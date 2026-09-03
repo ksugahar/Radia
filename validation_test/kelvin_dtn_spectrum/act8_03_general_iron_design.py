@@ -275,8 +275,9 @@ def scenario_B(order=2):
 
 
 if __name__ == "__main__":
-    okA = scenario_A()
-    okB, statB = scenario_B()
+    with ng.TaskManager():
+        okA = scenario_A()
+        okB, statB = scenario_B()
     print("\n" + "=" * 96)
     print("RESULT: Scenario A (concentric anchor) %s ; Scenario B (non-concentric design) %s"
           % ("PASS" if okA else "CHECK", "PASS" if okB else "CHECK"))

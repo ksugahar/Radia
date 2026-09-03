@@ -213,12 +213,15 @@ def run(maxh_m: float = 0.025, evrs_rank: int = 6) -> dict[str, object]:
 
 
 def main() -> None:
+    import ngsolve as ng
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--maxh", type=float, default=0.025)
     parser.add_argument("--evrs-rank", type=int, default=6)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     args = parser.parse_args()
-    result = run(maxh_m=args.maxh, evrs_rank=args.evrs_rank)
+    with ng.TaskManager():
+        result = run(maxh_m=args.maxh, evrs_rank=args.evrs_rank)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(result, indent=2))

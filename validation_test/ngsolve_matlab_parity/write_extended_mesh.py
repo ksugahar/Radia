@@ -39,14 +39,15 @@ def _exit_after_complete_write(path: Path) -> None:
 def main() -> None:
     if len(sys.argv) != 3:
         raise SystemExit("usage: write_extended_mesh.py MESH_ID OUTPUT_VOL")
-    mesh = build_mesh(sys.argv[1])
-    path = Path(sys.argv[2])
-    path.parent.mkdir(parents=True, exist_ok=True)
-    netgen_mesh = mesh.ngmesh if isinstance(mesh, ng.Mesh) else mesh
-    watchdog = threading.Thread(
-        target=_exit_after_complete_write, args=(path,), daemon=True)
-    watchdog.start()
-    netgen_mesh.Save(str(path))
+    with ng.TaskManager():
+        mesh = build_mesh(sys.argv[1])
+        path = Path(sys.argv[2])
+        path.parent.mkdir(parents=True, exist_ok=True)
+        netgen_mesh = mesh.ngmesh if isinstance(mesh, ng.Mesh) else mesh
+        watchdog = threading.Thread(
+            target=_exit_after_complete_write, args=(path,), daemon=True)
+        watchdog.start()
+        netgen_mesh.Save(str(path))
 
 
 if __name__ == "__main__":
