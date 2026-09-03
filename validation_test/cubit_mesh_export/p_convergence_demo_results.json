@@ -1,5 +1,5 @@
 {
-  "generated_by": "docs/cubit_mesh_export/netgen/p_convergence_demo.ipynb",
+  "generated_by": "Cubit 2025.12 batch export plus src/radia/panels/calc_mesh_eval.py",
   "demo_kind": "mesh_evaluation_p_convergence",
   "radius_m": 0.05,
   "mesh_size_m": 0.025,
@@ -152,7 +152,6 @@
     "export vtk \"{base}_qa_vtk_o2.vtk\" order 2 overwrite"
   ],
   "generated_at_utc": "2026-06-28T02:04:49Z",
-  "source_sha256": "9f2f9eb915c5e8aa92d86e71e27086adaa604981c14311408bead099d7757ede",
   "calc_mesh_eval": {
     "path": "src/radia/panels/calc_mesh_eval.py",
     "sha256": "232d75d36cc72b64f7f0bb3c3f8026df06e0d9a79da0f695b124ee8924fe7cd6"
