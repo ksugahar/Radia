@@ -2316,12 +2316,16 @@ for info in whl.infolist():
     if info.filename.endswith('.pyd'):
         print(f'{info.filename}: {info.file_size} bytes')
 # Must contain radia/_radia_pybind.pyd (> 2 MB)
-# Must NOT contain any .dll files (MKL policy)
+# Must contain radia_motor_rom.dll and no third-party runtime DLLs
 ```
 
 ### MKL DLL Policy: Do NOT Bundle
 
-**POLICY**: PyPI packages MUST NOT bundle Intel MKL DLLs. `pyproject.toml` declares `mkl>=2024.2.0` as dependency; pip installs MKL DLLs to `{sys.prefix}/Library/bin/`. `__init__.py` adds the path via `os.add_dll_directory()`.
+**POLICY**: PyPI packages MUST NOT bundle Intel MKL DLLs. `pyproject.toml`
+declares `mkl>=2026,<2027`; pip installs MKL DLLs to
+`{sys.prefix}/Library/bin/`, and `__init__.py` adds that runtime directory via
+`os.add_dll_directory()`. The Radia-owned `radia_motor_rom.dll` public C ABI is
+the intentional distribution exception and is verified separately.
 
 **Do NOT**: Copy MKL/Intel OpenMP DLLs into `src/radia/` or include `*.dll` in `package_data`.
 
@@ -2334,7 +2338,7 @@ src/radia/
   cln_core.pyd          # CLN transient solver
   peec_matrices.pyd     # PEEC matrix assembly
   *.py                  # Python utility modules
-  # NO .dll files
+  radia_motor_rom.dll   # Radia-owned public C ABI; no third-party DLLs
 ```
 
 **Always use `Build.ps1`** for building. Never use manual cmake commands -- the script handles CMake configure + build + `.pyd` copy to `src/radia/`.

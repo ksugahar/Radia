@@ -55,3 +55,15 @@ def test_mcp_result_ownership_distinguishes_docs_from_validation():
     assert "stores its result and WebGUI output in the notebook itself" in flat_guidance
     assert "does not require a result JSON sidecar" in flat_guidance
     assert "`validation_test/` owns" in guidance
+
+
+def test_pardiso_guidance_distinguishes_ngsolve_openblas_from_radia_mkl():
+    guidance = get_direct_solvers_knowledge("pardiso")
+    flat_guidance = " ".join(guidance.split())
+
+    assert "ngsolve-openblas" in guidance
+    assert "mkl>=2026,<2027" in guidance
+    assert "does not bundle or select MKL" in flat_guidance
+    assert "a compatible MKL runtime is a separate environment dependency" in flat_guidance
+    assert "included with NGSolve PyPI wheel" not in guidance
+    assert "NGSolve binary distributions automatically" not in guidance

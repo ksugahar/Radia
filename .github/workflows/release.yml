@@ -34,19 +34,19 @@ jobs:
       # ----------------------------------------------------------------
       # Upload native binaries to GitHub Releases (tag: binaries)
       # ----------------------------------------------------------------
-      - name: Upload native binaries to GitHub Releases (gh-free)
+      - name: Upload native binaries to GitHub Releases
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "=== Uploading native files to GitHub Releases (gh-free) ==="
+          echo "=== Uploading native files to GitHub Releases ==="
           FILES=$(find pyd-files -type f \( -name '*.pyd' -o -name '*.dll' -o -name '*.so' -o -name '*.dylib' \) 2>/dev/null)
           if [ -z "$FILES" ]; then
             echo "::warning::No native files found to upload"
             exit 0
           fi
-          # No GitHub CLI policy (CLAUDE.md): use the REST helper, not
-          # `gh release view/create/upload`.  --create-if-missing replaces the
-          # `gh release create`; the helper clobbers existing same-name assets.
+          # The repository helper gives this workflow an explicit,
+          # dependency-light REST upload contract. --create-if-missing creates
+          # the release and same-name assets are replaced deterministically.
           python tools/upload_release_asset.py --repo "${{ github.repository }}" \
             --tag binaries --create-if-missing $FILES
 

@@ -4,7 +4,8 @@ Default Windows consoles in Japanese locale use cp932, which cannot encode
 em-dashes (U+2014), arrows (U+2192), or CJK characters.  Knowledge-server
 --selftest paths print documentation text that frequently contains such
 characters, so without this helper `mcp-server-radia-ngsolve --selftest`
-and friends crash with UnicodeEncodeError on LAB / 100号機 CI runners.
+and friends crash with UnicodeEncodeError in Japanese Windows consoles or
+service-hosted selftest runs.
 
 Call ``use_utf8_stdout()`` once at the top of any ``main()`` path that
 writes user-facing text.  MCP stdio (``mcp.run(transport="stdio")``) is
