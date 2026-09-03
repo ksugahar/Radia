@@ -26,16 +26,24 @@ Verified vs the exact 2-D solution (H0 = mu0 = a = 1, beta = (mu_r-1)/(mu_r+1)):
 Run:  python reduced_clebsch_hodograph_fem.py
 """
 import math
-import os
-import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src", "radia"))
-
-from ngsolve import (                                       # noqa: E402
-    Mesh, H1, GridFunction, grad, InnerProduct, dx, sqrt, x, y, CF,
-    BilinearForm, LinearForm, TaskManager, Integrate,
+from netgen.geom2d import Circle, CSG2d
+from ngsolve import (
+    CF,
+    H1,
+    BilinearForm,
+    GridFunction,
+    InnerProduct,
+    Integrate,
+    LinearForm,
+    Mesh,
+    TaskManager,
+    dx,
+    grad,
+    sqrt,
+    x,
+    y,
 )
-from netgen.geom2d import CSG2d, Circle                     # noqa: E402
 
 A_CYL, MU_R, R_OUT = 1.0, 1000.0, 6.0
 BETA2 = (MU_R - 1.0) / (MU_R + 1.0)

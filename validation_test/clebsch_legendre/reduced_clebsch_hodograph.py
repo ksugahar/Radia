@@ -21,25 +21,33 @@ sphere field -- the bidirectional consistency that the (psi, Phi) chart is valid
 (Jacobian det[grad psi; grad Phi] = r |grad Phi|^2 != 0).  This is the verifiable
 foundation for the monolithic "deep" reduced-potential Clebsch hodograph (path B).
 
-Conventions follow examples/feec_vim/bidirectional_map_axisym.py (NGSolve 2D coords
-x = rho, y = z; B = grad Phi; Stokes psi with B_rho = -(1/rho)psi_z, B_z =
-(1/rho)psi_rho).  Normalized H0 = mu0 = a = 1.  beta = (mu_r - 1)/(mu_r + 2).
+Conventions follow validation_test/feec/vim_legacy/bidirectional_map_axisym.py
+(NGSolve 2D coords x = rho, y = z; B = grad Phi; Stokes psi with
+B_rho = -(1/rho)psi_z, B_z = (1/rho)psi_rho).  Normalized H0 = mu0 = a = 1.
+beta = (mu_r - 1)/(mu_r + 2).
 Exact consistent pair (current-free: E^2 psi = 0, Laplace Phi = 0):
     psi = rho^2 (1/2 + beta a^3/R^3),   Phi = z (1 - beta a^3/R^3),  R = sqrt(rho^2+z^2)
 on an exterior meridian box (R > a, rho > 0).
 
 Run:  python reduced_clebsch_hodograph.py
 """
-import os
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src", "radia"))
-
-from ngsolve import (                                       # noqa: E402
-    Mesh, H1, GridFunction, grad, InnerProduct, dx, sqrt, x, y, CF,
-    BilinearForm, LinearForm, TaskManager, Integrate,
+from netgen.geom2d import SplineGeometry
+from ngsolve import (
+    CF,
+    H1,
+    BilinearForm,
+    GridFunction,
+    InnerProduct,
+    Integrate,
+    LinearForm,
+    Mesh,
+    TaskManager,
+    dx,
+    grad,
+    sqrt,
+    x,
+    y,
 )
-from netgen.geom2d import SplineGeometry                    # noqa: E402
 
 A_SPH = 1.0                                   # sphere radius
 MU_R = 1000.0                                 # iron relative permeability
