@@ -416,12 +416,7 @@ This benchmark compares URN against Vector Fitting with TWO initialization strat
 """)
 
     # Load URN results
-    urn_result_path = (
-        Path(__file__).resolve().parents[2]
-        / 'validation_test'
-        / 'universal_relaxation_network'
-        / 'urn_benchmark_focused.json'
-    )
+    urn_result_path = Path(__file__).with_name('urn_benchmark_focused.json')
     with urn_result_path.open('r', encoding='utf-8') as f:
         urn_results = json.load(f)
 
