@@ -261,3 +261,6 @@ def test_eqnedit64_one_command_release_is_bounded_and_ephemeral():
     assert "'windows-radia'" in jit
     assert "-WindowStyle Hidden" in jit
     assert "Runner.Listener.exe" in jit
+    assert "runner.status -ceq 'online'" in jit
+    assert "actions/runners/$registeredRunnerId" in jit
+    assert "--method DELETE" in jit
