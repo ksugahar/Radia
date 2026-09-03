@@ -19,13 +19,9 @@ Requirements:
 """
 
 import sys
-from pathlib import Path
 
 # Add Cubit to path (auto-detect via radia's install_panels helper)
-_repo = next(p for p in Path(__file__).resolve().parents
-             if (p / "src" / "radia").exists())
-sys.path.insert(0, str(_repo / "src" / "radia"))
-from install_panels import find_cubit_bin as _fcb
+from radia.install_panels import find_cubit_bin as _fcb
 _cubit_path = _fcb()
 if _cubit_path and _cubit_path not in sys.path:
     sys.path.append(_cubit_path)
