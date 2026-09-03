@@ -9,7 +9,8 @@ HACApK path already used, which scales) fixed it: single-thread ~3x faster AND ~
 A RegionTaskManager self-wrap in the batch entry makes a BARE rad.Fld (no caller `with TaskManager()`)
 run parallel too.
 
-RUN ON mdx (idle) per the Benchmark Policy -- timing must not be measured on the codex-contended LAB.
+RUN ON hibino first per the Benchmark Policy; use mdx only when hibino is unavailable and its CI queue is idle.
+Timing must not be measured on the codex-contended LAB.
 Isolated env: PYTHONPATH -> a HEAD src/radia copy over the system Python; MKL/OMP=1 so TaskManager owns
 the swept parallelism.  Writes results_radfld_parallel_scaling.json next to this file.
 

@@ -473,11 +473,12 @@ Record these quantities in validation and benchmark artifacts:
 - peak memory when available;
 - field source count, evaluator build time, observation count, selected
   direct/tree route, and direct-reference field error;
-- machine label (`LAB` smoke vs `mdx` validation).
+- machine label (`LAB` smoke vs `hibino` validation or mdx fallback).
 
 Small problems are allowed to be simply "interactive".  The scaling question
 matters at engineering size, where charge count and matrix build dominate.
-Timing claims should be taken on mdx when it is idle.
+Timing claims should be taken on hibino first. Use mdx only when hibino is
+unavailable and the mdx CI runner and job queue are idle.
 
 ## HEX fill profile and the distorted-far dispatch (2026-08-09)
 
@@ -760,7 +761,8 @@ When a disagreement appears:
 3. Compare charge maps and field evaluation before nonlinear iteration.
 4. Check the same observable through two evaluators (`M_avg`, `rad.Fld`, probe
    grid, energy) before changing solver tolerances.
-5. Move heavy sweeps to mdx and label the result as validation, not LAB smoke.
+5. Move heavy sweeps to hibino first, or to mdx only behind an idle CI queue,
+   and label the result as validation, not LAB smoke.
 """
 
 _STATUS = r"""
@@ -797,10 +799,13 @@ Open work:
 - keep the image-symmetry roundoff contract green as hex/wedge coverage grows;
 - differentiate the composite mapped-HEX BDM2 charge operator and lock its
   shape derivative against finite differences before topology optimization;
-- continue BDM1/BDM2 TET/HEX/WEDGE accuracy, memory, and timing measurements on mdx;
-- continue charge-Gram H-matrix performance checks on mdx;
+- continue BDM1/BDM2 TET/HEX/WEDGE accuracy, memory, and timing measurements on
+  hibino first, with mdx as an idle-CI fallback;
+- continue charge-Gram H-matrix performance checks on hibino first, with mdx as
+  an idle-CI fallback;
 - run `validation_test/feec/bench_hdiv_field_evaluator_scaling.py` after a
-  normal release to measure public `rad.Fld` on mdx/hibino;
+  normal release to measure public `rad.Fld` on hibino first or an idle-CI mdx
+  fallback;
 - keep Cubit/GMSH mesh-export artifacts aligned with the HDiv API.
 - extend application-level force validation while keeping the existing
   curved motor Maxwell/volume/coenergy torque agreement green.

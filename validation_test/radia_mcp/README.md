@@ -23,7 +23,7 @@ python -m pytest validation_test/radia_mcp
 
 The root `validation_test/conftest.py` automatically applies the `validation`
 marker. Add `slow` or `compute_host` only when a case exceeds the normal manual
-validation budget or requires an idle mdx/hibino compute host.
+validation budget or requires hibino, with mdx as an idle-CI fallback.
 
 ## MCP server surface performance
 

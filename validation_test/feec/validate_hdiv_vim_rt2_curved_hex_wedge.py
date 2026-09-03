@@ -2,8 +2,9 @@
 
 The input ``.vol`` files are supplied explicitly because curved HEX/WEDGE
 meshes are produced by the Cubit export workflow and are not tiny CI fixtures.
-Use ``--solve`` only on an idle mdx or hibino host.  The JSON records the host,
-topology, dimensions, build/solve timings, and finite field-evaluation gate.
+Use ``--solve`` on hibino first, or on mdx only when hibino is unavailable and
+the mdx CI queue is idle. The JSON records the host, topology, dimensions,
+build/solve timings, and finite field-evaluation gate.
 """
 from __future__ import annotations
 

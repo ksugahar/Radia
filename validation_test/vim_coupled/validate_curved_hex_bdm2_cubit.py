@@ -1,4 +1,4 @@
-"""Validate true Cubit order-2 curved HEX BDM2 on mdx or hibino.
+"""Validate true Cubit order-2 curved HEX BDM2 on hibino first or idle-CI mdx.
 
 Generate the temporary mesh on a Cubit host first::
 

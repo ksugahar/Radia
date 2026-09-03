@@ -36,11 +36,14 @@ python tools/ci_preflight.py --validation --full
 ```
 
 Tests marked `compute_host` are solver-heavy and are skipped unless the actual
-hostname is `mdx` or `hibino`.  Run them over SSH on an idle compute host:
+hostname is `mdx` or `hibino`. Run them over SSH on hibino first:
 
 ```powershell
-ssh mdx python -m pytest validation_test/ -m compute_host -q
+ssh hibino python -m pytest validation_test/ -m compute_host -q
 ```
+
+Use mdx only when hibino is unavailable and the mdx CI runner and job queue are
+idle. A validation job must never delay CI or preflight.
 
 Manual scripts:
 
@@ -61,5 +64,5 @@ python -m pytest validation_test/cubit -q
 
 The normal CI path runs `tests/` only.  `validation_test/` is a manual release
 or operator-triggered gate, and GitHub Actions always excludes `compute_host`.
-This keeps routine CI responsive while preserving deeper mdx/hibino checks
-before release or publication-quality claims.
+This keeps routine CI responsive while preserving deeper hibino-first compute
+checks before release or publication-quality claims.

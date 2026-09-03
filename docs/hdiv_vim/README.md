@@ -512,8 +512,8 @@ host (`mdx` or `hibino`).  Required HDiv gates:
 - BDM1/BDM2 flat/curved TET/HEX/WEDGE operator accuracy and cost, including
   mapped-HEX BDM2 spectrum, quadrature convergence, linear/nonlinear solve,
   IMA, and fail-loud shape-derivative gates, plus charge-Gram H-matrix build stats and
-  memory/timing on idle `mdx` or `hibino`
-  for large runs;
+  memory/timing on hibino first, or on mdx only when hibino is unavailable and
+  the mdx CI queue is idle, for large runs;
 - 2D planar motor saliency checks for the motor lane.
 - reduced-motor torque agreement among Maxwell stress, magnetization-volume
   coupling, and fixed-current coenergy while reusing one charge Gram;

@@ -3,8 +3,9 @@
 
 This is the unstructured-tet counterpart of bench_hdiv_cube.py.  It uses the
 current production path, radia.vim.Solve, not the retired Radia object/MMPM
-benchmark.  Useful sizes are validation-class workloads and should be run on
-mdx for timing claims.
+benchmark. Useful sizes are validation-class workloads and should run on
+hibino first, or on mdx only when hibino is unavailable and its CI queue is
+idle.
 """
 from __future__ import annotations
 

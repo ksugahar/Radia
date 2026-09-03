@@ -19,7 +19,7 @@ A-RK reuse the established three-route harness and are wired in a follow-up
 run; the sign convention ``htilde = -signed_curvature`` follows the
 EarlyTimes metric contract and is pinned against B-RK there.
 
-Usage (LAB smoke; heavy sweeps go to mdx/hibino):
+Usage (LAB smoke; heavy sweeps use hibino first or an idle-CI mdx fallback):
   python validation_canonical_hcurl_ctype.py --iron-maxh 0.02
 """
 

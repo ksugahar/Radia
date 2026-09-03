@@ -11,7 +11,8 @@ This is the HDiv counterpart of the MMPM cube benchmark used in the
   * HACApK charge-Gram stats recorded from the solver result
 
 The script is intentionally in validation_test, not tests: useful sizes are
-solver-heavy and should be run on mdx for publication-grade timing.
+solver-heavy and should run on hibino first, or on mdx only when hibino is
+unavailable and its CI queue is idle.
 """
 from __future__ import annotations
 

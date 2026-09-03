@@ -6,7 +6,7 @@ C++ ChargeGram H-matrix.  Each trial minimizes a measured build/apply workload
 while constraining the physical ``B.T @ G @ B`` action against the accepted
 current parameters.  A tighter H-matrix remains an independent diagnostic.
 
-Example (run on mdx or hibino)::
+Example (run on hibino first, or on mdx only behind an idle CI queue)::
 
     python validation_test/feec/tune_hdiv_hmatrix_optuna.py \
         --topology tet --order 2 --cells 5 --cyclic-sectors 4 \
@@ -82,8 +82,9 @@ def _compute_host(*, allow_local_diagnostic: bool) -> tuple[str, bool]:
     accepted = short in {"mdx", "hibino"}
     if not accepted and not allow_local_diagnostic:
         raise SystemExit(
-            "HDiv H-matrix tuning is a validation workload and must run on mdx "
-            "or hibino. Pass --allow-local-diagnostic only for a bounded workflow "
+            "HDiv H-matrix tuning is a validation workload and must run on "
+            "hibino first, or on mdx only when its CI queue is idle. Pass "
+            "--allow-local-diagnostic only for a bounded workflow "
             f"smoke test; got hostname {hostname!r}.")
     return hostname, not accepted
 

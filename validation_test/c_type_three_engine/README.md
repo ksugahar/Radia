@@ -86,7 +86,8 @@ change, tolerance, and iteration limit for every engine. Pairwise agreement is
 not a pass when any engine is unconverged. Use `--nonlinear-verbose` for remote
 progress logs.
 
-Heavy nonlinear runs belong on mdx or hibino. The mesh build remains a
+Heavy nonlinear runs belong on hibino first, with mdx allowed only when hibino
+is unavailable and its CI queue is idle. The mesh build remains a
 foreground Cubit job, and the solver run remains a foreground Python job so a
 result cannot be mistaken for a completed validation while a detached process
 is still running.
