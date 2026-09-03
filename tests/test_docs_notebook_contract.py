@@ -85,6 +85,10 @@ def test_docs_do_not_restore_completed_migration_ledgers():
             "public_demo",
             "verification_migration",
         },
+        ROOT / "docs" / "stream_function": {
+            "demo_gallery",
+            "examples_catalog",
+        },
     }
     offenders = [
         path.relative_to(ROOT)

@@ -47,7 +47,7 @@ which on a flat plane reduces to:
     A[j, i] = − (μ₀ / 4π) ∫_Γ ∇φᵢ(r') · (r_j − r')_xy / |r_j − r'|³ dA(r')
 
 In NGSolve this is one `LinearForm` per target.  See
-[`build_fem_matrix`](examples_catalog.ipynb)
+[`build_fem_matrix`](demo_planar_uniform_fem_psi.py)
 for the canonical (planar) assembly.
 
 **Γ can be ANY surface, not just a plane.** Mesh a curved former
@@ -58,7 +58,7 @@ robustly via a solid mesh + `H1(mesh, order=p, definedon=mesh.Boundaries(".*"))`
 + `ds` + `mesh.Curve(p)` (isoparametric).  **This is exactly the capability
 the basis-loop path lacks** — it needs a structured `(φ, z)` grid and cannot
 be laid on a sphere.  See
-[`demo_sphere_fe_direct.py`](examples_catalog.ipynb)
+[`demo_sphere_fe_direct.py`](demo_sphere_fe_direct.py)
 (uniform Bz: cres 3e-15, single-stroke 0.24 %; Z2 shim: 0.36 % after
 sheet-metal distortion).
 
