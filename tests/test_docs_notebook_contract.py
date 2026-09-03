@@ -64,11 +64,21 @@ def test_docs_do_not_track_notebook_checksum_sidecars():
     )
 
 
-def test_clebsch_docs_do_not_restore_completed_migration_ledgers():
-    retired_stems = {"examples_catalog", "examples_migration"}
+def test_docs_do_not_restore_completed_migration_ledgers():
+    retired = {
+        ROOT / "docs" / "clebsch_hodograph": {
+            "examples_catalog",
+            "examples_migration",
+        },
+        ROOT / "docs" / "induction_heating": {
+            "induction_heating_examples_catalog",
+            "public_demo",
+        },
+    }
     offenders = [
         path.relative_to(ROOT)
-        for path in (ROOT / "docs" / "clebsch_hodograph").iterdir()
+        for directory, retired_stems in retired.items()
+        for path in directory.iterdir()
         if path.is_file()
         and path.suffix.lower() in {".ipynb", ".json"}
         and path.stem.removesuffix("_results") in retired_stems

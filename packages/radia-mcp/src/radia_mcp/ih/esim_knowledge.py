@@ -1,6 +1,6 @@
 """
 
-SHOWCASE NOTEBOOK: validation_test/ih_esim_benchmark/esim_showcase.ipynb -- Bessel cross-check (live) + committed digest/envelope/per-DOF/Karl figures.
+SHOWCASE NOTEBOOK: docs/induction_heating/induction_heating_demo_showcase.ipynb -- Bessel cross-check (live) + embedded digest/envelope/per-DOF/Karl figures. Checked numerical JSON remains under validation_test/ih_esim_benchmark/.
 ESIM (Effective Surface Impedance Method) practical usage knowledge.
 
 This module covers HOW TO USE ESIM in production -- CLI flags,
