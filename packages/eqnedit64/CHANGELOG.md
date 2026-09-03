@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 3.0.14 - 2026-09-03
+
 - Clarify that the signed standalone EXE is the canonical direct converter;
   package helpers are thin subprocess clients rather than a second CLI or a
   pybind11 conversion API.
