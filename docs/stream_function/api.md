@@ -265,6 +265,6 @@ are the entry points users typically want:
 ## Cross-reference
 
   - Theory: [theory.md](theory.md)
-  - Demos: [examples.md](examples.md)
+  - Demos: [demos.md](demos.md)
   - MCP topic: `streamfunction(topic=api)` for the formal SA-25-020 manuscript
     API.

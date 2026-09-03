@@ -1,8 +1,9 @@
-# ESIM Examples Index
+# ESIM Workflows
 
-Catalog of runnable ESIM scripts shipped with Radia.  Each example
-is self-contained (no out-of-tree paths) and reproducible from a
-clean `pip install radia[cubit]` checkout.
+Catalog of the public notebook and checked validation workflows for ESIM.
+The notebook is the human-facing demonstration; scripts and JSON evidence live
+under `validation_test/` and are reproducible from a clean
+`pip install radia[cubit]` checkout.
 
 ## Cell-problem level
 
@@ -61,10 +62,10 @@ For the full numerical results JSON used in the paper see
 
 ## Cross-references
 
-- [`README.md`](README.md) — top-level index of `docs/esim/` (7 docs).
+- [`README.md`](README.md) — top-level index of `docs/esim/`.
 - [`USAGE.md`](USAGE.md) — production CLI flag reference.
 - [`SCALAR_BIE_VS_VECTOR_BEM.md`](SCALAR_BIE_VS_VECTOR_BEM.md) — the methodological argument tying the scripts above into a coherent paper-grade workflow.
 
 ---
 
-**Document version**: 2026-05-20 (post-PEEC-Bessel-AC fix, per-DOF $H_t$ output).
+**Document version**: 2026-09-03 (docs/validation ownership aligned).

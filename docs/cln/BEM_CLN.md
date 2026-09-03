@@ -156,10 +156,9 @@ with N >= 5 elements is the next step.
 
 ## 6. Reference scripts
 
-All Mathematica verification scripts live in the digest supplement
-`digest/supplement/2026_05_18_3axis_cauer_sibc/scripts/`; canonical
-Python implementations are in
-`examples/hierarchical_cauer_sibc/multi_conductor/`:
+The maintained Mathematica verification scripts live in
+`validation_test/maglev/research_cln/`. They are validation evidence, not a
+standalone examples tier:
 
 | Script | Phase | What it verifies |
 |--------|-------|------------------|

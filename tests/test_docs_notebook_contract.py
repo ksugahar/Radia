@@ -64,6 +64,18 @@ def test_docs_do_not_track_notebook_checksum_sidecars():
     )
 
 
+def test_docs_indexes_use_demo_or_workflow_names():
+    offenders = sorted(
+        path.relative_to(ROOT)
+        for name in ("examples.md", "EXAMPLES.md")
+        for path in (ROOT / "docs").rglob(name)
+    )
+    assert not offenders, (
+        "The examples tier is retired; name public indexes demos or workflows: "
+        + ", ".join(map(str, offenders))
+    )
+
+
 def test_docs_do_not_restore_completed_migration_ledgers():
     retired = {
         ROOT / "docs" / "clebsch_hodograph": {

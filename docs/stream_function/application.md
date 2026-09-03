@@ -286,7 +286,7 @@ checks the field **two ways** -- the numpy straight-segment Biot-Savart used in
 the designer **and** Radia's C++ `rad.ObjFlmCur` + `rad.Fld` (a separate
 codebase).  They agree to 8–11 digits (uniform 3.5e-11, Gx 1.1e-8); the
 `abe`-confined Gx coil reaches **1.0 %** nonlinearity on the short former,
-cross-validated.  See the [demo ledger](examples.md).
+cross-validated.  See the [demo ledger](demos.md).
 
 ## Scaling (large surface meshes)
 

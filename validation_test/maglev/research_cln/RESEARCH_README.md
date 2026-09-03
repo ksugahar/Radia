@@ -1,29 +1,23 @@
-# research/ — radia-maglev research corpus
+# radia-maglev CLN validation corpus
 
-This directory holds **research scratch**: raw verification sweeps,
-Mathematica derivations, iteration history, and one-off probe scripts
-that back the theory but are **not** README-backed package examples.
+This directory preserves numerical verification sweeps, Mathematica
+derivations, iteration histories, and reference probes that support the CLN
+theory. These files belong to `validation_test/` because they are durable
+engineering evidence; this directory is not a scratch area or a package-demo
+tier.
 
-Per the lab Sample Promotion Ladder (tests -> examples -> panels), a
-sample lives in exactly one tier:
-
-- `tests/` — golden fixtures (machine-readable, minimal)
-- `examples/` — README-backed, standalone-runnable demonstrations
-- `research/` — **this dir**: exploratory corpus, no standalone-run or
-  README guarantee
-
-A script earns promotion `research/ -> examples/` only after it gains a
-README, runs standalone (`python <script>.py` with no hidden state), and
-demonstrates one clear concept.
+Fast implementation regressions belong in `tests/`. Human-facing explanations
+belong in executed notebooks under `docs/`. New exploratory work stays in
+`C:\temp` until it is distilled into one of those maintained destinations.
 
 ## Contents
 
 | Subdir | What |
 |--------|------|
-| `cln/` | The absorbed radia-cln research corpus (CLN = Cauer Ladder Network for eddy-current transients). See `cln/README.md`. |
+| `cln/` | The absorbed radia-cln validation corpus (CLN = Cauer Ladder Network for eddy-current transients). See `cln/README.md`. |
 
 `cln/` was migrated here from `examples/cln/` (2026-06-14) when the
 radia-cln scope was absorbed into radia-maglev: it is eddy-current
 CLN research, the natural domain of CLN, but the bulk of it (NGSolve
 validation sweeps, Schur-F derivations, BEM-CLN iteration history) is
-verification scratch rather than curated examples.
+durable validation evidence rather than a public demo.

@@ -19,7 +19,7 @@ import tempfile
 
 import pytest
 
-# Skip entire module if Cubit is not available (CI runner has no Cubit)
+# Skip outside the explicit Cubit integration environment.
 def _cubit_available():
     try:
         from radia.install_panels import find_cubit_bin
