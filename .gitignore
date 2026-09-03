@@ -490,6 +490,12 @@ aqtinstall.log
 *.egg-info/
 step_export.log
 
+# Native-extension replacement backups left when a loaded binary cannot be
+# overwritten in place. These are local recovery artifacts, never sources.
+*.pyd.locked_*
+*.pyd.loaded-old
+*.mexw64.locked_*
+
 # VTU output files (use NGSolve VTKOutput or GMSH post instead)
 *.vtu
 docs/research/
