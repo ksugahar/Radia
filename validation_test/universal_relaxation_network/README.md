@@ -1,9 +1,9 @@
 # Universal Relaxation Network validation
 
 This directory owns the durable benchmark and real-data validation records for
-the URN documentation. The runnable legacy drivers remain beside the public
-notebooks under `docs/universal_relaxation_network/`, but they write numerical
-evidence here rather than into `docs/`.
+the URN documentation. Validation and benchmark drivers live here; public
+notebooks and demonstration-only helpers remain under
+`docs/universal_relaxation_network/`.
 
 The older JSON payloads predate the repository-wide validation schema. Preserve
 their measured values as historical evidence; a future recomputation should add
@@ -16,3 +16,12 @@ the maintained docs-coupled drivers, but their numerical evidence belongs here.
 writes its JSON, figures, and SPICE netlist beneath this validation directory.
 The immutable input CSVs and their source documentation remain under
 `docs/universal_relaxation_network/data/real_world/tdk_ferrite/`.
+
+`urn_benchmark_improved.py` generates the focused synthetic benchmark record.
+`vf_benchmark_same_data.py` consumes that record and writes the corresponding
+Vector Fitting comparison beside it. Run both from the repository root:
+
+```powershell
+python validation_test/universal_relaxation_network/urn_benchmark_improved.py
+python validation_test/universal_relaxation_network/vf_benchmark_same_data.py
+```

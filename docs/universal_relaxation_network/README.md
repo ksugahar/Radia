@@ -32,29 +32,20 @@ impedance data. The maintained implementation is the `radia.urn` package under
 ```
 universal_relaxation_network/
   data/
-    synthetic/                    # Physics-based synthetic benchmark data
-      liion_battery_eis.csv       # Synthetic Li-ion battery EIS
-      mnzn_ferrite_impedance.csv  # Synthetic MnZn ferrite impedance
     real_world/                   # Real measurement datasets
       nasa_battery/               # NASA Li-ion Battery Aging Dataset
         nasa_18650_eis.csv        # Extracted EIS data (included)
       tdk_ferrite/                # TDK MnZn ferrite datasheet data
         tdk_pc50_impedance.csv    # PC50 impedance (included)
-  validate_urn_vs_vf.py           # URN vs Vector Fitting comparison
   demo_spice_timedomain.py        # Time-domain SPICE simulation demo
-  urn_benchmark_suite.py          # Full benchmark suite
-  validate_real_data.py           # Real-world data validation (NASA/Mendeley)
-  verify_timedomain_stability.py  # URN vs VF time-domain stability test
-  ablation_study.py               # Feature contribution analysis
-  benchmark_urn_vs_skrf_vf.py     # scikit-rf Vector Fitting comparison
-  run_ltspice_verification.py     # Actual LTspice simulation (PyLTSpice)
   cq_urn_bridge.py                # Passive URN H(s) -> BDF2 CQ teaching artifact
   cq_urn_bridge.ipynb             # Result-bearing CQ bridge notebook
 ```
 
 Benchmark and validation JSON records are stored under
-`validation_test/universal_relaxation_network/`; `docs/` retains the public
-notebooks, narrative, and embedded demonstration results.
+`validation_test/universal_relaxation_network/` together with their runnable
+drivers; `docs/` retains public notebooks, narrative, immutable input data, and
+embedded demonstration results.
 
 ## Quick Start
 
