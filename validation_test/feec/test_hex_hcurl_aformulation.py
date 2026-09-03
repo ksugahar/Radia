@@ -19,11 +19,11 @@ high-order (spectral) rate on genuine hex edge elements.
 import math
 import pytest
 
-pytestmark = pytest.mark.slow
+pytestmark = [pytest.mark.slow, pytest.mark.usefixtures("ngsolve_taskmanager")]
 
 ng = pytest.importorskip("ngsolve")
 from ngsolve import (HCurl, BilinearForm, LinearForm, GridFunction, Integrate,
-                     curl, dx, x, y, z, sin, pi, CF)
+                     curl, dx, x, y, sin, pi, CF)
 from ngsolve.meshes import MakeStructured3DMesh
 
 _AEX = CF((0, 0, sin(pi * x) * sin(pi * y)))
