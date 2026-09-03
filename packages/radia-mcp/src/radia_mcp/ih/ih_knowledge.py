@@ -13,7 +13,7 @@ Public docs/notebooks:
     promotion notebook for the closed public ESIM/WPT/RWG demo scripts.
   - docs/induction_heating/induction_heating_examples_catalog.ipynb -- full
     source/hash catalog for IH docs/API/validation migration lanes.
-  - docs/ih_esim_benchmark/esim_showcase.ipynb -- nonlinear ESIM benchmark
+  - validation_test/ih_esim_benchmark/esim_showcase.ipynb -- nonlinear ESIM benchmark
     figures/results.
 
 Sources:

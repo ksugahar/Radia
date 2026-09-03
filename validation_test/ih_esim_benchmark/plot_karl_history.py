@@ -20,7 +20,7 @@ Use this to distinguish two failure modes:
        max_iter cap as the per-DOF noise floor.
 
 Usage:
-    python docs/ih_esim_benchmark/plot_karl_history.py <RESULT.json>
+    python validation_test/ih_esim_benchmark/plot_karl_history.py <RESULT.json>
                                                             [<OUTPUT.png>]
 
 If <OUTPUT.png> is omitted the figure is saved next to the JSON as

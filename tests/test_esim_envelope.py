@@ -25,7 +25,7 @@ test promoted to a quantitative pytest -- corresponds to
 Strategy D (saturation regime) row 1 in
 [`docs/esim/CROSS_VALIDATION.md`](../docs/esim/CROSS_VALIDATION.md).
 
-Reference plot: docs/ih_esim_benchmark/cell_envelope.png.
+Reference plot: validation_test/ih_esim_benchmark/cell_envelope.png.
 """
 import math
 import sys
