@@ -392,9 +392,11 @@ def kelvin_dtn_eigenvalue(R=1.0, degree=1, maxh=0.4, order=1, intorder=10, dim=3
 
     gfu = GridFunction(fes)
     gfu.Set(datum, BND)                                   # u* = ρ^n Y_n on Γ
-    rhs = gfu.vec.CreateVector()
-    rhs.data = -(a.mat * gfu.vec)
-    gfu.vec.data += a.mat.Inverse(freedofs=fes.FreeDofs()) * rhs
+    freedofs = fes.FreeDofs()
+    if freedofs.NumSet():
+        rhs = gfu.vec.CreateVector()
+        rhs.data = -(a.mat * gfu.vec)
+        gfu.vec.data += a.mat.Inverse(freedofs=freedofs) * rhs
 
     # λ_eff = offset − ∫|∇u*|² / ∮u*²   (weak, variationally consistent)
     offset = -(dim - 2) / R                               # 3D: −1/R ; 2D: 0
