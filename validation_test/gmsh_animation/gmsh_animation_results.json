@@ -1,5 +1,5 @@
 {
-  "schema": "radia.docs.gmsh_animation.inspect.v1",
+  "schema": "radia.validation.gmsh_animation.inspect.v1",
   "generated_at_utc": "2026-08-05T05:10:48Z",
   "versions": {
     "python_version": "3.12.10",
