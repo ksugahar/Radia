@@ -19,6 +19,7 @@ import numpy as np
 import time
 import json
 from dataclasses import dataclass, asdict
+from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 import warnings
 warnings.filterwarnings('ignore')
@@ -26,6 +27,12 @@ warnings.filterwarnings('ignore')
 # URN imports
 from universal_relaxation_network import URNConfig, train_urn, UniversalRelaxationNetwork
 import torch
+
+VALIDATION_DIR = (
+    Path(__file__).resolve().parents[2]
+    / 'validation_test'
+    / 'universal_relaxation_network'
+)
 
 # Vector Fitting - using scipy for pole-residue fitting
 from scipy.optimize import curve_fit, minimize
@@ -481,7 +488,7 @@ def print_summary_table(results: List[ComparisonResult]):
     print("URN: All basis functions are inherently stable (passive circuits)")
 
 
-def save_results(results: List[ComparisonResult], filename: str):
+def save_results(results: List[ComparisonResult], filename: str | Path):
     """Save results to JSON file."""
     data = {
         'comparison_date': time.strftime('%Y-%m-%d %H:%M:%S'),
@@ -497,10 +504,12 @@ def save_results(results: List[ComparisonResult], filename: str):
         }
     }
 
-    with open(filename, 'w') as f:
+    output_path = Path(filename)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open('w', encoding='utf-8') as f:
         json.dump(data, f, indent=2)
 
-    print(f"\nResults saved to: {filename}")
+    print(f"\nResults saved to: {output_path}")
 
 
 if __name__ == '__main__':
@@ -508,7 +517,7 @@ if __name__ == '__main__':
 
     results = run_full_comparison()
     print_summary_table(results)
-    save_results(results, 'urn_vs_vf_comparison.json')
+    save_results(results, VALIDATION_DIR / 'urn_vs_vf_comparison.json')
 
     print("\n" + "=" * 80)
     print("KEY FINDINGS FOR PUBLICATION")
