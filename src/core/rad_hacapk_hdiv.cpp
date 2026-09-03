@@ -27,6 +27,8 @@ extern "C" {
 void HACApK_matvec_stats_reset(void);
 void HACApK_matvec_stats_get(double *values, int n_values,
                              int64_t *counts, int n_counts);
+int HACApK_matvec_stats_is_enabled(void);
+int HACApK_matvec_mkl_threads_get(void);
 }
 
 #ifdef HAVE_LAPACK
@@ -812,7 +814,6 @@ static long long NextChargeGramBuildId()
 static bool HexCacheStatsEnabledByEnv()
 {
     const char* v = std::getenv("RADIA_HDIV_BLOCK_CACHE_STATS");
-    if (!v || v[0] == '\0') v = std::getenv("RADIA_HDIV_HEX_CACHE_STATS");
     return v && v[0] != '\0' && v[0] != '0';
 }
 
@@ -821,13 +822,15 @@ static inline void HexStatAdd(bool enabled, std::atomic<long long>& v)
     if (enabled) v.fetch_add(1, std::memory_order_relaxed);
 }
 
+static constexpr size_t HEX_BLOCK_CACHE_LIMIT_DEFAULT = 200000u;
+
 static size_t HexBlockCacheLimit()
 {
     static const size_t limit = []() -> size_t {
         const char* v = std::getenv("RADIA_HDIV_HEX_BLOCK_CACHE_LIMIT");
-        if (!v || v[0] == '\0') return 200000u;
+        if (!v || v[0] == '\0') return HEX_BLOCK_CACHE_LIMIT_DEFAULT;
         const long long parsed = std::atoll(v);
-        return parsed > 0 ? (size_t)parsed : 200000u;
+        return parsed > 0 ? (size_t)parsed : HEX_BLOCK_CACHE_LIMIT_DEFAULT;
     }();
     return limit;
 }
@@ -3963,10 +3966,34 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexCacheStats()
 {
     auto ld = [](const std::atomic<long long>& v) { return (double)v.load(std::memory_order_relaxed); };
     std::vector<std::pair<std::string, double>> out;
+    const double hex_far_one_sided = HexFarOneSidedThreshold();
+    const double wedge_far_one_sided = WedgeFarOneSidedThreshold();
+    const double distorted_far_factor = HexDistortedFarFactor();
+    const int wedge_trans_scope = WedgeTransCacheScope();
+    const bool ho_far_one_sided = HOFarOneSidedEnabled();
+    const bool ho_analytic_enabled = HOAnalyticBlockEnabled();
+    const bool ho_image_enabled = HOTetImageBlockEnabled();
+    const bool trans_cache_enabled = HexTransCacheEnabled();
+    const bool curved_direct_enabled = CurvedDirectEnabled();
+    const size_t block_cache_limit = HexBlockCacheLimit();
+    const bool hmatvec_stats_enabled = HACApK_matvec_stats_is_enabled() != 0;
+    const int hmatvec_mkl_threads = HACApK_matvec_mkl_threads_get();
+    const bool numerical_override =
+        hex_far_one_sided > 0.0 || wedge_far_one_sided > 0.0 ||
+        distorted_far_factor != 1.0 || ho_far_one_sided ||
+        !ho_analytic_enabled || !ho_image_enabled || !curved_direct_enabled;
+    const bool performance_override =
+        block_cache_limit != HEX_BLOCK_CACHE_LIMIT_DEFAULT ||
+        wedge_trans_scope != 2 || !trans_cache_enabled ||
+        m_hexCacheStatsEnabled || hmatvec_stats_enabled ||
+        hmatvec_mkl_threads != 1;
     out.emplace_back("hex_cache_stats_enabled", m_hexCacheStatsEnabled ? 1.0 : 0.0);
-    out.emplace_back("hex_far_one_sided_threshold", HexFarOneSidedThreshold());
+    out.emplace_back("hex_block_cache_limit", (double)block_cache_limit);
+    out.emplace_back("hex_trans_cache_enabled", trans_cache_enabled ? 1.0 : 0.0);
+    out.emplace_back("hex_far_one_sided_threshold", hex_far_one_sided);
     out.emplace_back("hex_affine_exact_near_factor", HEX_AFFINE_EXACT_NEAR_FACTOR);
-    out.emplace_back("hex_distorted_far_factor", HexDistortedFarFactor());
+    out.emplace_back("hex_distorted_far_factor", distorted_far_factor);
+    out.emplace_back("curved_direct_enabled", curved_direct_enabled ? 1.0 : 0.0);
     // QuadBlockHex dispatch profile: computed blocks + accumulated wall seconds per branch (thread-summed
     // across the ParallelFor workers, so the seconds compare branch-to-branch, not to the build wall clock).
     out.emplace_back("hex_blk_affine_near", ld(m_hexBlkAffineNear));
@@ -3982,13 +4009,22 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexCacheStats()
     out.emplace_back("hex_general_shared_lookups", ld(m_hexGeneralSharedLookups));
     out.emplace_back("hex_general_shared_hits", ld(m_hexGeneralSharedHits));
     out.emplace_back("hex_general_shared_misses", ld(m_hexGeneralSharedMisses));
-    out.emplace_back("wedge_far_one_sided_threshold", WedgeFarOneSidedThreshold());
-    out.emplace_back("wedge_trans_cache_scope", (double)WedgeTransCacheScope());
-    out.emplace_back("wedge_trans_cache_enabled", WedgeTransCacheScope() > 0 ? 1.0 : 0.0);
-    out.emplace_back("ho_far_one_sided_enabled", HOFarOneSidedEnabled() ? 1.0 : 0.0);
+    out.emplace_back("wedge_far_one_sided_threshold", wedge_far_one_sided);
+    out.emplace_back("wedge_trans_cache_scope", (double)wedge_trans_scope);
+    out.emplace_back("wedge_trans_cache_enabled", wedge_trans_scope > 0 ? 1.0 : 0.0);
+    out.emplace_back("ho_far_one_sided_enabled", ho_far_one_sided ? 1.0 : 0.0);
     out.emplace_back("ho_analytic_block_available", m_hoAnalyticBlock ? 1.0 : 0.0);
     out.emplace_back("ho_analytic_block_enabled",
-                     m_hoAnalyticBlock && HOAnalyticBlockEnabled() ? 1.0 : 0.0);
+                     m_hoAnalyticBlock && ho_analytic_enabled ? 1.0 : 0.0);
+    out.emplace_back("ho_image_block_enabled", ho_image_enabled ? 1.0 : 0.0);
+    out.emplace_back("hmatvec_stats_enabled", hmatvec_stats_enabled ? 1.0 : 0.0);
+    out.emplace_back("hmatvec_mkl_threads", (double)hmatvec_mkl_threads);
+    out.emplace_back("nonproduction_numerical_override_active",
+                     numerical_override ? 1.0 : 0.0);
+    out.emplace_back("nondefault_performance_override_active",
+                     performance_override ? 1.0 : 0.0);
+    out.emplace_back("release_claim_eligible",
+                     numerical_override || performance_override ? 0.0 : 1.0);
     out.emplace_back("hex_block_lookups", ld(m_hexBlockLookups));
     out.emplace_back("hex_block_hits", ld(m_hexBlockHits));
     out.emplace_back("hex_block_misses", ld(m_hexBlockMisses));

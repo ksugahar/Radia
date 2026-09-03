@@ -254,6 +254,8 @@ void HACApK_matvec_sym_many_prepared_wrapper(
 void HACApK_matvec_stats_reset(void);
 void HACApK_matvec_stats_get(double *values, int n_values,
                              int64_t *counts, int n_counts);
+int HACApK_matvec_stats_is_enabled(void);
+int HACApK_matvec_mkl_threads_get(void);
 
 /* Free all H-matrix resources (call before HACApK_free_leafmtxp/lcontrol) */
 void HACApK_free_hmatrix_wrapper(
