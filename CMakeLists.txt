@@ -274,7 +274,7 @@ set(RADIA_CORE_SOURCES
 	# rad_subdivided_*.cpp REMOVED (Phase C, 2026-04-16) - Subdivide API gone, use Cubit/Netgen meshing
 	${CORE_DIR}/rad_serialization.cpp         # Interface functions
 	${CORE_DIR}/rad_polyhedron.cpp            # Polyhedron with magnetization
-	${CORE_DIR}/rad_hacapk.cpp                # HACApK H-matrix manager (Method 2)
+	${CORE_DIR}/rad_hacapk.cpp                # Kernel-agnostic HACApK H-matrix lifecycle
 
 	# PEEC Loop-Star matrix construction (Laplace kernel only)
 	${CORE_DIR}/rad_peec_matrices.cpp         # PEEC Loop-Star matrix construction

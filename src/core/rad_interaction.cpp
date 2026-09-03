@@ -1268,7 +1268,7 @@ void radTInteraction::FindMaxModMandH(double& MaxModM, double& MaxModH)
 //=========================================================================
 // PrecomputeTetraGeometry: Pre-compute tetrahedron face geometry
 // Extracts vertices, normals, and areas for fast 3x3 block computation
-// Reference: ELF-style optimization (same as RadHACApKMagnetostaticManager::PrecomputeGeometry3DOF)
+// Shared compact-tetrahedron geometry cache for dense interaction assembly.
 //=========================================================================
 
 void radTInteraction::PrecomputeTetraGeometry()
@@ -1640,7 +1640,7 @@ static void FieldGradFromChargedTriangleLocal(const double* obs,
 //=========================================================================
 // Compute3x3BlockFast: Fast 3x3 interaction block for tetrahedra
 // Uses pre-computed geometry (no B_comp overhead)
-// Reference: ELF-style optimization (same as RadHACApKMagnetostaticManager::Compute3x3BlockFast)
+// ELF-style compact-tetrahedron field kernel used by dense interaction assembly.
 //=========================================================================
 
 void radTInteraction::Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat) const

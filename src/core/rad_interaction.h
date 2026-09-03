@@ -178,7 +178,6 @@ public:
 
 class radTInteraction : public radTg {
 	friend class radTHMatrixACA;    // Allow H-matrix to access interaction data
-	friend class RadHACApKMagnetostaticManager;  // Allow HACApK manager to access interaction data
 
 	// Allow unified nonlinear iteration helpers to access interaction data
 	friend bool InitializeNonlinearContext(struct NonlinearContext&, radTInteraction*, bool);
@@ -597,9 +596,6 @@ public:
 
 	friend class radTIterativeRelaxMeth;
 	friend class radTRelaxationMethNo_0;   // LU direct solver
-#ifdef RADIA_USE_HACAPK
-	friend class RadHACApKMagnetostaticManager;      // HACApK compact-interaction manager
-#endif
 };
 
 //-------------------------------------------------------------------------
