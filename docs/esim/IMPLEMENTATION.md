@@ -326,7 +326,7 @@ of divergence — but it is **not by itself** evidence of a usable
 result, either.  You must inspect the trajectory.
 
 **Decision rule.**  Plot `esim_history` with
-[`docs/ih_esim_benchmark/plot_karl_history.py`](../ih_esim_benchmark/plot_karl_history.py),
+[`validation_test/ih_esim_benchmark/plot_karl_history.py`](../../validation_test/ih_esim_benchmark/plot_karl_history.py),
 which overlays `dZ` (or `dZ_max`), `Z_s_abs` (with min/max band for
 per-panel), and `|H_t|` per iteration.  Read it as:
 
@@ -508,7 +508,7 @@ target: `calc_inductance.py` scalar path, ~3 days effort.
 | Karl plateaus at `dZ ≈ 0.5` | non-monotone BH curve | print `μ(H)` from the loaded BH file at sample H values |
 | Karl converges to wrong `Z_s` | wrong sign on Robin BC | compare to scalar SIBC at low-H regime; `Z_s_esim ≈ Z_s_dowell` should hold |
 | Karl 50+ iter without convergence | `α` too small OR BH knee straddled | try `α = 0.7` with `max_iter = 30`; check `H_t_rms` vs the BH knee |
-| Karl hits `max_iter` but `Z_s_abs` / `H_t_rms` look plateaued | per-DOF noise floor on worst DOF, not divergence (see § 3.4) | plot `esim_history` with [`plot_karl_history.py`](../ih_esim_benchmark/plot_karl_history.py); if integrated quantities are monotone, accept the cap or raise `--esim-tol` to 5e-3 |
+| Karl hits `max_iter` but `Z_s_abs` / `H_t_rms` look plateaued | per-DOF noise floor on worst DOF, not divergence (see § 3.4) | plot `esim_history` with [`plot_karl_history.py`](../../validation_test/ih_esim_benchmark/plot_karl_history.py); if integrated quantities are monotone, accept the cap or raise `--esim-tol` to 5e-3 |
 | Cell Picard inner-loop diverges | `tol` too tight for the BH curve smoothness | raise cell `tol` to 1e-4 (currently hard-coded — see [`MATHEMATICAL_ANALYSIS.md`](MATHEMATICAL_ANALYSIS.md) § 2.3) |
 | Per-DOF Karl gives wildly different result from scalar | mass-lumping `M_lump` close to zero on some DOFs | check `min(M_lump)` — should be `>10⁻⁶ × max(M_lump)`; coarsen mesh if not |
 
@@ -556,8 +556,9 @@ src/radia/
 
 matlab/+radia/+simulink/      # Induction Heating block and MATLAB adapters
 
-docs/
+validation_test/
   ih_esim_benchmark/          # benchmark.py + analytical_bessel_baseline.py + results.json
+docs/
   induction_heating/          # result-saved public demo showcase + migration catalog
   # (canonical ESIM lives in src/radia/esim_cell_problem.py; old loose
   #  research/example scripts were promoted or removed in June 2026)

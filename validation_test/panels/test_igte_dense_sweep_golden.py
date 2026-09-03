@@ -1,6 +1,6 @@
 """Golden regression test for the IGTE 2026 ESIM digest dense sweep.
 
-Reads the committed `docs/ih_esim_benchmark/sweep_data_dense/`
+Reads the committed `validation_test/ih_esim_benchmark/sweep_data_dense/`
 JSONs and asserts the headline numbers cited in the digest:
 
   - Anchor case (100 A, 50 kHz): per-panel 18.75 W vs scalar 30.51 W
@@ -23,8 +23,10 @@ import os
 import pytest
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-DENSE = os.path.join(REPO, "docs", "ih_esim_benchmark", "sweep_data_dense")
-SWEEP = os.path.join(REPO, "docs", "ih_esim_benchmark", "sweep_data_dense")
+DENSE = os.path.join(
+    REPO, "validation_test", "ih_esim_benchmark", "sweep_data_dense"
+)
+SWEEP = DENSE
 
 
 def _load(tag):

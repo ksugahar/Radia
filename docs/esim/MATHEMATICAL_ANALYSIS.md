@@ -1129,7 +1129,7 @@ is:
   `--esim-relax 0.5`.
 
 Cross-validation suite:
-[`docs/ih_esim_benchmark/`](../ih_esim_benchmark/) ships
+[`validation_test/ih_esim_benchmark/`](../../validation_test/ih_esim_benchmark/) ships
 `benchmark.py` + `analytical_bessel_baseline.py` + `results.json` +
 `benchmark_plot.pdf`.  This is the runnable counterpart to § 5.1 (linear
 Bessel parity).  Extending it to Stoll-envelope and Lavers–Biringer
@@ -1141,7 +1141,7 @@ Closed-form references for the SIBC + ESIM combination:
 
 | Geometry | Reference | Status |
 |---|---|---|
-| Cylinder + linear μ | Wakao–Igarashi–Fujiwara Part 5 (Bessel) | **VERIFIED** (matches to ~10⁻⁴; benchmark at [`docs/ih_esim_benchmark/`](../ih_esim_benchmark/)) |
+| Cylinder + linear μ | Wakao–Igarashi–Fujiwara Part 5 (Bessel) | **VERIFIED** (matches to ~10⁻⁴; benchmark at [`validation_test/ih_esim_benchmark/`](../../validation_test/ih_esim_benchmark/)) |
 | Slab + linear μ | Dowell (tanh) | **VERIFIED** (Dowell closed-form baked into `mat.dowell_Zs`) |
 | Cylinder + nonlinear μ (BH) | Stoll 1974 (analytical envelope) | **open** (roadmap § 7) |
 | Plate + 2-sided heating | Lavers–Biringer 1985 | **open** (roadmap § 7; implementation exists at `ESIMFiniteSlabSolver`, no cross-check harness) |

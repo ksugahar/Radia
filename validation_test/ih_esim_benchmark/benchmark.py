@@ -31,7 +31,7 @@ import platform
 import subprocess
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
@@ -226,7 +226,8 @@ def main():
     tmpdir.mkdir(parents=True, exist_ok=True)
 
     results = {
-        "timestamp": datetime.now().isoformat(),
+        "schema": "radia.validation.ih-esim-cross-path-benchmark.v1",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "hostname": platform.node(),
         "radia_version": None,
         "problem": {
