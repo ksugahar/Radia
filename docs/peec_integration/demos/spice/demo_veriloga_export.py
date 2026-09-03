@@ -21,14 +21,10 @@ Author: Radia Development Team
 Date: 2026-01-16
 """
 
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia'))
-
 import numpy as np
 
 # Import Verilog-A generator
-from veriloga_generator import (
+from radia.veriloga_generator import (
     VerilogAGenerator,
     DowellParams, DebyeParams, ColeColeParams, MultiDebyeParams,
     generate_dowell_veriloga,
