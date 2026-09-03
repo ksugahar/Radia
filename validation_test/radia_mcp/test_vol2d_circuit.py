@@ -7,6 +7,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+pytestmark = pytest.mark.usefixtures("ngsolve_taskmanager")
+
 from radia_mcp.motor.server import motor_vol2d_circuit_analysis
 from radia_mcp.radia_ngsolve.netgen_vol import parse_netgen_tri_tet_vol
 from radia_mcp.radia_ngsolve.vol2d_circuit import (

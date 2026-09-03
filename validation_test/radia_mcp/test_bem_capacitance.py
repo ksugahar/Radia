@@ -7,6 +7,8 @@ against the exact analytic capacitance of an isolated conducting sphere, C = 4 p
 """
 import pytest
 
+pytestmark = pytest.mark.usefixtures("ngsolve_taskmanager")
+
 bem = pytest.importorskip("ngsolve.bem")
 from radia_mcp.radia_ngsolve.bem_integral import (sphere_capacitance, single_layer_capacitance,
                                                   spheroid_capacitance, spheroid_capacitance_analytic,

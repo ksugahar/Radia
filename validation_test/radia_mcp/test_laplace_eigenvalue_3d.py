@@ -9,6 +9,8 @@ import sys
 
 import pytest
 
+pytestmark = pytest.mark.usefixtures("ngsolve_taskmanager")
+
 ng = pytest.importorskip("ngsolve")
 pytest.importorskip("netgen")
 from netgen.occ import unit_cube, Sphere, Cylinder, Pnt, Z, OCCGeometry
