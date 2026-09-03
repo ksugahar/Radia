@@ -1,0 +1,111 @@
+{
+  "schema": "radia.validation.peec-solver-benchmarks.v1",
+  "generated_at_utc": "2026-09-03T06:29:52Z",
+  "versions": {
+    "python_version": "3.12.10",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "numpy_version": "2.5.2",
+    "radia_version": "4.95.55",
+    "radia_mcp_version": "1.4.51",
+    "matplotlib_version": "3.10.8"
+  },
+  "provenance": {
+    "version_scope": "manifest_render_environment",
+    "legacy_raw_measurement_versions": "not_recorded",
+    "future_driver_outputs_are_versioned": true
+  },
+  "notebook": "validation_test/solver_benchmarks/peec_solver_benchmarks.ipynb",
+  "notebook_sha256": "761125a69b324a54c6578eaf919ff9350d5c542eb77bb98f2a83d556c69ebb97",
+  "policy": {
+    "result_saved_ipynb": true,
+    "validation_json_required": true,
+    "raw_results_in_validation": true,
+    "routine_ci": false,
+    "executable_drivers": "validation_test/solver_benchmarks/"
+  },
+  "summary": {
+    "dense_rows": 5,
+    "hacapk_rows": 7,
+    "mna_rows": 10,
+    "max_hacapk_filaments": 24500,
+    "mna_common_filaments": [
+      200,
+      800,
+      1800,
+      3200,
+      5000
+    ],
+    "mna_largest_common_speedup_dense_over_hacapk": 1.5179149710929536,
+    "mna_largest_common_hacapk_peak_memory_mb": 489.9453125,
+    "raw_json_sha256": {
+      "dense": "1b815aa4354fd6c193318fabc81d29a7a5d9088e685ae145b8fa44506acd7ab7",
+      "hacapk": "5d4ed89482f074e8f620a8472410bf805df64c09600646eafb723d4be16f1076",
+      "mna_crossover": "780e2163fef9e8829c6772eafe473438eac37e49603c409d755a1b50b6952a0d"
+    }
+  },
+  "raw_benchmark_files": [
+    {
+      "name": "dense",
+      "path": "validation_test/solver_benchmarks/results_bench_peec_dense.json",
+      "sha256": "1b815aa4354fd6c193318fabc81d29a7a5d9088e685ae145b8fa44506acd7ab7",
+      "rows": 5,
+      "measured_at": "2026-04-16T07:31:56.252091"
+    },
+    {
+      "name": "hacapk",
+      "path": "validation_test/solver_benchmarks/results_bench_peec_hacapk.json",
+      "sha256": "5d4ed89482f074e8f620a8472410bf805df64c09600646eafb723d4be16f1076",
+      "rows": 7,
+      "measured_at": "2026-04-16T14:50:08.733719"
+    },
+    {
+      "name": "mna_crossover",
+      "path": "validation_test/solver_benchmarks/results_bench_peec_mna_crossover.json",
+      "sha256": "780e2163fef9e8829c6772eafe473438eac37e49603c409d755a1b50b6952a0d",
+      "rows": 10,
+      "measured_at": "2026-04-17T08:47:54.866433"
+    }
+  ],
+  "source_files": [
+    {
+      "path": "validation_test/solver_benchmarks/bench_peec_dense.py",
+      "sha256": "70ea7e99c667b4c1b68f50650f4349af0b0c77073bfbc0d9a94a94320a113779",
+      "chars": 9066
+    },
+    {
+      "path": "validation_test/solver_benchmarks/bench_peec_hacapk.py",
+      "sha256": "2dec4cd9f03f3b5d77e8a7a24ff7931db10890ddf130b61bfa1ea2ea62577e92",
+      "chars": 15618
+    },
+    {
+      "path": "validation_test/solver_benchmarks/bench_peec_mna_crossover.py",
+      "sha256": "ef709e90713e524863056ae5e35e1ffcbc143cc659bc3123340bc7360190dd77",
+      "chars": 16853
+    },
+    {
+      "path": "validation_test/solver_benchmarks/validate_peec_circuit_hacapk.py",
+      "sha256": "8ea626630200e66ae416879028f960f834ffaaeb74ed4ffcd517cf63d7b62e6e",
+      "chars": 3715
+    },
+    {
+      "path": "validation_test/solver_benchmarks/compare_peec_dense_vs_hacapk.py",
+      "sha256": "7244e708f254cb8c4a226b6a4446940d406f227ab599d87a95e41958ab6db314",
+      "chars": 9419
+    },
+    {
+      "path": "validation_test/solver_benchmarks/findings_peec_mna_crossover.md",
+      "sha256": "22fa753ae9eb3ca7f3cdc363b7734ed08aeddedc8517e0cc61f91995ba55c818",
+      "chars": 7726
+    },
+    {
+      "path": "validation_test/solver_benchmarks/comparison_peec_dense_vs_hacapk.md",
+      "sha256": "38419c98f5d207c5e41c0463e317b018d55fa571c2b3fa71fa8a67fd22d8fb7e",
+      "chars": 1539
+    },
+    {
+      "path": "validation_test/solver_benchmarks/comparison_peec_dense_vs_hacapk.tex",
+      "sha256": "f9b91d35b5875b9ce674b79cc22c1e8d1d48ca0a2aadcc4f84a91b2059fba0fc",
+      "chars": 1154
+    }
+  ]
+}

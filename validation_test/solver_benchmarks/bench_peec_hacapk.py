@@ -14,7 +14,7 @@ comparison vs bench_peec_dense.py isolates the linear-algebra cost.
 
 Per repository benchmark policy:
   - one subprocess per case (fresh python, clean peak-memory measurement)
-  - JSON output: docs/solver_benchmarks/results_bench_peec_hacapk.json
+  - JSON output: validation_test/solver_benchmarks/results_bench_peec_hacapk.json
 
 Subdivisions include values beyond the dense-LU feasibility window
 (nwinc in [1..7] -> N_fil = 500, 2000, 4500, 8000, 12500, 18000, 24500)
@@ -29,6 +29,7 @@ Usage:
 """
 
 import argparse
+import importlib.metadata as im
 import json
 import math
 import os
@@ -36,7 +37,7 @@ import platform
 import subprocess
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 import numpy as np
 import psutil
@@ -65,7 +66,7 @@ BICG_MAXITER = 2000
 
 BENCH_NAME = "bench_peec_hacapk"
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-RESULT_DIR = os.path.join(REPO_ROOT, "docs", "solver_benchmarks")
+RESULT_DIR = os.path.join(REPO_ROOT, "validation_test", "solver_benchmarks")
 OUTFILE = os.path.join(
     RESULT_DIR,
     f"results_{BENCH_NAME}.json",
@@ -353,9 +354,17 @@ def run_all() -> None:
               f"res={res['final_residual']:.1e}  "
               f"peak={res['peak_memory_mb']:.0f}MB")
 
+    generated_at_utc = datetime.now(timezone.utc).isoformat()
     data = {
-        "timestamp": datetime.now().isoformat(),
+        "schema": "radia.validation.peec-hacapk-benchmark.v1",
+        "generated_at_utc": generated_at_utc,
+        "timestamp": generated_at_utc,
         "hostname": platform.node(),
+        "versions": {
+            "python": platform.python_version(),
+            "numpy": np.__version__,
+            "radia": im.version("radia"),
+        },
         "benchmark": BENCH_NAME,
         "problem": {
             "base_turns": BASE_TURNS,

@@ -12,13 +12,17 @@ For release-by-release changes, see [CHANGELOG.md](../CHANGELOG.md).
 
 Runnable CAE examples published in this repository are executed
 `docs/**/*.ipynb` notebooks, not loose scripts. Each example keeps its computed
-outputs, a synchronized result JSON, and an interactive
+outputs and an interactive
 `ngsolve.webgui.Draw` scene for the mesh and principal field (or
 `netgen.webgui.Draw` for pre-mesh CAD). Static figures may supplement the
 scene, but do not replace it. Principal-field scenes pass the field and mesh
 explicitly and name/configure the view, for example
 `Draw(field, mesh, name="B_magnitude", draw_vol=True, ...)`. Start with
 [Radia <-> NGSolve integration basics](ngsolve_integration/integration_basics.ipynb).
+
+Benchmark timing, convergence studies, and golden numerical evidence live in
+[`validation_test/`](../validation_test/) with committed JSON provenance.
+Docs notebooks are demonstrations and do not require JSON sidecars.
 
 These notebooks explain and reproduce a workflow. The final human operating
 interface for Radia applications remains the masked Simulink block library.
@@ -66,7 +70,7 @@ directory; interactive WebGUI scenes remain the notebook explanation layer.
 - [NPORT_BLOCK_LANCZOS_SPICE.md](peec/NPORT_BLOCK_LANCZOS_SPICE.md) - N-port Block Lanczos algorithm for SPICE-compatible circuit extraction
 - [ltspice/README.md](ltspice/README.md) - Built-in `radia.ltspice` conversion, topology gates, CLI, MCP, and MATLAB bridge
 - [peec_bema_convergence/peec_bema_convergence.ipynb](peec_bema_convergence/peec_bema_convergence.ipynb) - Result-bearing 3turnCoil PEEC vs BEM-A convergence demonstration.
-- [solver_benchmarks/peec_solver_benchmarks.ipynb](solver_benchmarks/peec_solver_benchmarks.ipynb) - Result-bearing dense Ruehli vs HACApK PEEC benchmark notebook synchronized with committed JSON and `validation_test/solver_benchmarks/` drivers.
+- [PEEC solver benchmark validation](../validation_test/solver_benchmarks/README.md) - Dense Ruehli vs HACApK timing, scaling, and crossover evidence kept outside the public demo corpus.
 
 > **For "how do I author a STEP that PEEC can solve?"**: query
 > `radia-mcp` `peec_inductance(topic="step_authoring")` for Cubit + build123d

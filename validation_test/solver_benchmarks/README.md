@@ -10,9 +10,10 @@ that are too expensive for the default `tests/` loop.
 - `bench_peec_mna_crossover.py`
 - `validate_peec_circuit_hacapk.py`
 
-These scripts write their committed benchmark JSON to
-`docs/solver_benchmarks/`, where the result-bearing notebook renders the
-human-facing tables and plots.
+These scripts write their committed benchmark JSON to this directory. The
+result-bearing validation notebook records the tables and plots alongside the
+drivers and measured artifacts. These benchmarks are manual validation work,
+not part of routine pull-request CI.
 
 ## Legacy H-Matrix Solver Benchmarks
 
@@ -29,5 +30,5 @@ public examples:
 - `plot_benchmark_results.py`
 
 Their historical notes are `legacy_hmatrix_README.md` and
-`legacy_hmatrix_BENCHMARK_RESULTS.md`. Prefer the PEEC notebook in
-`docs/solver_benchmarks/` for current public solver benchmark presentation.
+`legacy_hmatrix_BENCHMARK_RESULTS.md`. Prefer
+`peec_solver_benchmarks.ipynb` for current PEEC solver benchmark evidence.
