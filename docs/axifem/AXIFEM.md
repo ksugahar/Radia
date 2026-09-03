@@ -60,6 +60,14 @@ curved or skewed.  Use P2 triangles for OCC/Kelvin curved boundaries when
 triangulation is simpler, structured straight Q2 quads for rectangular
 workpieces, and Q2 curved quads for annular-sector or mapped-quad studies.
 
+This support matrix is for the electromagnetic `A_phi` formulation.  The
+production axisymmetric heat solver uses standard NGSolve `H1(order=2)` with
+the `2 pi r` weak-form weight: that is Q2 on quadrilateral meshes and P2 on
+triangular meshes.  The optional legacy Henrotte heat BFIs remain available
+for Q1 and off-axis Q2 research comparisons, but fail fast for axis-touching
+Q2 because the electromagnetic FE exposes a six-function axis-reduced basis
+while the heat matrix requires all nine scalar-temperature functions.
+
 ### Benchmark status
 
 | Order | DOFs / quad | Status | Cu disk τ₁ vs BEM 224.31 µs |
