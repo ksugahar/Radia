@@ -8,6 +8,12 @@ from netgen.geom2d import unit_square
 from ngsolve.meshes import MakeStructured2DMesh, MakeStructured3DMesh
 
 
+@pytest.fixture(scope="module", autouse=True)
+def _taskmanager():
+    with ng.TaskManager():
+        yield
+
+
 def test_local_hdiv_family_dimensions_match_the_symbolic_ledgers():
     meshes = {
         "trig": ng.Mesh(unit_square.GenerateMesh(maxh=2.0)),
