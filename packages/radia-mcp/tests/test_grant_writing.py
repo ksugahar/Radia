@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import sys
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -87,7 +88,8 @@ def test_grant_writing_kddi_health_report_runs():
     report = gw.grant_writing_health_report(KDDI_SAMPLE, program="kddi_digital")
 
     assert report["program"] == "kddi_digital"
-    assert report["defect_score"] >= 0
+    assert 0 <= report["defect_score"] <= report["score_max"]
+    assert report["tools_run"]
     assert "kddi_digital" in report["detailed_results"]
     assert "power_electronics_focus" in report["detailed_results"]
     assert "budget" in report["detailed_results"]
@@ -97,7 +99,8 @@ def test_grant_writing_kaken_oss_health_report_runs():
     report = gw.grant_writing_health_report(KAKEN_OSS_SAMPLE, program="kaken_oss")
 
     assert report["program"] == "kaken_oss"
-    assert report["defect_score"] >= 0
+    assert 0 <= report["defect_score"] <= report["score_max"]
+    assert report["tools_run"]
     assert "kaken_oss_platform" in report["detailed_results"]
     assert "kaken_basic_research_positioning" in report["detailed_results"]
     assert "named_software_abstraction" in report["detailed_results"]
@@ -122,6 +125,9 @@ def test_grant_writing_server_exposes_adjacent_reviewer_readability():
     assert "grant_writing_japanese_readability_score" in names
     assert "grant_writing_kaken_basic_research_positioning_check" in names
     assert "grant_writing_budget_source_consistency_check" in names
+    assert "bib_path" in by_name["grant_writing_publication_list"].inputSchema[
+        "required"
+    ]
     assert "document_type" in by_name[
         "grant_writing_japanese_readability_score"
     ].inputSchema["required"]
@@ -239,39 +245,41 @@ async def _probe_japanese_readability_stdio() -> dict:
         cwd=str(package_root),
         env=env,
     )
-    async with stdio_client(params) as (read_stream, write_stream):
-        async with ClientSession(read_stream, write_stream) as session:
-            initialized = await session.initialize()
-            listed = await session.list_tools()
-            called = await session.call_tool(
-                "grant_writing_japanese_readability_score",
-                {
-                    "text": READABLE_JAPANESE_GRANT,
-                    "document_type": "grant_proposal",
-                },
-            )
-            payload = json.loads(called.content[0].text)
-            rejected = await session.call_tool(
-                "grant_writing_japanese_readability_score",
-                {
-                    "text": RESEARCH_MEETING_MANUSCRIPT,
-                    "document_type": "research_meeting_manuscript",
-                },
-            )
-            rejected_payload = json.loads(rejected.content[0].text)
-            return {
-                "server_name": initialized.serverInfo.name,
-                "listed": any(
-                    tool.name == "grant_writing_japanese_readability_score"
-                    for tool in listed.tools
-                ),
-                "is_error": bool(called.isError),
-                "status": payload["status"],
-                "score": payload["score"],
-                "rejected_is_error": bool(rejected.isError),
-                "rejected_status": rejected_payload["status"],
-                "rejected_score": rejected_payload["score"],
-            }
+    async with (
+        stdio_client(params) as (read_stream, write_stream),
+        ClientSession(read_stream, write_stream) as session,
+    ):
+        initialized = await session.initialize()
+        listed = await session.list_tools()
+        called = await session.call_tool(
+            "grant_writing_japanese_readability_score",
+            {
+                "text": READABLE_JAPANESE_GRANT,
+                "document_type": "grant_proposal",
+            },
+        )
+        payload = json.loads(called.content[0].text)
+        rejected = await session.call_tool(
+            "grant_writing_japanese_readability_score",
+            {
+                "text": RESEARCH_MEETING_MANUSCRIPT,
+                "document_type": "research_meeting_manuscript",
+            },
+        )
+        rejected_payload = json.loads(rejected.content[0].text)
+        return {
+            "server_name": initialized.serverInfo.name,
+            "listed": any(
+                tool.name == "grant_writing_japanese_readability_score"
+                for tool in listed.tools
+            ),
+            "is_error": bool(called.isError),
+            "status": payload["status"],
+            "score": payload["score"],
+            "rejected_is_error": bool(rejected.isError),
+            "rejected_status": rejected_payload["status"],
+            "rejected_score": rejected_payload["score"],
+        }
 
 
 def test_japanese_readability_passes_real_stdio_protocol():
@@ -287,6 +295,8 @@ def test_japanese_readability_passes_real_stdio_protocol():
     assert not result["rejected_is_error"]
     assert result["rejected_status"] == "wrong_genre"
     assert result["rejected_score"] is None
+
+
 def test_grant_writing_kaken_oss_platform_check():
     result = gw.grant_writing_kaken_oss_platform_check(KAKEN_OSS_SAMPLE)
 
@@ -2059,10 +2069,8 @@ def test_sentence_analysis_ignores_latex_scaffolding():
 
     result = gw.grant_writing_analyze_sentences(tex, max_len=50)
 
-    # The heading is its own segment: two sentences plus 研究目的. Keeping it
-    # separate is what stops a field title from fusing with the paragraph
-    # under it and being counted as one long sentence.
-    assert result["total_sentences"] == 3
+    # Fixed form headings are not applicant prose; the two body sentences are.
+    assert result["total_sentences"] == 2
     assert result["over_threshold_count"] == 0
     assert all("template" not in item["head"] for item in result["over_threshold_examples"])
 
@@ -2379,7 +2387,10 @@ def test_health_report_leaves_page_limits_alone_when_the_pdf_is_ambiguous(tmp_pa
 
     result = gw.grant_writing_health_report(str(tmp_path / "a.tex"))
 
-    assert "page_limit" not in result["detailed_results"]
+    page_result = result["detailed_results"]["page_limit"]
+    assert not page_result["applicable"]
+    assert "ambiguous" in page_result["reason"]
+    assert len(page_result["pdf_candidates"]) == 2
 
 
 def test_publication_list_is_not_linted_as_one_long_sentence():
@@ -3043,3 +3054,383 @@ def test_a_proposal_that_claims_no_absence_is_not_judged_on_it():
     )
 
     assert not result["applicable"]
+
+
+def test_inline_latex_comments_and_commented_inputs_are_not_linted(tmp_path):
+    (tmp_path / "a.tex").write_text("A本文。\n", encoding="utf-8")
+    (tmp_path / "b.tex").write_text("B本文。\n", encoding="utf-8")
+    main = tmp_path / "main.tex"
+    main.write_text(
+        "\\input{a} % \\input{b} TODO 赤線 \\[x=y\\]\n",
+        encoding="utf-8",
+    )
+
+    assembled = gw._read_text_if_path(str(main))
+    assert "A本文" in assembled
+    assert "B本文" not in assembled
+    assert "TODO" not in gw._prose_for_lint(assembled)
+
+    persuasion = gw.grant_writing_persuasion_quality_check(str(main))
+    assert persuasion["counts"]["display_equations"] == 0
+    residue = gw.grant_writing_template_residue_check(str(main))
+    assert residue["risks"] == []
+    review_format = gw.grant_writing_kaken_review_format_check(str(main))
+    assert all(r["type"] != "color_dependent_figure" for r in review_format["risks"])
+
+
+def test_fixed_form_headings_are_not_applicant_prose():
+    prose = gw._prose_for_lint(
+        "\\section{人権の保護及び法令等の遵守への対応}\n"
+        "本研究では個人情報を扱わない。\n"
+    )
+
+    assert "人権の保護及び法令等の遵守への対応" not in prose
+    assert prose == "本研究では個人情報を扱わない。"
+
+
+def test_raw_comment_only_triggers_do_not_activate_prose_checks():
+    commented = (
+        "% 連携 統合 Radia 予算 内訳 単価 数量 見積書 100千円\n"
+        "本研究では磁気浮上の成立条件を明らかにする。\n"
+    )
+
+    assert not gw.grant_writing_collaborative_integration_risk_check(commented)["applicable"]
+    assert not gw.grant_writing_budget_alignment_check(commented)["applicable"]
+    software = gw.grant_writing_named_software_abstraction_check(commented)
+    assert not software["applicable"]
+
+
+def test_short_keyword_matching_respects_word_and_character_boundaries():
+    assert gw._contains_any("domain decomposition", ["ai", "oss", "api", "ci", "arm"]) == []
+    assert gw._contains_any("core loss", ["oss"]) == []
+    assert gw._contains_any("磁力と熱伝導", ["力", "熱"]) == []
+    assert gw._contains_any("AI と OSS を用いる", ["ai", "oss"]) == ["ai", "oss"]
+
+    basic = gw.grant_writing_kaken_basic_research_positioning_check(
+        "domain decomposition improves a core loss model."
+    )
+    assert not basic["applicable"]
+    domain = gw.grant_writing_domain_outcome_chain_check("core loss is measured.")
+    assert not domain["applicable"]
+    assert not gw._mentions_cost_nearby("server maintenance 費を計上する。", "ai")
+
+
+def test_partner_matching_has_boundaries_and_excludes_the_home_institution():
+    assert gw._NAMED_PARTNER.search("METHOD is compared with another method.") is None
+    assert gw._NAMED_PARTNER.search("Kindai University develops the model.") is None
+    assert gw._NAMED_PARTNER.search("TU Wien develops the independent solver.")
+
+
+def test_electromagnetic_terms_do_not_satisfy_international_relationship_words():
+    result = gw.grant_writing_international_standing_check(
+        "ウィーン工科大学と海外共同研究を行う。"
+        "円筒導体の交流磁界を研究分担者が解析する。"
+    )
+
+    assert result["applicable"]
+    assert "交流" not in result["reciprocity_markers"]
+    assert "分担" not in result["reciprocity_markers"]
+
+
+def test_radia_name_does_not_match_radial_or_radiation():
+    result = gw.grant_writing_kaken_oss_platform_check(
+        "JP-MARsを研究基盤とする。radial field and radiation are evaluated."
+    )
+
+    assert not result["radia_integration"]["mentioned"]
+
+
+def test_overlapping_self_negation_patterns_report_one_finding():
+    result = gw.grant_writing_persuasion_quality_check(
+        "この成果は工学的有用性を示すものではなく、根拠にはしない。"
+    )
+
+    assert result["counts"]["self_negating_evidence"] == 1
+
+
+def test_form_role_words_are_not_parsed_as_people():
+    result = gw.grant_writing_proper_noun_load_check(
+        "同氏は研究代表者である。氏名 菅原賢悟。"
+    )
+
+    names = {item["name"] for item in result.get("singletons", [])}
+    assert "同" not in names
+    assert "究代表者" not in names
+
+
+def test_two_item_enumeration_before_nado_is_not_a_hedge():
+    result = gw.grant_writing_count_weak_expressions("高次要素、補助空間前処理などを比較する。")
+
+    assert "など" not in result["by_pattern"]
+
+
+def test_past_modifier_does_not_turn_a_future_claim_into_a_record():
+    result = gw.grant_writing_vague_claim_verb_check(
+        "統合したシステムを活用する。"
+    )
+
+    assert any(r["type"] == "claim_verb_without_mechanism" for r in result["risks"])
+
+
+def test_bare_item_number_is_not_concrete_momentum_evidence():
+    result = gw.grant_writing_reviewer_momentum_check(
+        "設計判断が困難である。研究項目1を設定する。"
+        "そこで本研究では成立条件を明らかにする。候補順位を確定する。"
+    )
+
+    assert not result["metrics"]["bottleneck_is_specific"]
+
+
+def test_calendar_year_alone_does_not_identify_a_publication():
+    result = gw.grant_writing_kaken_review_format_check(
+        "2026年度の研究業績として主要論文がある。"
+    )
+
+    assert any(r["type"] == "publication_not_identifiable" for r in result["risks"])
+
+
+def test_page_limit_reports_a_declared_field_missing_from_the_pdf(tmp_path):
+    _write_form_tex(tmp_path / "a.tex", "PURPOSE", 2)
+    _write_form_pdf(tmp_path / "form.pdf", [("OTHER", 4)])
+
+    result = gw.grant_writing_page_limit_check(str(tmp_path / "form.pdf"))
+
+    assert result["applicable"]
+    assert result["score"] < 10
+    assert any(r["type"] == "declared_field_heading_not_found" for r in result["risks"])
+
+
+def test_page_limit_does_not_consume_the_next_section_declaration(tmp_path):
+    (tmp_path / "a.tex").write_text(
+        "\\section{FIRST}\n本文。\n\\section{SECOND}\n% <<最大 1ページ>>\n本文。\n",
+        encoding="utf-8",
+    )
+    _write_form_pdf(tmp_path / "form.pdf", [("FIRST", 1), ("SECOND", 1)])
+
+    result = gw.grant_writing_page_limit_check(str(tmp_path / "form.pdf"))
+
+    assert [field["field"] for field in result["fields"]] == ["SECOND"]
+
+
+def test_page_limit_handles_two_field_headings_on_the_same_page(tmp_path):
+    import fitz
+
+    (tmp_path / "a.tex").write_text(
+        "\\section{FIRST}\n% <<最大 1ページ>>\n"
+        "\\section{SECOND}\n% <<最大 1ページ>>\n",
+        encoding="utf-8",
+    )
+    doc = fitz.open()
+    page = doc.new_page()
+    page.insert_text((72, 72), "FIRST SECOND", fontname="helv", fontsize=11)
+    doc.save(str(tmp_path / "form.pdf"))
+    doc.close()
+
+    result = gw.grant_writing_page_limit_check(str(tmp_path / "form.pdf"))
+
+    assert all(field["used_pages"] >= 1 for field in result["fields"])
+    assert any(r["type"] == "field_headings_share_page" for r in result["risks"])
+
+
+def test_health_report_uses_tex_directory_for_an_explicit_pdf_elsewhere(tmp_path):
+    source_dir = tmp_path / "source"
+    output_dir = tmp_path / "output"
+    source_dir.mkdir()
+    output_dir.mkdir()
+    tex = source_dir / "proposal.tex"
+    _write_form_tex(tex, "PURPOSE", 1)
+    pdf = output_dir / "compiled.pdf"
+    _write_form_pdf(pdf, [("PURPOSE", 2)])
+
+    result = gw.grant_writing_health_report(str(tex), pdf=str(pdf))
+
+    assert result["detailed_results"]["page_limit"]["applicable"]
+    assert any(f["name"] == "page_limit_check" for f in result["findings"])
+
+
+def test_health_report_prefers_a_same_stem_pdf_among_siblings(tmp_path):
+    tex = tmp_path / "proposal.tex"
+    _write_form_tex(tex, "PURPOSE", 1)
+    _write_form_pdf(tmp_path / "proposal.pdf", [("PURPOSE", 2)])
+    _write_form_pdf(tmp_path / "template.pdf", [("OTHER", 1)])
+
+    result = gw.grant_writing_health_report(str(tex))
+
+    assert result["detailed_results"]["page_limit"]["applicable"]
+    assert any(f["name"] == "page_limit_check" for f in result["findings"])
+
+
+def test_budget_parser_raises_on_a_non_numeric_candidate_row(tmp_path):
+    source = tmp_path / "budget.csv"
+    source.write_text(
+        "expenditure categories/費目,FY/年度,item/品目,,amount/金額\n"
+        "A,2026,PC,,300\n"
+        "A,2027,server,,=100*2\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="invalid budget row 3"):
+        gw.grant_writing_budget_source_consistency_check(str(source))
+
+
+def test_budget_csv_preserves_a_quoted_newline_and_decimal_total(tmp_path):
+    source = tmp_path / "budget.csv"
+    source.write_text(
+        "expenditure categories,FY,item,amount\n"
+        '人件費,2026,"RA\nwork",0.1\n'
+        "謝金,2026,lecture,0.2\n",
+        encoding="utf-8",
+    )
+
+    result = gw.grant_writing_budget_source_consistency_check(
+        str(source),
+        expected_total_thousand_yen=0.3,
+        expected_category_totals_json='{"E": 0.3}',
+    )
+
+    assert result["consistent"]
+    assert result["canonical"]["rows"][0]["item"] == "RA work"
+
+
+def test_xlsx_reader_ignores_phonetics_and_honours_row_numbers_and_merges(tmp_path):
+    main_ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    doc_rel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+    pkg_rel = "http://schemas.openxmlformats.org/package/2006/relationships"
+    shared = (
+        f'<sst xmlns="{main_ns}" count="1" uniqueCount="1">'
+        '<si><t>設備備品費</t><rPh sb="0" eb="5"><t>セツビビヒンヒ</t></rPh></si>'
+        "</sst>"
+    )
+    sheet = (
+        f'<worksheet xmlns="{main_ns}"><sheetData>'
+        '<row r="1"><c r="A1" t="inlineStr"><is><t>expenditure categories</t></is></c>'
+        '<c r="B1" t="inlineStr"><is><t>FY</t></is></c>'
+        '<c r="C1" t="inlineStr"><is><t>item</t></is></c>'
+        '<c r="D1" t="inlineStr"><is><t>amount</t></is></c></row>'
+        '<row r="3"><c r="A3" t="s"><v>0</v></c><c r="B3"><v>2026</v></c>'
+        '<c r="C3" t="inlineStr"><is><t>PC</t></is></c><c r="D3"><v>300</v></c></row>'
+        '<row r="4"><c r="B4"><v>2026</v></c>'
+        '<c r="C4" t="inlineStr"><is><t>GPU</t></is></c><c r="D4"><v>200</v></c></row>'
+        '</sheetData><mergeCells count="1"><mergeCell ref="A3:A4"/></mergeCells></worksheet>'
+    )
+    workbook = (
+        f'<workbook xmlns="{main_ns}" xmlns:r="{doc_rel}"><sheets>'
+        '<sheet name="s" sheetId="1" r:id="rId1"/></sheets></workbook>'
+    )
+    rels = (
+        f'<Relationships xmlns="{pkg_rel}">'
+        '<Relationship Id="rId1" Type="x" Target="/xl/worksheets/sheet1.xml"/>'
+        "</Relationships>"
+    )
+    path = tmp_path / "budget.xlsx"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("xl/workbook.xml", workbook)
+        archive.writestr("xl/_rels/workbook.xml.rels", rels)
+        archive.writestr("xl/sharedStrings.xml", shared)
+        archive.writestr("xl/worksheets/sheet1.xml", sheet)
+
+    rows = gw._budget_ledger_rows(path, "s")
+
+    assert [row["category"] for row in rows] == ["設備備品費", "設備備品費"]
+    assert [row["source_row"] for row in rows] == [3, 4]
+
+
+def test_health_report_scores_translationese_and_surfaces_non_scoring_diagnostics():
+    text = (
+        "設計判断には長い時間が必要である。"
+        "この劇的な方法は解析条件を設計へ発展する。"
+        "異種解析モジュールの機能、入出力物理量、実行条件、判定区間を"
+        "MCP、GitHub、CIで版管理し、設計候補の順位確定と第三者反証へ対応付ける。"
+        "XFEM、HACApK、ESIMをCauer縮約へ接続し、損失と効率を判定する。"
+    )
+    result = gw.grant_writing_health_report(text)
+
+    assert "translationese" in result["detailed_scores"]
+    assert result["defect_score"] < 10
+    question_names = {question["name"] for question in result["questions"]}
+    assert "adjacent_reviewer_readability_check" in question_names
+    assert "reviewer_momentum_check" in question_names
+
+
+def test_japanese_readability_requires_the_grant_genre_and_excludes_english():
+    wrong = gw.grant_writing_japanese_readability_score(
+        "解析結果を比較し、適用範囲を明らかにした。",
+        document_type="research_meeting_manuscript",
+    )
+    english = gw.grant_writing_japanese_readability_score(
+        "This proposal is written in English and must not receive a Japanese score.",
+        document_type="grant_proposal",
+    )
+    grant = gw.grant_writing_japanese_readability_score(
+        "設計条件の選択には時間を要する。"
+        "本研究では候補順位が一致する条件を明らかにする。"
+        "二つの解析法を比較し、適用範囲を判定する。",
+        document_type="grant_proposal",
+    )
+
+    assert wrong["status"] == "wrong_genre" and wrong["score"] is None
+    assert english["status"] == "not_applicable" and english["score"] is None
+    assert grant["applicable"] and 0 <= grant["score"] <= 100
+
+
+def _write_publication_bib(path):
+    path.write_text(
+        """@article{old,
+  author = {Sugahara, Kengo}, title = {Older}, journal = {Journal},
+  year = {2022}, volume = {1}, pages = {1--2}, doi = {10.1/old}
+}
+@article{future,
+  author = {Sugahara, Kengo}, title = {Future}, journal = {Journal},
+  year = {2027}, volume = {2}, pages = {3--4}, doi = {10.1/future}
+}
+@inproceedings{conf,
+  author = {Sugahara, Kengo}, title = {Conference}, booktitle = {Domestic Meeting},
+  year = {2025}, pages = {1--2}
+}
+@conference{conf2,
+  author = {Sugahara, Kengo}, title = {Conference Two}, booktitle = {Meeting},
+  year = {2024}, pages = {3--4}, number = {SA-27-0xx}
+}
+@article{edited,
+  editor = {Sugahara, Kengo}, author = {Someone, Else}, title = {Edited},
+  journal = {Journal}, year = {2025}
+}
+""",
+        encoding="utf-8",
+    )
+
+
+def test_publication_claims_do_not_duplicate_or_infer_peer_review_or_internationality(tmp_path):
+    bib = tmp_path / "papers.bib"
+    _write_publication_bib(bib)
+
+    peer = gw.grant_writing_achievement_count_check(
+        "査読付き学術論文を12件発表した。",
+        bib_path=str(bib),
+    )
+    international = gw.grant_writing_achievement_count_check(
+        "国際会議発表を1件行った。",
+        bib_path=str(bib),
+    )
+
+    assert peer.count("[要確認]") == 1
+    assert "[不一致]" not in peer
+    assert international.count("[要確認]") == 1
+    assert "BibTeX種別だけでは国際・国内を判定できない" in international
+
+
+def test_publication_relative_scope_uses_the_current_year_and_lists_each_group_once(tmp_path):
+    bib = tmp_path / "papers.bib"
+    _write_publication_bib(bib)
+
+    count = gw.grant_writing_achievement_count_check(
+        "過去5年の学術論文を2件発表した。",
+        bib_path=str(bib),
+    )
+    listing = gw.grant_writing_publication_list(bib_path=str(bib))
+
+    assert "学術論文 2" in count
+    assert listing.count("## 国際会議・研究発表") == 1
+    assert "Edited" not in listing
+    assert "プレースホルダを含む書誌項目" in listing
+    assert "将来年の業績" in listing
