@@ -710,8 +710,10 @@ def vector_potential_coefficient_from_solution(
 
 
 def magnetization_from_solution(res, points):
-    """Evaluate the BDM1 magnetization inside the solved mesh, zero outside."""
-    import ngsolve as ng
+    """Evaluate the BDM1 magnetization inside the solved mesh, zero outside.
+
+    The caller owns the surrounding ``ngsolve.TaskManager`` region.
+    """
 
     gfM = res.get("gfM") if isinstance(res, dict) else None
     if gfM is None:
@@ -724,12 +726,11 @@ def magnetization_from_solution(res, points):
     # NGSolve's ndarray MeshPoint representation exposes nr=-1 for points
     # outside the volume, allowing one vectorized lookup and one batched GF
     # evaluation without a Python point loop.
-    with ng.TaskManager():
-        mapped = mesh(pts[:, 0], pts[:, 1], pts[:, 2])
-        if not (isinstance(mapped, np.ndarray) and mapped.dtype.names and "nr" in mapped.dtype.names):
-            raise RuntimeError(
-                "vim magnetization evaluation requires NGSolve's vectorized MeshPoint array API")
-        valid = np.asarray(mapped["nr"] >= 0)
-        if np.any(valid):
-            values[valid] = np.asarray(gfM(mapped[valid]), float).reshape(-1, 3)
+    mapped = mesh(pts[:, 0], pts[:, 1], pts[:, 2])
+    if not (isinstance(mapped, np.ndarray) and mapped.dtype.names and "nr" in mapped.dtype.names):
+        raise RuntimeError(
+            "vim magnetization evaluation requires NGSolve's vectorized MeshPoint array API")
+    valid = np.asarray(mapped["nr"] >= 0)
+    if np.any(valid):
+        values[valid] = np.asarray(gfM(mapped[valid]), float).reshape(-1, 3)
     return values

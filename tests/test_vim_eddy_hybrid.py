@@ -83,6 +83,7 @@ def test_empty_surface_basis_keeps_a_volume_only_vim_well_formed():
 
 @pytest.mark.parametrize("solver", ["gmres", "cocr"])
 def test_matrix_free_inductance_uses_native_ngsolve_krylov(solver):
+    ng = pytest.importorskip("ngsolve")
     basis = vim.VolumeCurrentBasis(
         points=np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]]),
         weights=np.ones(2),
@@ -111,12 +112,13 @@ def test_matrix_free_inductance_uses_native_ngsolve_krylov(solver):
         rhs,
     )
 
-    actual, solve_info = system.solve(
-        s,
-        rhs,
-        solver=solver,
-        return_diagnostics=True,
-    )
+    with ng.TaskManager():
+        actual, solve_info = system.solve(
+            s,
+            rhs,
+            solver=solver,
+            return_diagnostics=True,
+        )
     np.testing.assert_allclose(actual, expected, rtol=2.0e-10, atol=2.0e-12)
     assert solve_info["backend"] == f"ngsolve-base-matrix-{solver}"
     assert solve_info["native_term_count"] == 1
@@ -164,6 +166,7 @@ def test_sampled_planar_log_hacapk_matches_dense_reference():
 
 
 def test_coupled_hdiv_hcurl_keeps_two_independent_native_hmatrices():
+    ng = pytest.importorskip("ngsolve")
     points = np.array(
         [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]
     )
@@ -205,12 +208,13 @@ def test_coupled_hdiv_hcurl_keeps_two_independent_native_hmatrices():
     operator = coupled.mixed_operator(s=2j)
     expected = np.array([1.0 + 0.2j, -0.4j, 0.3 + 0.1j, -0.2 + 0.5j])
     rhs = operator.matvec(expected)
-    result = coupled.solve(
-        s=2j,
-        magnetic_rhs=rhs[:2],
-        eddy_rhs=rhs[2:],
-        tolerance=1.0e-9,
-    )
+    with ng.TaskManager():
+        result = coupled.solve(
+            s=2j,
+            magnetic_rhs=rhs[:2],
+            eddy_rhs=rhs[2:],
+            tolerance=1.0e-9,
+        )
 
     np.testing.assert_allclose(
         result["solution"][:, 0], expected, rtol=5.0e-8, atol=5.0e-10

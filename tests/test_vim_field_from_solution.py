@@ -142,8 +142,9 @@ def test_uniform_box_matches_radia_cpp():
     )
     mixed = np.array([[0.01, 0.02, 0.01], [0.20, 0.20, 0.20],
                       [0.03, 0.01, 0.02]])
-    got_m = fb.magnetization_from_solution(
-        {"gfM": gfM, "order": 1, "curve_order": None}, mixed)
+    with ng.TaskManager():
+        got_m = fb.magnetization_from_solution(
+            {"gfM": gfM, "order": 1, "curve_order": None}, mixed)
     expected_m = np.array([M0, [0.0, 0.0, 0.0], M0])
     rad.UtiDelAll()
     assert rel.max() < 2e-8
