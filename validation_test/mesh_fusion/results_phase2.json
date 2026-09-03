@@ -1,4 +1,11 @@
 {
+  "schema": "radia.validation.mesh_fusion.phase2.v1",
+  "source_notebook": "docs/mesh_fusion/mesh_fusion.ipynb",
+  "checks": {
+    "l2_error_decreases": true,
+    "interface_jump_decreases": true,
+    "finest_l2_error_lt_2e_7": true
+  },
   "phase": 2,
   "description": "Nitsche-mortar 2D Poisson, independent H1 per side",
   "method": "Symmetric Interior Penalty Galerkin variant of Nitsche",

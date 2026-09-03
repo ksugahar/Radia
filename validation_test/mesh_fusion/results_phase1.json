@@ -1,4 +1,10 @@
 {
+  "schema": "radia.validation.mesh_fusion.phase1.v1",
+  "source_notebook": "docs/mesh_fusion/mesh_fusion.ipynb",
+  "checks": {
+    "l2_error_decreases": true,
+    "finest_l2_error_lt_1e_6": true
+  },
   "phase": 1,
   "description": "Nitsche/heterogeneous-mesh-density Poisson baseline",
   "ngsolve_version": "6.2.2603+",

@@ -524,13 +524,12 @@ a += lam.Trace() * cross(n, (u_A.Trace() - u_B.Trace())) * ds("interface")
 
 ## Worked example (VERIFIED): docs/mesh_fusion/mesh_fusion.ipynb
 
-A self-contained, runnable 5-phase study (code + committed results_phaseN.json
-+ mesh_fusion_convergence.png) in the Radia repo at
-`docs/mesh_fusion/mesh_fusion.ipynb`:
+A self-contained, runnable 5-phase study with embedded public output and a
+combined convergence plot lives at `docs/mesh_fusion/mesh_fusion.ipynb`.
+Checked phase evidence lives under `validation_test/mesh_fusion/`:
 
 - Phase 1 -- Nitsche baseline, 2D Poisson, two half-domains at different mesh
-  density. VERIFIED order=2 convergence: L2 err 4.06e-04 -> 4.56e-07 over
-  4 refinements (rate ~ +3.1, i.e. O(h^3)), n_dof 59 -> 3391.
+  density. The validation record owns the order-2 convergence values and gate.
 - Phase 2 -- mortar / Nitsche H1 Poisson with two INDEPENDENT trial spaces.
 - Phase 3 -- 2D Maxwell (A_z), Nitsche coil-air interface, complex
   j*omega*sigma eddy-current term.
@@ -538,8 +537,9 @@ A self-contained, runnable 5-phase study (code + committed results_phaseN.json
 - Phase 5 -- accelerator shim-yoke: refine the shim without inflating yoke DoF,
   with mesh-independent field-at-centre recovery across the non-matching joint.
 
-Promoted from the former `examples/mesh_fusion/` on 2026-06-26; the notebook is
-the canonical runnable artifact for this topic.
+Promoted from the former `examples/mesh_fusion/` on 2026-06-26. The notebook is
+the canonical public runnable artifact; validation JSON is the numerical source
+of truth.
 """
 
 

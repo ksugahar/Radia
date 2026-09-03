@@ -1,4 +1,10 @@
 {
+  "schema": "radia.validation.mesh_fusion.phase5.v1",
+  "source_notebook": "docs/mesh_fusion/mesh_fusion.ipynb",
+  "checks": {
+    "field_converges_with_refinement": true,
+    "last_two_relative_change_lt_1e_3": true
+  },
   "phase": 5,
   "description": "Accelerator magnet shim-yoke Nitsche-mortar demonstration",
   "use_case": "ATTO Tower magnet shim refinement without yoke DoF inflation",
