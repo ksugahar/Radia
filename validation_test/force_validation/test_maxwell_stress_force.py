@@ -35,6 +35,12 @@ RW = 0.002               # wire radius [m]
 R = 0.40                 # far boundary [m]
 
 
+@pytest.fixture(scope="module", autouse=True)
+def _taskmanager():
+    with ng.TaskManager():
+        yield
+
+
 def _solve(maxh=0.003):
     from netgen.geom2d import SplineGeometry
     from ngsolve import Mesh

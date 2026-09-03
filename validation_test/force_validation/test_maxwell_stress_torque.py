@@ -36,6 +36,12 @@ RC = 0.020               # MST contour radius (encloses both wires) [m]
 R = 0.40                 # outer boundary [m]
 
 
+@pytest.fixture(scope="module", autouse=True)
+def _taskmanager():
+    with ng.TaskManager():
+        yield
+
+
 def _solve(B0x, B0y, maxh=0.003):
     from netgen.geom2d import SplineGeometry
     from ngsolve import Mesh
