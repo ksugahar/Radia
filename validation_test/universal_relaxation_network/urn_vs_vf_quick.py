@@ -9,6 +9,7 @@ import numpy as np
 import time
 import json
 from dataclasses import dataclass, asdict
+from pathlib import Path
 from typing import Dict, List, Optional
 import warnings
 warnings.filterwarnings('ignore')
@@ -301,7 +302,8 @@ def main():
         }
     }
 
-    with open('urn_vs_vf_results.json', 'w') as f:
+    output_path = Path(__file__).with_name('urn_vs_vf_results.json')
+    with output_path.open('w', encoding='utf-8') as f:
         json.dump(output, f, indent=2)
 
     print("\n" + "=" * 80)
@@ -329,7 +331,7 @@ def main():
    - Fewer parameters due to sparsity
 """)
 
-    print(f"\nResults saved to: urn_vs_vf_results.json")
+    print(f"\nResults saved to: {output_path}")
 
 
 if __name__ == '__main__':

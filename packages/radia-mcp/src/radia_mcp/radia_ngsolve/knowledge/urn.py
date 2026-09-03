@@ -230,7 +230,9 @@ complex (eps, mu) or a non-passive rational fit into the time domain, which is
 generally non-causal/unstable.
 
 Time-domain verification in the repo: demo_spice_timedomain.py,
-run_ltspice_verification.py (actual LTspice), verify_timedomain_stability.py
+validation_test/universal_relaxation_network/run_ltspice_verification.py
+(actual LTspice) and
+validation_test/universal_relaxation_network/verify_timedomain_stability.py
 (URN vs VF stability).
 """
 
