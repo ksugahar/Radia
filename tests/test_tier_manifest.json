@@ -1,0 +1,31 @@
+{
+  "schema": "radia.test-tier-manifest.v1",
+  "profiles": {
+    "fast-contracts": {
+      "description": "Pure source, policy, package, and public-notebook contracts for every push.",
+      "max_elapsed_seconds": 60,
+      "paths": [
+        "tests/test_ci_execution_policy.py",
+        "tests/test_test_tier_policy.py",
+        "tests/test_run_test_tier.py",
+        "tests/test_docs_notebook_contract.py",
+        "tests/test_release_workflow_ref_gate.py",
+        "tests/test_wheel_package_policy.py",
+        "tests/test_application_interface_manifest.py",
+        "tests/axifem/test_docs_notebook_evidence.py"
+      ]
+    },
+    "native-smoke": {
+      "description": "Fast contracts plus deterministic native import and field regression checks.",
+      "extends": "fast-contracts",
+      "max_elapsed_seconds": 120,
+      "paths": [
+        "tests/test_simple.py",
+        "tests/test_radia.py",
+        "tests/test_meshless_relaxation_contract.py",
+        "tests/test_version_consistency.py",
+        "tests/test_vim_api_names.py"
+      ]
+    }
+  }
+}

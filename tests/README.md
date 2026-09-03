@@ -11,7 +11,7 @@ and cross-validation cases live under `validation_test/`.
 
 | Directory | Purpose | Typical command |
 | --- | --- | --- |
-| `tests/` | Lightweight debug and CI tests | `python -m pytest tests/` |
+| `tests/` | Lightweight debug and CI tests | `python tools/run_test_tier.py --profile fast-contracts` |
 | `validation_test/` | Heavy validation, benchmarks, GUI, Cubit, golden checks | `python -m pytest validation_test/` |
 
 The default `pytest` configuration discovers only `tests/`.  Run
@@ -21,8 +21,8 @@ checks.
 ## Running Lightweight Tests
 
 ```powershell
-python -m pytest tests/
-python -m pytest tests/ -m "not slow and not golden"
+python tools/run_test_tier.py --profile fast-contracts
+python tools/run_test_tier.py --profile native-smoke
 python tools/ci_preflight.py --only toplevel-collect
 ```
 
@@ -69,7 +69,7 @@ CI runs the lightweight gate by default:
 
 ```yaml
 - name: Run lightweight tests
-  run: python -m pytest tests/ -m "not slow and not golden"
+  run: python tools/run_test_tier.py --profile fast-contracts
 ```
 
 Manual release validation can add:

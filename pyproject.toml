@@ -247,7 +247,12 @@ addopts = [
     "--strict-markers",
 ]
 filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+    "ignore::pytest.PytestReturnNotNoneWarning",
     "ignore:Netgen fork.*is NOT installed:UserWarning",
+    "ignore:Field 'lifespan' has an incomplete definition.*",
 ]
 markers = [
     "basic: Basic functionality tests (fast)",
@@ -255,6 +260,7 @@ markers = [
     "advanced: Advanced features and edge cases",
     "performance: Performance and scaling tests",
     "slow: Tests that take more than 10 seconds",
+    "golden: Golden/reference tests separated from the ordinary CI gate",
     "benchmark: Performance benchmarks (not run by default)",
     "validation: Heavy validation_test suite (manual / release validation)",
     "compute_host: Solver-heavy validation restricted to mdx or hibino",

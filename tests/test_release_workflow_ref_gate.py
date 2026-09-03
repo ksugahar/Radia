@@ -61,8 +61,8 @@ def test_pypi_distributions_have_independent_ci_boundaries():
     assert "radia-mcp-wheel" not in native
     assert "cubit-mesh-export-wheel" not in native
     assert "radia-optuna-wheel" not in native
-    assert "--ignore=tests/test_cubit_installers.py" in native
-    assert "--ignore=tests/test_release_quad_optuna_candidate.py" in native
+    assert "tools/run_test_tier.py --profile native-smoke" in native
+    assert "'tests/'" not in native
     assert "pytest-rerunfailures" not in native
     assert "--reruns" not in native
 
