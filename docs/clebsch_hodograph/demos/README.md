@@ -1356,7 +1356,8 @@ it saturates.* Uses Optuna (TPE) if present, else a built-in grid+refine. Golden
 The companion question *"do the flux LINES keep the same shape as you turn up the drive
 current?"* (excitation-invariant, **not** a cyclotron) lives as a **result-bearing docs
 notebook**, not an examples script: `docs/clebsch_hodograph/excitation_invariant_field.ipynb`
-(+ `excitation_invariant_field.py` helper + synchronized JSON). It shows that below the iron
+(+ `excitation_invariant_field.py` helper; checked JSON lives under
+`validation_test/clebsch_hodograph/`). It shows that below the iron
 knee the magnet is LINEAR so the flux-line pattern is excitation-invariant by construction (the
 linear control drift is exactly 0 at every drive), saturation is the sole breaker, and the
 corner-relief end chamfer keeps the flux lines invariant `~6–7×` deeper into saturation — the
