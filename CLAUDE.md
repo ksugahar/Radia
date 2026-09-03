@@ -4053,24 +4053,29 @@ def save_benchmark_results(filename, benchmark_name, problem, results):
 
 ## .vol Pipeline: 2-Path Generation, 1-Path Computation
 
-### File Management: .jou and .vol Only
+### File Management: Reproducible CAD and Explicit Exports
 
-**POLICY**: `ensure_jou_path()` (Layer 2, PySide6 `radia_export_menu.py`) saves `.jou` before any export or evaluation. `.jou` basename determines all output filenames. `.cub5` is NOT saved by the pipeline.
+**POLICY**: A loaded Cubit model exports directly to a user-selected path. The
+toolbar never forces a journal save and never couples output names to a `.jou`
+basename. A known source journal may supply an editable initial directory and
+basename only. The toolbar does not save `.cub5` automatically.
 
 | File | Role |
 |------|------|
-| `.jou` | **Single source of truth**. Text, diff-able, version-controllable, reproducible across machines and Cubit versions |
-| `.vol` | **Computation interface**. Sole interface between Cubit and NGSolve. No ABI dependency |
+| `.sat` / `.step` / `.jou` | Optional CAD sources. SAT preserves Cubit's ACIS-native geometry, STEP is the portable exchange format, and tracked journals are replayable meshing/CAD recipes. |
+| `.vol` | **Computation interface**. Sole solver-mesh interface between Cubit and NGSolve. No Cubit ABI dependency. |
 
-**Design — .jou loaded or saved before proceeding**:
-- Every Export Mesh operation calls `ensure_jou_path()` first
-- `ensure_jou_path()` resolves in 3 steps:
-  1. `.jou` already loaded (via `play` or `get_current_journal_file`) → use it
-  2. `.jou` saved earlier in this session (`s_lastJouPath`) → use it
-  3. Neither → prompt user to save `.jou` now (QFileDialog) → `save journal`
-- **No operation proceeds without a known `.jou` path**
-- All output filenames derive from `.jou` basename: `{base}.vol`, `{base}.msh`, `{base}_J.sol`, etc.
-- `.cub5` is NOT saved by the pipeline. `.vol` is the sole computation interface
+**Design**:
+- A loaded Cubit session can export without a current `.jou`.
+- If no model is loaded, the toolbar may offer to replay a `.jou`; this is a
+  model-loading convenience, not an output-path contract.
+- If Cubit reports a current journal, its path is only an initial editable hint.
+- The export dialog owns the output directory and filename and remembers the
+  per-format directory. Cancelling the dialog performs no save or export.
+- Journal capture is an explicit reproducibility action. It is never an export
+  side effect and temporary journals do not belong at the repository root.
+- `.vol` is the branch point into NGSolve/Radia computation; `.msh` is the GMSH
+  post-processing artifact where required.
 
 ### Cubit/NGSolve Complete Separation Policy
 
@@ -4332,7 +4337,7 @@ imports another process's private runtime.
 │  ─────────────────────────────────────────────────────────────  │
 │  Export Mesh commands (GMSH/Nastran/VTK/Netgen Vol/FEMEEM/MEG)  │
 │  Mesh evaluation is a docs/notebook workflow, not a toolbar item │
-│  ensure_jou_path(): .jou save -> basename for all output files  │
+│  Explicit output path; no implicit .jou/.cub5 save              │
 │  export netgen/gmsh/jmag_nastran/vtk (APREPRO commands)  │
 └─────────────────────────────────────────────────────────────────┘
 ┌─────────────────────────────────────────────────────────────────┐
@@ -4362,7 +4367,9 @@ imports another process's private runtime.
 **Interfaces between layers**: self-contained `.vol` / `.sol` inputs plus
 versioned configuration, `run.log`, solver JSON, and `result.json` artifacts.
 
-**Filename convention**: `ensure_jou_path()` (Layer 2, PySide6 `radia_export_menu.py`) saves `.jou` first. All output files derive basename from `.jou`: `{base}.vol`, `{base}.msh`, `{base}_J.sol`, `{base}_q.sol`, etc.
+**Filename convention**: The user or application run owns the output path.
+Related artifacts use the selected/run basename (`{base}.vol`, `{base}.msh`,
+`{base}_J.sol`, `{base}_q.sol`) without requiring a same-named journal.
 
 ### Layer Isolation Rules
 

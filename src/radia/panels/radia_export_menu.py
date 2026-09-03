@@ -128,14 +128,6 @@ def find_claro():
     return None
 
 
-# ----------------------------------------------------------------------
-# Journal-path helper
-# ----------------------------------------------------------------------
-
-# Per-session sticky journal path (matches legacy `s_lastJouPath` in .ccl)
-_last_jou_path = ""
-
-
 def _is_valid_jou_path(p):
     if not p:
         return False
@@ -148,6 +140,18 @@ def _is_valid_jou_path(p):
     # Strip extension if any — basename without ext must be non-empty
     stem, _ = os.path.splitext(base)
     return bool(stem)
+
+
+def _current_journal_hint(cubit_mod):
+    """Return Cubit's current journal as an optional output-name hint."""
+    try:
+        path = cubit_mod.get_current_journal_file()
+    except Exception:
+        return ""
+    if not path:
+        return ""
+    normalized = path.replace("\\", "/")
+    return normalized if _is_valid_jou_path(normalized) else ""
 
 
 def _ensure_model(cubit_mod, parent):
@@ -169,48 +173,6 @@ def _ensure_model(cubit_mod, parent):
     if cubit_mod.get_volume_count() > 0:
         return jou
     return ""
-
-
-def ensure_jou_path(cubit_mod, parent):
-    """Ensure a .jou path is known.  Returns the path or "" if cancelled.
-
-    Three-step resolution (matches RadiaComp.cpp::ensure_jou_path):
-      1. Cubit's own current journal
-      2. The session-sticky path from a previous export
-      3. Prompt user with QFileDialog::getSaveFileName + `save journal`
-    """
-    global _last_jou_path
-
-    # 1. Cubit's own current journal file
-    try:
-        jf = cubit_mod.get_current_journal_file()
-    except Exception:
-        jf = ""
-    if jf:
-        p = jf.replace("\\", "/")
-        if _is_valid_jou_path(p):
-            return p
-
-    # 2. Session-sticky path
-    if _last_jou_path and _is_valid_jou_path(_last_jou_path):
-        return _last_jou_path
-
-    # 3. Prompt
-    default_dir = _default_start_dir() or os.getcwd().replace("\\", "/")
-    initial = default_dir.rstrip("/") + "/model.jou"
-    jou, _filter = QFileDialog.getSaveFileName(
-        parent, "Save Journal (determines output filenames)",
-        initial, "Cubit Journal (*.jou);;All Files (*)")
-    if not jou:
-        return ""
-    jou = jou.replace("\\", "/")
-    os.makedirs(os.path.dirname(jou), exist_ok=True)
-
-    # Save journal only (no .cub5)
-    cubit_mod.cmd(f'save journal "{jou}" overwrite')
-    _last_jou_path = jou
-    print(f"Saved journal: {jou}")
-    return jou
 
 
 # ----------------------------------------------------------------------
@@ -294,7 +256,7 @@ class ExportDialog(QDialog):
     ``vtk`` / ``femeem`` / ``meg``).
     """
 
-    def __init__(self, fmt, jou_path, cubit_mod, parent=None):
+    def __init__(self, fmt, source_path_hint, cubit_mod, parent=None):
         super().__init__(parent)
         self._fmt = fmt
         self._cubit = cubit_mod
@@ -304,15 +266,16 @@ class ExportDialog(QDialog):
         layout = QVBoxLayout(self)
         form = QFormLayout()
 
-        # Default directory + basename derive from .jou path
+        # A loaded journal may suggest a useful initial directory and
+        # basename, but it is never required and never controls the export.
         default_dir = ""
         if fmt == FMT_FEMEEM:
             base_name = "femeem_output"
         else:
             base_name = "ExportedMesh"
 
-        if jou_path:
-            jp = jou_path.replace("\\", "/")
+        if source_path_hint:
+            jp = source_path_hint.replace("\\", "/")
             slash = jp.rfind("/")
             if slash >= 0:
                 default_dir = jp[:slash]
@@ -513,12 +476,11 @@ class ExportDialog(QDialog):
         layout.addWidget(buttons)
 
         # --- Load saved settings ------------------------------------
-        # When jou_path was supplied (Cubit Solve menu launch with a
-        # current journal), the .jou-derived defaultDir wins over the
-        # previous session's directory.
+        # A source-path hint wins for the initial directory. Otherwise reuse
+        # the user's previous output directory for this format.
         all_settings = _load_settings()
         s = all_settings.get(fmt, {})
-        if not jou_path and "dir" in s:
+        if not source_path_hint and "dir" in s:
             self._dir.setText(s["dir"])
         if "order" in s:
             self._order.setCurrentIndex(int(s["order"]))
@@ -733,20 +695,15 @@ class ExportDialog(QDialog):
 
 def _run_generic_export(fmt, cubit_mod, parent):
     """Show ExportDialog and execute the chosen `export` command."""
-    global _last_jou_path
-
+    source_path_hint = ""
     if cubit_mod.get_volume_count() == 0:
-        jou = _ensure_model(cubit_mod, parent)
+        source_path_hint = _ensure_model(cubit_mod, parent)
         if cubit_mod.get_volume_count() == 0:
             return
-        if jou:
-            _last_jou_path = jou
+    if not source_path_hint:
+        source_path_hint = _current_journal_hint(cubit_mod)
 
-    jou_path = ensure_jou_path(cubit_mod, parent)
-    if not jou_path:
-        return
-
-    dlg = ExportDialog(fmt, jou_path, cubit_mod, parent=parent)
+    dlg = ExportDialog(fmt, source_path_hint, cubit_mod, parent=parent)
     if dlg.exec() != QDialog.Accepted:
         return
 
@@ -865,20 +822,15 @@ def _find_calc_script(python, module_name):
 
 def _run_netgen_export(cubit_mod, parent):
     """Export .vol via APREPRO + run NGSolve subprocess verification."""
-    global _last_jou_path
-
+    source_path_hint = ""
     if cubit_mod.get_volume_count() == 0:
-        jou = _ensure_model(cubit_mod, parent)
+        source_path_hint = _ensure_model(cubit_mod, parent)
         if cubit_mod.get_volume_count() == 0:
             return
-        if jou:
-            _last_jou_path = jou
+    if not source_path_hint:
+        source_path_hint = _current_journal_hint(cubit_mod)
 
-    jou_path = ensure_jou_path(cubit_mod, parent)
-    if not jou_path:
-        return
-
-    dlg = ExportDialog(FMT_NETGEN, jou_path, cubit_mod, parent=parent)
+    dlg = ExportDialog(FMT_NETGEN, source_path_hint, cubit_mod, parent=parent)
     if dlg.exec() != QDialog.Accepted:
         return
 
