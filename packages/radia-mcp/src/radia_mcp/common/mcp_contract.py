@@ -2,55 +2,67 @@
 
 from __future__ import annotations
 
-import re
+from collections import Counter
 from collections.abc import Iterable
 from typing import Any
 
-from mcp.types import ToolAnnotations
-
-
-SCHEMA = "cae-ai-lab.mcp-server-contract.v1"
-_WRITE = re.compile(
-    r"(?:^|_)(?:add|convert|create|delete|edit|exec|export|generate|import|install|launch|mesh|remove|run|save|set|solve|start|stop|submit|update|write)(?:_|$)"
-)
-_READ = re.compile(
-    r"(?:^|_)(?:analysis|analyze|audit|catalog|check|compare|diagnos|estimate|explain|gate|get|health|index|inspect|inventory|lesson|lint|list|overview|plan|policy|preflight|profile|query|read|readiness|reference|report|roadmap|route|search|status|summary|taxonomy|topic|topology|validate)(?:_|$)"
-)
-_OPEN = re.compile(
-    r"(?:^|_)(?:download|fetch|github|http|live|online|remote|session|web)(?:_|$)"
+from .server_hardening import (
+    annotation_preset_name,
+    infer_tool_annotations,
 )
 
 
-def _annotations(name: str, description: str) -> ToolAnnotations:
-    mutating = bool(
-        _WRITE.search(name.lower())
-        or re.search(
-            r"\b(?:create|delete|edit|execute|export|launch|modify|run|save|solve|update|write)\b",
-            description,
-            re.IGNORECASE,
-        )
-    )
-    read_only = not mutating and bool(
-        _READ.search(name.lower())
-        or re.search(
-            r"\b(?:analyze|check|compare|compile|compute|inspect|list|plan|read|report|return|route|search|validate)\b",
-            description,
-            re.IGNORECASE,
-        )
-    )
-    if read_only:
-        return ToolAnnotations(
-            readOnlyHint=True,
-            destructiveHint=False,
-            idempotentHint=True,
-            openWorldHint=bool(_OPEN.search(name.lower())),
-        )
-    return ToolAnnotations(
-        readOnlyHint=False,
-        destructiveHint=True,
-        idempotentHint=False,
-        openWorldHint=True,
-    )
+SCHEMA = "cae-ai-lab.mcp-server-contract.v2"
+
+
+def audit_tool_contract(mcp: Any) -> dict[str, Any]:
+    """Summarize the live FastMCP registry without invoking any tool."""
+    tools = getattr(getattr(mcp, "_tool_manager", None), "_tools", {})
+    missing_titles: list[str] = []
+    missing_annotations: list[str] = []
+    missing_contract_meta: list[str] = []
+    presets: Counter[str] = Counter()
+    sources: Counter[str] = Counter()
+    structured: list[str] = []
+    unstructured: list[str] = []
+    for name, tool in tools.items():
+        if not getattr(tool, "title", None):
+            missing_titles.append(name)
+        annotations = getattr(tool, "annotations", None)
+        if annotations is None or any(
+            value is None
+            for value in (
+                getattr(annotations, "readOnlyHint", None),
+                getattr(annotations, "destructiveHint", None),
+                getattr(annotations, "idempotentHint", None),
+                getattr(annotations, "openWorldHint", None),
+            )
+        ):
+            missing_annotations.append(name)
+        presets[annotation_preset_name(annotations)] += 1
+        meta = dict(getattr(tool, "meta", None) or {})
+        if meta.get("caeai.contract") != SCHEMA:
+            missing_contract_meta.append(name)
+        sources[str(meta.get("caeai.annotation_source", "unspecified"))] += 1
+        metadata = getattr(tool, "fn_metadata", None)
+        if getattr(metadata, "output_schema", None) is not None:
+            structured.append(name)
+        else:
+            unstructured.append(name)
+    return {
+        "schema": SCHEMA,
+        "complete": not (
+            missing_titles or missing_annotations or missing_contract_meta
+        ),
+        "n_tools": len(tools),
+        "annotation_presets": dict(sorted(presets.items())),
+        "annotation_sources": dict(sorted(sources.items())),
+        "missing_titles": sorted(missing_titles),
+        "missing_annotations": sorted(missing_annotations),
+        "missing_contract_meta": sorted(missing_contract_meta),
+        "structured_output_tools": sorted(structured),
+        "unstructured_output_tools": sorted(unstructured),
+    }
 
 
 def apply_tool_contract(
@@ -60,7 +72,7 @@ def apply_tool_contract(
     version: str,
     tool_prefix: str = "",
     set_server_metadata: bool = True,
-) -> dict[str, int]:
+) -> dict[str, Any]:
     """Attach titles, annotations, instructions, and version to one server."""
 
     tools = getattr(getattr(mcp, "_tool_manager", None), "_tools", {})
@@ -72,12 +84,25 @@ def apply_tool_contract(
     for name, tool in selected.items():
         if not getattr(tool, "title", None):
             tool.title = " ".join(part.capitalize() for part in name.split("_") if part)
+        meta = dict(getattr(tool, "meta", None) or {})
         if getattr(tool, "annotations", None) is None:
-            tool.annotations = _annotations(
+            annotations, source = infer_tool_annotations(
                 name, str(getattr(tool, "description", "") or "")
             )
-        meta = dict(getattr(tool, "meta", None) or {})
-        meta.setdefault("caeai.contract", SCHEMA)
+            tool.annotations = annotations
+            meta["caeai.annotation_source"] = source
+        else:
+            meta.setdefault("caeai.annotation_source", "explicit-decorator")
+        meta["caeai.annotation_preset"] = annotation_preset_name(
+            tool.annotations
+        )
+        meta["caeai.contract"] = SCHEMA
+        metadata = getattr(tool, "fn_metadata", None)
+        meta["caeai.output_mode"] = (
+            "structured"
+            if getattr(metadata, "output_schema", None) is not None
+            else "unstructured"
+        )
         tool.meta = meta
 
     low_level = getattr(mcp, "_mcp_server", None)
@@ -88,7 +113,9 @@ def apply_tool_contract(
                 f"Call the status/profile tool before routing {server_name}; "
                 "validate solver ownership and artifacts before side effects."
             )
-    return {"tools": len(selected)}
+    audit = audit_tool_contract(mcp)
+    mcp._radia_runtime_contract = audit
+    return audit
 
 
 def build_runtime_contract(
@@ -99,7 +126,10 @@ def build_runtime_contract(
         "runtime_core": "FastMCP over stdio",
         "capability_packs": list(capability_packs),
         "skill_layer": "separate workflow skills",
-        "explicit_tool_annotations": True,
+        "complete_tool_annotations": True,
+        "annotation_policy": (
+            "explicit preferred; conservative audited inference otherwise"
+        ),
         "session_policy": session_policy,
         "protocol_smoke": "initialize + tools/list + representative tools/call",
     }

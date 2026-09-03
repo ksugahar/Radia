@@ -2416,18 +2416,6 @@ def _selftest(audit_repo: bool = False):
 
 _validation.install()
 
-register_status_tool(
-    mcp,
-    server_name='mcp-server-gmsh',
-    description='GMSH MSH v4.1 inspect/validate + ParaView-parity post '
-                'verbs (derive/threshold/mirror/resample/CSV) + '
-                'post-display launch artifacts + visualization policy lint',
-    subpackage='radia_mcp.gmsh',
-    related_servers=["cubit"],
-    optional_deps=["gmsh"],
-    audit_command="mcp-server-gmsh --selftest --audit-repo",
-)
-
 
 def _is_closed_stdout_error(exc: BaseException) -> bool:
     """Windows raises EINVAL when a downstream PowerShell pipe closes early."""
@@ -2832,6 +2820,21 @@ def gmsh_lic(path: str, png_out: str | None = None,
                 resolution=resolution, kernel=kernel, cmap=cmap,
                 color_by_magnitude=color_by_magnitude, seed=seed,
                 **kwargs)
+
+
+# Register shared control-plane tools last so the common runtime-contract pass
+# covers every Gmsh operation above (including the late visualization tools).
+register_status_tool(
+    mcp,
+    server_name='mcp-server-gmsh',
+    description='GMSH MSH v4.1 inspect/validate + ParaView-parity post '
+                'verbs (derive/threshold/mirror/resample/CSV) + '
+                'post-display launch artifacts + visualization policy lint',
+    subpackage='radia_mcp.gmsh',
+    related_servers=["cubit"],
+    optional_deps=["gmsh"],
+    audit_command="mcp-server-gmsh --selftest --audit-repo",
+)
 
 
 if __name__ == '__main__':

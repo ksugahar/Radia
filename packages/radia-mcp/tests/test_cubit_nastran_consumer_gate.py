@@ -188,9 +188,9 @@ def test_nastran_consumer_mcp_tool_has_explicit_contract_metadata():
 
     assert catalog["operations"][0]["name"] == "cubit_nastran_consumer_gate"
     assert tool.title == "Run cubit validation"
-    assert tool.annotations.readOnlyHint is True
+    assert tool.annotations.readOnlyHint is False
     assert tool.annotations.destructiveHint is False
-    assert tool.annotations.idempotentHint is True
+    assert tool.annotations.idempotentHint is False
     assert tool.annotations.openWorldHint is False
 
 
@@ -253,7 +253,8 @@ def test_nastran_gate_passes_real_stdio_initialize_list_and_calls():
     assert result["server_version"]
     assert result["instructions"]
     assert result["title"] == "Run cubit validation"
-    assert result["annotations"].readOnlyHint is True
+    assert result["annotations"].readOnlyHint is False
+    assert result["annotations"].destructiveHint is False
     assert result["positive_error"] is False
     assert result["positive"]["status"] == "pass"
     assert result["negative_error"] is False

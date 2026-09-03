@@ -29,6 +29,7 @@ TEST_PREFIX = "packages/radia-mcp/tests/"
 ALWAYS_TESTS = (
     "tests/test_ci_selection.py",
     "tests/test_collection_dependency_gate.py",
+    "tests/test_common_mcp_runtime_contract.py",
     "tests/test_mcp_naming_contract.py",
     "tests/test_mcp_sdk_dependency_contract.py",
     "tests/test_meta_health.py::test_meta_catalog_has_at_least_30_servers",

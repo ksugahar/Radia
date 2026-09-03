@@ -40,9 +40,12 @@ Usage in a server's server.py:
 
 from __future__ import annotations
 from functools import lru_cache
+import hashlib
 import importlib
 import importlib.metadata
 import inspect
+import json
+from pathlib import Path
 import sys
 from typing import Optional
 
@@ -78,9 +81,13 @@ def build_status_payload(
     mcp_tools: Optional[list[str]] = None,
     audit_command: Optional[str] = None,
     tool_groups: Optional[list[dict]] = None,
+    runtime_contract: Optional[dict] = None,
+    runtime_provenance: Optional[dict] = None,
 ) -> dict:
     """Build the status dict shape that every radia_mcp.* server returns."""
     payload = {
+        "schema": "radia-mcp.server-status.v2",
+        "status": "ready",
         "server": server_name,
         "subpackage": subpackage,
         "description": description,
@@ -111,7 +118,68 @@ def build_status_payload(
         payload["all_optional_deps_installed"] = all(
             v["installed"] for v in payload["optional_deps"].values()
         )
+    if runtime_contract is not None:
+        payload["runtime_contract"] = runtime_contract
+    if runtime_provenance is not None:
+        payload["runtime_provenance"] = runtime_provenance
     return payload
+
+
+def _distribution_provenance() -> dict:
+    """Return installed-distribution facts that expose editable-path drift."""
+    result = {"name": "radia-mcp", "version": "unknown"}
+    try:
+        distribution = importlib.metadata.distribution("radia-mcp")
+    except importlib.metadata.PackageNotFoundError:
+        return result
+    result["version"] = distribution.version
+    try:
+        result["location"] = str(Path(distribution.locate_file("")).resolve())
+    except OSError:
+        result["location"] = str(distribution.locate_file(""))
+    direct_url = distribution.read_text("direct_url.json")
+    if direct_url:
+        try:
+            parsed = json.loads(direct_url)
+            result["editable"] = bool(
+                parsed.get("dir_info", {}).get("editable", False)
+            )
+            if parsed.get("url"):
+                result["source_url"] = parsed["url"]
+        except (TypeError, ValueError):
+            result["direct_url_parse_error"] = True
+    return result
+
+
+def _runtime_provenance(subpackage: str) -> dict:
+    """Identify the exact Python/MCP implementation loaded by this process."""
+    module_name = f"{subpackage}.server"
+    module = sys.modules.get(module_name)
+    module_file = getattr(module, "__file__", None)
+    if module_file is None:
+        try:
+            spec = importlib.util.find_spec(module_name)
+        except (ImportError, AttributeError, ValueError):
+            spec = None
+        module_file = getattr(spec, "origin", None)
+    result = {
+        "python_executable": sys.executable,
+        "module": module_name,
+        "module_file": str(Path(module_file).resolve()) if module_file else None,
+        "distribution": _distribution_provenance(),
+    }
+    try:
+        result["mcp_sdk_version"] = importlib.metadata.version("mcp")
+    except importlib.metadata.PackageNotFoundError:
+        result["mcp_sdk_version"] = "unknown"
+    if module_file:
+        try:
+            result["module_file_sha256"] = hashlib.sha256(
+                Path(module_file).read_bytes()
+            ).hexdigest()
+        except OSError:
+            result["module_file_sha256"] = None
+    return result
 
 
 def _introspect_fastmcp_tools(mcp) -> list[str]:
@@ -178,7 +246,7 @@ def register_status_tool(
         tool_name = f"{short}_status"
 
     @mcp.tool(name=tool_name)
-    def _status() -> dict:
+    def _status() -> dict[str, object]:
         return build_status_payload(
             server_name=server_name,
             description=description,
@@ -198,6 +266,8 @@ def register_status_tool(
         f"Call this first if you're unsure whether the server is healthy\n"
         f"or what tools it exposes."
     )
+    status_tool = mcp._tool_manager._tools[tool_name]
+    status_tool.description = _status.__doc__
 
     # Every server that has a status tool also gets ``<server>_reload_code``:
     # the package is an editable install, and until 2026-09-02 each code
@@ -211,3 +281,48 @@ def register_status_tool(
     from .._shared.hot_reload import register_reload_tool
 
     register_reload_tool(mcp, tool_name.removesuffix("_status") + "_reload_code")
+
+    # MathWorks-style runtime contract: every server exposes complete tool
+    # annotations and exact loaded-source provenance.  This happens after the
+    # shared status/reload controls are registered so those tools are covered
+    # too.  Server-specific annotation passes may refine the inferred presets.
+    from .mcp_contract import apply_tool_contract, audit_tool_contract
+    from .server_hardening import install_call_log
+
+    distribution = _distribution_provenance()
+    apply_tool_contract(
+        mcp,
+        server_name=server_name,
+        version=str(distribution.get("version", "unknown")),
+    )
+    short = server_name.removeprefix("mcp-server-").replace("-", "_")
+    install_call_log(
+        mcp,
+        f"{short}_tool_calls.jsonl",
+        f"RADIA_MCP_{short.upper()}_CALL_LOG",
+    )
+
+    # The closure deliberately computes the audit at call time: a later
+    # server-specific policy pass or hot reload must be visible immediately.
+    original_status = _status
+    tool = mcp._tool_manager._tools[tool_name]
+    meta = dict(getattr(tool, "meta", None) or {})
+    meta["caeai.control_plane"] = "status"
+    tool.meta = meta
+    registration_provenance = _runtime_provenance(subpackage)
+
+    def _status_with_runtime_contract() -> dict:
+        payload = original_status()
+        payload["runtime_contract"] = audit_tool_contract(mcp)
+        provenance = _runtime_provenance(subpackage)
+        registered_hash = registration_provenance.get("module_file_sha256")
+        current_hash = provenance.get("module_file_sha256")
+        provenance["module_sha256_at_registration"] = registered_hash
+        provenance["source_changed_since_registration"] = (
+            bool(registered_hash and current_hash)
+            and registered_hash != current_hash
+        )
+        payload["runtime_provenance"] = provenance
+        return payload
+
+    tool.fn = _status_with_runtime_contract

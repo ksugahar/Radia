@@ -4,8 +4,8 @@ servers.
 
 Locks the holes a rename/typo would open silently:
 * a name listed in an explicit classification set that matches NO
-  registered tool would silently stop protecting anything (the tool it
-  meant to mark destructive would default to READONLY);
+  registered tool would silently stop protecting anything (the tool now
+  defaults conservatively, but the stale policy name still needs fixing);
 * server instructions could be dropped without any test noticing;
 * the gate-hiding env could stop working.
 """

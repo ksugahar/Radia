@@ -1,4 +1,5 @@
 from radia_mcp.common.mcp_contract import SCHEMA
+from radia_mcp import __version__
 import pytest
 
 from radia_mcp.motor.server import _decode_owned_worker_json, mcp
@@ -19,7 +20,7 @@ def test_owned_worker_decoder_rejects_missing_json(payload):
 
 def test_motor_server_has_mathworks_style_runtime_contract():
     low_level = mcp._mcp_server
-    assert low_level.version == "1.4.19"
+    assert low_level.version == __version__
     assert low_level.instructions
 
     tools = mcp._tool_manager._tools

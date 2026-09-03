@@ -308,8 +308,10 @@ jobs:
             exit 1
           fi
 
-      # Run --selftest only for affected servers. Explicit full audit selects all.
-      - name: Affected per-server --selftest
+      # Run both the local health check and the real MCP protocol path for
+      # affected servers. Explicit full audit selects all; a shared runtime
+      # change also selects all because it changes every server contract.
+      - name: Affected per-server selftest and stdio MCP contract
         if: matrix.python-version == '3.12' && needs.scope.outputs.run_tests == 'true'
         shell: bash
         run: |
@@ -349,11 +351,33 @@ jobs:
               tag = "OK  " if ok else "FAIL"
               print(f"  {tag}  {short}")
               if not ok:
-                  failed.append((short, r.stderr[-300:].strip()))
+                  failed.append((short, "selftest", r.stderr[-300:].strip()))
+                  continue
+
+              protocol = subprocess.run(
+                  [
+                      sys.executable,
+                      "tools/smoke_mcp_stdio.py",
+                      "--server",
+                      short,
+                      "--timeout",
+                      str(slow_servers.get(short, 60)),
+                  ],
+                  capture_output=True,
+                  text=True,
+                  timeout=slow_servers.get(short, 60) + 15,
+              )
+              protocol_ok = protocol.returncode == 0
+              protocol_tag = "OK  " if protocol_ok else "FAIL"
+              print(f"  {protocol_tag}  {short} (stdio MCP)")
+              if not protocol_ok:
+                  failed.append(
+                      (short, "stdio MCP", protocol.stderr[-600:].strip())
+                  )
 
           print(f"\nSelected: {len(selected)}, failed: {len(failed)}")
-          for n, err in failed:
-              print(f"\n--- {n} ---")
+          for n, stage, err in failed:
+              print(f"\n--- {n}: {stage} ---")
               print(err)
           if failed:
               sys.exit(1)
@@ -400,6 +424,9 @@ jobs:
           python -m pip install --force-reinstall --no-deps "$WHEEL"
           cd "$RUNNER_TEMP"
           python -c "import radia_mcp; print(radia_mcp.__version__)"
+          SITE_PACKAGES=$(python -c "import site; print(site.getsitepackages()[0])")
+          python "$GITHUB_WORKSPACE/packages/radia-mcp/tools/smoke_mcp_stdio.py" \
+            --server meta --expect-module-root "$SITE_PACKAGES"
 
       - name: Upload radia-mcp wheel
         if: matrix.python-version == '3.12' && needs.scope.outputs.build_wheel == 'true'

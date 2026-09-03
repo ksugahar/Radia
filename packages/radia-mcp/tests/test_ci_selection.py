@@ -23,6 +23,7 @@ def test_contract_set_is_always_selected():
         for selector in plan["package_tests"]
     )
     assert "tests/test_meta_health.py" not in plan["package_tests"]
+    assert "tests/test_common_mcp_runtime_contract.py" in plan["package_tests"]
     assert plan["server_selftests"] == []
 
 
