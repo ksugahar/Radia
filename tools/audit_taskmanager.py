@@ -8,12 +8,18 @@ Two checks repo-wide:
    composable building blocks; the caller wraps them.
 
 2. **Caller modules** -- ``src/radia/panels/calc_*.py``,
-   ``examples/**.py``, and selected ``tests/`` -- that contain any
+   ``validation_test/**.py``, ``tests/**.py``, and Python helpers under
+   ``docs/`` -- that contain any
    NGSolve-parallel operation (``.Assemble()``,
    ``.Inverse(..., inverse=...)``, ``mesh.Curve(p)``,
    ``CGSolver(...)``, ``GMRESSolver(...)``,
    ``GridFunction.Set(coefficient, ...)``) MUST have
-   ``with TaskManager():`` inside the function that does it.
+   at least one caller-owned ``with TaskManager():`` region.
+
+This is intentionally a fast file-level minimum gate.  It detects a caller
+that has no TaskManager region at all; it cannot prove that every runtime call
+path is covered by the region.  Focused tests and review own that stronger
+control-flow check.
 
 Implementation: AST-based.  Comments, docstrings, string literals,
 and f-strings containing the parallel-op pattern are NOT flagged.
@@ -36,13 +42,13 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import subprocess
 import sys
 from fnmatch import fnmatch
 from pathlib import Path
 from typing import NamedTuple
 
-
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).absolute().parent.parent
 
 # Paths classified as HELPERS (must NOT wrap internally).
 HELPER_GLOBS = ["src/radia/**/*.py"]
@@ -54,8 +60,9 @@ HELPER_EXCLUDE = [
 # Paths classified as CALLERS (MUST wrap when doing parallel ops).
 CALLER_GLOBS = [
     "src/radia/panels/calc_*.py",
-    "examples/**/*.py",
+    "validation_test/**/*.py",
     "tests/**/*.py",
+    "docs/**/*.py",
 ]
 CALLER_EXCLUDE = [
     "**/__pycache__/**",
@@ -64,6 +71,20 @@ CALLER_EXCLUDE = [
     # Lab notebooks: out of scope.
     "**/*.ipynb",
 ]
+
+_CALL_PREFIXES = (
+    ".Assemble", ".Curve", ".Inverse", ".Set", ".GenerateMesh",
+    "BilinearForm", "LinearForm", "CGSolver", "GMRESSolver",
+    "BiCGStabSolver", "MinResSolver", "H1", "HCurl", "HDiv", "L2",
+    "VectorH1", "VectorL2", "FacetFESpace", "NumberSpace", "SurfaceL2",
+    "HDivDiv", "HDivSurface", "HCurlSurface", "TraceFESpace", "Periodic",
+    "Discontinuous", "Compress", "Integrate", "Norm", "Mesh",
+)
+_CANDIDATE_TOKENS = ("TaskManager",) + tuple(
+    f"{prefix}{spacing}("
+    for prefix in _CALL_PREFIXES
+    for spacing in ("", " ", "\t")
+)
 
 
 class Finding(NamedTuple):
@@ -79,6 +100,27 @@ def _matches_any(rel: str, patterns: list[str]) -> bool:
 
 
 def _gather_files() -> list[Path]:
+    command = ["git", "grep", "--untracked", "-Il", "-F"]
+    for token in _CANDIDATE_TOKENS:
+        command.extend(("-e", token))
+    command.extend(("--", "src/radia", "validation_test", "tests", "docs"))
+    proc = subprocess.run(
+        command,
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    if proc.returncode in (0, 1):
+        return sorted(
+            ROOT / relative
+            for relative in proc.stdout.splitlines()
+            if relative.endswith(".py")
+        )
+
+    # Keep the audit usable in source archives that do not contain .git.
     seen: set[Path] = set()
     out: list[Path] = []
     for g in HELPER_GLOBS + CALLER_GLOBS:
@@ -102,21 +144,29 @@ def _classify(path: Path) -> str | None:
     name = path.name
 
     # ---- Caller paths (checked first; more specific) ----
-    is_caller = False
-    if (len(parts) >= 4 and parts[0] == "src" and parts[1] == "radia"
-            and parts[2] == "panels" and name.startswith("calc_")
-            and name.endswith(".py")):
-        is_caller = True
-    elif parts[0] in ("examples", "tests") and path.suffix == ".py":
-        is_caller = True
-    if is_caller:
-        if not _matches_any(rel, CALLER_EXCLUDE):
-            return "caller"
+    is_panel_caller = (
+        len(parts) >= 4
+        and parts[0] == "src"
+        and parts[1] == "radia"
+        and parts[2] == "panels"
+        and name.startswith("calc_")
+        and name.endswith(".py")
+    )
+    is_lane_caller = (
+        parts[0] in ("validation_test", "tests", "docs")
+        and path.suffix == ".py"
+    )
+    if (is_panel_caller or is_lane_caller) and not _matches_any(rel, CALLER_EXCLUDE):
+        return "caller"
 
     # ---- Helper paths ----
-    if parts[0] == "src" and parts[1] == "radia" and path.suffix == ".py":
-        if not _matches_any(rel, HELPER_EXCLUDE):
-            return "helper"
+    if (
+        parts[0] == "src"
+        and parts[1] == "radia"
+        and path.suffix == ".py"
+        and not _matches_any(rel, HELPER_EXCLUDE)
+    ):
+        return "helper"
 
     return None
 
@@ -169,33 +219,31 @@ def _is_parallel_op(node: ast.Call) -> str | None:
     if isinstance(fn, ast.Attribute):
         if fn.attr == "Assemble" and not node.args:
             return ".Assemble()"
-        if fn.attr == "Curve":
+        if fn.attr == "Curve" and node.args:
             # mesh.Curve(p) — at least one positional arg
-            if node.args:
-                # Only flag if the receiver looks like a mesh
-                rec = fn.value
-                if isinstance(rec, ast.Name) and \
-                   ("mesh" in rec.id.lower() or rec.id == "ngmesh"):
-                    return "mesh.Curve()"
-                if isinstance(rec, ast.Attribute) and \
-                   ("mesh" in rec.attr.lower()):
-                    return "mesh.Curve()"
+            # Only flag if the receiver looks like a mesh
+            rec = fn.value
+            if isinstance(rec, ast.Name) and \
+               ("mesh" in rec.id.lower() or rec.id == "ngmesh"):
+                return "mesh.Curve()"
+            if isinstance(rec, ast.Attribute) and \
+               ("mesh" in rec.attr.lower()):
+                return "mesh.Curve()"
         if fn.attr == "Inverse":
             # mat.Inverse(..., inverse="pardiso") — keyword `inverse=` present
             for kw in node.keywords:
                 if kw.arg == "inverse":
                     return ".Inverse(inverse=...)"
-        if fn.attr == "Set":
+        if fn.attr == "Set" and node.args:
             # gf.Set(cf, ...) — at least one positional arg + receiver
             #   that looks like a GridFunction
-            if node.args:
-                rec = fn.value
-                if isinstance(rec, ast.Name) and \
-                   ("gf" in rec.id.lower() or "grid" in rec.id.lower()):
-                    return "gf.Set(cf, ...)"
-                if isinstance(rec, ast.Attribute) and \
-                   ("gf" in rec.attr.lower() or "grid" in rec.attr.lower()):
-                    return "gf.Set(cf, ...)"
+            rec = fn.value
+            if isinstance(rec, ast.Name) and \
+               ("gf" in rec.id.lower() or "grid" in rec.id.lower()):
+                return "gf.Set(cf, ...)"
+            if isinstance(rec, ast.Attribute) and \
+               ("gf" in rec.attr.lower() or "grid" in rec.attr.lower()):
+                return "gf.Set(cf, ...)"
         # Mesh(geo.GenerateMesh(...)) — flag the inner GenerateMesh
         if fn.attr == "GenerateMesh":
             return ".GenerateMesh()"
@@ -205,13 +253,13 @@ def _is_parallel_op(node: ast.Call) -> str | None:
     if isinstance(fn, ast.Attribute) and fn.attr in _NGSOLVE_TM_REQUIRED_NAMES:
         return f".{fn.attr}(...)"
     # ngsolve.Mesh(...) constructor with a Netgen mesh / geometry inside
-    if isinstance(fn, ast.Name) and fn.id == "Mesh" and node.args:
+    if (isinstance(fn, ast.Name) and fn.id == "Mesh" and node.args
+            and isinstance(node.args[0], ast.Call)):
         # Only flag `Mesh(<call>)` to avoid catching `Mesh(filename)` literals
-        if isinstance(node.args[0], ast.Call):
-            return "Mesh(...)"
-    if isinstance(fn, ast.Attribute) and fn.attr == "Mesh" and node.args:
-        if isinstance(node.args[0], ast.Call):
-            return "Mesh(...)"
+        return "Mesh(...)"
+    if (isinstance(fn, ast.Attribute) and fn.attr == "Mesh" and node.args
+            and isinstance(node.args[0], ast.Call)):
+        return "Mesh(...)"
     return None
 
 
@@ -273,6 +321,8 @@ def _audit_helper(path: Path) -> list[Finding]:
     findings: list[Finding] = []
     try:
         text = path.read_text(encoding="utf-8", errors="replace")
+        if "TaskManager" not in text:
+            return findings
         tree = ast.parse(text)
     except SyntaxError as exc:
         return [Finding(path, exc.lineno or 0, "parse-error",
@@ -295,9 +345,10 @@ def _audit_caller(path: Path) -> list[Finding]:
     `CGSolver(...)`, `GMRESSolver(...)`), the file MUST contain at
     least one `with TaskManager():` block somewhere.
 
-    The policy is "callers wrap"; we do NOT police WHICH function
-    contains the wrap (placement is the author's call, and a wrap in
-    a parent function correctly covers nested callee parallel ops).
+    This is a file-level minimum gate.  The policy is "callers wrap";
+    we do NOT infer runtime control flow or police which function contains
+    the wrap.  A wrap in an entry function can correctly cover calls into
+    local helper functions.
 
     A single violation is emitted per file (pointing at the first
     parallel op line) when the file has parallel ops but no TM wrap
@@ -306,6 +357,8 @@ def _audit_caller(path: Path) -> list[Finding]:
     findings: list[Finding] = []
     try:
         text = path.read_text(encoding="utf-8", errors="replace")
+        if not any(token in text for token in _CANDIDATE_TOKENS):
+            return findings
         tree = ast.parse(text)
     except SyntaxError as exc:
         return [Finding(path, exc.lineno or 0, "parse-error",
@@ -381,8 +434,8 @@ def main():
     if not args.quiet_ok:
         print(f"audit_taskmanager: scanned "
               f"{len(helpers)} helpers + {len(callers)} callers")
-        print(f"  policy: helper has 0 wraps; caller wraps every "
-              f"parallel-op-bearing function")
+        print("  policy: helper has 0 wraps; every parallel-op-bearing "
+              "caller file has a caller-owned region")
         print()
 
     if helper_findings:
