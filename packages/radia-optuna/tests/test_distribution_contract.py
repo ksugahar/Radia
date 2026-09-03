@@ -94,6 +94,17 @@ def test_staging_refuses_a_partial_native_distribution():
     assert '"bdist_wheel": bdist_wheel' in setup_source
 
 
+def test_focused_optuna_build_keeps_python_and_pybind_out_of_the_build_contract():
+    build = (REPO_ROOT / "Build.ps1").read_text(encoding="utf-8")
+    optuna_guard = build.index("if (-not $OptunaMexOnly) {")
+    pybind_probe = build.index("import pybind11; print(pybind11.get_cmake_dir())")
+    assert optuna_guard < pybind_probe
+    assert "$PythonCMakeArgs = if ($OptunaMexOnly)" in build
+    assert "$NINJA_COMMAND = Get-Command ninja" in build
+    assert "-InstallToSitePackages does not apply" in build
+    assert '-m pytest "$PROJECT_DIR\\packages\\radia-optuna\\tests" -q' in build
+
+
 def test_wheel_verifier_rejects_solver_boundary_leaks():
     verifier = (PACKAGE_ROOT / "verify_wheel.py").read_text(encoding="utf-8")
     for forbidden in ("radia_mex", "ngsolve", "netgen", "mkl_", "radia_pybind"):
