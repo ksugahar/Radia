@@ -22,14 +22,8 @@ Date: 2026-01-15
 
 import numpy as np
 import matplotlib.pyplot as plt
-import sys
-import os
 
-# Add paths
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../build-msvc'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia'))
-
-from analysis import UnifiedAnalysis, MultiPortResult
+from radia.analysis import UnifiedAnalysis
 
 
 def demo_basic_wpt():
