@@ -1,12 +1,10 @@
 # Clebsch Hodograph Docs
 
-The public demo entry point is the executed, result-bearing
-[`public_demo.ipynb`](public_demo.ipynb). Its adjacent JSON files are retained
-as historical data, not as a current notebook requirement.
-
-The historical source/result catalog is
-[`examples_catalog.ipynb`](examples_catalog.ipynb). Numerical evidence belongs
-under `validation_test/clebsch_hodograph/` with checked JSON.
+The public entry point is the executed, self-contained
+[`public_demo.ipynb`](public_demo.ipynb). It reads its maintained companion
+sources and figures directly; no notebook sidecar or migration ledger is part
+of the public contract. Numerical evidence belongs under `validation_test/`
+with checked JSON.
 
 Use the existing notes as the theory spine:
 

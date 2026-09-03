@@ -218,6 +218,9 @@ production interface for Radia applications is a masked block in the single
   or mesh and the primary computed field when one exists; use
   `netgen.webgui.Draw` for pre-mesh CAD geometry. A source catalog, migration
   archive, static PNG, or script excerpt alone does not qualify as an example.
+- Once a historical migration is complete, remove its source-catalog or
+  migration-ledger notebook and JSON archive. Git history is the archive;
+  `docs/` keeps maintained public notebooks, not migration bookkeeping.
 - A notebook field scene MUST pass the field and mesh explicitly and name the
   view, for example `Draw(field, mesh, name="B_magnitude", ...)`. Keep useful
   display choices such as volume/surface visibility, autoscaling, clipping,
