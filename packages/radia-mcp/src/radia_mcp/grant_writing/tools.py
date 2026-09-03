@@ -43,6 +43,7 @@ from radia_mcp.paper_writing._ja_lint import (
 )
 
 from .._shared.hedges import HEDGE_PATTERNS, scan_hedges
+from .._shared.page_limit import page_limit_content_selection_policy
 from .._shared.translationese import check_translationese as _translationese
 
 _HERE = pathlib.Path(__file__).resolve().parent
@@ -3693,6 +3694,92 @@ def grant_writing_cross_organization_pilot_check(text: str) -> dict:
     }
 
 
+# Words that state how two research objects relate inside one sentence. A
+# sentence that names both objects without one of these reads as if they were
+# the same study: 「四名の手法を誘導加熱で結合し、その判定則を加速器電磁石設計
+# へ発展させる」 was read that way by the lab's editor on 2026-09-03, while
+# 「誘導加熱を例題として結合させ、そこで培ったノウハウを加速器電磁石設計に
+# 展開させる」 was not. Bare 展開/発展 are not counted: the rejected sentence
+# had 発展 and an earlier draft had 展開.
+_PAIRED_OBJECT_RELATION = re.compile(
+    r"例題|事例|題材|で得た|で得られた|培った|を経て|から得|移す|移し|転用|適用|"
+    r"比較|共通|同じ|それぞれ|順に|先に|後に|次に|一方|対して|双方|両者|両課題"
+)
+_PAIRED_OBJECT_DECLARATION = re.compile(
+    r"([^\s、。（）「」]{2,12})と([^\s、。（）「」]{2,12})(?:を対象とする|の二課題|の2課題|の両課題)"
+)
+
+
+def grant_writing_paired_object_relation_check(text: str, objects: str = "") -> dict:
+    """List sentences that name both research objects but not how they relate.
+
+    A proposal with two target problems must say, wherever both appear in one
+    sentence, what one does for the other: serves as the worked example,
+    receives what the first produced, is compared with it. Every scored
+    readability axis is a surface statistic (length, particles, kanji ratio,
+    subject-predicate distance) and three variants of the sentence above --
+    original, compressed, and the editor's rewrite -- scored 85.7, 85.7 and
+    85.8, so the score cannot choose between them. This check is the missing
+    signal; it is a question for the author, not a defect.
+
+    Args:
+        text: proposal text or path.
+        objects: comma-separated object names. When empty, the pair is read
+            from a declaration such as 「誘導加熱と加速器電磁石を対象とする」
+            or 「AとBの二課題」.
+    """
+    prose = _prose_for_lint(_read_text_if_path(text))
+    names = [o.strip() for o in objects.split(",") if o.strip()]
+    if len(names) < 2:
+        match = _PAIRED_OBJECT_DECLARATION.search(prose)
+        if match:
+            names = [match.group(1), match.group(2)]
+    if len(names) < 2:
+        return {
+            "applicable": False,
+            "objects": names,
+            "sentence_count": 0,
+            "unrelated_sentences": [],
+            "comments": [],
+            "recommendations": [],
+            "target": "each sentence naming both objects states how one relates to the other",
+            "source": "paired-object relation check (2026-09-03 編集者指摘)",
+        }
+    sentences = [
+        s.strip() for s in re.split(r"(?<=[。．!?！？])|\n+", prose) if s.strip()
+    ]
+    a, b = names[0], names[1]
+    # 「誘導加熱と加速器電磁石の二課題」 lists the pair as one set; that is not
+    # a sentence about how one relates to the other, and it is how a proposal
+    # legitimately refers to both at once.
+    listing = re.compile(
+        rf"{re.escape(a)}[と、・及び]{{1,2}}{re.escape(b)}|{re.escape(b)}[と、・及び]{{1,2}}{re.escape(a)}"
+    )
+    both = [s for s in sentences if a in s and b in s and not listing.search(s)]
+    unrelated = [s for s in both if not _PAIRED_OBJECT_RELATION.search(s)]
+    comments = []
+    recommendations = []
+    if unrelated:
+        comments.append(
+            f"「{names[0]}」と「{names[1]}」を一文に置きながら、両者の関係を書いていない文が"
+            f"{len(unrelated)}件ある。二つが同じ研究に見える。"
+        )
+        recommendations.append(
+            "一方を例題とし、そこで得たものを他方へ移す、比較する、など関係を語で書く。"
+            "行が増えるなら、再掲になっている別の一文を削る。"
+        )
+    return {
+        "applicable": True,
+        "objects": names[:2],
+        "sentence_count": len(both),
+        "unrelated_sentences": [s[:140] for s in unrelated][:10],
+        "comments": comments,
+        "recommendations": recommendations,
+        "target": "each sentence naming both objects states how one relates to the other",
+        "source": "paired-object relation check (2026-09-03 編集者指摘)",
+    }
+
+
 # Latin tokens that are vocabulary, venues, or file names rather than a person,
 # product, or institution the reviewer must place. A conference named once in
 # the yearly plan is normal; a person named once in 準備状況 is not.
@@ -5466,6 +5553,16 @@ def _flatten(text: str) -> str:
     return re.sub(r"\s+", "", text)
 
 
+def grant_writing_page_limit_revision_policy() -> dict:
+    """Return the mandatory page-limit editing policy for proposals.
+
+    A page overflow is resolved by selecting and removing complete,
+    lower-priority content units. It is never resolved by compressing the
+    sentences, semantic relations, or typography that remain.
+    """
+    return page_limit_content_selection_policy("grant")
+
+
 def grant_writing_page_limit_check(pdf_path: str, tex_dir: str = "") -> dict:
     """Check each field of a compiled proposal against its page allowance.
 
@@ -5581,7 +5678,10 @@ def grant_writing_page_limit_check(pdf_path: str, tex_dir: str = "") -> dict:
                     f"様式が超過を印字している: 「{notice.group('field')}」は"
                     f"{notice.group('limit')}ページ以内。"
                 ),
-                "recommendation": "溢れた分の文をまるごと落とすか、別欄へ移す。",
+                "recommendation": (
+                    "残す文を圧縮しない。重複説明、副次例、補助証拠など、"
+                    "優先度の低い論点を一つ丸ごと落とすか別欄へ移す。"
+                ),
             })
 
     for span in spans:
@@ -5593,7 +5693,10 @@ def grant_writing_page_limit_check(pdf_path: str, tex_dir: str = "") -> dict:
                     f"「{span['field']}」は{span['declared_max_pages']}ページ指定に対し"
                     f"{span['used_pages']}ページ占めている。"
                 ),
-                "recommendation": "文を圧縮せず、文・段落単位で落とすか別欄へ移す。",
+                "recommendation": (
+                    "残す文を圧縮せず、優先度の低い主張・例・証拠を"
+                    "論点単位で丸ごと落とすか別欄へ移す。"
+                ),
             })
         elif span["used_pages"] < span["declared_max_pages"] or (
             span["last_page_fill"] < 0.6 and span["declared_max_pages"] >= 2
@@ -5640,6 +5743,10 @@ def grant_writing_page_limit_check(pdf_path: str, tex_dir: str = "") -> dict:
         "comments": [r["comment"] for r in risks],
         "recommendations": [r["recommendation"] for r in risks],
         "target": "each field inside its allowance, and filling it",
+        "page_limit_policy_id": (
+            "page_limit_select_content_do_not_compress_prose"
+        ),
+        "required_overflow_action": "drop_whole_low_priority_content_unit",
         "source": "page-limit check",
     }
 
@@ -7944,7 +8051,7 @@ def grant_writing_health_report(
         "abstraction", "argument_map", "basic_research", "bedrock", "budget", "capability",
         "claim", "domain", "focus", "format", "integration", "international",
         "irreplaceable", "kaken", "kddi", "literature", "metric", "narrative",
-        "nouns", "originality", "pages", "persuasion", "pilot", "residue",
+        "nouns", "originality", "pages", "pair", "persuasion", "pilot", "residue",
         "scale", "japanese", "readability", "momentum", "sections", "sentence",
         "translationese", "vague", "vocabulary", "weak",
     }
@@ -8096,6 +8203,18 @@ def grant_writing_health_report(
                     "score": narrative["score"],
                     "comments": narrative["comments"][:5],
                 })
+
+    if "pair" not in skip_set:
+        pair = grant_writing_paired_object_relation_check(text)
+        detailed_results["paired_object_relation"] = pair
+        if pair["applicable"] and pair["comments"]:
+            priority_issues.append({
+                "tool": "pair",
+                "name": "paired_object_relation_check",
+                "severity": "MEDIUM",
+                "score": None,
+                "comments": pair["comments"][:5],
+            })
 
     if "nouns" not in skip_set:
         nouns = grant_writing_proper_noun_load_check(text)
