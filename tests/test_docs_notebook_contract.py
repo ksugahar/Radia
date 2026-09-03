@@ -214,3 +214,18 @@ def test_urn_validation_drivers_stay_out_of_docs():
         "Move URN validation and benchmark drivers to validation_test: "
         + ", ".join(offenders)
     )
+
+
+def test_stream_function_docs_use_installed_radia_package():
+    docs_dir = ROOT / "docs" / "stream_function"
+    offenders = []
+    for path in docs_dir.glob("*.py"):
+        source = path.read_text(encoding="utf-8", errors="replace")
+        if "sys.path.insert" in source and (
+            '"src"' in source or '"src", "radia"' in source
+        ):
+            offenders.append(path.name)
+    assert not offenders, (
+        "Stream-function docs must import installed/editable radia: "
+        + ", ".join(sorted(offenders))
+    )

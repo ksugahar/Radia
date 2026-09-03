@@ -32,7 +32,6 @@ Validated (R=150 mm coil, DSV r=80 mm):
 Run: python demo_sphere_fe_direct.py --target z2 --distort
 """
 import argparse
-import sys
 import time
 from pathlib import Path
 
@@ -43,8 +42,6 @@ from ngsolve import (Mesh, H1, LinearForm, BilinearForm, grad, specialcf, CF,
                      x, y, z, ds, Cross, TaskManager, BND)
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parents[1] / "src"))
 from demo_sf_to_peec_gx import make_dsv, contour_polylines_phi_z, bz_fast
 
 MU0_4PI = 1.0e-7
