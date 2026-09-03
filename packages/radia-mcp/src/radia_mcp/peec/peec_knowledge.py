@@ -92,13 +92,14 @@ topo = builder.build_topology()
 
 ### Benchmarks
 
-VALIDATION NOTEBOOK
-`validation_test/solver_benchmarks/peec_solver_benchmarks.ipynb`: dense Ruehli
-L vs HACApK H-matrix (ACA+ compression + scaling) and the MNA dense-vs-HACApK
-crossover, read from committed benchmark JSON; the extracted |Z11| matches the
-dense reference. The notebook, JSON, comparison reports, and executable
-drivers are all owned by `validation_test/solver_benchmarks/`. They are manual
-numerical evidence, not routine CI or a public docs demo.
+VALIDATION EVIDENCE
+`validation_test/solver_benchmarks/peec_solver_benchmarks_results.json`: dense
+Ruehli L vs HACApK H-matrix (ACA+ compression + scaling) and the MNA
+dense-vs-HACApK crossover, assembled from committed raw benchmark JSON; the
+extracted |Z11| matches the dense reference. The JSON records, comparison
+reports, and executable drivers are owned by
+`validation_test/solver_benchmarks/`. They are manual numerical evidence, not
+routine CI or a public docs demo.
 
 ### References
 
