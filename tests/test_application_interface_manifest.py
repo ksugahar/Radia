@@ -68,3 +68,10 @@ def test_application_manifest_has_no_notebook_workbenches():
 def test_packaged_panel_notebook_directory_is_absent_or_empty():
     notebook_dir = REPO_ROOT / "src" / "radia" / "panels" / "notebooks"
     assert not notebook_dir.exists() or not list(notebook_dir.glob("*.ipynb"))
+
+
+def test_retired_python_optuna_panel_adapter_is_absent():
+    retired = (
+        REPO_ROOT / "src" / "radia" / "panels" / "optuna_study_helper.py"
+    )
+    assert not retired.exists()
