@@ -1,0 +1,9 @@
+# ESRF Example 5 iron -- +x/+z quarter for the IMA (image='+x-z') route.
+#
+# The caller plays example5_iron.jou first (full CAD), then this file.
+# Clipping happens on the ACIS solid, so the quarter keeps the exact
+# planar-faced chamfer of the full model.
+webcut volume all with plane xplane offset 0
+webcut volume all with plane zplane offset 0
+delete volume with x_coord < 0
+delete volume with z_coord < 0
