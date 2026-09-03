@@ -95,14 +95,14 @@ DECISION_TREE = r"""
        → ngsolve.bem (EFIE/MFIE/CFIE with FMM or H-matrix)
        → OUT OF Radia/lab scope per CLAUDE.md Laplace-kernel policy
 
-3. What's the SIZE?
-   ├── N < 500 elements
-   │   → LU direct (radia method=0)
-   ├── 500 < N < 2000
-   │   → BiCGSTAB (radia method=1)
-   └── N > 2000
-       → HACApK H-matrix — lab core for large charge-Gram / BEM blocks
-         → see matrix_solvers MCP for solver theory
+3. Which OPERATOR owns the solve?
+   ├── HDiv-VIM magnetic material
+   │   → use vim.Solve / vim.HDivSolver.Solve named solver and Gram options
+   │   → HACApK compresses charge-Gram operators where that route selects it
+   ├── PEEC or ngsolve.bem
+   │   → use that formulation's named solver/preconditioner API
+   └── Legacy Radia C++ relaxation object
+       → method=0 dense LU only; methods 1 and 2 are retired
 
 4. What's the GEOMETRY topology?
    ├── Simply connected
@@ -123,7 +123,7 @@ DECISION_TREE = r"""
 | Using EFIE at low freq | nan, ill-conditioned | Switch to Loop-Star or Weggler ST |
 | MFIE with RWG below 1 MHz | wrong solution | Use Vico-Greengard MFIE-LF stabilization |
 | Non-uniform M expected | wrong low-order approximation | Use higher-order HDiv / curved elements |
-| HACApK on small N (<500) | overhead dominates | Use LU (method=0) instead |
+| Treating HACApK as `rad.Solve(method=2)` | unsupported legacy selector | Use the owning HDiv/PEEC/BEM named API |
 | Galerkin BEM on nonlinear iron | awkward nonlinear coupling | Use HDiv-VIM / reduced FEM |
 | FMM on Radia | Removed 2026-03 | Use HACApK ACA instead |
 """

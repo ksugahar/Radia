@@ -109,30 +109,35 @@ Reference (this folder):
 ## How Radia uses HACApK
 
 ```python
-import radia as rad
+import ngsolve as ng
+from radia import vim
 
-# Configure HACApK before Solve
-rad.SolverConfig(
-    hacapk_eps=1e-4,   # ACA tolerance
-    hacapk_leaf=10,    # leaf cluster size
-    hacapk_eta=2.0,    # admissibility parameter
-)
-rad.Solve(container, 1e-4, 1000, 2)  # method=2 = HACApK
+with ng.TaskManager():
+    result = vim.Solve(
+        mesh,
+        mu_r=1000.0,
+        H_ext=applied_field,
+        gram_eps=1e-4,
+        leaf=10,
+        eta=2.0,
+        linear_solver="auto",
+        preconditioner="auto",
+    )
 ```
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `hacapk_eps` | 1e-4 | ACA truncation tolerance |
-| `hacapk_leaf` | 10 | Min cluster size (≈66 DOF for face-charge hex) |
-| `hacapk_eta` | 2.0 | Admissibility: clusters separated if dist > η·diam |
+| `gram_eps` | route default | Charge-Gram truncation tolerance |
+| `leaf` | 32 | Minimum cluster size |
+| `eta` | 2.0 | Admissibility parameter |
 
-## When to use HACApK
+## Selection boundary
 
-| N (elements) | Solver |
-|--------------|--------|
-| < 500 | LU direct (method=0) |
-| 500 - 2000 | BiCGSTAB (method=1) |
-| > 2000 | **HACApK** (method=2) ★ |
+HACApK remains a production H-matrix implementation for charge-Gram, PEEC,
+and BEM operators. It is no longer selected through the legacy
+`rad.Solve(method=2)` integer. The owning formulation chooses H-matrix
+construction and its linear solver through named APIs and reports the selected
+backend in its result diagnostics.
 
 ## Performance
 
@@ -159,7 +164,8 @@ References (this folder):
 - [LOCAL] 06_h_matrix_aca/TensorCore_BLR_TallSkinny_BEM.pdf
 - [LOCAL] 06_h_matrix_aca/Distributed_memory_lattice_H_factorization.pdf
 
-Not yet in lab production (HACApK with iterative Krylov is enough).
+Not yet in lab production; use the validated owning formulation and its
+reported backend rather than assuming one Krylov method.
 """
 
 

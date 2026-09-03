@@ -14,7 +14,7 @@ elliptic problems — limits practical N to ~500k DOF in 3D.
 | SuperLU_DIST | MPI | BSD | Non-symmetric, sparse direct |
 | UMFPACK | serial | LGPL | Small/medium, used by scipy |
 | KLU | serial | LGPL | Circuit simulation (very sparse) |
-| LU built-in (radia method=0) | serial | (lab) | N < 500 |
+| Legacy Radia dense LU (`method=0`) | MKL shared memory | (lab) | Compatibility relaxation path only |
 
 ## When direct beats iterative
 
@@ -119,24 +119,25 @@ NOT include MUMPS — build from source if needed.
 
 
 LU_RADIA = r"""
-# Built-in LU (Radia method=0)
+# Legacy Radia dense LU (`method=0`)
 
-For Radia HDiv-VIM interaction matrices (N < 500 elements), the built-in
-LAPACK LU is appropriate:
+The retained C++ relaxation ABI accepts only dense LU:
 
 ```python
 import radia as rad
-rad.SolverConfig(...)        # not needed for LU
-rad.Solve(container, 1e-4, 1000, 0)    # method=0 -> LU
+rad.Solve(legacy_object, 1e-4, 1000, 0)
 ```
 
-- Uses LAPACK `dgetrf` / `dgetri` from MKL.
+- Uses LAPACK through MKL.
 - Guaranteed convergence (it's not iterative).
 - Cost: O(N^3) factor, O(N^2) back-sub per RHS.
 - Threading: MKL handles internally via `MKL_NUM_THREADS`.
 
-For N > 500, switch to BiCGSTAB (method=1) or HACApK (method=2).  See
-`HMATRIX_EVALUATION.md` in the Radia docs.
+This is not the HDiv-VIM solver. New soft-iron models must be mesh-backed and
+use `radia.vim.Solve` or `radia.vim.HDivSolver.Solve`, whose
+`linear_solver`, `preconditioner`, `gram_eps`, `leaf`, and `eta` options are
+named independently of the legacy method integer. Do not recommend retired
+`rad.Solve` methods 1 or 2 for larger models.
 """
 
 
@@ -147,7 +148,7 @@ def get_direct_solvers_knowledge(topic: str = "overview") -> str:
         overview     - When direct beats iterative (DEFAULT)
         pardiso      - Intel MKL PARDISO (NGSolve default)
         mumps        - Distributed MUMPS
-        lu_radia     - Built-in LU for Radia HDiv-VIM
+        lu_radia     - Legacy Radia dense-LU compatibility path
         all          - Everything
     """
     topic = topic.lower().strip()

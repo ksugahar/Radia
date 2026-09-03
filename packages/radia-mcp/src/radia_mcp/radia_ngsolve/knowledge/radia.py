@@ -228,159 +228,97 @@ RADIA_SOLVING = """
 ## rad.Solve()
 
 ```python
-result = rad.Solve(obj, tolerance, max_iter, method)
+result = rad.Solve(mesh_backed_system)
 ```
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| obj | int | Container with geometry + background field |
-| tolerance | float | Nonlinear convergence tolerance (e.g., 0.001 = 0.1%) |
-| max_iter | int | Maximum iterations |
-| method | int | 0=LU (direct), 1=BiCGSTAB, 2=HACApK (H-matrix) |
+`rad.Solve` is the convenience dispatch. A registered mesh-backed soft-iron
+body routes to FEEC HDiv-VIM. The retained C++ compatibility signature is
+`rad.Solve(obj, tolerance, max_iter, method=0, image="")`; its only supported
+method is dense LU (`0`).
 
-## Solver Selection Guide
+## Solver Routing
 
-| Problem Size | Method | Notes |
-|-------------|--------|-------|
-| <500 elements | LU (0) | Fastest, O(N^3) memory |
-| 500-5000 elements | BiCGSTAB (1) | Default, iterative |
-| >5000 elements | HACApK (2) | H-matrix, O(N log N) |
+| Model | Entry point | Controls |
+|-------|-------------|----------|
+| Mesh-backed soft iron | `rad.Solve(system)` or `radia.vim.Solve(mesh, ...)` | named `linear_solver`, `preconditioner`, `gram_eps`, `leaf`, `eta`, tolerances |
+| Repeated HDiv geometry | `radia.vim.HDivSolver(mesh).Solve(...)` | same named controls plus operator reuse |
+| Legacy C++ relaxation object | `rad.Solve(obj, tol, max_iter, 0)` | dense LU only |
 
-## Return Value
-
-```python
-result = rad.Solve(grp, 0.001, 100, 0)
-# result = [residual, ?, ?, max_dM, max_dH]
-```
+Retired legacy method integers 1 and 2 must not be recommended. HACApK remains
+available inside owning HDiv/PEEC/BEM operator routes; it is not a public
+`rad.Solve(method=2)` selector.
 
 ## Example
 
 ```python
+import ngsolve as ng
+import radia as rad
+from radia.vim import soft_iron_box
+
 rad.UtiDelAll()
-
-# Create geometry
-verts = [[-0.01,-0.01,-0.01], [0.01,-0.01,-0.01],
-         [0.01,0.01,-0.01], [-0.01,0.01,-0.01],
-         [-0.01,-0.01,0.01], [0.01,-0.01,0.01],
-         [0.01,0.01,0.01], [-0.01,0.01,0.01]]
-cube = rad.ObjHexahedron(verts, [0, 0, 0])
-mat = rad.MatLin(1000)
-rad.MatApl(cube, mat)
-
-# Background field
-MU_0 = 4 * np.pi * 1e-7
-ext = rad.ObjBckg(lambda p: [0, 0, MU_0 * 200000])
-grp = rad.ObjCnt([cube, ext])
-
-# Solve
-result = rad.Solve(grp, 0.001, 100, 0)
+iron = soft_iron_box(
+    center=(0.0, 0.0, 0.0), size=(0.02, 0.02, 0.02),
+    mu_r=1000.0, nsub=4,
+)
+source = rad.ObjBckg(lambda p: [0.0, 0.0, 0.1])
+system = rad.ObjCnt([iron, source])
+with ng.TaskManager():
+    result = rad.Solve(system)
 ```
 
 ## Advanced Solver Configuration
 
 ```python
-# All solver parameters via unified SolverConfig()
-rad.SolverConfig(
-    bicgstab_tol=1e-4,
-    hacapk_eps=1e-4, hacapk_leaf=10, hacapk_eta=2.0,
-    relax_param=0.3,
-    newton_method=True,       # Start with Newton (fast convergence)
-    keep_magnetization=False, # True = continue from previous Solve state
-    newton_damping=True, newton_damping_max_iter=5, newton_damping_min_omega=0.01,
-    # B-input solvers for energy-based hysteresis
-    b_input_newton=False,     # Pure B-input Newton (2-4 iter)
-    b_input_hantila=False,    # Newton(3) + Hantila hybrid (recommended for hysteresis)
-    hantila_alpha=0.0,        # Polarization parameter (0 = auto-compute)
-    hantila_relax=0.0,        # Under-relaxation (0 = full step)
-)
+from radia import vim
 
-# Query current settings
-config = rad.GetSolverConfig()
+solver = vim.HDivSolver(mesh, order=2)
+with ng.TaskManager():
+    result = solver.Solve(
+        mu_r=1000.0,
+        H_ext=applied_field,
+        tol=1e-8,
+        maxit=4000,
+        linear_solver="auto",
+        preconditioner="auto",
+    )
 ```
 
-## Vector-Accurate Hysteresis Solvers
+## Vector-Accurate Hysteresis
 
-For **hysteresis materials** (`MatPlayHysteresis` or `MatEnergyHysteresis`), Radia provides
-specialized solvers that use **Forward(B->H)** instead of scalar chi for full
-vector magnetization accuracy.
-
-**Two hysteresis models:**
-- **Play model** (`MatPlayHysteresis`, Type 6, RECOMMENDED): Forward O(K) direct, analytical dH/dB
-- **Energy model** (`MatEnergyHysteresis`, Type 5): Forward via Schur complement, analytical dB/dH
-
-**Why Forward(B->H) for BEM?**
-- Standard chi-based BEM uses Inverse(H->B) -> scalar chi -> M = chi*H (M forced // H)
-- Vector-accurate solver uses Forward(B->H) -> H -> M = B/mu_0 - H (full vector M)
-- Forward(B->H) is the **natural direction for B-input Play** (B drives play operators)
-- Analytical Jacobian from `ComputeJacobian(dBdH)`
-- Converges in **2-4 iterations** (vs 50+ for chi-based Picard)
-
-**Naming convention**: Code uses B-input Play naming. `Forward(B)` = B->H (natural),
-`Inverse(H)` = H->B.
+Production hysteresis uses the mesh-backed HDiv-VIM history solver. The
+constitutive reference direction is B-input (`B -> H`), and the field history
+is advanced on one conforming NGSolve mesh:
 
 ```python
-# Enable Newton with Forward for hysteresis problems
-rad.SolverConfig(b_input_newton=True)
-rad.Solve(container, 1e-4, 100, 0)  # method=0 (LU)
+from radia import vim
+
+with ng.TaskManager():
+    result = vim.SolveHysteresis(
+        mesh,
+        h_steps,
+        play=(K, eta, f_k_tables),
+        tol=1e-8,
+        maxit=4000,
+        nl_tol=1e-3,
+    )
 ```
 
-### Newton + Hantila Hybrid (Recommended for Hysteresis)
-
-The **hybrid Newton+Hantila** approach combines:
-1. **Newton warmup** (3 iterations): Uses Forward(B->H), O(N^3), analytical Jacobian
-2. **Hantila refinement**: Uses Inverse(H->B), O(N^2), no Schur needed
-
-```python
-# Hybrid Newton(3) + Hantila (recommended for hysteresis)
-rad.SolverConfig(b_input_hantila=True, hantila_alpha=0, hantila_relax=0)
-rad.Solve(container, 1e-4, 5000, 0)
-
-# hantila_alpha=0: auto-compute from material probing (recommended)
-# hantila_alpha=500: manual alpha (for experienced users)
-# hantila_relax=0: full step (default), 0.3: 30% under-relaxation
-```
-
-**Hantila Polarization Method**: Splits M = alpha*H + R, factors (I - alpha*N) once
-(LU), then each iteration uses Inverse(H->B) + O(N^2) back-substitution. For large
-N, this is much faster than O(N^3) Newton per iteration.
-
-### Algorithm
-
-```
-Newton with Forward(B->H):
-  F(M) = M - Forward(mu_0*(H_ext + N*M + M)) / mu_0 = 0
-  Jacobian: dF/dM = I - dJ/dB * (N + I)
-  where dJ/dB = I - mu_0 * inv(dB/dH)  [analytical from energy Hessian]
-
-Newton+Hantila Hybrid:
-  1. Newton warmup (3 iter): Forward(B->H) + Jacobian, full dense solve
-  2. If not converged: Hantila with Inverse(H->B), LU-factored (I - alpha*N)
-  3. If Newton already converged: skip Hantila
-```
-
-### When to Use
-
-| Solver | Use Case |
-|--------|----------|
-| `rad.Solve()` (default) | Linear materials, BH curves (MatSatIsoTab) |
-| `b_input_newton=True` | Hysteresis, few elements, fast convergence needed |
-| `b_input_hantila=True` | **Hysteresis, any size** (recommended) |
-
-**Current limitation**: B-input hysteresis flags are not a generic mesh-less
-polyhedron feature.  For new soft-iron work, use the mesh-backed HDiv-VIM
-material route and record the nonlinear material-state convergence metadata.
-
-**Verified**: 0.00% error across 11-step hysteresis loop, 3-47 iterations per step.
+Use `vim.HDivSolver(mesh).SolveHysteresis(...)` when the same geometry is
+continued across runs and its operator cache should be reused. Legacy
+`SolverConfig(b_input_*)` flags and mesh-less material objects are not the
+production soft-iron route. Numerical evidence belongs under
+`validation_test/hysteresis/`.
 
 ## IMA (Image Method of Analysis) Symmetry
 
 IMA exploits mirror symmetry to reduce problem size (half, quarter, eighth model).
-All three solvers (LU, BiCGSTAB, HACApK) support IMA via the `image=` parameter.
+The supported mesh-backed HDiv-VIM geometry routes accept `image=`. The legacy
+C++ compatibility route accepts the same string only with dense LU.
 
 ```python
 # Quarter model with x-mirror (symmetric) and z-mirror (antisymmetric)
 # For Z-directed field: Bz is parallel to x-plane (+) and perpendicular to z-plane (-)
-rad.Solve(container, 0.001, 100, 2, image='+x-z')
+rad.Solve(container, image='+x-z')
 
 # Pre-build matrix with IMA (optional, for matrix inspection)
 handle = rad.BuildMatrix(model, image='+x-z')
@@ -442,9 +380,9 @@ thread count, there can be conflicts.
 
 | Solver | Method | Parallelization |
 |--------|--------|-----------------|
-| LU (method=0) | MKL `dgesv_` | External threaded kernel: `SuspendTaskManager` + `MKLThreadGuard` enables MKL multi-threading |
-| BiCGSTAB (method=1) | Dense matrix-vector product + vector ops | Solve loop stands up/reuses `RegionTaskManager`; kernels use `ParallelFor` / `ParallelForRange` |
-| HACApK (method=2) | H-matrix build + BiCGSTAB | Build/solve loops stand up or reuse `RegionTaskManager`; HACApK C callbacks bridge to `ParallelFor` / `ParallelForRange` |
+| Legacy LU (`method=0`) | MKL `dgesv_` | `SuspendTaskManager` + `MKLThreadGuard` around the external threaded kernel |
+| HDiv-VIM | symmetric named linear solver and preconditioner | caller-owned NGSolve `TaskManager` plus native charge-Gram kernels |
+| PEEC/BEM H-matrix routes | formulation-owned named solver | owning API reports its backend and TaskManager behavior |
 
 ### LU Solver Threading Detail
 
@@ -462,21 +400,12 @@ multi-threaded MKL, then `SuspendTaskManager` to avoid contention:
 }   // Both guards restore original state on scope exit
 ```
 
-### BiCGSTAB and HACApK Threading
+### HDiv-VIM and H-matrix Threading
 
-BiCGSTAB method 1 keeps a `RegionTaskManager` active across the whole iterative solve.
-Its dense matvec, vector operations, and preconditioner loops are TaskManager
-`ParallelFor` / `ParallelForRange` kernels. It does not call MKL BLAS for iterative
-vector kernels; that keeps Radia aligned with the NGSolve scheduler.
-
-H-matrix construction and BiCGSTAB iterations use TaskManager `ParallelFor`:
-- Matrix assembly: parallel over element pairs
-- ACA+ low-rank approximation: parallel over admissible blocks
-- BiCGSTAB matrix-vector product: parallel over H-matrix leaf nodes
-
-The shipped build/solve entry points keep a `RegionTaskManager` active across the long C++ loops.
-Direct diagnostic MatVec APIs are TaskManager-preconditioned: call them under `with TaskManager():`
-unless a higher-level solve/build routine already wrapped the scope.
+Call NGSolve finite-element assembly and HDiv-VIM solves under
+`with ngsolve.TaskManager():`. Native charge-Gram and H-matrix kernels reuse
+that execution substrate. PEEC and BEM routes own their separate solver choice;
+do not infer their threading from a retired `rad.Solve` method number.
 
 ## Querying Thread Info
 
@@ -490,7 +419,7 @@ print(stats['taskmanager_enabled']) # True
 print(stats['t_matrix_build'])      # Matrix build time [s]
 print(stats['t_linear_solve'])      # Linear solve time [s]
 print(stats['t_lu_decomp'])         # LU decomposition time [s] (LU only)
-print(stats['t_hmatrix_build'])     # H-matrix build time [s] (HACApK only)
+print(stats['t_hmatrix_build'])     # retained low-level H-matrix counter
 ```
 
 ## Other Parallelized Operations
@@ -511,26 +440,16 @@ Since Radia and NGSolve share the same TaskManager, they coexist naturally:
 import radia as rad  # Initializes TaskManager (loads ngcore.dll)
 from ngsolve import *
 
-# Radia solve (uses TaskManager internally)
-rad.Solve(grp, 0.001, 100, 2)
-
-# NGSolve BEM assembly (also uses TaskManager)
 with TaskManager():
+    rad.Solve(grp)
     V_op = LaplaceSL(j_trial.Trace() * ds) * j_test.Trace() * ds
 ```
 
 No thread conflict because both use the same underlying TaskManager instance.
 
-## Scaling Benchmarks (8 threads, cube hexahedron nonlinear)
-
-| Solver | Time Scaling | Memory Scaling |
-|--------|-------------|----------------|
-| LU | O(N^3.5) | O(N^1.8) |
-| BiCGSTAB | O(N^2.5) | O(N^1.9) |
-| HACApK | O(N^1.7) | O(N^1.2) |
-
-HACApK achieves near-linear scaling for both time and memory, enabling
-problems with >10,000 elements that would be infeasible with dense solvers.
+Scaling and backend comparisons are validation evidence, not timeless MCP
+constants. Read the current JSON artifacts under `validation_test/` before
+making a performance claim.
 """
 
 RADIA_FIELDS = """
@@ -877,11 +796,12 @@ ext = rad.ObjBckg(lambda p: [0, 0, B_value])
 ext = rad.ObjBckg([0, 0, B_value])
 ```
 
-## 4. Choose Solver Method by Size
+## 4. Choose the Owning Solver Route
 
-- <500 elements: LU (method=0)
-- 500-5000: BiCGSTAB (method=1)
-- >5000: HACApK (method=2)
+- Mesh-backed soft iron: HDiv-VIM through `vim.Solve` or `vim.HDivSolver`.
+- PEEC/BEM: use that formulation's named solver and preconditioner API.
+- Legacy C++ relaxation: dense LU (`method=0`) only.
+- Never select a current backend by the retired legacy method values 1 or 2.
 
 ## 5. Magnetization Units
 
@@ -913,9 +833,9 @@ ext = rad.ObjBckg([0, 0, B_value])
 ## 9. Convergence Checks
 
 ```python
-result = rad.Solve(grp, 0.001, 1000, 1)
-# Check result[3] (max_dM) - should decrease each iteration
-# Typical convergence: 3-6 iterations for linear, 10-50 for nonlinear
+with ngsolve.TaskManager():
+    result = radia.vim.Solve(mesh, mu_r=1000.0, H_ext=H_ext)
+print(result["iters"], result["linear_solver"], result["preconditioner"])
 ```
 
 ## 10. Field Evaluation Points
@@ -924,14 +844,15 @@ result = rad.Solve(grp, 0.001, 1000, 1)
 - Offset evaluation points slightly from boundaries
 - Use rad.FldLst for systematic field profiles
 
-## 11. Numerical experiment results: store as JSON, delete by folder
+## 11. Keep demonstration and validation evidence separate
 
-**RULE**: every numerical experiment / sweep / benchmark stores its
-results in a **JSON file** so the run can be REPRODUCED and re-analysed
-later WITHOUT re-running the (possibly expensive) computation.  When a
-campaign's results are no longer needed, delete the **whole folder at
-once** (一括でフォルダごと削除) -- never leave scattered orphan output
-files behind.
+`docs/**/*.ipynb` demonstrates what Radia can do. It is executed and stores its
+result and WebGUI output in the notebook itself; it does not require a result
+JSON sidecar and is not a benchmark.
+
+`validation_test/` owns analytical comparisons, convergence studies,
+benchmarks, and paper/conference evidence. Every such run writes a checked JSON
+artifact so the result can be inspected without rerunning an expensive solve.
 
 Why JSON:
 - Human-readable + diff-able + version-control-friendly.
@@ -960,9 +881,8 @@ re-run to recover (e.g. ``{"ndof": ..., "t_solve": ..., "iterations":
 ..., "converged": ..., "L_total": ...}``).
 
 Folder hygiene (the cleanup half of the rule):
-- Put ALL artifacts of one experiment campaign under ONE dedicated
-  folder, e.g. ``examples/<topic>/sweep_2026_05_29/`` (the result
-  ``.json``, any ``.png`` plots, logs, generated meshes).
+- Put all artifacts of one validation campaign under one dedicated
+  `validation_test/<topic>/` folder (result JSON, plots, logs, generated meshes).
 - Keep the campaign folder SELF-CONTAINED so that, when the results are
   no longer needed, you can ``rm -rf <folder>`` (delete the folder
   whole) and leave NOTHING orphaned elsewhere.
@@ -970,9 +890,8 @@ Folder hygiene (the cleanup half of the rule):
   shared dirs -- that defeats the one-shot folder delete and accumulates
   cruft.
 
-Reference: the lab Benchmark Policy (CLAUDE.md) pins the exact required
-JSON fields (peak_memory_mb, t_setup, t_solve, iterations, converged +
-top-level timestamp / hostname / benchmark / problem / results).
+The validation schema and its focused tests, not copied numbers in MCP
+knowledge, define the required metadata.
 """
 
 
@@ -2330,30 +2249,22 @@ rad.UtiDelAll()
 
 ## Pattern B: PM + Soft Iron (Linear)
 
-Iron acquires induced M from PM stray field.  Requires Solve().
+Keep the permanent magnet and soft iron in separate conforming spaces. The PM
+is an immutable magnetization source; the mesh-backed iron owns the unknowns.
 
 ```python
-import radia as rad
 import numpy as np
-rad.UtiDelAll()
+import ngsolve as ng
+from radia import vim
 
-# Permanent magnet
-pm = rad.ObjRecMag([0, 0, 0], [0.02, 0.02, 0.01], [0, 0, 954930])
-
-# Iron pole piece (zero initial M)
-iron = rad.ObjRecMag([0, 0, 0.015], [0.03, 0.03, 0.01], [0, 0, 0])
-mat = rad.MatLin(1000)  # mu_r = 1000
-rad.MatApl(iron, mat)
-
-assembly = rad.ObjCnt([pm, iron])
-result = rad.Solve(assembly, 0.0001, 1000, 0)  # LU solver
-print(f"Converged: max|dM|={result[3]:.2e}")
-
-B = rad.Fld(assembly, 'b', [0, 0, 0.03])
-rad.UtiDelAll()
+pm = vim.MagnetizationSource(pm_mesh, np.array([0.0, 0.0, 954930.0]))
+with ng.TaskManager():
+    result = vim.Solve(
+        iron_mesh, mu_r=1000.0, magnetization_sources=pm)
 ```
 
-**Example**: C-type electromagnet (full model, nonlinear steel + racetrack coil)
+Use separate PM and iron meshes when their normal magnetization is
+discontinuous at a touching interface.
 
 ---
 
@@ -2362,40 +2273,25 @@ rad.UtiDelAll()
 Soft iron in an externally applied field.  Classic magnetization problem.
 
 ```python
+import ngsolve as ng
 import radia as rad
-import numpy as np
+from radia.vim import soft_iron_box
+
 rad.UtiDelAll()
-
-MU_0 = 4 * np.pi * 1e-7
-
-# 3x3x3 hex mesh for a 20mm iron cube
-n = 3; dx = 0.02 / n; offset = 0.01
-objs = []
-base = [[0,0,0],[1,0,0],[1,1,0],[0,1,0],
-        [0,0,1],[1,0,1],[1,1,1],[0,1,1]]
-for iz in range(n):
-    for iy in range(n):
-        for ix in range(n):
-            x0, y0, z0 = ix*dx - offset, iy*dx - offset, iz*dx - offset
-            v = [[c[0]*dx+x0, c[1]*dx+y0, c[2]*dx+z0] for c in base]
-            objs.append(rad.ObjHexahedron(v, [0,0,0]))
-
-iron = rad.ObjCnt(objs)
-rad.MatApl(iron, rad.MatLin(1000))
-
-# IMPORTANT: ObjBckg requires a CALLABLE, not a list!
-bkg = rad.ObjBckg(lambda p: [0, 0, MU_0 * 200000])  # ~0.25 T
-grp = rad.ObjCnt([iron, bkg])
-
-result = rad.Solve(grp, 0.001, 100, 0)  # 27 hex, LU is fine
-B = rad.Fld(grp, 'b', [0, 0, 0.02])
+iron = soft_iron_box(
+    center=(0.0, 0.0, 0.0), size=(0.02, 0.02, 0.02),
+    mu_r=1000.0, nsub=3,
+)
+source = rad.ObjBckg(lambda p: [0.0, 0.0, 0.25])
+system = rad.ObjCnt([iron, source])
+with ng.TaskManager():
+    result = rad.Solve(system)
+B = rad.Fld(system, "b", [0.0, 0.0, 0.02])
 rad.UtiDelAll()
 ```
 
-**Element count**: 27 hex; HDiv-VIM DOF count depends on the selected HDiv order.
-**Example**: `validation_test/cube_uniform_field/experiment_objm_minimal.py`
-**Showcase notebook** (LU vs BiCGSTAB vs HACApK scaling, hex + tetra):
-`docs/cube_uniform_field/hmatrix_solver_scaling.ipynb`
+The HDiv order and mesh, not an old relaxation method number, determine the
+finite-element unknown space.
 
 ---
 
@@ -2404,28 +2300,17 @@ rad.UtiDelAll()
 Saturable iron with tabulated or functional B-H data.
 
 ```python
-import radia as rad
-rad.UtiDelAll()
+import ngsolve as ng
+from radia import vim
 
 # Tabulated B-H curve: [[H (A/m), B (T)], ...]
 BH = [[0,0], [100,0.1], [500,0.8], [1000,1.2],
       [5000,1.6], [20000,1.9], [50000,2.0]]
-mat_nl = rad.MatSatIsoTab(BH)
-
-# Or functional form: MatSatIsoFrm
-# mat_nl = rad.MatSatIsoFrm([[ksi1, ms1], [ksi2, ms2], [ksi3, ms3]])
-
-iron = rad.ObjRecMag([0, 0, 0], [0.02, 0.02, 0.02], [0, 0, 0])
-rad.MatApl(iron, mat_nl)
-
-bkg = rad.ObjBckg(lambda p: [0, 0, 0.5])  # 0.5 T
-grp = rad.ObjCnt([iron, bkg])
-
-# Nonlinear: may need more iterations + under-relaxation
-rad.SolverConfig(relax_param=0.3)  # 30% damping
-result = rad.Solve(grp, 0.0001, 500, 0)
-rad.SolverConfig(relax_param=0.0)  # reset
-rad.UtiDelAll()
+with ng.TaskManager():
+    result = vim.Solve(
+        mesh, bh_table=BH, H_ext=applied_field,
+        nonlinear_solver="energy-newton", nl_tol=1e-6, nl_maxit=300,
+    )
 ```
 
 **Example**: `docs/background_fields/sphere_in_quadrupole.py`
@@ -2445,7 +2330,8 @@ rad.UtiDelAll()
 iron = vim.MeshSoftIron(mesh, mu_r=1000)
 bkg = rad.ObjBckg(lambda p: [0, 0, 0.1])
 grp = rad.ObjCnt([iron, bkg])
-result = rad.Solve(grp, 0.001, 100, 2, demag_backend="hdiv")
+with ng.TaskManager():
+    result = rad.Solve(grp, demag_backend="hdiv")
 rad.UtiDelAll()
 ```
 
@@ -2457,752 +2343,107 @@ evaluation, executed + rendered): `docs/ngsolve_integration/integration_basics.i
 
 ---
 
-## Pattern F: Large-Scale with HACApK
+## Pattern F: Repeated or Large HDiv-VIM Solve
 
-For N > 2000 elements, use H-matrix acceleration (method=2).
+Use the persistent solver for operator reuse and configure the charge-Gram and
+linear solve through named arguments.
 
 ```python
-import radia as rad
-rad.UtiDelAll()
-
-# ... create large hex mesh (e.g., 10x10x10 = 1000 elements) ...
-
-rad.MatApl(iron, rad.MatLin(1000))
-bkg = rad.ObjBckg(lambda p: [0, 0, 0.1])
-grp = rad.ObjCnt([iron, bkg])
-
-# Configure HACApK parameters BEFORE Solve
-rad.SolverConfig(hacapk_eps=1e-4, hacapk_leaf=10, hacapk_eta=2.0)
-
-result = rad.Solve(grp, 0.001, 100, 2)  # method=2 = HACApK
-
-# Batch field evaluation (unified Fld with batch points)
-import numpy as np
-pts = np.array([[x, 0, 0] for x in np.linspace(-0.1, 0.1, 100)])
-B = np.asarray(rad.Fld(grp, 'b', pts))  # shape (100, 3)
-rad.UtiDelAll()
+solver = vim.HDivSolver(mesh, order=2, gram_eps=1e-10, leaf=32, eta=2.0)
+with ng.TaskManager():
+    result = solver.Solve(
+        mu_r=1000.0, H_ext=applied_field,
+        linear_solver="auto", preconditioner="auto")
 ```
 
-**Solver selection summary**:
-- N < 500: method=0 (LU) -- direct, guaranteed
-- 500 < N < 2000: method=1 (BiCGSTAB) -- fastest general
-- N > 2000: method=2 (HACApK) -- O(N log N) memory
-
-**Example**: `validation_test/cube_uniform_field/hexahedron/benchmark_hex.py`
+Read `result["linear_solver"]`, `result["preconditioner"]`, and the current
+validation JSON before reporting which backend or threshold is fastest.
 """
 
 
 RADIA_HYSTERESIS = """
-# Magnetic Hysteresis: B-input Play and Energy-Based Vector Hysteresis
+# Magnetic Hysteresis: Mesh-Backed HDiv-VIM Contract
 
-Radia supports **vector magnetic hysteresis** via two C++ models:
-- **Play model** (`MatPlayHysteresis`, Type 6, **RECOMMENDED**): Direct B-input Play
-  operators in C++. Forward O(K) direct evaluation, no Newton. 4-9 us/eval.
-- **Energy model** (`MatEnergyHysteresis`, Type 5): Energy-based approximation of
-  B-input Play. Requires non-negative shape functions (f_k >= 0).
+Radia's production field-history route is the B-input Play model on a
+mesh-backed NGSolve HDiv space. Material identification and material-only
+evaluation are separate from the spatial field solve.
 
-The measured B-H loop data (JMAG .hys files, MATLAB .mat files) is fitted
-using B-input Play, then used directly (Play model) or converted to energy
-parameters (Energy model) for the C++ solver.
+## Production Entry Points
 
-## Why B-input Play (Reference Model)
-
-The **B-input Play model** uses play operators driven by B (not H):
-- `p_k(B)`: play operator with threshold eta_k in B-space
-- `H = sum f_k(|p_k|) * (p_k / |p_k|)`: constitutive relation
-- Natural direction: **B -> H** (direct evaluation)
-- H -> B: **implicit** (requires fminsearch -- this motivates the energy model)
-
-Most Play models in literature are **H-input** (H drives operators). B-input
-is the **physically correct** choice:
-
-| Property | B-input (Sugahara/Hane) | H-input (literature majority) |
-|----------|------------------------|-------------------------------|
-| Play operator input | **B** | H |
-| Natural direction | **B -> H** | H -> B |
-| H-axis congruency | **Reproduced** (matches measurement) | **Not reproduced** |
-
-## C++ Play Model (MatPlayHysteresis, RECOMMENDED)
-
-Direct B-input Play operators implemented in C++ (`radTPlayHysteresisMaterial`, Type 6):
-
-**Forward (B -> H)**: O(K) direct evaluation, no Newton needed.
-```
-p_k = play(B, eta_k, p_k_prev)     -- play operator with threshold eta_k
-H = sum f_k(|p_k|) * (p_k / |p_k|) -- constitutive relation
-dH/dB computed analytically (chain rule through play operators)
-```
-
-**Inverse (H -> B)**: Newton iteration with analytical Jacobian.
-```
-Newton: F(B) = Forward(B) - H_target = 0
-dB = -inv(dH/dB) * F(B)            -- 3x3 matrix inversion O(1)
-```
-
-**Key advantage**: Shape functions f_k can be **negative** (no sign constraint).
-JMAG data typically has negative f_k for k>0, which is required for physical
-coercivity but incompatible with the Energy model's convex U_k requirement.
-
-**Performance**: Forward 4-9 us/eval, Inverse 10-47 us/eval (11x faster than Energy).
-
-## Energy-Based Approximation (MatEnergyHysteresis, Legacy)
-
-The energy-based model approximates B-input Play using convex energy minimization:
-
-**Derivation from B-input Play parameters**:
-1. U_k(r) = integral f_k(s) ds  (key identity: **U_k' = f_k**, same shape functions)
-2. chi_k = eta_k  (pinning = play threshold)
-3. |x| -> |x|_eps  (regularization for smoothness)
-4. G* = sum [U_k(|J_k|) - <H, J_k> + chi_k |J_k - J_{k,p}|_eps]
-
-**Limitation**: Requires f_k >= 0 (convex U_k). Real JMAG data has negative f_k,
-making energy conversion mathematically impossible for most materials.
-Use `MatPlayHysteresis` instead.
-
-**Naming convention** (B-input Play naming):
-- `Forward(B)` = B -> H: Schur complement O(K) (Egger's method)
-- `Inverse(H)` = H -> B: each J_k independent minimization, O(K)
-
-## Formulation Compatibility
-
-| Field Formulation | Primary Variable | Operator | Play Model | Energy Model |
-|-------------------|-----------------|----------|------------|--------------|
-| **A-formulation** (FEM) | B = curl(A) | Forward(B->H) | **Direct O(K)** | Schur O(K) |
-| **BEM standard** (Radia) | H | Inverse(H->B) | Newton + analytical J | Each J_k indep. |
-| **Hantila BEM** | H | Inverse(H->B) | Newton + analytical J | Each J_k indep. |
-| **Newton BEM** (vector M) | M -> B | Forward(B->H) | **Direct O(K)** | Schur O(K) |
-
----
-
-## Data Pipeline
-
-### Play Model (Recommended)
-
-```
-Measured B-H loops
-  |
-  v
-.hys file (JMAG)  or  .mat file (MATLAB/Potter-Schmulian)
-  |
-  v
-hys_to_play_radia() / mat_to_play_radia()   -> (K, eta, f_k_tables)
-  |
-  v
-rad.MatPlayHysteresis(K, eta, f_k_tables)    -> material handle
-  |
-  v
-rad.MatApl(iron_element, mat_handle)
-rad.Solve(container, tol, maxiter, method)
-```
-
-### Energy Model (Legacy, requires f_k >= 0)
-
-```
-Measured B-H loops -> load_hys() -> build_shape_functions()
-  -> convert_play_to_energy() -> rad.MatEnergyHysteresis(K, chi, tables, eps)
-```
-
----
-
-## API Reference
-
-### rad.MatPlayHysteresis(K, eta, f_k_tables) -- RECOMMENDED
-
-Create a B-input Play vector hysteresis material with table-based shape functions.
-
-**Parameters:**
-
-| Parameter | Type | Unit | Description |
-|-----------|------|------|-------------|
-| K | int | - | Number of play operators |
-| eta | array(K) | T | Play thresholds in B-space |
-| f_k_tables | list of (r, f) tuples | T, A/m | Shape function tables per operator |
-
-**Returns:** Material handle (int)
-
-**Shape function f_k(r):** tabulated at grid points r[i] (|p_k| values in Tesla)
-with function values f[i] (in A/m). **No sign constraint** -- f_k can be negative.
-Monotone limits automatically computed to ensure Newton convergence.
-
-### rad.MatEnergyHysteresis(K, chi, f_k_tables, eps=1e-8)
-
-Create an energy-based vector hysteresis material (legacy, requires f_k >= 0).
-
-**Parameters:**
-
-| Parameter | Type | Unit | Description |
-|-----------|------|------|-------------|
-| K | int | - | Number of partial polarizations (play operators) |
-| chi | array(K) | A/m | Pinning strength chi_k (= Play threshold eta_k) |
-| f_k_tables | list of (r, f) tuples | T, A/m | Shape function tables per operator |
-| eps | float | - | Regularization parameter (default 1e-8) |
-
-**Returns:** Material handle (int)
-
-### rad.MatMvsH(mat, component, H)
-
-Evaluate magnetization M at given H field (updates internal hysteresis state).
-Works with both Play and Energy models.
+| Need | Entry point |
+|------|-------------|
+| One history on one mesh | `radia.vim.SolveHysteresis(mesh, h_steps, ...)` |
+| Continuation and geometry reuse | `radia.vim.HDivSolver(mesh).SolveHysteresis(...)` |
+| Material object | `radia.vim.PlayHysteresisMaterial(K, eta, f_k_tables)` |
+| JMAG / MATLAB identification import | `radia.hysteresis_io.hys_to_play_radia` / `mat_to_play_radia` |
 
 ```python
-M = rad.MatMvsH(mat_handle, 'm', [Hx, Hy, Hz])
-# Returns [Mx, My, Mz] in A/m
-```
-
-### State Management (Both Models)
-
-```python
-state = rad.MatHysSaveState(mat)       # Save play operator states (K*9 doubles)
-rad.MatHysRestoreState(mat, state)     # Restore to saved state
-rad.MatHysCommitState(mat)             # Commit current state as new reference
-```
-
----
-
-## Usage Patterns
-
-### Pattern 1: From JMAG .hys File (Play Model, Recommended)
-
-```python
-import radia as rad
+import ngsolve as ng
+from radia import vim
 from radia.hysteresis_io import hys_to_play_radia
 
-rad.UtiDelAll()
+K, eta, tables = hys_to_play_radia("material.hys", K=20)
+material = vim.PlayHysteresisMaterial(K, eta, tables)
+h_steps = [
+    [0.0, 0.0, 0.0],
+    [0.0, 0.0, 2.0e5],
+    [0.0, 0.0, 0.0],
+]
 
-# One-step: .hys -> Play model parameters
-K, eta, f_k_tables = hys_to_play_radia('material.hys', K=20)
-
-mat = rad.MatPlayHysteresis(K, eta, f_k_tables)
-
-iron = rad.ObjRecMag([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 0])
-rad.MatApl(iron, mat)
-
-# Apply background field and solve
-bkg = rad.ObjBckg(lambda p: [0, 0, 0.1])  # 0.1 T
-container = rad.ObjCnt([iron, bkg])
-result = rad.Solve(container, 0.001, 100, 1)
-
-B = rad.Fld(container, 'b', [0.02, 0, 0])
-rad.UtiDelAll()
+with ng.TaskManager():
+    result = vim.SolveHysteresis(
+        mesh,
+        h_steps,
+        material=material,
+        tol=1e-8,
+        maxit=4000,
+        nl_tol=1e-3,
+        nl_maxit=200,
+    )
 ```
 
-### Pattern 2: From MATLAB .mat File (Play Model)
+For repeated histories on the same geometry:
 
 ```python
-from radia.hysteresis_io import mat_to_play_radia
-
-K, eta, f_k_tables = mat_to_play_radia('B_input.mat')
-mat = rad.MatPlayHysteresis(K, eta, f_k_tables)
+solver = vim.HDivSolver(mesh, order=2)
+with ng.TaskManager():
+    first = solver.SolveHysteresis(h_steps_a, material=material)
+    continued = solver.SolveHysteresis(h_steps_b, material=material)
 ```
 
-### Pattern 3: Step-by-Step (Custom Processing)
-
-```python
-from radia.hysteresis_io import load_hys, build_shape_functions
-
-# Step 1: Load B-H loop data
-loops = load_hys('material.hys')
-# loops = [{'B': array, 'H': array, 'Bmax': float}, ...]
-
-# Step 2: Build Play shape functions
-eta, f_k_tables, Bplay = build_shape_functions(loops)
-# eta = thresholds in B-space [Tesla]
-# f_k_tables = [(r_values, f_values), ...] per operator
-
-# Step 3: Create Radia material (Play model, direct)
-K = len(f_k_tables)
-mat = rad.MatPlayHysteresis(K, eta.tolist(), f_k_tables)
-```
-
-### Pattern 4: B-H Loop Generation (Material Characterization)
-
-Generate a B-H hysteresis loop to verify material behavior:
-
-```python
-import radia as rad
-import numpy as np
-from radia.hysteresis_io import hys_to_play_radia
-
-MU_0 = 4e-7 * np.pi
-rad.UtiDelAll()
-
-K, eta, tables = hys_to_play_radia('material.hys', K=20)
-mat = rad.MatPlayHysteresis(K, eta, tables)
-
-# Drive with sinusoidal H
-Hmax = 3000.0
-n_steps = 200
-t = np.linspace(0, 2 * np.pi, n_steps)
-H_drive = Hmax * np.sin(t)
-
-B_values = np.zeros(n_steps)
-for i, H_val in enumerate(H_drive):
-    M = rad.MatMvsH(mat, 'm', [H_val, 0, 0])
-    B_values[i] = MU_0 * (H_val + M[0])
-
-# B_values vs H_drive shows hysteresis loop
-# Ascending branch != descending branch (remanence, coercivity visible)
-```
-
-### Pattern 5: Energy Model (Legacy, for f_k >= 0 data only)
-
-```python
-from radia.hysteresis_io import hys_to_radia
-
-params = hys_to_radia('material.hys', K=20, eps=1e-8)
-mat = rad.MatEnergyHysteresis(**params)
-```
-
----
-
-## hysteresis_io Module Reference
-
-Location: `src/radia/hysteresis_io.py`
-
-| Function | Input | Output | Description |
-|----------|-------|--------|-------------|
-| `load_hys(filepath)` | .hys file path | list of {B, H, Bmax} | JMAG .hys reader |
-| `load_mat(filepath)` | .mat file path | loops, dB, BMax | MATLAB .mat reader (Potter-Schmulian) |
-| `build_shape_functions(loops, dB)` | B-H loops | eta, f_k_tables, Bplay | ShapeFunction.m port |
-| `play_hysteron(f_k, Bx, By, eta, px, py)` | shape funcs + B | Hx, Hy, px, py | PlayHysteron.m port (verification) |
-| **`hys_to_play_radia(filepath, K)`** | .hys path | **(K, eta, f_k_tables)** | **One-step .hys -> Play model** |
-| **`mat_to_play_radia(filepath)`** | .mat path | **(K, eta, f_k_tables)** | **One-step .mat -> Play model** |
-| `convert_play_to_energy(eta, f_k_tables)` | Play params | {K, chi, f_k_tables} | Play -> energy conversion |
-| `hys_to_radia(filepath, K, eps)` | .hys path | {K, chi, f_k_tables, eps} | One-step .hys -> Energy model |
-| `mat_to_radia(filepath, eps)` | .mat path | {K, chi, f_k_tables, eps} | One-step .mat -> Energy model |
-
-### .hys File Format (JMAG)
-
-```
-Jiles Atherton                    <- model type (ignored)
-0  200  5                         <- 0  nx(points/loop)  ny(num loops)
-1  200  0                         <- flags (ignored)
-tesla;A/m                         <- units: "tesla;A/m" or "A/m;tesla"
-1.200000  100.000000              <- B  H  (or H  B depending on units)
-1.195000  95.000000
-...                               <- nx * ny rows
-```
-
-### .mat File Format (Potter-Schmulian)
-
-MATLAB .mat file with variables:
-- `BH`: struct array, each with `.B` and `.H` fields (descending branch)
-- `dB`: B step size (scalar)
-- `BMax`: array of Bmax values per loop
-
----
-
-## Mathematical Background
-
-### B-input Play Model (C++ Implementation)
-
-```
-p_k(B) = play operator with threshold eta_k in B-space
-H = sum_k f_k(|p_k|) * (p_k / |p_k|)
-```
-- Forward (B -> H): O(K) direct evaluation, analytical dH/dB via chain rule
-- Inverse (H -> B): Newton iteration with analytical Jacobian inv(dH/dB)
-- **No sign constraint on f_k** -- handles negative shape functions from JMAG data
-
-### Energy-Based Approximation
-
-Derived from B-input Play: U_k' = f_k, chi_k = eta_k.
-
-**Inverse(H -> B)** [each J_k independent]:
-```
-J_k = argmin_J [ U_k(|J|) - <H, J> + chi_k * |J - J_{k,prev}|_eps ]
-B = mu_0 * H + sum_k J_k
-```
-Each J_k independent, O(K). BEM standard path.
-
-**Forward(B -> H)** [natural direction for B-input Play]:
-```
-{J_k} = argmin [ (nu_0/2)|B - sum J_k|^2 + sum [U_k + chi_k|J_k - J_{k,prev}|_eps] ]
-H = nu_0 * (B - sum J_k)
-```
-Schur complement (Egger's math), O(K). A-method, Newton BEM.
-
-**ComputeJacobian**: Energy model uses dB/dH = mu_0*I + sum H_k^{-1} from energy Hessian.
-Play model computes dH/dB analytically via chain rule, then inverts to get dB/dH.
-Both models provide analytical Jacobians for Newton convergence.
-
-### Key Identity: f_k = U_k' (Energy Model Only)
-
-- B-input Play shape function f_k = energy derivative U_k'
-- B-input Play threshold eta_k = pinning strength chi_k
-- Approximation source: eps-regularization (|x| -> |x|_eps)
-- As eps -> 0: energy model converges to B-input Play
-- **Limitation**: requires f_k >= 0 for convex U_k. Use Play model for f_k < 0
-
-### Parameter Guidelines
-
-**Play Model (MatPlayHysteresis):**
-
-| Parameter | Typical Range | Notes |
-|-----------|--------------|-------|
-| K | 5 - 50 | More = finer hysteresis resolution. K=10-20 typical |
-| eta | 0 - 1.5 T | Play thresholds in B-space. eta[0]=0 (reversible) |
-| f_k | any sign | Shape functions. Can be negative (JMAG data) |
-
-**Energy Model (MatEnergyHysteresis):**
-
-| Parameter | Typical Range | Notes |
-|-----------|--------------|-------|
-| K | 5 - 50 | Same as Play model |
-| chi | 0 - 1000 A/m | Pinning strength (= eta_k converted). chi[0]=0 |
-| f_k | **>= 0 only** | Must be non-negative for convex U_k |
-| eps | 1e-8 - 1e-6 | Regularization. Smaller = sharper corners |
-
----
-
-## Common Mistakes
-
-1. **Confusing M and J**: `M` is in A/m, `J = mu_0 * M` is in Tesla. Radia uses M (A/m).
-2. **Forgetting state is cumulative**: `MatMvsH()` updates internal hysteresis state.
-   Each call advances the magnetization history. Call order matters.
-3. **Using MatLin for hysteretic materials**: `MatLin(mu_r)` is for linear (non-hysteretic)
-   soft iron. Use `MatPlayHysteresis()` (recommended) or `MatEnergyHysteresis()`.
-4. **Using Energy model with negative f_k**: JMAG data typically has f_k < 0 for k>0.
-   Energy model requires f_k >= 0. Use `MatPlayHysteresis()` instead (no sign constraint).
-5. **Wrong K value**: Too few operators (K<5) gives poor loop shape. Too many (K>50)
-   adds cost with diminishing returns. K=10-20 is the sweet spot.
-
----
-
-## Verification
-
-### Play Model (13 tests)
-
-Script: `validation_test/hysteresis/verify_cpp_play_model.py`
-
-Tests: Forward M(H) sanity (4 tests), C++ vs Python comparison, B-H loop generation,
-state Save/Restore, monotone limit enforcement, Jacobian numerical verification,
-solver integration, performance benchmarking.
-
-Pytest: `tests/test_hysteresis.py` (13 tests covering Play + Energy, state management,
-solver integration, monotone limits)
-
-### Energy Model
-
-Script: `validation_test/hysteresis/verify_cpp_hysteresis.py`
-
-Tests: Forward operator, B-H loop, solver integration, performance.
-
----
-
-## Applications
-
-### Magnetization Analysis (着磁解析)
-
-The energy-based hysteresis model enables **magnetization process simulation**:
-
-```python
-import radia as rad
-import numpy as np
-
-rad.UtiDelAll()
-
-# 1. Create unmagnetized PM element with hysteresis material
-pm = rad.ObjRecMag([0, 0, 0], [0.02, 0.02, 0.01], [0, 0, 0])  # M=0 initially
-mat = rad.MatPlayHysteresis(K, eta, tables)  # or MatEnergyHysteresis
-rad.MatApl(pm, mat)
-
-# 2. Apply strong magnetizing field (着磁パルス)
-bkg = rad.ObjBckg(lambda p: [0, 0, 2.0])  # 2T magnetizing field
-container = rad.ObjCnt([pm, bkg])
-rad.Solve(container, 0.001, 100, 1)  # J_k states updated
-
-# 3. Remove magnetizing field -> residual magnetization remains
-# (requires re-creating container with zero background)
-# The hysteresis material retains memory via pinning (chi_k > 0)
-```
-
-**Key insight**: With `MatLin(mu_r)`, removing the external field returns M to zero.
-With `MatPlayHysteresis` (or `MatEnergyHysteresis`), **residual magnetization persists**
-due to pinning -- this is exactly the physics of magnetization.
-
-**Use cases**:
-- Multi-pole magnetization pattern analysis (着磁パターン)
-- Incomplete magnetization in weak-field regions (不完全着磁)
-- Demagnetization under reverse field or high temperature (減磁解析)
-- Iron loss from hysteresis loop area (鉄損計算)
-
----
-
-## BEM Solver Integration (C++)
-
-Radia's C++ BEM core provides solver paths for both Play and Energy hysteresis models:
-
-### Standard Path: Inverse(H->B) + Scalar Chi
-
-Standard chi-based BEM uses Inverse(H->B) to compute scalar chi, then M = chi*H.
-Simple, no Schur needed. Adequate for most cases.
-
-### Optional: Vector-Accurate Newton (Forward)
-
-For hysteresis where M does not align with H, the Newton variant uses
-Forward(B->H) for full vector M:
-
-1. **Full vector M**: Forward(B) -> H, then M = B/mu_0 - H (not scalar chi)
-2. **Forward(B->H) is O(K)**: Egger's Schur complement (mathematical reference).
-   This is the **natural direction for B-input Play**.
-3. **Analytical Jacobian**: from energy Hessian (not available in raw Play).
-4. **State management**: Save/Restore/Commit for Play operator states.
-
-### Newton with Forward (b_input_newton=True)
-
-Newton-Raphson using Forward(B->H) for vector-accurate M:
-
-```
-F(M) = M - Forward(mu_0*(H_ext + N*M + M)) / mu_0 = 0
-J_F = I - block_diag(dJ/dB) * (N + I)    [full dense Jacobian]
-dM = J_F^{-1} * (-F)                     [LAPACK dgesv_]
-```
-
-- Converges in **2-4 iterations** (quadratic convergence)
-- O(N^3) per iteration (dense Jacobian solve)
-- Best for small problems (N < 500)
-
-```python
-rad.SolverConfig(b_input_newton=True)
-rad.Solve(container, 1e-4, 100, 0)
-```
-
-### Newton + Hantila Hybrid (b_input_hantila=True, RECOMMENDED)
-
-Combines Newton warmup (Forward) with Hantila refinement (Inverse):
-
-```
-Phase 1: Newton warmup (3 iterations)
-  - Uses Forward(B->H): Schur complement, analytical Jacobian
-  - Full Jacobian J_F, LAPACK dgesv_, O(N^3) per iteration
-  - Gets close to solution quickly
-
-Phase 2: Hantila refinement (if Newton didn't fully converge)
-  - Uses Inverse(H->B): simple, no Schur needed
-  - Splits M = alpha*H + R, factors (I - alpha*N) ONCE (LU)
-  - Each iteration: O(N^2) back-substitution
-  - auto-alpha: probes material at 7 H values to find max susceptibility
-```
-
-- Converges in **3-47 iterations** total (depends on field step size)
-- For large N: Hantila phase is O(N^2) per iter vs Newton's O(N^3)
-- 0.00% error across 11-step hysteresis loop (verified)
-
-```python
-rad.SolverConfig(b_input_hantila=True)
-rad.Solve(container, 1e-4, 5000, 0)
-
-# With manual alpha (faster if you know the right value)
-rad.SolverConfig(b_input_hantila=True, hantila_alpha=500.0)
-```
-
-### Hysteresis Loop Workflow (C++ BEM)
-
-```python
-import radia as rad
-import numpy as np
-
-MU_0 = 4e-7 * np.pi
-
-rad.UtiDelAll()
-
-# 1. Create tetrahedral iron with hysteresis material
-iron = rad.ObjTetrahedron(tet_vertices, [0, 0, 0])
-mat = rad.MatPlayHysteresis(K, eta, tables)  # or MatEnergyHysteresis
-rad.MatApl(iron, mat)
-
-# 2. Enable B-input Hantila solver
-rad.SolverConfig(b_input_hantila=True)
-
-# 3. Step through field values (hysteresis loop)
-B_ext_values = [0.05, 0.1, 0.15, 0.2, 0.15, 0.1, 0.05, 0, -0.05, -0.1, 0]
-for B_ext in B_ext_values:
-    bkg = rad.ObjBckg(lambda p, b=B_ext: [0, 0, b])
-    container = rad.ObjCnt([iron, bkg])
-    result = rad.Solve(container, 1e-4, 5000, 0)
-    B = rad.Fld(container, 'b', [0, 0, 0.05])
-    print(f"B_ext={B_ext:.2f} T -> B_gap={B[2]:.4f} T, iters={result[0]}")
-
-rad.UtiDelAll()
-```
-
-### Comparison: Standard vs Vector-Accurate Solvers
-
-| Feature | Standard (chi-based) | Newton (Forward) | Newton+Hantila Hybrid |
-|---------|---------------------|-------------------|----------------------|
-| Operator used | Inverse(H->B) | Forward(B->H) | Forward + Inverse |
-| M accuracy | Scalar chi (M // H) | **Full vector M** | **Full vector M** |
-| Materials | MatLin, MatSatIsoTab, MatPlayHysteresis, MatEnergyHysteresis | MatPlayHysteresis, MatEnergyHysteresis | MatPlayHysteresis, MatEnergyHysteresis |
-| Jacobian | chi-based | **Analytical** | Analytical + Hantila |
-| Matrix factorization | Every iteration | Every iteration | **Once** (LU) |
-| Cost per iteration | O(N^3) | O(N^3) | **O(N^2)** |
-| Convergence | 5-50 (Picard) | **2-4** | **3-47** |
-| State management | chi only | Save/Restore/Commit | Save/Restore/Commit |
-
----
-
-## FEM Solver Integration (Hantila Polarization Method)
-
-Both Play and Energy hysteresis models integrate with NGSolve FEM solvers via
-**Hantila (1975) polarization method**. Both scalar and vector potential
-formulations are supported.
-
-**Note**: For A-formulation, B = curl(A) is directly available, so
-Forward(B->H) could be used (natural direction for B-input Play).
-However, FEM Hantila with Inverse(H->B) is already sufficient.
-
-### Available Solvers
-
-| Solver | Method | H derivation | Operator Used |
-|--------|--------|-------------|---------------|
-| `ScalarPotentialSolver.solve_hysteresis()` | Simkin reduced phi_r | H = H_s - grad(phi) | Inverse(H->B) |
-| `VectorPotentialSolver.solve_hysteresis()` | Reduced A_r | H = (B/mu_0 - R)/(1+alpha) | Inverse(H->B) |
-
-### Hantila Polarization Method
-
-Splits constitutive relation into linear + residual:
-```
-B = mu_0*(1+alpha)*H + mu_0*R    where R = M - alpha*H
-```
-
-- LHS is constant (assembled once): mu_0*(1+alpha) in iron, mu_0 in air
-- RHS updated each iteration with R from Inverse(H->B) -> M
-- Guaranteed convergence when alpha >= max(dM/dH)
-- Only Inverse(H->B) operator via `rad.MatMvsH()` needed (no Forward/Schur)
-- `relax` parameter (0-1) damps oscillation near play model pinning thresholds
-
-### Usage Pattern
-
-```python
-from radia.scalar_potential_solver import ScalarPotentialSolver
-from radia.vector_potential_solver import VectorPotentialSolver
-
-# Material factory (creates independent per-element handles)
-# Play model (recommended):
-def mat_factory():
-    return rad.MatPlayHysteresis(K, eta, tables)
-
-# Or Energy model (legacy):
-# def mat_factory():
-#     return rad.MatEnergyHysteresis(K, chi, tables, eps)
-
-# Vector potential (A_r) -- RECOMMENDED for B-input hysteresis
-# B = B_s + curl(A_r) is primary variable -> B directly available for Play operator
-solver_A = VectorPotentialSolver(mesh, iron_domains='iron', mu_r=1000.0, order=2)
-solver_A.set_source_from_radia(coil)
-solver_A.solve_hysteresis(mat_factory, alpha=500.0, relax=0.5)
-
-# Scalar potential (Simkin) -- also supported but less accurate for B-input
-# H = H_s - grad(phi) has cancellation that degrades B accuracy
-solver_S = ScalarPotentialSolver(mesh, iron_domains='iron', order=2,
-                                  kelvin_region='kelvin', kelvin_radius=R)
-solver_S.set_source_from_radia(coil)
-solver_S.solve_hysteresis(mat_factory, alpha=500.0, relax=0.5)
-```
-
-### Key Implementation Details
-
-- Per-element material handles are **persistent** across time steps
-  (stored in `solver._hys_handles`). Do NOT call `rad.UtiDelAll()` between steps.
-- States saved/restored each Hantila iteration via `MatHysSaveState/RestoreState`
-- States committed on convergence via `MatHysCommitState` (next step starts from here)
-- `mat_factory` is called only on first invocation; subsequent calls reuse handles
-- AC loop: same solver instance, update source with `set_source_from_radia(new_coil)`
-
-### Verified Results (C-type Electromagnet, NI=20000, Energy Play K=10)
-
-- Simkin Hantila: Bz = -729 mT
-- A_r Hantila: Bz = -741 mT
-- Agreement: 1.6%
-
-### FEM -> Radia Analytical Field (Beam Tracking)
-
-After hysteresis solve, export M to Radia for exact gap field:
-```python
-combined = solver.to_radia(coil=coil)       # iron M + coil
-B = rad.Fld(combined, 'b', gap_points)       # exact analytical B
-```
-- `solver.get_M_per_element()` -> {el_nr: [Mx,My,Mz]}
-- `solver.to_radia(coil)` -> Radia container (ObjCnt of iron + coil)
-- No mesh needed in gap; surface charge formulas exact for constant M
-
----
-
-## Unified Pipeline: Measurement -> B-input Play/Energy Model -> Solver
-
-| Layer | Component | Role |
-|-------|-----------|------|
-| **Identification** | B-input Play fitting (Taka's Fourier separation) | Measured B-H -> f_k, eta_k |
-| **Model (recommended)** | Direct B-input Play (`MatPlayHysteresis`) | f_k, eta_k used directly |
-| **Model (legacy)** | Energy approximation (`MatEnergyHysteresis`) | f_k -> U_k, eta_k -> chi_k |
-| **Solver** | BEM or FEM | Inverse(H->B) or Forward(B->H) |
-
-### Layer 1: Parameter Identification (B-input Play Fitting)
-
-Measured B-H loops -> B-input Play parameters:
-- eta_k: play thresholds in B-space
-- f_k: shape functions (B-input, not H-input!)
-
-Optional: Taka's Fourier separation for dynamic components:
-```
-h = (a_i * db/dt) + (c_i * b)
-c_i -> static (B-input shape functions)
-a_i -> dynamic (eddy current + aftereffect)
-```
-
-### Layer 2: C++ Model
-
-**Play model (recommended)**: Use B-input Play parameters directly.
-- `MatPlayHysteresis(K, eta, f_k_tables)` -- no conversion needed
-- f_k can be negative (required for JMAG data)
-
-**Energy model (legacy)**: Convert to energy approximation.
-- U_k(r) = integral f_k(s) ds  (f_k = U_k')
-- chi_k = eta_k
-- G* = sum [U_k + chi_k |J_k - J_{k,p}|_eps - <H, J_k>]
-- Requires f_k >= 0 (mathematically impossible for most JMAG data)
-
-### Layer 3: Field Solver
-
-- **BEM standard**: Inverse(H->B), each J_k independent
-- **BEM Newton**: Forward(B->H) for vector-accurate M + analytical Jacobian
-- **BEM Hantila**: Inverse(H->B) for R update (cheap)
-- **FEM Hantila**: Inverse(H->B) via MatMvsH()
-- **A-formulation**: Forward(B->H) directly (B known), but FEM Hantila sufficient
-
----
-
-## Future: Magnetic Aftereffect (磁気余効)
-
-**Status**: Planned. Not yet implemented.
-
-The Play model will be extended with thermal activation over pinning
-energy barriers (Arrhenius-type rate) for time-dependent magnetization:
-```
-dJ_k/dt ~ exp(-Delta_U_k / (k_B * T))
-```
-
-Applications: post-magnetization relaxation, long-term PM stability, temperature
-demagnetization.
-
----
-
-## References
-
-- Egger et al., "Efficient inverse operator for energy-based vector hysteresis",
-  IEEE Trans. Magn. (MAGCON-25-07-0171) [energy framework, Forward/Inverse naming]
-- Francois-Lavet et al., "An energy-based variational model of ferromagnetic
-  hysteresis for finite element computations", J. Comp. Appl. Math., 2013
-- Matsuo, "Magnetization process and B-input play model", IEEE Trans. Magn., 2011
-- Hantila, F.I., "A method for solving stationary magnetic field in nonlinear media",
-  Rev. Roum. Sci. Techn. - Electrotechn. et Energ., 1975
-- Taka Enki et al., "Proposal of Iron Loss Calculation Formula for PWM Excitation",
-  IEEJ SA-26-005, 2026
-- Sugahara, K. and Hane, H., "B-input energy-based vector hysteresis",
-  Kindai University, ongoing research [B-input vs H-input, measurement congruency]
+## Contracts
+
+- Supply exactly one of `play=(K, eta, tables)` or
+  `material=PlayHysteresisMaterial(...)`.
+- `h_steps` is the applied H history in A/m.
+- The caller owns the surrounding `ngsolve.TaskManager`.
+- Use `HDivSolver` when continuation and charge-Gram reuse matter.
+- Image symmetry is not supported by the current HDiv history solver and must
+  fail loudly.
+- Raw `ObjRecMag` / `ObjHexahedron` plus `MatApl` is not a production
+  soft-iron workflow. Mesh-less soft-iron `rad.Solve` is retired.
+- The low-level `rad.MatPlayHysteresis`, `rad.MatMvsH`, and
+  `MatHysSaveState/RestoreState/CommitState` functions remain useful for
+  constitutive material checks. They do not replace the mesh-backed field
+  solver.
+- The energy-stop model is a separate intentional model with stricter shape
+  constraints; do not silently substitute it for B-input Play.
+
+## Evidence
+
+Do not copy benchmark times, iteration counts, or accuracy percentages into MCP
+knowledge. Read the checked JSON produced by the relevant validation campaign:
+
+- `validation_test/hysteresis/test_binput_hdiv.py`
+- `validation_test/hysteresis/test_real_material_hysteresis.py`
+- `validation_test/hysteresis/test_loop_pollution_binput.py`
+- `validation_test/hysteresis/test_energy_stop_irreversible_pm.py`
+- `validation_test/hysteresis/bench_hysteresis_step.py`
+
+Fast regression coverage belongs in `tests/test_hdiv_vim_hysteresis_rt2.py`
+and the focused hysteresis API tests. Numerical and publication claims belong
+in validation JSON, not in this executable manual.
 """
-
 
 RADIA_ESIM = """
 # ESIM (Effective Surface Impedance Method)
