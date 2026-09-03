@@ -23,9 +23,9 @@ jobs:
       # CI gate and the local pre-push gate can never drift.  See CLAUDE.md
       # "CI Preflight Policy".  The script prints PASS/FAIL per policy and
       # exits non-zero on any violation.
-      #   1 no FldUnits() in examples        5 no generated files at repo root
+      #   1 no FldUnits() in Radia source    5 no generated files at repo root
       #   2 no tracked binaries              6 no legacy src/python import path
-      #   3 no Helmholtz WAVE kernel in core 7 README.md in every examples/ dir
+      #   3 no Helmholtz WAVE kernel in core 7 no tracked retired examples/ tier
       #   4 no CblasColMajor in core (allowlist: rad_mmm_matrices /
       #     rad_relaxation_methods / rad_hacapk / rad_stream_function .cpp)
       #   8 central HDiv geometry/order capability table

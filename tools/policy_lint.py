@@ -15,9 +15,9 @@ CI checks out on a fresh runner).
     python tools/policy_lint.py --quiet
 
 Policies (see CLAUDE.md):
-  1 no FldUnits() in examples            5 no generated files at repo root
+  1 no FldUnits() in Radia source        5 no generated files at repo root
   2 no tracked binaries                  6 no legacy src/python import path
-  3 no Helmholtz WAVE kernel in core     7 README.md in every examples/ dir
+  3 no Helmholtz WAVE kernel in core     7 no tracked retired examples/ tier
   4 no CblasColMajor in core (allowlist)
   8 HDiv geometry/field pairs use the central capability table
 """
@@ -61,9 +61,9 @@ def check_all():
     """Return list of (policy_name, ok, detail) for all 8 policies."""
     results = []
 
-    # 1: no FldUnits() in examples/*.py
-    hits = _git_grep("FldUnits", ["examples/*.py", "examples/**/*.py"])
-    results.append(("Policy 1: no FldUnits() in examples", not hits,
+    # 1: the removed unit-switching API must not return to executable Radia.
+    hits = _git_grep("FldUnits", ["src/radia/*.py", "src/radia/**/*.py"])
+    results.append(("Policy 1: no FldUnits() in Radia source", not hits,
                     hits[0] if hits else "ok"))
 
     # 2: no tracked binaries
@@ -105,16 +105,12 @@ def check_all():
     results.append((f"Policy 6: no legacy {_legacy} import path", not bad,
                     bad[0] if bad else "ok"))
 
-    # 7: every examples/*/ has README.md
-    ex = os.path.join(REPO, "examples")
-    missing = []
-    if os.path.isdir(ex):
-        for d in sorted(os.listdir(ex)):
-            dp = os.path.join(ex, d)
-            if os.path.isdir(dp) and not os.path.exists(os.path.join(dp, "README.md")):
-                missing.append(f"examples/{d}/")
-    results.append(("Policy 7: README.md in every example dir", not missing,
-                    str(missing[:3]) if missing else "ok"))
+    # 7: the examples tier is retired. Public demonstrations belong in docs,
+    # numerical evidence in validation_test, and regressions in tests.
+    rc, out = _sh(["git", "ls-files", "examples"])
+    examples = [path for path in out.splitlines() if path.strip()]
+    results.append(("Policy 7: no tracked retired examples tier", not examples,
+                    str(examples[:3]) if examples else "ok"))
 
     # 8: Piola-mapped HDiv field and geometry orders are dimension-dependent.
     # Keep one explicit table instead of reintroducing a tempting but incorrect
