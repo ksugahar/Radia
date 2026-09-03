@@ -1,0 +1,50 @@
+{
+  "schema": "radia.validation.ih-operator-physics.v1",
+  "generated_at_utc": "2026-09-03T21:10:49.457321+00:00",
+  "provenance": {
+    "command": "python validation_test/induction_heating/generate_ih_operator_physics_results.py",
+    "python": "3.12.10",
+    "ngsolve": "6.2.2606"
+  },
+  "configuration": {
+    "frequency_hz": 7000.0,
+    "workpiece_conductivity_S_per_m": 5000000.0,
+    "workpiece_relative_permeability": 100.0,
+    "coil_conductivity_S_per_m": 58000000.0,
+    "coupling_mode": "weak",
+    "bem_backend": "intree-dense",
+    "workpiece_box_volume_m3": 1e-06,
+    "workpiece_box_area_m2": 0.0006
+  },
+  "runtime_seconds": 6.271743100020103,
+  "thresholds": {
+    "electromagnetic_power_W_minimum": 5.656410577146e-06,
+    "electromagnetic_power_W_maximum": 5.887284478254001e-06,
+    "assembler_to_direct_power_relative_difference_maximum": 1e-09,
+    "relative_power_error_maximum": 1e-06,
+    "thermal_mass_relative_error_maximum": 1e-10,
+    "stiffness_nullspace_relative_error_maximum": 1e-10,
+    "convection_area_relative_error_maximum": 1e-10,
+    "temperature_weight_row_sum_relative_error_maximum": 1e-10
+  },
+  "observed": {
+    "electromagnetic_power_W": 5.7718475276642226e-06,
+    "thermal_source_power_W": 5.771847527664251e-06,
+    "relative_power_error": 4.989584369409143e-15,
+    "heat_projection_closure_W": 5.771847527664251e-06,
+    "mass_sum_J_per_K": 3.6426000000000007,
+    "stiffness_constant_nullspace_maximum": 8.326672684688674e-17,
+    "stiffness_maximum_absolute_entry": 1.3980000000000001,
+    "convection_sum_m2": 0.0006000000000000001,
+    "temperature_weight_minimum_J_per_K": 0.01897187500000004,
+    "temperature_weight_sum_J_per_K": 3.6426000000000007,
+    "temperature_weight_row_sum_maximum_relative_error": 1.2191544771005929e-16,
+    "direct_calc_inductance_power_W": 5.7718475276642226e-06,
+    "assembler_to_direct_power_relative_difference": 0.0,
+    "operator_basis": "exact-single-current-linear-response",
+    "surrogate": false,
+    "n_eddy_unknown": 1,
+    "n_heat": 20
+  },
+  "passed": true
+}

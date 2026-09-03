@@ -31,6 +31,20 @@ reaching back into `examples/`.
 
 The public docs catalog is `docs/induction_heating/`.
 
+## Simulink Operator Physics Golden
+
+`test_ih_operator_physics_golden.py` runs the real PEEC/BEM-SIBC unit-current
+solve and verifies thermal power closure, assembled-operator identities, and
+the exact single-current response contract used by the IH Simulink block.
+
+```powershell
+python -m pytest validation_test/induction_heating/test_ih_operator_physics_golden.py -q
+python validation_test/induction_heating/generate_ih_operator_physics_results.py
+```
+
+The generator owns `ih_operator_physics_results.json`; do not edit its
+numerical values by hand.
+
 ## Cubit Panels Legacy
 
 `cubit_panels_legacy/` contains the former IH Cubit-panel Python and
