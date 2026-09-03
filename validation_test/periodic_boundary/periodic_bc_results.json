@@ -1,0 +1,41 @@
+{
+  "schema": "radia.validation.periodic-boundary.v1",
+  "generated_at_utc": "2026-09-03T20:38:37.503315+00:00",
+  "provenance": {
+    "command": "python validation_test/periodic_boundary/generate_periodic_bc_results.py",
+    "python": "3.12.10",
+    "ngsolve": "6.2.2606"
+  },
+  "configuration": {
+    "element_family": "triangle",
+    "polynomial_order": 3,
+    "periodic_mesh_subdivisions": [
+      8,
+      16,
+      32
+    ],
+    "antiperiodic_mesh_subdivisions": 32,
+    "anti_periodic_phase": -1
+  },
+  "runtime_seconds": 0.4184817000059411,
+  "thresholds": {
+    "maximum_periodic_l2_error_n32": 0.0001,
+    "minimum_periodic_order3_h_rate": 3.0,
+    "maximum_antiperiodic_l2_error_n32": 0.0001,
+    "maximum_antiperiodic_sign_flip_error": 0.001
+  },
+  "observed": {
+    "periodic_l2_error_n8": 9.736667439731706e-05,
+    "periodic_l2_error_n16": 5.882092706723975e-06,
+    "periodic_l2_error_n32": 3.625843106719069e-07,
+    "periodic_order3_h_rate": 4.049026639276393,
+    "antiperiodic_l2_error_n32": 5.821278325786209e-08,
+    "antiperiodic_sign_flip_errors": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "antiperiodic_maximum_sign_flip_error": 0.0
+  },
+  "passed": true
+}
