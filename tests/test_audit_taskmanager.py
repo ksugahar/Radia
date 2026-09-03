@@ -31,6 +31,7 @@ def audit_module(monkeypatch, tmp_path):
         ("tests/axifem/_vol_mesh.py", "helper"),
         ("validation_test/cubit/cubit_202512_helpers.py", "helper"),
         ("validation_test/feec/conftest.py", "helper"),
+        ("validation_test/ngsolve_matlab_parity/extended_catalog.py", "helper"),
         ("validation_test/stream_function/regcoil_fusion_helpers.py", "helper"),
         ("docs/electric_machine/planar_vim_motor_helpers.py", "helper"),
         ("validation_test/cubit/_ho_volume_worker.py", "caller"),

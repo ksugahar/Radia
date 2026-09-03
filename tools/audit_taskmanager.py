@@ -82,6 +82,7 @@ LANE_HELPERS = {
     "tests/axifem/_vol_mesh.py",
     "validation_test/cubit/cubit_202512_helpers.py",
     "validation_test/feec/conftest.py",
+    "validation_test/ngsolve_matlab_parity/extended_catalog.py",
     "validation_test/stream_function/regcoil_fusion_helpers.py",
 }
 

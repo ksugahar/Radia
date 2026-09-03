@@ -18,7 +18,6 @@ import argparse
 import hashlib
 import json
 import platform
-import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -325,6 +324,8 @@ def _gap_inventory(path: Path) -> dict[str, object]:
 
 
 def build(options: argparse.Namespace) -> dict[str, object]:
+    import ngsolve as ng
+
     output_dir = options.output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     cubit = options.cubit.resolve()
@@ -390,16 +391,18 @@ def build(options: argparse.Namespace) -> dict[str, object]:
         "iron": _check_vol(iron_vol, output_dir, kelvin_domain=False),
         "kelvin_domain": _check_vol(kelvin_vol, output_dir, kelvin_domain=True),
     }
-    inventories = {
-        "iron": _ngsolve_inventory(iron_vol),
-        "kelvin_domain": _ngsolve_inventory(kelvin_vol),
-    }
-    reflection = {
-        "iron": _reflection_inventory(iron_vol),
-        "kelvin_domain": _reflection_inventory(kelvin_vol),
-    }
-    kelvin_identification = _kelvin_identification_inventory(kelvin_vol)
-    kelvin_fes = _kelvin_fes_inventory(kelvin_vol)
+    with ng.TaskManager():
+        inventories = {
+            "iron": _ngsolve_inventory(iron_vol),
+            "kelvin_domain": _ngsolve_inventory(kelvin_vol),
+        }
+        reflection = {
+            "iron": _reflection_inventory(iron_vol),
+            "kelvin_domain": _reflection_inventory(kelvin_vol),
+        }
+        kelvin_identification = _kelvin_identification_inventory(kelvin_vol)
+        kelvin_fes = _kelvin_fes_inventory(kelvin_vol)
+        gap_inventory = _gap_inventory(kelvin_vol)
     for name, inventory in inventories.items():
         if inventory["volume_element_vertex_counts"] != [4]:
             raise RuntimeError(f"{name} is not a pure TET mesh: {inventory}")
@@ -427,7 +430,6 @@ def build(options: argparse.Namespace) -> dict[str, object]:
     volume_error = None if iron_volume is None else (
         (iron_volume - EXACT_IRON_VOLUME_M3) / EXACT_IRON_VOLUME_M3
     )
-    gap_inventory = _gap_inventory(kelvin_vol)
     gap_is_resolved = bool(
         gap_inventory["elements"] > 0
         and gap_inventory["maximum_z_span_m"] <= 0.5 * gap_inventory["gap_height_m"]
