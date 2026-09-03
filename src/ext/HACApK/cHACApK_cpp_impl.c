@@ -228,6 +228,14 @@ void HACApK_matvec_stats_get(double *values, int n_values,
     }
 }
 
+int HACApK_matvec_stats_is_enabled(void) {
+    return matvec_stats_enabled();
+}
+
+int HACApK_matvec_mkl_threads_get(void) {
+    return matvec_mkl_threads();
+}
+
 /* Initialize persistent matvec buffers */
 static void init_matvec_buffers(int nd, int nthr, int ktmax) {
     int i;
