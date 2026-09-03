@@ -85,11 +85,16 @@
       "notes": "Circuit quality gates, measurements, knowledge, and learning helpers are callable from a checked MATLAB batch boundary and are not used per Simulink step."
     },
     {
-      "id": "acoustic-native",
+      "id": "acoustic-reference",
       "patterns": ["acoustics/__init__.py", "acoustics/scattering.py"],
-      "classification": "native-mex",
-      "matlab": ["matlab/+radia/+acoustic/softSphereScattering.m"],
-      "notes": "Four real-wavenumber sphere references share one C++ kernel."
+      "classification": "matlab-native",
+      "matlab": [
+        "matlab/+radia/+acoustic/softSphereScattering.m",
+        "matlab/+radia/+acoustic/rigidSphereScattering.m",
+        "matlab/+radia/+acoustic/fluidSphereScattering.m",
+        "matlab/+radia/+acoustic/elasticSphereScattering.m"
+      ],
+      "notes": "Independent readable SciPy and MATLAB partial-wave references; validation-only formulas are not exposed through pybind11 or MEX."
     },
     {
       "id": "acoustic-python",
@@ -97,7 +102,7 @@
       "classification": "python-fallback",
       "backend_contract": "in-process-python",
       "matlab": ["matlab/+radia/+python/acoustic.m"],
-      "notes": "BDF, CQ grid, and analytic complex-k sphere are native MEX; full NGSolve BEM CQ and FSI remain Python fallback."
+      "notes": "BDF, CQ grid, and the analytic complex-k sphere have readable MATLAB counterparts; full NGSolve BEM CQ and FSI remain Python fallback."
     },
     {
       "id": "analytical-formulas",
@@ -455,10 +460,10 @@
     {
       "priority": 5,
       "family": "acoustic-cq-bem-fsi",
-      "current": "Analytic sphere models, complex-wavenumber evaluation, BDF delta, and CQ grids share one native C++ kernel.",
-      "next_native_boundary": "Batched CQ transfer evaluation and numeric interface-coupling kernels used repeatedly by BEM/FSI solves.",
-      "retained_python_boundary": "NGSolve FEM/BEM spaces, forms, and coupled object orchestration.",
-      "gate": ["tests/acoustics/test_native_parity.py", "tests/matlab/test_acoustic_mex.m"]
+      "current": "NGSolve owns FEM/BEM assembly; readable Python and MATLAB sphere formulas provide independent validation references.",
+      "next_native_boundary": "Only measured production bottlenecks in repeated numeric interface coupling; analytical validation oracles stay readable and independent.",
+      "retained_python_boundary": "NGSolve FEM/BEM spaces, forms, coupled object orchestration, and validation-only analytical references.",
+      "gate": ["validation_test/acoustics/test_scattering_3way.py", "validation_test/acoustics/test_acoustic_reference.m"]
     },
     {
       "priority": 6,

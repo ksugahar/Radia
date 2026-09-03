@@ -169,10 +169,12 @@ index conversion is needed by callers.
 The previous `radia.spaceInfo` and `radia.ngsolveMatrix` spellings remain
 available as compatibility aliases.
 
-### Acoustic analytic kernels
+### Acoustic validation references
 
-The sphere-scattering references and convolution-quadrature primitives share
-one C++ implementation between pybind11 and MEX. MATLAB wrappers live under
+The sphere-scattering references are readable, independent SciPy and MATLAB
+partial-wave implementations. They intentionally do not use pybind11 or MEX,
+so they can judge the NGSolve FEM/BEM solver without sharing its native code.
+MATLAB references and vectorized convolution-quadrature primitives live under
 `+radia/+acoustic`:
 
 ```matlab
@@ -181,10 +183,10 @@ scattering = radia.acoustic.softSphereScattering(2.3, 0.9, points, Terms=28);
 grid = radia.acoustic.cqGrid(256, 1e-4, Method="BDF2");
 ```
 
-The native commands cover soft, rigid, fluid, and elastic spheres, complex
-wavenumbers, BDF delta, and CQ grid construction. Full CQ-BEM and acoustic FSI
-still require NGSolve's Python API and therefore use the explicit in-process
-fallback:
+The readable references cover soft, rigid, fluid, and elastic spheres and
+complex wavenumbers. BDF delta and CQ grid construction are small vectorized
+MATLAB functions. Full CQ-BEM and acoustic FSI still require NGSolve's Python
+API and therefore use the explicit in-process fallback:
 
 ```matlab
 result = radia.python.acoustic("cq", "cq_soft_sphere_scattering", ...
@@ -1404,9 +1406,11 @@ materialized in the optimization loop.
 ## Binding policy
 
 The executable parity audit compares three pybind11 surfaces with the
-`radia_mex` command table: 99 public top-level names, 28 underscore-prefixed
-numerical kernels, and 126 stateful class members. All 253 entries are covered
-by the current 364-command gateway. The independent 21-command
+`radia_mex` command table: 99 mapped public top-level names, 21
+underscore-prefixed numerical kernels, and 126 stateful class members in the
+mapped contract.
+All 246 mapped entries are covered by the current 360-command gateway. The
+independent 21-command
 `optuna_mex` owns only its two API commands and 19 optimizer kernels. Three
 internal mesh/test helpers are
 classified explicitly rather than silently omitted. The remaining `radentry`

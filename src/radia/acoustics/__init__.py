@@ -1,4 +1,4 @@
-"""radia.acoustics -- analytic acoustic scattering references (application lane).
+"""Radia's NGSolve-based acoustic application and validation lane.
 
 Acoustic Helmholtz scattering is an APPLICATION lane built on ngsolve.bem (the
 Helmholtz kernel), NOT part of the Laplace-only radia core (see the "Green's
@@ -12,7 +12,7 @@ Helmholtz FEM/BEM, radia.acoustics provides the analytic truth to check them.
 Validated 3-way (validation_test/acoustics/): Python analytic == MATLAB analytic
 to ~1e-14, and analytic == ngsolve.bem numerical (soft sphere) to ~2e-5.
 
-Public API (analytic scattering references, shared C++ via pybind11):
+Public API (readable SciPy analytical references, intentionally not native):
   soft_sphere_scattering     -- sound-soft (p = 0)
   rigid_sphere_scattering    -- sound-hard (dp/dn = 0)
   fluid_sphere_scattering    -- penetrable fluid sphere (Anderson 1950)
@@ -26,6 +26,9 @@ Submodules (need NGSolve / ngsolve.bem, import explicitly):
                                 BEM (ngsolve.bem Helmholtz single layer at complex
                                 kappa); cq.cq_soft_sphere_scattering,
                                 cq.soft_sphere_scattering_complex_k.
+
+The analytical references remain outside Radia's C++/pybind11/MEX kernels so
+they provide an implementation-independent check of the numerical solvers.
 """
 
 from .scattering import (

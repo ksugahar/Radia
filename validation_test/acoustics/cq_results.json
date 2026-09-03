@@ -1,6 +1,14 @@
 {
   "schema": "radia.acoustics.cq.v1",
-  "generated_at_utc": "2026-07-08T07:25:51Z",
+  "generated_at_utc": "2026-09-03T02:22:53Z",
+  "reference": {
+    "implementation": "src/radia/acoustics/cq.py (SciPy complex-k series)",
+    "independent_of": [
+      "radia C++",
+      "radia_mex",
+      "ngsolve.bem"
+    ]
+  },
   "problem": {
     "radius": 1.0,
     "sound_speed": 1.0,
@@ -9,11 +17,11 @@
     "method": "BDF2",
     "boundary": "sound_soft_sphere"
   },
-  "worst_frequency_bem_vs_complex_k_analytic": 0.00036315263548343475,
-  "time_signal_max_imag_over_scale": 4.64140778307926e-08,
+  "worst_frequency_bem_vs_complex_k_analytic": 0.00036315299079548824,
+  "time_signal_max_imag_over_scale": 5.270328431172079e-08,
   "versions": {
-    "radia": "4.95.6",
-    "ngsolve": "6.2.2604",
+    "radia": "4.95.77",
+    "ngsolve": "6.2.2606",
     "python": "3.12.10",
     "platform": "Windows-2022Server-10.0.20348-SP0"
   }
