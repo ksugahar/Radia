@@ -490,118 +490,74 @@ rel_change = |B_new - B_old| / B_sat
 
 This method provides fast Newton-Raphson convergence and matches industry-standard solvers.
 
-### Solver Tolerance Parameters
+### Solver Configuration
 
-Radia provides three tolerance parameters for controlling solver behavior:
-
-```python
-# 1. Nonlinear iteration tolerance (outer loop)
-#    Set via Solve() - controls when Newton-Raphson iterations stop
-rad.Solve(obj, nonl_tol, max_iter, method=0)  # legacy C++ route
-
-# 2. Solver parameters (all in one call)
-rad.SolverConfig(bicgstab_tol=1e-4, hacapk_eps=1e-4, hacapk_leaf=10, hacapk_eta=2.0)
-```
-
-| Parameter | Keyword | Default | Description |
-|-----------|---------|---------|-------------|
-| `nonl_tol` | `rad.Solve(obj, nonl_tol, ...)` | 0.001 | Nonlinear convergence threshold |
-| `bicgstab_tol` | `rad.SolverConfig(bicgstab_tol=...)` | 1e-4 | BiCGSTAB relative residual tolerance |
-| `hacapk_eps` | `rad.SolverConfig(hacapk_eps=...)` | 1e-4 | H-matrix ACA compression tolerance |
-
-**Example - Full solver configuration:**
+`rad.SolverConfig` configures the retained nonlinear state used by the legacy
+C++ LU relaxation route. The convergence tolerance remains an argument of
+`rad.Solve`:
 
 ```python
 import radia as rad
 
-# Configure all solver parameters in one call BEFORE Solve()
 rad.SolverConfig(
-    bicgstab_tol=1e-4,
-    hacapk_eps=1e-4, hacapk_leaf=10, hacapk_eta=2.0,
     newton_method=True,
-    newton_damping=True, newton_damping_max_iter=5, newton_damping_min_omega=0.01,
-    relax_param=0.0
+    newton_damping=True,
+    newton_damping_max_iter=5,
+    newton_damping_min_omega=0.01,
+    relax_param=0.0,
+    keep_magnetization=False,
 )
-
-# Solve
-rad.Solve(grp, 0.001, 100, 0)  # legacy C++ LU route
-
-# Query all settings
-config = rad.GetSolverConfig()
-print(config)
+rad.Solve(grp, 0.001, 100, 0)
 ```
 
-### SolverConfig - Unified Solver Parameter Configuration
+HDiv-VIM, PEEC, and BEM own their compression, Krylov tolerance, and H-matrix
+settings. Pass those settings to the corresponding solver constructor or solve
+call; they are deliberately not global `SolverConfig` state.
 
-```python
-rad.SolverConfig(**kwargs)
-```
-
-All parameters are optional keyword arguments. Only specified parameters are changed.
+All `SolverConfig` parameters are optional. Only specified parameters change.
 
 | Keyword | Type | Default | Description |
 |---------|------|---------|-------------|
-| `hacapk_eps` | float | 1e-4 | ACA+ compression tolerance (Method 2 only) |
-| `hacapk_leaf` | int | 10 | Minimum cluster size in elements |
-| `hacapk_eta` | float | 2.0 | Admissibility parameter |
-| `hmatrix_eps` | float | - | H-matrix field evaluation epsilon |
-| `bicgstab_tol` | float | 1e-4 | BiCGSTAB relative residual tolerance |
-| `relax_param` | float | 0.0 | Under-relaxation (0=full step, <1=damped) |
-| `newton_method` | bool | False | True=Newton-Raphson, False=Picard |
-| `newton_damping` | bool | True | Enable Newton line search damping |
-| `newton_damping_max_iter` | int | 5 | Max line search iterations |
+| `relax_param` | float | 0.0 | Under-relaxation (`0` is a full step) |
+| `keep_magnetization` | bool | False | Reuse the previous magnetization state |
+| `newton_method` | bool | False | Use Newton-Raphson instead of Picard iteration |
+| `newton_damping` | bool | True | Enable Newton line-search damping |
+| `newton_damping_max_iter` | int | 5 | Maximum line-search iterations |
 | `newton_damping_min_omega` | float | 0.01 | Minimum damping factor |
+| `b_input_newton` | bool | False | Enable supported B-input hysteresis stepping |
+| `b_input_hantila` | bool | False | Enable Hantila B-input stepping |
+| `hantila_alpha` | float | 0.0 | Hantila polarization parameter (`0` selects automatic scaling) |
+| `hantila_relax` | float | 0.0 | Hantila under-relaxation (`0` is a full step) |
 
-**HACApK Parameter Rationale:**
+Unknown or retired keywords fail with `ValueError`; in particular,
+`hacapk_eps`, `hacapk_leaf`, `hacapk_eta`, `hmatrix_eps`, and `bicgstab_tol`
+are not accepted here.
 
-| Parameter | Default | Rationale |
-|-----------|---------|-----------|
-| `hacapk_eps` | 1e-4 | Balance between accuracy and compression. Lower values (1e-6, 1e-8) for higher accuracy. |
-| `hacapk_leaf` | 10 | For face-charge hexahedra, leaf_size=10 gives roughly 60 DOF/leaf (binary tree splitting). |
-| `hacapk_eta` | 2.0 | Admissibility: clusters are "well-separated" when dist >= eta * max(diam). eta=2.0 is conservative. |
-
-**Examples:**
-
-```python
-# Configure retained low-level H-matrix parameters for APIs that use them
-rad.SolverConfig(hacapk_eps=1e-4, hacapk_leaf=10, hacapk_eta=2.0)
-
-# Under-relaxation for difficult nonlinear problems
-rad.SolverConfig(relax_param=0.3)
-rad.Solve(container, 0.001, 100, 0)
-rad.SolverConfig(relax_param=0.0)  # Reset to full step
-
-# Newton-Raphson with line search damping (recommended for large problems)
-rad.SolverConfig(newton_method=True, newton_damping=True)
-rad.Solve(container, 0.001, 100, 0)  # LU + Newton + damping
-```
-
-### GetSolverConfig - Query All Solver Parameters
+### GetSolverConfig
 
 ```python
 config = rad.GetSolverConfig()
 ```
 
-Returns a dictionary with all current solver parameters:
+The returned dictionary contains the same retained nonlinear state:
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `'bicgstab_tol'` | float | BiCGSTAB tolerance |
-| `'relax_param'` | float | Under-relaxation coefficient |
-| `'newton_method'` | bool | Newton-Raphson enabled |
-| `'newton_damping'` | bool | Newton damping enabled |
-| `'newton_damping_max_iter'` | int | Max line search iterations |
-| `'newton_damping_min_omega'` | float | Minimum damping factor |
-| `'hacapk_stats'` | dict | H-matrix statistics (only after HACApK solve) |
+| `relax_param` | float | Under-relaxation coefficient |
+| `keep_magnetization` | bool | Magnetization-state reuse enabled |
+| `newton_method` | bool | Newton-Raphson enabled |
+| `newton_damping` | bool | Newton damping enabled |
+| `newton_damping_max_iter` | int | Maximum line-search iterations |
+| `newton_damping_min_omega` | float | Minimum damping factor |
+| `b_input_newton` | bool | B-input Newton stepping enabled |
+| `b_input_hantila` | bool | Hantila B-input stepping enabled |
+| `hantila_alpha` | float | Hantila polarization parameter |
+| `hantila_relax` | float | Hantila under-relaxation |
 
-**Example:**
 ```python
 config = rad.GetSolverConfig()
-print(f"BiCGSTAB tol: {config['bicgstab_tol']}")
-print(f"Newton: {config['newton_method']}, damping: {config['newton_damping']}")
-if 'hacapk_stats' in config:
-    stats = config['hacapk_stats']
-    print(f"Compression: {stats['compression']:.1%}, Memory: {stats['memory_mb']:.1f} MB")
+print(config["relax_param"])
+print(config["newton_method"], config["newton_damping"])
 ```
 
 ---

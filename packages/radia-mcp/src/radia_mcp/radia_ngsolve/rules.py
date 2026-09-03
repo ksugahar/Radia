@@ -930,15 +930,38 @@ def check_removed_fldbatch(filepath: str, lines: List[str]) -> List[Dict]:
 
 
 def check_removed_solver_apis(filepath: str, lines: List[str]) -> List[Dict]:
-    """HIGH: Old solver parameter APIs removed. Use SolverConfig()."""
+    """HIGH: Reject retired solver APIs and stale SolverConfig keywords."""
     findings = []
-    old_apis = ['SetHACApKParams', 'SetHMatrixEpsilon', 'SetBiCGSTABTol',
-                'GetBiCGSTABTol', 'SetRelaxParam', 'GetRelaxParam',
-                'SetNewtonMethod', 'GetNewtonMethod', 'SetNewtonDamping',
-                'GetNewtonDampingStats', 'SetHMatrixFieldEval']
-    pattern = re.compile(r'(?:rad\.)?(?:' + '|'.join(old_apis) + r')\s*\(')
+    kernel_apis = [
+        'SetHACApKParams', 'SetHMatrixEpsilon', 'SetBiCGSTABTol',
+        'GetBiCGSTABTol', 'SetHMatrixFieldEval',
+    ]
+    nonlinear_apis = [
+        'SetRelaxParam', 'GetRelaxParam', 'SetNewtonMethod', 'GetNewtonMethod',
+        'SetNewtonDamping', 'GetNewtonDampingStats',
+    ]
+    kernel_pattern = re.compile(
+        r'(?:rad\.)?(?:' + '|'.join(kernel_apis) + r')\s*\('
+    )
+    nonlinear_pattern = re.compile(
+        r'(?:rad\.)?(?:' + '|'.join(nonlinear_apis) + r')\s*\('
+    )
+    retired_config_pattern = re.compile(
+        r'(?:rad\.)?SolverConfig\s*\([^)]*\b'
+        r'(?:hacapk_eps|hacapk_leaf|hacapk_eta|hmatrix_eps|bicgstab_tol)\s*='
+    )
     for i, line in enumerate(lines, 1):
-        if not line.strip().startswith('#') and pattern.search(line):
+        if line.strip().startswith('#'):
+            continue
+        if kernel_pattern.search(line) or retired_config_pattern.search(line):
+            findings.append({
+                'line': i, 'severity': 'HIGH', 'rule': 'removed-solver-api',
+                'message': (
+                    'Legacy compact-magnetostatic/Krylov controls are retired. '
+                    'Configure HDiv, PEEC, or BEM compression through that solver API.'
+                ),
+            })
+        elif nonlinear_pattern.search(line):
             findings.append({
                 'line': i, 'severity': 'HIGH', 'rule': 'removed-solver-api',
                 'message': 'Use rad.SolverConfig(**kwargs) and rad.GetSolverConfig().',

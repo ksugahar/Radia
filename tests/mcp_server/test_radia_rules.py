@@ -164,6 +164,7 @@ class TestRemovedSolverApis:
         findings = _run(check_removed_solver_apis, code)
         assert len(findings) == 1
         assert findings[0]['rule'] == 'removed-solver-api'
+        assert 'solver API' in findings[0]['message']
 
     def test_detects_setbicgstabtol(self):
         code = 'rad.SetBiCGSTABTol(1e-6)'
@@ -180,8 +181,14 @@ class TestRemovedSolverApis:
         findings = _run(check_removed_solver_apis, code)
         assert len(findings) == 1
 
-    def test_allows_solverconfig(self):
+    def test_detects_retired_solverconfig_keyword(self):
         code = 'rad.SolverConfig(hacapk_eps=1e-4)'
+        findings = _run(check_removed_solver_apis, code)
+        assert len(findings) == 1
+        assert 'solver API' in findings[0]['message']
+
+    def test_allows_current_solverconfig(self):
+        code = 'rad.SolverConfig(relax_param=0.3, newton_method=True)'
         assert _run(check_removed_solver_apis, code) == []
 
     def test_skips_comments(self):

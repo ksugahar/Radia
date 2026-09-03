@@ -5831,12 +5831,8 @@ PYBIND11_MODULE(_radia_pybind, m) {
               parameters are changed; others retain their current values.
 
               Keyword Args:
-                  hacapk_eps (float): H-matrix ACA tolerance (default: 1e-4)
-                  hacapk_leaf (int): H-matrix minimum cluster size (default: 10)
-                  hacapk_eta (float): H-matrix admissibility parameter (default: 2.0)
-                  hmatrix_eps (float): H-matrix field evaluation epsilon
-                  bicgstab_tol (float): BiCGSTAB convergence tolerance (default: 1e-4)
                   relax_param (float): Under-relaxation (0=full step, <1=damped)
+                  keep_magnetization (bool): Reuse the previous magnetization state
                   newton_method (bool): True=Newton-Raphson, False=Picard (default)
                   newton_damping (bool): Enable Newton line search damping
                   newton_damping_max_iter (int): Max line search iterations (default: 5)
@@ -5849,10 +5845,13 @@ PYBIND11_MODULE(_radia_pybind, m) {
                   hantila_relax (float): Hantila under-relaxation (0=full step, default: 0)
 
               Example:
-                  rad.SolverConfig(hacapk_eps=1e-4, hacapk_leaf=10, hacapk_eta=2.0)
-                  rad.SolverConfig(bicgstab_tol=1e-6, relax_param=0.3)
-                  rad.SolverConfig(newton_method=True, newton_damping=True)
+                  rad.SolverConfig(relax_param=0.3)
+                  rad.SolverConfig(newton_method=True, newton_damping=True,
+                                   keep_magnetization=True)
                   rad.SolverConfig(b_input_newton=True)  # B-input hysteresis stepping
+
+              HDiv, PEEC, and BEM H-matrix controls belong to their respective
+              solver constructors or solve calls, not this legacy LU-state API.
           )pbdoc");
 
     m.def("GetSolverConfig", &radia_solver_ext::GetSolverConfig,
@@ -5861,10 +5860,9 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
               Returns:
                   Dictionary with all solver parameters:
-                  - bicgstab_tol
-                  - relax_param, newton_method, b_input_newton, b_input_hantila
+                  - relax_param, keep_magnetization, newton_method
+                  - b_input_newton, b_input_hantila, hantila_alpha, hantila_relax
                   - newton_damping, newton_damping_max_iter, newton_damping_min_omega
-                  - hacapk_stats (if H-matrix solve has been performed)
           )pbdoc");
 
     // Image symmetry functions REMOVED (2026-01-31)
