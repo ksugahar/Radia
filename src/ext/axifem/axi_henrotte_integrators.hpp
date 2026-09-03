@@ -96,6 +96,11 @@ public:
 // 2 pi r_j A_phi).  No T = diag(2 pi r_node) wrap is applied -- T is
 // regular at the axis and stays in nodal form.  This is the key
 // difference from AxiHenrotteStiffnessBFI.
+//
+// Q2 limitation: H1Henrotte uses a magnetic 6-function basis on
+// axis-touching quads, which is incompatible with the full 9-node heat
+// matrix.  Both heat BFIs fail fast there.  Production axisymmetric heat uses
+// standard ngsolve.H1(order=2) with the 2*pi*r weak-form weight.
 class AxiHenrotteHeatStiffnessBFI : public BilinearFormIntegrator {
 public:
     shared_ptr<CoefficientFunction> k_cf;

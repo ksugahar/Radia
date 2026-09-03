@@ -657,6 +657,23 @@ Same three contracts as the qsurf side (see "Strict .sol + .vol
 contract" above): the `.sol` is a raw coefficient vector, the
 `.vol` carries the mesh, the FES order must match.
 
+## Axisymmetric discretization contract: Henrotte for EM, NGSolve H1 for heat
+
+Do not reuse the electromagnetic space for temperature:
+
+| Field | Required space | Axisymmetric operator |
+|---|---|---|
+| electromagnetic `A_phi` | `radia.axifem.H1Henrotte(...)` | Henrotte magnetic BFIs |
+| temperature `T` | standard `ngsolve.H1(mesh, order=2)` | symbolic forms weighted by `2*pi*x` |
+
+For standard NGSolve H1, `order=2` selects **Q2 on quadrilateral meshes** and
+**P2 on triangular meshes**.  It is an approximation order, not a request for
+one fixed element topology.  `AxiHenrotteHeatStiffnessBFI` and
+`AxiHenrotteHeatMassBFI` are optional research infrastructure only.  Their Q2
+path is valid off axis; both fail fast on axis-touching Q2 because the
+electromagnetic FE has six active axis functions while the heat matrix needs
+nine scalar-temperature functions.
+
 ## Axisymmetric thermal FE order: default 2 (near-axis cusp at order 1)
 
 `calc_heat_axisym.py` defaults to `--fes-order 2` (2026-09-03 near-axis
@@ -672,9 +689,8 @@ Field-report symptom map: "the axisym thermal result looks wrong near
 the axis" == this order-1 cusp.  Fix: keep the default order 2 (or pass
 `--fes-order 2`).  Do NOT switch the scalar solve to the Henrotte
 basis: the FEMM-canonical standard-H1 policy stands, order 2 already
-strongly suppresses the axis artifact, and the Henrotte HEAT order-2 path is
-currently broken on axis-touching meshes (magnetic axis-reduced shape
-functions vs full 9-node heat matrices).
+strongly suppresses the axis artifact.  The optional Henrotte heat BFIs now
+reject axis-touching Q2 explicitly instead of assembling inconsistent matrices.
 
 Two order>=2 implementation notes (both fixed 2026-09-03; they apply
 to `calc_heat.py` as well):
@@ -1274,7 +1290,24 @@ mstar_inv = mstar.Inverse(freedofs)
 gfT.vec.data = mstar_inv * (m.mat * gfT.vec + dt * f.vec)
 ```
 
-## 9. MODERATE: Missing TaskManager for Parallel Assembly
+## 9. HIGH: Do Not Reuse the Henrotte A_phi Space for Temperature
+
+```python
+# WRONG on an axis-touching Q2 mesh: electromagnetic axis-reduced basis
+fes_T = radia.axifem.H1Henrotte(mesh, order=2)
+a += radia.axifem.AxiHenrotteHeatStiffnessBFI(k)
+
+# CORRECT: standard scalar H1 with the cylindrical 2*pi*r measure
+fes_T = H1(mesh, order=2)  # Q2 on quads, P2 on triangles
+u, v = fes_T.TnT()
+a += k * grad(u) * grad(v) * 2*pi*x * dx
+m += rho_c * u * v * 2*pi*x * dx
+```
+
+The legacy Henrotte heat BFIs fail fast on axis-touching Q2.  Do not catch the
+exception and fall back; select the standard H1 thermal formulation explicitly.
+
+## 10. MODERATE: Missing TaskManager for Parallel Assembly
 
 ```python
 # SLOW: Serial assembly
@@ -1285,7 +1318,7 @@ with TaskManager():
     a.Assemble()  # Uses all CPU cores
 ```
 
-## 10. LOW: Point Evaluation Syntax
+## 11. LOW: Point Evaluation Syntax
 
 ```python
 # WRONG: Direct coordinate (only works for scalar fields)
@@ -1298,7 +1331,7 @@ T = gfT(mesh(0.03, 0, 0))
 Bz = B[2](mesh(0, 0, 0.03))  # B_z component
 ```
 
-## 11. LOW: VTK Legacy Format
+## 12. LOW: VTK Legacy Format
 
 ```python
 # OLD: Legacy VTK format (.vtk)
