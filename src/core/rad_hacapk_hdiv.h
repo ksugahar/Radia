@@ -434,15 +434,33 @@ public:
     // then amplifies G's ABSOLUTE rounding band (~eps*||G||) by ||B||^2 into
     // O(1) NEGATIVE demag eigenvalues (measured mu_min = -2.67 against the
     // physical [0,1] spectrum; CG stalls at any tolerance).  Storing Ghat
-    // keeps each entry relative-precision exact, which restores N PSD --
-    // proven on the 728-cell repro where clipping G's negative rounding band
-    // alone flipped 6 negative eigenvalues to 0.  See bug pattern
-    // facet-tet-charge-gram-indefinite-cg-stall.
+    // eliminates that absolute-roundoff amplification, but it does NOT make
+    // independently compressed ACA leaves positive semidefinite.  H-matrix
+    // material solves therefore require their own PSD certificate; the
+    // explicit dense backend below is the exact medium-mesh reference.
+    // See bug pattern facet-tet-charge-gram-indefinite-cg-stall.
     void MatVecSym(const std::vector<double>& x, std::vector<double>& y) override;
     void MatVecSymMany(const std::vector<double>& x, int nrhs,
                        std::vector<double>& y) override;
     // Diagnostic access: sigma_p = sqrt(raw G_pp) (empty before BuildHMatrix).
     const std::vector<double>& ChargeSigma() const { return m_chargeSigma; }
+    // Diagnostic oracle only: evaluate x^T G_raw x directly from the analytic
+    // entry kernel, without H-matrix compression or fill-time normalization.
+    // This intentionally O(n^2) check separates an entry-kernel PSD defect
+    // from an ACA/H-matrix PSD defect on a release-blocking mesh.
+    double RawSymmetricQuadraticForm(const std::vector<double>& x) const;
+    // Exact dense fallback for medium-size release-validation meshes.  The
+    // normalized analytic Gram is materialized once and then reused by every
+    // C++ solve/apply.  It is intentionally memory-bounded; large meshes must
+    // pass the H-matrix PSD certificate rather than silently becoming dense.
+    double BuildExactDenseNormalizedGram(std::size_t maximum_bytes);
+    bool UsesExactDenseNormalizedGram() const {
+        return !m_exactDenseNormalizedGram.empty();
+    }
+    double ExactDenseNormalizedGramMemoryMB() const {
+        return (double)(m_exactDenseNormalizedGram.size() * sizeof(double)) /
+               (1024.0 * 1024.0);
+    }
 
     // M3 (the iterative-solve hot kernel in C++): solve the SPD HDiv-VIM linear material system
     //   ((1/chi) M_mass + B^T G B) m = rhs
@@ -729,6 +747,7 @@ private:
     std::vector<double> m_chargeSigmaInv;  // 1/sigma_p
     bool m_sigmaActive = false;            // leaves hold Ghat; applies wrap S
     mutable bool m_fillNormalized = false; // fill-time oracle serves Ghat
+    std::vector<double> m_exactDenseNormalizedGram; // row-major Ghat; explicit medium-mesh fallback
     // Regression-only fault injection.  BuildHMatrix reads
     // RADIA_HDIV_TEST_FAIL_FILL_AFTER once; no test hook is exposed in pybind.
     int m_testFillFailureAfter = -1;
@@ -926,6 +945,10 @@ private:
         double hmatvec_lowrank_rank_le4 = 0.0, hmatvec_lowrank_rank_le8 = 0.0;
         double hmatvec_lowrank_rank_le16 = 0.0, hmatvec_lowrank_rank_le32 = 0.0;
         int mass_riesz_local_blocks = 0, mass_riesz_max_block = 0;
+        // 1.0 when a material-weighted Galerkin system uses the immutable
+        // geometry mass as its Riesz preconditioner.  The system remains the
+        // caller-configured material mass plus the demagnetization operator.
+        double mass_riesz_geometry_preconditioner = 0.0;
         int apply_count = 0, prec_count = 0, dot_count = 0;
         // Outcome of the last linear solve, measured from the TRUE residual
         // (not the CG recurrence): 1.0 = met tol, 0.0 = ran out of iterations.

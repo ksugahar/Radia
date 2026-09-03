@@ -1,3 +1,4 @@
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -8,6 +9,10 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SUITE = ROOT / "validation_test" / "c_type_three_engine"
+
+
+def module_hash(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def _load_convergence_module():
@@ -28,19 +33,24 @@ def test_c_type_cad_is_cubit_authority():
 
 def test_three_engine_runner_has_shared_physics_contract():
     runner = (SUITE / "run_three_engine.py").read_text(encoding="utf-8")
+    assert 'SOURCE_ROOT = HERE.parents[1] / "src"' in runner
+    assert 'SOURCE_PACKAGE = SOURCE_ROOT / "radia"' in runner
+    assert "sys.path.insert(0, str(SOURCE_ROOT))" in runner
+    assert 'imported_radia = sys.modules.get("radia")' in runner
+    assert "package_paths.insert(0, str(SOURCE_PACKAGE))" in runner
     assert 'rad.RadiaField(coil, "h")' in runner
     assert 'rad.RadiaField(coil, "b")' in runner
     assert "HDiv-MMM" in runner
+    assert '"formulation": "HDiv-MMM"' in runner
+    assert '"discretization": "BDM%d" % order' in runner
     assert "HCurl reduced-A" in runner
     assert "H1 TOSCA mixed total/reduced Omega" in runner
-    assert "project_source_interface_potential" in runner
-    assert "solve_magnetostatic_mixed_total_reduced_omega_kelvin" in runner
-    assert "solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin" in runner
+    assert "StaticElectromagnetMixedDomain" in runner
+    assert "solve_static_electromagnet_mixed_total_reduced_omega" in runner
     assert 'reduced_materials=("air",)' in runner
     assert 'total_materials=("iron", "kelvin")' in runner
-    assert 'interface_boundary="iron_air_interface"' in runner
-    assert 'kelvin_interface_boundary="kelvin_int"' in runner
-    assert 'kelvin_source_potential=kelvin_trace["potential"]' in runner
+    assert 'reduced_total_interface="iron_air_interface"' in runner
+    assert "source_trace_tolerance=source_trace_tolerance" in runner
     assert "source_trace" in runner
     assert "explicit cut or" in runner
     assert "fixed_mesh_equality_claimed" in runner
@@ -55,25 +65,26 @@ def test_three_engine_runner_has_shared_physics_contract():
     assert 'default=1.0e-14' in runner
     assert '"--source-trace-tolerance"' in runner
     assert 'default=0.05' in runner
-    assert '"--primary-only"' in runner
+    assert '"--primary-only"' not in runner
     assert '"--reduced-a-relax"' in runner
     assert '"relax": float(options.reduced_a_relax)' in runner
-    assert 'primary_pair_name = "hdiv_mmm__vs__omega_reduced_omega"' in runner
-    assert '"primary_gap_core_relative_rms"' in runner
+    assert 'hdiv_mixed_pair_name = "hdiv_mmm__vs__mixed_total_reduced_omega"' in runner
+    assert '"hdiv_mixed_gap_core_relative_rms"' in runner
     assert '"bh_interpolation_shared"' in runner
     assert '"hdiv_gram_eps": float(options.hdiv_gram_eps)' in runner
     assert '"nonlinear_converged": nonlinear_converged' in runner
     assert 'nonlinear_stats.get("nonlinear_converged_final_stage", False)' in runner
     assert '".reduced-a-checkpoint.json"' in runner
-    assert '".omega-checkpoint.json"' in runner
+    assert '".mixed-total-reduced-omega-checkpoint.json"' in runner
     assert '"implementation_sha256"' in runner
     assert '"radia_pybind"' in runner
     assert '"coil_builder"' in runner
-    assert '"primary_accuracy_passed"' in runner
+    assert '"hdiv_mixed_accuracy_passed"' in runner
     assert '"all_pairwise_within_tolerance"' in runner
-    assert '"selected_accuracy_passed"' in runner
     assert 'dirichlet="GND"' in runner
     assert "finite_outer_air_box_forbidden" in runner
+    assert "require_static_electromagnet_three_engine_contract" in runner
+    assert '"static_electromagnet_formulation_contract"' in runner
     assert "outer_boundary" not in runner
 
 
@@ -233,7 +244,7 @@ def test_historical_global_omega_results_preserve_pass_and_failed_gate_evidence(
     assert nonlinear_order2["comparison_contract"]["bh_interpolation_shared"]
 
 
-def test_current_tosca_mixed_three_engine_evidence_is_complete():
+def test_historical_tosca_mixed_v3_evidence_is_not_current_contract():
     results = SUITE / "results"
     linear = json.loads(
         (results / "hibino_20260902_linear_order3_tosca_mixed_v3.json").read_text(
@@ -261,6 +272,85 @@ def test_current_tosca_mixed_three_engine_evidence_is_complete():
     assert set(nonlinear["engines"]) == {
         "hdiv_mmm", "reduced_a", "omega_reduced_omega"
     }
+
+
+def test_current_tosca_mixed_three_engine_v4_evidence_is_complete():
+    results = SUITE / "results"
+    linear = json.loads(
+        (
+            results / "hibino_20260903_linear_order3_tosca_mixed_v4.json"
+        ).read_text(encoding="utf-8")
+    )
+    nonlinear = json.loads(
+        (
+            results / "hibino_20260903_nonlinear_order2_tosca_mixed_v4.json"
+        ).read_text(encoding="utf-8")
+    )
+    expected = {
+        "hdiv_mmm": "HDiv-MMM",
+        "reduced_a": "HCurl reduced-A",
+        "mixed_total_reduced_omega": "H1 TOSCA mixed total/reduced Omega",
+    }
+    for payload in (linear, nonlinear):
+        assert payload["schema"] == "radia.validation.c-type-formulation-comparison.v4"
+        assert payload["passed"] is True
+        assert payload["hdiv_mixed_accuracy_passed"] is True
+        assert payload["all_pairwise_within_tolerance"] is True
+        assert payload["comparison_contract"]["source_trace_tolerance"] == 0.05
+        assert payload["comparison_contract"][
+            "static_electromagnet_formulation_contract"
+        ]["engines"] == list(expected)
+        assert set(payload["engines"]) == set(expected)
+        for name, formulation in expected.items():
+            assert payload["engines"][name]["formulation"] == formulation
+        trace = payload["engines"]["mixed_total_reduced_omega"]["source_trace"]
+        assert trace["iron_relative_tangential_residual"] < 0.05
+        assert trace["kelvin_relative_tangential_residual"] < 0.05
+        assert payload["maximum_gap_core_pairwise_relative_rms"] < 0.01
+    assert nonlinear["nonlinear_converged"] is True
+    assert nonlinear["engines"]["hdiv_mmm"]["nonlinear_stats"]["converged"]
+    assert nonlinear["engines"]["reduced_a"]["nonlinear_stats"]["converged"]
+    assert nonlinear["engines"]["mixed_total_reduced_omega"]["nonlinear_stats"][
+        "converged"
+    ]
+
+
+def test_current_tosca_mixed_mesh_certificate_is_complete_and_portable():
+    results = SUITE / "results"
+    certificate = json.loads(
+        (
+            results
+            / "c_type_20260903_nonlinear_bdm2_mesh_convergence_certificate.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    assert certificate["schema"] == (
+        "radia.validation.c-type-absolute-accuracy-certificate.v1"
+    )
+    assert certificate["passed"] is True
+    assert all(certificate["checks"].values())
+    assert certificate["claim"]["analytic_absolute_truth_claimed"] is False
+    assert "TOSCA" in certificate["claim"]["scope"]
+    assert certificate["fine_mesh_maximum_pairwise_relative_rms"] < 0.005
+    assert certificate["combined_relative_numerical_uncertainty"] < 0.01
+    assert certificate["reproducibility"]["reference_machine"].casefold() == "mdx"
+    assert certificate["reproducibility"]["replicate_machine"].casefold() == "hibino"
+    assert certificate["reproducibility"]["maximum_relative_rms"] < 1e-9
+    assert certificate["mesh_family"] == "cubit_20260830_mesh_family.json"
+    assert (results / certificate["mesh_family"]).is_file()
+
+    expected = {
+        "coarse": "c_type_20260903_nonlinear_bdm2_coarse.json",
+        "medium": "c_type_20260903_nonlinear_bdm2_medium.json",
+        "fine": "c_type_20260903_nonlinear_bdm2_fine.json",
+        "finer": "c_type_20260903_nonlinear_bdm2_finer_mdx.json",
+    }
+    assert [row["name"] for row in certificate["level_results"]] == list(expected)
+    for row in certificate["level_results"]:
+        artifact = results / row["result"]
+        assert row["result"] == expected[row["name"]]
+        assert artifact.is_file()
+        assert module_hash(artifact) == row["result_sha256"]
 
 
 def test_historical_global_omega_accuracy_certificate_is_not_relabelled():
@@ -318,7 +408,11 @@ def test_mesh_family_builder_uses_one_geometric_cubit_sequence():
 
 def test_accuracy_certificate_requires_all_three_converged_routes():
     source = (SUITE / "run_mesh_convergence.py").read_text(encoding="utf-8")
-    assert 'ENGINES = ("hdiv_mmm", "reduced_a", "omega_reduced_omega")' in source
+    assert (
+        'ENGINES = ("hdiv_mmm", "reduced_a", "mixed_total_reduced_omega")'
+        in source
+    )
+    assert "radia.validation.c-type-formulation-comparison.v4" in source
     assert 'set(payload.get("engines", {})) != set(ENGINES)' in source
     assert 'if not payload.get("nonlinear_converged", False)' in source
     assert '"mesh_convergence_passed"' in source

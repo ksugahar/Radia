@@ -3951,10 +3951,37 @@ PYBIND11_MODULE(_radia_pybind, m) {
                  }
                  return to_numpy_1d(y);
              }, py::arg("x"),
-             "G_sym q -- EXACTLY symmetric H-matvec (upper-triangular leaves define both triangles), "
-             "so CG/MINRES on B^T G_sym B use a machine-symmetric operator (the ACA-asymmetry failure mode is removed).")
+             "G_sym q -- machine-symmetric H-matvec (upper-triangular leaves define both triangles). "
+             "Symmetry removes ACA transpose mismatch; positive-semidefinite certification remains a separate contract.")
         .def("entry", &RadHACApKChargeGram::GetInteractionMatrixElement, py::arg("i"), py::arg("j"),
              "Charge-Gram entry G[i,j] from the analytic / polytope / high-order kernel.")
+        .def("raw_symmetric_quadratic_form", [](const RadHACApKChargeGram& s, F64Array x_a) {
+                 const auto x = to_1d_vector<double>(x_a, "x");
+                 py::gil_scoped_release release;
+                 return s.RawSymmetricQuadraticForm(x);
+             }, py::arg("x"),
+             "Diagnostic-only exact-entry Rayleigh form x^T G_raw x; O(n^2), no H-matrix compression.")
+        .def("build_exact_dense_normalized_gram", [](RadHACApKChargeGram& s,
+                                                        std::size_t maximum_memory_mb) {
+                 if (maximum_memory_mb >
+                     std::numeric_limits<std::size_t>::max() / (1024ULL * 1024ULL))
+                     throw std::overflow_error(
+                         "maximum_memory_mb is too large to convert to bytes");
+                 const std::size_t bytes = maximum_memory_mb * 1024ULL * 1024ULL;
+                 double build_s = 0.0;
+                 {
+                     py::gil_scoped_release release;
+                     build_s = s.BuildExactDenseNormalizedGram(bytes);
+                 }
+                 py::dict result;
+                 result["build_s"] = build_s;
+                 result["memory_mb"] = s.ExactDenseNormalizedGramMemoryMB();
+                 result["n_dof"] = s.GetNDOF();
+                 return result;
+             }, py::arg("maximum_memory_mb") = 1024,
+             "Materialize a bounded exact normalized Gram for medium-mesh validation.")
+        .def_property_readonly("uses_exact_dense_normalized_gram",
+             &RadHACApKChargeGram::UsesExactDenseNormalizedGram)
         .def("charge_sigma",
              [](const RadHACApKChargeGram& s) {
                  return to_numpy_1d(s.ChargeSigma());
