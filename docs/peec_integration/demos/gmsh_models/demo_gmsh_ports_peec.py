@@ -25,12 +25,6 @@ Date: 2026-02-12
 import sys
 from pathlib import Path
 
-# Repo-local import path (works before `pip install radia`): put <repo>/src on
-# sys.path so `radia.peec_matrices` resolves from the source tree.
-_repo = next(p for p in Path(__file__).resolve().parents
-             if (p / "src" / "radia").exists())
-sys.path.insert(0, str(_repo / "src"))
-
 import numpy as np
 
 GMSH_MODELS = Path(__file__).resolve().parent
