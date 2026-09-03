@@ -27,6 +27,9 @@ classifiers = [
 
 dependencies = [
     "numpy>=1.20",
+    # Coordinate-defining SVDs use a one-thread BLAS context so canonical
+    # HCurl bases remain bit-reproducible across caller thread settings.
+    "threadpoolctl>=3.1",
     # Radia/HACApK intentionally uses oneMKL rather than NGSolve's OpenBLAS:
     # PARDISO and the dense HACApK kernels are performance-critical. MKL 2026
     # uses the mkl_rt.3.dll ABI, so keep runtime and build packages in 2026.x.
