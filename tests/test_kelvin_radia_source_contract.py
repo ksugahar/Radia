@@ -5,9 +5,29 @@ from __future__ import annotations
 import math
 
 import numpy as np
+import pytest
 
 
 MU_0 = 4.0e-7 * math.pi
+
+
+@pytest.mark.parametrize(
+    "factory_name",
+    (
+        "KelvinRadiaVectorPotential",
+        "KelvinRadiaFluxDensity",
+        "KelvinRadiaFieldStrength",
+        "KelvinRadiaScalarPotential",
+    ),
+)
+def test_native_kelvin_sources_reject_nonfinite_centres(factory_name):
+    import radia as rad
+
+    factory = getattr(rad, factory_name)
+    with pytest.raises(ValueError, match="kelvin_center must be finite"):
+        factory(1, (math.nan, 0.0, 0.0), 1.0, (0.0, 0.0, 0.0))
+    with pytest.raises(ValueError, match="physical_center must be finite"):
+        factory(1, (0.0, 0.0, 0.0), 1.0, (0.0, math.inf, 0.0))
 
 
 def _pullback(values, point, center, radius, *, twisted):

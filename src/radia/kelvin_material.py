@@ -84,8 +84,6 @@ from __future__ import annotations
 
 import math
 
-import numpy as np
-
 MU_0 = 4e-7 * math.pi
 NU_0 = 1.0 / MU_0
 
