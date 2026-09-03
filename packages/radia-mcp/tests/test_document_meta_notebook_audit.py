@@ -74,12 +74,8 @@ def test_default_notebook_audit_does_not_parse_adjacent_json(tmp_path):
 
     ready = document_meta_notebook_result_audit(str(tmp_path), "docs")
     assert ready["summary"]["ok_result_saved"] == 1
-    assert ready["notebooks"][0]["result_json_count"] == 0
-
-    compatibility = document_meta_notebook_result_audit(
-        str(tmp_path), "docs", require_json=True
-    )
-    assert compatibility["summary"]["result_json_missing_version_or_date"] == 1
+    assert "result_json_count" not in ready["notebooks"][0]
+    assert "needs_result_json_sidecar" not in ready["summary"]
 
 
 def test_notebook_result_audit_requires_saved_webgui_for_examples(tmp_path):
