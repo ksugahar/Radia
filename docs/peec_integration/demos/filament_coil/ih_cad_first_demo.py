@@ -13,25 +13,17 @@ Two coil designs are compared on the SAME steel-cylinder workpiece:
   B) Loft arc: rectangular 5x5 mm straight leg into a round wire 180
      degree return -- showcases Stage 3c LoftArcSegment
 
-Both are at 7 kHz, I_total = 1 A, and run against the same workpiece
-mesh extracted from ih_bem_sample.vol so the result is directly
-comparable to the Phase 2 validation numbers.
+Both are at 7 kHz, I_total = 1 A, and run against the same checked
+workpiece .vol supplied on the command line.
 
 The BEM-SIBC solver is CACHED across both coils via
 IHWorkpieceContext -- see per-coil timing breakdown in the output.
 """
 
-import os
-import sys
-import numpy as np
+import argparse
+from pathlib import Path
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-SRC = os.path.abspath(os.path.join(HERE, '..', '..', '..', 'src'))
-SRC_RADIA = os.path.join(SRC, 'radia')
-PANELS = os.path.join(SRC, 'radia', 'panels')
-for p in (SRC, SRC_RADIA, PANELS, HERE):
-    if p not in sys.path:
-        sys.path.insert(0, p)
+import numpy as np
 
 from ngsolve import Mesh, BND
 
@@ -43,9 +35,6 @@ from radia.panels.surface_mesh_extract import _extract_surface_mesh_filtered
 
 MM = 1e-3
 
-VOL_FILE = os.path.join(SRC, 'radia', 'panels', 'samples',
-                        'ih_bem_sample.vol')
-
 R_MAJOR = 30 * MM
 COIL_CURRENT = 1.0
 FREQUENCY = 7e3
@@ -54,8 +43,8 @@ WP_SIGMA = 2e6
 WP_MU_R = 100.0
 
 
-def load_workpiece():
-    mesh_full = Mesh(VOL_FILE)
+def load_workpiece(vol_file: Path):
+    mesh_full = Mesh(str(vol_file))
     wp = _extract_surface_mesh_filtered(mesh_full, keep_label='workpiece')
     return wp
 
@@ -109,8 +98,16 @@ def report(tag, coil, result):
 
 
 def main():
+    parser = argparse.ArgumentParser(
+        description="Compare two CAD-first coils against a checked workpiece mesh."
+    )
+    parser.add_argument("vol", type=Path, help="checked workpiece .vol mesh")
+    args = parser.parse_args()
+    if not args.vol.is_file():
+        parser.error(f"workpiece mesh does not exist: {args.vol}")
+
     print("Loading workpiece mesh...")
-    wp = load_workpiece()
+    wp = load_workpiece(args.vol)
     print(f"  {wp.nv} vertices, {wp.GetNE(BND)} surface elements")
 
     print("\nBuilding IHWorkpieceContext (one-time BEM assembly)...")

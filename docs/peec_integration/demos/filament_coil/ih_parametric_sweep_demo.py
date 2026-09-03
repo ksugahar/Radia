@@ -6,23 +6,16 @@ grid of (wire_radius, n_turns_arc) values against one cached workpiece
 and reports per-coil time + H_t_rms / P_total.
 
 Baseline (no cache, rebuilding SIBC each coil): ~14 s / coil on the
-166-node ih_bem_sample workpiece.
+original 166-node reference workpiece.
 With cache (this script): ~3 s / coil after a single ~11 s one-time
 assembly.
 """
 
-import os
-import sys
+import argparse
+from pathlib import Path
+
 import time
 import numpy as np
-
-HERE = os.path.dirname(os.path.abspath(__file__))
-SRC = os.path.abspath(os.path.join(HERE, '..', '..', '..', 'src'))
-SRC_RADIA = os.path.join(SRC, 'radia')
-PANELS = os.path.join(SRC, 'radia', 'panels')
-for p in (SRC, SRC_RADIA, PANELS, HERE):
-    if p not in sys.path:
-        sys.path.insert(0, p)
 
 from ngsolve import Mesh, BND
 
@@ -33,8 +26,6 @@ from radia.ih_pipeline import IHWorkpieceContext
 from radia.panels.surface_mesh_extract import _extract_surface_mesh_filtered
 
 MM = 1e-3
-VOL_FILE = os.path.join(SRC, 'radia', 'panels', 'samples',
-                        'ih_bem_sample.vol')
 
 R_MAJOR = 30 * MM
 FREQUENCY = 7e3
@@ -51,8 +42,16 @@ def build_round_torus(wire_r_mm, arc_deg):
 
 
 def main():
+    parser = argparse.ArgumentParser(
+        description="Sweep CAD-first coils against a checked workpiece mesh."
+    )
+    parser.add_argument("vol", type=Path, help="checked workpiece .vol mesh")
+    args = parser.parse_args()
+    if not args.vol.is_file():
+        parser.error(f"workpiece mesh does not exist: {args.vol}")
+
     print("Loading workpiece mesh...")
-    mesh_full = Mesh(VOL_FILE)
+    mesh_full = Mesh(str(args.vol))
     wp = _extract_surface_mesh_filtered(mesh_full, keep_label='workpiece')
     print(f"  {wp.nv} vertices, {wp.GetNE(BND)} surface elements")
 

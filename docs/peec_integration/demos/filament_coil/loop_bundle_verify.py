@@ -9,24 +9,13 @@ Also times both to show the scaling benefit as K grows.
 """
 
 import math
-import os
-import sys
 import time
 
 import numpy as np
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-SRC = os.path.abspath(os.path.join(HERE, '..', '..', '..', 'src'))
-SRC_RADIA = os.path.join(SRC, 'radia')
-for p in (SRC, SRC_RADIA):
-    if p not in sys.path:
-        sys.path.insert(0, p)
-
-import radia  # noqa: F401  -- sets up MKL DLL paths
-
 
 def build_test_coil(R, a, gap_deg, nw, nh, n_arc, freq, sigma):
-    from coil_builder import CoilBuilder
+    from radia.coil_builder import CoilBuilder
     cb = (CoilBuilder(current=1.0)
           .set_start([R, 0, 0],
                      orientation=np.array([[1, 0, 0],
@@ -47,8 +36,12 @@ def run(nw, nh, n_arc):
     print(f"\n=== nw x nh = {nw} x {nh}, n_arc = {n_arc} "
           f"(K = {nw*nh}, N_seg = {nw*nh*n_arc}) ===")
 
-    from peec_bundle import (build_bundle_solver, filament_currents,
-                              build_loop_bundle_impedance, solve_loop_bundle)
+    from radia.peec_bundle import (
+        build_bundle_solver,
+        build_loop_bundle_impedance,
+        filament_currents,
+        solve_loop_bundle,
+    )
     paths = build_test_coil(R, a, gap_deg, nw, nh, n_arc, freq, sigma_cu)
     dw = (2 * a) / nw
     dh = (2 * a) / nh
