@@ -291,6 +291,9 @@ if "Fld" in globals():
         BDM1/BDM2 fields by persistent C++ charge-field kernels.  A multi-body
         container sums every registered body plus its ordinary Radia sources.
         Other Radia objects call the ordinary C++ ``Fld`` unchanged.
+
+        The caller owns ``with ngsolve.TaskManager():`` when evaluating a
+        solved mesh-backed HDiv-VIM object.
         """
         try:
             from radia.vim import _radsolve
