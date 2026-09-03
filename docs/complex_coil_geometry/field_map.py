@@ -1,15 +1,15 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """Calculate a magnetic field map and export checked GMSH post data."""
 
 import os
 from pathlib import Path
 
 import numpy as np
-import radia as rad
 
 # Import coil model (defines mm = 1e-3)
 from coil_model import create_beam_steering_coil, mm
+
+import radia as rad
 
 print("=" * 70)
 print("MAGNETIC FIELD MAP CALCULATION")
@@ -75,12 +75,12 @@ def calculate_field_grid(coil_obj, grid_params):
 			percent = (idx + 1) * 100 / total_points
 			print(f"    Progress: {percent:.0f}% ({idx + 1}/{total_points})", end='\r')
 
-	print(f"\n  [OK] Field calculation complete")
+	print("\n  [OK] Field calculation complete")
 
 	# Calculate field magnitude
 	B_mag = np.sqrt(Bx**2 + By**2 + Bz**2)
 
-	print(f"\n  Field statistics:")
+	print("\n  Field statistics:")
 	print(f"    Bx range: [{np.min(Bx):.3f}, {np.max(Bx):.3f}] mT")
 	print(f"    By range: [{np.min(By):.3f}, {np.max(By):.3f}] mT")
 	print(f"    Bz range: [{np.min(Bz):.3f}, {np.max(Bz):.3f}] mT")
@@ -97,6 +97,7 @@ def export_field_to_gmsh(coil_obj, grid_params, filename):
 	"""Export the field on a Netgen air mesh as GMSH MSH v4.1 NodeData."""
 	from netgen.csg import CSGeometry, OrthoBrick, Pnt
 	from ngsolve import Mesh
+
 	from radia.gmsh_post_export import GmshPostExport
 
 	print("\n" + "-" * 70)
@@ -141,7 +142,7 @@ def main():
 	print("-" * 70)
 	coil, params = create_beam_steering_coil()
 
-	print(f"[OK] Coil model loaded")
+	print("[OK] Coil model loaded")
 	print(f"     Description: {params['description']}")
 	print(f"     Current: {params['current']} A")
 	print(f"     Cross-section: {params['cross_section']['width']/mm:.0f}x{params['cross_section']['height']/mm:.0f} mm")
@@ -168,7 +169,7 @@ def main():
 	print("\n" + "=" * 70)
 	print("GRID CONFIGURATION")
 	print("=" * 70)
-	print(f"\nField evaluation region (100 mm margin around coil):")
+	print("\nField evaluation region (100 mm margin around coil):")
 	print(f"  X: [{x_min/mm:.2f}, {x_max/mm:.2f}] mm")
 	print(f"  Y: [{y_min/mm:.2f}, {y_max/mm:.2f}] mm")
 	print(f"  Z: [{z_min/mm:.2f}, {z_max/mm:.2f}] mm")
@@ -180,10 +181,13 @@ def main():
 	print("      For finer resolution, increase grid points (may take longer).")
 
 	# Calculate field
-	field_data = calculate_field_grid(coil, grid_params)
+	calculate_field_grid(coil, grid_params)
 
 	# Export a checked GMSH post-processing artifact.
-	export_field_to_gmsh(coil, grid_params, 'field_map')
+	from ngsolve import TaskManager
+
+	with TaskManager():
+		export_field_to_gmsh(coil, grid_params, 'field_map')
 
 	# Cleanup
 	rad.UtiDelAll()

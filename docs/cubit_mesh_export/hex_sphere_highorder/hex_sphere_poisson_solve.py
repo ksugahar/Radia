@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Solve a PDE on the curved high-order HEX mesh -- not just integrate it.
 
 The companion `hex_sphere_curved_ngsolve.py` shows that the curved hex .vol gives the
@@ -14,20 +13,47 @@ surface.  We report the L2 error vs order on the SAME 56-hex mesh (p-refinement)
     order 2 :  ~1.3e-6
     order 3 :  ~3.9e-7
 
-Pure NGSolve, no Cubit needed to RUN (the .vol files are committed).  Load the high-order
-.vol AS-IS and do NOT call mesh.Curve() (it would reset the curved nodes -- see README).
+Generate the .vol files with Cubit first. Load each high-order .vol AS-IS and do not call
+mesh.Curve() (it would reset the curved nodes -- see README).
 
     python hex_sphere_poisson_solve.py
 """
 import os
-from ngsolve import (Mesh, H1, GridFunction, BilinearForm, LinearForm, Integrate,
-                     grad, dx, x, y, sin, cos, sqrt, VOL, BND)
+
+from ngsolve import (
+    BND,
+    H1,
+    VOL,
+    BilinearForm,
+    GridFunction,
+    Integrate,
+    LinearForm,
+    Mesh,
+    TaskManager,
+    cos,
+    dx,
+    grad,
+    sin,
+    sqrt,
+    x,
+    y,
+)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
+def _mesh_path(order):
+    path = os.path.join(HERE, f"hexsph_o{order}.vol")
+    if not os.path.isfile(path):
+        raise FileNotFoundError(
+            f"missing generated Cubit mesh: {path}; follow the regeneration "
+            "commands in README.md"
+        )
+    return path
+
+
 def l2_error(order):
-    mesh = Mesh(os.path.join(HERE, f"hexsph_o{order}.vol"))     # curved HEX, AS-IS
+    mesh = Mesh(_mesh_path(order))  # curved HEX, AS-IS
     u_ex = sin(8 * x) * cos(6 * y)
     f_rhs = 100 * sin(8 * x) * cos(6 * y)
     fes = H1(mesh, order=order, dirichlet=".*")
@@ -55,4 +81,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    with TaskManager():
+        main()
