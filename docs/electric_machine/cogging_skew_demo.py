@@ -48,6 +48,12 @@ HC = 1.0 / MU0                       # Br ~ 1 T rigid PM (mu_r = 1 recoil)
 Rr, Rs_in, Rs_out, BOX = 10.0, 13.0, 22.0, 70.0       # mm
 RB_IN, RB_OUT = 10.6, 12.4           # eggshell band inside the air gap [mm]
 HERE = Path(__file__).resolve().parent
+VALIDATION_RESULT = (
+    HERE.parents[1]
+    / "validation_test"
+    / "electric_machine"
+    / "cogging_skew_demo_results.json"
+)
 
 
 def mesh_salient(Wx=44.0, Wy=26.0):
@@ -139,7 +145,7 @@ def run_demo(verbose=False):
         })
 
     result = {
-        "schema": "radia.docs.electric_machine.cogging_skew_demo.v1",
+        "schema": "radia.validation.electric_machine.cogging_skew_demo.v1",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "versions": _runtime_versions(),
         "checks": {
@@ -170,8 +176,9 @@ def run_demo(verbose=False):
     return result
 
 
-def write_results_json(result, path=HERE / "cogging_skew_demo_results.json"):
+def write_results_json(result, path=VALIDATION_RESULT):
     path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return path
 
@@ -179,7 +186,7 @@ def write_results_json(result, path=HERE / "cogging_skew_demo_results.json"):
 def main():
     result = run_demo(verbose=True)
     out = write_results_json(result)
-    print(f"\nwrote {out.relative_to(HERE)}")
+    print(f"\nwrote {out}")
 
 
 if __name__ == "__main__":

@@ -109,6 +109,7 @@ def test_docs_do_not_restore_retired_result_bookkeeping():
         ROOT / "docs" / "axifem" / "axifem_element_evidence.json",
         ROOT / "docs" / "cubit_mesh_export" / "cubit_mesh_export_showcase_results.json",
         ROOT / "docs" / "cubit_mesh_export" / "netgen" / "p_convergence_demo_results.json",
+        ROOT / "docs" / "electric_machine" / "cogging_skew_demo_results.json",
         ROOT / "docs" / "gmsh_post" / "em_fieldlines_results.json",
         ROOT / "docs" / "gmsh_post" / "em_particle_orbits_results.json",
         ROOT / "docs" / "gmsh_post" / "em_post_gallery_results.json",
