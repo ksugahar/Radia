@@ -4,11 +4,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 DOCS = ROOT / "docs" / "axifem"
+VALIDATION = ROOT / "validation_test" / "axifem"
 
 
 def test_axifem_element_evidence_json_covers_all_shipping_paths():
     evidence = json.loads(
-        (DOCS / "axifem_element_evidence.json").read_text(encoding="utf-8")
+        (VALIDATION / "axifem_element_evidence.json").read_text(encoding="utf-8")
     )
 
     assert "runtime_radia_version" in evidence
@@ -35,7 +36,10 @@ def test_axifem_element_evidence_notebook_is_result_bearing():
     radia_meta = nb["metadata"]["radia"]
     assert radia_meta["artifact_type"] == "documentation-notebook"
     assert radia_meta["outputs_policy"] == "embedded-results-must-keep-version-stamp"
-    assert radia_meta["result_json"] == "docs/axifem/axifem_element_evidence.json"
+    assert (
+        radia_meta["result_json"]
+        == "validation_test/axifem/axifem_element_evidence.json"
+    )
 
     text = json.dumps(nb)
     assert "runtime_radia_version" in text

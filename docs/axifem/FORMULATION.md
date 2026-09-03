@@ -584,7 +584,7 @@ axifem Henrotte / Meeker formulation:
   axisymmetric physics,
 - runs at FEMM-grade accuracy per DOF, with current evidence recorded in
   [`AXIFEM_ELEMENT_EVIDENCE.ipynb`](AXIFEM_ELEMENT_EVIDENCE.ipynb) and
-  [`axifem_element_evidence.json`](axifem_element_evidence.json).
+  [`validation_test/axifem/axifem_element_evidence.json`](../../validation_test/axifem/axifem_element_evidence.json).
 
 This is why `radia.axifem` is a critical module of the radia
 distribution and not a separate research package.

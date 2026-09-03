@@ -106,6 +106,7 @@ def test_docs_do_not_restore_completed_migration_ledgers():
 
 def test_docs_do_not_restore_retired_result_bookkeeping():
     retired = {
+        ROOT / "docs" / "axifem" / "axifem_element_evidence.json",
         ROOT / "docs" / "cubit_mesh_export" / "cubit_mesh_export_showcase_results.json",
         ROOT / "docs" / "cubit_mesh_export" / "netgen" / "p_convergence_demo_results.json",
         ROOT / "docs" / "kelvin" / "kelvin_exterior_source_and_aphi_results.json",
