@@ -338,7 +338,7 @@ pip install scipy
 
 - [src/radia/README.md](../../src/radia/README.md) - Visualization utilities and CoilBuilder documentation
 - [tests/README.md](../../tests/README.md) - Test suite
-- [README_BUILD.md](../../README_BUILD.md) - Build instructions
+- [Build from source](../../README.md#build-from-source) - Build instructions
 
 ---
 
