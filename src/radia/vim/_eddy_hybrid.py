@@ -6364,9 +6364,12 @@ def _solve_native_reduced_operator(
     max_iterations: int | None = None,
     restart: int | None = None,
 ):
-    """Solve a matrix-free reduced system in NGSolve's BaseMatrix style."""
+    """Solve a matrix-free reduced system in NGSolve's BaseMatrix style.
 
-    import ngsolve as ng
+    The public solve entry point's caller owns the surrounding
+    ``ngsolve.TaskManager`` region.
+    """
+
     from radia import sparsesolv_ngsolve
 
     solver = str(solver).lower()
@@ -6406,43 +6409,42 @@ def _solve_native_reduced_operator(
     residuals = []
     iteration_counts = []
     refinement_counts = []
-    with ng.TaskManager():
-        for column in range(values.shape[1]):
-            source = native.CreateColVector()
-            source.FV().NumPy()[:] = np.asarray(
-                values[:, column], dtype=np.complex128
+    for column in range(values.shape[1]):
+        source = native.CreateColVector()
+        source.FV().NumPy()[:] = np.asarray(
+            values[:, column], dtype=np.complex128
+        )
+        solution = native.CreateColVector()
+        solution.FV().NumPy()[:] = 0.0
+        residual = native.CreateRowVector()
+        denominator = max(float(np.linalg.norm(source.FV().NumPy())), 1.0)
+        total_iterations = 0
+        relative_residual = np.inf
+        refinement_count = 0
+        correction_rhs = source
+        for refinement_count in range(8):
+            correction = native.CreateColVector()
+            correction.data = inverse * correction_rhs
+            solution.data += correction
+            solver_iterations = int(getattr(inverse, "iterations", -1))
+            if solver_iterations >= 0:
+                total_iterations += solver_iterations
+            residual.data = source - native * solution
+            relative_residual = float(
+                np.linalg.norm(residual.FV().NumPy()) / denominator
             )
-            solution = native.CreateColVector()
-            solution.FV().NumPy()[:] = 0.0
-            residual = native.CreateRowVector()
-            denominator = max(float(np.linalg.norm(source.FV().NumPy())), 1.0)
-            total_iterations = 0
-            relative_residual = np.inf
-            refinement_count = 0
-            correction_rhs = source
-            for refinement_count in range(8):
-                correction = native.CreateColVector()
-                correction.data = inverse * correction_rhs
-                solution.data += correction
-                solver_iterations = int(getattr(inverse, "iterations", -1))
-                if solver_iterations >= 0:
-                    total_iterations += solver_iterations
-                residual.data = source - native * solution
-                relative_residual = float(
-                    np.linalg.norm(residual.FV().NumPy()) / denominator
-                )
-                if relative_residual <= max(10.0 * tolerance, 1.0e-12):
-                    break
-                correction_rhs = residual
-            if relative_residual > max(10.0 * tolerance, 1.0e-12):
-                raise RuntimeError(
-                    f"native reduced {solver.upper()} residual {relative_residual:.3e} "
-                    f"exceeds tolerance {tolerance:.3e}"
-                )
-            solutions.append(solution.FV().NumPy().copy())
-            residuals.append(relative_residual)
-            iteration_counts.append(total_iterations)
-            refinement_counts.append(refinement_count)
+            if relative_residual <= max(10.0 * tolerance, 1.0e-12):
+                break
+            correction_rhs = residual
+        if relative_residual > max(10.0 * tolerance, 1.0e-12):
+            raise RuntimeError(
+                f"native reduced {solver.upper()} residual {relative_residual:.3e} "
+                f"exceeds tolerance {tolerance:.3e}"
+            )
+        solutions.append(solution.FV().NumPy().copy())
+        residuals.append(relative_residual)
+        iteration_counts.append(total_iterations)
+        refinement_counts.append(refinement_count)
     result = np.column_stack(solutions)
     diagnostics = {
         "backend": f"ngsolve-base-matrix-{solver}",
@@ -7134,7 +7136,12 @@ def _mixed_galerkin_orthogonalize_operator(
 
 @dataclass(frozen=True)
 class HybridVIMSystem:
-    """Reduced eddy-current VIM matrices on bulk-T plus surface-Omega bases."""
+    """Reduced eddy-current VIM matrices on bulk-T plus surface-Omega bases.
+
+    The caller owns ``with ngsolve.TaskManager():`` around operations that use
+    a matrix-free NGSolve operator, including indirect solve helpers such as
+    port-admittance and Schur-complement evaluation.
+    """
 
     resistance: np.ndarray
     inductance: object
@@ -7379,7 +7386,11 @@ class HybridVIMSystem:
         restart: int | None = None,
         return_diagnostics: bool = False,
     ) -> np.ndarray:
-        """Solve through dense C++ or native NGSolve COCR/GMRES."""
+        """Solve through dense C++ or native NGSolve COCR/GMRES.
+
+        The caller owns ``with ngsolve.TaskManager():`` when the system uses a
+        matrix-free NGSolve operator.
+        """
 
         z = self.impedance_operator(s, surface_impedance=surface_impedance)
         values = np.asarray(rhs)
@@ -8200,6 +8211,10 @@ class CoupledHDivHybridVIMSystem:
     current bases inside one eddy system, such as bulk EVRS, bridge-cycle
     currents, and surface-Omega/SIBC currents.  The coupling columns follow the
     mode order of the supplied :class:`HybridVIMSystem`.
+
+    The caller owns ``with ngsolve.TaskManager():`` around operations that use
+    a matrix-free NGSolve operator, including frequency, port-admittance, and
+    Schur-complement helpers.
     """
 
     magnetization_basis: SampledMagnetizationBasis
@@ -8577,7 +8592,11 @@ class CoupledHDivHybridVIMSystem:
         restart: int | None = None,
         return_operator: bool = False,
     ) -> dict[str, np.ndarray]:
-        """Solve the coupled HDiv-MMM / hybrid HCurl-VIM system."""
+        """Solve the coupled HDiv-MMM / hybrid HCurl-VIM system.
+
+        The caller owns ``with ngsolve.TaskManager():`` when the coupled
+        operator is matrix-free.
+        """
 
         op = self.mixed_operator(
             magnetic_operator,
