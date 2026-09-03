@@ -126,6 +126,7 @@ def test_docs_do_not_restore_retired_result_bookkeeping():
         ROOT / "docs" / "hdiv_vim" / "compare_curved_vs_radia_field.json",
         ROOT / "docs" / "hdiv_vim" / "hdiv_curved_nonlinear_field.json",
         ROOT / "docs" / "hdiv_vim" / "hdiv_demag_curved.json",
+        ROOT / "docs" / "hdiv_vim" / "c_type_three_formulation_tosca_mixed_iron.vol-check.json",
         ROOT / "docs" / "section_optics" / "section_optics_design_results.json",
         ROOT / "docs" / "section_optics" / "stamp_notebook_hash.py",
         ROOT / "docs" / "universal_relaxation_network" / "cq_urn_bridge_results.json",
