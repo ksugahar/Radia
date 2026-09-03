@@ -11,13 +11,14 @@ Usage:
   python validation_test/cubit/test_ngsolve_volume_hex_sphere.py
 """
 
-import sys
-import os
 import math
+import os
+import sys
+
+from ngsolve import CF, Integrate, TaskManager
 
 # NGSolve MUST be imported before cubit (DLL conflict avoidance)
-from ngsolve import Mesh as NGMesh, Integrate, CF
-from ngsolve import TaskManager
+from ngsolve import Mesh as NGMesh
 
 _test_dir = os.path.dirname(os.path.abspath(__file__))
 _repo_root = os.path.dirname(os.path.dirname(_test_dir))
@@ -34,6 +35,7 @@ if _plugin_dir and os.path.isdir(_plugin_dir):
     os.environ['CUBIT_PLUGIN_DIR'] = _plugin_dir
 
 import cubit
+
 cubit.init(['cubit', '-nojournal', '-batch', '-nographics',
             '-commandplugindir', _plugin_dir or ''])
 
@@ -76,13 +78,13 @@ def build_tet_sphere(mesh_size=0.015):
     return 0, n_tet, n_nodes
 
 
-def test_volume(mesh_type, build_func, mesh_size, orders):
+def _evaluate_volume(mesh_type, build_func, mesh_size, orders):
     """Test volume accuracy for a given mesh type and orders."""
     print(f"\n{'=' * 60}")
     print(f"  {mesh_type} mesh (size={mesh_size})")
     print(f"{'=' * 60}")
 
-    n_hex, n_tet, n_nodes = build_func(mesh_size)
+    n_hex, _n_tet, _n_nodes = build_func(mesh_size)
 
     # CAD volume from Cubit
     v = cubit.volume(1)
@@ -107,10 +109,10 @@ def test_volume(mesh_type, build_func, mesh_size, orders):
             vol = Integrate(CF(1), mesh)
             err = (vol - V_EXACT) / V_EXACT * 100
             status = "OK"
-        except Exception as e:
+        except Exception as exc:  # noqa: BLE001 - report any Cubit/export failure
             vol = 0
             err = -100
-            status = f"FAIL: {e}"
+            status = f"FAIL: {exc}"
 
         print(f"  order={order}: V={vol:.6e}, err={err:+.4f}%  [{status}]")
         results.append({
@@ -129,12 +131,13 @@ def main():
     all_results = {}
 
     # Tet mesh (baseline)
-    all_results['tet'] = test_volume(
-        "Tet", build_tet_sphere, 0.015, [1, 2, 3])
+    with TaskManager():
+        all_results['tet'] = _evaluate_volume(
+            "Tet", build_tet_sphere, 0.015, [1, 2, 3])
 
-    # Hex mesh (finer to get enough elements for convergence)
-    all_results['hex'] = test_volume(
-        "Hex", build_hex_sphere, 0.008, [1, 2, 3])
+        # Hex mesh (finer to get enough elements for convergence)
+        all_results['hex'] = _evaluate_volume(
+            "Hex", build_hex_sphere, 0.008, [1, 2, 3])
 
     # Summary
     print(f"\n{'=' * 60}")
