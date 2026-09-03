@@ -30,6 +30,11 @@ under `docs/` explain and reproduce methods; they are not production GUIs.
   post-processing artifact in its run directory and records it in
   `result.json`. A scalar/circuit-only mode records GMSH as not applicable; it
   does not create a dummy field.
+- `cubit-mesh-export` is the only supported VTK producer. Radia application,
+  validation, docs, and MCP field outputs use GMSH `.msh v4.1`; they do not call
+  `ngsolve.VTKOutput` or write `.vtk`, `.vtu`, or `.vts` files. NGSolve's own
+  `VTKOutput` remains a valid upstream feature; this is a Radia artifact-policy
+  choice, not a restriction on NGSolve.
 - A Simulink user may treat the checked `.vol` as the complete geometry and
   region-label input. Materials are authored as a MATLAB `dictionary`, mapped
   explicitly to those `.vol` region names, and compiled once during model
@@ -121,7 +126,8 @@ Mesh p-convergence is a documentation/validation workflow, not a Cubit toolbar
 action or application block. Cubit batch export produces the files and
 `src/radia/panels/calc_mesh_eval.py` evaluates them.
 
-- GMSH/BDF/VTK format QA checks Jacobians, volume, and area.
+- Cubit GMSH/BDF/VTK format QA checks Jacobians, volume, and area. VTK remains
+  confined to the `cubit-mesh-export` component.
 - NGSolve `.vol` p-convergence checks order 1-5 geometry integrals.
 - Cubit export owns file correctness; NGSolve owns interpretation of `.vol`.
 

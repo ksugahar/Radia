@@ -46,7 +46,7 @@ import os
 _script_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_script_dir, '..', '..', '..', 'src', 'radia'))
 
-# Change working directory to script directory for VTK output
+# Keep validation artifacts beside this script.
 os.chdir(_script_dir)
 
 import numpy as np
@@ -280,25 +280,14 @@ with TaskManager():
         print('  No valid test points')
 
     # =============================================================================
-    # Step 8: VTK Export
+    # Step 8: GMSH export
     # =============================================================================
     print()
-    print('[Step 8] Exporting VTK files')
+    print('[Step 8] Exporting GMSH fields')
     print('-' * 70)
 
     try:
-        # Export vector fields
-        vtk = VTKOutput(
-            mesh,
-            coefs=[gf_A, curl_A_cf, gf_B],
-            names=['A_HCurl', 'curl_A', 'B_HDiv'],
-            filename='verify_curl_A_B',
-            subdivision=2
-        )
-        vtk.Do()
-        print('  [OK] verify_curl_A_B.vtu exported')
-
-        # Export error field (in Radia units)
+        from radia.gmsh_post_export import GmshPostExport
         error_cf = sqrt((curl_A_cf[0] - gf_B[0])**2 +
                         (curl_A_cf[1] - gf_B[1])**2 +
                         (curl_A_cf[2] - gf_B[2])**2)
@@ -306,18 +295,16 @@ with TaskManager():
         gf_error = GridFunction(fes_h1)
         gf_error.Set(error_cf)
 
-        vtk_error = VTKOutput(
-            mesh,
-            coefs=[gf_error],
-            names=['curl_A_minus_B_error'],
-            filename='verify_curl_A_B_error',
-            subdivision=2
-        )
-        vtk_error.Do()
-        print('  [OK] verify_curl_A_B_error.vtu exported')
+        post = GmshPostExport(mesh)
+        post.add_vector_field('A_HCurl', gf_A)
+        post.add_vector_field('curl_A', curl_A_cf)
+        post.add_vector_field('B_HDiv', gf_B)
+        post.add_scalar_field('curl_A_minus_B_error', gf_error)
+        post.write('verify_curl_A_B.msh')
+        print('  [OK] verify_curl_A_B.msh exported')
 
     except Exception as e:
-        print('  [ERROR] VTK export failed: %s' % e)
+        print('  [ERROR] GMSH export failed: %s' % e)
 
     # =============================================================================
     # Summary

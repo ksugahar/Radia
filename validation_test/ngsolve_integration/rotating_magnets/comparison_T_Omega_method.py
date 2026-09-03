@@ -219,9 +219,9 @@ def get_magnet_position_and_rotation(step):
 	return x_pos, rotation_angle
 
 # ========================================================================
-# Step 1.6: 磁場測定グリッドの作成（3つの平面：XY, XZ, YZ）
+# Step 1.6: XZ平面の磁場測定グリッドを作成
 # ========================================================================
-print("\n[Step 1.6] 磁場測定グリッドの作成（XY, XZ, YZ平面）...")
+print("\n[Step 1.6] XZ平面の磁場測定グリッドを作成中...")
 
 # グリッド範囲
 grid_range = measurement_grid_range
@@ -229,7 +229,6 @@ grid_points_per_axis = measurement_grid_points
 
 # 1D配列の作成
 x_1d = np.linspace(-grid_range, grid_range, grid_points_per_axis)
-y_1d = np.linspace(-grid_range, grid_range, grid_points_per_axis)
 z_1d = np.linspace(-grid_range, grid_range, grid_points_per_axis)
 
 # XZ平面 (Y=0)
@@ -240,40 +239,14 @@ for i in range(grid_points_per_axis):
 		grid_points_xz.append([x_grid_xz[i, j], measurement_plane_y, z_grid_xz[i, j]])
 grid_points_xz = np.array(grid_points_xz)
 
-# XY平面 (Z=0)
-x_grid_xy, y_grid_xy = np.meshgrid(x_1d, y_1d)
-grid_points_xy = []
-for i in range(grid_points_per_axis):
-	for j in range(grid_points_per_axis):
-		grid_points_xy.append([x_grid_xy[i, j], y_grid_xy[i, j], 0.0])
-grid_points_xy = np.array(grid_points_xy)
-
-# YZ平面 (X=0)
-y_grid_yz, z_grid_yz = np.meshgrid(y_1d, z_1d)
-grid_points_yz = []
-for i in range(grid_points_per_axis):
-	for j in range(grid_points_per_axis):
-		grid_points_yz.append([0.0, y_grid_yz[i, j], z_grid_yz[i, j]])
-grid_points_yz = np.array(grid_points_yz)
-
 # XZ平面をメインのCSV出力用として保持
 grid_points = grid_points_xz
 n_grid_points = len(grid_points)
 
 grid_spacing = 2 * grid_range / (grid_points_per_axis - 1)
 print(f"  XZ平面グリッド: {grid_points_per_axis}x{grid_points_per_axis} = {len(grid_points_xz)}点 (Y={measurement_plane_y})")
-print(f"  XY平面グリッド: {grid_points_per_axis}x{grid_points_per_axis} = {len(grid_points_xy)}点 (Z=0)")
-print(f"  YZ平面グリッド: {grid_points_per_axis}x{grid_points_per_axis} = {len(grid_points_yz)}点 (X=0)")
 print(f"  範囲: [{-grid_range}, {grid_range}] mm")
 print(f"  グリッド間隔: {grid_spacing:.2f} mm (ELFMAGICと一致)")
-
-# VTK出力ディレクトリの作成
-vtk_xy_dir = output_dir / "vtk_xy_plane"
-vtk_xz_dir = output_dir / "vtk_xz_plane"
-vtk_yz_dir = output_dir / "vtk_yz_plane"
-vtk_xy_dir.mkdir(exist_ok=True)
-vtk_xz_dir.mkdir(exist_ok=True)
-vtk_yz_dir.mkdir(exist_ok=True)
 
 # CSV出力ファイルの準備（XZ平面のデータ）
 csv_output_file = output_dir / "magnetic_field_measurements.csv"
@@ -370,8 +343,6 @@ integral_data = []
 lorentz_force_data = []  # ローレンツ力データ
 eddy_current_data = []  # 渦電流データ（CSV用）
 measurement_data_xz = []  # XZ平面グリッド測定データ（CSV用）
-measurement_data_xy = []  # XY平面グリッド測定データ（VTK用）
-measurement_data_yz = []  # YZ平面グリッド測定データ（VTK用）
 
 for step in range(0, time_steps + 1):  # 0から180まで
 	x_pos, rotation_angle = get_magnet_position_and_rotation(step)
@@ -774,9 +745,9 @@ for step in range(0, time_steps + 1):  # 0から180まで
 		integral_Bz = 0.0
 
 	# ------------------------------------------------------------------
-	# 2.6: グリッド点での磁場測定（3つの平面）
+	# 2.6: XZ平面グリッド点での磁場測定
 	# ------------------------------------------------------------------
-	print(f"  [測定] 3つの平面で磁場を測定中...")
+	print(f"  [測定] XZ平面で磁場を測定中...")
 
 	# XZ平面の測定（CSV出力用）
 	step_measurements_xz = []
@@ -807,64 +778,6 @@ for step in range(0, time_steps + 1):  # 0から180まで
 				'B': 0.0
 			})
 
-	# XY平面の測定（VTK出力用）
-	step_measurements_xy = []
-	for idx, point in enumerate(grid_points_xy):
-		try:
-			mesh_point = mesh(point[0], point[1], point[2])
-			B_vec = B_ext_cf(mesh_point)
-			B_magnitude = np.sqrt(B_vec[0]**2 + B_vec[1]**2 + B_vec[2]**2)
-			step_measurements_xy.append({
-				'point_id': idx + 1,
-				'Gx': point[0],
-				'Gy': point[1],
-				'Gz': point[2],
-				'Bx': B_vec[0],
-				'By': B_vec[1],
-				'Bz': B_vec[2],
-				'B': B_magnitude
-			})
-		except Exception as e:
-			step_measurements_xy.append({
-				'point_id': idx + 1,
-				'Gx': point[0],
-				'Gy': point[1],
-				'Gz': point[2],
-				'Bx': 0.0,
-				'By': 0.0,
-				'Bz': 0.0,
-				'B': 0.0
-			})
-
-	# YZ平面の測定（VTK出力用）
-	step_measurements_yz = []
-	for idx, point in enumerate(grid_points_yz):
-		try:
-			mesh_point = mesh(point[0], point[1], point[2])
-			B_vec = B_ext_cf(mesh_point)
-			B_magnitude = np.sqrt(B_vec[0]**2 + B_vec[1]**2 + B_vec[2]**2)
-			step_measurements_yz.append({
-				'point_id': idx + 1,
-				'Gx': point[0],
-				'Gy': point[1],
-				'Gz': point[2],
-				'Bx': B_vec[0],
-				'By': B_vec[1],
-				'Bz': B_vec[2],
-				'B': B_magnitude
-			})
-		except Exception as e:
-			step_measurements_yz.append({
-				'point_id': idx + 1,
-				'Gx': point[0],
-				'Gy': point[1],
-				'Gz': point[2],
-				'Bx': 0.0,
-				'By': 0.0,
-				'Bz': 0.0,
-				'B': 0.0
-			})
-
 	measurement_data_xz.append({
 		'step': step,
 		'x_pos': x_pos,
@@ -872,21 +785,7 @@ for step in range(0, time_steps + 1):  # 0から180まで
 		'measurements': step_measurements_xz
 	})
 
-	measurement_data_xy.append({
-		'step': step,
-		'x_pos': x_pos,
-		'rotation_angle': rotation_angle,
-		'measurements': step_measurements_xy
-	})
-
-	measurement_data_yz.append({
-		'step': step,
-		'x_pos': x_pos,
-		'rotation_angle': rotation_angle,
-		'measurements': step_measurements_yz
-	})
-
-	print(f"  [測定完了] XZ: {len(step_measurements_xz)}点, XY: {len(step_measurements_xy)}点, YZ: {len(step_measurements_yz)}点")
+	print(f"  [測定完了] XZ: {len(step_measurements_xz)}点")
 
 	# データ保存
 	position_data.append(x_pos)
@@ -987,147 +886,6 @@ print(f"CSVファイル出力完了: {csv_output_file}")
 print(f"  総データ行数: {len(measurement_data_xz) * n_grid_points}")
 print(f"  タイムステップ数: {len(measurement_data_xz)}")
 print(f"  各ステップの測定点数: {n_grid_points}")
-
-# ========================================================================
-# Step 3.6: 3つの平面の磁場データをParaView用VTKファイルに出力
-# ========================================================================
-print("\n" + "=" * 80)
-print("[Step 3.6] 3つの平面の磁場データをVTKファイルに出力中...")
-print("=" * 80)
-
-# XZ平面（Y=0）
-print("  XZ平面を出力中...")
-for step_data in measurement_data_xz:
-	step = step_data['step']
-	measurements = step_data['measurements']
-	vtk_file = vtk_xz_dir / f"magnetic_field_xz_step_{step:04d}.vtk"
-
-	with open(vtk_file, 'w') as f:
-		f.write("# vtk DataFile Version 3.0\n")
-		f.write(f"Magnetic field on XZ plane at step {step}\n")
-		f.write("ASCII\n")
-		f.write("DATASET STRUCTURED_GRID\n")
-		f.write(f"DIMENSIONS {grid_points_per_axis} 1 {grid_points_per_axis}\n")
-		f.write(f"POINTS {len(measurements)} float\n")
-
-		for meas in measurements:
-			f.write(f"{meas['Gx']:.6f} {meas['Gy']:.6f} {meas['Gz']:.6f}\n")
-
-		f.write(f"\nPOINT_DATA {len(measurements)}\n")
-		f.write("VECTORS B_field float\n")
-		for meas in measurements:
-			f.write(f"{meas['Bx']:.12e} {meas['By']:.12e} {meas['Bz']:.12e}\n")
-
-		f.write("\nSCALARS B_magnitude float 1\n")
-		f.write("LOOKUP_TABLE default\n")
-		for meas in measurements:
-			f.write(f"{meas['B']:.12e}\n")
-
-		f.write("\nSCALARS Bx float 1\n")
-		f.write("LOOKUP_TABLE default\n")
-		for meas in measurements:
-			f.write(f"{meas['Bx']:.12e}\n")
-
-		f.write("\nSCALARS By float 1\n")
-		f.write("LOOKUP_TABLE default\n")
-		for meas in measurements:
-			f.write(f"{meas['By']:.12e}\n")
-
-		f.write("\nSCALARS Bz float 1\n")
-		f.write("LOOKUP_TABLE default\n")
-		for meas in measurements:
-			f.write(f"{meas['Bz']:.12e}\n")
-
-# XY平面（Z=0）
-print("  XY平面を出力中...")
-for step_data in measurement_data_xy:
-	step = step_data['step']
-	measurements = step_data['measurements']
-	vtk_file = vtk_xy_dir / f"magnetic_field_xy_step_{step:04d}.vtk"
-
-	with open(vtk_file, 'w') as f:
-		f.write("# vtk DataFile Version 3.0\n")
-		f.write(f"Magnetic field on XY plane at step {step}\n")
-		f.write("ASCII\n")
-		f.write("DATASET STRUCTURED_GRID\n")
-		f.write(f"DIMENSIONS {grid_points_per_axis} {grid_points_per_axis} 1\n")
-		f.write(f"POINTS {len(measurements)} float\n")
-
-		for meas in measurements:
-			f.write(f"{meas['Gx']:.6f} {meas['Gy']:.6f} {meas['Gz']:.6f}\n")
-
-		f.write(f"\nPOINT_DATA {len(measurements)}\n")
-		f.write("VECTORS B_field float\n")
-		for meas in measurements:
-			f.write(f"{meas['Bx']:.12e} {meas['By']:.12e} {meas['Bz']:.12e}\n")
-
-		f.write("\nSCALARS B_magnitude float 1\n")
-		f.write("LOOKUP_TABLE default\n")
-		for meas in measurements:
-			f.write(f"{meas['B']:.12e}\n")
-
-		f.write("\nSCALARS Bx float 1\n")
-		f.write("LOOKUP_TABLE default\n")
-		for meas in measurements:
-			f.write(f"{meas['Bx']:.12e}\n")
-
-		f.write("\nSCALARS By float 1\n")
-		f.write("LOOKUP_TABLE default\n")
-		for meas in measurements:
-			f.write(f"{meas['By']:.12e}\n")
-
-		f.write("\nSCALARS Bz float 1\n")
-		f.write("LOOKUP_TABLE default\n")
-		for meas in measurements:
-			f.write(f"{meas['Bz']:.12e}\n")
-
-# YZ平面（X=0）
-print("  YZ平面を出力中...")
-for step_data in measurement_data_yz:
-	step = step_data['step']
-	measurements = step_data['measurements']
-	vtk_file = vtk_yz_dir / f"magnetic_field_yz_step_{step:04d}.vtk"
-
-	with open(vtk_file, 'w') as f:
-		f.write("# vtk DataFile Version 3.0\n")
-		f.write(f"Magnetic field on YZ plane at step {step}\n")
-		f.write("ASCII\n")
-		f.write("DATASET STRUCTURED_GRID\n")
-		f.write(f"DIMENSIONS 1 {grid_points_per_axis} {grid_points_per_axis}\n")
-		f.write(f"POINTS {len(measurements)} float\n")
-
-		for meas in measurements:
-			f.write(f"{meas['Gx']:.6f} {meas['Gy']:.6f} {meas['Gz']:.6f}\n")
-
-		f.write(f"\nPOINT_DATA {len(measurements)}\n")
-		f.write("VECTORS B_field float\n")
-		for meas in measurements:
-			f.write(f"{meas['Bx']:.12e} {meas['By']:.12e} {meas['Bz']:.12e}\n")
-
-		f.write("\nSCALARS B_magnitude float 1\n")
-		f.write("LOOKUP_TABLE default\n")
-		for meas in measurements:
-			f.write(f"{meas['B']:.12e}\n")
-
-		f.write("\nSCALARS Bx float 1\n")
-		f.write("LOOKUP_TABLE default\n")
-		for meas in measurements:
-			f.write(f"{meas['Bx']:.12e}\n")
-
-		f.write("\nSCALARS By float 1\n")
-		f.write("LOOKUP_TABLE default\n")
-		for meas in measurements:
-			f.write(f"{meas['By']:.12e}\n")
-
-		f.write("\nSCALARS Bz float 1\n")
-		f.write("LOOKUP_TABLE default\n")
-		for meas in measurements:
-			f.write(f"{meas['Bz']:.12e}\n")
-
-print(f"VTK平面データ出力完了")
-print(f"  XZ平面: {len(measurement_data_xz)}ファイル -> {vtk_xz_dir}")
-print(f"  XY平面: {len(measurement_data_xy)}ファイル -> {vtk_xy_dir}")
-print(f"  YZ平面: {len(measurement_data_yz)}ファイル -> {vtk_yz_dir}")
 
 # ========================================================================
 # Step 4: 渦電流データのCSV出力

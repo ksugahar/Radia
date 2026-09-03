@@ -415,6 +415,14 @@ production interface for Radia applications is a masked block in the single
   field must declare the artifact not applicable and must not fabricate one.
   GMSH remains a visualization/post-processing target, never the solver mesh
   generator or the NGSolve interchange format.
+- `cubit-mesh-export` is the repository's only supported VTK producer. All
+  Radia solver, validation, docs, and MCP spatial-field output uses checked
+  GMSH `.msh v4.1`. Outside the Cubit export component, direct
+  `ngsolve.VTKOutput` calls and custom `.vtk`, `.vtu`, or `.vts` writers are
+  forbidden. Negative tests and documentation of external formats may mention
+  VTK, but they must not provide a Radia-owned VTK output path. NGSolve's
+  upstream `VTKOutput` remains a valid NGSolve API and may be documented as
+  such; Radia workflows choose GMSH as their post-processing contract.
 - Spatial GMSH figures, including contours, flux lines, streamlines, and
   sections, use a physical 1:1:1 axis scale by default. A deliberately
   exaggerated axis is allowed only when the scale factor is explicit in the
@@ -800,7 +808,7 @@ deletes protected data, assets, or fixtures):
   NEVER iteration snapshots. Removing such data would make the figure
   non-regenerable; do not delete it under this policy.
 - **Tracked mesh definitions and mesh-gen assets** — mesh files
-  (`.bdf`/`.nas`/`.msh`/`.vtk`), Cubit `.jou` journals, and
+  (`.bdf`/`.nas`/`.msh`, plus Cubit-export `.vtk` fixtures), Cubit `.jou` journals, and
   **mesh-generation scripts** — are protected by "Mesh File Preservation" and
   are NEVER deleted by this policy, even when a `_v2`/`_old` name makes them look
   like an iteration. Historical tracked meshes formerly under `examples/` should
@@ -856,7 +864,7 @@ source-tree download/bootstrap scripts for them.
   commit; development machines must not copy native outputs directly to mdx.
 - Tracked `.slx`, result-bearing notebook output, `.png`, and `.pdf` are allowed
   when required by their documented interface or publication role.
-- Generated solver meshes and field outputs (`.msh`, `.vtu`, `.vtk`, `.vol`)
+- Generated solver meshes and field outputs (`.msh`, `.vol`)
   stay out of source control unless a focused fixture policy explicitly owns
   them.
 
@@ -878,7 +886,7 @@ verification has passed. The four machines are LAB, 100号機, mdx, and hibino.
 ### File Placement Policy
 
 **POLICY**: Development scratch outputs belong in `C:\temp`.  Committed output
-files (`.png`, `.msh`, `.vtu`, `.vol`, validation JSON) must be placed next to
+files (`.png`, `.msh`, `.vol`, validation JSON) must be placed next to
 their owning `tests/`, `validation_test/`, `docs/`, or `src/radia/panels/`
 driver.
 - Do NOT place generated files at the repository root
@@ -2493,7 +2501,10 @@ Nastran BDF support is **REMOVED**. Use Cubit -> `.msh` export or Netgen direct.
 
 ### Mesh File Preservation
 
-**NEVER DELETE** mesh files (`.bdf`, `.nas`, `.msh`, `.vtk`), Cubit journal files (`.jou`), or mesh generation scripts. These are difficult to recreate.
+**NEVER DELETE** canonical mesh files (`.bdf`, `.nas`, `.msh`, and Cubit-owned
+`.vtk` fixtures), Cubit journal files (`.jou`), or mesh generation scripts.
+These are difficult to recreate. This protection does not preserve superseded
+Radia VTK field output outside the Cubit component.
 
 ### Available Mesh Access Functions
 

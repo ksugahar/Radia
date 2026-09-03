@@ -52,8 +52,8 @@ python verify_curl_A_equals_B.py
 
 ## Output Files
 
-- `verify_curl_A_B.vtu` - VTK file with A, curl(A), and B fields
-- `verify_curl_A_B_error.vtu` - VTK file with |curl(A) - B| error field
+- `verify_curl_A_B.msh` - checked GMSH `.msh v4.1` file containing A,
+  curl(A), B, and |curl(A) - B|
 
 ## Workflow
 

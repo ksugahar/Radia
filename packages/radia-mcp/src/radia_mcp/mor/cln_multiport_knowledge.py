@@ -633,11 +633,11 @@ After stage `nStage`:
     L = sum( int(R*J*A) dOmega )
     J = J - sigma * A / L                  # next-stage electric mode
 
-Output is per-stage VTK files for ParaView, exporting
+Radia ports this result as per-stage GMSH `.msh v4.1` files, exporting
 
     Ao, A, B = curl(A), phi, J
 
-with cellfields tagged for inspection of each ladder mode.
+with fields tagged for inspection of each ladder mode.
 
 ## What works, what doesn't (lab notes)
 

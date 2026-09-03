@@ -214,33 +214,37 @@ if args.method in ['gf', 'both']:
 	print(f"  |B|: min={B_mag_gf.min():.6e}, max={B_mag_gf.max():.6e}, mean={B_mag_gf.mean():.6e} T")
 
 # ============================================================================
-# Step 6: VTK Export
+# Step 6: GMSH export
 # ============================================================================
 
-print("\n[Step 6] VTK Export")
+print("\n[Step 6] GMSH Export")
 print("-" * 70)
+from radia.gmsh_post_export import GmshPostExport
 
 if args.method == 'cf':
-	print("\nExporting CoefficientFunction to VTK...")
-	vtk = VTKOutput(mesh, coefs=[B_cf], names=['B_field_CF'], filename="radia_field_cf")
-	vtk.Do()
-	print("  [OK] VTK file created: radia_field_cf.vtu")
+	print("\nExporting CoefficientFunction to GMSH...")
+	post = GmshPostExport(mesh)
+	post.add_vector_field('B_field_CF', B_cf)
+	post.write('radia_field_cf.msh')
+	print("  [OK] GMSH file created: radia_field_cf.msh")
 	print("       Contains EXACT Radia field values")
 
 elif args.method == 'gf':
-	print("\nExporting GridFunction to VTK...")
-	vtk = VTKOutput(mesh, coefs=[gfB], names=['B_field_GF'], filename="radia_field_gf")
-	vtk.Do()
-	print("  [OK] VTK file created: radia_field_gf.vtu")
+	print("\nExporting GridFunction to GMSH...")
+	post = GmshPostExport(mesh)
+	post.add_vector_field('B_field_GF', gfB)
+	post.write('radia_field_gf.msh')
+	print("  [OK] GMSH file created: radia_field_gf.msh")
 	print("       Contains FEM interpolated values")
 
 else:  # both
-	print("\nExporting both methods to VTK...")
-	vtk = VTKOutput(mesh, coefs=[B_cf, gfB], names=['B_field_CF', 'B_field_GF'], filename="radia_field_compare")
-	vtk.Do()
-	print("  [OK] VTK file created: radia_field_compare.vtu")
+	print("\nExporting both methods to GMSH...")
+	post = GmshPostExport(mesh)
+	post.add_vector_field('B_field_CF', B_cf)
+	post.add_vector_field('B_field_GF', gfB)
+	post.write('radia_field_compare.msh')
+	print("  [OK] GMSH file created: radia_field_compare.msh")
 	print("       Contains both CF (exact) and GF (interpolated) fields")
-	print("       Open in Paraview to compare side-by-side")
 
 # ============================================================================
 # Summary

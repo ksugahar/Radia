@@ -141,7 +141,7 @@ def mor_cln_multiport(topic: str = "all") -> str:
       "multi_expansion_code" (One Conductor_CLN_s0.edp quoted),
       "periodic_tiled" (tile graphical ladder pedagogy vs
       Bloch-Floquet periodic), "three_d" (A_phi_Gridap.jl HCurl/H1
-      saddle-point, 4-stage VTK output), "lab_lessons" (10),
+      saddle-point, 4-stage GMSH output), "lab_lessons" (10),
       "key_files", "citations", "all".
     """
     return get_cln_multiport_documentation(topic)

@@ -922,23 +922,6 @@ py::object Fld(int obj, const std::string& field_type, py::array_t<double> point
     }
 }
 
-/**
- * @brief Export field to VTS file
- *
- * @param obj Object handle
- * @param filename Output filename
- * @param x_range [xmin, xmax]
- * @param y_range [ymin, ymax]
- * @param z_range [zmin, zmax]
- * @param nx Number of points in x
- * @param ny Number of points in y
- * @param nz Number of points in z
- * @param include_B Include B field
- * @param include_H Include H field
- * @param unit_scale Coordinate scale factor
- * @return Filename
- */
-
 } // namespace radia_field
 
 

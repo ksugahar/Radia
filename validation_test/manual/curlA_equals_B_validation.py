@@ -213,9 +213,9 @@ if len(results) >= 2:
 			      f"error: {e1:.3e} -> {e2:.3e}, rate = {rate:.2f}")
 
 # ============================================================================
-# Step 5: VTK export (finest mesh only)
+# Step 5: GMSH export (finest mesh only)
 # ============================================================================
-print("\n[Step 5] VTK Export (finest mesh)")
+print("\n[Step 5] GMSH Export (finest mesh)")
 print("-" * 80)
 
 finest_idx = mesh_sizes.index(min(mesh_sizes))
@@ -250,22 +250,20 @@ with TaskManager():
 try:
 	# Export fields
 	default_temp = r"C:\temp" if os.name == "nt" else tempfile.gettempdir()
-	vtk_dir = Path(os.environ.get("RADIA_TEMP_ROOT", default_temp)) / \
+	gmsh_dir = Path(os.environ.get("RADIA_TEMP_ROOT", default_temp)) / \
 		"radia" / "validation" / "curlA_equals_B"
-	vtk_dir.mkdir(parents=True, exist_ok=True)
-	vtk_base = vtk_dir / "verify_curl_A_equals_B_improved"
-	vtk_output = VTKOutput(
-		mesh,
-		coefs=[A_gf, curl_A_gf, B_gf, error_magnitude],
-		names=["A_vector_potential", "curl_A", "B_field", "error_magnitude"],
-		filename=str(vtk_base),
-		subdivision=2
-	)
-	vtk_output.Do()
-	print(f"  [OK] VTK file exported: {vtk_base}.vtu")
-	print(f"  Open with: paraview {vtk_base}.vtu")
+	gmsh_dir.mkdir(parents=True, exist_ok=True)
+	gmsh_file = gmsh_dir / "verify_curl_A_equals_B_improved.msh"
+	from radia.gmsh_post_export import GmshPostExport
+	post = GmshPostExport(mesh)
+	post.add_vector_field("A_vector_potential", A_gf)
+	post.add_vector_field("curl_A", curl_A_gf)
+	post.add_vector_field("B_field", B_gf)
+	post.add_scalar_field("error_magnitude", error_magnitude)
+	post.write(str(gmsh_file))
+	print(f"  [OK] GMSH file exported: {gmsh_file}")
 except Exception as e:
-	print(f"  [ERROR] VTK export failed: {e}")
+	print(f"  [ERROR] GMSH export failed: {e}")
 
 # ============================================================================
 # Step 6: Summary

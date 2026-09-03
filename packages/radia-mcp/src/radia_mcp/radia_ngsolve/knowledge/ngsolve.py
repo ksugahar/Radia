@@ -884,7 +884,8 @@ Keep the split explicit:
    loader-aware handler, not through an untested raw association.
 2. LLM/headless preflight: summarize counts, labels, bounding box, orientation,
    and a source digest before running a solver.
-3. Result visualization: use Gmsh/VTK-style output for fields; do not treat a
+3. Radia result visualization: use checked GMSH `.msh v4.1` output for fields;
+   do not treat a
    visualization export as the solver mesh unless the converter contract says so.
 
 For the MATLAB acoustic FEM/BEM teaching lane, the same first-order Netgen
@@ -958,8 +959,8 @@ use a step-force structural modal response plus the causal Rayleigh
 retarded-potential integral, then draw r-z pressure snapshots with a MATLAB
 figure or an animated GIF written directly from the pressure array.  The GIF
 path is a good default artifact for reports because it is browser-viewable,
-headless-friendly, and still backed by readable `.m` code.  Gmsh/VTK can
-remain an export path for later 3D fields, but the teaching visualization
+  headless-friendly, and still backed by readable `.m` code. GMSH can remain
+  an export path for later 3D fields, but the teaching visualization
 should be readable `.m` code first.
 
 For the bounded-domain FEM visualization, show the outer spherical truncation
@@ -1206,7 +1207,11 @@ mu_d = {"iron": 4e-7*3.14*1000, "air": 4e-7*3.14, "coil": 4e-7*3.14}
 mu = CoefficientFunction([mu_d.get(mat, 4e-7*3.14) for mat in mesh.GetMaterials()])
 ```
 
-## VTK Output for ParaView
+## Upstream NGSolve `VTKOutput` Reference
+
+`VTKOutput` is a valid NGSolve feature and is shown here as upstream API
+documentation. Radia-owned applications, validation artifacts, and examples use
+`radia.gmsh_post_export.GmshPostExport` and checked GMSH `.msh v4.1` output.
 
 ```python
 from ngsolve import VTKOutput
@@ -1694,7 +1699,9 @@ a += curl(u) * curl(v) * dx
 # For matrix-valued, always use InnerProduct
 ```
 
-## 13. VTK Export
+## 13. Upstream NGSolve VTK Export
+
+This is an NGSolve API example. Use `GmshPostExport` for Radia-owned output.
 
 ```python
 # Export to VTK for ParaView
