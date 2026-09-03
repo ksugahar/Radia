@@ -11,6 +11,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_retired_examples_tier_is_not_restored():
     assert not (ROOT / "examples").exists()
+    assert '"examples/*"' not in (ROOT / "pyproject.toml").read_text(
+        encoding="utf-8"
+    )
     ignore_lines = {
         line.strip()
         for line in (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
