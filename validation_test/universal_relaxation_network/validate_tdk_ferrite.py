@@ -29,6 +29,9 @@ from typing import Dict, Tuple
 import torch
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
+DOCS_DIR = (
+    Path(__file__).resolve().parents[2] / 'docs' / 'universal_relaxation_network'
+)
 
 from radia.urn import (
     URNConfig,
@@ -48,10 +51,10 @@ def load_tdk_impedance_data(material: str = 'PC50') -> Tuple[np.ndarray, np.ndar
         freq: Frequency array [Hz]
         Z: Complex impedance array [Ohm]
     """
-    data_dir = os.path.join(script_dir, 'data', 'real_world', 'tdk_ferrite')
-    csv_file = os.path.join(data_dir, f'tdk_{material.lower()}_impedance.csv')
+    data_dir = DOCS_DIR / 'data' / 'real_world' / 'tdk_ferrite'
+    csv_file = data_dir / f'tdk_{material.lower()}_impedance.csv'
 
-    if not os.path.exists(csv_file):
+    if not csv_file.exists():
         raise FileNotFoundError(
             f"TDK impedance data not found: {csv_file}\n"
             f"Run convert_permeability_to_impedance.py first."
