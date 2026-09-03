@@ -2,8 +2,7 @@
 
 The historical promotion catalog is
 [`examples_catalog.ipynb`](examples_catalog.ipynb), accompanied by
-[`examples_catalog_results.json`](examples_catalog_results.json) and
-[`examples_catalog_result.json`](examples_catalog_result.json).  It records
+[`examples_catalog_results.json`](examples_catalog_results.json). It records
 the full source text, SHA-256 hashes, existing result/media artifacts,
 protected references, and migration lane captured before promotion. Validation
 and benchmark runners promoted from examples now live under
@@ -11,8 +10,7 @@ and benchmark runners promoted from examples now live under
 
 The public result-saved demo entry point is
 [`demo_gallery.ipynb`](demo_gallery.ipynb), accompanied by its historical data
-[`demo_gallery_results.json`](demo_gallery_results.json) and
-[`demo_gallery_result.json`](demo_gallery_result.json).  The remaining source
+[`demo_gallery_results.json`](demo_gallery_results.json). The remaining source
 script names below are a migration ledger, not the preferred public entry
 point; as each case is promoted, link executed notebooks,
 `validation_test` result JSON, or `src` APIs rather than the old examples tier.

@@ -24,7 +24,6 @@ def build_artifact(output_dir: str | Path | None = None) -> dict:
     artifact["artifact_paths"] = {
         "notebook_source_path": "docs/universal_relaxation_network/cq_urn_bridge.ipynb",
         "result_json": "docs/universal_relaxation_network/cq_urn_bridge_results.json",
-        "notebook_result_sidecar": "docs/universal_relaxation_network/cq_urn_bridge_result.json",
         "figure": "embedded in docs/universal_relaxation_network/cq_urn_bridge.ipynb",
     }
     artifact["notebook_source_artifact_id"] = (

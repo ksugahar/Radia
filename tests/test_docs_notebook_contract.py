@@ -47,3 +47,18 @@ def test_docs_do_not_own_validation_or_benchmark_json():
         "Move validation and benchmark JSON records to validation_test/: "
         + ", ".join(map(str, offenders))
     )
+
+
+def test_docs_do_not_track_notebook_checksum_sidecars():
+    offenders = []
+    for path in (ROOT / "docs").rglob("*_result.json"):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if payload.get("schema") == "radia.notebook_result.v1":
+            offenders.append(path.relative_to(ROOT))
+    assert not offenders, (
+        "Executed notebooks own their saved outputs; remove checksum sidecars: "
+        + ", ".join(map(str, offenders))
+    )
