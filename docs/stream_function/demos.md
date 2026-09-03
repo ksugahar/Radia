@@ -1,4 +1,4 @@
-# Demo inventory
+# Public demo inventory
 
 These maintained docs-coupled scripts support the executed theory,
 regularization, and deformation notebooks. Validation and benchmark runners
