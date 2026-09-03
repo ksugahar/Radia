@@ -697,7 +697,8 @@ python -m pytest -q `
 ```
 
 Any timing, fine-TET, or corrected C-yoke claim belongs in
-`validation_test/` and must run on an idle `mdx` or `hibino`, with the machine,
-native build identity, element/geometry order, image group, material
+`validation_test/` and must run on hibino first, or on mdx only when hibino is
+unavailable and the mdx CI queue is idle, with the machine, native build
+identity, element/geometry order, image group, material
 interpolant, ACA settings, DoF, build/apply/solve timing, and result checks
 recorded in JSON.

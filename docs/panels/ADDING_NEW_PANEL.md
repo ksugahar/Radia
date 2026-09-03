@@ -151,8 +151,9 @@ MEX path merely because it compiles.
 - Timeout, missing dependency, invalid config, and solver failure remain
   inspectable in `run.log` and `result.json`.
 
-Long solver validation runs on an idle mdx or hibino host. LAB and 100号機 are
-for build, import, mask, and fast numerical checks.
+Long solver validation runs on hibino first. Use mdx only when hibino is
+unavailable and the mdx CI queue is idle. LAB and 100号機 are for build, import,
+mask, and fast numerical checks.
 
 ## Current References
 

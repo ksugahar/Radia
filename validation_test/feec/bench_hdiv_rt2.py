@@ -1,4 +1,7 @@
-"""Measure the public pure-TET BDM1/BDM2 material path on mdx or hibino.
+"""Measure the public pure-TET BDM1/BDM2 material path on a compute host.
+
+Use hibino first, or mdx only when hibino is unavailable and its CI queue is
+idle.
 
 The filename is retained as a legacy validation entry point.
 

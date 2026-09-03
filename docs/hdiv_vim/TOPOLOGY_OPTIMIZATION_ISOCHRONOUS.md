@@ -200,7 +200,8 @@ Knowledge homes unchanged: `radia_mcp.topology_optimization`,
 | 4 | **DONE 2026-07-29.** Promotion complete per the ladder: `validation_test/isochronous_topopt/` (adjoint-gate lane + design-loop/verification lane with golden bands from the measured values, committed record JSON `results_design_loop_lane.json`; 6 lane tests, ~1 min); result-bearing companion notebook `isochronous_topopt.ipynb` in this directory (executed: FD 1.4e-8 on its direction / reciprocity 1.1e-10 / +16.10 % monotone / ersatz +0.69 %, with history+density figures; sidecar `isochronous_topopt_result.json`, `radia.notebook_result.v1`); knowledge synced to `radia_mcp.topology_optimization` (`topology_opt_applications(topic="isochronous")`: API map + the six measured traps) | ladder rules of CLAUDE.md; the remaining WORK is the STUDY itself (real isochronism profile, penalty/projection continuation, study-scale mdx runs, RK4 Hill re-measure) -- tracked as the Sec.-6.2 design study, not a stage |
 
 In parallel: the design-scale timing of the Python assembled route runs on
-idle mdx (the same job doubles as the CUDA-lane baseline), and the CUDA lane
+hibino first (or on mdx only when hibino is unavailable and the mdx CI queue is
+idle), and the same job doubles as the CUDA-lane baseline. The CUDA lane
 proceeds through its Phase 0-1 (Sec. 8).
 
 **Sec.-6.2 study infrastructure note (2026-07-29):** the first study-scale
@@ -312,7 +313,7 @@ Remaining levers, in order:
   (`iron_only_mesh` carries the correct `_TET_BOUNDARY_FACES`).
 * **Ownership**: `src/core/rad_hacapk_hdiv.*`, `src/radia/vim/**` are the
   co-agent's active area -- coordinate before editing; heavy timings run on
-  idle mdx/hibino only.
+  hibino first, with mdx allowed only behind an idle CI queue.
 
 ## 10. References
 

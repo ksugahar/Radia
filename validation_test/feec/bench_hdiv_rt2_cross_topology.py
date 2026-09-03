@@ -1,6 +1,7 @@
 """Compare RT2 TET/HEX/WEDGE at approximately 29k HDiv DoF.
 
-Run one topology per process on an idle mdx or hibino host.  All cases use the
+Run one topology per process on hibino first, or on mdx only when hibino is
+unavailable and its CI queue is idle. All cases use the
 same unit cube and solver settings.  ``--curve-order 2`` exercises each Q2
 geometry path on an affine cube, isolating implementation cost from CAD shape
 and mesh-quality differences.  Field timing records the cold first call and
