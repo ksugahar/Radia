@@ -25,6 +25,8 @@ import sys
 
 import pytest
 
+ng = pytest.importorskip("ngsolve")
+
 
 REPO = os.path.normpath(
     os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -33,6 +35,12 @@ FIXTURE = os.path.join(FIXTURE_DIR,
                        "heat_workpiece_cylinder_R25_H25_axisym.vol")
 SCRIPT = os.path.join(REPO, "src", "radia", "panels",
                        "calc_heat_axisym.py")
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _taskmanager():
+    with ng.TaskManager():
+        yield
 
 
 @pytest.fixture(scope="module")
@@ -65,7 +73,9 @@ def test_calc_heat_axisym_temperature_band(regenerate_fixture, tmp_path):
            "--linear-solver", "sparsecholesky",
            "--fes-order", "1",
            "--msh-output", str(tmp_path / "heat_axisym_T.msh")]
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    proc = subprocess.run(
+        cmd, capture_output=True, text=True, timeout=120, check=False
+    )
     assert proc.returncode == 0, (
         f"calc_heat_axisym exited {proc.returncode}\n"
         f"STDERR:\n{proc.stderr}\nSTDOUT tail:\n{proc.stdout[-500:]}")
@@ -114,7 +124,9 @@ def test_calc_heat_axisym_default_order2_band(regenerate_fixture, tmp_path):
            "--h-conv", "0",
            "--linear-solver", "sparsecholesky",
            "--msh-output", str(tmp_path / "heat_axisym_T_o2.msh")]
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    proc = subprocess.run(
+        cmd, capture_output=True, text=True, timeout=120, check=False
+    )
     assert proc.returncode == 0, (
         f"calc_heat_axisym exited {proc.returncode}\n"
         f"STDERR:\n{proc.stderr}\nSTDOUT tail:\n{proc.stdout[-500:]}")
@@ -138,7 +150,7 @@ def test_calc_heat_axisym_default_order2_band(regenerate_fixture, tmp_path):
     # The order-2 field strongly suppresses the spurious P1 near-axis
     # slope (about 139 C/m on this mesh).  Evaluate the saved physical
     # GridFunction instead of interpreting hierarchical coefficients.
-    from ngsolve import GridFunction, H1, Mesh, grad
+    from ngsolve import H1, GridFunction, Mesh, grad
 
     result_mesh = Mesh(result["heat_vol_file"])
     temperature = GridFunction(H1(result_mesh, order=2))
