@@ -582,8 +582,8 @@ def test_info_text_counts_by_class():
 def test_mcp_tools_registered():
     """The mcp_server module exposes its documented public tool surface.
 
-    Requires the optional ``[mcp]`` extra. CI runs with ``[test]`` only,
-    so we skip if the ``mcp`` dependency isn't installed.
+    Requires the optional ``[mcp]`` extra. The full ``[test]`` extra includes
+    the same SDK so CI exercises this surface; minimal environments may skip it.
     """
     pytest.importorskip("mcp.server.fastmcp")
     from radia.ltspice import mcp_server
