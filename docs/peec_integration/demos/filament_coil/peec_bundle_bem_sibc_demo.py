@@ -35,19 +35,9 @@ from __future__ import annotations
 
 import argparse
 import math
-import os
-import sys
 import time
 
 import numpy as np
-
-HERE = os.path.dirname(os.path.abspath(__file__))
-SRC = os.path.abspath(os.path.join(HERE, '..', '..', '..', 'src'))
-SRC_RADIA = os.path.join(SRC, 'radia')
-PANELS = os.path.join(SRC_RADIA, 'panels')
-for p in (SRC, SRC_RADIA, PANELS):
-    if p not in sys.path:
-        sys.path.insert(0, p)
 
 MU_0 = 4e-7 * math.pi
 
@@ -55,7 +45,7 @@ MU_0 = 4e-7 * math.pi
 def build_torus_filaments(R, a, current, gap_deg, nw, nh, n_arc,
                           frequency, sigma):
     """CoilBuilder circular torus (z-axis) -> filament paths."""
-    from coil_builder import CoilBuilder
+    from radia.coil_builder import CoilBuilder
     cb = (CoilBuilder(current=current)
           .set_start([R, 0, 0],
                      orientation=np.array([[1, 0, 0],
@@ -76,7 +66,7 @@ def build_wp_surface_mesh(R_wp, H_wp, maxh):
     faces (there should be none for a standalone cylinder).
     """
     from netgen.occ import Cylinder, OCCGeometry, Pnt, Dir
-    from ngsolve import Mesh
+    from ngsolve import Mesh, TaskManager
     from radia.panels.surface_mesh_extract import _extract_surface_mesh_filtered
 
     cyl = Cylinder(Pnt(0, 0, -H_wp / 2), Dir(0, 0, 1), R_wp, H_wp)
@@ -102,9 +92,11 @@ def solve_peec_bundle(paths, dw, dh, sigma, I_port, frequency):
     driven by the specified I_port current source, so the air-only port
     impedance is V_port / I_port.
     """
-    from peec_bundle import (build_bundle_solver,
-                              build_loop_bundle_impedance,
-                              solve_loop_bundle)
+    from radia.peec_bundle import (
+        build_bundle_solver,
+        build_loop_bundle_impedance,
+        solve_loop_bundle,
+    )
     solver, seg_of_fil, _, _ = build_bundle_solver(paths, dw, dh, sigma)
     R_f, L_f = build_loop_bundle_impedance(solver, seg_of_fil)
     I_fil, V_port = solve_loop_bundle(R_f, L_f, frequency, I_port=I_port)
@@ -167,7 +159,6 @@ def main():
     t0 = time.perf_counter()
     wp_mesh = build_wp_surface_mesh(R_wp, H_wp, args.wp_maxh)
     from ngsolve import BND
-    from ngsolve import TaskManager
     print(f"  wp nv={wp_mesh.nv}  ne(BND)={wp_mesh.GetNE(BND)}  "
           f"({time.perf_counter() - t0:.1f}s)")
     from radia.bem_sibc_solver import (ScalarBIESIBCSolver,
