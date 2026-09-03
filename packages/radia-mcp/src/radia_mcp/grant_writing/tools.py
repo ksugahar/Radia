@@ -816,6 +816,7 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
     undefined_purpose_scope_aliases: list[dict] = []
     bare_staged_processes: list[dict] = []
     incomplete_research_platform_roles: list[dict] = []
+    reader_reconstruction_required: list[dict] = []
     takeaways_after_evidence: list[dict] = []
     takeaway_order_examples: list[dict] = []
     representation_pattern = re.compile(
@@ -878,6 +879,66 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
     inclusive_platform_user_pattern = re.compile(
         r"(?:(?<!共同)利用者|研究者|研究代表者|研究分担者|教員|学生|"
         r"第三者|利用者一般)[^。！？\n]{0,36}(?:利用|検証|再現|実行|確認|参照)"
+    )
+    # These patterns do not reject technical vocabulary.  They identify a
+    # narrower semantic failure: a reviewer must reconstruct an omitted
+    # object, relation, or referent before the sentence can be understood.
+    # Keep them structural rather than project- or sentence-specific so that
+    # reviewer feedback becomes reusable guidance.
+    reader_reconstruction_patterns = (
+        (
+            "definition_attachment",
+            re.compile(
+                r"(?:を|と)[^。！？\n]{0,36}(?:に)?対応付けたものを"
+                r"[^。！？\n]{0,24}(?:と定義|と呼)"
+            ),
+        ),
+        (
+            "decision_basis_omitted",
+            re.compile(r"(?:順位確定|高忠実度(?:解析への)?移行)[^。！？\n]{0,24}判定を反証"),
+        ),
+        (
+            "opaque_self_description",
+            re.compile(r"(?:資産|コード|実装|手法)の自己記述"),
+        ),
+        (
+            "forward_summary_label",
+            re.compile(r"(?<!以下の)[二三四五六七八九十2-9２-９]成果の達成条件"),
+        ),
+        (
+            "nonexecutable_bundle",
+            re.compile(
+                r"(?:技術報告|論文)[^。！？\n]{0,64}(?:改訂|履歴)を"
+                r"[^。！？\n]{0,24}再実行可能"
+            ),
+        ),
+        (
+            "unnamed_transfer_object",
+            re.compile(
+                r"(?:研究室内|組織内)の共同開発を"
+                r"(?:機関間|組織間|他機関)へ(?:移す|移行|展開)"
+            ),
+        ),
+        (
+            "misattached_same_specification",
+            re.compile(
+                r"(?:解析|計算|評価)手法と同一仕様の(?:結合|比較|検証)課題"
+            ),
+        ),
+        (
+            "unnamed_reupdate_object",
+            re.compile(r"(?:評価|解析)(?:結果)?後の再更新"),
+        ),
+        (
+            "abstract_functions_as_connection_objects",
+            re.compile(
+                r"(?:離散化|メッシュ生成|最適化)"
+                r"(?:[、，,・]\s*(?:離散化|メッシュ生成|最適化)){1,}を"
+                r"(?:AI[^。！？\n]{0,30})?"
+                r"(?:MCP|API|インターフェース|インタフェース)"
+                r"[^。！？\n]{0,12}で接続"
+            ),
+        ),
     )
     defined_scope_aliases: set[str] = set()
     for index, sentence in enumerate(sentences):
@@ -999,6 +1060,14 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
                         "restricted_to_joint_users": restricted_to_joint_users,
                         "excerpt": sentence[:240],
                     })
+        for reason_code, pattern in reader_reconstruction_patterns:
+            for match in pattern.finditer(sentence):
+                reader_reconstruction_required.append({
+                    "index": index,
+                    "reason_code": reason_code,
+                    "phrase": match.group(0),
+                    "excerpt": sentence[:240],
+                })
 
     if dense_sentences:
         first = dense_sentences[0]
@@ -1158,6 +1227,25 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
             ),
             missing_roles=first["missing_roles"],
             examples=incomplete_research_platform_roles[:5],
+        )
+
+    if reader_reconstruction_required:
+        first = reader_reconstruction_required[0]
+        add_risk(
+            "reader_reconstruction_required",
+            first["excerpt"],
+            (
+                "対象、操作、修飾関係又は指示先が省略・錯綜しており、審査者が"
+                "文の外から関係を補って読み直さなければならない。"
+            ),
+            (
+                "誰が何に何をするかを名詞で閉じる。対応付けと定義は別文にし、"
+                "判定とその根拠、記述と実行物、移す又は更新する対象を明示する。"
+                "後続の列挙を先取りする場合は『以下の』を添える。"
+            ),
+            severity="HIGH",
+            reason_code=first["reason_code"],
+            examples=reader_reconstruction_required[:12],
         )
 
     layer_paragraphs: list[dict] = []
@@ -1356,6 +1444,9 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
             ),
             "research_platform_role_chain_incomplete_count": len(
                 incomplete_research_platform_roles
+            ),
+            "reader_reconstruction_required_count": len(
+                reader_reconstruction_required
             ),
             "three_layer_paragraph_count": len(layer_paragraphs),
             "takeaway_after_evidence_count": len(takeaways_after_evidence),

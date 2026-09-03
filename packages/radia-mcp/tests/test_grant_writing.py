@@ -1064,6 +1064,110 @@ def test_adjacent_reviewer_accepts_complete_research_platform_role_chain():
     assert "research_platform_role_chain_incomplete" not in types
 
 
+@pytest.mark.parametrize(
+    ("old_text", "reason_code"),
+    [
+        (
+            (
+                "支配方程式と仮定、受け渡す物理量、検証問題、版・権利を"
+                "実行機能に対応付けたものを解析モジュールと定義する。"
+            ),
+            "definition_attachment",
+        ),
+        (
+            (
+                "担当外研究者が順位確定又は高忠実度移行の判定を反証できる"
+                "結合条件を示す。"
+            ),
+            "decision_basis_omitted",
+        ),
+        (
+            "各資産の自己記述と試験は所有者が整備する。",
+            "opaque_self_description",
+        ),
+        (
+            "四成果の達成条件を共通の判定規則に対応付ける。",
+            "forward_summary_label",
+        ),
+        (
+            (
+                "技術報告、コード、入力、検証、改訂を再実行可能な一つの"
+                "研究過程として結ぶ。"
+            ),
+            "nonexecutable_bundle",
+        ),
+        (
+            "研究室内の共同開発を機関間へ移す。",
+            "unnamed_transfer_object",
+        ),
+        (
+            "電磁界解析手法と同一仕様の結合課題を分析単位とする。",
+            "misattached_same_specification",
+        ),
+        (
+            "高忠実度評価後の再更新と停止条件を担う。",
+            "unnamed_reupdate_object",
+        ),
+        (
+            "離散化、メッシュ生成、最適化をMCPで接続する。",
+            "abstract_functions_as_connection_objects",
+        ),
+    ],
+)
+def test_adjacent_reviewer_flags_reader_reconstruction(old_text, reason_code):
+    result = gw.grant_writing_adjacent_reviewer_readability_check(old_text)
+    risks = {risk["type"]: risk for risk in result["risks"]}
+
+    assert "reader_reconstruction_required" in risks
+    examples = risks["reader_reconstruction_required"]["examples"]
+    assert reason_code in {example["reason_code"] for example in examples}
+    assert result["metrics"]["reader_reconstruction_required_count"] >= 1
+
+
+@pytest.mark.parametrize(
+    "revised_text",
+    [
+        (
+            "各手法の実行機能に、支配方程式・仮定、受け渡す物理量、"
+            "検証問題、版・権利を対応付ける。この一組を解析モジュールと呼ぶ。"
+        ),
+        (
+            "担当外研究者が、順位確定か高忠実度解析への移行かを独立に"
+            "判定し、その根拠を再現・反証できる結合条件を示す。"
+        ),
+        (
+            "各資産の所有者が、機能・入出力・前提条件と試験を記述する。"
+        ),
+        (
+            "以下の四成果について、共通の判定規則に基づく達成条件を定める。"
+        ),
+        (
+            "技術報告に記された手法を、コード、入力データ、検証手順、"
+            "改訂履歴と結び、別機関が再実行・反証できる研究過程にする。"
+        ),
+        (
+            "研究室内で確立した共同開発手順を4機関へ展開する。"
+        ),
+        (
+            "複数の電磁界解析手法を同一仕様で結合する課題を分析単位とする。"
+        ),
+        (
+            "高忠実度評価の結果に基づく設計候補の再更新と、反復を止める"
+            "条件を担当する。"
+        ),
+        (
+            "離散化・メッシュ生成・最適化の各機能をMCPで接続する。"
+        ),
+    ],
+)
+def test_adjacent_reviewer_accepts_closed_object_relation(revised_text):
+    result = gw.grant_writing_adjacent_reviewer_readability_check(revised_text)
+    types = {risk["type"] for risk in result["risks"]}
+
+    assert "reader_reconstruction_required" not in types
+    assert result["metrics"]["reader_reconstruction_required_count"] == 0
+
+
 def test_adjacent_reviewer_readability_flags_takeaway_after_evidence():
     text = (
         "菅原・長嶺らは、Cauer縮約をGalerkin系へ実装した。"
