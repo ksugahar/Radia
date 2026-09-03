@@ -8,8 +8,6 @@ This is the CORRECT approach - use the working PEEC solver!
 """
 
 import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia'))
 
 import numpy as np
 from pathlib import Path
@@ -21,7 +19,7 @@ print("=" * 70)
 
 # Import PEEC module
 try:
-    from peec_matrices import PEECBuilder
+    from radia.peec_matrices import PEECBuilder
     print("\nUsing C++ PEEC implementation")
 except ImportError:
     print("\nERROR: PEEC module not available")
