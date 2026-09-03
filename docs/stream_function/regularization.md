@@ -9,7 +9,7 @@ are infinitely many ψ vectors that hit `B_target` exactly.  Choosing
 *which* such ψ to return is the role of the **regularisation**.
 
 Five options shipped, all in
-[`demo_planar_uniform_fem_psi_advanced.py`](examples_catalog.ipynb)
+[`demo_planar_uniform_fem_psi_advanced.py`](demo_planar_uniform_fem_psi_advanced.py)
 via `--regularize {l2, l2_aca, h1, h1_sigma, inductance_diag, linf}`.
 
 ## Quick comparison table (planar uniform Bz benchmark)
@@ -116,7 +116,7 @@ problem.  Practical fix would be IRLS or ADMM (1 day work).
 ## Combining with Path-A iteration
 
 All regularisation modes compose with `--compensated-iter` from
-[`demo_planar_uniform_fem_psi.py`](examples_catalog.ipynb).
+[`demo_planar_uniform_fem_psi.py`](demo_planar_uniform_fem_psi.py).
 Path-A iteration RE-USES the inner solver's cached factorisation:
 
 ```bash
@@ -168,7 +168,7 @@ All five regularisations above (and any other SPD `S`) admit a
 This is the formula implemented by
 [`radia.stream_function.RegularizedTSVD`](../../src/radia/stream_function.py)
 and exercised by
-[`demo_regularized_aca.py`](examples_catalog.ipynb).
+[`demo_regularized_aca.py`](demo_regularized_aca.py).
 
 ### Derivation
 
@@ -217,7 +217,7 @@ data misfit against the seminorm,
     min_ψ   ‖A ψ − B‖²  +  α · ψᵀ S ψ          (α > 0)
 
 with normal equation `(AᵀA + α S) ψ = Aᵀ B`.  In the demo
-([`demo_sf_to_peec_gx.py`](examples_catalog.ipynb))
+([`demo_sf_to_peec_gx.py`](demo_sf_to_peec_gx.py))
 `--regularize tikhonov` currently solves this as a **separate dense**
 `(AᵀA + α I)⁻¹ AᵀB`, disjoint from the `tsvd` ACA+ path.  **It does not
 need to be a separate path.**  Substitute the same ACA+TSVD
@@ -402,7 +402,7 @@ Same value across:
 ### IRLS for L∞ on top of the cache
 
 The bounded-ratio active-set IRLS (`solve_linf_irls` in
-[`demo_planar_uniform_fem_psi_advanced.py`](examples_catalog.ipynb))
+[`demo_planar_uniform_fem_psi_advanced.py`](demo_planar_uniform_fem_psi_advanced.py))
 replaces the slow scipy SLSQP path:
 
   - ACA+TSVD of `A` runs ONCE.
@@ -433,7 +433,7 @@ Now `A` is **constant**, so the ACA+TSVD base `(U, Σ, V)` is computed
 ONCE and reused across every trial — only the cheap fold
 `S⁻¹V + W = Vᵀ S⁻¹ V` is rebuilt per trial.
 
-[`demo_reg_hyperparam_aca.py`](examples_catalog.ipynb)
+[`demo_reg_hyperparam_aca.py`](demo_reg_hyperparam_aca.py)
 runs CMA-ES over a Gaussian conductivity feature
 
     σ(x, y) = 1 + amp · exp(−((x−cx)² + (y−cy)²) / width)
@@ -495,7 +495,7 @@ make an honest claim:
   - **Bending** — reshaping at **fixed average standoff** (a **zero-mean**
     deformation).  This is the genuine sheet-metal contribution.
 
-[`demo_pareto_deform.py`](examples_catalog.ipynb)
+[`demo_pareto_deform.py`](demo_pareto_deform.py)
 defaults to the zero-mean (pure-bending) constraint and optimises the shape
 **per homogeneity level** (CMA-ES over a Gaussian-localised polynomial basis,
 warm-started across α, `|z| ≤ 5 cm`).  The genuine bending pushes the WHOLE
@@ -512,7 +512,7 @@ redistributes the loop spacing ALONG the surface at FIXED radius, so it is
 needed).  It pushes the whole cylinder Gx-fingerprint front down
 ~ **−10 to −25 %** (best −25 %), done correctly (local-spacing peak +
 spacing-weighted seminorm `S`, monotone reparametrisation).  See
-[`demo_pareto_cylinder_deform.py`](examples_catalog.ipynb)
+[`demo_pareto_cylinder_deform.py`](demo_pareto_cylinder_deform.py)
 (`--target {gx,c2,s2,z2} [--azimuthal]`).
 
 The in-surface lever has TWO directions (axial `Z(z)` and azimuthal
@@ -541,7 +541,7 @@ a **multi-objective optimiser**: NSGA-II over (geometry, α) traces the
 3-objective (homogeneity, peak, **former size**) surface, autonomously
 finding that low peak at a given homogeneity *requires* a larger former
 (the geometry-peak coupling).  See
-[`demo_pareto_geometry_nsga.py`](examples_catalog.ipynb).
+[`demo_pareto_geometry_nsga.py`](demo_pareto_geometry_nsga.py).
 
 On the **cylinder** (Gx fingerprint, the standard MRI/shim geometry) the
 geometry lever is the cylinder **length**, and it behaves differently:
@@ -551,7 +551,7 @@ the length covers the DSV, loops beyond ≈ ±2·DSV barely reach the target so
 a longer cylinder stops helping.  The optimal lever direction is
 geometry-dependent (cf. the planar vs cylinder sheet-metal-distortion lever
 in [single_stroke.md](single_stroke.md)).  See
-[`demo_pareto_cylinder.py`](examples_catalog.ipynb).
+[`demo_pareto_cylinder.py`](demo_pareto_cylinder.py).
 
 ### Cross-reference
 
@@ -559,21 +559,21 @@ in [single_stroke.md](single_stroke.md)).  See
   - Single-stroke discretisation: [single_stroke.md](single_stroke.md)
   - Surface deformation: [deformation.md](deformation.md)
   - API: [`radia.stream_function.RegularizedTSVD`](../../src/radia/stream_function.py)
-  - Demos: [`demo_regularized_aca.py`](examples_catalog.ipynb)
-    (5-mode sweep), [`demo_reg_hyperparam_aca.py`](examples_catalog.ipynb)
+  - Demos: [`demo_regularized_aca.py`](demo_regularized_aca.py)
+    (5-mode sweep), [`demo_reg_hyperparam_aca.py`](demo_reg_hyperparam_aca.py)
     (σ-shape optimisation, ACA+ reused),
-    [`demo_pareto_tikhonov_aca.py`](examples_catalog.ipynb)
+    [`demo_pareto_tikhonov_aca.py`](demo_pareto_tikhonov_aca.py)
     (**(homogeneity, peak-J) Pareto front** via the folded Tikhonov α-sweep —
     the direct application of the `+ α I` core: one ACA factorisation, the
     whole front swept at ≈ 50 µs/point),
-    [`demo_pareto_geometry_nsga.py`](examples_catalog.ipynb)
+    [`demo_pareto_geometry_nsga.py`](demo_pareto_geometry_nsga.py)
     (geometry lever + NSGA-II joint front),
-    [`demo_pareto_cylinder.py`](examples_catalog.ipynb)
+    [`demo_pareto_cylinder.py`](demo_pareto_cylinder.py)
     (cylinder Gx, length lever with an optimum),
-    [`demo_pareto_deform.py`](examples_catalog.ipynb)
+    [`demo_pareto_deform.py`](demo_pareto_deform.py)
     (planar sheet-metal / 板金 bending lever, zero-mean genuine-forming
     decomposition),
-    [`demo_pareto_cylinder_deform.py`](examples_catalog.ipynb)
+    [`demo_pareto_cylinder_deform.py`](demo_pareto_cylinder_deform.py)
     (cylinder in-surface axial bending — the dominant cylinder lever, radius
     fixed = 100 % genuine, −10…−25 %)
   - MCP topic: `streamfunction(topic=regularized)`

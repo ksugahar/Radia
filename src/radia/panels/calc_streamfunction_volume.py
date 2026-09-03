@@ -10,7 +10,7 @@ solved as a LINEAR least-norm inverse (ACA+TSVD) for a uniform axial Bz, then
 contoured into windable equal-current wires whose Biot-Savart is cross-checked
 against Radia (two-codebase invariant).  See
 ``radia.streamfunction_volume`` and
-``docs/stream_function/examples_catalog.ipynb``.
+``docs/stream_function/theory.ipynb``.
 
 Pure headless: NGSolve / Radia imports live inside ``run()`` only, so Simulink
 and MCP tooling can inspect ``build_argparser()`` without paying the NGSolve

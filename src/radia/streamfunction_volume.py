@@ -25,7 +25,7 @@ This module is the SHIPPED home of the pipeline validated by
 ``radia.panels.calc_streamfunction_volume`` wraps ``design_volume_coil`` here.
 
 Domain of validity (the honest frontier; see
-``docs/stream_function/examples_catalog.ipynb`` and the VIM retirement ledger): clean equal-current
+``docs/stream_function/theory.ipynb`` and the VIM retirement ledger): clean equal-current
 extraction needs the zero-helicity, fixed-(radial)-foliation, closed-streamline
 regime.  A general target / arbitrary foliation hits the F1 (non-convex
 foliation choice), F2 (ill-posed Clebsch recovery) or F3 (nonzero-helicity

@@ -1,19 +1,10 @@
-# Demo ledger — what each example does
+# Demo inventory
 
-The historical promotion catalog is
-[`examples_catalog.ipynb`](examples_catalog.ipynb), accompanied by
-[`examples_catalog_results.json`](examples_catalog_results.json). It records
-the full source text, SHA-256 hashes, existing result/media artifacts,
-protected references, and migration lane captured before promotion. Validation
-and benchmark runners promoted from examples now live under
-[`validation_test/stream_function/`](../../validation_test/stream_function/).
-
-The public result-saved demo entry point is
-[`demo_gallery.ipynb`](demo_gallery.ipynb), accompanied by its historical data
-[`demo_gallery_results.json`](demo_gallery_results.json). The remaining source
-script names below are a migration ledger, not the preferred public entry
-point; as each case is promoted, link executed notebooks,
-`validation_test` result JSON, or `src` APIs rather than the old examples tier.
+These maintained docs-coupled scripts support the executed theory,
+regularization, and deformation notebooks. Validation and benchmark runners
+live under [`validation_test/stream_function/`](../../validation_test/stream_function/).
+The historical promotion catalogs are retained by Git history, not by the
+public docs tree.
 
 ## Core demos (axisymmetric / fingerprint / planar)
 

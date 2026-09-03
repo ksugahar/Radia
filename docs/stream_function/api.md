@@ -183,7 +183,7 @@ for it in range(n_iter):
     psi   = psi + step * delta
 ```
 
-See [`demo_regularized_aca.py`](examples_catalog.ipynb)
+See [`demo_regularized_aca.py`](demo_regularized_aca.py)
 for a 5-mode sweep on the planar uniform-Bz benchmark, and
 [regularization.md](regularization.md) for the derivation.
 
