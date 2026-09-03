@@ -43,8 +43,9 @@ _HYPE_RE = re.compile(
 # 数値: 12%, 3.2×, 4x, 10fold, 10 times, 10倍, 100 kHz, 3.2 MHz, 5 ms, 2 s,
 # 10 mm, 20 μm など.  \d+[\.×x%] を含み、かつ単位付き数値も捕捉する.
 _NUMBER_RE = re.compile(
-    r"\d+[\.×x%]"
-    r"|\d+(?:\.\d+)?\s*(?:%|倍|fold|times|×|kHz|MHz|GHz|Hz|ms|s|mm|μm|um|nm|dB)",
+    r"\b\d+\.\d+\b"
+    r"|\b\d+(?:\.\d+)?\s*(?:%|倍|fold|times|×|kHz|MHz|GHz|Hz|ms|"
+    r"mm|μm|um|nm|dB|s)(?![A-Za-z])",
     re.IGNORECASE,
 )
 

@@ -95,15 +95,18 @@ def _term_pattern(variant: str) -> re.Pattern[str]:
 def _read_text_with_fallback(path: pathlib.Path, encoding: str) -> tuple[str, str]:
     candidates = [encoding, "utf-8-sig", "utf-8", "cp932"]
     seen: set[str] = set()
+    raw = path.read_bytes()
     for enc in candidates:
         if enc in seen:
             continue
         seen.add(enc)
         try:
-            return path.read_text(encoding=enc), enc
+            return raw.decode(enc, errors="strict"), enc
         except UnicodeDecodeError:
             continue
-    return path.read_text(encoding=encoding, errors="replace"), encoding
+    raise UnicodeError(
+        f"could not decode {path} using {', '.join(candidates)}; file not changed"
+    )
 
 
 def paper_writing_normalize_terminology(
@@ -198,7 +201,10 @@ def paper_writing_normalize_terminology_file(
     if not path.exists():
         return {"error": f"file not found: {tex_path}"}
 
-    text, used_encoding = _read_text_with_fallback(path, encoding)
+    try:
+        text, used_encoding = _read_text_with_fallback(path, encoding)
+    except (OSError, UnicodeError) as exc:
+        return {"error": str(exc), "file": str(path), "changed": False}
     result = paper_writing_normalize_terminology(
         text,
         rules=rules,
@@ -206,7 +212,7 @@ def paper_writing_normalize_terminology_file(
         context_window=context_window,
     )
     if result["changed"] and not dry_run:
-        path.write_text(result["normalized_text"], encoding=used_encoding)
+        path.write_bytes(result["normalized_text"].encode(used_encoding))
 
     return {
         "file": str(path),

@@ -963,7 +963,7 @@ def test_arxiv_fetch_latex_source_mocked(monkeypatch, tmp_path):
             t.addfile(info, io.BytesIO(data))
     blob = buf.getvalue()
 
-    def fake_get(url, timeout=None):
+    def fake_get(url, timeout=None, **kwargs):
         assert "/e-print/" in url
         return _FakeResponse(200, content=blob)
 
@@ -997,9 +997,12 @@ def test_arxiv_search_mocked(monkeypatch):
     <link rel="alternate" href="http://arxiv.org/abs/2603.17339v1"/>
     <link title="pdf" href="http://arxiv.org/pdf/2603.17339v1"/>
   </entry>
-</feed>"""
+    </feed>"""
 
-    def fake_get(url, timeout=None):
+    def fake_get(url, timeout=None, **kwargs):
+        assert url == "https://export.arxiv.org/api/query"
+        assert kwargs["params"]["search_query"].startswith("all:finite element")
+        assert "User-Agent" in kwargs["headers"]
         return _FakeResponse(200, text=xml)
 
     real_req = pytest.importorskip("requests")
@@ -1282,7 +1285,12 @@ def test_target_venue_policy_rejects_unrelated_venue():
     r = pw.paper_writing_target_venue_policy("Unrelated Materials Journal")
     assert r["status"] == "reject"
     assert r["target_category"] is None
-    assert r["supported_categories"] == ["ieej", "ieee", "accelerator"]
+    assert r["supported_categories"] == [
+        "ieej",
+        "ieee",
+        "electromagnetics",
+        "accelerator",
+    ]
 
 
 def test_target_venue_policy_requires_concrete_selection():
@@ -1340,20 +1348,18 @@ def test_em_submission_gate_rejects_out_of_policy_venue():
     assert r["verdict"] == "fail"
 
 
-def test_em_submission_gate_no_inputs_fails_on_bib_policy():
-    """v0.91.0: no bib_path => FAIL on lab POLICY check."""
+def test_em_submission_gate_no_inputs_uses_canonical_bib_policy():
+    """An omitted bib_path selects the bundled canonical bibliography."""
     from radia_mcp.paper_writing._em_paper_style import (
         paper_writing_em_submission_gate,
     )
     r = paper_writing_em_submission_gate()
-    assert r["verdict"] == "fail"
-    # The bib_policy check itself fired
     names = [c["name"] for c in r["checks"]]
     assert "bib_policy" in names
     bib_check = next(c for c in r["checks"] if c["name"] == "bib_policy")
-    assert bib_check["status"] == "fail"
-    assert "reference.bib" in bib_check["summary"].lower() or \
-            "reference.bib" in str(bib_check.get("detail", ""))
+    assert bib_check["status"] == "pass"
+    assert r["bib_source"] == "canonical_default"
+    assert r["bib_path"].endswith("references.bib")
 
 
 def test_em_submission_gate_tex_only_returns_partial(tmp_path):
@@ -1444,19 +1450,20 @@ def test_citation_workflow_recipe_has_policy_lines():
     assert len(r) > 2000
     # Key policy keywords MUST be present
     for kw in ["NEVER invent", "ALWAYS",
-                "reference.bib", "Crossref", "Semantic Scholar",
+                "references.bib", "Crossref", "Semantic Scholar",
                 "arXiv", "verify", "TODO"]:
         assert kw in r, f"citation recipe missing key concept: {kw!r}"
 
 
-def test_verify_citation_no_bib_path_returns_error():
+def test_verify_citation_no_bib_path_uses_canonical_bibliography():
     from radia_mcp.paper_writing._citation_verify import (
         paper_writing_verify_citation,
     )
-    r = paper_writing_verify_citation(claim="some claim", bib_path="")
-    assert r["verdict"] == "error"
-    assert "bib_path" in r["advice"].lower()
-    assert "reference.bib" in r["advice"].lower()
+    r = paper_writing_verify_citation(
+        claim="", bib_path="", search_arxiv_if_no_doi=False
+    )
+    assert r["verdict"] == "no_candidate_found"
+    assert "bib_path" not in r["advice"].lower()
 
 
 def test_verify_citation_missing_bib_returns_error(tmp_path):
@@ -1574,7 +1581,7 @@ def test_verify_citation_doi_resolve_failure_marks_no_candidate(
     )
     assert r["verdict"] == "no_candidate_found"
     assert r["suggested_bibtex"] is None
-    assert "fabricated" in r["advice"].lower() or "typo" in r["advice"].lower()
+    assert "not found" in r["advice"].lower()
 
 
 def test_verify_citation_arxiv_search_fallback_mocked(monkeypatch, tmp_path):
@@ -1938,7 +1945,7 @@ def test_resolve_input_chain_handles_missing_subfile(tmp_path):
         r"\input{nonexistent}"
         r"\end{document}", encoding="utf-8")
     r = resolve_input_chain(str(tmp_path / "main.tex"))
-    assert r["ok"] is True   # missing file is graceful, not fatal
+    assert r["ok"] is False
     assert len(r["files_missing"]) == 1
     assert "nonexistent" in r["files_missing"][0]["path"]
 

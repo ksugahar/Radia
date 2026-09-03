@@ -227,6 +227,21 @@ where = ["src"]
 "radia_mcp.matlab_agentic_ml" = [
     "skill.md",
 ]
+"radia_mcp.paper_writing" = [
+    "skill.md",
+]
+"radia_mcp.grant_writing" = [
+    "skill.md",
+]
+"radia_mcp.presentation" = [
+    "skill.md",
+]
+"radia_mcp.poster" = [
+    "skill.md",
+]
+"radia_mcp.bibliography" = [
+    "data/references.bib",
+]
 "radia_mcp.mathematica" = [
     "*.md",
     "basis_functions/*.md",

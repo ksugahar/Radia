@@ -8,7 +8,7 @@ catalog).
 
 What's inside:
 
-  * tools.py (67 paper_writing_* tools)
+  * tools.py and focused companion modules (paper_writing_* tools)
        imrad balance, abstract length, hedge counting, figure forward
        reference, equation numbering, citation usage, passive voice
        ratio, paragraph length, sentence variety, reviewer comment
@@ -17,10 +17,7 @@ What's inside:
        skill modules in plans/T1-T20 (Tier 1-4 composite scoring,
        reproducibility, statistical reporting, IMRaD discussion
        structure, journal fit, root-cause diagnosis, etc.)
-  * cross_lint.py (8 JA-lint wrappers, calling _ja_lint)
-  * _ja_lint.py (inline copy of 8 grant_writing JA-lint helpers --
-       lab-language linters reused so paper authors get the SAME
-       tool names as grant authors)
+  * cross_lint.py (JA-lint wrappers using the shared grant-writing lints)
   * _shared/hedges.py (10 JA hedge patterns shared with the EN
        hedge set inside count_weak_expressions)
   * paper_download.py (IEEE Xplore / ScienceDirect / Emerald PDF
@@ -31,11 +28,11 @@ What's inside:
   * _tex_figure_placement.py (NEW v0.88.0: knowledge module on
        LaTeX float specifiers / placeins / widths / anti-patterns /
        per-journal profiles)
-  * skill.md (712-line writing-skill knowledge file)
+  * skill.md (writing-skill knowledge file)
   * plans/T1-T20 (20 Plan-B composite-score helpers)
 """
 
-# Re-export the 67 paper_writing_* tools from tools.py for convenient
+# Re-export paper_writing_* tools from tools.py for convenient
 # direct import.  Server-side registration happens via server.py.
 from . import tools as _tools  # noqa: F401
 from ._pdf_layout_visual import (  # noqa: F401
@@ -71,6 +68,13 @@ from ._em_paper_style import (  # noqa: F401
 from ._citation_verify import (  # noqa: F401
     paper_writing_verify_citation,
     paper_writing_citation_workflow_recipe,
+    paper_writing_check_citation_keys_exist,
+)
+from ._undefined_acronyms import paper_writing_check_undefined_acronyms  # noqa: F401
+from ._digest_lints import (  # noqa: F401
+    paper_writing_check_ref_label_consistency,
+    paper_writing_check_ieee_keywords,
+    paper_writing_check_pdf_unresolved_markers,
 )
 
 # v0.92.0: PDF overlap/overflow detection + undefined-variable check

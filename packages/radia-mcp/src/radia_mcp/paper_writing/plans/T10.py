@@ -69,7 +69,7 @@ def _extract_first(patterns: list[re.Pattern], text: str) -> str:
 
 
 def _extract_keywords(text: str, top_k: int = 15) -> list[str]:
-    """カタカナ 3+ / 漢字 2+ / 英大文字 token / 数値+単位 を抽出 (重複排除)。"""
+    """Extract normalized content words across Japanese and English."""
     keywords: list[str] = []
     seen: set[str] = set()
     # カタカナ 3+
@@ -82,9 +82,16 @@ def _extract_keywords(text: str, top_k: int = 15) -> list[str]:
         k = m.group(0)
         if k not in seen and len(k) >= 2:
             seen.add(k); keywords.append(k)
-    # 英大文字始まり (固有名詞 / 略語)
-    for m in re.finditer(r"\b[A-Z][A-Za-z0-9\-]{2,}\b", text):
-        k = m.group(0)
+    stop_words = {
+        "the", "this", "that", "these", "those", "and", "or", "but",
+        "for", "from", "with", "without", "into", "over", "under", "of",
+        "in", "on", "at", "to", "by", "via", "using", "based", "paper",
+        "study", "result", "results", "however", "therefore", "proposed",
+    }
+    for m in re.finditer(r"\b[A-Za-z][A-Za-z0-9\-]{2,}\b", text):
+        k = m.group(0).casefold()
+        if k in stop_words:
+            continue
         if k not in seen:
             seen.add(k); keywords.append(k)
     return keywords[:top_k]

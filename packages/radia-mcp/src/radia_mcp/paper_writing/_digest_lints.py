@@ -113,10 +113,11 @@ def paper_writing_check_ref_label_consistency(
         try:
             from ._tex_resolver import resolve_input_chain
             r = resolve_input_chain(tex_path, encoding=encoding)
-            if r.get("ok"):
-                src = r["merged_tex"]
-        except Exception:
-            pass
+            if not r.get("ok"):
+                return {"error": f"failed to resolve TeX inputs: {r.get('error')}"}
+            src = r["merged_tex"]
+        except Exception as exc:  # noqa: BLE001
+            return {"error": f"failed to resolve TeX inputs: {exc}"}
 
     stripped = _strip_for_lint(src)
 
@@ -126,8 +127,9 @@ def paper_writing_check_ref_label_consistency(
 
     ref_occurrences: dict[str, list[int]] = {}
     for m in _REF_RE.finditer(stripped):
-        k = m.group(1).strip()
-        ref_occurrences.setdefault(k, []).append(m.start())
+        for key in (part.strip() for part in m.group(1).split(",")):
+            if key:
+                ref_occurrences.setdefault(key, []).append(m.start())
 
     ref_keys = set(ref_occurrences.keys())
     dangling = sorted(ref_keys - labels)
@@ -252,10 +254,11 @@ def paper_writing_check_ieee_keywords(
         try:
             from ._tex_resolver import resolve_input_chain
             r = resolve_input_chain(tex_path, encoding=encoding)
-            if r.get("ok"):
-                src = r["merged_tex"]
-        except Exception:
-            pass
+            if not r.get("ok"):
+                return {"error": f"failed to resolve TeX inputs: {r.get('error')}"}
+            src = r["merged_tex"]
+        except Exception as exc:  # noqa: BLE001
+            return {"error": f"failed to resolve TeX inputs: {exc}"}
 
     src = _strip_for_lint(src)
 

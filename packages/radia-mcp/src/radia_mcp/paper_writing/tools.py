@@ -57,6 +57,7 @@ from ._terminology_normalizer import (  # noqa: F401
     paper_writing_normalize_terminology,
     paper_writing_normalize_terminology_file,
 )
+from ._shared.sentence import split_mixed_sentences
 
 # Paper-PDF download tools (v0.25.0, 2026-05-21) — IEEE Xplore + Emerald
 # Cookie-seeded session pattern.  Requires caller's IP to have
@@ -174,6 +175,19 @@ def paper_writing_usage() -> str:
 
 
 _TARGET_VENUE_PROFILES = {
+    "electromagnetics": {
+        "label": "international computational electromagnetics community",
+        "aliases": (
+            "igte", "international igte symposium", "compumag",
+            "conference on the computation of electromagnetic fields",
+            "cefc", "conference on electromagnetic field computation",
+        ),
+        "primary_language": "English",
+        "keyword_policy": (
+            "Follow the selected conference's current official template; "
+            "do not impose IEEEkeywords solely from the venue family."
+        ),
+    },
     "accelerator": {
         "label": "accelerator community",
         "aliases": (
@@ -214,13 +228,14 @@ def _target_venue_alias_matches(normalized: str, alias: str) -> bool:
 def paper_writing_target_venue_policy(target_venue: str = "") -> dict:
     """Enforce the CAE-AI Lab's deliberately narrow publication targets.
 
-    Supported targets are IEEJ, IEEE, and accelerator-community venues.
+    Supported targets are IEEJ, IEEE, international computational-
+    electromagnetics conferences (IGTE/COMPUMAG/CEFC), and accelerator venues.
     The function classifies a concrete venue name, returns its language and
     keyword lane, and rejects unrelated venue recommendations. Japanese and
     English readability are always evaluated independently and never averaged.
     """
     requested = target_venue.strip()
-    supported = ["ieej", "ieee", "accelerator"]
+    supported = ["ieej", "ieee", "electromagnetics", "accelerator"]
     if not requested:
         return {
             "status": "selection_required",
@@ -229,8 +244,9 @@ def paper_writing_target_venue_policy(target_venue: str = "") -> dict:
             "target_category": None,
             "supported_categories": supported,
             "recommendation": (
-                "Choose a concrete target in IEEJ, IEEE, or the accelerator "
-                "community before applying venue-specific submission rules."
+                "Choose a concrete target in IEEJ, IEEE, computational "
+                "electromagnetics, or the accelerator community before "
+                "applying venue-specific submission rules."
             ),
             "bilingual_policy": (
                 "Japanese and English are separate review lanes; scores are "
@@ -241,7 +257,7 @@ def paper_writing_target_venue_policy(target_venue: str = "") -> dict:
     normalized = requested.casefold().strip()
     matched_category = None
     # Accelerator aliases take precedence for names such as IEEE PAC.
-    for category in ("accelerator", "ieej", "ieee"):
+    for category in ("accelerator", "ieej", "electromagnetics", "ieee"):
         aliases = _TARGET_VENUE_PROFILES[category]["aliases"]
         if any(_target_venue_alias_matches(normalized, alias) for alias in aliases):
             matched_category = category
@@ -256,7 +272,8 @@ def paper_writing_target_venue_policy(target_venue: str = "") -> dict:
             "supported_categories": supported,
             "recommendation": (
                 "Do not optimize this manuscript for an unrelated venue. "
-                "Retarget it to IEEJ, IEEE, or an accelerator-community venue."
+                "Retarget it to IEEJ, IEEE, a computational-electromagnetics "
+                "conference, or an accelerator-community venue."
             ),
             "bilingual_policy": (
                 "Japanese and English are separate review lanes; scores are "
@@ -683,50 +700,24 @@ def paper_writing_check_citation_usage(tex_path: str,
 
     引数:
         tex_path: 論文本体の .tex (メインファイル)
-        bib_path: .bib ファイル (省略時は tex_path と同ディレクトリの *.bib)
+        bib_path: .bib ファイル。省略時は package 内の正典 references.bib。
     """
-    p = pathlib.Path(tex_path)
-    if not p.exists():
-        return {"error": f"tex file not found: {tex_path}"}
-    text = p.read_text(encoding="utf-8", errors="replace")
+    from ._citation_verify import paper_writing_check_citation_keys_exist
 
-    # Collect all \cite{...} keys (multiple keys in one \cite separated by ,)
-    cite_keys: set[str] = set()
-    for m in re.finditer(r"\\(?:cite|citep|citet|autocite|parencite)\*?"
-                         r"(?:\[[^\]]*\])?\{([^}]+)\}", text):
-        for k in m.group(1).split(","):
-            k = k.strip()
-            if k:
-                cite_keys.add(k)
-
-    # Find bib file
-    if bib_path:
-        bibs = [pathlib.Path(bib_path)]
-    else:
-        bibs = list(p.parent.glob("*.bib"))
-    if not bibs:
-        return {
-            "error": "no .bib file found (pass bib_path= or place *.bib next to tex)"
-        }
-
-    bib_entries: set[str] = set()
-    for bp in bibs:
-        btext = bp.read_text(encoding="utf-8", errors="replace")
-        for m in re.finditer(r"@\w+\s*\{\s*([^,\s]+)", btext):
-            bib_entries.add(m.group(1))
-
-    missing_in_bib = cite_keys - bib_entries  # cited but not in bib
-    unused_in_tex = bib_entries - cite_keys   # in bib but not cited
+    result = paper_writing_check_citation_keys_exist(tex_path, bib_path)
+    if "error" in result:
+        return result
 
     return {
-        "tex_file": str(p),
-        "bib_files": [str(b) for b in bibs],
-        "total_citations": len(cite_keys),
-        "total_bib_entries": len(bib_entries),
-        "missing_in_bib_count": len(missing_in_bib),
-        "missing_in_bib": sorted(missing_in_bib)[:20],
-        "unused_in_tex_count": len(unused_in_tex),
-        "unused_in_tex": sorted(unused_in_tex)[:20],
+        "tex_file": result["tex_path"],
+        "bib_files": [result["bib_path"]],
+        "total_citations": result["n_cited_keys"],
+        "total_bib_entries": result["n_bib_entries"],
+        "missing_in_bib_count": result["n_missing_in_bib"],
+        "missing_in_bib": result["all_missing_in_bib"],
+        "unused_in_tex_count": result["n_unused_in_tex"],
+        "unused_in_tex": result["all_unused_in_tex"],
+        "status": result["status"],
         "recommendation": (
             "missing_in_bib があれば .bib に追加。"
             "unused_in_tex が 5 件以上ある場合は refs を整理 "
@@ -924,7 +915,8 @@ def _paper_writing_split_conclusion(src: str) -> tuple[str, str, str]:
     )
     heading_name = re.compile(
         r"^(?:\d+(?:[.\u30fb・]\d+)*[.\u30fb　 ]*)?"
-        r"(?:conclusions?|summary|closing remarks|結論|まとめ|結語)\s*$",
+        r"(?:conclusions?(?:\s+and\s+future\s+work)?|concluding remarks|"
+        r"summary(?:\s+and\s+outlook)?|closing remarks|結論|まとめ|結語)\s*$",
         re.IGNORECASE,
     )
     matches = list(tex_heading.finditer(src))
@@ -946,7 +938,8 @@ def _paper_writing_split_conclusion(src: str) -> tuple[str, str, str]:
     line_heading = re.compile(
         r"(?im)^(?:#{1,4}\s*)?"
         r"((?:\d+(?:\.\d+)*[.\s]*)?"
-        r"(?:conclusions?|summary|closing remarks|結論|まとめ|結語))"
+        r"(?:conclusions?(?:\s+and\s+future\s+work)?|concluding remarks|"
+        r"summary(?:\s+and\s+outlook)?|closing remarks|結論|まとめ|結語))"
         r"\s*$"
     )
     match = line_heading.search(src)
@@ -989,8 +982,11 @@ def _paper_writing_conclusion_numeric_claims(src: str) -> set[str]:
 
 def _paper_writing_conclusion_symbols(src: str) -> set[str]:
     """Extract subscripted Latin symbols from inline/display mathematics."""
-    math_parts = re.findall(r"\$([^$]+)\$|\\\((.+?)\\\)|\\\[(.+?)\\\]", src,
-                            flags=re.DOTALL)
+    math_parts = re.findall(
+        r"\$([^$]+)\$|\\\((.+?)\\\)|(?<!\\)\\\[(.+?)\\\]",
+        src,
+        flags=re.DOTALL,
+    )
     joined = " ".join(part for group in math_parts for part in group if part)
     symbols = re.findall(r"\b[A-Za-z]+_\{?[A-Za-z0-9]+\}?", joined)
     return {re.sub(r"[{}\s]", "", symbol) for symbol in symbols}
@@ -1016,7 +1012,11 @@ def paper_writing_check_conclusion_first_use(
     結論に持ち込んだ可能性がある。本ツールはその候補を抽出する。
     """
     src, source_path = _paper_writing_text_or_path(text_or_path)
-    src = _paper_writing_strip_comments(src)
+    looks_like_tex = (
+        str(source_path).lower().endswith(".tex") if source_path
+        else "\\" in src
+    )
+    src = _paper_writing_strip_comments(src) if looks_like_tex else src
     before, conclusion, heading = _paper_writing_split_conclusion(src)
     if not conclusion.strip():
         return {
@@ -1140,9 +1140,7 @@ def paper_writing_check_abstract_background_ratio(abstract: str) -> dict:
     """
     if not abstract.strip():
         return {"error": "abstract is empty"}
-    # Split sentences: handle both .  and 。
-    sentences = re.split(r"(?<=[.。])\s+", abstract.strip())
-    sentences = [s for s in sentences if s.strip()]
+    sentences = split_mixed_sentences(abstract.strip())
     if not sentences:
         return {"error": "no sentences found"}
 
@@ -1236,7 +1234,10 @@ def paper_writing_check_abstract_no_math_no_citation(abstract: str) -> dict:
     inline_paren_re = re.compile(r"\\\(.+?\\\)", flags=re.DOTALL)
     # Display math: \[...\] and the equation/align/eqnarray/gather/multline
     # environments (and their starred variants).
-    display_bracket_re = re.compile(r"\\\[.+?\\\]", flags=re.DOTALL)
+    # A display-math opener is one backslash plus ``[``.  Exclude the
+    # ``\\[2pt]`` line-break spacing form, whose ``[`` is preceded by the
+    # second backslash of the line-break command.
+    display_bracket_re = re.compile(r"(?<!\\)\\\[.+?\\\]", flags=re.DOTALL)
     display_env_re = re.compile(
         r"\\begin\{(equation\*?|align\*?|eqnarray\*?|gather\*?|multline\*?|"
         r"flalign\*?|alignat\*?)\}.+?\\end\{\1\}",
@@ -1513,7 +1514,9 @@ def _paper_writing_plain_text(src: str) -> str:
     txt = re.sub(r"\\cite[a-zA-Z]*\*?(?:\[[^\]]*\])?\{[^{}]*\}", " ", txt)
     txt = re.sub(r"\\ref\{[^{}]*\}|\\eqref\{[^{}]*\}|\\label\{[^{}]*\}", " ", txt)
     txt = re.sub(r"\$[^$]*\$", " MATH ", txt)
-    txt = re.sub(r"\\\(.+?\\\)|\\\[.+?\\\]", " MATH ", txt, flags=re.DOTALL)
+    txt = re.sub(
+        r"\\\(.+?\\\)|(?<!\\)\\\[.+?\\\]", " MATH ", txt, flags=re.DOTALL
+    )
     txt = re.sub(r"\\[a-zA-Z]+\*?(?:\[[^\]]*\])?", " ", txt)
     txt = re.sub(r"[{}]", " ", txt)
     txt = txt.replace(r"\%", "%")
@@ -1549,7 +1552,7 @@ def _paper_writing_readability_prose(src: str) -> str:
             txt,
         )
 
-    txt = re.sub(r"\\\[[\s\S]*?\\\]", _keep_newlines, txt)
+    txt = re.sub(r"(?<!\\)\\\[[\s\S]*?\\\]", _keep_newlines, txt)
     txt = re.sub(r"\$\$[\s\S]*?\$\$", _keep_newlines, txt)
     txt = re.sub(r"\$[^$\n]*\$", " MATH ", txt)
     txt = re.sub(r"\\\([^\n]*?\\\)", " MATH ", txt)
@@ -2383,7 +2386,7 @@ def paper_writing_check_digest_human_review_triggers(
         flags=re.IGNORECASE,
     )
     unnumbered_math_re = re.compile(
-        r"\\\[(?P<bracket>.*?)\\\]|"
+        r"(?<!\\)\\\[(?P<bracket>.*?)\\\]|"
         r"\\begin\{(?P<env>equation\*|align\*|gather\*|multline\*)\}"
         r"(?P<starbody>.*?)\\end\{(?P=env)\}|"
         r"(?<!\\)\$\$(?P<dollar>.*?)(?<!\\)\$\$",
@@ -2842,9 +2845,9 @@ def paper_writing_check_imrad_balance(text: str) -> dict:
         "Abstract":     r"(?:\\section\*?\{.*?(?:Abstract|要旨|概要)\}|^#+\s*(?:Abstract|要旨|概要))",
         "Introduction": r"(?:\\section\*?\{.*?(?:Introduction|序論|はじめに|緒言)\}|^#+\s*(?:Introduction|序論|はじめに))",
         "Method":       r"(?:\\section\*?\{.*?(?:Method|Methods|手法|方法|実験方法)\}|^#+\s*(?:Method|手法|方法))",
-        "Result":       r"(?:\\section\*?\{.*?(?:Result|Results|結果|実験結果)\}|^#+\s*(?:Result|結果))",
+        "Result":       r"(?:\\section\*?\{.*?(?:Results?\s+and\s+Discussion|Results?|結果|実験結果)\}|^#+\s*(?:Results?\s+and\s+Discussion|Results?|結果))",
         "Discussion":   r"(?:\\section\*?\{.*?(?:Discussion|考察|議論)\}|^#+\s*(?:Discussion|考察))",
-        "Conclusion":   r"(?:\\section\*?\{.*?(?:Conclusion|結論|結言|まとめ)\}|^#+\s*(?:Conclusion|結論|まとめ))",
+        "Conclusion":   r"(?:\\section\*?\{.*?(?:Conclusions?|Concluding\s+Remarks|Summary\s+and\s+Outlook|結論|結言|まとめ)\}|^#+\s*(?:Conclusions?|Concluding\s+Remarks|Summary\s+and\s+Outlook|結論|まとめ))",
     }
     # Find positions
     positions = {}
@@ -2864,6 +2867,14 @@ def paper_writing_check_imrad_balance(text: str) -> dict:
     section_lengths = {}
     for i, (name, start) in enumerate(ordered):
         end = ordered[i+1][1] if i + 1 < len(ordered) else len(text)
+        if i + 1 == len(ordered):
+            bibliography = re.search(
+                r"\\begin\{thebibliography\}|\\bibliography(?:style)?\s*\{",
+                text[start:],
+                re.IGNORECASE,
+            )
+            if bibliography:
+                end = min(end, start + bibliography.start())
         section_lengths[name] = end - start
 
     total = sum(section_lengths.values())
@@ -2957,7 +2968,7 @@ def paper_writing_check_self_citation_ratio(tex_path: str,
 
     Args:
         tex_path: .tex ファイル
-        bib_path: .bib ファイル (省略時は同ディレクトリの *.bib)
+        bib_path: .bib ファイル。省略時は package 内の正典 references.bib。
         author_last_names: 自著と判定する著者の姓 (カンマ区切り、
                             例: "Sugahara,Hane,Hollaus")
 
@@ -2967,96 +2978,41 @@ def paper_writing_check_self_citation_ratio(tex_path: str,
     p = pathlib.Path(tex_path)
     if not p.exists():
         return {"error": f"tex file not found: {tex_path}"}
-    tex = p.read_text(encoding="utf-8", errors="replace")
-    if bib_path:
-        bibs = [pathlib.Path(bib_path)]
-    else:
-        bibs = list(p.parent.glob("*.bib"))
-    if not bibs:
-        return {"error": "no .bib file found"}
+    tex = p.read_text(encoding="utf-8", errors="strict")
+    if not bib_path:
+        from ..bibliography.plans.T14_canonical import CANONICAL
+        bib_path = str(CANONICAL)
+    bibs = [pathlib.Path(bib_path)]
+    if not bibs[0].is_file():
+        return {"error": f"bib file not found: {bib_path}"}
 
     authors = {a.strip() for a in author_last_names.split(",") if a.strip()}
     if not authors:
         return {"error": "provide author_last_names (comma-separated)"}
 
-    # Parse bib entries with a brace-balanced scanner.
-    # Naive regex like r"@\w+\s*\{([^@]*)" breaks on stray '@' inside fields
-    # (e.g. url = {...@doi.org/...}, email = {foo@bar}), and on nested braces
-    # inside author fields (e.g. {Sugahara, K. and Hane, {M.}}).
-    def _extract_balanced(text: str, start: int) -> tuple[int, str]:
-        """Given text[start] == '{', return (end_index_after_closing_brace, inner).
-        Tracks brace depth, ignoring braces in comments is not needed for .bib.
-        Returns (-1, "") if no matching close brace is found."""
-        assert text[start] == "{"
-        depth = 0
-        i = start
-        n = len(text)
-        while i < n:
-            c = text[i]
-            if c == "{":
-                depth += 1
-            elif c == "}":
-                depth -= 1
-                if depth == 0:
-                    return i + 1, text[start + 1 : i]
-            i += 1
-        return -1, ""
+    from ..bibliography._bibparse import read_bib_file
 
-    bib_entries = {}
+    bib_entries: dict[str, str] = {}
     for bp in bibs:
-        btxt = bp.read_text(encoding="utf-8", errors="replace")
-        # Find each @type{ header.
-        for hdr in re.finditer(r"@\w+\s*\{", btxt):
-            brace_start = hdr.end() - 1  # position of '{'
-            entry_end, entry_body = _extract_balanced(btxt, brace_start)
-            if entry_end < 0:
-                continue
-            # The entry body starts with:  <whitespace><cite_key>,<fields...>
-            key_match = re.match(r"\s*([^,\s]+)\s*,", entry_body)
-            if not key_match:
-                continue
-            key = key_match.group(1)
-            fields_region = entry_body[key_match.end():]
-            # Find author = { ... } with brace balancing (value may contain
-            # nested braces like {Sugahara, K. and Hane, {M.}}).
-            author_value = ""
-            for am in re.finditer(r"author\s*=\s*", fields_region, re.IGNORECASE):
-                vstart = am.end()
-                if vstart >= len(fields_region):
-                    break
-                vc = fields_region[vstart]
-                if vc == "{":
-                    _, inner = _extract_balanced(fields_region, vstart)
-                    author_value = inner
-                    break
-                if vc == '"':
-                    # Quoted value: up to the next unescaped ".
-                    end_q = fields_region.find('"', vstart + 1)
-                    if end_q > 0:
-                        author_value = fields_region[vstart + 1 : end_q]
-                    break
-                # Bare value (unusual): up to comma or end of entry.
-                end_bare = re.search(r"[,\n]", fields_region[vstart:])
-                author_value = (
-                    fields_region[vstart : vstart + end_bare.start()]
-                    if end_bare
-                    else fields_region[vstart:]
-                )
-                break
-            bib_entries[key] = author_value
+        for entry in read_bib_file(bp):
+            if entry.key:
+                bib_entries[entry.key] = entry.fields.get("author", "")
 
     # Find all \cite{...} keys
     cite_keys = set()
-    for m in re.finditer(r"\\(?:cite|citep|citet|parencite|autocite)\*?(?:\[[^\]]*\])?\{([^}]+)\}", tex):
-        for k in m.group(1).split(","):
-            if k.strip():
-                cite_keys.add(k.strip())
+    from ._citation_verify import _collect_cited_keys
+    cite_keys.update(_collect_cited_keys(tex))
 
     total = len(cite_keys)
     self_cites = []
     for key in cite_keys:
         author_field = bib_entries.get(key, "")
-        if any(a in author_field for a in authors):
+        entry_surnames = set()
+        for author in re.split(r"\s+and\s+", author_field, flags=re.IGNORECASE):
+            author = author.strip().strip("{}")
+            surname = author.split(",", 1)[0] if "," in author else author.split()[-1]
+            entry_surnames.add(re.sub(r"[^\w-]", "", surname).casefold())
+        if any(a.casefold() in entry_surnames for a in authors):
             self_cites.append(key)
 
     ratio = len(self_cites) / max(1, total)
@@ -3105,7 +3061,9 @@ def paper_writing_check_figure_forward_reference(tex_path: str) -> dict:
         r"\\(?:ref|autoref|Cref|cref|vref)\*?\{((?:fig|tab|table):[^}]+)\}",
         tex,
     ):
-        refs_used.add(m.group(1))
+        refs_used.update(
+            key.strip() for key in m.group(1).split(",") if key.strip()
+        )
 
     orphan_labels = sorted(labels_defined - refs_used)
     dangling_refs = sorted(refs_used - labels_defined)
@@ -3220,7 +3178,7 @@ def paper_writing_check_equation_numbering(tex_path: str) -> dict:
     equation_envs = len(
         re.findall(
             r"\\begin\{(?:equation|align|gather|multline|eqnarray|flalign)\*?\}"
-            r"|\\\[",
+            r"|(?<!\\)\\\[",
             tex,
         )
     )
@@ -3230,9 +3188,12 @@ def paper_writing_check_equation_numbering(tex_path: str) -> dict:
         eq_labels.add(m.group(1))
     # Find equation references
     eq_refs = {}
-    for m in re.finditer(r"\\(?:ref|eqref|autoref|Cref)\*?\{(eq:[^}]+)\}", tex):
-        key = m.group(1)
-        eq_refs[key] = eq_refs.get(key, 0) + 1
+    for m in re.finditer(
+        r"\\(?:ref|eqref|autoref|[Cc]ref|vref)\*?\{([^}]+)\}", tex
+    ):
+        for key in (part.strip() for part in m.group(1).split(",")):
+            if key.startswith("eq:"):
+                eq_refs[key] = eq_refs.get(key, 0) + 1
 
     # Dangling refs (referenced but not labeled)
     dangling = [k for k in eq_refs if k not in eq_labels]
@@ -3471,23 +3432,15 @@ def paper_writing_lint_reference_format(bib_path: str) -> dict:
     p = pathlib.Path(bib_path)
     if not p.exists():
         return {"error": f"bib not found: {bib_path}"}
-    txt = p.read_text(encoding="utf-8", errors="replace")
+    from ..bibliography._bibparse import read_bib_file
 
     entries = []
-    # Parse each @article{...} block
-    for m in re.finditer(r"@(\w+)\s*\{\s*([^,\s]+)\s*,([^@]*)(?=@|\Z)",
-                          txt + "@END", re.DOTALL):
-        entry_type = m.group(1).lower()
-        key = m.group(2)
-        if entry_type == "end":
+    for entry in read_bib_file(p):
+        if not entry.key:
             continue
-        body = m.group(3)
-        fields = {}
-        for fm in re.finditer(
-            r"(\w+)\s*=\s*[{\"]([^}\"]*)[}\"]",
-            body,
-        ):
-            fields[fm.group(1).lower()] = fm.group(2)
+        entry_type = entry.kind
+        key = entry.key
+        fields = entry.fields
         missing = []
         if not fields.get("year"):
             missing.append("year")
@@ -3529,6 +3482,9 @@ _REPETITION_STOP_WORDS = {
     "研究", "本研究", "本稿", "本論文", "論文", "結果", "方法",
     "実験", "解析", "評価", "検討", "考察", "目的",
     "図", "表", "式", "Fig", "Table", "Eq",
+    "a", "an", "and", "are", "as", "at", "be", "by", "for", "from",
+    "in", "is", "it", "of", "on", "or", "that", "the", "this", "to",
+    "was", "were", "with",
 }
 
 
@@ -3575,9 +3531,10 @@ def paper_writing_check_word_repetition(
     tokens: list[tuple[str, int]] = []
     for m in token_re.finditer(text):
         w = m.group(0)
-        if w in _REPETITION_STOP_WORDS:
+        if w in _REPETITION_STOP_WORDS or w.casefold() in _REPETITION_STOP_WORDS:
             continue
-        tokens.append((w, m.start()))
+        tokens.append((w.casefold() if re.fullmatch(r"[A-Za-z0-9-]+", w) else w,
+                       m.start()))
 
     findings = []
     seen_pairs: set[tuple[str, int, int]] = set()
@@ -3625,15 +3582,15 @@ _SENTENCE_END_PATTERNS = [
     ("だ",       r"だ$"),
     ("ある",     r"(?<!で)ある$"),
     ("ない",     r"ない$"),
-    ("した",     r"した$"),
     ("された",   r"された$"),
+    ("示した",   r"示した$"),
+    ("考えられる", r"考えられる$"),
+    ("した",     r"した$"),
     ("する",     r"する$"),
     ("される",   r"される$"),
     ("られる",   r"られる$"),
-    ("考えられる", r"考えられる$"),
     ("思われる", r"思われる$"),
     ("示す",     r"示す$"),
-    ("示した",   r"示した$"),
     ("得た",     r"得た$"),
     ("得る",     r"得る$"),
 ]
@@ -3666,7 +3623,7 @@ def paper_writing_check_sentence_ending_variety(
     """
     import math as _math
     import re as _re
-    sentences = [s.strip() for s in _re.split(r"[。．\.!?！？]", text) if s.strip()]
+    sentences = split_mixed_sentences(text)
     if not sentences:
         return {
             "total_sentences": 0,
@@ -3679,6 +3636,7 @@ def paper_writing_check_sentence_ending_variety(
 
     labels: list[str] = []
     for s in sentences:
+        s = s.rstrip("。．.!?！？ \t")
         tail = s[-12:] if len(s) > 12 else s
         hit = "other"
         for lbl, pat in _SENTENCE_END_PATTERNS:
@@ -4260,7 +4218,9 @@ def paper_writing_check_pdf_advanced_anomalies(
     references_starts: dict[int, int] = {}
     in_references_from: "int | None" = None
     for pno, txt in enumerate(page_texts):
-        m_ref = re.search(r"\b(?:REFERENCES|References)\b", txt)
+        m_ref = re.search(
+            r"(?im)^[ \t]*(?:\d+[.)]?[ \t]+)?references[ \t]*$", txt
+        )
         if m_ref:
             references_starts[pno] = m_ref.start()
             if in_references_from is None:
@@ -4372,7 +4332,7 @@ def paper_writing_check_pdf_advanced_anomalies(
     # ============================================================
     acronym_issues: list[dict] = []
     re_acronym_def = re.compile(
-        r"((?:[A-Z][A-Za-z\-]+\s+){1,6})\(([A-Z][A-Z0-9]{1,5})\)"
+        r"((?:[A-Za-z][A-Za-z\-]+\s+){1,8})\(([A-Z][A-Z0-9]{1,5})\)"
     )
     # Real acronym = at least 2 letters, all uppercase, optional trailing
     # digit suffix is allowed only if it's at the END (so `A1` matches but
@@ -4509,7 +4469,7 @@ def paper_writing_check_pdf_advanced_anomalies(
         stripped yields a known acronym."""
         for n_strip in (1, 2):
             tail = acr[n_strip:]
-            if tail in SKIP_ACRONYMS or tail in acronym_defs:
+            if len(tail) >= 2 and (tail in SKIP_ACRONYMS or tail in acronym_defs):
                 return True
         return False
 
@@ -5784,12 +5744,9 @@ def paper_writing_check_misleading_ratio_claims(
     )
 
     sentences = [
-        sentence.strip()
-        for sentence in re.split(
-            r"(?<=[。！？!?])\s*|(?<=[.!?])\s+(?=[A-Z0-9])|[\r\n]+",
-            text,
-        )
-        if sentence.strip()
+        sentence
+        for line in text.splitlines() or [text]
+        for sentence in split_mixed_sentences(line)
     ]
     findings = []
     ratio_expression_count = 0
