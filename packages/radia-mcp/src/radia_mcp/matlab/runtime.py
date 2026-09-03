@@ -195,6 +195,21 @@ _RETIRED_UNSAFE_C_ABI_SYMBOLS = (
 )
 
 _PYBIND_CLASS_EXCLUSIONS = {
+    **{
+        f"{name}.{member}": (
+            "NGSolve CoefficientFunction adapter for Kelvin-transformed Radia "
+            "fields; MATLAB owns this batch-only NGSolve composition through "
+            "radia.python.openBoundary and the declared open-boundary "
+            "python-fallback contract"
+        )
+        for name in (
+            "KelvinRadiaVectorPotential",
+            "KelvinRadiaFluxDensity",
+            "KelvinRadiaFieldStrength",
+            "KelvinRadiaScalarPotential",
+        )
+        for member in ("__binding__", "__init__")
+    },
     "_PEECBuilderInternal.__binding__": "implementation holder",
     "_HACApKPEECManagerInternal.__binding__": "implementation holder",
     "_HACApKBEMManagerInternal.__binding__": "implementation holder",

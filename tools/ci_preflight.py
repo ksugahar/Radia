@@ -267,6 +267,14 @@ def gate_radia_mcp_matrix():
     test_env = {
         "RADIA_MCP_FORCE_MINIMAL": "1",
         "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+        # Tests that spawn a child Python must resolve the same checkout as
+        # the parent pytest process, even in an isolated preflight venv.
+        "PYTHONPATH": os.pathsep.join(
+            part for part in (
+                os.path.join(MCP, "src"),
+                os.environ.get("PYTHONPATH", ""),
+            ) if part
+        ),
     }
     if selected_tests != ["tests"]:
         test_env["RADIA_MCP_CI_SELECTION_JSON"] = json.dumps(selected_tests)

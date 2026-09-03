@@ -1675,7 +1675,8 @@ mxArray* Commands() {
         "hdiv.planar_evaluator.create", "hdiv.planar_evaluator.destroy",
         "hdiv.planar_evaluator.field", "hdiv.planar_evaluator.az",
         "hdiv.planar_evaluator.stats", "hdiv.planar_evaluator.as_coefficient",
-        "radia.ObjHexahedron", "radia.ObjTetrahedron", "radia.ObjWedge",
+        "radia.ObjHexahedron", "radia.ObjTetrahedron",
+        "radia.ObjTetrahedronCurrent", "radia.ObjWedge",
         "radia.ObjPyramid", "radia.ObjThckPgn", "radia.ObjCylMag",
         "radia.ObjRecCur", "radia.ObjArcCur", "radia.ObjRaceTrk",
         "radia.ObjFlmCur", "radia.ObjArcPgnMag", "radia.ObjBckg",
@@ -10290,31 +10291,36 @@ void PlanarFieldAsCoefficient(int nlhs, mxArray* plhs[], int nrhs,
     plhs[0] = Uint64Output(RegisterCoefficient(std::move(coefficient)));
 }
 
-int CreatePolyhedron(const mxArray* vertices_value, const mxArray* magnetization_value,
+int CreatePolyhedron(const mxArray* vertices_value, const mxArray* source_value,
                      int expected_vertices, const std::vector<int>& faces,
-                     const std::vector<int>& face_lengths) {
+                     const std::vector<int>& face_lengths,
+                     bool current_source = false) {
     std::size_t rows = 0, cols = 0;
     auto vertices = RealMatrix(vertices_value, rows, cols, "vertices");
     if (rows != static_cast<std::size_t>(expected_vertices) || cols != 3)
         BadArgument("vertices have the wrong shape for this element type");
-    auto magnetization = FixedRealVector(magnetization_value, 3, "magnetization");
+    auto source = FixedRealVector(
+        source_value, 3, current_source ? "current_density" : "magnetization");
     std::vector<int> mutable_faces = faces;
     std::vector<int> mutable_lengths = face_lengths;
+    double magnetization[3] = {0};
     double linear_m[9] = {0};
     double current[3] = {0};
     double linear_current[9] = {0};
+    std::copy(source.begin(), source.end(),
+              current_source ? current : magnetization);
     int handle = 0;
     CheckRadia(RadObjPolyhdr(
         &handle, vertices.data(), expected_vertices, mutable_faces.data(),
         mutable_lengths.data(), static_cast<int>(mutable_lengths.size()),
-        magnetization.data(), linear_m, current, linear_current));
+        magnetization, linear_m, current, linear_current));
     return handle;
 }
 
 void RadiaPolyhedron(const std::string& command, int nlhs, mxArray* plhs[],
                      int nrhs, const mxArray* prhs[]) {
     CheckArity(nrhs, 3, nlhs, 1,
-        "handle = radia_mex('radia.Obj<Element>', vertices, magnetization)");
+        "handle = radia_mex('radia.Obj<Element>', vertices, source_vector)");
     int handle = 0;
     if (command == "radia.ObjHexahedron") {
         handle = CreatePolyhedron(prhs[1], prhs[2], 8,
@@ -10323,6 +10329,9 @@ void RadiaPolyhedron(const std::string& command, int nlhs, mxArray* plhs[],
     } else if (command == "radia.ObjTetrahedron") {
         handle = CreatePolyhedron(prhs[1], prhs[2], 4,
             {1,3,2, 1,2,4, 2,3,4, 3,1,4}, {3,3,3,3});
+    } else if (command == "radia.ObjTetrahedronCurrent") {
+        handle = CreatePolyhedron(prhs[1], prhs[2], 4,
+            {1,3,2, 1,2,4, 2,3,4, 3,1,4}, {3,3,3,3}, true);
     } else if (command == "radia.ObjWedge") {
         handle = CreatePolyhedron(prhs[1], prhs[2], 6,
             {1,3,2, 4,5,6, 1,2,5,4, 2,3,6,5, 3,1,4,6}, {3,3,4,4,4});
@@ -12407,6 +12416,7 @@ void Dispatch(const std::string& command, int nlhs, mxArray* plhs[], int nrhs,
         PlanarFieldStats(nlhs, plhs, nrhs, prhs);
     else if (command == "radia.ObjHexahedron" ||
              command == "radia.ObjTetrahedron" ||
+             command == "radia.ObjTetrahedronCurrent" ||
              command == "radia.ObjWedge" || command == "radia.ObjPyramid")
         RadiaPolyhedron(command, nlhs, plhs, nrhs, prhs);
     else if (command == "radia.ObjThckPgn" || command == "radia.ObjCylMag" ||

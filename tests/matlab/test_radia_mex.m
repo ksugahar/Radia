@@ -2216,6 +2216,20 @@ verifyGreaterThan(testCase, norm(B, "fro"), 0);
 clear cleanup
 end
 
+function testTetrahedronCurrentSource(testCase)
+radia.UtiDelAll();
+cleanup = onCleanup(@() radia.UtiDelAll());
+vertices = [0, 0, 0; 1, 0, 0; 0, 1, 0; 0, 0, 1];
+object = radia.ObjTetrahedronCurrent(vertices, [0, 0, 1e6]);
+
+verifyEqual(testCase, radia.ObjGeoVol(object), 1 / 6, "AbsTol", 1e-14);
+B = radia.Fld(object, "b", [2, 2, 2]);
+verifySize(testCase, B, [1, 3]);
+verifyTrue(testCase, all(isfinite(B)));
+verifyGreaterThan(testCase, norm(B), 0);
+clear cleanup
+end
+
 function testLegacyObjectsAndTransforms(testCase)
 radia.UtiDelAll();
 cleanup = onCleanup(@() radia.UtiDelAll());
