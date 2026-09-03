@@ -777,6 +777,8 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
     applicant_internal_abstractions: list[dict] = []
     vague_readiness_claims: list[dict] = []
     scope_without_deliverables: list[dict] = []
+    undefined_purpose_scope_aliases: list[dict] = []
+    bare_staged_processes: list[dict] = []
     takeaways_after_evidence: list[dict] = []
     representation_pattern = re.compile(
         r"(?P<answer>設計則|選択則|指針|適用条件|成立条件|知見|成果)"
@@ -806,6 +808,20 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
         r"(?:実証|検証|解明|確立|同定|導出|提示|実装|構築|開発|評価|"
         r"明らかに|条件を示|法則を示|知見を得)"
     )
+    scope_alias_definition_pattern = re.compile(
+        r"以下[「『]?"
+        r"(?P<alias>[二三四五六七八九十2-9２-９](?:課題|対象|手法))"
+        r"[」』]?(?:という|と呼ぶ)"
+    )
+    purpose_scope_alias_pattern = re.compile(
+        r"(?:研究)?目的は[、，][^。！？\n]{0,180}"
+        r"(?P<alias>[二三四五六七八九十2-9２-９](?:課題|対象|手法))"
+    )
+    bare_staged_process_pattern = re.compile(
+        r"(?<![のとび・])(?P<process>結合|統合|連携|活用|検証|比較|評価)を"
+        r"(?P<count>[一二三四五六七八九十0-9０-９]+)段階に分ける"
+    )
+    defined_scope_aliases: set[str] = set()
     for index, sentence in enumerate(sentences):
         local_jp = re.findall(r"[一-龥々〆ヵヶぁ-んァ-ヶー]", sentence)
         local_kanji = re.findall(r"[一-龥々〆ヵヶ]", sentence)
@@ -876,6 +892,23 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
         ):
             scope_without_deliverables.append({
                 "index": index,
+                "excerpt": sentence[:240],
+            })
+        for match in scope_alias_definition_pattern.finditer(sentence):
+            defined_scope_aliases.add(match.group("alias"))
+        for match in purpose_scope_alias_pattern.finditer(sentence):
+            alias = match.group("alias")
+            if alias not in defined_scope_aliases:
+                undefined_purpose_scope_aliases.append({
+                    "index": index,
+                    "alias": alias,
+                    "excerpt": sentence[:240],
+                })
+        for match in bare_staged_process_pattern.finditer(sentence):
+            bare_staged_processes.append({
+                "index": index,
+                "process": match.group("process"),
+                "stages": match.group("count"),
                 "excerpt": sentence[:240],
             })
 
@@ -986,6 +1019,39 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
             ),
             severity="HIGH",
             examples=scope_without_deliverables[:5],
+        )
+
+    if undefined_purpose_scope_aliases:
+        first = undefined_purpose_scope_aliases[0]
+        add_risk(
+            "purpose_scope_alias_before_definition",
+            first["excerpt"],
+            (
+                "研究目的が、対象を名指しする前に『二課題』等の局所的な"
+                "まとめ語へ依存しており、審査者が前文へ戻る必要がある。"
+            ),
+            (
+                "目的の冒頭で対象を具体名で列挙し、その場で『以下「二課題」"
+                "という』と定義してから、以降の文でまとめ語を用いる。"
+            ),
+            severity="HIGH",
+            examples=undefined_purpose_scope_aliases[:5],
+        )
+
+    if bare_staged_processes:
+        first = bare_staged_processes[0]
+        add_risk(
+            "bare_process_divided_into_stages",
+            first["excerpt"],
+            (
+                "『結合を四段階に分ける』のように抽象的な工程名だけを"
+                "段階化しており、各段階で何を整備・検証するかが見えない。"
+            ),
+            (
+                "『結合条件の整備と検証』のように、段階化する作業対象と"
+                "観察可能な操作を名詞で示してから段階数を述べる。"
+            ),
+            examples=bare_staged_processes[:5],
         )
 
     layer_paragraphs: list[dict] = []
@@ -1133,6 +1199,12 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
             "vague_readiness_status_count": len(vague_readiness_claims),
             "required_scope_without_deliverable_count": len(
                 scope_without_deliverables
+            ),
+            "purpose_scope_alias_before_definition_count": len(
+                undefined_purpose_scope_aliases
+            ),
+            "bare_process_divided_into_stages_count": len(
+                bare_staged_processes
             ),
             "three_layer_paragraph_count": len(layer_paragraphs),
             "takeaway_after_evidence_count": len(takeaways_after_evidence),
@@ -1481,6 +1553,13 @@ _REVIEWER_MOMENTUM_EVIDENCE_PATTERN = re.compile(
     r"(?:\d[\d,.]*(?:\\?%|年|月|日|時間|件|回|倍|円|人)|文献|"
     r"報告|実測|実証|実装|確認|採択|査読|共同研究|市場|既に|済み)"
 )
+_REVIEWER_MOMENTUM_LEADING_PURPOSE_PATTERN = re.compile(
+    r"^[^。！？\n]{2,42}(?:ため|には)[、，]"
+)
+_REVIEWER_MOMENTUM_NEGATIVE_DECISION_PATTERN = re.compile(
+    r"(?:判断|選択|比較|評価|確定|絞り込)[^。！？\n]{0,28}"
+    r"(?:できない|困難|難しい)"
+)
 
 
 def grant_writing_reviewer_momentum_check(text: str) -> dict:
@@ -1592,6 +1671,24 @@ def grant_writing_reviewer_momentum_check(text: str) -> dict:
         }
         item.update(details)
         risks.append(item)
+
+    first_sentence = lead_sentences[0]
+    if (
+        _REVIEWER_MOMENTUM_NEGATIVE_DECISION_PATTERN.search(first_sentence)
+        and not _REVIEWER_MOMENTUM_LEADING_PURPOSE_PATTERN.search(first_sentence)
+    ):
+        add_risk(
+            "decision_value_hidden_in_negative_opening",
+            first_sentence,
+            (
+                "冒頭が『判断できない』という障壁から始まり、何のために"
+                "その障壁を除くのかという研究価値を審査者が逆算する必要がある。"
+            ),
+            (
+                "『根拠ある設計判断を行うため』のように、実現したい判断価値を"
+                "短い目的句で先に置き、その後に現在の障壁を示す。"
+            ),
+        )
 
     if stake_index is None or stake_index > 3:
         excerpt = "。".join(lead_sentences[:4])
@@ -1736,6 +1833,9 @@ def grant_writing_reviewer_momentum_check(text: str) -> dict:
             "payoff_sentence": payoff_index,
             "method_sentence": method_index,
             "method_terms_before_move": method_terms_before_move,
+            "leading_purpose_before_negative_decision": bool(
+                _REVIEWER_MOMENTUM_LEADING_PURPOSE_PATTERN.search(first_sentence)
+            ),
             "arc_complete": arc_complete,
             "productive_tension": productive_tension,
         },
