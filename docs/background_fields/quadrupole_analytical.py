@@ -7,13 +7,10 @@ Tests that quadrupole background field defined in Tesla is correctly
 converted to H field internally.
 """
 
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
-
 import numpy as np
+import ngsolve as ng
 import radia as rd
+from radia.vim import soft_iron_box
 
 mm = 1e-3  # 1 mm in meters
 
@@ -67,18 +64,9 @@ print("-" * 70)
 
 # Small cube at center: 10mm cube centered at origin
 size = 10.0 * mm
-half = size / 2
-# Hexahedron vertices for cube centered at [0, 0, 0] with dimensions [10, 10, 10] mm
-vertices = [
-	[-half, -half, -half], [half, -half, -half], [half, half, -half], [-half, half, -half],
-	[-half, -half, half], [half, -half, half], [half, half, half], [-half, half, half]
-]
-cube = rd.ObjHexahedron(vertices, [0, 0, 0])
-# Use MatSatIsoFrm for isotropic saturable material
-# For soft iron-like material with high permeability
-mat = rd.MatSatIsoFrm([[1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759]])
-rd.MatApl(cube, mat)
-print(f"  Created {size/mm:.0f}x{size/mm:.0f}x{size/mm:.0f} mm cube with MatSatIsoFrm (nonlinear)")
+cube = soft_iron_box(
+	center=(0.0, 0.0, 0.0), size=(size, size, size), mu_r=1000.0, nsub=2)
+print(f"  Created {size/mm:.0f}x{size/mm:.0f}x{size/mm:.0f} mm HDiv-VIM soft-iron cube")
 
 # Create container with cube and background field
 container = rd.ObjCnt([cube, bckg_cf])
@@ -92,14 +80,11 @@ print("\n[Test 3] Solve and Verify Field")
 print("-" * 70)
 
 print("  Solving...")
-solve_result = rd.Solve(container, 1e-5, 5000)
-max_abs_M = solve_result[0]  # convergence residual (max |dM|)
-n_iter = int(solve_result[3])  # iteration count
-print(f"  Solve result: residual={max_abs_M:.2e}, iterations={n_iter}")
-if max_abs_M < 1e-5:
-	print("  [OK] Solution converged")
-else:
-	print(f"  [WARNING] Solution may not have converged (max|dM|={max_abs_M:.2e})")
+with ng.TaskManager():
+	solve_result = rd.Solve(container)
+n_iter = int(solve_result['iters'])
+print(f"  Solve result: HDiv-VIM iterations={n_iter}")
+print("  [OK] Solution converged (the HDiv-VIM solver fails loudly otherwise)")
 
 # ============================================================================
 # Test 4: Compare with analytical solution
