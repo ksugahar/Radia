@@ -13,11 +13,25 @@ Approach:
 Problem: Magnetic sphere in uniform field (axisymmetric A-formulation)
 """
 import os
-
-from numpy import pi, sqrt, linspace, zeros, nan, isnan, meshgrid
 import time
-from ngsolve import *
-from netgen.occ import *
+
+from netgen.occ import Glue, MoveTo, OCCGeometry, WorkPlane
+from ngsolve import (
+    BilinearForm,
+    CoefficientFunction,
+    GridFunction,
+    H1,
+    IfPos,
+    InnerProduct,
+    Integrate,
+    LinearForm,
+    Mesh,
+    TaskManager,
+    dx,
+    grad,
+    x,
+)
+from numpy import pi, sqrt
 
 print("=" * 70)
 print("CG-Smoother for Equilibrated Error Estimation")
@@ -37,7 +51,7 @@ mu_r = 100              # Relative permeability
 H0 = 1.0                # Applied field [A/m]
 B0 = mu0 * H0           # Applied flux density [T]
 
-print(f"\nParameters:")
+print("\nParameters:")
 print(f"  Sphere radius: {R_sphere} m")
 print(f"  Domain radius: {a} m")
 print(f"  Mesh size: {maxh} m")
@@ -88,7 +102,8 @@ for edge in sphere_half.edges:
 shape = Glue([air_half, sphere_half])
 geo = OCCGeometry(shape, dim=2)
 
-mesh = Mesh(geo.GenerateMesh(maxh=maxh))
+with TaskManager():
+    mesh = Mesh(geo.GenerateMesh(maxh=maxh))
 print(f"  Elements: {mesh.ne}")
 print(f"  Materials: {mesh.GetMaterials()}")
 
@@ -100,37 +115,40 @@ print("Step 1: Solve A-formulation")
 print("=" * 70)
 
 # u = r * A_theta, Dirichlet on axis
-fes_A = H1(mesh, order=fe_order, dirichlet="axis")
-u, v = fes_A.TnT()
+with TaskManager():
+    fes_A = H1(mesh, order=fe_order, dirichlet="axis")
+    u, v = fes_A.TnT()
 
-# r-weight
-r = IfPos(x - 1e-10, x, 1e-10)
+    # r-weight
+    r = IfPos(x - 1e-10, x, 1e-10)
 
-# Material properties
-nu_cf = CoefficientFunction([nu0 if mat == "air" else nu0/mu_r
-                              for mat in mesh.GetMaterials()])
-mu_cf = CoefficientFunction([mu0 if mat == "air" else mu0*mu_r
-                              for mat in mesh.GetMaterials()])
+    # Material properties
+    nu_cf = CoefficientFunction([nu0 if mat == "air" else nu0/mu_r
+                                  for mat in mesh.GetMaterials()])
+    mu_cf = CoefficientFunction([mu0 if mat == "air" else mu0*mu_r
+                                  for mat in mesh.GetMaterials()])
 
-# Bilinear form
-a_form = BilinearForm(fes_A)
-a_form += nu_cf / r * grad(u) * grad(v) * dx
-a_form.Assemble()
+    # Bilinear form
+    a_form = BilinearForm(fes_A)
+    a_form += nu_cf / r * grad(u) * grad(v) * dx
+    a_form.Assemble()
 
-# Source term for reduced potential (from magnetic material)
-nu_diff = CoefficientFunction([0 if mat == "air" else (nu0 - nu0/mu_r)
-                                for mat in mesh.GetMaterials()])
-grad_us = CoefficientFunction((B0 * x, 0))  # Source potential gradient
+    # Source term for reduced potential (from magnetic material)
+    nu_diff = CoefficientFunction([0 if mat == "air" else (nu0 - nu0/mu_r)
+                                    for mat in mesh.GetMaterials()])
+    grad_us = CoefficientFunction((B0 * x, 0))  # Source potential gradient
 
-f_A = LinearForm(fes_A)
-f_A += nu_diff / r * InnerProduct(grad_us, grad(v)) * dx("iron")
-f_A.Assemble()
+    f_A = LinearForm(fes_A)
+    f_A += nu_diff / r * InnerProduct(grad_us, grad(v)) * dx("iron")
+    f_A.Assemble()
 
-# Solve A-method
-gf_u = GridFunction(fes_A)
-t_start = time.time()
-gf_u.vec.data = a_form.mat.Inverse(fes_A.FreeDofs(), inverse="sparsecholesky") * f_A.vec
-t_A = time.time() - t_start
+    # Solve A-method
+    gf_u = GridFunction(fes_A)
+    t_start = time.time()
+    gf_u.vec.data = a_form.mat.Inverse(
+        fes_A.FreeDofs(), inverse="sparsecholesky"
+    ) * f_A.vec
+    t_A = time.time() - t_start
 print(f"  A-method solved in {t_A:.4f} s")
 
 # Compute H_A from A solution
@@ -155,7 +173,7 @@ Hz_cf = nu_cf * Bz_cf
 # H_A as CoefficientFunction (2D vector in r-z plane)
 H_A = CoefficientFunction((Hr_cf, Hz_cf))
 
-print(f"  H_A computed from A-method solution")
+print("  H_A computed from A-method solution")
 
 # ============================================================
 # Equilibrated Error Estimation: Direct Solve
@@ -167,32 +185,38 @@ print("=" * 70)
 # Find H_eq = grad(Omega) minimizing ||H_eq - H_A||^2
 # Variational form: (grad(Omega), grad(psi)) = (H_A, grad(psi))
 
-fes_Omega = H1(mesh, order=fe_order, dirichlet="outer")
-Omega, psi = fes_Omega.TnT()
+with TaskManager():
+    fes_Omega = H1(mesh, order=fe_order, dirichlet="outer")
+    Omega, psi = fes_Omega.TnT()
 
-# Bilinear form: (grad(Omega), grad(psi)) weighted by r (axisymmetric)
-a_Omega = BilinearForm(fes_Omega)
-a_Omega += r * grad(Omega) * grad(psi) * dx
-a_Omega.Assemble()
+    # Bilinear form: (grad(Omega), grad(psi)) weighted by r (axisymmetric)
+    a_Omega = BilinearForm(fes_Omega)
+    a_Omega += r * grad(Omega) * grad(psi) * dx
+    a_Omega.Assemble()
 
-# Linear form: (H_A, grad(psi)) weighted by r
-f_Omega = LinearForm(fes_Omega)
-f_Omega += r * H_A * grad(psi) * dx
-f_Omega.Assemble()
+    # Linear form: (H_A, grad(psi)) weighted by r
+    f_Omega = LinearForm(fes_Omega)
+    f_Omega += r * H_A * grad(psi) * dx
+    f_Omega.Assemble()
 
-# Solve with direct method
-gf_Omega_direct = GridFunction(fes_Omega)
-t_start = time.time()
-gf_Omega_direct.vec.data = a_Omega.mat.Inverse(fes_Omega.FreeDofs(), inverse="sparsecholesky") * f_Omega.vec
-t_direct = time.time() - t_start
+    # Solve with direct method
+    gf_Omega_direct = GridFunction(fes_Omega)
+    t_start = time.time()
+    gf_Omega_direct.vec.data = a_Omega.mat.Inverse(
+        fes_Omega.FreeDofs(), inverse="sparsecholesky"
+    ) * f_Omega.vec
+    t_direct = time.time() - t_start
+
+    # H_eq from direct solve
+    H_eq_direct = grad(gf_Omega_direct)
+
+    # Error estimator (direct)
+    error_direct_sq = Integrate(
+        r * InnerProduct(H_A - H_eq_direct, H_A - H_eq_direct) * dx,
+        mesh,
+    )
+    error_direct = sqrt(error_direct_sq)
 print(f"  Direct solve: {t_direct:.4f} s")
-
-# H_eq from direct solve
-H_eq_direct = grad(gf_Omega_direct)
-
-# Error estimator (direct)
-error_direct_sq = Integrate(r * InnerProduct(H_A - H_eq_direct, H_A - H_eq_direct) * dx, mesh)
-error_direct = sqrt(error_direct_sq)
 print(f"  ||H_A - H_eq||_direct = {error_direct:.6e}")
 
 # ============================================================
@@ -205,7 +229,8 @@ print("=" * 70)
 from ngsolve.krylovspace import CGSolver
 
 # Create preconditioner (Jacobi or smoother)
-pre = a_Omega.mat.CreateSmoother(fes_Omega.FreeDofs())
+with TaskManager():
+    pre = a_Omega.mat.CreateSmoother(fes_Omega.FreeDofs())
 
 # Test different numbers of CG iterations
 n_iter_list = [1, 2, 5, 10, 20, 50, 100]
@@ -214,30 +239,38 @@ print(f"\n{'n_iter':<10} {'Time (s)':<12} {'||H_A-H_eq||':<15} {'Rel.Error vs Di
 print("-" * 60)
 
 results = []
-for n_iter in n_iter_list:
-    gf_Omega_cg_limited = GridFunction(fes_Omega)
-    gf_Omega_cg_limited.vec[:] = 0
+with TaskManager():
+    for n_iter in n_iter_list:
+        gf_Omega_cg_limited = GridFunction(fes_Omega)
+        gf_Omega_cg_limited.vec[:] = 0
 
-    t_start = time.time()
+        t_start = time.time()
 
-    # CG solver with limited iterations
-    inv_cg = CGSolver(a_Omega.mat, pre, maxiter=n_iter, tol=1e-16, printrates=False)
-    gf_Omega_cg_limited.vec.data = inv_cg * f_Omega.vec
+        # CG solver with limited iterations
+        inv_cg = CGSolver(
+            a_Omega.mat, pre, maxiter=n_iter, tol=1e-16, printrates=False
+        )
+        gf_Omega_cg_limited.vec.data = inv_cg * f_Omega.vec
 
-    t_cg = time.time() - t_start
+        t_cg = time.time() - t_start
 
-    # H_eq from limited CG
-    H_eq_cg_limited = grad(gf_Omega_cg_limited)
+        # H_eq from limited CG
+        H_eq_cg_limited = grad(gf_Omega_cg_limited)
 
-    # Error estimator
-    error_cg_sq = Integrate(r * InnerProduct(H_A - H_eq_cg_limited, H_A - H_eq_cg_limited) * dx, mesh)
-    error_cg = sqrt(error_cg_sq)
+        # Error estimator
+        error_cg_sq = Integrate(
+            r * InnerProduct(
+                H_A - H_eq_cg_limited, H_A - H_eq_cg_limited
+            ) * dx,
+            mesh,
+        )
+        error_cg = sqrt(error_cg_sq)
 
-    # Relative error compared to direct solve
-    rel_error = abs(error_cg - error_direct) / error_direct * 100
+        # Relative error compared to direct solve
+        rel_error = abs(error_cg - error_direct) / error_direct * 100
 
-    print(f"{n_iter:<10} {t_cg:<12.4f} {error_cg:<15.6e} {rel_error:<20.2f}%")
-    results.append((n_iter, t_cg, error_cg, rel_error))
+        print(f"{n_iter:<10} {t_cg:<12.4f} {error_cg:<15.6e} {rel_error:<20.2f}%")
+        results.append((n_iter, t_cg, error_cg, rel_error))
 
 # ============================================================
 # CG Solver (for comparison)
@@ -256,28 +289,34 @@ tol_list = [1e-2, 1e-4, 1e-6, 1e-8]
 print(f"\n{'tol':<12} {'Iterations':<12} {'Time (s)':<12} {'||H_A-H_eq||':<15} {'Rel.Error vs Direct':<20}")
 print("-" * 75)
 
-for tol in tol_list:
-    gf_Omega_cg.vec[:] = 0
+with TaskManager():
+    for tol in tol_list:
+        gf_Omega_cg.vec[:] = 0
 
-    t_start = time.time()
+        t_start = time.time()
 
-    # CG solver with smoother as preconditioner
-    inv_cg = CGSolver(a_Omega.mat, pre, maxiter=1000, tol=tol, printrates=False)
-    gf_Omega_cg.vec.data = inv_cg * f_Omega.vec
+        # CG solver with smoother as preconditioner
+        inv_cg = CGSolver(
+            a_Omega.mat, pre, maxiter=1000, tol=tol, printrates=False
+        )
+        gf_Omega_cg.vec.data = inv_cg * f_Omega.vec
 
-    t_cg = time.time() - t_start
-    n_iter = inv_cg.iterations
+        t_cg = time.time() - t_start
+        n_iter = inv_cg.iterations
 
-    # H_eq from CG
-    H_eq_cg = grad(gf_Omega_cg)
+        # H_eq from CG
+        H_eq_cg = grad(gf_Omega_cg)
 
-    # Error estimator
-    error_cg_sq = Integrate(r * InnerProduct(H_A - H_eq_cg, H_A - H_eq_cg) * dx, mesh)
-    error_cg = sqrt(error_cg_sq)
+        # Error estimator
+        error_cg_sq = Integrate(
+            r * InnerProduct(H_A - H_eq_cg, H_A - H_eq_cg) * dx,
+            mesh,
+        )
+        error_cg = sqrt(error_cg_sq)
 
-    rel_error = abs(error_cg - error_direct) / error_direct * 100
+        rel_error = abs(error_cg - error_direct) / error_direct * 100
 
-    print(f"{tol:<12.0e} {n_iter:<12} {t_cg:<12.4f} {error_cg:<15.6e} {rel_error:<20.2f}%")
+        print(f"{tol:<12.0e} {n_iter:<12} {t_cg:<12.4f} {error_cg:<15.6e} {rel_error:<20.2f}%")
 
 # ============================================================
 # Element-wise Error Distribution Comparison
@@ -287,32 +326,32 @@ print("Step 5: Element-wise Error Distribution")
 print("=" * 70)
 
 # Compute element-wise error for direct and CG with 20 iterations
-gf_Omega_cg20 = GridFunction(fes_Omega)
-gf_Omega_cg20.vec[:] = 0
-inv_cg20 = CGSolver(a_Omega.mat, pre, maxiter=20, tol=1e-16, printrates=False)
-gf_Omega_cg20.vec.data = inv_cg20 * f_Omega.vec
+with TaskManager():
+    gf_Omega_cg20 = GridFunction(fes_Omega)
+    gf_Omega_cg20.vec[:] = 0
+    inv_cg20 = CGSolver(
+        a_Omega.mat, pre, maxiter=20, tol=1e-16, printrates=False
+    )
+    gf_Omega_cg20.vec.data = inv_cg20 * f_Omega.vec
 
-H_eq_cg20 = grad(gf_Omega_cg20)
+    H_eq_cg20 = grad(gf_Omega_cg20)
 
-# Element-wise errors
-eta_direct = []
-eta_cg = []
-
-for el in mesh.Elements():
-    # Direct
-    err_d = Integrate(r * InnerProduct(H_A - H_eq_direct, H_A - H_eq_direct) * dx,
-                      mesh, element_wise=True)
-    eta_direct.append(sqrt(err_d[el.nr]))
-
-    # Smoother
-    err_s = Integrate(r * InnerProduct(H_A - H_eq_cg20, H_A - H_eq_cg20) * dx,
-                      mesh, element_wise=True)
-    eta_cg.append(sqrt(err_s[el.nr]))
+    # Integrate each field once; the returned vectors already contain every element.
+    err_d = Integrate(
+        r * InnerProduct(H_A - H_eq_direct, H_A - H_eq_direct) * dx,
+        mesh,
+        element_wise=True,
+    )
+    err_s = Integrate(
+        r * InnerProduct(H_A - H_eq_cg20, H_A - H_eq_cg20) * dx,
+        mesh,
+        element_wise=True,
+    )
 
 # Convert to arrays
 import numpy as np
-eta_direct = np.array(eta_direct)
-eta_cg = np.array(eta_cg)
+eta_direct = np.array([sqrt(err_d[el.nr]) for el in mesh.Elements()])
+eta_cg = np.array([sqrt(err_s[el.nr]) for el in mesh.Elements()])
 
 # Correlation
 correlation = np.corrcoef(eta_direct, eta_cg)[0, 1]
