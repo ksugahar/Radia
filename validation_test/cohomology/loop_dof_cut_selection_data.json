@@ -1,4 +1,5 @@
 {
+  "schema": "radia.validation.cohomology.loop-dof-cut-selection.v1",
   "generated_at_utc": "2026-07-22T06:02:47Z",
   "radia_version": "4.95.22",
   "python_version": "3.12.10",
@@ -16,6 +17,13 @@
     "mesh_nv_incl_interior": 667
   },
   "b1": 2,
+  "checks": {
+    "torus_genus_one": true,
+    "first_betti_number_two": true,
+    "qr_basis_is_class_mixed": true,
+    "pure_toroidal_candidate_found": true,
+    "selected_cut_is_toroidal": true
+  },
   "qr_generator_basis_windings": [
     [
       -1,
