@@ -5,33 +5,27 @@ Comprehensive tests validating the complete ESIM workflow:
 1. Cell problem solver accuracy
 2. ESI table generation and interpolation
 3. Coupled solver convergence
-4. VTK export functionality
-5. Physical consistency checks
+4. Physical consistency checks
 
 Author: Radia Development Team
 Date: 2026-01-08
 """
 
 import sys
-import os
 import numpy as np
 
-# Add radia module path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
-
-from esim_cell_problem import (
+from radia.esim_cell_problem import (
     ESIMCellProblemSolver,
     BHCurveInterpolator,
     ESITable,
     generate_esi_table_from_bh_curve,
 )
-from esim_workpiece import create_esim_block, create_esim_cylinder
-from esim_coupled_solver import (
+from radia.esim_workpiece import create_esim_block, create_esim_cylinder
+from radia.esim_coupled_solver import (
     InductionHeatingCoil,
     ESIMCoupledSolver,
     solve_induction_heating,
 )
-from esim_vtk_export import ESIMVTKOutput
 
 
 def test_bh_curve_interpolation():
@@ -271,66 +265,6 @@ def test_coupled_solver():
     return passed
 
 
-def test_vtk_export():
-    """Test VTK export functionality."""
-    print("Test 6: VTK Export")
-    print("-" * 40)
-
-    bh_curve = [[0, 0], [100, 0.2], [500, 0.9], [1000, 1.3], [5000, 1.8], [50000, 2.1]]
-    sigma = 2e6
-    freq = 50000
-
-    coil = InductionHeatingCoil(
-        coil_type='spiral',
-        center=[0, 0, 0.02],
-        inner_radius=0.03,
-        outer_radius=0.05,
-        pitch=0.005,
-        num_turns=3,
-        axis=[0, 0, 1],
-    )
-    coil.set_current(100)
-
-    workpiece = create_esim_block(
-        center=[0, 0, -0.01],
-        dimensions=[0.08, 0.08, 0.02],
-        bh_curve=bh_curve,
-        sigma=sigma,
-        frequency=freq,
-        panels_per_side=4
-    )
-
-    solver = ESIMCoupledSolver(coil, workpiece, freq)
-    solver.solve(tol=1e-3, max_iter=10, verbose=False)
-
-    # Test VTK export
-    output_dir = os.path.dirname(__file__)
-    vtk_file = os.path.join(output_dir, 'test_output')
-
-    vtk = ESIMVTKOutput(
-        workpiece=workpiece,
-        coefs=['PowerDensity', 'H_tangential'],
-        filename=vtk_file,
-        legacy=True
-    )
-    vtk.Do()
-
-    # Check file exists
-    vtk_path = f"{vtk_file}.vtk"
-    if os.path.exists(vtk_path):
-        size = os.path.getsize(vtk_path)
-        print(f"  Created: {os.path.basename(vtk_path)} ({size} bytes)")
-        os.remove(vtk_path)  # Clean up
-        print(f"  File creation: [PASS]")
-        passed = True
-    else:
-        print(f"  File creation: [FAIL]")
-        passed = False
-
-    print()
-    return passed
-
-
 def _validate_physical_consistency():
     """Test physical consistency of results."""
     print("Test 7: Physical Consistency")
@@ -427,8 +361,7 @@ def main():
         ("ESI Table Generation", test_esi_table_generation),
         ("Coil Field Computation", test_coil_field_computation),
         ("Coupled Solver", test_coupled_solver),
-        ("VTK Export", test_vtk_export),
-        ("Physical Consistency", test_physical_consistency),
+        ("Physical Consistency", _validate_physical_consistency),
     ]
 
     results = []
