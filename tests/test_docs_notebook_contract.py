@@ -62,3 +62,18 @@ def test_docs_do_not_track_notebook_checksum_sidecars():
         "Executed notebooks own their saved outputs; remove checksum sidecars: "
         + ", ".join(map(str, offenders))
     )
+
+
+def test_clebsch_docs_do_not_restore_completed_migration_ledgers():
+    retired_stems = {"examples_catalog", "examples_migration"}
+    offenders = [
+        path.relative_to(ROOT)
+        for path in (ROOT / "docs" / "clebsch_hodograph").iterdir()
+        if path.is_file()
+        and path.suffix.lower() in {".ipynb", ".json"}
+        and path.stem.removesuffix("_results") in retired_stems
+    ]
+    assert not offenders, (
+        "Git history owns completed migration bookkeeping; remove docs ledgers: "
+        + ", ".join(map(str, offenders))
+    )
