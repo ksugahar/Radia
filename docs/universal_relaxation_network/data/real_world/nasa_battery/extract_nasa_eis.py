@@ -275,7 +275,7 @@ This electrochemical impedance data demonstrates URN's ability to fit:
 3. Multi-element RC networks
 
 ```python
-from universal_relaxation_network import UniversalRelaxationNetwork
+from radia.urn import UniversalRelaxationNetwork
 
 # Load data
 import pandas as pd

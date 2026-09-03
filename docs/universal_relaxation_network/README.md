@@ -1,6 +1,10 @@
-# Universal Relaxation Network (URN) Examples
+# Universal Relaxation Network (URN)
 
-This directory contains the implementation and examples for the Universal Relaxation Network (URN), a KAN-inspired approach for automatic discovery of physical relaxation mechanisms from impedance data.
+This directory contains public documentation, result-bearing notebooks, and
+reproduction drivers for the Universal Relaxation Network (URN), a KAN-inspired
+approach for automatic discovery of physical relaxation mechanisms from
+impedance data. The maintained implementation is the `radia.urn` package under
+`src/radia/urn/`.
 
 ## Validation Results (2026-01-19)
 
@@ -36,8 +40,6 @@ universal_relaxation_network/
         nasa_18650_eis.csv        # Extracted EIS data (included)
       tdk_ferrite/                # TDK MnZn ferrite datasheet data
         tdk_pc50_impedance.csv    # PC50 impedance (included)
-  universal_relaxation_network.py # Main URN implementation (3900+ lines)
-  relaxation_basis_library.py     # Basis function library
   validate_urn_vs_vf.py           # URN vs Vector Fitting comparison
   demo_spice_timedomain.py        # Time-domain SPICE simulation demo
   urn_benchmark_suite.py          # Full benchmark suite
@@ -57,7 +59,7 @@ notebooks, narrative, and embedded demonstration results.
 ## Quick Start
 
 ```python
-from universal_relaxation_network import (
+from radia.urn import (
     UniversalRelaxationNetwork, URNConfig, train_urn, generate_spice_netlist
 )
 import numpy as np

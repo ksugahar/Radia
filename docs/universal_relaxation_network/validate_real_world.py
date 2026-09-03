@@ -32,12 +32,10 @@ import pandas as pd
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
-# Add parent directory for imports
 script_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, script_dir)
 
 # Import URN
-from universal_relaxation_network import (
+from radia.urn import (
     UniversalRelaxationNetwork,
     URNConfig,
     train_urn,
