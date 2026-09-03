@@ -43,6 +43,8 @@ import sys
 import time
 from pathlib import Path
 
+from _validation_output import validation_output
+
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
@@ -242,7 +244,7 @@ def main():
 
     # ------- JSON dump --------------------------------------------------
     import json
-    out = HERE / "demo_reg_hyperparam_results.json"
+    out = validation_output("demo_reg_hyperparam_results.json")
     payload = {
         "cost": args.cost,
         "n_trials": args.trials,
@@ -270,7 +272,7 @@ def main():
         ],
     }
     with open(out, "w") as f:
-        json.dump(payload, f, indent=2)
+        json.dump(payload, f, indent=2, allow_nan=False)
     print(f"\n  Saved: {out.name}")
 
     # ------- plot: sigma map + best psi contours + convergence ----------
