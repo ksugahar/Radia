@@ -17,7 +17,6 @@ loft plumbing on a geometry where the taper is visually obvious.
 """
 
 import os
-import sys
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
@@ -25,15 +24,10 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 -- registers 3d proj
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SRC = os.path.abspath(os.path.join(HERE, '..', '..', '..', 'src'))
-SRC_RADIA = os.path.join(SRC, 'radia')
-for p in (SRC, SRC_RADIA):
-    if p not in sys.path:
-        sys.path.insert(0, p)
 
 from radia.coil_builder import CoilBuilder
 from radia.coil_profile import RectProfile
-from peec_bundle import build_bundle_solver, filament_currents
+from radia.peec_bundle import build_bundle_solver, filament_currents
 
 MM = 1e-3
 CU_SIGMA = 5.8e7
