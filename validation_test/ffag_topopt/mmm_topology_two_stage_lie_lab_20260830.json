@@ -1,0 +1,171 @@
+{
+  "schema": "radia.mmm-topology-two-stage-fourth-order-lie/v1",
+  "status": "pass",
+  "machine": "lab",
+  "python": "3.12.10",
+  "policy": {
+    "name": "MMM-topology",
+    "lego_stage": "aca-qr-tsvd-exact-schur-binary-lego",
+    "shape_stage": "ngsolve-gettrafo-full-resolve",
+    "primary_cad_mesher": "coreform-cubit",
+    "fallback_mesher": null,
+    "sculpt_in_core_loop": false
+  },
+  "model": {
+    "element_family": "TET",
+    "hdiv_family": "BDM1 discontinuous",
+    "elements": 24,
+    "lego_discontinuous_dofs": 288,
+    "shape_continuous_dofs": 192,
+    "removed_element": 0,
+    "target_amplitude_m": 0.003,
+    "selected_entries": {
+      "R": [
+        3,
+        0
+      ],
+      "T": [
+        1,
+        2,
+        2
+      ],
+      "U": [
+        1,
+        2,
+        2,
+        2
+      ],
+      "V": [
+        3,
+        0,
+        2,
+        2,
+        2
+      ]
+    }
+  },
+  "inverse": {
+    "initial_max_band_ratio": 62.504457208339566,
+    "shape_undeformed_max_band_ratio": 60.00000000069173,
+    "lego_full_topology_max_band_ratio": 57.413087899151336,
+    "lego_final_max_band_ratio": 57.413087899151336,
+    "final_max_band_ratio": 0.999939168065822,
+    "recovered_amplitude_m": 0.0029685302158178476,
+    "amplitude_relative_error": 0.010489928060717496,
+    "lego_iterations": 1,
+    "shape_iterations": 4,
+    "initial_active_elements": 23,
+    "lego_active_elements": 24,
+    "initial_state_iterations": 38,
+    "lego_stop_reason": "max_iterations"
+  },
+  "shape_history": [
+    {
+      "iteration": 0,
+      "max_band_ratio_before": 60.00000000069173,
+      "max_band_ratio_after": 37.841343753334776,
+      "accepted_scale": 1.0,
+      "route": "ngsolve_deform",
+      "nonlinear_resolves": 1
+    },
+    {
+      "iteration": 1,
+      "max_band_ratio_before": 37.841343753334776,
+      "max_band_ratio_after": 3.679675392528084,
+      "accepted_scale": 1.0,
+      "route": "ngsolve_deform",
+      "nonlinear_resolves": 1
+    },
+    {
+      "iteration": 2,
+      "max_band_ratio_before": 3.679675392528084,
+      "max_band_ratio_after": 0.8922785046392054,
+      "accepted_scale": 1.0,
+      "route": "ngsolve_deform",
+      "nonlinear_resolves": 1
+    },
+    {
+      "iteration": 3,
+      "max_band_ratio_before": 0.8922785046392054,
+      "max_band_ratio_after": 0.999939168065822,
+      "accepted_scale": 1.0,
+      "route": "ngsolve_deform",
+      "nonlinear_resolves": 1
+    }
+  ],
+  "solve_records": [
+    {
+      "derivative": false,
+      "iterations": 30,
+      "wall_s": 0.43444520000048215
+    },
+    {
+      "derivative": false,
+      "iterations": 28,
+      "wall_s": 0.34289849999913713
+    },
+    {
+      "derivative": false,
+      "iterations": 33,
+      "wall_s": 0.2030282999985502
+    },
+    {
+      "derivative": true,
+      "iterations": 28,
+      "wall_s": 0.830554200001643
+    },
+    {
+      "derivative": false,
+      "iterations": 30,
+      "wall_s": 0.3011412999985623
+    },
+    {
+      "derivative": true,
+      "iterations": 30,
+      "wall_s": 1.128023999997822
+    },
+    {
+      "derivative": false,
+      "iterations": 30,
+      "wall_s": 0.2934114000017871
+    },
+    {
+      "derivative": true,
+      "iterations": 30,
+      "wall_s": 1.0282657999996445
+    },
+    {
+      "derivative": false,
+      "iterations": 30,
+      "wall_s": 0.2946072999984608
+    },
+    {
+      "derivative": true,
+      "iterations": 30,
+      "wall_s": 0.9548417999976664
+    },
+    {
+      "derivative": false,
+      "iterations": 30,
+      "wall_s": 0.3993897999971523
+    },
+    {
+      "derivative": true,
+      "iterations": 30,
+      "wall_s": 1.0610674999988987
+    }
+  ],
+  "wall_s": 22.84762249999767,
+  "gates": {
+    "same_mesh_for_both_stages": true,
+    "initial_binary_topology_valid": true,
+    "known_missing_tet_recovered": true,
+    "no_gray_material": true,
+    "lego_full_resolve_improves_lie_target": true,
+    "gettrafo_stage_executed": true,
+    "final_lie_target_inside_bands": true,
+    "manufactured_shape_amplitude_recovered": true,
+    "finite_difference_not_used": true,
+    "final_acceptance_explicit": true
+  }
+}
