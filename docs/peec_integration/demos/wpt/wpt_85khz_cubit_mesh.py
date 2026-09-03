@@ -26,11 +26,9 @@ Date: 2026-01-16
 """
 
 import sys
-import os
 
 # Auto-detect Cubit installation
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), 'src', 'radia'))
-from install_panels import find_cubit_bin
+from radia.install_panels import find_cubit_bin
 _cubit_path = find_cubit_bin()
 if _cubit_path and _cubit_path not in sys.path:
     sys.path.insert(0, _cubit_path)
