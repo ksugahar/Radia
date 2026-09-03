@@ -91,6 +91,65 @@ def test_caller_region_satisfies_minimum_gate(audit_module, tmp_path):
     assert audit_module._audit_caller(path) == []
 
 
+def test_pytest_module_may_request_shared_taskmanager_fixture(
+    audit_module, tmp_path
+):
+    path = tmp_path / "validation_test" / "solver" / "test_parallel.py"
+    path.parent.mkdir(parents=True)
+    (path.parent / "conftest.py").write_text(
+        "def ngsolve_taskmanager():\n"
+        "    with TaskManager():\n"
+        "        yield\n",
+        encoding="utf-8",
+    )
+    path.write_text(
+        "import pytest\n"
+        "pytestmark = pytest.mark.usefixtures('ngsolve_taskmanager')\n"
+        "def test_solve():\n"
+        "    form = BilinearForm(space)\n"
+        "    form.Assemble()\n",
+        encoding="utf-8",
+    )
+
+    assert audit_module._audit_caller(path) == []
+
+
+def test_fixture_marker_without_fixture_is_reported(audit_module, tmp_path):
+    path = tmp_path / "tests" / "test_parallel.py"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        "import pytest\n"
+        "pytestmark = pytest.mark.usefixtures('ngsolve_taskmanager')\n"
+        "form = BilinearForm(space)\n"
+        "form.Assemble()\n",
+        encoding="utf-8",
+    )
+
+    findings = audit_module._audit_caller(path)
+
+    assert len(findings) == 1
+    assert findings[0].kind == "caller-missing-wrap"
+
+
+def test_shared_fixture_marker_does_not_exempt_standalone_generator(
+    audit_module, tmp_path
+):
+    path = tmp_path / "validation_test" / "solver" / "generate_result.py"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        "import pytest\n"
+        "pytestmark = pytest.mark.usefixtures('ngsolve_taskmanager')\n"
+        "form = BilinearForm(space)\n"
+        "form.Assemble()\n",
+        encoding="utf-8",
+    )
+
+    findings = audit_module._audit_caller(path)
+
+    assert len(findings) == 1
+    assert findings[0].kind == "caller-missing-wrap"
+
+
 def test_helper_owned_region_is_reported(audit_module, tmp_path):
     path = tmp_path / "src" / "radia" / "solver.py"
     path.parent.mkdir(parents=True)

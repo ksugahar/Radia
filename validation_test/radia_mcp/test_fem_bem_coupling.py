@@ -17,6 +17,8 @@ the full BEM coupling extends.
 """
 import pytest
 
+pytestmark = pytest.mark.usefixtures("ngsolve_taskmanager")
+
 from radia_mcp.radia_ngsolve.fem_bem_coupling import (
     sphere_shell_analytic_dtn,
     laplace_fem_bem_schur,
@@ -207,4 +209,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    from ngsolve import TaskManager
+
+    with TaskManager():
+        main()

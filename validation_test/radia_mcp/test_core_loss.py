@@ -19,6 +19,9 @@ import os
 import sys
 
 import numpy as np
+import pytest
+
+pytestmark = pytest.mark.usefixtures("ngsolve_taskmanager")
 
 _SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 if _SRC not in sys.path:
@@ -130,11 +133,14 @@ def test_core_loss_in_region_integrates_density():
 
 
 if __name__ == "__main__":
-    test_classical_term_matches_closed_form()
-    test_classical_scaling()
-    test_fft_sinusoid_recovers_fundamental()
-    test_harmonic_reduces_to_bertotti_for_sinusoid()
-    test_two_harmonic_classical_sum()
-    test_core_loss_in_region_integrates_density()
+    from ngsolve import TaskManager
+
+    with TaskManager():
+        test_classical_term_matches_closed_form()
+        test_classical_scaling()
+        test_fft_sinusoid_recovers_fundamental()
+        test_harmonic_reduces_to_bertotti_for_sinusoid()
+        test_two_harmonic_classical_sum()
+        test_core_loss_in_region_integrates_density()
     print("[OK] core-loss separation validated: classical closed form, f^2/B^2 "
           "scaling, FFT harmonic path, region integration.")

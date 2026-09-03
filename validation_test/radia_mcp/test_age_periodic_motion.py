@@ -11,6 +11,8 @@ from radia_mcp.radia_ngsolve.age_periodic_motion import (
     solve_age_periodic_motion,
 )
 
+pytestmark = pytest.mark.usefixtures("ngsolve_taskmanager")
+
 
 def _vol_text(tmp_path) -> str:
     path = tmp_path / "age_two_region.vol"

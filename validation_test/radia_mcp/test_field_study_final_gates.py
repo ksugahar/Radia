@@ -8,6 +8,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+pytestmark = pytest.mark.usefixtures("ngsolve_taskmanager")
+
 pytest.importorskip("ngsolve")
 pytest.importorskip("gmsh")
 

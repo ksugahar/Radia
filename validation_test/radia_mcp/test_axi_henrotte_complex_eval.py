@@ -24,8 +24,10 @@ if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
 import numpy as np
-from ngsolve import Mesh, GridFunction, grad, x as r_cf
-from netgen.occ import OCCGeometry, MoveTo, X, Y
+from netgen.occ import MoveTo, OCCGeometry, X, Y
+from ngsolve import GridFunction, Mesh, TaskManager, grad
+from ngsolve import x as r_cf
+from ngsolve import y as z_cf
 from radia.axifem import H1Henrotte
 
 C = 2.0 + 3.0j
@@ -44,8 +46,11 @@ def build_mesh():
 def main():
     mesh = build_mesh()
 
-    # A_phi = r^2 is inside the Q1 Henrotte basis {1, r^2, z, r^2 z}.
-    f = r_cf * r_cf
+    # A_phi = r^2 (1 + z) is inside the Q1 Henrotte basis
+    # {1, r^2, z, r^2 z} and has two nonzero gradient components.  Using
+    # r^2 alone makes a componentwise relative check divide roundoff in the
+    # analytically zero z derivative by an almost-zero reference value.
+    f = r_cf * r_cf * (1.0 + z_cf)
 
     fes_r = H1Henrotte(mesh, order=1, dirichlet="")
     gfr = GridFunction(fes_r)
@@ -73,9 +78,10 @@ def main():
     for (rr, zz) in PTS:
         gr = grad(gfr)(mesh(rr, zz))     # (dA/dr, dA/dz) real
         gc = grad(gfc)(mesh(rr, zz))     # complex
-        for k in range(2):
-            err = abs(gc[k] - C * gr[k]) / (abs(C * gr[k]) + 1e-30)
-            max_g = max(max_g, err)
+        expected = np.asarray(C * np.asarray(gr), dtype=np.complex128)
+        actual = np.asarray(gc, dtype=np.complex128)
+        err = np.linalg.norm(actual - expected) / max(np.linalg.norm(expected), 1e-30)
+        max_g = max(max_g, float(err))
         print(f"    ({rr:.2f},{zz:.2f}): grad_r=({gr[0]:+.4e},{gr[1]:+.4e})"
               f"  |grad_c-C*grad_r|rel<= {max_g:.2e}")
     assert max_g < 1e-9, f"COMPLEX gradient eval != C * real gradient (max rel {max_g:.2e})"
@@ -93,4 +99,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    with TaskManager():
+        main()
