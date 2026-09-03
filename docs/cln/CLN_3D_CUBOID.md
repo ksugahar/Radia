@@ -43,13 +43,12 @@ generic 3D framework. **HCurl** is.
 
 ## 2. Existing 3D HCurl assets
 
-In the `W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/ngsolve_validation/`
-working tree (separate from this repo):
+The imported research assets are tracked under
+[`validation_test/maglev/research_cln/ngsolve_validation/`](../../validation_test/maglev/research_cln/ngsolve_validation/):
 
 | File | Purpose |
 |---|---|
-| [`cuboid_521_3dir_full_foster.py`](../../../W%3A/30_CauerLadderNetwork/2026_04_01_長方形CLN/ngsolve_validation/cuboid_521_3dir_full_foster.py) | HCurl Order=2 Foster eigsh decomposition for Cu cuboid 5×2×1 mm in 3 directions (B_x, B_y, B_z), tree-cotree gauge, 25-30 modes per direction |
-| `cuboid_521_foster.json` | Output of the above: per-direction R, L, τ values |
+| [`cuboid_521_3dir_full_foster.py`](../../validation_test/maglev/research_cln/ngsolve_validation/cuboid_521_3dir_full_foster.py) | HCurl Order=2 Foster eigsh decomposition for Cu cuboid 5×2×1 mm in 3 directions (B_x, B_y, B_z), tree-cotree gauge, 25-30 modes per direction |
 | `bem_foster_cauer.py` | 3D Cauer extraction from BEM Foster (cuboid version of `disk_bem_cauer.py`) |
 | `bem_foster_cauer_highprec.wls` | Mathematica BEM Foster eigvals + amplitudes for cuboid (input to `bem_foster_cauer.py`) |
 | `foster_cln_python_pure.py` | Pure-Python BEM K-matrix + Cauer pipeline for cuboid (mp.quad Tanh-Sinh integration; ~17 digits) |

@@ -1,8 +1,8 @@
 # Cauer Ladder Network (CLN) — Tanimoto-Kameari Method
 
 Comprehensive theory + implementation guide for Cauer ladder network
-construction from FEM eddy current analysis. Source material: Tanimoto
-master's thesis (W:/00_CAE/NGSolve/谷本/) + Kameari iterative
+construction from FEM eddy current analysis. Source material: Tanimoto's
+2024 master's thesis and Kameari's iterative
 orthogonalization. Connection to Kelvin transformation (recent
 2026-05-04 findings) is documented in §6.
 
@@ -299,8 +299,8 @@ in vacuum).
 ### 6.1 Status (2026-05-05)
 
 **Important context**: Kelvin transformation in NGSolve is a **proven,
-high-accuracy** technique when properly formulated. Kameari (2025/10/14
-slides `W:/00_CAE/NGSolve/亀有/4-05.pdf`) demonstrates:
+high-accuracy** technique when properly formulated. Kameari's 2025/10/14
+presentation demonstrates:
 - Magnetic sphere in uniform B with COARSE mesh (Order 3, μ_r=1000):
   **A-Ω_r gives 0.001% error**, **Ω-Ω_r Order 4 gives 0.029% error**
 - **Independent of Kelvin radius rk** — even rk=100 (huge) gives same
@@ -372,8 +372,8 @@ bundle with finite extent):
 
 ### 6.4.1 Kameari's Three Reduction Methods (2025/10/14 reference)
 
-From `W:/00_CAE/NGSolve/亀有/4-05.pdf` (Kameari, "Electromagnetic
-Analyses Using Higher Order Hierarchic Finite Elements"):
+From Kameari, "Electromagnetic Analyses Using Higher Order Hierarchic
+Finite Elements" (presentation, 2025/10/14):
 
 | Method | Inner region | Outer (Kelvin) region | Use case |
 |---|---|---|---|
@@ -502,8 +502,7 @@ inline gauge correction.
 
 ### 7.1.1 Canonical A-form Recipe (Tanimoto, do not deviate)
 
-Audited from `W:/00_CAE/NGSolve/谷本/20240910_静止器回転機用/20240917_A_ICCG_最新版.ipynb`
-and `修論/CLN_AT.ipynb`:
+Audited from Tanimoto's 2024 A-ICCG and CLN A-T thesis notebooks:
 
 ```python
 fes = HCurl(mesh, order=order, dirichlet="...", nograds=True)   # OR type1=True
@@ -602,45 +601,19 @@ packages/radia-mcp/src/radia_mcp/radia_ngsolve/knowledge/
     └── A_ICCG_production.py      # latest 2024-09-17 production
 ```
 
-### Source Notebooks
+### Tracked Validation and Provenance
 
-```
-W:/00_CAE/NGSolve/谷本/
-├── 修論/                         # Master's thesis (canonical)
-│   ├── 2次元CLN.ipynb
-│   ├── CLN_AT.ipynb              ← primary 3D
-│   ├── CLN_T-Omega.ipynb
-│   ├── CLN_APhi.ipynb
-│   └── メッシュ.ipynb
-├── 定式_誤差検証/                  # Formulation / error verification
-│   ├── 20231211_A_(Penalty)_CLN.ipynb
-│   ├── 20231221_A_gauge_CLN.ipynb
-│   ├── 20240108_gauge_test.ipynb
-│   └── CASE_*.ipynb              # ablations
-└── 20240910_静止器回転機用/        # Production for machines
-    ├── 20240917_A_ICCG_最新版.ipynb  ⭐ Latest stable
-    ├── A-T_formulation.ipynb
-    ├── A_CG_TEAM28size.ipynb
-    └── Lukas_A-Φ_test.ipynb
-```
+- [`validation_test/cln/`](../../validation_test/cln/) contains the maintained
+  CLN smoke cases and committed JSON evidence.
+- [`validation_test/maglev/research_cln/`](../../validation_test/maglev/research_cln/)
+  preserves the imported research notebooks, Mathematica derivations, and
+  historical cross-validation programs used to reconstruct the method.
+- [`validation_test/axifem/`](../../validation_test/axifem/) owns the maintained
+  axisymmetric element evidence and generated-matrix checks.
 
-### Research Project
-
-`W:/30_CauerLadderNetwork/` — CLN + Kelvin research (2026):
-- 2026_04_01_長方形CLN/ — current rectangular CLN + Kelvin work
-- prior phases for various conductor shapes (sphere, cuboid, etc.)
-
-### Kameari Reference Library (canonical NGSolve hierarchic FEM + Kelvin)
-
-`W:/00_CAE/NGSolve/亀有/` — Kameari's NGSolve notebooks:
-- `4-05.pdf` — 2025/10/14 slides ⭐ canonical reference for hierarchic
-  FEM + 3 reduction methods (Ω-Ω_r, A-Ω_r, A-A_r) + Kelvin in NGSolve
-- `5-03.html` — adaptive meshing for reluctance (2D)
-- `導体球/Sphere_UnifB_Mod.ipynb` — analytical for AC magnetic sphere
-- `CLN_AT.ipynb`, `CLN_T-Omega.ipynb`, `CLN_APhi.ipynb` — three CLN
-  formulations on cylinder (Tanimoto-style)
-- `TEAM Problem #3 *.ipynb` — TEAM workshop benchmark
-- `Error estimation/` — ZZ-type error estimator notebooks
+The thesis and presentation listed in the references below remain the source
+provenance. Local laboratory archive paths are intentionally not part of the
+public execution contract.
 
 ---
 
@@ -660,8 +633,7 @@ W:/00_CAE/NGSolve/谷本/
 3. **谷本** (Tanimoto), Master's Thesis, Kindai University, 2024.
    3D HCurl CLN formulations (A-T, T-Ω, A-Φ) and verification.
 4. **A. Kameari**, "Electromagnetic Analyses Using Higher Order
-   Hierarchic Finite Elements", presentation 2025/10/14
-   (`W:/00_CAE/NGSolve/亀有/4-05.pdf`). Canonical demonstration of
+   Hierarchic Finite Elements", presentation 2025/10/14. Canonical demonstration of
    Ω-Ω_r / A-Ω_r / A-A_r reductions with Kelvin transformation in
    NGSolve. Magnetic sphere reference: A-Ω_r Order 3 with coarse mesh
    gives 0.001% error, independent of Kelvin radius `r_k`.

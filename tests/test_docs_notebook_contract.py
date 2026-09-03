@@ -365,6 +365,20 @@ def test_ngbem_docs_do_not_duplicate_validation_drivers():
     )
 
 
+def test_cln_and_axifem_docs_do_not_publish_lab_drive_paths():
+    paths = [
+        ROOT / "docs" / "cln" / "CAUER_LADDER_NETWORK.md",
+        ROOT / "docs" / "cln" / "CLN_3D_CUBOID.md",
+        ROOT / "docs" / "axifem" / "AXIFEM.md",
+    ]
+    offenders = []
+    for path in paths:
+        source = path.read_text(encoding="utf-8", errors="replace").replace("\\", "/")
+        if "W:/" in source or "S:/" in source:
+            offenders.append(path.relative_to(ROOT).as_posix())
+    assert not offenders, "Use tracked validation paths in public docs: " + ", ".join(offenders)
+
+
 def test_migrated_docs_use_installed_dependencies():
     paths = [
         ROOT / "docs" / "electric_machine" / "cogging_skew_demo.py",
