@@ -10,6 +10,12 @@ Eqnedit64.exe INPUT OUTPUT
 No Python runtime, installer, ActiveX registration, or external TeX command is
 required by the standalone executable.
 
+The native executable is the canonical command-line boundary. The optional
+Python package console launcher and helper functions invoke this same EXE; they
+do not define a second converter. The CLI dispatcher is intentionally not
+duplicated through pybind11. The existing pybind11 structural-editing API is a
+separate optional interface and is not required for conversion.
+
 ## Input
 
 | `INPUT` | Meaning |

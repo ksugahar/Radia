@@ -19,7 +19,7 @@
   /* デプロイごとに上げる。ボタン行の右端に出て、開きっぱなしのタブが
    * 古い版を動かし続けていないかを一目で判別できる（.exe の
    * タイトルバー・ビルドスタンプと同じ教訓）。 */
-  var BUILD = "2026-08-30a";
+  var BUILD = "2026-09-03a";
 
   var PALETTES = [
     {
@@ -192,7 +192,7 @@
 
 
   var CSS = [
-    ".eqed { border: 1px solid #d9d9d6; border-radius: 10px; padding: 14px 16px; background: #fcfcfb; }",
+    ".eqed { --eqed-source-font: ui-monospace, 'Cascadia Mono', 'Yu Gothic UI', Meiryo, monospace; border: 1px solid #d9d9d6; border-radius: 10px; padding: 14px 16px; background: #fcfcfb; }",
     ".eqed-palette-head { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: flex-start; padding: 0 0 7px; }",
     ".eqed-tabs { display: flex; flex: 1 1 auto; gap: 4px; max-width: 100%; overflow-x: auto; scrollbar-width: thin; }",
     ".eqed-tab { flex: 0 0 auto; font: inherit; font-size: 0.86rem; padding: 6px 12px; border: 1px solid #cfcfcb; border-radius: 7px 7px 3px 3px; background: #f7f7f5; color: inherit; cursor: pointer; }",
@@ -209,12 +209,12 @@
     ".eqed-row-label { font-size: 0.78rem; color: var(--muted, #717170); min-width: 3.6em; }",
     ".eqed-key { font: inherit; font-size: 0.95rem; line-height: 1; padding: 5px 8px; border: 1px solid #cfcfcb; border-radius: 6px; background: #fff; cursor: pointer; min-width: 2.1em; }",
     ".eqed-key:hover { background: #eef3f8; border-color: #9db8d2; }",
-    ".eqed-recent { display: block; width: fit-content; max-width: 100%; box-sizing: border-box; margin: 4px 0 2px; padding: 3px 8px; border: 1px solid #8fb7dc; border-radius: 5px; background: #dceeff; color: #163f63; font-family: Consolas, 'Cascadia Mono', monospace; font-size: 0.88rem; white-space: pre-wrap; overflow-wrap: anywhere; }",
+    ".eqed-recent { display: block; width: fit-content; max-width: 100%; box-sizing: border-box; margin: 4px 0 2px; padding: 3px 8px; border: 1px solid #8fb7dc; border-radius: 5px; background: #dceeff; color: #163f63; font-family: var(--eqed-source-font); font-size: 0.88rem; white-space: pre-wrap; overflow-wrap: anywhere; }",
     ".eqed-recent[hidden] { display: none; }",
     ".eqed-recent--flash { animation: eqed-recent-flash 700ms ease-out; }",
     "@keyframes eqed-recent-flash { from { background: #8fc9ff; } to { background: #dceeff; } }",
     "@media (prefers-reduced-motion: reduce) { .eqed-recent--flash { animation: none; } }",
-    ".eqed-source { width: 100%; box-sizing: border-box; font-family: Consolas, 'Cascadia Mono', monospace; font-size: 0.95rem; padding: 8px 10px; border: 1px solid #cfcfcb; border-radius: 6px; margin-top: 4px; }",
+    ".eqed-source { width: 100%; box-sizing: border-box; font-family: var(--eqed-source-font); font-size: 0.95rem; padding: 8px 10px; border: 1px solid #cfcfcb; border-radius: 6px; margin-top: 4px; }",
     /* Match the native canvas: white ground, sunken frame, top-left anchor. */
     ".eqed-preview { min-height: 5.5em; padding: 12px 14px; overflow-x: auto; background: #fff; border: 1px solid #c9c9c5; border-radius: 4px; box-shadow: inset 1px 1px 3px rgba(0,0,0,0.07); margin: 8px 0; }",
     ".eqed-preview mjx-container[display='true'] { text-align: left !important; margin: 0 !important; }",
