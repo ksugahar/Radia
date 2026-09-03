@@ -933,9 +933,9 @@ p >= 2 takes the A-Phi block. Golden:
 
 #### Rendered walkthrough
 
-`docs/kelvin/kelvin_exterior_source_and_aphi.ipynb` (executed, with the
-synchronized `kelvin_exterior_source_and_aphi_results.json`) re-runs all
-three goldens of this section — the exterior-source routes, the twisted
+`docs/kelvin/kelvin_exterior_source_and_aphi.ipynb` is executed and embeds
+the results while re-running all three goldens of this section — the
+exterior-source routes, the twisted
 0-form pullback contracts, and the A\*/A-Phi p-sweep — and embeds the
 outputs.
 
