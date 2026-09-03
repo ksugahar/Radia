@@ -14,8 +14,10 @@ def test_ngsolve_cross_validation_registry_topic_records_reusable_artifacts():
     assert "validation_test/cubit_mesh_export/validation_vol_*_summary.json" in doc
     assert "validation_test/build123d_netgen_gmsh_flow/validation_*_summary.json" in doc
     assert "validation_test/electric_machine/validation_*_summary.json" in doc
-    assert "examples/rf_waveguide/validation_*_summary.json" in doc
-    assert "validation/mcp_quality/golden_gate_*.json" in doc
+    assert "validation_test/rf_waveguide/validation_*_summary.json" in doc
+    assert "packages/radia-mcp/tests/test_meta_health.py" in doc
+    assert "examples/rf_waveguide" not in doc
+    assert "validation/mcp_quality" not in doc
     assert 'force_validation("cross_validation")' in doc
     assert 'fem_bem_schur("api")' in doc
     assert "radia_mcp_golden_gate()" in doc

@@ -8,10 +8,10 @@ open-boundary closure compared on **one yardstick — the per-multipole Dirichle
     d_n  =  | λ_h(n) − λ_exact(n) |  /  | λ_exact(n) |
 ```
 
-across the three regimes, with the measured numbers reproduced in-repo by
-[retired `act7_22_dtn_spectrum_consolidated.py`](../kelvin/ARCHIVE_RETIREMENT.md)
-(data: `act7_22_dtn_spectrum_consolidated.json`; figure: `…​.pdf`). It consolidates the
-scattered per-regime measurements — static `act7_21`,
+across the three regimes. The original generator and sidecar were retired after
+their maintained conclusions were distilled here; see
+[`ARCHIVE_RETIREMENT.md`](../kelvin/ARCHIVE_RETIREMENT.md). This table
+consolidates the scattered per-regime measurements — static `act7_21`,
 eddy `act6_09`,
 high-frequency `act7_01`/`act7_07` — into one table.
 

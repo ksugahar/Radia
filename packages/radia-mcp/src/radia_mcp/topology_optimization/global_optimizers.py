@@ -7,8 +7,8 @@ with competing harmonics, or any boxed design space.
 
 SHOWCASE NOTEBOOK: ``docs/optimization/optimization.ipynb`` -- constrained CAE optimization
 worked examples (Optuna TPE + analytic-guess enqueue + feasibility-aware selection) on RF
-waveguide slab-matching and Bragg-filter design, executed live. Corpus + drift-reference JSON
-at ``examples/optimization/``.
+waveguide slab-matching and Bragg-filter design, executed live. Checked scripts and
+machine-readable evidence live under ``validation_test/optimization/``.
 
 DE/rand/1/bin: for each member x_i form a mutant v = a + F (b - c) from three distinct random
 members, binomially cross v with x_i (rate CR, at least one gene forced), and keep the trial only

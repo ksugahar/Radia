@@ -740,8 +740,8 @@ SINGLE-STROKE ERROR CORRECTION via DEFORM (already shipped; VectorH1 upgrade)
     FIELD REPRESENTATION + shape derivative; the field eval stays Biot-Savart
     (NOT a SetDeformation-then-PDE-solve loop).
 
-IMPLEMENTATION STATUS (tests/ -> examples/ -> panels/)  [Stage A DONE 2026-06-11]
---------------------------------------------------------------------------------
+IMPLEMENTATION STATUS (tests/ + validation/docs -> Simulink)  [Stage A DONE 2026-06-11]
+------------------------------------------------------------------------------------------
   Phase 0  record the unification (memory/clebsch_cohomology_streamfunction_
            unification.md) -- DONE.
   Phase 1  2D bidirectional map (Tampere) -- DONE: validation_test/feec/vim_legacy/

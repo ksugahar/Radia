@@ -67,3 +67,14 @@ def test_pardiso_guidance_distinguishes_ngsolve_openblas_from_radia_mkl():
     assert "a compatible MKL runtime is a separate environment dependency" in flat_guidance
     assert "included with NGSolve PyPI wheel" not in guidance
     assert "NGSolve binary distributions automatically" not in guidance
+
+
+def test_radia_guidance_uses_current_demo_and_validation_ownership():
+    geometry = get_radia_documentation("geometry")
+    esim = get_radia_documentation("esim")
+
+    assert "docs/background_fields/background_fields_results.json" not in geometry
+    assert "results are embedded in the notebook" in geometry
+    assert "docs/esim/WORKFLOWS.md" in esim
+    assert "validation_test/induction_heating/cubit_panels_legacy" in esim
+    assert "examples/.../" not in esim

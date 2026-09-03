@@ -2041,9 +2041,9 @@ SIBC Robin as usual, Kelvin exterior.
 - Neumann-K without Robin (pure Dirichlet-source): got P_wp within
   2D SIBC ref, but P_wp matched PEEC+BEM only to 24% — the uniform-K
   surface source misses coil proximity effects.  **Retired.**
-- Dowell thin-wire analytical P_coil: good for research, but not a
-  panel-level primitive (hides mesh-dependence from the user).
-  **Demoted to examples/ on 2026-04-19.**
+- Dowell thin-wire analytical P_coil: useful as a validation reference, but not
+  a production-block primitive because it hides mesh dependence. The retained
+  reference belongs under `validation_test/induction_heating/`.
 
 ### Validation (2026-04-19, ih_fem_kelvin_skin_fine, Cu 7 kHz)
 
@@ -2056,8 +2056,8 @@ SIBC Robin as usual, Kelvin exterior.
 **P_wp agreement PEEC+BEM vs FEM A-V: 1%** (!) — the primary IH
 engineering metric.  L is within 10% (coil mesh-sensitive).  P_coil
 is volumetric `|J|^2/sigma` and mesh-sensitive; captured value with
-tolerance 15% in golden.  For exact P_coil use Dowell analytical
-in examples/.
+tolerance 15% in golden. Use the checked Dowell analytical reference under
+`validation_test/induction_heating/` when a coil-loss comparison is required.
 
 ### .vol / .jou requirements
 

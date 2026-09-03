@@ -501,7 +501,7 @@ careful remeshing.
 - SHOWCASE NOTEBOOK ``docs/electrostatics/electrostatics.ipynb``: the five
   electrostatic identities above, executed and rendered (parallel-plate,
   coaxial, capacitance-gradient, sphere-over-plane, Maxwell traction).
-- ``examples/rf_waveguide/validation_scattering_radiation_force.py``:
+- ``validation_test/rf_waveguide/validation_scattering_radiation_force.py``:
   one-sided normal-incidence scattering force from reflectance/transmittance,
   equivalent to the absorber/reflector radiation-pressure factor.
 - ``ngsolve_usage("dq_torque")`` / ``ngsolve_usage("mtpa")``: machine torque maps.

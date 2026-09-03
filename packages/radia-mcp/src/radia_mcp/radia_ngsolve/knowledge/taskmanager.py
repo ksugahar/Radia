@@ -501,7 +501,8 @@ TASKMANAGER_HELPER_VS_CALLER = r"""
 | Where the code lives | `with TaskManager():` ? |
 |---|---|
 | `src/radia/panels/calc_*.py` (CALLER) | YES — wrap the FEM block |
-| `examples/**/*.py`           (CALLER) | YES — wrap the FEM block |
+| `validation_test/**/*.py`    (CALLER) | YES — wrap the FEM block |
+| executable `docs/**/*.py` helpers (CALLER) | YES — wrap the FEM block |
 | `tests/**/*.py`              (CALLER) | YES — wrap the FEM block |
 | `src/radia/**/*.py` (HELPER, NOT calc_*) | NO — caller wraps |
 | C++ kernels using `ngcore::ParallelFor` | n/a — honour caller's context |
@@ -535,10 +536,9 @@ internal `with TaskManager():` were converted to no-internal-wrap:
 | `scalar_potential_solver.py` | 1 | Ω-reduced Ω scalar |
 | `vector_potential_solver.py` | 4 | A-formulation HCurl |
 
-Callers (`calc_*.py` + `examples/**.py` + `tests/**.py`) were swept
-to add the caller-side wrap.  154 example files (mostly
-adaptive-Kelvin convergence sweeps) gained a `with TaskManager():`
-around `main()` or the top-level execution block.
+Callers (`calc_*.py`, validation runners, executable docs helpers, and tests)
+use the caller-side wrap. The retired examples corpus was migrated to its
+maintained docs, validation, or source destination.
 
 ## Helper diagnostic (optional, defensive)
 
