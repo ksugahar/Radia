@@ -302,11 +302,12 @@ def _capture_cpp_solve_timings(res):
         return
     # Nonlinear solves call the C++ W-CG many times.  Sum timing/count-like
     # quantities so the final artifact reflects the full nonlinear solve, while
-    # preserving "last_*" diagnostic values from the most recent inner solve.
+    # preserving state/identity diagnostics from the most recent inner solve.
     for key, value in clean.items():
         # "last_*" (like "hmatvec_last_*") are state of the most recent inner
         # solve -- converged flag, final residual -- not additive quantities.
-        if key.startswith("hmatvec_last_") or key.startswith("last_"):
+        if (key.startswith("hmatvec_last_") or key.startswith("last_") or
+                key == "mass_riesz_geometry_preconditioner"):
             _LAST_CPP_SOLVE_TIMINGS[key] = value
         else:
             _LAST_CPP_SOLVE_TIMINGS[key] = _LAST_CPP_SOLVE_TIMINGS.get(key, 0.0) + value
@@ -429,12 +430,13 @@ def _solve_linear_jacobi_cpp(H, system_mass, n_face, h_ext, inv_chi, tol, maxit)
 
 def _solve_linear_W_cpp(H, W, n_face, h_ext, tol, maxit):
     """PER-REGION linear solve ENTIRELY in C++: the SYMMETRIC Galerkin system (M_{1/chi} + N) m = M_mass h_ext
-    by symmetric mass-Riesz CG, where W = M_{1/chi} = INT (1/chi(x)) u.v dx is BOTH the system mass AND the
-    Riesz preconditioner.  Passing W as the 'mass' COO with inv_chi=1.0 makes the C++ kernel
-    (`solve_configured_linear_material_mass_riesz`, symmetric=True) computes A = 1.0*W + B^T G B and
-    preconditions with
-    W^{-1} (PARDISO) -- the SAME all-C++ symmetric CG as the uniform path, generalized to per-region chi.
-    The whole Krylov loop runs in C++ (symmetric charge-Gram H-matvec + PARDISO W-solve + vector ops).
+    by symmetric mass-Riesz CG.  W = M_{1/chi} = INT (1/chi(x)) u.v dx is the SYSTEM mass; the immutable
+    geometry mass M_mass is the Riesz preconditioner.  Passing W as the 'mass' COO with inv_chi=1.0 makes
+    the C++ kernel (`solve_configured_linear_material_mass_riesz`, symmetric=True) compute
+    A = W + B^T G B while preconditioning with M_mass^{-1} (PARDISO).  Keeping the Riesz map material-
+    independent is the same stable C++ CG contract as the uniform path and lets nonlinear tangent updates
+    reuse its factor.  The whole Krylov loop runs in C++ (symmetric charge-Gram H-matvec + PARDISO solve
+    + vector ops).
     Python declares W and the geometric mass as NGSolve forms; NGSolve assembles them in C++, pybind extracts
     their native sparse matrices directly, and the persistent C++ operator applies the geometric-mass RHS.
     The
@@ -465,7 +467,8 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
                      curve_order=None, curve_gauss=8, ho_far_factor=None,
                      newton_inner_tol="auto", newton_warmstart="linear",
                      newton_continuation=1, newton_reuse_tangent_steps=1,
-                     newton_cg_x0=False, _operator_cache=None):
+                     newton_cg_x0=False, gram_backend="hmat",
+                     exact_dense_memory_mb=None, _operator_cache=None):
     """HDiv-type VIM soft-iron demag solve (the +N physical material system).
 
     Material spec (EXACTLY ONE):
@@ -598,10 +601,13 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
             raise ValueError("vim.Solve (2D): preconditioner must be 'mass-riesz' (got %r)"
                              % (preconditioner,))
         for _nm, _val in (("gram_eps", gram_eps), ("far_quad", far_quad), ("ho_far_factor", ho_far_factor),
-                          ("curve_order", curve_order)):
+                          ("curve_order", curve_order), ("exact_dense_memory_mb", exact_dense_memory_mb)):
             if _val is not None:
                 raise ValueError("vim.Solve (2D): %s is a 3D knob; the 2D Gram parameters "
                                  "are fixed by its own gates (got %r)" % (_nm, _val))
+        if gram_backend != "hmat":
+            raise ValueError("vim.Solve (2D): gram_backend must be 'hmat' (got %r)"
+                             % (gram_backend,))
         from ._vim2d import solve_planar_demag
         result = solve_planar_demag(
             mesh, mu_r=mu_r, H_ext=H_ext, bh_table=bh_table, magnets=magnets,
@@ -667,6 +673,8 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
                               nonlinear_solver, preconditioner, newton_inner_tol, newton_warmstart,
                               newton_continuation, newton_reuse_tangent_steps, newton_cg_x0,
                               vertex_counts=_vtx, magnetization_sources=sources,
+                              gram_backend=gram_backend,
+                              exact_dense_memory_mb=exact_dense_memory_mb,
                               operator_cache=_operator_cache,
                               image_cyclic=image_cyclic,
                               image_cyclic_alternating=image_cyclic_alternating,
@@ -686,7 +694,8 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
                       nonlinear_solver="energy-newton", preconditioner="auto",
                       newton_inner_tol="auto", newton_warmstart="linear", newton_continuation=1,
                       newton_reuse_tangent_steps=1, newton_cg_x0=False, vertex_counts=None,
-                      magnetization_sources=(), operator_cache=None,
+                      magnetization_sources=(), gram_backend="hmat",
+                      exact_dense_memory_mb=None, operator_cache=None,
                       image_cyclic=None, image_cyclic_alternating=False,
                       cyclic_periodic_boundaries=None):
     """BDM1/BDM2 HDiv soft-iron demag solve.  The order-p charge-Gram demag operator N = B^T G B is
@@ -805,7 +814,8 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
                         image_cyclic=image_cyclic,
                         image_cyclic_alternating=bool(image_cyclic_alternating),
                         cyclic_periodic_boundaries=cyclic_periodic_boundaries,
-                        vertex_counts=frozenset(vertex_counts),
+                        vertex_counts=frozenset(vertex_counts), gram_backend=gram_backend,
+                        exact_dense_memory_mb=exact_dense_memory_mb,
                         nonlinear=bool(bh_table is not None))
         for key, value in expected.items():
             cached = operator_cache.get(key)
@@ -844,6 +854,8 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
             image_masks=image_masks, image_signs=image_signs,
             image_rot_angle=image_rot_angle,
             excluded_boundaries=cyclic_periodic_boundaries,
+            gram_backend=gram_backend,
+            exact_dense_memory_mb=exact_dense_memory_mb,
             _materialize_mass=False)
         t_after_charge_gram = time.perf_counter()
         charge_build_timings = dict(getattr(build_charge_gram, "last_timings", {}) or {})
@@ -884,7 +896,8 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
         mu = gfMu.vec.FV().NumPy().copy()
         denom = float(mu @ _geometry_mass_apply(H, mu))
         D = float((mu @ N_apply(mu)) / denom)
-        hmat_stats = dict(H.stats()) if hasattr(H, "stats") else None
+        hmat_stats = (dict(H.stats()) if gram_backend == "hmat" and hasattr(H, "stats")
+                      else None)
         if hmat_stats is not None and hasattr(H, "hex_state_breakdown"):
             try:
                 _hex_diag = H.hex_state_breakdown()
@@ -899,7 +912,9 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
             image_cyclic=image_cyclic,
             image_cyclic_alternating=bool(image_cyclic_alternating),
             cyclic_periodic_boundaries=cyclic_periodic_boundaries,
-            vertex_counts=frozenset(vertex_counts), nonlinear=bool(bh_table is not None),
+            vertex_counts=frozenset(vertex_counts), gram_backend=gram_backend,
+            exact_dense_memory_mb=exact_dense_memory_mb,
+            nonlinear=bool(bh_table is not None),
             fes=fes, charge_gram=H, n_face=int(n_face), n_el=int(n_el),
             n_charge=int(n_charge), demag=float(D),
             hmat_stats=(None if hmat_stats is None else dict(hmat_stats)),
@@ -1014,6 +1029,9 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
                preconditioner=preconditioner, preconditioner_requested=preconditioner_requested,
                preconditioner_policy=preconditioner_policy,
                order=int(order), curve_order=curve_order, image=image,
+               gram_backend=gram_backend,
+               exact_dense_normalized_gram=bool(
+                   getattr(H, "uses_exact_dense_normalized_gram", False)),
                operator_reused=bool(operator_reused),
                symmetry_constrained_dofs=len(symmetry_constrained_dofs), setup_wall_s=setup_wall_s,
                periodic_slave_dofs=len(periodic_slave_dofs),
@@ -1158,20 +1176,39 @@ def _solve_nonlinear_picard_mass_riesz_cpp(mesh, fes, bh_table, H, n_face, h_ext
     m = np.zeros(n_face, dtype=float)
     rel_step = float("inf")
     nit = 0
+    stats = {
+        "nonlinear_solver": "picard-mass-riesz",
+        "nonlinear_picard_iters": 0,
+        "nonlinear_material_relaxation": 0.7,
+        "nonlinear_linear_inner_iters": 0,
+    }
     # Damping the material coefficient rather than the solved field keeps every outer step an SPD Galerkin
     # solve while avoiding saturation ping-pong on steep tables.
     relax = 0.7
     for it in range(int(nl_maxit)):
         nit = it + 1
-        m_new, _ = _solve_W(_W_matrix(nu), x0=m if it > 0 else None)
+        m_new, inner_iterations = _solve_W(
+            _W_matrix(nu), x0=m if it > 0 else None
+        )
+        stats["nonlinear_picard_iters"] += 1
+        stats["nonlinear_linear_inner_iters"] += int(inner_iterations)
         rel_step = float(np.linalg.norm(m_new - m)) / (float(np.linalg.norm(m_new)) + 1e-30)
         m = m_new
         nu_new = np.maximum(_nu_sec_all(_Mmag(m)), 1e-30)
         if rel_step < nl_tol:
+            stats["nonlinear_final_rel_step"] = float(rel_step)
+            stats["nonlinear_converged_final_stage"] = True
+            _capture_nonlinear_solve_stats(stats)
             return m, nit
         nu = relax * nu_new + (1.0 - relax) * nu
     if not require_convergence:
+        stats["nonlinear_final_rel_step"] = float(rel_step)
+        stats["nonlinear_converged_final_stage"] = False
+        _capture_nonlinear_solve_stats(stats)
         return m, nit
+    stats["nonlinear_final_rel_step"] = float(rel_step)
+    stats["nonlinear_converged_final_stage"] = False
+    _capture_nonlinear_solve_stats(stats)
     raise RuntimeError("vim.Solve (Picard mass-Riesz): did NOT converge -- rel step=%.2e > "
                        "nl_tol=%.1e after %d iters.  Try nonlinear_solver='energy-newton' for the robust "
                        "co-energy Newton path." % (rel_step, nl_tol, nit))
