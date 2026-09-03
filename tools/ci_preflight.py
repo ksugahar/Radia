@@ -276,7 +276,11 @@ def gate_radia_mcp_matrix():
         flush=True,
     )
     try:
-        pytest_targets = ["tests/"] if selected_tests == ["tests"] else selected_tests
+        # Discover from the package test root even for impact-scoped runs.
+        # conftest.py ignores unselected and unavailable-optional-dependency
+        # files before module import, then deselects unrequested node IDs.
+        # Passing files explicitly bypasses pytest's collect_ignore contract.
+        pytest_targets = ["tests/"]
         rc, out = _sh([sys.executable, "-m", "pytest", *pytest_targets, "-q",
                        "-p", "no:cacheprovider", "--no-header",
                        "-m", "not xval and not slow"],
