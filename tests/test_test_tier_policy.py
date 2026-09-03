@@ -9,6 +9,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_retired_examples_tier_is_not_restored():
+    assert not (ROOT / "examples").exists()
+    ignore_lines = {
+        line.strip()
+        for line in (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    }
+    assert not any(line.lstrip("!").startswith("examples/") for line in ignore_lines)
+
+
 def test_pytest_has_one_repository_configuration_source():
     assert not (ROOT / "pytest.ini").exists()
     assert "[tool.pytest.ini_options]" in (ROOT / "pyproject.toml").read_text(
