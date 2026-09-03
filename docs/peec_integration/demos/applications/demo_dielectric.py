@@ -15,14 +15,8 @@ Date: 2026-01-15
 
 import numpy as np
 import matplotlib.pyplot as plt
-import sys
-import os
 
-# Add paths
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../build-msvc'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia'))
-
-from dielectric_solver import (
+from radia.dielectric_solver import (
     DielectricSolver, DielectricMesh,
     create_box_mesh, create_sphere_mesh,
     CombinedLoopStarDielectric, EPS_0
@@ -336,7 +330,7 @@ def test_inductor_with_magnetic_core():
     print("Test 4: Inductor with Magnetic Core")
     print("=" * 70)
 
-    from dielectric_solver import UnifiedSurfaceSolver
+    from radia.dielectric_solver import UnifiedSurfaceSolver
 
     # Inductor parameters (air core)
     L_air = 10e-6  # 10 uH
@@ -474,7 +468,7 @@ def test_lc_with_magnetic_core():
     print("Test 5: LC Circuit with Magnetic Core")
     print("=" * 70)
 
-    from dielectric_solver import UnifiedSurfaceSolver
+    from radia.dielectric_solver import UnifiedSurfaceSolver
 
     # Inductor parameters
     L_air = 10e-6  # 10 uH
