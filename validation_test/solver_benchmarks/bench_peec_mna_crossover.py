@@ -55,12 +55,13 @@ Usage:
     python bench_peec_mna_crossover.py --case 0 --mode hacapk
     python bench_peec_mna_crossover.py --ncases
 
-Output: docs/solver_benchmarks/results_bench_peec_mna_crossover.json.
+Output: validation_test/solver_benchmarks/results_bench_peec_mna_crossover.json.
 """
 
 from __future__ import annotations
 
 import argparse
+import importlib.metadata as im
 import json
 import math
 import os
@@ -68,7 +69,7 @@ import platform
 import subprocess
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 import numpy as np
 import psutil
@@ -123,7 +124,7 @@ BICG_MAXITER = 5000
 
 BENCH_NAME = "bench_peec_mna_crossover"
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-RESULT_DIR = os.path.join(REPO_ROOT, "docs", "solver_benchmarks")
+RESULT_DIR = os.path.join(REPO_ROOT, "validation_test", "solver_benchmarks")
 OUTFILE = os.path.join(
     RESULT_DIR,
     f"results_{BENCH_NAME}.json",
@@ -343,9 +344,17 @@ def run_all() -> None:
                   f"peak={res['peak_memory_mb']:.0f}MB  "
                   f"|Z11|={res['abs_Z11']:.3e}")
 
+    generated_at_utc = datetime.now(timezone.utc).isoformat()
     data = {
-        "timestamp": datetime.now().isoformat(),
+        "schema": "radia.validation.peec-mna-crossover-benchmark.v1",
+        "generated_at_utc": generated_at_utc,
+        "timestamp": generated_at_utc,
         "hostname": platform.node(),
+        "versions": {
+            "python": platform.python_version(),
+            "numpy": np.__version__,
+            "radia": im.version("radia"),
+        },
         "benchmark": BENCH_NAME,
         "problem": {
             "base_turns": BASE_TURNS,
