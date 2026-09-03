@@ -49,6 +49,29 @@ def test_docs_do_not_own_validation_or_benchmark_json():
     )
 
 
+def test_urn_docs_use_the_packaged_implementation():
+    urn_docs = ROOT / "docs" / "universal_relaxation_network"
+    duplicate_modules = {
+        urn_docs / "relaxation_basis_library.py",
+        urn_docs / "universal_relaxation_network.py",
+    }
+    assert not any(path.exists() for path in duplicate_modules)
+
+    stale_imports = (
+        "from universal_relaxation_network import",
+        "from relaxation_basis_library import",
+    )
+    offenders = [
+        path.relative_to(ROOT)
+        for path in urn_docs.rglob("*.py")
+        if any(token in path.read_text(encoding="utf-8") for token in stale_imports)
+    ]
+    assert not offenders, (
+        "URN docs must import the canonical radia.urn package: "
+        + ", ".join(map(str, offenders))
+    )
+
+
 def test_docs_do_not_track_notebook_checksum_sidecars():
     offenders = []
     for path in (ROOT / "docs").rglob("*_result.json"):

@@ -4,16 +4,12 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-import sys
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-RADIA_MCP_SRC = REPO_ROOT / "packages" / "radia-mcp" / "src"
 VALIDATION_DIR = REPO_ROOT / "validation_test" / "universal_relaxation_network"
-if str(RADIA_MCP_SRC) not in sys.path:
-    sys.path.insert(0, str(RADIA_MCP_SRC))
 
-from radia_mcp.radia_ngsolve.cq_urn import make_cq_urn_bridge_artifact  # noqa: E402
+from radia_mcp.radia_ngsolve.cq_urn import make_cq_urn_bridge_artifact
 
 
 def build_artifact(output_dir: str | Path | None = None) -> dict:

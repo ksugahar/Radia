@@ -24,16 +24,13 @@ Date: 2026-01-19
 """
 
 import os
-import sys
 import argparse
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
 
-# Add parent to path for imports
-sys.path.insert(0, str(Path(__file__).parent))
-
-from universal_relaxation_network import (
+from radia.urn import (
     UniversalRelaxationNetwork, URNConfig, train_urn, generate_spice_netlist
 )
 

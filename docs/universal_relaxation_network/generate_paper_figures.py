@@ -12,13 +12,9 @@ Output:
 - paper/Figures/fig_*.pdf
 """
 
-import sys
 import os
 from pathlib import Path
 import numpy as np
-
-# Add parent directory for imports
-sys.path.insert(0, str(Path(__file__).parent))
 
 import matplotlib
 matplotlib.use('Agg')
@@ -83,7 +79,7 @@ def load_tdk_ferrite_data(material='pc50'):
 def run_urn_fitting(freq, Z_data):
     """Run URN fitting and return fitted impedance."""
     try:
-        from universal_relaxation_network import URNConfig, train_urn
+        from radia.urn import URNConfig, train_urn
         import torch
 
         config = URNConfig(

@@ -14,7 +14,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # URN imports
-from universal_relaxation_network import URNConfig, train_urn
+from radia.urn import URNConfig, train_urn
 import torch
 
 # Simple Vector Fitting for comparison
