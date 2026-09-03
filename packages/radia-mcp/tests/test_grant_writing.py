@@ -1123,6 +1123,42 @@ def test_adjacent_reviewer_readability_accepts_explicit_section_claims():
     assert "required_scope_without_deliverable" not in types
 
 
+def test_adjacent_reviewer_readability_flags_undefined_scope_and_bare_staging():
+    text = (
+        "目的は、誘導加熱と加速器電磁石の二課題で設計則を検証することである。"
+        "研究項目1では、結合を四段階に分ける。"
+    )
+
+    result = gw.grant_writing_adjacent_reviewer_readability_check(text)
+    types = {risk["type"] for risk in result["risks"]}
+
+    assert "purpose_scope_alias_before_definition" in types
+    assert "bare_process_divided_into_stages" in types
+    assert result["metrics"]["purpose_scope_alias_before_definition_count"] == 1
+    assert result["metrics"]["bare_process_divided_into_stages_count"] == 1
+    staging = next(
+        risk for risk in result["risks"]
+        if risk["type"] == "bare_process_divided_into_stages"
+    )
+    assert "何を整備・検証" in staging["comment"]
+    assert "作業対象" in staging["recommendation"]
+
+
+def test_adjacent_reviewer_readability_accepts_defined_scope_and_named_staging():
+    text = (
+        "本研究では、誘導加熱と加速器電磁石を対象とする二つの設計課題"
+        "（以下「二課題」という）を扱う。"
+        "研究目的は、二課題で設計則を検証することである。"
+        "研究項目1では、結合条件の整備と検証を四段階に分ける。"
+    )
+
+    result = gw.grant_writing_adjacent_reviewer_readability_check(text)
+    types = {risk["type"] for risk in result["risks"]}
+
+    assert "purpose_scope_alias_before_definition" not in types
+    assert "bare_process_divided_into_stages" not in types
+
+
 def test_adjacent_reviewer_readability_flags_takeaway_after_evidence():
     text = (
         "菅原・長嶺らは、Cauer縮約をGalerkin系へ実装した。"
@@ -1220,6 +1256,35 @@ def test_reviewer_momentum_flags_unsupported_hype():
     types = {risk["type"] for risk in result["risks"]}
 
     assert "unsupported_excitement_language" in types
+
+
+def test_reviewer_momentum_flags_decision_value_hidden_in_negative_opening():
+    text = (
+        "電気機器の設計では、解析手法を替えると候補の優劣が入れ替わることがあり、"
+        "どの手法まで確かめれば候補を絞れるかを設計者が判断できない。"
+        "そこで本研究では、手法間の差を比較する。"
+        "設計候補を絞る条件を明らかにする。"
+    )
+
+    result = gw.grant_writing_reviewer_momentum_check(text)
+    types = {risk["type"] for risk in result["risks"]}
+
+    assert "decision_value_hidden_in_negative_opening" in types
+
+
+def test_reviewer_momentum_accepts_decision_value_before_obstacle():
+    text = (
+        "根拠ある設計判断を行うため、電気機器の設計では、解析手法を替えると"
+        "候補の優劣が入れ替わることがあり、どの手法まで確かめれば候補を"
+        "絞れるかを設計者が判断できない。"
+        "そこで本研究では、手法間の差を比較する。"
+        "設計候補を絞る条件を明らかにする。"
+    )
+
+    result = gw.grant_writing_reviewer_momentum_check(text)
+    types = {risk["type"] for risk in result["risks"]}
+
+    assert "decision_value_hidden_in_negative_opening" not in types
 
 
 def test_subject_predicate_distance_reads_fullwidth_japanese_comma():
