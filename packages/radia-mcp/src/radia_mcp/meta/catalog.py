@@ -127,6 +127,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "primary_tools": ["matlab_agent_guide",
                             "matlab_extension_contract",
                             "matlab_official_server_config",
+                            "matlab_official_server_status",
                             "matlab_radia_mex_contract",
                             "matlab_optuna_simulink_contract",
                             "matlab_radia_acoustic_interface_contract"],
@@ -578,7 +579,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "subpackage": "radia_mcp.grant_writing",
         "entry_point": "mcp-server-grant-writing",
         "description": "Grant proposal helpers: Japanese technical-prose "
-                       "lint, section coverage, budget alignment, "
+                       "lint, genre-bound readability scoring, section coverage, budget alignment, "
                        "internal-to-external scale, collaborative-integration "
                        "risk, tool-to-domain outcomes, derived-metric "
                        "validation, cross-organization pilots, "
@@ -595,6 +596,8 @@ CATALOG: dict[str, dict[str, Any]] = {
                        "OSS-platform checks.",
         "primary_tools": ["grant_writing_usage",
                             "grant_writing_health_report",
+                            "grant_writing_japanese_genre_contract",
+                            "grant_writing_japanese_readability_score",
                             "grant_writing_kddi_digital_check",
                             "grant_writing_kaken_oss_platform_check",
                             "grant_writing_kaken_review_format_check",
