@@ -351,6 +351,15 @@ def test_peec_spiral_docs_use_installed_radia_package():
     )
 
 
+def test_ngbem_docs_do_not_duplicate_validation_drivers():
+    docs_dir = ROOT / "docs" / "peec_integration" / "demos" / "ngbem"
+    scripts = sorted(path.name for path in docs_dir.glob("*.py"))
+    assert not scripts, (
+        "Keep ngbem numerical drivers in validation_test and publish results "
+        "through the PEEC notebooks: " + ", ".join(scripts)
+    )
+
+
 def test_migrated_docs_use_installed_dependencies():
     paths = [
         ROOT / "docs" / "electric_machine" / "cogging_skew_demo.py",

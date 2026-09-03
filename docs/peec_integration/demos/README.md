@@ -55,7 +55,7 @@ python spice/prima_with_dowell_correction.py
 python spice/demo_prima_spice_export.py
 
 # result-saved public notebook
-jupyter notebook ../public_demo.ipynb
+jupyter notebook ../peec_showcase.ipynb
 ```
 
 The numerical PRIMA/Dowell comparisons live under
