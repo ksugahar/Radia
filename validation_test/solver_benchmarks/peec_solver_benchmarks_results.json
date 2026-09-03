@@ -1,6 +1,6 @@
 {
-  "schema": "radia.validation.peec-solver-benchmarks.v1",
-  "generated_at_utc": "2026-09-03T06:29:52Z",
+  "schema": "radia.validation.peec-solver-benchmarks.v2",
+  "generated_at_utc": "2026-09-03T09:33:23Z",
   "versions": {
     "python_version": "3.12.10",
     "platform": "Windows-2022Server-10.0.20348-SP0",
@@ -14,11 +14,9 @@
     "legacy_raw_measurement_versions": "not_recorded",
     "future_driver_outputs_are_versioned": true
   },
-  "notebook": "validation_test/solver_benchmarks/peec_solver_benchmarks.ipynb",
-  "notebook_sha256": "761125a69b324a54c6578eaf919ff9350d5c542eb77bb98f2a83d556c69ebb97",
   "policy": {
-    "result_saved_ipynb": true,
     "validation_json_required": true,
+    "validation_notebook_required": false,
     "raw_results_in_validation": true,
     "routine_ci": false,
     "executable_drivers": "validation_test/solver_benchmarks/"
