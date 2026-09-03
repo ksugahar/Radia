@@ -2,8 +2,8 @@
 
 Legacy migration note: this file was moved out of
 `examples/solver_benchmarks/` because these scripts are validation drivers, not
-public examples. Current public PEEC benchmark presentation lives in
-`docs/solver_benchmarks/peec_solver_benchmarks.ipynb`.
+public examples. Current PEEC benchmark evidence lives in
+`validation_test/solver_benchmarks/peec_solver_benchmarks.ipynb`.
 
 This directory contains comprehensive benchmarks for magnetostatic solver methods in Radia, with focus on H-matrix acceleration.
 

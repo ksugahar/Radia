@@ -15,7 +15,7 @@ Measures, per case:
 
 Per repository benchmark policy:
   - One process per case (fresh Python interpreter)
-  - JSON output: docs/solver_benchmarks/results_bench_peec_dense.json
+  - JSON output: validation_test/solver_benchmarks/results_bench_peec_dense.json
 
 Baseline for Phase 1 HACApK-PEEC paper (see docs/research/HACAPK_PEEC_PRIMA_PAPER.md).
 Run this once to establish the dense-PEEC operating point, then compare
@@ -28,6 +28,7 @@ Usage:
 """
 
 import argparse
+import importlib.metadata as im
 import json
 import math
 import os
@@ -35,7 +36,7 @@ import platform
 import subprocess
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 import numpy as np
 import psutil
@@ -59,7 +60,7 @@ SUBDIVISIONS = [1, 2, 3, 4, 5]
 
 BENCH_NAME = "bench_peec_dense"
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-RESULT_DIR = os.path.join(REPO_ROOT, "docs", "solver_benchmarks")
+RESULT_DIR = os.path.join(REPO_ROOT, "validation_test", "solver_benchmarks")
 OUTFILE = os.path.join(
     RESULT_DIR,
     f"results_{BENCH_NAME}.json",
@@ -194,9 +195,17 @@ def run_all() -> None:
               f"t_solve={res['t_solve']:.2f}s  peak_mem={res['peak_memory_mb']:.0f} MB  "
               f"|Z|={res['abs_Z11']*1e3:.3f} mOhm")
 
+    generated_at_utc = datetime.now(timezone.utc).isoformat()
     data = {
-        "timestamp": datetime.now().isoformat(),
+        "schema": "radia.validation.peec-dense-benchmark.v1",
+        "generated_at_utc": generated_at_utc,
+        "timestamp": generated_at_utc,
         "hostname": platform.node(),
+        "versions": {
+            "python": platform.python_version(),
+            "numpy": np.__version__,
+            "radia": im.version("radia"),
+        },
         "benchmark": BENCH_NAME,
         "problem": {
             "base_turns": BASE_TURNS,

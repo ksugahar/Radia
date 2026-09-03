@@ -2,7 +2,8 @@
 
 Legacy migration note: this historical benchmark record is kept with the
 runnable validation drivers in `validation_test/solver_benchmarks/`. It is not
-the current public example layer; use `docs/solver_benchmarks/` for the
+the public example layer; use
+`validation_test/solver_benchmarks/peec_solver_benchmarks.ipynb` for the
 result-bearing PEEC solver benchmark notebook.
 
 **Date**: 2025-11-13
@@ -29,8 +30,8 @@ All H-matrix benchmarks have been successfully executed with **measured** perfor
 ## Comprehensive Documentation
 
 This file is the retained historical result note for the legacy H-matrix
-benchmark drivers. The current public benchmark notebook is
-`docs/solver_benchmarks/peec_solver_benchmarks.ipynb`.
+benchmark drivers. The current benchmark notebook is
+`validation_test/solver_benchmarks/peec_solver_benchmarks.ipynb`.
 
 ---
 
@@ -207,4 +208,4 @@ rad.Solve(geometry, 0.0001, 1000, 2)
 **Version**: v1.1.0
 
 **For current public benchmark presentation**, see
-`docs/solver_benchmarks/peec_solver_benchmarks.ipynb`.
+`validation_test/solver_benchmarks/peec_solver_benchmarks.ipynb`.
