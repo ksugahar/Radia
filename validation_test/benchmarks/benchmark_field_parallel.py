@@ -14,11 +14,11 @@ import socket
 import sys
 import time
 
-import radia as rad
-
-
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = ROOT / "validation_test" / "benchmarks" / "results" / "field_parallel.json"
+sys.path.insert(0, str(ROOT / "src"))
+
+import radia as rad
 
 
 def create_test_magnet():
@@ -77,6 +77,7 @@ def run_benchmark() -> dict[str, object]:
             "platform": platform.platform(),
             "python_version": platform.python_version(),
             "radia_version": str(rad.UtiVer()),
+            "radia_module": str(Path(rad.__file__).resolve()),
             "thread_environment": {
                 name: os.environ.get(name)
                 for name in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "NGS_NUM_THREADS")
