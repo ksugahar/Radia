@@ -264,3 +264,16 @@ def test_migrated_docs_use_installed_dependencies():
         if any(token in source for token in forbidden):
             offenders.append(path.relative_to(ROOT).as_posix())
     assert not offenders, "Docs must resolve installed dependencies: " + ", ".join(offenders)
+
+
+def test_clebsch_docs_do_not_inject_radia_source():
+    docs_dir = ROOT / "docs" / "clebsch_hodograph" / "demos"
+    offenders = []
+    for path in docs_dir.glob("*.py"):
+        source = path.read_text(encoding="utf-8", errors="replace").replace("\\", "/")
+        if "src/radia" in source and "sys.path" in source:
+            offenders.append(path.name)
+    assert not offenders, (
+        "Clebsch docs must import installed/editable radia: "
+        + ", ".join(sorted(offenders))
+    )

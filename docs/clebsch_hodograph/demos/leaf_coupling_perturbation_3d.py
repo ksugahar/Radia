@@ -55,8 +55,6 @@ import sys
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
-    os.path.dirname(os.path.abspath(__file__)))), "src", "radia"))
 
 from accel_pole_ends_fem import (GAP, POLE_W, Z_OUT, T_LEG, L_BEAM, AIR,  # noqa: E402
                                  COIL_W, COIL_H, COIL_R, COIL_STRAIGHT, NI, MU0)
