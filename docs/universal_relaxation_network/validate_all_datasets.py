@@ -155,8 +155,13 @@ def main():
     }
 
     # Create output directory
-    output_dir = Path(__file__).parent / 'validation_output'
-    output_dir.mkdir(exist_ok=True)
+    output_dir = (
+        Path(__file__).resolve().parents[2]
+        / 'validation_test'
+        / 'universal_relaxation_network'
+        / 'validation_output'
+    )
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     results = []
 

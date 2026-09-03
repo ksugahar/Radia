@@ -11,7 +11,7 @@ Requirements:
   Coreform Cubit 2025.8+ installed
 
 Docs companion:
-  docs/ngsolve_user_meeting/volume_area_convergence.ipynb executes the Cubit-free
+  validation_test/ngsolve_user_meeting/volume_area_convergence.ipynb executes the Cubit-free
   OCC subset and stores synchronized JSON results.  This script keeps the full
   Cubit ACIS trampoline presentation path beside that notebook.
 

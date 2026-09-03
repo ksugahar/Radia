@@ -4,12 +4,13 @@ Vector Fitting Benchmark on Same Test Cases as URN
 Uses the same test data from urn_benchmark_improved.py
 to compare VF performance against already-obtained URN results.
 
-URN results are loaded from urn_benchmark_focused.json
+URN results are loaded from the canonical validation_test artifact.
 """
 
 import numpy as np
 import time
 import json
+from pathlib import Path
 from scipy.linalg import lstsq
 
 
@@ -415,7 +416,13 @@ This benchmark compares URN against Vector Fitting with TWO initialization strat
 """)
 
     # Load URN results
-    with open('urn_benchmark_focused.json', 'r') as f:
+    urn_result_path = (
+        Path(__file__).resolve().parents[2]
+        / 'validation_test'
+        / 'universal_relaxation_network'
+        / 'urn_benchmark_focused.json'
+    )
+    with urn_result_path.open('r', encoding='utf-8') as f:
         urn_results = json.load(f)
 
     urn_by_name = {r['name']: r for r in urn_results['results']}

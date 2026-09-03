@@ -849,7 +849,11 @@ def run_all_benchmarks():
     all_results.extend(dielectric_results)
 
     # Save results
-    output_dir = os.path.dirname(os.path.abspath(__file__))
+    output_dir = os.path.abspath(os.path.join(
+        os.path.dirname(__file__), '..', '..', 'validation_test',
+        'universal_relaxation_network',
+    ))
+    os.makedirs(output_dir, exist_ok=True)
     output_file = os.path.join(output_dir, 'urn_benchmark_results.json')
     save_results(all_results, output_file)
 

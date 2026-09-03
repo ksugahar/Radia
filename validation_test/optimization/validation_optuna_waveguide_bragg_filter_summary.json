@@ -1,6 +1,6 @@
 {
   "schema": "radia.validation.optimization.optuna_waveguide_bragg_filter.v1",
-  "generated_at_utc": "2026-06-27T08:41:56Z",
+  "generated_at_utc": "2026-06-27T08:45:46Z",
   "kind": "optuna_waveguide_bragg_filter_validation",
   "validation_class": true,
   "optuna_version": "4.9.0",

@@ -475,7 +475,12 @@ if __name__ == '__main__':
     print_summary(results)
 
     # Save results
-    output_json = os.path.join(script_dir, "real_world_validation_results.json")
+    output_dir = os.path.abspath(os.path.join(
+        script_dir, '..', '..', 'validation_test',
+        'universal_relaxation_network',
+    ))
+    os.makedirs(output_dir, exist_ok=True)
+    output_json = os.path.join(output_dir, "real_world_validation_results.json")
     save_results_json(results, output_json)
 
     # Exit with success/failure based on results
