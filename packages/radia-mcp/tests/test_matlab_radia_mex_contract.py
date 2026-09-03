@@ -23,7 +23,7 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     contract = matlab_radia_mex_contract("mex")
 
     assert contract["status"] == "ready"
-    assert contract["command_count"] == 360
+    assert contract["command_count"] == 361
     assert not any(
         command.startswith("optuna.")
         for command in contract["command_names"]
@@ -136,8 +136,9 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
         "hdiv.field_evaluator.field_gradient",
     }.issubset(contract["command_names"])
     assert contract["command_groups"]["radia-core"] >= 70
-    assert contract["pybind_public_count"] == 99
-    assert contract["pybind_covered_count"] == 99
+    assert "radia.ObjTetrahedronCurrent" in contract["command_names"]
+    assert contract["pybind_public_count"] == 100
+    assert contract["pybind_covered_count"] == 100
     assert contract["pybind_missing"] == []
     assert contract["pybind_internal_numerical_count"] == 21
     assert contract["pybind_internal_missing"] == []
@@ -159,6 +160,10 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
             in contract["pybind_class_exclusions"])
     assert (
         "_ChargeGramHMatrix._reduce_configured_candidate_directional_schur"
+        in contract["pybind_class_exclusions"]
+    )
+    assert (
+        "KelvinRadiaVectorPotential.__init__"
         in contract["pybind_class_exclusions"]
     )
     assert contract["pybind_class_covered_count"] == contract["pybind_class_surface_count"]
