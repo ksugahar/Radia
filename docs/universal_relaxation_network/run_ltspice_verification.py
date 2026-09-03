@@ -521,8 +521,8 @@ def main():
                        help='Path to LTspice executable')
     parser.add_argument('--dataset', choices=['battery', 'ferrite'], default='battery',
                        help='Dataset to use')
-    parser.add_argument('--output-dir', type=str, default='results',
-                       help='Output directory')
+    parser.add_argument('--output-dir', type=str, default=None,
+                       help='Output directory (defaults to validation_test)')
 
     args = parser.parse_args()
 
@@ -546,7 +546,15 @@ def main():
     freq = data[:, 0]
     Z = data[:, z_cols[0]] + 1j * data[:, z_cols[1]]
 
-    output_dir = Path(__file__).parent / args.output_dir
+    if args.output_dir:
+        output_dir = Path(args.output_dir).expanduser().resolve()
+    else:
+        output_dir = (
+            Path(__file__).resolve().parents[2]
+            / 'validation_test'
+            / 'universal_relaxation_network'
+            / 'ltspice'
+        )
 
     success = run_full_verification(freq, Z, output_dir, args.ltspice_path)
 

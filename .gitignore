@@ -483,6 +483,12 @@ aqtinstall.log
 *.egg-info/
 step_export.log
 
+# URN documentation embeds its public results in notebooks. Reproduction and
+# LTspice runtime artifacts belong under validation_test/ or an explicit output
+# directory, never back in docs/.
+docs/universal_relaxation_network/results/
+docs/universal_relaxation_network/validation_output/
+
 # Native-extension replacement backups left when a loaded binary cannot be
 # overwritten in place. These are local recovery artifacts, never sources.
 *.pyd.locked_*
