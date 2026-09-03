@@ -7,6 +7,16 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- grant-writing / paper-writing: expose one mandatory shared page-limit
+  revision policy through `grant_writing_page_limit_revision_policy` and
+  `paper_writing_page_limit_revision_policy`. Start from the human-readable,
+  semantically sound draft rather than the highest machine-scored draft;
+  improve its content and prose without line-count pressure; compile it; then,
+  only if it overflows, rank sentence/claim importance and delete the
+  lowest-priority complete sentence or content unit. Compressing surviving
+  prose or typography is forbidden, and an omitted sentence is preferred to
+  an ambiguous compressed one. `paper_writing_check_prose_density` accepts
+  `page_limit_pressure=True` to enforce that action from the first finding.
 - grant-writing: new `grant_writing_paired_object_relation_check` lists
   sentences that name both target problems without a word for how one
   relates to the other (「AとB」 listings excluded); the health report carries

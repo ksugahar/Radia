@@ -1232,6 +1232,15 @@ thrown away space the funder granted for arguing, and that is the same defect
 seen from the other side. Both directions are reported by
 `grant_writing_page_limit_check(pdf_path)`.
 
+Before revising an overfull field, call
+`grant_writing_page_limit_revision_policy()`. This is the same mandatory
+content-selection policy used by paper-writing. A page constraint changes
+which claims are kept; it does not justify making the surviving prose denser.
+Use the human-readable, semantically sound revision as the baseline even when
+an ambiguous compressed revision has a higher machine score. Improve the
+baseline's content and prose first, compile it, and only then decide whether
+one low-priority sentence must be removed.
+
 The check reads the **compiled PDF**, not the source, because a page limit is
 a property of the rendered document. Two independent signals are used:
 
@@ -1261,15 +1270,20 @@ grown to six pages in a four-page field. A suite that lints sentences without
 measuring the page they land on will approve a document that cannot be
 submitted.
 
-Two consequences for how the other rules are applied:
+The mandatory consequences for how the other rules are applied are:
 
-- 「文の圧縮は厳禁」 stands. Never reduce a prescribed body font or line
-  spacing. If the project template explicitly permits heading before/after
-  spacing to be tightened, use that bounded layout adjustment before deleting
-  clear prose, then render and inspect every page for heading separation,
-  overlap, and clipping. The exact spacing allowance is project policy, not a
-  universal grant-writing rule. Otherwise drop whole sentences or move them to
-  another field; do not compress the surviving ones back down.
+- 「文の圧縮は厳禁」である。意味の通る基準稿の内容を先に改善し、行数を気にせず、
+  主体、対象、操作、条件、因果、課題間の関係が分かる自然な修正文を確定する。
+  その改善稿を組版し、超過する場合だけ各一文の
+  論点重要度を評価し、最低重要度の一文を丸ごと削除する。必要なら重複説明、
+  副次例、補助的な証拠・結果・背景を論点単位で削除するか適切な欄へ移す。
+  残した文を短く詰め直さない。
+- 明確な文として残せない一文・論点は、圧縮版を置かず丸ごと削除する。
+  意味不明な一文を残すより、その一文がない申請書を選ぶ。ページ適合や機械点の
+  上昇だけでは改善と判定しない。
+- 規定の本文フォント、行間、余白は縮めない。見出し間隔等の調整が様式上
+  許可されていても、見た目の補正に限り、追加内容を押し込む目的では使わない。
+  組版後は見出しの分離、重なり、切れを確認する。
 - A field is not the only place its evidence may live. International
   collaboration evidence moved from 研究目的 to 研究遂行能力及び研究環境
   scores under the criterion that actually rewards it, and it freed the
@@ -1291,20 +1305,6 @@ are kept and terminated so consecutive bullets cannot fuse into one
 pseudo-sentence. An English period does not end a sentence for the Japanese
 splitter, so it does not count as a terminator here.
 
-## Foreign Matter: Fewer Proper Nouns (異物を混入させない)
-
-2026-09-02 の実測。基盤C計画調書の準備状況に、研究代表者の別の実績を
-二文で足した。「軸対称解析でも、公開ソフトFEMMの作者Meeker氏の断片コードを
-論文の定式化から2次要素へ拡張実装し、試験付きの解析モジュールにした。本研究は
-この掘り起こしと拡張を機関間で行う。」頁に収まり、機械検査は全て通過した。
-研究代表者の判断は「異物は混入させるべきでない。固有名詞は少ないほうがよい」で、
-二文は取り下げた。
-
-審査者から見た欠陥は四つあった。
-
-1. **三つ目の対象が突然現れる。** 申請書は二課題で一貫していたのに、準備状況の
-   末尾に別の解析対象が出て、どちらの課題に属するのか分からない。
-2. **固有名詞が二つ増え、どちらも一度しか出ない。** 分担者でも共同研究相手でも
 ## Cut Content, Keep the Relation (内容を削って分かりやすい文を採る)
 
 2026-09-03 の実測。読みやすさ点が 70 点から 80 点へ上がった原稿を編集者
@@ -1349,6 +1349,20 @@ splitter, so it does not count as a terminator here.
 - 頁調整は文の圧縮ではなく、文・段落単位の削除で行う。削るのは再掲・言い直し・
   つなぎの一文からで、関係語や定義語からではない。
 
+## Foreign Matter: Fewer Proper Nouns (異物を混入させない)
+
+2026-09-02 の実測。基盤C計画調書の準備状況に、研究代表者の別の実績を
+二文で足した。「軸対称解析でも、公開ソフトFEMMの作者Meeker氏の断片コードを
+論文の定式化から2次要素へ拡張実装し、試験付きの解析モジュールにした。本研究は
+この掘り起こしと拡張を機関間で行う。」頁に収まり、機械検査は全て通過した。
+研究代表者の判断は「異物は混入させるべきでない。固有名詞は少ないほうがよい」で、
+二文は取り下げた。
+
+審査者から見た欠陥は四つあった。
+
+1. **三つ目の対象が突然現れる。** 申請書は二課題で一貫していたのに、準備状況の
+   末尾に別の解析対象が出て、どちらの課題に属するのか分からない。
+2. **固有名詞が二つ増え、どちらも一度しか出ない。** 分担者でも共同研究相手でも
    ないので、審査者は位置づけを探して止まる。
 3. **証拠として重複している。** 「他人の手法を掘り起こして結合した」実績は、
    4 機関の分担者の資産で既に強く書いてあった。同じ型の証拠を外部の名前で
@@ -1405,8 +1419,10 @@ splitter, so it does not count as a terminator here.
 3. 括弧の中の英語は略語定義（MCP、ESIM）だけにする。
 4. 定義語（反証、凍結、判定区間）や数学用語（写す）は直訳に見えても残す。
    それらを消すと意味契約が崩れる。
-5. 修正は**行数が増えない形**で行う。頁充填率が 0.99 の欄では、一文字の
-   増加が 1 行の増加になり、欄が溢れる。
+5. 修正はまず**行数を気にせず自然で明確な文**として確定する。頁充填率が
+   0.99 の欄で溢れる場合は、各一文の論点重要度を評価し、最低重要度の一文を
+   丸ごと削る。修正文を圧縮しない。明確に残せない一文は、意味不明な短縮版を
+   置かず削除する。
 
 同じ検査は paper-writing（`paper_writing_translationese_check`）と
 presentation（`presentation_translationese_check`）にもある。英語論文を先に
@@ -1416,6 +1432,7 @@ presentation（`presentation_translationese_check`）にもある。英語論文
 ## Useful Tools
 
 - `grant_writing_usage()`
+- `grant_writing_page_limit_revision_policy()`
 - `grant_writing_kaken_review_axes()`
 - `grant_writing_health_report(text_or_path, program="generic", skip="", pdf="")`
 - `grant_writing_japanese_genre_contract(document_type)`
@@ -1686,12 +1703,14 @@ Treat a short role clarification as a semantic-preservation edit. Before the
 edit, inventory the existing expertise, application domains, named research
 base, technical functions, interface, actors, and actions. After the edit,
 confirm that none disappeared without the author's explicit decision. Add the
-manager, platform function, and user/verification actor by local compression or
-minimal phrases; do not pay for role clarity by deleting the technical scope
-that proves capability. If the reviewer supplies an approximate addition
-budget, preserve that case-specific limit and the original sentence structure
-as far as the semantic inventory allows. The adjacent-reviewer diagnostic
-reports `research_platform_role_chain_incomplete` when this chain is missing.
+manager, platform function, and user/verification actor in clear,
+self-contained prose; do not compress the surrounding sentences or delete the
+technical scope that proves capability. If this creates page overflow, rank
+the importance of complete sentences and remove the lowest-priority claim,
+example, or evidence unit elsewhere. An approximate addition budget from a
+reviewer is a planning target, never permission to drop an actor, object,
+function, or action. The adjacent-reviewer diagnostic reports
+`research_platform_role_chain_incomplete` when this chain is missing.
 
 The integrated health report also runs the non-scoring
 `grant_writing_reviewer_momentum_check(text)`. Readability and reviewer

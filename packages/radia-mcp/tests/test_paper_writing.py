@@ -202,6 +202,44 @@ def test_check_prose_density_returns_dict():
     assert isinstance(r, dict)
 
 
+def test_page_limit_policy_requires_sentence_importance_and_whole_unit_drop():
+    policy = pw.paper_writing_page_limit_revision_policy()
+
+    assert policy["mandatory"] is True
+    assert policy["policy_id"] == (
+        "page_limit_select_content_do_not_compress_prose"
+    )
+    assert [item["level"] for item in policy["importance_rubric"]] == [
+        4, 3, 2, 1, 0
+    ]
+    actions = [step["action"] for step in policy["required_sequence"]]
+    assert actions.index("rank_sentence_and_claim_importance") < actions.index(
+        "drop_whole_low_priority_content_unit"
+    )
+    assert "意味不明な一文" in policy["acceptance_rule"]
+
+
+def test_prose_density_enforces_content_drop_under_page_pressure():
+    dense = (
+        "The implementation, characterization, optimization, evaluation, and "
+        "verification of FEM BEM API GPU HPC solver configurations — including "
+        "mesh adaptation and boundary integration — establishes the "
+        "generalization of the computation; it also supports the validation "
+        "of the approximation; however, every configuration remains in this "
+        "single sentence because the manuscript must fit within one page."
+    )
+
+    result = pw.paper_writing_check_prose_density(
+        dense, page_limit_pressure=True
+    )
+
+    assert result["flagged_sentences"] == 1
+    assert result["required_page_limit_action"] == (
+        "drop_whole_low_priority_content_unit"
+    )
+    assert "Do not shorten the surviving sentences" in result["recommendation"]
+
+
 def test_abstract_strength_returns_dict():
     r = pw.paper_writing_abstract_strength(ABSTRACT_EN)
     assert isinstance(r, dict)

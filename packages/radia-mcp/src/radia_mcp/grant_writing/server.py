@@ -52,6 +52,10 @@ never scores English text or research manuscripts as grant applications. The
 diagnostic strips LaTeX/form scaffolding, uses graduated penalties, scores
 reviewer takeaways before named means, and can compare both the complete draft
 and the edited passage before and after a revision.
+The page-limit revision policy is shared with paper-writing: start from the
+semantically sound draft, improve it without line-count pressure, then delete
+the lowest-priority complete sentence or content unit only if the PDF overflows.
+Never compress surviving prose to fit or reward a shorter ambiguous revision.
 
 Promoted to radia-mcp so the document-writing servers are registered in
 parallel: paper-writing / grant-writing.
@@ -94,6 +98,7 @@ register_status_tool(
     server_name="mcp-server-grant-writing",
     description=(
         "Grant proposal lint and review helpers: Japanese technical prose, "
+        "mandatory page-limit content selection without prose compression, "
         "section coverage, KDDI Digital Innovation social-implementation "
         "axes, official KAKENHI B/C axes, KAKENHI AI-era OSS platform axes, "
         "basic-research/tool/impact hierarchy, exact XLSX/CSV budget-source "
