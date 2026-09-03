@@ -312,7 +312,7 @@ class NGBEMPEECSolver:
         - M_LS: int div(J) * phi dS — local FEM coupling
         - R_loop: DC resistance per edge
         """
-        from ngsolve import HDivSurface, SurfaceL2, TaskManager, ds
+        from ngsolve import HDivSurface, SurfaceL2, ds
         from ngsolve import BilinearForm, BND
         from ngsolve.bem import LaplaceSL, SingleLayerPotentialOperator
 
@@ -331,21 +331,19 @@ class NGBEMPEECSolver:
         j_trial = self._fes_hdiv.TrialFunction()
         j_test = self._fes_hdiv.TestFunction()
 
-        with TaskManager():
-            # .Trace() is required for correct BEM integration.
-            # Without it, boundary-edge DOFs get corrupted diagonal
-            # entries (e.g. -1e+11) due to incorrect kernel evaluation.
-            L_op = LaplaceSL(
-                j_trial.Trace() * ds(label)
-            ) * j_test.Trace() * ds(label)
+        # .Trace() is required for correct BEM integration.
+        # Without it, boundary-edge DOFs get corrupted diagonal
+        # entries (e.g. -1e+11) due to incorrect kernel evaluation.
+        L_op = LaplaceSL(
+            j_trial.Trace() * ds(label)
+        ) * j_test.Trace() * ds(label)
 
         L_dense = extract_dense_matrix(L_op.mat, self.n_loop)
         self.L = MU_0 * L_dense
 
         # --- V_0 / P: scalar single layer on SurfaceL2 ---
-        with TaskManager():
-            V_op = SingleLayerPotentialOperator(self._fes_l2,
-                                                intorder=self.intorder)
+        V_op = SingleLayerPotentialOperator(self._fes_l2,
+                                            intorder=self.intorder)
 
         V_dense = extract_dense_matrix(V_op.mat, self.n_star)
         self.V_0 = V_dense              # Raw LaplaceSL (for stabilized mode)
@@ -435,7 +433,7 @@ class NGBEMPEECSolver:
         Returns:
             Q_0: numpy array (n_star x n_loop), real
         """
-        from ngsolve import TaskManager, ds, div
+        from ngsolve import ds, div
         from ngsolve.bem import LaplaceSL
 
         # Product space for BEM coupling operator
@@ -447,10 +445,9 @@ class NGBEMPEECSolver:
 
         n_total = fes_prod.ndof
 
-        with TaskManager():
-            Q_op = LaplaceSL(
-                div(uHDiv.Trace()) * ds(bonus_intorder=self.intorder)
-            ) * vL2 * ds(bonus_intorder=self.intorder)
+        Q_op = LaplaceSL(
+            div(uHDiv.Trace()) * ds(bonus_intorder=self.intorder)
+        ) * vL2 * ds(bonus_intorder=self.intorder)
 
         # Extract the full product-space matrix and get the (1,0) block
         Q_full = extract_dense_matrix(Q_op.mat, n_total)

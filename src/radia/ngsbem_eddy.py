@@ -163,7 +163,7 @@ class EddyCurrentFEMBEM:
             intorder: Integration order for BEM singular quadrature
         """
         from ngsolve import (H1, SurfaceL2, BilinearForm, GridFunction,
-                              TaskManager, ds, dx, grad)
+                              ds, dx, grad)
         from ngsolve.bem import (SingleLayerPotentialOperator,
                                   DoubleLayerPotentialOperator,
                                   HypersingularOperator)
@@ -199,22 +199,21 @@ class EddyCurrentFEMBEM:
 
         # --- BEM operators (exterior Laplace, separate space API) ---
         print("  Assembling BEM operators...")
-        with TaskManager():
-            self._V_op = SingleLayerPotentialOperator(
-                self._fes_l2, intorder=intorder)
-            self._K_op = DoubleLayerPotentialOperator(
-                self._fes_h1, self._fes_l2,
-                trial_definedon=self.mesh.Boundaries(self.surface_label),
-                test_definedon=self.mesh.Boundaries(self.surface_label),
-                intorder=intorder)
-            self._D_op = HypersingularOperator(
-                self._fes_h1,
-                definedon=self.mesh.Boundaries(self.surface_label),
-                intorder=intorder)
-            self._M_bf = BilinearForm(
-                self._fes_h1.TrialFunction()
-                * self._fes_l2.TestFunction().Trace()
-                * ds(self.surface_label)).Assemble()
+        self._V_op = SingleLayerPotentialOperator(
+            self._fes_l2, intorder=intorder)
+        self._K_op = DoubleLayerPotentialOperator(
+            self._fes_h1, self._fes_l2,
+            trial_definedon=self.mesh.Boundaries(self.surface_label),
+            test_definedon=self.mesh.Boundaries(self.surface_label),
+            intorder=intorder)
+        self._D_op = HypersingularOperator(
+            self._fes_h1,
+            definedon=self.mesh.Boundaries(self.surface_label),
+            intorder=intorder)
+        self._M_bf = BilinearForm(
+            self._fes_h1.TrialFunction()
+            * self._fes_l2.TestFunction().Trace()
+            * ds(self.surface_label)).Assemble()
         print("  Done.")
 
         # --- Preconditioner blocks ---
@@ -308,7 +307,7 @@ class EddyCurrentFEMBEM:
 
         where f_H1 = -k^2 * (Hz_inc, v) is the FEM volume source.
         """
-        from ngsolve import (GridFunction, LinearForm, TaskManager,
+        from ngsolve import (GridFunction, LinearForm,
                               BlockMatrix, BlockVector, dx, CF)
         from ngsolve.solvers import GMRes
 
@@ -356,9 +355,8 @@ class EddyCurrentFEMBEM:
         if printrates:
             print(f"  FEMBEM: H1 DOFs={self._fes_h1.ndof}, "
                   f"L2 DOFs={self._fes_l2.ndof}")
-        with TaskManager():
-            sol = GMRes(A=lhs, b=rhs, pre=pre,
-                        tol=1e-8, maxsteps=500, printrates=printrates)
+        sol = GMRes(A=lhs, b=rhs, pre=pre,
+                    tol=1e-8, maxsteps=500, printrates=printrates)
 
         # --- Extract solution ---
         self.gfu_h1 = GridFunction(self._fes_h1)
@@ -717,7 +715,7 @@ class EddyCurrentBEMSIBC:
             intorder: Integration order for BEM singular quadrature
         """
         from ngsolve import (H1, SurfaceL2, BilinearForm, GridFunction,
-                              TaskManager, ds, dx, grad, CF)
+                              ds, dx, grad, CF)
         from ngsolve.bem import (SingleLayerPotentialOperator,
                                   DoubleLayerPotentialOperator,
                                   HypersingularOperator)
@@ -752,22 +750,21 @@ class EddyCurrentBEMSIBC:
         u, v = self._fes_h1.TnT()
         uL2, vL2 = self._fes_l2.TnT()
 
-        with TaskManager():
-            V_op = SingleLayerPotentialOperator(
-                self._fes_l2, intorder=intorder)
-            K_op = DoubleLayerPotentialOperator(
-                self._fes_h1, self._fes_l2,
-                trial_definedon=self.mesh.Boundaries(label),
-                test_definedon=self.mesh.Boundaries(label),
-                intorder=intorder)
-            D_op = HypersingularOperator(
-                self._fes_h1,
-                definedon=self.mesh.Boundaries(label),
-                intorder=intorder)
-            M_bf = BilinearForm(
-                self._fes_h1.TrialFunction()
-                * self._fes_l2.TestFunction().Trace()
-                * ds(label)).Assemble()
+        V_op = SingleLayerPotentialOperator(
+            self._fes_l2, intorder=intorder)
+        K_op = DoubleLayerPotentialOperator(
+            self._fes_h1, self._fes_l2,
+            trial_definedon=self.mesh.Boundaries(label),
+            test_definedon=self.mesh.Boundaries(label),
+            intorder=intorder)
+        D_op = HypersingularOperator(
+            self._fes_h1,
+            definedon=self.mesh.Boundaries(label),
+            intorder=intorder)
+        M_bf = BilinearForm(
+            self._fes_h1.TrialFunction()
+            * self._fes_l2.TestFunction().Trace()
+            * ds(label)).Assemble()
 
         # --- Surface mass matrix (H1 trace) ---
         M_surf_bf = BilinearForm(u * v * ds(label))
@@ -2055,7 +2052,7 @@ class VectorEddyCurrentFEMBEM:
         """
         from ngsolve import (HCurl, HDivSurface, SurfaceL2,
                               BilinearForm, GridFunction,
-                              TaskManager, ds, dx, curl, div, BND)
+                              ds, dx, curl, div, BND)
         from ngsolve.bem import HelmholtzSL
 
         t0 = time.time()
@@ -2107,26 +2104,25 @@ class VectorEddyCurrentFEMBEM:
         (uHDiv, uL2), (vHDiv, vL2) = fes_bem.TnT()
         n_bem_full = fes_bem.ndof
 
-        with TaskManager():
-            # A_kappa: HelmholtzSL on HDivSurface x HDivSurface (vectorial)
-            A_k = HelmholtzSL(
-                uHDiv.Trace() * ds(bonus_intorder=intorder), kappa
-            ) * vHDiv.Trace() * ds(bonus_intorder=intorder)
+        # A_kappa: HelmholtzSL on HDivSurface x HDivSurface (vectorial)
+        A_k = HelmholtzSL(
+            uHDiv.Trace() * ds(bonus_intorder=intorder), kappa
+        ) * vHDiv.Trace() * ds(bonus_intorder=intorder)
 
-            # V_kappa: HelmholtzSL on SurfaceL2 x SurfaceL2 (scalar)
-            V_k = HelmholtzSL(
-                uL2 * ds(bonus_intorder=intorder), kappa
-            ) * vL2 * ds(bonus_intorder=intorder)
+        # V_kappa: HelmholtzSL on SurfaceL2 x SurfaceL2 (scalar)
+        V_k = HelmholtzSL(
+            uL2 * ds(bonus_intorder=intorder), kappa
+        ) * vL2 * ds(bonus_intorder=intorder)
 
-            # Q_kappa: HelmholtzSL on div(HDivSurface) x SurfaceL2
-            Q_k = HelmholtzSL(
-                div(uHDiv.Trace()) * ds(bonus_intorder=intorder), kappa
-            ) * vL2 * ds(bonus_intorder=intorder)
+        # Q_kappa: HelmholtzSL on div(HDivSurface) x SurfaceL2
+        Q_k = HelmholtzSL(
+            div(uHDiv.Trace()) * ds(bonus_intorder=intorder), kappa
+        ) * vL2 * ds(bonus_intorder=intorder)
 
-            # Combined BEM matrix (Weggler stabilized):
-            # S_bem = [A_k, Q_k^T; Q_k, kappa^2*V_k]
-            S_bem_mat = (A_k.mat + Q_k.mat + Q_k.mat.T
-                         + kappa**2 * V_k.mat)
+        # Combined BEM matrix (Weggler stabilized):
+        # S_bem = [A_k, Q_k^T; Q_k, kappa^2*V_k]
+        S_bem_mat = (A_k.mat + Q_k.mat + Q_k.mat.T
+                     + kappa**2 * V_k.mat)
 
         # --- Extract combined BEM matrix using FREE DOFs only ---
         # HDivSurface may have non-free DOFs (wire basket constraints).

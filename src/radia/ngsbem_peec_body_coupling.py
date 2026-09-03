@@ -125,9 +125,8 @@ def _project_biot_savart_to_gf(segments, mesh, fes):
 
     H_cf = biot_savart_wire(segments, current=1.0)
     gf = GridFunction(fes)
-    with TaskManager():
-        gf.Set(H_cf[2])  # Hz component
-        return gf
+    gf.Set(H_cf[2])  # Hz component
+    return gf
 
 
 class CoupledPEECBody:
@@ -372,8 +371,6 @@ class CoupledPEECBody:
         """
         from ngsolve import (H1, BilinearForm, GridFunction, LinearForm,
                               Integrate, CF, dx, grad)
-        from ngsolve import TaskManager
-
         if self._hz_inc_gfs is None:
             self.prepare_coupling()
 

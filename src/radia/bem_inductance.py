@@ -117,7 +117,7 @@ def compute_inductance_source_sink(mesh, source_label="source", sink_label="sink
             gf_J: GridFunction(HDivSurface) with solved J
         or dict with 'error' key on failure.
     """
-    from ngsolve import (HDivSurface, SurfaceL2, TaskManager, ds, BND,
+    from ngsolve import (HDivSurface, SurfaceL2, ds, BND,
                          BilinearForm, LinearForm, div, GridFunction)
     from ngsolve.bem import LaplaceSL
 
@@ -147,8 +147,7 @@ def compute_inductance_source_sink(mesh, source_label="source", sink_label="sink
     # --- LaplaceSL matrix: n_J x n_J ---
     t0 = time.perf_counter()
     jt, jv = fes_J.TnT()
-    with TaskManager():
-        V_op = LaplaceSL(jt.Trace() * ds, use_fmm=False) * jv.Trace() * ds
+    V_op = LaplaceSL(jt.Trace() * ds, use_fmm=False) * jv.Trace() * ds
     SL = _to_dense(V_op.mat)
     t_assembly = time.perf_counter() - t0
 
