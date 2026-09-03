@@ -11,8 +11,7 @@ n_peri-mesh sweep against the BEM-A surface-mesh sweep.  Recorded in
 | File | Contents |
 |---|---|
 | `3turnCoil_peec_bema_convergence_2026_05_13.json` | Per-step L_coil values: PEEC at n_peri=8/16/32/64 vs BEM-A at 4028/5938/9848/14972 tris.  `frequency=50000`, Cu wire.  L converges monotonically for PEEC (423.89 → 431.55 nH, L_∞ ≈ 434 nH); BEM-A is non-monotonic (432.57 → 417.56 → 412.18 nH) and 14,972 tris is unreachable on this machine (dense memory + MINRES stall).  Production retains n_peri=16 / L = 426.30 nH, ~1 s runtime. |
-| `peec_bema_convergence.ipynb` | Result-bearing validation notebook with the comparison table and convergence plot. |
-| `peec_bema_convergence_results.json` | Versioned durable result JSON synchronized with the notebook. |
+| `peec_bema_convergence_results.json` | Versioned durable result JSON with the comparison data, summary, and provenance. |
 
 ## Key finding
 
@@ -52,5 +51,4 @@ geometry match + h-refinement + an FEM A-V truth.
 
 **Scalable solver:** loop-COCR / HACApK-COCR (`solver='cocr'` or
 `'hacapk_cocr'`), ~24 mesh-independent iterations, exact vs dense LU. See the
-`closure_2026_07_03` block in `peec_bema_convergence_results.json` and the
-`## 2026-07-03 Closure` cells in the notebook.
+`closure_2026_07_03` block in `peec_bema_convergence_results.json`.

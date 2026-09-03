@@ -1,7 +1,6 @@
 {
-  "schema": "radia.validation.peec-bema-convergence.v1",
+  "schema": "radia.validation.peec-bema-convergence.v2",
   "generated_at_utc": "2026-06-28T08:42:55Z",
-  "notebook": "validation_test/peec_bema_convergence/peec_bema_convergence.ipynb",
   "source_raw_json": "validation_test/peec_bema_convergence/3turnCoil_peec_bema_convergence_2026_05_13.json",
   "source_raw_json_sha256": "d74edcd380de8e78e31042513caa5afe8592e59a87367dcb6151864b199643d8",
   "versions": {
