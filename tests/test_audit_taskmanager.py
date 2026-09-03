@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import warnings
 from pathlib import Path
 
 import pytest
@@ -104,3 +105,19 @@ def test_helper_owned_region_is_reported(audit_module, tmp_path):
 
     assert len(findings) == 1
     assert findings[0].kind == "helper-wraps"
+
+
+def test_syntax_warning_identifies_source_file(audit_module, tmp_path):
+    path = tmp_path / "tests" / "test_invalid_escape.py"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        '"""invalid \\i escape"""\nform = BilinearForm(space)\n',
+        encoding="utf-8",
+    )
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", SyntaxWarning)
+        audit_module._audit_caller(path)
+
+    assert caught
+    assert caught[0].filename == str(path)

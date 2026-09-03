@@ -349,7 +349,7 @@ def _audit_helper(path: Path) -> list[Finding]:
         text = path.read_text(encoding="utf-8", errors="replace")
         if "TaskManager" not in text:
             return findings
-        tree = ast.parse(text)
+        tree = ast.parse(text, filename=str(path))
     except SyntaxError as exc:
         return [Finding(path, exc.lineno or 0, "parse-error",
                          str(exc)[:80], "fix syntax")]
@@ -385,7 +385,7 @@ def _audit_caller(path: Path) -> list[Finding]:
         text = path.read_text(encoding="utf-8", errors="replace")
         if not any(token in text for token in _CANDIDATE_TOKENS):
             return findings
-        tree = ast.parse(text)
+        tree = ast.parse(text, filename=str(path))
     except SyntaxError as exc:
         return [Finding(path, exc.lineno or 0, "parse-error",
                          str(exc)[:80], "fix syntax")]
