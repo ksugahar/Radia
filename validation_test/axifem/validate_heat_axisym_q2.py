@@ -7,17 +7,18 @@ Q1/Q2 temperature and near-axis-gradient comparison as a durable JSON result.
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timezone
 import importlib.metadata
 import json
-from pathlib import Path
+import os
 import platform
 import sys
 import tempfile
+from datetime import UTC, datetime
+from pathlib import Path
 
 import numpy as np
+from ngsolve import TaskManager
 from scipy.special import j0, jn_zeros
-
 
 REPO = Path(__file__).resolve().parents[2]
 PANELS = REPO / "src" / "radia" / "panels"
@@ -25,9 +26,8 @@ FIXTURES = REPO / "validation_test" / "panels" / "fixtures"
 sys.path.insert(0, str(PANELS))
 sys.path.insert(0, str(FIXTURES))
 
-from calc_heat_axisym import solve_heat_axisym  # noqa: E402
-from generate_heat_cylinder_axisym import main as generate_fixture  # noqa: E402
-
+from calc_heat_axisym import solve_heat_axisym
+from generate_heat_cylinder_axisym import main as generate_fixture
 
 RADIUS_M = 0.025
 HEIGHT_M = 0.025
@@ -64,7 +64,7 @@ def _analytical_temperature(radius_m: float, terms: int = 100) -> float:
 
 
 def _run_order(order: int, output_dir: Path, reference: dict[str, float]):
-    from ngsolve import GridFunction, H1, Mesh, grad
+    from ngsolve import H1, GridFunction, Mesh, grad
 
     fixture = FIXTURES / "heat_workpiece_cylinder_R25_H25_axisym.vol"
     result = solve_heat_axisym(
@@ -117,16 +117,21 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    generate_fixture()
     reference = {
         "axis_temperature_C": _analytical_temperature(0.0),
         "surface_temperature_C": _analytical_temperature(RADIUS_M),
         "series_terms": 100,
     }
-    with tempfile.TemporaryDirectory(prefix="radia-axisym-heat-") as directory:
-        output_dir = Path(directory)
-        q1 = _run_order(1, output_dir, reference)
-        q2 = _run_order(2, output_dir, reference)
+    temp_root = Path(os.environ.get("RADIA_TEMP_DIR", r"C:\temp"))
+    temp_root.mkdir(parents=True, exist_ok=True)
+    with TaskManager():
+        generate_fixture()
+        with tempfile.TemporaryDirectory(
+            prefix="radia-axisym-heat-", dir=temp_root
+        ) as directory:
+            output_dir = Path(directory)
+            q1 = _run_order(1, output_dir, reference)
+            q2 = _run_order(2, output_dir, reference)
 
     slope_reduction = abs(q1["radial_gradient_at_axis_C_per_m"]) / max(
         abs(q2["radial_gradient_at_axis_C_per_m"]), 1.0e-15
@@ -145,7 +150,7 @@ def main() -> int:
     }
     payload = {
         "schema": "radia.validation.axisym-heat-q2.v1",
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "status": "pass" if all(checks.values()) else "fail",
         "runtime": {
             "python": platform.python_version(),

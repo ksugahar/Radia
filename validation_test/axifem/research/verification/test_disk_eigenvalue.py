@@ -14,13 +14,17 @@
 import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
-
+from netgen.occ import Glue, MoveTo, OCCGeometry, X, Y
 from ngsolve import (
-    Mesh, BilinearForm, InnerProduct, grad, dx, x, CoefficientFunction,
+    BilinearForm,
+    InnerProduct,
+    Mesh,
+    TaskManager,
+    dx,
+    grad,
+    x,
 )
-from netgen.occ import OCCGeometry, MoveTo, Glue, X, Y
 from radia.axifem import H1Henrotte
-
 
 R_DISK = 10e-3
 T_DISK = 2e-3
@@ -104,15 +108,12 @@ def main():
     print(f"\n{'case':<8} {'tau_1 us':>10} {'tau_2':>8} {'tau_3':>8} {'tau_4':>8} "
           f"{'r1/Q1':>8}")
     for R_air, Z_air, h_d, h_a, label in cases:
-        try:
-            taus, _, _ = solve_disk(R_air, Z_air, h_d, h_a)
-            r1 = taus[0] / PYTHON_Q1_REF[0]
-            print(f"{label:<8} {taus[0]:>10.3f} {taus[1]:>8.2f} {taus[2]:>8.2f} "
-                  f"{taus[3]:>8.2f} {r1:>8.4f}")
-        except Exception as e:
-            print(f"{label:<8} ERROR: {e}")
-            import traceback; traceback.print_exc()
+        taus, _, _ = solve_disk(R_air, Z_air, h_d, h_a)
+        r1 = taus[0] / PYTHON_Q1_REF[0]
+        print(f"{label:<8} {taus[0]:>10.3f} {taus[1]:>8.2f} {taus[2]:>8.2f} "
+              f"{taus[3]:>8.2f} {r1:>8.4f}")
 
 
 if __name__ == "__main__":
-    main()
+    with TaskManager():
+        main()
