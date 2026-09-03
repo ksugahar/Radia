@@ -42,8 +42,9 @@ linear equations with PARDISO", FGCS 2003.  DOI: 10.1016/S0167-739X(03)00188-2.
 ## What it is
 
 Multifrontal direct solver with **METIS** reordering and **OpenMP**
-parallelism.  Bundled in Intel MKL as `mkl_pardiso` — ships with
-NGSolve binary distributions automatically.
+parallelism. Intel distributes PARDISO in MKL. The NGSolve PyPI wheel uses
+`ngsolve-openblas`; a compatible MKL runtime is a separate environment
+dependency when PARDISO is required.
 
 ## How to invoke from NGSolve
 
@@ -74,8 +75,10 @@ Other choices: `inverse="sparsecholesky"` (built-in symmetric direct),
 - Singular matrices (Periodic with ungauged Omega-reduction): PARDISO
   may return garbage without error.  Always check with one CG iteration
   on the same matrix.
-- MKL license: included with NGSolve PyPI wheel via `mkl>=2024.2.0`
-  dependency.  No separate license needed.
+- The NGSolve 6.2.2606 wheel uses its `ngsolve-openblas` dependency; it does
+  not bundle or select MKL. PARDISO requires a separately installed compatible
+  MKL runtime. Radia pins `mkl>=2026,<2027` for its own native kernels, and
+  availability must be checked in the active environment.
 """
 
 

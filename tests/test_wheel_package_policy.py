@@ -20,6 +20,16 @@ def test_radia_wheel_excludes_native_backup_files():
     } <= excluded
 
 
+def test_mkl_is_external_but_the_radia_owned_motor_abi_is_documented():
+    config = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    policies = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+
+    assert "mkl>=2026,<2027" in config["project"]["dependencies"]
+    assert "mkl>=2024.2.0" not in policies
+    assert "radia_motor_rom.dll" in policies
+    assert "no third-party DLLs" in policies
+
+
 def test_ci_native_artifact_excludes_backups_and_pre_push_does_not_upload():
     hook = (ROOT / "tools" / "git-hooks" / "pre-push").read_text(
         encoding="utf-8"
