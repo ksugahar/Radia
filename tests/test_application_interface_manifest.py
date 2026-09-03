@@ -75,5 +75,6 @@ def test_retired_optimization_adapters_are_absent():
         REPO_ROOT / "src" / "radia" / "panels" / "optuna_study_helper.py",
         REPO_ROOT / "src" / "radia" / "ih_claude_proposer.py",
         REPO_ROOT / "src" / "radia" / "esim_vtk_export.py",
+        REPO_ROOT / "src" / "radia" / "esim_hantila.py",
     ]
     assert all(not path.exists() for path in retired)
