@@ -662,6 +662,14 @@ public:
         if (!std::isfinite(radius_) || radius_ <= 0.0)
             throw std::invalid_argument(
                 "KelvinRadiaFluxDensity radius must be positive and finite");
+        for (double value : kelvin_center_)
+            if (!std::isfinite(value))
+                throw std::invalid_argument(
+                    "KelvinRadiaFluxDensity kelvin_center must be finite");
+        for (double value : physical_center_)
+            if (!std::isfinite(value))
+                throw std::invalid_argument(
+                    "KelvinRadiaFluxDensity physical_center must be finite");
     }
 
     double Evaluate(const ngfem::BaseMappedIntegrationPoint&) const override {

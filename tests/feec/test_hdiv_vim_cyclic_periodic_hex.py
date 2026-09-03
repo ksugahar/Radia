@@ -147,6 +147,12 @@ def test_cyclic_rotation_pairs_do_not_claim_kelvin_readiness():
     assert has_kelvin_identification(_connected_sector_mesh()) is False
 
 
+def test_identification_predicate_honors_explicit_boundary_names():
+    mesh = _connected_sector_mesh()
+    assert has_kelvin_identification(
+        mesh, inner_bnd="periodic_min", outer_bnd="periodic_max") is True
+
+
 def test_ffag_cyclic_identification_requires_explicit_number_after_kelvin_or_other_pairs():
     mesh = _two_layer_sector_mesh()
     # A separate periodic relation is a stand-in for a Kelvin identification.

@@ -148,7 +148,8 @@ def _boundary_vertex_ids(mesh, boundary: str) -> set[int]:
     return vertices
 
 
-def has_kelvin_identification(mesh) -> bool:
+def has_kelvin_identification(
+        mesh, inner_bnd: str = "kelvin_int", outer_bnd: str = "kelvin_ext") -> bool:
     """Return whether the Kelvin boundaries, rather than any boundary, match.
 
     A rotational FFAG sector and a Kelvin exterior may both use NGSolve
@@ -159,8 +160,8 @@ def has_kelvin_identification(mesh) -> bool:
     boundary vertex with a ``kelvin_ext`` boundary vertex.
     """
     try:
-        inner = _boundary_vertex_ids(mesh, "kelvin_int")
-        outer = _boundary_vertex_ids(mesh, "kelvin_ext")
+        inner = _boundary_vertex_ids(mesh, inner_bnd)
+        outer = _boundary_vertex_ids(mesh, outer_bnd)
         if not inner or not outer:
             return False
         pairs = mesh.ngmesh.GetIdentifications()
@@ -272,7 +273,8 @@ def add_kelvin_identification(
             f"inner_bnd / outer_bnd names.")
 
     # --- Skip-if-existing pre-flight ----------------------------------------
-    kelvin_already_identified = has_kelvin_identification(mesh)
+    kelvin_already_identified = has_kelvin_identification(
+        mesh, inner_bnd=inner_bnd, outer_bnd=outer_bnd)
     if skip_if_existing and kelvin_already_identified:
         return {
             "n_pairs": 0,
@@ -310,7 +312,6 @@ def add_kelvin_identification(
         point_tolerance = max(0.05 * off_len, 1e-3)
 
     # --- Collect vertex PointIndex sets on each side ------------------------
-    from ngsolve import BND
     inner_pids = _boundary_vertex_ids(mesh, inner_bnd)
     outer_pids = _boundary_vertex_ids(mesh, outer_bnd)
 
