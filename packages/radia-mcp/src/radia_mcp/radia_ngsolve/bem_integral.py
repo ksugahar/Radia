@@ -27,6 +27,36 @@ from netgen.occ import Sphere, Pnt, OCCGeometry
 import netgen.occ as occ
 
 
+def _bem_surface_measure(intorder):
+    """Match the legacy BEM absolute integration order on the variational API."""
+    return ds(bonus_intorder=intorder - 4)
+
+
+def _laplace_sl(trial, test, intorder):
+    measure = _bem_surface_measure(intorder)
+    return bem.LaplaceSL(trial.Trace() * measure) * test.Trace() * measure
+
+
+def _laplace_dl(trial, test, intorder):
+    measure = _bem_surface_measure(intorder)
+    return bem.LaplaceDL(trial.Trace() * measure) * test.Trace() * measure
+
+
+def _helmholtz_sl(trial, test, kappa, intorder):
+    measure = _bem_surface_measure(intorder)
+    return bem.HelmholtzSL(trial.Trace() * measure, kappa) * test.Trace() * measure
+
+
+def _helmholtz_dl(trial, test, kappa, intorder):
+    measure = _bem_surface_measure(intorder)
+    return bem.HelmholtzDL(trial.Trace() * measure, kappa) * test.Trace() * measure
+
+
+def _helmholtz_cf(trial, test, kappa, intorder):
+    measure = _bem_surface_measure(intorder)
+    return bem.HelmholtzCF(trial.Trace() * measure, kappa) * test.Trace() * measure
+
+
 def single_layer_capacitance(mesh, order=3, intorder=12, curve_order=4, tol=1e-9, maxiter=600):
     """Capacitance of the conductor(s) bounded by ``mesh`` (a closed surface) by the Laplace SINGLE-LAYER
     indirect BEM.  Sets the conductor potential to 1, solves the first-kind integral equation V sigma = 1
@@ -34,7 +64,7 @@ def single_layer_capacitance(mesh, order=3, intorder=12, curve_order=4, tol=1e-9
     total charge Q = integral(sigma) = C (since the potential is unity).  ``eps0 = 1`` (normalised)."""
     fes = ng.SurfaceL2(mesh, order=order, dual_mapping=True)
     u, v = fes.TnT()
-    V = bem.SingleLayerPotentialOperator(fes, intorder=intorder)          # Laplace single layer (SPD)
+    V = _laplace_sl(u, v, intorder)                                     # Laplace single layer (SPD)
     rhs = LinearForm(1.0 * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble()
     mass = BilinearForm(u.Trace() * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble().mat
     pre = mass.Inverse(freedofs=fes.FreeDofs())
@@ -110,7 +140,7 @@ def conductor_polarizability(mesh, axis="z", order=3, intorder=12, maxiter=600):
     coord = {"x": ng.x, "y": ng.y, "z": ng.z}[axis]
     fes = ng.SurfaceL2(mesh, order=order, dual_mapping=True)
     u, v = fes.TnT()
-    V = bem.SingleLayerPotentialOperator(fes, intorder=intorder)
+    V = _laplace_sl(u, v, intorder)
     rhs = LinearForm(coord * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble()
     mass = BilinearForm(u.Trace() * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble().mat
     pre = mass.Inverse(freedofs=fes.FreeDofs())
@@ -152,8 +182,8 @@ def single_layer_spectrum(n_eig=9, maxh=0.6, order=1, intorder=10, curve_order=4
     mesh = ng.Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), 1.0)).GenerateMesh(maxh=maxh)).Curve(curve_order)
     fes = ng.SurfaceL2(mesh, order=order, dual_mapping=True)
     N = fes.ndof
-    V = bem.SingleLayerPotentialOperator(fes, intorder=intorder)
     u, w = fes.TnT()
+    V = _laplace_sl(u, w, intorder)
     M = BilinearForm(u.Trace() * w.Trace() * ds(bonus_intorder=intorder - 4)).Assemble().mat
     x = V.mat.CreateColVector(); y = V.mat.CreateColVector()
     Vd = np.zeros((N, N)); Md = np.zeros((N, N))
@@ -184,7 +214,7 @@ def helmholtz_exterior_point_source(kappa, a=1.0, maxh=0.4, order=3, rext=3.0, i
     mesh = ng.Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), a)).GenerateMesh(maxh=maxh)).Curve(4)
     fes = ng.SurfaceL2(mesh, order=order, complex=True, dual_mapping=True)
     u, v = fes.TnT()
-    V = bem.HelmholtzSingleLayerPotentialOperator(fes, fes, kappa, intorder=intorder)
+    V = _helmholtz_sl(u, v, kappa, intorder)
     g = cmath.exp(1j * kappa * a) / (4.0 * np.pi * a)                      # constant interior-source trace
     rhs = LinearForm(g * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble()
     mass = BilinearForm(u.Trace() * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble().mat
@@ -239,7 +269,7 @@ def helmholtz_soundsoft_sphere_scattering(kappa, a=1.0, maxh=0.35, order=3, rext
     mesh = ng.Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), a)).GenerateMesh(maxh=maxh)).Curve(4)
     fes = ng.SurfaceL2(mesh, order=order, complex=True, dual_mapping=True)
     u, v = fes.TnT()
-    V = bem.HelmholtzSingleLayerPotentialOperator(fes, fes, kappa, intorder=intorder)
+    V = _helmholtz_sl(u, v, kappa, intorder)
     uinc = ng.exp(1j * kappa * ng.z)                                      # incident plane wave (+z)
     rhs = LinearForm(-uinc * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble()
     mass = BilinearForm(u.Trace() * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble().mat
@@ -306,8 +336,8 @@ def helmholtz_soundhard_sphere_scattering(kappa, a=1.0, maxh=0.35, order=3, rext
     mesh = ng.Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), a)).GenerateMesh(maxh=maxh)).Curve(4)
     fes = ng.SurfaceL2(mesh, order=order, complex=True, dual_mapping=True)
     u, v = fes.TnT()
-    V = bem.HelmholtzSingleLayerPotentialOperator(fes, fes, kappa, intorder=intorder)
-    K = bem.HelmholtzDoubleLayerPotentialOperator(fes, fes, kappa, intorder=intorder)
+    V = _helmholtz_sl(u, v, kappa, intorder)
+    K = _helmholtz_dl(u, v, kappa, intorder)
     mass = BilinearForm(u.Trace() * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble().mat
     nrm = specialcf.normal(3)
     g = -1j * kappa * nrm[2] * ng.exp(1j * kappa * ng.z)                  # Neumann datum sigma = -du_inc/dn
@@ -364,8 +394,8 @@ def helmholtz_sphere_radiation_impedance(kappa, a=1.0, maxh=0.3, order=3, intord
     mesh = ng.Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), a)).GenerateMesh(maxh=maxh)).Curve(4)
     fes = ng.SurfaceL2(mesh, order=order, complex=True, dual_mapping=True)
     u, v = fes.TnT()
-    V = bem.HelmholtzSingleLayerPotentialOperator(fes, fes, kappa, intorder=intorder)
-    K = bem.HelmholtzDoubleLayerPotentialOperator(fes, fes, kappa, intorder=intorder)
+    V = _helmholtz_sl(u, v, kappa, intorder)
+    K = _helmholtz_dl(u, v, kappa, intorder)
     mass = BilinearForm(u.Trace() * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble().mat
     pre = mass.Inverse(freedofs=fes.FreeDofs())
     area = Integrate(ng.CoefficientFunction(1.0) * ds, mesh).real
@@ -396,7 +426,7 @@ def helmholtz_cfie_soundsoft_sphere(kappa, a=1.0, maxh=0.35, order=3, rext=2.0, 
     (helmholtz_soundsoft_sphere_scattering).  The indirect ansatz couples the double- and single-layer
     potentials, u_scat = (D - i kappa S) psi, which is UNIQUELY solvable for ALL real kappa (no spurious
     interior resonances).  The boundary integral equation is (1/2 I + K - i kappa V) psi = -u_inc|_Gamma,
-    assembled here as ``(1/2 M + HelmholtzCombinedFieldOperator) psi = rhs`` (the operator excludes the 1/2
+    assembled here as ``(1/2 M + HelmholtzCF) psi = rhs`` (the operator excludes the 1/2
     jump, added via the mass matrix M).  The scattered field is evaluated as
 
         u_scat(x) = INT_Gamma psi(y) [ dG(x,y)/dn_y - i kappa G(x,y) ] dGamma(y),
@@ -411,7 +441,7 @@ def helmholtz_cfie_soundsoft_sphere(kappa, a=1.0, maxh=0.35, order=3, rext=2.0, 
     mesh = ng.Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), a)).GenerateMesh(maxh=maxh)).Curve(4)
     fes = ng.SurfaceL2(mesh, order=order, complex=True, dual_mapping=True)
     u, v = fes.TnT()
-    cfo = bem.HelmholtzCombinedFieldOperator(fes, fes, kappa=kappa, intorder=intorder)
+    cfo = _helmholtz_cf(u, v, kappa, intorder)
     mass = BilinearForm(u.Trace() * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble().mat
     rhs = LinearForm(-ng.exp(1j * kappa * ng.z) * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble()
     psi = GridFunction(fes)
@@ -444,8 +474,8 @@ def helmholtz_irregular_frequency_condition(kappa, a=1.0, maxh=0.9, order=0, int
     fes = ng.SurfaceL2(mesh, order=order, complex=True, dual_mapping=True)
     u, v = fes.TnT()
     nd = fes.ndof
-    V = bem.HelmholtzSingleLayerPotentialOperator(fes, fes, kappa, intorder=intorder)
-    cfo = bem.HelmholtzCombinedFieldOperator(fes, fes, kappa=kappa, intorder=intorder)
+    V = _helmholtz_sl(u, v, kappa, intorder)
+    cfo = _helmholtz_cf(u, v, kappa, intorder)
     mass = BilinearForm(u.Trace() * v.Trace() * ds(bonus_intorder=intorder - 2)).Assemble().mat
 
     def _dense(op):
@@ -511,7 +541,7 @@ def helmholtz_soundsoft_far_field(kappa, a=1.0, maxh=0.3, order=3, intorder=12,
     mesh = ng.Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), a)).GenerateMesh(maxh=maxh)).Curve(4)
     fes = ng.SurfaceL2(mesh, order=order, complex=True, dual_mapping=True)
     u, v = fes.TnT()
-    cfo = bem.HelmholtzCombinedFieldOperator(fes, fes, kappa=kappa, intorder=intorder)
+    cfo = _helmholtz_cf(u, v, kappa, intorder)
     mass = BilinearForm(u.Trace() * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble().mat
     rhs = LinearForm(-ng.exp(1j * kappa * ng.z) * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble()
     psi = GridFunction(fes)
@@ -594,8 +624,8 @@ def helmholtz_soundhard_far_field(kappa, a=1.0, maxh=0.3, order=3, intorder=12,
     mesh = ng.Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), a)).GenerateMesh(maxh=maxh)).Curve(4)
     fes = ng.SurfaceL2(mesh, order=order, complex=True, dual_mapping=True)
     u, v = fes.TnT()
-    V = bem.HelmholtzSingleLayerPotentialOperator(fes, fes, kappa, intorder=intorder)
-    K = bem.HelmholtzDoubleLayerPotentialOperator(fes, fes, kappa, intorder=intorder)
+    V = _helmholtz_sl(u, v, kappa, intorder)
+    K = _helmholtz_dl(u, v, kappa, intorder)
     mass = BilinearForm(u.Trace() * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble().mat
     nrm = specialcf.normal(3)
     g = -1j * kappa * nrm[2] * ng.exp(1j * kappa * ng.z)                  # Neumann datum sigma = -du_inc/dn
@@ -679,8 +709,8 @@ def helmholtz_impedance_far_field(kappa, a=1.0, beta=0.5, maxh=0.3, order=3, int
     mesh = ng.Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), a)).GenerateMesh(maxh=maxh)).Curve(4)
     fes = ng.SurfaceL2(mesh, order=order, complex=True, dual_mapping=True)
     u, v = fes.TnT()
-    V = bem.HelmholtzSingleLayerPotentialOperator(fes, fes, kappa, intorder=intorder)
-    K = bem.HelmholtzDoubleLayerPotentialOperator(fes, fes, kappa, intorder=intorder)
+    V = _helmholtz_sl(u, v, kappa, intorder)
+    K = _helmholtz_dl(u, v, kappa, intorder)
     mass = BilinearForm(u.Trace() * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble().mat
     nrm = specialcf.normal(3)
     g = -1j * kappa * (nrm[2] + beta) * ng.exp(1j * kappa * ng.z)         # Robin datum -(dn u_inc + i k beta u_inc)
@@ -966,7 +996,7 @@ def sphere_gibc_benchmark(R=1.0, omega=1e6, mu_r=1.0, sigma=5.8e7, maxh=0.3, ord
 #
 # BIE (first-kind, exterior, direct representation) -- NGSolve sign convention:
 #
-#   NGSolve's DoubleLayerPotentialOperator uses n_y = outward from the enclosed
+#   NGSolve's LaplaceDL uses n_y = outward from the enclosed
 #   volume (standard Sauter-Schwab convention).  The Calderon identity gives
 #
 #     Interior DtN:  V σ_int = (+½ M + K) u   →  σ = V⁻¹ (+½ M + K) u,  eigenvalue +n/R
@@ -1016,7 +1046,7 @@ def laplace_exterior_dtn(fes_bnd, intorder=12):
     The exterior first-kind BIE is V σ = (-½ M + K) u (exterior-side jump −½ of the
     double-layer, same K as the interior BIE V σ = (+½ M + K) u but with negative mass).
     This follows the Sauter-Schwab Calderon identity with n_y = outward from the enclosed
-    domain (the NGSolve DoubleLayerPotentialOperator convention).
+    domain (the NGSolve LaplaceDL convention).
 
     Returns the dense DtN matrix as a complex numpy array (ndof × ndof).
     For a sphere of radius R the DtN eigenvalue for dipole mode Y₁^m is −2/R
@@ -1034,8 +1064,8 @@ def laplace_exterior_dtn(fes_bnd, intorder=12):
     sub-block and scatters zeros back.  For a standalone closed surface every DOF
     is free and this is a no-op."""
     u, v = fes_bnd.TnT()
-    V = bem.SingleLayerPotentialOperator(fes_bnd, intorder=intorder)
-    K = bem.DoubleLayerPotentialOperator(fes_bnd, fes_bnd, intorder=intorder)
+    V = _laplace_sl(u, v, intorder)
+    K = _laplace_dl(u, v, intorder)
     M = BilinearForm(u.Trace() * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble().mat
     ndof = fes_bnd.ndof
     V_d = _dense_mat(V.mat, ndof)
