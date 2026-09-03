@@ -243,6 +243,11 @@ def test_peec_wpt_docs_use_installed_radia_package():
         + ", ".join(sorted(offenders))
     )
 
+    quickstart = docs_dir.parent / "QUICKSTART_WPT.md"
+    source = quickstart.read_text(encoding="utf-8", errors="replace").replace("\\", "/")
+    assert "sys.path.insert" not in source
+    assert "from peec_matrices import" not in source
+
 
 def test_basic_peec_docs_use_installed_radia_package():
     docs_dir = ROOT / "docs" / "peec_integration" / "demos" / "basic_peec"

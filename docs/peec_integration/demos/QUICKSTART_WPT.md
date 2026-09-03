@@ -16,9 +16,7 @@ pip install radia numpy matplotlib
 import numpy as np
 
 # Import PEEC builder
-import sys
-sys.path.insert(0, '../../src/radia')
-from peec_matrices import PEECBuilder
+from radia.peec_matrices import PEECBuilder
 
 # Physical parameters
 LENGTH = 0.1       # 100mm coil segment
