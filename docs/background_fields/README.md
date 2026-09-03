@@ -1,6 +1,6 @@
 # Radia Background Field Docs
 
-This directory contains the result-saved docs layer and notebook-coupled helper
+This directory contains the result-bearing docs layer and notebook-coupled helper
 scripts demonstrating how to use Python callback functions as background
 magnetic fields in Radia simulations using `rad.ObjBckg()`.
 
@@ -25,19 +25,19 @@ Radia's `ObjBckg` function allows you to define arbitrary background magnetic fi
 ### Example Scripts
 
 #### 1. **quadrupole_analytical.py**
-   - Simple quadrupole background field example with nonlinear material (MatSatIsoFrm)
+   - Simple quadrupole background field example with mesh-backed linear soft iron
    - Tests B→H conversion and solver convergence with background fields
    - Verifies B/H = μ₀ at multiple far-field points
 
 #### 2. **sphere_in_quadrupole.py**
    - Analytical solution comparison for magnetizable cube in quadrupole field
-   - Uses nonlinear material (MatSatIsoFrm)
+   - Uses the HDiv-VIM `soft_iron_box` intent constructor
    - Evaluates 11 test points at distances 20-100 mm
    - Includes error statistics grouped by distance
 
 #### 3. **permeability_comparison.py**
    - Compares accuracy across different permeability values
-   - Tests with μᵣ = 10, 100, 1000 using linear material (MatLin)
+   - Tests with μᵣ = 10, 100, 1000 using mesh-backed linear material
    - 11 test points per permeability value
    - Demonstrates accuracy across a wide permeability range
 
@@ -48,7 +48,9 @@ Radia's `ObjBckg` function allows you to define arbitrary background magnetic fi
 
 ```python
 import radia as rd
+import ngsolve as ng
 import numpy as np
+from radia.vim import soft_iron_box
 
 # Radia always uses meters
 
@@ -73,22 +75,21 @@ def quadrupole_field(pos):
 # Create background field source
 background = rd.ObjBckg(quadrupole_field)
 
-# Create magnetizable object using ObjHexahedron
+# Create mesh-backed soft iron through the current HDiv-VIM intent API
 mm = 1e-3
-half = 5 * mm
-vertices = [[-half,-half,-half], [half,-half,-half], [half,half,-half], [-half,half,-half],
-            [-half,-half,half], [half,-half,half], [half,half,half], [-half,half,half]]
-cube = rd.ObjHexahedron(vertices, [0, 0, 0])
-
-# Apply linear isotropic material (mu_r = 1000)
-mat = rd.MatLin(1000)
-rd.MatApl(cube, mat)
+cube = soft_iron_box(
+    center=(0.0, 0.0, 0.0),
+    size=(10 * mm, 10 * mm, 10 * mm),
+    mu_r=1000.0,
+    nsub=2,
+)
 
 # Combine with background field
 system = rd.ObjCnt([cube, background])
 
-# Solve
-rd.Solve(system, 0.0001, 10000)
+# Solve through the NGSolve-backed HDiv-VIM route
+with ng.TaskManager():
+    rd.Solve(system)
 
 # Evaluate total field (object + background)
 B_total = rd.Fld(system, 'b', [20*mm, 0, 0])
@@ -198,12 +199,12 @@ def sextupole_field(pos):
 ## Requirements
 
 - Python 3.8+
-- Radia with CoefficientFunction support
+- Radia and its supported NGSolve runtime
 - NumPy
 - Cubit (optional, for mesh generation)
 
 ## References
 
 - Result-saved notebook: `docs/background_fields/background_fields.ipynb`
-- Synchronized result JSON: `docs/background_fields/background_fields_results.json`
+- Saved demonstration results: `docs/background_fields/background_fields.ipynb`
 - Radia to NGSolve examples: `validation_test/ngsolve_integration/`

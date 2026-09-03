@@ -83,3 +83,14 @@ def test_non_cubit_code_has_no_vtk_output_path() -> None:
         "Only cubit-mesh-export may produce VTK. Use GmshPostExport and checked "
         ".msh v4.1 output elsewhere:\n" + "\n".join(violations)
     )
+
+
+def test_docs_do_not_track_paraview_state_files() -> None:
+    state_files = sorted(
+        path.relative_to(ROOT).as_posix() for path in (ROOT / "docs").rglob("*.pvsm")
+    )
+    assert not state_files, (
+        "Docs use saved notebook output and GMSH post-processing artifacts; "
+        "ParaView state files are stale machine-specific UI state:\n"
+        + "\n".join(state_files)
+    )
