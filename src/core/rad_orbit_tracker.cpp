@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <exception>
 #include <sstream>
 #include <stdexcept>
 #include <vector>
@@ -184,7 +185,9 @@ void InterpolateState(const StepRecord& start, const StepRecord& end,
 
 }  // namespace
 
-OrbitTrackResult TrackReferenceOrbit3DToPlane(
+namespace {
+
+OrbitTrackResult TrackReferenceOrbit3DToPlaneImpl(
     const rad_hdiv::HDivFieldEvaluator* iron,
     double iron_scale,
     int iron_algorithm,
@@ -228,10 +231,6 @@ OrbitTrackResult TrackReferenceOrbit3DToPlane(
         || !(plane_normal_norm > 0.0) || station_count < 2)
         throw std::invalid_argument(
             "orbit tracker: integration controls are invalid");
-
-    // Solve-loop self-wrap: the iron evaluator and any inner ParallelFor
-    // reuse this region instead of standing up a pool per field call.
-    ngcore::RegionTaskManager task_manager;
 
     const auto selected_algorithm = iron_algorithm < 0
         ? rad_hdiv::HDivFieldEvaluator::Algorithm::Auto
@@ -366,6 +365,52 @@ OrbitTrackResult TrackReferenceOrbit3DToPlane(
     for (std::size_t midpoint = 0; midpoint < midpoint_count; ++midpoint)
         curvature_out[midpoint] =
             -midpoint_field[3*midpoint+2] * inverse_rigidity;
+    return result;
+}
+
+}  // namespace
+
+OrbitTrackResult TrackReferenceOrbit3DToPlane(
+    const rad_hdiv::HDivFieldEvaluator* iron,
+    double iron_scale,
+    int iron_algorithm,
+    int radia_object,
+    int mirror_z,
+    const double constant_field_t[3],
+    double magnetic_rigidity,
+    const double entrance_point[3],
+    const double entrance_direction[3],
+    const double exit_plane_normal[3],
+    double exit_plane_offset_m,
+    double step_m,
+    double maximum_path_m,
+    double planarity_tolerance_m,
+    std::size_t station_count,
+    double* positions_out,
+    double* tangents_out,
+    double* stations_out,
+    double* curvature_out) {
+    OrbitTrackResult result;
+    std::exception_ptr pending_exception;
+    {
+        // Solve-loop self-wrap: the iron evaluator and any inner ParallelFor
+        // reuse this region instead of standing up a pool per field call.
+        // Catch before destroying RegionTaskManager: its Windows unwinding
+        // path is not exception-safe when an orbit validation gate fires.
+        ngcore::RegionTaskManager task_manager;
+        try {
+            result = TrackReferenceOrbit3DToPlaneImpl(
+                iron, iron_scale, iron_algorithm, radia_object, mirror_z,
+                constant_field_t, magnetic_rigidity, entrance_point,
+                entrance_direction, exit_plane_normal, exit_plane_offset_m,
+                step_m, maximum_path_m, planarity_tolerance_m, station_count,
+                positions_out, tangents_out, stations_out, curvature_out);
+        } catch (...) {
+            pending_exception = std::current_exception();
+        }
+    }
+    if (pending_exception)
+        std::rethrow_exception(pending_exception);
     return result;
 }
 
