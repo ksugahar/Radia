@@ -115,7 +115,8 @@ def bem_h_matrix(topic: str = "overview") -> str:
     """
     H-matrix / ACA acceleration for BEM.
 
-    ★ HACApK is the lab production library (radia method=2).
+    HACApK is a production H-matrix library used by owning HDiv/PEEC/BEM
+    operators; it is not selected by a rad.Solve method integer.
 
     Args:
         topic: One of:
