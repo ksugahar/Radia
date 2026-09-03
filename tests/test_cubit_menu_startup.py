@@ -90,6 +90,16 @@ def test_export_menu_uses_claro_api_not_qmenubar_injection():
     assert "QMenu(" not in source
 
 
+def test_export_menu_does_not_force_a_journal_save():
+    """A loaded Cubit model must export without creating a root-side log."""
+    source = EXPORT_MENU.read_text(encoding="utf-8")
+
+    assert "ensure_jou_path" not in source
+    assert "getSaveFileName" not in source
+    assert "save journal" not in source
+    assert "_current_journal_hint" in source
+
+
 def test_claro_export_menu_not_removed_through_qt():
     """"Radia Export" must not be torn down via Qt.
 

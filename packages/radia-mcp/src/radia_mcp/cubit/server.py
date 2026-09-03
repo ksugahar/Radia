@@ -3131,9 +3131,9 @@ def cubit_session_journal(out_path: str = "",
 	Export every Cubit command this MCP-server process sent to the live
 	session as a portable `.jou` journal.
 
-	The lab treats `.jou` as the single source of truth for geometry;
-	this tool turns an interactive LLM-driven session back into a
-	replayable, version-controllable journal. Failed commands are
+	This explicit provenance tool turns an interactive LLM-driven session
+	into an optional replayable, version-controllable recipe. Mesh export
+	does not require or create a journal. Failed commands are
 	included as comments (`# FAILED: ...`) so the record stays honest.
 
 	Scope: commands from THIS server process only -- attaching to a
