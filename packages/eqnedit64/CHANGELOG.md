@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Clarify that the signed standalone EXE is the canonical direct converter;
+  package helpers are thin subprocess clients rather than a second CLI or a
+  pybind11 conversion API.
+- Keep the packaged Web source and recent-insertion display readable through
+  the same CJK-aware browser font fallback stack.
+
 ## 3.0.13 - 2026-09-03
 
 - Keep native TeX source readable when the Windows session mis-resolves

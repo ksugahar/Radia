@@ -247,7 +247,8 @@ Google Slides用コピーは300 dpiのPNGとHTMLを登録し、24 pt数式と同
 
 ### 6.3 CLI
 
-GUIを開かない公開構文は `Eqnedit64.exe <入力> <出力>` の一種類だけとする。入力は
+GUIを開かない正規の公開境界は、Pythonを介さないnative executableの
+`Eqnedit64.exe <入力> <出力>` 一種類だけとする。入力は
 UTF-8 `.tex`または予約語`clipboard`、出力は用途名または画像ファイル名である。
 
 ```text
@@ -265,6 +266,9 @@ PNGへ置き換える。旧出力名`png`と旧`--copy-*`、`--render-*`、`--te
 内部に残すが、公開ヘルプ、教材、Python package、`radia-mcp.presentation`は必ず
 単一の入力／出力構文を使う。CLI/APIはPowerPoint自動生成や
 `radia-mcp.presentation`から呼べる安定した変換境界とする。
+Python packageのconsole launcher、`copy_equation()`、`render_equation()`は同じEXEを
+subprocessで呼ぶ任意の薄い利用者に限る。CLI dispatcherをpybind11へ複製しない。
+既存のpybind11構造編集APIは別の任意interfaceであり、変換器の実行条件ではない。
 `Eqnedit64.exe a.tex b.tex`はExplorerの複数選択として先頭文書をGUIで開き、二番目を
 出力先として上書きしない。他の不正出力はconsole/redirect時に標準エラーへ理由を書いて
 94を返し、標準streamがないグラフィカル起動ではダイアログを出す。`--help` / `--version`も
@@ -481,9 +485,9 @@ pushするとrelease gateが失敗するのが正しい。
 
 ## 13. 現在の公開状態
 
-Eqnedit64 3.0.11が2026-09-03時点の公開済み基準版であり、3.0.13はこの文書が対象とする
-次の候補である。未公開の3.0.12候補で整えた構造選択、TeX整形、簡潔なCLIを3.0.13へ
-吸収し、改行操作と正式公開前Fableレビューを追加する。3.0.11の通常Ctrl+Vは、native/Webとも左揃えの編集可能なinline
+Eqnedit64 3.0.13が2026-09-03時点の公開済み基準版である。未公開の3.0.12候補で整えた
+構造選択、TeX整形、簡潔な直接CLIを吸収し、改行操作、parser固定点、TeXソースfont検査、
+正式公開前Fableレビューを追加した。通常Ctrl+Vは、native/Webとも左揃えの編集可能なinline
 Office Mathを18 ptで作る。`&`を含まない複数行は各leaf rowへ分けて同じ左端を保ち、
 PowerPointに可視の`&`を渡さない。ネイティブのタイトル、About、`--version`には製品版と
 source stampの両方を表示する。
@@ -574,18 +578,18 @@ source stampの両方を表示する。
   O:ハンドテストの組合せで防止する。候補とgateのsample文字列重複は将来共通定数化できる。
   Windows runnerは日本語glyphを所有するUI fontを必要とし、現在のwindows-2022 CIでは確認済み。
 
-- product tag: `eqnedit64-v3.0.11`
-- product tag source: `f5ac045703eab940323bddabbef6bb4fd3a9e55c`
+- product tag: `eqnedit64-v3.0.13`
+- product tag source: `9587520bfce972296e39971f3956d9ab293f339f`
 - GitHub Release EXE SHA-256:
-  `96823819F4E1AA5B436BAC2D8065C8A0833A1B213E671380D48A8975BF975080`
+  `24B47CCEFEA1F913A1C5DF80051716FDB86C08FE55DFD365B9D2F1CB87636635`
 - signer: `CN=ksugahar`
-- GitHub Release: `https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.0.11`
-- PyPI: `https://pypi.org/project/eqnedit64/3.0.11/`
+- GitHub Release: `https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.0.13`
+- PyPI: `https://pypi.org/project/eqnedit64/3.0.13/`
 - PyPI wheels: CPython 3.10、3.11、3.12、3.13の`win_amd64`計4個。
 
-3.0.13候補をO:へ置いた時点では`Eqnedit64.handtest.json`を正とし、公開済み3.0.11の
-release manifestと混同しない。3.0.13のtag、GitHub Release、PyPIは公開手順をすべて
-通過するまで「公開済み」と記載しない。
+O:の正式配布物は`Eqnedit64.release.json`を正とし、候補専用の
+`Eqnedit64.handtest.json`を残さない。公開済みEXE、GitHub Release、4個のPyPI wheelに
+埋め込まれたEXEは上記SHA-256で一致する。
 
 ## 14. ソース地図
 
