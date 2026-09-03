@@ -69,11 +69,10 @@ import platform
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import numpy as np
 import psutil
-
 
 # ----------------------------------------------------------------------
 # Benchmark configuration
@@ -137,21 +136,15 @@ OUTFILE = os.path.join(
 # nwinc x nhinc cross-section expansion internally).
 # ----------------------------------------------------------------------
 
-def _ensure_radia_on_path() -> None:
-    """Insert repo's src/ and src/radia on sys.path and trigger MKL load."""
-    here = os.path.dirname(os.path.abspath(__file__))
-    root_src = os.path.join(here, "..", "..", "src")
-    inner = os.path.join(root_src, "radia")
-    for p in (root_src, inner):
-        if p not in sys.path:
-            sys.path.insert(0, p)
-    import radia  # noqa: F401 -- MKL DLL registration
+def _load_radia_backend() -> None:
+    """Load the installed Radia package and register its native DLL paths."""
+    import radia  # noqa: F401
 
 
 def _build_topology(nwinc: int):
     """Build the per-filament topology dict via PEECBuilder."""
-    _ensure_radia_on_path()
-    from peec_matrices import PEECBuilder
+    _load_radia_backend()
+    from radia.peec_matrices import PEECBuilder
 
     builder = PEECBuilder()
     nodes = []
@@ -181,8 +174,8 @@ def run_case(nwinc: int, mode: str) -> dict:
     if mode not in MODES:
         raise ValueError(f"mode must be one of {MODES}, got {mode!r}")
 
-    _ensure_radia_on_path()
-    from peec_topology import PEECCircuitSolver
+    _load_radia_backend()
+    from radia.peec_topology import PEECCircuitSolver
 
     proc = psutil.Process(os.getpid())
 
@@ -302,6 +295,7 @@ def run_all() -> None:
              "--mode", mode,
              "--json-stdout"],
             capture_output=True, text=True,
+            check=False,
         )
         wall = time.perf_counter() - t0
         if pr.returncode != 0:
@@ -319,7 +313,7 @@ def run_all() -> None:
             if line.startswith("{"):
                 last_json = line
         if last_json is None:
-            print(f"     FAILED: no JSON in stdout")
+            print("     FAILED: no JSON in stdout")
             results.append({
                 "nwinc": nwinc, "mode": mode,
                 "error": "no JSON",
@@ -344,7 +338,7 @@ def run_all() -> None:
                   f"peak={res['peak_memory_mb']:.0f}MB  "
                   f"|Z11|={res['abs_Z11']:.3e}")
 
-    generated_at_utc = datetime.now(timezone.utc).isoformat()
+    generated_at_utc = datetime.now(UTC).isoformat()
     data = {
         "schema": "radia.validation.peec-mna-crossover-benchmark.v1",
         "generated_at_utc": generated_at_utc,
