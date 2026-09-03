@@ -14,16 +14,15 @@ import os
 import platform
 import time
 import tomllib
-from datetime import datetime, timezone
+from collections.abc import Callable
+from datetime import UTC, datetime
 from importlib import metadata
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
-from ngsolve import Mesh
-from ngsolve.meshes import MakeStructured2DMesh
 from netgen.geom2d import SplineGeometry
-
+from ngsolve import Mesh, TaskManager
 from radia_mcp.radia_ngsolve.vol2d_circuit import (
     parse_netgen_2d_vol,
     write_structured_rect_vol,
@@ -32,9 +31,8 @@ from radia_mcp.radia_ngsolve.vol2d_dynamics import solve_vol2d_harmonic
 from radia_mcp.radia_ngsolve.vol2d_electrostatic import (
     solve_vol2d_electrostatic_system,
 )
-from radia_mcp.radia_ngsolve.vol2d_thermal import solve_vol2d_transient_heat
 from radia_mcp.radia_ngsolve.vol2d_scalar import analyze_vol2d_scalar
-
+from radia_mcp.radia_ngsolve.vol2d_thermal import solve_vol2d_transient_heat
 
 MU0 = 4.0e-7 * math.pi
 EPS0 = 8.8541878128e-12
@@ -42,6 +40,13 @@ ARTIFACT_SCHEMA = "cae-ai-lab.solver-run.v1"
 GENERATOR = "validation_test/radia_mcp/generate_field_study_production_artifacts.py"
 ARTIFACT_ROOT = "validation_test/radia_mcp/artifacts/field_study_production_v1"
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def _run_solver(
+    solver: Callable[[dict[str, Any]], dict[str, Any]], request: dict[str, Any]
+) -> dict[str, Any]:
+    with TaskManager():
+        return solver(request)
 
 
 def _version(name: str) -> str:
@@ -106,25 +111,56 @@ def _mesh_p2_curved(root: Path) -> Path:
     return path
 
 
+def _map_vol_points(
+    path: Path, mapping: Callable[[float, float], tuple[float, float]]
+) -> None:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    try:
+        section = next(
+            index for index, line in enumerate(lines) if line.strip().lower() == "points"
+        )
+        count = int(lines[section + 1].strip())
+    except (StopIteration, IndexError, ValueError) as exc:
+        raise ValueError(f"{path.name} has no valid points section") from exc
+    if section + 2 + count > len(lines):
+        raise ValueError(f"{path.name} has a truncated points section")
+    for index in range(section + 2, section + 2 + count):
+        values = lines[index].split()
+        if len(values) != 3:
+            raise ValueError(f"{path.name} point record {index - section - 1} is invalid")
+        x_value, y_value, z_value = map(float, values)
+        mapped_x, mapped_y = mapping(x_value, y_value)
+        lines[index] = f"{mapped_x:24.16f} {mapped_y:24.16f} {z_value:24.16f}"
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+
+
 def _mesh_q2_curved(root: Path) -> Path:
-    mesh = MakeStructured2DMesh(
-        quads=True,
+    path = root / "q2_curved_annular_sector.vol"
+    write_structured_rect_vol(
+        path,
+        x0=0.0,
+        x1=1.0,
+        y0=0.0,
+        y1=1.0,
         nx=7,
         ny=8,
-        mapping=lambda x, y: (
-            (1.0 + x) * math.cos((y - 0.5) * math.pi / 3.0),
-            (1.0 + x) * math.sin((y - 0.5) * math.pi / 3.0),
+        quads=True,
+        material="domain",
+    )
+    _map_vol_points(
+        path,
+        lambda x_value, y_value: (
+            (1.0 + x_value) * math.cos((y_value - 0.5) * math.pi / 3.0),
+            (1.0 + x_value) * math.sin((y_value - 0.5) * math.pi / 3.0),
         ),
     )
-    mesh.Curve(2)
-    path = root / "q2_curved_annular_sector.vol"
-    mesh.ngmesh.Save(str(path))
     return path
 
 
 def _thermal_case(root: Path, family: str) -> tuple[dict[str, Any], dict[str, Any]]:
     mesh_path = _mesh_rect(root, family)
-    result = solve_vol2d_transient_heat(
+    result = _run_solver(
+        solve_vol2d_transient_heat,
         {
             "physics": "transient_heat",
             "vol_text": mesh_path.read_text(encoding="utf-8"),
@@ -203,7 +239,7 @@ def _scalar_physics_case(
             },
             "export_basename": "production_steady_heat",
         }
-        result = analyze_vol2d_scalar(request)
+        result = _run_solver(analyze_vol2d_scalar, request)
         observables = result["result_contract"]["observables"]
         expected = 100.0 / (1.0 / (coefficient * depth) + 1.0 / (10.0 * depth))
         max_abs = max(
@@ -246,7 +282,7 @@ def _scalar_physics_case(
             "materials": {"domain": material},
             "export_basename": f"production_{case_id}",
         }
-        result = analyze_vol2d_scalar(request)
+        result = _run_solver(analyze_vol2d_scalar, request)
         observables = result["result_contract"]["observables"]
         actual = complex(*observables["admittance_s"])
         expected = coefficient * depth
@@ -274,7 +310,9 @@ def _scalar_physics_case(
     else:
         raise ValueError(f"unknown scalar production case: {case_id}")
 
-    replay = analyze_vol2d_scalar({"operation": "replay_gate", "replay_artifact": result})
+    replay = _run_solver(
+        analyze_vol2d_scalar, {"operation": "replay_gate", "replay_artifact": result}
+    )
     checks = {
         "ran_to_completion": True,
         "result_files_exist": True,
@@ -303,7 +341,8 @@ def _scalar_physics_case(
 
 def _electrostatic_case(root: Path, family: str) -> tuple[dict[str, Any], dict[str, Any]]:
     mesh_path = _mesh_three_conductor(root)
-    result = solve_vol2d_electrostatic_system(
+    result = _run_solver(
+        solve_vol2d_electrostatic_system,
         {
             "physics": "electrostatic_system",
             "vol_text": mesh_path.read_text(encoding="utf-8"),
@@ -392,12 +431,19 @@ def _harmonic_case(root: Path, family: str, *, nonlinear: bool) -> tuple[dict[st
         request.update(
             {"relaxation": 0.2, "relative_tolerance": 1.0e-10, "maximum_iterations": 400}
         )
-    result = solve_vol2d_harmonic(request)
+    result = _run_solver(solve_vol2d_harmonic, request)
     residual_scale = max(1.0, float(np.linalg.norm(np.asarray(result["field_state"]))))
     residual_relative = float(result["residual_inf"]) / residual_scale
     power_relative = abs(float(result["power_closure_error_w"])) / max(
         1.0, abs(float(result["eddy_loss_w"]))
     )
+    mesh_contract = view.contract()
+    if family == "P2_curved":
+        geometry_contract = bool(mesh_contract["has_curved_geometry"])
+    elif family == "Q2_curved":
+        geometry_contract = not bool(mesh_contract["axis_aligned_quads"])
+    else:
+        geometry_contract = True
     checks = {
         "ran_to_completion": True,
         "result_files_exist": True,
@@ -411,9 +457,7 @@ def _harmonic_case(root: Path, family: str, *, nonlinear: bool) -> tuple[dict[st
             if nonlinear
             else True
         ),
-        "curved_geometry_loaded": bool(view.contract()["has_curved_geometry"])
-        if family.endswith("_curved")
-        else True,
+        "geometry_contract": geometry_contract,
     }
     summary = {
         "operation": "harmonic_eddy",
@@ -454,7 +498,7 @@ def _write_artifact(
     relative = f"{ARTIFACT_ROOT}/{family.lower()}.json"
     artifact = {
         "schema": ARTIFACT_SCHEMA,
-        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "created_at_utc": datetime.now(UTC).isoformat(),
         "case": f"Field Study {family} frozen production artifact",
         "solver": "radia-ngsolve",
         "pass": bool(evidence["checks"]["validation_passed"]),
@@ -476,14 +520,22 @@ def _write_artifact(
         "timing_breakdown_s": _timing(result),
         "verification": {
             "method": "analytic identity plus residual, reciprocity, passivity, or power closure gate",
-            "command": f"python -m pytest validation_test/radia_mcp/test_field_study_final_gates.py -q",
+            "command": "python -m pytest validation_test/radia_mcp/test_field_study_final_gates.py -q",
         },
         "production_contract": {
             "element_family": family,
             "mesh_contract_sha256": mesh_contract["contract_sha256"],
             "triangles": mesh_contract["triangles"],
             "quadrilaterals": mesh_contract["quadrilaterals"],
-            "curved_geometry": mesh_contract["has_curved_geometry"],
+            "curved_geometry": bool(mesh_contract["has_curved_geometry"])
+            or (family == "Q2_curved" and not mesh_contract["axis_aligned_quads"]),
+            "geometry_representation": (
+                "netgen_curvedelements"
+                if mesh_contract["has_curved_geometry"]
+                else "mapped_quadrilateral"
+                if family == "Q2_curved" and not mesh_contract["axis_aligned_quads"]
+                else "affine"
+            ),
             "generated_vol_git_required": False,
         },
         "result_summary": evidence["summary"],
@@ -505,7 +557,7 @@ def _write_physics_artifact(
     relative = f"{ARTIFACT_ROOT}/{case_id}.json"
     artifact = {
         "schema": ARTIFACT_SCHEMA,
-        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "created_at_utc": datetime.now(UTC).isoformat(),
         "case": f"Field Study {case_id} frozen production artifact",
         "solver": "radia-ngsolve",
         "pass": bool(evidence["checks"]["validation_passed"]),
@@ -608,7 +660,7 @@ def main() -> int:
         )
     manifest = {
         "schema": "radia.field-study-production-manifest.v1",
-        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "created_at_utc": datetime.now(UTC).isoformat(),
         "execution_environment": {
             "host_role": host_role,
             "hostname": platform.node(),
