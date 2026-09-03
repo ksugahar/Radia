@@ -24,7 +24,7 @@ Usage::
 
     # Apply only to a specific subdir:
     python tools/fix_taskmanager_callers.py \\
-        --filter examples/kelvin_transformation/AdaptiveMesh/
+        --filter validation_test/kelvin_transformation/AdaptiveMesh/
 
     # Verify after:
     python tools/audit_taskmanager.py
@@ -49,7 +49,7 @@ import sys
 from pathlib import Path
 from typing import NamedTuple
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).absolute().parent.parent
 
 
 class Patch(NamedTuple):
@@ -69,7 +69,8 @@ def _audit_now() -> dict:
          str(ROOT / "tools" / "audit_taskmanager.py"), "--json"],
         capture_output=True, env={**__import__("os").environ,
                                     "PYTHONIOENCODING": "utf-8",
-                                    "PYTHONWARNINGS": "ignore"})
+                                    "PYTHONWARNINGS": "ignore"},
+        check=False)
     out = (proc.stdout or b"").decode("utf-8", errors="replace")
     # Skip any leading noise
     i = out.find("{")
@@ -132,13 +133,13 @@ def _add_taskmanager_import(text: str) -> str:
     approach -- adding a new line cannot break tuple parens / trailing
     commas / parentheses-continued imports).
     """
-    if "TaskManager" in text:
+    if "TaskManager" in text and re.search(
+            r"\bimport\b[^\n]*\bTaskManager\b", text):
         # Conservative: any mention of TaskManager (import or string)
         # means we leave it alone; user/auditor can verify manually if
         # this is a false negative.
         # But if it's clearly imported, skip:
-        if re.search(r"\bimport\b[^\n]*\bTaskManager\b", text):
-            return text
+        return text
 
     # Find the LAST line that looks like a top-level ngsolve import
     # (matches `from ngsolve...`, `import ngsolve...`).  We append
@@ -147,8 +148,7 @@ def _add_taskmanager_import(text: str) -> str:
     last_ngsolve_line = -1
     for i, L in enumerate(lines):
         stripped = L.lstrip()
-        if stripped.startswith("from ngsolve") or \
-           stripped.startswith("import ngsolve"):
+        if stripped.startswith(("from ngsolve", "import ngsolve")):
             last_ngsolve_line = i
 
     if last_ngsolve_line >= 0:
@@ -286,8 +286,7 @@ def _fix_one(path: Path, op_line: int, label: str,
     region_lines = text.splitlines()[op_line - 1: func_end]
     for L in region_lines:
         stripped = L.lstrip()
-        if (stripped.startswith("def ") or stripped.startswith("class ")
-                or stripped.startswith("async def ")):
+        if stripped.startswith(("def ", "class ", "async def ")):
             line_indent = len(L) - len(stripped)
             if line_indent <= op_indent:
                 return ("skipped: wrap region contains nested def/class "
@@ -300,13 +299,8 @@ def _fix_one(path: Path, op_line: int, label: str,
 
     # Re-parse to get updated line numbers after the import edit
     if new_text != text:
-        # Adjust op_line + func boundaries since we inserted lines above
-        # If the import insertion added N lines BEFORE op_line, op_line
-        # shifts +N.
-        n_added = new_text.count("\n", 0, new_text.find("\n", 0) + 1)
-        # Simpler: count the diff in line count up to the original op_line
-        # in the new text vs old text.  Recompute fresh.
-        # Use the original text first to compute, then patch + import.
+        # Wrap the original body first, then add the import so source line
+        # positions remain stable during the structural edit.
         wrapped, ok = _wrap_function_body(text, func_start, func_end,
                                             body_indent, op_line)
         if not ok:
@@ -339,7 +333,7 @@ def main():
                     help="print what would change; do not write")
     p.add_argument("--filter", default="",
                     help="only fix files whose relative path STARTS WITH "
-                         "this prefix (e.g. 'examples/kelvin_'). "
+                         "this prefix (e.g. 'validation_test/kelvin_'). "
                          "Multiple comma-separated allowed.")
     args = p.parse_args()
 
