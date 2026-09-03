@@ -1023,7 +1023,8 @@ maintenance results and explicitly set the next policy first.
   deterministic; the public accelerator-field, lamination, and MMM-topology
   MATLAB entries are classified; and `ObjTetrahedronCurrent` plus the Kelvin
   field/potential surfaces have explicit standalone-MEX coverage or boundary
-  classifications.
+  classifications. HDiv-MMM environment controls are finite and exhaustively
+  classified, and native stats record the effective release-relevant path.
 - Active work: continue CI, build, dependency, and repository cleanup. Remove
   duplicate tests, retired interfaces, and stale generated files while keeping
   fast regression coverage for implementation bugs and JSON-backed numerical

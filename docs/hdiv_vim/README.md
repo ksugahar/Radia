@@ -415,9 +415,12 @@ prescribed-source multicell HEX full-vs-image `rad.Fld` contract below `10 eps`
 at the normal quadrature order.  `RADIA_HDIV_HEX_FAR_ONESIDED`,
 `RADIA_HDIV_WEDGE_FAR_ONESIDED`, and `RADIA_HDIV_HO_FAR_ONESIDED` are retained
 only for diagnostic timing experiments and must not be used for release
-results.  The C++ linear solve reports `solve_*` timing fields, while NumPy
-buffers replace Python lists at pybind boundaries.  Hot block-cache counters
-remain opt-in so ordinary timing runs avoid per-entry atomic overhead.
+results. The effective cache, quadrature, image-block, profiling, and native
+thread settings are recorded in `hmat_stats`; diagnostic paths set
+`release_claim_eligible=0`. The C++ linear solve reports `solve_*` timing
+fields, while NumPy buffers replace Python lists at pybind boundaries. Hot
+block-cache counters remain opt-in so ordinary timing runs avoid per-entry
+atomic overhead.
 
 The first mdx cube timing sweep on 2026-07-08 reached structured-hex N=40
 (`1.56M` HDiv DOF) in about `355 s` wall time and `116 s` H-matrix build time.
