@@ -1647,6 +1647,50 @@ The adjacent-reviewer diagnostic therefore flags Japanese `コード系譜`,
 `プログラムの系譜`, `ソースコード譜系`, and corresponding implementation
 forms, while leaving a well-explained scientific or historical lineage alone.
 
+### One-pass referent closure
+
+A technically correct sentence still fails when an adjacent reviewer must
+reconstruct an omitted object, relation, or referent before its first reading
+makes sense.  Treat this as a semantic defect, not as a request to remove
+technical terms.  A sentence should let the reviewer identify, without reading
+ahead, who acts, what observable object is acted on, what operation is
+performed, and how named items relate.
+
+Common failure structures and their repairs are:
+
+- Do not attach a long inventory to both an operation and a definition, as in
+  "associate A--E with a function and define the result as X".  State the
+  association first, then define or name the resulting unit in a second
+  sentence.
+- Do not say that a bare decision is "refuted".  State who independently makes
+  which decision, and that another researcher can reproduce or refute its
+  grounds.
+- Replace labels such as "self-description" with the fields actually written:
+  function, input/output, assumptions, and tests.
+- Introduce a later list as "the following N outcomes".  A bare "N outcomes"
+  before the list is a backward-search instruction for the reviewer.
+- Do not make reports, histories, or revisions themselves "re-executable".
+  Link the method described in a report to executable code, input data, test
+  procedure, and revision history.
+- Name what is transferred or updated.  "Move collaborative development to
+  other institutions" should become a transfer of a development procedure;
+  "re-update after evaluation" should name the design candidates being
+  updated and the result that triggers it.
+- Keep a modifier next to its logical object.  Several analysis methods may be
+  coupled under the same specification; an analysis method is not itself "the
+  same specification" as a coupling task.
+- When a platform links discipline-level processes, name the linkable units as
+  functions, implementations, or data rather than leaving abstract process
+  nouns as though they were software objects.
+
+`grant_writing_adjacent_reviewer_readability_check` reports these structures as
+`reader_reconstruction_required`, with a `reason_code` identifying the omitted
+relation.  Every learned pattern requires a paired regression: the ambiguous
+structure must be reported and a semantically explicit alternative must pass.
+Do not use the diagnostic to enforce one approved sentence or to shorten the
+replacement.  If the clear wording overflows a form, delete a complete,
+lower-priority claim elsewhere under the page-limit policy.
+
 ### Reviewer-feedback learning loop
 
 When a reviewer supplies an old/new correction, do not store the approved
