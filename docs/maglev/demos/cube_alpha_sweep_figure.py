@@ -6,8 +6,9 @@ frequency response Re[alpha]/V (reactive flux exclusion) and |Im[alpha]|/V
 (f = 1 kHz - 1 GHz).  Re[alpha]/V rises from ~0 (low-f penetration) to 1
 (high-f perfect-conductor exclusion); the loss |Im| shows the drag peak.
 
-Outputs (committed next to this script, Data Persistence Policy):
-  cube_alpha_sweep_results.json   the swept data + parameters
+Outputs:
+  validation_test/maglev/demos/cube_alpha_sweep_results.json
+                                  the swept data + parameters
   cube_alpha_sweep.pdf / .png     IEEE single-column figure
 
 Figure conventions (lab-wide, self-contained -- no LAB-private helper):
@@ -27,6 +28,8 @@ import platform
 from datetime import datetime, timezone
 
 import numpy as np
+
+from _validation_output import validation_output
 
 SIGMA_CU = 5.8e7
 MU0 = 4.0 * math.pi * 1e-7
@@ -132,9 +135,9 @@ def main():
     data = run_sweep()
     # stamp after the (resume-unsafe) clock read, at the very end
     data["meta"]["timestamp"] = datetime.now(timezone.utc).isoformat()
-    out_json = os.path.join(HERE, "cube_alpha_sweep_results.json")
+    out_json = validation_output("cube_alpha_sweep_results.json", HERE)
     with open(out_json, "w", encoding="utf-8") as fp:
-        json.dump(data, fp, indent=2)
+        json.dump(data, fp, indent=2, allow_nan=False)
     pdf, png = make_figure(data, data["meta"]["timestamp"])
 
     p = data["params"]

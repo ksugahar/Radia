@@ -38,7 +38,7 @@ HERE = Path(__file__).resolve().parent
 DEFAULT_RESULT = HERE / "team28_coilbuilder_height_family_results.json"
 DEFAULT_FAMILY = HERE / "team28_coilbuilder_hcurl_eddy_cln_family.json"
 REFERENCE_CURVE = (
-    REPO_ROOT / "docs" / "maglev" / "demos" / "team28" / "team28_cln_sweep_results.json"
+    HERE / "demos" / "team28" / "team28_cln_sweep_results.json"
 )
 DEFAULT_HEIGHT_OFFSETS_MM = tuple(range(-7, 18))
 DISK_WEIGHT_N = 1.055

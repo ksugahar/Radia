@@ -41,10 +41,12 @@ from ngsolve import (
 )
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, ".."))
 sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(HERE, "..", "sphere"))  # maglev_sphere_force
 from maglev_sphere_force import G_exact, delta  # noqa: E402
 import ellipsoid_alpha_tensor as ET  # noqa: E402
+from _validation_output import validation_output  # noqa: E402
 
 mu0 = 4 * np.pi * 1e-7
 SIGMA = 5.8e7          # copper
@@ -202,9 +204,10 @@ def main():
         "alpha_c_re_m3": {k: [v.real for v in curves[k]] for k in shapes},
         "alpha_c_im_m3": {k: [v.imag for v in curves[k]] for k in shapes},
     }
-    with open(os.path.join(HERE, "ellipsoid_alpha_omega_axisym_results.json"), "w") as fp:
-        json.dump(data, fp, indent=2)
-    print("\n wrote ellipsoid_alpha_omega_axisym_results.json")
+    output = validation_output("ellipsoid_alpha_omega_axisym_results.json", HERE)
+    with open(output, "w") as fp:
+        json.dump(data, fp, indent=2, allow_nan=False)
+    print(f"\n wrote {output}")
     plot(freqs, curves, hf, shapes)
 
 

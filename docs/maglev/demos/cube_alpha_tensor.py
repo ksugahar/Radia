@@ -56,6 +56,8 @@ from radia.maglev.mixed_galerkin import (
 )
 from radia.maglev.simulink import build_state_space_mimo
 
+from _validation_output import validation_output
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 SIGMA_CU = 5.8e7
 MU_0 = 4 * math.pi * 1e-7
@@ -145,9 +147,10 @@ def main():
                        "alpha(s); physical vector tensor is in "
                        "ellipsoid/ellipsoid_alpha_tensor_3d.py"),
     }
-    with open(os.path.join(HERE, "cube_alpha_tensor_results.json"), "w") as fp:
-        json.dump(out, fp, indent=2)
-    print("\nwrote cube_alpha_tensor_results.json")
+    output = validation_output("cube_alpha_tensor_results.json", HERE)
+    with open(output, "w") as fp:
+        json.dump(out, fp, indent=2, allow_nan=False)
+    print(f"\nwrote {output}")
 
 
 if __name__ == "__main__":

@@ -24,9 +24,10 @@ pytest.importorskip("ngsolve")
 pytest.importorskip("netgen.occ")
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_DEMOS = os.path.join(_ROOT, "docs", "maglev", "demos")
 _SPHERE_DEMO = os.path.join(_ROOT, "docs", "maglev", "demos", "sphere")
 _SCRIPT = os.path.join(_SPHERE_DEMO, "coil_sphere_eddy_force.py")
-_JSON = os.path.join(_SPHERE_DEMO, "coil_sphere_eddy_force_results.json")
+_JSON_NAME = "coil_sphere_eddy_force_results.json"
 
 
 @pytest.fixture(scope="module")
@@ -38,9 +39,11 @@ def results(tmp_path_factory):
         _SPHERE_DEMO, run_dir, dirs_exist_ok=True,
         ignore=shutil.ignore_patterns("__pycache__", "*.json", "*.png"))
     script = os.path.join(run_dir, os.path.basename(_SCRIPT))
-    result_json = os.path.join(run_dir, os.path.basename(_JSON))
+    result_json = os.path.join(run_dir, _JSON_NAME)
+    env = os.environ.copy()
+    env["PYTHONPATH"] = _DEMOS + os.pathsep + env.get("PYTHONPATH", "")
     proc = subprocess.run([sys.executable, script], cwd=run_dir,
-                          capture_output=True, text=True, timeout=600,
+                          capture_output=True, text=True, timeout=600, env=env,
                           check=False)
     assert proc.returncode == 0, (
         f"coil_sphere_eddy_force.py failed:\n{proc.stdout[-2000:]}\n{proc.stderr[-2000:]}")
