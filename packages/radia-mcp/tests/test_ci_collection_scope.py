@@ -23,7 +23,7 @@ def test_node_selection_keeps_only_requested_contract():
             sys.executable,
             "-m",
             "pytest",
-            "tests/test_meta_health.py",
+            "tests/",
             "--collect-only",
             "-q",
             "-p",

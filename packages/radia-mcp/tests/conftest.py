@@ -187,14 +187,23 @@ collect_ignore = []
 if _CI_SELECT_ALL:
     _dependency_scan_files = sorted(_TEST_ROOT.rglob("test_*.py"))
 else:
-    # Impact CI passes these same selectors directly to pytest. Avoid walking
-    # and parsing the entire test tree during conftest import on an SMB
-    # checkout; only selected files can be collected by this invocation.
-    _dependency_scan_files = sorted({
+    # Impact CI discovers from tests/ so pytest honours collect_ignore before
+    # importing a module.  Ignore every unselected file by name, but parse only
+    # the selected files for optional dependencies; this keeps the SMB cost
+    # bounded and prevents collection-time imports such as PIL/numpy in the
+    # minimal matrix.
+    _selected_files = {
         _TEST_ROOT / _selector_file(selector).removeprefix("tests/")
         for selector in _CI_SELECTORS
         if _selector_file(selector).endswith(".py")
-    })
+    }
+    _all_test_files = sorted(_TEST_ROOT.rglob("test_*.py"))
+    collect_ignore.extend(
+        _f.relative_to(_TEST_ROOT).as_posix()
+        for _f in _all_test_files
+        if _f not in _selected_files
+    )
+    _dependency_scan_files = sorted(_selected_files)
 
 for _f in _dependency_scan_files:
     if not _f.is_file():
