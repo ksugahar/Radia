@@ -340,11 +340,13 @@ bool load_math_font() {
         ? static_cast<const unsigned char*>(LockResource(block)) : nullptr;
     if (!bytes || !size) return false;
 
-    /* AddFontMemResourceEx repeatedly crashed Server 2022's per-session
-     * fontdrvhost.exe (0xc0000005) while every old hidden test still passed.
-     * Extract the verified embedded bytes once and use the file-backed,
-     * process-private API instead.  This is a cache, not an installation:
-     * there is no registry entry and the EXE remains the only input. */
+    /* A controlled 2026-08-29 A/B run identified AddFontMemResourceEx as one
+     * trigger for Server 2022's per-session fontdrvhost.exe (0xc0000005), even
+     * though the old hidden test passed.  Other applications can still crash
+     * that shared host, so this is not a claim about its sole cause.  Extract
+     * the verified embedded bytes once and use the file-backed, process-private
+     * API instead.  This is a cache, not an installation: there is no registry
+     * entry and the EXE remains the only input. */
     const std::filesystem::path path = cache_embedded_math_font(bytes, size);
     if (path.empty()) return false;
     return AddFontResourceExW(path.c_str(), FR_PRIVATE | FR_NOT_ENUM,
@@ -369,7 +371,8 @@ void ensure_math_font() {
      * AddFontMemResourceEx calls per process, times the hundreds of test
      * processes a working day starts.  Session font tables do not enjoy
      * that: this machine''s GDI reached a state where healthy faces drew
-     * blanks or the wrong glyphs, and our own churn is the leading suspect.
+     * blanks or the wrong glyphs, and the controlled A/B run identified the
+     * repeated memory registrations as one trigger.
      * Registration is per-process and freed at exit; there is never a
      * reason to do it more than once. */
     /* A font host finishing another short-lived test process can reject

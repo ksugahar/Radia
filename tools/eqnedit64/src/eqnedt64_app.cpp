@@ -2461,6 +2461,23 @@ bool font_owns_glyphs(HFONT font, const wchar_t* sample) {
     return true;
 }
 
+/* A successful CreateFontW call can still substitute an unrelated face.
+ * That is especially dangerous for source code: every wchar remains correct
+ * in the EDIT control while ASCII is painted as plausible but unrelated
+ * glyphs. Verify the physical face selected into a DC, not only LOGFONT's
+ * requested name. */
+bool font_resolves_to_face(HFONT font, const wchar_t* expected) {
+    if (!font || !expected) return false;
+    HDC dc = CreateCompatibleDC(nullptr);
+    if (!dc) return false;
+    HGDIOBJ old = SelectObject(dc, font);
+    wchar_t actual[LF_FACESIZE] = {};
+    const int length = GetTextFaceW(dc, _countof(actual), actual);
+    SelectObject(dc, old);
+    DeleteDC(dc);
+    return length > 0 && _wcsicmp(actual, expected) == 0;
+}
+
 /* The first candidate that owns every sample glyph AND provably draws.
  * The embedded math font leads: it ships inside the executable, the canvas
  * renders with it every run, and it covers every palette face -- so the
@@ -2577,6 +2594,34 @@ HFONT pick_palette_tab_font(int heightPx) {
         if (font) DeleteObject(font);
     }
     flight_note("font.palette_tabs.fallback DEFAULT_GUI_FONT");
+    return HFONT(GetStockObject(DEFAULT_GUI_FONT));
+}
+
+/* The TeX pane must handle both ASCII commands and Japanese text without
+ * font linking. Consolas was previously requested without validation; in a
+ * damaged Server 2022 font session the EDIT control kept correct UTF-16 text
+ * but painted it as unrelated accented glyphs. Reuse the self-owning CJK
+ * family used by the readable palette tabs, and fall back to the same stock
+ * GUI font that still paints the source label correctly. */
+HFONT pick_source_font(int heightPx) {
+    const wchar_t* sample =
+        L"\\frac{x_1}{y}+\\text{日本語 0123456789}[]{}";
+    const wchar_t* candidates[] = {L"Yu Gothic UI", L"Meiryo UI",
+                                   L"MS UI Gothic"};
+    for (const wchar_t* face : candidates) {
+        HFONT font = CreateFontW(-heightPx, 0, 0, 0, FW_NORMAL, FALSE, FALSE,
+                                 FALSE, DEFAULT_CHARSET, OUT_TT_PRECIS,
+                                 CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+                                 VARIABLE_PITCH, face);
+        if (font_resolves_to_face(font, face) &&
+            font_owns_glyphs(font, sample) && font_draws_ink(font, sample)) {
+            flight_note(std::string("font.source ") + utf8_wide(face));
+            return font;
+        }
+        flight_note(std::string("font.source.rejected ") + utf8_wide(face));
+        if (font) DeleteObject(font);
+    }
+    flight_note("font.source.fallback DEFAULT_GUI_FONT");
     return HFONT(GetStockObject(DEFAULT_GUI_FONT));
 }
 
@@ -4042,15 +4087,9 @@ LRESULT CALLBACK MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 g.sourceProc = reinterpret_cast<WNDPROC>(SetWindowLongPtrW(
                     g.source, GWLP_WNDPROC,
                     reinterpret_cast<LONG_PTR>(SourceProc)));
-            g.sourceFont = CreateFontW(-scaled_px(hwnd, 16), 0, 0, 0,
-                FW_NORMAL, FALSE, FALSE, FALSE,
-                DEFAULT_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS,
-                CLEARTYPE_QUALITY, FIXED_PITCH | FF_MODERN, L"Consolas");
-            if (g.sourceFont) {
-                g.ownsSourceFont = true;
-            } else {
-                g.sourceFont = HFONT(GetStockObject(DEFAULT_GUI_FONT));
-            }
+            g.sourceFont = pick_source_font(scaled_px(hwnd, 16));
+            g.ownsSourceFont =
+                g.sourceFont != HFONT(GetStockObject(DEFAULT_GUI_FONT));
             SendMessageW(g.source, WM_SETFONT, WPARAM(g.sourceFont), TRUE);
             SendMessageW(g.source, EM_SETLIMITTEXT, 1024 * 1024, 0);
             g.status = CreateWindowExW(0, STATUSCLASSNAMEW, L"",
@@ -5247,16 +5286,18 @@ int visual_scale_test() {
          * identifies the exact bad cell without a screenshot or desktop. */
         if (!paletteVisible) return 204 + failedPaletteCell;
         bool sourceVisible = false;
-        /* A freshly signed/replaced EXE can reach GDI before the session font
-         * host has made Consolas drawable. Recreate the handle for at most
-         * one second; a persistent missing/broken font still fails loudly. */
+        /* A freshly signed/replaced EXE can reach GDI while the session font
+         * host is being replaced. Re-run the same validated source-font
+         * chooser used by the real window for at most one second. */
         for (int attempt = 0; attempt < 40 && !sourceVisible; ++attempt) {
-            HFONT sourceFont = CreateFontW(-MulDiv(16, dpi, 96), 0, 0, 0,
-                FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_TT_PRECIS,
-                CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-                FIXED_PITCH | FF_MODERN, L"Consolas");
-            sourceVisible = font_draws_ink(sourceFont, L"\\frac{x}{y}");
-            if (sourceFont) DeleteObject(sourceFont);
+            HFONT sourceFont = pick_source_font(MulDiv(16, dpi, 96));
+            const wchar_t* sourceSample =
+                L"\\frac{x_1}{y}+\\text{日本語 0123456789}[]{}";
+            sourceVisible = font_owns_glyphs(sourceFont, sourceSample) &&
+                            font_draws_ink(sourceFont, sourceSample);
+            if (sourceFont &&
+                sourceFont != HFONT(GetStockObject(DEFAULT_GUI_FONT)))
+                DeleteObject(sourceFont);
             if (!sourceVisible) Sleep(25);
         }
         if (!sourceVisible) return 186;

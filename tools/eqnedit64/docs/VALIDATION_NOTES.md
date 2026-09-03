@@ -5,6 +5,60 @@
 [`CANONICAL_OPERATION.md`](CANONICAL_OPERATION.md) と `release-eqnedit64` skillを
 正とする。`build\accept_release.ps1`は隔離CI/VM用であり、対話中LABでは実行しない。
 
+## 2026-09-03 TeXソースfont修正後の最終Fableレビュー
+
+- reviewed sourceは`1496f804e38ab422144219bf676e8d8e9d3c5944`。Claude Code Fable 5.1
+  (`claude-fable-5-1`)がread-only plan modeで`main`との差分、実装、試験、仕様を確認した。
+- verdictは`APPROVED`、release-blocking findingなし。物理face、font自身のcmap、bitmap ink、
+  stock fontの所有権、production／visual gateの同一chooser、静的guardを確認し、既レビューの
+  parser固定点とCLIに退行を持ち込まないと判定した。
+- productionのstock fallbackはgraceful degradationであり、visual gateは退避後もcmapとinkを
+  検査する。過去の誤rasterizeそのものはhermeticに再現せず、静的guard、face/cmap/ink gate、
+  O:ハンドテストを組み合わせる。候補とgateのsample文字列重複は非ブロッカーとして残す。
+- Windows-hosted CIは日本語glyphをfont自身に持つCJK UI faceを前提とする。現在の
+  `windows-2022` Eqnedit64 CIはgreenであり、その前提を満たすことを確認済み。
+
+## 2026-09-03 3.0.13 O:ハンドテストのTeX欄誤字形
+
+- 指摘回収commitは`1b1ceded668a250b69051edeb366f4f66a18ca20`。
+- PR #86のgreen候補`5fbc6ab2cfc5905416da8fef16a837661ae89627`をO:で開くと、数式canvas、
+  日本語menu、`TeXソース`labelは正常だが、source EDIT内のASCIIだけがaccent付きの
+  無関係な字形として描かれた。内部source同期はUnicode `SetWindowTextW` / `GetWindowTextW`
+  で、同候補のhidden source/model一致試験もgreenのため、保存TeXの文字化けではなく
+  source control専用fontの誤描画と切り分けた。
+- 原因はsource EDITだけが`CreateFontW(..., L"Consolas")`の成功を無検証で信じたこと。
+  既存visual testも「何らかのinkがある」だけを見たため、正しい文字列を別glyphで描く
+  session font破損を検出できなかった。
+- 修正はConsolas固定を廃止し、選択DCの物理face名、font自身の日本語＋TeX ASCII cmap、
+  bitmap inkをすべて満たすCJK UI fontを選ぶ。候補全滅時は同画面で正常表示できている
+  source labelと同じstock GUI fontへ退避する。visual testと静的guardは実production
+  chooserを必須とし、無検証Consolasへ戻ったら失敗する。
+
+## 2026-09-03 3.0.13最終Fableレビューの固定点回収
+
+- 指摘回収commitは`b5c17a7c5327f1eed0a3a72538242c46b8513107`。
+- 対象は統合済み候補`bc703ea54bd3f60570d72835623552b9bc656a51`。旧3.0.11記録を
+  再利用せずsource buildから全検査を測り直したFableレビューで、4操作
+  （n乗根→指数へTab→lim→`a`）から得た`\sqrt[\lim_{a}]{x}`が最初の再parseで
+  指数閉じ`]`と被開平部を飲み込み、Undoと保存／再開で別の式になるrelease blockerを
+  検出した。
+- 既存fuzzerは`normalized == normalized_twice`だけを検査し、editor自身の出力から
+  一度目への破壊を見逃していた。修正前へ`editor == normalized`を先に追加して赤を確認し、
+  parserのoptional引数停止判定を直した。決定的4操作と全60テンプレートをn乗根指数へ
+  入れる族試験を追加し、100 seed×250操作も同じ一度目固定点契約で通す。
+- 同レビューで既存不具合`\text{hello world}`→`\text{helloworld}`も確認した。
+  3.0.13固有の回帰ではないが回避手段が無かったため、`\text` / `\operatorname`内の
+  通常空白、escaped percent、source改行を保持する。`~`、`\ `、`\,`の明示空白は
+  同一化せず、各命令の意味を保つ。
+- LABの長時間fuzzは2回とも`fontdrvhost.exe`のPID交代で停止したが、交代は開始1～3秒後、
+  交代後は同負荷を約400秒完走した。またEqnedit64不在時にも同じhost crashが継続した。
+  2026-08-29のA/Bはメモリフォント登録が一因だった証拠として維持するが、唯一原因とは
+  断定しない。番人は試験時間以上かつ最低10分の事前Application Error観測を比較し、
+  既存crashまたはeventを伴わないPID交代を`INCONCLUSIVE`、健全な隔離session中だけの
+  crashを`FAIL`とする。修正作業中の単発hidden検査3本はすべて終了0だったが08:40:58に
+  同じ`0xc0000005` / offset `0x366a2`でPIDが交代し、その81秒前の08:39:37にもEqnedit64の
+  検査外で同一crashがあった。この実測は短い試験にも最低10分の対照窓が必要な根拠である。
+
 ## 2026-09-03 3.0.13追補レビューの貼り付け・CLI回収
 
 - 基準候補`484041df8a520d71ee08e3505a8edaf1ca65104a`に対するClaude Code実測レビューで、

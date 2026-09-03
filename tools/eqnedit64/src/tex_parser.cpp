@@ -107,6 +107,7 @@ private:
     size_t p_;
     int depth_ = 0;          /* recursion depth, to bound pathological nesting */
     bool depthExceeded_ = false;
+    int literalSpaceDepth_ = 0; /* inside text-like braced arguments */
 
     /* Parse, layout, and emit are all recursive over the tree, so a deeply
      * nested paste -- \sqrt{\sqrt{...}} thousands deep -- overflowed the
@@ -177,14 +178,22 @@ private:
     }
     void skip_space() {
         for (;;) {
-            while (!eof() &&
-                   (s_[p_] == ' ' || s_[p_] == '\t' || s_[p_] == '\n' ||
-                    s_[p_] == '\r'))
-                ++p_;
+            if (literalSpaceDepth_ == 0) {
+                while (!eof() &&
+                       (s_[p_] == ' ' || s_[p_] == '\t' ||
+                        s_[p_] == '\n' || s_[p_] == '\r'))
+                    ++p_;
+            }
             /* An unescaped percent starts a TeX comment.  Escaped `\\%`
              * reaches parse_command() and remains a visible percent sign. */
             if (eof() || s_[p_] != '%') return;
             while (!eof() && s_[p_] != '\n' && s_[p_] != '\r') ++p_;
+            /* A TeX comment consumes its line ending even in a text-like
+             * argument, where ordinary spaces are otherwise content. */
+            if (literalSpaceDepth_ > 0) {
+                if (!eof() && s_[p_] == '\r') ++p_;
+                if (!eof() && s_[p_] == '\n') ++p_;
+            }
         }
     }
 
@@ -296,7 +305,12 @@ private:
         skip_space();
         if (peek() != '[') return false;
         ++p_;
-        while (!eof() && peek() != ']') {
+        for (;;) {
+            /* emitLim() terminates its control word with a space.  Test the
+             * optional delimiter after ignoring that TeX whitespace, or the
+             * next atom consumes `]` and the radicand into the index. */
+            skip_space();
+            if (eof() || peek() == ']') break;
             size_t before = p_;
             if (NodePtr a = parse_atom_with_scripts()) out.push_back(std::move(a));
             else if (p_ == before) ++p_;
@@ -376,6 +390,18 @@ private:
         skip_space();
         if (eof()) return nullptr;
         char c = peek();
+
+        /* In text-like arguments TeX turns any run of ordinary source
+         * whitespace into one visible word space.  Normal math parsing has
+         * already skipped it before reaching this point. */
+        if (literalSpaceDepth_ > 0 &&
+            (c == ' ' || c == '\t' || c == '\n' || c == '\r')) {
+            do { ++p_; }
+            while (!eof() &&
+                   (peek() == ' ' || peek() == '\t' ||
+                    peek() == '\n' || peek() == '\r'));
+            return make_char(TF_TEXT, uint32_t(' '), ' ');
+        }
 
         if (c == '{') {
             ++p_;
@@ -651,7 +677,26 @@ private:
 
     /* A braced group whose characters all take one typeface. */
     NodePtr styled_group(int typeface) {
-        NodeList inner = parse_arg();
+        NodeList inner;
+        const bool preserveSpaces =
+            typeface == TF_TEXT || typeface == TF_FUNCTION;
+        if (preserveSpaces) {
+            /* The delimiter after a control word is syntax, but whitespace
+             * inside its braces is content.  Disable ordinary math-space
+             * skipping only after the opening brace has been consumed. */
+            skip_space();
+            if (peek() == '{') {
+                ++p_;
+                ++literalSpaceDepth_;
+                inner = parse_seq(kBrace);
+                --literalSpaceDepth_;
+                if (peek() == '}') ++p_;
+            } else {
+                inner = parse_arg();
+            }
+        } else {
+            inner = parse_arg();
+        }
         retype(inner, typeface);
         auto line = std::make_unique<LineNode>();
         line->children = std::move(inner);
@@ -662,8 +707,11 @@ private:
         for (auto& n : list) {
             if (!n) continue;
             if (n->tag() == Node::kChar) {
-                static_cast<CharNode&>(*n).typeface = typeface;
-                static_cast<CharNode&>(*n).automaticFunction = false;
+                auto& ch = static_cast<CharNode&>(*n);
+                /* Explicit TeX spaces retain their width/non-breaking
+                 * semantics and split the surrounding text run. */
+                if (ch.typeface != TF_SPACE) ch.typeface = typeface;
+                ch.automaticFunction = false;
             } else {
                 for (NodeList* slot : node_slots(*n))
                     if (slot) retype(*slot, typeface);

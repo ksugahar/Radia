@@ -92,6 +92,10 @@ standalone利用者はpipを必要としない。
 - キャンバスから同期するTeX整形はemitter由来のCR/LFを先に吸収し、`\begin`後、
   `\end`前、`\\`後へWin32 EDIT用CRLFを一元的に置く。単独LFを制御文字として見せたり、
   空行と字下げだけを重ねたりしない。
+- nativeが生成した正規TeXは最初の再parseから同一でなければならず、二度目以降だけ
+  固定する壊れた形を許さない。n乗根の指数には`\lim`を含む全テンプレートを置け、閉じ`]`を
+  越えて被開平部を取り込まない。`\text{...}`と`\operatorname{...}`は通常の単語間空白を
+  保持し、`~`、`\ `、`\,`の明示空白を通常空白へ潰さない。
 - ソース欄を単なる「TeXを表示」機能として隠すメニューは設けない。
 - キャンバスに `\command` を入力して空白で確定する旧式のTeXコマンド入力は持たない。
 - TeXコマンドはパレットから選び、挿入直後のTeX範囲を短時間強調して手癖として学べるようにする。
@@ -274,8 +278,10 @@ Eqnedit64はLatin Modern MathをEXEへ埋め込む。実行時は内容ハッシ
 
 `AddFontMemResourceEx`へ戻してはならない。旧3.0.1以前のメモリフォント登録／解除を
 繰り返す経路は、Windows Server 2022の対話セッションで`fontdrvhost.exe`を壊し、
-Eqnedit64だけでなくLINE等の文字を消す事故を起こした。3.0.2のファイル-backed private登録と
-32回ライフサイクル試験が再発防止策である。
+Eqnedit64だけでなくLINE等の文字を消す一因になることをA/B実験で確認した。3.0.2の
+ファイル-backed private登録と32回ライフサイクル試験が、この確認済みtriggerへの
+再発防止策である。ただし共有font hostはEqnedit64不在時にも落ちており、すべてのPID交代を
+Eqnedit64へ帰属させたり、OS側の唯一原因を解決済みと断定したりしない。
 
 文字種ごとの描画責任を混同しない。
 
@@ -283,10 +289,17 @@ Eqnedit64だけでなくLINE等の文字を消す事故を起こした。3.0.2�
 - メニュー、分類タブ、日本語UI: 明示的なCJKシステムフォント。
 - 数式フォントで描くowner-drawパレットセル: そのフォントが持つ記号だけを使う。
 - 日本語ラベルをLatin Modern Mathへ渡し、フォントリンクに期待してはならない。
+- TeXソース欄は日本語とTeX ASCIIの両方をfont自身が所有し、要求faceと選択DCの物理faceが
+  一致し、実bitmapへinkを描けるfontだけを使う。`CreateFontW`がhandleを返しただけで
+  `Consolas`を採用しない。候補が全滅した場合は、同じ画面の正常なsource labelで使う
+  Windows stock GUI fontへ退避する。visual gateは退避後もcmapとinkを検査して不健全なら
+  不合格とし、productionのstock font退避は起動継続のためのgraceful degradationとする。
+  内部UTF-16が正しくても別glyphに見える候補は、O:ハンドテストで不合格とする。
 
-古い版によって既にセッションのフォントホストが壊れた場合、修正版の起動だけでは
+古い版または他要因によって既にセッションのフォントホストが壊れた場合、修正版の起動だけでは
 OSセッション内の壊れた状態を修復できない。一回のサインアウトまたは再起動が必要な場合が
-ある。ただし3.0.2以降は新しい破損を起こさないことをCIで確認する。
+ある。3.0.2以降の候補は、健全な隔離sessionのCIで確認済みtriggerを再発させないことを
+検査する。
 
 ## 8. 3.0.3で回収した表示不具合
 
@@ -366,6 +379,12 @@ GitHub-hosted Windows runnerまたは破棄可能なVM/ユーザーセッショ�
 - `fontdrvhost.exe`のPIDが途中で変わらない。
 - Windows Application logへ新しいEvent 1000が増えない。
 - 各起動のprivate font登録、描画、解除が成功する。
+
+PID交代時は試験時間以上かつ最低10分の事前Application Error観測と対応するEvent 1000を確認する。
+事前にも同じcrashがある場合、またはPIDだけ交代してcrash eventがない場合は製品FAILへ
+帰属せず`INCONCLUSIVE`とする。健全な隔離sessionの実行区間だけにcrash eventが増えた場合を
+release-blocking FAILとする。共有の対話sessionで長時間fuzzを行った結果は機能試験として
+記録できるが、font host交代を製品原因と判定しない。
 
 対話中LABでは単発のhidden testは実行できるが、環境変数を偽装して32回試験のguardを
 迂回しない。
@@ -497,6 +516,63 @@ source stampの両方を表示する。
   help/version/errorの標準streamを自動試験する。未知命令抑制で露見した`\\flat` / `\\sharp`
   の退行は正式サポートと全パレット実行試験で閉じた。これは最初のFableレビュー範囲を
   越えるため、修正後の最終候補に対して正式公開前Fableレビューをもう一度行う。
+
+### 13.3 3.0.13 最終Fable固定点レビュー記録
+
+- reviewed source: `bc703ea54bd3f60570d72835623552b9bc656a51`
+- resolution source: `b5c17a7c5327f1eed0a3a72538242c46b8513107`
+- reviewer: Claude Code Fable（提示された実測レビュー）
+- result: `RELEASE BLOCKED`から記録済み指摘を回収。PR CIとO:ハンドテスト前のためtagは未許可
+- reproduced blocker: n乗根→指数へTab→lim→`a`の4操作で生成した
+  `\sqrt[\lim_{a}]{x}`が最初の再parseで指数閉じ`]`と被開平部を取り込み、Undoと
+  保存／再開が別の式になった。既存fuzzerは壊れた一度目と二度目だけを比較して誤合格した。
+- resolution contract: `editor output == first reparse == second reparse`をexact比較し、
+  修正前に4操作が赤になることを確認してからoptional引数の停止判定を修正した。
+  同じ契約を全60テンプレートのn乗根指数と100 seed×250操作へ適用する。
+  レビューで併記された`\text` / `\operatorname`の空白脱落も、TeX往復、表示幅、SVG、
+  MathMLを含め回収した。
+- font-host disposition: 二度の長時間fuzz中のPID交代は、Eqnedit64不在時にも同じ
+  `0xc0000005` / offset `0x366a2`が発生するLAB共有sessionでは製品へ帰属できない。
+  確認済みメモリフォントtriggerの回避は維持し、最低10分の事前対照窓とApplication Errorを
+  組み合わせて`FAIL`と`INCONCLUSIVE`を分ける。
+- review scope: 回収commitは本レビューに記録されたparser固定点、text空白、font判定と
+  それらの仕様・試験だけを変更した。別機能を追加していないため§12の一度のFableレビューを
+  満たすが、PR CI、署名済みO:候補、菅原ハンドテストを省略してよい意味ではない。
+
+### 13.4 O:ハンドテストで検出したTeXソース誤字形
+
+- hand-tested source: `5fbc6ab2cfc5905416da8fef16a837661ae89627`
+- resolution source: `1b1ceded668a250b69051edeb366f4f66a18ca20`
+- result: canvasと日本語UIは正常だが、TeXソース欄のASCIIだけが無関係なaccent字形に
+  見えたため不合格。公開tagとmain mergeを継続停止した。
+- cause: source EDITだけが無検証の`Consolas` handleを使い、試験も内部UTF-16一致と
+  「inkが一つでもある」ことしか見なかった。正しい文字列を誤glyphで描くfont sessionを
+  合格させた。
+- resolution contract: source fontは選択DCの物理face名、font自身の日本語＋TeX ASCII
+  cmap、実bitmap inkを検査する。全候補失敗時は正常なsource labelと同じstock GUI fontへ
+  退避し、productionとvisual testが同じchooserを使う。無検証`Consolas`へ戻る変更は
+  静的guardで失敗する。
+- review disposition: このハンドテスト修正は§13.3のFable reviewed source後に追加された
+  別の描画変更である。更新候補のPR CIとO:再試験後、正式公開前にFableレビューをもう一度
+  行い、reviewed sourceを追記する。
+
+### 13.5 TeXソースfont修正後の最終Fableレビュー記録
+
+- reviewed source: `1496f804e38ab422144219bf676e8d8e9d3c5944`
+- reviewer: Claude Code Fable 5.1（model ID `claude-fable-5-1`、read-only plan mode）
+- execution: 2026-09-03。ファイル変更、ビルド、GUI起動、clipboard操作、font stressは行わず、
+  `main`との差分、実装、試験、仕様を静的に確認した。
+- result: `APPROVED`。release-blocking findingなし。greenのPR CIと更新済みO:候補の
+  ハンドテストを前提に、main統合と3.0.13公開を承認した。
+- reviewed scope: `1b1ceded668a250b69051edeb366f4f66a18ca20`のTeXソースfont選択と
+  `1496f804e38ab422144219bf676e8d8e9d3c5944`の失敗記録。物理face、font自身のcmap、
+  実bitmap ink、stock objectの所有権と解放、production／visual gateの同一chooser、
+  `test_font_safety.py`の静的guardを確認した。parser固定点とCLI dispatchは変更されず、
+  §13.3のレビュー結果を無効化しない。
+- non-blocking findings: productionのstock fallbackはvisual gateほどfail-closedではない。
+  過去の誤rasterizeそのものをhermeticに再現する試験ではなく、静的guard、face/cmap/ink gate、
+  O:ハンドテストの組合せで防止する。候補とgateのsample文字列重複は将来共通定数化できる。
+  Windows runnerは日本語glyphを所有するUI fontを必要とし、現在のwindows-2022 CIでは確認済み。
 
 - product tag: `eqnedit64-v3.0.11`
 - product tag source: `f5ac045703eab940323bddabbef6bb4fd3a9e55c`

@@ -216,8 +216,9 @@ pwsh -NoProfile -File build\setup_developer_signing.ps1
 そのプロセスは強制終了します。ビルド前に必要な文書を保存してください。
 
 3.0.2以降は、内蔵数式フォントを検証済みユーザーキャッシュへ展開し、
-ファイルベースで私有登録します。旧メモリ登録で発生したWindowsフォントホストの
-クラッシュを再発させないため、短命プロセスの連続起動を含む総合試験は
+ファイルベースで私有登録します。旧メモリ登録はWindowsフォントホストを壊す一因と
+A/B実験で確認済みですが、共有hostはEqnedit64不在時にも落ちるため唯一原因とは
+断定しません。確認済みtriggerを再発させないため、短命プロセスの連続起動を含む総合試験は
 GitHub-hosted Windows CI、VM、または専用Windowsユーザーセッションだけで実行し、
 普段使う対話セッションでは実行しません。隔離済みセッションでは次のマーカーを
 設定します。
@@ -263,6 +264,10 @@ pwsh -Sta -NoProfile -File build\test_external_paste.ps1
 `run_model_tests.py` は数式フォントの私有登録・解除を繰り返さないよう、7つの
 ヘッドレスモデル試験を1つのPythonプロセスで実行します。各試験は個別にも
 実行できます。
+共有の対話sessionで`test_ui_fuzz.ps1`だけを実行し、機能検査自体が通った途中で
+`fontdrvhost.exe`が交代した場合、scriptは事前10分以上のApplication Errorも照合して
+font判定を`INCONCLUSIVE`と警告します。これは製品PASSでもFAILでもありません。
+正式なfont判定は健全な隔離sessionのCIで行います。
 
 メモリ破壊を検査するASan版も、同じ非表示GUIファズへ渡せます。
 
