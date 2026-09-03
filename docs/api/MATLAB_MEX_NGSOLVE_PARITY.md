@@ -17,14 +17,14 @@ silently dropped from the count.
 
 | Surface | Current contract |
 |---|---:|
-| Public top-level pybind11 names | 99 |
-| Covered mapped MEX names | 99 |
+| Public top-level pybind11 names | 100 |
+| Covered mapped MEX names | 100 |
 | Underscore numerical kernels | 21 / 21 covered |
 | Stateful pybind11 class surface | 126 / 126 covered |
-| Radia MEX gateway commands | 360 |
-| Optuna MEX gateway commands | 20 |
-| MATLAB Optuna classes | 38 |
-| MATLAB Optuna functions | 30 |
+| Radia MEX gateway commands | 361 |
+| Optuna MEX gateway commands | 21 |
+| MATLAB Optuna classes | 96 |
+| MATLAB Optuna functions | 93 |
 
 The gateways are intentionally independent. `radia_mex` contains no
 `optuna.*` commands and owns the Radia/NGSolve/oneMKL dependency graph.
@@ -38,6 +38,15 @@ not count as native parity. They remain readable, independent SciPy and MATLAB
 implementations under `src/radia/acoustics` and `matlab/+radia/+acoustic` so
 they can validate the NGSolve/ngsolve.bem CQ-BEM and FSI routes without sharing
 a C++, pybind11, or MEX kernel with the solver under test.
+
+`radia.ObjTetrahedronCurrent` is part of the standalone MEX surface and is
+tested through the same object/field API as its pybind11 counterpart. The four
+`KelvinRadia*` classes are intentionally different: they are NGSolve
+`CoefficientFunction` adapters rather than independent numerical kernels.
+MATLAB constructs that batch-only NGSolve composition through
+`radia.python.openBoundary`; their bindings and constructors are explicitly
+classified in the parity inventory instead of being reported as missing MEX
+commands.
 
 The `axifem.q1_magnetic_element_matrices` command shares the Q1 Henrotte
 stiffness and sigma-mass implementation with `radia.axifem` and the production
