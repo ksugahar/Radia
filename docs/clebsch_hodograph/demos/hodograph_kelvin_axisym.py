@@ -7,8 +7,8 @@ error.  This script replaces that truncation with the lab's verified
 axisymmetric Kelvin transformation (open boundary), so the field is exact
 and the hodograph is computed on an exact field.
 
-It reuses the verified Omega-Reduced-Omega + Kelvin pattern captured in
-``docs/kelvin/kelvin_classic_demos.ipynb`` and implemented through
+It reuses the verified Omega-Reduced-Omega + Kelvin pattern documented in
+``docs/kelvin/KELVIN_TRANSFORMATION.md`` and implemented through
 ``radia.kelvin_source`` helpers (interior physical half-disk + exterior
 Kelvin half-disk offset in z, periodic kelvin_int <-> kelvin_ext,
 mu_ext = mu0 (R/rho')^2), then ADDS the hodograph post-processing on the

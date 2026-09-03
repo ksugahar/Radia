@@ -759,8 +759,8 @@ Kelvin pullback, it satisfies `∇×(ν' ∇×A_s) = 0` (the pulled-back
 vacuum Maxwell equation), NOT the `ν₀` version. The algebraic
 substitution is no longer valid.
 
-**Symptom**: applying the wrong form gives wildly inflated FEM
-inductance — empirically +43% on a torus + Kelvin benchmark.
+**Symptom**: applying the wrong form double-counts the background contribution
+and inflates the FEM inductance.
 
 **Correct form** (returning to eq. 7 directly):
 
@@ -772,16 +772,10 @@ a(A_r, v) = (J, v)_inner - ∫_full ν · (∇×A_s) · (∇×v) dV
 The inner contribution cancels via Ampere's law (where A_s = Biot-Savart
 satisfies ν₀ Maxwell as expected).
 
-**Validation** (archived classic source
-`examples/.../Coil_3D_A_HCurl_PEEC_source.py`, preserved in
-`docs/kelvin/kelvin_classic_demos_results.json`, 2026-05-04):
-
-| Linear form | L (FEM) | Analytical | Error |
-|---|---|---|---|
-| Old: `-(ν - ν₀) (∇×A_s) (∇×v) dx` | 127.06 nH | 88.55 nH | **+43.48%** |
-| New: `-ν' (∇×A_s) (∇×v) dx("kelvin")` | 93.97 nH | 88.55 nH | **+6.12%** |
-
-Reference baseline (J-source, no PEEC): +4.80%.
+The maintained executable checks are under `validation_test/kelvin_source/`
+and `validation_test/cubit/kelvin_1_4_p_convergence/`. Historical torus values
+and their retired source remain recoverable from Git history rather than being
+copied into a docs-side archive.
 
 ### 7.6 Two Conventions for "Background Field Transformation"
 

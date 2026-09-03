@@ -2198,9 +2198,9 @@ B_voxel = create_voxel_cf(combined, 'b', mesh=mesh, resolution=61)
 ## Test Scripts
 
 - `validation_test/ngsolve_integration/mesh_magnetization_import/verified_ngsolve_to_radia.py` - FEM->Radia analytical pipeline
-- `docs/kelvin/kelvin_classic_demos.ipynb` +
-  `docs/kelvin/kelvin_classic_demos_results.json` - result-bearing Kelvin
-  classic demos; maintained convention is `radia.kelvin_source`
+- `docs/kelvin/KELVIN_TRANSFORMATION.md` and
+  `docs/kelvin/kelvin_exterior_source_and_aphi.ipynb` - maintained Kelvin
+  theory and executed result view; implementation is `radia.kelvin_source`
 """
 
 RADIA_PLAY_MODELS = """

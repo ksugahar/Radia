@@ -3698,9 +3698,8 @@ geometry.  The reduced-Omega Kelvin Neumann correction term
 
     f += -H_s * specialcf.normal(3) * v.Trace() * ds("kelvin_int")
 
-is correct AS-WRITTEN on Cubit-meshed `.vol`, but the archived OCC
-reference in `docs/kelvin/kelvin_classic_demos_results.json` needed
-the same sign after a 2026-04-26 unification pass.  If the
+is correct AS-WRITTEN on Cubit-meshed `.vol`; the maintained executable
+reference is `validation_test/cubit/kelvin_1_4_p_convergence/`. If the
 BC is wrong-signed: 1/4 sample goes from +0.71% to about -7% at p=2.
 
 **Practical rule**: if a Kelvin-Neumann run gives a 5-10x error at
