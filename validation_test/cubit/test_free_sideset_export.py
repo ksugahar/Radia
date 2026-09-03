@@ -15,17 +15,22 @@ import pytest
 pytest.importorskip("gmsh")
 ng = pytest.importorskip("ngsolve")
 
-from radia_mcp.cubit import session  # noqa: E402
-from radia_mcp.cubit.server import _vol_surface_element_count  # noqa: E402
-from radia_mcp.cubit.vol_inventory import summarize_netgen_vol_inventory  # noqa: E402
-from radia_mcp.gmsh.msh_inspect import mesh_quality, mesh_total_volume  # noqa: E402
-from cubit_mesh_export.check import check_consistency  # noqa: E402
-
+from cubit_mesh_export.check import check_consistency
+from radia_mcp.cubit import session
+from radia_mcp.cubit.server import _vol_surface_element_count
+from radia_mcp.cubit.vol_inventory import summarize_netgen_vol_inventory
+from radia_mcp.gmsh.msh_inspect import mesh_quality, mesh_total_volume
 
 pytestmark = pytest.mark.skipif(
     session.get_cubit_bin_dir() is None,
     reason="Coreform Cubit is not installed",
 )
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _taskmanager():
+    with ng.TaskManager():
+        yield
 
 
 def _cube_stl_rows(x0: float, x1: float, name: str) -> list[str]:
@@ -150,8 +155,8 @@ def test_free_sculpt_sideset_recovers_each_material_domain(tmp_path):
         == ownership["domain_surface_incidence_counts"][2]
     )
     assert ownership["surface_domain_pair_counts"] == {
-        f"1->0": ownership["domain_surface_incidence_counts"][1],
-        f"2->0": ownership["domain_surface_incidence_counts"][2],
+        "1->0": ownership["domain_surface_incidence_counts"][1],
+        "2->0": ownership["domain_surface_incidence_counts"][2],
     }
 
     mesh = ng.Mesh(str(vol))
