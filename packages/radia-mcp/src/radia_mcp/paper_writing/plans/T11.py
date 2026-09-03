@@ -68,7 +68,9 @@ _PREREG_PATTERNS = [
 # 4. Methods replicability (versions, dependencies, hardware)
 _METHODS_REPL_PATTERNS = [
     # software versions
-    r"\b[A-Za-z]+\s+v?\d+\.\d+(?:\.\d+)?",  # PyTorch 1.13, Python 3.10.4
+    r"\b(?:Python|MATLAB|Simulink|PyTorch|TensorFlow|NumPy|SciPy|NGSolve|"
+    r"Netgen|Radia|COMSOL|ANSYS|JMAG|FEMM)\s+v?\d+\.\d+(?:\.\d+)?",
+    r"\b[A-Za-z][A-Za-z0-9_-]*\s+(?:version\s+|v)\d+\.\d+(?:\.\d+)?",
     r"version\s+\d+\.\d+",
     r"バージョン\s*\d+\.\d+",
     # OS / hardware
@@ -98,7 +100,7 @@ _COI_PATTERNS = [
     r"declaration\s+of\s+(?:competing|conflict)",
     r"the\s+authors?\s+declare",
     r"利益相反",
-    r"COI",
+    r"\bCOI\b",
     r"funding[\s:：]",
     r"acknowledg(?:ment|e?ment)s?",
     r"謝辞",

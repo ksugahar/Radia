@@ -396,6 +396,7 @@ jobs:
           python -m build --wheel packages/radia-mcp
           WHEEL=$(find packages/radia-mcp/dist -name 'radia_mcp-*.whl' | head -1)
           test -n "$WHEEL"
+          python packages/radia-mcp/tools/verify_wheel_contents.py "$WHEEL"
           python -m pip install --force-reinstall --no-deps "$WHEEL"
           cd "$RUNNER_TEMP"
           python -c "import radia_mcp; print(radia_mcp.__version__)"

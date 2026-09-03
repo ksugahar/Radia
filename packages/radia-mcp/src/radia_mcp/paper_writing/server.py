@@ -81,7 +81,7 @@ mcp = FastMCP("mcp-server-paper-writing")
 
 
 # ============================================================
-# Auto-register the 67 paper_writing_* tools from tools.py
+# Auto-register the paper_writing_* tools from tools.py
 # (matches the registration pattern previously used in
 # mcp-server-document.paper_writing.__init__.register).
 # ============================================================
@@ -134,6 +134,18 @@ mcp.tool()(paper_writing_em_submission_gate)
 # ============================================================
 mcp.tool()(paper_writing_verify_citation)
 mcp.tool()(paper_writing_citation_workflow_recipe)
+mcp.tool()(paper_writing_check_citation_keys_exist)
+mcp.tool()(paper_writing_check_undefined_acronyms)
+mcp.tool()(paper_writing_check_ref_label_consistency)
+mcp.tool()(paper_writing_check_ieee_keywords)
+mcp.tool()(paper_writing_check_pdf_unresolved_markers)
+_REGISTERED_TOOLS.extend([
+    "paper_writing_check_citation_keys_exist",
+    "paper_writing_check_undefined_acronyms",
+    "paper_writing_check_ref_label_consistency",
+    "paper_writing_check_ieee_keywords",
+    "paper_writing_check_pdf_unresolved_markers",
+])
 
 
 # ============================================================
@@ -151,6 +163,41 @@ mcp.tool()(paper_writing_check_undefined_variables)
 # ============================================================
 mcp.tool()(paper_writing_resolve_input_chain)
 mcp.tool()(paper_writing_extract_abstract)
+
+# Keep the self-test inventory aligned with every explicit registration above.
+for _fn in (
+    paper_writing_render_pages_to_png,
+    paper_writing_detect_page_whitespace_anomalies,
+    paper_writing_layout_thumbnail_strip,
+    paper_writing_check_floats_far_from_reference,
+    paper_writing_layout_visual_recipe,
+    paper_writing_tex_figure_placement,
+    paper_writing_arxiv_fetch_latex_source,
+    paper_writing_arxiv_extract_equations,
+    paper_writing_arxiv_search,
+    paper_writing_semantic_scholar_lookup,
+    paper_writing_semantic_scholar_references,
+    paper_writing_semantic_scholar_citations,
+    paper_writing_external_sources_recipe,
+    paper_writing_em_paper_style,
+    paper_writing_em_submission_gate,
+    paper_writing_verify_citation,
+    paper_writing_citation_workflow_recipe,
+    paper_writing_check_citation_keys_exist,
+    paper_writing_check_undefined_acronyms,
+    paper_writing_check_ref_label_consistency,
+    paper_writing_check_ieee_keywords,
+    paper_writing_check_pdf_unresolved_markers,
+    paper_writing_detect_text_image_overlap,
+    paper_writing_detect_text_overflow_page,
+    paper_writing_detect_overlapping_text_blocks,
+    paper_writing_pdf_overlap_recipe,
+    paper_writing_check_undefined_variables,
+    paper_writing_resolve_input_chain,
+    paper_writing_extract_abstract,
+):
+    if _fn.__name__ not in _REGISTERED_TOOLS:
+        _REGISTERED_TOOLS.append(_fn.__name__)
 
 
 # ============================================================
@@ -178,14 +225,17 @@ _N_FIGURE_TOOLS = _register_figure(mcp)
 # ============================================================
 
 @mcp.prompt()
-def cite_a_claim(claim: str, bib_path: str = "references.bib") -> str:
+def cite_a_claim(claim: str, bib_path: str = "") -> str:
     """Surface the lab POLICY for inserting any \\cite{} into a paper.
 
     Args:
         claim: the sentence / paragraph that needs a citation.
-        bib_path: path to the user's references.bib (default
-            'references.bib' in CWD).
+        bib_path: optional bibliography override. The bundled canonical
+            references.bib is used by default.
     """
+    if not bib_path:
+        from ..bibliography.plans.T14_canonical import CANONICAL
+        bib_path = str(CANONICAL)
     return (
         f"Insert a citation for this claim:\n"
         f"  > {claim}\n\n"
@@ -214,7 +264,7 @@ register_status_tool(
     server_name='mcp-server-paper-writing',
     description=(
         'Journal-paper writing skill suite: IMRaD/abstract/citation/'
-        'figure lint (67 tools), image-based PDF layout verification '
+        'figure lint, image-based PDF layout verification '
         '(pymupdf), LaTeX figure placement knowledge (htbp/placeins/'
         'widths/anti-patterns), IEEE/ScienceDirect/Emerald PDF '
         'download with cookies. Also serves the merged presentation_* '
@@ -223,7 +273,10 @@ register_status_tool(
         'standalone presentation + figure servers retired).'
     ),
     subpackage='radia_mcp.paper_writing',
-    related_servers=["literature-index", "chart2d", "poster"],
+    related_servers=[
+        "grant-writing", "poster", "document-meta", "chart2d", "pdf",
+        "bibliography", "research-project",
+    ],
     optional_deps=["pymupdf", "Pillow", "requests", "python-pptx",
                      "matplotlib"],
 )
@@ -279,7 +332,9 @@ def main():
             "Unrelated Materials Journal"
         )
         assert rejected["status"] == "reject"
-        print("    target_venue_policy: IEEJ/IEEE/accelerator only")
+        em_venue = _tools.paper_writing_target_venue_policy("COMPUMAG")
+        assert em_venue["target_category"] == "electromagnetics"
+        print("    target_venue_policy: IEEJ/IEEE/electromagnetics/accelerator")
 
         # v0.88.0 layout knowledge tools
         full = paper_writing_tex_figure_placement('all')
@@ -324,12 +379,12 @@ def main():
         print(f"  em_paper_style: all={len(em_full)} chars, "
               f"overview={len(em_ov)} chars")
         gate = paper_writing_em_submission_gate()
-        # v0.91.0: no bib_path => bib_policy gate fires => verdict=fail
-        assert gate["verdict"] == "fail"
+        # An omitted bib_path selects the bundled canonical bibliography.
+        assert gate["bib_source"] == "canonical_default"
         names = [c["name"] for c in gate["checks"]]
         assert "bib_policy" in names
         print(f"  em_submission_gate (no inputs): verdict={gate['verdict']} "
-              f"(bib_policy gate fired as designed), "
+              f"(canonical bibliography selected), "
               f"{gate['n_checks_run']} checks")
 
         # v0.91.0: citation verification workflow
@@ -338,12 +393,22 @@ def main():
         for kw in ["NEVER invent", "references.bib", "Crossref"]:
             assert kw in rec3, f"citation recipe missing: {kw}"
         print(f"  citation_workflow_recipe: {len(rec3)} chars")
-        # Offline check: missing bib_path -> error verdict
+        # Offline check: an omitted path uses the bundled canonical bib.
         from ._citation_verify import paper_writing_verify_citation
-        v = paper_writing_verify_citation(claim="x", bib_path="")
-        assert v["verdict"] == "error"
-        print(f"  verify_citation (no bib): verdict={v['verdict']} "
-              f"(refuses to fabricate)")
+        v = paper_writing_verify_citation(
+            claim="x", bib_path="", search_arxiv_if_no_doi=False
+        )
+        assert v["verdict"] == "no_candidate_found"
+        print(f"  verify_citation (canonical bib): verdict={v['verdict']}")
+
+        required_explicit_tools = {
+            "paper_writing_check_citation_keys_exist",
+            "paper_writing_check_undefined_acronyms",
+            "paper_writing_check_ref_label_consistency",
+            "paper_writing_check_ieee_keywords",
+            "paper_writing_check_pdf_unresolved_markers",
+        }
+        assert required_explicit_tools <= set(_REGISTERED_TOOLS)
 
         # v0.92.0: PDF overlap recipe + IoU math
         rec4 = paper_writing_pdf_overlap_recipe()

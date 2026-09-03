@@ -179,12 +179,12 @@ def paper_writing_render_pages_to_png(
 
 def paper_writing_detect_page_whitespace_anomalies(
     pdf_path: str,
-    whitespace_threshold: float = 0.75,
+    whitespace_threshold: float = 0.95,
     dpi: int = 100,
 ) -> dict:
     """Flag pages that are mostly whitespace (sign of bad float placement).
 
-    Algorithmic check (no agent needed): a page that is >75% white
+    Algorithmic check (no agent needed): a page that is >95% white
     is usually a sign that a stubborn [!h] or [H] specifier forced
     a float to its own page when LaTeX could not satisfy the
     constraint with running text.  Classic lab pattern:
@@ -200,8 +200,9 @@ def paper_writing_detect_page_whitespace_anomalies(
 
     Args:
         pdf_path: typeset PDF.
-        whitespace_threshold: 0.0 to 1.0 white-fraction.  Default 0.75
-            = flag pages > 75% white.
+        whitespace_threshold: 0.0 to 1.0 white-fraction. Default 0.95.
+            Normal two-column pages are often 88--90% white at pixel level,
+            so the former 0.75 default reported virtually every page.
         dpi: render resolution.  Default 100 = fast (~700x1000 px);
             higher DPI doesn't change the whitespace ratio meaningfully.
 
@@ -355,6 +356,7 @@ def paper_writing_check_floats_far_from_reference(
     tex_path: str,
     pdf_path: str,
     max_pages_apart: int = 1,
+    aux_path: str = "",
 ) -> dict:
     """Detect figures whose \\ref{} appears far from the actual float.
 
@@ -402,8 +404,6 @@ def paper_writing_check_floats_far_from_reference(
         _re.DOTALL,
     )
     label_re = _re.compile(r"\\label\{([^}]+)\}")
-    ref_re_tmpl = r"\\(?:ref|Cref|cref|autoref|eqref)\{%s\}"
-
     fig_labels = []
     for m in fig_re.finditer(src):
         block = m.group(0)
@@ -411,49 +411,72 @@ def paper_writing_check_floats_far_from_reference(
         if lm:
             fig_labels.append(lm.group(1))
 
+    aux = pathlib.Path(aux_path) if aux_path else tex.with_suffix(".aux")
+    if not aux.is_file():
+        return {
+            "applicable": False,
+            "status": "not_applicable",
+            "labels_found": len(fig_labels),
+            "flagged_count": 0,
+            "flagged": [],
+            "reason": f"compiled aux file not found: {aux}",
+            "advice": "Compile the TeX document, preserve its .aux file, and rerun.",
+        }
+
+    aux_text = aux.read_text(encoding="utf-8", errors="strict")
+    aux_labels: dict[str, tuple[str, int]] = {}
+    for match in _re.finditer(
+        r"\\newlabel\{([^{}]+)\}\{\{([^{}]+)\}\{([^{}]+)\}", aux_text
+    ):
+        label, number, page_token = match.groups()
+        if label in fig_labels and page_token.isdigit():
+            aux_labels[label] = (number, int(page_token))
+
     # Build per-page text from the PDF
-    doc = pymupdf.open(str(pdf))
-    page_texts = []
-    for i, page in enumerate(doc):
-        page_texts.append(page.get_text())
-    doc.close()
+    with pymupdf.open(str(pdf)) as doc:
+        page_texts = [page.get_text() for page in doc]
 
     flagged = []
+    unresolved_labels = []
     for lab in fig_labels:
-        # Find which page the figure CONTENT lives on -- approximated by
-        # \label scrolling onto the page (LaTeX places \label adjacent
-        # to the float in source, and \label content "fig:foo" rarely
-        # appears in body text other than \ref{fig:foo}).
-        # Conservative: the figure CAPTION often contains the figure
-        # number "Fig. N", so we don't have a fast way to locate the
-        # float page from text alone.  Instead we approximate the
-        # FLOAT page as the page where the SECOND or later occurrence
-        # of references to it stops appearing -- i.e. the page where
-        # the figure actually sits.  See "detect" advice below.
-        pat = _re.compile(ref_re_tmpl % _re.escape(lab))
-        ref_pages = [i + 1 for i, t in enumerate(page_texts) if pat.search(t)]
+        if lab not in aux_labels:
+            unresolved_labels.append(lab)
+            continue
+        figure_number, float_page = aux_labels[lab]
+        # Exclude caption-shaped lines so the caption does not count as its
+        # own prose reference. The authoritative float page comes from aux.
+        mention = _re.compile(
+            rf"\bFig(?:ure)?s?\.?[~\s]*{_re.escape(figure_number)}\b",
+            _re.IGNORECASE,
+        )
+        caption = _re.compile(
+            rf"^\s*Fig(?:ure)?\.?[~\s]*{_re.escape(figure_number)}\s*[.:-]",
+            _re.IGNORECASE,
+        )
+        ref_pages = []
+        for page_no, page_text in enumerate(page_texts, start=1):
+            if any(
+                mention.search(line) and not caption.search(line)
+                for line in page_text.splitlines()
+            ):
+                ref_pages.append(page_no)
         if not ref_pages:
             continue
-        # This heuristic is intentionally weak; for a robust check we
-        # would need synctex.  For now we flag IF the LAST ref page is
-        # far before the figure's expected position (= max ref page +
-        # 1 page typically).  Real implementation: parse the PDF for
-        # the figure caption "Fig. N" and locate that page.
         first_ref = min(ref_pages)
-        last_ref = max(ref_pages)
-        span = last_ref - first_ref
-        if span > max_pages_apart:
+        delta = abs(float_page - first_ref)
+        if delta > max_pages_apart:
             flagged.append({
                 "label": lab,
+                "figure_number": figure_number,
                 "ref_pages": ref_pages,
                 "first_ref_page": first_ref,
-                "last_ref_page": last_ref,
-                "span_pages": span,
+                "float_page": float_page,
+                "delta_pages": delta,
             })
 
     advice = (
         "First \\ref{fig:X} should be within 1 page of the figure itself. "
-        "When span_pages > 1, the float was likely pushed far by a rigid "
+        "When delta_pages > 1, the float was likely pushed far by a rigid "
         "[!h] or [t] specifier.  Fixes: (a) move \\begin{figure} earlier in "
         "source (LaTeX never pulls a float backward); (b) loosen to [htbp] "
         "or [tbp]; (c) add \\usepackage[section]{placeins} so floats cannot "
@@ -465,7 +488,12 @@ def paper_writing_check_floats_far_from_reference(
     )
 
     return {
+        "applicable": True,
+        "status": "warning" if flagged or unresolved_labels else "clean",
         "labels_found": len(fig_labels),
+        "labels_resolved_from_aux": len(aux_labels),
+        "unresolved_labels": unresolved_labels,
+        "aux_path": str(aux),
         "flagged_count": len(flagged),
         "flagged": flagged,
         "advice": advice,

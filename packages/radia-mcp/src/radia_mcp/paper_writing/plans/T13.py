@@ -25,28 +25,15 @@ import statistics
 from collections import Counter
 
 
-# ------------------------------------------------------------------
-# BibTeX entry extraction
-# ------------------------------------------------------------------
-_BIB_ENTRY_RE = re.compile(
-    r"@\w+\s*\{[^,]*,\s*((?:[^@]|\n)*?)\n\s*\}", re.MULTILINE
-)
-_BIB_FIELD_RE = re.compile(
-    r"(\w+)\s*=\s*[\{\"]+(.+?)[\}\"]+\s*[,\n]", re.DOTALL
-)
-
-
 def _parse_bib_entries(bib: str) -> list[dict]:
-    """Roughly parse BibTeX into list of {year, author, journal, address}."""
-    entries: list[dict] = []
-    for m in _BIB_ENTRY_RE.finditer(bib):
-        body = m.group(1)
-        fields: dict[str, str] = {}
-        for fm in _BIB_FIELD_RE.finditer(body + "\n"):
-            key = fm.group(1).lower()
-            val = re.sub(r"\s+", " ", fm.group(2)).strip()
-            fields[key] = val
+    """Parse BibTeX via the package-wide balanced-brace parser."""
+    from ...bibliography._bibparse import parse_bib
 
+    entries: list[dict] = []
+    for parsed in parse_bib(bib):
+        if not parsed.key:
+            continue
+        fields = parsed.fields
         entry: dict = {}
         # year
         year_str = fields.get("year", "")

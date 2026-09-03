@@ -20,6 +20,7 @@ theses / long IEEE papers using \\input get scanned in full.
 from __future__ import annotations
 
 import os
+import pathlib
 import re
 from typing import Optional
 
@@ -70,10 +71,12 @@ def resolve_input_chain(
     Notes:
         * Comments after \\input{...} % comment are stripped.
         * \\input inside a comment line (leading %) is skipped.
-        * Relative paths are resolved against the INCLUDING file's
-          directory (LaTeX semantics), not the main file's directory.
+        * Relative paths are resolved against the compilation working
+          directory, represented here by the main file's directory. TeX does
+          not change its working directory when it enters an input file.
     """
     main = os.path.abspath(main_tex_path)
+    main_dir = os.path.dirname(main)
     if not os.path.exists(main):
         return {
             "ok": False,
@@ -86,11 +89,13 @@ def resolve_input_chain(
     seen_paths: dict[str, int] = {}   # abs_path -> first inlined depth
 
     def _read(path: str) -> str:
+        raw = pathlib.Path(path).read_bytes()
         try:
-            with open(path, encoding=encoding, errors="replace") as fh:
-                return fh.read()
-        except Exception as e:  # noqa: BLE001
-            return f"% [resolve_input_chain: read error on {path}: {e}]\n"
+            return raw.decode(encoding, errors="strict")
+        except UnicodeDecodeError:
+            if encoding.casefold().replace("-", "") != "utf8":
+                raise
+            return raw.decode("cp932", errors="strict")
 
     def _resolve(path: str, depth: int, parent: Optional[str] = None) -> str:
         abs_path = os.path.abspath(path)
@@ -122,9 +127,7 @@ def resolve_input_chain(
             "size_bytes": len(text.encode("utf-8", errors="replace")),
         })
 
-        # Replace each \\input{X} with the recursive resolution
-        this_dir = os.path.dirname(abs_path)
-
+        # Replace each \\input{X} with the recursive resolution.
         def _sub(m):
             # Skip if the \\input is inside a comment line: find
             # the start of the line and check for '%' before.
@@ -134,16 +137,16 @@ def resolve_input_chain(
             if re.search(r"(?<!\\)%", line_before):
                 return m.group(0)
             inc = m.group(1).strip()
-            if not inc.endswith(".tex"):
+            if not os.path.splitext(inc)[1]:
                 inc = inc + ".tex"
-            child_path = os.path.join(this_dir, inc)
+            child_path = inc if os.path.isabs(inc) else os.path.join(main_dir, inc)
             return _resolve(child_path, depth + 1, parent=abs_path)
 
         return _INPUT_PATTERN.sub(_sub, text)
 
     try:
         merged = _resolve(main, depth=0)
-    except RecursionError as e:
+    except (RecursionError, OSError, UnicodeError) as e:
         return {
             "ok": False,
             "error": str(e),
@@ -151,8 +154,8 @@ def resolve_input_chain(
             "files_missing": missing,
         }
 
-    return {
-        "ok": True,
+    result = {
+        "ok": not missing,
         "main": main_tex_path,
         "merged_tex": merged,
         "files_resolved": resolved,
@@ -160,6 +163,9 @@ def resolve_input_chain(
         "files_duplicate": duplicate,
         "total_chars": len(merged),
     }
+    if missing:
+        result["error"] = f"{len(missing)} TeX input file(s) could not be resolved"
+    return result
 
 
 def paper_writing_resolve_input_chain(
@@ -273,8 +279,20 @@ def paper_writing_extract_abstract(
             "abstract": None,
         }
 
-    with open(tex_path, encoding=encoding, errors="replace") as fh:
-        src = fh.read()
+    try:
+        raw = pathlib.Path(tex_path).read_bytes()
+        try:
+            src = raw.decode(encoding, errors="strict")
+        except UnicodeDecodeError:
+            if encoding.casefold().replace("-", "") != "utf8":
+                raise
+            src = raw.decode("cp932", errors="strict")
+    except (OSError, UnicodeError) as exc:
+        return {
+            "ok": False,
+            "error": f"failed to read tex: {exc}",
+            "abstract": None,
+        }
 
     # Try direct first
     abs_text = extract_abstract_from_tex(src)
