@@ -15,13 +15,14 @@ Output:
 - JSON results file
 
 Usage:
-    python validate_all_datasets.py
+    python validation_test/universal_relaxation_network/validate_all_datasets.py
 """
 
 import os
 import json
 import time
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
 
@@ -30,13 +31,17 @@ from radia.urn import (
 )
 import torch
 
+DOCS_URN_DIR = (
+    Path(__file__).resolve().parents[2] / 'docs' / 'universal_relaxation_network'
+)
 
-def load_data(data_path, skiprows):
+
+def load_data(data_path):
     """Load impedance data from CSV file."""
-    data = np.loadtxt(data_path, delimiter=',', skiprows=skiprows)
-    freq = data[:, 0]
-    Z_real = data[:, 1]
-    Z_imag = data[:, 2]
+    data = pd.read_csv(data_path, comment='#')
+    freq = data['frequency_Hz'].to_numpy()
+    Z_real = data['Z_real_Ohm'].to_numpy()
+    Z_imag = data['Z_imag_Ohm'].to_numpy()
     return freq, Z_real + 1j * Z_imag
 
 
@@ -151,18 +156,13 @@ def main():
     }
 
     # Create output directory
-    output_dir = (
-        Path(__file__).resolve().parents[2]
-        / 'validation_test'
-        / 'universal_relaxation_network'
-        / 'validation_output'
-    )
+    output_dir = Path(__file__).resolve().parent / 'validation_output'
     output_dir.mkdir(parents=True, exist_ok=True)
 
     results = []
 
     for name, info in datasets.items():
-        data_path = Path(__file__).parent / info['path']
+        data_path = DOCS_URN_DIR / info['path']
 
         if not data_path.exists():
             print(f"\n[SKIP] {name}: Data file not found")
@@ -172,7 +172,7 @@ def main():
         print("-" * 40)
 
         # Load data
-        freq, Z_data = load_data(data_path, info['skiprows'])
+        freq, Z_data = load_data(data_path)
         print(f"  Loaded {len(freq)} frequency points")
         print(f"  Frequency range: {freq.min():.4f} Hz - {freq.max()/1e6:.2f} MHz")
 

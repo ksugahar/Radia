@@ -28,11 +28,7 @@ warnings.filterwarnings('ignore')
 from radia.urn import URNConfig, UniversalRelaxationNetwork, train_urn
 import torch
 
-VALIDATION_DIR = (
-    Path(__file__).resolve().parents[2]
-    / 'validation_test'
-    / 'universal_relaxation_network'
-)
+VALIDATION_DIR = Path(__file__).resolve().parent
 
 # Vector Fitting - using scipy for pole-residue fitting
 from scipy.optimize import curve_fit, minimize

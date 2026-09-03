@@ -20,8 +20,8 @@ For each configuration, reports:
 - Training time
 
 Usage:
-    python ablation_study.py
-    python ablation_study.py --dataset ferrite  # Use ferrite data instead
+    python validation_test/universal_relaxation_network/ablation_study.py
+    python validation_test/universal_relaxation_network/ablation_study.py --dataset ferrite
 
 Output:
     - Table with ablation results
@@ -35,6 +35,7 @@ import time
 import argparse
 import sys
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
 from dataclasses import dataclass
@@ -42,6 +43,10 @@ from typing import Dict, List, Optional, Tuple
 
 from radia.urn import (
     UniversalRelaxationNetwork, URNConfig, train_urn
+)
+
+DOCS_URN_DIR = (
+    Path(__file__).resolve().parents[2] / 'docs' / 'universal_relaxation_network'
 )
 
 
@@ -379,29 +384,19 @@ def main():
 
     args = parser.parse_args()
 
-    # Load data
-    data_dir = Path(__file__).parent / 'data' / 'synthetic'
-
     if args.dataset == 'battery':
-        data_path = data_dir / 'liion_battery_eis.csv'
-        skip_header = 18
+        data_path = DOCS_URN_DIR / 'data' / 'real_world' / 'nasa_battery' / 'nasa_18650_eis.csv'
     else:
-        data_path = data_dir / 'mnzn_ferrite_impedance.csv'
-        skip_header = 18
+        data_path = DOCS_URN_DIR / 'data' / 'real_world' / 'tdk_ferrite' / 'tdk_pc50_impedance.csv'
 
     if not data_path.exists():
         print(f"Data file not found: {data_path}")
         sys.exit(1)
 
     print(f"Loading data from: {data_path}")
-    data = np.genfromtxt(data_path, delimiter=',', skip_header=skip_header)
-
-    if args.dataset == 'battery':
-        freq = data[:, 0]
-        Z = data[:, 1] + 1j * data[:, 2]
-    else:  # ferrite: columns are freq, mu_real, mu_imag, Z_real, Z_imag
-        freq = data[:, 0]
-        Z = data[:, 3] + 1j * data[:, 4]
+    data = pd.read_csv(data_path, comment='#')
+    freq = data['frequency_Hz'].to_numpy()
+    Z = data['Z_real_Ohm'].to_numpy() + 1j * data['Z_imag_Ohm'].to_numpy()
 
     print(f"  Frequency range: {freq.min():.2e} - {freq.max():.2e} Hz")
     print(f"  Number of points: {len(freq)}")

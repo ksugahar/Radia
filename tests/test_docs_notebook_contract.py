@@ -189,3 +189,28 @@ def test_docs_do_not_restore_retired_result_bookkeeping():
         "Docs notebooks embed display results; validation_test owns checked evidence: "
         + ", ".join(map(str, offenders))
     )
+
+
+def test_urn_validation_drivers_stay_out_of_docs():
+    docs_dir = ROOT / "docs" / "universal_relaxation_network"
+    validation_only = {
+        "ablation_study.py",
+        "benchmark_urn_vs_skrf_vf.py",
+        "run_ltspice_verification.py",
+        "urn_benchmark_improved.py",
+        "urn_benchmark_suite.py",
+        "urn_vs_vf_comparison.py",
+        "urn_vs_vf_quick.py",
+        "validate_all_datasets.py",
+        "validate_real_data.py",
+        "validate_real_world.py",
+        "validate_tdk_ferrite.py",
+        "validate_urn_vs_vf.py",
+        "verify_timedomain_stability.py",
+        "vf_benchmark_same_data.py",
+    }
+    offenders = sorted(path.name for path in docs_dir.iterdir() if path.name in validation_only)
+    assert not offenders, (
+        "Move URN validation and benchmark drivers to validation_test: "
+        + ", ".join(offenders)
+    )

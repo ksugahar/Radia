@@ -25,3 +25,8 @@ Vector Fitting comparison beside it. Run both from the repository root:
 python validation_test/universal_relaxation_network/urn_benchmark_improved.py
 python validation_test/universal_relaxation_network/vf_benchmark_same_data.py
 ```
+
+The remaining `validate_*`, `benchmark_*`, ablation, LTspice, and time-domain
+drivers also live here. Their immutable NASA and TDK input CSV files remain in
+`docs/universal_relaxation_network/data/real_world/`; generated JSON, plots,
+netlists, and timing records stay under this validation directory.

@@ -18,8 +18,7 @@ Requirements:
     Optional: ngspice or LTspice for actual SPICE verification
 
 Usage:
-    python verify_timedomain_stability.py
-    python verify_timedomain_stability.py --with-ngspice  # Runs actual SPICE
+    python validation_test/universal_relaxation_network/verify_timedomain_stability.py
 
 Output:
     - Comparative plots (URN vs VF)
@@ -35,6 +34,7 @@ import subprocess
 import tempfile
 import sys
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
 from scipy import signal
@@ -42,6 +42,10 @@ from scipy.linalg import eig
 
 from radia.urn import (
     UniversalRelaxationNetwork, URNConfig, train_urn, generate_spice_netlist
+)
+
+DOCS_URN_DIR = (
+    Path(__file__).resolve().parents[2] / 'docs' / 'universal_relaxation_network'
 )
 
 
@@ -518,18 +522,17 @@ def main():
     print("Time-Domain Stability Verification: URN vs Vector Fitting")
     print("="*70)
 
-    # Load synthetic data (or real data if available)
-    data_path = Path(__file__).parent / 'data' / 'synthetic' / 'liion_battery_eis.csv'
+    data_path = DOCS_URN_DIR / 'data' / 'real_world' / 'nasa_battery' / 'nasa_18650_eis.csv'
 
     if not data_path.exists():
         print(f"Data file not found: {data_path}")
-        print("Please ensure synthetic data is available.")
+        print("Please ensure the bundled NASA validation data is available.")
         sys.exit(1)
 
     print(f"\nLoading data from: {data_path}")
-    data = np.genfromtxt(data_path, delimiter=',', skip_header=18)
-    freq = data[:, 0]
-    Z = data[:, 1] + 1j * data[:, 2]
+    data = pd.read_csv(data_path, comment='#')
+    freq = data['frequency_Hz'].to_numpy()
+    Z = data['Z_real_Ohm'].to_numpy() + 1j * data['Z_imag_Ohm'].to_numpy()
 
     print(f"  Frequency range: {freq.min():.2e} - {freq.max():.2e} Hz")
     print(f"  Number of points: {len(freq)}")
@@ -596,7 +599,7 @@ def main():
     print("Generating comparison plot...")
     print("-"*50)
 
-    output_dir = Path(__file__).parent / 'results'
+    output_dir = Path(__file__).parent / 'timedomain_stability'
     output_dir.mkdir(exist_ok=True)
 
     generate_comparison_plot(

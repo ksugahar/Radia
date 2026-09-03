@@ -17,7 +17,7 @@ Requirements:
     pip install numpy scipy torch matplotlib
 
 Usage:
-    python validate_urn_vs_vf.py
+    python validation_test/universal_relaxation_network/validate_urn_vs_vf.py
 
 Output:
     - Fitting comparison plots (PNG)
@@ -29,6 +29,7 @@ import os
 import json
 import time
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
 
@@ -36,42 +37,30 @@ from radia.urn import (
     UniversalRelaxationNetwork, URNConfig, train_urn, generate_spice_netlist
 )
 
+DOCS_URN_DIR = (
+    Path(__file__).resolve().parents[2] / 'docs' / 'universal_relaxation_network'
+)
+
 
 def load_battery_data():
     """Load NASA Li-ion battery EIS data (real measurement)."""
-    # Try real-world NASA data first
-    data_path = Path(__file__).parent / 'data' / 'real_world' / 'nasa_battery' / 'nasa_18650_eis.csv'
-    if not data_path.exists():
-        # Fall back to synthetic data
-        data_path = Path(__file__).parent / 'data' / 'synthetic' / 'liion_battery_eis.csv'
-        print(f"  Note: Using synthetic data ({data_path.name})")
-        skiprows = 7  # Synthetic data has 7 header lines
-    else:
-        print(f"  Using real NASA 18650 battery EIS data")
-        skiprows = 24  # NASA data has 24 header lines
-    data = np.loadtxt(data_path, delimiter=',', skiprows=skiprows)
-    freq = data[:, 0]
-    Z_real = data[:, 1]
-    Z_imag = data[:, 2]
+    data_path = DOCS_URN_DIR / 'data' / 'real_world' / 'nasa_battery' / 'nasa_18650_eis.csv'
+    print("  Using real NASA 18650 battery EIS data")
+    data = pd.read_csv(data_path, comment='#')
+    freq = data['frequency_Hz'].to_numpy()
+    Z_real = data['Z_real_Ohm'].to_numpy()
+    Z_imag = data['Z_imag_Ohm'].to_numpy()
     return freq, Z_real + 1j * Z_imag
 
 
 def load_ferrite_data():
     """Load TDK MnZn ferrite impedance data (real measurement)."""
-    # Try real-world TDK data first
-    data_path = Path(__file__).parent / 'data' / 'real_world' / 'tdk_ferrite' / 'tdk_pc50_impedance.csv'
-    if not data_path.exists():
-        # Fall back to synthetic data
-        data_path = Path(__file__).parent / 'data' / 'synthetic' / 'mnzn_ferrite_impedance.csv'
-        print(f"  Note: Using synthetic data ({data_path.name})")
-        skiprows = 7  # Synthetic data has 7 header lines
-    else:
-        print(f"  Using real TDK PC50 ferrite impedance data")
-        skiprows = 19  # TDK data has 19 header lines
-    data = np.loadtxt(data_path, delimiter=',', skiprows=skiprows)
-    freq = data[:, 0]
-    Z_real = data[:, 1]  # Z_real is column 1
-    Z_imag = data[:, 2]  # Z_imag is column 2
+    data_path = DOCS_URN_DIR / 'data' / 'real_world' / 'tdk_ferrite' / 'tdk_pc50_impedance.csv'
+    print("  Using real TDK PC50 ferrite impedance data")
+    data = pd.read_csv(data_path, comment='#')
+    freq = data['frequency_Hz'].to_numpy()
+    Z_real = data['Z_real_Ohm'].to_numpy()
+    Z_imag = data['Z_imag_Ohm'].to_numpy()
     return freq, Z_real + 1j * Z_imag
 
 
@@ -267,12 +256,7 @@ def main():
         'datasets': {}
     }
 
-    output_dir = (
-        Path(__file__).resolve().parents[2]
-        / 'validation_test'
-        / 'universal_relaxation_network'
-        / 'validation_output'
-    )
+    output_dir = Path(__file__).resolve().parent / 'validation_output'
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # =========================================================================

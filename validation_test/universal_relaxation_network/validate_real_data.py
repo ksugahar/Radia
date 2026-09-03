@@ -16,8 +16,8 @@ Supported datasets:
    - Contains: EIS at 19 SoC levels for 11 LiFePO4 batteries
 
 Usage:
-    python validate_real_data.py --nasa-path data/real_world/nasa_battery/
-    python validate_real_data.py --mendeley-path data/real_world/mendeley_eis/
+    python validation_test/universal_relaxation_network/validate_real_data.py --bundled-nasa
+    python validation_test/universal_relaxation_network/validate_real_data.py --mendeley-path C:/data/cell.csv
 
 Author: K. Sugahara, Y. Sato
 Date: 2026-01-19
@@ -27,11 +27,16 @@ import os
 import argparse
 import sys
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
 
 from radia.urn import (
     UniversalRelaxationNetwork, URNConfig, train_urn, generate_spice_netlist
+)
+
+DOCS_URN_DIR = (
+    Path(__file__).resolve().parents[2] / 'docs' / 'universal_relaxation_network'
 )
 
 
@@ -496,9 +501,11 @@ def main():
     parser = argparse.ArgumentParser(description='URN Validation with Real-World Data')
     parser.add_argument('--nasa-path', type=str, help='Path to NASA battery .mat file')
     parser.add_argument('--mendeley-path', type=str, help='Path to Mendeley EIS .csv file')
-    parser.add_argument('--synthetic', action='store_true',
-                        help='Use synthetic data for testing (no real data required)')
-    parser.add_argument('--output-dir', type=str, default='results',
+    parser.add_argument('--bundled-nasa', action='store_true',
+                        help='Use the bundled NASA 18650 measurement CSV')
+    parser.add_argument(
+        '--output-dir', type=str,
+        default=str(Path(__file__).resolve().parent / 'real_data'),
                         help='Directory for output files')
     parser.add_argument('--convergence-test', action='store_true',
                         help='Run convergence analysis (n_restarts sensitivity)')
@@ -516,27 +523,29 @@ def main():
         freq, Z, metadata = load_nasa_battery_eis(args.nasa_path)
     elif args.mendeley_path:
         freq, Z, metadata = load_mendeley_eis(args.mendeley_path)
-    elif args.synthetic:
-        # Use synthetic data for testing
-        print("Using synthetic battery EIS data for demonstration...")
-        data_path = Path(__file__).parent / 'data' / 'synthetic' / 'liion_battery_eis.csv'
+    elif args.bundled_nasa:
+        print("Using bundled NASA 18650 measurement data...")
+        data_path = (
+            DOCS_URN_DIR / 'data' / 'real_world' / 'nasa_battery'
+            / 'nasa_18650_eis.csv'
+        )
         if not data_path.exists():
-            print(f"ERROR: Synthetic data not found at {data_path}")
+            print(f"ERROR: Bundled NASA data not found at {data_path}")
             sys.exit(1)
-        data = np.genfromtxt(data_path, delimiter=',', skip_header=18)
-        freq = data[:, 0]
-        Z = data[:, 1] + 1j * data[:, 2]
+        data = pd.read_csv(data_path, comment='#')
+        freq = data['frequency_Hz'].to_numpy()
+        Z = data['Z_real_Ohm'].to_numpy() + 1j * data['Z_imag_Ohm'].to_numpy()
         metadata = {
-            'source': 'Synthetic Battery EIS',
+            'source': 'NASA 18650 Battery EIS',
             'file': str(data_path),
             'n_points': len(freq),
-            'note': 'Physics-based synthetic data for algorithm validation'
+            'note': 'Bundled measured data for algorithm validation'
         }
     else:
         print("ERROR: Please specify data source:")
         print("  --nasa-path <path>     : NASA battery .mat file")
         print("  --mendeley-path <path> : Mendeley EIS .csv file")
-        print("  --synthetic            : Use bundled synthetic data")
+        print("  --bundled-nasa         : Use bundled NASA measurement data")
         sys.exit(1)
 
     # Run main validation

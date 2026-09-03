@@ -18,8 +18,8 @@ References:
     - scikit-rf: https://scikit-rf.readthedocs.io/
 
 Usage:
-    python benchmark_urn_vs_skrf_vf.py
-    python benchmark_urn_vs_skrf_vf.py --dataset ferrite
+    python validation_test/universal_relaxation_network/benchmark_urn_vs_skrf_vf.py
+    python validation_test/universal_relaxation_network/benchmark_urn_vs_skrf_vf.py --dataset ferrite
 
 Author: K. Sugahara, Y. Sato
 Date: 2026-01-19
@@ -29,11 +29,16 @@ import time
 import argparse
 import sys
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
 
 from radia.urn import (
     UniversalRelaxationNetwork, URNConfig, train_urn, generate_spice_netlist
+)
+
+DOCS_URN_DIR = (
+    Path(__file__).resolve().parents[2] / 'docs' / 'universal_relaxation_network'
 )
 
 # Check for scikit-rf
@@ -445,26 +450,19 @@ def main():
         print("Install with: pip install scikit-rf")
         print("Using fallback simplified VF implementation")
 
-    # Load data
-    data_dir = Path(__file__).parent / 'data' / 'synthetic'
-
     if args.dataset == 'battery':
-        data_path = data_dir / 'liion_battery_eis.csv'
-        skip_header = 18
-        z_cols = (1, 2)
+        data_path = DOCS_URN_DIR / 'data' / 'real_world' / 'nasa_battery' / 'nasa_18650_eis.csv'
     else:
-        data_path = data_dir / 'mnzn_ferrite_impedance.csv'
-        skip_header = 19
-        z_cols = (3, 4)
+        data_path = DOCS_URN_DIR / 'data' / 'real_world' / 'tdk_ferrite' / 'tdk_pc50_impedance.csv'
 
     if not data_path.exists():
         print(f"ERROR: Data file not found: {data_path}")
         sys.exit(1)
 
     print(f"\nLoading data from: {data_path}")
-    data = np.genfromtxt(data_path, delimiter=',', skip_header=skip_header)
-    freq = data[:, 0]
-    Z = data[:, z_cols[0]] + 1j * data[:, z_cols[1]]
+    data = pd.read_csv(data_path, comment='#')
+    freq = data['frequency_Hz'].to_numpy()
+    Z = data['Z_real_Ohm'].to_numpy() + 1j * data['Z_imag_Ohm'].to_numpy()
 
     print(f"  Frequency range: {freq.min():.2e} - {freq.max():.2e} Hz")
     print(f"  Number of points: {len(freq)}")
