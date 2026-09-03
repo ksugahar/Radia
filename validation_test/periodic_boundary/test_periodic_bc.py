@@ -24,6 +24,12 @@ from ngsolve import (H1, Periodic, BilinearForm, LinearForm, GridFunction,
 from ngsolve.meshes import MakeStructured2DMesh
 
 
+@pytest.fixture(autouse=True)
+def _taskmanager():
+    with ng.TaskManager():
+        yield
+
+
 def _mesh(n):
     return MakeStructured2DMesh(quads=False, nx=n, ny=n, periodic_x=True)
 
@@ -41,41 +47,49 @@ def _l2(gf, ref, mesh):
     return math.sqrt(Integrate(Norm(gf - ref) ** 2, mesh).real)
 
 
+def _periodic_error(n):
+    mesh = _mesh(n)
+    fes = Periodic(H1(mesh, order=3, dirichlet="bottom|top"))
+    exact = sin(2 * pi * x) * sin(pi * y)
+    field = _solve(fes, 5 * pi * pi * exact)
+    return _l2(field, exact, mesh)
+
+
+def _antiperiodic_solution(n=32):
+    mesh = _mesh(n)
+    fes = Periodic(
+        H1(mesh, order=3, dirichlet="bottom|top", complex=True), phase=[-1]
+    )
+    exact = cos(pi * x) * sin(pi * y)
+    return mesh, _solve(fes, 2 * pi * pi * exact), exact
+
+
 def test_periodic_recovers_manufactured():
     """Periodic (phase +1) FE space recovers u = sin(2 pi x) sin(pi y)."""
-    mesh = _mesh(32)
-    fes = Periodic(H1(mesh, order=3, dirichlet="bottom|top"))
-    uex = sin(2 * pi * x) * sin(pi * y)
-    gf = _solve(fes, 5 * pi * pi * uex)
-    assert _l2(gf, uex, mesh) < 1e-4, "periodic L2 error %.2e" % _l2(gf, uex, mesh)
+    error = _periodic_error(32)
+    assert error < 1e-4, "periodic L2 error %.2e" % error
 
 
 def test_antiperiodic_recovers_manufactured():
     """Anti-periodic (phase -1) FE space recovers u = cos(pi x) sin(pi y)."""
-    mesh = _mesh(32)
-    fes = Periodic(H1(mesh, order=3, dirichlet="bottom|top", complex=True), phase=[-1])
-    uex = cos(pi * x) * sin(pi * y)
-    gf = _solve(fes, 2 * pi * pi * uex)
-    assert _l2(gf, uex, mesh) < 1e-4, "anti-periodic L2 error %.2e" % _l2(gf, uex, mesh)
+    mesh, field, exact = _antiperiodic_solution()
+    error = _l2(field, exact, mesh)
+    assert error < 1e-4, "anti-periodic L2 error %.2e" % error
 
 
 def test_antiperiodic_sign_flip_across_pitch():
     """The anti-periodic solution genuinely satisfies u(1,y) = -u(0,y)."""
-    mesh = _mesh(32)
-    fes = Periodic(H1(mesh, order=3, dirichlet="bottom|top", complex=True), phase=[-1])
-    uex = cos(pi * x) * sin(pi * y)
-    gf = _solve(fes, 2 * pi * pi * uex)
+    mesh, field, _ = _antiperiodic_solution()
     for yy in (0.3, 0.5, 0.7):
-        left = gf(mesh(0.0, yy))
-        right = gf(mesh(1.0, yy))
+        left = field(mesh(0.0, yy))
+        right = field(mesh(1.0, yy))
         assert abs(right + left) < 1e-3, "not anti-periodic at y=%.1f: u0=%.4f u1=%.4f" % (yy, left, right)
 
 
 def test_periodic_h_convergence():
     """Periodic BC keeps optimal high-order convergence (order 3 -> rate ~4)."""
-    uex = sin(2 * pi * x) * sin(pi * y)
-    e1 = _l2(_solve(Periodic(H1(_mesh(8), order=3, dirichlet="bottom|top")), 5 * pi * pi * uex), uex, _mesh(8))
-    e2 = _l2(_solve(Periodic(H1(_mesh(16), order=3, dirichlet="bottom|top")), 5 * pi * pi * uex), uex, _mesh(16))
+    e1 = _periodic_error(8)
+    e2 = _periodic_error(16)
     rate = math.log(e1 / e2) / math.log(2.0)
     assert rate > 3.0, "periodic h-rate %.2f below optimal" % rate
 
