@@ -38,7 +38,7 @@ def run_test_with_threads(num_threads):
 	print(f"{'=' * 70}\n")
 
 	result = subprocess.run(
-		[sys.executable, 'test_parallel_performance.py'],
+		[sys.executable, str(Path(__file__).with_name('benchmark_field_parallel.py'))],
 		env=env,
 		capture_output=True,
 		text=True

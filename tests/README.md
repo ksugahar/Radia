@@ -32,7 +32,6 @@ Useful single-file checks:
 python tests/test_simple.py
 python tests/test_radia.py
 python tests/test_advanced.py
-python tests/test_parallel_performance.py
 python tests/test_radia_ngsolve.py
 ```
 
@@ -46,6 +45,7 @@ Benchmark scripts are validation artifacts and live in
 
 ```powershell
 python validation_test/benchmarks/benchmark_parallel.py
+python validation_test/benchmarks/benchmark_field_parallel.py
 python validation_test/benchmarks/benchmark_correct.py
 python validation_test/benchmarks/benchmark_heavy.py
 python validation_test/benchmarks/benchmark_threads.py
