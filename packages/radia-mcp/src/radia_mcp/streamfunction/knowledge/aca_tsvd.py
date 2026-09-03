@@ -13,9 +13,8 @@ Production module: ``radia.stream_function`` (src/radia/stream_function.py),
 C++ core src/core/rad_stream_function.cpp.  ACA+ is delegated to the in-repo
 HACApK C library (cHACApK_acaplus).  Docs:
 docs/stream_function.md plus the result-saved docs/stream_function notebooks.
-Demo source/result records are cataloged by docs/stream_function/
-examples_catalog.ipynb; validation runners live under validation_test/
-stream_function.  Tests: tests/test_stream_function.py.
+Maintained demo sources live under docs/stream_function; validation runners
+live under validation_test/stream_function. Tests: tests/test_stream_function.py.
 
 The MCP server exposes this via ``streamfunction(topic=...)`` on the
 radia-streamfunction server (moved from radia-ngsolve aca_tsvd in 2026-06).
@@ -1177,7 +1176,7 @@ Five chain attempts that REDUCED field accuracy (Gx, kuijpers 16.24 % ref):
 
 ## 5. Demo file ledger
 
-Demo records cataloged by ``docs/stream_function/examples_catalog.ipynb``:
+Maintained demo sources under ``docs/stream_function``:
 
   | File                                 | Role                                   | Best RMS | Path-A |
   | ------------------------------------ | -------------------------------------- | -------- | ------ |
@@ -1989,7 +1988,7 @@ SHEET-METAL (板金) lever   [2026-06, radia 4.89.1+]
    (out-of-surface lift on the plane, in-surface reroute on the
    cylinder) -- see topic "single_stroke".
 
-DEMO RECORDS (docs/stream_function/demo_gallery_results.json):
+DEMO SOURCES (docs/stream_function):
   demo_pareto_tikhonov_aca.py     -- folded-Tikhonov (homogeneity, peak) front
   demo_pareto_geometry_nsga.py    -- geometry lever + NSGA-II joint front
   demo_pareto_cylinder.py         -- cylinder Gx, length lever (optimum)

@@ -33,8 +33,7 @@ short *entry point*; this folder is the detailed reference.
 | Optimise the coil SURFACE geometry (bilevel) | [deformation.md](deformation.md) |
 | Look up the Python API | [api.md](api.md) |
 | Reproduce a published benchmark | [benchmarks.md](benchmarks.md) |
-| Run the public demo gallery | [demo_gallery.ipynb](demo_gallery.ipynb) |
-| Audit / migrate the remaining example scripts | [examples_catalog.ipynb](examples_catalog.ipynb) |
+| Run the executed public notebooks | [theory.ipynb](theory.ipynb), [regularization.ipynb](regularization.ipynb), [deformation.ipynb](deformation.ipynb) |
 | Hook ngsolve.bem H-matrix (2604+) | [ngsbem_integration.md](ngsbem_integration.md) |
 | **Design a stellarator coil** (REGCOIL / NESCOIL / FOCUS: winding-surface current potential, net current, coil force/stress, VMEC boundary, winding-shape) | [**fusion.md**](fusion.md) |
 | Cite / publish this work | paper outline (W:\02_学会資料\2025年度\2026_01_JIAM\streamfunction\, not in repo) |
@@ -71,17 +70,15 @@ of running loose example scripts:
 
 | Route | Artifact |
 |-------|----------|
-| Public demo gallery | [`demo_gallery.ipynb`](demo_gallery.ipynb), with saved notebook output |
-| Historical source/result ledger | [`examples_catalog.ipynb`](examples_catalog.ipynb); its JSON is optional migration history |
 | Theory and FE-direct psi | [`theory.ipynb`](theory.ipynb) |
 | Regularization and Pareto trade-offs | [`regularization.ipynb`](regularization.ipynb) |
 | Surface deformation search | [`deformation.ipynb`](deformation.ipynb) |
 | Runnable validation/benchmarks | [`validation_test/stream_function/`](../../validation_test/stream_function/) |
 | Reusable Stage-2 API/CLI | [`src/radia/panels/calc_streamfunction.py`](../../src/radia/panels/calc_streamfunction.py) |
 
-The transitional demo source names are cataloged in
-[`examples.md`](examples.md); new public links should point to the notebooks,
-`validation_test` result JSON, or `src` API rather than the old examples tree.
+Maintained demo source names and their current locations are listed in
+[`examples.md`](examples.md). Public links point to those sources, the executed
+notebooks, `validation_test` result JSON, or `src` APIs.
 
 ## What this is, what it is not
 

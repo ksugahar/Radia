@@ -16,8 +16,9 @@ of coil design, generalised to any Radia source family.
 - **Full docs**: [`docs/stream_function/`](stream_function/README.md)
 - Module: [`src/radia/stream_function.py`](../src/radia/stream_function.py)
 - C++ core: `src/core/rad_stream_function.{h,cpp}`
-- Public demo gallery: [`docs/stream_function/demo_gallery.ipynb`](stream_function/demo_gallery.ipynb)
-- Source/result ledger: [`docs/stream_function/examples_catalog.ipynb`](stream_function/examples_catalog.ipynb)
+- Executed public notebooks: [`theory.ipynb`](stream_function/theory.ipynb),
+  [`regularization.ipynb`](stream_function/regularization.ipynb), and
+  [`deformation.ipynb`](stream_function/deformation.ipynb)
 - Tests: `tests/test_stream_function.py`
 - MCP knowledge: `aca_tsvd(topic=session_2026_05_30)` for the full session-log
   narrative; `aca_tsvd(topic=single_stroke)` for the chain construction detail.
