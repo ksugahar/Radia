@@ -97,6 +97,13 @@ Calling `mesh.Curve(2)` on a triangular OCC mesh is supported by the P2
 triangle path.  Calling `mesh.Curve(2)` on a quadrilateral mesh keeps the
 default straight axis-aligned Q2 path unless the caller also passes
 `curvedquad=True`.
+
+This matrix describes the electromagnetic `A_phi` space.  Axisymmetric heat
+uses standard `ngsolve.H1(mesh, order=2)` with the `2*pi*r` weak-form weight:
+Q2 on quadrilateral meshes, P2 on triangular meshes.  Do not reuse
+`H1Henrotte` for the production temperature field.  The optional Henrotte heat
+BFIs support Q1 and off-axis Q2 research comparisons and fail fast for
+axis-touching Q2.
 """
 
 AXIFEM_API = """\
@@ -147,6 +154,11 @@ exported.
 * **Boundary 1D segments:** in `order=2` mode, a boundary segment exposes
   2 vertex DOFs and 1 edge midnode DOF, so `dirichlet="…"` on a boundary
   marks all three.
+* **Thermal scope:** reserve this space and its magnetic BFIs for `A_phi`.
+  Production temperature uses standard `ngsolve.H1(order=2)` plus the
+  `2*pi*r` weight.  The optional `AxiHenrotteHeatStiffnessBFI` and
+  `AxiHenrotteHeatMassBFI` reject axis-touching Q2 rather than mixing the
+  magnetic six-function FE with a full nine-function heat matrix.
 """
 
 AXIFEM_HODGE_GEOMETRY = """\

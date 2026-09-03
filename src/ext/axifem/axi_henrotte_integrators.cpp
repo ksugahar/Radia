@@ -754,17 +754,32 @@ void AxiHenrotteSigmaMassBFI::CalcElementMatrix(
 // ===========================================================================
 //
 // For axisymmetric heat the integrand is polynomial in (s, z) with NO 1/s
-// term, so axis-touching elements are integrable with the FULL Q2 9-monomial
-// basis (unlike magnetic which drops 3 axis-incompatible monomials).
+// term, so a dedicated scalar space could integrate axis-touching elements
+// with the FULL Q2 9-monomial basis.  H1Henrotte is an electromagnetic space,
+// however: its axis Q2 FE exposes the magnetic 6-function basis and zeros the
+// three axis DOFs.  Mixing that FE with a full 9x9 heat matrix is invalid, so
+// the BFIs below fail fast on axis-touching Q2 elements.  Production heat uses
+// standard ngsolve.H1(order=2) with the 2*pi*r weak-form weight.
 //
-// We therefore bypass fe.Vinv (which assumes the magnetic axis-reduced basis)
-// and compute the full 9x9 inverse Vandermonde in-place from element corner
-// + s-midpoint edge midnode + face center coordinates.
+// For the still-supported off-axis Q2 research path, compute the full 9x9
+// inverse Vandermonde in-place from element corner + s-midpoint edge midnode +
+// face center coordinates.
 //
 // All matrices in q_heat_henrotte_generated.hpp already include the leading
 // pi factor (from 2 pi r dr dz = pi ds dz).
 
 namespace {
+
+[[noreturn]] void ThrowAxisQ2HeatBasisMismatch(const char * integrator_name)
+{
+    throw Exception(string(integrator_name)
+                    + ": axis-touching Q2 AxiHenrotteFE uses the magnetic "
+                      "6-function basis (A_phi = 0 on the axis), but the heat "
+                      "operator requires a full scalar-temperature basis. "
+                      "Use ngsolve.H1(mesh, order=2) with the 2*pi*r "
+                      "axisymmetric weight for heat; reserve H1Henrotte for "
+                      "the electromagnetic A_phi solve.");
+}
 
 inline void Q2HeatInverseVandermonde(double ra, double rb, double za, double zb,
                                       Mat<9,9> & inv_V)
@@ -878,6 +893,9 @@ void AxiHenrotteHeatStiffnessBFI::CalcElementMatrix(
         return;
     }
     if (auto * q2 = dynamic_cast<const AxiHenrotteFE_Q2_AxisAligned*>(&fel)) {
+        if (q2->is_axis) {
+            ThrowAxisQ2HeatBasisMismatch("AxiHenrotteHeatStiffnessBFI");
+        }
         HeatElementMatrix_Q2(q2->r_a, q2->r_b, q2->z_a, q2->z_b,
                              q_heat::KMonomialQ2, k_val, elmat);
         return;
@@ -906,6 +924,16 @@ void AxiHenrotteHeatMassBFI::CalcElementMatrix(
     elmat = 0.0;
     ELEMENT_TYPE et = fel.ElementType();
     double rho_c = SampleAtCentroid(*rho_c_cf, eltrans, et, lh);
+
+    // Validate the FE contract before the zero-coefficient fast path.  An
+    // axis-touching Q2 magnetic basis is incompatible with this heat operator
+    // regardless of the material value on a particular element.
+    if (auto * q2 = dynamic_cast<const AxiHenrotteFE_Q2_AxisAligned*>(&fel)) {
+        if (q2->is_axis) {
+            ThrowAxisQ2HeatBasisMismatch("AxiHenrotteHeatMassBFI");
+        }
+    }
+
     if (rho_c == 0.0) return;
 
     if (auto * q1 = dynamic_cast<const AxiHenrotteFE_Q1_AxisAligned*>(&fel)) {
@@ -1014,8 +1042,9 @@ void ExportAxiHenrotteIntegrators(pybind11::module & m)
         "Henrotte {1, r^2, z, ...} basis.  Weak form (after s = r^2):\n"
         "  a(T, v) = pi * Integrate( k * [ 4 s d_s T d_s v + d_z T d_z v ]\n"
         "                            ds dz )\n"
-        "Nodal-T DOFs (no flux-function transformation).  Axis elements\n"
-        "use the full 9-monomial Q2 basis (no 1/s factor in heat).")
+        "Nodal-T DOFs (no flux-function transformation). Q2 is supported only\n"
+        "off axis; axis-touching Q2 fails fast. Production heat should use\n"
+        "ngsolve.H1(order=2) with the 2*pi*r weak-form weight.")
         .def(py::init<shared_ptr<CoefficientFunction>>(),
              py::arg("k"));
 
@@ -1024,7 +1053,8 @@ void ExportAxiHenrotteIntegrators(pybind11::module & m)
         m, "AxiHenrotteHeatMassBFI",
         "Closed-form axisymmetric HEAT capacity (transient term):\n"
         "  m(T, v) = pi * Integrate( rho_c * T * v ) ds dz.\n"
-        "Pass rho_c = rho * c_p [J/(m^3 K)] as a CoefficientFunction.")
+        "Pass rho_c = rho * c_p [J/(m^3 K)] as a CoefficientFunction.\n"
+        "Q2 is supported only off axis; axis-touching Q2 fails fast.")
         .def(py::init<shared_ptr<CoefficientFunction>>(),
              py::arg("rho_c"));
 }

@@ -380,7 +380,7 @@ where `V` is the global vector of nodal `A_φ` DOFs.  In the API:
 
 ## 10b. Heat-equation operator on the same FESpace (radia 4.31.0+, OPTIONAL infrastructure)
 
-> **Status (2026-05-10)**: This section documents the Henrotte heat
+> **Status (updated 2026-09-03)**: This section documents the Henrotte heat
 > BFIs as **optional** infrastructure.  The production heat solver
 > [`src/radia/panels/calc_heat_axisym.py`](../../src/radia/panels/calc_heat_axisym.py)
 > uses **standard NGSolve `H1` + `2 pi r` weighting** instead, matching
@@ -443,7 +443,12 @@ Note **no `1/s` factor** — heat is integrand-clean even on axis-
 touching elements.  This is the architectural difference from the
 magnetic stiffness (§ 6 has `1/(\mu_r s)` in the second term), and
 it means **the full 9-monomial Q2 basis is admissible on axis-
-touching elements** for heat (no axis basis reduction needed).
+touching elements** for heat (no axis basis reduction needed).  The shipping
+`H1Henrotte` space nevertheless exposes the electromagnetic six-function
+axis-reduced Q2 basis.  It is therefore not paired with the full 9x9 heat
+matrix on axis elements; both heat BFIs reject that combination explicitly.
+Use standard NGSolve `H1(order=2)` with the `2 pi r` weight for axis-touching
+heat meshes.
 
 The transient heat capacity term is similarly clean:
 
@@ -460,18 +465,19 @@ and assembled by the C++ integrators
 
 DOF semantics are **nodal `T(vertex)`** directly — no
 `T = diag(2 pi r_node)` flux-function transformation (T has no axis
-boundary condition; standard nodal interpolation is correct).
+boundary condition; standard nodal interpolation is correct).  Q2 use of
+these optional BFIs is limited to off-axis meshes.
 
 Smoke test:
 [`tests/axifem/test_heat_henrotte_smoke.py`](../../tests/axifem/test_heat_henrotte_smoke.py)
 asserts that the assembled `K_T` is symmetric with one zero mode
-(constant-T null space), `M_T` is SPD, and axis-touching elements
-remain finite (no `1/s` divergence).
+(constant-T null space), `M_T` is SPD, both BFIs fail fast for the incompatible
+axis-touching Henrotte Q2 basis, and standard NGSolve H1 Q2 reproduces an
+axis-touching manufactured heat solution.
 
-P1-triangle heat support is intentionally deferred to a follow-up;
-production induction-heating workpiece thermal analyses use
-structured quad meshes for accuracy anyway (Q2 quad converges much
-faster than P1 triangle on the axis).
+P1/P2-triangle support in the optional Henrotte heat BFIs is intentionally
+deferred.  Production induction-heating workpiece thermal analyses use
+standard NGSolve H1, selecting Q2 or P2 from the mesh topology.
 
 ## 10c. Boundary trace + Neumann RHS (radia 4.32.0+, OPTIONAL infrastructure)
 
