@@ -48,7 +48,6 @@ universal_relaxation_network/
   run_ltspice_verification.py     # Actual LTspice simulation (PyLTSpice)
   cq_urn_bridge.py                # Passive URN H(s) -> BDF2 CQ teaching artifact
   cq_urn_bridge.ipynb             # Result-bearing CQ bridge notebook
-  cq_urn_bridge_results.json      # Machine-readable CQ bridge checks
 ```
 
 Benchmark and validation JSON records are stored under
@@ -263,7 +262,8 @@ relaxation model to a causal time-domain operator:
 4. Compare the causal CQ response with a deliberately naive periodic IFFT
    contrast.
 
-The notebook writes `cq_urn_bridge_results.json` and embeds the executed figure.
+The builder writes `validation_test/universal_relaxation_network/cq_urn_bridge_results.json`,
+while the notebook embeds the executed figure and summary.
 This is the educational contract for later acoustic FEM/BEM and time-domain
 Maxwell examples: replace only the scalar teaching `H(s)` with the solver's
 passive boundary/material/operator response.

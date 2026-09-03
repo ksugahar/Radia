@@ -516,7 +516,8 @@ URN wins {urn_wins_a}/{total_tests} vs Aggressive VF
         }
     }
 
-    with open('urn_vs_vf_comparison.json', 'w') as f:
+    output_path = urn_result_path.parent / 'urn_vs_vf_comparison.json'
+    with output_path.open('w', encoding='utf-8') as f:
         json.dump(combined, f, indent=2)
 
     print("\n" + "=" * 80)
@@ -560,7 +561,7 @@ KEY ADVANTAGES OF URN:
    - VF requires Foster/Cauer synthesis (may lose passivity)
 """)
 
-    print(f"\nResults saved to: urn_vs_vf_comparison.json")
+    print(f"\nResults saved to: {output_path}")
 
 
 if __name__ == '__main__':
