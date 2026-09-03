@@ -7,6 +7,9 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- paper-writing / bibliography: standardize the canonical bibliography name
+  on `references.bib`; tests, usage examples, and historical policy text no
+  longer expect the withdrawn singular filename.
 - grant-writing / paper-writing: expose one mandatory shared page-limit
   revision policy through `grant_writing_page_limit_revision_policy` and
   `paper_writing_page_limit_revision_policy`. Start from the human-readable,
@@ -1389,11 +1392,11 @@ Web-research basis (2026-05-26):
   - mcp-server-paper-writing --selftest: 14 sections OK
   - Full in-process pytest: 244 + 14 = **258 tests pass**
 
-## 0.91.0 — citation-verification policy: reference.bib + search-and-verify enforcement
+## 0.91.0 — citation-verification policy: references.bib + search-and-verify enforcement
 
 Released 2026-05-26.
 
-User directive: "paper-writing では、reference.bib を使うことと検索
+User directive: "paper-writing では、references.bib を使うことと検索
 して裏を取ることを忘れずに。"
 
 The #1 AI-assisted-paper failure mode is **citation hallucination** --
@@ -1409,11 +1412,11 @@ policy at three levels:
   Read this BEFORE generating ANY \\cite{} or BibTeX entry.
 
   The 6 steps:
-  1. READ the user's reference.bib first (single source of truth).
+  1. READ the user's references.bib first (single source of truth).
   2. SEARCH for grounding via Crossref / Semantic Scholar / arXiv.
-  3. MATCH candidates against reference.bib (already-cited? skip).
+  3. MATCH candidates against references.bib (already-cited? skip).
   4. VERIFY the DOI resolves (defensive double-check).
-  5. INSERT into reference.bib only if "ready_to_insert" verdict.
+  5. INSERT into references.bib only if "ready_to_insert" verdict.
   6. LINT after insertion (paper_writing_lint_reference_format).
 
   Plus explicit "when verification cannot complete" guidance:
@@ -1449,22 +1452,22 @@ policy at three levels:
   not supplied -- previously this was a soft skip.  The new
   `bib_policy` check status="fail" message:
 
-    "reference.bib was not supplied.  Lab POLICY: every citation
+    "references.bib was not supplied.  Lab POLICY: every citation
      must come from the user's actual .bib and be verified via
      paper_writing_verify_citation BEFORE insertion.  Re-call
-     with bib_path=/path/to/reference.bib OR explicitly justify
+     with bib_path=/path/to/references.bib OR explicitly justify
      why no .bib check applies."
 
 ### NEW MCP prompt
 
-  `cite_a_claim(claim, bib_path="reference.bib")` -- surfaces the
+  `cite_a_claim(claim, bib_path="references.bib")` -- surfaces the
   policy as a prompt the AI sees when asked to insert a citation.
 
 ### Tests
 
   +8 tests covering:
   - recipe contains the 8 policy keywords (NEVER invent, ALWAYS,
-    reference.bib, Crossref, Semantic Scholar, arXiv, verify, TODO)
+    references.bib, Crossref, Semantic Scholar, arXiv, verify, TODO)
   - verify_citation no bib_path → error verdict
   - verify_citation missing bib file → error verdict
   - DOI already in bib → found_in_bib verdict (case + URL handling)

@@ -1116,8 +1116,8 @@ def test_em_submission_gate_no_inputs_fails_on_bib_policy():
     assert "bib_policy" in names
     bib_check = next(c for c in r["checks"] if c["name"] == "bib_policy")
     assert bib_check["status"] == "fail"
-    assert "reference.bib" in bib_check["summary"].lower() or \
-            "reference.bib" in str(bib_check.get("detail", ""))
+    assert "references.bib" in bib_check["summary"].lower() or \
+            "references.bib" in str(bib_check.get("detail", ""))
 
 
 def test_em_submission_gate_tex_only_returns_partial(tmp_path):
@@ -1181,7 +1181,7 @@ def test_citation_workflow_recipe_has_policy_lines():
     assert len(r) > 2000
     # Key policy keywords MUST be present
     for kw in ["NEVER invent", "ALWAYS",
-                "reference.bib", "Crossref", "Semantic Scholar",
+                "references.bib", "Crossref", "Semantic Scholar",
                 "arXiv", "verify", "TODO"]:
         assert kw in r, f"citation recipe missing key concept: {kw!r}"
 
@@ -1193,7 +1193,7 @@ def test_verify_citation_no_bib_path_returns_error():
     r = paper_writing_verify_citation(claim="some claim", bib_path="")
     assert r["verdict"] == "error"
     assert "bib_path" in r["advice"].lower()
-    assert "reference.bib" in r["advice"].lower()
+    assert "references.bib" in r["advice"].lower()
 
 
 def test_verify_citation_missing_bib_returns_error(tmp_path):

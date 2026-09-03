@@ -687,7 +687,7 @@ The main contributions of this paper are:
 **ファイル名ポリシー (研究室標準)**: 書誌ファイルは
 **`references.bib`（複数形）** で統一する。多数の文献を収める以上こちらが正しい
 英語であり、CLAUDE.md と paper-writing の引用ツールもこの名前を既定とする。
-`reference.bib`（単数）や `references-<suffix>.bib`（例: `references-es.bib`）は
+単数形の旧ファイル名や `references-<suffix>.bib`（例: `references-es.bib`）は
 使わない。単数形は 2026-07-18 に一度提案されたが **同日中に撤回済み** で、
 この節も長らく撤回前の記述のまま残っていた。
 
