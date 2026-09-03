@@ -16,13 +16,11 @@ design uses CMA-ES.  Forward field is Radia's fixed-magnet field (`ObjRecMag` + 
 Run:  python demo_cmaes_magnet_design.py [--trials N]
 """
 import argparse
-import sys
 from pathlib import Path
 
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[1] / "src"))
 
 import radia as rad
 

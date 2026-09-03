@@ -32,13 +32,11 @@ and then report the volume gradient nonuniformity on a (rho, z) grid.
 Run:  python demo_coil_design_gz.py [--nrings N] [--k MODES] [--nwires N]
 """
 import argparse
-import sys
 from pathlib import Path
 
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[1] / "src"))
 
 import radia as rad
 from radia.stream_function import aca_tsvd, pseudo_inverse_solve, radia_field_kernel

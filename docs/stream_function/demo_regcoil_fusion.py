@@ -84,7 +84,6 @@ import json
 import math
 import os
 import platform
-import sys
 from datetime import datetime
 
 import numpy as np
@@ -98,12 +97,6 @@ A_PLASMA = 0.06       # plasma-boundary minor radius (circular case, parts 1-3)
 A_WIND = 0.12         # winding-surface minor radius (the coil lives here)
 _MU0 = 4.0e-7 * math.pi
 _MU0_4PI = 1.0e-7
-
-
-def _src_paths():
-    here = os.path.dirname(os.path.abspath(__file__))
-    sys.path.insert(0, os.path.join(here, "..", "..", "src", "radia"))
-    sys.path.insert(0, os.path.join(here, "..", "..", "src", "radia", "panels"))
 
 
 def _torus_surface_vol(a, maxh, path):
@@ -385,8 +378,7 @@ def main():
     ap.add_argument("--no-plot", action="store_true")
     args = ap.parse_args()
 
-    _src_paths()
-    import calc_streamfunction as C
+    from radia.panels import calc_streamfunction as C
     from ngsolve import Mesh, H1, specialcf, TaskManager
 
     os.makedirs(args.work_dir, exist_ok=True)

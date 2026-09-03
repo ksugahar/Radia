@@ -27,7 +27,6 @@ Inner psi solve = the library RegularizedTSVD folded Tikhonov routine.
 Outputs JSON + PNG next to this script.
 """
 import os
-import sys
 import json
 import argparse
 
@@ -38,8 +37,6 @@ from _validation_output import validation_json_for_basename
 from radia_mcp.figure import lab_figure, save_lab_figure
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, _HERE)
-sys.path.insert(0, os.path.join(_HERE, "..", "..", "src"))
 
 from demo_sf_to_peec_gx import loop_corners, _loop_Hz, make_dsv
 from radia.stream_function import aca_tsvd, RegularizedTSVD

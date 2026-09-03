@@ -39,7 +39,6 @@ Run:
     python demo_reg_hyperparam_aca.py --trials 30 --cost wire_length --rms-cap 0.03
 """
 import argparse
-import sys
 import time
 from pathlib import Path
 
@@ -48,8 +47,6 @@ from _validation_output import validation_output
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[1] / "src"))
-sys.path.insert(0, str(HERE))
 
 from radia.stream_function import aca_tsvd, RegularizedTSVD
 from demo_planar_uniform_fem_psi import build_fem_matrix, sample_psi_grid

@@ -36,13 +36,11 @@ and convert to Tesla (B = MU0 * H) only in the verification.
 Run:  python demo_coil_design_gx.py [--nphi 24] [--nz 40] [--nlevels 12]
 """
 import argparse
-import sys
 from pathlib import Path
 
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[1] / "src"))
 
 from radia.stream_function import aca_tsvd, pseudo_inverse_solve
 from radia.biot_savart import h_segments_batch, MU0
