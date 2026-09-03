@@ -45,10 +45,15 @@ def check_state(eq: "Equation", seed: int, step: int, trail: list[str]) -> None:
     first = Equation()
     first.load_latex(tex)
     normalized = first.latex()
+    if tex != normalized:
+        raise AssertionError(
+            f"editor output changed on its first reparse at seed={seed} step={step}\n"
+            f"trail={trail[-12:]}\neditor={tex!r}\nfirst={normalized!r}"
+        )
     second = Equation()
     second.load_latex(normalized)
     normalized_twice = second.latex()
-    if normalized.strip() != normalized_twice.strip():
+    if normalized != normalized_twice:
         raise AssertionError(
             f"normalization did not reach a fixed point at seed={seed} step={step}\n"
             f"trail={trail[-12:]}\nfirst={normalized!r}\nsecond={normalized_twice!r}"
@@ -122,6 +127,33 @@ def run_seed(seed: int, steps: int) -> int:
 
 
 def main() -> int:
+    # Four ordinary GUI operations used to create TeX that the parser could
+    # not read back: nth-root, Tab to its index, limit, then a condition.
+    # Exercise that editing route before random coverage so the fixed-point
+    # contract never depends on a seed happening to revisit it.
+    root_limit = Equation()
+    root_limit.insert_template("nthroot")
+    root_limit.next_slot()
+    root_limit.insert_template("lim")
+    root_limit.insert_text("a")
+    check_state(root_limit, -1, 4,
+                ["template:nthroot", "caret.next_slot",
+                 "template:lim", "text:a"])
+
+    # The index is a full structural slot, not a special case for `lim`.
+    # Every insertable template, with its first slot populated, must survive
+    # the same immediate reparse when it is nested there.
+    for kind in Equation.templates():
+        indexed = Equation()
+        indexed.insert_template("nthroot")
+        indexed.next_slot()
+        if not indexed.insert_template(kind):
+            continue
+        indexed.insert_text("a")
+        check_state(indexed, -2, 1,
+                    ["template:nthroot", "caret.next_slot",
+                     f"template:{kind}", "text:a"])
+
     seeds = 100
     steps = 250
     operations = 0
