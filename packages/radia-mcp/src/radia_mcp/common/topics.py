@@ -52,6 +52,7 @@ or developers keep both in sync manually.
 """
 from __future__ import annotations
 
+import importlib.metadata
 from typing import Mapping
 
 
@@ -86,7 +87,7 @@ def register_topics_tool(
         {"name": k, "description": str(v)} for k, v in topics.items()
     ]
 
-    def _topics_impl() -> dict:
+    def _topics_impl() -> dict[str, object]:
         return {
             "server": server_name,
             "n_topics": len(topics_snapshot),
@@ -106,4 +107,21 @@ def register_topics_tool(
     )
 
     mcp.tool()(_topics_impl)
+
+    # Dispatcher servers historically register topics after status. Apply the
+    # same fleet contract immediately so registration order cannot leave this
+    # late tool without annotations, title, metadata, or an output schema.
+    from .mcp_contract import apply_tool_contract
+
+    try:
+        version = importlib.metadata.version("radia-mcp")
+    except importlib.metadata.PackageNotFoundError:
+        version = "unknown"
+    apply_tool_contract(
+        mcp,
+        server_name=server_name,
+        version=version,
+        tool_prefix=tool_name,
+        set_server_metadata=False,
+    )
     return tool_name
