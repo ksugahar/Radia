@@ -47,8 +47,10 @@ one cohomology DOF for the linked flux) are follow-ups.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from threading import Lock
 
 import numpy as np
+from threadpoolctl import threadpool_limits
 
 __all__ = [
     "CanonicalHCurlChain",
@@ -58,6 +60,24 @@ __all__ = [
 ]
 
 
+_DETERMINISTIC_SVD_LOCK = Lock()
+
+
+def _deterministic_svd(matrix, *, full_matrices=True):
+    """Run the coordinate-defining SVD on one BLAS thread.
+
+    Tail singular vectors are not a reproducible coordinate system when the
+    BLAS implementation is free to change its reduction tree.  These SVDs run
+    only while constructing the small reference space, so pinning this narrow
+    operation to one thread is inexpensive and keeps cached observation rows
+    compatible with a freshly reconstructed chain.  ``threadpoolctl`` changes
+    process-global runtime state, hence the lock around its context.
+    """
+    with _DETERMINISTIC_SVD_LOCK:
+        with threadpool_limits(limits=1, user_api="blas"):
+            return np.linalg.svd(matrix, full_matrices=full_matrices)
+
+
 def _matching_finite_vectors(values, *, label):
     arrays = tuple(np.asarray(value, dtype=float).reshape(-1) for value in values)
     if len({array.size for array in arrays}) != 1:
@@ -65,6 +85,59 @@ def _matching_finite_vectors(values, *, label):
     if not all(np.all(np.isfinite(array)) for array in arrays):
         raise ValueError(f"{label} arrays must contain only finite values")
     return arrays
+
+
+def _canonical_subspace_basis(vectors):
+    """Remove the arbitrary SVD rotation from an orthonormal subspace basis.
+
+    Singular vectors belonging to a tightly clustered tail can rotate with
+    the BLAS thread count even though their projector is unchanged.  Build a
+    deterministic pivoted-Cholesky basis from that projector so cached rows
+    and freshly reconstructed chains use the same coordinates.
+    """
+    raw = np.asarray(vectors, dtype=float)
+    if raw.ndim != 2 or raw.shape[1] < 1 or not np.all(np.isfinite(raw)):
+        raise ValueError("subspace basis must be one finite nonempty matrix")
+    rows, columns = raw.shape
+    projector = np.einsum("ik,jk->ij", raw, raw, optimize=False)
+    projector = 0.5 * (projector + projector.T)
+    diagonal = np.maximum(np.diag(projector).copy(), 0.0)
+    basis = np.zeros((rows, columns), dtype=float)
+    tie_tolerance = 256.0 * np.finfo(float).eps
+    rank_tolerance = (
+        4096.0 * np.finfo(float).eps * rows
+        * max(1.0, float(np.max(diagonal, initial=0.0)))
+    )
+    for column in range(columns):
+        peak = float(np.max(diagonal, initial=0.0))
+        candidates = np.flatnonzero(
+            diagonal >= peak - tie_tolerance * max(1.0, peak)
+        )
+        pivot = int(candidates[0])
+        vector = projector[:, pivot].copy()
+        if column:
+            active = basis[:, :column]
+            # Two deterministic modified-Gram--Schmidt passes keep the basis
+            # orthonormal without reintroducing an arbitrary QR/SVD rotation.
+            for _ in range(2):
+                coefficients = np.einsum(
+                    "ij,i->j", active, vector, optimize=False
+                )
+                vector -= np.einsum(
+                    "ij,j->i", active, coefficients, optimize=False
+                )
+        norm = float(np.sqrt(np.einsum("i,i->", vector, vector,
+                                       optimize=False)))
+        if not np.isfinite(norm) or norm <= rank_tolerance:
+            raise RuntimeError("canonical subspace pivot lost numerical rank")
+        vector /= norm
+        if vector[pivot] < 0.0:
+            vector *= -1.0
+        basis[:, column] = vector
+        diagonal -= vector * vector
+        diagonal = np.maximum(diagonal, 0.0)
+        diagonal[pivot] = 0.0
+    return np.ascontiguousarray(basis)
 
 
 def graded_breaks(s_nodes_m, weight, element_count, *, strength=1.0):
@@ -338,7 +411,7 @@ class CanonicalHCurlElement:
         n = constraint.shape[1]
         if constraint.shape[0] == 0:
             return np.eye(n)[:, :dim], np.zeros(dim)
-        _, s, vt = np.linalg.svd(constraint, full_matrices=True)
+        _, s, vt = _deterministic_svd(constraint, full_matrices=True)
         s_full = np.concatenate((s, np.zeros(max(0, n - len(s)))))
         order = np.argsort(s_full)
         keep = order[:dim]
@@ -632,13 +705,13 @@ class CanonicalHCurlChain:
             target = order_x * (self.element_count + order_s)
         if constraint.shape[0] == 0:
             return np.eye(total)[:, :target]
-        _, s, vt = np.linalg.svd(constraint, full_matrices=True)
+        _, s, vt = _deterministic_svd(constraint, full_matrices=True)
         s_full = np.concatenate((s, np.zeros(max(0, total - len(s)))))
         order = np.argsort(s_full)
         keep = order[:target]
         self.interface_defects = s_full[keep]
         self.interface_defect_scale = float(s[0]) if s.size else 1.0
-        return np.ascontiguousarray(vt[keep].T)
+        return _canonical_subspace_basis(vt[keep].T)
 
     def _locate(self, s_m):
         s = np.asarray(s_m, dtype=float).reshape(-1)

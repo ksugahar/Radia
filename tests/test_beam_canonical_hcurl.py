@@ -9,14 +9,46 @@ the midplane-only rejection.
 
 import numpy as np
 import pytest
+from threadpoolctl import threadpool_limits
 
 from radia.beam_canonical_hcurl import (
     CanonicalHCurlChain,
     CanonicalHCurlElement,
+    _canonical_subspace_basis,
     graded_breaks,
 )
 
 HW, HH = 0.010, 0.0035
+
+
+def test_canonical_subspace_basis_removes_arbitrary_internal_rotation():
+    rng = np.random.default_rng(20260831)
+    raw, _ = np.linalg.qr(rng.normal(size=(31, 9)))
+    rotation, _ = np.linalg.qr(rng.normal(size=(9, 9)))
+
+    first = _canonical_subspace_basis(raw)
+    rotated = _canonical_subspace_basis(raw @ rotation)
+
+    np.testing.assert_allclose(first, rotated, rtol=0.0, atol=8.0e-14)
+    np.testing.assert_allclose(
+        first.T @ first, np.eye(first.shape[1]), rtol=0.0, atol=2.0e-14)
+
+
+def test_chain_coordinates_are_bit_reproducible_across_blas_thread_counts():
+    breaks = np.linspace(0.0, 0.04, 5)
+
+    def build():
+        return CanonicalHCurlChain(
+            breaks, HW, HH, order_x=4, order_s=2,
+            curvature_per_m=lambda s: 0.15 + 0.02 * s,
+        )._reduced
+
+    with threadpool_limits(limits=1, user_api="blas"):
+        single_thread = build()
+    with threadpool_limits(limits=4, user_api="blas"):
+        multi_thread = build()
+
+    np.testing.assert_array_equal(multi_thread, single_thread)
 
 
 def make_element(order_x, order_s, curvature=(0.0,), half_length=0.005):
