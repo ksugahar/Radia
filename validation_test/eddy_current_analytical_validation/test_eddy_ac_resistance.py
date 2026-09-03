@@ -24,6 +24,12 @@ MU0 = 4e-7 * math.pi
 SIGMA = 5.8e7   # copper
 
 
+@pytest.fixture(autouse=True)
+def _taskmanager():
+    with ng.TaskManager():
+        yield
+
+
 def _fem_rac_over_rdc(a_over_delta, a=0.005, order=4, n=600):
     delta = a / a_over_delta
     omega = 2.0 / (MU0 * SIGMA * delta ** 2)
