@@ -4,6 +4,9 @@
 
 ## 3.0.13 - 2026-09-03
 
+- Keep native TeX source readable when the Windows session mis-resolves
+  Consolas by selecting a verified Japanese/ASCII-owning UI face and falling
+  back to the proven stock GUI font.
 - Keep `\sqrt[\lim_{a}]{x}` and every other structural root index unchanged by
   the native editor's first save/reparse, so Undo and reopen cannot rewrite the
   index or consume the radicand.

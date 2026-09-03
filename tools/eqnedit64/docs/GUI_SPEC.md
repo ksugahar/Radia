@@ -241,6 +241,11 @@ Eqnedt32にならい、ツールバーは**挿入できるものの総目録**�
 - `\text{...}`と`\operatorname{...}`の通常空白は可視の単語間空白として保持し、
   改行を含む空白runは一つの単語間空白へ正規化する。`~`、`\ `、`\,`は各TeX命令の
   幅・非改行性を保ち、通常空白へ潰さない。通常の数式モードではsource空白を無視する。
+- TeXソース欄へ`Consolas`などの名前だけを信じて割り当てない。候補fontは、選択DCが
+  返す物理face名の一致、日本語とTeX ASCIIをfont自身のcmapが所有すること、実bitmapへ
+  inkを描けることの三つを確認する。全候補が不健全なら、同じ画面で正常な`TeXソース`
+  labelと同じWindows stock GUI fontへ退避し、内部UTF-16が正しくても別字形に見える状態を
+  許さない。
 - TeXソース欄は横スクロールを要求せず、長い1行を欄幅でsoft wrapする。ソース欄の
   通常の`Enter`はraw CRLFではなくキャレット位置へ数式行区切り`\\`を挿入し、
   単一行だった場合は`aligned`で包む。選択中は選択範囲を区切りへ置換する。
@@ -537,7 +542,7 @@ Eqnedit64拡張として、`curl`, `div`, `grad`, `rot`, `tr`, `diag`, `Res`,
 | AUT-24 | Canvas／TeXソース双方の選択状態からCut/Copyを有効化し、無選択時はメニューを無効化して理由を表示し、直呼びでもクリップボードを変更しない | `--ui-interaction-test` |
 | AUT-25 | 編集記号の表示切替がTeXを変えず、空スロット・明示空白・`&`ガイドの画素を画面描画だけに追加し、非表示描画とは実画素数が異なる | `--ui-interaction-test` |
 | AUT-26 | 構造キャレット座標が有限の描画範囲にあり、96/120/144/192 dpi・40/100/175/400%ズームでIME未確定文字列の左上がキャレット上端、候補位置が下端となる。IME開始→日本語Unicode確定→終了は重複入力せずTeXソースへ同期し、開始→取消は数式を変えない | `test_edit.py` / `--ui-interaction-test` / `--visual-scale-test` |
-| AUT-27 | 96/120/144/192 dpi相当のオフスクリーンGDI描画で研究用数式の文字、構造キャレット、選択フィードバック、plain/boldの実差、全パレットセルのfont ownershipとowner-draw ink、TeXソース用フォントが実画素として見える | `--visual-scale-test` |
+| AUT-27 | 96/120/144/192 dpi相当のオフスクリーンGDI描画で研究用数式の文字、構造キャレット、選択フィードバック、plain/boldの実差、全パレットセルのfont ownershipとowner-draw inkを確認する。TeXソースfontは実画素だけでなく、実ウィンドウと同じchooserで物理face名、日本語＋ASCII cmap ownershipを満たす | `--visual-scale-test` / `test_font_safety.py` |
 | AUT-28 | ショートカット・コーチがTeXとキーをステータスへ出した直後も構造キャンバスに焦点を戻し、64文字の連続入力を遮らない | `--ui-interaction-test` |
 | AUT-29 | 通常回帰、外部貼り付け、ASan、100 seed×5,000回のGUI耐久、署名、単体配布、旧形式非混入がすべて合格した場合だけGitHub Releaseへ添付する | `accept_release.ps1` |
 | AUT-30 | キー入力ごとの実GDI再描画相当を各200回測定し、フォントキャッシュ有効時に全代表式5 ms未満、かつキャッシュなしより有意に遅くない | `--paint-bench` / `accept_release.ps1` |
