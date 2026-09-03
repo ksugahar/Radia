@@ -4,7 +4,7 @@ Auto-generated from each server's production `core` `mcp.list_tools()` via `scri
 
 Fine-grained validation and identity operations are discovered with each server's `*_validation_catalog` tool and invoked through `*_validation_run`; they are not repeated as top-level schemas.
 
-Total: **908 tools** across 49 MCP servers.
+Total: **909 tools** across 49 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -55,7 +55,7 @@ Total: **908 tools** across 49 MCP servers.
 | [`mcp-server-doc-convert`](#mcp-server-doc-convert) | `radia_mcp.doc_convert` | 22 |
 | [`mcp-server-bibliography`](#mcp-server-bibliography) | `radia_mcp.bibliography` | 17 |
 | [`mcp-server-research-project`](#mcp-server-research-project) | `radia_mcp.research_project` | 6 |
-| [`mcp-server-radia-meta`](#mcp-server-radia-meta) | `radia_mcp.meta` | 11 |
+| [`mcp-server-radia-meta`](#mcp-server-radia-meta) | `radia_mcp.meta` | 12 |
 | [`mcp-server-panel-review`](#mcp-server-panel-review) | `radia_mcp.panel_review` | 4 |
 
 ## `mcp-server-cubit`
@@ -1391,6 +1391,7 @@ Module: `radia_mcp.meta.server`
 | `radia_mcp_naming_conventions` | Return the canonical naming contract used by every bundled MCP server. |
 | `radia_mcp_overview` | Authoritative catalog of all radia_mcp.* servers. |
 | `radia_mcp_related` | Servers that pair well with `name` (e.g. radia_mcp_related('bayesian-opt') |
+| `radia_mcp_validate_solver_artifact` | Validate neutral solver-artifact identity before domain-specific gates. |
 | `radia_meta_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
 | `radia_meta_status` | Status / introspection for mcp-server-radia-meta. |
 
