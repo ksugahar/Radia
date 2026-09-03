@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **1104 tools** across 49 MCP servers.
+Total: **1108 tools** across 49 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -44,8 +44,8 @@ Total: **1104 tools** across 49 MCP servers.
 | [`mcp-server-mathematica`](#mcp-server-mathematica) | `radia_mcp.mathematica` | 15 |
 | [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 3 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 25 |
-| [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 202 |
-| [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 51 |
+| [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 204 |
+| [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 53 |
 | [`mcp-server-poster`](#mcp-server-poster) | `radia_mcp.poster` | 33 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 10 |
 | [`mcp-server-document-meta`](#mcp-server-document-meta) | `radia_mcp.document_meta` | 12 |
@@ -1206,6 +1206,7 @@ Module: `radia_mcp.paper_writing.server`
 | `paper_writing_next_5_actions` | paper health_report の priority_issues を impact / effort で再 sort、 |
 | `paper_writing_normalize_terminology` | Normalize known terminology variants in paper text. |
 | `paper_writing_normalize_terminology_file` | Normalize known terminology variants in a TeX/text file. |
+| `paper_writing_page_limit_revision_policy` | Return the mandatory page-limit editing policy for papers. |
 | `paper_writing_pdf_overlap_recipe` | Return the recipe for PDF overlap/overflow detection. |
 | `paper_writing_related_work_density` | Introduction 内の \cite 密度・自己引用比率・年度分布を診断。 |
 | `paper_writing_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
@@ -1223,7 +1224,7 @@ Module: `radia_mcp.paper_writing.server`
 | `paper_writing_semantic_scholar_references` | List the references CITED BY a given paper. |
 | `paper_writing_statistical_reporting_compliance` | 各 p 値の周辺で effect size / CI / sample size の有無を診断。 |
 | `paper_writing_status` | (no description) |
-| `paper_writing_suggest_concept_drops` | Suggest specific concepts to drop when prose is over the |
+| `paper_writing_suggest_concept_drops` | Suggest complete content units to drop instead of compressing prose. |
 | `paper_writing_suggest_redundancy_fixes` | 冗長表現 25 パターンの置換候補提示 (re-export)。 |
 | `paper_writing_tex_figure_placement` | LaTeX figure placement knowledge: float specifiers, placeins, |
 | `paper_writing_title_abstract_conclusion_triangle` | Title / Abstract / Conclusion の三角形整合性を診断。 |
@@ -1255,6 +1256,7 @@ Module: `radia_mcp.paper_writing.server`
 | `presentation_check_kanji_ratio` | スライド台本の漢字比率 check (re-export)。 |
 | `presentation_check_logo_on_every_slide` | 全スライドに同じロゴ画像が繰り返し配置されているかを検出。 |
 | `presentation_check_misuse_japanese` | 台本の現代誤用検出 (re-export)。 |
+| `presentation_check_negated_premise` | 否定形の主張のうち、否定している前提を聴衆がまだ知らないものを検出する。 |
 | `presentation_check_notation_variants` | スライドテキストの表記ゆれ検出 (re-export)。 |
 | `presentation_check_over_politeness` | 学会発表で過剰に丁寧な言い回しを検出。木下 p.235。 |
 | `presentation_check_overfull_hbox` | beamer ログ中の Overfull \hbox をカウント。スライドでは致命的。 |
@@ -1366,6 +1368,8 @@ Module: `radia_mcp.grant_writing.server`
 | `grant_writing_literature_gap_evidence_check` | Check whether literature-survey evidence supports the claimed gap. |
 | `grant_writing_named_software_abstraction_check` | Check whether named software is used at the right proposal level. |
 | `grant_writing_page_limit_check` | Check each field of a compiled proposal against its page allowance. |
+| `grant_writing_page_limit_revision_policy` | Return the mandatory page-limit editing policy for proposals. |
+| `grant_writing_paired_object_relation_check` | List sentences that name both research objects but not how they relate. |
 | `grant_writing_persuasion_quality_check` | Check reviewer-facing hierarchy, equations, and defensive prose. |
 | `grant_writing_proper_noun_load_check` | Count proper nouns a reviewer must place, and list the ones named once. |
 | `grant_writing_publication_list` | List the applicant's own publications for a grant achievement section. |
