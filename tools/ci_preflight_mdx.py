@@ -150,7 +150,7 @@ try {{
     if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
     & $python tools/ci_preflight.py --since $base
     if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
-    & $python -m pytest tests/test_ci_execution_policy.py tests/test_docs_notebook_contract.py tests/test_release_workflow_ref_gate.py tests/test_wheel_package_policy.py tests/test_application_interface_manifest.py tests/axifem/test_docs_notebook_evidence.py -q
+    & $python tools/run_test_tier.py --profile fast-contracts
     if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
   }} finally {{
     Pop-Location

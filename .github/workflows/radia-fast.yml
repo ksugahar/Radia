@@ -74,14 +74,9 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path $env:RADIA_CI_OUTPUT_DIR | Out-Null
-          & $env:RADIA_FAST_PYTHON -m pytest `
-            tests/test_ci_execution_policy.py `
-            tests/test_docs_notebook_contract.py `
-            tests/test_release_workflow_ref_gate.py `
-            tests/test_wheel_package_policy.py `
-            tests/test_application_interface_manifest.py `
-            tests/axifem/test_docs_notebook_evidence.py `
-            -q --junitxml="$env:RADIA_CI_OUTPUT_DIR\fast-contracts.xml"
+          & $env:RADIA_FAST_PYTHON tools/run_test_tier.py `
+            --profile fast-contracts `
+            --junitxml "$env:RADIA_CI_OUTPUT_DIR\fast-contracts.xml"
           exit $LASTEXITCODE
 
       - name: Record exact CI ref context
