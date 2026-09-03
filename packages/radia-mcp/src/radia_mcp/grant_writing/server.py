@@ -48,7 +48,10 @@ team can start or execute.
 Checks that a section cannot answer -- budget itemization in a research plan
 -- report themselves inapplicable instead of scoring it low.
 Japanese readability uses a separate genre-bound 100-point diagnostic. It
-never scores English text or research manuscripts as grant applications.
+never scores English text or research manuscripts as grant applications. The
+diagnostic strips LaTeX/form scaffolding, uses graduated penalties, scores
+reviewer takeaways before named means, and can compare both the complete draft
+and the edited passage before and after a revision.
 
 Promoted to radia-mcp so the document-writing servers are registered in
 parallel: paper-writing / grant-writing.
