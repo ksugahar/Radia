@@ -9,6 +9,31 @@ Finish with three matching outcomes: `O:\Eqnedit64.exe`, the tagged GitHub
 Release, and the PyPI wheels. Do not call the release complete while any one is
 stale.
 
+## One-command publication
+
+After the reviewed candidate is merged and the exact `origin/main` Eqnedit64
+and Policy Lint checks are green, run one command from the repository:
+
+```powershell
+pwsh -File .agents/skills/release-eqnedit64/scripts/publish.ps1 `
+  -Version <major.minor.patch>
+```
+
+This is the canonical final publication path. It verifies synchronized native
+and package versions, builds and signs the exact main source, runs the direct
+CLI check, transactionally updates O: and its release manifest, creates and
+pushes the annotated tag, provisions a current one-job GitHub JIT runner for
+the O:-backed signing job, waits for tag CI and publication, and then downloads
+the GitHub Release and all four PyPI wheels to prove that every embedded EXE is
+byte-identical to O:. The JIT runner is not installed as a service and is
+removed after the job. The script is resumable after a pushed tag; it never
+deletes or moves a remote tag.
+
+Use `-WhatIf` to build/sign and exercise the complete pre-tag/O: preflight
+without updating O:, creating a tag, or publishing. A release request such as
+"publish 3.0.14" authorizes the ordinary command; do not add `-Confirm:$false`
+to scripts or documentation.
+
 ## O: hand-test invariant
 
 - `O:\Eqnedit64.exe` is Sugahara's canonical hand-test entry point. After a
@@ -71,26 +96,15 @@ stale.
    hand testing. Do not merge to `main` before this gate is recorded.
 5. Merge the approved release commit to `main` and push it.
 6. Wait for the main Eqnedit64 CI and Policy Lint to pass.
-7. Confirm tracked files are clean and `HEAD == origin/main`.
-8. Run `tools/eqnedit64/build/build_eqnedt64.bat` on LAB.
-9. Before creating any release tag, stage the exact signed build to O::
+7. Run the one-command publication shown above. It enforces clean
+   `HEAD == origin/main`, builds, signs, updates O: before the tag, publishes,
+   waits, and performs the public byte-identity audit.
 
-```powershell
-pwsh -File .agents/skills/release-eqnedit64/scripts/sync_to_o.ps1 `
-  -Tag eqnedit64-v<version> `
-  -SourceExe tools/eqnedit64/dist/Eqnedit64.exe `
-  -SourceSha (git rev-parse HEAD)
-```
-
-10. Verify the helper reports `Updated=True`, the intended version, `Valid`,
-   `CN=ksugahar`, and the recorded SHA-256.
-11. Create the annotated tag at the manifest's exact source SHA and push it.
-12. Wait for tag CI, GitHub Release, and PyPI publication to pass.
-
-The helper refuses an existing remote release tag, a dirty or unpushed source,
-a mismatched build stamp, version, signature, or hash. Use `-WhatIf` for a
-preflight that does not change O:. If replacement fails because the shared EXE
-is locked, leave the existing file intact and report the lock; do not kill
+The O: helper refuses an existing remote release tag, a dirty or unpushed
+source, a mismatched build stamp, version, signature, or hash. The publication
+script knows how to resume verification after a tag exists, but will not try to
+rewrite O: at that point. If replacement fails because the shared EXE is
+locked, leave the existing file intact and report the lock; do not kill
 unrelated or remote user processes.
 
 An explicit release/deploy/update request authorizes the matching `O:` update.

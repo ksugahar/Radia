@@ -8,6 +8,8 @@ param(
     [Parameter(Mandatory = $true)]
     [ValidatePattern('^[0-9a-fA-F]{40}$')]
     [string]$SourceSha,
+    [ValidatePattern('^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$')]
+    [string]$Repository = 'ksugahar/Radia',
     [string]$Destination = 'O:\Eqnedit64.exe',
     [string]$ManifestPath = 'O:\Eqnedit64.release.json',
     [string]$HandTestManifestPath = 'O:\Eqnedit64.handtest.json',
@@ -20,15 +22,18 @@ Set-StrictMode -Version Latest
 if ($PSVersionTable.PSVersion.Major -lt 7) {
     throw 'sync_to_o.ps1 requires PowerShell 7 or newer.'
 }
-if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    throw 'Git is required.'
+foreach ($command in @('git', 'gh')) {
+    if (-not (Get-Command $command -ErrorAction SilentlyContinue)) {
+        throw "$command is required."
+    }
 }
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path
-git -C $repoRoot fetch origin main --quiet
-if ($LASTEXITCODE -ne 0) { throw 'git fetch origin main failed.' }
 $headSha = (git -C $repoRoot rev-parse HEAD).Trim()
-$originMainSha = (git -C $repoRoot rev-parse origin/main).Trim()
+$originMainSha = (gh api "repos/$Repository/commits/main" --jq .sha).Trim()
+if ($LASTEXITCODE -ne 0 -or -not $originMainSha) {
+    throw 'Could not query the pushed main commit through GitHub.'
+}
 $normalizedSourceSha = $SourceSha.ToLowerInvariant()
 if ($headSha -cne $normalizedSourceSha -or
     $originMainSha -cne $normalizedSourceSha) {
@@ -40,9 +45,10 @@ if ($LASTEXITCODE -ne 0 -or $trackedStatus) {
     throw 'Tracked release source is dirty.'
 }
 
-$remoteTag = git -C $repoRoot ls-remote --tags origin "refs/tags/$Tag"
+$remoteTags = gh api "repos/$Repository/git/matching-refs/tags/$Tag" |
+    ConvertFrom-Json
 if ($LASTEXITCODE -ne 0) { throw "Could not query remote tag $Tag" }
-if ($remoteTag) {
+if (@($remoteTags).Count -gt 0) {
     throw "Release tag already exists; O: must be prepared before tag push: $Tag"
 }
 

@@ -7,7 +7,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "eqnedit64"
-version = "3.0.13"
+version = "3.0.14"
 description = "Fast TeX equation editing, rendering, and Office clipboard tools"
 readme = "README.md"
 requires-python = ">=3.10"
