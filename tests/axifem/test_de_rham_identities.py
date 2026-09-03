@@ -14,13 +14,18 @@ import math
 
 import pytest
 
-pytest.importorskip("ngsolve")
+ng = pytest.importorskip("ngsolve")
 
+from _vol_mesh import reload_via_vol, structured_rect_vol_mesh
 from netgen.geom2d import SplineGeometry
 from netgen.occ import MoveTo, OCCGeometry, X, Y
 from ngsolve import GridFunction, Integrate, Mesh, grad, x, y
 
-from _vol_mesh import reload_via_vol, structured_rect_vol_mesh
+
+@pytest.fixture(scope="module", autouse=True)
+def _taskmanager():
+    with ng.TaskManager():
+        yield
 
 
 def _identity_cases():

@@ -4,7 +4,17 @@ import sys
 import numpy as np
 import pytest
 from netgen.geom2d import SplineGeometry
-from ngsolve import BilinearForm, CoefficientFunction, LinearForm, Mesh, ds, dx, grad, x
+from ngsolve import (
+    BilinearForm,
+    CoefficientFunction,
+    LinearForm,
+    Mesh,
+    TaskManager,
+    ds,
+    dx,
+    grad,
+    x,
+)
 
 _ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 for _path in (
@@ -21,6 +31,12 @@ from radia_mcp.radia_ngsolve.solve import (
     solve_axi_magnetostatic_dual_boundary_average,
     solve_axi_magnetostatic_nonlinear,
 )
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _taskmanager():
+    with TaskManager():
+        yield
 
 
 def _mesh():
@@ -55,7 +71,7 @@ def _assembled(fes, mixed=None):
 
 
 def _free_vertex_dofs(mesh):
-    from ngsolve import NodeId, VERTEX
+    from ngsolve import VERTEX, NodeId
 
     fes = H1Henrotte(mesh, order=2, dirichlet="left")
     return [
@@ -70,7 +86,7 @@ def test_signed_dof_identification_is_exact_and_reduced_residual_is_small():
     mesh = _mesh()
     fes = H1Henrotte(mesh, order=2, dirichlet="left")
     free_vertices = []
-    from ngsolve import NodeId, VERTEX
+    from ngsolve import VERTEX, NodeId
 
     for vertex in mesh.vertices:
         dofs = [dof for dof in fes.GetDofNrs(NodeId(VERTEX, vertex.nr)) if dof >= 0]
@@ -104,7 +120,7 @@ def test_signed_dof_identification_is_exact_and_reduced_residual_is_small():
 def test_antiperiodic_self_identification_pins_the_shared_trace_vertex():
     mesh = _mesh()
     fes = H1Henrotte(mesh, order=2, dirichlet="left")
-    from ngsolve import NodeId, VERTEX
+    from ngsolve import VERTEX, NodeId
 
     dof = next(
         candidate
