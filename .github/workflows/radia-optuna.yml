@@ -17,6 +17,7 @@ on:
       - 'src/matlab/radia_mex.cpp'
       - 'Build.ps1'
       - 'CMakeLists.txt'
+      - '.github/workflows/radia-optuna.yml'
   pull_request:
     branches: [main]
     paths:
@@ -32,6 +33,7 @@ on:
       - 'src/matlab/radia_mex.cpp'
       - 'Build.ps1'
       - 'CMakeLists.txt'
+      - '.github/workflows/radia-optuna.yml'
   workflow_dispatch:
 
 permissions:
@@ -48,14 +50,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+      - name: Create run-local Python environment
+        shell: pwsh
+        run: |
+          $venv = Join-Path $env:RUNNER_TEMP "radia-optuna-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          python -m venv $venv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $py = Join-Path $venv 'Scripts\python.exe'
+          "RADIA_OPTUNA_CI_PYTHON=$py" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          (Join-Path $venv 'Scripts') | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Build standalone optuna_mex
         shell: pwsh
         run: |
-          python -m pip install pybind11==3.0.2
+          & $env:RADIA_OPTUNA_CI_PYTHON -m pip install pybind11==3.0.2
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & .\Build.ps1 -OptunaMexOnly
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -63,20 +71,20 @@ jobs:
       - name: Test, build, and verify radia-optuna wheel
         shell: pwsh
         run: |
-          python -m pip install build wheel pytest optuna==4.9.0
-          python -m pytest packages\radia-optuna\tests -q
+          & $env:RADIA_OPTUNA_CI_PYTHON -m pip install build wheel pytest optuna==4.9.0
+          & $env:RADIA_OPTUNA_CI_PYTHON -m pytest packages\radia-optuna\tests -q
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python -m pytest tests\test_release_quad_optuna_candidate.py -q
+          & $env:RADIA_OPTUNA_CI_PYTHON -m pytest tests\test_release_quad_optuna_candidate.py -q
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Push-Location packages\radia-optuna
           try {
-            python -m build --wheel
+            & $env:RADIA_OPTUNA_CI_PYTHON -m build --wheel
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             $wheels = @(Get-ChildItem dist\*.whl)
             if ($wheels.Count -ne 1) {
               throw "Expected one radia-optuna wheel, found $($wheels.Count)"
             }
-            python verify_wheel.py $wheels[0].FullName --json
+            & $env:RADIA_OPTUNA_CI_PYTHON verify_wheel.py $wheels[0].FullName --json
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           } finally {
             Pop-Location
