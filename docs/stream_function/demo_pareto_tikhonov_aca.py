@@ -49,7 +49,6 @@ Usage:
     python demo_pareto_tikhonov_aca.py --target uniform --n-lam 20
 """
 import os
-import sys
 import json
 import argparse
 
@@ -60,8 +59,6 @@ from _validation_output import validation_json_for_basename
 from radia_mcp.figure import lab_figure, save_lab_figure
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, _HERE)                                    # sibling demos
-sys.path.insert(0, os.path.join(_HERE, "..", "..", "src"))   # radia package
 
 from demo_planar_uniform_fem_psi import build_fem_matrix, build_h1_stiffness
 from radia.stream_function import aca_tsvd, RegularizedTSVD

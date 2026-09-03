@@ -10,13 +10,11 @@ kernel-agnostic: it serves coils and magnetic materials alike.
 Run:  python demo_magnet_array.py
 """
 import os
-import sys
 from pathlib import Path
 
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[1] / "src"))
 
 import radia as rad
 from radia.stream_function import aca_tsvd, pseudo_inverse_solve, radia_field_kernel

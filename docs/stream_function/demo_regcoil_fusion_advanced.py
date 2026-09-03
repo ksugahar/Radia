@@ -55,7 +55,6 @@ import argparse
 import json
 import math
 import os
-import sys
 import urllib.request
 from datetime import datetime
 
@@ -66,13 +65,6 @@ from _validation_output import validation_output
 # the li383 reference equilibrium shipped by simsopt (open source, MIT)
 _LI383_URL = ("https://raw.githubusercontent.com/hiddenSymmetries/simsopt/"
               "master/tests/test_files/wout_li383_low_res_reference.nc")
-
-
-def _src_paths():
-    here = os.path.dirname(os.path.abspath(__file__))
-    sys.path.insert(0, here)
-    sys.path.insert(0, os.path.join(here, "..", "..", "src", "radia"))
-    sys.path.insert(0, os.path.join(here, "..", "..", "src", "radia", "panels"))
 
 
 def _torus_at(R0, a, maxh, path):
@@ -279,9 +271,8 @@ def main():
     ap.add_argument("--no-plot", action="store_true")
     args = ap.parse_args()
 
-    _src_paths()
     import demo_regcoil_fusion as base
-    import calc_streamfunction as C
+    from radia.panels import calc_streamfunction as C
     from ngsolve import Mesh, TaskManager
 
     os.makedirs(args.work_dir, exist_ok=True)

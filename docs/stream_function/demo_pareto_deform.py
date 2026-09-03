@@ -28,7 +28,6 @@ homogeneity); allowing standoff reaches ~ -53% but that is mostly repositioning.
 Outputs JSON + PNG next to this script.
 """
 import os
-import sys
 import json
 import argparse
 
@@ -39,8 +38,6 @@ from _validation_output import validation_json_for_basename
 from radia_mcp.figure import lab_figure, save_lab_figure
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, _HERE)
-sys.path.insert(0, os.path.join(_HERE, "..", "..", "src"))
 
 from demo_planar_uniform_fem_psi_advanced import build_fem_matrix_deformed
 from demo_planar_uniform_fem_psi import build_h1_stiffness

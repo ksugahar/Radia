@@ -29,7 +29,6 @@ Run:
     python demo_regularized_aca.py --skip-linf       # quicker, skip IRLS
 """
 import argparse
-import sys
 import time
 from pathlib import Path
 
@@ -38,8 +37,6 @@ from _validation_output import validation_output
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[1] / "src"))
-sys.path.insert(0, str(HERE))
 
 from radia.stream_function import (
     aca_tsvd, pseudo_inverse_solve, RegularizedTSVD,

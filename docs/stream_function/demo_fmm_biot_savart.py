@@ -59,9 +59,6 @@ REPO = HERE.parents[1]
 FIXTURE = REPO / "tests" / "panels" / "fixtures" / "make_streamfunction_vol.py"
 CALC = REPO / "src" / "radia" / "panels" / "calc_streamfunction.py"
 
-sys.path.insert(0, str(REPO / "src" / "radia" / "panels"))
-sys.path.insert(0, str(REPO / "src" / "radia"))
-
 _MU0_4PI = 1.0e-7
 
 
@@ -345,7 +342,7 @@ def main():
     # ---- in-process design via calc_streamfunction import -----------------
     print(f"\nBuilding design problem (Gz coil, order={args.order})...")
     from ngsolve import Mesh, H1, specialcf, TaskManager, GridFunction
-    import calc_streamfunction as CS
+    from radia.panels import calc_streamfunction as CS
 
     class _A:
         pass

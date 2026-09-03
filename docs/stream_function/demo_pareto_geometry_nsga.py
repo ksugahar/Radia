@@ -23,7 +23,6 @@ Two modes:
 Outputs JSON + PNG next to this script.
 """
 import os
-import sys
 import json
 import argparse
 
@@ -32,8 +31,6 @@ import numpy as np
 from _validation_output import validation_json_for_basename
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, _HERE)
-sys.path.insert(0, os.path.join(_HERE, "..", "..", "src"))
 
 from demo_pareto_tikhonov_aca import FoldedPareto, pareto_nondominated
 

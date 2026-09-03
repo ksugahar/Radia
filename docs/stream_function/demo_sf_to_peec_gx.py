@@ -36,14 +36,12 @@ Run:  python demo_sf_to_peec_gx.py [--nphi 24] [--nz 40] [--nlevels 12] [--with-
 """
 import argparse
 import os
-import sys
 import time
 from pathlib import Path
 
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[1] / "src"))
 
 from radia.stream_function import aca_tsvd, pseudo_inverse_solve
 from radia.biot_savart import h_segments_batch, MU0

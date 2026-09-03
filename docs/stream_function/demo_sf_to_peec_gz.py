@@ -18,14 +18,12 @@ biot_savart.h_segments_batch (NOT ObjFlmCur, which has an orientation bug).
 Run:  python demo_sf_to_peec_gz.py [--nrings N] [--nwires N] [--with-peec]
 """
 import argparse
-import sys
 import tempfile
 from pathlib import Path
 
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[1] / "src"))
 
 import radia as rad
 from radia.stream_function import aca_tsvd, pseudo_inverse_solve, radia_field_kernel

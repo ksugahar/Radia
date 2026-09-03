@@ -63,10 +63,6 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 FIXTURE = REPO / "tests" / "panels" / "fixtures" / "make_shielded_coil_vol.py"
 
-sys.path.insert(0, str(REPO / "src" / "radia" / "panels"))
-sys.path.insert(0, str(REPO / "src" / "radia"))
-
-
 def _make_meshes(outdir):
     """Generate primary + shield + DSV + external .vol via the fixture."""
     env = os.environ.copy()
@@ -137,7 +133,7 @@ def main():
     vols = _make_meshes(work)
 
     from ngsolve import Mesh, TaskManager
-    import calc_streamfunction as CS
+    from radia.panels import calc_streamfunction as CS
 
     with TaskManager():
         # --- SHIELDED design (primary + shield, joint solve) ---

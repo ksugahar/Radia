@@ -55,7 +55,6 @@ Run examples:
         --deform-params bump --deform-trials 20
 """
 import argparse
-import sys
 import time
 from pathlib import Path
 
@@ -64,7 +63,6 @@ from _validation_output import validation_output
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[1] / "src"))
 
 from radia.biot_savart import h_segments_batch, MU0
 
