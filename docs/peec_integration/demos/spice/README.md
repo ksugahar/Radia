@@ -7,11 +7,13 @@ PRIMA model order reduction with SPICE netlist and Verilog-A export.
 | File | Description |
 |------|-------------|
 | `demo_prima_spice_export.py` | Export PRIMA reduced model as SPICE netlist or Verilog-A |
-| `demo_peec_prima_reduction.py` | PEEC + PRIMA integration demo |
 | `demo_veriloga_export.py` | Verilog-A export demo |
 | `demo_dowell_spice.py` | Dowell skin-effect SPICE model |
 | `prima_with_dowell_correction.py` | PRIMA(DC) + Dowell correction verification |
 | `dowell_to_prima.py` | Dowell formula to PRIMA ladder conversion |
+
+Numerical PRIMA/Dowell evidence is maintained under
+`validation_test/peec_integration/verification/`.
 
 ## SPICE Models
 
