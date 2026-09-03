@@ -269,7 +269,6 @@ norecursedirs = [
 source = ["radia"]
 omit = [
     "tests/*",
-    "examples/*",
 ]
 
 [tool.coverage.report]
