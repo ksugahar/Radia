@@ -25,7 +25,7 @@ sphere (formulation gate).
 import numpy as np
 import scipy.sparse as sp
 from scipy.sparse.linalg import spsolve
-from scipy.special import spherical_jn, spherical_yn, lpmv, gammaln
+from scipy.special import gammaln, lpmv, spherical_jn, spherical_yn
 
 
 # ===== spherical Hankel + real spherical harmonics + DtN (numpy) ============== #
@@ -117,7 +117,7 @@ def _ng_to_scipy(mat):
 
 def sphere_mesh(radius=1.0, maxh=0.4):
     """A sphere volume tet mesh (boundary face named 'gamma') for the FSI solve."""
-    from netgen.occ import Sphere, OCCGeometry
+    from netgen.occ import OCCGeometry, Sphere
     from ngsolve import Mesh
     solid = Sphere((0, 0, 0), radius)
     solid.faces.name = "gamma"
@@ -133,33 +133,46 @@ def fsi_dtn_solve(mesh, k, cL=2.0, cT=1.0, rho_s=1.5, rho_f=1.0,
     the ``dtn`` operator info, and (if ``obs`` given) ``scattered`` / ``incident``
     / ``total`` complex pressures at the exterior observation points.
     """
-    from ngsolve import (VectorH1, H1, BilinearForm, LinearForm, TaskManager, BND,
-                         InnerProduct, Sym, Grad, div, ds, dx, specialcf, exp, z as Zc)
+    from ngsolve import (
+        BND,
+        H1,
+        BilinearForm,
+        Grad,
+        InnerProduct,
+        LinearForm,
+        Sym,
+        VectorH1,
+        div,
+        ds,
+        dx,
+        exp,
+        specialcf,
+    )
+    from ngsolve import z as Zc
 
     omega = k
     mu = rho_s * cT**2
     lam = rho_s * (cL**2 - 2 * cT**2)
 
-    with TaskManager():
-        fes_u = VectorH1(mesh, order=order, complex=True)
-        u, v = fes_u.TnT()
-        a = BilinearForm(fes_u, symmetric=True)
-        a += (2 * mu * InnerProduct(Sym(Grad(u)), Sym(Grad(v))) + lam * div(u) * div(v)
-              - omega**2 * rho_s * InnerProduct(u, v)) * dx
-        a.Assemble()
+    fes_u = VectorH1(mesh, order=order, complex=True)
+    u, v = fes_u.TnT()
+    a = BilinearForm(fes_u, symmetric=True)
+    a += (2 * mu * InnerProduct(Sym(Grad(u)), Sym(Grad(v))) + lam * div(u) * div(v)
+          - omega**2 * rho_s * InnerProduct(u, v)) * dx
+    a.Assemble()
 
-        fes_p = H1(mesh, order=1, complex=True)
-        p, q = fes_p.TnT()
-        nrm = specialcf.normal(mesh.dim)
-        mb = BilinearForm(fes_p, symmetric=True)
-        mb += p * q * ds(boundary)
-        mb.Assemble()
-        gform = BilinearForm(trialspace=fes_u, testspace=fes_p, check_unused=False)
-        gform += InnerProduct(u, nrm) * q * ds(boundary)
-        gform.Assemble()
-        minc = LinearForm(fes_p)
-        minc += (1j * k * exp(1j * k * Zc)) * nrm[2] * q * ds(boundary)
-        minc.Assemble()
+    fes_p = H1(mesh, order=1, complex=True)
+    p, q = fes_p.TnT()
+    nrm = specialcf.normal(mesh.dim)
+    mb = BilinearForm(fes_p, symmetric=True)
+    mb += p * q * ds(boundary)
+    mb.Assemble()
+    gform = BilinearForm(trialspace=fes_u, testspace=fes_p, check_unused=False)
+    gform += InnerProduct(u, nrm) * q * ds(boundary)
+    gform.Assemble()
+    minc = LinearForm(fes_p)
+    minc += (1j * k * exp(1j * k * Zc)) * nrm[2] * q * ds(boundary)
+    minc.Assemble()
 
     Kdyn = _ng_to_scipy(a.mat)
     Mb_full = _ng_to_scipy(mb.mat)
@@ -188,7 +201,7 @@ def fsi_dtn_solve(mesh, k, cL=2.0, cT=1.0, rho_s=1.5, rho_f=1.0,
     residual = float(np.linalg.norm(Amat @ x - rhs))
 
     out = {"c": c, "residual": residual, "dtn": dtn, "order": int(order),
-           "ndof_u": int(ndof_u), "num_boundary_nodes": int(len(bnd)), "wavenumber": k}
+           "ndof_u": int(ndof_u), "num_boundary_nodes": len(bnd), "wavenumber": k}
     if obs is not None:
         obs = np.asarray(obs, float)
         out["scattered"] = _exterior_from_coeffs(c, dtn, k, obs)

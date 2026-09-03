@@ -10,11 +10,11 @@ cq_results.json.
 import json
 import platform
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
-import pytest
+from ngsolve import TaskManager
 
 from radia.acoustics import cq
 
@@ -26,7 +26,9 @@ OBS = np.array([[0.0, 0.0, -3.0], [3.0, 0.0, 0.0], [0.0, 0.0, 2.0]])
 
 
 def _worst_frequency_error():
-    from ngsolve import BilinearForm, TaskManager, ds, z as Zc, exp as ngexp
+    from ngsolve import BilinearForm, TaskManager, ds
+    from ngsolve import exp as ngexp
+    from ngsolve import z as Zc
     n = np.arange(N)
     rho = (np.finfo(float).eps ** 0.5) ** (1.0 / N)
     zeta = rho * np.exp(-2j * np.pi * n / N)
@@ -50,7 +52,10 @@ def test_cq_frequency_bem_matches_complex_k_analytic():
 
 
 def test_cq_time_signal_real_and_causal():
-    res = cq.cq_soft_sphere_scattering(OBS, radius=R, num_time=N, time_step=DT, sound_speed=C)
+    with TaskManager():
+        res = cq.cq_soft_sphere_scattering(
+            OBS, radius=R, num_time=N, time_step=DT, sound_speed=C
+        )
     scale = max(float(np.max(np.abs(res["scattered"]))), 1e-30)
     assert res["max_imag"] < 1e-6 * scale        # real time signal (Lubich rho-weighting)
     assert scale > 0                             # a nonzero scattered response
@@ -59,12 +64,16 @@ def test_cq_time_signal_real_and_causal():
 
 def _write_results():
     import ngsolve
+
     import radia
     worst = _worst_frequency_error()
-    res = cq.cq_soft_sphere_scattering(OBS, radius=R, num_time=N, time_step=DT, sound_speed=C)
+    with TaskManager():
+        res = cq.cq_soft_sphere_scattering(
+            OBS, radius=R, num_time=N, time_step=DT, sound_speed=C
+        )
     out = {
         "schema": "radia.acoustics.cq.v1",
-        "generated_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "generated_at_utc": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "reference": {
             "implementation": "src/radia/acoustics/cq.py (SciPy complex-k series)",
             "independent_of": ["radia C++", "radia_mex", "ngsolve.bem"],

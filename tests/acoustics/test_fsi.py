@@ -6,9 +6,9 @@ interior).  The full convergence-to-Faran study lives in validation_test/acousti
 """
 import numpy as np
 import pytest
+from ngsolve import Mesh, TaskManager
 
-from radia.acoustics import fsi
-from radia.acoustics import elastic_sphere_scattering, rigid_sphere_scattering
+from radia.acoustics import elastic_sphere_scattering, fsi, rigid_sphere_scattering
 
 K, R = 2.0, 1.0
 OBS = np.array([[0.0, 0.0, -3.0], [3.0, 0.0, 0.0], [0.0, 0.0, 3.0], [0.0, 0.0, 2.0]])
@@ -19,11 +19,12 @@ def _rel(a, b):
 
 
 def test_p2_more_accurate_than_p1_on_same_mesh():
-    mesh = fsi.sphere_mesh(R, maxh=0.4)
-    far = elastic_sphere_scattering(K, R, OBS, longitudinal_speed=2.0,
-                                    shear_speed=1.0, density_ratio=1.5)["scattered"]
-    s1 = fsi.fsi_dtn_solve(mesh, K, order=1, obs=OBS)
-    s2 = fsi.fsi_dtn_solve(mesh, K, order=2, obs=OBS)
+    with TaskManager():
+        mesh = fsi.sphere_mesh(R, maxh=0.4)
+        far = elastic_sphere_scattering(K, R, OBS, longitudinal_speed=2.0,
+                                        shear_speed=1.0, density_ratio=1.5)["scattered"]
+        s1 = fsi.fsi_dtn_solve(mesh, K, order=1, obs=OBS)
+        s2 = fsi.fsi_dtn_solve(mesh, K, order=2, obs=OBS)
 
     assert s2["residual"] < 1e-8
     assert s1["dtn"]["deviation"] < 3e-2                     # spherical truncation gate
@@ -34,18 +35,19 @@ def test_p2_more_accurate_than_p1_on_same_mesh():
 
 
 def test_stiff_limit_approaches_rigid_sphere():
-    mesh = fsi.sphere_mesh(R, maxh=0.32)
-    s = fsi.fsi_dtn_solve(mesh, K, cL=50.0, cT=25.0, rho_s=50.0, order=2, obs=OBS)
-    rig = rigid_sphere_scattering(K, R, OBS)["scattered"]
+    with TaskManager():
+        mesh = fsi.sphere_mesh(R, maxh=0.32)
+        s = fsi.fsi_dtn_solve(mesh, K, cL=50.0, cT=25.0, rho_s=50.0, order=2, obs=OBS)
+        rig = rigid_sphere_scattering(K, R, OBS)["scattered"]
     # a very stiff/heavy elastic sphere radiates like a sound-hard sphere
     assert _rel(s["scattered"], rig) < 0.15
 
 
 def test_non_spherical_truncation_raises():
     from netgen.occ import Box, OCCGeometry
-    from ngsolve import Mesh
-    box = Box((-1, -1, -1), (1, 1, 1))
-    box.faces.name = "gamma"
-    mesh = Mesh(OCCGeometry(box).GenerateMesh(maxh=0.7))
-    with pytest.raises(ValueError):                          # DtN is fail-loud off-sphere
-        fsi.fsi_dtn_solve(mesh, K, order=1, obs=OBS)
+    with TaskManager():
+        box = Box((-1, -1, -1), (1, 1, 1))
+        box.faces.name = "gamma"
+        mesh = Mesh(OCCGeometry(box).GenerateMesh(maxh=0.7))
+        with pytest.raises(ValueError):                      # DtN is fail-loud off-sphere
+            fsi.fsi_dtn_solve(mesh, K, order=1, obs=OBS)
