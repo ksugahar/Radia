@@ -22,6 +22,7 @@ def audit_module(monkeypatch, tmp_path):
     [
         ("src/radia/solver.py", "helper"),
         ("src/radia/panels/calc_heat.py", "caller"),
+        ("src/radia/simulink/ih_operator_assembly.py", "caller"),
         ("validation_test/heat/check_energy.py", "caller"),
         ("tests/test_heat.py", "caller"),
         ("docs/heat/notebook_helper.py", "caller"),

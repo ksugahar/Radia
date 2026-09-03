@@ -3,11 +3,13 @@
 
 Two checks repo-wide:
 
-1. **Helper modules** under ``src/radia/`` (NOT ``src/radia/panels/calc_*.py``)
-   must have **ZERO** ``with TaskManager():`` blocks.  Helpers are
+1. **Helper modules** under ``src/radia/`` (excluding executable panel and
+   Simulink operator-assembly adapters) must have **ZERO**
+   ``with TaskManager():`` blocks.  Helpers are
    composable building blocks; the caller wraps them.
 
 2. **Caller modules** -- ``src/radia/panels/calc_*.py``,
+   ``src/radia/simulink/*_operator_assembly.py``,
    ``validation_test/**.py``, ``tests/**.py``, and Python helpers under
    ``docs/`` -- that contain any
    NGSolve-parallel operation (``.Assemble()``,
@@ -54,12 +56,14 @@ ROOT = Path(__file__).absolute().parent.parent
 HELPER_GLOBS = ["src/radia/**/*.py"]
 HELPER_EXCLUDE = [
     "src/radia/panels/calc_*.py",
+    "src/radia/simulink/*_operator_assembly.py",
     "**/__pycache__/**",
 ]
 
 # Paths classified as CALLERS (MUST wrap when doing parallel ops).
 CALLER_GLOBS = [
     "src/radia/panels/calc_*.py",
+    "src/radia/simulink/*_operator_assembly.py",
     "validation_test/**/*.py",
     "tests/**/*.py",
     "docs/**/*.py",
@@ -152,11 +156,20 @@ def _classify(path: Path) -> str | None:
         and name.startswith("calc_")
         and name.endswith(".py")
     )
+    is_simulink_assembly_caller = (
+        len(parts) >= 4
+        and parts[0] == "src"
+        and parts[1] == "radia"
+        and parts[2] == "simulink"
+        and name.endswith("_operator_assembly.py")
+    )
     is_lane_caller = (
         parts[0] in ("validation_test", "tests", "docs")
         and path.suffix == ".py"
     )
-    if (is_panel_caller or is_lane_caller) and not _matches_any(rel, CALLER_EXCLUDE):
+    if (
+        is_panel_caller or is_simulink_assembly_caller or is_lane_caller
+    ) and not _matches_any(rel, CALLER_EXCLUDE):
         return "caller"
 
     # ---- Helper paths ----
