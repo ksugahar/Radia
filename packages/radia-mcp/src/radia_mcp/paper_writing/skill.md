@@ -38,8 +38,10 @@ Introduction 内の引用密度・自己引用比率・年度分布を診断。
 - 目安: Intro に 20-40 件 (研究動向 20, 直接比較対象 5-10)
 - 自己引用比率 < 20%、直近 5 年分 40% 以上が目安
 
-### T6. 制約検証 → ✅ `paper_writing_validate_pdf_pages` / `paper_writing_validate_abstract_length` / `paper_writing_check_overfull_hbox` / `paper_writing_check_pdf_edge_overflow`
+### T6. 制約検証 → ✅ `paper_writing_page_limit_revision_policy` / `paper_writing_validate_pdf_pages` / `paper_writing_validate_abstract_length` / `paper_writing_check_overfull_hbox` / `paper_writing_check_pdf_edge_overflow`
 IEEE/IEEJ/APS 固有の制約検証:
+- ページ超過時は `paper_writing_page_limit_revision_policy()` の共通必須手順を
+  先に適用する。残す文章の圧縮は禁止し、優先度の低い論点を丸ごと削る。
 - ページ数 (IEEE Trans: extended OK / PRL 4 pages / IEEJ 和文 10 pages)
 - Abstract (IEEE 200 words / IEEJ 400 字 / APS 250 words)
 - Overfull hbox ゼロ (LaTeX log 経由 = `check_overfull_hbox`)
@@ -172,25 +174,42 @@ CRITICAL 検出時は recommendation が「全部消せ、その上で `suggest_
 に切り替わる。
 出典: IEEE TMag author guidelines (10pt 最低)。
 
-#### Page-limit overflow への対処 — **タイポグラフィ ハックは厳禁**
-ページ制限を超えた時の **bad responses 階層** (上ほど絶対禁止):
+#### Page-limit overflow への対処 — **文章圧縮もタイポグラフィも厳禁**
 
-0. **Typography hacks — 厳禁** (Sugahara 2026-05-21):
+`paper_writing_page_limit_revision_policy()` は grant-writing と共有する必須ゲートで
+ある。ページ制約は文章を詰める問題ではなく、掲載する内容を選ぶ問題として扱う。
+機械点が高い版ではなく、人が読んで意味の通る版を基準稿にする。まずその基準稿の
+内容と文章を、行数を気にせず改善して自己完結した修正文を作る。改善稿を組版して
+初めて超過を判定する。超過する場合は、重複説明、
+副次例、補助的な証拠・結果・背景から、優先度の低い論点を一つ丸ごと削除または
+別の文書へ移す。残した文から主体、対象、条件、因果、課題間の関係を落として
+短くすることは厳禁である。ページ数や機械点が改善しても、意味が弱くなれば不採用とする。
+明確な文として残せない一文・論点は、圧縮版を置かず丸ごと削除する。意味不明な
+一文を残すより、その一文がない原稿を選ぶ。
+
+**禁止事項:**
+
+0. **Prose compression — 厳禁** (Sugahara 2026-09-03):
+   - 行数を保つために主語・対象・条件・指示対象を省く。
+   - 複数の課題、人、手法の関係を名詞列、括弧、スラッシュ、`その`で一文へ押し込む。
+   - 「短い」「ページに収まる」「採点が上がる」だけで改善と判定する。
+1. **Typography hacks — 厳禁** (Sugahara 2026-05-21):
    - 本文フォント縮小 (`\small` / `\footnotesize` / `\fontsize{9}`) — IEEE/IEEJ
      の 10pt 最低基準を破る。
    - 行間圧縮 (`\linespread{0.9}` 以下、`baselineskip` 12pt 以下)。
    - マージン / textheight 拡大 (journal class default より広く取る)。
-   - **`\vspace` は厳禁ではない** (Sugahara 2026-05-21 refinement,
-     「見た目が良くなるならあり」): layout tool として使用 OK、detector は
-     INFO 報告のみで score に影響させない。
+   - **`\vspace` は見た目の補正に限る** (Sugahara 2026-05-21 refinement,
+     「見た目が良くなるならあり」)。追加内容を残してページへ押し込む目的では
+     使わない。detector は意図を判定できないため INFO 報告に留める。
 
    font/spacing/margin の3つは desk-reject トリガー。reviewer は
    journal class の標準と違うタイポグラフィを一瞥で見抜く — 「正規
-   スペースで収まらなかった」ことを露呈する。`\vspace` は通常 LaTeX
-   layout の一部 — 全体のタイポが標準に見えるかどうかが基準。
-1. **Prose 圧縮過剰** — 下記 `check_prose_density` で検出される anti-pattern
-   (nominalisation, em-dash chain, jargon クラスタ).
-2. **概念を1つ削る** — 正解。`suggest_concept_drops` で候補を提案。
+   スペースで収まらなかった」ことを露呈する。
+
+**必須の解決策:** 各一文が、中心的な問い、投稿先の評価項目、主要な方法・検証・
+結論、固有の証拠のどれを担うかで論点重要度を評価する。短さや削減語数を重要度の
+代用にしない。`suggest_concept_drops` も補助に使い、最低重要度の一文を丸ごと
+削除する。自動候補がなければ圧縮へ進まず、内容範囲とページ制約の衝突を著者へ戻す。
 
 #### Bilingual digest page-limit policy (EN venue-limit strict, JA synced)
 
@@ -207,9 +226,10 @@ page limit を確認する。英語版は投稿物なので、確認した venue
 そのものを英語版に合わせて削る必要はない。
 
 編集時は EN/JA を同じ change set で更新し、英語版は page-count を検証、
-日本語版は bilingual sync と組版エラーを検証する。EN が venue limit を超える場合は
-「冗長部削除 → 小さな `\vspace{-...}` 調整 → 低優先文の削除 → 英文圧縮」の
-順で対応し、英文圧縮で不明瞭になるなら文を削る。
+日本語版は bilingual sync と組版エラーを検証する。EN は意味の通る基準稿の内容と
+英文を先に改善し、その後で組版する。venue limit を超える場合だけ、
+「重複する論点 → 副次例 → 補助的な証拠・結果」の順で
+内容単位に削除する。英文圧縮や `\vspace` による内容の押し込みは行わない。
 
 #### Reviewer Q&A driven revision policy
 
@@ -219,6 +239,10 @@ Digest / paper を修正するときは、まず査読者が突っ込みそう�
 この段階では文章が一時的に増えてよい。Q&A で論点を潰してから本文へ反映し、
 page limit 超過は過剰な英文圧縮ではなく、冗長部削除または優先度の低い内容の
 削除で解決する。
+
+削除前後で、残す各主張の主体、対象、操作、条件、因果、課題間の関係、得られる
+知見を照合する。削除後の接続は自然に直すが、残した複数の意味を短い一文へ
+再充填しない。
 
 本文へ反映するときは、読みにくい compressed prose を作らない。関係を説明する
 ために文中で `=` を助詞代わりに使わず、等号は数式・表・明示的な定義式に限る。
@@ -358,19 +382,20 @@ Tikhonov 正則化と、低ランク近似・モード打切りによる数値�
 場合に限り、理由とともに名を挙げる。手法の中核が依存するフレームワーク（例: NGSolve の
 要素・.vol）は再現性を上げるので明記してよい。
 
-#### `paper_writing_check_prose_density(text)` — 圧縮 anti-pattern 検出
-語数・ページ制限に達して **悪い圧縮** を始めた draft を検出する per-sentence
+#### `paper_writing_check_prose_density(text, page_limit_pressure=False)` — 圧縮 anti-pattern 検出
+語数・ページ制限に達して文章を詰め始めた draft を検出する per-sentence
 診断。5 軸: nominalisation (`we augment` → `the augmentation`) /
 em-dash + semicolon clause chaining / jargon クラスタ / 40 語超の長文 /
 acronym 密集。各文 score 0-4、>=2 で flag。
-**flag 率 >30% の場合**、recommendation が `rewrite` ではなく
-**`reduce_content`** に切り替わる — 圧縮には床がある。これ以上圧縮しても
-読めなくなるだけで、本来は **概念を 1 つ落とすべき** という政策判断。
+通常診断では flag 率 >30% で recommendation が `rewrite` から
+**`reduce_content`** に切り替わる。ページ制約下では
+`page_limit_pressure=True` を指定し、flag が一つでもあれば、自然な文へ戻した上で
+最低重要度の一文・論点を丸ごと削除する。ページ適合のための文章圧縮は量を問わず禁止する。
 全体 score 0-10。表面 detector (font / citation / hbox) が全部通っても
 読みにくい draft の最後の砦。
 
 #### `paper_writing_suggest_concept_drops(text)` — どの概念を落とすか
-`check_prose_density` の companion。compression floor を超えた時、
+`check_prose_density` の companion。圧縮兆候またはPDFのページ超過を検出した時、
 **具体的に何を捨てれば自然な文章に戻るか** を pattern match で提案する。
 5 droppable パターン (低コスト順):
 

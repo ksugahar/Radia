@@ -2232,6 +2232,22 @@ def test_page_limit_flags_a_field_past_its_allowance(tmp_path):
     over = next(r for r in result["risks"] if r["severity"] == "CRITICAL")
     assert "3ページ占めている" in over["comment"]
     assert result["fields"][0]["used_pages"] == 3
+    assert result["required_overflow_action"] == (
+        "drop_whole_low_priority_content_unit"
+    )
+
+
+def test_grant_page_limit_policy_matches_paper_content_selection_rule():
+    policy = gw.grant_writing_page_limit_revision_policy()
+
+    assert policy["mandatory"] is True
+    assert policy["policy_id"] == (
+        "page_limit_select_content_do_not_compress_prose"
+    )
+    forbidden = {item["id"] for item in policy["forbidden_actions"]}
+    assert "compress_surviving_prose" in forbidden
+    assert "reward_shortness_without_semantic_review" in forbidden
+    assert "最低重要度の完全な一文" in policy["deletion_rule"]
 
 
 def test_page_limit_reads_the_notice_the_form_prints_itself(tmp_path):
@@ -2446,22 +2462,6 @@ def test_proper_noun_load_lists_unplaced_singletons_but_keeps_venues_and_roles()
     assert clean["applicable"] is False
 
 
-def test_prose_list_items_survive_but_stay_separate():
-    proposal = (
-        "\\begin{itemize}\n"
-        "\\item 誘導加熱の発熱量を評価する\n"
-        "\\item 加速器電磁石の出口位置ずれを抑える\n"
-        "\\end{itemize}\n"
-    )
-
-    prose = gw._prose_for_lint(proposal)
-
-    assert "誘導加熱の発熱量を評価する。" in prose
-    assert "加速器電磁石の出口位置ずれを抑える。" in prose
-
-
-def test_a_parenthesised_gloss_is_not_an_unfilled_placeholder():
-    # From a submitted proposal: 入力 opens an ordinary technical gloss.
 def test_paired_object_relation_flags_the_sentence_the_editor_rejected():
     # 2026-09-03: three variants scored 85.7 / 85.7 / 85.8 on readability; the
     # editor rejected the first two because the two problems read as one study.
@@ -2493,6 +2493,22 @@ def test_notation_suggests_hito_for_a_counted_number_of_people():
     assert counter and counter[0]["variant_count"] == 1
 
 
+def test_prose_list_items_survive_but_stay_separate():
+    proposal = (
+        "\\begin{itemize}\n"
+        "\\item 誘導加熱の発熱量を評価する\n"
+        "\\item 加速器電磁石の出口位置ずれを抑える\n"
+        "\\end{itemize}\n"
+    )
+
+    prose = gw._prose_for_lint(proposal)
+
+    assert "誘導加熱の発熱量を評価する。" in prose
+    assert "加速器電磁石の出口位置ずれを抑える。" in prose
+
+
+def test_a_parenthesised_gloss_is_not_an_unfilled_placeholder():
+    # From a submitted proposal: 入力 opens an ordinary technical gloss.
     result = gw.grant_writing_template_residue_check(
         "設計技術を高度化し，高いビーム効率（入力したエネルギーに対する"
         "ビーム強度）を実現する。"

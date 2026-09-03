@@ -214,7 +214,8 @@ register_status_tool(
     server_name='mcp-server-paper-writing',
     description=(
         'Journal-paper writing skill suite: IMRaD/abstract/citation/'
-        'figure lint (67 tools), image-based PDF layout verification '
+        'figure lint, mandatory page-limit content-selection policy, '
+        'image-based PDF layout verification '
         '(pymupdf), LaTeX figure placement knowledge (htbp/placeins/'
         'widths/anti-patterns), IEEE/ScienceDirect/Emerald PDF '
         'download with cookies. Also serves the merged presentation_* '
