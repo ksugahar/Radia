@@ -1177,6 +1177,12 @@ merely to make validation faster.
 repository effort on completing, reviewing, simplifying, documenting, and
 validating capabilities that already exist.
 
+This section has precedence during the window. It overrides standing native-
+promotion, parity-expansion, application-promotion, and development-priority
+guidance whenever following that guidance would create a new supported surface.
+The end date does not automatically resume feature development: review the
+maintenance results and explicitly set the next policy first.
+
 - Allowed work includes bug fixes, API and policy consistency, removal of
   retired paths, dependency and build cleanup, CI/runtime reduction, test and
   validation classification, documentation repair, and completion of an
@@ -1190,6 +1196,42 @@ validating capabilities that already exist.
 - Maintenance changes must reduce or leave unchanged the long-term support
   surface. A rewrite that merely moves unfinished behavior behind a new API is
   a feature change, not maintenance.
+
+**Scope boundary**:
+
+- A new solver or formulation, application, public Python/MATLAB/MEX API
+  family, MCP tool family, Simulink product block, artifact schema, or runtime
+  dependency is a new feature and is forbidden during the window.
+- Filling a recorded gap in an already-public and already-claimed contract may
+  be maintenance when it adds no new numerical meaning or workflow. Examples
+  include a missing MEX mapping, parity-manifest classification, packaging
+  metadata, error propagation, or a broken released entry point.
+- Refactoring for reliability or measured performance is maintenance only when
+  the public contract and artifact meaning stay unchanged. Do not use the
+  window to redesign a working API under a new name.
+- Reference formulas used only as numerical oracles stay in readable Python,
+  MATLAB, or validation code. Do not promote analytical validation references
+  into C++, pybind11, or MEX merely to make them look production-ready.
+
+**Ordered maintenance backlog**:
+
+1. Restore the canonical `radia-optuna` source/distribution metadata in clean
+   `main`, remove dirty-tree or release-tree fallback from health checks, and
+   make source-root selection deterministic.
+2. Classify or repair the committed Python-to-MATLAB parity entries for
+   `accelerator_field_validation.py`, `lamination.py`, and `mmm_topology.py`.
+3. Close or explicitly classify the standalone-MEX coverage gaps for
+   `ObjTetrahedronCurrent` and the Kelvin field/potential class surfaces.
+4. Continue CI, build, dependency, and repository cleanup. Remove duplicate
+   tests and stale generated files while keeping fast regression coverage for
+   implementation bugs and JSON-backed numerical evidence in
+   `validation_test/`.
+
+Work on one maintenance family per commit. Rebase it onto the latest clean
+`main`, run its focused fast tests, and report unrelated global failures
+separately. Never make a gate pass by deleting an independent oracle, weakening
+a tolerance without evidence, skipping the affected lane, or reading expected
+results from the implementation under test.
 
 **Promotion gates**:
 
