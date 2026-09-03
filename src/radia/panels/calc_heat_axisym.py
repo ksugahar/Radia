@@ -174,14 +174,13 @@ def solve_heat_axisym(wp_vol,
                       rotation_rpm=0.0,
                       probe_point=None,
                       msh_output="",
-                      vtu_prefix="",
                       csv_output=""):
     setup_paths()
     t0 = time.perf_counter()
 
     from ngsolve import (Mesh, H1, BilinearForm, LinearForm, GridFunction,
                           Integrate, CF, ds, dx, BND, x as r_coord,
-                          VTKOutput, TaskManager, InnerProduct, grad)
+                          TaskManager, InnerProduct, grad)
 
     if not os.path.isfile(wp_vol):
         return {"error": f"--wp-vol not found: {wp_vol}"}
@@ -339,17 +338,6 @@ def solve_heat_axisym(wp_vol,
          f"{A_surf_axisym:.4e} m^2)")
     Q_input_J = 0.0
 
-    vtu_files = []
-    if vtu_prefix:
-        vtk = VTKOutput(wp_mesh, coefs=[gfT], names=["T"],
-                        filename=f"{vtu_prefix}_000", subdivision=0,
-                        legacy=False)
-        try:
-            vtk.Do()
-            vtu_files.append(f"{vtu_prefix}_000.vtu")
-        finally:
-            del vtk
-
     for step in range(1, n_steps + 1):
         t = step * float(dt)
         f_form = LinearForm(fes_T)
@@ -374,15 +362,6 @@ def solve_heat_axisym(wp_vol,
                 T_probe.append(float(getattr(val, "real", val)))
             except Exception:
                 T_probe.append(float("nan"))
-        if vtu_prefix:
-            vtk = VTKOutput(wp_mesh, coefs=[gfT], names=["T"],
-                            filename=f"{vtu_prefix}_{step:03d}",
-                            subdivision=0, legacy=False)
-            try:
-                vtk.Do()
-                vtu_files.append(f"{vtu_prefix}_{step:03d}.vtu")
-            finally:
-                del vtk
         _log(f"STEP:{step}/{n_steps} t={t:.3f}s "
              f"T_probe={T_probe[-1] if probe_point is not None else 'n/a'}")
 
@@ -507,7 +486,6 @@ def solve_heat_axisym(wp_vol,
         "T_sol_file": T_sol_file,
         "heat_vol_file": heat_vol_file,
         "msh_file": gmsh_file,
-        "vtu_files": vtu_files,
         "csv_file": csv_output if (csv_output and probe_point is not None)
                      else "",
         "t_total_s": round(t_total, 2),
@@ -578,7 +556,6 @@ def main():
                         help="Probe point 'r,z' [m] for the T(t) "
                              "history (axisym is 2D, so 2 coords).")
     parser.add_argument("--msh-output", default="")
-    parser.add_argument("--vtu-prefix", default="")
     parser.add_argument("--csv-output", default="")
 
     def run(args):
@@ -618,7 +595,6 @@ def main():
             rotation_rpm=args.rotation_rpm,
             probe_point=probe_point,
             msh_output=args.msh_output,
-            vtu_prefix=args.vtu_prefix,
             csv_output=args.csv_output,
         )
 
