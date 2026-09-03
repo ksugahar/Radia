@@ -102,3 +102,14 @@ def test_docs_do_not_restore_completed_migration_ledgers():
         "Git history owns completed migration bookkeeping; remove docs ledgers: "
         + ", ".join(map(str, offenders))
     )
+
+
+def test_docs_notebooks_do_not_restore_retired_result_sidecars():
+    retired = {
+        ROOT / "docs" / "kelvin" / "kelvin_exterior_source_and_aphi_results.json",
+    }
+    offenders = sorted(path.relative_to(ROOT) for path in retired if path.exists())
+    assert not offenders, (
+        "Docs notebooks embed display results; validation_test owns checked JSON: "
+        + ", ".join(map(str, offenders))
+    )

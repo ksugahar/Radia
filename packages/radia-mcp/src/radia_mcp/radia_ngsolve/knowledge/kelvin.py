@@ -3228,9 +3228,9 @@ radius, build H_s with `make_reduced_potential_background_cf` and pass it via
 
 `docs/kelvin/kelvin_exterior_source_and_aphi.ipynb` -- executed,
 result-bearing; re-runs the three goldens (exterior-source routes, twisted
-pullback contracts, A*/A-Phi p-sweep) and embeds every number, with the
-synchronized `kelvin_exterior_source_and_aphi_results.json` sidecar.  Read it
-for the full narrative; this topic is the operational summary.
+pullback contracts, A*/A-Phi p-sweep) and embeds every number. Read it for
+the full narrative; `validation_test/kelvin_source/` owns the checked
+numerical evidence and this topic is the operational summary.
 
 ## T-Omega
 
