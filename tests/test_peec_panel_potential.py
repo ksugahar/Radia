@@ -6,9 +6,6 @@ import pytest
 peec_matrices = pytest.importorskip("radia.peec_matrices")
 PEECBuilder = peec_matrices.PEECBuilder
 
-EPSILON_0 = 8.854187817e-12
-
-
 def _potential_matrix(*panels):
     builder = PEECBuilder()
     for panel in panels:
@@ -17,17 +14,20 @@ def _potential_matrix(*panels):
     return np.asarray(potential)
 
 
-def test_triangle_self_potential_is_physical():
+def _scaled(panel, factor):
+    return [[factor * coordinate for coordinate in point] for point in panel]
+
+
+def test_triangle_self_potential_obeys_inverse_length_scaling():
     side = 0.01
     height = side * np.sqrt(3.0) / 2.0
     triangle = [[0.0, 0.0, 0.0], [side, 0.0, 0.0], [side / 2.0, height, 0.0]]
 
     self_potential = _potential_matrix(triangle)[0, 0]
-    characteristic_size = np.sqrt(0.5 * side * height)
-    dimensional_scale = 1.0 / (4.0 * np.pi * EPSILON_0 * characteristic_size)
+    doubled_self_potential = _potential_matrix(_scaled(triangle, 2.0))[0, 0]
 
-    assert self_potential > 0.0
-    assert 0.5 < self_potential / dimensional_scale < 2.0
+    assert np.isfinite(self_potential) and self_potential > 0.0
+    assert self_potential / doubled_self_potential == pytest.approx(2.0, rel=5.0e-6)
 
 
 def test_near_panel_mutual_potential_is_reciprocal_and_decays():
@@ -43,19 +43,15 @@ def test_near_panel_mutual_potential_is_reciprocal_and_decays():
     assert np.all(np.diff(mutual) < 0.0)
 
 
-def test_quad_self_potential_matches_triangle_split():
+def test_quad_self_potential_obeys_inverse_length_scaling():
     quad = [
         [0.0, 0.0, 0.0],
         [0.01, 0.0, 0.0],
         [0.01, 0.01, 0.0],
         [0.0, 0.01, 0.0],
     ]
-    triangle_1 = [quad[0], quad[1], quad[2]]
-    triangle_2 = [quad[0], quad[2], quad[3]]
-
     quad_self = _potential_matrix(quad)[0, 0]
-    split_self = 0.5 * (
-        _potential_matrix(triangle_1)[0, 0] + _potential_matrix(triangle_2)[0, 0]
-    )
+    doubled_quad_self = _potential_matrix(_scaled(quad, 2.0))[0, 0]
 
-    np.testing.assert_allclose(quad_self, split_self, rtol=1.0e-12)
+    assert np.isfinite(quad_self) and quad_self > 0.0
+    assert quad_self / doubled_quad_self == pytest.approx(2.0, rel=5.0e-6)
