@@ -35,11 +35,12 @@ custom `BilinearFormIntegrator`s).
 ### Result-bearing evidence
 
 The executed proof artifact is
-[`AXIFEM_ELEMENT_EVIDENCE.ipynb`](AXIFEM_ELEMENT_EVIDENCE.ipynb), backed by
-[`axifem_element_evidence.json`](axifem_element_evidence.json).  It records
-the current `radia` runtime version, execution date, pytest output, and an
-evidence matrix for all six shipping paths: P1, Q1, P2, Q2, P2 curved, and
-Q2 curved.
+[`AXIFEM_ELEMENT_EVIDENCE.ipynb`](AXIFEM_ELEMENT_EVIDENCE.ipynb). Its saved
+outputs present the checked evidence stored under
+[`validation_test/axifem`](../../validation_test/axifem/). The validation
+record captures the `radia` runtime version, execution date, pytest output,
+and an evidence matrix for all six shipping paths: P1, Q1, P2, Q2, P2 curved,
+and Q2 curved.
 
 ### Implementation support matrix
 
@@ -375,9 +376,9 @@ tests/axifem/                            # public test surface
 docs/axifem/
   README.ipynb                            # notebook index
   AXIFEM_ELEMENT_EVIDENCE.ipynb           # executed P1/Q1/P2/Q2/P2-curved/Q2-curved proof
-  axifem_element_evidence.json            # version-stamped result JSON consumed by notebook
 
 validation_test/axifem/                  # validation-class research checks
+  axifem_element_evidence.json             # checked evidence consumed by the docs notebook
   research/validate_q2_codegen.py         # Q2 closed-form matrix check
   research/verification/                  # Hiruma/Cauer + element checks and JSON
 ```
