@@ -22,19 +22,9 @@ import sys
 import os
 import numpy as np
 
-# Add Radia to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia'))
+from radia.peec_matrices import PEECBuilder
 
-import radia as rad
-
-try:
-    from peec_matrices import PEECBuilder
-    print("Using C++ PEEC implementation")
-except ImportError:
-    print("C++ PEEC module not available, using Python fallback")
-    from radia.peec_matrices import PEECBuilder
-
-from lanczos_reduction import (
+from radia.lanczos_reduction import (
     LanczosReducer,
     SPICEExtractionConfig,
     PRIMASchurExtractor
