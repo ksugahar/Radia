@@ -70,8 +70,9 @@ def test_packaged_panel_notebook_directory_is_absent_or_empty():
     assert not notebook_dir.exists() or not list(notebook_dir.glob("*.ipynb"))
 
 
-def test_retired_python_optuna_panel_adapter_is_absent():
-    retired = (
-        REPO_ROOT / "src" / "radia" / "panels" / "optuna_study_helper.py"
-    )
-    assert not retired.exists()
+def test_retired_optimization_adapters_are_absent():
+    retired = [
+        REPO_ROOT / "src" / "radia" / "panels" / "optuna_study_helper.py",
+        REPO_ROOT / "src" / "radia" / "ih_claude_proposer.py",
+    ]
+    assert all(not path.exists() for path in retired)
