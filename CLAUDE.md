@@ -1892,46 +1892,6 @@ self-crossing geometry (the SF printable-former channel) use a **MESH boolean**
 segfaults / degenerates, and STL is the native 3D-print format (shipped as
 `calc_streamfunction.py --former-stl`).
 
-### CAD Authoring Priority: Cubit > build123d > netgen.occ (2026-08-28)
-
-**POLICY** (Sugahara): CAD オーサリングの優先順位は **Cubit (ACIS) >
-build123d (OCCT + lab hardened helpers) > netgen.occ**。netgen.occ は
-**STEP / .vol の I/O とメッシュ生成のみ**に使い、オーサリングには使わない。
-これは上の "CAD Authoring: build123d or Cubit" を厳密な優先順位に格上げした
-もので、Cubit を第一候補として明示する。
-
-**メッシュのメインパス**: **Cubit -> `export netgen` -> `.vol`** を研究室の
-メインパスとする。`.vol` は Cubit と NGSolve の唯一のインターフェース
-(既存 "Cubit/NGSolve Complete Separation Policy") であり続ける。netgen 直
-メッシュ (STEP -> Netgen) は補助経路。
-
-**Why -- 実測 (2026-08-28, ESRF 例題 5 C 型磁石の磁極)**:
-
-1. `netgen.occ.ThruSections` は OCC の `ruled` フラグを公開しない。既定は
-   非 ruled なので、3 断面 (34x24 -> 50x40 -> 50x40) のロフトが折れを表現
-   できず**スプライン面**になる。結果は**無警告**で:
-   磁極面 **+8.7%** / 面取り中央 **+22.6%** / 体積 **+7.65%** /
-   bbox **56.93 x 46.93** (目標 50 x 40) mm。
-   原典 `ObjMltExtRtg` は断面を平面で結ぶので、これは形状の誤りである。
-2. 同じ形状を **Cubit/ACIS** の `create volume loft` で作ると、体積
-   **1,446,095.333333 mm^3 = 解析値と相対誤差 0.0**、bbox 厳密、面はすべて
-   平面。`export netgen` -> `.vol` -> NGSolve でも **+1.5e-12%**。
-3. さらに `netgen.occ.OCCGeometry(<step>)` は **14 ソリッドの STEP から
-   1 ソリッドしか読まない**(残り 13 を無警告で欠落; STEP 側は
-   `MANIFOLD_SOLID_BREP` x14 を確認済み)。Cubit -> STEP -> netgen という
-   経路自体が危険で、`.vol` 経路はこれを回避する。
-
-**How to apply**:
-- 新規 CAD は Cubit `.jou` で作る。ジャーナルが真実の源
-  ("The SCRIPT is the journal")。
-- **Python から Cubit を呼ばない** (Layer 4 分離ポリシー)。`.jou` が
-  STEP / `.vol` を生成し、Python は成果物ファイルを読む。
-- netgen でメッシュを切る経路が必要なときは入力が STEP なので、
-  オーサリング層は **build123d** が相性が良い (netgen.occ ではなく)。
-- APREPRO は **`#` コメント行の中でも波括弧式を評価する**。ジャーナルの
-  コメントに波括弧式を書かない (2026-08-28 に構文エラーで検出)。
-- 既存の netgen.occ オーサリングを見つけたら、この優先順位で置き換える。
-
 ### GMSH .msh Format Version Policy (2026-04-15 update)
 
 **POLICY**: **全リポジトリで GMSH .msh v4.1 のみ**。v2.2 は全廃。
