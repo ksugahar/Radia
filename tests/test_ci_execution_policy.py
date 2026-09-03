@@ -124,7 +124,7 @@ def test_pre_push_runs_the_unpushed_candidate_on_mdx():
 def test_policy_twins_define_the_same_mdx_notebook_contract():
     agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
     claude = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
-    heading = "### CI Execution, Validation Evidence, and Notebook Policy (2026-09-02)"
+    heading = "### CI Execution, Validation Evidence, and Notebook Policy (2026-09-03)"
 
     def section(text: str) -> str:
         start = text.index(heading)
@@ -150,3 +150,30 @@ def test_policy_twins_define_the_same_mdx_notebook_contract():
     assert "an adjacent JSON and a runtime gate are not required" in normalized
     assert "A docs-only contract lane parses changed notebooks" in normalized
     assert "Developer pre-push hooks run only the impact-scoped mdx preflight" in normalized
+
+
+def test_policy_twins_define_the_same_compute_host_routing():
+    agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    claude = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    start_marker = "**POLICY (hibino-first; mdx CI-first, 2026-09-03)**"
+    end_marker = "**POLICY**: 全てのベンチマークスクリプト"
+
+    def routing_policy(text: str) -> str:
+        start = text.index(start_marker)
+        return text[start:text.index(end_marker, start)]
+
+    policy = routing_policy(agents)
+    assert policy == routing_policy(claude)
+    normalized = " ".join(policy.split())
+    assert "on hibino first" in normalized
+    assert "mdx CI runner and its job queue are idle" in normalized
+    assert "Compute work must never delay or destabilize CI/preflight" in normalized
+    assert "Historical mdx measurements remain valid provenance" in normalized
+
+    for stale in (
+        "`mdx` by default",
+        "`mdx`を既定の静音計算ホスト",
+        "mdx = 静音計算ホスト",
+    ):
+        assert stale not in agents
+        assert stale not in claude

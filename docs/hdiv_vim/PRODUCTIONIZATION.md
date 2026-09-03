@@ -158,9 +158,8 @@ requires the explicit `RT=True` flag and is not implied by the `HDiv` name.
 Before release or `mdx`/`hibino` deployment:
 
 - run focused HDiv smoke tests on LAB/100号機;
-- run heavy validation/benchmark sweeps on an idle `mdx` or `hibino` host
-  (`mdx` by default, `hibino` for MATLAB, large-memory, long-running, or
-  mdx-occupied jobs);
+- run heavy validation/benchmark sweeps on hibino first; use mdx only when
+  hibino is unavailable and the mdx CI runner and job queue are idle;
 - record the actual validation host in the result JSON/log;
 - record charge count, HDiv DoF, H-matrix compression, build time, solve time,
   iteration count, and machine label;

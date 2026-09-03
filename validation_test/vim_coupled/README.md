@@ -12,9 +12,9 @@ at the physical harmonic coupling scales (magnetic row `-K/mu0`, eddy row
 | `test_hdiv_hcurl_transient_validation.py` | eleven-step moving manufactured transient with a changing magnetic operator | production-form snapshot/artifact contract, Joule-loss observables, and the discrete energy-balance gate |
 | `validate_hcurl_eddy_bubble_disk.py` | public axisymmetric BEM modal spectrum plus live Q1/Q2 `radia.axifem` checks | 3-D TET HCurl eddy-bubble h/p convergence, passive CLN extraction, and the response-basis completeness gate |
 | `validate_magnetic_conductor_disk.py` | regenerated mapped-HEX mesh plus axisymmetric Q2 and full 3-D HCurl references | quick/full live replay of the magnetic-conductor adjudication without tracking `.vol` files |
-| `validate_mapped_hex_bdm2_production.py` | q9/q12 versus q10/q16 open-boundary ChargeGram on a reflection-symmetric non-affine trilinear HEX body | physical spectrum, linear/nonlinear material solves, independent full/reduced IMA solves, and the prescribed-source `<10 eps` field contract; run on mdx or hibino |
-| `validate_mapped_hex_bdm2_quadrature_reference.py` | q10/q16 versus q11/q20 on the same mapped BDM2 body | expensive independent reference for the q9/q12 production quadrature decision; run on mdx or hibino |
-| `build_curved_hex_bdm2_cylinder.py` + `validate_curved_hex_bdm2_cubit.py` | Cubit 2025.12 order-2 curved four-HEX cylinder; the builder is the source of truth and the mesh is regenerated outside Git | `check-vol`, true `Curve(2)`, all cells non-affine, linear/nonlinear BDM2 solves, `rad.Fld`, independent NGSolve boundary integral, and fail-loud mapped shape derivatives; run the solver validation on mdx or hibino |
+| `validate_mapped_hex_bdm2_production.py` | q9/q12 versus q10/q16 open-boundary ChargeGram on a reflection-symmetric non-affine trilinear HEX body | physical spectrum, linear/nonlinear material solves, independent full/reduced IMA solves, and the prescribed-source `<10 eps` field contract; use hibino first or idle-CI mdx |
+| `validate_mapped_hex_bdm2_quadrature_reference.py` | q10/q16 versus q11/q20 on the same mapped BDM2 body | expensive independent reference for the q9/q12 production quadrature decision; use hibino first or idle-CI mdx |
+| `build_curved_hex_bdm2_cylinder.py` + `validate_curved_hex_bdm2_cubit.py` | Cubit 2025.12 order-2 curved four-HEX cylinder; the builder is the source of truth and the mesh is regenerated outside Git | `check-vol`, true `Curve(2)`, all cells non-affine, linear/nonlinear BDM2 solves, `rad.Fld`, independent NGSolve boundary integral, and fail-loud mapped shape derivatives; use hibino first or idle-CI mdx |
 | `validate_mapped_hex_bdm2_hodge_reference.py` | finite-domain H1 Omega discrete Hodge projection and open-boundary ChargeGram on the same two-cell mapped BDM2 body | independent formulation/coupling cross-check after the cancellation-preserving ChargeGram repair |
 | `validate_h1_hodge_bdm2_disk.py` | independently regenerated static axisymmetric Q2 disk | heavy 3-D TET BDM1/BDM2 plus H1 h/p ladder; the final BDM2/H1-p4 observable reaches 0.98% error |
 | `validate_nonlinear_iron_esim_coupling.py` | regenerated same-region magnetic/conductive TET cube plus local 1-D nonlinear B-H cells | full HDiv-MMM/HCurl solve inside the local-ESIM Karl loop, field-amplitude dependence, passivity, Joule loss, and fixed-Gram replay |
@@ -88,7 +88,8 @@ tightening):
   simultaneous ordinary bulk nonlinear B-H update, hysteretic/rotational skin
   state, or multidimensional corner cell.
 
-Most focused lanes remain LAB-runnable.  The mapped HEX BDM2 production run is
-about 5 min on mdx; the q10/q16 versus q11/q20 reference is about 8 min.  Keep
-those heavy workloads on mdx or hibino and reserve LAB/100-machine for build and
-fast regression tests.
+Most focused lanes remain LAB-runnable. The mapped HEX BDM2 production run was
+about 5 min on mdx; the q10/q16 versus q11/q20 reference was about 8 min. Run
+future heavy workloads on hibino first, or on mdx only when hibino is unavailable
+and the mdx CI queue is idle. Reserve LAB/100-machine for build and fast
+regression tests.

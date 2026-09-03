@@ -53,7 +53,7 @@ S:\Radia\01_GitHub\
                           # and validation_test/ as durable promoted lanes.
   tests/                  # Radia tests + tests/mcp/
   examples/               # retired; do not add new files
-  validation_test/         # heavier validation, executed on idle mdx/hibino
+  validation_test/         # heavier validation; hibino first, mdx only behind idle CI
   docs/
   Build.ps1               # MSVC + MKL build
 ```
@@ -321,8 +321,9 @@ production interface for Radia applications is a masked block in the single
   not a valid production visualization.
 - Treat `radia-mcp` as the canonical executable manual for Radia-specific
   MATLAB and Simulink workflows. Do not duplicate generic MathWorks guidance.
-- Long or solver-heavy MATLAB validation runs execute on mdx or hibino; LAB and
-  100号機 remain development and fast-test hosts.
+- Long or solver-heavy MATLAB validation runs execute on hibino first. Use mdx
+  only when hibino is unavailable and the mdx CI queue is idle; LAB and 100号機
+  remain development and fast-test hosts.
 
 ### Python-to-MATLAB Capability Parity and Fallback Policy (2026-07-21)
 
@@ -534,7 +535,7 @@ on its own. Re-ask: "is X good for the repository?" If yes, do it for that
 reason. If the only argument for X is the paper, deprioritize it in favor of
 work that genuinely improves the code.
 
-### CI Execution, Validation Evidence, and Notebook Policy (2026-09-02)
+### CI Execution, Validation Evidence, and Notebook Policy (2026-09-03)
 
 **POLICY**: **mdx** is Radia's self-hosted CI and preflight host. LAB and
 100号機 are development machines and MUST NOT execute pull-request, push,
@@ -588,10 +589,10 @@ The repository has three complementary, non-duplicative evidence surfaces:
   and multi-machine studies. When normal CI exposes a defect or uncertainty,
   run only the relevant validation lane and retain its result JSON. Validation
   artifacts require machine-readable JSON with the checked values, runtime,
-  versions, and execution host. Validation
-  also runs explicitly on mdx (or hibino when the installed application
-  requires it), on a scheduled validation lane, or as a named release gate; it
-  does not run on every pull request.
+  versions, and execution host. Validation runs explicitly on hibino first, or
+  on mdx only when hibino is unavailable and the mdx CI queue is idle, through
+  a scheduled validation lane or named release gate; it does not run on every
+  pull request.
 - `docs/**/*.ipynb` is the public calculation record: derivation, executed
   evidence, figures, and a presentation-ready narrative. It is not a retired
   workbench. A notebook should be promotable directly into a talk or paper
@@ -605,8 +606,8 @@ notebook is the human-readable, result-bearing record of that execution.
 Neither may carry a private numerical implementation that the other cannot
 reproduce through the shared Python/C++ API and durable artifacts. A docs-only
 contract lane parses changed notebooks and rejects malformed JSON or
-replacement characters; mdx validation re-executes the notebook sets named by
-a changed method or a release gate.
+replacement characters; a named validation lane re-executes the notebook sets
+named by a changed method or release gate on the permitted compute host.
 
 Every new test declares its tier from measured runtime and dependency scope.
 When a formerly fast test grows beyond the CI budget, move its evidence and
@@ -1129,7 +1130,7 @@ a durable role:
 | Lane | Purpose (intent) | Audience | Ships in wheel? |
 |------|------------------|----------|-----------------|
 | `tests/**` | **実装バグの検出** — small deterministic regression, fixture, and API/error contract. Do not duplicate an existing test purpose. | CI / Codex / developer | No |
-| `validation_test/<topic>/` | **重要な検証・ベンチ・golden lock** — numerical truth with required result JSON, executed on idle `mdx` or `hibino` for large runs. | developer / agent / research validation | No |
+| `validation_test/<topic>/` | **重要な検証・ベンチ・golden lock** — numerical truth with required result JSON; large runs use hibino first and mdx only behind an idle CI queue. | developer / agent / research validation | No |
 | `docs/<topic>/*.ipynb` | **ユーザーに理論と代表結果を同時に見せる** — executed, output-bearing demonstration; no JSON sidecar required. | users / collaborators / future agents | Docs |
 | `docs/<topic>/*.py` | Notebook-local helper only. | notebook readers / MCP if local | Docs |
 | `src/` | Reusable API, parser, formula, solver helper, and computation kernel. | package users / validation / MCP / blocks | Yes |
@@ -1165,8 +1166,9 @@ merely to make validation faster.
 
 - Keep validation oracles readable and independent under `validation_test/`, or
   in a tracked Python, MATLAB, or Mathematica reference used from that lane.
-  Solver-heavy validation may run on `mdx` or `hibino`; oracle speed alone is
-  not a reason to reduce implementation independence.
+  Solver-heavy validation runs on hibino first, with mdx allowed only when
+  hibino is unavailable and the mdx CI queue is idle; oracle speed alone is not
+  a reason to reduce implementation independence.
 - An oracle must not call the same production function, pybind11/MEX binding,
   or native kernel whose numerical behavior it certifies. Do not expose a
   validation-only analytical reference through the production pybind11 or MEX
@@ -1247,8 +1249,8 @@ results from the implementation under test.
   fast regression.
 - **C:\temp → validation_test/**: the run is a numerical validation,
   benchmark, convergence sweep, golden lock, or regression corpus; heavy runs
-  are executed on an idle `mdx` or `hibino` host and labelled with the actual
-  validation host.
+  use hibino first, or mdx only when hibino is unavailable and the mdx CI queue
+  is idle, and are labelled with the actual validation host.
 - **C:\temp → docs/**: the result teaches a method or workflow to humans; the
   notebook must be executed, output-bearing, and Markdown-integrated. It has no
   mandatory JSON sidecar. A public CAE example also includes saved WebGUI
@@ -2974,11 +2976,12 @@ accepted artifact -> PyPI OIDC publication -> release-quad -> GitHub Release
 - CI/CD 環境 (e.g. `C:\actions-runner\_work\Radia\Radia\...`) は別管理 (NETWORK
   SERVICE 所有)。 LAB の editable pointer がそちらに drift していたら戻す。
 
-**POLICY (2026-06-25 update)**: **QUAD 配布**: LAB と 100号機 は editable
+**POLICY (2026-09-03 update)**: **QUAD 配布**: LAB と 100号機 は editable
 (NAS source、developer/user feedback loop)、mdx と hibino は PyPI install。
-mdx は compute/Cubit verification point なので `radia` + `cubit-mesh-export`
-のみでよく、`radia-mcp` は不要。hibino は PyPI 経由の MCP consumer として
-`radia-mcp` も入れる。
+mdx は self-hosted CI/preflight と exact-artifact verification を優先し、
+`radia` + `cubit-mesh-export` を検証する。machine-wide `radia-mcp` は不要。
+hibino は重い validation/benchmark の第一選択であり、PyPI 経由の MCP
+consumer として `radia-mcp` も入れる。
 
 **QUAD 配布モデル (2026-06-25)**:
 
@@ -2986,13 +2989,14 @@ mdx は compute/Cubit verification point なので `radia` + `cubit-mesh-export`
 |-------|--------|-----------|------|
 | 1 | LAB | `pip install -e .` + `pip install -e packages/cubit-mesh-export` + `pip install -e packages/radia-mcp` | 開発者ループ。最速フィードバック (NAS source 直接編集) |
 | 1 | 100号機 | `pip install -e \\192.168.11.100\work\00_CAE\Radia\01_GitHub` + `pip install -e ...\packages\cubit-mesh-export` + `pip install -e ...\packages\radia-mcp` | 共有ユーザ環境も editable。radia と MCP の学習/修正が即反映される |
-| 2 | mdx | `pip install radia / cubit-mesh-export` (PyPI) + `cubit-plugin-install --all-users` | PyPI wheel + Cubit plugin の compute verification。`radia-mcp` は不要 |
-| 2 | hibino | `pip install radia / radia-mcp / cubit-mesh-export` (PyPI) + `cubit-plugin-install --all-users` | PyPI 経由の MCP consumer verification |
+| 2 | mdx | `pip install radia / cubit-mesh-export` (PyPI) + `cubit-plugin-install --all-users` | self-hosted CI/preflight と exact-artifact verification。compute は hibino unavailable かつ CI idle 時のみ。`radia-mcp` は不要 |
+| 2 | hibino | `pip install radia / radia-mcp / cubit-mesh-export` (PyPI) + `cubit-plugin-install --all-users` | 重い validation/benchmark と PyPI 経由の MCP consumer verification |
 
 **変更点 (2026-06-25)**:
 - 旧: LAB editable / 100号機 + mdx 両方 PyPI (2-tier).
 - 新: LAB + 100号機 editable / mdx + hibino PyPI (QUAD).
-- mdx は `radia-mcp` 不要。hibino を PyPI 経由の MCP consumer として追加。
+- mdx は CI/preflight 優先で `radia-mcp` 不要。hibino は重い計算と PyPI
+  経由の MCP consumer verification を担う。
 
 **LAB / 100号機 editable パッケージ**:
 - `radia` (LAB: `S:\Radia\01_GitHub`, 100号機: `\\192.168.11.100\work\00_CAE\Radia\01_GitHub`)
@@ -3979,31 +3983,19 @@ and multiple sidecars.
 
 ### Benchmark Policy
 
-**POLICY (MUST: 重い検証・計算時間の測定は mdx または hibino で、2026-07-14 Sugahara)**:
-**壁時計 / タイミング / スケーラビリティ計測と solver-heavy な `validation_test/` の実行は、
-アイドル状態の `mdx` または `hibino` で行うことが MUST**。`mdx`を既定の静音計算ホストとし、
-MATLAB、大規模メモリ、長時間ジョブ、またはmdx混雑時は`hibino`を使う。LAB での timing は codex の
-並列 build / pytest / 他計算に汚染され無意味なので、**論文・docs・意思決定に用いる時間データは LAB で
-測ってはならない**。LAB で許されるのは correctness / smoke(数値一致・収束確認)のみ。mdx が塞がって
-いれば `hibino`へ振り分けるか、両方が塞がっていれば timing は延期する(下記)。この MUST は benchmark script (`bench_*.py`) だけでなく、
-ad-hoc な timing 計測・scaling sweep・build-time 測定すべてに適用される。
-
-**POLICY (mdx/hibino = 静音計算ホスト、他ジョブ終了後にのみ走らせる、2026-07-14)**: `mdx` と
-`hibino` は研究室の **計算用・静音マシン**。壁時計 / タイミング計測および重い計算ジョブは、
-**他のプロセス（別の計算ジョブ・build・CI・pytest・他ユーザ / codex の計算）が終わってから**＝
-選択したホストが **アイドルのときだけ** 開始する。実行中の別ジョブと **並走させない** — 並走は
-計算ホストの
-"静音で再現可能" という唯一の価値を壊し、かつ他人のジョブを汚染する。
-- **開始前に必ず選択したホストの稼働状況を確認**する：`ssh mdx pwsh` または `ssh hibino pwsh` で
-  `Get-Process python` の本数 / CPU負荷 / build・CIの有無を見る。重いジョブが走っていれば **待つ**
-  （横入りしない）。
-- `mdx` と `hibino` がともに塞がっているとき：**正しさ照合 (correctness / smoke — 数値が一致するか・
-  収束するか) は LAB で可**（LAB は codex 競合下でも一致確認は問題ない）。**タイミング計測は
-  いずれかがアイドルになるまで延期**する。LAB のタイミングは codex の並列 build / pytest に汚染されて
-  無意味（crash / hang / SIGKILL / noise）なので信用しない。
-- 重い `validation_test/` は実行したホスト名、開始時刻、実行時間、メモリ条件を結果JSONまたはログに残す。
-- これは codex↔claude の **共有ポリシー**（AGENTS.md の Benchmark Policy にも同文を置く）。
-  背景と過去インシデントは memory `benchmark_on_mdx_quiet_machine.md`。
+**POLICY (hibino-first; mdx CI-first, 2026-09-03)**: Run solver-heavy
+validation, optimization, scaling, memory, and timing work on hibino first.
+Use mdx only when hibino is unavailable and both the mdx CI runner and its job
+queue are idle. Compute work must never delay or destabilize CI/preflight.
+- Check the selected host's active processes and load before launch. For an mdx
+  fallback, also check the CI runner/service and queued or active jobs.
+- If hibino is unavailable and mdx is busy, LAB may run correctness/smoke probes
+  only; defer publication or decision-grade timing until a permitted compute
+  host is idle.
+- Record hostname, start time, runtime, memory conditions, and runtime versions
+  in the result JSON or log. Historical mdx measurements remain valid
+  provenance, but they do not define the current routing policy.
+- Keep this policy synchronized between AGENTS.md and CLAUDE.md.
 
 **POLICY**: 全てのベンチマークスクリプト (`bench_*.py`) は JSON 形式の結果ファイルを出力すること。
 

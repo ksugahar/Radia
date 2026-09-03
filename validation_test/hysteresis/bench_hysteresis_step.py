@@ -9,13 +9,13 @@ mass-Riesz PARDISO factor are paid once (t_setup_s / charge_gram_wall_s),
 after which every quasi-static step costs only CG applies + the batched
 material update (per-step t_step_s ~ flat across the loop).
 
-Benchmark Policy: publication timings run on idle mdx or hibino (mdx default,
-idle-gated); LAB runs are
-correctness smoke only.  Each case runs in its OWN subprocess so peak memory
+Benchmark Policy: publication timings run on hibino first, or on mdx only when
+hibino is unavailable and the mdx CI queue is idle; LAB runs are correctness
+smoke only. Each case runs in its OWN subprocess so peak memory
 (psutil peak working set) is per-case accurate.
 
 Usage:
-  python bench_hysteresis_step.py --sizes 8,12,16,20        # driver (mdx)
+  python bench_hysteresis_step.py --sizes 8,12,16,20        # compute-host driver
   python bench_hysteresis_step.py --sizes 4                 # LAB smoke
   python bench_hysteresis_step.py --case-n 12               # one case, JSON on stdout
 """

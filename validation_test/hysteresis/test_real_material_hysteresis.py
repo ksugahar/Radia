@@ -13,7 +13,7 @@ Two results a K=3 toy cannot demonstrate and a 0D material model cannot produce:
       resolves the spatial map + integrates the total, which a 0D loss curve cannot.
 
 Correctness (numerical agreement / physical soundness), so LAB per the Benchmark
-Policy; per-step timing is the idle mdx/hibino study.  Results saved to
+Policy; per-step timing uses hibino first or an idle-CI mdx fallback. Results saved to
 real_material_*.json.
 """
 import json
