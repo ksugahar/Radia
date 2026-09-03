@@ -53,9 +53,11 @@ jobs:
       changed_files_json: ${{ steps.classify.outputs.changed_files_json }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Fetch impact comparison base
-        if: needs.scope.outputs.run_tests == 'true' && needs.scope.outputs.run_full != 'true'
+        if: github.event_name != 'workflow_dispatch' && github.ref_type != 'tag'
         shell: bash
         env:
           CI_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
@@ -64,8 +66,6 @@ jobs:
             git cat-file -e "$CI_BASE_SHA^{commit}" 2>/dev/null || \
               git fetch --no-tags --depth=1 origin "$CI_BASE_SHA"
           fi
-        with:
-          fetch-depth: 0
 
       - name: Classify radia-mcp change scope
         id: classify
