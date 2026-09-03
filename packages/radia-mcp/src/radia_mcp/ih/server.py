@@ -49,7 +49,7 @@ def induction_heating(topic: str = "all") -> str:
     Complete workflow for electromagnetic induction heating analysis:
     EM eddy current solve -> Joule heat computation -> transient
     thermal analysis, including mesh loading, rotating workpiece,
-    VTK output, and post-processing patterns.
+    checked GMSH output, and post-processing patterns.
 
     Args:
         topic: Documentation topic. Options:
@@ -59,7 +59,7 @@ def induction_heating(topic: str = "all") -> str:
             "eddy_current"  - A-Phi formulation
             "thermal"       - Transient heat equation
             "rotating"      - Rotating workpiece
-            "postprocess"   - VTK output, field evaluation
+            "postprocess"   - GMSH output, field evaluation
             "pitfalls"      - Common mistakes
             "esim_kelvin"   - ESIM + Kelvin for IH
     """

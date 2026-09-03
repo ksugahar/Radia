@@ -261,9 +261,8 @@ def main():
 	print("  - Batch evaluation is the only way to accelerate field evaluation")
 	print()
 
-	# Note: VTK export skipped for benchmark scripts
-	# (125 elements would create a large VTK file not needed for benchmarking)
-	print("\n[INFO] VTK export skipped (benchmark script)")
+	# Field export is intentionally omitted from this timing-only benchmark.
+	print("\n[INFO] Field export skipped (benchmark script)")
 	print("="*80)
 
 	rad.UtiDelAll()

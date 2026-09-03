@@ -108,7 +108,7 @@ Empirically (verified 2026-05-27 audit):
   domain integration); negligible if obs is point.
 - `GridFunction.Set(...)` (L2 projection): **MUST** be inside.
 - `gf.Save(path)`: outside is fine (pure I/O).
-- VTK / GMSH export: outside is fine (pure I/O).
+- Upstream NGSolve VTK or Radia GMSH export: outside is fine (pure I/O).
 
 ## Nesting is OK but redundant
 

@@ -17,7 +17,7 @@ CLAUDE.md Best Practices:
 4. Use CoefficientFunction directly for maximum accuracy near boundaries
 
 Output:
-- VTK file for visualization in ParaView
+- Checked GMSH `.msh v4.1` field file
 - Comparison between HDiv, HCurl, and VectorH1 spaces
 
 Usage:
@@ -228,25 +228,19 @@ with TaskManager():
     print(f"{'Avg error (%)':<25s} {'':<12s} {np.mean(errors_hdiv):>12.3f} {np.mean(errors_hcurl):>12.3f} {np.mean(errors_vh1):>12.3f}")
 
     # ============================================================================
-    # Step 7: Export to VTK for Visualization
+    # Step 7: Export to GMSH for visualization
     # ============================================================================
-    print("\n[Step 7] Exporting to VTK")
+    print("\n[Step 7] Exporting to GMSH")
     print("-" * 70)
 
+    from radia.gmsh_post_export import GmshPostExport
     output_dir = os.path.dirname(os.path.abspath(__file__))
-    vtk_filename = os.path.join(output_dir, "demo_hdiv_projection")
+    gmsh_filename = os.path.join(output_dir, "demo_hdiv_projection.msh")
+    post = GmshPostExport(mesh)
+    post.add_vector_field("B_hdiv", B_gf_hdiv)
+    post.write(gmsh_filename)
 
-    # Export HDiv GridFunction
-    vtkopts = VTKOutput(
-        mesh,
-        names=["B_hdiv"],
-        coefs=[B_gf_hdiv],
-        filename=vtk_filename
-    )
-    vtkopts.Do()
-
-    print(f"  VTK file exported: {vtk_filename}.vtu")
-    print("  Open in ParaView to visualize the magnetic field")
+    print(f"  GMSH file exported: {gmsh_filename}")
 
     # ============================================================================
     # Summary
