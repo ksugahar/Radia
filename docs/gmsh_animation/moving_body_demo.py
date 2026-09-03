@@ -21,14 +21,9 @@ Requirements:
 
 import math
 import os
-import sys
 import numpy as np
 
-# Add radia to path
 _this_dir = os.path.dirname(os.path.abspath(__file__))
-_repo_root = os.path.dirname(os.path.dirname(_this_dir))
-sys.path.insert(0, os.path.join(_repo_root, "src"))
-sys.path.insert(0, _this_dir)
 
 from ngsolve import Mesh, CF, Integrate, BND, TaskManager
 from netgen.csg import CSGeometry, Cylinder, Plane, Pnt, Vec, OrthoBrick

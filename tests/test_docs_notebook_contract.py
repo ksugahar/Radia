@@ -242,3 +242,25 @@ def test_peec_wpt_docs_use_installed_radia_package():
         "PEEC WPT docs must not inject repository build/source paths: "
         + ", ".join(sorted(offenders))
     )
+
+
+def test_migrated_docs_use_installed_dependencies():
+    paths = [
+        ROOT / "docs" / "electric_machine" / "cogging_skew_demo.py",
+        ROOT / "docs" / "gmsh_animation" / "moving_body_demo.py",
+        ROOT / "docs" / "kelvin" / "dtn_spectrum_coarse_mesh_demo.py",
+        ROOT / "docs" / "kelvin" / "Supplement" / "experiment_cg_smoother_equilibration.py",
+        ROOT / "docs" / "cubit_mesh_export" / "gmsh" / "gmsh_export_example.py",
+        ROOT / "docs" / "cubit_mesh_export" / "nastran" / "nastran_export_example.py",
+    ]
+    forbidden = ("build-msvc", "install_ngsolve", "packages/radia-mcp/src", "src/radia")
+    offenders = []
+    for path in paths:
+        source = "\n".join(
+            line
+            for line in path.read_text(encoding="utf-8", errors="replace").splitlines()
+            if not line.lstrip().startswith("#")
+        ).replace("\\", "/")
+        if any(token in source for token in forbidden):
+            offenders.append(path.relative_to(ROOT).as_posix())
+    assert not offenders, "Docs must resolve installed dependencies: " + ", ".join(offenders)

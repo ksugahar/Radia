@@ -69,16 +69,8 @@ A sphere surface mesh FLOORS at ndof=336, so every maxh >= 0.5 gives the same
 coarsest mesh; use maxh <= 0.5 for distinct levels.
 Run:  python docs/kelvin/dtn_spectrum_coarse_mesh_demo.py
 """
-import sys
-from pathlib import Path
-
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-_RADIA_MCP_SRC = _REPO_ROOT / "packages" / "radia-mcp" / "src"
-if str(_RADIA_MCP_SRC) not in sys.path:
-    sys.path.insert(0, str(_RADIA_MCP_SRC))
-
-from radia_mcp.radia_ngsolve.bem_integral import exterior_dtn_spectrum  # noqa: E402
-from radia_mcp.radia_ngsolve.fem_bem_coupling import (  # noqa: E402
+from radia_mcp.radia_ngsolve.bem_integral import exterior_dtn_spectrum
+from radia_mcp.radia_ngsolve.fem_bem_coupling import (
     kelvin_dtn_eigenvalue, kelvin_openbc_error_vs_exterior_mesh,
 )
 
