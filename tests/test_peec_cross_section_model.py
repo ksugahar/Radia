@@ -1,18 +1,12 @@
 """CAD-shape dispatch for PEEC internal impedance models."""
 
 import math
-import sys
-from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src" / "radia" / "panels"))
-sys.path.insert(0, str(ROOT / "src"))
-
-import calc_inductance  # noqa: E402
-from radia._b3d_shim import GeomType  # noqa: E402
-from radia.coil_from_cad import _rectangular_face_dimensions  # noqa: E402
+from radia._b3d_shim import GeomType
+from radia.coil_from_cad import _rectangular_face_dimensions
+from radia.panels import calc_inductance
 
 
 def test_strict_rectangle_selects_dowell_and_keeps_real_perimeter():
