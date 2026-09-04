@@ -706,8 +706,8 @@ class VectorPotentialSolver:
         anderson_depth : int
             Memory depth of the constrained Anderson mixing of the per-element
             reluctivity (:mod:`radia.picard_acceleration`); 0 is the plain damped
-            update above.  The mixed iterate is projected onto the reluctivity
-            range of the B-H law, extrapolated in ``anderson_transform`` space
+            update above.  The mixed iterate is projected onto an envelope that
+            includes evaluated B-H targets, extrapolated in ``anderson_transform`` space
             (``"log"`` by default), and reverted when it worsens the residual.
         nu_initial : array, optional
             Per-element reluctivity warm start in mesh element order of the iron
@@ -777,12 +777,12 @@ class VectorPotentialSolver:
             nu_current = warm.astype(float, copy=True)
             for (nr, _), value in zip(iron_elements, nu_current):
                 nu_gf.vec[nr] = float(value)
-        # The secant reluctivity of a saturating law rises from the initial
-        # reluctivity towards the vacuum value; the mixed iterate stays in that
-        # range so every linear solve sees a physical material.
+        # Initial permeability is not necessarily the maximum permeability.
+        # Expand this envelope with evaluated constitutive targets below.
         accelerator = ConstrainedAndersonAccelerator(
             depth=int(anderson_depth), relaxation=float(relax),
-            lower=min(float(nu_iron_init), nu_air), upper=nu_air,
+            lower=min(nu_air, float(np.min(nu_current, initial=nu_iron_init))),
+            upper=float(np.max(nu_current, initial=nu_air)),
             transform=str(anderson_transform))
         observation = None
         if observation_points is not None:
@@ -907,6 +907,11 @@ class VectorPotentialSolver:
                     B_val[0]**2 + B_val[1]**2 + B_val[2]**2))
                 B_new_arr[index] = B_mag
                 nu_target[index] = nu_of_b(B_mag) if B_mag > 1e-10 else nu_iron_init
+            if not np.all(np.isfinite(nu_target)) or np.any(nu_target <= 0.0):
+                raise RuntimeError("B-H law produced a non-positive or non-finite reluctivity")
+            if nu_target.size:
+                accelerator.lower = min(accelerator.lower, float(np.min(nu_target)))
+                accelerator.upper = max(accelerator.upper, float(np.max(nu_target)))
             entry = {"iteration": int(it + 1)}
             if observation is not None:
                 observed_field = np.asarray(

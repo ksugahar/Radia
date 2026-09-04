@@ -913,6 +913,10 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
                 entry["observation_relative_change"] = float(
                     np.max(np.linalg.norm(observed_field - observed_previous, axis=1)) / scale)
             observed_previous = observed_field
+        # PCHIP secants can exceed the secants at the tabulated nodes.
+        # A safeguard must not clip the constitutive law's own target.
+        if mu_r_target.size:
+            accelerator.upper = max(accelerator.upper, float(np.max(mu_r_target)))
         if iteration == 1 and initial.ndim == 0:
             # A scalar start is a guess: jump to the first material estimate
             # undamped.  A per-element warm start is an iterate of this very

@@ -1059,3 +1059,41 @@ raw HEX Gram indefiniteness and a production solve; #7 requires the new native
 image build and converged FEM comparisons. The release-owning task has been
 notified of the deployment dependency. This section records restart safety,
 not successful field agreement or completion of either case.
+
+### 8.7 Installed-wheel trial and material-envelope defects (2026-09-05)
+
+With user approval, a candidate wheel was built from `6d66d38f9` using
+`Build.ps1` and `Build_Wheel.ps1 -DryRun`, without publishing it. Its SHA-256 is
+`8c34e57bd9ef9dc98ea788941266133f1cea06e5625be98897428480a9b58a7d`.
+Hibino installed it into `C:/temp/radia-candidate-6d66d38f9/venv`, with
+read-only access to system dependencies and candidate-local Radia, threadpoolctl,
+and test tools. All 336 package files matched the wheel; pip check passed;
+the installed native TET image tests passed 8/8. No standalone PYD was copied.
+The version string remains 4.95.81: this is a hash-identified private candidate,
+not the published 4.95.81 artifact.
+
+Example #7's curved P2 TET one-pole mesh (15,210 elements), BDM1, image `-x-y`,
+32 threads, gram epsilon 1e-10 converged through the production Newton/CG path:
+96,987 field DoF, 50 Newton iterations, 9,357 inner iterations, Gram 153.164 s,
+solve 184.652 s, internal total 339.812 s, and 531.482 s including direct field
+evaluation and adapter work. The result is preserved in the candidate results
+directory. This establishes a working native image path, not three-engine
+agreement. The FEM trial exposed two material-law defects:
+
+1. Reduced-A initialized its lower reluctivity bound from the first positive
+   H/B sample and never lowered it. Real initial magnetization curves may have
+   rising secant permeability: Example #7 has initial H/B 354.776115 but a
+   minimum tabulated H/B of 99.032672. Even depth-zero Picard updates were
+   clipped, changing the material law. A small FE regression using that real
+   table fails in all 23 iron entries on the previous implementation.
+2. Mixed Omega bounded permeability by the maximum tabulated secant, but a
+   monotone PCHIP B(H) can have a larger secant between nodes. A regression
+   reaches 2176.768 against a tabulated cap of 2000 and fails on the previous
+   implementation.
+
+Both loops now expand the acceleration envelope to include evaluated material
+targets (and Reduced-A's supplied warm state). Thus a constitutive fixed point
+is not excluded by an assumed monotonic secant range, and depth-zero remains
+the actual convex Picard update. The generic Anderson bounds API is unchanged.
+The invalid FEM trials were stopped; their intermediate fields are not accepted
+as comparison results. New-wheel three-engine validation is still required.
