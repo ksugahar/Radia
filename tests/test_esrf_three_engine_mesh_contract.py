@@ -67,7 +67,7 @@ def test_hybrid_undulator_three_engine_mesh_keeps_pm_as_given_source():
     }
 
 
-def test_hybrid_reflection_digest_is_compact_and_preserves_material_and_parity():
+def test_hybrid_reflection_signature_preserves_material_and_parity():
     builder = _builder_module()
     upper = np.asarray(
         [
@@ -79,11 +79,11 @@ def test_hybrid_reflection_digest_is_compact_and_preserves_material_and_parity()
     )
     lower = upper.copy()
     lower[:, 2] *= -1.0
-    direct = builder._reflection_element_digest("iron", upper, reflected=False)
-    reflected = builder._reflection_element_digest("iron", lower, reflected=True)
+    direct = builder._reflection_element_signature("iron", upper, reflected=False)
+    reflected = builder._reflection_element_signature("iron", lower, reflected=True)
     assert direct == reflected
-    assert len(direct) == 32
-    assert direct != builder._reflection_element_digest("air", upper, reflected=False)
+    assert len(direct) == len("iron") + 1 + upper.size * 8
+    assert direct != builder._reflection_element_signature("air", upper, reflected=False)
 
 
 def test_hybrid_undulator_journal_preserves_cubit_and_kelvin_contract(tmp_path):
