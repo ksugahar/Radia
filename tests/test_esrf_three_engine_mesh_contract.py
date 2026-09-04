@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -23,6 +24,9 @@ COIL_YOKE_BUILDER_PATH = (
 )
 COIL_YOKE_RUNNER_PATH = (
     ROOT / "validation_test" / "esrf_three_engine" / "run_coil_yoke_three_engine.py"
+)
+COIL_YOKE_CONTRACT_PATH = (
+    ROOT / "validation_test" / "esrf_three_engine" / "esrf_coil_yoke.py"
 )
 
 
@@ -51,6 +55,18 @@ def _coil_yoke_builder_module():
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _coil_yoke_contract_module():
+    spec = importlib.util.spec_from_file_location(
+        "_esrf_coil_yoke_contract", COIL_YOKE_CONTRACT_PATH
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -212,3 +228,27 @@ def test_coil_yoke_runner_keeps_one_coil_source_and_three_required_engines():
     assert "--hdiv-image" in text
     assert "image=options.hdiv_image" in text
     assert "hdiv_image=options.hdiv_image" in text
+    assert "observation_volume_quadrature" in text
+    assert "average_observation_field" in text
+    assert '"tensor_gauss_2x2x2"' in text
+    assert '"source_potential_contract": "total_hodge"' in text
+    assert '"linear_solver": options.reduced_a_solver' in text
+    shared = (
+        ROOT / "validation_test" / "c_type_three_engine" / "run_three_engine.py"
+    ).read_text(encoding="utf-8")
+    assert '"hmat_stats": dict(result.get("hmat_stats") or {})' in shared
+    assert '"charge_gram_wall_s"' in shared
+
+
+def test_coil_yoke_observation_volume_average_preserves_affine_fields():
+    helper = _coil_yoke_contract_module()
+    centres, samples = helper.observation_volume_quadrature(7, half_width_m=2.0e-5)
+    assert samples.shape == (8 * len(centres), 3)
+    affine = np.column_stack(
+        (2.0 * samples[:, 0] - samples[:, 1], samples[:, 2], 1.0 + samples[:, 0])
+    )
+    averaged = helper.average_observation_field(affine, len(centres))
+    expected = np.column_stack(
+        (2.0 * centres[:, 0] - centres[:, 1], centres[:, 2], 1.0 + centres[:, 0])
+    )
+    np.testing.assert_allclose(averaged, expected, atol=1.0e-15, rtol=0.0)
