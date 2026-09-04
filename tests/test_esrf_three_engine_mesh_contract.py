@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -254,3 +256,124 @@ def test_coil_yoke_observation_volume_average_preserves_affine_fields():
         (2.0 * centres[:, 0] - centres[:, 1], centres[:, 2], 1.0 + centres[:, 0])
     )
     np.testing.assert_allclose(averaged, expected, atol=1.0e-15, rtol=0.0)
+
+
+def _coil_yoke_runner_module(monkeypatch):
+    monkeypatch.syspath_prepend(str(COIL_YOKE_RUNNER_PATH.parent))
+    spec = importlib.util.spec_from_file_location(
+        "_esrf_coil_yoke_runner", COIL_YOKE_RUNNER_PATH
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _converged_diagnostics(converged=True):
+    return {
+        "formulation": "test",
+        "nonlinear": True,
+        "nonlinear_stats": {"converged": converged, "iterations": 7},
+    }
+
+
+def test_coil_yoke_runner_declares_picard_state_and_anderson_controls():
+    text = COIL_YOKE_RUNNER_PATH.read_text(encoding="utf-8")
+    assert "--mixed-anderson-depth" in text
+    assert "--reduced-a-anderson-depth" in text
+    assert "--mixed-relaxation" in text
+    assert "MixedOmegaPicardNotConverged" in text
+    assert 'CHECKPOINT_SCHEMA = "radia.validation.esrf-coil-yoke-checkpoint.v3"' in text
+    assert 'STATE_SCHEMA = "radia.validation.esrf-coil-yoke-picard-state.v1"' in text
+    assert "_write_state(" in text
+    assert "_read_state(" in text
+    # The iteration cap is provenance, never checkpoint identity.
+    common = text.split("common = _checkpoint_contract(", 1)[1].split(")", 1)[0]
+    assert "nonlinear_maximum_iterations" not in common
+    assert '"nonlinear_maximum_iterations": iteration_caps' in text
+    shared = (
+        ROOT / "validation_test" / "c_type_three_engine" / "run_three_engine.py"
+    ).read_text(encoding="utf-8")
+    assert "anderson_depth=int(anderson_depth)" in shared
+    assert "nonlinear_mu_r_initial=mu_r_initial" in shared
+    assert "nu_initial=nu_initial" in shared
+
+
+def test_coil_yoke_checkpoint_reader_accepts_only_converged_matching_results(tmp_path, monkeypatch):
+    runner = _coil_yoke_runner_module(monkeypatch)
+    contract = runner._checkpoint_contract(
+        case=7, nonlinear_tolerance=2.0e-5, engine="reduced_a",
+        engine_settings={"linear_solver": "direct", "relaxation": 0.1})
+    field = np.arange(6.0).reshape(2, 3)
+    path = tmp_path / "run.reduced_a.checkpoint.json"
+
+    runner._write_checkpoint(path, contract, field, _converged_diagnostics(),
+                             {"nonlinear_maximum_iterations": 80})
+    stored = json.loads(path.read_text(encoding="utf-8"))
+    assert stored["schema"] == runner.CHECKPOINT_SCHEMA
+    assert stored["provenance"]["nonlinear_maximum_iterations"] == 80
+    resumed_field, resumed_diagnostics = runner._read_checkpoint(path, contract)
+    np.testing.assert_array_equal(resumed_field, field)
+    assert resumed_diagnostics["nonlinear_stats"]["converged"] is True
+
+    with pytest.raises(RuntimeError, match="contract changed"):
+        runner._read_checkpoint(path, dict(contract, nonlinear_tolerance=1.0e-6))
+    with pytest.raises(RuntimeError, match="non-converged"):
+        runner._write_checkpoint(path, contract, field, _converged_diagnostics(False), {})
+
+    # A v2 checkpoint carried the cap in its identity; a converged one still resumes.
+    legacy = tmp_path / "legacy.reduced_a.checkpoint.json"
+    legacy_contract = {**contract, "nonlinear_maximum_iterations": 80,
+                       "engine_settings": {**contract["engine_settings"],
+                                           "nonlinear_maximum_iterations": 80}}
+    legacy.write_text(json.dumps({
+        "schema": "radia.validation.esrf-coil-yoke-checkpoint.v2",
+        "contract": legacy_contract,
+        "field_T": field.tolist(),
+        "diagnostics": _converged_diagnostics(),
+    }), encoding="utf-8")
+    resumed_field, _ = runner._read_checkpoint(legacy, contract)
+    np.testing.assert_array_equal(resumed_field, field)
+    # ... but a non-converged v2 result is refused instead of reused.
+    legacy.write_text(json.dumps({
+        "schema": "radia.validation.esrf-coil-yoke-checkpoint.v2",
+        "contract": legacy_contract,
+        "field_T": field.tolist(),
+        "diagnostics": _converged_diagnostics(False),
+    }), encoding="utf-8")
+    with pytest.raises(RuntimeError, match="non-converged"):
+        runner._read_checkpoint(legacy, contract)
+    legacy.write_text(json.dumps({"schema": "unknown", "contract": contract,
+                                  "field_T": [], "diagnostics": {}}), encoding="utf-8")
+    with pytest.raises(RuntimeError, match="unsupported checkpoint schema"):
+        runner._read_checkpoint(legacy, contract)
+    assert runner._read_checkpoint(tmp_path / "missing.json", contract) is None
+
+
+def test_coil_yoke_picard_state_roundtrip_is_explicitly_partial(tmp_path, monkeypatch):
+    runner = _coil_yoke_runner_module(monkeypatch)
+    contract = runner._checkpoint_contract(
+        case=6, engine="mixed_total_reduced_omega",
+        engine_settings={"relaxation": 0.3, "anderson_depth": 2})
+    stats = {
+        "iterations": 80, "converged": False, "relative_B_change": 9.03e-5,
+        "contraction_rate_estimate": 0.97,
+        "element_numbers": [3, 5, 8], "mu_r_elements": [900.0, 12.5, 1.0],
+        "history": [{"iteration": 1}, {"iteration": 2, "relative_B_change": 0.5}],
+    }
+    state = runner._picard_state("mixed_total_reduced_omega", stats, "mu_r_elements")
+    assert state["mu_r_elements"] == [900.0, 12.5, 1.0]
+    assert state["element_numbers"] == [3, 5, 8]
+    assert state["iterations"] == 80
+    assert state["resumed_iterations"] == 0
+    path = tmp_path / "run.mixed_total_reduced_omega.state.json"
+    runner._write_state(path, contract, state, {"nonlinear_maximum_iterations": 80})
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload["schema"] == runner.STATE_SCHEMA
+    assert payload["converged"] is False
+    assert runner._read_state(path, contract) == state
+    with pytest.raises(RuntimeError, match="state contract changed"):
+        runner._read_state(path, dict(contract, engine="reduced_a"))
+    assert runner._read_state(tmp_path / "missing.json", contract) is None
