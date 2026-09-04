@@ -152,9 +152,10 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     assert "axifem.q2_magnetic_element_matrices" in contract["command_names"]
     # _ChargeGramHMatrix.charge_sigma (the sigma-normalization diagnostic
     # from the roundoff-amplification fix) is EXCLUDED with a reason, and
-    # exclusions leave the relevant surface; cyclic image setup expands the
-    # covered stateful surface to 126 entries, including field-gradient and
-    # configured directional-Schur and shape-derivative bindings.
+    # exclusions leave the relevant surface. The raw Rayleigh/leaf diagnostics
+    # and bounded exact-dense fallback are private validation aids, while cyclic
+    # image setup expands the covered stateful surface to 126 entries, including
+    # field-gradient and configured directional-Schur/shape-derivative bindings.
     assert contract["pybind_class_surface_count"] == 126
     assert ("_ChargeGramHMatrix.charge_sigma"
             in contract["pybind_class_exclusions"])
@@ -162,6 +163,13 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
         "_ChargeGramHMatrix._reduce_configured_candidate_directional_schur"
         in contract["pybind_class_exclusions"]
     )
+    for member in (
+        "raw_symmetric_quadratic_form",
+        "symmetric_leaf_quadratics",
+        "build_exact_dense_normalized_gram",
+        "uses_exact_dense_normalized_gram",
+    ):
+        assert f"_ChargeGramHMatrix.{member}" in contract["pybind_class_exclusions"]
     for name in (
         "KelvinRadiaVectorPotential",
         "KelvinRadiaFluxDensity",
