@@ -48,7 +48,7 @@ def three_engine_material_contract() -> dict[str, object]:
         "hdiv_response_mesh": "assets/model.vol",
         "fem_mesh_role": "conforming iron + physical air + Kelvin exterior",
         "coil_source": "shared mesh-free CoilBuilder solid current",
-        "mixed_h1_source_potential": "surface_trace_with_cut_gate",
+        "mixed_h1_source_potential": "total_volume_hodge_with_harmonic_cut",
         "required_boundaries": (
             "iron_air_interface",
             "kelvin_int",

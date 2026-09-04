@@ -201,6 +201,67 @@ def project_source_physical_potential(
     }
 
 
+def project_source_total_hodge(
+        mesh, H_s, total_source_materials, *, order=2, inverse="pardiso",
+        gauge_epsilon=1.0e-12):
+    """Split a linked source inside total-potential materials.
+
+    On a multiply connected iron body a curl-free coil field need not be the
+    gradient of one single-valued scalar.  This volume projection computes
+
+    ``H_s = -grad(Phi_s) + H_harmonic``.
+
+    ``Phi_s`` supplies the reduced/total interface jump and ``H_harmonic``
+    carries the non-exact cohomology class in the total region.  The caller
+    owns the surrounding :class:`ngsolve.TaskManager` region.
+    """
+    names = tuple(str(name) for name in total_source_materials)
+    if not names or len(names) != len(set(names)) or any(not name for name in names):
+        raise ValueError(
+            "total_source_materials must contain unique non-empty names")
+    if int(order) < 1:
+        raise ValueError("order must be positive")
+    if gauge_epsilon <= 0.0 or not math.isfinite(gauge_epsilon):
+        raise ValueError("gauge_epsilon must be positive and finite")
+    actual = {str(name) for name in mesh.GetMaterials()}
+    unknown = sorted(set(names) - actual)
+    if unknown:
+        raise ValueError(
+            "total_source_materials contains mesh materials that are absent: "
+            f"{unknown}"
+        )
+
+    selector = mesh.Materials("|".join(names))
+    fes = Compress(H1(mesh, order=int(order), definedon=selector))
+    potential, test = fes.TnT()
+    d_total = dx(definedon=selector)
+    a_bf = BilinearForm(fes, symmetric=True)
+    a_bf += InnerProduct(grad(potential), grad(test)) * d_total
+    a_bf += float(gauge_epsilon) * potential * test * d_total
+    f_lf = LinearForm(fes)
+    f_lf += -InnerProduct(H_s, grad(test)) * d_total
+    a_bf.Assemble()
+    f_lf.Assemble()
+    potential_gf = GridFunction(fes, name="total_source_potential")
+    potential_gf.vec.data = a_bf.mat.Inverse(
+        fes.FreeDofs(), inverse=inverse) * f_lf.vec
+
+    harmonic_field = H_s + grad(potential_gf)
+    harmonic_norm = float(math.sqrt(Integrate(
+        InnerProduct(harmonic_field, harmonic_field) * d_total, mesh)))
+    source_norm = float(math.sqrt(Integrate(
+        InnerProduct(H_s, H_s) * d_total, mesh)))
+    return {
+        "potential": potential_gf,
+        "harmonic_field": harmonic_field,
+        "fes": fes,
+        "relative_harmonic_norm": harmonic_norm / max(source_norm, 1.0e-300),
+        "harmonic_norm": harmonic_norm,
+        "source_norm": source_norm,
+        "total_source_materials": names,
+    }
+
+
 def project_kelvin_A_source(mesh, A_s_cf, *, order=2):
     """Project a Kelvin-aware source potential into a periodic HCurl space.
 
@@ -435,12 +496,15 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         kelvin_mats=("kelvin",), inverse="pardiso",
         interface_constraint_scale=None, total_dirichlet_cf=None,
         mu_cf=None, kelvin_interface_boundary=None,
-        kelvin_source_potential=None):
+        kelvin_source_potential=None, total_source_h=None,
+        total_source_materials=()):
     """Solve the TOSCA-style mixed total/reduced Omega formulation.
 
-    ``H_s`` is used *only* in ``reduced_materials`` (the source enclosure),
-    where ``H = H_s - grad(phi_reduced)``.  The iron, physical outer air, and
-    Kelvin exterior use a total scalar potential,
+    ``H_s`` is used in ``reduced_materials`` (the source enclosure), where
+    ``H = H_s - grad(phi_reduced)``.  A linked coil may additionally supply
+    ``total_source_h`` on ``total_source_materials``; this is the harmonic
+    remainder of the iron-volume Hodge split and gives
+    ``H = total_source_h - grad(phi_total)`` there.  Other total materials use
     ``H = -grad(phi_total)``.  On ``interface_boundary`` the potentials are
     coupled by the exact source trace
 
@@ -499,6 +563,10 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
             the narrow extension point used by the nonlinear Picard driver;
             callers must not supply a physical-space coefficient in the Kelvin
             material.
+        total_source_h: optional non-exact harmonic source field retained in
+            the total-potential region.
+        total_source_materials: total-region materials on which
+            ``total_source_h`` is defined.  Supply both arguments together.
     """
     reduced_materials = tuple(reduced_materials)
     total_materials = tuple(total_materials)
@@ -529,6 +597,13 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         raise ValueError(
             f"kelvin_interface_boundary={kelvin_interface_boundary!r} is not "
             "a mesh boundary")
+    total_source_materials = tuple(str(name) for name in total_source_materials)
+    if (total_source_h is None) != (not total_source_materials):
+        raise ValueError(
+            "total_source_h and total_source_materials must be supplied together")
+    if not set(total_source_materials) <= total_set:
+        raise ValueError(
+            "total_source_materials must be contained in total_materials")
     if interface_constraint_scale is None:
         # Stiffness entries scale as mu * L; interface trace entries scale as
         # L^2.  This balancing does not alter the constraint, only the saddle
@@ -592,6 +667,10 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
     f_lf = LinearForm(fes)
     f_lf += mu_cf * H_s * grad(test_reduced) * dx(
         definedon=reduced_selector, bonus_intorder=bonus_intorder)
+    if total_source_h is not None:
+        total_source_selector = mesh.Materials("|".join(total_source_materials))
+        f_lf += mu_cf * total_source_h * grad(test_total) * dx(
+            definedon=total_source_selector, bonus_intorder=bonus_intorder)
     f_lf += interface_constraint_scale * test_multiplier * source_potential * d_interface
     if kelvin_interface_selector is not None:
         f_lf += -interface_constraint_scale * test_kelvin_multiplier * (
@@ -615,7 +694,14 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
     kelvin_multiplier_gf = (
         None if fes_kelvin_multiplier is None else solution.components[3])
     H_reduced = H_s - grad(phi_reduced_gf)
-    H_total = -grad(phi_total_gf)
+    zero_h = CoefficientFunction((0.0, 0.0, 0.0))
+    total_source_by_material = mesh.MaterialCF({
+        material: total_source_h
+        if total_source_h is not None and material in total_source_materials
+        else zero_h
+        for material in total_materials
+    })
+    H_total = total_source_by_material - grad(phi_total_gf)
     h_components = []
     for component in range(3):
         values = {
@@ -638,6 +724,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         "H_s": H_s,
         "source_potential": source_potential,
         "kelvin_source_potential": kelvin_source_potential,
+        "total_source_h": total_source_h,
+        "total_source_materials": total_source_materials,
         "H_cf": H_cf,
         "B_cf": mu_cf * H_cf,
     }
@@ -650,7 +738,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
         bonus_intorder=4, kelvin_mats=("kelvin",), inverse="pardiso",
         mu_r_initial=1000.0, tolerance=2.0e-5, max_iterations=80,
         relaxation=0.3, interface_constraint_scale=None,
-        kelvin_interface_boundary=None, kelvin_source_potential=None):
+        kelvin_interface_boundary=None, kelvin_source_potential=None,
+        total_source_h=None, total_source_materials=()):
     """Picard solve for the mixed total/reduced Omega formulation.
 
     The source split and its interface trace stay fixed throughout the
@@ -733,7 +822,9 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
             inverse=inverse, interface_constraint_scale=interface_constraint_scale,
             mu_cf=mixed_mu_cf(),
             kelvin_interface_boundary=kelvin_interface_boundary,
-            kelvin_source_potential=kelvin_source_potential)
+            kelvin_source_potential=kelvin_source_potential,
+            total_source_h=total_source_h,
+            total_source_materials=total_source_materials)
         B_current = np.zeros(len(nonlinear_elements))
         for index, (element_nr, centroid) in enumerate(nonlinear_elements):
             H_value = result["H_cf"](mesh(*centroid))
