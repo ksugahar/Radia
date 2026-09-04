@@ -17,8 +17,8 @@ SPEC.loader.exec_module(release_quad)
 
 def test_release_quad_tracks_the_independent_optuna_version():
     versions = release_quad._read_repo_versions()
-    assert versions["radia-optuna"] == "0.1.5"
-    assert versions["optuna.__version__"] == "0.1.5"
+    assert versions["radia-optuna"] == "0.1.6"
+    assert versions["optuna.__version__"] == "0.1.6"
 
 
 def test_optuna_candidate_requires_the_independent_distribution_workflow():

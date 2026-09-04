@@ -7,6 +7,19 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.52] - 2026-09-04
+
+- CI and packaging: split independently published distributions into
+  change-scoped lanes, keep the normal MCP matrix dependency-light, and retain
+  exhaustive numerical evidence in explicit validation/release gates.
+- runtime: keep Python 3.10 compatibility in grant-writing publication checks,
+  classify its diagnostic tools as read-only, and preserve lazy common-package
+  imports across the 49-server fleet.
+- MATLAB/HDiv: classify native Gram diagnostics explicitly and retain the
+  standalone-MEX and Simulink parity boundaries introduced by this release.
+- presentation: treat Eqnedit64 as an independently published optional backend
+  instead of coupling its build and tests to `radia-mcp.presentation`.
+
 - all servers: adopted the official MATLAB MCP Server's control-plane design
   principles through one fleet runtime contract. Every tool now receives a
   complete four-hint annotation and auditable classification source;

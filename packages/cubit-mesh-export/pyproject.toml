@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cubit-mesh-export"
-version = "0.14.14"
+version = "0.14.15"
 description = "Solver-neutral mesh export from Coreform Cubit: high-order curved .vol/.msh/.bdf, Kelvin transformation, Dirichlet/symmetry label conventions"
 readme = "README.md"
 license = {text = "MIT"}
