@@ -1267,8 +1267,11 @@
             : item[1].trim();
           button.type = "button";
           button.setAttribute("data-tex-literal-ok", "true");
+          /* title only: it becomes the accessible DESCRIPTION while the
+           * visible face stays the accessible NAME.  An aria-label here would
+           * replace that name, so "arg min" would no longer address the key
+           * for a screen reader, for voice control, or for the homepage QA. */
           button.title = description;
-          button.setAttribute("aria-label", description);
           button.addEventListener("mouseenter", function () { showKeyHelp(description); });
           button.addEventListener("focus", function () { showKeyHelp(description); });
           button.addEventListener("mouseleave", function () { clearKeyHelp(description); });
