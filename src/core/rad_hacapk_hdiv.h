@@ -888,8 +888,13 @@ private:
 
     // CURVED HIGH-ORDER (isoparametric P2) mode: m_curved sets m_highorder=true too (the QuadDot/PhiInner path
     // is shared); PhiInner -> PhiAtHO_Curved (always the curved Duffy).  m_cellNodes [n_cell*30] / m_faceNodes
-    // [n_bf*18] hold the P2 high-order nodes; m_gl/m_gw the curved Duffy Gauss rule.  No analytic moments, no
-    // inner-subtraction table, no near/far split (m_ho_far_factor stays 1e30).
+    // [n_bf*18] hold the P2 high-order nodes; m_gl/m_gw the curved Duffy Gauss rule.  No analytic moments and
+    // no inner-subtraction table.  The near/far split IS available: the curved constructor takes the same
+    // low-quad tables as the flat path, so FAR pairs use QuadDotFar (direct) / QuadDotFarImage (image).
+    // Direct host pairs go through QuadBlockHOTet (curved product rule when the hosts do not touch, the
+    // vectorized curved Duffy when they do); image host pairs go through QuadBlockHOTetImage with the
+    // image-aware ImageHostsTouch test, so a mirror or cyclic image is integrated by the same rules as the
+    // corresponding direct pair of the full model.
     bool m_curved = false;
     // HCurl curl-Piola currents are supplied as K(xi)=J(X(xi))*|det dX/dxi|.
     // Their physical volume measures are already folded into K, so both Gram
@@ -1144,6 +1149,11 @@ private:
     mutable std::atomic<long long> m_hoSymBlockHits{0};
     mutable std::atomic<long long> m_hoSymBlockMisses{0};
     mutable std::atomic<long long> m_hoSymBlockClears{0};
+    // Image (IMA mirror / cyclic) entry dispatch profile of the high-order TET Gram: how many (entry, image)
+    // terms took the cheap far rule, the host-block rule, or the per-entry scalar fold.
+    mutable std::atomic<long long> m_hoImageFarEntries{0};
+    mutable std::atomic<long long> m_hoImageBlockEntries{0};
+    mutable std::atomic<long long> m_hoImageScalarEntries{0};
     // QuadBlockHex dispatch profile: block counts + wall nanoseconds per branch (affine near product /
     // affine far product / distorted-pair far product / general graded path split by host proximity).
     // Always accumulated -- a relaxed fetch_add per BLOCK is negligible against the block quadrature.
@@ -1305,7 +1315,19 @@ private:
     void PhiInnerHOCurvedHostVec(int kind, int host, const double p[3],
                                  const std::vector<int>& charges, double* values) const;
     bool CurvedHostsTouch(int kindA, int hostA, int kindB, int hostB) const;
-    std::vector<double> QuadBlockHOCurvedDirect(int kindT, int hostT, int kindS, int hostS) const;
+    // Image-aware touch test for the block rules: does the IMAGE T_img(S) share a vertex / edge / face with
+    // the target host T?  S's corner vertices are mapped FORWARD by the image transform and matched against
+    // T's corners by coordinates, so mirror-fixed vertices (a cut face lying on the plane) and
+    // rotation-identified sector vertices are both found -- the vertex-id test of CurvedHostsTouch sees
+    // neither.  img == 0 delegates to CurvedHostsTouch.  The criterion itself is the direct one (>= 2 shared
+    // corners, or one shared corner when a boundary-face charge participates).
+    bool ImageHostsTouch(int kindT, int hostT, int kindS, int hostS, int img) const;
+    bool IsMirrorImage(int img) const;                        // img > 0 with no rotation angle (an involution)
+    bool ImageFarPair(int a, int b, int img) const;           // |T^-1 c_a - c_b| > m_ho_far_factor*(size_a+size_b)
+    double QuadDotFarImage(int tgt, int src, int img) const;  // QuadDotFar with tgt's low outer points mapped by T^-1
+    static bool HOTetImageFarEnabled();                       // RADIA_HDIV_DISABLE_HO_IMAGE_FAR (diagnostic A/B switch)
+    std::vector<double> QuadBlockHOCurvedDirect(int kindT, int hostT, int kindS, int hostS,
+                                                int img = 0) const;
     std::vector<double> QuadBlockHOTet(int kindT, int hostT, int kindS, int hostS) const;
     std::vector<double> QuadBlockHOTetImage(
         int kindT, int hostT, int kindS, int hostS, int img) const;
