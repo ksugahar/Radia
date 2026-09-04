@@ -78,3 +78,18 @@ def test_retired_optimization_adapters_are_absent():
         REPO_ROOT / "src" / "radia" / "esim_hantila.py",
     ]
     assert all(not path.exists() for path in retired)
+
+
+def test_legacy_ih_quality_skill_routes_only_to_simulink():
+    skill = (
+        REPO_ROOT / ".agents" / "skills" / "radia-ih-panel-quality"
+        / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    normalized = " ".join(skill.split())
+
+    assert "simulink-app-health" in normalized
+    assert "IHDesignSpec" in normalized
+    assert "official MathWorks model lane" in normalized
+    assert "Do not recreate `src/radia/radia_ih.py`" in normalized
+    assert "tests/panels/test_ih_panel_qt.py" not in normalized
+    assert "panel-qt-test" not in normalized
