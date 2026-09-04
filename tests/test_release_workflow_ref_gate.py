@@ -4,7 +4,6 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 RELEASE_WORKFLOWS=(
     ROOT/".github"/"workflows"/"release.yml",
-    ROOT/".github"/"workflows"/"release-radia-mcp.yml",
     ROOT/".github"/"workflows"/"release-cubit-mesh-export.yml",
 )
 OPTUNA_RELEASE_WORKFLOW=(
@@ -21,11 +20,6 @@ PACKAGE_CI_CONTEXTS=(
         ROOT/".github"/"workflows"/"build-test.yml",
         "radia.ci-release-context.v1",
         "ci-release-context",
-    ),
-    (
-        ROOT/".github"/"workflows"/"radia-mcp-matrix.yml",
-        "radia-mcp.ci-release-context.v1",
-        "radia-mcp-ci-release-context",
     ),
     (
         ROOT/".github"/"workflows"/"cubit-mesh-export.yml",
@@ -101,6 +95,21 @@ def test_pypi_release_jobs_require_the_triggering_ci_to_be_a_tag_run():
         assert 'context.get("release_tags")' in workflow
         assert "if: steps.ref_check.outputs.eligible == 'true'" in workflow
         assert "run-id: ${{ github.event.workflow_run.id }}" in workflow
+
+
+def test_radia_mcp_publishes_only_from_its_successful_tag_ci():
+    workflow = (ROOT / ".github" / "workflows" / "radia-mcp-matrix.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "workflow_run:" not in workflow
+    assert "release-radia-mcp.yml" not in workflow
+    assert "radia-mcp-ci-release-context" not in workflow
+    assert "needs: [scope, selftest]" in workflow
+    assert "github.ref_type == 'tag'" in workflow
+    assert "startsWith(github.ref_name, 'radia-mcp-v')" in workflow
+    assert "Download wheel built by this tag CI" in workflow
+    assert "${GITHUB_REF_NAME#radia-mcp-v}" in workflow
+    assert "pypa/gh-action-pypi-publish@release/v1" in workflow
 
 
 def test_optuna_manual_release_selects_one_fully_successful_ci_run():
