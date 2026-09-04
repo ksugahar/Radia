@@ -1200,6 +1200,14 @@ Markdown, TeX, or e-Rad. Do not repair a discrepancy by changing whichever
 document is easiest; report the delta, then update every derivative from the
 declared source. Use `grant_writing_budget_source_consistency_check` for exact
 reconciliation in thousands of yen. Persuasive prose is never numeric truth.
+Do not stop after totals agree. A repeated e-Rad detail label can remain stale
+even when its amount and the prose total are correct. For every fiscal year,
+compare the category, item wording, quantity/unit-price equation, and amount
+against the canonical ledger. Recompute any expression such as hours times
+unit price, and treat a description/amount mismatch as a submission blocker.
+When e-Rad cannot export a row ledger directly, transcribe its displayed detail
+rows to a comparison CSV and run the same source-consistency check; do not infer
+the rows from the narrative total.
 
 最大費目が何かを明記し、それが研究の中心的な実験・検証行為と一致することを
 説明する。旅費が最大なら、一般的な学会参加ではなく、誰が何を再実行・変更・
@@ -1755,6 +1763,17 @@ example, or evidence unit elsewhere. An approximate addition budget from a
 reviewer is a planning target, never permission to drop an actor, object,
 function, or action. The adjacent-reviewer diagnostic reports
 `research_platform_role_chain_incomplete` when this chain is missing.
+
+In the concluding sentence of a capability section, a label such as "public
+change" or "MCP operation" is not yet evidence. It does not tell the reviewer
+whether the work is planned or complete, what was changed or executed, or where
+the result can be inspected. Preserve the number of claims and replace each
+abstract label with an observable record: actor, object, completed operation,
+count or bounded condition where available, and destination artifact or
+execution result. For example, an incorporated set of build/CI changes and an
+MCP connection/execution record are stronger than generic change and operation
+nouns. `grant_writing_adjacent_reviewer_readability_check` reports
+`feasibility_evidence_not_observable` for the narrow generic forms.
 
 The integrated health report also runs the non-scoring
 `grant_writing_reviewer_momentum_check(text)`. Readability and reviewer
