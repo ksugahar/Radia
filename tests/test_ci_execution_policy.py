@@ -277,3 +277,22 @@ def test_policy_twins_define_the_same_compute_host_routing():
     ):
         assert stale not in agents
         assert stale not in claude
+
+
+def test_agent_policies_stay_compact_and_share_one_policy_body():
+    agents_path = ROOT / "AGENTS.md"
+    claude_path = ROOT / "CLAUDE.md"
+    agents = agents_path.read_text(encoding="utf-8").splitlines()
+    claude = claude_path.read_text(encoding="utf-8").splitlines()
+
+    assert agents[0] == "# Codex - Radia Project Policy"
+    assert claude[0] == "# Claude Code - Radia Project Policy"
+    assert agents[1:] == claude[1:]
+    assert len(agents) < 300
+    assert agents_path.stat().st_size < 20_000
+    assert claude_path.stat().st_size < 20_000
+
+    policy = "\n".join(agents)
+    assert "Historical investigations remain in Git history" in policy
+    assert "Do not expand this file into a second manual" in policy
+    assert "packages/radia-mcp/src/radia_mcp/**/knowledge/" in policy
