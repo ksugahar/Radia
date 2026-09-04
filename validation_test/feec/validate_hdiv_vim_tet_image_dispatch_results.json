@@ -1,0 +1,262 @@
+{
+  "schema": "radia.validation.hdiv-vim-tet-image-dispatch.v1",
+  "generated_at_utc": "2026-09-04T22:07:52.588080+00:00",
+  "hostname": "lab",
+  "timing_role": "relative same-host smoke; decision-grade timing belongs on idle mdx/hibino",
+  "radia_version": "4.95.81",
+  "ngsolve_version": "6.2.2606",
+  "python_version": "3.12.10",
+  "platform": "Windows-2022Server-10.0.20348-SP0",
+  "image": "-x-y",
+  "mu_r": 100.0,
+  "quadrupole_gradient_A_per_m2": 10000.0,
+  "gram_eps": 1e-12,
+  "gates": {
+    "symmetry": 1e-12,
+    "on_plane_residue": 1e-10,
+    "normalized_min_eigenvalue": -1e-09,
+    "physics_flat_box": 1e-08,
+    "physics_curved_sphere": 0.03,
+    "legacy_field_agreement": 0.002
+  },
+  "legacy_environment": {
+    "RADIA_HDIV_DISABLE_HO_IMAGE_BLOCK": "1",
+    "RADIA_HDIV_DISABLE_HO_IMAGE_FAR": "1"
+  },
+  "observation_points_m": [
+    [
+      1.5,
+      0.5,
+      0.2
+    ],
+    [
+      -1.5,
+      0.5,
+      0.2
+    ],
+    [
+      0.5,
+      -1.5,
+      0.2
+    ],
+    [
+      -0.5,
+      -1.5,
+      -0.2
+    ],
+    [
+      1.2,
+      1.2,
+      0.5
+    ],
+    [
+      -1.2,
+      -1.2,
+      -0.5
+    ],
+    [
+      0.3,
+      0.3,
+      1.6
+    ],
+    [
+      -0.3,
+      0.3,
+      -1.6
+    ]
+  ],
+  "cases": [
+    {
+      "geometry": "flat_box",
+      "order": 1,
+      "maxh": 0.5,
+      "n_el_reduced": 76,
+      "n_el_full": 304,
+      "n_charge": 280,
+      "ndof": 558,
+      "symmetry": 0.0,
+      "on_plane_charge_count": 84,
+      "on_plane_residue": 3.3509873872598768e-15,
+      "normalized_min_eigenvalue": -2.9291224929673386e-16,
+      "normalized_max_eigenvalue": 16.45033266809183,
+      "raw_quadratic_form_at_min_vector": -1.3950919266628186e-20,
+      "hmat_quadratic_form_at_min_vector": -1.3950919266628204e-20,
+      "legacy_normalized_min_eigenvalue": -9.975967428588972e-10,
+      "physics_reduced_vs_full": 6.353931493011836e-15,
+      "demag_reduced": 0.11878232047265547,
+      "demag_full": 0.333444254107903,
+      "legacy_entry_delta_max": 1.1774162619598041e-07,
+      "legacy_entry_delta_p99": 1.6842362628838407e-08,
+      "legacy_field_agreement": 8.421569469491542e-08,
+      "build_wall_s_new": 0.38060199999745237,
+      "build_wall_s_legacy": 0.5164170000061858,
+      "build_speedup": 1.3568425809891766,
+      "image_dispatch_counters": {
+        "ho_image_far_entries": 64760.0,
+        "ho_image_block_entries": 0.0,
+        "ho_image_scalar_entries": 71911.0
+      },
+      "solve_iters_reduced": 30,
+      "solve_iters_full": 30,
+      "checks": {
+        "symmetry": true,
+        "on_plane_residue": true,
+        "normalized_min_eigenvalue": true,
+        "raw_form_sign": true,
+        "physics": true,
+        "legacy_field_agreement": true,
+        "block_or_far_used": true
+      },
+      "passed": true
+    },
+    {
+      "geometry": "flat_box",
+      "order": 2,
+      "maxh": 0.5,
+      "n_el_reduced": 76,
+      "n_el_full": 304,
+      "n_charge": 712,
+      "ndof": 1572,
+      "symmetry": 0.0,
+      "on_plane_charge_count": 168,
+      "on_plane_residue": 5.493660451171644e-15,
+      "normalized_min_eigenvalue": -4.606078866229151e-17,
+      "normalized_max_eigenvalue": 43.80046928357013,
+      "raw_quadratic_form_at_min_vector": -1.4637970764652909e-22,
+      "hmat_quadratic_form_at_min_vector": -1.4637970764652906e-22,
+      "legacy_normalized_min_eigenvalue": -3.832857510717883e-09,
+      "physics_reduced_vs_full": 1.0977847535131095e-12,
+      "demag_reduced": 0.11847176527773345,
+      "demag_full": 0.33334320360115716,
+      "legacy_entry_delta_max": 1.5019227731285527e-07,
+      "legacy_entry_delta_p99": 2.373600518860856e-08,
+      "legacy_field_agreement": 1.5573123086217447e-06,
+      "build_wall_s_new": 2.7157579000049736,
+      "build_wall_s_legacy": 29.677328000005218,
+      "build_speedup": 10.92782534111412,
+      "image_dispatch_counters": {
+        "ho_image_far_entries": 355868.0,
+        "ho_image_block_entries": 458212.0,
+        "ho_image_scalar_entries": 0.0
+      },
+      "solve_iters_reduced": 33,
+      "solve_iters_full": 33,
+      "checks": {
+        "symmetry": true,
+        "on_plane_residue": true,
+        "normalized_min_eigenvalue": true,
+        "raw_form_sign": true,
+        "physics": true,
+        "legacy_field_agreement": true,
+        "block_or_far_used": true
+      },
+      "passed": true
+    },
+    {
+      "geometry": "curved_sphere",
+      "order": 1,
+      "maxh": 0.5,
+      "n_el_reduced": 45,
+      "n_el_full": 107,
+      "n_charge": 195,
+      "ndof": 345,
+      "symmetry": 0.0,
+      "on_plane_charge_count": 72,
+      "on_plane_residue": 8.503118440019604e-16,
+      "normalized_min_eigenvalue": -5.870712099687478e-17,
+      "normalized_max_eigenvalue": 11.796135203000382,
+      "raw_quadratic_form_at_min_vector": 9.195371396974948e-22,
+      "hmat_quadratic_form_at_min_vector": 6.849766041749753e-22,
+      "legacy_normalized_min_eigenvalue": -1.3035297386495604e-07,
+      "physics_reduced_vs_full": 0.0005280605139776826,
+      "demag_reduced": 0.10453087166464727,
+      "demag_full": 0.3333658657770014,
+      "legacy_entry_delta_max": 6.6874252178851325e-06,
+      "legacy_entry_delta_p99": 1.1847566087218453e-06,
+      "legacy_field_agreement": 3.7500710016541027e-07,
+      "build_wall_s_new": 1.7107303000011598,
+      "build_wall_s_legacy": 26.31129659999715,
+      "build_speedup": 15.380154662590188,
+      "image_dispatch_counters": {
+        "ho_image_far_entries": 19838.0,
+        "ho_image_block_entries": 53263.0,
+        "ho_image_scalar_entries": 0.0
+      },
+      "solve_iters_reduced": 37,
+      "solve_iters_full": 71,
+      "checks": {
+        "symmetry": true,
+        "on_plane_residue": true,
+        "normalized_min_eigenvalue": true,
+        "raw_form_sign": true,
+        "physics": true,
+        "legacy_field_agreement": true,
+        "block_or_far_used": true
+      },
+      "passed": true
+    },
+    {
+      "geometry": "curved_sphere",
+      "order": 2,
+      "maxh": 0.5,
+      "n_el_reduced": 45,
+      "n_el_full": 107,
+      "n_charge": 480,
+      "ndof": 960,
+      "symmetry": 4.293133052591553e-18,
+      "on_plane_charge_count": 144,
+      "on_plane_residue": 8.14356484343071e-15,
+      "normalized_min_eigenvalue": -9.484978841768358e-18,
+      "normalized_max_eigenvalue": 30.066011410863915,
+      "raw_quadratic_form_at_min_vector": -1.5793327493129213e-19,
+      "hmat_quadratic_form_at_min_vector": -1.5488708731114962e-19,
+      "legacy_normalized_min_eigenvalue": -4.901926840814867e-09,
+      "physics_reduced_vs_full": 0.0002398319694632067,
+      "demag_reduced": 0.10478846021770605,
+      "demag_full": 0.33343618212419146,
+      "legacy_entry_delta_max": 3.8413491740767556e-07,
+      "legacy_entry_delta_p99": 6.735458997372258e-08,
+      "legacy_field_agreement": 1.5703484830031626e-06,
+      "build_wall_s_new": 7.5738624000005075,
+      "build_wall_s_legacy": 819.7869974999994,
+      "build_speedup": 108.23896107485983,
+      "image_dispatch_counters": {
+        "ho_image_far_entries": 81673.0,
+        "ho_image_block_entries": 283439.0,
+        "ho_image_scalar_entries": 0.0
+      },
+      "solve_iters_reduced": 34,
+      "solve_iters_full": 94,
+      "checks": {
+        "symmetry": true,
+        "on_plane_residue": true,
+        "normalized_min_eigenvalue": true,
+        "raw_form_sign": true,
+        "physics": true,
+        "legacy_field_agreement": true,
+        "block_or_far_used": true
+      },
+      "passed": true
+    }
+  ],
+  "speed": [
+    {
+      "order": 1,
+      "maxh": 0.3,
+      "n_el": 150,
+      "n_charge": 564,
+      "build_wall_s_new": 5.314927799998259,
+      "build_wall_s_legacy": 164.419753999995,
+      "hmat_build_time_new": 4.9420533,
+      "hmat_build_time_legacy": 162.2980599,
+      "compression": 1.0,
+      "image_dispatch_counters": {
+        "ho_image_far_entries": 343471.0,
+        "ho_image_block_entries": 175412.0,
+        "ho_image_scalar_entries": 0.0
+      },
+      "build_speedup": 30.935463319002917
+    }
+  ],
+  "passed": true
+}
