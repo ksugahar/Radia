@@ -799,44 +799,26 @@ PATTERNS: list[dict] = [
     },
     {
         "id": "tools-md-drift-wip-contamination",
-        "title": "docs/TOOLS.md committed out-of-sync with radia_mcp code -- "
-                 "regenerated WITH uncommitted WIP tools, or NOT regenerated "
-                 "after adding tools -- radia-mcp matrix drift gate goes red.",
+        "title": "Retired generated TOOLS.md drift gate captured uncommitted WIP",
         "topics": ["ci", "release", "tools-md", "radia-mcp"],
-        "severity": "high",
+        "severity": "low",
         "first_seen": "2026-06-04",
-        "last_seen": "2026-06-05",
-        "what": "The radia-mcp matrix 'TOOLS.md drift gate' (and the "
-                "self-hosted CI 'Run basic tests' -> tests/mcp_server/"
-                "test_tools_doc.py) fail: committed docs/TOOLS.md != "
-                "gen_tools_doc.py regenerated from the COMMITTED code.  Two "
-                "directions seen 2026-06-04/05: (a) a session regenerated "
-                "TOOLS.md while ANOTHER session's force_validation tool was "
-                "uncommitted WIP, baking a 339/force_validation row into the "
-                "commit while committed code had only 338 (06003d40, 24f13628); "
-                "(b) the SF/FEMM sessions ADDED femm_parity_documentation + "
-                "force_validation + SF topics in committed code but never "
-                "regenerated TOOLS.md, leaving it at the 338 snapshot "
-                "(5c4b0216).",
+        "last_seen": "2026-09-04",
+        "what": "A committed generated inventory repeatedly drifted from the "
+                "actual MCP registry and imported every server during routine "
+                "preflight. The generated file and its CI gate were retired; "
+                "the meta catalog and live tools/list responses now own "
+                "discovery. gen_tools_doc.py remains an ignored local snapshot.",
         "root_cause": "gen_tools_doc.py imports the LIVE radia_mcp packages, so "
-                      "regenerating on a dirty working tree captures UNCOMMITTED "
-                      "tools; conversely, adding a tool without regenerating "
-                      "leaves TOOLS.md behind.  CI regenerates from the clean "
-                      "checked-out commit, so any mismatch with the committed "
-                      "TOOLS.md fails the gate.",
-        "detection": "python tools/ci_preflight.py (TOOLS.md drift gate is "
-                     "WIP-aware: it WARNS when radia_mcp/src has uncommitted "
-                     ".py changes); radia-mcp-matrix.yml 'TOOLS.md drift gate'; "
-                     "tests/mcp_server/test_tools_doc.py.",
-        "prevention": "Regenerate from CLEAN committed code: commit the "
-                      "tool-adding code FIRST then regenerate, OR regenerate in "
-                      "a detached worktree at HEAD (no WIP).  ALWAYS commit the "
-                      "tool code + regenerated docs/TOOLS.md TOGETHER in one "
-                      "commit.  Run `python tools/ci_preflight.py` before push.",
-        "related": ["tools/ci_preflight.py",
-                    "packages/radia-mcp/scripts/gen_tools_doc.py",
-                    ".github/workflows/radia-mcp-matrix.yml",
-                    "tests/mcp_server/test_tools_doc.py"],
+                      "a snapshot mixed runtime registry state with source-tree "
+                      "state and duplicated information already available over "
+                      "the MCP protocol.",
+        "detection": "Use radia_mcp_golden_gate plus affected-server protocol "
+                     "tests to validate the live catalog and tools/list surface.",
+        "prevention": "Do not commit generated tool inventories. Generate the "
+                      "ignored local snapshot only for offline inspection.",
+        "related": ["packages/radia-mcp/scripts/gen_tools_doc.py",
+                    "packages/radia-mcp/src/radia_mcp/meta/server.py"],
     },
     {
         "id": "new-src-module-unclassified-in-parity-manifest",

@@ -1,16 +1,17 @@
-"""Generate docs/TOOLS.md -- single-file inventory of all radia-mcp tools.
+"""Generate a local snapshot of all radia-mcp tools on demand.
 
 radia-mcp ships one MCP server per subpackage listed in
 radia_mcp.meta.catalog (cubit / build123d / radia-ngsolve / gmsh / ih /
 peec / electromagnet / ... -- the count grows over time and is derived
 dynamically below, never hardcoded).  Each has its own FastMCP instance
 and console-script entry point.  This script imports each server module,
-enumerates its tools, and writes a unified markdown inventory so an AI
-agent can grep one file to find any tool across all servers.
+enumerates its tools, and writes a unified Markdown snapshot for offline
+inspection. The live MCP ``tools/list`` response and ``radia_mcp.meta`` catalog
+are authoritative; the generated file is intentionally not version-controlled.
 
 Usage:
-    python scripts/gen_tools_doc.py            # write docs/TOOLS.md
-    python scripts/gen_tools_doc.py --check    # exit 1 if file is stale
+    python scripts/gen_tools_doc.py            # write ignored docs/TOOLS.md
+    python scripts/gen_tools_doc.py --check    # compare an existing snapshot
 """
 from __future__ import annotations
 
@@ -73,10 +74,10 @@ def render() -> str:
     out.append("# radia-mcp Tools Inventory")
     out.append("")
     out.append(
-        "Auto-generated from each server's production `core` "
+        "Local snapshot generated from each server's production `core` "
         "`mcp.list_tools()` via "
-        "`scripts/gen_tools_doc.py`. **Do not edit by hand** — "
-        "regenerate after adding/renaming tools."
+        "`scripts/gen_tools_doc.py`. The live `tools/list` response and "
+        "`radia_mcp.meta` catalog are authoritative."
     )
     out.append("")
     out.append(

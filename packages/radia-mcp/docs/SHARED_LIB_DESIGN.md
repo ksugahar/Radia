@@ -100,8 +100,10 @@ elf + comsol-fork add `radia-mcp>=0.70.0` as a dep and import
   ```
 - Provide a one-shot `tools/sync_vendored.py` script (~30 LOC, stdlib
   only, uses urllib to fetch from GitHub raw).
-- Each repo's CI runs the sync script (or its --check mode) as a
-  drift gate, parallel to radia-mcp's TOOLS.md drift gate.
+- Each consumer repo may run the sync script (or its --check mode) as a
+  narrowly scoped vendored-source drift gate. Radia-mcp itself discovers its
+  tools from the checked meta catalog and live `tools/list`, not a generated
+  Markdown snapshot.
 
 **Why not B (PyPI lib)**: at this scale (3 consumers, 150 LOC), the
 overhead of running a 4th release lifecycle is higher than the
