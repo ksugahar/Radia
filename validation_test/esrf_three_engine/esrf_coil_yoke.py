@@ -10,6 +10,7 @@ same solid-current ``CoilBuilder`` geometry through one Radia object tree.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from itertools import product
 
 import numpy as np
 
@@ -105,6 +106,36 @@ def core_selector(number: int, points: np.ndarray) -> np.ndarray:
     return np.abs(values[:, case.beam_axis]) <= case.core_half_length_m + 1.0e-14
 
 
+def observation_volume_quadrature(
+    number: int, *, half_width_m: float = 2.0e-5
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return a tiny 2x2x2 Gauss cloud around each observation centre.
+
+    ``curl(HCurl)`` and the tangential components of an HDiv field have no
+    unique point value on an internal element face.  Several symmetric ESRF
+    observation centres lie exactly on such faces.  A common microscopic
+    volume average gives every formulation the same well-defined observable
+    without moving the nominal measurement locations.
+    """
+    half_width = float(half_width_m)
+    if not np.isfinite(half_width) or half_width <= 0.0:
+        raise ValueError("half_width_m must be finite and positive")
+    centres = observation_points(number)
+    abscissa = half_width / np.sqrt(3.0)
+    offsets = np.asarray(tuple(product((-abscissa, abscissa), repeat=3)))
+    samples = (centres[:, None, :] + offsets[None, :, :]).reshape(-1, 3)
+    return centres, samples
+
+
+def average_observation_field(values: np.ndarray, centre_count: int) -> np.ndarray:
+    """Collapse an eight-point observation cloud to its volume averages."""
+    field = np.asarray(values, dtype=float)
+    count = int(centre_count)
+    if field.ndim != 2 or field.shape[1] != 3 or field.shape[0] != 8 * count:
+        raise ValueError("values must have shape (8 * centre_count, 3)")
+    return np.mean(field.reshape(count, 8, 3), axis=1)
+
+
 def build_radia_coil_source(number: int) -> tuple[int, dict[str, object]]:
     """Materialize the authoritative CoilBuilder sources once.
 
@@ -157,7 +188,9 @@ def build_radia_coil_source(number: int) -> tuple[int, dict[str, object]]:
 __all__ = [
     "ESRFCoilYokeCase",
     "build_radia_coil_source",
+    "average_observation_field",
     "core_selector",
     "get_case",
     "observation_points",
+    "observation_volume_quadrature",
 ]
