@@ -69,6 +69,17 @@ def test_regular_ci_never_selects_a_lab_runner():
             assert "windows-radia" not in normalized, f"{path.name}: {line}"
             assert "lab" not in normalized, f"{path.name}: {line}"
 
+    signing = (workflows / signing_release).read_text(encoding="utf-8")
+    agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    claude = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    deploy = (
+        ROOT / ".agents" / "skills" / "deploy" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    assert "runs-on: [self-hosted, windows-radia]" in signing
+    assert "sole LAB runner exception" in agents
+    assert "sole LAB runner exception" in claude
+    assert "only LAB runner exception" in " ".join(deploy.split())
+
 
 def test_policy_lint_enforces_the_retired_examples_boundary():
     policy = (ROOT / "tools" / "policy_lint.py").read_text(encoding="utf-8")
@@ -163,6 +174,7 @@ def test_preflight_uses_live_mcp_contracts_without_generated_inventory_gate():
     assert not hasattr(preflight, "gate_tools_md")
     gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
     assert "/packages/radia-mcp/docs/TOOLS.md" in gitignore
+    assert not (ROOT / "packages" / "radia-mcp" / ".gitattributes").exists()
 
 
 def test_active_docs_do_not_restore_generated_catalog_or_old_release_name():
@@ -181,6 +193,14 @@ def test_active_docs_do_not_restore_generated_catalog_or_old_release_name():
 
     release_skill = active_docs[3].read_text(encoding="utf-8")
     assert "do not restore a tracked generated `docs/TOOLS.md` gate" in release_skill
+
+
+def test_release_quad_describes_the_supported_cubit_generation():
+    release_quad = (ROOT / "tools" / "release_quad.py").read_text(
+        encoding="utf-8"
+    )
+    assert "Cubit 2025.12+ -batch" in release_quad
+    assert "Cubit 2025.3 -batch" not in release_quad
 
 
 def test_preflight_git_scope_is_safe_in_an_isolated_worktree(monkeypatch):
@@ -296,3 +316,20 @@ def test_agent_policies_stay_compact_and_share_one_policy_body():
     assert "Historical investigations remain in Git history" in policy
     assert "Do not expand this file into a second manual" in policy
     assert "packages/radia-mcp/src/radia_mcp/**/knowledge/" in policy
+
+
+def test_ngsolve_mcp_install_guidance_matches_native_dependency_pin():
+    knowledge = (
+        ROOT
+        / "packages"
+        / "radia-mcp"
+        / "src"
+        / "radia_mcp"
+        / "radia_ngsolve"
+        / "knowledge"
+        / "ngsolve.py"
+    ).read_text(encoding="utf-8")
+
+    assert "ngsolve==6.2.2606 netgen-mesher==6.2.2606" in knowledge
+    assert "NGSolve 6.2.2606 uses ngsolve-openblas" in knowledge
+    assert "Version 6.2.2604 includes: MKL" not in knowledge
