@@ -2,6 +2,7 @@
 
 import importlib.util
 from pathlib import Path
+from types import SimpleNamespace
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -162,6 +163,44 @@ def test_preflight_uses_live_mcp_contracts_without_generated_inventory_gate():
     assert not hasattr(preflight, "gate_tools_md")
     gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
     assert "/packages/radia-mcp/docs/TOOLS.md" in gitignore
+
+
+def test_active_docs_do_not_restore_generated_catalog_or_old_release_name():
+    active_docs = [
+        ROOT / "README.md",
+        ROOT / "AGENTS.md",
+        ROOT / "CLAUDE.md",
+        ROOT / ".agents" / "skills" / "release-quad" / "SKILL.md",
+        ROOT / ".agents" / "skills" / "verify-deploy" / "SKILL.md",
+    ]
+
+    for path in active_docs:
+        text = path.read_text(encoding="utf-8")
+        assert "[Generated MCP tool catalog]" not in text, path
+        assert "`release-qud`" not in text, path
+
+    release_skill = active_docs[3].read_text(encoding="utf-8")
+    assert "do not restore a tracked generated `docs/TOOLS.md` gate" in release_skill
+
+
+def test_preflight_git_scope_is_safe_in_an_isolated_worktree(monkeypatch):
+    preflight = _preflight_module()
+    commands = []
+
+    def fake_run(command, **_kwargs):
+        commands.append(command)
+        return SimpleNamespace(returncode=0, stdout="README.md\n", stderr="")
+
+    monkeypatch.setattr(preflight.subprocess, "run", fake_run)
+
+    assert preflight._changed_since("HEAD^") == ["README.md"]
+    assert len(commands) == 4
+    for command in commands:
+        assert command[:3] == [
+            "git",
+            "-c",
+            f"safe.directory={preflight.REPO}",
+        ]
 
 
 def test_pre_push_runs_the_unpushed_candidate_on_mdx():
