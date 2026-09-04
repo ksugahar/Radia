@@ -29,6 +29,11 @@ byte-identical to O:. The JIT runner is not installed as a service and is
 removed after the job. The script is resumable after a pushed tag; it never
 deletes or moves a remote tag.
 
+The operator command runs on LAB and requires PowerShell 7, Git, Python, and
+an authenticated GitHub CLI. These are release-workstation dependencies only;
+the Eqnedit64 executable, wheel runtime, and compute hosts do not depend on
+`gh`.
+
 Use `-WhatIf` to build/sign and exercise the complete pre-tag/O: preflight
 without updating O:, creating a tag, or publishing. A release request such as
 "publish 3.0.14" authorizes the ordinary command; do not add `-Confirm:$false`

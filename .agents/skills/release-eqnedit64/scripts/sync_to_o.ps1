@@ -18,6 +18,11 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+$dryRun = [bool]$WhatIf
+# CmdletBinding's caller may set the automatic preference even though this
+# script owns an explicit dry-run switch. Keep staging I/O active so the
+# preflight can hash and verify its temporary copy.
+$WhatIfPreference = $false
 
 if ($PSVersionTable.PSVersion.Major -lt 7) {
     throw 'sync_to_o.ps1 requires PowerShell 7 or newer.'
@@ -30,10 +35,12 @@ foreach ($command in @('git', 'gh')) {
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path
 $headSha = (git -C $repoRoot rev-parse HEAD).Trim()
-$originMainSha = (gh api "repos/$Repository/commits/main" --jq .sha).Trim()
-if ($LASTEXITCODE -ne 0 -or -not $originMainSha) {
+$originMainText = gh api "repos/$Repository/commits/main" --jq .sha
+if ($LASTEXITCODE -ne 0 -or
+    [string]::IsNullOrWhiteSpace([string]$originMainText)) {
     throw 'Could not query the pushed main commit through GitHub.'
 }
+$originMainSha = ([string]$originMainText).Trim().ToLowerInvariant()
 $normalizedSourceSha = $SourceSha.ToLowerInvariant()
 if ($headSha -cne $normalizedSourceSha -or
     $originMainSha -cne $normalizedSourceSha) {
@@ -143,7 +150,7 @@ try {
     [IO.File]::WriteAllText(
         $stageManifest, $manifestJson + "`n", [Text.UTF8Encoding]::new($false))
 
-    if (-not $WhatIf) {
+    if (-not $dryRun) {
         if ($hadDestination) {
             [IO.File]::Copy($fullDestination, $backupExe, $false)
         }
@@ -211,7 +218,7 @@ try {
     }
 
     [pscustomobject]@{
-        Updated = -not $WhatIf
+        Updated = -not $dryRun
         Tag = $Tag
         SourceSha = $normalizedSourceSha
         Destination = $fullDestination
