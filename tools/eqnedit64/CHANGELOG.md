@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Stop the Web prime key from writing a double superscript. A prime is itself
+  a superscript, so pressing it after `a^{2}` produced `a^{2}'`, which MathJax
+  refuses to convert ("Prime causes double exponent: use braces to clarify").
+  The structural editor cannot reach that state because it attaches the prime
+  to its base; the source pane inserts at the caret, so the insertion now
+  carries MathJax's own remedy - an empty group - and only where one is
+  needed. `f'`, `f''`, and a prime after a subscript are unchanged.
+- Describe the palette cell under the cursor in the Web status line, on hover
+  and on keyboard focus, and give every key an `aria-label`. A two-letter face
+  such as `sf` or `tt` says nothing on its own, and the `title` tooltip it
+  relied on does not appear on a touch screen or for a keyboard user. This is
+  the native status bar's behaviour, which the Web edition had not carried
+  over.
 - Give the browser edition its own fast CI job: the Web contract and the
   JavaScript syntax and insertion tests now run on a free ubuntu runner in
   seconds instead of waiting behind the Windows native build. The native job
