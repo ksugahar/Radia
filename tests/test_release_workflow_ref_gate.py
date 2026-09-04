@@ -4,7 +4,6 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 RELEASE_WORKFLOWS=(
     ROOT/".github"/"workflows"/"release.yml",
-    ROOT/".github"/"workflows"/"release-cubit-mesh-export.yml",
 )
 OPTUNA_RELEASE_WORKFLOW=(
     ROOT/".github"/"workflows"/"release-radia-optuna.yml"
@@ -20,11 +19,6 @@ PACKAGE_CI_CONTEXTS=(
         ROOT/".github"/"workflows"/"build-test.yml",
         "radia.ci-release-context.v1",
         "ci-release-context",
-    ),
-    (
-        ROOT/".github"/"workflows"/"cubit-mesh-export.yml",
-        "cubit-mesh-export.ci-release-context.v1",
-        "cubit-mesh-export-ci-release-context",
     ),
 )
 
@@ -109,6 +103,23 @@ def test_radia_mcp_publishes_only_from_its_successful_tag_ci():
     assert "startsWith(github.ref_name, 'radia-mcp-v')" in workflow
     assert "Download wheel built by this tag CI" in workflow
     assert "${GITHUB_REF_NAME#radia-mcp-v}" in workflow
+    assert "pypa/gh-action-pypi-publish@release/v1" in workflow
+
+
+def test_cubit_mesh_export_publishes_only_from_its_successful_tag_ci():
+    workflow = (ROOT / ".github" / "workflows" / "cubit-mesh-export.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "workflow_run:" not in workflow
+    assert "release-cubit-mesh-export.yml" not in workflow
+    assert "cubit-mesh-export-ci-release-context" not in workflow
+    assert "needs: build-test" in workflow
+    assert "github.ref_type == 'tag'" in workflow
+    assert "startsWith(github.ref_name, 'cubit-mesh-export-v')" in workflow
+    assert "Download wheel built by this tag CI" in workflow
+    assert "${GITHUB_REF_NAME#cubit-mesh-export-v}" in workflow
+    assert "cubit_mesh_export.ccm" in workflow
+    assert "cubit_mesh_curver.pyd" in workflow
     assert "pypa/gh-action-pypi-publish@release/v1" in workflow
 
 
