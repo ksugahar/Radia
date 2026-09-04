@@ -15,7 +15,6 @@ comparison with the HDiv response mesh.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import importlib.util
 import json
 import subprocess
@@ -308,16 +307,17 @@ def write_journal(
     return journal, vol
 
 
-def _reflection_element_digest(
+def _reflection_element_signature(
     material: str, points: np.ndarray, *, reflected: bool
 ) -> bytes:
-    """Return a compact, deterministic signature for one linear element hull.
+    """Return an exact, compact signature for one linear element hull.
 
     A full Cubit Q2 mesh can contain millions of volume elements. Retaining a
     nested Python tuple for every element just to test the z-reflection contract
     is needlessly memory intensive. The mesh is already structurally checked by
-    ``check-vol``; this signature records material and rounded corner coordinates
-    in a fixed 32-byte SHA-256 value, so counterpart lookup remains bounded.
+    ``check-vol``; this signature stores the material and rounded corner
+    coordinates in one immutable byte string, so counterpart lookup remains
+    bounded without admitting a digest collision.
     """
     quantized = np.rint(np.asarray(points, dtype=float) * 1.0e14).astype(
         "<i8", copy=False
@@ -325,8 +325,7 @@ def _reflection_element_digest(
     if reflected:
         quantized[:, 2] *= -1
     order = np.lexsort((quantized[:, 2], quantized[:, 1], quantized[:, 0]))
-    payload = material.encode("utf-8") + b"\0" + quantized[order].tobytes()
-    return hashlib.sha256(payload).digest()
+    return material.encode("utf-8") + b"\0" + quantized[order].tobytes()
 
 
 def _element_corner_points(mesh: object, element: object) -> np.ndarray:
@@ -377,14 +376,14 @@ def validate_fem_mesh(path: Path) -> dict[str, object]:
     duplicate_elements = 0
     for element in mesh.Elements(ng.VOL):
         element_count += 1
-        signature = _reflection_element_digest(
+        signature = _reflection_element_signature(
             str(element.mat), _element_corner_points(mesh, element), reflected=False
         )
         duplicate_elements += int(signature in signatures)
         signatures.add(signature)
     missing_elements = 0
     for element in mesh.Elements(ng.VOL):
-        signature = _reflection_element_digest(
+        signature = _reflection_element_signature(
             str(element.mat), _element_corner_points(mesh, element), reflected=True
         )
         missing_elements += int(signature not in signatures)
