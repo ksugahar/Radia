@@ -789,6 +789,7 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
     ambiguous_relation_phrases: list[dict] = []
     applicant_internal_abstractions: list[dict] = []
     vague_readiness_claims: list[dict] = []
+    vague_feasibility_evidence: list[dict] = []
     scope_without_deliverables: list[dict] = []
     takeaways_after_evidence: list[dict] = []
     representation_pattern = re.compile(
@@ -813,6 +814,20 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
     )
     vague_readiness_pattern = re.compile(
         r"(?:本)?(?:助成|研究)?期間前に[^。！？\n]{0,40}準備が整っている"
+    )
+    feasibility_conclusion_pattern = re.compile(
+        r"(?:遂行|実行)可能性は[^。！？\n]{0,220}"
+        r"(?:に基づく|で裏付けられる|を根拠とする)"
+    )
+    abstract_feasibility_evidence_patterns = (
+        ("generic_public_change", re.compile(r"(?:公開|外部)(?:変更|対応|活動)")),
+        (
+            "generic_platform_operation",
+            re.compile(
+                r"(?:MCP|API|CI|リポジトリ|プラットフォーム)"
+                r"(?:の)?(?:運用|活用|利用)"
+            ),
+        ),
     )
     scope_markers = ("必達範囲", "必須範囲", "最低限の達成範囲")
     deliverable_pattern = re.compile(
@@ -883,6 +898,19 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
                 "phrase": readiness_match.group(0),
                 "excerpt": sentence[:240],
             })
+        feasibility_match = feasibility_conclusion_pattern.search(sentence)
+        if feasibility_match:
+            abstract_hits = [
+                {"reason_code": reason_code, "phrase": match.group(0)}
+                for reason_code, pattern in abstract_feasibility_evidence_patterns
+                for match in pattern.finditer(feasibility_match.group(0))
+            ]
+            if abstract_hits:
+                vague_feasibility_evidence.append({
+                    "index": index,
+                    "abstract_evidence": abstract_hits,
+                    "excerpt": sentence[:240],
+                })
         if (
             any(marker in sentence for marker in scope_markers)
             and not deliverable_pattern.search(sentence)
@@ -985,6 +1013,24 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
                 "完了状態を明示し、直前の文に採択・実装・検証等の根拠を置く。"
             ),
             examples=vague_readiness_claims[:5],
+        )
+
+    if vague_feasibility_evidence:
+        first = vague_feasibility_evidence[0]
+        add_risk(
+            "feasibility_evidence_not_observable",
+            first["excerpt"],
+            (
+                "遂行可能性の根拠が『公開変更』『MCP運用』等の抽象名詞に"
+                "留まり、誰が何を完了し、どの成果物又は実行結果に残ったかを"
+                "審査者が確認できない。"
+            ),
+            (
+                "根拠の個数を増やさず、各ラベルを、実施者、対象、完了した操作、"
+                "件数又は条件、反映先・成果物で具体化する。基盤については"
+                "『接続・実行済み』等、実際に成功した行為を示す。"
+            ),
+            examples=vague_feasibility_evidence[:5],
         )
 
     if scope_without_deliverables:
@@ -1144,6 +1190,9 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
                 applicant_internal_abstractions
             ),
             "vague_readiness_status_count": len(vague_readiness_claims),
+            "feasibility_evidence_not_observable_count": len(
+                vague_feasibility_evidence
+            ),
             "required_scope_without_deliverable_count": len(
                 scope_without_deliverables
             ),
@@ -6805,6 +6854,7 @@ def _budget_ledger_rows(path: pathlib.Path, sheet_name: str) -> list[dict]:
     )
 
     rows: list[dict] = []
+    saw_blank_after_ledger = False
     for source_row, row in enumerate(matrix[header_index + 1 :], header_index + 2):
         def cell(column, current_row=row):
             return current_row[column] if column < len(current_row) else None
@@ -6816,9 +6866,26 @@ def _budget_ledger_rows(path: pathlib.Path, sheet_name: str) -> list[dict]:
             "amount": cell(amount_col),
         }
         if all(value is None or str(value).strip() == "" for value in values.values()):
+            if rows:
+                saw_blank_after_ledger = True
             continue
         category = str(values["category"] or "").strip()
         item = re.sub(r"\s+", " ", str(values["item"] or "")).strip()
+        nonempty_cells = [
+            value for value in row if value is not None and str(value).strip() != ""
+        ]
+        # e-Rad workbooks may cache amount-only summary formulas below a blank row.
+        if (
+            rows
+            and saw_blank_after_ledger
+            and not category
+            and (values["year"] is None or str(values["year"]).strip() == "")
+            and not item
+            and len(nonempty_cells) == 1
+            and values["amount"] is not None
+            and str(values["amount"]).strip() != ""
+        ):
+            continue
         if category.casefold() in {"合計", "総計", "total", "grand total"}:
             continue
         if item.casefold() in {"合計", "総計", "total", "grand total"}:
@@ -6859,6 +6926,7 @@ def _budget_ledger_rows(path: pathlib.Path, sheet_name: str) -> list[dict]:
             ),
             "source_row": source_row,
         })
+        saw_blank_after_ledger = False
     return rows
 
 
