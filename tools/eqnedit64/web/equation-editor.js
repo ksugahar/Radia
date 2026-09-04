@@ -8,9 +8,11 @@
  * MathJax に任せる。パレットは「マウスで全記号に届く」規則の縮約版。
  *
  * 操作:
- *   - パレットのボタンでテンプレート・記号を挿入
+ *   - パレットのボタンでテンプレート・記号を挿入（Ctrl+Z で取り消せる）
  *   - 範囲選択して分数などを押すと、選択が最初の空欄に包まれる
  *   - Tab / Shift+Tab で空欄 {} の間を移動
+ *   - Enter は数式の行区切り \\（aligned / matrix / cases の行を増やす）、
+ *     Shift+Enter はソースだけの改行
  *   - 「$$付きでコピー」「equation付きでコピー」で持ち出し
  */
 (function () {
@@ -19,7 +21,7 @@
   /* デプロイごとに上げる。ボタン行の右端に出て、開きっぱなしのタブが
    * 古い版を動かし続けていないかを一目で判別できる（.exe の
    * タイトルバー・ビルドスタンプと同じ教訓）。 */
-  var BUILD = "2026-09-03a";
+  var BUILD = "2026-09-05a";
 
   var PALETTES = [
     {
@@ -40,12 +42,16 @@
         ["lim", "\\lim_{ \\to }", "極限"],
         ["d/dx", "\\frac{\\mathrm{d} {}}{\\mathrm{d} {}}", "常微分"],
         ["∂/∂x", "\\frac{\\partial {}}{\\partial {}}", "偏微分"],
-        ["行列", "\\begin{pmatrix}  &  \\\\  &  \\end{pmatrix}", "2×2行列（丸括弧）"],
-        ["∷", "\\begin{matrix}  &  \\\\  &  \\end{matrix}", "行列（括弧なし）"],
-        ["[∷]", "\\begin{bmatrix}  &  \\\\  &  \\end{bmatrix}", "行列（角括弧）"],
-        ["|∷|", "\\begin{vmatrix}  &  \\\\  &  \\end{vmatrix}", "行列式"],
-        ["場合", "\\begin{cases}  &  \\\\  &  \\end{cases}", "場合分け"],
-        ["整列", "\\begin{aligned}  &=  \\\\  &=  \\end{aligned}", "複数行"]
+        /* 行列と場合分けの各セルは空欄 {} にする。Tab で順に埋められ、
+         * 挿入時にネイティブ版と同じ改行・字下げで整形して表示する。 */
+        ["行列", "\\begin{pmatrix} {} & {} \\\\ {} & {} \\end{pmatrix}", "2×2行列（丸括弧）"],
+        ["∷", "\\begin{matrix} {} & {} \\\\ {} & {} \\end{matrix}", "行列（括弧なし）"],
+        ["[∷]", "\\begin{bmatrix} {} & {} \\\\ {} & {} \\end{bmatrix}", "行列（角括弧）"],
+        ["|∷|", "\\begin{vmatrix} {} & {} \\\\ {} & {} \\end{vmatrix}", "行列式"],
+        ["場合", "\\begin{cases} {} & {} \\\\ {} & {} \\end{cases}", "場合分け"],
+        ["整列", "\\begin{aligned} {} &= {} \\\\ {} &= {} \\end{aligned}", "複数行（Enter でも行が増える）"],
+        ["↑□", "\\overset{}{}", "上側の注記（記号の上に小さく）"],
+        ["↓□", "\\underset{}{}", "下側の注記（記号の下に小さく）"]
       ]
     },
     {
@@ -58,7 +64,10 @@
         ["{ }", "\\left\\{ {} \\right\\}", "波括弧"],
         ["| |", "\\left| {} \\right|", "絶対値"],
         ["‖ ‖", "\\left\\| {} \\right\\|", "ノルム"],
-        ["⟨ ⟩", "\\left\\langle {} \\right\\rangle", "山括弧（内積）"]
+        ["⟨ ⟩", "\\left\\langle {} \\right\\rangle", "山括弧（内積）"],
+        ["⌊ ⌋", "\\left\\lfloor {} \\right\\rfloor", "床関数"],
+        ["⌈ ⌉", "\\left\\lceil {} \\right\\rceil", "天井関数"],
+        ["⟨ | ⟩", "\\left\\langle {} \\middle| {} \\right\\rangle", "ブラケット（\\middle| で仕切る）"]
       ]
     },
     {
@@ -69,7 +78,17 @@
         ["x⃗", "\\vec{}", "ベクトル"],
         ["ẋ", "\\dot{}", "ドット"],
         ["ẍ", "\\ddot{}", "二重ドット"],
+        ["x⃛", "\\dddot{}", "三重ドット"],
         ["ã", "\\tilde{}", "チルダ"],
+        ["x′", "'", "プライム"],
+        ["x̸", "\\cancel{}", "打ち消し線"],
+        ["¯□", "\\overline{}", "上線（伸縮）"],
+        ["_□", "\\underline{}", "下線（伸縮）"],
+        ["⏞□", "\\overbrace{}", "上の水平波括弧"],
+        ["⏟□", "\\underbrace{}", "下の水平波括弧"],
+        ["□→", "\\overrightarrow{}", "上の右向き伸縮矢印"],
+        ["←□", "\\overleftarrow{}", "上の左向き伸縮矢印"],
+        ["□↔", "\\overleftrightarrow{}", "上の両向き伸縮矢印"],
         ["ℝ", "\\mathbb{}", "黒板太字"],
         ["ℰ", "\\mathcal{}", "カリグラフィー体（起電力ℰなど）"],
         ["sf", "\\mathsf{}", "サンセリフ"],
@@ -107,7 +126,20 @@
         ["≡", "\\equiv ", ""], ["≤", "\\leq ", ""], ["≥", "\\geq ", ""],
         ["≠", "\\neq ", ""], ["≪", "\\ll ", "十分小さい"],
         ["≫", "\\gg ", "十分大きい"], ["⊥", "\\perp ", "垂直"],
-        ["∥", "\\parallel ", "平行"], ["∠", "\\angle ", "角・偏角（フェーザ）"]
+        ["∥", "\\parallel ", "平行"], ["∠", "\\angle ", "角・偏角（フェーザ）"],
+        ["∓", "\\mp ", "マイナスプラス"], ["÷", "\\div ", "除算"],
+        ["∗", "\\ast ", "アスタリスク"], ["•", "\\bullet ", "黒丸"],
+        ["⊖", "\\ominus ", "丸マイナス"], ["⊙", "\\odot ", "丸ドット"],
+        ["⋄", "\\diamond ", "ダイヤ演算子"], ["▽", "\\bigtriangledown ", "下向き三角"],
+        ["∖", "\\setminus ", "差集合"], ["\\", "\\backslash ", "バックスラッシュ"],
+        ["†", "\\dagger ", "ダガー（随伴）"], ["‡", "\\ddagger ", "二重ダガー"],
+        ["≺", "\\prec ", "順序が先"], ["≻", "\\succ ", "順序が後"],
+        ["≅", "\\cong ", "合同"], ["∣", "\\mid ", "割り切る・条件付き"],
+        ["‖", "\\Vert ", "二重縦線"], ["⊢", "\\vdash ", "導出される"],
+        ["⊨", "\\models ", "充足する"], ["◁", "\\triangleleft ", "左向き三角"],
+        ["▷", "\\triangleright ", "右向き三角"], ["⊑", "\\sqsubseteq ", "角付き部分集合"],
+        ["⊒", "\\sqsupseteq ", "角付き上位集合"], ["⌢", "\\frown ", "フラウン"],
+        ["⌣", "\\smile ", "スマイル"]
       ]
     },
     {
@@ -118,7 +150,24 @@
         ["∈", "\\in ", ""], ["∉", "\\notin ", ""], ["⊂", "\\subset ", ""],
         ["∪", "\\cup ", ""], ["∩", "\\cap ", ""], ["∀", "\\forall ", ""],
         ["∃", "\\exists ", ""], ["∅", "\\emptyset ", ""],
-        ["∴", "\\therefore ", "ゆえに"], ["∵", "\\because ", "なぜならば"]
+        ["∴", "\\therefore ", "ゆえに"], ["∵", "\\because ", "なぜならば"],
+        ["←", "\\leftarrow ", ""], ["↔", "\\leftrightarrow ", ""],
+        ["↑", "\\uparrow ", ""], ["↓", "\\downarrow ", ""], ["↕", "\\updownarrow ", ""],
+        ["⇐", "\\Leftarrow ", ""], ["⇑", "\\Uparrow ", ""],
+        ["⟹", "\\Longrightarrow ", "長い⇒"], ["⟸", "\\Longleftarrow ", "長い⇐"],
+        ["⟺", "\\Longleftrightarrow ", "長い⇔"],
+        ["↪", "\\hookrightarrow ", "右フック矢印"], ["↩", "\\hookleftarrow ", "左フック矢印"],
+        ["↗", "\\nearrow ", ""], ["↘", "\\searrow ", ""], ["↙", "\\swarrow ", ""], ["↖", "\\nwarrow ", ""],
+        ["⇀", "\\rightharpoonup ", "右上ハープーン"], ["⇁", "\\rightharpoondown ", "右下ハープーン"],
+        ["↼", "\\leftharpoonup ", "左上ハープーン"], ["↽", "\\leftharpoondown ", "左下ハープーン"],
+        ["∋", "\\ni ", "要素として含む"], ["⊃", "\\supset ", ""],
+        ["⊆", "\\subseteq ", ""], ["⊇", "\\supseteq ", ""],
+        ["⊄", "\\not\\subset ", "部分集合でない"],
+        ["⊔", "\\sqcup ", "角付き和"], ["⊓", "\\sqcap ", "角付き共通部分"],
+        ["⋃", "\\bigcup_{}^{}", "大きい和集合"], ["⋂", "\\bigcap_{}^{}", "大きい共通部分"],
+        ["∐", "\\coprod_{}^{}", "余積"],
+        ["¬", "\\neg ", "否定"], ["∨", "\\vee ", "論理和"],
+        ["∄", "\\nexists ", "存在しない"], ["⊤", "\\top ", "真"]
       ]
     },
     {
@@ -145,7 +194,26 @@
         ["∂", "\\partial ", ""], ["∇", "\\nabla ", ""], ["∞", "\\infty ", ""],
         ["ℏ", "\\hbar ", ""], ["°", "^{\\circ} ", "度"],
         ["⋯", "\\cdots ", "横の点"], ["⋮", "\\vdots ", "縦の点"],
-        ["⋱", "\\ddots ", "斜めの点"]
+        ["⋱", "\\ddots ", "斜めの点"], ["…", "\\ldots ", "下寄りの点"],
+        ["ℜ", "\\Re ", "実部（フラクトゥール）"], ["ℑ", "\\Im ", "虚部（フラクトゥール）"],
+        ["ℓ", "\\ell ", "筆記体の l"], ["℧", "\\mho ", "モー（コンダクタンス）"],
+        ["′", "\\prime ", "プライム記号"],
+        ["⌊", "\\lfloor ", ""], ["⌋", "\\rfloor ", ""],
+        ["⌈", "\\lceil ", ""], ["⌉", "\\rceil ", ""]
+      ]
+    },
+    {
+      /* TeX の空白命令。文字幅は TeX 標準（\, = 1/6 em など）。 */
+      label: "空白",
+      items: [
+        ["\\,", "\\, ", "細い空き（1/6 em）"],
+        ["\\:", "\\: ", "中位の空き（2/9 em）"],
+        ["\\;", "\\; ", "広い空き（5/18 em）"],
+        ["\\!", "\\! ", "負の空き（詰める）"],
+        ["quad", "\\quad ", "1 em の空き"],
+        ["qquad", "\\qquad ", "2 em の空き"],
+        ["~", "~", "改行しない空白"],
+        ["\\␣", "\\ ", "通常幅の空白（\\ の後に空白）"]
       ]
     },
     {
@@ -159,7 +227,11 @@
         ["σ", "\\sigma ", ""], ["τ", "\\tau ", ""],
         ["ϕ", "\\phi ", "ファイ（スカラーポテンシャル）"],
         ["φ", "\\varphi ", ""], ["χ", "\\chi ", ""], ["ψ", "\\psi ", ""],
-        ["ω", "\\omega ", ""]
+        ["ω", "\\omega ", ""],
+        ["ϵ", "\\epsilon ", "イプシロン（\\varepsilon とは別字形）"],
+        ["ϑ", "\\vartheta ", "シータ（異体）"], ["ϰ", "\\varkappa ", "カッパ（異体）"],
+        ["ϖ", "\\varpi ", "パイ（異体）"], ["ϱ", "\\varrho ", "ロー（異体）"],
+        ["ς", "\\varsigma ", "シグマ（語末形）"], ["υ", "\\upsilon ", "ウプシロン"]
       ]
     },
     {
@@ -167,7 +239,9 @@
       items: [
         ["Γ", "\\Gamma ", ""], ["Δ", "\\Delta ", ""], ["Θ", "\\Theta ", ""],
         ["Λ", "\\Lambda ", ""], ["Φ", "\\Phi ", "磁束Φなど"],
-        ["Ψ", "\\Psi ", ""], ["Ω", "\\Omega ", ""]
+        ["Ψ", "\\Psi ", ""], ["Ω", "\\Omega ", ""],
+        ["Ξ", "\\Xi ", ""], ["Π", "\\Pi ", ""], ["Σ", "\\Sigma ", ""],
+        ["Υ", "\\Upsilon ", ""]
       ]
     }
   ];
@@ -177,7 +251,7 @@
   var PALETTE_TABS = [
     { id: "basic", label: "基本", palettes: ["構造", "括弧", "装飾"] },
     { id: "analysis", label: "解析", palettes: ["関数", "関係"] },
-    { id: "sets", label: "集合・記号", palettes: ["矢印・集合", "その他"] },
+    { id: "sets", label: "集合・記号", palettes: ["矢印・集合", "その他", "空白"] },
     { id: "geometry", label: "幾何", palettes: ["微分幾何"] },
     { id: "greek", label: "ギリシャ", palettes: ["ギリシャ", "ギリシャ大"] }
   ];
@@ -215,6 +289,8 @@
     "@keyframes eqed-recent-flash { from { background: #8fc9ff; } to { background: #dceeff; } }",
     "@media (prefers-reduced-motion: reduce) { .eqed-recent--flash { animation: none; } }",
     ".eqed-source { width: 100%; box-sizing: border-box; font-family: var(--eqed-source-font); font-size: 0.95rem; padding: 8px 10px; border: 1px solid #cfcfcb; border-radius: 6px; margin-top: 4px; }",
+    /* The native status bar's fifth part: the Tab / Enter / & hint. */
+    ".eqed-hint { font-size: 0.76rem; color: var(--muted, #717170); margin: 2px 0 4px; overflow-wrap: anywhere; }",
     /* Match the native canvas: white ground, sunken frame, top-left anchor. */
     ".eqed-preview { min-height: 5.5em; padding: 12px 14px; overflow-x: auto; background: #fff; border: 1px solid #c9c9c5; border-radius: 4px; box-shadow: inset 1px 1px 3px rgba(0,0,0,0.07); margin: 8px 0; }",
     ".eqed-preview mjx-container[display='true'] { text-align: left !important; margin: 0 !important; }",
@@ -428,6 +504,18 @@
    * native版と同じ inline / 18 pt / large-operator 属性へ正規化する。
    * TeXの構造決定はMathJaxに任せるため、積分はmsubsup、総和は
    * munderoverとなり、native emitterも同じ規則を試験する。 */
+  /* MathJax loads \boldsymbol and \cancel on demand, and until the package
+   * arrives the synchronous tex2mml the Office copy needs throws
+   * "MathJax retry".  Pull both in once at startup so the first copy of a
+   * `\bm` or `\cancel` equation cannot fail on a package that is still in
+   * flight.  Fire and forget: the copy path stays synchronous, which is what
+   * keeps the user gesture alive for the clipboard write. */
+  function warmAutoloadedMacros() {
+    if (!window.MathJax || typeof window.MathJax.tex2mmlPromise !== "function") return;
+    window.MathJax.tex2mmlPromise("\\boldsymbol{x}+\\cancel{x}", { display: false })
+      .catch(function () { /* the sync path reports its own failure */ });
+  }
+
   function officeMathMl(tex) {
     var raw = window.MathJax.tex2mml(
       "\\displaystyle " + mathJaxTex(tex), { display: false });
@@ -589,7 +677,10 @@
   /* 空欄 {} を探して中へ。無ければ null。 */
   function nextHole(text, from, backwards) {
     if (backwards) {
-      for (var i = Math.min(from, text.length - 1) - 2; i >= 0; i--) {
+      /* A caret inside a hole sits at from with "{" at from - 1, so the
+       * previous hole can start no later than from - 2.  Starting from
+       * text.length - 3 (the old bound) skipped a hole at the very end. */
+      for (var i = from - 2; i >= 0; i--) {
         if (text.charAt(i) === "{" && text.charAt(i + 1) === "}") return i + 1;
       }
       return null;
@@ -598,6 +689,339 @@
       if (text.charAt(j) === "{" && text.charAt(j + 1) === "}") return j + 1;
     }
     return null;
+  }
+
+  /* Native GUI_SPEC §3.5 source layout, applied to inserted templates: a
+   * line break after \begin{...}, before \end{...}, and after a row break
+   * \\, with two spaces of indent per environment depth.  Only whitespace
+   * that TeX ignores is touched, so the rendered equation is unchanged.
+   * Text the user typed is never re-flowed under the caret. */
+  function prettyTex(raw) {
+    var out = "";
+    var depth = 0;
+    var lineStart = true;
+    var i = 0;
+    function newline() {
+      out = out.replace(/[ \t]+$/, "") + "\n" + new Array(depth + 1).join("  ");
+      lineStart = true;
+    }
+    while (i < raw.length) {
+      var c = raw.charAt(i);
+      if (c === "\n" || c === "\r" || (lineStart && (c === " " || c === "\t"))) {
+        i += 1;
+        continue;
+      }
+      var close = -1;
+      if (raw.slice(i, i + 5) === "\\end{" && (close = raw.indexOf("}", i)) >= 0) {
+        depth = Math.max(0, depth - 1);
+        if (!lineStart) newline();
+        out += raw.slice(i, close + 1);
+        lineStart = false;
+        i = close + 1;
+        continue;
+      }
+      if (raw.slice(i, i + 7) === "\\begin{" && (close = raw.indexOf("}", i)) >= 0) {
+        if (raw.charAt(close + 1) === "{") {
+          /* \begin{array}{cc}: the column spec stays on the \begin line. */
+          var spec = raw.indexOf("}", close + 1);
+          if (spec >= 0) close = spec;
+        }
+        /* The rule breaks after \begin, not before it, so a nested
+         * environment stays on the line that introduces it. */
+        out += raw.slice(i, close + 1);
+        i = close + 1;
+        depth += 1;
+        newline();
+        continue;
+      }
+      if (c === "\\" && raw.charAt(i + 1) === "\\") {
+        out += "\\\\";
+        i += 2;
+        newline();
+        continue;
+      }
+      if (c === "\\" && i + 1 < raw.length) {
+        /* Keep control symbols such as \{ and \} intact. */
+        out += raw.slice(i, i + 2);
+        lineStart = false;
+        i += 2;
+        continue;
+      }
+      out += c;
+      lineStart = false;
+      i += 1;
+    }
+    return out.replace(/[ \t]+$/, "");
+  }
+
+  /* Row environments: the ones whose \\ means "next row" and whose & means
+   * "next column".  Enter adds rows to these. */
+  var ROW_ENVIRONMENT = /^(aligned|alignedat|gathered|split|cases|dcases|rcases|array|(?:p|b|B|v|V|small)?matrix)$/;
+
+  function environmentToken(text, from) {
+    /* End of a \begin{name} token at from, including an array column spec. */
+    var close = text.indexOf("}", from);
+    if (close < 0) return from;
+    if (text.charAt(close + 1) === "{" && /^\\begin\{array\}/.test(text.slice(from))) {
+      var spec = text.indexOf("}", close + 1);
+      if (spec >= 0) close = spec;
+    }
+    return close + 1;
+  }
+
+  /* Environments open at pos, outermost first.  A position inside a
+   * \begin token counts as the start of that body; inside an \end token it
+   * counts as the end of that body. */
+  function openEnvironments(text, pos) {
+    var token = /\\(begin|end)\{[^}]*\}/g;
+    var stack = [];
+    var match;
+    while ((match = token.exec(text)) !== null) {
+      var from = match.index;
+      if (from >= pos) break;
+      if (match[1] === "begin") {
+        stack.push({
+          name: match[0].slice(7, -1),
+          begin: from,
+          body: environmentToken(text, from)
+        });
+      } else if (pos < from + match[0].length) {
+        break;
+      } else if (stack.length) {
+        stack.pop();
+      }
+    }
+    return stack;
+  }
+
+  /* Index of the \end token that closes env (text.length when unclosed). */
+  function environmentEnd(text, env) {
+    var token = /\\(begin|end)\{[^}]*\}/g;
+    token.lastIndex = env.body;
+    var level = 0;
+    var match;
+    while ((match = token.exec(text)) !== null) {
+      if (match[1] === "begin") level += 1;
+      else if (level === 0) return match.index;
+      else level -= 1;
+    }
+    return text.length;
+  }
+
+  /* The single row environment that makes up the whole source, if any:
+   * Enter outside it (before \begin or after \end) still adds a row to it
+   * instead of nesting a second aligned. */
+  function soleRowEnvironment(text) {
+    var begin = text.indexOf("\\begin{");
+    if (begin < 0 || text.slice(0, begin).trim() !== "") return null;
+    var close = text.indexOf("}", begin);
+    if (close < 0) return null;
+    var env = { name: text.slice(begin + 7, close), begin: begin, body: environmentToken(text, begin) };
+    if (!ROW_ENVIRONMENT.test(env.name)) return null;
+    var end = environmentEnd(text, env);
+    var after = text.indexOf("}", end);
+    if (end >= text.length || after < 0 || text.slice(after + 1).trim() !== "") return null;
+    return env;
+  }
+
+  /* The row of body [bodyStart, bodyEnd) that contains pos: its bounds, the
+   * column (top-level & count before pos) and the brace/environment depth
+   * at pos.  A pos inside a \\ token is moved in front of it. */
+  function rowContext(text, bodyStart, bodyEnd, pos) {
+    var depth = 0;
+    var depthAtPos = null;
+    var rowStart = bodyStart;
+    var rowEnd = bodyEnd;
+    var column = 0;
+    var i = bodyStart;
+    while (i < bodyEnd) {
+      if (depthAtPos === null && i >= pos) depthAtPos = depth;
+      var c = text.charAt(i);
+      if (c === "\\") {
+        if (text.charAt(i + 1) === "\\") {
+          if (i < pos && pos < i + 2) pos = i;
+          if (depth === 0) {
+            if (i + 2 <= pos) {
+              rowStart = i + 2;
+              column = 0;
+            } else {
+              rowEnd = i;
+              break;
+            }
+          }
+          i += 2;
+          continue;
+        }
+        if (text.slice(i, i + 7) === "\\begin{") {
+          depth += 1;
+          i = environmentToken(text, i);
+          continue;
+        }
+        if (text.slice(i, i + 5) === "\\end{") {
+          depth = Math.max(0, depth - 1);
+          var close = text.indexOf("}", i);
+          i = close >= 0 ? close + 1 : i + 5;
+          continue;
+        }
+        i += 2;                        /* \{ \} \& and the first letter of a control word */
+        continue;
+      }
+      if (c === "{") depth += 1;
+      else if (c === "}") depth = Math.max(0, depth - 1);
+      else if (c === "&" && depth === 0 && i < pos) column += 1;
+      i += 1;
+    }
+    if (depthAtPos === null) depthAtPos = depth;
+    var contentStart = rowStart;
+    while (contentStart < rowEnd && /\s/.test(text.charAt(contentStart))) contentStart += 1;
+    var contentEnd = rowEnd;
+    while (contentEnd > contentStart && /\s/.test(text.charAt(contentEnd - 1))) contentEnd -= 1;
+    return {
+      pos: pos,
+      rowStart: rowStart,
+      contentStart: contentStart,
+      contentEnd: contentEnd,
+      column: column,
+      depth: depthAtPos
+    };
+  }
+
+  function wrapInAligned(text, pos) {
+    var row = rowContext(text, 0, text.length, pos);
+    var first;
+    var second;
+    if (row.depth > 0) {
+      /* Enter inside \frac{}{} or ^{} at top level: keep the expression whole
+       * as row one and open an empty row two. */
+      first = text.trim();
+      second = "";
+    } else {
+      first = text.slice(0, row.pos).trim();
+      second = text.slice(row.pos).trim();
+    }
+    var open = "\\begin{aligned}\n  ";
+    var between = " \\\\\n  ";
+    var value = open + (first || "{}") + between + (second || "{}") + "\n\\end{aligned}";
+    return {
+      value: value,
+      caret: open.length + (first || "{}").length + between.length + (second ? 0 : 1)
+    };
+  }
+
+  /* Structural Enter (native GUI_SPEC §3.5), as a pure function like
+   * composeInsertion: the selection is deleted, then
+   *   - in a row environment, the row is split at the caret: the rest of the
+   *     row moves to a new row that keeps the column (leading "& "), and an
+   *     empty row gets a {} hole;
+   *   - inside \frac{}{}, ^{}, \text{} or a nested environment the group is
+   *     never split: an empty {} row is opened after the current row;
+   *   - at top level the whole source is wrapped in aligned;
+   *   - before \begin or after \end of a source that is one row environment,
+   *     an empty first or last row is added instead of nesting a second one. */
+  function composeRowBreak(value, selStart, selEnd) {
+    selStart = Math.max(0, Math.min(selStart, value.length));
+    selEnd = Math.max(selStart, Math.min(selEnd, value.length));
+    var text = value.slice(0, selStart) + value.slice(selEnd);
+    var pos = selStart;
+    var stack = openEnvironments(text, pos);
+    var env = null;
+    var depth = 0;
+    for (var s = stack.length - 1; s >= 0; s--) {
+      if (ROW_ENVIRONMENT.test(stack[s].name)) {
+        env = stack[s];
+        depth = s + 1;
+        break;
+      }
+    }
+    var firstRow = false;
+    if (!env) {
+      env = soleRowEnvironment(text);
+      if (env) {
+        depth = 1;
+        firstRow = pos <= env.begin;
+        pos = firstRow ? env.body : environmentEnd(text, env);
+      }
+    }
+    if (!env) return wrapInAligned(text, pos);
+    var bodyEnd = environmentEnd(text, env);
+    pos = Math.max(env.body, Math.min(pos, bodyEnd));
+    var indent = new Array(depth + 1).join("  ");
+    var row = rowContext(text, env.body, bodyEnd, pos);
+    var head;
+    var ins;
+    if (firstRow) {
+      head = text.slice(0, row.contentStart);
+      ins = "{} \\\\\n" + indent;
+      return { value: head + ins + text.slice(row.contentStart), caret: head.length + 1 };
+    }
+    if (row.depth > 0) {
+      head = text.slice(0, row.contentEnd);
+      ins = " \\\\\n" + indent + "{}";
+      return { value: head + ins + text.slice(row.contentEnd), caret: head.length + ins.length - 1 };
+    }
+    /* Split inside the row's own content: the indentation in front of it and
+     * the newline that keeps \end on its own line are layout, not material to
+     * move into the new row. */
+    var at = Math.max(row.contentStart, Math.min(row.pos, row.contentEnd));
+    var left = at;
+    while (left > row.contentStart && /\s/.test(text.charAt(left - 1))) left -= 1;
+    var right = at;
+    while (right < row.contentEnd && /\s/.test(text.charAt(right))) right += 1;
+    var prefix = "";
+    for (var k = 0; k < row.column; k++) prefix += "& ";
+    var hole = right >= row.contentEnd ? "{}" : "";
+    head = text.slice(0, left);
+    ins = " \\\\\n" + indent + prefix + hole;
+    return {
+      value: head + ins + text.slice(right),
+      caret: head.length + ins.length - (hole ? 1 : 0)
+    };
+  }
+
+  /* Replace input[start, end) with text through the browser's editing
+   * command so the change stays in the undo history (Ctrl+Z).  Assigning
+   * input.value discards that history, which made every palette click
+   * irreversible.  setRangeText is the standards path when execCommand is
+   * unavailable; it does not register in the history on every engine. */
+  function replaceRangeUndoable(input, start, end, text) {
+    var old = input.value;
+    var expected = old.slice(0, start) + text + old.slice(end);
+    input.focus();
+    input.setSelectionRange(start, end);
+    var done = false;
+    try {
+      done = document.execCommand(text ? "insertText" : "delete", false, text);
+    } catch (error) {
+      done = false;
+    }
+    if (done && input.value === expected) return;
+    if (input.value === old) {
+      input.setRangeText(text, start, end, "end");
+    } else {
+      input.value = expected;
+    }
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  /* Apply a {value, caret} edit as the smallest replacement that turns the
+   * current value into the new one, then place the caret. */
+  function applyEdit(input, edit) {
+    var old = input.value;
+    var value = edit.value;
+    var limit = Math.min(old.length, value.length);
+    var head = 0;
+    while (head < limit && old.charAt(head) === value.charAt(head)) head += 1;
+    var tail = 0;
+    while (tail < limit - head &&
+           old.charAt(old.length - 1 - tail) === value.charAt(value.length - 1 - tail)) {
+      tail += 1;
+    }
+    if (head < old.length - tail || head < value.length - tail) {
+      replaceRangeUndoable(input, head, old.length - tail, value.slice(head, value.length - tail));
+    } else {
+      input.focus();
+    }
+    input.setSelectionRange(edit.caret, edit.caret);
   }
 
   /* Pure insertion contract, shared by the live textarea and the Node CI
@@ -636,7 +1060,16 @@
     var recent = el("output", "eqed-recent");
     recent.hidden = true;
     recent.setAttribute("aria-live", "polite");
+    /* Shows TeX source on purpose (the learning surface); the homepage QA
+     * must not read it as a MathJax leak. */
+    recent.setAttribute("data-tex-literal-ok", "true");
     input.parentNode.insertBefore(recent, input);
+    var hint = el("p", "eqed-hint",
+      "Tab / Shift+Tab: 次・前の空欄へ　" +
+      "Enter: 数式の改行 \\\\（aligned・行列・場合分けの行が増える）　" +
+      "Shift+Enter: ソースだけ改行　Ctrl+Z: 取り消し");
+    hint.setAttribute("data-tex-literal-ok", "true");
+    input.parentNode.insertBefore(hint, input.nextSibling);
     var timer = null;
 
     function render() {
@@ -685,13 +1118,13 @@
       recent.classList.remove("eqed-recent--flash");
     }
 
-    /* 挿入。選択があり、断片が空欄を持つなら選択を最初の空欄へ包む。 */
+    /* 挿入。選択があり、断片が空欄を持つなら選択を最初の空欄へ包む。
+     * 環境テンプレートはネイティブ版と同じ改行・字下げで入れる。 */
     function insert(snippet) {
+      if (snippet.indexOf("\\begin{") >= 0) snippet = prettyTex(snippet);
       var edit = composeInsertion(
         input.value, input.selectionStart, input.selectionEnd, snippet);
-      input.value = edit.value;
-      input.focus();
-      input.setSelectionRange(edit.caret, edit.caret);
+      applyEdit(input, edit);
       showRecentInsertion(snippet);
       scheduleRender();
     }
@@ -802,6 +1235,18 @@
       if (pos === null) return;
       event.preventDefault();
       input.setSelectionRange(pos, pos);
+    });
+    /* Enter は数式の行区切り（ネイティブ GUI_SPEC §3.5 の構造的 Enter）。
+     * Shift+Enter はブラウザ標準のソース改行のまま。日本語入力の確定
+     * Enter（isComposing / keyCode 229）は IME に渡す。 */
+    input.addEventListener("keydown", function (event) {
+      if (event.key !== "Enter" || event.shiftKey || event.ctrlKey ||
+          event.altKey || event.metaKey) return;
+      if (event.isComposing || event.keyCode === 229) return;
+      event.preventDefault();
+      applyEdit(input, composeRowBreak(
+        input.value, input.selectionStart, input.selectionEnd));
+      scheduleRender();
     });
 
     /* Office へのコピー。text/html に MathML、text/plain に TeX の2形式
@@ -924,6 +1369,11 @@
         .appendChild(el("span", "eqed-build", "build " + BUILD));
 
     render();
+    if (window.MathJax && window.MathJax.startup && window.MathJax.startup.promise) {
+      window.MathJax.startup.promise.then(warmAutoloadedMacros).catch(function () {});
+    } else {
+      warmAutoloadedMacros();
+    }
   }
 
   function ready() {
@@ -933,6 +1383,9 @@
   if (typeof module !== "undefined" && module.exports) {
     module.exports = {
       composeInsertion: composeInsertion,
+      composeRowBreak: composeRowBreak,
+      prettyTex: prettyTex,
+      nextHole: nextHole,
       mathJaxTex: mathJaxTex,
       mathAlphabets: MATH_ALPHABETS.map(function (item) {
         return { label: item.label, snippet: item.snippet };
