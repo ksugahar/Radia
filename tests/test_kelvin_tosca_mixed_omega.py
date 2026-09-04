@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 
 def _two_region_mesh(maxh):
@@ -253,3 +254,130 @@ def test_mixed_total_reduced_omega_picard_uses_the_same_interface_contract():
     assert result["nonlinear_stats"]["converged"]
     assert result["nonlinear_stats"]["iterations"] == 2
     assert np.linalg.norm(np.asarray(result["H_cf"](mesh(0.5, 0.1, 0.2)))) > 1.0e-5
+
+
+def _picard_case(maxh=0.32):
+    """Shared source/interface setup of the Picard contract test above."""
+    import math
+    import ngsolve as ng
+    from radia.kelvin_solver import project_source_interface_potential
+
+    mesh = _two_region_mesh(maxh=maxh)
+    r_x = ng.x - 2.5
+    r2 = r_x * r_x + ng.y * ng.y + ng.z * ng.z
+    h_gradient = ng.CoefficientFunction((
+        r_x / r2**1.5, ng.y / r2**1.5, ng.z / r2**1.5))
+    a = (1.0 - ng.x**2)**2
+    b = (1.0 - ng.y**2)**2
+    c = (1.0 - ng.z**2)**2
+    da_dx = -4.0 * ng.x * (1.0 - ng.x**2)
+    db_dy = -4.0 * ng.y * (1.0 - ng.y**2)
+    h_source = h_gradient + ng.CoefficientFunction((
+        a * db_dy * c, -da_dx * b * c, 0.0))
+    mu0 = 4.0e-7 * math.pi
+    # A saturating table so the Picard map is genuinely nonlinear at this source.
+    bh_table = ((0.0, 0.0), (0.5, 0.5 * mu0 * 2000.0), (2.0, 1.4e-3),
+                (8.0, 2.0e-3), (40.0, 2.4e-3))
+    with ng.TaskManager():
+        trace = project_source_interface_potential(
+            mesh, h_source, "source_total_interface", order=2,
+            relative_tolerance=0.04)
+    return mesh, h_source, trace["potential"], bh_table
+
+
+def _picard_solve(mesh, h_source, potential, bh_table, **overrides):
+    import ngsolve as ng
+    from radia.kelvin_solver import (
+        solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin,
+    )
+
+    settings = dict(
+        bh_table=bh_table,
+        nonlinear_materials=("total",), reduced_materials=("reduced",),
+        total_materials=("total",), interface_boundary="source_total_interface",
+        order=2, dirichlet_bbbnd="outer", tolerance=1.0e-6,
+        max_iterations=60, relaxation=0.3)
+    settings.update(overrides)
+    with ng.TaskManager():
+        return solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
+            mesh, h_source, potential, 1.0, (3.0, 0.0, 0.0), **settings)
+
+
+def test_mixed_omega_picard_records_history_and_per_element_state():
+    import ngsolve as ng
+
+    mesh, h_source, potential, bh_table = _picard_case()
+    observation = np.array([[0.5, 0.1, 0.2], [0.7, -0.2, 0.1]])
+    result = _picard_solve(mesh, h_source, potential, bh_table,
+                           observation_points=observation)
+    stats = result["nonlinear_stats"]
+    assert stats["converged"]
+    assert stats["anderson_depth"] == 0
+    assert stats["warm_start"] is False
+    assert len(stats["history"]) == stats["iterations"]
+    assert stats["history"][0]["iteration"] == 1
+    assert "relative_B_change" not in stats["history"][0]
+    assert all("relative_B_change" in row for row in stats["history"][1:])
+    assert stats["history"][-1]["relative_B_change"] == stats["relative_B_change"]
+    assert all("observation_relative_change" in row for row in stats["history"][1:])
+    assert np.asarray(stats["observation_field_T"]).shape == (2, 3)
+    iron = [el.nr for el in mesh.Elements(ng.VOL) if str(el.mat) == "total"]
+    assert stats["element_numbers"] == iron
+    mu_r = np.asarray(stats["mu_r_elements"])
+    assert mu_r.shape == (len(iron),)
+    assert np.all(mu_r >= 1.0)
+    assert stats["contraction_rate_estimate"] is None or 0.0 < stats["contraction_rate_estimate"] < 1.0
+
+
+def test_mixed_omega_picard_warm_start_resumes_from_the_converged_state():
+    mesh, h_source, potential, bh_table = _picard_case()
+    cold = _picard_solve(mesh, h_source, potential, bh_table)
+    warm = _picard_solve(mesh, h_source, potential, bh_table,
+                         mu_r_initial=np.asarray(cold["nonlinear_stats"]["mu_r_elements"]))
+    assert warm["nonlinear_stats"]["warm_start"] is True
+    assert warm["nonlinear_stats"]["converged"]
+    # A converged warm start needs one solve to reproduce B and one to confirm it.
+    assert warm["nonlinear_stats"]["iterations"] <= 3
+    assert warm["nonlinear_stats"]["iterations"] < cold["nonlinear_stats"]["iterations"]
+    probe = mesh(0.5, 0.1, 0.2)
+    np.testing.assert_allclose(
+        np.asarray(warm["H_cf"](probe)), np.asarray(cold["H_cf"](probe)), rtol=1.0e-4)
+    with pytest.raises(ValueError, match="one value per nonlinear element"):
+        _picard_solve(mesh, h_source, potential, bh_table, mu_r_initial=np.ones(3))
+    with pytest.raises(ValueError, match=">= 1"):
+        bad = np.asarray(cold["nonlinear_stats"]["mu_r_elements"]).copy()
+        bad[0] = 0.5
+        _picard_solve(mesh, h_source, potential, bh_table, mu_r_initial=bad)
+
+
+def test_mixed_omega_picard_constrained_anderson_reaches_the_same_solution():
+    mesh, h_source, potential, bh_table = _picard_case()
+    plain = _picard_solve(mesh, h_source, potential, bh_table)
+    mixed = _picard_solve(mesh, h_source, potential, bh_table, anderson_depth=2)
+    stats = mixed["nonlinear_stats"]
+    assert stats["converged"]
+    assert stats["anderson_depth"] == 2
+    assert stats["anderson"]["accelerated_steps"] >= 1
+    assert stats["iterations"] <= plain["nonlinear_stats"]["iterations"]
+    mu_r = np.asarray(stats["mu_r_elements"])
+    assert np.all(np.isfinite(mu_r)) and np.all(mu_r >= 1.0)
+    probe = mesh(0.5, 0.1, 0.2)
+    np.testing.assert_allclose(
+        np.asarray(mixed["H_cf"](probe)), np.asarray(plain["H_cf"](probe)), rtol=2.0e-3)
+
+
+def test_mixed_omega_picard_non_convergence_raises_with_the_state():
+    from radia.kelvin_solver import MixedOmegaPicardNotConverged
+
+    mesh, h_source, potential, bh_table = _picard_case()
+    with pytest.raises(MixedOmegaPicardNotConverged, match="did not converge") as excinfo:
+        _picard_solve(mesh, h_source, potential, bh_table, max_iterations=2, tolerance=1.0e-12)
+    state = excinfo.value.state
+    assert state["nonlinear_stats"]["converged"] is False
+    assert state["nonlinear_stats"]["iterations"] == 2
+    assert len(state["nonlinear_stats"]["history"]) == 2
+    assert len(state["mu_r_elements"]) == len(state["element_numbers"]) > 0
+    # The partial state is a valid warm start.
+    resumed = _picard_solve(mesh, h_source, potential, bh_table,
+                            mu_r_initial=np.asarray(state["mu_r_elements"]))
+    assert resumed["nonlinear_stats"]["converged"]
