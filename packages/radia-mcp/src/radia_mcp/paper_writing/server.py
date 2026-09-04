@@ -14,6 +14,12 @@ PPTX toolset does not warrant a standalone server).  All presentation_*
 tools are served here; the radia_mcp.presentation module remains the
 implementation home.
 
+2026-09-05: poster MERGED here too (Sugahara).  A poster is a
+presentation artefact and obeys the same figure rules, but as a
+standalone server it could not see figure_* at all -- the one asymmetry
+left after the 2026-07-18 figure merge.  The mcp-server-poster entry
+point is retired; radia_mcp.poster remains the implementation home.
+
 Usage:
     mcp-server-paper-writing              # stdio
     mcp-server-paper-writing --selftest   # self-test
@@ -26,6 +32,7 @@ from mcp.server.fastmcp import FastMCP
 from ..common import register_status_tool
 from ..presentation import register as _register_presentation
 from ..figure import register as _register_figure
+from ..poster import register as _register_poster
 
 from . import tools as _tools
 from ._pdf_layout_visual import (
@@ -174,6 +181,17 @@ _N_FIGURE_TOOLS = _register_figure(mcp)
 
 
 # ============================================================
+# 2026-09-05: poster merged into paper-writing (Sugahara).
+# A poster is a presentation artefact under the same figure rules, yet
+# as its own server it could not reach figure_* at all.  That was the
+# last asymmetry left by the presentation + figure merges.  The
+# standalone mcp-server-poster entry point is retired; all poster_*
+# tools ride this server.
+# ============================================================
+_N_POSTER_TOOLS = _register_poster(mcp)
+
+
+# ============================================================
 # Prompt: cite-with-verification reminder
 # ============================================================
 
@@ -219,12 +237,14 @@ register_status_tool(
         '(pymupdf), LaTeX figure placement knowledge (htbp/placeins/'
         'widths/anti-patterns), IEEE/ScienceDirect/Emerald PDF '
         'download with cookies. Also serves the merged presentation_* '
-        'slide lint + PPTX toolset (2026-07-17) and the merged figure_* '
-        '/ paper_figure_* publication-figure toolset (2026-07-18: '
-        'standalone presentation + figure servers retired).'
+        'slide lint + PPTX toolset (2026-07-17), the merged figure_* '
+        '/ paper_figure_* publication-figure toolset (2026-07-18), and '
+        'the merged poster_* conference-poster toolset (2026-09-05: '
+        'standalone presentation, figure and poster servers retired, so '
+        'every printed or projected artefact shares one figure layer).'
     ),
     subpackage='radia_mcp.paper_writing',
-    related_servers=["literature-index", "chart2d", "poster"],
+    related_servers=["literature-index", "chart2d", "document-meta"],
     optional_deps=["pymupdf", "Pillow", "requests", "python-pptx",
                      "matplotlib"],
 )
@@ -241,6 +261,9 @@ def main():
         print(f"  registered figure_* tools (merged): {_N_FIGURE_TOOLS}")
         assert _N_FIGURE_TOOLS > 5, (
             f"figure merge lost tools: {_N_FIGURE_TOOLS}")
+        print(f"  registered poster_* tools (merged): {_N_POSTER_TOOLS}")
+        assert _N_POSTER_TOOLS > 25, (
+            f"poster merge lost tools: {_N_POSTER_TOOLS}")
         import radia_mcp.figure.server as _figsrv
         _fdp = _figsrv.figure_design_principles("all")
         assert len(_fdp) > 1000, (
