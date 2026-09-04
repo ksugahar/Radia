@@ -1100,7 +1100,7 @@ def _deploy_pypi(ssh_host, label, *, include_mcp=True, python_cmd="python", cubi
          freshly-installed wheel's plugin; skipped on optional-Cubit
          targets when Cubit is not installed)
       5. cubit-plugin-install --verify-only (sha256 sanity)
-      6. cubit-smoke-test (Cubit 2025.3 -batch run on ih_bem_sample.jou)
+      6. cubit-smoke-test (Cubit 2025.12+ -batch run on ih_bem_sample.jou)
     """
     step(f"Phase 8 ({label}): kill + PyPI install + plugin install + verify + smoke (over SSH)")
     v = _read_repo_versions()
