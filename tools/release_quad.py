@@ -970,7 +970,7 @@ def _kill_cubit_local():
 
 
 def _kill_mcp_local():
-    info("force-kill local MCP console scripts and Radia panel launchers")
+    info("force-kill local MCP and Radia console-script processes")
     run(["pwsh", "-NoProfile", "-Command",
          "Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | "
          "Where-Object { $_.ProcessId -ne $PID -and ("
