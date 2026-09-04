@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
+import subprocess
+import sys
 
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
@@ -126,3 +129,20 @@ def test_root_mcp_response_change_enables_only_its_regression_lane():
     plan = SELECTOR.build_plan(["tests/mcp_server/test_mcp_tool_responses.py"])
     assert plan["run_mcp_response_tests"] is True
     assert plan["server_selftests"] == []
+
+
+def test_cli_accepts_large_changed_file_list_over_stdin():
+    changed = [
+        f"packages/radia-mcp/src/radia_mcp/family_{index}/server.py"
+        for index in range(2000)
+    ]
+    completed = subprocess.run(
+        [sys.executable, str(SELECTOR_PATH), "--changed-files-json", "-"],
+        input=json.dumps(changed),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    plan = json.loads(completed.stdout)
+    assert plan["mode"] == "targeted"
+    assert plan["changed_files"] == sorted(changed)
