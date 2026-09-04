@@ -7,10 +7,6 @@ on:
     paths:
       - 'tools/eqnedit64/**'
       - 'packages/eqnedit64/**'
-      - 'packages/radia-mcp/src/radia_mcp/presentation/_equation_cli.py'
-      - 'packages/radia-mcp/src/radia_mcp/presentation/skill.md'
-      - 'packages/radia-mcp/src/radia_mcp/presentation/tools.py'
-      - 'packages/radia-mcp/tests/test_presentation_equation_cli.py'
       - '.github/workflows/eqnedit64.yml'
       - '.github/workflows/release-eqnedit64-pypi.yml'
   pull_request:
@@ -18,10 +14,6 @@ on:
     paths:
       - 'tools/eqnedit64/**'
       - 'packages/eqnedit64/**'
-      - 'packages/radia-mcp/src/radia_mcp/presentation/_equation_cli.py'
-      - 'packages/radia-mcp/src/radia_mcp/presentation/skill.md'
-      - 'packages/radia-mcp/src/radia_mcp/presentation/tools.py'
-      - 'packages/radia-mcp/tests/test_presentation_equation_cli.py'
       - '.github/workflows/eqnedit64.yml'
       - '.github/workflows/release-eqnedit64-pypi.yml'
   workflow_dispatch:
@@ -105,12 +97,9 @@ jobs:
       - name: Run C++ document tests
         run: ctest --test-dir build_cmake -C Release --output-on-failure
 
-      - name: Check Web and MCP equation contracts
+      - name: Check Eqnedit64 Web contract
         working-directory: .
-        run: >-
-          python -m pytest
-          tools/eqnedit64/tests/test_web_contract.py
-          packages/radia-mcp/tests/test_presentation_equation_cli.py -q
+        run: python -m pytest tools/eqnedit64/tests/test_web_contract.py -q
 
       - name: Check Web JavaScript syntax
         run: |

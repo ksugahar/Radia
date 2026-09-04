@@ -22,6 +22,9 @@
   JS実装は `tools/eqnedit64/web/equation-editor.js`、共通契約は
   `tools/eqnedit64/docs/PRODUCT_PARITY.md`。研究室ホームページはJS版の
   公開先であり、ホームページ側のコピーを独自編集しない。
+- native版とPython APIは独立した `eqnedit64` PyPIパッケージとして公開する。
+  `radia-mcp.presentation` は任意の利用側であり、`eqnedit64`への依存や実装の
+  複製を持たない。通常はインストール済みパッケージのbackendを自動検出する。
 - `presentation_equation_policy()` で、この正本・公開先・変換経路を確認できる。
 - JS版はブラウザUIであり、`radia_mcp.presentation` のWindows実行
   バックエンドにはしない。

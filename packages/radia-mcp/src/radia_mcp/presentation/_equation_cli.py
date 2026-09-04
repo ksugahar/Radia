@@ -32,16 +32,19 @@ _COPY_TARGETS = {
 def presentation_equation_policy() -> dict:
     """Return the canonical source, publication, and format responsibilities."""
     return {
-        "schema": "radia-mcp.presentation-equation-policy.v2",
+        "schema": "radia-mcp.presentation-equation-policy.v3",
         "source_of_truth": {
             "native": "tools/eqnedit64/src",
             "web": "tools/eqnedit64/web/equation-editor.js",
             "web_mount": "tools/eqnedit64/web/equation-editor.fragment.html",
             "parity": "tools/eqnedit64/docs/PRODUCT_PARITY.md",
+            "distribution": "packages/eqnedit64",
         },
         "publication": {
             "web": "Sugahara Laboratory homepage",
-            "native": "ksugahar/Radia GitHub Releases",
+            "python": "PyPI package eqnedit64",
+            "native": "matching ksugahar/Radia Eqnedit64 GitHub Release",
+            "integration": "optional radia-mcp.presentation consumer adapter",
         },
         "web_publication_contract": {
             "mode": "build-time import from Radia checkout",
@@ -85,6 +88,15 @@ def _candidate_executables(explicit: str | None) -> Iterable[Path]:
     configured = os.environ.get("EQNEDIT64_EXE")
     if configured:
         yield Path(configured).expanduser()
+    try:
+        from eqnedit64 import backend_path as packaged_backend_path
+    except (ImportError, OSError):
+        pass
+    else:
+        try:
+            yield Path(packaged_backend_path())
+        except (OSError, RuntimeError):
+            pass
     found = shutil.which("Eqnedit64.exe") or shutil.which("Eqnedit64")
     if found:
         yield Path(found)
@@ -108,7 +120,8 @@ def _resolve_executable(explicit: str | None) -> Path:
             return resolved
     raise FileNotFoundError(
         "Eqnedit64.exe was not found. Pass executable=..., set "
-        "EQNEDIT64_EXE, place it on PATH, or build tools/eqnedit64."
+        "EQNEDIT64_EXE, install the independent eqnedit64 PyPI package, place "
+        "it on PATH, or build tools/eqnedit64."
     )
 
 

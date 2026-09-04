@@ -54,6 +54,8 @@ def test_pypi_distributions_have_independent_ci_boundaries():
     assert "workflow_dispatch:" in fast
     assert "runs-on: [self-hosted, Windows, X64, mdx]" in fast
     assert "Build with MSVC" not in fast
+    assert "compileall -q src/radia" in fast
+    assert "compileall -q src/radia packages/radia-mcp/src" not in fast
     assert "workflow_dispatch:" in native
     assert "tags: ['v*']" in native
     trigger = native[:native.index("workflow_dispatch:")]
@@ -185,6 +187,22 @@ def test_eqnedit64_release_requires_exact_successful_tag_ci():
     assert 'gh release create "$EQNEDIT64_TAG"' in release
     assert release.index("pypa/gh-action-pypi-publish@release/v1") < release.index(
         'gh release create "$EQNEDIT64_TAG"')
+
+
+def test_eqnedit64_ci_is_separate_from_radia_mcp_ci():
+    ci = EQNEDIT64_WORKFLOW.read_text(encoding="utf-8")
+    radia_fast = (ROOT / ".github" / "workflows" / "radia-fast.yml").read_text(
+        encoding="utf-8"
+    )
+    policy = (ROOT / ".github" / "workflows" / "policy-lint.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "packages/radia-mcp/" not in ci
+    for path in ("packages/eqnedit64/**", "tools/eqnedit64/**"):
+        assert path in ci
+        assert path in radia_fast
+        assert path in policy
 
 
 def test_eqnedit64_release_order_is_handtest_fable_main_o_drive_then_tag():

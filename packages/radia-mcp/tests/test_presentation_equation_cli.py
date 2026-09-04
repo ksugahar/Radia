@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 import subprocess
+import sys
+import types
 
 from radia_mcp.presentation import _equation_cli as equation_cli
 from radia_mcp.presentation import tools as presentation_tools
@@ -9,6 +11,7 @@ from radia_mcp.presentation import tools as presentation_tools
 
 def _fake_executable(tmp_path: Path) -> Path:
     app = tmp_path / "Eqnedit64.exe"
+    app.parent.mkdir(parents=True, exist_ok=True)
     app.write_bytes(b"test executable placeholder")
     return app
 
@@ -20,10 +23,14 @@ def test_presentation_tools_export_eqnedit64_bridge() -> None:
     assert presentation_tools.presentation_render_equation
 
 
-def test_equation_policy_keeps_both_editions_in_radia() -> None:
+def test_equation_policy_keeps_standalone_distribution_boundary() -> None:
     policy = equation_cli.presentation_equation_policy()
+    assert policy["schema"] == "radia-mcp.presentation-equation-policy.v3"
     assert policy["source_of_truth"]["native"] == "tools/eqnedit64/src"
     assert policy["source_of_truth"]["web"].startswith("tools/eqnedit64/web/")
+    assert policy["source_of_truth"]["distribution"] == "packages/eqnedit64"
+    assert policy["publication"]["python"] == "PyPI package eqnedit64"
+    assert "optional" in policy["publication"]["integration"]
     assert policy["homepage_is_source_of_truth"] is False
     assert policy["canonical_input"] == "TeX"
     assert policy["retired_formats"] == ["MTEF", ".eqn"]
@@ -42,6 +49,23 @@ def test_equation_policy_keeps_both_editions_in_radia() -> None:
     assert paste["priority"] == "left alignment over forced 24 pt"
     assert paste["native_web_parity"] is True
     assert paste["forbidden_acceptance_probe"] == "slide.Shapes.Paste()"
+
+
+def test_installed_eqnedit64_package_precedes_path_launcher(
+    tmp_path, monkeypatch
+) -> None:
+    packaged = _fake_executable(tmp_path / "package")
+    path_launcher = _fake_executable(tmp_path / "path")
+    module = types.ModuleType("eqnedit64")
+    module.backend_path = lambda: packaged
+    monkeypatch.delenv("EQNEDIT64_EXE", raising=False)
+    monkeypatch.setitem(sys.modules, "eqnedit64", module)
+    monkeypatch.setattr(equation_cli.shutil, "which", lambda _name: str(path_launcher))
+
+    candidates = list(equation_cli._candidate_executables(None))
+
+    assert candidates[0] == packaged
+    assert candidates[1] == path_launcher
 
 
 def test_copy_office_uses_utf8_file_contract(tmp_path, monkeypatch) -> None:
