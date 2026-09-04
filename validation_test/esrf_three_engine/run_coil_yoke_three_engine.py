@@ -154,6 +154,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--hdiv-order", choices=(1, 2), type=int, default=2)
     parser.add_argument("--fem-order", type=int, default=2)
     parser.add_argument("--hdiv-gram-eps", type=float, default=1.0e-12)
+    parser.add_argument(
+        "--hdiv-image",
+        default=None,
+        help="Explicit HDiv IMA mirror contract, for example --hdiv-image=-x-y for one ESRF quadrupole pole.",
+    )
     parser.add_argument("--reduced-a-solver", choices=("direct", "bddc", "ams", "auto"), default="direct")
     parser.add_argument("--reduced-a-relaxation", type=float, default=0.1)
     parser.add_argument("--nonlinear-tolerance", type=float, default=2.0e-5)
@@ -209,6 +214,7 @@ def main(argv: list[str] | None = None) -> int:
         hdiv_order=int(options.hdiv_order),
         fem_order=int(options.fem_order),
         hdiv_gram_eps=float(options.hdiv_gram_eps),
+        hdiv_image=options.hdiv_image,
         nonlinear_tolerance=float(options.nonlinear_tolerance),
         nonlinear_maximum_iterations=int(options.nonlinear_maximum_iterations),
         observation_points_m=points.tolist(),
@@ -228,6 +234,7 @@ def main(argv: list[str] | None = None) -> int:
                 nonlinear_tolerance=options.nonlinear_tolerance,
                 nonlinear_maximum_iterations=options.nonlinear_maximum_iterations,
                 points=points,
+                image=options.hdiv_image,
             ),
         ),
         (
@@ -273,6 +280,7 @@ def main(argv: list[str] | None = None) -> int:
             "case": int(case.number),
             "source": coil_manifest,
             "source_field_rms_T": float(np.sqrt(np.mean(np.sum(source_field * source_field, axis=1)))),
+            "hdiv_image": options.hdiv_image,
             "iron_mesh_sha256": _sha256(iron_mesh_path),
             "fem_mesh_sha256": _sha256(fem_mesh_path),
             "fem_mesh_contract": fem_mesh_report,
@@ -318,8 +326,9 @@ def main(argv: list[str] | None = None) -> int:
             "bh_table": "shared monotone PCHIP B(H)",
             "finite_outer_air_box_forbidden": True,
             "hdiv_air_mesh_forbidden": True,
+            "hdiv_image": options.hdiv_image,
             "fem_kelvin_mesh_shared": True,
-            "mixed_h1_source_potential": "surface_trace_with_cut_gate",
+            "mixed_h1_source_potential": "total_volume_hodge_with_harmonic_cut",
         },
         "iron_mesh": str(iron_mesh_path),
         "iron_mesh_sha256": _sha256(iron_mesh_path),

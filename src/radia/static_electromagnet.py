@@ -119,6 +119,7 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
     bh_table=None,
     source_trace_tolerance: float | None = None,
     source_potential_contract: str = "surface_trace",
+    source_projection_order: int | None = None,
     nonlinear_tolerance: float = 2.0e-5,
     nonlinear_max_iterations: int = 80,
     nonlinear_relaxation: float = 0.3,
@@ -127,15 +128,21 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
 ) -> dict[str, object]:
     """Solve one static electromagnet through the required H1 formulation.
 
-    ``source_potential_contract="surface_trace"`` is the general CoilBuilder
-    route: each source/total trace is projected independently and linked coils
-    retain their explicit cut/cohomology requirement.  Fixed permanent
-    magnetization may instead use ``"global_physical"``.  Its current-free
-    exterior field is projected once on the physical air/iron domain, which
-    preserves additive constants between disconnected pole interfaces.
+    ``source_potential_contract="total_hodge"`` is the general CoilBuilder
+    route.  It retains the non-exact harmonic/cut component of a linked source
+    inside total-potential iron instead of forcing it into a scalar trace.
+    ``"surface_trace"`` is the strict scalar-only contract for simply connected
+    interfaces.  Fixed permanent magnetization may use ``"global_physical"``.
+    Source projection defaults to at least order two even for an order-one
+    response solve; this keeps the smooth Kelvin-interface trace error below
+    the topology gate without changing the response-space order.
     """
     if int(order) < 1:
         raise ValueError("order must be positive")
+    if source_projection_order is None:
+        source_projection_order = max(2, int(order))
+    if int(source_projection_order) < 1:
+        raise ValueError("source_projection_order must be positive")
     if float(kelvin_radius) <= 0.0:
         raise ValueError("kelvin_radius must be positive")
     if (linear_mu_r_by_material is None) == (bh_table is None):
@@ -143,16 +150,18 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
             "supply exactly one of linear_mu_r_by_material or bh_table for "
             "mixed total/reduced Omega"
         )
-    if source_potential_contract not in {"surface_trace", "global_physical"}:
+    if source_potential_contract not in {
+            "surface_trace", "total_hodge", "global_physical"}:
         raise ValueError(
-            "source_potential_contract must be 'surface_trace' or "
-            "'global_physical'"
+            "source_potential_contract must be 'surface_trace', "
+            "'total_hodge', or 'global_physical'"
         )
     domain.validate_mesh_labels(
         mesh.GetMaterials(), mesh.GetBoundaries(), mesh.GetBBBoundaries()
     )
 
     from radia.kelvin_solver import (
+        project_source_total_hodge,
         project_source_physical_potential,
         project_source_interface_potential,
         solve_magnetostatic_mixed_total_reduced_omega_kelvin,
@@ -164,22 +173,58 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
             mesh,
             source_h,
             domain.reduced_total_interface,
-            order=int(order),
+            order=int(source_projection_order),
             relative_tolerance=source_trace_tolerance,
         )
         kelvin_trace = project_source_interface_potential(
             mesh,
             source_h,
             domain.kelvin_interface,
-            order=int(order),
+            order=int(source_projection_order),
             relative_tolerance=source_trace_tolerance,
         )
         source_potential = source_trace["potential"]
         kelvin_source_potential = kelvin_trace["potential"]
         source_diagnostics = {
             "contract": source_potential_contract,
+            "projection_order": int(source_projection_order),
             "iron_air_relative_tangential_residual": float(
                 source_trace["relative_tangential_residual"]
+            ),
+            "kelvin_relative_tangential_residual": float(
+                kelvin_trace["relative_tangential_residual"]
+            ),
+            "relative_tolerance": source_trace_tolerance,
+        }
+        total_source_h = None
+        total_source_materials = ()
+    elif source_potential_contract == "total_hodge":
+        total_source_materials = tuple(
+            name for name in domain.total_materials
+            if name not in domain.kelvin_materials
+        )
+        source_hodge = project_source_total_hodge(
+            mesh,
+            source_h,
+            total_source_materials,
+            order=int(source_projection_order),
+        )
+        kelvin_trace = project_source_interface_potential(
+            mesh,
+            source_h,
+            domain.kelvin_interface,
+            order=int(source_projection_order),
+            relative_tolerance=source_trace_tolerance,
+        )
+        source_potential = source_hodge["potential"]
+        kelvin_source_potential = kelvin_trace["potential"]
+        total_source_h = source_hodge["harmonic_field"]
+        source_diagnostics = {
+            "contract": source_potential_contract,
+            "projection_order": int(source_projection_order),
+            "total_source_materials": list(total_source_materials),
+            "iron_relative_harmonic_norm": float(
+                source_hodge["relative_harmonic_norm"]
             ),
             "kelvin_relative_tangential_residual": float(
                 kelvin_trace["relative_tangential_residual"]
@@ -195,13 +240,16 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
             mesh,
             source_h,
             physical_materials,
-            order=int(order),
+            order=int(source_projection_order),
             relative_tolerance=source_trace_tolerance,
         )
         source_potential = source_volume["potential"]
         kelvin_source_potential = source_potential
+        total_source_h = None
+        total_source_materials = ()
         source_diagnostics = {
             "contract": source_potential_contract,
+            "projection_order": int(source_projection_order),
             "physical_materials": list(physical_materials),
             "relative_volume_residual": float(
                 source_volume["relative_volume_residual"]
@@ -219,6 +267,8 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
         "kelvin_mats": domain.kelvin_materials,
         "kelvin_interface_boundary": domain.kelvin_interface,
         "kelvin_source_potential": kelvin_source_potential,
+        "total_source_h": total_source_h,
+        "total_source_materials": total_source_materials,
     }
     if bh_table is None:
         result = solve_magnetostatic_mixed_total_reduced_omega_kelvin(

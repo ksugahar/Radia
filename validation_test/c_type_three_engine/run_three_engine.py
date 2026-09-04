@@ -278,6 +278,7 @@ def solve_hdiv(
     nonlinear_tolerance: float,
     nonlinear_maximum_iterations: int,
     points: np.ndarray,
+    image: str | None = None,
 ) -> tuple[np.ndarray, dict[str, object]]:
     started = time.perf_counter()
     source_h = rad.RadiaField(coil, "h")
@@ -293,6 +294,7 @@ def solve_hdiv(
             nl_tol=nonlinear_tolerance,
             nl_maxit=nonlinear_maximum_iterations,
             preconditioner="auto",
+            image=image,
             **kwargs,
         )
         demag_h = vim.FieldFromSolution(result, points, algorithm="direct")
@@ -315,6 +317,7 @@ def solve_hdiv(
         "nonlinear_stats": nonlinear_stats,
         "preconditioner": result.get("preconditioner"),
         "gram_eps": float(gram_eps),
+        "image": image,
         "runtime_s": float(time.perf_counter() - started),
     }
 
@@ -417,6 +420,7 @@ def solve_omega(
             linear_mu_r_by_material=None if nonlinear else {"iron": float(material)},
             bh_table=material if nonlinear else None,
             source_trace_tolerance=source_trace_tolerance,
+            source_potential_contract="total_hodge",
             nonlinear_tolerance=nonlinear_tolerance,
             nonlinear_max_iterations=nonlinear_maximum_iterations,
             nonlinear_relaxation=0.3,
@@ -433,9 +437,9 @@ def solve_omega(
         ),
         "source_trace": {
             "iron_interface_boundary": "iron_air_interface",
-            "projection_order": int(order),
-            "iron_relative_tangential_residual": float(
-                source_trace["iron_air_relative_tangential_residual"]
+            "projection_order": int(source_trace["projection_order"]),
+            "iron_relative_harmonic_norm": float(
+                source_trace["iron_relative_harmonic_norm"]
             ),
             "kelvin_interface_boundary": "kelvin_int",
             "kelvin_relative_tangential_residual": float(
@@ -443,9 +447,9 @@ def solve_omega(
             ),
             "relative_tolerance": float(source_trace_tolerance),
             "cut_policy": (
-                "a non-small trace residual requires an explicit cut or "
-                "cohomology source representation; the Kelvin jump carries "
-                "the orientation-reversed source 0-form"
+                "the iron volume Hodge split retains the linked-source "
+                "harmonic/cohomology field; the Kelvin jump carries the "
+                "orientation-reversed exact source 0-form"
             ),
         },
         "kelvin_center_m": list(kelvin_center),
