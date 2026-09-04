@@ -919,6 +919,18 @@ bool RadHACApKChargeGram::HOTetImageBlockEnabled()
     return enabled;
 }
 
+// Diagnostic A/B switch for the image far rule: with RADIA_HDIV_DISABLE_HO_IMAGE_FAR set (together with
+// RADIA_HDIV_DISABLE_HO_IMAGE_BLOCK) every image term takes the legacy per-entry scalar fold, which lets a
+// validation compare the production dispatch against it bit for bit.  Cached like its siblings.
+bool RadHACApKChargeGram::HOTetImageFarEnabled()
+{
+    static const bool enabled = []() -> bool {
+        const char* v = std::getenv("RADIA_HDIV_DISABLE_HO_IMAGE_FAR");
+        return !v || v[0] == '\0' || v[0] == '0';
+    }();
+    return enabled;
+}
+
 // Read from GetHexBlock / GetHexSymBlock, i.e. once per block lookup during
 // the fill.  Same caching discipline as the switches above.
 static bool HexTransCacheEnabled()
@@ -2069,7 +2081,7 @@ bool RadHACApKChargeGram::CurvedTouchBlockValue(
 // avoiding a closest-point search and a curved Duffy map for every target quadrature point.  Touching pairs
 // stay on the singularity-resolving host-vector Duffy path.
 std::vector<double> RadHACApKChargeGram::QuadBlockHOCurvedDirect(
-    int kindT, int hostT, int kindS, int hostS) const
+    int kindT, int hostT, int kindS, int hostS, int img) const
 {
     const std::vector<int>& targets = kindT == 0 ? m_hoCellCharges[hostT] : m_hoFaceCharges[hostT];
     const std::vector<int>& sources = kindS == 0 ? m_hoCellCharges[hostS] : m_hoFaceCharges[hostS];
@@ -2080,7 +2092,12 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHOCurvedDirect(
     const std::vector<rad_hdiv::Vec3>& source_points = m_qp[sources[0]];
     for (size_t qt = 0; qt < target_points.size(); ++qt) {
         std::fill(inner.begin(), inner.end(), 0.0);
-        const double x0 = target_points[qt][0], x1 = target_points[qt][1], x2 = target_points[qt][2];
+        // img > 0: the image pair (T, T_img(S)) equals (T_img^-1(T), S) by the isometry, so only the target
+        // points move (ImageEvalPoint applies T^-1); the source rule and its monomial-folded weights are reused.
+        const double p0[3] = {target_points[qt][0], target_points[qt][1], target_points[qt][2]};
+        double mapped[3] = {p0[0], p0[1], p0[2]};
+        if (img != 0) ImageEvalPoint(img, p0, mapped);
+        const double x0 = mapped[0], x1 = mapped[1], x2 = mapped[2];
         for (size_t qs = 0; qs < source_points.size(); ++qs) {
             const double dx = x0-source_points[qs][0], dy = x1-source_points[qs][1],
                          dz = x2-source_points[qs][2];
@@ -2135,11 +2152,18 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHOTetImage(
     const int nT = (int)targets.size(), nS = (int)sources.size();
     std::vector<double> block((size_t)nT*nS, 0.0), inner((size_t)nS, 0.0);
     if (nT == 0 || nS == 0) return block;
-    if (m_curved)
-        throw std::logic_error("TET image host block requires flat affine hosts");
+    // CURVED hosts take the same two rules as the direct QuadBlockHOTet, applied to the image pair
+    // (T, T_img(S)) == (T_img^-1(T), S).  A non-touching image pair is a smooth double integral and takes the
+    // curved product rule; an image that touches the target (the mirror cell across a cut face, or an
+    // on-plane cut face reflected onto itself) keeps the vectorized curved Duffy so the singular /
+    // near-singular potential is integrated exactly like the direct touching pair of the full model.  An
+    // on-plane face maps onto itself point by point, so its image self block is evaluated at the SAME outer
+    // points by the SAME rule as its direct self block and the antisymmetric fold cancels to roundoff.
+    if (m_curved && CurvedDirectEnabled() && !ImageHostsTouch(kindT, hostT, kindS, hostS, img))
+        return QuadBlockHOCurvedDirect(kindT, hostT, kindS, hostS, img);
 
     // Every target mode on one host owns the same outer points.  Map those
-    // points through the inverse cyclic image once, evaluate every co-located
+    // points through the inverse image once, evaluate every co-located
     // source mode together, then contract the mode-specific target weights.
     // The scalar image path repeated this geometry/moment work per charge pair.
     const std::vector<rad_hdiv::Vec3>& points = m_qp[targets[0]];
@@ -2147,7 +2171,8 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHOTetImage(
         const double p0[3] = {points[q][0], points[q][1], points[q][2]};
         double p[3];
         ImageEvalPoint(img, p0, p);
-        PhiInnerHOHostVec(kindS, hostS, p, sources, inner.data());
+        if (m_curved) PhiInnerHOCurvedHostVec(kindS, hostS, p, sources, inner.data());
+        else PhiInnerHOHostVec(kindS, hostS, p, sources, inner.data());
         for (int lt = 0; lt < nT; ++lt) {
             const double weight = m_qw[targets[lt]][q];
             double* row = &block[(size_t)lt*nS];
@@ -2627,6 +2652,91 @@ double RadHACApKChargeGram::QuadDotRefl(int tgt, int src, int img) const
         s += W[k] * (m_highorder ? PhiInner(src, p) : PhiAt(src, p));
     }
     return s * RAD_INV_FOUR_PI;
+}
+
+bool RadHACApKChargeGram::IsMirrorImage(int img) const
+{
+    if (img <= 0) return false;
+    const size_t i = (size_t)img - 1;
+    return i >= m_image_rot_angle.size() || m_image_rot_angle[i] == 0.0;
+}
+
+bool RadHACApKChargeGram::ImageFarPair(int a, int b, int img) const
+{
+    // The direct far_pair rule measured on the IMAGE geometry: |c_a - T(c_b)| == |T^-1(c_a) - c_b| by the
+    // isometry.  Self pairs are allowed -- a host far from every image plane is far from its own image.
+    // Needs the low-quad tables (m_ho_far_factor < 1e29), exactly like QuadDotFar.
+    if (img <= 0 || m_ho_far_factor >= 1e29 || !HOTetImageFarEnabled()) return false;
+    double c[3];
+    ImageEvalPoint(img, &m_cent[(size_t)3*a], c);
+    const double dx = c[0] - m_cent[(size_t)3*b];
+    const double dy = c[1] - m_cent[(size_t)3*b + 1];
+    const double dz = c[2] - m_cent[(size_t)3*b + 2];
+    return std::sqrt(dx*dx + dy*dy + dz*dz) > m_ho_far_factor * (m_size[a] + m_size[b]);
+}
+
+double RadHACApKChargeGram::QuadDotFarImage(int tgt, int src, int img) const
+{
+    // FAR image term: QuadDotFar with tgt's LOW outer points mapped by the inverse image transform.  The image
+    // of a well-separated charge is at least as well separated (isometry), so the low-order plain double
+    // Gauss is as accurate here as for the direct far pair.  For a mirror the two directions are the same sum
+    // in a different order; for a rotation they are G_T and G_{T^-1}, which the caller averages.
+    const std::vector<rad_hdiv::Vec3>& Px = m_qp_lo[tgt];
+    const std::vector<double>&         Wx = m_qw_lo[tgt];
+    const std::vector<rad_hdiv::Vec3>& Py = m_inP_lo[src];
+    const std::vector<double>&         Wy = m_inW_lo[src];
+    double s = 0.0;
+    for (size_t i = 0; i < Px.size(); ++i) {
+        const double p0[3] = {Px[i][0], Px[i][1], Px[i][2]};
+        double p[3]; ImageEvalPoint(img, p0, p);
+        double inner = 0.0;
+        for (size_t j = 0; j < Py.size(); ++j) {
+            const double dx = p[0] - Py[j][0], dy = p[1] - Py[j][1], dz = p[2] - Py[j][2];
+            const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+            if (r < 1e-300) continue;                        // an image never coincides with a far source
+            inner += Wy[j] * m_srcval_lo[src][j] / r;
+        }
+        s += Wx[i] * inner;
+    }
+    return s * RAD_INV_FOUR_PI;
+}
+
+bool RadHACApKChargeGram::ImageHostsTouch(int kindT, int hostT, int kindS, int hostS, int img) const
+{
+    if (img == 0) return CurvedHostsTouch(kindT, hostT, kindS, hostS);
+    const std::vector<int>& tc = (kindT == 0) ? m_hoCellCharges[hostT] : m_hoFaceCharges[hostT];
+    const std::vector<int>& sc = (kindS == 0) ? m_hoCellCharges[hostS] : m_hoFaceCharges[hostS];
+    if (tc.empty() || sc.empty()) return false;              // an empty host has no block to integrate
+    // Corner vertices of a high-order host: the first 4 (tet) / 3 (tri) P2 nodes when curved, else the
+    // affine corners.  P2 node order puts the corners first (rad_hdiv P2TetShape / P2TriShape).
+    auto corners = [&](int kind, int host, double c[4][3]) -> int {
+        const int n = (kind == 0) ? 4 : 3;
+        const double* s = m_curved
+            ? ((kind == 0) ? &m_cellNodes[(size_t)host*30] : &m_faceNodes[(size_t)host*18])
+            : ((kind == 0) ? &m_cellV[(size_t)host*12] : &m_faceV[(size_t)host*9]);
+        for (int i = 0; i < n; ++i)
+            for (int k = 0; k < 3; ++k) c[i][k] = s[3*i + k];
+        return n;
+    };
+    double cT[4][3], cS[4][3];
+    const int nT = corners(kindT, hostT, cT);
+    const int nS = corners(kindS, hostS, cS);
+    // Mesh vertices that coincide after the transform do so to roundoff (a plane vertex reflects onto
+    // itself exactly; a periodic sector vertex onto its identified partner), while distinct vertices are a
+    // whole element apart -- a tolerance far below the host size separates the two cases.
+    const double tol = 1e-9 * (m_size[tc[0]] + m_size[sc[0]]);
+    int shared = 0;
+    for (int j = 0; j < nS; ++j) {
+        double image_corner[3];
+        ImageApplyVector(img, cS[j], image_corner);          // T applied to a POSITION (linear, no offset)
+        for (int i = 0; i < nT; ++i) {
+            const double dx = image_corner[0] - cT[i][0];
+            const double dy = image_corner[1] - cT[i][1];
+            const double dz = image_corner[2] - cT[i][2];
+            if (dx*dx + dy*dy + dz*dz <= tol*tol) { ++shared; break; }
+        }
+    }
+    return shared >= 2 || (shared == 1 && (kindT == 1 || kindS == 1));
 }
 
 double RadHACApKChargeGram::QuadDotFar(int tgt, int src) const
@@ -3960,6 +4070,9 @@ void RadHACApKChargeGram::ResetHexCacheStats()
     m_hexGeneralSharedLookups.store(0, std::memory_order_relaxed);
     m_hexGeneralSharedHits.store(0, std::memory_order_relaxed);
     m_hexGeneralSharedMisses.store(0, std::memory_order_relaxed);
+    m_hoImageFarEntries.store(0, std::memory_order_relaxed);
+    m_hoImageBlockEntries.store(0, std::memory_order_relaxed);
+    m_hoImageScalarEntries.store(0, std::memory_order_relaxed);
 }
 
 std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexCacheStats() const
@@ -3973,6 +4086,7 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexCacheStats()
     const bool ho_far_one_sided = HOFarOneSidedEnabled();
     const bool ho_analytic_enabled = HOAnalyticBlockEnabled();
     const bool ho_image_enabled = HOTetImageBlockEnabled();
+    const bool ho_image_far_enabled = HOTetImageFarEnabled();
     const bool trans_cache_enabled = HexTransCacheEnabled();
     const bool curved_direct_enabled = CurvedDirectEnabled();
     const size_t block_cache_limit = HexBlockCacheLimit();
@@ -3981,7 +4095,8 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexCacheStats()
     const bool numerical_override =
         hex_far_one_sided > 0.0 || wedge_far_one_sided > 0.0 ||
         distorted_far_factor != 1.0 || ho_far_one_sided ||
-        !ho_analytic_enabled || !ho_image_enabled || !curved_direct_enabled;
+        !ho_analytic_enabled || !ho_image_enabled || !ho_image_far_enabled ||
+        !curved_direct_enabled;
     const bool performance_override =
         block_cache_limit != HEX_BLOCK_CACHE_LIMIT_DEFAULT ||
         wedge_trans_scope != 2 || !trans_cache_enabled ||
@@ -4017,6 +4132,7 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexCacheStats()
     out.emplace_back("ho_analytic_block_enabled",
                      m_hoAnalyticBlock && ho_analytic_enabled ? 1.0 : 0.0);
     out.emplace_back("ho_image_block_enabled", ho_image_enabled ? 1.0 : 0.0);
+    out.emplace_back("ho_image_far_enabled", ho_image_far_enabled ? 1.0 : 0.0);
     out.emplace_back("hmatvec_stats_enabled", hmatvec_stats_enabled ? 1.0 : 0.0);
     out.emplace_back("hmatvec_mkl_threads", (double)hmatvec_mkl_threads);
     out.emplace_back("nonproduction_numerical_override_active",
@@ -4045,6 +4161,9 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexCacheStats()
     out.emplace_back("ho_sym_block_hits", ld(m_hoSymBlockHits));
     out.emplace_back("ho_sym_block_misses", ld(m_hoSymBlockMisses));
     out.emplace_back("ho_sym_block_clears", ld(m_hoSymBlockClears));
+    out.emplace_back("ho_image_far_entries", ld(m_hoImageFarEntries));
+    out.emplace_back("ho_image_block_entries", ld(m_hoImageBlockEntries));
+    out.emplace_back("ho_image_scalar_entries", ld(m_hoImageScalarEntries));
     const double btot = ld(m_hexBlockLookups);
     const double ttot = ld(m_hexTransBlockLookups);
     const double sbtot = ld(m_hexSymBlockLookups);
@@ -6200,8 +6319,13 @@ const std::vector<double>& RadHACApKChargeGram::GetHOTetSymBlock(
         std::vector<double> ab = img == 0
             ? QuadBlockHOTet(kindA, hostA, kindB, hostB)
             : QuadBlockHOTetImage(kindA, hostA, kindB, hostB, img);
-        const bool direct_curved = img == 0 && m_curved && CurvedDirectEnabled() &&
-                                   !CurvedHostsTouch(kindA, hostA, kindB, hostB);
+        // The curved product rule is an exact transpose under a MIRROR (|T^-1 x - y| == |T^-1 y - x| for an
+        // involution), so the BA integration is redundant there.  A rotation image keeps both directions:
+        // 0.5*(G_T + G_{T^-1}) is the designed symmetrization.
+        const bool direct_curved = m_curved && CurvedDirectEnabled() &&
+                                   (img == 0 ? !CurvedHostsTouch(kindA, hostA, kindB, hostB)
+                                             : (IsMirrorImage(img) &&
+                                                !ImageHostsTouch(kindA, hostA, kindB, hostB, img)));
         const bool same_host = kindA == kindB && hostA == hostB;
         std::vector<double> ba;
         if (!direct_curved && !same_host)
