@@ -1007,3 +1007,29 @@ non-converged engine writes `<output>.<engine>.state.json` (explicitly
 `converged: false`) which `--resume` uses as a warm start; new options
 `--mixed-relaxation`, `--mixed-anderson-depth`, `--reduced-a-anderson-depth`
 (default 0, part of the identity only when set).
+
+### 8.5 Codex handover verification (2026-09-05)
+
+The curved-TET dispatch test double now preserves the native configuration
+contract: it receives the four build inputs, including the NGSolve mass,
+and returns the public three-tuple. No production return contract or numerical
+tolerance was changed. All six dispatch tests pass after this correction.
+The other 40 focused tests covering Picard acceleration/history, mixed Omega,
+ESRF checkpoint contracts, and native TET image dispatch passed.
+
+Tests used the built source/native pair at `C:/temp/radia-hdiv-ima/src`
+(commit `8c5b071693961564519effa6463feb531e0f2b1a`), explicitly imported before
+pytest, with the updated tests from the isolated handover worktree. No PYD was
+copied. This is not evidence of a new wheel build or deployment.
+
+Release remains blocked: the HEX image field roundoff tests reproduce relative
+differences of 1.9927109321574784e-14 and 4.944633724445392e-14 against the
+unchanged 10-epsilon gate (2.220446049250313e-15). The full field-contract file
+has three passes and two failures. Their cause is not established by this run.
+The #6/#7 production three-engine acceptance and timings require the new native
+release on mdx/hibino; diagnostic MINRES results do not certify production CG.
+
+The LAB release-worktree editable path is not repaired blindly: release-quad
+intentionally retains the verified release source until the canonical development
+checkout catches up. Use its explicit restore-editable command only after that
+prerequisite is satisfied; do not redirect imports to the stale dirty shared tree.
