@@ -444,6 +444,8 @@ docs/research/
 
 # Private working memory / project notes -- never publish
 memory/
+# Optional local MCP inventory snapshot. Live tools/list is authoritative.
+/packages/radia-mcp/docs/TOOLS.md
 # Codex worktrees and temporary review junctions are machine-local state.
 /.codex/
 /.codex-*/

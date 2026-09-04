@@ -9,9 +9,10 @@ Python (`cubit.cmd`), STEP import, NGSolve `.vol` export with the
 canonical `check-vol` gate, a persistent Cubit session (daemon), and
 the Sugahara lab's curated Cubit knowledge corpus.
 
-The authoritative, auto-generated tool list lives in
-[`docs/TOOLS.md`](../../../docs/TOOLS.md#mcp-server-cubit) — regenerate
-with `scripts/gen_tools_doc.py` after adding/renaming tools.
+The live `tools/list` response is authoritative. Use `cubit_status`,
+`cubit_topics`, and the `mcp-server-radia-meta` catalog for discovery. For an
+offline local snapshot only, run `scripts/gen_tools_doc.py`; its output is not
+version-controlled.
 
 ## Quick start
 

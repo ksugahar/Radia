@@ -562,15 +562,17 @@ lanes may start only when a changed file is a documented shared build, ABI, or
 integration boundary; convenience cross-testing is not sufficient reason.
 Within `radia-mcp`, classify changes as docs-only, packaging/version metadata,
 or implementation/tests. Docs-only changes run relevant document checks;
-generated-inventory checks run when the inventory or its generator changes;
 metadata-only changes build and import-check one wheel; implementation/tests
 run the supported-Python compile/import matrix for the affected package
-families. On the newest supported Python, normal pull-request and main-push CI
+families. The checked `radia_mcp.meta` catalog and each server's live
+`tools/list` response are the tool-discovery source of truth. Generated tool
+inventory snapshots are local diagnostics, not committed artifacts or CI
+oracles. On the newest supported Python, normal pull-request and main-push CI
 runs a stable compact contract set, tests selected from the changed source/test
 paths, and only the affected server selftests. A shared `common` change selects
 all server selftests. The complete package pytest suite, all-server selftests,
-and full generated-inventory audit run only through the explicit full-audit
-workflow or a named pre-tag release-candidate audit on the same commit. A
+and full live-catalog audit run only through the explicit full-audit workflow
+or a named pre-tag release-candidate audit on the same commit. A
 release-tag workflow builds and verifies the exact tagged artifact without
 repeating the full tests already accepted for that source commit. Full
 numerical, GUI, performance, and multi-machine evidence remains an explicit
@@ -3074,7 +3076,7 @@ paths. LAB and 100号機 do not execute CI.
 
 `tools/ci_preflight.py` defaults to the union of `origin/main...HEAD`, staged,
 unstaged, and untracked changes. Policy and version checks always run;
-`radia-mcp` publish-boundary, tool inventory, package tests, and server
+`radia-mcp` publish-boundary, live catalog, package tests, and server
 selftests run only when that distribution changes. Broad top-level test
 collection, complete package suites, and `validation_test/` remain explicit
 diagnostics. Deterministic failures are returned immediately without an
@@ -3082,7 +3084,6 @@ automatic rerun.
 
 ```powershell
 python tools/ci_preflight.py
-python tools/ci_preflight.py --fix
 python tools/ci_preflight.py --only toplevel-collect
 python tools/ci_preflight.py --validation --full
 ```

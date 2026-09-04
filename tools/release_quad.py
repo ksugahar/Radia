@@ -2101,14 +2101,14 @@ def _check_main_synced(*, hard: bool) -> int:
 
 
 def cmd_sync_main(args):
-    """Deterministic fetch -> twin-aware rebase -> preflight --fix -> push.
+    """Deterministic fetch -> twin-aware rebase -> preflight -> push.
 
     Automates the 2026-08-07 manual dance: git rebase drops commits whose
     patches already landed on origin as rebased twins; --empty=drop removes
     ones that become empty.  Genuine conflicts stop the rebase IN PLACE
     with instructions (this tool never resolves content on its own).
     """
-    step("sync-main: fetch -> rebase (twin-aware) -> preflight --fix -> push")
+    step("sync-main: fetch -> rebase (twin-aware) -> preflight -> push")
 
     if (REPO / ".git/rebase-merge").exists() or (REPO / ".git/rebase-apply").exists():
         fail("a rebase is already in progress — finish it first "
@@ -2150,18 +2150,12 @@ def cmd_sync_main(args):
         ok("nothing to push — main already equals origin/main")
         return 0
 
-    p = run([sys.executable, str(REPO / "tools/ci_preflight.py"), "--fix"],
+    p = run([sys.executable, str(REPO / "tools/ci_preflight.py")],
             check=False)
     if p.returncode != 0:
-        fail("ci_preflight is RED after --fix — fix the printed gate, "
+        fail("ci_preflight is RED — fix the printed gate, "
              "then re-run sync-main.")
         return 3
-    tools_md = "packages/radia-mcp/docs/TOOLS.md"
-    if tools_md in _git("status", "--porcelain").stdout:
-        _git("add", tools_md)
-        _git("commit", "-m",
-             "docs(mcp): regenerate TOOLS.md (release_quad sync-main)")
-        ok("committed regenerated TOOLS.md")
 
     p = run([GIT_EXE, "-C", str(REPO), "push", "origin", "main"], check=False)
     if p.returncode != 0:
@@ -2382,7 +2376,7 @@ def main():
     sub.add_parser("ci-verify",
                     help="Phase 5.5: SHA-bound CI-green gate (after push main, before tag)")
     sm = sub.add_parser("sync-main",
-                        help="fetch -> twin-aware rebase -> preflight --fix -> push")
+                        help="fetch -> twin-aware rebase -> preflight -> push")
     sm.add_argument("--no-push", action="store_true",
                     help="stop after the rebase (prep-only)")
     em = sub.add_parser("evidence-motor",

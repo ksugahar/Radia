@@ -213,8 +213,10 @@ non-standard.
 
 `radia-mcp` treats a green test matrix as release-candidate evidence,
 not as the final operational claim.  The public MCP surface is healthy
-when the matrix, policy lint, version consistency, generated
-`docs/TOOLS.md` drift check, and top-level pytest collection all pass.
+when the matrix, policy lint, version consistency, live catalog contracts,
+and top-level pytest collection all pass. Tool discovery is verified from
+`radia_mcp.meta` and each server's actual `tools/list`; generated inventory
+snapshots are not committed or used as a CI oracle.
 
 Operational quality is claimed only after PyPI-installed MCP entry
 points smoke successfully and the release-quad machine checks pass on

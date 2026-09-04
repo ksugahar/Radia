@@ -310,7 +310,6 @@ def radia_mcp_golden_gate(check_path: bool = False) -> dict:
         "checks": checks,
         "full_gate_commands": [
             "python tools/policy_lint.py --tracked-only",
-            "python scripts/gen_tools_doc.py --check",
             "pytest tests/test_meta_health.py tests/test_each_server_selftest.py tests/test_policy_lint.py",
         ],
     }

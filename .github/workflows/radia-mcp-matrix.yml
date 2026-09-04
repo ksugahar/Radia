@@ -48,7 +48,6 @@ jobs:
       python_versions: ${{ steps.classify.outputs.python_versions }}
       run_tests: ${{ steps.classify.outputs.run_tests }}
       run_full: ${{ steps.classify.outputs.run_full }}
-      check_tools_doc: ${{ steps.classify.outputs.check_tools_doc }}
       build_wheel: ${{ steps.classify.outputs.build_wheel }}
       changed_files_json: ${{ steps.classify.outputs.changed_files_json }}
     steps:
@@ -82,7 +81,6 @@ jobs:
           python_versions='["3.12"]'
           run_tests=true
           run_full=false
-          check_tools_doc=false
           build_wheel=false
           files=''
 
@@ -91,13 +89,11 @@ jobs:
             python_versions='["3.12"]'
             run_tests=false
             run_full=false
-            check_tools_doc=false
             build_wheel=true
           elif [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             mode=full
             python_versions='["3.10","3.11","3.12"]'
             run_full=true
-            check_tools_doc=false
             build_wheel=true
           else
             if [[ "$EVENT_NAME" == "pull_request" ]]; then
@@ -114,14 +110,12 @@ jobs:
               python_versions='["3.12"]'
               run_tests=false
               run_full=false
-              check_tools_doc=false
               build_wheel=false
             elif [[ -n "$files" ]] && ! grep -qvE '^packages/radia-mcp/(pyproject\.toml$|src/radia_mcp/__init__\.py$|README\.md$|CHANGELOG\.md$)' <<<"$files"; then
               mode=package
               python_versions='["3.12"]'
               run_tests=false
               run_full=false
-              check_tools_doc=false
               build_wheel=true
             else
               if grep -qE '^packages/radia-mcp/src/' <<<"$files"; then
@@ -132,9 +126,6 @@ jobs:
               fi
             fi
 
-            if grep -qE '^packages/radia-mcp/(docs/TOOLS\.md|scripts/gen_tools_doc\.py)$' <<<"$files"; then
-              check_tools_doc=true
-            fi
           fi
 
           changed_files_json=$(printf '%s\n' "$files" | jq -R -s -c 'split("\n") | map(select(length > 0))')
@@ -143,7 +134,6 @@ jobs:
           echo "python_versions=$python_versions" >> "$GITHUB_OUTPUT"
           echo "run_tests=$run_tests" >> "$GITHUB_OUTPUT"
           echo "run_full=$run_full" >> "$GITHUB_OUTPUT"
-          echo "check_tools_doc=$check_tools_doc" >> "$GITHUB_OUTPUT"
           echo "build_wheel=$build_wheel" >> "$GITHUB_OUTPUT"
           echo "changed_files_json=$changed_files_json" >> "$GITHUB_OUTPUT"
           echo "Selected radia-mcp CI mode: $mode"
@@ -201,7 +191,6 @@ jobs:
       - name: Install minimal deps
         if: >-
           needs.scope.outputs.run_tests == 'true' ||
-          needs.scope.outputs.check_tools_doc == 'true' ||
           needs.scope.outputs.build_wheel == 'true'
         shell: bash
         env:
@@ -289,23 +278,6 @@ jobs:
               subprocess.run(command, cwd=package_root, env=env).returncode
           )
           PY
-
-      # TOOLS.md drift gate — regenerate the auto-generated inventory
-      # and fail if it differs from the committed copy. Catches the
-      # 2026-05-24 release-time regression where TOOLS.md silently
-      # carried a 9-server / 129-tool snapshot while the catalog had
-      # grown to 37 / 281.
-      - name: TOOLS.md drift gate
-        if: matrix.python-version == '3.12' && needs.scope.outputs.check_tools_doc == 'true'
-        shell: bash
-        run: |
-          python packages/radia-mcp/scripts/gen_tools_doc.py
-          if ! git diff --exit-code -- packages/radia-mcp/docs/TOOLS.md; then
-            echo "::error::packages/radia-mcp/docs/TOOLS.md is stale."
-            echo "::error::Run locally: python packages/radia-mcp/scripts/gen_tools_doc.py"
-            echo "::error::then commit the resulting docs/TOOLS.md change."
-            exit 1
-          fi
 
       # Run both the local health check and the real MCP protocol path for
       # affected servers. Explicit full audit selects all; a shared runtime
