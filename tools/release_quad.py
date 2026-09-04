@@ -1274,14 +1274,17 @@ if git_exe is None:
     raise RuntimeError("Git is required by the editable release probe")
 
 def hsh_git(relpath):
-    try:
-        d = subprocess.run([git_exe, "-C", root, "show", tag + ":" + relpath],
-                           capture_output=True).stdout
-        NL = bytes([10]); CR = bytes([13])
-        d = d.replace(CR + NL, NL).replace(CR, NL)
-        if not d: return "MISSING"
-        h = hashlib.sha256(); h.update(d); return h.hexdigest()[:12]
-    except Exception: return "MISSING"
+    result = subprocess.run(
+        [git_exe, "-c", "safe.directory=" + root, "-C", root,
+         "show", tag + ":" + relpath],
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        detail = result.stderr.decode(errors="replace").strip()
+        raise RuntimeError(f"git show failed for {relpath}: {detail}")
+    NL = bytes([10]); CR = bytes([13])
+    d = result.stdout.replace(CR + NL, NL).replace(CR, NL)
+    h = hashlib.sha256(); h.update(d); return h.hexdigest()[:12]
 
 print(f"VER radia              = {radia.__version__}")
 print(f"VER cubit-mesh-export  = {cubit_mesh_export.__version__}")
