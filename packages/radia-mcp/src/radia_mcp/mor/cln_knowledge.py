@@ -577,10 +577,33 @@ wall band (1.5 wins above 100 kHz, 3 loses); a second edge rate 2 alpha gives
 linearly dependent while the Galerkin value is not: solve the Jacobi-scaled
 system by truncated-SVD least squares (rcond 1e-12), never by a plain LU.
 
-SIBC corner and edge treatments exist independently (Deeley 1990 IEEE TMag
-26(2):712; Yuferev-Proekt-Ida 2001 IEEE TMag 37(5):3465); the bump above is
-a Galerkin DOF, not an SIBC correction formula, and the two are not yet
-compared.
+Prior work (Crossref-verified survey, 2026-09-04; keys in the canonical
+references.bib): edge and corner SIBC corrections are forty years old and
+all of one kind, a LOCAL modification of the surface impedance or an
+additive corner loss constant driven by the outer (perfect-conductor)
+field: Hoole-Carpenter 1985 (hoole1985surface), Deeley 1988/1990/1994
+(deeley1988improved, deeley1990surface, deeley1994improved: two-mode
+diffusion solution, cross-coupling at corners, no extra unknown),
+Wang-Lavers 1992/1993 (wang1992modified, wang1993modified), Park et al.
+1995 (park1995three), Aymard et al. 1997 (aymard1997improved),
+Yuferev-Proekt-Ida 2001 (yuferev2001surface: perturbation about the PEC
+edge singularity), Proekt-Yuferev-Tsukerman-Ida 2002
+(proekt2002overlapping: a separate edge patch, the closest thing to a
+local DOF), Yuferev-Ida 2009 sec. 3.7 (yuferev2009surface); loss-side
+corner constants and the delta-expansion of a rectangular conductor's
+impedance (faces + corners, 2-D) by Warne 1994-1996/2022 (warne1994eddy,
+warne2022asymptotic); corner asymptotics of the eddy-current potential by
+Dauge et al. 2014 (dauge2014corner) and Buret et al. 2012 (buret2012eddy).
+Transition-band coupling of a surface condition to interior unknowns
+appears as TD-SIBC plus coarse volume FE (Sabariego et al. 2012,
+sabariego2012time) and as a non-local all-frequency IBC (Badics et al.
+2019, badics2019nonlocal). The heat-content analogy is van den
+Berg-Gilkey 1994 (vandenberg1994heat, smooth boundary) and van den
+Berg-Srisatkunarajah 1990 (vandenberg1990heat, polygon corner terms).
+NOT found: independent face / edge / vertex amplitudes as Galerkin DOFs
+coupled to the bulk low-frequency modes across the transition band, nor an
+explicit 3-D codimension expansion (faces ~ delta, edges ~ delta^2,
+vertices ~ delta^3) of the admittance. Say 'to the best of our knowledge'.
 
 ## Time domain
 
