@@ -33,6 +33,22 @@ import numpy as np
 from math import sqrt as msqrt
 
 MU_0 = 4 * np.pi * 1e-7
+DEFAULT_GAUGE_EPSILON = 1.0e-6
+LINEAR_RELATIVE_RESIDUAL_LIMIT = 1.0e-6
+
+
+def _relative_residual_on_free_dofs(residual_values, rhs_values, free_dof_mask):
+    """Return the algebraic residual norm on unconstrained HCurl DOFs."""
+    residual = np.asarray(residual_values)
+    rhs = np.asarray(rhs_values)
+    free = np.asarray(free_dof_mask, dtype=bool)
+    if residual.shape != rhs.shape or free.shape != residual.shape:
+        raise ValueError("residual, RHS, and free-DOF mask shapes must match")
+    residual_norm = float(np.linalg.norm(residual[free]))
+    rhs_norm = float(np.linalg.norm(rhs[free]))
+    if rhs_norm > 0.0:
+        return residual_norm / rhs_norm
+    return 0.0 if residual_norm == 0.0 else float("inf")
 
 
 def _build_nu_of_b_interpolator(bh_data):
@@ -97,7 +113,7 @@ class VectorPotentialSolver:
     order : int
         FEM polynomial order (default: 2).
     kelvin_region : str, optional
-        Material name of Kelvin exterior domain region (reserved for future use).
+        Material name of the compactified Kelvin exterior domain.
     kelvin_radius : float, optional
         Inner radius R of Kelvin exterior domain [m].
     kelvin_center : list/tuple, optional
@@ -157,6 +173,8 @@ class VectorPotentialSolver:
         self._A_gf = None
         self._B_cf = None
         self._H_cf = None
+        self._last_linear_stats = None
+        self._last_nonlinear_stats = None
 
     # ------------------------------------------------------------------
     # Source field setup
@@ -304,7 +322,9 @@ class VectorPotentialSolver:
     # Linear solver
     # ------------------------------------------------------------------
 
-    def solve_linear(self, dirichlet='default', eps=1e-10, solver='auto'):
+    def solve_linear(self, dirichlet='default',
+                     eps=DEFAULT_GAUGE_EPSILON, solver='auto',
+                     kelvin_eps=None):
         """Solve the linear A_r formulation.
 
         Finds A_r in HCurl satisfying:
@@ -317,10 +337,18 @@ class VectorPotentialSolver:
         dirichlet : str
             Boundary label for Dirichlet BC (A x n = 0).
         eps : float
-            Gauge regularization strength.
+            Dimensionless gauge regularization strength in physical regions.
         solver : str
             'auto' (AMS if available, else BDDC for large, direct for small),
-            'ams' (Chebyshev AMS + TaskManager), 'bddc', or 'direct'.
+            'ams' (Chebyshev AMS + TaskManager), 'bddc', or 'direct'. Kelvin
+            systems use direct below 200,001 DOFs and BDDC above that limit;
+            their Periodic high-order space does not support the current AMS
+            auxiliary-space construction.
+        kelvin_eps : float, optional
+            Dimensionless gauge regularization strength in the compactified
+            Kelvin region. Defaults to ``eps``. This separate control is for
+            convergence studies; weakening only one side can make BDDC local
+            blocks singular.
         """
         from ngsolve import (GridFunction, BilinearForm, LinearForm,
                              curl, InnerProduct, dx, Preconditioner,
@@ -332,8 +360,12 @@ class VectorPotentialSolver:
 
         nu_cf = self._build_nu_cf()
         nu_0 = 1.0 / MU_0
+        physical_eps, resolved_kelvin_eps = self._resolve_gauge_epsilons(
+            eps, kelvin_eps)
 
         fes = self._make_hcurl_space(dirichlet)
+        free_dof_mask = np.fromiter(
+            fes.FreeDofs(), dtype=np.bool_, count=int(fes.ndof))
 
         solver = self._select_solver(fes.ndof, solver)
 
@@ -343,12 +375,19 @@ class VectorPotentialSolver:
         all_mats = list(dict.fromkeys(self.mesh.GetMaterials()))
 
         # Bilinear form: nu * curl(A) . curl(v) + eps*nu_0 * A . v.
-        # eps is dimensionless; scaling by nu_0 is essential on the Kelvin
-        # ball where nu tends to zero at the compactification centre.
-        gauge_coeff = eps * nu_0
-        a = BilinearForm(fes)
+        # BDDC inverts element-local blocks. Both the physical and Kelvin
+        # regions therefore need a non-degenerate gauge term; strengthening
+        # only the compactified exterior does not regularize physical blocks.
+        physical_gauge_coeff = physical_eps * nu_0
+        kelvin_gauge_coeff = (
+            resolved_kelvin_eps * nu_0
+            if resolved_kelvin_eps is not None else physical_gauge_coeff)
+        a = BilinearForm(fes, symmetric=True)
         for mat in all_mats:
             a += nu_cf * InnerProduct(curl(A), curl(v)) * dx(mat)
+            gauge_coeff = (kelvin_gauge_coeff
+                           if mat == self._kelvin_region
+                           else physical_gauge_coeff)
             a += gauge_coeff * InnerProduct(A, v) * dx(mat)
 
         pre_bddc = None
@@ -367,18 +406,49 @@ class VectorPotentialSolver:
 
         # NOTE: Caller MUST be inside `with TaskManager():` per CLAUDE.md
         # "Caller Wraps, Helper Does NOT" (2026-05-27).
+        iterations = None
         if solver == 'ams':
-            pre = self._setup_ams_preconditioner(a.mat, fes, gauge_coeff)
+            pre = self._setup_ams_preconditioner(
+                a.mat, fes, physical_gauge_coeff)
             inv = CGSolver(mat=a.mat, pre=pre, maxiter=2000,
                            tol=1e-10, printrates=False)
             self._A_gf.vec.data = inv * f.vec
+            iterations = getattr(inv, 'iterations', None)
         elif solver == 'bddc':
             inv = CGSolver(mat=a.mat, pre=pre_bddc.mat, maxiter=2000,
                            tol=1e-10, printrates=False)
             self._A_gf.vec.data = inv * f.vec
+            iterations = getattr(inv, 'iterations', None)
         else:
             self._A_gf.vec.data = (
                 a.mat.Inverse(fes.FreeDofs()) * f.vec)
+
+        solution_values = np.asarray(self._A_gf.vec.FV().NumPy())
+        linear_residual = f.vec.CreateVector()
+        linear_residual.data = f.vec - a.mat * self._A_gf.vec
+        relative_residual = _relative_residual_on_free_dofs(
+            linear_residual.FV().NumPy(), f.vec.FV().NumPy(), free_dof_mask)
+        if (not np.all(np.isfinite(solution_values))
+                or not np.isfinite(relative_residual)):
+            raise RuntimeError(
+                "reduced-A linear solve produced a non-finite solution or "
+                "residual; increase eps in both physical and Kelvin regions"
+            )
+        if relative_residual > LINEAR_RELATIVE_RESIDUAL_LIMIT:
+            raise RuntimeError(
+                "reduced-A linear solve failed its relative-residual contract: "
+                f"{relative_residual:.6e} > "
+                f"{LINEAR_RELATIVE_RESIDUAL_LIMIT:.1e}"
+            )
+        self._last_linear_stats = {
+            'solver': solver,
+            'ndof': int(fes.ndof),
+            'iterations': (int(iterations) if iterations is not None else None),
+            'physical_gauge_epsilon': physical_eps,
+            'kelvin_gauge_epsilon': resolved_kelvin_eps,
+            'relative_residual': relative_residual,
+            'relative_residual_limit': LINEAR_RELATIVE_RESIDUAL_LIMIT,
+        }
 
         self._B_cf = self._B_source_cf + curl(self._A_gf)
         self._H_cf = nu_cf * self._B_cf
@@ -391,7 +461,7 @@ class VectorPotentialSolver:
 
     def solve_nonlinear_newton(self, bh_data, tol=1e-4, maxiter=50,
                                dirichlet='default', verbose=True,
-                               solver='auto'):
+                               solver='auto', eps=DEFAULT_GAUGE_EPSILON):
         """Newton iteration with SymbolicEnergy for nonlinear B-H curve.
 
         Uses magnetic coenergy w*(B) = integral_0^B H(B') dB' and NGSolve
@@ -412,6 +482,8 @@ class VectorPotentialSolver:
             Print iteration progress.
         solver : str
             'auto', 'ams', 'bddc', or 'direct'.
+        eps : float
+            Dimensionless gauge regularization strength.
         """
         from ngsolve import (HCurl, GridFunction, BilinearForm, BSpline,
                              SymbolicEnergy, InnerProduct, curl, dx,
@@ -503,7 +575,7 @@ class VectorPotentialSolver:
             -nu_0 * InnerProduct(self._B_source_cf, curl(A)))
 
         # Gauge regularization: eps * |A|^2 / 2
-        eps = 1e-10
+        eps, _ = self._resolve_gauge_epsilons(eps, None)
         gauge_coeff = eps * nu_0
         a += SymbolicEnergy(
             gauge_coeff / 2.0 * InnerProduct(A, A))
@@ -535,9 +607,8 @@ class VectorPotentialSolver:
             r.data = -au
 
             if solver == 'ams':
-                eps_gauge = 1e-10
                 pre = self._setup_ams_preconditioner(
-                    a.mat, fes, eps_gauge)
+                    a.mat, fes, gauge_coeff)
                 inv = CGSolver(mat=a.mat, pre=pre,
                                maxiter=2000, tol=1e-10,
                                printrates=False)
@@ -600,7 +671,8 @@ class VectorPotentialSolver:
     # ------------------------------------------------------------------
 
     def solve_nonlinear(self, bh_data, tol=1e-4, maxiter=50, relax=0.3,
-                        dirichlet='default', verbose=True, solver='auto'):
+                        dirichlet='default', verbose=True, solver='auto',
+                        eps=DEFAULT_GAUGE_EPSILON, kelvin_eps=None):
         """Picard iteration for nonlinear A_r formulation.
 
         Each iteration: solve linear -> evaluate |B| -> update nu -> repeat.
@@ -624,9 +696,14 @@ class VectorPotentialSolver:
             Print iteration progress.
         solver : str
             'auto', 'ams', 'bddc', or 'direct'.
+        eps : float
+            Dimensionless gauge regularization strength in physical regions.
+        kelvin_eps : float, optional
+            Dimensionless gauge regularization strength in the compactified
+            Kelvin region. Defaults to ``eps``.
         """
         from ngsolve import (HCurl, L2, GridFunction, BilinearForm, LinearForm,
-                             curl, InnerProduct, Norm, dx, VOL, Preconditioner,
+                             curl, InnerProduct, dx, VOL, Preconditioner,
                              TaskManager)
         if self._B_source_cf is None:
             raise RuntimeError("Set source field first")
@@ -637,6 +714,8 @@ class VectorPotentialSolver:
 
         # FE space
         fes = self._make_hcurl_space(dirichlet)
+        free_dof_mask = np.fromiter(
+            fes.FreeDofs(), dtype=np.bool_, count=int(fes.ndof))
 
         if verbose:
             print(f"  HCurl DOFs: {fes.ndof}")
@@ -674,13 +753,12 @@ class VectorPotentialSolver:
         final_relative_change = None
         maximum_linear_relative_residual = 0.0
         iterations = 0
-        eps = 1e-6
-        # Retain the vacuum-reluctivity scaling used by solve_linear(), but use
-        # a stronger dimensionless gauge for nonlinear periodic Kelvin systems
-        # so every Picard matrix remains in PARDISO's SPD regime.  The physical
-        # curl(A) field is audited by mesh convergence and the three-formulation
-        # HDiv-MMM / reduced-A / omega-reduced-omega comparison.
-        gauge_coeff = eps * nu_air
+        physical_eps, resolved_kelvin_eps = self._resolve_gauge_epsilons(
+            eps, kelvin_eps)
+        physical_gauge_coeff = physical_eps * nu_air
+        kelvin_gauge_coeff = (
+            resolved_kelvin_eps * nu_air
+            if resolved_kelvin_eps is not None else physical_gauge_coeff)
         solver = self._select_solver(fes.ndof, solver)
 
         if verbose:
@@ -694,11 +772,12 @@ class VectorPotentialSolver:
             a = BilinearForm(fes, symmetric=True)
             for mat in phys_mats:
                 a += nu_gf * InnerProduct(curl(A_trial), curl(v)) * dx(mat)
-                a += gauge_coeff * InnerProduct(A_trial, v) * dx(mat)
+                a += physical_gauge_coeff * InnerProduct(
+                    A_trial, v) * dx(mat)
             if kelvin_nu is not None:
                 a += kelvin_nu * InnerProduct(curl(A_trial), curl(v)) * dx(
                     self._kelvin_region)
-                a += gauge_coeff * InnerProduct(A_trial, v) * dx(
+                a += kelvin_gauge_coeff * InnerProduct(A_trial, v) * dx(
                     self._kelvin_region)
 
             # RHS: (1/mu_0 - nu) * B_s . curl(v)
@@ -719,7 +798,7 @@ class VectorPotentialSolver:
             if solver == 'ams':
                 from ngsolve.krylovspace import CGSolver
                 pre = self._setup_ams_preconditioner(
-                    a.mat, fes, gauge_coeff)
+                    a.mat, fes, physical_gauge_coeff)
                 inv = CGSolver(a.mat, pre, maxiter=2000, tol=1e-8,
                                printrates=False)
                 A_gf.vec.data = inv * f.vec
@@ -734,10 +813,9 @@ class VectorPotentialSolver:
 
             linear_residual = f.vec.CreateVector()
             linear_residual.data = f.vec - a.mat * A_gf.vec
-            rhs_norm = float(Norm(f.vec))
-            linear_relative_residual = (
-                float(Norm(linear_residual)) / rhs_norm if rhs_norm > 0.0 else 0.0
-            )
+            linear_relative_residual = _relative_residual_on_free_dofs(
+                linear_residual.FV().NumPy(), f.vec.FV().NumPy(),
+                free_dof_mask)
             maximum_linear_relative_residual = max(
                 maximum_linear_relative_residual, linear_relative_residual
             )
@@ -817,6 +895,9 @@ class VectorPotentialSolver:
             'maximum_iterations': int(maxiter),
             'maximum_linear_relative_residual': maximum_linear_relative_residual,
             'direct_inverse': 'pardisospd' if solver == 'direct' else None,
+            'solver': solver,
+            'physical_gauge_epsilon': physical_eps,
+            'kelvin_gauge_epsilon': resolved_kelvin_eps,
         }
         if not converged and verbose:
             print(f"   WARNING: Not converged after {maxiter} iterations")
@@ -1286,12 +1367,15 @@ class VectorPotentialSolver:
     def _select_solver(self, fes_ndof, solver):
         """Select solver type based on DOF count and availability."""
         if getattr(self, '_kelvin_region', None):
-            if solver in ('ams', 'bddc'):
+            if solver == 'ams':
                 raise ValueError(
-                    f"solver='{solver}' is not supported for Periodic Kelvin "
-                    "HCurl; use solver='direct'"
+                    "solver='ams' is not supported for Periodic Kelvin HCurl: "
+                    "the current auxiliary H1 space is order-1 and Periodic "
+                    "low-order coupling is unavailable; use solver='bddc'"
                 )
-            return 'direct' if solver == 'auto' else solver
+            if solver != 'auto':
+                return solver
+            return 'direct' if fes_ndof <= 200_000 else 'bddc'
         if solver != 'auto':
             if solver == 'ams' and int(self.order) != 1:
                 raise ValueError(
@@ -1310,6 +1394,25 @@ class VectorPotentialSolver:
             return 'bddc'
         except ImportError:
             return 'bddc'
+
+    def _resolve_gauge_epsilons(self, eps, kelvin_eps):
+        """Validate physical/Kelvin dimensionless gauge coefficients."""
+        physical_eps = float(eps)
+        if not np.isfinite(physical_eps) or physical_eps <= 0.0:
+            raise ValueError("eps must be a positive finite number")
+
+        if not getattr(self, '_kelvin_region', None):
+            if kelvin_eps is not None:
+                raise ValueError(
+                    "kelvin_eps requires a configured kelvin_region")
+            return physical_eps, None
+
+        resolved_kelvin_eps = (
+            physical_eps if kelvin_eps is None else float(kelvin_eps))
+        if (not np.isfinite(resolved_kelvin_eps)
+                or resolved_kelvin_eps <= 0.0):
+            raise ValueError("kelvin_eps must be a positive finite number")
+        return physical_eps, resolved_kelvin_eps
 
     def _solve_system(self, a, f, fes, gf, pre, use_iterative):
         """Solve assembled linear system (direct or iterative)."""

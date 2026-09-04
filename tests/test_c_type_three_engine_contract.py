@@ -127,7 +127,9 @@ def test_reduced_a_nonlinear_direct_path_is_symmetric_and_residual_checked():
         "def solve_hysteresis(", 1
     )[0]
     assert "BilinearForm(fes, symmetric=True)" in nonlinear
-    assert "eps = 1e-6" in nonlinear
+    assert "eps=DEFAULT_GAUGE_EPSILON" in nonlinear
+    assert "physical_gauge_coeff = physical_eps * nu_air" in nonlinear
+    assert "kelvin_gauge_coeff" in nonlinear
     assert "inverse='pardisospd'" in nonlinear
     assert "maximum_linear_relative_residual" in nonlinear
     assert "reduced-A linear solve failed its relative-residual" in nonlinear

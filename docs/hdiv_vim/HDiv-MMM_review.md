@@ -151,6 +151,7 @@ an agreement certificate, not analytic absolute truth.
 | F9 | P2 | MATLAB parity is partial at the method level. | `HDivFieldEvaluator` and `EnergyStopMaterial` have native checked MEX handles. The parity manifest classifies `vim/__init__.py` as `python-fallback`; complete solve/mesh/form orchestration is not a native MATLAB API. |
 | F10 | P3 | Configuration provenance and class ownership remain broad. | Fourteen `RADIA_HDIV_*` variables remain, and `RadHACApKChargeGram` still owns entry, build, cache, solve, derivative, field, and diagnostics. Keep diagnostic switches out of release claims and split only at measured ownership boundaries. |
 | F11 | P2, integration open | Kelvin and FFAG rotational periodic identifications can coexist only as distinct identification classes. | The FFAG cyclic helper accepts an explicit `identnr`, while Kelvin identification refuses to treat an unrelated cyclic pair as Kelvin-ready. Focused tests cover separate IDs and the non-poisoning predicate. An end-to-end sector FFAG magnet solve with paired periodic faces, Kelvin exterior, and an independent FEM/HDiv B comparison remains the next application validation. |
+| F12 | Implementation resolved; remote application rerun open | The reduced-A Kelvin failure was a gauge-conditioning defect, not a periodic-identification or source-pullback defect. | The order-2 HCurl interface slaves all edge and face trace DOFs. On the real Example #6 mesh, `eps=1e-10` makes both Periodic and non-Periodic BDDC local inverses non-finite; strengthening only the Kelvin region does not repair them. A uniform `1e-6` gauge gives a finite 705,838-DoF solve in 28 CG iterations with `5.31e-8` true relative residual. `VectorPotentialSolver` now defaults every physical and Kelvin block to `1e-6`, permits an explicit independent `kelvin_eps`, enables BDDC for large Kelvin systems, and rejects non-finite or inaccurate linear solves. The released-wheel #6/#7 three-formulation reruns remain required. |
 
 ### 0.2 Production capability matrix
 
@@ -706,6 +707,48 @@ These are readiness records, not numerical certificates.  Do not cite
 three-engine agreement for Examples 6 or 7 until the runner finishes from a
 released native wheel on mdx or hibino and writes its checked result JSON.
 
+### 5.4 Periodic Kelvin BDDC gauge diagnosis (2026-09-04)
+
+The reduced-A failure on the staged Example #6 FEM mesh was isolated before
+changing the physical formulation.  The `kelvin_int` and `kelvin_ext` surfaces
+have 1,393 point pairs with a constant `(0.48, 0, 0)` translation and
+`2.99e-16 m` maximum pairing error.  Periodic order-2 HCurl marks 9,737 minion
+DOFs unused, exactly `4,173 + 2*2,782`, accounting for every interface edge DOF
+and both tangential face modes.  Removing `Periodic` did not remove the NaNs.
+The identification is therefore complete and is not the failing component.
+
+The external source pullback is also independent of this failure.  The
+reduced-A right-hand side is supported in iron, while the solved reaction field
+extends through physical air and the Kelvin domain.  The 1-form A pullback,
+2-form B pullback, and Kelvin reluctivity factor already have separate focused
+tests.  Applying the BDDC preconditioner to the assembled right-hand side at
+the former uniform `1e-10` gauge produced non-finite values before CG began;
+the same happened on the non-Periodic HCurl space.  PARDISO SPD reported error
+`-4`, and sparse Cholesky returned a non-finite solution after 150.44 s.
+
+An exterior-only split does not fix the matrix: physical `1e-10` with Kelvin
+`1e-6`, both as a constant and with a Kelvin metric factor, still gives a
+non-finite preconditioner application.  BDDC inverts element-local blocks, so
+curl-free local modes in the physical region also need a usable mass gauge.
+With `1e-6` in every region, the actual 705,838-DoF Example #6 matrix assembled
+in 15.72 s and CG completed in 28 iterations and 24.02 s, with `5.3061e-8` true
+relative residual.  A separate curved order-2 35,174-DoF Kelvin regression
+completed in 46 iterations with `1.6020e-10` true relative residual.
+On that regression, retaining physical `1e-6` while raising only the Kelvin
+coefficient to `1e-5` changed the three-probe B field by `2.53e-7` relative to
+uniform `1e-6`; raising both regions to `1e-5` changed it by `1.10e-4`.
+
+The production API consequently exposes `eps` for physical regions and
+`kelvin_eps` for the compactified exterior, with `kelvin_eps=None` inheriting
+the physical value.  Both default to the measured stable `1e-6` scale.  The
+split is a convergence-study control, not permission to leave the physical
+blocks singular.  Every linear solve now records both resolved values and its
+true residual and fails loudly on a non-finite solution or a residual above
+`1e-6`.  AMS remains unavailable for Periodic Kelvin HCurl because its current
+auxiliary H1 construction is order-1 and NGSolve does not expose the required
+Periodic low-order coupling; high-order Kelvin `auto` selects BDDC above
+200,000 DOFs.
+
 ## 6. Remaining work and acceptance criteria
 
 | Priority | Item | Acceptance criterion |
@@ -715,6 +758,7 @@ released native wheel on mdx or hibino and writes its checked result JSON.
 | P1 | Nonlinear C-yoke memory evidence | Four-level accuracy and repeated timing are closed on mdx and hibino for `v4.95.71`. Add measured process peak memory to a future scaling campaign before making a memory-efficiency claim. reduced-A remains an independent third-formulation audit rather than the primary production route. |
 | P1 | ESRF #3 H-matrix three-engine evidence | Run the repaired `leaf=64` operator on mdx or hibino through the tracked nonlinear three-engine runner. Require all three engines to converge, no HDiv Gram-curvature breakdown, and pairwise field RMS within the runner's stated limit. |
 | P1 | ESRF #6 and #7 three-engine evidence | Run the new coil-yoke runner from the released native wheel on mdx or hibino. Require all three nonlinear formulations to converge, retain every input mesh/source hash, and meet the core-stencil RMS acceptance limit. |
+| P1 | Released reduced-A Kelvin BDDC replay | Install the merged wheel on hibino or mdx and rerun Examples #6 and #7. Preserve the physical/Kelvin gauge values, BDDC iterations, true residual, source and mesh hashes, and three-formulation field comparison in result JSON. |
 | Resolved for primal path | Mapped HEX BDM2 material solve | The composite mapped charge representation passes spectrum, linear/nonlinear solve, IMA, field, and quadrature-convergence gates on mdx. |
 | P2 | Mapped HEX BDM2 shape derivative | Differentiate the same complete-host tensor and whole-host Duffy representation, then lock it against finite differences before enabling topology optimization. The current API fails loudly. |
 | P2 | Image-aware field acceleration | Design grouping that is invariant under explicit reflection and reduced IMA representation; prove `<10 eps` direct parity before enabling tree/H-matrix evaluation for image-bearing field maps. |
@@ -754,6 +798,11 @@ worktree, then repeated with the exact `v4.95.70` timing wheel and the final
 - 3 IMA field roundoff tests: FAIL, including isolated-process reruns, with the
   measurements recorded in section 4;
 - batched/block-PCG true-residual and constrained-H-matrix checks: 2 tests PASS.
+- reduced-A Kelvin BDDC candidate: 17 dispatch/contract tests PASS; curved
+  order-2 35,174-DoF Periodic HCurl solve PASS in 46 iterations with
+  `1.6020e-10` true relative residual. The real Example #6 diagnostic gives
+  28 iterations and `5.3061e-8` at 705,838 DoFs with a uniform `1e-6` gauge;
+  the released-wheel three-engine rerun remains open.
 - exact-dense ChargeGram entry, public `DemagOperator`/`vim.Solve`, and
   configured-principal-submatrix semantics: 9 tests PASS in 5.87 s on LAB;
 - ESRF #3 exact-dense material diagnostic: PASS under its explicit 1 GiB cap.
