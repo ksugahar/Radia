@@ -7,6 +7,24 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- paper-writing / presentation: count an overfull box from every site TeX
+  reports one. Both servers keyed on `in paragraph at lines`, so an overfull
+  table row (`in alignment`), a float TeX had to break out (`detected at
+  line`), and anything raised while the output routine runs were all counted
+  as zero. That last form is the `\vbox` beamer emits when a slide overflows
+  its frame, so the slide check most worth having never fired. The two copies
+  of the scanner are now one shared `radia_mcp._shared.latex_log`, which
+  covers all four sites and reports `hbox_count` / `vbox_count` separately.
+- paper-writing: `classify_reviewer_comment` held the regex
+  `fig.\s*\d+ caption` inside a plain substring test, where it could never
+  match; "The Fig. 3 caption has a wrong unit" fell through to the `B?`
+  default and was answered as a rewrite request instead of a typo fix.
+- paper-writing: `skill.md` told readers to call
+  `paper_writing_check_subject_verb_distance`, which does not exist — the tool
+  is `paper_writing_check_subject_predicate_distance`. A regression test now
+  fails when the skill names a `paper_writing_*` tool the server does not
+  register.
+
 ## [1.4.52] - 2026-09-04
 
 - CI and packaging: split independently published distributions into
