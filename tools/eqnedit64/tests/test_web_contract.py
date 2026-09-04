@@ -85,10 +85,16 @@ def test_palette_keys_explain_themselves_without_hover() -> None:
     """
     assert "function showKeyHelp(text)" in SOURCE
     assert "function clearKeyHelp(text)" in SOURCE
-    assert 'button.setAttribute("aria-label", description)' in SOURCE
     assert 'button.addEventListener("mouseenter"' in SOURCE
     assert 'button.addEventListener("focus"' in SOURCE
     assert 'status.setAttribute("data-tex-literal-ok", "true")' in SOURCE
+    # The visible face must stay the key's accessible name: an aria-label
+    # would replace it, so "arg min" would no longer address the key for a
+    # screen reader, for voice control, or for the homepage QA locator.
+    keys = SOURCE.split("palette.items.forEach", 1)[1].split(
+        "row.appendChild(button)", 1)[0]
+    assert 'setAttribute("aria-label"' not in keys
+    assert "button.title = description" in keys
 
 
 def test_teaching_surfaces_are_exempt_from_the_bare_tex_scan() -> None:
