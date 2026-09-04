@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **1108 tools** across 49 MCP servers.
+Total: **1110 tools** across 49 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -50,7 +50,7 @@ Total: **1108 tools** across 49 MCP servers.
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 10 |
 | [`mcp-server-document-meta`](#mcp-server-document-meta) | `radia_mcp.document_meta` | 12 |
 | [`mcp-server-pdf`](#mcp-server-pdf) | `radia_mcp.pdf` | 17 |
-| [`mcp-server-doc-convert`](#mcp-server-doc-convert) | `radia_mcp.doc_convert` | 22 |
+| [`mcp-server-doc-convert`](#mcp-server-doc-convert) | `radia_mcp.doc_convert` | 24 |
 | [`mcp-server-bibliography`](#mcp-server-bibliography) | `radia_mcp.bibliography` | 23 |
 | [`mcp-server-research-project`](#mcp-server-research-project) | `radia_mcp.research_project` | 6 |
 | [`mcp-server-radia-meta`](#mcp-server-radia-meta) | `radia_mcp.meta` | 11 |
@@ -1521,6 +1521,8 @@ Module: `radia_mcp.doc_convert.server`
 | `doc_convert_rename_business_card` | Rename a scanned-business-card file to ``<company>_<name><ext>``. |
 | `doc_convert_rename_pdf_by_title` | Rename a PDF to ``<sanitized-title>.pdf`` (collision-safe). |
 | `doc_convert_resize_for_print` | Shrink a pptx to ``target_width_cm`` and set ALL fonts to ``target_font_pt``. |
+| `doc_convert_session_font_check` | このセッションで各書体が GDI から本当に描けるかを確かめる。 |
+| `doc_convert_session_font_repair` | セッションで壊れた書体を、再起動せずにフォント表へ読み直させる。 |
 | `doc_convert_slide_lint` | Run accessibility + density lints on every slide. |
 | `doc_convert_slide_to_image` | Export one slide as an image file via PowerPoint COM. |
 | `doc_convert_status` | (no description) |
