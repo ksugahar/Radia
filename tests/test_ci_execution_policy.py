@@ -121,11 +121,13 @@ def test_distribution_ci_is_change_scoped_and_mcp_full_suite_is_explicit():
     assert "radia_mcp_health" not in mcp
     assert "pytest-rerunfailures" not in mcp
     assert "--reruns" not in mcp
+    assert "check_tools_doc" not in mcp
+    assert "TOOLS.md drift gate" not in mcp
     assert "mode=release" in mcp
     assert "needs.scope.outputs.build_wheel == 'true'" in mcp
 
 
-def test_preflight_checks_generated_tool_inventory_only_when_affected():
+def test_preflight_uses_live_mcp_contracts_without_generated_inventory_gate():
     preflight = _preflight_module()
 
     source_keys = {
@@ -135,14 +137,6 @@ def test_preflight_checks_generated_tool_inventory_only_when_affected():
         )
     }
     assert source_keys == {"policy", "publish-boundary", "version", "radia-mcp"}
-
-    inventory_keys = {
-        key
-        for key, _, _ in preflight._gates_for_changes(
-            ["packages/radia-mcp/docs/TOOLS.md"]
-        )
-    }
-    assert inventory_keys == {"policy", "version", "tools-md"}
 
     docs_keys = {
         key
@@ -162,9 +156,12 @@ def test_preflight_checks_generated_tool_inventory_only_when_affected():
         "policy",
         "publish-boundary",
         "version",
-        "tools-md",
         "radia-mcp",
     }
+
+    assert not hasattr(preflight, "gate_tools_md")
+    gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
+    assert "/packages/radia-mcp/docs/TOOLS.md" in gitignore
 
 
 def test_pre_push_runs_the_unpushed_candidate_on_mdx():
@@ -199,7 +196,9 @@ def test_policy_twins_define_the_same_mdx_notebook_contract():
     assert "use hibino first when it is available" in normalized
     assert "the mdx CI queue is idle" in normalized
     assert "CI scope begins at the independently released distribution boundary" in normalized
-    assert "generated-inventory checks run when the inventory or its generator changes" in normalized
+    assert "each server's live `tools/list` response are the tool-discovery source of truth" in normalized
+    assert "Generated tool inventory snapshots are local diagnostics" in normalized
+    assert "not committed artifacts or CI oracles" in normalized
     assert "normal pull-request and main-push CI runs a stable compact contract set" in normalized
     assert "tests selected from the changed source/test paths" in normalized
     assert "only the affected server selftests" in normalized

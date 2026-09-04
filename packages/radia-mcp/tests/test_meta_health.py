@@ -8,8 +8,6 @@ This is the canonical "is the package healthy" test — run on every PR
 """
 
 import re
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
@@ -129,25 +127,8 @@ def test_meta_golden_gate_passes_catalog_contracts():
     assert gate["n_servers"] >= 30
     assert any(c["name"] == "optuna_external_boundary" and c["ok"]
                for c in gate["checks"])
-    assert "python scripts/gen_tools_doc.py --check" in gate["full_gate_commands"]
-
-
-def test_generated_tools_inventory_is_current():
-    """docs/TOOLS.md must stay synchronized with the live MCP tool registry."""
-    pkg_root = Path(__file__).resolve().parents[1]
-    result = subprocess.run(
-        [sys.executable, "scripts/gen_tools_doc.py", "--check"],
-        cwd=pkg_root,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=60,
-    )
-    assert result.returncode == 0, (
-        "docs/TOOLS.md is stale; run `python scripts/gen_tools_doc.py`.\n"
-        f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
-    )
+    assert all("gen_tools_doc" not in command
+               for command in gate["full_gate_commands"])
 
 
 def test_readme_mcp_entrypoints_are_cataloged_or_external():

@@ -9,23 +9,21 @@ Gates:
   1. policy-lint        -- the 8 static policies (CblasColMajor etc.)
   2. publish-boundary   -- radia-mcp provenance/internal-path lint + selftest
   3. version-consistency-- pyproject == __init__ for radia / radia-mcp / cme
-  4. tools-md-drift     -- regenerate docs/TOOLS.md and diff (WIP-aware)
-  5. radia-mcp          -- compile + health + impact-selected package tests
+  4. radia-mcp          -- compile + health + impact-selected package tests
                            and affected server selftests under the same
                            minimal-dependency simulation as GitHub CI
-  6. toplevel-collect   -- explicit `pytest tests/ --collect-only` diagnostic
-  7. toplevel-run       -- (only with --full) run the lightweight tests/
-  8. validation-collect -- (only with --validation) collect the heavy
+  5. toplevel-collect   -- explicit `pytest tests/ --collect-only` diagnostic
+  6. toplevel-run       -- (only with --full) run the lightweight tests/
+  7. validation-collect -- (only with --validation) collect the heavy
                            validation_test/ suite
-  9. validation-run     -- (only with --validation --full) run the heavy
+  8. validation-run     -- (only with --validation --full) run the heavy
                            validation_test/ suite
 
 Usage:
     python tools/ci_preflight.py            # affected compact gates
     python tools/ci_preflight.py --full     # also run lightweight tests/
     python tools/ci_preflight.py --validation  # also collect validation_test/
-    python tools/ci_preflight.py --fix      # auto-regenerate TOOLS.md on drift
-    python tools/ci_preflight.py --only policy,tools-md
+    python tools/ci_preflight.py --only policy,radia-mcp
 
 Exit 0 = all green, safe to push.  Non-zero = a gate CI would fail is red.
 """
@@ -157,73 +155,7 @@ def gate_version_consistency():
 
 
 # ======================================================================
-# Gate 4: TOOLS.md drift  (WIP-aware)
-# ======================================================================
-def gate_tools_md(fix=False):
-    gen = os.path.join("packages", "radia-mcp", "scripts", "gen_tools_doc.py")
-    doc = "packages/radia-mcp/docs/TOOLS.md"
-
-    rc, out = _sh(["git", "status", "--porcelain", "--", "packages/radia-mcp/src"])
-    wip = [ln for ln in out.splitlines() if ln.strip()]
-
-    if not wip:
-        # Fast path: working tree == committed; regenerate in place + diff.
-        rc, out = _sh([sys.executable, os.path.join(REPO, gen)])
-        if rc != 0:
-            return False, f"gen_tools_doc.py failed: {out[-200:]}"
-        rc, _ = _sh(["git", "diff", "--exit-code", "--", doc])
-        if rc == 0:
-            return True, "docs/TOOLS.md matches generated inventory"
-        if fix:
-            return True, "docs/TOOLS.md was STALE -- regenerated (stage it before commit)"
-        _sh(["git", "checkout", "--", doc])  # restore (don't leave dirty)
-        return False, ("docs/TOOLS.md is STALE vs code -- run "
-                       "`python tools/ci_preflight.py --fix` and commit it")
-
-    # WIP present: CI checks out the COMMITTED code, so check the COMMITTED
-    # state (HEAD), NOT the working tree -- otherwise uncommitted radia_mcp/src
-    # changes (this or another concurrent session) false-positive this gate.
-    # Extract HEAD's radia-mcp to a temp dir, regenerate from that committed
-    # code, and compare to HEAD's committed TOOLS.md (exactly what CI does).
-    import io
-    import shutil
-    import tarfile
-    import tempfile
-    tmp = tempfile.mkdtemp(prefix="radia_toolsmd_")
-    try:
-        ar = subprocess.run(["git", "archive", "HEAD", "packages/radia-mcp"],
-                            cwd=REPO, capture_output=True)
-        if ar.returncode != 0:
-            return False, "git archive HEAD failed: " + ar.stderr[-200:].decode(errors="replace")
-        with tarfile.open(fileobj=io.BytesIO(ar.stdout)) as tf:
-            tf.extractall(tmp, filter="data")  # filter: Py3.12+ safe-extract
-        gen_tmp = os.path.join(tmp, "packages", "radia-mcp", "scripts", "gen_tools_doc.py")
-        rc, out = _sh([sys.executable, gen_tmp])  # regen from COMMITTED code
-        if rc != 0:
-            return False, f"gen_tools_doc.py (committed) failed: {out[-200:]}"
-        with open(os.path.join(tmp, "packages", "radia-mcp", "docs", "TOOLS.md"),
-                  encoding="utf-8") as f:
-            regen = f.read()
-        show = subprocess.run(["git", "show", f"HEAD:{doc}"], cwd=REPO,
-                              capture_output=True, text=True,
-                              encoding="utf-8", errors="replace")
-        committed = show.stdout
-        note = f" (checked HEAD; {len(wip)} working-tree WIP file(s) ignored)"
-        if regen.replace("\r\n", "\n") == committed.replace("\r\n", "\n"):
-            return True, "committed docs/TOOLS.md matches committed code" + note
-        if fix:
-            with open(os.path.join(REPO, doc), "w", encoding="utf-8", newline="") as f:
-                f.write(regen)
-            return True, "committed docs/TOOLS.md was STALE -- regenerated from HEAD (stage it)" + note
-        return False, ("committed docs/TOOLS.md is STALE vs COMMITTED code (HEAD): a "
-                       "tool was added/removed without regenerating -- run "
-                       "`python tools/ci_preflight.py --fix` and commit it" + note)
-    finally:
-        shutil.rmtree(tmp, ignore_errors=True)
-
-
-# ======================================================================
-# Gate 5: radia-mcp impact lane
+# Gate 4: radia-mcp impact lane
 # ======================================================================
 def gate_radia_mcp_matrix():
     selector = os.path.join(MCP, "tools", "select_ci_tests.py")
@@ -405,7 +337,6 @@ ALL_GATES = [
     ("policy",          "Policy Lint (8 static policies)",        gate_policy_lint),
     ("publish-boundary","radia-mcp publish-boundary lint",        gate_publish_boundary_lint),
     ("version",         "Version consistency (pyproject==init)",  gate_version_consistency),
-    ("tools-md",        "TOOLS.md drift gate",                    gate_tools_md),
     ("radia-mcp",       "radia-mcp impact lane",                  gate_radia_mcp_matrix),
     ("toplevel-collect","Top-level collect-only (import check)",  gate_toplevel_collect),
 ]
@@ -474,14 +405,6 @@ def _gates_for_changes(changed):
     )
     if mcp_changes and not mcp_docs_only:
         sel |= {"publish-boundary", "radia-mcp"}
-    if any(
-        f in {
-            "packages/radia-mcp/docs/TOOLS.md",
-            "packages/radia-mcp/scripts/gen_tools_doc.py",
-        }
-        for f in changed
-    ):
-        sel.add("tools-md")
     return [g for g in ALL_GATES if g[0] in sel]
 
 
@@ -493,8 +416,6 @@ def main(argv=None):
                     help="also run the lightweight tests/ pytest")
     ap.add_argument("--validation", action="store_true",
                     help="also collect validation_test/; with --full, run it")
-    ap.add_argument("--fix", action="store_true",
-                    help="auto-regenerate TOOLS.md if drifted (stage it yourself)")
     ap.add_argument("--only", default="",
                     help="comma-separated gate keys to run (default: all fast gates)")
     ap.add_argument("--since", default="",
@@ -535,7 +456,7 @@ def main(argv=None):
         sys.stdout.write(f"  {label:42} ... ")
         sys.stdout.flush()
         try:
-            ok, detail = (fn(fix=args.fix) if key == "tools-md" else fn())
+            ok, detail = fn()
         except Exception as e:  # noqa: BLE001
             ok, detail = False, f"gate crashed: {type(e).__name__}: {e}"
         results.append((key, label, ok, detail))

@@ -141,7 +141,7 @@ operational completion.  The minimum pre-push health evidence is:
 - radia-mcp pytest matrix green (latest review evidence: 229 passed)
 - package policy lint green
 - package version consistency green
-- generated `docs/TOOLS.md` drift check green
+- live catalog and affected-server `tools/list` contracts green
 - top-level pytest collection green
 
 After PyPI upload, the release is not "done" until wheel-installed MCP

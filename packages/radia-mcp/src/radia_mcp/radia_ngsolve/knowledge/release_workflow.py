@@ -96,7 +96,7 @@ table is the AI-readable summary.
 
 | Phase | Action | Mandatory? | Notes |
 |------:|--------|-----------|-------|
-| Pre | `sync-main`: fetch -> twin-aware rebase (`--empty=drop` skips commits whose patches landed on origin as rebased twins) -> `ci_preflight --fix` -> push | when NAS main diverged from origin/main | added 2026-08-07 after the recurring 40-min manual rebase-archaeology sessions; refuses on a dirty tree, leaves genuine conflicts in place with instructions |
+| Pre | `sync-main`: fetch -> twin-aware rebase (`--empty=drop` skips commits whose patches landed on origin as rebased twins) -> impact preflight -> push | when NAS main diverged from origin/main | added 2026-08-07 after the recurring 40-min manual rebase-archaeology sessions; refuses on a dirty tree, leaves genuine conflicts in place with instructions |
 | Pre | `evidence-motor [--check|--force]`: rebuild the MEX, ship the snapshot closure to HIBINO over scp, run the MATLAB generator SYNCHRONOUSLY over ssh, fetch the artifact, verify SHA pins, align the pytest test-count | whenever `src/matlab/radia_mex.cpp` / `matlab/+radia/setup.m` / the generator changed | Windows OpenSSH reaps detached children on session exit — the run MUST stay synchronous; snapshot closure = matlab/, src/matlab/, tests/matlab/, validation_test/{radia_mcp,maglev}/, docs/maglev/demos/team28/, pyproject.toml |
 | 0 | Clean rebuild of Cubit plugin (.ccm/.pyd) | If `src/cubit_plugin/` changed | ~2-5 min targeted, ~10 min full |
 | 1 | Decide minor vs patch per package | always | git log per package since last tag |
@@ -191,9 +191,9 @@ python tools/ci_preflight.py
 ```
 
 Policy and version consistency always run. A `packages/radia-mcp/` change also
-selects the publication-boundary lint, generated inventory check, affected
-server selftests, and impact-selected MCP tests. The default path does not
-collect or run the solver validation corpus.
+selects the publication-boundary lint, live catalog contracts, affected server
+selftests, and impact-selected MCP tests. The default path does not collect or
+run the solver validation corpus.
 
 Use explicit escalation only when its evidence is needed:
 
@@ -201,7 +201,6 @@ Use explicit escalation only when its evidence is needed:
 python tools/ci_preflight.py --full                 # lightweight tests/
 python tools/ci_preflight.py --validation           # validation collect-only
 python tools/ci_preflight.py --full --validation    # run validation_test/
-python tools/ci_preflight.py --fix                  # repair generated inventory
 ```
 
 Routine CI mirrors this separation: mdx owns the fast repository lane,
@@ -220,7 +219,7 @@ green:
 * radia-mcp pytest matrix passes (review evidence: 229 passed).
 * policy lint passes.
 * version consistency passes.
-* generated `packages/radia-mcp/docs/TOOLS.md` has no drift.
+* the checked meta catalog and affected servers' live `tools/list` contracts pass.
 * impact-selected package tests and affected server selftests pass.
 
 This is strong evidence for:
