@@ -21,6 +21,11 @@ assert _AUDIT_SPEC is not None and _AUDIT_SPEC.loader is not None
 _AUDIT_MODULE = importlib.util.module_from_spec(_AUDIT_SPEC)
 _AUDIT_SPEC.loader.exec_module(_AUDIT_MODULE)
 check_deployed_panel_source = _AUDIT_MODULE.check_deployed_panel_source
+check_pyside6_ownership_boundary = _AUDIT_MODULE.check_pyside6_ownership_boundary
+
+
+def test_pyside6_is_confined_to_cubit_owned_code_and_tests():
+    assert check_pyside6_ownership_boundary() == []
 
 
 def test_deployment_audit_rejects_startup_from_another_checkout(tmp_path):

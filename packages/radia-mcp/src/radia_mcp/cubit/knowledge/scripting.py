@@ -1910,24 +1910,26 @@ Setting the field to zero there is physically correct.
 For HCurl, GND improves iterative solver convergence even though it is not
 strictly required for uniqueness. Recommended for production use.
 
-## Naming Convention Contract for IH/BEM (.jou ↔ calc scripts)
+## Naming Convention Contract for IH/BEM
 
-**POLICY**: Labels live ONLY in the .jou. After .vol export, no label is
-passed at the GUI or calc-script level. The student verifies the .jou
-once; everything downstream uses defaults.
+**POLICY**: CAD/mesh labels are authored in Cubit and persisted in `.vol`.
+Every solver-bound mesh is checked against the selected application's
+versioned label contract before initialization. Simulink DesignSpec or the
+headless configuration may select a valid named region, but must not repair or
+silently infer missing labels.
 
 | Entity | Required name | Used by |
 |--------|---------------|---------|
 | Coil terminal sideset (current in)  | `source` | calc_inductance.py default |
 | Coil terminal sideset (current out) | `sink`   | calc_inductance.py default |
 | Coil block                           | `coil`   | calc_inductance.py default (BEM filter) |
-| Workpiece block (optional)           | `workpiece` | calc_inductance.py / calc_heating_bem.py |
+| Workpiece block (optional)           | `workpiece` | calc_inductance.py |
 | Air block (optional)                 | `air`    | (not used by BEM) |
 | Kelvin block (optional, FEM Kelvin)  | `kelvin` | calc_fem_kelvin.py |
 | GND nodeset (optional, H1 Kelvin)    | `GND`    | calc_fem_kelvin.py |
 
 ```python
-# .jou template — names are FIXED, IDs are LOCAL
+# Cubit Python template: names are fixed, IDs are local
 cubit.cmd(f'block 1 add volume {coil_vid}')
 cubit.cmd('block 1 name "coil"')
 cubit.cmd(f'sideset 1 add surface {source_sid}')
@@ -1936,237 +1938,47 @@ cubit.cmd(f'sideset 2 add surface {sink_sid}')
 cubit.cmd('sideset 2 name "sink"')     # MUST be "sink"
 ```
 
-If calc_inductance.py reports "No boundary labels match source='source'",
-the .jou does not follow convention. Fix the .jou (not the GUI, not the
-calc script).
+If `calc_inductance.py` reports that `source` is missing, fix the Cubit model
+and regenerate the checked `.vol`; do not work around the failure in Simulink
+or solver code.
 """
 
 
-CUBIT_NGSOLVE_PANEL = """\
-# Cubit Panel Development: External Python + NGSolve
+CUBIT_SOLVER_HANDOFF = """\
+# Cubit-to-Radia Solver Handoff
 
-## Architecture: Two-Process Model (.vol Interface)
+Cubit is Radia's CAD, meshing, labeling, and checked `.vol` export layer. It is
+not a solver-application GUI. Human production operation belongs to masked
+blocks in the Radia Simulink library; Python/MCP uses the same headless solver
+and artifact contracts.
 
-Cubit panels that use NGSolve must run computation in an **external Python
-subprocess**. The `.vol` file is the **sole interface** between Cubit and
-NGSolve. `calc_*.py` scripts do NOT import cubit.
-
-```
-Cubit GUI (bundled Python 3.10, ships PySide6)
-  register_toolbar.py
-    1. Qt dialog (modeless, non-blocking)
-    2. cubit.cmd('export netgen "model.vol" order 2 overwrite')
-    3. QProcess.start(external_python, [calc_*.py, --vol model.vol, ...])
-    4. QProcess.finished -> read JSON result file (--output)
-    5. Update Qt dialog with results
-
-External Python (system Python 3.12, has NGSolve)
-  calc_inductance.py / calc_fem_kelvin.py / calc_volume.py
-    1. from ngsolve import Mesh
-    2. mesh = Mesh("model.vol")  # labels + curving embedded in .vol
-    3. Compute (BEM, FEM, etc.)
-    4. Write result to --output JSON file
-    NOTE: NO cubit import. NO .cub5 handling.
-```
-
-## Critical Rules
-
-1. **calc_*.py must NOT import cubit**: The `.vol` file contains all mesh
-   data (material labels, boundary labels, high-order curving). Cubit is
-   only needed for mesh generation (in the GUI process), not for computation.
-
-2. **QProcess, not subprocess.run()**: subprocess.run() blocks the GUI thread,
-   causing Cubit to freeze/crash. QProcess is non-blocking.
-
-3. **Modeless dialogs**: Use `dialog.show()` not `dialog.exec()`. Modal
-   exec() blocks Cubit's main window. Keep a reference on main_window to
-   prevent garbage collection:
-   ```python
-   def _show_dialog():
-       if not hasattr(main_window, '_dlg') or main_window._dlg is None:
-           main_window._dlg = MyDialog(main_window)
-       main_window._dlg.show()
-       main_window._dlg.raise_()
-   action.triggered.connect(_show_dialog)
-   ```
-
-4. **JSON result via --output file**: Do NOT rely on stdout parsing.
-   Use `--output result.json`:
-   ```python
-   # calc_inductance.py
-   parser.add_argument("--output", default="")
-   if args.output:
-       with open(args.output, "w") as f:
-           json.dump(result, f)
-
-   # register_toolbar.py
-   args = [..., "--output", json_path]
-   # In _on_extract_finished:
-   with open(json_path, "r") as f:
-       data = json.load(f)
-   ```
-
-5. **startup.py encoding**: Use `exec(open(..., encoding="utf-8").read())`
-   because Windows Japanese locale defaults to cp932. Never use non-ASCII
-   characters (em dash, smart quotes, etc.) in register_toolbar.py.
-
-## BEM Inductance Panel (DC, Source/Sink EFIE)
-
-### Method
-
-Saddle point EFIE with source/sink current injection:
-```
-[SL  D^T] [J] = [0]
-[D   0  ] [p] = [g]
-```
-- SL = LaplaceSL (ngsolve.bem, Laplace kernel 1/(4*pi*r))
-- D = divergence (HDivSurface -> SurfaceL2 order=0)
-- g = +1/A_source on source faces, -1/A_sink on sink faces
-- L = mu_0 * J^T @ SL @ J
-
-### Block Registration for Source/Sink
-
-CRITICAL: Register source/sink blocks AFTER conductor, BEFORE boundary.
-In export netgen, last block wins for bcname. Source/sink
-(subset) must have higher block ID than boundary (superset).
-
-```python
-# CORRECT: source/sink before boundary
-cubit.cmd("set duplicate block elements on")
-cubit.cmd("block 1 add volume all")
-cubit.cmd('block 1 name "conductor"')
-cubit.cmd("block 2 add face in surface 1")   # gap face
-cubit.cmd('block 2 name "source"')
-cubit.cmd("block 3 add face in surface 3")   # gap face
-cubit.cmd('block 3 name "sink"')
-cubit.cmd("block 4 add face in surface all")  # superset last
-cubit.cmd('block 4 name "boundary"')
-
-# WRONG: boundary first -> source/sink labels overridden
-cubit.cmd("block 1 add face all")           # boundary first
-cubit.cmd('block 1 name "boundary"')
-cubit.cmd("block 2 add face in surface 1")  # last block wins
-cubit.cmd('block 2 name "source"')          # boundary overrides!
-```
-
-### Hex Mesh for BEM (Recommended)
-
-Create gapped torus by revolve (NOT subtract). Subtract creates complex
-topology that Cubit's sweeper cannot handle.
+## Supported Boundary
 
 ```
-# Revolve approach (sweepable)
-create surface circle radius 0.005 yplane
-move surface 1 x 0.05 include_merged
-sweep surface 1 zaxis angle 355
-volume 1 scheme sweep source surface 1 target surface 3
-surface 1 size 0.005
-surface 1 scheme pave
-mesh surface 1
-mesh volume 1
+Cubit / cubit-mesh-export
+  SAT or STEP -> mesh -> labels -> Netgen .vol -> check-vol
+
+Radia Simulink block or Python/MCP
+  checked .vol + DesignSpec -> headless solver -> result.json + GMSH .msh
 ```
 
-Surface IDs from revolve are deterministic: 1=start, 2=body, 3=end.
+- Cubit's bundled PySide6 may be used only by the `cubit-mesh-export` toolbar.
+- Do not add Radia solver dialogs, application panels, or Qt dependencies.
+- Solver code must not import `cubit`; Cubit communicates through checked files.
+- A solver-bound `.vol` must pass its versioned
+  `radia.vol-label-contract.v1` contract with strict labels.
+- Geometry/topology and labels live in SAT/STEP/Cubit/`.vol`; conductivity,
+  permeability, BH data, frequency, current, and thermal properties live in
+  DesignSpec/configuration.
+- Reusable computation belongs to `radia.*` APIs. A `calc_*.py` entry point is
+  a thin configuration and artifact adapter, not a second solver copy.
+- Spatial solver results use GMSH `.msh v4.1`. VTK is retained only as a Cubit
+  exporter capability and in NGSolve's upstream API.
 
-### Panel UI Settings
-
-| Setting | Values | Default | Description |
-|---------|--------|---------|-------------|
-| Curve order | 1-2 | 2 | Mesh geometry (2=curved elements) |
-| FES order | 0-2 | 0 | HDivSurface basis (0=RWG) |
-
-- Curve(2): improves geometric accuracy (integration points on curved surface)
-- FES order=0: sufficient for smooth current distributions (torus)
-- FES order=1: useful for sharp features (corners, edges)
-- Constraint (SurfaceL2) is always order=0 (element-wise current conservation)
-
-### Performance (source/sink EFIE, ToDense)
-
-| DOFs | SL assembly | SL extract | Solve | Total |
-|------|------------|------------|-------|-------|
-| ~1000 | 0.6s | 1.6s | 0.1s | ~2s |
-| ~2000 | 4.5s | 26s | 0.6s | ~31s |
-| ~5000 | 19s | 143s | 2.5s | ~165s |
-
-Bottleneck: SL extract (ToDense) is O(N^2). For larger problems, need
-iterative solver + FMM matvec.
-
-D matrix: use mat.ToDense().NumPy() (0.01s), NOT column-by-column extraction
-(13s for 5000 DOFs).
-
-### Cubit Surface Mesh Size Control
-
-`volume all size X` only affects interior tets, NOT surface mesh.
-Cubit's trimesher uses geometry-based sizing by default.
-
-To control surface mesh density:
-```
-set trimesher geometry sizing off   # disable curvature-based sizing
-surface all size 0.005              # explicit surface element size
-```
-
-Without this, all mesh size values give the same surface mesh count.
-
-### GMSH Visualization
-
-Open GMSH button launches GMSH GUI via external Python:
-```python
-ext_python -c "import sys, gmsh; gmsh.initialize(sys.argv, run=True); gmsh.finalize()" file.msh
-```
-
-CRITICAL: Do NOT use gmsh.bat or `python -m gmsh` from Cubit's Python.
-- gmsh.bat is a Python wrapper that calls system python, but Cubit's Python
-  intercepts the call
-- `python -m gmsh` does NOT launch the GUI
-- Only `gmsh.initialize(sys.argv, run=True)` launches the GMSH GUI window
-
-Result .msh v4.1 contains two NodeData fields:
-- |J| (ncomp=1): scalar current density magnitude, colormap display
-- J (ncomp=3): vector current density, arrow display on curved surface
-
-IMPORTANT: Vector data must be passed as 2D numpy array shape (nv, 3),
-NOT flatten(). flatten() creates 1D array causing arr[ni,c] IndexError
-in GmshPostExport.write().
-
-```python
-# CORRECT
-post.add_field("J", node_vec, ncomp=3)     # shape (nv, 3)
-
-# WRONG - causes empty NodeData
-post.add_field("J", node_vec.flatten(), ncomp=3)  # shape (nv*3,)
-```
-
-GMSH display: |J| shows current crowding on inner radius of torus bend
-(physically correct: shorter path = higher current density at constant
-voltage across source/sink ports).
-
-### COMSOL Import Workflow
-
-.msh v2.2 with NodeData is directly importable by COMSOL:
-
-1. File > Import > GMSH (.msh v2.2)
-2. Physical Groups ("source", "sink", "boundary") -> COMSOL Selections
-3. NodeData (|J|, J) -> Results > External dataset
-4. Heat Transfer: Q = |J|^2 / sigma as boundary heat source
-5. Lorentz force: F = J x B (vector field from NodeData)
-
-### Panel Code Reload (No Cubit Restart)
-
-To reload panel code after editing register_toolbar.py, run in Cubit:
-```
-play "C:/ProgramData/Radia/Cubit/radia_startup.py"
-```
-This re-exec's register_toolbar.py, updating all class definitions.
-The menu shows "Radia menu already registered." (duplicate check), but
-dialog classes (InductanceDialog, etc.) are reloaded with new code.
-
-For current-user installs, the generated shim is under
-`%LOCALAPPDATA%/Radia/Cubit/radia_startup.py`.  Do not edit
-`src/radia/panels/startup.py`; `cubit-plugin-install` regenerates the
-shim with the correct absolute `register_toolbar.py` path.
-
-After reload, close and reopen the dialog to use updated code.
-Existing dialog instances use the OLD class definition.
+Common IH labels are `coil`, `workpiece`, `air`, `kelvin`, `source`, `sink`,
+`sibc`, `kelvin_int`, `kelvin_ext`, `outer`, and `GND`. The selected application
+mode's label contract decides which are required; labels never imply material
+constants.
 """
 
 
@@ -4342,8 +4154,9 @@ def get_cubit_documentation(topic: str = "all") -> str:
 		"batch_processing": CUBIT_BATCH_PROCESSING,
 		"format_conversion": CUBIT_FORMAT_CONVERSION,
 		"kelvin_transform": CUBIT_KELVIN_TRANSFORM,
-		"ngsolve_panel": CUBIT_NGSOLVE_PANEL,
-		"optuna": CUBIT_NGSOLVE_PANEL,  # Optuna integration documented in panel section
+		"ngsolve_panel": CUBIT_SOLVER_HANDOFF,
+		"solver_handoff": CUBIT_SOLVER_HANDOFF,
+		"optuna": CUBIT_RESULTS_VISUALIZATION,
 		"results_visualization": CUBIT_RESULTS_VISUALIZATION,
 		"post_processing": CUBIT_RESULTS_VISUALIZATION,
 		"geometry_commands": CUBIT_GEOMETRY_COMMANDS,
