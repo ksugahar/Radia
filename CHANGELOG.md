@@ -9,6 +9,21 @@ All notable changes to the `radia` package.  Format: each release lists
   and migrated the `eqnedit64` package plus `radia-mcp.presentation` bridge to
   it, while retaining the older native switches only as compatibility inputs.
 
+## 4.95.81 - Projected box response and trace-safe magnet validation
+
+Released 2026-09-04.
+
+- Corrected Mixed Galerkin drive projection to retain boundary hat-function
+  contributions through the full mass matrix, and added the coupled Schur
+  formulation for box conductors.
+- Recorded exact heat-content, independent edge/corner amplitude, and passive
+  real-pole time-domain evidence in the canonical validation artifact.
+- Made the ESRF three-engine comparison evaluate every formulation through the
+  same microscopic volume average, avoiding ambiguous one-sided finite-element
+  traces at observation points on internal faces.
+- Hardened isolated release worktrees and two radia-mcp runtime paths without
+  expanding the normal CI scope.
+
 ## 4.95.77 - Mixed Galerkin and native NGSolve MATLAB parity
 
 Released 2026-09-02.
