@@ -182,8 +182,12 @@ command-entry mode.
 The single executable needs no installer, Python runtime, or file-type
 registration. Copy places equivalent TeX, editable Office Math, EMF, and
 opaque bitmap representations on the clipboard; Google Slides and headless
-TeX-to-PNG paths are included. The signed binary is published in the
-[Eqnedit64 3.0.0 release](https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.0.0).
+TeX-to-PNG paths are included. Eqnedit64 is released independently from Radia:
+the Python/API distribution is on [PyPI](https://pypi.org/project/eqnedit64/),
+and the matching signed standalone binary is published in the
+[Eqnedit64 3.0.13 release](https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.0.13).
+`radia-mcp.presentation` discovers that installation as an optional rendering
+and clipboard backend; neither package depends on the other at runtime.
 Legacy Eqnedit32/MTEF binaries and conversion sources are deliberately not
 part of the public component.
 

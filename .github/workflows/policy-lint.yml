@@ -6,11 +6,15 @@ on:
     paths-ignore:
       - "packages/radia-mcp/**"
       - "tests/mcp_server/**"
+      - "packages/eqnedit64/**"
+      - "tools/eqnedit64/**"
   pull_request:
     branches: [main]
     paths-ignore:
       - "packages/radia-mcp/**"
       - "tests/mcp_server/**"
+      - "packages/eqnedit64/**"
+      - "tools/eqnedit64/**"
 
 jobs:
   policy-checks:
