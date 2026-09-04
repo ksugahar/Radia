@@ -26,14 +26,12 @@ on:
       - "packages/radia-mcp/**"
       - "tests/mcp_server/**"
       - ".github/workflows/radia-mcp-matrix.yml"
-      - ".github/workflows/release-radia-mcp.yml"
   pull_request:
     branches: [main]
     paths:
       - "packages/radia-mcp/**"
       - "tests/mcp_server/**"
       - ".github/workflows/radia-mcp-matrix.yml"
-      - ".github/workflows/release-radia-mcp.yml"
   workflow_dispatch:
 
 concurrency:
@@ -148,34 +146,6 @@ jobs:
         python-version: ${{ fromJSON(needs.scope.outputs.python_versions) }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Record exact radia-mcp CI ref context
-        if: matrix.python-version == '3.12'
-        run: |
-          python - <<'PY'
-          import json, os, pathlib
-          tag = os.environ['GITHUB_REF_NAME'] if os.environ['GITHUB_REF_TYPE'] == 'tag' else None
-          data = {
-              'schema': 'radia-mcp.ci-release-context.v1',
-              'ref': os.environ['GITHUB_REF'],
-              'ref_name': os.environ['GITHUB_REF_NAME'],
-              'ref_type': os.environ['GITHUB_REF_TYPE'],
-              'sha': os.environ['GITHUB_SHA'],
-              'run_id': os.environ['GITHUB_RUN_ID'],
-              'event_name': os.environ['GITHUB_EVENT_NAME'],
-              'release_tags': [tag] if tag else [],
-          }
-          pathlib.Path('radia-mcp-ci-release-context.json').write_text(
-              json.dumps(data, indent=2), encoding='utf-8')
-          PY
-
-      - name: Upload exact radia-mcp CI ref context
-        if: matrix.python-version == '3.12'
-        uses: actions/upload-artifact@v4
-        with:
-          name: radia-mcp-ci-release-context
-          path: radia-mcp-ci-release-context.json
-          if-no-files-found: error
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -406,3 +376,64 @@ jobs:
           name: radia-mcp-wheel
           path: packages/radia-mcp/dist/*.whl
           if-no-files-found: error
+
+  publish:
+    needs: [scope, selftest]
+    if: >-
+      github.ref_type == 'tag' &&
+      startsWith(github.ref_name, 'radia-mcp-v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Download wheel built by this tag CI
+        uses: actions/download-artifact@v4
+        with:
+          name: radia-mcp-wheel
+          path: dist
+
+      - name: Verify wheel version matches the triggering tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t wheels < <(find dist -maxdepth 1 -name 'radia_mcp-*.whl')
+          if [[ "${#wheels[@]}" -ne 1 ]]; then
+            echo "::error::Expected exactly one radia-mcp wheel, found ${#wheels[@]}"
+            exit 1
+          fi
+          expected="${GITHUB_REF_NAME#radia-mcp-v}"
+          python3 - "${wheels[0]}" "$expected" <<'PY'
+          import email
+          import pathlib
+          import sys
+          import zipfile
+
+          wheel = pathlib.Path(sys.argv[1])
+          expected = sys.argv[2]
+          with zipfile.ZipFile(wheel) as archive:
+              metadata_name = next(
+                  name for name in archive.namelist()
+                  if name.endswith(".dist-info/METADATA")
+              )
+              metadata = email.message_from_bytes(archive.read(metadata_name))
+          actual = metadata["Version"]
+          if actual != expected:
+              raise SystemExit(
+                  f"wheel/tag version mismatch: wheel={actual}, tag={expected}"
+              )
+          summary = metadata.get("Summary", "")
+          if len(summary) > 512:
+              raise SystemExit(
+                  f"PyPI Summary is {len(summary)} characters; maximum is 512"
+              )
+          print(f"release wheel verified: {wheel.name} ({actual})")
+          PY
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          skip-existing: true
