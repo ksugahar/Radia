@@ -37,7 +37,13 @@ from radia.electromagnet_validation import (
 from radia.esrf_examples import get_esrf_bh_table
 from radia.kelvin_identify_ngsolve import detect_kelvin_offset, has_kelvin_identification
 
-from esrf_coil_yoke import build_radia_coil_source, core_selector, get_case, observation_points
+from esrf_coil_yoke import (
+    average_observation_field,
+    build_radia_coil_source,
+    core_selector,
+    get_case,
+    observation_volume_quadrature,
+)
 
 
 CTYPE_RUNNER_PATH = HERE.parent / "c_type_three_engine" / "run_three_engine.py"
@@ -98,7 +104,7 @@ def _write_checkpoint(
     path.write_text(
         json.dumps(
             {
-                "schema": "radia.validation.esrf-coil-yoke-checkpoint.v1",
+                "schema": "radia.validation.esrf-coil-yoke-checkpoint.v2",
                 "contract": contract,
                 "field_T": np.asarray(field, dtype=float).tolist(),
                 "diagnostics": diagnostics,
@@ -165,6 +171,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--nonlinear-maximum-iterations", type=int, default=80)
     parser.add_argument("--source-trace-tolerance", type=float, default=0.05)
     parser.add_argument("--relative-rms-tolerance", type=float, default=0.03)
+    parser.add_argument("--observation-half-width", type=float, default=2.0e-5)
     parser.add_argument("--threads", type=int, default=0)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--preflight", action="store_true")
@@ -177,6 +184,11 @@ def main(argv: list[str] | None = None) -> int:
         raise ValueError("--reduced-a-relaxation must lie in (0, 1]")
     if not 0.0 < options.source_trace_tolerance < 1.0:
         raise ValueError("--source-trace-tolerance must lie in (0, 1)")
+    if (
+        not np.isfinite(options.observation_half_width)
+        or options.observation_half_width <= 0.0
+    ):
+        raise ValueError("--observation-half-width must be finite and positive")
     if options.threads > 0:
         ng.SetNumThreads(options.threads)
 
@@ -192,13 +204,19 @@ def main(argv: list[str] | None = None) -> int:
     fem_mesh = ng.Mesh(str(fem_mesh_path))
     if not has_kelvin_identification(fem_mesh):
         raise RuntimeError("FEM mesh has no Kelvin point identification")
-    points = observation_points(case.number)
-    for point in points:
+    points, field_points = observation_volume_quadrature(
+        case.number, half_width_m=options.observation_half_width
+    )
+    for point in field_points:
         if not fem_mesh(*map(float, point)):
-            raise RuntimeError(f"observation point lies outside FEM mesh: {point.tolist()}")
+            raise RuntimeError(
+                f"observation quadrature point lies outside FEM mesh: {point.tolist()}"
+            )
     rad.UtiDelAll()
     coil, coil_manifest = build_radia_coil_source(case.number)
-    source_field = np.asarray(rad.Fld(coil, "b", points), dtype=float)
+    source_field = average_observation_field(
+        np.asarray(rad.Fld(coil, "b", field_points), dtype=float), len(points)
+    )
     if not np.isfinite(source_field).all():
         raise RuntimeError("CoilBuilder source field is non-finite at an observation point")
     kelvin_center = tuple(float(value) for value in detect_kelvin_offset(fem_mesh))
@@ -218,6 +236,8 @@ def main(argv: list[str] | None = None) -> int:
         nonlinear_tolerance=float(options.nonlinear_tolerance),
         nonlinear_maximum_iterations=int(options.nonlinear_maximum_iterations),
         observation_points_m=points.tolist(),
+        observation_half_width_m=float(options.observation_half_width),
+        observation_quadrature="tensor_gauss_2x2x2",
     )
     fields: dict[str, np.ndarray] = {}
     diagnostics: dict[str, dict[str, object]] = {}
@@ -233,7 +253,7 @@ def main(argv: list[str] | None = None) -> int:
                 gram_eps=options.hdiv_gram_eps,
                 nonlinear_tolerance=options.nonlinear_tolerance,
                 nonlinear_maximum_iterations=options.nonlinear_maximum_iterations,
-                points=points,
+                points=field_points,
                 image=options.hdiv_image,
             ),
         ),
@@ -252,7 +272,7 @@ def main(argv: list[str] | None = None) -> int:
                 nonlinear_verbose=False,
                 kelvin_center=kelvin_center,
                 kelvin_radius=case.kelvin_radius_m,
-                points=points,
+                points=field_points,
             ),
         ),
         (
@@ -268,14 +288,30 @@ def main(argv: list[str] | None = None) -> int:
                 nonlinear_verbose=False,
                 kelvin_center=kelvin_center,
                 kelvin_radius=case.kelvin_radius_m,
-                points=points,
+                points=field_points,
                 source_trace_tolerance=options.source_trace_tolerance,
             ),
         ),
     )
+    engine_settings = {
+        "hdiv_mmm": {
+            "linear_tolerance": 1.0e-8,
+            "linear_maximum_iterations": 12000,
+            "preconditioner": "auto",
+        },
+        "reduced_a": {
+            "linear_solver": options.reduced_a_solver,
+            "relaxation": float(options.reduced_a_relaxation),
+        },
+        "mixed_total_reduced_omega": {
+            "source_potential_contract": "total_hodge",
+            "source_trace_tolerance": float(options.source_trace_tolerance),
+            "relaxation": 0.3,
+        },
+    }
     if options.preflight:
         payload = {
-            "schema": "radia.validation.esrf-coil-yoke-preflight.v1",
+            "schema": "radia.validation.esrf-coil-yoke-preflight.v2",
             "passed": True,
             "case": int(case.number),
             "source": coil_manifest,
@@ -291,10 +327,19 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     for name, solve in solver_specs:
         checkpoint = output.with_suffix(f".{name}.checkpoint.json")
-        contract = _checkpoint_contract(**common, engine=name)
+        contract = _checkpoint_contract(
+            **common, engine=name, engine_settings=engine_settings[name]
+        )
         resumed = _read_checkpoint(checkpoint, contract) if options.resume else None
         if resumed is None:
-            fields[name], diagnostics[name] = solve()
+            field_samples, diagnostics[name] = solve()
+            fields[name] = average_observation_field(field_samples, len(points))
+            diagnostics[name]["observation_contract"] = {
+                "kind": "volume_average",
+                "quadrature": "tensor_gauss_2x2x2",
+                "half_width_m": float(options.observation_half_width),
+                "sample_count_per_centre": 8,
+            }
             _write_checkpoint(checkpoint, contract, fields[name], diagnostics[name])
         else:
             fields[name], diagnostics[name] = resumed
@@ -313,7 +358,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     passed = nonlinear_converged and maximum_core_relative_rms <= options.relative_rms_tolerance
     result = {
-        "schema": "radia.validation.esrf-coil-yoke-three-engine.v1",
+        "schema": "radia.validation.esrf-coil-yoke-three-engine.v2",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "passed": bool(passed),
         "machine": platform.node(),
@@ -337,6 +382,12 @@ def main(argv: list[str] | None = None) -> int:
         "fem_mesh_contract": fem_mesh_report,
         "kelvin_center_m": list(kelvin_center),
         "observation_points_m": points.tolist(),
+        "observation_contract": {
+            "kind": "volume_average",
+            "quadrature": "tensor_gauss_2x2x2",
+            "half_width_m": float(options.observation_half_width),
+            "sample_count_per_centre": 8,
+        },
         "core_point_count": int(np.count_nonzero(core)),
         "engines": diagnostics,
         "fields_T": {name: value.tolist() for name, value in fields.items()},

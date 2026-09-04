@@ -305,6 +305,21 @@ def solve_hdiv(
         nonlinear_stats["converged"] = bool(
             nonlinear_stats.get("nonlinear_converged_final_stage", False)
         )
+    timing_keys = (
+        "fes_wall_s",
+        "charge_gram_wall_s",
+        "charge_basis_wall_s",
+        "charge_gram_cpp_wall_s",
+        "projection_wall_s",
+        "solve_wall_s",
+        "post_wall_s",
+        "total_wall_s_internal",
+    )
+    timings = {
+        key: float(result[key])
+        for key in timing_keys
+        if result.get(key) is not None
+    }
     return field, {
         "formulation": "HDiv-MMM",
         "discretization": "BDM%d" % order,
@@ -317,6 +332,8 @@ def solve_hdiv(
         "nonlinear_stats": nonlinear_stats,
         "preconditioner": result.get("preconditioner"),
         "gram_eps": float(gram_eps),
+        "timings": timings,
+        "hmat_stats": dict(result.get("hmat_stats") or {}),
         "image": image,
         "runtime_s": float(time.perf_counter() - started),
     }
