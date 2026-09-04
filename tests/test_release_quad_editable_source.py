@@ -122,6 +122,9 @@ def test_editable_probe_resolves_git_inside_the_target_process():
 
     assert 'git_exe = shutil.which("git")' in probe
     assert "[git_exe," in probe
+    assert '"-c", "safe.directory=" + root' in probe
+    assert "if result.returncode != 0:" in probe
+    assert "git show failed for {relpath}" in probe
     assert "GIT_EXE" not in probe
 
 
