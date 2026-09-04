@@ -3961,6 +3961,38 @@ PYBIND11_MODULE(_radia_pybind, m) {
                  return s.RawSymmetricQuadraticForm(x);
              }, py::arg("x"),
              "Diagnostic-only exact-entry Rayleigh form x^T G_raw x; O(n^2), no H-matrix compression.")
+        .def("symmetric_leaf_quadratics", [](const RadHACApKChargeGram& s,
+                                               F64Array x_a, int raw_check_count) {
+                 const auto x = to_1d_vector<double>(x_a, "x");
+                 RadHACApKSymmetricLeafQuadraticReport report;
+                 {
+                     py::gil_scoped_release release;
+                     report = s.DiagnoseSymmetricLeafQuadratics(x, raw_check_count);
+                 }
+                 py::dict result;
+                 result["hmatrix_quadratic"] = report.hmatrix_quadratic;
+                 result["upper_leaf_count"] = report.upper_leaf_count;
+                 result["upper_low_rank_count"] = report.upper_low_rank_count;
+                 result["upper_dense_count"] = report.upper_dense_count;
+                 result["diagonal_low_rank_count"] = report.diagonal_low_rank_count;
+                 py::list leaves;
+                 for (const auto& leaf : report.dominant_leaves) {
+                     py::dict item;
+                     item["leaf_index"] = leaf.leaf_index;
+                     item["kind"] = leaf.low_rank ? "low_rank" : "dense";
+                     item["row_start"] = leaf.row_start;
+                     item["row_size"] = leaf.row_size;
+                     item["column_start"] = leaf.column_start;
+                     item["column_size"] = leaf.column_size;
+                     item["rank"] = leaf.rank;
+                     item["hmatrix_quadratic"] = leaf.hmatrix_quadratic;
+                     item["raw_quadratic"] = leaf.raw_quadratic;
+                     leaves.append(std::move(item));
+                 }
+                 result["dominant_leaves"] = std::move(leaves);
+                 return result;
+             }, py::arg("x"), py::arg("raw_check_count") = 32,
+             "Diagnostic-only symmetric H-matrix leaf Rayleigh contributions; dominant leaves are compared to raw entries.")
         .def("build_exact_dense_normalized_gram", [](RadHACApKChargeGram& s,
                                                         std::size_t maximum_memory_mb) {
                  if (maximum_memory_mb >
