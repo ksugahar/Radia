@@ -68,12 +68,12 @@ PATTERNS: list[dict] = [
                       "hasn't been assigned yet.  Real site: "
                       "calc_verify_vol.py:38 vs :83 (keiko 100号機).",
         "detection": "validation_test/panels/test_taskmanager_scoping.py (AST sweep) "
-                     "+ tools/audit_new_panel_contract.py rule C6.",
+                     "+ tools/audit_application_block_contract.py rule C6.",
         "prevention": "Put TaskManager in the TOP-of-function import "
                       "line alongside Mesh / Integrate / CF / BND.  "
                       "Never inside a try: block AFTER first use.",
         "related": ["validation_test/panels/test_taskmanager_scoping.py",
-                    "tools/audit_new_panel_contract.py"],
+                    "tools/audit_application_block_contract.py"],
     },
     {
         "id": "ih-log-truncated-by-super-then-append",

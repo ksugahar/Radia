@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""audit_new_panel_contract.py -- enforce the application calc contract.
+"""audit_application_block_contract.py -- enforce the application calc contract.
 
 Pure static AST analysis -- runs in <1 s, no NGSolve/Cubit needed.
 Suitable as a CI gate.
@@ -31,10 +31,10 @@ For retired interface modules:
 Exit code 0 = clean; non-zero = violations printed and counted.
 
 Run locally:
-    python tools/audit_new_panel_contract.py
+    python tools/audit_application_block_contract.py
 
 CI:
-    python tools/audit_new_panel_contract.py || exit 1
+    python tools/audit_application_block_contract.py || exit 1
 """
 
 from __future__ import annotations
