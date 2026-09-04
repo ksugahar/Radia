@@ -2063,7 +2063,9 @@ def cmd_done(args):
 # ============================================================
 
 def _git(*argv, capture=True, check=True):
-    return subprocess.run([GIT_EXE, "-C", str(REPO), *argv],
+    safe_repo = REPO.resolve().as_posix()
+    return subprocess.run([GIT_EXE, "-c", f"safe.directory={safe_repo}",
+                           "-C", str(REPO), *argv],
                           capture_output=capture, text=True, check=check)
 
 
