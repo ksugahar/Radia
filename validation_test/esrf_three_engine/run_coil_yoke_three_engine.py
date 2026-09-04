@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib
 import importlib.util
 import json
 import platform
@@ -96,6 +97,23 @@ LEGACY_CAP_KEY = "nonlinear_maximum_iterations"
 
 def _checkpoint_contract(**values: object) -> dict[str, object]:
     return dict(values)
+
+
+def _implementation_identity() -> dict[str, str]:
+    """Bind resumed numerical evidence to the actual native/Python implementation."""
+    modules = (
+        "radia._radia_pybind", "radia.vim._vim", "radia.kelvin_solver",
+        "radia.static_electromagnet", "radia.vector_potential_solver",
+        "radia.picard_acceleration", "ngsolve.ngslib",
+    )
+    identity = {}
+    for name in modules:
+        module = importlib.import_module(name)
+        identity[name] = _sha256(Path(module.__file__))
+    identity["runner"] = _sha256(Path(__file__))
+    identity["shared_engines"] = _sha256(CTYPE_RUNNER_PATH)
+    identity["case_source"] = _sha256(HERE / "esrf_coil_yoke.py")
+    return identity
 
 
 def _legacy_contract(payload: dict[str, object]) -> dict[str, object]:
@@ -372,6 +390,7 @@ def main(argv: list[str] | None = None) -> int:
     output = options.output.resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
     common = _checkpoint_contract(
+        implementation_sha256=_implementation_identity(),
         case=int(case.number),
         iron_mesh_sha256=_sha256(iron_mesh_path),
         fem_mesh_sha256=_sha256(fem_mesh_path),

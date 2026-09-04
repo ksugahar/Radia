@@ -1033,3 +1033,29 @@ The LAB release-worktree editable path is not repaired blindly: release-quad
 intentionally retains the verified release source until the canonical development
 checkout catches up. Use its explicit restore-editable command only after that
 prerequisite is satisfied; do not redirect imports to the stale dirty shared tree.
+
+### 8.6 ESRF #6/#7 restart gate (2026-09-05)
+
+Both hibino and mdx were queried through SSH: no Python compute processes were
+listed, and both imported installed PyPI Radia 4.95.81 from site-packages.
+Neither host yet contains the new native TET image implementation. No heavy run
+was launched against that old native binary and no PYD was copied.
+
+The saved #6 MINRES diagnostic checkpoint declares nonlinear convergence but
+contains no native implementation identity. Its hmat release-eligibility flag
+does not establish which material linear solver actually ran. Consequently,
+convergence alone is insufficient to reuse it as production evidence.
+
+The #6/#7 runner now includes SHA-256 identities of the loaded native library,
+NGSolve native library, formulation modules, acceleration module, case source,
+and shared/current runners in every result/state contract. Old or differently
+built checkpoints fail the identity comparison instead of silently certifying
+a new implementation. Original checkpoints remain untouched. The focused mesh
+and checkpoint contract suite passes all 12 tests, including rejection of a
+converged diagnostic-build checkpoint under a production-build identity.
+
+Three-engine acceptance is still incomplete: #6 requires correction of the
+raw HEX Gram indefiniteness and a production solve; #7 requires the new native
+image build and converged FEM comparisons. The release-owning task has been
+notified of the deployment dependency. This section records restart safety,
+not successful field agreement or completion of either case.
