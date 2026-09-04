@@ -1097,3 +1097,27 @@ is not excluded by an assumed monotonic secant range, and depth-zero remains
 the actual convex Picard update. The generic Anderson bounds API is unchanged.
 The invalid FEM trials were stopped; their intermediate fields are not accepted
 as comparison results. New-wheel three-engine validation is still required.
+
+### 8.8 Corrected candidate installed and HEX gate reproduced
+
+The material-envelope fix is commit `c11ed1b2b`. Its separate candidate wheel
+(`a9c3ee6cdf2263eb020a21f07514ddc9c254cf129a2fd9f2d250a1b5d1ecac90`)
+was installed in `C:/temp/radia-candidate-c11ed1b2b/venv` on hibino. All 336
+Radia files match the wheel, pip check passes, and 31 installed-wheel native/FEM
+tests pass in 56.26 s. The local focused suite passes 41 tests. Both new
+material-envelope tests were independently run against the previous Fable
+implementation and failed there.
+
+Example #6 was then run with the corrected candidate, BDM1, FEM order 1,
+gram epsilon 1e-10, 32 threads, and no numerical overrides. Production CG
+failed at iteration 86 with p^T A p = -1893733131.842714. No MINRES fallback
+was used. This is a release-blocking HEX operator defect, not evidence that a
+larger iteration cap is needed. Neither FEM engine ran after that failure.
+
+Machine-readable assessment and the successful earlier #7 HDiv field vector
+are retained under `validation_test/esrf_three_engine/results/`. The #7
+checkpoint explicitly belongs to the first candidate; its native hash is
+unchanged by the FEM-only fix, but corrected full-model FEM agreement has not
+yet been demonstrated. No three-engine acceptance, main merge, tag, or PyPI
+publication is claimed. Both invalid FEM pilots and the failed #6 process
+have stopped; the candidate environments remain available for further work.
