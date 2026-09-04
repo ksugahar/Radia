@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Give the browser edition its own fast CI job: the Web contract and the
+  JavaScript syntax and insertion tests now run on a free ubuntu runner in
+  seconds instead of waiting behind the Windows native build. The native job
+  keeps its full `tools/eqnedit64/**` scope because `tests/test_palettes.py`
+  compares the differential-geometry palette against the native catalogue and
+  path filters cannot tell which palette a Web edit touched.
 - Port the native structural `Enter` to the Web TeX source pane: it writes the
   row separator `\\`, keeps the alignment column with a leading `&`, wraps a
   bare expression in `aligned`, and opens an empty row instead of splitting a
