@@ -58,6 +58,7 @@ from ._terminology_normalizer import (  # noqa: F401
     paper_writing_normalize_terminology_file,
 )
 from ._shared.sentence import split_mixed_sentences
+from .._shared.latex_log import summarize_overfull
 
 # Paper-PDF download tools (v0.25.0, 2026-05-21) — IEEE Xplore + Emerald
 # Cookie-seeded session pattern.  Requires caller's IP to have
@@ -364,23 +365,22 @@ def paper_writing_validate_pdf_pages(pdf_path: str, page_limit: int) -> dict:
 
 
 def paper_writing_check_overfull_hbox(log_path: str) -> dict:
-    """LaTeX ログ中の Overfull \\hbox 警告をカウント。journal では許容ゼロ。"""
+    """LaTeX ログ中の Overfull box をカウント。journal では許容ゼロ。
+
+    TeX は overfull box を 4 つの site から報告する: ``in paragraph at
+    lines`` / ``in alignment at lines`` / ``detected at line`` / そして
+    行番号を持たない ``has occurred while \\output is active``。 段落だけを
+    数えると、表組み・float・出力ルーチン由来の溢れが 0 件として通過し、
+    目標ゼロの検査が「合格」に見えてしまう。 4 site すべてと
+    ``\\hbox`` / ``\\vbox`` の双方を数え、内訳を返す。
+    """
     p = pathlib.Path(log_path)
     if not p.exists():
         return {"error": f"file not found: {log_path}"}
     text = p.read_text(encoding="utf-8", errors="replace")
-    matches = re.findall(
-        r"Overfull \\hbox \(([^)]+)\) in paragraph at lines (\d+)(?:--(\d+))?",
-        text,
-    )
-    details = [
-        {"severity": m[0], "lines": m[1] + (f"-{m[2]}" if m[2] else "")}
-        for m in matches[:20]
-    ]
     return {
         "file": str(p),
-        "overfull_count": len(matches),
-        "overfull_details": details,
+        **summarize_overfull(text),
         "target": "0 (journal は許容なし)",
     }
 
@@ -3362,9 +3362,13 @@ def paper_writing_classify_reviewer_comment(comment: str) -> dict:
                 "suggested_stance": "agree",
                 "hint": "書き直し + 引用追加。同意して改訂版をインラインで提示。",
                 "triggers": ["rewrite / citation request"]}
-    # A-level: typo / simple
-    if any(k in c for k in ("typo", "grammar", "spelling", "missing comma",
-                             "fig.\\s*\\d+ caption", "誤植", "スペル")):
+    # A-level: typo / simple.  The caption entry is a PATTERN, not a
+    # substring: "fig.\\s*\\d+ caption" cannot occur literally in a reviewer
+    # comment, so "The Fig. 3 caption has a wrong unit" used to fall through
+    # to the B? default and be answered as a rewrite request.
+    if (any(k in c for k in ("typo", "grammar", "spelling", "missing comma",
+                             "誤植", "スペル"))
+            or re.search(r"fig(?:ure)?\.?\s*\d+\s+caption", c)):
         return {"difficulty": "A", "confidence": "high",
                 "suggested_stance": "agree",
                 "hint": "Typo / 軽微な指摘。すぐ直して "
