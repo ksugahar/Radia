@@ -5,6 +5,17 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- Time-domain realisation of the mixed cube admittance
+  (`validation_test/mixed_galerkin/time_domain/01_cube_step_response.py`,
+  formerly `01_cube_aaa_step_response.py`): the settled time-domain-SIBC
+  form, a passive real-pole Foster fit of `Y_mixed(s)`
+  (`rom_fit.passive_foster_fit`), replaces the poles of a one-sided AAA
+  fit.  Those 22 poles were complex and non-conjugate (21 of 22) and the
+  real part of their step response strayed 11 % below 1 us from the exact
+  inverse Laplace transform (Talbot); the 18 real poles stay within 0.1 %
+  on 1e-8..1e-1 s.  The artifact case is now `cube3d_time_domain` with the
+  exact, ROM and sqrt-t curves and keeps the AAA measurement as
+  `aaa_direct_diagnostic`.  `references.bib` gains `oh1995efficient`.
 - Mixed Galerkin admittance in its projected form: `radia.maglev.mixed_galerkin.
   BoxMixedGalerkin` puts the bulk Dirichlet eigenmodes and the tensor surface
   envelope of a box conductor into ONE Galerkin space and solves the coupled
