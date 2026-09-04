@@ -178,6 +178,9 @@ def test_coil_yoke_journal_uses_kelvin_not_a_finite_outer_air_box(tmp_path):
     contract = builder.three_engine_material_contract()
     assert contract["response_materials"] == ("iron", "air", "kelvin")
     assert contract["coil_source"] == "shared mesh-free CoilBuilder solid current"
+    assert contract["mixed_h1_source_potential"] == (
+        "total_volume_hodge_with_harmonic_cut"
+    )
     assert contract["finite_outer_air_box_forbidden"] is True
     assert vol.name == "coil_yoke_kelvin.vol"
     assert 'export netgen' in journal.read_text(encoding="utf-8")
@@ -198,8 +201,14 @@ def test_coil_yoke_runner_keeps_one_coil_source_and_three_required_engines():
     assert "solve_hdiv" in text
     assert "solve_reduced_a" in text
     assert "solve_omega" in text
+    assert 'source_potential_contract="total_hodge"' in (
+        ROOT / "validation_test" / "c_type_three_engine" / "run_three_engine.py"
+    ).read_text(encoding="utf-8")
     assert "require_static_electromagnet_three_engine_contract" in text
     assert "finite_outer_air_box_forbidden\": True" in text
     assert "fem_kelvin_mesh_shared\": True" in text
     assert "fem_periodic_kelvin_mesh_shared" not in text
     assert "--resume" in text
+    assert "--hdiv-image" in text
+    assert "image=options.hdiv_image" in text
+    assert "hdiv_image=options.hdiv_image" in text
