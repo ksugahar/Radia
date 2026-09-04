@@ -128,7 +128,7 @@ apply_tool_contract(
     server_name="mcp-server-grant-writing",
     version=__version__,
 )
-classify_tool_annotations(mcp)
+classify_tool_annotations(mcp, readonly_name_hints=("grant_writing_",))
 
 
 def main():

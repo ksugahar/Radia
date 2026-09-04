@@ -112,7 +112,9 @@ def test_distribution_ci_is_change_scoped_and_mcp_full_suite_is_explicit():
     assert "--full --output radia-mcp-ci-selection.json" in mcp
     assert 'plan["package_tests"]' in mcp
     assert 'env["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"' in mcp
-    assert 'else plan["package_tests"]' in mcp
+    assert 'env["RADIA_MCP_CI_SELECTION_JSON"]' in mcp
+    assert '"-m", "not xval and not slow", "tests"' in mcp
+    assert '*targets' not in mcp
     assert 'plan["server_selftests"]' in mcp
     assert 'plan["run_mcp_response_tests"]' in mcp
     assert "Meta health (all cataloged subpackages must import)" not in mcp
