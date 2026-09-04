@@ -2136,7 +2136,7 @@ def _finish_charge_gram_backend(result, *, gram_backend, exact_dense_memory_mb):
     return B, G, M_mass
 
 
-def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_quad=3, ho_far_factor=2.0,
+def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=64, eta=2.0, far_quad=3, ho_far_factor=2.0,
                       inner_quad=None, curve_order=None, curve_gauss=8, nonlinear=False,
                       image_masks=None, image_signs=None, image_rot_angle=None,
                       _materialize_mass=True,
@@ -2146,6 +2146,11 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
     """From an HDiv FESpace (order p, the order from the fes), build the monomial charge-density map
     B (scipy CSR, n_charge x ndof), the C++ charge-Gram H-matrix G, and the HDiv mass M_mass (CSR).
     The CALLER wraps in TaskManager.
+
+    ``leafsize=64`` is the production default. It keeps high-order charge rows
+    with coincident clustering centres in a sufficiently large local block;
+    smaller explicit values require the same raw-Gram and PSD validation as a
+    new discretization.
 
     ``cyclic_periodic_boundaries=(master, slave)`` is the broken-HDiv VIM
     periodic contract and therefore requires ``internal_interfaces=True`` plus
@@ -2454,7 +2459,7 @@ class DemagOperator:
     ``DemagFactor`` in ``with TaskManager():``.
     """
 
-    def __init__(self, fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0,
+    def __init__(self, fes, intorder=None, eps=1e-7, leafsize=64, eta=2.0,
                  far_quad=3, ho_far_factor=2.0, inner_quad=None,
                  curve_order=None, curve_gauss=8,
                  internal_interfaces=False, image_masks=None,

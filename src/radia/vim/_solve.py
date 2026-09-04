@@ -459,7 +459,7 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
                      magnetization_sources=None, magnets=None,
                      image=None, image_cyclic=None, image_cyclic_alternating=False,
                      cyclic_periodic_boundaries=None,
-                     gram_eps=None, leaf=32, eta=2.0, far_quad=None, tol=1e-8,
+                     gram_eps=None, leaf=64, eta=2.0, far_quad=None, tol=1e-8,
                      maxit=4000, nl_maxit=300, nl_tol=1e-6,
                      nonlinear_solver="energy-newton",
                      preconditioner="auto",
@@ -470,6 +470,11 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
                      newton_cg_x0=False, gram_backend="hmat",
                      exact_dense_memory_mb=None, _operator_cache=None):
     """HDiv-type VIM soft-iron demag solve (the +N physical material system).
+
+    ``leaf=64`` is the production ChargeGram H-matrix default. It is
+    calibrated for high-order charge rows sharing clustering centres; a
+    smaller explicit value requires raw-Gram and PSD validation for the
+    selected mesh family.
 
     Material spec (EXACTLY ONE):
       mu_r     : float > 1 -> LINEAR isotropic soft iron (ONE region), OR a dict {material_name: mu_r}

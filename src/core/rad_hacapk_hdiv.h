@@ -26,6 +26,28 @@ class RadHACApKChargeGramDerivative;
 #include <string>
 #include <utility>
 #include <atomic>
+#include <limits>
+
+struct RadHACApKSymmetricLeafQuadratic {
+    int leaf_index = -1;
+    bool low_rank = false;
+    int row_start = 0;
+    int row_size = 0;
+    int column_start = 0;
+    int column_size = 0;
+    int rank = 0;
+    double hmatrix_quadratic = 0.0;
+    double raw_quadratic = std::numeric_limits<double>::quiet_NaN();
+};
+
+struct RadHACApKSymmetricLeafQuadraticReport {
+    double hmatrix_quadratic = 0.0;
+    int upper_leaf_count = 0;
+    int upper_low_rank_count = 0;
+    int upper_dense_count = 0;
+    int diagonal_low_rank_count = 0;
+    std::vector<RadHACApKSymmetricLeafQuadratic> dominant_leaves;
+};
 
 // Persistent exact HDiv mass factor for the MASS RIESZ preconditioner, cached
 // across solves.  Broken spaces use local dense blocks; general masses use PARDISO.
@@ -449,6 +471,12 @@ public:
     // This intentionally O(n^2) check separates an entry-kernel PSD defect
     // from an ACA/H-matrix PSD defect on a release-blocking mesh.
     double RawSymmetricQuadraticForm(const std::vector<double>& x) const;
+    // Diagnostic-only decomposition of x^T G_hmat x into symmetric upper-leaf
+    // contributions.  The dominant leaves are checked directly against the raw
+    // entry kernel, which isolates a bad hierarchy/ACA block without changing
+    // the production H-matrix or solve path.
+    RadHACApKSymmetricLeafQuadraticReport DiagnoseSymmetricLeafQuadratics(
+        const std::vector<double>& x, int raw_check_count) const;
     // Exact dense fallback for medium-size release-validation meshes.  The
     // normalized analytic Gram is materialized once and then reused by every
     // C++ solve/apply.  It is intentionally memory-bounded; large meshes must

@@ -6828,6 +6828,117 @@ double RadHACApKChargeGram::RawSymmetricQuadraticForm(
     return (double)value;
 }
 
+RadHACApKSymmetricLeafQuadraticReport
+RadHACApKChargeGram::DiagnoseSymmetricLeafQuadratics(
+    const std::vector<double>& x, int raw_check_count) const
+{
+    if ((int)x.size() != m_n)
+        throw std::invalid_argument(
+            "DiagnoseSymmetricLeafQuadratics: charge-vector size mismatch");
+    if (!m_exactDenseNormalizedGram.empty())
+        throw std::runtime_error(
+            "DiagnoseSymmetricLeafQuadratics: exact-dense Gram has no H-matrix leaves");
+
+    const auto* const leaves = static_cast<const st_cHACApK_leafmtxp_t*>(GetLeafmtxp());
+    const auto* const control = static_cast<const st_cHACApK_lcontrol_t*>(GetLcontrol());
+    if (!leaves || !control || !leaves->st_lf || !control->lod || leaves->nd != m_n)
+        throw std::runtime_error(
+            "DiagnoseSymmetricLeafQuadratics: H-matrix leaf/control state is unavailable");
+
+    std::vector<double> x_permuted((size_t)m_n, 0.0);
+    for (int position = 0; position < m_n; ++position) {
+        const int original = control->lod[position + 1] - 1;
+        if (original < 0 || original >= m_n)
+            throw std::runtime_error(
+                "DiagnoseSymmetricLeafQuadratics: invalid HACApK permutation");
+        const double sigma = m_sigmaActive ? m_chargeSigma[(size_t)original] : 1.0;
+        x_permuted[(size_t)position] = x[(size_t)original] * sigma;
+    }
+
+    RadHACApKSymmetricLeafQuadraticReport report;
+    std::vector<RadHACApKSymmetricLeafQuadratic> candidates;
+    candidates.reserve((size_t)leaves->nlf);
+    for (int leaf_index = 1; leaf_index <= leaves->nlf; ++leaf_index) {
+        const auto* const leaf = leaves->st_lf[leaf_index];
+        if (!leaf || leaf->nstrtl > leaf->nstrtt)
+            continue;
+        if (leaf->nstrtl < 1 || leaf->nstrtt < 1 || leaf->ndl <= 0 || leaf->ndt <= 0 ||
+            leaf->nstrtl - 1 + leaf->ndl > m_n || leaf->nstrtt - 1 + leaf->ndt > m_n)
+            throw std::runtime_error(
+                "DiagnoseSymmetricLeafQuadratics: invalid H-matrix leaf bounds");
+
+        const int row = leaf->nstrtl - 1;
+        const int column = leaf->nstrtt - 1;
+        long double block_quadratic = 0.0L;
+        if (leaf->ltmtx == 1) {
+            if (!leaf->a1 || !leaf->a2 || leaf->kt <= 0)
+                throw std::runtime_error(
+                    "DiagnoseSymmetricLeafQuadratics: incomplete low-rank leaf");
+            for (int rank = 0; rank < leaf->kt; ++rank) {
+                long double left_dot = 0.0L;
+                long double right_dot = 0.0L;
+                for (int i = 0; i < leaf->ndl; ++i)
+                    left_dot += (long double)x_permuted[(size_t)(row + i)]
+                        * leaf->a2[(size_t)i + (size_t)leaf->ndl*rank];
+                for (int j = 0; j < leaf->ndt; ++j)
+                    right_dot += (long double)x_permuted[(size_t)(column + j)]
+                        * leaf->a1[(size_t)j + (size_t)leaf->ndt*rank];
+                block_quadratic += left_dot * right_dot;
+            }
+        } else if (leaf->ltmtx == 2) {
+            if (!leaf->a1)
+                throw std::runtime_error(
+                    "DiagnoseSymmetricLeafQuadratics: incomplete dense leaf");
+            for (int i = 0; i < leaf->ndl; ++i)
+                for (int j = 0; j < leaf->ndt; ++j)
+                    block_quadratic += (long double)x_permuted[(size_t)(row + i)]
+                        * leaf->a1[(size_t)j + (size_t)leaf->ndt*i]
+                        * x_permuted[(size_t)(column + j)];
+        } else {
+            throw std::runtime_error(
+                "DiagnoseSymmetricLeafQuadratics: unknown H-matrix leaf kind");
+        }
+
+        const bool upper = leaf->nstrtl < leaf->nstrtt;
+        const double quadratic = (double)(upper ? 2.0L*block_quadratic : block_quadratic);
+        report.hmatrix_quadratic += quadratic;
+        ++report.upper_leaf_count;
+        if (leaf->ltmtx == 1) ++report.upper_low_rank_count;
+        else ++report.upper_dense_count;
+        if (leaf->ltmtx == 1 && !upper) ++report.diagonal_low_rank_count;
+        candidates.push_back({
+            leaf_index, leaf->ltmtx == 1, row, leaf->ndl, column, leaf->ndt,
+            leaf->ltmtx == 1 ? leaf->kt : 0, quadratic,
+            std::numeric_limits<double>::quiet_NaN()});
+    }
+
+    std::sort(candidates.begin(), candidates.end(),
+              [](const auto& left, const auto& right) {
+                  return std::fabs(left.hmatrix_quadratic) >
+                      std::fabs(right.hmatrix_quadratic);
+              });
+    const int checked = std::min(std::max(raw_check_count, 0),
+                                 static_cast<int>(candidates.size()));
+    for (int entry = 0; entry < checked; ++entry) {
+        auto& candidate = candidates[(size_t)entry];
+        const bool upper = candidate.row_start < candidate.column_start;
+        long double raw = 0.0L;
+        for (int i = 0; i < candidate.row_size; ++i) {
+            const int original_i = control->lod[candidate.row_start + i + 1] - 1;
+            const long double x_i = x[(size_t)original_i];
+            for (int j = 0; j < candidate.column_size; ++j) {
+                const int original_j = control->lod[candidate.column_start + j + 1] - 1;
+                raw += x_i * (long double)GetInteractionMatrixElementRaw(original_i, original_j)
+                    * (long double)x[(size_t)original_j];
+            }
+        }
+        candidate.raw_quadratic = (double)(upper ? 2.0L*raw : raw);
+    }
+    candidates.resize((size_t)checked);
+    report.dominant_leaves = std::move(candidates);
+    return report;
+}
+
 double RadHACApKChargeGram::BuildExactDenseNormalizedGram(
     std::size_t maximum_bytes)
 {

@@ -369,7 +369,7 @@ class _QuadratureCoupling:
 
 
 def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
-                    nu0=None, gram_eps=None, leaf=32, eta=2.0, far_quad=None,
+                    nu0=None, gram_eps=None, leaf=64, eta=2.0, far_quad=None,
                     ho_far_factor=None, tol=1e-8, maxit=4000,
                     nl_maxit=200, nl_tol=1e-3,
                     initial_b_path=None, initial_state=None, order=1,

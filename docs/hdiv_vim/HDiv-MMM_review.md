@@ -9,7 +9,8 @@ exposed several failure modes.
 ## Review status
 
 - Revised: 2026-09-04 after the released-binary TOSCA-style mixed
-  total/reduced-Omega C-yoke mesh campaign on mdx and Hibino.
+  total/reduced-Omega C-yoke mesh campaign on mdx and Hibino, and the
+  symmetric ChargeGram diagonal-leaf repair for ESRF Example #3.
 - The `v4.95.71` four-level result cited below is evidence for the former
   global reduced-Omega formulation only.  It is retained as history, but it
   is **not** an accuracy certificate for the current mixed formulation.  The
@@ -78,11 +79,12 @@ findings remain:
    `DemagOperator`, contradicting the BDM1/BDM2-only production policy.
 3. Fine TET C-yoke runs reportedly lose positive definiteness under refinement;
    the failing mesh and driver are not tracked, so the defect is not replayable.
-4. The symmetric ACA/H-matrix ChargeGram is indefinite on the ESRF #3 BDM2
-   response-iron mesh.  The raw analytic Gram and a bounded exact-dense
-   materialization are positive, so this is a compression defect, not a
-   material, mass-Riesz, or PARDISO defect.  It blocks H-matrix material
-   release until a PSD-preserving compression or certificate is implemented.
+4. The symmetric ACA/H-matrix ChargeGram previously made diagonal,
+   zero-width clusters low rank on the ESRF #3 BDM2 response-iron mesh.
+   The symmetric diagonal-leaf repair removes that construction defect and a
+   focused regression locks it. The full nonlinear three-engine #3 run remains
+   the acceptance gate; a single positive quadratic direction is not a global
+   PSD certificate.
 Known, fail-loud limitations are not hidden failures: mapped HEX BDM2 shape
 derivatives, 3D pyramid/mixed meshes, and 2D history solves remain unsupported.
 Large IMA field maps remain direct because the tree route is
@@ -629,9 +631,32 @@ cost boundary, not a scalable timing claim.
 
 This validates the FE/mass/PARDISO path and provides a safe three-engine
 medium-mesh reference.  It is not a scalable fallback and must not be selected
-implicitly.  The default H-matrix backend remains release-blocked for material
-solves until it has a genuine PSD-preserving construction or an acceptance
-certificate that rejects this failure before CG starts.
+implicitly.
+
+### 5.2 Symmetric diagonal-leaf repair (2026-09-04)
+
+The failure was not caused by IMA: the #3 asset has no image reduction, and
+independent fourfold/sixfold cyclic IMA checks remain within `8.43e-5` relative
+field RMS. The failing H-matrix contained same-cluster diagonal ACA leaves.
+For example, a size-18/rank-3 leaf contributed `1824.028974949` to the
+quadratic form where its raw analytic self block contributed
+`41092.606726508`. In symmetric storage an off-diagonal leaf is reflected,
+but a diagonal leaf is applied once; unconstrained ACA there is neither
+symmetric nor positive semidefinite.
+
+`cHACApK_count_lntmx` and `cHACApK_generate_leafmtx` now keep each
+same-cluster diagonal leaf dense only when Radia requests symmetric fill.
+Off-diagonal leaves remain ACA-compressed. The native regression uses repeated
+charge centres and asserts that there are no low-rank diagonal leaves and that
+the materialized H-matrix quadratic matches the raw analytic quadratic.
+
+On the fixed first PCG direction of the #3 mesh, the repaired `leaf=16`
+operator gives `+79506.431938098`, replacing the former negative
+`-110486.500638061`. The calibrated production default is `leaf=64`: it gives
+`+78435.277824058` against `+78453.287592292` from the raw oracle, a `0.023%`
+gap, with 1,084 low-rank and 1,458 dense leaves (94.65 MB, 16.62% of dense
+storage). The repair fixes the identified construction defect; remote
+nonlinear three-engine evidence is still required before closing Example #3.
 
 ## 6. Remaining work and acceptance criteria
 
@@ -640,7 +665,7 @@ certificate that rejects this failure before CG starts.
 | P1 | Full-versus-IMA `rad.Fld` roundoff | Make all three isolated failures in section 4 pass below `10 eps` without weakening tolerances. Compare solved coefficient vectors before debugging source evaluation, then align directed block symmetrization and full/reduced field summation order. |
 | P1 | Remove production RT0 | Delete the 3D order-0 entries from `hdiv_capabilities`, remove the order-0 `DemagOperator` production path and dedicated order-0 tests/docs, and keep public `Solve`, operator, field, and MATLAB inventory consistently BDM1/BDM2. |
 | P1 | Nonlinear C-yoke memory evidence | Four-level accuracy and repeated timing are closed on mdx and hibino for `v4.95.71`. Add measured process peak memory to a future scaling campaign before making a memory-efficiency claim. reduced-A remains an independent third-formulation audit rather than the primary production route. |
-| P1 | H-matrix material PSD certificate | On ESRF #3, prove the compressed Gram is PSD before a material-CG solve, or replace independent ACA blocks with a PSD-preserving compression. The H-matrix backend is release-blocked until the counterexample in section 5.1 passes without exact-dense materialization. |
+| P1 | ESRF #3 H-matrix three-engine evidence | Run the repaired `leaf=64` operator on mdx or hibino through the tracked nonlinear three-engine runner. Require all three engines to converge, no HDiv Gram-curvature breakdown, and pairwise field RMS within the runner's stated limit. |
 | Resolved for primal path | Mapped HEX BDM2 material solve | The composite mapped charge representation passes spectrum, linear/nonlinear solve, IMA, field, and quadrature-convergence gates on mdx. |
 | P2 | Mapped HEX BDM2 shape derivative | Differentiate the same complete-host tensor and whole-host Duffy representation, then lock it against finite differences before enabling topology optimization. The current API fails loudly. |
 | P2 | Image-aware field acceleration | Design grouping that is invariant under explicit reflection and reduced IMA representation; prove `<10 eps` direct parity before enabling tree/H-matrix evaluation for image-bearing field maps. |
@@ -682,9 +707,10 @@ worktree, then repeated with the exact `v4.95.70` timing wheel and the final
 - batched/block-PCG true-residual and constrained-H-matrix checks: 2 tests PASS.
 - exact-dense ChargeGram entry, public `DemagOperator`/`vim.Solve`, and
   configured-principal-submatrix semantics: 9 tests PASS in 5.87 s on LAB;
-- ESRF #3 exact-dense material diagnostic: PASS under its explicit 1 GiB cap;
-  the parallel H-matrix run fails at PCG iteration zero as recorded in section
-  5.1 and remains a release blocker rather than a passing validation result.
+- ESRF #3 exact-dense material diagnostic: PASS under its explicit 1 GiB cap.
+  The historical parallel H-matrix failure at PCG iteration zero is explained
+  by section 5.2. The repaired H-matrix must still complete the tracked remote
+  nonlinear three-engine runner before it becomes release evidence.
 - canonical Cubit C-yoke mesh: PASS with exact reflected topology, 462 Kelvin
   point pairs, and `2.00e-15 m` maximum translation error;
 - order-2 linear Kelvin three-engine comparison: PASS, 0.12113% maximum
