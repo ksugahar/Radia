@@ -279,6 +279,24 @@ def _converged_diagnostics(converged=True):
     }
 
 
+def test_coil_yoke_checkpoint_rejects_different_native_build(tmp_path, monkeypatch):
+    runner = _coil_yoke_runner_module(monkeypatch)
+    contract = runner._checkpoint_contract(
+        case=6, engine="hdiv_mmm",
+        implementation_sha256={"radia._radia_pybind": "diagnostic-build"})
+    path = tmp_path / "hdiv.checkpoint.json"
+    runner._write_checkpoint(path, contract, np.ones((2, 3)),
+                             _converged_diagnostics(), {})
+    with pytest.raises(RuntimeError, match="contract changed"):
+        runner._read_checkpoint(path, dict(
+            contract, implementation_sha256={"radia._radia_pybind": "production-build"}))
+    identity = runner._implementation_identity()
+    assert len(identity["radia._radia_pybind"]) == 64
+    assert identity["runner"] == runner._sha256(COIL_YOKE_RUNNER_PATH)
+    text = COIL_YOKE_RUNNER_PATH.read_text(encoding="utf-8")
+    assert "implementation_sha256=_implementation_identity()" in text
+
+
 def test_coil_yoke_runner_declares_picard_state_and_anderson_controls():
     text = COIL_YOKE_RUNNER_PATH.read_text(encoding="utf-8")
     assert "--mixed-anderson-depth" in text
