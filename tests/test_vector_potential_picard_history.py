@@ -90,3 +90,31 @@ def test_reduced_a_picard_warm_start_and_anderson_reach_the_same_field():
     np.testing.assert_allclose(np.asarray(mixed_solver.get_B()(probe)), reference, rtol=5.0e-3)
     with pytest.raises(ValueError, match="one reluctivity per iron element"):
         _solve(mesh, nu_initial=np.ones(2))
+
+
+def test_reduced_a_does_not_clip_rising_permeability_targets(monkeypatch):
+    from radia.esrf_examples import get_esrf_bh_table
+    from radia.picard_acceleration import ConstrainedAndersonAccelerator
+
+    steps = []
+    original = ConstrainedAndersonAccelerator.step
+
+    def record_step(self, current, target):
+        result = original(self, current, target)
+        steps.append((current.copy(), target.copy(), result.copy()))
+        return result
+
+    monkeypatch.setattr(ConstrainedAndersonAccelerator, "step", record_step)
+    mesh = _iron_in_air()
+    solver = VectorPotentialSolver(mesh, iron_domains="iron", mu_r=1000.0, order=1)
+    solver.set_source_cf(ng.CoefficientFunction((0.0, 0.0, 0.1)))
+    table = get_esrf_bh_table(7)
+    with ng.TaskManager():
+        solver.solve_nonlinear(table, maxiter=2, tol=1e-12, relax=0.1,
+                               anderson_depth=0, dirichlet="outer", solver="direct",
+                               verbose=False)
+    assert len(steps) == 2
+    current, target, result = steps[0]
+    assert np.min(target) < np.min(current)
+    for current, target, result in steps:
+        np.testing.assert_array_equal(result, 0.1 * target + 0.9 * current)
