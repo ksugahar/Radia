@@ -1027,7 +1027,14 @@ def get_esrf_cubit_mesh_policy(number: int) -> dict[str, Any]:
     has_iron = spec.model_class in {
         "hybrid_permanent_magnet", "iron_dominated_dipole", "quadrupole"
     }
-    cad_scheme = "tetmesh" if int(number) == 4 else "auto"
+    # Example 7's end-chamfered quadrupole yoke is a full CAD authority, but
+    # Cubit 2025.12 cannot map or submap its four volumes without a further
+    # topology partition.  Require the supported curved-Q2 TET route
+    # explicitly rather than issuing ``scheme auto`` and silently exporting an
+    # empty mesh.  It remains a tracked HEX-partition improvement, not an
+    # unrecorded fallback.
+    explicit_tet_yoke = int(number) == 7
+    cad_scheme = "tetmesh" if int(number) == 4 or explicit_tet_yoke else "auto"
     return {
         "schema": "radia.esrf-cubit-mesh-policy.v1",
         "all_examples_use_cubit": True,
@@ -1036,13 +1043,19 @@ def get_esrf_cubit_mesh_policy(number: int) -> dict[str, Any]:
         "cad_volume_fallback_reason": (
             "exact sphere has no yoke; ordinary Cubit CAD meshing falls back "
             "to TET while Sculpt HEX is evaluated separately"
-            if int(number) == 4 else None
+            if int(number) == 4 else
+            "Cubit 2025.12 cannot map/submap the full 400 mm end-chamfered "
+            "Example-7 yoke; use explicit curved-Q2 TET until the CAD is "
+            "partitioned into sweepable HEX blocks"
+            if explicit_tet_yoke else None
         ),
         "regions": {
             "iron": {
                 "present": bool(has_iron),
-                "required_family": "HEX" if has_iron else None,
-                "scheme": "auto" if has_iron else None,
+                "required_family": (
+                    "TET" if explicit_tet_yoke else "HEX" if has_iron else None
+                ),
+                "scheme": cad_scheme if has_iron else None,
             },
             "permanent_magnet": {
                 "preferred_family": "HEX",
@@ -1076,14 +1089,18 @@ def get_esrf_cubit_mesh_policy(number: int) -> dict[str, Any]:
         "solver_routes": {
             "bdm2_ima": {
                 "mesh": "Cubit soft-magnetic response mesh only",
-                "iron_family": "HEX" if has_iron else None,
+                "iron_family": (
+                    "TET" if explicit_tet_yoke else "HEX" if has_iron else None
+                ),
                 "air_mesh": False,
                 "fixed_magnetization_source_mesh": True,
             },
             "nonlinear_hcurl_fem": {
                 "mesh": "Cubit conforming full-domain mesh",
                 "allowed_families": ["HEX", "WEDGE", "PYRAMID", "TET"],
-                "iron_family": "HEX" if has_iron else None,
+                "iron_family": (
+                    "TET" if explicit_tet_yoke else "HEX" if has_iron else None
+                ),
                 "air_preferred_family": "HEX",
                 "air_fallback_family": "TET",
             },

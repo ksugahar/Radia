@@ -670,6 +670,42 @@ gap, with 1,084 low-rank and 1,458 dense leaves (94.65 MB, 16.62% of dense
 storage). The repair fixes the identified construction defect; remote
 nonlinear three-engine evidence is still required before closing Example #3.
 
+### 5.3 ESRF coil-yoke three-engine readiness (2026-09-04)
+
+ESRF Examples 6 and 7 are coil-driven nonlinear quadrupoles.  The validation
+must use one mesh-free `CoilBuilder` solid-current object tree for every
+formulation: HDiv-MMM receives the checked iron-only Cubit response mesh, and
+reduced-A plus mixed total/reduced-Omega receive a separate conforming
+iron/physical-air/Kelvin mesh made from the same iron STEP authority.  Coils
+are deliberately not FEM-meshed.  A finite outer-air box is forbidden.
+
+Both cases now have an executable, checkpointed three-engine runner and a
+fast preflight that verifies the source closure, source field finiteness,
+observation-point containment, material and boundary labels, Kelvin
+identifications, and the mesh hashes that bind checkpoints to their inputs.
+The runner compares the 45-point symmetric gap stencil and treats all three
+nonlinear convergences plus the configured pairwise core RMS limit as its
+acceptance gate.
+
+| Case | HDiv response mesh | Independent FEM mesh | Readiness result |
+|---|---:|---:|---|
+| #6, quadrupole | existing curved-Q2 Cubit iron HEX | 134,686 curved-Q2 elements, 1,393 Kelvin identifications | Preflight PASS; full nonlinear three-engine run pending the released H-matrix repair. |
+| #7, ESRF storage-ring quadrupole | 367,845 curved-Q2 Cubit iron TET | 839,376 curved-Q2 elements, 1,409 Kelvin identifications | Preflight PASS; full nonlinear three-engine run pending the released H-matrix repair. |
+
+Case #7 is explicitly TET at present.  Cubit 2025.12 cannot map or submap
+the full 400 mm end-chamfered yoke without a further topology partition.  The
+policy therefore records `tetmesh` and `TET` for both HDiv and FEM iron rather
+than silently exporting an empty mesh.  Its iron-only Cubit mesh passes the
+strict label, curved-mapping, and CAD-volume checks: all 23,542,080 Jacobian
+samples have a consistent orientation, the minimum scaled Jacobian is
+`0.0628180`, and the CAD-volume difference is `5.83e-11%`.
+Partitioning it into sweepable HEX blocks remains an improvement task; it is
+not a reason to claim a HEX computation that was not performed.
+
+These are readiness records, not numerical certificates.  Do not cite
+three-engine agreement for Examples 6 or 7 until the runner finishes from a
+released native wheel on mdx or hibino and writes its checked result JSON.
+
 ## 6. Remaining work and acceptance criteria
 
 | Priority | Item | Acceptance criterion |
@@ -678,6 +714,7 @@ nonlinear three-engine evidence is still required before closing Example #3.
 | P1 | Remove production RT0 | Delete the 3D order-0 entries from `hdiv_capabilities`, remove the order-0 `DemagOperator` production path and dedicated order-0 tests/docs, and keep public `Solve`, operator, field, and MATLAB inventory consistently BDM1/BDM2. |
 | P1 | Nonlinear C-yoke memory evidence | Four-level accuracy and repeated timing are closed on mdx and hibino for `v4.95.71`. Add measured process peak memory to a future scaling campaign before making a memory-efficiency claim. reduced-A remains an independent third-formulation audit rather than the primary production route. |
 | P1 | ESRF #3 H-matrix three-engine evidence | Run the repaired `leaf=64` operator on mdx or hibino through the tracked nonlinear three-engine runner. Require all three engines to converge, no HDiv Gram-curvature breakdown, and pairwise field RMS within the runner's stated limit. |
+| P1 | ESRF #6 and #7 three-engine evidence | Run the new coil-yoke runner from the released native wheel on mdx or hibino. Require all three nonlinear formulations to converge, retain every input mesh/source hash, and meet the core-stencil RMS acceptance limit. |
 | Resolved for primal path | Mapped HEX BDM2 material solve | The composite mapped charge representation passes spectrum, linear/nonlinear solve, IMA, field, and quadrature-convergence gates on mdx. |
 | P2 | Mapped HEX BDM2 shape derivative | Differentiate the same complete-host tensor and whole-host Duffy representation, then lock it against finite differences before enabling topology optimization. The current API fails loudly. |
 | P2 | Image-aware field acceleration | Design grouping that is invariant under explicit reflection and reduced IMA representation; prove `<10 eps` direct parity before enabling tree/H-matrix evaluation for image-bearing field maps. |
