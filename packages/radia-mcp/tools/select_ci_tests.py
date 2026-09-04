@@ -346,7 +346,12 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.changed_files_json is not None:
-        changed_files = json.loads(args.changed_files_json)
+        encoded_files = (
+            sys.stdin.read()
+            if args.changed_files_json == "-"
+            else args.changed_files_json
+        )
+        changed_files = json.loads(encoded_files)
         if not isinstance(changed_files, list) or not all(
             isinstance(path, str) for path in changed_files
         ):
