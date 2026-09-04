@@ -11,6 +11,9 @@ import sys
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 SELECTOR_PATH = PACKAGE_ROOT / "tools" / "select_ci_tests.py"
+WORKFLOW_PATH = (
+    PACKAGE_ROOT.parents[1] / ".github" / "workflows" / "radia-mcp-matrix.yml"
+)
 SPEC = importlib.util.spec_from_file_location("select_ci_tests", SELECTOR_PATH)
 assert SPEC and SPEC.loader
 SELECTOR = importlib.util.module_from_spec(SPEC)
@@ -146,3 +149,11 @@ def test_cli_accepts_large_changed_file_list_over_stdin():
     plan = json.loads(completed.stdout)
     assert plan["mode"] == "targeted"
     assert plan["changed_files"] == sorted(changed)
+
+
+def test_workflow_discovers_selected_tests_from_the_test_directory():
+    workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+
+    assert 'env["RADIA_MCP_CI_SELECTION_JSON"]' in workflow
+    assert '"-m", "not xval and not slow", "tests"' in workflow
+    assert '*targets' not in workflow
