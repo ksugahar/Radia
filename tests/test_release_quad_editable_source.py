@@ -47,6 +47,19 @@ def test_release_quad_git_helper_trusts_only_its_active_worktree(monkeypatch):
     assert kwargs == {"capture_output": True, "text": True, "check": True}
 
 
+def test_release_head_uses_safe_git_helper(monkeypatch):
+    calls = []
+
+    def fake_git(*args, **kwargs):
+        calls.append((args, kwargs))
+        return subprocess.CompletedProcess(args, 0, stdout="ABCDEF\n", stderr="")
+
+    monkeypatch.setattr(release_quad, "_git", fake_git)
+
+    assert release_quad._release_head() == "abcdef"
+    assert calls == [(('rev-parse', 'HEAD'), {})]
+
+
 def test_editable_release_roots_can_target_one_clean_nas_worktree(monkeypatch):
     monkeypatch.setenv(
         release_quad.EDITABLE_REPO_LAB_ENV,
