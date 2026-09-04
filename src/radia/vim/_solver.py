@@ -23,7 +23,7 @@ class HDivSolver:
     def __init__(self, mesh, *, order=1, image=None, image_cyclic=None,
                  image_cyclic_alternating=False,
                  cyclic_periodic_boundaries=None,
-                 gram_eps=None, leaf=32,
+                 gram_eps=None, leaf=64,
                  eta=2.0, far_quad=None, curve_order=None, curve_gauss=8,
                  ho_far_factor=None, gram_backend="hmat",
                  exact_dense_memory_mb=None):
