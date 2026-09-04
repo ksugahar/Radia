@@ -256,6 +256,21 @@ _PYBIND_CLASS_EXCLUSIONS = {
         "sigma-normalization diagnostic for the roundoff-amplification "
         "regression tests (empty before BuildHMatrix; every public apply "
         "already wraps S back, so MATLAB sees the physical Gram)"),
+    "_ChargeGramHMatrix.raw_symmetric_quadratic_form": (
+        "diagnostic-only O(n^2) exact-entry Rayleigh form used to localize "
+        "H-matrix roundoff and positive-semidefinite failures; it is not a "
+        "user-facing solver operation"),
+    "_ChargeGramHMatrix.symmetric_leaf_quadratics": (
+        "diagnostic-only H-matrix leaf decomposition used by regression and "
+        "validation tooling; MATLAB consumes the checked physical Gram apply"),
+    "_ChargeGramHMatrix.build_exact_dense_normalized_gram": (
+        "private bounded-memory Python VIM safety fallback for validation-sized "
+        "meshes; it changes internal Gram storage but adds no MATLAB solver "
+        "semantics beyond the existing entry and matvec contracts"),
+    "_ChargeGramHMatrix.uses_exact_dense_normalized_gram": (
+        "introspection-only flag for the private exact-dense validation "
+        "fallback; backend diagnostics are reported through public result "
+        "artifacts rather than a separate MEX property"),
     "_ChargeGramHMatrix._reduce_configured_candidate_directional_schur": (
         "private proposal-only acceleration used by the Python topology "
         "optimizer; it is not a public pybind capability, and MATLAB uses "
