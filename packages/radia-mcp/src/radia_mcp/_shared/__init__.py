@@ -7,7 +7,9 @@
 - hedges:    弱気修飾 (と考えられる / 可能性がある 等) の集中管理
 - language:  日本語テキスト判定 (CJK 比率)
 - sentence:  文分割 (句点 ．。, mixed ja/en)
+- latex_log: LaTeX ログの overfull box 走査 (4 site すべて / hbox+vbox)
 """
 from .hedges import HEDGE_PATTERNS, scan_hedges  # noqa: F401
 from .language import is_japanese, cjk_char_count  # noqa: F401
+from .latex_log import scan_overfull, summarize_overfull  # noqa: F401
 from .sentence import split_ja_sentences, split_mixed_sentences  # noqa: F401

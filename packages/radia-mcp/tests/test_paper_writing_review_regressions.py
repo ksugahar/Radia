@@ -306,3 +306,93 @@ def test_terminology_normalizer_never_writes_replacement_char(tmp_path):
     )
     assert "error" in result
     assert path.read_bytes() == b"\x81"
+
+
+# --- second review pass (2026-09-05): the findings still open on main -------
+
+
+_OVERFULL_LOG = """\
+Overfull \\hbox (1.0pt too wide) in paragraph at lines 10--12
+Overfull \\hbox (2.0pt too wide) in alignment at lines 20--22
+Overfull \\vbox (3.0pt too high) detected at line 30
+Overfull \\hbox (4.0pt too wide) has occurred while \\output is active
+Underfull \\hbox (badness 10000) in paragraph at lines 40--41
+"""
+
+
+def test_overfull_scanner_counts_every_site_tex_reports_from(tmp_path):
+    """A table row or a float that overflows is still an overfull box.
+
+    TeX names four sites and only one says "in paragraph"; counting that one
+    reported zero for the other three, which reads as a pass for a check
+    whose target is zero.
+    """
+    log = tmp_path / "paper.log"
+    log.write_text(_OVERFULL_LOG, encoding="utf-8")
+    result = pw.paper_writing_check_overfull_hbox(str(log))
+    assert result["overfull_count"] == 4
+    assert result["hbox_count"] == 3
+    assert result["vbox_count"] == 1
+    sites = {d["site"] for d in result["overfull_details"]}
+    assert sites == {"paragraph", "alignment", "detected", "output"}
+    # Underfull is a different warning and must not be counted.
+    assert all("badness" not in d["severity"] for d in result["overfull_details"])
+
+
+def test_overfull_scanner_reports_lines_only_when_tex_gave_them(tmp_path):
+    log = tmp_path / "paper.log"
+    log.write_text(_OVERFULL_LOG, encoding="utf-8")
+    by_site = {
+        d["site"]: d
+        for d in pw.paper_writing_check_overfull_hbox(str(log))["overfull_details"]
+    }
+    assert by_site["paragraph"]["lines"] == "10-12"
+    assert by_site["detected"]["lines"] == "30"
+    # \output is active carries a page, never a source line: do not invent one.
+    assert by_site["output"]["lines"] == ""
+
+
+def test_beamer_overfull_check_sees_the_vertical_slide_overflow(tmp_path):
+    """The slide-overflow case beamer actually emits is \\vbox from \\output."""
+    from radia_mcp.presentation import tools as pres
+
+    log = tmp_path / "slides.log"
+    log.write_text(
+        "Overfull \\vbox (12.0pt too high) has occurred while \\output is active\n",
+        encoding="utf-8",
+    )
+    result = pres.presentation_check_overfull_hbox(str(log))
+    assert result["overfull_count"] == 1
+    assert result["vbox_count"] == 1
+
+
+def test_reviewer_comment_caption_entry_is_matched_as_a_pattern():
+    """The caption entry was a regex sitting in a plain substring test."""
+    result = pw.paper_writing_classify_reviewer_comment(
+        "The Fig. 3 caption has a wrong unit."
+    )
+    assert result["difficulty"] == "A"
+    assert result["confidence"] == "high"
+    # A plain typo report keeps working through the substring branch.
+    assert pw.paper_writing_classify_reviewer_comment(
+        "There is a typo in Section II."
+    )["difficulty"] == "A"
+
+
+def test_skill_document_only_names_tools_that_exist():
+    """A renamed tool left the skill telling readers to call a missing name."""
+    import asyncio
+    import pathlib
+    import re
+
+    from radia_mcp.paper_writing import server as srv
+
+    registered = {tool.name for tool in asyncio.run(srv.mcp.list_tools())}
+    skill = (
+        pathlib.Path(srv.__file__).parent / "skill.md"
+    ).read_text(encoding="utf-8")
+    named = set(re.findall(r"\bpaper_writing_[a-z0-9_]+", skill))
+    # "paper_writing_check_*" is a deliberate wildcard; the framework-migration
+    # entry is explicitly labelled as not yet implemented.
+    named -= {"paper_writing_check_", "paper_writing_check_framework_migration"}
+    assert not (named - registered)

@@ -14,6 +14,7 @@ import re
 import zipfile
 
 from radia_mcp.common.pptx_svg import picture_svg_blob, svg_geometry
+from radia_mcp._shared.latex_log import summarize_overfull
 
 # Plan B Tier 1 (v0.12.0) — composite score + human-advisor comments
 from .plans.T1 import presentation_opening_hook_strength  # noqa: F401
@@ -714,26 +715,21 @@ def presentation_validate_pdf_pages(pdf_path: str,
 
 
 def presentation_check_overfull_hbox(log_path: str) -> dict:
-    """beamer ログ中の Overfull \\hbox をカウント。スライドでは致命的。
+    """beamer ログ中の Overfull box をカウント。スライドでは致命的。
 
-    目標: 0。overflow があると図が切れる / 文字がはみ出す。
+    目標: 0。overflow があると図が切れる / 文字がはみ出す。 スライドが
+    枠から溢れるとき beamer が出すのは ``Overfull \\vbox`` で、しかも
+    ``has occurred while \\output is active`` の形 (行番号なし) が多い。
+    段落の ``\\hbox`` だけを数えていた頃は、この最も重要な溢れが 0 件と
+    して通過していた。 4 site すべてと hbox / vbox の双方を数える。
     """
     p = pathlib.Path(log_path)
     if not p.exists():
         return {"error": f"file not found: {log_path}"}
     text = p.read_text(encoding="utf-8", errors="replace")
-    matches = re.findall(
-        r"Overfull \\hbox \(([^)]+)\) in paragraph at lines (\d+)(?:--(\d+))?",
-        text,
-    )
-    details = [
-        {"severity": m[0], "lines": m[1] + (f"-{m[2]}" if m[2] else "")}
-        for m in matches[:20]
-    ]
     return {
         "file": str(p),
-        "overfull_count": len(matches),
-        "overfull_details": details,
+        **summarize_overfull(text),
         "target": "0 (beamer は overflow で致命的)",
     }
 
