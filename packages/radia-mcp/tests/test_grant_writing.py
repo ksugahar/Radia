@@ -501,6 +501,35 @@ def test_budget_source_consistency_reports_exact_delta(tmp_path):
     assert result["differences"][0]["delta"] == 5
 
 
+def test_budget_source_consistency_ignores_trailing_amount_only_summary_rows(tmp_path):
+    source = tmp_path / "budget.csv"
+    source.write_text(
+        "category,年度/FY,x,x,品目/Item,x,x,金額/Amount\n"
+        "F,2027,,,AI subscription,,,202\n"
+        "\n"
+        ",,,,,,,202\n"
+        ",,,,,,,202\n",
+        encoding="utf-8",
+    )
+    result = gw.grant_writing_budget_source_consistency_check(
+        str(source), expected_total_thousand_yen=202
+    )
+    assert result["consistent"]
+    assert result["canonical"]["row_count"] == 1
+
+
+def test_budget_source_consistency_keeps_amount_only_rows_inside_ledger_strict(tmp_path):
+    source = tmp_path / "budget.csv"
+    source.write_text(
+        "category,年度/FY,x,x,品目/Item,x,x,金額/Amount\n"
+        "F,2027,,,AI subscription,,,202\n"
+        ",,,,,,,100\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="invalid budget row 3"):
+        gw.grant_writing_budget_source_consistency_check(str(source))
+
+
 def test_internal_evidence_to_external_scale_accepts_transfer_and_validation():
     result = gw.grant_writing_internal_evidence_to_external_scale_check(
         "予備成果として、研究室内で教員と学生が知識基盤を利用している。"
@@ -1191,6 +1220,30 @@ def test_adjacent_reviewer_readability_accepts_concrete_implementation_terms():
     types = {risk["type"] for risk in result["risks"]}
 
     assert "applicant_internal_abstraction" not in types
+
+
+def test_adjacent_reviewer_flags_abstract_feasibility_evidence_labels():
+    text = (
+        "遂行可能性は、共著実績、複数機関資産の再実行、担当者の公開変更、"
+        "研究室内MCP運用に基づく。"
+    )
+    result = gw.grant_writing_adjacent_reviewer_readability_check(text)
+    risks = {risk["type"]: risk for risk in result["risks"]}
+    assert "feasibility_evidence_not_observable" in risks
+    assert result["metrics"]["feasibility_evidence_not_observable_count"] == 1
+    assert "実施者、対象、完了した操作" in risks[
+        "feasibility_evidence_not_observable"
+    ]["recommendation"]
+
+
+def test_adjacent_reviewer_accepts_observable_feasibility_evidence():
+    text = (
+        "遂行可能性は、共著実績、複数機関資産の再実行、担当者のビルド・CI"
+        "改善4件を公開版へ取り込んだ実績、研究室内MCP接続・実行実績に基づく。"
+    )
+    result = gw.grant_writing_adjacent_reviewer_readability_check(text)
+    types = {risk["type"] for risk in result["risks"]}
+    assert "feasibility_evidence_not_observable" not in types
 
 
 def test_adjacent_reviewer_readability_flags_takeaway_after_evidence():
