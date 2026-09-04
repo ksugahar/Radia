@@ -483,3 +483,12 @@ from .plans.T16_book_pdf_rename import (  # noqa: E402,F401
     doc_convert_extract_title_from_image,
     doc_convert_rename_pdf_by_title,
 )
+
+# ---------------------------------------------------------------------------
+# Tier 1 — the session font table (2026-09-04): a face that fontdrvhost.exe
+# lost is reloaded for this session without a reboot
+# ---------------------------------------------------------------------------
+from .plans.T17_session_fonts import (  # noqa: E402,F401
+    doc_convert_session_font_check,
+    doc_convert_session_font_repair,
+)
