@@ -99,6 +99,8 @@ def test_cubit_probe_checks_runtime_visibility_and_enabled_state():
     assert "action.isEnabled()" in source
     assert "main.createPopupMenu()" in source
     assert 'cubit.cmd("exit 0")' in source
+    assert 'temporary_result = RESULT_PATH + ".tmp"' in source
+    assert "os.replace(temporary_result, RESULT_PATH)" in source
 
 
 def test_gui_smoke_is_an_installed_release_gate():
