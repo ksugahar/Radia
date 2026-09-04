@@ -64,6 +64,33 @@ def test_structural_row_break_and_undo_contract() -> None:
     assert "ROW_ENVIRONMENT" in SOURCE
 
 
+def test_prime_never_creates_a_double_superscript() -> None:
+    """A prime is a superscript, so it needs a group after another one.
+
+    The structural editor attaches the prime to its base; a source pane
+    inserts at the caret, so a palette prime pressed after `a^{2}` produced
+    `a^{2}'`, which MathJax rejects with "Prime causes double exponent".
+    """
+    assert "function endsWithSuperscript(text)" in SOURCE
+    assert "/^'+$/.test(snippet)" in SOURCE
+    assert 'endsWithSuperscript(before) ? "{}" : ""' in SOURCE
+
+
+def test_palette_keys_explain_themselves_without_hover() -> None:
+    """A two-letter face such as "sf" or "tt" says nothing on its own.
+
+    The native status bar describes the cell under the cursor.  A title
+    tooltip cannot do that on a touch screen or for a keyboard user, so the
+    Web editor mirrors the native status line on hover and on focus.
+    """
+    assert "function showKeyHelp(text)" in SOURCE
+    assert "function clearKeyHelp(text)" in SOURCE
+    assert 'button.setAttribute("aria-label", description)' in SOURCE
+    assert 'button.addEventListener("mouseenter"' in SOURCE
+    assert 'button.addEventListener("focus"' in SOURCE
+    assert 'status.setAttribute("data-tex-literal-ok", "true")' in SOURCE
+
+
 def test_teaching_surfaces_are_exempt_from_the_bare_tex_scan() -> None:
     """The hint line and recent-insertion display show TeX on purpose."""
     assert 'recent.setAttribute("data-tex-literal-ok", "true")' in SOURCE
