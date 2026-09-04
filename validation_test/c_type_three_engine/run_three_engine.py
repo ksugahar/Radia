@@ -1,11 +1,11 @@
-"""Compare HDiv-MMM and Omega-reduced-Omega on one C-type magnet.
+"""Compare three formulations on one C-type electromagnet.
 
-HCurl reduced-A remains an independent third route unless ``--primary-only``
-is selected. All formulations share the exact Cubit/ACIS iron authority, one
-solid ``CoilBuilder`` excitation, one B-H table, and one set of physical
-observation points. HDiv-MMM intentionally uses the iron-only mesh because its
-Coulomb Gram is the open-boundary operator; the FEM formulations use the same
-periodic Kelvin mesh. No finite outer air box is part of this comparison.
+HDiv-MMM, HCurl reduced-A, and H1 TOSCA-style mixed total/reduced Omega share
+the exact Cubit/ACIS iron authority, one solid ``CoilBuilder`` excitation, one
+B-H table, and one set of physical observation points. HDiv-MMM intentionally
+uses the iron-only mesh because its Coulomb Gram is the open-boundary operator;
+the FEM formulations use the same periodic Kelvin mesh. No finite outer air
+box is part of this comparison.
 """
 
 from __future__ import annotations
@@ -21,6 +21,23 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+# A validation invocation from a source checkout must evaluate the source under
+# test, not an unrelated installed wheel that happens to be on ``PATH``.
+HERE = Path(__file__).resolve().parent
+SOURCE_ROOT = HERE.parents[1] / "src"
+SOURCE_PACKAGE = SOURCE_ROOT / "radia"
+if (SOURCE_PACKAGE / "__init__.py").is_file():
+    sys.path.insert(0, str(SOURCE_ROOT))
+    # A result-bearing notebook may already have imported the installed wheel
+    # before it loads this validation runner.  Make the source package explicit
+    # in that case too, so the runner cannot silently combine its source files
+    # with an unrelated wheel-only module set.
+    imported_radia = sys.modules.get("radia")
+    if imported_radia is not None:
+        package_paths = getattr(imported_radia, "__path__", None)
+        if package_paths is not None and str(SOURCE_PACKAGE) not in package_paths:
+            package_paths.insert(0, str(SOURCE_PACKAGE))
+
 import ngsolve as ng
 import numpy as np
 import radia as rad
@@ -32,21 +49,28 @@ from radia.kelvin_identify_ngsolve import (
     detect_kelvin_offset,
     has_kelvin_identification,
 )
-from radia.kelvin_solver import (
-    project_source_interface_potential,
-    solve_magnetostatic_mixed_total_reduced_omega_kelvin,
-    solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin,
+from radia.electromagnet_validation import (
+    require_static_electromagnet_three_engine_contract,
+)
+from radia.static_electromagnet import (
+    StaticElectromagnetMixedDomain,
+    solve_static_electromagnet_mixed_total_reduced_omega,
 )
 from radia.vector_potential_solver import VectorPotentialSolver
 
 
 MU0 = 4.0e-7 * math.pi
-HERE = Path(__file__).resolve().parent
 DEFAULT_BH = (
     Path(rad.__file__).resolve().parent
     / "panels"
     / "samples"
     / "em_sample_bh.txt"
+)
+MIXED_DOMAIN = StaticElectromagnetMixedDomain(
+    reduced_materials=("air",),
+    total_materials=("iron", "kelvin"),
+    nonlinear_materials=("iron",),
+    reduced_total_interface="iron_air_interface",
 )
 
 
@@ -280,7 +304,8 @@ def solve_hdiv(
             nonlinear_stats.get("nonlinear_converged_final_stage", False)
         )
     return field, {
-        "formulation": "HDiv-MMM BDM%d" % order,
+        "formulation": "HDiv-MMM",
+        "discretization": "BDM%d" % order,
         "open_boundary": "Coulomb charge Gram; iron-only mesh",
         "mesh_elements": int(mesh.ne),
         "mesh_vertices": int(mesh.nv),
@@ -382,55 +407,22 @@ def solve_omega(
     started = time.perf_counter()
     source_h = rad.RadiaField(coil, "h")
     with ng.TaskManager():
-        source_trace = project_source_interface_potential(
+        result = solve_static_electromagnet_mixed_total_reduced_omega(
             mesh,
             source_h,
-            "iron_air_interface",
+            MIXED_DOMAIN,
+            kelvin_radius,
+            kelvin_center,
             order=order,
-            relative_tolerance=source_trace_tolerance,
+            linear_mu_r_by_material=None if nonlinear else {"iron": float(material)},
+            bh_table=material if nonlinear else None,
+            source_trace_tolerance=source_trace_tolerance,
+            nonlinear_tolerance=nonlinear_tolerance,
+            nonlinear_max_iterations=nonlinear_maximum_iterations,
+            nonlinear_relaxation=0.3,
         )
-        kelvin_trace = project_source_interface_potential(
-            mesh,
-            source_h,
-            "kelvin_int",
-            order=order,
-            relative_tolerance=source_trace_tolerance,
-        )
-        if nonlinear:
-            result = solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
-                mesh,
-                source_h,
-                source_trace["potential"],
-                kelvin_radius,
-                kelvin_center,
-                bh_table=material,
-                nonlinear_materials=("iron",),
-                reduced_materials=("air",),
-                total_materials=("iron", "kelvin"),
-                interface_boundary="iron_air_interface",
-                kelvin_interface_boundary="kelvin_int",
-                kelvin_source_potential=kelvin_trace["potential"],
-                order=order,
-                tolerance=nonlinear_tolerance,
-                max_iterations=nonlinear_maximum_iterations,
-                relaxation=0.3,
-            )
-        else:
-            result = solve_magnetostatic_mixed_total_reduced_omega_kelvin(
-                mesh,
-                source_h,
-                source_trace["potential"],
-                kelvin_radius,
-                kelvin_center,
-                mu_r_by_material={"iron": float(material)},
-                reduced_materials=("air",),
-                total_materials=("iron", "kelvin"),
-                interface_boundary="iron_air_interface",
-                kelvin_interface_boundary="kelvin_int",
-                kelvin_source_potential=kelvin_trace["potential"],
-                order=order,
-            )
     field = evaluate_cf(result["B_cf"], mesh, points)
+    source_trace = result["static_electromagnet_contract"]["source_trace"]
     return field, {
         "formulation": "H1 TOSCA mixed total/reduced Omega",
         "open_boundary": "periodic spherical Kelvin transform",
@@ -443,11 +435,11 @@ def solve_omega(
             "iron_interface_boundary": "iron_air_interface",
             "projection_order": int(order),
             "iron_relative_tangential_residual": float(
-                source_trace["relative_tangential_residual"]
+                source_trace["iron_air_relative_tangential_residual"]
             ),
             "kelvin_interface_boundary": "kelvin_int",
             "kelvin_relative_tangential_residual": float(
-                kelvin_trace["relative_tangential_residual"]
+                source_trace["kelvin_relative_tangential_residual"]
             ),
             "relative_tolerance": float(source_trace_tolerance),
             "cut_policy": (
@@ -491,11 +483,6 @@ def main() -> None:
     parser.add_argument("--nonlinear-tolerance", type=float, default=2.0e-5)
     parser.add_argument("--nonlinear-maximum-iterations", type=int, default=80)
     parser.add_argument("--nonlinear-verbose", action="store_true")
-    parser.add_argument(
-        "--primary-only",
-        action="store_true",
-        help="run only the primary HDiv-MMM versus Omega-reduced-Omega comparison",
-    )
     parser.add_argument("--threads", type=int, default=0)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--gap-core-half-length", type=float, default=0.010)
@@ -627,62 +614,63 @@ def main() -> None:
             Path(sys.modules[VectorPotentialSolver.__module__].__file__).resolve()
         ),
     }
-    if not options.primary_only:
-        resumed = (
-            read_checkpoint(reduced_a_checkpoint, reduced_a_contract)
-            if options.resume else None
+    resumed = (
+        read_checkpoint(reduced_a_checkpoint, reduced_a_contract)
+        if options.resume else None
+    )
+    if resumed is None:
+        progress("engine_start", engine="reduced_a", mesh_elements=int(kelvin_mesh.ne))
+        fields["reduced_a"], diagnostics["reduced_a"] = solve_reduced_a(
+            kelvin_mesh,
+            coil,
+            material,
+            nonlinear=nonlinear,
+            order=options.fem_order,
+            linear_solver=options.reduced_a_solver,
+            relax=options.reduced_a_relax,
+            nonlinear_tolerance=options.nonlinear_tolerance,
+            nonlinear_maximum_iterations=options.nonlinear_maximum_iterations,
+            nonlinear_verbose=options.nonlinear_verbose,
+            kelvin_center=kelvin_center,
+            kelvin_radius=kelvin_radius,
+            points=points,
         )
-        if resumed is None:
-            progress("engine_start", engine="reduced_a",
-                     mesh_elements=int(kelvin_mesh.ne))
-            fields["reduced_a"], diagnostics["reduced_a"] = solve_reduced_a(
-                kelvin_mesh,
-                coil,
-                material,
-                nonlinear=nonlinear,
-                order=options.fem_order,
-                linear_solver=options.reduced_a_solver,
-                relax=options.reduced_a_relax,
-                nonlinear_tolerance=options.nonlinear_tolerance,
-                nonlinear_maximum_iterations=options.nonlinear_maximum_iterations,
-                nonlinear_verbose=options.nonlinear_verbose,
-                kelvin_center=kelvin_center,
-                kelvin_radius=kelvin_radius,
-                points=points,
-            )
-            write_checkpoint(
-                reduced_a_checkpoint,
-                reduced_a_contract,
-                fields["reduced_a"],
-                diagnostics["reduced_a"],
-            )
-            progress("engine_complete", engine="reduced_a",
-                     runtime_s=diagnostics["reduced_a"]["runtime_s"],
-                     checkpoint=str(reduced_a_checkpoint))
-        else:
-            fields["reduced_a"], diagnostics["reduced_a"] = resumed
-            diagnostics["reduced_a"]["resumed_from_checkpoint"] = True
-            progress("engine_resumed", engine="reduced_a",
-                     checkpoint=str(reduced_a_checkpoint))
+        write_checkpoint(
+            reduced_a_checkpoint,
+            reduced_a_contract,
+            fields["reduced_a"],
+            diagnostics["reduced_a"],
+        )
+        progress("engine_complete", engine="reduced_a",
+                 runtime_s=diagnostics["reduced_a"]["runtime_s"],
+                 checkpoint=str(reduced_a_checkpoint))
+    else:
+        fields["reduced_a"], diagnostics["reduced_a"] = resumed
+        diagnostics["reduced_a"]["resumed_from_checkpoint"] = True
+        progress("engine_resumed", engine="reduced_a", checkpoint=str(reduced_a_checkpoint))
 
-    omega_checkpoint = options.output.with_suffix(".omega-checkpoint.json")
-    omega_contract = {
+    mixed_omega_checkpoint = options.output.with_suffix(
+        ".mixed-total-reduced-omega-checkpoint.json"
+    )
+    mixed_omega_contract = {
         **fem_contract,
-        "engine": "omega_reduced_omega",
+        "engine": "mixed_total_reduced_omega",
         "implementation_sha256": sha256(
             Path(sys.modules[
-                solve_magnetostatic_mixed_total_reduced_omega_kelvin.__module__
+                solve_static_electromagnet_mixed_total_reduced_omega.__module__
             ].__file__).resolve()
         ),
     }
     resumed = (
-        read_checkpoint(omega_checkpoint, omega_contract)
+        read_checkpoint(mixed_omega_checkpoint, mixed_omega_contract)
         if options.resume else None
     )
     if resumed is None:
-        progress("engine_start", engine="omega_reduced_omega",
+        progress("engine_start", engine="mixed_total_reduced_omega",
                  mesh_elements=int(kelvin_mesh.ne))
-        fields["omega_reduced_omega"], diagnostics["omega_reduced_omega"] = solve_omega(
+        fields["mixed_total_reduced_omega"], diagnostics[
+            "mixed_total_reduced_omega"
+        ] = solve_omega(
             kelvin_mesh,
             coil,
             material,
@@ -697,19 +685,21 @@ def main() -> None:
             source_trace_tolerance=options.source_trace_tolerance,
         )
         write_checkpoint(
-            omega_checkpoint,
-            omega_contract,
-            fields["omega_reduced_omega"],
-            diagnostics["omega_reduced_omega"],
+            mixed_omega_checkpoint,
+            mixed_omega_contract,
+            fields["mixed_total_reduced_omega"],
+            diagnostics["mixed_total_reduced_omega"],
         )
-        progress("engine_complete", engine="omega_reduced_omega",
-                 runtime_s=diagnostics["omega_reduced_omega"]["runtime_s"],
-                 checkpoint=str(omega_checkpoint))
+        progress("engine_complete", engine="mixed_total_reduced_omega",
+                 runtime_s=diagnostics["mixed_total_reduced_omega"]["runtime_s"],
+                 checkpoint=str(mixed_omega_checkpoint))
     else:
-        fields["omega_reduced_omega"], diagnostics["omega_reduced_omega"] = resumed
-        diagnostics["omega_reduced_omega"]["resumed_from_checkpoint"] = True
-        progress("engine_resumed", engine="omega_reduced_omega",
-                 checkpoint=str(omega_checkpoint))
+        fields["mixed_total_reduced_omega"], diagnostics[
+            "mixed_total_reduced_omega"
+        ] = resumed
+        diagnostics["mixed_total_reduced_omega"]["resumed_from_checkpoint"] = True
+        progress("engine_resumed", engine="mixed_total_reduced_omega",
+                 checkpoint=str(mixed_omega_checkpoint))
 
     all_points = np.ones(points.shape[0], dtype=bool)
     gap_core = np.abs(points[:, 0]) <= float(options.gap_core_half_length) + 1e-14
@@ -726,33 +716,29 @@ def main() -> None:
         name: reflection_diagnostics(points, value)
         for name, value in fields.items()
     }
-    primary_pair_name = "hdiv_mmm__vs__omega_reduced_omega"
-    if primary_pair_name not in core_pairs:
-        raise RuntimeError("primary HDiv-MMM versus Omega comparison is missing")
-    primary_relative_rms = float(core_pairs[primary_pair_name]["relative_rms"])
+    hdiv_mixed_pair_name = "hdiv_mmm__vs__mixed_total_reduced_omega"
+    if hdiv_mixed_pair_name not in core_pairs:
+        raise RuntimeError("HDiv-MMM versus mixed total/reduced Omega comparison is missing")
+    hdiv_mixed_relative_rms = float(core_pairs[hdiv_mixed_pair_name]["relative_rms"])
     maximum_relative_rms = max(row["relative_rms"] for row in core_pairs.values())
     nonlinear_converged = all(
         bool(row.get("nonlinear_stats", {}).get("converged", False))
         for row in diagnostics.values()
     ) if nonlinear else True
-    primary_accuracy_passed = primary_relative_rms <= options.relative_rms_tolerance
+    hdiv_mixed_accuracy_passed = (
+        hdiv_mixed_relative_rms <= options.relative_rms_tolerance
+    )
     all_pairwise_within_tolerance = (
         maximum_relative_rms <= options.relative_rms_tolerance
     )
-    # A primary-only run is an HDiv/Mixed-Omega development gate. A full
-    # three-engine run is accepted only when every selected independent pair
-    # meets the common field tolerance.
-    selected_accuracy_passed = (
-        primary_accuracy_passed if options.primary_only
-        else all_pairwise_within_tolerance
-    )
-    passed = selected_accuracy_passed and nonlinear_converged
+    require_static_electromagnet_three_engine_contract(diagnostics)
+    passed = all_pairwise_within_tolerance and nonlinear_converged
     try:
         radia_version = importlib.metadata.version("radia")
     except importlib.metadata.PackageNotFoundError:
         radia_version = "editable-unversioned"
     output = {
-        "schema": "radia.validation.c-type-formulation-comparison.v3",
+        "schema": "radia.validation.c-type-formulation-comparison.v4",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "passed": passed,
         "machine": platform.node(),
@@ -761,9 +747,8 @@ def main() -> None:
         "radia_module": str(rad.__file__),
         "mode": options.mode,
         "nonlinear_converged": nonlinear_converged,
-        "primary_accuracy_passed": primary_accuracy_passed,
+        "hdiv_mixed_accuracy_passed": hdiv_mixed_accuracy_passed,
         "all_pairwise_within_tolerance": all_pairwise_within_tolerance,
-        "selected_accuracy_passed": selected_accuracy_passed,
         "comparison_contract": {
             "cad_authority_sha256": mesh_report["cad_sha256"],
             "coilbuilder_source_shared": True,
@@ -781,15 +766,11 @@ def main() -> None:
             "finite_outer_air_box_forbidden": True,
             "quantity": "gauge-invariant magnetic flux density B in tesla",
             "fixed_mesh_equality_claimed": False,
-            "primary_pair": ["hdiv_mmm", "omega_reduced_omega"],
-            "reduced_a_role": (
-                "not run (--primary-only)"
-                if options.primary_only
-                else "independent third-formulation cross-check"
+            "static_electromagnet_formulation_contract": require_static_electromagnet_three_engine_contract(
+                diagnostics
             ),
             "acceptance": (
-                "a primary-only run gates HDiv/Mixed-Omega; a complete three-"
-                "formulation run requires every parity-projected pairwise B "
+                "all three formulations are mandatory and every parity-projected B "
                 "comparison in the useful gap core to pass; off-plane reflection "
                 "and raw/full-fringe values remain mandatory diagnostics"
             ),
@@ -799,7 +780,7 @@ def main() -> None:
             for name, contract in (
                 ("hdiv_mmm", hdiv_contract),
                 ("reduced_a", reduced_a_contract),
-                ("omega_reduced_omega", omega_contract),
+                ("mixed_total_reduced_omega", mixed_omega_contract),
             )
             if name in fields
         },
@@ -820,25 +801,23 @@ def main() -> None:
         "pairwise_median_projected_gap_core": core_pairs,
         "gap_core_half_length_m": float(options.gap_core_half_length),
         "gap_core_point_count": int(np.count_nonzero(gap_core)),
-        "primary_gap_core_relative_rms": primary_relative_rms,
-        "primary_gap_core_metrics": core_pairs[primary_pair_name],
+        "hdiv_mixed_gap_core_relative_rms": hdiv_mixed_relative_rms,
+        "hdiv_mixed_gap_core_metrics": core_pairs[hdiv_mixed_pair_name],
         "maximum_gap_core_pairwise_relative_rms": maximum_relative_rms,
         "relative_rms_tolerance": options.relative_rms_tolerance,
     }
     options.output.parent.mkdir(parents=True, exist_ok=True)
     options.output.write_text(json.dumps(output, indent=2) + "\n", encoding="utf-8")
     progress("validation_complete", passed=bool(passed), output=str(options.output),
-             primary_gap_core_relative_rms=primary_relative_rms,
+             hdiv_mixed_gap_core_relative_rms=hdiv_mixed_relative_rms,
              maximum_gap_core_pairwise_relative_rms=maximum_relative_rms)
     if not passed:
         failures = []
         if not nonlinear_converged:
             failures.append("at least one selected nonlinear formulation did not converge")
-        if not selected_accuracy_passed:
-            measured = maximum_relative_rms if not options.primary_only else primary_relative_rms
-            scope = "all selected pairwise" if not options.primary_only else "primary"
+        if not all_pairwise_within_tolerance:
             failures.append(
-                f"{scope} relative RMS {measured:.6e} exceeds "
+                f"all pairwise relative RMS {maximum_relative_rms:.6e} exceeds "
                 f"{options.relative_rms_tolerance:.6e}"
             )
         raise RuntimeError("; ".join(failures) + f"; see {options.output}")

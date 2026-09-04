@@ -9,6 +9,7 @@ from netgen.csg import CSGeometry, OrthoBrick, Pnt
 from ngsolve.meshes import MakeStructured3DMesh
 
 from radia import vim
+from radia.vim._magnetization_source import _field_coefficient_algorithm
 from tests._ngsolve_2606 import curve_mesh
 
 
@@ -16,6 +17,15 @@ def _box_mesh(x0, x1, maxh=0.28):
     geometry = CSGeometry()
     geometry.Add(OrthoBrick(Pnt(x0, -0.2, -0.2), Pnt(x1, 0.2, 0.2)).mat("body"))
     return ng.Mesh(geometry.GenerateMesh(maxh=maxh))
+
+
+def test_large_fixed_magnetization_source_uses_native_tree_coefficient_path():
+    assert _field_coefficient_algorithm({"source_count": 511}, None) == "direct"
+    assert _field_coefficient_algorithm({"source_count": 512}, None) == "tree"
+    assert _field_coefficient_algorithm({"source_count": 10000}, "direct") == "direct"
+    assert _field_coefficient_algorithm({"source_count": 1}, "tree") == "tree"
+    with pytest.raises(ValueError, match="field_cf_algorithm"):
+        _field_coefficient_algorithm({"source_count": 1}, "auto")
 
 
 def test_prescribed_magnetization_is_l2_projected_and_native_field_matches_direct():

@@ -23,9 +23,10 @@ class HDivSolver:
     def __init__(self, mesh, *, order=1, image=None, image_cyclic=None,
                  image_cyclic_alternating=False,
                  cyclic_periodic_boundaries=None,
-                 gram_eps=None, leaf=32,
+                 gram_eps=None, leaf=64,
                  eta=2.0, far_quad=None, curve_order=None, curve_gauss=8,
-                 ho_far_factor=None):
+                 ho_far_factor=None, gram_backend="hmat",
+                 exact_dense_memory_mb=None):
         if int(getattr(mesh, "dim", -1)) != 3:
             raise ValueError(
                 "vim.HDivSolver requires a 3D mesh; use PlanarDemagBody for 2D")
@@ -53,6 +54,8 @@ class HDivSolver:
         self.curve_order = curve_order
         self.curve_gauss = int(curve_gauss)
         self.ho_far_factor = ho_far_factor
+        self.gram_backend = str(gram_backend)
+        self.exact_dense_memory_mb = exact_dense_memory_mb
         self._material_caches = {}
         self._history_caches = {}
         self._last_result = None
@@ -67,6 +70,8 @@ class HDivSolver:
             eta=self.eta, far_quad=self.far_quad,
             curve_order=self.curve_order, curve_gauss=self.curve_gauss,
             ho_far_factor=self.ho_far_factor,
+            gram_backend=self.gram_backend,
+            exact_dense_memory_mb=self.exact_dense_memory_mb,
         )
 
     @property
@@ -143,6 +148,9 @@ class HDivSolver:
                         nl_tol=1e-3, initial_b_path=None,
                         initial_state=None, state_quadrature_order=None):
         """Advance a B-input material history on this persistent geometry."""
+        if self.gram_backend != "hmat":
+            raise NotImplementedError(
+                "vim.HDivSolver.SolveHysteresis currently requires gram_backend='hmat'")
         if self.image is not None or self.image_cyclic is not None:
             raise NotImplementedError(
                 "vim.HDivSolver.SolveHysteresis does not yet support image symmetry")
