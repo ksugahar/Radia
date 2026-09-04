@@ -136,6 +136,21 @@ def _remove_existing_audio_shapes(slide: Any) -> int:
     return removed
 
 
+def _run_blocking(coro):
+    """Run a coroutine to completion whether or not an event loop is already
+    running in this thread.  Inside the MCP server the tool handler is itself
+    awaited, so asyncio.run() raises "cannot be called from a running event
+    loop"; a worker thread with its own loop is the way through."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    import concurrent.futures
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
+
+
 def presentation_embed_tts_audio_in_pptx(
     pptx_path: str,
     script_md_path: str,
@@ -200,7 +215,7 @@ def presentation_embed_tts_audio_in_pptx(
             tasks.append(_edge_tts_save(slide_no, text, audio_path, voice, rate))
         return await asyncio.gather(*tasks)
 
-    audio_rows = asyncio.run(gen_all())
+    audio_rows = _run_blocking(gen_all())
     audio = {n: pathlib.Path(path) for n, path, _size in audio_rows}
 
     try:
