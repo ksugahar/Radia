@@ -672,7 +672,9 @@ class VectorPotentialSolver:
 
     def solve_nonlinear(self, bh_data, tol=1e-4, maxiter=50, relax=0.3,
                         dirichlet='default', verbose=True, solver='auto',
-                        eps=DEFAULT_GAUGE_EPSILON, kelvin_eps=None):
+                        eps=DEFAULT_GAUGE_EPSILON, kelvin_eps=None, *,
+                        anderson_depth=0, anderson_transform="log",
+                        nu_initial=None, observation_points=None):
         """Picard iteration for nonlinear A_r formulation.
 
         Each iteration: solve linear -> evaluate |B| -> update nu -> repeat.
@@ -701,6 +703,25 @@ class VectorPotentialSolver:
         kelvin_eps : float, optional
             Dimensionless gauge regularization strength in the compactified
             Kelvin region. Defaults to ``eps``.
+        anderson_depth : int
+            Memory depth of the constrained Anderson mixing of the per-element
+            reluctivity (:mod:`radia.picard_acceleration`); 0 is the plain damped
+            update above.  The mixed iterate is projected onto the reluctivity
+            range of the B-H law, extrapolated in ``anderson_transform`` space
+            (``"log"`` by default), and reverted when it worsens the residual.
+        nu_initial : array, optional
+            Per-element reluctivity warm start in mesh element order of the iron
+            elements (``_last_nonlinear_stats["element_numbers"]`` of an earlier
+            solve); default is the initial reluctivity of the curve everywhere.
+        observation_points : array (N, 3), optional
+            Points at which the iteration-to-iteration change of B is recorded in
+            ``_last_nonlinear_stats["history"]``, so the stopping criterion can be
+            judged where the result is consumed.
+
+        The loop returns even when it does not converge (``converged`` is False
+        in ``_last_nonlinear_stats``); the stats always carry the per-iteration
+        ``history``, a contraction-rate estimate, and the per-element
+        ``nu_elements`` state for a warm restart.
         """
         from ngsolve import (HCurl, L2, GridFunction, BilinearForm, LinearForm,
                              curl, InnerProduct, dx, VOL, Preconditioner,
@@ -708,9 +729,14 @@ class VectorPotentialSolver:
         if self._B_source_cf is None:
             raise RuntimeError("Set source field first")
 
+        from radia.picard_acceleration import (
+            ConstrainedAndersonAccelerator, estimate_contraction_rate)
+
         nu_of_b, B_sat = _build_nu_of_b_interpolator(bh_data)
         nu_iron_init = nu_of_b(0.0)
         nu_air = 1.0 / MU_0
+        if int(anderson_depth) < 0:
+            raise ValueError("anderson_depth must be non-negative")
 
         # FE space
         fes = self._make_hcurl_space(dirichlet)
@@ -729,13 +755,45 @@ class VectorPotentialSolver:
 
         # Initialize nu on physical materials. The Kelvin metric remains a
         # continuous CoefficientFunction and is assembled separately.
+        iron_elements = []
         for el in self.mesh.Elements(VOL):
             mat = str(el.mat) if hasattr(el, 'mat') else str(
                 self.mesh.GetMaterials()[el.nr])
             if mat in self._mu_r_dict:
                 nu_gf.vec[el.nr] = nu_iron_init
+                iron_elements.append((int(el.nr), self._element_centroid(el)))
             elif mat != self._kelvin_region:
                 nu_gf.vec[el.nr] = nu_air
+        element_numbers = [nr for nr, _ in iron_elements]
+        nu_current = np.full(len(iron_elements), float(nu_iron_init))
+        if nu_initial is not None:
+            warm = np.asarray(nu_initial, dtype=float)
+            if warm.shape != (len(iron_elements),):
+                raise ValueError(
+                    "nu_initial must hold one reluctivity per iron element "
+                    f"({len(iron_elements)}); got shape {warm.shape}")
+            if not np.all(np.isfinite(warm)) or np.any(warm <= 0.0):
+                raise ValueError("nu_initial must be finite and positive")
+            nu_current = warm.astype(float, copy=True)
+            for (nr, _), value in zip(iron_elements, nu_current):
+                nu_gf.vec[nr] = float(value)
+        # The secant reluctivity of a saturating law rises from the initial
+        # reluctivity towards the vacuum value; the mixed iterate stays in that
+        # range so every linear solve sees a physical material.
+        accelerator = ConstrainedAndersonAccelerator(
+            depth=int(anderson_depth), relaxation=float(relax),
+            lower=min(float(nu_iron_init), nu_air), upper=nu_air,
+            transform=str(anderson_transform))
+        observation = None
+        if observation_points is not None:
+            observation = np.asarray(observation_points, dtype=float).reshape(-1, 3)
+            for point in observation:
+                if not self.mesh(*map(float, point)):
+                    raise ValueError(
+                        f"observation point lies outside the mesh: {point.tolist()}")
+        history = []
+        observed_previous = None
+        observed_field = None
 
         all_mats = list(dict.fromkeys(self.mesh.GetMaterials()))
         phys_mats = [m for m in all_mats if m != self._kelvin_region]
@@ -834,40 +892,47 @@ class VectorPotentialSolver:
             # B_total = B_s + curl(A_r)
             B_total_cf = self._B_source_cf + curl(A_gf)
 
-            # Update nu in iron from |B|
-            B_new_list = []
-            for el in self.mesh.Elements(VOL):
-                mat = str(el.mat) if hasattr(el, 'mat') else str(
-                    self.mesh.GetMaterials()[el.nr])
-                if mat not in self._mu_r_dict:
-                    continue
+            # Update nu in iron from |B| at the element centroids.  A centroid
+            # that no element contains is a broken mesh, not a zero field.
+            B_new_arr = np.empty(len(iron_elements))
+            nu_target = np.empty(len(iron_elements))
+            for index, (nr, (cx, cy, cz)) in enumerate(iron_elements):
+                mip = self.mesh(cx, cy, cz)
+                if not mip:
+                    raise RuntimeError(
+                        f"iron element {nr} centroid ({cx}, {cy}, {cz}) lies "
+                        "outside the mesh")
+                B_val = B_total_cf(mip)
+                B_mag = float(np.sqrt(
+                    B_val[0]**2 + B_val[1]**2 + B_val[2]**2))
+                B_new_arr[index] = B_mag
+                nu_target[index] = nu_of_b(B_mag) if B_mag > 1e-10 else nu_iron_init
+            entry = {"iteration": int(it + 1)}
+            if observation is not None:
+                observed_field = np.asarray(
+                    [[float(value) for value in B_total_cf(self.mesh(*point))]
+                     for point in observation], dtype=float)
+                if observed_previous is not None:
+                    scale = max(float(np.max(np.linalg.norm(observed_field, axis=1))),
+                                1.0e-30)
+                    entry["observation_relative_change"] = float(
+                        np.max(np.linalg.norm(observed_field - observed_previous, axis=1))
+                        / scale)
+                observed_previous = observed_field
 
-                cx, cy, cz = self._element_centroid(el)
-                try:
-                    mip = self.mesh(cx, cy, cz)
-                    B_val = B_total_cf(mip)
-                    B_mag = float(np.sqrt(
-                        B_val[0]**2 + B_val[1]**2 + B_val[2]**2))
-                except Exception:
-                    B_mag = 0.0
-
-                if B_mag > 1e-10:
-                    nu_new = nu_of_b(B_mag)
-                else:
-                    nu_new = nu_iron_init
-
-                # Under-relaxation
-                alpha = relax
-                nu_old = nu_gf.vec[el.nr]
-                nu_gf.vec[el.nr] = alpha * nu_new + (1.0 - alpha) * nu_old
-                B_new_list.append(B_mag)
-
-            B_new_arr = np.array(B_new_list)
+            # Damped Picard (depth 0) or constrained Anderson mixing of nu.
+            nu_current = np.asarray(accelerator.step(nu_current, nu_target), dtype=float)
+            for (nr, _), value in zip(iron_elements, nu_current):
+                nu_gf.vec[nr] = float(value)
+            entry["nu_min"] = float(np.min(nu_current)) if nu_current.size else None
+            entry["nu_max"] = float(np.max(nu_current)) if nu_current.size else None
 
             # Convergence check
             if B_old_arr is not None and len(B_old_arr) == len(B_new_arr):
                 max_change = np.max(np.abs(B_new_arr - B_old_arr)) / B_sat
                 final_relative_change = float(max_change)
+                entry["relative_B_change"] = final_relative_change
+                history.append(entry)
                 if verbose:
                     mip_0 = self.mesh(0, 0, 0)
                     Bz_now = B_total_cf(mip_0)[2]
@@ -879,6 +944,7 @@ class VectorPotentialSolver:
                         print(f"   Converged at iteration {it}")
                     break
             else:
+                history.append(entry)
                 if verbose:
                     mip_0 = self.mesh(0, 0, 0)
                     Bz_now = B_total_cf(mip_0)[2]
@@ -898,7 +964,20 @@ class VectorPotentialSolver:
             'solver': solver,
             'physical_gauge_epsilon': physical_eps,
             'kelvin_gauge_epsilon': resolved_kelvin_eps,
+            'relaxation': float(relax),
+            'anderson_depth': int(anderson_depth),
+            'warm_start': nu_initial is not None,
+            'history': history,
+            'contraction_rate_estimate': estimate_contraction_rate(
+                [row['relative_B_change'] for row in history
+                 if 'relative_B_change' in row]),
+            'nu_elements': nu_current.tolist(),
+            'element_numbers': element_numbers,
+            'anderson': accelerator.stats(),
         }
+        if observed_field is not None:
+            self._last_nonlinear_stats['observation_points_m'] = observation.tolist()
+            self._last_nonlinear_stats['observation_field_T'] = observed_field.tolist()
         if not converged and verbose:
             print(f"   WARNING: Not converged after {maxiter} iterations")
 

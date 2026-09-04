@@ -123,10 +123,23 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
     nonlinear_tolerance: float = 2.0e-5,
     nonlinear_max_iterations: int = 80,
     nonlinear_relaxation: float = 0.3,
+    nonlinear_anderson_depth: int = 0,
+    nonlinear_anderson_transform: str = "log",
+    nonlinear_mu_r_initial=1000.0,
+    nonlinear_observation_points=None,
     inverse: str = "pardiso",
     bonus_intorder: int = 4,
 ) -> dict[str, object]:
     """Solve one static electromagnet through the required H1 formulation.
+
+    The nonlinear loop is the Picard iteration of
+    :func:`radia.kelvin_solver.solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin`:
+    ``nonlinear_anderson_depth`` enables its constrained Anderson mixing,
+    ``nonlinear_mu_r_initial`` is a scalar or the per-element warm start of an
+    earlier ``nonlinear_stats["mu_r_elements"]``, and
+    ``nonlinear_observation_points`` records the per-iteration field change at
+    the points where the result is consumed.  A non-converged loop raises
+    :class:`radia.kelvin_solver.MixedOmegaPicardNotConverged` with that state.
 
     ``source_potential_contract="total_hodge"`` is the general CoilBuilder
     route.  It retains the non-exact harmonic/cut component of a linked source
@@ -294,6 +307,10 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
             tolerance=float(nonlinear_tolerance),
             max_iterations=int(nonlinear_max_iterations),
             relaxation=float(nonlinear_relaxation),
+            anderson_depth=int(nonlinear_anderson_depth),
+            anderson_transform=str(nonlinear_anderson_transform),
+            mu_r_initial=nonlinear_mu_r_initial,
+            observation_points=nonlinear_observation_points,
             **common,
         )
     result["static_electromagnet_contract"] = domain.as_dict()
