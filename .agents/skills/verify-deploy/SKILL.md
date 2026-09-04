@@ -79,7 +79,7 @@ inventory and a real export/check cycle.
 - LAB and 100号機: canonical editable source and fast application checks.
 - mdx: isolated CI/compute environment; never infer its state from LAB files.
 - hibino: optional long optimization/validation compute host.
-- Release verification: use `release-qud`; every result must be attributable to
+- Release verification: use `release-quad`; every result must be attributable to
   one immutable commit SHA.
 
 Reject the deployment when any machine resolves a different source tree, a

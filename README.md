@@ -378,7 +378,8 @@ arguments, prerequisites, failure modes, and validation route for a concrete
 operation.
 
 - [MCP package and client setup](packages/radia-mcp/README.md)
-- [Generated MCP tool catalog](packages/radia-mcp/docs/TOOLS.md)
+- Use each server's live `tools/list` response for the authoritative tool
+  inventory; the checked `radia_mcp.meta` catalog supplies discovery metadata.
 
 ### MATLAB and native MEX
 

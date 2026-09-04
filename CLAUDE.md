@@ -4607,7 +4607,7 @@ corresponding section in the other agent-policy file in the same change.
 
 Claude does **NOT**: `git push` (for release or otherwise), monitor/poll GitHub
 Actions CI, wait for CI-green, run `tools/ci_preflight.py` or
-`tools/check_ci.py` watch-loops, push tags, invoke the `release-qud` flow, or
+`tools/check_ci.py` watch-loops, push tags, invoke the `release-quad` flow, or
 publish to PyPI. If asked to "release", Claude prepares and commits the work,
 then hands off to codex.
 
@@ -4623,7 +4623,7 @@ or from a previous turn. The default is **commit-and-stop**.
 
 **Codex-side consequence**: a Claude session hands off a local commit SHA and
 branch. Taking it from there — `tools/ci_preflight.py`, push, CI-green, tag,
-publish, `release-qud` — is codex's lane, and codex should not wait for Claude
+publish, `release-quad` — is codex's lane, and codex should not wait for Claude
 to do any of it.
 
 ---

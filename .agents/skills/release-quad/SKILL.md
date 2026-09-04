@@ -96,6 +96,7 @@ tier to that tree.
 - Use `ssh hibino` for hibino. For multi-line remote PowerShell, follow
   the repository SSH policy: pipe a script into
   `ssh hibino 'pwsh -ExecutionPolicy Bypass -Command -'`.
-- Keep `packages/radia-mcp/src/radia_mcp/radia_ngsolve/knowledge/`
-  and `packages/radia-mcp/docs/TOOLS.md` in sync when changing release
-  or deploy knowledge.
+- Keep `packages/radia-mcp/src/radia_mcp/radia_ngsolve/knowledge/` and the
+  checked `radia_mcp.meta` discovery catalog in sync when changing release or
+  deploy knowledge. The live MCP registry is the authoritative tool inventory;
+  do not restore a tracked generated `docs/TOOLS.md` gate.
