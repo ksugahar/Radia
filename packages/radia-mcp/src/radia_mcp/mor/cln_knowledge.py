@@ -557,6 +557,19 @@ separate: the single coefficient mis-weights the edge (an asymptotic-basis
 defect, all frequencies), and in the transition band the surface DOFs need
 independence because they couple to the bulk.
 
+The frozen-ratio test makes the second statement quantitative (same script,
+rows 'frozen-ratio single DOF'): the free amplitude ratios converge to
+xi_E/xi_1 = 0.800 and xi_C/xi_1 = 0.457 (real; square: 0.400 and 0.400)
+above 1 MHz but are complex and swing through the transition band (0.50 -
+0.19 j and 0.39 - 0.59 j at 4 kHz). ONE surface function with the ratios
+frozen at their 1 GHz values equals the free 3-DOF result above 1 MHz and
+fails in the transition band unless the bulk is rich: n<=3 0.21 % vs
+0.030 %, n<=1 0.74 % vs 0.11 %, n<=9 0.020 % vs 0.0125 %. A better fixed
+envelope is enough asymptotically; in the transition band the edge and
+corner amplitudes must be independent DOFs. (Sugahara's hypothesis of
+2026-09-04, confirmed.) The 0.800 / 0.400 look exact for the bump
+d = g(t) - g(2t); not derived, do not quote as a theorem.
+
 The exact reference is _references/box_heat_content.py: for a box the
 admittance is the heat-content integral <v>(s) = -sMS int_0^inf
 exp(-sMS tau) m(tau)^D dtau with m the 1-D Dirichlet heat content,

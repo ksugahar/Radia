@@ -41,6 +41,17 @@ So the edge amplitude is what the single coefficient gets wrong, at every
 frequency; what remains after it is a transition-band residual that falls
 with the bulk rank (0.108 % at 4 unknowns -> 0.0125 % at 128), i.e. the
 coupling with the interior modes.
+
+Is an INDEPENDENT edge DOF needed, or would a better fixed envelope do?  The
+free 3-DOF solve gives amplitude ratios xi_E/xi_1 -> 0.800 and xi_C/xi_1 ->
+0.457 (real) above ~1 MHz, but complex and swinging through the transition
+band (e.g. 0.50 - 0.19 j and 0.39 - 0.59 j at 4 kHz).  Freezing the ratios at
+their 1 GHz values into ONE surface function reproduces the free result above
+1 MHz exactly, and in the transition band only when the bulk is rich (n <= 9:
+0.020 % vs 0.0125 %); with a small bulk it fails there (n <= 3: 0.21 % vs
+0.030 %; n <= 1: 0.74 % vs 0.11 %).  In the asymptotic band a fixed envelope
+with the right ratios suffices; in the transition band the edge and corner
+amplitudes must be free, because they couple to the interior modes.
 """
 import cmath
 import itertools
@@ -169,17 +180,38 @@ def assemble(basis, fac, D, sMS):
     return K + sMS * Mm, -sMS * load, load
 
 
-def Y_galerkin(s, D, kind, n_bulk_max, rule, alpha=ALPHA):
-    """Mixed Galerkin admittance of the D-box with the given basis."""
+def Y_galerkin(s, D, kind, n_bulk_max, rule, alpha=ALPHA, surface=None):
+    """Mixed Galerkin admittance of the D-box with the given basis.  `surface`
+    replaces the surface part of the basis by an explicit list (frozen-ratio
+    test).  Returns (Y, n_unknowns, {name: coefficient})."""
     x, w = rule
     sMS = s * MS
     fac = Factors(cmath.sqrt(sMS), x, w, alphas=(alpha, 2 * alpha))
     basis = make_basis(D, kind, n_bulk_max, alpha)
+    if surface is not None:
+        basis = [b for b in basis if b[0].startswith("bulk")] + list(surface)
     A, rhs, load = assemble(basis, fac, D, sMS)
     dsc = 1.0 / np.sqrt(np.abs(np.diag(A)))
     As = dsc[:, None] * A * dsc[None, :]
     xi = dsc * np.linalg.lstsq(As, dsc * rhs, rcond=1e-12)[0]
-    return Y_DC_cube3d(L, SIGMA) * L ** (D - 3) * (1.0 + (xi @ load) / L**D), len(basis)
+    Y = Y_DC_cube3d(L, SIGMA) * L ** (D - 3) * (1.0 + (xi @ load) / L**D)
+    return Y, len(basis), {b[0]: complex(c) for b, c in zip(basis, xi)}
+
+
+def frozen_ratio_surface(D, rule, f_hz=1e9, alpha=ALPHA):
+    """ONE surface function psi_1 + r_E psi_E + r_C psi_C with the amplitude
+    ratios frozen at their asymptotic (1 GHz) values from the free solve: a
+    better fixed envelope, no independent edge or corner DOF.  Whether it
+    matches the free 3-DOF surface tells whether independence is needed."""
+    _, _, xi = Y_galerkin(2j * PI * f_hz, D, "1EC", 9, rule, alpha)
+    r_E = xi["psi_E"] / xi["psi_1"]
+    r_C = xi["psi_C"] / xi["psi_1"]
+    a = f"d{alpha:g}"
+    axes = list(range(D))
+    terms = [(1.0, tuple("F" for _ in axes))]
+    terms += [(r_E, tuple(a if j in pair else "F" for j in axes)) for pair in itertools.combinations(axes, 2)]
+    terms += [(r_C, tuple(a for _ in axes))]
+    return [("psi_frozen", terms)], r_E, r_C
 
 
 CONFIGS = [
@@ -195,19 +227,38 @@ FREQS = np.logspace(0, 9, 46)
 REPORT_AT = (1e3, 1e4, 1e5, 1e6, 1e8)
 
 
+def _row(label, kind, nb, n, ys, ex):
+    err = np.abs(np.array(ys) - ex) / np.abs(ex)
+    i = int(np.argmax(err))
+    return {
+        "surface": label, "flags": kind, "bulk_n_max": nb, "n_unknowns": int(n),
+        "max_error_pct": float(100 * err[i]), "at_f_Hz": float(FREQS[i]),
+        "error_pct_at": {f"{f:.0e}": float(100 * err[int(np.argmin(np.abs(FREQS - f)))]) for f in REPORT_AT},
+    }
+
+
+def _pair(z):
+    return [float(z.real), float(z.imag)]
+
+
 def sweep(D, rule):
     ex = np.array([Y_exact(2j * PI * f, D, L, SIGMA) for f in FREQS])
-    rows = []
+    rows, ratios = [], []
     for label, kind, nb in CONFIGS:
-        ys, n = zip(*(Y_galerkin(2j * PI * f, D, kind, nb, rule) for f in FREQS))
-        err = np.abs(np.array(ys) - ex) / np.abs(ex)
-        i = int(np.argmax(err))
-        rows.append({
-            "surface": label, "flags": kind, "bulk_n_max": nb, "n_unknowns": int(n[0]),
-            "max_error_pct": float(100 * err[i]), "at_f_Hz": float(FREQS[i]),
-            "error_pct_at": {f"{f:.0e}": float(100 * err[int(np.argmin(np.abs(FREQS - f)))]) for f in REPORT_AT},
-        })
-    return ex, rows
+        sols = [Y_galerkin(2j * PI * f, D, kind, nb, rule) for f in FREQS]
+        rows.append(_row(label, kind, nb, sols[0][1], [y for y, _, _ in sols], ex))
+        if kind == "1EC" and nb == 9:
+            for f, (_, _, xi) in zip(FREQS, sols):
+                ratios.append({"f_Hz": float(f), "xi_1": _pair(xi["psi_1"]),
+                               "xi_E_over_xi_1": _pair(xi["psi_E"] / xi["psi_1"]),
+                               "xi_C_over_xi_1": _pair(xi["psi_C"] / xi["psi_1"])})
+    surface, r_E, r_C = frozen_ratio_surface(D, rule)
+    for nb in (1, 3, 9):
+        sols = [Y_galerkin(2j * PI * f, D, "1", nb, rule, surface=surface) for f in FREQS]
+        rows.append(_row("frozen-ratio single DOF (ratios from 1 GHz)", "frozen", nb,
+                         sols[0][1], [y for y, _, _ in sols], ex))
+    return ex, rows, {"r_E_at_1GHz": _pair(r_E), "r_C_at_1GHz": _pair(r_C),
+                      "free_3dof_bulk_n_max_9": ratios}
 
 
 def summary() -> dict:
@@ -230,8 +281,9 @@ def summary() -> dict:
         "quadrature_nodes_per_axis": int(len(rule[0])),
     }
     for D, name in ((3, "cube"), (2, "square")):
-        _, rows = sweep(D, rule)
+        _, rows, ratios = sweep(D, rule)
         out[name] = rows
+        out[name + "_amplitude_ratios"] = ratios
     return out
 
 
@@ -244,8 +296,14 @@ def main():
         print(f"\n{name}: max relative error over 1 Hz .. 1 GHz (%)")
         print(f"{'surface DOFs':42s} {'bulk':>5s} {'n':>4s} {'max':>8s} {'at f':>7s} " + " ".join(f"{k:>7s}" for k in r[name][0]["error_pct_at"]))
         for row in r[name]:
-            print(f"{row['surface']:42s} n<={row['bulk_n_max']:<2d} {row['n_unknowns']:4d} {row['max_error_pct']:8.4f} {row['at_f_Hz']:7.0e} "
+            print(f"{row['surface'][:42]:42s} n<={row['bulk_n_max']:<2d} {row['n_unknowns']:4d} {row['max_error_pct']:8.4f} {row['at_f_Hz']:7.0e} "
                   + " ".join(f"{v:7.4f}" for v in row["error_pct_at"].values()))
+        rat = r[name + "_amplitude_ratios"]
+        print(f"  free 3-DOF amplitude ratios (bulk n<=9); at 1 GHz r_E = {rat['r_E_at_1GHz'][0]:.4f}{rat['r_E_at_1GHz'][1]:+.4f}j, "
+              f"r_C = {rat['r_C_at_1GHz'][0]:.4f}{rat['r_C_at_1GHz'][1]:+.4f}j")
+        for q in rat["free_3dof_bulk_n_max_9"][15::3]:
+            print(f"    f = {q['f_Hz']:7.0e} Hz: xi_E/xi_1 = {q['xi_E_over_xi_1'][0]:7.4f}{q['xi_E_over_xi_1'][1]:+8.4f}j   "
+                  f"xi_C/xi_1 = {q['xi_C_over_xi_1'][0]:7.4f}{q['xi_C_over_xi_1'][1]:+8.4f}j")
 
 
 if __name__ == "__main__":

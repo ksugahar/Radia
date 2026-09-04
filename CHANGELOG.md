@@ -18,7 +18,12 @@ All notable changes to the `radia` package.  Format: each release lists
   0.030 % with only 11 unknowns; the face-profile and corner DOFs alone do
   little; the square goes 0.34 % -> 0.006 %.  Artifact case
   `box_edge_corner_dofs`.  The non-conforming splits of cube3d/08 and the
-  wedge bumps of cube3d/09 stay as recorded dead ends.
+  wedge bumps of cube3d/09 stay as recorded dead ends.  A frozen-ratio
+  test shows why the DOF must be independent: the free edge/corner
+  amplitude ratios converge to 0.800 / 0.457 above 1 MHz but are complex
+  and swing through the transition band, and a single surface function
+  with the ratios frozen fails there unless the bulk is rich (n<=3:
+  0.21 % vs 0.030 %).
 - Time-domain realisation of the mixed cube admittance
   (`validation_test/mixed_galerkin/time_domain/01_cube_step_response.py`,
   formerly `01_cube_aaa_step_response.py`): the settled time-domain-SIBC
