@@ -21,9 +21,9 @@ import sys
 import os
 import numpy as np
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src'))
 
-from ngbem_peec import NGBEMPEECSolver, create_plate_mesh
+from radia.ngsbem_peec import NGBEMPEECSolver, create_plate_mesh
 
 # Physical constants
 MU_0 = 4.0 * np.pi * 1e-7

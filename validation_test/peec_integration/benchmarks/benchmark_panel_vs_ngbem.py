@@ -130,18 +130,22 @@ def compute_v_matrix_ngbem(mesh, order=0, intorder=5, dual_mapping=False):
         ndof: Number of DOFs
         t_assemble: Assembly time [s]
     """
-    from ngsolve import SurfaceL2, TaskManager
-    from ngsolve.bem import SingleLayerPotentialOperator
+    from ngsolve import SurfaceL2, TaskManager, ds
+    from ngsolve.bem import LaplaceSL
 
     fes = SurfaceL2(mesh, order=order, dual_mapping=dual_mapping)
     ndof = fes.ndof
+    u, v = fes.TnT()
+    source_bonus = max(0, int(intorder) - 2 - 2 * int(order))
+    source_ds = ds(bonus_intorder=source_bonus)
 
     t0 = time.perf_counter()
     with TaskManager():
-        V_op = SingleLayerPotentialOperator(fes, intorder=intorder)
+        V_op = LaplaceSL(u * source_ds) * v * ds
     t_assemble = time.perf_counter() - t0
 
     V = extract_dense_matrix(V_op.mat, ndof)
+    V = 0.5 * (V + V.T)
     return V, ndof, t_assemble
 
 
@@ -164,13 +168,20 @@ def compute_l_matrix_ngbem(mesh, order=0, intorder=5):
 
     j = fes.TrialFunction()
     k = fes.TestFunction()
+    source_bonus = max(0, int(intorder) - 2 - 2 * int(order))
+    source_ds = ds("plate", bonus_intorder=source_bonus)
 
     t0 = time.perf_counter()
     with TaskManager():
-        L_op = LaplaceSL(j * ds("plate")) * k * ds("plate")
+        L_op = (
+            LaplaceSL(j.Trace() * source_ds)
+            * k.Trace()
+            * ds("plate")
+        )
     t_assemble = time.perf_counter() - t0
 
     L_dense = extract_dense_matrix(L_op.mat, ndof)
+    L_dense = 0.5 * (L_dense + L_dense.T)
     L = MU_0 * L_dense
 
     return L, ndof, t_assemble

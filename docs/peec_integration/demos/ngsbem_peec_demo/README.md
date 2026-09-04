@@ -24,9 +24,9 @@ result-bearing entry points are:
 
 | Module | Description |
 |--------|-------------|
-| `validation_test/peec_integration/ngsbem_peec_demo/ngbem_peec.py` | PEEC Loop-Star solver (`NGBEMPEECSolver`) with 3 modes: mqs, full, stabilized |
-| `validation_test/peec_integration/ngsbem_peec_demo/ngbem_eddy.py` | Eddy current solver (`ShieldBEMSIBC`): EFIE + SIBC for conducting/magnetic bodies |
-| `validation_test/peec_integration/ngsbem_peec_demo/ngbem_interface.py` | Bridge: ngbem matrices to Radia PEEC topology |
+| `src/radia/ngsbem_peec.py` | PEEC Loop-Star solver (`NGBEMPEECSolver`) with 3 modes: mqs, full, stabilized |
+| `src/radia/ngsbem_eddy.py` | Eddy current solver (`ShieldBEMSIBC`): EFIE + SIBC for conducting/magnetic bodies |
+| `src/radia/ngsbem_interface.py` | Bridge: NGSolve BEM matrices to Radia PEEC topology, preserving local Loop and global cohomology current modes |
 
 ## Subdirectories
 

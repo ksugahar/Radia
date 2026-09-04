@@ -21,11 +21,12 @@ The key mapping:
 
 Loop-Star Decomposition:
     Decomposes HDivSurface (edge-based) DOFs into:
-    - Loop (face-based): solenoidal currents, div(J_loop) = 0  -> eddy currents
-    - Star (vertex-based): irrotational currents, curl(J_star) = 0  -> charge
+    - Loop: vertex-generated local loops plus global cohomology loops
+    - Star: independent face-edge incidence columns carrying surface charge
 
-    T_loop: (n_edges, n_loop) face circulation basis
-    T_star: (n_edges, n_star) vertex star basis
+    T_loop: (n_edges, n_loop) complete divergence-free basis
+    T_harmonic: global cycles caused by holes or handles
+    T_star: (n_edges, n_star) charge-carrying basis
     T = [T_loop | T_star]: full transformation (square, invertible)
 
     For BEM matrix A_edge:
@@ -128,22 +129,23 @@ class LoopStarTransform:
     """Loop-Star basis transformation for surface BEM mesh.
 
     Decomposes HDivSurface (edge-based) DOFs into:
-    - Loop (face-based): solenoidal currents, div(J_loop) = 0
-    - Star (vertex-based): irrotational currents, curl(J_star) = 0
+    - Loop: local vertex loops plus global cohomology loops, div(J_loop) = 0
+    - Star: independent face-edge incidence columns carrying surface charge
 
     Physical interpretation:
     - Loop = eddy currents (no charge accumulation at vertices)
     - Star = charge-driven currents (charge accumulates at vertices)
 
     Mathematical basis:
-    - T_loop columns = face circulation vectors (incidence matrix B^T)
-    - T_star columns = vertex star vectors (node-edge incidence A^T)
+    - local loop columns span the independent node-edge incidence columns
+    - cohomology columns complete null(div) on surfaces with holes or handles
+    - star columns span the independent face-edge incidence columns
     - Orthogonality: T_star^T * T_loop = 0 (exact, from graph theory)
     - Euler formula: n_loop + n_star = n_edges
 
     Surface type handling:
-    - Open surface (chi=1): remove 1 reference vertex from T_star
-    - Closed surface (chi=2): remove 1 vertex + 1 face
+    - ranks are inferred from the incidence matrices, not from chi=1/2 cases
+    - multiply connected and disconnected surfaces retain global loop modes
 
     Supported element orders:
     - order=0: Full Loop-Star (1 DOF per edge, exact decomposition)
@@ -224,10 +226,10 @@ class LoopStarTransform:
         # --- Euler characteristic ---
         chi = n_vertices - n_edges + n_faces
 
-        # --- Build T_loop: face-edge incidence (n_edges x n_faces) ---
-        # T_loop[e, f] = +1 if edge e's global direction matches face f's
-        #                     local circulation (va -> vb), -1 otherwise
-        T_loop_full = np.zeros((n_edges, n_faces))
+        # --- Face-edge incidence transpose (n_edges x n_faces) ---
+        # B[e, f] = +1 if edge e's global direction matches face f's
+        # local circulation (va -> vb), and -1 otherwise.
+        face_incidence_t = np.zeros((n_edges, n_faces))
 
         for f_idx, face_verts in enumerate(face_vertex_list):
             n_v = len(face_verts)
@@ -248,38 +250,54 @@ class LoopStarTransform:
                 else:
                     sign = -1.0
 
-                T_loop_full[e_idx, f_idx] = sign
+                face_incidence_t[e_idx, f_idx] = sign
 
-        # --- Build T_star: node-edge incidence (n_edges x n_vertices) ---
-        # T_star[e, v] = +1 if edge e leaves vertex v (v is v0)
-        #               -1 if edge e enters vertex v (v is v1)
-        T_star_full = np.zeros((n_edges, n_vertices))
+        # --- Node-edge incidence transpose (n_edges x n_vertices) ---
+        # A[e, v] = +1 if edge e leaves vertex v and -1 if it enters.
+        vertex_incidence_t = np.zeros((n_edges, n_vertices))
 
         for e_idx, (v0, v1) in enumerate(edge_list):
             v0_idx = vert_to_idx[v0]
             v1_idx = vert_to_idx[v1]
-            T_star_full[e_idx, v0_idx] = +1.0
-            T_star_full[e_idx, v1_idx] = -1.0
+            vertex_incidence_t[e_idx, v0_idx] = +1.0
+            vertex_incidence_t[e_idx, v1_idx] = -1.0
 
-        # --- Remove dependent columns to make T square ---
-        # Euler: V - E + F = chi
-        # For open surface (chi=1): remove 1 star column (reference vertex)
-        # For closed surface (chi=2): remove 1 star + 1 loop column
-        T_star = T_star_full
-        T_loop = T_loop_full
+        # Independent vertex columns are local divergence-free loops. The
+        # independent face columns are charge-carrying stars. On a multiply
+        # connected surface these two spaces do not fill the edge space: the
+        # remaining null(div) columns are the global cohomology loops.
+        from scipy.linalg import null_space, qr
 
-        if chi >= 1:
-            T_star = T_star_full[:, :-1]
-        if chi >= 2:
-            T_loop = T_loop_full[:, :-1]
+        def independent_columns(matrix):
+            _, triangular, pivots = qr(
+                matrix, mode="economic", pivoting=True, check_finite=False
+            )
+            diagonal = np.abs(np.diag(triangular))
+            scale = diagonal[0] if diagonal.size else 0.0
+            tolerance = max(matrix.shape) * np.finfo(float).eps * scale
+            rank = int(np.count_nonzero(diagonal > tolerance))
+            return matrix[:, pivots[:rank]]
+
+        T_local_loop = independent_columns(vertex_incidence_t)
+        T_star = independent_columns(face_incidence_t)
+        divergence = face_incidence_t.T
+        harmonic_constraints = np.vstack((divergence, T_local_loop.T))
+        T_harmonic = null_space(harmonic_constraints, check_finite=False)
+        if T_harmonic.size == 0:
+            T_harmonic = np.empty((n_edges, 0))
+        T_loop = np.hstack((T_local_loop, T_harmonic))
 
         # --- Store results ---
         self.T_loop = T_loop          # (n_edges, n_loop)
         self.T_star = T_star          # (n_edges, n_star)
         self.T = np.hstack([T_loop, T_star])  # (n_edges, n_edges)
+        self.T_local_loop = T_local_loop
+        self.T_harmonic = T_harmonic
 
         self._n_loop = T_loop.shape[1]
         self._n_star = T_star.shape[1]
+        self._n_local_loop = T_local_loop.shape[1]
+        self._n_harmonic = T_harmonic.shape[1]
         self._n_edges = n_edges
         self._n_faces = n_faces
         self._n_vertices = n_vertices
@@ -315,13 +333,23 @@ class LoopStarTransform:
 
     @property
     def n_loop(self):
-        """Number of Loop (face-based, solenoidal) DOFs."""
+        """Number of local plus cohomology Loop DOFs."""
         return self._n_loop
 
     @property
     def n_star(self):
-        """Number of Star (vertex-based, irrotational) DOFs."""
+        """Number of charge-carrying Star DOFs."""
         return self._n_star
+
+    @property
+    def n_local_loop(self):
+        """Number of vertex-generated local Loop DOFs."""
+        return self._n_local_loop
+
+    @property
+    def n_harmonic(self):
+        """Number of global cohomology Loop DOFs."""
+        return self._n_harmonic
 
     @property
     def n_edge(self):
@@ -450,8 +478,9 @@ class LoopStarTransform:
               f"{self._n_edges} edges, {self._n_faces} faces")
         print(f"  Euler characteristic chi = {self._chi} "
               f"({'closed' if self._chi == 2 else 'open'} surface)")
-        print(f"  Loop DOFs (face-based, solenoidal): {self._n_loop}")
-        print(f"  Star DOFs (vertex-based, irrotational): {self._n_star}")
+        print(f"  Loop DOFs (solenoidal): {self._n_loop} "
+              f"({self._n_local_loop} local + {self._n_harmonic} cohomology)")
+        print(f"  Star DOFs (charge-carrying): {self._n_star}")
         print(f"  Total: {self._n_loop} + {self._n_star} = "
               f"{self._n_loop + self._n_star} (edges: {self._n_edges})")
         print(f"  T matrix: {self.T.shape}, "
@@ -684,10 +713,14 @@ class NGBEMBridge:
                 'L_SS': L_SS,           # Star "inductance" (small)
                 'R_LL': R_LL,           # Loop resistance
                 'R_SS': R_SS,           # Star resistance
-                'n_loop_ls': ls.n_loop, # Loop DOFs (face-based)
-                'n_star_ls': ls.n_star, # Star DOFs (vertex-based)
+                'n_loop_ls': ls.n_loop, # Local-loop plus cohomology DOFs
+                'n_star_ls': ls.n_star,
+                'n_local_loop_ls': ls.n_local_loop,
+                'n_harmonic_ls': ls.n_harmonic,
                 'T_loop': ls.T_loop,    # Transformation matrices
                 'T_star': ls.T_star,
+                'T_local_loop': ls.T_local_loop,
+                'T_harmonic': ls.T_harmonic,
                 'T': ls.T,
                 'T_inv': ls.T_inv,
                 'orthogonality_error': ls.verify_orthogonality(),
