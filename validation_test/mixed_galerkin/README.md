@@ -54,7 +54,7 @@ solved per-frequency. Intermediate-frequency accuracy is bounded by the
 | `sphere/`      | Mixed Galerkin on solid sphere |
 | `square2d/`    | Mixed Galerkin on infinite-z square cross-section |
 | `cube3d/`      | Mixed Galerkin on solid cube (rank-N + closed K_ss + NGSolve FEM ground truth verified) |
-| `time_domain/` | Time-domain realization: AAA rational fit → 21 stable poles (cube). No `d` tuning. |
+| `time_domain/` | Passive real-pole Foster realization of the cube response: 18 real poles, exact DC, and a step response checked against inverse Laplace transformation. |
 | `ngsolve_validation/` | Framework-agnostic NGSolve FEM cross-validation (cube / cuboid Kelvin) |
 | `cuboid_general/` | Non-cubic cuboid: the generalized Mellin asymptote by codimension. Promoted 2026-09-02 |
 | `lshape3d_ngsolve_mellin.py` | Non-tensor 3D shape (L-shape) probe — Mellin universality check |
@@ -80,7 +80,9 @@ before quoting it.
 | file | what it tried | state |
 |---|---|---|
 | `cube3d/08_edge_corner_basis.py` | split the single tensor envelope into 7: three faces, three edges, one corner | FAILED, and diagnosed: the separable family is asymptotically rank-deficient, the condition number explodes and the solve returns garbage. This is why "one DOF per boundary class" is not the fix it looks like |
-| `cube3d/09_wedge_basis.py` | a non-separable basis with genuine 2D structure across a z-edge, plus 11 symmetry images | outcome NOT recorded in the file; run it before citing |
+| `cube3d/09_wedge_basis.py` | a non-separable basis with genuine 2D structure across a z-edge, plus 11 symmetry images | DIVERGES: its relative error grows with frequency, so this basis is not asymptotically admissible |
+| `_references/box_heat_content.py` | exact slab, square, and cube admittance from the heat-content integral | slab closed form reproduced to numerical precision; cube reference replaces unresolved-mesh FEM as the box truth |
+| `cube3d/10_edge_corner_dofs.py` | conforming local face, edge, and corner bumps coupled to the bulk modes | the independent edge amplitude removes the cube error floor; frozen asymptotic ratios fail through the transition band unless the bulk basis is sufficiently rich |
 | `cuboid_general/01..05` | generalized Mellin for `Lx != Ly != Lz`: `c_0 = S sqrt(sigma/mu)` (faces), `c_1 = -(16/pi mu)(Lx+Ly+Lz)` (edges), `c_2 = 48/(pi mu^1.5 sqrt(sigma))` (vertices, size-independent) | phase 1 disagrees with FEM by 95-528 % at 1e7-1e8 Hz, and it is the FEM that is wrong. Deep skin requires `|Y| ~ f^-1/2`, i.e. a factor `sqrt(10) = 3.162` per decade. The Mellin column converges to it (3.004, 3.111, 3.146) while the FEM column goes 3.134, 1.947, **1.037** -- flat, which an eddy-current admittance cannot be. At `ne = 712`, about 9 elements per side, and `|gL| = 428` at 1e8 Hz, one element spans ~48 skin depths; saturation is what an unresolved skin layer looks like. Re-run the reference on a resolved mesh before reading phase 1 as a test of the asymptote |
 | `lshape3d_mixed_galerkin.py` | mixed model on a body with one concave dihedral edge | the surface enrichment makes it WORSE: +21 % to +67 % against FEM with a bounding-box tensor envelope, which does not satisfy the boundary condition on the concave step faces |
 
@@ -115,8 +117,8 @@ for remaining square/cube candidates):
 |---|---|---|---|---|
 | Cylinder    | 0.04% wall band  | 2.4e-4% | 2e-5% | 1e-5% |
 | Sphere      | 0.11%            | 0.001% | (Senior tower terminates at γ_1) | |
-| 2D square   | 0.03 – 0.26%     | — (flat face: Senior trivial) | tensor corner envelope verified; non-separable edge enrichment remains open in 3D | |
-| 3D cube     | 0.33% vs NGSolve FEM (rank 20, closed K_ss) | — | — | |
+| 2D square   | 0.03 – 0.26%     | — (flat face: Senior trivial) | corner Mellin needed | |
+| 3D cube     | 0.33% for the rank-20 tensor envelope; 0.0125% with an independent edge amplitude against the exact heat-content result | — | — | |
 
 All results obtained with **zero free parameters**: the bulk-surface
 crossover frequency is determined by the Galerkin system, not a

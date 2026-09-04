@@ -508,34 +508,24 @@ stop. Write it down for three reasons instead:
 
 ## Measured, with the metric stated
 
-Metric: abs(Y_exact - Y_mixed) / abs(Y_exact), the COMPLEX difference, over
-1 Hz - 100 MHz. Do not take abs() of each side and then subtract: that discards
-the phase error and under-reports (0.0525 % instead of 0.0639 % on the cylinder,
-same grid, same function).
+Metric: abs(Y_exact - Y_mixed) / abs(Y_exact), the COMPLEX difference. Do not
+take abs() of each side and then subtract because that discards phase error.
+Read the current values, frequency bands, and improvement factors from
+`validation_test/mixed_galerkin/results/mixed_galerkin_results.json`; this
+knowledge text deliberately does not duplicate them.
 
-  cylinder, planar SIBC                 0.0639 %  max anywhere
-  cylinder, + 3 Senior terms            0.00063 %
-  sphere,   planar SIBC                 0.1371 %
-  sphere,   + gamma_1                   0.0037 %   (36.9x max-anywhere,
-                                                    102.2x wall-band)
-  2-D square, tensor corner envelope    0.3375 %
-  3-D cube,   + rank-20 bulk            0.33 %     vs NGSolve FEM
-
-Two improvement factors, because max-anywhere and wall-band are different
-quantities and quoting one as the other is how a slide comes to disagree with
-its own validation run.
-
-## The polyhedron floor is NOT missing corner functions
+## The polyhedron floor needs an independent edge amplitude
 
 The tensor envelope psi = f(x) f(y) f(z) already has the right asymptotics
 everywhere: exp(-d t) - 1 on a face, r^2 sin(2 theta) at a 90-degree edge (the
 Wiener-Hopf wedge), and x y z ~ r^3 Y_{3,0} at an octant corner. What one
 tensor-product DOF cannot do is give the correct quantitative WEIGHT to all
-three boundary classes at once. The obvious split into one separable DOF per
-face, edge, and corner class was tested and FAILED: the family is
-asymptotically rank-deficient and its solve becomes ill-conditioned. The open
-repair is a genuinely two-dimensional, non-separable edge basis. In 2D, where
-there is no trihedral corner, the single tensor construction reaches 0.34 %.
+three boundary classes at once. A naive split into one separable DOF per face,
+edge, and corner class is asymptotically rank-deficient. The conforming local
+bumps in `cube3d/10_edge_corner_dofs.py` instead show that an independent edge
+amplitude removes the cube floor. A fixed high-frequency edge/corner ratio is
+adequate only asymptotically; through the transition band those amplitudes must
+remain independent because they couple to the interior modes.
 
 SIBC corner and edge treatments exist independently (Deeley 1990 IEEE TMag
 26(2):712; Yuferev-Proekt-Ida 2001 IEEE TMag 37(5):3465) and are not yet
@@ -545,9 +535,10 @@ imported into this trial space.
 
 The Senior tower is half-integer powers of s, i.e. fractional integrals, each
 realisable as a finite RC ladder. Re-entrant edges give an angle-dependent
-non-half-integer exponent instead. In practice none of that matters to the
-pipeline: the computed Y(s) is fitted with AAA (21 stable poles for the cube,
-no fitted d anywhere) and becomes an ordinary state space.
+non-half-integer exponent instead. The production realization uses a passive
+real-pole Foster fit seeded by AAA and completed with diffusive poles and
+non-negative least squares. Direct use of the one-sided complex AAA poles is a
+recorded negative result, not the time-domain model.
 
 ## Where it lives
 

@@ -9,7 +9,9 @@ Locks, on the copper cube of validation_test/mixed_galerkin/cube3d:
   * the multi-port form: symmetry, decoupled dipole port, DC Gram.
 """
 import cmath
+import json
 import math
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -25,6 +27,7 @@ MS = MU0 * SIGMA_CU
 # Aitken-extrapolated Foster sums (N = 799) of the exact triple-sine series,
 # validation_test/mixed_galerkin/cube3d/04_rank_N_bulk_sweep.py::Y_AITKEN
 Y_AITKEN = {1e3: 6.892354, 1e4: 3.431919, 1e5: 1.218962, 1e6: 0.399611}
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def _t(f):
@@ -172,3 +175,16 @@ def test_multiport_symmetry_and_dc_gram(cube):
     a = mg2.alpha(2j * math.pi * 1e6)
     assert a.shape == (2, 2)
     assert 0.9 < (a[0, 0] / mg2.V).real < 1.0
+
+
+def test_validation_artifact_records_projected_and_time_domain_cases():
+    artifact = ROOT / "validation_test/mixed_galerkin/results/mixed_galerkin_results.json"
+    data = json.loads(artifact.read_text(encoding="utf-8"))
+    time_case = data["cases"]["cube3d_time_domain"]
+    edge_case = data["cases"]["box_edge_corner_dofs"]
+
+    assert time_case["script"] == "time_domain/01_cube_step_response.py"
+    assert time_case["all_poles_real"]
+    assert time_case["residues_nonnegative"]
+    assert edge_case["script"] == "cube3d/10_edge_corner_dofs.py"
+    assert edge_case["cube"]
