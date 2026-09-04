@@ -2193,6 +2193,10 @@ supported on LAB and 100号機 for operator PR/Actions work and may be used by a
 GitHub Actions job with `GITHUB_TOKEN`; mdx runtime jobs must not depend on a
 developer login. `release_quad.py ci-verify` reads SHA-bound check-runs through
 the REST helper rather than inspecting a runner's local process or files.
+Portable runtime, build, and package code therefore remains `gh`-free;
+operator-only release/CI skills under `.agents/skills/` may require an
+authenticated `gh` when they fail fast on its absence and do not export that
+dependency to compute hosts or distributed packages.
 
 ### Distribution Test Policy (2026-04-24, updated 2026-05-19)
 
