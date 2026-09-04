@@ -354,7 +354,19 @@ def solve_reduced_a(
     kelvin_center: tuple[float, float, float],
     kelvin_radius: float,
     points: np.ndarray,
+    anderson_depth: int = 0,
+    nu_initial=None,
+    observation_points=None,
 ) -> tuple[np.ndarray, dict[str, object]]:
+    """HCurl reduced-A on the Kelvin mesh.
+
+    ``anderson_depth`` enables the constrained Anderson mixing of the per-element
+    reluctivity, ``nu_initial`` is the per-element warm start of an earlier
+    ``nonlinear_stats["nu_elements"]``, and ``observation_points`` records the
+    per-iteration field change where the comparison is made.  A non-converged
+    Picard loop is reported through ``nonlinear_stats["converged"]``; the caller
+    decides whether that is a failure.
+    """
     started = time.perf_counter()
     solver = VectorPotentialSolver(
         mesh,
@@ -376,6 +388,9 @@ def solve_reduced_a(
                 dirichlet="GND",
                 verbose=nonlinear_verbose,
                 solver=linear_solver,
+                anderson_depth=int(anderson_depth),
+                nu_initial=nu_initial,
+                observation_points=observation_points,
             )
         else:
             solution = solver.solve_linear(
@@ -417,12 +432,24 @@ def solve_omega(
     kelvin_radius: float,
     points: np.ndarray,
     source_trace_tolerance: float,
+    relaxation: float = 0.3,
+    anderson_depth: int = 0,
+    mu_r_initial=1000.0,
+    observation_points=None,
 ) -> tuple[np.ndarray, dict[str, object]]:
     """Run the TOSCA-style total/reduced Omega route on the Kelvin mesh.
 
     The physical air contains the CoilBuilder source and is the reduced
     region.  Iron and the Kelvin exterior are total-potential regions, so the
     source field is never numerically cancelled in high-permeability iron.
+
+    ``relaxation`` / ``anderson_depth`` control the damped Picard loop and its
+    constrained Anderson mixing, ``mu_r_initial`` is a scalar or the per-element
+    warm start of an earlier ``nonlinear_stats["mu_r_elements"]``, and
+    ``observation_points`` records the per-iteration field change where the
+    comparison is made.  A non-converged loop raises
+    :class:`radia.kelvin_solver.MixedOmegaPicardNotConverged` carrying the
+    per-element state; the caller persists or discards it.
     """
     started = time.perf_counter()
     source_h = rad.RadiaField(coil, "h")
@@ -440,7 +467,10 @@ def solve_omega(
             source_potential_contract="total_hodge",
             nonlinear_tolerance=nonlinear_tolerance,
             nonlinear_max_iterations=nonlinear_maximum_iterations,
-            nonlinear_relaxation=0.3,
+            nonlinear_relaxation=float(relaxation),
+            nonlinear_anderson_depth=int(anderson_depth),
+            nonlinear_mu_r_initial=mu_r_initial,
+            nonlinear_observation_points=observation_points,
         )
     field = evaluate_cf(result["B_cf"], mesh, points)
     source_trace = result["static_electromagnet_contract"]["source_trace"]
