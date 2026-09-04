@@ -62,10 +62,11 @@ installs. QUAD verifies its exact Git SHA and tracked-clean state on LAB and
 100号機 before killing processes or installing anything. Repeat the same two
 environment variables for `done`. The final `done` gate is non-mutating: it
 requires the active LAB source to remain at the exact tracked-clean release SHA,
-verifies editable metadata and actual import origins on LAB/100号機, and leaves
-those verified pointers unchanged. After the canonical `01_GitHub` tree catches
-up with published `main`, run `restore-editable` explicitly to return the
-development tier to that tree.
+requires that SHA to equal the peeled `v<radia-version>` tag, verifies editable
+metadata and actual import origins on LAB/100号機, and leaves those verified
+pointers unchanged. After the canonical `01_GitHub` tree catches up with
+published `main`, run `restore-editable` explicitly to return the development
+tier to that tree.
 
 ## Rules
 

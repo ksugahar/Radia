@@ -110,7 +110,7 @@ table is the AI-readable summary.
 | 8 | Deploy LAB + 100号機 editable, hibino PyPI, then mdx PyPI via Phase 8e | always | mdx skips radia-mcp |
 | 8S | Verify the exact versioned Simulink ZIP on LAB / 100号機 / mdx / hibino | for every Simulink revision | `simulink-candidate --package <zip> --target all` |
 | 9 | Cross-machine consistency probe (LAB / 100号機 / mdx / hibino hashes) | always | mdx reports radia-mcp as N/A |
-| DoD | Re-run preflight, exact-source/editable checks, and Phase 9; bind the exact ZIP hash to the same HEAD without changing the verified editable pointers | always | `done --simulink-package <zip>`; only exit 0 authorizes GitHub Release publication. `done` requires the active LAB source to be the exact tracked-clean release SHA, verifies LAB/100号機 editable metadata and import origins, and refuses while NAS main != origin/main. Returning to canonical development sources is a later explicit `restore-editable` operation |
+| DoD | Re-run preflight, exact-source/editable checks, and Phase 9; bind the exact ZIP hash to the same HEAD without changing the verified editable pointers | always | `done --simulink-package <zip>`; only exit 0 authorizes GitHub Release publication. `done` requires the active LAB source to be the exact tracked-clean release SHA, requires that SHA to equal the peeled `v<radia-version>` tag, verifies LAB/100号機 editable metadata and import origins, and refuses while NAS main != origin/main. Returning to canonical development sources is a later explicit `restore-editable` operation |
 
 ## ===
 ## simulink_candidate — exact MEX + SLX publication gate

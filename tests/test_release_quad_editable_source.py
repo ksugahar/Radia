@@ -148,6 +148,21 @@ def test_local_release_source_requires_exact_sha_and_tracked_clean(
     assert release_quad._verify_local_release_source(str(repo), head) == 4
 
 
+def test_release_tag_gate_requires_declared_version_at_exact_head(monkeypatch):
+    monkeypatch.setattr(
+        release_quad, "_read_repo_versions", lambda: {"radia": "4.95.80"}
+    )
+    monkeypatch.setattr(release_quad, "_release_head", lambda: "a" * 40)
+    monkeypatch.setattr(release_quad, "_release_tag_commit", lambda _version: "a" * 40)
+    assert release_quad._verify_head_release_tag() == 0
+
+    monkeypatch.setattr(release_quad, "_release_tag_commit", lambda _version: None)
+    assert release_quad._verify_head_release_tag() == 4
+
+    monkeypatch.setattr(release_quad, "_release_tag_commit", lambda _version: "b" * 40)
+    assert release_quad._verify_head_release_tag() == 4
+
+
 def test_lab_deploy_stops_before_killing_processes_on_source_mismatch(monkeypatch):
     monkeypatch.setattr(release_quad, "_release_head", lambda: "a" * 40)
     monkeypatch.setattr(
@@ -211,6 +226,11 @@ def test_done_keeps_exact_verified_editables_after_all_gates(monkeypatch):
         "_verify_local_release_source",
         lambda _repo, _sha: calls.append("source") or 0,
     )
+    monkeypatch.setattr(
+        release_quad,
+        "_verify_head_release_tag",
+        lambda: calls.append("tag") or 0,
+    )
     monkeypatch.setattr(release_quad, "_verify_lab_editable", lambda *_args: calls.append("lab") or 0)
     monkeypatch.setattr(release_quad, "_verify_100_editable", lambda *_args: calls.append("100") or 0)
     monkeypatch.setattr(release_quad, "cmd_phase9", lambda _args: calls.append("phase9") or 0)
@@ -228,7 +248,9 @@ def test_done_keeps_exact_verified_editables_after_all_gates(monkeypatch):
 
     args = type("Args", (), {"simulink_package": None})()
     assert release_quad.cmd_done(args) == 0
-    assert calls == ["preflight", "source", "lab", "100", "phase9", "guard", "main"]
+    assert calls == [
+        "preflight", "source", "tag", "lab", "100", "phase9", "guard", "main"
+    ]
 
 
 def test_done_stops_before_machine_checks_when_active_source_is_stale(monkeypatch):
