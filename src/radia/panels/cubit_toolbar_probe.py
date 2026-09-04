@@ -63,7 +63,7 @@ def _finish(payload):
     # Run the exit command after the result has been flushed.  The external
     # runner verifies that the GUI process actually disappears.
     import cubit
-    QTimer.singleShot(0, lambda: cubit.cmd("exit"))
+    QTimer.singleShot(0, lambda: cubit.cmd("exit 0"))
 
 
 def _snapshot():
