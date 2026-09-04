@@ -25,6 +25,28 @@ def _git(repo, *args):
     ).stdout.strip()
 
 
+def test_release_quad_git_helper_trusts_only_its_active_worktree(monkeypatch):
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append((command, kwargs))
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(release_quad.subprocess, "run", fake_run)
+    release_quad._git("status", "--short")
+
+    command, kwargs = calls[0]
+    assert command[:3] == [
+        release_quad.GIT_EXE,
+        "-c",
+        f"safe.directory={release_quad.REPO.resolve().as_posix()}",
+    ]
+    assert command[3:] == [
+        "-C", str(release_quad.REPO), "status", "--short"
+    ]
+    assert kwargs == {"capture_output": True, "text": True, "check": True}
+
+
 def test_editable_release_roots_can_target_one_clean_nas_worktree(monkeypatch):
     monkeypatch.setenv(
         release_quad.EDITABLE_REPO_LAB_ENV,
