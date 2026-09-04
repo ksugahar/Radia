@@ -2,7 +2,7 @@
 
 - 文書状態: 現行
 - 対象製品: Eqnedit64 native / Python package / Web editor
-- 対象リリース: 3.0.13
+- 対象リリース: 3.0.14
 - 基準日: 2026-09-03
 - リポジトリ: `ksugahar/Radia`
 
@@ -477,6 +477,21 @@ native出力は `tools/eqnedit64/dist/Eqnedit64.exe`。ビルド前に同じ出�
     GitHub Releaseへ署名済みEXEと`SHA256SUMS.txt`を添付する。
 13. PyPIから各wheel、GitHub ReleaseからEXEを再取得し、同梱EXEとO:のEXEがbyte-identical、
     SHA-256一致、署名有効であることを外側から確認する。
+
+手順5のmain CI成功後、手順6〜13は次の一コマンドを正規経路とする。
+
+```powershell
+pwsh -File .agents/skills/release-eqnedit64/scripts/publish.ps1 -Version X.Y.Z
+```
+
+このコマンドはexact main、必要CI、版数、署名、直接CLIを再検査し、O:をtagより先に
+transactional更新する。続いて変更不能なannotated tagを作成し、release job専用の
+one-job JIT runnerを一意な一時directoryから起動する。runnerはservice登録せず、online確認、
+失敗時の登録解除、job後のprocess・登録・一時directory削除までを同じ実行が所有する。
+tag CIと公開待ちは時間上限を持ち、公開後はGitHub EXE、checksum、PyPIの4 wheel、各wheel内
+EXEをO:とbyte比較する。tag作成後に中断した場合は同じtag/SHA/O: manifestから再開し、
+既存tagを移動または削除しない。`-WhatIf`はビルドとtag前検査だけを行い、O:・tag・公開を
+変更しない。公開skillとこの順序契約はEqnedit64専用CIの所有物とする。
 
 O:は対話中LABでは`C:\Users\Administrator\OneDrive`へのSUBSTである。self-hosted runnerは
 LocalSystemのためユーザー固有ドライブ文字O:を見られない場合がある。release workflowは

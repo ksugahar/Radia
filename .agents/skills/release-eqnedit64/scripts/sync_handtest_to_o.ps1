@@ -14,6 +14,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+$dryRun = [bool]$WhatIf
+$WhatIfPreference = $false
 
 if ($PSVersionTable.PSVersion.Major -lt 7) {
     throw 'sync_handtest_to_o.ps1 requires PowerShell 7 or newer.'
@@ -144,7 +146,7 @@ try {
     [IO.File]::WriteAllText(
         $stageManifest, $manifestJson + "`n", [Text.UTF8Encoding]::new($false))
 
-    if (-not $WhatIf) {
+    if (-not $dryRun) {
         if ($hadDestination) {
             [IO.File]::Copy($fullDestination, $backupExe, $false)
         }
@@ -222,7 +224,7 @@ try {
     }
 
     [pscustomobject]@{
-        Updated = -not $WhatIf
+        Updated = -not $dryRun
         State = 'handtest'
         SourceSha = $normalizedSourceSha
         Destination = $fullDestination

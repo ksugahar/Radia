@@ -2,12 +2,20 @@
 
 ## Unreleased
 
+## 3.0.14 — 2026-09-03
+
 - Give the Web TeX source pane and recent-insertion teaching surface one
   shared CJK-aware browser font stack instead of depending directly on
   Consolas, and lock the policy with a focused Web contract test.
 - Document the standalone `Eqnedit64.exe INPUT OUTPUT` converter as the
   canonical direct CLI. Python launchers may call it as a subprocess, but the
   CLI dispatcher is not a pybind11 API and is not duplicated in the Web app.
+- Add one resumable release command that builds and signs exact main, updates
+  O: before the tag, provisions an ephemeral one-job runner, waits for GitHub
+  and PyPI publication, and verifies all distributed EXEs byte for byte.
+- Make that command compare Actions timestamps as UTC, choose the newest exact
+  run, require main-branch qualification, keep `-WhatIf` staging executable,
+  and preserve the original failure if isolated-runner cleanup also fails.
 
 ## 3.0.13 — 2026-09-03
 
