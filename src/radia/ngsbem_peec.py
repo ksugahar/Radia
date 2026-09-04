@@ -342,15 +342,19 @@ class NGBEMPEECSolver:
         # --- L matrix: mu_0 * vector single layer on HDivSurface ---
         j_trial = self._fes_hdiv.TrialFunction()
         j_test = self._fes_hdiv.TestFunction()
+        l_source_ds, l_test_ds = _bem_measure_pair(
+            ds, label, self.intorder, self.order, self.order
+        )
 
         # .Trace() is required for correct BEM integration.
         # Without it, boundary-edge DOFs get corrupted diagonal
         # entries (e.g. -1e+11) due to incorrect kernel evaluation.
         L_op = LaplaceSL(
-            j_trial.Trace() * ds(label)
-        ) * j_test.Trace() * ds(label)
+            j_trial.Trace() * l_source_ds
+        ) * j_test.Trace() * l_test_ds
 
         L_dense = extract_dense_matrix(L_op.mat, self.n_loop)
+        L_dense = 0.5 * (L_dense + L_dense.T)
         self.L = MU_0 * L_dense
 
         # --- V_0 / P: scalar single layer on SurfaceL2 ---
@@ -361,6 +365,7 @@ class NGBEMPEECSolver:
         V_op = LaplaceSL(uL2 * source_ds) * vL2 * test_ds
 
         V_dense = extract_dense_matrix(V_op.mat, self.n_star)
+        V_dense = 0.5 * (V_dense + V_dense.T)
         self.V_0 = V_dense              # Raw LaplaceSL (for stabilized mode)
         self.P = V_dense / EPS_0         # Potential coefficient P = V_0/eps_0
 
