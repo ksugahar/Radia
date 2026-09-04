@@ -15,6 +15,7 @@ on:
       - 'tests/test_cubit_menu_startup.py'
       - 'tools/audit_pyside6_only.py'
       - 'validation_test/cubit_mesh_export/**'
+      - '.github/workflows/cubit-mesh-export.yml'
   pull_request:
     branches: [main]
     paths:
@@ -28,6 +29,7 @@ on:
       - 'tests/test_cubit_menu_startup.py'
       - 'tools/audit_pyside6_only.py'
       - 'validation_test/cubit_mesh_export/**'
+      - '.github/workflows/cubit-mesh-export.yml'
   workflow_dispatch:
 
 permissions:
@@ -46,29 +48,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
-      - name: Record exact cubit-mesh-export CI ref context
-        shell: pwsh
-        run: |
-          $tag = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME } else { $null }
-          [ordered]@{
-            schema = 'cubit-mesh-export.ci-release-context.v1'
-            ref = $env:GITHUB_REF
-            ref_name = $env:GITHUB_REF_NAME
-            ref_type = $env:GITHUB_REF_TYPE
-            sha = $env:GITHUB_SHA
-            run_id = [string]$env:GITHUB_RUN_ID
-            event_name = $env:GITHUB_EVENT_NAME
-            release_tags = @($tag)
-          } | ConvertTo-Json | Set-Content `
-            -LiteralPath cubit-mesh-export-ci-release-context.json -Encoding utf8
-
-      - name: Upload exact cubit-mesh-export CI ref context
-        uses: actions/upload-artifact@v4
-        with:
-          name: cubit-mesh-export-ci-release-context
-          path: cubit-mesh-export-ci-release-context.json
-          if-no-files-found: error
 
       - name: Fetch the hash-pinned native curver
         shell: pwsh
@@ -156,3 +135,62 @@ jobs:
           name: cubit-mesh-export-wheel
           path: packages/cubit-mesh-export/dist/*.whl
           if-no-files-found: error
+
+  publish:
+    needs: build-test
+    if: >-
+      github.ref_type == 'tag' &&
+      startsWith(github.ref_name, 'cubit-mesh-export-v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Download wheel built by this tag CI
+        uses: actions/download-artifact@v4
+        with:
+          name: cubit-mesh-export-wheel
+          path: dist
+
+      - name: Verify wheel version matches the triggering tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t wheels < <(find dist -maxdepth 1 -name 'cubit_mesh_export-*.whl')
+          if [[ "${#wheels[@]}" -ne 1 ]]; then
+            echo "::error::Expected exactly one cubit-mesh-export wheel, found ${#wheels[@]}"
+            exit 1
+          fi
+          expected="${GITHUB_REF_NAME#cubit-mesh-export-v}"
+          python3 - "${wheels[0]}" "$expected" <<'PY'
+          import email
+          import pathlib
+          import sys
+          import zipfile
+
+          wheel = pathlib.Path(sys.argv[1])
+          expected = sys.argv[2]
+          with zipfile.ZipFile(wheel) as archive:
+              names = archive.namelist()
+              metadata_name = next(
+                  name for name in names if name.endswith(".dist-info/METADATA")
+              )
+              metadata = email.message_from_bytes(archive.read(metadata_name))
+          actual = metadata["Version"]
+          if actual != expected:
+              raise SystemExit(
+                  f"wheel/tag version mismatch: wheel={actual}, tag={expected}"
+              )
+          required = ("cubit_mesh_export.ccm", "cubit_mesh_curver.pyd")
+          missing = [item for item in required if not any(name.endswith(item) for name in names)]
+          if missing:
+              raise SystemExit(f"release wheel lacks mandatory payloads: {missing}")
+          print(f"release wheel verified: {wheel.name} ({actual})")
+          PY
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          skip-existing: true
