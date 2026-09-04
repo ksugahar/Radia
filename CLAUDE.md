@@ -3032,9 +3032,11 @@ release worktreeを保持し、並行WIPがmainへ着地した後に通常のedi
 LAB / 100号機で `pip install --upgrade <pkg>` を流すと editable が静かに上書きされて壊れるので注意。release 後の LAB / 100号機 側 metadata 同期は `pip install -e <path> --no-deps --no-cache-dir` で再 editable 化。`pip install --upgrade` は **mdx / hibino 用** (PyPI から通常通り upgrade).
 
 Editable drift の検出と復旧は `tools/release_quad.py verify-editable` と
-`tools/release_quad.py restore-editable` が担う。`all` / `done` は exact-SHA
-配布後に検証し、開発再開前に LAB / 100号機を canonical editable source
-へ戻す。事故年表と手動復旧手順をポリシーファイルへ複製しない。
+`tools/release_quad.py restore-editable` が担う。`all` / `done` は active
+editable source の exact SHA・tracked-clean・配布内容を検証し、検証済みの
+pointerを変更しない。canonical treeへの切替は、そのtreeが公開済みmainへ
+追いついた後に `restore-editable` を明示実行する。`done` の後処理として
+自動復旧してはならない。事故年表と手動復旧手順をポリシーファイルへ複製しない。
 
 **mdx / hibino 全ユーザー PyPI install**: `C:\Program Files\Python312`
 の machine-wide site-packages に PyPI install。mdx は
