@@ -354,6 +354,12 @@ VALIDATION_FULL_GATES = [
 def _changed_since(ref):
     """Committed and working-tree files changed from ``ref``."""
     def git_names(command):
+        command = [
+            command[0],
+            "-c",
+            f"safe.directory={REPO}",
+            *command[1:],
+        ]
         completed = subprocess.run(
             command,
             cwd=REPO,
