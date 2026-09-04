@@ -1185,7 +1185,8 @@ OHP 世代の本だが、**図の語り方**として今も有効:
 
 過去の自研究室 CEFC/Compumag **口頭発表**（CEFC2020 Yano: retired moment-path / Compumag2023
 Tanimoto: CLN-TEAM28 / CEFC2024 Sugahara: FP-CLN）から抽出した、この会場で通る型。
-各 talk の field note は `talk_feedback.py`。**ポスターは別物**（`radia-poster` 参照）。
+各 talk の field note は `talk_feedback.py`。**ポスターは別物**（`poster_*` ツール。
+2026-09-05 に paper-writing サーバーへ統合され、同じ一覧から呼べる）。
 
 ### talk arc（計算電磁気・手法提案の口頭）
 1. **Title** ＋ 原案者クレジット（例「CLN は Kameari 2016」）
