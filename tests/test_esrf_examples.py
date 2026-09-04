@@ -421,7 +421,7 @@ def test_all_esrf_examples_have_cubit_hex_preferred_mesh_policy(number):
     assert policy["regions"]["permanent_magnet"]["response_unknown"] is False
 
 
-@pytest.mark.parametrize("number", [3, 5, 6, 7])
+@pytest.mark.parametrize("number", [3, 5, 6])
 def test_every_esrf_yoke_requires_cubit_hex(number):
     policy = get_esrf_cubit_mesh_policy(number)
     assert policy["regions"]["iron"] == {
@@ -429,6 +429,18 @@ def test_every_esrf_yoke_requires_cubit_hex(number):
         "required_family": "HEX",
         "scheme": "auto",
     }
+
+
+def test_example7_explicitly_uses_curved_tet_until_cad_partitioning_exists():
+    policy = get_esrf_cubit_mesh_policy(7)
+    assert policy["regions"]["iron"] == {
+        "present": True,
+        "required_family": "TET",
+        "scheme": "tetmesh",
+    }
+    assert policy["solver_routes"]["bdm2_ima"]["iron_family"] == "TET"
+    assert policy["solver_routes"]["nonlinear_hcurl_fem"]["iron_family"] == "TET"
+    assert "cannot map/submap" in policy["cad_volume_fallback_reason"]
 
 
 def test_cubit_journal_uses_hex_capable_auto_for_c_yoke(tmp_path):
