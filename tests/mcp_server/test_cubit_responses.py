@@ -73,6 +73,7 @@ class TestCubitScriptingKnowledge:
         "hex_workflow":        ["hex", "sweep"],
         "tet_workflow":        ["tet", "netgen"],
         "kelvin_transform":    ["Kelvin", "transform"],
+        "ngsolve_panel":       ["Simulink", "check-vol", "DesignSpec"],
         "aprepro_journal":     ["APREPRO", "aprepro", "journal"],
         "batch_processing":    ["batch", "nographics"],
         "helix_coil":          ["helix", "coil"],
@@ -101,6 +102,16 @@ class TestCubitScriptingKnowledge:
 
     def test_unknown_topic(self):
         _assert_unknown_topic_graceful(get_cubit_documentation)
+
+    def test_solver_handoff_does_not_teach_retired_cubit_panels(self):
+        body = get_cubit_documentation("ngsolve_panel")
+        normalized = " ".join(body.split())
+
+        assert "masked blocks in the Radia Simulink library" in normalized
+        assert "Cubit is Radia's CAD, meshing, labeling" in normalized
+        assert "QDialog" not in body
+        assert "QProcess" not in body
+        assert "Panel UI Settings" not in body
 
 
 # ---------------------------------------------------------------------------

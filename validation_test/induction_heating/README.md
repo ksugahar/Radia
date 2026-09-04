@@ -45,13 +45,14 @@ python validation_test/induction_heating/generate_ih_operator_physics_results.py
 The generator owns `ih_operator_physics_results.json`; do not edit its
 numerical values by hand.
 
-## Cubit Panels Legacy
+## Legacy BEM/ESIM Validation
 
-`cubit_panels_legacy/` contains the former IH Cubit-panel Python and
-Cubit/display assets.  Keep it as a protected validation corpus while reusable
-kernels are promoted to `src/` and public explanations move into result-saved
-docs notebooks.  Do not add new examples-path references back to the old IH
-Cubit-panel examples location.
+`cubit_panels_legacy/` is a migration corpus from the former IH Cubit panel.
+It retains research scripts and indispensable Cubit input fixtures only while
+their numerical claims are promoted to checked JSON evidence. Reusable kernels
+and application behavior belong to `src/radia`; generated GMSH companion files
+are run artifacts and are not tracked here. Do not add new production imports
+or examples-path references to this directory.
 
 ## Demoted Sample Legacy Fixtures
 

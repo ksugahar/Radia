@@ -127,30 +127,24 @@ All views independently toggleable in GMSH Post-processing tree.
 | `verify_esim.py` | ESIM verification against analytical + NGSolve FEM |
 | **`compare_bem_coupled_vs_fem_kelvin.py`** | **Coupled BEM vs FEM-Kelvin SIBC cross-check (canonical regression record, 2026-04-12)** |
 
-## Cubit Panel
+## Current Application Routing
 
-The Cubit panel (`src/radia/panels/calc_inductance.py`) provides GUI access:
-- Journal editor with default hex sweep torus
-- Auto source/sink block detection
-- **Workpiece block detection** -> ESIM/Dowell settings appear automatically
-- Model selection: ESIM (nonlinear) / Dowell (analytical)
-- Material selection: Steel / Copper / Aluminum (sigma auto-set)
-- Result table: L, R, P, Q, skin depth, total Z
-- Solve + Open GMSH button (combined J + B visualization)
+The former standalone Cubit/PySide IH panel is retired. Human production runs
+use the masked IH block in the Radia Simulink library. The block delegates to
+the canonical headless backend in `src/radia/panels/calc_inductance.py`; this
+validation corpus must not carry a private copy of that backend.
 
-### Cubit blocks for workpiece
+Cubit remains the CAD and solver-mesh preparation environment. Its block and
+sideset labels are consumed by the headless backend and checked before solve.
+For example, a workpiece volume is labelled with:
 
 ```
 block N add volume <workpiece_vid>
 block N name "workpiece"
 ```
 
-When the `workpiece` block exists, the panel shows additional settings:
-- **Model**: ESIM / Dowell
-- **Material**: Steel / Copper / Aluminum
-- **Frequency** [Hz]
-- **Sigma** [S/m] (auto-updated by material selection)
-- **Half-thickness** [m] (slab model parameter)
+Material, frequency, impedance model, and geometry settings belong to the
+Simulink mask/DesignSpec contract rather than a Cubit GUI panel.
 
 ## Usage
 

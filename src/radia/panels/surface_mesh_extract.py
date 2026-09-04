@@ -1,16 +1,13 @@
 """Surface-mesh extraction utilities shared by BEM application backends.
 
-Moved out of the legacy BEM reference calc_heating_bem.py
-on 2026-04-24 because the production BEM backend was importing from the
-demoted examples path, which fails silently on any wheel-only install
-(no repo checkout on the user's box).
+Moved out of the legacy BEM reference calculator on 2026-04-24 because the
+production BEM backend was importing from a validation copy, which fails on a
+wheel-only install and allows the two implementations to drift.
 
 Consumers:
   - src/radia/panels/calc_inductance.py         (production: PEEC|BEM-A
                                                   coil + scalar BEM-SIBC
                                                   workpiece, weak coupling)
-  - validation_test/induction_heating/bem_reference/calc_heating_bem.py
-    (research validation script; keeps its own local copy for back-compat)
 """
 from __future__ import annotations
 

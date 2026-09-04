@@ -204,8 +204,8 @@ python dodd_deeds_rod.py --sweep
   (+/-3% vs Smythe analytical, when A_inc is exact CF).
 - **L (inductance) is accurate in both total and scattered** FEM
   (volume integral, not affected by surface trace issues).
-- For the coil+workpiece IH problem, the BEM path
-  (`calc_inductance.py` / `calc_heating_bem.py`) uses
-  `ScalarBIESIBCSolver` and is validated.
+- For the coil+workpiece IH problem, the canonical BEM path
+  (`calc_inductance.py`) uses `ScalarBIESIBCSolver` and is validated by
+  `validation_test/induction_heating/esim_cross_formulation/results.json`.
 - The FEM path (`calc_fem_kelvin.py --formulation total`) gives
   correct L but -34% H_t/P.
