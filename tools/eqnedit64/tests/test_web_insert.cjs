@@ -131,5 +131,25 @@ assert.equal(
   "\\begin{aligned}\n  {} \\\\\n  F &= ma \\\\\n  E &= mc^2\n\\end{aligned}"
 );
 
+/* A prime is itself a superscript, so TeX rejects one placed straight after
+ * another superscript ("Prime causes double exponent").  The palette inserts
+ * at the caret, so the insertion carries MathJax's own remedy when needed and
+ * stays untouched when it is not. */
+assert.deepEqual(editor.composeInsertion("a", 1, 1, "'"), { value: "a'", caret: 2 });
+assert.deepEqual(editor.composeInsertion("f", 1, 1, "''"), { value: "f''", caret: 3 });
+assert.deepEqual(editor.composeInsertion("a^{2}", 5, 5, "'"),
+                 { value: "a^{2}{}'", caret: 8 });
+assert.deepEqual(editor.composeInsertion("a^2", 3, 3, "'"),
+                 { value: "a^2{}'", caret: 6 });
+assert.deepEqual(editor.composeInsertion("a^{n+1} ", 8, 8, "'"),
+                 { value: "a^{n+1} {}'", caret: 11 });
+/* Already primed, subscripted, or plain text needs no group. */
+assert.deepEqual(editor.composeInsertion("a'", 2, 2, "'"), { value: "a''", caret: 3 });
+assert.deepEqual(editor.composeInsertion("x_{1}", 5, 5, "'"), { value: "x_{1}'", caret: 6 });
+assert.deepEqual(editor.composeInsertion("a^{2}b", 6, 6, "'"), { value: "a^{2}b'", caret: 7 });
+/* An escaped brace is a symbol, not the end of a superscript group. */
+assert.deepEqual(editor.composeInsertion("\\{x\\}", 5, 5, "'"),
+                 { value: "\\{x\\}'", caret: 6 });
+
 console.log("PASS: Web style selection wrapping and caret placement");
 console.log("PASS: Web hole traversal, native source layout, structural Enter");

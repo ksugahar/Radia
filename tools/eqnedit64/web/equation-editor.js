@@ -1024,6 +1024,37 @@
     input.setSelectionRange(edit.caret, edit.caret);
   }
 
+  /* TeX reads ' as a superscript, so a prime placed straight after another
+   * superscript is a double exponent: `a^{2}'` fails to convert with
+   * "Prime causes double exponent: use braces to clarify".  The structural
+   * editor cannot produce that because it attaches the prime to the base; a
+   * source pane can, because the palette inserts at the caret.  Detect the
+   * case so the insertion can carry MathJax's own remedy, an empty group. */
+  function endsWithSuperscript(text) {
+    var i = text.length - 1;
+    while (i >= 0 && /\s/.test(text.charAt(i))) i -= 1;
+    if (i < 0) return false;
+    if (text.charAt(i) === "'") return false;      /* a'' is legal */
+    var before = i;
+    if (text.charAt(i) === "}" && text.charAt(i - 1) !== "\\") {
+      var depth = 0;
+      for (; i >= 0; i--) {
+        var c = text.charAt(i);
+        if (text.charAt(i - 1) === "\\") continue;  /* \{ and \} are symbols */
+        if (c === "}") depth += 1;
+        else if (c === "{") {
+          depth -= 1;
+          if (depth === 0) break;
+        }
+      }
+      if (i <= 0) return false;
+      before = i;
+    }
+    var j = before - 1;
+    while (j >= 0 && /\s/.test(text.charAt(j))) j -= 1;
+    return text.charAt(j) === "^";
+  }
+
   /* Pure insertion contract, shared by the live textarea and the Node CI
    * test.  Keeping caret arithmetic out of DOM event code makes selection
    * wrapping a tested result instead of a browser-manual assumption. */
@@ -1033,6 +1064,14 @@
     var before = value.slice(0, start);
     var selected = value.slice(start, end);
     var after = value.slice(end);
+    if (/^'+$/.test(snippet)) {
+      /* A prime is its own superscript, so it never takes a hole and never
+       * wraps a selection.  Clarify with an empty group when the caret sits
+       * right after another superscript, which is exactly what MathJax asks
+       * for; the rendered result is unchanged where no group is needed. */
+      var prime = (endsWithSuperscript(before) ? "{}" : "") + snippet;
+      return { value: before + prime + after, caret: before.length + prime.length };
+    }
     var body = snippet;
     var caret;
     var firstHole = body.indexOf("{}");
@@ -1056,6 +1095,8 @@
     var input = root.querySelector(".eqed-source");
     var preview = root.querySelector(".eqed-preview");
     var status = root.querySelector(".eqed-status");
+    /* It now carries the TeX of the cell under the cursor on purpose. */
+    status.setAttribute("data-tex-literal-ok", "true");
     var paletteHost = root.querySelector(".eqed-palettes");
     var recent = el("output", "eqed-recent");
     recent.hidden = true;
@@ -1102,6 +1143,18 @@
           if (status.textContent === message) status.textContent = "";
         }, 4000);
       }
+    }
+
+    /* The native status bar explains the cell under the cursor before it is
+     * inserted.  A title tooltip cannot do that on a touch screen or for a
+     * keyboard user, and a two-letter face such as "sf" or "tt" says nothing
+     * on its own, so mirror the native behaviour in the status line. */
+    function showKeyHelp(text) {
+      status.textContent = text;
+    }
+
+    function clearKeyHelp(text) {
+      if (status.textContent === text) status.textContent = "";
     }
 
     function showRecentInsertion(snippet) {
@@ -1209,10 +1262,17 @@
         row.appendChild(el("span", "eqed-row-label", palette.label));
         palette.items.forEach(function (item) {
           var button = el("button", "eqed-key", item[0]);
+          var description = item[2]
+            ? item[2] + "  " + item[1].trim()
+            : item[1].trim();
           button.type = "button";
           button.setAttribute("data-tex-literal-ok", "true");
-          if (item[2]) button.title = item[2] + "  " + item[1].trim();
-          else button.title = item[1].trim();
+          button.title = description;
+          button.setAttribute("aria-label", description);
+          button.addEventListener("mouseenter", function () { showKeyHelp(description); });
+          button.addEventListener("focus", function () { showKeyHelp(description); });
+          button.addEventListener("mouseleave", function () { clearKeyHelp(description); });
+          button.addEventListener("blur", function () { clearKeyHelp(description); });
           button.addEventListener("click", function () { insert(item[1]); });
           row.appendChild(button);
         });
