@@ -1499,6 +1499,24 @@ def test_collaborative_integration_risk_check_is_optional_for_unrelated_plan():
     assert result["score"] is None
 
 
+def test_collaborative_integration_risk_ignores_the_kakenhi_role_title():
+    # 「連携研究者」 is a role title on every KAKENHI form. Read as the trigger
+    # word 「連携」 it made a plain team sentence applicable and reported seven
+    # missing integration axes on a proposal that integrates nothing.
+    result = gw.grant_writing_collaborative_integration_risk_check(
+        "研究代表者と連携研究者で数値解析を行う。"
+    )
+
+    assert not result["applicable"]
+    assert result["score"] is None
+
+    coupled = gw.grant_writing_collaborative_integration_risk_check(
+        "研究代表者と連携研究者で二つのソルバーを統合する。"
+    )
+
+    assert coupled["applicable"]
+
+
 def test_kaken_review_format_flags_color_only_figure():
     result = gw.grant_writing_kaken_review_format_check(
         "図1に赤線で提案法、青線で従来法の損失を示す。"
@@ -2539,6 +2557,41 @@ def test_cross_organization_pilot_treats_wrapped_lines_as_one_paragraph():
     assert "remaining_gap" not in result["missing_axes"]
 
 
+def test_budget_source_consistency_accepts_the_grouped_summary_headings(tmp_path):
+    header = (
+        "費目区分/Expenditure Categories,年度/FY,品名・仕様/Item (Specification),"
+        "設置機関/Place,品目/Item,数量/Qty,単価/Unit Price,金額/Amount\n"
+    )
+    source = tmp_path / "budget.csv"
+    source.write_text(
+        header
+        + "A,2027,,,ワークステーション,,,300\n"
+        + "B,2027,,,SSD,,,200\n"
+        + "C,2027,,,国内学会出張,,,100\n"
+        + "D,2027,,,海外学会出張,,,50\n",
+        encoding="utf-8-sig",
+    )
+
+    # 物品費 and 旅費 are the grouped headings the applicant actually writes in
+    # the summary line. They must reconcile against 設備備品費+消耗品費 and
+    # 国内旅費+外国旅費 instead of being reported as absent from the ledger.
+    result = gw.grant_writing_budget_source_consistency_check(
+        str(source),
+        expected_category_totals_json='{"物品費": 500, "旅費": 150}',
+    )
+
+    assert result["consistent"], result["differences"]
+
+    wrong = gw.grant_writing_budget_source_consistency_check(
+        str(source),
+        expected_category_totals_json='{"物品費": 400}',
+    )
+
+    assert [d["type"] for d in wrong["differences"]] == ["category_total_mismatch"]
+    assert wrong["differences"][0]["category"] == "物品費"
+    assert wrong["differences"][0]["delta"] == 100
+
+
 def test_budget_source_consistency_accepts_japanese_category_headings(tmp_path):
     header = (
         "費目区分/Expenditure Categories,年度/FY,品名・仕様/Item (Specification),"
@@ -2937,7 +2990,7 @@ def test_a_forward_claim_with_a_vague_verb_still_fires():
 def test_a_software_inventory_is_not_an_acronym_pile():
     inventory = (
         "本研究の遂行に必要な計算機資源を有する。"
-        "Adventure, CST Studio, ELF, Elmer, EMCoS, EMSolution, FastCap, "
+        "Adventure, CST Studio, NGSolve, Elmer, EMCoS, EMSolution, FastCap, "
         "JMAG, COMSOL を保有している。"
     )
 
@@ -2993,7 +3046,7 @@ NON_PROSE_ONLY = """１　研究目的、研究方法など
 実装
 再検証
 研究環境
-Adventure, CST Studio, ELF, Elmer, EMCoS, EMSolution, FastCap, JMAG, COMSOL
+Adventure, CST Studio, NGSolve, Elmer, EMCoS, EMSolution, FastCap, JMAG, COMSOL
 経費明細
 設備備品費 1,000千円
 消耗品費 500千円
