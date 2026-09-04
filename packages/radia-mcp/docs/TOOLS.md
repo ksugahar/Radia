@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **1110 tools** across 49 MCP servers.
+Total: **1108 tools** across 48 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -44,9 +44,8 @@ Total: **1110 tools** across 49 MCP servers.
 | [`mcp-server-mathematica`](#mcp-server-mathematica) | `radia_mcp.mathematica` | 15 |
 | [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 3 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 25 |
-| [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 204 |
+| [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 235 |
 | [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 53 |
-| [`mcp-server-poster`](#mcp-server-poster) | `radia_mcp.poster` | 33 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 10 |
 | [`mcp-server-document-meta`](#mcp-server-document-meta) | `radia_mcp.document_meta` | 12 |
 | [`mcp-server-pdf`](#mcp-server-pdf) | `radia_mcp.pdf` | 17 |
@@ -1113,7 +1112,7 @@ Module: `radia_mcp.chart2d.server`
 
 ## `mcp-server-paper-writing`
 
-_Journal paper / digest writing helpers: IMRaD, abstract, citation, figure, equation, PDF layout, and reviewer-trigger lints. Also serves the merged presentation_* slide lint + PPTX tools (2026-07-17) and the merged figure_* / paper_figure_* publication-figure tools (2026-07-18: the standalone presentation and figure servers were retired -- AI cannot yet author slide decks end-to-end, and figure was a shared middle layer now unified here)._
+_Journal paper / digest writing helpers: IMRaD, abstract, citation, figure, equation, PDF layout, and reviewer-trigger lints. Also serves the merged presentation_* slide lint + PPTX tools (2026-07-17), the merged figure_* / paper_figure_* publication-figure tools (2026-07-18), and the merged poster_* conference-poster tools (2026-09-05: the standalone presentation, figure and poster servers were retired -- AI cannot yet author slide decks end-to-end, figure was a shared middle layer, and a poster obeys the same figure rules but could not reach them from its own server)._
 
 Module: `radia_mcp.paper_writing.server`
 
@@ -1233,6 +1232,37 @@ Module: `radia_mcp.paper_writing.server`
 | `paper_writing_validate_abstract_length` | Abstract 字数 / 語数が制限内か検証。言語を自動判定。 |
 | `paper_writing_validate_pdf_pages` | PDF のページ数が投稿制限内か検証。pymupdf が必要。 |
 | `paper_writing_verify_citation` | Verify a citation BEFORE inserting it into the paper. |
+| `poster_adaptive_health_report` | Health report tuned for a target conference's review culture. |
+| `poster_betterposter_billboard_lint` | Lint the central billboard text for plain-language compliance. |
+| `poster_caption_self_contained` | Score each ``\caption`` / ``\captionof{figure}`` for self-sufficiency. |
+| `poster_color_contrast_wcag` | Check WCAG 2.1 AA contrast for *actually-paired* text/bg combinations. |
+| `poster_color_count_321` | Count unique colors and warn if the palette violates the 3-color rule. |
+| `poster_colorblind_hint` | Simulate deuteranopia and flag pairs that collapse to similar colors. |
+| `poster_compile` | Compile a poster .tex to PDF. |
+| `poster_elevator_pitch_generate` | Render a 3-minute speakable script from the poster source. |
+| `poster_figures_audit` | Check that every ``\includegraphics{path}`` resolves to a file. |
+| `poster_font_embed_check` | Run ``pdffonts`` and report any non-embedded font. |
+| `poster_fontsize_by_distance` | Verify that ``\fontsize{X}`` values are large enough for their role. |
+| `poster_from_paper_tex` | Convert a paper .tex into a Kelvin-style poster skeleton. |
+| `poster_from_pptx` | Convert a PowerPoint poster draft to a Kelvin-style A1 .tex. |
+| `poster_health_report` | Run Tier 1-2 lints and produce a weighted health score. |
+| `poster_jp_font_check` | Inspect Japanese font family declarations in a poster .tex. |
+| `poster_line_length` | Flag sentences that are too long for poster reading. |
+| `poster_lint` | Lint a poster .tex against poster-specific (not slide) criteria. |
+| `poster_next_5_actions` | Return the top 5 actions ranked by (impact - 0.5*effort). |
+| `poster_print_readiness_audit` | Audit a poster for print-readiness: paper size + figure DPI. |
+| `poster_qa_anticipation_list` | Anticipate likely poster Q&A and tag each with reviewer-type motivation. |
+| `poster_qr_audit` | Audit QR code(s) in a poster for prominence + labeling + URL reachability. |
+| `poster_qr_inject` | Inject a labeled QR code into a poster .tex. |
+| `poster_rewrite_suggest` | Return 3-4 candidate phrasings for a target poster element. |
+| `poster_root_cause_diagnosis` | Diagnose which of the 5 typical poster failure patterns apply. |
+| `poster_run_full_workflow` | Chain the Intelligence Layer phases into one call. |
+| `poster_skill_doc` | Return the poster sub-skill's ``skill.md`` documentation as text. |
+| `poster_template_betterposter` | Return (or write) the A0-landscape #betterposter template. |
+| `poster_template_kelvin` | Return (or write) the A1-portrait Japanese poster template. |
+| `poster_typography_lints` | Run cheap regex-based typography hygiene checks. |
+| `poster_word_count` | Lint a poster's word budget against Purrington's ≤1000-word target. |
+| `poster_zone_balance_check` | Check that minipage column widths approximate 0.25 / 0.50 / 0.25. |
 | `presentation_acronym_usage_audit` | 略語使用頻度監査 (re-export)。 |
 | `presentation_adaptive_health_report` | pptx health_report の severity を venue で adjust。 |
 | `presentation_add_citation_footer` | Add a small citation footnote textbox along the BOTTOM of one |
@@ -1385,48 +1415,6 @@ Module: `radia_mcp.grant_writing.server`
 | `grant_writing_translationese_check` | Find Japanese that reads as translated English or as generated prose. |
 | `grant_writing_usage` | Return the grant-writing guide. |
 | `grant_writing_vague_claim_verb_check` | Flag 統合/連携/活用 that never say how. |
-
-## `mcp-server-poster`
-
-_Conference poster generation and lint: templates, viewing-distance font size, color contrast, zone balance, QR audit, and print readiness._
-
-Module: `radia_mcp.poster.server`
-
-| Tool | Description |
-|---|---|
-| `poster_adaptive_health_report` | Health report tuned for a target conference's review culture. |
-| `poster_betterposter_billboard_lint` | Lint the central billboard text for plain-language compliance. |
-| `poster_caption_self_contained` | Score each ``\caption`` / ``\captionof{figure}`` for self-sufficiency. |
-| `poster_color_contrast_wcag` | Check WCAG 2.1 AA contrast for *actually-paired* text/bg combinations. |
-| `poster_color_count_321` | Count unique colors and warn if the palette violates the 3-color rule. |
-| `poster_colorblind_hint` | Simulate deuteranopia and flag pairs that collapse to similar colors. |
-| `poster_compile` | Compile a poster .tex to PDF. |
-| `poster_elevator_pitch_generate` | Render a 3-minute speakable script from the poster source. |
-| `poster_figures_audit` | Check that every ``\includegraphics{path}`` resolves to a file. |
-| `poster_font_embed_check` | Run ``pdffonts`` and report any non-embedded font. |
-| `poster_fontsize_by_distance` | Verify that ``\fontsize{X}`` values are large enough for their role. |
-| `poster_from_paper_tex` | Convert a paper .tex into a Kelvin-style poster skeleton. |
-| `poster_from_pptx` | Convert a PowerPoint poster draft to a Kelvin-style A1 .tex. |
-| `poster_health_report` | Run Tier 1-2 lints and produce a weighted health score. |
-| `poster_jp_font_check` | Inspect Japanese font family declarations in a poster .tex. |
-| `poster_line_length` | Flag sentences that are too long for poster reading. |
-| `poster_lint` | Lint a poster .tex against poster-specific (not slide) criteria. |
-| `poster_next_5_actions` | Return the top 5 actions ranked by (impact - 0.5*effort). |
-| `poster_print_readiness_audit` | Audit a poster for print-readiness: paper size + figure DPI. |
-| `poster_qa_anticipation_list` | Anticipate likely poster Q&A and tag each with reviewer-type motivation. |
-| `poster_qr_audit` | Audit QR code(s) in a poster for prominence + labeling + URL reachability. |
-| `poster_qr_inject` | Inject a labeled QR code into a poster .tex. |
-| `poster_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `poster_rewrite_suggest` | Return 3-4 candidate phrasings for a target poster element. |
-| `poster_root_cause_diagnosis` | Diagnose which of the 5 typical poster failure patterns apply. |
-| `poster_run_full_workflow` | Chain the Intelligence Layer phases into one call. |
-| `poster_skill_doc` | Return the poster sub-skill's ``skill.md`` documentation as text. |
-| `poster_status` | (no description) |
-| `poster_template_betterposter` | Return (or write) the A0-landscape #betterposter template. |
-| `poster_template_kelvin` | Return (or write) the A1-portrait Japanese poster template. |
-| `poster_typography_lints` | Run cheap regex-based typography hygiene checks. |
-| `poster_word_count` | Lint a poster's word budget against Purrington's ≤1000-word target. |
-| `poster_zone_balance_check` | Check that minipage column widths approximate 0.25 / 0.50 / 0.25. |
 
 ## `mcp-server-literature-index`
 

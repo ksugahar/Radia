@@ -1,8 +1,18 @@
 """poster sub-module — 学会ポスター発表の作文・組版支援.
 
 Promoted from the COMSOL Conference 2025 Tokyo poster (Kelvin.tex,
-2025-12-05) as a reusable sub-skill. presentation/ がスライド用なのに
-対し、こちらは A1/A0 ポスター特化:
+2025-12-05) as a reusable sub-skill.
+
+2026-09-05: poster MERGED into mcp-server-paper-writing (Sugahara).
+A poster is a presentation artefact governed by the same figure rules,
+yet as a standalone server it could not reach figure_* at all -- the
+last asymmetry left after presentation merged into paper-writing
+(2026-07-17) and figure followed (2026-07-18).  The standalone
+mcp-server-poster entry point is retired; every poster_* tool is served
+by mcp-server-paper-writing via the register() function below, and this
+module remains the implementation home.
+
+presentation/ がスライド用なのに対し、こちらは A1/A0 ポスター特化:
 
     - 遠目 (1m) でも読めるフォントサイズ basement
     - 図優位 (text < 図 + caption 面積)

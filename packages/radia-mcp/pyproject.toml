@@ -197,8 +197,9 @@ mcp-server-panel-review = "radia_mcp.panel_review.server:main"
 # BibTeX/citation tooling.  deps: pip install radia-mcp[document]
 # (presentation was also promoted then; 2026-07-17 its standalone server
 # was retired and the presentation_* tools merged into
-# mcp-server-paper-writing -- AI cannot yet author slide decks end-to-end.)
-mcp-server-poster = "radia_mcp.poster.server:main"
+# mcp-server-paper-writing -- AI cannot yet author slide decks end-to-end.
+# 2026-09-05 poster followed: a poster obeys the same figure rules as a
+# slide but, on its own server, could not reach figure_* at all.)
 mcp-server-pdf = "radia_mcp.pdf.server:main"
 mcp-server-doc-convert = "radia_mcp.doc_convert.server:main"
 mcp-server-bibliography = "radia_mcp.bibliography.server:main"
