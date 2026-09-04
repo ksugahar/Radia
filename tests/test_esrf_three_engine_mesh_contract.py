@@ -18,6 +18,12 @@ RUNNER_PATH = (
 PROFILE_PATH = (
     ROOT / "validation_test" / "esrf_three_engine" / "profile_hybrid_undulator_hdiv_setup.py"
 )
+COIL_YOKE_BUILDER_PATH = (
+    ROOT / "validation_test" / "esrf_three_engine" / "build_esrf_coil_yoke_kelvin_mesh.py"
+)
+COIL_YOKE_RUNNER_PATH = (
+    ROOT / "validation_test" / "esrf_three_engine" / "run_coil_yoke_three_engine.py"
+)
 
 
 def _builder_module():
@@ -31,6 +37,17 @@ def _builder_module():
 
 def _runner_module():
     spec = importlib.util.spec_from_file_location("_esrf_three_engine_runner", RUNNER_PATH)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _coil_yoke_builder_module():
+    spec = importlib.util.spec_from_file_location(
+        "_esrf_coil_yoke_builder", COIL_YOKE_BUILDER_PATH
+    )
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -119,3 +136,51 @@ def test_hybrid_undulator_hdiv_profile_separates_source_from_gram_setup():
     assert "vim.Solve(" in text
     assert "--gram-backend" in text
     assert "--exact-dense-memory-mb" in text
+
+
+def test_coil_yoke_journal_uses_kelvin_not_a_finite_outer_air_box(tmp_path):
+    builder = _coil_yoke_builder_module()
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    (assets / "iron.step").write_text("placeholder", encoding="utf-8")
+    journal, vol = builder.write_journal(
+        tmp_path / "mesh",
+        assets_dir=assets,
+        kelvin_radius_m=0.16,
+        iron_size_m=0.006,
+        air_size_m=0.016,
+        kelvin_size_m=0.035,
+        gap_size_m=0.003,
+        gap_refinement_radius_m=0.026,
+        gap_refinement_half_length_m=0.032,
+        beam_axis=0,
+        curve_order=2,
+    )
+    contract = builder.three_engine_material_contract()
+    assert contract["response_materials"] == ("iron", "air", "kelvin")
+    assert contract["coil_source"] == "shared mesh-free CoilBuilder solid current"
+    assert contract["finite_outer_air_box_forbidden"] is True
+    assert vol.name == "coil_yoke_kelvin.vol"
+    assert 'export netgen' in journal.read_text(encoding="utf-8")
+    inside = journal.with_name("build_esrf_coil_yoke_inside_cubit.py")
+    text = inside.read_text(encoding="utf-8")
+    assert "build_inside_cubit" in text
+    assert 'symmetry=["z"]' in COIL_YOKE_BUILDER_PATH.read_text(encoding="utf-8")
+    assert "iron.step" in text
+
+
+def test_coil_yoke_runner_keeps_one_coil_source_and_three_required_engines():
+    text = COIL_YOKE_RUNNER_PATH.read_text(encoding="utf-8")
+    source_text = (
+        ROOT / "validation_test" / "esrf_three_engine" / "esrf_coil_yoke.py"
+    ).read_text(encoding="utf-8")
+    assert "build_radia_coil_source" in text
+    assert "source_is_meshed\": False" in source_text
+    assert "solve_hdiv" in text
+    assert "solve_reduced_a" in text
+    assert "solve_omega" in text
+    assert "require_static_electromagnet_three_engine_contract" in text
+    assert "finite_outer_air_box_forbidden\": True" in text
+    assert "fem_kelvin_mesh_shared\": True" in text
+    assert "fem_periodic_kelvin_mesh_shared" not in text
+    assert "--resume" in text
