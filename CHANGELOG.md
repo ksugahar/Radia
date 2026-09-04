@@ -5,6 +5,20 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- Mixed Galerkin boxes: an exact reference and the answer to the 0.33 %
+  cube floor.  `validation_test/mixed_galerkin/_references/box_heat_content.py`
+  gives the slab / square / cube admittance exactly (heat-content integral
+  along the pi/4 ray; slab closed form to 1e-13, cube |Y|(10 kHz) 3.431902
+  against the Aitken Foster 3.431919), replacing the pending FEM ground
+  truth for boxes.  `cube3d/10_edge_corner_dofs.py` adds conforming,
+  localised layer bumps so that face, edge and corner regions get their own
+  amplitude beside the tensor envelope: the cube's envelope-only floor
+  (0.71 % with 2 unknowns, 0.21 % with 126) drops to 0.014 % with one EDGE
+  degree of freedom (at every frequency), 0.0125 % with edge + corner, and
+  0.030 % with only 11 unknowns; the face-profile and corner DOFs alone do
+  little; the square goes 0.34 % -> 0.006 %.  Artifact case
+  `box_edge_corner_dofs`.  The non-conforming splits of cube3d/08 and the
+  wedge bumps of cube3d/09 stay as recorded dead ends.
 - Time-domain realisation of the mixed cube admittance
   (`validation_test/mixed_galerkin/time_domain/01_cube_step_response.py`,
   formerly `01_cube_aaa_step_response.py`): the settled time-domain-SIBC

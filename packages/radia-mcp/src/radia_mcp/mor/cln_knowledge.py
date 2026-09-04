@@ -526,32 +526,61 @@ same grid, same function).
   sphere,   + gamma_1                   0.0037 %   (36.9x max-anywhere,
                                                     102.2x wall-band)
   2-D square, tensor corner envelope    0.3375 %
-  3-D cube,   + rank-20 bulk            0.33 %     vs NGSolve FEM
+  3-D cube,   + rank-20 bulk            0.33 %     vs the exact heat-content
+                                                   admittance (and NGSolve FEM)
+  3-D cube,   + one EDGE DOF            0.014 %    cube3d/10, 2026-09-04
 
 Two improvement factors, because max-anywhere and wall-band are different
 quantities and quoting one as the other is how a slide comes to disagree with
 its own validation run.
 
-## The polyhedron floor is NOT missing corner functions
+## The polyhedron floor is the EDGE amplitude; one conforming edge DOF fixes it
 
 The tensor envelope psi = f(x) f(y) f(z) already has the right asymptotics
 everywhere: exp(-d t) - 1 on a face, r^2 sin(2 theta) at a 90-degree edge (the
 Wiener-Hopf wedge), and x y z ~ r^3 Y_{3,0} at an octant corner. What one
 tensor-product DOF cannot do is give the correct quantitative WEIGHT to all
-three boundary classes at once. The obvious repairs have both been tried and
-both fail: splitting into seven separable per-class envelopes
-(08_edge_corner_basis.py) is asymptotically rank-deficient, and a single
+three boundary classes at once. Measured 2026-09-04 against an EXACT
+reference (cube3d/10_edge_corner_dofs.py; artifact case box_edge_corner_dofs):
+the class that is wrong is the EDGE. Conforming, localised layer bumps
+d(x) = g(x; t) - g(x; 2t) -- zero on the faces and zero in the bulk -- give
+the face (sum d F F), edge (sum d d F) and corner (d d d) regions their own
+amplitude beside the envelope F F F, F = 1 - g. Cube, 1 Hz..1 GHz, max error:
+envelope only 0.71 % (2 unknowns) .. 0.21 % (126 bulk sines), the floor in the
+transition band 6-60 kHz; + face-profile DOF 0.20 % (nothing); + corner DOF
+0.16 %; + EDGE DOF 0.014 % (15x, and at every frequency: 1 MHz 0.045 % ->
+0.002 %); + edge + corner 0.0125 %, and 0.030 % with only 11 unknowns. Square:
+0.34 % -> 0.006 %. What remains after the edge DOF is a transition-band
+residual that falls with the bulk rank (0.108 % at 4 unknowns -> 0.0125 % at
+128): the coupling with the interior modes. So both statements hold and
+separate: the single coefficient mis-weights the edge (an asymptotic-basis
+defect, all frequencies), and in the transition band the surface DOFs need
+independence because they couple to the bulk.
+
+The exact reference is _references/box_heat_content.py: for a box the
+admittance is the heat-content integral <v>(s) = -sMS int_0^inf
+exp(-sMS tau) m(tau)^D dtau with m the 1-D Dirichlet heat content,
+integrated along tau = rho exp(-j pi/4) where both factors decay; slab closed
+form to 1e-13, cube |Y|(10 kHz) = 3.431902 (Aitken Foster N=799: 3.431919,
+mixed rank-20: 3.443338, the 0.33 %). No FEM or mode truncation is needed for
+boxes any more.
+
+Two earlier repairs failed and stay recorded: splitting into seven separable
+per-class envelopes (08_edge_corner_basis.py) is NON-conforming (f(x) alone is
+not zero on the y and z faces) and asymptotically rank-deficient; a single
 non-separable wedge function on one edge (09_wedge_basis.py, run 2026-09-02)
 diverges with frequency -- 21.8 % at 10 kHz, 292 % at 1 MHz, 2974 % at
-100 MHz against the Mellin asymptote, where the tensor baseline gives
-0.55 %, 0.045 %, 0.0044 %. An admissible edge basis is an open problem; do
-not recommend either of those two as the fix.
-In 2D, where there is no trihedral corner, the same construction reaches
-0.34 %.
+100 MHz. Do not recommend either as the fix; the conforming bump of cube3d/10
+is the admissible edge basis. Rate alpha = 2 is the best single choice for the
+wall band (1.5 wins above 100 kHz, 3 loses); a second edge rate 2 alpha gives
+0.0099 %. At low frequency all layer functions are ~ x(L - x), so the family is
+linearly dependent while the Galerkin value is not: solve the Jacobi-scaled
+system by truncated-SVD least squares (rcond 1e-12), never by a plain LU.
 
 SIBC corner and edge treatments exist independently (Deeley 1990 IEEE TMag
-26(2):712; Yuferev-Proekt-Ida 2001 IEEE TMag 37(5):3465) and are not yet
-imported into this trial space.
+26(2):712; Yuferev-Proekt-Ida 2001 IEEE TMag 37(5):3465); the bump above is
+a Galerkin DOF, not an SIBC correction formula, and the two are not yet
+compared.
 
 ## Time domain
 
