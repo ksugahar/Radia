@@ -26,6 +26,41 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  web:
+    # The browser edition is pure JavaScript plus a string-contract test, so it
+    # answers in seconds on a free runner instead of waiting for the Windows
+    # native build.  This is a fast-feedback lane, not a replacement: the
+    # native job still runs for every change under tools/eqnedit64, because
+    # tests/test_palettes.py compares the differential-geometry palette in
+    # web/equation-editor.js against the native catalogue and therefore needs
+    # the built module.  Path filters cannot tell which palette a Web edit
+    # touched, so the native lane keeps its full scope.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools/eqnedit64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install test dependencies
+        run: python -m pip install pytest
+
+      - name: Check Eqnedit64 Web contract
+        run: python -m pytest tests/test_web_contract.py -q
+
+      - name: Check Web JavaScript syntax and insertion behaviour
+        run: |
+          node --check web/equation-editor.js
+          node tests/test_web_insert.cjs
+
   build-test:
     # Font registration tests run only in this disposable GitHub-hosted
     # session. They must not churn the interactive laboratory desktop's font
@@ -97,14 +132,8 @@ jobs:
       - name: Run C++ document tests
         run: ctest --test-dir build_cmake -C Release --output-on-failure
 
-      - name: Check Eqnedit64 Web contract
-        working-directory: .
-        run: python -m pytest tools/eqnedit64/tests/test_web_contract.py -q
-
-      - name: Check Web JavaScript syntax
-        run: |
-          node --check web/equation-editor.js
-          node tests/test_web_insert.cjs
+      # The Web contract and JavaScript checks belong to the `web` job above,
+      # which reports them in seconds on a free runner.
 
       - name: Build headless model module
         run: cmd.exe /d /c build\build_pymodule.bat
