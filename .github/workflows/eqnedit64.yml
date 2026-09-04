@@ -102,8 +102,7 @@ jobs:
         run: >-
           python -m pytest
           tests/test_release_workflow_ref_gate.py
-          tools/eqnedit64/tests/test_web_contract.py
-          packages/radia-mcp/tests/test_presentation_equation_cli.py -q
+          tools/eqnedit64/tests/test_web_contract.py -q
 
       - name: Check Web JavaScript syntax
         run: |

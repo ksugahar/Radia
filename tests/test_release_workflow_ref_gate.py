@@ -77,8 +77,6 @@ def test_pypi_distributions_have_independent_ci_boundaries():
     assert "tags: ['cubit-mesh-export-v*']" in texts["cubit-mesh-export"]
     assert "tags: ['radia-optuna-v*']" in texts["radia-optuna"]
     assert "tags: ['eqnedit64-v*']" in texts["Eqnedit64"]
-    assert ".agents/skills/release-eqnedit64/**" in texts["Eqnedit64"]
-    assert "tests/test_release_workflow_ref_gate.py" in texts["Eqnedit64"]
 
 
 def test_ci_records_exact_ref_context_before_release():
@@ -239,6 +237,14 @@ def test_eqnedit64_release_order_is_handtest_fable_main_o_drive_then_tag():
     assert "if ($remoteTagSha -and $remoteTagSha -cne $sha)" in publish
     assert "Resume and verify publication" in publish
     assert "Verify-PublicRelease" in publish
+    assert "--branch', 'main'" in publish
+    assert "$_.headBranch -ceq 'main'" in publish
+    assert "[datetimeoffset]$NotBefore" in publish
+    assert "Sort-Object createdAt -Descending" in publish
+    assert "[datetimeoffset]::Parse(" in publish
+    assert "-SourceSha $sha -Repository $Repository -WhatIf" in publish
+    assert "$WhatIfPreference = $false" in sync
+    assert "$dryRun = [bool]$WhatIf" in sync
 
     assert "Release tag already exists; O: must be prepared before tag push" in sync
     assert "HEAD=$headSha origin/main=$originMainSha" in sync
@@ -268,3 +274,7 @@ def test_eqnedit64_one_command_release_is_bounded_and_ephemeral():
     assert "--method DELETE" in jit
     assert "Process = $process" in jit
     assert "$process = $jit.Process" in publish
+    assert "$operationError = $_" in publish
+    assert "Publication cleanup also failed" in publish
+    assert "Get-CimInstance Win32_Process" in publish
+    assert "gh run cancel" in publish

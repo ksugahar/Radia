@@ -65,11 +65,13 @@ function Wait-Until {
 function Assert-MainChecks {
     param([Parameter(Mandatory = $true)][string]$Sha)
     $runs = Get-GhJson @('run', 'list', '--repo', $Repository,
-        '--commit', $Sha, '--event', 'push', '--limit', '30', '--json',
-        'databaseId,name,status,conclusion,headSha,createdAt')
+        '--commit', $Sha, '--event', 'push', '--branch', 'main',
+        '--limit', '30', '--json',
+        'databaseId,name,status,conclusion,headSha,headBranch,createdAt')
     foreach ($name in @('Eqnedit64', 'Policy Lint')) {
         $run = $runs | Where-Object {
-            $_.name -ceq $name -and $_.headSha -ceq $Sha
+            $_.name -ceq $name -and $_.headSha -ceq $Sha -and
+            $_.headBranch -ceq 'main'
         } | Sort-Object createdAt -Descending | Select-Object -First 1
         if (-not $run -or $run.status -cne 'completed' -or
             $run.conclusion -cne 'success') {
@@ -126,13 +128,20 @@ function Get-RemoteTagSha {
     return ([string]$commit.sha).ToLowerInvariant()
 }
 
-function Publish-AnnotatedTag {
-    param([Parameter(Mandatory = $true)][string]$Sha)
+function Get-TaggerIdentity {
     $name = ([string](Invoke-Git config user.name)).Trim()
     $email = ([string](Invoke-Git config user.email)).Trim()
     if (-not $name -or -not $email) {
         throw 'Git user.name and user.email are required for the release tag.'
     }
+    return [pscustomobject]@{ Name = $name; Email = $email }
+}
+
+function Publish-AnnotatedTag {
+    param(
+        [Parameter(Mandatory = $true)][string]$Sha,
+        [Parameter(Mandatory = $true)]$Tagger
+    )
     $tagRequestPath = Join-Path 'C:\temp' (
         'eqnedit64-tag-' + [Guid]::NewGuid().ToString('N') + '.json')
     $refRequestPath = Join-Path 'C:\temp' (
@@ -144,9 +153,10 @@ function Publish-AnnotatedTag {
             object = $Sha
             type = 'commit'
             tagger = [ordered]@{
-                name = $name
-                email = $email
-                date = (Get-Date).ToUniversalTime().ToString('o')
+                name = $Tagger.Name
+                email = $Tagger.Email
+                date = [datetime]::UtcNow.ToString(
+                    "yyyy-MM-dd'T'HH:mm:ss'Z'")
             }
         } | ConvertTo-Json -Depth 3
         [IO.File]::WriteAllText(
@@ -209,7 +219,7 @@ function Wait-ForRun {
     param(
         [Parameter(Mandatory = $true)][string]$Workflow,
         [Parameter(Mandatory = $true)][string]$Sha,
-        [Parameter(Mandatory = $true)][datetime]$NotBefore,
+        [Parameter(Mandatory = $true)][datetimeoffset]$NotBefore,
         [string]$Branch
     )
     return Wait-Until -Description "$Workflow run" -Probe {
@@ -220,8 +230,10 @@ function Wait-ForRun {
         $runs = Get-GhJson $arguments
         $run = $runs | Where-Object {
             $_.headSha -ceq $Sha -and
-            ([datetime]$_.createdAt).ToUniversalTime() -ge $NotBefore
-        } | Sort-Object createdAt | Select-Object -First 1
+            ([datetimeoffset]::Parse(
+                [string]$_.createdAt)).ToUniversalTime() -ge
+                $NotBefore.ToUniversalTime()
+        } | Sort-Object createdAt -Descending | Select-Object -First 1
         if ($run) { return $run }
         return $null
     }
@@ -360,6 +372,7 @@ if ($remoteTagSha -and $remoteTagSha -cne $sha) {
 }
 
 if (-not $remoteTagSha) {
+    $tagger = Get-TaggerIdentity
     Push-Location $repoRoot
     try {
         cmd.exe /d /c tools\eqnedit64\build\build_eqnedt64.bat
@@ -374,7 +387,7 @@ if (-not $remoteTagSha) {
             "$Repository $tag", 'Update O:, tag, and publish')) {
         & (Join-Path $PSScriptRoot 'sync_to_o.ps1') -Tag $tag `
             -SourceExe (Join-Path $repoRoot 'tools\eqnedit64\dist\Eqnedit64.exe') `
-            -SourceSha $sha -WhatIf
+            -SourceSha $sha -Repository $Repository -WhatIf
         return
     }
     $sync = & (Join-Path $PSScriptRoot 'sync_to_o.ps1') -Tag $tag `
@@ -382,8 +395,8 @@ if (-not $remoteTagSha) {
         -SourceSha $sha -Repository $Repository
     $oRelease = Assert-ORelease -Sha $sha
 
-    $tagPushTime = (Get-Date).ToUniversalTime().AddSeconds(-5)
-    Publish-AnnotatedTag -Sha $sha
+    $tagPushTime = [datetimeoffset]::UtcNow.AddSeconds(-5)
+    Publish-AnnotatedTag -Sha $sha -Tagger $tagger
     $publishedTagSha = Get-RemoteTagSha
     if ($publishedTagSha -cne $sha) {
         throw "Published tag did not resolve to exact main: $publishedTagSha"
@@ -394,10 +407,13 @@ if (-not $remoteTagSha) {
         return
     }
     $oRelease = Assert-ORelease -Sha $sha
-    $tagPushTime = [datetime]'2000-01-01T00:00:00Z'
+    $tagPushTime = [datetimeoffset]::Parse('2000-01-01T00:00:00Z')
 }
 
 $jit = $null
+$tagRun = $null
+$releaseRun = $null
+$operationError = $null
 try {
     if (-not (Test-PublicReleaseExists)) {
         $jit = & (Join-Path $PSScriptRoot 'start_jit_runner.ps1') `
@@ -406,29 +422,63 @@ try {
             -NotBefore $tagPushTime -Branch $tag
         $null = Watch-Run -Run $tagRun
         $releaseRun = Wait-ForRun -Workflow 'release-eqnedit64-pypi.yml' `
-            -Sha $sha -NotBefore ([datetime]$tagRun.createdAt)
+            -Sha $sha -NotBefore ([datetimeoffset]::Parse(
+                [string]$tagRun.createdAt).ToUniversalTime())
         $null = Watch-Run -Run $releaseRun
     }
     $public = Verify-PublicRelease -ORelease $oRelease
+} catch {
+    $operationError = $_
 } finally {
+    $cleanupError = $null
     if ($jit) {
-        $process = $jit.Process
-        if ($process -and -not $process.HasExited) {
-            $process | Stop-Process -Force
-            $null = $process.WaitForExit(5000)
-        }
-        gh api --method DELETE `
-            "repos/$Repository/actions/runners/$($jit.RunnerId)" 1>$null 2>$null
-        $runnerRoot = [IO.Path]::GetFullPath([string]$jit.RunnerRoot)
-        if (-not $runnerRoot.StartsWith(
-                'C:\temp\eqnedit64-actions-runner-',
-                [StringComparison]::OrdinalIgnoreCase)) {
-            throw "Refusing to remove unsafe JIT runner directory: $runnerRoot"
-        }
-        if (Test-Path -LiteralPath $runnerRoot -PathType Container) {
-            Remove-Item -LiteralPath $runnerRoot -Recurse -Force
+        try {
+            if ($operationError) {
+                foreach ($run in @($tagRun, $releaseRun)) {
+                    if ($run -and $run.status -cne 'completed') {
+                        gh run cancel ([string]$run.databaseId) `
+                            --repo $Repository 1>$null 2>$null
+                    }
+                }
+            }
+
+            $process = $jit.Process
+            if ($process -and -not $process.HasExited -and
+                -not $process.WaitForExit(10000)) {
+                $process | Stop-Process -Force
+                $null = $process.WaitForExit(5000)
+            }
+            gh api --method DELETE `
+                "repos/$Repository/actions/runners/$($jit.RunnerId)" `
+                1>$null 2>$null
+            $runnerRoot = [IO.Path]::GetFullPath([string]$jit.RunnerRoot)
+            if (-not $runnerRoot.StartsWith(
+                    'C:\temp\eqnedit64-actions-runner-',
+                    [StringComparison]::OrdinalIgnoreCase)) {
+                throw "Refusing to remove unsafe JIT runner directory: $runnerRoot"
+            }
+            $runnerPrefix = $runnerRoot.TrimEnd('\') + '\'
+            Get-CimInstance Win32_Process | Where-Object {
+                $_.ExecutablePath -and
+                ([string]$_.ExecutablePath).StartsWith(
+                    $runnerPrefix, [StringComparison]::OrdinalIgnoreCase)
+            } | ForEach-Object {
+                Stop-Process -Id $_.ProcessId -Force -ErrorAction Stop
+            }
+            if (Test-Path -LiteralPath $runnerRoot -PathType Container) {
+                Remove-Item -LiteralPath $runnerRoot -Recurse -Force
+            }
+        } catch {
+            $cleanupError = $_
         }
     }
+    if ($operationError) {
+        if ($cleanupError) {
+            Write-Warning "Publication cleanup also failed: $cleanupError"
+        }
+        throw $operationError
+    }
+    if ($cleanupError) { throw $cleanupError }
 }
 
 [pscustomobject]@{

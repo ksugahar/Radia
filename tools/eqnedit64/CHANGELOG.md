@@ -13,6 +13,9 @@
 - Add one resumable release command that builds and signs exact main, updates
   O: before the tag, provisions an ephemeral one-job runner, waits for GitHub
   and PyPI publication, and verifies all distributed EXEs byte for byte.
+- Make that command compare Actions timestamps as UTC, choose the newest exact
+  run, require main-branch qualification, keep `-WhatIf` staging executable,
+  and preserve the original failure if isolated-runner cleanup also fails.
 
 ## 3.0.13 — 2026-09-03
 
