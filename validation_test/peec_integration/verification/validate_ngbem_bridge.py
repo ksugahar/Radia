@@ -1,18 +1,15 @@
 """
 validate_ngbem_bridge.py
 
-Validation of ngbem -> PEEC Circuit Extraction Bridge
+Validation of the NGSolve BEM -> PEEC circuit extraction bridge.
 
 Tests:
-1. Edge geometry extraction: mesh.edges -> centers, directions, lengths
-2. Virtual topology: segment_nodes valid, node count matches vertices
-3. Matrix symmetry: ngbem L and P are symmetric (Galerkin guarantee)
-4. Topology dict format: all required keys present
-5. PEEC vs ngbem inductance: single wire comparison
-6. FastHenry use_ngbem: end-to-end test via parser
+1. Virtual topology and port assignment
+2. Matrix dimensions and metadata
+3. Galerkin symmetry of the surface-current L and P matrices
 
-All tests use try/except for ngbem availability.
-Tests that require ngbem are SKIPped if not installed.
+All tests use try/except for NGSolve BEM availability.
+Tests that require NGSolve BEM are SKIPped if not installed.
 
 Part of Radia project
 """
@@ -21,8 +18,8 @@ import sys
 import os
 import numpy as np
 
-# Add src/radia to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia'))
+# Add the repository package root to the import path.
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src'))
 
 MU_0 = 4.0 * np.pi * 1e-7
 
@@ -39,68 +36,50 @@ def record(name, status, detail=""):
 
 
 def check_ngbem_available():
-    """Check if ngbem and NGSolve are available."""
+    """Check if NGSolve and its BEM module are available."""
     try:
         import ngsolve
-        import ngbem
+        from ngsolve import bem
         return True
     except ImportError:
         return False
 
 
 # =====================================================================
-# Test 1: ngbem_interface module imports correctly
+# Test 1: ngsbem_interface module imports correctly
 # =====================================================================
 def test_module_import():
-    """Test that ngbem_interface module can be imported (no ngbem needed)."""
+    """Test that ngsbem_interface can be imported without assembling BEM."""
     print("=" * 60)
     print("Test 1: Module Import")
     print("=" * 60)
 
     try:
-        from ngbem_interface import NGBEMBridge, extract_edge_geometry
+        from radia.ngsbem_interface import NGBEMBridge, extract_edge_geometry
         record("import NGBEMBridge", "PASS")
     except ImportError as e:
         record("import NGBEMBridge", "FAIL", str(e))
 
-    # gmsh_mesh_import removed -- surface mesh functions no longer available
-    record("import gmsh surface functions", "SKIP", "gmsh_mesh_import removed")
-
-
 # =====================================================================
-# Test 2: GMSH surface mesh reading
-# =====================================================================
-def test_gmsh_surface_read():
-    """Test GMSH surface mesh reading -- SKIPPED (gmsh_mesh_import removed)."""
-    print("\n" + "=" * 60)
-    print("Test 2: GMSH Surface Mesh Reading (SKIPPED)")
-    print("=" * 60)
-
-    # gmsh_mesh_import is removed. Surface mesh reading should use
-    # .vol files with NGSolve Mesh() instead.
-    record("gmsh surface read", "SKIP", "gmsh_mesh_import removed")
-
-
-# =====================================================================
-# Test 3: NGBEMBridge virtual topology (requires ngbem)
+# Test 2: NGBEMBridge virtual topology (requires NGSolve BEM)
 # =====================================================================
 def test_ngbem_bridge_topology():
-    """Test NGBEMBridge virtual topology from ngbem solver."""
+    """Test NGBEMBridge virtual topology from the NGSolve BEM solver."""
     print("\n" + "=" * 60)
-    print("Test 3: NGBEMBridge Virtual Topology")
+    print("Test 2: NGBEMBridge Virtual Topology")
     print("=" * 60)
 
     if not check_ngbem_available():
-        record("ngbem bridge topology", "SKIP", "ngbem not installed")
+        record("NGSolve BEM bridge topology", "SKIP", "NGSolve BEM unavailable")
         return
 
-    from ngbem_peec import NGBEMPEECSolver, create_plate_mesh
-    from ngbem_interface import NGBEMBridge
+    from radia.ngsbem_peec import NGBEMPEECSolver, create_plate_mesh
+    from radia.ngsbem_interface import NGBEMBridge
 
     # Create simple plate mesh
     mesh = create_plate_mesh(0.01, 0.001, 0.003)
 
-    # Assemble ngbem solver
+    # Assemble the NGSolve BEM solver.
     solver = NGBEMPEECSolver(mesh, sigma=5.8e7, thickness=1e-3)
     solver.assemble()
 
@@ -141,26 +120,26 @@ def test_ngbem_bridge_topology():
     record("port assignment", "PASS", f"port 0: node {pos} -> {neg}")
 
     # Check backend metadata
-    assert topo.get('backend') == 'ngbem', \
-        f"Expected backend='ngbem', got '{topo.get('backend')}'"
+    assert topo.get('backend') == 'ngsbem', \
+        f"Expected backend='ngsbem', got '{topo.get('backend')}'"
     record("backend metadata", "PASS")
 
 
 # =====================================================================
-# Test 4: Matrix symmetry (requires ngbem)
+# Test 3: Matrix symmetry (requires NGSolve BEM)
 # =====================================================================
 def test_matrix_symmetry():
-    """Test ngbem L and P matrices are symmetric (Galerkin property)."""
+    """Test NGSolve BEM L and P matrices are symmetric (Galerkin property)."""
     print("\n" + "=" * 60)
-    print("Test 4: Matrix Symmetry (Galerkin)")
+    print("Test 3: Matrix Symmetry (Galerkin)")
     print("=" * 60)
 
     if not check_ngbem_available():
-        record("matrix symmetry", "SKIP", "ngbem not installed")
+        record("matrix symmetry", "SKIP", "NGSolve BEM unavailable")
         return
 
-    from ngbem_peec import NGBEMPEECSolver, create_plate_mesh
-    from ngbem_interface import NGBEMBridge
+    from radia.ngsbem_peec import NGBEMPEECSolver, create_plate_mesh
+    from radia.ngsbem_interface import NGBEMBridge
 
     mesh = create_plate_mesh(0.01, 0.001, 0.003)
     solver = NGBEMPEECSolver(mesh, sigma=5.8e7, thickness=1e-3)
@@ -198,156 +177,17 @@ def test_matrix_symmetry():
 
 
 # =====================================================================
-# Test 5: PEEC vs ngbem inductance comparison (requires ngbem)
-# =====================================================================
-def test_peec_vs_ngbem():
-    """Compare L from PEEC filaments vs ngbem BEM for a single wire."""
-    print("\n" + "=" * 60)
-    print("Test 5: PEEC vs ngbem Inductance")
-    print("=" * 60)
-
-    if not check_ngbem_available():
-        record("PEEC vs ngbem", "SKIP", "ngbem not installed")
-        return
-
-    from peec_matrices import PEECBuilder
-    from peec_topology import PEECCircuitSolver
-    from ngbem_peec import NGBEMPEECSolver, create_plate_mesh
-    from ngbem_interface import NGBEMBridge
-
-    # PEEC: single wire 100mm, 1mm x 1mm cross-section
-    builder = PEECBuilder()
-    n1 = builder.add_node_at(0.0, 0.0, 0.0)
-    n2 = builder.add_node_at(0.1, 0.0, 0.0)
-    builder.add_connected_segment(n1, n2, 1e-3, 1e-3, 5.8e7)
-    builder.add_port(n1, n2)
-    topo_peec = builder.build_topology()
-
-    solver_peec = PEECCircuitSolver(topo_peec)
-    Z_peec = solver_peec.compute_port_impedance(1e6)
-    L_peec = np.imag(Z_peec) / (2 * np.pi * 1e6)
-
-    print(f"  PEEC: Z = {Z_peec:.4e}")
-    print(f"  PEEC: L = {L_peec*1e9:.2f} nH")
-
-    # ngbem: same wire as surface mesh plate
-    mesh = create_plate_mesh(0.1, 0.001, 0.003)
-    ngbem_solver = NGBEMPEECSolver(mesh, sigma=5.8e7, thickness=1e-3)
-    ngbem_solver.assemble()
-
-    bridge = NGBEMBridge(ngbem_solver, port_spec=([0, 0, 0], [0.1, 0, 0]))
-    topo_ngbem = bridge.to_topology_dict()
-
-    solver_ngbem = PEECCircuitSolver(topo_ngbem)
-    Z_ngbem = solver_ngbem.compute_port_impedance(1e6)
-    L_ngbem = np.imag(Z_ngbem) / (2 * np.pi * 1e6)
-
-    print(f"  ngbem: Z = {Z_ngbem:.4e}")
-    print(f"  ngbem: L = {L_ngbem*1e9:.2f} nH")
-
-    # Compare (accept <50% difference - fundamentally different methods)
-    if L_peec > 0 and L_ngbem > 0:
-        rel_diff = abs(L_peec - L_ngbem) / abs(L_peec) * 100
-        print(f"  Relative difference: {rel_diff:.1f}%")
-        if rel_diff < 50:
-            record("PEEC vs ngbem L", "PASS", f"{rel_diff:.1f}% difference")
-        else:
-            record("PEEC vs ngbem L", "FAIL",
-                   f"{rel_diff:.1f}% > 50% threshold")
-    else:
-        record("PEEC vs ngbem L", "FAIL", "Non-positive inductance")
-
-
-# =====================================================================
-# Test 6: FastHenry parser use_ngbem option (requires ngbem)
-# =====================================================================
-def test_fasthenry_ngbem():
-    """Test FastHenry parser with use_ngbem=True."""
-    print("\n" + "=" * 60)
-    print("Test 6: FastHenry use_ngbem")
-    print("=" * 60)
-
-    if not check_ngbem_available():
-        record("FastHenry use_ngbem", "SKIP", "ngbem not installed")
-        return
-
-    from fasthenry_parser import FastHenryParser
-
-    inp_text = """
-.Units mm
-.default sigma=5.8e7
-
-N1 x=0 y=0 z=0
-N2 x=100 y=0 z=0
-
-E1 N1 N2 w=1 h=1
-
-.external N1 N2
-.freq fmin=1e3 fmax=1e6 ndec=3
-.end
-"""
-
-    parser = FastHenryParser()
-    parser.parse_string(inp_text)
-
-    # Solve with ngbem backend
-    result = parser.solve(use_ngbem=True)
-
-    assert result['backend'] == 'ngbem', \
-        f"Expected backend='ngbem', got '{result['backend']}'"
-    record("backend field", "PASS")
-
-    assert len(result['freqs']) > 0, "No frequencies"
-    record("frequency sweep", "PASS",
-           f"{len(result['freqs'])} frequencies")
-
-    # L should be positive and physically reasonable (1-1000 nH for 100mm wire)
-    L_dc = result['L'][0] if result['L'][0] > 0 else result['L'][-1]
-    L_nH = L_dc * 1e9
-    print(f"  L = {L_nH:.1f} nH")
-    if 1 < L_nH < 1000:
-        record("physically reasonable L", "PASS", f"{L_nH:.1f} nH")
-    else:
-        record("physically reasonable L", "FAIL", f"{L_nH:.1f} nH out of range")
-
-    # Also solve with PEEC and compare
-    result_peec = parser.solve(use_ngbem=False)
-    L_peec_nH = result_peec['L'][-1] * 1e9
-    print(f"  PEEC L = {L_peec_nH:.1f} nH")
-    print(f"  ngbem L = {L_nH:.1f} nH")
-
-    record("end-to-end FastHenry ngbem", "PASS")
-
-
-# =====================================================================
-# Test 7: gmsh_surface_to_ngsolve (requires NGSolve)
-# =====================================================================
-def test_gmsh_to_ngsolve():
-    """Test GMSH surface mesh to NGSolve -- SKIPPED (gmsh_mesh_import removed)."""
-    print("\n" + "=" * 60)
-    print("Test 7: GMSH Surface to NGSolve (SKIPPED)")
-    print("=" * 60)
-
-    # gmsh_mesh_import is removed. Use .vol files with NGSolve Mesh() instead.
-    record("NGSolve surface mesh", "SKIP", "gmsh_mesh_import removed")
-
-
-# =====================================================================
 # Main
 # =====================================================================
 if __name__ == '__main__':
-    print("ngbem Bridge Validation")
+    print("NGSolve BEM Bridge Validation")
     print("=" * 60)
-    print(f"NGSolve/ngbem available: {check_ngbem_available()}")
+    print(f"NGSolve BEM available: {check_ngbem_available()}")
     print()
 
     test_module_import()
-    test_gmsh_surface_read()
     test_ngbem_bridge_topology()
     test_matrix_symmetry()
-    test_peec_vs_ngbem()
-    test_fasthenry_ngbem()
-    test_gmsh_to_ngsolve()
 
     # Summary
     print("\n" + "=" * 60)

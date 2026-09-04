@@ -23,7 +23,7 @@ import os
 import numpy as np
 import time
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src'))
 
 # Physical constants
 MU_0 = 4.0 * np.pi * 1e-7
@@ -77,13 +77,13 @@ def test_assembly():
     print("\n=== Test 2: BEM+SIBC Assembly ===")
 
     try:
-        from ngbem_eddy import EddyCurrentBEMSIBC, create_conductor_mesh
+        from radia.ngsbem_eddy import EddyCurrentBEMSIBC, create_conductor_mesh
     except ImportError as e:
         report("Import ngbem_eddy", False, str(e))
         return None
 
     try:
-        from ngsolve.bem import SingleLayerPotentialOperator
+        from ngsolve.bem import LaplaceSL
     except ImportError:
         report("BEM+SIBC assembly", None, "SKIP: ngbem not installed")
         results[-1] = ("BEM+SIBC assembly", "SKIP")
@@ -205,7 +205,7 @@ def test_physical_plausibility(mesh):
         return
 
     try:
-        from ngbem_eddy import EddyCurrentBEMSIBC
+        from radia.ngsbem_eddy import EddyCurrentBEMSIBC
     except ImportError:
         report("Physical plausibility", None, "SKIP: import failed")
         results[-1] = ("Physical plausibility", "SKIP")
@@ -324,8 +324,8 @@ def test_dof_comparison():
     print("\n=== Test 6: DOF Comparison ===")
 
     try:
-        from ngbem_eddy import EddyCurrentBEMSIBC, EddyCurrentFEMBEM
-        from ngbem_eddy import create_conductor_mesh
+        from radia.ngsbem_eddy import EddyCurrentBEMSIBC, EddyCurrentFEMBEM
+        from radia.ngsbem_eddy import create_conductor_mesh
     except ImportError:
         report("DOF comparison", None, "SKIP: ngsolve not available")
         results[-1] = ("DOF comparison", "SKIP")
