@@ -381,3 +381,31 @@ def test_mixed_omega_picard_non_convergence_raises_with_the_state():
     resumed = _picard_solve(mesh, h_source, potential, bh_table,
                             mu_r_initial=np.asarray(state["mu_r_elements"]))
     assert resumed["nonlinear_stats"]["converged"]
+
+
+def test_mixed_omega_envelope_includes_interpolated_material_targets(monkeypatch):
+    import math
+    from radia.kelvin_solver import MixedOmegaPicardNotConverged
+    from radia.picard_acceleration import ConstrainedAndersonAccelerator
+
+    mesh, h_source, potential, _ = _picard_case()
+    mu0 = 4e-7 * math.pi
+    table = [(0, 0), (1e-4, mu0 * 0.2), (2e-4, mu0 * 0.4),
+             (3e-4, mu0 * 0.402), (1.0, mu0 * 200)]
+    maxima = []
+    original = ConstrainedAndersonAccelerator.step
+
+    def checked_step(self, current, target):
+        maxima.append(float(np.max(target)))
+        assert self.upper >= np.max(target)
+        result = original(self, current, target)
+        np.testing.assert_array_equal(result, 0.3 * target + 0.7 * current)
+        return result
+
+    monkeypatch.setattr(ConstrainedAndersonAccelerator, "step", checked_step)
+    try:
+        _picard_solve(mesh, h_source, potential, table, max_iterations=4,
+                     tolerance=1e-12, anderson_depth=0)
+    except MixedOmegaPicardNotConverged:
+        pass
+    assert maxima and max(maxima) > 2000.0
