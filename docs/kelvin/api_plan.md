@@ -113,7 +113,7 @@ def solve_full_A_kelvin(
         mesh, J_source_cf,
         R_K, offset, nu_0=NU_0,
         order=1, dirichlet_bbnd="GND",
-        gauge_eps=1e-8,
+        gauge_eps=1e-6,
         convention="sugahara"):
     """Full-A 3D HCurl FEM with Sugahara Kelvin convention.
 
@@ -125,7 +125,7 @@ def solve_reduced_A_kelvin(
         mesh, A_s_cf,
         R_K, offset, nu_0=NU_0,
         order=1, dirichlet_bbnd="GND",
-        gauge_eps=1e-8,
+        gauge_eps=1e-6,
         convention="sugahara"):
     """Reduced-A 3D HCurl FEM with external A_s source.
 
