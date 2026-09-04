@@ -524,6 +524,9 @@ commit focused enough that `radia`, `cubit-mesh-export`, `radia-mcp`,
 `radia-optuna`, and `eqnedit64` changes can be identified without rebuilding or
 retesting the other distributions. Pull-request and main-push workflows run
 only the owning distribution lanes plus genuinely shared repository contracts.
+A distribution-private path starts exactly one distribution lane. Multiple
+lanes may start only when a changed file is a documented shared build, ABI, or
+integration boundary; convenience cross-testing is not sufficient reason.
 Within `radia-mcp`, classify changes as docs-only, packaging/version metadata,
 or implementation/tests. Docs-only changes run relevant document checks;
 generated-inventory checks run when the inventory or its generator changes;
@@ -539,6 +542,11 @@ release-tag workflow builds and verifies the exact tagged artifact without
 repeating the full tests already accepted for that source commit. Full
 numerical, GUI, performance, and multi-machine evidence remains an explicit
 validation or release gate rather than an automatic response to every commit.
+Eqnedit64 is an independent PyPI/GitHub-release distribution. Its native and
+Web implementation runs only the Eqnedit64 lane; `radia-mcp.presentation` is an
+optional consumer adapter and runs only the radia-mcp lane. A deliberate public
+CLI-contract change requires an explicit cross-distribution compatibility run,
+not permanent co-triggering of both full workflows.
 Because AI agents are expected to diagnose and repair failures interactively,
 normal CI optimizes for fast, high-signal feedback rather than exhaustive proof;
 strict breadth belongs to explicit validation and release acceptance. Normal CI

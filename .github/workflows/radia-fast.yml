@@ -59,7 +59,7 @@ jobs:
       - name: Compile public Python sources
         shell: pwsh
         run: |
-          & $env:RADIA_FAST_PYTHON -m compileall -q src/radia packages/radia-mcp/src
+          & $env:RADIA_FAST_PYTHON -m compileall -q src/radia
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Run mdx preflight contracts
