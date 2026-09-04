@@ -306,7 +306,7 @@ mode flag:
 - persistent field evaluation;
 - diagnostics and artifact provenance.
 
-The audited source contains 14 supported `RADIA_HDIV_*` environment controls.
+The audited source contains 15 supported `RADIA_HDIV_*` environment controls.
 They are now exhaustively classified and guarded by
 `tests/test_hdiv_environment_policy.py`; adding an unclassified control fails
 the fast test lane. The obsolete `RADIA_HDIV_HEX_CACHE_STATS` alias was removed.
@@ -316,7 +316,7 @@ the fast test lane. The obsolete `RADIA_HDIV_HEX_CACHE_STATS` alias was removed.
 | Diagnostic counters | `RADIA_HDIV_BLOCK_CACHE_STATS`, `RADIA_HDIV_HMATVEC_STATS` | Opt-in instrumentation; invalidates production timing claims. |
 | Failure injection | `RADIA_HDIV_TEST_FAIL_FILL_AFTER` | Test-only build failure; no public API and no successful result artifact. |
 | Performance/cache A/B | `RADIA_HDIV_HEX_BLOCK_CACHE_LIMIT`, `RADIA_HDIV_WEDGE_TRANS_CACHE`, `RADIA_HDIV_DISABLE_TRANS_CACHE` | Diagnostic benchmark paths; effective values are copied into `hmat_stats`. |
-| Numerical/path A/B | `RADIA_HDIV_CURVED_DIRECT`, `RADIA_HDIV_HEX_FAR_ONESIDED`, `RADIA_HDIV_WEDGE_FAR_ONESIDED`, `RADIA_HDIV_HEX_DISTORTED_FAR_FACTOR`, `RADIA_HDIV_HO_FAR_ONESIDED`, `RADIA_HDIV_DISABLE_HO_ANALYTIC_BLOCK`, `RADIA_HDIV_DISABLE_HO_IMAGE_BLOCK` | Non-production comparison paths; `hmat_stats.nonproduction_numerical_override_active` and `release_claim_eligible` make them fail-loud in provenance. |
+| Numerical/path A/B | `RADIA_HDIV_CURVED_DIRECT`, `RADIA_HDIV_HEX_FAR_ONESIDED`, `RADIA_HDIV_WEDGE_FAR_ONESIDED`, `RADIA_HDIV_HEX_DISTORTED_FAR_FACTOR`, `RADIA_HDIV_HO_FAR_ONESIDED`, `RADIA_HDIV_DISABLE_HO_ANALYTIC_BLOCK`, `RADIA_HDIV_DISABLE_HO_IMAGE_BLOCK`, `RADIA_HDIV_DISABLE_HO_IMAGE_FAR` | Non-production comparison paths; `hmat_stats.nonproduction_numerical_override_active` and `release_claim_eligible` make them fail-loud in provenance. |
 | Preconditioner A/B | `RADIA_HDIV_AUTO_JACOBI_TET_NFACE` | Measurement-only auto-policy threshold; the resolved threshold and branch are recorded in `preconditioner_policy`. |
 
 The native `stats()` surface records every effective C++ cache, quadrature,
