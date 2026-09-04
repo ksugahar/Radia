@@ -45,6 +45,33 @@ def test_palette_and_learning_contract() -> None:
     assert "nextHole(input.value" in SOURCE
 
 
+def test_structural_row_break_and_undo_contract() -> None:
+    """Enter is the native row break, and every edit stays undoable."""
+    assert 'event.key !== "Enter" || event.shiftKey' in SOURCE
+    assert "event.isComposing || event.keyCode === 229" in SOURCE
+    assert "composeRowBreak(" in SOURCE
+    assert "function prettyTex(raw)" in SOURCE
+    assert r'snippet.indexOf("\\begin{") >= 0) snippet = prettyTex(snippet)' in SOURCE
+    # The palette insert and the row break go through the same undoable edit.
+    assert "applyEdit(input, edit)" in SOURCE
+    assert "input.value = edit.value" not in SOURCE
+    assert 'document.execCommand(text ? "insertText" : "delete", false, text)' in SOURCE
+    assert "input.setRangeText(text, start, end, \"end\")" in SOURCE
+    # Row environments get {} cells so Tab reaches every one of them.
+    for template in [r"\\begin{pmatrix} {} & {} \\\\ {} & {} \\end{pmatrix}",
+                     r"\\begin{cases} {} & {} \\\\ {} & {} \\end{cases}"]:
+        assert template in SOURCE
+    assert "ROW_ENVIRONMENT" in SOURCE
+
+
+def test_teaching_surfaces_are_exempt_from_the_bare_tex_scan() -> None:
+    """The hint line and recent-insertion display show TeX on purpose."""
+    assert 'recent.setAttribute("data-tex-literal-ok", "true")' in SOURCE
+    assert 'hint.setAttribute("data-tex-literal-ok", "true")' in SOURCE
+    assert '"eqed-hint"' in SOURCE
+    assert "Shift+Enter" in SOURCE
+
+
 def test_common_math_alphabets_are_always_visible() -> None:
     assert "var MATH_ALPHABETS" in SOURCE
     for command in [r"\\mathrm{}", r"\\mathit{}", r"\\mathbf{}"]:
@@ -108,6 +135,18 @@ def test_office_mathml_is_canonical_inline_18pt() -> None:
     assert 'node.textContent === "―"' in canonical
     assert 'parent === "mover" ? "¯" : "_"' in canonical
     assert 'node.setAttribute("stretchy", "true")' in canonical
+
+
+def test_autoloaded_macros_are_warmed_before_the_first_office_copy() -> None:
+    """The Office copy is synchronous, so no package may still be in flight.
+
+    MathJax loads \\boldsymbol and \\cancel on demand and makes the
+    synchronous tex2mml throw "MathJax retry" until the package arrives, which
+    failed the first copy of a `\\bm` equation on a freshly opened page.
+    """
+    assert "function warmAutoloadedMacros()" in SOURCE
+    assert r'tex2mmlPromise("\\boldsymbol{x}+\\cancel{x}"' in SOURCE
+    assert "window.MathJax.startup.promise.then(warmAutoloadedMacros)" in SOURCE
 
 
 def test_office_copy_prefers_exact_cf_html_fragment() -> None:
