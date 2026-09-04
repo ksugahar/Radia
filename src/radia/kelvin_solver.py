@@ -223,7 +223,7 @@ def solve_full_A_kelvin(mesh, J_source_cf, R_K, offset,
                          nu_0=NU_0,
                          order=1,
                          dirichlet_bbnd="GND",
-                         gauge_eps=1e-8,
+                         gauge_eps=1e-6,
                          bonus_intorder=4,
                          kelvin_mats=("kelvin",),
                          inverse="pardiso"):
@@ -274,7 +274,7 @@ def solve_reduced_A_kelvin(mesh, A_s_cf, R_K, offset,
                             nu_0=NU_0,
                             order=1,
                             dirichlet_bbnd="GND",
-                            gauge_eps=1e-8,
+                            gauge_eps=1e-6,
                             bonus_intorder=4,
                             kelvin_mats=("kelvin",),
                             inverse="pardiso"):
@@ -331,7 +331,7 @@ def solve_reduced_A_kelvin(mesh, A_s_cf, R_K, offset,
 
 def solve_magnetostatic_reduced_A_kelvin(
         mesh, A_s, R_K, offset, *, mu_r_by_material,
-        nu_0=NU_0, order=1, dirichlet_bbnd="GND", gauge_eps=1e-8,
+        nu_0=NU_0, order=1, dirichlet_bbnd="GND", gauge_eps=1e-6,
         bonus_intorder=4, kelvin_mats=("kelvin",), inverse="pardiso"):
     """Solve the linear reduced-A magnetostatic problem with iron and Kelvin.
 

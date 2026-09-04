@@ -13,13 +13,14 @@ Catches regression of either:
 """
 import os
 import sys
+import numpy as np
 import pytest
 
 PANELS = os.path.join(os.path.dirname(__file__), "..", "..", "src", "radia", "panels")
 sys.path.insert(0, PANELS)
 
 
-def _build_occ_kelvin_mesh(maxh_air=0.08):
+def _build_occ_kelvin_mesh(maxh_air=0.08, maxh_magnetic=0.05):
     """Build the canonical OCC Kelvin pattern in-memory:
     `Identify(PERIODIC)` AFTER `Glue([...])`.  Returns the NGSolve mesh."""
     from netgen.occ import (Sphere, Pnt, OCCGeometry, IdentificationType,
@@ -32,7 +33,7 @@ def _build_occ_kelvin_mesh(maxh_air=0.08):
 
     mag_sphere = Sphere(Pnt(0, 0, 0), sphere_radius)
     mag_sphere.mat("magnetic")
-    mag_sphere.maxh = 0.05
+    mag_sphere.maxh = maxh_magnetic
     for face in mag_sphere.faces:
         face.name = "sphere"
 
@@ -81,7 +82,7 @@ def test_occ_kelvin_p2_slaves_more_than_p1():
     pairs.  If high-order coupling broke (regression), p=2 slaved
     would equal p=1 slaved.
     """
-    from ngsolve import H1, Periodic
+    from ngsolve import H1, Periodic, TaskManager
     mesh = _build_occ_kelvin_mesh()
     with TaskManager():
         mesh.Curve(2)
@@ -93,6 +94,36 @@ def test_occ_kelvin_p2_slaves_more_than_p1():
         assert slaved_at[2] > slaved_at[1] * 2, (
             f"p=2 should slave > 2x p=1 DOFs (got p1={slaved_at[1]}, "
             f"p2={slaved_at[2]})")
+
+
+def test_occ_kelvin_hcurl_order2_bddc_is_finite_and_resolved():
+    """The production gauge keeps Periodic high-order BDDC blocks invertible."""
+    from ngsolve import CoefficientFunction, TaskManager
+    from radia.vector_potential_solver import VectorPotentialSolver
+
+    mesh = _build_occ_kelvin_mesh(maxh_air=0.18, maxh_magnetic=0.12)
+    with TaskManager():
+        mesh.Curve(2)
+        solver = VectorPotentialSolver(
+            mesh,
+            iron_domains="magnetic",
+            mu_r=1000.0,
+            order=2,
+            kelvin_region="air_outer",
+            kelvin_radius=1.0,
+            kelvin_center=(0.0, 0.0, 3.0),
+        )
+        solver.set_source_cf(CoefficientFunction((0.0, 0.0, 1.0)))
+        solution = solver.solve_linear(dirichlet="GND", solver="bddc")
+
+    values = np.asarray(solution.vec.FV().NumPy())
+    assert np.all(np.isfinite(values))
+    assert solver._last_linear_stats["solver"] == "bddc"
+    assert solver._last_linear_stats["physical_gauge_epsilon"] == pytest.approx(
+        1.0e-6)
+    assert solver._last_linear_stats["kelvin_gauge_epsilon"] == pytest.approx(
+        1.0e-6)
+    assert solver._last_linear_stats["relative_residual"] < 1.0e-6
 
 
 def test_occ_kelvin_set_then_integrate_ratio():
