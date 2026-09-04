@@ -33,6 +33,9 @@ Eqnedit64.exe と Web/JS 数式エディタは、Radia の `tools/eqnedit64` で
 | 挿入直後のTeX強調 | ソース内の非アクティブ選択 | キャレットを動かさない強調表示 | 共通学習面 |
 | TeXソース文字の可読性 | 物理face・cmap・実inkを検査しstock GUI fontへ退避 | 共有CSS変数によるCJK対応monospace fallback | 共通学習面 |
 | `Tab` / `Shift+Tab`で空欄移動 | 構造GUI・TeXソース | TeXソース | 共通学習面 |
+| `Enter`の構造的行区切り・`Shift+Enter`のソース改行 | 構造キャンバス・TeXソース | TeXソース | 共通学習面 |
+| 挿入テンプレートの整形（`\begin`後・`\end`前・`\\`後で改行し、環境深さで字下げ） | 構造モデルの正規化TeX | 挿入断片へ同じ規則を適用 | 共通学習面 |
+| 挿入・行区切りの取り消し | 単一Undoへまとめる | ブラウザのUndo履歴（`Ctrl+Z`）を壊さない | 共通学習面 |
 | 論文TeXの意味保全 | native parserで標準環境・コメント・メタ命令を正規化 | MathJaxの標準TeX解釈へ委譲 | `~`を`\sim`にせず、`align`の`&`を失わず、命令名を本文にしない |
 | 構造キャンバス編集 | 必須 | 非該当 | native固有 |
 | 数式3.0由来ショートカット | 互換層として必須 | 非該当 | native固有 |
@@ -66,6 +69,15 @@ native parserの固定点、optional引数の停止条件、Undo用再parseはna
 Web版のソース文字はブラウザのfont fallbackへ委ねるため、Win32のGDI font検査を
 JavaScriptへ再実装しない。ソース欄と直前挿入表示は一つのCJK対応font stackを共有し、
 特定のローカルfont一つだけを前提にしない。
+TeXソース欄の`Enter`は両版とも数式の行区切り`\\`であり、単なる空白改行ではない。
+新しい行は直前の行の整列列を保ち（先頭に`&`）、`\frac`、上下付き、`\text`、入れ子環境の
+途中では群を分割せず、現在の行の後ろへ空の行を開く。行環境がまだ無い入力は`aligned`で
+包む。ソースだけを改行する場合は両版とも`Shift+Enter`を使う。Web版はさらに、日本語入力の
+確定`Enter`（`isComposing` / key code 229）をIMEへ渡し、数式の行区切りにしない。
+挿入テンプレートのセルは`{}`とし、`Tab`が全セルへ到達できることを両版の条件とする。
+Web版の挿入・行区切りはブラウザの編集コマンド経由で適用し、`textarea.value`の代入で
+Undo履歴を捨てない。ブラウザのUndo履歴はnativeのUndoスタックに対応する共通学習面である。
+
 両版とも`\text{hello world}`と`\operatorname{arg max}`の単語間空白を表示・保存し、
 escaped percentを含む文章でも空白を脱落させない。nativeは構造木へ取り込む際に連続する
 source空白を一つの単語間空白へ正規化するが、`~`、`\ `、`\,`の明示空白は区別して保持する。

@@ -31,6 +31,26 @@ or assume that one locally installed font resolves correctly. This is the Web
 counterpart of the native source-legibility contract, not a JavaScript port of
 the Win32 physical-face, cmap, and raster-ink probes.
 
+`Tab` and `Shift+Tab` move to the next and previous empty `{}` slot, and
+`Enter` is the same structural row break the native editor performs in its TeX
+source pane: it writes the row separator `\\`, keeps the alignment column by
+starting the new row with `&`, and wraps a bare expression in `aligned` when no
+row environment is open yet. It never splits a group such as `\frac{}{}` or
+`\text{}`; inside one it opens an empty row after the current one instead.
+`Shift+Enter` keeps the plain source newline, and an IME confirmation `Enter`
+(`isComposing`, key code 229) is left to the input method. Inserted environment
+templates are laid out with the native source rules — break after `\begin`,
+before `\end`, and after each `\\`, indented by environment depth — and their
+cells are `{}` slots so `Tab` reaches every one of them.
+
+Every insertion and row break is applied through the browser's own editing
+command, so `Ctrl+Z` undoes a palette click exactly like typed text. Assigning
+`textarea.value` would discard the undo history; do not reintroduce it.
+
+The hint line under the source pane and the recent-insertion display show bare
+TeX on purpose and are marked `data-tex-literal-ok` so the homepage rendering QA
+does not read them as unrendered math.
+
 The `R x` / `I x` / `B x` math-alphabet group is always visible beside the
 category tabs. It inserts `\mathrm{}`, `\mathit{}`, or `\mathbf{}`; a source
 selection is wrapped in the chosen command and an empty selection leaves the

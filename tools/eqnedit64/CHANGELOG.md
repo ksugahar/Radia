@@ -2,6 +2,38 @@
 
 ## Unreleased
 
+- Port the native structural `Enter` to the Web TeX source pane: it writes the
+  row separator `\\`, keeps the alignment column with a leading `&`, wraps a
+  bare expression in `aligned`, and opens an empty row instead of splitting a
+  group such as `\frac{}{}`. `Shift+Enter` keeps the plain source newline, and
+  an IME confirmation `Enter` is left to the input method.
+- Lay inserted Web environment templates out with the native source rules —
+  break after `\begin`, before `\end`, and after each `\\`, indented by
+  environment depth — and give their cells `{}` slots so `Tab` reaches every
+  one of them.
+- Apply every Web insertion and row break through the browser's editing
+  command so `Ctrl+Z` undoes a palette click like typed text. Assigning
+  `textarea.value` had discarded the undo history on every insert.
+- Reach a hole that ends the source when `Shift+Tab` walks backwards; the
+  previous bound skipped it and reported "no more holes".
+- Realign the laboratory homepage's Eqnedit64 release gate with the exe: its
+  browser, clipboard-bridge, and PowerPoint QA still required the retired 24 pt
+  Office paste, so it failed an editor that correctly emits the shared 18 pt
+  contract (`kOfficePasteFontPoints`; the surviving 24 pt constant is the
+  separate Google Slides export). The homepage scripts live in that workspace,
+  not in Radia; the size contract itself is stated in `docs/PRODUCT_PARITY.md`.
+- Warm MathJax's on-demand `\boldsymbol` and `\cancel` packages at Web
+  startup. The Office copy has to stay synchronous to keep the user gesture
+  alive for the clipboard write, and until the package arrived that synchronous
+  conversion threw "MathJax retry", so the first copy of a `\bm` equation on a
+  freshly opened page reported a generation failure.
+- Grow the Web palettes toward the native catalogue: extensible accents and
+  over/under braces, floor/ceiling and `\middle|` brackets, `\overset` /
+  `\underset`, the long and harpoon arrows, big operators, the remaining
+  binary relations, a spacing row, and the variant Greek letters.
+- Mark the Web hint line and recent-insertion display `data-tex-literal-ok`
+  so the homepage rendering QA does not read their deliberate TeX as
+  unrendered math.
 - Give the Web TeX source pane and recent-insertion teaching surface one
   shared CJK-aware browser font stack instead of depending directly on
   Consolas, and lock the policy with a focused Web contract test.
