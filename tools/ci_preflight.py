@@ -75,14 +75,14 @@ GREEN, RED, YEL, DIM, RST = "\033[32m", "\033[31m", "\033[33m", "\033[2m", "\033
 _PREFLIGHT_CHANGED_FILES = None
 
 
-def _sh(cmd, cwd=REPO, env=None, timeout=None):
+def _sh(cmd, cwd=REPO, env=None, timeout=None, input_text=None):
     """Run a command, return (returncode, stdout+stderr)."""
     e = dict(os.environ)
     if env:
         e.update(env)
     p = subprocess.run(cmd, cwd=cwd, env=e, capture_output=True,
                        text=True, encoding="utf-8", errors="replace",
-                       timeout=timeout)
+                       timeout=timeout, input=input_text)
     return p.returncode, (p.stdout or "") + (p.stderr or "")
 
 
@@ -232,14 +232,16 @@ def gate_radia_mcp_matrix():
         selector_cmd.append("--full")
     else:
         selector_cmd.extend(
-            [
-                "--changed-files-json",
-                json.dumps(_PREFLIGHT_CHANGED_FILES),
-                "--base",
-                "origin/main",
-            ]
+            ["--changed-files-json", "-", "--base", "origin/main"]
         )
-    rc, out = _sh(selector_cmd)
+    rc, out = _sh(
+        selector_cmd,
+        input_text=(
+            json.dumps(_PREFLIGHT_CHANGED_FILES)
+            if _PREFLIGHT_CHANGED_FILES is not None
+            else None
+        ),
+    )
     if rc != 0:
         return False, f"impact selector failed: {out[-400:]}"
     try:
