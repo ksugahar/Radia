@@ -2822,7 +2822,7 @@ def build_argparser():
                              "unmet prerequisites or genus != 1 fail "
                              "loud.  There is deliberately NO 'off': the "
                              "legacy un-extended genus-1 solve is a known "
-                             "+25-30% over-estimate and must not be "
+                             "+25-30%% over-estimate and must not be "
                              "selectable.  delta_L (Telegen) keeps the "
                              "plain-solve phi convention.")
 

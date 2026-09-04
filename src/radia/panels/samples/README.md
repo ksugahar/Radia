@@ -62,9 +62,10 @@ Top-level canonical trio (all shipped):
 
 Kelvin Benchmark mode (`Electromagnet` block / `EMDesignSpec` formulation = "Kelvin
 Benchmark"): bundled `kelvin_benchmark_sphere_1_2.vol` (1/2
-model) + `kelvin_benchmark_sphere_1_4.vol` (1/4 model).  See
-`validation_test/panels/test_kelvin_benchmark_golden.py` for the golden
-band (±1.5% at p=2).
+model) + `kelvin_benchmark_sphere_1_4.vol` (1/4 model). The independent
+numerical regression is
+`validation_test/cubit/test_kelvin_1_4_p_convergence.py` (quarter model,
+±1.5% at p=2 and ±1.0% at p=3); Simulink tests own only interface routing.
 
 ## PCB PEEC Simulink block
 

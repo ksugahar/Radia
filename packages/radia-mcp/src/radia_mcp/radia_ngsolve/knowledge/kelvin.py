@@ -2372,9 +2372,11 @@ JSON output: `Hi_origin`, `Hi_analytical`, `error_pct`, `slaved_dofs`.
   | p=2   |        +0.71% |
   | p=3   |        +0.54% |
 
-Panel-level golden test:
-`validation_test/panels/test_kelvin_benchmark_golden.py` parametrises over
-both 1/2 and 1/4 samples, locking |error| < 1.5% at p=2.
+The maintained numerical regression is
+`validation_test/cubit/test_kelvin_1_4_p_convergence.py`. It generates the
+quarter model independently and locks |error| < 1.5% at p=2 and < 1.0% at
+p=3. Simulink interface tests cover parameter routing separately; they do not
+own the analytical truth.
 
 ## Why 1/8 is unsupported for the sphere benchmark (physics)
 

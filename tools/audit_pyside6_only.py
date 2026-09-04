@@ -12,18 +12,20 @@ Static checks:
   1. ZERO real PyQt5 / PySide2 / PyQt6 import statements in tracked *.py
      (lint-rule regexes and "no PyQt5 fallback" comments do NOT count --
      only actual ``import``/``from ... import`` lines).
-  2. Cubit toolbar modules import PySide6.
-  3. radia pyproject.toml does not declare a PySide6 dependency or retired
+  2. ZERO executable PySide6 imports outside Cubit-owned modules and their
+     focused toolbar tests.
+  3. Cubit toolbar modules import PySide6.
+  4. radia pyproject.toml does not declare a PySide6 dependency or retired
      standalone panel scripts.
-  4. cubit_mesh_export.ccm (if present in the package source) has NO Qt5 DLL
+  5. cubit_mesh_export.ccm (if present in the package source) has NO Qt5 DLL
      dependency (pefile import-table scan).
 
 Interface checks:
-  5. The official WorkflowToolbar remains complete and startup registers the
+  6. The official WorkflowToolbar remains complete and startup registers the
      complementary Export menu through emclaro, never through a PySide6 QMenu.
 
 Headless check (isolated subprocess, offscreen Qt):
-  6. If PySide6 is installed, ExportDialog builds all 6 formats emitting valid
+  7. If PySide6 is installed, ExportDialog builds all 6 formats emitting valid
      ``export ... overwrite`` commands.  If PySide6 is absent, this is a skip,
      not a failure.
 
@@ -36,6 +38,7 @@ cross-machine SSH to 100号機 / mdx / hibino) lives in the release/deploy gates
 """
 from __future__ import annotations
 
+import ast
 import json
 import importlib.util
 import os
@@ -51,6 +54,16 @@ CUBIT_TOOLBAR_MODULES = [
     "src/radia/panels/radia_export_menu.py",
     "src/radia/panels/register_toolbar.py",
 ]
+
+PYSIDE6_ALLOWED_FILES = {
+    "packages/radia-mcp/src/radia_mcp/cubit/bootstrap.py",
+    "src/radia/panels/cubit_toolbar_probe.py",
+    "src/radia/panels/radia_export_menu.py",
+    "src/radia/panels/register_toolbar.py",
+    "tools/audit_pyside6_only.py",
+    "validation_test/panels/conftest.py",
+    "validation_test/panels/test_radia_export_menu.py",
+}
 
 
 # ----------------------------------------------------------------------
@@ -74,6 +87,40 @@ def check_no_legacy_qt_imports() -> list[str]:
     # git grep: rc 0 = matches found (BAD), rc 1 = no match (GOOD)
     hits = [ln for ln in r.stdout.splitlines() if ln.strip()]
     return hits
+
+
+def check_pyside6_ownership_boundary() -> list[str]:
+    """Reject executable PySide6 imports outside Cubit-owned code/tests."""
+    pattern = r"^[[:space:]]*(from|import)[[:space:]]+PySide6"
+    result = subprocess.run(
+        ["git", "grep", "-lI", "-E", pattern, "--", "*.py"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    issues = []
+    for raw_path in result.stdout.splitlines():
+        relative = raw_path.strip().replace("\\", "/")
+        if not relative or relative in PYSIDE6_ALLOWED_FILES:
+            continue
+        path = ROOT / relative
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=relative)
+        except (OSError, SyntaxError):
+            continue
+        for node in ast.walk(tree):
+            module = ""
+            if isinstance(node, ast.ImportFrom):
+                module = node.module or ""
+            elif isinstance(node, ast.Import):
+                module = next(
+                    (alias.name for alias in node.names
+                     if alias.name == "PySide6" or alias.name.startswith("PySide6.")),
+                    "",
+                )
+            if module == "PySide6" or module.startswith("PySide6."):
+                issues.append(f"{relative}:{node.lineno}: {module}")
+    return issues
 
 
 def check_cubit_toolbar_imports_pyside6() -> list[str]:
@@ -304,6 +351,13 @@ def main(argv: list[str]) -> int:
     for h in legacy:
         print("       " + h)
     all_issues += [f"legacy Qt import: {h}" for h in legacy]
+
+    boundary = check_pyside6_ownership_boundary()
+    print(f"[{'FAIL' if boundary else 'OK'}] PySide6 imports stay inside "
+          f"Cubit-owned code/tests: {len(boundary)} violation(s)")
+    for issue in boundary:
+        print("       " + issue)
+    all_issues += [f"PySide6 ownership violation: {h}" for h in boundary]
 
     gui_missing = check_cubit_toolbar_imports_pyside6()
     print(f"[{'FAIL' if gui_missing else 'OK'}] Cubit toolbar modules import PySide6")
