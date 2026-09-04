@@ -482,6 +482,44 @@ evidence of Optuna parity.
 
 ## Critical Policies
 
+### Do Not Break the Interactive Session's Fonts (2026-09-03)
+
+**POLICY**: Never run Eqnedit64 GUI, rendering, or font-registration tests in
+the LAB interactive session (session 1). Use a separate session.
+
+`fontdrvhost.exe` — the per-session user-mode font driver — has crashed **202
+times since 2026-08-23, every time at the same offset 0x366a2** (access
+violation). Whichever typeface was mid-load when it dies becomes unusable in
+that session, so the casualty rotates (Calibri, Arial, Times New Roman). The
+user's Office then renders equations invisibly: the paste succeeds, the glyphs
+have zero ink. It reads as an application bug and has repeatedly been
+misdiagnosed as one.
+
+Minute-level correlation on 2026-09-03 put every one of that morning's 14
+crashes immediately after an Eqnedit64 worktree checkout followed by a build,
+test, or render. Windows fonts (8 faces x 16 sizes) and 73 Latin Modern OTFs
+drawn through GDI never trigger it. Human PowerPoint use, RDP reconnects, and
+Windows Update are uncorrelated.
+
+- A separate session confines the damage to its own font table; the user's
+  Office is untouched. This is the whole mitigation — the crash itself is not
+  yet fixed.
+- **Do not claim the underlying defect is fixed without a repeat-count
+  comparison.** VALIDATION_NOTES (2026-08-29) recorded 3.0.1 as reproducing the
+  crash and 3.0.2 as resolving it after moving from `AddFontMemResourceEx` to
+  file-private registration. A binary inventory of the 109 builds under
+  `C:\temp` showed 3.0.11-3.0.13 carry file-private registration **only**, and
+  they still crash. The crash is intermittent, so a single non-reproduction
+  proves nothing.
+- If a typeface does die, it is repairable **without a reboot**: the corruption
+  is in the session's win32k font table, not on disk. Use
+  `doc_convert_session_font_check` and `doc_convert_session_font_repair`
+  (radia-mcp, `c71102f68`), which remove and re-add the one affected face and
+  broadcast `WM_FONTCHANGE`. Already-open Office needs reopening; nothing else.
+- Attribute by session records, not by worktree name. A worktree called
+  `eqnedit64-codex-review` says nothing about which agent ran it — the
+  2026-09-03 morning window has no codex session at all.
+
 ### Self-Driving Loop Discipline (2026-06-24)
 
 Drive an autonomous / self-paced loop by **task completion, not a clock**: finish
