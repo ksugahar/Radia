@@ -43,6 +43,7 @@ CASES = [
     ("sphere/02_hoibc_gamma1.py", "sphere_hoibc_gamma1"),
     ("square2d/01_corner_envelope.py", "square2d_corner_envelope"),
     ("time_domain/01_cube_step_response.py", "cube3d_time_domain"),
+    ("cube3d/10_edge_corner_dofs.py", "box_edge_corner_dofs"),
 ]
 
 PENDING = {
