@@ -20,7 +20,7 @@ Two things this deliberately does not do:
 from __future__ import annotations
 
 import re
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from ..bibliography._bibparse import read_bib_file
@@ -36,6 +36,10 @@ GROUPS = [
     ("inbook", "著書"),
 ]
 EXCLUDED_KINDS = {"misc", "unpublished", "online", "software"}
+
+
+def _current_local_year() -> int:
+    return datetime.now(timezone.utc).astimezone().year
 
 
 def _resolve_bib_path(bib_path: str) -> Path:
@@ -146,7 +150,7 @@ def grant_writing_publication_list(bib_path: str,
                     + ", ".join(sorted(placeholders))
                 )
             year = e.fields.get("year", "")[:4]
-            if year.isdigit() and int(year) > datetime.now(UTC).astimezone().year:
+            if year.isdigit() and int(year) > _current_local_year():
                 out.append(
                     "   [要確認] 将来年の業績である。採択・受理・発表予定の状態を明記する。"
                 )
@@ -230,7 +234,7 @@ def grant_writing_achievement_count_check(text: str,
         mine = [e for e in mine if e.fields.get("year", "")[:4] >= since]
     elif scope_label.startswith("過去"):
         n = int(re.search(r"\d+", scope_label).group())
-        cutoff = datetime.now(UTC).astimezone().year - n + 1
+        cutoff = _current_local_year() - n + 1
         mine = [e for e in mine
                 if e.fields.get("year", "")[:4].isdigit()
                 and int(e.fields["year"][:4]) >= cutoff]

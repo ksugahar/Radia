@@ -281,10 +281,9 @@ jobs:
           env["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
           if plan["package_tests"] != ["tests"]:
               env["RADIA_MCP_CI_SELECTION_JSON"] = json.dumps(plan["package_tests"])
-          targets = ["tests"] if plan["package_tests"] == ["tests"] else plan["package_tests"]
           command = [
               sys.executable, "-m", "pytest", "-v", "-r", "aR",
-              "-m", "not xval and not slow", *targets,
+              "-m", "not xval and not slow", "tests",
           ]
           raise SystemExit(
               subprocess.run(command, cwd=package_root, env=env).returncode
