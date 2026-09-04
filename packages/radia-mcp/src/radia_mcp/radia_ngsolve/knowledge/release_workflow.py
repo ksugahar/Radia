@@ -110,7 +110,7 @@ table is the AI-readable summary.
 | 8 | Deploy LAB + 100号機 editable, hibino PyPI, then mdx PyPI via Phase 8e | always | mdx skips radia-mcp |
 | 8S | Verify the exact versioned Simulink ZIP on LAB / 100号機 / mdx / hibino | for every Simulink revision | `simulink-candidate --package <zip> --target all` |
 | 9 | Cross-machine consistency probe (LAB / 100号機 / mdx / hibino hashes) | always | mdx reports radia-mcp as N/A |
-| DoD | Re-run preflight/editable/Phase 9, bind the exact ZIP hash to the same HEAD, then restore canonical editable installs | always | `done --simulink-package <zip>`; only exit 0 authorizes GitHub Release publication. Since 2026-08-31 `done` force-reinstalls LAB/100号機 from canonical `01_GitHub`, self-tests grant-writing, and verifies both editable metadata and import origins. It also refuses while NAS main != origin/main |
+| DoD | Re-run preflight, exact-source/editable checks, and Phase 9; bind the exact ZIP hash to the same HEAD without changing the verified editable pointers | always | `done --simulink-package <zip>`; only exit 0 authorizes GitHub Release publication. `done` requires the active LAB source to be the exact tracked-clean release SHA, verifies LAB/100号機 editable metadata and import origins, and refuses while NAS main != origin/main. Returning to canonical development sources is a later explicit `restore-editable` operation |
 
 ## ===
 ## simulink_candidate — exact MEX + SLX publication gate
@@ -138,12 +138,13 @@ python tools/release_quad.py done `
 The candidate state is keyed by the ZIP SHA-256. Rebuilding or modifying the
 archive invalidates the four-machine evidence. `done` also requires the
 manifest commit to equal repository `HEAD`, so validation from another commit
-cannot authorize publication. A successful `done` finally restores LAB and
-100号機 to their canonical editable worktrees. If execution is interrupted
-before that restoration finishes, run `python tools/release_quad.py
-restore-editable` before resuming MCP development. Upload the ZIP, external
-`manifest.json`, and `SHA256SUMS.txt` to the matching Radia GitHub Release only
-after `done` exits 0.
+cannot authorize publication. A successful `done` leaves LAB and 100号機 on
+the exact editable source it verified; it never swaps a release worktree for a
+possibly older canonical WIP tree as a side effect. After the canonical tree
+has caught up with published `main`, run `python tools/release_quad.py
+restore-editable` explicitly before resuming development there. Upload the ZIP,
+external `manifest.json`, and `SHA256SUMS.txt` to the matching Radia GitHub
+Release only after `done` exits 0.
 
 The standalone IH preview remains supported by the same packager without
 `--full-library`; it does not replace the production full-library gate.

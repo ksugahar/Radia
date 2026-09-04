@@ -202,9 +202,15 @@ def test_remote_restore_forces_canonical_uninstall_then_editable_install(monkeyp
     assert "mcp-server-grant-writing --selftest" in script
 
 
-def test_done_restores_canonical_editables_only_after_all_gates(monkeypatch):
+def test_done_keeps_exact_verified_editables_after_all_gates(monkeypatch):
     calls = []
     monkeypatch.setattr(release_quad, "cmd_preflight", lambda _args: calls.append("preflight") or 0)
+    monkeypatch.setattr(release_quad, "_release_head", lambda: "a" * 40)
+    monkeypatch.setattr(
+        release_quad,
+        "_verify_local_release_source",
+        lambda _repo, _sha: calls.append("source") or 0,
+    )
     monkeypatch.setattr(release_quad, "_verify_lab_editable", lambda *_args: calls.append("lab") or 0)
     monkeypatch.setattr(release_quad, "_verify_100_editable", lambda *_args: calls.append("100") or 0)
     monkeypatch.setattr(release_quad, "cmd_phase9", lambda _args: calls.append("phase9") or 0)
@@ -214,11 +220,36 @@ def test_done_restores_canonical_editables_only_after_all_gates(monkeypatch):
         lambda: calls.append("guard") or 0,
     )
     monkeypatch.setattr(release_quad, "_check_main_synced", lambda **_kwargs: calls.append("main") or 0)
-    monkeypatch.setattr(release_quad, "cmd_restore_editable", lambda _args: calls.append("restore") or 0)
+
+    def unexpected_restore(_args):
+        raise AssertionError("done must not mutate a verified editable tier")
+
+    monkeypatch.setattr(release_quad, "cmd_restore_editable", unexpected_restore)
 
     args = type("Args", (), {"simulink_package": None})()
     assert release_quad.cmd_done(args) == 0
-    assert calls == ["preflight", "lab", "100", "phase9", "guard", "main", "restore"]
+    assert calls == ["preflight", "source", "lab", "100", "phase9", "guard", "main"]
+
+
+def test_done_stops_before_machine_checks_when_active_source_is_stale(monkeypatch):
+    calls = []
+    monkeypatch.setattr(release_quad, "cmd_preflight", lambda _args: calls.append("preflight") or 0)
+    monkeypatch.setattr(release_quad, "_release_head", lambda: "a" * 40)
+    monkeypatch.setattr(
+        release_quad,
+        "_verify_local_release_source",
+        lambda _repo, _sha: calls.append("source") or 4,
+    )
+
+    def unexpected_machine_check(*_args, **_kwargs):
+        raise AssertionError("machine checks must not run from a stale source")
+
+    monkeypatch.setattr(release_quad, "_verify_lab_editable", unexpected_machine_check)
+    monkeypatch.setattr(release_quad, "_verify_100_editable", unexpected_machine_check)
+
+    args = type("Args", (), {"simulink_package": None})()
+    assert release_quad.cmd_done(args) == 4
+    assert calls == ["preflight", "source"]
 
 
 def test_ci_check_runs_use_latest_attempt_for_each_name(monkeypatch):

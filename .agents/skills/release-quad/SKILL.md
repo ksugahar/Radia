@@ -60,11 +60,12 @@ python tools/release_quad.py all
 The release worktree must contain the native build outputs needed by editable
 installs. QUAD verifies its exact Git SHA and tracked-clean state on LAB and
 100号機 before killing processes or installing anything. Repeat the same two
-environment variables for `done`. After all gates pass, `done` automatically
-stops active MCP transports, reinstalls the three-package development tier from
-the canonical `01_GitHub` worktrees, runs the grant-writing self-test, and
-verifies both editable metadata and actual import origins. If a release is
-interrupted before `done` completes, run `restore-editable` explicitly.
+environment variables for `done`. The final `done` gate is non-mutating: it
+requires the active LAB source to remain at the exact tracked-clean release SHA,
+verifies editable metadata and actual import origins on LAB/100号機, and leaves
+those verified pointers unchanged. After the canonical `01_GitHub` tree catches
+up with published `main`, run `restore-editable` explicitly to return the
+development tier to that tree.
 
 ## Rules
 
