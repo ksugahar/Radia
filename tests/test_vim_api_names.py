@@ -70,3 +70,13 @@ def test_public_soft_iron_order_uses_bdm_terminology():
     assert "BDM2" in doc
     assert "RT1" not in doc
     assert "RT2" not in doc
+
+
+def test_public_chargegram_leaf_defaults_are_high_order_safe():
+    import inspect
+
+    assert inspect.signature(vim.Solve).parameters["leaf"].default == 64
+    assert inspect.signature(vim.HDivSolver).parameters["leaf"].default == 64
+    assert inspect.signature(vim.SolveHysteresis).parameters["leaf"].default == 64
+    assert inspect.signature(vim.ChargeGram).parameters["leafsize"].default == 64
+    assert inspect.signature(vim.DemagOperator).parameters["leafsize"].default == 64

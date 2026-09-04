@@ -143,6 +143,29 @@ def test_chargegram_build_honors_requested_max_rank():
     assert stats["max_rank"] == 1
 
 
+def test_symmetric_chargegram_keeps_coincident_diagonal_leaves_dense():
+    """ACA must not replace a self-energy block merely because its width is zero."""
+    anchors = np.array(
+        [[0.0, 0.0, 0.0], [2.0, 0.0, 0.0], [0.0, 2.0, 0.0], [0.0, 0.0, 2.0]],
+        dtype=np.float64,
+    )
+    points = np.repeat(anchors, 18, axis=0)
+    weights = np.ones(len(points), dtype=np.float64)
+    gram = _rb._ChargeGramHMatrix.from_sampled_laplace(
+        points.ravel(), weights, 1.0e-3, 1.0e-12, 4, 2.0, True
+    )
+    x = np.random.default_rng(42).standard_normal(len(points))
+
+    report = dict(gram.symmetric_leaf_quadratics(x, 0))
+    assert report["diagonal_low_rank_count"] == 0
+    assert report["hmatrix_quadratic"] == pytest.approx(
+        float(x @ np.asarray(gram.matvec_sym(x))), rel=2e-12, abs=2e-12)
+    raw_quadratic = gram.raw_symmetric_quadratic_form(x)
+    assert raw_quadratic > 0.0
+    assert report["hmatrix_quadratic"] == pytest.approx(
+        raw_quadratic, rel=2e-12, abs=2e-12)
+
+
 def test_nonlinear_timing_collector_keeps_latest_solver_outcome():
     _solve_module._clear_cpp_solve_timings()
     _solve_module._capture_cpp_solve_timings({

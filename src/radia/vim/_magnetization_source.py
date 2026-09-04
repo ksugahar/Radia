@@ -11,6 +11,23 @@ from ._field_batch import _create_field_evaluator
 from ._vim import _curve_mesh, build_charge_gram
 
 
+def _field_coefficient_algorithm(evaluator_stats, requested):
+    """Choose the native field path used while NGSolve assembles a solve.
+
+    NGSolve evaluates a coefficient at short SIMD batches.  The evaluator's
+    generic ``auto`` threshold is therefore not reached for a large prescribed
+    source even when the surrounding form has millions of quadrature calls.
+    Use the C++ tree explicitly once the charge cloud is large; scalar callers
+    retain the exact direct path through :meth:`MagnetizationSource.Field`.
+    """
+    if requested is not None:
+        requested = str(requested)
+        if requested not in {"direct", "tree"}:
+            raise ValueError("field_cf_algorithm must be 'direct' or 'tree'")
+        return requested
+    return "tree" if int(evaluator_stats.get("source_count", 0)) >= 512 else "direct"
+
+
 class MagnetizationSource:
     """Fixed 3D magnetization source for HDiv-VIM coupling.
 
@@ -28,7 +45,8 @@ class MagnetizationSource:
     permanent_magnet_level = 1
 
     def __init__(self, mesh, magnetization, *, order=1, curve_order=None,
-                 image=None, curve_gauss=8):
+                 image=None, curve_gauss=8, field_cf_algorithm=None,
+                 field_tree_options=None):
         started = time.perf_counter()
         if mesh.dim != 3:
             raise ValueError("vim.MagnetizationSource: the prescribed-source API is 3D; "
@@ -83,17 +101,23 @@ class MagnetizationSource:
             image_masks=image_masks, image_signs=image_signs,
             _materialize_mass=False, _build_hmatrix=False)
         coefficients = np.ascontiguousarray(gf_m.vec.FV().NumPy(), dtype=np.float64).copy()
-        evaluator, evaluator_stats = _create_field_evaluator(gram, coefficients, order)
+        evaluator, evaluator_stats = _create_field_evaluator(
+            gram, coefficients, order, tree_options=field_tree_options
+        )
+        coefficient_algorithm = _field_coefficient_algorithm(
+            evaluator_stats, field_cf_algorithm
+        )
 
         self.mesh = mesh
         self.space = space
         self.magnetization = gf_m
-        self.field_cf = _rp._HDivFieldCoefficient(evaluator, "direct")
+        self.field_cf = _rp._HDivFieldCoefficient(evaluator, coefficient_algorithm)
         self.image = image
         self.order = order
         self.curve_order = curve_order
         self._field_evaluator = evaluator
         self._coefficients = coefficients
+        self.field_cf_algorithm = coefficient_algorithm
         self.stats = dict(
             permanent_magnet_model=self.permanent_magnet_model,
             permanent_magnet_level=self.permanent_magnet_level,
@@ -106,6 +130,14 @@ class MagnetizationSource:
             geometry_wall_s=time.perf_counter()-projection_done,
             total_wall_s=time.perf_counter()-started,
             hmatrix_built=False,
+            field_cf_algorithm=coefficient_algorithm,
+            field_tree_options={
+                name: evaluator_stats[name]
+                for name in (
+                    "leaf_size", "theta", "tree_min_sources", "auto_min_work",
+                    "tree_relative_tolerance", "probe_count",
+                )
+            },
             field_evaluator=evaluator_stats,
         )
 

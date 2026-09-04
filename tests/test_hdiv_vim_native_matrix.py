@@ -38,6 +38,16 @@ def test_demag_operator_is_native_ngsolve_matrix_and_matches_configured_apply():
             0.2, np.ascontiguousarray(linear_rhs), tol=1e-11,
             maxit=5000, symmetric=True)
 
+        weighted = ng.BilinearForm(fes)
+        weighted += 0.2 * trial * test * ng.dx
+        weighted.Assemble()
+        operator._G.configure_mass_matrix_ngsolve(weighted.mat)
+        weighted_rhs = operator._G.apply_configured_linear_material_operator(
+            1.0, coefficients)
+        weighted_recovered = operator._G.solve_configured_linear_material_mass_riesz(
+            1.0, np.ascontiguousarray(weighted_rhs), tol=1e-11,
+            maxit=5000, symmetric=True)
+
         added = magnetization.vec.CreateVector()
         added[:] = 1.25
         operator.mat.MultAdd(0.4, magnetization.vec, added)
@@ -58,7 +68,10 @@ def test_demag_operator_is_native_ngsolve_matrix_and_matches_configured_apply():
                        rtol=1e-12, atol=1e-15)
     assert np.allclose(mass_native, mass_reference.FV().NumPy(), rtol=2e-15, atol=1e-15)
     assert recovered["timings"]["mass_riesz_local_blocks"] == 0
+    assert recovered["timings"]["mass_riesz_geometry_preconditioner"] == 1.0
     assert np.allclose(recovered["m"], coefficients, rtol=2e-9, atol=2e-11)
+    assert weighted_recovered["timings"]["mass_riesz_geometry_preconditioner"] == 1.0
+    assert np.allclose(weighted_recovered["m"], coefficients, rtol=2e-9, atol=2e-11)
     assert np.allclose(added.FV().NumPy(), 1.25 + 0.4 * reference,
                        rtol=1e-12, atol=1e-15)
     assert np.allclose(transposed.FV().NumPy(), -0.2 - 0.3 * reference,

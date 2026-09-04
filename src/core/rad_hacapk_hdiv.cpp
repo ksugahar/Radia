@@ -6710,6 +6710,7 @@ void RadHACApKChargeGram::OnBuildStarting(const RadHACApKParams& params)
     m_derivativeMaxRank=params.max_rank;
     m_fillNormalized = false;
     m_sigmaActive = false;
+    m_exactDenseNormalizedGram.clear();
 }
 
 void RadHACApKChargeGram::OnBuildFinished(bool succeeded) noexcept
@@ -6785,6 +6786,25 @@ void RadHACApKChargeGram::ComputeChargeSigma()
 void RadHACApKChargeGram::MatVecSym(const std::vector<double>& x,
                                     std::vector<double>& y)
 {
+    if (!m_exactDenseNormalizedGram.empty()) {
+        if ((int)x.size() != m_n || !m_sigmaActive)
+            throw std::runtime_error("MatVecSym: invalid exact dense Gram state");
+        std::vector<double> xs((size_t)m_n), yhat((size_t)m_n, 0.0);
+        for (int p = 0; p < m_n; ++p)
+            xs[(size_t)p] = x[(size_t)p] * m_chargeSigma[(size_t)p];
+        ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+        ngcore::ParallelFor(ngcore::IntRange(m_n), [&](size_t i_size) {
+            const double* const row = m_exactDenseNormalizedGram.data() + i_size*(size_t)m_n;
+            long double value = 0.0L;
+            for (int j = 0; j < m_n; ++j)
+                value += (long double)row[j] * xs[(size_t)j];
+            yhat[i_size] = (double)value;
+        });
+        y.resize((size_t)m_n);
+        for (int p = 0; p < m_n; ++p)
+            y[(size_t)p] = yhat[(size_t)p] * m_chargeSigma[(size_t)p];
+        return;
+    }
     if (!m_sigmaActive) { RadHACApKBase::MatVecSym(x, y); return; }
     // stored leaves hold Ghat = S^-1 G S^-1; the physical apply is
     // G x = S (Ghat (S x)).
@@ -6799,9 +6819,197 @@ void RadHACApKChargeGram::MatVecSym(const std::vector<double>& x,
 void RadHACApKChargeGram::MatVecSymMany(const std::vector<double>& x,
                                         int nrhs, std::vector<double>& y)
 {
+    if (!m_exactDenseNormalizedGram.empty()) {
+        if (nrhs < 1 || x.size() != (size_t)nrhs*m_n)
+            throw std::invalid_argument("MatVecSymMany: exact dense batch shape mismatch");
+        y.assign(x.size(), 0.0);
+        std::vector<double> one_x((size_t)m_n), one_y;
+        for (int rhs = 0; rhs < nrhs; ++rhs) {
+            std::copy_n(x.data() + (size_t)rhs*m_n, m_n, one_x.data());
+            MatVecSym(one_x, one_y);
+            std::copy_n(one_y.data(), m_n, y.data() + (size_t)rhs*m_n);
+        }
+        return;
+    }
     if (!m_sigmaActive) { RadHACApKBase::MatVecSymMany(x, nrhs, y); return; }
     MatVecSymManyPrepared(
         x, nrhs, nullptr, m_chargeSigma.data(), y);
+}
+
+double RadHACApKChargeGram::RawSymmetricQuadraticForm(
+    const std::vector<double>& x) const
+{
+    if ((int)x.size() != m_n)
+        throw std::invalid_argument(
+            "RawSymmetricQuadraticForm: charge-vector size mismatch");
+
+    // GetHexSymBlock's memo tables are thread-local, just like the normal
+    // HACApK leaf fill.  Parallelize independent upper-triangle rows, then
+    // reduce in a fixed order so this expensive O(n^2) oracle stays both fast
+    // and reproducible.
+    std::vector<long double> rows((size_t)m_n, 0.0L);
+    ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+    ngcore::ParallelFor(ngcore::IntRange(m_n), [&](size_t i_size) {
+        const int i = (int)i_size;
+        const long double xi = x[(size_t)i];
+        long double row = xi * xi * (long double)GetInteractionMatrixElementRaw(i, i);
+        for (int j = i + 1; j < m_n; ++j) {
+            row += 2.0L * xi * (long double)x[(size_t)j]
+                 * (long double)GetInteractionMatrixElementRaw(i, j);
+        }
+        rows[(size_t)i] = row;
+    });
+    long double value = 0.0L;
+    for (const long double row : rows) value += row;
+    return (double)value;
+}
+
+RadHACApKSymmetricLeafQuadraticReport
+RadHACApKChargeGram::DiagnoseSymmetricLeafQuadratics(
+    const std::vector<double>& x, int raw_check_count) const
+{
+    if ((int)x.size() != m_n)
+        throw std::invalid_argument(
+            "DiagnoseSymmetricLeafQuadratics: charge-vector size mismatch");
+    if (!m_exactDenseNormalizedGram.empty())
+        throw std::runtime_error(
+            "DiagnoseSymmetricLeafQuadratics: exact-dense Gram has no H-matrix leaves");
+
+    const auto* const leaves = static_cast<const st_cHACApK_leafmtxp_t*>(GetLeafmtxp());
+    const auto* const control = static_cast<const st_cHACApK_lcontrol_t*>(GetLcontrol());
+    if (!leaves || !control || !leaves->st_lf || !control->lod || leaves->nd != m_n)
+        throw std::runtime_error(
+            "DiagnoseSymmetricLeafQuadratics: H-matrix leaf/control state is unavailable");
+
+    std::vector<double> x_permuted((size_t)m_n, 0.0);
+    for (int position = 0; position < m_n; ++position) {
+        const int original = control->lod[position + 1] - 1;
+        if (original < 0 || original >= m_n)
+            throw std::runtime_error(
+                "DiagnoseSymmetricLeafQuadratics: invalid HACApK permutation");
+        const double sigma = m_sigmaActive ? m_chargeSigma[(size_t)original] : 1.0;
+        x_permuted[(size_t)position] = x[(size_t)original] * sigma;
+    }
+
+    RadHACApKSymmetricLeafQuadraticReport report;
+    std::vector<RadHACApKSymmetricLeafQuadratic> candidates;
+    candidates.reserve((size_t)leaves->nlf);
+    for (int leaf_index = 1; leaf_index <= leaves->nlf; ++leaf_index) {
+        const auto* const leaf = leaves->st_lf[leaf_index];
+        if (!leaf || leaf->nstrtl > leaf->nstrtt)
+            continue;
+        if (leaf->nstrtl < 1 || leaf->nstrtt < 1 || leaf->ndl <= 0 || leaf->ndt <= 0 ||
+            leaf->nstrtl - 1 + leaf->ndl > m_n || leaf->nstrtt - 1 + leaf->ndt > m_n)
+            throw std::runtime_error(
+                "DiagnoseSymmetricLeafQuadratics: invalid H-matrix leaf bounds");
+
+        const int row = leaf->nstrtl - 1;
+        const int column = leaf->nstrtt - 1;
+        long double block_quadratic = 0.0L;
+        if (leaf->ltmtx == 1) {
+            if (!leaf->a1 || !leaf->a2 || leaf->kt <= 0)
+                throw std::runtime_error(
+                    "DiagnoseSymmetricLeafQuadratics: incomplete low-rank leaf");
+            for (int rank = 0; rank < leaf->kt; ++rank) {
+                long double left_dot = 0.0L;
+                long double right_dot = 0.0L;
+                for (int i = 0; i < leaf->ndl; ++i)
+                    left_dot += (long double)x_permuted[(size_t)(row + i)]
+                        * leaf->a2[(size_t)i + (size_t)leaf->ndl*rank];
+                for (int j = 0; j < leaf->ndt; ++j)
+                    right_dot += (long double)x_permuted[(size_t)(column + j)]
+                        * leaf->a1[(size_t)j + (size_t)leaf->ndt*rank];
+                block_quadratic += left_dot * right_dot;
+            }
+        } else if (leaf->ltmtx == 2) {
+            if (!leaf->a1)
+                throw std::runtime_error(
+                    "DiagnoseSymmetricLeafQuadratics: incomplete dense leaf");
+            for (int i = 0; i < leaf->ndl; ++i)
+                for (int j = 0; j < leaf->ndt; ++j)
+                    block_quadratic += (long double)x_permuted[(size_t)(row + i)]
+                        * leaf->a1[(size_t)j + (size_t)leaf->ndt*i]
+                        * x_permuted[(size_t)(column + j)];
+        } else {
+            throw std::runtime_error(
+                "DiagnoseSymmetricLeafQuadratics: unknown H-matrix leaf kind");
+        }
+
+        const bool upper = leaf->nstrtl < leaf->nstrtt;
+        const double quadratic = (double)(upper ? 2.0L*block_quadratic : block_quadratic);
+        report.hmatrix_quadratic += quadratic;
+        ++report.upper_leaf_count;
+        if (leaf->ltmtx == 1) ++report.upper_low_rank_count;
+        else ++report.upper_dense_count;
+        if (leaf->ltmtx == 1 && !upper) ++report.diagonal_low_rank_count;
+        candidates.push_back({
+            leaf_index, leaf->ltmtx == 1, row, leaf->ndl, column, leaf->ndt,
+            leaf->ltmtx == 1 ? leaf->kt : 0, quadratic,
+            std::numeric_limits<double>::quiet_NaN()});
+    }
+
+    std::sort(candidates.begin(), candidates.end(),
+              [](const auto& left, const auto& right) {
+                  return std::fabs(left.hmatrix_quadratic) >
+                      std::fabs(right.hmatrix_quadratic);
+              });
+    const int checked = std::min(std::max(raw_check_count, 0),
+                                 static_cast<int>(candidates.size()));
+    for (int entry = 0; entry < checked; ++entry) {
+        auto& candidate = candidates[(size_t)entry];
+        const bool upper = candidate.row_start < candidate.column_start;
+        long double raw = 0.0L;
+        for (int i = 0; i < candidate.row_size; ++i) {
+            const int original_i = control->lod[candidate.row_start + i + 1] - 1;
+            const long double x_i = x[(size_t)original_i];
+            for (int j = 0; j < candidate.column_size; ++j) {
+                const int original_j = control->lod[candidate.column_start + j + 1] - 1;
+                raw += x_i * (long double)GetInteractionMatrixElementRaw(original_i, original_j)
+                    * (long double)x[(size_t)original_j];
+            }
+        }
+        candidate.raw_quadratic = (double)(upper ? 2.0L*raw : raw);
+    }
+    candidates.resize((size_t)checked);
+    report.dominant_leaves = std::move(candidates);
+    return report;
+}
+
+double RadHACApKChargeGram::BuildExactDenseNormalizedGram(
+    std::size_t maximum_bytes)
+{
+    if (!m_sigmaActive || (int)m_chargeSigmaInv.size() != m_n) {
+        // An explicit exact-dense request deliberately bypasses HACApK.  Set
+        // up the same immutable charge geometry and diagonal normalization as
+        // the H-matrix pre-fill stage, without allocating cluster/leaf data.
+        ExtractCoordinates();
+        if (m_curved) PrecomputeCurvedTouchBlocks();
+        ComputeChargeSigma();
+        m_fillNormalized = false;
+        m_sigmaActive = true;
+    }
+    const std::size_t n = (std::size_t)m_n;
+    if (n != 0 && n > std::numeric_limits<std::size_t>::max() / n)
+        throw std::overflow_error("BuildExactDenseNormalizedGram: matrix size overflow");
+    const std::size_t entries = n*n;
+    if (entries > maximum_bytes / sizeof(double))
+        throw std::runtime_error(
+            "BuildExactDenseNormalizedGram: requested exact Gram exceeds the configured memory limit");
+    const auto started = std::chrono::steady_clock::now();
+    std::vector<double> dense(entries, 0.0);
+    ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+    ngcore::ParallelFor(ngcore::IntRange(m_n), [&](size_t i_size) {
+        const int i = (int)i_size;
+        for (int j = i; j < m_n; ++j) {
+            const double value = GetInteractionMatrixElementRaw(i, j)
+                * m_chargeSigmaInv[i_size] * m_chargeSigmaInv[(size_t)j];
+            dense[i_size*n+(size_t)j] = value;
+            dense[(size_t)j*n+i_size] = value;
+        }
+    });
+    m_exactDenseNormalizedGram.swap(dense);
+    return std::chrono::duration<double>(
+        std::chrono::steady_clock::now() - started).count();
 }
 
 void RadHACApKChargeGram::MatVecSymManyConfigured(
@@ -6810,6 +7018,45 @@ void RadHACApKChargeGram::MatVecSymManyConfigured(
 {
     if (component < 0 || component >= m_operatorChargeComponents)
         throw std::out_of_range("MatVecSymManyConfigured: component out of range");
+    if (!m_exactDenseNormalizedGram.empty()) {
+        if (nrhs < 1 || x.size() != (size_t)nrhs*m_n)
+            throw std::invalid_argument("MatVecSymManyConfigured: exact dense batch shape mismatch");
+        const bool masked = respect_constraints &&
+            m_operatorConstrained.size() == (size_t)m_operatorNFace &&
+            m_operatorChargeConfigured;
+        if (!masked) {
+            MatVecSymMany(x, nrhs, y);
+            return;
+        }
+        const size_t charge_offset = (size_t)component*m_ndof;
+        std::vector<unsigned char> active((size_t)m_n, 0);
+        for (int charge = 0; charge < m_n; ++charge) {
+            const size_t row = charge_offset + (size_t)charge;
+            for (int k = m_operatorBIndptr[row];
+                 k < m_operatorBIndptr[row + 1]; ++k) {
+                const int face = m_operatorBIndices[(size_t)k];
+                if (!m_operatorConstrained[(size_t)face] &&
+                    m_operatorBData[(size_t)k] != 0.0) {
+                    active[(size_t)charge] = 1;
+                    break;
+                }
+            }
+        }
+        y.assign(x.size(), 0.0);
+        std::vector<double> one_x((size_t)m_n), one_y;
+        for (int rhs = 0; rhs < nrhs; ++rhs) {
+            const double* source = x.data() + (size_t)rhs*m_n;
+            for (int charge = 0; charge < m_n; ++charge)
+                one_x[(size_t)charge] = active[(size_t)charge]
+                    ? source[(size_t)charge] : 0.0;
+            MatVecSym(one_x, one_y);
+            double* destination = y.data() + (size_t)rhs*m_n;
+            for (int charge = 0; charge < m_n; ++charge)
+                destination[(size_t)charge] = active[(size_t)charge]
+                    ? one_y[(size_t)charge] : 0.0;
+        }
+        return;
+    }
     const size_t stride = static_cast<size_t>(m_ndof)+1;
     const size_t begin = static_cast<size_t>(component)*stride;
     const bool masked = respect_constraints &&
@@ -7775,29 +8022,40 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     // worker pools, while the sparse factor/solve can still scale.
     radia::MKLThreadGuard solve_mkl_guard(1);
 #endif
-    // MASS RIESZ preconditioner (the default 'auto' path): z = M_mass^{-1} r via the persistent exact
-    // local-block/PARDISO factor of the HDiv mass.  ~3-5x fewer iters than the diagonal
-    // Jacobi (the diagonal under-resolves the HDiv mass off-diagonal coupling) and nearly mu_r-flat.  When
-    // mass_riesz is false the legacy diagonal Jacobi z = r/prec is used (linear_solver="cpp-cg").
+    // MASS RIESZ preconditioner (the default 'auto' path): z = M_geometry^{-1} r via the persistent exact
+    // local-block/PARDISO factor of the immutable HDiv geometry mass.  A material-weighted Galerkin system
+    // still applies its caller-supplied W + N exactly; only its Riesz map stays fixed.  This preserves the
+    // SPD preconditioning contract through nonlinear/tangent updates and avoids refactoring W every step.
+    // When mass_riesz is false the legacy diagonal Jacobi z = r/prec is used (linear_solver="cpp-cg").
+    const bool configured_mass = m_operatorMassConfigured &&
+        &mI == &m_operatorMassI && &mJ == &m_operatorMassJ && &mV == &m_operatorMassV &&
+        m_operatorMassIndptr.size() == (size_t)n_face + 1;
+    const bool use_geometry_mass_riesz = configured_mass &&
+        m_operatorGeometryMassConfigured && m_operatorNFace == n_face &&
+        m_operatorGeometryMassI.size() == m_operatorGeometryMassJ.size() &&
+        m_operatorGeometryMassI.size() == m_operatorGeometryMassV.size();
 #ifdef HAVE_LAPACK
     // PERSISTENT factor (2026-07-10): get-or-build via EnsureMassRieszFactor (exact-COO key; hit =
     // reuse, factor_s += 0; miss = release-then-refactor).  mrKeep pins the entry for the CG loop.
     std::shared_ptr<RadMassRieszCache> mrKeep;
     MassRieszFactor* mr = nullptr;
     if (mass_riesz) {
-        const std::vector<int>* factorI = &mI;
-        const std::vector<int>* factorJ = &mJ;
-        const std::vector<double>* factorV = &mV;
+        const std::vector<int>* factorI = use_geometry_mass_riesz
+            ? &m_operatorGeometryMassI : &mI;
+        const std::vector<int>* factorJ = use_geometry_mass_riesz
+            ? &m_operatorGeometryMassJ : &mJ;
+        const std::vector<double>* factorV = use_geometry_mass_riesz
+            ? &m_operatorGeometryMassV : &mV;
         std::vector<int> projectedI, projectedJ;
         std::vector<double> projectedV;
         if (constrained) {
-            projectedI.reserve(mI.size() + (size_t)n_face);
-            projectedJ.reserve(mJ.size() + (size_t)n_face);
-            projectedV.reserve(mV.size() + (size_t)n_face);
-            for (size_t k = 0; k < mV.size(); ++k) {
-                const int i = mI[k], j = mJ[k];
+            projectedI.reserve(factorI->size() + (size_t)n_face);
+            projectedJ.reserve(factorJ->size() + (size_t)n_face);
+            projectedV.reserve(factorV->size() + (size_t)n_face);
+            for (size_t k = 0; k < factorV->size(); ++k) {
+                const int i = (*factorI)[k], j = (*factorJ)[k];
                 if (m_operatorConstrained[(size_t)i] || m_operatorConstrained[(size_t)j]) continue;
-                projectedI.push_back(i); projectedJ.push_back(j); projectedV.push_back(mV[k]);
+                projectedI.push_back(i); projectedJ.push_back(j); projectedV.push_back((*factorV)[k]);
             }
             for (int i = 0; i < n_face; ++i) if (m_operatorConstrained[(size_t)i]) {
                 projectedI.push_back(i); projectedJ.push_back(i); projectedV.push_back(1.0);
@@ -7805,19 +8063,19 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
             factorI = &projectedI; factorJ = &projectedJ; factorV = &projectedV;
         }
         mrKeep = EnsureMassRieszFactor(*factorI, *factorJ, *factorV, n_face, "SolveLinearMaterial",
-                                       &m_lastSolveTiming.factor_s);
+                                       &m_lastSolveTiming.factor_s,
+                                       /*geometry_cache=*/use_geometry_mass_riesz && !constrained);
         mr = &mrKeep->factor;
         m_lastSolveTiming.mass_riesz_local_blocks = mr->LocalBlockCount();
         m_lastSolveTiming.mass_riesz_max_block = mr->LocalMaxBlock();
+        m_lastSolveTiming.mass_riesz_geometry_preconditioner =
+            use_geometry_mass_riesz ? 1.0 : 0.0;
     }
 #else
     if (mass_riesz)
         throw std::runtime_error("SolveLinearMaterial: mass Riesz preconditioner requires MKL PARDISO "
                                  "(HAVE_LAPACK)");
 #endif
-    const bool configured_mass = m_operatorMassConfigured &&
-        &mI == &m_operatorMassI && &mJ == &m_operatorMassJ && &mV == &m_operatorMassV &&
-        m_operatorMassIndptr.size() == (size_t)n_face + 1;
     DeterministicCSR local_mass;
     if (!configured_mass)
         local_mass = BuildDeterministicRowCSR(
@@ -9647,10 +9905,17 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
     std::shared_ptr<RadMassRieszCache> block_mr_keep;
     MassRieszFactor* block_mr = nullptr;
     double block_factor_s = 0.0;
+    const bool block_use_geometry_mass_riesz =
+        m_operatorGeometryMassConfigured && m_operatorNFace == n_face &&
+        m_operatorGeometryMassI.size() == m_operatorGeometryMassJ.size() &&
+        m_operatorGeometryMassI.size() == m_operatorGeometryMassV.size();
     if (mass_riesz) {
         block_mr_keep = EnsureMassRieszFactor(
-            m_operatorMassI, m_operatorMassJ, m_operatorMassV, n_face,
-            "SolveConfiguredLinearMaterialAutoPrecMany", &block_factor_s);
+            block_use_geometry_mass_riesz ? m_operatorGeometryMassI : m_operatorMassI,
+            block_use_geometry_mass_riesz ? m_operatorGeometryMassJ : m_operatorMassJ,
+            block_use_geometry_mass_riesz ? m_operatorGeometryMassV : m_operatorMassV,
+            n_face, "SolveConfiguredLinearMaterialAutoPrecMany", &block_factor_s,
+            /*geometry_cache=*/block_use_geometry_mass_riesz);
         block_mr = &block_mr_keep->factor;
     }
 #else
@@ -10084,6 +10349,8 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
         m_lastSolveTiming.mass_riesz_local_blocks =
             block_mr->LocalBlockCount();
         m_lastSolveTiming.mass_riesz_max_block = block_mr->LocalMaxBlock();
+        m_lastSolveTiming.mass_riesz_geometry_preconditioner =
+            block_use_geometry_mass_riesz ? 1.0 : 0.0;
 #endif
         const auto solve_started = Clock::now();
         auto timed_apply = [&](const std::vector<double>& input,
@@ -10410,6 +10677,9 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
                 target.mass_riesz_max_block = std::max(
                     target.mass_riesz_max_block,
                     source.mass_riesz_max_block);
+                target.mass_riesz_geometry_preconditioner = std::max(
+                    target.mass_riesz_geometry_preconditioner,
+                    source.mass_riesz_geometry_preconditioner);
             };
             for (int row : active) {
                 const auto offset = static_cast<size_t>(row)*n_face;
@@ -12276,6 +12546,7 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::LastSolveTiming
         {"solve_pcg_update_s", t.pcg_update_s},
         {"mass_riesz_local_blocks", (double)t.mass_riesz_local_blocks},
         {"mass_riesz_max_block", (double)t.mass_riesz_max_block},
+        {"mass_riesz_geometry_preconditioner", t.mass_riesz_geometry_preconditioner},
         {"solve_apply_count", (double)t.apply_count},
         {"solve_prec_count", (double)t.prec_count},
         {"solve_dot_count", (double)t.dot_count},

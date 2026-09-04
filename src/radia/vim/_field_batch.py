@@ -81,14 +81,19 @@ def _normalized_tree_options(tree_options):
     return merged
 
 
-def _create_field_evaluator(gram, coefficients, order):
+def _create_field_evaluator(gram, coefficients, order, *, tree_options=None):
     """Materialize one immutable C++ source evaluator from configured geometry."""
     started = time.perf_counter()
+    options = (
+        dict(_FIELD_TREE_DEFAULTS)
+        if tree_options is None
+        else _normalized_tree_options(tree_options)
+    )
     evaluator = gram.create_field_evaluator(
         np.ascontiguousarray(coefficients, dtype=np.float64),
-        _FIELD_TREE_LEAF, _FIELD_TREE_THETA,
-        _FIELD_TREE_MIN_SOURCES, _FIELD_TREE_AUTO_MIN_WORK,
-        _FIELD_TREE_RELATIVE_TOLERANCE, _FIELD_TREE_PROBE_COUNT)
+        int(options["leaf_size"]), float(options["theta"]),
+        int(options["tree_min_sources"]), int(options["auto_min_work"]),
+        float(options["tree_relative_tolerance"]), int(options["probe_count"]))
     stats = dict(evaluator.stats())
     stats["source_kind"] = f"{stats.pop('source_representation')}-bdm{int(order)}"
     stats["build_wall_s"] = time.perf_counter()-started

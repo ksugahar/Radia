@@ -453,7 +453,10 @@ def build(options: argparse.Namespace) -> dict[str, object]:
         "mesh_policy": {
             "hdiv_mmm": "exact iron-only Cubit/ACIS TET .vol; Coulomb open boundary",
             "reduced_a": "exact iron + locally refined physical air + Kelvin exterior",
-            "omega_reduced_omega": "same periodic Kelvin .vol as reduced-A",
+            "mixed_total_reduced_omega": (
+                "same periodic Kelvin .vol as reduced-A; H1 TOSCA "
+                "mixed total/reduced Omega"
+            ),
         },
         "kelvin_radius_m": float(options.kelvin_radius),
         "kelvin_physical_center_m": [0.0, 0.0, 0.0],

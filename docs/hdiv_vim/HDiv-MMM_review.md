@@ -8,14 +8,16 @@ exposed several failure modes.
 
 ## Review status
 
-- Revised: 2026-09-02 after the pre-release TOSCA-style mixed
-  total/reduced-Omega C-yoke comparison on Hibino.
+- Revised: 2026-09-04 after the released-binary TOSCA-style mixed
+  total/reduced-Omega C-yoke mesh campaign on mdx and Hibino, and the
+  symmetric ChargeGram diagonal-leaf repair for ESRF Example #3.
 - The `v4.95.71` four-level result cited below is evidence for the former
   global reduced-Omega formulation only.  It is retained as history, but it
   is **not** an accuracy certificate for the current mixed formulation.  The
-  current mixed route has a checked fixed-mesh, three-formulation acceptance;
-  a fresh released-binary multi-level mdx/hibino certificate remains required
-  before making an absolute numerical-envelope claim.
+  current mixed route now has a checked four-level, independent-host
+  certificate on `radia 4.95.77`. It is a numerical convergence envelope, not
+  an analytic-truth claim. Any later solver implementation hash requires its
+  own certificate rather than inheriting this one.
 - The `22fc5630e..ec57769de` HEAD increment consists of Eqnedit64 pull
   requests `#34` and `#35`. It changes no HDiv source, test, validation,
   MATLAB, or HDiv documentation path, so the earlier HDiv measurements remain
@@ -68,7 +70,7 @@ The implementation is production-capable for the declared BDM1/BDM2 primal
 solve and field lanes, but it does not justify an unconditional "complete for
 every HDiv case" claim. The BDM2 TET directional defect found by this review
 is corrected, and the mapped/non-affine HEX BDM2 material lane is now promoted
-by the cancellation-preserving composite quadrature described below. Three P1
+by the cancellation-preserving composite quadrature described below. Four P1
 findings remain:
 
 1. Three explicit full-versus-IMA field regressions fail the required
@@ -77,6 +79,12 @@ findings remain:
    `DemagOperator`, contradicting the BDM1/BDM2-only production policy.
 3. Fine TET C-yoke runs reportedly lose positive definiteness under refinement;
    the failing mesh and driver are not tracked, so the defect is not replayable.
+4. The symmetric ACA/H-matrix ChargeGram previously made diagonal,
+   zero-width clusters low rank on the ESRF #3 BDM2 response-iron mesh.
+   The symmetric diagonal-leaf repair removes that construction defect and a
+   focused regression locks it. The full nonlinear three-engine #3 run remains
+   the acceptance gate; a single positive quadratic direction is not a global
+   PSD certificate.
 Known, fail-loud limitations are not hidden failures: mapped HEX BDM2 shape
 derivatives, 3D pyramid/mixed meshes, and 2D history solves remain unsupported.
 Large IMA field maps remain direct because the tree route is
@@ -106,14 +114,25 @@ fails loudly and requires an explicit cut representative or HCurl reduced-A.
 The saddle system is symmetric indefinite and therefore uses PARDISO rather
 than an SPD-only CG path.
 
-On the shared exact Cubit C-yoke mesh, all three routes now pass a 1% gap-core
-relative-RMS B gate on Hibino: 0.41955% maximum in the linear order-3 run and
-0.16023% maximum in the nonlinear order-2 run.  The nonlinear HDiv,
-reduced-A, and mixed-Omega runs converge and take 11.15 s, 221.56 s, and
-135.76 s respectively.  The associated source-trace residuals are below the
-separate 5% cut/cohomology gate.  These values establish fixed-mesh
-cross-formulation agreement; they are deliberately not an analytic-truth or
-mesh-convergence claim.
+On the shared exact Cubit C-yoke mesh, all three routes pass a 1% gap-core
+relative-RMS B gate on Hibino.  The current v4 artifacts report a 0.45977%
+maximum in the linear order-3 run and 0.16023% in the nonlinear order-2 run.
+The nonlinear HDiv-MMM, HCurl reduced-A, and H1 TOSCA mixed total/reduced Omega
+runs converge and take 11.27 s, 216.93 s, and 134.71 s respectively.  The
+associated source-trace residuals are below the separate 5% cut/cohomology
+gate.  These values establish fixed-mesh cross-formulation agreement; they
+are deliberately not an analytic-truth or mesh-convergence claim.
+
+The released-binary campaign then ran four exact Cubit/ACIS levels
+(`434/542/846/1,688` iron elements and `24,134/36,208/54,886/89,454`
+Kelvin-domain elements). All three nonlinear routes converged at every level.
+At the finest level, the maximum pairwise parity-projected gap-core RMS
+difference was `0.27714%`; the maximum discretisation uncertainty was
+`0.17601%`, giving a conservative combined numerical envelope of `0.35399%`.
+The independently repeated finest solve on Hibino reproduced the mdx field
+within `5.25e-14` relative RMS. This closes the mixed-formulation numerical
+acceptance for the exact `radia 4.95.77` implementation contract; it remains
+an agreement certificate, not analytic absolute truth.
 
 ## 0. Cross-layer production review
 
@@ -125,7 +144,7 @@ mesh-convergence claim.
 | F2 | P1, partially resolved | The field-evaluator IMA contract is green for mapped HEX BDM2 prescribed sources; independent solve parity remains a separate numerical lane. | On the current mdx production body, prescribed full/reduced fields differ by `2.7506 eps`, below the `10 eps` limit. Independently converged mass-Riesz CG full/reduced solves differ by `3.2835e-13` in sampled field. Three legacy focused checks were rerun and remain narrowly red: single-cell HEX `2.02e-14`, multicell HEX `4.93e-14`, and curved TET BDM2 `2.3931e-15` against a `2.2204e-15` limit. Preserve the field limit and fix those paths rather than loosening their tolerances or relabeling Krylov/reduction error as evaluator error. |
 | F3 | P1 | RT0 is publicly advertised again despite the BDM1/BDM2-only decision. | `_capabilities.py` exposes 3D TET/HEX order 0 and `DemagOperator` documents an order-0 broken-interface path. `HDivSolver` and field evaluation accept only orders 1 and 2. Remove the public RT0 entries/path and retain any topology-only experiment outside the production API. |
 | F4 | Resolved on `v4.95.71` | The released operator completes the finer C-yoke TET lane without loss of SPD. | The 1,688-element iron mesh solves on mdx and hibino, all three nonlinear routes converge, and the final three mesh levels pass the contraction/order gate. The older untracked `p^T A p < 0` report is not used as current evidence. |
-| F5 | Fixed-mesh resolved; release evidence open | The C-type comparison is now a TOSCA-style mixed total/reduced-Omega route with its two required source-trace jumps, and its full three-route fixed-mesh acceptance passes. | `validation_test/c_type_three_engine/` owns the exact Cubit/ACIS mesh, shared CoilBuilder, PCHIP B(H) law, Kelvin contract, checkpoints, and JSON gates. The pre-release Hibino linear order-3 run has maximum pairwise gap-core RMS B difference 0.45977%; the nonlinear order-2 run has 0.16023%, and all nonlinear engines converge. Its iron/air and Kelvin trace residuals are respectively 1.26933%/1.75381% (linear) and 2.98511%/4.53077% (nonlinear), below the 5% cut gate. The old global-Omega four-level artifact is historical only. Before an absolute envelope or released-performance claim, run a fresh multi-level, independent mdx/hibino campaign using the formally released native binary. |
+| F5 | Resolved for the released `4.95.77` implementation contract | The C-type comparison is the TOSCA-style mixed total/reduced-Omega route with two required source-trace jumps, and its three-route nonlinear BDM2 mesh certificate passes. | `validation_test/c_type_three_engine/` owns the exact Cubit/ACIS mesh, shared CoilBuilder, PCHIP B(H) law, Kelvin contract, checkpoints, and portable JSON gates. Four levels on mdx plus the independent Hibino finest replay yield 0.27714% maximum finest pairwise gap-core RMS, a 0.35399% combined numerical envelope, and `5.25e-14` cross-host RMS. The old global-Omega four-level artifact is historical only. A later implementation hash must rerun this campaign before it can make the same claim. |
 | F6 | Resolved for primal solve/field; derivative open | Mapped/non-affine HEX BDM2 is a production material lane. | Complete-host tensor source rules preserve smooth-pair charge cancellation; reflection-invariant whole-host Duffy rules handle self and adjacent pairs. On mdx the 756-DoF q9/q12 operator has spectrum `[-8.53e-16, 0.999899]`, linear/nonlinear solves converge, and its material response differs from q10/q16 by `5.28e-4` in mass norm. q10/q16 differs from q11/q20 by `3.94e-4`. An independent Cubit 2025.12 Curve(2) four-HEX gate also passes linear/nonlinear solve and field checks. Shape derivatives fail loudly until the composite rule is differentiated. |
 | F7 | P2 | IMA disables tree acceleration for field maps. | `HDivFieldEvaluator::AlgorithmFor` returns `Direct` whenever images exist. This protects full/reduced roundoff parity, but large IMA observation maps cannot use the otherwise guarded treecode. Any image-aware acceleration needs a common full/reduced grouping and the F2 contract first. |
 | F8 | P2 | Exact vector-potential evaluation is narrower than H-field evaluation. | Exact `A` uses straight TET BDM1 equivalent currents. BDM2, curved, HEX, and WEDGE use NGSolve-mapped quadrature clouds assembled in Python. This is valid as an explicit converged quadrature route, not an all-topology exact/native claim. |
@@ -517,23 +536,12 @@ same nonlinear iteration counts. The raw artifacts and their hashes are
 indexed by
 `validation_test/c_type_three_engine/results/mdx_hibino_20260830_nonlinear_order2_summary.json`.
 
-The subsequent `v4.95.71` campaign replaces a single fixed-mesh comparison with
-four exact Cubit/ACIS levels. The accepted observed-order fit uses the final
-`medium -> fine -> finer` levels; the extra coarse level prevents one
-accidentally small unstructured-mesh increment from creating a false
-asymptotic claim. The finest meshes contain 1,688 iron TET elements and 89,454
-Kelvin-domain TET elements. All three nonlinear routes converge. Their
-gap-core spread is 0.29326%, the maximum conservative discretization
-uncertainty is 0.17601%, and the maximum consensus deviation is 0.18226%, for
-a 0.35827% combined numerical envelope. The independent hibino result matches
-the mdx fields within `2.35e-14` relative RMS.
-
-The finest mdx run uses 32,580 HDiv DoFs in 36.78 s, 470,288 reduced-A DoFs in
-852.08 s, and 124,132 Omega DoFs in 90.41 s. Hibino repeats them in 37.43,
-865.45, and 91.21 s. This closes the earlier fine-TET breakdown as a current
-production blocker: the released operator solves the finer family without CG
-indefiniteness. The tracked certificate still avoids an analytic-truth claim;
-it certifies convergence toward one common B-field envelope.
+The subsequent `v4.95.71` four-level campaign belongs to the historical global
+reduced-Omega formulation. Its refinement arithmetic is retained for
+diagnostic archaeology only: the formulation lacks the physical-air/Kelvin
+source-potential jump and is not an acceptance route. The current accepted
+campaign is the `4.95.77` mixed-formulation evidence reported in section 0.0
+and stored as `c_type_20260903_nonlinear_bdm2_mesh_convergence_certificate.json`.
 
 ## 4. Image-folded roundoff contract
 
@@ -607,6 +615,61 @@ solution representation; it must not weaken the field gate.
 6. The Cubit MCP disconnection was ultimately traced to an expired Cubit
    license, not an `export netgen` crash.
 
+### 5.1 ESRF #3 material-operator PSD boundary (2026-09-04)
+
+The ESRF #3 hybrid-undulator response mesh is the decisive counterexample to
+the assumption that a symmetrized ACA matrix is enough for CG.  On the 144-cell
+curved Q2 HEX iron mesh (14,040 HDiv DoF, 8,640 charge DoF), the first
+mass-Riesz PCG direction has `p^T G_H p = -110486.500638061`, while the fixed
+order raw analytic oracle gives `p^T G_raw p = +78453.287592292`.  The
+compressed material solve therefore fails at iteration zero; increasing the
+iteration limit or changing a CG tolerance cannot repair it.
+
+An explicit, memory-bounded `gram_backend="exact-dense"` diagnostic was added
+for medium meshes.  It materializes the normalized physical Gram directly from
+the analytic entry oracle, requires a caller-provided cap, and preserves the
+same NGSolve charge map, mass matrix, and configured constraint semantics.  At
+a 1 GiB cap, #3 used 569.53125 MiB and took 95.50 s to materialize.  It gives
+`p^T G_dense p = +78453.287528763`, agrees with the raw oracle to `8.1e-10`
+relative, and the linear material recovery converges in 58 iterations to
+`9.59e-10` true residual with `4.48e-8` coefficient recovery error.
+
+The public `vim.Solve` path was also profiled on the same response mesh with
+`gram_backend="exact-dense"`, order 2, curve order 2, eight threads, and the
+same explicit 1 GiB cap.  Its zero-load setup completed in 149.71 s (149.16 s
+charge-Gram stage), used no H-matrix statistics, and required zero linear
+iterations as expected for a zero source.  This is a public-path smoke and a
+cost boundary, not a scalable timing claim.
+
+This validates the FE/mass/PARDISO path and provides a safe three-engine
+medium-mesh reference.  It is not a scalable fallback and must not be selected
+implicitly.
+
+### 5.2 Symmetric diagonal-leaf repair (2026-09-04)
+
+The failure was not caused by IMA: the #3 asset has no image reduction, and
+independent fourfold/sixfold cyclic IMA checks remain within `8.43e-5` relative
+field RMS. The failing H-matrix contained same-cluster diagonal ACA leaves.
+For example, a size-18/rank-3 leaf contributed `1824.028974949` to the
+quadratic form where its raw analytic self block contributed
+`41092.606726508`. In symmetric storage an off-diagonal leaf is reflected,
+but a diagonal leaf is applied once; unconstrained ACA there is neither
+symmetric nor positive semidefinite.
+
+`cHACApK_count_lntmx` and `cHACApK_generate_leafmtx` now keep each
+same-cluster diagonal leaf dense only when Radia requests symmetric fill.
+Off-diagonal leaves remain ACA-compressed. The native regression uses repeated
+charge centres and asserts that there are no low-rank diagonal leaves and that
+the materialized H-matrix quadratic matches the raw analytic quadratic.
+
+On the fixed first PCG direction of the #3 mesh, the repaired `leaf=16`
+operator gives `+79506.431938098`, replacing the former negative
+`-110486.500638061`. The calibrated production default is `leaf=64`: it gives
+`+78435.277824058` against `+78453.287592292` from the raw oracle, a `0.023%`
+gap, with 1,084 low-rank and 1,458 dense leaves (94.65 MB, 16.62% of dense
+storage). The repair fixes the identified construction defect; remote
+nonlinear three-engine evidence is still required before closing Example #3.
+
 ## 6. Remaining work and acceptance criteria
 
 | Priority | Item | Acceptance criterion |
@@ -614,6 +677,7 @@ solution representation; it must not weaken the field gate.
 | P1 | Full-versus-IMA `rad.Fld` roundoff | Make all three isolated failures in section 4 pass below `10 eps` without weakening tolerances. Compare solved coefficient vectors before debugging source evaluation, then align directed block symmetrization and full/reduced field summation order. |
 | P1 | Remove production RT0 | Delete the 3D order-0 entries from `hdiv_capabilities`, remove the order-0 `DemagOperator` production path and dedicated order-0 tests/docs, and keep public `Solve`, operator, field, and MATLAB inventory consistently BDM1/BDM2. |
 | P1 | Nonlinear C-yoke memory evidence | Four-level accuracy and repeated timing are closed on mdx and hibino for `v4.95.71`. Add measured process peak memory to a future scaling campaign before making a memory-efficiency claim. reduced-A remains an independent third-formulation audit rather than the primary production route. |
+| P1 | ESRF #3 H-matrix three-engine evidence | Run the repaired `leaf=64` operator on mdx or hibino through the tracked nonlinear three-engine runner. Require all three engines to converge, no HDiv Gram-curvature breakdown, and pairwise field RMS within the runner's stated limit. |
 | Resolved for primal path | Mapped HEX BDM2 material solve | The composite mapped charge representation passes spectrum, linear/nonlinear solve, IMA, field, and quadrature-convergence gates on mdx. |
 | P2 | Mapped HEX BDM2 shape derivative | Differentiate the same complete-host tensor and whole-host Duffy representation, then lock it against finite differences before enabling topology optimization. The current API fails loudly. |
 | P2 | Image-aware field acceleration | Design grouping that is invariant under explicit reflection and reduced IMA representation; prove `<10 eps` direct parity before enabling tree/H-matrix evaluation for image-bearing field maps. |
@@ -653,6 +717,12 @@ worktree, then repeated with the exact `v4.95.70` timing wheel and the final
 - 3 IMA field roundoff tests: FAIL, including isolated-process reruns, with the
   measurements recorded in section 4;
 - batched/block-PCG true-residual and constrained-H-matrix checks: 2 tests PASS.
+- exact-dense ChargeGram entry, public `DemagOperator`/`vim.Solve`, and
+  configured-principal-submatrix semantics: 9 tests PASS in 5.87 s on LAB;
+- ESRF #3 exact-dense material diagnostic: PASS under its explicit 1 GiB cap.
+  The historical parallel H-matrix failure at PCG iteration zero is explained
+  by section 5.2. The repaired H-matrix must still complete the tracked remote
+  nonlinear three-engine runner before it becomes release evidence.
 - canonical Cubit C-yoke mesh: PASS with exact reflected topology, 462 Kelvin
   point pairs, and `2.00e-15 m` maximum translation error;
 - order-2 linear Kelvin three-engine comparison: PASS, 0.12113% maximum
@@ -667,11 +737,12 @@ worktree, then repeated with the exact `v4.95.70` timing wheel and the final
 - historical four-level order-2 nonlinear global-Omega certificate on
   `v4.95.71`: PASS for that retired formulation only. It is not evidence for
   the current TOSCA mixed route and must not be used in release material.
-- current pre-release TOSCA mixed fixed-mesh acceptance on Hibino: PASS. At
-  linear order 3 the maximum all-pair gap-core RMS B difference is 0.45977%; at
-  nonlinear order 2 it is 0.16023%, with all three nonlinear engines
-  converged. A released-binary multi-level mdx/hibino certificate remains
-  open.
+- current v4 TOSCA mixed nonlinear BDM2 mesh certificate on `radia 4.95.77`:
+  PASS. Four Cubit levels converge for exactly `hdiv_mmm`, `reduced_a`, and
+  `mixed_total_reduced_omega`. The finest maximum pairwise gap-core RMS is
+  0.27714%, the combined numerical envelope is 0.35399%, and the mdx/Hibino
+  replay is `5.25e-14` relative RMS. A global reduced-Omega calculation is
+  historical evidence only.
 - release-qud: PASS for `radia 4.95.71`; package versions and production file
   hashes agree across LAB, the 100-machine, mdx, and hibino.
 

@@ -1,8 +1,8 @@
 # C-type formulation validation
 
-The primary comparison is the production HDiv-MMM magnetostatic route against
-the NGSolve TOSCA-style mixed total/reduced Omega route. HCurl reduced-A is
-retained as an independent third-formulation audit:
+The accepted comparison is three-way and mandatory. The physical C-type model
+is evaluated by HDiv-MMM, HCurl reduced-A, and the NGSolve TOSCA-style H1 mixed
+total/reduced Omega route:
 
 1. HDiv-MMM (BDM1 or BDM2), with the Coulomb charge Gram as the exact open
    boundary operator;
@@ -64,11 +64,9 @@ python validation_test/c_type_three_engine/run_three_engine.py `
   --output C:/temp/radia_ctype_three_engine/nonlinear.json
 ```
 
-Use `--primary-only` for the faster direct HDiv-MMM versus mixed-Omega
-development comparison. Omitting it also runs reduced-A as the independent
-third route. A full three-engine run is accepted only if every selected pair
-passes the requested gap-core `B` tolerance and, for nonlinear runs, every
-engine converges. The default `--source-trace-tolerance 0.05` is a separate
+Every run executes all three formulations. It is accepted only if every
+gap-core `B` pair passes the requested tolerance and, for nonlinear runs,
+every engine converges. The default `--source-trace-tolerance 0.05` is a separate
 gate for both the physical iron/air and physical-air/Kelvin source-potential
 traces. A failed trace projection requires an explicit cut/cohomology
 representation rather than a relaxed numerical tolerance.
@@ -129,20 +127,31 @@ the current Python mixed-formulation source was overlaid on the installed
 CoilBuilder, Radia source evaluation, and NGSolve assembly were therefore the
 installed wheel's components.
 
-- `results/hibino_20260902_linear_order3_tosca_mixed_v3.json` is the linear
+- `results/hibino_20260903_linear_order3_tosca_mixed_v4.json` is the linear
   order-3 full three-engine run. At a 1% all-pair gate its HDiv/mixed,
   HDiv/reduced-A, and mixed/reduced-A gap-core RMS differences are 0.41955%,
   0.38661%, and 0.45977%. The physical source-trace residuals are 1.26933%
   on iron/air and 1.75381% on `kelvin_int`, both below the 5% cut gate.
-- `results/hibino_20260902_nonlinear_order2_tosca_mixed_v3.json` is the
+- `results/hibino_20260903_nonlinear_order2_tosca_mixed_v4.json` is the
   nonlinear full three-engine run with the shared monotone PCHIP B(H) table.
   All engines converge; the three respective gap-core RMS differences are
   0.12324%, 0.10674%, and 0.16023%. Its trace residuals are 2.98511% and
-  4.53077%, both below the same 5% gate. The HDiv, reduced-A, and mixed-Omega
-  runtimes are 11.15 s, 221.56 s, and 135.76 s.
+  4.53077%, both below the same 5% gate. The HDiv, reduced-A, and H1 TOSCA
+  mixed total/reduced Omega
+  runtimes are 11.27 s, 216.93 s, and 134.71 s.
 
 These two artifacts complete the fixed-mesh three-formulation acceptance for
-the current TOSCA split. A new multi-level, independent-host convergence
-certificate must be generated from the released binary before stating an
-absolute numerical envelope for this formulation; the historic global-Omega
-certificate must not be relabelled as that result.
+the current TOSCA split. The released-binary four-level campaign is recorded
+in `results/c_type_20260903_nonlinear_bdm2_mesh_convergence_certificate.json`
+with its portable level artifacts:
+
+- finest all-pair gap-core RMS: `0.27714%`;
+- maximum discretisation uncertainty: `0.17601%`;
+- conservative combined numerical envelope: `0.35399%`;
+- mdx/Hibino independent-host replay: `5.25e-14` relative RMS.
+
+All certificate checks pass for `radia 4.95.77`, including nonlinear
+convergence, mesh contraction, cross-formulation agreement, and independent
+host reproducibility. It certifies numerical agreement, not analytic absolute
+truth. A later implementation hash must rerun the campaign; the historical
+global-Omega certificate must not be relabelled as this result.

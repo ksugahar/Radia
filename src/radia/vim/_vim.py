@@ -2123,15 +2123,34 @@ def _configure_cpp_operator(B, G, M_mass, M_mass_ngsolve):
     return B, G, M_mass
 
 
-def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_quad=3, ho_far_factor=2.0,
+def _finish_charge_gram_backend(result, *, gram_backend, exact_dense_memory_mb):
+    """Activate an explicitly selected Gram backend after C++ topology setup."""
+    B, G, M_mass = result
+    if gram_backend == "exact-dense":
+        info = dict(G.build_exact_dense_normalized_gram(
+            maximum_memory_mb=int(exact_dense_memory_mb)))
+        build_charge_gram.last_timings.update({
+            "exact_dense_gram_build_s": float(info["build_s"]),
+            "exact_dense_gram_memory_mb": float(info["memory_mb"]),
+        })
+    return B, G, M_mass
+
+
+def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=64, eta=2.0, far_quad=3, ho_far_factor=2.0,
                       inner_quad=None, curve_order=None, curve_gauss=8, nonlinear=False,
                       image_masks=None, image_signs=None, image_rot_angle=None,
                       _materialize_mass=True,
                       _build_hmatrix=True, internal_interfaces=False,
-                      excluded_boundaries=(), cyclic_periodic_boundaries=()):
+                      excluded_boundaries=(), cyclic_periodic_boundaries=(),
+                      gram_backend="hmat", exact_dense_memory_mb=None):
     """From an HDiv FESpace (order p, the order from the fes), build the monomial charge-density map
     B (scipy CSR, n_charge x ndof), the C++ charge-Gram H-matrix G, and the HDiv mass M_mass (CSR).
     The CALLER wraps in TaskManager.
+
+    ``leafsize=64`` is the production default. It keeps high-order charge rows
+    with coincident clustering centres in a sufficiently large local block;
+    smaller explicit values require the same raw-Gram and PSD validation as a
+    new discretization.
 
     ``cyclic_periodic_boundaries=(master, slave)`` is the broken-HDiv VIM
     periodic contract and therefore requires ``internal_interfaces=True`` plus
@@ -2161,8 +2180,24 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
     all-high-quad build to <1e-3 by tests/feec/test_hdiv_vim_nearfar_highorder.py -- so this is NOT a silent
     approximation, it is a TESTED accuracy-preserving quadrature-order choice (a default param == the user's
     contract).  Pass ho_far_factor=inf to FORCE the exact all-high-quad build (e.g. a golden reference)."""
+    if gram_backend not in {"hmat", "exact-dense"}:
+        raise ValueError(
+            "vim.ChargeGram: gram_backend must be 'hmat' or 'exact-dense' (got %r)"
+            % (gram_backend,))
+    if gram_backend == "exact-dense":
+        if exact_dense_memory_mb is None or int(exact_dense_memory_mb) <= 0:
+            raise ValueError(
+                "vim.ChargeGram: exact-dense requires exact_dense_memory_mb > 0")
+        _build_hmatrix = False
+    elif exact_dense_memory_mb is not None:
+        raise ValueError(
+            "vim.ChargeGram: exact_dense_memory_mb is valid only with gram_backend='exact-dense'")
     build_charge_gram.last_timings = {}
     mesh = fes.mesh
+    if gram_backend == "exact-dense" and mesh.dim != 3:
+        raise NotImplementedError(
+            "vim.ChargeGram: gram_backend='exact-dense' is a 3D medium-mesh "
+            "validation backend; the 2D planar production path requires 'hmat'")
     p = int(fes.globalorder)
     _vtypes = _volume_vertex_counts(mesh)
     excluded_boundaries = tuple(str(name) for name in excluded_boundaries)
@@ -2259,33 +2294,36 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
                 % (mesh.dim, sorted(_ivt) if _ivt else None, curve_order))
     if mesh.dim == 2:
         # 2D PLANAR (motor cross-section) layer: BDM1/BDM2 tri/quad cells + boundary-edge charges, log kernel.
-        return _configure_cpp_operator(
+        return _finish_charge_gram_backend(_configure_cpp_operator(
             *_build_charge_gram_2d(
                 fes, eps=eps, leafsize=leafsize, eta=eta,
                 image_masks=image_masks, image_signs=image_signs,
                 image_rot_angle=image_rot_angle,
-                materialize_mass=_materialize_mass, build_hmatrix=_build_hmatrix))
+                materialize_mass=_materialize_mass, build_hmatrix=_build_hmatrix)),
+            gram_backend=gram_backend, exact_dense_memory_mb=exact_dense_memory_mb)
     if _vtypes == {8}:
         # PURE-HEX BDM1/BDM2: tensor Qp charge basis + Q2 geometry; FLAT or Curve(2) one path.
         # curve_order is IGNORED for hex -- curved is automatic (GetTrafo picks up mesh.Curve(2)); the caller
         # Curve(2)'s the mesh before this call, exactly like the tet curved path.  Uses the hex-gated params.
-        return _configure_cpp_operator(*_build_charge_gram_hex(
+        return _finish_charge_gram_backend(_configure_cpp_operator(*_build_charge_gram_hex(
             fes, eps=eps, leafsize=leafsize, eta=eta,
             image_masks=image_masks, image_signs=image_signs,
             image_rot_angle=image_rot_angle,
             materialize_mass=_materialize_mass, build_hmatrix=_build_hmatrix,
             internal_interfaces=bool(internal_interfaces),
             excluded_boundaries=excluded_boundaries,
-            cyclic_periodic_boundaries=cyclic_periodic_boundaries))
+            cyclic_periodic_boundaries=cyclic_periodic_boundaries)),
+            gram_backend=gram_backend, exact_dense_memory_mb=exact_dense_memory_mb)
     if _vtypes == {6}:
         # PURE-WEDGE (PRISM) BDM1/BDM2: tri-Pp x z-Pp volume charge + mixed tri/quad-face
         # surface charge; 18-node Q2 geometry; FLAT or Curve(2) one path).  curve_order is IGNORED (curved is
         # automatic via GetTrafo picking up mesh.Curve(2)), same as the hex path.
-        return _configure_cpp_operator(*_build_charge_gram_wedge(
+        return _finish_charge_gram_backend(_configure_cpp_operator(*_build_charge_gram_wedge(
             fes, eps=eps, leafsize=leafsize, eta=eta,
             image_masks=image_masks, image_signs=image_signs,
             image_rot_angle=image_rot_angle,
-            materialize_mass=_materialize_mass, build_hmatrix=_build_hmatrix))
+            materialize_mass=_materialize_mass, build_hmatrix=_build_hmatrix)),
+            gram_backend=gram_backend, exact_dense_memory_mb=exact_dense_memory_mb)
     if _vtypes != {4}:
         raise ValueError(
             "vim.ChargeGram: HDiv-VIM is TET (tri-face), pure-HEX (quad-face), or pure-WEDGE/prism "
@@ -2350,8 +2388,9 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
         G = _rp._ChargeGramHMatrix(**kw)
         _finish_image_rotations(G, image_rot_angle, eps=eps, leafsize=leafsize, eta=eta,
                                 build_hmatrix=bool(_build_hmatrix))
-        return _configure_cpp_operator(
-            cbk["B"], G, cbk["M_mass"], cbk["M_mass_ngsolve"])
+        return _finish_charge_gram_backend(_configure_cpp_operator(
+            cbk["B"], G, cbk["M_mass"], cbk["M_mass_ngsolve"]),
+            gram_backend=gram_backend, exact_dense_memory_mb=exact_dense_memory_mb)
     # INNER subtraction quad (B2 speedup): the subtraction remainder (m_src(y)-m_src(p)) is SMOOTH (the
     # singular part is carried EXACTLY by the analytic PhiTet/TriPotential base), so the inner sum uses a
     # COARSER rule than the outer -> another ~1.5-2x on the O(quad_out^3 * quad_in^3) near entries.  Floor at
@@ -2403,7 +2442,9 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
                             build_hmatrix=bool(_build_hmatrix),
                             deferred_build=deferred_rank_build,
                             max_rank=400 if p == 2 else 200)
-    return _configure_cpp_operator(B, G, M_mass, cb["M_mass_ngsolve"])
+    return _finish_charge_gram_backend(_configure_cpp_operator(
+        B, G, M_mass, cb["M_mass_ngsolve"]),
+        gram_backend=gram_backend, exact_dense_memory_mb=exact_dense_memory_mb)
 
 
 class DemagOperator:
@@ -2418,12 +2459,13 @@ class DemagOperator:
     ``DemagFactor`` in ``with TaskManager():``.
     """
 
-    def __init__(self, fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0,
+    def __init__(self, fes, intorder=None, eps=1e-7, leafsize=64, eta=2.0,
                  far_quad=3, ho_far_factor=2.0, inner_quad=None,
                  curve_order=None, curve_gauss=8,
                  internal_interfaces=False, image_masks=None,
                  image_signs=None, image_rot_angle=None,
-                 cyclic_periodic_boundaries=None):
+                 cyclic_periodic_boundaries=None, gram_backend="hmat",
+                 exact_dense_memory_mb=None):
         p = int(fes.globalorder)
         vtypes = _volume_vertex_counts(fes.mesh)
         validate_hdiv_configuration(fes.mesh.dim, vtypes, p, fes.mesh.GetCurveOrder())
@@ -2447,6 +2489,8 @@ class DemagOperator:
         self.cyclic_periodic_boundaries = tuple(
             () if cyclic_periodic_boundaries is None
             else cyclic_periodic_boundaries)
+        self.gram_backend = str(gram_backend)
+        self.exact_dense_memory_mb = exact_dense_memory_mb
         self._B, self._G, self._Mmass = build_charge_gram(
             fes, intorder=intorder, eps=eps, leafsize=leafsize, eta=eta,
             far_quad=far_quad, ho_far_factor=ho_far_factor, inner_quad=inner_quad,
@@ -2454,7 +2498,9 @@ class DemagOperator:
             internal_interfaces=self.internal_interfaces,
             image_masks=self.image_masks, image_signs=self.image_signs,
             image_rot_angle=self.image_rot_angle,
-            cyclic_periodic_boundaries=self.cyclic_periodic_boundaries)
+            cyclic_periodic_boundaries=self.cyclic_periodic_boundaries,
+            gram_backend=self.gram_backend,
+            exact_dense_memory_mb=self.exact_dense_memory_mb)
         self.mat = self._G.demag_matrix()
 
     @property
