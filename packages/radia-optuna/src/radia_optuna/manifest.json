@@ -1,6 +1,6 @@
 {
   "schema": "radia-optuna.distribution.v1",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "oracle_version": "4.9.0",
   "matlab_namespace": "radia.optuna",
   "matlab_file_count": 226,

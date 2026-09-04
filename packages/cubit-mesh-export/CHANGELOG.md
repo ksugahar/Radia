@@ -6,6 +6,15 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
 ## Unreleased
 
+## 0.14.15 - High-order mapping checks and refreshed native payload
+
+Released 2026-09-04.
+
+- Validate high-order `.vol` element mappings before accepting an exported
+  mesh, including the Q2-axis geometry exercised by the Radia validation lane.
+- Refresh the bundled Cubit 2025.12 command backend from the reviewed source
+  and keep the installed toolbar and smoke-test contract aligned with it.
+
 ## 0.14.14 - Complete native payload rebuild and Claro export menu
 
 Released 2026-08-30.

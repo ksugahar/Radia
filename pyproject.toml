@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia"
-version = "4.95.77"
+version = "4.95.78"
 description = "Radia 3D Magnetostatics with NGSolve Integration and TaskManager Parallelization"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -71,12 +71,12 @@ mcp = [
 optuna = [
     # Independently versioned monorepo artifact. Pin the release that passed
     # this Radia version's MATLAB/Simulink integration gate.
-    "radia-optuna==0.1.5",
+    "radia-optuna==0.1.6",
 ]
 optuna-upstream = [
     # Adds pinned upstream Python/SciPy/PyTorch paths used by GP, scrambled QMC,
     # and parameter-importance parity; native MATLAB/Simulink use stays lighter.
-    "radia-optuna[upstream]==0.1.5",
+    "radia-optuna[upstream]==0.1.6",
 ]
 cubit = [
     "cubit-mesh-export",
