@@ -54,7 +54,7 @@ def test_mixed_total_reduced_omega_keeps_source_out_of_high_mu_total_region():
             mu_r_by_material={"reduced": 1.0, "total": 1000.0},
             reduced_materials=("reduced",), total_materials=("total",),
             interface_boundary="source_total_interface", order=2,
-            dirichlet_bbnd="outer")
+            dirichlet_bbbnd="outer")
     assert source_trace["relative_tangential_residual"] < 0.03
 
     h_field = result["H_cf"]
@@ -105,6 +105,48 @@ def test_source_trace_rejects_a_non_exact_tangential_field_without_a_cut():
             relative_tolerance=1.0e-3)
 
 
+def test_fixed_magnetization_source_uses_one_global_physical_potential():
+    """A PM source preserves potential offsets across both material sides."""
+    import ngsolve as ng
+    from radia.kelvin_solver import project_source_physical_potential
+
+    mesh = _two_region_mesh(maxh=0.35)
+    # H_s = -grad(x) is globally exact across the reduced/total material
+    # interface.  A volume projection has one additive gauge, unlike two
+    # independently gauged surface traces.
+    source_h = ng.CoefficientFunction((-1.0, 0.0, 0.0))
+    with ng.TaskManager():
+        source = project_source_physical_potential(
+            mesh,
+            source_h,
+            ("reduced", "total"),
+            order=2,
+            relative_tolerance=1.0e-10,
+        )
+    assert source["relative_volume_residual"] < 1.0e-10
+    potential = source["potential"]
+    left = float(potential(mesh(-0.75, 0.0, 0.0)))
+    right = float(potential(mesh(0.75, 0.0, 0.0)))
+    assert abs((right - left) - 1.5) < 1.0e-8
+
+
+def test_global_physical_source_potential_rejects_current_linked_field():
+    """A non-exact source remains on the explicit cut/cohomology route."""
+    import ngsolve as ng
+    import pytest
+    from radia.kelvin_solver import project_source_physical_potential
+
+    mesh = _two_region_mesh(maxh=0.35)
+    with ng.TaskManager(), pytest.raises(RuntimeError, match="globally exact"):
+        project_source_physical_potential(
+            mesh,
+            ng.CoefficientFunction((0.0, -ng.z, ng.y)),
+            ("reduced", "total"),
+            order=2,
+            relative_tolerance=1.0e-3,
+        )
+
+
 def test_mixed_total_reduced_omega_picard_uses_the_same_interface_contract():
     """The nonlinear driver keeps source topology separate from B(H) updates."""
     import math
@@ -140,7 +182,7 @@ def test_mixed_total_reduced_omega_picard_uses_the_same_interface_contract():
             bh_table=((0.0, 0.0), (10.0, 10.0 * mu0 * 1000.0)),
             nonlinear_materials=("total",), reduced_materials=("reduced",),
             total_materials=("total",), interface_boundary="source_total_interface",
-            order=2, dirichlet_bbnd="outer", tolerance=1.0e-9,
+            order=2, dirichlet_bbbnd="outer", tolerance=1.0e-9,
             max_iterations=5, relaxation=0.5)
 
     assert result["nonlinear_stats"]["converged"]

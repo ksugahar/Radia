@@ -1512,7 +1512,12 @@ void cHACApK_count_lntmx(
   zdistlt=sqrt(zs);
   zeta=param[51];
 
- if((st_cltl->zwdth<=zeta*zdistlt || st_cltt->zwdth<=zeta*zdistlt)
+ /* A symmetric H-matrix mirrors only strictly upper leaves.  A diagonal
+  * leaf is applied exactly once, so ACA there would be neither symmetric nor
+  * positive-semidefinite even when the entry kernel is.  Keep every diagonal
+  * cluster dense for that mode; off-diagonal leaves remain compressible. */
+ if((!g_sym_fill || nstrtl != nstrtt)
+    && (st_cltl->zwdth<=zeta*zdistlt || st_cltt->zwdth<=zeta*zdistlt)
     && (ndl>=nleaf && ndt>=nleaf && ndl<=nlmax && ndt<=nlmax)
    ) {
     if(param[52]==0
@@ -1585,7 +1590,10 @@ void cHACApK_generate_leafmtx(
   zdistlt=sqrt(zs);
   zeta=param[51];
 
- if((st_cltl->zwdth<=zeta*zdistlt || st_cltt->zwdth<=zeta*zdistlt)
+ /* Must exactly mirror cHACApK_count_lntmx above so allocation and fill see
+  * the same symmetric-diagonal topology. */
+ if((!g_sym_fill || nstrtl != nstrtt)
+    && (st_cltl->zwdth<=zeta*zdistlt || st_cltt->zwdth<=zeta*zdistlt)
     && (ndl>=nleaf && ndt>=nleaf && ndl<=nlmax && ndt<=nlmax)
    ) {
     if(param[52]==0

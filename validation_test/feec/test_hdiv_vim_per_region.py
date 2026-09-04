@@ -65,8 +65,9 @@ def test_per_region_equal_mu_matches_scalar():
 
 def test_per_region_default_is_cpp_symmetric_cg():
     """Per-region linear (RT1) uses the all-C++ SYMMETRIC mass-Riesz CG on the Galerkin system
-    (M_{1/chi} + N) m = M_mass h_ext (W = the 1/chi-weighted HDiv mass is both the system mass and the Riesz
-    preconditioner).  The per-region path's correctness is locked by
+    (M_{1/chi} + N) m = M_mass h_ext.  W = M_{1/chi} remains the system mass while the immutable geometry
+    mass is the Riesz preconditioner, so nonlinear/material updates cannot perturb the PARDISO Riesz map.
+    The per-region path's correctness is locked by
     test_per_region_equal_mu_matches_scalar; the legacy form-1 cross-check is retired.
     """
     mesh = _two_region_mesh()
@@ -74,6 +75,7 @@ def test_per_region_default_is_cpp_symmetric_cg():
         cg = Solve(mesh, mu_r={"lo": 200.0, "hi": 200.0}, H_ext=HEXT,
                               tol=1e-11, gram_eps=1e-12, ho_far_factor=float("inf"))
     assert cg["linear_solver"] == "mass-riesz-cg"     # per-region RT1 = C++ symmetric CG
+    assert cg["cpp_solve_timings"]["mass_riesz_geometry_preconditioner"] == 1.0
 
 
 def test_per_region_different_mu_physics():
@@ -154,22 +156,41 @@ def test_per_region_nl_equal_table_matches_single():
 
 @pytest.mark.slow
 def test_per_region_nl_different_tables_physics():
-    """Different BH grades per region: (1) the global M_avg_z is strictly BOUNDED by the all-soft and
-    all-hard scalar runs (monotone response to per-region permeability); (2) the mixed run is genuinely
-    distinct from BOTH (the dict path is not silently collapsing to one curve); (3) the solve is genuinely
-    NONLINEAR -- the soft grade's M_avg differs substantially from its LINEAR (mu_r = chi0+1) counterpart,
-    so the BH saturation is actually engaged (not a disguised linear solve)."""
+    """Different BH grades must remain both globally and locally distinguishable.
+
+    The global M_avg_z is bounded by all-soft and all-hard reference runs, but it is an equal-volume average:
+    a stronger low-side response and a weaker high-side response can partially cancel.  The acceptance lock
+    therefore requires a modest nonzero global separation AND a large region-resolved |M_z| contrast; the
+    latter directly catches an accidental collapse of the per-region BH dictionary to one curve.  Saturation
+    is checked separately at a drive that actually enters the nonlinear portion of the supplied BH table.
+    """
     mesh = _two_region_mesh()
     with ng.TaskManager():
         r  = Solve(mesh, bh_table={"lo": BH_SOFT, "hi": BH_HARD}, H_ext=HEXT_NL, nl_tol=1e-6)
         rs = Solve(mesh, bh_table=BH_SOFT, H_ext=HEXT_NL, nl_tol=1e-6)
         rh = Solve(mesh, bh_table=BH_HARD, H_ext=HEXT_NL, nl_tol=1e-6)
-        rL = Solve(mesh, mu_r=5001.0, H_ext=HEXT_NL)   # linear chi0 counterpart of the soft grade
-    z, zs, zh, zL = r["M_avg"][2], rs["M_avg"][2], rh["M_avg"][2], rL["M_avg"][2]
+    z, zs, zh = r["M_avg"][2], rs["M_avg"][2], rh["M_avg"][2]
     assert zh < z < zs                                    # bounded: harder grade -> less, softer -> more
-    assert abs(z - zs) > 0.03 * abs(zs)                   # distinct from all-soft (measured ~11%)
+    assert abs(z - zs) > 0.005 * abs(zs)                  # global mixed response, even after averaging
     assert abs(z - zh) > 0.005 * abs(zh)                  # distinct from all-hard (RT1 measured ~0.85%)
-    assert abs(zs - zL) > 0.10 * abs(zL)                  # saturation engaged: nonlinear != linear (~26%)
+    mz_lo, mz_hi = _region_mean_absMz(mesh, r["M"])
+    assert mz_lo > 2.0 * mz_hi                             # direct per-region BH response, not a collapsed table
+
+
+@pytest.mark.slow
+def test_nonlinear_table_departs_from_linear_when_drive_saturates():
+    """At 1 MA/m the supplied soft table is genuinely saturated, unlike the low-drive routing test.
+
+    This keeps a material-model regression from silently replacing the BH solve with its zero-field linear
+    chi0 tangent while avoiding an invalid saturation claim at the 100 kA/m per-region test drive.
+    """
+    mesh = _two_region_mesh()
+    saturated_drive = ng.CoefficientFunction((0.0, 0.0, 1.0e6))
+    with ng.TaskManager():
+        nonlinear = Solve(mesh, bh_table=BH_SOFT, H_ext=saturated_drive, nl_tol=1e-6)
+        linear = Solve(mesh, mu_r=5001.0, H_ext=saturated_drive)
+    nonlinear_vs_linear = abs(nonlinear["M_avg"][2] - linear["M_avg"][2]) / abs(linear["M_avg"][2])
+    assert nonlinear_vs_linear > 0.4
 
 
 def test_per_region_nl_fail_loud():

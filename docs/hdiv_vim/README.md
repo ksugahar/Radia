@@ -16,8 +16,8 @@ constrained trust-region SLP design loop, exact-void iron-only verification;
 golden-band lane `validation_test/isochronous_topopt/`), and
 [c_type_three_formulation_tosca_mixed.ipynb](c_type_three_formulation_tosca_mixed.ipynb)
 (Cubit/ACIS C-yoke; HDiv-MMM, HCurl reduced-A, and H1 TOSCA mixed
-total/reduced Omega fixed-mesh acceptance; validation lane
-`validation_test/c_type_three_engine/`).
+total/reduced Omega nonlinear BDM2 four-level, two-host mesh-convergence
+acceptance; validation evidence in `validation_test/c_type_three_engine/`).
 
 ## NGSolve Family Convention
 
@@ -62,12 +62,17 @@ E_demag(m) = 0.5 * (B m)^T G (B m),
 N = B^T G B.
 ```
 
-Consequently `N` is symmetric positive semidefinite and vanishes on `ker(B)`.
-The production solve does not construct or constrain a loop/cotree basis; the
-positive material Hodge operator `W` selects the unique physical solution of
-the symmetric positive-definite system `W + B^T G B`.  On a multiply connected
-domain, harmonic/cohomology modes remain a topology-owned finite-dimensional
-part of `ker(B)` and must not be confused with spurious charge modes.
+For the exact Coulomb Gram, `N` is symmetric positive semidefinite and vanishes
+on `ker(B)`.  The production solve does not construct or constrain a
+loop/cotree basis; the positive material Hodge operator `W` selects the unique
+physical solution of the symmetric positive-definite exact system
+`W + B^T G B`.  On a multiply connected domain, harmonic/cohomology modes
+remain a topology-owned finite-dimensional part of `ker(B)` and must not be
+confused with spurious charge modes.  A symmetric ACA/H-matrix approximation
+is not automatically positive semidefinite: it is admitted to a material-CG
+solve only after its PSD certificate passes.  The explicit
+`gram_backend="exact-dense"` mode is the bounded medium-mesh validation oracle;
+it never silently replaces the scalable H-matrix backend.
 
 ## Live API
 
@@ -382,8 +387,8 @@ High-order material states use NGSolve mapped interpolation and
 `IntegrationRuleSpace`; Python does not reconstruct HDiv/HCurl orientation,
 Piola maps, or hidden local DOF transforms from `CalcShape` and `GetDofNrs`.
 
-The production 3D solve uses symmetric C++ CG on the SPD `W + B^T G B`
-system.  The public default is `preconditioner="auto"`: linear solves and
+The production 3D solve uses symmetric C++ CG on a PSD-certified
+`W + B^T G B` system.  The public default is `preconditioner="auto"`: linear solves and
 small tet nonlinear solves use the exact mass-Riesz map, while nonlinear
 energy-Newton on pure hex/wedge meshes and medium-or-larger tet meshes uses the
 exact diagonal of `W + B^T G B`.  The diagonal branch is still the same
@@ -406,8 +411,10 @@ tensor rules once, so parallel H-matrix entry fill does not recreate them.
 The charge-Gram build caches the symmetrized host-pair block
 `0.5*(AB + BA^T)`.  Production evaluates both directed FAR quadrature rules;
 mapped BDM2 near pairs additionally use the whole-host Duffy construction.
-Storing only an upper triangle makes a matrix algebraically symmetric, but a
-one-sided finite quadrature rule is not invariant when a reduced image model is
+Storing only an upper triangle makes a matrix algebraically symmetric, but
+algebraic symmetry alone is not a positive-semidefinite certificate for
+independently compressed ACA blocks.  A one-sided finite quadrature rule is not
+invariant when a reduced image model is
 replaced by its explicit reflected mesh.  The bidirectional rule keeps the
 prescribed-source multicell HEX full-vs-image `rad.Fld` contract below `10 eps`
 at the normal quadrature order.  `RADIA_HDIV_HEX_FAR_ONESIDED`,
@@ -431,6 +438,14 @@ invariance.  The
 remaining performance focus is split by regime: charge-Gram build for linear
 or small-tet runs, and H-matrix apply count / nonlinear globalization for large
 hex-wedge energy-Newton runs.
+
+The historical H-matrix timings below are throughput measurements, not a
+universal material-solve certificate.  In particular, the ESRF #3 BDM2
+response mesh exposes an indefinite symmetric ACA approximation.  Do not use
+those timings to claim a general CG-capable material backend until the
+PSD-preserving compression/certificate gate described in
+`HDiv-MMM_review.md` passes; use the explicitly capped exact-dense backend only
+for medium-mesh validation meanwhile.
 
 The 2026-07-09 mdx nonlinear energy-Newton preconditioner sweep showed why the
 `auto` policy is element- and size-aware.  For structured hex, the tuned
@@ -481,8 +496,10 @@ universal default for all wedge geometries.
 
 ## Why This Is The Main Route
 
-- `N = B^T G B` is symmetric and loop-free by construction: loops are
-  `ker(B)`, so charge-free modes are field-null without hand-built loop bases.
+- The exact `N = B^T G B` is symmetric, positive semidefinite, and loop-free by
+  construction: loops are `ker(B)`, so charge-free modes are field-null without
+  hand-built loop bases.  A compressed representation must separately retain or
+  certify that energy property before it is used by CG.
 - NGSolve `Mesh`, `GridFunction`, `CoefficientFunction`, `BilinearForm`, and
   `TaskManager` are shared with reduced FEM and motor workflows.
 - Prescribed magnetization is projected once into a source-owned HDiv space;

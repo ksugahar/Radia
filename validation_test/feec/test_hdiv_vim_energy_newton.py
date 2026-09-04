@@ -118,6 +118,26 @@ def test_picard_energy_matches_energy_newton():
     assert rel < 1e-5, (rh["M_avg"], re["M_avg"], rel)
 
 
+def test_picard_mass_riesz_reports_a_final_convergence_contract():
+    """The robust forward Picard route is not allowed to return unlabelled M."""
+    mesh = _sphere(maxh=0.8)
+    with ng.TaskManager():
+        result = Solve(
+            mesh,
+            bh_table=_BH,
+            H_ext=ng.CoefficientFunction((0, 0, 5000.0)),
+            order=1,
+            nonlinear_solver="picard-mass-riesz",
+            preconditioner="mass-riesz",
+        )
+    stats = result["nonlinear_solve_stats"]
+    assert result["linear_solver"] == "picard-mass-riesz-cpp"
+    assert stats["nonlinear_solver"] == "picard-mass-riesz"
+    assert stats["nonlinear_converged_final_stage"] is True
+    assert stats["nonlinear_picard_iters"] > 0
+    assert stats["nonlinear_linear_inner_iters"] > 0
+
+
 def test_energy_newton_fast_knobs_preserve_solution_and_report_stats():
     """Inexact inner CG / continuation / chord-tangent reuse are explicit speed knobs, not new physics."""
     mesh = _sphere(maxh=0.8)
