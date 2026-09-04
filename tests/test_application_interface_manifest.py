@@ -14,9 +14,11 @@ def test_simulink_application_guide_has_no_retired_panel_path():
     assert guide.read_text(encoding="utf-8").startswith(
         "# Adding a Radia Simulink Application Block"
     )
-    audit = (REPO_ROOT / "tools" / "audit_new_panel_contract.py").read_text(
-        encoding="utf-8"
-    )
+    old_audit = REPO_ROOT / "tools" / "audit_new_panel_contract.py"
+    assert not old_audit.exists()
+    audit = (
+        REPO_ROOT / "tools" / "audit_application_block_contract.py"
+    ).read_text(encoding="utf-8")
     assert "docs/simulink/ADDING_APPLICATION_BLOCK.md" in audit
     assert "docs/panels/ADDING_NEW_PANEL.md" not in audit
 
