@@ -51,8 +51,9 @@ Usage:
 
     python tools/release_quad.py done --simulink-package <zip>
         Require both the normal release gate and the matching four-machine
-        Simulink candidate state, then restore LAB and 100号機 to the
-        canonical editable worktrees under 01_GitHub.
+        Simulink candidate state. The active LAB/100号機 editable sources stay
+        unchanged so a verified release worktree cannot be replaced by an
+        older canonical WIP tree after the final gate.
 
     python tools/release_quad.py restore-editable
         Recovery command for a failed or interrupted release. Stop active
@@ -1970,19 +1971,25 @@ def _run_retired_standalone_pyside_guard():
 
 
 def cmd_done(args):
-    """Run release gates, then restore the canonical editable development tier.
+    """Run release gates without changing the verified editable sources.
 
     Exit 0 means the release is consistent across LAB / 100号機 / mdx / hibino,
     the repo is release-ready, the retired non-Cubit PySide panel surface has
-    not been reintroduced, AND LAB/100号機 have been returned to canonical
-    01_GitHub editable sources. Active MCP transports are restarted by their
-    clients after this command stops them for the reinstall.
+    not been reintroduced, AND LAB/100号機 still use the exact clean source
+    verified by this command. Returning to the canonical development tree is a
+    separate, explicit ``restore-editable`` operation after that tree catches
+    up with the published release.
     """
     step("Definition-of-done check "
          "(preflight + editable tier + phase9 + retired standalone panel guard)")
     rc = cmd_preflight(args)
     if rc != 0:
         fail("preflight failed — repo state not release-ready.")
+        return rc
+
+    rc = _verify_local_release_source(_editable_repo_lab(), _release_head())
+    if rc != 0:
+        fail("active LAB editable source is not the exact clean release SHA.")
         return rc
 
     drift = _verify_lab_editable()
@@ -2017,18 +2024,14 @@ def cmd_done(args):
             fail("Simulink candidate did not satisfy the four-machine gate.")
             return rc
 
-    rc = cmd_restore_editable(args)
-    if rc != 0:
-        fail("release gates passed, but canonical editable restoration failed. "
-             "Run `release_quad restore-editable` before resuming development.")
-        return rc
-
     print("")
     suffix = (" The supplied Simulink candidate also passed all four MATLAB "
               "machines." if getattr(args, "simulink_package", None) else "")
     ok("DEFINITION OF DONE met. Release is consistent across LAB / 100号機 / "
-       "mdx / hibino, LAB/100号機 are restored to canonical editable sources, "
-       "and the retired standalone PySide panel surface is absent." + suffix)
+       "mdx / hibino, LAB/100号機 remain on the exact verified editable "
+       "source, and the retired standalone PySide panel surface is absent. "
+       "Run `release_quad restore-editable` explicitly after the canonical "
+       "development tree catches up." + suffix)
     return 0
 
 
@@ -2367,7 +2370,7 @@ def main():
                     help="regenerate even when the pins are current")
     done = sub.add_parser(
         "done",
-        help="definition-of-done: preflight + editable-tier + phase9 + guards")
+        help="non-mutating definition-of-done: exact source + phase9 + guards")
     done.add_argument(
         "--simulink-package",
         help="also require a matching four-machine Simulink candidate pass")
