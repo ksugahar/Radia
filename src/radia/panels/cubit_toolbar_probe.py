@@ -57,8 +57,10 @@ def _finish(payload):
     payload["schema"] = SCHEMA
     payload["elapsed_seconds"] = round(time.monotonic() - _started, 3)
     os.makedirs(os.path.dirname(os.path.abspath(RESULT_PATH)), exist_ok=True)
-    with open(RESULT_PATH, "w", encoding="utf-8") as stream:
+    temporary_result = RESULT_PATH + ".tmp"
+    with open(temporary_result, "w", encoding="utf-8") as stream:
         json.dump(payload, stream, ensure_ascii=False, indent=2, sort_keys=True)
+    os.replace(temporary_result, RESULT_PATH)
 
     # Run the exit command after the result has been flushed.  The external
     # runner verifies that the GUI process actually disappears.
