@@ -5,6 +5,22 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_simulink_application_guide_has_no_retired_panel_path():
+    assert not (
+        REPO_ROOT / "docs" / "panels" / "ADDING_NEW_PANEL.md"
+    ).exists()
+    guide = REPO_ROOT / "docs" / "simulink" / "ADDING_APPLICATION_BLOCK.md"
+    assert guide.is_file()
+    assert guide.read_text(encoding="utf-8").startswith(
+        "# Adding a Radia Simulink Application Block"
+    )
+    audit = (REPO_ROOT / "tools" / "audit_new_panel_contract.py").read_text(
+        encoding="utf-8"
+    )
+    assert "docs/simulink/ADDING_APPLICATION_BLOCK.md" in audit
+    assert "docs/panels/ADDING_NEW_PANEL.md" not in audit
+
+
 def test_application_manifest_has_no_notebook_workbenches():
     manifest_path = (
         REPO_ROOT / "src" / "radia" / "panels"

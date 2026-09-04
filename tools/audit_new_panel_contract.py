@@ -192,7 +192,7 @@ LEGACY_CALC_EXEMPT = {
     "calc_em_table.py",       # passes args via dict-of-dicts, not argparse
     "calc_equivalence_source.py",  # research script, separate pattern
     # calc_*.py NOT in this set MUST follow the canonical pattern
-    # documented in docs/panels/ADDING_NEW_PANEL.md.
+    # documented in docs/simulink/ADDING_APPLICATION_BLOCK.md.
 }
 
 

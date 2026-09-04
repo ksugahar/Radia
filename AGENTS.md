@@ -151,6 +151,11 @@ geometry/mesh and primary-field scenes.
 Developer pre-push hooks run only the impact-scoped mdx preflight. Release
 workflows, never developer hooks, publish immutable artifacts.
 
+The EqnEdit64 signed-standalone release job is the sole LAB runner exception:
+it verifies the LAB-owned signing certificate and OneDrive release manifest
+after successful EqnEdit64 tag CI. It is a release signing gate, not regular
+repository CI, and must not acquire Radia test or build work.
+
 ### Compute Host Routing
 
 **POLICY (hibino-first; mdx CI-first, 2026-09-03)**: Run solver-heavy

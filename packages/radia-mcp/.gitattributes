@@ -1,7 +1,0 @@
-# Auto-generated docs/TOOLS.md is compared byte-exact against the
-# output of `scripts/gen_tools_doc.py` (which always emits LF).  On
-# Windows with `core.autocrlf=true` (the LAB + self-hosted runner
-# default), git would otherwise convert LF -> CRLF on checkout, then
-# the drift gate sees CRLF on disk vs LF from render() and fails
-# even though the logical content is identical.  Lock to LF.
-docs/TOOLS.md text eol=lf
