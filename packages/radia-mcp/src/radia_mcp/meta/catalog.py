@@ -550,12 +550,15 @@ CATALOG: dict[str, dict[str, Any]] = {
         "description": "Journal paper / digest writing helpers: IMRaD, "
                        "abstract, citation, figure, equation, PDF layout, "
                        "and reviewer-trigger lints. Also serves the merged "
-                       "presentation_* slide lint + PPTX tools (2026-07-17) "
-                       "and the merged figure_* / paper_figure_* "
-                       "publication-figure tools (2026-07-18: the standalone "
-                       "presentation and figure servers were retired -- AI "
-                       "cannot yet author slide decks end-to-end, and figure "
-                       "was a shared middle layer now unified here).",
+                       "presentation_* slide lint + PPTX tools (2026-07-17), "
+                       "the merged figure_* / paper_figure_* "
+                       "publication-figure tools (2026-07-18), and the "
+                       "merged poster_* conference-poster tools (2026-09-05: "
+                       "the standalone presentation, figure and poster "
+                       "servers were retired -- AI cannot yet author slide "
+                       "decks end-to-end, figure was a shared middle layer, "
+                       "and a poster obeys the same figure rules but could "
+                       "not reach them from its own server).",
         "primary_tools": ["paper_writing_usage",
                             "paper_writing_health_report",
                             "paper_writing_em_submission_gate",
@@ -563,10 +566,11 @@ CATALOG: dict[str, dict[str, Any]] = {
                             "presentation_health_report",
                             "presentation_extract_pptx_text",
                             "figure_style_guide",
-                            "paper_figure_profiles"],
+                            "paper_figure_profiles",
+                            "poster_lint",
+                            "poster_health_report"],
         "related": [
             "grant-writing",
-            "poster",
             "document-meta",
             "chart2d",
             "pdf",
@@ -619,20 +623,13 @@ CATALOG: dict[str, dict[str, Any]] = {
     # presentation_* tools are now served by mcp-server-paper-writing
     # (see the paper-writing entry above). The radia_mcp.presentation
     # module remains the implementation home.
-    "poster": {
-        "subpackage": "radia_mcp.poster",
-        "entry_point": "mcp-server-poster",
-        "description": "Conference poster generation and lint: templates, "
-                       "viewing-distance font size, color contrast, zone "
-                       "balance, QR audit, and print readiness.",
-        "primary_tools": ["poster_usage", "poster_lint",
-                            "poster_health_report"],
-        "related": [
-            "paper-writing",
-            "document-meta",
-        ],
-        "tags": ["meta"],
-    },
+    # "poster" was a standalone server until 2026-09-05.  A poster is a
+    # presentation artefact governed by the same figure rules, but as its
+    # own server it could not reach figure_* at all -- the last asymmetry
+    # left by the presentation (2026-07-17) and figure (2026-07-18) merges.
+    # Its poster_* tools are now served by mcp-server-paper-writing (see the
+    # paper-writing entry above); radia_mcp.poster remains the
+    # implementation home.
     "literature-index": {
         "subpackage": "radia_mcp.literature_index",
         "entry_point": "mcp-server-literature-index",
@@ -662,7 +659,6 @@ CATALOG: dict[str, dict[str, Any]] = {
             "meta",
             "paper-writing",
             "grant-writing",
-            "poster",
             "pdf",
             "doc-convert",
             "research-project",

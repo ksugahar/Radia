@@ -43,7 +43,7 @@ register_status_tool(
         "notebook-result and panel-layout audits."
     ),
     subpackage="radia_mcp.document_meta",
-    related_servers=["grant-writing", "presentation", "paper-writing", "poster", "bibliography"],
+    related_servers=["grant-writing", "paper-writing", "bibliography"],
     optional_deps=["pymupdf"],
 )
 
