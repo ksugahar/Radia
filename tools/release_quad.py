@@ -303,6 +303,24 @@ def _release_tag_commit(version: object) -> str | None:
     return result.stdout.strip().lower()
 
 
+def _verify_head_release_tag() -> int:
+    """Require ``HEAD`` to be the peeled tag for the declared Radia version."""
+    version = _read_repo_versions()["radia"]
+    head = _release_head()
+    tag_commit = _release_tag_commit(version)
+    if tag_commit is None:
+        fail(f"Radia {version} has no local v{version} release tag")
+        return 4
+    if tag_commit != head:
+        fail(
+            f"HEAD {head} is not the v{version} release commit {tag_commit}; "
+            "release_quad done must run on the exact tagged source"
+        )
+        return 4
+    ok(f"HEAD is anchored at v{version} ({head[:12]})")
+    return 0
+
+
 def _simulink_candidate_commit_is_release_anchored(
         manifest: dict, head: str) -> tuple[bool, str]:
     """Accept an exact tagged candidate when release-tooling later advances main.
@@ -1990,6 +2008,11 @@ def cmd_done(args):
     rc = _verify_local_release_source(_editable_repo_lab(), _release_head())
     if rc != 0:
         fail("active LAB editable source is not the exact clean release SHA.")
+        return rc
+
+    rc = _verify_head_release_tag()
+    if rc != 0:
+        fail("release HEAD is not anchored by its declared Radia version tag.")
         return rc
 
     drift = _verify_lab_editable()

@@ -3034,8 +3034,9 @@ LAB / 100号機で `pip install --upgrade <pkg>` を流すと editable が静か
 Editable drift の検出と復旧は `tools/release_quad.py verify-editable` と
 `tools/release_quad.py restore-editable` が担う。`all` / `done` は active
 editable source の exact SHA・tracked-clean・配布内容を検証し、検証済みの
-pointerを変更しない。canonical treeへの切替は、そのtreeが公開済みmainへ
-追いついた後に `restore-editable` を明示実行する。`done` の後処理として
+pointerを変更しない。`done` はそのSHAが `v<radia-version>` のpeeled commit
+と完全一致することも要求する。canonical treeへの切替は、そのtreeが公開済み
+mainへ追いついた後に `restore-editable` を明示実行する。`done` の後処理として
 自動復旧してはならない。事故年表と手動復旧手順をポリシーファイルへ複製しない。
 
 **mdx / hibino 全ユーザー PyPI install**: `C:\Program Files\Python312`
