@@ -15,11 +15,14 @@ comparison with the HDiv response mesh.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import subprocess
 import sys
 from pathlib import Path
+
+import numpy as np
 
 
 HERE = Path(__file__).resolve().parent
@@ -305,10 +308,36 @@ def write_journal(
     return journal, vol
 
 
+def _reflection_element_digest(
+    material: str, points: np.ndarray, *, reflected: bool
+) -> bytes:
+    """Return a compact, deterministic signature for one linear element hull.
+
+    A full Cubit Q2 mesh can contain millions of volume elements. Retaining a
+    nested Python tuple for every element just to test the z-reflection contract
+    is needlessly memory intensive. The mesh is already structurally checked by
+    ``check-vol``; this signature records material and rounded corner coordinates
+    in a fixed 32-byte SHA-256 value, so counterpart lookup remains bounded.
+    """
+    quantized = np.rint(np.asarray(points, dtype=float) * 1.0e14).astype(
+        "<i8", copy=False
+    )
+    if reflected:
+        quantized[:, 2] *= -1
+    order = np.lexsort((quantized[:, 2], quantized[:, 1], quantized[:, 0]))
+    payload = material.encode("utf-8") + b"\0" + quantized[order].tobytes()
+    return hashlib.sha256(payload).digest()
+
+
+def _element_corner_points(mesh: object, element: object) -> np.ndarray:
+    return np.asarray(
+        [mesh.vertices[vertex.nr].point for vertex in element.vertices], dtype=float
+    )
+
+
 def validate_fem_mesh(path: Path) -> dict[str, object]:
     """Validate labels and Kelvin identification before a three-way solve."""
     import ngsolve as ng
-    import numpy as np
 
     mesh = ng.Mesh(str(path))
     contract = three_engine_material_contract()
@@ -343,33 +372,33 @@ def validate_fem_mesh(path: Path) -> dict[str, object]:
         maximum_vertex_error = max(
             maximum_vertex_error, float(np.linalg.norm(matching - reflected))
         )
-    signatures = set()
+    signatures: set[bytes] = set()
     element_count = 0
+    duplicate_elements = 0
     for element in mesh.Elements(ng.VOL):
         element_count += 1
-        points = [
-            tuple(np.round(mesh.vertices[vertex.nr].point, 14))
-            for vertex in element.vertices
-        ]
-        signatures.add((str(element.mat), tuple(sorted(points))))
+        signature = _reflection_element_digest(
+            str(element.mat), _element_corner_points(mesh, element), reflected=False
+        )
+        duplicate_elements += int(signature in signatures)
+        signatures.add(signature)
     missing_elements = 0
     for element in mesh.Elements(ng.VOL):
-        reflected_points = []
-        for vertex in element.vertices:
-            point = np.asarray(mesh.vertices[vertex.nr].point, dtype=float)
-            point[2] *= -1.0
-            reflected_points.append(tuple(np.round(point, 14)))
-        signature = (str(element.mat), tuple(sorted(reflected_points)))
+        signature = _reflection_element_digest(
+            str(element.mat), _element_corner_points(mesh, element), reflected=True
+        )
         missing_elements += int(signature not in signatures)
     reflection = {
         "missing_reflected_vertices": int(missing_vertices),
         "maximum_reflected_vertex_error_m": float(maximum_vertex_error),
         "volume_element_count": int(element_count),
+        "duplicate_volume_elements": int(duplicate_elements),
         "missing_reflected_volume_elements": int(missing_elements),
     }
     if (
         reflection["missing_reflected_vertices"]
         or reflection["maximum_reflected_vertex_error_m"] > 1.0e-13
+        or reflection["duplicate_volume_elements"]
         or reflection["missing_reflected_volume_elements"]
     ):
         raise RuntimeError(
