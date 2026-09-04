@@ -147,6 +147,71 @@ def test_global_physical_source_potential_rejects_current_linked_field():
         )
 
 
+def test_total_hodge_projection_retains_a_linked_harmonic_source():
+    """A linked curl-free field is split, not rejected or scalarized away."""
+    from netgen.occ import Box, Glue, OCCGeometry, Pnt
+    import ngsolve as ng
+    from radia.kelvin_solver import project_source_total_hodge
+
+    bars = [
+        Box(Pnt(-0.5, -1.0, 0.4), Pnt(0.5, 1.0, 1.0)),
+        Box(Pnt(-0.5, -1.0, -1.0), Pnt(0.5, 1.0, -0.4)),
+        Box(Pnt(-0.5, -1.0, -0.4), Pnt(0.5, -0.4, 0.4)),
+        Box(Pnt(-0.5, 0.4, -0.4), Pnt(0.5, 1.0, 0.4)),
+    ]
+    for bar in bars:
+        bar.mat("total")
+    mesh = ng.Mesh(OCCGeometry(Glue(bars)).GenerateMesh(maxh=0.35))
+    radius2 = ng.y * ng.y + ng.z * ng.z
+    linked_h = ng.CoefficientFunction((0.0, -ng.z / radius2, ng.y / radius2))
+
+    with ng.TaskManager():
+        source = project_source_total_hodge(
+            mesh, linked_h, ("total",), order=2)
+
+    assert source["relative_harmonic_norm"] > 0.5
+    reconstructed = -ng.grad(source["potential"]) + source["harmonic_field"]
+    error = ng.sqrt(ng.Integrate(
+        ng.InnerProduct(reconstructed - linked_h, reconstructed - linked_h),
+        mesh,
+    ))
+    assert float(error) < 1.0e-12
+
+
+def test_mixed_omega_accepts_the_total_hodge_source_components():
+    """The Hodge scalar and harmonic terms both enter the total region."""
+    import ngsolve as ng
+    from radia.kelvin_solver import (
+        project_source_total_hodge,
+        solve_magnetostatic_mixed_total_reduced_omega_kelvin,
+    )
+
+    mesh = _two_region_mesh(maxh=0.55)
+    source_h = ng.CoefficientFunction((-1.0, 0.0, 0.0))
+    with ng.TaskManager():
+        source = project_source_total_hodge(
+            mesh, source_h, ("total",), order=1)
+        result = solve_magnetostatic_mixed_total_reduced_omega_kelvin(
+            mesh,
+            source_h,
+            source["potential"],
+            1.0,
+            (3.0, 0.0, 0.0),
+            mu_r_by_material={"reduced": 1.0, "total": 2.0},
+            reduced_materials=("reduced",),
+            total_materials=("total",),
+            interface_boundary="source_total_interface",
+            order=1,
+            dirichlet_bbbnd="outer",
+            total_source_h=source["harmonic_field"],
+            total_source_materials=("total",),
+        )
+
+    value = np.asarray(result["H_cf"](mesh(0.5, 0.1, 0.1)), dtype=float)
+    assert np.isfinite(value).all()
+    assert result["total_source_materials"] == ("total",)
+
+
 def test_mixed_total_reduced_omega_picard_uses_the_same_interface_contract():
     """The nonlinear driver keeps source topology separate from B(H) updates."""
     import math
