@@ -161,9 +161,7 @@ def _editable_repo_100():
 
 
 def _release_head():
-    return subprocess.check_output(
-        [GIT_EXE, "rev-parse", "HEAD"], cwd=str(REPO), text=True
-    ).strip().lower()
+    return _git("rev-parse", "HEAD").stdout.strip().lower()
 
 
 # ============================================================
@@ -292,11 +290,8 @@ def _release_tag_commit(version: object) -> str | None:
     """Return the peeled commit for the public ``v<version>`` tag, if any."""
     if not isinstance(version, str) or not version.strip():
         return None
-    result = subprocess.run(
-        [GIT_EXE, "rev-parse", "--verify", f"refs/tags/v{version}^{{}}"],
-        cwd=REPO,
-        capture_output=True,
-        text=True,
+    result = _git(
+        "rev-parse", "--verify", f"refs/tags/v{version}^{{}}", check=False
     )
     if result.returncode != 0:
         return None
@@ -342,12 +337,7 @@ def _simulink_candidate_commit_is_release_anchored(
         return False, f"Simulink manifest version {version!r} has no v<version> release tag"
     if commit != tag_commit:
         return False, "Simulink manifest commit does not match its peeled release tag"
-    ancestry = subprocess.run(
-        [GIT_EXE, "merge-base", "--is-ancestor", commit, head],
-        cwd=REPO,
-        capture_output=True,
-        text=True,
-    )
+    ancestry = _git("merge-base", "--is-ancestor", commit, head, check=False)
     if ancestry.returncode != 0:
         return False, "Simulink tagged commit is not an ancestor of the release controller HEAD"
     return True, f"Simulink candidate is anchored at v{version} ({commit[:12]})"
@@ -514,10 +504,7 @@ def _verify_simulink_candidate_state(package_arg: str) -> int:
     if missing:
         fail(f"Simulink candidate has not passed: {', '.join(missing)}")
         return 4
-    head = subprocess.run(
-        [GIT_EXE, "rev-parse", "HEAD"], cwd=REPO,
-        capture_output=True, text=True, check=True,
-    ).stdout.strip().lower()
+    head = _release_head()
     anchored, message = _simulink_candidate_commit_is_release_anchored(
         manifest, head)
     if not anchored:
@@ -562,24 +549,15 @@ def _verify_optuna_wheel(wheel: Path) -> tuple[dict | None, str]:
 
 def _optuna_release_source_ready() -> tuple[bool, str]:
     head = _release_head()
-    status = subprocess.run(
-        [GIT_EXE, "status", "--porcelain", "--untracked-files=no"],
-        cwd=str(REPO), capture_output=True, text=True,
-    )
+    status = _git("status", "--porcelain", "--untracked-files=no", check=False)
     if status.returncode != 0:
         return False, status.stderr.strip() or "git status failed"
     if status.stdout.strip():
         return False, "tracked release source is dirty"
-    fetched = subprocess.run(
-        [GIT_EXE, "fetch", "origin", "main", "--quiet"],
-        cwd=str(REPO), capture_output=True, text=True,
-    )
+    fetched = _git("fetch", "origin", "main", "--quiet", check=False)
     if fetched.returncode != 0:
         return False, fetched.stderr.strip() or "git fetch origin main failed"
-    origin_main = subprocess.run(
-        [GIT_EXE, "rev-parse", "origin/main"], cwd=str(REPO),
-        capture_output=True, text=True,
-    )
+    origin_main = _git("rev-parse", "origin/main", check=False)
     if origin_main.returncode != 0:
         return False, origin_main.stderr.strip() or "origin/main is unavailable"
     remote_head = origin_main.stdout.strip().lower()
@@ -1857,9 +1835,7 @@ def cmd_restore_editable(args):
 def _git_repo_owner_name():
     """Extract 'owner/name' from `git config remote.origin.url`."""
     import re
-    url = subprocess.check_output(
-        [GIT_EXE, "config", "--get", "remote.origin.url"],
-        cwd=str(REPO), text=True).strip()
+    url = _git("config", "--get", "remote.origin.url").stdout.strip()
     m = re.search(r"github\.com[:/]([^/\s]+)/([^/\s.]+?)(?:\.git)?$", url)
     if not m:
         raise RuntimeError(f"cannot parse GitHub repo from origin {url!r}")
@@ -1941,8 +1917,7 @@ def cmd_ci_verify(args):
     """Require every latest GitHub check-run for HEAD to be green."""
 
     step("Phase 5.5: CI verify -- SHA-bound GitHub check-runs")
-    head_sha = subprocess.check_output(
-        [GIT_EXE, "rev-parse", "HEAD"], cwd=str(REPO), text=True).strip()
+    head_sha = _release_head()
     print(f"  HEAD = {head_sha[:8]}")
     gh_ok, gh_msg = _check_github_hosted_workflows(
         head_sha, required_names=None, timeout_sec=3600
@@ -2128,9 +2103,7 @@ def cmd_sync_main(args):
     info(f"main vs origin/main: ahead {ahead} / behind {behind}")
 
     if behind > 0:
-        p = subprocess.run(
-            [GIT_EXE, "-C", str(REPO), "rebase", "origin/main", "--empty=drop"],
-            capture_output=True, text=True)
+        p = _git("rebase", "origin/main", "--empty=drop", check=False)
         print((p.stdout or "").strip())
         if p.returncode != 0:
             print((p.stderr or "").strip()[-1500:])
@@ -2159,7 +2132,7 @@ def cmd_sync_main(args):
              "then re-run sync-main.")
         return 3
 
-    p = run([GIT_EXE, "-C", str(REPO), "push", "origin", "main"], check=False)
+    p = _git("push", "origin", "main", capture=False, check=False)
     if p.returncode != 0:
         fail("push failed (pre-push hook output above names the gate).")
         return 3
