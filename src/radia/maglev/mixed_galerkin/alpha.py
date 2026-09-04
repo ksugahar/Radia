@@ -38,8 +38,10 @@ def _dirichlet_eigenmodes(mesh, n_eigen: int, dirichlet_label: str):
 
     Solves (-Laplacian) phi_n = lam_n phi_n on the conductor with phi_n = 0 on
     `dirichlet_label`.  Returns the ascending eigenvalues, the M-normalized
-    eigenvectors restricted to the free dofs, the free-dof mass matrix, the
-    free-dof boolean mask, the H1 space, and the volume V.  Both the scalar
+    eigenvectors restricted to the free dofs, the full mass matrix, the
+    free-dof boolean mask, the H1 space, and the volume V. The full matrix is
+    required because driving functions need not vanish on the boundary. Both the
+    scalar
     (`bulk_foster_via_eigen`) and the matrix / multi-port
     (`bulk_foster_matrix_via_eigen`) drivers share this eigensolve so the two
     return bit-identical spectra.
@@ -86,21 +88,21 @@ def _dirichlet_eigenmodes(mesh, n_eigen: int, dirichlet_label: str):
             vecs[:, k] /= norm
 
     V = float(Integrate(1.0, mesh))
-    return lam, vecs, M_free, free, fes, V
+    return lam, vecs, M, free, fes, V
 
 
-def _project_drive(fes, M_free, free, vecs, cf, V):
+def _project_drive(fes, M, free, vecs, cf, V):
     """Project a driving CoefficientFunction onto the eigenbasis.
 
-    Returns b[n] = <cf, phi_n>_M / sqrt(V)  (length n_eigen).  Exact for
-    drives within the polynomial order of `fes` (order 2 -> the constant 1 and
-    the centered coordinates x, y, z are represented exactly).
+    Returns b[n] = <cf, phi_n>_M / sqrt(V) (length n_eigen). The eigenmode
+    is zero on Dirichlet DOFs, but the drive is not, so the product uses the
+    free rows and all mass-matrix columns.
     """
     from ngsolve import GridFunction
     gfu = GridFunction(fes)
     gfu.Set(cf)
     full = np.array(gfu.vec.FV().NumPy())
-    ip = vecs.T @ M_free.dot(full[free])
+    ip = vecs.T @ (M[free, :] @ full)
     return ip / math.sqrt(V)
 
 
@@ -152,13 +154,13 @@ def bulk_foster_matrix_via_eigen(mesh, sigma: float, mu: float, drive_cfs,
     V : float
     """
     from ngsolve import CoefficientFunction
-    lam, vecs, M_free, free, fes, V = _dirichlet_eigenmodes(
+    lam, vecs, M, free, fes, V = _dirichlet_eigenmodes(
         mesh, n_eigen, dirichlet_label)
     P = len(drive_cfs)
     n_mode = len(lam)
     B = np.zeros((n_mode, P))
     for p, cf in enumerate(drive_cfs):
-        B[:, p] = _project_drive(fes, M_free, free, vecs,
+        B[:, p] = _project_drive(fes, M, free, vecs,
                                  CoefficientFunction(cf), V)
     tau_n = mu * sigma / lam
     G_n = np.zeros((n_mode, P, P))
@@ -278,12 +280,12 @@ def K_SIBC_total(area_total: float, sigma: float, mu: float) -> float:
 
 
 def Y_mixed(s, lam, tau, g_n, K_SIBC, c1):
-    """Y_R(s) = Y_bulk_Foster(s) + K_SIBC / sqrt(s) + c_1 / s.
+    """Additive composition Y(s) = Y_bulk_Foster(s) + K_SIBC / sqrt(s) + c_1 / s.
 
     Bulk Foster sum Y_bulk(s) = sum_n g_n / (1 + s tau_n) covers
-    the low-mid frequency response; the Mellin tail K_SIBC/sqrt(s)
-    + c_1/s captures the high-f surface and edge correction beyond
-    the truncated bulk sum.
+    The terms are added without a coupling block. For a projected box model
+    in which the crossover is selected by a Schur complement, use
+    :class:`schur.BoxMixedGalerkin`.
     """
     s_complex = complex(s) if not isinstance(s, complex) else s
     Y_bulk = np.sum(g_n / (1.0 + s_complex * tau))
@@ -343,9 +345,12 @@ def K_SIBC_matrix(mesh, drive_cfs, sigma, mu):
 
 
 def Y_matrix_mixed(s, lam, tau, G_n, K_mat, C1_mat):
-    """Matrix Mixed-Galerkin admittance Y(s)_{pq} (P x P complex).
+    """Matrix additive admittance Y(s)_{pq} (P x P complex).
 
         Y(s) = sum_n G_n[n] / (1 + s tau_n) + K_mat / sqrt(s) + C1_mat / s
+
+    This is an additive form without a coupling block. The projected
+    multi-port box form is :class:`schur.BoxMixedGalerkin`.
 
     G_n is the (n_eigen, P, P) residue tensor from
     bulk_foster_matrix_via_eigen; K_mat from K_SIBC_matrix; C1_mat the

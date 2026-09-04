@@ -1,4 +1,4 @@
-"""Mixed Galerkin CLN-SIBC: bulk Foster + polyhedral surface envelope -> alpha(s)."""
+"""Mixed Galerkin CLN-SIBC models and polarizability helpers."""
 
 from .alpha import (
     bulk_foster_via_eigen,
@@ -23,6 +23,7 @@ from .cad_edges import (
     edge_moment_matrix,
 )
 from .vector_bulk import bulk_foster_vector_via_eigen
+from .schur import BoxMixedGalerkin, box_layer_1d, graded_axis_rule
 from .rom_fit import (
     FosterROM,
     passive_foster_fit,
@@ -57,6 +58,9 @@ __all__ = [
     "cad_topology_c1",
     "edge_moment_matrix",
     "bulk_foster_vector_via_eigen",
+    "BoxMixedGalerkin",
+    "box_layer_1d",
+    "graded_axis_rule",
     "FosterROM",
     "passive_foster_fit",
     "diagonal_tensor_state_space",
