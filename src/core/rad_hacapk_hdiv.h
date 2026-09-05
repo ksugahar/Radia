@@ -1063,6 +1063,18 @@ private:
     void PhiInnerHexRadialHostVec(int kindS, int hS, const double p[3],
                                   const double* reference,
                                   const std::vector<int>& srcG, double* inn) const;
+    // Cone/fan/sinh inner of the BDM1 near family (2026-09-05): six face cones from the apex (the
+    // singular point -- the outer point of a self pair, the physical closest point of a touching pair),
+    // each face integrated by four edge fans from the apex's physical foot, with Johnston-Elliott sinh
+    // substitutions along the ray (near-singular peak of a touching pair), the fan radius (apex close to
+    // the face) and the edge parameter (foot close to an edge).  Every nested peak is resolved by
+    // construction, so the accuracy does not degrade with the cell aspect ratio; m_glIn rules the smooth
+    // directions and m_glInSelf the substituted ones.
+    void PhiInnerHexConeFanVec(int kindS, int hS, const double p[3], const double* reference,
+                               const std::vector<int>& srcG, double* inn) const;
+    // Closest reference point of a (possibly exterior) physical point on a Q2 cell host: the converged
+    // interior inverse, else the nearest of the six face closest-point solves.
+    static bool HexQ2ClosestReference(const double* nd27, const double X[3], double xi[3]);
     // Try the physical inverse for an accurate near-pair anchor.  For an
     // exterior non-self target, retain the last finite in-cube point because
     // any such point gives an exact six-cone partition of the source host.

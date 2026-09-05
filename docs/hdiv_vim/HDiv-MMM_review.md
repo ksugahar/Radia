@@ -1215,3 +1215,63 @@ build against 120 s for the legacy family); the idle mdx/hibino run is codex's.
 `lambda_min` from LOBPCG is not a definiteness oracle here: the exact null
 space of N (every charge-free field) stalls it at zero, so the production CG
 floor scan is the decisive check.
+
+### 8.10 Cone/fan near inner and the M-metric amplification (2026-09-06)
+
+The near family of section 8.9 was replaced by a whole-host rule
+(`PhiInnerHexConeFanVec`): six face cones from the apex -- the outer point of a
+self pair, the physical closest point of the source host for a touching pair
+(`HexQ2ClosestReference`) -- each face integrated by four edge fans from the
+apex's physical foot, with Johnston-Elliott sinh substitutions along the ray
+(the near-singular peak `1/sqrt(d^2 + r^2 |v|^2)` of a touching pair), the fan
+radius (apex close to the face) and the edge parameter (foot close to an
+edge).  Two facts drove it: a thin cone (apex near its face) has a `1/rho`
+peak in the face integral that a tensor Gauss rule cannot integrate (the error
+is first order in the apex distance and moves erratically with the point
+count: sector errors -6 %..+3 % at 8 points, -0.8 %..+12 % at 12), and the
+edge direction carries no vanishing Jacobian, so its peak mass is `b ln(1/b)`
+and the substitution must be applied for every positive width (a `1e-3`
+cutoff left 12 % errors on outer points `1e-4` from an edge).  Affine sources
+keep the exact analytic inner.  Result: on a lattice warped by `1e-7` the rule
+matches the exact inner to `3e-5` (cell self `2.5e-5`, face self `5e-6`,
+touching `3.4e-5`); the elongated sector lattice sits inside the physical band
+(`lambda_max` 0.998 against 1.084 legacy and 1.03 for the sub-tet radial), so
+`test_sector_spectrum_stays_in_physical_band` is a plain pass; the per-class
+residual against `glnear` 12 is `1.6e-4` and comes from the outer rule
+(`glin_self` 8 vs 12 changes `3e-6`).  The default `glin_self_n` is 8.
+
+The affine product family (exact inner, plain `glout` 4 outer) turned out to
+be the coarser one: face self blocks `+4.1e-3` (converging only
+algebraically, `+1.1e-4` at `glout` 10, `+1.5e-5` at 16), touching couplings
+`1.7e-4`; the graded 8-point outer is `2.4e-6` on the flat face self integral.
+BDM1 therefore routes the whole affine near band (self, touching, and the
+non-touching pairs inside the `HEX_AFFINE_EXACT_NEAR_FACTOR` band) through
+the graded near tensor outer as well, so every near source of a target host is
+integrated on one cloud; BDM2 keeps the affine product.
+
+None of this passes #6.  The CG breakdown direction of the cone/fan family is
+identical to the old family's (quotient `-5.086e-4`, same cells, 60 %
+distorted); a mesh perturbed by `1e-10` m so that every cell is non-affine
+(uniform fan family) still breaks at iteration 98 (`p^T A p` `-1.2e9` against
+`-1.8e11`); routing only the touching affine pairs onto the graded cloud
+exposed a 4-fold degenerate face mode at `lambda` `-5.009e-3` (self face
+`+0.65`, touching face-face `-0.46`, near band `-0.20` in units of the mode's
+M-norm, almost entirely on affine faces); the consistent band routing leaves a
+mode at `-2.27e-3` and the CG at iteration 98 (hibino).  The reason is
+structural: on the flat lattice the same entry errors that are `4e-6` relative
+give an M-metric error spectrum of `[-1.0e-3, +4.0e-4]`, and `2e-7` entries
+give `[-4.9e-5, +3.2e-5]` -- an amplification of about `1e3`.  The modes
+nearest zero are nearly charge-free fields whose cell-divergence and face
+charges cancel, so their energy is a small remainder of large self and cross
+block energies, each integrated by its own rule; the block errors do not cancel
+the way the charges do.  Block-wise quadrature would need entries accurate to
+about `1e-8` on rules with `x ln x` edge behaviour, which is not a tuning
+target.  The way out is a common energy form: either the Ewald split
+`1/r = erf(alpha r)/r + erfc(alpha r)/r`, with the smooth positive-definite
+part integrated on one global point set (positive semidefinite by construction
+for any charge samples) and only the short-range part, which has no
+cancellation structure, integrated per self/touching block; or the assembly of
+each BDM DOF's composite charge (cell divergence plus boundary face charge,
+zero net) with one rule per DOF pair, i.e. the dipole-kernel formulation with
+analytic element integrals.  Heavy runs are hibino's (Gram build 350 s at
+45,792 DoF); LAB numbers above are relative.

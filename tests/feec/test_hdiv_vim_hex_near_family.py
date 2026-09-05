@@ -67,19 +67,18 @@ def test_sector_spectrum_is_psd_and_dispatch_is_the_near_family():
     w, stats = _generalized_spectrum(_sector_mesh())
     assert w[0] > -1e-8, f"demag spectrum lost PSD: min eig {w[0]:.3e}"
     assert stats["hex_near_inner_exact"] == 1.0
+    assert stats["hex_near_inner_host_cone"] == 1.0
     assert stats["hex_cluster_radius_enabled"] == 1.0
     assert stats["hex_glnear_n"] == 8.0 and stats["hex_glout_n"] == 4.0
-    assert stats["hex_glin_self_n"] == 12.0 and stats["hex_glin_n"] == 5.0
+    assert stats["hex_glin_self_n"] == 8.0 and stats["hex_glin_n"] == 5.0
     assert stats["nonproduction_numerical_override_active"] == 0.0
     # every distorted host pair inside the near band is graded; none took the plain far rule
     assert stats["hex_blk_general_near"] > 0 and stats["hex_blk_general_far"] == 0
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "open accuracy item (2026-09-05): on this elongated sector lattice the near family is still "
-    "+/- 2..9 % off a fine reference in the M-metric (legacy: -11 %..+18 %), so lambda_max reaches "
-    "1.03 against the physical bound 1; a converged near family must turn this into a pass"))
 def test_sector_spectrum_stays_in_physical_band():
+    """The cone/fan/sinh inner keeps the elongated distorted lattice inside the physical band; the
+    previous sub-tet radial (1.03) and the legacy family (1.084) both exceeded it."""
     w, _ = _generalized_spectrum(_sector_mesh())
     assert w[-1] < 1.0 + 1e-3, f"demag spectrum exceeds the physical band: {w[-1]:.6f}"
 
