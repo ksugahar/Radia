@@ -864,6 +864,18 @@ static double WedgeFarOneSidedThreshold()
 // QuadBlockHexAffineFarProduct instead of the 6x6-sub graded machinery.  Default matches the accepted
 // affine far gate (HEX_AFFINE_EXACT_NEAR_FACTOR = 1.0); <= 0 disables the switch (diagnostic A/B /
 // regression-triage escape, same pattern as the one-sided thresholds above).
+// RADIA_HDIV_HEX_CLUSTER_RADIUS=0 restores plain point bounding boxes for the cluster tree
+// (diagnostic A/B only; reported as a numerical override).
+static bool HexClusterRadiusEnabled()
+{
+    static const bool enabled = []() -> bool {
+        const char* v = std::getenv("RADIA_HDIV_HEX_CLUSTER_RADIUS");
+        if (!v || v[0] == '\0') return true;
+        return std::atoi(v) != 0;
+    }();
+    return enabled;
+}
+
 static double HexDistortedFarFactor()
 {
     static const double factor = []() -> double {
@@ -3275,13 +3287,17 @@ RadHACApKChargeGram::RadHACApKChargeGram(
     std::vector<double> far_tet_pts, std::vector<double> far_tet_w,
     std::vector<double> far_tri_pts, std::vector<double> far_tri_w,
     double near_grade, double far_inner_factor,
-    std::vector<int> image_masks, std::vector<double> image_signs)
+    std::vector<int> image_masks, std::vector<double> image_signs,
+    std::vector<double> gl_near, std::vector<double> gw_near, bool near_inner_exact,
+    std::vector<double> gl_in_self, std::vector<double> gw_in_self)
     : m_n_el(n_el), m_hexmode(true), m_hex_n_bf(n_bf),
       m_hexNodes(std::move(hex_cell_nodes)), m_quadNodes(std::move(quad_face_nodes)),
       m_symTetP(std::move(sym_tet_pts)), m_symTetW(std::move(sym_tet_w)),
       m_symTriP(std::move(sym_tri_pts)), m_symTriW(std::move(sym_tri_w)),
       m_glOut(std::move(gl_out)), m_gwOut(std::move(gw_out)),
       m_glIn(std::move(gl_in)), m_gwIn(std::move(gw_in)),
+      m_glNear(std::move(gl_near)), m_gwNear(std::move(gw_near)),
+      m_glInSelf(std::move(gl_in_self)), m_gwInSelf(std::move(gw_in_self)), m_nearInnerExact(near_inner_exact),
       m_farTetP(std::move(far_tet_pts)), m_farTetW(std::move(far_tet_w)),
       m_farTriP(std::move(far_tri_pts)), m_farTriW(std::move(far_tri_w)),
       m_near_grade(near_grade), m_far_inner_factor(far_inner_factor),
@@ -3292,6 +3308,14 @@ RadHACApKChargeGram::RadHACApKChargeGram(
     m_n = (int)m_host.size();
     if (m_kind.size() != m_host.size() || m_expo.size() != 3*m_host.size())
         throw std::invalid_argument("HEX ChargeGram charge metadata sizes are inconsistent");
+    if (m_glNear.size() != m_gwNear.size())
+        throw std::invalid_argument("HEX ChargeGram gl_near/gw_near sizes differ");
+    if (m_glNear.empty()) { m_glNear = m_glOut; m_gwNear = m_gwOut; }   // legacy: one outer rule for both
+    if (m_glInSelf.size() != m_gwInSelf.size())
+        throw std::invalid_argument("HEX ChargeGram gl_in_self/gw_in_self sizes differ");
+    if (m_glInSelf.empty()) { m_glInSelf = m_glIn; m_gwInSelf = m_gwIn; }  // legacy: one radial rule for both
+    if (m_glOut.empty() || m_glIn.empty())
+        throw std::invalid_argument("HEX ChargeGram needs non-empty gl_out and gl_in rules");
     for (int exponent : m_expo)
         if (exponent < 0 || exponent > 2)
             throw std::invalid_argument("HEX ChargeGram supports reference exponents in {0,1,2}");
@@ -4096,7 +4120,8 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexCacheStats()
         hex_far_one_sided > 0.0 || wedge_far_one_sided > 0.0 ||
         distorted_far_factor != 1.0 || ho_far_one_sided ||
         !ho_analytic_enabled || !ho_image_enabled || !ho_image_far_enabled ||
-        !curved_direct_enabled;
+        !curved_direct_enabled || (m_hexmode && !m_nearInnerExact) ||
+        (m_hexmode && !HexClusterRadiusEnabled());
     const bool performance_override =
         block_cache_limit != HEX_BLOCK_CACHE_LIMIT_DEFAULT ||
         wedge_trans_scope != 2 || !trans_cache_enabled ||
@@ -4108,6 +4133,12 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexCacheStats()
     out.emplace_back("hex_far_one_sided_threshold", hex_far_one_sided);
     out.emplace_back("hex_affine_exact_near_factor", HEX_AFFINE_EXACT_NEAR_FACTOR);
     out.emplace_back("hex_distorted_far_factor", distorted_far_factor);
+    out.emplace_back("hex_near_inner_exact", m_nearInnerExact ? 1.0 : 0.0);
+    out.emplace_back("hex_cluster_radius_enabled", HexClusterRadiusEnabled() ? 1.0 : 0.0);
+    out.emplace_back("hex_glnear_n", (double)m_glNear.size());
+    out.emplace_back("hex_glout_n", (double)m_glOut.size());
+    out.emplace_back("hex_glin_n", (double)m_glIn.size());
+    out.emplace_back("hex_glin_self_n", (double)m_glInSelf.size());
     out.emplace_back("curved_direct_enabled", curved_direct_enabled ? 1.0 : 0.0);
     // QuadBlockHex dispatch profile: computed blocks + accumulated wall seconds per branch (thread-summed
     // across the ParallelFor workers, so the seconds compare branch-to-branch, not to the build wall clock).
@@ -4504,7 +4535,8 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHexAffineFarProduct(
 }
 
 void RadHACApKChargeGram::PhiInnerHexSubVec(int kindS, int hS, int subB, const double p[3],
-                                            const std::vector<int>& srcG, double* inn) const
+                                            const std::vector<int>& srcG, double* inn,
+                                            const double* anchor) const
 {
     const bool cell = (kindS == 0);
     const double* nd = cell ? &m_hexNodes[(size_t)hS*81] : &m_quadNodes[(size_t)hS*27];
@@ -4545,7 +4577,16 @@ void RadHACApKChargeGram::PhiInnerHexSubVec(int kindS, int hS, int subB, const d
     const double dxc = p[0]-cs[0], dyc = p[1]-cs[1], dzc = p[2]-cs[2];
     const bool far_pt = std::sqrt(dxc*dxc + dyc*dyc + dzc*dzc) > m_far_inner_factor*sz;
     if (!far_pt) {
-        PhiInnerHexSiteVec(kindS, hS, subB, p, srcG, inn);
+        // EXACT-anchor radial (2026-09-05): the caller passes the outer point's reference coordinates in
+        // THIS source host (HexQ2Inverse / QuadQ2ClosestReference); PhiInnerHexRadialVec clamps the anchor
+        // into the sub-simplex and tiles it with signed radial cones whose apex kills the 1/r peak, so the
+        // rule converges like the self rule.  The static-site radial anchored at the nearest of 15 / 7
+        // fixed sites underestimated touching-pair energies by ~1e-3 (ESRF #6 HEX Gram indefiniteness).
+        // FACE sources take the finer (self) radial rule: the negative face-face mode of the ESRF #6
+        // Gram (lambda -5.0e-3, all of it face-face energy on distorted cells) came from edge-sharing
+        // face pairs integrated with the 3 x glin^2 = 75-point cones against accurate self blocks.
+        if (anchor) PhiInnerHexRadialVec(kindS, hS, subB, p, anchor, srcG, inn, /*self_rule=*/!cell);
+        else        PhiInnerHexSiteVec(kindS, hS, subB, p, srcG, inn);
         return;
     }
     const std::shared_ptr<const HexQuadCloud> cl =
@@ -4652,7 +4693,7 @@ static void ClosestPointTri2D(const double V[3][2], const double p[2], double ou
 // them).  m_glIn/m_gwIn = the radial 1D Gauss rule.
 void RadHACApKChargeGram::PhiInnerHexRadialVec(int kindS, int hS, int subB, const double p[3],
                                                const double* xiT, const std::vector<int>& srcG,
-                                               double* inn) const
+                                               double* inn, bool self_rule) const
 {
     if (!xiT)
         throw std::logic_error("PhiInnerHexRadialVec: xiT required (SELF-only; non-self near uses the site radial)");
@@ -4668,9 +4709,11 @@ void RadHACApKChargeGram::PhiInnerHexRadialVec(int kindS, int hS, int subB, cons
         return;
     }
     const double* nd = cell ? &m_hexNodes[(size_t)hS*81] : &m_quadNodes[(size_t)hS*27];
-    const int nR = (int)m_glIn.size();
-    const double* GL = m_glIn.data();
-    const double* GW = m_gwIn.data();
+    const std::vector<double>& glr = self_rule ? m_glInSelf : m_glIn;   // SELF pairs: the finer radial rule
+    const std::vector<double>& gwr = self_rule ? m_gwInSelf : m_gwIn;
+    const int nR = (int)glr.size();
+    const double* GL = glr.data();
+    const double* GW = gwr.data();
     const int nS = (int)srcG.size();
     std::vector<double> acc((size_t)nS, 0.0);
 
@@ -5268,8 +5311,13 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
                          std::memory_order_relaxed);
         return out;
     };
+    // TOUCHING hosts (a shared Q2 lattice node after the image transform) never take a far tensor
+    // product: their integrand is singular on the shared node/edge/face whatever the centroid ratio says
+    // (vertex-touching affine pairs reach ratio 1.0 on the ESRF #6 mesh, 2026-09-05).
+    const bool touching_hosts = HexHostsTouch(kindT, hT, kindS, hS, img);
     if (affineT && affineS) {
-        const bool exact_near = sep <= HEX_AFFINE_EXACT_NEAR_FACTOR*(m_size[repA] + m_size[repB]);
+        const bool exact_near = touching_hosts
+            || sep <= HEX_AFFINE_EXACT_NEAR_FACTOR*(m_size[repA] + m_size[repB]);
         return exact_near
             ? timed(m_hexBlkAffineNear, m_hexNsAffineNear,
                     [&]{ return QuadBlockHexAffineProduct(kindT, hT, kindS, hS, img); })
@@ -5279,10 +5327,10 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
     // DISTORTED-pair far switch (see HexDistortedFarFactor): the tensor far product is geometry-map
     // exact (Q2 point placement, Piola reference charge measure), so a well-separated pair with a
     // distorted/curved host needs no 6x6-sub graded machinery either.  Self pairs have sep == 0 and
-    // always stay on the graded/radial path.
+    // always stay on the graded/radial path; touching hosts were excluded above.
     {
         const double fac = HexDistortedFarFactor();
-        if (fac > 0.0 && sep > fac*(m_size[repA] + m_size[repB]))
+        if (fac > 0.0 && !touching_hosts && sep > fac*(m_size[repA] + m_size[repB]))
             return timed(m_hexBlkDistortedFar, m_hexNsDistortedFar,
                          [&]{ return QuadBlockHexAffineFarProduct(kindT, hT, kindS, hS, img); });
     }
@@ -5304,7 +5352,10 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
     // source-potential eval, and never treat the pair as SELF.  img==0 => reflpt identity => byte-identical.
     auto reflpt = [this, img](const double* v, double* o){ ImageEvalPoint(img, v, o); };
     const int rt = tgtG[0], rs = srcG[0];      // representative charges (host-level cent/size)
-    const bool near_hosts = (img == 0 && kindT == kindS && hT == hS)
+    // NEAR hosts: self, touching (shared lattice node -- face/edge/vertex neighbours sit at centroid
+    // ratio 0.56..1.0 on the ESRF #6 mesh and were classified far at near_grade 0.5), or within the
+    // near_grade distance band.
+    const bool near_hosts = (img == 0 && kindT == kindS && hT == hS) || touching_hosts
                             || sep <= m_near_grade*(m_size[rt] + m_size[rs]);   // sep == reflected r_h above
     // SELF host pair: the inner takes the RADIAL decomposition with the EXACT anchor xiT (the outer
     // point's own ref coords -- no Newton).  The OUTER grading below is UNCHANGED -- it is required by the
@@ -5324,6 +5375,23 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
         const double d_ = std::abs(rc_[0]-m_cent[3*rt]) + std::abs(rc_[1]-m_cent[3*rt+1]) + std::abs(rc_[2]-m_cent[3*rt+2]);
         self_pair = (d_ < 1e-6 * m_size[rt] + 1e-12);   // T(host)==host <=> host is invariant
     }
+    // NEAR NON-SELF host pairs (touching / near_grade band): the endpoint-graded tensor outer over the whole
+    // target host with the exact-anchor radial inner (QuadBlockHexNearTensor).  It replaces the former
+    // corner-Duffy sub-tet outer + static-site inner for touching pairs, whose ~1e-3 errors made the ESRF
+    // #6 Gram indefinite (2026-09-05).  CELL self pairs keep the corner-graded sub-tet outer below:
+    // measured on the #6 distorted cells its self block converges to 1e-5 at glnear 8 (the endpoint-graded
+    // tensor outer clusters points at the sub-tet faces, where the glin-5 radial inner is coarse: 4e-3 low).
+    // FACE self pairs also take the tensor path: the face potential's edge singularities need grading at
+    // every edge of the target square, which the endpoint-graded tensor rule provides (the sector lattice
+    // left lambda_max at 1.02..1.05 with the corner-graded sub-tri outer, 0.996 with the tensor outer).
+    if (near_hosts) {
+        std::vector<double> near_blk = QuadBlockHexNearTensor(kindT, hT, kindS, hS, img, self_pair);
+        m_hexBlkGeneralNear.fetch_add(1, std::memory_order_relaxed);
+        m_hexNsGeneralNear.fetch_add((long long)std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                         std::chrono::steady_clock::now() - t_general0).count(),
+                                     std::memory_order_relaxed);
+        return near_blk;
+    }
     const int nqreg = cellT ? (int)m_symTetW.size() : (int)m_symTriW.size();
     const double* ndT = cellT ? &m_hexNodes[(size_t)hT*81] : &m_quadNodes[(size_t)hT*27];
     const int nvT = cellT ? 4 : 3;
@@ -5335,15 +5403,17 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
         for (int sB = 0; sB < nsubS; ++sB) {
             const size_t sidB = cellS ? ((size_t)hS*6 + sB) : ((size_t)hS*2 + sB);
             const double* cB0 = cellS ? &m_cellSubC[sidB*3] : &m_faceSubC[sidB*3];
-            double cB[3]; reflpt(cB0, cB);   // mapped source sub-centroid drives near/far + Duffy corner (img>0)
+            double cB[3]; reflpt(cB0, cB);   // mapped source sub-centroid drives the Duffy corner (img>0)
             const double szB = cellS ? m_cellSubS[sidB] : m_faceSubS[sidB];
             const double* cA = cellT ? &m_cellSubC[sidA*3] : &m_faceSubC[sidA*3];
             const double dx = cA[0]-cB[0], dy = cA[1]-cB[1], dz = cA[2]-cB[2];
-            const bool near_sub = near_hosts &&
+            // SELF pairs: grade the sub-tet outer toward the source sub (the validated self scheme);
+            // non-near pairs: the regular symmetric rule.
+            const bool near_sub = self_pair &&
                 std::sqrt(dx*dx + dy*dy + dz*dz) <= m_near_grade*(szA + szB);
-            // OUTER geometry cloud on target sub sA (monomial-FREE): regular symmetric or graded toward
-            // cB.  HELD as a shared_ptr: the inner calls below fetch far clouds from the same cache, and
-            // its capacity clear must not invalidate this hold (the n=10 0xC0000005 use-after-free).
+            // OUTER geometry cloud on target sub sA (monomial-FREE).  HELD as a shared_ptr: the inner
+            // calls below fetch far clouds from the same cache, and its capacity clear must not
+            // invalidate this hold (the n=10 0xC0000005 use-after-free).
             std::shared_ptr<const HexQuadCloud> oc;
             if (!near_sub) {
                 oc = HexGetCloud(m_build_id, HexCloudKey(cellT ? 0 : 1, true, false, hT, sA, 3),
@@ -5361,7 +5431,7 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
                 oc = HexGetCloud(m_build_id, HexCloudKey(cellT ? 0 : 1, true, true, hT, sA, corner),
                     [&](HexQuadCloud& c) {
                         std::vector<double> gb, gw;
-                        HexDuffyBary(cellT ? 3 : 2, corner, m_glOut, m_gwOut, gb, gw);
+                        HexDuffyBary(cellT ? 3 : 2, corner, m_glNear, m_gwNear, gb, gw);   // near outer rule (decoupled)
                         HexBuildCloud(ndT, cellT, sA, gb.data(), gw.data(), (int)gw.size(), true, c);
                     });
             }
@@ -5372,8 +5442,7 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
                 for (int ls = 0; ls < nS; ++ls) inn[ls] = 0.0;
                 double peval[3]; reflpt(pq, peval);                                             // inverse-map for the (image) source eval
                 if (self_pair) PhiInnerHexRadialVec(kindS, hS, sB, pq, xiT, srcG, inn.data());  // radial, exact anchor
-                else           PhiInnerHexSubVec(kindS, hS, sB, peval, srcG, inn.data());       // far cloud / radial (peval==pq if img==0)
-
+                else           PhiInnerHexSubVec(kindS, hS, sB, peval, srcG, inn.data());       // far cloud / site radial (peval==pq if img==0)
                 const double wg = oc->wgeo[q];
                 for (int lt = 0; lt < nT; ++lt) owt[lt] = wg*HexMonoEval(tgtG[lt], xiT);
                 for (int lt = 0; lt < nT; ++lt) {
@@ -5385,12 +5454,109 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
         }
     }
     for (double& v : blk) v *= RAD_INV_FOUR_PI;
-    (near_hosts ? m_hexBlkGeneralNear : m_hexBlkGeneralFar)
-        .fetch_add(1, std::memory_order_relaxed);
-    (near_hosts ? m_hexNsGeneralNear : m_hexNsGeneralFar)
+    (self_pair ? m_hexBlkGeneralNear : m_hexBlkGeneralFar).fetch_add(1, std::memory_order_relaxed);
+    (self_pair ? m_hexNsGeneralNear : m_hexNsGeneralFar)
         .fetch_add((long long)std::chrono::duration_cast<std::chrono::nanoseconds>(
                        std::chrono::steady_clock::now() - t_general0).count(),
                    std::memory_order_relaxed);
+    return blk;
+}
+
+// Endpoint-graded tensor cloud over the COMPLETE reference cube (cell) or square (face): the 1D near
+// rule (gl, gw) is pushed through the C2 smootherstep t = s^3 (10 - 15 s + 6 s^2), w' = w 30 s^2 (1-s)^2,
+// which clusters points quadratically at both ends of every axis.  The product rule therefore resolves
+// the boundary singularities of a self / touching source potential on every face, edge and corner of the
+// target at once (the corner-Duffy sub-tet rule resolved one corner per sub pair).  Weights are the REF
+// measure (Piola-exact charge: no Jacobian); they sum to 1 (cell) / 1 (face).
+static void HexGradedTensorCloud(const double* nd, bool cell, const std::vector<double>& gl,
+                                 const std::vector<double>& gw, HexQuadCloud& out)
+{
+    const int n = (int)gl.size();
+    std::vector<double> t((size_t)n), w((size_t)n);
+    for (int i = 0; i < n; ++i) {
+        const double s = gl[i];
+        t[(size_t)i] = s*s*s*(10.0 - 15.0*s + 6.0*s*s);
+        w[(size_t)i] = gw[i]*30.0*s*s*(1.0-s)*(1.0-s);
+    }
+    const int nq = cell ? n*n*n : n*n;
+    out.pts.resize((size_t)nq*3); out.wgeo.resize((size_t)nq); out.xi.resize((size_t)nq*3);
+    int q = 0;
+    if (cell) {
+        for (int k = 0; k < n; ++k) for (int j = 0; j < n; ++j) for (int i = 0; i < n; ++i, ++q) {
+            const double xi[3] = {t[(size_t)i], t[(size_t)j], t[(size_t)k]};
+            double X[3];
+            RadHACApKChargeGram::HexQ2MapX(nd, xi, X);
+            for (int c = 0; c < 3; ++c) { out.pts[(size_t)3*q+c] = X[c]; out.xi[(size_t)3*q+c] = xi[c]; }
+            out.wgeo[(size_t)q] = w[(size_t)i]*w[(size_t)j]*w[(size_t)k];
+        }
+    } else {
+        for (int j = 0; j < n; ++j) for (int i = 0; i < n; ++i, ++q) {
+            const double uv[2] = {t[(size_t)i], t[(size_t)j]};
+            double X[3];
+            RadHACApKChargeGram::QuadQ2MapX(nd, uv, X);
+            out.pts[(size_t)3*q] = X[0]; out.pts[(size_t)3*q+1] = X[1]; out.pts[(size_t)3*q+2] = X[2];
+            out.xi[(size_t)3*q] = uv[0]; out.xi[(size_t)3*q+1] = uv[1]; out.xi[(size_t)3*q+2] = 0.0;
+            out.wgeo[(size_t)q] = w[(size_t)i]*w[(size_t)j];
+        }
+    }
+}
+
+std::vector<double> RadHACApKChargeGram::QuadBlockHexNearTensor(int kindT, int hT, int kindS, int hS, int img,
+                                                                bool self_pair) const
+{
+    const std::vector<int>& tgtG = (kindT == 0) ? m_cellCharges[hT] : m_faceCharges[hT];
+    const std::vector<int>& srcG = (kindS == 0) ? m_cellCharges[hS] : m_faceCharges[hS];
+    const int nT = (int)tgtG.size(), nS = (int)srcG.size();
+    std::vector<double> blk((size_t)nT*nS, 0.0);
+    if (nT == 0 || nS == 0) return blk;
+    const bool cellT = (kindT == 0), cellS = (kindS == 0);
+    const int nsubS = cellS ? 6 : 2;
+    const double* ndT = cellT ? &m_hexNodes[(size_t)hT*81] : &m_quadNodes[(size_t)hT*27];
+    const double* ndS = cellS ? &m_hexNodes[(size_t)hS*81] : &m_quadNodes[(size_t)hS*27];
+    auto reflpt = [this, img](const double* v, double* o){ ImageEvalPoint(img, v, o); };
+    // Whole-host cloud (sub index 7 / corner 3 keep the key clear of the sub-simplex clouds).  HELD as a
+    // shared_ptr across the inner calls that fetch far clouds from the same cache.
+    std::shared_ptr<const HexQuadCloud> oc =
+        HexGetCloud(m_build_id, HexCloudKey(cellT ? 0 : 1, true, true, hT, 7, 3),
+            [&](HexQuadCloud& c) { HexGradedTensorCloud(ndT, cellT, m_glNear, m_gwNear, c); });
+    const int nqo = (int)oc->wgeo.size();
+    std::vector<double> inn((size_t)nS), owt((size_t)nT);
+    for (int q = 0; q < nqo; ++q) {
+        const double pq[3] = {oc->pts[3*q], oc->pts[3*q+1], oc->pts[3*q+2]};
+        const double* xiT = &oc->xi[3*q];
+        for (int ls = 0; ls < nS; ++ls) inn[ls] = 0.0;
+        double peval[3]; reflpt(pq, peval);
+        if (self_pair) {
+            // the outer point's own reference coordinates anchor the radial cones in every source sub;
+            // the SELF radial rule is finer (the endpoint grading puts outer points near the sub-tet faces)
+            for (int sB = 0; sB < nsubS; ++sB) PhiInnerHexRadialVec(kindS, hS, sB, pq, xiT, srcG, inn.data(), true);
+        } else if (m_nearInnerExact) {
+            double anchor[3] = {0.5, 0.5, 0.5};
+            bool ok;
+            if (cellS) ok = HexQ2Inverse(ndS, peval, anchor);                                  // clamped into [0,1]^3
+            else {
+                double uv[2] = {0.5, 0.5};
+                ok = QuadQ2ClosestReference(ndS, peval, uv);
+                anchor[0] = uv[0]; anchor[1] = uv[1]; anchor[2] = 0.0;
+            }
+            if (!ok)
+                throw std::runtime_error(
+                    std::string("hex charge Gram: near-pair reference inversion failed for ")
+                    + (cellS ? "cell host " : "face host ") + std::to_string(hS)
+                    + " (target " + (cellT ? "cell " : "face ") + std::to_string(hT) + ")");
+            for (int sB = 0; sB < nsubS; ++sB) PhiInnerHexSubVec(kindS, hS, sB, peval, srcG, inn.data(), anchor);
+        } else {
+            for (int sB = 0; sB < nsubS; ++sB) PhiInnerHexSubVec(kindS, hS, sB, peval, srcG, inn.data());
+        }
+        const double wg = oc->wgeo[q];
+        for (int lt = 0; lt < nT; ++lt) owt[lt] = wg*HexMonoEval(tgtG[lt], xiT);
+        for (int lt = 0; lt < nT; ++lt) {
+            const double wl = owt[lt];
+            double* row = &blk[(size_t)lt*nS];
+            for (int ls = 0; ls < nS; ++ls) row[ls] += wl*inn[ls];
+        }
+    }
+    for (double& v : blk) v *= RAD_INV_FOUR_PI;
     return blk;
 }
 
@@ -6106,6 +6272,7 @@ bool RadHACApKChargeGram::HexPairTakesGeneralPath(int kindT, int hT, int kindS, 
         ? (hS >= 0 && hS < (int)m_hexAffineCell.size() && m_hexAffineCell[hS])
         : (hS >= 0 && hS < (int)m_quadAffineFace.size() && m_quadAffineFace[hS]);
     if (affT && affS) return false;
+    if (HexHostsTouch(kindT, hT, kindS, hS, img)) return true;   // touching distorted hosts: graded path
     const double fac = HexDistortedFarFactor();
     if (fac <= 0.0) return true;
     const int repA = tgtG[0], repB = srcG[0];
@@ -6116,6 +6283,39 @@ bool RadHACApKChargeGram::HexPairTakesGeneralPath(int kindT, int hT, int kindS, 
       + (m_cent[(size_t)3*repA + 1] - repBc[1])*(m_cent[(size_t)3*repA + 1] - repBc[1])
       + (m_cent[(size_t)3*repA + 2] - repBc[2])*(m_cent[(size_t)3*repA + 2] - repBc[2]));
     return sep <= fac*(m_size[repA] + m_size[repB]);
+}
+
+bool RadHACApKChargeGram::HexHostsTouch(int kindT, int hT, int kindS, int hS, int img) const
+{
+    const std::vector<int>& tgtG = (kindT == 0) ? m_cellCharges[hT] : m_faceCharges[hT];
+    const std::vector<int>& srcG = (kindS == 0) ? m_cellCharges[hS] : m_faceCharges[hS];
+    if (tgtG.empty() || srcG.empty()) return false;
+    if (img == 0 && kindT == kindS && hT == hS) return true;
+    // Cheap reject: hosts whose centroids are farther apart than the sum of their bounding radii (plus
+    // a roundoff margin) cannot share a node.  This keeps the O(27*27) node comparison off the far pairs.
+    const int repA = tgtG[0], repB = srcG[0];
+    double cS[3];
+    ImageEvalPoint(img, &m_cent[(size_t)3*repB], cS);
+    const double dx = m_cent[(size_t)3*repA] - cS[0], dy = m_cent[(size_t)3*repA + 1] - cS[1],
+                 dz = m_cent[(size_t)3*repA + 2] - cS[2];
+    const double radius_sum = m_size[repA] + m_size[repB];
+    if (std::sqrt(dx*dx + dy*dy + dz*dz) > 1.05*radius_sum + 1e-12) return false;
+    const double* ndT = (kindT == 0) ? &m_hexNodes[(size_t)hT*81] : &m_quadNodes[(size_t)hT*27];
+    const double* ndS = (kindS == 0) ? &m_hexNodes[(size_t)hS*81] : &m_quadNodes[(size_t)hS*27];
+    const int nT = (kindT == 0) ? 27 : 9, nS = (kindS == 0) ? 27 : 9;
+    // Lattice nodes shared by neighbouring hosts come from each host's own GetTrafo evaluation and agree
+    // to roundoff; distinct nodes are a lattice spacing apart.
+    const double tol = 1e-9*radius_sum + 1e-14;
+    for (int j = 0; j < nS; ++j) {
+        double image_node[3];
+        ImageApplyVector(img, &ndS[3*j], image_node);       // T applied to a POSITION (linear, no offset)
+        for (int i = 0; i < nT; ++i) {
+            const double ex = image_node[0] - ndT[3*i], ey = image_node[1] - ndT[3*i + 1],
+                         ez = image_node[2] - ndT[3*i + 2];
+            if (ex*ex + ey*ey + ez*ez <= tol*tol) return true;
+        }
+    }
+    return false;
 }
 
 const std::vector<double>& RadHACApKChargeGram::GetHexBlock(int kindT, int hT, int kindS, int hS, int img) const
@@ -6808,6 +7008,18 @@ void RadHACApKChargeGram::ExtractCoordinates()
     m_n_elem = m_n;
     m_ndof   = m_n;
     m_coordinates = m_cent;   // [n*3] charge centroids (the cluster-tree points)
+    m_pointRadius.clear();
+    if (m_hexmode && !m_d2 && !m_wedgemode && HexClusterRadiusEnabled()) {
+        // HEX cluster-tree boxes of SUPPORTS (2026-09-05, ESRF #6): the co-located charge centroids hide
+        // the extent of a host's charge, so HACApK's box-gap admissibility (width <= eta * gap) declared
+        // blocks between TOUCHING hosts admissible and ACA+ stopped at rank 5 on an 80x80 block whose raw
+        // quadratic was 2.9x larger (the lambda_max 2.12 mode; the physical bound is 1).  Publishing the
+        // host bounding radius per charge makes the boxes of touching hosts overlap (gap 0), so every
+        // touching pair lands in a dense leaf while a host's modes stay co-located (spreading the modes
+        // over the lattice nodes instead split hosts across clusters and put self entries into low-rank
+        // leaves: lambda in [-790, 929]).
+        m_pointRadius = m_size;
+    }
 }
 
 bool RadHACApKChargeGram::BuildHMatrix(const RadHACApKParams& params)
