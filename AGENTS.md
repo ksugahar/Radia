@@ -151,10 +151,16 @@ geometry/mesh and primary-field scenes.
 Developer pre-push hooks run only the impact-scoped mdx preflight. Release
 workflows, never developer hooks, publish immutable artifacts.
 
-The EqnEdit64 signed-standalone release job is the sole LAB runner exception:
-it verifies the LAB-owned signing certificate and OneDrive release manifest
-after successful EqnEdit64 tag CI. It is a release signing gate, not regular
-repository CI, and must not acquire Radia test or build work.
+No workflow selects a LAB runner. The EqnEdit64 signed-standalone release job
+once did, to read the LAB-owned OneDrive release manifest, and that was never
+reachable: a runner service executes as NETWORK SERVICE, which sees no per-user
+mapped drive, and these machines are the workgroup HFEM rather than a domain,
+so the laboratory share refuses its machine account outright. Making LAB a
+runner would also hand it Radia's heavy build and test work. The signed
+executable now reaches CI as an asset of the eqnedit64-staging release, staged
+by sync_to_o.ps1 in the same transaction that updates O:, and the whole release
+lane runs GitHub-hosted. O: stays the human hand-test entry point, not a CI
+input.
 
 ### Compute Host Routing
 

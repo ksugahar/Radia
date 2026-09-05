@@ -52,13 +52,21 @@ def test_fast_ci_runs_only_on_mdx_and_native_is_a_named_release_lane():
     assert 'workflows: ["Radia Native Release"]' in release
 
 
-def test_regular_ci_never_selects_a_lab_runner():
+def test_no_workflow_selects_a_lab_runner():
+    """No lane may ask for a LAB runner, the signing release included.
+
+    The signing job used to be the documented exception, and it could never
+    run: a runner service executes as NETWORK SERVICE, which sees no per-user
+    mapped drive, and these machines form a workgroup rather than a domain, so
+    the laboratory share refuses the machine account.  The label it asked for
+    was never registered either, so a tag push queued forever instead of
+    failing.  The signed executable now arrives as a staging release asset and
+    the whole lane is GitHub-hosted.
+    """
     workflows = ROOT / ".github" / "workflows"
     signing_release = "release-eqnedit64-pypi.yml"
 
     for path in sorted(workflows.glob("*.yml")):
-        if path.name == signing_release:
-            continue
         runner_lines = [
             line.strip()
             for line in path.read_text(encoding="utf-8").splitlines()
@@ -75,10 +83,11 @@ def test_regular_ci_never_selects_a_lab_runner():
     deploy = (
         ROOT / ".agents" / "skills" / "deploy" / "SKILL.md"
     ).read_text(encoding="utf-8")
-    assert "runs-on: [self-hosted, windows-radia]" in signing
-    assert "sole LAB runner exception" in agents
-    assert "sole LAB runner exception" in claude
-    assert "only LAB runner exception" in " ".join(deploy.split())
+    assert "runs-on: windows-2022" in signing
+    assert "--tag eqnedit64-staging" in signing
+    assert "No workflow selects a LAB runner." in agents
+    assert "No workflow selects a LAB runner." in claude
+    assert "No workflow selects a LAB runner." in " ".join(deploy.split())
 
 
 def test_policy_lint_enforces_the_retired_examples_boundary():

@@ -204,12 +204,49 @@ try {
         }
     }
 
+    # O: is the human hand-test entry point and cannot be read by CI: the
+    # runner service is NETWORK SERVICE, which sees neither a per-user mapped
+    # drive nor - these machines being a workgroup, not a domain - the
+    # laboratory SMB share.  Stage the same two files as release assets so the
+    # tag CI can fetch exactly what was just written to O:.
+    $staged = $null
+    if (-not $WhatIf) {
+        $stagingDir = Join-Path ([IO.Path]::GetTempPath()) (
+            'eqnedit64-staging-{0}' -f $transactionId)
+        New-Item -ItemType Directory -Path $stagingDir -Force | Out-Null
+        try {
+            $stagedExe = Join-Path $stagingDir ("Eqnedit64-$expectedVersion.exe")
+            $stagedManifest = Join-Path $stagingDir (
+                "Eqnedit64-$expectedVersion.release.json")
+            [IO.File]::Copy($fullDestination, $stagedExe, $true)
+            [IO.File]::Copy($fullManifest, $stagedManifest, $true)
+            $uploader = Join-Path $repoRoot 'tools\upload_release_asset.py'
+            & python $uploader --repo ksugahar/Radia --tag eqnedit64-staging `
+                --create-if-missing $stagedExe $stagedManifest
+            if ($LASTEXITCODE -ne 0) {
+                throw @"
+O: was updated but the release assets could not be staged for CI.
+Do not push the tag yet: the tag CI reads the signed executable from the
+eqnedit64-staging release, not from O:.  Re-run this script, or upload
+$stagedExe and $stagedManifest with tools/upload_release_asset.py.
+"@
+            }
+            $staged = @("Eqnedit64-$expectedVersion.exe",
+                        "Eqnedit64-$expectedVersion.release.json")
+        } finally {
+            if (Test-Path -LiteralPath $stagingDir) {
+                Remove-Item -LiteralPath $stagingDir -Recurse -Force
+            }
+        }
+    }
+
     [pscustomobject]@{
         Updated = -not $WhatIf
         Tag = $Tag
         SourceSha = $normalizedSourceSha
         Destination = $fullDestination
         Manifest = $fullManifest
+        StagedAssets = $staged
         Version = $expectedVersion
         Sha256 = $sourceHash
         Signature = [string]$signature.Status

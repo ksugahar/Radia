@@ -16,9 +16,11 @@ that gate instead.
 - mdx is the priority CI runner and a MATLAB compute host. CI builds in an
   isolated per-run environment.
 - hibino runs long optimization and validation jobs when available.
-- The EqnEdit64 signed-standalone release gate is the only LAB runner
-  exception. It verifies the LAB-owned certificate and OneDrive manifest after
-  successful tag CI; it must not run Radia tests or builds.
+- No workflow selects a LAB runner. The EqnEdit64 release lane is GitHub-hosted
+  end to end: the signed executable reaches it as an asset of the
+  eqnedit64-staging release, staged by sync_to_o.ps1 alongside the O: update. A
+  runner service runs as NETWORK SERVICE and can read neither O: nor the
+  workgroup share, and a LAB runner would also inherit Radia's heavy builds.
 
 ## Supported operations
 
