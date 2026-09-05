@@ -3230,6 +3230,12 @@ static bool HexInv3(const double A[3][3], double B[3][3])
 // Smooth far blocks use the complete-host tensor product below; applying the degree-six recurrence to every
 // far outer point was the dominant BDM2 HEX H-matrix build cost.
 static constexpr bool HEX_USE_AFFINE_EXACT_CELL_INNER = true;
+// Peak width d/|v| below which the plain Gauss rule already resolves the near-singular ray integrand
+// (error O(b^2)) and the sinh substitution would have to integrate an exponential over too many e-folds.
+static constexpr double HOST_CONE_SINH_MIN_WIDTH = 1e-3;
+// Peak width above which the peak is wider than the unit interval and the plain rule is used.
+static constexpr double HOST_CONE_SINH_MAX_WIDTH = 1.0;
+
 static constexpr double HEX_AFFINE_EXACT_NEAR_FACTOR = 1.0;
 
 // Build a Duffy-graded barycentric rule on a (dim+1)-vertex ref sub-simplex from the 1D rule (gl,gw),
@@ -4134,6 +4140,9 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexCacheStats()
     out.emplace_back("hex_affine_exact_near_factor", HEX_AFFINE_EXACT_NEAR_FACTOR);
     out.emplace_back("hex_distorted_far_factor", distorted_far_factor);
     out.emplace_back("hex_near_inner_exact", m_nearInnerExact ? 1.0 : 0.0);
+    out.emplace_back("hex_near_inner_host_cone", m_nearInnerExact ? 1.0 : 0.0);   // cone/fan/sinh near inner
+    out.emplace_back("hex_near_sinh_min_width", HOST_CONE_SINH_MIN_WIDTH);
+    out.emplace_back("hex_near_sinh_max_width", HOST_CONE_SINH_MAX_WIDTH);
     out.emplace_back("hex_cluster_radius_enabled", HexClusterRadiusEnabled() ? 1.0 : 0.0);
     out.emplace_back("hex_glnear_n", (double)m_glNear.size());
     out.emplace_back("hex_glout_n", (double)m_glOut.size());
@@ -5315,9 +5324,22 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
     // product: their integrand is singular on the shared node/edge/face whatever the centroid ratio says
     // (vertex-touching affine pairs reach ratio 1.0 on the ESRF #6 mesh, 2026-09-05).
     const bool touching_hosts = HexHostsTouch(kindT, hT, kindS, hS, img);
-    if (affineT && affineS) {
-        const bool exact_near = touching_hosts
-            || sep <= HEX_AFFINE_EXACT_NEAR_FACTOR*(m_size[repA] + m_size[repB]);
+    // BDM1 SELF and TOUCHING affine pairs take the graded near tensor outer of the general path (with the
+    // exact analytic inner, see QuadBlockHexNearTensor): the plain glout product outer is not graded, and
+    // the potential of a touching host is singular on the shared edge/face of the target (ESRF #6,
+    // 2026-09-05: along the CG breakdown direction the affine face self blocks were 4e-3 high and the
+    // edge-sharing face-face blocks 7e-3 low at glout 4, a cancellation error of the size of the negative
+    // energy).  BDM2 keeps the affine product for every near pair (its own contracts).
+    const bool affine_exact_near = touching_hosts
+        || sep <= HEX_AFFINE_EXACT_NEAR_FACTOR*(m_size[repA] + m_size[repB]);
+    // BDM1: the WHOLE affine near band (self, touching, and the non-touching pairs inside the
+    // HEX_AFFINE_EXACT_NEAR_FACTOR band) takes the graded near tensor path, so every near source of a
+    // target host is integrated on the same outer cloud (leaving the non-touching band on the plain
+    // product while touching pairs moved to the graded cloud exposed a 4-fold degenerate lambda -5.0e-3
+    // face-charge mode on ESRF #6: self face +0.65, touching face-face -0.46, near band -0.20 in units
+    // of the mode's M-norm).  Beyond the band the affine far product stays.
+    if (affineT && affineS && (m_hexAffineOrder == 2 || !affine_exact_near)) {
+        const bool exact_near = affine_exact_near;
         return exact_near
             ? timed(m_hexBlkAffineNear, m_hexNsAffineNear,
                     [&]{ return QuadBlockHexAffineProduct(kindT, hT, kindS, hS, img); })
@@ -5520,6 +5542,11 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHexNearTensor(int kindT, int h
         HexGetCloud(m_build_id, HexCloudKey(cellT ? 0 : 1, true, true, hT, 7, 3),
             [&](HexQuadCloud& c) { HexGradedTensorCloud(ndT, cellT, m_glNear, m_gwNear, c); });
     const int nqo = (int)oc->wgeo.size();
+    // affine sources keep the exact analytic inner (PhiInnerHexAffine*SubVec); distorted sources take the
+    // whole-host radial cones
+    const bool source_affine = cellS
+        ? (HEX_USE_AFFINE_EXACT_CELL_INNER && hS >= 0 && hS < (int)m_hexAffineCell.size() && m_hexAffineCell[hS])
+        : (hS >= 0 && hS < (int)m_quadAffineFace.size() && m_quadAffineFace[hS]);
     std::vector<double> inn((size_t)nS), owt((size_t)nT);
     for (int q = 0; q < nqo; ++q) {
         const double pq[3] = {oc->pts[3*q], oc->pts[3*q+1], oc->pts[3*q+2]};
@@ -5527,24 +5554,36 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHexNearTensor(int kindT, int h
         for (int ls = 0; ls < nS; ++ls) inn[ls] = 0.0;
         double peval[3]; reflpt(pq, peval);
         if (self_pair) {
-            // the outer point's own reference coordinates anchor the radial cones in every source sub;
-            // the SELF radial rule is finer (the endpoint grading puts outer points near the sub-tet faces)
-            for (int sB = 0; sB < nsubS; ++sB) PhiInnerHexRadialVec(kindS, hS, sB, pq, xiT, srcG, inn.data(), true);
-        } else if (m_nearInnerExact) {
-            double anchor[3] = {0.5, 0.5, 0.5};
-            bool ok;
-            if (cellS) ok = HexQ2Inverse(ndS, peval, anchor);                                  // clamped into [0,1]^3
-            else {
-                double uv[2] = {0.5, 0.5};
-                ok = QuadQ2ClosestReference(ndS, peval, uv);
-                anchor[0] = uv[0]; anchor[1] = uv[1]; anchor[2] = 0.0;
+            if (source_affine) {
+                // exact analytic inner on the affine sub-simplices
+                for (int sB = 0; sB < nsubS; ++sB) PhiInnerHexRadialVec(kindS, hS, sB, pq, xiT, srcG, inn.data(), true);
+            } else {
+                // whole-host cone/fan rule with the apex at the outer point itself: the 1/r singularity sits
+                // at the apex of all six cones (a per-sub-tet apex is displaced for the five subs that do
+                // not contain the point), and the fans resolve the face peaks of the thin cones
+                PhiInnerHexConeFanVec(kindS, hS, pq, xiT, srcG, inn.data());
             }
-            if (!ok)
-                throw std::runtime_error(
-                    std::string("hex charge Gram: near-pair reference inversion failed for ")
-                    + (cellS ? "cell host " : "face host ") + std::to_string(hS)
-                    + " (target " + (cellT ? "cell " : "face ") + std::to_string(hT) + ")");
-            for (int sB = 0; sB < nsubS; ++sB) PhiInnerHexSubVec(kindS, hS, sB, peval, srcG, inn.data(), anchor);
+        } else if (m_nearInnerExact) {
+            if (source_affine) {
+                for (int sB = 0; sB < nsubS; ++sB) PhiInnerHexSubVec(kindS, hS, sB, peval, srcG, inn.data());
+            } else {
+                // apex = the physical closest point of the source host; the near-singular peaks of the touching
+                // pair are resolved by the sinh substitutions of the cone/fan rule
+                double anchor[3] = {0.5, 0.5, 0.5};
+                bool ok;
+                if (cellS) ok = HexQ2ClosestReference(ndS, peval, anchor);
+                else {
+                    double uv[2] = {0.5, 0.5};
+                    ok = QuadQ2ClosestReference(ndS, peval, uv);
+                    anchor[0] = uv[0]; anchor[1] = uv[1]; anchor[2] = 0.0;
+                }
+                if (!ok)
+                    throw std::runtime_error(
+                        std::string("hex charge Gram: near-pair closest-point search failed for ")
+                        + (cellS ? "cell host " : "face host ") + std::to_string(hS)
+                        + " (target " + (cellT ? "cell " : "face ") + std::to_string(hT) + ")");
+                PhiInnerHexConeFanVec(kindS, hS, peval, anchor, srcG, inn.data());
+            }
         } else {
             for (int sB = 0; sB < nsubS; ++sB) PhiInnerHexSubVec(kindS, hS, sB, peval, srcG, inn.data());
         }
@@ -5862,6 +5901,272 @@ void RadHACApKChargeGram::PhiInnerHexRadialHostVec(
             }
         }
     }
+}
+
+
+void RadHACApKChargeGram::PhiInnerHexConeFanVec(
+    int kindS, int hS, const double p[3], const double* reference,
+    const std::vector<int>& srcG, double* inn) const
+{
+    if (!reference)
+        throw std::invalid_argument("PhiInnerHexConeFanVec requires a reference-space apex");
+    const bool cell = kindS == 0;
+    const double* nodes = cell
+        ? &m_hexNodes[(size_t)hS*81]
+        : &m_quadNodes[(size_t)hS*27];
+    const std::vector<double>& gla = m_glIn;       // smooth directions (coarse rule)
+    const std::vector<double>& gwa = m_gwIn;
+    const std::vector<double>& glr = m_glInSelf;   // substituted (peaked) directions (fine rule)
+    const std::vector<double>& gwr = m_gwInSelf;
+    const int nqa = (int)gla.size();
+    const int nqr = (int)glr.size();
+    const int nS = (int)srcG.size();
+    const size_t nmax = (size_t)std::max(nqa, nqr);
+    std::vector<double> tn(nmax), tw(nmax), sn(nmax), sw(nmax), rn(nmax), rw(nmax);
+
+    // Apex geometry: the physical apex, its distance d to the target and the reference-to-physical
+    // tangent map at the apex (the per-direction scales of the substitutions).
+    double apex[3];
+    double J[3][3] = {{0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}};
+    double T[3][2] = {{0.0, 0.0}, {0.0, 0.0}, {0.0, 0.0}};
+    if (cell) {
+        HexQ2Map(nodes, reference, apex, J);
+    } else {
+        const double uv[2] = {reference[0], reference[1]};
+        QuadQ2Map(nodes, uv, apex, T);
+    }
+    const double dpx = p[0]-apex[0], dpy = p[1]-apex[1], dpz = p[2]-apex[2];
+    const double d = std::sqrt(dpx*dpx + dpy*dpy + dpz*dpz);
+
+    auto dot3 = [](const double* a, const double* b) { return a[0]*b[0] + a[1]*b[1] + a[2]*b[2]; };
+    auto norm3 = [&](const double* v) { return std::sqrt(dot3(v, v)); };
+
+    // One-sided sinh nodes on [0,1] for a peak of width b at 0 (Johnston-Elliott): r = b sinh(2 mu t),
+    // mu = asinh(1/b)/2, so r(1) = 1 and 1/sqrt(b^2 + r^2) = 1/(b cosh(2 mu t)) cancels against dr/dt.
+    // Below HOST_CONE_SINH_MIN_WIDTH the plain rule already resolves the peak (error O(b^2)); above
+    // HOST_CONE_SINH_MAX_WIDTH the peak is wider than the interval.  Always the fine rule.
+    auto one_sided = [&](double b, double* xn, double* xw) -> int {
+        if (b >= HOST_CONE_SINH_MIN_WIDTH && b < HOST_CONE_SINH_MAX_WIDTH) {
+            const double mu = 0.5*std::asinh(1.0/b);
+            for (int i = 0; i < nqr; ++i) {
+                const double arg = 2.0*mu*glr[i];
+                xn[i] = b*std::sinh(arg);
+                xw[i] = gwr[i]*2.0*b*mu*std::cosh(arg);
+            }
+        } else {
+            for (int i = 0; i < nqr; ++i) { xn[i] = glr[i]; xw[i] = gwr[i]; }
+        }
+        return nqr;
+    };
+    // Two-sided sinh nodes on [0,1] for a peak of width b at t0: t = t0 + b sinh(mu (2u-1) - eta) with
+    // mu = [asinh(t0/b) + asinh((1-t0)/b)]/2 and eta = [asinh(t0/b) - asinh((1-t0)/b)]/2, so t(0) = 0
+    // and t(1) = 1.  Unlike the ray and fan radii, the edge integrand carries no vanishing Jacobian, so
+    // its peak keeps a mass of order b ln(1/b) however small b is and the substitution is applied for
+    // every positive width (it turns the model peak into a constant); only a peak wider than the
+    // interval takes the coarse plain rule.
+    auto two_sided = [&](double t0, double b, double* xn, double* xw) -> int {
+        if (b > 0.0 && b < HOST_CONE_SINH_MAX_WIDTH) {
+            const double s0 = std::asinh(t0/b), s1 = std::asinh((1.0-t0)/b);
+            const double mu = 0.5*(s0 + s1), eta = 0.5*(s0 - s1);
+            for (int i = 0; i < nqr; ++i) {
+                const double arg = mu*(2.0*glr[i]-1.0) - eta;
+                xn[i] = t0 + b*std::sinh(arg);
+                xw[i] = gwr[i]*2.0*b*mu*std::cosh(arg);
+            }
+            return nqr;
+        }
+        for (int i = 0; i < nqa; ++i) { xn[i] = gla[i]; xw[i] = gwa[i]; }
+        return nqa;
+    };
+
+    if (cell) {
+        // Six face cones from the apex x0: y = x0 + r (F(a,b) - x0), reference Jacobian r^2 fd da db.
+        // The face integral is a four-fan polar rule around the apex's physical foot c0 on the face
+        // (the (a,b) integrand peaks there like fd/|J(F - x0)| once the ray integral is done), each fan
+        // ray with the sinh substitution on its radius rho (width = the apex-to-foot distance combined
+        // with d) and on the edge parameter t (width = the foot-to-edge distance combined with d).
+        for (int fixed_axis = 0; fixed_axis < 3; ++fixed_axis) {
+            const int axis_a = (fixed_axis + 1) % 3;
+            const int axis_b = (fixed_axis + 2) % 3;
+            for (int side = 0; side < 2; ++side) {
+                const double nsgn = (double)side - reference[fixed_axis];
+                const double fd = std::abs(nsgn);
+                if (fd < 1e-300) continue;
+                double N3[3], A[3], B[3];
+                for (int k = 0; k < 3; ++k) {
+                    N3[k] = J[k][fixed_axis]*nsgn;    // apex -> face foot along the reference normal
+                    A[k] = J[k][axis_a];              // physical face basis
+                    B[k] = J[k][axis_b];
+                }
+                const double a0 = reference[axis_a], b0 = reference[axis_b];
+                const double AA = dot3(A, A), AB = dot3(A, B), BB = dot3(B, B);
+                const double AN = dot3(A, N3), BN = dot3(B, N3);
+                const double det = AA*BB - AB*AB;
+                double ca = a0, cb = b0;
+                if (det > 1e-24*AA*BB) {
+                    ca = std::clamp(a0 - (BB*AN - AB*BN)/det, 0.0, 1.0);
+                    cb = std::clamp(b0 - (AA*BN - AB*AN)/det, 0.0, 1.0);
+                }
+                double G0[3];
+                for (int k = 0; k < 3; ++k) G0[k] = N3[k] + (ca-a0)*A[k] + (cb-b0)*B[k];
+                const double peak = std::sqrt(dot3(G0, G0) + d*d);
+                for (int fixed2 = 0; fixed2 < 2; ++fixed2) {
+                    for (int side2 = 0; side2 < 2; ++side2) {
+                        const double c_fixed = fixed2 == 0 ? ca : cb;
+                        const double c_free = fixed2 == 0 ? cb : ca;
+                        const double s2 = std::abs((double)side2 - c_fixed);
+                        if (s2 < 1e-300) continue;
+                        const double* Efix = fixed2 == 0 ? A : B;
+                        const double* Efree = fixed2 == 0 ? B : A;
+                        double Gedge[3];
+                        for (int k = 0; k < 3; ++k) Gedge[k] = G0[k] + ((double)side2 - c_fixed)*Efix[k];
+                        const double EE = dot3(Efree, Efree);
+                        double t0 = c_free;
+                        if (EE > 0.0) t0 = std::clamp(c_free - dot3(Gedge, Efree)/EE, 0.0, 1.0);
+                        double R[3];
+                        for (int k = 0; k < 3; ++k) R[k] = Gedge[k] + (t0 - c_free)*Efree[k];
+                        const double bt = EE > 0.0 ? std::sqrt(dot3(R, R) + d*d)/std::sqrt(EE) : 0.0;
+                        const int nt = two_sided(t0, bt, tn.data(), tw.data());
+                        for (int it = 0; it < nt; ++it) {
+                            const double t = tn[it];
+                            const double wa = fixed2 == 0 ? (double)side2 - ca : t - ca;
+                            const double wb = fixed2 == 0 ? t - cb : (double)side2 - cb;
+                            double JW[3];
+                            for (int k = 0; k < 3; ++k) JW[k] = wa*A[k] + wb*B[k];
+                            const double jw = norm3(JW);
+                            const int ns = one_sided(jw > 0.0 ? peak/jw : 0.0, sn.data(), sw.data());
+                            for (int is = 0; is < ns; ++is) {
+                                const double rho = sn[is];
+                                const double wrho = tw[it]*sw[is]*rho*s2;
+                                const double a = ca + rho*wa, b = cb + rho*wb;
+                                double ray[3];
+                                ray[fixed_axis] = nsgn;
+                                ray[axis_a] = a - a0;
+                                ray[axis_b] = b - b0;
+                                double v[3];
+                                for (int k = 0; k < 3; ++k) v[k] = N3[k] + (a-a0)*A[k] + (b-b0)*B[k];
+                                const double vn = norm3(v);
+                                const int nr = one_sided(vn > 0.0 && d > 0.0 ? d/vn : 0.0, rn.data(), rw.data());
+                                for (int ir = 0; ir < nr; ++ir) {
+                                    const double r = rn[ir];
+                                    double y[3];
+                                    for (int axis = 0; axis < 3; ++axis) y[axis] = reference[axis] + r*ray[axis];
+                                    double X[3];
+                                    HexQ2MapX(nodes, y, X);
+                                    const double dx = p[0]-X[0], dy = p[1]-X[1], dz = p[2]-X[2];
+                                    const double pr = std::sqrt(dx*dx + dy*dy + dz*dz);
+                                    if (pr < 1e-300) continue;
+                                    const double weight = wrho*rw[ir]*r*r*fd/pr;
+                                    for (int local = 0; local < nS; ++local)
+                                        inn[local] += weight*HexMonoEval(srcG[local], y);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return;
+    }
+
+    // Face host: four edge fans from the apex u0 (the singular point itself), reference Jacobian rho s2,
+    // with the sinh substitution on the fan radius (width d/|J w|, the near-singular peak of a touching
+    // pair) and on the edge parameter (width = the apex-to-edge distance combined with d).
+    const double u0[2] = {reference[0], reference[1]};
+    for (int fixed2 = 0; fixed2 < 2; ++fixed2) {
+        const int free2 = 1 - fixed2;
+        for (int side2 = 0; side2 < 2; ++side2) {
+            const double s2 = std::abs((double)side2 - u0[fixed2]);
+            if (s2 < 1e-300) continue;
+            double Efix[3], Efree[3];
+            for (int k = 0; k < 3; ++k) { Efix[k] = T[k][fixed2]; Efree[k] = T[k][free2]; }
+            double Gedge[3];
+            for (int k = 0; k < 3; ++k) Gedge[k] = ((double)side2 - u0[fixed2])*Efix[k];
+            const double EE = dot3(Efree, Efree);
+            double t0 = u0[free2];
+            if (EE > 0.0) t0 = std::clamp(u0[free2] - dot3(Gedge, Efree)/EE, 0.0, 1.0);
+            double R[3];
+            for (int k = 0; k < 3; ++k) R[k] = Gedge[k] + (t0 - u0[free2])*Efree[k];
+            const double bt = EE > 0.0 ? std::sqrt(dot3(R, R) + d*d)/std::sqrt(EE) : 0.0;
+            const int nt = two_sided(t0, bt, tn.data(), tw.data());
+            for (int it = 0; it < nt; ++it) {
+                const double t = tn[it];
+                double w2[2];
+                w2[fixed2] = (double)side2 - u0[fixed2];
+                w2[free2] = t - u0[free2];
+                double Jw[3];
+                for (int k = 0; k < 3; ++k) Jw[k] = w2[0]*T[k][0] + w2[1]*T[k][1];
+                const double jw = norm3(Jw);
+                const int ns = one_sided(jw > 0.0 && d > 0.0 ? d/jw : 0.0, sn.data(), sw.data());
+                for (int is = 0; is < ns; ++is) {
+                    const double rho = sn[is];
+                    const double uv[2] = {u0[0] + rho*w2[0], u0[1] + rho*w2[1]};
+                    double X[3];
+                    QuadQ2MapX(nodes, uv, X);
+                    const double dx = p[0]-X[0], dy = p[1]-X[1], dz = p[2]-X[2];
+                    const double pr = std::sqrt(dx*dx + dy*dy + dz*dz);
+                    if (pr < 1e-300) continue;
+                    const double weight = tw[it]*sw[is]*rho*s2/pr;
+                    const double y3[3] = {uv[0], uv[1], 0.0};
+                    for (int local = 0; local < nS; ++local)
+                        inn[local] += weight*HexMonoEval(srcG[local], y3);
+                }
+            }
+        }
+    }
+}
+
+bool RadHACApKChargeGram::HexQ2ClosestReference(
+    const double* nd27, const double X[3], double xi[3])
+{
+    double inverse[3];
+    const bool converged = HexQ2Inverse(nd27, X, inverse);
+    // HexQ2Inverse returns at convergence before its clamp, so a converged exterior target comes back
+    // with an out-of-cube reference point; a converged interior target is the closest point itself.
+    const double slack = 1e-9;
+    if (converged
+            && inverse[0] >= -slack && inverse[0] <= 1.0+slack
+            && inverse[1] >= -slack && inverse[1] <= 1.0+slack
+            && inverse[2] >= -slack && inverse[2] <= 1.0+slack) {
+        for (int k = 0; k < 3; ++k) xi[k] = std::clamp(inverse[k], 0.0, 1.0);
+        return true;
+    }
+    // Exterior (or unresolved) target: the closest point lies on the boundary.  Solve the closest-point
+    // problem on each of the six Q2 faces and keep the nearest; a clamped reference inverse is only the
+    // closest point in the reference metric, which a skewed cell tilts away from the physical one.
+    double best = std::numeric_limits<double>::infinity();
+    bool found = false;
+    for (int fixed_axis = 0; fixed_axis < 3; ++fixed_axis) {
+        const int axis_a = (fixed_axis + 1) % 3;
+        const int axis_b = (fixed_axis + 2) % 3;
+        for (int side = 0; side < 2; ++side) {
+            double nd9[27];
+            for (int iv = 0; iv < 3; ++iv)
+                for (int iu = 0; iu < 3; ++iu) {
+                    int idx[3];
+                    idx[fixed_axis] = 2*side;
+                    idx[axis_a] = iu;
+                    idx[axis_b] = iv;
+                    const double* src = &nd27[3*(idx[0] + 3*idx[1] + 9*idx[2])];
+                    double* dst = &nd9[3*(iu + 3*iv)];
+                    dst[0] = src[0]; dst[1] = src[1]; dst[2] = src[2];
+                }
+            double uv[2] = {0.5, 0.5};
+            if (!QuadQ2ClosestReference(nd9, X, uv)) continue;
+            double mapped[3];
+            QuadQ2MapX(nd9, uv, mapped);
+            const double dx = mapped[0]-X[0], dy = mapped[1]-X[1], dz = mapped[2]-X[2];
+            const double d2 = dx*dx + dy*dy + dz*dz;
+            if (std::isfinite(d2) && d2 < best) {
+                best = d2;
+                found = true;
+                xi[fixed_axis] = (double)side;
+                xi[axis_a] = uv[0];
+                xi[axis_b] = uv[1];
+            }
+        }
+    }
+    return found;
 }
 
 std::vector<double> RadHACApKChargeGram::QuadBlockHexCompositeProduct(
