@@ -64,6 +64,13 @@
 static volatile int g_sym_fill = 0;
 void cHACApK_set_sym_fill(int flag) { g_sym_fill = flag; }
 
+/* Per-point support radius for the cluster bounding boxes (original 0-based point order; NULL = none).
+ * Extended sources (charge modes co-located at their host centroid) otherwise look like points to the
+ * box-gap admissibility, which declared blocks between TOUCHING hosts admissible and let ACA+ stop at
+ * rank 5 on a block whose true quadratic was 2.9x larger (Radia HEX charge Gram, 2026-09-05). */
+static const double* g_point_radius = NULL;
+void cHACApK_set_point_radius(const double* radius) { g_point_radius = radius; }
+
 //***cHACApK_generate_frame_blrleaf
 void cHACApK_generate_frame_blrleaf(
   st_cHACApK_leafmtxp st_leafmtxp,
@@ -1773,13 +1780,18 @@ void cHACApK_bndbox(
     goto error;
   }
   if(st_clt->nnson == 0) {
-    for(id=1; id<=ndim; id++) {
-      st_clt->bmin[id]=zgmid_t[id][lod[1]]; st_clt->bmax[id]=zgmid_t[id][lod[1]];
+    /* leaf: box of the point SUPPORTS (centre +- radius when a radius table is set) */
+    {
+      const double r1 = g_point_radius ? g_point_radius[lod[1]-1] : 0.0;
+      for(id=1; id<=ndim; id++) {
+        st_clt->bmin[id]=zgmid_t[id][lod[1]]-r1; st_clt->bmax[id]=zgmid_t[id][lod[1]]+r1;
+      }
     }
-    for(id=1; id<=ndim; id++) {
-      for(il=2; il<=st_clt->nsize; il++) {
-        if(zgmid_t[id][lod[il]] < st_clt->bmin[id]) st_clt->bmin[id] = zgmid_t[id][lod[il]];
-        if(st_clt->bmax[id] < zgmid_t[id][lod[il]]) st_clt->bmax[id] = zgmid_t[id][lod[il]];
+    for(il=2; il<=st_clt->nsize; il++) {
+      const double r = g_point_radius ? g_point_radius[lod[il]-1] : 0.0;
+      for(id=1; id<=ndim; id++) {
+        if(zgmid_t[id][lod[il]]-r < st_clt->bmin[id]) st_clt->bmin[id] = zgmid_t[id][lod[il]]-r;
+        if(st_clt->bmax[id] < zgmid_t[id][lod[il]]+r) st_clt->bmax[id] = zgmid_t[id][lod[il]]+r;
       }
     }
   } else {
