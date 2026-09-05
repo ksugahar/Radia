@@ -189,13 +189,16 @@ def test_eqnedit64_release_requires_exact_successful_tag_ci():
     assert "context.get(\"ref_type\") == \"tag\"" in release
     assert r"eqnedit64-v\d+\.\d+\.\d+" in release
     assert "ref: ${{ needs.qualify.outputs.sha }}" in release
-    assert "runs-on: [self-hosted, windows-radia]" in release
-    assert "$releaseRoots = @('C:\\Users\\Administrator\\OneDrive')" in release
-    assert "Get-PSDrive -Name O -PSProvider FileSystem" in release
-    assert "$releaseRoots = @('O:\\') + $releaseRoots" in release
+    # The signed executable arrives as a staging release asset, not from O:.
+    # A runner service is NETWORK SERVICE and can read neither a per-user
+    # mapped drive nor the workgroup share, so no runner could ever verify O:.
+    assert "runs-on: windows-2022" in release
+    assert "--tag eqnedit64-staging" in release
+    assert '"Eqnedit64-$version.exe"' in release
+    assert '"Eqnedit64-$version.release.json"' in release
+    assert "Run sync_to_o.ps1 before pushing the tag." in release
     assert "$exe = Join-Path $releaseRoot 'Eqnedit64.exe'" in release
     assert "$manifestPath = Join-Path $releaseRoot 'Eqnedit64.release.json'" in release
-    assert "The runner service uses LocalSystem" in release
     assert "eqnedit64.o-release.v1" in release
     assert "$manifest.source_sha -cne $env:EQNEDIT64_SHA" in release
     assert "name: eqnedit64-signed-standalone" in release

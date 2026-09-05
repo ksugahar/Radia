@@ -75,13 +75,22 @@ source SHA、EXE SHA-256、version、signerを記録する。ここまで成功�
 `eqnedit64-v<version>`tagをpushする。
 
 正式同期の成功時は`O:\Eqnedit64.handtest.json`を除去し、現在のEXEと一致する
-`O:\Eqnedit64.release.json`を再作成する。
+`O:\Eqnedit64.release.json`を再作成する。同じトランザクションで、この2ファイルを
+`Eqnedit64-<version>.exe`と`Eqnedit64-<version>.release.json`という名前で
+`eqnedit64-staging` releaseへもアップロードする。
 
-tag CIはO:のマニフェストに記録されたsource SHAがtag SHAと完全一致する場合だけ、
-その署名済みEXEからPython 3.10--3.13用wheelを作り、PyPIへ公開した後に
-GitHub Releaseへ`Eqnedit64.exe`と`SHA256SUMS.txt`を添付する。O:更新前にtagを
-pushしてはならない。旧版へ戻す必要が生じた場合も、対象Gitコミットを再ビルドして
-同じ順序と最終ゲートを通す。
+**O:はCIの入力ではない。** runner serviceは`NETWORK SERVICE`として動くため、
+対話ユーザーのドライブ文字も、ワークグループ構成の研究室SMB共有も見えない
+（2026-09-05に実測。`\\163.51.64.136\work`はrunnerからaccess denied）。よって
+tag CIは`eqnedit64-staging` releaseのassetから署名済みEXEとマニフェストを取得し、
+GitHub-hosted windowsで検証する。O:はあくまで人手ハンドテストの入口として残す。
+
+tag CIはマニフェストに記録されたsource SHAがtag SHAと完全一致し、EXEの
+SHA-256・ProductVersion・`CN=ksugahar`署名がすべて一致する場合だけ、その署名済み
+EXEからPython 3.10--3.13用wheelを作り、PyPIへ公開した後にGitHub Releaseへ
+`Eqnedit64.exe`と`SHA256SUMS.txt`を添付する。staging更新前にtagをpushしてはならない
+（pushした場合はassetが無いため、待機ではなく明示的なエラーで停止する）。旧版へ戻す
+必要が生じた場合も、対象Gitコミットを再ビルドして同じ順序と最終ゲートを通す。
 
 ## 正本移行後の品質運用
 
