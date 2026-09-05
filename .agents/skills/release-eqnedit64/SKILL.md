@@ -52,13 +52,26 @@ stale.
   `O:\Eqnedit64.release.json` gate manifest. Only after both pass byte-for-byte
   verification may the exact recorded commit receive the release tag.
 - Push `eqnedit64-v<version>` last. The tag CI verifies the application; the
-  release workflow reads the already-staged O: executable through its short
-  self-hosted job, requires the manifest source SHA to equal the tag SHA, then
-  builds Python 3.10--3.13 wheels and publishes GitHub Release and PyPI from
-  that one signed binary.
-- Run full private-font process suites only in the isolated Eqnedit64 CI/VM
-  session. Do not bypass `EQNEDIT64_ISOLATED_TEST_SESSION` on the interactive
-  LAB desktop.
+  release workflow then downloads the staged executable from the
+  `eqnedit64-staging` release on a GitHub-hosted runner, requires the manifest
+  source SHA to equal the tag SHA, and builds Python 3.10--3.13 wheels and
+  publishes GitHub Release and PyPI from that one signed binary. No job reads
+  O:, and none runs on a self-hosted runner: a runner service is NETWORK
+  SERVICE, which can reach neither a per-user mapped drive nor the workgroup
+  share. The signature is what carries the guarantee across that transport -
+  the key is non-exportable, so a matching `CN=ksugahar` signature, SHA-256,
+  product version, and source SHA together prove the binary was built on LAB
+  from the tagged commit, and an unsigned CI build cannot impersonate it.
+- On the interactive LAB desktop, the release does exactly two things:
+  **compile and sign**. `build_eqnedt64.bat` invokes the compiler and
+  `signtool`; it starts no window, renders no equation, and registers no font,
+  so it stays clear of the `fontdrvhost.exe` failure that leaves the session's
+  Office fonts inkless. Everything that *runs* the built binary - the GUI,
+  rendering, `--self-test`, the font-session endurance suites, and
+  `accept_release.ps1` - belongs to the isolated CI or VM session. Do not
+  bypass `EQNEDIT64_ISOLATED_TEST_SESSION` on the interactive LAB desktop.
+  Compiling on LAB is not optional: the signing key is non-exportable, so the
+  shipped executable can only be produced there.
 
 ## Required order
 
@@ -71,9 +84,28 @@ stale.
    hand testing. Do not merge to `main` before this gate is recorded.
 5. Merge the approved release commit to `main` and push it.
 6. Wait for the main Eqnedit64 CI and Policy Lint to pass.
-7. Confirm tracked files are clean and `HEAD == origin/main`.
-8. Run `tools/eqnedit64/build/build_eqnedt64.bat` on LAB.
-9. Before creating any release tag, stage the exact signed build to O::
+7. Run steps 7--11 as one command. It checks the source against
+   `origin/main`, refuses a tag that already exists, refuses a tree whose
+   declared version disagrees with the tag, compiles and signs, verifies the
+   product version and `CN=ksugahar` signature, backs up whatever O: currently
+   holds - a hand-test candidate staged there is someone's work in progress -
+   stages to O: and to the `eqnedit64-staging` release, and only then creates
+   and pushes the annotated tag:
+
+```powershell
+pwsh -File .agents/skills/release-eqnedit64/scripts/release_eqnedit64.ps1 `
+  -Tag eqnedit64-v<version>
+```
+
+   `-WhatIf` runs every check and the build and changes nothing; `-SkipBuild`
+   reuses an existing `dist/Eqnedit64.exe`, which the identity checks still
+   have to accept. Run the individual steps below only when diagnosing a
+   failure of this one.
+
+8. Wait for tag CI, GitHub Release, and PyPI publication to pass.
+
+The individual steps, for diagnosis: `tools/eqnedit64/build/build_eqnedt64.bat`
+compiles and signs; then, before any tag exists,
 
 ```powershell
 pwsh -File .agents/skills/release-eqnedit64/scripts/sync_to_o.ps1 `
@@ -82,10 +114,9 @@ pwsh -File .agents/skills/release-eqnedit64/scripts/sync_to_o.ps1 `
   -SourceSha (git rev-parse HEAD)
 ```
 
-10. Verify the helper reports `Updated=True`, the intended version, `Valid`,
-   `CN=ksugahar`, and the recorded SHA-256.
-11. Create the annotated tag at the manifest's exact source SHA and push it.
-12. Wait for tag CI, GitHub Release, and PyPI publication to pass.
+must report `Updated=True`, the intended version, `Valid`, `CN=ksugahar`, the
+recorded SHA-256, and the two `StagedAssets`. Create the annotated tag last, at
+the manifest's exact source SHA, and push it.
 
 The helper refuses an existing remote release tag, a dirty or unpushed source,
 a mismatched build stamp, version, signature, or hash. Use `-WhatIf` for a
