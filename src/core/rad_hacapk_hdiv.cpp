@@ -9023,6 +9023,9 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrec(
         }
     }
     std::vector<double> prec(static_cast<size_t>(n_face), 0.0);
+    std::atomic<int> jacobi_failure_dof{-1};
+    std::atomic<double> jacobi_failure_value{0.0};
+    std::atomic<double> jacobi_failure_ndiag{0.0};
     {
         ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
         ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) {
@@ -9032,10 +9035,27 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrec(
             for (size_t p = 0; p < ids.size(); ++p)
                 for (size_t q = 0; q < ids.size(); ++q)
                     ndiag += vals[p] * vals[q] * GetInteractionMatrixElement(ids[p], ids[q]);
-            double value = inv_chi * mass_diag[f] + ndiag;
-            if (!(value > 0.0) || !std::isfinite(value)) value = 1.0;
+            const double value = inv_chi * mass_diag[f] + ndiag;
+            // No-Fallbacks: a non-positive exact diagonal of inv_chi*M + B^T G B means the charge Gram lost
+            // positive definiteness on this DOF's own support.  Replacing it by 1.0 would hide exactly the
+            // defect the CG breakdown guard reports later (ESRF #6, 2026-09-05).
+            if (!(value > 0.0) || !std::isfinite(value)) {
+                jacobi_failure_dof.store(static_cast<int>(f), std::memory_order_relaxed);
+                jacobi_failure_value.store(value, std::memory_order_relaxed);
+                jacobi_failure_ndiag.store(ndiag, std::memory_order_relaxed);
+                return;
+            }
             prec[f] = value;
         });
+    }
+    if (jacobi_failure_dof.load(std::memory_order_relaxed) >= 0) {
+        const int f = jacobi_failure_dof.load(std::memory_order_relaxed);
+        throw std::runtime_error(
+            "SolveConfiguredLinearMaterialAutoPrec: the exact Jacobi diagonal of inv_chi*M + B^T G B is "
+            "not positive at DOF " + std::to_string(f) + " (value "
+            + std::to_string(jacobi_failure_value.load(std::memory_order_relaxed)) + ", B^T G B part "
+            + std::to_string(jacobi_failure_ndiag.load(std::memory_order_relaxed))
+            + "): the charge Gram is not positive definite on this DOF's own charge support.");
     }
     prec_min = n_face ? prec[0] : 0.0;
     prec_max = prec_min;
@@ -9980,6 +10000,9 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
                 support_value[static_cast<size_t>(f)].push_back(
                     m_operatorBData[static_cast<size_t>(k)]);
             }
+        std::atomic<int> jacobi_failure_dof{-1};
+        std::atomic<double> jacobi_failure_value{0.0};
+        std::atomic<double> jacobi_failure_ndiag{0.0};
         {
             ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
             ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) {
@@ -9990,10 +10013,26 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
                     for (size_t q = 0; q < ids.size(); ++q)
                         ndiag += vals[p] * vals[q] *
                             GetInteractionMatrixElement(ids[p], ids[q]);
-                double value = inv_chi * mass_diag[f] + ndiag;
-                if (!(value > 0.0) || !std::isfinite(value)) value = 1.0;
+                const double value = inv_chi * mass_diag[f] + ndiag;
+                // No-Fallbacks (see SolveConfiguredLinearMaterialAutoPrec): a non-positive exact diagonal
+                // is a lost-definiteness report, not a preconditioner detail.
+                if (!(value > 0.0) || !std::isfinite(value)) {
+                    jacobi_failure_dof.store(static_cast<int>(f), std::memory_order_relaxed);
+                    jacobi_failure_value.store(value, std::memory_order_relaxed);
+                    jacobi_failure_ndiag.store(ndiag, std::memory_order_relaxed);
+                    return;
+                }
                 prec[f] = value;
             });
+        }
+        if (jacobi_failure_dof.load(std::memory_order_relaxed) >= 0) {
+            const int f = jacobi_failure_dof.load(std::memory_order_relaxed);
+            throw std::runtime_error(
+                "SolveConfiguredLinearMaterialAutoPrecMany: the exact Jacobi diagonal of inv_chi*M + B^T G B "
+                "is not positive at DOF " + std::to_string(f) + " (value "
+                + std::to_string(jacobi_failure_value.load(std::memory_order_relaxed)) + ", B^T G B part "
+                + std::to_string(jacobi_failure_ndiag.load(std::memory_order_relaxed))
+                + "): the charge Gram is not positive definite on this DOF's own charge support.");
         }
         prec_min = n_face ? prec[0] : 0.0;
         prec_max = prec_min;
