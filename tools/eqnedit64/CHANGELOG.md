@@ -1,7 +1,15 @@
 # Eqnedit64 changelog
 
-## Unreleased
+## 3.0.15 — 2026-09-05
 
+- Say why an equation cannot be shown instead of leaving raw TeX in the Web
+  preview. An unclosed group is the beginner's most frequent mistake and the
+  one MathJax handles worst for a learner: it refuses the whole expression and
+  the page kept showing `\[\frac{1}{2\]` with no hint. The brace balance is now
+  checked first and names the offending character position, and anything else
+  MathJax rejects is reported with its own message. The native editor cannot
+  reach this state, because its parser keeps brace nesting balanced by
+  construction, so this was a Web-only gap.
 - Stop the Web prime key from writing a double superscript. A prime is itself
   a superscript, so pressing it after `a^{2}` produced `a^{2}'`, which MathJax
   refuses to convert ("Prime causes double exponent: use braces to clarify").
@@ -10,11 +18,13 @@
   carries MathJax's own remedy - an empty group - and only where one is
   needed. `f'`, `f''`, and a prime after a subscript are unchanged.
 - Describe the palette cell under the cursor in the Web status line, on hover
-  and on keyboard focus, and give every key an `aria-label`. A two-letter face
-  such as `sf` or `tt` says nothing on its own, and the `title` tooltip it
-  relied on does not appear on a touch screen or for a keyboard user. This is
-  the native status bar's behaviour, which the Web edition had not carried
-  over.
+  and on keyboard focus. A two-letter face such as `sf` or `tt` says nothing on
+  its own, and the `title` tooltip it relied on does not appear on a touch
+  screen or for a keyboard user. This is the native status bar's behaviour,
+  which the Web edition had not carried over. The face stays the key's
+  accessible name: an `aria-label` carrying the description replaced it, so
+  "arg min" no longer addressed the key for a screen reader, for voice
+  control, or for the homepage QA locator.
 - Give the browser edition its own fast CI job: the Web contract and the
   JavaScript syntax and insertion tests now run on a free ubuntu runner in
   seconds instead of waiting behind the Windows native build. The native job

@@ -64,6 +64,21 @@ def test_structural_row_break_and_undo_contract() -> None:
     assert "ROW_ENVIRONMENT" in SOURCE
 
 
+def test_malformed_input_is_explained_instead_of_shown_as_raw_tex() -> None:
+    """MathJax refuses a bad expression, leaving the preview holding raw TeX.
+
+    A learner who forgets a closing brace saw `\\[\\frac{1}{2\\]` and no
+    explanation.  The brace balance is checked before MathJax is asked, and
+    whatever else it rejects is reported with its own message.
+    """
+    assert "function braceProblem(tex)" in SOURCE
+    assert "function showRenderProblem(reason)" in SOURCE
+    assert "function reportUnrendered(source)" in SOURCE
+    assert "var problem = braceProblem(tex);" in SOURCE
+    assert "数式を表示できません" in SOURCE
+    assert ".eqed-problem {" in SOURCE
+
+
 def test_prime_never_creates_a_double_superscript() -> None:
     """A prime is a superscript, so it needs a group after another one.
 
