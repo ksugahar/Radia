@@ -243,6 +243,7 @@ bool RadHACApKBase::BuildHMatrix(const RadHACApKParams& params) {
     cHACApK_set_sym_fill(UseSymmetricFill() ? 1 : 0);
     ScopeExit build_state_scope([this, &build_succeeded]() noexcept {
         cHACApK_set_sym_fill(0);
+        cHACApK_set_point_radius(nullptr);
         OnBuildFinished(build_succeeded);
     });
     OnBuildStarting(params);
@@ -259,6 +260,12 @@ bool RadHACApKBase::BuildHMatrix(const RadHACApKParams& params) {
     auto start_time = std::chrono::high_resolution_clock::now();
 
     ExtractCoordinates();
+    // Bounding boxes of SUPPORTS: a manager whose elements are extended sources publishes a per-element
+    // radius so the box-gap admissibility keeps touching elements in dense leaves (co-located charge
+    // modes looked like points and let ACA+ stop early on touching blocks, ESRF #6 2026-09-05).
+    if (!m_pointRadius.empty() && m_pointRadius.size() != m_coordinates.size() / 3)
+        throw std::runtime_error("BuildHMatrix: point radius table size does not match the element count");
+    cHACApK_set_point_radius(m_pointRadius.empty() ? nullptr : m_pointRadius.data());
 
     if (m_n_elem == 0) {
         std::cerr << "[HACApK] Error: No elements" << std::endl;

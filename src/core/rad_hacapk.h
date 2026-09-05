@@ -247,6 +247,9 @@ protected:
 
     // Element center coordinates for clustering, size = n_elem * 3
     std::vector<double> m_coordinates;
+    // Optional per-element support radius for the cluster-tree bounding boxes (see
+    // cHACApK_set_point_radius); empty = plain point boxes.  Filled by ExtractCoordinates.
+    std::vector<double> m_pointRadius;
 
     // Current inverse susceptibility (1/chi per DOF), size = n_dof
     std::vector<double> m_inv_chi;

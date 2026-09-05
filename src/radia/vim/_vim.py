@@ -1563,15 +1563,30 @@ def _charge_basis_hex(fes, cob_quad=3, *, materialize_mass=True,
                 })
 
 
-def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=0.5, far_inner=1.0,
+def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=1.0, far_inner=1.0,
                            eps=1e-12, leafsize=64, eta=2.0, image_masks=None, image_signs=None,
                            image_rot_angle=(),
                            materialize_mass=True, build_hmatrix=True,
                            internal_interfaces=False, excluded_boundaries=(),
-                           cyclic_periodic_boundaries=()):
+                           cyclic_periodic_boundaries=(), glnear_n=None, near_inner="exact",
+                           glin_self_n=None):
     """Pure-hex BDM1/BDM2 charge Gram via the hex-mode C++ _ChargeGramHMatrix.  FLAT and CURVED (mesh.Curve(2))
     share ONE path (the 27-node Q2 lattice is extracted via GetTrafo either way -- the caller Curve(2)'s the
-    mesh for curved).  glout_n = the 1D outer rule.  BDM1 keeps the validated default 4.  Flat BDM2 uses
+    mesh for curved).
+
+    NEAR family (2026-09-05, ESRF #6 HEX Gram indefiniteness): a host pair is NEAR when the hosts are the
+    same, share a Q2 lattice node (touching), or lie within ``near_grade`` * (size_a + size_b) of each
+    other.  Near pairs are integrated with ONE endpoint-graded tensor rule over the whole target host
+    (``glnear_n`` points per axis, pushed through the C2 smootherstep so every face, edge and corner of the
+    target is resolved) and the exact-anchor radial inner over each source sub-simplex (the outer point's
+    reference coordinates in the source host; ``near_inner="site"`` restores the legacy static-site radial
+    for A/B only).  ``glnear_n`` is decoupled from ``glout_n`` because the far tensor product shares
+    ``glout_n`` and its cost grows like n^6.  The legacy family (near_grade 0.5, corner-Duffy sub-tet outer,
+    site inner) left ``lambda_min(M^-1 N)`` at -2e-3..-5e-3 on the ESRF #6 mesh and ``lambda_max`` at 1.08
+    on elongated sector cells; the physical band is [0, 1].
+
+    glout_n = the 1D outer rule of the affine near product and of the far tensor product.  BDM1 keeps the
+    validated default 4.  Flat BDM2 uses
     the TET-style analytic polynomial source moments plus a whole-host tensor outer for self/near hosts.
     Smooth far hosts use a reflection-invariant tensor-product rule on both complete reference domains,
     avoiding degree-six moment recurrences without changing the accepted spectrum or IMA contracts.
@@ -1603,6 +1618,16 @@ def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=0.5, far_i
     glout_n = default_outer if glout_n is None else int(glout_n)
     default_inner = 5 if p == 1 else (12 if mapped_bdm2 else 7)
     glin_n = default_inner if glin_n is None else int(glin_n)
+    # NEAR family (2026-09-05, ESRF #6 HEX Gram indefiniteness): the graded outer rule of self / touching
+    # sub pairs is decoupled from glout_n (shared by the far tensor product, whose cost grows like n^6),
+    # touching hosts are always graded (near_grade 1.0 + the C++ shared-node test), and touching pairs take
+    # the exact-anchor radial inner.  ``near_inner="site"`` restores the static-site radial for A/B only.
+    glnear_n = (8 if p == 1 else glout_n) if glnear_n is None else int(glnear_n)
+    # SELF pairs: the endpoint-graded outer puts points near the sub-tet faces where the radial cones need
+    # more points; 12 brings the #6 distorted self block within 1e-4 of the converged value (5: 3.7e-3 low).
+    glin_self_n = (12 if p == 1 else glin_n) if glin_self_n is None else int(glin_self_n)
+    if near_inner not in ("exact", "site"):
+        raise ValueError("_build_charge_gram_hex: near_inner must be 'exact' or 'site' (got %r)" % (near_inner,))
     cb = _charge_basis_hex(
         fes, cob_quad=max(3, p+1), materialize_mass=materialize_mass,
         internal_interfaces=bool(internal_interfaces),
@@ -1612,6 +1637,8 @@ def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=0.5, far_i
     t1 = time.perf_counter()
     glo, gwo = _g01(glout_n)
     gli, gwi = _g01(glin_n)
+    gln, gwn = _g01(glnear_n)
+    gls, gws = _g01(glin_self_n)
     ftp = np.asarray(_SYM5_TET[0]); ftw = np.asarray(_SYM5_TET[1])
     G = _rp._ChargeGramHMatrix(
         hex_cell_nodes=cb["cell_nodes"], quad_face_nodes=cb["face_nodes"],
@@ -1628,7 +1655,10 @@ def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=0.5, far_i
         image_masks=(_EMPTY_I32 if image_masks is None else _i32_buffer(image_masks)),
         image_signs=(_EMPTY_F64 if image_signs is None else _f64_buffer(image_signs)),
         eps=eps, leaf=leafsize, eta=eta,
-        build=bool(build_hmatrix) and not len(image_rot_angle))
+        build=bool(build_hmatrix) and not len(image_rot_angle),
+        gl_near=_f64_buffer(gln), gw_near=_f64_buffer(gwn),
+        near_inner_exact=(near_inner == "exact"),
+        gl_in_self=_f64_buffer(gls), gw_in_self=_f64_buffer(gws))
     _finish_image_rotations(G, image_rot_angle, eps=eps, leafsize=leafsize, eta=eta,
                             build_hmatrix=bool(build_hmatrix))
     t2 = time.perf_counter()
