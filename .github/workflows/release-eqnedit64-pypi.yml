@@ -94,12 +94,19 @@ jobs:
           $version = $env:EQNEDIT64_TAG.Substring('eqnedit64-v'.Length)
           $dest = Join-Path $env:RUNNER_TEMP 'eqnedit64-staging'
           New-Item -ItemType Directory -Path $dest | Out-Null
-          foreach ($name in @("Eqnedit64-$version.exe",
-                              "Eqnedit64-$version.release.json")) {
+          # --min-size guards against a truncated download, and its default is
+          # sized for wheels and .pyd files.  The manifest is a few hundred
+          # bytes, so it needs its own floor or every attempt is discarded as
+          # short.  One byte is enough: the content is verified below against
+          # the tag, the hash, and the signature.
+          foreach ($item in @(@("Eqnedit64-$version.exe", 100000),
+                              @("Eqnedit64-$version.release.json", 1))) {
+            $name = $item[0]
             python tools/download_release_asset.py `
               --repo $env:GITHUB_REPOSITORY `
               --tag eqnedit64-staging `
               --name $name `
+              --min-size $item[1] `
               --dest $dest
             if ($LASTEXITCODE -ne 0) {
               throw ("The signed standalone for $env:EQNEDIT64_TAG is not staged: " +
