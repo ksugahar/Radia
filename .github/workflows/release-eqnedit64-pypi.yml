@@ -68,32 +68,61 @@ jobs:
   signed-standalone:
     needs: qualify
     if: needs.qualify.outputs.eligible == 'true'
-    runs-on: [self-hosted, windows-radia]
-    timeout-minutes: 5
+    # GitHub-hosted on purpose.  This job used to run on a self-hosted runner
+    # so it could read the signed executable from the laboratory O: drive, and
+    # that cannot work: the runner service is NETWORK SERVICE, which sees
+    # neither the interactive user's mapped drives nor - the machines being a
+    # workgroup, not a domain - the laboratory SMB share.  The signed binary
+    # now reaches CI as an asset of the eqnedit64-staging release, uploaded by
+    # sync_to_o.ps1 in the same transaction that updates O:.  O: remains the
+    # human hand-test entry point; it is no longer a CI dependency.
+    runs-on: windows-2022
+    timeout-minutes: 10
     steps:
-      - name: Verify the pre-tag O drive release gate
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Download the signed standalone prepared for this tag
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EQNEDIT64_TAG: ${{ needs.qualify.outputs.tag }}
+        run: |
+          $version = $env:EQNEDIT64_TAG.Substring('eqnedit64-v'.Length)
+          $dest = Join-Path $env:RUNNER_TEMP 'eqnedit64-staging'
+          New-Item -ItemType Directory -Path $dest | Out-Null
+          foreach ($name in @("Eqnedit64-$version.exe",
+                              "Eqnedit64-$version.release.json")) {
+            python tools/download_release_asset.py `
+              --repo $env:GITHUB_REPOSITORY `
+              --tag eqnedit64-staging `
+              --name $name `
+              --dest $dest
+            if ($LASTEXITCODE -ne 0) {
+              throw ("The signed standalone for $env:EQNEDIT64_TAG is not staged: " +
+                "$name is missing from the eqnedit64-staging release. " +
+                'Run sync_to_o.ps1 before pushing the tag.')
+            }
+          }
+          # Downstream verification keeps the historical file names.
+          Move-Item (Join-Path $dest "Eqnedit64-$version.exe") `
+            (Join-Path $dest 'Eqnedit64.exe')
+          Move-Item (Join-Path $dest "Eqnedit64-$version.release.json") `
+            (Join-Path $dest 'Eqnedit64.release.json')
+
+      - name: Verify the signed standalone against the tag
         shell: pwsh
         env:
           EQNEDIT64_TAG: ${{ needs.qualify.outputs.tag }}
           EQNEDIT64_SHA: ${{ needs.qualify.outputs.sha }}
         run: |
-          # O: is SUBST-ed to this OneDrive directory in the interactive LAB
-          # session.  The runner service uses LocalSystem, so it cannot see
-          # per-user drive letters and must inspect the same backing directory.
-          $releaseRoots = @('C:\Users\Administrator\OneDrive')
-          if (Get-PSDrive -Name O -PSProvider FileSystem -ErrorAction SilentlyContinue) {
-            $releaseRoots = @('O:\') + $releaseRoots
-          }
-          $releaseRoot = $releaseRoots | Where-Object {
-            (Test-Path -LiteralPath (Join-Path $_ 'Eqnedit64.exe') -PathType Leaf) -and
-            (Test-Path -LiteralPath (Join-Path $_ 'Eqnedit64.release.json') -PathType Leaf)
-          } | Select-Object -First 1
-          if (-not $releaseRoot) {
-            throw 'O: Eqnedit64 release gate is incomplete; prepare O: before tag push.'
-          }
+          $releaseRoot = Join-Path $env:RUNNER_TEMP 'eqnedit64-staging'
           $exe = Join-Path $releaseRoot 'Eqnedit64.exe'
           $manifestPath = Join-Path $releaseRoot 'Eqnedit64.release.json'
-          Write-Host "Verifying O: release backing path: $releaseRoot"
+          Write-Host "Verifying staged release payload: $releaseRoot"
           $manifest = Get-Content -LiteralPath $manifestPath -Raw |
             ConvertFrom-Json
           $expectedVersion = $env:EQNEDIT64_TAG.Substring('eqnedit64-v'.Length)
@@ -110,7 +139,9 @@ jobs:
               -not $signature.SignerCertificate -or
               $signature.SignerCertificate.Subject -cne 'CN=ksugahar' -or
               $signature.Status -in @('NotSigned', 'HashMismatch')) {
-            throw 'O: Eqnedit64 release gate does not match the exact tag CI.'
+            throw ('The staged signed Eqnedit64 does not match this tag. ' +
+              'It must be the executable compiled and signed from the exact ' +
+              'tagged commit, staged by sync_to_o.ps1 before the tag push.')
           }
 
           $artifact = Join-Path $env:RUNNER_TEMP 'eqnedit64-signed-standalone'
