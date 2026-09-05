@@ -289,7 +289,10 @@ public:
                         std::vector<double> far_tet_pts, std::vector<double> far_tet_w,
                         std::vector<double> far_tri_pts, std::vector<double> far_tri_w,
                         double near_grade, double far_inner_factor,
-                        std::vector<int> image_masks = {}, std::vector<double> image_signs = {});
+                        std::vector<int> image_masks = {}, std::vector<double> image_signs = {},
+                        std::vector<double> gl_near = {}, std::vector<double> gw_near = {},
+                        bool near_inner_exact = true,
+                        std::vector<double> gl_in_self = {}, std::vector<double> gw_in_self = {});
 
     // 2D PLANAR mode (2026-07-03, the motor cross-section layer; memory hdiv-vim-tri-quad-motor):
     // charges rho = -div M on 2D cells (BDM1: TRI P0 / QUAD Q1; BDM2: TRI P1 / QUAD Q2)
@@ -936,6 +939,13 @@ private:
     std::vector<double> m_symTriP, m_symTriW;           // regular outer tri rule (bary lam1..2; W sums 1/2)
     std::vector<double> m_glOut, m_gwOut;               // 1D [0,1] Gauss -> graded OUTER Duffy (near/self subs)
     std::vector<double> m_glIn, m_gwIn;                 // 1D [0,1] Gauss -> the RADIAL inner rule (PhiInnerHexRadialVec)
+    // NEAR family (2026-09-05, ESRF #6 HEX Gram indefiniteness): the graded OUTER Duffy rule of self and
+    // touching sub pairs is DECOUPLED from gl_out (which the far tensor product shares -- raising gl_out
+    // alone multiplies the far cost by (n/4)^6), and touching non-self pairs take the EXACT-anchor radial
+    // inner (the source-host reference inverse of the outer point) instead of the static-site radial.
+    std::vector<double> m_glNear, m_gwNear;             // 1D [0,1] Gauss -> endpoint-graded tensor OUTER of near/self hosts
+    std::vector<double> m_glInSelf, m_gwInSelf;         // 1D [0,1] Gauss -> the RADIAL inner of SELF pairs (finer than m_glIn)
+    bool m_nearInnerExact = true;                       // false = legacy static-site radial (diagnostic only)
     std::vector<double> m_farTetP, m_farTetW;           // cheap FAR inner tet rule (bary; W sums 1/6)
     std::vector<double> m_farTriP, m_farTriW;           // cheap FAR inner tri rule (bary; W sums 1/2)
     double m_near_grade = 1.5, m_far_inner_factor = 4.0;
@@ -1038,7 +1048,9 @@ private:
         const std::vector<int>& mI, const std::vector<int>& mJ, const std::vector<double>& mV,
         int n_face, const char* caller, double* factor_s_accum, bool geometry_cache = false);
     void PhiInnerHexSubVec(int kindS, int hS, int subB, const double p[3],
-                           const std::vector<int>& srcG, double* inn) const;  // inner over ALL source locals (shares sqrt)
+                           const std::vector<int>& srcG, double* inn,
+                           const double* anchor = nullptr) const;  // inner over ALL source locals (shares sqrt);
+                           // anchor = the outer point's reference coordinates in the SOURCE host (exact-anchor radial)
     // Complete-host tensor rule for smooth mapped-BDM2 source potentials.
     // The former degree-five sub-simplex far cloud was not exact enough for
     // the O(1e-3) volume/surface cancellation of high charge modes.
@@ -1082,7 +1094,7 @@ private:
     // removed with them).  m_glIn/m_gwIn is the radial 1D Gauss rule (n=5 -> 4*125 pts per cell call);
     // not cacheable here (x0 = xiT varies per outer point).
     void PhiInnerHexRadialVec(int kindS, int hS, int subB, const double p[3], const double* xiT,
-                              const std::vector<int>& srcG, double* inn) const;
+                              const std::vector<int>& srcG, double* inn, bool self_rule = false) const;
     void DPhiInnerHexRadialCellVec(int hS, int subB, const double p[3], const double dp[3],
                                   const double* xiT, const double* node_velocity,
                                   const std::vector<int>& srcG, double* dinn,
@@ -1181,6 +1193,13 @@ private:
     mutable std::atomic<long long> m_hexGeneralSharedHits{0};
     mutable std::atomic<long long> m_hexGeneralSharedMisses{0};
     bool HexPairTakesGeneralPath(int kindT, int hT, int kindS, int hS, int img) const;
+    // TOUCHING hex hosts (a shared Q2 lattice node after the image transform): always the graded near
+    // family, never the far tensor product, whatever the centroid-separation ratio says.
+    bool HexHostsTouch(int kindT, int hT, int kindS, int hS, int img) const;
+    // NEAR host pairs (self / touching / within near_grade): endpoint-graded tensor outer over the whole
+    // target host, exact-anchor radial (or far cloud) inner per source sub-simplex.
+    std::vector<double> QuadBlockHexNearTensor(int kindT, int hT, int kindS, int hS, int img,
+                                               bool self_pair) const;
     // Per-host tensor rule of the far product (points, tensor weights, per-local-charge monomial
     // values).  The rule is PAIR-INDEPENDENT (mask reflections are applied to the target points at
     // kernel time), so QuadBlockHexAffineFarProduct fetches it from this instance-shared cache

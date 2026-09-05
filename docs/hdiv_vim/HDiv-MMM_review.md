@@ -306,7 +306,7 @@ mode flag:
 - persistent field evaluation;
 - diagnostics and artifact provenance.
 
-The audited source contains 15 supported `RADIA_HDIV_*` environment controls.
+The audited source contains 16 supported `RADIA_HDIV_*` environment controls.
 They are now exhaustively classified and guarded by
 `tests/test_hdiv_environment_policy.py`; adding an unclassified control fails
 the fast test lane. The obsolete `RADIA_HDIV_HEX_CACHE_STATS` alias was removed.
@@ -316,7 +316,7 @@ the fast test lane. The obsolete `RADIA_HDIV_HEX_CACHE_STATS` alias was removed.
 | Diagnostic counters | `RADIA_HDIV_BLOCK_CACHE_STATS`, `RADIA_HDIV_HMATVEC_STATS` | Opt-in instrumentation; invalidates production timing claims. |
 | Failure injection | `RADIA_HDIV_TEST_FAIL_FILL_AFTER` | Test-only build failure; no public API and no successful result artifact. |
 | Performance/cache A/B | `RADIA_HDIV_HEX_BLOCK_CACHE_LIMIT`, `RADIA_HDIV_WEDGE_TRANS_CACHE`, `RADIA_HDIV_DISABLE_TRANS_CACHE` | Diagnostic benchmark paths; effective values are copied into `hmat_stats`. |
-| Numerical/path A/B | `RADIA_HDIV_CURVED_DIRECT`, `RADIA_HDIV_HEX_FAR_ONESIDED`, `RADIA_HDIV_WEDGE_FAR_ONESIDED`, `RADIA_HDIV_HEX_DISTORTED_FAR_FACTOR`, `RADIA_HDIV_HO_FAR_ONESIDED`, `RADIA_HDIV_DISABLE_HO_ANALYTIC_BLOCK`, `RADIA_HDIV_DISABLE_HO_IMAGE_BLOCK`, `RADIA_HDIV_DISABLE_HO_IMAGE_FAR` | Non-production comparison paths; `hmat_stats.nonproduction_numerical_override_active` and `release_claim_eligible` make them fail-loud in provenance. |
+| Numerical/path A/B | `RADIA_HDIV_CURVED_DIRECT`, `RADIA_HDIV_HEX_FAR_ONESIDED`, `RADIA_HDIV_WEDGE_FAR_ONESIDED`, `RADIA_HDIV_HEX_DISTORTED_FAR_FACTOR`, `RADIA_HDIV_HO_FAR_ONESIDED`, `RADIA_HDIV_DISABLE_HO_ANALYTIC_BLOCK`, `RADIA_HDIV_DISABLE_HO_IMAGE_BLOCK`, `RADIA_HDIV_DISABLE_HO_IMAGE_FAR`, `RADIA_HDIV_HEX_CLUSTER_RADIUS` | Non-production comparison paths; `hmat_stats.nonproduction_numerical_override_active` and `release_claim_eligible` make them fail-loud in provenance. |
 | Preconditioner A/B | `RADIA_HDIV_AUTO_JACOBI_TET_NFACE` | Measurement-only auto-policy threshold; the resolved threshold and branch are recorded in `preconditioner_policy`. |
 
 The native `stats()` surface records every effective C++ cache, quadrature,
@@ -1121,3 +1121,92 @@ unchanged by the FEM-only fix, but corrected full-model FEM agreement has not
 yet been demonstrated. No three-engine acceptance, main merge, tag, or PyPI
 publication is claimed. Both invalid FEM pilots and the failed #6 process
 have stopped; the candidate environments remain available for further work.
+
+### 8.9 ESRF #6 root cause: HEX charge-Gram definiteness (2026-09-05)
+
+The iteration-86 CG breakdown of section 8.8 reproduces on LAB from the
+production entry point (`solve_configured_linear_material_auto_prec`, chi0
+warmstart of the energy-Newton path, `p^T A p = -1.3e9` at iteration 86 versus
+`-1.9e9` on hibino with 32 threads): deterministic, not a threading race.  Along
+the breakdown direction `p^T W p = +4.95e12` and `p^T N p = -4.96e12`, and the
+raw O(n^2) quadratic form is `-4.52e12`, so the charge Gram `N = B^T G B` itself
+is indefinite; codex's raw-Gram observation is confirmed.  The Newton tangent is
+SPD (the case-6 table has `dM/dH >= 0.16` everywhere), every exact 13-host
+element cluster is PSD to 1e-16 in the M-metric, and a floor scan with the
+production CG brackets `lambda_min(M^-1 N)` between `-5e-3` and `-2e-3` (mu_r
+2001, 1001 and 501 break at iterations 86, 105 and 156; mu_r 201 converges in
+253 iterations).  The physical band is [0, 1].  Two independent defects produce
+this, and both are now fixed on `claude/hdiv-hex-gram-psd`.
+
+**H-matrix admissibility (the larger defect).**  A preconditioned generalized
+LOBPCG finds `lambda_max` Ritz 2.12 whose raw quotient is 0.83; the symmetric
+leaf diagnostic pins the excess to one low-rank leaf (rank 5, 80 x 80, H-matrix
+quadratic `-0.67` versus raw `-1.96`) that couples two mirror cells touching
+across x = 0, while every other dominant leaf agrees to 1e-4.  The cluster-tree
+points were the co-located charge centroids, so HACApK's box-gap admissibility
+(`width <= eta * gap` in `cHACApK_bndbox` / the leaf generators) saw a gap of
+one cell between clusters whose hosts touch, declared the block admissible, and
+ACA+ stopped at rank 5.  Fix: `cHACApK_set_point_radius` inflates the leaf
+bounding boxes by a per-point support radius (the host bounding radius
+published by the hex Gram's `ExtractCoordinates`), so touching hosts have gap 0
+and always land in dense leaves while a host's modes stay co-located.
+(Spreading the modes over the lattice nodes instead split hosts across clusters
+and put self entries into low-rank leaves: `lambda` in [-790, 929].)  The
+diagnostic latch `RADIA_HDIV_HEX_CLUSTER_RADIUS=0` restores point boxes and is
+reported as a numerical override.
+
+**Near family of distorted cells (partially resolved).**  The #6 non-affine
+cells are trilinear distortions (Q2 mid-node deviation 1e-15), not curved.
+Pair-level comparison against fine rules showed the distorted SELF blocks 8e-4
+low (up to 5.6e-3), the BDM face-dof self-energy 7e-3 low, and touching pairs
+classified "not near" at `near_grade` 0.5 (their centroid ratio is 0.56..1.0),
+so the sub-tet outer was the regular rule against a boundary-singular
+potential; the static-site radial inner added ~1e-3.  Against a fine reference
+on a 72-cell elongated sector lattice the legacy family is -11 %..+18 % off in
+the M-metric (`lambda_max` 1.084 against the physical bound 1).  Changes:
+touching hosts (a shared Q2 lattice node, `HexHostsTouch`) are always near and
+never take the far tensor product (also affine pairs, whose vertex-touching
+ratio reaches 1.0); the near outer rule `glnear_n` (default 8) is decoupled
+from `glout_n`, which the far tensor product shares; every near pair (self,
+touching, near band) is integrated on ONE endpoint-graded tensor rule over the
+whole target host (`QuadBlockHexNearTensor`, smootherstep grading on every
+axis) so all sources of a target share the same outer point set (mixing the
+corner-graded sub-tet self outer with tensor touching pairs, although each block
+was more accurate, made the assembled Gram worse: `lambda_min` -4.3e-3); the
+inner is the exact-anchor radial (`HexQ2Inverse` / `QuadQ2ClosestReference`
+anchors, `PhiInnerHexRadialVec`) with a finer rule `glin_self_n` (default 12)
+for self pairs and face sources (the endpoint grading puts outer points near
+the sub-tet faces, where the 5-point cones are coarse; the remaining #6
+negative mode, -5.0e-3, was pure face-face energy on distorted cells and
+disappears with the finer face rule); `near_inner="site"` keeps the legacy
+inner as a flagged A/B path.  On the sector lattice the error against the fine
+reference drops to -1 %..+9 % (glnear 8 / glin 5 / self 12; -2 %..+2 % at
+glnear 10 / glin 8 / self 12), and touching-pair blocks on #6 move within 7e-5
+of the fine reference (legacy 1.4e-4..2.4e-4).  It is not converged: the sector
+`lambda_max` is still 1.03 (strict xfail in
+`tests/feec/test_hdiv_vim_hex_near_family.py`), and on #6 the production CG
+still breaks at iteration 100 at the chi0 floor (a direction below -5e-4 that
+the preconditioned LOBPCG cannot separate from the exact null space of
+charge-free fields).  The converging direction is a near rule whose error is
+independent of the cell aspect ratio; the tensor outer + exact-anchor radial is
+the consistent frame for it.
+
+**Fail-loud Jacobi diagonal.**  `SolveConfiguredLinearMaterialAutoPrec` and
+its multi-RHS twin silently replaced a non-positive exact diagonal of
+`inv_chi*M + B^T G B` by 1.0; they now raise with the DOF and the value
+(`tests/feec/test_hdiv_jacobi_diagonal_fail_loud.py`).
+
+**Gate.**  `validation_test/esrf_three_engine/validate_hex_gram_definiteness.py`
+rebuilds the production Gram on the #6 asset and fails unless the exact
+clusters are PSD, the production CG converges at the chi0 floor and at 2x, 4x
+and 8x larger initial permeability, the preconditioned LOBPCG edges stay inside
+[-1e-8, 1 + 1e-3], and the raw O(n^2) and H-matrix quadratic forms agree along
+the minimizing direction (the separate compression check).  Its LAB result is
+recorded in `results/hex_gram_definiteness_lab.json`: clusters PSD, raw and
+H-matrix quadratic forms agreeing to 1.8e-14 along the minimizing direction,
+`lambda_max` Ritz 1.051 (2.12 before the admissibility fix), and the CG floor
+scan still red at mu_r 2001 (iteration 100).  Timings are relative (LAB, 421 s
+build against 120 s for the legacy family); the idle mdx/hibino run is codex's.
+`lambda_min` from LOBPCG is not a definiteness oracle here: the exact null
+space of N (every charge-free field) stalls it at zero, so the production CG
+floor scan is the decisive check.
