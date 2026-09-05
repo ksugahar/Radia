@@ -128,6 +128,22 @@ An explicit release/deploy/update request authorizes the matching `O:` update.
 For a request that only asks to inspect or test Eqnedit64, obtain authorization
 before changing `O:`.
 
+## Who may run this
+
+Eqnedit64 is the exception to the usual boundary where an agent stops at the
+local commit and hands the push, the tag and the publication to another agent.
+Here one authorized request carries the whole release: build and sign, stage to
+O: and to `eqnedit64-staging`, push the tag, and see the GitHub Release and the
+PyPI wheels appear. Splitting it was worse than keeping it together - the
+sequence is order-critical and every step verifies the one before it, so the
+agent that produced the signed binary is the one that should carry it to the
+end and report what actually published. Sugahara authorized this on
+2026-09-05, after Claude Code took 3.0.15 from source to PyPI that way.
+
+This does not widen anything else. The release still needs an explicit request,
+the hand-test and review gates still come first, and the boundary for other
+Radia work is unchanged.
+
 For an authorized hand-test update, run:
 
 ```powershell
