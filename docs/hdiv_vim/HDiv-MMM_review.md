@@ -1185,11 +1185,16 @@ glnear 10 / glin 8 / self 12), and touching-pair blocks on #6 move within 7e-5
 of the fine reference (legacy 1.4e-4..2.4e-4).  It is not converged: the sector
 `lambda_max` is still 1.03 (strict xfail in
 `tests/feec/test_hdiv_vim_hex_near_family.py`), and on #6 the production CG
-still breaks at iteration 100 at the chi0 floor (a direction below -5e-4 that
-the preconditioned LOBPCG cannot separate from the exact null space of
-charge-free fields).  The converging direction is a near rule whose error is
-independent of the cell aspect ratio; the tensor outer + exact-anchor radial is
-the consistent frame for it.
+still breaks at iteration 100 at the chi0 floor: along the breakdown direction
+the Rayleigh quotient of N is -5.08e-4 in the M-metric (raw and H-matrix
+agree), 1.6 % below the floor 5.0e-4, spread over distorted (60 %) and affine
+(40 %) cells; the preconditioned LOBPCG cannot separate such a direction from
+the exact null space of charge-free fields.  A floor scan with the production
+CG still breaks at mu_r 1334, 1001 and 501 (iterations 148, 160, 292), as the
+legacy family did, so the lower band of the raw Gram is not yet improved on
+#6 -- the sector error and the H-matrix consistency are.  The converging direction is a near
+rule whose error is independent of the cell aspect ratio; the tensor outer +
+exact-anchor radial is the consistent frame for it.
 
 **Fail-loud Jacobi diagonal.**  `SolveConfiguredLinearMaterialAutoPrec` and
 its multi-RHS twin silently replaced a non-positive exact diagonal of
