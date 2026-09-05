@@ -1578,9 +1578,19 @@ def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=1.0, far_i
     same, share a Q2 lattice node (touching), or lie within ``near_grade`` * (size_a + size_b) of each
     other.  Near pairs are integrated with ONE endpoint-graded tensor rule over the whole target host
     (``glnear_n`` points per axis, pushed through the C2 smootherstep so every face, edge and corner of the
-    target is resolved) and the exact-anchor radial inner over each source sub-simplex (the outer point's
-    reference coordinates in the source host; ``near_inner="site"`` restores the legacy static-site radial
-    for A/B only).  ``glnear_n`` is decoupled from ``glout_n`` because the far tensor product shares
+    target is resolved) and a WHOLE-HOST cone/fan inner: the six face cones of the source host from an
+    apex at the singular point -- the outer point itself for a self pair, the physical closest point of
+    the source host for a touching pair -- so the 1/r peak sits at the apex of every cone (a per-sub-tet
+    apex is displaced for the sub-tets that do not contain the point, and the displaced peak is what
+    elongated sliver sub-tets resolve badly); each face is integrated by four edge fans from the apex's
+    physical foot, because a thin cone (apex close to its face) has a 1/rho peak in the face integral
+    that tensor Gauss rules cannot resolve (their error is first order in the apex distance and moves
+    erratically with the point count).  Every peaked direction -- the ray of a touching pair
+    (1/sqrt(d^2 + r^2 |v|^2)), the fan radius and the edge parameter -- takes the Johnston-Elliott sinh
+    substitution with the physical peak width (plain Gauss below width 1e-3, where the peak is already
+    resolved, and above width 1).  A face host uses the four edge fans from the apex.  Affine sources
+    keep the exact analytic inner.  ``near_inner="site"`` restores the legacy static-site sub-simplex
+    radial for A/B only.  ``glnear_n`` is decoupled from ``glout_n`` because the far tensor product shares
     ``glout_n`` and its cost grows like n^6.  The legacy family (near_grade 0.5, corner-Duffy sub-tet outer,
     site inner) left ``lambda_min(M^-1 N)`` at -2e-3..-5e-3 on the ESRF #6 mesh and ``lambda_max`` at 1.08
     on elongated sector cells; the physical band is [0, 1].
@@ -1623,9 +1633,9 @@ def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=1.0, far_i
     # touching hosts are always graded (near_grade 1.0 + the C++ shared-node test), and touching pairs take
     # the exact-anchor radial inner.  ``near_inner="site"`` restores the static-site radial for A/B only.
     glnear_n = (8 if p == 1 else glout_n) if glnear_n is None else int(glnear_n)
-    # SELF pairs: the endpoint-graded outer puts points near the sub-tet faces where the radial cones need
-    # more points; 12 brings the #6 distorted self block within 1e-4 of the converged value (5: 3.7e-3 low).
-    glin_self_n = (12 if p == 1 else glin_n) if glin_self_n is None else int(glin_self_n)
+    # glin_self_n rules the sinh-substituted (peaked) directions of the cone/fan inner -- ray, fan radius,
+    # edge parameter -- and glin_n the smooth ones; 8 points integrate the substituted peaks to ~1e-6.
+    glin_self_n = (8 if p == 1 else glin_n) if glin_self_n is None else int(glin_self_n)
     if near_inner not in ("exact", "site"):
         raise ValueError("_build_charge_gram_hex: near_inner must be 'exact' or 'site' (got %r)" % (near_inner,))
     cb = _charge_basis_hex(
