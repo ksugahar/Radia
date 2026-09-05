@@ -1215,3 +1215,42 @@ build against 120 s for the legacy family); the idle mdx/hibino run is codex's.
 `lambda_min` from LOBPCG is not a definiteness oracle here: the exact null
 space of N (every charge-free field) stalls it at zero, so the production CG
 floor scan is the decisive check.
+
+### 8.10 Installed-wheel reproduction on Hibino (2026-09-05)
+
+The candidate from `63225d0bb` was packaged after `Build.ps1` and installed
+only into `C:/temp/radia-candidate-63225d0bb/venv`. No loose native binary was
+deployed, no public package was uploaded, and the system Radia installation
+was unchanged. The installed 336 Radia files match the wheel byte-for-byte;
+`pip check` passed. Wheel SHA256:
+`64276bc61759fbc09ce04182961bb7ed10bbffd9e6175a57d30449c2c035fce6`.
+Native SHA256:
+`f0f61f47fd058f05ba0efd939ee25224600389dbb0de7312a24c0c2b4f77b9b9`.
+
+The Jacobi fail-loud, HEX near-family, and TET image-dispatch tests returned
+**12 passed, 1 xfailed in 79.45 s**. The strict xfail remains the sector
+physical-upper-band defect, not an accepted accuracy result.
+
+The installed-wheel validation runner now resolves Radia from the active
+environment rather than forcibly inserting a repository source directory.
+The run used 32 threads, `gram_eps=1e-10`, and no HDiv numerical overrides.
+Evidence: `validation_test/esrf_three_engine/results/hex_gram_definiteness_63225d0bb_hibino.json`.
+
+| Check | Hibino result |
+| --- | --- |
+| Mesh | 1648 HEX, 592 non-affine cells, 45,792 field DOF |
+| Gram build | 188.59 s; compression 0.3321; maximum rank 60 |
+| Local cluster spectrum | [-3.78e-16, 0.94985], no negative clusters |
+| Production CG at mu_r 2001.2 | Breakdown at iteration 100; pAp = -2.4209e11 |
+| Raw/H-matrix quadratic-form gap | 4.97e-16 in the M metric on the tested direction |
+| Acceptance | FAIL; release-blocking |
+
+Both LOBPCG edge searches exhausted 300 iterations without meeting their
+1e-8 tolerance. Their Ritz values (-1.629e-7 and 1.050756) are diagnostics,
+not certified extremal eigenvalues. The raw quadratic form is negative on
+the tested vector too; the compression agreement is directional evidence,
+not an operator-wide error bound. The production CG failure independently
+prevents acceptance. Higher-permeability floor cases were not run because
+the scan stops at its first failure. No three-engine field agreement is
+claimed. All foreground jobs finished, and no Python compute process was
+left running on Hibino.
