@@ -151,5 +151,21 @@ assert.deepEqual(editor.composeInsertion("a^{2}b", 6, 6, "'"), { value: "a^{2}b'
 assert.deepEqual(editor.composeInsertion("\\{x\\}", 5, 5, "'"),
                  { value: "\\{x\\}'", caret: 6 });
 
+/* An unclosed group is the beginner's most frequent mistake, and MathJax
+ * answers it by refusing the whole expression, which left raw TeX on screen.
+ * The balance is checked before MathJax sees the source, and the message
+ * names where the problem is. */
+assert.equal(editor.braceProblem("\\frac{1}{2}"), null);
+assert.equal(editor.braceProblem(""), null);
+assert.match(editor.braceProblem("\\frac{1}{2"), /閉じていない \{ が 1 個/);
+assert.match(editor.braceProblem("\\frac{1}{2"), /^閉じていない/);
+assert.match(editor.braceProblem("\\sqrt{\\frac{1}{2}"), /が 1 個/);
+/* The first unmatched closing brace is reported by position, 1-based. */
+assert.match(editor.braceProblem("x}"), /^2 文字目の \} /);
+/* Escaped braces are symbols, and environments balance on their own. */
+assert.equal(editor.braceProblem("\\left\\{ x \\right\\}"), null);
+assert.equal(editor.braceProblem("\\begin{aligned} a &= b \\end{aligned}"), null);
+assert.equal(editor.braceProblem("\\{ \\} \\{"), null);
+
 console.log("PASS: Web style selection wrapping and caret placement");
 console.log("PASS: Web hole traversal, native source layout, structural Enter");

@@ -21,7 +21,7 @@
   /* デプロイごとに上げる。ボタン行の右端に出て、開きっぱなしのタブが
    * 古い版を動かし続けていないかを一目で判別できる（.exe の
    * タイトルバー・ビルドスタンプと同じ教訓）。 */
-  var BUILD = "2026-09-05a";
+  var BUILD = "3.0.15 (2026-09-05b)";
 
   var PALETTES = [
     {
@@ -291,6 +291,8 @@
     ".eqed-source { width: 100%; box-sizing: border-box; font-family: var(--eqed-source-font); font-size: 0.95rem; padding: 8px 10px; border: 1px solid #cfcfcb; border-radius: 6px; margin-top: 4px; }",
     /* The native status bar's fifth part: the Tab / Enter / & hint. */
     ".eqed-hint { font-size: 0.76rem; color: var(--muted, #717170); margin: 2px 0 4px; overflow-wrap: anywhere; }",
+    /* Why the equation cannot be shown, in place of the preview. */
+    ".eqed-problem { margin: 0; padding: 8px 10px; border-left: 3px solid #c2793a; background: #fdf3e7; color: #6a3c11; font-size: 0.9rem; overflow-wrap: anywhere; }",
     /* Match the native canvas: white ground, sunken frame, top-left anchor. */
     ".eqed-preview { min-height: 5.5em; padding: 12px 14px; overflow-x: auto; background: #fff; border: 1px solid #c9c9c5; border-radius: 4px; box-shadow: inset 1px 1px 3px rgba(0,0,0,0.07); margin: 8px 0; }",
     ".eqed-preview mjx-container[display='true'] { text-align: left !important; margin: 0 !important; }",
@@ -1024,6 +1026,31 @@
     input.setSelectionRange(edit.caret, edit.caret);
   }
 
+  /* An unclosed group is the beginner's most frequent mistake, and it is the
+   * one MathJax handles worst for a learner: it refuses the whole expression,
+   * so the preview is left holding raw TeX with no hint of what went wrong.
+   * Name the problem, and say where it is, before handing the source over.
+   * The native editor cannot reach this state - its parser keeps brace
+   * nesting balanced by construction - so this is a Web-only obligation. */
+  function braceProblem(tex) {
+    var depth = 0;
+    for (var i = 0; i < tex.length; i++) {
+      var c = tex.charAt(i);
+      if (c === "\\") { i += 1; continue; }   /* \{ and \} are symbols */
+      if (c === "{") depth += 1;
+      else if (c === "}") {
+        depth -= 1;
+        if (depth < 0) {
+          return (i + 1) + " 文字目の } に対応する { がありません。";
+        }
+      }
+    }
+    if (depth > 0) {
+      return "閉じていない { が " + depth + " 個あります。";
+    }
+    return null;
+  }
+
   /* TeX reads ' as a superscript, so a prime placed straight after another
    * superscript is a double exponent: `a^{2}'` fails to convert with
    * "Prime causes double exponent: use braces to clarify".  The structural
@@ -1113,11 +1140,43 @@
     input.parentNode.insertBefore(hint, input.nextSibling);
     var timer = null;
 
+    /* Replace the preview with the reason the equation cannot be shown.  The
+     * source stays untouched in the pane above, so the reader can compare the
+     * message against what they typed. */
+    function showRenderProblem(reason) {
+      preview.innerHTML = "";
+      var note = el("p", "eqed-problem");
+      note.appendChild(el("strong", "", "数式を表示できません"));
+      note.appendChild(document.createTextNode(" — " + reason));
+      preview.appendChild(note);
+    }
+
+    /* MathJax rejects more than unbalanced braces, and when it does the page
+     * is left showing raw TeX.  Ask it for the reason and put that on screen
+     * instead, unless the source has moved on in the meantime. */
+    function reportUnrendered(source) {
+      if (input.value.trim() !== source) return;
+      if (preview.querySelector("mjx-container")) return;
+      if (!window.MathJax || typeof window.MathJax.tex2mmlPromise !== "function") return;
+      window.MathJax.tex2mmlPromise(mathJaxTex(source), { display: true }).then(
+        function () { /* converted after all: leave the preview alone */ },
+        function (error) {
+          if (input.value.trim() !== source) return;
+          showRenderProblem(String((error && error.message) || error));
+        }
+      );
+    }
+
     function render() {
       var tex = input.value.trim();
       preview.innerHTML = "";
       if (!tex) {
         preview.appendChild(el("p", "eqed-empty", "ここに数式が表示されます"));
+        return;
+      }
+      var problem = braceProblem(tex);
+      if (problem) {
+        showRenderProblem(problem);
         return;
       }
       var box = el("div", "");
@@ -1129,6 +1188,9 @@
       if (window.SugaharaMath && typeof window.SugaharaMath.typeset === "function") {
         window.SugaharaMath.typeset(preview);
       }
+      /* The shared typeset chain swallows its own failures, so the only
+       * reliable signal is the absence of a rendered container afterwards. */
+      window.setTimeout(function () { reportUnrendered(tex); }, 600);
     }
 
     function scheduleRender() {
@@ -1447,6 +1509,7 @@
     module.exports = {
       composeInsertion: composeInsertion,
       composeRowBreak: composeRowBreak,
+      braceProblem: braceProblem,
       prettyTex: prettyTex,
       nextHole: nextHole,
       mathJaxTex: mathJaxTex,

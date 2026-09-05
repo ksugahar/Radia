@@ -9,7 +9,7 @@ import tempfile
 import eqnedit64
 
 
-assert eqnedit64.__version__ == "3.0.13"
+assert eqnedit64.__version__ == "3.0.15"
 assert eqnedit64.backend_path().is_file()
 assert eqnedit64.web_asset().is_file()
 assert eqnedit64.web_asset("equation-editor.fragment.html").is_file()
