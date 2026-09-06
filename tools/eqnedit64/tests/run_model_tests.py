@@ -19,6 +19,7 @@ TESTS = (
     "test_operations_fuzz.py",
     "test_tex_fuzz.py",
     "test_layout.py",
+    "test_embellishments.py",
     "test_usability_trace.py",
 )
 
