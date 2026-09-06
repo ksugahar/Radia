@@ -200,6 +200,8 @@ def main(argv=None) -> int:
     parser.add_argument("--expect-iron-sha256", default=None)
     parser.add_argument("--allow-nonconforming", action="store_true",
                         help="diagnose a mesh with hanging nodes / duplicated faces instead of refusing it")
+    parser.add_argument("--glpair-n", type=int, default=None,
+                        help="points per dimension of the pair-domain Duffy / near-band rule (default: production 8)")
     options = parser.parse_args(argv)
     if options.threads > 0:
         ng.SetNumThreads(options.threads)
@@ -219,7 +221,7 @@ def main(argv=None) -> int:
         "schema": SCHEMA, "generated_at_utc": _dt.datetime.now(_dt.timezone.utc).isoformat(),
         "host": platform.node(), "radia_version": getattr(radia, "__version__", None), "radia_file": radia.__file__,
         "case": CASE, "iron_mesh": str(mesh_path), "iron_mesh_sha256": sha,
-        "chi0": chi0, "inv_chi0": inv_chi0, "gram_eps": options.gram_eps, "checks": {},
+        "chi0": chi0, "inv_chi0": inv_chi0, "gram_eps": options.gram_eps, "glpair_n": options.glpair_n, "checks": {},
     }
     failures = []
     mesh = ng.Mesh(str(mesh_path))
@@ -238,7 +240,7 @@ def main(argv=None) -> int:
         report["mesh"] = {"ne": int(mesh.ne), "ndof": n_face, "nonaffine_cells": int(affinity["nonaffine_cell_count"]),
                           "conformity": conformity}
         started = time.perf_counter()
-        B, G, M_mass = vim.ChargeGram(fes, eps=options.gram_eps)
+        B, G, M_mass = vim.ChargeGram(fes, eps=options.gram_eps, hex_glpair_n=options.glpair_n)
         report["gram_build_s"] = time.perf_counter() - started
         stats = dict(G.stats())
         report["gram_stats"] = {k: (float(v) if isinstance(v, (int, float, np.floating)) else str(v))

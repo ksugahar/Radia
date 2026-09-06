@@ -67,6 +67,23 @@ def test_iron_law_is_a_monotone_h_b_table(qmag):
     assert 1.0e4 < mu_r_initial < 1.5e4
 
 
+def test_three_engine_cube_average_is_exact_for_a_linear_field():
+    spec = importlib.util.spec_from_file_location("run_qmag_three_engine", LANE / "run_qmag_three_engine.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["run_qmag_three_engine"] = module
+    spec.loader.exec_module(module)
+    centres = np.array([[0.001, 0.001, 0.0], [-0.004, -0.004, 0.0]])
+    sub = module._cube_points(centres, 2.0e-5)
+    assert sub.shape == (16, 3)
+    # a quadrupole-like linear field B = (G x, -G y, 0) is averaged exactly by the 2x2x2 Gauss cube
+    field = np.column_stack([15.0 * sub[:, 0], -15.0 * sub[:, 1], np.zeros(len(sub))])
+    averaged = module._cube_average(field, len(centres))
+    expected = np.column_stack([15.0 * centres[:, 0], -15.0 * centres[:, 1], np.zeros(2)])
+    assert np.allclose(averaged, expected, atol=1.0e-15)
+    assert module._relative_rms(expected, expected) == 0.0
+    assert module._relative_rms(expected, 1.01 * expected) == pytest.approx(0.01)
+
+
 def test_mesh_journal_is_conforming_and_id_free(qmag, tmp_path):
     journal = tmp_path / "qmag.jou"
     qmag.write_mesh_journal(journal, tmp_path / "qmag.vol", size_m=0.01, order=2)
