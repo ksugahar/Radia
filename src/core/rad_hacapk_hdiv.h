@@ -293,7 +293,8 @@ public:
                         std::vector<double> gl_near = {}, std::vector<double> gw_near = {},
                         bool near_inner_exact = true,
                         std::vector<double> gl_in_self = {}, std::vector<double> gw_in_self = {},
-                        std::vector<double> gl_pair = {}, std::vector<double> gw_pair = {});
+                        std::vector<double> gl_pair = {}, std::vector<double> gw_pair = {},
+                        std::vector<double> gl_pair_affine = {}, std::vector<double> gw_pair_affine = {});
 
     // 2D PLANAR mode (2026-07-03, the motor cross-section layer; memory hdiv-vim-tri-quad-motor):
     // charges rho = -div M on 2D cells (BDM1: TRI P0 / QUAD Q1; BDM2: TRI P1 / QUAD Q2)
@@ -947,6 +948,14 @@ private:
     std::vector<double> m_glNear, m_gwNear;             // 1D [0,1] Gauss -> endpoint-graded tensor OUTER of near/self hosts
     std::vector<double> m_glInSelf, m_gwInSelf;         // 1D [0,1] Gauss -> the RADIAL inner of SELF pairs (finer than m_glIn)
     std::vector<double> m_glPair, m_gwPair;             // 1D [0,1] Gauss per dimension of the pair-domain Duffy rule
+    // The same rule for pairs whose BOTH hosts are affine (2026-09-07): with affine maps the Duffy
+    // integrand is exponentially convergent (unit-cube self-energy 5e-9 at 6 points), whereas a
+    // distorted host converges only ~10x per two points (sector lattice: 7e-5 at 6, 6e-6 at 8), so
+    // affine-affine pairs -- most pairs of a real magnet -- take the cheaper count.
+    std::vector<double> m_glPairAffine, m_gwPairAffine;
+    bool HexHostAffine(int kind, int h) const;
+    const std::vector<double>& PairRuleNodes(int kindT, int hT, int kindS, int hS) const;
+    const std::vector<double>& PairRuleWeights(int kindT, int hT, int kindS, int hS) const;
     bool m_nearInnerExact = true;                       // false = legacy static-site radial (diagnostic only)
     std::vector<double> m_farTetP, m_farTetW;           // cheap FAR inner tet rule (bary; W sums 1/6)
     std::vector<double> m_farTriP, m_farTriW;           // cheap FAR inner tri rule (bary; W sums 1/2)

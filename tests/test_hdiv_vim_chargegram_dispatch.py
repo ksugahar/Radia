@@ -125,6 +125,8 @@ def test_chargegram_hex_shortcut_forwards_image_params(monkeypatch):
         "internal_interfaces": False,
         "excluded_boundaries": (),
         "cyclic_periodic_boundaries": (),
+        "glpair_n": None,
+        "glpair_affine_n": None,
     }]
 
 
