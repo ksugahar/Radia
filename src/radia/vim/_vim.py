@@ -436,6 +436,36 @@ def _exterior_bnd_elements(mesh, *, excluded_boundaries=()):
     return kept
 
 
+def mesh_conformity_report(mesh) -> dict:
+    """Count the non-conforming contacts of a volume mesh: hanging facets and duplicated boundary faces.
+
+    A facet owned by exactly ONE volume element must be a boundary element; otherwise a neighbour touches
+    it through a hanging node (2:1 transition) or an unmerged CAD interface.  Two boundary elements with
+    coincident corner coordinates are the two sides of an unmerged same-material interface: they carry
+    opposite surface charges whose cancellation is only as good as the block quadrature (ESRF example 6,
+    2026-09-06: 512 such pairs plus 832 hanging contacts made the HEX charge Gram indefinite; the merged
+    mesh passed).  Returns ``{"hanging_facets", "duplicated_boundary_face_pairs", "conforming"}``.
+    One O(n_el) dict pass; corner coordinates are rounded to 1e-9 for the coincidence key."""
+    pts = np.array([list(v.point) for v in mesh.vertices])
+    owners: dict = {}
+    for el in mesh.Elements(ng.VOL):
+        for fa in el.facets:
+            key = tuple(sorted(v.nr for v in mesh[fa].vertices))
+            owners[key] = owners.get(key, 0) + 1
+    bnd_keys = set()
+    coincident: dict = {}
+    for i in range(mesh.GetNE(ng.BND)):
+        e = mesh[ng.ElementId(ng.BND, i)]
+        key = tuple(sorted(v.nr for v in e.vertices))
+        bnd_keys.add(key)
+        geo = tuple(sorted(map(tuple, np.round(pts[list(key)], 9))))
+        coincident[geo] = coincident.get(geo, 0) + 1
+    hanging = sum(1 for key, n in owners.items() if n == 1 and key not in bnd_keys)
+    duplicated = sum(n * (n - 1) // 2 for n in coincident.values())
+    return {"hanging_facets": int(hanging), "duplicated_boundary_face_pairs": int(duplicated),
+            "conforming": bool(hanging == 0 and duplicated == 0)}
+
+
 def _assert_broken_hdiv(fes):
     """Require element-local HDiv unknowns for explicit interface charges.
 

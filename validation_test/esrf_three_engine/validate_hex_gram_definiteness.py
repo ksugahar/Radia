@@ -178,32 +178,8 @@ def lobpcg_generalized(G, M_geom, n_face, k, maxiter, seed=6):
 
 
 def mesh_conformity(mesh) -> dict:
-    """Count non-conforming contacts: hanging facets and duplicated boundary faces.
-
-    A facet owned by exactly one volume element must be a boundary element; otherwise a
-    neighbour touches it through a hanging node (2:1 transition) or an unmerged interface.
-    Two boundary elements with coincident corner coordinates are the two sides of an unmerged
-    same-material interface: they carry opposite surface charges whose cancellation is only as
-    good as the block quadrature (Example 6, 2026-09-06: 512 pairs -> indefinite HEX Gram).
-    """
-    pts = np.array([list(v.point) for v in mesh.vertices])
-    owners: dict = {}
-    for el in mesh.Elements(ng.VOL):
-        for fa in el.facets:
-            key = tuple(sorted(v.nr for v in mesh[fa].vertices))
-            owners[key] = owners.get(key, 0) + 1
-    bnd_keys = set()
-    coincident: dict = {}
-    for i in range(mesh.GetNE(ng.BND)):
-        e = mesh[ng.ElementId(ng.BND, i)]
-        key = tuple(sorted(v.nr for v in e.vertices))
-        bnd_keys.add(key)
-        geo = tuple(sorted(map(tuple, np.round(pts[list(key)], 9))))
-        coincident[geo] = coincident.get(geo, 0) + 1
-    hanging = sum(1 for key, n in owners.items() if n == 1 and key not in bnd_keys)
-    duplicated = sum(n * (n - 1) // 2 for n in coincident.values())
-    return {"hanging_facets": int(hanging), "duplicated_boundary_face_pairs": int(duplicated),
-            "conforming": bool(hanging == 0 and duplicated == 0)}
+    """Hanging facets / duplicated boundary faces (see ``radia.vim.mesh_conformity_report``)."""
+    return vim.mesh_conformity_report(mesh)
 
 
 def main(argv=None) -> int:
