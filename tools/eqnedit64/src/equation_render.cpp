@@ -2263,14 +2263,68 @@ private:
 
     Layout layout_embell(const EmbellNode& e, double sizePt) {
         Layout inner = layout_list(e.content, sizePt);
+
+        /* The prime family is a superscript SUFFIX, not an accent: TeX sets
+         * a' to the right of the letter at script size.  Sending it through
+         * the centred-accent path below drew a hat instead, so every prime
+         * cell in the Decoration palette rendered as one -- while the TeX and
+         * the Office MathML it copied were correct, which is what made the
+         * display disagree with the result.  Same geometry as a parsed
+         * PrimeNode so `a'` typed and `a'` from the palette look alike. */
+        const int primes = (e.embellType == EM_PRIME)  ? 1
+                         : (e.embellType == EM_DPRIME) ? 2
+                         : (e.embellType == EM_TPRIME ||
+                            e.embellType == EM_BPRIME) ? 3
+                         : 0;
+        if (primes > 0) {
+            Layout out = inner;
+            for (int i = 0; i < primes; ++i) {
+                Layout p = glyph_layout(0x2032, script_size(sizePt), false, true);
+                out.absorb(p, out.w, -0.35 * sizePt);
+                out.w += p.w;
+                out.asc = std::max(out.asc, 0.35 * sizePt + p.asc);
+                out.desc = std::max(out.desc, p.desc);
+            }
+            return out;
+        }
+
+        /* A cancel is drawn THROUGH the base, so it is a rule across the
+         * middle rather than a mark above it -- the same primitive the
+         * over/underline decorations use. */
+        if (e.embellType == EM_MBAR) {
+            Layout out = inner;
+            Rule bar;
+            bar.x = 0;
+            bar.w = out.w;
+            bar.h = rule_thickness(sizePt);
+            bar.y = -(out.asc - inner.asc * 0.5) - 0.5 * bar.h;
+            out.rules.push_back(bar);
+            return out;
+        }
+
         /* Accent characters, not their ASCII lookalikes.  U+005E is a full
          * circumflex punctuation mark: at the base's size it drew 1.24 times
-         * the letter's width where TeX's hat is 0.58. */
+         * the letter's width where TeX's hat is 0.58.
+         *
+         * Every embellishment the model can hold needs an entry.  The hat was
+         * the fall-through for anything unlisted, so a double dot, a cancel
+         * bar and a frown all drew as hats.  The marks below are the ones the
+         * MathML emitter already publishes for the same types, so the screen
+         * and the Office paste agree. */
         uint32_t cp = 0x02C6;                     /* hat */
-        if (e.embellType == 2) cp = 0x02D9;       /* dot */
-        else if (e.embellType == 8) cp = 0x02DC;  /* tilde */
-        else if (e.embellType == 11) cp = 0x2192; /* vector */
-        else if (e.embellType == 17) cp = 0x00AF; /* bar */
+        if (e.embellType == EM_DOT) cp = 0x02D9;
+        else if (e.embellType == EM_DDOT) cp = 0x00A8;
+        else if (e.embellType == EM_TDOT) cp = 0x20DB;
+        else if (e.embellType == EM_TILDE) cp = 0x02DC;
+        else if (e.embellType == EM_NOT) cp = 0x0338;
+        else if (e.embellType == EM_RARROW) cp = 0x2192;
+        else if (e.embellType == EM_LARROW) cp = 0x2190;
+        else if (e.embellType == EM_BARROW) cp = 0x2194;
+        else if (e.embellType == EM_R1ARROW) cp = 0x21C0;
+        else if (e.embellType == EM_L1ARROW) cp = 0x21BC;
+        else if (e.embellType == EM_OBAR) cp = 0x00AF;
+        else if (e.embellType == EM_FROWN) cp = 0x2322;
+        else if (e.embellType == EM_SMILE) cp = 0x2323;
         /* Accents are drawn at the base's own size, not at script size.  TeX
          * takes them from the math font at the current size; shrinking them
          * made every accent about two thirds of TeX's width -- a tilde 0.49
