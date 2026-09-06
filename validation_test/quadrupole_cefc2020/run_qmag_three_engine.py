@@ -37,9 +37,11 @@ import radia as rad  # noqa: E402
 import qmag_case as Q  # noqa: E402
 from run_qmag_hdiv import _load_engines, parse_case  # noqa: E402
 from radia.kelvin_identify_ngsolve import detect_kelvin_offset, has_kelvin_identification  # noqa: E402
+from radia.kelvin_solver import MixedOmegaPicardNotConverged  # noqa: E402
 from radia.vim import mesh_conformity_report  # noqa: E402
 
 SCHEMA = "radia.qmag-cefc2020-three-engine.v1"
+STATE_SCHEMA = "radia.qmag-cefc2020-picard-state.v1"
 GAUSS_2 = (-1.0 / np.sqrt(3.0), 1.0 / np.sqrt(3.0))
 
 
@@ -63,6 +65,32 @@ def _relative_rms(reference: np.ndarray, candidate: np.ndarray) -> float:
     return float(np.sqrt(np.mean(np.sum((candidate - reference) ** 2, axis=1))) / denominator)
 
 
+def _write_state(path: Path, identity: dict, stats: dict, prior_state: dict | None) -> None:
+    """Persist a non-converged mixed Omega loop's per-element permeability, explicitly partial."""
+    resumed = 0 if prior_state is None else int(prior_state.get("resumed_iterations", 0)) + int(prior_state["iterations"])
+    path.write_text(json.dumps({
+        "schema": STATE_SCHEMA, "generated_at_utc": datetime.now(timezone.utc).isoformat(), "host": platform.node(),
+        "converged": False, "identity": identity,
+        "element_numbers": list(stats["element_numbers"]), "mu_r_elements": list(stats["mu_r_elements"]),
+        "iterations": int(stats.get("iterations", 0)), "resumed_iterations": resumed,
+        "relative_B_change": stats.get("relative_B_change"),
+        "contraction_rate_estimate": stats.get("contraction_rate_estimate"),
+        "history": list(stats.get("history", ())),
+    }, indent=1) + chr(10), encoding="utf-8")
+
+
+def _read_state(path: Path, identity: dict) -> dict | None:
+    """A partial state of the SAME problem is a warm start; a different problem's state is an error."""
+    if not path.is_file():
+        return None
+    state = json.loads(path.read_text(encoding="utf-8"))
+    if state.get("schema") != STATE_SCHEMA or state.get("converged", True):
+        raise ValueError(f"{path} is not a partial mixed Omega state of schema {STATE_SCHEMA}")
+    if state.get("identity") != identity:
+        raise ValueError(f"{path} belongs to a different problem: {state.get('identity')} != {identity}")
+    return state
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--fem-mesh", type=Path, required=True)
@@ -80,6 +108,11 @@ def main(argv=None) -> int:
     parser.add_argument("--nonlinear-maximum-iterations", type=int, default=80)
     parser.add_argument("--source-trace-tolerance", type=float, default=0.05)
     parser.add_argument("--mixed-relaxation", type=float, default=0.3)
+    parser.add_argument("--mixed-anderson-depth", type=int, default=0,
+                        help="constrained Anderson depth of the mixed Omega Picard loop (0 = damped Picard)")
+    parser.add_argument("--resume", action="store_true",
+                        help="warm-start the mixed Omega loop from the state file a non-converged run left "
+                             "next to --output (same case and FEM mesh required)")
     parser.add_argument("--reduced-a-solver", choices=("direct", "bddc", "ams", "auto"), default="direct")
     parser.add_argument("--observation-half-width", type=float, default=2.0e-5)
     parser.add_argument("--relative-tolerance", type=float, default=0.03)
@@ -136,15 +169,34 @@ def main(argv=None) -> int:
         hdiv_provenance = {"mesh": {"path": str(options.hdiv_mesh.resolve()), "sha256": _sha256(options.hdiv_mesh),
                                     "ne": int(hdiv_mesh.ne), "conformity": conformity}, "host": platform.node()}
 
-    # Mixed total/reduced Omega on the Kelvin mesh (cube-averaged at the seam).
+    # Mixed total/reduced Omega on the Kelvin mesh (cube-averaged at the seam).  A non-converged
+    # Picard loop is never a result: its per-element permeability is saved next to --output and a
+    # later run of the same problem resumes from it with --resume (the loop raises with its state).
+    state_path = options.output.with_suffix(".mixed_total_reduced_omega.state.json")
+    state_identity = {"case": case, "fem_mesh_sha256": _sha256(fem_path), "fem_order": int(options.fem_order),
+                      "nonlinear_tolerance": float(options.nonlinear_tolerance)}
+    state = _read_state(state_path, state_identity) if options.resume and case["nonlinear"] else None
     started = time.perf_counter()
-    field, diag = engines.solve_omega(
-        fem_mesh, coil, material, nonlinear=case["nonlinear"], order=options.fem_order,
-        nonlinear_tolerance=options.nonlinear_tolerance,
-        nonlinear_maximum_iterations=options.nonlinear_maximum_iterations, nonlinear_verbose=False,
-        kelvin_center=kelvin_center, kelvin_radius=kelvin_radius, points=fem_points,
-        source_trace_tolerance=options.source_trace_tolerance, relaxation=options.mixed_relaxation,
-        anderson_depth=0, mu_r_initial=1000.0, observation_points=fem_points)
+    try:
+        field, diag = engines.solve_omega(
+            fem_mesh, coil, material, nonlinear=case["nonlinear"], order=options.fem_order,
+            nonlinear_tolerance=options.nonlinear_tolerance,
+            nonlinear_maximum_iterations=options.nonlinear_maximum_iterations, nonlinear_verbose=False,
+            kelvin_center=kelvin_center, kelvin_radius=kelvin_radius, points=fem_points,
+            source_trace_tolerance=options.source_trace_tolerance, relaxation=options.mixed_relaxation,
+            anderson_depth=options.mixed_anderson_depth,
+            mu_r_initial=(1000.0 if state is None else np.asarray(state["mu_r_elements"], dtype=float)),
+            observation_points=fem_points)
+    except MixedOmegaPicardNotConverged as exc:
+        stats = dict(exc.state["nonlinear_stats"])
+        _write_state(state_path, state_identity, stats, state)
+        raise RuntimeError(f"mixed total/reduced Omega did not converge after {time.perf_counter() - started:.0f} s; "
+                           f"its per-element state was saved to {state_path} for a warm restart with --resume") from exc
+    if state is not None:
+        stats = dict(diag.get("nonlinear_stats") or {})
+        stats["resumed_iterations"] = int(state.get("resumed_iterations", 0)) + int(state["iterations"])
+        stats["warm_start_state"] = str(state_path)
+        diag = diag | {"nonlinear_stats": stats}
     fields["mixed_total_reduced_omega"] = _cube_average(field, len(points))
     diagnostics["mixed_total_reduced_omega"] = diag | {"wall_s": time.perf_counter() - started}
     if options.with_reduced_a:
