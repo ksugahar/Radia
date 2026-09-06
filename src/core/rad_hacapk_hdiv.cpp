@@ -326,7 +326,11 @@ struct MassRieszFactor {
         pardiso(pt, &maxfct, &mnum, &mtype, &phase, &n, a.data(), ia.data(), ja.data(),
                 &idum, &nrhs, iparm, &msglvl, const_cast<double*>(rhs), x, &error);
         if (error != 0)
-            throw std::runtime_error("MassRieszPardiso: PARDISO solve phase failed");
+            throw std::runtime_error(
+                "MassRieszPardiso: PARDISO solve phase (33) failed with error " + std::to_string((long long)error)
+                + " for n = " + std::to_string((long long)n)
+                + " (MKL codes: -2 out of memory, -4 zero pivot, -10 no license; the Q-mag BDM2 h10 mesh, "
+                  "~200k unknowns next to a 20 GB Gram on the 60 GB hibino, died here on 2026-09-07)");
     }
     void SolveMany(const double* rhs, double* x, int rhs_count) {
         // PARDISO stores dense right-hand sides column-major [n][nrhs].
