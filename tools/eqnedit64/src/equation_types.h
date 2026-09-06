@@ -75,6 +75,9 @@ enum TemplateSelector {
 };
 
 enum Embellishment {
+    /* 0 is "no embellishment": the field's default, and a value every
+     * switch over this enum must still account for. */
+    EM_NONE = 0,
     EM_DOT = 2, EM_DDOT = 3, EM_TDOT = 4,
     EM_PRIME = 5, EM_DPRIME = 6, EM_BPRIME = 7,
     EM_TILDE = 8, EM_HAT = 9, EM_NOT = 10,
