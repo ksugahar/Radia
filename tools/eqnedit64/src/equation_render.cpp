@@ -1382,7 +1382,11 @@ uint32_t bigop_glyph(int selector) {
         case tmCOPROD: case tmICOPROD: return 0x2210;
         case tmUNION: case tmIUNION:   return 0x22C3;
         case tmINTER: case tmIINTER:   return 0x22C2;
-        default: return 0x2211;
+        /* A selector nobody mapped must LOOK wrong, not plausible.  Returning
+         * the summation sign meant an unmapped big operator drew as a sigma
+         * and no one could tell -- the same shape that let a prime draw as a
+         * hat through a whole release.  U+FFFD is unmistakable on screen. */
+        default: return 0xFFFD;
     }
 }
 
@@ -1464,7 +1468,9 @@ std::pair<uint32_t, uint32_t> fence_glyphs(int selector) {
         case tmDBAR:  return {0x2016, 0x2016};
         case tmFLOOR: return {0x230A, 0x230B};
         case tmCEIL:  return {0x2308, 0x2309};
-        default:      return {'(', ')'};
+        /* Likewise: an unmapped fence drew as a round bracket, so a wrong
+         * delimiter was indistinguishable from a deliberate one. */
+        default:      return {0xFFFD, 0xFFFD};
     }
 }
 

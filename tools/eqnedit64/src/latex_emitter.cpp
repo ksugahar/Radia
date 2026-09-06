@@ -797,6 +797,12 @@ void LaTeXEmitter::emitDecoration(const DecorationNode& deco, std::string& out) 
     case tmRARROW: out += "\\overrightarrow{"; out += content; out += "}"; break;
     case tmLARROW: out += "\\overleftarrow{"; out += content; out += "}"; break;
     case tmBARROW: out += "\\overleftrightarrow{"; out += content; out += "}"; break;
+    /* Unreachable today: these five are the only selectors any code path
+     * builds a DecorationNode with.  If a sixth is ever added, this branch
+     * loses the user's markup silently -- the TeX comes back without the
+     * decoration and the next load rebuilds a different equation -- so
+     * test_embellishments.py round-trips every over/under template and fails
+     * when one stops surviving. */
     default: out += content; break;
     }
 }
