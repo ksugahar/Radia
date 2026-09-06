@@ -315,7 +315,7 @@ the fast test lane. The obsolete `RADIA_HDIV_HEX_CACHE_STATS` alias was removed.
 |---|---|---|
 | Diagnostic counters | `RADIA_HDIV_BLOCK_CACHE_STATS`, `RADIA_HDIV_HMATVEC_STATS` | Opt-in instrumentation; invalidates production timing claims. |
 | Failure injection | `RADIA_HDIV_TEST_FAIL_FILL_AFTER` | Test-only build failure; no public API and no successful result artifact. |
-| Performance/cache A/B | `RADIA_HDIV_HEX_BLOCK_CACHE_LIMIT`, `RADIA_HDIV_WEDGE_TRANS_CACHE`, `RADIA_HDIV_DISABLE_TRANS_CACHE` | Diagnostic benchmark paths; effective values are copied into `hmat_stats`. |
+| Performance/cache A/B | `RADIA_HDIV_HEX_BLOCK_CACHE_LIMIT`, `RADIA_HDIV_WEDGE_TRANS_CACHE`, `RADIA_HDIV_DISABLE_TRANS_CACHE`, `RADIA_HDIV_DISABLE_CONGRUENT_CACHE` | Diagnostic benchmark paths; effective values are copied into `hmat_stats`. |
 | Numerical/path A/B | `RADIA_HDIV_CURVED_DIRECT`, `RADIA_HDIV_HEX_FAR_ONESIDED`, `RADIA_HDIV_WEDGE_FAR_ONESIDED`, `RADIA_HDIV_HEX_DISTORTED_FAR_FACTOR`, `RADIA_HDIV_HO_FAR_ONESIDED`, `RADIA_HDIV_DISABLE_HO_ANALYTIC_BLOCK`, `RADIA_HDIV_DISABLE_HO_IMAGE_BLOCK`, `RADIA_HDIV_DISABLE_HO_IMAGE_FAR`, `RADIA_HDIV_HEX_CLUSTER_RADIUS`, `RADIA_HDIV_HEX_PAIR_DUFFY` | Non-production comparison paths; `hmat_stats.nonproduction_numerical_override_active` and `release_claim_eligible` make them fail-loud in provenance. |
 | Preconditioner A/B | `RADIA_HDIV_AUTO_JACOBI_TET_NFACE` | Measurement-only auto-policy threshold; the resolved threshold and branch are recorded in `preconditioner_policy`. |
 
@@ -1366,3 +1366,56 @@ The quadrature work of sections 8.9-8.11 stays (it is what makes the merged
 mesh's touching pairs consistent to `1e-12`), but the defect that made
 example 6 alone indefinite was the mesh.  Next validation target: the CEFC
 2020 Q-mag quadrupole (`validation_test/quadrupole_cefc2020/`).
+
+### 8.13 HEX Gram build cost: the near blocks, and the translation-congruent cache (2026-09-06)
+
+Where HEX stands against TET (all timings mdx/hibino, committed JSON): the
+C-type three-engine nonlinear BDM2 run solves 32580 TET face unknowns in 37 s
+(1.1 ms per unknown, 10-23x faster than the two FEM formulations at 0.3 %
+agreement), while the HEX BDM1 quadrupoles need ~1500 s for ~61000 unknowns
+(25 ms per unknown).  The `gram_stats` profile of the Q-mag `h = 10 mm`
+linear run (hibino, 38 threads, thread-summed seconds) locates the whole gap:
+
+| dispatch class | blocks | thread-seconds | per block |
+|---|---|---|---|
+| `hex_blk_general_near` (pair-domain Duffy + near-band product) | 137,341 | 36,458 | 265 ms |
+| `hex_blk_affine_far` | 10,253,212 | 146 | 14 us |
+| `hex_blk_distorted_far` | 3,519,648 | 43 | 12 us |
+
+The near family is 99 % of the build: every touching pair (the pair-domain
+Duffy rule, ~72 % of the near blocks) and every non-touching pair inside the
+near band (`QuadBlockHexProductN`, ~28 %) integrates `8^6 = 262,144` point
+pairs.  Two cache defects multiplied that cost.  `HexPairTakesGeneralPath`
+returned false for affine-affine pairs, so on a mesh whose cells are 74 %
+affine most near blocks bypassed the instance-shared cache and were
+recomputed by every fill worker that touched them (27,118 shared lookups
+against 137,341 evaluations).  And the translation cache required every host
+to sit on the half-cell lattice of one affine cell (`hex_uniform_trans_hosts`
+is false on any real magnet), although a swept mesh -- every 2.5-D magnet --
+repeats each host once per layer.
+
+Both are fixed in the kernel: every BDM1 touching or near-band pair now takes
+the shared cache, and the cache key is the TRANSLATION-CONGRUENT pair
+(`HexSharedBlockKey`: the two host templates plus the centre offset quantized
+to `1e-10` of the largest host spread; `BuildHexCongruenceTemplates` hashes
+each host's Q2 lattice nodes relative to its centre together with its charge
+exponents).  A charge-Gram block depends only on the relative geometry of its
+hosts, so every translated copy of a pair -- 5 of 6 near blocks on the 6-layer
+10 mm meshes, 14 of 15 at 4 mm -- is served from one evaluation, exactly.
+Image blocks (`img > 0`) keep the host key.  `tests/feec/test_hdiv_vim_hex_congruent_cache.py`
+locks the mechanism on a graded (non-lattice) swept mesh: the cache engages
+(templates far fewer than hosts, shared hits above 30 % of lookups) and the
+Gram equals the uncached one (`RADIA_HDIV_DISABLE_CONGRUENT_CACHE`, a
+performance latch reported in `hmat_stats`) to `1e-12`.  The hibino timing of
+the Q-mag and example-6 builds with and without the cache is the next entry
+of this section; the further levers, in order, are the pair point count
+(`glpair_n` 8 -> 6 is 5.6x on every near block at `6e-9` self-energy accuracy,
+to be confirmed by the definiteness gate), a distance-graded count for the
+non-touching band, and the analytic inner for affine-affine touching pairs if
+the conforming-mesh A/B shows the block-wise family suffices there.
+
+Separately, the nonlinear Q-mag run spent 8545 s of its 10167 s in the
+Newton/Picard inner loop (2 Newton iterations, 866 inner CG iterations, 34
+line-search backtracks: ~10 s per inner iteration against 55 ms per CG
+iteration of the linear solve on the same Gram).  That loop, not the Gram,
+dominates nonlinear HEX runs and is profiled next.

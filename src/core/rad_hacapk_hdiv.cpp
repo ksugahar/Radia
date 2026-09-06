@@ -991,6 +991,16 @@ static bool HexTransCacheEnabled()
     return enabled;
 }
 
+// Translation-congruent shared cache of the expensive near blocks (see HexSharedBlockKey).  A
+// performance switch: the blocks are the same quadrature either way; the latch exists for A/B timing.
+static bool HexCongruentCacheEnabled()
+{
+    static const bool enabled = []() -> bool {
+        return std::getenv("RADIA_HDIV_DISABLE_CONGRUENT_CACHE") == nullptr;
+    }();
+    return enabled;
+}
+
 static void ValidateImageVectors(const std::vector<int>& image_masks,
                                  const std::vector<double>& image_signs)
 {
@@ -3623,6 +3633,7 @@ RadHACApKChargeGram::RadHACApKChargeGram(
             ok = classify_host(1, f, &m_quadNodes[(size_t)f*27], 9, (size_t)n_el + (size_t)f);
         m_hexUniformTransHosts = ok;
     }
+    BuildHexCongruenceTemplates(n_el, m_hex_n_bf);   // translation-congruent pair cache (any mesh)
     BuildHexSiteTables();   // static-site radial tables (non-self near inner) + mapped site positions
     BuildHexInnerRules();   // immutable complete-host BDM2 source rules; fill callbacks only read them
 }
@@ -4173,14 +4184,19 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexCacheStats()
         !curved_direct_enabled || (m_hexmode && !m_nearInnerExact) ||
         (m_hexmode && !HexClusterRadiusEnabled()) ||
         (m_hexmode && !HexPairDuffyEnabled());
+    const bool congruent_cache_enabled = HexCongruentCacheEnabled();
     const bool performance_override =
         block_cache_limit != HEX_BLOCK_CACHE_LIMIT_DEFAULT ||
-        wedge_trans_scope != 2 || !trans_cache_enabled ||
+        wedge_trans_scope != 2 || !trans_cache_enabled || !congruent_cache_enabled ||
         m_hexCacheStatsEnabled || hmatvec_stats_enabled ||
         hmatvec_mkl_threads != 1;
     out.emplace_back("hex_cache_stats_enabled", m_hexCacheStatsEnabled ? 1.0 : 0.0);
     out.emplace_back("hex_block_cache_limit", (double)block_cache_limit);
     out.emplace_back("hex_trans_cache_enabled", trans_cache_enabled ? 1.0 : 0.0);
+    out.emplace_back("hex_congruent_cache_enabled", congruent_cache_enabled ? 1.0 : 0.0);
+    out.emplace_back("hex_congruent_ready", m_hexCongruentReady ? 1.0 : 0.0);
+    out.emplace_back("hex_congruent_templates", (double)m_hexCongruentTemplateCount);
+    out.emplace_back("hex_congruent_hosts", (double)m_hexHostCongruentTemplate.size());
     out.emplace_back("hex_far_one_sided_threshold", hex_far_one_sided);
     out.emplace_back("hex_affine_exact_near_factor", HEX_AFFINE_EXACT_NEAR_FACTOR);
     out.emplace_back("hex_distorted_far_factor", distorted_far_factor);
@@ -6628,11 +6644,101 @@ static thread_local std::unordered_map<HexBlockKey, std::vector<double>, HexBloc
 // header member doc), so this test may use the cheap ctor-precomputed affinity flags
 // (m_hexAffineCell / m_quadAffineFace) instead of QuadBlockHex's per-call face_affine lattice
 // re-check.
+namespace {
+struct HexSignatureHash {
+    std::size_t operator()(const std::vector<long long>& v) const
+    {
+        std::size_t h = 1469598103934665603ull;
+        for (long long x : v) {
+            h ^= static_cast<std::size_t>(static_cast<unsigned long long>(x));
+            h *= 1099511628211ull;
+        }
+        return h;
+    }
+};
+}   // namespace
+
+// Congruence templates for the translation-congruent shared cache.  Two hosts are translated copies
+// when their Q2 lattice nodes, taken relative to the host centre and quantized to 1e-10 of the largest
+// host spread, and their charge exponents coincide.  Swept (extruded) meshes -- every 2.5-D magnet --
+// repeat each host once per layer; the pair cache in GetHexBlock then evaluates each expensive near
+// block once per congruence class instead of once per layer.  A quantization-boundary miss only costs
+// a recomputation; a false hit would need two different pairs within 1e-10 of each other.
+void RadHACApKChargeGram::BuildHexCongruenceTemplates(int n_el, int n_bf)
+{
+    const size_t n_host = (size_t)n_el + (size_t)n_bf;
+    m_hexHostCongruentTemplate.assign(n_host, -1);
+    m_hexHostCenter.assign(n_host*3, 0.0);
+    m_hexCongruentQuantum = 0.0;
+    m_hexCongruentTemplateCount = 0;
+    m_hexCongruentReady = false;
+    if (n_host == 0 || m_hexNodes.size() < (size_t)n_el*81 || m_quadNodes.size() < (size_t)n_bf*27) return;
+    auto nodes_of = [&](size_t idx, int& nnode) -> const double* {
+        if (idx < (size_t)n_el) { nnode = 27; return &m_hexNodes[idx*81]; }
+        nnode = 9;
+        return &m_quadNodes[(idx - (size_t)n_el)*27];
+    };
+    double scale = 0.0;
+    for (size_t idx = 0; idx < n_host; ++idx) {
+        int nnode = 0;
+        const double* nd = nodes_of(idx, nnode);
+        double* ctr = &m_hexHostCenter[3*idx];
+        for (int i = 0; i < nnode; ++i)
+            for (int k = 0; k < 3; ++k) ctr[k] += nd[3*i + k];
+        for (int k = 0; k < 3; ++k) ctr[k] /= (double)nnode;
+        for (int i = 0; i < nnode; ++i) {
+            const double dx = nd[3*i] - ctr[0], dy = nd[3*i + 1] - ctr[1], dz = nd[3*i + 2] - ctr[2];
+            scale = std::max(scale, std::sqrt(dx*dx + dy*dy + dz*dz));
+        }
+    }
+    if (!(scale > 0.0) || !std::isfinite(scale)) return;
+    const double quantum = 1e-10*scale;
+    std::unordered_map<std::vector<long long>, int, HexSignatureHash> templates;
+    std::vector<long long> sig;
+    for (size_t idx = 0; idx < n_host; ++idx) {
+        int nnode = 0;
+        const double* nd = nodes_of(idx, nnode);
+        const double* ctr = &m_hexHostCenter[3*idx];
+        const bool cell = idx < (size_t)n_el;
+        const std::vector<int>& grp = cell ? m_cellCharges[idx] : m_faceCharges[idx - (size_t)n_el];
+        sig.clear();
+        sig.reserve((size_t)nnode*3 + 2 + grp.size()*3);
+        sig.push_back(cell ? 0 : 1);
+        for (int i = 0; i < nnode; ++i)
+            for (int k = 0; k < 3; ++k) sig.push_back(std::llround((nd[3*i + k] - ctr[k])/quantum));
+        sig.push_back((long long)grp.size());
+        for (int g : grp)
+            for (int k = 0; k < 3; ++k) sig.push_back((long long)m_expo[(size_t)3*g + k]);
+        auto it = templates.find(sig);
+        if (it == templates.end()) it = templates.emplace(sig, (int)templates.size()).first;
+        m_hexHostCongruentTemplate[idx] = it->second;
+    }
+    m_hexCongruentQuantum = quantum;
+    m_hexCongruentTemplateCount = (int)templates.size();
+    m_hexCongruentReady = true;
+}
+
 bool RadHACApKChargeGram::HexPairTakesGeneralPath(int kindT, int hT, int kindS, int hS, int img) const
 {
     const std::vector<int>& tgtG = (kindT == 0) ? m_cellCharges[hT] : m_faceCharges[hT];
     const std::vector<int>& srcG = (kindS == 0) ? m_cellCharges[hS] : m_faceCharges[hS];
     if (tgtG.empty() || srcG.empty()) return false;
+    if (m_hexAffineOrder == 1 && HexPairDuffyEnabled()) {
+        // BDM1: every touching pair (pair-domain Duffy) and every near-band pair (product rule with
+        // the pair point count) is a 6-D tensor block whatever the hosts' affinity -- 265 ms against
+        // 14 us for a far block on hibino (2026-09-06) -- so all of them belong in the shared cache.
+        // Before this the affine-affine ones fell through to the per-thread caches and were
+        // recomputed by every fill worker that touched them.
+        if (HexHostsTouch(kindT, hT, kindS, hS, img)) return true;
+        const int repA = tgtG[0], repB = srcG[0];
+        double repBc[3];
+        ImageEvalPoint(img, &m_cent[(size_t)3*repB], repBc);
+        const double sep = std::sqrt(
+            (m_cent[(size_t)3*repA]     - repBc[0])*(m_cent[(size_t)3*repA]     - repBc[0])
+          + (m_cent[(size_t)3*repA + 1] - repBc[1])*(m_cent[(size_t)3*repA + 1] - repBc[1])
+          + (m_cent[(size_t)3*repA + 2] - repBc[2])*(m_cent[(size_t)3*repA + 2] - repBc[2]));
+        if (sep <= m_near_grade*(m_size[repA] + m_size[repB])) return true;
+    }
     const bool affT = (kindT == 0)
         ? (hT >= 0 && hT < (int)m_hexAffineCell.size() && m_hexAffineCell[hT])
         : (hT >= 0 && hT < (int)m_quadAffineFace.size() && m_quadAffineFace[hT]);
@@ -6953,10 +7059,25 @@ const std::vector<double>& RadHACApKChargeGram::GetHexBlock(int kindT, int hT, i
         // the image index < 64 (a 63-fold cyclic group is far past any practical machine sector count).
         if (img < 0 || img > 63)
             throw std::invalid_argument("ChargeGram: image index out of range (max 63 images)");
-        const unsigned long long key =
-            (unsigned long long)(kindT != 0) | ((unsigned long long)(kindS != 0) << 1)
-          | ((unsigned long long)(unsigned)img << 2)
-          | ((unsigned long long)(unsigned)hT << 8) | ((unsigned long long)(unsigned)hS << 36);
+        HexSharedBlockKey key{};
+        key.kindT = kindT; key.kindS = kindS;
+        key.same = (kindT == kindS && hT == hS) ? 1 : 0;
+        if (HexCongruentCacheEnabled() && m_hexCongruentReady && img == 0) {
+            // Translation-congruent key: the block of (T, S) equals the block of every (T + d, S + d).
+            const size_t iT = (kindT == 0) ? (size_t)hT : (size_t)m_n_el + (size_t)hT;
+            const size_t iS = (kindS == 0) ? (size_t)hS : (size_t)m_n_el + (size_t)hS;
+            const double* cT = &m_hexHostCenter[3*iT];
+            const double* cS = &m_hexHostCenter[3*iS];
+            key.mode = 1; key.img = 0;
+            key.a = m_hexHostCongruentTemplate[iT];
+            key.b = m_hexHostCongruentTemplate[iS];
+            key.qx = std::llround((cT[0] - cS[0])/m_hexCongruentQuantum);
+            key.qy = std::llround((cT[1] - cS[1])/m_hexCongruentQuantum);
+            key.qz = std::llround((cT[2] - cS[2])/m_hexCongruentQuantum);
+        } else {
+            key.mode = 0; key.img = img; key.a = hT; key.b = hS;
+            key.qx = key.qy = key.qz = 0;
+        }
         m_hexGeneralSharedLookups.fetch_add(1, std::memory_order_relaxed);
         {
             std::shared_lock<std::shared_mutex> rl(m_hexGeneralSharedMutex);
