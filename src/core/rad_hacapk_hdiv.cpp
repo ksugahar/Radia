@@ -3344,7 +3344,8 @@ RadHACApKChargeGram::RadHACApKChargeGram(
     std::vector<int> image_masks, std::vector<double> image_signs,
     std::vector<double> gl_near, std::vector<double> gw_near, bool near_inner_exact,
     std::vector<double> gl_in_self, std::vector<double> gw_in_self,
-    std::vector<double> gl_pair, std::vector<double> gw_pair)
+    std::vector<double> gl_pair, std::vector<double> gw_pair,
+    std::vector<double> gl_pair_affine, std::vector<double> gw_pair_affine)
     : m_n_el(n_el), m_hexmode(true), m_hex_n_bf(n_bf),
       m_hexNodes(std::move(hex_cell_nodes)), m_quadNodes(std::move(quad_face_nodes)),
       m_symTetP(std::move(sym_tet_pts)), m_symTetW(std::move(sym_tet_w)),
@@ -3354,6 +3355,7 @@ RadHACApKChargeGram::RadHACApKChargeGram(
       m_glNear(std::move(gl_near)), m_gwNear(std::move(gw_near)),
       m_glInSelf(std::move(gl_in_self)), m_gwInSelf(std::move(gw_in_self)), m_nearInnerExact(near_inner_exact),
       m_glPair(std::move(gl_pair)), m_gwPair(std::move(gw_pair)),
+      m_glPairAffine(std::move(gl_pair_affine)), m_gwPairAffine(std::move(gw_pair_affine)),
       m_farTetP(std::move(far_tet_pts)), m_farTetW(std::move(far_tet_w)),
       m_farTriP(std::move(far_tri_pts)), m_farTriW(std::move(far_tri_w)),
       m_near_grade(near_grade), m_far_inner_factor(far_inner_factor),
@@ -3373,6 +3375,9 @@ RadHACApKChargeGram::RadHACApKChargeGram(
     if (m_glPair.size() != m_gwPair.size())
         throw std::invalid_argument("HEX ChargeGram gl_pair/gw_pair sizes differ");
     if (m_glPair.empty()) GaussLegendre01(8, m_glPair, m_gwPair);      // pair-domain Duffy rule per dimension
+    if (m_glPairAffine.size() != m_gwPairAffine.size())
+        throw std::invalid_argument("HEX ChargeGram gl_pair_affine/gw_pair_affine sizes differ");
+    if (m_glPairAffine.empty()) GaussLegendre01(6, m_glPairAffine, m_gwPairAffine);   // affine-affine pairs
     if (m_glOut.empty() || m_glIn.empty())
         throw std::invalid_argument("HEX ChargeGram needs non-empty gl_out and gl_in rules");
     for (int exponent : m_expo)
@@ -4206,6 +4211,7 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexCacheStats()
     out.emplace_back("hex_near_sinh_max_width", HOST_CONE_SINH_MAX_WIDTH);
     out.emplace_back("hex_pair_duffy_enabled", (m_hexAffineOrder == 1 && HexPairDuffyEnabled()) ? 1.0 : 0.0);
     out.emplace_back("hex_glpair_n", (double)m_glPair.size());
+    out.emplace_back("hex_glpair_affine_n", (double)m_glPairAffine.size());
     out.emplace_back("hex_pair_nonconforming", ld(m_hexPairNonconforming));
     out.emplace_back("hex_cluster_radius_enabled", HexClusterRadiusEnabled() ? 1.0 : 0.0);
     out.emplace_back("hex_glnear_n", (double)m_glNear.size());
@@ -6853,6 +6859,23 @@ RadHACApKChargeGram::HexPairAdjacency RadHACApKChargeGram::HexPairAdjacencyOf(
     return adj;
 }
 
+bool RadHACApKChargeGram::HexHostAffine(int kind, int h) const
+{
+    return (kind == 0)
+        ? (h >= 0 && h < (int)m_hexAffineCell.size() && m_hexAffineCell[(size_t)h])
+        : (h >= 0 && h < (int)m_quadAffineFace.size() && m_quadAffineFace[(size_t)h]);
+}
+
+const std::vector<double>& RadHACApKChargeGram::PairRuleNodes(int kindT, int hT, int kindS, int hS) const
+{
+    return (HexHostAffine(kindT, hT) && HexHostAffine(kindS, hS)) ? m_glPairAffine : m_glPair;
+}
+
+const std::vector<double>& RadHACApKChargeGram::PairRuleWeights(int kindT, int hT, int kindS, int hS) const
+{
+    return (HexHostAffine(kindT, hT) && HexHostAffine(kindS, hS)) ? m_gwPairAffine : m_gwPair;
+}
+
 std::vector<double> RadHACApKChargeGram::QuadBlockHexProductN(int kindT, int hT, int kindS, int hS, int img) const
 {
     // Non-touching pairs inside the near band: plain tensor Gauss on both reference domains with the pair
@@ -6867,8 +6890,8 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHexProductN(int kindT, int hT,
     const int dT = (kindT == 0) ? 3 : 2, dS = (kindS == 0) ? 3 : 2;
     const double* ndT = (kindT == 0) ? &m_hexNodes[(size_t)hT*81] : &m_quadNodes[(size_t)hT*27];
     const double* ndS = (kindS == 0) ? &m_hexNodes[(size_t)hS*81] : &m_quadNodes[(size_t)hS*27];
-    const std::vector<double>& gl = m_glPair;
-    const std::vector<double>& gw = m_gwPair;
+    const std::vector<double>& gl = PairRuleNodes(kindT, hT, kindS, hS);     // 6 for affine-affine, else 8
+    const std::vector<double>& gw = PairRuleWeights(kindT, hT, kindS, hS);
     const int N = (int)gl.size();
     // source samples once (points and mode values), then the target loop
     const int nptS = (dS == 3) ? N*N*N : N*N;
@@ -6929,8 +6952,8 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHexPairDuffy(int kindT, int hT
     const int nsub = (2*nrel + ntrT + ntrS) * (1 << std::max(0, nrel - 1)) * ((ntrT + ntrS) > 0 && nrel > 0 ? 1 : 1);
     const double* ndT = (kindT == 0) ? &m_hexNodes[(size_t)hT*81] : &m_quadNodes[(size_t)hT*27];
     const double* ndS = (kindS == 0) ? &m_hexNodes[(size_t)hS*81] : &m_quadNodes[(size_t)hS*27];
-    const std::vector<double>& gl = m_glPair;
-    const std::vector<double>& gw = m_gwPair;
+    const std::vector<double>& gl = PairRuleNodes(kindT, hT, kindS, hS);     // 6 for affine-affine, else 8
+    const std::vector<double>& gw = PairRuleWeights(kindT, hT, kindS, hS);
     const int N = (int)gl.size();
     std::vector<int> idx((size_t)ndim, 0);
     std::vector<double> qT((size_t)nT), qS((size_t)nS);

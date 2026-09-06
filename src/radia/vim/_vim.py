@@ -1599,7 +1599,7 @@ def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=1.0, far_i
                            materialize_mass=True, build_hmatrix=True,
                            internal_interfaces=False, excluded_boundaries=(),
                            cyclic_periodic_boundaries=(), glnear_n=None, near_inner="exact",
-                           glin_self_n=None, glpair_n=None):
+                           glin_self_n=None, glpair_n=None, glpair_affine_n=None):
     """Pure-hex BDM1/BDM2 charge Gram via the hex-mode C++ _ChargeGramHMatrix.  FLAT and CURVED (mesh.Curve(2))
     share ONE path (the 27-node Q2 lattice is extracted via GetTrafo either way -- the caller Curve(2)'s the
     mesh for curved).
@@ -1680,6 +1680,14 @@ def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=1.0, far_i
     glpair_n = 8 if glpair_n is None else int(glpair_n)
     if glpair_n < 2:
         raise ValueError("_build_charge_gram_hex: glpair_n must be >= 2 (got %r)" % (glpair_n,))
+    # glpair_affine_n = the same rule for pairs whose BOTH hosts are affine (2026-09-07).  With affine
+    # maps the Duffy integrand converges exponentially (unit-cube self-energy 5e-9 at 6 points), while a
+    # distorted host converges only ~10x per two points (tapered sector lattice: 7e-5 at 6, 6e-6 at 8),
+    # so the affine-affine pairs -- most pairs of a swept magnet mesh -- take the cheaper count (6^6
+    # against 8^6 point pairs, 5.6x per block) at no accuracy cost.
+    glpair_affine_n = 6 if glpair_affine_n is None else int(glpair_affine_n)
+    if glpair_affine_n < 2:
+        raise ValueError("_build_charge_gram_hex: glpair_affine_n must be >= 2 (got %r)" % (glpair_affine_n,))
     if near_inner not in ("exact", "site"):
         raise ValueError("_build_charge_gram_hex: near_inner must be 'exact' or 'site' (got %r)" % (near_inner,))
     cb = _charge_basis_hex(
@@ -1694,6 +1702,7 @@ def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=1.0, far_i
     gln, gwn = _g01(glnear_n)
     gls, gws = _g01(glin_self_n)
     glp, gwp = _g01(glpair_n)
+    glpa, gwpa = _g01(glpair_affine_n)
     ftp = np.asarray(_SYM5_TET[0]); ftw = np.asarray(_SYM5_TET[1])
     G = _rp._ChargeGramHMatrix(
         hex_cell_nodes=cb["cell_nodes"], quad_face_nodes=cb["face_nodes"],
@@ -1714,7 +1723,8 @@ def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=1.0, far_i
         gl_near=_f64_buffer(gln), gw_near=_f64_buffer(gwn),
         near_inner_exact=(near_inner == "exact"),
         gl_in_self=_f64_buffer(gls), gw_in_self=_f64_buffer(gws),
-        gl_pair=_f64_buffer(glp), gw_pair=_f64_buffer(gwp))
+        gl_pair=_f64_buffer(glp), gw_pair=_f64_buffer(gwp),
+        gl_pair_affine=_f64_buffer(glpa), gw_pair_affine=_f64_buffer(gwpa))
     _finish_image_rotations(G, image_rot_angle, eps=eps, leafsize=leafsize, eta=eta,
                             build_hmatrix=bool(build_hmatrix))
     t2 = time.perf_counter()
@@ -2228,7 +2238,8 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=64, eta=2.0, far_qu
                       _materialize_mass=True,
                       _build_hmatrix=True, internal_interfaces=False,
                       excluded_boundaries=(), cyclic_periodic_boundaries=(),
-                      gram_backend="hmat", exact_dense_memory_mb=None, hex_glpair_n=None):
+                      gram_backend="hmat", exact_dense_memory_mb=None, hex_glpair_n=None,
+                      hex_glpair_affine_n=None):
     """From an HDiv FESpace (order p, the order from the fes), build the monomial charge-density map
     B (scipy CSR, n_charge x ndof), the C++ charge-Gram H-matrix G, and the HDiv mass M_mass (CSR).
     The CALLER wraps in TaskManager.
@@ -2399,9 +2410,10 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=64, eta=2.0, far_qu
             internal_interfaces=bool(internal_interfaces),
             excluded_boundaries=excluded_boundaries,
             cyclic_periodic_boundaries=cyclic_periodic_boundaries,
-            # HEX-only rule count of the pair-domain Duffy / near-band product (None = the
-            # production 8 per dimension); the effective value is published as hex_glpair_n.
-            glpair_n=hex_glpair_n)),
+            # HEX-only rule counts of the pair-domain Duffy / near-band product (None = the
+            # production 8 per dimension, 6 for affine-affine pairs); the effective values are
+            # published as hex_glpair_n / hex_glpair_affine_n.
+            glpair_n=hex_glpair_n, glpair_affine_n=hex_glpair_affine_n)),
             gram_backend=gram_backend, exact_dense_memory_mb=exact_dense_memory_mb)
     if _vtypes == {6}:
         # PURE-WEDGE (PRISM) BDM1/BDM2: tri-Pp x z-Pp volume charge + mixed tri/quad-face
