@@ -866,6 +866,44 @@ static double WedgeFarOneSidedThreshold()
 // regression-triage escape, same pattern as the one-sided thresholds above).
 // RADIA_HDIV_HEX_CLUSTER_RADIUS=0 restores plain point bounding boxes for the cluster tree
 // (diagnostic A/B only; reported as a numerical override).
+// ---- Gauss-Legendre on [0,1] for an arbitrary point count (Newton on P_n, ascending nodes) ----
+static void GaussLegendre01(int n, std::vector<double>& x, std::vector<double>& w)
+{
+    if (n < 1) throw std::invalid_argument("GaussLegendre01: n must be positive");
+    x.assign((size_t)n, 0.0); w.assign((size_t)n, 0.0);
+    const double pi = 3.14159265358979323846;
+    for (int i = 0; i < n; ++i) {
+        double z = std::cos(pi*(i + 0.75)/(n + 0.5));
+        double pp = 1.0;
+        for (int it = 0; it < 100; ++it) {
+            double p1 = 1.0, p2 = 0.0;
+            for (int j = 0; j < n; ++j) {
+                const double p3 = p2; p2 = p1;
+                p1 = ((2.0*j + 1.0)*z*p2 - j*p3)/(j + 1.0);
+            }
+            pp = n*(z*p1 - p2)/(z*z - 1.0);
+            const double dz = p1/pp;
+            z -= dz;
+            if (std::abs(dz) < 1e-15) break;
+        }
+        x[(size_t)i] = 0.5*(1.0 - z);
+        w[(size_t)i] = 1.0/((1.0 - z*z)*pp*pp);
+    }
+}
+
+// Diagnostic latch: RADIA_HDIV_HEX_PAIR_DUFFY=0 restores the block-wise near family for touching pairs
+// (an A/B path, reported as a numerical override).
+static bool HexPairDuffyEnabled()
+{
+    static const bool enabled = []() -> bool {
+        const char* v = std::getenv("RADIA_HDIV_HEX_PAIR_DUFFY");
+        if (!v || v[0] == '\0') return true;
+        return std::atoi(v) != 0;
+    }();
+    return enabled;
+}
+
+
 static bool HexClusterRadiusEnabled()
 {
     static const bool enabled = []() -> bool {
@@ -3295,7 +3333,8 @@ RadHACApKChargeGram::RadHACApKChargeGram(
     double near_grade, double far_inner_factor,
     std::vector<int> image_masks, std::vector<double> image_signs,
     std::vector<double> gl_near, std::vector<double> gw_near, bool near_inner_exact,
-    std::vector<double> gl_in_self, std::vector<double> gw_in_self)
+    std::vector<double> gl_in_self, std::vector<double> gw_in_self,
+    std::vector<double> gl_pair, std::vector<double> gw_pair)
     : m_n_el(n_el), m_hexmode(true), m_hex_n_bf(n_bf),
       m_hexNodes(std::move(hex_cell_nodes)), m_quadNodes(std::move(quad_face_nodes)),
       m_symTetP(std::move(sym_tet_pts)), m_symTetW(std::move(sym_tet_w)),
@@ -3304,6 +3343,7 @@ RadHACApKChargeGram::RadHACApKChargeGram(
       m_glIn(std::move(gl_in)), m_gwIn(std::move(gw_in)),
       m_glNear(std::move(gl_near)), m_gwNear(std::move(gw_near)),
       m_glInSelf(std::move(gl_in_self)), m_gwInSelf(std::move(gw_in_self)), m_nearInnerExact(near_inner_exact),
+      m_glPair(std::move(gl_pair)), m_gwPair(std::move(gw_pair)),
       m_farTetP(std::move(far_tet_pts)), m_farTetW(std::move(far_tet_w)),
       m_farTriP(std::move(far_tri_pts)), m_farTriW(std::move(far_tri_w)),
       m_near_grade(near_grade), m_far_inner_factor(far_inner_factor),
@@ -3320,6 +3360,9 @@ RadHACApKChargeGram::RadHACApKChargeGram(
     if (m_glInSelf.size() != m_gwInSelf.size())
         throw std::invalid_argument("HEX ChargeGram gl_in_self/gw_in_self sizes differ");
     if (m_glInSelf.empty()) { m_glInSelf = m_glIn; m_gwInSelf = m_gwIn; }  // legacy: one radial rule for both
+    if (m_glPair.size() != m_gwPair.size())
+        throw std::invalid_argument("HEX ChargeGram gl_pair/gw_pair sizes differ");
+    if (m_glPair.empty()) GaussLegendre01(8, m_glPair, m_gwPair);      // pair-domain Duffy rule per dimension
     if (m_glOut.empty() || m_glIn.empty())
         throw std::invalid_argument("HEX ChargeGram needs non-empty gl_out and gl_in rules");
     for (int exponent : m_expo)
@@ -4091,6 +4134,7 @@ void RadHACApKChargeGram::ResetHexCacheStats()
     m_hexBlkAffineFar.store(0, std::memory_order_relaxed);
     m_hexBlkDistortedFar.store(0, std::memory_order_relaxed);
     m_hexBlkGeneralNear.store(0, std::memory_order_relaxed);
+    m_hexPairNonconforming.store(0, std::memory_order_relaxed);
     m_hexBlkGeneralFar.store(0, std::memory_order_relaxed);
     m_hexNsAffineNear.store(0, std::memory_order_relaxed);
     m_hexNsAffineFar.store(0, std::memory_order_relaxed);
@@ -4127,7 +4171,8 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexCacheStats()
         distorted_far_factor != 1.0 || ho_far_one_sided ||
         !ho_analytic_enabled || !ho_image_enabled || !ho_image_far_enabled ||
         !curved_direct_enabled || (m_hexmode && !m_nearInnerExact) ||
-        (m_hexmode && !HexClusterRadiusEnabled());
+        (m_hexmode && !HexClusterRadiusEnabled()) ||
+        (m_hexmode && !HexPairDuffyEnabled());
     const bool performance_override =
         block_cache_limit != HEX_BLOCK_CACHE_LIMIT_DEFAULT ||
         wedge_trans_scope != 2 || !trans_cache_enabled ||
@@ -4143,6 +4188,9 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexCacheStats()
     out.emplace_back("hex_near_inner_host_cone", m_nearInnerExact ? 1.0 : 0.0);   // cone/fan/sinh near inner
     out.emplace_back("hex_near_sinh_min_width", HOST_CONE_SINH_MIN_WIDTH);
     out.emplace_back("hex_near_sinh_max_width", HOST_CONE_SINH_MAX_WIDTH);
+    out.emplace_back("hex_pair_duffy_enabled", (m_hexAffineOrder == 1 && HexPairDuffyEnabled()) ? 1.0 : 0.0);
+    out.emplace_back("hex_glpair_n", (double)m_glPair.size());
+    out.emplace_back("hex_pair_nonconforming", ld(m_hexPairNonconforming));
     out.emplace_back("hex_cluster_radius_enabled", HexClusterRadiusEnabled() ? 1.0 : 0.0);
     out.emplace_back("hex_glnear_n", (double)m_glNear.size());
     out.emplace_back("hex_glout_n", (double)m_glOut.size());
@@ -5338,6 +5386,21 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
     // product while touching pairs moved to the graded cloud exposed a 4-fold degenerate lambda -5.0e-3
     // face-charge mode on ESRF #6: self face +0.65, touching face-face -0.46, near band -0.20 in units
     // of the mode's M-norm).  Beyond the band the affine far product stays.
+    // BDM1 TOUCHING pairs (self, shared face/edge/vertex, affine or not): the pair-domain Duffy rule.
+    if (m_hexAffineOrder == 1 && touching_hosts && HexPairDuffyEnabled()) {
+        const HexPairAdjacency adj = HexPairAdjacencyOf(kindT, hT, kindS, hS, img);
+        if (adj.entity_dim >= 0)
+            return timed(m_hexBlkGeneralNear, m_hexNsGeneralNear,
+                         [&]{ return QuadBlockHexPairDuffy(kindT, hT, kindS, hS, img); });
+        m_hexPairNonconforming.fetch_add(1, std::memory_order_relaxed);   // graded near family below
+    }
+    // BDM1 NON-touching pairs inside the near band: the plain product rule with the pair point count
+    // (the graded cloud + fan inner of that band was the largest remaining error class on ESRF #6:
+    // +2.9e-3 of a -5e-3 mode's energy moved when the band rules were refined, 2026-09-06).
+    if (m_hexAffineOrder == 1 && HexPairDuffyEnabled()
+            && sep <= m_near_grade*(m_size[repA] + m_size[repB]))
+        return timed(m_hexBlkGeneralNear, m_hexNsGeneralNear,
+                     [&]{ return QuadBlockHexProductN(kindT, hT, kindS, hS, img); });
     if (affineT && affineS && (m_hexAffineOrder == 2 || !affine_exact_near)) {
         const bool exact_near = affine_exact_near;
         return exact_near
@@ -6588,6 +6651,259 @@ bool RadHACApKChargeGram::HexPairTakesGeneralPath(int kindT, int hT, int kindS, 
       + (m_cent[(size_t)3*repA + 1] - repBc[1])*(m_cent[(size_t)3*repA + 1] - repBc[1])
       + (m_cent[(size_t)3*repA + 2] - repBc[2])*(m_cent[(size_t)3*repA + 2] - repBc[2]));
     return sep <= fac*(m_size[repA] + m_size[repB]);
+}
+
+RadHACApKChargeGram::HexPairAdjacency RadHACApKChargeGram::HexPairAdjacencyOf(
+    int kindT, int hT, int kindS, int hS, int img) const
+{
+    HexPairAdjacency adj;
+    const std::vector<int>& tgtG = (kindT == 0) ? m_cellCharges[hT] : m_faceCharges[hT];
+    const std::vector<int>& srcG = (kindS == 0) ? m_cellCharges[hS] : m_faceCharges[hS];
+    if (tgtG.empty() || srcG.empty()) return adj;
+    const int dT = (kindT == 0) ? 3 : 2, dS = (kindS == 0) ? 3 : 2;
+    const double* ndT = (kindT == 0) ? &m_hexNodes[(size_t)hT*81] : &m_quadNodes[(size_t)hT*27];
+    const double* ndS = (kindS == 0) ? &m_hexNodes[(size_t)hS*81] : &m_quadNodes[(size_t)hS*27];
+    const int nT = (kindT == 0) ? 27 : 9, nS = (kindS == 0) ? 27 : 9;
+    const double radius_sum = m_size[tgtG[0]] + m_size[srcG[0]];
+    const double tol = 1e-9*radius_sum + 1e-14;
+    std::vector<std::pair<int, int>> pairs;
+    for (int j = 0; j < nS; ++j) {
+        double image_node[3];
+        ImageApplyVector(img, &ndS[3*j], image_node);
+        for (int i = 0; i < nT; ++i) {
+            const double ex = image_node[0] - ndT[3*i], ey = image_node[1] - ndT[3*i + 1],
+                         ez = image_node[2] - ndT[3*i + 2];
+            if (ex*ex + ey*ey + ez*ez <= tol*tol) pairs.emplace_back(i, j);
+        }
+    }
+    const int count = (int)pairs.size();
+    if (count == 0) return adj;
+    int e;
+    if (count == 1) e = 0;
+    else if (count == 3) e = 1;
+    else if (count == 9) e = 2;
+    else if (count == 27 && dT == 3 && dS == 3) e = 3;
+    else {
+        // A NON-CONFORMING contact (a hanging node: one host's edge midpoint on another host's corner,
+        // ESRF #6 has 832 such pairs at its 2:1 transitions; or a partial face overlap).  No canonical
+        // frames exist for a partial entity, so the pair is reported as entity_dim -2 and the dispatch
+        // keeps it on the graded near family; the count is published in the stats.
+        adj.entity_dim = -2;
+        return adj;
+    }
+    auto ref_of = [](int dim, int node, double* z) {
+        if (dim == 3) { z[0] = 0.5*(node % 3); z[1] = 0.5*((node/3) % 3); z[2] = 0.5*(node/9); }
+        else          { z[0] = 0.5*(node % 3); z[1] = 0.5*(node/3);       z[2] = 0.0; }
+    };
+    static const int perms3[6][3] = {{0,1,2},{0,2,1},{1,0,2},{1,2,0},{2,0,1},{2,1,0}};
+    static const int perms2[2][3] = {{0,1,2},{1,0,2}};
+    auto apply = [](int dim, const int* perm, const int* flip, const double* ref, double* zeta) {
+        for (int k = 0; k < dim; ++k) zeta[k] = flip[k] ? 1.0 - ref[perm[k]] : ref[perm[k]];
+    };
+    const int nperT = dT == 3 ? 6 : 2, nperS = dS == 3 ? 6 : 2;
+    const int nflipT = 1 << dT, nflipS = 1 << dS;
+    const double eps = 1e-12;
+    for (int pT = 0; pT < nperT; ++pT) {
+        const int* permT = dT == 3 ? perms3[pT] : perms2[pT];
+        for (int fT = 0; fT < nflipT; ++fT) {
+            int flipT[3] = {(fT >> 0) & 1, (fT >> 1) & 1, (fT >> 2) & 1};
+            bool okT = true;
+            for (const auto& pr : pairs) {
+                double ref[3], zeta[3];
+                ref_of(dT, pr.first, ref);
+                apply(dT, permT, flipT, ref, zeta);
+                for (int k = e; k < dT && okT; ++k) okT = std::abs(zeta[k] - 1.0) < eps;
+                if (!okT) break;
+            }
+            if (!okT) continue;
+            for (int pS = 0; pS < nperS; ++pS) {
+                const int* permS = dS == 3 ? perms3[pS] : perms2[pS];
+                for (int fS = 0; fS < nflipS; ++fS) {
+                    int flipS[3] = {(fS >> 0) & 1, (fS >> 1) & 1, (fS >> 2) & 1};
+                    bool ok = true;
+                    for (const auto& pr : pairs) {
+                        double refT[3], zT[3], refS[3], zS[3];
+                        ref_of(dT, pr.first, refT);  apply(dT, permT, flipT, refT, zT);
+                        ref_of(dS, pr.second, refS); apply(dS, permS, flipS, refS, zS);
+                        for (int k = e; k < dS && ok; ++k) ok = std::abs(zS[k]) < eps;
+                        for (int k = 0; k < e && ok; ++k) ok = std::abs(zT[k] - zS[k]) < eps;
+                        if (!ok) break;
+                    }
+                    if (!ok) continue;
+                    adj.entity_dim = e;
+                    for (int k = 0; k < 3; ++k) {
+                        adj.permT[k] = permT[k]; adj.flipT[k] = flipT[k];
+                        adj.permS[k] = permS[k]; adj.flipS[k] = flipS[k];
+                    }
+                    return adj;
+                }
+            }
+        }
+    }
+    // A coincidence count of a conforming entity whose nodes are not that entity of both hosts (a
+    // hanging node on an edge midpoint or face centre, a partial edge overlap with 3 nodes): another
+    // non-conforming contact, kept on the graded near family and counted like the others.
+    adj.entity_dim = -2;
+    return adj;
+}
+
+std::vector<double> RadHACApKChargeGram::QuadBlockHexProductN(int kindT, int hT, int kindS, int hS, int img) const
+{
+    // Non-touching pairs inside the near band: plain tensor Gauss on both reference domains with the pair
+    // rule (Q2 maps, reference charge measure); the integrand is smooth because the hosts are separated,
+    // and the same point count that resolves the regularized touching integrals resolves a gap of the
+    // order of the host size.
+    const std::vector<int>& tgtG = (kindT == 0) ? m_cellCharges[hT] : m_faceCharges[hT];
+    const std::vector<int>& srcG = (kindS == 0) ? m_cellCharges[hS] : m_faceCharges[hS];
+    const int nT = (int)tgtG.size(), nS = (int)srcG.size();
+    std::vector<double> blk((size_t)nT*nS, 0.0);
+    if (nT == 0 || nS == 0) return blk;
+    const int dT = (kindT == 0) ? 3 : 2, dS = (kindS == 0) ? 3 : 2;
+    const double* ndT = (kindT == 0) ? &m_hexNodes[(size_t)hT*81] : &m_quadNodes[(size_t)hT*27];
+    const double* ndS = (kindS == 0) ? &m_hexNodes[(size_t)hS*81] : &m_quadNodes[(size_t)hS*27];
+    const std::vector<double>& gl = m_glPair;
+    const std::vector<double>& gw = m_gwPair;
+    const int N = (int)gl.size();
+    // source samples once (points and mode values), then the target loop
+    const int nptS = (dS == 3) ? N*N*N : N*N;
+    std::vector<double> XS((size_t)3*nptS), wS((size_t)nptS), qS((size_t)nptS*nS);
+    {
+        int p = 0;
+        for (int a = 0; a < N; ++a) for (int b = 0; b < N; ++b) for (int c = 0; c < (dS == 3 ? N : 1); ++c, ++p) {
+            double eta[3] = {gl[(size_t)a], gl[(size_t)b], dS == 3 ? gl[(size_t)c] : 0.0};
+            wS[(size_t)p] = gw[(size_t)a]*gw[(size_t)b]*(dS == 3 ? gw[(size_t)c] : 1.0);
+            if (dS == 3) HexQ2MapX(ndS, eta, &XS[(size_t)3*p]); else { const double uv[2] = {eta[0], eta[1]}; QuadQ2MapX(ndS, uv, &XS[(size_t)3*p]); }
+            for (int ls = 0; ls < nS; ++ls) qS[(size_t)p*nS + ls] = HexMonoEval(srcG[ls], eta);
+        }
+    }
+    std::vector<double> qT((size_t)nT), inn((size_t)nS);
+    for (int a = 0; a < N; ++a) for (int b = 0; b < N; ++b) for (int c = 0; c < (dT == 3 ? N : 1); ++c) {
+        double xi[3] = {gl[(size_t)a], gl[(size_t)b], dT == 3 ? gl[(size_t)c] : 0.0};
+        const double wT = gw[(size_t)a]*gw[(size_t)b]*(dT == 3 ? gw[(size_t)c] : 1.0);
+        double XT[3], XTr[3];
+        if (dT == 3) HexQ2MapX(ndT, xi, XT); else { const double uv[2] = {xi[0], xi[1]}; QuadQ2MapX(ndT, uv, XT); }
+        ImageEvalPoint(img, XT, XTr);
+        std::fill(inn.begin(), inn.end(), 0.0);
+        for (int p = 0; p < nptS; ++p) {
+            const double dx = XTr[0]-XS[(size_t)3*p], dy = XTr[1]-XS[(size_t)3*p+1], dz = XTr[2]-XS[(size_t)3*p+2];
+            const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+            if (r < 1e-300) continue;
+            const double w = wS[(size_t)p]/r;
+            const double* q = &qS[(size_t)p*nS];
+            for (int ls = 0; ls < nS; ++ls) inn[(size_t)ls] += w*q[ls];
+        }
+        for (int lt = 0; lt < nT; ++lt) qT[(size_t)lt] = wT*HexMonoEval(tgtG[lt], xi);
+        for (int lt = 0; lt < nT; ++lt) {
+            double* row = &blk[(size_t)lt*nS];
+            const double wl = qT[(size_t)lt];
+            for (int ls = 0; ls < nS; ++ls) row[ls] += wl*inn[(size_t)ls];
+        }
+    }
+    for (double& v : blk) v *= RAD_INV_FOUR_PI;
+    return blk;
+}
+std::vector<double> RadHACApKChargeGram::QuadBlockHexPairDuffy(int kindT, int hT, int kindS, int hS, int img) const
+{
+    const std::vector<int>& tgtG = (kindT == 0) ? m_cellCharges[hT] : m_faceCharges[hT];
+    const std::vector<int>& srcG = (kindS == 0) ? m_cellCharges[hS] : m_faceCharges[hS];
+    const int nT = (int)tgtG.size(), nS = (int)srcG.size();
+    std::vector<double> blk((size_t)nT*nS, 0.0);
+    if (nT == 0 || nS == 0) return blk;
+    const HexPairAdjacency adj = HexPairAdjacencyOf(kindT, hT, kindS, hS, img);
+    if (adj.entity_dim < 0)
+        throw std::logic_error("QuadBlockHexPairDuffy: the host pair does not share a lattice node");
+    const int dT = (kindT == 0) ? 3 : 2, dS = (kindS == 0) ? 3 : 2, e = adj.entity_dim;
+    const int ntrT = dT - e, ntrS = dS - e, nrel = e, nfree = e;
+    const int kcone = nrel + ntrT + ntrS;
+    const int ndim = dT + dS;
+    // Subdomains: the dominant cone coordinate (two signs for a relative one) times the SIGNS of the
+    // other relative coordinates -- the intersection-box lengths 1 - |u_i| are only smooth on a fixed
+    // sign of u_i (splitting them is the analogue of the Sauter-Schwab sub-integrals; without it the
+    // rule converged only algebraically: unit-cube self-energy -3.1 % at N = 4, -1.4 % at N = 6).
+    const int nsub = (2*nrel + ntrT + ntrS) * (1 << std::max(0, nrel - 1)) * ((ntrT + ntrS) > 0 && nrel > 0 ? 1 : 1);
+    const double* ndT = (kindT == 0) ? &m_hexNodes[(size_t)hT*81] : &m_quadNodes[(size_t)hT*27];
+    const double* ndS = (kindS == 0) ? &m_hexNodes[(size_t)hS*81] : &m_quadNodes[(size_t)hS*27];
+    const std::vector<double>& gl = m_glPair;
+    const std::vector<double>& gw = m_gwPair;
+    const int N = (int)gl.size();
+    std::vector<int> idx((size_t)ndim, 0);
+    std::vector<double> qT((size_t)nT), qS((size_t)nS);
+    double cone[6];
+    const int ndomain = 2*nrel + ntrT + ntrS;
+    const int nsignsets = 1 << std::max(0, nrel - 1);
+    for (int sub = 0; sub < ndomain*nsignsets; ++sub) {
+        const int dsel = sub / nsignsets, signset = sub % nsignsets;
+        int dom; double sgn;
+        if (dsel < 2*nrel) { dom = dsel/2; sgn = (dsel % 2 == 0) ? 1.0 : -1.0; }
+        else               { dom = nrel + (dsel - 2*nrel); sgn = 1.0; }
+        // signs of the non-dominant relative coordinates: when the dominant one is relative there are
+        // nrel-1 of them; when it is transverse there are nrel, and the extra one takes both signs below
+        double relsign[3] = {1.0, 1.0, 1.0};
+        {
+            int bit = 0;
+            for (int c = 0; c < nrel; ++c) {
+                if (c == dom) continue;
+                if (bit < std::max(0, nrel - 1)) relsign[c] = ((signset >> bit) & 1) ? -1.0 : 1.0;
+                ++bit;
+            }
+        }
+        const int extra = (dom >= nrel && nrel > 0) ? 2 : 1;   // transverse dominant: the last relative coordinate takes both signs
+        for (int ex = 0; ex < extra; ++ex) {
+        if (extra == 2) relsign[nrel - 1] = (ex == 0) ? 1.0 : -1.0;
+        std::fill(idx.begin(), idx.end(), 0);
+        while (true) {
+            const double wv = gl[(size_t)idx[0]];
+            double weight = gw[(size_t)idx[0]];
+            int yi = 1;
+            for (int c = 0; c < kcone; ++c) {
+                if (c == dom) { cone[c] = sgn*wv; continue; }
+                const double g = gl[(size_t)idx[yi]];
+                weight *= gw[(size_t)idx[yi]];
+                ++yi;
+                if (c < nrel) { cone[c] = relsign[c]*wv*g; }
+                else          { cone[c] = wv*g; }
+            }
+            for (int c = 1; c < kcone; ++c) weight *= wv;          // Duffy Jacobian w^(kcone-1)
+            double zetaT[3] = {0.0, 0.0, 0.0}, zetaS[3] = {0.0, 0.0, 0.0};
+            for (int i = 0; i < nfree; ++i) {
+                const double u = cone[i];
+                const double lo = std::max(0.0, -u), hi = std::min(1.0, 1.0 - u);
+                const double g = gl[(size_t)idx[yi]];
+                weight *= gw[(size_t)idx[yi]]*(hi - lo);
+                ++yi;
+                const double f = lo + g*(hi - lo);
+                zetaT[i] = f; zetaS[i] = f + u;
+            }
+            for (int j = 0; j < ntrT; ++j) zetaT[e + j] = 1.0 - cone[nrel + j];
+            for (int j = 0; j < ntrS; ++j) zetaS[e + j] = cone[nrel + ntrT + j];
+            double xi[3] = {0.0, 0.0, 0.0}, eta[3] = {0.0, 0.0, 0.0};
+            for (int k = 0; k < dT; ++k) xi[adj.permT[k]] = adj.flipT[k] ? 1.0 - zetaT[k] : zetaT[k];
+            for (int k = 0; k < dS; ++k) eta[adj.permS[k]] = adj.flipS[k] ? 1.0 - zetaS[k] : zetaS[k];
+            double XT[3], XTr[3], XS[3];
+            if (dT == 3) HexQ2MapX(ndT, xi, XT); else { const double uv[2] = {xi[0], xi[1]}; QuadQ2MapX(ndT, uv, XT); }
+            ImageEvalPoint(img, XT, XTr);
+            if (dS == 3) HexQ2MapX(ndS, eta, XS); else { const double uv[2] = {eta[0], eta[1]}; QuadQ2MapX(ndS, uv, XS); }
+            const double dx = XTr[0]-XS[0], dy = XTr[1]-XS[1], dz = XTr[2]-XS[2];
+            const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+            if (r > 1e-300) {
+                weight /= r;
+                for (int lt = 0; lt < nT; ++lt) qT[(size_t)lt] = HexMonoEval(tgtG[lt], xi);
+                for (int ls = 0; ls < nS; ++ls) qS[(size_t)ls] = HexMonoEval(srcG[ls], eta);
+                for (int lt = 0; lt < nT; ++lt) {
+                    const double wl = weight*qT[(size_t)lt];
+                    double* row = &blk[(size_t)lt*nS];
+                    for (int ls = 0; ls < nS; ++ls) row[ls] += wl*qS[(size_t)ls];
+                }
+            }
+            int p = 0;
+            while (p < ndim) { if (++idx[(size_t)p] < N) break; idx[(size_t)p] = 0; ++p; }
+            if (p == ndim) break;
+        }
+        }
+    }
+    (void)nsub;
+    for (double& v : blk) v *= RAD_INV_FOUR_PI;
+    return blk;
 }
 
 bool RadHACApKChargeGram::HexHostsTouch(int kindT, int hT, int kindS, int hS, int img) const
