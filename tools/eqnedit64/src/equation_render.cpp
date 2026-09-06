@@ -1507,14 +1507,17 @@ private:
         return script_size(sizePt);
     }
 
-    double size_of(int sizeType) const {
+    double size_of(EquationSize sizeType) const {
+        /* No default: /W4 /WX /w14062 makes a new size step a build failure
+         * rather than a silent fall back to the full size. */
         switch (sizeType) {
             case SIZETYPE_SUB:    return st_.sub;
             case SIZETYPE_SUB2:   return st_.sub2;
             case SIZETYPE_SYM:    return st_.sym;
             case SIZETYPE_SUBSYM: return st_.subsym;
-            default:              return st_.full;
+            case SIZETYPE_FULL:   break;
         }
+        return st_.full;
     }
     /* One step down for scripts, floored at the sub-subscript size. */
     double script_size(double cur) const {
@@ -1948,6 +1951,23 @@ private:
         Layout num = layout_list(f.numer, partSize);
         Layout den = layout_list(f.denom, partSize);
         style_ = outer;
+
+        /* A slashed fraction is written on one line: a/b.  The model has
+         * carried `slashed` since the template was added and the LaTeX
+         * emitter honours it, but nothing here ever read it, so Ctrl+/ drew
+         * an ordinary stacked fraction and only the copied TeX revealed the
+         * difference -- the same shape as the prime that drew as a hat. */
+        if (f.slashed) {
+            Layout out;
+            Layout slash = glyph_layout('/', sizePt, false, false);
+            out.absorb(num, 0.0, 0.0);
+            out.absorb(slash, num.w, 0.0);
+            out.absorb(den, num.w + slash.w, 0.0);
+            out.w = num.w + slash.w + den.w;
+            out.asc = std::max({num.asc, slash.asc, den.asc});
+            out.desc = std::max({num.desc, slash.desc, den.desc});
+            return out;
+        }
         /* sizePt stays the fraction's own: TeX takes the bar thickness and
          * the num/denom shifts from the style the fraction is in, not from
          * the smaller one its parts are set in. */

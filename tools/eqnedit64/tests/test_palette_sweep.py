@@ -31,6 +31,22 @@ sys.path.insert(0, os.path.join(_ROOT, "build"))
 from eqnedit_core import Equation, palettes, math_font_loaded  # noqa: E402
 
 
+# Cells that are the same thing under two names, so drawing alike is correct.
+ALIASES = {
+    frozenset({"symbol.\\dag", "symbol.\\dagger"}),
+    frozenset({"symbol.\\to", "symbol.\\rightarrow"}),
+}
+
+# Commands the window routes somewhere other than the four entry points
+# below: the matrix row/column verbs act on an existing matrix rather than
+# creating anything, so they have nothing to draw on their own.
+SKIP_PREFIXES = ("matrix.",)
+
+
+def is_alias(one: str, other: str) -> bool:
+    return frozenset({one, other}) in ALIASES
+
+
 def build(command: str) -> Equation | None:
     """Apply one palette command to a fresh equation, exactly as the window
     does in eqnedt64_app.cpp: templates, symbols, raw LaTeX and typeface
@@ -68,19 +84,30 @@ def main() -> int:
     for title, _face, _columns, items in palettes():
         drawn: dict[str, str] = {}
         for command, face, _label in items:
+            if command.startswith(SKIP_PREFIXES):
+                continue
             cells += 1
             equation = build(command)
             if equation is None:
                 unusable.append(f"{title}/{face}: {command} was rejected")
                 continue
 
+            # An empty template is a row of identical placeholders, so fill
+            # the slots before comparing: \over and \under differ only in
+            # where the script sits, which an empty pair cannot show.
+            for _ in range(3):
+                equation.insert_text("a")
+                if not equation.next_slot():
+                    break
+
             svg = equation.svg()
             if not svg.strip():
                 failures.append(f"{title}/{face}: {command} rendered nothing")
                 continue
             if svg in drawn and drawn[svg] != command:
-                failures.append(
-                    f"{title}: {command} draws exactly like {drawn[svg]}")
+                if not is_alias(command, drawn[svg]):
+                    failures.append(
+                        f"{title}: {command} draws exactly like {drawn[svg]}")
             else:
                 drawn[svg] = command
 

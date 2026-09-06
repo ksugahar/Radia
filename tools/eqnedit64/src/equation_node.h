@@ -108,7 +108,7 @@ public:
 
 class SizeNode : public Node {
 public:
-    int sizeType = 0;       /* SIZETYPE_FULL..SIZETYPE_SUBSYM */
+    EquationSize sizeType = SIZETYPE_FULL;
 
     SizeNode() : Node(kSize) {}
     void accept(NodeVisitor& v) override;
