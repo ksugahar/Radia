@@ -33,6 +33,14 @@ DECORATIONS = (
     "prime", "dprime", "tprime", "strike", "frown", "smile",
 )
 
+# The over/under family is a second node type with the same defect: the
+# renderer tested for the underline and drew a plain overline for the rest,
+# so a vector written \overrightarrow{AB} appeared as a bare line.
+OVER_UNDER = (
+    "overline", "underline", "overrightarrow", "overleftarrow",
+    "overleftrightarrow",
+)
+
 
 def render(kind: str | None) -> str:
     """Put one decoration around the same base and return its SVG."""
@@ -86,9 +94,20 @@ def main() -> int:
             f"{svg_width(drawn['prime'])}, {svg_width(drawn['dprime'])}, "
             f"{svg_width(drawn['tprime'])}")
 
+    # The over/under family, checked the same way and for the same reason.
+    over_under = {kind: render(kind) for kind in OVER_UNDER}
+    seen_ou: dict[str, str] = {}
+    for kind, svg in over_under.items():
+        if not svg.strip():
+            failures.append(f"{kind} rendered nothing")
+        elif svg in seen_ou:
+            failures.append(f"{kind} renders exactly like {seen_ou[svg]}")
+        else:
+            seen_ou[svg] = kind
+
     # A template the palette offers must be one the model accepts.
     known = set(Equation.templates())
-    missing = [kind for kind in DECORATIONS if kind not in known]
+    missing = [kind for kind in DECORATIONS + OVER_UNDER if kind not in known]
     if missing:
         failures.append(f"palette offers templates the model rejects: {missing}")
 
@@ -97,8 +116,8 @@ def main() -> int:
         for failure in failures:
             print("  " + failure)
         return 1
-    print(f"ok    {len(DECORATIONS)} decorations draw distinctly; "
-          "primes are suffixes")
+    print(f"ok    {len(DECORATIONS)} decorations and {len(OVER_UNDER)} "
+          "over/under marks draw distinctly; primes are suffixes")
     return 0
 
 
