@@ -83,6 +83,7 @@ def main() -> int:
 
     for title, _face, _columns, items in palettes():
         drawn: dict[str, str] = {}
+        tex_of: dict[str, str] = {}
         for command, face, _label in items:
             if command.startswith(SKIP_PREFIXES):
                 continue
@@ -106,10 +107,16 @@ def main() -> int:
                 continue
             if svg in drawn and drawn[svg] != command:
                 if not is_alias(command, drawn[svg]):
+                    # Carry the emitted TeX of both sides: identical pictures
+                    # with identical TeX are a duplicate cell, identical
+                    # pictures with different TeX are a rendering defect, and
+                    # the message has to say which without a second CI run.
                     failures.append(
-                        f"{title}: {command} draws exactly like {drawn[svg]}")
+                        f"{title}: {command} draws exactly like {drawn[svg]}"
+                        f"  [tex {equation.latex()!r} vs {tex_of[drawn[svg]]!r}]")
             else:
                 drawn[svg] = command
+                tex_of[command] = equation.latex()
 
             # What the editor saves must be what it loads.
             tex = equation.latex()
