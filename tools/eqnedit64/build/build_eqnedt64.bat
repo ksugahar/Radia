@@ -45,7 +45,7 @@ for /f "usebackq delims=" %%D in (`pwsh -NoProfile -Command "(Get-Date).ToString
 rc /nologo /fo build\Eqnedit64.res src\eqnedit64.rc
 if errorlevel 1 ( echo [ERROR] Eqnedit64 resources failed & exit /b 1 )
 
-cl /nologo /O2 /Zi /guard:cf /W4 /WX /EHsc /MT /std:c++17 /utf-8 ^
+cl /nologo /O2 /Zi /guard:cf /W4 /WX /w14062 /EHsc /MT /std:c++17 /utf-8 ^
    /D_CRT_SECURE_NO_WARNINGS /DUNICODE /D_UNICODE /I src ^
    /TP src\eqnedt64_app.cpp src\equation_edit.cpp src\equation_render.cpp ^
        src\tex_parser.cpp src\equation_node.cpp src\latex_emitter.cpp ^
@@ -78,7 +78,7 @@ copy /Y build\Eqnedit64.exe dist\Eqnedit64.exe >nul
 if errorlevel 1 ( echo [ERROR] portable executable copy failed & exit /b 1 )
 echo [OK] dist\Eqnedit64.exe (portable release)
 
-cl /nologo /O2 /W4 /WX /EHsc /MT /std:c++17 /utf-8 /I src ^
+cl /nologo /O2 /W4 /WX /w14062 /EHsc /MT /std:c++17 /utf-8 /I src ^
    /TP tests\test_tex_document.cpp src\tex_document.cpp ^
    /Fe:build\test_tex_document.exe /Fo:build\ ^
    /link /SUBSYSTEM:CONSOLE

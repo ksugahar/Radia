@@ -2306,25 +2306,37 @@ private:
          * circumflex punctuation mark: at the base's size it drew 1.24 times
          * the letter's width where TeX's hat is 0.58.
          *
-         * Every embellishment the model can hold needs an entry.  The hat was
-         * the fall-through for anything unlisted, so a double dot, a cancel
-         * bar and a frown all drew as hats.  The marks below are the ones the
-         * MathML emitter already publishes for the same types, so the screen
-         * and the Office paste agree. */
-        uint32_t cp = 0x02C6;                     /* hat */
-        if (e.embellType == EM_DOT) cp = 0x02D9;
-        else if (e.embellType == EM_DDOT) cp = 0x00A8;
-        else if (e.embellType == EM_TDOT) cp = 0x20DB;
-        else if (e.embellType == EM_TILDE) cp = 0x02DC;
-        else if (e.embellType == EM_NOT) cp = 0x0338;
-        else if (e.embellType == EM_RARROW) cp = 0x2192;
-        else if (e.embellType == EM_LARROW) cp = 0x2190;
-        else if (e.embellType == EM_BARROW) cp = 0x2194;
-        else if (e.embellType == EM_R1ARROW) cp = 0x21C0;
-        else if (e.embellType == EM_L1ARROW) cp = 0x21BC;
-        else if (e.embellType == EM_OBAR) cp = 0x00AF;
-        else if (e.embellType == EM_FROWN) cp = 0x2322;
-        else if (e.embellType == EM_SMILE) cp = 0x2323;
+         * A switch with NO default, deliberately.  This was an if-chain whose
+         * fall-through was the hat, so the eight embellishments it did not
+         * list drew as one and nothing said so.  Under /W4 /WX an enumerator
+         * missing from this switch is C4062 and the build fails, which is a
+         * stronger guarantee than any test: a new embellishment cannot reach
+         * a user until someone has decided how it is drawn.  The marks are
+         * the ones the MathML emitter publishes for the same types, so the
+         * screen and the Office paste agree. */
+        uint32_t cp = 0;
+        switch (e.embellType) {
+        case EM_DOT:     cp = 0x02D9; break;
+        case EM_DDOT:    cp = 0x00A8; break;
+        case EM_TDOT:    cp = 0x20DB; break;
+        case EM_TILDE:   cp = 0x02DC; break;
+        case EM_HAT:     cp = 0x02C6; break;
+        case EM_NOT:     cp = 0x0338; break;
+        case EM_RARROW:  cp = 0x2192; break;
+        case EM_LARROW:  cp = 0x2190; break;
+        case EM_BARROW:  cp = 0x2194; break;
+        case EM_R1ARROW: cp = 0x21C0; break;
+        case EM_L1ARROW: cp = 0x21BC; break;
+        case EM_OBAR:    cp = 0x00AF; break;
+        case EM_FROWN:   cp = 0x2322; break;
+        case EM_SMILE:   cp = 0x2323; break;
+        /* Handled above: they are not accents. */
+        case EM_PRIME: case EM_DPRIME: case EM_BPRIME: case EM_TPRIME:
+        case EM_MBAR:
+        case EM_NONE:
+            break;
+        }
+        if (cp == 0) return inner;   /* unreachable; the switch is exhaustive */
         /* Accents are drawn at the base's own size, not at script size.  TeX
          * takes them from the math font at the current size; shrinking them
          * made every accent about two thirds of TeX's width -- a tilde 0.49

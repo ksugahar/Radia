@@ -134,31 +134,39 @@ private:
         } else {
             result = element("mi", value);
         }
-        for (int embell : ch.embells) result = apply_embell(result, embell);
+        for (Embellishment embell : ch.embells) result = apply_embell(result, embell);
         return result;
     }
 
-    std::string apply_embell(const std::string& base, int embell) {
+    std::string apply_embell(const std::string& base, Embellishment embell) {
         const char* mark = nullptr;
         bool under = false;
         switch (embell) {
+        case EM_NONE: return base;   /* the field's default */
         case EM_DOT: mark = "&#x02D9;"; break;
         case EM_DDOT: mark = "&#x00A8;"; break;
         case EM_TDOT: mark = "&#x20DB;"; break;
-        case EM_PRIME: mark = "&#x2032;"; break;
-        case EM_DPRIME: mark = "&#x2033;"; break;
-        case EM_TPRIME: mark = "&#x2034;"; break;
         case EM_TILDE: mark = "~"; break;
         case EM_HAT: mark = "^"; break;
         case EM_NOT: mark = "&#x0338;"; break;
         case EM_RARROW: mark = "&#x2192;"; break;
         case EM_LARROW: mark = "&#x2190;"; break;
         case EM_BARROW: mark = "&#x2194;"; break;
+        case EM_R1ARROW: mark = "&#x21C0;"; break;
+        case EM_L1ARROW: mark = "&#x21BC;"; break;
         case EM_MBAR: mark = "_"; under = true; break;
         case EM_OBAR: mark = "&#x00AF;"; break;
         case EM_FROWN: mark = "&#x2322;"; break;
         case EM_SMILE: mark = "&#x2323;"; under = true; break;
-        default: return base;
+        /* The prime family is a suffix, not something to put over the base. */
+        case EM_PRIME: return base + element("mo", "&#x2032;");
+        case EM_DPRIME: return base + element("mo", "&#x2033;");
+        case EM_BPRIME:
+        case EM_TPRIME: return base + element("mo", "&#x2034;");
+        /* No default, deliberately: /W4 /WX turns a new embellishment that
+         * nobody mapped into C4062 at compile time. `default: return base`
+         * dropped the decoration silently instead, so an equation pasted into
+         * Office quietly lost it. */
         }
         return element(under ? "munder" : "mover",
                        base + element("mo", mark, "stretchy=\"true\""));
