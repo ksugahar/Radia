@@ -281,10 +281,12 @@ bool RadHACApKBase::BuildHMatrix(const RadHACApKParams& params) {
     RadHACApKCallback::ClearCallbackException();
 
     // Kernel-specific precomputation.
+    const auto t_prep0 = std::chrono::high_resolution_clock::now();
     OnBeforeBuild();
 
     // Kernel-specific initial chi.
     InitializeInvChi();
+    m_stats.t_prep = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - t_prep0).count();
 
     // Allocate opaque structures
     m_leafmtxp = HACApK_alloc_leafmtxp();
@@ -375,6 +377,9 @@ bool RadHACApKBase::BuildHMatrix(const RadHACApKParams& params) {
     m_stats.dense_memory_mb = (double)dense_bytes / (1024.0 * 1024.0);
     m_stats.compression = (dense_bytes > 0) ?
         (double)hmat_bytes / (double)dense_bytes : 1.0;
+    m_stats.t_cluster = HACApK_lcontrol_get_time(m_control, 90);
+    m_stats.t_leafgen = HACApK_lcontrol_get_time(m_control, 91);
+    m_stats.t_fill = HACApK_lcontrol_get_time(m_control, 92);
 
     auto end_time = std::chrono::high_resolution_clock::now();
     m_stats.build_time = std::chrono::duration<double>(end_time - start_time).count();
@@ -392,11 +397,13 @@ bool RadHACApKBase::BuildHMatrix(const RadHACApKParams& params) {
 
     // Cache diagonal elements N_ii for Jacobi preconditioner (reused every
     // BiCGSTAB iteration). Uses virtual GetInteractionMatrixElement.
+    const auto t_diag0 = std::chrono::high_resolution_clock::now();
     m_diag_N.resize(m_ndof);
     ngcore::ParallelFor(ngcore::IntRange(m_ndof), [&](size_t i) {
         m_diag_N[(int)i] = GetInteractionMatrixElement((int)i, (int)i);
     });
     m_diag_cached = true;
+    m_stats.t_diag = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - t_diag0).count();
 
     m_valid = true;
     build_succeeded = true;

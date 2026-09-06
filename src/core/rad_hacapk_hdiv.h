@@ -1247,8 +1247,19 @@ private:
     int m_hexCongruentTemplateCount = 0;
     bool m_hexCongruentReady = false;
     void BuildHexCongruenceTemplates(int n_el, int n_bf);
+    // One slot per key.  The slot is inserted on the first lookup and its block is computed under
+    // std::call_once, so concurrent misses on the same key WAIT for one computation instead of each
+    // recomputing the block (the previous "racing first insert wins" design duplicated the expensive
+    // Duffy near blocks whenever several fill workers reached the same congruence key together).
+    // unique_ptr keeps the slot address stable across rehashing; the returned block reference lives
+    // as long as the instance.
+    struct HexSharedBlockSlot {
+        std::once_flag once;
+        std::vector<double> blk;
+    };
     mutable std::shared_mutex m_hexGeneralSharedMutex;
-    mutable std::unordered_map<HexSharedBlockKey, std::vector<double>, HexSharedBlockKeyHash> m_hexGeneralSharedCache;
+    mutable std::unordered_map<HexSharedBlockKey, std::unique_ptr<HexSharedBlockSlot>, HexSharedBlockKeyHash>
+        m_hexGeneralSharedCache;
     mutable std::atomic<long long> m_hexGeneralSharedLookups{0};
     mutable std::atomic<long long> m_hexGeneralSharedHits{0};
     mutable std::atomic<long long> m_hexGeneralSharedMisses{0};
