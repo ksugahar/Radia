@@ -225,6 +225,8 @@ def test_coil_yoke_runner_keeps_one_coil_source_and_three_required_engines():
     assert "fem_kelvin_mesh_shared\": True" in text
     assert "fem_periodic_kelvin_mesh_shared" not in text
     assert "--resume" in text
+    assert "--mixed-nonlinear-maximum-iterations" in text
+    assert "nonlinear_maximum_iterations=mixed_nonlinear_maximum_iterations" in text
     assert "--hdiv-image" in text
     assert "image=options.hdiv_image" in text
     assert "hdiv_image=options.hdiv_image" in text
