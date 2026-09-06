@@ -97,3 +97,31 @@ def test_mesh_journal_is_conforming_and_id_free(qmag, tmp_path):
     assert "order 2 overwrite" in text
     assert not any(line.strip().startswith("volume ") and line.split()[1].isdigit() for line in text.splitlines())
     assert qmag.STEP_PATH.is_file() and qmag.STEP_PATH.stat().st_size > 100_000
+
+
+def test_three_engine_partial_state_round_trip(tmp_path):
+    """A non-converged mixed Omega loop leaves a partial state that only the SAME problem may resume."""
+    module = sys.modules.get("run_qmag_three_engine")
+    if module is None:
+        spec = importlib.util.spec_from_file_location("run_qmag_three_engine", LANE / "run_qmag_three_engine.py")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules["run_qmag_three_engine"] = module
+        spec.loader.exec_module(module)
+    identity = {"case": {"name": "J3.0"}, "fem_mesh_sha256": "abc", "fem_order": 2, "nonlinear_tolerance": 2.0e-5}
+    stats = {"element_numbers": [3, 1, 2], "mu_r_elements": [10.0, 200.0, 3000.0], "iterations": 80,
+             "relative_B_change": 7.8e-4, "contraction_rate_estimate": 0.97, "history": [{"iteration": 1}]}
+    path = tmp_path / "three_engine_J3.0.mixed_total_reduced_omega.state.json"
+    module._write_state(path, identity, stats, None)
+    state = module._read_state(path, identity)
+    assert state["converged"] is False and state["schema"] == module.STATE_SCHEMA
+    assert state["mu_r_elements"] == stats["mu_r_elements"] and state["element_numbers"] == [3, 1, 2]
+    assert state["iterations"] == 80 and state["resumed_iterations"] == 0
+    # a second non-converged run accumulates the resumed iterations
+    module._write_state(path, identity, stats | {"iterations": 50}, state)
+    assert module._read_state(path, identity)["resumed_iterations"] == 80
+    assert module._read_state(tmp_path / "missing.json", identity) is None
+    with pytest.raises(ValueError, match="different problem"):
+        module._read_state(path, identity | {"fem_order": 3})
+    path.write_text(path.read_text(encoding="utf-8").replace('"converged": false', '"converged": true'), encoding="utf-8")
+    with pytest.raises(ValueError, match="not a partial"):
+        module._read_state(path, identity)
