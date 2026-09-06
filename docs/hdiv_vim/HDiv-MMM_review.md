@@ -1414,8 +1414,30 @@ to be confirmed by the definiteness gate), a distance-graded count for the
 non-touching band, and the analytic inner for affine-affine touching pairs if
 the conforming-mesh A/B shows the block-wise family suffices there.
 
-Separately, the nonlinear Q-mag run spent 8545 s of its 10167 s in the
-Newton/Picard inner loop (2 Newton iterations, 866 inner CG iterations, 34
-line-search backtracks: ~10 s per inner iteration against 55 ms per CG
-iteration of the linear solve on the same Gram).  That loop, not the Gram,
-dominates nonlinear HEX runs and is profiled next.
+The same cache defect explains the slow phases AFTER the build.  Every later
+`G.entry(i, j)` from the main thread -- the gate's cluster check, the CG
+preconditioner setup of the floor scan, the nonlinear energy-Newton exact-
+diagonal preconditioner -- recomputed the near blocks that lived only in the
+fill workers' thread-local caches: 265 ms (Duffy) or 77 ms (block-wise) per
+block.  That is why the first example-6 gate's cluster check took 2785 s
+against 449 s for the block-wise arm (the ratio of the block costs), why its
+CG floor "took" 2083 s for 431 iterations (the setup, not the iterations), and
+why the nonlinear Q-mag run spent 8545 s of its 10167 s in the Newton loop for
+866 inner CG iterations, while the same nonlinear solve on LAB with the shared
+cache needed 43 s for 2674 inner iterations (16 ms each, 7 Newton iterations,
+no backtracks).  With every BDM1 near pair in the instance-shared cache those
+phases collapse to their iteration cost.
+
+The pair point count is now chosen per pair.  The rule converges
+exponentially when both hosts are affine (unit-cube self-energy `4.9e-9` at
+6 points, `1.8e-12` at 8) but only about tenfold per two points on distorted
+hosts (tapered sector lattice, entry error against a 10-point reference,
+touching / near band: `5.4e-4 / 1.0e-3` at 4, `4.2e-4 / 3.0e-4` at 5,
+`7.4e-5 / 8.4e-5` at 6, `6.3e-6 / 7.3e-6` at 8; the band needs the same count
+as the touching class).  Affine-affine pairs therefore take `glpair_affine_n`
+= 6 and pairs with a distorted host `glpair_n` = 8 (`vim.ChargeGram(
+hex_glpair_n=..., hex_glpair_affine_n=...)`, published in `hmat_stats`): on a
+swept magnet most near blocks cost `6^6` instead of `8^6` point pairs (5.6x)
+and the distorted pole tips keep their accuracy.  The example-6 gate at
+`glpair_n` 6 / 5 on the conforming mesh (queued on hibino) decides whether the
+distorted pairs can go lower; on the sector numbers they should not.
