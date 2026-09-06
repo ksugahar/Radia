@@ -306,7 +306,7 @@ mode flag:
 - persistent field evaluation;
 - diagnostics and artifact provenance.
 
-The audited source contains 14 supported `RADIA_HDIV_*` environment controls.
+The audited source contains 15 supported `RADIA_HDIV_*` environment controls.
 They are now exhaustively classified and guarded by
 `tests/test_hdiv_environment_policy.py`; adding an unclassified control fails
 the fast test lane. The obsolete `RADIA_HDIV_HEX_CACHE_STATS` alias was removed.
@@ -316,7 +316,7 @@ the fast test lane. The obsolete `RADIA_HDIV_HEX_CACHE_STATS` alias was removed.
 | Diagnostic counters | `RADIA_HDIV_BLOCK_CACHE_STATS`, `RADIA_HDIV_HMATVEC_STATS` | Opt-in instrumentation; invalidates production timing claims. |
 | Failure injection | `RADIA_HDIV_TEST_FAIL_FILL_AFTER` | Test-only build failure; no public API and no successful result artifact. |
 | Performance/cache A/B | `RADIA_HDIV_HEX_BLOCK_CACHE_LIMIT`, `RADIA_HDIV_WEDGE_TRANS_CACHE`, `RADIA_HDIV_DISABLE_TRANS_CACHE` | Diagnostic benchmark paths; effective values are copied into `hmat_stats`. |
-| Numerical/path A/B | `RADIA_HDIV_CURVED_DIRECT`, `RADIA_HDIV_HEX_FAR_ONESIDED`, `RADIA_HDIV_WEDGE_FAR_ONESIDED`, `RADIA_HDIV_HEX_DISTORTED_FAR_FACTOR`, `RADIA_HDIV_HO_FAR_ONESIDED`, `RADIA_HDIV_DISABLE_HO_ANALYTIC_BLOCK`, `RADIA_HDIV_DISABLE_HO_IMAGE_BLOCK` | Non-production comparison paths; `hmat_stats.nonproduction_numerical_override_active` and `release_claim_eligible` make them fail-loud in provenance. |
+| Numerical/path A/B | `RADIA_HDIV_CURVED_DIRECT`, `RADIA_HDIV_HEX_FAR_ONESIDED`, `RADIA_HDIV_WEDGE_FAR_ONESIDED`, `RADIA_HDIV_HEX_DISTORTED_FAR_FACTOR`, `RADIA_HDIV_HO_FAR_ONESIDED`, `RADIA_HDIV_DISABLE_HO_ANALYTIC_BLOCK`, `RADIA_HDIV_DISABLE_HO_IMAGE_BLOCK`, `RADIA_HDIV_DISABLE_HO_IMAGE_FAR` | Non-production comparison paths; `hmat_stats.nonproduction_numerical_override_active` and `release_claim_eligible` make them fail-loud in provenance. |
 | Preconditioner A/B | `RADIA_HDIV_AUTO_JACOBI_TET_NFACE` | Measurement-only auto-policy threshold; the resolved threshold and branch are recorded in `preconditioner_policy`. |
 
 The native `stats()` surface records every effective C++ cache, quadrature,
@@ -871,3 +871,165 @@ unavailable and the mdx CI queue is idle, with the machine, native build
 identity, element/geometry order, image group, material
 interpolant, ACA settings, DoF, build/apply/solve timing, and result checks
 recorded in JSON.
+
+## 8. Curved-TET mirror images, Gram definiteness, and the FEM Picard loops (2026-09-05)
+
+Branch `claude/hdiv-ima-curved-tet` (on the PR #93 head `35ebfd0cb`).  Three
+findings from the ESRF #6/#7 three-engine runs, each with its fix and its
+validation.  Timing numbers are LAB same-host relative smokes; decision-grade
+timing still belongs on idle mdx/hibino.
+
+### 8.1 The IMA build of ESRF #7 was a per-entry scalar curved Duffy
+
+The #7 one-pole model is not a HEX mesh: `model_one_pole_20mm.vol` is 15,210
+curved P2 TET elements (`check.json`: `tetrahedron_count 15210`, `curve_order
+2`).  Its reduced BDM1 build with `image="-x-y"` ran for more than 61 minutes
+on hibino while the FULL 30 mm model (31,988 curved TET, no image) solved BDM1
+in 403 s nonlinear and 256 s linear.
+
+Cause (`rad_hacapk_hdiv_entry.cpp`, `HighOrderTetEntryStrategy::Evaluate`):
+every MIRROR image term took the scalar fold
+`0.5 (QuadDotRefl(a,b) + QuadDotRefl(b,a))`, and on a curved host `PhiInner`
+is `CurvedTetPotential` -- 4 faces x 3 leads x 8^3 = 6144 curved-map
+evaluations per outer point per source charge, both directions, every image,
+far pairs included.  The host-block path existed only for ROTATION images on
+FLAT hosts (`QuadBlockHOTetImage` threw for curved), and no far rule existed
+for images at all, while the DIRECT terms used the product rule, the far rule,
+and the vectorized Duffy per host.
+
+Fix (`rad_hacapk_hdiv.cpp`, `rad_hacapk_hdiv_entry.cpp`, header):
+
+| Piece | Rule |
+|---|---|
+| `ImageFarPair(a, b, img)` | the direct far criterion on the IMAGE geometry, distance from `T^-1 c_a` to `c_b` above `f (s_a + s_b)` |
+| `QuadDotFarImage` | `QuadDotFar` with the target's low outer points mapped by `T^-1`; a mirror gives the same sum in a different order, a rotation gives `G_T` and `G_{T^-1}` which are averaged as designed |
+| `ImageHostsTouch(T, S, img)` | S's corners mapped forward (`ImageApplyVector` on positions) and matched to T's corners by coordinates: plane-fixed vertices and rotation-identified sector vertices are both found; the vertex-id test `CurvedHostsTouch` sees neither |
+| `QuadBlockHOTetImage` (curved) | touching image pair: vectorized curved Duffy at the mapped points; otherwise `QuadBlockHOCurvedDirect(img)` product rule; mirror + product rule is an exact transpose, so it is one-sided |
+| entry dispatch | far -> host block (curved, or flat with the analytic host block) -> scalar fold only for flat BDM1 / polynomial-combination charges |
+
+An on-plane cut face maps onto itself point by point, so its image self block
+is evaluated at the same outer points by the same rule as its direct self
+block and the antisymmetric fold cancels to roundoff -- the curved analogue of
+the hex `self_pair` fix of 2026-07-05.  The legacy fold stays reachable for
+A/B through `RADIA_HDIV_DISABLE_HO_IMAGE_BLOCK=1` plus the new
+`RADIA_HDIV_DISABLE_HO_IMAGE_FAR=1` (classified as a numerical-path override
+above); `hmat_stats` gains `ho_image_far_entries`, `ho_image_block_entries`,
+`ho_image_scalar_entries` under `RADIA_HDIV_BLOCK_CACHE_STATS=1`.
+
+### 8.2 Validation: entries, symmetry, definiteness, physics, speed
+
+`validation_test/feec/validate_hdiv_vim_tet_image_dispatch.py` (JSON next to
+it) and the fast `tests/feec/test_hdiv_vim_tet_image_dispatch.py`.  A quarter
+model (x > 0, y > 0) with `image="-x-y"` under the quadrupole field
+`H_ext = g (y, x, 0)` -- the parity of the ESRF quadrupoles -- against its
+full model.  For the flat box the full mesh is the exact mirrored union of the
+quarter mesh (`mirrored_union`), so the agreement is roundoff + ACA level; for
+the curved sphere the two meshes are independent.
+
+| Case (maxh 0.5, `gram_eps` 1e-12) | n_charge | entry symmetry | on-plane residue | lambda_min new | lambda_min legacy | reduced+image vs full | build new / legacy |
+|---|---|---|---|---|---|---|---|
+| flat box BDM1 | 280 | 0 | 3.4e-15 | -2.9e-16 | -1.0e-9 | 6.4e-15 | 0.38 s / 0.50 s |
+| flat box BDM2 | 712 | 0 | 5.5e-15 | -4.6e-17 | -3.8e-9 | 1.1e-12 | 2.7 s / 29.7 s |
+| curved sphere BDM1 | 195 | 0 | 8.5e-16 | -5.9e-17 | -1.3e-7 | 5.3e-4 | 1.7 s / 26.3 s |
+| curved sphere BDM2 | 480 | 4e-18 | 8.1e-15 | -9.5e-18 | -4.9e-9 | 2.4e-4 | 7.6 s / 820 s |
+| curved sphere BDM1, maxh 0.3 (build only) | 564 | -- | -- | -- | -- | -- | 5.3 s / 164 s |
+
+`lambda_min` is the smallest eigenvalue of the sigma-normalized dense Gram
+assembled from `matvec_sym`; the raw O(n^2) quadratic form on the minimizing
+vector agrees in sign.  The build ratios grow with the mesh (1.4x for flat
+BDM1, where the analytic host block is off and only the far rule changes;
+11x flat BDM2; 15x and 31x curved BDM1 at 45 and 150 elements; 108x curved
+BDM2), because the legacy fold paid the curved Duffy for every filled entry
+while the dispatch pays it once per touching host pair.  Two points matter
+beyond the speed:
+
+* the LEGACY fold was itself slightly indefinite -- exact/Duffy image terms
+  combined with product-rule direct terms are not one quadrature family, and
+  the mixture leaks into the smallest eigenvalues (-1e-9 flat, -1.3e-7
+  curved, at these tiny sizes).  The consistent dispatch is PSD to roundoff.
+  This is one mechanism for "IMA + TET -> CG breakdown"; it does not explain
+  codex's raw O(n^2) HEX Gram of #6, which is a separate defect and stays on
+  the MINRES-as-diagnostic-only rule;
+* the on-plane cut-face charges of the antisymmetric planes annihilate to
+  about 1e-15 of the median self entry with sigma left at one, as the sigma
+  pre-pass contract requires.
+
+Every existing IMA, cyclic, hex-image, sigma, and roundoff test passes on the
+patched build.  Three failures on the PR #93 head reproduce on an UNPATCHED
+baseline build and are therefore pre-existing: the two hex-image roundoff
+tests of `validation_test/feec/test_hdiv_radfld_contract.py` (4.9e-14 against
+a 10 eps gate) and
+`tests/test_hdiv_vim_chargegram_dispatch.py::test_chargegram_curved_tet_matches_mesh_geometry_by_default`
+(its test double returns four values where `_finish_charge_gram_backend`
+unpacks three).
+
+### 8.3 The FEM Picard loops: history, warm start, constrained Anderson
+
+ESRF #6 mixed Omega stopped at 80 damped-Picard iterations (relaxation 0.3)
+with `relative_B_change` 9.03e-5 against 2e-5, and the rerun with a 160 cap
+started from zero because the loop raised and discarded its state.  Both FEM
+engines were fixed-relaxation Picard on the per-element material coefficient
+with a step-size criterion, no history, no warm start.
+
+Shipped: `radia.picard_acceleration.ConstrainedAndersonAccelerator` (real
+arithmetic; projection onto the secant range of the B(H) law; extrapolation
+in log space by default; restart on residual growth; an a-posteriori
+acceptance that drops an accelerated iterate whose next residual is worse and
+takes the damped Picard step from the accepted one instead; depth 0 is the
+legacy convex combination bit for bit) and `estimate_contraction_rate`.
+`solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin` and
+`VectorPotentialSolver.solve_nonlinear` accept a per-element warm start
+(`mu_r_initial` array / `nu_initial`), `anderson_depth`, `anderson_transform`,
+`observation_points`; their `nonlinear_stats` carry the per-iteration
+`history`, `contraction_rate_estimate`, the per-element state, the Anderson
+counters, and the observed field.  The mixed loop raises
+`MixedOmegaPicardNotConverged` with that state; the reduced-A loop keeps
+returning, and its silent `except Exception: B_mag = 0.0` centroid fallback is
+now a raise.
+
+Measured on the fast tests: reduced-A saturating cube (tol 1e-6) cold 24
+iterations, warm start from the converged state 2, Anderson(2) 14, fields
+agreeing to 3e-7.  Mixed Omega on a shielded-knee two-region case (H_knee
+1e-4 A/m): plain rate 0.958 (1.3e-5 after 150), Anderson(2, log) 48
+rejections in 150 and no gain, linear transform worse.  Anderson is therefore
+opt-in in the runner; the warm start, the history, and the rate estimate are
+the guaranteed wins.
+
+### 8.4 Runner contract: converged-only checkpoints, caps as provenance
+
+`run_coil_yoke_three_engine.py` (checkpoint schema v3): a result checkpoint
+is written and read only for a converged solve (the v2 `reduced_a` checkpoint
+of #7 with `converged: false` would have been reused silently and failed the
+gate hours later); the iteration caps left the checkpoint identity and live in
+`provenance`, so a converged solution is reused whatever cap produced it, and
+converged v2 checkpoints still resume after their cap key is stripped; a
+non-converged engine writes `<output>.<engine>.state.json` (explicitly
+`converged: false`) which `--resume` uses as a warm start; new options
+`--mixed-relaxation`, `--mixed-anderson-depth`, `--reduced-a-anderson-depth`
+(default 0, part of the identity only when set).
+
+### 8.5 Codex handover verification (2026-09-05)
+
+The curved-TET dispatch test double now preserves the native configuration
+contract: it receives the four build inputs, including the NGSolve mass,
+and returns the public three-tuple. No production return contract or numerical
+tolerance was changed. All six dispatch tests pass after this correction.
+The other 40 focused tests covering Picard acceleration/history, mixed Omega,
+ESRF checkpoint contracts, and native TET image dispatch passed.
+
+Tests used the built source/native pair at `C:/temp/radia-hdiv-ima/src`
+(commit `8c5b071693961564519effa6463feb531e0f2b1a`), explicitly imported before
+pytest, with the updated tests from the isolated handover worktree. No PYD was
+copied. This is not evidence of a new wheel build or deployment.
+
+Release remains blocked: the HEX image field roundoff tests reproduce relative
+differences of 1.9927109321574784e-14 and 4.944633724445392e-14 against the
+unchanged 10-epsilon gate (2.220446049250313e-15). The full field-contract file
+has three passes and two failures. Their cause is not established by this run.
+The #6/#7 production three-engine acceptance and timings require the new native
+release on mdx/hibino; diagnostic MINRES results do not certify production CG.
+
+The LAB release-worktree editable path is not repaired blindly: release-quad
+intentionally retains the verified release source until the canonical development
+checkout catches up. Use its explicit restore-editable command only after that
+prerequisite is satisfied; do not redirect imports to the stale dirty shared tree.
