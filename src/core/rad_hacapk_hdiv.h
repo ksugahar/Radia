@@ -1202,8 +1202,44 @@ private:
     // rehash), so readers hold no lock after lookup.  Classification (HexPairTakesGeneralPath) picks
     // the CACHE only, never the quadrature -- a borderline misclassification just caches a cheap block
     // here (or a heavy one thread-locally), both harmless.
+    // Shared-cache key.  mode 0 = the directed host pair (kindT, hT, kindS, hS, img).  mode 1 =
+    // TRANSLATION-CONGRUENT pair (2026-09-06): the two host templates plus the quantized centre
+    // offset.  A charge-Gram block depends only on the relative geometry of its two hosts, so every
+    // translated copy of a pair (the z-layers of a swept HEX mesh: 5 of 6 near blocks on a 6-layer
+    // quadrupole, 14 of 15 at 4 mm) is served from one evaluation, exactly.  Image blocks (img > 0)
+    // are not translation invariant and keep mode 0.
+    struct HexSharedBlockKey {
+        int mode, kindT, a, kindS, b, img, same;
+        long long qx, qy, qz;
+        bool operator==(const HexSharedBlockKey& o) const
+        {
+            return mode == o.mode && kindT == o.kindT && a == o.a && kindS == o.kindS && b == o.b
+                && img == o.img && same == o.same && qx == o.qx && qy == o.qy && qz == o.qz;
+        }
+    };
+    struct HexSharedBlockKeyHash {
+        std::size_t operator()(const HexSharedBlockKey& k) const
+        {
+            std::size_t h = 1469598103934665603ull;
+            auto mix = [&](long long v) {
+                h ^= static_cast<std::size_t>(static_cast<unsigned long long>(v));
+                h *= 1099511628211ull;
+            };
+            mix(k.mode); mix(k.kindT); mix(k.a); mix(k.kindS); mix(k.b); mix(k.img); mix(k.same);
+            mix(k.qx); mix(k.qy); mix(k.qz);
+            return h;
+        }
+    };
+    // Congruence templates of every host (cells then faces): the quantized Q2 lattice nodes relative
+    // to the host centre plus the charge exponents; hosts with equal templates are translated copies.
+    std::vector<int> m_hexHostCongruentTemplate;   // [n_el+n_bf] template id, -1 before the build
+    std::vector<double> m_hexHostCenter;           // [3*(n_el+n_bf)] mean of the host's lattice nodes
+    double m_hexCongruentQuantum = 0.0;            // 1e-10 x the largest host spread
+    int m_hexCongruentTemplateCount = 0;
+    bool m_hexCongruentReady = false;
+    void BuildHexCongruenceTemplates(int n_el, int n_bf);
     mutable std::shared_mutex m_hexGeneralSharedMutex;
-    mutable std::unordered_map<unsigned long long, std::vector<double>> m_hexGeneralSharedCache;
+    mutable std::unordered_map<HexSharedBlockKey, std::vector<double>, HexSharedBlockKeyHash> m_hexGeneralSharedCache;
     mutable std::atomic<long long> m_hexGeneralSharedLookups{0};
     mutable std::atomic<long long> m_hexGeneralSharedHits{0};
     mutable std::atomic<long long> m_hexGeneralSharedMisses{0};
