@@ -882,7 +882,7 @@ void LaTeXEmitter::emitMatrix(const MatrixNode& mat, std::string& out) {
 
 void LaTeXEmitter::emitEmbell(const EmbellNode& embell, std::string& out) {
     const std::string content = emitNodes(embell.content);
-    const int type = embell.embellType;
+    const int type = static_cast<int>(embell.embellType);
     /* The prime family has no prefix -- it is written entirely as a suffix
      * (x', x'').  Requiring both halves silently dropped the mark, so a
      * prime template produced a bare x. */

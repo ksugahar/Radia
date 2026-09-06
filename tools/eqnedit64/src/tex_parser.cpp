@@ -530,7 +530,7 @@ private:
 
         if (int em = accent_code(cmd); em >= 0) {
             auto e = std::make_unique<EmbellNode>();
-            e->embellType = em;
+            e->embellType = static_cast<Embellishment>(em);
             e->content = parse_arg();
             return e;
         }

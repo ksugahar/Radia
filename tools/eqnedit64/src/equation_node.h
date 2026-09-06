@@ -91,7 +91,7 @@ public:
     uint32_t charCode = 0;
     char ch = 0;            /* for ND_CHAR: ASCII char */
     std::string latex;      /* for ND_SYMBOL: LaTeX command (e.g. "\\nabla") */
-    std::vector<int> embells; /* chained embellishment types */
+    std::vector<Embellishment> embells; /* chained embellishment types */
 
     CharNode() : Node(kChar) {}
     void accept(NodeVisitor& v) override;
@@ -99,7 +99,7 @@ public:
 
 class EmbellNode : public Node {
 public:
-    int embellType = 0;
+    Embellishment embellType = EM_NONE;
     NodeList content;       /* for ND_EMBELL (LaTeX: \hat{content}) */
 
     EmbellNode() : Node(kEmbell) {}
