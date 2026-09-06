@@ -1035,11 +1035,19 @@ def get_esrf_cubit_mesh_policy(number: int) -> dict[str, Any]:
     # unrecorded fallback.
     explicit_tet_yoke = int(number) == 7
     cad_scheme = "tetmesh" if int(number) == 4 or explicit_tet_yoke else "auto"
+    # Example 6's forty iron solids are all extrusions along the beam axis
+    # (x, 60 mm).  After imprint/merge, ``scheme auto`` and ``submap`` fail to
+    # interval-match the eight hyperbolic pole tips, while an explicit
+    # end-face-to-end-face sweep of every volume meshes all of them and yields
+    # a conforming all-HEX body (2408 HEX at 10 mm, 2026-09-06).
+    iron_sweep_axis = 0 if int(number) == 6 else None
     return {
         "schema": "radia.esrf-cubit-mesh-policy.v1",
         "all_examples_use_cubit": True,
         "preferred_volume_family": "HEX",
         "cad_volume_scheme": cad_scheme,
+        "iron_sweep_axis": iron_sweep_axis,
+        "conforming_partition": "imprint volume all; merge volume all",
         "cad_volume_fallback_reason": (
             "exact sphere has no yoke; ordinary Cubit CAD meshing falls back "
             "to TET while Sculpt HEX is evaluated separately"
@@ -1055,7 +1063,10 @@ def get_esrf_cubit_mesh_policy(number: int) -> dict[str, Any]:
                 "required_family": (
                     "TET" if explicit_tet_yoke else "HEX" if has_iron else None
                 ),
-                "scheme": cad_scheme if has_iron else None,
+                "scheme": (
+                    ("sweep" if iron_sweep_axis is not None else cad_scheme)
+                    if has_iron else None
+                ),
             },
             "permanent_magnet": {
                 "preferred_family": "HEX",
@@ -1163,22 +1174,55 @@ def export_esrf_cubit_assets(number: int, output_dir: str | Path,
     vol_path = root / "model.vol"
     if solver_categories:
         cub_path = root / "model.cub5"
+        # The partitioned solids of one material must share their faces, edges
+        # and nodes.  Without imprint/merge every constructive interface is
+        # exported as two coincident boundary faces carrying opposite surface
+        # charges, and unequal neighbour intervals leave hanging nodes:
+        # Example 6 measured 512 duplicated face pairs plus 832 hanging-node
+        # contacts (2026-09-06), which made the HEX charge Gram indefinite.
         lines.extend([
+            "imprint volume all",
+            "merge volume all",
             "sideset 1 add surface all",
             'sideset 1 name "outer_boundary"',
-            f"volume all scheme {mesh_policy['cad_volume_scheme']}",
+        ])
+        sweep_axis = mesh_policy["iron_sweep_axis"]
+        if sweep_axis is None:
+            lines.append(f"volume all scheme {mesh_policy['cad_volume_scheme']}")
+        else:
+            # Every solid is an extrusion along ``sweep_axis``.  Sweep each
+            # volume from its lower end faces to its upper end faces, selected
+            # by their centre coordinate inside an APREPRO loop (never by
+            # entity id).  Cubit's auto/submap selectors cannot interval-match
+            # the merged hyperbolic pole tips of Example 6.
+            axis = int(sweep_axis)
+            axis_name = "xyz"[axis]
+            for category in solver_categories:
+                lower, upper = shapes[category].bounding_box
+                lo = float((lower.x, lower.y, lower.z)[axis])
+                hi = float((upper.x, upper.y, upper.z)[axis])
+                # ``x_coord`` filters on the surface centre.  The planar end
+                # faces sit exactly at the bounding-box limits, whereas the
+                # imprinted lateral faces of the pole tips do not all span the
+                # full extrusion length, so the tolerance must stay tight: a
+                # quarter-extent tolerance pulled lateral faces into the
+                # source set and Cubit demanded multisweep.
+                tol = 1.0e-3 * (hi - lo)
+                lines.extend([
+                    f"#{{_v = {category}_first}}",
+                    f"#{{_n = {category}_last - {category}_first + 1}}",
+                    "#{Loop(_n)}",
+                    (f"volume {{_v}} scheme sweep source surface in volume {{_v}} "
+                     f"with {axis_name}_coord < {lo + tol:.12g} target surface in "
+                     f"volume {{_v}} with {axis_name}_coord > {hi - tol:.12g}"),
+                    "#{_v++}",
+                    "#{EndLoop}",
+                ])
+        lines.extend([
             f"volume all size {float(mesh_size_m):.12g}",
             "mesh volume all",
+            "list volume with not is_meshed",
         ])
-        if int(number) == 6:
-            # The eight symmetry-related hyperbolic pole tips are submappable,
-            # but Cubit's ``auto`` selector leaves them unmeshed at useful
-            # resolutions.  Select by actual mesh state, never by entity ID.
-            lines.extend([
-                'group "hex_recovery" add volume with not is_meshed',
-                "volume in hex_recovery scheme submap",
-                "mesh volume in hex_recovery",
-            ])
         lines.extend([
             f'export netgen "{vol_path.as_posix()}" order {int(order)} overwrite',
             f'save as "{cub_path.as_posix()}" overwrite',

@@ -68,6 +68,7 @@ def test_sector_spectrum_is_psd_and_dispatch_is_the_near_family():
     assert w[0] > -1e-8, f"demag spectrum lost PSD: min eig {w[0]:.3e}"
     assert stats["hex_near_inner_exact"] == 1.0
     assert stats["hex_near_inner_host_cone"] == 1.0
+    assert stats["hex_pair_duffy_enabled"] == 1.0 and stats["hex_glpair_n"] == 8.0
     assert stats["hex_cluster_radius_enabled"] == 1.0
     assert stats["hex_glnear_n"] == 8.0 and stats["hex_glout_n"] == 4.0
     assert stats["hex_glin_self_n"] == 8.0 and stats["hex_glin_n"] == 5.0
@@ -85,7 +86,7 @@ def test_sector_spectrum_stays_in_physical_band():
 
 def test_legacy_site_inner_is_a_flagged_override_and_differs():
     """The static-site radial survives only as a diagnostic A/B path: it is reported as a numerical
-    override and its touching-pair entries differ from the exact-anchor family."""
+    override; touching pairs are integrated by the pair-domain Duffy rule whichever inner is selected."""
     mesh = _sector_mesh()
     with ng.TaskManager():
         fes = ng.HDiv(mesh, order=1)
@@ -113,7 +114,10 @@ def test_legacy_site_inner_is_a_flagged_override_and_differs():
     site = G_site.entry(a, b)
     self_scale = np.sqrt(G_exact.entry(a, a) * G_exact.entry(b, b))
     rel = abs(exact - site) / self_scale
-    assert 1e-7 < rel < 1e-2, f"exact-anchor and site inners differ by {rel:.3e} of the self scale"
+    # touching pairs are owned by the pair-domain Duffy rule (2026-09-06), which ignores near_inner: the
+    # legacy site inner can only differ on the non-touching near band, so the touching entry is identical
+    assert rel < 1e-13, f"touching entry depends on near_inner ({rel:.3e} of the self scale)"
+    assert stats_exact["hex_pair_duffy_enabled"] == 1.0 and stats_site["hex_pair_duffy_enabled"] == 1.0
     with pytest.raises(ValueError):
         with ng.TaskManager():
             V._build_charge_gram_hex(fes, eps=1e-10, build_hmatrix=False, near_inner="newton")

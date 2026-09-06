@@ -316,7 +316,7 @@ the fast test lane. The obsolete `RADIA_HDIV_HEX_CACHE_STATS` alias was removed.
 | Diagnostic counters | `RADIA_HDIV_BLOCK_CACHE_STATS`, `RADIA_HDIV_HMATVEC_STATS` | Opt-in instrumentation; invalidates production timing claims. |
 | Failure injection | `RADIA_HDIV_TEST_FAIL_FILL_AFTER` | Test-only build failure; no public API and no successful result artifact. |
 | Performance/cache A/B | `RADIA_HDIV_HEX_BLOCK_CACHE_LIMIT`, `RADIA_HDIV_WEDGE_TRANS_CACHE`, `RADIA_HDIV_DISABLE_TRANS_CACHE` | Diagnostic benchmark paths; effective values are copied into `hmat_stats`. |
-| Numerical/path A/B | `RADIA_HDIV_CURVED_DIRECT`, `RADIA_HDIV_HEX_FAR_ONESIDED`, `RADIA_HDIV_WEDGE_FAR_ONESIDED`, `RADIA_HDIV_HEX_DISTORTED_FAR_FACTOR`, `RADIA_HDIV_HO_FAR_ONESIDED`, `RADIA_HDIV_DISABLE_HO_ANALYTIC_BLOCK`, `RADIA_HDIV_DISABLE_HO_IMAGE_BLOCK`, `RADIA_HDIV_DISABLE_HO_IMAGE_FAR`, `RADIA_HDIV_HEX_CLUSTER_RADIUS` | Non-production comparison paths; `hmat_stats.nonproduction_numerical_override_active` and `release_claim_eligible` make them fail-loud in provenance. |
+| Numerical/path A/B | `RADIA_HDIV_CURVED_DIRECT`, `RADIA_HDIV_HEX_FAR_ONESIDED`, `RADIA_HDIV_WEDGE_FAR_ONESIDED`, `RADIA_HDIV_HEX_DISTORTED_FAR_FACTOR`, `RADIA_HDIV_HO_FAR_ONESIDED`, `RADIA_HDIV_DISABLE_HO_ANALYTIC_BLOCK`, `RADIA_HDIV_DISABLE_HO_IMAGE_BLOCK`, `RADIA_HDIV_DISABLE_HO_IMAGE_FAR`, `RADIA_HDIV_HEX_CLUSTER_RADIUS`, `RADIA_HDIV_HEX_PAIR_DUFFY` | Non-production comparison paths; `hmat_stats.nonproduction_numerical_override_active` and `release_claim_eligible` make them fail-loud in provenance. |
 | Preconditioner A/B | `RADIA_HDIV_AUTO_JACOBI_TET_NFACE` | Measurement-only auto-policy threshold; the resolved threshold and branch are recorded in `preconditioner_policy`. |
 
 The native `stats()` surface records every effective C++ cache, quadrature,
@@ -1275,3 +1275,94 @@ each BDM DOF's composite charge (cell divergence plus boundary face charge,
 zero net) with one rule per DOF pair, i.e. the dipole-kernel formulation with
 analytic element integrals.  Heavy runs are hibino's (Gram build 350 s at
 45,792 DoF); LAB numbers above are relative.
+
+### 8.11 Pair-domain Duffy quadrature for touching HEX pairs (2026-09-06)
+
+Design (c) of section 8.10, the standard answer of the Galerkin BEM/VIE
+literature (Sauter-Schwab regularizing transformations; Reid's Taylor-Duffy
+for tetrahedron products), is implemented for BDM1: every TOUCHING host pair
+(self, shared face, shared edge, shared vertex; cell-cell, cell-face and
+face-face; affine or not) is integrated on its `(d_T + d_S)`-dimensional
+product domain by `QuadBlockHexPairDuffy`.  `HexPairAdjacencyOf` reads the
+shared entity and the canonical frames (axis permutation plus flips per host)
+off the coincident Q2 lattice nodes after the image transform.  In canonical
+coordinates the relative in-entity coordinates `u = zeta_S - zeta_T` and the
+transverse coordinates form a cone vector whose max-norm `w` is the Duffy
+variable: one subdomain per dominant coordinate (two signs for a relative
+one) times the signs of the other relative coordinates -- the intersection-box
+lengths `1 - |u_i|` are smooth only on a fixed sign, and without that split the
+rule converged algebraically (unit-cube self-energy `-3.1 %` at 4 points,
+`-1.4 %` at 6).  The Jacobian `w^(k-1)` cancels `1/r = 1/(w X)` with `X`
+smooth and nonvanishing for any Q2 map, so the analytic radial reduction of
+Taylor-Duffy (which needs affine elements) is not required: tensor Gauss on the
+unit hypercube converges exponentially.  Measured with `glpair_n` points per
+dimension (`pair_duffy_check.py`, LAB): the unit-cube Coulomb self-energy
+`1.88231264438961` is reproduced to `2.5e-6` (4), `4.9e-9` (6), `1.8e-12` (8);
+the unit-square self-energy `2.9732095982` to `1.8e-6`, `4.1e-9`, `1.2e-11`;
+on a `2x2x2` lattice warped by `1e-7` every touching block changes by `1.4e-4`
+(4 to 6), `6.2e-9` (6 to 8) and `4.6e-12` (8 to 10).  The default is 8.  The
+non-touching pairs inside the near band take the plain product rule with the
+same point count (`QuadBlockHexProductN`; the hosts are separated, so the
+integrand is smooth), after the class-wise comparison of the `-5.0e-3` mode
+showed that band as the largest remaining error class (`+2.9e-3` of the mode's
+energy moved when its rules were refined, against `3e-5` for the touching
+face-face blocks).  `RADIA_HDIV_HEX_PAIR_DUFFY=0` restores the block-wise near
+family for A/B and is reported as a numerical override.
+
+With the pair rule, the near-band product rule and the non-conforming
+fallback in place the #6 gate on hibino (Gram 1220 s, 45792 faces) still broke
+the production CG at iteration 93 (`p^T A p = -2.2e11`), with the element
+clusters PSD (`lambda_max 0.9004`), the LOBPCG `lambda_min` Ritz stalled at
+`-4.9e-7` and `lambda_max` Ritz `1.027`.  That pointed away from quadrature and
+at the mesh itself (section 8.12).
+
+### 8.12 The #6 mesh was non-conforming: unmerged Cubit partitions (2026-09-06)
+
+`HexPairAdjacencyOf` refused a face pair that shares exactly two lattice nodes,
+and a node-coincidence survey of the 4768 hosts of the #6 mesh explained the
+remaining negative energy: 512 pairs of geometrically identical boundary faces
+and 832 hanging-node contacts (2:1 transitions).  The reason is the journal
+generator, not Cubit: `export_esrf_cubit_assets` imported the forty
+partitioned iron solids and meshed them with `scheme auto` plus a `submap`
+retry, but never issued `imprint volume all` / `merge volume all`, although
+the partition was designed (docstring of `build_esrf_cubit_hdiv_iron`) so that
+the exporter drops the shared same-material surfaces -- which it does only for
+merged volumes.  Every constructive interface therefore left the mesh as two
+coincident boundary faces carrying opposite surface charges, and unequal
+neighbour intervals left hanging nodes.  The `+-sigma` twins are exactly the
+`+0.0543 / -0.0543` "self face / touching face-face" cancellation of the
+`-5.0e-3` mode in section 8.9, and the hanging-node contacts (no canonical
+frames, graded near family) carry the residual seen after section 8.11.
+Examples 3, 5 and 7 were meshed by the same journal and had the same defect.
+
+The fix is in the journal generator: every solver journal now imprints and
+merges before the sideset, and #6 -- whose forty solids are all 60 mm
+extrusions along the beam axis -- sweeps every volume explicitly from its
+lower to its upper end faces inside an APREPRO loop (`volume {_v} scheme sweep
+source surface in volume {_v} with x_coord < lo+tol target surface ... >
+hi-tol`), because `scheme auto` and `submap` cannot interval-match the eight
+merged hyperbolic pole tips, one sweep command may not name several volumes,
+and the tolerance must be `1e-3` of the extent (the imprinted lateral faces of
+the tips do not all span the full length; a quarter-extent tolerance pulled
+them into the source set and Cubit demanded multisweep).  Headless Cubit
+2025.12 on LAB: 2408 HEX, 2200 boundary faces, 3616 nodes, order-2 curving,
+`check-vol` PASSED, conforming (0 hanging facets, 0 duplicated faces), and
+byte-identical from the python probe and the generated journal.  Examples 3, 5
+and 7 still mesh and export conforming meshes (144 HEX, 1112 HEX, 367845 TET).
+`validate_hex_gram_definiteness.py` now surveys the conformity and refuses a
+non-conforming mesh unless `--allow-nonconforming`; the mesh policy records
+`iron_sweep_axis` and `conforming_partition`.
+
+**Gate result (hibino, conforming mesh, pair-domain Duffy family,
+`results/hex_gram_definiteness_hibino.json`): PASSED.**  Gram 1567 s for
+62192 face unknowns; element clusters PSD (`lambda_min -3.8e-16`,
+`lambda_max 0.8891`); the production chi0-warmstart CG converges at every
+floor of the scan -- 431 iterations at `mu_r ~ 2001`, 486 at 4001, 542 at
+8002, 598 at 16003 -- where the non-conforming mesh broke down at iteration
+93; LOBPCG `lambda_min` Ritz `+5.0e-21`, `lambda_max` Ritz `0.99990` (inside
+the physical band `[0, 1]`, against `1.027` before); raw versus H-matrix
+quadratic form along the minimizing direction agree to `1.3e-33` (M-metric).
+The quadrature work of sections 8.9-8.11 stays (it is what makes the merged
+mesh's touching pairs consistent to `1e-12`), but the defect that made
+example 6 alone indefinite was the mesh.  Next validation target: the CEFC
+2020 Q-mag quadrupole (`validation_test/quadrupole_cefc2020/`).

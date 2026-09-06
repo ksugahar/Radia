@@ -292,7 +292,8 @@ public:
                         std::vector<int> image_masks = {}, std::vector<double> image_signs = {},
                         std::vector<double> gl_near = {}, std::vector<double> gw_near = {},
                         bool near_inner_exact = true,
-                        std::vector<double> gl_in_self = {}, std::vector<double> gw_in_self = {});
+                        std::vector<double> gl_in_self = {}, std::vector<double> gw_in_self = {},
+                        std::vector<double> gl_pair = {}, std::vector<double> gw_pair = {});
 
     // 2D PLANAR mode (2026-07-03, the motor cross-section layer; memory hdiv-vim-tri-quad-motor):
     // charges rho = -div M on 2D cells (BDM1: TRI P0 / QUAD Q1; BDM2: TRI P1 / QUAD Q2)
@@ -945,6 +946,7 @@ private:
     // inner (the source-host reference inverse of the outer point) instead of the static-site radial.
     std::vector<double> m_glNear, m_gwNear;             // 1D [0,1] Gauss -> endpoint-graded tensor OUTER of near/self hosts
     std::vector<double> m_glInSelf, m_gwInSelf;         // 1D [0,1] Gauss -> the RADIAL inner of SELF pairs (finer than m_glIn)
+    std::vector<double> m_glPair, m_gwPair;             // 1D [0,1] Gauss per dimension of the pair-domain Duffy rule
     bool m_nearInnerExact = true;                       // false = legacy static-site radial (diagnostic only)
     std::vector<double> m_farTetP, m_farTetW;           // cheap FAR inner tet rule (bary; W sums 1/6)
     std::vector<double> m_farTriP, m_farTriW;           // cheap FAR inner tri rule (bary; W sums 1/2)
@@ -1185,6 +1187,7 @@ private:
     mutable std::atomic<long long> m_hexBlkAffineFar{0};
     mutable std::atomic<long long> m_hexBlkDistortedFar{0};
     mutable std::atomic<long long> m_hexBlkGeneralNear{0};
+    mutable std::atomic<long long> m_hexPairNonconforming{0};   // touching pairs without canonical frames (hanging nodes)
     mutable std::atomic<long long> m_hexBlkGeneralFar{0};
     mutable std::atomic<long long> m_hexNsAffineNear{0};
     mutable std::atomic<long long> m_hexNsAffineFar{0};
@@ -1208,6 +1211,29 @@ private:
     // TOUCHING hex hosts (a shared Q2 lattice node after the image transform): always the graded near
     // family, never the far tensor product, whatever the centroid-separation ratio says.
     bool HexHostsTouch(int kindT, int hT, int kindS, int hS, int img) const;
+    // Shared lattice entity of a touching host pair (2026-09-06): entity_dim = 0 vertex, 1 edge, 2 face,
+    // 3 identical cells (-1 = not touching) and the canonical frames (axis permutation + flips) that put
+    // the shared entity at zeta_k = 1 (target) / zeta_k = 0 (source) for k >= entity_dim with matching
+    // in-entity coordinates, derived from the coincident Q2 lattice nodes after the image transform.
+    struct HexPairAdjacency {
+        int entity_dim = -1;
+        int permT[3] = {0, 1, 2}, flipT[3] = {0, 0, 0};
+        int permS[3] = {0, 1, 2}, flipS[3] = {0, 0, 0};
+    };
+    HexPairAdjacency HexPairAdjacencyOf(int kindT, int hT, int kindS, int hS, int img) const;
+    // TOUCHING pairs of the BDM1 family: the (dT + dS)-dimensional product integral is regularized on
+    // the product domain itself (Sauter-Schwab / Taylor-Duffy pattern): relative in-entity coordinates
+    // u = zeta_S - zeta_T plus the transverse coordinates form a cone vector c whose max-norm w is the
+    // Duffy variable (one subdomain per dominant coordinate, two signs for the relative ones), so
+    // |Phi_T - Phi_S| = w X with X smooth and nonvanishing and the Jacobian w^(k-1) cancels the 1/r
+    // singularity; the remaining in-entity coordinates run over the intersection box.  Tensor Gauss on
+    // the unit hypercube converges exponentially, which the block-wise near family (graded outer x
+    // separate inner) cannot: on ESRF #6 the near-zero modes are 1e-3 cancellations of block energies,
+    // so 1e-8 block accuracy is required (memory hdiv_hex_gram_m_metric_amplification).
+    std::vector<double> QuadBlockHexPairDuffy(int kindT, int hT, int kindS, int hS, int img) const;
+    // Non-touching pairs inside the near band (BDM1): plain tensor Gauss on both reference domains with
+    // the pair rule (the hosts are separated, so the integrand is smooth).
+    std::vector<double> QuadBlockHexProductN(int kindT, int hT, int kindS, int hS, int img) const;
     // NEAR host pairs (self / touching / within near_grade): endpoint-graded tensor outer over the whole
     // target host, exact-anchor radial (or far cloud) inner per source sub-simplex.
     std::vector<double> QuadBlockHexNearTensor(int kindT, int hT, int kindS, int hS, int img,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import numpy as np
@@ -421,14 +422,48 @@ def test_all_esrf_examples_have_cubit_hex_preferred_mesh_policy(number):
     assert policy["regions"]["permanent_magnet"]["response_unknown"] is False
 
 
-@pytest.mark.parametrize("number", [3, 5, 6])
-def test_every_esrf_yoke_requires_cubit_hex(number):
+@pytest.mark.parametrize("number, scheme", [(3, "auto"), (5, "auto"), (6, "sweep")])
+def test_every_esrf_yoke_requires_cubit_hex(number, scheme):
     policy = get_esrf_cubit_mesh_policy(number)
     assert policy["regions"]["iron"] == {
         "present": True,
         "required_family": "HEX",
-        "scheme": "auto",
+        "scheme": scheme,
     }
+    assert policy["conforming_partition"] == "imprint volume all; merge volume all"
+    assert policy["iron_sweep_axis"] == (0 if number == 6 else None)
+
+
+@pytest.mark.parametrize("number", [3, 5, 6, 7])
+def test_cubit_journal_merges_partitioned_solids_before_meshing(number, tmp_path):
+    # Unmerged constructive solids export every interface twice (coincident
+    # boundary faces with opposite charges) and leave hanging nodes; Example 6
+    # measured 512 duplicated face pairs and an indefinite HEX charge Gram.
+    pytest.importorskip("netgen.occ")
+    manifest = export_esrf_cubit_assets(number, tmp_path)
+    journal = Path(manifest["journal"]).read_text(encoding="utf-8")
+    assert (journal.index("import step") < journal.index("imprint volume all")
+            < journal.index("merge volume all") < journal.index("mesh volume all"))
+    assert "hex_recovery" not in journal
+    assert "list volume with not is_meshed" in journal
+
+
+def test_example6_cubit_journal_sweeps_every_volume_along_the_beam_axis(tmp_path):
+    pytest.importorskip("netgen.occ")
+    manifest = export_esrf_cubit_assets(6, tmp_path)
+    journal = Path(manifest["journal"]).read_text(encoding="utf-8")
+    assert "volume all scheme" not in journal
+    assert "#{Loop(_n)}" in journal and "#{EndLoop}" in journal
+    sweep = [line for line in journal.splitlines() if "scheme sweep" in line]
+    assert len(sweep) == 1
+    match = re.fullmatch(
+        r"volume \{_v\} scheme sweep source surface in volume \{_v\} with x_coord < (-0\.0299\d*) "
+        r"target surface in volume \{_v\} with x_coord > (0\.0299\d*)", sweep[0])
+    assert match, sweep[0]
+    # The end faces sit at x = -+30 mm; the tolerance is 1e-3 of the extrusion length.
+    assert abs(float(match.group(1)) + 0.03) < 1.0e-4 and abs(float(match.group(2)) - 0.03) < 1.0e-4
+    assert not any(line.strip().startswith("volume ") and line.split()[1].isdigit()
+                   for line in journal.splitlines())
 
 
 def test_example7_explicitly_uses_curved_tet_until_cad_partitioning_exists():
