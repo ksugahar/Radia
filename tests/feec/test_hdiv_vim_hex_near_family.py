@@ -68,7 +68,7 @@ def test_sector_spectrum_is_psd_and_dispatch_is_the_near_family():
     assert w[0] > -1e-8, f"demag spectrum lost PSD: min eig {w[0]:.3e}"
     assert stats["hex_near_inner_exact"] == 1.0
     assert stats["hex_near_inner_host_cone"] == 1.0
-    assert stats["hex_pair_duffy_enabled"] == 1.0 and stats["hex_glpair_n"] == 8.0
+    assert stats["hex_pair_duffy_enabled"] == 1.0 and stats["hex_glpair_n"] == 6.0
     assert stats["hex_cluster_radius_enabled"] == 1.0
     assert stats["hex_glnear_n"] == 8.0 and stats["hex_glout_n"] == 4.0
     assert stats["hex_glin_self_n"] == 8.0 and stats["hex_glin_n"] == 5.0

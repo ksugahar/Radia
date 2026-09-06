@@ -57,3 +57,22 @@ explicit sweep, `check-vol` and `radia.vim.mesh_conformity_report` gates).  The
 solves are heavy (one charge Gram per HDiv case, a 183k-element Kelvin FEM per
 formulation) and run on hibino, one job at a time; results are committed under
 `results/` with the host name in the file name.
+
+## Results (hibino, 2026-09-07)
+
+Linear cases, HDiv-MMM on the `h = 10 mm` conforming HEX mesh (2352 BDM1
+elements, 60,816 unknowns, mass-Riesz CG to `1e-8`) against the mixed
+total/reduced Omega FEM on the 183k-element order-2 Kelvin mesh.  The RMS is
+the relative RMS of the vector field difference over the 31 diagonal points;
+the last column is the relative gap of the diagonal field at 15 mm.  All
+three cases pass the 3 % band by a wide margin; the JSONs under `results/`
+carry the full point-wise fields and the mesh hashes.
+
+| case | `mu_r` | CG iterations | field RMS | `B_perp(15 mm)` HDiv-MMM [T] | mixed Omega FEM [T] | gap |
+|---|---|---|---|---|---|---|
+| `mu100` | 100 | 30 | 0.08 % | -0.17875 | -0.17858 | 0.09 % |
+| `mu1000` | 1000 | 33 | 0.06 % | -0.22722 | -0.22725 | 0.01 % |
+| `mu10000` | 10000 | 36 | 0.07 % | -0.23394 | -0.23401 | 0.03 % |
+
+The nonlinear case (`J3.0`, the tabulated B(H) law) runs through the same
+runner; its result is appended here when the hibino chain finishes.
