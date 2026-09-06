@@ -2092,6 +2092,8 @@ void RadHACApKChargeGram::PrecomputeCurvedTouchBlocks()
     }
     m_curvedTouchBlocks.clear();
     m_curvedTouchBlocks.resize(pairs.size());
+    const int touch_tasks = std::max(1, std::min((int)pairs.size(),
+                                                 32 * std::max(1, ngcore::TaskManager::GetNumThreads())));
     ngcore::ParallelFor(ngcore::IntRange(pairs.size()), [&](size_t pair_index) {
         const int ga = pairs[pair_index].first, gb = pairs[pair_index].second;
         const int kindA = ga < n_cell ? 0 : 1, hostA = ga < n_cell ? ga : ga-n_cell;
@@ -2115,7 +2117,7 @@ void RadHACApKChargeGram::PrecomputeCurvedTouchBlocks()
                         0.5*(ab[(size_t)la*nB + lb] + ba[(size_t)lb*nA + la]);
         }
         m_curvedTouchBlocks[pair_index] = std::move(sym);
-    });
+    }, touch_tasks);
     const auto stop = std::chrono::high_resolution_clock::now();
     m_curvedTouchBuildTime = std::chrono::duration<double>(stop-start).count();
 }
@@ -4238,6 +4240,12 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexCacheStats()
     out.emplace_back("hex_general_shared_lookups", ld(m_hexGeneralSharedLookups));
     out.emplace_back("hex_general_shared_hits", ld(m_hexGeneralSharedHits));
     out.emplace_back("hex_general_shared_misses", ld(m_hexGeneralSharedMisses));
+    {
+        // Distinct keys held by the shared cache.  With compute-once, misses == entries; the pair
+        // is kept so a regression back to duplicated evaluation would show as misses > entries.
+        std::shared_lock<std::shared_mutex> rl(m_hexGeneralSharedMutex);
+        out.emplace_back("hex_general_shared_entries", (double)m_hexGeneralSharedCache.size());
+    }
     out.emplace_back("wedge_far_one_sided_threshold", wedge_far_one_sided);
     out.emplace_back("wedge_trans_cache_scope", (double)wedge_trans_scope);
     out.emplace_back("wedge_trans_cache_enabled", wedge_trans_scope > 0 ? 1.0 : 0.0);
@@ -7106,19 +7114,29 @@ const std::vector<double>& RadHACApKChargeGram::GetHexBlock(int kindT, int hT, i
             key.qx = key.qy = key.qz = 0;
         }
         m_hexGeneralSharedLookups.fetch_add(1, std::memory_order_relaxed);
+        HexSharedBlockSlot* slot = nullptr;
         {
             std::shared_lock<std::shared_mutex> rl(m_hexGeneralSharedMutex);
             auto it = m_hexGeneralSharedCache.find(key);
             if (it != m_hexGeneralSharedCache.end()) {
                 m_hexGeneralSharedHits.fetch_add(1, std::memory_order_relaxed);
-                return it->second;
+                slot = it->second.get();
             }
         }
-        std::vector<double> blk = QuadBlockHex(kindT, hT, kindS, hS, img);
-        m_hexGeneralSharedMisses.fetch_add(1, std::memory_order_relaxed);
-        std::unique_lock<std::shared_mutex> wl(m_hexGeneralSharedMutex);
-        auto it = m_hexGeneralSharedCache.emplace(key, std::move(blk)).first;   // racing first insert wins
-        return it->second;
+        if (!slot) {
+            std::unique_lock<std::shared_mutex> wl(m_hexGeneralSharedMutex);
+            auto it = m_hexGeneralSharedCache.find(key);
+            if (it == m_hexGeneralSharedCache.end())
+                it = m_hexGeneralSharedCache.emplace(key, std::make_unique<HexSharedBlockSlot>()).first;
+            slot = it->second.get();
+        }
+        // Compute-once: exactly one thread evaluates the block; the others block here until it is
+        // stored.  A throwing evaluation leaves the flag unset, so the next caller retries.
+        std::call_once(slot->once, [&]() {
+            slot->blk = QuadBlockHex(kindT, hT, kindS, hS, img);
+            m_hexGeneralSharedMisses.fetch_add(1, std::memory_order_relaxed);
+        });
+        return slot->blk;
     }
     if (use_trans_cache) {
         HexStatAdd(m_hexCacheStatsEnabled, m_hexTransBlockLookups);
@@ -7851,6 +7869,10 @@ void RadHACApKChargeGram::ComputeChargeSigma()
         // build's own region, so it stands up its own.
         ngcore::RegionTaskManager rtm(
             std::max(1, (int)ngcore::TaskManager::GetMaxThreads()));
+        // Fine tasks (not one chunk per thread): the self-entries are host-ordered and on a HEX mesh
+        // the first touch of each near block class is the whole cost, so a static split leaves the
+        // workers that drew already-cached classes idle.
+        const int sigma_tasks = std::max(1, std::min(m_n, 32 * std::max(1, ngcore::TaskManager::GetNumThreads())));
         ngcore::ParallelFor(ngcore::IntRange(m_n), [&](size_t p) {
             const double d = GetInteractionMatrixElementRaw((int)p, (int)p);
             if (images_folded) {
@@ -7871,7 +7893,7 @@ void RadHACApKChargeGram::ComputeChargeSigma()
             int expected = -1;
             if (bad_charge.compare_exchange_strong(expected, (int)p))
                 bad_value = d;
-        });
+        }, sigma_tasks);
     }
     if (bad_charge.load() >= 0)
         throw std::runtime_error(

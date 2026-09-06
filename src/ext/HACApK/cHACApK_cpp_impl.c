@@ -459,6 +459,9 @@ int HACApK_build_hmatrix_wrapper(
     ndpth = 0;
     nclst = 0;
 
+    /* Build-phase wall clocks (ctl->time[90..92]: cluster tree + boxes, leaf generation + sort,
+     * ACA+ fill) read back by RadHACApKBase::BuildHMatrix into the published stats. */
+    double t_phase = matvec_wall_time();
     cHACApK_generate_cbitree(&st_clt, gmid_t, ctl->param, ctl->lpmd, lodfc,
                               &ndpth, 0, 1, nofc, nofc, ndim, &nclst);
 
@@ -468,6 +471,7 @@ int HACApK_build_hmatrix_wrapper(
 
     /* Compute bounding boxes */
     cHACApK_bndbox(st_clt, gmid_t, lodfc, nofc);
+    ctl->time[90] = matvec_wall_time() - t_phase;
 
     /* Map element ordering to DOF ordering */
     for (il = 1; il <= nofc; il++) {
@@ -521,6 +525,7 @@ int HACApK_build_hmatrix_wrapper(
         printf("[HACApK] Generating leaf matrix structure...\n");
         fflush(stdout);
     }
+    t_phase = matvec_wall_time();
     cHACApK_generate_leafmtx(st_leafmtx, st_clt, st_clt, ctl->param, ctl->lpmd,
                               lnmtx, nofc, nffc, &nlf, &ndpth);
 
@@ -535,6 +540,7 @@ int HACApK_build_hmatrix_wrapper(
         fflush(stdout);
     }
     cHACApK_sort_leafmtx(st_leafmtx, nlf);
+    ctl->time[91] = matvec_wall_time() - t_phase;
     if (print_level > 0) {
         printf("[HACApK] Sort completed\n");
         fflush(stdout);
@@ -577,9 +583,11 @@ int HACApK_build_hmatrix_wrapper(
                    nlf, (int)ctl->param[63], nd);
             fflush(stdout);
         }
+        t_phase = matvec_wall_time();
         cHACApK_fill_leafmtx_hyp(st_leafmtx, i_bemv, ctl->param, znrmmat,
                                   ctl->lpmd, lnmtx, ctl->lod, ctl->lod, nd, nlf,
                                   lnps, lnpe, ctl->lthr);
+        ctl->time[92] = matvec_wall_time() - t_phase;
         if (print_level > 0) {
             printf("[HACApK] ACA+ fill completed\n");
             fflush(stdout);
@@ -1836,6 +1844,12 @@ int HACApK_leafmtxp_get_ktmax(void *ptr) {
 int* HACApK_lcontrol_get_lod(void *ptr) {
     st_cHACApK_lcontrol ctl = (st_cHACApK_lcontrol)ptr;
     return ctl ? ctl->lod : NULL;
+}
+
+double HACApK_lcontrol_get_time(void *ptr, int idx) {
+    st_cHACApK_lcontrol ctl = (st_cHACApK_lcontrol)ptr;
+    if (!ctl || !ctl->time || idx < 0 || idx >= 100) return 0.0;
+    return ctl->time[idx];
 }
 
 /*=========================================================================
