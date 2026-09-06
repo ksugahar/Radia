@@ -1676,15 +1676,19 @@ def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=1.0, far_i
     # glpair_n = the 1D Gauss rule per dimension of the pair-domain Duffy quadrature that integrates every
     # TOUCHING BDM1 host pair (self, shared face/edge/vertex) on its (dT + dS)-dimensional product domain
     # (2026-09-06): the near-zero modes of M^-1 N are 1e-3 cancellations of block energies, so the touching
-    # blocks need ~1e-8 accuracy, which only the exponentially convergent pair-domain rule delivers.
-    glpair_n = 8 if glpair_n is None else int(glpair_n)
+    # blocks need the exponentially convergent pair-domain rule.  Default 6 points (2026-09-07): the ESRF #6
+    # definiteness gate gives the same spectrum edge (lambda_max 0.99990) at 5, 6 and 8 points, the tapered
+    # sector lattice the same generalized spectrum at all three, and the CEFC 2020 quadrupole field moves by
+    # 4e-6 (relative) between 8 and 6 points -- against a 6^6 / 8^6 = 5.6x cheaper near block.  8 remains an
+    # explicit choice for entry-level accuracy studies (7e-5 -> 6e-6 on distorted hosts).
+    glpair_n = 6 if glpair_n is None else int(glpair_n)
     if glpair_n < 2:
         raise ValueError("_build_charge_gram_hex: glpair_n must be >= 2 (got %r)" % (glpair_n,))
     # glpair_affine_n = the same rule for pairs whose BOTH hosts are affine (2026-09-07).  With affine
     # maps the Duffy integrand converges exponentially (unit-cube self-energy 5e-9 at 6 points), while a
     # distorted host converges only ~10x per two points (tapered sector lattice: 7e-5 at 6, 6e-6 at 8),
-    # so the affine-affine pairs -- most pairs of a swept magnet mesh -- take the cheaper count (6^6
-    # against 8^6 point pairs, 5.6x per block) at no accuracy cost.
+    # so the affine-affine pairs -- most pairs of a swept magnet mesh -- can always take the smaller count.
+    # Both defaults are 6 now; the knob stays so an accuracy study can raise glpair_n alone.
     glpair_affine_n = 6 if glpair_affine_n is None else int(glpair_affine_n)
     if glpair_affine_n < 2:
         raise ValueError("_build_charge_gram_hex: glpair_affine_n must be >= 2 (got %r)" % (glpair_affine_n,))

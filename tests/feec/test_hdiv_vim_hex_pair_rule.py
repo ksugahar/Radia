@@ -1,8 +1,9 @@
 """Pair-domain Duffy rule: the affine-pair point count and the exact unit-cube constants.
 
 The rule integrates every touching BDM1 host pair on its product domain.  For AFFINE hosts the
-integrand converges exponentially, so affine-affine pairs take 6 points per dimension
-(``glpair_affine_n``), distorted pairs 8 (``glpair_n``).  The unit cube has closed-form self
+integrand converges exponentially; affine-affine pairs take ``glpair_affine_n`` points per
+dimension and pairs with a distorted host ``glpair_n`` (both default 6 since 2026-09-07, when the
+definiteness gate and the quadrupole field proved insensitive to 8 -> 6).  The unit cube has closed-form self
 energies: cube-cube 1.88231264438961 and face-face 2.9732095982 (times 1/(4 pi) in the Gram).
 """
 
@@ -43,7 +44,7 @@ def _constant_charges(cb):
 
 def test_affine_pairs_take_six_points_and_reproduce_the_unit_cube_constants():
     Gd, stats, cb = _dense(MakeStructured3DMesh(hexes=True, nx=1, ny=1, nz=1))
-    assert stats["hex_glpair_n"] == 8.0 and stats["hex_glpair_affine_n"] == 6.0
+    assert stats["hex_glpair_n"] == 6.0 and stats["hex_glpair_affine_n"] == 6.0
     assert stats["hex_pair_duffy_enabled"] == 1.0
     cell, faces = _constant_charges(cb)
     assert abs(Gd[cell, cell] * FOUR_PI - CUBE_SELF) / CUBE_SELF < 2.0e-8      # 4.9e-9 measured at 6 points

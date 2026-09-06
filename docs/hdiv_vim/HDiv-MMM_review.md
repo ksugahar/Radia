@@ -1455,11 +1455,11 @@ exponentially when both hosts are affine (unit-cube self-energy `4.9e-9` at
 hosts (tapered sector lattice, entry error against a 10-point reference,
 touching / near band: `5.4e-4 / 1.0e-3` at 4, `4.2e-4 / 3.0e-4` at 5,
 `7.4e-5 / 8.4e-5` at 6, `6.3e-6 / 7.3e-6` at 8; the band needs the same count
-as the touching class).  Affine-affine pairs therefore take `glpair_affine_n`
-= 6 and pairs with a distorted host `glpair_n` = 8 (`vim.ChargeGram(
-hex_glpair_n=..., hex_glpair_affine_n=...)`, published in `hmat_stats`): on a
-swept magnet most near blocks cost `6^6` instead of `8^6` point pairs (5.6x)
-and the distorted pole tips keep their accuracy.
+as the touching class).  The first design took `glpair_affine_n` = 6 for
+affine-affine pairs and `glpair_n` = 8 for pairs with a distorted host
+(`vim.ChargeGram(hex_glpair_n=..., hex_glpair_affine_n=...)`, both published
+in `hmat_stats`); the gate and field evidence below then made 6 the default
+for every pair, and the two knobs remain for accuracy studies.
 
 The example-6 definiteness gate on the conforming mesh, rerun with the shared
 cache and the pair point count forced to 5, 6 and 8 for every pair (hibino,
@@ -1478,9 +1478,53 @@ The post-build phases collapse exactly as the entry-recompute diagnosis
 predicts (2785 s to 1 s, 2083 s to 5 s for the same 431 iterations), the
 whole gate now takes minutes instead of hours, and the spectrum edge is the
 same `0.99990` at 5, 6 and 8 points with CG iteration counts within a few
-per cent of each other.  Example 6's distorted hosts (the hyperbolic pole
-tips) are mild; the tapered sector lattice of the near-family test is the
-harder case and keeps the committed default of 8 points for pairs with a
-distorted host.  At 6 points example 6 builds at 2.1 ms per unknown, at 5
-points at 0.8 ms, against the TET route's 1.1 ms per unknown: the HEX Gram
-build is now of the same order as TET.
+per cent of each other.  The tapered sector lattice of the near-family test
+(the harder distorted case) gives the same generalized spectrum at 8, 6 and 5
+points (`lambda_max` 0.99813 / 0.99813 / 0.99812, `lambda_min` at round-off),
+and the CEFC 2020 quadrupole field on the `h = 15 mm` mesh (LAB, `mu_r =
+1000`, `B_perp(15 mm)`) moves by `4e-6` relative between 8 and 6 points and by
+`6e-5` between 8 and 5 (`-0.227134`, `-0.227135`, `-0.227147` T), two orders
+below the 0.3 % FEM agreement.  The production default is therefore **6 points
+for every pair** (`glpair_n` = `glpair_affine_n` = 6, 2026-09-07); 8 stays an
+explicit choice for entry-level accuracy studies, 5 is acceptable on the
+evidence but not the default.  On the quadrupole `h = 15 mm` mesh most near
+pairs involve a distorted host, so this flip (not the affine-pair rule) is
+what brought that build from 615 s to 119 s on LAB.  At 6 points example 6
+builds at 2.1 ms per unknown, at 5 points at 0.8 ms, against the TET route's
+1.1 ms per unknown: the HEX Gram build is now of the same order as TET.
+
+### 8.14 Parallel efficiency of the build: a static leaf schedule (2026-09-07)
+
+With the near family cut down, the build-phase timers (`build_prep_s`,
+`build_cluster_s`, `build_leafgen_s`, `build_fill_s`, `build_diag_s` in
+`hmat_stats`, from HACApK `ctl->time[90..92]` and the base build) showed
+where the remaining wall time went: on the quadrupole `h = 10 mm` build on
+LAB, prep (the self-energy pass `ComputeChargeSigma`) 219 s and the ACA+ fill
+658 s of 878 s, cluster tree / leaf generation / diagonal cache below a
+second.  Yet the quadrature branches summed to only a quarter of the thread
+capacity (hibino: 4,275 thread-seconds against 38 x 448 s; the LAB process
+ran on about half its cores).  The cause was the schedule, not the work:
+`hacapk_parallel_for` called `ngcore::ParallelFor` with the default task
+count, which splits the range into one contiguous chunk per thread -- a
+static schedule over a leaf list sorted by row block, whose leaves differ by
+five orders of magnitude in cost (a dense near leaf of Duffy pair blocks
+against a far low-rank leaf) and whose lower-triangular half is skipped by
+the symmetric fill.  The same one-chunk-per-thread split ran the
+self-energy pass over host-ordered charges, where the first touch of each
+near-block class is the whole cost.  The fix passes 32 tasks per thread to
+`ParallelFor` (the runtime pulls tasks from an atomic counter, so many tasks
+balance dynamically) in the leaf fill, the self-energy pass and the curved
+touch-block precompute.  The shared near-block cache also lost its "racing
+first insert wins" design: a per-key slot with `std::call_once` now makes
+concurrent misses wait for one evaluation instead of each recomputing the
+block (`hex_general_shared_entries` equals `hex_general_shared_misses`,
+locked by the congruent-cache test; on the quadrupole the duplication was
+five blocks in 26,000, so the gain is the schedule).
+
+Quadrupole `h = 15 mm`, `mu_r = 1000`, 6 points, LAB (8 threads, relative
+numbers only): Gram build 119 s -> 62 s, prep 28 s -> 5 s, fill 91 s -> 55 s,
+with the quadrature thread-seconds unchanged (382 -> 406 near, 44 far);
+450 thread-seconds over 8 workers is 56 s, so the build now runs at about 93 %
+parallel efficiency against about 40 % before.  Field unchanged
+(`B_perp(15 mm) = -0.227135 T`).  The hibino rerun of the committed timing
+table (`h = 10 mm`, 38 threads) is the number to quote.
