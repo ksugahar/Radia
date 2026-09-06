@@ -2228,7 +2228,7 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=64, eta=2.0, far_qu
                       _materialize_mass=True,
                       _build_hmatrix=True, internal_interfaces=False,
                       excluded_boundaries=(), cyclic_periodic_boundaries=(),
-                      gram_backend="hmat", exact_dense_memory_mb=None):
+                      gram_backend="hmat", exact_dense_memory_mb=None, hex_glpair_n=None):
     """From an HDiv FESpace (order p, the order from the fes), build the monomial charge-density map
     B (scipy CSR, n_charge x ndof), the C++ charge-Gram H-matrix G, and the HDiv mass M_mass (CSR).
     The CALLER wraps in TaskManager.
@@ -2398,7 +2398,10 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=64, eta=2.0, far_qu
             materialize_mass=_materialize_mass, build_hmatrix=_build_hmatrix,
             internal_interfaces=bool(internal_interfaces),
             excluded_boundaries=excluded_boundaries,
-            cyclic_periodic_boundaries=cyclic_periodic_boundaries)),
+            cyclic_periodic_boundaries=cyclic_periodic_boundaries,
+            # HEX-only rule count of the pair-domain Duffy / near-band product (None = the
+            # production 8 per dimension); the effective value is published as hex_glpair_n.
+            glpair_n=hex_glpair_n)),
             gram_backend=gram_backend, exact_dense_memory_mb=exact_dense_memory_mb)
     if _vtypes == {6}:
         # PURE-WEDGE (PRISM) BDM1/BDM2: tri-Pp x z-Pp volume charge + mixed tri/quad-face

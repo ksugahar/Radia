@@ -29,15 +29,31 @@ spacing (`r = -15..15 mm`); the summary value is `B_perp(15 mm)` and the gradien
 diagonal (quadrupole), converged nonlinear loop; mesh convergence is judged across
 the `qmag_h*.vol` series (15 / 10 / 6 / 4 mm: 980 / 2352 / 6040 / 16408 HEX).
 
+## Acceptance: agreement with the mixed total/reduced Omega FEM
+
+HDiv-MMM is accepted on this magnet when it agrees with the repository's own
+mixed total/reduced Omega formulation (and optionally HCurl reduced-A) on the
+same coils and the same iron law -- the same three-engine contract as the
+C-type and ESRF lanes.  `build_qmag_fem_mesh.py` builds the full-domain FEM
+mesh (iron + physical air sphere of 0.16 m + periodic Kelvin exterior, tets,
+order 2, bore refinement; ~183k elements) with the ESRF coil-yoke builder, and
+`run_qmag_three_engine.py` runs both formulations on the 31 diagonal points
+(the FEM field cube-averaged around each point because the points lie on the
+z = 0 mesh seam) and reports the relative RMS of the vector field difference
+and the `B_perp(15 mm)` gap against a 3 % band.
+
 ## Running
 
 ```powershell
 python build_qmag_cubit_mesh.py --output-dir C:\temp\radia-qmag\meshes --sizes 0.010 0.006 0.004
 python run_qmag_hdiv.py --mesh C:\temp\radia-qmag\meshes\qmag_h10.vol --case mu1000 --output results\qmag_h10_mu1000_hibino.json
 python run_qmag_hdiv.py --mesh C:\temp\radia-qmag\meshes\qmag_h10.vol --case J3.0 --output results\qmag_h10_J3.0_hibino.json
+python build_qmag_fem_mesh.py --output-dir C:\temp\radia-qmag\fem
+python run_qmag_three_engine.py --fem-mesh C:\temp\radia-qmag\fem\coil_yoke_kelvin.vol --fem-mesh-report C:\temp\radia-qmag\fem\qmag_fem_kelvin.mesh.json --case mu1000 --hdiv-result results\qmag_h10_mu1000_hibino.json --output results\three_engine_mu1000_hibino.json
 ```
 
-The mesh builder writes conforming z-swept HEX (imprint/merge, per-volume explicit
-sweep, `check-vol` and `radia.vim.mesh_conformity_report` gates).  The solves are
-heavy (one charge Gram per case) and run on hibino, one job at a time; results are
-committed under `results/` with the host name in the file name.
+The HEX mesh builder writes conforming z-swept HEX (imprint/merge, per-volume
+explicit sweep, `check-vol` and `radia.vim.mesh_conformity_report` gates).  The
+solves are heavy (one charge Gram per HDiv case, a 183k-element Kelvin FEM per
+formulation) and run on hibino, one job at a time; results are committed under
+`results/` with the host name in the file name.
