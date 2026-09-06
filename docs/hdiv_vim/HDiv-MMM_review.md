@@ -1459,6 +1459,28 @@ as the touching class).  Affine-affine pairs therefore take `glpair_affine_n`
 = 6 and pairs with a distorted host `glpair_n` = 8 (`vim.ChargeGram(
 hex_glpair_n=..., hex_glpair_affine_n=...)`, published in `hmat_stats`): on a
 swept magnet most near blocks cost `6^6` instead of `8^6` point pairs (5.6x)
-and the distorted pole tips keep their accuracy.  The example-6 gate at
-`glpair_n` 6 / 5 on the conforming mesh (queued on hibino) decides whether the
-distorted pairs can go lower; on the sector numbers they should not.
+and the distorted pole tips keep their accuracy.
+
+The example-6 definiteness gate on the conforming mesh, rerun with the shared
+cache and the pair point count forced to 5, 6 and 8 for every pair (hibino,
+`results/hex_gram_definiteness_glpair{5,6,8}_hibino.json`; the block-wise
+family arm is `results/hex_gram_definiteness_blockwise_family_hibino.json`):
+
+| Gram | build | cluster check | CG at the chi0 floor (431 it) | LOBPCG `lambda_max` | verdict |
+|---|---|---|---|---|---|
+| first gate, previous wheel, 8 points | 1567 s | 2785 s | 2083 s | 0.99990 | PASSED |
+| block-wise near family (no pair rule) | 431 s | 449 s | 218 s | 1.00165 | FAILED (band) |
+| shared cache, 8 points | 612 s | 1 s | 5 s | 0.99990 | PASSED |
+| shared cache, 6 points | 128 s | 1 s | 5 s | 0.99990 | PASSED |
+| shared cache, 5 points | 51 s | 1 s | 5 s | 0.99990 | PASSED |
+
+The post-build phases collapse exactly as the entry-recompute diagnosis
+predicts (2785 s to 1 s, 2083 s to 5 s for the same 431 iterations), the
+whole gate now takes minutes instead of hours, and the spectrum edge is the
+same `0.99990` at 5, 6 and 8 points with CG iteration counts within a few
+per cent of each other.  Example 6's distorted hosts (the hyperbolic pole
+tips) are mild; the tapered sector lattice of the near-family test is the
+harder case and keeps the committed default of 8 points for pairs with a
+distorted host.  At 6 points example 6 builds at 2.1 ms per unknown, at 5
+points at 0.8 ms, against the TET route's 1.1 ms per unknown: the HEX Gram
+build is now of the same order as TET.
