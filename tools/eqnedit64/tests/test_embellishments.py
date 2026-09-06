@@ -105,6 +105,22 @@ def main() -> int:
         else:
             seen_ou[svg] = kind
 
+    # A decoration must survive a round trip through the TeX the editor emits.
+    # emitDecoration drops an unmapped selector silently, so the equation would
+    # come back without it and the next load would rebuild something else.
+    for kind in OVER_UNDER + ("prime", "dprime", "hat", "strike"):
+        source = Equation()
+        source.insert_template(kind)
+        source.insert_text("a")
+        tex = source.latex()
+        again = Equation()
+        if not again.load_latex(tex):
+            failures.append(f"{kind}: emitted TeX does not load back: {tex!r}")
+            continue
+        if again.latex() != tex:
+            failures.append(
+                f"{kind}: not a fixed point: {tex!r} -> {again.latex()!r}")
+
     # A template the palette offers must be one the model accepts.
     known = set(Equation.templates())
     missing = [kind for kind in DECORATIONS + OVER_UNDER if kind not in known]
