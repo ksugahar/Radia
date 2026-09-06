@@ -56,6 +56,10 @@ def test_congruent_cache_engages_and_reproduces_the_uncached_gram(tmp_path):
     assert stats["hex_general_shared_lookups"] > 0
     assert stats["hex_general_shared_hits"] > 0.3 * stats["hex_general_shared_lookups"]
     assert stats["nondefault_performance_override_active"] == 0.0
+    # Compute-once: every miss is one distinct key, so no near block was evaluated twice by racing
+    # workers (the earlier "first insert wins" cache duplicated evaluations under contention).
+    assert stats["hex_general_shared_misses"] == stats["hex_general_shared_entries"] > 0
+    assert stats["hex_general_shared_lookups"] == stats["hex_general_shared_hits"] + stats["hex_general_shared_misses"]
 
     # Same Gram with the cache latched off in a fresh interpreter (the latch is read once per process).
     out = tmp_path / "uncached.npy"

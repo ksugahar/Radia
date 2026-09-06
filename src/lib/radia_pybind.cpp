@@ -4826,6 +4826,8 @@ PYBIND11_MODULE(_radia_pybind, m) {
                  d["n_dense"] = st.n_dense; d["max_rank"] = st.max_rank;
                  d["compression"] = st.compression; d["build_time"] = st.build_time;
                  d["memory_mb"] = st.memory_mb; d["dense_memory_mb"] = st.dense_memory_mb;
+                 d["build_prep_s"] = st.t_prep; d["build_cluster_s"] = st.t_cluster;
+                 d["build_leafgen_s"] = st.t_leafgen; d["build_fill_s"] = st.t_fill; d["build_diag_s"] = st.t_diag;
                  for (const auto& kv : s.HexCacheStats()) d[kv.first.c_str()] = kv.second;
                  return d;
              }, "H-matrix stats dict.");
