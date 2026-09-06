@@ -1569,10 +1569,17 @@ def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=1.0, far_i
                            materialize_mass=True, build_hmatrix=True,
                            internal_interfaces=False, excluded_boundaries=(),
                            cyclic_periodic_boundaries=(), glnear_n=None, near_inner="exact",
-                           glin_self_n=None):
+                           glin_self_n=None, glpair_n=None):
     """Pure-hex BDM1/BDM2 charge Gram via the hex-mode C++ _ChargeGramHMatrix.  FLAT and CURVED (mesh.Curve(2))
     share ONE path (the 27-node Q2 lattice is extracted via GetTrafo either way -- the caller Curve(2)'s the
     mesh for curved).
+
+    TOUCHING pairs (2026-09-06, BDM1): every pair of hosts sharing a Q2 lattice node (self, face, edge or
+    vertex neighbours; cell-cell, cell-face, face-face) is integrated on its (dT + dS)-dimensional product
+    domain by the pair-domain Duffy rule (``QuadBlockHexPairDuffy``, ``glpair_n`` points per dimension,
+    exponentially convergent: unit-cube self-energy to 1.8e-12 at 8 points); non-touching pairs inside the
+    ``near_grade`` band take the plain product rule with the same points (``QuadBlockHexProductN``).  The
+    block-wise near family below survives as the ``RADIA_HDIV_HEX_PAIR_DUFFY=0`` A/B path and for BDM2.
 
     NEAR family (2026-09-05, ESRF #6 HEX Gram indefiniteness): a host pair is NEAR when the hosts are the
     same, share a Q2 lattice node (touching), or lie within ``near_grade`` * (size_a + size_b) of each
@@ -1636,6 +1643,13 @@ def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=1.0, far_i
     # glin_self_n rules the sinh-substituted (peaked) directions of the cone/fan inner -- ray, fan radius,
     # edge parameter -- and glin_n the smooth ones; 8 points integrate the substituted peaks to ~1e-6.
     glin_self_n = (8 if p == 1 else glin_n) if glin_self_n is None else int(glin_self_n)
+    # glpair_n = the 1D Gauss rule per dimension of the pair-domain Duffy quadrature that integrates every
+    # TOUCHING BDM1 host pair (self, shared face/edge/vertex) on its (dT + dS)-dimensional product domain
+    # (2026-09-06): the near-zero modes of M^-1 N are 1e-3 cancellations of block energies, so the touching
+    # blocks need ~1e-8 accuracy, which only the exponentially convergent pair-domain rule delivers.
+    glpair_n = 8 if glpair_n is None else int(glpair_n)
+    if glpair_n < 2:
+        raise ValueError("_build_charge_gram_hex: glpair_n must be >= 2 (got %r)" % (glpair_n,))
     if near_inner not in ("exact", "site"):
         raise ValueError("_build_charge_gram_hex: near_inner must be 'exact' or 'site' (got %r)" % (near_inner,))
     cb = _charge_basis_hex(
@@ -1649,6 +1663,7 @@ def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=1.0, far_i
     gli, gwi = _g01(glin_n)
     gln, gwn = _g01(glnear_n)
     gls, gws = _g01(glin_self_n)
+    glp, gwp = _g01(glpair_n)
     ftp = np.asarray(_SYM5_TET[0]); ftw = np.asarray(_SYM5_TET[1])
     G = _rp._ChargeGramHMatrix(
         hex_cell_nodes=cb["cell_nodes"], quad_face_nodes=cb["face_nodes"],
@@ -1668,7 +1683,8 @@ def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=1.0, far_i
         build=bool(build_hmatrix) and not len(image_rot_angle),
         gl_near=_f64_buffer(gln), gw_near=_f64_buffer(gwn),
         near_inner_exact=(near_inner == "exact"),
-        gl_in_self=_f64_buffer(gls), gw_in_self=_f64_buffer(gws))
+        gl_in_self=_f64_buffer(gls), gw_in_self=_f64_buffer(gws),
+        gl_pair=_f64_buffer(glp), gw_pair=_f64_buffer(gwp))
     _finish_image_rotations(G, image_rot_angle, eps=eps, leafsize=leafsize, eta=eta,
                             build_hmatrix=bool(build_hmatrix))
     t2 = time.perf_counter()

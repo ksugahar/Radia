@@ -177,6 +177,35 @@ def lobpcg_generalized(G, M_geom, n_face, k, maxiter, seed=6):
     return vals, vecs, float(np.max(vals_hi)), time.perf_counter() - started
 
 
+def mesh_conformity(mesh) -> dict:
+    """Count non-conforming contacts: hanging facets and duplicated boundary faces.
+
+    A facet owned by exactly one volume element must be a boundary element; otherwise a
+    neighbour touches it through a hanging node (2:1 transition) or an unmerged interface.
+    Two boundary elements with coincident corner coordinates are the two sides of an unmerged
+    same-material interface: they carry opposite surface charges whose cancellation is only as
+    good as the block quadrature (Example 6, 2026-09-06: 512 pairs -> indefinite HEX Gram).
+    """
+    pts = np.array([list(v.point) for v in mesh.vertices])
+    owners: dict = {}
+    for el in mesh.Elements(ng.VOL):
+        for fa in el.facets:
+            key = tuple(sorted(v.nr for v in mesh[fa].vertices))
+            owners[key] = owners.get(key, 0) + 1
+    bnd_keys = set()
+    coincident: dict = {}
+    for i in range(mesh.GetNE(ng.BND)):
+        e = mesh[ng.ElementId(ng.BND, i)]
+        key = tuple(sorted(v.nr for v in e.vertices))
+        bnd_keys.add(key)
+        geo = tuple(sorted(map(tuple, np.round(pts[list(key)], 9))))
+        coincident[geo] = coincident.get(geo, 0) + 1
+    hanging = sum(1 for key, n in owners.items() if n == 1 and key not in bnd_keys)
+    duplicated = sum(n * (n - 1) // 2 for n in coincident.values())
+    return {"hanging_facets": int(hanging), "duplicated_boundary_face_pairs": int(duplicated),
+            "conforming": bool(hanging == 0 and duplicated == 0)}
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--assets-dir", type=Path, required=True, help="directory holding the case-6 model.vol")
@@ -193,6 +222,8 @@ def main(argv=None) -> int:
     parser.add_argument("--skip-raw", action="store_true", help="skip the O(n^2) raw quadratic form")
     parser.add_argument("--threads", type=int, default=0)
     parser.add_argument("--expect-iron-sha256", default=None)
+    parser.add_argument("--allow-nonconforming", action="store_true",
+                        help="diagnose a mesh with hanging nodes / duplicated faces instead of refusing it")
     options = parser.parse_args(argv)
     if options.threads > 0:
         ng.SetNumThreads(options.threads)
@@ -216,11 +247,20 @@ def main(argv=None) -> int:
     }
     failures = []
     mesh = ng.Mesh(str(mesh_path))
+    conformity = mesh_conformity(mesh)
+    print(f"mesh: ne {mesh.ne} bnd {mesh.GetNE(ng.BND)} hanging facets {conformity['hanging_facets']} "
+          f"duplicated boundary face pairs {conformity['duplicated_boundary_face_pairs']}", flush=True)
+    if not conformity["conforming"] and not options.allow_nonconforming:
+        raise RuntimeError("the iron mesh is non-conforming (%d hanging facets, %d duplicated boundary face "
+                           "pairs): regenerate it with imprint/merge (export_esrf_cubit_assets) or pass "
+                           "--allow-nonconforming to diagnose it" % (conformity["hanging_facets"],
+                                                                     conformity["duplicated_boundary_face_pairs"]))
     with ng.TaskManager():
         fes = ng.HDiv(mesh, order=1)
         n_face = int(fes.ndof)
         affinity = V._hex_mapping_affinity_report(mesh)
-        report["mesh"] = {"ne": int(mesh.ne), "ndof": n_face, "nonaffine_cells": int(affinity["nonaffine_cell_count"])}
+        report["mesh"] = {"ne": int(mesh.ne), "ndof": n_face, "nonaffine_cells": int(affinity["nonaffine_cell_count"]),
+                          "conformity": conformity}
         started = time.perf_counter()
         B, G, M_mass = vim.ChargeGram(fes, eps=options.gram_eps)
         report["gram_build_s"] = time.perf_counter() - started
