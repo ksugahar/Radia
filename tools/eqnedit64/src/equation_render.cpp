@@ -2365,6 +2365,47 @@ private:
 
     Layout layout_decoration(const DecorationNode& d, double sizePt) {
         Layout out = layout_list(d.content, sizePt);
+
+        /* The same defect the embellishments had: this tested for the
+         * underline and drew a plain overline for everything else, so
+         * \overrightarrow, \overleftarrow and \overleftrightarrow -- the
+         * ordinary way to write a vector AB -- all appeared as a bare line
+         * while the LaTeX they emitted was correct.  An arrow is a glyph
+         * stretched over the base, not a rule, so it takes the same path the
+         * horizontal braces use. */
+        if (d.selector == tmRARROW || d.selector == tmLARROW ||
+            d.selector == tmBARROW) {
+            const uint32_t cp = (d.selector == tmRARROW) ? 0x2192
+                              : (d.selector == tmLARROW) ? 0x2190
+                                                         : 0x2194;
+            Layout arrow = glyph_layout(cp, sizePt, false, true);
+            const double y = -(out.asc + 0.10 * sizePt);
+            /* Same rule the horizontal braces follow: place the glyph when it
+             * is close to the base's width, and grow it with a shaft when it
+             * would otherwise have to be distorted.  There is no horizontal
+             * glyph stretch in this engine - Glyph carries stretchY only. */
+            if (arrow.w >= out.w * 0.55) {
+                out.absorb(arrow, (out.w - arrow.w) * 0.5, y);
+            } else {
+                Rule shaft{0, y - 0.5 * rule_thickness(sizePt),
+                           out.w - arrow.w * 0.5, rule_thickness(sizePt)};
+                if (d.selector == tmLARROW) shaft.x = arrow.w * 0.5;
+                if (d.selector == tmBARROW) {
+                    shaft.x = arrow.w * 0.5;
+                    shaft.w = std::max(0.0, out.w - arrow.w);
+                }
+                out.rules.push_back(shaft);
+                /* The head sits at the end the arrow points to; a double head
+                 * is drawn by the single glyph at both ends. */
+                if (d.selector != tmLARROW)
+                    out.absorb(arrow, out.w - arrow.w, y);
+                if (d.selector != tmRARROW)
+                    out.absorb(glyph_layout(cp, sizePt, false, true), 0.0, y);
+            }
+            out.asc = std::max(out.asc, -y + arrow.asc);
+            return out;
+        }
+
         const double thick = rule_thickness(sizePt);
         Rule bar;
         bar.x = 0;
