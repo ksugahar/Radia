@@ -1428,6 +1428,27 @@ cache needed 43 s for 2674 inner iterations (16 ms each, 7 Newton iterations,
 no backtracks).  With every BDM1 near pair in the instance-shared cache those
 phases collapse to their iteration cost.
 
+Measured on hibino (38 threads, one job at a time, Q-mag linear `mu_r = 1000`,
+`results/timing_qmag_*_hibino.json`; the pre-fix row is the 17:18 run of the
+same mesh with the previous wheel):
+
+| build | unknowns | Gram wall | near blocks evaluated | near thread-s | shared hits / lookups |
+|---|---|---|---|---|---|
+| before (affine pairs bypass the shared cache) | 60816 | 1625 s | 137,341 | 36,458 | 6,030 / 27,118 |
+| shared cache for every near pair, congruence off | 60816 | 1326 s | 129,536 | 30,261 | 51,094 / 180,630 |
+| translation-congruent key | 60816 | **450 s** | 27,062 | 4,078 | 153,442 / 180,504 |
+| translation-congruent key, `h = 6 mm` | 153296 | 902 s | 33,273 | 6,018 | 338,165 / 371,438 |
+
+The field is unchanged to every printed digit (`B_perp(15 mm) = -0.22722 T`
+in all three `h = 10 mm` builds).  The routing fix alone removes the worker
+duplication (1625 to 1326 s); the congruence key evaluates one near block per
+class instead of one per layer (4.8x fewer evaluations on the 6-layer mesh)
+and brings the build to 450 s, 7.4 ms per unknown; the 10-layer 6 mm mesh
+runs at 5.9 ms per unknown.  Against the TET route's 1.1 ms per unknown the
+gap is now about 6x, and the near family is no longer the bulk of it: 4,078
+thread-seconds over 38 workers is ~110 s of the 450 s, so the next profile
+target is the rest of the build (cluster tree, ACA fills, far blocks).
+
 The pair point count is now chosen per pair.  The rule converges
 exponentially when both hosts are affine (unit-cube self-energy `4.9e-9` at
 6 points, `1.8e-12` at 8) but only about tenfold per two points on distorted
