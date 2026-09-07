@@ -1548,3 +1548,47 @@ third and no longer worth a dedicated pass.  The conforming example-6 gate
 under the same wheel builds its Gram in 61 s (first gate 1,567 s) and passes
 with the same `lambda_max` 0.99990
 (`esrf_three_engine/results/hex_gram_definiteness_dynamic_hibino.json`).
+
+### 8.15 The same magnet on HEX and on TET (2026-09-07)
+
+The per-unknown figures of section 8.14 compare different magnets.  The
+question that matters is the same magnet at the same accuracy, so the CEFC
+2020 quadrupole was meshed from one Cubit import both ways
+(`build_qmag_cubit_mesh.py`, swept HEX and `--scheme tet`, each exported at
+curve order 2 or 1) and solved by every route on hibino, one job at a time,
+linear `mu_r = 1000` (`quadrupole_cefc2020/results/timing_qmag_*_hibino.json`;
+the mixed Omega FEM gives `B_perp(15 mm) = -0.22725 T`):
+
+| route | h [mm] | elements | unknowns | Gram [s] | of which prep [s] | solve [s] | total [s] | ms per unknown | `B_perp(15 mm)` [T] |
+|---|---|---|---|---|---|---|---|---|---|
+| HEX curved Q2, BDM1 | 15 | 980 | 25,984 | 25 | 3 | 1.3 | **27** | 1.02 | -0.22713 |
+| HEX curved Q2, BDM1 | 10 | 2,352 | 60,816 | 37 | 5 | 1.8 | **41** | 0.67 | -0.22722 |
+| HEX curved Q2, BDM1 | 6 | 6,040 | 153,296 | 69 | 5 | 4.1 | **76** | 0.50 | -0.22724 |
+| HEX curved Q2, BDM1 | 4 | 16,408 | 410,128 | 175 | 5 | 12.2 | **197** | 0.48 | -0.22725 |
+| TET straight, BDM1 | 10 | 12,248 | 80,202 | 15 | 0 | 2.3 | **18** | 0.22 | -0.22723 |
+| TET straight, BDM1 | 7 | 26,987 | 172,644 | 31 | 0 | 4.6 | **38** | 0.22 | -0.22725 |
+| TET straight, BDM1 | 5 | 63,204 | 397,047 | 86 | 0 | 9.5 | **100** | 0.25 | -0.22726 |
+| TET straight, BDM2 | 10 | 12,248 | 233,892 | 164 | 0 | 8.0 | **175** | 0.75 | -0.22727 |
+| TET curved Q2, BDM1 | 10 | 12,248 | 80,202 | 53 | 40 | 2.3 | **56** | 0.70 | -0.22740 |
+| TET curved Q2, BDM2 | 10 | 12,248 | 233,892 | 278 | 204 | 7.9 | **289** | 1.23 | -0.22727 |
+| TET curved Q2, BDM2 | 7 | 26,987 | 507,210 | 655 | 453 | 16.3 | **678** | 1.34 | -0.22728 |
+
+Three readings.  First, against the production TET route on a curved mesh
+(curved BDM2, the route of the C-type three-engine campaign) the HEX route is
+now the faster one at equal accuracy: 40 s against 289 s at `h = 10 mm`, both
+within 0.01 % of the FEM.  Second, the curved TET routes pay 70-80 % of their
+build in the curved touching-block precompute (`PrecomputeCurvedTouchBlocks`:
+204 s of 278 s at BDM2, 40 s of 53 s at BDM1), and that rule is also the less
+accurate one -- curved BDM1 at 10 mm lands 0.07 % off where straight BDM1 on
+the same tets lands 0.01 % off, and the curved BDM2 harmonics converge from
+further away (quadrupole README, "Multipole convergence").  The cheaper and
+more accurate curved touching family is the TET route's next lever.  Third,
+straight TET BDM1 with its closed-form near integrals remains the cheapest
+route per unknown (0.2 ms against 0.5-0.7 ms for the HEX Duffy family) and
+in wall time (18 s against 40 s at 10 mm, 100 s against 197 s for 400k
+unknowns), while the HEX mesh keeps the quadrupole symmetry exactly and
+resolves the pole face with fewer unknowns.  The HEX goal -- TET-class
+performance -- is met against the curved TET route and within a factor of
+two of the straight one; closing that factor would take a closed-form inner
+integral for affine HEX pairs, which is where the remaining Duffy cost sits.
+

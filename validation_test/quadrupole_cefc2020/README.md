@@ -123,3 +123,14 @@ route converges to the same limit but from further away, so at a given mesh
 its curved touching-block rule, not the geometry, sets the error.  That rule
 is also 87 % of the curved TET build time (section 8.14 of the review): the
 next TET-side lever is a cheaper and more accurate curved touching family.
+
+## HEX against TET on this magnet
+
+`results/timing_qmag_*_hibino.json` time every route (swept HEX BDM1, TET
+BDM1 / BDM2 on straight and on curved-Q2 meshes from the same CAD import) on
+hibino for the linear `mu_r = 1000` case; the table and its reading are in
+section 8.15 of `docs/hdiv_vim/HDiv-MMM_review.md`.  A curved TET BDM2 solve
+on the 5 mm mesh (63,204 tets, about 1.2 M unknowns) ended in a stack
+overflow of the build and is recorded as an open large-N issue of the TET
+route.
+
