@@ -304,6 +304,32 @@ def _verify_level2_ih_contract(manifest: dict) -> None:
         raise RuntimeError("The IH native runtime dependency contract is invalid")
 
 
+def _run_matlab_process(command: list[str], timeout: int):
+    # MATLAB's Windows launcher starts a child that inherits stdout. Pipes
+    # can therefore keep communicate() blocked after the launcher is killed.
+    with tempfile.TemporaryFile() as output:
+        process = subprocess.Popen(command, stdout=output, stderr=subprocess.STDOUT)
+        try:
+            returncode = process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired as error:
+            if sys.platform == "win32":
+                subprocess.run(
+                    ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                    capture_output=True, timeout=30, check=True,
+                )
+            else:
+                process.kill()
+            process.wait(timeout=30)
+            output.seek(0)
+            details = output.read().decode("utf-8", errors="backslashreplace")
+            raise RuntimeError(
+                f"MATLAB verification timed out after {timeout}s; "
+                f"stopped owned PID {process.pid}.\n{details}"
+            ) from error
+        output.seek(0)
+        return subprocess.CompletedProcess(command, returncode, output.read(), b"")
+
+
 def run_matlab_smoke(archive: Path, matlab: Path, timeout: int = 300) -> str:
     if not matlab.is_file():
         raise FileNotFoundError(f"MATLAB executable does not exist: {matlab}")
@@ -335,9 +361,8 @@ def run_matlab_smoke(archive: Path, matlab: Path, timeout: int = 300) -> str:
             f"addpath('{matlab_root}','-begin');"
             f"report={verification_function}();assert(report.passed);"
         )
-        result = subprocess.run(
+        result = _run_matlab_process(
             [str(matlab), "-batch", expression],
-            capture_output=True,
             timeout=timeout,
         )
         # MATLAB emits UTF-8 in batch mode even when the Windows process
