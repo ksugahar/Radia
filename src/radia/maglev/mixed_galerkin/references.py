@@ -1,4 +1,4 @@
-"""Analytic reference admittances for mixed-Galerkin examples.
+"""Analytic reference admittances for Foster + SIBC and CLN + SIBC studies.
 
 These helpers are canonical enough to be imported by docs and lightweight
 examples, but they remain analytic references rather than solver machinery.
