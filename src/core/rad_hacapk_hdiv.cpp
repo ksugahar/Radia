@@ -6961,8 +6961,10 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHexProductN(int kindT, int hT,
             for (int ls = 0; ls < nS; ++ls) qS[(size_t)p*nS + ls] = HexMonoEval(srcG[ls], eta);
         }
     }
-    std::vector<double> qT((size_t)nT), inn((size_t)nS), innc((size_t)nS);
-    std::vector<double> comp((size_t)nT*nS, 0.0);   // Neumaier compensation (see QuadBlockHexPairDuffy)
+    std::vector<double> qT((size_t)nT), inn((size_t)nS);
+    // Neumaier compensation of the OUTER accumulation only (the inner point loop keeps plain sums: the
+    // hot loop, and its order is the same lexicographic order in every evaluation of the pair).
+    std::vector<double> comp((size_t)nT*nS, 0.0);
     for (int a = 0; a < N; ++a) for (int b = 0; b < N; ++b) for (int c = 0; c < (dT == 3 ? N : 1); ++c) {
         double xi[3] = {gl[(size_t)a], gl[(size_t)b], dT == 3 ? gl[(size_t)c] : 0.0};
         const double wT = gw[(size_t)a]*gw[(size_t)b]*(dT == 3 ? gw[(size_t)c] : 1.0);
@@ -6970,16 +6972,14 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHexProductN(int kindT, int hT,
         if (dT == 3) HexQ2MapX(ndT, xi, XT); else { const double uv[2] = {xi[0], xi[1]}; QuadQ2MapX(ndT, uv, XT); }
         ImageEvalPoint(img, XT, XTr);
         std::fill(inn.begin(), inn.end(), 0.0);
-        std::fill(innc.begin(), innc.end(), 0.0);
         for (int p = 0; p < nptS; ++p) {
             const double dx = XTr[0]-XS[(size_t)3*p], dy = XTr[1]-XS[(size_t)3*p+1], dz = XTr[2]-XS[(size_t)3*p+2];
             const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
             if (r < 1e-300) continue;
             const double w = wS[(size_t)p]/r;
             const double* q = &qS[(size_t)p*nS];
-            for (int ls = 0; ls < nS; ++ls) NeumaierAdd(inn[(size_t)ls], innc[(size_t)ls], w*q[ls]);
+            for (int ls = 0; ls < nS; ++ls) inn[(size_t)ls] += w*q[ls];
         }
-        for (int ls = 0; ls < nS; ++ls) inn[(size_t)ls] += innc[(size_t)ls];
         for (int lt = 0; lt < nT; ++lt) qT[(size_t)lt] = wT*HexMonoEval(tgtG[lt], xi);
         for (int lt = 0; lt < nT; ++lt) {
             double* row = &blk[(size_t)lt*nS];
@@ -7017,12 +7017,13 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHexPairDuffy(int kindT, int hT
     const int N = (int)gl.size();
     std::vector<int> idx((size_t)ndim, 0);
     std::vector<double> qT((size_t)nT), qS((size_t)nS);
-    // Neumaier-compensated accumulation: the same physical pair is summed in a different subdomain
-    // and point order when it is reached as a direct pair of the full model and as an image pair of the
-    // reduced model (or through another host's lattice orientation), and the plain sum of ~1e5 terms
-    // then differs by ~1e-13 relative.  Compensation makes the block insensitive to the summation
-    // order at the level of a few eps, which the full-versus-image field contract requires.
-    std::vector<double> comp((size_t)nT*nS, 0.0);
+    // The same physical pair is summed in a different SUBDOMAIN order when it is reached as a direct
+    // pair of the full model and as an image pair of the reduced model (or through another host's
+    // lattice orientation); within a subdomain the point order is the same lexicographic order.  Each
+    // subdomain is therefore summed plainly (the hot loop) and the subdomain partial sums are added
+    // with Neumaier compensation, which makes the block insensitive to that order at the level of a few
+    // eps for the full-versus-image field contract at no measurable cost.
+    std::vector<double> part((size_t)nT*nS, 0.0), comp((size_t)nT*nS, 0.0);
     double cone[6];
     const int ndomain = 2*nrel + ntrT + ntrS;
     const int nsignsets = 1 << std::max(0, nrel - 1);
@@ -7045,6 +7046,7 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHexPairDuffy(int kindT, int hT
         const int extra = (dom >= nrel && nrel > 0) ? 2 : 1;   // transverse dominant: the last relative coordinate takes both signs
         for (int ex = 0; ex < extra; ++ex) {
         if (extra == 2) relsign[nrel - 1] = (ex == 0) ? 1.0 : -1.0;
+        std::fill(part.begin(), part.end(), 0.0);
         std::fill(idx.begin(), idx.end(), 0);
         while (true) {
             const double wv = gl[(size_t)idx[0]];
@@ -7086,15 +7088,15 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHexPairDuffy(int kindT, int hT
                 for (int ls = 0; ls < nS; ++ls) qS[(size_t)ls] = HexMonoEval(srcG[ls], eta);
                 for (int lt = 0; lt < nT; ++lt) {
                     const double wl = weight*qT[(size_t)lt];
-                    double* row = &blk[(size_t)lt*nS];
-                    double* crow = &comp[(size_t)lt*nS];
-                    for (int ls = 0; ls < nS; ++ls) NeumaierAdd(row[ls], crow[ls], wl*qS[(size_t)ls]);
+                    double* row = &part[(size_t)lt*nS];
+                    for (int ls = 0; ls < nS; ++ls) row[ls] += wl*qS[(size_t)ls];
                 }
             }
             int p = 0;
             while (p < ndim) { if (++idx[(size_t)p] < N) break; idx[(size_t)p] = 0; ++p; }
             if (p == ndim) break;
         }
+        for (size_t k = 0; k < blk.size(); ++k) NeumaierAdd(blk[k], comp[k], part[k]);
         }
     }
     (void)nsub;
