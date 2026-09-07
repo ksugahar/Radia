@@ -105,6 +105,7 @@ curve order 2 or 1).  Correctness study on LAB, no timings:
 | TET straight, BDM1 | 5 | 397,047 | +26.10 | -1.85 | +0.83 | 0.003 |
 | TET straight, BDM2 | 10 | 233,892 | +25.69 | -1.86 | +0.80 | 0.003 |
 | TET curved Q2, BDM2 | 10 | 233,892 | +24.88 | -2.31 | +0.61 | 0.015 |
+| TET curved Q2, BDM2 | 7 | 507,210 | +26.05 | -1.73 | +0.82 | 0.022 |
 
 Both the curved HEX route and the straight TET BDM1 route converge to
 `b_6 = 26.1 +- 0.1`; the faceted pole face at 10 mm and below costs less than
@@ -116,6 +117,9 @@ higher curve order buys nothing here, and the curved touching-block
 quadrature would only get dearer.  The swept HEX meshes keep the quadrupole
 symmetry exactly (forbidden harmonics at round-off); the TET meshes leak up
 to 0.04 unit.  The curved TET BDM2 solve at 10 mm sits 1.2 units below the
-converged `b_6` -- farther than the straight BDM2 on the same tets -- which
-points at the curved touching-block rule of the TET route rather than at the
-geometry; its refinement is being checked.
+converged `b_6` -- farther than the straight BDM2 on the same tets -- and
+reaches 26.05 at 7 mm while its `b_10` overshoots to `-1.73`: the curved TET
+route converges to the same limit but from further away, so at a given mesh
+its curved touching-block rule, not the geometry, sets the error.  That rule
+is also 87 % of the curved TET build time (section 8.14 of the review): the
+next TET-side lever is a cheaper and more accurate curved touching family.
