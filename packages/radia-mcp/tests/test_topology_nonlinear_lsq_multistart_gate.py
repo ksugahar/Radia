@@ -1,7 +1,6 @@
 import copy
 import json
 
-
 from radia_mcp.topology_optimization.nonlinear_lsq_multistart_gate import (
     evaluate_nonlinear_lsq_multistart,
 )
