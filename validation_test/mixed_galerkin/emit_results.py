@@ -1,4 +1,4 @@
-"""Write the one numerical artifact for the mixed Galerkin study.
+"""Write the numerical artifact for the Foster/CLN + SIBC studies.
 
 `validation_test/` owns the numbers. Documentation notebooks and talk material
 read this file; they do not recompute it. That rule exists because the
@@ -109,22 +109,28 @@ def build() -> dict:
     }
 
 
+def headline_error(result: dict):
+    """Select the first available metric, including an exact zero."""
+    for key in ("max_error_pct", "gamma1_max_error_pct", "planar_max_error_pct"):
+        value = result.get(key)
+        if value is not None:
+            return value
+    return result.get("by_n_dof", {}).get("4", {}).get("max_error_pct")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", default=str(HERE / "results" / "mixed_galerkin_results.json"))
     args = ap.parse_args()
 
-    print("running the analytic mixed Galerkin cases ...")
+    print("running the analytic Foster/CLN + SIBC cases ...")
     data = build()
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    out.write_text(json.dumps(data, indent=2, allow_nan=False) + "\n", encoding="utf-8")
     print(f"\nwrote {out}")
     for label, r in data["cases"].items():
-        headline = (r.get("max_error_pct")
-                    or r.get("gamma1_max_error_pct")
-                    or r.get("planar_max_error_pct")
-                    or (r.get("by_n_dof", {}).get("4", {}).get("max_error_pct")))
+        headline = headline_error(r)
         print(f"  {label:28s} {headline:.5f} %" if headline is not None
               else f"  {label:28s} (see file)")
     return 0
