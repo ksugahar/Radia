@@ -1,4 +1,4 @@
-# Two-layer optimization: first maintenance slice
+# Two-layer optimization diagnostics
 
 `radia_mcp.optimization` owns solver-neutral guidance and diagnostics;
 `topology_optimization` owns electromagnetic shape/topology knowledge and
@@ -55,8 +55,8 @@ distributed and no model-weight training is performed.
 
 ## Next slices, deliberately not claimed complete
 
-1. KKT, feasibility and projected gradients, with scaled residuals and constraint
-   qualifications; keep constrained stationarity distinct from sufficiency.
+1. Constraint-qualification and curvature evidence beyond residual diagnostics;
+   keep constrained stationarity distinct from sufficiency.
 2. Audit references/callers before relocating nonlinear least squares and linear
    inverse helpers. Linear CG belongs to linear algebra; nonlinear CG belongs
    to optimization. Do not relocate both merely because their names match.
@@ -69,3 +69,45 @@ Public ecosystem solvers remain preferred. These MCP diagnostics are not new
 Radia numerical kernels or a new MATLAB optimizer implementation. The known
 legacy Armijo behavior is preserved, including returning the last rejected
 trial with accepted=false; callers must not accept that trial unconditionally.
+
+## Constrained diagnostics
+
+`optimization_kkt_audit` handles smooth minimization with g(x)<=0 and h(x)=0.
+Provide all constraint values and Jacobian **rows** at the same point, including
+bounds if they exist. The Lagrangian convention is L=f+mu*g+nu*h: physical
+inequality multipliers mu must be nonnegative; equality multipliers nu have no
+sign restriction. The tool checks supplied multipliers, never estimates them.
+Use empty lists for an absent family and at least one constraint overall.
+
+With positive fixed scales x=S*z, F=f/q, G=g/c and H=h/d, dimensionless
+multipliers are lambda=mu*c/q and eta=nu*d/q. The reported infinity norms are:
+
+- primal: max(G,0) and H, separately;
+- dual: min(lambda,0);
+- complementarity: lambda*G;
+- stationarity: grad_z(F)+J_G^T*lambda+J_H^T*eta.
+
+Each check uses the supplied positive dimensionless tolerance. Infeasibility
+takes status priority; all residuals within tolerance yield only
+`first_order_candidate`. Constraint qualifications are explicitly
+`not_verified`. Degenerate constraints may prevent KKT necessity even at an
+actual minimum. Nonconvex maxima/saddles may satisfy KKT. Smoothness, constraint
+completeness, Jacobian accuracy, convexity and second-order sufficiency are not
+certified by caller-supplied residuals.
+
+`optimization_projected_gradient_audit` handles smooth box-only problems.
+Bounds are physical coordinates; null denotes no bound. Equal bounds fix a
+variable. It reports bound infeasibility separately from
+G=z-project_box(z-grad_z(F)), using a **fixed unit dimensionless step**. This
+mapping has the correct boundary sign behavior even when the raw gradient is
+nonzero. It is computed in displacement coordinates to avoid subtracting large,
+nearly equal iterates. General constraints must use the KKT route, not this
+box diagnostic. Tolerances and fixed scales still affect finite-precision
+classification; a small mapping is not an accuracy or optimality certificate.
+
+Source: Kanamori et al. (2016), section 3.2 (feasible directions and convex
+sufficiency) and section 10.1 (active inequalities and KKT conditions), inspected
+in the supplied PDF on PDF pages 62-63 and 170-173. The dimensionless residual
+contracts and box mapping are engineering adaptations, not source algorithm
+transcriptions. These are read-only MCP diagnostics, not numerical solver or
+MATLAB kernel additions. No new client process is required.
