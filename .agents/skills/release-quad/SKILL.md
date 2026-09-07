@@ -44,6 +44,14 @@ versions, compatibility constants, and tracked file hashes. Both mdx hosts repor
 `radia-mcp` as `N/A`; that is intentional and is excluded from drift
 comparison.
 
+Both mdx runners use the shared `mdx` label and a unique `mdx1` or `mdx2`
+label. Before accepting a replacement runner, verify Python 3.12, Git,
+PowerShell 7, MSVC x64 via `vswhere`, Windows SDK, CMake, MATLAB, and the
+MATLAB Engine import. A successful fast-contract job does not certify MEX
+build readiness: also run the Optuna native build lane. Keep pip build
+dependencies in the workflow's run-local venv. Remove retired runner
+registrations after their replacements are verified online.
+
 ## Parallel WIP-Safe Editable Source
 
 Do not stash, clean, reset, or rebase a shared LAB worktree just to release.
