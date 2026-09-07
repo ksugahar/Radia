@@ -1,9 +1,10 @@
 import copy
 import json
 
-
 from radia_mcp.topology_optimization.server import topology_opt_simplex_stationarity_audit_gate
-from radia_mcp.topology_optimization.simplex_stationarity_gate import evaluate_simplex_stationarity_audit
+from radia_mcp.topology_optimization.simplex_stationarity_gate import (
+    evaluate_simplex_stationarity_audit,
+)
 
 
 def _summary():

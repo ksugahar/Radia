@@ -2,14 +2,14 @@
 
 import numpy as np
 import pytest
-
 from radia_mcp.optimization import global_optimizers as common
 from radia_mcp.topology_optimization import global_optimizers as legacy
 
 
-@pytest.mark.parametrize("name", [
-    "constraint_violation", "best_feasible_record", "differential_evolution",
-])
+@pytest.mark.parametrize(
+    "name",
+    ["constraint_violation", "best_feasible_record", "differential_evolution"],
+)
 def test_legacy_import_is_canonical(name):
     assert getattr(legacy, name) is getattr(common, name)
 
@@ -35,6 +35,7 @@ def test_selection_returns_copy_with_explicit_infeasible_fallback():
 
 def test_guide_records_completed_ownership_and_regression_gate_limits():
     from radia_mcp.optimization.server import optimization_guide
+
     guide = optimization_guide()
     assert "radia_mcp.optimization.global_optimizers" in guide["search_ownership"]["helpers"]
     assert "false convergence" in guide["search_ownership"]["regression_gates"]
