@@ -1,16 +1,18 @@
 // axi_henrotte_integrators.cpp — Closed-form BilinearFormIntegrators.
 //
-// Element-matrix formulas ported verbatim from the validated Python prototype:
-//   W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/axifem/axifem_quad.py
+// Element-matrix formulas ported from the validated Python fixtures under
+// tests/axifem/_reference_python/ (research copies are retained under
+// validation_test/maglev/research_cln/axifem/):
+//   axifem_quad.py
 //     _element_matrices_quad_closed_form  (Q1 stiffness)
 //     element_sigma_mass_quad             (Q1 sigma mass)
-//   W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/axifem/axifem_core.py
+//   axifem_core.py
 //     element_matrices                    (P1 triangle stiffness, FEMM prob3big)
-//   W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/axifem/sigma_mass.py
+//   sigma_mass.py
 //     element_sigma_mass                  (P1 triangle sigma mass, Hammer 7-point)
 //
 // DOF convention (V-DOF): u_j = A_phi at vertex j. This matches the Python
-// references (axifem/disk_hiruma_quad.py and disk_hiruma.py).
+// references (validation_test/axifem/research/verification/test_hiruma_disk*.py).
 // - Q1 closed form: M_V = T M_phi T with T_jj = 2 pi r_j; axis-vertex rows/
 //   cols become zero (caller MUST Dirichlet axis edges).
 // - P1 triangle stiffness: -pi factor applied to FEMM raw matrices, matches

@@ -161,8 +161,9 @@ testResults = <|
   "K_phi_axis_test_flat" -> KphiAtest,
   "M_sigma_phi_axis_test_flat" -> MsigPhiAtest
 |>;
-Export["W:/30_CauerLadderNetwork/2026_04_01_\:9577\:65b9\:5f62CLN/axifem/quad_q2_henrotte_matrices_test.json", testResults, "JSON"];
-Export["W:/30_CauerLadderNetwork/2026_04_01_\:9577\:65b9\:5f62CLN/axifem/quad_q2_henrotte_matrices.json", result, "JSON"];
+exportDir = DirectoryName[$InputFileName];
+Export[FileNameJoin[{exportDir, "quad_q2_henrotte_matrices_test.json"}], testResults, "JSON"];
+Export[FileNameJoin[{exportDir, "quad_q2_henrotte_matrices.json"}], result, "JSON"];
 Print["Saved: quad_q2_henrotte_matrices.json"];
 Print[""];
 Print["Total elapsed: ", Round[AbsoluteTime[] - $startTime, 0.1], " s"];

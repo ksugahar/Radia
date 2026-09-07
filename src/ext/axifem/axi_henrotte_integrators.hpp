@@ -2,9 +2,9 @@
 // bypass NGSolve's Gauss quadrature for the FEMM/Henrotte axisymmetric weak
 // form. The 1/r weight in the axisymmetric integrals would otherwise lose
 // 5-10% accuracy when integrated by Gauss quadrature near the symmetry axis;
-// here we use Mathematica-derived closed forms instead (port of
-// W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/axifem/axifem_quad.py and
-// axifem_core.py).
+// here we use Mathematica-derived closed forms instead (port of the Python
+// references axifem_quad.py and axifem_core.py, shipped under
+// tests/axifem/_reference_python/).
 //
 // Two integrators are exposed:
 //
