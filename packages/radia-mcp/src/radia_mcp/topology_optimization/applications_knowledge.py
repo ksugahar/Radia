@@ -409,7 +409,7 @@ This compact NumPy helper is not a replacement for production ecosystem solvers.
 GLOBAL_OPTIMIZERS = r"""
 ## Global optimization -- Differential Evolution (the multimodal/global member)
 
-`global_optimizers.differential_evolution(func, bounds, seed=...)` is a GLOBAL, derivative-free
+`radia_mcp.optimization.global_optimizers.differential_evolution(func, bounds, seed=...)` is a GLOBAL, derivative-free
 population optimizer (Storn-Price DE/rand/1/bin): mutate v = a + F(b-c) from three random members,
 binomially cross with the target, keep the trial only if it lowers the objective. It is the global
 complement to the LOCAL optimizers (Nelder-Mead in `outer_loop`, Levenberg-Marquardt in
@@ -425,6 +425,11 @@ deterministic run.
 Verified (test_topology_global_opt): global optimum of Rastrigin (2-D and 5-D), Ackley (3-D) and
 Rosenbrock (4-D) to f < 1e-6 at the known minimizer, deterministic for a fixed seed, and matching
 scipy.optimize.differential_evolution.
+
+The historical topology_optimization.global_optimizers path is an identity alias.
+These test problems do not establish a universal global-optimum guarantee;
+population spread is only a termination heuristic. Prefer established production
+libraries. Bayesian/evolutionary guidance stays separate from shared diagnostics.
 """
 
 
