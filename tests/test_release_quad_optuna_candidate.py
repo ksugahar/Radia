@@ -118,7 +118,7 @@ def test_optuna_done_requires_exact_head_hash_version_and_four_targets(
     assert rc == 0
     assert checked == state
 
-    state["targets"]["mdx"]["status"] = "failed"
+    state["targets"]["mdx2"]["status"] = "failed"
     path.write_text(json.dumps(state), encoding="utf-8")
     rc, checked = release_quad._verify_optuna_candidate_state(str(wheel))
     assert rc == 4

@@ -260,7 +260,7 @@ def test_policy_twins_define_the_same_mdx_notebook_contract():
     policy = section(agents)
     assert policy == section(claude)
     normalized = " ".join(policy.split())
-    assert "mdx gives CI and preflight work priority" in normalized
+    assert "Both mdx hosts give CI and preflight priority" in normalized
     assert "use hibino first when it is available" in normalized
     assert "the mdx CI queue is idle" in normalized
     assert "CI scope begins at the independently released distribution boundary" in normalized

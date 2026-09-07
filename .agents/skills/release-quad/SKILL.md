@@ -1,6 +1,6 @@
 ---
 name: release-quad
-description: Four-machine Radia release gate. Use when the user asks for release-quad, release_quad, post-release deploy, GitHub Release publication, or the Definition Of Done for Radia releases. Coordinates PyPI and Simulink release candidates across LAB, 100号機, mdx, and hibino via tools/release_quad.py.
+description: Four-machine Radia release gate. Use when the user asks for release-quad, release_quad, post-release deploy, GitHub Release publication, or the Definition Of Done for Radia releases. Coordinates PyPI and Simulink release candidates across LAB, 100号機, mdx1, and mdx2 via tools/release_quad.py.
 ---
 
 # release-quad
@@ -12,7 +12,7 @@ Use only `tools/release_quad.py`; release work must go through QUAD.
 ```powershell
 python tools/release_quad.py preflight
 python tools/release_quad.py phase0
-python tools/release_quad.py phase8 --target lab,100,hibino
+python tools/release_quad.py phase8 --target lab,100
 python tools/release_quad.py phase8e
 python tools/release_quad.py phase9
 python tools/release_quad.py simulink-candidate --package <zip> --target all
@@ -29,20 +29,28 @@ python tools/release_quad.py restore-editable
 |---|---|---|
 | LAB | NAS editable | `phase8 --target lab` |
 | 100号機 | NAS editable over SSH | `phase8 --target 100` |
-| hibino | PyPI wheel consumer over `ssh hibino` | `phase8 --target hibino` |
-| mdx | PyPI wheel consumer, no `radia-mcp` | `phase8e` |
+| mdx1 | PyPI wheel consumer over `ssh mdx1`, no `radia-mcp` | `phase8e` |
+| mdx2 | PyPI wheel consumer over `ssh mdx2`, no `radia-mcp` | `phase8e` |
 
 `radia-optuna` is an independent release lane. It does not run `phase8` or
 install Radia/Cubit. `optuna-candidate` downloads the exact wheel artifact from
 one successful `main` push CI run and runs that wheel's installed-wheel
-MATLAB/Simulink test on LAB, 100号機, mdx, and hibino. `optuna-done` requires
+MATLAB/Simulink test on LAB, 100号機, mdx1, and mdx2. `optuna-done` requires
 the wheel SHA256, source commit, package version, CI run, and all four target
 results to agree.
 
-`phase9` is the hard gate: LAB / 100号機 / mdx / hibino must agree on
-versions, compatibility constants, and tracked file hashes. mdx reports
+`phase9` is the hard gate: LAB / 100号機 / mdx1 / mdx2 must agree on
+versions, compatibility constants, and tracked file hashes. Both mdx hosts report
 `radia-mcp` as `N/A`; that is intentional and is excluded from drift
 comparison.
+
+Both mdx runners use the shared `mdx` label and a unique `mdx1` or `mdx2`
+label. Before accepting a replacement runner, verify Python 3.12, Git,
+PowerShell 7, MSVC x64 via `vswhere`, Windows SDK, CMake, MATLAB, and the
+MATLAB Engine import. A successful fast-contract job does not certify MEX
+build readiness: also run the Optuna native build lane. Keep pip build
+dependencies in the workflow's run-local venv. Remove retired runner
+registrations after their replacements are verified online.
 
 ## Parallel WIP-Safe Editable Source
 
@@ -79,7 +87,7 @@ tier to that tree.
   both PyPI and the GitHub Release without rebuilding it.
 - Do not publish any GitHub Release containing the Radia Simulink library,
   MATLAB support files, or MEX assets until the complete four-machine gate
-  passes for LAB, 100号機, mdx, and hibino.
+  passes for LAB, 100号機, mdx1, and mdx2.
 - The Simulink gate hashes the exact ZIP and extracts it independently on each
   machine. A full library runs `verify_radia_simulink_release`; an IH preview
   runs `verify_radia_ih_release`. Rebuilding the ZIP invalidates the recorded
@@ -93,9 +101,9 @@ tier to that tree.
   `SHA256SUMS.txt`.
 - This gate applies to every subsequent Simulink library revision as well as
   the initial release.
-- Use `ssh hibino` for hibino. For multi-line remote PowerShell, follow
+- Use `ssh mdx1` and `ssh mdx2` for the two compute targets. Follow
   the repository SSH policy: pipe a script into
-  `ssh hibino 'pwsh -ExecutionPolicy Bypass -Command -'`.
+  `ssh mdx1 'pwsh -ExecutionPolicy Bypass -Command -'`.
 - Keep `packages/radia-mcp/src/radia_mcp/radia_ngsolve/knowledge/` and the
   checked `radia_mcp.meta` discovery catalog in sync when changing release or
   deploy knowledge. The live MCP registry is the authoritative tool inventory;
