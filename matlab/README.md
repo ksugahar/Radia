@@ -583,7 +583,7 @@ field-sensitive refinement.
 - `radia.RadiaField` B/H/A/M/Phi CoefficientFunctions with coordinate
   transforms, reusable point caches, and native trilinear voxel interpolation
 - B-input `radia.EnergyStopMaterial` with checked native-handle lifetime
-- complex dense solve and mixed-Galerkin Schur complement
+- complex dense solve and bulk/surface Schur complement (Foster + SIBC for eigenmode bulk)
 - skin impedance and SIBC tail/termination kernels
 - CLN Lanczos reduction, tridiagonal construction, impedance sweeps,
   loop-star coupling transforms, and ACA/SVD star compression
