@@ -1,8 +1,9 @@
 """CLN expansion-point + SIBC orthogonal-residual theory.
 
 POLICY NOTE (2026-06-12): The Warburg-Schur termination described in
-this module was SUPERSEDED by the bulk + SIBC (CLN/Krylov or Foster bulk + HOIBC
-surface envelope, Schur-coupled, no `d` parameter) framework.  The
+this module was SUPERSEDED by Schur-coupled bulk + SIBC enrichment, without
+a fitted `d` parameter. The bulk uses Foster eigenmodes or CLN/Krylov vectors
+as specified by the case; HOIBC adds optional higher-order surface corrections. The
 Warburg-Schur code was hard-deleted from the repo on 2026-06-12; see
 `memory/project_warburg_schur_deprecated_2026_06_12.md` for the
 history.  This knowledge module is kept for context but its
