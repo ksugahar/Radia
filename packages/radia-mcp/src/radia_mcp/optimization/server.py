@@ -6,6 +6,7 @@ from .. import __version__
 from ..common.mcp_contract import apply_tool_contract
 from .diagnostics import optimization_gradient_check, optimization_stopping_audit
 from .constraints import optimization_kkt_audit, optimization_projected_gradient_audit
+from .splitting import optimization_proximal_gradient_audit, optimization_admm_consensus_audit
 
 mcp = FastMCP("radia-optimization-domain", instructions=(
     "Solver-neutral optimization diagnostics on caller-supplied evidence. "
@@ -19,6 +20,8 @@ mcp.add_tool(optimization_gradient_check, annotations=_read_only)
 mcp.add_tool(optimization_stopping_audit, annotations=_read_only)
 mcp.add_tool(optimization_kkt_audit, annotations=_read_only)
 mcp.add_tool(optimization_projected_gradient_audit, annotations=_read_only)
+mcp.add_tool(optimization_proximal_gradient_audit, annotations=_read_only)
+mcp.add_tool(optimization_admm_consensus_audit, annotations=_read_only)
 
 
 @mcp.tool(annotations=_read_only)
@@ -34,7 +37,14 @@ def optimization_guide() -> dict[str, Any]:
         "constraint_source": "Kanamori et al. (2016), sections 3.2 and 10.1; fixed-scale residuals are engineering diagnostics, not verbatim source algorithms.",
         "helpers": {"least_squares": "radia_mcp.optimization.nonlinear_lsq", "regularized_inverse": "radia_mcp.optimization.linear_inverse", "linear_cg": "radia_mcp.matrix_solvers.krylov"},
         "helper_caution": "Legacy topology_optimization imports re-export the same helpers. LM converged is only an absolute gradient check; inspect termination_reason and independently check derivatives. Helpers are not additional MCP tools or production solver replacements.",
-        "deferred": ["proximal/ADMM guidance", "global-search helper ownership audit"],
+        "splitting": {
+            "proximal": "optimization_proximal_gradient_audit checks supplied L1/disjoint group-L2 prox results and mappings in normalized coordinates. Differentiate only the smooth term. Overlap/TV need different operators.",
+            "admm": "optimization_admm_consensus_audit checks both residuals for fixed-rho unrelaxed two-block x=z only; subproblem optimality and dual updates are not verified.",
+            "scaling": "Normalize variables AND the objective, gradients, penalty weights and duals consistently before solving. Unequal within-group variable scaling generally changes an isotropic group-L2 penalty; do not reuse its old weights blindly.",
+            "applications": "L1 can promote sparse coil excitations; disjoint group L2 can select grouped sources; TV penalizes spatial differences, not individual amplitudes. These are modeling choices, not guarantees of manufacturability or validated field designs.",
+            "sources": ["Kanamori et al. (2016), sections 12.3.1 and 15.3.1", "Boyd et al. (2011), ADMM, section 3.3: https://web.stanford.edu/~boyd/papers/admm_distr_stats.html"],
+        },
+        "deferred": ["general/relaxed/adaptive-rho ADMM", "overlapping-group/TV diagnostics", "global-search helper ownership audit"],
     }
 
 
