@@ -913,7 +913,10 @@ private:
     // Symmetric reference-triangle rule for the base of each radial Duffy
     // sub-tet.  This removes reference-vertex-order dependence and reduces the
     // inner curved kernel from nq^3 to nq*ntri evaluations.
-    std::vector<int> m_curvedTouchBlockIndex;          // canonical host-pair -> block slot, -1 if non-touching
+    // Canonical touching host pair (lo << 32 | hi over the cell-then-face host numbering) -> block slot.
+    // A hash map, not an n_host x n_host table: the table cost 22 GB on a 63k-tet mesh (75k hosts) and
+    // took hibino down through its commit limit, while the touching pairs themselves number ~16 per host.
+    std::unordered_map<unsigned long long, int> m_curvedTouchBlockIndex;
     std::vector<std::vector<double>> m_curvedTouchBlocks; // precomputed symmetric touching blocks
     double m_curvedTouchBuildTime = 0.0;
     void PrecomputeCurvedTouchBlocks();

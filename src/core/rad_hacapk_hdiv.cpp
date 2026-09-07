@@ -2077,16 +2077,49 @@ void RadHACApKChargeGram::PrecomputeCurvedTouchBlocks()
     const int n_cell = (int)(m_cellVertices.size()/4);
     const int n_face = (int)(m_faceVertices.size()/3);
     const int n_host = n_cell + n_face;
-    m_curvedTouchBlockIndex.assign((size_t)n_host*n_host, -1);
+    // Candidate pairs come from the vertex -> host incidence (a touching pair shares at least one
+    // vertex), so the enumeration is O(hosts x neighbours) instead of an n_host^2 scan; the slot
+    // order (ga ascending, then gb ascending) is deterministic.
+    auto host_vertices = [&](int g, int& count) -> const int* {
+        if (g < n_cell) { count = 4; return &m_cellVertices[(size_t)4*g]; }
+        count = 3; return &m_faceVertices[(size_t)3*(g-n_cell)];
+    };
+    int n_vertex = 0;
+    for (int v : m_cellVertices) n_vertex = std::max(n_vertex, v + 1);
+    for (int v : m_faceVertices) n_vertex = std::max(n_vertex, v + 1);
+    std::vector<int> incidence_count((size_t)n_vertex + 1, 0);
+    for (int g = 0; g < n_host; ++g) {
+        int nv = 0; const int* verts = host_vertices(g, nv);
+        for (int i = 0; i < nv; ++i) ++incidence_count[(size_t)verts[i] + 1];
+    }
+    for (int v = 0; v < n_vertex; ++v) incidence_count[(size_t)v + 1] += incidence_count[(size_t)v];
+    std::vector<int> incidence(incidence_count.back());
+    {
+        std::vector<int> cursor(incidence_count.begin(), incidence_count.end() - 1);
+        for (int g = 0; g < n_host; ++g) {
+            int nv = 0; const int* verts = host_vertices(g, nv);
+            for (int i = 0; i < nv; ++i) incidence[(size_t)cursor[(size_t)verts[i]]++] = g;
+        }
+    }
+    m_curvedTouchBlockIndex.clear();
     std::vector<std::pair<int,int>> pairs;
+    std::vector<int> candidates;
     for (int ga = 0; ga < n_host; ++ga) {
         const int kindA = ga < n_cell ? 0 : 1;
         const int hostA = ga < n_cell ? ga : ga-n_cell;
-        for (int gb = ga; gb < n_host; ++gb) {
+        int nv = 0; const int* verts = host_vertices(ga, nv);
+        candidates.clear();
+        for (int i = 0; i < nv; ++i)
+            for (int k = incidence_count[(size_t)verts[i]]; k < incidence_count[(size_t)verts[i] + 1]; ++k)
+                if (incidence[(size_t)k] >= ga) candidates.push_back(incidence[(size_t)k]);
+        std::sort(candidates.begin(), candidates.end());
+        candidates.erase(std::unique(candidates.begin(), candidates.end()), candidates.end());
+        for (int gb : candidates) {
             const int kindB = gb < n_cell ? 0 : 1;
             const int hostB = gb < n_cell ? gb : gb-n_cell;
             if (!CurvedHostsTouch(kindA, hostA, kindB, hostB)) continue;
-            m_curvedTouchBlockIndex[(size_t)ga*n_host + gb] = (int)pairs.size();
+            m_curvedTouchBlockIndex.emplace(
+                ((unsigned long long)(unsigned)ga << 32) | (unsigned long long)(unsigned)gb, (int)pairs.size());
             pairs.emplace_back(ga, gb);
         }
     }
@@ -2127,12 +2160,13 @@ bool RadHACApKChargeGram::CurvedTouchBlockValue(
 {
     if (m_curvedTouchBlockIndex.empty()) return false;
     const int n_cell = (int)(m_cellVertices.size()/4);
-    const int n_host = n_cell + (int)(m_faceVertices.size()/3);
     const int ga = kindA == 0 ? hostA : n_cell+hostA;
     const int gb = kindB == 0 ? hostB : n_cell+hostB;
     const int lo = std::min(ga, gb), hi = std::max(ga, gb);
-    const int slot = m_curvedTouchBlockIndex[(size_t)lo*n_host + hi];
-    if (slot < 0) return false;
+    const auto it = m_curvedTouchBlockIndex.find(
+        ((unsigned long long)(unsigned)lo << 32) | (unsigned long long)(unsigned)hi);
+    if (it == m_curvedTouchBlockIndex.end()) return false;
+    const int slot = it->second;
     const int kind_hi = hi < n_cell ? 0 : 1;
     const int host_hi = hi < n_cell ? hi : hi-n_cell;
     const int n_hi = kind_hi == 0 ? (int)m_hoCellCharges[host_hi].size()
