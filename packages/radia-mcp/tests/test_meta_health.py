@@ -90,6 +90,10 @@ def test_every_cataloged_server_has_register_status_tool():
 
     missing = []
     for name, info in catalog.CATALOG.items():
+        if info.get("kind") == "capability-pack":
+            # Public protocol status/schema coverage lives in test_capability_packs.
+            assert "capability_pack_status" in info["primary_tools"]
+            continue
         subpkg_dir = info["subpackage"].replace("radia_mcp.", "")
         server_py = src_root / subpkg_dir / "server.py"
         if not server_py.exists():
