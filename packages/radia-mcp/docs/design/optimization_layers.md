@@ -58,8 +58,8 @@ distributed and no model-weight training is performed.
    keep constrained stationarity distinct from sufficiency.
 2. Audit remaining global-search helper ownership without merging Bayesian,
    evolutionary and local smooth search merely because all optimize objectives.
-3. Proximal methods/ADMM and structured regularization; connect verified cases
-   to inverse magnetic-field/coil design rather than invent generic solvers.
+3. Extend splitting diagnostics to justified general-constraint/TV cases and
+   connect them to independently validated physical inverse-design workflows.
 4. Keep Bayesian/evolutionary search distinct; use local refinement only when
    smoothness, derivative accuracy and constraints permit it.
 
@@ -155,3 +155,60 @@ Two numerical edge cases were corrected during migration:
 These compact teaching helpers are not replacements for established production
 optimization libraries. Existing coil-fit, analytic and SciPy comparison tests
 remain authoritative regressions; no new physics solve is needed for the move.
+
+## Proximal methods and structured regularization
+
+`optimization_proximal_gradient_audit` accepts a supplied proximal point p for
+the normalized objective f+R. It checks the condition
+0 in (p-x)/alpha + grad f(x) + partial R(p), separately from the mapping
+(x-p)/alpha. Thus a fabricated p=x cannot pass merely because its mapping is
+zero. Only the smooth part f belongs in `smooth_gradient`.
+
+Supported penalties are coordinate-weighted L1 and disjoint group L2 with
+nonnegative weights. Group indices are zero-based and must partition all
+coordinates exactly once. For a nonzero group, the subgradient direction is
+fixed; at an exactly zero group it is a Euclidean ball. Tiny nonzero groups are
+not silently snapped to zero. The proximal-condition metric is the maximum
+group L2 residual; the mapping metric is an infinity norm. Their positive
+tolerances are explicit. Valid proximal evidence and a small mapping yield
+only `first_order_candidate`, not an optimality or convergence certificate.
+Gradient accuracy, descent/line search and Lipschitz assumptions are unverified.
+
+Inputs must already share dimensionless coordinates and objective units.
+Changing variable scales also changes gradients and regularization: unequal
+scaling inside a group generally changes an isotropic group norm. Do not feed
+physical coordinates into a normalized penalty or rescale only the gradient.
+Overlapping groups, TV, nuclear norms and constraints are not supported by this
+diagnostic. Box-only indicators use the existing projected-gradient audit.
+
+L1 may model sparse source amplitudes; group L2 may model selecting source
+groups. TV concerns neighboring differences, not amplitudes, so elementwise
+soft-thresholding is not a TV prox. Choices of groups, units and weights require
+engineering justification. None of these penalties proves manufacturability.
+The focused regression uses a **synthetic diagonal inverse map**, with an exact
+Lasso solution as an independent reference; it is not a physical coil model.
+
+Source: Kanamori et al. (2016), sections 12.3.1 and 15.3.1, especially the L1
+and disjoint-group proximal examples. The subproblem audit is an implementation
+contract derived from their optimality conditions, not a new optimizer. The
+book is not bundled.
+
+## Consensus ADMM residuals
+
+`optimization_admm_consensus_audit` supports only standard, unrelaxed,
+fixed-rho, two-block ADMM for f(x)+g(z) subject to x=z. Supply normalized
+post-update x,z,u and previous z; u=y/rho is the scaled dual.
+It reports r=x-z and s=-rho*(z-previous_z) through their L2 norms.
+The thresholds are sqrt(n)*atol+rtol*max(norm(x),norm(z)) and
+sqrt(n)*atol+rtol*norm(rho*u), respectively. Both must pass for `residuals_small`.
+
+Subproblem optimality, dual-update correctness, iteration provenance and
+convexity/saddle-point assumptions remain unverified. Even stationary forged
+data can have zero residuals; the result therefore never certifies optimality.
+General A/B constraints, adaptive penalties, relaxation and multiblock schemes
+are rejected. There is no automatic rho tuning or solver execution.
+
+Reference: [Boyd et al., Distributed Optimization and Statistical Learning via
+the Alternating Direction Method of Multipliers (2011), section 3.3](https://web.stanford.edu/~boyd/papers/admm_distr_stats.html).
+This specialization and its normalized-coordinate contract are explicit;
+the two tools compose into the existing radia-design optimization profile.
