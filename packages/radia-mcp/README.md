@@ -1,5 +1,7 @@
 # radia-mcp
 
+Optimization now has a [solver-neutral and electromagnetic two-layer boundary](docs/design/optimization_layers.md), composed through the existing `radia-design` profile.
+
 For fewer client processes, use the [capability packs](docs/design/capability_packs.md).
 They combine related domains with startup-selected profiles while preserving old
 commands. `paper-writing` now includes grant and poster tools as well as slides
