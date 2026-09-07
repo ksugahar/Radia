@@ -44,7 +44,13 @@ def optimization_guide() -> dict[str, Any]:
             "applications": "L1 can promote sparse coil excitations; disjoint group L2 can select grouped sources; TV penalizes spatial differences, not individual amplitudes. These are modeling choices, not guarantees of manufacturability or validated field designs.",
             "sources": ["Kanamori et al. (2016), sections 12.3.1 and 15.3.1", "Boyd et al. (2011), ADMM, section 3.3: https://web.stanford.edu/~boyd/papers/admm_distr_stats.html"],
         },
-        "deferred": ["general/relaxed/adaptive-rho ADMM", "overlapping-group/TV diagnostics", "global-search helper ownership audit"],
+        "search_ownership": {
+            "helpers": "radia_mcp.optimization.global_optimizers owns the existing DE and feasibility-selection helpers; old topology imports are identity aliases. Bayesian and evolutionary guidance remain separate. Prefer established ecosystem solvers for production.",
+            "selection_limits": "Legacy selection assumes missing constraints mean unconstrained and does not validate finite inputs. Validate complete finite evidence and normalize constraint residuals before ranking; a least-violating fallback is not feasible.",
+            "search_limits": "DE population spread is a termination heuristic, not stationarity or global optimality. Local refinement requires smoothness and independently checked derivatives; do not polish across discrete switches blindly.",
+            "regression_gates": "Existing topology multistart and simplex gates remain reproduction-specific. Their ok means the specified regression evidence passed, not all solvers converged: multistart requires the old zero-start collapse and simplex requires detection of false convergence. Use common optimization audits for new runs.",
+        },
+        "deferred": ["general/relaxed/adaptive-rho ADMM", "overlapping-group/TV diagnostics", "independent physical inverse-design demonstration"],
     }
 
 

@@ -1,6 +1,7 @@
 import copy
 import json
 
+
 from radia_mcp.topology_optimization.server import topology_opt_simplex_stationarity_audit_gate
 from radia_mcp.topology_optimization.simplex_stationarity_gate import evaluate_simplex_stationarity_audit
 
@@ -58,3 +59,12 @@ def test_simplex_stationarity_audit_rejects_duplicate_method_ids():
     result = evaluate_simplex_stationarity_audit(bad)
     assert result["status"] == "needs_attention"
     assert result["checks"]["method_ids_unique"] is False
+
+
+def test_gate_is_reproduction_contract_not_all_methods_success():
+    summary = _summary()
+    summary["methods"][0].update(x=[0.0, -0.5], objective=-0.25, gradient=[0.0, 0.0])
+    result = evaluate_simplex_stationarity_audit(summary)
+    assert all(row["accepted"] for row in result["methods"])
+    assert result["status"] == "needs_attention"
+    assert not result["checks"]["candidate_false_convergence_detected"]
