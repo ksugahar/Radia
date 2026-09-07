@@ -27,8 +27,10 @@ _CAPABILITIES = (
     HDivCapability(2, "tri-quad", 1, (1, 2), 2),
     HDivCapability(2, "tri-quad", 2, (1, 2, 3), 3),
     # Broken RT0 is the material-topology space: constant cell divergence and
-    # constant normal jump per facet, on straight affine TETs or HEXes.  The
-    # higher-order body-fitted/Trafo solve remains BDM1/BDM2.
+    # constant normal jump per facet, on straight affine TETs or HEXes.  It is
+    # the operator space of radia.topology_optimization (DemagOperator on
+    # HDiv(order=0, discontinuous=True)) and NOT a production solve order:
+    # vim.Solve refuses order 0.  The body-fitted solve is BDM1/BDM2.
     HDivCapability(3, "tet", 0, (1,), 1),
     HDivCapability(3, "tet", 1, (1, 2), 2),
     HDivCapability(3, "tet", 2, (1, 2), 2),

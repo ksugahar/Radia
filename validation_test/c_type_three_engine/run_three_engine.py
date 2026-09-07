@@ -510,6 +510,18 @@ def solve_omega(
     }
 
 
+def _process_peak_memory_mb() -> float | None:
+    """Peak working set of this process in MB (Windows ``peak_wset``, else RSS), for memory evidence."""
+    try:
+        import os
+        import psutil
+    except ImportError:  # pragma: no cover - psutil is a runtime dependency on the validation hosts
+        return None
+    info = psutil.Process(os.getpid()).memory_info()
+    peak = getattr(info, "peak_wset", None) or info.rss
+    return float(peak) / (1024.0 * 1024.0)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mesh-dir", type=Path, required=True)
@@ -794,6 +806,7 @@ def main() -> None:
         "passed": passed,
         "machine": platform.node(),
         "python": sys.version,
+        "peak_process_memory_mb": _process_peak_memory_mb(),
         "radia_version": radia_version,
         "radia_module": str(rad.__file__),
         "mode": options.mode,
