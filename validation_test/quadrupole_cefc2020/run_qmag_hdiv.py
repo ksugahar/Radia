@@ -42,6 +42,41 @@ SCHEMA = "radia.qmag-cefc2020-hdiv-result.v1"
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+def implementation_identity() -> dict:
+    """Bind a measurement to the exact implementation that produced it.
+
+    A version string does not separate two candidate builds of the same version, so the record also
+    carries the SHA-256 of the loaded native extension and, when the run resolves from a source tree,
+    the git commit and worktree state of that tree.
+    """
+    import subprocess
+
+    module = Path(rad.__file__).resolve()
+    native = module.parent / "_radia_pybind.pyd"
+    identity = {
+        "radia_version": getattr(rad, "__version__", None),
+        "radia_module": str(module),
+        "native_extension": str(native) if native.is_file() else None,
+        "native_sha256": _sha256(native) if native.is_file() else None,
+        "native_mtime_utc": (datetime.fromtimestamp(native.stat().st_mtime, timezone.utc).isoformat()
+                             if native.is_file() else None),
+    }
+    for candidate in (module.parents[2], Path(__file__).resolve().parents[2]):
+        git = candidate / ".git"
+        if not (git.is_dir() or git.is_file()):
+            continue
+        try:
+            head = subprocess.run(["git", "-C", str(candidate), "rev-parse", "HEAD"],
+                                  capture_output=True, text=True, check=True).stdout.strip()
+            dirty = subprocess.run(["git", "-C", str(candidate), "status", "--porcelain"],
+                                   capture_output=True, text=True, check=True).stdout.strip()
+        except (OSError, subprocess.CalledProcessError):
+            continue
+        identity["source_tree"] = str(candidate)
+        identity["source_commit"] = head
+        identity["source_tracked_clean"] = not dirty
+        break
+    return identity
 
 
 def _load_engines():
@@ -124,6 +159,7 @@ def main(argv=None) -> int:
         failures.append(f"B_perp is not odd along the diagonal (even part {even_part:.2e})")
     report = {
         "schema": SCHEMA, "generated_at_utc": datetime.now(timezone.utc).isoformat(), "host": platform.node(),
+        "implementation": implementation_identity(),
         "radia_version": getattr(rad, "__version__", None), "radia_file": rad.__file__,
         "case": case,
         "mesh": {"path": str(mesh_path), "sha256": _sha256(mesh_path), "ne": int(mesh.ne), "nv": int(mesh.nv),
