@@ -96,9 +96,9 @@ def Y_cln_pade(s: complex, N: int, a: float, sigma: float, mu: float, *,
 
     with ``j_n`` the zeros of J_0 and ``lambda_n = (j_n / a)^2``. A Cauer
     ladder of ``N`` stages is the Pade approximant of that series at ``s = 0``,
-    so the truncation is computed here rather than by running the ladder
-    recursion: the two agree, and the Pade route does not lose digits to the
-    difference-and-divide step the recursion takes.
+    computed here by an orthogonal Krylov projection of the modal resolvent.
+    This preserves the finite-modal Taylor moments without solving their
+    ill-conditioned Hankel system in double precision.
 
     That is also why the truncated ladder has the wrong tail. A Pade
     approximant is rational, and a rational function has an integer asymptotic
@@ -114,8 +114,9 @@ def Y_cln_pade(s: complex, N: int, a: float, sigma: float, mu: float, *,
         kind: ``"L"`` for the inductance-terminated ladder, Pade [N-1/N];
             ``"R"`` for the resistance-terminated one, Pade [N/N].
         n_modes: Bessel zeros used to build the moments.
-        n_taylor: highest Taylor order retained before the Pade solve; must be
-            at least ``2N`` for kind ``"R"``.
+        n_taylor: compatibility parameter bounding the requested Taylor order;
+            must be at least ``2N`` for kind ``"R"``. Moments are matched
+            implicitly, not formed as a dense Hankel system.
 
     Returns:
         The truncated ladder's admittance at ``s``.
@@ -141,7 +142,7 @@ def Y_cln_pade(s: complex, N: int, a: float, sigma: float, mu: float, *,
         raise ValueError(f"n_modes must be at least 1, not {n_modes!r}")
     if n_taylor < 0:
         raise ValueError(f"n_taylor must be non-negative, not {n_taylor!r}")
-    if a <= 0.0 or sigma <= 0.0 or mu <= 0.0:
+    if any(not math.isfinite(value) or value <= 0.0 for value in (a, sigma, mu)):
         raise ValueError("a, sigma, and mu must be positive")
 
     kind = kind.upper()
@@ -156,33 +157,40 @@ def Y_cln_pade(s: complex, N: int, a: float, sigma: float, mu: float, *,
             f"Pade [{m}/{n}] needs {m + n} Taylor terms; n_taylor={n_taylor}")
 
     zeros = jn_zeros(0, n_modes)
-    eigenvalues = zeros**2
+    inverse_eigenvalues = 1.0 / zeros**2
     cn = 4.0 / zeros ** 2
-
-    # Build in the dimensionless variable u = s*mu*sigma*a^2. Using the
-    # dimensional eigenvalues (j_n/a)^2 makes the Pade system needlessly
-    # ill-conditioned and breaks geometric similarity at roundoff level.
-    # Y/Y_DC = a_0 + a_1 u + ... with
-    # a_0 = 1 and a_k = (-1)^k sum_n cn/(j_n^2)^k.
-    coef = np.empty(n_taylor + 1)
-    coef[0] = 1.0
-    for k in range(1, n_taylor + 1):
-        coef[k] = (-1) ** k * float(np.sum(cn / eigenvalues**k))
-
-    # Q from the coefficients of z^(m+1) .. z^(m+n), with q_0 = 1
-    mat = np.zeros((n, n))
-    rhs = np.zeros(n)
-    for i, k in enumerate(range(m + 1, m + n + 1)):
-        for j in range(1, n + 1):
-            if 0 <= k - j <= n_taylor:
-                mat[i, j - 1] = coef[k - j]
-        rhs[i] = -coef[k]
-    Q = np.concatenate([[1.0], np.linalg.solve(mat, rhs)])
-
-    P = np.array([sum(Q[j] * coef[k - j] for j in range(min(k, n) + 1))
-                  for k in range(m + 1)])
-
     u = s * mu * sigma * a**2
-    num = sum(P[k] * u**k for k in range(m + 1))
-    den = sum(Q[k] * u**k for k in range(n + 1))
-    return Y_DC_cylinder(a, sigma) * num / den
+    if u == 0:
+        return Y_DC_cylinder(a, sigma)
+
+    if kind == "R":
+        # Y = 1 - u b.T (I + u T)^-1 b, T = diag(1/j_n^2).
+        # An N-vector projection of this resolvent gives [N/N] for Y.
+        source = np.sqrt(cn * inverse_eigenvalues)
+    else:
+        # The finite-modal reference has a constant omitted-mode weight.
+        # Place it at T=0: DC and every original Taylor moment stay exact.
+        # Replacing it by a finite, guessed pole would change the reference.
+        source = np.sqrt(np.append(cn, max(0.0, 1.0 - cn.sum())))
+        inverse_eigenvalues = np.append(inverse_eigenvalues, 0.0)
+
+    vector = source / np.linalg.norm(source)
+    columns = []
+    for _ in range(min(N, len(source))):
+        columns.append(vector)
+        basis = np.column_stack(columns)
+        candidate = inverse_eigenvalues * vector
+        # Reorthogonalization avoids the loss of rank from raw Krylov powers.
+        for _ in range(2):
+            candidate -= basis @ (basis.T @ candidate)
+        norm = np.linalg.norm(candidate)
+        if norm <= 32 * np.finfo(float).eps * inverse_eigenvalues.max():
+            break
+        vector = candidate / norm
+
+    reduced = basis.T @ (inverse_eigenvalues[:, None] * basis)
+    projected = basis.T @ source
+    response = projected @ np.linalg.solve(
+        np.eye(len(columns)) + u * reduced, projected)
+    ratio = 1.0 - u * response if kind == "R" else response
+    return Y_DC_cylinder(a, sigma) * ratio
