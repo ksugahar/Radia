@@ -32,7 +32,9 @@ def optimization_guide() -> dict[str, Any]:
         "routes": {"smooth_unconstrained": "optimization", "pde_adjoint": "topology_optimization", "black_box": "bayesian_opt/evolutionary", "linear_cg": "matrix_solvers; distinguish from nonlinear CG"},
         "constraints": "Use optimization_kkt_audit for smooth g<=0, h=0 with physical multipliers and row Jacobians; use optimization_projected_gradient_audit for box-only problems. Both need explicit scales and cannot certify optimality or constraint qualifications.",
         "constraint_source": "Kanamori et al. (2016), sections 3.2 and 10.1; fixed-scale residuals are engineering diagnostics, not verbatim source algorithms.",
-        "deferred": ["proximal/ADMM guidance", "remaining generic helper migration"],
+        "helpers": {"least_squares": "radia_mcp.optimization.nonlinear_lsq", "regularized_inverse": "radia_mcp.optimization.linear_inverse", "linear_cg": "radia_mcp.matrix_solvers.krylov"},
+        "helper_caution": "Legacy topology_optimization imports re-export the same helpers. LM converged is only an absolute gradient check; inspect termination_reason and independently check derivatives. Helpers are not additional MCP tools or production solver replacements.",
+        "deferred": ["proximal/ADMM guidance", "global-search helper ownership audit"],
     }
 
 

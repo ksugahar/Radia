@@ -20,6 +20,46 @@ from radia_mcp.topology_optimization.nonlinear_lsq import levenberg_marquardt
 MU0 = 4e-7 * math.pi
 
 
+def test_legacy_import_is_canonical_helper():
+    from radia_mcp.optimization.nonlinear_lsq import levenberg_marquardt as canonical
+    assert levenberg_marquardt is canonical
+
+
+def test_no_improvement_is_not_convergence():
+    # Deliberately inconsistent Jacobian: every trial leaves the cost unchanged.
+    out = levenberg_marquardt(lambda x: np.array([1.0]), [0.0], jac=lambda x: [[1.0]])
+    assert not out["converged"]
+    assert out["termination_reason"] == "no_improvement"
+    assert out["grad_norm"] == 1.0
+
+
+@pytest.mark.parametrize("options,reason", [
+    ({"max_iter": 1}, "iteration_limit"), ({"xtol": 10.0}, "step_tolerance"),
+])
+def test_final_gradient_and_small_step_are_not_false_success(options, reason):
+    out = levenberg_marquardt(lambda x: x - 1.0, [0.0], jac=lambda x: [[1.0]], **options)
+    assert not out["converged"]
+    assert out["termination_reason"] == reason
+    assert out["grad_norm"] == pytest.approx(abs(out["x"][0]-1.0))
+    assert out["cost"] == pytest.approx(.5*(out["x"][0]-1.0)**2)
+
+
+@pytest.mark.parametrize("options", [{"max_iter": 0}, {"max_iter": 1.5},
+    {"lam0": -1}, {"eps": 0}, {"gtol": np.inf}, {"xtol": np.nan}])
+def test_invalid_controls_fail_loudly(options):
+    with pytest.raises(ValueError):
+        levenberg_marquardt(lambda x: x, [1.0], **options)
+
+
+def test_invalid_callback_evidence_fails_loudly():
+    with pytest.raises(ValueError, match="residual"):
+        levenberg_marquardt(lambda x: [np.nan], [0.0])
+    with pytest.raises(ValueError, match="Jacobian"):
+        levenberg_marquardt(lambda x: x, [1.0], jac=lambda x: [[np.inf]])
+    with pytest.raises(ValueError, match="Jacobian"):
+        levenberg_marquardt(lambda x: x, [1.0], jac=lambda x: [[1,2]])
+
+
 def test_exact_parameter_recovery_exponential():
     # y = a exp(b t) + c, noiseless -> LM recovers (a,b,c) to ~machine precision
     t = np.linspace(0, 2, 25)

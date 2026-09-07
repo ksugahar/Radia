@@ -326,7 +326,7 @@ design method and the linear core under the `field_synthesis` PM-multipole / str
 function inverse: the analytic multipole identity gives the columns of A; this solver
 inverts it stably.
 
-IMPLEMENTATION (radia_mcp.topology_optimization.linear_inverse):
+IMPLEMENTATION (radia_mcp.optimization.linear_inverse; old topology import retained):
   tsvd_solve(A, b, k)        TSVD solution keeping k modes (k=rank -> pinv).
   tikhonov_solve(A, b, lam)  Tikhonov solution, argmin ||A x - b||^2 + lam^2 ||x||^2.
   filter_factors(s, lam)     phi_n = s_n^2/(s_n^2+lam^2).
@@ -352,7 +352,7 @@ inverts it stably; `outer_loop` then tunes the manufacturable parameters around 
 KRYLOV_SOLVERS = r"""
 ## Krylov inner solves -- Linear Conjugate Gradient (the `pcg` member)
 
-`krylov.linear_conjugate_gradient(operator, b, x0=None, ...)` solves SPD systems
+`radia_mcp.matrix_solvers.krylov.linear_conjugate_gradient(operator, b, x0=None, ...)` solves SPD systems
 `A x = b` using only matrix-vector products.  It is the quadratic-minimization
 workhorse behind PDE-constrained optimization, Newton/LM inner systems, and
 regularized inverse problems when `A` is too large to factor:
@@ -375,7 +375,7 @@ non-SPD / invalid inputs fail loudly.
 NONLINEAR_LSQ = r"""
 ## Nonlinear least squares -- Levenberg-Marquardt (the `lsqnonlin` member)
 
-`nonlinear_lsq.levenberg_marquardt(residual, x0, jac=None)` minimises 0.5||r(x)||^2 by
+`radia_mcp.optimization.nonlinear_lsq.levenberg_marquardt(residual, x0, jac=None)` minimises 0.5||r(x)||^2 by
 interpolating Gauss-Newton and gradient descent:
 
     (J^T J + lam I) delta = -J^T r ,   x <- x + delta ,
@@ -398,6 +398,11 @@ Verified (test_topology_nonlinear_lsq): exponential-model parameter recovery to 
 circular-loop on-axis field B_z=mu0 I a^2/(2(a^2+z^2)^{3/2}) -> (I,a) recovered to ~1e-14 after
 normalisation; Rosenbrock residuals [1-x, 10(y-x^2)] -> (1,1), cost 0; and agreement with
 scipy.optimize.least_squares(method='lm') to ~1e-15.
+
+The old topology_optimization imports remain available. Read termination_reason:
+no improvement or a small step alone is NOT convergence. grad_norm describes the
+returned iterate; converged only means the absolute gradient tolerance holds.
+This compact NumPy helper is not a replacement for production ecosystem solvers.
 """
 
 
