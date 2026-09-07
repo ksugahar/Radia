@@ -1,4 +1,10 @@
-"""schur.py -- mixed Galerkin admittance in Schur (coupled) form on a box.
+"""schur.py -- Foster + SIBC admittance in Schur-coupled form on a box.
+
+The legacy module/class identifiers are retained for compatibility. This
+scalar enriched-space construction is not a mixed finite-element formulation.
+Its bulk basis is Foster (Dirichlet eigenmodes), not CLN/Krylov. Validation
+cases using CLN/Krylov bulk must be identified as CLN + SIBC; they do not
+establish a change of the public eigenmode-coordinate API (lam, tau, Y_bulk).
 
 The bulk eigenmodes phi_n (Dirichlet Laplacian, vanish on the boundary) and
 the surface envelope psi (vanishes on the boundary, tends to -1 inside)
@@ -171,7 +177,9 @@ def box_of_mesh(mesh, rel_tol=1e-6):
 # the coupled model
 # ---------------------------------------------------------------------------
 class BoxMixedGalerkin:
-    """Mixed Galerkin (Schur form) eddy-current admittance of a box conductor.
+    """Foster + SIBC (Schur form) eddy-current admittance of a box conductor.
+
+    The class name is a legacy compatibility identifier.
 
     Parameters
     ----------
