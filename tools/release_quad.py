@@ -1549,8 +1549,8 @@ def _fresh_import_origin(pkg):
 def _verify_lab_editable(packages=None):
     """Check the 4 LAB-editable packages still point at NAS source.
 
-    Returns (n_ok, n_drift, n_missing, details) tuple.  Drift is the
-    one we care about for the "release-done" gate -- it means LAB
+    Returns the number of drifted packages. Drift is the
+    condition checked by the "release-done" gate -- it means LAB
     cannot dev-loop on that package because edits won't reflect.
 
     Missing for `mcp-server-document` is OK (LAB-private, may not be
@@ -1585,6 +1585,12 @@ def _verify_lab_editable(packages=None):
                  f"pip show output")
             n_drift += 1
             details.append((pkg, "no_location", "?"))
+            continue
+
+        if not d.get("editable project location"):
+            fail(f"{pkg:25s}  v{version}  NOT EDITABLE")
+            n_drift += 1
+            details.append((pkg, "not_editable", editable))
             continue
 
         if d.get("editable project location"):
@@ -1623,11 +1629,12 @@ def _verify_lab_editable(packages=None):
         fail(f"{n_drift} LAB-editable package(s) DRIFTED.  Fix:")
         for pkg, why, _got in details:
             print(f"        # {pkg} ({why})")
-            print(f"        Get-Process | Where-Object {{ $_.Name -like "
-                  f"'mcp-server*' }} | Stop-Process -Force")
-            print(f"        pip uninstall -y {pkg}")
-            print(f"        pip install -e {dict(packages)[pkg]} "
-                  f"--no-deps --no-cache-dir")
+            print("        At a quiet boundary, disconnect only the affected "
+                  "client/server; preserve unrelated sessions.")
+            print(f'        & "{sys.executable}" -m pip install -e '
+                  f'"{dict(packages)[pkg]}" --no-deps --no-build-isolation')
+            print("        Verify metadata and actual import origin, then "
+                  "reconnect and verify the live client.")
         print("")
         print("        See CLAUDE.md \"POLICY (2026-05-27): release 後の "
               "LAB editable 再確認\" for the full recovery procedure.")
