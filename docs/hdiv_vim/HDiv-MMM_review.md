@@ -1604,9 +1604,9 @@ source:
 
 | engine | unknowns | wall [s] |
 |---|---|---|
-| HDiv-MMM, BDM1, iron-only HEX | 62,192 | 66 |
-| HCurl reduced-A, Periodic Kelvin BDDC | 705,838 | 0 |
-| mixed total/reduced Omega, Anderson depth 2 | 223,676 | 0 |
+| HDiv-MMM, BDM1, iron-only HEX | 62,192 | 69 |
+| HCurl reduced-A, Periodic Kelvin BDDC | 705,838 | 745 |
+| mixed total/reduced Omega, Anderson depth 2 | 223,676 | 1454 |
 
 | pair | core RMS (27 points) | full stencil (45 points) |
 |---|---|---|
@@ -1620,6 +1620,6 @@ The acceptance limit is 3 % on the core stencil and the maximum is
 comparable problem.  Two readings: the three formulations agree on an
 iron-dominated nonlinear quadrupole to under 1 %, and HDiv-MMM reaches that
 agreement with 62,192 unknowns on the iron alone against 705,838 for
-reduced-A and 223,676 for the mixed Omega route, in 66 s of the 38-minute
-run.  The reduced-A Kelvin BDDC replay row is closed by the same run.
+reduced-A and 223,676 for the mixed Omega route, in 69 s against
+745 s and 1454 s for the two FEM routes.  The reduced-A Kelvin BDDC replay row is closed by the same run.
 
