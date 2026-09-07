@@ -83,6 +83,14 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 ### MATLAB And Simulink
 
 - Use MathWorks' official MATLAB MCP Server and Simulink Agentic Toolkit.
+  The official MCP Server remains the standard MATLAB operation foundation.
+  Use the official MATLAB Engine for Python when available and appropriate,
+  particularly for SSH batch execution and shared-session connections. Keep
+  Engine installed and importable on mdx1/mdx2; record the interpreter, MATLAB
+  version, and execution route. Reuse Radia MATLAB entry points through either
+  route. Engine execution does not waive the official Toolkit model-edit,
+  check, save/reopen, and diagnostic requirements for production SLX files.
+  Close only sessions owned by the operation and retain caller-owned sessions.
 - A tracked production `.slx` passes read, edit, check, save, close, and reopen
   on the exact path. Never patch SLX ZIP/XML directly.
 - Public model-authored UI text is English. Mojibake, replacement glyphs,
@@ -124,8 +132,12 @@ solver boundary is a checked `.vol` regardless of the creation route.
 
 ### CI Execution, Validation Evidence, and Notebook Policy (2026-09-03)
 
-**POLICY**: **mdx** is Radia's self-hosted CI and preflight host. LAB and
-100号機 are development machines. mdx gives CI and preflight work priority.
+**POLICY**: **mdx1 and mdx2** are Radia's self-hosted CI and preflight pool. LAB and
+100号機 are development machines. Both mdx hosts give CI and preflight priority.
+GitHub Actions uses the shared `mdx` label and assigns jobs to an available runner.
+Release-quad requires LAB, 100号機, mdx1, and mdx2 for the same release commit.
+LAB/100号機 retain verified editable installs; mdx1/mdx2 consume release wheels.
+hibino remains a computation host and is not a release-quad acceptance target.
 Long solver work should use hibino first when it is available and may use mdx
 only when the mdx CI queue is idle.
 

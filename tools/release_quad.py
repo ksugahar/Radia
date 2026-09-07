@@ -12,15 +12,15 @@ Usage:
     python tools/release_quad.py phase0
         Mandatory clean rebuild of the Cubit plugin (~3-4 min).
 
-    python tools/release_quad.py phase8 [--target lab|100|hibino|all]
+    python tools/release_quad.py phase8 [--target lab|100|mdx1|mdx2|all]
         Run Phase 8a..8d on each target: kill Cubit, install by the
-        target's tier (LAB/100 editable, hibino PyPI), cubit-plugin-install,
+        target's tier (LAB/100 editable, mdx1/mdx2 PyPI), cubit-plugin-install,
         --verify-only, cubit-smoke-test. Refuses
         to start if Phase 0 has not been done since the last source
         change in src/cubit_plugin/.
 
     python tools/release_quad.py phase8e
-        Upgrade mdx from PyPI. Refuses to run if pip index versions
+        Upgrade mdx1 and mdx2 from PyPI. Refuses to run if pip index versions
         radia / cubit-mesh-export don't match the local repo
         (i.e. PyPI hasn't propagated yet). radia-mcp is intentionally
         not installed on mdx -- and is actively uninstalled if a prior
@@ -135,7 +135,8 @@ EDITABLE_REPO_100_ENV = "RADIA_RELEASE_EDITABLE_REPO_100"
 # change between lab network segments, while the supported host alias remains
 # stable and carries the correct user/key settings.
 SSH_100 = "100"
-SSH_MDX = "mdx"
+SSH_MDX1 = "mdx1"
+SSH_MDX2 = "mdx2"
 SSH_HIBINO = "hibino"
 PY_HIBINO = "py -3.12"
 MATLAB_EXE = r"C:\Program Files\MATLAB\R2026a\bin\matlab.exe"
@@ -145,8 +146,8 @@ OPTUNA_SUCCESS_MARKER = "RADIA_OPTUNA_WHEEL_SIMULINK_OK"
 SIMULINK_TARGETS = {
     "lab": ("LAB", None, "python"),
     "100": ("100号機", SSH_100, "python"),
-    "mdx": ("mdx", SSH_MDX, "python"),
-    "hibino": ("hibino", SSH_HIBINO, "py -3.12"),
+    "mdx1": ("mdx1", SSH_MDX1, "python"),
+    "mdx2": ("mdx2", SSH_MDX2, "python"),
 }
 
 
@@ -417,7 +418,7 @@ def _run_simulink_candidate_target(
 def cmd_simulink_candidate(args):
     """Verify one extracted Simulink archive on the requested MATLAB machines."""
     package = Path(args.package).resolve()
-    step("Simulink candidate gate (LAB / 100号機 / mdx / hibino)")
+    step("Simulink candidate gate (LAB / 100号機 / mdx1 / mdx2)")
     try:
         manifest = _simulink_manifest(package)
     except (OSError, RuntimeError, ValueError, zipfile.BadZipFile) as error:
@@ -511,7 +512,7 @@ def _verify_simulink_candidate_state(package_arg: str) -> int:
         fail(message)
         return 4
     info(message)
-    ok("supplied Simulink candidate passed LAB / 100号機 / mdx / hibino")
+    ok("supplied Simulink candidate passed LAB / 100号機 / mdx1 / mdx2")
     return 0
 
 
@@ -735,7 +736,7 @@ def _run_optuna_candidate_target(
 
 def cmd_optuna_candidate(args):
     """Download one main-CI wheel and run it on all four MATLAB machines."""
-    step("radia-optuna exact-wheel candidate gate (LAB / 100号機 / mdx / hibino)")
+    step("radia-optuna exact-wheel candidate gate (LAB / 100号機 / mdx1 / mdx2)")
     candidate, output = _download_verified_optuna_ci_wheel(args.ci_run_id)
     if candidate is None:
         fail(f"invalid radia-optuna CI candidate: {output}")
@@ -818,7 +819,7 @@ def _verify_optuna_candidate_state(wheel_arg: str) -> tuple[int, dict | None]:
     if missing:
         fail(f"radia-optuna candidate has not passed: {', '.join(missing)}")
         return 4, None
-    ok("exact radia-optuna wheel passed LAB / 100号機 / mdx / hibino")
+    ok("exact radia-optuna wheel passed LAB / 100号機 / mdx1 / mdx2")
     return 0, state
 
 
@@ -988,7 +989,7 @@ def _deploy_editable_remote(ssh_host, label, repo):
     """Editable-install recipe for machines that should read NAS source.
 
     LAB and 100号機 are the editable tier.  PyPI propagation is not a
-    precondition for this tier; hibino/mdx remain the wheel-consumer
+    precondition for this tier; mdx1/mdx2 remain the wheel-consumer
     verification tier.
     """
     step(f"Phase 8 ({label}): kill + NAS editable install + plugin install + verify + smoke (over SSH)")
@@ -1040,7 +1041,7 @@ def _check_pypi_propagation(versions, *, include_mcp=True):
     """Refuse to deploy if PyPI hasn't propagated to repo's current versions.
 
     Returns 0 on success, 2 if any package is stale.  Used by every PyPI
-    install target (hibino + mdx) to prevent installing the OLD version
+    install target (mdx1 + mdx2) to prevent installing the OLD version
     while CI is still publishing the new one.
     """
     info("checking PyPI propagation...")
@@ -1064,7 +1065,7 @@ def _check_pypi_propagation(versions, *, include_mcp=True):
 def _deploy_pypi(ssh_host, label, *, include_mcp=True, python_cmd="python", cubit_optional=False):
     """PyPI-install recipe for downstream Cubit-equipped machines.
 
-    Used for hibino and mdx.  hibino gets radia-mcp; mdx is a compute
+    Used for mdx1 and mdx2. Each is a compute
     consumer and intentionally skips the MCP server package -- and
     actively uninstalls radia-mcp if a prior release left it behind.
 
@@ -1164,12 +1165,12 @@ def _deploy_100():
     )
 
 
-def _deploy_hibino():
-    return _deploy_pypi(SSH_HIBINO, "hibino", python_cmd=PY_HIBINO, cubit_optional=True)
+def _deploy_mdx(host):
+    return _deploy_pypi(host, host, include_mcp=False, cubit_optional=True)
 
 
 def cmd_phase8(args):
-    """Deploy + verify + smoke on LAB, 100号機, and/or hibino."""
+    """Deploy + verify + smoke on LAB, 100号機, mdx1, and/or mdx2."""
     # precondition: Phase 0 freshness
     rc = cmd_preflight(args)
     if rc != 0:
@@ -1187,8 +1188,8 @@ def cmd_phase8(args):
             rc = _deploy_100()
             if rc != 0:
                 return rc
-        elif t == "hibino":
-            rc = _deploy_hibino()
+        elif t in ("mdx1", "mdx2"):
+            rc = _deploy_mdx(t)
             if rc != 0:
                 return rc
         elif t == "all":
@@ -1198,7 +1199,7 @@ def cmd_phase8(args):
             rc = _deploy_100()
             if rc != 0:
                 return rc
-            rc = _deploy_hibino()
+            rc = cmd_phase8e(args)
             if rc != 0:
                 return rc
         else:
@@ -1208,8 +1209,12 @@ def cmd_phase8(args):
 
 
 def cmd_phase8e(args):
-    """Upgrade mdx from PyPI (radia + cubit-mesh-export only)."""
-    return _deploy_pypi(SSH_MDX, "mdx", include_mcp=False)
+    """Upgrade mdx1 and mdx2 from PyPI (radia + cubit-mesh-export only)."""
+    for host in (SSH_MDX1, SSH_MDX2):
+        rc = _deploy_mdx(host)
+        if rc != 0:
+            return rc
+    return 0
 
 
 CROSS_MACHINE_PROBE = '''import hashlib, os
@@ -1321,10 +1326,10 @@ def cmd_phase9(args):
     targets = [
         ("LAB", ["python", "-"], CROSS_MACHINE_PROBE_LAB),
         ("100号機", ["ssh", SSH_100, "python", "-"], CROSS_MACHINE_PROBE_LAB),
-        ("mdx", ["ssh", SSH_MDX, "python", "-"], CROSS_MACHINE_PROBE_NO_MCP),
-        ("hibino", ["ssh", SSH_HIBINO, "py", "-3.12", "-"], CROSS_MACHINE_PROBE),
+        ("mdx1", ["ssh", SSH_MDX1, "python", "-"], CROSS_MACHINE_PROBE_NO_MCP),
+        ("mdx2", ["ssh", SSH_MDX2, "python", "-"], CROSS_MACHINE_PROBE_NO_MCP),
     ]
-    step("Phase 9: cross-machine consistency (LAB / 100号機 / mdx / hibino)")
+    step("Phase 9: cross-machine consistency (LAB / 100号機 / mdx1 / mdx2)")
     outputs = []
     for label, cmd_prefix, probe_src in targets:
         out = _probe(label, cmd_prefix, probe_src)
@@ -1371,13 +1376,13 @@ def cmd_phase9(args):
         fail(f"{drift} field(s) drift across machines — release NOT done.")
         return 4
     print("")
-    ok("all fields match across LAB / 100号機 / mdx / hibino — release verified.")
+    ok("all fields match across LAB / 100号機 / mdx1 / mdx2 — release verified.")
     return 0
 
 
 def cmd_all(args):
-    """Run the full deploy + verify chain (phase8 LAB+100+hibino, phase8e mdx, phase9)."""
-    rc = cmd_phase8(argparse.Namespace(target="lab,100,hibino"))
+    """Run the full deploy + verify chain (phase8 LAB+100, phase8e mdx1+mdx2, phase9)."""
+    rc = cmd_phase8(argparse.Namespace(target="lab,100"))
     if rc != 0: return rc
     rc = cmd_phase8e(args)
     if rc != 0:
@@ -1969,7 +1974,7 @@ def _run_retired_standalone_pyside_guard():
 def cmd_done(args):
     """Run release gates without changing the verified editable sources.
 
-    Exit 0 means the release is consistent across LAB / 100号機 / mdx / hibino,
+    Exit 0 means the release is consistent across LAB / 100号機 / mdx1 / mdx2,
     the repo is release-ready, the retired non-Cubit PySide panel surface has
     not been reintroduced, AND LAB/100号機 still use the exact clean source
     verified by this command. Returning to the canonical development tree is a
@@ -2029,7 +2034,7 @@ def cmd_done(args):
     suffix = (" The supplied Simulink candidate also passed all four MATLAB "
               "machines." if getattr(args, "simulink_package", None) else "")
     ok("DEFINITION OF DONE met. Release is consistent across LAB / 100号機 / "
-       "mdx / hibino, LAB/100号機 remain on the exact verified editable "
+       "mdx1 / mdx2, LAB/100号機 remain on the exact verified editable "
        "source, and the retired standalone PySide panel surface is absent. "
        "Run `release_quad restore-editable` explicitly after the canonical "
        "development tree catches up." + suffix)
@@ -2315,11 +2320,11 @@ def main():
     sub.add_parser("phase0",
                     help="clean rebuild of the Cubit plugin")
     s8 = sub.add_parser("phase8",
-                         help="deploy + verify + smoke on LAB / 100号機 / hibino")
+                         help="deploy + verify + smoke on LAB / 100号機 / mdx1 / mdx2")
     s8.add_argument("--target", default="lab,100",
-                     help="comma list: lab, 100, hibino, all (default lab,100)")
+                     help="comma list: lab, 100, mdx1, mdx2, all (default lab,100)")
     sub.add_parser("phase8e",
-                    help="upgrade mdx from PyPI (after PyPI propagation)")
+                    help="upgrade mdx1 and mdx2 from PyPI (after PyPI propagation)")
     sub.add_parser("phase9",
                     help="cross-machine consistency probe")
     ss = sub.add_parser(
@@ -2328,7 +2333,7 @@ def main():
     ss.add_argument("--package", required=True,
                     help="path to an IH preview or full Radia Simulink ZIP")
     ss.add_argument("--target", default="all",
-                    help="comma list: lab, 100, mdx, hibino, all")
+                    help="comma list: lab, 100, mdx1, mdx2, all")
     optuna_candidate = sub.add_parser(
         "optuna-candidate",
         help="download one main-CI radia-optuna wheel and verify it on four MATLAB machines")
@@ -2337,7 +2342,7 @@ def main():
         help="successful main-push CI run containing radia-optuna-wheel")
     optuna_candidate.add_argument(
         "--target", default="all",
-        help="comma list: lab, 100, mdx, hibino, all")
+        help="comma list: lab, 100, mdx1, mdx2, all")
     optuna_done = sub.add_parser(
         "optuna-done",
         help="require the exact radia-optuna wheel to have passed all four machines")
