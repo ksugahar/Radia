@@ -69,6 +69,8 @@ from .tools import (  # noqa: F401
     find_best_legend_loc,
     check_text_overlap,
     place_text_clear,
+    place_label_arrow,
+    place_legend_clear,
     plot_asymptote_ratio_sweep,
     plot_basis_size_convergence,
 )
