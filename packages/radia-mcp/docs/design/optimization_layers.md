@@ -44,8 +44,7 @@ proof of derivative correctness.
 
 Kanamori, Suzuki, Takeuchi and Sato, *Continuous Optimization for Machine
 Learning* (Kodansha, 2016), section 3.3, printed pp. 52-54, and section 4.1.
-The supplied Japanese PDF's pp. 64-65 (one-based PDF numbering) explain
-stopping/scaling; the rendered p. 65 was checked because OCR mangles equations.
+Section 3.3 discusses stopping criteria and the effect of scaling.
 The source emphasizes joint observation of gradients, iterates and objectives.
 Our fixed characteristic-scale diagnostic is an engineering adaptation, NOT an
 implementation of the book's exact machine-epsilon-based formula or convergence
@@ -106,8 +105,9 @@ box diagnostic. Tolerances and fixed scales still affect finite-precision
 classification; a small mapping is not an accuracy or optimality certificate.
 
 Source: Kanamori et al. (2016), section 3.2 (feasible directions and convex
-sufficiency) and section 10.1 (active inequalities and KKT conditions), inspected
-in the supplied PDF on PDF pages 62-63 and 170-173. The dimensionless residual
+sufficiency) and section 10.1 (active inequalities and KKT conditions).
+Refer to these sections in the book cited above; the book is not bundled.
+The dimensionless residual
 contracts and box mapping are engineering adaptations, not source algorithm
 transcriptions. These are read-only MCP diagnostics, not numerical solver or
 MATLAB kernel additions. No new client process is required.
