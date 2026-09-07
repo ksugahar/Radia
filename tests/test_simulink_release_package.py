@@ -262,10 +262,54 @@ def test_matlab_smoke_decodes_utf8_without_cp932(monkeypatch, tmp_path):
         stdout = "\u691c\u8a3c\u5b8c\u4e86 RADIA_IH_RELEASE_OK\n".encode("utf-8")
         stderr = b""
 
-    monkeypatch.setattr(verify_module.subprocess, "run", lambda *args, **kwargs: Result())
+    monkeypatch.setattr(verify_module, "_run_matlab_process", lambda *args, **kwargs: Result())
     output = verify_module.run_matlab_smoke(archive, matlab)
     assert "RADIA_IH_RELEASE_OK" in output
     assert verify_module._console_safe("bad:\ufffd", "cp932") == "bad:\\ufffd"
+
+
+def test_matlab_timeout_stops_only_owned_windows_tree(monkeypatch):
+    module = load_module("verify_simulink_timeout", ROOT / "tools" / "verify_simulink_release.py")
+    calls = []
+
+    class Process:
+        pid = 43210
+        waits = 0
+
+        def wait(self, timeout):
+            self.waits += 1
+            if self.waits == 1:
+                raise module.subprocess.TimeoutExpired("matlab", timeout)
+            return 1
+
+    def popen(command, stdout, stderr):
+        stdout.write(b"startup diagnostics")
+        assert stderr == module.subprocess.STDOUT
+        return Process()
+
+    monkeypatch.setattr(module.sys, "platform", "win32")
+    monkeypatch.setattr(module.subprocess, "Popen", popen)
+    monkeypatch.setattr(module.subprocess, "run", lambda command, **kw: calls.append(command))
+    with pytest.raises(RuntimeError, match="startup diagnostics"):
+        module._run_matlab_process(["matlab.exe", "-batch", "test"], 1)
+    assert calls == [["taskkill", "/PID", "43210", "/T", "/F"]]
+
+
+def test_matlab_process_keeps_success_output(monkeypatch):
+    module = load_module("verify_simulink_process", ROOT / "tools" / "verify_simulink_release.py")
+
+    class Process:
+        def wait(self, timeout):
+            return 0
+
+    def popen(command, stdout, stderr):
+        stdout.write(b"RADIA_SIMULINK_RELEASE_OK")
+        return Process()
+
+    monkeypatch.setattr(module.subprocess, "Popen", popen)
+    result = module._run_matlab_process(["matlab.exe"], 1)
+    assert result.returncode == 0
+    assert result.stdout == b"RADIA_SIMULINK_RELEASE_OK"
 
 
 @pytest.mark.parametrize("damaged", ["bad \ufffd text", "bad ??? text"])
