@@ -283,6 +283,11 @@ def build_plan(
             continue
 
         family = parts[0]
+        # Internal composed domains need the owning pack's selftest even when
+        # they intentionally have no standalone catalog/console entry.
+        if family not in family_servers:
+            servers.update(name for name, info in catalog.items()
+                           if family in info.get("members", []))
         module_parts = parts[1:]
         if module_parts and module_parts[-1].endswith(".py"):
             module_parts = (*module_parts[:-1], module_parts[-1][:-3])
