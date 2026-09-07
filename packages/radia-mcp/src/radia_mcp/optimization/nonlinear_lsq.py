@@ -19,6 +19,20 @@ from the true minimum. NORMALISE the residual to O(1) (divide by a characteristi
 well-conditioned recovery -- then noiseless data is recovered to machine precision.
 """
 import numpy as np
+from numbers import Real
+
+
+def _positive_control(value, name):
+    message = f"{name} must be a finite positive real scalar"
+    if isinstance(value, (bool, np.bool_)) or not isinstance(value, Real):
+        raise ValueError(message)
+    try:
+        result = float(value)
+    except (OverflowError, ValueError) as exc:
+        raise ValueError(message) from exc
+    if not np.isfinite(result) or result <= 0:
+        raise ValueError(message)
+    return result
 
 
 def levenberg_marquardt(residual, x0, jac=None, max_iter=300, gtol=1e-12,
@@ -46,8 +60,10 @@ def levenberg_marquardt(residual, x0, jac=None, max_iter=300, gtol=1e-12,
         raise ValueError("x0 must be a finite nonempty vector")
     if isinstance(max_iter, bool) or not isinstance(max_iter, (int, np.integer)) or max_iter < 1:
         raise ValueError("max_iter must be a positive integer")
-    if any(not np.isfinite(v) or v <= 0 for v in (gtol, xtol, lam0, eps)):
-        raise ValueError("gtol, xtol, lam0 and eps must be finite and positive")
+    gtol, xtol, lam0, eps = (
+        _positive_control(v, name)
+        for name, v in (("gtol", gtol), ("xtol", xtol), ("lam0", lam0), ("eps", eps))
+    )
 
     def evaluate(xx):
         rr = np.asarray(residual(xx), dtype=float)

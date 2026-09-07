@@ -45,9 +45,11 @@ def test_final_gradient_and_small_step_are_not_false_success(options, reason):
 
 
 @pytest.mark.parametrize("options", [{"max_iter": 0}, {"max_iter": 1.5},
-    {"lam0": -1}, {"eps": 0}, {"gtol": np.inf}, {"xtol": np.nan}])
+    {"lam0": -1}, {"eps": 0}, {"gtol": np.inf}, {"xtol": np.nan},
+    {"gtol": np.array([1.,2.])}, {"xtol": np.array(1.)}, {"lam0": [1.]},
+    {"eps": "1e-7"}, {"eps": True}, {"gtol": 1j}])
 def test_invalid_controls_fail_loudly(options):
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="positive|finite"):
         levenberg_marquardt(lambda x: x, [1.0], **options)
 
 
