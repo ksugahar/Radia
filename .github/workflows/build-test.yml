@@ -168,32 +168,17 @@ jobs:
       - name: Install test dependencies
         shell: pwsh
         run: |
-          # Pre-cleanup: orphan mcp-server-*.exe processes from a
-          # previous CI run hold Scripts/mcp-server-*.exe and block
-          # the editable install with WinError 32 (file in use).
-          # 2026-05-22 v4.72.0 hit this on mcp-server-build123d.exe;
-          # mirror release_quad.py phase 8's force-kill.
-          Write-Host "Stopping any orphan mcp-server-*.exe..."
-          Get-Process -ErrorAction SilentlyContinue | Where-Object {
-            $_.Name -like 'mcp-server*'
-          } | ForEach-Object {
-            Write-Host "  killing $($_.Name) pid=$($_.Id)"
-            Stop-Process -Id $_.Id -Force
+          # This job owns only its fresh venv, never host MCP processes or
+          # persistent site-packages. A failed venv setup must fail closed.
+          if (-not $env:RADIA_CI_VENV) { throw "RADIA_CI_VENV is required" }
+          $ciPython = Join-Path $env:RADIA_CI_VENV 'Scripts\python.exe'
+          if (-not (Test-Path -LiteralPath $ciPython -PathType Leaf)) {
+            throw "Isolated CI Python is missing: $ciPython"
           }
-          Start-Sleep -Seconds 2
-
-          # Pre-cleanup: ~adia-mcp orphan dist-info from a botched
-          # uninstall is the second known cause of CI install
-          # failures (pip refuses to install on top of an "invalid
-          # distribution").  Remove any *.dist-info named ~adia*.
-          $sp = python -c "import site, sys; print(site.getsitepackages()[0])"
-          Get-ChildItem -Path $sp -Filter "~adia*" -Directory -ErrorAction SilentlyContinue |
-            ForEach-Object {
-              Write-Host "  removing orphan $($_.Name)"
-              Remove-Item -Path $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
-            }
-
-          python -m pip install mcp "trimesh>=4.0" twine==6.2.0 --quiet
+          & $ciPython -c "import os,sys; assert sys.prefix != sys.base_prefix and os.path.samefile(sys.prefix, os.environ['RADIA_CI_VENV']), 'CI Python must belong to RADIA_CI_VENV'"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $ciPython -m pip install mcp "trimesh>=4.0" twine==6.2.0 --quiet
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Write-Host "mcp + trimesh + twine installed (radia_mcp via PYTHONPATH, not pip-installed)"
 
       # ----------------------------------------------------------------
