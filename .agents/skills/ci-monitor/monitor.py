@@ -151,7 +151,7 @@ def watch_runs(run_ids: Iterable[str], poll_seconds: int,
     print()
     print("=" * 70)
     bad = [rid for rid, st in final.items()
-            if st["conclusion"] not in ("success", "skipped", "cancelled")
+            if st["conclusion"] not in ("success", "skipped")
             or st.get("status") == "error"]
     if not bad:
         n_skipped = sum(1 for st in final.values()
