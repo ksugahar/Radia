@@ -1438,6 +1438,8 @@ same mesh with the previous wheel):
 | shared cache for every near pair, congruence off | 60816 | 1326 s | 129,536 | 30,261 | 51,094 / 180,630 |
 | translation-congruent key | 60816 | **450 s** | 27,062 | 4,078 | 153,442 / 180,504 |
 | translation-congruent key, `h = 6 mm` | 153296 | 902 s | 33,273 | 6,018 | 338,165 / 371,438 |
+| + dynamic schedule, compute-once, 6 points (section 8.14) | 60816 | **37 s** | 26,807 | 761 | 155,164 / 181,986 |
+| + dynamic schedule, compute-once, 6 points, `h = 6 mm` | 153296 | **69 s** | 33,023 | 1,071 | 340,187 / 373,220 |
 
 The field is unchanged to every printed digit (`B_perp(15 mm) = -0.22722 T`
 in all three `h = 10 mm` builds).  The routing fix alone removes the worker
@@ -1473,6 +1475,7 @@ family arm is `results/hex_gram_definiteness_blockwise_family_hibino.json`):
 | shared cache, 8 points | 612 s | 1 s | 5 s | 0.99990 | PASSED |
 | shared cache, 6 points | 128 s | 1 s | 5 s | 0.99990 | PASSED |
 | shared cache, 5 points | 51 s | 1 s | 5 s | 0.99990 | PASSED |
+| shared cache, 6 points, dynamic schedule (section 8.14) | 61 s | 1 s | 5 s | 0.99990 | PASSED |
 
 The post-build phases collapse exactly as the entry-recompute diagnosis
 predicts (2785 s to 1 s, 2083 s to 5 s for the same 431 iterations), the
@@ -1526,5 +1529,22 @@ numbers only): Gram build 119 s -> 62 s, prep 28 s -> 5 s, fill 91 s -> 55 s,
 with the quadrature thread-seconds unchanged (382 -> 406 near, 44 far);
 450 thread-seconds over 8 workers is 56 s, so the build now runs at about 93 %
 parallel efficiency against about 40 % before.  Field unchanged
-(`B_perp(15 mm) = -0.227135 T`).  The hibino rerun of the committed timing
-table (`h = 10 mm`, 38 threads) is the number to quote.
+(`B_perp(15 mm) = -0.227135 T`).
+
+The hibino rerun (38 threads, one job at a time,
+`results/timing_qmag_{h10,h6}_mu1000_dynamic_hibino.json`, the two rows added
+to the table of section 8.13) combines the dynamic schedule, the compute-once
+cache and the 6-point default: the `h = 10 mm` Gram (60,816 unknowns) builds
+in **37 s** against 450 s with the congruent cache alone and 1,625 s before
+it, the `h = 6 mm` Gram (153,296 unknowns) in **69 s** against 902 s; the
+fields agree with the earlier builds to every printed digit
+(`-0.22722` / `-0.22724` T).  Per unknown that is 0.61 ms and 0.45 ms, below
+the TET BDM2 route's 1.1 ms on the C-type magnet: the HEX Gram build is no
+longer the slower route.  The phase timers now read prep 5 s, fill 31 s
+(`h = 10 mm`) and prep 5 s, fill 60 s (`h = 6 mm`); the quadrature
+thread-seconds (761 + 208 and 1,071 + 837) over 38 workers account for 26 s
+and 50 s of those builds, so the remaining gap to perfect balance is under a
+third and no longer worth a dedicated pass.  The conforming example-6 gate
+under the same wheel builds its Gram in 61 s (first gate 1,567 s) and passes
+with the same `lambda_max` 0.99990
+(`esrf_three_engine/results/hex_gram_definiteness_dynamic_hibino.json`).
