@@ -43,6 +43,9 @@ def main(argv=None) -> int:
     parser.add_argument("--sizes", type=float, nargs="+", default=(0.010, 0.006, 0.004), help="mesh sizes in metres")
     parser.add_argument("--order", type=int, default=2, help="curved-element order of the .vol export")
     parser.add_argument("--cubit", type=Path, default=DEFAULT_CUBIT)
+    parser.add_argument("--scheme", choices=("sweep", "tet"), default="sweep",
+                        help="sweep = conforming all-HEX (qmag_h<mm>.vol); tet = the TET comparison route "
+                             "(qmag_tet_h<mm>.vol) from the same CAD import")
     options = parser.parse_args(argv)
     cubit = options.cubit.resolve()
     if not cubit.is_file():
@@ -51,11 +54,11 @@ def main(argv=None) -> int:
     out.mkdir(parents=True, exist_ok=True)
     meshes = []
     for size in options.sizes:
-        tag = f"qmag_h{size * 1000.0:g}"
+        tag = f"qmag_h{size * 1000.0:g}" if options.scheme == "sweep" else f"qmag_tet_h{size * 1000.0:g}"
         vol = out / f"{tag}.vol"
         journal = out / f"{tag}.jou"
         log = out / f"{tag}.cubit.log"
-        Q.write_mesh_journal(journal, vol, size_m=size, order=options.order)
+        Q.write_mesh_journal(journal, vol, size_m=size, order=options.order, scheme=options.scheme)
         Q.run_cubit(cubit, journal, log)
         mesh = ng.Mesh(str(vol))
         conformity = mesh_conformity_report(mesh)
@@ -74,7 +77,7 @@ def main(argv=None) -> int:
         entry = {"size_m": float(size), "vol": str(vol), "sha256": _sha256(vol), "journal": str(journal),
                  "ne": int(mesh.ne), "nbnd": int(mesh.GetNE(ng.BND)), "nv": int(mesh.nv), "families": families,
                  "materials": list(mesh.GetMaterials()), "boundaries": sorted(set(mesh.GetBoundaries())),
-                 "conformity": conformity, "order": int(options.order)}
+                 "conformity": conformity, "order": int(options.order), "scheme": options.scheme}
         print(f"{tag}: {entry['ne']} elements ({families}), {entry['nbnd']} boundary faces, conforming", flush=True)
         meshes.append(entry)
     manifest = {
@@ -83,8 +86,9 @@ def main(argv=None) -> int:
         "cubit": str(cubit), "step": str(Q.STEP_PATH), "step_sha256": _sha256(Q.STEP_PATH),
         "iron_volume_m3_cad": Q.IRON_VOLUME_M3, "meshes": meshes,
     }
-    (out / "mesh_manifest.json").write_text(json.dumps(manifest, indent=1), encoding="utf-8")
-    print("wrote", out / "mesh_manifest.json")
+    manifest_name = "mesh_manifest.json" if options.scheme == "sweep" else "mesh_manifest_tet.json"
+    (out / manifest_name).write_text(json.dumps(manifest, indent=1), encoding="utf-8")
+    print("wrote", out / manifest_name)
     return 0
 
 

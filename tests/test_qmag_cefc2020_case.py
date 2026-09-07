@@ -97,6 +97,15 @@ def test_mesh_journal_is_conforming_and_id_free(qmag, tmp_path):
     assert "order 2 overwrite" in text
     assert not any(line.strip().startswith("volume ") and line.split()[1].isdigit() for line in text.splitlines())
     assert qmag.STEP_PATH.is_file() and qmag.STEP_PATH.stat().st_size > 100_000
+    # the TET comparison route shares the import / imprint / merge / labels and only swaps the scheme
+    tet = tmp_path / "qmag_tet.jou"
+    qmag.write_mesh_journal(tet, tmp_path / "qmag_tet.vol", size_m=0.01, order=2, scheme="tet")
+    tet_text = tet.read_text(encoding="ascii")
+    assert "volume all scheme tetmesh" in tet_text and "scheme sweep" not in tet_text and "#{Loop" not in tet_text
+    assert tet_text.index("merge volume all") < tet_text.index("scheme tetmesh") < tet_text.index("mesh volume all")
+    assert 'block 1 name "iron"' in tet_text and "order 2 overwrite" in tet_text
+    with pytest.raises(ValueError, match="scheme"):
+        qmag.write_mesh_journal(tet, tmp_path / "x.vol", size_m=0.01, order=2, scheme="hex")
 
 
 def test_three_engine_partial_state_round_trip(tmp_path):
