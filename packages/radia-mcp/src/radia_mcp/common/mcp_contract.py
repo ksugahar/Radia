@@ -18,6 +18,11 @@ SCHEMA = "cae-ai-lab.mcp-server-contract.v2"
 def audit_tool_contract(mcp: Any) -> dict[str, Any]:
     """Summarize the live FastMCP registry without invoking any tool."""
     tools = getattr(getattr(mcp, "_tool_manager", None), "_tools", {})
+    return audit_tool_definitions(tools)
+
+
+def audit_tool_definitions(tools: dict[str, Any]) -> dict[str, Any]:
+    """Audit FastMCP definitions or public SDK Tool objects identically."""
     missing_titles: list[str] = []
     missing_annotations: list[str] = []
     missing_contract_meta: list[str] = []
@@ -45,7 +50,8 @@ def audit_tool_contract(mcp: Any) -> dict[str, Any]:
             missing_contract_meta.append(name)
         sources[str(meta.get("caeai.annotation_source", "unspecified"))] += 1
         metadata = getattr(tool, "fn_metadata", None)
-        if getattr(metadata, "output_schema", None) is not None:
+        if (getattr(metadata, "output_schema", None) is not None
+                or getattr(tool, "outputSchema", None) is not None):
             structured.append(name)
         else:
             unstructured.append(name)

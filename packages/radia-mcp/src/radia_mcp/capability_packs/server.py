@@ -20,6 +20,8 @@ from mcp.server.stdio import stdio_server
 
 from . import PACKS, modules_for
 from .. import __version__
+from ..common.status import build_status_payload, _runtime_provenance
+from ..common.mcp_contract import audit_tool_definitions, SCHEMA
 
 
 class CapabilityServer:
@@ -32,6 +34,7 @@ class CapabilityServer:
         self.tools = {}
         self.prompts = {}
         self.resources = {}
+        self.registration_provenance = _runtime_provenance("radia_mcp.capability_packs")
         self.server = Server(
             f"mcp-server-{pack}",
             version=__version__,
@@ -74,26 +77,46 @@ class CapabilityServer:
         return self
 
     def status(self):
-        return {
+        provenance = _runtime_provenance("radia_mcp.capability_packs")
+        registered = self.registration_provenance.get("module_file_sha256")
+        provenance.update(module_sha256_at_registration=registered,
+                          source_changed_since_registration=registered != provenance.get("module_file_sha256"))
+        definitions = {name: entry for name, (entry, _, _) in self.tools.items()}
+        definitions["capability_pack_status"] = self.status_tool()
+        payload = build_status_payload(
+            f"mcp-server-{self.pack}", PACKS[self.pack]["description"],
+            "radia_mcp.capability_packs", mcp_tools=list(definitions),
+            runtime_contract=audit_tool_definitions(definitions),
+            runtime_provenance=provenance,
+        )
+        payload.update({
             "pack": self.pack, "profile": self.profile,
             "modules": list(self.modules),
             "profiles": ["all", *[p for p in PACKS[self.pack]["profiles"] if p != "all"]],
-            "tools": len(self.tools),
             "owners": {name: owner for name, (_, _, owner) in self.tools.items()},
             "transport": "stdio", "child_mcp_processes": False,
             "version": __version__, "python_executable": sys.executable,
             "source": __file__,
-        }
+        })
+        return payload
+
+    @staticmethod
+    def status_tool():
+        return types.Tool(
+                name="capability_pack_status",
+                title="Capability Pack Status",
+                description="Describe the active capability profile and exact tool ownership.",
+                inputSchema={"type": "object", "properties": {}, "additionalProperties": False},
+                outputSchema={"type": "object"},
+                _meta={"caeai.contract": SCHEMA, "caeai.control_plane": "status",
+                      "caeai.annotation_source": "explicit"},
+                annotations=types.ToolAnnotations(readOnlyHint=True, destructiveHint=False,
+                                                  idempotentHint=True, openWorldHint=False),
+            )
 
     async def list_tools(self):
         return [
-            types.Tool(
-                name="capability_pack_status",
-                description="Describe the active capability profile and exact tool ownership.",
-                inputSchema={"type": "object", "properties": {}, "additionalProperties": False},
-                annotations=types.ToolAnnotations(readOnlyHint=True, destructiveHint=False,
-                                                  idempotentHint=True, openWorldHint=False),
-            ),
+            self.status_tool(),
             *[entry for entry, _, _ in self.tools.values()],
         ]
 

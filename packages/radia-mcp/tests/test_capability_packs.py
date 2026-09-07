@@ -29,6 +29,11 @@ def test_pack_preserves_domain_schemas_prompts_resources(pack):
         actual = {t.name: t.model_dump() for t in await app.list_tools()}
         actual.pop("capability_pack_status")
         assert actual == expected
+        status = app.status()
+        assert status["runtime_contract"]["complete"]
+        assert status["runtime_contract"]["n_tools"] == len(expected) + 1
+        assert status["runtime_provenance"]["module_sha256_at_registration"]
+        assert not status["runtime_provenance"]["source_changed_since_registration"]
         assert {p.name: p.model_dump() for p in await app.list_prompts()} == prompts
         assert {str(r.uri): r.model_dump() for r in await app.list_resources()} == resources
     asyncio.run(check())
