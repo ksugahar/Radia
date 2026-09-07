@@ -180,6 +180,6 @@ result = <|
   "M_test_numerical" -> Chop[M_test],
   "test_params" -> testRules
 |>;
-Export["W:/30_CauerLadderNetwork/2026_04_01_\:9577\:65b9\:5f62CLN/axifem/quad_q1_henrotte_matrices.json", result, "JSON"];
+Export[FileNameJoin[{DirectoryName[$InputFileName], "quad_q1_henrotte_matrices.json"}], result, "JSON"];
 Print[""];
 Print["Saved: quad_q1_henrotte_matrices.json"];
