@@ -92,6 +92,12 @@ tier to that tree.
   machine. A full library runs `verify_radia_simulink_release`; an IH preview
   runs `verify_radia_ih_release`. Rebuilding the ZIP invalidates the recorded
   gate state and requires all four checks again.
+- Execute these checks through Python's MATLAB Engine, not a MATLAB `-batch`
+  launcher. Each verifier owns a new Engine session and closes it on success
+  or failure; do not attach to or close a user's shared session. The selected
+  Python must have an Engine installation matching the requested MATLAB root.
+  Keep the isolated worker timeout so a stalled startup is bounded without
+  stopping unrelated MATLAB or solver processes.
 - The `done` result is the authoritative publication gate; partial, failed,
   or manually waived machine checks do not authorize publication.
 - Assemble and test the versioned Simulink package before publication. A full
