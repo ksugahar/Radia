@@ -23,6 +23,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+maintenance = ["tomlkit>=0.13,<1"]
 # build123d-side tools need the build123d library itself.
 build123d = [
     "build123d>=0.6",

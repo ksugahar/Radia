@@ -51,8 +51,7 @@ async def _probe_server(short_name: str) -> dict[str, Any]:
     parameters = StdioServerParameters(
         command=sys.executable,
         args=[
-            "-c",
-            f"from {subpackage}.server import main; main()",
+            "-s", "-m", "radia_mcp.maintenance", "serve", short_name,
         ],
         env=environment,
     )
