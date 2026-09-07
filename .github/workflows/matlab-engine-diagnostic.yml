@@ -1,0 +1,58 @@
+name: MATLAB Engine SYSTEM diagnostic
+
+on:
+  push:
+    branches: [codex/mdx-engine-system-probe]
+    paths: [.github/workflows/matlab-engine-diagnostic.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  engine:
+    strategy:
+      fail-fast: false
+      matrix:
+        host: [mdx1, mdx2]
+    runs-on: [self-hosted, Windows, X64, '${{ matrix.host }}']
+    timeout-minutes: 3
+    steps:
+      - name: Record execution identity
+        shell: pwsh
+        run: |
+          whoami
+          Get-Process MATLAB,MathWorksServiceHost -ErrorAction SilentlyContinue |
+            Select-Object Id,SessionId,ProcessName
+          exit 0
+      - name: Bounded dedicated Engine startup
+        shell: pwsh
+        run: |
+          @'
+          import subprocess, sys, tempfile
+          code = """
+          import sys
+          sys.path.insert(0, r'C:\Program Files\MATLAB\R2026a\extern\engines\python\dist')
+          import matlab.engine
+          print('ENGINE_IMPORT', matlab.engine.__file__, flush=True)
+          eng = matlab.engine.start_matlab('-nodesktop')
+          try:
+              value = eng.sqrt(4.0)
+              assert value == 2.0, value
+              print('ENGINE_CALCULATION_PASS', value, flush=True)
+          finally:
+              eng.quit()
+          print('ENGINE_SHUTDOWN_PASS', flush=True)
+          """
+          with tempfile.TemporaryFile() as log:
+              child = subprocess.Popen([sys.executable, '-c', code], stdout=log, stderr=subprocess.STDOUT)
+              try:
+                  result = child.wait(timeout=60)
+              except subprocess.TimeoutExpired:
+                  subprocess.run(['taskkill', '/PID', str(child.pid), '/T', '/F'], check=True)
+                  child.wait(timeout=20)
+                  result = 124
+              log.seek(0)
+              print(log.read().decode('utf-8', errors='replace'), flush=True)
+              raise SystemExit(result)
+          '@ | & 'C:\Program Files\Python312\python.exe' -
+          exit $LASTEXITCODE
