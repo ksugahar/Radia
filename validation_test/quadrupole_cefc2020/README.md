@@ -129,8 +129,12 @@ next TET-side lever is a cheaper and more accurate curved touching family.
 `results/timing_qmag_*_hibino.json` time every route (swept HEX BDM1, TET
 BDM1 / BDM2 on straight and on curved-Q2 meshes from the same CAD import) on
 hibino for the linear `mu_r = 1000` case; the table and its reading are in
-section 8.15 of `docs/hdiv_vim/HDiv-MMM_review.md`.  A curved TET BDM2 solve
-on the 5 mm mesh (63,204 tets, about 1.2 M unknowns) ended in a stack
-overflow of the build and is recorded as an open large-N issue of the TET
-route.
+section 8.15 of `docs/hdiv_vim/HDiv-MMM_review.md`.  The curved TET BDM2
+solve on the 5 mm mesh (63,204 tets, 1.17 M unknowns) first took a 57 GB host
+down through an `n_host x n_host` touching-block index (22 GB; fixed, the
+index is now a hash map over vertex-incident pairs) and then, with the fix,
+built its Gram but failed the mass-Riesz solve allocation on the same 57 GB
+host; the straight-mesh BDM2 solve of the same size runs on a 128 GB host.
+That size is therefore a memory ceiling of the 57 GB hosts, not a defect, and
+the table stops at 7 mm for the curved TET BDM2 route.
 
