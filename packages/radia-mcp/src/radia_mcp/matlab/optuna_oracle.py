@@ -16,7 +16,7 @@ import re
 from typing import Any
 
 
-_POLICY_HEADING = "### MATLAB Optuna Upstream Differential-Oracle Policy (2026-08-21)"
+_POLICY_HEADING = "## Optuna"
 
 # Any local function declaration, including bracketed output lists.  The name
 # filter below then applies MATLAB's own rule.  Matching only ``test``-prefixed
@@ -237,11 +237,12 @@ def matlab_optuna_compatibility_contract(
 
 def _policy_block(path: Path) -> str:
     source = path.read_text(encoding="utf-8")
-    start = source.find(_POLICY_HEADING)
-    if start < 0:
+    heading = re.search(r"^" + re.escape(_POLICY_HEADING) + r"[ \t]*$", source, re.MULTILINE)
+    if heading is None:
         return ""
-    end = source.find("\n---\n", start)
-    return source[start:] if end < 0 else source[start:end]
+    following_heading = re.search(r"^#{1,2} ", source[heading.end():], re.MULTILINE)
+    end = heading.end() + following_heading.start() if following_heading else len(source)
+    return source[heading.start():end].strip()
 
 
 def matlab_optuna_oracle_audit(
