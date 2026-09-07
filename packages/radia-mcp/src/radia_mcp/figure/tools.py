@@ -1443,16 +1443,12 @@ def check_text_overlap(ax, text, margin_px: float = 2.0):
 
     fig = ax.get_figure()
     fig.canvas.draw()
-    others = [t for t in ax.texts if t is not text]
-    keep = list(ax.texts)
-    # measure against everything except the text itself
-    for t in keep:
-        if t is text:
-            t.set_visible(False)
-    pts = _occupied_points(ax)
-    for t in keep:
-        t.set_visible(True)
-    del others
+    visible = text.get_visible()
+    try:
+        text.set_visible(False)
+        pts = _occupied_points(ax)
+    finally:
+        text.set_visible(visible)
 
     bb = text.get_window_extent()
     x0, x1 = bb.x0 - margin_px, bb.x1 + margin_px
@@ -1581,6 +1577,54 @@ def place_text_clear(ax, s, *, nx: int = 11, ny: int = 7,
 # ============================================================
 # ROM-paper helpers (Cauer / Multi-K / Schur-F asymptote plots)
 # ============================================================
+
+def place_label_arrow(ax, s, xy, *, region=None, arrow_kw=None, **text_kw):
+    """Place a clear label and an arrow to data coordinates ``xy``.
+
+    The arrow tail uses axes fractions so changing export DPI preserves it.
+    ``region`` and text properties follow :func:`place_text_clear`.
+    """
+    t = place_text_clear(ax, s, region=region, **text_kw)
+    fig = ax.get_figure()
+    fig.canvas.draw()
+    bb = t.get_window_extent()
+    tx, ty = ax.transData.transform(xy)
+    sides = (((bb.x0 + bb.x1) / 2, bb.y0 - 3), ((bb.x0 + bb.x1) / 2, bb.y1 + 3),
+             (bb.x0 - 3, (bb.y0 + bb.y1) / 2), (bb.x1 + 3, (bb.y0 + bb.y1) / 2))
+    sx, sy = min(sides, key=lambda p: (p[0] - tx) ** 2 + (p[1] - ty) ** 2)
+    fx, fy = ax.transAxes.inverted().transform((sx, sy))
+    props = dict(arrowstyle="->", lw=1.8, color=t.get_color(), shrinkA=0, shrinkB=5)
+    if arrow_kw:
+        props.update(arrow_kw)
+    ann = ax.annotate("", xy=xy, xycoords="data", xytext=(float(fx), float(fy)),
+                      textcoords="axes fraction", arrowprops=props)
+    return t, ann
+
+
+def place_legend_clear(ax, *, locs=("lower left", "lower right", "upper left",
+                                   "upper right", "center left", "center right"),
+                       outside=True, **legend_kw):
+    """Choose a clear legend location or report an explicit outside fallback."""
+    import warnings
+
+    fig = ax.get_figure()
+    for loc in locs:
+        leg = ax.legend(loc=loc, frameon=False, **legend_kw)
+        fig.canvas.draw()
+        if not check_legend_overlap(ax):
+            return loc
+        leg.remove()
+    if not outside:
+        return None
+    warnings.warn(
+        "place_legend_clear: no corner is clear, so the legend is outside the "
+        "axes, where a fixed-size canvas will cut it off. Name the curves in "
+        "place with place_label_arrow instead.", stacklevel=2)
+    ax.legend(loc="center left", bbox_to_anchor=(1.01, 0.5), frameon=False,
+              **legend_kw)
+    fig.canvas.draw()
+    return "outside"
+
 
 def plot_asymptote_ratio_sweep(ax, f_Hz, Y_curves, K_SIBC, *,
                                 target_line: bool = True,
