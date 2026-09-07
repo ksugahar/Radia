@@ -1,4 +1,4 @@
-import hashlib,json,os,re,shutil
+import hashlib,json,os,re,shutil,subprocess
 from collections import Counter
 from pathlib import Path
 from .optuna_boundary import matlab_optuna_mcp_route
@@ -18,6 +18,17 @@ def matlab_extension_contract():
         if "acoustic" in text.lower() or "fembem" in text.lower(): errors.append(f"{p.name}: namespace leak")
         errors += [f"{p.name}: missing {d}" for d in re.findall(r"radia_mcp_matlab\.([A-Za-z]\w*)",text) if d not in names]
     return {"schema":"radia-mcp.matlab-extension/v1","ok":not errors,"status":"ok" if not errors else "error","runtime_owner":"MathWorks MATLAB MCP Server","extension_file":str(EXT),"matlab_root":str(MATLAB),"sha256":hashlib.sha256(raw).hexdigest(),"tool_count":len(tools),"tool_names":[t["name"] for t in tools],"signature_count":len(sig),"matlab_function_count":len(files),"errors":errors}
+def _official_server_candidates():
+    toolkit_bin = Path.home()/".matlab"/"agentic-toolkits"/"bin"
+    candidates = [toolkit_bin/"matlab-mcp-server.exe",
+                  toolkit_bin/"matlab-mcp-server-windows-x64.exe"]
+    candidates += [Path(found) for name in (
+        "matlab-mcp-server", "matlab-mcp-server-windows-x64.exe",
+        "matlab-mcp-core-server", "matlab-mcp-core-server-win64.exe",
+    ) if (found := shutil.which(name))]
+    return candidates
+
+
 def matlab_official_server_config(profile="existing",*,include_generic_extension=False):
     if profile not in PROFILES: raise ValueError(profile)
     session,display=PROFILES[profile]; args=[f"--matlab-session-mode={session}"]; files=[]; setup=""
@@ -26,11 +37,69 @@ def matlab_official_server_config(profile="existing",*,include_generic_extension
         if not c["ok"]: raise RuntimeError(c["errors"])
         files=[c["extension_file"]]; args += [f"--extension-file={c['extension_file']}"]; setup=f"addpath('{c['matlab_root']}');"
     if display=="nodesktop": args.append("--matlab-display-mode=nodesktop")
-    candidates=[Path.home()/".matlab/agentic-toolkits/bin/matlab-mcp-server-windows-x64.exe"]
-    candidates += [Path(x) for x in [shutil.which("matlab-mcp-server"),shutil.which("matlab-mcp-server-windows-x64.exe"),shutil.which("matlab-mcp-core-server"),shutil.which("matlab-mcp-core-server-win64.exe")] if x]
+    candidates = _official_server_candidates()
     cmd=os.getenv("RADIA_MATLAB_MCP_SERVER") or next((str(x) for x in candidates if x.is_file()),"matlab-mcp-server")
     return {"schema":"radia-mcp.matlab-server-config/v1","status":"ok","runtime_owner":"MathWorks MATLAB MCP Server","integration_owner":"radia-mcp.matlab","command_id":"matlab-mcp-server","command":cmd,"profile":profile,"args":args,"extension_files":files,"matlab_setup_code":setup}
 def matlab_radia_acoustic_interface_contract(): return {"runtime_owner":"MathWorks MATLAB MCP Server","matlab_workflow_owner":"MathWorks MATLAB Agentic Toolkit","simulink_workflow_owner":"MathWorks Simulink Agentic Toolkit","generic_operations_owner":"radia_mcp.matlab","generic_matlab_package":"radia_mcp_matlab","production_owner":"radia.acoustics","education_solver_owner":"radia_mcp.acoustic_fembem","radia_extension_scope":["Radia MATLAB/MEX domain APIs","LTspice orchestration and result import","MATLAB Optuna 4.9.0 differential subset"]}
+
+
+def _agentic_toolkit_status():
+    config_path = Path.home()/".matlab"/"agentic-toolkits"/"config.json"
+    result = {"available": False, "path": str(config_path), "toolkits": {}}
+    try:
+        payload = json.loads(config_path.read_text(encoding="utf-8-sig"))
+        if not isinstance(payload, dict) or not isinstance(payload.get("matlab", {}), dict):
+            raise ValueError("Toolkit configuration must contain an object and a MATLAB object")
+    except FileNotFoundError:
+        return result
+    except (OSError, UnicodeError, ValueError) as exception:
+        return {**result, "error": str(exception)}
+    return {
+        **result, "available": True,
+        "mcp_server_version": str(payload.get("mcpServerVersion", "")),
+        "matlab_version": str(payload.get("matlab", {}).get("version", "")),
+        "last_updated": str(payload.get("lastUpdated", "")),
+        "session_mode": str(payload.get("sessionMode", "")),
+        "toolkits": payload.get("toolkits", {}),
+    }
+
+
+def matlab_official_server_status():
+    """Inventory the installed MathWorks foundation without starting MATLAB."""
+    command = str(matlab_official_server_config()["command"])
+    resolved = Path(command)
+    if not resolved.is_file():
+        located = shutil.which(command)
+        resolved = Path(located) if located else resolved
+    available = resolved.is_file()
+    version = ""
+    error = ""
+    if available:
+        try:
+            probe = subprocess.run(
+                [str(resolved), "--version"], capture_output=True, check=False,
+                text=True, encoding="utf-8", errors="replace", timeout=15,
+            )
+            version = (probe.stdout or probe.stderr).strip()
+            if probe.returncode != 0:
+                error = f"version probe returned {probe.returncode}"
+            elif not version:
+                error = "version probe returned no version text"
+        except (OSError, subprocess.SubprocessError) as exception:
+            error = str(exception)
+    toolkit = _agentic_toolkit_status()
+    return {
+        "schema": "radia-mcp.matlab-official-server-status/v1",
+        "status": "ready" if available and not error and not toolkit.get("error") else "needs_attention",
+        "runtime_owner": "MathWorks MATLAB MCP Server",
+        "command": str(resolved) if available else command,
+        "available": available, "version": version, "version_probe_error": error,
+        "agentic_toolkits": toolkit,
+        "generic_operations_owner": "MathWorks MATLAB MCP Server and Simulink Agentic Toolkit",
+        "generic_operations": ["model_read", "model_edit", "model_check", "model_test"],
+        "radia_role": "domain-specific MEX, artifact, and CAE workflow extension",
+        "update_policy": "Report installed versions; check official release notes and focused regressions before upgrading. This inventory does not claim upstream currency.",
+    }
 
 
 def _radia_repo_root():
@@ -602,6 +671,8 @@ def matlab_radia_mex_contract(topic="all"):
         "verified_contract": {
             "matlab_gate": "runtests('tests/matlab')",
             "python_numerical_parity_gate": "runtests('tests/matlab/test_radia_ngsolve_parity.m')",
+            "ngsolve_python_mex_parity_gate": "runtests('tests/matlab/test_ngsolve_mex_pybind_parity.m')",
+            "ngsolve_python_mex_validation_case": "validation_test/ngsolve_integration/matlab_mex_native_case.json",
             "acoustic_reference_validation_gate": "runtests('validation_test/acoustics/test_acoustic_reference.m')",
             "axifem_python_mex_parity_gate": "runtests('tests/matlab/test_axifem_mex.m')",
             "hcurl_topology_python_mex_parity_gate": "runtests('tests/matlab/test_hcurl_topology_optimization.m')",

@@ -23,6 +23,7 @@ from .optuna_oracle import (
 from .runtime import (
     matlab_extension_contract as _contract,
     matlab_official_server_config as _config,
+    matlab_official_server_status as _official_status,
     matlab_radia_acoustic_interface_contract as _boundary,
     matlab_radia_mex_contract as _mex_contract,
     matlab_optuna_simulink_contract as _optuna_contract,
@@ -52,6 +53,10 @@ def matlab_radia_acoustic_interface_contract()->str: return json.dumps(_boundary
 def matlab_radia_mex_contract(topic:str="all")->str:
     """Expose the shared Radia/NGSolve Python-to-MATLAB MEX capability contract."""
     return json.dumps(_mex_contract(topic),ensure_ascii=False,indent=2)
+@mcp.tool()
+def matlab_official_server_status()->str:
+    """Report the installed official server and toolkit versions without starting MATLAB."""
+    return json.dumps(_official_status(),ensure_ascii=False,indent=2)
 @mcp.tool()
 def matlab_optuna_simulink_contract()->str:
     """Describe the table-backed MATLAB Optuna and Simulink workflow."""

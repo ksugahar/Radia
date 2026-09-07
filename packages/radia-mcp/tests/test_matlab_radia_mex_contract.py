@@ -192,6 +192,11 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     assert contract["verified_contract"]["python_numerical_parity_gate"] == (
         "runtests('tests/matlab/test_radia_ngsolve_parity.m')"
     )
+    assert contract["verified_contract"]["ngsolve_python_mex_parity_gate"] == (
+        "runtests('tests/matlab/test_ngsolve_mex_pybind_parity.m')"
+    )
+    assert (Path(__file__).resolve().parents[3] /
+            contract["verified_contract"]["ngsolve_python_mex_validation_case"]).is_file()
     assert contract["verified_contract"]["acoustic_reference_validation_gate"] == (
         "runtests('validation_test/acoustics/test_acoustic_reference.m')"
     )
