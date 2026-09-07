@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import math
 import importlib.util
 import json
+import math
 from pathlib import Path
 
 import pytest
@@ -12,7 +12,10 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 # Analytic references do not need the native solver or its DLLs.
 spec = importlib.util.spec_from_file_location(
-    "mixed_galerkin_references", ROOT / "src/radia/maglev/mixed_galerkin/references.py")
+    "mixed_galerkin_references", ROOT / "src/radia/maglev/mixed_galerkin/references.py"
+)
+if spec is None or spec.loader is None:
+    raise ImportError("Cannot load the mixed-Galerkin analytic reference module")
 references = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(references)
 Y_DC_cylinder = references.Y_DC_cylinder
@@ -36,8 +39,7 @@ def test_cln_pade_preserves_dimensionless_radius_scaling(kind: str) -> None:
     scale = 1.7
     s = 2j * math.pi * 12_500.0
     base = Y_cln_pade(s, 4, radius, SIGMA_CU, MU0, kind=kind)
-    scaled = Y_cln_pade(
-        s / scale**2, 4, radius * scale, SIGMA_CU, MU0, kind=kind)
+    scaled = Y_cln_pade(s / scale**2, 4, radius * scale, SIGMA_CU, MU0, kind=kind)
     assert scaled / scale**2 == pytest.approx(base, rel=2e-12)
 
 
@@ -68,17 +70,28 @@ def test_cln_pade_rejects_invalid_contract(kwargs: dict, match: str) -> None:
 
 @pytest.mark.parametrize("kind", ["L", "R"])
 def test_tenth_order_pade_matches_independent_high_precision_reference(kind):
-    evidence = json.loads((ROOT / "validation_test/mixed_galerkin/results/cln_pade_reference.json").read_text(encoding="utf-8"))
-    case = next(row for row in evidence["cases"]
-                if row["N"] == 10 and row["kind"] == kind and row["u_imag"] == 1e6)
+    evidence = json.loads(
+        (ROOT / "validation_test/mixed_galerkin/results/cln_pade_reference.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    case = next(
+        row
+        for row in evidence["cases"]
+        if row["N"] == 10 and row["kind"] == kind and row["u_imag"] == 1e6
+    )
     expected = complex(*case["reference_ratio"])
-    actual = Y_cln_pade(1e6j, 10, 1.0, 1.0, 1.0, kind=kind) / math.pi
+    actual = (
+        Y_cln_pade(1e6j, 10, 1.0, 1.0, 1.0, kind=kind, n_modes=evidence["n_modes"], n_taylor=20)
+        / math.pi
+    )
     assert actual == pytest.approx(expected, rel=1e-8, abs=1e-12)
 
 
 @pytest.mark.parametrize("kind", ["L", "R"])
 def test_pade_handles_exhausted_modal_rank(kind):
     from scipy.special import jn_zeros
+
     u = 30j
     zeros = jn_zeros(0, 2)
     expected = 1 - sum(4 / x**2 * u / (x**2 + u) for x in zeros)
