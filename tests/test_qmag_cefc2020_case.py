@@ -134,3 +134,21 @@ def test_three_engine_partial_state_round_trip(tmp_path):
     path.write_text(path.read_text(encoding="utf-8").replace('"converged": false', '"converged": true'), encoding="utf-8")
     with pytest.raises(ValueError, match="not a partial"):
         module._read_state(path, identity)
+
+
+def test_multipole_expansion_recovers_a_synthetic_quadrupole_with_b6():
+    """A field B_y + i B_x = C2 (z/r) + C6 (z/r)^5 is recovered to round-off by the FFT expansion."""
+    spec = importlib.util.spec_from_file_location("run_qmag_multipoles", LANE / "run_qmag_multipoles.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["run_qmag_multipoles"] = module
+    spec.loader.exec_module(module)
+    points = module.circle_points(0.015, 64)
+    z = (points[:, 0] + 1j * points[:, 1]) / 0.015
+    complex_field = 0.2 * z + 0.2 * 30.0e-4 * z ** 5 - 0.2 * 2.0e-4 * 1j * z ** 9
+    field = np.column_stack([complex_field.imag, complex_field.real, np.zeros(len(z))])
+    m = module.multipoles(field)
+    assert m["B2_T"] == pytest.approx(0.2)
+    assert m["b6_units"] == pytest.approx(30.0, abs=1e-9) and m["a6_units"] == pytest.approx(0.0, abs=1e-9)
+    assert m["a10_units"] == pytest.approx(-2.0, abs=1e-9) and m["b10_units"] == pytest.approx(0.0, abs=1e-9)
+    assert m["b14_units"] == pytest.approx(0.0, abs=1e-9)
+    assert all(m[f"forbidden_b{n}_units"] < 1e-9 for n in (3, 4, 5))

@@ -81,3 +81,41 @@ Picard loop needed the constrained Anderson mixing (`--mixed-anderson-depth 2`,
 52 iterations, 126 min on hibino) after a first attempt with
 plain damped Picard stalled at the 80-iteration cap with a relative B change of
 7.8e-4 -- the runner now saves that partial state and resumes from it.
+
+## Multipole convergence: curved against straight pole faces, BDM1 against BDM2
+
+`B_perp(15 mm)` is dominated by the gradient and cannot tell a curved pole face
+from a faceted one (the curved and straight TET BDM2 solves agree to five
+digits on it).  The observable that can is the allowed-harmonic content of the
+field: `run_qmag_multipoles.py` expands `B_y + i B_x` on a circle of radius
+15 mm (75 % of the pole radius) by FFT and reports `b_6, b_10, b_14` in units
+of `1e-4 B_2`, plus the quadrupole-forbidden `b_3, b_4, b_5` as a mesh-symmetry
+check.  Linear `mu_r = 1000`, design current; every mesh from the same Cubit
+import (`build_qmag_cubit_mesh.py`, HEX swept or `--scheme tet`, exported at
+curve order 2 or 1).  Correctness study on LAB, no timings:
+
+| route | h [mm] | unknowns | `b_6` | `b_10` | `b_14` | forbidden `b_3` |
+|---|---|---|---|---|---|---|
+| HEX curved Q2, BDM1 | 15 | 25,984 | +21.32 | -4.01 | +0.37 | 0.000 |
+| HEX curved Q2, BDM1 | 10 | 60,816 | +26.04 | -2.08 | +0.76 | 0.000 |
+| HEX curved Q2, BDM1 | 6 | 153,296 | +26.17 | -1.97 | +0.80 | 0.000 |
+| HEX curved Q2, BDM1 | 4 | 410,128 | +26.14 | -1.97 | +0.80 | 0.000 |
+| TET straight, BDM1 | 10 | 80,202 | +26.20 | -1.84 | +0.85 | 0.024 |
+| TET straight, BDM1 | 7 | 172,644 | +26.25 | -1.82 | +0.89 | 0.004 |
+| TET straight, BDM1 | 5 | 397,047 | +26.10 | -1.85 | +0.83 | 0.003 |
+| TET straight, BDM2 | 10 | 233,892 | +25.69 | -1.86 | +0.80 | 0.003 |
+| TET curved Q2, BDM2 | 10 | 233,892 | +24.88 | -2.31 | +0.61 | 0.015 |
+
+Both the curved HEX route and the straight TET BDM1 route converge to
+`b_6 = 26.1 +- 0.1`; the faceted pole face at 10 mm and below costs less than
+0.1 unit in `b_6` and about 0.12 unit in `b_10` (HEX `-1.97` against straight
+TET `-1.85`, the curvature showing first in the higher order).  The 15 mm HEX
+mesh is off by 5 units through field resolution, not geometry: at 10 mm the
+Q2 pole face is already exact to the pole sag of order `h^3 / R^2`, so a
+higher curve order buys nothing here, and the curved touching-block
+quadrature would only get dearer.  The swept HEX meshes keep the quadrupole
+symmetry exactly (forbidden harmonics at round-off); the TET meshes leak up
+to 0.04 unit.  The curved TET BDM2 solve at 10 mm sits 1.2 units below the
+converged `b_6` -- farther than the straight BDM2 on the same tets -- which
+points at the curved touching-block rule of the TET route rather than at the
+geometry; its refinement is being checked.
