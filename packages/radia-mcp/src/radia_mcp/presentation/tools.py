@@ -14,6 +14,7 @@ import re
 import zipfile
 
 from radia_mcp.common.pptx_svg import picture_svg_blob, svg_geometry
+from ._kishotenketsu import presentation_kishotenketsu_check  # noqa: F401
 
 # Plan B Tier 1 (v0.12.0) — composite score + human-advisor comments
 from .plans.T1 import presentation_opening_hook_strength  # noqa: F401
