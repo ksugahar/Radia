@@ -577,6 +577,13 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
     # Mapped HEX BDM2 uses the cancellation-preserving composite charge rule
     # documented on the production high-order path below.
     order = int(order)
+    if order not in (1, 2):
+        # Production HDiv-MMM is BDM1/BDM2.  Order 0 (broken RT0) exists only as the material-topology
+        # operator space of radia.topology_optimization (DemagOperator on HDiv(order=0, discontinuous=True));
+        # it is not a solve order, and a silent order-0 solve would hide that distinction.
+        raise ValueError(
+            "vim.Solve: order must be 1 (BDM1) or 2 (BDM2); got %r.  Order 0 is the broken RT0 "
+            "material-topology space of radia.topology_optimization, not a production solve order." % (order,))
     if curve_order is None and mesh.dim == 3 and mesh.GetCurveOrder() >= 2:
         curve_order = int(mesh.GetCurveOrder())
     _vtx = _volume_vertex_counts(mesh)
