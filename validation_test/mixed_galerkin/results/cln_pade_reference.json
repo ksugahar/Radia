@@ -1,0 +1,381 @@
+{
+  "schema": "radia.cln-pade-reference.v1",
+  "passed": true,
+  "utc": "2026-09-07T08:33:27.543426+00:00",
+  "host": "lab",
+  "source_base_commit": "f3befc40284ef7d8d5322382823f1a5fb59b1189",
+  "source_sha256": "b27a7f2af7a64a4e801c858d864fd9b2b2f1af666f3c66790940c4bc5657b0e9",
+  "elapsed_seconds": 0.26791249999951106,
+  "python": "3.12.10",
+  "numpy": "2.5.2",
+  "scipy": "1.17.1",
+  "mpmath": "1.3.0",
+  "precision_digits": 100,
+  "n_modes": 200,
+  "n_taylor": 20,
+  "oracle": "100-digit Taylor-moment Pade; shared float64 Bessel zeros only",
+  "scope": "Finite-modal Pade evaluation, not infinite-mode or solver validation",
+  "relative_tolerance": 1e-08,
+  "cases": [
+    {
+      "N": 1,
+      "kind": "L",
+      "u_imag": 0.001,
+      "reference_ratio": [
+        0.9999999843750007,
+        -0.0001249999963423009
+      ],
+      "actual_ratio": [
+        0.9999999843750007,
+        -0.0001249999963423009
+      ],
+      "relative_complex_error": 0.0,
+      "passed": true
+    },
+    {
+      "N": 1,
+      "kind": "L",
+      "u_imag": 1.0,
+      "reference_ratio": [
+        0.9846153850285169,
+        -0.12307692145021464
+      ],
+      "actual_ratio": [
+        0.984615385028517,
+        -0.12307692145021465
+      ],
+      "relative_complex_error": 1.1275702591483674e-16,
+      "passed": true
+    },
+    {
+      "N": 1,
+      "kind": "L",
+      "u_imag": 1000.0,
+      "reference_ratio": [
+        6.399590600738783e-05,
+        -0.007999488141837709
+      ],
+      "actual_ratio": [
+        6.39959060073878e-05,
+        -0.007999488141837707
+      ],
+      "relative_complex_error": 2.168738393339343e-16,
+      "passed": true
+    },
+    {
+      "N": 1,
+      "kind": "L",
+      "u_imag": 1000000.0,
+      "reference_ratio": [
+        6.400000174138802e-11,
+        -8.00000010858075e-06
+      ],
+      "actual_ratio": [
+        6.4000001741388e-11,
+        -8.00000010858075e-06
+      ],
+      "relative_complex_error": 1.6155871119132258e-21,
+      "passed": true
+    },
+    {
+      "N": 1,
+      "kind": "R",
+      "u_imag": 0.001,
+      "reference_ratio": [
+        0.9999999791666673,
+        -0.00012499999482320362
+      ],
+      "actual_ratio": [
+        0.9999999791666673,
+        -0.00012499999482320367
+      ],
+      "relative_complex_error": 5.421010933013601e-20,
+      "passed": true
+    },
+    {
+      "N": 1,
+      "kind": "R",
+      "u_imag": 1.0,
+      "reference_ratio": [
+        0.9797297297446735,
+        -0.12162161987346891
+      ],
+      "actual_ratio": [
+        0.9797297297446735,
+        -0.12162161987346896
+      ],
+      "relative_complex_error": 5.622807054241825e-17,
+      "passed": true
+    },
+    {
+      "N": 1,
+      "kind": "R",
+      "u_imag": 1000.0,
+      "reference_ratio": [
+        0.2500270194813602,
+        -0.004499837821749933
+      ],
+      "actual_ratio": [
+        0.25002701948135986,
+        -0.004499837821749937
+      ],
+      "relative_complex_error": 1.3319802256155424e-15,
+      "passed": true
+    },
+    {
+      "N": 1,
+      "kind": "R",
+      "u_imag": 1000000.0,
+      "reference_ratio": [
+        0.2500000204817978,
+        -4.499999815745098e-06
+      ],
+      "actual_ratio": [
+        0.2500000204817975,
+        -4.499999815745102e-06
+      ],
+      "relative_complex_error": 1.3322675202931304e-15,
+      "passed": true
+    },
+    {
+      "N": 4,
+      "kind": "L",
+      "u_imag": 0.001,
+      "reference_ratio": [
+        0.9999999791666673,
+        -0.00012499999471469675
+      ],
+      "actual_ratio": [
+        0.9999999791666678,
+        -0.00012499999471469688
+      ],
+      "relative_complex_error": 5.551115360842051e-16,
+      "passed": true
+    },
+    {
+      "N": 4,
+      "kind": "L",
+      "u_imag": 1.0,
+      "reference_ratio": [
+        0.9797672048237063,
+        -0.1215230896311456
+      ],
+      "actual_ratio": [
+        0.9797672048237067,
+        -0.12152308963114572
+      ],
+      "relative_complex_error": 4.672650585522539e-16,
+      "passed": true
+    },
+    {
+      "N": 4,
+      "kind": "L",
+      "u_imag": 1000.0,
+      "reference_ratio": [
+        0.03094118373229602,
+        -0.0594894940205676
+      ],
+      "actual_ratio": [
+        0.03094118373229682,
+        -0.05948949402056802
+      ],
+      "relative_complex_error": 1.3516532397457853e-14,
+      "passed": true
+    },
+    {
+      "N": 4,
+      "kind": "L",
+      "u_imag": 1000000.0,
+      "reference_ratio": [
+        4.480195270623471e-08,
+        -8.000135523737333e-05
+      ],
+      "actual_ratio": [
+        4.480195270623681e-08,
+        -8.000135523737503e-05
+      ],
+      "relative_complex_error": 2.1344881539226022e-14,
+      "passed": true
+    },
+    {
+      "N": 4,
+      "kind": "R",
+      "u_imag": 0.001,
+      "reference_ratio": [
+        0.9999999791666673,
+        -0.00012499999471469675
+      ],
+      "actual_ratio": [
+        0.9999999791666673,
+        -0.00012499999471469683
+      ],
+      "relative_complex_error": 8.131516399520403e-20,
+      "passed": true
+    },
+    {
+      "N": 4,
+      "kind": "R",
+      "u_imag": 1.0,
+      "reference_ratio": [
+        0.9797672048237072,
+        -0.12152308963114603
+      ],
+      "actual_ratio": [
+        0.9797672048237072,
+        -0.12152308963114611
+      ],
+      "relative_complex_error": 8.433996523432376e-17,
+      "passed": true
+    },
+    {
+      "N": 4,
+      "kind": "R",
+      "u_imag": 1000.0,
+      "reference_ratio": [
+        0.04546509614792295,
+        -0.03127674629976645
+      ],
+      "actual_ratio": [
+        0.04546509614792194,
+        -0.03127674629976655
+      ],
+      "relative_complex_error": 1.8329641562743435e-14,
+      "passed": true
+    },
+    {
+      "N": 4,
+      "kind": "R",
+      "u_imag": 1000000.0,
+      "reference_ratio": [
+        0.04000131437355634,
+        -3.263936031892214e-05
+      ],
+      "actual_ratio": [
+        0.04000131437355525,
+        -3.263936031892224e-05
+      ],
+      "relative_complex_error": 2.7234254725383782e-14,
+      "passed": true
+    },
+    {
+      "N": 10,
+      "kind": "L",
+      "u_imag": 0.001,
+      "reference_ratio": [
+        0.9999999791666673,
+        -0.00012499999471469675
+      ],
+      "actual_ratio": [
+        0.9999999791666678,
+        -0.00012499999471469688
+      ],
+      "relative_complex_error": 5.551115360842051e-16,
+      "passed": true
+    },
+    {
+      "N": 10,
+      "kind": "L",
+      "u_imag": 1.0,
+      "reference_ratio": [
+        0.9797672048237072,
+        -0.12152308963114603
+      ],
+      "actual_ratio": [
+        0.9797672048237077,
+        -0.12152308963114614
+      ],
+      "relative_complex_error": 5.734015046740719e-16,
+      "passed": true
+    },
+    {
+      "N": 10,
+      "kind": "L",
+      "u_imag": 1000.0,
+      "reference_ratio": [
+        0.0447308057799656,
+        -0.04371735919124417
+      ],
+      "actual_ratio": [
+        0.0447308057799664,
+        -0.04371735919124394
+      ],
+      "relative_complex_error": 1.337965064731461e-14,
+      "passed": true
+    },
+    {
+      "N": 10,
+      "kind": "L",
+      "u_imag": 1000000.0,
+      "reference_ratio": [
+        7.215736020931758e-06,
+        -0.0004411694273417033
+      ],
+      "actual_ratio": [
+        7.215736020933884e-06,
+        -0.00044116942734176694
+      ],
+      "relative_complex_error": 1.4432018508445875e-13,
+      "passed": true
+    },
+    {
+      "N": 10,
+      "kind": "R",
+      "u_imag": 0.001,
+      "reference_ratio": [
+        0.9999999791666673,
+        -0.00012499999471469675
+      ],
+      "actual_ratio": [
+        0.9999999791666673,
+        -0.00012499999471469683
+      ],
+      "relative_complex_error": 8.131516399520403e-20,
+      "passed": true
+    },
+    {
+      "N": 10,
+      "kind": "R",
+      "u_imag": 1.0,
+      "reference_ratio": [
+        0.9797672048237072,
+        -0.12152308963114603
+      ],
+      "actual_ratio": [
+        0.9797672048237072,
+        -0.12152308963114611
+      ],
+      "relative_complex_error": 8.433996523432376e-17,
+      "passed": true
+    },
+    {
+      "N": 10,
+      "kind": "R",
+      "u_imag": 1000.0,
+      "reference_ratio": [
+        0.04472547554270352,
+        -0.04371430828022421
+      ],
+      "actual_ratio": [
+        0.04472547554270245,
+        -0.0437143082802244
+      ],
+      "relative_complex_error": 1.7346993240007073e-14,
+      "passed": true
+    },
+    {
+      "N": 10,
+      "kind": "R",
+      "u_imag": 1000000.0,
+      "reference_ratio": [
+        0.008297427708847987,
+        -0.0001602821967156772
+      ],
+      "actual_ratio": [
+        0.008297427708846672,
+        -0.00016028219671567856
+      ],
+      "relative_complex_error": 1.584437823950481e-13,
+      "passed": true
+    }
+  ]
+}
