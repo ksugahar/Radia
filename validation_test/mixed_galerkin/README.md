@@ -159,6 +159,22 @@ artifact are release evidence here.
 
 ## Related references in this repo
 
+### Cauer Reference Stability
+
+Run `python validation_test/mixed_galerkin/validate_cln_pade_reference.py` to
+regenerate `results/cln_pade_reference.json`. This lightweight, solver-free
+lane compares the orthogonal-projection implementation of `Y_cln_pade` with
+an independent 100-digit Taylor-moment Pade solve at orders 1, 4, and 10 for
+both terminations. It checks complex error, not magnitude-only error.
+
+The comparison holds the finite 200-mode input fixed. It certifies evaluation
+stability, not convergence to the infinite-mode cylinder solution. The omitted
+modal weight remains a constant contribution, preserving the existing DC and
+Taylor-moment contract. It is not replaced by an arbitrarily placed extra pole.
+The result JSON records runtime versions and the source hash. The focused test
+`tests/test_mixed_galerkin_references.py` reads only two high-order regression
+cases; it does not rerun the high-precision lane or need a native build.
+
 - `README.md` — this validation campaign and its open questions
 - `_references/square2d_foster.py` — independent 2D square reference
 - `_references/cube3d_foster.py` — independent cube reference used by the
