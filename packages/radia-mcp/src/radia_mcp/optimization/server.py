@@ -5,6 +5,7 @@ from mcp.types import ToolAnnotations
 from .. import __version__
 from ..common.mcp_contract import apply_tool_contract
 from .diagnostics import optimization_gradient_check, optimization_stopping_audit
+from .constraints import optimization_kkt_audit, optimization_projected_gradient_audit
 
 mcp = FastMCP("radia-optimization-domain", instructions=(
     "Solver-neutral optimization diagnostics on caller-supplied evidence. "
@@ -16,6 +17,8 @@ _read_only = ToolAnnotations(readOnlyHint=True, destructiveHint=False,
                              idempotentHint=True, openWorldHint=False)
 mcp.add_tool(optimization_gradient_check, annotations=_read_only)
 mcp.add_tool(optimization_stopping_audit, annotations=_read_only)
+mcp.add_tool(optimization_kkt_audit, annotations=_read_only)
+mcp.add_tool(optimization_projected_gradient_audit, annotations=_read_only)
 
 
 @mcp.tool(annotations=_read_only)
@@ -27,7 +30,9 @@ def optimization_guide() -> dict[str, Any]:
         "stopping": "Inspect gradient, step and objective change separately. This conservative engineering policy is not a transcription of the book's machine-epsilon formula or a proof of convergence.",
         "gradient_check": "Compare the same physical gradient at the same point to independent central differences over multiple dimensionless steps; repeat at nonstationary points and inspect truncation/noise. Consistent samples cannot prove independence.",
         "routes": {"smooth_unconstrained": "optimization", "pde_adjoint": "topology_optimization", "black_box": "bayesian_opt/evolutionary", "linear_cg": "matrix_solvers; distinguish from nonlinear CG"},
-        "deferred": ["KKT/projected-gradient diagnostics", "proximal/ADMM guidance", "remaining generic helper migration"],
+        "constraints": "Use optimization_kkt_audit for smooth g<=0, h=0 with physical multipliers and row Jacobians; use optimization_projected_gradient_audit for box-only problems. Both need explicit scales and cannot certify optimality or constraint qualifications.",
+        "constraint_source": "Kanamori et al. (2016), sections 3.2 and 10.1; fixed-scale residuals are engineering diagnostics, not verbatim source algorithms.",
+        "deferred": ["proximal/ADMM guidance", "remaining generic helper migration"],
     }
 
 
