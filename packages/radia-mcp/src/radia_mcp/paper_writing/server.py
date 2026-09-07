@@ -26,6 +26,10 @@ from mcp.server.fastmcp import FastMCP
 from ..common import register_status_tool
 from ..presentation import register as _register_presentation
 from ..figure import register as _register_figure
+from ..grant_writing import register as _register_grant
+from ..poster import register as _register_poster
+from ..common.server_hardening import ANN_READONLY
+from .review_route import paper_writing_review_route
 
 from . import tools as _tools
 from ._pdf_layout_visual import (
@@ -77,7 +81,13 @@ from ._tex_resolver import (
 )
 
 
-mcp = FastMCP("mcp-server-paper-writing")
+mcp = FastMCP("mcp-server-paper-writing", instructions=(
+    "Paper, slide, poster, figure and grant-writing workflows. Select the "
+    "document genre and language first using paper_writing_review_route. "
+    "grant_writing_* tools are read-only grant diagnostics; "
+    "declare document_type before Japanese scoring. Use paper_writing_* for "
+    "papers and research-meeting manuscripts; never average scores across genres."
+))
 
 
 # ============================================================
@@ -218,6 +228,9 @@ _N_PRESENTATION_TOOLS = _register_presentation(mcp)
 # all figure_* / paper_figure_* tools ride this server.
 # ============================================================
 _N_FIGURE_TOOLS = _register_figure(mcp)
+_N_GRANT_TOOLS = _register_grant(mcp)
+_N_POSTER_TOOLS = _register_poster(mcp)
+mcp.tool(annotations=ANN_READONLY)(paper_writing_review_route)
 
 
 # ============================================================

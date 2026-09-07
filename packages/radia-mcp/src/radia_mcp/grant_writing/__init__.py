@@ -6,6 +6,7 @@ paper_writing / figure / grant_writing / presentation.
 from __future__ import annotations
 
 from . import tools as _tools
+from ..common.server_hardening import ANN_READONLY
 
 
 def register(mcp) -> int:
@@ -13,6 +14,6 @@ def register(mcp) -> int:
     count = 0
     for name in dir(_tools):
         if name.startswith("grant_writing_") and callable(getattr(_tools, name)):
-            mcp.tool()(getattr(_tools, name))
+            mcp.tool(annotations=ANN_READONLY)(getattr(_tools, name))
             count += 1
     return count
