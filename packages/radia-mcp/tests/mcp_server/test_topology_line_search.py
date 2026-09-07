@@ -16,6 +16,11 @@ if _SRC not in sys.path:
 from radia_mcp.topology_optimization.line_search import armijo_backtracking
 
 
+def test_legacy_import_is_the_canonical_function():
+    from radia_mcp.optimization.line_search import armijo_backtracking as canonical
+    assert armijo_backtracking is canonical
+
+
 def test_quadratic_accepts_half_step_to_minimum():
     def f(x):
         return float((x[0] - 2.0) ** 2)
