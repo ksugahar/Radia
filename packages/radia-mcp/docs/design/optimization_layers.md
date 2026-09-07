@@ -56,9 +56,8 @@ distributed and no model-weight training is performed.
 
 1. Constraint-qualification and curvature evidence beyond residual diagnostics;
    keep constrained stationarity distinct from sufficiency.
-2. Audit references/callers before relocating nonlinear least squares and linear
-   inverse helpers. Linear CG belongs to linear algebra; nonlinear CG belongs
-   to optimization. Do not relocate both merely because their names match.
+2. Audit remaining global-search helper ownership without merging Bayesian,
+   evolutionary and local smooth search merely because all optimize objectives.
 3. Proximal methods/ADMM and structured regularization; connect verified cases
    to inverse magnetic-field/coil design rather than invent generic solvers.
 4. Keep Bayesian/evolutionary search distinct; use local refinement only when
@@ -111,3 +110,48 @@ The dimensionless residual
 contracts and box mapping are engineering adaptations, not source algorithm
 transcriptions. These are read-only MCP diagnostics, not numerical solver or
 MATLAB kernel additions. No new client process is required.
+
+## Helper ownership and compatibility
+
+The existing NumPy-only helpers now have explicit canonical homes:
+
+| Capability | Canonical module | Compatibility module |
+| --- | --- | --- |
+| Nonlinear least squares (LM) | `optimization.nonlinear_lsq` | `topology_optimization.nonlinear_lsq` |
+| Regularized linear inverse (TSVD/Tikhonov/L-curve) | `optimization.linear_inverse` | `topology_optimization.linear_inverse` |
+| Linear CG for SPD systems | `matrix_solvers.krylov` | `topology_optimization.krylov` |
+
+All paths are relative to `radia_mcp`. Compatibility modules re-export the
+same function objects, not forked copies or alternate solvers. Signatures remain
+unchanged. No new MCP tool, server, dependency or MATLAB numerical implementation
+is introduced. Linear CG's algorithm is unchanged; it is not nonlinear CG.
+
+The caller audit found direct imports in the existing helper regression tests
+and references in topology application and stream-function knowledge. Those
+tests deliberately retain the old imports and assert identity with the new
+homes. Application guidance names the canonical paths. Field-map construction
+and PDE adjoints remain domain-owned. The nonlinear multi-start evidence gate
+and simplex-stationarity gate retain their existing summary contracts and tool
+names in `topology_optimization`; their ownership needs a separate gate audit,
+not a move bundled with these numerical helpers.
+Global/evolutionary search is not migrated in this slice.
+
+Two numerical edge cases were corrected during migration:
+
+- LM now reports `grad_norm` at the returned iterate. `converged` is true only
+  when its absolute gradient criterion holds; small steps, exhausted iterations
+  and no improvement alone are not success. The additive `termination_reason`
+  field distinguishes these exits. Invalid controls, callback shapes and
+  nonfinite evidence fail loudly. Callbacks must be deterministic. Existing
+  residual-scaling limitations still apply; gradient convergence is not a
+  minimum certificate. This intentionally tightens the legacy success flag.
+- Positive-lambda Tikhonov uses s/(s^2+lambda^2) without dividing by s, so exact
+  null modes yield zero rather than NaN. Lambda zero uses NumPy least squares
+  with `rcond=None`; filter factors for exact zero modes are zero. Negative or
+  nonfinite lambda is rejected. TSVD refuses a selected exact-zero singular
+  mode and asks for a smaller k. Numerical-rank/truncation choice remains the
+  caller's responsibility. L-curve corner selection remains a discrete heuristic.
+
+These compact teaching helpers are not replacements for established production
+optimization libraries. Existing coil-fit, analytic and SciPy comparison tests
+remain authoritative regressions; no new physics solve is needed for the move.

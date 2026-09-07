@@ -13,6 +13,11 @@ if _SRC not in sys.path:
 from radia_mcp.topology_optimization.krylov import linear_conjugate_gradient
 
 
+def test_legacy_import_is_canonical_linear_algebra_helper():
+    from radia_mcp.matrix_solvers.krylov import linear_conjugate_gradient as canonical
+    assert linear_conjugate_gradient is canonical
+
+
 def _spd_system(n=8, seed=4):
     rng = np.random.default_rng(seed)
     M = rng.normal(size=(n, n))
