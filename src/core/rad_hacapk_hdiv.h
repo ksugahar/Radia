@@ -956,6 +956,14 @@ private:
     // distorted host converges only ~10x per two points (sector lattice: 7e-5 at 6, 6e-6 at 8), so
     // affine-affine pairs -- most pairs of a real magnet -- take the cheaper count.
     std::vector<double> m_glPairAffine, m_gwPairAffine;
+    // Separate 1D rule for the DOMINANT (cone-radius w) direction of the pair-domain Duffy rule.  After
+    // the substitution the 1/r singularity is cancelled exactly by the Duffy Jacobian w^(kcone-1), and
+    // within one subdomain the reference coordinates are affine in w, so this direction carries a smooth
+    // -- for affine host pairs polynomial -- integrand and needs fewer points than the angular ones.
+    // Empty means "use the pair rule", which is the historical uniform-N behaviour.
+    std::vector<double> m_glPairW, m_gwPairW, m_glPairAffineW, m_gwPairAffineW;
+    const std::vector<double>& PairRuleWNodes(int kindT, int hT, int kindS, int hS) const;
+    const std::vector<double>& PairRuleWWeights(int kindT, int hT, int kindS, int hS) const;
     bool HexHostAffine(int kind, int h) const;
     const std::vector<double>& PairRuleNodes(int kindT, int hT, int kindS, int hS) const;
     const std::vector<double>& PairRuleWeights(int kindT, int hT, int kindS, int hS) const;

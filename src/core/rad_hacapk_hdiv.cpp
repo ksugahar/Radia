@@ -997,6 +997,19 @@ static bool HexTransCacheEnabled()
 
 // Translation-congruent shared cache of the expensive near blocks (see HexSharedBlockKey).  A
 // performance switch: the blocks are the same quadrature either way; the latch exists for A/B timing.
+// Diagnostic A/B of the dominant-direction point count (performance class; the effective value is
+// published in hmat_stats as hex_glpair_w_n / hex_glpair_affine_w_n).
+static int HexPairWOverride()
+{
+    static const int value = []() -> int {
+        const char* text = std::getenv("RADIA_HDIV_HEX_GLPAIR_W_N");
+        if (text == nullptr) return 0;
+        const int parsed = std::atoi(text);
+        return (parsed >= 2 && parsed <= 32) ? parsed : 0;
+    }();
+    return value;
+}
+
 static bool HexCongruentCacheEnabled()
 {
     static const bool enabled = []() -> bool {
@@ -3418,6 +3431,10 @@ RadHACApKChargeGram::RadHACApKChargeGram(
     if (m_glPairAffine.size() != m_gwPairAffine.size())
         throw std::invalid_argument("HEX ChargeGram gl_pair_affine/gw_pair_affine sizes differ");
     if (m_glPairAffine.empty()) GaussLegendre01(6, m_glPairAffine, m_gwPairAffine);   // affine-affine pairs
+    if (const int w_override = HexPairWOverride()) {
+        GaussLegendre01(w_override, m_glPairW, m_gwPairW);
+        m_glPairAffineW = m_glPairW; m_gwPairAffineW = m_gwPairW;
+    }
     if (m_glOut.empty() || m_glIn.empty())
         throw std::invalid_argument("HEX ChargeGram needs non-empty gl_out and gl_in rules");
     for (int exponent : m_expo)
@@ -4228,7 +4245,7 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexCacheStats()
         !ho_analytic_enabled || !ho_image_enabled || !ho_image_far_enabled ||
         !curved_direct_enabled || (m_hexmode && !m_nearInnerExact) ||
         (m_hexmode && !HexClusterRadiusEnabled()) ||
-        (m_hexmode && !HexPairDuffyEnabled());
+        (m_hexmode && !HexPairDuffyEnabled()) || (m_hexmode && HexPairWOverride() != 0);
     const bool congruent_cache_enabled = HexCongruentCacheEnabled();
     const bool performance_override =
         block_cache_limit != HEX_BLOCK_CACHE_LIMIT_DEFAULT ||
@@ -4250,8 +4267,22 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexCacheStats()
     out.emplace_back("hex_near_sinh_min_width", HOST_CONE_SINH_MIN_WIDTH);
     out.emplace_back("hex_near_sinh_max_width", HOST_CONE_SINH_MAX_WIDTH);
     out.emplace_back("hex_pair_duffy_enabled", (m_hexAffineOrder == 1 && HexPairDuffyEnabled()) ? 1.0 : 0.0);
+    {
+        // Host classification actually used by the near-pair dispatch: an affine (parallelepiped) host
+        // takes the exact affine inner and the affine pair rule, everything else the general path.
+        double affine_cells = 0.0, affine_faces = 0.0;
+        for (unsigned char x : m_hexAffineCell) affine_cells += (double)x;
+        for (unsigned char x : m_quadAffineFace) affine_faces += (double)x;
+        out.emplace_back("hex_affine_cells", affine_cells);
+        out.emplace_back("hex_cells", (double)m_hexAffineCell.size());
+        out.emplace_back("quad_affine_faces", affine_faces);
+        out.emplace_back("quad_faces", (double)m_quadAffineFace.size());
+    }
     out.emplace_back("hex_glpair_n", (double)m_glPair.size());
     out.emplace_back("hex_glpair_affine_n", (double)m_glPairAffine.size());
+    out.emplace_back("hex_glpair_w_n", (double)(m_glPairW.empty() ? m_glPair.size() : m_glPairW.size()));
+    out.emplace_back("hex_glpair_affine_w_n",
+                     (double)(m_glPairAffineW.empty() ? m_glPairAffine.size() : m_glPairAffineW.size()));
     out.emplace_back("hex_pair_nonconforming", ld(m_hexPairNonconforming));
     out.emplace_back("hex_cluster_radius_enabled", HexClusterRadiusEnabled() ? 1.0 : 0.0);
     out.emplace_back("hex_glnear_n", (double)m_glNear.size());
@@ -6922,6 +6953,20 @@ const std::vector<double>& RadHACApKChargeGram::PairRuleWeights(int kindT, int h
     return (HexHostAffine(kindT, hT) && HexHostAffine(kindS, hS)) ? m_gwPairAffine : m_gwPair;
 }
 
+const std::vector<double>& RadHACApKChargeGram::PairRuleWNodes(int kindT, int hT, int kindS, int hS) const
+{
+    const bool affine = HexHostAffine(kindT, hT) && HexHostAffine(kindS, hS);
+    const std::vector<double>& rule = affine ? m_glPairAffineW : m_glPairW;
+    return rule.empty() ? PairRuleNodes(kindT, hT, kindS, hS) : rule;
+}
+
+const std::vector<double>& RadHACApKChargeGram::PairRuleWWeights(int kindT, int hT, int kindS, int hS) const
+{
+    const bool affine = HexHostAffine(kindT, hT) && HexHostAffine(kindS, hS);
+    const std::vector<double>& rule = affine ? m_gwPairAffineW : m_gwPairW;
+    return rule.empty() ? PairRuleWeights(kindT, hT, kindS, hS) : rule;
+}
+
 // Neumaier's compensated addition: sum += x with the rounding error of the add kept in comp.  The
 // final value is sum + comp; the result is independent of the summation order to a few eps.
 static inline void NeumaierAdd(double& sum, double& comp, double x)
@@ -7012,9 +7057,12 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHexPairDuffy(int kindT, int hT
     const int nsub = (2*nrel + ntrT + ntrS) * (1 << std::max(0, nrel - 1)) * ((ntrT + ntrS) > 0 && nrel > 0 ? 1 : 1);
     const double* ndT = (kindT == 0) ? &m_hexNodes[(size_t)hT*81] : &m_quadNodes[(size_t)hT*27];
     const double* ndS = (kindS == 0) ? &m_hexNodes[(size_t)hS*81] : &m_quadNodes[(size_t)hS*27];
-    const std::vector<double>& gl = PairRuleNodes(kindT, hT, kindS, hS);     // 6 for affine-affine, else 8
+    const std::vector<double>& gl = PairRuleNodes(kindT, hT, kindS, hS);     // angular / free directions
     const std::vector<double>& gw = PairRuleWeights(kindT, hT, kindS, hS);
+    const std::vector<double>& glw = PairRuleWNodes(kindT, hT, kindS, hS);   // dominant (cone-radius) direction
+    const std::vector<double>& gww = PairRuleWWeights(kindT, hT, kindS, hS);
     const int N = (int)gl.size();
+    const int Nw = (int)glw.size();
     std::vector<int> idx((size_t)ndim, 0);
     std::vector<double> qT((size_t)nT), qS((size_t)nS);
     // The same physical pair is summed in a different SUBDOMAIN order when it is reached as a direct
@@ -7049,8 +7097,8 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHexPairDuffy(int kindT, int hT
         std::fill(part.begin(), part.end(), 0.0);
         std::fill(idx.begin(), idx.end(), 0);
         while (true) {
-            const double wv = gl[(size_t)idx[0]];
-            double weight = gw[(size_t)idx[0]];
+            const double wv = glw[(size_t)idx[0]];
+            double weight = gww[(size_t)idx[0]];
             int yi = 1;
             for (int c = 0; c < kcone; ++c) {
                 if (c == dom) { cone[c] = sgn*wv; continue; }
@@ -7093,7 +7141,11 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHexPairDuffy(int kindT, int hT
                 }
             }
             int p = 0;
-            while (p < ndim) { if (++idx[(size_t)p] < N) break; idx[(size_t)p] = 0; ++p; }
+            while (p < ndim) {
+                const int limit = (p == 0) ? Nw : N;
+                if (++idx[(size_t)p] < limit) break;
+                idx[(size_t)p] = 0; ++p;
+            }
             if (p == ndim) break;
         }
         for (size_t k = 0; k < blk.size(); ++k) NeumaierAdd(blk[k], comp[k], part[k]);
@@ -7140,11 +7192,17 @@ bool RadHACApKChargeGram::HexHostsTouch(int kindT, int hT, int kindS, int hS, in
 const std::vector<double>& RadHACApKChargeGram::GetHexBlock(int kindT, int hT, int kindS, int hS, int img) const
 {
     const int wedge_scope = m_wedgemode ? WedgeTransCacheScope() : 2;
-    const bool use_trans_cache = HexTransCacheEnabled() &&
+    // The expensive general-path blocks (graded near / site-radial band) take the INSTANCE-SHARED
+    // compute-once cache on every mesh, uniform or not.  The per-thread translation cache below is a
+    // congruence cache too, but it is per worker, size-limited and cleared per build, so on a uniform
+    // mesh it let each fill worker -- and every post-build G.entry call on the main thread -- recompute
+    // the same near block.  That is the duplication the shared cache exists to remove.
+    const bool general_path = !m_d2 && !m_wedgemode
+                              && HexPairTakesGeneralPath(kindT, hT, kindS, hS, img);
+    const bool use_trans_cache = HexTransCacheEnabled() && !general_path &&
                                  !m_d2 && m_hexUniformTransHosts && img == 0 &&
                                  (!m_wedgemode || wedge_scope >= 2 || (kindT == 0 && kindS == 0));
-    if (!use_trans_cache && !m_d2 && !m_wedgemode
-            && HexPairTakesGeneralPath(kindT, hT, kindS, hS, img)) {
+    if (general_path) {
         // Expensive general-path block (graded near or site-radial mid band): serve from the
         // instance-shared cache so the fill workers do not each recompute it (the per-thread caches
         // below duplicate ~2x).  Key packs (kinds, image index, hosts) into 64 bits; hosts < 2^28 and
