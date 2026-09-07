@@ -12,6 +12,13 @@ and builds a passive discrete state-space model; NGSolve remains the owner of
 mesh assembly, high-order geometry, and DoF orientation. Acoustic FEM/BEM
 remains separate.
 
+Use `matlab_official_server_status` to inventory the installed official server
+and Agentic Toolkit configuration before troubleshooting a connection. It runs
+only the server's `--version` probe and does not start MATLAB. Missing servers,
+failed or empty version probes, and malformed toolkit configuration report
+`needs_attention`. Installed version information is not proof of the latest
+upstream release. `RADIA_MATLAB_MCP_SERVER` overrides automatic discovery.
+
 Call `matlab_optuna_mcp_route` first, then call `matlab_optuna_health` before
 executing or releasing the MATLAB package. The health gate derives its counts
 from the checked `radia-optuna` manifest, complete Optuna 4.9.0 public-API
