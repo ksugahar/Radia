@@ -1,0 +1,1465 @@
+{
+ "schema": "radia.validation.esrf-coil-yoke-three-engine.v2",
+ "generated_at_utc": "2026-09-07T22:33:09.870856+00:00",
+ "passed": true,
+ "machine": "mdx1",
+ "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+ "peak_process_memory_mb": 6504.26171875,
+ "case": 6,
+ "formulation_contract": {
+  "schema": "radia.static-electromagnet-three-engine/v1",
+  "engines": [
+   "hdiv_mmm",
+   "reduced_a",
+   "mixed_total_reduced_omega"
+  ],
+  "formulations": {
+   "hdiv_mmm": "HDiv-MMM",
+   "reduced_a": "HCurl reduced-A",
+   "mixed_total_reduced_omega": "H1 TOSCA mixed total/reduced Omega"
+  },
+  "h1_acceptance_route": "mixed_total_reduced_omega",
+  "global_reduced_omega_acceptance_forbidden": true
+ },
+ "shared_input_contract": {
+  "iron_cad": "same Cubit STEP authority for HDiv and FEM meshes",
+  "coil_source": {
+   "authority": "ESRF Example 6 CoilBuilder solid-current paths",
+   "case": 6,
+   "source_is_meshed": false,
+   "coil_count": 8,
+   "radia_object_count": 64,
+   "coils": [
+    {
+     "index": 0,
+     "current_A": -1560.0,
+     "segment_count": 8,
+     "closed": true,
+     "closure_gap_m": 9.813077866773595e-18,
+     "radia_object_count": 8
+    },
+    {
+     "index": 1,
+     "current_A": 1560.0,
+     "segment_count": 8,
+     "closed": true,
+     "closure_gap_m": 7.757919228897728e-18,
+     "radia_object_count": 8
+    },
+    {
+     "index": 2,
+     "current_A": -1560.0,
+     "segment_count": 8,
+     "closed": true,
+     "closure_gap_m": 3.469446951953614e-18,
+     "radia_object_count": 8
+    },
+    {
+     "index": 3,
+     "current_A": 1560.0,
+     "segment_count": 8,
+     "closed": true,
+     "closure_gap_m": 1.4304896245381992e-17,
+     "radia_object_count": 8
+    },
+    {
+     "index": 4,
+     "current_A": -960.0,
+     "segment_count": 8,
+     "closed": true,
+     "closure_gap_m": 6.938893903907228e-18,
+     "radia_object_count": 8
+    },
+    {
+     "index": 5,
+     "current_A": 960.0,
+     "segment_count": 8,
+     "closed": true,
+     "closure_gap_m": 1.5515838457795457e-17,
+     "radia_object_count": 8
+    },
+    {
+     "index": 6,
+     "current_A": -960.0,
+     "segment_count": 8,
+     "closed": true,
+     "closure_gap_m": 9.813077866773595e-18,
+     "radia_object_count": 8
+    },
+    {
+     "index": 7,
+     "current_A": 960.0,
+     "segment_count": 8,
+     "closed": true,
+     "closure_gap_m": 9.813077866773595e-18,
+     "radia_object_count": 8
+    }
+   ]
+  },
+  "bh_table": "shared monotone PCHIP B(H)",
+  "finite_outer_air_box_forbidden": true,
+  "hdiv_air_mesh_forbidden": true,
+  "hdiv_image": null,
+  "fem_kelvin_mesh_shared": true,
+  "mixed_h1_source_potential": "total_volume_hodge_with_harmonic_cut"
+ },
+ "iron_mesh": "C:\\temp\\radia-ex6-diag\\assets_conforming\\model.vol",
+ "iron_mesh_sha256": "fdd1387281e550e27eab435cfac3ec54e0b9d1339438699fdc50c852dfcafc74",
+ "fem_mesh": "C:\\temp\\radia-esrf-fem\\example6\\coil_yoke_kelvin.vol",
+ "fem_mesh_sha256": "dfc12b84f80db1fa17fb5012b6f87c072e8aa1fb3c085b61269f047a879a54ac",
+ "fem_mesh_contract": {
+  "asset_manifest_sha256": "b2bbe5db90d581df6719edeaaf8d699b74dae4288701914417a8fe94a1b0c7ac",
+  "bbboundaries": [
+   "GND"
+  ],
+  "boundaries": [
+   "iron_air_interface",
+   "kelvin_ext",
+   "kelvin_int"
+  ],
+  "contract": {
+   "coil_source": "shared mesh-free CoilBuilder solid current",
+   "fem_mesh_role": "conforming iron + physical air + Kelvin exterior",
+   "finite_outer_air_box_forbidden": true,
+   "hdiv_response_mesh": "assets/model.vol",
+   "mixed_h1_source_potential": "total_volume_hodge_with_harmonic_cut",
+   "required_bbboundary": "GND",
+   "required_boundaries": [
+    "iron_air_interface",
+    "kelvin_int",
+    "kelvin_ext"
+   ],
+   "response_materials": [
+    "iron",
+    "air",
+    "kelvin"
+   ]
+  },
+  "cubit_returncode": 0,
+  "curve_order": 2,
+  "elements": 134686,
+  "identification_count": 1393,
+  "materials": [
+   "iron",
+   "air",
+   "kelvin"
+  ],
+  "path": "C:\\temp\\radia-esrf-fem\\example6\\coil_yoke_kelvin.vol",
+  "vertices": 24064
+ },
+ "kelvin_center_m": [
+  0.4799999999999973,
+  -5.1336972867188635e-17,
+  -5.489757542235733e-17
+ ],
+ "observation_points_m": [
+  [
+   -0.024,
+   -0.006,
+   -0.006
+  ],
+  [
+   -0.024,
+   -0.006,
+   0.0
+  ],
+  [
+   -0.024,
+   -0.006,
+   0.006
+  ],
+  [
+   -0.024,
+   0.0,
+   -0.006
+  ],
+  [
+   -0.024,
+   0.0,
+   0.0
+  ],
+  [
+   -0.024,
+   0.0,
+   0.006
+  ],
+  [
+   -0.024,
+   0.006,
+   -0.006
+  ],
+  [
+   -0.024,
+   0.006,
+   0.0
+  ],
+  [
+   -0.024,
+   0.006,
+   0.006
+  ],
+  [
+   -0.012,
+   -0.006,
+   -0.006
+  ],
+  [
+   -0.012,
+   -0.006,
+   0.0
+  ],
+  [
+   -0.012,
+   -0.006,
+   0.006
+  ],
+  [
+   -0.012,
+   0.0,
+   -0.006
+  ],
+  [
+   -0.012,
+   0.0,
+   0.0
+  ],
+  [
+   -0.012,
+   0.0,
+   0.006
+  ],
+  [
+   -0.012,
+   0.006,
+   -0.006
+  ],
+  [
+   -0.012,
+   0.006,
+   0.0
+  ],
+  [
+   -0.012,
+   0.006,
+   0.006
+  ],
+  [
+   0.0,
+   -0.006,
+   -0.006
+  ],
+  [
+   0.0,
+   -0.006,
+   0.0
+  ],
+  [
+   0.0,
+   -0.006,
+   0.006
+  ],
+  [
+   0.0,
+   0.0,
+   -0.006
+  ],
+  [
+   0.0,
+   0.0,
+   0.0
+  ],
+  [
+   0.0,
+   0.0,
+   0.006
+  ],
+  [
+   0.0,
+   0.006,
+   -0.006
+  ],
+  [
+   0.0,
+   0.006,
+   0.0
+  ],
+  [
+   0.0,
+   0.006,
+   0.006
+  ],
+  [
+   0.012,
+   -0.006,
+   -0.006
+  ],
+  [
+   0.012,
+   -0.006,
+   0.0
+  ],
+  [
+   0.012,
+   -0.006,
+   0.006
+  ],
+  [
+   0.012,
+   0.0,
+   -0.006
+  ],
+  [
+   0.012,
+   0.0,
+   0.0
+  ],
+  [
+   0.012,
+   0.0,
+   0.006
+  ],
+  [
+   0.012,
+   0.006,
+   -0.006
+  ],
+  [
+   0.012,
+   0.006,
+   0.0
+  ],
+  [
+   0.012,
+   0.006,
+   0.006
+  ],
+  [
+   0.024,
+   -0.006,
+   -0.006
+  ],
+  [
+   0.024,
+   -0.006,
+   0.0
+  ],
+  [
+   0.024,
+   -0.006,
+   0.006
+  ],
+  [
+   0.024,
+   0.0,
+   -0.006
+  ],
+  [
+   0.024,
+   0.0,
+   0.0
+  ],
+  [
+   0.024,
+   0.0,
+   0.006
+  ],
+  [
+   0.024,
+   0.006,
+   -0.006
+  ],
+  [
+   0.024,
+   0.006,
+   0.0
+  ],
+  [
+   0.024,
+   0.006,
+   0.006
+  ]
+ ],
+ "observation_contract": {
+  "kind": "volume_average",
+  "quadrature": "tensor_gauss_2x2x2",
+  "half_width_m": 2e-05,
+  "sample_count_per_centre": 8
+ },
+ "core_point_count": 27,
+ "engines": {
+  "hdiv_mmm": {
+   "formulation": "HDiv-MMM",
+   "discretization": "BDM1",
+   "open_boundary": "Coulomb charge Gram; iron-only mesh",
+   "mesh_elements": 2408,
+   "mesh_vertices": 3616,
+   "ndof": 62192,
+   "linear_iterations": 1,
+   "nonlinear": true,
+   "nonlinear_stats": {
+    "nonlinear_inner_preconditioner": "jacobi",
+    "nonlinear_inner_tol": "auto",
+    "nonlinear_continuation_steps": 1,
+    "nonlinear_reuse_tangent_steps": 1,
+    "nonlinear_cg_x0": false,
+    "nonlinear_newton_iters": 1,
+    "nonlinear_warmstart_solves": 1,
+    "nonlinear_linear_inner_iters": 412,
+    "nonlinear_line_search_backtracks": 34,
+    "nonlinear_tangent_assemblies": 1,
+    "nonlinear_tangent_reuses": 0,
+    "nonlinear_fresh_tangent_retries": 0,
+    "nonlinear_final_rel_step": 9.79895138559458e-13,
+    "nonlinear_final_settled_iters": 1,
+    "nonlinear_converged_final_stage": true,
+    "converged": true
+   },
+   "preconditioner": "jacobi",
+   "gram_eps": 1e-12,
+   "timings": {
+    "fes_wall_s": 0.10253060000104597,
+    "charge_gram_wall_s": 58.64076829999976,
+    "charge_basis_wall_s": 1.395576599999913,
+    "charge_gram_cpp_wall_s": 57.110660300000745,
+    "projection_wall_s": 1.1362459999945713,
+    "solve_wall_s": 5.7844460000051185,
+    "post_wall_s": 0.1638491999983671,
+    "total_wall_s_internal": 65.89107749999675
+   },
+   "hmat_stats": {
+    "n_dof": 28064,
+    "n_leaves": 54286,
+    "n_lowrank": 6404,
+    "n_dense": 47882,
+    "max_rank": 88,
+    "compression": 0.33671391092229,
+    "build_time": 57.055617500000004,
+    "memory_mb": 2023.2533874511719,
+    "dense_memory_mb": 6008.8203125,
+    "build_prep_s": 7.7983934,
+    "build_cluster_s": 0.004924100001517218,
+    "build_leafgen_s": 0.00924249999661697,
+    "build_fill_s": 49.2343034000005,
+    "build_diag_s": 0.0032236,
+    "hex_cache_stats_enabled": 0.0,
+    "hex_block_cache_limit": 200000.0,
+    "hex_trans_cache_enabled": 1.0,
+    "hex_congruent_cache_enabled": 1.0,
+    "hex_congruent_ready": 1.0,
+    "hex_congruent_templates": 1048.0,
+    "hex_congruent_hosts": 4608.0,
+    "hex_far_one_sided_threshold": 0.0,
+    "hex_affine_exact_near_factor": 1.0,
+    "hex_distorted_far_factor": 1.0,
+    "hex_near_inner_exact": 1.0,
+    "hex_near_inner_host_cone": 1.0,
+    "hex_near_sinh_min_width": 0.001,
+    "hex_near_sinh_max_width": 1.0,
+    "hex_pair_duffy_enabled": 1.0,
+    "hex_affine_cells": 1792.0,
+    "hex_cells": 2408.0,
+    "quad_affine_faces": 1816.0,
+    "quad_faces": 2200.0,
+    "hex_glpair_n": 6.0,
+    "hex_glpair_affine_n": 6.0,
+    "hex_glpair_w_n": 6.0,
+    "hex_glpair_affine_w_n": 6.0,
+    "hex_pair_nonconforming": 0.0,
+    "hex_cluster_radius_enabled": 1.0,
+    "hex_glnear_n": 8.0,
+    "hex_glout_n": 4.0,
+    "hex_glin_n": 5.0,
+    "hex_glin_self_n": 8.0,
+    "curved_direct_enabled": 1.0,
+    "hex_blk_affine_near": 0.0,
+    "hex_blk_affine_far": 9548572.0,
+    "hex_blk_distorted_far": 6810528.0,
+    "hex_blk_general_near": 49232.0,
+    "hex_blk_general_far": 0.0,
+    "hex_s_affine_near": 0.0,
+    "hex_s_affine_far": 121.2808873,
+    "hex_s_distorted_far": 102.53273630000001,
+    "hex_s_general_near": 1510.5302726,
+    "hex_s_general_far": 0.0,
+    "hex_general_shared_lookups": 189704.0,
+    "hex_general_shared_hits": 140462.0,
+    "hex_general_shared_misses": 49232.0,
+    "hex_general_shared_entries": 49232.0,
+    "wedge_far_one_sided_threshold": 0.0,
+    "wedge_trans_cache_scope": 2.0,
+    "wedge_trans_cache_enabled": 1.0,
+    "ho_far_one_sided_enabled": 0.0,
+    "ho_analytic_block_available": 0.0,
+    "ho_analytic_block_enabled": 0.0,
+    "ho_image_block_enabled": 1.0,
+    "ho_image_far_enabled": 1.0,
+    "hmatvec_stats_enabled": 0.0,
+    "hmatvec_mkl_threads": 1.0,
+    "nonproduction_numerical_override_active": 0.0,
+    "nondefault_performance_override_active": 0.0,
+    "release_claim_eligible": 1.0,
+    "hex_block_lookups": 0.0,
+    "hex_block_hits": 0.0,
+    "hex_block_misses": 0.0,
+    "hex_block_clears": 0.0,
+    "hex_trans_block_lookups": 0.0,
+    "hex_trans_block_hits": 0.0,
+    "hex_trans_block_misses": 0.0,
+    "hex_trans_block_clears": 0.0,
+    "hex_sym_block_lookups": 0.0,
+    "hex_sym_block_hits": 0.0,
+    "hex_sym_block_misses": 0.0,
+    "hex_sym_block_clears": 0.0,
+    "hex_sym_trans_block_lookups": 0.0,
+    "hex_sym_trans_block_hits": 0.0,
+    "hex_sym_trans_block_misses": 0.0,
+    "hex_sym_trans_block_clears": 0.0,
+    "ho_sym_block_lookups": 0.0,
+    "ho_sym_block_hits": 0.0,
+    "ho_sym_block_misses": 0.0,
+    "ho_sym_block_clears": 0.0,
+    "ho_image_far_entries": 0.0,
+    "ho_image_block_entries": 0.0,
+    "ho_image_scalar_entries": 0.0,
+    "hex_block_hit_rate": 0.0,
+    "hex_trans_block_hit_rate": 0.0,
+    "hex_sym_block_hit_rate": 0.0,
+    "hex_sym_trans_block_hit_rate": 0.0,
+    "ho_sym_block_hit_rate": 0.0,
+    "curved_touch_blocks": 0.0,
+    "curved_touch_build_time": 0.0,
+    "hex_uniform_affine_cells": false,
+    "hex_uniform_trans_hosts": false
+   },
+   "image": null,
+   "runtime_s": 69.33729219999805,
+   "observation_contract": {
+    "kind": "volume_average",
+    "quadrature": "tensor_gauss_2x2x2",
+    "half_width_m": 2e-05,
+    "sample_count_per_centre": 8
+   }
+  },
+  "reduced_a": {
+   "formulation": "HCurl reduced-A",
+   "open_boundary": "periodic spherical Kelvin transform",
+   "source_contract": "vacuum source removed; iron contrast RHS only",
+   "kelvin_center_m": [
+    0.4799999999999973,
+    -5.1336972867188635e-17,
+    -5.489757542235733e-17
+   ],
+   "kelvin_radius_m": 0.16,
+   "mesh_elements": 134686,
+   "mesh_vertices": 24064,
+   "ndof": 705838,
+   "nonlinear": true,
+   "linear_solver": "bddc",
+   "relax": 0.1,
+   "bh_interpolation": "exact inverse of shared monotone PCHIP B(H), with vacuum-slope continuation",
+   "nonlinear_stats": {
+    "converged": true,
+    "iterations": 31,
+    "final_relative_change": 1.8592207948649647e-05,
+    "tolerance": 2e-05,
+    "maximum_iterations": 200,
+    "maximum_linear_relative_residual": 5.799213708308845e-08,
+    "direct_inverse": null,
+    "solver": "bddc",
+    "physical_gauge_epsilon": 1e-06,
+    "kelvin_gauge_epsilon": 1e-06,
+    "relaxation": 0.1,
+    "anderson_depth": 0,
+    "warm_start": false,
+    "contraction_rate_estimate": 0.8633292768909072,
+    "anderson": {
+     "anderson_depth": 0,
+     "relaxation": 0.1,
+     "transform": "log",
+     "lower": 397.6487684686584,
+     "upper": 795774.7154594767,
+     "accept_growth": 1.0,
+     "accelerated_steps": 0,
+     "rejections": 0,
+     "restarts": 0,
+     "clips": 0,
+     "projections": 0,
+     "residual_history": [
+      228.17443060411307,
+      177.1239926718972,
+      142.7889255554892,
+      117.21362337863786,
+      97.57443846168593,
+      82.0184310161847,
+      69.39362814010127,
+      58.98979062241631,
+      50.75664980356578,
+      43.79745049222964,
+      37.873210042970584,
+      32.80932060446622,
+      28.46660084024836,
+      24.732294550325378,
+      21.514465301436303,
+      18.744028940846647,
+      16.346327716401106,
+      14.268242129292389,
+      12.464867933800633,
+      10.89808741475315,
+      9.535430698165555,
+      8.3491570547543,
+      7.315506079207125,
+      6.414082029733663,
+      5.627343927975403,
+      4.940180609159825,
+      4.340506820231781,
+      3.8186460614884936,
+      3.3688382235481527,
+      2.9922376069616234,
+      2.6588602907465315
+     ]
+    }
+   },
+   "runtime_s": 744.7895416000028,
+   "observation_contract": {
+    "kind": "volume_average",
+    "quadrature": "tensor_gauss_2x2x2",
+    "half_width_m": 2e-05,
+    "sample_count_per_centre": 8
+   }
+  },
+  "mixed_total_reduced_omega": {
+   "formulation": "H1 TOSCA mixed total/reduced Omega",
+   "open_boundary": "periodic spherical Kelvin transform",
+   "source_contract": "exact Radia H is restricted to physical air; the source/iron interface uses a projected scalar trace; iron and Kelvin use total Omega",
+   "source_trace": {
+    "iron_interface_boundary": "iron_air_interface",
+    "projection_order": 2,
+    "iron_relative_harmonic_norm": 0.008288584428949612,
+    "kelvin_interface_boundary": "kelvin_int",
+    "kelvin_relative_tangential_residual": 0.002428929729408942,
+    "relative_tolerance": 0.05,
+    "cut_policy": "the iron volume Hodge split retains the linked-source harmonic/cohomology field; the Kelvin jump carries the orientation-reversed exact source 0-form"
+   },
+   "kelvin_center_m": [
+    0.4799999999999973,
+    -5.1336972867188635e-17,
+    -5.489757542235733e-17
+   ],
+   "kelvin_radius_m": 0.16,
+   "mesh_elements": 134686,
+   "mesh_vertices": 24064,
+   "ndof": 223676,
+   "nonlinear": true,
+   "nonlinear_stats": {
+    "method": "Picard",
+    "iterations": 14,
+    "converged": true,
+    "relative_B_change": 7.662775700286744e-06,
+    "tolerance": 2e-05,
+    "relaxation": 0.3,
+    "anderson_depth": 2,
+    "warm_start": false,
+    "contraction_rate_estimate": 0.4294728036150724,
+    "anderson": {
+     "anderson_depth": 2,
+     "relaxation": 0.3,
+     "transform": "log",
+     "lower": 1.0,
+     "upper": 2001.1999999999937,
+     "accept_growth": 1.0,
+     "accelerated_steps": 12,
+     "rejections": 0,
+     "restarts": 0,
+     "clips": 0,
+     "projections": 1,
+     "residual_history": [
+      316.69281469126804,
+      254.47723048531816,
+      65.44203742371269,
+      47.19213910944222,
+      28.479384234154168,
+      24.574211563235394,
+      8.71139128892628,
+      6.978917307178108,
+      1.7390977949301032,
+      1.3941960046524855,
+      0.9966472342484849,
+      0.5507267367993336,
+      0.44690451352994387
+     ]
+    }
+   },
+   "runtime_s": 1454.4242091999986,
+   "observation_contract": {
+    "kind": "volume_average",
+    "quadrature": "tensor_gauss_2x2x2",
+    "half_width_m": 2e-05,
+    "sample_count_per_centre": 8
+   }
+  }
+ },
+ "fields_T": {
+  "hdiv_mmm": [
+   [
+    0.015405079117519899,
+    -0.07506592912193186,
+    -0.07506592895024733
+   ],
+   [
+    1.1598354931232875e-09,
+    -1.1932444340947914e-09,
+    -0.07362327305235589
+   ],
+   [
+    -0.015405076539605569,
+    0.07506592602800102,
+    -0.07506592934434174
+   ],
+   [
+    4.3518315580267687e-10,
+    -0.07362327139518701,
+    -1.4115011755609218e-09
+   ],
+   [
+    7.585011900608502e-10,
+    -5.536270923342838e-10,
+    -1.9045502031038084e-09
+   ],
+   [
+    1.1202984830862049e-09,
+    0.07362327017157402,
+    -2.4074249385243698e-09
+   ],
+   [
+    -0.01540507807832794,
+    -0.07506592577388563,
+    0.0750659248479435
+   ],
+   [
+    4.916998759136957e-10,
+    1.0075386897606307e-10,
+    0.07362326851328509
+   ],
+   [
+    0.015405079070232764,
+    0.07506592599825095,
+    0.07506592378428233
+   ],
+   [
+    0.002635584919056697,
+    -0.09137403785474442,
+    -0.09137403658619277
+   ],
+   [
+    -4.529830378888975e-11,
+    -1.256813141860475e-09,
+    -0.09047951161607742
+   ],
+   [
+    -0.002635584966236568,
+    0.09137403464409063,
+    -0.09137403654099198
+   ],
+   [
+    -4.911127498498763e-10,
+    -0.090479512242021,
+    5.7619789846266155e-11
+   ],
+   [
+    1.0647576423406951e-10,
+    -8.389106255507353e-10,
+    -3.8861745181725197e-10
+   ],
+   [
+    8.721331936290737e-10,
+    0.09047951051971505,
+    -4.738327819606809e-10
+   ],
+   [
+    -0.0026355867997413652,
+    -0.09137403734562023,
+    0.09137403686559091
+   ],
+   [
+    -9.053907709322572e-12,
+    -3.7047400499947455e-10,
+    0.09047951114639917
+   ],
+   [
+    0.002635587020172928,
+    0.09137403679110936,
+    0.09137403663953557
+   ],
+   [
+    1.273531329384228e-09,
+    -0.09267040635805278,
+    -0.09267040618516734
+   ],
+   [
+    -4.0330049038777674e-10,
+    -7.927771267826319e-10,
+    -0.09250098338910553
+   ],
+   [
+    -1.9399818775273907e-09,
+    0.09267040423817294,
+    -0.09267040576863068
+   ],
+   [
+    5.982339362948096e-10,
+    -0.09250098338307225,
+    -7.198552574103209e-10
+   ],
+   [
+    -3.447612959951194e-10,
+    -8.12360894736152e-10,
+    -7.811347794113642e-10
+   ],
+   [
+    -1.147348552618196e-09,
+    0.09250098176753167,
+    -6.811103326443768e-10
+   ],
+   [
+    6.921780493630165e-10,
+    -0.0926704058266581,
+    0.09267040431272412
+   ],
+   [
+    -4.31458654543232e-10,
+    -7.382863380059779e-10,
+    0.09250098176114936
+   ],
+   [
+    -1.422247361946119e-09,
+    0.09267040452462502,
+    0.09267040468241773
+   ],
+   [
+    -0.0026355867694869417,
+    -0.09137403948119976,
+    -0.09137404044940911
+   ],
+   [
+    -7.413137701883087e-10,
+    -5.232459969965037e-10,
+    -0.09047951427767872
+   ],
+   [
+    0.0026355854679194473,
+    0.09137403793332498,
+    -0.09137403937188975
+   ],
+   [
+    -1.1349755435639173e-09,
+    -0.09047951348869383,
+    -1.7894969755487462e-09
+   ],
+   [
+    -6.335049515211321e-10,
+    -8.781070130770843e-10,
+    -1.3718148400543827e-09
+   ],
+   [
+    3.0992614159641035e-11,
+    0.09047951168260235,
+    -1.0905705065682343e-09
+   ],
+   [
+    0.002635583694014026,
+    -0.09137403836075246,
+    0.09137403556614257
+   ],
+   [
+    -7.913883610784473e-10,
+    -1.189702005771051e-09,
+    0.09047951089067277
+   ],
+   [
+    -0.002635585289815685,
+    0.09137403594400956,
+    0.09137403634434749
+   ],
+   [
+    -0.015405080411704847,
+    -0.07506592794693748,
+    -0.07506592824335459
+   ],
+   [
+    -8.678945276842323e-10,
+    4.991915806770459e-11,
+    -0.07362327165985723
+   ],
+   [
+    0.015405078504342787,
+    0.07506592779396398,
+    -0.07506592692033288
+   ],
+   [
+    -1.269625787929662e-09,
+    -0.07362327291721568,
+    6.18917620265661e-12
+   ],
+   [
+    -5.447888357074404e-10,
+    -5.839506113867446e-10,
+    4.07481940686372e-10
+   ],
+   [
+    1.3897535037797195e-10,
+    0.07362327163181812,
+    9.910644100023336e-10
+   ],
+   [
+    0.015405077691102068,
+    -0.07506593029495409,
+    0.07506592883868407
+   ],
+   [
+    -1.7562183467599652e-10,
+    -1.203014461861879e-09,
+    0.07362327288844792
+   ],
+   [
+    -0.015405077957043661,
+    0.07506592745010338,
+    0.07506592948621459
+   ]
+  ],
+  "reduced_a": [
+   [
+    0.014080571124933747,
+    -0.07560622717468055,
+    -0.07640717139306913
+   ],
+   [
+    1.0871601655617876e-10,
+    -2.849163944053726e-11,
+    -0.07410936837431392
+   ],
+   [
+    -0.01408057105386467,
+    0.07560622722704831,
+    -0.07640717147478912
+   ],
+   [
+    0.00029305507722881847,
+    -0.07309523921600294,
+    -0.00017698338662284295
+   ],
+   [
+    -2.1565189832982966e-11,
+    -6.285520140394268e-11,
+    -1.6963220026940505e-05
+   ],
+   [
+    -0.00029305513875333686,
+    0.07309523917238417,
+    -0.00017698345517617984
+   ],
+   [
+    -0.015593572509085326,
+    -0.07486174370459298,
+    0.07420263767210236
+   ],
+   [
+    1.1158547095222252e-11,
+    1.0906100892174586e-11,
+    0.0724538438241958
+   ],
+   [
+    0.015593572524648415,
+    0.07486174368683783,
+    0.07420263772982101
+   ],
+   [
+    0.0035881904938705423,
+    -0.09104335960217101,
+    -0.09112062046116726
+   ],
+   [
+    3.739705270580434e-11,
+    1.275895806807148e-10,
+    -0.09035527212223007
+   ],
+   [
+    -0.003588190210491971,
+    0.09104335978454789,
+    -0.09112062035550608
+   ],
+   [
+    -2.0173985752189597e-05,
+    -0.09025692847974767,
+    -2.7228394776640164e-05
+   ],
+   [
+    1.479436825596505e-10,
+    1.2906471631012213e-10,
+    1.3456399624624392e-05
+   ],
+   [
+    2.0173823542125433e-05,
+    0.09025692841803036,
+    -2.7228244880927196e-05
+   ],
+   [
+    -0.002597416924059296,
+    -0.09097963559178064,
+    0.0915498217110582
+   ],
+   [
+    -8.489153171788383e-11,
+    6.449057550928045e-11,
+    0.09041228479117207
+   ],
+   [
+    0.0025974168655981287,
+    0.09097963554736241,
+    0.09154982164185979
+   ],
+   [
+    3.259922688222181e-05,
+    -0.09253850642092165,
+    -0.0925735609228155
+   ],
+   [
+    6.947290812563903e-12,
+    9.185861525435831e-11,
+    -0.09240245284337878
+   ],
+   [
+    -3.259908192310776e-05,
+    0.09253850672448176,
+    -0.09257356096286601
+   ],
+   [
+    4.302537589535499e-05,
+    -0.09237347345128846,
+    1.6251129633923927e-06
+   ],
+   [
+    3.8090078350731896e-11,
+    9.404841007471204e-11,
+    6.449337274115424e-06
+   ],
+   [
+    -4.302546843502532e-05,
+    0.09237347363958853,
+    1.6252066241832331e-06
+   ],
+   [
+    -4.1031983762437385e-05,
+    -0.09254154986787916,
+    0.09254388688884925
+   ],
+   [
+    2.0113521431373816e-10,
+    2.6458072059344856e-10,
+    0.09236548958424604
+   ],
+   [
+    4.103206514392904e-05,
+    0.09254154984234386,
+    0.09254388681918035
+   ],
+   [
+    -0.002795814936443329,
+    -0.09125497287380974,
+    -0.09116307580279806
+   ],
+   [
+    -1.7525169338765292e-10,
+    -1.717911788301149e-11,
+    -0.09038522957512526
+   ],
+   [
+    0.0027958145488578283,
+    0.09125497323315022,
+    -0.0911630756201123
+   ],
+   [
+    -4.2387747202540156e-05,
+    -0.0905650976515181,
+    -0.0003585533828246358
+   ],
+   [
+    1.6674287069086326e-10,
+    1.302222485609182e-10,
+    0.00010385882084418571
+   ],
+   [
+    4.23875495004612e-05,
+    0.09056509756060808,
+    -0.0003585534189639562
+   ],
+   [
+    0.0025425472306283546,
+    -0.09169083733249392,
+    0.09146886123196382
+   ],
+   [
+    -7.676408203111638e-11,
+    -7.192226434607604e-11,
+    0.09067206577177267
+   ],
+   [
+    -0.0025425469903929514,
+    0.09169083731449582,
+    0.09146886132618812
+   ],
+   [
+    -0.015498427923514243,
+    -0.07412808786983409,
+    -0.07511432437034038
+   ],
+   [
+    5.4089890688191825e-11,
+    1.6377819646263767e-12,
+    -0.07336203867791598
+   ],
+   [
+    0.015498427849102693,
+    0.07412808790356432,
+    -0.07511432444960646
+   ],
+   [
+    -0.000331658626928724,
+    -0.07394610243585066,
+    -6.946931966166545e-05
+   ],
+   [
+    1.5323102351859005e-10,
+    6.230289184951457e-11,
+    0.0013235140280291624
+   ],
+   [
+    0.0003316584973741559,
+    0.0739461024641984,
+    -6.946944194002985e-05
+   ],
+   [
+    0.015425069763093217,
+    -0.07453865094528549,
+    0.0754720853958763
+   ],
+   [
+    4.431257173264508e-12,
+    -8.126646331243527e-11,
+    0.0735728589169242
+   ],
+   [
+    -0.015425069953103953,
+    0.07453865130998674,
+    0.0754720853023586
+   ]
+  ],
+  "mixed_total_reduced_omega": [
+   [
+    0.015156074285646803,
+    -0.07421052996548273,
+    -0.07344775441892774
+   ],
+   [
+    3.4515053676425816e-11,
+    3.266350201652866e-11,
+    -0.0744628561231695
+   ],
+   [
+    -0.015156074211874843,
+    0.07421053002955497,
+    -0.07344775437615914
+   ],
+   [
+    -9.356381247251429e-05,
+    -0.0745954831227964,
+    -0.0004908033991674748
+   ],
+   [
+    4.215671878207876e-11,
+    2.2683672235219218e-11,
+    0.0004949851350897732
+   ],
+   [
+    9.356390185495256e-05,
+    0.07459548317269282,
+    -0.0004908033538869137
+   ],
+   [
+    -0.016439777475516375,
+    -0.0750327754431982,
+    0.07572280101423381
+   ],
+   [
+    4.582642644424632e-11,
+    1.0209871322545321e-11,
+    0.06876710382841872
+   ],
+   [
+    0.01643977757356703,
+    0.07503277547406012,
+    0.0757228010704573
+   ],
+   [
+    0.002621165165059464,
+    -0.0903163561909387,
+    -0.09092357393631242
+   ],
+   [
+    1.2662254179003029e-11,
+    2.405171617493357e-11,
+    -0.09046561258216669
+   ],
+   [
+    -0.0026211651363684304,
+    0.09031635623702233,
+    -0.09092357391555977
+   ],
+   [
+    0.0001720191265367351,
+    -0.09046738124264363,
+    5.927523333660573e-05
+   ],
+   [
+    1.8288874611922838e-11,
+    2.2021482724230703e-11,
+    -0.0006921493500771164
+   ],
+   [
+    -0.00017201908776758588,
+    0.09046738128857217,
+    5.927525682659613e-05
+   ],
+   [
+    -0.002382166448621526,
+    -0.09196225916383045,
+    0.09131226311792465
+   ],
+   [
+    1.818717346706418e-11,
+    1.872783929684715e-11,
+    0.0903291607025476
+   ],
+   [
+    0.0023821664849012036,
+    0.09196225920652135,
+    0.09131226314915311
+   ],
+   [
+    -4.195178626478649e-06,
+    -0.09257562600988078,
+    -0.09255506961843538
+   ],
+   [
+    1.967077442794674e-12,
+    1.8676095548265503e-11,
+    -0.09236781589894888
+   ],
+   [
+    4.195186175050218e-06,
+    0.09257562604602981,
+    -0.09255506961625727
+   ],
+   [
+    -8.180869762713257e-06,
+    -0.0923881420137759,
+    1.513216725724699e-05
+   ],
+   [
+    4.660034109762699e-12,
+    2.0737185951839052e-11,
+    -1.3957318739527612e-06
+   ],
+   [
+    8.18088301312171e-06,
+    0.09238814205479837,
+    1.5132172153574755e-05
+   ],
+   [
+    2.243308029798514e-05,
+    -0.09249540692378917,
+    0.09254882105889567
+   ],
+   [
+    2.4009854716224605e-12,
+    2.215405553370473e-11,
+    0.09237056753644438
+   ],
+   [
+    -2.2433072714001863e-05,
+    0.09249540696816001,
+    0.09254882106725594
+   ],
+   [
+    -0.0033012691172543624,
+    -0.09193624572444621,
+    -0.09108264895773888
+   ],
+   [
+    -3.468437468251472e-12,
+    1.53875406950295e-11,
+    -0.08930892117309258
+   ],
+   [
+    0.0033012691149913015,
+    0.09193624575505277,
+    -0.09108264897027799
+   ],
+   [
+    0.0005291774043008996,
+    -0.09102577521415664,
+    -5.146926072539138e-05
+   ],
+   [
+    -2.6827531830082468e-12,
+    2.3623229159506e-11,
+    0.0002032748200300104
+   ],
+   [
+    -0.0005291774043170668,
+    0.0910257752620312,
+    -5.146927063941464e-05
+   ],
+   [
+    0.003112741992221666,
+    -0.08970031754580358,
+    0.09148976403668875
+   ],
+   [
+    -6.4837271471450906e-12,
+    3.0459882303880605e-11,
+    0.09023811412106347
+   ],
+   [
+    -0.003112741999711297,
+    0.08970031760582692,
+    0.09148976403240815
+   ],
+   [
+    -0.015661204095585187,
+    -0.07588285557812927,
+    -0.07524006779076331
+   ],
+   [
+    -8.942700440381243e-12,
+    1.3518324077467026e-11,
+    -0.07332283743662193
+   ],
+   [
+    0.015661204084246292,
+    0.07588285560619179,
+    -0.07524006781875883
+   ],
+   [
+    0.00020967091005849744,
+    -0.07307953060119417,
+    -0.0007083265834425724
+   ],
+   [
+    -7.429713317734578e-12,
+    2.914048064401329e-11,
+    0.000527334679172734
+   ],
+   [
+    -0.00020967091975701097,
+    0.07307953066103254,
+    -0.0007083266092243519
+   ],
+   [
+    0.014721352163227387,
+    -0.07600205897204693,
+    0.0761067542235323
+   ],
+   [
+    -1.3723707353737152e-11,
+    4.08020804609202e-11,
+    0.07541007456522884
+   ],
+   [
+    -0.014721352185858206,
+    0.07600205905705565,
+    0.07610675420455001
+   ]
+  ]
+ },
+ "pairwise_raw": {
+  "hdiv_mmm__vs__reduced_a": {
+   "relative_rms": 0.006802623396426782,
+   "maximum_absolute_difference_T": 0.001960911700881814
+  },
+  "hdiv_mmm__vs__mixed_total_reduced_omega": {
+   "relative_rms": 0.012002099641791929,
+   "maximum_absolute_difference_T": 0.00485616468486639
+  },
+  "reduced_a__vs__mixed_total_reduced_omega": {
+   "relative_rms": 0.014081050336242726,
+   "maximum_absolute_difference_T": 0.0036867399957770807
+  }
+ },
+ "pairwise_core": {
+  "hdiv_mmm__vs__reduced_a": {
+   "relative_rms": 0.0034449688297968134,
+   "maximum_absolute_difference_T": 0.0010397236268905137
+  },
+  "hdiv_mmm__vs__mixed_total_reduced_omega": {
+   "relative_rms": 0.006962371077009257,
+   "maximum_absolute_difference_T": 0.001744251841574633
+  },
+  "reduced_a__vs__mixed_total_reduced_omega": {
+   "relative_rms": 0.007836200595697606,
+   "maximum_absolute_difference_T": 0.0020706829826411272
+  }
+ },
+ "maximum_core_pairwise_relative_rms": 0.007836200595697606,
+ "relative_rms_tolerance": 0.03,
+ "nonlinear_converged": true,
+ "provenance": {
+  "nonlinear_maximum_iterations": {
+   "hdiv_mmm": 200,
+   "reduced_a": 200,
+   "mixed_total_reduced_omega": 200
+  },
+  "engine_settings": {
+   "hdiv_mmm": {
+    "linear_tolerance": 1e-08,
+    "linear_maximum_iterations": 12000,
+    "preconditioner": "auto"
+   },
+   "reduced_a": {
+    "linear_solver": "bddc",
+    "relaxation": 0.1
+   },
+   "mixed_total_reduced_omega": {
+    "source_potential_contract": "total_hodge",
+    "source_trace_tolerance": 0.05,
+    "relaxation": 0.3,
+    "anderson_depth": 2
+   }
+  },
+  "checkpoint_schema": "radia.validation.esrf-coil-yoke-checkpoint.v3"
+ },
+ "bulk_solver_state_omitted": {
+  "reason": "Per-element material state and per-iteration history are warm-start data, not acceptance evidence, and they made the artifact 1.9 MB.  Every acceptance number (pairwise core and raw RMS, convergence, iteration counts, timings, mesh and source hashes, peak memory) is kept.",
+  "dropped_entries": {
+   "reduced_a": {
+    "nu_elements": 34228,
+    "element_numbers": 34228,
+    "observation_points_m": 360,
+    "observation_field_T": 360,
+    "history": 31
+   },
+   "mixed_total_reduced_omega": {
+    "mu_r_elements": 34228,
+    "element_numbers": 34228,
+    "observation_points_m": 360,
+    "observation_field_T": 360,
+    "history": 14
+   }
+  },
+  "complete_artifact": {
+   "path": "C:\\temp\\radia-esrf-fem\\example6\\three_engine_case6_bdm1_mdx1.json",
+   "host": "mdx1",
+   "sha256": "cb98224188bc3a5e663323568b1955d1d4a4236ee7cfc0e5c91b1f904111dc52",
+   "bytes": 3542161
+  }
+ }
+}
