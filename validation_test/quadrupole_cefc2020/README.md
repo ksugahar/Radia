@@ -73,6 +73,11 @@ carry the full point-wise fields and the mesh hashes.
 | `mu100` | 100 | 30 | 0.08 % | -0.17875 | -0.17858 | 0.09 % |
 | `mu1000` | 1000 | 33 | 0.06 % | -0.22722 | -0.22725 | 0.01 % |
 | `mu10000` | 10000 | 36 | 0.07 % | -0.23394 | -0.23401 | 0.03 % |
+| `J3.0` (B(H) table, 3 A/mm^2) | nonlinear | 2 Newton / 866 CG | 0.05 % | -0.23401 | -0.23393 | 0.03 % |
 
-The nonlinear case (`J3.0`, the tabulated B(H) law) runs through the same
-runner; its result is appended here when the hibino chain finishes.
+The nonlinear row is the tabulated B(H) law at the design current: HDiv-MMM
+converged its energy Newton loop (mass-Riesz CG inner solves); the mixed Omega
+Picard loop needed the constrained Anderson mixing (`--mixed-anderson-depth 2`,
+52 iterations, 126 min on hibino) after a first attempt with
+plain damped Picard stalled at the 80-iteration cap with a relative B change of
+7.8e-4 -- the runner now saves that partial state and resumes from it.
