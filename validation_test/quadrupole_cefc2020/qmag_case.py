@@ -99,10 +99,15 @@ def load_bh_table(path: Path = BH_PATH) -> list[list[float]]:
     return [[float(h), float(b)] for h, b in data]
 
 
-def write_mesh_journal(journal: Path, vol: Path, *, size_m: float, order: int, step: Path = STEP_PATH) -> None:
-    """Conforming z-swept HEX journal: imprint/merge every solid, sweep each from its z_min to z_max faces."""
+def write_mesh_journal(journal: Path, vol: Path, *, size_m: float, order: int, step: Path = STEP_PATH,
+                       scheme: str = "sweep") -> None:
+    """Conforming iron journal: imprint/merge every solid, then either sweep each from its z_min to its
+    z_max faces (``scheme="sweep"``, the all-HEX route) or tet-mesh the merged body (``scheme="tet"``,
+    the TET route that the HEX timings are compared against on the same CAD and the same Cubit import)."""
     if not float(size_m) > 0.0 or int(order) < 1:
         raise ValueError("size_m must be positive and order >= 1")
+    if scheme not in ("sweep", "tet"):
+        raise ValueError(f"scheme must be 'sweep' or 'tet' (got {scheme!r})")
     z_lo, z_hi = -30.0 * MM, 30.0 * MM
     tol = 1.0e-3 * (z_hi - z_lo)
     lines = [
@@ -116,13 +121,20 @@ def write_mesh_journal(journal: Path, vol: Path, *, size_m: float, order: int, s
         'block 1 name "iron"',
         "sideset 1 add surface all",
         'sideset 1 name "outer_boundary"',
-        "#{_v = iron_first}",
-        "#{_n = iron_last - iron_first + 1}",
-        "#{Loop(_n)}",
-        (f"volume {{_v}} scheme sweep source surface in volume {{_v}} with z_coord < {z_lo + tol:.12g} "
-         f"target surface in volume {{_v}} with z_coord > {z_hi - tol:.12g}"),
-        "#{_v++}",
-        "#{EndLoop}",
+    ]
+    if scheme == "sweep":
+        lines += [
+            "#{_v = iron_first}",
+            "#{_n = iron_last - iron_first + 1}",
+            "#{Loop(_n)}",
+            (f"volume {{_v}} scheme sweep source surface in volume {{_v}} with z_coord < {z_lo + tol:.12g} "
+             f"target surface in volume {{_v}} with z_coord > {z_hi - tol:.12g}"),
+            "#{_v++}",
+            "#{EndLoop}",
+        ]
+    else:
+        lines += ["volume all scheme tetmesh"]
+    lines += [
         f"volume all size {float(size_m):.12g}",
         "mesh volume all",
         "list volume with not is_meshed",
