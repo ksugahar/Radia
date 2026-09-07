@@ -4,7 +4,7 @@ PACKS = {
     "radia-design": {
         "description": "Optimization, surrogate models and data assimilation",
         "profiles": {
-            "optimization": ("topology_optimization", "bayesian_opt", "evolutionary"),
+            "optimization": ("optimization", "topology_optimization", "bayesian_opt", "evolutionary"),
             "learning": ("gnn", "pinn", "data_assimilation"),
         },
     },
