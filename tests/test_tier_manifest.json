@@ -6,6 +6,9 @@
       "max_elapsed_seconds": 60,
       "paths": [
         "tests/test_ci_execution_policy.py",
+        "tests/test_ci_monitor.py",
+        "tests/test_mdx_runner_pool.py",
+        "tests/test_release_quad_optuna_candidate.py",
         "tests/test_test_tier_policy.py",
         "tests/test_run_test_tier.py",
         "tests/test_docs_notebook_contract.py",

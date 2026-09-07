@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import time
@@ -48,6 +49,7 @@ def _gh(args: list[str], timeout: int = 60) -> tuple[int, str, str]:
         cp = subprocess.run(
             ["gh"] + args, capture_output=True, text=True,
             encoding="utf-8", errors="replace",
+            env={**os.environ, "GH_REPO": os.environ.get("GH_REPO") or "ksugahar/Radia"},
             timeout=timeout, check=False)
         return cp.returncode, cp.stdout, cp.stderr
     except FileNotFoundError:
@@ -149,7 +151,7 @@ def watch_runs(run_ids: Iterable[str], poll_seconds: int,
     print()
     print("=" * 70)
     bad = [rid for rid, st in final.items()
-            if st["conclusion"] not in ("success", "skipped", "cancelled")
+            if st["conclusion"] not in ("success", "skipped")
             or st.get("status") == "error"]
     if not bad:
         n_skipped = sum(1 for st in final.values()

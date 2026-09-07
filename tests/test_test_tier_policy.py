@@ -58,3 +58,19 @@ def test_fast_ci_profiles_have_explicit_paths_and_runtime_budgets():
     )
     assert "tools/run_test_tier.py" in fast
     assert "tools/run_test_tier.py --profile native-smoke" in native
+
+
+def test_release_gate_contracts_do_not_trigger_optuna_rebuilds():
+    import yaml
+
+    workflow = yaml.safe_load(
+        (ROOT / '.github/workflows/radia-optuna.yml').read_text(encoding='utf-8')
+    )
+    events = workflow.get('on', workflow.get(True))
+    contract = 'tests/test_release_quad_optuna_candidate.py'
+    for event in ('push', 'pull_request'):
+        assert contract not in events[event]['paths']
+        assert 'packages/radia-optuna/**' in events[event]['paths']
+        assert 'Build.ps1' in events[event]['paths']
+    manifest = json.loads((ROOT / 'tests/test_tier_manifest.json').read_text())
+    assert contract in manifest['profiles']['fast-contracts']['paths']

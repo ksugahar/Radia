@@ -36,30 +36,34 @@ Single skill, two phases:
 
 ## Quick reference
 
+Commands explicitly target `ksugahar/Radia`, independent of the caller's
+current directory and Git worktree ownership. Set `GH_REPO=owner/repository`
+to monitor another repository. A Git safe-directory change is not required.
+
 Default mode: auto-discover the 3 most recent in_progress / queued
 runs and watch them.
 
 ```bash
-python .Codex/skills/ci-monitor/monitor.py
+python .agents/skills/ci-monitor/monitor.py
 ```
 
 Explicit run IDs (release-quad Phase 7 idiom):
 
 ```bash
-python .Codex/skills/ci-monitor/monitor.py 25275163545 25275166586 25275166607
+python .agents/skills/ci-monitor/monitor.py 25275163545 25275166586 25275166607
 ```
 
 Custom poll interval (default 30 s):
 
 ```bash
-python .Codex/skills/ci-monitor/monitor.py --poll 60 25275166586
+python .agents/skills/ci-monitor/monitor.py --poll 60 25275166586
 ```
 
 Watch the most recent N runs of a specific branch / tag:
 
 ```bash
-python .Codex/skills/ci-monitor/monitor.py --branch v4.27.0 --auto 1
-python .Codex/skills/ci-monitor/monitor.py --branch main   --auto 3
+python .agents/skills/ci-monitor/monitor.py --branch v4.27.0 --auto 1
+python .agents/skills/ci-monitor/monitor.py --branch main   --auto 3
 ```
 
 ## Output format
