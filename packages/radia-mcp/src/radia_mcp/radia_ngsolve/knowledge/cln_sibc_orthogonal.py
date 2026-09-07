@@ -1,7 +1,7 @@
 """CLN expansion-point + SIBC orthogonal-residual theory.
 
 POLICY NOTE (2026-06-12): The Warburg-Schur termination described in
-this module was SUPERSEDED by the Mixed Galerkin (CLN bulk + HOIBC
+this module was SUPERSEDED by the bulk + SIBC (CLN/Krylov or Foster bulk + HOIBC
 surface envelope, Schur-coupled, no `d` parameter) framework.  The
 Warburg-Schur code was hard-deleted from the repo on 2026-06-12; see
 `memory/project_warburg_schur_deprecated_2026_06_12.md` for the
@@ -667,7 +667,7 @@ after Theorem 1; Paper 1 §VIII routes volume-source problems to XFEM.
 
 
 CLN_SIBC_EVRS_ESIM = """
-# Production HCurl EVRS + local ESIM-SIBC mixed Galerkin
+# Production HCurl EVRS + local ESIM-SIBC coupling
 
 This is the current Radia production interpretation of the SIBC bridge.  It is
 separate from the deprecated scalar Warburg closure described historically in
@@ -741,7 +741,7 @@ HDiv-MMM/HCurl coupling. Do not overclaim the scope:
 scalar `mu_r`. A simultaneous constitutive iteration that updates an ordinary
 nonlinear HDiv magnetic operator together with the local ESIM Gram is still an integration task.
 
-## Exact mixed-Galerkin elimination
+## Exact bulk/surface Schur elimination
 
 Partition the reduced operator into eliminated ordinary bulk coordinates `b`
 and retained HDiv/bridge/SIBC coordinates `k`:
@@ -773,7 +773,7 @@ on a re-entrant notched conductor from 1 kHz to 1 MHz:
 - 14 conductor-cycle modes + 3 exterior-SIBC modes;
 - 25 retained eddy coordinates, 0.703% of the parent DoFs;
 - local-ESIM port difference from depth 22: at most 4.95e-8;
-- mixed-Galerkin port difference from the direct reduced solve: at most 6.44e-16;
+- coupled bulk/surface port difference from the direct reduced solve: at most 6.44e-16;
 - uniform ESIM vs local ESIM: 0.229%--0.655%;
 - linear SIBC vs local ESIM: 6.98%--38.31%;
 - the 4-by-96 LUT has maximum direct-midpoint relative error 8.17e-4;
@@ -788,9 +788,28 @@ outside the ESIM cell model.
 """
 
 
+_TERMINOLOGY = """## Current terminology
+
+Use **Foster + SIBC** when the bulk consists of diffusion eigenmodes, and
+**CLN + SIBC** when it consists of CLN/Krylov vectors. HOIBC names the
+higher-order surface corrections. Do not call a scalar enriched trial space
+"mixed Galerkin" or conflate Foster eigenmodes with CLN/Krylov vectors.
+The public box model uses Foster eigenmodes. Its `lam`, `tau`, and `Y_bulk`
+contract has not been converted to CLN by changing this terminology.
+Foster + SIBC is the production default; CLN remains a comparison route,
+not a required migration. Choose retained modes from convergence and error
+over the operating frequency band rather than assuming accuracy from a name.
+`mixed_galerkin`, `BoxMixedGalerkin`, and other existing API/path identifiers
+are retained for compatibility. A Schur complement is algebraic elimination;
+it is not by itself evidence of a physical DtN boundary operator.
+This terminology takes precedence over historical prose and saved output.
+"""
+
+
 def get_cln_sibc_orthogonal_documentation() -> str:
     """Return full markdown documentation for the CLN+SIBC orthogonal theory."""
     return "\n\n".join([
+        _TERMINOLOGY,
         CLN_SIBC_ORTHOGONAL_OVERVIEW,
         CLN_SIBC_ORTHOGONAL_RELATION_TO_MATSUO,
         CLN_SIBC_ORTHOGONAL_KURIYAMA,
@@ -818,7 +837,7 @@ def get_cln_sibc_orthogonal_section(name: str = "list") -> str:
         "xfem_vs_sibc"   - XFEM / classical SIBC / augmented CLN decision
                            framework, port-driven scope, stacking strategy
         "evrs_esim"      - production HCurl EVRS, local ESIM surface Gram,
-                           and exact affine mixed-Galerkin reconstruction
+                           and exact affine bulk/surface reconstruction
         "all"            - full documentation
     """
     table = {
@@ -840,4 +859,4 @@ def get_cln_sibc_orthogonal_section(name: str = "list") -> str:
     if name not in table:
         return (f"Unknown section '{name}'. "
                 f"Use 'list' to see available sections.")
-    return table[name]
+    return table[name] if name == "all" else _TERMINOLOGY + "\n\n" + table[name]
