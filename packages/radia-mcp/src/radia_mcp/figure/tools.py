@@ -1344,9 +1344,287 @@ def find_best_legend_loc(ax, candidates=("upper right", "upper left",
     return best, summary
 
 
+def _occupied_points(ax, n_samples_per_line: int = 200):
+    """Every drawn thing in the axes, as display-space points to avoid.
+
+    Covers what check_legend_overlap does not: filled regions (fill_between
+    makes a PolyCollection, not a Line2D) and existing texts (the panel letter
+    paper_figure adds is a Text, and a label placed on top of it is the most
+    common collision in a multi-panel figure).
+    """
+    import numpy as np
+
+    fig = ax.get_figure()
+    fig.canvas.draw()
+    pts = []
+
+    for line in ax.lines:
+        if not line.get_visible():
+            continue
+        x = np.asarray(line.get_xdata(), dtype=float)
+        y = np.asarray(line.get_ydata(), dtype=float)
+        if x.size == 0:
+            continue
+        if x.size > n_samples_per_line:
+            idx = np.linspace(0, x.size - 1, n_samples_per_line).astype(int)
+            x, y = x[idx], y[idx]
+        pts.append(ax.transData.transform(np.column_stack([x, y])))
+
+    for coll in ax.collections:
+        if not coll.get_visible():
+            continue
+        try:
+            paths = coll.get_paths()
+        except AttributeError:
+            continue
+        trans = coll.get_transform()
+        for path in paths:
+            v = np.asarray(path.vertices, dtype=float)
+            if v.size == 0:
+                continue
+            if v.shape[0] > n_samples_per_line:
+                idx = np.linspace(0, v.shape[0] - 1,
+                                  n_samples_per_line).astype(int)
+                v = v[idx]
+            pts.append(trans.transform(v))
+
+    for patch in ax.patches:
+        if not patch.get_visible():
+            continue
+        try:
+            bb = patch.get_window_extent()
+        except (AttributeError, ValueError):
+            continue
+        pts.append(np.array([[bb.x0, bb.y0], [bb.x1, bb.y0],
+                             [bb.x0, bb.y1], [bb.x1, bb.y1],
+                             [(bb.x0 + bb.x1) / 2, (bb.y0 + bb.y1) / 2]]))
+
+    for txt in ax.texts:
+        if not txt.get_visible() or not txt.get_text().strip():
+            continue
+        try:
+            bb = txt.get_window_extent()
+        except (AttributeError, ValueError, RuntimeError):
+            continue
+        # sample the whole box, not only its corners: a long label is wide
+        nx = max(2, int(bb.width // 8))
+        ny = max(2, int(bb.height // 8))
+        gx, gy = np.meshgrid(np.linspace(bb.x0, bb.x1, nx),
+                             np.linspace(bb.y0, bb.y1, ny))
+        pts.append(np.column_stack([gx.ravel(), gy.ravel()]))
+
+    if not pts:
+        return np.empty((0, 2))
+    return np.vstack(pts)
+
+
+def check_text_overlap(ax, text, margin_px: float = 2.0):
+    """Report what a Text artist is sitting on top of.
+
+    Args:
+        ax: the Axes the text belongs to.
+        text: a matplotlib Text (the return value of ``ax.text(...)``).
+        margin_px: treat drawn content within this many pixels of the text
+            box as an overlap, so "almost touching" is caught too.
+
+    Returns:
+        dict with ``n_points`` (how many sampled points of other artists fall
+        inside the padded text box), ``fraction`` of all sampled points, and
+        ``clear_px`` (distance from the text box to the nearest drawn point;
+        ``inf`` when the axes is empty). ``n_points == 0`` means clear.
+
+    Example:
+        >>> t = ax.text(0.1, 0.9, "planar SIBC")
+        >>> if check_text_overlap(ax, t)["n_points"]:
+        ...     t.remove()
+        ...     t = place_text_clear(ax, "planar SIBC")
+    """
+    import numpy as np
+
+    fig = ax.get_figure()
+    fig.canvas.draw()
+    visible = text.get_visible()
+    try:
+        text.set_visible(False)
+        pts = _occupied_points(ax)
+    finally:
+        text.set_visible(visible)
+
+    bb = text.get_window_extent()
+    x0, x1 = bb.x0 - margin_px, bb.x1 + margin_px
+    y0, y1 = bb.y0 - margin_px, bb.y1 + margin_px
+    if pts.size == 0:
+        return {"n_points": 0, "fraction": 0.0, "clear_px": float("inf")}
+
+    inside = ((pts[:, 0] >= x0) & (pts[:, 0] <= x1) &
+              (pts[:, 1] >= y0) & (pts[:, 1] <= y1))
+    dx = np.maximum.reduce([x0 - pts[:, 0], np.zeros(len(pts)), pts[:, 0] - x1])
+    dy = np.maximum.reduce([y0 - pts[:, 1], np.zeros(len(pts)), pts[:, 1] - y1])
+    dist = np.hypot(dx, dy)
+    return {"n_points": int(inside.sum()),
+            "fraction": float(inside.sum()) / len(pts),
+            "clear_px": float(dist.min())}
+
+
+def place_text_clear(ax, s, *, nx: int = 11, ny: int = 7,
+                     pad_frac: float = 0.02, margin_px: float | None = None,
+                     region: tuple[float, float, float, float] | None = None,
+                     **text_kw):
+    """Put a label where nothing is drawn, instead of at hand-picked coordinates.
+
+    Searches an ``nx`` by ``ny`` grid of anchors in axes coordinates, measures
+    the rendered text box at each, and keeps the anchor with no drawn content
+    under it and the largest clearance. Lines, filled regions, patches and
+    existing texts all count as drawn -- including the panel letter that
+    paper_figure adds, which is the usual thing a hand-placed label lands on.
+
+    Args:
+        ax: the Axes to label.
+        s: the label text.
+        nx, ny: anchor grid resolution.
+        pad_frac: keep anchors this far (in axes fraction) from the edges.
+        margin_px: clearance demanded around the text box. Default is
+            0.6 em of the placed text: a fixed pixel count is nothing at
+            slide sizes (4 px is 0.04 em at 24 pt, 300 dpi), and a label
+            that clears a panel letter by that much reads as touching it.
+        region: ``(x0, x1, y0, y1)`` in axes fraction; when given, anchors
+            are searched only inside that box. Use it for a label that must
+            stay near the feature it names, e.g. one with an arrow to it, so
+            the search does not carry it to the far side of the axes.
+        **text_kw: passed to ``ax.text`` (color, fontsize, ha, va, ...).
+            ``transform`` is set for you and must not be given.
+
+    Returns:
+        The placed Text artist. Placement is by the text's own ``ha``/``va``,
+        default lower-left of the box at the anchor.
+
+    Raises:
+        ValueError: if ``transform`` is passed, since the search works in
+            axes coordinates.
+
+    Example:
+        >>> ax.fill_between(x, 0, y)
+        >>> place_text_clear(ax, r"surface: a cut", color="tab:red")
+
+    Notes:
+        Call after all plotting and after ``fig.tight_layout()``: the search
+        needs the final axes box, the same requirement find_best_legend_loc
+        has.  When every anchor is covered -- a genuinely full axes -- the
+        least-covered one is used, so this never fails to place.
+    """
+    import numpy as np
+
+    if "transform" in text_kw:
+        raise ValueError(
+            "place_text_clear searches in axes coordinates and sets transform "
+            "itself; drop the transform argument.")
+
+    fig = ax.get_figure()
+    fig.canvas.draw()
+    pts = _occupied_points(ax)
+
+    probe = ax.text(0.5, 0.5, s, transform=ax.transAxes, **text_kw)
+    fig.canvas.draw()
+    if margin_px is None:
+        margin_px = 0.6 * probe.get_fontsize() * fig.dpi / 72.0
+
+    full = (pad_frac, 1.0 - pad_frac, pad_frac, 1.0 - pad_frac)
+
+    def search(box):
+        x0r, x1r, y0r, y1r = box
+        best = None
+        for fx in np.linspace(x0r, x1r, nx):
+            for fy in np.linspace(y0r, y1r, ny):
+                probe.set_position((fx, fy))
+                fig.canvas.draw()
+                bb = probe.get_window_extent()
+                ax_bb = ax.get_window_extent()
+                if bb.x0 < ax_bb.x0 or bb.x1 > ax_bb.x1:
+                    continue                  # would run off the axes
+                if bb.y0 < ax_bb.y0 or bb.y1 > ax_bb.y1:
+                    continue
+                x0, x1 = bb.x0 - margin_px, bb.x1 + margin_px
+                y0, y1 = bb.y0 - margin_px, bb.y1 + margin_px
+                if pts.size == 0:
+                    n_in, clear = 0, float("inf")
+                else:
+                    inside = ((pts[:, 0] >= x0) & (pts[:, 0] <= x1) &
+                              (pts[:, 1] >= y0) & (pts[:, 1] <= y1))
+                    n_in = int(inside.sum())
+                    dx = np.maximum.reduce(
+                        [x0 - pts[:, 0], np.zeros(len(pts)), pts[:, 0] - x1])
+                    dy = np.maximum.reduce(
+                        [y0 - pts[:, 1], np.zeros(len(pts)), pts[:, 1] - y1])
+                    clear = float(np.hypot(dx, dy).min())
+                score = (n_in, -clear)
+                if best is None or score < best[0]:
+                    best = (score, (fx, fy))
+        return best
+
+    best = search(full if region is None else region)
+    if best is None and region is not None:
+        # the label does not fit anywhere in the region: better elsewhere in
+        # the axes than hanging off the edge where the region put it
+        best = search(full)
+
+    if best is None:                          # nothing fitted inside the axes
+        probe.set_position((full[0], full[3]))
+    else:
+        probe.set_position(best[1])
+    fig.canvas.draw()
+    return probe
+
 # ============================================================
 # ROM-paper helpers (Cauer / Multi-K / Schur-F asymptote plots)
 # ============================================================
+
+def place_label_arrow(ax, s, xy, *, region=None, arrow_kw=None, **text_kw):
+    """Place a clear label and an arrow to data coordinates ``xy``.
+
+    The arrow tail uses axes fractions so changing export DPI preserves it.
+    ``region`` and text properties follow :func:`place_text_clear`.
+    """
+    t = place_text_clear(ax, s, region=region, **text_kw)
+    fig = ax.get_figure()
+    fig.canvas.draw()
+    bb = t.get_window_extent()
+    tx, ty = ax.transData.transform(xy)
+    sides = (((bb.x0 + bb.x1) / 2, bb.y0 - 3), ((bb.x0 + bb.x1) / 2, bb.y1 + 3),
+             (bb.x0 - 3, (bb.y0 + bb.y1) / 2), (bb.x1 + 3, (bb.y0 + bb.y1) / 2))
+    sx, sy = min(sides, key=lambda p: (p[0] - tx) ** 2 + (p[1] - ty) ** 2)
+    fx, fy = ax.transAxes.inverted().transform((sx, sy))
+    props = dict(arrowstyle="->", lw=1.8, color=t.get_color(), shrinkA=0, shrinkB=5)
+    if arrow_kw:
+        props.update(arrow_kw)
+    ann = ax.annotate("", xy=xy, xycoords="data", xytext=(float(fx), float(fy)),
+                      textcoords="axes fraction", arrowprops=props)
+    return t, ann
+
+
+def place_legend_clear(ax, *, locs=("lower left", "lower right", "upper left",
+                                   "upper right", "center left", "center right"),
+                       outside=True, **legend_kw):
+    """Choose a clear legend location or report an explicit outside fallback."""
+    import warnings
+
+    fig = ax.get_figure()
+    for loc in locs:
+        leg = ax.legend(loc=loc, frameon=False, **legend_kw)
+        fig.canvas.draw()
+        if not check_legend_overlap(ax):
+            return loc
+        leg.remove()
+    if not outside:
+        return None
+    warnings.warn(
+        "place_legend_clear: no corner is clear, so the legend is outside the "
+        "axes, where a fixed-size canvas will cut it off. Name the curves in "
+        "place with place_label_arrow instead.", stacklevel=2)
+    ax.legend(loc="center left", bbox_to_anchor=(1.01, 0.5), frameon=False,
+              **legend_kw)
+    fig.canvas.draw()
+    return "outside"
+
 
 def plot_asymptote_ratio_sweep(ax, f_Hz, Y_curves, K_SIBC, *,
                                 target_line: bool = True,
