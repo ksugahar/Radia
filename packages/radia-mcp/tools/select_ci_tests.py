@@ -51,9 +51,16 @@ def _normalize(path: str) -> str:
 
 @lru_cache(maxsize=1)
 def _catalog() -> dict[str, dict]:
-    namespace = runpy.run_path(
-        str(PACKAGE_ROOT / "src" / "radia_mcp" / "meta" / "catalog.py")
-    )
+    # Keep selection independent of editable-install drift while allowing the
+    # catalog to import its lightweight sibling capability manifest.
+    sys.path.insert(0, str(PACKAGE_ROOT / "src"))
+    try:
+        namespace = runpy.run_path(
+            str(PACKAGE_ROOT / "src" / "radia_mcp" / "meta" / "catalog.py"),
+            run_name="radia_mcp.meta.catalog",
+        )
+    finally:
+        sys.path.pop(0)
     return namespace["CATALOG"]
 
 
