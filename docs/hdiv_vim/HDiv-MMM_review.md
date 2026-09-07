@@ -757,8 +757,8 @@ Periodic low-order coupling; high-order Kelvin `auto` selects BDDC above
 | Resolved (2026-09-07) | Remove production RT0 | The public `vim.Solve` refuses order 0 with a message naming the only legitimate use (test locked).  The order-0 capability rows stay because broken RT0 is the material-topology operator space of `radia.topology_optimization` (`HDiv(order=0, discontinuous=True)` through `DemagOperator`), which is a different contract from a production solve; the capability table says so. |
 | P1 | Nonlinear C-yoke memory evidence | Four-level accuracy and repeated timing are closed on mdx and hibino for `v4.95.71`. Add measured process peak memory to a future scaling campaign before making a memory-efficiency claim. reduced-A remains an independent third-formulation audit rather than the primary production route. |
 | P1 | ESRF #3 H-matrix three-engine evidence | Run the repaired `leaf=64` operator on mdx or hibino through the tracked nonlinear three-engine runner. Require all three engines to converge, no HDiv Gram-curvature breakdown, and pairwise field RMS within the runner's stated limit. |
-| P1 | ESRF #6 and #7 three-engine evidence | Run the new coil-yoke runner from the released native wheel on mdx or hibino. Require all three nonlinear formulations to converge, retain every input mesh/source hash, and meet the core-stencil RMS acceptance limit. |
-| P1 | Released reduced-A Kelvin BDDC replay | Install the merged wheel on hibino or mdx and rerun Examples #6 and #7. Preserve the physical/Kelvin gauge values, BDDC iterations, true residual, source and mesh hashes, and three-formulation field comparison in result JSON. |
+| #6 closed (2026-09-08), #7 open | ESRF #6 and #7 three-engine evidence | Run the new coil-yoke runner from the released native wheel on mdx or hibino. Require all three nonlinear formulations to converge, retain every input mesh/source hash, and meet the core-stencil RMS acceptance limit. |
+| Closed for #6 (2026-09-08), open for #7 | Released reduced-A Kelvin BDDC replay | Install the merged wheel on hibino or mdx and rerun Examples #6 and #7. Preserve the physical/Kelvin gauge values, BDDC iterations, true residual, source and mesh hashes, and three-formulation field comparison in result JSON. |
 | Resolved for primal path | Mapped HEX BDM2 material solve | The composite mapped charge representation passes spectrum, linear/nonlinear solve, IMA, field, and quadrature-convergence gates on mdx. |
 | P2 | Mapped HEX BDM2 shape derivative | Differentiate the same complete-host tensor and whole-host Duffy representation, then lock it against finite differences before enabling topology optimization. The current API fails loudly. |
 | P2 | Image-aware field acceleration | Design grouping that is invariant under explicit reflection and reduced IMA representation; prove `<10 eps` direct parity before enabling tree/H-matrix evaluation for image-bearing field maps. |
@@ -1591,4 +1591,35 @@ resolves the pole face with fewer unknowns.  The HEX goal -- TET-class
 performance -- is met against the curved TET route and within a factor of
 two of the straight one; closing that factor would take a closed-form inner
 integral for affine HEX pairs, which is where the remaining Duffy cost sits.
+
+### 8.16 ESRF example 6: the released nonlinear three-engine result (2026-09-08)
+
+The coil-driven quadrupole ran from the production-candidate wheel on mdx1,
+one job at a time, through the tracked runner
+(`esrf_three_engine/results/case6_nonlinear_three_engine_mdx1.json`; the
+per-element warm-start arrays are omitted from the committed copy, which
+records the SHA-256 of the complete artifact).  All three nonlinear
+formulations converged on their own meshes and one shared mesh-free coil
+source:
+
+| engine | unknowns | wall [s] |
+|---|---|---|
+| HDiv-MMM, BDM1, iron-only HEX | 62,192 | 66 |
+| HCurl reduced-A, Periodic Kelvin BDDC | 705,838 | 0 |
+| mixed total/reduced Omega, Anderson depth 2 | 223,676 | 0 |
+
+| pair | core RMS (27 points) | full stencil (45 points) |
+|---|---|---|
+| hdiv mmm against reduced a | 0.34 % | 0.68 % |
+| hdiv mmm against mixed total reduced omega | 0.70 % | 1.20 % |
+| reduced a against mixed total reduced omega | 0.78 % | 1.41 % |
+
+The acceptance limit is 3 % on the core stencil and the maximum is
+0.78 %.  The run also records the process peak working set,
+6.4 GB, which is the memory evidence the C-yoke row asked for on a
+comparable problem.  Two readings: the three formulations agree on an
+iron-dominated nonlinear quadrupole to under 1 %, and HDiv-MMM reaches that
+agreement with 62,192 unknowns on the iron alone against 705,838 for
+reduced-A and 223,676 for the mixed Omega route, in 66 s of the 38-minute
+run.  The reduced-A Kelvin BDDC replay row is closed by the same run.
 
