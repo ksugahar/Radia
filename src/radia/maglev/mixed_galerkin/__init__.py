@@ -1,4 +1,9 @@
-"""Mixed Galerkin CLN-SIBC models and polarizability helpers."""
+"""Foster + SIBC models and polarizability helpers.
+
+``mixed_galerkin`` and ``BoxMixedGalerkin`` are legacy compatibility names,
+not a claim that the scalar enriched-space model is a mixed FE formulation.
+The production bulk uses Foster eigenmodes, not a CLN/Krylov basis.
+"""
 
 from .alpha import (
     bulk_foster_via_eigen,

@@ -15,7 +15,7 @@ extraction gives the exact 12 edges with dihedral pi/2 each.
 For an L-section the CAD has 18 edges (12 outer + 6 from the notch),
 including 2 re-entrant edges at dihedral 3*pi/2.
 
-This is the IGA-flavored part of Mixed Galerkin SIBC: bulk Foster
+This is the IGA-flavored part of Foster + SIBC: bulk Foster
 modes still need a volumetric FEM mesh (no way around that for
 arbitrary geometry), but the SURFACE / EDGE / VERTEX contributions
 can be IGA-direct from the CAD topology and stay mesh-independent

@@ -1,15 +1,28 @@
-# Mixed Galerkin formulation (CLN bulk + HOIBC surface)
+# Foster + SIBC and CLN + SIBC validation
 
-Research scripts for the **mixed Galerkin** formulation of eddy-current
-admittance Y(s): bulk Cauer Ladder Network (CLN) at low frequency +
-Higher-Order Impedance Boundary Condition (HOIBC) at high frequency,
-coupled via the Schur complement (= discrete Steklov-Poincaré operator =
-discrete DtN map at the algebraic level).
+Research scripts for bulk/surface coupling in eddy-current admittance Y(s).
+Use **Foster + SIBC** for eigenmode bulk and **CLN + SIBC** for CLN/Krylov
+bulk. HOIBC denotes the higher-order surface corrections when present.
+The scalar unknown is approximated in an enriched trial space; this is not
+a mixed finite-element formulation. A Schur complement describes algebraic
+block elimination, not by itself a physical DtN boundary operator.
+
+`mixed_galerkin`, `BoxMixedGalerkin`, existing filenames, and JSON keys are
+legacy compatibility identifiers. Saved historical output may still use the
+old term; retain it as evidence, not as the current method name.
+The public box implementation in `src/radia/maglev/mixed_galerkin/schur.py`
+uses Foster eigenmodes. CLN/Krylov validation does not silently change its
+public `lam`, `tau`, or `Y_bulk` contract.
+
+**Production default: Foster + SIBC.** CLN is a comparison route, not a
+required migration. Select retained Foster modes by convergence and error in
+the operating frequency band. Similar accuracy is a validation question, not
+an assumption established by either basis name.
 
 > **History note (2026-06-12)**: This directory was previously
 > `examples/hierarchical_cauer_sibc/` and centred on the **Warburg-Schur
 > termination** (`Y_R = Y_CLN + K_SIBC √s / (s + d)`, with `d` tuned).
-> That approach was superseded by the Mixed Galerkin framework below,
+> That approach was superseded by the bulk/surface coupling below,
 > which removes the `d` parameter entirely and improves wall-band
 > accuracy by 1–4 orders of magnitude. The Warburg-Schur code was
 > hard-deleted; see
@@ -32,14 +45,14 @@ The two endpoints have different natural bases:
 
 | Endpoint | Basis | Captures |
 |---|---|---|
-| s → 0 (DC, low-freq) | bulk CLN Foster modes (sine eigenfunctions) | volume diffusion |
+| s → 0 (DC, low-freq) | Foster eigenmodes, or CLN/Krylov vectors as declared by the case | volume diffusion |
 | s → ∞ (deep skin)    | HOIBC Senior tower of fractional-power envelopes | surface skin effect |
 
-The **mixed Galerkin** combines both:
+The **bulk + SIBC enriched approximation** combines both:
 
   v(r, s) ≈ Σ ξ_k^{bulk} φ_k(r) + Σ ξ_k^{surf} ψ_k(r, s)
 
-with bulk φ_k from CLN Krylov-at-s=0 (frequency-independent) and surface
+with bulk φ_k from Foster eigenmodes or CLN Krylov-at-s=0 (frequency-independent) and surface
 ψ_k(r, s) the planar SIBC envelope plus Senior tower curvature
 corrections. The Galerkin system has size (N_bulk + N_surf) and is
 solved per-frequency. Intermediate-frequency accuracy is bounded by the
@@ -50,10 +63,10 @@ solved per-frequency. Intermediate-frequency accuracy is bounded by the
 | Subdir | Contents |
 |---|---|
 | `_references/` | Remaining square/cube analytic references pending src/API promotion |
-| `cylinder/`    | Mixed Galerkin on infinite-z cylinder cross-section |
-| `sphere/`      | Mixed Galerkin on solid sphere |
-| `square2d/`    | Mixed Galerkin on infinite-z square cross-section |
-| `cube3d/`      | Mixed Galerkin on solid cube (rank-N + closed K_ss + NGSolve FEM ground truth verified) |
+| `cylinder/`    | Bulk + SIBC on infinite-z cylinder cross-section |
+| `sphere/`      | Bulk + SIBC on solid sphere |
+| `square2d/`    | Bulk + SIBC on infinite-z square cross-section |
+| `cube3d/`      | Bulk + SIBC on solid cube (rank-N + closed K_ss + NGSolve FEM ground truth verified) |
 | `time_domain/` | Passive real-pole Foster realization of the cube response: 18 real poles, exact DC, and a step response checked against inverse Laplace transformation. |
 | `ngsolve_validation/` | Framework-agnostic NGSolve FEM cross-validation (cube / cuboid Kelvin) |
 | `cuboid_general/` | Non-cubic cuboid: the generalized Mellin asymptote by codimension. Promoted 2026-09-02 |

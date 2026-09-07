@@ -1,4 +1,4 @@
-"""alpha.py -- general-shape polarizability tensor via Mixed Galerkin.
+"""alpha.py -- Foster + SIBC polarizability helpers.
 
 For any conductor shape specified as a `.vol` mesh, compute:
 
@@ -9,7 +9,7 @@ For any conductor shape specified as a `.vol` mesh, compute:
      cuboid Mellin anchor; Sugahara-Nagamine-Hane 2026 Paper 1 SIII).
   3. Surface area S_total -> K_SIBC = S sqrt(sigma/mu)
      (Mellin leading term).
-  4. Schur composition Y_R(s) = Y_bulk_Foster(s) + K_SIBC/sqrt(s)
+  4. Additive asymptotic composition Y_R(s) = Y_bulk_Foster(s) + K_SIBC/sqrt(s)
      + c_1/s.
   5. Polarizability alpha(s) = V - Y(s)/sigma.
 
@@ -275,7 +275,7 @@ def K_SIBC_total(area_total: float, sigma: float, mu: float) -> float:
 
 
 # ---------------------------------------------------------------------------
-# Mixed Galerkin admittance Y(s) and polarizability alpha(s)
+# Foster + SIBC admittance Y(s) and polarizability alpha(s)
 # ---------------------------------------------------------------------------
 
 

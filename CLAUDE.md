@@ -57,6 +57,13 @@ Prefer established public abstractions over proprietary plumbing.
 
 ### Numerical Rules
 
+- Name eigenmode-bulk/surface coupling **Foster + SIBC**; use **CLN + SIBC**
+  for an actual CLN/Krylov bulk basis. Do not call these scalar enriched-space
+  models "mixed Galerkin". Legacy API/path identifiers remain compatible.
+- Foster + SIBC is the production default for this bulk/surface method.
+  CLN remains a comparison route, not a required migration. Decide retained
+  mode counts from error/convergence in the operating band, not naming alone.
+
 - Use SI units; magnetization is A/m.
 - Compare vector fields with `norm(B1 - B2)`.
 - Radia C++ matrix storage is row-major unless an external API owns the layout.
