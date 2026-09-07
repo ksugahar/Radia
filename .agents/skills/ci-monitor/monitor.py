@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import time
@@ -48,6 +49,7 @@ def _gh(args: list[str], timeout: int = 60) -> tuple[int, str, str]:
         cp = subprocess.run(
             ["gh"] + args, capture_output=True, text=True,
             encoding="utf-8", errors="replace",
+            env={**os.environ, "GH_REPO": os.environ.get("GH_REPO") or "ksugahar/Radia"},
             timeout=timeout, check=False)
         return cp.returncode, cp.stdout, cp.stderr
     except FileNotFoundError:
