@@ -29,9 +29,19 @@ def test_evrs_esim_section_records_production_contract() -> None:
 def test_full_cln_sibc_documentation_includes_evrs_esim() -> None:
     text = get_cln_sibc_orthogonal_documentation()
 
-    assert "Production HCurl EVRS + local ESIM-SIBC mixed Galerkin" in text
+    assert "Production HCurl EVRS + local ESIM-SIBC coupling" in text
     assert "local-ESIM port difference" in text
 
 
 def test_evrs_esim_section_is_listed() -> None:
     assert "evrs_esim" in get_cln_sibc_orthogonal_section("list")
+
+
+def test_current_basis_terminology_precedes_historical_sections() -> None:
+    for name in ("overview", "evrs_esim", "all"):
+        text = get_cln_sibc_orthogonal_section(name)
+        assert text.startswith("## Current terminology")
+        assert text.count("## Current terminology") == 1
+        assert "**Foster + SIBC**" in text
+        assert "**CLN + SIBC**" in text
+        assert "retained for compatibility" in text
