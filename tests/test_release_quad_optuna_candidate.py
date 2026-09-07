@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import tomllib
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -17,8 +18,10 @@ SPEC.loader.exec_module(release_quad)
 
 def test_release_quad_tracks_the_independent_optuna_version():
     versions = release_quad._read_repo_versions()
-    assert versions["radia-optuna"] == "0.1.6"
-    assert versions["optuna.__version__"] == "0.1.6"
+    package = TOOL.parents[1] / "packages/radia-optuna/pyproject.toml"
+    expected = tomllib.loads(package.read_text(encoding="utf-8"))["project"]["version"]
+    assert versions["radia-optuna"] == expected
+    assert versions["optuna.__version__"] == expected
 
 
 def test_optuna_candidate_requires_the_independent_distribution_workflow():
