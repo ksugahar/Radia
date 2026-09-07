@@ -169,6 +169,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--reduced-a-relaxation", type=float, default=0.1)
     parser.add_argument("--nonlinear-tolerance", type=float, default=2.0e-5)
     parser.add_argument("--nonlinear-maximum-iterations", type=int, default=80)
+    parser.add_argument(
+        "--mixed-nonlinear-maximum-iterations",
+        type=int,
+        default=None,
+        help=(
+            "Optional Picard cap for mixed total/reduced Omega only. "
+            "HDiv and reduced-A retain --nonlinear-maximum-iterations."
+        ),
+    )
     parser.add_argument("--source-trace-tolerance", type=float, default=0.05)
     parser.add_argument("--relative-rms-tolerance", type=float, default=0.03)
     parser.add_argument("--observation-half-width", type=float, default=2.0e-5)
@@ -178,6 +187,13 @@ def main(argv: list[str] | None = None) -> int:
     options = parser.parse_args(argv)
     if options.fem_order < 1:
         raise ValueError("--fem-order must be positive")
+    if options.nonlinear_maximum_iterations < 1:
+        raise ValueError("--nonlinear-maximum-iterations must be positive")
+    if (
+        options.mixed_nonlinear_maximum_iterations is not None
+        and options.mixed_nonlinear_maximum_iterations < 1
+    ):
+        raise ValueError("--mixed-nonlinear-maximum-iterations must be positive")
     if not 0.0 < options.hdiv_gram_eps < 1.0:
         raise ValueError("--hdiv-gram-eps must lie in (0, 1)")
     if not 0.0 < options.reduced_a_relaxation <= 1.0:
@@ -222,6 +238,11 @@ def main(argv: list[str] | None = None) -> int:
     kelvin_center = tuple(float(value) for value in detect_kelvin_offset(fem_mesh))
     engines = _load_shared_engines()
     bh_table = get_esrf_bh_table(case.number)
+    mixed_nonlinear_maximum_iterations = (
+        int(options.nonlinear_maximum_iterations)
+        if options.mixed_nonlinear_maximum_iterations is None
+        else int(options.mixed_nonlinear_maximum_iterations)
+    )
     output = options.output.resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
     common = _checkpoint_contract(
@@ -284,7 +305,7 @@ def main(argv: list[str] | None = None) -> int:
                 nonlinear=True,
                 order=options.fem_order,
                 nonlinear_tolerance=options.nonlinear_tolerance,
-                nonlinear_maximum_iterations=options.nonlinear_maximum_iterations,
+                nonlinear_maximum_iterations=mixed_nonlinear_maximum_iterations,
                 nonlinear_verbose=False,
                 kelvin_center=kelvin_center,
                 kelvin_radius=case.kelvin_radius_m,
@@ -307,6 +328,7 @@ def main(argv: list[str] | None = None) -> int:
             "source_potential_contract": "total_hodge",
             "source_trace_tolerance": float(options.source_trace_tolerance),
             "relaxation": 0.3,
+            "nonlinear_maximum_iterations": mixed_nonlinear_maximum_iterations,
         },
     }
     if options.preflight:
