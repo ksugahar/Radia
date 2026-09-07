@@ -809,6 +809,32 @@ EXTERNAL_PACKAGES: dict[str, dict[str, Any]] = {
 # Rule of thumb: any string a user might reasonably type to refer to a
 # server -- the CLI suffix, the underscore subpackage name, the
 # hyphen short name -- should resolve to the same CATALOG entry.
+from ..capability_packs import PACKS, modules_for
+
+for _pack, _spec in PACKS.items():
+    CATALOG[_pack] = {
+        "subpackage": f"radia_mcp.{_pack.replace('-', '_')}",
+        "entry_point": f"mcp-server-{_pack}",
+        "description": _spec["description"],
+        "primary_tools": ["capability_pack_status"],
+        "related": [],
+        "tags": ["meta"],
+        "kind": "capability-pack",
+        "profiles": ["all", *[p for p in _spec["profiles"] if p != "all"]],
+        "members": list(modules_for(_pack)),
+    }
+
+# Keep old entry points during migration; expose recommended replacements.
+for _name, _info in CATALOG.items():
+    if _name in PACKS:
+        continue
+    _module = _info["subpackage"].removeprefix("radia_mcp.")
+    _packs = [p for p in PACKS if _module in modules_for(p)]
+    if _packs:
+        _info["capability_packs"] = _packs
+CATALOG["grant-writing"]["integrated_into"] = "paper-writing"
+CATALOG["poster"]["integrated_into"] = "paper-writing"
+
 _ALIASES = {
     # CLI-name -> catalog key
     "radia-meta": "meta",

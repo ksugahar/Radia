@@ -1,5 +1,10 @@
 # radia-mcp
 
+For fewer client processes, use the [capability packs](docs/design/capability_packs.md).
+They combine related domains with startup-selected profiles while preserving old
+commands. `paper-writing` now includes grant and poster tools as well as slides
+and figures; genre-specific scoring remains separate.
+
 [![PyPI](https://img.shields.io/pypi/v/radia-mcp.svg)](https://pypi.org/project/radia-mcp/)
 [![Python](https://img.shields.io/pypi/pyversions/radia-mcp.svg)](https://pypi.org/project/radia-mcp/)
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](LICENSE)

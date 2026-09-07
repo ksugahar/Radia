@@ -13,6 +13,10 @@ REQUIRED_ASSETS = frozenset(
         "radia_mcp/paper_writing/skill.md",
         "radia_mcp/poster/skill.md",
         "radia_mcp/presentation/skill.md",
+        "radia_mcp/ih/prompts/ngsolve_recipes.md",
+        "radia_mcp/ih/prompts/mathematica_verification.md",
+        "radia_mcp/peec/prompts/ngsolve_recipes.md",
+        "radia_mcp/peec/prompts/mathematica_derivation.md",
     }
 )
 

@@ -109,6 +109,13 @@ full = [
 Repository = "https://github.com/ksugahar/Radia"
 
 [project.scripts]
+mcp-server-radia-design = "radia_mcp.radia_design.server:main"
+mcp-server-radia-electrical = "radia_mcp.radia_electrical.server:main"
+mcp-server-radia-motion = "radia_mcp.radia_motion.server:main"
+mcp-server-radia-analysis = "radia_mcp.radia_analysis.server:main"
+mcp-server-radia-acoustic-workflows = "radia_mcp.radia_acoustic_workflows.server:main"
+mcp-server-document-ops = "radia_mcp.document_ops.server:main"
+mcp-server-radia-publication = "radia_mcp.radia_publication.server:main"
 # Public MCP servers. All load standalone on the MCP Python SDK 1.x. The
 # "radia-coupled" ones reference radia from inside example snippets in
 # their knowledge modules, but importing the server does not require
@@ -215,6 +222,8 @@ mcp-server-research-project = "radia_mcp.research_project.server:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
+"radia_mcp.ih" = ["prompts/*.md"]
+"radia_mcp.peec" = ["prompts/*.md"]
 "radia_mcp.matlab" = [
     "skill.md",
     "extensions/*.json",
