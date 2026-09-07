@@ -7,6 +7,21 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.53] - 2026-09-07
+
+- Compose domain capability entry points while preserving runtime status,
+  provenance, and genre-aware writing review contracts.
+- Add standard client launchers and safe maintenance operations; distinguish
+  editable source deployment from client reconnection and live verification.
+- Restore official MATLAB foundation inventory and update the Optuna policy
+  audit to the current policy section.
+- Clarify Foster + SIBC production terminology versus CLN/Krylov comparison
+  routes, without renaming legacy solver identifiers.
+- Retire the generated tool-inventory gate and stale operational contracts;
+  retain change-scoped CI and independent package publication.
+- Fix observable grant evidence/budget validation and presentation audio
+  embedding within the server event loop.
+
 ## [1.4.52] - 2026-09-04
 
 - CI and packaging: split independently published distributions into
