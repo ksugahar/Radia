@@ -24,7 +24,8 @@ def test_mcp_sdk_dependency_and_minimal_ci_are_synchronized():
     workflow = (ROOT / ".github" / "workflows" / "radia-mcp-matrix.yml").read_text(
         encoding="utf-8"
     )
-    assert f'"{SDK_REQUIREMENT}"' in workflow
+    # Resolve the same core pin from metadata rather than duplicating it in CI.
+    assert 'pip install -e "packages/radia-mcp[maintenance]"' in workflow
 
 
 def test_supported_sdk_still_exposes_fastmcp():

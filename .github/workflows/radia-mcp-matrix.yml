@@ -168,11 +168,10 @@ jobs:
         run: |
           # tomli: tomllib backport for Python 3.10 (tools/policy_lint.py reads pyproject.toml;
           # tomllib is stdlib only on 3.11+).  No-op on 3.11/3.12 via the env marker.
-          python -m pip install "mcp>=1.0,<2" "tomli; python_version < '3.11'"
+          python -m pip install -e "packages/radia-mcp[maintenance]" "tomli; python_version < '3.11'"
           if [[ "$RUN_TESTS" == "true" ]]; then
             python -m pip install pytest
           fi
-          python -m pip install -e packages/radia-mcp --no-deps
 
       - name: Prepare impact-scoped test plan
         if: needs.scope.outputs.run_tests == 'true'
