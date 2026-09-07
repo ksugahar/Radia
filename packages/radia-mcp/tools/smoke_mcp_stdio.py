@@ -66,7 +66,9 @@ async def _probe_server(short_name: str) -> dict[str, Any]:
                 for tool in listed.tools
                 if (tool.meta or {}).get("caeai.control_plane") == "status"
             ]
-            if len(status_tools) == 1:
+            if info.get("kind") == "capability-pack" and "capability_pack_status" in by_name:
+                status_name = "capability_pack_status"
+            elif len(status_tools) == 1:
                 status_name = status_tools[0]
             elif conventional_status_name in by_name:
                 status_name = conventional_status_name
