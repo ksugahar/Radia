@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -21,6 +22,15 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 ZERO = "0" * 40
+
+
+def select_idle_host(runners: list[dict]) -> str:
+    for host in ("mdx1", "mdx2"):
+        for runner in runners:
+            labels = {label["name"] for label in runner.get("labels", [])}
+            if {"mdx", host} <= labels and runner.get("status") == "online" and not runner.get("busy", True):
+                return host
+    raise RuntimeError("No idle mdx1/mdx2 CI runner is available; retry after CI finishes")
 
 
 def run(command: list[str], *, cwd: Path | None = None) -> None:
@@ -79,10 +89,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--base", required=True, help="remote SHA before the push")
     parser.add_argument("--head", required=True, help="local candidate SHA")
     parser.add_argument(
-        "--host", default=os.environ.get("RADIA_PREFLIGHT_HOST", "mdx"),
-        help="SSH host for the dedicated preflight worker (default: mdx)",
+        "--host", default=os.environ.get("RADIA_PREFLIGHT_HOST", "auto"),
+        choices=("auto", "mdx1", "mdx2"),
+        help="Select an idle mdx runner, or explicitly choose mdx1/mdx2",
     )
     args = parser.parse_args(argv)
+    if args.host == "auto":
+        inventory = json.loads(subprocess.check_output(
+            ["gh", "api", "repos/ksugahar/Radia/actions/runners"], text=True))
+        args.host = select_idle_host(inventory["runners"])
+    print(f"Preflight host: {args.host}")
 
     run_id = uuid.uuid4().hex
     remote_root = r"C:\temp\radia-preflight"
