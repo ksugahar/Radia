@@ -300,6 +300,7 @@ def test_policy_twins_define_the_same_compute_host_routing():
     assert "SPOT instance" in normalized
     assert "one heavy job at a time" in normalized
     assert "whichever of mdx1/mdx2 is idle" in normalized
+    assert "both its CI runner and its job queue are idle" in normalized
     # ICMP is blocked on hibino, so ping reports a false "down".
     assert "ConnectTimeout" in normalized
     assert 'reports a false "down"' in normalized
