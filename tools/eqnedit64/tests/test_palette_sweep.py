@@ -60,6 +60,8 @@ def build(command: str) -> Equation | None:
         if not equation.insert_symbol(command[len("symbol."):]):
             return None
     elif command.startswith("latex."):
+        if command.startswith(("latex._", "latex.^")):
+            equation.insert_text("x")
         if not equation.insert_latex(command[len("latex."):]):
             return None
     elif command.startswith("style."):
@@ -96,10 +98,13 @@ def main() -> int:
             # An empty template is a row of identical placeholders, so fill
             # the slots before comparing: \over and \under differ only in
             # where the script sits, which an empty pair cannot show.
-            for _ in range(3):
-                equation.insert_text("a")
-                if not equation.next_slot():
-                    break
+            # Restyling preserves the selection. Typing here would replace the
+            # styled x and compare plain a against plain a instead of the cells.
+            if not command.startswith("style."):
+                for _ in range(3):
+                    equation.insert_text("a")
+                    if not equation.next_slot():
+                        break
 
             svg = equation.svg()
             if not svg.strip():
