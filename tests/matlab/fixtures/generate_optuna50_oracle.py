@@ -1298,6 +1298,24 @@ def _multiobjective_tpe_trials() -> list[dict[str, float]]:
     return rows
 
 
+def _native_tpe_history_selection() -> dict[str, object]:
+    history = [dict(x=-1.75 + i * 0.5, value=float(i % 3)) for i in range(8)]
+    cases = []
+    for direction in ["minimize", "maximize"]:
+        for gamma in [0.1, 1.0]:
+            sampler = optuna.samplers.TPESampler(
+                seed=149, n_startup_trials=4,
+                gamma=lambda n, g=gamma: min(25, int(np.ceil(g * n))))
+            study = optuna.create_study(direction=direction, sampler=sampler)
+            for row in history:
+                study.add_trial(optuna.trial.create_trial(
+                    value=row["value"], params={"x": row["x"]},
+                    distributions={"x": optuna.distributions.FloatDistribution(-2, 2)}))
+            proposal = study.ask().suggest_float("x", -2, 2)
+            cases.append(dict(direction=direction, gamma=gamma, proposal=proposal))
+    return dict(seed=149, history=history, cases=cases)
+
+
 def _tpe_intersection_transitions() -> dict[str, object]:
     study = optuna.create_study(
         sampler=optuna.samplers.TPESampler(seed=137, n_startup_trials=4)
@@ -3467,6 +3485,7 @@ def build_oracle() -> dict[str, object]:
         "random_sampler_seed_123": _random_trials(),
         "tpe_sampler_seed_37": _tpe_trials(),
         "tpe_intersection_transitions": _tpe_intersection_transitions(),
+        "native_tpe_history_selection": _native_tpe_history_selection(),
         "tpe_constant_liar_seed_127": _tpe_constant_liar_contract(),
         "numeric_untransform": _numeric_untransform_contract(),
         "single_distribution_rng": _single_distribution_rng_contract(),

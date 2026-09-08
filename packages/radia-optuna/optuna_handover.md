@@ -29,6 +29,42 @@ MATLAB vectorization, MEX kernels, deterministic batching, table/MAT
 persistence, Simulink signals, and session tooling may improve performance and
 teaching value, but they must not silently change a shared Optuna algorithm.
 
+### Native TPE optimization boundary (2026-09-08)
+
+MATLAB tables remain the authoritative trial database, including durable
+table/MAT persistence and the history exposed to Simulink. The MEX history is
+only a rebuildable computation cache. Rustuna is a design reference, not a
+runtime dependency or a new storage backend; do not introduce Rust/Cargo,
+discard persisted trials, or adopt Rustuna's RNG in this optimization lane.
+
+The first native change references Rustuna revision
+`ebb5e6a88dec4caed0107db2cafb93807f2ebc66` and replaces whole-history ranking
+with partial selection. Trial-number indexing removes the linear replacement
+lookup, and a maintained chronological index removes the per-proposal
+chronological sort. Objective ties still resolve by trial number; estimator
+observations remain chronological, preserving Optuna 5 random consumption.
+Parameter extraction uses one lookup instead of two. Sparse per-trial parameter
+maps are retained; a columnar-cache redesign is not implemented by this change.
+
+The upstream-generated `native_tpe_history_selection` fixture covers tied
+objectives, minimize/maximize, and the all-good split boundary. Its MATLAB
+comparison also exercises reverse insertion, replacement, and cache reset.
+Performance acceptance remains separate from numerical acceptance: a speedup
+must be measured on an idle host with matching MATLAB code and old/new MEX,
+then compared against pinned Python Optuna. Busy LAB timings are not proof of
+a gain, and no Rustuna-scale acceleration is claimed. Long-run evidence belongs
+under `validation_test/optimization`, not the short regression suite.
+
+Local acceptance on 2026-09-08: the rebuilt standalone MEX passed all 76
+tests in `test_optuna_upstream_oracle.m`, including the new selection fixture;
+the 11 standalone package tests passed. Two oracle regenerations were
+byte-identical (SHA256
+`1b8640596d0d3b20abe8b34e621738abefc9b7e9f81e7c85e7cb8a7b0ff7a2b3`).
+The newly built wheel passed strict source/native fidelity verification
+(222 MATLAB files, 21 MEX commands). These gates establish tested numerical
+and distribution behavior, not a measured performance gain or exhaustive
+compatibility outside the fixtures.
+
 ## 2. Scope and non-goals
 
 ### In scope
