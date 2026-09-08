@@ -7,6 +7,11 @@ on:
       - 'src/ext/sparsesolv/**'
       - 'src/matlab/radia_mex.cpp'
       - 'matlab/+radia/+sparsesolv/**'
+      - 'matlab/+radia/+python/sparsesolv.m'
+      - 'matlab/+radia/+python/electromagnetValidation.m'
+      - 'matlab/+radia/+python/esrfExamples.m'
+      - 'matlab/+radia/+python/staticElectromagnet.m'
+      - 'matlab/python_api_parity_manifest.json'
       - 'tests/matlab/*sparsesolv*'
       - 'validation_test/ngsolve_matlab_parity/run_sparsesolv_parity.py'
       - 'src/radia/__init__.py'
@@ -23,6 +28,11 @@ on:
       - 'src/ext/sparsesolv/**'
       - 'src/matlab/radia_mex.cpp'
       - 'matlab/+radia/+sparsesolv/**'
+      - 'matlab/+radia/+python/sparsesolv.m'
+      - 'matlab/+radia/+python/electromagnetValidation.m'
+      - 'matlab/+radia/+python/esrfExamples.m'
+      - 'matlab/+radia/+python/staticElectromagnet.m'
+      - 'matlab/python_api_parity_manifest.json'
       - 'tests/matlab/*sparsesolv*'
       - 'validation_test/ngsolve_matlab_parity/run_sparsesolv_parity.py'
       - 'src/radia/__init__.py'
@@ -46,6 +56,7 @@ jobs:
   ams-regression:
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: [self-hosted, Windows, X64, mdx]
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
@@ -58,6 +69,7 @@ jobs:
           $changed = @(git diff --name-only HEAD^ HEAD)
           $required = $LASTEXITCODE -ne 0 -or '${{ github.event_name }}' -eq 'workflow_dispatch'
           $required = $required -or [bool]($changed -match '^(src/ext/sparsesolv/|src/matlab/|matlab/\+radia/\+sparsesolv/|tests/matlab/.*sparsesolv|validation_test/ngsolve_matlab_parity/run_sparsesolv|CMakeLists.txt|Build.ps1|\.github/workflows/sparsesolv.yml)')
+          $required = $required -or [bool]($changed -match '^matlab/(python_api_parity_manifest.json|\+radia/\+python/(sparsesolv|electromagnetValidation|esrfExamples|staticElectromagnet)\.m)')
           "required=$($required.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
 
       - name: Create isolated native environment

@@ -102,3 +102,14 @@ value = radia.python.sparsesolv("has_compact_ams");
 verifyEqual(t,value.backend,"python-fallback");
 verifyTrue(t,logical(value.value));
 end
+
+function testElectromagnetBatchEntries(t)
+r = radia.python.electromagnetValidation("static_electromagnet_three_engine_contract");
+verifyEqual(t,r.backend,"python-fallback");
+verifyNotEmpty(t,r.value);
+r = radia.python.esrfExamples("get_esrf_example_spec",{int32(1)});
+verifyEqual(t,double(r.value.number),1);
+r = radia.python.staticElectromagnet("StaticElectromagnetMixedDomain", ...
+    {{'air'}, {'iron','kelvin'}, {'iron'}});
+verifyEqual(t,string(r.value.ground_boundary),"GND");
+end
