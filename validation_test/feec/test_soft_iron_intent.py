@@ -20,9 +20,10 @@ H0 = 1000.0
 def _vol(path):
     """Write the iron cube as a ``.vol``: this test's subject is SoftIron's FILE path.
 
-    The mesh comes from OCC rather than ``MakeStructured3DMesh`` because saving a structured mesh
-    crashes NGSolve 6.2.2606 (access violation inside ``ngmesh.Save``, reproducible with no radia
-    imported at all, for HEX and TET alike, while the OCC and CSG routes save and reload fine).
+    On the reported Windows/NGSolve 6.2.2606 environment, saving structured
+    HEX/TET meshes raised an access violation even without importing Radia;
+    OCC and CSG meshes round-tripped successfully. This OCC fixture preserves
+    the file-input contract, not structured-HEX coverage or an upstream diagnosis.
     """
     with ng.TaskManager():
         geometry = OCCGeometry(Box(Pnt(0.0, 0.0, 0.0), Pnt(L, L, L)))
@@ -30,7 +31,7 @@ def _vol(path):
 
 
 def test_soft_iron_hdiv_from_vol(tmp_path):
-    vol = tmp_path / "cube_hex.vol"
+    vol = tmp_path / "cube.vol"
     _vol(vol)
 
     def run(backend="hdiv"):
