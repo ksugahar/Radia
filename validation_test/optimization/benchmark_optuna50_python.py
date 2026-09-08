@@ -1,7 +1,8 @@
 """Benchmark the pinned upstream Optuna 5.0.0 TPE oracle.
 
 Run this and ``benchmark_matlab_optuna50.m`` on the same otherwise-idle host.
-The first three repeats are warm-ups; the reported value is the median of the
+Each workload receives eleven prewarm repeats before measurement. The first
+three measured repeats are warm-ups; the reported value is the median of the
 remaining eight repeats. The workloads intentionally exclude persistence and
 parallel scheduling because those are MATLAB extensions rather than shared
 Optuna behavior.
@@ -22,6 +23,7 @@ import warnings
 
 import numpy
 import optuna
+import pandas
 import scipy
 
 
@@ -161,6 +163,11 @@ def main() -> None:
             f"This benchmark requires optuna==5.0.0, found {optuna.__version__}"
         )
     optuna.logging.set_verbosity(optuna.logging.ERROR)
+    # Prime all workload code before the measured repeats, matching MATLAB's
+    # JIT prewarm. Still validate every discarded proposal checksum.
+    _measure(_scalar, EXPECTED_SCALAR_CHECKSUM)
+    _measure(_grouped, EXPECTED_GROUPED_CHECKSUM)
+    _measure_trials_dataframe()
     result = {
         "schema": "radia.validation.optuna50-performance-runtime.v1",
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -171,12 +178,14 @@ def main() -> None:
             "optuna": optuna.__version__,
             "numpy": numpy.__version__,
             "scipy": scipy.__version__,
+            "pandas": pandas.__version__,
         },
         "settings": {
             "trials": TRIALS,
             "total_repeats": REPEATS,
             "warmup_repeats": WARMUP_REPEATS,
             "reported_repeats": REPEATS - WARMUP_REPEATS,
+            "prewarm_repeats": REPEATS,
         },
         "scalar": _measure(_scalar, EXPECTED_SCALAR_CHECKSUM),
         "grouped_conditional": _measure(

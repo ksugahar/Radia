@@ -101,6 +101,19 @@ wheel verification, installed-wheel Simulink E2E, and paired LAB development
 benchmark pass. Release status remains pending until the fresh long mdx
 performance lane, CI, merge, tag, publication, and release-quad gates pass.
 
+The follow-up scalar performance change enables the completed-history MEX for
+default sequential TPE, reuses unchanged distributions and NaN-bearing metadata,
+and invalidates native history on reseed. The paired prewarmed LAB measurement
+in `validation_test/optimization/results_optuna50_paired_lab_20260908.json`
+reports MATLAB/Python throughput ratios of 1.222 scalar and 2.184 grouped TPE.
+The separate table-export ratio is 0.886; no universal speed claim is made.
+All 150 MATLAB tests (74 shared-oracle and 76 integration) and 11 Python package
+tests pass after this change; the rebuilt wheel passes strict source fidelity.
+Engine startup/calculation/
+shutdown passed on both mdx CI runner accounts in run 34210024491. mdx2 has
+Engine 26.1 installed, but its SSH startup still timed out; this does not
+provide a MATLAB performance result on mdx2.
+
 The prior coverage audit also remains binding: verified entries must be derived
 from the test manifest and oracle fixture provenance. A maintained allow-list
 may describe a mapping, but it cannot turn that mapping into verification.

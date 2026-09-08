@@ -1919,7 +1919,8 @@ classdef Study < handle
             % Optuna 5 regards an empty/missing constraint dictionary as
             % unconstrained. Only a named value activates constrained
             % optimization.
-            result = any(obj.ConstraintCountTable.Count > 0);
+            result = ~isempty(obj.ConstraintCountTable) && ...
+                any(obj.ConstraintCountTable.Count > 0);
         end
 
         function finishTrial(obj, trial, state, value, message)
