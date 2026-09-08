@@ -215,7 +215,7 @@ HCurl-specific multigrid needed.
 | Property | Classical IC on HCurl | Hiptmair-Xu AMS |
 |----------|----------------------|------------------|
 | Handles kernel | ✗ (κ blows up) | ✓ (gradient subspace = kernel) |
-| Scales with order p | ✗ degrades fast | ✓ stable up to p=10 |
+| Higher order p | Requires a suitable hierarchy | Requires matching high-order interpolation; no blanket p=10 guarantee |
 | Requires geometric MG | n/a | ✗ (uses AMG on scalar) |
 | Implementation effort | low | medium (need G, Π matrices) |
 
@@ -242,57 +242,65 @@ Performance vs HYPRE AMS + BoomerAMG (mesh1_3.5T, 197k DOFs):
 
 ## When to use — MEASURED, and it depends on the ORDER p (2026-09-08)
 
-**AMS is for p=1 (lowest-order Nedelec).  For p=2 use NGSolve `bddc`.**
-Measured on mdx1 (idle, 38 cores) on the hiruma complex eddy-current problem
+**Use the current coordinate-based CompactAMS recipe with NGSolve order=1.
+For the measured order=2 workload, prefer NGSolve `bddc`.**
+The following measurements were reported on mdx1 (idle, 38 cores), on the hiruma complex eddy-current problem
 (conductor + core + air, σ=0 in air, 30 kHz, `nograds=True` tets, COCR, 1e-8):
 
 | order | use | why (measured) |
 |-------|-----|----------------|
-| **p=1** | **AMS** ★ | 197k dof: AMS 523 MB / 2.9 s setup + 2.0 s solve, versus a direct factorisation 2029 MB / 6.4 s.  Memory scales **O(N^0.81)** versus **O(N^1.72)** |
-| **p=2** | **NGSolve `bddc`** | 1.46M dof in 67 iterations / 5.5 s / 4.35 GB.  Iterations are flat in mesh refinement (95 → 96 → 112 over 680k → 1.46M) |
-| any | NOT `multigrid` | p=2, 865k dof: 154 iterations and **205 s of solve versus bddc's 7.2 s — 28x slower** |
+| **p=1** | **AMS** | 197k dof: AMS 523 MB / 2.9 s setup + 2.0 s solve, versus a direct factorisation 2029 MB / 6.4 s. Reported finite-range memory-fit exponents 0.81 versus 1.72 are not asymptotic complexity claims. |
+| **p=2** | **NGSolve `bddc`** | Reported 1.46M dof / 5.5 s / 4.35 GB; compare exact configurations before combining iteration counts from different runs. |
+| tested p=2 configuration | prefer `bddc` to tested `multigrid` | 865k dof: 205 s versus 7.2 s solve time. This is not a universal exclusion of multigrid. |
 
-**AMS cannot be applied directly at p≥2**: its Π interpolation is built from
-vertex coordinates and the lowest-order discrete gradient.
+These are handoff measurements, not independently certified release evidence.
+Before relying on exact timings, retrieve the input, configuration, source/binary
+identity and result JSON in `validation_test/`; private agent memory is not a
+publicly reproducible artifact.
 
-**Do not "extend AMS to p=2" — it is not needed.**  p=2 does not suffer a
-convergence collapse; `bddc` handles it with flat iteration counts.
+The coordinate-based recipe below does not supply a matching high-order Π.
+Do not apply it unchanged at p≥2. This is a wrapper limitation, not an AMS
+algorithm limitation: HYPRE supports high-order Nedelec discretizations when
+the caller supplies compatible discrete-gradient and interpolation matrices.
+See https://hypre.readthedocs.io/en/latest/solvers-ams.html#high-order-discretizations .
 
 **Using AMS as the BDDC coarse solver was built and measured — it is a
-TRADE-OFF, not a win.**  The p=2 BDDC wirebasket coarse space is 56% lowest-order
-edge dofs (i.e. exactly the p=1 space, where AMS applies).  Substituting AMS
-there gives **memory −63% but solve time +58%** at 1.46M dof.  Reason: a direct
-method puts its cost in the SETUP (done once) and has a cheap APPLY; a Krylov
-preconditioner applies ~100 times per solve, so apply cost dominates and the
-direct factorisation wins.  AMS wins only where it is the SOLVER (1 apply) —
-which is the p=1 row above.  Full data: `memory/hcurl_preconditioner_measurements_2026_09_08.md`.
+TRADE-OFF in the reported configuration.** Substituting AMS in the tested
+coarse-solver construction reportedly gives **memory −63% but solve time +58%**
+at 1.46M dof. A direct factorization amortizes setup across repeated solves;
+an iterative coarse solve can require several cycles on each outer iteration.
+AMS used as a Krylov preconditioner is also applied repeatedly, not just once.
+Coarse-space compatibility must be checked explicitly; a percentage of edge
+DOFs does not establish equivalence to the full lowest-order space.
 
-**ICCG / IC is NOT usable as the coarse solver**: 1000 iterations without
-converging (it cannot see the gradient kernel).  Compressed factorisations
-(MUMPS BLR, STRUMPACK HSS, H-LU) are also a poor fit here — low-rank
-compressibility requires a conductive medium between clusters, and a σ=0 AIR
-region destroys it.
+The tested ICCG coarse configuration reportedly failed to converge in 1000
+iterations. Do not generalize that result to every IC construction. No measured
+BLR/HSS/H-LU result is supplied here: σ=0 air alone does not prove a lack of
+low-rank compressibility. Assess compression error, ranks, memory and time for
+the actual operator before excluding those methods.
 
 | Problem | Use CompactAMS |
 |---------|----------------|
 | Real spd HCurl curl-curl + mass, **p=1** | ✓ + CG |
 | Complex sym HCurl (eddy current MQS), **p=1** | ✓ + COCR ★ |
-| Same but **p=2 or higher** | ✗ — use NGSolve `bddc` |
+| Same but **p=2 or higher** | This coordinate-based recipe is not validated; prefer tested `bddc` or a separately validated high-order AMS interface |
 | HCurl with air region (σ=0) | ✓ + shifted preconditioner (see em_specific) |
 | HDiv (flux variable) | Use ADS — same paper, dual construction |
 | HCurl helmholtz (high freq) | NOT a lab use case (Laplace kernel only) |
 
 ## ⚠ Build it OUTSIDE `with TaskManager():`
 
-Constructing `CompactAMSPreconditioner` / `ComplexCompactAMSPreconditioner`
-inside an active TaskManager region kills the process with `0xC0000409`
+In the reported Windows builds, constructing `CompactAMSPreconditioner` /
+`ComplexCompactAMSPreconditioner` inside an active TaskManager region killed the process with `0xC0000409`
 (`__fastfail`) — **no Python exception, no traceback**.  Verified 2026-09-08 on
 the identical matrix: outside = OK, inside = dead; reproduced on two
 independently built binaries.  The unit tests pass only because they do not
 wrap.  This contradicts the CLAUDE.md "TaskManager-Only" policy, which tells
 callers to wrap the whole NGSolve block — so wrap the mesh/space/forms/assembly
 and the SOLVE, but build the preconditioner between them, outside the region.
-See `memory/ams_constructor_dies_inside_taskmanager.md`.
+Treat this as a reported implementation defect and retain the workaround until
+a subprocess regression certifies the fixed build. Do not deliberately reproduce
+the crash inside a live MCP or MATLAB process.
 
 ## Code recipe
 
@@ -301,11 +309,11 @@ it does not take the FESpace.  It also needs a REAL surrogate matrix even for
 a complex system.  Verified against the shipped binary 2026-09-08.
 
 ```python
-import numpy as np
-from ngsolve import HCurl, BilinearForm, LinearForm, GridFunction, TaskManager
+from ngsolve import HCurl, BilinearForm, LinearForm, GridFunction, TaskManager, curl, dx, CF
 from radia.sparsesolv_ngsolve import ComplexCompactAMSPreconditioner, COCRSolver
 
-# order=1: AMS's Pi is built from the LOWEST-ORDER gradient. See "When to use".
+# Caller supplies mesh, nu, eps, omega and sigma; labels are "cond" and "dirichlet".
+# order=1: supported coordinate-based recipe. See "When to use".
 kw = dict(order=1, nograds=True, dirichlet="dirichlet")
 
 with TaskManager():
