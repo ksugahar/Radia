@@ -10,7 +10,18 @@ from pathlib import Path
 import subprocess
 import tempfile
 
-import matlab.engine
+def record_timeout(child, output):
+    record = dict(passed=False, error="owned Engine worker timeout", worker_pid=child.pid)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(record), encoding="utf-8")
+    try:
+        # Kill only this runner's owned Engine process tree.
+        subprocess.run(["taskkill", "/PID", str(child.pid), "/T", "/F"], check=True)
+        child.wait(timeout=20)
+    except (OSError, subprocess.SubprocessError) as exc:
+        record["cleanup_error"] = str(exc)
+    finally:
+        output.write_text(json.dumps(record), encoding="utf-8")
 
 
 def main():
@@ -25,12 +36,9 @@ def main():
         try:
             raise SystemExit(child.wait(timeout=args.timeout))
         except subprocess.TimeoutExpired:
-            # Kill only this runner's owned Engine process tree.
-            subprocess.run(["taskkill", "/PID", str(child.pid), "/T", "/F"], check=True)
-            child.wait(timeout=20)
-            args.output.parent.mkdir(parents=True, exist_ok=True)
-            args.output.write_text(json.dumps(dict(passed=False, error="owned Engine worker timeout")))
+            record_timeout(child, args.output)
             raise SystemExit(124)
+    import matlab.engine
     root = Path(__file__).resolve().parents[2]
     if not (root/"src/radia/_radia_pybind.pyd").is_file():
         raise RuntimeError("Build -RadiaOnly in this checkout before parity; do not borrow an editable binary")
@@ -49,6 +57,7 @@ def main():
                                 *sorted((root/"src/ext/sparsesolv/include").rglob("*.hpp"))]},
                   passed=False)
     eng = None
+    Path("C:/temp").mkdir(parents=True, exist_ok=True)
     scratch = tempfile.TemporaryDirectory(prefix="sparsesolv-matlab-", dir="C:/temp")
     metrics = Path(scratch.name)/"metrics.json"
     try:
