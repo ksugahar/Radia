@@ -35,9 +35,11 @@ classdef Study < handle
         InOptimize (1,1) logical = false
         TrialNumberData double = zeros(0,1)
         TrialStateData string = strings(0,1)
+        % COMPLETE, PRUNED, RUNNING, WAITING; maintained at transitions.
+        TrialStateCounts (1,4) double = zeros(1,4)
         TrialValueData double = zeros(0,1)
-        TrialStartTimeData
-        TrialEndTimeData
+        TrialStartTimeData double = zeros(0,1)
+        TrialEndTimeData double = zeros(0,1)
         TrialDurationData double = zeros(0,1)
         TrialParamsData cell = cell(0,1)
         TrialIntermediateData cell = cell(0,1)
@@ -144,7 +146,10 @@ classdef Study < handle
                 error("radia:optuna:FixedDistributions", ...
                     "fixedDistributions must be a scalar struct of distributions.");
             end
-            waiting=find(obj.TrialStateData=="WAITING",1);
+            waiting=[];
+            if obj.TrialStateCounts(4)>0
+                waiting=find(obj.TrialStateData=="WAITING",1);
+            end
             if isempty(waiting)
                 trial = radia.optuna.Trial(obj, obj.NextTrialNumber);
                 obj.NextTrialNumber = obj.NextTrialNumber + 1;
@@ -161,6 +166,8 @@ classdef Study < handle
                 queuedParams=obj.QueueParamTable(rows,:);
                 trial.setFixedParameters(queuedParams.Name,queuedParams.Value);
                 obj.TrialStateData(waiting)="RUNNING";
+                obj.TrialStateCounts(3)=obj.TrialStateCounts(3)+1;
+                obj.TrialStateCounts(4)=obj.TrialStateCounts(4)-1;
                 obj.TrialStartTimeData(waiting)=trial.startTimeSerial();
                 obj.TrialEndTimeData(waiting)=NaN;
                 obj.TrialDurationData(waiting)=NaN;
@@ -686,6 +693,7 @@ classdef Study < handle
                 message = "Recovered stale RUNNING trial after timeout.";
             end
             trialNumbers = obj.TrialNumberData(rows);
+            obj.TrialStateCounts(3)=obj.TrialStateCounts(3)-sum(rows);
             obj.TrialStateData(rows) = "FAIL";
             obj.TrialValueData(rows) = NaN;
             obj.TrialEndTimeData(rows) = nowTime;
@@ -771,6 +779,9 @@ classdef Study < handle
         function set.TrialTable(obj,value)
             obj.TrialNumberData=reshape(double(value.TrialNumber),[],1);
             obj.TrialStateData=reshape(string(value.State),[],1);
+            obj.TrialStateCounts=[sum(obj.TrialStateData=="COMPLETE"), ...
+                sum(obj.TrialStateData=="PRUNED"),sum(obj.TrialStateData=="RUNNING"), ...
+                sum(obj.TrialStateData=="WAITING")];
             obj.TrialValueData=reshape(double(value.Value),[],1);
             obj.TrialStartTimeData=reshape(datenum(value.StartTime),[],1); %#ok<DATNM>
             obj.TrialEndTimeData=reshape(datenum(value.EndTime),[],1); %#ok<DATNM>
@@ -1150,6 +1161,8 @@ classdef Study < handle
             row=numel(obj.TrialNumberData)+1;
             obj.TrialNumberData(row,1)=double(number);
             obj.TrialStateData(row,1)=string(state);
+            obj.TrialStateCounts=obj.TrialStateCounts+ ...
+                double(state==["COMPLETE","PRUNED","RUNNING","WAITING"]);
             obj.TrialValueData(row,1)=double(value);
             obj.TrialStartTimeData(row,1)=double(startTime);
             obj.TrialEndTimeData(row,1)=double(endTime);
@@ -1189,8 +1202,12 @@ classdef Study < handle
 
         function count=nonRunningTrialCount(obj)
             %NONRUNNINGTRIALCOUNT COMPLETE and PRUNED TPE history trials.
-            count=sum(obj.TrialStateData=="COMPLETE" | ...
-                obj.TrialStateData=="PRUNED");
+            count=obj.TrialStateCounts(1)+obj.TrialStateCounts(2);
+        end
+
+        function counts=trialStateCounts(obj)
+            %TRIALSTATECOUNTS COMPLETE, PRUNED, RUNNING, WAITING; no history copy.
+            counts=obj.TrialStateCounts;
         end
 
         function [steps,values]=lastIntermediateValues(obj,trialNumbers)
@@ -1270,14 +1287,20 @@ classdef Study < handle
         function initializeTables(obj)
             persistent templates
             if ~isempty(templates)
-                obj.TrialTable=templates.TrialTable;
-                obj.ParamTable=templates.ParamTable;
-                obj.IntermediateTable=templates.IntermediateTable;
+                % Constructor-only: column stores already have their empty
+                % defaults. Do not decode empty table columns back into them.
+                obj.TrialTableCache=templates.TrialTable;
+                obj.ParamTableCache=templates.ParamTable;
+                obj.IntermediateTableCache=templates.IntermediateTable;
+                obj.ObjectiveTableCache=templates.ObjectiveTable;
+                obj.TrialTableDirty=false;
+                obj.ParamTableDirty=false;
+                obj.IntermediateTableDirty=false;
+                obj.ObjectiveTableDirty=false;
                 obj.UserAttrTable=templates.UserAttrTable;
                 obj.SystemAttrTable=templates.SystemAttrTable;
                 obj.ConstraintTable=templates.ConstraintTable;
                 obj.ConstraintCountTable=templates.ConstraintCountTable;
-                obj.ObjectiveTable=templates.ObjectiveTable;
                 obj.SamplerStateTable=templates.SamplerStateTable;
                 obj.QueueParamTable=templates.QueueParamTable;
                 return
@@ -1963,6 +1986,8 @@ classdef Study < handle
             end
             obj.ObjectiveTableDirty=true;
             obj.TrialStateData(rows)=state;
+            obj.TrialStateCounts=obj.TrialStateCounts+ ...
+                double(state==["COMPLETE","PRUNED","RUNNING","WAITING"])-[0,0,1,0];
             obj.TrialValueData(rows)=value(1);
             obj.TrialEndTimeData(rows)=endTime;
             obj.TrialDurationData(rows)=elapsed;

@@ -52,6 +52,11 @@ not an idle compute-host release gate. Historical 4.9 measurements remain useful
 regression baselines, but require matched prewarming and workload semantics
 before claiming a controlled version-to-version speed change.
 
+The subsequent [state-count experiment](results_optuna50_statecount_lab_20260908.json)
+is **inconclusive**, not a passed performance gate: LAB CPU saturation invalidated
+the before/after speed inference, and mdx2 SSH Engine startup timed out. Retain
+this negative evidence and rerun on an idle supported execution context.
+
 The checked result also records the separate `optuna_mex` operational boundary:
 21 commands, binary size and hash, imported libraries, and seven fresh-process
 first-call measurements. This proves that optimization code is not loaded by a
