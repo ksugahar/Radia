@@ -11,6 +11,7 @@ import os
 import sys
 
 import numpy as np
+import pytest
 
 _SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 if _SRC not in sys.path:
@@ -46,7 +47,7 @@ def test_lcurve_corner_selects_interior_regularization():
     assert corner["solution_norm"] == corner["points"][corner["index"]][1]
 
 
-def main():
+def test_known_svd_regularization_identities():
     A, b, s_true, x_true = _build()
     pinv = np.linalg.pinv(A) @ b
 
@@ -85,14 +86,36 @@ def main():
     assert xn[0] >= xn[1] >= xn[2], xn        # bigger lam -> smaller solution
     print(f"  L-curve residuals = {np.round(r,5)}  solnorms = {np.round(xn,4)}")
 
-    corner = lcurve_corner(A, b, [1.0e-4, 1.0e-3, 1.0e-2, 1.0e-1, 1.0])
-    assert 0 < corner["index"] < 4, corner
-    print(f"  L-curve corner lambda = {corner['lambda']:.1e}  "
-          f"curvature = {corner['curvature'][corner['index']]:.3g}")
-
     print("\n[OK] TSVD/Tikhonov field-synthesis inversion: TSVD(k=rank)==pinv (1e-10), "
           "Tikhonov(lam->0)==pinv, filter factors, TSVD + L-curve monotonicity verified.")
 
 
+def test_legacy_imports_are_canonical_helpers():
+    from radia_mcp.optimization import linear_inverse as canonical
+    for func in (tsvd_solve, tikhonov_solve, filter_factors, lcurve, lcurve_corner):
+        assert func is getattr(canonical, func.__name__)
+
+
+def test_exact_null_modes_and_zero_regularization():
+    A = np.diag([2.0, 0.0])
+    b = np.array([4.0, 3.0])
+    # Independent augmented least-squares formulation, not the SVD filter formula.
+    augmented = np.vstack((A, .5*np.eye(2)))
+    expected = np.linalg.lstsq(augmented, np.r_[b, [0., 0.]], rcond=None)[0]
+    np.testing.assert_allclose(tikhonov_solve(A, b, .5), expected)
+    np.testing.assert_allclose(tikhonov_solve(A, b, 0), [2,0])
+    np.testing.assert_allclose(filter_factors([2,0], 0), [1,0])
+    np.testing.assert_allclose(tsvd_solve(A, b, 1), [2,0])
+    with pytest.raises(ValueError, match="zero singular"):
+        tsvd_solve(A, b, 2)
+
+
+@pytest.mark.parametrize("lam", [-1, np.nan, np.inf])
+def test_invalid_regularization_fails_loudly(lam):
+    with pytest.raises(ValueError, match="lam"):
+        tikhonov_solve(np.eye(2), [1,2], lam)
+
+
 if __name__ == "__main__":
-    main()
+    test_known_svd_regularization_identities()
+    test_lcurve_corner_selects_interior_regularization()

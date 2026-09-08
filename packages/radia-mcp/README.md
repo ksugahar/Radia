@@ -1,9 +1,15 @@
 # radia-mcp
 
+Optimization now has a [solver-neutral and electromagnetic two-layer boundary](docs/design/optimization_layers.md), composed through the existing `radia-design` profile.
+
 For fewer client processes, use the [capability packs](docs/design/capability_packs.md).
 They combine related domains with startup-selected profiles while preserving old
 commands. `paper-writing` now includes grant and poster tools as well as slides
 and figures; genre-specific scoring remains separate.
+
+For standard client settings, safe editable updates and behavioral acceptance,
+see the [maintenance procedure](docs/maintenance.md) and
+[known-issue ledger](docs/maintenance-known-issues.md).
 
 [![PyPI](https://img.shields.io/pypi/v/radia-mcp.svg)](https://pypi.org/project/radia-mcp/)
 [![Python](https://img.shields.io/pypi/pyversions/radia-mcp.svg)](https://pypi.org/project/radia-mcp/)

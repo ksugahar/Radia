@@ -71,3 +71,12 @@ def test_nonlinear_lsq_multistart_rejects_wrong_objective_gradient_contract():
     result = evaluate_nonlinear_lsq_multistart(bad)
     assert result["status"] == "needs_attention"
     assert result["checks"]["least_squares_contract_recorded"] is False
+
+
+def test_gate_requires_historical_reproduction_not_just_good_new_runs():
+    summary = _summary()
+    summary["legacy_starts"] = [[1.0, 0.0], [0.0, 1.0]]
+    result = evaluate_nonlinear_lsq_multistart(summary)
+    assert result["checks"]["corrected_starts_are_distinct"]
+    assert result["status"] == "needs_attention"
+    assert not result["checks"]["legacy_zero_multiplicative_start_collapse_detected"]
