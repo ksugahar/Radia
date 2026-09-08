@@ -90,7 +90,8 @@ def test_partial_upload_is_cleaned_on_failure(monkeypatch, tmp_path):
     assert '.bundle' in scripts[-1]
 
 
-def test_generated_script_locks_before_setup_and_always_cleans(monkeypatch, tmp_path):
+@pytest.mark.parametrize('busy', [False, True])
+def test_generated_script_locks_before_setup_and_always_cleans(monkeypatch, tmp_path, busy):
     module = _load_module()
     _mock_candidate(monkeypatch, module, tmp_path)
     scripts = []
@@ -121,9 +122,16 @@ def test_generated_script_locks_before_setup_and_always_cleans(monkeypatch, tmp_
         bundle = Path(bundle_line.split("'", 2)[1])
         bundle.parent.mkdir(parents=True, exist_ok=True)
         bundle.write_bytes(b'partial upload')
+        # Never depend on the host runner (including the one executing this test).
+        process_result = "[pscustomobject]@{ Id = 123 }" if busy else "$null"
+        isolated = (
+            "function Get-Process { param($Name, $ErrorAction) "
+            f"return {process_result} " + "}\n" + isolated
+        )
         file.write_text(isolated, encoding='utf-8')
         result = subprocess.run([pwsh, '-NoProfile', '-File', str(file)],
                                 capture_output=True, text=True, timeout=30)
         assert result.returncode != 0
-        assert 'Git is unavailable' in result.stderr
+        expected = 'CI became busy' if busy else 'Git is unavailable'
+        assert expected in result.stderr
         assert not bundle.exists()
