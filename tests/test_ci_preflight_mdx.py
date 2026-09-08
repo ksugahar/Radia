@@ -85,7 +85,8 @@ def test_partial_upload_is_cleaned_on_failure(monkeypatch, tmp_path):
         raise RuntimeError('upload failed')
     monkeypatch.setattr(module, 'run', fail_upload)
     assert module.main(['--base', 'a' * 40, '--head', 'b' * 40, '--host', 'mdx1']) == 1
-    assert scripts[-1].startswith('Remove-Item -LiteralPath ')
+    assert scripts[-1].startswith('if (Test-Path -LiteralPath ')
+    assert scripts[-1].endswith('exit 0')
     assert '.bundle' in scripts[-1]
 
 
