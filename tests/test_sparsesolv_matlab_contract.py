@@ -1,6 +1,10 @@
 """Keep the formerly omitted compiled module in the parity inventory."""
 import json
 import yaml
+import subprocess
+import shutil
+import os
+import pytest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -35,3 +39,18 @@ def test_matlab_lane_runs_engine_and_retains_json_on_mdx():
     assert "-MatlabMexOnly" in step["run"]
     assert "run_sparsesolv_parity.py --output" in step["run"]
     assert "sparsesolv-matlab.json" in job["steps"][-1]["with"]["path"]
+
+
+def test_missing_diff_base_selects_matlab_without_failing_step(tmp_path):
+    pwsh = shutil.which("pwsh")
+    if not pwsh:
+        pytest.skip("PowerShell runner contract")
+    workflow = yaml.safe_load((ROOT/".github/workflows/sparsesolv.yml").read_text())
+    step = next(s for s in workflow["jobs"]["ams-regression"]["steps"] if s.get("id") == "matlab-impact")
+    script = step["run"].replace("${{ github.event_name }}", "pull_request")
+    output = tmp_path/"output"
+    result = subprocess.run([pwsh, "-NoProfile", "-Command",
+        "function git { $global:LASTEXITCODE=1 }; " + script],
+        env={**os.environ, "GITHUB_OUTPUT": str(output)}, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert output.read_text().strip() == "required=true"
