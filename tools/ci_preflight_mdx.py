@@ -5,6 +5,10 @@ GitHub Actions can only inspect commits already on GitHub. This helper closes
 that gap for ``pre-push``: it sends the candidate commit delta as a Git bundle
 to mdx, checks it out in an isolated temporary worktree, and runs the
 deterministic fast gates there.
+
+Runner availability is checked at admission, including explicit host selection.
+A host-local OS lock protects the shared preflight repository and environment;
+it is not a reservation in GitHub Actions' scheduler.
 """
 
 from __future__ import annotations
@@ -24,8 +28,8 @@ ROOT = Path(__file__).resolve().parents[1]
 ZERO = "0" * 40
 
 
-def select_idle_host(runners: list[dict]) -> str:
-    for host in ("mdx1", "mdx2"):
+def select_idle_host(runners: list[dict], requested: str = "auto") -> str:
+    for host in (("mdx1", "mdx2") if requested == "auto" else (requested,)):
         for runner in runners:
             labels = {label["name"] for label in runner.get("labels", [])}
             if {"mdx", host} <= labels and runner.get("status") == "online" and not runner.get("busy", True):
@@ -94,10 +98,13 @@ def main(argv: list[str] | None = None) -> int:
         help="Select an idle mdx runner, or explicitly choose mdx1/mdx2",
     )
     args = parser.parse_args(argv)
-    if args.host == "auto":
+    try:
         inventory = json.loads(subprocess.check_output(
             ["gh", "api", "repos/ksugahar/Radia/actions/runners"], text=True))
-        args.host = select_idle_host(inventory["runners"])
+        args.host = select_idle_host(inventory["runners"], args.host)
+    except (OSError, RuntimeError, ValueError, subprocess.CalledProcessError) as exc:
+        print(f"mdx preflight unavailable: {exc}", file=sys.stderr)
+        return 1
     print(f"Preflight host: {args.host}")
 
     run_id = uuid.uuid4().hex
@@ -132,6 +139,14 @@ $worktree = '{remote_worktree}'
 $ref = '{remote_ref}'
 $head = '{args.head}'
 $base = '{effective_base}'
+$lock = $null
+try {{
+  # Fail fast on overlapping preflights; the OS releases the lock on process exit.
+  $lock = [IO.File]::Open((Join-Path $root 'preflight.lock'),
+    [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+  if (Get-Process -Name Runner.Worker -ErrorAction SilentlyContinue) {{
+    throw 'CI became busy after host selection; retry after CI finishes'
+  }}
 if (-not (Test-Path -LiteralPath $git)) {{ throw "Git is unavailable at $git" }}
 if (-not (Test-Path -LiteralPath $system_python)) {{ throw "Python is unavailable at $system_python" }}
 if (-not (Test-Path -LiteralPath (Join-Path $repo '.git'))) {{
@@ -146,7 +161,6 @@ if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
 & $git -C $repo worktree prune
 & $git -C $repo worktree add --detach $worktree $head
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
-try {{
   Push-Location $worktree
   try {{
     $venv = Join-Path $root 'fast-venv'
@@ -172,15 +186,33 @@ try {{
     Pop-Location
   }}
 }} finally {{
-  if (Test-Path -LiteralPath $worktree) {{ & $git -C $repo worktree remove --force $worktree }}
-  Remove-Item -LiteralPath $bundle -Force -ErrorAction SilentlyContinue
-  & $git -C $repo update-ref -d $ref
+  try {{
+    if ($null -ne $lock -and (Test-Path -LiteralPath $git)) {{
+      if (Test-Path -LiteralPath $worktree) {{ & $git -C $repo worktree remove --force $worktree }}
+      if (Test-Path -LiteralPath (Join-Path $repo '.git')) {{ & $git -C $repo update-ref -d $ref }}
+    }}
+  }} finally {{
+    try {{
+      Remove-Item -LiteralPath $bundle -Force -ErrorAction SilentlyContinue
+    }} finally {{
+      if ($null -ne $lock) {{ $lock.Dispose() }}
+    }}
+  }}
 }}
 """
         remote_command(script, args.host)
     except (OSError, RuntimeError, subprocess.CalledProcessError) as exc:
         print(f"mdx preflight failed: {exc}", file=sys.stderr)
         return 1
+    finally:
+        # Also remove a partial upload when scp or the remote launcher fails.
+        try:
+            remote_command(
+                f"Remove-Item -LiteralPath '{remote_bundle}' -Force -ErrorAction SilentlyContinue",
+                args.host,
+            )
+        except (OSError, RuntimeError, subprocess.CalledProcessError) as exc:
+            print(f"preflight upload cleanup needs attention: {exc}", file=sys.stderr)
 
     print(f"mdx preflight passed for {args.head}")
     return 0
