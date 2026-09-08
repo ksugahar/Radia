@@ -35,16 +35,24 @@ result-bearing documentation notebooks.
 ```bash
 pip install cubit-mesh-export
 cubit-plugin-install
-cubit-smoke-test
 ```
 
 `cubit-plugin-install` deploys the plugin binaries, the Netgen DLLs, and the
 Cubit-side Python helpers (`cubit_helpers/add_kelvin.py`,
 `cubit_helpers/auto_kelvin_entry.py`) into your Coreform Cubit 2025.12 profile.
-`cubit-smoke-test` then drives a full round trip — mesh a sample, export it, and
-validate that the `.vol` is solver-ready — so a broken install fails here rather
-than inside your first real model.
 Use `cubit-plugin-install --all-users` for a shared lab machine.
+
+For a standalone round-trip check, supply your own Cubit journal:
+
+```bash
+cubit-smoke-test --jou path/to/sample.jou
+```
+
+The journal must produce the expected material and boundary labels; adjust
+`--expect` and `--expect-materials` for its label contract. The check exports a
+`.vol` and runs the solver-ready validation gate, including NGSolve reload.
+The no-argument `cubit-smoke-test` currently requires Radia's
+`ih_bem_sample.jou`; that fixture is not bundled in the standalone package.
 
 What you get depends on whether `radia` is installed alongside it:
 
@@ -65,11 +73,12 @@ cubit-plugin-install
 ```
 
 > **If Cubit exits with code 2 while the export itself succeeded**, check for a
-> machine-wide `CUBIT_PLUGIN_DIR` environment variable.  Cubit appends it as a
-> `-commandplugindir` argument and then reports both the flag and its value as
-> files it could not open, which turns a clean run into a non-zero exit.  The
-> plugin still loads and the `.vol` is still valid — verify with `check-vol`
-> rather than trusting the exit code.
+> machine-wide `CUBIT_PLUGIN_DIR` environment variable. On LAB this caused Cubit
+> to receive a `-commandplugindir` argument and report both the flag and its
+> value as files it could not open. This is a diagnosed environment issue, not
+> a reason to accept every exit code 2. Inspect the log and correct the stale
+> setting, then rerun. An exported `.vol` must still pass `check-vol`; a valid
+> output alone does not prove the entire Cubit command completed successfully.
 
 ### Upgrade
 
