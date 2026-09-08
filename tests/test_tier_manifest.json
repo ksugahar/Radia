@@ -1,6 +1,9 @@
 {
   "schema": "radia.test-tier-manifest.v1",
   "impact_rules": {
+    "src/matlab/radia_mex.cpp": ["tests/test_sparsesolv_matlab_contract.py"],
+    "matlab/+radia/+sparsesolv/": ["tests/test_sparsesolv_matlab_contract.py"],
+    "matlab/python_api_parity_manifest.json": ["tests/test_sparsesolv_matlab_contract.py"],
     "Build.ps1": ["tests/test_build_failure_propagation.py"],
     ".github/workflows/sparsesolv.yml": ["tests/test_sparsesolv_ci_contract.py"],
     "tools/ci_preflight_mdx.py": ["tests/test_ci_preflight_mdx.py"],
