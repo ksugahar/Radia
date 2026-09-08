@@ -85,7 +85,7 @@ def main(n_trials=40):
             A = _response(fes, targets, theta, phi)
             M, N = A.shape
             res = aca_tsvd(M, N, lambda i, j: A[i, j], modes=min(M, N),
-                           kmax=min(M, N), aca_eps=1e-12, method=3)
+                           kmax=min(M, N), aca_eps=1e-12)
             lam = pseudo_inverse_solve(res, B_two)
             fit = float(np.linalg.norm(A @ lam - B_two)
                         / (np.linalg.norm(B_two) + 1e-30))
