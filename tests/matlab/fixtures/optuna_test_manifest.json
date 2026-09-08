@@ -201,6 +201,13 @@
       "file": "test_optuna_reliability.m",
       "oracle": null,
       "scope": "MATLAB MAT-file transaction, recovery, and sampler-state persistence",
+      "test": "testStateCountCacheTracksMATLABStorageLifecycle"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_reliability.m",
+      "oracle": null,
+      "scope": "MATLAB MAT-file transaction, recovery, and sampler-state persistence",
       "test": "testAtomicStorageSchemaAndBackupRecovery"
     },
     {
