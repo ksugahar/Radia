@@ -169,7 +169,7 @@ def sweep(fes, mesh, targets, Btarget):
         A = response_full(fes, targets, t)
         M, N = A.shape
         res = aca_tsvd(M, N, lambda i, j: A[i, j],
-                       modes=min(M, N), kmax=min(M, N), aca_eps=1e-12, method=3)
+                       modes=min(M, N), kmax=min(M, N), aca_eps=1e-12)
         lam = pseudo_inverse_solve(res, Btarget)
         g[k] = current_norm(fes, mesh, lam, t)
         fit[k] = np.linalg.norm(A @ lam - Btarget) / (np.linalg.norm(Btarget) + 1e-30)

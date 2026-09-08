@@ -50,7 +50,7 @@ def solve_lambda(maxh=0.03):
     targets = [(0.0, 0.0, float(zz)) for zz in zt]
     A = assemble_response(mesh, fes, targets)
     res = aca_tsvd(len(targets), fes.ndof, lambda i, j: A[i, j],
-                   modes=len(targets), kmax=len(targets), aca_eps=1e-10, method=3)
+                   modes=len(targets), kmax=len(targets), aca_eps=1e-10)
     lam = pseudo_inverse_solve(res, np.full(len(targets), B0))
     gf = GridFunction(fes)
     gf.vec.FV().NumPy()[:] = lam
