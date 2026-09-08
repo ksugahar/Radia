@@ -208,7 +208,8 @@ if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
         # Also remove a partial upload when scp or the remote launcher fails.
         try:
             remote_command(
-                f"Remove-Item -LiteralPath '{remote_bundle}' -Force -ErrorAction SilentlyContinue",
+                f"if (Test-Path -LiteralPath '{remote_bundle}') {{ "
+                f"Remove-Item -LiteralPath '{remote_bundle}' -Force -ErrorAction Stop }}\nexit 0",
                 args.host,
             )
         except (OSError, RuntimeError, subprocess.CalledProcessError) as exc:
