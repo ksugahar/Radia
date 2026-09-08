@@ -3918,6 +3918,65 @@
     ],
     "seed": 157
   },
+  "native_tpe_history_selection": {
+    "cases": [
+      {
+        "direction": "minimize",
+        "gamma": 0.1,
+        "proposal": -1.878277841781468
+      },
+      {
+        "direction": "minimize",
+        "gamma": 1.0,
+        "proposal": -1.3089597204330237
+      },
+      {
+        "direction": "maximize",
+        "gamma": 0.1,
+        "proposal": -0.7698765177992555
+      },
+      {
+        "direction": "maximize",
+        "gamma": 1.0,
+        "proposal": -1.3089597204330237
+      }
+    ],
+    "history": [
+      {
+        "value": 0.0,
+        "x": -1.75
+      },
+      {
+        "value": 1.0,
+        "x": -1.25
+      },
+      {
+        "value": 2.0,
+        "x": -0.75
+      },
+      {
+        "value": 0.0,
+        "x": -0.25
+      },
+      {
+        "value": 1.0,
+        "x": 0.25
+      },
+      {
+        "value": 2.0,
+        "x": 0.75
+      },
+      {
+        "value": 0.0,
+        "x": 1.25
+      },
+      {
+        "value": 1.0,
+        "x": 1.75
+      }
+    ],
+    "seed": 149
+  },
   "nsgaii_crossovers_seed_73": {
     "blxalpha": [
       {

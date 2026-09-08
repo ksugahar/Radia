@@ -237,6 +237,9 @@ struct OptunaRandomStateHandle {
     bool has_gauss = false;
     double gauss = 0.0;
     std::vector<OptunaTPEHistoryTrial> tpe_history;
+    // Computation cache only; MATLAB tables own the durable trial history.
+    std::unordered_map<int, std::size_t> tpe_history_rows;
+    std::vector<std::size_t> tpe_chronological;
 };
 #endif
 
@@ -2899,7 +2902,10 @@ void OptunaTPEHistoryReset(int nlhs, mxArray*[], int nrhs,
                            const mxArray* prhs[]) {
     CheckArity(nrhs, 2, nlhs, 0,
         "radia_mex('optuna.tpe.history.reset', handle)");
-    OptunaRandomState(Handle(prhs[1])).tpe_history.clear();
+    auto& state = OptunaRandomState(Handle(prhs[1]));
+    state.tpe_history.clear();
+    state.tpe_history_rows.clear();
+    state.tpe_chronological.clear();
 }
 
 void OptunaTPEHistoryAppendComplete(int nlhs, mxArray*[], int nrhs,
@@ -2927,15 +2933,25 @@ void OptunaTPEHistoryAppendComplete(int nlhs, mxArray*[], int nrhs,
                 "TPE history distribution IDs must be unique positive integers with finite values");
         trial.parameters.emplace(identifier, values[index]);
     }
-    auto found = std::find_if(
-        state.tpe_history.begin(), state.tpe_history.end(),
-        [trial_number](const OptunaTPEHistoryTrial& existing) {
-            return existing.trial_number == trial_number;
-        });
-    if (found == state.tpe_history.end())
+    const auto found = state.tpe_history_rows.find(trial_number);
+    if (found == state.tpe_history_rows.end()) {
+        const std::size_t row = state.tpe_history.size();
         state.tpe_history.push_back(std::move(trial));
-    else
-        *found = std::move(trial);
+        state.tpe_history_rows.emplace(trial_number, row);
+        if (state.tpe_chronological.empty() ||
+            state.tpe_history[state.tpe_chronological.back()].trial_number < trial_number) {
+            state.tpe_chronological.push_back(row);
+        } else {
+            const auto position = std::lower_bound(
+                state.tpe_chronological.begin(), state.tpe_chronological.end(), trial_number,
+                [&](std::size_t index, int number) {
+                    return state.tpe_history[index].trial_number < number;
+                });
+            state.tpe_chronological.insert(position, row);
+        }
+    } else {
+        state.tpe_history[found->second] = std::move(trial);
+    }
 }
 
 void OptunaTPEBestGroupedHistory(int nlhs, mxArray* plhs[], int nrhs,
@@ -2983,26 +2999,26 @@ void OptunaTPEBestGroupedHistory(int nlhs, mxArray* plhs[], int nrhs,
     if (state.tpe_history.empty())
         BadArgument("grouped TPE history has no completed trials");
 
-    std::vector<std::size_t> chronological(state.tpe_history.size());
-    std::iota(chronological.begin(), chronological.end(), 0);
-    std::stable_sort(
-        chronological.begin(), chronological.end(),
-        [&](std::size_t left, std::size_t right) {
-            return state.tpe_history[left].trial_number <
-                   state.tpe_history[right].trial_number;
-        });
+    const auto& chronological = state.tpe_chronological;
     auto ranked = chronological;
-    std::stable_sort(
-        ranked.begin(), ranked.end(),
-        [&](std::size_t left, std::size_t right) {
-            const double lhs = state.tpe_history[left].objective;
-            const double rhs = state.tpe_history[right].objective;
-            return minimize ? lhs < rhs : lhs > rhs;
-        });
     const int finished = static_cast<int>(ranked.size());
     const int good_count = std::max(
         1, std::min(finished, std::min(
             max_good, static_cast<int>(std::ceil(gamma * finished)))));
+    // Rustuna's partial-selection design avoids sorting the whole history.
+    // Unlike an arbitrary unstable tie, use trial number as a secondary key
+    // to preserve Optuna's stable chronological split and RNG observations.
+    // Reference: optuna/rustuna ebb5e6a, rustuna_sampler/src/tpe/sampler.rs.
+    if (good_count < finished) {
+        std::nth_element(ranked.begin(), ranked.begin() + good_count, ranked.end(),
+            [&](std::size_t left, std::size_t right) {
+                const auto& lhs = state.tpe_history[left];
+                const auto& rhs = state.tpe_history[right];
+                if (lhs.objective == rhs.objective)
+                    return lhs.trial_number < rhs.trial_number;
+                return minimize ? lhs.objective < rhs.objective : lhs.objective > rhs.objective;
+            });
+    }
     std::vector<unsigned char> globally_good(state.tpe_history.size(), 0);
     for (int index = 0; index < good_count; ++index)
         globally_good[ranked[static_cast<std::size_t>(index)]] = 1;
@@ -3014,18 +3030,24 @@ void OptunaTPEBestGroupedHistory(int nlhs, mxArray* plhs[], int nrhs,
         const std::size_t group_dimension = end - begin;
         std::vector<double> good;
         std::vector<double> bad;
+        good.reserve(static_cast<std::size_t>(good_count) * group_dimension);
+        bad.reserve((state.tpe_history.size() - good_count) * group_dimension);
+        std::vector<double> row_values(group_dimension);
         for (std::size_t history_index : chronological) {
             const auto& trial = state.tpe_history[history_index];
             bool present = true;
-            for (std::size_t dim = begin; dim < end; ++dim)
-                present = present &&
-                    trial.parameters.count(distribution_ids[dim]) != 0;
+            for (std::size_t dim = begin; dim < end; ++dim) {
+                const auto parameter = trial.parameters.find(distribution_ids[dim]);
+                if (parameter == trial.parameters.end()) {
+                    present = false;
+                    break;
+                }
+                row_values[dim - begin] = parameter->second;
+            }
             if (!present)
                 continue;
             auto& target = globally_good[history_index] ? good : bad;
-            for (std::size_t dim = begin; dim < end; ++dim)
-                target.push_back(
-                    trial.parameters.at(distribution_ids[dim]));
+            target.insert(target.end(), row_values.begin(), row_values.end());
         }
         const std::size_t group_observations =
             (good.size() + bad.size()) / group_dimension;
