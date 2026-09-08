@@ -1007,6 +1007,7 @@ def _kill_mcp_local():
 
 
 def _deploy_lab():
+    """Deploy editable packages and run the Cubit 2025.12+ -batch smoke test."""
     step("Phase 8 (LAB): kill, install from NAS, plugin install, verify, smoke")
     repo = _editable_repo_lab()
     rc = _verify_local_release_source(repo, _release_head())
@@ -1089,8 +1090,7 @@ def _check_pypi_propagation(versions, *, include_mcp=True):
     while CI is still publishing the new one.
     """
     info("checking PyPI propagation...")
-    packages = [("radia", versions["radia"]),
-                ("cubit-mesh-export", versions["cubit-mesh-export"])]
+    packages = [("radia", versions["radia"])]
     if include_mcp:
         packages.append(("radia-mcp", versions["radia-mcp"]))
     for pkg, want in packages:
@@ -1106,8 +1106,8 @@ def _check_pypi_propagation(versions, *, include_mcp=True):
     return 0
 
 
-def _deploy_pypi(ssh_host, label, *, include_mcp=True, python_cmd="python", cubit_optional=False):
-    """PyPI-install recipe for downstream Cubit-equipped machines.
+def _deploy_pypi(ssh_host, label, *, include_mcp=True, python_cmd="python"):
+    """PyPI-install recipe for compute consumers, never Cubit deployment.
 
     Used for mdx1 and mdx2. Each is a compute
     consumer and intentionally skips the MCP server package -- and
@@ -1115,24 +1115,20 @@ def _deploy_pypi(ssh_host, label, *, include_mcp=True, python_cmd="python", cubi
 
     Recipe:
       1. PyPI propagation check (refuse if stale)
-      2. force-kill Cubit + mcp-server-*.exe (otherwise pip install blocks
+      2. stop mcp-server-*.exe (otherwise pip install blocks
          on locked Scripts/mcp-server-*.exe)
       3. pip install --upgrade --no-cache-dir from PyPI, pinned to the
          repo's current versions
-      4. cubit-plugin-install --all-users (regular-file deploy of the
-         freshly-installed wheel's plugin; skipped on optional-Cubit
-         targets when Cubit is not installed)
-      5. cubit-plugin-install --verify-only (sha256 sanity)
-      6. cubit-smoke-test (Cubit 2025.12+ -batch run on ih_bem_sample.jou)
+    Cubit packages and plugins are deployed only by the LAB/100 editable lane.
+    Existing compute-host Cubit installations are neither used nor removed.
     """
-    step(f"Phase 8 ({label}): kill + PyPI install + plugin install + verify + smoke (over SSH)")
+    step(f"Phase 8 ({label}): compute PyPI install (over SSH; no Cubit)")
     v = _read_repo_versions()
     rc = _check_pypi_propagation(v, include_mcp=include_mcp)
     if rc != 0:
         return rc
 
     v_radia = v["radia"]
-    v_cme   = v["cubit-mesh-export"]
     v_mcp   = v["radia-mcp"]
     mcp_pin = f' "radia-mcp=={v_mcp}"' if include_mcp else ""
     # mdx is a compute consumer: radia-mcp must NOT be present there.  Older
@@ -1145,13 +1141,11 @@ def _deploy_pypi(ssh_host, label, *, include_mcp=True, python_cmd="python", cubi
         "" if include_mcp
         else f"{python_cmd} -m pip uninstall -y radia-mcp\n"
     )
-    cubit_optional_ps = "$true" if cubit_optional else "$false"
 
     ps_block = f"""
 $ErrorActionPreference = 'Continue'
 Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {{
   $_.ProcessId -ne $PID -and (
-    $_.Name -eq 'coreform_cubit.exe' -or $_.Name -eq 'cubit.exe' -or
     $_.Name -like 'mcp-server*' -or
     $_.Name -like 'radia-*' -or $_.Name -like 'radia_*' -or
     ((($_.Name -eq 'python.exe') -or ($_.Name -eq 'pythonw.exe')) -and
@@ -1171,29 +1165,7 @@ Start-Sleep -Seconds 2
         # different binary (ef49da18...). Force-reinstall guarantees the
         # PyPI wheel's bytes overwrite whatever is on disk, which is the
         # whole point of "PyPI is the canonical channel" in the 2-tier policy.
-{python_cmd} -m pip install --upgrade --force-reinstall --no-deps --no-cache-dir "radia[cubit]=={v_radia}" "cubit-mesh-export=={v_cme}"{mcp_pin}
-if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
-$pyExe = (& {python_cmd} -c "import sys; print(sys.executable)").Trim()
-if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
-$scriptDir = Join-Path (Split-Path -Parent $pyExe) "Scripts"
-$env:PATH = $scriptDir + ";" + $env:PATH
-$cubitOptional = {cubit_optional_ps}
-$cubitExeCandidates = @()
-if ($env:CUBIT_PATH) {{ $cubitExeCandidates += (Join-Path $env:CUBIT_PATH "coreform_cubit.exe") }}
-$cubitExeCandidates += "C:\\Program Files\\Coreform Cubit 2025.12\\bin\\coreform_cubit.exe"
-$cubitFound = $false
-foreach ($candidate in $cubitExeCandidates) {{
-  if (Test-Path $candidate) {{ $cubitFound = $true; break }}
-}}
-if (-not $cubitFound -and $cubitOptional) {{
-  Write-Host "[WARN] Coreform Cubit 2025.12+ not found; skipping Cubit plugin install on optional-Cubit target."
-  exit 0
-}}
-cubit-plugin-install --all-users
-if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
-cubit-plugin-install --verify-only
-if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
-cubit-smoke-test
+{python_cmd} -m pip install --upgrade --force-reinstall --no-deps --no-cache-dir "radia=={v_radia}"{mcp_pin}
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
 """
     encoded = base64.b64encode(ps_block.encode("utf-16le")).decode("ascii")
@@ -1210,7 +1182,7 @@ def _deploy_100():
 
 
 def _deploy_mdx(host):
-    return _deploy_pypi(host, host, include_mcp=False, cubit_optional=True)
+    return _deploy_pypi(host, host, include_mcp=False)
 
 
 def cmd_phase8(args):
@@ -1253,7 +1225,7 @@ def cmd_phase8(args):
 
 
 def cmd_phase8e(args):
-    """Upgrade mdx1 and mdx2 from PyPI (radia + cubit-mesh-export only)."""
+    """Upgrade mdx1 and mdx2 from PyPI (radia only, no Cubit or MCP)."""
     for host in (SSH_MDX1, SSH_MDX2):
         rc = _deploy_mdx(host)
         if rc != 0:
@@ -1293,6 +1265,17 @@ for r in ["panels/register_toolbar.py",
 
 
 CROSS_MACHINE_PROBE_NO_MCP = CROSS_MACHINE_PROBE.replace(
+    "import radia, cubit_mesh_export", "import radia",
+).replace(
+    'print(f"VER cubit-mesh-export  = {cubit_mesh_export.__version__}")',
+    'print("VER cubit-mesh-export  = N/A")',
+).replace(
+    'print(f"COMPAT cme  -> radia   = [{cubit_mesh_export.COMPAT_RADIA_MIN}, {cubit_mesh_export.COMPAT_RADIA_MAX}]")',
+    'print("COMPAT cme  -> radia   = N/A")',
+).replace(
+    'print(f"COMPAT rad  -> cme     = [{radia.COMPAT_CUBIT_MESH_EXPORT_MIN}, {radia.COMPAT_CUBIT_MESH_EXPORT_MAX}]")',
+    'print("COMPAT rad  -> cme     = N/A")',
+).replace(
     "print(f\"VER radia-mcp          = {ver('radia-mcp')}\")",
     'print("VER radia-mcp          = N/A")',
 )
