@@ -241,7 +241,10 @@ classdef Trial < radia.optuna.BaseTrial
         function [key,registry]=claimKey(registry,name)
             %CLAIMKEY Preserve distinct original names after makeValidName.
             original=string(name);
-            base=char(matlab.lang.makeValidName(original));
+            base=char(original);
+            if ~isvarname(base)
+                base=char(matlab.lang.makeValidName(original));
+            end
             if isfield(registry,base)
                 if string(registry.(base))==original
                     key=base;
@@ -764,9 +767,25 @@ classdef Trial < radia.optuna.BaseTrial
                 key=char(key);
             end
             available = isfield(obj.RelativeParams, key) && ...
-                isfield(obj.RelativeDistributions, key) && ...
-                radia.optuna.internal.DistributionCodec.equivalent( ...
-                obj.RelativeDistributions.(key), distribution);
+                isfield(obj.RelativeDistributions, key);
+            if available && ...
+                    ~radia.optuna.internal.DistributionCodec.equivalent( ...
+                    obj.RelativeDistributions.(key), distribution)
+                % Upstream accepts compatible changed bounds when the
+                % already sampled value is contained in the new space.
+                radia.optuna.check_distribution_compatibility( ...
+                    obj.RelativeDistributions.(key),distribution);
+                proposed=obj.RelativeParams.(key);
+                available=proposed>=distribution.low && ...
+                    proposed<=distribution.high;
+                if distribution.kind=="integer"
+                    available=available && ...
+                        mod(proposed-distribution.low,distribution.step)==0;
+                elseif isfinite(distribution.step)
+                    grid=(proposed-distribution.low)/distribution.step;
+                    available=available && abs(grid-round(grid))<1e-8;
+                end
+            end
             if available
                 value = obj.RelativeParams.(key);
                 if distribution.kind == "categorical"

@@ -669,6 +669,31 @@ release evidence):
 - [x] radia-mcp MATLAB difference-gate update
 - [ ] version, CI, review, merge, tag, PyPI, and release-quad
 
+### Performance follow-up (2026-09-08)
+
+Native sequential TPE now updates the non-group intersection from completed
+trial distributions, valid parameter names bypass redundant name conversion,
+and dataframe columns are constructed together. The seeded upstream fixture
+includes changing bounds, parameter removal/reintroduction, and an empty trial
+to guard cache invalidation.
+The case also exposed and fixed relative-proposal reuse across changed bounds,
+out-of-range historical observation removal, and per-parameter rather than
+global trial ranking. These are upstream behavior corrections, not algorithm
+changes to obtain a faster benchmark. See
+`validation_test/optimization/results_optuna50_followup_lab_20260908.json` for
+all fresh-Engine measurements. Before the correctness corrections, scalar
+measured approximately 1,280 trials/s and grouped 616--666 trials/s. Final code
+measured 1,144/473 trials/s versus Python 874/282, with 1,000-row export
+5.191 ms versus 4.885 ms. Earlier peaks are not final-code acceptance evidence.
+The final implementation passes 75 upstream-oracle and 24 table/reliability/core
+MATLAB tests, with 11 package Python tests passing.
+
+Historical 4.9 LAB scalar performance was approximately 1,375 trials/s.
+Do not declare performance complete just because 5.0 exceeds Python. Establish
+a matched-host/prewarm historical baseline and run the compute-host gate;
+the current LAB measurements include host-load variation and are not release
+acceptance. Preserve all repeated results rather than selecting the fastest.
+
 ## 19. Definition of done
 
 The implementation is complete only when:
