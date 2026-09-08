@@ -117,7 +117,7 @@ def main():
         Btar = np.full(M, B0)
 
         res = aca_tsvd(M, ndof, lambda i, j: A[i, j],
-                       modes=M, kmax=M, aca_eps=1e-10, method=3)
+                       modes=M, kmax=M, aca_eps=1e-10)
         Tco = pseudo_inverse_solve(res, Btar)
 
         fit_res = np.linalg.norm(A @ Tco - Btar) / np.linalg.norm(Btar)
