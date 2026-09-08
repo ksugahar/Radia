@@ -437,28 +437,40 @@ echo ========================================
 echo   Building cln_core
 echo ========================================
 "$CMAKE_EXE" --build . --config Release --target cln_core -j
-if errorlevel 1 ( echo WARNING: cln_core build failed )
+if errorlevel 1 (
+    echo ERROR: cln_core build failed
+    exit /b 1
+)
 
 echo.
 echo ========================================
 echo   Building sparsesolv_ngsolve
 echo ========================================
 "$CMAKE_EXE" --build . --config Release --target sparsesolv_ngsolve -j
-if errorlevel 1 ( echo WARNING: sparsesolv_ngsolve build failed )
+if errorlevel 1 (
+    echo ERROR: sparsesolv_ngsolve build failed
+    exit /b 1
+)
 
 echo.
 echo ========================================
 echo   Building axifem
 echo ========================================
 "$CMAKE_EXE" --build . --config Release --target axifem -j
-if errorlevel 1 ( echo WARNING: axifem build failed )
+if errorlevel 1 (
+    echo ERROR: axifem build failed
+    exit /b 1
+)
 
 echo.
 echo ========================================
 echo   Building _equation (LaTeX equations)
 echo ========================================
 "$CMAKE_EXE" --build . --config Release --target _equation -j
-if errorlevel 1 ( echo WARNING: _equation build failed )
+if errorlevel 1 (
+    echo ERROR: _equation build failed
+    exit /b 1
+)
 
 echo.
 echo ========================================
@@ -483,8 +495,15 @@ if exist "%CUBIT_DIR%\CubitConfig.cmake" (
     rem so cubit_mesh_curver.pyd builds against pip-installed Netgen + pybind11.
     rem .ccm/.ccl in build-ccm continue to use compact_netgen (no DLL deps).
     "$CMAKE_EXE" -G Ninja -DCMAKE_BUILD_TYPE=Release -DPython3_EXECUTABLE="$PythonExecutable" -Dpybind11_DIR="$Pybind11CMakeDir" -DCubit_DIR="%CUBIT_DIR%" -DNETGEN_DIR="%NETGEN_DIR%" -DCOMPACT_NETGEN_OVERRIDES=NONE "%CUBIT_PLUGIN_SRC%"
+    if errorlevel 1 (
+        echo ERROR: cubit_mesh_curver configuration failed
+        exit /b 1
+    )
     "$CMAKE_EXE" --build . --config Release --target cubit_mesh_curver -j
-    if errorlevel 1 ( echo WARNING: cubit_mesh_curver build failed )
+    if errorlevel 1 (
+        echo ERROR: cubit_mesh_curver build failed
+        exit /b 1
+    )
 
     rem ========================================
     rem   Building cubit_mesh_export.ccm (APREPRO commands; no Qt deps)
@@ -501,8 +520,15 @@ if exist "%CUBIT_DIR%\CubitConfig.cmake" (
     if not exist "!CUBIT_CCM_BUILD!" mkdir "!CUBIT_CCM_BUILD!"
     cd /d "!CUBIT_CCM_BUILD!"
     "$CMAKE_EXE" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DPython3_EXECUTABLE="$PythonExecutable" -Dpybind11_DIR="$Pybind11CMakeDir" -DCubit_DIR="%CUBIT_DIR%" -DNETGEN_DIR="%NETGEN_DIR%" "%CUBIT_PLUGIN_SRC%"
+    if errorlevel 1 (
+        echo ERROR: cubit_mesh_export_ccm configuration failed
+        exit /b 1
+    )
     "$CMAKE_EXE" --build . --config Release --target cubit_mesh_export_ccm -j
-    if errorlevel 1 ( echo WARNING: cubit_mesh_export_ccm build failed )
+    if errorlevel 1 (
+        echo ERROR: cubit_mesh_export_ccm build failed
+        exit /b 1
+    )
 
     cd /d "$BUILD_DIR"
 ) else (
