@@ -25,6 +25,18 @@ from ngsolve.krylovspace import CGSolver
 # Fixtures
 # ============================================================================
 
+@pytest.mark.parametrize("is_complex", [False, True])
+def test_operator_scalar_type_matches_native_vectors(is_complex):
+    mesh = Mesh(unit_square.GenerateMesh(maxh=0.5))
+    space = H1(mesh, order=1, complex=is_complex)
+    u, v = space.TnT()
+    a = BilinearForm(space)
+    a += u*v*dx
+    a.Assemble()
+    for operator in (ICPreconditioner(a.mat), SparseSolvSolver(a.mat)):
+        assert operator.is_complex == is_complex
+        assert operator.CreateColVector().is_complex == is_complex
+
 @pytest.fixture
 def poisson_2d():
     """2D Poisson problem with exact solution."""

@@ -809,6 +809,7 @@ if(RADIA_BUILD_MATLAB_MEX)
 		${NGSOLVE_COMPAT_INC}
 	)
 	target_include_directories(radia_mex PRIVATE
+		${EXT_DIR}/sparsesolv/include
 		${CMAKE_CURRENT_SOURCE_DIR}/src/matlab
 		${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink
 		${CORE_DIR}
@@ -821,6 +822,8 @@ if(RADIA_BUILD_MATLAB_MEX)
 		${NGSolve_INCLUDE_DIRS}
 	)
 	target_compile_definitions(radia_mex PRIVATE
+		SPARSESOLV_USE_NGSOLVE_TASKMANAGER
+		SPARSESOLV_USE_MKL
 		_CRT_SECURE_NO_WARNINGS
 		_GM_WITHOUT_BASE
 		ALPHA__DLL__
