@@ -5,6 +5,15 @@ on:
     branches: [main]
     paths:
       - 'src/ext/sparsesolv/**'
+      - 'src/matlab/radia_mex.cpp'
+      - 'matlab/+radia/+sparsesolv/**'
+      - 'matlab/+radia/+python/sparsesolv.m'
+      - 'matlab/+radia/+python/electromagnetValidation.m'
+      - 'matlab/+radia/+python/esrfExamples.m'
+      - 'matlab/+radia/+python/staticElectromagnet.m'
+      - 'matlab/python_api_parity_manifest.json'
+      - 'tests/matlab/*sparsesolv*'
+      - 'validation_test/ngsolve_matlab_parity/run_sparsesolv_parity.py'
       - 'src/radia/__init__.py'
       - 'CMakeLists.txt'
       - 'Build.ps1'
@@ -17,6 +26,15 @@ on:
     branches: [main]
     paths:
       - 'src/ext/sparsesolv/**'
+      - 'src/matlab/radia_mex.cpp'
+      - 'matlab/+radia/+sparsesolv/**'
+      - 'matlab/+radia/+python/sparsesolv.m'
+      - 'matlab/+radia/+python/electromagnetValidation.m'
+      - 'matlab/+radia/+python/esrfExamples.m'
+      - 'matlab/+radia/+python/staticElectromagnet.m'
+      - 'matlab/python_api_parity_manifest.json'
+      - 'tests/matlab/*sparsesolv*'
+      - 'validation_test/ngsolve_matlab_parity/run_sparsesolv_parity.py'
       - 'src/radia/__init__.py'
       - 'CMakeLists.txt'
       - 'Build.ps1'
@@ -38,8 +56,22 @@ jobs:
   ams-regression:
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: [self-hosted, Windows, X64, mdx]
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Select MATLAB parity impact
+        id: matlab-impact
+        shell: pwsh
+        run: |
+          $changed = @(git diff --name-only HEAD~1 HEAD)
+          $required = $LASTEXITCODE -ne 0 -or '${{ github.event_name }}' -eq 'workflow_dispatch'
+          $required = $required -or [bool]($changed -match '^(src/ext/sparsesolv/|src/matlab/|matlab/\+radia/\+sparsesolv/|tests/matlab/.*sparsesolv|validation_test/ngsolve_matlab_parity/run_sparsesolv|CMakeLists.txt|Build.ps1|\.github/workflows/sparsesolv.yml)')
+          $required = $required -or [bool]($changed -match '^matlab/(python_api_parity_manifest.json|\+radia/\+python/(sparsesolv|electromagnetValidation|esrfExamples|staticElectromagnet)\.m)')
+          "required=$($required.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          exit 0
 
       - name: Create isolated native environment
         shell: pwsh
@@ -78,6 +110,21 @@ jobs:
           python tools/run_test_tier.py --profile sparsesolv --junitxml "$env:RUNNER_TEMP\sparsesolv-results.xml"
           exit $LASTEXITCODE
 
+      - name: Build and verify native MATLAB parity
+        if: steps.matlab-impact.outputs.required == 'true'
+        shell: pwsh
+        env:
+          PYTHONPATH: '${{ github.workspace }}\src'
+        run: |
+          & .\Build.ps1 -MatlabMexOnly
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $matlab = Get-ChildItem "$env:ProgramFiles\MATLAB" -Directory | Sort-Object Name -Descending | Select-Object -First 1
+          if (-not $matlab) { throw 'MATLAB installation required for native parity' }
+          python -m pip install (Join-Path $matlab.FullName 'extern\engines\python')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python validation_test/ngsolve_matlab_parity/run_sparsesolv_parity.py --output "$env:RUNNER_TEMP\sparsesolv-matlab.json"
+          exit $LASTEXITCODE
+
       - name: Upload solver test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -85,5 +132,6 @@ jobs:
           name: sparsesolv-results
           path: |
             ${{ runner.temp }}/sparsesolv-results.xml
+            ${{ runner.temp }}/sparsesolv-matlab.json
             build-msvc/build.log
           if-no-files-found: warn
