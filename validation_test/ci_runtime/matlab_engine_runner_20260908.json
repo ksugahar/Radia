@@ -1,0 +1,21 @@
+{
+  "schema": "radia.matlab-engine-runner-observation.v1",
+  "date": "2026-09-08",
+  "workflow_run": "https://github.com/ksugahar/Radia/actions/runs/34170815923",
+  "diagnostic_commit_short": "d795fc6c2",
+  "engine": "R2026a bundled extern/engines/python/dist",
+  "startup_options": "-nodesktop",
+  "timeout_seconds": 60,
+  "observations": [
+    {"host": "mdx1", "account": "NT AUTHORITY\\SYSTEM", "result": "startup_timeout"},
+    {"host": "mdx2", "account": "NT AUTHORITY\\SYSTEM", "result": "startup_timeout"},
+    {"host": "mdx1", "account": "mdx1\\administrator", "result": "pass", "sqrt_4": 2.0, "shutdown_pass": true},
+    {"host": "mdx2", "account": "mdx2\\administrator", "result": "pass", "sqrt_4": 2.0, "shutdown_pass": true}
+  ],
+  "limitations": [
+    "This is Engine infrastructure acceptance, not MEX or numerical solver validation.",
+    "mdx2 was observed after OS reboot with no MATLAB or ServiceHost before the successful rerun; prior interactive login is not excluded.",
+    "mdx2 runner was started explicitly; automatic service startup after reboot is not certified.",
+    "Account change correlates with CI success; the exact secure-store failure mechanism was not independently established."
+  ]
+}

@@ -52,6 +52,27 @@ build readiness: also run the Optuna native build lane. Keep pip build
 dependencies in the workflow's run-local venv. Remove retired runner
 registrations after their replacements are verified online.
 
+MATLAB-capable mdx runner services use `.\Administrator`, the current
+MATLAB-authenticated account, not SYSTEM. Configure credentials through the
+Windows Services Log On UI, never chat, command arguments, or committed files.
+The visible service is `GitHub Actions Runner (ksugahar-Radia.mdx1-ci)`
+(or mdx2-ci). An alternate least-privilege account requires its own MATLAB
+authentication and service-context acceptance; administrator privilege itself
+is not the MATLAB requirement.
+
+After runner reinstall/account changes, manually dispatch
+`matlab-engine-diagnostic.yml`. It tests both actual runner accounts with a
+dedicated Python Engine session, calculation and shutdown, with a 60-second
+owned-process-tree timeout. Do not add this license-dependent diagnostic to
+normal push/tag CI. SSH success or an open RDP MATLAB is not runner acceptance.
+The initial SYSTEM failure and subsequent account-change success are recorded
+in `validation_test/ci_runtime/matlab_engine_runner_20260908.json`.
+
+mdx1 is scheduled for retirement in March 2027. Before retiring it, obtain the
+replacement-target decision and update runner routing and release-quad target
+contracts together; verify MATLAB authentication and the native build on the
+replacement. Do not silently reduce the four-host gate or invent a replacement.
+
 ## Parallel WIP-Safe Editable Source
 
 Do not stash, clean, reset, or rebase a shared LAB worktree just to release.

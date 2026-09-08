@@ -1,9 +1,7 @@
-name: MATLAB Engine SYSTEM diagnostic
+name: MATLAB Engine runner diagnostic
 
 on:
-  push:
-    branches: [codex/mdx-engine-system-probe]
-    paths: [.github/workflows/matlab-engine-diagnostic.yml]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -29,7 +27,7 @@ jobs:
         run: |
           @'
           import subprocess, sys, tempfile
-          code = """
+          code = r"""
           import sys
           sys.path.insert(0, r'C:\Program Files\MATLAB\R2026a\extern\engines\python\dist')
           import matlab.engine
