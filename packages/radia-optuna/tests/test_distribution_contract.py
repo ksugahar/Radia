@@ -88,7 +88,7 @@ def test_staging_refuses_a_partial_native_distribution():
     assert "Build.ps1 -OptunaMexOnly" in setup_source
     assert "optuna_mex.mexw64" in setup_source
     assert "optuna_upstream_compatibility.json" in setup_source
-    assert "optuna49_api_coverage.json" in setup_source
+    assert "optuna50_api_coverage.json" in setup_source
     assert "THIRD_PARTY_NOTICES.md" in setup_source
     assert 'return "py3", "none", "win_amd64"' in setup_source
     assert '"bdist_wheel": bdist_wheel' in setup_source
@@ -110,7 +110,7 @@ def test_wheel_verifier_rejects_solver_boundary_leaks():
     for forbidden in ("radia_mex", "ngsolve", "netgen", "mkl_", "radia_pybind"):
         assert forbidden in verifier
     assert "py3-none-win_amd64" in verifier
-    assert "optuna\\s*==\\s*4\\.9\\.0" in verifier
+    assert "optuna\\s*==\\s*5\\.0\\.0" in verifier
     assert "THIRD_PARTY_NOTICES.md" in verifier
     assert "source_fidelity_verified" in verifier
     assert "wheel payload differs from the checked monorepo source" in verifier

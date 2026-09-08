@@ -1,5 +1,5 @@
 classdef StudyDirection < uint8
-    %STUDYDIRECTION Optuna 4.9 study-direction enumeration.
+    %STUDYDIRECTION Optuna 5 study-direction enumeration.
 
     enumeration
         NOT_SET (0)

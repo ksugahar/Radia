@@ -239,16 +239,29 @@ installs after release.
 
 ## Optuna
 
-Pinned upstream Optuna is the oracle for shared MATLAB behavior. Seed, options,
-search-space order, history, constraints, values, states, warnings, and random
-consumption must match upstream fixtures. Handwritten MATLAB output is not
+Pinned upstream Optuna 5.0.0 is the sole oracle for shared MATLAB behavior.
+Seed, options, search-space and parameter order, history, named constraints,
+values, states, warnings, defaults, extension points, and random consumption
+must match upstream-generated fixtures. Handwritten MATLAB output is not
 compatibility truth.
 
+The MATLAB implementation adopts the Optuna 5 public design in place. Do not
+keep a 4.x architecture behind compatibility shims: the atomic cutover deletes
+active `optuna49` fixtures and pins, removed public APIs and options, legacy
+sampler-state restore, and the former public multi-objective TPE sampler.
+Unified `TPESampler` owns both scalar and multi-objective TPE.
+
 MATLAB table/MAT storage, Simulink monitoring, parallel execution, and MEX are
-extensions, not permission to alter the compatible algorithm. Keep API coverage
-and oracle manifests current. Unsupported behavior fails loudly. Official
-`optuna/optuna-mcp` owns generic Study/Trial MCP; `radia-mcp` owns MATLAB,
-Simulink, MEX, and Radia-domain composition.
+extensions, not permission to alter the compatible algorithm. Native MATLAB
+and MEX may outperform Python when differential results remain correct. Keep
+API coverage and oracle manifests current; unsupported behavior fails loudly.
+Fast deterministic tests belong in `tests`; long performance, scaling,
+parallel-efficiency, and maximum-dimension work belongs in `validation_test`.
+
+Released `optuna-mcp==0.2.0` owns generic Study/Trial MCP against Optuna
+5.0.0. An observed upstream `0.3.0.dev` source tree is development status, not
+an installed stable-version claim. `radia-mcp` owns only MATLAB, Simulink,
+MEX, differential-oracle, performance-gate, and Radia-domain composition.
 
 ## Git And Agents
 

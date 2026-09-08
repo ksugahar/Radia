@@ -80,7 +80,7 @@ verifyTrue(testCase, isfile(storagePath + ".bak"));
 loaded = load(storagePath, "StudyData", "-mat");
 verifyEqual(testCase, string(loaded.StudyData.Schema), ...
     "radia.optuna.study");
-verifyEqual(testCase, loaded.StudyData.Version, 4);
+verifyEqual(testCase, loaded.StudyData.Version, 5);
 
 overwriteFile(storagePath, "damaged primary");
 lastwarn("");
@@ -119,7 +119,7 @@ end
 function testSamplerRandomStatesResumeDeterministically(testCase)
 verifySamplerResume(testCase, "random");
 verifySamplerResume(testCase, "tpe");
-verifySamplerResume(testCase, "motpe");
+verifySamplerResume(testCase, "tpe_multiobjective");
 verifySamplerResume(testCase, "nsgaii");
 end
 
@@ -184,8 +184,8 @@ switch name
         sampler = radia.optuna.TPESampler( ...
             Seed=seed, NStartupTrials=2, Multivariate=true);
         directions = "minimize";
-    case "motpe"
-        sampler = radia.optuna.MOTPESampler( ...
+    case "tpe_multiobjective"
+        sampler = radia.optuna.TPESampler( ...
             Seed=seed, NStartupTrials=2);
         directions = ["minimize", "minimize"];
     case "nsgaii"

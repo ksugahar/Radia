@@ -1,6 +1,6 @@
-"""Benchmark the pinned upstream Optuna 4.9.0 TPE oracle.
+"""Benchmark the pinned upstream Optuna 5.0.0 TPE oracle.
 
-Run this and ``benchmark_matlab_optuna49.m`` on the same otherwise-idle host.
+Run this and ``benchmark_matlab_optuna50.m`` on the same otherwise-idle host.
 The first three repeats are warm-ups; the reported value is the median of the
 remaining eight repeats. The workloads intentionally exclude persistence and
 parallel scheduling because those are MATLAB extensions rather than shared
@@ -30,11 +30,12 @@ REPEATS = 11
 WARMUP_REPEATS = 3
 DATAFRAME_TRIALS = 1000
 EXPECTED_SCALAR_CHECKSUM = 20.040135043951892
-EXPECTED_GROUPED_CHECKSUM = 104.33176385944043
+EXPECTED_GROUPED_CHECKSUM = 116.82876282520074
 
 
 def _scalar() -> float:
     study = optuna.create_study(
+        study_name="benchmark-scalar",
         sampler=optuna.samplers.TPESampler(seed=37, n_startup_trials=4)
     )
     checksum = 0.0
@@ -55,7 +56,9 @@ def _grouped() -> float:
             multivariate=True,
             group=True,
         )
-    study = optuna.create_study(sampler=sampler)
+    study = optuna.create_study(
+        study_name="benchmark-grouped", sampler=sampler
+    )
     checksum = 0.0
     for _ in range(TRIALS):
         trial = study.ask()
@@ -99,7 +102,7 @@ def _measure_trials_dataframe() -> dict[str, object]:
         "x": optuna.distributions.FloatDistribution(0.0, 1.0),
         "mode": optuna.distributions.CategoricalDistribution(["A", "B"]),
     }
-    study = optuna.create_study()
+    study = optuna.create_study(study_name="benchmark-dataframe")
     for index in range(DATAFRAME_TRIALS):
         study.add_trial(
             optuna.trial.create_trial(
@@ -153,13 +156,13 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
-    if optuna.__version__ != "4.9.0":
+    if optuna.__version__ != "5.0.0":
         raise RuntimeError(
-            f"This benchmark requires optuna==4.9.0, found {optuna.__version__}"
+            f"This benchmark requires optuna==5.0.0, found {optuna.__version__}"
         )
     optuna.logging.set_verbosity(optuna.logging.ERROR)
     result = {
-        "schema": "radia.validation.optuna49-performance-runtime.v1",
+        "schema": "radia.validation.optuna50-performance-runtime.v1",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "runtime": "python-upstream",
         "host": os.environ.get("COMPUTERNAME", platform.node()),
