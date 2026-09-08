@@ -89,7 +89,7 @@ def _coil():
 
 
 def _solve(mesh, coil, mu_r_iron=1.0, kelvin_scale=1.0,
-           kelvin_interface="kelvin_int"):
+           kelvin_interface="kelvin_int", exact_exterior_source=False):
     import ngsolve as ng
     import radia as rad
     from radia.kelvin_material import make_kelvin_mu_cf, MU_0
@@ -118,7 +118,11 @@ def _solve(mesh, coil, mu_r_iron=1.0, kelvin_scale=1.0,
             total_materials=("iron", "kelvin"),
             interface_boundary="iron_air_interface", order=2,
             kelvin_interface_boundary=kelvin_interface,
-            kelvin_source_potential=kelvin_source["potential"],
+            kelvin_source_potential=(
+                None if exact_exterior_source else kelvin_source["potential"]),
+            kelvin_source_h=(
+                rad.KelvinRadiaFieldStrength(coil, OFFSET, RADIUS, (0.0, 0.0, 0.0))
+                if exact_exterior_source else None),
             total_source_h=None, total_source_materials=())
     return result
 
@@ -225,3 +229,43 @@ def test_kelvin_material_without_its_interface_is_rejected():
     mesh = _kelvin_mesh()
     with pytest.raises(ValueError, match="kelvin_interface_boundary"):
         _solve(mesh, _coil(), kelvin_interface=None)
+
+
+def test_exact_pulled_back_exterior_source_matches_the_lift():
+    """The two exterior source representations must agree, exactness aside.
+
+    The lift only reproduces the projected interface trace; the exact field is
+    the analytic pullback throughout the ball and needs no projection at all.
+    They therefore differ by discretisation, not by formulation, and both must
+    reproduce the source field in the exterior.
+    """
+    import radia as rad
+    from radia.kelvin_source import kelvin_pullback_vector
+
+    mesh = _kelvin_mesh(maxh=0.20)
+    coil = _coil()
+    lifted = _solve(mesh, coil, mu_r_iron=1.0)
+    exact = _solve(mesh, coil, mu_r_iron=1.0, exact_exterior_source=True)
+    assert exact["kelvin_source_lift"] is None
+    assert lifted["kelvin_source_lift"] is not None
+
+    centre = np.asarray(OFFSET, dtype=float)
+    for direction in ((1.0, 0.0, 0.0), (0.0, 0.0, 1.0), (0.6, -0.6, 0.52)):
+        unit = np.asarray(direction, dtype=float)
+        unit = unit / np.linalg.norm(unit)
+        computational = centre + 0.62 * RADIUS * unit
+        physical = (RADIUS * RADIUS / (0.62 * RADIUS)) * unit
+        expected = np.asarray(
+            rad.Fld(coil, "h", [physical.tolist()]), dtype=float).reshape(3)
+        errors = []
+        for result in (lifted, exact):
+            h_comp = np.asarray(
+                result["H_cf"](mesh(*map(float, computational))), dtype=float)
+            h_physical = -kelvin_pullback_vector(
+                h_comp, physical, np.zeros(3), RADIUS)
+            errors.append(float(np.linalg.norm(h_physical - expected)
+                                / np.linalg.norm(expected)))
+        assert max(errors) < 0.25, (
+            "exterior field wrong for one representation: lift %.3f, exact %.3f"
+            % (errors[0], errors[1]))
+
