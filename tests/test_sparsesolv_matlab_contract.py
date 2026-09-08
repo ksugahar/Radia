@@ -4,10 +4,28 @@ import yaml
 import subprocess
 import shutil
 import os
+import runpy
+from types import SimpleNamespace
 import pytest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_engine_timeout_retains_evidence_when_cleanup_fails(tmp_path, monkeypatch):
+    runner = runpy.run_path(str(ROOT/"validation_test/ngsolve_matlab_parity/run_sparsesolv_parity.py"))
+    output = tmp_path/"nested/failure.json"
+
+    def fail_cleanup(command, **kwargs):
+        assert command == ["taskkill", "/PID", "12345", "/T", "/F"]
+        assert json.loads(output.read_text())["passed"] is False
+        raise OSError("access denied")
+
+    monkeypatch.setattr(subprocess, "run", fail_cleanup)
+    runner["record_timeout"](SimpleNamespace(pid=12345), output)
+    record = json.loads(output.read_text())
+    assert record["passed"] is False
+    assert record["cleanup_error"] == "access denied"
 
 
 def test_sparsesolv_has_native_and_explicit_fallback_owners():
