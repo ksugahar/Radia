@@ -125,6 +125,12 @@ checks, lifecycle tests, numerical checks, and durable `run.log` /
 SAT is important for Cubit's ACIS workflow; STEP is the portable standard. The
 solver boundary is a checked `.vol` regardless of the creation route.
 
+- Producing a `.vol` is `cubit-mesh-export`'s responsibility and runs on a
+  licensed Cubit machine. radia CI never generates one: it consumes committed
+  fixtures. A missing required fixture fails the test; only explicitly optional
+  validation inputs may produce a visible skip. Heavier `.vol` work
+  belongs to `validation_test/`, and `docs/**/*.ipynb` may show the Cubit
+  generation step.
 - Every solver-bound `.vol` passes `check-vol` with its versioned label
   contract before solver or Simulink initialization.
 - Label checks validate topology/naming; DesignSpec validates physical data.
@@ -190,12 +196,22 @@ input.
 
 ### Compute Host Routing
 
-**POLICY (hibino-first; mdx CI-first, 2026-09-03)**: Run solver-heavy
-validation, optimization, scaling, memory, and timing work on hibino first.
-Use mdx only when hibino is unavailable and both the mdx CI runner and its job
-queue are idle. Compute work must never delay or destabilize CI/preflight.
+**POLICY (2026-09-08)**: Run solver-heavy validation, optimization, scaling,
+memory, and timing work on hibino when it is **already running and idle**.
+hibino is a SPOT instance: starting it is a human action, not an agent one.
+Probe with `ssh -o ConnectTimeout=6 -o BatchMode=yes hibino hostname` — ICMP is
+blocked, so `ping` reports a false "down" — then check for a running python
+job, because hibino takes one heavy job at a time. Otherwise use whichever of
+mdx1/mdx2 is idle, after checking both its CI runner and its job queue are idle.
+Compute work must never delay or destabilize CI/preflight.
 Historical mdx measurements remain valid provenance. Record host, runtime,
 versions, and measured quantities in validation JSON.
+
+Core count does not imply speed; settle the setting before the host. One #6
+Gram build moved from 51 s to 1567 s on a single host by quadrature rule alone
+(`validation_test/esrf_three_engine/results/hex_gram_definiteness_*.json`).
+hibino's real advantage is memory — 230 GB with no pagefile — rather than its
+76 logical cores.
 
 **POLICY**: 全てのベンチマークスクリプトは機械可読な JSON 結果を保存すること。
 
