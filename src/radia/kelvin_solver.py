@@ -34,6 +34,24 @@ from ngsolve import (H1, HCurl, BilinearForm, LinearForm, GridFunction,
 from radia.kelvin_material import make_kelvin_mu_cf, make_kelvin_nu_cf, MU_0, NU_0
 
 
+def _constrains_point_gauge(mesh, selector, dirichlet_bbbnd):
+    """Does a space on ``selector`` own the ``dirichlet_bbbnd`` point gauge?
+
+    ``definedon`` keeps unused degrees of freedom in the numbering and merely
+    marks them unfree, so counting free degrees of freedom with and without the
+    constraint is the unambiguous ownership test.  Order 1 answers it: a BBBND
+    gauge sits on vertices.
+    """
+    if not dirichlet_bbbnd:
+        return False
+    unconstrained = H1(mesh, order=1, definedon=selector)
+    constrained = H1(mesh, order=1, definedon=selector,
+                     dirichlet_bbbnd=dirichlet_bbbnd)
+    free_unconstrained = sum(1 for flag in unconstrained.FreeDofs() if flag)
+    free_constrained = sum(1 for flag in constrained.FreeDofs() if flag)
+    return free_unconstrained - free_constrained > 0
+
+
 def _assemble_and_solve(a_bf, f_lf, fes, inverse="pardiso"):
     """Assemble and solve.  Caller MUST be inside `with TaskManager():`
     per CLAUDE.md "Caller Wraps, Helper Does NOT" (2026-05-27).
@@ -511,11 +529,26 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
     ``phi_total - phi_reduced = source_potential``.
 
     When the reduced physical air reaches the inner Kelvin sphere, provide
-    ``kelvin_interface_boundary`` and ``kelvin_source_potential`` as well.
-    This adds the periodic source jump between the reduced physical-air trace
-    and the Kelvin total-potential trace.  Omitting it would silently remove
-    the source 0-form from the Kelvin pair, even though the physical source
-    reaches the Kelvin interface.
+    ``kelvin_interface_boundary`` and ``kelvin_source_potential`` as well; a
+    Kelvin material in ``total_materials`` without them is rejected.  The
+    source enclosure and the Kelvin exterior are then discretised by one
+    periodic H1 space, which is what makes the exterior transmit.  The magnetic
+    scalar potential is a twisted 0-form, so the orientation-reversing Kelvin
+    inversion pulls it back as ``Omega_comp = -Omega_phys`` with no metric
+    factor (``docs/kelvin/KELVIN_TRANSFORMATION.md`` 2.3).  Solving for
+    ``-Omega_comp`` in the exterior leaves one unknown that is continuous
+    across the identified spheres up to the source jump
+
+    ``Omega_exterior - phi_reduced = kelvin_source_potential``,
+
+    which enters as a lift of that trace rather than as a second Lagrange
+    multiplier.  A space restricted to the total materials cannot express this
+    coupling at all: the material touching the physical sphere is the reduced
+    one, so such a space owns no degree of freedom there, the identification
+    pairs nothing, and the exterior block is eliminated with an identically
+    zero field.  ``H_cf`` in a Kelvin material is the computational-frame
+    ``H_comp``; its sign follows the twisted convention, so it is ``+grad`` of
+    the stored unknown, not ``-grad``.
 
     This prevents the source field and the reduced correction from cancelling
     inside high-permeability material.  The normal flux condition is natural
@@ -553,9 +586,9 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
             ``kelvin_source_potential`` when a reduced material touches the
             inner Kelvin sphere.
         kelvin_source_potential: physical source-potential trace on
-            ``kelvin_interface_boundary``.  Kelvin inversion is orientation
-            reversing for this twisted 0-form, so the enforced jump there is
-            ``phi_total - phi_reduced = -kelvin_source_potential``.
+            ``kelvin_interface_boundary``.  It is lifted into the shared
+            periodic space, so the exterior physical potential leaves the
+            sphere as ``phi_reduced + kelvin_source_potential``.
         total_dirichlet_cf: optional non-homogeneous total-potential lift for
             a finite-domain verification problem. Production Kelvin meshes use
             the default ``None`` and a point/edge ``GND`` constraint.
@@ -616,65 +649,128 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         mu_cf = make_kelvin_mu_cf(
             mesh, R_K, offset, kelvin_mats=kelvin_mats,
             mu_r_by_material=mu_r_by_material)
+    kelvin_total_materials = tuple(
+        material for material in total_materials
+        if any(str(key).lower() in material.lower() for key in kelvin_mats))
+    core_total_materials = tuple(
+        material for material in total_materials
+        if material not in kelvin_total_materials)
+    if kelvin_total_materials and kelvin_interface_boundary is None:
+        raise ValueError(
+            "a Kelvin exterior material is declared in total_materials without "
+            "kelvin_interface_boundary; the reduced source enclosure is then "
+            "the material that touches the identified physical sphere, the "
+            "total space owns no degree of freedom there, and the Kelvin block "
+            "stays uncoupled with an identically zero field: "
+            f"kelvin_materials={list(kelvin_total_materials)}")
+    if kelvin_total_materials and not core_total_materials:
+        raise ValueError(
+            "total_materials names only Kelvin exterior materials; the "
+            "source/total interface then has no total-potential side")
+
     reduced_selector = mesh.Materials("|".join(reduced_materials))
     total_selector = mesh.Materials("|".join(total_materials))
+    core_total_selector = (
+        total_selector if not kelvin_total_materials
+        else mesh.Materials("|".join(core_total_materials)))
+    kelvin_selector = (
+        None if not kelvin_total_materials
+        else mesh.Materials("|".join(kelvin_total_materials)))
+    # The source enclosure and the Kelvin exterior share one periodic space.
+    # The magnetic scalar potential is a TWISTED 0-form, so the orientation
+    # reversing Kelvin inversion pulls it back as ``Omega_comp = -Omega_phys``
+    # with no metric factor (docs/kelvin/KELVIN_TRANSFORMATION.md 2.3).  Solving
+    # for ``-Omega_comp`` in the exterior therefore leaves one unknown that is
+    # continuous across the identified spheres up to the source jump, which a
+    # periodic H1 space represents directly.  Restricting the total space to
+    # the total materials instead leaves it without a single degree of freedom
+    # on the physical sphere, because the material touching that sphere is the
+    # reduced one; the identification then has nothing to pair and the whole
+    # exterior block is silently eliminated.
+    coupled_selector = (
+        reduced_selector if kelvin_selector is None
+        else mesh.Materials("|".join(tuple(reduced_materials)
+                                     + kelvin_total_materials)))
     interface_selector = mesh.Boundaries(interface_boundary)
     kelvin_interface_selector = (
         None if kelvin_interface_boundary is None
         else mesh.Boundaries(kelvin_interface_boundary))
 
-    # Only the total region crosses the Kelvin periodic identification.  The
-    # source enclosure is intentionally an independent H1 space.
-    fes_reduced = H1(mesh, order=int(order), definedon=reduced_selector)
-    fes_total = Compress(Periodic(H1(
-        mesh, order=int(order), definedon=total_selector,
-        dirichlet_bbbnd=dirichlet_bbbnd)))
+    if kelvin_selector is None:
+        fes_reduced = H1(mesh, order=int(order), definedon=coupled_selector)
+        fes_total = Compress(Periodic(H1(
+            mesh, order=int(order), definedon=core_total_selector,
+            dirichlet_bbbnd=dirichlet_bbbnd)))
+    else:
+        # Exactly one of the two blocks carries the point gauge.  Pinning both
+        # would fight the interface jump; pinning neither leaves the coupled
+        # air/exterior block floating.
+        coupled_gauged = _constrains_point_gauge(
+            mesh, coupled_selector, dirichlet_bbbnd)
+        total_gauged = _constrains_point_gauge(
+            mesh, core_total_selector, dirichlet_bbbnd)
+        if coupled_gauged and total_gauged:
+            raise ValueError(
+                f"dirichlet_bbbnd={dirichlet_bbbnd!r} constrains both the "
+                "source/Kelvin block and the total block; the interface jump "
+                "already ties their constants, so place the gauge inside one "
+                "of them")
+        if not (coupled_gauged or total_gauged):
+            raise ValueError(
+                f"dirichlet_bbbnd={dirichlet_bbbnd!r} constrains neither the "
+                "source/Kelvin block nor the total block; the mixed system has "
+                "no gauge")
+        coupled_gauge = ({"dirichlet_bbbnd": dirichlet_bbbnd}
+                         if coupled_gauged else {})
+        total_gauge = ({"dirichlet_bbbnd": dirichlet_bbbnd}
+                       if total_gauged else {})
+        fes_reduced = Periodic(H1(
+            mesh, order=int(order), definedon=coupled_selector,
+            **coupled_gauge))
+        fes_total = Compress(Periodic(H1(
+            mesh, order=int(order), definedon=core_total_selector,
+            **total_gauge)))
     fes_multiplier = Compress(H1(
         mesh, order=int(order), definedon=interface_selector))
-    fes_kelvin_multiplier = (
-        None if kelvin_interface_selector is None
-        else Compress(H1(mesh, order=int(order), definedon=kelvin_interface_selector)))
     fes = fes_reduced * fes_total * fes_multiplier
-    if fes_kelvin_multiplier is None:
-        (phi_reduced, phi_total, multiplier), (
-            test_reduced, test_total, test_multiplier) = fes.TnT()
-        kelvin_multiplier = test_kelvin_multiplier = None
-    else:
-        fes = fes * fes_kelvin_multiplier
-        (phi_reduced, phi_total, multiplier, kelvin_multiplier), (
-            test_reduced, test_total, test_multiplier, test_kelvin_multiplier) = fes.TnT()
+    (phi_reduced, phi_total, multiplier), (
+        test_reduced, test_total, test_multiplier) = fes.TnT()
+
+    # Lift of the physical source-potential trace onto the identified spheres.
+    # Its periodic degrees of freedom are shared, so setting it on the physical
+    # sphere gives the Kelvin sphere the same values; any discrete extension
+    # into the ball produces the same exterior potential.
+    kelvin_lift = None
+    if kelvin_selector is not None:
+        kelvin_lift = GridFunction(fes_reduced, name="kelvin_source_lift")
+        kelvin_lift.vec[:] = 0.0
+        kelvin_lift.Set(kelvin_source_potential,
+                        definedon=kelvin_interface_selector)
 
     a_bf = BilinearForm(fes, symmetric=True)
     a_bf += mu_cf * grad(phi_reduced) * grad(test_reduced) * dx(
-        definedon=reduced_selector, bonus_intorder=bonus_intorder)
+        definedon=coupled_selector, bonus_intorder=bonus_intorder)
     a_bf += mu_cf * grad(phi_total) * grad(test_total) * dx(
-        definedon=total_selector, bonus_intorder=bonus_intorder)
+        definedon=core_total_selector, bonus_intorder=bonus_intorder)
     d_interface = ds(definedon=interface_selector, bonus_intorder=bonus_intorder)
     jump_trial = phi_total.Trace() - phi_reduced.Trace()
     jump_test = test_total.Trace() - test_reduced.Trace()
     a_bf += interface_constraint_scale * (
         multiplier * jump_test + test_multiplier * jump_trial) * d_interface
-    if kelvin_interface_selector is not None:
-        d_kelvin_interface = ds(
-            definedon=kelvin_interface_selector, bonus_intorder=bonus_intorder)
-        kelvin_jump_trial = phi_total.Trace() - phi_reduced.Trace()
-        kelvin_jump_test = test_total.Trace() - test_reduced.Trace()
-        a_bf += interface_constraint_scale * (
-            kelvin_multiplier * kelvin_jump_test
-            + test_kelvin_multiplier * kelvin_jump_trial
-        ) * d_kelvin_interface
 
     f_lf = LinearForm(fes)
     f_lf += mu_cf * H_s * grad(test_reduced) * dx(
         definedon=reduced_selector, bonus_intorder=bonus_intorder)
+    if kelvin_lift is not None:
+        # Exterior equation for Omega_t = phi_reduced + lift, tested with the
+        # same continuous space; the lift moves to the right-hand side.
+        f_lf += -mu_cf * grad(kelvin_lift) * grad(test_reduced) * dx(
+            definedon=kelvin_selector, bonus_intorder=bonus_intorder)
     if total_source_h is not None:
         total_source_selector = mesh.Materials("|".join(total_source_materials))
         f_lf += mu_cf * total_source_h * grad(test_total) * dx(
             definedon=total_source_selector, bonus_intorder=bonus_intorder)
     f_lf += interface_constraint_scale * test_multiplier * source_potential * d_interface
-    if kelvin_interface_selector is not None:
-        f_lf += -interface_constraint_scale * test_kelvin_multiplier * (
-            kelvin_source_potential) * d_kelvin_interface
     a_bf.Assemble()
     f_lf.Assemble()
 
@@ -691,8 +787,6 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
             fes.FreeDofs(), inverse=inverse) * residual
 
     phi_reduced_gf, phi_total_gf, multiplier_gf = solution.components[:3]
-    kelvin_multiplier_gf = (
-        None if fes_kelvin_multiplier is None else solution.components[3])
     H_reduced = H_s - grad(phi_reduced_gf)
     zero_h = CoefficientFunction((0.0, 0.0, 0.0))
     total_source_by_material = mesh.MaterialCF({
@@ -702,13 +796,25 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         for material in total_materials
     })
     H_total = total_source_by_material - grad(phi_total_gf)
+    # Twisted 0-form: the stored exterior unknown is -Omega_comp, so the
+    # computational-frame H is +grad of it rather than -grad.
+    kelvin_potential_cf = (
+        None if kelvin_lift is None
+        else -(phi_reduced_gf + kelvin_lift))
+    H_kelvin = (
+        None if kelvin_lift is None
+        else grad(phi_reduced_gf) + grad(kelvin_lift))
+    kelvin_set = set(kelvin_total_materials)
     h_components = []
     for component in range(3):
-        values = {
-            material: H_reduced[component] if material in reduced_set
-            else H_total[component]
-            for material in mesh.GetMaterials()
-        }
+        values = {}
+        for material in mesh.GetMaterials():
+            if material in reduced_set:
+                values[material] = H_reduced[component]
+            elif material in kelvin_set:
+                values[material] = H_kelvin[component]
+            else:
+                values[material] = H_total[component]
         h_components.append(mesh.MaterialCF(values))
     H_cf = CoefficientFunction(tuple(h_components))
     return {
@@ -716,7 +822,9 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         "phi_reduced": phi_reduced_gf,
         "phi_total": phi_total_gf,
         "interface_multiplier": multiplier_gf,
-        "kelvin_interface_multiplier": kelvin_multiplier_gf,
+        "kelvin_source_lift": kelvin_lift,
+        "kelvin_total_potential": kelvin_potential_cf,
+        "kelvin_materials": kelvin_total_materials,
         "fes": fes,
         "fes_reduced": fes_reduced,
         "fes_total": fes_total,
