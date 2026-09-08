@@ -941,12 +941,10 @@ classdef Study < handle
             top=reshape(string({columns.Top}),[],1);
             sub=reshape(string({columns.Sub}),[],1);
             metadata=obj.dataframeMetadata(top,sub,logical(multiIndex));
-            result=table();
             storageNames=matlab.lang.makeUniqueStrings( ...
                 cellstr(metadata.flat_columns));
-            for index=1:numel(columns)
-                result.(storageNames{index})=columns(index).Values;
-            end
+            columnValues={columns.Values};
+            result=table(columnValues{:},'VariableNames',storageNames);
             result.Properties.UserData=metadata;
             descriptions=top;
             nested=strlength(sub)>0;

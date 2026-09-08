@@ -39,6 +39,8 @@ classdef TPESampler < radia.optuna.BaseSampler
         EncodingCacheValues string = strings(0,1)
         NativeHistoryValid (1,1) logical = false
         NativeHistoryCompleteCount (1,1) double = 0
+        NativeIntersection struct = struct()
+        NativeIntersectionReady (1,1) logical = false
         HistoryDistributionNames string = strings(0,1)
         HistoryDistributions cell = cell(0,1)
         NativeGroupRevision (1,1) double = -1
@@ -195,8 +197,9 @@ classdef TPESampler < radia.optuna.BaseSampler
             end
             [x, y, trialNumbers, pending, states] = ...
                 obj.numericObservations(study, name);
-            valid = isfinite(x) & (isfinite(y) | states=="PRUNED") & ...
-                x >= low & x <= high;
+            % Upstream retains observations from earlier, wider bounds.
+            % The current bounds constrain proposals, not historical data.
+            valid = isfinite(x) & (isfinite(y) | states=="PRUNED");
             if options.Log
                 valid = valid & x > 0;
             end
@@ -206,9 +209,7 @@ classdef TPESampler < radia.optuna.BaseSampler
             pending = pending(valid);
             states = states(valid);
 
-            [good, bad] = obj.splitObservations( ...
-                x, y, study.Directions(1), study, trialNumbers, pending, ...
-                states);
+            [good, bad] = obj.splitObservations(x,study,trialNumbers);
             belowWeights=obj.observationWeights(numel(good));
             aboveWeights=obj.observationWeights(numel(bad));
             nativeHandle=obj.Stream.nativeHandle();
@@ -315,9 +316,7 @@ classdef TPESampler < radia.optuna.BaseSampler
             states = states(valid);
             count = numel(choiceTokens);
 
-            [good, bad] = obj.splitObservations( ...
-                observed, y, study.Directions(1), study, ...
-                trialNumbers, pending, states);
+            [good, bad] = obj.splitObservations(observed,study,trialNumbers);
             below = radia.optuna.internal.ParzenEstimator.categorical( ...
                 good, count, PriorWeight=obj.PriorWeight, ...
                 ObservationWeights=obj.observationWeights(numel(good)));
@@ -471,9 +470,14 @@ classdef TPESampler < radia.optuna.BaseSampler
                     trial.setRelativeParameters(searchSpace,values,"");
                 end
             else
-                searchSpace = obj.inferRelativeSearchSpace(study, trial);
+                nativeHistory=obj.canUseNativeGroupedHistory(study);
+                if nativeHistory
+                    searchSpace=obj.NativeIntersection;
+                else
+                    searchSpace=obj.inferRelativeSearchSpace(study, trial);
+                end
                 if isempty(searchSpace), return; end
-                if obj.canUseNativeGroupedHistory(study) && ...
+                if nativeHistory && ...
                         obj.sampleNativeGroupedHistory(trial,{searchSpace})
                     obj.recordState(study, trial.Number);
                     return
@@ -557,20 +561,12 @@ classdef TPESampler < radia.optuna.BaseSampler
             end
         end
 
-        function [good, bad] = splitObservations(obj, values, objectives, ...
-                direction, study, trialNumbers, pending, states)
-            % Match Optuna's _split_complete_trials: n_below may equal the
-            % number of observations.  In that case the above density is
-            % represented by its prior component only.
-            if nargin<8
-                states=strings(0,1);
-            end
-            nGood = obj.goodTrialCount(study.nonRunningTrialCount());
-            nGood = min(nGood,numel(values));
-            order = obj.rankObservations( ...
-                objectives, direction, study, trialNumbers, pending, states);
-            isGood = false(numel(values), 1);
-            isGood(order(1:nGood)) = true;
+        function [good, bad] = splitObservations(obj,values,study,trialNumbers)
+            % Split trials before selecting observations for this parameter,
+            % as upstream does. Missing parameters must not promote a worse
+            % trial into the below group.
+            goodNumbers=obj.globalGoodTrialNumbers(study);
+            isGood=ismember(trialNumbers,goodNumbers);
             % Keep chronological order so Optuna's history weights attach to
             % the same observations after the objective-based split.
             good = values(isGood);
@@ -1309,7 +1305,40 @@ classdef TPESampler < radia.optuna.BaseSampler
                 obj.NativeHistoryCompleteCount+1;
             if obj.Group
                 obj.GroupDecomposition.update(names,distributions);
+            else
+                obj.updateNativeIntersection(names,distributions);
             end
+        end
+
+        function updateNativeIntersection(obj,names,distributions)
+            % Completed-trial specs already exist here. Intersect them once
+            % at tell(), avoiding a scan and JSON decode of stored history
+            % at every ask(). An empty intersection stays empty.
+            space=obj.NativeIntersection;
+            if ~obj.NativeIntersectionReady
+                [names,order]=sort(names);
+                for index=1:numel(names)
+                    distribution=distributions{order(index)};
+                    if ~radia.optuna.internal.DistributionCodec.isSingle(distribution)
+                        space(end+1,1)=struct('name',names(index), ...
+                            'distribution',distribution); %#ok<AGROW>
+                    end
+                end
+                obj.NativeIntersectionReady=true;
+            else
+                keep=false(numel(space),1);
+                for index=1:numel(space)
+                    matching=find(names==space(index).name,1);
+                    keep(index)=~isempty(matching) && ...
+                        radia.optuna.internal.DistributionCodec.equivalent( ...
+                            space(index).distribution,distributions{matching});
+                end
+                space=space(keep);
+            end
+            if ~isequaln(space,obj.NativeIntersection)
+                obj.NativeGroupRevision=-1;
+            end
+            obj.NativeIntersection=space;
         end
 
         function identifier=historyDistributionId(obj,name,distribution)
@@ -1429,6 +1458,8 @@ classdef TPESampler < radia.optuna.BaseSampler
                 obj.GroupDecomposition= ...
                     radia.optuna.internal.GroupDecomposedSearchSpace();
                 obj.NativeHistoryCompleteCount=0;
+                obj.NativeIntersection=obj.emptySearchSpace();
+                obj.NativeIntersectionReady=false;
                 obj.HistoryDistributionNames=strings(0,1);
                 obj.HistoryDistributions=cell(0,1);
                 obj.NativeGroupRevision=-1;

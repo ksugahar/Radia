@@ -1897,6 +1897,24 @@ end
 verifyEqual(testCase,actual,expected,AbsTol=5e-12);
 end
 
+function testTPEIntersectionTransitionsMatchUpstream(testCase)
+contract=testCase.TestData.Oracle.tpe_intersection_transitions;
+study=radia.optuna.Study(Sampler=radia.optuna.TPESampler( ...
+    Seed=contract.seed,NStartupTrials=contract.startup_trials),AutoSave=false);
+for row=reshape(contract.trials,1,[])
+    trial=study.ask();
+    x=0; y=0;
+    if row.active
+        x=trial.suggest_float("x",row.low,row.high);
+        if row.include_y
+            y=trial.suggest_float("y",-1,1);
+        end
+    end
+    study.tell(trial,row.loss);
+    verifyEqual(testCase,[x,y],[row.x,row.y],AbsTol=5e-12);
+end
+end
+
 function testTPEConstantLiarConcurrentRunningMatchesUpstream(testCase)
 contract=testCase.TestData.Oracle.tpe_constant_liar_seed_127;
 verifyEmpty(testCase,string( ...

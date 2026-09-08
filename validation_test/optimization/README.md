@@ -45,6 +45,13 @@ measurement alongside the faster scalar and grouped TPE results. The checked
 result JSON records the environment, raw medians, throughput ratios, and the
 claim boundary; persistence, parallel scheduling, objective cost, and cold
 process startup are deliberately reported outside this shared-behavior gate.
+The [follow-up LAB measurements](results_optuna50_followup_lab_20260908.json)
+retain two fresh-Engine repeats around one Python run after intersection-cache,
+parameter-name, and table-construction changes. These are development evidence,
+not an idle compute-host release gate. Historical 4.9 measurements remain useful
+regression baselines, but require matched prewarming and workload semantics
+before claiming a controlled version-to-version speed change.
+
 The checked result also records the separate `optuna_mex` operational boundary:
 21 commands, binary size and hash, imported libraries, and seven fresh-process
 first-call measurements. This proves that optimization code is not loaded by a
