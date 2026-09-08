@@ -1,5 +1,5 @@
 classdef TrialState < uint8
-    %TRIALSTATE Optuna 4.9 trial-state enumeration.
+    %TRIALSTATE Optuna 5 trial-state enumeration.
 
     enumeration
         RUNNING (0)

@@ -1,5 +1,5 @@
 function study=import_study(payload,options)
-%IMPORT_STUDY Rebuild a study from radia.optuna.study-export.v1.
+%IMPORT_STUDY Rebuild a study from radia.optuna.study-export.v2.
 
 arguments
     payload
@@ -19,9 +19,9 @@ if isstring(payload) || ischar(payload)
 end
 if ~isstruct(payload) || ~isscalar(payload) || ...
         ~isfield(payload,"schema") || ...
-        string(payload.schema)~="radia.optuna.study-export.v1"
+        string(payload.schema)~="radia.optuna.study-export.v2"
     error("radia:optuna:ImportStudy", ...
-        "Expected one radia.optuna.study-export.v1 payload.");
+        "Expected one radia.optuna.study-export.v2 payload.");
 end
 
 name=options.Name;
@@ -36,7 +36,7 @@ if isfield(payload,"metric_names") && ~isempty(payload.metric_names)
     study.set_metric_names(reshape(string(payload.metric_names),1,[]));
 end
 applyStudyAttributes(study,payload,"user_attrs",@study.set_user_attr);
-applyStudyAttributes(study,payload,"system_attrs",@study.set_system_attr);
+applyStudyAttributes(study,payload,"system_attrs",@study.setInternalAttribute);
 
 trials=normalizeList(payload,"trials");
 numbers=cellfun(@(trial)double(trial.number),trials);
@@ -90,13 +90,12 @@ for index=1:numel(steps)
         datetime("now",TimeZone="local")}; %#ok<AGROW>
 end
 
-constraintPresent=isfield(record,"constraint_present") && ...
-    logical(record.constraint_present);
-constraints=zeros(1,0);
-if constraintPresent && isfield(record,"constraints") && ...
-        ~isempty(record.constraints)
-    constraints=reshape(double(cell2mat( ...
-        normalizeNumericList(record.constraints))),1,[]);
+constraintEntries=normalizeList(record,"constraints");
+constraintNames=strings(1,numel(constraintEntries));
+constraints=zeros(1,numel(constraintEntries));
+for index=1:numel(constraintEntries)
+    constraintNames(index)=string(constraintEntries{index}.name);
+    constraints(index)=double(constraintEntries{index}.value);
 end
 [userAttrs,userAttrNames]=attributeStruct(record,"user_attrs");
 [systemAttrs,systemAttrNames]=attributeStruct(record,"system_attrs");
@@ -105,7 +104,8 @@ frozen=radia.optuna.FrozenTrial( ...
     Params=params,Distributions=distributions, ...
     IntermediateValues=intermediate, ...
     UserAttrs=userAttrs,SystemAttrs=systemAttrs, ...
-    ConstraintPresent=constraintPresent,Constraints=constraints, ...
+    ConstraintPresent=~isempty(constraintNames), ...
+    ConstraintNames=constraintNames,Constraints=constraints, ...
     DatetimeStart=parseTimestamp(record,"datetime_start"), ...
     DatetimeComplete=parseTimestamp(record,"datetime_complete"));
 end

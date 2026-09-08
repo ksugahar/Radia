@@ -104,7 +104,7 @@ def _repository_candidates() -> list[Path]:
 def _repository_layout(root: Path) -> dict[str, Path | str] | None:
     matlab_root = root / "matlab"
     manifest = root / "packages" / "radia-optuna" / "src" / "radia_optuna" / "manifest.json"
-    if not (matlab_root / "optuna49_api_coverage.json").is_file():
+    if not (matlab_root / "optuna50_api_coverage.json").is_file():
         return None
     if not manifest.is_file():
         return None
@@ -114,17 +114,17 @@ def _repository_layout(root: Path) -> dict[str, Path | str] | None:
         "matlab_root": matlab_root,
         "manifest": manifest,
         "notice": root / "packages" / "radia-optuna" / "THIRD_PARTY_NOTICES.md",
-        "oracle": root / "tests" / "matlab" / "fixtures" / "optuna49_oracle.json",
+        "oracle": root / "tests" / "matlab" / "fixtures" / "optuna50_oracle.json",
         "mcp_oracle": root
         / "tests"
         / "matlab"
         / "fixtures"
-        / "optuna49_mcp_oracle.json",
+        / "optuna50_mcp_oracle.json",
         "inventory": root
         / "tests"
         / "matlab"
         / "fixtures"
-        / "optuna49_public_api.json",
+        / "optuna50_public_api.json",
         "test_manifest": root
         / "tests"
         / "matlab"
@@ -136,7 +136,7 @@ def _repository_layout(root: Path) -> dict[str, Path | str] | None:
 def _installed_layout(package_root: Path) -> dict[str, Path | str] | None:
     matlab_root = package_root / "matlab"
     manifest = package_root / "manifest.json"
-    if not manifest.is_file() or not (matlab_root / "optuna49_api_coverage.json").is_file():
+    if not manifest.is_file() or not (matlab_root / "optuna50_api_coverage.json").is_file():
         return None
     return {
         "source_kind": "installed-distribution",
@@ -240,7 +240,7 @@ def matlab_optuna_health(distribution_path: str = "") -> dict[str, Any]:
     root = Path(layout["root"])
     matlab_root = Path(layout["matlab_root"])
     manifest_path = Path(layout["manifest"])
-    coverage_path = matlab_root / "optuna49_api_coverage.json"
+    coverage_path = matlab_root / "optuna50_api_coverage.json"
     compatibility_path = matlab_root / "optuna_upstream_compatibility.json"
     notice_path = Path(layout["notice"])
     mex_path = matlab_root / "optuna_mex.mexw64"
@@ -516,15 +516,15 @@ def matlab_optuna_oracle_plan(
     if key in {"all", "shared", "samplers", "storage"}:
         fixture_commands.extend(
             [
-                "python tests/matlab/fixtures/generate_optuna49_api_inventory.py",
-                "python tests/matlab/fixtures/generate_optuna49_oracle.py",
-                "python tests/matlab/fixtures/generate_optuna49_api_coverage.py",
+                "python tests/matlab/fixtures/generate_optuna50_api_inventory.py",
+                "python tests/matlab/fixtures/generate_optuna50_oracle.py",
+                "python tests/matlab/fixtures/generate_optuna50_api_coverage.py",
                 "python tests/matlab/fixtures/generate_optuna_test_manifest.py",
             ]
         )
     if key in {"all", "upstream_mcp"}:
         fixture_commands.append(
-            "python tests/matlab/fixtures/generate_optuna49_mcp_oracle.py"
+            "python tests/matlab/fixtures/generate_optuna50_mcp_oracle.py"
         )
 
     return {
@@ -552,7 +552,7 @@ def matlab_optuna_oracle_plan(
         "oracle": health["oracle"],
         "ownership": {
             "shared_study_trial_tools": "optuna/optuna-mcp",
-            "seeded_numeric_oracle": "direct optuna==4.9.0",
+            "seeded_numeric_oracle": "direct optuna==5.0.0",
             "matlab_execution": "MathWorks official MATLAB MCP Server",
             "matlab_difference_contract": "radia-mcp.matlab",
         },
@@ -581,8 +581,8 @@ def matlab_optuna_benchmark_plan(
         }
     root = Path(str(health["root"]))
     benchmark_root = root / "validation_test" / "optimization"
-    python_script = benchmark_root / "benchmark_optuna49_python.py"
-    matlab_script = benchmark_root / "benchmark_matlab_optuna49.m"
+    python_script = benchmark_root / "benchmark_optuna50_python.py"
+    matlab_script = benchmark_root / "benchmark_matlab_optuna50.m"
     cold_script = benchmark_root / "benchmark_optuna_mex_cold_start.ps1"
     missing = [str(path) for path in (python_script, matlab_script, cold_script) if not path.is_file()]
     if missing:
@@ -607,8 +607,8 @@ def matlab_optuna_benchmark_plan(
         )
     scalar_seed, group_seed = sampler_seeds
     output = Path(output_directory).expanduser()
-    python_output = output / "optuna49_python.json"
-    matlab_output = output / "optuna49_matlab.json"
+    python_output = output / "optuna50_python.json"
+    matlab_output = output / "optuna50_matlab.json"
     cold_output = output / "optuna_mex_cold.json"
     root_literal = _matlab_literal(str(root))
     matlab_output_literal = _matlab_literal(str(matlab_output))
@@ -617,7 +617,7 @@ def matlab_optuna_benchmark_plan(
         f"repoRoot=string({root_literal}); cd(repoRoot); "
         "addpath(fullfile(repoRoot,'matlab')); "
         "addpath(fullfile(repoRoot,'validation_test','optimization')); "
-        f"result=benchmark_matlab_optuna49(string({matlab_output_literal})); "
+        f"result=benchmark_matlab_optuna50(string({matlab_output_literal})); "
         "nativeStatus=radia.optuna.nativeStatus(); "
         "assert(nativeStatus.mex_available); "
         "assert(result.versions.optuna_mex_command_count=="
@@ -647,7 +647,7 @@ def matlab_optuna_benchmark_plan(
             "output": str(cold_output),
         },
         "python_warmed": {
-            "runtime": "direct optuna==4.9.0",
+            "runtime": "direct optuna==5.0.0",
             "command": f'python "{python_script}" --output "{python_output}"',
             "output": str(python_output),
         },
@@ -815,7 +815,7 @@ def matlab_optuna_release_gate(
         cold = _mapping(performance.get("mex_cold"), "performance.mex_cold", errors)
         for result, runtime in ((python_result, "python-upstream"), (matlab_result, "matlab")):
             if result and (
-                result.get("schema") != "radia.validation.optuna49-performance-runtime.v1"
+                result.get("schema") != "radia.validation.optuna50-performance-runtime.v1"
                 or result.get("runtime") != runtime
             ):
                 errors.append(f"invalid {runtime} performance evidence")

@@ -1,5 +1,5 @@
 classdef SearchSpaceGroup < handle
-    %SEARCHSPACEGROUP MATLAB name for Optuna 4.9's _SearchSpaceGroup.
+    %SEARCHSPACEGROUP MATLAB name for Optuna 5's _SearchSpaceGroup.
 
     properties (Access=private)
         Core (1,1) radia.optuna.internal.GroupDecomposedSearchSpace

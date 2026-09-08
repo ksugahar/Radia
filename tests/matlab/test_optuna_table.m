@@ -84,13 +84,12 @@ function testTrialCompatibilityMetadata(testCase)
 trial = radia.optuna.Study(AutoSave=false).ask();
 x = trial.suggest_float("positive", 1, 100, Log=true);
 trial.set_user_attr("role", "compatibility-test");
-trial.set_system_attr("source", "matlab");
 
 verifyTrue(testCase, isfinite(x));
 verifyTrue(testCase, isfield(trial.Distributions, "positive"));
 verifyEqual(testCase, trial.Distributions.positive.name, "FloatDistribution");
 verifyEqual(testCase, trial.UserAttrs.role, "compatibility-test");
-verifyEqual(testCase, trial.SystemAttrs.source, "matlab");
+verifyFalse(testCase,ismethod(trial,"set_system_attr"));
 end
 
 function testStudyUserAttributesPersist(testCase)

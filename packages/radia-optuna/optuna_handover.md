@@ -1,8 +1,8 @@
 # radia-optuna Simulink optimization — implementation handover
 
-Rewritten 2026-08-29. No tracked `optuna_handover.md` existed on the current
-main branch, so this is the new canonical handover rather than a continuation
-of the unrelated EQNEDT64 document.
+Rewritten 2026-08-29 and revised 2026-09-08 for the Optuna 5 migration. This is
+the canonical product and migration handover; the unrelated EQNEDT64 document
+is not an Optuna authority.
 
 ## 1. Product goal
 
@@ -24,7 +24,7 @@ The intended experience is informed by two MathWorks products:
 Those products are references for the MATLAB and Simulink operating surface.
 They are not runtime dependencies and do not replace Optuna's algorithms.
 
-The algorithmic source of truth remains pinned upstream `optuna==4.9.0`.
+The algorithmic source of truth is pinned upstream `optuna==5.0.0`.
 MATLAB vectorization, MEX kernels, deterministic batching, table/MAT
 persistence, Simulink signals, and session tooling may improve performance and
 teaching value, but they must not silently change a shared Optuna algorithm.
@@ -65,7 +65,7 @@ teaching value, but they must not silently change a shared Optuna algorithm.
 
 When references disagree, use this order:
 
-1. Upstream Optuna 4.9.0 is the behavioral oracle for shared Study, Trial,
+1. Upstream Optuna 5.0.0 is the behavioral oracle for shared Study, Trial,
    sampler, pruner, distribution, storage-state, and seeded random behavior.
 2. Global Optimization Toolbox and Simulink Design Optimization define familiar
    MATLAB workflow conventions.
@@ -77,9 +77,9 @@ Shared algorithm tests must derive expectations by executing pinned upstream
 Optuna. MATLAB-only behavior must be marked `matlab-integration` and must not be
 presented as evidence of upstream parity.
 
-## 4. Current baseline and required correction
+## 4. Migration baseline and current state
 
-The current main branch already has:
+The migration started from a completed Optuna 4.9 baseline:
 
 - `Study`, `Trial`, samplers, pruners, distributions, storage, visualization,
   integrations, and the required standalone `optuna_mex`.
@@ -91,24 +91,30 @@ The current main branch already has:
   failure classification, and model/provenance hashing.
 - A Level-2 MATLAB S-Function that runs one trial per sample, persists normalized
   tables, and emits numerical telemetry.
-- A 816-entry generated upstream public-surface inventory.
+- An 816-entry generated upstream public-surface inventory.
 
-One audit correction must land before expanding the API. The current coverage
-generator calls some entries verified because they appear in a maintained
-allow-list. Verification must instead be derived from the test manifest and
-oracle fixture provenance. The reconciled ledger distinguishes 748
-evidence-derived entries from 68 asserted mappings, while the required shared
-scope remains 400/400 directly mapped with no asserted required entry.
+That baseline was migration input, not the target compatibility claim. The
+active branch now contains only the 5.0 fixture names and bridge pin, uses
+unified public TPE, named constraints, Optuna 5 defaults and mutation points,
+and has deleted removed integrations and APIs. The local 150-test fast suite,
+wheel verification, installed-wheel Simulink E2E, and paired LAB development
+benchmark pass. Release status remains pending until the fresh long mdx
+performance lane, CI, merge, tag, publication, and release-quad gates pass.
+
+The prior coverage audit also remains binding: verified entries must be derived
+from the test manifest and oracle fixture provenance. A maintained allow-list
+may describe a mapping, but it cannot turn that mapping into verification.
 
 Therefore the public claim is:
 
-> The required declared Optuna 4.9.0 compatibility scope is oracle-covered.
-> The wider MATLAB surface is present and mapped, but the coverage ledger must
-> distinguish evidence from assertion until every wider entry has direct
-> evidence.
+> The required declared Optuna 5.0.0 compatibility scope is oracle-covered only
+> after the 5.0 inventory, direct oracle fixture, real-transport MCP fixture,
+> MATLAB fast suite, and evidence ledger all agree. Historical 4.9 evidence does
+> not satisfy this claim.
 
-Do not restore the older blanket “816 verified” wording unless the generator
-can derive that number from actual oracle tests.
+Do not restore the older blanket “816 verified” wording. The generated 5.0
+ledger is 812 present, 749 oracle-verified, 63 explicitly asserted, and all
+401 required entries oracle-mapped.
 
 ## 5. Architecture
 
@@ -396,7 +402,7 @@ Session metadata adds:
 - selected trial and UI state
 - checkpoint revision and stop reason
 
-The explicit `study-export.v1` bridge to an upstream Optuna storage remains a
+The explicit `study-export.v2` bridge to an upstream Optuna storage remains a
 batch handoff, never a runtime fallback.
 
 ## 13. Performance contract
@@ -416,6 +422,12 @@ The MATLAB version should meet or exceed upstream throughput where native MEX,
 vectorization, and Simulink integration provide an advantage. It must never
 trade away seeded algorithm parity on the sequential lane merely to win a
 benchmark.
+
+The automatic-multivariate scalar TPE path maintains an incremental
+intersection-search-space cache keyed by the ordered finished-trial prefix.
+Appending a trial filters the current intersection once; a changed or restored
+history invalidates the prefix and rebuilds from source data. This removes the
+former quadratic history scan while preserving the upstream proposal sequence.
 
 Long scaling benchmarks belong in `validation_test/optimization`. Fast tests
 may assert results and conservative non-regression bounds; they must not encode
@@ -482,9 +494,99 @@ The official `optuna/optuna-mcp` server owns shared public Study/Trial operation
 Keep the independent/unofficial notice, Optuna/SciPy/Joe--Kuo notices, and pinned
 upstream handoff version. Do not use the Optuna logo or imply endorsement.
 
-## 17. Implementation order
+As of 2026-09-08 the latest released `optuna-mcp` is 0.2.0. Upstream `main`
+declares 0.3.0.dev, but its server tool implementation is unchanged from 0.2.0;
+the observed changes are packaging, container publication, CI hardening, Python
+3.13 coverage, action pinning, attestations, and development dependencies. Use
+released 0.2.0 with `optuna==5.0.0` for the real-transport fixture. Record the
+server version and transport in the fixture. Do not label an unreleased
+0.3.0.dev checkout as the supported server.
 
-Implementation record (2026-08-29):
+## 17. Optuna 5 migration and deletion plan
+
+This is a replacement migration, not a side-by-side compatibility feature.
+There will be one MATLAB implementation and one active upstream oracle.
+
+### Stage A — freeze and inventory
+
+- Preserve the last green Optuna 4.9 commit/tag as history; do not create a
+  `V49` namespace, compatibility mode, or runtime version switch.
+- Inventory 5.0 public symbols/signatures and classify added, removed, and
+  behavior-changed entries.
+- Mark the working branch and package documentation as migration in progress.
+
+Exit: the 5.0 API delta and every active 4.9 reference are mechanically listed.
+
+### Stage B — establish the 5.0 oracle before changing MATLAB behavior
+
+- Generate direct fixtures in an isolated environment pinned to
+  `optuna==5.0.0`, recording Python, NumPy, SciPy, PyTorch, and `cmaes`.
+- Generate the MCP fixture through a real stdio session using released
+  `optuna-mcp==0.2.0` running against Optuna 5.0.0.
+- Run each generator twice and require byte-identical JSON.
+- Add explicit coverage for TPE defaults and bandwidth behavior,
+  multi-objective default TPE, named constraints and duplicate/NaN behavior,
+  new NSGA-II mutation types, and removed APIs.
+
+Exit: the complete 5.0 fixtures are deterministic and regeneration fails with
+any other Optuna version.
+
+### Stage C — replace behavior in place
+
+- Change the existing MATLAB classes and MEX kernels directly. Do not retain
+  parallel 4.9 implementations.
+- Make TPE multivariate and constant-liar behavior follow 5.0 defaults and port
+  the 5.0 bandwidth rule from the upstream algorithm.
+- Make TPE the default for both single- and multi-objective studies.
+- Replace positional constraint storage at the public boundary with named
+  constraints while keeping an efficient internal numeric view for samplers.
+- Add `BaseMutation` and `PolynomialMutation` and connect them to NSGA-II/III.
+- Remove `categorical_distance_func`, public Study/Trial system-attribute APIs,
+  and the removed StudySummary field instead of emulating them.
+
+Exit: focused MATLAB tests pass against the 5.0 fixture and no production path
+selects old behavior.
+
+### Stage D — atomic oracle cutover and 4.9 deletion
+
+The first commit that declares 5.0 compatibility must do all of the following
+together:
+
+- switch every active test, package verifier, manifest, bridge, README, policy,
+  and CI command from `optuna49`/4.9.0 to `optuna50`/5.0.0;
+- delete the 4.9 oracle JSON, public-API inventory, coverage ledger, MCP fixture,
+  and their 4.9 generator scripts;
+- delete removed API code and constructor options, not merely stop testing them;
+- regenerate the distribution manifest and installed-wheel expectations;
+- fail a repository scan if active source or tests still mention `optuna49`,
+  `optuna==4.9.0`, or the removed compatibility members.
+
+Historical CHANGELOG entries, tagged release evidence, and named archived
+performance result files may retain 4.9 text. They are immutable provenance and
+must be clearly described as historical; they are never loaded by active tests.
+
+Deletion happens here—not before Stage B, because that would remove the last
+working oracle before its replacement is proven, and not after release, because
+shipping both active oracle generations would leave ambiguous truth and dead
+code.
+
+Exit: exactly one active oracle generation exists and the fast suite passes
+from a clean checkout and an isolated installed wheel.
+
+### Stage E — validation and release
+
+- Run long seeded parity and performance/scaling jobs under `validation_test`.
+- Compare warmed throughput without weakening sequential seeded parity.
+- Review licenses and third-party notices, merge, tag, publish the four
+  distributions, and run release-quad only from the same verified commit.
+
+Exit: release evidence names Optuna 5.0.0 and optuna-mcp 0.2.0 explicitly, and
+no release gate consumes an Optuna 4.9 active artifact.
+
+## 18. Historical implementation record
+
+Historical Optuna 4.9 release-candidate record (2026-08-29; not valid 5.0
+release evidence):
 
 - fast MATLAB Optuna suite: 150/150 passed, 0 failed, 0 incomplete;
 - oracle ledger: 816/816 present, 748 executable-evidence verified,
@@ -554,7 +656,7 @@ Implementation record (2026-08-29):
 - [x] radia-mcp MATLAB difference-gate update
 - [ ] version, CI, review, merge, tag, PyPI, and release-quad
 
-## 18. Definition of done
+## 19. Definition of done
 
 The implementation is complete only when:
 

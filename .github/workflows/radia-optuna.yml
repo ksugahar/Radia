@@ -13,7 +13,7 @@ on:
       - 'matlab/+radia/+simulink/addOptunaMonitor.m'
       - 'matlab/radia_optuna_sfun.m'
       - 'matlab/optuna_upstream_compatibility.json'
-      - 'matlab/optuna49_api_coverage.json'
+      - 'matlab/optuna50_api_coverage.json'
       - 'src/matlab/radia_mex.cpp'
       - 'Build.ps1'
       - 'CMakeLists.txt'
@@ -29,7 +29,7 @@ on:
       - 'matlab/+radia/+simulink/addOptunaMonitor.m'
       - 'matlab/radia_optuna_sfun.m'
       - 'matlab/optuna_upstream_compatibility.json'
-      - 'matlab/optuna49_api_coverage.json'
+      - 'matlab/optuna50_api_coverage.json'
       - 'src/matlab/radia_mex.cpp'
       - 'Build.ps1'
       - 'CMakeLists.txt'
@@ -71,7 +71,7 @@ jobs:
       - name: Test, build, and verify radia-optuna wheel
         shell: pwsh
         run: |
-          & $env:RADIA_OPTUNA_CI_PYTHON -m pip install build wheel pytest optuna==4.9.0
+          & $env:RADIA_OPTUNA_CI_PYTHON -m pip install build wheel pytest optuna==5.0.0
           & $env:RADIA_OPTUNA_CI_PYTHON -m pytest packages\radia-optuna\tests -q
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Push-Location packages\radia-optuna

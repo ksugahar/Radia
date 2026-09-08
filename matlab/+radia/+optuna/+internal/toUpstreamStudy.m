@@ -1,6 +1,6 @@
 function [pythonStudy,pythonTrials,optunaModule]=toUpstreamStudy( ...
         trials,studyDirection)
-%TOUPSTREAMSTUDY Convert MATLAB FrozenTrial snapshots to Optuna 4.9.
+%TOUPSTREAMSTUDY Convert MATLAB FrozenTrial snapshots to Optuna 5.0.
 arguments
     trials
     studyDirection = []
@@ -15,9 +15,9 @@ if environment.ExecutionMode~="InProcess"
 end
 optunaModule=py.importlib.import_module("optuna");
 version=string(py.builtins.getattr(optunaModule,"__version__"));
-if version~="4.9.0"
+if version~="5.0.0"
     error("radia:optuna:UpstreamVersion", ...
-        "Upstream adapters require optuna==4.9.0, found %s.",version);
+        "Upstream adapters require optuna==5.0.0, found %s.",version);
 end
 if isa(trials,"radia.optuna.Study")
     studyDirection=trials.Directions;
@@ -46,6 +46,11 @@ for index=1:numel(trials)
     params=loads(char(jsonencode(source.Params)));
     userAttrs=loads(char(jsonencode(source.UserAttrs)));
     systemAttrs=loads(char(jsonencode(source.SystemAttrs)));
+    constraints=py.dict;
+    for constraintIndex=1:numel(source.ConstraintNames)
+        constraints{char(source.ConstraintNames(constraintIndex))}= ...
+            double(source.Constraints(constraintIndex));
+    end
     distributions=py.dict;
     names=string(fieldnames(source.Distributions));
     for nameIndex=1:numel(names)
@@ -62,7 +67,8 @@ for index=1:numel(trials)
     keyword={"state",state,"params",params, ...
         "distributions",distributions, ...
         "intermediate_values",intermediate, ...
-        "user_attrs",userAttrs,"system_attrs",systemAttrs};
+        "user_attrs",userAttrs,"system_attrs",systemAttrs, ...
+        "constraints",constraints};
     values=reshape(double(source.Values),1,[]);
     if numel(values)==1 && ~isnan(values)
         keyword(end+1:end+2)={"value",values};

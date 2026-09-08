@@ -1,257 +1,102 @@
-# radia-optuna compatibility review
+# radia-optuna 5.0 compatibility review
 
-Review of the MATLAB Optuna component after reconciling the earlier Claude
-Code Opus 5 review (`00c9576bc`, `09f4608c3`, `cbc029319`) with the current
-monorepo implementation.
+This review supersedes the earlier Claude Code Opus 5 review of the 4.x
+implementation. Its useful defect findings remain incorporated, but its API
+counts, version pins, sampler boundary, and release conclusions are historical.
 
-- Reviewed: 2026-08-29
-- Behavioral and algorithm oracle: `optuna==4.9.0`
+- Reviewed: 2026-09-08
+- Behavioral and algorithm oracle: `optuna==5.0.0`
+- Official MCP stable contract: `optuna-mcp==0.2.0`
+- Observed upstream MCP source: `0.3.0.dev` (not claimed as an installed release)
 - SciPy data/runtime pin used by Sobol fixtures: `scipy==1.17.1`
-- Release candidate version: `radia-optuna==0.1.5`
-- Working branch: `codex/optuna-simulink-student-workflow`
+- Release candidate version: `radia-optuna==0.2.0`
 
 ## Verdict
 
-The earlier **not complete** verdict is stale for the required Optuna 4.9.0
-compatibility scope. The generated evidence ledger reports **816/816 API
-entries present**, with **748 backed by executable upstream evidence** and
-**68 explicitly marked as inventory assertions**. There are zero partial,
-unmapped, or missing entries. More importantly, all **400/400 required entries
-have executable upstream evidence**; none of that required scope is closed by
-an assertion. The ledger therefore reports
-`full_compatibility_complete=true` under its checked scope rule. The complete
-fast MATLAB Optuna regression set passes **150/150**.
+The active implementation now targets the Optuna 5 design directly. It does
+not retain a 4.x namespace, fixture lane, public multi-objective TPE sampler,
+removed integration exports, public system-attribute API, categorical-distance
+option, baseline-quantile option, or old sampler-state restore shim.
 
-That conclusion has a precise scope. `radia-optuna` is a MATLAB implementation
-of the Optuna API and algorithms, with explicit calls to pinned upstream Python
-for the families whose implementation remains upstream-owned. It is not a
-Python binary drop-in and does not claim that MATLAB-only parallel execution,
-MAT/table storage, Simulink telemetry, or Radia adapters are upstream behavior.
+The generated inventory reports 812/812 Optuna 5 public entries present. Of
+these, 749 are backed by executable upstream evidence and 63 wider
+Python-language or bridge entries are explicit assertions. All 401 required
+MATLAB entries are executable-evidence mapped; none is closed by an assertion.
+There are zero partial, unmapped, or missing entries.
 
-This review does not turn a worktree result into a release claim. Full CI,
-merge, versioning, tag, PyPI publication, and release-quad remain separate
-gates.
+That is a checked compatibility claim, not a Python binary-drop-in claim.
+MATLAB objects, MAT/table persistence, Simulink blocks, native MEX execution,
+and parallel scheduling remain explicit MATLAB extensions.
 
-## Current checked state
+## Optuna 5 replacements
 
-| Contract | Current result |
-|---|---:|
-| Optuna 4.9 public entries | 816 / 816 present |
-| Executable upstream evidence | 748 |
-| Explicit wider-inventory assertions | 68 |
-| Required compatibility scope | 400 / 400 executable-evidence mapped |
-| MATLAB Optuna suite | 150 / 150 passed |
-| Upstream Python differential tests | 77 |
-| Official upstream MCP tests | 3 |
-| MATLAB integration tests | 69 |
-| Standalone native gateway | 21 commands |
-| Native unscrambled Sobol limit | 21,201 dimensions |
-| Packaged `radia.optuna` MATLAB files | 226 |
-| Standalone Simulink entry points | 15 |
+- `TPESampler` is the sole public TPE sampler for scalar and multi-objective
+  studies. Its private multi-objective path uses uniform good-trial weights,
+  the Optuna 5 multi-objective gamma rule, and the shared Parzen estimator.
+- Omitted `Multivariate` uses the Optuna 5 automatic policy, `ConstantLiar`
+  defaults to true, numerical bandwidth uses nearest-neighbor distances, and
+  the removed categorical-distance option is absent.
+- Constraints are named dictionaries set by `Trial.set_constraint`. Missing
+  and empty dictionaries are feasible; trials may use different names and
+  different numbers of constraints. The deprecated `ConstraintsFcn` path
+  remains only with the upstream 5.0-to-7.0 future warning.
+- NSGA-II and NSGA-III accept `BaseMutation`; `PolynomialMutation` implements
+  the upstream seeded formula and default distribution index.
+- QMC includes categorical coordinates, uses the union of concurrent RUNNING
+  trial spaces before the first result, warns for conditional pending spaces,
+  and freezes to the first COMPLETE/PRUNED trial afterwards.
+- Parameter importance defaults to PED-ANOVA. Metric-name columns retain
+  declaration order.
+- Removed integrations and removed public APIs fail as absent rather than
+  being simulated by MATLAB compatibility shims.
 
-Additional release-candidate checks performed in this review:
+## Numeric and performance work retained from the earlier review
 
-| Check | Result |
-|---|---:|
-| `packages/radia-optuna` plus focused `radia-mcp` pytest | 28 / 28 passed |
-| Fresh wheel archive verification | PASS, 226 MATLAB files / 21 commands / 15 Simulink entries |
-| Isolated installed-wheel MATLAB E2E | PASS, no repository or Radia on MATLAB path |
-| Installed-wheel `OptimizationSession` save/resume | PASS, 4 / 4 trials completed |
-| Installed-wheel student Simulink model | PASS, 12 / 12 trials attempted |
-| Installed-wheel compact-block iteration | PASS, seed-less 4 -> 6 trials, best applied, topology unchanged |
-| Installed-wheel table resume | PASS, all seven typed tables restored |
-| mdx warmed MATLAB/Python ratios | 0.670 scalar / 0.491 grouped / 0.630 table |
-| mdx deterministic 4-worker batch | 2.357x sequential throughput |
-| mdx 4,000-trial indexed history lookup | 5.683x scan reference |
-| mdx first MEX call | 11.44 ms median over seven fresh MATLAB processes |
-| radia-mcp release evidence gate | PASS, `status=ready` |
-| Native Sobol maximum-dimension validation | 21,201 dimensions, PASS |
-| Full Radia MEX/Simulink provenance regeneration | HIBINO, 86 / 86 passed |
+The earlier review correctly identified decimal-step adjustment, PRUNED TPE
+history, arbitrary-name collision, next-down boundaries, ties-to-even rounding,
+sparse trial lookup, PRUNED CMA-ES participation, and multi-objective history as
+important compatibility risks. These remain covered by the 5.0 oracle suite.
 
-The oracle JSON regenerates byte-for-byte with SHA-256
-`7A561D22470DF24F8B62E7797F47A3011CD858C3CF6691B736E6C1BA4BB5FA1F`.
-The API coverage SHA-256 is
-`43A5F72D2961FF1797C7E9FEC537D5308FD162744D2C99118A3AC64523C05BFC`;
-the test-manifest SHA-256 is
-`7939FB667A47F53E256BC6B8CEEA94A0008A4A92BB182ED6B8BF1C8183D3CEA5`.
-The generated coverage and manifest regenerate byte-stably.
+The required MEX is intentionally not optional. The native gateway fails
+loudly when absent or incompatible; there is no silent `radia_mex` or MATLAB
+algorithm substitution. For the Optuna 5 TPE bandwidth change, the MEX also
+reproduces NumPy 2.5.2's short-array unstable argsort network so tied
+observations consume the same seeded proposal sequence.
 
-## Disposition of the earlier findings
+Long timing and scaling work belongs under `validation_test/optimization`.
+The active paired lane is `benchmark_optuna50_python.py` plus
+`benchmark_matlab_optuna50.m`. Earlier 4.x mdx JSON remains useful historical
+engineering evidence but cannot satisfy the 0.2.0 release gate.
 
-The decimal step handling, PRUNED TPE history, arbitrary-name collision,
-`nextDown`, ties-to-even rounding, sparse trial lookup, editable layout,
-PRUNED CMA-ES, and PRUNED multi-objective TPE findings are retained and covered
-by the current oracle suite.
+The scalar automatic-multivariate path now updates its intersection search
+space only for newly finished trials instead of rebuilding every historical
+intersection on every `ask`. A same-host LAB development run on 2026-09-08
+(100 trials, 11 repeats, 3 warm-ups, explicit study names) measured 783 versus
+818 scalar trials/s for MATLAB versus upstream Python, 336 versus 286 grouped
+conditional trials/s, and 241k versus 199k `trials_dataframe` rows/s. The
+proposal checksums were identical. These are development measurements; the
+published release result still requires the mdx validation lane.
 
-One recommendation was deliberately not imported: `NativeKernels.has` must not
-make a missing or incompatible MEX look optional. The standalone optimizer
-gateway is a required, exact contract and fails loudly. This matches the
-published no-fallback policy and avoids silently changing numerical backends.
+## Distribution, MCP, and licensing boundary
 
-## Improvements made from this review
+The wheel contains the MATLAB namespace, the 21-command standalone
+`optuna_mex`, the audited generic Simulink subset, and required notices. It does
+not require the Radia solver, NGSolve, oneMKL, or Cubit. Three explicitly named
+Radia adapters stay classified in the manifest and require Radia only when
+chosen.
 
-### Seeded TPE tie resolution
+Shared Study/Trial/visualization MCP operation belongs to the official
+`optuna/optuna-mcp` server. `radia-mcp` owns only MATLAB/Simulink/MEX health,
+code generation, differential-oracle planning, performance evidence, and the
+MATLAB-specific release gate. The project remains independent and unofficial,
+does not use the Optuna logo, and carries the upstream MIT and SciPy/Joe--Kuo
+notices.
 
-The final full-suite run exposed one real seeded difference in univariate
-constant-liar TPE. The MT19937 state, candidate stream, good/bad split, and
-categorical probabilities all matched upstream. The difference was two ULPs
-introduced by the MSVC scalar `log`/`exp` path in the MEX categorical density:
-an exact NumPy acquisition tie between choices A and B was no longer a tie, so
-MATLAB selected a later category.
+## Test and release policy
 
-Categorical acquisition now uses the same vectorized log-sum-exp evaluation
-order as the upstream NumPy oracle. Numerical Parzen sampling and density work
-remain native. The concurrent constant-liar fixture now matches all 32 rows
-(16 univariate and 16 multivariate), and the complete 150-test suite passes.
-This is why seeded compatibility must compare proposal sequences, not merely
-distribution moments or objective quality.
-
-### MATLAB and Simulink student workflow
-
-The MATLAB surface now has a toolbox-shaped entry layer:
-`OptimizationParameter`, `OptimizeOptions`, `optimoptions`, `optimize`, and
-`getParameterFromModel`. These names provide a familiar MATLAB workflow but do
-not depend on Global Optimization Toolbox or Simulink Design Optimization.
-Sampler, pruner, seed, search-space, callback, persistence, and stopping
-configuration delegate to the same `radia.optuna` implementation used by the
-lower-level API.
-
-`OptimizationSession` owns the explicit configured/running/paused/completed/
-cancelled lifecycle, checkpoint/restore, stale-RUNNING recovery, trial
-selection, and application of selected parameters. The full Level-2 MATLAB
-S-Function retains its six-input/eighteen-output ABI, but it is now internal to
-the default `Optuna Study` facade. The public student surface has two inputs and
-five outputs: four scalar convenience signals and one fixed-schema
-`OptunaMonitorBusV1`. Configuration, table review, and trial application are
-mask operations, while variable-length history and Pareto data stay in MAT
-tables, so experiments do not require signal-line changes.
-
-The tracked `radia_optuna_teaching.slx` and
-`OPTUNA_SIMULINK_LAB.md` cover a known quadratic optimum, a biobjective Pareto
-exercise, deterministic complete/pruned/failed behavior, and a tested
-no-rewiring loop: separate-study configuration comparison, same-study budget
-extension, table review, best-trial application, and rerun. Both the teaching
-model and the production library passed the required official-agent
-read/edit/check/save/reopen lane, clean-path reopen, full-window visual QA, and
-embedded-SLX scans with zero U+FFFD or suspicious `???` runs.
-
-### History storage
-
-The useful performance work from `09f4608c3` was ported onto the current
-implementation without replacing its newer API surface:
-
-- `freezeTrials` converts timestamp columns once per batch.
-- trials without reports reuse the shared empty intermediate table.
-- `TrialState.toStorage` short-circuits canonical strings.
-- `IntermediateTable` is a lazy materialized view over typed columns.
-- `TrialRowIndex` provides rebuildable per-trial row buckets for parameters,
-  objectives, intermediate values, attributes, and constraints.
-
-The index is a cache, never the authority. A row-count mismatch rebuilds from
-the source column, so a missed append notification can cost speed but cannot
-change results.
-
-The durable long benchmark is
-`validation_test/optimization/benchmark_optuna_history_store.m`. The mdx run
-covered 250/500/1000/2000/4000 trials, produced a freeze exponent of 0.862,
-and made the 4,000-trial indexed probe 5.683 times faster than the scan
-reference. Every indexed result matched the independent scan result.
-
-### mdx release-candidate performance
-
-Pinned upstream Python and MATLAB were run consecutively on mdx with identical
-100-trial workloads and 11 repeats, discarding the first three. MATLAB/Python
-warmed-time ratios were 0.670 for scalar TPE, 0.491 for grouped conditional
-TPE, and 0.630 for a 1,000-row `trials_dataframe`; lower is faster. Seeded
-checksums and table shape matched.
-
-The MATLAB-only deterministic batch benchmark froze RandomSampler proposals
-before objective evaluation. With 64 trials, a calibrated scalar objective,
-and four process workers, the warmed median improved from 5.256 s sequential
-to 2.230 s parallel: 2.357x speedup and 58.9% worker efficiency. This measures
-scheduler/worker throughput and does not predict the speedup of a particular
-CAE solver. A 5 ms smoke was slower in parallel, documenting that cheap
-objectives should remain sequential.
-
-The required MEX first call had an 11.44 ms median over seven fresh MATLAB
-processes. A separate unrelated `measured_jointconvex_ridge.py` process
-remained active on one core; it was not stopped. Pre-run total CPU was
-2.72--4.73% with 51,918 MiB free memory. The raw evidence records this load,
-and `radia-mcp.matlab_optuna_release_gate` returned `status=ready` with no
-errors.
-
-### Explicit Optuna storage handoff
-
-The bridge idea from `cbc029319` was retained as an explicit separation, not a
-runtime fallback:
-
-```text
-MATLAB Study -> export_study -> study-export.v1 -> radia-optuna-bridge
-     ^                                                   |
-     +------------- import_study <- upstream storage ----+
-```
-
-The original draft lost constraint vectors and study-level system attributes.
-The revised schema preserves those, plus original parameter and attribute
-names, distributions, intermediate values, timestamps, metric names, and
-trial states. The Python bridge refuses any Optuna version other than 4.9.0.
-It passes a real SQLite round trip; the MATLAB round trip also preserves names
-that are not valid MATLAB field names.
-
-### Previously named sampler gaps
-
-- Constant-liar TPE now has an oracle fixture with multiple genuinely
-  concurrent `RUNNING` trials.
-- CMA-ES covers source-trial warm start, separable CMA, margin CMA,
-  learning-rate adaptation, pruned-trial consideration, warnings, and invalid
-  option combinations.
-- Unscrambled Sobol uses the SciPy Joe--Kuo criterion-6 table through dimension
-  21,201. A standalone MEX command generates point batches without Python.
-
-For contiguous Sobol batches the MEX follows the single Gray-code bit change
-between consecutive samples. On the same LAB host, 64 dimensions by 4,096
-points measured 0.7587 ms median through the MATLAB API versus 0.8898 ms for
-SciPy 1.17.1, while preserving the upstream point sequence. The separate
-maximum-dimension validation generated the first point in all 21,201
-dimensions successfully (0.208 s on this run).
-
-## Distribution and licensing boundary
-
-The fresh local `0.1.5` `py3-none-win_amd64` wheel was checked byte-for-byte
-against the monorepo sources, then installed into an isolated venv.
-`radia-optuna-doctor` resolved the
-wheel layout, all 226 MATLAB files, all fifteen standalone Simulink entry points,
-the 21-command `optuna_mex`, and the third-party notices without requiring the
-Radia solver package. MATLAB then loaded that installed tree with the
-repository and Radia absent from its path and exercised Study/SimulinkRunner,
-`OptimizationSession` checkpoint/resume, the version-2 optimization block, the
-tracked student workflow, and table persistence.
-
-The distribution retains the Optuna, SciPy, and Joe--Kuo notices, identifies
-itself as independent and unofficial, does not use the Optuna logo, and pins
-`optuna==4.9.0` whenever an explicit upstream handoff is requested.
-
-## Policy conclusion
-
-Optuna 4.9.0 remains the common algorithmic source of truth: equations,
-transforms, state transitions, boundary behavior, and seeded random
-consumption order are shared. MATLAB vectorization, MEX kernels, batching,
-parallel scheduling, MAT/table persistence, Simulink telemetry, and the
-explicit storage bridge may improve performance and workflow without defining
-an alternative compatibility truth.
-
-Short regression tests remain under `tests`; long scaling and maximum-dimension
-work remains under `validation_test`.
-
-## Remaining release gates
-
-- Run the repository CI matrix on the final commit.
-- Publish the independently versioned `radia-optuna==0.1.5` candidate only
-  after the main-CI artifact passes the four-machine release-quad gate.
-- Merge, tag, publish the wheel to PyPI, and complete release-quad.
-
-Until those gates finish, the correct statement is: **the reviewed worktree
-closes the required Optuna 4.9.0 compatibility scope with executable upstream
-evidence, exposes the entire generated surface with assertions identified
-separately, and passes its differential, integration, installed-wheel, mdx
-performance, and maximum-dimension checks; it is not yet a published release.**
+Fast deterministic regressions live under `tests`. Long performance, scaling,
+parallel-efficiency, and maximum-dimension runs live under `validation_test`.
+Fixtures and coverage are regenerated from the pinned 5.0 environment and must
+be byte-stable. A release requires the full short suite, isolated installed-
+wheel checks, fresh 5.0 performance evidence, CI, merge, tag, PyPI publication,
+and the four-machine release-quad gate.
