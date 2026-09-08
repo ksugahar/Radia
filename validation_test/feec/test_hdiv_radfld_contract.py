@@ -125,7 +125,9 @@ def test_hdiv_image_demag_matches_explicit_full_to_roundoff():
 # (2026-09-07) the accumulation order no longer matters, and what remains is the sqrt(n_points) eps of
 # the per-term rounding (measured 2.2e-14 single cell, 5.7e-14 multi-cell; 1.3e-13 / 6.7e-14 before the
 # compensation).  The TET route keeps 10 eps because its near integrals are closed forms.  This bound is
-# that floor with a factor of two, not a reflection defect allowance.
+# that floor with a factor of two, not a reflection defect allowance.  Summed over ~1e6 terms the
+# floor IS this computation's machine precision, and Sugahara accepted it as the HEX field contract
+# on 2026-09-08; the TET analytic route keeps the 10 eps contract.
 HEX_IMAGE_FIELD_LIMIT = 1.2e-13
 
 
