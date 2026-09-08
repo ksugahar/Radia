@@ -127,7 +127,8 @@ solver boundary is a checked `.vol` regardless of the creation route.
 
 - Producing a `.vol` is `cubit-mesh-export`'s responsibility and runs on a
   licensed Cubit machine. radia CI never generates one: it consumes committed
-  fixtures and skips explicitly when a fixture is absent. Heavier `.vol` work
+  fixtures. A missing required fixture fails the test; only explicitly optional
+  validation inputs may produce a visible skip. Heavier `.vol` work
   belongs to `validation_test/`, and `docs/**/*.ipynb` may show the Cubit
   generation step.
 - Every solver-bound `.vol` passes `check-vol` with its versioned label
@@ -201,7 +202,8 @@ hibino is a SPOT instance: starting it is a human action, not an agent one.
 Probe with `ssh -o ConnectTimeout=6 -o BatchMode=yes hibino hostname` — ICMP is
 blocked, so `ping` reports a false "down" — then check for a running python
 job, because hibino takes one heavy job at a time. Otherwise use whichever of
-mdx1/mdx2 is idle. Compute work must never delay or destabilize CI/preflight.
+mdx1/mdx2 is idle, after checking both its CI runner and its job queue are idle.
+Compute work must never delay or destabilize CI/preflight.
 Historical mdx measurements remain valid provenance. Record host, runtime,
 versions, and measured quantities in validation JSON.
 
