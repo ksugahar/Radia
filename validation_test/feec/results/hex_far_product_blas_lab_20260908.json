@@ -1,0 +1,77 @@
+{
+  "cases": [
+    {
+      "nt": 9,
+      "ns": 9,
+      "qt": 16,
+      "qs": 16,
+      "relative_max_error": 1.6374162575890073e-16,
+      "scalar_median_s": 5.272500000000001e-06,
+      "blas_median_s": 1.695e-06,
+      "speedup": 3.110619469026549
+    },
+    {
+      "nt": 26,
+      "ns": 26,
+      "qt": 64,
+      "qs": 64,
+      "relative_max_error": 2.489890771180274e-16,
+      "scalar_median_s": 0.00017018450000000002,
+      "blas_median_s": 1.9979000000000003e-05,
+      "speedup": 8.518169077531407
+    },
+    {
+      "nt": 26,
+      "ns": 9,
+      "qt": 64,
+      "qs": 16,
+      "relative_max_error": 5.052068988066639e-16,
+      "scalar_median_s": 3.0139500000000002e-05,
+      "blas_median_s": 6.511000000000001e-06,
+      "speedup": 4.629012440485332
+    },
+    {
+      "nt": 9,
+      "ns": 26,
+      "qt": 16,
+      "qs": 64,
+      "relative_max_error": 5.655387240556484e-16,
+      "scalar_median_s": 3.6778000000000006e-05,
+      "blas_median_s": 4.6775000000000005e-06,
+      "speedup": 7.862747194013897
+    },
+    {
+      "nt": 26,
+      "ns": 26,
+      "qt": 125,
+      "qs": 125,
+      "relative_max_error": 6.281531563558986e-16,
+      "scalar_median_s": 0.0005819205,
+      "blas_median_s": 6.628100000000001e-05,
+      "speedup": 8.779597471371886
+    },
+    {
+      "nt": 26,
+      "ns": 26,
+      "qt": 65,
+      "qs": 64,
+      "relative_max_error": 5.444070528919543e-16,
+      "scalar_median_s": 0.00017251600000000003,
+      "blas_median_s": 2.0564e-05,
+      "speedup": 8.389223886403425
+    }
+  ],
+  "schema": "radia.hex-far-product.microbenchmark.v1",
+  "timestamp": "2026-09-08T04:41:49.916695+00:00",
+  "machine": "lab",
+  "platform": "Windows-2022Server-10.0.20348-SP0",
+  "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+  "mkl": "2026.1.0",
+  "compiler_flags": "MSVC 14.50.35717 /O2 /Ob2 /DNDEBUG /MD /EHsc /fp:fast /arch:AVX2 /GL /std:c++20 /LD; pip mkl-devel; mkl_rt.lib",
+  "scope": "synthetic kernel only; not full Gram or solve acceptance",
+  "source_sha256": {
+    "rad_hex_far_product.h": "c9837cad73bc28f1b86989b7088574dc46471cd3b85037a5788877966da1a01a",
+    "benchmark_hex_far_product.cpp": "44cf4952aaacb03ce2607d2ad27ec67c61b5fca8ed7dc36e676d45b4ee9928ce",
+    "hex_far_product.dll": "e38af0b1e1e8e6edd359205e6fcb59cf665cf9d7d8a5cea9b7aae95ae314b8c7"
+  }
+}

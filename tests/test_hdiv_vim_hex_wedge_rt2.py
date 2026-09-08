@@ -188,9 +188,11 @@ def test_mapped_hex_bdm1_material_solve_remains_the_supported_lane():
     assert np.isfinite(result["M_avg"]).all()
 
 
-def test_rt2_hex_far_block_uses_accurate_complete_tensor_rule():
+@pytest.mark.parametrize("exponent", [0, 2])
+def test_rt2_hex_far_block_uses_accurate_complete_tensor_rule(exponent):
     """A separated affine pair exercises the fast far block, not the exact near recurrence."""
-    x5, w5 = np.polynomial.legendre.leggauss(5)
+    # The quadratic charge needs a richer rule to reach the same oracle tolerance.
+    x5, w5 = np.polynomial.legendre.leggauss(8 if exponent else 5)
     x5, w5 = 0.5*(x5 + 1.0), 0.5*w5
 
     def nodes(offset):
@@ -204,7 +206,7 @@ def test_rt2_hex_far_block_uses_accurate_complete_tensor_rule():
         quad_face_nodes=np.empty(0), n_el=2, n_bf=0,
         charge_host=np.asarray([0, 1], dtype=np.int32),
         charge_kind=np.asarray([0, 0], dtype=np.int32),
-        charge_expo=np.zeros(6, dtype=np.int32),
+        charge_expo=np.asarray([exponent, 0, 0]*2, dtype=np.int32),
         sym_tet_pts=np.asarray([0.25, 0.25, 0.25]),
         sym_tet_w=np.asarray([1.0/6.0]),
         sym_tri_pts=np.asarray([1.0/3.0, 1.0/3.0]),
@@ -224,7 +226,8 @@ def test_rt2_hex_far_block_uses_accurate_complete_tensor_rule():
     reference = 0.0
     source = q + np.asarray([4.0, 0.0, 0.0])
     for target, weight in zip(q, qw):
-        reference += weight*np.sum(qw/np.linalg.norm(target - source, axis=1))
+        reference += weight*target[0]**exponent*np.sum(
+            qw*q[:, 0]**exponent/np.linalg.norm(target - source, axis=1))
     reference /= 4.0*np.pi
 
     assert gram.stats()["hex_affine_exact_near_factor"] == 1.0
