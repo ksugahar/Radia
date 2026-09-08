@@ -58,10 +58,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--junitxml", type=Path)
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--collect-only", action="store_true")
+    parser.add_argument("--since", help="Add affected lightweight contracts since this commit; empty means all registered impacts")
     args = parser.parse_args(argv)
 
     try:
         paths, budget = load_profile(args.profile)
+        if args.since is not None:
+            changed = None
+            if args.since:
+                diff = subprocess.run(
+                    ['git', '-c', f'safe.directory={ROOT}', 'diff', '--name-only', '-z',
+                     args.since, 'HEAD', '--'], cwd=ROOT, capture_output=True)
+                if diff.returncode == 0:
+                    changed = diff.stdout.decode('utf-8').split('\0')
+            paths = select_impact_tests(paths, changed)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         print(f"test-tier configuration error: {exc}", file=sys.stderr)
         return 2
@@ -91,6 +101,22 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 1
     return result.returncode
+
+
+def select_impact_tests(paths: list[str], changed: list[str] | None) -> list[str]:
+    """Select only registered lightweight regressions; unknown bases fail broad."""
+    rules = json.loads(MANIFEST.read_text(encoding='utf-8')).get('impact_rules', {})
+    selected = list(paths)
+    if changed is not None and 'tests/test_tier_manifest.json' in changed:
+        changed = None
+    for source, tests in rules.items():
+        if changed is None or source in changed or any(test in changed for test in tests):
+            selected.extend(tests)
+    selected = list(dict.fromkeys(selected))
+    for path in selected:
+        if not (ROOT / path).is_file():
+            raise ValueError(f'impact rule names missing test: {path}')
+    return selected
 
 
 if __name__ == "__main__":
