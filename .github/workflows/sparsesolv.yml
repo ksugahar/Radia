@@ -1,0 +1,89 @@
+name: SparseSolv AMS
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/ext/sparsesolv/**'
+      - 'src/radia/__init__.py'
+      - 'CMakeLists.txt'
+      - 'Build.ps1'
+      - 'pyproject.toml'
+      - 'tests/test_tier_manifest.json'
+      - 'tools/run_test_tier.py'
+      - 'tests/test_sparsesolv_ci_contract.py'
+      - '.github/workflows/sparsesolv.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/ext/sparsesolv/**'
+      - 'src/radia/__init__.py'
+      - 'CMakeLists.txt'
+      - 'Build.ps1'
+      - 'pyproject.toml'
+      - 'tests/test_tier_manifest.json'
+      - 'tools/run_test_tier.py'
+      - 'tests/test_sparsesolv_ci_contract.py'
+      - '.github/workflows/sparsesolv.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sparsesolv-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  ams-regression:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: [self-hosted, Windows, X64, mdx]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create isolated native environment
+        shell: pwsh
+        run: |
+          $venv = Join-Path $env:RUNNER_TEMP "sparsesolv-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          python -m venv $venv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $ciPython = Join-Path $venv 'Scripts\python.exe'
+          $pins = @(& $ciPython -c "import pathlib,tomllib; d=tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8')); print(*[x for x in d['project']['dependencies'] if x.startswith(('ngsolve==','netgen-mesher=='))], sep='\n')")
+          if ($LASTEXITCODE -ne 0 -or $pins.Count -ne 2) { throw 'Expected two exact FE runtime pins' }
+          & $ciPython -m pip install @pins mkl-devel pybind11==3.0.2 ninja cmake pytest scipy pyyaml
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "RADIA_CI_VENV=$venv" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          (Join-Path $venv 'Scripts') | Out-File $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Build current package and SparseSolv
+        shell: pwsh
+        run: |
+          # The package facade requires _radia_pybind; never borrow a developer binary.
+          & .\Build.ps1 -RadiaOnly
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = (& $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath).Trim()
+          if (-not $vs) { throw 'MSVC installation not found' }
+          $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
+          & cmd.exe /d /c "call `"$vcvars`" && cmake --build build-msvc --config Release --target sparsesolv_ngsolve --parallel 4"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Verify source provenance and run required AMS tests
+        shell: pwsh
+        env:
+          PYTHONPATH: '${{ github.workspace }}\src'
+        run: |
+          python -c "import pathlib,radia.sparsesolv_ngsolve as s; p=pathlib.Path(s.__file__).resolve(); assert p.parent == (pathlib.Path.cwd()/'src'/'radia').resolve(), p; assert s.has_compact_ams(), 'AMS support missing'; print('tested native module:',p)"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/run_test_tier.py --profile sparsesolv --junitxml "$env:RUNNER_TEMP\sparsesolv-results.xml"
+          exit $LASTEXITCODE
+
+      - name: Upload solver test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sparsesolv-results
+          path: |
+            ${{ runner.temp }}/sparsesolv-results.xml
+            build-msvc/build.log
+          if-no-files-found: warn
