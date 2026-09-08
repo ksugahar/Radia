@@ -174,29 +174,22 @@ def test_kelvin_exterior_reproduces_the_pulled_back_source_field():
     the negated field rather than a slightly inaccurate one.
     """
     import radia as rad
-    from radia.kelvin_source import kelvin_pullback_vector
+    from radia.kelvin_source import evaluate_kelvin_exterior
 
     mesh = _kelvin_mesh(maxh=0.20)
     coil = _coil()
     result = _solve(mesh, coil, mu_r_iron=1.0)
-    centre = np.asarray(OFFSET, dtype=float)
-    errors = []
-    for direction in ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0),
-                      (0.6, -0.6, 0.52)):
-        unit = np.asarray(direction, dtype=float)
-        unit = unit / np.linalg.norm(unit)
-        computational = centre + 0.62 * RADIUS * unit
-        physical = (RADIUS * RADIUS / (0.62 * RADIUS)) * unit
-        h_comp = np.asarray(
-            result["H_cf"](mesh(*map(float, computational))), dtype=float)
-        # Twisted 1-form: h = -k* h', so undoing the pullback of the stored
-        # computational field carries the same minus.
-        h_physical = -kelvin_pullback_vector(
-            h_comp, physical, np.zeros(3), RADIUS)
-        expected = np.asarray(
-            rad.Fld(coil, 'h', [physical.tolist()]), dtype=float).reshape(3)
-        errors.append(float(np.linalg.norm(h_physical - expected)
-                            / np.linalg.norm(expected)))
+    directions = np.asarray([(1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0),
+                             (0.6, -0.6, 0.52)], dtype=float)
+    directions = directions / np.linalg.norm(directions, axis=1)[:, None]
+    physical_points = (RADIUS / 0.62) * directions
+    recovered = evaluate_kelvin_exterior(
+        result["H_cf"], mesh, physical_points, kelvin_center=OFFSET,
+        physical_center=(0.0, 0.0, 0.0), radius=RADIUS, form="field_strength")
+    expected = np.asarray(
+        rad.Fld(coil, "h", physical_points.tolist()), dtype=float).reshape(-1, 3)
+    errors = list(np.linalg.norm(recovered - expected, axis=1)
+                  / np.linalg.norm(expected, axis=1))
     # A dead exterior returns exactly the source magnitude as the error (1.0);
     # a sign-flipped one returns about 2.0.  The band below is the coarse-mesh
     # discretisation error of a correctly coupled exterior.
@@ -268,4 +261,125 @@ def test_exact_pulled_back_exterior_source_matches_the_lift():
         assert max(errors) < 0.25, (
             "exterior field wrong for one representation: lift %.3f, exact %.3f"
             % (errors[0], errors[1]))
+
+
+def test_solution_pullback_inverts_the_native_kelvin_source_exactly():
+    """The pullback API must undo the native forward transform to round-off.
+
+    The native ``KelvinRadia*`` coefficients ARE the forward pullback of a
+    known Radia field, so composing them with the solution pullback has to
+    return the physical field itself.  That pins the metric factor, the
+    Householder reflection, the two-sphere offset, and the orientation sign of
+    each form at once, without needing a solve.
+    """
+    import radia as rad
+    from radia.kelvin_source import (
+        evaluate_kelvin_exterior,
+        kelvin_computational_to_physical,
+        kelvin_physical_to_computational,
+    )
+
+    mesh = _kelvin_mesh(maxh=0.34)
+    coil = _coil()
+    physical_center = (0.0, 0.0, 0.0)
+    directions = np.asarray([(1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0),
+                             (0.5, -0.7, 0.51)], dtype=float)
+    directions = directions / np.linalg.norm(directions, axis=1)[:, None]
+    points = (RADIUS / 0.55) * directions
+
+    computational = kelvin_physical_to_computational(
+        points, OFFSET, physical_center, RADIUS)
+    back = kelvin_computational_to_physical(
+        computational, OFFSET, physical_center, RADIUS)
+    assert np.allclose(back, points, rtol=1e-12, atol=1e-14)
+
+    for form, factory, component in (
+            ("field_strength", rad.KelvinRadiaFieldStrength, "h"),
+            ("flux_density", rad.KelvinRadiaFluxDensity, "b")):
+        forward = factory(coil, OFFSET, RADIUS, physical_center)
+        recovered = evaluate_kelvin_exterior(
+            forward, mesh, points, kelvin_center=OFFSET,
+            physical_center=physical_center, radius=RADIUS, form=form)
+        expected = np.asarray(
+            rad.Fld(coil, component, points.tolist()), dtype=float).reshape(-1, 3)
+        relative = (np.linalg.norm(recovered - expected, axis=1)
+                    / np.linalg.norm(expected, axis=1))
+        assert float(np.max(relative)) < 1.0e-9, (
+            "%s pullback does not invert the native transform: %s"
+            % (form, relative))
+
+
+def test_solution_pullback_rejects_interior_points_and_unknown_forms():
+    """Fail loud rather than transform something the formula does not cover."""
+    from radia.kelvin_source import evaluate_kelvin_exterior, kelvin_solution_to_physical
+
+    mesh = _kelvin_mesh(maxh=0.34)
+    with pytest.raises(ValueError, match="EXTERIOR"):
+        kelvin_solution_to_physical(
+            np.zeros((1, 3)), [[0.1, 0.0, 0.0]], kelvin_center=OFFSET,
+            physical_center=(0.0, 0.0, 0.0), radius=RADIUS,
+            form="field_strength")
+    with pytest.raises(ValueError, match="form must be one of"):
+        kelvin_solution_to_physical(
+            np.zeros((1, 3)), [[2.0, 0.0, 0.0]], kelvin_center=OFFSET,
+            physical_center=(0.0, 0.0, 0.0), radius=RADIUS, form="B")
+
+
+def test_every_form_degree_and_orientation_round_trips():
+    """Kelvin -> real -> Kelvin must be the identity for all eight cases.
+
+    Degree and orientation are independent axes, so the table has to be closed
+    under the involution for 0, 1, 2 and 3 forms, straight and twisted alike.
+    """
+    from radia.kelvin_source import (
+        kelvin_computational_to_physical,
+        kelvin_physical_to_computational,
+        kelvin_solution_to_computational,
+        kelvin_solution_to_physical,
+    )
+
+    rng = np.random.default_rng(20260908)
+    physical_center = np.array([0.0, 0.0, 0.0])
+    kelvin_center = np.asarray(OFFSET, dtype=float)
+    directions = rng.normal(size=(6, 3))
+    directions /= np.linalg.norm(directions, axis=1)[:, None]
+    physical = (RADIUS / rng.uniform(0.2, 0.9, size=(6, 1))) * directions
+    computational = kelvin_physical_to_computational(
+        physical, kelvin_center, physical_center, RADIUS)
+    assert np.allclose(
+        kelvin_computational_to_physical(
+            computational, kelvin_center, physical_center, RADIUS),
+        physical, rtol=1e-12, atol=1e-14)
+
+    for degree in (0, 1, 2, 3):
+        for twisted in (False, True):
+            form = (degree, twisted)
+            shape = (6,) if degree in (0, 3) else (6, 3)
+            values = rng.normal(size=shape)
+            pushed = kelvin_solution_to_computational(
+                values, computational, kelvin_center=kelvin_center,
+                physical_center=physical_center, radius=RADIUS, form=form)
+            pulled = kelvin_solution_to_physical(
+                pushed, physical, kelvin_center=kelvin_center,
+                physical_center=physical_center, radius=RADIUS, form=form)
+            assert np.allclose(pulled.reshape(shape), values,
+                               rtol=1e-11, atol=1e-13), (
+                "round trip failed for degree %d twisted=%s" % (degree, twisted))
+
+
+def test_named_forms_agree_with_their_degree_and_orientation():
+    """The physics names must resolve to the premetric classification."""
+    from radia.kelvin_source import KELVIN_FORMS, kelvin_form_degree_and_twist
+
+    assert KELVIN_FORMS["electric_potential"] == (0, False)
+    assert KELVIN_FORMS["scalar_potential"] == (0, True)
+    assert KELVIN_FORMS["vector_potential"] == (1, False)
+    assert KELVIN_FORMS["field_strength"] == (1, True)
+    assert KELVIN_FORMS["flux_density"] == (2, False)
+    assert KELVIN_FORMS["current_density"] == (2, True)
+    assert KELVIN_FORMS["charge_density"] == (3, True)
+    assert kelvin_form_degree_and_twist("flux_density") == (2, False)
+    assert kelvin_form_degree_and_twist((1, True)) == (1, True)
+    with pytest.raises(ValueError, match="degree must be"):
+        kelvin_form_degree_and_twist((4, False))
 
