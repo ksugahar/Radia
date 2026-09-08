@@ -128,6 +128,26 @@ the same record with separate final-source hashes; earlier peak throughput
 must not be presented as the final-code acceptance result. Neither stable
 grouped improvement nor historical 4.9 performance recovery is established.
 
+The next performance increment maintains COMPLETE/PRUNED/RUNNING/WAITING counts
+at state transitions. TPE eligibility and startup-count queries no longer scan
+or copy the full trial history, and an empty waiting queue avoids a history
+scan. Constructor-only empty table caches bypass decoding their columns back
+into already empty stores. Unchanged intersections return immediately;
+distribution equality avoids repeated categorical tokenization and scalar
+NaN-aware generic comparisons when direct equality suffices.
+
+All 75 upstream-oracle, 25 table/reliability/core, and 11 Python package tests
+pass. The new MATLAB-only cache invariant checks enqueue, concurrent ask,
+completion, pruning, stale recovery, imported trials, and save/reload against
+the actual table view; it does not add an upstream parity claim.
+The [state-count experiment](../../validation_test/optimization/results_optuna50_statecount_lab_20260908.json)
+is explicitly inconclusive: LAB CPU was observed at 100 percent. All five
+development timings are retained, including slower candidate runs, so no
+speedup is established. An idle mdx2 SSH Engine attempt imported successfully
+but timed out before MATLAB startup after 90 seconds; its owned process tree
+was reaped. Complete an idle-host before/after measurement before accepting
+this increment as an end-to-end performance improvement.
+
 MATLAB Engine 26.1 is installed on mdx2. The official dedicated Engine
 startup/calculation/shutdown diagnostic passed on both mdx runner accounts in
 [run 34210024491](https://github.com/ksugahar/Radia/actions/runs/34210024491).

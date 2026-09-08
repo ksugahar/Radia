@@ -66,6 +66,41 @@ verifyError(testCase, @()study.tell(trial, 1), ...
     "radia:optuna:TrialState");
 end
 
+function testStateCountCacheTracksMATLABStorageLifecycle(testCase)
+% Integration invariant, not an additional upstream parity claim.
+storagePath=string(tempname("C:\temp"))+".mat";
+cleanup=onCleanup(@()deleteStudyStorage(storagePath));
+study=radia.optuna.Study(StoragePath=storagePath,AutoSave=false, ...
+    Sampler=radia.optuna.RandomSampler(17));
+verifyStateCountCache(testCase,study);
+study.enqueue_trial(struct("x",0.2));
+study.enqueue_trial(struct("x",0.4));
+verifyStateCountCache(testCase,study);
+first=study.ask();
+second=study.ask();
+third=study.ask();
+verifyStateCountCache(testCase,study);
+study.tell(first,1);
+study.tell(second,State="PRUNED");
+verifyStateCountCache(testCase,study);
+study.recoverStaleRunning(0);
+verifyStateCountCache(testCase,study);
+study.tell(third,1,SkipIfFinished=true);
+study.add_trial(radia.optuna.create_trial(value=2));
+study.save();
+reloaded=radia.optuna.Study(StoragePath=storagePath,AutoSave=false, ...
+    Sampler=radia.optuna.RandomSampler(17));
+verifyStateCountCache(testCase,reloaded);
+clear cleanup
+end
+
+function verifyStateCountCache(testCase,study)
+states=study.TrialTable.State;
+counts=sum(states==["COMPLETE","PRUNED","RUNNING","WAITING"],1);
+verifyEqual(testCase,study.trialStateCounts(),counts);
+verifyEqual(testCase,study.nonRunningTrialCount(),sum(counts(1:2)));
+end
+
 function testAtomicStorageSchemaAndBackupRecovery(testCase)
 storagePath = string(tempname("C:\temp")) + ".mat";
 cleanup = onCleanup(@()deleteStudyStorage(storagePath));

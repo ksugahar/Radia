@@ -1262,11 +1262,10 @@ classdef TPESampler < radia.optuna.BaseSampler
             if ~result
                 return
             end
-            trials=study.trialData();
-            result=sum(trials.State=="COMPLETE")== ...
+            counts=study.trialStateCounts();
+            result=counts(1)== ...
                 obj.NativeHistoryCompleteCount && ...
-                ~any(trials.State=="PRUNED") && ...
-                sum(trials.State=="RUNNING")==1;
+                counts(2)==0 && counts(3)==1;
             if ~result
                 obj.NativeHistoryValid=false;
             end
@@ -1333,11 +1332,12 @@ classdef TPESampler < radia.optuna.BaseSampler
                         radia.optuna.internal.DistributionCodec.equivalent( ...
                             space(index).distribution,distributions{matching});
                 end
+                if all(keep)
+                    return
+                end
                 space=space(keep);
             end
-            if ~isequaln(space,obj.NativeIntersection)
-                obj.NativeGroupRevision=-1;
-            end
+            obj.NativeGroupRevision=-1;
             obj.NativeIntersection=space;
         end
 

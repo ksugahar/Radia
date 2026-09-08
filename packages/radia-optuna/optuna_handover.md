@@ -694,6 +694,25 @@ a matched-host/prewarm historical baseline and run the compute-host gate;
 the current LAB measurements include host-load variation and are not release
 acceptance. Preserve all repeated results rather than selecting the fastest.
 
+### State-count and empty-store performance increment
+
+State counts now update on mutation rather than scanning history at each TPE
+ask. Empty waiting queues bypass their scan, warm constructors reuse empty
+table caches without column decoding, unchanged intersections return early,
+and distribution equality avoids redundant normalization. Validation passes
+75 upstream-oracle tests, 25 MATLAB table/reliability/core tests, and 11 package
+Python tests. A MATLAB-only cache invariant covers enqueue through reload.
+
+Performance acceptance remains open. The JSON
+`validation_test/optimization/results_optuna50_statecount_lab_20260908.json`
+retains the five LAB development runs and marks them inconclusive because CPU
+was observed at 100 percent. Do not use these numbers to claim improvement.
+hibino/mdx1 were busy; idle mdx2 imported Engine over SSH but startup timed out
+after 90 seconds and the owned process tree was reaped. Use the already
+verified authenticated CI execution context or another idle compute host for
+the controlled before/after gate; do not reinstall Engine or repeat unchanged
+SSH startup probes.
+
 ## 19. Definition of done
 
 The implementation is complete only when:
