@@ -180,7 +180,7 @@ if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
     if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
     & $python tools/ci_preflight.py --since $base
     if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
-    & $python tools/run_test_tier.py --profile fast-contracts
+    & $python tools/run_test_tier.py --profile fast-contracts --since $base
     if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
   }} finally {{
     Pop-Location

@@ -44,6 +44,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - name: Create isolated fast-CI environment
         shell: pwsh
@@ -72,10 +74,13 @@ jobs:
 
       - name: Run fast repository and notebook contracts
         shell: pwsh
+        env:
+          RADIA_IMPACT_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
           New-Item -ItemType Directory -Force -Path $env:RADIA_CI_OUTPUT_DIR | Out-Null
           & $env:RADIA_FAST_PYTHON tools/run_test_tier.py `
             --profile fast-contracts `
+            --since "$env:RADIA_IMPACT_BASE" `
             --junitxml "$env:RADIA_CI_OUTPUT_DIR\fast-contracts.xml"
           exit $LASTEXITCODE
 
