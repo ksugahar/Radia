@@ -2,6 +2,7 @@
   "schema": "radia.test-tier-manifest.v1",
   "impact_rules": {
     "Build.ps1": ["tests/test_build_failure_propagation.py"],
+    ".github/workflows/sparsesolv.yml": ["tests/test_sparsesolv_ci_contract.py"],
     "tools/ci_preflight_mdx.py": ["tests/test_ci_preflight_mdx.py"],
     "tools/release_quad.py": ["tests/test_release_quad_state.py", "tests/test_release_quad_editable_source.py", "tests/test_release_quad_optuna_candidate.py"],
     "tools/verify_simulink_release.py": ["tests/test_simulink_release_package.py"],
@@ -35,8 +36,14 @@
         "tests/test_radia.py",
         "tests/test_meshless_relaxation_contract.py",
         "tests/test_version_consistency.py",
-        "tests/test_vim_api_names.py"
+        "tests/test_vim_api_names.py",
+        "src/ext/sparsesolv/tests/test_sparsesolv.py"
       ]
+    },
+    "sparsesolv": {
+      "description": "Required native AMS, AMG and Krylov solver regressions.",
+      "max_elapsed_seconds": 120,
+      "paths": ["src/ext/sparsesolv/tests/test_sparsesolv.py"]
     }
   }
 }
