@@ -125,6 +125,11 @@ checks, lifecycle tests, numerical checks, and durable `run.log` /
 SAT is important for Cubit's ACIS workflow; STEP is the portable standard. The
 solver boundary is a checked `.vol` regardless of the creation route.
 
+- Producing a `.vol` is `cubit-mesh-export`'s responsibility and runs on a
+  licensed Cubit machine. radia CI never generates one: it consumes committed
+  fixtures and skips explicitly when a fixture is absent. Heavier `.vol` work
+  belongs to `validation_test/`, and `docs/**/*.ipynb` may show the Cubit
+  generation step.
 - Every solver-bound `.vol` passes `check-vol` with its versioned label
   contract before solver or Simulink initialization.
 - Label checks validate topology/naming; DesignSpec validates physical data.
