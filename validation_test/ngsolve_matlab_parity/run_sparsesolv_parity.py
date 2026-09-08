@@ -4,6 +4,8 @@ import datetime
 import hashlib
 import json
 import platform
+import os
+import sys
 from pathlib import Path
 import subprocess
 import tempfile
@@ -14,8 +16,25 @@ import matlab.engine
 def main():
     parser = argparse.ArgumentParser(__doc__)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--timeout", type=int, default=240)
     args = parser.parse_args()
+    if not args.worker:
+        child = subprocess.Popen([sys.executable, str(Path(__file__).resolve()),
+                                  "--worker", "--output", str(args.output.resolve())])
+        try:
+            raise SystemExit(child.wait(timeout=args.timeout))
+        except subprocess.TimeoutExpired:
+            # Kill only this runner's owned Engine process tree.
+            subprocess.run(["taskkill", "/PID", str(child.pid), "/T", "/F"], check=True)
+            child.wait(timeout=20)
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_text(json.dumps(dict(passed=False, error="owned Engine worker timeout")))
+            raise SystemExit(124)
     root = Path(__file__).resolve().parents[2]
+    if not (root/"src/radia/_radia_pybind.pyd").is_file():
+        raise RuntimeError("Build -RadiaOnly in this checkout before parity; do not borrow an editable binary")
+    os.environ["PYTHONPATH"] = str(root/"src") + os.pathsep + os.environ.get("PYTHONPATH", "")
     mex = root / "matlab/radia_mex.mexw64"
     record = dict(schema="radia.sparsesolv-matlab-parity.v1",
                   utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),

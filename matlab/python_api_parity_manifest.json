@@ -9,6 +9,30 @@
   ],
   "rules": [
     {
+      "id": "electromagnet-validation",
+      "patterns": ["electromagnet_validation.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/electromagnetValidation.m"],
+      "notes": "Public three-formulation and ESRF validation contracts; batch-only, no duplicated numerical oracle."
+    },
+    {
+      "id": "esrf-model-definitions",
+      "patterns": ["esrf_examples.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/esrfExamples.m"],
+      "notes": "Source-traceable SI model definitions, CAD/source factories, and artifact export. Python CAD and NGSolve objects are retained at this explicit batch boundary."
+    },
+    {
+      "id": "static-electromagnet",
+      "patterns": ["static_electromagnet.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/staticElectromagnet.m"],
+      "notes": "Named MATLAB entry for the total/reduced Omega domain and solve contract. Executes the installed Python implementation without copying the formulation or claiming validation of another source revision."
+    },
+    {
       "id": "sparsesolv-native-and-python",
       "patterns": ["sparsesolv_ngsolve.*"],
       "classification": "python-fallback",
