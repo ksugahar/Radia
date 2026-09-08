@@ -60,8 +60,6 @@ def build(command: str) -> Equation | None:
         if not equation.insert_symbol(command[len("symbol."):]):
             return None
     elif command.startswith("latex."):
-        if command.startswith(("latex._", "latex.^")):
-            equation.insert_text("x")
         if not equation.insert_latex(command[len("latex."):]):
             return None
     elif command.startswith("style."):
