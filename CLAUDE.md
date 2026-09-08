@@ -148,6 +148,13 @@ hibino remains a computation host and is not a release-quad acceptance target.
 Long solver work should use hibino first when it is available and may use mdx
 only when the mdx CI queue is idle.
 
+MATLAB-capable runner services must use a MATLAB-authenticated account and pass
+an Engine startup/calculation/shutdown check in the actual service context;
+SYSTEM and SSH success are not substitutes for that acceptance. Keep the
+diagnostic manual-only. mdx1 is scheduled for retirement in March 2027; migrate
+CI routing and release-quad targets together before retirement, following the
+`release-quad` skill and a user-approved replacement plan.
+
 CI scope begins at the independently released distribution boundary. The
 checked `radia_mcp.meta` catalog and each server's live `tools/list` response
 are the tool-discovery source of truth. Generated tool inventory snapshots are
