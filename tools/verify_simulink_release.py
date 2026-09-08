@@ -11,6 +11,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 import zipfile
 from pathlib import Path, PurePosixPath
 
@@ -304,6 +305,68 @@ def _verify_level2_ih_contract(manifest: dict) -> None:
         raise RuntimeError("The IH native runtime dependency contract is invalid")
 
 
+def _run_matlab_process(command: list[str], timeout: int):
+    # The Engine worker owns MATLAB children that may inherit stdout. Avoid
+    # pipes that keep communicate() blocked after only the worker is killed.
+    with tempfile.TemporaryFile() as output:
+        process = subprocess.Popen(command, stdout=output, stderr=subprocess.STDOUT)
+        try:
+            returncode = process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired as error:
+            if sys.platform == "win32":
+                subprocess.run(
+                    ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                    capture_output=True, timeout=30, check=True,
+                )
+            else:
+                process.kill()
+            process.wait(timeout=30)
+            output.seek(0)
+            details = output.read().decode("utf-8", errors="backslashreplace")
+            raise RuntimeError(
+                f"MATLAB verification timed out after {timeout}s; "
+                f"stopped owned PID {process.pid}.\n{details}"
+            ) from error
+        output.seek(0)
+        return subprocess.CompletedProcess(command, returncode, output.read(), b"")
+
+
+def _engine_worker(expected_root: str, expression: str) -> int:
+    """Own one Engine session; never connect to or quit a user's session."""
+    import matlab.engine
+
+    print("Starting dedicated MATLAB Engine session", flush=True)
+    engine = matlab.engine.start_matlab("-nodesktop -nosplash")
+    output, errors = io.StringIO(), io.StringIO()
+    try:
+        actual_root = engine.matlabroot()
+        if Path(actual_root).resolve() != Path(expected_root).resolve():
+            raise RuntimeError(
+                f"MATLAB Engine root mismatch: expected {expected_root}, got {actual_root}"
+            )
+        print(f"MATLAB Engine connected: {actual_root}", flush=True)
+        engine.eval(expression, nargout=0, stdout=output, stderr=errors)
+    finally:
+        print(output.getvalue(), end="", flush=True)
+        print(errors.getvalue(), end="", file=sys.stderr, flush=True)
+        engine.quit()
+    return 0
+
+
+class _EngineScratch(tempfile.TemporaryDirectory):
+    """Engine.quit can return shortly before Windows releases native DLLs."""
+
+    def cleanup(self):
+        deadline = time.monotonic() + 30
+        while True:
+            try:
+                return super().cleanup()
+            except PermissionError:
+                if time.monotonic() >= deadline:
+                    raise
+                time.sleep(0.25)
+
+
 def run_matlab_smoke(archive: Path, matlab: Path, timeout: int = 300) -> str:
     if not matlab.is_file():
         raise FileNotFoundError(f"MATLAB executable does not exist: {matlab}")
@@ -325,7 +388,7 @@ def run_matlab_smoke(archive: Path, matlab: Path, timeout: int = 300) -> str:
     success_marker = (
         "RADIA_SIMULINK_RELEASE_OK" if full_library else "RADIA_IH_RELEASE_OK"
     )
-    with tempfile.TemporaryDirectory(
+    with _EngineScratch(
             prefix="radia-ih-verify-", dir=scratch) as temporary:
         root = Path(temporary)
         with zipfile.ZipFile(archive) as bundle:
@@ -335,15 +398,12 @@ def run_matlab_smoke(archive: Path, matlab: Path, timeout: int = 300) -> str:
             f"addpath('{matlab_root}','-begin');"
             f"report={verification_function}();assert(report.passed);"
         )
-        result = subprocess.run(
-            [str(matlab), "-batch", expression],
-            capture_output=True,
+        result = _run_matlab_process(
+            [sys.executable, "-X", "utf8", "-s", str(Path(__file__).resolve()),
+             "--engine-worker", str(matlab.parent.parent), expression],
             timeout=timeout,
         )
-        # MATLAB emits UTF-8 in batch mode even when the Windows process
-        # locale is cp932.  Keep subprocess in binary mode so Python never
-        # starts a locale-decoding reader thread that can fail before the
-        # ASCII release marker is inspected.
+        # The Python Engine worker emits UTF-8 even on a cp932 host.
         output = (result.stdout or b"").decode("utf-8", errors="backslashreplace") + \
             (result.stderr or b"").decode("utf-8", errors="backslashreplace")
         if result.returncode != 0:
@@ -359,6 +419,8 @@ def run_matlab_smoke(archive: Path, matlab: Path, timeout: int = 300) -> str:
 
 
 def main() -> int:
+    if len(sys.argv) == 4 and sys.argv[1] == "--engine-worker":
+        return _engine_worker(sys.argv[2], sys.argv[3])
     parser = argparse.ArgumentParser()
     parser.add_argument("archive", type=Path)
     parser.add_argument("--matlab", type=Path)
@@ -375,6 +437,7 @@ def main() -> int:
         print(_console_safe(matlab_output.rstrip()))
     print(json.dumps({
         "status": "passed",
+        "execution_backend": "not-executed" if args.manifest_only else "matlab-engine",
         "package": manifest["package"],
         "version": manifest["version"],
         "commit": manifest["commit"],

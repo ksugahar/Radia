@@ -37,7 +37,7 @@ _CI_SELECTED_FILES = {_selector_file(selector) for selector in _CI_SELECTORS}
 _CI_SELECT_ALL = not _CI_SELECTORS or "tests" in _CI_SELECTED_FILES
 
 # The radia-mcp matrix CI ("lightweight selftest") installs ONLY mcp + pytest
-# + radia-mcp (--no-deps): NO ngsolve / netgen / scipy / numpy / matplotlib /
+# + radia-mcp[maintenance]: NO ngsolve / netgen / scipy / numpy / matplotlib /
 # gmsh / chromadb / ...  A test that imports ANY such module AT MODULE LEVEL
 # crashes pytest COLLECTION there (ModuleNotFoundError) and reddens the whole
 # suite.  So skip collecting any test file whose imports include a module that
@@ -61,6 +61,8 @@ _MINIMAL_BASELINE = set(getattr(sys, "stdlib_module_names", ())) | {
     "h11", "httpcore", "httpx", "httpx_sse", "idna", "jsonschema", "jwt",
     "multipart", "pydantic", "pydantic_core", "pydantic_settings", "referencing",
     "rpds", "sse_starlette", "starlette", "typing_inspection", "uvicorn",
+    # Lightweight optional maintenance extra, exercised by the matrix.
+    "tomlkit",
 }
 _PROJECT_IMPORT_CACHE = {}
 

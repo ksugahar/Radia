@@ -33,6 +33,12 @@ def test_contract_set_is_always_selected():
     assert plan["server_selftests"] == []
 
 
+def test_internal_optimization_domain_selects_its_existing_pack():
+    plan = SELECTOR.build_plan(["packages/radia-mcp/src/radia_mcp/optimization/diagnostics.py"])
+    assert plan["server_selftests"] == ["radia-design"]
+    assert "tests/test_optimization_foundation.py" in plan["package_tests"]
+
+
 def test_changed_test_file_is_selected_directly():
     path = "packages/radia-mcp/tests/test_force_mcp_contract.py"
     plan = SELECTOR.build_plan([path])

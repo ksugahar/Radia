@@ -81,6 +81,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import zipfile
 from datetime import datetime, timezone
 from importlib import metadata as importlib_metadata
@@ -344,9 +345,52 @@ def _simulink_candidate_commit_is_release_anchored(
     return True, f"Simulink candidate is anchored at v{version} ({commit[:12]})"
 
 
-def _write_simulink_state(path: Path, state: dict) -> None:
+def _write_simulink_state(path: Path, state: dict, target: str) -> None:
+    """Merge only the completed target under a process lock, then publish atomically."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
+    # Keep this lock file: unlinking it could split concurrent writers' locks.
+    with path.with_suffix(path.suffix + '.lock').open('a+b') as lock:
+        deadline = time.monotonic() + 30
+        while True:
+            try:
+                if os.name == 'nt':
+                    import msvcrt
+                    lock.seek(0)
+                    msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+                else:
+                    import fcntl
+                    fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except OSError:
+                if time.monotonic() >= deadline:
+                    raise TimeoutError(f'Timed out locking candidate state: {path}')
+                time.sleep(0.05)
+        temporary = None
+        try:
+            previous = json.loads(path.read_text(encoding='utf-8')) if path.exists() else {}
+            if previous:
+                for field in ('schema', 'package_sha256', 'wheel_sha256', 'commit', 'ci_run_id'):
+                    if previous.get(field) != state.get(field):
+                        raise ValueError(f'Candidate state identity mismatch: {field}')
+            merged = {**state, 'targets': {**previous.get('targets', {})}}
+            merged['targets'][target] = state['targets'][target]
+            with tempfile.NamedTemporaryFile(
+                    mode='w', encoding='utf-8', dir=path.parent,
+                    prefix=path.name + '.', suffix='.tmp', delete=False) as output:
+                temporary = Path(output.name)
+                json.dump(merged, output, indent=2)
+                output.write('\n')
+                output.flush()
+                os.fsync(output.fileno())
+            os.replace(temporary, path)
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
+            if os.name == 'nt':
+                lock.seek(0)
+                msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
 
 
 def _run_simulink_candidate_target(
@@ -468,7 +512,7 @@ def cmd_simulink_candidate(args):
             "verified_at_utc": datetime.now(timezone.utc).isoformat(),
             "output_tail": output[-4000:],
         }
-        _write_simulink_state(state_path, state)
+        _write_simulink_state(state_path, state, key)
         if passed:
             ok(f"Simulink package passed on {label}")
         else:
@@ -776,7 +820,7 @@ def cmd_optuna_candidate(args):
             "verified_at_utc": datetime.now(timezone.utc).isoformat(),
             "output_tail": target_output[-4000:],
         }
-        _write_simulink_state(state_path, state)
+        _write_simulink_state(state_path, state, key)
         if passed:
             ok(f"radia-optuna wheel passed on {label}")
         else:
@@ -1549,8 +1593,8 @@ def _fresh_import_origin(pkg):
 def _verify_lab_editable(packages=None):
     """Check the 4 LAB-editable packages still point at NAS source.
 
-    Returns (n_ok, n_drift, n_missing, details) tuple.  Drift is the
-    one we care about for the "release-done" gate -- it means LAB
+    Returns the number of drifted packages. Drift is the
+    condition checked by the "release-done" gate -- it means LAB
     cannot dev-loop on that package because edits won't reflect.
 
     Missing for `mcp-server-document` is OK (LAB-private, may not be
@@ -1585,6 +1629,12 @@ def _verify_lab_editable(packages=None):
                  f"pip show output")
             n_drift += 1
             details.append((pkg, "no_location", "?"))
+            continue
+
+        if not d.get("editable project location"):
+            fail(f"{pkg:25s}  v{version}  NOT EDITABLE")
+            n_drift += 1
+            details.append((pkg, "not_editable", editable))
             continue
 
         if d.get("editable project location"):
@@ -1623,11 +1673,12 @@ def _verify_lab_editable(packages=None):
         fail(f"{n_drift} LAB-editable package(s) DRIFTED.  Fix:")
         for pkg, why, _got in details:
             print(f"        # {pkg} ({why})")
-            print(f"        Get-Process | Where-Object {{ $_.Name -like "
-                  f"'mcp-server*' }} | Stop-Process -Force")
-            print(f"        pip uninstall -y {pkg}")
-            print(f"        pip install -e {dict(packages)[pkg]} "
-                  f"--no-deps --no-cache-dir")
+            print("        At a quiet boundary, disconnect only the affected "
+                  "client/server; preserve unrelated sessions.")
+            print(f'        & "{sys.executable}" -m pip install -e '
+                  f'"{dict(packages)[pkg]}" --no-deps --no-build-isolation')
+            print("        Verify metadata and actual import origin, then "
+                  "reconnect and verify the live client.")
         print("")
         print("        See CLAUDE.md \"POLICY (2026-05-27): release 後の "
               "LAB editable 再確認\" for the full recovery procedure.")
