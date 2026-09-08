@@ -29,18 +29,47 @@ result-bearing documentation notebooks.
 
 ## Install
 
+`cubit-mesh-export` is standalone: it needs Coreform Cubit 2025.12, but it does
+**not** need `radia`.
+
+```bash
+pip install cubit-mesh-export
+cubit-plugin-install
+cubit-smoke-test
+```
+
+`cubit-plugin-install` deploys the plugin binaries, the Netgen DLLs, and the
+Cubit-side Python helpers (`cubit_helpers/add_kelvin.py`,
+`cubit_helpers/auto_kelvin_entry.py`) into your Coreform Cubit 2025.12 profile.
+`cubit-smoke-test` then drives a full round trip — mesh a sample, export it, and
+validate that the `.vol` is solver-ready — so a broken install fails here rather
+than inside your first real model.
+Use `cubit-plugin-install --all-users` for a shared lab machine.
+
+What you get depends on whether `radia` is installed alongside it:
+
+|                                                             | standalone | with `radia` |
+|-------------------------------------------------------------|:----------:|:------------:|
+| `export {netgen,gmsh,vtk,femeem,meg}` / `export jmag_nastran` |     yes    |      yes     |
+| `check-vol` CLI (no Cubit required)                           |     yes    |      yes     |
+| Kelvin transformation and symmetry labels                     |     yes    |      yes     |
+| **Export menu inside Cubit's GUI**                            |      —     |      yes     |
+
+The menu is registered through Cubit's own Claro API and runs in Cubit's
+embedded Python; normal Radia Python/MCP workflows and Simulink applications do
+not need PySide6.  To get the whole Radia toolchain in one step:
+
 ```bash
 pip install "radia[cubit]"
 cubit-plugin-install
 ```
 
-The second command deploys the Cubit plugin binaries, the Netgen DLLs,
-the Cubit-side Python helpers (`cubit_helpers/add_kelvin.py`,
-`cubit_helpers/auto_kelvin_entry.py`), and the Radia Export Mesh toolbar
-startup registration into your Coreform Cubit 2025.12 profiles.  The toolbar
-runs only inside Cubit's embedded Python; normal Radia Python/MCP workflows
-and Simulink applications do not need PySide6.
-Use `cubit-plugin-install --all-users` for a shared lab machine.
+> **If Cubit exits with code 2 while the export itself succeeded**, check for a
+> machine-wide `CUBIT_PLUGIN_DIR` environment variable.  Cubit appends it as a
+> `-commandplugindir` argument and then reports both the flag and its value as
+> files it could not open, which turns a clean run into a non-zero exit.  The
+> plugin still loads and the `.vol` is still valid — verify with `check-vol`
+> rather than trusting the exit code.
 
 ### Upgrade
 
