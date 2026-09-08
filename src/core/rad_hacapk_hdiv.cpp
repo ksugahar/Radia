@@ -6806,12 +6806,16 @@ bool RadHACApKChargeGram::HexPairTakesGeneralPath(int kindT, int hT, int kindS, 
     const std::vector<int>& tgtG = (kindT == 0) ? m_cellCharges[hT] : m_faceCharges[hT];
     const std::vector<int>& srcG = (kindS == 0) ? m_cellCharges[hS] : m_faceCharges[hS];
     if (tgtG.empty() || srcG.empty()) return false;
-    if (m_hexAffineOrder == 1 && HexPairDuffyEnabled()) {
-        // BDM1: every touching pair (pair-domain Duffy) and every near-band pair (product rule with
-        // the pair point count) is a 6-D tensor block whatever the hosts' affinity -- 265 ms against
-        // 14 us for a far block on hibino (2026-09-06) -- so all of them belong in the shared cache.
-        // Before this the affine-affine ones fell through to the per-thread caches and were
-        // recomputed by every fill worker that touched them.
+    {
+        // Every touching pair and every near-band pair is an expensive tensor block whatever the hosts'
+        // affinity and whatever the order, so all of them belong in the instance-shared compute-once
+        // cache.  Measured per block on one Q-mag mesh: BDM1 pair-domain Duffy 265 ms (hibino), BDM2
+        // exact-affine near 442 ms and graded near 155 ms (LAB), against 2 us for a far block.  This
+        // predicate only selects WHICH CACHE serves the block -- GetHexBlock computes the same
+        // QuadBlockHex either way -- so the classification never changes a number.  Before 2026-09-08
+        // the rule was BDM1-only and the BDM2 affine-affine near blocks fell through to the per-thread
+        // caches: 60,986 evaluations of 442 ms on Q-mag h15, 70 % of that build, with no reuse between
+        // congruent hosts.
         if (HexHostsTouch(kindT, hT, kindS, hS, img)) return true;
         const int repA = tgtG[0], repB = srcG[0];
         double repBc[3];
