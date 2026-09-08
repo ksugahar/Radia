@@ -13,6 +13,14 @@ checkout (normally `S:\Radia\01_GitHub`, or the checkout named by the
 JavaScript with SHA-256. Do not retain or edit an independent homepage source
 copy.
 
+A formal Eqnedit64 release includes both the native distribution and this Web
+publication. After GitHub/PyPI publication, build the homepage from the same
+release tag, update its versionless Windows download link, publish the editor
+page and changed assets, and verify public JS SHA-256 and browser behavior.
+The release is incomplete until this homepage phase passes. The complete
+procedure is in `.agents/skills/release-eqnedit64/SKILL.md` at the repository root.
+The editor lives at `elemag/equation-editor.php`; the learning portal links to it.
+
 The homepage release gate is intentionally isolated from the other 3D teaching
 material: run `site_builder/tools/run_eqnedit64_release_qa.ps1` in the homepage
 workspace. It builds only the editor page and asset, then runs the two-viewport

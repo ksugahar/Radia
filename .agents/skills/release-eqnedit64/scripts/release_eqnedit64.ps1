@@ -167,5 +167,6 @@ if ($WhatIf) {
     Sha256 = $sha256
     Signer = $signer
     OBackup = $backup
-    NextStep = 'Watch the tag CI, then the GitHub Release and the PyPI wheels.'
+    HomepagePublicationRequired = $true
+    NextStep = 'Watch tag CI and GitHub/PyPI publication, then publish and verify the same-tag Web/JS edition on the laboratory homepage as required by SKILL.md.'
 }

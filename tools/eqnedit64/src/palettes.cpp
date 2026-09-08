@@ -213,10 +213,11 @@ std::vector<Palette> build() {
         raw("\\mathrm{d} ", u8"dω", u8"外微分（立体のd）"),
         raw("\\iota_{} ", u8"ι", u8"内部積（縮約）ι_X"),
         raw("\\mathcal{L}_{} ", u8"ℒ", u8"Lie微分"),
-        raw("^{*} ", u8"f^*", u8"引き戻し（pullback）"),
-        raw("_{*} ", u8"f_*", u8"押し出し（pushforward）"),
-        raw("^{\\flat} ", u8"♭", u8"フラット（添字を下げる）"),
-        raw("^{\\sharp} ", u8"♯", u8"シャープ（添字を上げる）"),
+        /* Each raw fragment is parsed independently, so scripts need a base. */
+        raw("{}^{*} ", u8"f^*", u8"引き戻し（pullback）"),
+        raw("{}_{*} ", u8"f_*", u8"押し出し（pushforward）"),
+        raw("{}^{\\flat} ", u8"♭", u8"フラット（添字を下げる）"),
+        raw("{}^{\\sharp} ", u8"♯", u8"シャープ（添字を上げる）"),
         raw("\\otimes ", u8"⊗", u8"テンソル積"),
         raw("\\oplus ", u8"⊕", u8"直和"),
     }});
