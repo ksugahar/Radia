@@ -9,7 +9,7 @@ import pytest
 pytest.importorskip("ngsolve")
 import radia as rad  # noqa: E402
 import ngsolve as ng  # noqa: E402
-from ngsolve.meshes import MakeStructured3DMesh  # noqa: E402
+from netgen.occ import Box, OCCGeometry, Pnt  # noqa: E402
 
 MU0 = 4.0e-7 * math.pi
 L = 0.02
@@ -18,14 +18,20 @@ H0 = 1000.0
 
 
 def _vol(path):
+    """Write the iron cube as a ``.vol``: this test's subject is SoftIron's FILE path.
+
+    On the reported Windows/NGSolve 6.2.2606 environment, saving structured
+    HEX/TET meshes raised an access violation even without importing Radia;
+    OCC and CSG meshes round-tripped successfully. This OCC fixture preserves
+    the file-input contract, not structured-HEX coverage or an upstream diagnosis.
+    """
     with ng.TaskManager():
-        m = MakeStructured3DMesh(hexes=True, nx=3, ny=3, nz=3,
-                                 mapping=lambda x, y, z: (L * x, L * y, L * z))
-        m.ngmesh.Save(str(path))
+        geometry = OCCGeometry(Box(Pnt(0.0, 0.0, 0.0), Pnt(L, L, L)))
+        geometry.GenerateMesh(maxh=L / 3.0).Save(str(path))
 
 
 def test_soft_iron_hdiv_from_vol(tmp_path):
-    vol = tmp_path / "cube_hex.vol"
+    vol = tmp_path / "cube.vol"
     _vol(vol)
 
     def run(backend="hdiv"):
