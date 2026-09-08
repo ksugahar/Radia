@@ -66,11 +66,12 @@ jobs:
         id: matlab-impact
         shell: pwsh
         run: |
-          $changed = @(git diff --name-only HEAD^ HEAD)
+          $changed = @(git diff --name-only HEAD~1 HEAD)
           $required = $LASTEXITCODE -ne 0 -or '${{ github.event_name }}' -eq 'workflow_dispatch'
           $required = $required -or [bool]($changed -match '^(src/ext/sparsesolv/|src/matlab/|matlab/\+radia/\+sparsesolv/|tests/matlab/.*sparsesolv|validation_test/ngsolve_matlab_parity/run_sparsesolv|CMakeLists.txt|Build.ps1|\.github/workflows/sparsesolv.yml)')
           $required = $required -or [bool]($changed -match '^matlab/(python_api_parity_manifest.json|\+radia/\+python/(sparsesolv|electromagnetValidation|esrfExamples|staticElectromagnet)\.m)')
           "required=$($required.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          exit 0
 
       - name: Create isolated native environment
         shell: pwsh
