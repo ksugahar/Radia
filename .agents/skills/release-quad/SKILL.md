@@ -52,6 +52,27 @@ build readiness: also run the Optuna native build lane. Keep pip build
 dependencies in the workflow's run-local venv. Remove retired runner
 registrations after their replacements are verified online.
 
+MATLAB-capable mdx runner services use `.\Administrator`, the current
+MATLAB-authenticated account, not SYSTEM. Configure credentials through the
+Windows Services Log On UI, never chat, command arguments, or committed files.
+The visible service is `GitHub Actions Runner (ksugahar-Radia.mdx1-ci)`
+(or mdx2-ci). An alternate least-privilege account requires its own MATLAB
+authentication and service-context acceptance; administrator privilege itself
+is not the MATLAB requirement.
+
+After runner reinstall/account changes, manually dispatch
+`matlab-engine-diagnostic.yml`. It tests both actual runner accounts with a
+dedicated Python Engine session, calculation and shutdown, with a 60-second
+owned-process-tree timeout. Do not add this license-dependent diagnostic to
+normal push/tag CI. SSH success or an open RDP MATLAB is not runner acceptance.
+The initial SYSTEM failure and subsequent account-change success are recorded
+in `validation_test/ci_runtime/matlab_engine_runner_20260908.json`.
+
+mdx1 is scheduled for retirement in March 2027. Before retiring it, obtain the
+replacement-target decision and update runner routing and release-quad target
+contracts together; verify MATLAB authentication and the native build on the
+replacement. Do not silently reduce the four-host gate or invent a replacement.
+
 ## Parallel WIP-Safe Editable Source
 
 Do not stash, clean, reset, or rebase a shared LAB worktree just to release.
@@ -92,6 +113,12 @@ tier to that tree.
   machine. A full library runs `verify_radia_simulink_release`; an IH preview
   runs `verify_radia_ih_release`. Rebuilding the ZIP invalidates the recorded
   gate state and requires all four checks again.
+- Execute these checks through Python's MATLAB Engine, not a MATLAB `-batch`
+  launcher. Each verifier owns a new Engine session and closes it on success
+  or failure; do not attach to or close a user's shared session. The selected
+  Python must have an Engine installation matching the requested MATLAB root.
+  Keep the isolated worker timeout so a stalled startup is bounded without
+  stopping unrelated MATLAB or solver processes.
 - The `done` result is the authoritative publication gate; partial, failed,
   or manually waived machine checks do not authorize publication.
 - Assemble and test the versioned Simulink package before publication. A full

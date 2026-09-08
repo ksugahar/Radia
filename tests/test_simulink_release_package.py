@@ -262,10 +262,114 @@ def test_matlab_smoke_decodes_utf8_without_cp932(monkeypatch, tmp_path):
         stdout = "\u691c\u8a3c\u5b8c\u4e86 RADIA_IH_RELEASE_OK\n".encode("utf-8")
         stderr = b""
 
-    monkeypatch.setattr(verify_module.subprocess, "run", lambda *args, **kwargs: Result())
+    def run_worker(command, **kwargs):
+        assert command[0] == verify_module.sys.executable
+        assert "--engine-worker" in command
+        assert "-batch" not in command
+        return Result()
+
+    monkeypatch.setattr(verify_module, "_run_matlab_process", run_worker)
     output = verify_module.run_matlab_smoke(archive, matlab)
     assert "RADIA_IH_RELEASE_OK" in output
     assert verify_module._console_safe("bad:\ufffd", "cp932") == "bad:\\ufffd"
+
+
+def test_matlab_timeout_stops_only_owned_windows_tree(monkeypatch):
+    module = load_module("verify_simulink_timeout", ROOT / "tools" / "verify_simulink_release.py")
+    calls = []
+
+    class Process:
+        pid = 43210
+        waits = 0
+
+        def wait(self, timeout):
+            self.waits += 1
+            if self.waits == 1:
+                raise module.subprocess.TimeoutExpired("matlab", timeout)
+            return 1
+
+    def popen(command, stdout, stderr):
+        stdout.write(b"startup diagnostics")
+        assert stderr == module.subprocess.STDOUT
+        return Process()
+
+    monkeypatch.setattr(module.sys, "platform", "win32")
+    monkeypatch.setattr(module.subprocess, "Popen", popen)
+    monkeypatch.setattr(module.subprocess, "run", lambda command, **kw: calls.append(command))
+    with pytest.raises(RuntimeError, match="startup diagnostics"):
+        module._run_matlab_process(["matlab.exe", "-batch", "test"], 1)
+    assert calls == [["taskkill", "/PID", "43210", "/T", "/F"]]
+
+
+def test_matlab_process_keeps_success_output(monkeypatch):
+    module = load_module("verify_simulink_process", ROOT / "tools" / "verify_simulink_release.py")
+
+    class Process:
+        def wait(self, timeout):
+            return 0
+
+    def popen(command, stdout, stderr):
+        stdout.write(b"RADIA_SIMULINK_RELEASE_OK")
+        return Process()
+
+    monkeypatch.setattr(module.subprocess, "Popen", popen)
+    result = module._run_matlab_process(["matlab.exe"], 1)
+    assert result.returncode == 0
+    assert result.stdout == b"RADIA_SIMULINK_RELEASE_OK"
+
+
+@pytest.mark.parametrize("failure", [False, True])
+def test_engine_worker_quits_its_session_on_success_and_failure(monkeypatch, tmp_path, failure):
+    import types
+    import sys
+    module = load_module("verify_engine_worker", ROOT / "tools" / "verify_simulink_release.py")
+    calls = []
+
+    class Engine:
+        def matlabroot(self):
+            return str(tmp_path)
+
+        def eval(self, expression, **kwargs):
+            assert kwargs["nargout"] == 0
+            kwargs["stdout"].write("engine output")
+            calls.append(expression)
+            if failure:
+                raise RuntimeError("simulation failed")
+
+        def quit(self):
+            calls.append("quit")
+
+    api = types.ModuleType("matlab.engine")
+    api.start_matlab = lambda options: Engine()
+    parent = types.ModuleType("matlab")
+    parent.engine = api
+    monkeypatch.setitem(sys.modules, "matlab", parent)
+    monkeypatch.setitem(sys.modules, "matlab.engine", api)
+    if failure:
+        with pytest.raises(RuntimeError, match="simulation failed"):
+            module._engine_worker(str(tmp_path), "verify()")
+    else:
+        assert module._engine_worker(str(tmp_path), "verify()") == 0
+    assert calls == ["verify()", "quit"]
+
+
+def test_engine_scratch_retries_transient_dll_lock(monkeypatch, tmp_path):
+    module = load_module("verify_engine_cleanup", ROOT / "tools" / "verify_simulink_release.py")
+    original = module.tempfile.TemporaryDirectory.cleanup
+    attempts = []
+
+    def cleanup(instance):
+        attempts.append(1)
+        if len(attempts) == 1:
+            raise PermissionError("DLL still unloading")
+        return original(instance)
+
+    monkeypatch.setattr(module.tempfile.TemporaryDirectory, "cleanup", cleanup)
+    monkeypatch.setattr(module.time, "sleep", lambda seconds: None)
+    with module._EngineScratch(dir=tmp_path) as folder:
+        assert Path(folder).is_dir()
+    assert attempts == [1, 1]
+    assert not Path(folder).exists()
 
 
 @pytest.mark.parametrize("damaged", ["bad \ufffd text", "bad ??? text"])

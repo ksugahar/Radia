@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia-mcp"
-version = "1.4.52"
+version = "1.4.53"
 # IMPORTANT: PyPI Warehouse enforces Summary max length = 512 chars.
 # 0.72.0-0.74.0 silently failed publish-pypi (twine reject) because
 # the per-release changelog accumulated >512 chars here.  Keep this
@@ -23,6 +23,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+maintenance = ["tomlkit>=0.13,<1"]
 # build123d-side tools need the build123d library itself.
 build123d = [
     "build123d>=0.6",
