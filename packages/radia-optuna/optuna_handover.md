@@ -65,6 +65,16 @@ The newly built wheel passed strict source/native fidelity verification
 and distribution behavior, not a measured performance gain or exhaustive
 compatibility outside the fixtures.
 
+The 2026-09-09 mdx attempt is recorded in
+`validation_test/optimization/results_optuna50_native_selection_attempt_20260909.json`.
+Both old/new MEX completed the same MATLAB workload with matching checksums,
+but another computation started during the mdx1 comparison; the pair is not
+performance acceptance. mdx2 imported Engine but timed out during startup
+after 90 seconds; its owned process tree was terminated and absence of Python
+and MATLAB processes verified. Repeated isolated timing and the Python
+comparison remain pending. Use an available idle host or a verified working
+Engine execution context, not repeated unchanged mdx2 SSH startup probes.
+
 ## 2. Scope and non-goals
 
 ### In scope
