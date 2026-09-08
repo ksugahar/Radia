@@ -1897,6 +1897,33 @@ end
 verifyEqual(testCase,actual,expected,AbsTol=5e-12);
 end
 
+function testNativeTPEHistorySelectionMatchesUpstream(testCase)
+contract=testCase.TestData.Oracle.native_tpe_history_selection;
+for entry=reshape(contract.cases,1,[])
+    stream=radia.optuna.internal.NumpyRandomState(contract.seed);
+    token=stream.nativeHandle();
+    % Reverse insertion, replacement, and reset must not change chronology.
+    for pass=1:2
+        radia.optuna.internal.NativeKernels.call("optuna.tpe.history.reset",token);
+        for index=numel(contract.history):-1:1
+            row=contract.history(index);
+            radia.optuna.internal.NativeKernels.call( ...
+                "optuna.tpe.history.append_complete",token,index-1, ...
+                row.value+1,int32(1),row.x);
+            radia.optuna.internal.NativeKernels.call( ...
+                "optuna.tpe.history.append_complete",token,index-1, ...
+                row.value,int32(1),row.x);
+        end
+    end
+    actual=radia.optuna.internal.NativeKernels.call( ...
+        "optuna.tpe.best_grouped_history",token,24,int32([0,1]), ...
+        int32(1),false,-2,2,false,NaN,int32(0), ...
+        string(entry.direction)=="minimize",entry.gamma,25,1,true,false);
+    verifyEqual(testCase,actual,entry.proposal,AbsTol=5e-12);
+    delete(stream);
+end
+end
+
 function testTPEIntersectionTransitionsMatchUpstream(testCase)
 contract=testCase.TestData.Oracle.tpe_intersection_transitions;
 study=radia.optuna.Study(Sampler=radia.optuna.TPESampler( ...
