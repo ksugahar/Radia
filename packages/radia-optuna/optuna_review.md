@@ -93,6 +93,41 @@ parallel execution, session resume, Simulink blocks, and the teaching model.
 All 11 package Python tests passed with pinned Optuna 5.0.0. The rebuilt 0.2.0
 wheel passed strict source fidelity for 222 MATLAB files and 21 MEX commands.
 
+Follow-up performance work updates the native non-group intersection at completed
+trial insertion, skips `makeValidName` for already valid parameter names, and
+constructs exported table columns in one call. A new upstream-generated seeded
+case exercises changed bounds, removed/reintroduced parameters, and an empty
+completed trial; it guards against stale intersection caches.
+That case exposed three additional upstream differences, now corrected:
+compatible relative proposals are reused when contained in changed bounds,
+historical observations outside the current bounds are retained, and trial
+ranking precedes per-parameter observation selection. The last point reuses
+the existing global trial split instead of ranking only trials containing a
+parameter. All 75 upstream-oracle tests pass after these corrections, including
+the 24-trial changing-space sequence. The fixture is byte-stable across two
+regenerations with pinned Optuna 5.0.0. The 24 table/reliability/core MATLAB
+regressions and all 11 package Python tests also pass.
+
+The [follow-up LAB record](../../validation_test/optimization/results_optuna50_followup_lab_20260908.json)
+retains both fresh-Engine measurements preceding the three compatibility
+corrections: scalar 1,281/1,280 trials/s, grouped
+616/666 trials/s, and 1,000-row export 4.080/4.485 ms. The intervening Python
+measurement is 880 scalar and 275 grouped trials/s, with 5.223 ms export.
+All checksums remain within 1e-12. Python also improved relative to the preceding
+record, so the apparent before/after gain includes host-load variation.
+Historical 4.9 LAB scalar time was 72.717 ms per 100 trials (about 1,375 trials/s),
+versus 78.040/78.105 ms now. This is a regression-investigation baseline, not a
+controlled version comparison: prewarm settings differ and grouped proposals
+changed in 5.0. Recovering historical performance still requires matched-host
+validation; exceeding Python alone is not sufficient evidence.
+
+The final-code rerun (after all three compatibility corrections) recorded
+1,144 scalar and 473 grouped trials/s versus Python 874/282. Table export was
+5.191 ms versus Python 4.885 ms. These slower MATLAB timings are retained in
+the same record with separate final-source hashes; earlier peak throughput
+must not be presented as the final-code acceptance result. Neither stable
+grouped improvement nor historical 4.9 performance recovery is established.
+
 MATLAB Engine 26.1 is installed on mdx2. The official dedicated Engine
 startup/calculation/shutdown diagnostic passed on both mdx runner accounts in
 [run 34210024491](https://github.com/ksugahar/Radia/actions/runs/34210024491).

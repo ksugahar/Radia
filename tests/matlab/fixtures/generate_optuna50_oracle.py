@@ -1298,6 +1298,25 @@ def _multiobjective_tpe_trials() -> list[dict[str, float]]:
     return rows
 
 
+def _tpe_intersection_transitions() -> dict[str, object]:
+    study = optuna.create_study(
+        sampler=optuna.samplers.TPESampler(seed=137, n_startup_trials=4)
+    )
+    rows = []
+    for index in range(24):
+        trial = study.ask()
+        bounds = [-2.0, 2.0] if index < 8 else [-1.0, 2.0]
+        active = index != 16
+        include_y = index < 12 or index >= 20
+        x = trial.suggest_float("x", *bounds) if active else 0.0
+        y = trial.suggest_float("y", -1.0, 1.0) if active and include_y else 0.0
+        loss = (x - 0.25) ** 2 + (y + 0.1) ** 2
+        study.tell(trial, loss)
+        rows.append(dict(low=bounds[0], high=bounds[1], active=active,
+                         include_y=include_y, x=x, y=y, loss=loss))
+    return dict(seed=137, startup_trials=4, trials=rows)
+
+
 def _mixed_tpe_trials() -> list[dict[str, object]]:
     study = optuna.create_study(
         sampler=optuna.samplers.TPESampler(seed=43, n_startup_trials=4)
@@ -3447,6 +3466,7 @@ def build_oracle() -> dict[str, object]:
         "distribution_json": _distribution_json_contract(),
         "random_sampler_seed_123": _random_trials(),
         "tpe_sampler_seed_37": _tpe_trials(),
+        "tpe_intersection_transitions": _tpe_intersection_transitions(),
         "tpe_constant_liar_seed_127": _tpe_constant_liar_contract(),
         "numeric_untransform": _numeric_untransform_contract(),
         "single_distribution_rng": _single_distribution_rng_contract(),
