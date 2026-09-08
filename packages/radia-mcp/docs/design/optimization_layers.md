@@ -56,8 +56,8 @@ distributed and no model-weight training is performed.
 
 1. Constraint-qualification and curvature evidence beyond residual diagnostics;
    keep constrained stationarity distinct from sufficiency.
-2. Audit remaining global-search helper ownership without merging Bayesian,
-   evolutionary and local smooth search merely because all optimize objectives.
+2. Preserve the completed search ownership audit below; Bayesian, evolutionary
+   and local smooth search remain distinct workflows.
 3. Extend splitting diagnostics to justified general-constraint/TV cases and
    connect them to independently validated physical inverse-design workflows.
 4. Keep Bayesian/evolutionary search distinct; use local refinement only when
@@ -132,9 +132,7 @@ tests deliberately retain the old imports and assert identity with the new
 homes. Application guidance names the canonical paths. Field-map construction
 and PDE adjoints remain domain-owned. The nonlinear multi-start evidence gate
 and simplex-stationarity gate retain their existing summary contracts and tool
-names in `topology_optimization`; their ownership needs a separate gate audit,
-not a move bundled with these numerical helpers.
-Global/evolutionary search is not migrated in this slice.
+names in `topology_optimization`; the follow-up audit below explains why.
 
 Two numerical edge cases were corrected during migration:
 
@@ -212,3 +210,71 @@ Reference: [Boyd et al., Distributed Optimization and Statistical Learning via
 the Alternating Direction Method of Multipliers (2011), section 3.3](https://web.stanford.edu/~boyd/papers/admm_distr_stats.html).
 This specialization and its normalized-coordinate contract are explicit;
 the two tools compose into the existing radia-design optimization profile.
+
+## Completed search and regression-gate ownership audit
+
+Scope: the existing Bayesian/evolutionary dispatchers and knowledge, local
+helpers, global-search helpers, and the two historical regression gates.
+This is an ownership audit, not certification of every optimizer or guide claim.
+
+| Surface | Decision and rationale |
+| --- | --- |
+| `bayesian_opt` | Retain GP, surrogate and acquisition guidance; not a duplicate local optimizer. |
+| `evolutionary` | Retain population, representation and multiobjective guidance; not interchangeable with Bayesian search. |
+| `optimization` | Own shared scaling, diagnostics, LM, inverse helpers and now `global_optimizers`; no new dispatcher/server. |
+| `topology_optimization` | Own PDE/adjoint/application guidance plus historical regression contracts. |
+| `matrix_solvers` | Own linear CG, not nonlinear optimization. |
+
+`optimization.global_optimizers` now owns the existing NumPy DE and
+feasibility-ranking helpers. The old module re-exports the exact function
+objects. No numerical algorithm, seeded sequence, signature, return field,
+dependency, tool name or server configuration changes in this migration.
+Existing old-import numerical tests remain, with explicit identity regressions.
+
+The two gates are **reproduction-specific**, not universal success gates:
+
+- Multistart requires evidence of the old all-zero multiplicative-start
+  collapse as well as corrected starts, residuals and Jacobians. An ordinary
+  successful multistart with no such legacy experiment cannot pass this gate.
+- Simplex requires a candidate's false convergence to be detected and an
+  accepted independent control. `status=ok` does NOT mean every method succeeded.
+  Two genuinely accepted methods alone do not satisfy this reproduction contract.
+
+Preserve their schemas/tool names and lock these meanings with regression tests.
+New workflows use the common stopping, projected-gradient, KKT or proximal
+audit suitable for their mathematical problem. No duplicate generic gate is added.
+
+Known limitations retained, not silently certified by relocation: DE uses
+population objective spread, not a stationarity/global-optimum certificate.
+The legacy selector treats a missing constraint key as unconstrained, accepts
+unvalidated nonfinite numbers, and sums raw residuals by default. Callers must
+provide complete finite evidence and normalize differently scaled constraints;
+check `feasible` on the fallback. Hardening these behaviors requires a separate
+compatibility change, not an unnoticed ownership edit. Production solvers should
+come from the established ecosystem. Local refinement after global search is
+conditional on smoothness, reliable derivatives and compatible constraints.
+
+## Physical inverse-design follow-up (started, not yet validated)
+
+Use the fixed square-loop current basis in
+`docs/stream_function/demo_coil_field_synthesis.py` as the model reference,
+not a new topology optimizer. The independent field-engine pattern is in
+`validation_test/stream_function/verify_coil_field_independent.py`.
+
+1. Freeze geometry in metres, a nonzero target in tesla, current scale in
+   amperes, training probes and disjoint held-out probes before fitting.
+2. Build the unit-current response from the existing Radia filament API.
+   Compare Tikhonov, coordinate L1 and disjoint physical coil-group L2 over
+   regularization paths; equal numeric weights are not an equal comparison.
+3. Select settings using a declared training-error budget; never tune on the
+   held-out probes. Report target error, current norm, active coils/groups and
+   the threshold used to declare activity. Sparsity is not manufacturability.
+4. Re-evaluate the accepted currents with independent Biot-Savart integration
+   at held-out probes. Report full vector difference relative to the reference
+   field norm, separately from target-fit error; check quadrature convergence.
+5. Gate optimizer evidence with common diagnostics. Store validation JSON with
+   geometry, units, currents, tolerances, runtime/source provenance and failures.
+   A public example follows only after an executed notebook with saved WebGUI
+   geometry/field output and synchronized JSON passes the docs checks.
+
+No physical validation result, deployment, or client restart is claimed here.
