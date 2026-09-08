@@ -283,7 +283,9 @@ def test_policy_twins_define_the_same_mdx_notebook_contract():
 def test_policy_twins_define_the_same_compute_host_routing():
     agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
     claude = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
-    start_marker = "**POLICY (hibino-first; mdx CI-first, 2026-09-03)**"
+    # Anchor on the heading, not on a dated POLICY line: the routing rule is
+    # revised whenever the host fleet changes and the marker should survive it.
+    start_marker = "### Compute Host Routing"
     end_marker = "**POLICY**: 全てのベンチマークスクリプト"
 
     def routing_policy(text: str) -> str:
@@ -293,8 +295,15 @@ def test_policy_twins_define_the_same_compute_host_routing():
     policy = routing_policy(agents)
     assert policy == routing_policy(claude)
     normalized = " ".join(policy.split())
-    assert "on hibino first" in normalized
-    assert "mdx CI runner and its job queue are idle" in normalized
+    # hibino is SPOT: agents may use it, but must not start it.
+    assert "already running and idle" in normalized
+    assert "SPOT instance" in normalized
+    assert "one heavy job at a time" in normalized
+    assert "whichever of mdx1/mdx2 is idle" in normalized
+    # ICMP is blocked on hibino, so ping reports a false "down".
+    assert "ConnectTimeout" in normalized
+    assert 'reports a false "down"' in normalized
+    assert "Core count does not imply speed" in normalized
     assert "Compute work must never delay or destabilize CI/preflight" in normalized
     assert "Historical mdx measurements remain valid provenance" in normalized
 
@@ -302,6 +311,8 @@ def test_policy_twins_define_the_same_compute_host_routing():
         "`mdx` by default",
         "`mdx`を既定の静音計算ホスト",
         "mdx = 静音計算ホスト",
+        # Unconditional "hibino first" reads as "start it if it is down".
+        "on hibino first",
     ):
         assert stale not in agents
         assert stale not in claude
