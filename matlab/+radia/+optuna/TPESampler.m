@@ -170,6 +170,7 @@ classdef TPESampler < radia.optuna.BaseSampler
         function reseed_rng(obj)
             freshSeed=radia.optuna.internal.resolveSeed([]);
             obj.Stream=radia.optuna.internal.NumpyRandomState(freshSeed);
+            obj.NativeHistoryValid=false;
             obj.IndependentSampler.reseed_rng();
             obj.MultiObjectiveSampler.reseed_rng();
         end
@@ -472,6 +473,11 @@ classdef TPESampler < radia.optuna.BaseSampler
             else
                 searchSpace = obj.inferRelativeSearchSpace(study, trial);
                 if isempty(searchSpace), return; end
+                if obj.canUseNativeGroupedHistory(study) && ...
+                        obj.sampleNativeGroupedHistory(trial,{searchSpace})
+                    obj.recordState(study, trial.Number);
+                    return
+                end
                 values = obj.sampleRelativeSpace(study, searchSpace);
                 trial.setRelativeParameters(searchSpace,values,"");
             end
@@ -486,7 +492,7 @@ classdef TPESampler < radia.optuna.BaseSampler
             if trial.State == "COMPLETE" && ~isempty(obj.ConstraintsFcn)
                 study.recordConstraints(trial, obj.ConstraintsFcn(trial));
             end
-            if obj.Group && obj.isMultivariate(study)
+            if obj.isMultivariate(study)
                 obj.updateNativeHistory(study,trial);
             end
         end
@@ -720,6 +726,16 @@ classdef TPESampler < radia.optuna.BaseSampler
                                 keep(spaceIndex)=false;
                                 continue
                             end
+                            % Canonical storage repeats the same encoding for
+                            % an unchanged distribution. Reuse its validated
+                            % spec instead of decoding JSON on every trial.
+                            distribution=searchSpace(spaceIndex).distribution;
+                            if parameters.Kind(matching)==distribution.kind && ...
+                                    parameters.Distribution(matching)== ...
+                                    obj.distributionEncoding( ...
+                                        searchSpace(spaceIndex).name,distribution)
+                                continue
+                            end
                             candidate=radia.optuna.internal. ...
                                 DistributionCodec.decode( ...
                                 parameters.Kind(matching), ...
@@ -735,6 +751,9 @@ classdef TPESampler < radia.optuna.BaseSampler
                         end
                     end
                 end
+            end
+            if ~obj.Group && ~isequaln(searchSpace,obj.IntersectionCache)
+                obj.NativeGroupRevision=-1;
             end
             obj.IntersectionTrialNumbers=trialNumbers;
             obj.IntersectionCache=searchSpace;
@@ -1232,11 +1251,14 @@ classdef TPESampler < radia.optuna.BaseSampler
         end
 
         function result=canUseNativeGroupedHistory(obj,study)
-            result=obj.NativeHistoryValid && obj.Group && ...
+            % beforeTrial runs before the new trial has observations. When
+            % it is the sole RUNNING trial, ConstantLiar adds no observation,
+            % so the completed-history kernel has exactly the same input.
+            result=obj.NativeHistoryValid && ...
                 obj.isMultivariate(study) && ...
                 isscalar(study.Directions) && isempty(obj.GammaFcn) && ...
                 isempty(obj.WeightsFcn) && isempty(obj.ConstraintsFcn) && ...
-                ~obj.ConstantLiar && ...
+                ~study.hasConstraintRecords() && ...
                 strlength(study.StoragePath)==0 && ...
                 obj.Stream.nativeHandle()~=0 && ...
                 radia.optuna.internal.NativeKernels.has( ...
@@ -1255,7 +1277,7 @@ classdef TPESampler < radia.optuna.BaseSampler
         end
 
         function updateNativeHistory(obj,study,trial)
-            if ~obj.NativeHistoryValid || ~obj.Group || ...
+            if ~obj.NativeHistoryValid || ...
                     ~obj.isMultivariate(study)
                 return
             end
@@ -1285,7 +1307,9 @@ classdef TPESampler < radia.optuna.BaseSampler
                 distributionIds,values);
             obj.NativeHistoryCompleteCount= ...
                 obj.NativeHistoryCompleteCount+1;
-            obj.GroupDecomposition.update(names,distributions);
+            if obj.Group
+                obj.GroupDecomposition.update(names,distributions);
+            end
         end
 
         function identifier=historyDistributionId(obj,name,distribution)

@@ -68,14 +68,37 @@ The active paired lane is `benchmark_optuna50_python.py` plus
 `benchmark_matlab_optuna50.m`. Earlier 4.x mdx JSON remains useful historical
 engineering evidence but cannot satisfy the 0.2.0 release gate.
 
-The scalar automatic-multivariate path now updates its intersection search
-space only for newly finished trials instead of rebuilding every historical
-intersection on every `ask`. A same-host LAB development run on 2026-09-08
-(100 trials, 11 repeats, 3 warm-ups, explicit study names) measured 783 versus
-818 scalar trials/s for MATLAB versus upstream Python, 336 versus 286 grouped
-conditional trials/s, and 241k versus 199k `trials_dataframe` rows/s. The
-proposal checksums were identical. These are development measurements; the
-published release result still requires the mdx validation lane.
+The scalar automatic-multivariate path updates its intersection only for newly
+finished trials and reuses identical encoded distributions. The existing native
+history kernel now also serves the default sequential TPE configuration. A sole
+new RUNNING trial has no observations to contribute to ConstantLiar; constraints,
+PRUNED history, concurrent RUNNING trials, custom weights/gamma, and persistence
+retain their general paths. Reseeding invalidates the native history. Metadata
+comparison uses `isequaln` so unspecified numeric steps do not invalidate every
+cached search space. Empty constraint tables avoid unnecessary column access.
+
+The [paired LAB result](../../validation_test/optimization/results_optuna50_paired_lab_20260908.json)
+records 974 versus 797 scalar trials/s for MATLAB versus Python (1.22x) and
+539 versus 247 grouped conditional trials/s (2.18x). Both scripts now execute
+11 prewarm workloads before the 11 measured repeats; the first three measured
+repeats are discarded. This avoids mixing MATLAB JIT compilation into the
+warmed claim. All proposal checksums agree within 1e-12; the executable oracle
+suite passes all 74 tests. Table export measured 6.336 ms versus 5.616 ms for
+1,000 rows (MATLAB/Python throughput ratio 0.886), so this is specifically a
+TPE throughput improvement, not a universal speed claim.
+
+Post-change validation: 74 upstream-oracle tests plus 76 MATLAB integration
+tests passed (150 total, zero failures/incomplete), including table persistence,
+parallel execution, session resume, Simulink blocks, and the teaching model.
+All 11 package Python tests passed with pinned Optuna 5.0.0. The rebuilt 0.2.0
+wheel passed strict source fidelity for 222 MATLAB files and 21 MEX commands.
+
+MATLAB Engine 26.1 is installed on mdx2. The official dedicated Engine
+startup/calculation/shutdown diagnostic passed on both mdx runner accounts in
+[run 34210024491](https://github.com/ksugahar/Radia/actions/runs/34210024491).
+SSH startup timed out with both installed and bundled Engine, and owned probe
+processes were reaped. There is no mdx2 MATLAB timing result from these attempts;
+fresh mdx performance validation remains a release requirement.
 
 ## Distribution, MCP, and licensing boundary
 
