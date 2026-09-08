@@ -36,6 +36,12 @@ The paired Optuna 5.0 performance benchmark is a warmed, sequential,
 same-host differential gate. Run both commands while the machine is otherwise
 idle and compare the medians only when the host and workload settings match.
 Each runner fails if its explicit-seed proposal checksum changes. The checked
+scripts first prewarm each complete workload for 11 repeats, then measure 11
+repeats and discard the first three. This symmetric prewarm excludes delayed
+MATLAB JIT compilation; it does not measure cold-start cost. The
+[2026-09-08 LAB result](results_optuna50_paired_lab_20260908.json) includes all
+measured timings and both runtimes, including the slower MATLAB table-export
+measurement alongside the faster scalar and grouped TPE results. The checked
 result JSON records the environment, raw medians, throughput ratios, and the
 claim boundary; persistence, parallel scheduling, objective cost, and cold
 process startup are deliberately reported outside this shared-behavior gate.
