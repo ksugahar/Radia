@@ -1,5 +1,40 @@
 # Radia MATLAB and Simulink
 
+## Native SparseSolv
+
+`radia.sparsesolv.AMS(A, space)` and `radia.sparsesolv.IC(A)` return native
+`radia.ngsolve.Matrix` preconditioners. `radia.sparsesolv.COCR(A, P)` returns
+an inverse operator applied with `inverse.matvec(rhs)`. Matrices and vectors
+remain owned by C++; deleting the input MATLAB wrappers does not invalidate
+the inverse operator. The MEX calls the same SparseSolv C++ implementation as
+the Python extension, without embedding Python for these operations.
+
+The coordinate-based AMS entry requires a real auxiliary matrix assembled on
+the supplied 3D `HCurl` space with `Order=1` and `NoGrads=true`. Use
+`Complex=true` to precondition a matching complex eddy-current matrix. AMS
+setup deliberately runs outside TaskManager; matrix application uses the
+existing native TaskManager path. COCR requires symmetric, not Hermitian,
+systems and a compatible symmetric preconditioner.
+
+This is focused native coverage, not a claim of complete native parity.
+`radia.python.sparsesolv(functionName, positional, Keywords=...)` exposes
+the complete Python module at an explicit batch boundary, including
+`SparseSolvSolver`, custom-gradient AMS, Update and detailed solver options.
+The returned struct declares `backend="python-fallback"` and holds the Python
+result in `.value`; Python objects and native MEX handles cannot be mixed.
+
+Regression: `runtests('tests/matlab/test_sparsesolv_mex.m')`. The Engine runner
+`validation_test/ngsolve_matlab_parity/run_sparsesolv_parity.py --output ...`
+records the focused result and MEX/source hashes as JSON.
+Build both `-RadiaOnly` and `-MatlabMexOnly` before that isolated check. Its
+private Engine worker has a bounded timeout and uses this checkout's Python
+package without changing installed editable paths.
+
+The named batch interfaces `radia.python.electromagnetValidation`,
+`radia.python.esrfExamples` and `radia.python.staticElectromagnet` expose the
+validation contracts, ESRF model factories and total/reduced Omega workflow
+respectively. They preserve Python-owned CAD/NGSolve objects in `result.value`.
+
 Radia's final human-facing application interface is the single **Radia**
 Simulink library. Its Electromagnet, PCB PEEC, Motor, Stream Function,
 Induction Heating, and Magnetic Levitation blocks share one Library Browser
