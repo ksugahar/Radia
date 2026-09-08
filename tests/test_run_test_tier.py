@@ -35,3 +35,31 @@ def test_unknown_test_tier_fails_before_pytest_is_started():
     runner = runner_module()
     with pytest.raises(ValueError, match="unknown test tier"):
         runner.load_profile("does-not-exist")
+
+
+def test_changed_release_tool_selects_its_regressions():
+    runner = runner_module()
+    paths, _ = runner.load_profile('fast-contracts')
+    selected = runner.select_impact_tests(paths, ['tools/release_quad.py'])
+    assert 'tests/test_release_quad_state.py' in selected
+    assert 'tests/test_release_quad_editable_source.py' in selected
+    assert len(selected) == len(set(selected))
+
+
+def test_changed_test_selects_itself_but_not_unrelated_regressions():
+    runner = runner_module()
+    selected = runner.select_impact_tests([], ['tests/test_ci_preflight_mdx.py'])
+    assert selected == ['tests/test_ci_preflight_mdx.py']
+    assert runner.select_impact_tests([], ['docs/intro.md']) == []
+
+
+def test_unknown_base_selects_all_registered_impacts():
+    runner = runner_module()
+    selected = runner.select_impact_tests([], None)
+    assert 'tests/test_release_quad_state.py' in selected
+    assert 'tests/test_ci_preflight_mdx.py' in selected
+
+
+def test_manifest_change_checks_all_registered_impacts():
+    runner = runner_module()
+    assert runner.select_impact_tests([], ['tests/test_tier_manifest.json']) == runner.select_impact_tests([], None)
