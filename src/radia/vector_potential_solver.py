@@ -167,6 +167,7 @@ class VectorPotentialSolver:
 
         # Source field: B_s (vector, 3 components)
         self._B_source_cf = None
+        self._kelvin_source_cf = None
         self._radia_obj = None
 
         # Solution storage
@@ -308,8 +309,42 @@ class VectorPotentialSolver:
 
         self._B_source_cf = CF(tuple(cfs))
 
-    def set_source_cf(self, B_source_cf):
+    def _total_flux_density(self, reaction_cf):
+        """Total B, with the Kelvin material handled explicitly.
+
+        The plain source coefficient is a physical-coordinate quantity, so
+        evaluating it at a Kelvin computational point silently returns the
+        field of a completely different location.  Either the caller supplied
+        the pulled-back source, or that region reports NaN rather than a
+        number a reader could mistake for the field.
+        """
+        from ngsolve import CoefficientFunction
+
+        total = self._B_source_cf + reaction_cf
+        if not self._kelvin_region:
+            return total
+        if self._kelvin_source_cf is not None:
+            kelvin_total = self._kelvin_source_cf + reaction_cf
+        else:
+            kelvin_total = CoefficientFunction(
+                (float("nan"), float("nan"), float("nan")))
+        components = []
+        for component in range(3):
+            components.append(self.mesh.MaterialCF(
+                {self._kelvin_region: kelvin_total[component]},
+                default=total[component]))
+        return CoefficientFunction(tuple(components))
+
+    def set_source_cf(self, B_source_cf, kelvin_source_cf=None):
         """Set source field B_s directly from an NGSolve CoefficientFunction.
+
+        ``kelvin_source_cf`` is the SAME source pulled back into the Kelvin
+        exterior, for example ``radia.KelvinRadiaFluxDensity``.  The reduced
+        right-hand side is assembled on the iron alone, so the solve never
+        needs it; the TOTAL field does.  Without it the reported total B inside
+        a Kelvin material would be the plain source evaluated at compactified
+        coordinates, which is wrong by orders of magnitude, so that region is
+        filled with NaN instead of a plausible number.
 
         Parameters
         ----------
@@ -317,6 +352,7 @@ class VectorPotentialSolver:
             Vector CF of dimension 3 giving B_s in Tesla.
         """
         self._B_source_cf = B_source_cf
+        self._kelvin_source_cf = kelvin_source_cf
 
     # ------------------------------------------------------------------
     # Linear solver
@@ -450,7 +486,7 @@ class VectorPotentialSolver:
             'relative_residual_limit': LINEAR_RELATIVE_RESIDUAL_LIMIT,
         }
 
-        self._B_cf = self._B_source_cf + curl(self._A_gf)
+        self._B_cf = self._total_flux_density(curl(self._A_gf))
         self._H_cf = nu_cf * self._B_cf
 
         return self._A_gf
