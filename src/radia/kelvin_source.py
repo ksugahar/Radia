@@ -255,6 +255,172 @@ def kelvin_factor_scalar(r_prime, center, R):
 # ---------- GridFunction evaluation in physical coordinates ---------------
 
 
+# ---------- Solution pullback: computational frame -> physical -------------
+#
+# The two-sphere production geometry has the physical ball at ``physical_center``
+# and its Kelvin image at ``kelvin_center``; the single-centre helpers below
+# cannot express that offset and are kept only for concentric research meshes.
+#
+# Orientation matters as much as the metric factor.  The Kelvin inversion
+# reverses orientation, so TWISTED forms carry an extra minus
+# (docs/kelvin/KELVIN_TRANSFORMATION.md 2.3):
+#
+#   scalar_potential  phi_m   twisted 0-form   phi   = -phi'
+#   vector_potential  A       straight 1-form  A     = +(R/rho)^2 H A'
+#   field_strength    H       twisted 1-form   H     = -(R/rho)^2 H H'
+#   flux_density      B       2-form proxy     B     = -(R/rho)^4 H B'
+#
+# The map is an involution, so each formula is its own inverse once the factor
+# is evaluated at the radius of the frame being mapped INTO.
+
+# Degree and orientation are independent axes.  With ``s = R / rho_target``
+# (the radius measured in the frame being mapped INTO) and the Householder
+# reflection ``H(n) v = v - 2 (v.n) n`` about the common radial direction, the
+# proxy of a straight k-form transforms with
+#
+#   k = 0   f  ->        f          k = 2   b  ->  -s^4 H b
+#   k = 1   a  ->  +s^2 H a         k = 3   u  ->  -s^6 u
+#
+# and a TWISTED form carries one extra ``sgn(det J) = -1``.  Both minus signs
+# have different origins: degrees 2 and 3 pick theirs up from converting the
+# form to a vector or scalar proxy, twisting picks its up from the reversed
+# orientation.  The map is an involution, so the SAME table serves both
+# directions once ``s`` is taken in the target frame.
+_KELVIN_STRAIGHT_SIGN = {0: 1.0, 1: 1.0, 2: -1.0, 3: -1.0}
+_KELVIN_SCALE_EXPONENT = {0: 0, 1: 2, 2: 4, 3: 6}
+_KELVIN_USES_HOUSEHOLDER = {0: False, 1: True, 2: True, 3: False}
+
+# Premetric assignment of the electromagnetic quantities.
+KELVIN_FORMS = {
+    "electric_potential": (0, False),
+    "scalar_potential": (0, True),
+    "vector_potential": (1, False),
+    "electric_field": (1, False),
+    "field_strength": (1, True),
+    "flux_density": (2, False),
+    "displacement": (2, True),
+    "current_density": (2, True),
+    "charge_density": (3, True),
+    "energy_density": (3, True),
+}
+KELVIN_SOLUTION_FORMS = tuple(sorted(KELVIN_FORMS))
+
+
+def kelvin_form_degree_and_twist(form):
+    """Resolve a form name, or an explicit ``(degree, twisted)`` pair."""
+    if isinstance(form, str):
+        if form not in KELVIN_FORMS:
+            raise ValueError(
+                "form must be one of %s or a (degree, twisted) pair; got %r"
+                % (list(KELVIN_SOLUTION_FORMS), form))
+        return KELVIN_FORMS[form]
+    degree, twisted = form
+    degree = int(degree)
+    if degree not in _KELVIN_SCALE_EXPONENT:
+        raise ValueError("form degree must be 0, 1, 2 or 3; got %r" % (degree,))
+    return degree, bool(twisted)
+
+
+def kelvin_physical_to_computational(points, kelvin_center, physical_center,
+                                      radius):
+    """Map physical exterior coordinates onto the offset Kelvin ball."""
+    p = np.asarray(points, dtype=float).reshape(-1, 3)
+    delta = p - np.asarray(physical_center, dtype=float)
+    rho2 = np.sum(delta * delta, axis=1)
+    if np.any(rho2 <= 0.0):
+        raise ValueError("a physical point coincides with the physical centre")
+    return (np.asarray(kelvin_center, dtype=float)
+            + (radius * radius / rho2)[:, None] * delta)
+
+
+def kelvin_computational_to_physical(points, kelvin_center, physical_center,
+                                      radius):
+    """Map Kelvin-ball coordinates onto the physical exterior."""
+    p = np.asarray(points, dtype=float).reshape(-1, 3)
+    delta = p - np.asarray(kelvin_center, dtype=float)
+    rho2 = np.sum(delta * delta, axis=1)
+    if np.any(rho2 <= 0.0):
+        raise ValueError("a Kelvin point coincides with the image of infinity")
+    return (np.asarray(physical_center, dtype=float)
+            + (radius * radius / rho2)[:, None] * delta)
+
+
+def kelvin_transform_form(values, points_target, centre_target, radius, form):
+    """Transform a form proxy into the frame whose points are given.
+
+    ``points_target`` are the coordinates in the frame being mapped INTO and
+    ``centre_target`` that frame's sphere centre; the metric factor and the
+    reflection are evaluated there.  Because the inversion is an involution
+    this one routine covers Kelvin -> physical and physical -> Kelvin.
+    """
+    degree, twisted = kelvin_form_degree_and_twist(form)
+    p = np.asarray(points_target, dtype=float).reshape(-1, 3)
+    delta = p - np.asarray(centre_target, dtype=float)
+    rho = np.sqrt(np.sum(delta * delta, axis=1))
+    if np.any(rho <= 0.0):
+        raise ValueError("a target point coincides with its sphere centre")
+    sign = _KELVIN_STRAIGHT_SIGN[degree] * (-1.0 if twisted else 1.0)
+    scale = sign * (radius / rho) ** _KELVIN_SCALE_EXPONENT[degree]
+    if not _KELVIN_USES_HOUSEHOLDER[degree]:
+        return scale * np.asarray(values, dtype=float).reshape(-1)
+    v = np.asarray(values, dtype=float).reshape(-1, 3)
+    normal = delta / rho[:, None]
+    reflected = v - 2.0 * np.sum(v * normal, axis=1)[:, None] * normal
+    return scale[:, None] * reflected
+
+
+def kelvin_solution_to_physical(values, points_physical, *, kelvin_center,
+                                 physical_center, radius, form):
+    """Pull a solved Kelvin-frame quantity back to the physical exterior."""
+    p = np.asarray(points_physical, dtype=float).reshape(-1, 3)
+    delta = p - np.asarray(physical_center, dtype=float)
+    rho = np.sqrt(np.sum(delta * delta, axis=1))
+    if np.any(rho < radius * (1.0 - 1.0e-12)):
+        raise ValueError(
+            "kelvin_solution_to_physical takes points in the physical "
+            "EXTERIOR |r - physical_center| >= radius; the interior is solved "
+            "directly and needs no pullback")
+    return kelvin_transform_form(values, p, physical_center, radius, form)
+
+
+def kelvin_solution_to_computational(values, points_computational, *,
+                                      kelvin_center, physical_center, radius,
+                                      form):
+    """Push a physical exterior quantity into the Kelvin ball."""
+    p = np.asarray(points_computational, dtype=float).reshape(-1, 3)
+    delta = p - np.asarray(kelvin_center, dtype=float)
+    rho = np.sqrt(np.sum(delta * delta, axis=1))
+    if np.any(rho > radius * (1.0 + 1.0e-12)):
+        raise ValueError(
+            "kelvin_solution_to_computational takes points INSIDE the Kelvin "
+            "ball |r' - kelvin_center| <= radius")
+    return kelvin_transform_form(values, p, kelvin_center, radius, form)
+
+
+def evaluate_kelvin_exterior(field, mesh, points_physical, *, kelvin_center,
+                              physical_center, radius, form):
+    """Evaluate a solved exterior field at PHYSICAL points outside the ball.
+
+    ``field`` is the computational-frame solution on the Kelvin mesh, callable
+    at a mesh point.  This is the routine to use for far-field probes of a
+    Kelvin-transformed solve; evaluating the coefficient at the physical
+    coordinate instead returns the value at a completely different location.
+    """
+    p = np.asarray(points_physical, dtype=float).reshape(-1, 3)
+    computational = kelvin_physical_to_computational(
+        p, kelvin_center, physical_center, radius)
+    values = []
+    for point in computational:
+        mip = mesh(float(point[0]), float(point[1]), float(point[2]))
+        value = field(mip)
+        values.append(float(value) if np.ndim(value) == 0
+                      else np.asarray(value, dtype=float).reshape(-1))
+    values = np.asarray(values, dtype=float)
+    return kelvin_solution_to_physical(
+        values, p, kelvin_center=kelvin_center,
+        physical_center=physical_center, radius=radius, form=form)
+
+
 def eval_Omega_physical_from_gf(gf_Omega_comp, mesh, r_phys, center, R):
     """Physical Omega(r_phys) from a GridFunction storing Omega_comp on
     the Kelvin outer-sphere FEM mesh.
