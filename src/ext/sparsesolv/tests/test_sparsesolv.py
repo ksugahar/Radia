@@ -1152,8 +1152,7 @@ class TestCompactAMG:
     @pytest.fixture
     def has_amg(self):
         from radia.sparsesolv_ngsolve import has_compact_ams
-        if not has_compact_ams():
-            pytest.skip("CompactAMG not available")
+        assert has_compact_ams(), "Required CompactAMG support is missing"
 
     def test_compact_amg_basic(self, has_amg):
         """CompactAMG + CG solves 3D Poisson."""
@@ -1195,8 +1194,7 @@ class TestCompactAMS:
     @pytest.fixture
     def has_ams(self):
         from radia.sparsesolv_ngsolve import has_compact_ams
-        if not has_compact_ams():
-            pytest.skip("CompactAMS not available")
+        assert has_compact_ams(), "Required CompactAMS support is missing"
 
     @pytest.fixture
     def curl_curl_3d(self):
@@ -1301,8 +1299,7 @@ class TestComplexCompactAMS:
     @pytest.fixture
     def has_ams(self):
         from radia.sparsesolv_ngsolve import has_compact_ams
-        if not has_compact_ams():
-            pytest.skip("ComplexCompactAMS not available")
+        assert has_compact_ams(), "Required ComplexCompactAMS support is missing"
 
     def test_complex_ams_basic(self, has_ams, eddy_current_3d):
         """ComplexCompactAMS + COCR solves eddy current problem."""
