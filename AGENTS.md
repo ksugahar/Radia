@@ -150,6 +150,11 @@ solver boundary is a checked `.vol` regardless of the creation route.
 GitHub Actions uses the shared `mdx` label and assigns jobs to an available runner.
 Release-quad requires LAB, 100号機, mdx1, and mdx2 for the same release commit.
 LAB/100号機 retain verified editable installs; mdx1/mdx2 consume release wheels.
+Release-quad deploys `cubit-mesh-export` and its Cubit plugin/toolbar only to
+LAB and 100号機. Do not install or run them on mdx1/mdx2 in the release lane;
+their Cubit version/compatibility probe fields are explicitly not applicable.
+This deployment boundary does not prohibit Cubit-independent checker unit tests
+in isolated CI environments. Existing installations are not silently removed.
 hibino remains a computation host and is not a release-quad acceptance target.
 Long solver work should use hibino first when it is available and may use mdx
 only when the mdx CI queue is idle.

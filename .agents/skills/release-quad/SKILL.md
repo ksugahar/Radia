@@ -29,8 +29,14 @@ python tools/release_quad.py restore-editable
 |---|---|---|
 | LAB | NAS editable | `phase8 --target lab` |
 | 100号機 | NAS editable over SSH | `phase8 --target 100` |
-| mdx1 | PyPI wheel consumer over `ssh mdx1`, no `radia-mcp` | `phase8e` |
-| mdx2 | PyPI wheel consumer over `ssh mdx2`, no `radia-mcp` | `phase8e` |
+| mdx1 | Radia PyPI wheel consumer over `ssh mdx1`, no MCP/Cubit deployment | `phase8e` |
+| mdx2 | Radia PyPI wheel consumer over `ssh mdx2`, no MCP/Cubit deployment | `phase8e` |
+
+Deploy `cubit-mesh-export` and the Cubit plugin/toolbar only to LAB and
+100号機. The mdx lane neither installs the package nor runs Cubit commands,
+even if Cubit is detected there. Do not uninstall existing Cubit packages as
+part of this routing change. Isolated Cubit-independent checker CI is separate
+from deployment and remains allowed.
 
 `radia-optuna` is an independent release lane. It does not run `phase8` or
 install Radia/Cubit. `optuna-candidate` downloads the exact wheel artifact from
@@ -41,7 +47,8 @@ results to agree.
 
 `phase9` is the hard gate: LAB / 100号機 / mdx1 / mdx2 must agree on
 versions, compatibility constants, and tracked file hashes. Both mdx hosts report
-`radia-mcp` as `N/A`; that is intentional and is excluded from drift
+`radia-mcp`, `cubit-mesh-export`, and Cubit compatibility fields as `N/A`;
+that is intentional and is excluded from drift
 comparison.
 
 Both mdx runners use the shared `mdx` label and a unique `mdx1` or `mdx2`
