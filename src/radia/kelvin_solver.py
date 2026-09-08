@@ -514,8 +514,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         kelvin_mats=("kelvin",), inverse="pardiso",
         interface_constraint_scale=None, total_dirichlet_cf=None,
         mu_cf=None, kelvin_interface_boundary=None,
-        kelvin_source_potential=None, total_source_h=None,
-        total_source_materials=()):
+        kelvin_source_potential=None, kelvin_source_h=None,
+        total_source_h=None, total_source_materials=()):
     """Solve the TOSCA-style mixed total/reduced Omega formulation.
 
     ``H_s`` is used in ``reduced_materials`` (the source enclosure), where
@@ -621,10 +621,16 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
     if interface_boundary not in mesh.GetBoundaries():
         raise ValueError(
             f"interface_boundary={interface_boundary!r} is not a mesh boundary")
-    if (kelvin_interface_boundary is None) != (kelvin_source_potential is None):
+    if kelvin_source_h is not None and kelvin_source_potential is not None:
         raise ValueError(
-            "kelvin_interface_boundary and kelvin_source_potential must be "
-            "supplied together")
+            "supply either kelvin_source_h (the exact pulled-back exterior "
+            "source) or kelvin_source_potential (its projected interface "
+            "trace), not both")
+    if (kelvin_interface_boundary is None) != (
+            kelvin_source_potential is None and kelvin_source_h is None):
+        raise ValueError(
+            "kelvin_interface_boundary and one exterior source representation "
+            "must be supplied together")
     if (kelvin_interface_boundary is not None
             and kelvin_interface_boundary not in mesh.GetBoundaries()):
         raise ValueError(
@@ -736,12 +742,23 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
     (phi_reduced, phi_total, multiplier), (
         test_reduced, test_total, test_multiplier) = fes.TnT()
 
-    # Lift of the physical source-potential trace onto the identified spheres.
-    # Its periodic degrees of freedom are shared, so setting it on the physical
-    # sphere gives the Kelvin sphere the same values; any discrete extension
-    # into the ball produces the same exterior potential.
+    # The exterior needs the source 0-form that the identified spheres jump by.
+    # Two explicit representations are supported and the caller picks one.
+    #
+    # ``kelvin_source_h`` is the exact pulled-back exterior source field, for
+    # example ``radia.KelvinRadiaFieldStrength``.  It equals ``grad`` of the
+    # exact lift, so the exterior unknown becomes the REDUCED potential there
+    # and the discrete exterior field carries the analytic source itself.  No
+    # interface trace is projected at all.
+    #
+    # Otherwise the projected trace ``kelvin_source_potential`` is lifted into
+    # the shared periodic space.  Its periodic degrees of freedom are shared,
+    # so setting it on the physical sphere gives the Kelvin sphere the same
+    # values, and any discrete extension into the ball yields the same exterior
+    # potential.  That representation inherits the projection residual of the
+    # trace, which the exact-source form does not.
     kelvin_lift = None
-    if kelvin_selector is not None:
+    if kelvin_selector is not None and kelvin_source_h is None:
         kelvin_lift = GridFunction(fes_reduced, name="kelvin_source_lift")
         kelvin_lift.vec[:] = 0.0
         kelvin_lift.Set(kelvin_source_potential,
@@ -765,6 +782,11 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         # Exterior equation for Omega_t = phi_reduced + lift, tested with the
         # same continuous space; the lift moves to the right-hand side.
         f_lf += -mu_cf * grad(kelvin_lift) * grad(test_reduced) * dx(
+            definedon=kelvin_selector, bonus_intorder=bonus_intorder)
+    elif kelvin_selector is not None:
+        # Same right-hand side with the exact source in place of the lift:
+        # grad of the exact lift IS the pulled-back exterior source field.
+        f_lf += -mu_cf * kelvin_source_h * grad(test_reduced) * dx(
             definedon=kelvin_selector, bonus_intorder=bonus_intorder)
     if total_source_h is not None:
         total_source_selector = mesh.Materials("|".join(total_source_materials))
@@ -798,12 +820,13 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
     H_total = total_source_by_material - grad(phi_total_gf)
     # Twisted 0-form: the stored exterior unknown is -Omega_comp, so the
     # computational-frame H is +grad of it rather than -grad.
+    kelvin_exterior_source = (
+        grad(kelvin_lift) if kelvin_lift is not None else kelvin_source_h)
     kelvin_potential_cf = (
-        None if kelvin_lift is None
-        else -(phi_reduced_gf + kelvin_lift))
+        None if kelvin_lift is None else -(phi_reduced_gf + kelvin_lift))
     H_kelvin = (
-        None if kelvin_lift is None
-        else grad(phi_reduced_gf) + grad(kelvin_lift))
+        None if kelvin_selector is None
+        else grad(phi_reduced_gf) + kelvin_exterior_source)
     kelvin_set = set(kelvin_total_materials)
     h_components = []
     for component in range(3):
@@ -823,6 +846,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         "phi_total": phi_total_gf,
         "interface_multiplier": multiplier_gf,
         "kelvin_source_lift": kelvin_lift,
+        "kelvin_exterior_source": kelvin_exterior_source,
         "kelvin_total_potential": kelvin_potential_cf,
         "kelvin_materials": kelvin_total_materials,
         "fes": fes,
@@ -847,6 +871,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
         mu_r_initial=1000.0, tolerance=2.0e-5, max_iterations=80,
         relaxation=0.3, interface_constraint_scale=None,
         kelvin_interface_boundary=None, kelvin_source_potential=None,
+        kelvin_source_h=None,
         total_source_h=None, total_source_materials=()):
     """Picard solve for the mixed total/reduced Omega formulation.
 
@@ -931,6 +956,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
             mu_cf=mixed_mu_cf(),
             kelvin_interface_boundary=kelvin_interface_boundary,
             kelvin_source_potential=kelvin_source_potential,
+            kelvin_source_h=kelvin_source_h,
             total_source_h=total_source_h,
             total_source_materials=total_source_materials)
         B_current = np.zeros(len(nonlinear_elements))
