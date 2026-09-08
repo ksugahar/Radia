@@ -11,16 +11,20 @@ classdef IntersectionSearchSpace
             end
             searchSpace = ...
                 radia.optuna.internal.IntersectionSearchSpace.empty();
-            finished = study.TrialTable.State == "COMPLETE";
+            trials=study.trialData();
+            finished = trials.State == "COMPLETE";
             if options.IncludePruned
-                finished = finished | study.TrialTable.State == "PRUNED";
+                finished = finished | trials.State == "PRUNED";
             end
-            trialNumbers = study.TrialTable.TrialNumber(finished);
+            trialNumbers = trials.TrialNumber(finished);
             if isempty(trialNumbers)
                 return
             end
 
-            params = study.ParamTable;
+            % Use the Study's columnar arrays directly. Constructing and
+            % indexing MATLAB tables here dominated short TPE studies even
+            % though the intersection itself contained only a few names.
+            params = study.parameterData();
             commonNames = unique(params.Name( ...
                 params.TrialNumber == trialNumbers(1)), "stable");
             for index = 2:numel(trialNumbers)
@@ -35,18 +39,20 @@ classdef IntersectionSearchSpace
             for name = reshape(sort(commonNames), 1, [])
                 rows = params.Name == name & ...
                     ismember(params.TrialNumber, trialNumbers);
-                selected = params(rows,:);
-                if height(selected) ~= numel(trialNumbers)
+                selected = find(rows);
+                if numel(selected) ~= numel(trialNumbers)
                     continue
                 end
                 distribution = ...
                     radia.optuna.internal.DistributionCodec.decode( ...
-                    selected.Kind(1), selected.Distribution(1));
+                    params.Kind(selected(1)), ...
+                    params.Distribution(selected(1)));
                 compatible = true;
-                for row = 2:height(selected)
+                for row = 2:numel(selected)
                     candidate = ...
                         radia.optuna.internal.DistributionCodec.decode( ...
-                        selected.Kind(row), selected.Distribution(row));
+                        params.Kind(selected(row)), ...
+                        params.Distribution(selected(row)));
                     if ~radia.optuna.internal.DistributionCodec.equivalent( ...
                             distribution, candidate)
                         compatible = false;

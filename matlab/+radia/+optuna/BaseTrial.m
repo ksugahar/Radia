@@ -1,5 +1,5 @@
 classdef (Abstract) BaseTrial < handle
-    %BASETRIAL Common Optuna 4.9 trial interface.
+    %BASETRIAL Common Optuna 5.0 trial interface.
 
     methods
         function value=datetime_start(obj)
@@ -26,10 +26,6 @@ classdef (Abstract) BaseTrial < handle
             value=obj.UserAttrs; %#ok<MCNPN>
         end
 
-        function value=system_attrs(obj)
-            value=obj.SystemAttrs; %#ok<MCNPN>
-        end
-
         function report(~,~,~)
             error("radia:optuna:AbstractTrial", ...
                 "The concrete trial must implement report.");
@@ -39,8 +35,12 @@ classdef (Abstract) BaseTrial < handle
             obj.setUserAttr(name,value); %#ok<MCNPN>
         end
 
-        function set_system_attr(obj,name,value)
-            obj.setSystemAttr(name,value); %#ok<MCNPN>
+        function set_constraint(obj,name,value)
+            obj.setConstraint(name,value); %#ok<MCNPN>
+        end
+
+        function value=constraints(obj)
+            value=obj.constraintDictionary(); %#ok<MCNPN>
         end
 
         function value=should_prune(obj)

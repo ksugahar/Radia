@@ -1,70 +1,49 @@
 {
-  "schema": "radia.optuna-upstream-compatibility.v1",
-  "claim": "All 816 inventoried Optuna 4.9.0 public symbols and class members are present and differential-oracle mapped. This MATLAB API is not a Python binary drop-in, and backend-specific option boundaries remain explicit below.",
+  "schema": "radia.optuna-upstream-compatibility.v2",
+  "claim": "All 812 inventoried Optuna 5.0.0 public symbols and class members are present and mapped. The MATLAB API adopts the Optuna 5 public design but is not a Python binary drop-in.",
   "oracle": {
     "package": "optuna",
-    "version": "4.9.0",
-    "seed_rule": "Every seeded comparison uses the same explicit seed, options, parameter order, history, and sequential ask/tell order.",
+    "version": "5.0.0",
+    "seed_rule": "Seeded comparisons use the same explicit seed, options, parameter order, history, and sequential ask/tell order.",
     "numerical_transport": "direct-python",
     "public_contract_transport": "official-optuna-mcp-0.2.0"
   },
   "algorithm_core_policy": {
-    "source_of_truth": "Optuna 4.9.0 equations, transforms, state transitions, boundary handling, and seeded random-consumption order",
-    "native_execution": "MATLAB vectorization and standalone MEX kernels may execute the common algorithm without a Python runtime dependency",
-    "extensions": "Parallel trial scheduling, table/MAT persistence, Simulink telemetry, and explicitly named MATLAB-only algorithms may improve capability or performance without changing the upstream-compatible default path"
+    "source_of_truth": "Optuna 5.0.0 public algorithms, transforms, state transitions, defaults, extension points, boundary handling, and seeded random-consumption order",
+    "replacement_rule": "The active implementation is the Optuna 5 design. Removed 4.x public APIs, active 4.x fixtures, state restoration, and compatibility shims are not retained.",
+    "native_execution": "MATLAB vectorization and standalone MEX kernels may execute the common algorithm faster without changing its observable contract.",
+    "extensions": "Parallel scheduling, table/MAT persistence, Simulink telemetry, and explicitly named MATLAB-only capabilities remain extensions rather than parity evidence."
   },
   "complete_api_closure": {
-    "inventory": "tests/matlab/fixtures/optuna49_public_api.json",
-    "coverage": "matlab/optuna49_api_coverage.json",
-    "rule": "A complete-compatibility claim is forbidden until every inventoried public symbol and class member is present and has an exact upstream-oracle mapping.",
-    "result": "816 verified, 0 partial, 0 unmapped, 0 missing",
+    "inventory": "tests/matlab/fixtures/optuna50_public_api.json",
+    "coverage": "matlab/optuna50_api_coverage.json",
+    "result": "812 present, 749 oracle-verified, 63 explicit assertions, 0 partial, 0 unmapped, 0 missing; all 401 required entries are oracle-mapped",
     "complete": true
   },
+  "optuna5_design_changes": [
+    "TPESampler is the sole public TPE sampler and owns scalar, mixed, multivariate, conditional, constrained, and multi-objective paths; the removed public multi-objective TPE class is not exposed.",
+    "TPE defaults use automatic multivariate selection, constant_liar=true, nearest-neighbor bandwidths, and no categorical_distance_func option.",
+    "Trial constraints are named dictionaries set with set_constraint; missing and empty dictionaries are feasible and different trials need not share names or cardinality.",
+    "NSGA-II and NSGA-III accept the Optuna 5 BaseMutation extension, including PolynomialMutation.",
+    "Parameter importance defaults to PED-ANOVA and does not expose baseline_quantile.",
+    "Removed integrations and removed public study system-attribute APIs are absent rather than emulated."
+  ],
   "shared_behavior_verified": [
-    "Study ask/tell-by-object/tell-by-number/enqueue/add-trial lifecycle, including imported WAITING/RUNNING trials, finished-trial handling, directions, metric names, attributes, FrozenTrial-returning get_trials/best_trial/best_trials observables, and single-MAT-storage load/copy/delete/list management",
-    "StudySummary objects, include_best_trial behavior, single- versus multi-objective direction access, and immediate registration of empty stored studies",
-    "BaseTrial inheritance for Trial, FixedTrial, and FrozenTrial; BaseSampler/BasePruner subtype identity; and the BasePruner.prune interface",
-    "TrialPruned exception handling through Study.optimize, including PRUNED state, last intermediate value, and callback snapshot",
-    "FixedTrial objective evaluation, suggestions, attributes, warnings, and incompatibility errors",
-    "FrozenTrial suggestions, no-op report, should-prune result, mutable attributes, collection return types, and incompatibility errors",
-    "Float, integer, stepped, logarithmic, and categorical distributions, including effective-high adjustment, repeated-parameter compatibility, and arbitrary parameter names",
-    "Distribution JSON round trips, dynamic-space compatibility checks, and the five deprecated Optuna 4.9 distribution aliases",
-    "StudyDirection and TrialState values, TrialState.is_finished, enum inputs to study/trial factories, and Study.direction",
-    "IntersectionSearchSpace and intersection_search_space, including pruned-state inclusion, ignored failed/waiting trials, sorted keys, dynamic-range exclusion, and retained single-value distributions",
-    "Sampler seed=None constructor semantics: independently constructed unseeded samplers draw fresh private entropy without mutating MATLAB's global RNG; exact proposal comparison remains explicitly seeded",
-    "Sampler reseed_rng behavior, including fresh private entropy, the deliberate BruteForceSampler no-op, delegated independent samplers, and unchanged QMC sequence seeds",
-    "RandomSampler proposal sequences",
-    "TPESampler scalar, mixed, multivariate, group-decomposed conditional, constrained, callable gamma/weights, categorical-distance, deprecated consider_prior warning, and constant-liar proposal sequences with multiple genuinely concurrent RUNNING trials, including independent-fallback warning control",
-    "MOTPESampler multi-objective proposal sequences and constrained Pareto support",
-    "GridSampler and fixed/conditional BruteForceSampler exhaustion behavior",
-    "PartialFixedSampler proposal sequences",
-    "QMCSampler seeded scrambled and deterministic unscrambled Sobol/Halton prefixes, native Joe--Kuo Sobol generation above 32 dimensions through the SciPy/Optuna maximum of 21,201 dimensions, custom independent samplers, and warning controls for seed=None scrambling and independent fallback",
-    "CmaEsSampler seeded numeric proposal sequences, source-trial warm start, separable CMA, CMA with margin, learning-rate adaptation, consideration of pruned trials, deprecated restart-option fallback, invalid-option errors, and independent-sampler controls; categorical parameters remain independently sampled as in upstream Optuna 4.9.0",
-    "GPSampler float/integer/categorical proposals through acquisition after startup, constraint-aware acquisition, and deterministic MAT-table history replay when Backend is upstream-python",
-    "NSGAIISampler and NSGAIIISampler seeded population behavior",
-    "NSGA-II Uniform, BLX-alpha, SBX, VSBX, SPX, and UNDX crossover proposal sequences",
-    "Percentile, threshold, patient, no-op, successive-halving, Hyperband, and Wilcoxon pruning decisions",
-    "fANOVA parameter importance through the pinned Optuna 4.9.0 evaluator",
-    "Public logging constants, verbosity, handlers, propagation, and formatter behavior",
-    "BaseStorage/InMemoryStorage plus pinned RDBStorage, cached storage, Journal file/Redis backends, JournalStorage replay, heartbeat retry callbacks, stale-trial failure, and real-transport gRPC proxy behavior",
-    "File-system, boto3-shaped, and GCS-shaped artifact stores plus upload, list, download, retry, metadata, and path/error behavior",
-    "MaxTrialsCallback, BestValueStagnationEvaluator, EMMREvaluator, RegretBoundEvaluator, and Terminator behavior",
-    "All public Plotly and matplotlib visualization exports, availability checks, optional-dependency errors, and returned figure/axes types",
-    "All public optuna.integration lazy exports, including exact optional-dependency availability and error types in the pinned environment",
-    "Official Optuna MCP Study/Trial tool contract where optuna-mcp exposes the operation"
+    "Study, Trial, FixedTrial, FrozenTrial, StudySummary, storage, artifact, logging, visualization, callback, and pruning contracts inventoried from Optuna 5.0.0",
+    "Random, unified TPE, Grid, BruteForce, PartialFixed, QMC, CMA-ES, GP, NSGA-II, and NSGA-III seeded behavior",
+    "Optuna 5 named-constraint feasibility, Pareto ranking, different dictionary shapes, duplicate-name warning, and NaN failure",
+    "QMC categorical coordinates, pending-RUNNING union inference, conditional-space warning, and frozen first-suggested-trial space",
+    "PED-ANOVA default importance, polynomial mutation, automatic multivariate TPE, constant liar, and nearest-neighbor bandwidths",
+    "Official Optuna MCP Study/Trial contract wherever optuna-mcp 0.2.0 exposes the operation"
   ],
   "matlab_integration_only": [
-    "parallel trial scheduling, overshoot, late completion, and deterministic cache handling",
-    "MATLAB table normalization and MAT-file persistence/reload",
-    "MATLAB callback transactions and storage locking",
-    "Simulink block, mask, signal, and run-artifact integration",
-    "native MEX kernel lifecycle and explicit backend selection",
-    "GPSampler Backend=matlab-native state persistence and lifecycle"
+    "parallel trial scheduling and deterministic completion handling",
+    "MATLAB table normalization and MAT-file persistence",
+    "Simulink blocks, monitor buses, study review, and run artifacts",
+    "native MEX lifecycle, performance, and backend selection"
   ],
-  "unsupported_or_not_yet_oracled": [
-    {
-      "feature": "Python runtime identity",
-      "boundary": "MATLAB returns MATLAB objects for native APIs and exact upstream Python figure, axes, integration, storage, or evaluator objects only on the explicitly pinned upstream boundary. Python pickling, arbitrary Python subclass identity, and binary drop-in replacement are not claimed."
-    }
+  "unsupported_or_not_claimed": [
+    "Python pickling, arbitrary Python subclass identity, and binary drop-in replacement",
+    "MATLAB-only integration behavior as evidence of upstream parity"
   ]
 }

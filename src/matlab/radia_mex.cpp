@@ -2503,13 +2503,143 @@ std::vector<double> OptunaMixtureWeights(
     return result;
 }
 
+namespace {
+
+// NumPy 2.5 uses the x86-simd-sort four-lane bitonic network for the
+// small arrays passed to np.argsort by Optuna's Parzen estimator.  Equal
+// discrete observations can receive different neighbour bandwidths, so a
+// stable_sort is observably different from the upstream 5.0 algorithm.
+// Reproduce the scalar equivalent of that network for the <=256-observation
+// hot path.  Larger arrays have the same numerical ordering unless values are
+// exactly tied; their fallback remains deterministic.
+void OptunaNumpySortStage(std::array<double, 4>& keys,
+                          std::array<std::size_t, 4>& indices,
+                          const std::array<int, 4>& permutation,
+                          unsigned maximum_mask) {
+    const auto input_keys = keys;
+    const auto input_indices = indices;
+    for (std::size_t lane = 0; lane < 4; ++lane) {
+        const std::size_t other = static_cast<std::size_t>(permutation[lane]);
+        const bool choose_maximum =
+            (maximum_mask & (1U << static_cast<unsigned>(lane))) != 0;
+        const bool choose_first = choose_maximum
+            ? input_keys[lane] >= input_keys[other]
+            : input_keys[lane] <= input_keys[other];
+        keys[lane] = choose_first ? input_keys[lane] : input_keys[other];
+        indices[lane] = choose_first
+            ? input_indices[lane] : input_indices[other];
+    }
+}
+
+void OptunaNumpySortFour(std::array<double, 4>& keys,
+                         std::array<std::size_t, 4>& indices) {
+    OptunaNumpySortStage(keys, indices, {1, 0, 3, 2}, 0xAU);
+    OptunaNumpySortStage(keys, indices, {3, 2, 1, 0}, 0xCU);
+    OptunaNumpySortStage(keys, indices, {1, 0, 3, 2}, 0xAU);
+}
+
+void OptunaNumpyMergeFour(std::array<double, 4>& keys,
+                          std::array<std::size_t, 4>& indices) {
+    OptunaNumpySortStage(keys, indices, {2, 3, 0, 1}, 0xCU);
+    OptunaNumpySortStage(keys, indices, {1, 0, 3, 2}, 0xAU);
+}
+
+void OptunaNumpyCompareExchange(std::array<double, 4>& lower_keys,
+                                std::array<std::size_t, 4>& lower_indices,
+                                std::array<double, 4>& upper_keys,
+                                std::array<std::size_t, 4>& upper_indices) {
+    for (std::size_t lane = 0; lane < 4; ++lane) {
+        if (lower_keys[lane] <= upper_keys[lane])
+            continue;
+        std::swap(lower_keys[lane], upper_keys[lane]);
+        std::swap(lower_indices[lane], upper_indices[lane]);
+    }
+}
+
+void OptunaNumpyMergeBlocks(
+    std::vector<std::array<double, 4>>& keys,
+    std::vector<std::array<std::size_t, 4>>& indices,
+    std::size_t start, std::size_t count) {
+    if (count == 2) {
+        std::reverse(keys[start + 1].begin(), keys[start + 1].end());
+        std::reverse(indices[start + 1].begin(), indices[start + 1].end());
+        OptunaNumpyCompareExchange(keys[start], indices[start],
+                                   keys[start + 1], indices[start + 1]);
+        std::reverse(keys[start + 1].begin(), keys[start + 1].end());
+        std::reverse(indices[start + 1].begin(), indices[start + 1].end());
+    } else {
+        for (std::size_t offset = 0; offset < count / 2; ++offset) {
+            const std::size_t lower = start + offset;
+            const std::size_t upper = start + count - offset - 1;
+            std::reverse(keys[upper].begin(), keys[upper].end());
+            std::reverse(indices[upper].begin(), indices[upper].end());
+            OptunaNumpyCompareExchange(keys[lower], indices[lower],
+                                       keys[upper], indices[upper]);
+            std::reverse(keys[upper].begin(), keys[upper].end());
+            std::reverse(indices[upper].begin(), indices[upper].end());
+        }
+    }
+    for (std::size_t width = count / 2; width >= 2; width /= 2) {
+        for (std::size_t base = start; base < start + count; base += width)
+            for (std::size_t offset = 0; offset < width / 2; ++offset)
+                OptunaNumpyCompareExchange(
+                    keys[base + offset], indices[base + offset],
+                    keys[base + offset + width / 2],
+                    indices[base + offset + width / 2]);
+    }
+    for (std::size_t block = start; block < start + count; ++block)
+        OptunaNumpyMergeFour(keys[block], indices[block]);
+}
+
+std::vector<std::size_t> OptunaNumpyArgsort(
+    const std::vector<double>& values) {
+    const std::size_t count = values.size();
+    std::vector<std::size_t> order(count);
+    std::iota(order.begin(), order.end(), 0);
+    if (count <= 1)
+        return order;
+    if (count > 256) {
+        std::stable_sort(order.begin(), order.end(),
+            [&](std::size_t left, std::size_t right) {
+                return values[left] < values[right];
+            });
+        return order;
+    }
+
+    std::size_t block_count = 1;
+    while (block_count * 4 < count)
+        block_count *= 2;
+    std::vector<std::array<double, 4>> keys(block_count);
+    std::vector<std::array<std::size_t, 4>> indices(block_count);
+    const std::size_t padding_index =
+        std::numeric_limits<std::size_t>::max();
+    for (std::size_t position = 0; position < block_count * 4; ++position) {
+        const std::size_t block = position / 4;
+        const std::size_t lane = position % 4;
+        keys[block][lane] = position < count
+            ? values[position] : std::numeric_limits<double>::infinity();
+        indices[block][lane] = position < count ? position : padding_index;
+    }
+    for (std::size_t block = 0; block < block_count; ++block)
+        OptunaNumpySortFour(keys[block], indices[block]);
+    for (std::size_t width = 2; width <= block_count; width *= 2)
+        for (std::size_t start = 0; start < block_count; start += width)
+            OptunaNumpyMergeBlocks(keys, indices, start, width);
+    for (std::size_t position = 0; position < count; ++position)
+        order[position] = indices[position / 4][position % 4];
+    return order;
+}
+
+}  // namespace
+
 std::vector<OptunaJointEstimator> OptunaBuildJointEstimators(
     const std::vector<double>& observations, std::size_t observation_count,
     std::size_t dimension, const mxLogical* categorical,
     const std::vector<double>& lows, const std::vector<double>& highs,
     const mxLogical* log_scale, const std::vector<double>& steps,
     const std::vector<int>& choice_counts, double prior_weight,
-    bool magic_clip, const std::vector<double>& observation_weights) {
+    bool magic_clip, bool endpoints,
+    const std::vector<double>& observation_weights) {
     std::vector<OptunaJointEstimator> result(dimension);
     const auto weights = OptunaMixtureWeights(
         observation_count, prior_weight, observation_weights);
@@ -2575,23 +2705,43 @@ std::vector<OptunaJointEstimator> OptunaBuildJointEstimators(
         estimator.internal_high = estimator.log_scale
             ? std::log(support_high) : support_high;
         const double span = estimator.internal_high - estimator.internal_low;
-        double sigma = 0.2 * std::pow(
-            std::max<std::size_t>(observation_count, 1),
-            -1.0 / static_cast<double>(dimension + 4)) * span;
         double minimum = std::numeric_limits<double>::epsilon();
         if (magic_clip)
             minimum = span / std::min<double>(
                 100.0, 1.0 + static_cast<double>(observation_count + 1));
-        sigma = std::min(std::max(sigma, minimum), span);
-        estimator.mu.resize(observation_count + 1);
-        estimator.sigma.assign(observation_count + 1, sigma);
+        estimator.mu.resize(observation_count);
         for (std::size_t row = 0; row < observation_count; ++row) {
             const double raw = observations[row * dimension + dim];
             estimator.mu[row] = estimator.log_scale ? std::log(raw) : raw;
         }
-        estimator.mu.back() = 0.5 *
-            (estimator.internal_low + estimator.internal_high);
-        estimator.sigma.back() = span;
+        estimator.sigma.resize(observation_count);
+        if (observation_count > 0) {
+            const auto order = OptunaNumpyArgsort(estimator.mu);
+            std::vector<double> sorted(observation_count);
+            std::vector<double> sorted_sigma(observation_count);
+            for (std::size_t index = 0; index < observation_count; ++index)
+                sorted[index] = estimator.mu[order[index]];
+            for (std::size_t index = 0; index < observation_count; ++index) {
+                const double left = index == 0 ? estimator.internal_low
+                                               : sorted[index - 1];
+                const double right = index + 1 == observation_count
+                    ? estimator.internal_high : sorted[index + 1];
+                sorted_sigma[index] = std::max(
+                    sorted[index] - left, right - sorted[index]);
+            }
+            if (!endpoints && observation_count >= 2) {
+                sorted_sigma.front() = sorted[1] - sorted[0];
+                sorted_sigma.back() =
+                    sorted[observation_count - 1] -
+                    sorted[observation_count - 2];
+            }
+            for (std::size_t index = 0; index < observation_count; ++index)
+                estimator.sigma[order[index]] = std::min(
+                    std::max(sorted_sigma[index], minimum), span);
+        }
+        estimator.mu.push_back(0.5 *
+            (estimator.internal_low + estimator.internal_high));
+        estimator.sigma.push_back(span);
         estimator.denominator.resize(observation_count + 1);
         for (std::size_t kernel = 0; kernel <= observation_count; ++kernel)
             estimator.denominator[kernel] = OptunaLogNormalMass(
@@ -2605,8 +2755,8 @@ std::vector<OptunaJointEstimator> OptunaBuildJointEstimators(
 
 void OptunaTPEBestJointObservations(int nlhs, mxArray* plhs[], int nrhs,
                                     const mxArray* prhs[]) {
-    CheckArity(nrhs, 15, nlhs, 1,
-        "values = radia_mex('optuna.tpe.best_joint_observations', handle, count, categorical, lows, highs, log_scale, steps, choice_counts, good, bad, prior_weight, magic_clip, below_weights, above_weights)");
+    CheckArity(nrhs, 16, nlhs, 1,
+        "values = radia_mex('optuna.tpe.best_joint_observations', handle, count, categorical, lows, highs, log_scale, steps, choice_counts, good, bad, prior_weight, magic_clip, endpoints, below_weights, above_weights)");
     OptunaRandomStateHandle& state = OptunaRandomState(Handle(prhs[1]));
     const int count = PositiveInteger(prhs[2], "count");
     const mxArray* categorical_array = prhs[3];
@@ -2630,16 +2780,19 @@ void OptunaTPEBestJointObservations(int nlhs, mxArray* plhs[], int nrhs,
         BadArgument("joint TPE observation matrices have invalid width");
     const double prior_weight = Scalar(prhs[11], "prior_weight");
     const bool magic_clip = Boolean(prhs[12], "magic_clip");
-    const auto below_weights = RealVector(prhs[13], "below_weights");
-    const auto above_weights = RealVector(prhs[14], "above_weights");
+    const bool endpoints = Boolean(prhs[13], "endpoints");
+    const auto below_weights = RealVector(prhs[14], "below_weights");
+    const auto above_weights = RealVector(prhs[15], "above_weights");
     const auto* categorical = mxGetLogicals(categorical_array);
     const auto* log_scale = mxGetLogicals(log_array);
     const auto below = OptunaBuildJointEstimators(
         good, good_count, dimension, categorical, lows, highs, log_scale,
-        steps, choice_counts, prior_weight, magic_clip, below_weights);
+        steps, choice_counts, prior_weight, magic_clip, endpoints,
+        below_weights);
     const auto above = OptunaBuildJointEstimators(
         bad, bad_count, dimension, categorical, lows, highs, log_scale,
-        steps, choice_counts, prior_weight, magic_clip, above_weights);
+        steps, choice_counts, prior_weight, magic_clip, endpoints,
+        above_weights);
     plhs[0] = RealRow(OptunaBestJoint(state, count, below, above));
 }
 
@@ -2671,12 +2824,7 @@ OptunaJointEstimator OptunaBuildUnivariateNumericalEstimator(
     }
     std::vector<double> sigmas(n);
     if (n > 0) {
-        std::vector<std::size_t> order(n);
-        std::iota(order.begin(), order.end(), 0);
-        std::stable_sort(order.begin(), order.end(),
-            [&](std::size_t left, std::size_t right) {
-                return mus[left] < mus[right];
-            });
+        const auto order = OptunaNumpyArgsort(mus);
         std::vector<double> sorted(n), sorted_sigma(n);
         for (std::size_t index = 0; index < n; ++index)
             sorted[index] = mus[order[index]];
@@ -2792,8 +2940,8 @@ void OptunaTPEHistoryAppendComplete(int nlhs, mxArray*[], int nrhs,
 
 void OptunaTPEBestGroupedHistory(int nlhs, mxArray* plhs[], int nrhs,
                                  const mxArray* prhs[]) {
-    CheckArity(nrhs, 16, nlhs, 1,
-        "values = radia_mex('optuna.tpe.best_grouped_history', handle, count, group_offsets, distribution_ids, categorical, lows, highs, log_scale, steps, choice_counts, minimize, gamma, max_good, prior_weight, magic_clip)");
+    CheckArity(nrhs, 17, nlhs, 1,
+        "values = radia_mex('optuna.tpe.best_grouped_history', handle, count, group_offsets, distribution_ids, categorical, lows, highs, log_scale, steps, choice_counts, minimize, gamma, max_good, prior_weight, magic_clip, endpoints)");
     auto& state = OptunaRandomState(Handle(prhs[1]));
     const int count = PositiveInteger(prhs[2], "count");
     const auto group_offsets = IntegerVector(prhs[3], "group_offsets");
@@ -2831,6 +2979,7 @@ void OptunaTPEBestGroupedHistory(int nlhs, mxArray* plhs[], int nrhs,
     const int max_good = PositiveInteger(prhs[13], "max_good");
     const double prior_weight = Scalar(prhs[14], "prior_weight");
     const bool magic_clip = Boolean(prhs[15], "magic_clip");
+    const bool endpoints = Boolean(prhs[16], "endpoints");
     if (state.tpe_history.empty())
         BadArgument("grouped TPE history has no completed trials");
 
@@ -2892,11 +3041,11 @@ void OptunaTPEBestGroupedHistory(int nlhs, mxArray* plhs[], int nrhs,
         const auto below = OptunaBuildJointEstimators(
             good, good.size() / group_dimension, group_dimension,
             categorical + begin, group_lows, group_highs, log_scale + begin,
-            group_steps, group_choices, prior_weight, magic_clip, {});
+            group_steps, group_choices, prior_weight, magic_clip, endpoints, {});
         const auto above = OptunaBuildJointEstimators(
             bad, bad.size() / group_dimension, group_dimension,
             categorical + begin, group_lows, group_highs, log_scale + begin,
-            group_steps, group_choices, prior_weight, magic_clip, {});
+            group_steps, group_choices, prior_weight, magic_clip, endpoints, {});
         const auto candidate = OptunaBestJoint(state, count, below, above);
         std::copy(candidate.begin(), candidate.end(), result.begin() + begin);
     }

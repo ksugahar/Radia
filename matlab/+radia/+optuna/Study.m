@@ -1,5 +1,5 @@
 classdef Study < handle
-    %STUDY Table-backed implementation of a verified Optuna 4.9 subset.
+    %STUDY Table-backed implementation of the verified Optuna 5.0 surface.
 
     properties (SetAccess=private)
         Name (1,1) string
@@ -75,7 +75,7 @@ classdef Study < handle
 
     properties (Constant, Access=private)
         StorageSchema = "radia.optuna.study"
-        StorageVersion = 4
+        StorageVersion = 5
     end
 
     methods
@@ -109,15 +109,10 @@ classdef Study < handle
             obj.Sampler = options.Sampler;
             obj.Pruner = options.Pruner;
             if isempty(obj.Sampler)
-                if isscalar(obj.Directions)
-                    obj.Sampler = radia.optuna.TPESampler( ...
-                        NStartupTrials=10);
-                else
-                    % Optuna 4.9 selects NSGA-II for a multi-objective
-                    % study when no sampler is supplied.
-                    obj.Sampler = radia.optuna.NSGAIISampler( ...
-                        PopulationSize=50);
-                end
+                % Optuna 5.0 selects TPESampler for both single- and
+                % multi-objective studies. TPESampler resolves its automatic
+                % multivariate mode from the number of objectives.
+                obj.Sampler = radia.optuna.TPESampler(NStartupTrials=10);
             end
             if isempty(obj.Pruner)
                 obj.Pruner = radia.optuna.MedianPruner();
@@ -438,7 +433,7 @@ classdef Study < handle
             value = obj.UserAttrs;
         end
 
-        function setSystemAttr(obj,name,value)
+        function setInternalAttribute(obj,name,value)
             arguments
                 obj
                 name (1,1) string
@@ -448,11 +443,7 @@ classdef Study < handle
             obj.persist();
         end
 
-        function set_system_attr(obj,name,value)
-            obj.setSystemAttr(name,value);
-        end
-
-        function value = system_attrs(obj)
+        function value = internalAttributes(obj)
             value=obj.SystemAttrs;
         end
 
@@ -987,8 +978,6 @@ classdef Study < handle
             if ~isempty(obj.MetricNames)
                 labels=reshape(obj.MetricNames,[],1);
                 indices=(1:objectiveCount)';
-                [labels,order]=sort(labels);
-                indices=indices(order);
             else
                 labels=string((0:objectiveCount-1)');
                 indices=(1:objectiveCount)';
@@ -1317,9 +1306,9 @@ classdef Study < handle
             obj.SystemAttrTable = table('Size', [0, 3], ...
                 'VariableTypes', {'double','string','string'}, ...
                 'VariableNames', {'TrialNumber','Name','ValueJSON'});
-            obj.ConstraintTable = table('Size', [0, 3], ...
-                'VariableTypes', {'double','double','double'}, ...
-                'VariableNames', {'TrialNumber','ConstraintIndex','Value'});
+            obj.ConstraintTable = table('Size', [0, 4], ...
+                'VariableTypes', {'double','double','string','double'}, ...
+                'VariableNames', {'TrialNumber','ConstraintIndex','Name','Value'});
             obj.ConstraintCountTable = table('Size', [0, 2], ...
                 'VariableTypes', {'double','double'}, ...
                 'VariableNames', {'TrialNumber','Count'});
@@ -1394,6 +1383,13 @@ classdef Study < handle
             end
             if isfield(data, "ConstraintTable")
                 obj.ConstraintTable = data.ConstraintTable;
+                if ~ismember("Name",string( ...
+                        obj.ConstraintTable.Properties.VariableNames))
+                    obj.ConstraintTable.Name= ...
+                        string(obj.ConstraintTable.ConstraintIndex-1);
+                    obj.ConstraintTable=movevars(obj.ConstraintTable,"Name", ...
+                        "Before","Value");
+                end
             end
             if isfield(data, "ConstraintCountTable")
                 obj.ConstraintCountTable = data.ConstraintCountTable;
@@ -1495,13 +1491,15 @@ classdef Study < handle
                 startedAt=timestamps.TrialStart(row);
                 completedAt=timestamps.TrialEnd(row);
             end
-            [constraintPresent,constraints]=obj.constraintRecord(trialNumber);
+            [constraintPresent,constraints,constraintNames]= ...
+                obj.constraintRecord(trialNumber);
             frozen=radia.optuna.FrozenTrial(Number=trialNumber, ...
                 State=obj.TrialStateData(row),Values=values, ...
                 Params=obj.TrialParamsData{row}, ...
                 Distributions=distributions, ...
                 IntermediateValues=intermediate,UserAttrs=userAttrs, ...
                 SystemAttrs=systemAttrs,Constraints=constraints, ...
+                ConstraintNames=constraintNames, ...
                 ConstraintPresent=constraintPresent, ...
                 DatetimeStart=startedAt,DatetimeComplete=completedAt, ...
                 ErrorMessage=obj.TrialErrorData(row));
@@ -1642,6 +1640,7 @@ classdef Study < handle
                     obj.ConstraintTable=[obj.ConstraintTable;table( ...
                         repmat(number,numel(frozen.Constraints),1), ...
                         (1:numel(frozen.Constraints))', ...
+                        reshape(frozen.ConstraintNames,[],1), ...
                         reshape(frozen.Constraints,[],1), ...
                         'VariableNames',obj.ConstraintTable.Properties.VariableNames)];
                     for constraintRow=firstConstraintRow:height(obj.ConstraintTable)
@@ -1822,7 +1821,7 @@ classdef Study < handle
                 error("radia:optuna:SamplerConstraints", ...
                     "The configured sampler does not implement " + ...
                     "constraint-aware ranking. Use TPESampler, " + ...
-                    "MOTPESampler, or NSGAIISampler.");
+                    "TPESampler or NSGAIISampler.");
             end
             stale=obj.ConstraintIndex.lookup( ...
                 obj.ConstraintTable.TrialNumber,trial.Number);
@@ -1838,13 +1837,35 @@ classdef Study < handle
                 firstRow=height(obj.ConstraintTable)+1;
                 obj.ConstraintTable = [obj.ConstraintTable; table( ...
                     repmat(trial.Number, numel(values), 1), ...
-                    (1:numel(values))', values, ...
+                    (1:numel(values))',string(0:numel(values)-1)',values, ...
                     'VariableNames', obj.ConstraintTable.Properties.VariableNames)];
                 for row=firstRow:height(obj.ConstraintTable)
                     obj.ConstraintIndex.append(trial.Number,row);
                 end
             end
             trial.setConstraints(values);
+            obj.persist();
+        end
+
+        function recordConstraint(obj,trial,name,value)
+            arguments
+                obj
+                trial (1,1) radia.optuna.Trial
+                name (1,1) string
+                value (1,1) double
+            end
+            [present,values,names]=obj.constraintRecord(trial.Number);
+            if any(names==name)
+                return
+            end
+            if ~present
+                obj.ConstraintCountTable(end+1,:)={trial.Number,0};
+            end
+            index=numel(values)+1;
+            obj.ConstraintTable(end+1,:)={trial.Number,index,name,value};
+            obj.ConstraintCountTable.Count( ...
+                obj.ConstraintCountTable.TrialNumber==trial.Number)=index;
+            obj.ConstraintIndex.append(trial.Number,height(obj.ConstraintTable));
             obj.persist();
         end
 
@@ -1855,7 +1876,7 @@ classdef Study < handle
             end
         end
 
-        function [present, values] = constraintRecord(obj, trialNumber)
+        function [present, values, names] = constraintRecord(obj, trialNumber)
             countRows = obj.ConstraintCountTable.TrialNumber == trialNumber;
             if sum(countRows) > 1
                 error("radia:optuna:ConstraintShape", ...
@@ -1864,6 +1885,7 @@ classdef Study < handle
             present = any(countRows);
             if ~present
                 values = zeros(1,0);
+                names = strings(1,0);
                 return
             end
             count = obj.ConstraintCountTable.Count(countRows);
@@ -1882,6 +1904,11 @@ classdef Study < handle
                     "Trial %d has an incomplete constraint vector.",trialNumber);
             end
             values = reshape(selected.Value,1,[]);
+            names = reshape(string(selected.Name),1,[]);
+            if numel(unique(names))~=numel(names)
+                error("radia:optuna:ConstraintShape", ...
+                    "Trial %d has duplicate constraint names.",trialNumber);
+            end
             if any(isnan(values))
                 error("radia:optuna:Constraints", ...
                     "Trial %d has NaN constraint values.",trialNumber);
@@ -1889,7 +1916,10 @@ classdef Study < handle
         end
 
         function result = hasConstraintRecords(obj)
-            result = ~isempty(obj.ConstraintCountTable);
+            % Optuna 5 regards an empty/missing constraint dictionary as
+            % unconstrained. Only a named value activates constrained
+            % optimization.
+            result = any(obj.ConstraintCountTable.Count > 0);
         end
 
         function finishTrial(obj, trial, state, value, message)
@@ -2023,19 +2053,17 @@ classdef Study < handle
         end
 
         function [feasible, constrained] = feasibleTrials(obj, trialNumbers)
-            % Once any constraint is present, missing constraint rows are
-            % unknown rather than implicitly feasible. This protects legacy
-            % and partially written studies from selecting an unchecked run.
+            % Optuna 5 exposes a dictionary per trial. Missing storage rows
+            % materialize as an empty dictionary and are therefore feasible.
             trialNumbers = reshape(double(trialNumbers), [], 1);
             constrained = obj.hasConstraintRecords();
             feasible = true(size(trialNumbers));
             if ~constrained
                 return
             end
-            feasible(:) = false;
             for index = 1:numel(trialNumbers)
                 [present,values] = obj.constraintRecord(trialNumbers(index));
-                feasible(index) = present && all(values <= 0);
+                feasible(index) = ~present || all(values <= 0);
             end
         end
 

@@ -1,4 +1,4 @@
-"""Compare the Optuna 4.9.0 public inventory with the MATLAB package surface."""
+"""Compare the Optuna 5.0.0 public inventory with the MATLAB package surface."""
 
 from __future__ import annotations
 
@@ -10,10 +10,10 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[3]
-INVENTORY_PATH = Path(__file__).with_name("optuna49_public_api.json")
-ORACLE_PATH = Path(__file__).with_name("optuna49_oracle.json")
+INVENTORY_PATH = Path(__file__).with_name("optuna50_public_api.json")
+ORACLE_PATH = Path(__file__).with_name("optuna50_oracle.json")
 MATLAB_DIRECTORY = ROOT / "matlab" / "+radia" / "+optuna"
-DESTINATION = ROOT / "matlab" / "optuna49_api_coverage.json"
+DESTINATION = ROOT / "matlab" / "optuna50_api_coverage.json"
 FUNCTION_PATTERN = re.compile(
     r"(?m)^\s*function\s+(?:\[[^]]*\]|\w+)\s*=\s*(\w+)\s*\(|"
     r"^\s*function\s+(\w+)\s*\("
@@ -363,12 +363,13 @@ VERIFIED_MEMBERS = {
     "BasePruner": {"prune"},
     "BaseSampler": SAMPLER_PUBLIC_MEMBERS | {"reseed_rng"},
     "BaseTrial": {
+        "constraints",
         "datetime_start",
         "distributions",
         "number",
         "params",
         "report",
-        "set_system_attr",
+        "set_constraint",
         "set_user_attr",
         "should_prune",
         "suggest_categorical",
@@ -377,7 +378,6 @@ VERIFIED_MEMBERS = {
         "suggest_int",
         "suggest_loguniform",
         "suggest_uniform",
-        "system_attrs",
         "user_attrs",
     },
     "Study": {
@@ -395,24 +395,23 @@ VERIFIED_MEMBERS = {
         "metric_names",
         "optimize",
         "set_metric_names",
-        "set_system_attr",
         "set_user_attr",
         "stop",
-        "system_attrs",
         "tell",
         "trials",
         "trials_dataframe",
         "user_attrs",
     },
-    "StudySummary": {"direction", "directions", "system_attrs"},
+    "StudySummary": {"direction", "directions"},
     "Trial": {
+        "constraints",
         "datetime_start",
         "distributions",
         "number",
         "params",
         "report",
         "relative_params",
-        "set_system_attr",
+        "set_constraint",
         "set_user_attr",
         "should_prune",
         "suggest_categorical",
@@ -421,16 +420,16 @@ VERIFIED_MEMBERS = {
         "suggest_int",
         "suggest_loguniform",
         "suggest_uniform",
-        "system_attrs",
         "user_attrs",
     },
     "FixedTrial": {
+        "constraints",
         "datetime_start",
         "distributions",
         "number",
         "params",
         "report",
-        "set_system_attr",
+        "set_constraint",
         "set_user_attr",
         "should_prune",
         "suggest_categorical",
@@ -443,6 +442,7 @@ VERIFIED_MEMBERS = {
         "user_attrs",
     },
     "FrozenTrial": {
+        "constraints",
         "datetime_complete",
         "datetime_start",
         "distributions",
@@ -452,7 +452,7 @@ VERIFIED_MEMBERS = {
         "number",
         "params",
         "report",
-        "set_system_attr",
+        "set_constraint",
         "set_user_attr",
         "should_prune",
         "state",
@@ -487,6 +487,8 @@ VERIFIED_MEMBERS = {
     "UNDXCrossover": CROSSOVER_PUBLIC_MEMBERS,
     "UniformCrossover": CROSSOVER_PUBLIC_MEMBERS,
     "VSBXCrossover": CROSSOVER_PUBLIC_MEMBERS,
+    "BaseMutation": {"mutation"},
+    "PolynomialMutation": {"mutation"},
     "HyperbandPruner": {"prune"},
     "MedianPruner": {"prune"},
     "NopPruner": {"prune"},
@@ -612,18 +614,19 @@ CLASS_ORACLE_SECTIONS = {
         "multivariate_tpe_sampler_seed_67",
         "sampler_public_members",
         "sampler_reseed",
-        "tpe_categorical_distance",
         "tpe_group",
         "tpe_sampler_seed_37",
         "tpe_constant_liar_seed_127",
     ),
     "BaseCrossover": ("base_components", "nsgaii_crossovers_seed_73"),
+    "BaseMutation": ("nsgaii_mutation",),
     "BLXAlphaCrossover": ("nsgaii_crossovers_seed_73",),
     "SBXCrossover": ("nsgaii_crossovers_seed_73",),
     "SPXCrossover": ("nsgaii_crossovers_seed_73",),
     "UNDXCrossover": ("nsgaii_crossovers_seed_73",),
     "UniformCrossover": ("nsgaii_crossovers_seed_73",),
     "VSBXCrossover": ("nsgaii_crossovers_seed_73",),
+    "PolynomialMutation": ("nsgaii_mutation",),
     "IntersectionSearchSpace": ("search_space",),
     "BestValueStagnationEvaluator": ("terminator",),
     "MaxTrialsCallback": ("terminator",),
@@ -823,8 +826,8 @@ def _oracle_generator_sections() -> dict[str, set[str]]:
     verified.
     """
     fixtures = Path(__file__).resolve().parent
-    oracle_source = fixtures / "generate_optuna49_oracle.py"
-    mcp_source = fixtures / "generate_optuna49_mcp_oracle.py"
+    oracle_source = fixtures / "generate_optuna50_oracle.py"
+    mcp_source = fixtures / "generate_optuna50_mcp_oracle.py"
     tree = ast.parse(oracle_source.read_text(encoding="utf-8"))
     functions = {
         node.name: node
@@ -838,27 +841,34 @@ def _oracle_generator_sections() -> dict[str, set[str]]:
         )
 
     section_producers: dict[str, str] = {}
-    for node in ast.walk(functions["build_oracle"]):
-        if not isinstance(node, ast.Dict):
-            continue
-        for key, value in zip(node.keys, node.values):
-            if (
-                isinstance(key, ast.Constant)
-                and isinstance(key.value, str)
-                and isinstance(value, ast.Call)
-                and isinstance(value.func, ast.Name)
-            ):
-                section_producers[key.value] = value.func.id
+    returned = next(
+        (
+            node.value
+            for node in functions["build_oracle"].body
+            if isinstance(node, ast.Return) and isinstance(node.value, ast.Dict)
+        ),
+        None,
+    )
+    if returned is None:
+        raise RuntimeError("build_oracle() must directly return its fixture dictionary.")
+    for key, value in zip(returned.keys, returned.values):
+        if (
+            isinstance(key, ast.Constant)
+            and isinstance(key.value, str)
+            and isinstance(value, ast.Call)
+            and isinstance(value.func, ast.Name)
+        ):
+            section_producers[key.value] = value.func.id
 
     fixture_sections = set(
         json.loads(
-            (fixtures / "optuna49_oracle.json").read_text(encoding="utf-8")
+            (fixtures / "optuna50_oracle.json").read_text(encoding="utf-8")
         )
     )
     unknown = sorted(set(section_producers) - fixture_sections)
     if unknown:
         raise RuntimeError(
-            "build_oracle() names sections absent from optuna49_oracle.json: "
+            "build_oracle() names sections absent from optuna50_oracle.json: "
             + ", ".join(unknown)
         )
 
@@ -934,11 +944,11 @@ def _entry(
 
 def build_coverage() -> dict[str, Any]:
     inventory = json.loads(INVENTORY_PATH.read_text(encoding="utf-8"))
-    if inventory.get("optuna_version") != "4.9.0":
-        raise RuntimeError("The public API inventory is not pinned to Optuna 4.9.0.")
+    if inventory.get("optuna_version") != "5.0.0":
+        raise RuntimeError("The public API inventory is not pinned to Optuna 5.0.0.")
     oracle = json.loads(ORACLE_PATH.read_text(encoding="utf-8"))
-    if oracle.get("optuna_version") != "4.9.0":
-        raise RuntimeError("The differential oracle is not pinned to Optuna 4.9.0.")
+    if oracle.get("optuna_version") != "5.0.0":
+        raise RuntimeError("The differential oracle is not pinned to Optuna 5.0.0.")
     required_sections = {
         section
         for sections in CLASS_ORACLE_SECTIONS.values()
@@ -1049,11 +1059,11 @@ def build_coverage() -> dict[str, Any]:
         and not required_asserted
     )
     return {
-        "schema": "radia.optuna49-api-coverage.v1",
-        "upstream_version": "4.9.0",
-        "upstream_inventory": "tests/matlab/fixtures/optuna49_public_api.json",
+        "schema": "radia.optuna50-api-coverage.v1",
+        "upstream_version": "5.0.0",
+        "upstream_inventory": "tests/matlab/fixtures/optuna50_public_api.json",
         "upstream_inventory_sha256": _sha256(INVENTORY_PATH),
-        "upstream_oracle": "tests/matlab/fixtures/optuna49_oracle.json",
+        "upstream_oracle": "tests/matlab/fixtures/optuna50_oracle.json",
         "upstream_oracle_sha256": _sha256(ORACLE_PATH),
         "class_oracle_sections": CLASS_ORACLE_SECTIONS,
         "closure_rule": (

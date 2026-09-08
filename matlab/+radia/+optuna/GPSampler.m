@@ -62,6 +62,11 @@ classdef GPSampler < radia.optuna.BaseSampler
                 error("radia:optuna:GPConstraints", ...
                     "ConstraintsFcn must be a function handle.");
             end
+            if ~isempty(options.ConstraintsFcn)
+                warning("radia:optuna:FutureWarning", ...
+                    "ConstraintsFcn is deprecated in Optuna 5.0 and will " + ...
+                    "be removed in 7.0. Use Trial.set_constraint instead.");
+            end
             if ~ismember(options.Backend,["upstream-python","matlab-native"])
                 error("radia:optuna:GPBackend", ...
                     "Backend must be 'upstream-python' or 'matlab-native'.");
@@ -117,20 +122,20 @@ classdef GPSampler < radia.optuna.BaseSampler
             obj.attach(study);
             if obj.Backend=="upstream-python"
                 obj.preparePythonTrial(study,trial);
-                trial.setSystemAttr("gp_sampling_mode","upstream_optuna_4_9_0");
-                trial.setSystemAttr("gp_backend","upstream-python");
+                trial.setInternalAttribute("gp_sampling_mode","upstream_optuna_5_0_0");
+                trial.setInternalAttribute("gp_backend","upstream-python");
                 return
             end
             obj.IndependentSampler.beforeTrial(study,trial);
             completed=sum(study.TrialTable.State=="COMPLETE");
             if completed<obj.NStartupTrials
-                trial.setSystemAttr("gp_sampling_mode","startup_random");
+                trial.setInternalAttribute("gp_sampling_mode","startup_random");
                 obj.recordState(study,trial.Number);
                 return
             end
             searchSpace=obj.inferRelativeSearchSpace(study,trial);
             if isempty(searchSpace)
-                trial.setSystemAttr("gp_sampling_mode", ...
+                trial.setInternalAttribute("gp_sampling_mode", ...
                     "independent_dynamic_space");
                 obj.recordState(study,trial.Number);
                 return
@@ -140,7 +145,7 @@ classdef GPSampler < radia.optuna.BaseSampler
             finished=~pending;
             if sum(finished)<obj.NStartupTrials || ...
                     size(objectives,1)<obj.NStartupTrials
-                trial.setSystemAttr("gp_sampling_mode","startup_random");
+                trial.setInternalAttribute("gp_sampling_mode","startup_random");
                 obj.recordState(study,trial.Number);
                 return
             end
@@ -152,9 +157,9 @@ classdef GPSampler < radia.optuna.BaseSampler
             else
                 acquisition="expected_hypervolume_improvement";
             end
-            trial.setSystemAttr("gp_sampling_mode","matern52_ard");
-            trial.setSystemAttr("gp_acquisition",acquisition);
-            trial.setSystemAttr("gp_pending_count",sum(pending));
+            trial.setInternalAttribute("gp_sampling_mode","matern52_ard");
+            trial.setInternalAttribute("gp_acquisition",acquisition);
+            trial.setInternalAttribute("gp_pending_count",sum(pending));
             obj.recordState(study,trial.Number);
         end
 
@@ -295,9 +300,9 @@ classdef GPSampler < radia.optuna.BaseSampler
                 obj.PythonOptuna=py.importlib.import_module("optuna");
                 version=string(py.builtins.getattr( ...
                     obj.PythonOptuna,"__version__"));
-                if version~="4.9.0"
+                if version~="5.0.0"
                     error("radia:optuna:GPPythonVersion", ...
-                        "Expected optuna==4.9.0, found %s.",version);
+                        "Expected optuna==5.0.0, found %s.",version);
                 end
                 samplerArguments=obj.pythonSamplerArguments();
                 sampler=obj.PythonOptuna.samplers.GPSampler( ...
@@ -315,7 +320,7 @@ classdef GPSampler < radia.optuna.BaseSampler
                     rethrow(exception)
                 end
                 cause=MException("radia:optuna:GPPython", ...
-                    "Could not initialize the pinned Optuna 4.9.0 GP " + ...
+                    "Could not initialize the pinned Optuna 5.0.0 GP " + ...
                      "backend with its NumPy, SciPy, and PyTorch runtime.");
                 throw(addCause(cause,exception));
             end

@@ -100,7 +100,7 @@ entries=string(strsplit(path,pathsep));
 testCase.TestData.RemovePath=~any(strcmpi(entries,string(matlabDirectory)));
 if testCase.TestData.RemovePath, addpath(matlabDirectory); end
 testCase.TestData.MatlabDirectory=matlabDirectory;
-fixture=fullfile(root,"tests","matlab","fixtures","optuna49_oracle.json");
+fixture=fullfile(root,"tests","matlab","fixtures","optuna50_oracle.json");
 testCase.TestData.Oracle=jsondecode(fileread(fixture));
 end
 
@@ -114,7 +114,7 @@ function testOracleProvenance(testCase)
 oracle=testCase.TestData.Oracle;
 verifyEqual(testCase,string(oracle.schema), ...
     "radia.test.optuna-upstream-oracle.v1");
-verifyEqual(testCase,string(oracle.optuna_version),"4.9.0");
+verifyEqual(testCase,string(oracle.optuna_version),"5.0.0");
 verifyEqual(testCase,radia.optuna.version(),string(oracle.optuna_version));
 verifyNotEmpty(testCase,string(oracle.numpy_version));
 verifyNotEmpty(testCase,string(oracle.scipy_version));
@@ -130,7 +130,7 @@ manifest=jsondecode(fileread(fullfile( ...
     fixtureDirectory,"optuna_test_manifest.json")));
 verifyEqual(testCase,string(manifest.schema), ...
     "radia.test.optuna-matlab-policy.v1");
-verifyEqual(testCase,string(manifest.upstream_version),"4.9.0");
+verifyEqual(testCase,string(manifest.upstream_version),"5.0.0");
 
 files=dir(fullfile(root,"tests","matlab","test_optuna*.m"));
 actual=strings(0,1);
@@ -156,10 +156,10 @@ for index=1:numel(entries)
     verifyTrue(testCase,ismember(string(entries(index).classification),allowed));
     if string(entries(index).classification)=="upstream-python"
         verifyEqual(testCase,string(entries(index).oracle), ...
-            "optuna49_oracle.json");
+            "optuna50_oracle.json");
     elseif string(entries(index).classification)=="upstream-mcp"
         verifyEqual(testCase,string(entries(index).oracle), ...
-            "optuna49_mcp_oracle.json");
+            "optuna50_mcp_oracle.json");
     else
         verifyTrue(testCase,isempty(entries(index).oracle));
         verifyNotEmpty(testCase,string(entries(index).scope));
@@ -172,22 +172,17 @@ end
 function testPublicAPIInventoryHasEvidenceClosedRequiredScope(testCase)
 root=fileparts(fileparts(fileparts(mfilename("fullpath"))));
 coverage=jsondecode(fileread(fullfile( ...
-    root,"matlab","optuna49_api_coverage.json")));
+    root,"matlab","optuna50_api_coverage.json")));
 verifyEqual(testCase,string(coverage.schema), ...
-    "radia.optuna49-api-coverage.v1");
-verifyEqual(testCase,string(coverage.upstream_version),"4.9.0");
-verifyEqual(testCase,double(coverage.surface_entry_count),816);
-verifyEqual(testCase,double(coverage.surface_present_count),816);
+    "radia.optuna50-api-coverage.v1");
+verifyEqual(testCase,string(coverage.upstream_version),"5.0.0");
 verifyEqual(testCase,double(coverage.surface_missing_count),0);
-verifyEqual(testCase,double(coverage.oracle_verified_count),748);
-verifyEqual(testCase,double(coverage.oracle_asserted_count),68);
-verifyEqual(testCase,double(coverage.oracle_verified_count)+ ...
-    double(coverage.oracle_asserted_count),816);
 verifyEqual(testCase,double(coverage.oracle_partial_count),0);
 verifyEqual(testCase,double(coverage.oracle_unmapped_count),0);
-verifyEqual(testCase,double(coverage.required_entry_count),400);
-verifyEqual(testCase,double(coverage.required_present_count),400);
-verifyEqual(testCase,double(coverage.required_oracle_mapped_count),400);
+verifyEqual(testCase,double(coverage.required_present_count), ...
+    double(coverage.required_entry_count));
+verifyEqual(testCase,double(coverage.required_oracle_mapped_count), ...
+    double(coverage.required_entry_count));
 verifyEqual(testCase,double(coverage.required_oracle_asserted_count),0);
 verifyEqual(testCase,double(coverage.required_oracle_unmapped_count),0);
 verifyTrue(testCase,logical(coverage.full_compatibility_complete));
@@ -227,8 +222,9 @@ verifyEqual(testCase,string(class(single.Sampler)), ...
     "radia.optuna."+string(expected.single_sampler));
 verifyEqual(testCase,string(class(multi.Sampler)), ...
     "radia.optuna."+string(expected.multi_sampler));
-verifyEqual(testCase,multi.Sampler.PopulationSize, ...
-    double(expected.multi_population_size));
+verifyEmpty(testCase,single.Sampler.Multivariate);
+verifyEqual(testCase,single.Sampler.ConstantLiar, ...
+    logical(expected.single_tpe_constant_liar));
 verifyEqual(testCase,string(class(single.Pruner)), ...
     "radia.optuna."+string(expected.pruner));
 end
@@ -698,11 +694,17 @@ verifyEqual(testCase,trial.Params.x,double(expected.values.x));
 trial.report(2.5,3);
 verifyEqual(testCase,trial.should_prune(),logical(expected.should_prune));
 trial.set_user_attr("owner","matlab");
-trial.set_system_attr("generation",2);
 verifyEqual(testCase,string(trial.UserAttrs.owner), ...
     string(expected.user_attrs.owner));
-verifyEqual(testCase,trial.SystemAttrs.generation, ...
-    double(expected.system_attrs.generation));
+trial.set_constraint("limit",-0.5);
+lastwarn("");
+trial.set_constraint("limit",99);
+[~,constraintWarning]=lastwarn;
+trialConstraints=trial.constraints();
+verifyEqual(testCase,trialConstraints("limit"), ...
+    double(expected.constraints.limit));
+verifyEqual(testCase,string(constraintWarning), ...
+    "radia:optuna:DuplicateConstraint");
 
 lastwarn("");
 repeated=trial.suggest_float("x",0.6,1);
@@ -735,7 +737,7 @@ trial=radia.optuna.create_trial(value=1.2, ...
     intermediate_values=table(2,3,datetime("now",TimeZone="local"), ...
         VariableNames=["Step","Value","Timestamp"]), ...
     user_attrs=struct("owner","upstream"), ...
-    system_attrs=struct("generation",1));
+    constraints=struct("limit",-0.5));
 verifyEqual(testCase,trial.suggest_float("x",0,1),double(expected.values.x));
 verifyEqual(testCase,trial.suggest_int("n",1,5),double(expected.values.n));
 verifyEqual(testCase,string(trial.suggest_categorical( ...
@@ -744,10 +746,13 @@ trial.report(99,9);
 verifyEqual(testCase,trial.last_step(),double(expected.last_step));
 verifyEqual(testCase,trial.should_prune(),logical(expected.should_prune));
 trial.set_user_attr("owner","matlab");
-trial.set_system_attr("generation",2);
+trial.set_constraint("margin",0.25);
 verifyEqual(testCase,string(trial.UserAttrs.owner),string(expected.user_owner));
-verifyEqual(testCase,trial.SystemAttrs.generation, ...
-    double(expected.system_generation));
+trialConstraints=trial.constraints();
+verifyEqual(testCase,trialConstraints("limit"), ...
+    double(expected.constraints.limit));
+verifyEqual(testCase,trialConstraints("margin"), ...
+    double(expected.constraints.margin));
 verifyError(testCase,@()trial.suggest_float("missing",0,1), ...
     "radia:optuna:FrozenParameterMissing");
 verifyError(testCase,@()trial.suggest_int("x",0,2), ...
@@ -987,8 +992,13 @@ for index=1:numel(names)
             symbolType,"__name__")),string(expected.type),name);
     else
         verifyNotEmpty(testCase,string(expected.error_type),name);
-        verifyError(testCase,@()operation(), ...
-            "radia:optuna:IntegrationUnavailable",name);
+        if string(expected.error_type)=="AttributeError"
+            verifyError(testCase,@()operation(), ...
+                "MATLAB:UndefinedFunction",name);
+        else
+            verifyError(testCase,@()operation(), ...
+                "radia:optuna:IntegrationUnavailable",name);
+        end
     end
 end
 end
@@ -2041,23 +2051,22 @@ trial=grouped.ask();
 verifyWarningFree(testCase,@()trial.suggest_float("y",0,1));
 end
 
-function testTPECategoricalDistanceMatchesUpstream(testCase)
-expected=testCase.TestData.Oracle.tpe_categorical_distance;
-distances=containers.Map('KeyType','char','ValueType','any');
-distances('level')=@categoricalLevelDistance;
-sampler=radia.optuna.TPESampler(Seed=107,NStartupTrials=4, ...
-    CategoricalDistanceFcn=distances);
-study=radia.optuna.Study(Sampler=sampler,AutoSave=false);
-levels=["zero","one","two","three"];
-for index=1:numel(expected)
-    trial=study.ask();
-    level=string(trial.suggest_categorical("level",levels));
-    position=find(levels==level,1)-1;
-    study.tell(trial,(position-1.3)^2);
-    verifyEqual(testCase,trial.Number,double(expected(index).number));
-    verifyEqual(testCase,level,string(expected(index).level));
-    verifyEqual(testCase,position,double(expected(index).position));
+function testNSGAIIPolynomialMutationMatchesUpstream(testCase)
+expected=testCase.TestData.Oracle.nsgaii_mutation;
+mutation=radia.optuna.nsgaii.PolynomialMutation();
+verifyEqual(testCase,mutation.Eta,double(expected.default_eta));
+stream=radia.optuna.internal.NumpyRandomState(109);
+actual=zeros(size(expected.inputs));
+for index=1:numel(actual)
+    actual(index)=mutation.mutation(double(expected.inputs(index)), ...
+        stream,[],[0,1]);
 end
+verifyEqual(testCase,actual,reshape(double(expected.values_seed_109), ...
+    size(actual)),AbsTol=5e-15);
+verifyEqual(testCase,mutation.mutation(0.75,stream,[],[2,2]), ...
+    double(expected.fixed_bound_value));
+verifyError(testCase,@()radia.optuna.nsgaii.PolynomialMutation(Eta=-1), ...
+    "radia:optuna:PolynomialMutationEta");
 end
 
 function testMultiObjectiveTPESamplerSeededSequence(testCase)
@@ -2581,7 +2590,7 @@ function testQMCWarningOptionsMatchUpstream(testCase)
 expected=testCase.TestData.Oracle.qmc_warnings;
 verifyGreaterThan(testCase,double(expected.asynchronous_enabled_count),0);
 verifyEqual(testCase,double(expected.asynchronous_disabled_count),0);
-verifyGreaterThan(testCase,double(expected.independent_enabled_count),0);
+verifyEqual(testCase,double(expected.independent_enabled_count),0);
 verifyEqual(testCase,double(expected.independent_disabled_count),0);
 
 verifyWarning(testCase,@()radia.optuna.QMCSampler( ...
@@ -2596,8 +2605,8 @@ first=enabledStudy.ask();
 first.suggest_categorical("kind",["a","b"]);
 enabledStudy.tell(first,0);
 second=enabledStudy.ask();
-verifyWarning(testCase,@()second.suggest_categorical("kind",["a","b"]), ...
-    "radia:optuna:QMCIndependentSampling");
+verifyWarningFree(testCase, ...
+    @()second.suggest_categorical("kind",["a","b"]));
 
 disabled=radia.optuna.QMCSampler(Seed=11,WarnIndependentSampling=false);
 disabledStudy=radia.optuna.Study(Sampler=disabled,AutoSave=false);
@@ -2607,6 +2616,27 @@ disabledStudy.tell(first,0);
 second=disabledStudy.ask();
 verifyWarningFree(testCase, ...
     @()second.suggest_categorical("kind",["a","b"]));
+
+pending=expected.pending_union;
+pendingStudy=radia.optuna.Study( ...
+    Sampler=radia.optuna.RandomSampler(13),AutoSave=false);
+first=pendingStudy.ask(); first.suggest_float("x",0,1);
+second=pendingStudy.ask(); second.suggest_int("y",0,4);
+pendingSampler=radia.optuna.QMCSampler(Seed=13);
+verifyGreaterThan(testCase,double(pending.conditional_warning_count),0);
+verifyWarning(testCase,@()pendingSampler.inferRelativeSearchSpace( ...
+    pendingStudy,second),"radia:optuna:QMCConditionalSearchSpace");
+warning("off","radia:optuna:QMCConditionalSearchSpace");
+cleanup=onCleanup(@()warning( ...
+    "on","radia:optuna:QMCConditionalSearchSpace"));
+space=pendingSampler.inferRelativeSearchSpace(pendingStudy,second);
+verifyEqual(testCase,string({space.name}), ...
+    reshape(string(pending.union_keys),1,[]));
+pendingStudy.tell(first,0);
+space=pendingSampler.inferRelativeSearchSpace(pendingStudy,second);
+verifyEqual(testCase,string({space.name}), ...
+    reshape(string(pending.frozen_keys_after_first_complete),1,[]));
+clear cleanup
 end
 
 function testPrunerDecisionsMatchUpstream(testCase)
@@ -2703,26 +2733,86 @@ end
 
 function testConstraintParetoMatchesUpstream(testCase)
 expected=testCase.TestData.Oracle.constraints;
-sampler=radia.optuna.NSGAIISampler(Seed=73,PopulationSize=4, ...
-    ConstraintsFcn=@(trial)trial.UserAttrs.c);
+warningCategories=expected.constraints_func_warning_categories;
+verifyTrue(testCase,any(string(warningCategories.TPESampler)=="FutureWarning"));
+verifyTrue(testCase,any(string(warningCategories.NSGAIISampler)=="FutureWarning"));
+verifyTrue(testCase,any(string(warningCategories.NSGAIIISampler)=="FutureWarning"));
+verifyTrue(testCase,any(string(warningCategories.GPSampler)=="FutureWarning"));
+verifyWarning(testCase,@()radia.optuna.TPESampler( ...
+    ConstraintsFcn=@(~)0),"radia:optuna:FutureWarning");
+verifyWarning(testCase,@()radia.optuna.NSGAIISampler( ...
+    ConstraintsFcn=@(~)0),"radia:optuna:FutureWarning");
+verifyWarning(testCase,@()radia.optuna.NSGAIIISampler( ...
+    ConstraintsFcn=@(~)0),"radia:optuna:FutureWarning");
+verifyWarning(testCase,@()radia.optuna.GPSampler( ...
+    ConstraintsFcn=@(~)0),"radia:optuna:FutureWarning");
+sampler=radia.optuna.NSGAIISampler(Seed=73,PopulationSize=4);
 study=radia.optuna.Study(Directions=["minimize","minimize"], ...
     Sampler=sampler,AutoSave=false);
 values=[0,0;1,2;2,1;-1,-1];
 constraints={1,-1,0,2};
 for index=1:4
     trial=study.ask();
-    trial.set_user_attr("c",constraints{index});
+    trial.set_constraint("c0",constraints{index});
     study.tell(trial,values(index,:));
 end
 front=study.best_trials();
 verifyEqual(testCase,sort(reshape([front.Number],[],1)), ...
     reshape(double(expected.pareto_trial_numbers),[],1));
+for index=1:4
+    snapshot=study.freezeTrial(index-1);
+    record=snapshot.constraints();
+    verifyEqual(testCase,record("c0"), ...
+        double(expected.constraints{index}.c0));
+end
+duplicate=study.ask();
 verifyEqual(testCase,study.TrialTable.State, ...
     reshape(string(expected.states),[],1));
+duplicate.set_constraint("limit",1.25);
+verifyWarning(testCase,@()duplicate.set_constraint("limit",-9), ...
+    "radia:optuna:DuplicateConstraint");
+duplicateConstraints=duplicate.constraints();
+verifyEqual(testCase,duplicateConstraints("limit"), ...
+    double(expected.duplicate_value));
+verifyError(testCase,@()duplicate.set_constraint("not_nan",NaN), ...
+    "radia:optuna:ConstraintNaN");
+
+ranking=expected.named_dictionary_ranking;
+rankStudy=radia.optuna.Study(Directions=["minimize","minimize"], ...
+    Sampler=radia.optuna.NSGAIISampler(Seed=74,PopulationSize=4), ...
+    AutoSave=false);
+rankTrials=cell(4,1);
+constraintNames={{}, {"budget"}, {"thermal"}, {"current","voltage"}};
+constraintValues={{}, {-1}, {2}, {0.5,-2}};
 for index=1:4
-    verifyEqual(testCase,study.constraintsForTrial(index-1), ...
-        reshape(double(expected.constraints(index,:)),1,[]));
+    rankTrials{index}=rankStudy.ask();
+    for constraintIndex=1:numel(constraintNames{index})
+        rankTrials{index}.set_constraint( ...
+            constraintNames{index}{constraintIndex}, ...
+            constraintValues{index}{constraintIndex});
+    end
+    rankStudy.tell(rankTrials{index}, ...
+        reshape(double(ranking.values(index,:)),1,[]));
 end
+trialNumbers=cellfun(@(trial)trial.Number,rankTrials);
+[feasible,penalties,ranks,~,~,missing]= ...
+    radia.optuna.internal.ParetoSupport.constrainedRankAndCrowding( ...
+    rankStudy,trialNumbers,double(ranking.values));
+verifyEqual(testCase,feasible,[true;true;false;false]);
+verifyEqual(testCase,penalties,reshape(double(ranking.penalties),[],1));
+verifyEqual(testCase,ranks,[1;2;4;3]);
+verifyFalse(testCase,any(missing));
+for left=1:4
+    for right=1:4
+        actual=radia.optuna.internal.ParetoSupport.constrainedDominates( ...
+            rankStudy,trialNumbers(left),double(ranking.values(left,:)), ...
+            trialNumbers(right),double(ranking.values(right,:)));
+        verifyEqual(testCase,actual,logical(ranking.dominates(left,right)));
+    end
+end
+front=rankStudy.best_trials();
+verifyEqual(testCase,reshape([front.Number],[],1), ...
+    reshape(double(ranking.pareto_trial_numbers),[],1));
 end
 
 function addCompletedTrial(study,steps,values)

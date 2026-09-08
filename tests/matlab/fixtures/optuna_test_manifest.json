@@ -3,22 +3,22 @@
     {
       "classification": "upstream-python",
       "file": "test_optuna_core_parity.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testEnqueueTrialMatchesUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_core_parity.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testInvalidEnqueuedValueFallsBackLikeUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_core_parity.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testAskFixedDistributionsMatchesUpstream"
     },
     {
@@ -87,21 +87,21 @@
     {
       "classification": "upstream-mcp",
       "file": "test_optuna_mcp_oracle.m",
-      "oracle": "optuna49_mcp_oracle.json",
+      "oracle": "optuna50_mcp_oracle.json",
       "scope": "official Optuna MCP behavior",
       "test": "testOfficialMCPProvenanceAndToolContract"
     },
     {
       "classification": "upstream-mcp",
       "file": "test_optuna_mcp_oracle.m",
-      "oracle": "optuna49_mcp_oracle.json",
+      "oracle": "optuna50_mcp_oracle.json",
       "scope": "official Optuna MCP behavior",
       "test": "testSingleObjectiveStudyTrialContract"
     },
     {
       "classification": "upstream-mcp",
       "file": "test_optuna_mcp_oracle.m",
-      "oracle": "optuna49_mcp_oracle.json",
+      "oracle": "optuna50_mcp_oracle.json",
       "scope": "official Optuna MCP behavior",
       "test": "testMultiObjectiveMetricAndParetoContract"
     },
@@ -131,7 +131,7 @@
       "file": "test_optuna_nsgaii_joint.m",
       "oracle": null,
       "scope": "MATLAB NSGA-II generation cache, parallel scheduling, and persistence",
-      "test": "testConstraintVectorShapeIsStable"
+      "test": "testNamedConstraintDictionariesNeedNotShareShape"
     },
     {
       "classification": "matlab-integration",
@@ -171,8 +171,8 @@
     {
       "classification": "upstream-python",
       "file": "test_optuna_pruner_parity.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testPrunerDecisionsMatchUpstream"
     },
     {
@@ -535,29 +535,29 @@
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testNumericUntransformPrimitivesMatchUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testSingleDistributionConsumesNoRandomNumber"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testTPEPrunedHistorySeededSequence"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testOracleProvenance"
     },
     {
@@ -570,487 +570,487 @@
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testPublicAPIInventoryHasEvidenceClosedRequiredScope"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testNumpyRandomStateSeedContract"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testUpstreamDefaults"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testUnseededSamplerDefaultsMatchUpstreamSemantics"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testSamplerReseedMatchesUpstreamSemantics"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testLoggingPublicContractMatchesUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testSamplerPublicMembersMatchUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testUpstreamTellContract"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testTrialPrunedExceptionMatchesUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testExceptionPublicContractMatchesUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testFinishedTellAndConstraintFailureMatchUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testFixedTrialMatchesUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testFrozenTrialPublicBehaviorMatchesUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testStudyManagementMatchesUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testTrialsDataframeMatchesUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testParameterImportancesMatchUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testImportanceEvaluatorPublicMembersMatchUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testIntegrationExportsMatchUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testVisualizationExportsMatchUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testTerminationContractsMatchUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testArtifactPublicContractMatchesUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testInMemoryStorageMatchesUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testCachedStorageMatchesUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testRDBStorageMatchesUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testGrpcStorageProxyMatchesUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testJournalBackendMatchesUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testJournalStorageMatchesUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testJournalRedisBackendMatchesUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testRetryHeartbeatCallbackMatchesUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testRandomSamplerSeededSequence"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testDistributionCompatibilityMatchesUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testDistributionPublicMembersMatchUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testIntersectionSearchSpaceMatchesUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testGroupDecomposedSearchSpaceMatchesUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testStudyDirectionAndTrialStateMatchUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testUnfinishedAddedTrialsMatchUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testBaseClassHierarchyMatchesUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testDistributionJSONAndCompatibilityMatchUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testTPESamplerSeededSequence"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testTPEConstantLiarConcurrentRunningMatchesUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testTPECallableGammaWeightsSeededSequence"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testTPEGroupAndIndependentWarningMatchUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
-      "test": "testTPECategoricalDistanceMatchesUpstream"
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
+      "test": "testNSGAIIPolynomialMutationMatchesUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testMultiObjectiveTPESamplerSeededSequence"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testMixedTPESamplerSeededSequence"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testGridSamplerSeededOrder"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testNSGAIISeededProposalSequence"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testNSGAIIISeededProposalSequence"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testBruteForceSeededProposalSequence"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testConditionalBruteForceSeededProposalSequence"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testCmaEsSeededProposalSequence"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testCmaEsIndependentSamplerSeededSequence"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testCmaEsAdvancedContinuousModesMatchUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testCmaEsWithMarginMatchesUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testCmaEsSourceTrialsWarmStartMatchesUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testCmaEsConsiderPrunedTrialsMatchesUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testCmaEsAdvancedWarningsAndInvalidCombinationsMatchUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testScrambledQMCSeededProposalSequence"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testGPSeededProposalSequence"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testGPConstraintsSeededProposalSequence"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testGPTableResumeReplaysUpstreamHistory"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testNSGAIICrossoverSeededSequences"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testPartialFixedSamplerSeededSequence"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testMultivariateTPESeededSequence"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testUnscrambledQMCSeededSequence"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testNativeSobolAbove32DimensionsMatchesUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testQMCWarningOptionsMatchUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testPrunerDecisionsMatchUpstream"
     },
     {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
-      "oracle": "optuna49_oracle.json",
-      "scope": "shared Optuna 4.9.0 behavior",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testConstraintParetoMatchesUpstream"
     }
   ],
   "schema": "radia.test.optuna-matlab-policy.v1",
-  "upstream_version": "4.9.0"
+  "upstream_version": "5.0.0"
 }

@@ -34,7 +34,7 @@ def test_health_uses_distribution_and_upstream_manifests_as_truth(monkeypatch):
         ).read_text(encoding="utf-8")
     )
     coverage = json.loads(
-        (REPO_ROOT / "matlab" / "optuna49_api_coverage.json").read_text(
+        (REPO_ROOT / "matlab" / "optuna50_api_coverage.json").read_text(
             encoding="utf-8"
         )
     )
@@ -101,11 +101,11 @@ def test_oracle_plan_targets_official_matlab_mcp_and_pinned_upstream():
     assert plan["runtime_owner"] == "MathWorks official MATLAB MCP Server"
     assert plan["ownership"] == {
         "shared_study_trial_tools": "optuna/optuna-mcp",
-        "seeded_numeric_oracle": "direct optuna==4.9.0",
+        "seeded_numeric_oracle": "direct optuna==5.0.0",
         "matlab_execution": "MathWorks official MATLAB MCP Server",
         "matlab_difference_contract": "radia-mcp.matlab",
     }
-    assert "generate_optuna49_mcp_oracle.py" in " ".join(
+    assert "generate_optuna50_mcp_oracle.py" in " ".join(
         plan["fixture_regeneration"]["commands"]
     )
     assert "runtests" not in plan["matlab_code"]
@@ -133,7 +133,7 @@ def test_benchmark_plan_reads_checked_workload_settings_and_separates_startup():
     }
     assert plan["same_host_required"] is True
     assert plan["cold_start"]["output"].endswith("optuna_mex_cold.json")
-    assert plan["python_warmed"]["runtime"] == "direct optuna==4.9.0"
+    assert plan["python_warmed"]["runtime"] == "direct optuna==5.0.0"
     assert plan["matlab_warmed"]["execute_with"] == "evaluate_matlab_code"
     assert plan["acceptance"]["max_matlab_to_python_warmed_time_ratio"] == 1.0
     assert plan["acceptance"]["startup_measured_separately"] is True
@@ -154,7 +154,7 @@ def _passing_release_evidence() -> dict[str, object]:
         "reported_repeats": 8,
     }
     python_result = {
-        "schema": "radia.validation.optuna49-performance-runtime.v1",
+        "schema": "radia.validation.optuna50-performance-runtime.v1",
         "runtime": "python-upstream",
         "host": "LAB",
         "versions": {"optuna": health["distribution"]["upstream_version"]},
@@ -171,7 +171,7 @@ def _passing_release_evidence() -> dict[str, object]:
         },
     }
     matlab_result = {
-        "schema": "radia.validation.optuna49-performance-runtime.v1",
+        "schema": "radia.validation.optuna50-performance-runtime.v1",
         "runtime": "matlab",
         "host": "LAB",
         "versions": {"optuna_mex_command_count": command_count},

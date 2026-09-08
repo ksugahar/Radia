@@ -13,6 +13,7 @@ classdef Trial < radia.optuna.BaseTrial
         UserAttrs struct = struct()
         SystemAttrs struct = struct()
         Constraints double = zeros(1,0)
+        ConstraintNames string = strings(1,0)
         ErrorMessage (1,1) string = ""
         LastStep double = NaN
     end
@@ -73,6 +74,7 @@ classdef Trial < radia.optuna.BaseTrial
             obj.UserAttrs=snapshot.UserAttrs;
             obj.SystemAttrs=snapshot.SystemAttrs;
             obj.Constraints=snapshot.Constraints;
+            obj.ConstraintNames=snapshot.ConstraintNames;
             obj.StartTimeSerial=datenum(snapshot.DatetimeStart); %#ok<DATNM>
             obj.EndTimeSerial=datenum(snapshot.DatetimeComplete); %#ok<DATNM>
             obj.ErrorMessage=snapshot.ErrorMessage;
@@ -93,6 +95,12 @@ classdef Trial < radia.optuna.BaseTrial
 
         function setConstraints(obj, values)
             obj.Constraints = reshape(double(values), 1, []);
+            obj.ConstraintNames=string(0:numel(obj.Constraints)-1);
+        end
+
+        function setConstraintSnapshot(obj,names,values)
+            obj.ConstraintNames=reshape(string(names),1,[]);
+            obj.Constraints=reshape(double(values),1,[]);
         end
 
         function value=startTimeSerial(obj)
@@ -156,7 +164,7 @@ classdef Trial < radia.optuna.BaseTrial
             end
             attribute = matlab.lang.makeValidName( ...
                 string(source) + "_relative_search_space");
-            obj.setSystemAttr(attribute,names);
+            obj.setInternalAttribute(attribute,names);
         end
 
         function setFixedParameters(obj,names,values)
@@ -169,7 +177,7 @@ classdef Trial < radia.optuna.BaseTrial
             end
             obj.FixedParameterNames=names;
             obj.FixedParameterValues=values;
-            obj.setSystemAttr("fixed_params",names);
+            obj.setInternalAttribute("fixed_params",names);
         end
 
         function setStorageParameter(obj,name,value,distribution)
@@ -568,7 +576,7 @@ classdef Trial < radia.optuna.BaseTrial
             obj.setUserAttr(name, value);
         end
 
-        function setSystemAttr(obj, name, value)
+        function setInternalAttribute(obj, name, value)
             arguments
                 obj
                 name (1,1) string
@@ -579,16 +587,51 @@ classdef Trial < radia.optuna.BaseTrial
             obj.Study.recordSystemAttribute(obj,name,value);
         end
 
-        function set_system_attr(obj, name, value)
-            obj.setSystemAttr(name, value);
+        function setConstraint(obj,name,value)
+            arguments
+                obj
+                name (1,1) string
+                value
+            end
+            obj.ensureRunning();
+            try
+                value=double(value);
+            catch
+                error("radia:optuna:ConstraintType", ...
+                    "Constraint value must be convertible to a scalar double.");
+            end
+            if ~isscalar(value) || ~isreal(value)
+                error("radia:optuna:ConstraintType", ...
+                    "Constraint value must be convertible to a scalar double.");
+            end
+            if isnan(value)
+                error("radia:optuna:ConstraintNaN", ...
+                    "Attempted to set constraint '%s', but NaN is not allowed.",name);
+            end
+            if any(obj.ConstraintNames==name)
+                warning("radia:optuna:DuplicateConstraint", ...
+                    "The constraint value is ignored because constraint '%s' is already set.",name);
+                return
+            end
+            obj.ConstraintNames(end+1)=name;
+            obj.Constraints(end+1)=value;
+            obj.Study.recordConstraint(obj,name,value);
+        end
+
+        function set_constraint(obj,name,value)
+            obj.setConstraint(name,value);
         end
 
         function value = user_attrs(obj)
             value = obj.UserAttrs;
         end
 
-        function value = system_attrs(obj)
-            value = obj.SystemAttrs;
+        function value=constraints(obj)
+            value=obj.constraintDictionary();
+        end
+
+        function value=internalAttributes(obj)
+            value=obj.SystemAttrs;
         end
 
         function value = params(obj)
@@ -601,6 +644,11 @@ classdef Trial < radia.optuna.BaseTrial
     end
 
     methods (Access=private)
+        function value=constraintDictionary(obj)
+            value=dictionary(reshape(obj.ConstraintNames,[],1), ...
+                reshape(obj.Constraints,[],1));
+        end
+
         function value = suggestIntegerImpl(obj, name, low, high, step, logScale)
             obj.ensureRunning();
             if ~(isfinite(low) && isfinite(high) && isfinite(step)) || ...

@@ -42,7 +42,7 @@ row=study.SamplerStateTable.Sampler=="nsgaii";
 state=study.SamplerStateTable.State{row};
 
 verifyEqual(testCase,study.SamplerStateTable.Schema(row), ...
-    "radia.optuna.nsgaii-sampler-state.v3");
+    "radia.optuna.nsgaii-sampler-state.v4");
 verifyEqual(testCase,state.generation_by_trial, ...
     [0 0;1 0;2 1;3 1]);
 verifyEqual(testCase,numel(state.generation_parent_cache),1);
@@ -177,7 +177,7 @@ clear cleanup
 cleanupStorage([primaryPath,clonePath]);
 end
 
-function testConstraintVectorShapeIsStable(testCase)
+function testNamedConstraintDictionariesNeedNotShareShape(testCase)
 study = radia.optuna.Study(Directions=["minimize","minimize"], ...
     Sampler=radia.optuna.NSGAIISampler( ...
     Seed=49,PopulationSize=2),AutoSave=false);
@@ -187,10 +187,12 @@ study.recordConstraints(first,[0,0]);
 second = study.ask();
 study.tell(second,[1,0]);
 study.recordConstraints(second,0);
-verifyError(testCase,@() ...
+[feasible,violation,rank] = ...
     radia.optuna.internal.ParetoSupport.constrainedRankAndCrowding( ...
-    study,[first.Number;second.Number],[0,1;1,0]), ...
-    "radia:optuna:ConstraintShape");
+    study,[first.Number;second.Number],[0,1;1,0]);
+verifyEqual(testCase,feasible,[true;true]);
+verifyEqual(testCase,violation,[0;0]);
+verifyEqual(testCase,rank,[1;1]);
 end
 
 function testEmptyConstraintVectorIsPresentAndFeasible(testCase)
@@ -210,9 +212,9 @@ study.tell(missingTrial,[0,0]);
 verifyTrue(testCase,present);
 verifyEmpty(testCase,values);
 verifyFalse(testCase,missingPresent);
-verifyEqual(testCase,feasible,[true;false]);
-verifyEqual(testCase,missing,[false;true]);
-verifyEqual(testCase,order,[1;2]);
+verifyEqual(testCase,feasible,[true;true]);
+verifyEqual(testCase,missing,[false;false]);
+verifyEqual(testCase,order,[2;1]);
 end
 
 function testDynamicParameterFallsBackOutsideJointIntersection(testCase)

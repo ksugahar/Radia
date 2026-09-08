@@ -1,5 +1,5 @@
 classdef NSGAIIISupport
-    %NSGAIIISUPPORT Deterministic Optuna 4.9 NSGA-III transforms.
+    %NSGAIIISUPPORT Deterministic Optuna 5 NSGA-III transforms.
 
     methods (Static)
         function points=defaultReferencePoints(nObjectives,dividingParameter)

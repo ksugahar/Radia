@@ -1,5 +1,5 @@
 classdef CategoricalDistribution < radia.optuna.BaseDistribution
-    %CATEGORICALDISTRIBUTION Public Optuna 4.9 categorical distribution.
+    %CATEGORICALDISTRIBUTION Public Optuna 5 categorical distribution.
 
     methods
         function obj=CategoricalDistribution(choices)

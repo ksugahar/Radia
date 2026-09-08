@@ -1,6 +1,6 @@
-function result = benchmark_matlab_optuna49(outputPath)
-%BENCHMARK_MATLAB_OPTUNA49 Benchmark the MATLAB Optuna 4.9-compatible TPE.
-% Run this on the same otherwise-idle host as benchmark_optuna49_python.py.
+function result = benchmark_matlab_optuna50(outputPath)
+%BENCHMARK_MATLAB_OPTUNA50 Benchmark the MATLAB Optuna 5-compatible TPE.
+% Run this on the same otherwise-idle host as benchmark_optuna50_python.py.
 
 arguments
     outputPath (1, 1) string = ""
@@ -13,7 +13,7 @@ trials = 100;
 repeats = 11;
 warmupRepeats = 3;
 expectedScalarChecksum = 20.040135043951892;
-expectedGroupedChecksum = 104.33176385944043;
+expectedGroupedChecksum = 116.82876282520074;
 dataframeTrials = 1000;
 
 [scalarSeconds, scalarChecksums] = measure(@runScalar, trials, repeats);
@@ -33,7 +33,7 @@ if strlength(host) == 0
     end
 end
 result = struct( ...
-    "schema", "radia.validation.optuna49-performance-runtime.v1", ...
+    "schema", "radia.validation.optuna50-performance-runtime.v1", ...
     "generated_at", string(datetime("now", "TimeZone", "UTC", ...
         "Format", "yyyy-MM-dd'T'HH:mm:ss.SSSXXX")), ...
     "runtime", "matlab", ...
@@ -79,7 +79,7 @@ modes = ["A", "B"];
 distributions = struct( ...
     "x", radia.optuna.FloatDistribution(0, 1), ...
     "mode", radia.optuna.CategoricalDistribution(modes));
-study = radia.optuna.Study(AutoSave=false);
+study = radia.optuna.Study(Name="benchmark-dataframe",AutoSave=false);
 for index = 1:trials
     study.add_trial(radia.optuna.create_trial( ...
         value=double(index - 1), ...
@@ -137,8 +137,9 @@ end
 end
 
 function checksum = runScalar(trials)
-study = radia.optuna.Study(Sampler=radia.optuna.TPESampler( ...
-    Seed=37, NStartupTrials=4), AutoSave=false);
+study = radia.optuna.Study(Name="benchmark-scalar", ...
+    Sampler=radia.optuna.TPESampler(Seed=37, NStartupTrials=4), ...
+    AutoSave=false);
 checksum = 0;
 for index = 1:trials
     trial = study.ask();
@@ -149,9 +150,9 @@ end
 end
 
 function checksum = runGrouped(trials)
-study = radia.optuna.Study(Sampler=radia.optuna.TPESampler( ...
-    Seed=101, NStartupTrials=4, Multivariate=true, Group=true), ...
-    AutoSave=false);
+study = radia.optuna.Study(Name="benchmark-grouped", ...
+    Sampler=radia.optuna.TPESampler(Seed=101, NStartupTrials=4, ...
+    Multivariate=true, Group=true),AutoSave=false);
 checksum = 0;
 for index = 1:trials
     trial = study.ask();

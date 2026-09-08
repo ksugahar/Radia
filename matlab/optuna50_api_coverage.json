@@ -19,6 +19,9 @@
       "base_components",
       "importance"
     ],
+    "BaseMutation": [
+      "nsgaii_mutation"
+    ],
     "BasePruner": [
       "base_components",
       "pruners"
@@ -138,6 +141,9 @@
     "PercentilePruner": [
       "pruners"
     ],
+    "PolynomialMutation": [
+      "nsgaii_mutation"
+    ],
     "QMCSampler": [
       "native_sobol_high_dimension",
       "qmc_warnings",
@@ -179,7 +185,6 @@
       "multivariate_tpe_sampler_seed_67",
       "sampler_public_members",
       "sampler_reseed",
-      "tpe_categorical_distance",
       "tpe_group",
       "tpe_sampler_seed_37",
       "tpe_constant_liar_seed_127"
@@ -244,8 +249,9 @@
       "kind": "class-method",
       "matlab_name": "radia.optuna.Study.add_trial",
       "oracle_sections": [
+        "constraints",
         "importance",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "retry_callback",
         "study_management",
         "trials_dataframe",
@@ -260,7 +266,7 @@
       "kind": "class-method",
       "matlab_name": "radia.optuna.Study.add_trials",
       "oracle_sections": [
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "search_space",
         "trials_dataframe",
         "unfinished_trials"
@@ -287,7 +293,7 @@
         "gp_constraints_sampler_seed_89",
         "gp_sampler_seed_53",
         "lifecycle_errors",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "mixed_tpe_sampler_seed_43",
         "multiobjective_tpe_sampler_seed_41",
         "multivariate_tpe_sampler_seed_67",
@@ -303,7 +309,6 @@
         "tell",
         "terminator",
         "terminator_bases",
-        "tpe_categorical_distance",
         "tpe_constant_liar_seed_127",
         "tpe_group",
         "tpe_pruned_history_seed_113",
@@ -332,7 +337,7 @@
       "matlab_name": "radia.optuna.Study.best_trial",
       "oracle_sections": [
         "best_params",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "study_management"
       ],
       "oracle_status": "verified",
@@ -345,7 +350,7 @@
       "matlab_name": "radia.optuna.Study.best_trials",
       "oracle_sections": [
         "constraints",
-        "mcp:generate_optuna49_mcp_oracle"
+        "mcp:generate_optuna50_mcp_oracle"
       ],
       "oracle_status": "verified",
       "scope": "required",
@@ -387,9 +392,10 @@
       "matlab_name": "radia.optuna.Study.Directions",
       "oracle_sections": [
         "cached_storage",
+        "constraints",
         "grpc_storage",
         "journal_storage",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "rdb_storage",
         "storage",
         "study_management"
@@ -415,7 +421,7 @@
       "matlab_name": "radia.optuna.Study.get_trials",
       "oracle_sections": [
         "ga_sampler",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "sampler_public_members",
         "unfinished_trials"
       ],
@@ -428,7 +434,7 @@
       "kind": "class-property",
       "matlab_name": "radia.optuna.Study.metric_names",
       "oracle_sections": [
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "trials_dataframe"
       ],
       "oracle_status": "verified",
@@ -460,7 +466,7 @@
       "kind": "class-method",
       "matlab_name": "radia.optuna.Study.set_metric_names",
       "oracle_sections": [
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "trials_dataframe"
       ],
       "oracle_status": "verified",
@@ -470,21 +476,8 @@
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.Study.set_system_attr",
-      "oracle_sections": [
-        "fixed_trial",
-        "frozen_trial"
-      ],
-      "oracle_status": "verified",
-      "scope": "required",
-      "surface_status": "present",
-      "upstream": "optuna.Study.set_system_attr"
-    },
-    {
-      "kind": "class-method",
       "matlab_name": "radia.optuna.Study.set_user_attr",
       "oracle_sections": [
-        "constraints",
         "fixed_trial",
         "frozen_trial",
         "gp_constraints_sampler_seed_89"
@@ -506,25 +499,6 @@
       "upstream": "optuna.Study.stop"
     },
     {
-      "kind": "class-property",
-      "matlab_name": "radia.optuna.Study.system_attrs",
-      "oracle_sections": [
-        "constraints",
-        "fixed_trial",
-        "frozen_trial",
-        "lifecycle_errors",
-        "mcp:generate_optuna49_mcp_oracle",
-        "pruners",
-        "retry_callback",
-        "sampler_public_members",
-        "trials_dataframe"
-      ],
-      "oracle_status": "verified",
-      "scope": "required",
-      "surface_status": "present",
-      "upstream": "optuna.Study.system_attrs"
-    },
-    {
       "kind": "class-method",
       "matlab_name": "radia.optuna.Study.tell",
       "oracle_sections": [
@@ -538,7 +512,7 @@
         "gp_constraints_sampler_seed_89",
         "gp_sampler_seed_53",
         "lifecycle_errors",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "mixed_tpe_sampler_seed_43",
         "multiobjective_tpe_sampler_seed_41",
         "multivariate_tpe_sampler_seed_67",
@@ -554,7 +528,6 @@
         "tell",
         "terminator",
         "terminator_bases",
-        "tpe_categorical_distance",
         "tpe_constant_liar_seed_127",
         "tpe_group",
         "tpe_pruned_history_seed_113",
@@ -574,7 +547,8 @@
         "core_api",
         "importance",
         "lifecycle_errors",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
+        "qmc_warnings",
         "retry_callback",
         "sampler_public_members",
         "search_space",
@@ -604,12 +578,11 @@
       "kind": "class-property",
       "matlab_name": "radia.optuna.Study.user_attrs",
       "oracle_sections": [
-        "constraints",
         "core_api",
         "fixed_trial",
         "frozen_trial",
         "gp_constraints_sampler_seed_89",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "study_management",
         "trials_dataframe",
         "unfinished_trials"
@@ -639,6 +612,21 @@
     },
     {
       "kind": "class-property",
+      "matlab_name": "radia.optuna.Trial.constraints",
+      "oracle_sections": [
+        "constraints",
+        "fixed_trial",
+        "frozen_trial",
+        "gp_constraints_sampler_seed_89",
+        "lifecycle_errors"
+      ],
+      "oracle_status": "verified",
+      "scope": "required",
+      "surface_status": "present",
+      "upstream": "optuna.Trial.constraints"
+    },
+    {
+      "kind": "class-property",
       "matlab_name": "radia.optuna.Trial.datetime_start",
       "oracle_sections": [
         "sampler_public_members",
@@ -664,7 +652,7 @@
         "grpc_storage",
         "importance",
         "journal_storage",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "numeric_untransform",
         "rdb_storage",
         "retry_callback",
@@ -694,14 +682,13 @@
         "fixed_trial",
         "grpc_storage",
         "journal_storage",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "pruners",
         "rdb_storage",
         "sampler_public_members",
         "storage",
         "tell",
         "terminator",
-        "tpe_categorical_distance",
         "tpe_constant_liar_seed_127",
         "tpe_group",
         "trials_dataframe",
@@ -722,7 +709,7 @@
         "grpc_storage",
         "importance",
         "journal_storage",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "rdb_storage",
         "storage",
         "study_management",
@@ -765,21 +752,21 @@
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.Trial.set_system_attr",
+      "matlab_name": "radia.optuna.Trial.set_constraint",
       "oracle_sections": [
+        "constraints",
         "fixed_trial",
         "frozen_trial"
       ],
       "oracle_status": "verified",
       "scope": "required",
       "surface_status": "present",
-      "upstream": "optuna.Trial.set_system_attr"
+      "upstream": "optuna.Trial.set_constraint"
     },
     {
       "kind": "class-method",
       "matlab_name": "radia.optuna.Trial.set_user_attr",
       "oracle_sections": [
-        "constraints",
         "fixed_trial",
         "frozen_trial",
         "gp_constraints_sampler_seed_89"
@@ -822,7 +809,6 @@
         "qmc_warnings",
         "random_sampler_seed_123",
         "single_distribution_rng",
-        "tpe_categorical_distance",
         "tpe_constant_liar_seed_127",
         "tpe_group"
       ],
@@ -869,6 +855,7 @@
         "nsgaii_sampler_seed_19",
         "nsgaiii_sampler_seed_23",
         "partial_fixed_sampler_seed_61",
+        "qmc_warnings",
         "random_sampler_seed_123",
         "sampler_public_members",
         "scrambled_qmc_sampler_seed_47",
@@ -902,6 +889,7 @@
         "multivariate_tpe_sampler_seed_67",
         "nsgaii_sampler_seed_19",
         "nsgaiii_sampler_seed_23",
+        "qmc_warnings",
         "random_sampler_seed_123",
         "sampler_public_members",
         "single_distribution_rng",
@@ -936,33 +924,13 @@
     },
     {
       "kind": "class-property",
-      "matlab_name": "radia.optuna.Trial.system_attrs",
-      "oracle_sections": [
-        "constraints",
-        "fixed_trial",
-        "frozen_trial",
-        "lifecycle_errors",
-        "mcp:generate_optuna49_mcp_oracle",
-        "pruners",
-        "retry_callback",
-        "sampler_public_members",
-        "trials_dataframe"
-      ],
-      "oracle_status": "verified",
-      "scope": "required",
-      "surface_status": "present",
-      "upstream": "optuna.Trial.system_attrs"
-    },
-    {
-      "kind": "class-property",
       "matlab_name": "radia.optuna.Trial.user_attrs",
       "oracle_sections": [
-        "constraints",
         "core_api",
         "fixed_trial",
         "frozen_trial",
         "gp_constraints_sampler_seed_89",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "study_management",
         "trials_dataframe",
         "unfinished_trials"
@@ -1076,7 +1044,7 @@
         "grid_sampler_seed_17",
         "importance",
         "lifecycle_errors",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "mixed_tpe_sampler_seed_43",
         "multiobjective_tpe_sampler_seed_41",
         "multivariate_tpe_sampler_seed_67",
@@ -1097,7 +1065,6 @@
         "tell",
         "terminator",
         "terminator_bases",
-        "tpe_categorical_distance",
         "tpe_constant_liar_seed_127",
         "tpe_group",
         "tpe_pruned_history_seed_113",
@@ -1121,6 +1088,7 @@
         "base_trial",
         "cached_storage",
         "cmaes_advanced",
+        "constraints",
         "frozen_trial",
         "grpc_storage",
         "importance",
@@ -1166,7 +1134,7 @@
         "grpc_storage",
         "importance",
         "journal_storage",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "numeric_untransform",
         "rdb_storage",
         "retry_callback",
@@ -1200,7 +1168,7 @@
       "kind": "function",
       "matlab_name": "radia.optuna.get_all_study_names",
       "oracle_sections": [
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "study_management"
       ],
       "oracle_status": "verified",
@@ -1304,6 +1272,7 @@
         "multivariate_tpe_sampler_seed_67",
         "native_sobol_high_dimension",
         "nsgaii_crossovers_seed_73",
+        "nsgaii_mutation",
         "nsgaii_sampler_seed_19",
         "nsgaiii_sampler_seed_23",
         "partial_fixed_sampler_seed_61",
@@ -1315,7 +1284,6 @@
         "scrambled_qmc_sampler_seed_47",
         "single_distribution_rng",
         "terminator_bases",
-        "tpe_categorical_distance",
         "tpe_constant_liar_seed_127",
         "tpe_group",
         "tpe_pruned_history_seed_113",
@@ -1332,7 +1300,7 @@
       "kind": "module",
       "matlab_name": "radia.optuna (search_space namespace)",
       "oracle_sections": [
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "sampler_public_members",
         "search_space"
       ],
@@ -1405,7 +1373,6 @@
         "tell",
         "terminator",
         "terminator_bases",
-        "tpe_categorical_distance",
         "tpe_constant_liar_seed_127",
         "tpe_group",
         "tpe_pruned_history_seed_113",
@@ -1448,7 +1415,7 @@
         "importance",
         "journal_storage",
         "lifecycle_errors",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "mixed_tpe_sampler_seed_43",
         "multiobjective_tpe_sampler_seed_41",
         "multivariate_tpe_sampler_seed_67",
@@ -1470,7 +1437,6 @@
         "study_management",
         "terminator",
         "terminator_bases",
-        "tpe_categorical_distance",
         "tpe_constant_liar_seed_127",
         "tpe_group",
         "tpe_pruned_history_seed_113",
@@ -1490,7 +1456,7 @@
       "kind": "module",
       "matlab_name": "radia.optuna (version namespace)",
       "oracle_sections": [
-        "mcp:generate_optuna49_mcp_oracle"
+        "mcp:generate_optuna50_mcp_oracle"
       ],
       "oracle_status": "verified",
       "scope": "required",
@@ -1597,7 +1563,7 @@
       "matlab_name": "radia.optuna.Backoff.write",
       "oracle_sections": [
         "artifacts",
-        "mcp:generate_optuna49_mcp_oracle"
+        "mcp:generate_optuna50_mcp_oracle"
       ],
       "oracle_status": "verified",
       "scope": "replaced",
@@ -1642,7 +1608,7 @@
       "matlab_name": "radia.optuna.Boto3ArtifactStore.write",
       "oracle_sections": [
         "artifacts",
-        "mcp:generate_optuna49_mcp_oracle"
+        "mcp:generate_optuna50_mcp_oracle"
       ],
       "oracle_status": "verified",
       "scope": "replaced",
@@ -1687,7 +1653,7 @@
       "matlab_name": "radia.optuna.FileSystemArtifactStore.write",
       "oracle_sections": [
         "artifacts",
-        "mcp:generate_optuna49_mcp_oracle"
+        "mcp:generate_optuna50_mcp_oracle"
       ],
       "oracle_status": "verified",
       "scope": "replaced",
@@ -1732,7 +1698,7 @@
       "matlab_name": "radia.optuna.GCSArtifactStore.write",
       "oracle_sections": [
         "artifacts",
-        "mcp:generate_optuna49_mcp_oracle"
+        "mcp:generate_optuna50_mcp_oracle"
       ],
       "oracle_status": "verified",
       "scope": "replaced",
@@ -1789,7 +1755,7 @@
       "oracle_sections": [
         "custom_tpe_sampler_gamma_weights",
         "distribution_public_members",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "numeric_untransform",
         "trials_dataframe",
         "visualization"
@@ -1841,7 +1807,7 @@
         "distribution_public_members",
         "frozen_trial",
         "importance",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "search_space",
         "trials_dataframe"
       ],
@@ -1856,7 +1822,7 @@
       "oracle_sections": [
         "custom_tpe_sampler_gamma_weights",
         "distribution_public_members",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "numeric_untransform",
         "trials_dataframe",
         "visualization"
@@ -1931,7 +1897,7 @@
       "oracle_sections": [
         "custom_tpe_sampler_gamma_weights",
         "distribution_public_members",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "numeric_untransform",
         "trials_dataframe",
         "visualization"
@@ -1976,7 +1942,7 @@
         "grpc_storage",
         "importance",
         "journal_storage",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "numeric_untransform",
         "rdb_storage",
         "retry_callback",
@@ -2000,7 +1966,7 @@
       "oracle_sections": [
         "custom_tpe_sampler_gamma_weights",
         "distribution_public_members",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "numeric_untransform",
         "trials_dataframe",
         "visualization"
@@ -2040,7 +2006,7 @@
         "distribution_json",
         "distribution_public_members",
         "frozen_trial",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "search_space",
         "visualization"
       ],
@@ -2055,7 +2021,7 @@
       "oracle_sections": [
         "custom_tpe_sampler_gamma_weights",
         "distribution_public_members",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "numeric_untransform",
         "trials_dataframe",
         "visualization"
@@ -2105,7 +2071,7 @@
       "oracle_sections": [
         "custom_tpe_sampler_gamma_weights",
         "distribution_public_members",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "numeric_untransform",
         "trials_dataframe",
         "visualization"
@@ -2155,7 +2121,7 @@
       "oracle_sections": [
         "custom_tpe_sampler_gamma_weights",
         "distribution_public_members",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "numeric_untransform",
         "trials_dataframe",
         "visualization"
@@ -2205,7 +2171,7 @@
       "oracle_sections": [
         "custom_tpe_sampler_gamma_weights",
         "distribution_public_members",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "numeric_untransform",
         "trials_dataframe",
         "visualization"
@@ -2255,7 +2221,7 @@
       "oracle_sections": [
         "custom_tpe_sampler_gamma_weights",
         "distribution_public_members",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "numeric_untransform",
         "trials_dataframe",
         "visualization"
@@ -2756,24 +2722,6 @@
     },
     {
       "kind": "lazy-optional",
-      "matlab_name": "radia.optuna.AllenNLPExecutor",
-      "oracle_sections": [],
-      "oracle_status": "asserted",
-      "scope": "replaced",
-      "surface_status": "present",
-      "upstream": "optuna.integration.AllenNLPExecutor"
-    },
-    {
-      "kind": "lazy-optional",
-      "matlab_name": "radia.optuna.AllenNLPPruningCallback",
-      "oracle_sections": [],
-      "oracle_status": "asserted",
-      "scope": "replaced",
-      "surface_status": "present",
-      "upstream": "optuna.integration.AllenNLPPruningCallback"
-    },
-    {
-      "kind": "lazy-optional",
       "matlab_name": "radia.optuna.BoTorchSampler",
       "oracle_sections": [],
       "oracle_status": "asserted",
@@ -2789,24 +2737,6 @@
       "scope": "replaced",
       "surface_status": "present",
       "upstream": "optuna.integration.CatBoostPruningCallback"
-    },
-    {
-      "kind": "lazy-optional",
-      "matlab_name": "radia.optuna.ChainerMNStudy",
-      "oracle_sections": [],
-      "oracle_status": "asserted",
-      "scope": "replaced",
-      "surface_status": "present",
-      "upstream": "optuna.integration.ChainerMNStudy"
-    },
-    {
-      "kind": "lazy-optional",
-      "matlab_name": "radia.optuna.ChainerPruningExtension",
-      "oracle_sections": [],
-      "oracle_status": "asserted",
-      "scope": "replaced",
-      "surface_status": "present",
-      "upstream": "optuna.integration.ChainerPruningExtension"
     },
     {
       "kind": "lazy-optional",
@@ -2879,15 +2809,6 @@
       "scope": "replaced",
       "surface_status": "present",
       "upstream": "optuna.integration.MLflowCallback"
-    },
-    {
-      "kind": "lazy-optional",
-      "matlab_name": "radia.optuna.MXNetPruningCallback",
-      "oracle_sections": [],
-      "oracle_status": "asserted",
-      "scope": "replaced",
-      "surface_status": "present",
-      "upstream": "optuna.integration.MXNetPruningCallback"
     },
     {
       "kind": "lazy-optional",
@@ -3431,6 +3352,7 @@
       "kind": "class-method",
       "matlab_name": "radia.optuna.BaseGASampler.infer_relative_search_space",
       "oracle_sections": [
+        "qmc_warnings",
         "sampler_public_members"
       ],
       "oracle_status": "verified",
@@ -3532,6 +3454,7 @@
       "kind": "class-method",
       "matlab_name": "radia.optuna.BaseSampler.infer_relative_search_space",
       "oracle_sections": [
+        "qmc_warnings",
         "sampler_public_members"
       ],
       "oracle_status": "verified",
@@ -3613,6 +3536,7 @@
       "kind": "class-method",
       "matlab_name": "radia.optuna.BruteForceSampler.infer_relative_search_space",
       "oracle_sections": [
+        "qmc_warnings",
         "sampler_public_members"
       ],
       "oracle_status": "verified",
@@ -3697,6 +3621,7 @@
       "kind": "class-method",
       "matlab_name": "radia.optuna.CmaEsSampler.infer_relative_search_space",
       "oracle_sections": [
+        "qmc_warnings",
         "sampler_public_members"
       ],
       "oracle_status": "verified",
@@ -3741,6 +3666,7 @@
       "kind": "class",
       "matlab_name": "radia.optuna.GPSampler",
       "oracle_sections": [
+        "constraints",
         "gp_constraints_sampler_seed_89",
         "gp_sampler_seed_53",
         "sampler_public_members",
@@ -3778,6 +3704,7 @@
       "kind": "class-method",
       "matlab_name": "radia.optuna.GPSampler.infer_relative_search_space",
       "oracle_sections": [
+        "qmc_warnings",
         "sampler_public_members"
       ],
       "oracle_status": "verified",
@@ -3858,6 +3785,7 @@
       "kind": "class-method",
       "matlab_name": "radia.optuna.GridSampler.infer_relative_search_space",
       "oracle_sections": [
+        "qmc_warnings",
         "sampler_public_members"
       ],
       "oracle_status": "verified",
@@ -3913,6 +3841,7 @@
       "kind": "class",
       "matlab_name": "radia.optuna.NSGAIIISampler",
       "oracle_sections": [
+        "constraints",
         "ga_sampler",
         "nsgaiii_sampler_seed_23",
         "sampler_public_members",
@@ -3983,6 +3912,7 @@
       "kind": "class-method",
       "matlab_name": "radia.optuna.NSGAIIISampler.infer_relative_search_space",
       "oracle_sections": [
+        "qmc_warnings",
         "sampler_public_members"
       ],
       "oracle_status": "verified",
@@ -4122,6 +4052,7 @@
       "kind": "class-method",
       "matlab_name": "radia.optuna.NSGAIISampler.infer_relative_search_space",
       "oracle_sections": [
+        "qmc_warnings",
         "sampler_public_members"
       ],
       "oracle_status": "verified",
@@ -4224,6 +4155,7 @@
       "kind": "class-method",
       "matlab_name": "radia.optuna.PartialFixedSampler.infer_relative_search_space",
       "oracle_sections": [
+        "qmc_warnings",
         "sampler_public_members"
       ],
       "oracle_status": "verified",
@@ -4307,6 +4239,7 @@
       "kind": "class-method",
       "matlab_name": "radia.optuna.QMCSampler.infer_relative_search_space",
       "oracle_sections": [
+        "qmc_warnings",
         "sampler_public_members"
       ],
       "oracle_status": "verified",
@@ -4357,8 +4290,9 @@
         "core_api",
         "deprecated_suggest",
         "distributions",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "partial_fixed_sampler_seed_61",
+        "qmc_warnings",
         "random_sampler_seed_123",
         "sampler_public_members",
         "sampler_reseed",
@@ -4398,6 +4332,7 @@
       "kind": "class-method",
       "matlab_name": "radia.optuna.RandomSampler.infer_relative_search_space",
       "oracle_sections": [
+        "qmc_warnings",
         "sampler_public_members"
       ],
       "oracle_status": "verified",
@@ -4442,6 +4377,7 @@
       "kind": "class",
       "matlab_name": "radia.optuna.TPESampler",
       "oracle_sections": [
+        "constraints",
         "custom_tpe_sampler_gamma_weights",
         "lifecycle_errors",
         "mixed_tpe_sampler_seed_43",
@@ -4450,7 +4386,6 @@
         "sampler_public_members",
         "sampler_reseed",
         "sampler_seed_defaults",
-        "tpe_categorical_distance",
         "tpe_constant_liar_seed_127",
         "tpe_group",
         "tpe_pruned_history_seed_113",
@@ -4498,6 +4433,7 @@
       "kind": "class-method",
       "matlab_name": "radia.optuna.TPESampler.infer_relative_search_space",
       "oracle_sections": [
+        "qmc_warnings",
         "sampler_public_members"
       ],
       "oracle_status": "verified",
@@ -4544,6 +4480,7 @@
       "oracle_sections": [
         "ga_sampler",
         "nsgaii_crossovers_seed_73",
+        "nsgaii_mutation",
         "sampler_public_members"
       ],
       "oracle_status": "verified",
@@ -4619,6 +4556,50 @@
       "scope": "required",
       "surface_status": "present",
       "upstream": "optuna.samplers.nsgaii.BaseCrossover.n_parents"
+    },
+    {
+      "kind": "class",
+      "matlab_name": "radia.optuna.BaseMutation",
+      "oracle_sections": [
+        "nsgaii_mutation"
+      ],
+      "oracle_status": "verified",
+      "scope": "required",
+      "surface_status": "present",
+      "upstream": "optuna.samplers.nsgaii.BaseMutation"
+    },
+    {
+      "kind": "class-method",
+      "matlab_name": "radia.optuna.BaseMutation.mutation",
+      "oracle_sections": [
+        "nsgaii_mutation"
+      ],
+      "oracle_status": "verified",
+      "scope": "required",
+      "surface_status": "present",
+      "upstream": "optuna.samplers.nsgaii.BaseMutation.mutation"
+    },
+    {
+      "kind": "class",
+      "matlab_name": "radia.optuna.PolynomialMutation",
+      "oracle_sections": [
+        "nsgaii_mutation"
+      ],
+      "oracle_status": "verified",
+      "scope": "required",
+      "surface_status": "present",
+      "upstream": "optuna.samplers.nsgaii.PolynomialMutation"
+    },
+    {
+      "kind": "class-method",
+      "matlab_name": "radia.optuna.PolynomialMutation.mutation",
+      "oracle_sections": [
+        "nsgaii_mutation"
+      ],
+      "oracle_status": "verified",
+      "scope": "required",
+      "surface_status": "present",
+      "upstream": "optuna.samplers.nsgaii.PolynomialMutation.mutation"
     },
     {
       "kind": "class",
@@ -5192,6 +5173,7 @@
         "cached_storage",
         "grpc_storage",
         "journal_storage",
+        "pruners",
         "rdb_storage",
         "storage"
       ],
@@ -5207,7 +5189,7 @@
         "cached_storage",
         "grpc_storage",
         "journal_storage",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "rdb_storage",
         "storage"
       ],
@@ -5328,7 +5310,7 @@
         "cached_storage",
         "grpc_storage",
         "journal_storage",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "rdb_storage",
         "storage"
       ],
@@ -5620,6 +5602,7 @@
         "cached_storage",
         "grpc_storage",
         "journal_storage",
+        "pruners",
         "rdb_storage",
         "storage"
       ],
@@ -5635,7 +5618,7 @@
         "cached_storage",
         "grpc_storage",
         "journal_storage",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "rdb_storage",
         "storage"
       ],
@@ -5756,7 +5739,7 @@
         "cached_storage",
         "grpc_storage",
         "journal_storage",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "rdb_storage",
         "storage"
       ],
@@ -6049,6 +6032,7 @@
         "cached_storage",
         "grpc_storage",
         "journal_storage",
+        "pruners",
         "rdb_storage",
         "storage"
       ],
@@ -6064,7 +6048,7 @@
         "cached_storage",
         "grpc_storage",
         "journal_storage",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "rdb_storage",
         "storage"
       ],
@@ -6185,7 +6169,7 @@
         "cached_storage",
         "grpc_storage",
         "journal_storage",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "rdb_storage",
         "storage"
       ],
@@ -6616,6 +6600,7 @@
         "cached_storage",
         "grpc_storage",
         "journal_storage",
+        "pruners",
         "rdb_storage",
         "storage"
       ],
@@ -6631,7 +6616,7 @@
         "cached_storage",
         "grpc_storage",
         "journal_storage",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "rdb_storage",
         "storage"
       ],
@@ -6763,7 +6748,7 @@
         "cached_storage",
         "grpc_storage",
         "journal_storage",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "rdb_storage",
         "storage"
       ],
@@ -7114,6 +7099,7 @@
         "cached_storage",
         "grpc_storage",
         "journal_storage",
+        "pruners",
         "rdb_storage",
         "storage"
       ],
@@ -7129,7 +7115,7 @@
         "cached_storage",
         "grpc_storage",
         "journal_storage",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "rdb_storage",
         "storage"
       ],
@@ -7261,7 +7247,7 @@
         "cached_storage",
         "grpc_storage",
         "journal_storage",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "rdb_storage",
         "storage"
       ],
@@ -7654,6 +7640,7 @@
         "cached_storage",
         "grpc_storage",
         "journal_storage",
+        "pruners",
         "rdb_storage",
         "storage"
       ],
@@ -7669,7 +7656,7 @@
         "cached_storage",
         "grpc_storage",
         "journal_storage",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "rdb_storage",
         "storage"
       ],
@@ -7801,7 +7788,7 @@
         "cached_storage",
         "grpc_storage",
         "journal_storage",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "rdb_storage",
         "storage"
       ],
@@ -8289,6 +8276,7 @@
         "cached_storage",
         "grpc_storage",
         "journal_storage",
+        "pruners",
         "rdb_storage",
         "storage"
       ],
@@ -8304,7 +8292,7 @@
         "cached_storage",
         "grpc_storage",
         "journal_storage",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "rdb_storage",
         "storage"
       ],
@@ -8436,7 +8424,7 @@
         "cached_storage",
         "grpc_storage",
         "journal_storage",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "rdb_storage",
         "storage"
       ],
@@ -8474,8 +8462,9 @@
       "kind": "class-method",
       "matlab_name": "radia.optuna.Study.add_trial",
       "oracle_sections": [
+        "constraints",
         "importance",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "retry_callback",
         "study_management",
         "trials_dataframe",
@@ -8490,7 +8479,7 @@
       "kind": "class-method",
       "matlab_name": "radia.optuna.Study.add_trials",
       "oracle_sections": [
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "search_space",
         "trials_dataframe",
         "unfinished_trials"
@@ -8517,7 +8506,7 @@
         "gp_constraints_sampler_seed_89",
         "gp_sampler_seed_53",
         "lifecycle_errors",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "mixed_tpe_sampler_seed_43",
         "multiobjective_tpe_sampler_seed_41",
         "multivariate_tpe_sampler_seed_67",
@@ -8533,7 +8522,6 @@
         "tell",
         "terminator",
         "terminator_bases",
-        "tpe_categorical_distance",
         "tpe_constant_liar_seed_127",
         "tpe_group",
         "tpe_pruned_history_seed_113",
@@ -8562,7 +8550,7 @@
       "matlab_name": "radia.optuna.Study.best_trial",
       "oracle_sections": [
         "best_params",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "study_management"
       ],
       "oracle_status": "verified",
@@ -8575,7 +8563,7 @@
       "matlab_name": "radia.optuna.Study.best_trials",
       "oracle_sections": [
         "constraints",
-        "mcp:generate_optuna49_mcp_oracle"
+        "mcp:generate_optuna50_mcp_oracle"
       ],
       "oracle_status": "verified",
       "scope": "required",
@@ -8617,9 +8605,10 @@
       "matlab_name": "radia.optuna.Study.Directions",
       "oracle_sections": [
         "cached_storage",
+        "constraints",
         "grpc_storage",
         "journal_storage",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "rdb_storage",
         "storage",
         "study_management"
@@ -8645,7 +8634,7 @@
       "matlab_name": "radia.optuna.Study.get_trials",
       "oracle_sections": [
         "ga_sampler",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "sampler_public_members",
         "unfinished_trials"
       ],
@@ -8658,7 +8647,7 @@
       "kind": "class-property",
       "matlab_name": "radia.optuna.Study.metric_names",
       "oracle_sections": [
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "trials_dataframe"
       ],
       "oracle_status": "verified",
@@ -8690,7 +8679,7 @@
       "kind": "class-method",
       "matlab_name": "radia.optuna.Study.set_metric_names",
       "oracle_sections": [
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "trials_dataframe"
       ],
       "oracle_status": "verified",
@@ -8700,21 +8689,8 @@
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.Study.set_system_attr",
-      "oracle_sections": [
-        "fixed_trial",
-        "frozen_trial"
-      ],
-      "oracle_status": "verified",
-      "scope": "required",
-      "surface_status": "present",
-      "upstream": "optuna.study.Study.set_system_attr"
-    },
-    {
-      "kind": "class-method",
       "matlab_name": "radia.optuna.Study.set_user_attr",
       "oracle_sections": [
-        "constraints",
         "fixed_trial",
         "frozen_trial",
         "gp_constraints_sampler_seed_89"
@@ -8736,25 +8712,6 @@
       "upstream": "optuna.study.Study.stop"
     },
     {
-      "kind": "class-property",
-      "matlab_name": "radia.optuna.Study.system_attrs",
-      "oracle_sections": [
-        "constraints",
-        "fixed_trial",
-        "frozen_trial",
-        "lifecycle_errors",
-        "mcp:generate_optuna49_mcp_oracle",
-        "pruners",
-        "retry_callback",
-        "sampler_public_members",
-        "trials_dataframe"
-      ],
-      "oracle_status": "verified",
-      "scope": "required",
-      "surface_status": "present",
-      "upstream": "optuna.study.Study.system_attrs"
-    },
-    {
       "kind": "class-method",
       "matlab_name": "radia.optuna.Study.tell",
       "oracle_sections": [
@@ -8768,7 +8725,7 @@
         "gp_constraints_sampler_seed_89",
         "gp_sampler_seed_53",
         "lifecycle_errors",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "mixed_tpe_sampler_seed_43",
         "multiobjective_tpe_sampler_seed_41",
         "multivariate_tpe_sampler_seed_67",
@@ -8784,7 +8741,6 @@
         "tell",
         "terminator",
         "terminator_bases",
-        "tpe_categorical_distance",
         "tpe_constant_liar_seed_127",
         "tpe_group",
         "tpe_pruned_history_seed_113",
@@ -8804,7 +8760,8 @@
         "core_api",
         "importance",
         "lifecycle_errors",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
+        "qmc_warnings",
         "retry_callback",
         "sampler_public_members",
         "search_space",
@@ -8834,12 +8791,11 @@
       "kind": "class-property",
       "matlab_name": "radia.optuna.Study.user_attrs",
       "oracle_sections": [
-        "constraints",
         "core_api",
         "fixed_trial",
         "frozen_trial",
         "gp_constraints_sampler_seed_89",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "study_management",
         "trials_dataframe",
         "unfinished_trials"
@@ -9018,8 +8974,9 @@
         "journal_storage",
         "lifecycle_errors",
         "logging",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "nsgaii_crossovers_seed_73",
+        "nsgaii_mutation",
         "rdb_storage",
         "retry_callback",
         "sampler_public_members",
@@ -9092,7 +9049,8 @@
         "importance",
         "journal_storage",
         "lifecycle_errors",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
+        "nsgaii_mutation",
         "numeric_untransform",
         "pruners",
         "qmc_warnings",
@@ -9148,9 +9106,10 @@
       "matlab_name": "radia.optuna.StudySummary.directions",
       "oracle_sections": [
         "cached_storage",
+        "constraints",
         "grpc_storage",
         "journal_storage",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "rdb_storage",
         "storage",
         "study_management"
@@ -9159,25 +9118,6 @@
       "scope": "required",
       "surface_status": "present",
       "upstream": "optuna.study.StudySummary.directions"
-    },
-    {
-      "kind": "class-property",
-      "matlab_name": "radia.optuna.StudySummary.system_attrs",
-      "oracle_sections": [
-        "constraints",
-        "fixed_trial",
-        "frozen_trial",
-        "lifecycle_errors",
-        "mcp:generate_optuna49_mcp_oracle",
-        "pruners",
-        "retry_callback",
-        "sampler_public_members",
-        "trials_dataframe"
-      ],
-      "oracle_status": "verified",
-      "scope": "required",
-      "surface_status": "present",
-      "upstream": "optuna.study.StudySummary.system_attrs"
     },
     {
       "kind": "function",
@@ -9214,7 +9154,7 @@
         "grid_sampler_seed_17",
         "importance",
         "lifecycle_errors",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "mixed_tpe_sampler_seed_43",
         "multiobjective_tpe_sampler_seed_41",
         "multivariate_tpe_sampler_seed_67",
@@ -9235,7 +9175,6 @@
         "tell",
         "terminator",
         "terminator_bases",
-        "tpe_categorical_distance",
         "tpe_constant_liar_seed_127",
         "tpe_group",
         "tpe_pruned_history_seed_113",
@@ -9266,7 +9205,7 @@
       "kind": "function",
       "matlab_name": "radia.optuna.get_all_study_names",
       "oracle_sections": [
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "study_management"
       ],
       "oracle_status": "verified",
@@ -9563,6 +9502,21 @@
     },
     {
       "kind": "class-property",
+      "matlab_name": "radia.optuna.BaseTrial.constraints",
+      "oracle_sections": [
+        "constraints",
+        "fixed_trial",
+        "frozen_trial",
+        "gp_constraints_sampler_seed_89",
+        "lifecycle_errors"
+      ],
+      "oracle_status": "verified",
+      "scope": "required",
+      "surface_status": "present",
+      "upstream": "optuna.trial.BaseTrial.constraints"
+    },
+    {
+      "kind": "class-property",
       "matlab_name": "radia.optuna.BaseTrial.datetime_start",
       "oracle_sections": [
         "sampler_public_members",
@@ -9588,7 +9542,7 @@
         "grpc_storage",
         "importance",
         "journal_storage",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "numeric_untransform",
         "rdb_storage",
         "retry_callback",
@@ -9618,14 +9572,13 @@
         "fixed_trial",
         "grpc_storage",
         "journal_storage",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "pruners",
         "rdb_storage",
         "sampler_public_members",
         "storage",
         "tell",
         "terminator",
-        "tpe_categorical_distance",
         "tpe_constant_liar_seed_127",
         "tpe_group",
         "trials_dataframe",
@@ -9646,7 +9599,7 @@
         "grpc_storage",
         "importance",
         "journal_storage",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "rdb_storage",
         "storage",
         "study_management",
@@ -9678,21 +9631,21 @@
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.BaseTrial.set_system_attr",
+      "matlab_name": "radia.optuna.BaseTrial.set_constraint",
       "oracle_sections": [
+        "constraints",
         "fixed_trial",
         "frozen_trial"
       ],
       "oracle_status": "verified",
       "scope": "required",
       "surface_status": "present",
-      "upstream": "optuna.trial.BaseTrial.set_system_attr"
+      "upstream": "optuna.trial.BaseTrial.set_constraint"
     },
     {
       "kind": "class-method",
       "matlab_name": "radia.optuna.BaseTrial.set_user_attr",
       "oracle_sections": [
-        "constraints",
         "fixed_trial",
         "frozen_trial",
         "gp_constraints_sampler_seed_89"
@@ -9735,7 +9688,6 @@
         "qmc_warnings",
         "random_sampler_seed_123",
         "single_distribution_rng",
-        "tpe_categorical_distance",
         "tpe_constant_liar_seed_127",
         "tpe_group"
       ],
@@ -9782,6 +9734,7 @@
         "nsgaii_sampler_seed_19",
         "nsgaiii_sampler_seed_23",
         "partial_fixed_sampler_seed_61",
+        "qmc_warnings",
         "random_sampler_seed_123",
         "sampler_public_members",
         "scrambled_qmc_sampler_seed_47",
@@ -9815,6 +9768,7 @@
         "multivariate_tpe_sampler_seed_67",
         "nsgaii_sampler_seed_19",
         "nsgaiii_sampler_seed_23",
+        "qmc_warnings",
         "random_sampler_seed_123",
         "sampler_public_members",
         "single_distribution_rng",
@@ -9849,33 +9803,13 @@
     },
     {
       "kind": "class-property",
-      "matlab_name": "radia.optuna.BaseTrial.system_attrs",
-      "oracle_sections": [
-        "constraints",
-        "fixed_trial",
-        "frozen_trial",
-        "lifecycle_errors",
-        "mcp:generate_optuna49_mcp_oracle",
-        "pruners",
-        "retry_callback",
-        "sampler_public_members",
-        "trials_dataframe"
-      ],
-      "oracle_status": "verified",
-      "scope": "required",
-      "surface_status": "present",
-      "upstream": "optuna.trial.BaseTrial.system_attrs"
-    },
-    {
-      "kind": "class-property",
       "matlab_name": "radia.optuna.BaseTrial.user_attrs",
       "oracle_sections": [
-        "constraints",
         "core_api",
         "fixed_trial",
         "frozen_trial",
         "gp_constraints_sampler_seed_89",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "study_management",
         "trials_dataframe",
         "unfinished_trials"
@@ -9898,6 +9832,21 @@
       "scope": "required",
       "surface_status": "present",
       "upstream": "optuna.trial.FixedTrial"
+    },
+    {
+      "kind": "class-property",
+      "matlab_name": "radia.optuna.FixedTrial.constraints",
+      "oracle_sections": [
+        "constraints",
+        "fixed_trial",
+        "frozen_trial",
+        "gp_constraints_sampler_seed_89",
+        "lifecycle_errors"
+      ],
+      "oracle_status": "verified",
+      "scope": "required",
+      "surface_status": "present",
+      "upstream": "optuna.trial.FixedTrial.constraints"
     },
     {
       "kind": "class-property",
@@ -9926,7 +9875,7 @@
         "grpc_storage",
         "importance",
         "journal_storage",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "numeric_untransform",
         "rdb_storage",
         "retry_callback",
@@ -9956,14 +9905,13 @@
         "fixed_trial",
         "grpc_storage",
         "journal_storage",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "pruners",
         "rdb_storage",
         "sampler_public_members",
         "storage",
         "tell",
         "terminator",
-        "tpe_categorical_distance",
         "tpe_constant_liar_seed_127",
         "tpe_group",
         "trials_dataframe",
@@ -9984,7 +9932,7 @@
         "grpc_storage",
         "importance",
         "journal_storage",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "rdb_storage",
         "storage",
         "study_management",
@@ -10016,21 +9964,21 @@
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.FixedTrial.set_system_attr",
+      "matlab_name": "radia.optuna.FixedTrial.set_constraint",
       "oracle_sections": [
+        "constraints",
         "fixed_trial",
         "frozen_trial"
       ],
       "oracle_status": "verified",
       "scope": "required",
       "surface_status": "present",
-      "upstream": "optuna.trial.FixedTrial.set_system_attr"
+      "upstream": "optuna.trial.FixedTrial.set_constraint"
     },
     {
       "kind": "class-method",
       "matlab_name": "radia.optuna.FixedTrial.set_user_attr",
       "oracle_sections": [
-        "constraints",
         "fixed_trial",
         "frozen_trial",
         "gp_constraints_sampler_seed_89"
@@ -10073,7 +10021,6 @@
         "qmc_warnings",
         "random_sampler_seed_123",
         "single_distribution_rng",
-        "tpe_categorical_distance",
         "tpe_constant_liar_seed_127",
         "tpe_group"
       ],
@@ -10120,6 +10067,7 @@
         "nsgaii_sampler_seed_19",
         "nsgaiii_sampler_seed_23",
         "partial_fixed_sampler_seed_61",
+        "qmc_warnings",
         "random_sampler_seed_123",
         "sampler_public_members",
         "scrambled_qmc_sampler_seed_47",
@@ -10153,6 +10101,7 @@
         "multivariate_tpe_sampler_seed_67",
         "nsgaii_sampler_seed_19",
         "nsgaiii_sampler_seed_23",
+        "qmc_warnings",
         "random_sampler_seed_123",
         "sampler_public_members",
         "single_distribution_rng",
@@ -10189,12 +10138,7 @@
       "kind": "class-property",
       "matlab_name": "radia.optuna.FixedTrial.system_attrs",
       "oracle_sections": [
-        "constraints",
-        "fixed_trial",
-        "frozen_trial",
-        "lifecycle_errors",
-        "mcp:generate_optuna49_mcp_oracle",
-        "pruners",
+        "mcp:generate_optuna50_mcp_oracle",
         "retry_callback",
         "sampler_public_members",
         "trials_dataframe"
@@ -10208,12 +10152,11 @@
       "kind": "class-property",
       "matlab_name": "radia.optuna.FixedTrial.user_attrs",
       "oracle_sections": [
-        "constraints",
         "core_api",
         "fixed_trial",
         "frozen_trial",
         "gp_constraints_sampler_seed_89",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "study_management",
         "trials_dataframe",
         "unfinished_trials"
@@ -10244,6 +10187,21 @@
     },
     {
       "kind": "class-property",
+      "matlab_name": "radia.optuna.FrozenTrial.constraints",
+      "oracle_sections": [
+        "constraints",
+        "fixed_trial",
+        "frozen_trial",
+        "gp_constraints_sampler_seed_89",
+        "lifecycle_errors"
+      ],
+      "oracle_status": "verified",
+      "scope": "required",
+      "surface_status": "present",
+      "upstream": "optuna.trial.FrozenTrial.constraints"
+    },
+    {
+      "kind": "class-property",
       "matlab_name": "radia.optuna.FrozenTrial.datetime_start",
       "oracle_sections": [
         "sampler_public_members",
@@ -10269,7 +10227,7 @@
         "grpc_storage",
         "importance",
         "journal_storage",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "numeric_untransform",
         "rdb_storage",
         "retry_callback",
@@ -10324,14 +10282,13 @@
         "fixed_trial",
         "grpc_storage",
         "journal_storage",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "pruners",
         "rdb_storage",
         "sampler_public_members",
         "storage",
         "tell",
         "terminator",
-        "tpe_categorical_distance",
         "tpe_constant_liar_seed_127",
         "tpe_group",
         "trials_dataframe",
@@ -10352,7 +10309,7 @@
         "grpc_storage",
         "importance",
         "journal_storage",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "rdb_storage",
         "storage",
         "study_management",
@@ -10384,21 +10341,21 @@
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.FrozenTrial.set_system_attr",
+      "matlab_name": "radia.optuna.FrozenTrial.set_constraint",
       "oracle_sections": [
+        "constraints",
         "fixed_trial",
         "frozen_trial"
       ],
       "oracle_status": "verified",
       "scope": "required",
       "surface_status": "present",
-      "upstream": "optuna.trial.FrozenTrial.set_system_attr"
+      "upstream": "optuna.trial.FrozenTrial.set_constraint"
     },
     {
       "kind": "class-method",
       "matlab_name": "radia.optuna.FrozenTrial.set_user_attr",
       "oracle_sections": [
-        "constraints",
         "fixed_trial",
         "frozen_trial",
         "gp_constraints_sampler_seed_89"
@@ -10441,7 +10398,6 @@
         "qmc_warnings",
         "random_sampler_seed_123",
         "single_distribution_rng",
-        "tpe_categorical_distance",
         "tpe_constant_liar_seed_127",
         "tpe_group"
       ],
@@ -10488,6 +10444,7 @@
         "nsgaii_sampler_seed_19",
         "nsgaiii_sampler_seed_23",
         "partial_fixed_sampler_seed_61",
+        "qmc_warnings",
         "random_sampler_seed_123",
         "sampler_public_members",
         "scrambled_qmc_sampler_seed_47",
@@ -10521,6 +10478,7 @@
         "multivariate_tpe_sampler_seed_67",
         "nsgaii_sampler_seed_19",
         "nsgaiii_sampler_seed_23",
+        "qmc_warnings",
         "random_sampler_seed_123",
         "sampler_public_members",
         "single_distribution_rng",
@@ -10557,12 +10515,7 @@
       "kind": "class-property",
       "matlab_name": "radia.optuna.FrozenTrial.system_attrs",
       "oracle_sections": [
-        "constraints",
-        "fixed_trial",
-        "frozen_trial",
-        "lifecycle_errors",
-        "mcp:generate_optuna49_mcp_oracle",
-        "pruners",
+        "mcp:generate_optuna50_mcp_oracle",
         "retry_callback",
         "sampler_public_members",
         "trials_dataframe"
@@ -10576,12 +10529,11 @@
       "kind": "class-property",
       "matlab_name": "radia.optuna.FrozenTrial.user_attrs",
       "oracle_sections": [
-        "constraints",
         "core_api",
         "fixed_trial",
         "frozen_trial",
         "gp_constraints_sampler_seed_89",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "study_management",
         "trials_dataframe",
         "unfinished_trials"
@@ -10607,7 +10559,8 @@
         "importance",
         "journal_storage",
         "lifecycle_errors",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
+        "nsgaii_mutation",
         "numeric_untransform",
         "pruners",
         "qmc_warnings",
@@ -10638,8 +10591,9 @@
         "fixed_trial",
         "frozen_trial",
         "importance",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "native_sobol_high_dimension",
+        "nsgaii_mutation",
         "pruners",
         "search_space",
         "single_distribution_rng",
@@ -10675,6 +10629,21 @@
     },
     {
       "kind": "class-property",
+      "matlab_name": "radia.optuna.Trial.constraints",
+      "oracle_sections": [
+        "constraints",
+        "fixed_trial",
+        "frozen_trial",
+        "gp_constraints_sampler_seed_89",
+        "lifecycle_errors"
+      ],
+      "oracle_status": "verified",
+      "scope": "required",
+      "surface_status": "present",
+      "upstream": "optuna.trial.Trial.constraints"
+    },
+    {
+      "kind": "class-property",
       "matlab_name": "radia.optuna.Trial.datetime_start",
       "oracle_sections": [
         "sampler_public_members",
@@ -10700,7 +10669,7 @@
         "grpc_storage",
         "importance",
         "journal_storage",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "numeric_untransform",
         "rdb_storage",
         "retry_callback",
@@ -10730,14 +10699,13 @@
         "fixed_trial",
         "grpc_storage",
         "journal_storage",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "pruners",
         "rdb_storage",
         "sampler_public_members",
         "storage",
         "tell",
         "terminator",
-        "tpe_categorical_distance",
         "tpe_constant_liar_seed_127",
         "tpe_group",
         "trials_dataframe",
@@ -10758,7 +10726,7 @@
         "grpc_storage",
         "importance",
         "journal_storage",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "rdb_storage",
         "storage",
         "study_management",
@@ -10801,21 +10769,21 @@
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.Trial.set_system_attr",
+      "matlab_name": "radia.optuna.Trial.set_constraint",
       "oracle_sections": [
+        "constraints",
         "fixed_trial",
         "frozen_trial"
       ],
       "oracle_status": "verified",
       "scope": "required",
       "surface_status": "present",
-      "upstream": "optuna.trial.Trial.set_system_attr"
+      "upstream": "optuna.trial.Trial.set_constraint"
     },
     {
       "kind": "class-method",
       "matlab_name": "radia.optuna.Trial.set_user_attr",
       "oracle_sections": [
-        "constraints",
         "fixed_trial",
         "frozen_trial",
         "gp_constraints_sampler_seed_89"
@@ -10858,7 +10826,6 @@
         "qmc_warnings",
         "random_sampler_seed_123",
         "single_distribution_rng",
-        "tpe_categorical_distance",
         "tpe_constant_liar_seed_127",
         "tpe_group"
       ],
@@ -10905,6 +10872,7 @@
         "nsgaii_sampler_seed_19",
         "nsgaiii_sampler_seed_23",
         "partial_fixed_sampler_seed_61",
+        "qmc_warnings",
         "random_sampler_seed_123",
         "sampler_public_members",
         "scrambled_qmc_sampler_seed_47",
@@ -10938,6 +10906,7 @@
         "multivariate_tpe_sampler_seed_67",
         "nsgaii_sampler_seed_19",
         "nsgaiii_sampler_seed_23",
+        "qmc_warnings",
         "random_sampler_seed_123",
         "sampler_public_members",
         "single_distribution_rng",
@@ -10972,33 +10941,13 @@
     },
     {
       "kind": "class-property",
-      "matlab_name": "radia.optuna.Trial.system_attrs",
-      "oracle_sections": [
-        "constraints",
-        "fixed_trial",
-        "frozen_trial",
-        "lifecycle_errors",
-        "mcp:generate_optuna49_mcp_oracle",
-        "pruners",
-        "retry_callback",
-        "sampler_public_members",
-        "trials_dataframe"
-      ],
-      "oracle_status": "verified",
-      "scope": "required",
-      "surface_status": "present",
-      "upstream": "optuna.trial.Trial.system_attrs"
-    },
-    {
-      "kind": "class-property",
       "matlab_name": "radia.optuna.Trial.user_attrs",
       "oracle_sections": [
-        "constraints",
         "core_api",
         "fixed_trial",
         "frozen_trial",
         "gp_constraints_sampler_seed_89",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "study_management",
         "trials_dataframe",
         "unfinished_trials"
@@ -11041,7 +10990,7 @@
         "cmaes_advanced",
         "grpc_storage",
         "journal_storage",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "rdb_storage",
         "sampler_public_members",
         "search_space",
@@ -11061,7 +11010,7 @@
         "cached_storage",
         "grpc_storage",
         "journal_storage",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "rdb_storage",
         "search_space",
         "storage",
@@ -11078,7 +11027,7 @@
       "matlab_name": "radia.optuna.TrialState.PRUNED",
       "oracle_sections": [
         "cmaes_advanced",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "search_space",
         "tell",
         "tpe_pruned_history_seed_113",
@@ -11238,8 +11187,9 @@
         "journal_storage",
         "lifecycle_errors",
         "logging",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
         "nsgaii_crossovers_seed_73",
+        "nsgaii_mutation",
         "rdb_storage",
         "retry_callback",
         "sampler_public_members",
@@ -11312,7 +11262,8 @@
         "importance",
         "journal_storage",
         "lifecycle_errors",
-        "mcp:generate_optuna49_mcp_oracle",
+        "mcp:generate_optuna50_mcp_oracle",
+        "nsgaii_mutation",
         "numeric_untransform",
         "pruners",
         "qmc_warnings",
@@ -11342,6 +11293,7 @@
         "base_trial",
         "cached_storage",
         "cmaes_advanced",
+        "constraints",
         "frozen_trial",
         "grpc_storage",
         "importance",
@@ -11620,23 +11572,23 @@
     }
   ],
   "full_compatibility_complete": true,
-  "oracle_asserted_count": 68,
+  "oracle_asserted_count": 63,
   "oracle_partial_count": 0,
   "oracle_unmapped_count": 0,
-  "oracle_verified_count": 748,
-  "required_entry_count": 400,
+  "oracle_verified_count": 749,
+  "required_entry_count": 401,
   "required_missing_count": 0,
   "required_oracle_asserted_count": 0,
-  "required_oracle_mapped_count": 400,
+  "required_oracle_mapped_count": 401,
   "required_oracle_unmapped_count": 0,
-  "required_present_count": 400,
-  "schema": "radia.optuna49-api-coverage.v1",
+  "required_present_count": 401,
+  "schema": "radia.optuna50-api-coverage.v1",
   "scope_counts": {
     "bridged": 261,
     "out-of-scope": 4,
     "python-language": 46,
-    "replaced": 105,
-    "required": 400
+    "replaced": 100,
+    "required": 401
   },
   "scope_rules": {
     "optuna.artifacts": {
@@ -11687,12 +11639,12 @@
       "scope": "replaced"
     }
   },
-  "surface_entry_count": 816,
+  "surface_entry_count": 812,
   "surface_missing_count": 0,
-  "surface_present_count": 816,
-  "upstream_inventory": "tests/matlab/fixtures/optuna49_public_api.json",
-  "upstream_inventory_sha256": "A69642BD83B136B5A52D351A84E3D910971A7514F1AF48282EE6B3CA609D11FF",
-  "upstream_oracle": "tests/matlab/fixtures/optuna49_oracle.json",
-  "upstream_oracle_sha256": "7A561D22470DF24F8B62E7797F47A3011CD858C3CF6691B736E6C1BA4BB5FA1F",
-  "upstream_version": "4.9.0"
+  "surface_present_count": 812,
+  "upstream_inventory": "tests/matlab/fixtures/optuna50_public_api.json",
+  "upstream_inventory_sha256": "81CBD4C33ACAC95063994CC8DE8B5BBEF788C40ED23F8ECEAE690C9F0D14B602",
+  "upstream_oracle": "tests/matlab/fixtures/optuna50_oracle.json",
+  "upstream_oracle_sha256": "30196F6157C0D4A6B3873AAA018698BD548F599F0DD5ECDF388E692D509C9F2B",
+  "upstream_version": "5.0.0"
 }
