@@ -4,7 +4,7 @@
     "Build.ps1": ["tests/test_build_failure_propagation.py"],
     ".github/workflows/sparsesolv.yml": ["tests/test_sparsesolv_ci_contract.py"],
     "tools/ci_preflight_mdx.py": ["tests/test_ci_preflight_mdx.py"],
-    "tools/release_quad.py": ["tests/test_release_quad_state.py", "tests/test_release_quad_editable_source.py", "tests/test_release_quad_optuna_candidate.py"],
+    "tools/release_quad.py": ["tests/test_release_quad_state.py", "tests/test_release_quad_editable_source.py", "tests/test_release_quad_optuna_candidate.py", "tests/test_mdx_runner_pool.py"],
     "tools/verify_simulink_release.py": ["tests/test_simulink_release_package.py"],
     "tools/ci_preflight.py": ["tests/test_ci_preflight_scope.py"],
     "tools/run_test_tier.py": ["tests/test_run_test_tier.py"]
