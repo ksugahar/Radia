@@ -1926,8 +1926,14 @@ end
 
 function testTPEIntersectionTransitionsMatchUpstream(testCase)
 contract=testCase.TestData.Oracle.tpe_intersection_transitions;
+for persisted=[false,true]
+storage="";
+if persisted, storage=string(tempname('C:/temp'))+'.mat'; end
+cleanup=onCleanup(@() cleanupStudyFiles(storage));
 study=radia.optuna.Study(Sampler=radia.optuna.TPESampler( ...
-    Seed=contract.seed,NStartupTrials=contract.startup_trials),AutoSave=false);
+    Seed=contract.seed,NStartupTrials=contract.startup_trials), ...
+    StoragePath=storage,AutoSave=false);
+count=0;
 for row=reshape(contract.trials,1,[])
     trial=study.ask();
     x=0; y=0;
@@ -1939,6 +1945,15 @@ for row=reshape(contract.trials,1,[])
     end
     study.tell(trial,row.loss);
     verifyEqual(testCase,[x,y],[row.x,row.y],AbsTol=5e-12);
+    count=count+1;
+    if persisted && ismember(count,[5,9,16])
+        study.save();
+        study=radia.optuna.Study(StoragePath=storage,AutoSave=false, ...
+            Sampler=radia.optuna.TPESampler( ...
+            Seed=contract.seed,NStartupTrials=contract.startup_trials));
+    end
+end
+clear cleanup
 end
 end
 
@@ -2053,9 +2068,13 @@ end
 function testTPEGroupAndIndependentWarningMatchUpstream(testCase)
 contract=testCase.TestData.Oracle.tpe_group;
 expected=contract.sequence;
+for persisted=[false,true]
+storage="";
+if persisted, storage=string(tempname('C:/temp'))+'.mat'; end
+cleanup=onCleanup(@() cleanupStudyFiles(storage));
 study=radia.optuna.Study(Sampler=radia.optuna.TPESampler( ...
     Seed=101,NStartupTrials=4,Multivariate=true,Group=true), ...
-    AutoSave=false);
+    StoragePath=storage,AutoSave=false);
 for index=1:numel(expected)
     trial=study.ask();
     branch=string(trial.suggest_categorical( ...
@@ -2074,6 +2093,14 @@ for index=1:numel(expected)
     verifyEqual(testCase,trial.Number,double(expected(index).number));
     verifyEqual(testCase,branch,string(expected(index).branch));
     verifyEqual(testCase,x,double(expected(index).x),AbsTol=5e-12);
+    if persisted && ismember(index,[5,9,13])
+        study.save();
+        study=radia.optuna.Study(StoragePath=storage,AutoSave=false, ...
+            Sampler=radia.optuna.TPESampler( ...
+            Seed=101,NStartupTrials=4,Multivariate=true,Group=true));
+    end
+end
+clear cleanup
 end
 
 verifyGreaterThan(testCase, ...
@@ -2934,6 +2961,7 @@ end
 
 function cleanupStudyFiles(paths)
 for path=reshape(string(paths),1,[])
+    if strlength(path)==0, continue; end
     if isfile(path), delete(path); end
     if isfile(path+".bak"), delete(path+".bak"); end
 end
