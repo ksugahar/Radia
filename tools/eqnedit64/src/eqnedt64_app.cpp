@@ -2545,6 +2545,28 @@ void draw_palette_cell(HDC dc, const RECT& rect, HFONT font,
     const int availableH = int(rect.bottom - rect.top) - 2 * margin;
     if (availableW <= 0 || availableH <= 0) return;
 
+    // The font's OPEN BOX is a hairline that can disappear on downsampling.
+    // Space commands deliberately show one/two/three measured spacing marks,
+    // not literal whitespace and not a glyph selected through font linking.
+    const int spaceMarks = command == "latex.\\," ? 1 :
+        command == "latex.\\:" ? 2 : command == "latex.\\;" ? 3 : 0;
+    if (spaceMarks) {
+        const int markW = std::max(3, std::min(em / 2, availableW / spaceMarks - 2));
+        const int markH = std::max(2, em / 4);
+        const int x0 = int(rect.left + (rect.right - rect.left - spaceMarks * (markW + 2) + 2) / 2);
+        const int y0 = int(rect.top + (rect.bottom - rect.top - markH) / 2);
+        HPEN pen = CreatePen(PS_SOLID, std::max(1, em / 17),
+            GetSysColor(hot ? COLOR_HIGHLIGHTTEXT : COLOR_MENUTEXT));
+        HGDIOBJ old = SelectObject(dc, pen);
+        for (int i = 0; i < spaceMarks; ++i) {
+            const int x = x0 + i * (markW + 2);
+            MoveToEx(dc, x, y0, nullptr); LineTo(dc, x, y0 + markH);
+            LineTo(dc, x + markW, y0 + markH); LineTo(dc, x + markW, y0);
+        }
+        SelectObject(dc, old); DeleteObject(pen);
+        return;
+    }
+
     // Render semantic previews through the same model as insertion. Other
     // labels remain literal glyphs; never reinterpret a symbol as TeX.
     eqnedit::Equation preview;
@@ -2702,7 +2724,10 @@ bool palette_cell_draws_readably(HFONT font, const std::wstring& face,
     /* A centred dot is intentionally only a handful of pixels at 96 dpi.
      * Its exact cmap ownership is the stronger anti-tofu condition; require
      * the real draw path to add more than a lone accidental pixel. */
-    return ink >= size_t(std::max(2, dpi / 48)) && edgeInk == 0;
+    const bool readable = ink >= size_t(std::max(2, dpi / 48)) && edgeInk == 0;
+    if (!readable) fprintf(stderr, "palette %s dpi=%d hot=%d ink=%zu edge=%zu\n",
+        command.c_str(), dpi, int(hot), ink, edgeInk);
+    return readable;
 }
 
 /* Category labels are Japanese, so DEFAULT_GUI_FONT is not a sufficient
