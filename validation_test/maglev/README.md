@@ -16,3 +16,21 @@ under `docs/maglev`; checked JSON records belong here.
 Static evidence tests are fast and do not regenerate the records. Slow solver
 reproduction tests remain in this validation lane and use temporary output
 directories so a test run never mutates committed evidence.
+
+## ECB plate force reference
+
+`ecb_foster_lorentz_reference.py` solves the scalar eddy model of
+`radia.maglev.ecb.lorentz` directly on a mirror-symmetric structured mesh and
+reconstructs the current as `J = (1/mu) curl(v z)` -- `v` is the reaction-field
+z component in tesla, so this is the only reconstruction with the units and
+parity of a real eddy current.  It checks the physics a centred z-dipole over a
+plate must show: zero horizontal force, a repulsive lift, mesh convergence, a
+lift rising with frequency, and a lift below the infinite perfect-conductor
+image bound.
+
+The shipped `compute_lorentz_force_via_foster` is run alongside.  It builds the
+current as `-omega sigma Im(v)`, which yields no lift for a centred magnet and a
+horizontal force that mirror symmetry forbids -- 1906 N at 5 kHz, about 160x
+the 11.7 N image bound.  `test_ecb_foster_lorentz_reference_evidence.py` replays the summary and
+holds the kernel to the reference with a strict xfail that turns red once the
+kernel is corrected.
