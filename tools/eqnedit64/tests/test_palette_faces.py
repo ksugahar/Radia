@@ -6,7 +6,7 @@ existing test because the suites press the COMMAND behind a key and never look
 at the KEY.
 
 1.  The differential-geometry Hodge-star key showed U+2605 BLACK STAR while
-    `\\star` renders as U+2606's operator cousin, U+22C6 STAR OPERATOR.  The
+    `\\star` renders as U+22C6 STAR OPERATOR, not U+2605 BLACK STAR.  The
     key promised one glyph and inserted another.
 
 2.  U+2605 is not in Latin Modern Math.  `pick_button_font` concatenates
