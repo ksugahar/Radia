@@ -1,6 +1,6 @@
 # Eqnedit64 changelog
 
-## Unreleased
+## 3.1.0 — release candidate
 
 - Fail `--self-test` when the palette is not drawing in the embedded math
   font, naming the face GDI substituted. The cmap check says which character
