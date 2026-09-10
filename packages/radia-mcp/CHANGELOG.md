@@ -7,6 +7,14 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- Presentation: add `presentation_check_outline_slide` to require a visible
+  problem-to-proposal divider near the detected turn, not only a front agenda.
+- Presentation: report backup/Q&A slides that are named but still visible;
+  preserve cut material as hidden slides in the same deck.
+- Presentation: ignore page furniture when reading takeaways and recognize
+  `no <subject> <verb>` complaints so the detected turn does not fall through
+  to the summary slide.
+
 ## [1.4.53] - 2026-09-07
 
 - Compose domain capability entry points while preserving runtime status,
