@@ -5,6 +5,13 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- Fixed MATLAB LTspice binary RAW parsing for the `double` flag and vectorized
+  record decoding. Unknown layouts and mismatched payload sizes now fail
+  explicitly; binary header properties are retained. Transient state injection
+  rejects missing/ambiguous `.end` directives and hierarchical inductor currents
+  that cannot safely be reinjected. Added LTspice-generated binary/ASCII fixtures
+  and 13 MATLAB data-safety regressions.
+
 - Retired `solve_magnetostatic_reduced_omega_kelvin`: calls now fail explicitly
   because its Kelvin exterior/interface convention is not validated. Migrate
   to the total/reduced Omega API with explicit interface/source data. Preserve
