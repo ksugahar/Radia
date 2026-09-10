@@ -58,6 +58,17 @@ solves are heavy (one charge Gram per HDiv case, a 183k-element Kelvin FEM per
 formulation) and run on hibino, one job at a time; results are committed under
 `results/` with the host name in the file name.
 
+`run_qmag_hdiv.py` defaults to `--radia-source repo`. For distributed-wheel
+validation on hibino or mdx, use a dedicated non-editable environment and add
+`--radia-source installed`. This checks the distribution's WHEEL metadata,
+rejects editable installs (including another checkout), and verifies that the
+loaded `radia/__init__.py` matches the distribution's recorded file. Missing
+metadata or a shadowing PYTHONPATH checkout aborts before the solve. The JSON
+records the requested source, resolved module, and installed distribution
+version. Keep `qmag_source.py` beside the runner when staging validation files.
+This source-selection option applies to the HDiv runner only; the other
+builders and three-engine runner still select their repository source.
+
 ## Results (hibino, 2026-09-07)
 
 Linear cases, HDiv-MMM on the `h = 10 mm` conforming HEX mesh (2352 BDM1

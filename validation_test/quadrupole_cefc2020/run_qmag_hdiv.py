@@ -60,6 +60,7 @@ import numpy as np  # noqa: E402
 import radia as rad  # noqa: E402
 
 import qmag_case as Q  # noqa: E402
+from qmag_source import require_radia_source as _require_radia_source  # noqa: E402
 from radia.vim import mesh_conformity_report  # noqa: E402
 
 CTYPE_RUNNER_PATH = REPO / "validation_test" / "c_type_three_engine" / "run_three_engine.py"
@@ -72,21 +73,9 @@ def _sha256(path: Path) -> str:
 
 def require_radia_source(source: str) -> dict:
     """Fail loud when the loaded radia is not the one the run claims to test."""
-    module = Path(rad.__file__).resolve()
-    checkout = (REPO / "src").resolve()
-    from_checkout = module.is_relative_to(checkout)
-    if source == "repo" and not from_checkout:
-        raise RuntimeError(
-            "--radia-source repo was requested but radia resolved to %s, "
-            "outside the checkout at %s" % (module, checkout))
-    if source == "installed" and from_checkout:
-        raise RuntimeError(
-            "--radia-source installed was requested but radia resolved to the "
-            "checkout at %s; uninstall the editable install or run from a "
-            "directory outside the repository" % module)
-    return {"requested": source,
-            "resolved_module": str(module),
-            "resolved_from_checkout": bool(from_checkout)}
+    return _require_radia_source(source, rad.__file__, REPO / "src")
+
+
 def implementation_identity() -> dict:
     """Bind a measurement to the exact implementation that produced it.
 
