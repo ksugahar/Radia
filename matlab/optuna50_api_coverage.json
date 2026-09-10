@@ -252,6 +252,7 @@
         "constraints",
         "importance",
         "mcp:generate_optuna50_mcp_oracle",
+        "native_tpe_history_selection",
         "retry_callback",
         "study_management",
         "trials_dataframe",
@@ -298,6 +299,7 @@
         "multiobjective_tpe_sampler_seed_41",
         "multivariate_tpe_sampler_seed_67",
         "native_sobol_high_dimension",
+        "native_tpe_history_selection",
         "nsgaii_crossovers_seed_73",
         "partial_fixed_sampler_seed_61",
         "pruners",
@@ -311,6 +313,7 @@
         "terminator_bases",
         "tpe_constant_liar_seed_127",
         "tpe_group",
+        "tpe_intersection_transitions",
         "tpe_pruned_history_seed_113",
         "tpe_sampler_seed_37",
         "unfinished_trials",
@@ -376,6 +379,7 @@
         "cached_storage",
         "grpc_storage",
         "journal_storage",
+        "native_tpe_history_selection",
         "rdb_storage",
         "storage",
         "study_management",
@@ -530,6 +534,7 @@
         "terminator_bases",
         "tpe_constant_liar_seed_127",
         "tpe_group",
+        "tpe_intersection_transitions",
         "tpe_pruned_history_seed_113",
         "tpe_sampler_seed_37",
         "unscrambled_qmc_sampler_seed_71"
@@ -653,6 +658,7 @@
         "importance",
         "journal_storage",
         "mcp:generate_optuna50_mcp_oracle",
+        "native_tpe_history_selection",
         "numeric_untransform",
         "rdb_storage",
         "retry_callback",
@@ -851,6 +857,7 @@
         "multiobjective_tpe_sampler_seed_41",
         "multivariate_tpe_sampler_seed_67",
         "native_sobol_high_dimension",
+        "native_tpe_history_selection",
         "nsgaii_crossovers_seed_73",
         "nsgaii_sampler_seed_19",
         "nsgaiii_sampler_seed_23",
@@ -863,6 +870,7 @@
         "terminator_bases",
         "tpe_constant_liar_seed_127",
         "tpe_group",
+        "tpe_intersection_transitions",
         "tpe_pruned_history_seed_113",
         "tpe_sampler_seed_37",
         "unfinished_trials",
@@ -1049,6 +1057,7 @@
         "multiobjective_tpe_sampler_seed_41",
         "multivariate_tpe_sampler_seed_67",
         "native_sobol_high_dimension",
+        "native_tpe_history_selection",
         "nsgaii_crossovers_seed_73",
         "nsgaii_sampler_seed_19",
         "nsgaiii_sampler_seed_23",
@@ -1067,6 +1076,7 @@
         "terminator_bases",
         "tpe_constant_liar_seed_127",
         "tpe_group",
+        "tpe_intersection_transitions",
         "tpe_pruned_history_seed_113",
         "tpe_sampler_seed_37",
         "trial_pruned_exception",
@@ -1093,6 +1103,7 @@
         "grpc_storage",
         "importance",
         "journal_storage",
+        "native_tpe_history_selection",
         "rdb_storage",
         "retry_callback",
         "search_space",
@@ -1135,6 +1146,7 @@
         "importance",
         "journal_storage",
         "mcp:generate_optuna50_mcp_oracle",
+        "native_tpe_history_selection",
         "numeric_untransform",
         "rdb_storage",
         "retry_callback",
@@ -1271,6 +1283,7 @@
         "multiobjective_tpe_sampler_seed_41",
         "multivariate_tpe_sampler_seed_67",
         "native_sobol_high_dimension",
+        "native_tpe_history_selection",
         "nsgaii_crossovers_seed_73",
         "nsgaii_mutation",
         "nsgaii_sampler_seed_19",
@@ -1286,6 +1299,7 @@
         "terminator_bases",
         "tpe_constant_liar_seed_127",
         "tpe_group",
+        "tpe_intersection_transitions",
         "tpe_pruned_history_seed_113",
         "tpe_sampler_seed_37",
         "unfinished_trials",
@@ -1355,6 +1369,7 @@
         "multiobjective_tpe_sampler_seed_41",
         "multivariate_tpe_sampler_seed_67",
         "native_sobol_high_dimension",
+        "native_tpe_history_selection",
         "nsgaii_crossovers_seed_73",
         "nsgaii_sampler_seed_19",
         "nsgaiii_sampler_seed_23",
@@ -1375,6 +1390,7 @@
         "terminator_bases",
         "tpe_constant_liar_seed_127",
         "tpe_group",
+        "tpe_intersection_transitions",
         "tpe_pruned_history_seed_113",
         "tpe_sampler_seed_37",
         "trial_pruned_exception",
@@ -1420,6 +1436,7 @@
         "multiobjective_tpe_sampler_seed_41",
         "multivariate_tpe_sampler_seed_67",
         "native_sobol_high_dimension",
+        "native_tpe_history_selection",
         "nsgaii_crossovers_seed_73",
         "nsgaii_sampler_seed_19",
         "nsgaiii_sampler_seed_23",
@@ -1439,6 +1456,7 @@
         "terminator_bases",
         "tpe_constant_liar_seed_127",
         "tpe_group",
+        "tpe_intersection_transitions",
         "tpe_pruned_history_seed_113",
         "tpe_sampler_seed_37",
         "trial_pruned_exception",
@@ -1943,6 +1961,7 @@
         "importance",
         "journal_storage",
         "mcp:generate_optuna50_mcp_oracle",
+        "native_tpe_history_selection",
         "numeric_untransform",
         "rdb_storage",
         "retry_callback",
@@ -4383,11 +4402,13 @@
         "mixed_tpe_sampler_seed_43",
         "multiobjective_tpe_sampler_seed_41",
         "multivariate_tpe_sampler_seed_67",
+        "native_tpe_history_selection",
         "sampler_public_members",
         "sampler_reseed",
         "sampler_seed_defaults",
         "tpe_constant_liar_seed_127",
         "tpe_group",
+        "tpe_intersection_transitions",
         "tpe_pruned_history_seed_113",
         "tpe_sampler_seed_37"
       ],
@@ -4490,7 +4511,7 @@
     },
     {
       "kind": "class",
-      "matlab_name": "radia.optuna.BLXAlphaCrossover",
+      "matlab_name": "radia.optuna.nsgaii.BLXAlphaCrossover",
       "oracle_sections": [
         "nsgaii_crossovers_seed_73",
         "sampler_public_members"
@@ -4502,7 +4523,7 @@
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.BLXAlphaCrossover.crossover",
+      "matlab_name": "radia.optuna.nsgaii.BLXAlphaCrossover.crossover",
       "oracle_sections": [
         "nsgaii_crossovers_seed_73",
         "sampler_public_members"
@@ -4514,7 +4535,7 @@
     },
     {
       "kind": "class-constant-or-field",
-      "matlab_name": "radia.optuna.BLXAlphaCrossover.n_parents",
+      "matlab_name": "radia.optuna.nsgaii.BLXAlphaCrossover.n_parents",
       "oracle_sections": [
         "sampler_public_members"
       ],
@@ -4525,7 +4546,7 @@
     },
     {
       "kind": "class",
-      "matlab_name": "radia.optuna.BaseCrossover",
+      "matlab_name": "radia.optuna.nsgaii.BaseCrossover",
       "oracle_sections": [
         "sampler_public_members"
       ],
@@ -4536,7 +4557,7 @@
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.BaseCrossover.crossover",
+      "matlab_name": "radia.optuna.nsgaii.BaseCrossover.crossover",
       "oracle_sections": [
         "nsgaii_crossovers_seed_73",
         "sampler_public_members"
@@ -4548,7 +4569,7 @@
     },
     {
       "kind": "class-property",
-      "matlab_name": "radia.optuna.BaseCrossover.n_parents",
+      "matlab_name": "radia.optuna.nsgaii.BaseCrossover.n_parents",
       "oracle_sections": [
         "sampler_public_members"
       ],
@@ -4559,7 +4580,7 @@
     },
     {
       "kind": "class",
-      "matlab_name": "radia.optuna.BaseMutation",
+      "matlab_name": "radia.optuna.nsgaii.BaseMutation",
       "oracle_sections": [
         "nsgaii_mutation"
       ],
@@ -4570,7 +4591,7 @@
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.BaseMutation.mutation",
+      "matlab_name": "radia.optuna.nsgaii.BaseMutation.mutation",
       "oracle_sections": [
         "nsgaii_mutation"
       ],
@@ -4581,7 +4602,7 @@
     },
     {
       "kind": "class",
-      "matlab_name": "radia.optuna.PolynomialMutation",
+      "matlab_name": "radia.optuna.nsgaii.PolynomialMutation",
       "oracle_sections": [
         "nsgaii_mutation"
       ],
@@ -4592,7 +4613,7 @@
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.PolynomialMutation.mutation",
+      "matlab_name": "radia.optuna.nsgaii.PolynomialMutation.mutation",
       "oracle_sections": [
         "nsgaii_mutation"
       ],
@@ -4603,7 +4624,7 @@
     },
     {
       "kind": "class",
-      "matlab_name": "radia.optuna.SBXCrossover",
+      "matlab_name": "radia.optuna.nsgaii.SBXCrossover",
       "oracle_sections": [
         "nsgaii_crossovers_seed_73",
         "sampler_public_members"
@@ -4615,7 +4636,7 @@
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.SBXCrossover.crossover",
+      "matlab_name": "radia.optuna.nsgaii.SBXCrossover.crossover",
       "oracle_sections": [
         "nsgaii_crossovers_seed_73",
         "sampler_public_members"
@@ -4627,7 +4648,7 @@
     },
     {
       "kind": "class-constant-or-field",
-      "matlab_name": "radia.optuna.SBXCrossover.n_parents",
+      "matlab_name": "radia.optuna.nsgaii.SBXCrossover.n_parents",
       "oracle_sections": [
         "sampler_public_members"
       ],
@@ -4638,7 +4659,7 @@
     },
     {
       "kind": "class",
-      "matlab_name": "radia.optuna.SPXCrossover",
+      "matlab_name": "radia.optuna.nsgaii.SPXCrossover",
       "oracle_sections": [
         "nsgaii_crossovers_seed_73",
         "sampler_public_members"
@@ -4650,7 +4671,7 @@
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.SPXCrossover.crossover",
+      "matlab_name": "radia.optuna.nsgaii.SPXCrossover.crossover",
       "oracle_sections": [
         "nsgaii_crossovers_seed_73",
         "sampler_public_members"
@@ -4662,7 +4683,7 @@
     },
     {
       "kind": "class-constant-or-field",
-      "matlab_name": "radia.optuna.SPXCrossover.n_parents",
+      "matlab_name": "radia.optuna.nsgaii.SPXCrossover.n_parents",
       "oracle_sections": [
         "sampler_public_members"
       ],
@@ -4673,7 +4694,7 @@
     },
     {
       "kind": "class",
-      "matlab_name": "radia.optuna.UNDXCrossover",
+      "matlab_name": "radia.optuna.nsgaii.UNDXCrossover",
       "oracle_sections": [
         "nsgaii_crossovers_seed_73",
         "sampler_public_members"
@@ -4685,7 +4706,7 @@
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.UNDXCrossover.crossover",
+      "matlab_name": "radia.optuna.nsgaii.UNDXCrossover.crossover",
       "oracle_sections": [
         "nsgaii_crossovers_seed_73",
         "sampler_public_members"
@@ -4697,7 +4718,7 @@
     },
     {
       "kind": "class-constant-or-field",
-      "matlab_name": "radia.optuna.UNDXCrossover.n_parents",
+      "matlab_name": "radia.optuna.nsgaii.UNDXCrossover.n_parents",
       "oracle_sections": [
         "sampler_public_members"
       ],
@@ -4708,7 +4729,7 @@
     },
     {
       "kind": "class",
-      "matlab_name": "radia.optuna.UniformCrossover",
+      "matlab_name": "radia.optuna.nsgaii.UniformCrossover",
       "oracle_sections": [
         "nsgaii_crossovers_seed_73",
         "sampler_public_members"
@@ -4720,7 +4741,7 @@
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.UniformCrossover.crossover",
+      "matlab_name": "radia.optuna.nsgaii.UniformCrossover.crossover",
       "oracle_sections": [
         "nsgaii_crossovers_seed_73",
         "sampler_public_members"
@@ -4732,7 +4753,7 @@
     },
     {
       "kind": "class-constant-or-field",
-      "matlab_name": "radia.optuna.UniformCrossover.n_parents",
+      "matlab_name": "radia.optuna.nsgaii.UniformCrossover.n_parents",
       "oracle_sections": [
         "sampler_public_members"
       ],
@@ -4743,7 +4764,7 @@
     },
     {
       "kind": "class",
-      "matlab_name": "radia.optuna.VSBXCrossover",
+      "matlab_name": "radia.optuna.nsgaii.VSBXCrossover",
       "oracle_sections": [
         "nsgaii_crossovers_seed_73",
         "sampler_public_members"
@@ -4755,7 +4776,7 @@
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.VSBXCrossover.crossover",
+      "matlab_name": "radia.optuna.nsgaii.VSBXCrossover.crossover",
       "oracle_sections": [
         "nsgaii_crossovers_seed_73",
         "sampler_public_members"
@@ -4767,7 +4788,7 @@
     },
     {
       "kind": "class-constant-or-field",
-      "matlab_name": "radia.optuna.VSBXCrossover.n_parents",
+      "matlab_name": "radia.optuna.nsgaii.VSBXCrossover.n_parents",
       "oracle_sections": [
         "sampler_public_members"
       ],
@@ -8465,6 +8486,7 @@
         "constraints",
         "importance",
         "mcp:generate_optuna50_mcp_oracle",
+        "native_tpe_history_selection",
         "retry_callback",
         "study_management",
         "trials_dataframe",
@@ -8511,6 +8533,7 @@
         "multiobjective_tpe_sampler_seed_41",
         "multivariate_tpe_sampler_seed_67",
         "native_sobol_high_dimension",
+        "native_tpe_history_selection",
         "nsgaii_crossovers_seed_73",
         "partial_fixed_sampler_seed_61",
         "pruners",
@@ -8524,6 +8547,7 @@
         "terminator_bases",
         "tpe_constant_liar_seed_127",
         "tpe_group",
+        "tpe_intersection_transitions",
         "tpe_pruned_history_seed_113",
         "tpe_sampler_seed_37",
         "unfinished_trials",
@@ -8589,6 +8613,7 @@
         "cached_storage",
         "grpc_storage",
         "journal_storage",
+        "native_tpe_history_selection",
         "rdb_storage",
         "storage",
         "study_management",
@@ -8743,6 +8768,7 @@
         "terminator_bases",
         "tpe_constant_liar_seed_127",
         "tpe_group",
+        "tpe_intersection_transitions",
         "tpe_pruned_history_seed_113",
         "tpe_sampler_seed_37",
         "unscrambled_qmc_sampler_seed_71"
@@ -9050,6 +9076,7 @@
         "journal_storage",
         "lifecycle_errors",
         "mcp:generate_optuna50_mcp_oracle",
+        "native_tpe_history_selection",
         "nsgaii_mutation",
         "numeric_untransform",
         "pruners",
@@ -9090,6 +9117,7 @@
         "cached_storage",
         "grpc_storage",
         "journal_storage",
+        "native_tpe_history_selection",
         "rdb_storage",
         "storage",
         "study_management",
@@ -9159,6 +9187,7 @@
         "multiobjective_tpe_sampler_seed_41",
         "multivariate_tpe_sampler_seed_67",
         "native_sobol_high_dimension",
+        "native_tpe_history_selection",
         "nsgaii_crossovers_seed_73",
         "nsgaii_sampler_seed_19",
         "nsgaiii_sampler_seed_23",
@@ -9177,6 +9206,7 @@
         "terminator_bases",
         "tpe_constant_liar_seed_127",
         "tpe_group",
+        "tpe_intersection_transitions",
         "tpe_pruned_history_seed_113",
         "tpe_sampler_seed_37",
         "trial_pruned_exception",
@@ -9543,6 +9573,7 @@
         "importance",
         "journal_storage",
         "mcp:generate_optuna50_mcp_oracle",
+        "native_tpe_history_selection",
         "numeric_untransform",
         "rdb_storage",
         "retry_callback",
@@ -9730,6 +9761,7 @@
         "multiobjective_tpe_sampler_seed_41",
         "multivariate_tpe_sampler_seed_67",
         "native_sobol_high_dimension",
+        "native_tpe_history_selection",
         "nsgaii_crossovers_seed_73",
         "nsgaii_sampler_seed_19",
         "nsgaiii_sampler_seed_23",
@@ -9742,6 +9774,7 @@
         "terminator_bases",
         "tpe_constant_liar_seed_127",
         "tpe_group",
+        "tpe_intersection_transitions",
         "tpe_pruned_history_seed_113",
         "tpe_sampler_seed_37",
         "unfinished_trials",
@@ -9876,6 +9909,7 @@
         "importance",
         "journal_storage",
         "mcp:generate_optuna50_mcp_oracle",
+        "native_tpe_history_selection",
         "numeric_untransform",
         "rdb_storage",
         "retry_callback",
@@ -10063,6 +10097,7 @@
         "multiobjective_tpe_sampler_seed_41",
         "multivariate_tpe_sampler_seed_67",
         "native_sobol_high_dimension",
+        "native_tpe_history_selection",
         "nsgaii_crossovers_seed_73",
         "nsgaii_sampler_seed_19",
         "nsgaiii_sampler_seed_23",
@@ -10075,6 +10110,7 @@
         "terminator_bases",
         "tpe_constant_liar_seed_127",
         "tpe_group",
+        "tpe_intersection_transitions",
         "tpe_pruned_history_seed_113",
         "tpe_sampler_seed_37",
         "unfinished_trials",
@@ -10228,6 +10264,7 @@
         "importance",
         "journal_storage",
         "mcp:generate_optuna50_mcp_oracle",
+        "native_tpe_history_selection",
         "numeric_untransform",
         "rdb_storage",
         "retry_callback",
@@ -10440,6 +10477,7 @@
         "multiobjective_tpe_sampler_seed_41",
         "multivariate_tpe_sampler_seed_67",
         "native_sobol_high_dimension",
+        "native_tpe_history_selection",
         "nsgaii_crossovers_seed_73",
         "nsgaii_sampler_seed_19",
         "nsgaiii_sampler_seed_23",
@@ -10452,6 +10490,7 @@
         "terminator_bases",
         "tpe_constant_liar_seed_127",
         "tpe_group",
+        "tpe_intersection_transitions",
         "tpe_pruned_history_seed_113",
         "tpe_sampler_seed_37",
         "unfinished_trials",
@@ -10560,6 +10599,7 @@
         "journal_storage",
         "lifecycle_errors",
         "mcp:generate_optuna50_mcp_oracle",
+        "native_tpe_history_selection",
         "nsgaii_mutation",
         "numeric_untransform",
         "pruners",
@@ -10670,6 +10710,7 @@
         "importance",
         "journal_storage",
         "mcp:generate_optuna50_mcp_oracle",
+        "native_tpe_history_selection",
         "numeric_untransform",
         "rdb_storage",
         "retry_callback",
@@ -10868,6 +10909,7 @@
         "multiobjective_tpe_sampler_seed_41",
         "multivariate_tpe_sampler_seed_67",
         "native_sobol_high_dimension",
+        "native_tpe_history_selection",
         "nsgaii_crossovers_seed_73",
         "nsgaii_sampler_seed_19",
         "nsgaiii_sampler_seed_23",
@@ -10880,6 +10922,7 @@
         "terminator_bases",
         "tpe_constant_liar_seed_127",
         "tpe_group",
+        "tpe_intersection_transitions",
         "tpe_pruned_history_seed_113",
         "tpe_sampler_seed_37",
         "unfinished_trials",
@@ -11263,6 +11306,7 @@
         "journal_storage",
         "lifecycle_errors",
         "mcp:generate_optuna50_mcp_oracle",
+        "native_tpe_history_selection",
         "nsgaii_mutation",
         "numeric_untransform",
         "pruners",
@@ -11298,6 +11342,7 @@
         "grpc_storage",
         "importance",
         "journal_storage",
+        "native_tpe_history_selection",
         "rdb_storage",
         "retry_callback",
         "search_space",
@@ -11645,6 +11690,6 @@
   "upstream_inventory": "tests/matlab/fixtures/optuna50_public_api.json",
   "upstream_inventory_sha256": "81CBD4C33ACAC95063994CC8DE8B5BBEF788C40ED23F8ECEAE690C9F0D14B602",
   "upstream_oracle": "tests/matlab/fixtures/optuna50_oracle.json",
-  "upstream_oracle_sha256": "30196F6157C0D4A6B3873AAA018698BD548F599F0DD5ECDF388E692D509C9F2B",
+  "upstream_oracle_sha256": "1B8640596D0D3B20ABE8B34E621738ABEFC9B7E9F81E7C85E7CB8A7B0FF7A2B3",
   "upstream_version": "5.0.0"
 }

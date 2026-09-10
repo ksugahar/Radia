@@ -202,6 +202,26 @@ See `validation_test/optimization/optuna_precision_20260910.md` and raw JSON.
 Reproduce with `validate_optuna_precision(outputPath)` after configuring pinned
 Python. The measured corpus and platform are the scope, not arbitrary inputs.
 
+### Independent review: coverage freshness and implementation names
+
+The review found a stale upstream-oracle digest in the committed coverage
+ledger and 25 flattened NSGA-II names that omitted the `nsgaii` package.
+The coverage generator now derives qualified names from the actual MATLAB
+package directories, including class members, and fails on ambiguous public
+basenames. Regeneration updates the oracle hash/section references and those
+25 names without changing any oracle status or the 401-entry required scope.
+
+A normal standalone-package pytest now checks oracle SHA256, full regenerated
+coverage equality, and the source path behind every non-module implementation
+name. The existing MATLAB coverage test additionally resolves every NSGA-II
+ledger class and member through MATLAB metadata. The repository health gate
+returns `ok=true`; this is not installed-wheel or release-quad acceptance.
+
+Systematic comparison of all public constructor defaults remains a separate
+review task. Recorded class signatures and selected seed/TPE default tests do
+not establish that every constructor default has a MATLAB comparison. Do not
+use `full_compatibility_complete` as a certificate for that unimplemented audit.
+
 ## 2. Scope and non-goals
 
 ### In scope

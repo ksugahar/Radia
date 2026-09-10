@@ -942,6 +942,25 @@ def _entry(
     }
 
 
+def _matlab_qualified_names() -> dict[str, str]:
+    """Derive resolvable public names from MATLAB package directories."""
+    result: dict[str, str] = {}
+    for path in sorted(MATLAB_DIRECTORY.rglob("*.m")):
+        relative = path.relative_to(MATLAB_DIRECTORY)
+        if "+internal" in relative.parts:
+            continue
+        packages = relative.parts[:-1]
+        if any(not part.startswith("+") for part in packages):
+            raise RuntimeError(f"Non-package public MATLAB path: {relative}")
+        qualified = ".".join(
+            ["radia", "optuna", *(part[1:] for part in packages), path.stem]
+        )
+        if path.stem in result:
+            raise RuntimeError(f"Ambiguous MATLAB public basename: {path.stem}")
+        result[path.stem] = qualified
+    return result
+
+
 def build_coverage() -> dict[str, Any]:
     inventory = json.loads(INVENTORY_PATH.read_text(encoding="utf-8"))
     if inventory.get("optuna_version") != "5.0.0":
@@ -961,6 +980,7 @@ def build_coverage() -> dict[str, Any]:
             + ", ".join(missing_sections)
         )
     names, members = _matlab_surface()
+    qualified_names = _matlab_qualified_names()
     entries: list[dict[str, object]] = []
     for module in inventory["modules"]:
         module_name = str(module["module"])
@@ -976,7 +996,7 @@ def build_coverage() -> dict[str, Any]:
                     name, SYMBOL_EQUIVALENTS.get(name, name)
                 )
                 present = surface_name in names
-                matlab_name = f"radia.optuna.{surface_name}" if present else None
+                matlab_name = qualified_names[surface_name] if present else None
             surface_name = CLASS_EQUIVALENTS.get(name, name)
             class_members_complete = kind == "class" and all(
                 surface_name in members
@@ -1022,7 +1042,7 @@ def build_coverage() -> dict[str, Any]:
                         f"{upstream}.{member_name}",
                         f"class-{member['kind']}",
                         member_present,
-                        f"radia.optuna.{surface_name}.{actual_member}"
+                        f"{qualified_names[surface_name]}.{actual_member}"
                         if member_present
                         else None,
                         member_oracle,
