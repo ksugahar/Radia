@@ -58,14 +58,18 @@ classdef SpiceEditor < handle
         end
         function setElementModel(obj,reference,model),obj.setComponentValue(reference,model);end
         function nodes=getAllNodes(obj),references=obj.getComponents();nodes=strings(0,1);for k=1:numel(references),nodes=[nodes;obj.getComponentNodes(references(k))];end,nodes=unique(nodes,'stable');end %#ok<AGROW>
-        function names=getSubcircuitNames(obj),t=regexp(obj.Text,'(?im)^\s*\.subckt\s+(\S+)','tokens');names=string(cellfun(@(x)x{1},t,'UniformOutput',false));end
+        function names=getSubcircuitNames(obj)
+            lines=splitlines(obj.Text);definitions=obj.subcircuitDefinitions(lines);
+            if isempty(definitions),names=strings(0,1);return,end
+            allNames=[definitions.name];depths=[definitions.depth];names=allNames(depths==1)';
+        end
         function sections=getControlSections(obj),sections=string(regexp(obj.Text,'(?ims)^\s*\.control\s*$.*?^\s*\.endc\s*$','match'))';end
         function addControlSection(obj,instruction),if isempty(regexp(obj.Text,'(?im)^\s*\.end\s*$','once')),error("radia:ltspice:MissingEnd","Cannot add a control section because the netlist has no .end directive.");end,obj.Text=regexprep(obj.Text,"(?im)^\s*\.end\s*$",".control"+obj.LineEnding+instruction+obj.LineEnding+".endc"+obj.LineEnding+".end",'once');end
         function removed=removeControlSection(obj,index),if nargin<2,index=1;end,sections=obj.getControlSections();if index<1||index>numel(sections),removed=false;else,obj.Text=replace(obj.Text,sections(index),"");removed=true;end,end
         function addLibrarySearchPaths(obj,varargin),obj.LibraryPaths=[obj.LibraryPaths,string(varargin)];end
         function path=findLibrary(obj,name),candidates=[fullfile(fileparts(obj.SourcePath),name),fullfile(obj.LibraryPaths,name)];index=find(isfile(candidates),1);if isempty(index),path="";else,path=candidates(index);end,end
         function circuit=getSubcircuitNamed(obj,name)
-            p="(?ims)^\s*\.subckt\s+"+regexptranslate('escape',char(name))+"(?:\s+[^\r\n]*)?\r?\n.*?^\s*\.ends(?:\s+"+regexptranslate('escape',char(name))+")?\s*$";blocks=string(regexp(obj.Text,p,'match'));if isempty(blocks),circuit=[];return,end,if numel(blocks)>1,error("radia:ltspice:AmbiguousSubcircuit","Subcircuit is defined more than once: %s",name);end,block=blocks(1);path=string(tempname("C:\temp"))+"_"+matlab.lang.makeValidName(char(name))+".cir";f=fopen(path,'w');c=onCleanup(@()fclose(f));fprintf(f,'%s%s.end',block,obj.LineEnding);clear c;circuit=radia.ltspice.SpiceCircuit(path);
+            lines=splitlines(obj.Text);definitions=obj.subcircuitDefinitions(lines);matches=find(strcmpi([definitions.name],name));if isempty(matches),circuit=[];return,end,if numel(matches)>1,error("radia:ltspice:AmbiguousSubcircuit","Subcircuit is defined more than once: %s",name);end,definition=definitions(matches);block=join(lines(definition.first:definition.last),obj.LineEnding);path=string(tempname("C:\temp"))+"_"+matlab.lang.makeValidName(char(name))+".cir";f=fopen(path,'w');c=onCleanup(@()fclose(f));fprintf(f,'%s%s.end',block,obj.LineEnding);clear c;circuit=radia.ltspice.SpiceCircuit(path);
         end
         function circuit=getSubcircuit(obj,instanceName),line=obj.componentLine(instanceName);parts=split(strtrim(line));parameter=find(contains(parts,"="),1);marker=find(strcmpi(parts,"params:"),1);cutoff=[parameter,marker];cutoff=cutoff(cutoff>0);if isempty(cutoff),index=numel(parts);else,index=min(cutoff)-1;end,model=parts(index);circuit=obj.getSubcircuitNamed(model);if isempty(circuit),error("radia:ltspice:SubcircuitNotFound","Subcircuit not found: %s",model);end,end
         function circuits=modifiedSubcircuits(~),circuits={};end
@@ -169,16 +173,23 @@ classdef SpiceEditor < handle
             end
             index=topMatches(1);line=lines(index);
         end
-        function [topMask,scopeNames]=lineScopes(~,lines)
-            topMask=true(numel(lines),1);scopeNames=strings(numel(lines),1);current="";
+        function [topMask,scopeNames]=lineScopes(obj,lines)
+            topMask=true(numel(lines),1);scopeNames=strings(numel(lines),1);definitions=obj.subcircuitDefinitions(lines);
+            for index=find([definitions.depth]==1)
+                first=definitions(index).first;last=definitions(index).last;topMask(first:last)=false;scopeNames(first:last)=definitions(index).name;
+            end
+        end
+        function definitions=subcircuitDefinitions(~,lines)
+            definitions=struct('name',{},'first',{},'last',{},'depth',{});stack=zeros(0,1);
             for k=2:numel(lines)
-                s=strtrim(lines(k));lowerLine=lower(s);
-                if current==""&&~isempty(regexp(lowerLine,'^\.subckt\s+','once'))
-                    tokens=split(s);current=tokens(2);topMask(k)=false;scopeNames(k)=current;
-                elseif current~=""
-                    topMask(k)=false;scopeNames(k)=current;if ~isempty(regexp(lowerLine,'^\.ends(?:\s|$)','once')),current="";end
+                s=strtrim(lines(k));opening=regexp(s,'(?i)^\.subckt\s+(\S+)','tokens','once');
+                if ~isempty(opening)
+                    index=numel(definitions)+1;definitions(index)=struct('name',string(opening{1}),'first',k,'last',0,'depth',numel(stack)+1);stack(end+1,1)=index; %#ok<AGROW>
+                elseif ~isempty(regexp(s,'(?i)^\.ends(?:\s|$)','once'))&&~isempty(stack)
+                    definitions(stack(end)).last=k;stack(end)=[];
                 end
             end
+            if ~isempty(stack),names=join([definitions(stack).name],", ");error("radia:ltspice:UnterminatedSubcircuit","Subcircuit definition has no matching .ends: %s",names);end
         end
         function [parts,valueIndex]=componentTokens(obj,reference)
             parts=split(strtrim(obj.componentLine(reference)));prefix=upper(extractBetween(parts(1),1,1));fixed=struct('R',4,'C',4,'L',4,'D',4,'V',4,'I',4,'B',4,'E',6,'G',6,'F',5,'H',5,'Q',5,'J',5,'M',6,'K',4,'T',6);

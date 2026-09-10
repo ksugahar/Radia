@@ -24,7 +24,9 @@ for iteration=1:options.MaxIterations
  simulation=radia.simulink.runLTspice(stateNetlist,InputSignals=signals,Executable=options.Executable,OutputDirectory=folder,Timeout_s=options.Timeout_s);
  names=simulation.waveform.names;j=find(names==options.CurrentTrace,1);if isempty(j),error("radia:simulink:HystereticCurrentTrace","Current trace not found: %s",options.CurrentTrace);end
  rawTime=real(simulation.waveform.values(:,1));rawCurrent=real(simulation.waveform.values(:,j));
- t=linspace(0,options.Duration_s,options.CouplingSamples).';current=interp1(rawTime,rawCurrent,t,"linear","extrap");
+ lastTime=NaN;if ~isempty(rawTime),lastTime=max(rawTime);end
+ if isempty(rawTime)||~all(isfinite(rawTime))||lastTime<options.Duration_s-max(1e-12,1e-9*options.Duration_s),error("radia:simulink:HystereticIncompleteInterval","LTspice stopped at %.17g s before the requested interval %.17g s.",lastTime,options.Duration_s);end
+ t=linspace(0,options.Duration_s,options.CouplingSamples).';current=interp1(rawTime,rawCurrent,t,"linear");if any(~isfinite(current)),error("radia:simulink:HystereticIncompleteInterval","LTspice waveform does not cover the requested coupling interval.");end
  [B,H,states,flux,emf,energy]=hysteresisWaveform(material,hysteresisState,current,t,options);
  previous=interp1(tOld,eOld,t,"linear","extrap");scale=max([max(abs(emf)),max(abs(previous)),1e-12]);history(iteration)=max(abs(emf-previous))/scale;
  if history(iteration)<=options.RelativeTolerance,converged=true;break,end
