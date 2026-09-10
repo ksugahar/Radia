@@ -11,6 +11,7 @@ known=["real","complex","double","forward","stepped","log","fastaccess"];
 unknown=setdiff(flags,known);
 if ~isempty(unknown),error("radia:ltspice:RawFlags","Unsupported binary RAW flag(s): %s.",join(unknown,", "));end
 isComplex=any(flags=="complex");isReal=any(flags=="real");allDouble=any(flags=="double");
+isFastAccess=any(flags=="fastaccess");
 if isComplex==isReal,error("radia:ltspice:RawFlags","Binary RAW must declare exactly one of real or complex.");end
 nvar=headerInt(lines,"No. Variables:"); npoint=headerInt(lines,"No. Points:");
 vline=find(strtrim(lines)=="Variables:",1); names=strings(1,nvar); types=strings(1,nvar);
@@ -22,14 +23,27 @@ if isComplex,stride=16*nvar;elseif allDouble,stride=8*nvar;else,stride=8+4*(nvar
 if numel(payload)<stride*npoint, error("radia:ltspice:RawTruncated","Binary RAW payload is truncated."); end
 payload=payload(1:stride*npoint);
 if isComplex
- doubles=reshape(typecast(uint8(payload),'double'),2*nvar,npoint).';
- values=complex(doubles(:,1:2:end),doubles(:,2:2:end));
+ doubles=typecast(uint8(payload),'double');
+ if isFastAccess
+  doubles=reshape(doubles,2*npoint,nvar);
+  values=complex(doubles(1:2:end,:),doubles(2:2:end,:));
+ else
+  doubles=reshape(doubles,2*nvar,npoint).';
+  values=complex(doubles(:,1:2:end),doubles(:,2:2:end));
+ end
 elseif allDouble
- values=reshape(typecast(uint8(payload),'double'),nvar,npoint).';
+ doubles=typecast(uint8(payload),'double');
+ if isFastAccess,values=reshape(doubles,npoint,nvar);else,values=reshape(doubles,nvar,npoint).';end
 else
- records=reshape(payload,stride,npoint);values=zeros(npoint,nvar);
- values(:,1)=typecast(reshape(records(1:8,:),1,[]),'double').';
- if nvar>1,values(:,2:end)=double(reshape(typecast(reshape(records(9:end,:),1,[]),'single'),nvar-1,npoint).');end
+ values=zeros(npoint,nvar);
+ if isFastAccess
+  values(:,1)=typecast(payload(1:8*npoint),'double').';
+  if nvar>1,values(:,2:end)=double(reshape(typecast(payload(8*npoint+1:end),'single'),npoint,nvar-1));end
+ else
+  records=reshape(payload,stride,npoint);
+  values(:,1)=typecast(reshape(records(1:8,:),1,[]),'double').';
+  if nvar>1,values(:,2:end)=double(reshape(typecast(reshape(records(9:end,:),1,[]),'single'),nvar-1,npoint).');end
+ end
 end
 rawProperties=parseHeaderProperties(lines);
 data=struct("schema","radia.ltspice.raw.binary.v1","path",rawFile,"names",names,"types",types,"values",values,"is_complex",isComplex,"raw_properties",rawProperties,"flags",flags);
@@ -39,7 +53,8 @@ function at=findPattern(bytes,pattern), at=strfind(bytes,uint8(pattern)); if ~is
 function value=headerInt(lines,label), row=find(startsWith(strtrim(lines),label),1); value=sscanf(char(extractAfter(strtrim(lines(row)),label)),'%d'); end
 function properties=parseHeaderProperties(lines)
 properties=struct();
-for k=1:numel(lines)
+variablesRow=find(strtrim(lines)=="Variables:",1);if isempty(variablesRow),variablesRow=numel(lines)+1;end
+for k=1:variablesRow-1
  line=strtrim(lines(k));colon=strfind(line,":");if isempty(colon),continue,end
  label=strtrim(extractBefore(line,colon(1)));if label=="Binary",continue,end
  key=matlab.lang.makeValidName(char(label));properties.(key)=strtrim(extractAfter(line,colon(1)));
