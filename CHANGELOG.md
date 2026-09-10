@@ -5,6 +5,11 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- Changed the presentation outline guidance and check to require the complete
+  agenda at each major section transition, with only the section starting now
+  distinctly emphasized. A one-time agenda or sparse section card no longer
+  counts as recurring navigation.
+
 ## 4.95.89 - Safe AMS setup and reliable native release packaging
 
 Released 2026-09-11.
