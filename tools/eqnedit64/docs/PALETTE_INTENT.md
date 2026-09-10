@@ -130,6 +130,10 @@ Preview failures are visible, not raw TeX. Native uses its existing model and
 GDI fitter. Over/underbrace examples use a two-letter base and omit annotation
 ink so the brace can remain larger; native previews disable editing placeholders.
 Inserted expressions still include those editable annotation slots.
+The image audit exposed a renderer fallback that changed wide braces to rules.
+Braces must retain their glyph at every width; horizontal scaling is shared by
+GDI and SVG, and the decoration regression checks one-, two- and eight-letter
+bases in both directions. Passing an ink/clipping gate alone missed this defect.
 
 Pixel gates detect clipping and empty output, not minimum semantic feature
 size. Small primes and harpoon distinctions still require image review. No
