@@ -5,6 +5,21 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- Recovered the air-gap electromagnetic torque of `calc_motor_transient`, which
+  collapsed to round-off. The contour integral passed `grad(A)` straight into a
+  boundary integral over the internal `airgap_mid` edge, which evaluates a
+  volume field in the wrong space: on the PMSM golden case the machine reported
+  max|T_em| = 1.1e-13 N m where it now reports 13.9 N m, so the mechanical
+  equation was never driven by the field. **Motor transient torque, and the
+  speed and angle histories that depend on it, from releases up to and
+  including 4.95.89 must be recalculated.**
+- Added the planar air-gap torque kernels to `radia.force_ngsolve`:
+  `air_gap_maxwell_torque_line_2d` (single contour; the default, and the route
+  the script always intended) and `air_gap_maxwell_torque_arkkio_2d` (the
+  gap-thickness average that Arkkio's method actually is). `calc_motor_transient
+  --airgap-torque {line,arkkio}` selects between them, and the force-result
+  `method` now names the route that ran instead of always claiming Arkkio.
+
 - Generalized recurring-outline detection to accept author-defined two-to-eight
   section taxonomies even when each divider is titled with its current section
   rather than ``Outline``.
