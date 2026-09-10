@@ -21,7 +21,7 @@ silently dropped from the count.
 | Covered mapped MEX names | 100 |
 | Underscore numerical kernels | 21 / 21 covered |
 | Stateful pybind11 class surface | 126 / 126 covered |
-| Radia MEX gateway commands | 361 |
+| Radia MEX gateway commands | 364 |
 | Optuna MEX gateway commands | 21 |
 | MATLAB Optuna classes | 96 |
 | MATLAB Optuna functions | 93 |
