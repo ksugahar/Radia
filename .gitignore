@@ -292,6 +292,9 @@ validation_test/cubit/kelvin_1_4_p_convergence/p_convergence.json
 # Test fixtures: hand-curated STEP files checked into the repo as
 # regression inputs (e.g. keiko's 1turn_coil_loft_outsideline.step).
 !tests/**/fixtures/*.step
+# CAD authority of a validation lane: the mesh is regenerated from this STEP by
+# the lane's own Cubit journal, so the STEP -- not the .vol -- is the asset.
+!validation_test/quadrupole_cefc2020/*.step
 # Minimal solver meshes used as deterministic regression inputs.
 !tests/fixtures/**/*.vol
 

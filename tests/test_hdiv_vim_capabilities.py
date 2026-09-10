@@ -30,3 +30,15 @@ def test_configuration_validation_has_no_global_p_plus_one_rule():
         validate_hdiv_configuration(3, {8}, 2, 3)
     with pytest.raises(ValueError, match="does not support geometry order 3"):
         validate_hdiv_configuration(3, {6}, 2, 3)
+
+
+def test_public_solve_refuses_order_zero():
+    """Production solves are BDM1/BDM2; broken RT0 is the topology-optimization operator space only."""
+    import ngsolve as ng
+    import pytest
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia import vim
+    mesh = MakeStructured3DMesh(hexes=True, nx=1, ny=1, nz=1)
+    with pytest.raises(ValueError, match="order must be 1"):
+        with ng.TaskManager():
+            vim.Solve(mesh, H_ext=ng.CoefficientFunction((0, 0, 1.0e4)), order=0, mu_r=100.0)

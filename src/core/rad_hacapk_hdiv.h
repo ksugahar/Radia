@@ -289,7 +289,12 @@ public:
                         std::vector<double> far_tet_pts, std::vector<double> far_tet_w,
                         std::vector<double> far_tri_pts, std::vector<double> far_tri_w,
                         double near_grade, double far_inner_factor,
-                        std::vector<int> image_masks = {}, std::vector<double> image_signs = {});
+                        std::vector<int> image_masks = {}, std::vector<double> image_signs = {},
+                        std::vector<double> gl_near = {}, std::vector<double> gw_near = {},
+                        bool near_inner_exact = true,
+                        std::vector<double> gl_in_self = {}, std::vector<double> gw_in_self = {},
+                        std::vector<double> gl_pair = {}, std::vector<double> gw_pair = {},
+                        std::vector<double> gl_pair_affine = {}, std::vector<double> gw_pair_affine = {});
 
     // 2D PLANAR mode (2026-07-03, the motor cross-section layer; memory hdiv-vim-tri-quad-motor):
     // charges rho = -div M on 2D cells (BDM1: TRI P0 / QUAD Q1; BDM2: TRI P1 / QUAD Q2)
@@ -888,8 +893,13 @@ private:
 
     // CURVED HIGH-ORDER (isoparametric P2) mode: m_curved sets m_highorder=true too (the QuadDot/PhiInner path
     // is shared); PhiInner -> PhiAtHO_Curved (always the curved Duffy).  m_cellNodes [n_cell*30] / m_faceNodes
-    // [n_bf*18] hold the P2 high-order nodes; m_gl/m_gw the curved Duffy Gauss rule.  No analytic moments, no
-    // inner-subtraction table, no near/far split (m_ho_far_factor stays 1e30).
+    // [n_bf*18] hold the P2 high-order nodes; m_gl/m_gw the curved Duffy Gauss rule.  No analytic moments and
+    // no inner-subtraction table.  The near/far split IS available: the curved constructor takes the same
+    // low-quad tables as the flat path, so FAR pairs use QuadDotFar (direct) / QuadDotFarImage (image).
+    // Direct host pairs go through QuadBlockHOTet (curved product rule when the hosts do not touch, the
+    // vectorized curved Duffy when they do); image host pairs go through QuadBlockHOTetImage with the
+    // image-aware ImageHostsTouch test, so a mirror or cyclic image is integrated by the same rules as the
+    // corresponding direct pair of the full model.
     bool m_curved = false;
     // HCurl curl-Piola currents are supplied as K(xi)=J(X(xi))*|det dX/dxi|.
     // Their physical volume measures are already folded into K, so both Gram
@@ -903,7 +913,10 @@ private:
     // Symmetric reference-triangle rule for the base of each radial Duffy
     // sub-tet.  This removes reference-vertex-order dependence and reduces the
     // inner curved kernel from nq^3 to nq*ntri evaluations.
-    std::vector<int> m_curvedTouchBlockIndex;          // canonical host-pair -> block slot, -1 if non-touching
+    // Canonical touching host pair (lo << 32 | hi over the cell-then-face host numbering) -> block slot.
+    // A hash map, not an n_host x n_host table: the table cost 22 GB on a 63k-tet mesh (75k hosts) and
+    // took hibino down through its commit limit, while the touching pairs themselves number ~16 per host.
+    std::unordered_map<unsigned long long, int> m_curvedTouchBlockIndex;
     std::vector<std::vector<double>> m_curvedTouchBlocks; // precomputed symmetric touching blocks
     double m_curvedTouchBuildTime = 0.0;
     void PrecomputeCurvedTouchBlocks();
@@ -931,6 +944,30 @@ private:
     std::vector<double> m_symTriP, m_symTriW;           // regular outer tri rule (bary lam1..2; W sums 1/2)
     std::vector<double> m_glOut, m_gwOut;               // 1D [0,1] Gauss -> graded OUTER Duffy (near/self subs)
     std::vector<double> m_glIn, m_gwIn;                 // 1D [0,1] Gauss -> the RADIAL inner rule (PhiInnerHexRadialVec)
+    // NEAR family (2026-09-05, ESRF #6 HEX Gram indefiniteness): the graded OUTER Duffy rule of self and
+    // touching sub pairs is DECOUPLED from gl_out (which the far tensor product shares -- raising gl_out
+    // alone multiplies the far cost by (n/4)^6), and touching non-self pairs take the EXACT-anchor radial
+    // inner (the source-host reference inverse of the outer point) instead of the static-site radial.
+    std::vector<double> m_glNear, m_gwNear;             // 1D [0,1] Gauss -> endpoint-graded tensor OUTER of near/self hosts
+    std::vector<double> m_glInSelf, m_gwInSelf;         // 1D [0,1] Gauss -> the RADIAL inner of SELF pairs (finer than m_glIn)
+    std::vector<double> m_glPair, m_gwPair;             // 1D [0,1] Gauss per dimension of the pair-domain Duffy rule
+    // The same rule for pairs whose BOTH hosts are affine (2026-09-07): with affine maps the Duffy
+    // integrand is exponentially convergent (unit-cube self-energy 5e-9 at 6 points), whereas a
+    // distorted host converges only ~10x per two points (sector lattice: 7e-5 at 6, 6e-6 at 8), so
+    // affine-affine pairs -- most pairs of a real magnet -- take the cheaper count.
+    std::vector<double> m_glPairAffine, m_gwPairAffine;
+    // Separate 1D rule for the DOMINANT (cone-radius w) direction of the pair-domain Duffy rule.  After
+    // the substitution the 1/r singularity is cancelled exactly by the Duffy Jacobian w^(kcone-1), and
+    // within one subdomain the reference coordinates are affine in w, so this direction carries a smooth
+    // -- for affine host pairs polynomial -- integrand and needs fewer points than the angular ones.
+    // Empty means "use the pair rule", which is the historical uniform-N behaviour.
+    std::vector<double> m_glPairW, m_gwPairW, m_glPairAffineW, m_gwPairAffineW;
+    const std::vector<double>& PairRuleWNodes(int kindT, int hT, int kindS, int hS) const;
+    const std::vector<double>& PairRuleWWeights(int kindT, int hT, int kindS, int hS) const;
+    bool HexHostAffine(int kind, int h) const;
+    const std::vector<double>& PairRuleNodes(int kindT, int hT, int kindS, int hS) const;
+    const std::vector<double>& PairRuleWeights(int kindT, int hT, int kindS, int hS) const;
+    bool m_nearInnerExact = true;                       // false = legacy static-site radial (diagnostic only)
     std::vector<double> m_farTetP, m_farTetW;           // cheap FAR inner tet rule (bary; W sums 1/6)
     std::vector<double> m_farTriP, m_farTriW;           // cheap FAR inner tri rule (bary; W sums 1/2)
     double m_near_grade = 1.5, m_far_inner_factor = 4.0;
@@ -1033,7 +1070,9 @@ private:
         const std::vector<int>& mI, const std::vector<int>& mJ, const std::vector<double>& mV,
         int n_face, const char* caller, double* factor_s_accum, bool geometry_cache = false);
     void PhiInnerHexSubVec(int kindS, int hS, int subB, const double p[3],
-                           const std::vector<int>& srcG, double* inn) const;  // inner over ALL source locals (shares sqrt)
+                           const std::vector<int>& srcG, double* inn,
+                           const double* anchor = nullptr) const;  // inner over ALL source locals (shares sqrt);
+                           // anchor = the outer point's reference coordinates in the SOURCE host (exact-anchor radial)
     // Complete-host tensor rule for smooth mapped-BDM2 source potentials.
     // The former degree-five sub-simplex far cloud was not exact enough for
     // the O(1e-3) volume/surface cancellation of high charge modes.
@@ -1046,6 +1085,18 @@ private:
     void PhiInnerHexRadialHostVec(int kindS, int hS, const double p[3],
                                   const double* reference,
                                   const std::vector<int>& srcG, double* inn) const;
+    // Cone/fan/sinh inner of the BDM1 near family (2026-09-05): six face cones from the apex (the
+    // singular point -- the outer point of a self pair, the physical closest point of a touching pair),
+    // each face integrated by four edge fans from the apex's physical foot, with Johnston-Elliott sinh
+    // substitutions along the ray (near-singular peak of a touching pair), the fan radius (apex close to
+    // the face) and the edge parameter (foot close to an edge).  Every nested peak is resolved by
+    // construction, so the accuracy does not degrade with the cell aspect ratio; m_glIn rules the smooth
+    // directions and m_glInSelf the substituted ones.
+    void PhiInnerHexConeFanVec(int kindS, int hS, const double p[3], const double* reference,
+                               const std::vector<int>& srcG, double* inn) const;
+    // Closest reference point of a (possibly exterior) physical point on a Q2 cell host: the converged
+    // interior inverse, else the nearest of the six face closest-point solves.
+    static bool HexQ2ClosestReference(const double* nd27, const double X[3], double xi[3]);
     // Try the physical inverse for an accurate near-pair anchor.  For an
     // exterior non-self target, retain the last finite in-cube point because
     // any such point gives an exact six-cone partition of the source host.
@@ -1077,7 +1128,7 @@ private:
     // removed with them).  m_glIn/m_gwIn is the radial 1D Gauss rule (n=5 -> 4*125 pts per cell call);
     // not cacheable here (x0 = xiT varies per outer point).
     void PhiInnerHexRadialVec(int kindS, int hS, int subB, const double p[3], const double* xiT,
-                              const std::vector<int>& srcG, double* inn) const;
+                              const std::vector<int>& srcG, double* inn, bool self_rule = false) const;
     void DPhiInnerHexRadialCellVec(int hS, int subB, const double p[3], const double dp[3],
                                   const double* xiT, const double* node_velocity,
                                   const std::vector<int>& srcG, double* dinn,
@@ -1144,6 +1195,11 @@ private:
     mutable std::atomic<long long> m_hoSymBlockHits{0};
     mutable std::atomic<long long> m_hoSymBlockMisses{0};
     mutable std::atomic<long long> m_hoSymBlockClears{0};
+    // Image (IMA mirror / cyclic) entry dispatch profile of the high-order TET Gram: how many (entry, image)
+    // terms took the cheap far rule, the host-block rule, or the per-entry scalar fold.
+    mutable std::atomic<long long> m_hoImageFarEntries{0};
+    mutable std::atomic<long long> m_hoImageBlockEntries{0};
+    mutable std::atomic<long long> m_hoImageScalarEntries{0};
     // QuadBlockHex dispatch profile: block counts + wall nanoseconds per branch (affine near product /
     // affine far product / distorted-pair far product / general graded path split by host proximity).
     // Always accumulated -- a relaxed fetch_add per BLOCK is negligible against the block quadrature.
@@ -1151,6 +1207,7 @@ private:
     mutable std::atomic<long long> m_hexBlkAffineFar{0};
     mutable std::atomic<long long> m_hexBlkDistortedFar{0};
     mutable std::atomic<long long> m_hexBlkGeneralNear{0};
+    mutable std::atomic<long long> m_hexPairNonconforming{0};   // touching pairs without canonical frames (hanging nodes)
     mutable std::atomic<long long> m_hexBlkGeneralFar{0};
     mutable std::atomic<long long> m_hexNsAffineNear{0};
     mutable std::atomic<long long> m_hexNsAffineFar{0};
@@ -1165,12 +1222,89 @@ private:
     // rehash), so readers hold no lock after lookup.  Classification (HexPairTakesGeneralPath) picks
     // the CACHE only, never the quadrature -- a borderline misclassification just caches a cheap block
     // here (or a heavy one thread-locally), both harmless.
+    // Shared-cache key.  mode 0 = the directed host pair (kindT, hT, kindS, hS, img).  mode 1 =
+    // TRANSLATION-CONGRUENT pair (2026-09-06): the two host templates plus the quantized centre
+    // offset.  A charge-Gram block depends only on the relative geometry of its two hosts, so every
+    // translated copy of a pair (the z-layers of a swept HEX mesh: 5 of 6 near blocks on a 6-layer
+    // quadrupole, 14 of 15 at 4 mm) is served from one evaluation, exactly.  Image blocks (img > 0)
+    // are not translation invariant and keep mode 0.
+    struct HexSharedBlockKey {
+        int mode, kindT, a, kindS, b, img, same;
+        long long qx, qy, qz;
+        bool operator==(const HexSharedBlockKey& o) const
+        {
+            return mode == o.mode && kindT == o.kindT && a == o.a && kindS == o.kindS && b == o.b
+                && img == o.img && same == o.same && qx == o.qx && qy == o.qy && qz == o.qz;
+        }
+    };
+    struct HexSharedBlockKeyHash {
+        std::size_t operator()(const HexSharedBlockKey& k) const
+        {
+            std::size_t h = 1469598103934665603ull;
+            auto mix = [&](long long v) {
+                h ^= static_cast<std::size_t>(static_cast<unsigned long long>(v));
+                h *= 1099511628211ull;
+            };
+            mix(k.mode); mix(k.kindT); mix(k.a); mix(k.kindS); mix(k.b); mix(k.img); mix(k.same);
+            mix(k.qx); mix(k.qy); mix(k.qz);
+            return h;
+        }
+    };
+    // Congruence templates of every host (cells then faces): the quantized Q2 lattice nodes relative
+    // to the host centre plus the charge exponents; hosts with equal templates are translated copies.
+    std::vector<int> m_hexHostCongruentTemplate;   // [n_el+n_bf] template id, -1 before the build
+    std::vector<double> m_hexHostCenter;           // [3*(n_el+n_bf)] mean of the host's lattice nodes
+    double m_hexCongruentQuantum = 0.0;            // 1e-10 x the largest host spread
+    int m_hexCongruentTemplateCount = 0;
+    bool m_hexCongruentReady = false;
+    void BuildHexCongruenceTemplates(int n_el, int n_bf);
+    // One slot per key.  The slot is inserted on the first lookup and its block is computed under
+    // std::call_once, so concurrent misses on the same key WAIT for one computation instead of each
+    // recomputing the block (the previous "racing first insert wins" design duplicated the expensive
+    // Duffy near blocks whenever several fill workers reached the same congruence key together).
+    // unique_ptr keeps the slot address stable across rehashing; the returned block reference lives
+    // as long as the instance.
+    struct HexSharedBlockSlot {
+        std::once_flag once;
+        std::vector<double> blk;
+    };
     mutable std::shared_mutex m_hexGeneralSharedMutex;
-    mutable std::unordered_map<unsigned long long, std::vector<double>> m_hexGeneralSharedCache;
+    mutable std::unordered_map<HexSharedBlockKey, std::unique_ptr<HexSharedBlockSlot>, HexSharedBlockKeyHash>
+        m_hexGeneralSharedCache;
     mutable std::atomic<long long> m_hexGeneralSharedLookups{0};
     mutable std::atomic<long long> m_hexGeneralSharedHits{0};
     mutable std::atomic<long long> m_hexGeneralSharedMisses{0};
     bool HexPairTakesGeneralPath(int kindT, int hT, int kindS, int hS, int img) const;
+    // TOUCHING hex hosts (a shared Q2 lattice node after the image transform): always the graded near
+    // family, never the far tensor product, whatever the centroid-separation ratio says.
+    bool HexHostsTouch(int kindT, int hT, int kindS, int hS, int img) const;
+    // Shared lattice entity of a touching host pair (2026-09-06): entity_dim = 0 vertex, 1 edge, 2 face,
+    // 3 identical cells (-1 = not touching) and the canonical frames (axis permutation + flips) that put
+    // the shared entity at zeta_k = 1 (target) / zeta_k = 0 (source) for k >= entity_dim with matching
+    // in-entity coordinates, derived from the coincident Q2 lattice nodes after the image transform.
+    struct HexPairAdjacency {
+        int entity_dim = -1;
+        int permT[3] = {0, 1, 2}, flipT[3] = {0, 0, 0};
+        int permS[3] = {0, 1, 2}, flipS[3] = {0, 0, 0};
+    };
+    HexPairAdjacency HexPairAdjacencyOf(int kindT, int hT, int kindS, int hS, int img) const;
+    // TOUCHING pairs of the BDM1 family: the (dT + dS)-dimensional product integral is regularized on
+    // the product domain itself (Sauter-Schwab / Taylor-Duffy pattern): relative in-entity coordinates
+    // u = zeta_S - zeta_T plus the transverse coordinates form a cone vector c whose max-norm w is the
+    // Duffy variable (one subdomain per dominant coordinate, two signs for the relative ones), so
+    // |Phi_T - Phi_S| = w X with X smooth and nonvanishing and the Jacobian w^(k-1) cancels the 1/r
+    // singularity; the remaining in-entity coordinates run over the intersection box.  Tensor Gauss on
+    // the unit hypercube converges exponentially, which the block-wise near family (graded outer x
+    // separate inner) cannot: on ESRF #6 the near-zero modes are 1e-3 cancellations of block energies,
+    // so 1e-8 block accuracy is required (memory hdiv_hex_gram_m_metric_amplification).
+    std::vector<double> QuadBlockHexPairDuffy(int kindT, int hT, int kindS, int hS, int img) const;
+    // Non-touching pairs inside the near band (BDM1): plain tensor Gauss on both reference domains with
+    // the pair rule (the hosts are separated, so the integrand is smooth).
+    std::vector<double> QuadBlockHexProductN(int kindT, int hT, int kindS, int hS, int img) const;
+    // NEAR host pairs (self / touching / within near_grade): endpoint-graded tensor outer over the whole
+    // target host, exact-anchor radial (or far cloud) inner per source sub-simplex.
+    std::vector<double> QuadBlockHexNearTensor(int kindT, int hT, int kindS, int hS, int img,
+                                               bool self_pair) const;
     // Per-host tensor rule of the far product (points, tensor weights, per-local-charge monomial
     // values).  The rule is PAIR-INDEPENDENT (mask reflections are applied to the target points at
     // kernel time), so QuadBlockHexAffineFarProduct fetches it from this instance-shared cache
@@ -1305,7 +1439,19 @@ private:
     void PhiInnerHOCurvedHostVec(int kind, int host, const double p[3],
                                  const std::vector<int>& charges, double* values) const;
     bool CurvedHostsTouch(int kindA, int hostA, int kindB, int hostB) const;
-    std::vector<double> QuadBlockHOCurvedDirect(int kindT, int hostT, int kindS, int hostS) const;
+    // Image-aware touch test for the block rules: does the IMAGE T_img(S) share a vertex / edge / face with
+    // the target host T?  S's corner vertices are mapped FORWARD by the image transform and matched against
+    // T's corners by coordinates, so mirror-fixed vertices (a cut face lying on the plane) and
+    // rotation-identified sector vertices are both found -- the vertex-id test of CurvedHostsTouch sees
+    // neither.  img == 0 delegates to CurvedHostsTouch.  The criterion itself is the direct one (>= 2 shared
+    // corners, or one shared corner when a boundary-face charge participates).
+    bool ImageHostsTouch(int kindT, int hostT, int kindS, int hostS, int img) const;
+    bool IsMirrorImage(int img) const;                        // img > 0 with no rotation angle (an involution)
+    bool ImageFarPair(int a, int b, int img) const;           // |T^-1 c_a - c_b| > m_ho_far_factor*(size_a+size_b)
+    double QuadDotFarImage(int tgt, int src, int img) const;  // QuadDotFar with tgt's low outer points mapped by T^-1
+    static bool HOTetImageFarEnabled();                       // RADIA_HDIV_DISABLE_HO_IMAGE_FAR (diagnostic A/B switch)
+    std::vector<double> QuadBlockHOCurvedDirect(int kindT, int hostT, int kindS, int hostS,
+                                                int img = 0) const;
     std::vector<double> QuadBlockHOTet(int kindT, int hostT, int kindS, int hostS) const;
     std::vector<double> QuadBlockHOTetImage(
         int kindT, int hostT, int kindS, int hostS, int img) const;

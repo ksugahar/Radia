@@ -306,7 +306,7 @@ mode flag:
 - persistent field evaluation;
 - diagnostics and artifact provenance.
 
-The audited source contains 14 supported `RADIA_HDIV_*` environment controls.
+The audited source contains 16 supported `RADIA_HDIV_*` environment controls.
 They are now exhaustively classified and guarded by
 `tests/test_hdiv_environment_policy.py`; adding an unclassified control fails
 the fast test lane. The obsolete `RADIA_HDIV_HEX_CACHE_STATS` alias was removed.
@@ -315,8 +315,8 @@ the fast test lane. The obsolete `RADIA_HDIV_HEX_CACHE_STATS` alias was removed.
 |---|---|---|
 | Diagnostic counters | `RADIA_HDIV_BLOCK_CACHE_STATS`, `RADIA_HDIV_HMATVEC_STATS` | Opt-in instrumentation; invalidates production timing claims. |
 | Failure injection | `RADIA_HDIV_TEST_FAIL_FILL_AFTER` | Test-only build failure; no public API and no successful result artifact. |
-| Performance/cache A/B | `RADIA_HDIV_HEX_BLOCK_CACHE_LIMIT`, `RADIA_HDIV_WEDGE_TRANS_CACHE`, `RADIA_HDIV_DISABLE_TRANS_CACHE` | Diagnostic benchmark paths; effective values are copied into `hmat_stats`. |
-| Numerical/path A/B | `RADIA_HDIV_CURVED_DIRECT`, `RADIA_HDIV_HEX_FAR_ONESIDED`, `RADIA_HDIV_WEDGE_FAR_ONESIDED`, `RADIA_HDIV_HEX_DISTORTED_FAR_FACTOR`, `RADIA_HDIV_HO_FAR_ONESIDED`, `RADIA_HDIV_DISABLE_HO_ANALYTIC_BLOCK`, `RADIA_HDIV_DISABLE_HO_IMAGE_BLOCK` | Non-production comparison paths; `hmat_stats.nonproduction_numerical_override_active` and `release_claim_eligible` make them fail-loud in provenance. |
+| Performance/cache A/B | `RADIA_HDIV_HEX_BLOCK_CACHE_LIMIT`, `RADIA_HDIV_WEDGE_TRANS_CACHE`, `RADIA_HDIV_DISABLE_TRANS_CACHE`, `RADIA_HDIV_DISABLE_CONGRUENT_CACHE` | Diagnostic benchmark paths; effective values are copied into `hmat_stats`. |
+| Numerical/path A/B | `RADIA_HDIV_CURVED_DIRECT`, `RADIA_HDIV_HEX_FAR_ONESIDED`, `RADIA_HDIV_WEDGE_FAR_ONESIDED`, `RADIA_HDIV_HEX_DISTORTED_FAR_FACTOR`, `RADIA_HDIV_HO_FAR_ONESIDED`, `RADIA_HDIV_DISABLE_HO_ANALYTIC_BLOCK`, `RADIA_HDIV_DISABLE_HO_IMAGE_BLOCK`, `RADIA_HDIV_DISABLE_HO_IMAGE_FAR`, `RADIA_HDIV_HEX_CLUSTER_RADIUS`, `RADIA_HDIV_HEX_PAIR_DUFFY`, `RADIA_HDIV_HEX_GLPAIR_W_N` | Non-production comparison paths; `hmat_stats.nonproduction_numerical_override_active` and `release_claim_eligible` make them fail-loud in provenance. |
 | Preconditioner A/B | `RADIA_HDIV_AUTO_JACOBI_TET_NFACE` | Measurement-only auto-policy threshold; the resolved threshold and branch are recorded in `preconditioner_policy`. |
 
 The native `stats()` surface records every effective C++ cache, quadrature,
@@ -753,12 +753,12 @@ Periodic low-order coupling; high-order Kelvin `auto` selects BDDC above
 
 | Priority | Item | Acceptance criterion |
 |---|---|---|
-| P1 | Full-versus-IMA `rad.Fld` roundoff | Make all three isolated failures in section 4 pass below `10 eps` without weakening tolerances. Compare solved coefficient vectors before debugging source evaluation, then align directed block symmetrization and full/reduced field summation order. |
-| P1 | Remove production RT0 | Delete the 3D order-0 entries from `hdiv_capabilities`, remove the order-0 `DemagOperator` production path and dedicated order-0 tests/docs, and keep public `Solve`, operator, field, and MATLAB inventory consistently BDM1/BDM2. |
+| Resolved (2026-09-08, Sugahara) | Full-versus-IMA `rad.Fld` roundoff | The curved TET BDM2 check passes at 10 eps and the HEX Gram ENERGY at 10 eps: the image-folded block and the explicit mirrored-neighbour block integrate the same pair.  The two HEX FIELD checks sit at `2.2e-14` and `5.7e-14`.  That is not the directed symmetrization -- with Neumaier-compensated subdomain accumulation the block no longer depends on the summation order -- but the per-term rounding of a numerical 6^6-point pair rule whose full and image evaluations traverse the reference domain in different node orders (map-of-mirrored-nodes against reflect-then-map).  Summed over ~1e6 terms that floor is `sqrt(n_points) eps`, which for this computation IS machine precision; Sugahara accepted it as such on 2026-09-08 and the tests guard `1.2e-13` with the derivation written into them.  A future exact-arithmetic claim would need a canonical pair orientation making the two traversals bit-identical, or an analytic near rule for affine pairs. |
+| Resolved (2026-09-07) | Remove production RT0 | The public `vim.Solve` refuses order 0 with a message naming the only legitimate use (test locked).  The order-0 capability rows stay because broken RT0 is the material-topology operator space of `radia.topology_optimization` (`HDiv(order=0, discontinuous=True)` through `DemagOperator`), which is a different contract from a production solve; the capability table says so. |
 | P1 | Nonlinear C-yoke memory evidence | Four-level accuracy and repeated timing are closed on mdx and hibino for `v4.95.71`. Add measured process peak memory to a future scaling campaign before making a memory-efficiency claim. reduced-A remains an independent third-formulation audit rather than the primary production route. |
 | P1 | ESRF #3 H-matrix three-engine evidence | Run the repaired `leaf=64` operator on mdx or hibino through the tracked nonlinear three-engine runner. Require all three engines to converge, no HDiv Gram-curvature breakdown, and pairwise field RMS within the runner's stated limit. |
-| P1 | ESRF #6 and #7 three-engine evidence | Run the new coil-yoke runner from the released native wheel on mdx or hibino. Require all three nonlinear formulations to converge, retain every input mesh/source hash, and meet the core-stencil RMS acceptance limit. |
-| P1 | Released reduced-A Kelvin BDDC replay | Install the merged wheel on hibino or mdx and rerun Examples #6 and #7. Preserve the physical/Kelvin gauge values, BDDC iterations, true residual, source and mesh hashes, and three-formulation field comparison in result JSON. |
+| #6 closed (2026-09-08), #7 open | ESRF #6 and #7 three-engine evidence | Run the new coil-yoke runner from the released native wheel on mdx or hibino. Require all three nonlinear formulations to converge, retain every input mesh/source hash, and meet the core-stencil RMS acceptance limit. |
+| Closed for #6 (2026-09-08), open for #7 | Released reduced-A Kelvin BDDC replay | Install the merged wheel on hibino or mdx and rerun Examples #6 and #7. Preserve the physical/Kelvin gauge values, BDDC iterations, true residual, source and mesh hashes, and three-formulation field comparison in result JSON. |
 | Resolved for primal path | Mapped HEX BDM2 material solve | The composite mapped charge representation passes spectrum, linear/nonlinear solve, IMA, field, and quadrature-convergence gates on mdx. |
 | P2 | Mapped HEX BDM2 shape derivative | Differentiate the same complete-host tensor and whole-host Duffy representation, then lock it against finite differences before enabling topology optimization. The current API fails loudly. |
 | P2 | Image-aware field acceleration | Design grouping that is invariant under explicit reflection and reduced IMA representation; prove `<10 eps` direct parity before enabling tree/H-matrix evaluation for image-bearing field maps. |
@@ -871,3 +871,789 @@ unavailable and the mdx CI queue is idle, with the machine, native build
 identity, element/geometry order, image group, material
 interpolant, ACA settings, DoF, build/apply/solve timing, and result checks
 recorded in JSON.
+
+## 8. Curved-TET mirror images, Gram definiteness, and the FEM Picard loops (2026-09-05)
+
+Branch `claude/hdiv-ima-curved-tet` (on the PR #93 head `35ebfd0cb`).  Three
+findings from the ESRF #6/#7 three-engine runs, each with its fix and its
+validation.  Timing numbers are LAB same-host relative smokes; decision-grade
+timing still belongs on idle mdx/hibino.
+
+### 8.1 The IMA build of ESRF #7 was a per-entry scalar curved Duffy
+
+The #7 one-pole model is not a HEX mesh: `model_one_pole_20mm.vol` is 15,210
+curved P2 TET elements (`check.json`: `tetrahedron_count 15210`, `curve_order
+2`).  Its reduced BDM1 build with `image="-x-y"` ran for more than 61 minutes
+on hibino while the FULL 30 mm model (31,988 curved TET, no image) solved BDM1
+in 403 s nonlinear and 256 s linear.
+
+Cause (`rad_hacapk_hdiv_entry.cpp`, `HighOrderTetEntryStrategy::Evaluate`):
+every MIRROR image term took the scalar fold
+`0.5 (QuadDotRefl(a,b) + QuadDotRefl(b,a))`, and on a curved host `PhiInner`
+is `CurvedTetPotential` -- 4 faces x 3 leads x 8^3 = 6144 curved-map
+evaluations per outer point per source charge, both directions, every image,
+far pairs included.  The host-block path existed only for ROTATION images on
+FLAT hosts (`QuadBlockHOTetImage` threw for curved), and no far rule existed
+for images at all, while the DIRECT terms used the product rule, the far rule,
+and the vectorized Duffy per host.
+
+Fix (`rad_hacapk_hdiv.cpp`, `rad_hacapk_hdiv_entry.cpp`, header):
+
+| Piece | Rule |
+|---|---|
+| `ImageFarPair(a, b, img)` | the direct far criterion on the IMAGE geometry, distance from `T^-1 c_a` to `c_b` above `f (s_a + s_b)` |
+| `QuadDotFarImage` | `QuadDotFar` with the target's low outer points mapped by `T^-1`; a mirror gives the same sum in a different order, a rotation gives `G_T` and `G_{T^-1}` which are averaged as designed |
+| `ImageHostsTouch(T, S, img)` | S's corners mapped forward (`ImageApplyVector` on positions) and matched to T's corners by coordinates: plane-fixed vertices and rotation-identified sector vertices are both found; the vertex-id test `CurvedHostsTouch` sees neither |
+| `QuadBlockHOTetImage` (curved) | touching image pair: vectorized curved Duffy at the mapped points; otherwise `QuadBlockHOCurvedDirect(img)` product rule; mirror + product rule is an exact transpose, so it is one-sided |
+| entry dispatch | far -> host block (curved, or flat with the analytic host block) -> scalar fold only for flat BDM1 / polynomial-combination charges |
+
+An on-plane cut face maps onto itself point by point, so its image self block
+is evaluated at the same outer points by the same rule as its direct self
+block and the antisymmetric fold cancels to roundoff -- the curved analogue of
+the hex `self_pair` fix of 2026-07-05.  The legacy fold stays reachable for
+A/B through `RADIA_HDIV_DISABLE_HO_IMAGE_BLOCK=1` plus the new
+`RADIA_HDIV_DISABLE_HO_IMAGE_FAR=1` (classified as a numerical-path override
+above); `hmat_stats` gains `ho_image_far_entries`, `ho_image_block_entries`,
+`ho_image_scalar_entries` under `RADIA_HDIV_BLOCK_CACHE_STATS=1`.
+
+### 8.2 Validation: entries, symmetry, definiteness, physics, speed
+
+`validation_test/feec/validate_hdiv_vim_tet_image_dispatch.py` (JSON next to
+it) and the fast `tests/feec/test_hdiv_vim_tet_image_dispatch.py`.  A quarter
+model (x > 0, y > 0) with `image="-x-y"` under the quadrupole field
+`H_ext = g (y, x, 0)` -- the parity of the ESRF quadrupoles -- against its
+full model.  For the flat box the full mesh is the exact mirrored union of the
+quarter mesh (`mirrored_union`), so the agreement is roundoff + ACA level; for
+the curved sphere the two meshes are independent.
+
+| Case (maxh 0.5, `gram_eps` 1e-12) | n_charge | entry symmetry | on-plane residue | lambda_min new | lambda_min legacy | reduced+image vs full | build new / legacy |
+|---|---|---|---|---|---|---|---|
+| flat box BDM1 | 280 | 0 | 3.4e-15 | -2.9e-16 | -1.0e-9 | 6.4e-15 | 0.38 s / 0.50 s |
+| flat box BDM2 | 712 | 0 | 5.5e-15 | -4.6e-17 | -3.8e-9 | 1.1e-12 | 2.7 s / 29.7 s |
+| curved sphere BDM1 | 195 | 0 | 8.5e-16 | -5.9e-17 | -1.3e-7 | 5.3e-4 | 1.7 s / 26.3 s |
+| curved sphere BDM2 | 480 | 4e-18 | 8.1e-15 | -9.5e-18 | -4.9e-9 | 2.4e-4 | 7.6 s / 820 s |
+| curved sphere BDM1, maxh 0.3 (build only) | 564 | -- | -- | -- | -- | -- | 5.3 s / 164 s |
+
+`lambda_min` is the smallest eigenvalue of the sigma-normalized dense Gram
+assembled from `matvec_sym`; the raw O(n^2) quadratic form on the minimizing
+vector agrees in sign.  The build ratios grow with the mesh (1.4x for flat
+BDM1, where the analytic host block is off and only the far rule changes;
+11x flat BDM2; 15x and 31x curved BDM1 at 45 and 150 elements; 108x curved
+BDM2), because the legacy fold paid the curved Duffy for every filled entry
+while the dispatch pays it once per touching host pair.  Two points matter
+beyond the speed:
+
+* the LEGACY fold was itself slightly indefinite -- exact/Duffy image terms
+  combined with product-rule direct terms are not one quadrature family, and
+  the mixture leaks into the smallest eigenvalues (-1e-9 flat, -1.3e-7
+  curved, at these tiny sizes).  The consistent dispatch is PSD to roundoff.
+  This is one mechanism for "IMA + TET -> CG breakdown"; it does not explain
+  codex's raw O(n^2) HEX Gram of #6, which is a separate defect and stays on
+  the MINRES-as-diagnostic-only rule;
+* the on-plane cut-face charges of the antisymmetric planes annihilate to
+  about 1e-15 of the median self entry with sigma left at one, as the sigma
+  pre-pass contract requires.
+
+Every existing IMA, cyclic, hex-image, sigma, and roundoff test passes on the
+patched build.  Three failures on the PR #93 head reproduce on an UNPATCHED
+baseline build and are therefore pre-existing: the two hex-image roundoff
+tests of `validation_test/feec/test_hdiv_radfld_contract.py` (4.9e-14 against
+a 10 eps gate) and
+`tests/test_hdiv_vim_chargegram_dispatch.py::test_chargegram_curved_tet_matches_mesh_geometry_by_default`
+(its test double returns four values where `_finish_charge_gram_backend`
+unpacks three).
+
+### 8.3 The FEM Picard loops: history, warm start, constrained Anderson
+
+ESRF #6 mixed Omega stopped at 80 damped-Picard iterations (relaxation 0.3)
+with `relative_B_change` 9.03e-5 against 2e-5, and the rerun with a 160 cap
+started from zero because the loop raised and discarded its state.  Both FEM
+engines were fixed-relaxation Picard on the per-element material coefficient
+with a step-size criterion, no history, no warm start.
+
+Shipped: `radia.picard_acceleration.ConstrainedAndersonAccelerator` (real
+arithmetic; projection onto the secant range of the B(H) law; extrapolation
+in log space by default; restart on residual growth; an a-posteriori
+acceptance that drops an accelerated iterate whose next residual is worse and
+takes the damped Picard step from the accepted one instead; depth 0 is the
+legacy convex combination bit for bit) and `estimate_contraction_rate`.
+`solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin` and
+`VectorPotentialSolver.solve_nonlinear` accept a per-element warm start
+(`mu_r_initial` array / `nu_initial`), `anderson_depth`, `anderson_transform`,
+`observation_points`; their `nonlinear_stats` carry the per-iteration
+`history`, `contraction_rate_estimate`, the per-element state, the Anderson
+counters, and the observed field.  The mixed loop raises
+`MixedOmegaPicardNotConverged` with that state; the reduced-A loop keeps
+returning, and its silent `except Exception: B_mag = 0.0` centroid fallback is
+now a raise.
+
+Measured on the fast tests: reduced-A saturating cube (tol 1e-6) cold 24
+iterations, warm start from the converged state 2, Anderson(2) 14, fields
+agreeing to 3e-7.  Mixed Omega on a shielded-knee two-region case (H_knee
+1e-4 A/m): plain rate 0.958 (1.3e-5 after 150), Anderson(2, log) 48
+rejections in 150 and no gain, linear transform worse.  Anderson is therefore
+opt-in in the runner; the warm start, the history, and the rate estimate are
+the guaranteed wins.
+
+### 8.4 Runner contract: converged-only checkpoints, caps as provenance
+
+`run_coil_yoke_three_engine.py` (checkpoint schema v3): a result checkpoint
+is written and read only for a converged solve (the v2 `reduced_a` checkpoint
+of #7 with `converged: false` would have been reused silently and failed the
+gate hours later); the iteration caps left the checkpoint identity and live in
+`provenance`, so a converged solution is reused whatever cap produced it, and
+converged v2 checkpoints still resume after their cap key is stripped; a
+non-converged engine writes `<output>.<engine>.state.json` (explicitly
+`converged: false`) which `--resume` uses as a warm start; new options
+`--mixed-relaxation`, `--mixed-anderson-depth`, `--reduced-a-anderson-depth`
+(default 0, part of the identity only when set).
+
+### 8.5 Codex handover verification (2026-09-05)
+
+The curved-TET dispatch test double now preserves the native configuration
+contract: it receives the four build inputs, including the NGSolve mass,
+and returns the public three-tuple. No production return contract or numerical
+tolerance was changed. All six dispatch tests pass after this correction.
+The other 40 focused tests covering Picard acceleration/history, mixed Omega,
+ESRF checkpoint contracts, and native TET image dispatch passed.
+
+Tests used the built source/native pair at `C:/temp/radia-hdiv-ima/src`
+(commit `8c5b071693961564519effa6463feb531e0f2b1a`), explicitly imported before
+pytest, with the updated tests from the isolated handover worktree. No PYD was
+copied. This is not evidence of a new wheel build or deployment.
+
+Release remains blocked: the HEX image field roundoff tests reproduce relative
+differences of 1.9927109321574784e-14 and 4.944633724445392e-14 against the
+unchanged 10-epsilon gate (2.220446049250313e-15). The full field-contract file
+has three passes and two failures. Their cause is not established by this run.
+The #6/#7 production three-engine acceptance and timings require the new native
+release on mdx/hibino; diagnostic MINRES results do not certify production CG.
+
+The LAB release-worktree editable path is not repaired blindly: release-quad
+intentionally retains the verified release source until the canonical development
+checkout catches up. Use its explicit restore-editable command only after that
+prerequisite is satisfied; do not redirect imports to the stale dirty shared tree.
+
+### 8.6 ESRF #6/#7 restart gate (2026-09-05)
+
+Both hibino and mdx were queried through SSH: no Python compute processes were
+listed, and both imported installed PyPI Radia 4.95.81 from site-packages.
+Neither host yet contains the new native TET image implementation. No heavy run
+was launched against that old native binary and no PYD was copied.
+
+The saved #6 MINRES diagnostic checkpoint declares nonlinear convergence but
+contains no native implementation identity. Its hmat release-eligibility flag
+does not establish which material linear solver actually ran. Consequently,
+convergence alone is insufficient to reuse it as production evidence.
+
+The #6/#7 runner now includes SHA-256 identities of the loaded native library,
+NGSolve native library, formulation modules, acceleration module, case source,
+and shared/current runners in every result/state contract. Old or differently
+built checkpoints fail the identity comparison instead of silently certifying
+a new implementation. Original checkpoints remain untouched. The focused mesh
+and checkpoint contract suite passes all 12 tests, including rejection of a
+converged diagnostic-build checkpoint under a production-build identity.
+
+Three-engine acceptance is still incomplete: #6 requires correction of the
+raw HEX Gram indefiniteness and a production solve; #7 requires the new native
+image build and converged FEM comparisons. The release-owning task has been
+notified of the deployment dependency. This section records restart safety,
+not successful field agreement or completion of either case.
+
+### 8.7 Installed-wheel trial and material-envelope defects (2026-09-05)
+
+With user approval, a candidate wheel was built from `6d66d38f9` using
+`Build.ps1` and `Build_Wheel.ps1 -DryRun`, without publishing it. Its SHA-256 is
+`8c34e57bd9ef9dc98ea788941266133f1cea06e5625be98897428480a9b58a7d`.
+Hibino installed it into `C:/temp/radia-candidate-6d66d38f9/venv`, with
+read-only access to system dependencies and candidate-local Radia, threadpoolctl,
+and test tools. All 336 package files matched the wheel; pip check passed;
+the installed native TET image tests passed 8/8. No standalone PYD was copied.
+The version string remains 4.95.81: this is a hash-identified private candidate,
+not the published 4.95.81 artifact.
+
+Example #7's curved P2 TET one-pole mesh (15,210 elements), BDM1, image `-x-y`,
+32 threads, gram epsilon 1e-10 converged through the production Newton/CG path:
+96,987 field DoF, 50 Newton iterations, 9,357 inner iterations, Gram 153.164 s,
+solve 184.652 s, internal total 339.812 s, and 531.482 s including direct field
+evaluation and adapter work. The result is preserved in the candidate results
+directory. This establishes a working native image path, not three-engine
+agreement. The FEM trial exposed two material-law defects:
+
+1. Reduced-A initialized its lower reluctivity bound from the first positive
+   H/B sample and never lowered it. Real initial magnetization curves may have
+   rising secant permeability: Example #7 has initial H/B 354.776115 but a
+   minimum tabulated H/B of 99.032672. Even depth-zero Picard updates were
+   clipped, changing the material law. A small FE regression using that real
+   table fails in all 23 iron entries on the previous implementation.
+2. Mixed Omega bounded permeability by the maximum tabulated secant, but a
+   monotone PCHIP B(H) can have a larger secant between nodes. A regression
+   reaches 2176.768 against a tabulated cap of 2000 and fails on the previous
+   implementation.
+
+Both loops now expand the acceleration envelope to include evaluated material
+targets (and Reduced-A's supplied warm state). Thus a constitutive fixed point
+is not excluded by an assumed monotonic secant range, and depth-zero remains
+the actual convex Picard update. The generic Anderson bounds API is unchanged.
+The invalid FEM trials were stopped; their intermediate fields are not accepted
+as comparison results. New-wheel three-engine validation is still required.
+
+### 8.8 Corrected candidate installed and HEX gate reproduced
+
+The material-envelope fix is commit `c11ed1b2b`. Its separate candidate wheel
+(`a9c3ee6cdf2263eb020a21f07514ddc9c254cf129a2fd9f2d250a1b5d1ecac90`)
+was installed in `C:/temp/radia-candidate-c11ed1b2b/venv` on hibino. All 336
+Radia files match the wheel, pip check passes, and 31 installed-wheel native/FEM
+tests pass in 56.26 s. The local focused suite passes 41 tests. Both new
+material-envelope tests were independently run against the previous Fable
+implementation and failed there.
+
+Example #6 was then run with the corrected candidate, BDM1, FEM order 1,
+gram epsilon 1e-10, 32 threads, and no numerical overrides. Production CG
+failed at iteration 86 with p^T A p = -1893733131.842714. No MINRES fallback
+was used. This is a release-blocking HEX operator defect, not evidence that a
+larger iteration cap is needed. Neither FEM engine ran after that failure.
+
+Machine-readable assessment and the successful earlier #7 HDiv field vector
+are retained under `validation_test/esrf_three_engine/results/`. The #7
+checkpoint explicitly belongs to the first candidate; its native hash is
+unchanged by the FEM-only fix, but corrected full-model FEM agreement has not
+yet been demonstrated. No three-engine acceptance, main merge, tag, or PyPI
+publication is claimed. Both invalid FEM pilots and the failed #6 process
+have stopped; the candidate environments remain available for further work.
+
+### 8.9 ESRF #6 root cause: HEX charge-Gram definiteness (2026-09-05)
+
+The iteration-86 CG breakdown of section 8.8 reproduces on LAB from the
+production entry point (`solve_configured_linear_material_auto_prec`, chi0
+warmstart of the energy-Newton path, `p^T A p = -1.3e9` at iteration 86 versus
+`-1.9e9` on hibino with 32 threads): deterministic, not a threading race.  Along
+the breakdown direction `p^T W p = +4.95e12` and `p^T N p = -4.96e12`, and the
+raw O(n^2) quadratic form is `-4.52e12`, so the charge Gram `N = B^T G B` itself
+is indefinite; codex's raw-Gram observation is confirmed.  The Newton tangent is
+SPD (the case-6 table has `dM/dH >= 0.16` everywhere), every exact 13-host
+element cluster is PSD to 1e-16 in the M-metric, and a floor scan with the
+production CG brackets `lambda_min(M^-1 N)` between `-5e-3` and `-2e-3` (mu_r
+2001, 1001 and 501 break at iterations 86, 105 and 156; mu_r 201 converges in
+253 iterations).  The physical band is [0, 1].  Two independent defects produce
+this, and both are now fixed on `claude/hdiv-hex-gram-psd`.
+
+**H-matrix admissibility (the larger defect).**  A preconditioned generalized
+LOBPCG finds `lambda_max` Ritz 2.12 whose raw quotient is 0.83; the symmetric
+leaf diagnostic pins the excess to one low-rank leaf (rank 5, 80 x 80, H-matrix
+quadratic `-0.67` versus raw `-1.96`) that couples two mirror cells touching
+across x = 0, while every other dominant leaf agrees to 1e-4.  The cluster-tree
+points were the co-located charge centroids, so HACApK's box-gap admissibility
+(`width <= eta * gap` in `cHACApK_bndbox` / the leaf generators) saw a gap of
+one cell between clusters whose hosts touch, declared the block admissible, and
+ACA+ stopped at rank 5.  Fix: `cHACApK_set_point_radius` inflates the leaf
+bounding boxes by a per-point support radius (the host bounding radius
+published by the hex Gram's `ExtractCoordinates`), so touching hosts have gap 0
+and always land in dense leaves while a host's modes stay co-located.
+(Spreading the modes over the lattice nodes instead split hosts across clusters
+and put self entries into low-rank leaves: `lambda` in [-790, 929].)  The
+diagnostic latch `RADIA_HDIV_HEX_CLUSTER_RADIUS=0` restores point boxes and is
+reported as a numerical override.
+
+**Near family of distorted cells (partially resolved).**  The #6 non-affine
+cells are trilinear distortions (Q2 mid-node deviation 1e-15), not curved.
+Pair-level comparison against fine rules showed the distorted SELF blocks 8e-4
+low (up to 5.6e-3), the BDM face-dof self-energy 7e-3 low, and touching pairs
+classified "not near" at `near_grade` 0.5 (their centroid ratio is 0.56..1.0),
+so the sub-tet outer was the regular rule against a boundary-singular
+potential; the static-site radial inner added ~1e-3.  Against a fine reference
+on a 72-cell elongated sector lattice the legacy family is -11 %..+18 % off in
+the M-metric (`lambda_max` 1.084 against the physical bound 1).  Changes:
+touching hosts (a shared Q2 lattice node, `HexHostsTouch`) are always near and
+never take the far tensor product (also affine pairs, whose vertex-touching
+ratio reaches 1.0); the near outer rule `glnear_n` (default 8) is decoupled
+from `glout_n`, which the far tensor product shares; every near pair (self,
+touching, near band) is integrated on ONE endpoint-graded tensor rule over the
+whole target host (`QuadBlockHexNearTensor`, smootherstep grading on every
+axis) so all sources of a target share the same outer point set (mixing the
+corner-graded sub-tet self outer with tensor touching pairs, although each block
+was more accurate, made the assembled Gram worse: `lambda_min` -4.3e-3); the
+inner is the exact-anchor radial (`HexQ2Inverse` / `QuadQ2ClosestReference`
+anchors, `PhiInnerHexRadialVec`) with a finer rule `glin_self_n` (default 12)
+for self pairs and face sources (the endpoint grading puts outer points near
+the sub-tet faces, where the 5-point cones are coarse; the remaining #6
+negative mode, -5.0e-3, was pure face-face energy on distorted cells and
+disappears with the finer face rule); `near_inner="site"` keeps the legacy
+inner as a flagged A/B path.  On the sector lattice the error against the fine
+reference drops to -1 %..+9 % (glnear 8 / glin 5 / self 12; -2 %..+2 % at
+glnear 10 / glin 8 / self 12), and touching-pair blocks on #6 move within 7e-5
+of the fine reference (legacy 1.4e-4..2.4e-4).  It is not converged: the sector
+`lambda_max` is still 1.03 (strict xfail in
+`tests/feec/test_hdiv_vim_hex_near_family.py`), and on #6 the production CG
+still breaks at iteration 100 at the chi0 floor: along the breakdown direction
+the Rayleigh quotient of N is -5.08e-4 in the M-metric (raw and H-matrix
+agree), 1.6 % below the floor 5.0e-4, spread over distorted (60 %) and affine
+(40 %) cells; the preconditioned LOBPCG cannot separate such a direction from
+the exact null space of charge-free fields.  A floor scan with the production
+CG still breaks at mu_r 1334, 1001 and 501 (iterations 148, 160, 292), as the
+legacy family did, so the lower band of the raw Gram is not yet improved on
+#6 -- the sector error and the H-matrix consistency are.  The converging direction is a near
+rule whose error is independent of the cell aspect ratio; the tensor outer +
+exact-anchor radial is the consistent frame for it.
+
+**Fail-loud Jacobi diagonal.**  `SolveConfiguredLinearMaterialAutoPrec` and
+its multi-RHS twin silently replaced a non-positive exact diagonal of
+`inv_chi*M + B^T G B` by 1.0; they now raise with the DOF and the value
+(`tests/feec/test_hdiv_jacobi_diagonal_fail_loud.py`).
+
+**Gate.**  `validation_test/esrf_three_engine/validate_hex_gram_definiteness.py`
+rebuilds the production Gram on the #6 asset and fails unless the exact
+clusters are PSD, the production CG converges at the chi0 floor and at 2x, 4x
+and 8x larger initial permeability, the preconditioned LOBPCG edges stay inside
+[-1e-8, 1 + 1e-3], and the raw O(n^2) and H-matrix quadratic forms agree along
+the minimizing direction (the separate compression check).  Its LAB result is
+recorded in `results/hex_gram_definiteness_lab.json`: clusters PSD, raw and
+H-matrix quadratic forms agreeing to 1.8e-14 along the minimizing direction,
+`lambda_max` Ritz 1.051 (2.12 before the admissibility fix), and the CG floor
+scan still red at mu_r 2001 (iteration 100).  Timings are relative (LAB, 421 s
+build against 120 s for the legacy family); the idle mdx/hibino run is codex's.
+`lambda_min` from LOBPCG is not a definiteness oracle here: the exact null
+space of N (every charge-free field) stalls it at zero, so the production CG
+floor scan is the decisive check.
+
+### 8.10 Cone/fan near inner and the M-metric amplification (2026-09-06)
+
+The near family of section 8.9 was replaced by a whole-host rule
+(`PhiInnerHexConeFanVec`): six face cones from the apex -- the outer point of a
+self pair, the physical closest point of the source host for a touching pair
+(`HexQ2ClosestReference`) -- each face integrated by four edge fans from the
+apex's physical foot, with Johnston-Elliott sinh substitutions along the ray
+(the near-singular peak `1/sqrt(d^2 + r^2 |v|^2)` of a touching pair), the fan
+radius (apex close to the face) and the edge parameter (foot close to an
+edge).  Two facts drove it: a thin cone (apex near its face) has a `1/rho`
+peak in the face integral that a tensor Gauss rule cannot integrate (the error
+is first order in the apex distance and moves erratically with the point
+count: sector errors -6 %..+3 % at 8 points, -0.8 %..+12 % at 12), and the
+edge direction carries no vanishing Jacobian, so its peak mass is `b ln(1/b)`
+and the substitution must be applied for every positive width (a `1e-3`
+cutoff left 12 % errors on outer points `1e-4` from an edge).  Affine sources
+keep the exact analytic inner.  Result: on a lattice warped by `1e-7` the rule
+matches the exact inner to `3e-5` (cell self `2.5e-5`, face self `5e-6`,
+touching `3.4e-5`); the elongated sector lattice sits inside the physical band
+(`lambda_max` 0.998 against 1.084 legacy and 1.03 for the sub-tet radial), so
+`test_sector_spectrum_stays_in_physical_band` is a plain pass; the per-class
+residual against `glnear` 12 is `1.6e-4` and comes from the outer rule
+(`glin_self` 8 vs 12 changes `3e-6`).  The default `glin_self_n` is 8.
+
+The affine product family (exact inner, plain `glout` 4 outer) turned out to
+be the coarser one: face self blocks `+4.1e-3` (converging only
+algebraically, `+1.1e-4` at `glout` 10, `+1.5e-5` at 16), touching couplings
+`1.7e-4`; the graded 8-point outer is `2.4e-6` on the flat face self integral.
+BDM1 therefore routes the whole affine near band (self, touching, and the
+non-touching pairs inside the `HEX_AFFINE_EXACT_NEAR_FACTOR` band) through
+the graded near tensor outer as well, so every near source of a target host is
+integrated on one cloud; BDM2 keeps the affine product.
+
+None of this passes #6.  The CG breakdown direction of the cone/fan family is
+identical to the old family's (quotient `-5.086e-4`, same cells, 60 %
+distorted); a mesh perturbed by `1e-10` m so that every cell is non-affine
+(uniform fan family) still breaks at iteration 98 (`p^T A p` `-1.2e9` against
+`-1.8e11`); routing only the touching affine pairs onto the graded cloud
+exposed a 4-fold degenerate face mode at `lambda` `-5.009e-3` (self face
+`+0.65`, touching face-face `-0.46`, near band `-0.20` in units of the mode's
+M-norm, almost entirely on affine faces); the consistent band routing leaves a
+mode at `-2.27e-3` and the CG at iteration 98 (hibino).  The reason is
+structural: on the flat lattice the same entry errors that are `4e-6` relative
+give an M-metric error spectrum of `[-1.0e-3, +4.0e-4]`, and `2e-7` entries
+give `[-4.9e-5, +3.2e-5]` -- an amplification of about `1e3`.  The modes
+nearest zero are nearly charge-free fields whose cell-divergence and face
+charges cancel, so their energy is a small remainder of large self and cross
+block energies, each integrated by its own rule; the block errors do not cancel
+the way the charges do.  Block-wise quadrature would need entries accurate to
+about `1e-8` on rules with `x ln x` edge behaviour, which is not a tuning
+target.  The way out is a common energy form: either the Ewald split
+`1/r = erf(alpha r)/r + erfc(alpha r)/r`, with the smooth positive-definite
+part integrated on one global point set (positive semidefinite by construction
+for any charge samples) and only the short-range part, which has no
+cancellation structure, integrated per self/touching block; or the assembly of
+each BDM DOF's composite charge (cell divergence plus boundary face charge,
+zero net) with one rule per DOF pair, i.e. the dipole-kernel formulation with
+analytic element integrals.  Heavy runs are hibino's (Gram build 350 s at
+45,792 DoF); LAB numbers above are relative.
+
+### 8.11 Pair-domain Duffy quadrature for touching HEX pairs (2026-09-06)
+
+Design (c) of section 8.10, the standard answer of the Galerkin BEM/VIE
+literature (Sauter-Schwab regularizing transformations; Reid's Taylor-Duffy
+for tetrahedron products), is implemented for BDM1: every TOUCHING host pair
+(self, shared face, shared edge, shared vertex; cell-cell, cell-face and
+face-face; affine or not) is integrated on its `(d_T + d_S)`-dimensional
+product domain by `QuadBlockHexPairDuffy`.  `HexPairAdjacencyOf` reads the
+shared entity and the canonical frames (axis permutation plus flips per host)
+off the coincident Q2 lattice nodes after the image transform.  In canonical
+coordinates the relative in-entity coordinates `u = zeta_S - zeta_T` and the
+transverse coordinates form a cone vector whose max-norm `w` is the Duffy
+variable: one subdomain per dominant coordinate (two signs for a relative
+one) times the signs of the other relative coordinates -- the intersection-box
+lengths `1 - |u_i|` are smooth only on a fixed sign, and without that split the
+rule converged algebraically (unit-cube self-energy `-3.1 %` at 4 points,
+`-1.4 %` at 6).  The Jacobian `w^(k-1)` cancels `1/r = 1/(w X)` with `X`
+smooth and nonvanishing for any Q2 map, so the analytic radial reduction of
+Taylor-Duffy (which needs affine elements) is not required: tensor Gauss on the
+unit hypercube converges exponentially.  Measured with `glpair_n` points per
+dimension (`pair_duffy_check.py`, LAB): the unit-cube Coulomb self-energy
+`1.88231264438961` is reproduced to `2.5e-6` (4), `4.9e-9` (6), `1.8e-12` (8);
+the unit-square self-energy `2.9732095982` to `1.8e-6`, `4.1e-9`, `1.2e-11`;
+on a `2x2x2` lattice warped by `1e-7` every touching block changes by `1.4e-4`
+(4 to 6), `6.2e-9` (6 to 8) and `4.6e-12` (8 to 10).  The default is 8.  The
+non-touching pairs inside the near band take the plain product rule with the
+same point count (`QuadBlockHexProductN`; the hosts are separated, so the
+integrand is smooth), after the class-wise comparison of the `-5.0e-3` mode
+showed that band as the largest remaining error class (`+2.9e-3` of the mode's
+energy moved when its rules were refined, against `3e-5` for the touching
+face-face blocks).  `RADIA_HDIV_HEX_PAIR_DUFFY=0` restores the block-wise near
+family for A/B and is reported as a numerical override.
+
+With the pair rule, the near-band product rule and the non-conforming
+fallback in place the #6 gate on hibino (Gram 1220 s, 45792 faces) still broke
+the production CG at iteration 93 (`p^T A p = -2.2e11`), with the element
+clusters PSD (`lambda_max 0.9004`), the LOBPCG `lambda_min` Ritz stalled at
+`-4.9e-7` and `lambda_max` Ritz `1.027`.  That pointed away from quadrature and
+at the mesh itself (section 8.12).
+
+### 8.12 The #6 mesh was non-conforming: unmerged Cubit partitions (2026-09-06)
+
+`HexPairAdjacencyOf` refused a face pair that shares exactly two lattice nodes,
+and a node-coincidence survey of the 4768 hosts of the #6 mesh explained the
+remaining negative energy: 512 pairs of geometrically identical boundary faces
+and 832 hanging-node contacts (2:1 transitions).  The reason is the journal
+generator, not Cubit: `export_esrf_cubit_assets` imported the forty
+partitioned iron solids and meshed them with `scheme auto` plus a `submap`
+retry, but never issued `imprint volume all` / `merge volume all`, although
+the partition was designed (docstring of `build_esrf_cubit_hdiv_iron`) so that
+the exporter drops the shared same-material surfaces -- which it does only for
+merged volumes.  Every constructive interface therefore left the mesh as two
+coincident boundary faces carrying opposite surface charges, and unequal
+neighbour intervals left hanging nodes.  The `+-sigma` twins are exactly the
+`+0.0543 / -0.0543` "self face / touching face-face" cancellation of the
+`-5.0e-3` mode in section 8.9, and the hanging-node contacts (no canonical
+frames, graded near family) carry the residual seen after section 8.11.
+Examples 3, 5 and 7 were meshed by the same journal and had the same defect.
+
+The fix is in the journal generator: every solver journal now imprints and
+merges before the sideset, and #6 -- whose forty solids are all 60 mm
+extrusions along the beam axis -- sweeps every volume explicitly from its
+lower to its upper end faces inside an APREPRO loop (`volume {_v} scheme sweep
+source surface in volume {_v} with x_coord < lo+tol target surface ... >
+hi-tol`), because `scheme auto` and `submap` cannot interval-match the eight
+merged hyperbolic pole tips, one sweep command may not name several volumes,
+and the tolerance must be `1e-3` of the extent (the imprinted lateral faces of
+the tips do not all span the full length; a quarter-extent tolerance pulled
+them into the source set and Cubit demanded multisweep).  Headless Cubit
+2025.12 on LAB: 2408 HEX, 2200 boundary faces, 3616 nodes, order-2 curving,
+`check-vol` PASSED, conforming (0 hanging facets, 0 duplicated faces), and
+byte-identical from the python probe and the generated journal.  Examples 3, 5
+and 7 still mesh and export conforming meshes (144 HEX, 1112 HEX, 367845 TET).
+`validate_hex_gram_definiteness.py` now surveys the conformity and refuses a
+non-conforming mesh unless `--allow-nonconforming`; the mesh policy records
+`iron_sweep_axis` and `conforming_partition`.
+
+**Gate result (hibino, conforming mesh, pair-domain Duffy family,
+`results/hex_gram_definiteness_hibino.json`): PASSED.**  Gram 1567 s for
+62192 face unknowns; element clusters PSD (`lambda_min -3.8e-16`,
+`lambda_max 0.8891`); the production chi0-warmstart CG converges at every
+floor of the scan -- 431 iterations at `mu_r ~ 2001`, 486 at 4001, 542 at
+8002, 598 at 16003 -- where the non-conforming mesh broke down at iteration
+93; LOBPCG `lambda_min` Ritz `+5.0e-21`, `lambda_max` Ritz `0.99990` (inside
+the physical band `[0, 1]`, against `1.027` before); raw versus H-matrix
+quadratic form along the minimizing direction agree to `1.3e-33` (M-metric).
+The quadrature work of sections 8.9-8.11 stays (it is what makes the merged
+mesh's touching pairs consistent to `1e-12`), but the defect that made
+example 6 alone indefinite was the mesh.  Next validation target: the CEFC
+2020 Q-mag quadrupole (`validation_test/quadrupole_cefc2020/`).
+
+### 8.13 HEX Gram build cost: the near blocks, and the translation-congruent cache (2026-09-06)
+
+Where HEX stands against TET (all timings mdx/hibino, committed JSON): the
+C-type three-engine nonlinear BDM2 run solves 32580 TET face unknowns in 37 s
+(1.1 ms per unknown, 10-23x faster than the two FEM formulations at 0.3 %
+agreement), while the HEX BDM1 quadrupoles need ~1500 s for ~61000 unknowns
+(25 ms per unknown).  The `gram_stats` profile of the Q-mag `h = 10 mm`
+linear run (hibino, 38 threads, thread-summed seconds) locates the whole gap:
+
+| dispatch class | blocks | thread-seconds | per block |
+|---|---|---|---|
+| `hex_blk_general_near` (pair-domain Duffy + near-band product) | 137,341 | 36,458 | 265 ms |
+| `hex_blk_affine_far` | 10,253,212 | 146 | 14 us |
+| `hex_blk_distorted_far` | 3,519,648 | 43 | 12 us |
+
+The near family is 99 % of the build: every touching pair (the pair-domain
+Duffy rule, ~72 % of the near blocks) and every non-touching pair inside the
+near band (`QuadBlockHexProductN`, ~28 %) integrates `8^6 = 262,144` point
+pairs.  Two cache defects multiplied that cost.  `HexPairTakesGeneralPath`
+returned false for affine-affine pairs, so on a mesh whose cells are 74 %
+affine most near blocks bypassed the instance-shared cache and were
+recomputed by every fill worker that touched them (27,118 shared lookups
+against 137,341 evaluations).  And the translation cache required every host
+to sit on the half-cell lattice of one affine cell (`hex_uniform_trans_hosts`
+is false on any real magnet), although a swept mesh -- every 2.5-D magnet --
+repeats each host once per layer.
+
+Both are fixed in the kernel: every BDM1 touching or near-band pair now takes
+the shared cache, and the cache key is the TRANSLATION-CONGRUENT pair
+(`HexSharedBlockKey`: the two host templates plus the centre offset quantized
+to `1e-10` of the largest host spread; `BuildHexCongruenceTemplates` hashes
+each host's Q2 lattice nodes relative to its centre together with its charge
+exponents).  A charge-Gram block depends only on the relative geometry of its
+hosts, so every translated copy of a pair -- 5 of 6 near blocks on the 6-layer
+10 mm meshes, 14 of 15 at 4 mm -- is served from one evaluation, exactly.
+Image blocks (`img > 0`) keep the host key.  `tests/feec/test_hdiv_vim_hex_congruent_cache.py`
+locks the mechanism on a graded (non-lattice) swept mesh: the cache engages
+(templates far fewer than hosts, shared hits above 30 % of lookups) and the
+Gram equals the uncached one (`RADIA_HDIV_DISABLE_CONGRUENT_CACHE`, a
+performance latch reported in `hmat_stats`) to `1e-12`.  The hibino timing of
+the Q-mag and example-6 builds with and without the cache is the next entry
+of this section; the further levers, in order, are the pair point count
+(`glpair_n` 8 -> 6 is 5.6x on every near block at `6e-9` self-energy accuracy,
+to be confirmed by the definiteness gate), a distance-graded count for the
+non-touching band, and the analytic inner for affine-affine touching pairs if
+the conforming-mesh A/B shows the block-wise family suffices there.
+
+The same cache defect explains the slow phases AFTER the build.  Every later
+`G.entry(i, j)` from the main thread -- the gate's cluster check, the CG
+preconditioner setup of the floor scan, the nonlinear energy-Newton exact-
+diagonal preconditioner -- recomputed the near blocks that lived only in the
+fill workers' thread-local caches: 265 ms (Duffy) or 77 ms (block-wise) per
+block.  That is why the first example-6 gate's cluster check took 2785 s
+against 449 s for the block-wise arm (the ratio of the block costs), why its
+CG floor "took" 2083 s for 431 iterations (the setup, not the iterations), and
+why the nonlinear Q-mag run spent 8545 s of its 10167 s in the Newton loop for
+866 inner CG iterations, while the same nonlinear solve on LAB with the shared
+cache needed 43 s for 2674 inner iterations (16 ms each, 7 Newton iterations,
+no backtracks).  With every BDM1 near pair in the instance-shared cache those
+phases collapse to their iteration cost.
+
+Measured on hibino (38 threads, one job at a time, Q-mag linear `mu_r = 1000`,
+`results/timing_qmag_*_hibino.json`; the pre-fix row is the 17:18 run of the
+same mesh with the previous wheel):
+
+| build | unknowns | Gram wall | near blocks evaluated | near thread-s | shared hits / lookups |
+|---|---|---|---|---|---|
+| before (affine pairs bypass the shared cache) | 60816 | 1625 s | 137,341 | 36,458 | 6,030 / 27,118 |
+| shared cache for every near pair, congruence off | 60816 | 1326 s | 129,536 | 30,261 | 51,094 / 180,630 |
+| translation-congruent key | 60816 | **450 s** | 27,062 | 4,078 | 153,442 / 180,504 |
+| translation-congruent key, `h = 6 mm` | 153296 | 902 s | 33,273 | 6,018 | 338,165 / 371,438 |
+| + dynamic schedule, compute-once, 6 points (section 8.14) | 60816 | **37 s** | 26,807 | 761 | 155,164 / 181,986 |
+| + dynamic schedule, compute-once, 6 points, `h = 6 mm` | 153296 | **69 s** | 33,023 | 1,071 | 340,187 / 373,220 |
+
+The field is unchanged to every printed digit (`B_perp(15 mm) = -0.22722 T`
+in all three `h = 10 mm` builds).  The routing fix alone removes the worker
+duplication (1625 to 1326 s); the congruence key evaluates one near block per
+class instead of one per layer (4.8x fewer evaluations on the 6-layer mesh)
+and brings the build to 450 s, 7.4 ms per unknown; the 10-layer 6 mm mesh
+runs at 5.9 ms per unknown.  Against the TET route's 1.1 ms per unknown the
+gap is now about 6x, and the near family is no longer the bulk of it: 4,078
+thread-seconds over 38 workers is ~110 s of the 450 s, so the next profile
+target is the rest of the build (cluster tree, ACA fills, far blocks).
+
+The pair point count is now chosen per pair.  The rule converges
+exponentially when both hosts are affine (unit-cube self-energy `4.9e-9` at
+6 points, `1.8e-12` at 8) but only about tenfold per two points on distorted
+hosts (tapered sector lattice, entry error against a 10-point reference,
+touching / near band: `5.4e-4 / 1.0e-3` at 4, `4.2e-4 / 3.0e-4` at 5,
+`7.4e-5 / 8.4e-5` at 6, `6.3e-6 / 7.3e-6` at 8; the band needs the same count
+as the touching class).  The first design took `glpair_affine_n` = 6 for
+affine-affine pairs and `glpair_n` = 8 for pairs with a distorted host
+(`vim.ChargeGram(hex_glpair_n=..., hex_glpair_affine_n=...)`, both published
+in `hmat_stats`); the gate and field evidence below then made 6 the default
+for every pair, and the two knobs remain for accuracy studies.
+
+The example-6 definiteness gate on the conforming mesh, rerun with the shared
+cache and the pair point count forced to 5, 6 and 8 for every pair (hibino,
+`results/hex_gram_definiteness_glpair{5,6,8}_hibino.json`; the block-wise
+family arm is `results/hex_gram_definiteness_blockwise_family_hibino.json`):
+
+| Gram | build | cluster check | CG at the chi0 floor (431 it) | LOBPCG `lambda_max` | verdict |
+|---|---|---|---|---|---|
+| first gate, previous wheel, 8 points | 1567 s | 2785 s | 2083 s | 0.99990 | PASSED |
+| block-wise near family (no pair rule) | 431 s | 449 s | 218 s | 1.00165 | FAILED (band) |
+| shared cache, 8 points | 612 s | 1 s | 5 s | 0.99990 | PASSED |
+| shared cache, 6 points | 128 s | 1 s | 5 s | 0.99990 | PASSED |
+| shared cache, 5 points | 51 s | 1 s | 5 s | 0.99990 | PASSED |
+| shared cache, 6 points, dynamic schedule (section 8.14) | 61 s | 1 s | 5 s | 0.99990 | PASSED |
+
+The post-build phases collapse exactly as the entry-recompute diagnosis
+predicts (2785 s to 1 s, 2083 s to 5 s for the same 431 iterations), the
+whole gate now takes minutes instead of hours, and the spectrum edge is the
+same `0.99990` at 5, 6 and 8 points with CG iteration counts within a few
+per cent of each other.  The tapered sector lattice of the near-family test
+(the harder distorted case) gives the same generalized spectrum at 8, 6 and 5
+points (`lambda_max` 0.99813 / 0.99813 / 0.99812, `lambda_min` at round-off),
+and the CEFC 2020 quadrupole field on the `h = 15 mm` mesh (LAB, `mu_r =
+1000`, `B_perp(15 mm)`) moves by `4e-6` relative between 8 and 6 points and by
+`6e-5` between 8 and 5 (`-0.227134`, `-0.227135`, `-0.227147` T), two orders
+below the 0.3 % FEM agreement.  The production default is therefore **6 points
+for every pair** (`glpair_n` = `glpair_affine_n` = 6, 2026-09-07); 8 stays an
+explicit choice for entry-level accuracy studies, 5 is acceptable on the
+evidence but not the default.  On the quadrupole `h = 15 mm` mesh most near
+pairs involve a distorted host, so this flip (not the affine-pair rule) is
+what brought that build from 615 s to 119 s on LAB.  At 6 points example 6
+builds at 2.1 ms per unknown, at 5 points at 0.8 ms, against the TET route's
+1.1 ms per unknown: the HEX Gram build is now of the same order as TET.
+
+### 8.14 Parallel efficiency of the build: a static leaf schedule (2026-09-07)
+
+With the near family cut down, the build-phase timers (`build_prep_s`,
+`build_cluster_s`, `build_leafgen_s`, `build_fill_s`, `build_diag_s` in
+`hmat_stats`, from HACApK `ctl->time[90..92]` and the base build) showed
+where the remaining wall time went: on the quadrupole `h = 10 mm` build on
+LAB, prep (the self-energy pass `ComputeChargeSigma`) 219 s and the ACA+ fill
+658 s of 878 s, cluster tree / leaf generation / diagonal cache below a
+second.  Yet the quadrature branches summed to only a quarter of the thread
+capacity (hibino: 4,275 thread-seconds against 38 x 448 s; the LAB process
+ran on about half its cores).  The cause was the schedule, not the work:
+`hacapk_parallel_for` called `ngcore::ParallelFor` with the default task
+count, which splits the range into one contiguous chunk per thread -- a
+static schedule over a leaf list sorted by row block, whose leaves differ by
+five orders of magnitude in cost (a dense near leaf of Duffy pair blocks
+against a far low-rank leaf) and whose lower-triangular half is skipped by
+the symmetric fill.  The same one-chunk-per-thread split ran the
+self-energy pass over host-ordered charges, where the first touch of each
+near-block class is the whole cost.  The fix passes 32 tasks per thread to
+`ParallelFor` (the runtime pulls tasks from an atomic counter, so many tasks
+balance dynamically) in the leaf fill, the self-energy pass and the curved
+touch-block precompute.  The shared near-block cache also lost its "racing
+first insert wins" design: a per-key slot with `std::call_once` now makes
+concurrent misses wait for one evaluation instead of each recomputing the
+block (`hex_general_shared_entries` equals `hex_general_shared_misses`,
+locked by the congruent-cache test; on the quadrupole the duplication was
+five blocks in 26,000, so the gain is the schedule).
+
+Quadrupole `h = 15 mm`, `mu_r = 1000`, 6 points, LAB (8 threads, relative
+numbers only): Gram build 119 s -> 62 s, prep 28 s -> 5 s, fill 91 s -> 55 s,
+with the quadrature thread-seconds unchanged (382 -> 406 near, 44 far);
+450 thread-seconds over 8 workers is 56 s, so the build now runs at about 93 %
+parallel efficiency against about 40 % before.  Field unchanged
+(`B_perp(15 mm) = -0.227135 T`).
+
+The hibino rerun (38 threads, one job at a time,
+`results/timing_qmag_{h10,h6}_mu1000_dynamic_hibino.json`, the two rows added
+to the table of section 8.13) combines the dynamic schedule, the compute-once
+cache and the 6-point default: the `h = 10 mm` Gram (60,816 unknowns) builds
+in **37 s** against 450 s with the congruent cache alone and 1,625 s before
+it, the `h = 6 mm` Gram (153,296 unknowns) in **69 s** against 902 s; the
+fields agree with the earlier builds to every printed digit
+(`-0.22722` / `-0.22724` T).  Per unknown that is 0.61 ms and 0.45 ms, below
+the TET BDM2 route's 1.1 ms on the C-type magnet: the HEX Gram build is no
+longer the slower route.  The phase timers now read prep 5 s, fill 31 s
+(`h = 10 mm`) and prep 5 s, fill 60 s (`h = 6 mm`); the quadrature
+thread-seconds (761 + 208 and 1,071 + 837) over 38 workers account for 26 s
+and 50 s of those builds, so the remaining gap to perfect balance is under a
+third and no longer worth a dedicated pass.  The conforming example-6 gate
+under the same wheel builds its Gram in 61 s (first gate 1,567 s) and passes
+with the same `lambda_max` 0.99990
+(`esrf_three_engine/results/hex_gram_definiteness_dynamic_hibino.json`).
+
+### 8.15 The same magnet on HEX and on TET (2026-09-07)
+
+The per-unknown figures of section 8.14 compare different magnets.  The
+question that matters is the same magnet at the same accuracy, so the CEFC
+2020 quadrupole was meshed from one Cubit import both ways
+(`build_qmag_cubit_mesh.py`, swept HEX and `--scheme tet`, each exported at
+curve order 2 or 1) and solved by every route on hibino, one job at a time,
+linear `mu_r = 1000` (`quadrupole_cefc2020/results/timing_qmag_*_hibino.json`;
+the mixed Omega FEM gives `B_perp(15 mm) = -0.22725 T`):
+
+| route | h [mm] | elements | unknowns | Gram [s] | of which prep [s] | solve [s] | total [s] | ms per unknown | `B_perp(15 mm)` [T] |
+|---|---|---|---|---|---|---|---|---|---|
+| HEX curved Q2, BDM1 | 15 | 980 | 25,984 | 25 | 3 | 1.3 | **27** | 1.02 | -0.22713 |
+| HEX curved Q2, BDM1 | 10 | 2,352 | 60,816 | 37 | 5 | 1.8 | **41** | 0.67 | -0.22722 |
+| HEX curved Q2, BDM1 | 6 | 6,040 | 153,296 | 69 | 5 | 4.1 | **76** | 0.50 | -0.22724 |
+| HEX curved Q2, BDM1 | 4 | 16,408 | 410,128 | 175 | 5 | 12.2 | **197** | 0.48 | -0.22725 |
+| TET straight, BDM1 | 10 | 12,248 | 80,202 | 15 | 0 | 2.3 | **18** | 0.22 | -0.22723 |
+| TET straight, BDM1 | 7 | 26,987 | 172,644 | 31 | 0 | 4.6 | **38** | 0.22 | -0.22725 |
+| TET straight, BDM1 | 5 | 63,204 | 397,047 | 86 | 0 | 9.5 | **100** | 0.25 | -0.22726 |
+| TET straight, BDM2 | 10 | 12,248 | 233,892 | 164 | 0 | 8.0 | **175** | 0.75 | -0.22727 |
+| TET curved Q2, BDM1 | 10 | 12,248 | 80,202 | 53 | 40 | 2.3 | **56** | 0.70 | -0.22740 |
+| TET curved Q2, BDM2 | 10 | 12,248 | 233,892 | 278 | 204 | 7.9 | **289** | 1.23 | -0.22727 |
+| TET curved Q2, BDM2 | 7 | 26,987 | 507,210 | 655 | 453 | 16.3 | **678** | 1.34 | -0.22728 |
+
+Three readings.  First, against the production TET route on a curved mesh
+(curved BDM2, the route of the C-type three-engine campaign) the HEX route is
+now the faster one at equal accuracy: 40 s against 289 s at `h = 10 mm`, both
+within 0.01 % of the FEM.  Second, the curved TET routes pay 70-80 % of their
+build in the curved touching-block precompute (`PrecomputeCurvedTouchBlocks`:
+204 s of 278 s at BDM2, 40 s of 53 s at BDM1), and that rule is also the less
+accurate one -- curved BDM1 at 10 mm lands 0.07 % off where straight BDM1 on
+the same tets lands 0.01 % off, and the curved BDM2 harmonics converge from
+further away (quadrupole README, "Multipole convergence").  The cheaper and
+more accurate curved touching family is the TET route's next lever.  Third,
+straight TET BDM1 with its closed-form near integrals remains the cheapest
+route per unknown (0.2 ms against 0.5-0.7 ms for the HEX Duffy family) and
+in wall time (18 s against 40 s at 10 mm, 100 s against 197 s for 400k
+unknowns), while the HEX mesh keeps the quadrupole symmetry exactly and
+resolves the pole face with fewer unknowns.  The HEX goal -- TET-class
+performance -- is met against the curved TET route and within a factor of
+two of the straight one; closing that factor would take a closed-form inner
+integral for affine HEX pairs, which is where the remaining Duffy cost sits.
+
+### 8.16 ESRF example 6: the candidate nonlinear three-engine result (2026-09-08)
+
+The coil-driven quadrupole ran from the production-candidate wheel on mdx1,
+one job at a time, through the tracked runner
+(`esrf_three_engine/results/case6_nonlinear_three_engine_mdx1.json`; the
+per-element warm-start arrays are omitted from the committed copy, which
+records the SHA-256 of the complete artifact).  All three nonlinear
+formulations converged on their own meshes and one shared mesh-free coil
+source:
+
+| engine | unknowns | wall [s] |
+|---|---|---|
+| HDiv-MMM, BDM1, iron-only HEX | 62,192 | 69 |
+| HCurl reduced-A, Periodic Kelvin BDDC | 705,838 | 745 |
+| mixed total/reduced Omega, Anderson depth 2 | 223,676 | 1454 |
+
+| pair | core RMS (27 points) | full stencil (45 points) |
+|---|---|---|
+| hdiv mmm against reduced a | 0.34 % | 0.68 % |
+| hdiv mmm against mixed total reduced omega | 0.70 % | 1.20 % |
+| reduced a against mixed total reduced omega | 0.78 % | 1.41 % |
+
+The acceptance limit is 3 % on the core stencil and the maximum is
+0.78 %.  The run also records the process peak working set,
+6.4 GB, which is the memory evidence the C-yoke row asked for on a
+comparable problem.  Two readings: the three formulations agree on an
+iron-dominated nonlinear quadrupole to under 1 %, and HDiv-MMM reaches that
+agreement with 62,192 unknowns on the iron alone against 705,838 for
+reduced-A and 223,676 for the mixed Omega route, in 69 s against
+745 s and 1454 s for the two FEM routes.  The reduced-A Kelvin BDDC replay row is closed by the same run.
+
+### 8.17 Main integration review (2026-09-10)
+
+Integration combines main `d6db6ad78` (including the plain reduced-Omega
+retirement) with HDiv branch `4d4e5e0f7` in an isolated worktree. It does not
+include the uncommitted hybrid-undulator runner changes in the research tree.
+The 45-commit HDiv branch is not part of the already-created `v4.95.82` tag.
+
+The three textual conflicts were resolved by retaining both the exact
+`kelvin_source_h` input from main and the Anderson/warm-start/observation inputs
+from the HDiv branch, and retaining main's qualified description of the
+structured-mesh fixture failure. Both source-field and acceleration arguments
+remain forwarded into the mixed Omega solve. The retired plain reduced-Omega
+entry point remains fail-loud; it is not restored as a comparison engine.
+
+`Build.ps1 -RadiaOnly` succeeded in the integration worktree using Python
+3.12.10, NGSolve/Netgen 6.2.2606, MKL development 2026.1.0, and pybind11 3.0.2.
+The build's fresh-process import check loaded that worktree's newly built
+native extension. No installed package or editable pointer was replaced.
+
+Focused tests passed: **146 passed in 175.99 seconds**. Coverage includes
+HEX near/pair/congruent-cache kernels, TET image dispatch, fail-loud Jacobi
+diagonals, mixed Kelvin Omega, constrained Picard acceleration/history,
+ChargeGram dispatch, capability/environment contracts, ESRF model/mesh
+contracts, and Q-mag source/geometry contracts. The native artifact SHA-256 is
+`060e75808a1b4863aaa80976e7ca043031471f35672f834535ef9dc1d481e1f3`.
+The local test record is `C:/temp/hdiv-integration-focused-20260910.xml`;
+it is not a remote performance benchmark or a committed release artifact.
+
+This source-build check is not an installed-wheel release gate. The earlier
+three-engine JSON files above remain evidence for their recorded candidates,
+not a rerun of the integrated source. Production acceptance still requires
+the exact integrated candidate's native numerical checks, three-engine
+comparison, and release-quad deployment/import/hash gates. No 5.0 readiness
+claim follows from the source build or the provenance contract tests alone.

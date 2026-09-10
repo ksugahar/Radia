@@ -1,0 +1,109 @@
+{
+ "schema": "radia.validation.esrf-hex-gram-definiteness.v1",
+ "generated_at_utc": "2026-09-05T08:01:09.215159+00:00",
+ "host": "lab",
+ "radia_version": "4.95.81",
+ "radia_file": "C:\\temp\\radia-hdiv-fix6\\src\\radia\\__init__.py",
+ "case": 6,
+ "iron_mesh": "C:\\temp\\radia-xfer6\\assets\\example_6_quadrupole\\model.vol",
+ "iron_mesh_sha256": "0d4449962b60757cba78e771a136b2805a4323e26a1ee6d7ae482751bb7e5a5f",
+ "chi0": 2000.200000000012,
+ "inv_chi0": 0.000499950004999497,
+ "gram_eps": 1e-10,
+ "checks": {
+  "clusters": {
+   "lambda_min": -3.886235653260475e-16,
+   "lambda_max": 0.9498498116269869,
+   "negative_clusters": 0,
+   "wall_s": 60.56357119999302
+  },
+  "floor_scan": [
+   {
+    "floor_factor": 1.0,
+    "mu_r_equivalent": 2001.200000000012,
+    "converged": false,
+    "error": "SolveLinearMaterial: CG breakdown at iteration 100 -- p^T A p = -243673461883.694977 is not positive.  The charge-Gram operator is not SPD here (indefiniteness or NaN), so the iterate is meaningless. ",
+    "breakdown_iteration": 100,
+    "pAp": -243673461883.69498,
+    "wall_s": 52.79428460000781
+   }
+  ],
+  "spectrum": {
+   "lambda_min_ritz": [
+    -1.6291934475576928e-07,
+    3.75926997486687e-08,
+    2.169833698104853e-07,
+    6.748490211458478e-07
+   ],
+   "lambda_max_ritz": 1.050756293629563,
+   "wall_s": 116.43868620001012
+  },
+  "compression": {
+   "raw_form_M_metric": -1.6291932655732025e-07,
+   "hmatrix_form_M_metric": -1.6291934475608938e-07,
+   "gap_M_metric": 1.8198769131271647e-14,
+   "wall_s": 140.24235209998733
+  }
+ },
+ "mesh": {
+  "ne": 1648,
+  "ndof": 45792,
+  "nonaffine_cells": 592
+ },
+ "gram_build_s": 421.33516910001345,
+ "gram_stats": {
+  "max_rank": 60.0,
+  "compression": 0.33204824256767684,
+  "hex_cache_stats_enabled": 0.0,
+  "hex_block_cache_limit": 200000.0,
+  "hex_trans_cache_enabled": 1.0,
+  "hex_far_one_sided_threshold": 0.0,
+  "hex_affine_exact_near_factor": 1.0,
+  "hex_distorted_far_factor": 1.0,
+  "hex_near_inner_exact": 1.0,
+  "hex_cluster_radius_enabled": 1.0,
+  "hex_glnear_n": 8.0,
+  "hex_glout_n": 4.0,
+  "hex_glin_n": 5.0,
+  "hex_glin_self_n": 12.0,
+  "hex_blk_affine_near": 123999.0,
+  "hex_blk_affine_far": 9183956.0,
+  "hex_blk_distorted_far": 7048974.0,
+  "hex_blk_general_near": 72664.0,
+  "hex_blk_general_far": 0.0,
+  "hex_s_affine_near": 446.14478770000005,
+  "hex_s_affine_far": 73.3536244,
+  "hex_s_distorted_far": 80.4094383,
+  "hex_s_general_near": 1436.9055386,
+  "hex_s_general_far": 0.0,
+  "hex_general_shared_lookups": 88274.0,
+  "hex_general_shared_hits": 15610.0,
+  "hex_general_shared_misses": 72664.0,
+  "hex_block_lookups": 0.0,
+  "hex_block_hits": 0.0,
+  "hex_block_misses": 0.0,
+  "hex_block_clears": 0.0,
+  "hex_trans_block_lookups": 0.0,
+  "hex_trans_block_hits": 0.0,
+  "hex_trans_block_misses": 0.0,
+  "hex_trans_block_clears": 0.0,
+  "hex_sym_block_lookups": 0.0,
+  "hex_sym_block_hits": 0.0,
+  "hex_sym_block_misses": 0.0,
+  "hex_sym_block_clears": 0.0,
+  "hex_sym_trans_block_lookups": 0.0,
+  "hex_sym_trans_block_hits": 0.0,
+  "hex_sym_trans_block_misses": 0.0,
+  "hex_sym_trans_block_clears": 0.0,
+  "hex_block_hit_rate": 0.0,
+  "hex_trans_block_hit_rate": 0.0,
+  "hex_sym_block_hit_rate": 0.0,
+  "hex_sym_trans_block_hit_rate": 0.0
+ },
+ "failures": [
+  "production CG breakdown inside the floor scan",
+  "lambda_min -1.629e-07 below the floor -1.0e-08",
+  "lambda_max 1.05076 above the physical band"
+ ],
+ "passed": false
+}
