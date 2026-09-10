@@ -474,37 +474,22 @@ def solve_magnetostatic_reduced_omega_kelvin(
         mesh, H_s, R_K, offset, *, mu_r_by_material,
         order=1, dirichlet_bbbnd="GND", bonus_intorder=4,
         kelvin_mats=("kelvin",), inverse="pardiso"):
-    """Solve a periodic reduced Omega--Omega magnetostatic problem with Kelvin.
+    """Retired plain reduced-Omega Kelvin entry point; always raises.
 
-    ``H_s`` is the complete source field in computational coordinates. For a
-    compact Radia current source, construct it with
-    :func:`radia.kelvin_material.make_kelvin_aware_radia_H_s_cf`.
-
-    The weak form consumes a twisted 1-form.  Do not pass a projected HDiv
-    flux density multiplied by ``nu`` here: an HDiv projection preserves the
-    normal trace/divergence of ``B``, but does not preserve the Kelvin Hodge
-    relation or the curl-free ``H`` source contract required by this scalar
-    potential formulation.
+    The legacy exterior/interface convention is not validated. Use
+    :func:`solve_magnetostatic_mixed_total_reduced_omega_kelvin` with explicit
+    material partitions, interface traces and Kelvin source data instead.
+    This is not a drop-in substitution: missing physical input must not be
+    inferred. The retirement does not reject reduced-potential formulations
+    in general. Historical evidence lives in
+    ``validation_test/hdiv_vim/reduced_omega_retirement``.
     """
-    mu_cf = make_kelvin_mu_cf(
-        mesh, R_K, offset, kelvin_mats=kelvin_mats,
-        mu_r_by_material=mu_r_by_material)
-    fes = Periodic(H1(mesh, order=order, dirichlet_bbbnd=dirichlet_bbbnd))
-    phi, test = fes.TnT()
-    a_bf = BilinearForm(fes, symmetric=True)
-    a_bf += mu_cf * grad(phi) * grad(test) * dx(
-        bonus_intorder=bonus_intorder)
-    f_lf = LinearForm(fes)
-    f_lf += mu_cf * H_s * grad(test) * dx(
-        bonus_intorder=bonus_intorder)
-    phi_gf = _assemble_and_solve(a_bf, f_lf, fes, inverse=inverse)
-    return {
-        "phi": phi_gf,
-        "fes": fes,
-        "mu_cf": mu_cf,
-        "H_s": H_s,
-        "B_cf": mu_cf * (H_s - grad(phi_gf)),
-    }
+    raise NotImplementedError(
+        "solve_magnetostatic_reduced_omega_kelvin is retired: the legacy "
+        "Kelvin exterior/interface convention is not validated. Migrate to "
+        "solve_magnetostatic_mixed_total_reduced_omega_kelvin with explicit "
+        "material partitions, source-potential traces and Kelvin interface "
+        "data; automatic substitution is not supported.")
 
 
 def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
