@@ -21,6 +21,9 @@ from pptx.util import Inches, Pt  # noqa: E402
 from radia_mcp.presentation._kishotenketsu import (  # noqa: E402
     presentation_kishotenketsu_check,
 )
+from radia_mcp.presentation.tools import (  # noqa: E402
+    presentation_check_qa_backup_slides,
+)
 
 # 起, 承, 転, 結, 結 -- the shape the check looks for, in the lab's own format:
 # a short noun-phrase title, a body, and the claim in the bottom banner.
@@ -154,3 +157,85 @@ def test_recovered_tool_keeps_newer_title_style_api():
     assert callable(tools.presentation_kishotenketsu_check)
     assert "title_style" in inspect.signature(
         tools.presentation_check_slide_message_hierarchy).parameters
+
+
+def _deck_with_furniture(tmp_path, rows, name="furniture.pptx"):
+    """Build the lab layout with citations and page marks below the banner."""
+    prs = pptx.Presentation()
+    prs.slide_width, prs.slide_height = Inches(13.333), Inches(7.5)
+    for n, (title, body, takeaway) in enumerate(
+            [("Cover", ["Talk"], "")] + rows, start=1):
+        slide = prs.slides.add_slide(prs.slide_layouts[6])
+        head = slide.shapes.add_textbox(Inches(0.6), Inches(0.1),
+                                        Inches(12.0), Inches(0.7))
+        head.text_frame.text = title
+        for line in body:
+            box = slide.shapes.add_textbox(Inches(0.6), Inches(1.5),
+                                           Inches(12.0), Inches(3.0))
+            box.text_frame.text = line
+        if takeaway:
+            band = slide.shapes.add_textbox(Inches(0.4), Inches(6.4),
+                                            Inches(12.5), Inches(0.6))
+            band.text_frame.paragraphs[0].add_run().text = takeaway
+        cite = slide.shapes.add_textbox(Inches(0.4), Inches(7.05),
+                                        Inches(9.0), Inches(0.3))
+        cite.text_frame.text = "[1] Kameari et al., 2018"
+        mark = slide.shapes.add_textbox(Inches(11.4), Inches(7.2),
+                                        Inches(1.6), Inches(0.3))
+        mark.text_frame.text = "Kindai University"
+        page = slide.shapes.add_textbox(Inches(12.9), Inches(7.2),
+                                        Inches(0.4), Inches(0.3))
+        page.text_frame.text = str(n)
+    out = tmp_path / name
+    prs.save(str(out))
+    return out
+
+
+def test_page_furniture_is_not_read_as_the_takeaway(tmp_path):
+    rows = list(ARC)
+    rows.insert(2, ("Outline", ["So far the problem.",
+                                "From here, the method."], ""))
+    result = presentation_kishotenketsu_check(
+        str(_deck_with_furniture(tmp_path, rows)))
+    outline = next(item for item in result["outline"] if 4 in item["slides"])
+    assert "4" not in outline["takeaways"]
+    assert "Kindai University" not in outline["takeaways"]
+    assert any("A circuit, exact at DC." in takeaway
+               for phase in result["outline"]
+               for takeaway in phase["takeaways"])
+
+
+def test_no_x_does_y_is_a_complaint(tmp_path):
+    rows = [
+        ("The ladder", ["Kameari 2018 builds it."],
+         "A circuit, DC exact: no rational model makes slope minus one half."),
+        ("One space", ["Inspired by XFEM [10]: one matrix."],
+         "Keep the ladder, add one surface mode."),
+        ("A cylinder", ["Copper, 5 mm."],
+         "Two unknowns hold it to 0.06 %."),
+        ("Summary", ["Bulk plus surface."],
+         "Keep the ladder, add the mode."),
+    ]
+    result = presentation_kishotenketsu_check(str(_deck(tmp_path, rows)))
+    assert result["arc"]["sho"] == [2]
+    assert result["turn_slide"] == 3
+
+
+def test_named_backup_slide_is_reported_when_visible(tmp_path):
+    path = _deck(tmp_path, [("Backup", ["Derivation"], "")],
+                 name="visible-backup.pptx")
+    result = presentation_check_qa_backup_slides(str(path), min_backup=1)
+    assert result["named_but_visible"][0]["slide"] == 2
+    assert result["warnings"]
+
+
+def test_hidden_backup_slide_is_not_reported_as_visible(tmp_path):
+    path = _deck(tmp_path, [("Backup", ["Derivation"], "")],
+                 name="hidden-backup.pptx")
+    prs = pptx.Presentation(path)
+    prs.slides[1]._element.set("show", "0")
+    prs.save(path)
+    result = presentation_check_qa_backup_slides(str(path), min_backup=1)
+    assert result["hidden_slides"] == 1
+    assert result["named_but_visible"] == []
+    assert result["warnings"] == []
