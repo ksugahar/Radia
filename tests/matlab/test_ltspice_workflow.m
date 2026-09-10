@@ -60,6 +60,17 @@ raw=struct("names",["time","V(in)"],"values",[0,0;1e-3,1],"step_ranges",[1,2]);
 verifyError(testCase,@()radia.ltspice.extractTransientState(raw,NetlistFile=netlist),"radia:ltspice:MissingSubcircuitState");
 end
 
+function testSubcircuitPortCurrentsDoNotMasqueradeAsState(testCase)
+root="C:\temp\ltrev";negative=fullfile(root,"sub.raw");negativeNetlist=fullfile(root,"sub.cir");
+positive=fullfile(root,"sub2.raw");positiveNetlist=fullfile(root,"sub2.cir");
+if ~all(isfile([negative,negativeNetlist,positive,positiveNetlist])),testCase.assumeFail("Opus subcircuit fixtures are unavailable.");end
+raw=radia.ltspice.readRaw(negative);
+verifyTrue(testCase,any(startsWith(lower(raw.names),"ix(x1:")));
+verifyError(testCase,@()radia.ltspice.extractTransientState(raw,NetlistFile=negativeNetlist),"radia:ltspice:MissingSubcircuitState");
+saved=radia.ltspice.extractTransientState(radia.ltspice.readRaw(positive),NetlistFile=positiveNetlist);
+verifyTrue(testCase,any(strcmpi(saved.inductor_names,"x1:L1")));
+end
+
 function testProcessTreeTerminationUsesFrameworkCompatibleApi(testCase)
 if ~ispc,testCase.assumeFail("Windows-only process lifecycle test.");end
 info=System.Diagnostics.ProcessStartInfo();info.FileName='pwsh';
