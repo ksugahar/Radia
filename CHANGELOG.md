@@ -5,6 +5,10 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.90 - Recovered motor torque and completed the AMS contract
+
+Released 2026-09-11.
+
 - Recovered the air-gap electromagnetic torque of `calc_motor_transient`, which
   collapsed to round-off. The contour integral passed `grad(A)` straight into a
   boundary integral over the internal `airgap_mid` edge, which evaluates a
