@@ -5,6 +5,11 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- Fixed MATLAB LTspice binary RAW precision/layout validation and transient
+  state injection. Unsupported layouts, malformed payload sizes, missing or
+  ambiguous `.end` directives, and unsupported hierarchical inductor states
+  now fail explicitly. Added LTspice-generated binary/ASCII regression fixtures.
+
 - `release_quad ci-verify` requires native release evidence on the exact SHA
   before tagging. The isolated build environment imports its dependencies
   immediately after installation so missing modules fail before the build.
