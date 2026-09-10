@@ -297,10 +297,15 @@ void radTg3d::NormStressTensor(radTField* FieldPtr)
 
 	(static_cast<radTg3d*>(FieldPtr->ShapeIntDataPtr->HandleOfSource.rep))->B_genComp(FieldPtr);
 
-	// Maxwell stress tensor: T = (1/mu_0) * (B B - 0.5 |B|^2 I)
-	// Radia now uses SI units (meters) internally, matching ELF.
-	// ConForStrTensInSI = 1/mu_0 = 1/(4*pi*1e-7) [m/H]
-	const double ConForStrTensInSI = 1.0/(4*3.14159265358979*1.E-07);
+	// Maxwell stress tensor.  The field this integrand receives through
+	// B_genComp is the MAGNETIC FIELD STRENGTH H in A/m, not B in tesla, so
+	// the SI stress is
+	//     T = mu_0 * (H H - 0.5 |H|^2 I)   [Pa]
+	// and the prefactor is mu_0, NOT 1/mu_0.  Writing 1/mu_0 here scales the
+	// whole rad.FldFrc API by 1/mu_0^2 ~ 6.33e11 (verified 2026-09-10 against
+	// the exact uniform-field result and against radia.force; locked by
+	// tests/test_fldfrc_golden.py).
+	const double ConForStrTensInSI = 4*3.14159265358979*1.E-07;
 	TVector3d LocB = FieldPtr->B;
 
 	//Out normal projection of the Maxwell Stress Tensor
