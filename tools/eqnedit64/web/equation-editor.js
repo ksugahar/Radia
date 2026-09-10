@@ -1507,6 +1507,10 @@
   }
   if (typeof module !== "undefined" && module.exports) {
     module.exports = {
+      // A copy of the actual catalogue for contract tests, not a second table.
+      palettes: PALETTES.map(function (palette) {
+        return { label: palette.label, items: palette.items.map(function (item) { return item.slice(); }) };
+      }),
       composeInsertion: composeInsertion,
       composeRowBreak: composeRowBreak,
       braceProblem: braceProblem,
