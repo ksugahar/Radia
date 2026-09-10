@@ -294,13 +294,17 @@ In the reported Windows builds, constructing `CompactAMSPreconditioner` /
 `ComplexCompactAMSPreconditioner` inside an active TaskManager region killed the process with `0xC0000409`
 (`__fastfail`) — **no Python exception, no traceback**.  Verified 2026-09-08 on
 the identical matrix: outside = OK, inside = dead; reproduced on two
-independently built binaries.  The unit tests pass only because they do not
-wrap.  This contradicts the CLAUDE.md "TaskManager-Only" policy, which tells
-callers to wrap the whole NGSolve block — so wrap the mesh/space/forms/assembly
-and the SOLVE, but build the preconditioner between them, outside the region.
-Treat this as a reported implementation defect and retain the workaround until
-a subprocess regression certifies the fixed build. Do not deliberately reproduce
-the crash inside a live MCP or MATLAB process.
+independently built binaries. The guarded C++ implementation now rejects
+construction and both Update overloads with RuntimeError when GetTaskManager()
+reports an active context, before hierarchy setup or matrix replacement.
+This covers the real/complex factories and their CompactAMS aliases; applying
+an already-built preconditioner inside TaskManager remains supported.
+Wrap mesh/space/forms/assembly and the SOLVE, but construct or update AMS outside
+the region. The subprocess regression in test_sparsesolv.py checks rejection,
+continued process operation, unchanged state, and parallel application.
+Older installed binaries can still crash: verify the deployed build before
+relying on the guard. Never probe an unknown binary inside a live MCP or MATLAB
+process; use the subprocess regression.
 
 ## Code recipe
 
@@ -334,7 +338,7 @@ with TaskManager():
     pts = mesh.ngmesh.Points()
     cx, cy, cz = ([pts[i + 1][k] for i in range(mesh.nv)] for k in range(3))
 
-# BUILD OUTSIDE the TaskManager region -- inside it dies with 0xC0000409
+# BUILD OUTSIDE TaskManager -- guarded builds raise RuntimeError inside it
 prec = ComplexCompactAMSPreconditioner(
     a_real_mat=ar.mat, grad_mat=G, freedofs=fes_r.FreeDofs(),
     coord_x=cx, coord_y=cy, coord_z=cz,
