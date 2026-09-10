@@ -315,13 +315,231 @@ def _gap_inventory(path: Path) -> dict[str, object]:
                     maximum_edge,
                     float(np.linalg.norm(points[left] - points[right])),
                 )
+    gap_height = 0.010
+    profile = _gap_line_profile(mesh, gap_height)
     return {
         "elements": elements,
         "maximum_edge_m": maximum_edge,
         "maximum_z_span_m": maximum_z_span,
-        "gap_height_m": 0.010,
+        "gap_height_m": gap_height,
+        # A RESOLUTION INDICATOR derived from the widest element in z, not a
+        # layer count: gap_height / max_z_span.  It is reported because
+        # `gap_size` does not control it -- that value is applied as a surface
+        # size on the pole faces, so it refines the mesh IN PLANE while the
+        # tets stay free to span the whole half-gap in z.  A family can shrink
+        # `gap_size` from 2.5 mm to 1.28 mm and move this from 2.00 to 2.55.
+        "z_resolution_indicator": (gap_height / maximum_z_span
+                                   if maximum_z_span > 0.0 else 0.0),
+        # The count that the indicator only approximates: how many distinct
+        # elements a line actually crosses on its way through the gap.
+        "line_profile": profile,
     }
 
+
+def _curved_line_segments(mesh, x0: float, y0: float, half: float,
+                          coarse_samples: int = 2001, tolerance: float = 1.0e-9):
+    """Segments along a gap line on the CURVED geometry.
+
+    The vertex-tet clipping works on the straightened cell, so it can only
+    report straight-geometry segment lengths.  Agreeing element COUNTS do not
+    show that the endpoints or the longest segment agree.  Here the switch
+    positions themselves are located: a coarse walk finds each change of
+    element id, then bisection drives the change to ``tolerance`` so the
+    segment boundaries -- and therefore the lengths -- are measured on the
+    geometry the solver actually integrates over.
+
+    LIMIT: bisection only refines transitions the COARSE WALK already found.
+    A segment shorter than the coarse spacing can be stepped over entirely,
+    so a disagreement in the segment COUNT against the straight-geometry
+    clipping is not attributable to curvature without further work -- it can
+    equally be a missed short segment here.  Measured on the C-type family
+    2026-09-10: the two agree on the maximum segment length to about 1 um on
+    the five representative lines, while one line disagreed 14 against 13 in
+    the count, cause undetermined.
+    """
+    import numpy as np
+    import ngsolve as ng
+
+    materials = mesh.GetMaterials()
+
+    def identify(z):
+        try:
+            point = mesh(float(x0), float(y0), float(z))
+        except Exception:                                       # noqa: BLE001
+            return None
+        number = int(point.nr)
+        if str(materials[mesh[ng.ElementId(ng.VOL, number)].index]) != "air":
+            return None
+        return number
+
+    grid = np.linspace(-half + 1e-9, half - 1e-9, int(coarse_samples))
+    ids = [identify(z) for z in grid]
+    boundaries = []
+    for index in range(1, len(grid)):
+        if ids[index] == ids[index - 1]:
+            continue
+        low, high = float(grid[index - 1]), float(grid[index])
+        low_id = ids[index - 1]
+        while high - low > tolerance:
+            middle = 0.5 * (low + high)
+            if identify(middle) == low_id:
+                low = middle
+            else:
+                high = middle
+        boundaries.append(0.5 * (low + high))
+    edges = [-half] + boundaries + [half]
+    segments = []
+    for index in range(len(edges) - 1):
+        centre = 0.5 * (edges[index] + edges[index + 1])
+        if identify(centre) is None:
+            continue
+        segments.append(edges[index + 1] - edges[index])
+    return {
+        "segments": len(segments),
+        "maximum_segment_m": float(max(segments)) if segments else 0.0,
+        "minimum_segment_m": float(min(segments)) if segments else 0.0,
+        "covered_m": float(sum(segments)),
+        "switch_tolerance_m": float(tolerance),
+    }
+
+
+def _gap_line_profile(mesh, gap_height: float,
+                      offsets=((0.0, 0.0), (0.008, 0.0), (0.0, 0.005),
+                               (0.008, 0.005), (-0.008, -0.005))) -> dict:
+    """Measure what a line actually meets on its way across the gap.
+
+    A crossing COUNT is not a division count: a line can clip several tets
+    over a short span and still run through one coarse element elsewhere, so
+    the count alone cannot say whether a coarse stretch remains.  The segment
+    the line spends inside each element is therefore computed EXACTLY, by
+    clipping the line against each tetrahedron's four face half-spaces, which
+    also removes the dependence on a sampling density.  Coverage is checked
+    too: the union of the segments must fill the gap without a hole and
+    without overlap, or the measurement is not describing one clean traversal.
+
+    The clipping uses the straight tetrahedron through the element's vertices.
+    On a curved mesh that is an approximation of the curved cell, so the
+    sampled counts -- which go through NGSolve's own point location and see
+    the curved geometry -- are reported next to it as a cross-check.
+    """
+    import numpy as np
+    import ngsolve as ng
+
+    half = 0.5 * float(gap_height)
+    materials = mesh.GetMaterials()
+    air_boxes = []
+    for element in mesh.Elements(ng.VOL):
+        if str(materials[element.index]) != "air":
+            continue
+        points = np.asarray(
+            [mesh.vertices[v.nr].point for v in element.vertices], dtype=float)
+        if points.shape[0] != 4:
+            continue
+        lo, hi = points.min(axis=0), points.max(axis=0)
+        if hi[2] < -half or lo[2] > half:
+            continue
+        air_boxes.append((lo, hi, points))
+
+    def _segments(x0, y0):
+        found = []
+        for lo, hi, points in air_boxes:
+            if not (lo[0] <= x0 <= hi[0] and lo[1] <= y0 <= hi[1]):
+                continue
+            low, high = -half, half
+            ok = True
+            for drop in range(4):
+                face = [points[i] for i in range(4) if i != drop]
+                normal = np.cross(face[1] - face[0], face[2] - face[0])
+                inward = points[drop] - face[0]
+                if float(normal @ inward) < 0.0:
+                    normal = -normal
+                offset = float(normal @ face[0])
+                a = float(normal[2])
+                b = float(normal[0] * x0 + normal[1] * y0) - offset
+                if abs(a) < 1.0e-300:
+                    if b < 0.0:
+                        ok = False
+                        break
+                    continue
+                bound = -b / a
+                if a > 0.0:
+                    low = max(low, bound)
+                else:
+                    high = min(high, bound)
+                if low >= high:
+                    ok = False
+                    break
+            if ok and high - low > 1.0e-12:
+                found.append((low, high))
+        found.sort()
+        return found
+
+    def _sampled_count(x0, y0, samples):
+        previous, count = None, 0
+        for value in np.linspace(-half + 1e-9, half - 1e-9, samples):
+            try:
+                point = mesh(float(x0), float(y0), float(value))
+            except Exception:                                   # noqa: BLE001
+                previous = None
+                continue
+            number = int(point.nr)
+            if str(materials[mesh[ng.ElementId(ng.VOL, number)].index]) != "air":
+                previous = None
+                continue
+            if number != previous:
+                count += 1
+                previous = number
+        return count
+
+    lines = []
+    for x0, y0 in offsets:
+        found = _segments(float(x0), float(y0))
+        lengths = [high - low for low, high in found]
+        covered = float(sum(lengths))
+        holes, overlaps = 0.0, 0.0
+        cursor = -half
+        for low, high in found:
+            if low > cursor + 1.0e-10:
+                holes += low - cursor
+            elif low < cursor - 1.0e-10:
+                overlaps += cursor - low
+            cursor = max(cursor, high)
+        if cursor < half - 1.0e-10:
+            holes += half - cursor
+        lines.append({
+            "x_m": float(x0), "y_m": float(y0),
+            "segments": len(found),
+            "maximum_segment_m": float(max(lengths)) if lengths else 0.0,
+            "minimum_segment_m": float(min(lengths)) if lengths else 0.0,
+            "covered_m": covered,
+            "uncovered_m": float(holes),
+            "overlap_m": float(overlaps),
+            "sampled_4001": _sampled_count(x0, y0, 4001),
+            "sampled_16001": _sampled_count(x0, y0, 16001),
+            "curved": _curved_line_segments(mesh, float(x0), float(y0), half),
+        })
+    counts = [row["segments"] for row in lines if row["segments"]]
+    return {
+        "lines": lines,
+        "minimum_segments": int(min(counts)) if counts else 0,
+        "maximum_segment_m": float(max(row["maximum_segment_m"] for row in lines))
+        if lines else 0.0,
+        "clean_traversal": all(row["uncovered_m"] < 1.0e-9
+                               and row["overlap_m"] < 1.0e-9 for row in lines),
+        "sampling_is_stable": all(row["sampled_4001"] == row["sampled_16001"]
+                                  for row in lines),
+        # Curved geometry, measured by bisecting the element-id switch rather
+        # than inferred from an agreeing count.
+        "curved_minimum_segments": int(min(row["curved"]["segments"]
+                                           for row in lines)) if lines else 0,
+        "curved_maximum_segment_m": float(max(row["curved"]["maximum_segment_m"]
+                                              for row in lines)) if lines else 0.0,
+        "geometry_of_lengths": "straight vertex tetrahedra; the 'curved' "
+                               "entries repeat the measurement on the curved "
+                               "cells",
+        "note": "measured on the listed representative lines only; not a "
+                "statement about the whole gap",
+    }
 
 def build(options: argparse.Namespace) -> dict[str, object]:
     import ngsolve as ng
@@ -430,9 +648,30 @@ def build(options: argparse.Namespace) -> dict[str, object]:
     volume_error = None if iron_volume is None else (
         (iron_volume - EXACT_IRON_VOLUME_M3) / EXACT_IRON_VOLUME_M3
     )
+    # The historical gate accepted TWO elements across the gap.  It stays the
+    # default so an existing family does not silently change verdict, but it
+    # is now a named, recorded requirement that a caller can raise: two
+    # elements through the gap is not a field-accuracy claim.
+    required_across_gap = float(options.gap_elements_across)
+    # The requirement is on the MEASURED crossing count, not on the indicator:
+    # sizing a volume does not by itself guarantee a division count, so the
+    # mesh that was actually produced has to be walked.
+    # The longest traversal a line makes inside one element is the number a
+    # coarse stretch hides behind a healthy count, so it is required too.  It
+    # is tied to the division requirement rather than fixed: at N divisions
+    # the nominal traversal is gap_height/N, and 1.2 times that is the mesh
+    # DESIGN tolerance -- not an accuracy guarantee.  Raising N therefore
+    # tightens both requirements together.
+    profile = gap_inventory["line_profile"]
+    nominal = gap_inventory["gap_height_m"] / max(required_across_gap, 1)
+    segment_limit = float(options.gap_segment_factor) * nominal
     gap_is_resolved = bool(
         gap_inventory["elements"] > 0
-        and gap_inventory["maximum_z_span_m"] <= 0.5 * gap_inventory["gap_height_m"]
+        and profile["minimum_segments"] >= required_across_gap
+        and profile["curved_minimum_segments"] >= required_across_gap
+        and profile["clean_traversal"]
+        and profile["maximum_segment_m"] <= segment_limit
+        and profile["curved_maximum_segment_m"] <= segment_limit
     )
     result = {
         "schema": "radia.validation.c-type-cubit-meshes.v1",
@@ -466,6 +705,9 @@ def build(options: argparse.Namespace) -> dict[str, object]:
         "kelvin_mesh_size_m": float(options.kelvin_mesh_size),
         "curve_order": int(options.curve_order),
         "gap_inventory": gap_inventory,
+        "gap_elements_across_required": int(options.gap_elements_across),
+        "gap_segment_limit_m": segment_limit,
+        "gap_segment_factor": float(options.gap_segment_factor),
         "reflection_inventory": reflection,
         "kelvin_identification": kelvin_identification,
         "kelvin_fes": kelvin_fes,
@@ -500,7 +742,20 @@ def main() -> None:
     )
     parser.add_argument("--iron-size", type=float, default=0.010)
     parser.add_argument("--air-size", type=float, default=0.015)
-    parser.add_argument("--gap-size", type=float, default=0.002)
+    parser.add_argument("--gap-size", type=float, default=0.002,
+                        help="pole-face SURFACE size; this refines the gap in "
+                             "plane and does not by itself divide the gap "
+                             "through its thickness")
+    parser.add_argument("--gap-elements-across", type=int, default=2,
+                        help="required elements a line must cross through the "
+                             "FULL gap thickness, measured on the produced "
+                             "mesh. The historical default is 2; a "
+                             "field-accuracy family starts at 6 and refines "
+                             "from there")
+    parser.add_argument("--gap-segment-factor", type=float, default=1.2,
+                        help="longest traversal inside one element, as a "
+                             "multiple of the nominal gap_height/N. A mesh "
+                             "design tolerance, not an accuracy guarantee")
     parser.add_argument("--kelvin-radius", type=float, default=0.22)
     parser.add_argument("--kelvin-mesh-size", type=float, default=0.025)
     parser.add_argument("--curve-order", type=int, choices=range(2, 6), default=2)
