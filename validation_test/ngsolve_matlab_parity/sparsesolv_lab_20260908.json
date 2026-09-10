@@ -1,0 +1,114 @@
+{
+  "schema": "radia.sparsesolv-matlab-parity.v1",
+  "utc": "2026-09-08T10:39:28.519601+00:00",
+  "host": "lab",
+  "python": "3.12.10",
+  "mex": "C:\\temp\\radia-axifem-q2-heat-axis\\matlab\\radia_mex.mexw64",
+  "mex_sha256": "4636050da2d42a74a2d29d972e823224c57f525c9d50f134b97c8cdcbf01f77c",
+  "source_state": "Working tree snapshot; source_hashes identify tested files, not the base commit alone",
+  "source_base_commit": "423a9aa233ccac6cac9c9c765254c48f3814cbe1",
+  "source_hashes": {
+    "src\\matlab\\radia_mex.cpp": "53c088f7cfbf6e7568da37c22712e59444b41fcb260536bbb90f66d959dbafc5",
+    "tests\\matlab\\test_sparsesolv_mex.m": "73b1b4093d1da95619ce6793c1a6feef5315af9d1e76b53d5ff6e184a1f7a868",
+    "tests\\matlab\\sparsesolv_python_reference.py": "5f54516ccf391b9b0a4c0db0e02ee73d377a88de870ea12213d74c61879f4ce9",
+    "src\\ext\\sparsesolv\\include\\sparsesolv\\core\\abmc_ordering.hpp": "9f54f9f959bd99e8b3148ef0bcf0ec1e2a6c4b3f59f94ce550ae0fb911381757",
+    "src\\ext\\sparsesolv\\include\\sparsesolv\\core\\constants.hpp": "963c3e210adcc63986873b8dc45e75703196ffd504b12d5875ac486e22481d74",
+    "src\\ext\\sparsesolv\\include\\sparsesolv\\core\\dense_matrix.hpp": "d9b42615758dcb93f9c302b98e98f3ade3cc52f9b88ccdb642e5ba6e568f3ff2",
+    "src\\ext\\sparsesolv\\include\\sparsesolv\\core\\level_schedule.hpp": "ebc9d4052a8178526bd5dfd58e4ec13fee04e18bc934e24a0cd3459fb6b5a5df",
+    "src\\ext\\sparsesolv\\include\\sparsesolv\\core\\parallel.hpp": "5e43854ac7774c9077433e8943910a8dee89d0a9147e2409bf973d2f172e735c",
+    "src\\ext\\sparsesolv\\include\\sparsesolv\\core\\preconditioner.hpp": "dbba32b42acae98a7e3c98e60b1a44a3e13ad1e8b52283546a7a11decc1ead58",
+    "src\\ext\\sparsesolv\\include\\sparsesolv\\core\\rcm_ordering.hpp": "7db926784a202bb3171ce7e399e63d2f9ac7d93ffe39fced6c93b5a1efbf1c43",
+    "src\\ext\\sparsesolv\\include\\sparsesolv\\core\\solver_config.hpp": "088ccf853f298eb0adc74c7d9b209e189bbc518236ae71754752df5462e90c1b",
+    "src\\ext\\sparsesolv\\include\\sparsesolv\\core\\sparse_matrix_coo.hpp": "4fdc9246c92e3fe4f1135ca2e667f038dd30ebf28dc5f753980287d6c9d89837",
+    "src\\ext\\sparsesolv\\include\\sparsesolv\\core\\sparse_matrix_csr.hpp": "eb0687f4ca99d315bd1a02c5a2b6b0a72b6207760327880a91beabe5091d02aa",
+    "src\\ext\\sparsesolv\\include\\sparsesolv\\core\\sparse_matrix_csr_builder.hpp": "372fb6d66d46f3d6fb7ca8e529ba4176e695c31184178c832d10484230d7db43",
+    "src\\ext\\sparsesolv\\include\\sparsesolv\\core\\sparse_matrix_view.hpp": "d35b6a8644b13442d35c46710968a9ab2c501713169c95bf749b6ef1f20dab43",
+    "src\\ext\\sparsesolv\\include\\sparsesolv\\core\\types.hpp": "89648d1d68788912934e0eaf2f8425571c89ada5f3464792e1e4ffdc219fa7a8",
+    "src\\ext\\sparsesolv\\include\\sparsesolv\\ngsolve\\sparsesolv_precond.hpp": "b759939214edb3dff923c9012649047fbe74e70bd330d375a644283419ef983a",
+    "src\\ext\\sparsesolv\\include\\sparsesolv\\ngsolve\\sparsesolv_python_export.hpp": "af88518dd02940d3b92db63fca30ea6dbc230a6c291da13ab2133bd8692c7d9b",
+    "src\\ext\\sparsesolv\\include\\sparsesolv\\ngsolve\\sparsesolv_solvers.hpp": "d0d0ad2f3839ad84d5f0b22661bf5e056659a0062d08a04bdacfd11591a6f2a7",
+    "src\\ext\\sparsesolv\\include\\sparsesolv\\preconditioners\\compact_amg.hpp": "43e0b58c68e16e9627652240c477bf61566687e1bdff8737a0d4ff70c04a561c",
+    "src\\ext\\sparsesolv\\include\\sparsesolv\\preconditioners\\compact_ams.hpp": "06f23be022b3e41119045cf94d4ead91fe8a526b0daa95a34d04ca726564b625",
+    "src\\ext\\sparsesolv\\include\\sparsesolv\\preconditioners\\complex_compact_ams.hpp": "cb6204cf4c3f7eb7eeda922ce947691790b51ca7f173202d78535dd53cbaf4b9",
+    "src\\ext\\sparsesolv\\include\\sparsesolv\\preconditioners\\ic_preconditioner.hpp": "b1c126425e7b772ca03ecaa0414a03bc4236ccf38b9ab1076fb89a43efaf76c1",
+    "src\\ext\\sparsesolv\\include\\sparsesolv\\solvers\\cg_solver.hpp": "2a3bea6c497e1993c460e005c8ec1e48893c7ea2c935a1963bd63e9029e2ae57",
+    "src\\ext\\sparsesolv\\include\\sparsesolv\\solvers\\cocr_solver.hpp": "cc19230746ae378abb0d1872254fcab97c770c7d84cc5ececafa9546b3490121",
+    "src\\ext\\sparsesolv\\include\\sparsesolv\\solvers\\iterative_solver.hpp": "e8046aa501ca9b8de53a228ff71be7b396311f6e27d871ed38c0faeb4323672a",
+    "src\\ext\\sparsesolv\\include\\sparsesolv\\sparsesolv.hpp": "a9b7d9f42e16b26b0e5e46341920998855c83a748e4ad5b3da1b3417f2f6d170"
+  },
+  "passed": true,
+  "matlab": "26.1.0.3276743 (R2026a) Update 3",
+  "resolved_mex": "C:\\temp\\radia-axifem-q2-heat-axis\\matlab\\radia_mex.mexw64",
+  "tests": {
+    "names": [
+      "test_sparsesolv_mex/testPythonParityAndLifetime",
+      "test_sparsesolv_mex/testRejectWrongSpace",
+      "test_sparsesolv_mex/testExplicitPythonFallback",
+      "test_sparsesolv_mex/testElectromagnetBatchEntries"
+    ],
+    "passed": [
+      true,
+      true,
+      true,
+      true
+    ],
+    "failed": [
+      false,
+      false,
+      false,
+      false
+    ],
+    "incomplete": [
+      false,
+      false,
+      false,
+      false
+    ],
+    "duration": [
+      4.9014924,
+      0.3060361,
+      23.779678200000003,
+      0.5560741
+    ]
+  },
+  "numerical": {
+    "cases": [
+      {
+        "name": "ams",
+        "ndof": 66,
+        "preconditioner_relative_error": 3.8111537377718505e-16,
+        "solution_relative_error": 5.329765090173874e-16,
+        "relative_residual": 3.579740613560508e-12
+      },
+      {
+        "name": "complex_ams",
+        "ndof": 66,
+        "preconditioner_relative_error": 3.7635783519830135e-16,
+        "solution_relative_error": 6.167588950427399e-16,
+        "relative_residual": 3.5797182036749993e-12
+      },
+      {
+        "name": "ic",
+        "ndof": 66,
+        "preconditioner_relative_error": 4.583780146231334e-16,
+        "solution_relative_error": 5.936276958538264e-16,
+        "relative_residual": 5.422280912103679e-12
+      },
+      {
+        "name": "complex_ic",
+        "ndof": 66,
+        "preconditioner_relative_error": 5.094824199385818e-16,
+        "solution_relative_error": 5.581668392707654e-16,
+        "relative_residual": 5.422240460504369e-12
+      }
+    ],
+    "oracle": {
+      "mesh": "C:\\temp\\tpc8426648_b365_48f3_826f_536c39cc5054\\mesh.vol",
+      "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+      "ngsolve": "6.2.2606",
+      "mesh_sha256": "856a22cccc556233768608de694d5785c6acbb3871df568dd11368ad2a7755f4",
+      "sparsesolv_sha256": "95aedba4799f6572c0b06614afaf6ed037c33ac7500e435c9abe0db50ce765da",
+      "sparsesolv_binary": "C:\\temp\\radia-axifem-q2-heat-axis\\src\\radia\\sparsesolv_ngsolve.pyd"
+    }
+  }
+}

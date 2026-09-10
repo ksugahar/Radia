@@ -14,6 +14,14 @@ def test_every_python_module_has_a_checked_matlab_classification():
     result = MODULE.audit(ROOT)
     assert result["ok"], result["errors"]
     assert result["classified_file_count"] == result["python_file_count"]
+    for module, owner in [
+        ("electromagnet_validation.py", "electromagnetValidation"),
+        ("esrf_examples.py", "esrfExamples"),
+        ("static_electromagnet.py", "staticElectromagnet"),
+    ]:
+        entry = next(item for item in result["assignments"] if item["python"] == module)
+        assert entry["classification"] == "python-fallback"
+        assert entry["matlab"] == [f"matlab/+radia/+python/{owner}.m"]
     assert result["counts"]["native-mex"] >= 4
     assert result["counts"]["python-fallback"] >= 80
     assert "acoustic-python" in result["python_fallback_families"]
