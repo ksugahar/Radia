@@ -16,6 +16,12 @@ setup deliberately runs outside TaskManager; matrix application uses the
 existing native TaskManager path. COCR requires symmetric, not Hermitian,
 systems and a compatible symmetric preconditioner.
 
+Any other space, including `Order=2` with `NoGrads=true`, raises
+`radia:mex:Exception`. The Python extension raises `RuntimeError` for the same
+input, because the SparseSolv C++ constructor rejects a discrete gradient whose
+rows are not all edge-vertex pairs. Use NGSolve's `bddc` preconditioner for
+higher-order HCurl.
+
 This is focused native coverage, not a claim of complete native parity.
 `radia.python.sparsesolv(functionName, positional, Keywords=...)` exposes
 the complete Python module at an explicit batch boundary, including
