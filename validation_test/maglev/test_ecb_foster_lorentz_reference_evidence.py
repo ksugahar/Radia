@@ -1,12 +1,11 @@
-"""ECB plate force: replay the reference evidence, and hold the shipped kernel to it.
+"""ECB plate force: replay the reference evidence, and run the kernel live.
 
 The reference lane (``ecb_foster_lorentz_reference.py``) solves the scalar
-model directly and reconstructs the eddy current as (1/mu) curl(v z).  The
-shipped ``compute_lorentz_force_via_foster`` reconstructs it as
--omega sigma Im(v), which gives no lift for a centred magnet and a horizontal
-force that mirror symmetry forbids.  The last test runs the kernel on a small
-mesh and is marked strict-xfail: it starts passing -- and therefore failing the
-suite -- the moment the kernel is corrected, so the record cannot go stale.
+model of ``radia.maglev.ecb.lorentz`` directly and reconstructs the eddy
+current as (1/mu) curl(v z).  These tests replay its summary and run the
+shipped kernel on a small mesh, so a regression to the pre-2026-09-11 current
+(-omega sigma Im(v): no lift when centred, forbidden horizontal force) fails
+here rather than in someone's result.
 """
 
 from __future__ import annotations
@@ -27,7 +26,7 @@ def _payload():
 
 def test_reference_summary_is_complete_and_physical():
     payload = _payload()
-    assert payload["schema"] == "radia.maglev.ecb-foster-lorentz-reference.v1"
+    assert payload["schema"] == "radia.maglev.ecb-foster-lorentz-reference.v2"
     for key in ("radia_version", "ngsolve_version", "python_version", "host"):
         assert payload["runtime"][key]
     assert payload["reference_passed"] is True
@@ -46,20 +45,33 @@ def test_reference_lift_values_are_locked():
     assert max(-v for v in centred.values()) < payload["problem"]["image_lift_bound_N"]
 
 
-def test_shipped_kernel_defect_is_recorded():
-    record = _payload()["shipped_kernel"]
-    assert record["violates_mirror_symmetry"] is True
-    assert record["produces_no_lift_when_centred"] is True
-    assert record["exceeds_image_bound"] is True
+def test_kernel_agrees_with_the_reference():
+    payload = _payload()
+    assert payload["kernel_passed"] is True
+    assert all(payload["kernel_checks"].values()), payload["kernel_checks"]
+    rtol = payload["problem"]["kernel_lift_rtol"]
+    for case in payload["cases"]:
+        if case["frequency_hz"] in payload["problem"]["kernel_agreement_frequencies_hz"]:
+            assert case["kernel_lift_relative_error"] < rtol, case
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="compute_lorentz_force_via_foster reconstructs J_y = -omega sigma Im(v) "
-           "instead of (1/mu) curl(v z): no lift when centred, forbidden horizontal "
-           "force. Remove this marker when the kernel is corrected.",
-)
-def test_shipped_kernel_satisfies_the_centred_symmetry_checks():
+def test_kernel_converges_with_the_foster_basis_at_5khz():
+    """200 modes stop far short of the 5 kHz skin depth; growing the basis must fix it."""
+    rows = _payload()["mode_study"]["rows"]
+    errors = [row["relative_error"] for row in rows]
+    assert all(a > b for a, b in zip(errors, errors[1:])), errors
+    assert errors[-1] < _payload()["problem"]["mode_study_final_rtol"], errors
+    assert rows[0]["relative_error"] > 0.1, "the truncation effect should be visible at 200 modes"
+
+
+def test_history_keeps_the_pre_fix_defect():
+    history = _payload()["history"]
+    assert history["current_reconstruction"] == "J_y = -omega sigma Im(v)"
+    assert history["centred_vertical_force_N"] == 0.0
+    assert abs(history["centred_horizontal_force_N_50_500_5000Hz"][-1]) > 100 * history["image_bound_N"]
+
+
+def test_kernel_live_centred_symmetry_and_lift():
     pytest.importorskip("ngsolve")
     from ngsolve import TaskManager
 
@@ -70,8 +82,8 @@ def test_shipped_kernel_satisfies_the_centred_symmetry_checks():
     with TaskManager():
         mesh = lane.plate_mesh(20, 8, 2)
         lam, vecs, _mass, free, _fes, _volume = _dirichlet_eigenmodes(mesh, 60, "outer")
-        horizontal, vertical = compute_lorentz_force_via_foster(
+        fx, fy, fz = compute_lorentz_force_via_foster(
             mesh, lam, vecs, free, lane.SIGMA, lane.MU0,
             2j * math.pi * 500.0, lane.M_PM, lane.Z_PM, 0.0)
-    assert abs(horizontal) < 1e-6 * max(abs(vertical), 1e-30)
-    assert vertical < 0.0
+    assert fz < 0.0, "the conductor must be pushed away from the magnet"
+    assert max(abs(fx), abs(fy)) < 1e-9 * abs(fz), (fx, fy, fz)
