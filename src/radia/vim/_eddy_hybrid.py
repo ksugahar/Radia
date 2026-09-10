@@ -324,14 +324,17 @@ class EddyParentOrderLedger:
         return info
 
 
-def _radia_cpp_kernel(name: str):
+def _radia_cpp_kernel(name: str, *, hint: str | None = None):
     try:
         from radia import _radia_pybind as _radia_cpp
     except ImportError as exc:
         raise RuntimeError("Radia C++ extension is not importable; rebuild the selected source") from exc
     kernel = getattr(_radia_cpp, name, None)
     if not callable(kernel):
-        raise RuntimeError(f"Radia C++ extension lacks {name}; rebuild _radia_pybind")
+        detail = f"Radia C++ extension lacks {name}"
+        if hint:
+            detail += f" ({hint})"
+        raise RuntimeError(f"{detail}; rebuild _radia_pybind")
     return kernel
 
 
@@ -5704,11 +5707,10 @@ class NGSolveProjectedInteraction:
         ):
             raise ValueError("assembled bases do not match projected BEM bases")
         projection = np.column_stack(self.projections)
-        matrix_type = _radia_cpp_kernel("_ProjectedBaseMatrix")
-        if matrix_type is None:
-            raise RuntimeError(
-                "Radia C++ extension lacks the NGSolve projected BaseMatrix adapter"
-            )
+        matrix_type = _radia_cpp_kernel(
+            "_ProjectedBaseMatrix",
+            hint="NGSolve projected BaseMatrix adapter",
+        )
         native = matrix_type(
             self.parent_matrix,
             np.ascontiguousarray(projection, dtype=np.complex128),
@@ -5897,7 +5899,7 @@ def _build_sampled_hacapk_operator(
     )
     if kernel not in {"laplace", "planar-log"}:
         raise ValueError("kernel must be 'laplace' or 'planar-log'")
-    if gram_type is None or not hasattr(gram_type, factory_name):
+    if not hasattr(gram_type, factory_name):
         raise RuntimeError(
             f"Radia C++ extension lacks sampled {kernel} HACApK support; rebuild _radia_pybind"
         )
@@ -6276,11 +6278,10 @@ def _flatten_native_operator(operator, *, offset=0, scale=1.0):
         dense += scale * np.asarray(operator._dense)
         return dense, terms
     if isinstance(operator, RestrictedReducedOperator):
-        matrix_type = _radia_cpp_kernel("_ProjectedBaseMatrix")
-        if matrix_type is None:
-            raise RuntimeError(
-                "Radia C++ extension lacks the projected BaseMatrix adapter"
-            )
+        matrix_type = _radia_cpp_kernel(
+            "_ProjectedBaseMatrix",
+            hint="projected BaseMatrix adapter",
+        )
         parent_native = _native_reduced_base_matrix(operator._parent)
         projection = np.zeros(
             (operator._parent.shape[0], operator.shape[0]),
@@ -6352,11 +6353,10 @@ def _native_reduced_base_matrix(operator):
     """Build one C++/NGSolve BaseMatrix from independent reduced terms."""
 
     dense, terms = _flatten_native_operator(operator)
-    matrix_type = _radia_cpp_kernel("_ReducedBlockMatrix")
-    if matrix_type is None:
-        raise RuntimeError(
-            "Radia C++ extension lacks the reduced NGSolve BaseMatrix adapter"
-        )
+    matrix_type = _radia_cpp_kernel(
+        "_ReducedBlockMatrix",
+        hint="reduced NGSolve BaseMatrix adapter",
+    )
     return matrix_type(
         np.ascontiguousarray(dense, dtype=np.complex128),
         [term[0] for term in terms],
@@ -6689,18 +6689,29 @@ def _solve_reduced_linear(operator, rhs) -> np.ndarray:
     )
     equilibrated_values = values / coordinate_scale[:, np.newaxis]
 
-    func = _radia_cpp_kernel("_HybridVIMSolve")
-    if func is not None and (
-        np.iscomplexobj(equilibrated_matrix) or np.iscomplexobj(equilibrated_values)
-    ):
-        solution = func(
-            np.ascontiguousarray(equilibrated_matrix, dtype=np.complex128),
-            np.ascontiguousarray(equilibrated_values, dtype=np.complex128),
-        )
-    else:
-        solution = np.linalg.solve(equilibrated_matrix, equilibrated_values)
+    complex_input = np.iscomplexobj(equilibrated_matrix) or np.iscomplexobj(
+        equilibrated_values
+    )
+    solution = _radia_cpp_kernel("_HybridVIMSolve")(
+        np.ascontiguousarray(equilibrated_matrix, dtype=np.complex128),
+        np.ascontiguousarray(equilibrated_values, dtype=np.complex128),
+    )
+    if not complex_input:
+        solution = np.asarray(solution).real
     solution = np.asarray(solution) / coordinate_scale[:, np.newaxis]
     return solution[:, 0] if vector_rhs else solution
+
+
+def _reported_solver_backend(solved, *, mixed_galerkin: bool) -> str:
+    """Read the backend recorded by the solve that actually produced the result."""
+
+    solver_diagnostics = solved.get("solver_diagnostics")
+    if not solver_diagnostics or "backend" not in solver_diagnostics:
+        raise RuntimeError("hybrid VIM solve did not report its solver backend")
+    backend = str(solver_diagnostics["backend"])
+    if mixed_galerkin:
+        backend += "-mixed-galerkin"
+    return backend
 
 
 def _label_tuple(labels, name: str) -> tuple[str, ...]:
@@ -8892,16 +8903,11 @@ class CoupledHDivHybridVIMSystem:
             )
         )
         port_response = rhs.conj().T @ coefficients
-        backend = solved.get("solver_diagnostics", {}).get(
-            "backend",
-            (
-                "radia-cpp-dense"
-                if _radia_cpp_kernel("_HybridVIMSolve") is not None
-                else "numpy-linalg"
-            ),
+        solver_diagnostics = solved.get("solver_diagnostics")
+        backend = _reported_solver_backend(
+            solved,
+            mixed_galerkin=use_mixed_galerkin,
         )
-        if use_mixed_galerkin:
-            backend += "-mixed-galerkin"
         return HCurlVIMHDivMMMSolution(
             frequency_hz=frequency,
             s=s,
@@ -8921,7 +8927,7 @@ class CoupledHDivHybridVIMSystem:
             average_joule_loss=np.asarray(average_loss),
             residual_relative_norm=residual_relative,
             solver_backend=backend,
-            solver_diagnostics=solved.get("solver_diagnostics"),
+            solver_diagnostics=solver_diagnostics,
             orthogonalized_rhs=orthogonalized_rhs,
             orthogonalized_solution=orthogonalized_solution,
             mixed_galerkin_diagnostics=mixed_galerkin_diagnostics,
