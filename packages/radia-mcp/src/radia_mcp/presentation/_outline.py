@@ -3,16 +3,16 @@
 An outline is not merely one agenda slide near the beginning, and it is not a
 retrospective statement that the problem has ended and the solution begins.
 For a spoken research presentation, navigation has to appear where the topic
-changes: "Motivation" before the motivation, "Proposed method" before the
-method, and "Results" before the results. Each divider repeats the complete
-agenda and highlights only the section that starts now, so the audience sees
-both the route and its current position.
+changes. Each divider repeats the complete agenda and highlights only the
+section that starts now, so the audience sees both the route and its current
+position. Agenda rows are concise section labels such as ``Motivation``;
+explanatory taglines belong in the content slides, not in the agenda.
 
 The section names are examples, not a mandatory taxonomy. Authors first
 classify the actual deck into coherent acts, then place a divider at the start
-of every substantial act. This checker uses the deck's 起承転結 arc to infer
-the common motivation/method/results spine. A one-slide closing summary does
-not need its own divider.
+of every substantial act. Four or five sections are the normal target for a
+full research talk. This checker uses the deck's 起承転結 arc to infer the
+legacy motivation/method/results spine when no custom taxonomy is available.
 """
 from __future__ import annotations
 
@@ -42,6 +42,11 @@ _ITEM_PREFIX = re.compile(
     r"^\s*(?:(?:\d+|[ivxlcdm]+)[\s.)\-:：]+|[-–—•●○▪▫]\s*)",
     re.IGNORECASE)
 
+_AGENDA_EXPLANATION = re.compile(
+    r"\s(?:—|–|-)\s|[:：]\s|[.!?。！？]\s*$"
+)
+_RECOMMENDED_SECTION_COUNTS = {4, 5}
+
 
 def _section_labels(slide: dict) -> set[str]:
     text = f"{slide['title'] or ''}\n{slide['text']}"
@@ -52,6 +57,12 @@ def _section_labels(slide: dict) -> set[str]:
 def _normalise_agenda_item(text: str) -> str:
     """Return a comparison key without numbering or display whitespace."""
     return re.sub(r"\s+", " ", _ITEM_PREFIX.sub("", text or "")).strip().casefold()
+
+
+def _is_concise_section_label(text: str) -> bool:
+    """Reject agenda rows that append an explanation to the section name."""
+    label = _ITEM_PREFIX.sub("", text or "").strip()
+    return bool(label) and not _AGENDA_EXPLANATION.search(label)
 
 
 def _agenda_items(slide: dict) -> list[str]:
@@ -198,6 +209,7 @@ def _repeated_agenda_coverage(dividers: list[dict]) -> dict:
     observed_unique = list(dict.fromkeys(observed))
     order_ok = observed_unique == first_sequence
     complete = all(coverage.values()) and observed_unique == list(canonical)
+    concise_labels = all(_is_concise_section_label(item) for item in display)
     return {
         "applicable": True,
         "items": display,
@@ -211,6 +223,9 @@ def _repeated_agenda_coverage(dividers: list[dict]) -> dict:
         ],
         "same_order": all(sequence == canonical for sequence in sequences),
         "highlight_order_ok": order_ok,
+        "section_count": len(canonical),
+        "recommended_section_count": len(canonical) in _RECOMMENDED_SECTION_COUNTS,
+        "concise_labels": concise_labels,
         "complete": complete and all(sequence == canonical for sequence in sequences),
     }
 
@@ -303,12 +318,17 @@ def presentation_check_outline_slide(pptx_path: str,
         }
         checks["全章を毎回同じ順序で再掲する"] = recurring["same_order"]
         checks["強調章が章順に進む"] = recurring["highlight_order_ok"]
-        score = (10.0 if recurring["complete"]
-                 else round(10.0 * sum(checks.values()) / len(checks), 1))
+        checks["章を4〜5分類にする"] = recurring["recommended_section_count"]
+        checks["Outline は説明文を付けず章名だけにする"] = recurring["concise_labels"]
+        score = round(10.0 * sum(checks.values()) / len(checks), 1)
         scoring_mode = "repeated-agenda"
     else:
-        checks = semantic_checks
-        score = round(10.0 * sum(checks.values()) / len(checks), 1)
+        checks = dict(semantic_checks)
+        if recurring.get("applicable", False):
+            checks["章を4〜5分類にする"] = recurring["recommended_section_count"]
+            checks["Outline は説明文を付けず章名だけにする"] = recurring["concise_labels"]
+        score = (0.0 if not any(semantic_checks.values())
+                 else round(10.0 * sum(checks.values()) / len(checks), 1))
         scoring_mode = "semantic-boundaries"
     comments = [f"{'OK  ' if value else 'FAIL'} {label}"
                 for label, value in checks.items()]
@@ -321,11 +341,26 @@ def presentation_check_outline_slide(pptx_path: str,
         if custom_taxonomy:
             missing = [name for name, slides
                        in recurring["coverage"].items() if not slides]
-            problem = (("満たしていない章: " + ", ".join(missing) + ".")
-                       if missing else "章の再掲順または強調順が一致しない。")
+            problems = []
+            if missing:
+                problems.append("満たしていない章: " + ", ".join(missing))
+            if not recurring["same_order"] or not recurring["highlight_order_ok"]:
+                problems.append("章の再掲順または強調順が一致しない")
+            if not recurring["recommended_section_count"]:
+                problems.append("章数は4〜5を基本とする")
+            if not recurring["concise_labels"]:
+                problems.append("各項目は説明を付けず章名だけにする")
+            problem = "。".join(problems) + "。"
         else:
             missing = [name for name, slides in coverage.items() if not slides]
-            problem = "満たしていない章: " + ", ".join(missing) + "."
+            problems = (["満たしていない章: " + ", ".join(missing)]
+                        if missing else [])
+            if recurring.get("applicable", False):
+                if not recurring["recommended_section_count"]:
+                    problems.append("章数は4〜5を基本とする")
+                if not recurring["concise_labels"]:
+                    problems.append("各項目は説明を付けず章名だけにする")
+            problem = "。".join(problems) + "。"
         comments.append(
             "各章の先頭で全項目を再掲し、現在章だけを色・太字・大きさ等で"
             "一意に強調する。" + problem)
@@ -358,8 +393,9 @@ def presentation_check_outline_slide(pptx_path: str,
         "comments": comments,
         "hint": (
             "Outline は内容が切り替わる場所で繰り返す。毎回すべての章を同じ順で"
-            "示し、今から始まる章だけを赤字などで強調する。章名は例であり、"
-            "実際の deck の内容から分類する。"
+            "示し、今から始まる章だけを赤字などで強調する。4〜5章を基本とし、"
+            "各項目は Motivation のような章名だけにして説明文を付けない。"
+            "章名自体は実際の deck の内容から決める。"
         ),
         "source": "菅原による IGTE'26 デッキ査読の明確化 2026-09-11。",
     }

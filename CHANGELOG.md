@@ -5,6 +5,11 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- Refined recurring presentation agendas: full research talks now target four
+  or five content-derived sections, agenda rows contain section names only,
+  and explanatory taglines reduce the outline score. Each transition still
+  repeats the same list and highlights only the section beginning there.
+
 ## 4.95.90 - Recovered motor torque and completed the AMS contract
 
 Released 2026-09-11.
