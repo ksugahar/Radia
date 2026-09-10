@@ -5,6 +5,12 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- Retired `solve_magnetostatic_reduced_omega_kelvin`: calls now fail explicitly
+  because its Kelvin exterior/interface convention is not validated. Migrate
+  to the total/reduced Omega API with explicit interface/source data. Preserve
+  the nonmatching historical comparison in `validation_test`, not as proof of
+  complementary bounds or variable-transformation equivalence.
+
 ## 4.95.82 - Safe AMS setup and physical shifted preconditioning
 
 Released 2026-09-10.

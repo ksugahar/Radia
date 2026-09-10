@@ -1,0 +1,84 @@
+{
+  "schema": "radia.research.reduced-vs-mixed-omega.v1",
+  "generated_at_utc": "2026-09-10T08:54:40.793553+00:00",
+  "hostname": "lab",
+  "radia_version": "4.95.81",
+  "level": "C:\\temp\\radia-ctype-family\\coarse",
+  "mesh_elements": 24134,
+  "mu_r": 1000.0,
+  "claim": "with source_projection_order == order the two admissible sets coincide, so the shifted Omega energies must agree",
+  "orders": [
+    {
+      "order": 1,
+      "plain_reduced_omega": {
+        "16": {
+          "omega_air": 1.3740727364045493,
+          "omega_iron": 1.4134865041043376,
+          "omega_kelvin": 0.11499475588702134,
+          "W_omega_hat_J": 2.902553996395908
+        },
+        "22": {
+          "omega_air": 1.3748647155933043,
+          "omega_iron": 1.413475092952174,
+          "omega_kelvin": 0.11453318855673689,
+          "W_omega_hat_J": 2.9028729971022154
+        }
+      },
+      "mixed_total_reduced_omega": {
+        "16": {
+          "omega_air": 1.4094833238248625,
+          "omega_iron": 1.4168279509435282,
+          "omega_kelvin": 0.16146377326768646,
+          "W_omega_hat_J": 2.9877750480360774
+        },
+        "22": {
+          "omega_air": 1.4102978596603057,
+          "omega_iron": 1.4168164887191932,
+          "omega_kelvin": 0.1610940096623894,
+          "W_omega_hat_J": 2.9882083580418883
+        }
+      },
+      "relative_difference": 0.02939686339183931,
+      "iron_relative_harmonic_norm": 0.1870486051055385,
+      "source_projection_order": 1,
+      "plain_runtime_s": 17.506279200024437,
+      "mixed_runtime_s": 6.1359308999963105
+    },
+    {
+      "order": 2,
+      "plain_reduced_omega": {
+        "16": {
+          "omega_air": 1.364310999967451,
+          "omega_iron": 0.10541419798553038,
+          "omega_kelvin": 0.09057295362884217,
+          "W_omega_hat_J": 1.5602981515818235
+        },
+        "22": {
+          "omega_air": 1.364528041231124,
+          "omega_iron": 0.10540737760863585,
+          "omega_kelvin": 0.09056478741251825,
+          "W_omega_hat_J": 1.5605002062522781
+        }
+      },
+      "mixed_total_reduced_omega": {
+        "16": {
+          "omega_air": 1.3997056429067338,
+          "omega_iron": 0.10843605153534652,
+          "omega_kelvin": 0.1321333879641901,
+          "W_omega_hat_J": 1.6402750824062706
+        },
+        "22": {
+          "omega_air": 1.3998777427527678,
+          "omega_iron": 0.10842918422008861,
+          "omega_kelvin": 0.13212619207818818,
+          "W_omega_hat_J": 1.6404331190510446
+        }
+      },
+      "relative_difference": 0.0512226223864043,
+      "iron_relative_harmonic_norm": 0.03002832656428992,
+      "source_projection_order": 2,
+      "plain_runtime_s": 33.283604399999604,
+      "mixed_runtime_s": 13.634366200014483
+    }
+  ]
+}
