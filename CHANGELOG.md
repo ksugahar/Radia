@@ -5,6 +5,10 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- `release_quad ci-verify` requires native release evidence on the exact SHA
+  before tagging. The isolated build environment imports its dependencies
+  immediately after installation so missing modules fail before the build.
+
 ## 4.95.91 - Corrected MagLev ECB force reconstruction
 
 Released 2026-09-11.
