@@ -106,6 +106,24 @@ loaded=radia.optuna.Study(StoragePath=path,AutoSave=false);
 verifyEqual(testCase,loaded.SamplerStateTable,expected);
 end
 
+function testFloatPrecisionDiagnosticContract(testCase)
+% Diagnostic arithmetic, not handwritten optimization expectations.
+tiny=typecast(uint64(1),'double');
+entry=optunaFloatError([1+eps,-1-eps],[1,-1]);
+verifyEqual(testCase,entry.max_ulp,'1');
+verifyEqual(testCase,entry.max_absolute,eps);
+entry=optunaFloatError([-tiny,0,NaN,Inf],[tiny,-0,NaN,Inf]);
+verifyEqual(testCase,entry.max_ulp,'2');
+verifyEqual(testCase,entry.nonfinite_mismatches,0);
+verifyEqual(testCase,entry.unequal_finite,1);
+entry=optunaFloatError([tiny,Inf],[0,-Inf]);
+verifyEqual(testCase,entry.zero_reference_mismatches,1);
+verifyEqual(testCase,entry.nonfinite_mismatches,1);
+verifyTrue(testCase,isnan(entry.max_relative));
+entry=optunaFloatError(-1,1);
+verifyEqual(testCase,entry.max_ulp,'9214364837600034816');
+end
+
 function testTrialCompatibilityMetadata(testCase)
 trial = radia.optuna.Study(AutoSave=false).ask();
 x = trial.suggest_float("positive", 1, 100, Log=true);

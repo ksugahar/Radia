@@ -188,6 +188,20 @@ raw JSON files. All 76 upstream-oracle, 27 table/reliability/core and 11 package
 tests pass. Remaining work includes incremental durability with a stated crash
 contract, long-history allocation/native costs, and measured resume latency.
 
+### Measured binary64 precision (2026-09-10)
+
+The opt-in differential precision audit records maximum absolute, reference-
+relative and exact ULP distances without changing existing tolerances. In the
+exercised corpus, TPE's maximum absolute error is 2.8866e-15 and CMA-ES's is
+4.4409e-15; their maximum ULP distances are 962 and 1280 respectively.
+RNG/RandomSampler and the baseline NSGA-II/III/QMC sequences are numerically
+exact in these tests, while NSGA-II crossover cases differ by up to 2 ULP.
+Thus do not claim uniform bit equality or 1-ULP agreement. GP's default Python
+delegation is not independent native-MATLAB precision evidence.
+See `validation_test/optimization/optuna_precision_20260910.md` and raw JSON.
+Reproduce with `validate_optuna_precision(outputPath)` after configuring pinned
+Python. The measured corpus and platform are the scope, not arbitrary inputs.
+
 ## 2. Scope and non-goals
 
 ### In scope
