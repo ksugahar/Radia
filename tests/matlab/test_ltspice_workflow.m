@@ -37,18 +37,18 @@ verifyLessThan(testCase,result.waveform.values(2,1),1e-6);
 end
 
 function testFastAccessDoubleRawUsesColumnMajorStorage(testCase)
-fixture="C:\temp\ltrev\fb.raw";
-if ~isfile(fixture),testCase.assumeFail("Opus fast-access fixture is unavailable.");end
-raw=radia.ltspice.readRawBinary(fixture);
-verifyTrue(testCase,any(raw.flags=="fastaccess"));
-verifyEqual(testCase,max(raw.values(:,1)),0.02,'AbsTol',1e-12);
-verifyEqual(testCase,max(abs(raw.values(:,2))),1,'AbsTol',1e-12);
+source=fullfile(fileparts(mfilename("fullpath")),"fixtures","ltspice_rc.cir");
+netlist=string(fileread(source));netlist=replace(netlist,".tran 0 20m 0 10u",".options numdgt=7"+newline+".tran 0 20m 0 10u");
+fixture=fullfile(testCase.TestData.TempDirectory,"fastaccess_source.cir");writeTextFixture(fixture,netlist);
+result=radia.ltspice.run(fixture,RawFormat="binary",OutputDirectory=fullfile(testCase.TestData.TempDirectory,"fastaccess_run"));
+before=radia.ltspice.readRawBinary(result.raw_file);converted=fullfile(testCase.TestData.TempDirectory,"fastaccess.raw");copyfile(result.raw_file,converted);
+convertRawToFastAccess(converted,radia.ltspice.findExecutable());after=radia.ltspice.readRawBinary(converted);
+verifyTrue(testCase,any(after.flags=="fastaccess"));verifyEqual(testCase,after.names,before.names);verifyEqual(testCase,after.values,before.values,'AbsTol',0);
 end
 
 function testRawPropertiesStopBeforeVariableTable(testCase)
-fixture="C:\temp\ltrev\b.raw";
-if ~isfile(fixture),testCase.assumeFail("Opus binary fixture is unavailable.");end
-raw=radia.ltspice.readRawBinary(fixture);
+source=fullfile(fileparts(mfilename("fullpath")),"fixtures","ltspice_rc.cir");
+result=radia.ltspice.run(source,RawFormat="binary",OutputDirectory=fullfile(testCase.TestData.TempDirectory,"properties_run"));raw=radia.ltspice.readRawBinary(result.raw_file);
 verifyFalse(testCase,isfield(raw.raw_properties,"Variables"));
 verifyFalse(testCase,isfield(raw.raw_properties,"x2I_x1"));
 end
@@ -61,10 +61,10 @@ verifyError(testCase,@()radia.ltspice.extractTransientState(raw,NetlistFile=netl
 end
 
 function testSubcircuitPortCurrentsDoNotMasqueradeAsState(testCase)
-root="C:\temp\ltrev";negative=fullfile(root,"sub.raw");negativeNetlist=fullfile(root,"sub.cir");
-positive=fullfile(root,"sub2.raw");positiveNetlist=fullfile(root,"sub2.cir");
-if ~all(isfile([negative,negativeNetlist,positive,positiveNetlist])),testCase.assumeFail("Opus subcircuit fixtures are unavailable.");end
-raw=radia.ltspice.readRaw(negative);
+root=testCase.TestData.TempDirectory;negativeNetlist=fullfile(root,"sub.cir");positiveNetlist=fullfile(root,"sub2.cir");
+base="* subcircuit state regression"+newline+".subckt rl a b"+newline+"L1 a m 1m"+newline+"R1 m b 1"+newline+".ends"+newline+"V1 in 0 PULSE(0 1 0 1u 1u 5m 10m)"+newline+"X1 in 0 rl"+newline;
+writeTextFixture(negativeNetlist,base+".tran 0 1m 0 1u"+newline+".end");writeTextFixture(positiveNetlist,base+".save V(in) I(x1:L1)"+newline+".tran 0 1m 0 1u"+newline+".end");
+negative=radia.ltspice.run(negativeNetlist,OutputDirectory=fullfile(root,"sub_run")).raw_file;positive=radia.ltspice.run(positiveNetlist,OutputDirectory=fullfile(root,"sub2_run")).raw_file;raw=radia.ltspice.readRaw(negative);
 verifyTrue(testCase,any(startsWith(lower(raw.names),"ix(x1:")));
 verifyError(testCase,@()radia.ltspice.extractTransientState(raw,NetlistFile=negativeNetlist),"radia:ltspice:MissingSubcircuitState");
 saved=radia.ltspice.extractTransientState(radia.ltspice.readRaw(positive),NetlistFile=positiveNetlist);
@@ -86,6 +86,20 @@ raw=struct("names",["time","V(in)","Ix(xtop:a)"],"values",[0,0,0;1e-3,1,1e-3],"s
 verifyError(testCase,@()radia.ltspice.extractTransientState(raw,NetlistFile=netlist),"radia:ltspice:MissingSubcircuitState");
 end
 
+function testParamsSyntaxResolvesStatelessSubcircuit(testCase)
+netlist=fullfile(testCase.TestData.TempDirectory,"params_stateless.cir");
+writeTextFixture(netlist,"X1 in 0 rdiv params: R=1k"+newline+".subckt rdiv a b params: R=1k"+newline+"R1 a b {R}"+newline+".ends"+newline+".end");
+raw=struct("names",["time","V(in)"],"values",[0,0;1e-3,1],"step_ranges",[1,2]);
+state=radia.ltspice.extractTransientState(raw,NetlistFile=netlist);verifyEmpty(testCase,state.inductor_names);
+end
+
+function testDeviceInternalSubcircuitStateFailsAsUnsupported(testCase)
+netlist=fullfile(testCase.TestData.TempDirectory,"diode_state.cir");
+writeTextFixture(netlist,"X1 in 0 dd"+newline+".subckt dd a b"+newline+"D1 a m DM"+newline+"R1 m b 1"+newline+".model DM D(Cjo=100p)"+newline+".ends"+newline+".end");
+raw=struct("names",["time","V(in)"],"values",[0,0;1e-3,1],"step_ranges",[1,2]);
+verifyError(testCase,@()radia.ltspice.extractTransientState(raw,NetlistFile=netlist),"radia:ltspice:UnsupportedSubcircuitState");
+end
+
 function testProcessTreeTerminationUsesFrameworkCompatibleApi(testCase)
 if ~ispc,testCase.assumeFail("Windows-only process lifecycle test.");end
 info=System.Diagnostics.ProcessStartInfo();info.FileName='pwsh';
@@ -100,9 +114,14 @@ end
 function testRunTimeoutTerminatesOwnedProcessTree(testCase)
 if ~ispc,testCase.assumeFail("Windows-only timeout test.");end
 fake=fullfile(testCase.TestData.TempDirectory,"slow_ltspice.cmd");
-writeTextFixture(fake,"@echo off"+newline+"ping 127.0.0.1 -n 30 >nul"+newline);
+pidFile=fullfile(testCase.TestData.TempDirectory,"slow_child.pid");
+child=string(sprintf('pwsh -NoLogo -NoProfile -NonInteractive -Command "$PID | Set-Content -LiteralPath ''%s''; Start-Sleep -Seconds 30"',pidFile));
+writeTextFixture(fake,"@echo off"+newline+child+newline);
 netlist=fullfile(testCase.TestData.TempDirectory,"timeout.cir");writeTextFixture(netlist,".tran 1m"+newline+".end");
-verifyError(testCase,@()radia.ltspice.run(netlist,Executable=fake,Timeout_s=0.2,OutputDirectory=fullfile(testCase.TestData.TempDirectory,"timeout_run")),"radia:ltspice:Timeout");
+verifyError(testCase,@()radia.ltspice.run(netlist,Executable=fake,Timeout_s=5,OutputDirectory=fullfile(testCase.TestData.TempDirectory,"timeout_run")),"radia:ltspice:Timeout");
+verifyTrue(testCase,isfile(pidFile));pid=str2double(strtrim(string(fileread(pidFile))));alive=true;
+try,childProcess=System.Diagnostics.Process.GetProcessById(pid);alive=~childProcess.HasExited;catch,alive=false;end
+verifyFalse(testCase,alive,"The timeout left its child process running.");
 end
 
 function testStateInjectionFailsWithoutEndAndAcceptsHierarchicalInductor(testCase)
@@ -354,6 +373,11 @@ end
 
 function writeTextFixture(path,text)
 handle=fopen(path,'w');assert(handle>=0);cleanup=onCleanup(@()fclose(handle));fprintf(handle,'%s',text);clear cleanup
+end
+
+function convertRawToFastAccess(path,executable)
+info=System.Diagnostics.ProcessStartInfo();info.FileName=char(executable);info.Arguments='-FastAccess "'+string(path)+'"';info.UseShellExecute=false;info.CreateNoWindow=true;
+process=System.Diagnostics.Process();process.StartInfo=info;assert(process.Start());assert(process.WaitForExit(30000));assert(process.ExitCode==0);
 end
 
 function path=tempPath(testCase,name),path=fullfile(testCase.TestData.TempDirectory,name);end
