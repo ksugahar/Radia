@@ -74,6 +74,9 @@ jobs:
           Move-Item -LiteralPath $downloaded `
             -Destination (Join-Path $destination 'cubit_mesh_curver.pyd') `
             -Force
+          python packages\cubit-mesh-export\src\cubit_mesh_export\_native_provenance.py `
+            verify --repo-root . --package-dir $destination
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build and verify cubit-mesh-export wheel
         shell: pwsh
@@ -96,8 +99,6 @@ jobs:
               init = archive.read('cubit_mesh_export/__init__.py').decode()
               native_manifest = json.loads(archive.read(
                   'cubit_mesh_export/native_payloads.json'))
-              curver = archive.read(
-                  'cubit_mesh_export/cubit_mesh_curver.pyd')
               wheel_meta_path = next(
                   name for name in names
                   if name.endswith('.dist-info/WHEEL'))
@@ -110,9 +111,13 @@ jobs:
               raise SystemExit(f'wheel is not natively tagged: {wheel}')
           if 'Root-Is-Purelib: false' not in wheel_meta:
               raise SystemExit('native wheel incorrectly declares purelib root')
-          expected = native_manifest['payloads']['cubit_mesh_curver.pyd']
-          if len(curver) != expected['size'] or hashlib.sha256(curver).hexdigest() != expected['sha256']:
-              raise SystemExit('wheel curver does not match native_payloads.json')
+          for name in ('cubit_mesh_export.ccm', 'cubit_mesh_curver.pyd'):
+              content = archive.read(f'cubit_mesh_export/{name}')
+              expected = native_manifest['payloads'][name]
+              if (len(content) != expected['size'] or
+                      hashlib.sha256(content).hexdigest() != expected['sha256']):
+                  raise SystemExit(
+                      f'wheel payload {name} does not match native_payloads.json')
           print(f'PASS cubit-mesh-export {package_version}: mandatory payloads present')
           '@ | python - $wheel.FullName
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

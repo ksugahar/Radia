@@ -1,8 +1,10 @@
 import hashlib
 import importlib.util
 import json
+import os
 import sys
 import tarfile
+import tomllib
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -16,6 +18,19 @@ if str(CME_SRC) not in sys.path:
 def _load_install_panels():
     path = PROJECT_ROOT / "src" / "radia" / "install_panels.py"
     spec = importlib.util.spec_from_file_location("radia_install_panels_test", path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_native_provenance():
+    path = (
+        PROJECT_ROOT / "packages" / "cubit-mesh-export" / "src"
+        / "cubit_mesh_export" / "_native_provenance.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "cubit_mesh_export_native_provenance_test", path)
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(module)
@@ -255,7 +270,10 @@ def test_native_build_is_worktree_relative_and_propagates_both_payloads():
     assert "packages\\cubit-mesh-export\\src\\cubit_mesh_export" in build_script
     for payload in ("cubit_mesh_export.ccm", "cubit_mesh_curver.pyd"):
         assert payload in build_script
-        assert f'pkg_dir / "{payload}"' in setup_script
+    assert "_native_provenance.py" in build_script
+    assert "record" in build_script
+    assert "verify_manifest(repo_root, pkg_dir)" in setup_script
+    assert "st_mtime" not in setup_script
 
 
 def test_distribution_ci_packages_the_exact_candidate_binaries():
@@ -269,6 +287,8 @@ def test_distribution_ci_packages_the_exact_candidate_binaries():
     assert "native_payloads.json" in workflow
     assert "download_release_asset.py" in workflow
     assert "Get-FileHash" in workflow
+    assert "_native_provenance.py" in workflow
+    assert "verify --repo-root . --package-dir $destination" in workflow
     assert '"netgen-mesher==6.2.2606"' in workflow
     assert '"ngsolve==6.2.2606"' in workflow
     assert "cubit_mesh_export/cubit_mesh_export.ccm" in workflow
@@ -288,8 +308,70 @@ def test_distribution_ci_packages_the_exact_candidate_binaries():
     )
     manifest = json.loads(
         (package_dir / "native_payloads.json").read_text(encoding="utf-8"))
-    payload = manifest["payloads"]["cubit_mesh_curver.pyd"]
-    curver = (package_dir / "cubit_mesh_curver.pyd").read_bytes()
-    assert payload["asset_name"].endswith(payload["sha256"] + ".pyd")
-    assert payload["size"] == len(curver)
-    assert payload["sha256"] == hashlib.sha256(curver).hexdigest()
+    provenance = _load_native_provenance()
+    assert manifest["schema"] == provenance.SCHEMA
+    source_hash, source_count = provenance.native_source_digest(PROJECT_ROOT)
+    assert manifest["source"]["hash_format"] == provenance.HASH_FORMAT
+    assert manifest["source"]["tree_sha256"] == source_hash
+    assert manifest["source"]["file_count"] == source_count
+    assert provenance.verify_manifest(PROJECT_ROOT, package_dir) == []
+    for name in provenance.REQUIRED_PAYLOADS:
+        payload = manifest["payloads"][name]
+        content = (package_dir / name).read_bytes()
+        assert payload["size"] == len(content)
+        assert payload["sha256"] == hashlib.sha256(content).hexdigest()
+    curver = manifest["payloads"]["cubit_mesh_curver.pyd"]
+    assert curver["asset_name"].endswith(curver["sha256"] + ".pyd")
+
+
+def test_native_source_provenance_is_content_addressed_not_timestamped(tmp_path):
+    provenance = _load_native_provenance()
+    source = tmp_path / "src" / "cubit_plugin" / "native.cpp"
+    source.parent.mkdir(parents=True)
+    source.write_text("int answer = 42;\n", encoding="utf-8")
+
+    before = provenance.native_source_digest(tmp_path)
+    stat = source.stat()
+    os.utime(source, (stat.st_atime + 100, stat.st_mtime + 100))
+    assert provenance.native_source_digest(tmp_path) == before
+
+    source.write_bytes(b"int answer = 42;\r\n")
+    assert provenance.native_source_digest(tmp_path) == before
+
+    source.write_text("int answer = 43;\n", encoding="utf-8")
+    assert provenance.native_source_digest(tmp_path) != before
+
+
+def test_native_manifest_rejects_drift_in_either_required_payload(
+        monkeypatch, tmp_path):
+    provenance = _load_native_provenance()
+    source = tmp_path / "src" / "cubit_plugin" / "native.cpp"
+    source.parent.mkdir(parents=True)
+    source.write_text("int answer = 42;\n", encoding="utf-8")
+    package_dir = tmp_path / "package"
+    package_dir.mkdir()
+    for name in provenance.REQUIRED_PAYLOADS:
+        (package_dir / name).write_bytes((name + "\n").encode())
+    (package_dir / "native_payloads.json").write_text(
+        '{"payloads": {}}', encoding="utf-8")
+    monkeypatch.setattr(provenance, "_source_commit", lambda _root: "a" * 40)
+    provenance.record_manifest(tmp_path, package_dir)
+    assert provenance.verify_manifest(tmp_path, package_dir) == []
+
+    for name in provenance.REQUIRED_PAYLOADS:
+        path = package_dir / name
+        original = path.read_bytes()
+        path.write_bytes(original + b"drift")
+        errors = provenance.verify_manifest(tmp_path, package_dir)
+        assert any(name in error for error in errors)
+        path.write_bytes(original)
+
+
+def test_distribution_metadata_matches_the_only_supported_native_wheel():
+    pyproject = tomllib.loads((
+        PROJECT_ROOT / "packages" / "cubit-mesh-export" / "pyproject.toml"
+    ).read_text(encoding="utf-8"))
+    project = pyproject["project"]
+    assert project["requires-python"] == ">=3.12,<3.13"
+    assert "Programming Language :: Python :: 3.12" in project["classifiers"]
+    assert "Operating System :: Microsoft :: Windows" in project["classifiers"]
