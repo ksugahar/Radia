@@ -193,6 +193,24 @@ statuses=string({coverage.entries.oracle_status});
 verifyTrue(testCase,all(ismember(statuses,["verified","asserted"])));
 required=string({coverage.entries.scope})=="required";
 verifyTrue(testCase,all(statuses(required)=="verified"));
+% Resolve the ledger's package-qualified implementation, not just basenames.
+for entry=reshape(coverage.entries,1,[])
+    if ~startsWith(string(entry.upstream),"optuna.samplers.nsgaii.")
+        continue
+    end
+    name=string(entry.matlab_name);
+    verifyTrue(testCase,startsWith(name,"radia.optuna.nsgaii."));
+    parts=split(name,".");
+    isMember=startsWith(string(entry.kind),"class-");
+    if isMember, owner=join(parts(1:end-1),"."); else, owner=name; end
+    metadata=meta.class.fromName(char(owner));
+    assertNotEmpty(testCase,metadata,char(owner));
+    if isMember
+        publicNames=[string({metadata.MethodList.Name}), ...
+            string({metadata.PropertyList.Name})];
+        verifyTrue(testCase,any(publicNames==parts(end)),char(name));
+    end
+end
 end
 
 function testNumpyRandomStateSeedContract(testCase)

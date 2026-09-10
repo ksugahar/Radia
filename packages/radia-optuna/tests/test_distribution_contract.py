@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import json
 import re
 import tomllib
@@ -18,6 +19,32 @@ VERIFY_SPEC = importlib.util.spec_from_file_location(
 assert VERIFY_SPEC is not None and VERIFY_SPEC.loader is not None
 verify_wheel = importlib.util.module_from_spec(VERIFY_SPEC)
 VERIFY_SPEC.loader.exec_module(verify_wheel)
+
+
+def test_api_coverage_is_reproducible_and_names_real_matlab_packages():
+    path = REPO_ROOT / "tests/matlab/fixtures/generate_optuna50_api_coverage.py"
+    spec = importlib.util.spec_from_file_location("optuna_coverage_audit", path)
+    assert spec is not None and spec.loader is not None
+    generator = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(generator)
+    committed = json.loads(generator.DESTINATION.read_text(encoding="utf-8"))
+    assert committed["upstream_oracle_sha256"].lower() == hashlib.sha256(
+        generator.ORACLE_PATH.read_bytes()
+    ).hexdigest()
+    regenerated = json.loads(json.dumps(generator.build_coverage()))
+    assert committed == regenerated, "Regenerate Optuna API coverage."
+    entries = [e for e in committed["entries"] if e["kind"] != "module"]
+    for entry in entries:
+        name = entry["matlab_name"]
+        if name is None:
+            continue
+        parts = name.split(".")
+        if entry["kind"].startswith("class-"):
+            parts = parts[:-1]
+        source = REPO_ROOT / "matlab"
+        for package in parts[:-1]:
+            source /= "+" + package
+        assert (source / (parts[-1] + ".m")).is_file(), name
 
 
 def test_matlab_path_names_the_layout_it_resolved():
