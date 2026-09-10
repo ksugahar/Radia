@@ -819,6 +819,360 @@ def _scope_for(upstream: str) -> str:
     return "required"
 
 
+# --- constructor-default audit ------------------------------------------
+#
+# The inventory records classes and their public members but not __init__, so
+# a changed constructor default was invisible here while changing every seeded
+# result.  Optuna 5.0 is that case: TPESampler moved multivariate False -> None
+# and constant_liar False -> True; only the second had a named default test.
+#
+# The oracle records every upstream default literally.  This pairs them with
+# the MATLAB `arguments` block and requires each parameter to either match, or
+# be declared below with a reason.  A declaration that no longer applies is an
+# error too, so the tables cannot rot.
+
+MATLAB_ARGUMENT = re.compile(
+    r"^\s*options\.(?P<name>\w+)(?P<declaration>[^=\n]*?)=\s*(?P<default>.+?)\s*$"
+)
+
+# Upstream parameter -> MATLAB argument, where stripping underscores and
+# lowercasing does not already pair them.
+CONSTRUCTOR_PARAMETER_ALIASES: dict[str, str] = {
+    "constraints_func": "ConstraintsFcn",
+    "crossover_prob": "CrossoverProbability",
+    "mutation_prob": "MutationProbability",
+    "swapping_prob": "SwappingProbability",
+    "n_ei_candidates": "NumberOfEIChoices",
+    "n_min_trials": "MinCompletedTrials",
+    "popsize": "PopulationSize",
+    "weights": "WeightsFcn",
+    "gamma": "GammaFcn",
+}
+
+UNSET = (
+    "MATLAB types this argument as a scalar double, which cannot hold [], so "
+    "NaN is the unset sentinel for upstream None."
+)
+
+# (class, upstream parameter) -> why the MATLAB default differs but agrees.
+# Every entry states what upstream's literal default resolves to; where that
+# needed measuring rather than reading, the measured value is quoted.
+CONSTRUCTOR_DEFAULT_EQUIVALENCES: dict[tuple[str, str], str] = {
+    ("CmaEsSampler", "popsize"): (
+        "MATLAB PopulationSize=0 is the unset sentinel; the constructor "
+        "rejects anything between zero and two, so zero cannot be a real "
+        "population."
+    ),
+    ("CmaEsSampler", "sigma0"): UNSET,
+    ("CmaEsSampler", "x0"): (
+        "MATLAB X0 is typed struct, so an empty struct is the unset value for "
+        "upstream None."
+    ),
+    ("EMMREvaluator", "seed"): UNSET,
+    ("FloatDistribution", "step"): UNSET,
+    ("FrozenTrial", "values"): UNSET,
+    ("MaxTrialsCallback", "states"): (
+        "Upstream carries a TrialState tuple; MATLAB carries the equivalent "
+        "state name as a string, matching how every other MATLAB entry point "
+        "spells a trial state."
+    ),
+    ("NSGAIIISampler", "mutation_prob"): UNSET,
+    ("NSGAIIISampler", "reference_points"): (
+        "MATLAB ReferencePoints is a numeric matrix, so a 0x0 matrix is the "
+        "unset value for upstream None."
+    ),
+    ("NSGAIISampler", "mutation_prob"): UNSET,
+    ("RDBStorage", "engine_kwargs"): (
+        "MATLAB engine_kwargs is typed struct, so an empty struct is the "
+        "unset value for upstream None."
+    ),
+    ("RDBStorage", "grace_period"): UNSET,
+    ("RDBStorage", "heartbeat_interval"): UNSET,
+    ("RegretBoundEvaluator", "seed"): UNSET,
+    ("RetryFailedTrialCallback", "max_retry"): UNSET,
+    ("RetryHeartbeatStaleTrialCallback", "max_retry"): UNSET,
+    ("SBXCrossover", "eta"): UNSET,
+    ("SPXCrossover", "epsilon"): UNSET,
+    ("TPESampler", "consider_endpoints"): (
+        "Optuna 5.0 types this bool | None, where None resolves internally. "
+        "Measured on the pinned build: TPESampler() resolves it to False, "
+        "which is the MATLAB default."
+    ),
+    ("TPESampler", "consider_magic_clip"): (
+        "Optuna 5.0 types this bool | None. Measured on the pinned build: "
+        "TPESampler() resolves it to True, which is the MATLAB default."
+    ),
+    ("TPESampler", "prior_weight"): (
+        "Optuna 5.0 types this float | None. Measured on the pinned build: "
+        "TPESampler() resolves it to 1.0, which is the MATLAB default."
+    ),
+    ("TPESampler", "warn_independent_sampling"): (
+        "Optuna 5.0 types this bool | None. Measured on the pinned build: "
+        "TPESampler() resolves it to False, which is the MATLAB default."
+    ),
+    ("ThresholdPruner", "lower"): UNSET,
+    ("ThresholdPruner", "upper"): UNSET,
+    ("UNDXCrossover", "sigma_eta"): UNSET,
+    ("VSBXCrossover", "eta"): UNSET,
+}
+
+# (class, upstream parameter) -> a default that genuinely disagrees with
+# upstream.  These are recorded limitations, NOT equivalences: the audit
+# counts them separately and the tests pin the set, so a new one cannot
+# appear unnoticed.  Do not move an entry here to make a run pass.
+CONSTRUCTOR_DEFAULT_DIVERGENCES: dict[tuple[str, str], str] = {
+    ("Terminator", "improvement_evaluator"): (
+        "Upstream Terminator() resolves None to RegretBoundEvaluator "
+        "(measured on the pinned build); MATLAB defaults to "
+        "BestValueStagnationEvaluator, so an unconfigured Terminator stops on "
+        "a different criterion than upstream."
+    ),
+    ("FanovaImportanceEvaluator", "seed"): (
+        "Upstream seed=None means fresh entropy per instance; MATLAB defaults "
+        "to a fixed 0, so two unseeded MATLAB evaluators agree with each "
+        "other where two upstream ones do not."
+    ),
+    ("MeanDecreaseImpurityImportanceEvaluator", "seed"): (
+        "Same divergence as FanovaImportanceEvaluator.seed: upstream None is "
+        "fresh entropy, MATLAB pins 0."
+    ),
+}
+
+# (class, upstream parameter) -> why MATLAB carries no counterpart.
+CONSTRUCTOR_PARAMETERS_NOT_IMPLEMENTED: dict[tuple[str, str], str] = {
+    ("Boto3ArtifactStore", "client"): (
+        "Artifact stores are scoped out-of-scope; a boto3 client object has "
+        "no MATLAB counterpart."
+    ),
+    ("GPSampler", "independent_sampler"): (
+        "MATLAB GPSampler does not expose an independent-sampler override; "
+        "recorded as a limitation rather than a silently different knob."
+    ),
+    ("GPSampler", "warn_independent_sampling"): (
+        "Follows independent_sampler: with no override there is no "
+        "independent-sampling warning to configure."
+    ),
+    ("NSGAIIISampler", "elite_population_selection_strategy"): (
+        "MATLAB NSGA-III uses the built-in reference-point elite selection "
+        "and exposes no strategy override."
+    ),
+    ("SBXCrossover", "uniform_crossover_prob"): (
+        "MATLAB implements the SBX crossover proper; the per-gene uniform "
+        "mixing knobs are not exposed."
+    ),
+    ("SBXCrossover", "use_child_gene_prob"): (
+        "Follows uniform_crossover_prob."
+    ),
+    ("VSBXCrossover", "uniform_crossover_prob"): (
+        "Follows SBXCrossover.uniform_crossover_prob."
+    ),
+    ("VSBXCrossover", "use_child_gene_prob"): (
+        "Follows SBXCrossover.use_child_gene_prob."
+    ),
+}
+
+_MATLAB_ABSENT = {
+    "[]",
+    "{}",
+    "double.empty(1,0)",
+    "double.empty",
+    "string.empty(1,0)",
+    "string.empty",
+    "cell(1,0)",
+}
+
+
+def _canonical_upstream_default(literal: str) -> tuple:
+    text = literal.strip()
+    if text == "None":
+        return ("absent",)
+    if text in ("True", "False"):
+        return ("bool", text == "True")
+    try:
+        return ("number", float(text))
+    except ValueError:
+        pass
+    if len(text) >= 2 and text[0] in "'\"" and text[-1] == text[0]:
+        return ("string", text[1:-1])
+    return ("opaque", text)
+
+
+def _canonical_matlab_default(literal: str) -> tuple:
+    text = literal.strip().rstrip(";").strip()
+    if text in _MATLAB_ABSENT:
+        return ("absent",)
+    if text in ("true", "false"):
+        return ("bool", text == "true")
+    try:
+        return ("number", float(text))
+    except ValueError:
+        pass
+    if len(text) >= 2 and text[0] in "'\"" and text[-1] == text[0]:
+        return ("string", text[1:-1])
+    return ("opaque", text)
+
+
+def _matlab_constructor_defaults() -> dict[str, dict[str, str]]:
+    """Defaulted `arguments` entries of every public MATLAB constructor."""
+    constructors: dict[str, dict[str, str]] = {}
+    for path in sorted(MATLAB_DIRECTORY.rglob("*.m")):
+        # Judge folders relative to the package root: +internal and MATLAB
+        # private/ helpers are not public, and a checkout path that merely
+        # contains such a folder name must not hide the whole surface.
+        relative = path.relative_to(MATLAB_DIRECTORY)
+        if "+internal" in relative.parts or "private" in relative.parts:
+            continue
+        class_folders = [
+            part[1:] for part in relative.parts[:-1] if part.startswith("@")
+        ]
+        if class_folders and path.stem != class_folders[-1]:
+            continue  # External method file; the constructor is in the class file.
+        stem = path.stem
+        source = path.read_text(encoding="utf-8")
+        match = re.search(
+            rf"function\s+\w+\s*=\s*{re.escape(stem)}\s*\([^)]*\)"
+            rf"\s*\n\s*arguments\s*\n(?P<block>.*?)\n\s*end",
+            source,
+            re.S,
+        )
+        if not match:
+            continue
+        # MATLAB continues a line with "..."; join first, or every continued
+        # argument is silently dropped and the audit under-reports.
+        block = re.sub(r"\.\.\.[^\n]*\n\s*", " ", match.group("block"))
+        defaults: dict[str, str] = {}
+        for line in block.splitlines():
+            line = line.split("%", 1)[0]
+            hit = MATLAB_ARGUMENT.match(line)
+            if hit:
+                defaults[hit.group("name")] = hit.group("default").strip()
+        if defaults:
+            constructors[stem] = defaults
+    return constructors
+
+
+def _audit_constructor_defaults(oracle: dict[str, Any]) -> dict[str, object]:
+    record = oracle.get("constructor_defaults")
+    if not isinstance(record, dict) or "modules" not in record:
+        raise RuntimeError(
+            "The oracle carries no constructor_defaults section; regenerate it "
+            "with the pinned Optuna before building the coverage ledger."
+        )
+    matlab = _matlab_constructor_defaults()
+    matched: list[str] = []
+    equivalent: list[str] = []
+    not_implemented: list[str] = []
+    divergent: list[str] = []
+    undeclared: list[str] = []
+    used_aliases: set[str] = set()
+    used_equivalences: set[tuple[str, str]] = set()
+    used_absences: set[tuple[str, str]] = set()
+    used_divergences: set[tuple[str, str]] = set()
+
+    for module_name, classes in sorted(record["modules"].items()):
+        for class_name, parameters in sorted(classes.items()):
+            if class_name not in matlab:
+                # Not implemented in MATLAB at all; the surface ledger above
+                # already accounts for that, so there is no default to audit.
+                continue
+            arguments = matlab[class_name]
+            normalized = {
+                name.replace("_", "").lower(): name for name in arguments
+            }
+            for parameter, detail in sorted(parameters.items()):
+                key = (class_name, parameter)
+                alias = CONSTRUCTOR_PARAMETER_ALIASES.get(parameter)
+                if alias and alias in arguments:
+                    used_aliases.add(parameter)
+                    argument = alias
+                else:
+                    argument = normalized.get(parameter.replace("_", "").lower())
+                label = f"{module_name}.{class_name}.{parameter}"
+                if argument is None:
+                    if key in CONSTRUCTOR_PARAMETERS_NOT_IMPLEMENTED:
+                        used_absences.add(key)
+                        not_implemented.append(label)
+                    else:
+                        undeclared.append(
+                            f"{label}: no MATLAB argument, and no declared reason"
+                        )
+                    continue
+                upstream_value = _canonical_upstream_default(detail["default_repr"])
+                matlab_value = _canonical_matlab_default(arguments[argument])
+                if upstream_value == matlab_value:
+                    matched.append(label)
+                elif key in CONSTRUCTOR_DEFAULT_EQUIVALENCES:
+                    used_equivalences.add(key)
+                    equivalent.append(label)
+                elif key in CONSTRUCTOR_DEFAULT_DIVERGENCES:
+                    used_divergences.add(key)
+                    divergent.append(label)
+                else:
+                    undeclared.append(
+                        f"{label}: upstream {detail['default_repr']} vs MATLAB "
+                        f"{argument} = {arguments[argument]}"
+                    )
+
+    if undeclared:
+        raise RuntimeError(
+            "Constructor defaults disagree with the pinned oracle and carry no "
+            "declared reason:\n  " + "\n  ".join(sorted(undeclared))
+        )
+    stale_aliases = sorted(set(CONSTRUCTOR_PARAMETER_ALIASES) - used_aliases)
+    stale_equivalences = sorted(
+        f"{cls}.{param}"
+        for cls, param in set(CONSTRUCTOR_DEFAULT_EQUIVALENCES) - used_equivalences
+    )
+    stale_absences = sorted(
+        f"{cls}.{param}"
+        for cls, param in set(CONSTRUCTOR_PARAMETERS_NOT_IMPLEMENTED) - used_absences
+    )
+    stale_divergences = sorted(
+        f"{cls}.{param}"
+        for cls, param in set(CONSTRUCTOR_DEFAULT_DIVERGENCES) - used_divergences
+    )
+    stale = (
+        stale_aliases + stale_equivalences + stale_absences + stale_divergences
+    )
+    if stale:
+        raise RuntimeError(
+            "Constructor-default declarations no longer apply; remove them: "
+            + ", ".join(stale)
+        )
+
+    return {
+        "audited_class_count": len(
+            {
+                label.rsplit(".", 1)[0]
+                for label in matched + equivalent + not_implemented + divergent
+            }
+        ),
+        "matched_count": len(matched),
+        "declared_equivalent_count": len(equivalent),
+        "declared_not_implemented_count": len(not_implemented),
+        "declared_divergent_count": len(divergent),
+        "declared_divergences": {
+            f"{cls}.{param}": reason
+            for (cls, param), reason in sorted(
+                CONSTRUCTOR_DEFAULT_DIVERGENCES.items()
+            )
+        },
+        "declared_equivalences": {
+            f"{cls}.{param}": reason
+            for (cls, param), reason in sorted(
+                CONSTRUCTOR_DEFAULT_EQUIVALENCES.items()
+            )
+        },
+        "declared_not_implemented": {
+            f"{cls}.{param}": reason
+            for (cls, param), reason in sorted(
+                CONSTRUCTOR_PARAMETERS_NOT_IMPLEMENTED.items()
+            )
+        },
+        "parameter_aliases": dict(sorted(CONSTRUCTOR_PARAMETER_ALIASES.items())),
+    }
+
+
 def _qualified_optuna_references(tree: ast.AST) -> set[str]:
     """Conservative identity evidence: never infer an owner from a suffix.
 
@@ -1110,6 +1464,7 @@ def build_coverage() -> dict[str, Any]:
             "differential-oracle section; assertion-only mappings do not pass"
         ),
         "scope_rules": SCOPE_RULES,
+        "constructor_default_audit": _audit_constructor_defaults(oracle),
         "oracle_asserted_count": asserted_count,
         "required_oracle_asserted_count": len(required_asserted),
         "scope_counts": scope_counts,

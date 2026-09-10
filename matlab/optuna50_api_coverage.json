@@ -230,6 +230,67 @@
     ]
   },
   "closure_rule": "full_compatibility_complete is true only when every entry whose scope is 'required' is present and has evidence derived from an upstream differential-oracle section; assertion-only mappings do not pass",
+  "constructor_default_audit": {
+    "audited_class_count": 46,
+    "declared_divergences": {
+      "FanovaImportanceEvaluator.seed": "Upstream seed=None means fresh entropy per instance; MATLAB defaults to a fixed 0, so two unseeded MATLAB evaluators agree with each other where two upstream ones do not.",
+      "MeanDecreaseImpurityImportanceEvaluator.seed": "Same divergence as FanovaImportanceEvaluator.seed: upstream None is fresh entropy, MATLAB pins 0.",
+      "Terminator.improvement_evaluator": "Upstream Terminator() resolves None to RegretBoundEvaluator (measured on the pinned build); MATLAB defaults to BestValueStagnationEvaluator, so an unconfigured Terminator stops on a different criterion than upstream."
+    },
+    "declared_divergent_count": 3,
+    "declared_equivalences": {
+      "CmaEsSampler.popsize": "MATLAB PopulationSize=0 is the unset sentinel; the constructor rejects anything between zero and two, so zero cannot be a real population.",
+      "CmaEsSampler.sigma0": "MATLAB types this argument as a scalar double, which cannot hold [], so NaN is the unset sentinel for upstream None.",
+      "CmaEsSampler.x0": "MATLAB X0 is typed struct, so an empty struct is the unset value for upstream None.",
+      "EMMREvaluator.seed": "MATLAB types this argument as a scalar double, which cannot hold [], so NaN is the unset sentinel for upstream None.",
+      "FloatDistribution.step": "MATLAB types this argument as a scalar double, which cannot hold [], so NaN is the unset sentinel for upstream None.",
+      "FrozenTrial.values": "MATLAB types this argument as a scalar double, which cannot hold [], so NaN is the unset sentinel for upstream None.",
+      "MaxTrialsCallback.states": "Upstream carries a TrialState tuple; MATLAB carries the equivalent state name as a string, matching how every other MATLAB entry point spells a trial state.",
+      "NSGAIIISampler.mutation_prob": "MATLAB types this argument as a scalar double, which cannot hold [], so NaN is the unset sentinel for upstream None.",
+      "NSGAIIISampler.reference_points": "MATLAB ReferencePoints is a numeric matrix, so a 0x0 matrix is the unset value for upstream None.",
+      "NSGAIISampler.mutation_prob": "MATLAB types this argument as a scalar double, which cannot hold [], so NaN is the unset sentinel for upstream None.",
+      "RDBStorage.engine_kwargs": "MATLAB engine_kwargs is typed struct, so an empty struct is the unset value for upstream None.",
+      "RDBStorage.grace_period": "MATLAB types this argument as a scalar double, which cannot hold [], so NaN is the unset sentinel for upstream None.",
+      "RDBStorage.heartbeat_interval": "MATLAB types this argument as a scalar double, which cannot hold [], so NaN is the unset sentinel for upstream None.",
+      "RegretBoundEvaluator.seed": "MATLAB types this argument as a scalar double, which cannot hold [], so NaN is the unset sentinel for upstream None.",
+      "RetryFailedTrialCallback.max_retry": "MATLAB types this argument as a scalar double, which cannot hold [], so NaN is the unset sentinel for upstream None.",
+      "RetryHeartbeatStaleTrialCallback.max_retry": "MATLAB types this argument as a scalar double, which cannot hold [], so NaN is the unset sentinel for upstream None.",
+      "SBXCrossover.eta": "MATLAB types this argument as a scalar double, which cannot hold [], so NaN is the unset sentinel for upstream None.",
+      "SPXCrossover.epsilon": "MATLAB types this argument as a scalar double, which cannot hold [], so NaN is the unset sentinel for upstream None.",
+      "TPESampler.consider_endpoints": "Optuna 5.0 types this bool | None, where None resolves internally. Measured on the pinned build: TPESampler() resolves it to False, which is the MATLAB default.",
+      "TPESampler.consider_magic_clip": "Optuna 5.0 types this bool | None. Measured on the pinned build: TPESampler() resolves it to True, which is the MATLAB default.",
+      "TPESampler.prior_weight": "Optuna 5.0 types this float | None. Measured on the pinned build: TPESampler() resolves it to 1.0, which is the MATLAB default.",
+      "TPESampler.warn_independent_sampling": "Optuna 5.0 types this bool | None. Measured on the pinned build: TPESampler() resolves it to False, which is the MATLAB default.",
+      "ThresholdPruner.lower": "MATLAB types this argument as a scalar double, which cannot hold [], so NaN is the unset sentinel for upstream None.",
+      "ThresholdPruner.upper": "MATLAB types this argument as a scalar double, which cannot hold [], so NaN is the unset sentinel for upstream None.",
+      "UNDXCrossover.sigma_eta": "MATLAB types this argument as a scalar double, which cannot hold [], so NaN is the unset sentinel for upstream None.",
+      "VSBXCrossover.eta": "MATLAB types this argument as a scalar double, which cannot hold [], so NaN is the unset sentinel for upstream None."
+    },
+    "declared_equivalent_count": 26,
+    "declared_not_implemented": {
+      "Boto3ArtifactStore.client": "Artifact stores are scoped out-of-scope; a boto3 client object has no MATLAB counterpart.",
+      "GPSampler.independent_sampler": "MATLAB GPSampler does not expose an independent-sampler override; recorded as a limitation rather than a silently different knob.",
+      "GPSampler.warn_independent_sampling": "Follows independent_sampler: with no override there is no independent-sampling warning to configure.",
+      "NSGAIIISampler.elite_population_selection_strategy": "MATLAB NSGA-III uses the built-in reference-point elite selection and exposes no strategy override.",
+      "SBXCrossover.uniform_crossover_prob": "MATLAB implements the SBX crossover proper; the per-gene uniform mixing knobs are not exposed.",
+      "SBXCrossover.use_child_gene_prob": "Follows uniform_crossover_prob.",
+      "VSBXCrossover.uniform_crossover_prob": "Follows SBXCrossover.uniform_crossover_prob.",
+      "VSBXCrossover.use_child_gene_prob": "Follows SBXCrossover.use_child_gene_prob."
+    },
+    "declared_not_implemented_count": 8,
+    "matched_count": 123,
+    "parameter_aliases": {
+      "constraints_func": "ConstraintsFcn",
+      "crossover_prob": "CrossoverProbability",
+      "gamma": "GammaFcn",
+      "mutation_prob": "MutationProbability",
+      "n_ei_candidates": "NumberOfEIChoices",
+      "n_min_trials": "MinCompletedTrials",
+      "popsize": "PopulationSize",
+      "swapping_prob": "SwappingProbability",
+      "weights": "WeightsFcn"
+    }
+  },
   "entries": [
     {
       "kind": "class",
@@ -8118,6 +8179,6 @@
   "upstream_inventory": "tests/matlab/fixtures/optuna50_public_api.json",
   "upstream_inventory_sha256": "81CBD4C33ACAC95063994CC8DE8B5BBEF788C40ED23F8ECEAE690C9F0D14B602",
   "upstream_oracle": "tests/matlab/fixtures/optuna50_oracle.json",
-  "upstream_oracle_sha256": "1B8640596D0D3B20ABE8B34E621738ABEFC9B7E9F81E7C85E7CB8A7B0FF7A2B3",
+  "upstream_oracle_sha256": "509BAFF53C7B5DC14B7695C67FFC52CEBD41DF550DE11F75684EC65A784B7292",
   "upstream_version": "5.0.0"
 }

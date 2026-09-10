@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import importlib.metadata
 import inspect
 import json
@@ -24,6 +25,22 @@ import scipy
 from optuna.trial import TrialState
 
 EXPECTED_VERSION = "5.0.0"
+
+CONSTRUCTOR_MODULE_NAMES = [
+    "optuna",
+    "optuna.artifacts",
+    "optuna.distributions",
+    "optuna.importance",
+    "optuna.pruners",
+    "optuna.samplers",
+    "optuna.samplers.nsgaii",
+    "optuna.search_space",
+    "optuna.storages",
+    "optuna.storages.journal",
+    "optuna.study",
+    "optuna.terminator",
+    "optuna.trial",
+]
 INTEGRATION_EXPORTS = (
     "AllenNLPExecutor",
     "AllenNLPPruningCallback",
@@ -3418,6 +3435,87 @@ def _terminator_base_contract() -> dict[str, object]:
     }
 
 
+def _constructor_default_contract() -> dict[str, object]:
+    """Record every defaulted constructor parameter on the public surface.
+
+    The API inventory records classes and their public members, but not
+    __init__, so a changed constructor default was invisible to the coverage
+    gate while changing every seeded result.  Optuna 5.0 is exactly that case:
+    TPESampler moved multivariate from False to None and constant_liar from
+    False to True, and only the second had a named default test.
+
+    This records the literal signature default, not a resolved value.  Several
+    5.0 parameters are typed "X | None" where None means "resolve internally",
+    so the literal is None while the effective value is something else; the
+    MATLAB comparison declares those equivalences explicitly rather than this
+    oracle guessing at private state.
+    """
+    modules: dict[str, object] = {}
+    for module_name in CONSTRUCTOR_MODULE_NAMES:
+        try:
+            module = importlib.import_module(module_name)
+        except Exception as error:  # report, never silently skip a module
+            raise RuntimeError(
+                f"Cannot import {module_name} for the constructor contract: {error}"
+            ) from error
+        exported = getattr(module, "__all__", None)
+        names = sorted(exported) if exported else sorted(
+            name for name in vars(module) if not name.startswith("_")
+        )
+        classes: dict[str, object] = {}
+        for name in names:
+            obj = getattr(module, name, None)
+            if not inspect.isclass(obj):
+                continue
+            try:
+                signature = inspect.signature(obj.__init__)
+            except (ValueError, TypeError):
+                continue
+            parameters: dict[str, object] = {}
+            for parameter in signature.parameters.values():
+                if parameter.name == "self":
+                    continue
+                if parameter.default is inspect.Parameter.empty:
+                    continue
+                annotation = parameter.annotation
+                parameters[parameter.name] = {
+                    "default_repr": repr(parameter.default),
+                    "annotation": (
+                        annotation
+                        if isinstance(annotation, str)
+                        else getattr(annotation, "__name__", str(annotation))
+                    ),
+                    "kind": parameter.kind.name,
+                }
+            if parameters:
+                classes[name] = parameters
+        if classes:
+            modules[module_name] = classes
+    total = sum(
+        len(parameters)
+        for classes in modules.values()
+        for parameters in classes.values()
+    )
+    return {
+        "modules": modules,
+        "excluded_modules": {
+            "optuna.integration": (
+                "Third-party framework callbacks are scoped out-of-scope and "
+                "discharged by radia_optuna.bridge. optuna.integration also "
+                "raises on attribute access for any integration whose backend "
+                "is absent, so recording its defaults would make the oracle "
+                "depend on optional third-party installs."
+            ),
+            "optuna.visualization": (
+                "Plotting is scoped out-of-scope; the study is exported and "
+                "plotted from Python."
+            ),
+        },
+        "class_count": sum(len(classes) for classes in modules.values()),
+        "parameter_count": total,
+    }
+
+
 def build_oracle() -> dict[str, object]:
     optuna.logging.set_verbosity(optuna.logging.WARNING)
     if optuna.__version__ != EXPECTED_VERSION:
@@ -3434,6 +3532,7 @@ def build_oracle() -> dict[str, object]:
         "python_version": sys.version.split()[0],
         "torch_version": importlib.metadata.version("torch"),
         "cmaes_version": importlib.metadata.version("cmaes"),
+        "constructor_defaults": _constructor_default_contract(),
         "defaults": {
             "anonymous_prefix": "no-name-",
             "single_sampler": type(single.sampler).__name__,
