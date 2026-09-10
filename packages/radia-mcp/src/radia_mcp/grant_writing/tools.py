@@ -5772,6 +5772,290 @@ def grant_writing_template_residue_check(text: str) -> dict:
     }
 
 
+_UNRESOLVED_TARGET_QUALIFIER = re.compile(
+    r"(?i:\b(?:TBD|TBC|FIXME)\b)|暫定(?:値|目標|案|版|的)?|"
+    r"仮(?:置き|設定|目標|値|案)|要確認|未確定|後日確定|提出版までに確定"
+)
+_TARGET_CONTEXT = re.compile(
+    r"目標|達成|指標|基準|閾値|精度|誤差|性能|終了時|以下|以上|以内|未満"
+)
+_NUMERIC_TARGET = re.compile(
+    r"\d+(?:\.\d+)?\s*(?:%|％|倍|件|台|人|日|月|年|円|mm|cm|m|T|A|V)?"
+)
+
+
+def grant_writing_unresolved_target_language_check(text: str) -> dict:
+    """List unresolved qualifiers that remain beside a stated target.
+
+    This is deliberately an unscored fact audit. ``暫定`` can be correct in a
+    working draft and ``仮置き`` can describe an experimental operation. The
+    tool therefore reports the exact line, qualifier, and nearby target
+    signals, then leaves the submission decision to the author.
+    """
+    raw = _read_source_without_latex_comments(text)
+    candidates: list[dict] = []
+    for number, line in enumerate(raw.splitlines(), 1):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("<!--"):
+            continue
+        qualifiers = [m.group(0) for m in _UNRESOLVED_TARGET_QUALIFIER.finditer(stripped)]
+        if not qualifiers:
+            continue
+        target_terms = sorted(set(_TARGET_CONTEXT.findall(stripped)))
+        numbers = _NUMERIC_TARGET.findall(stripped)
+        if not target_terms and not numbers:
+            continue
+        candidates.append({
+            "line": number,
+            "qualifiers": qualifiers,
+            "target_terms": target_terms,
+            "numbers": numbers[:8],
+            "excerpt": stripped[:240],
+        })
+    return {
+        "applicable": bool(raw.strip()),
+        "score": None,
+        "automatic_judgment_prohibited": True,
+        "candidate_count": len(candidates),
+        "candidates": candidates[:40],
+        "questions": ([
+            (
+                "数値目標の近くに未確定語が残っている。作業メモなら提出本文から除き、"
+                "提出時にも必要な限定なら根拠と確定時期を人が確認する。"
+            )
+        ] if candidates else []),
+        "target": "show unresolved wording beside targets without deciding whether it is wrong",
+        "source": "unresolved-target language fact audit",
+    }
+
+
+def grant_writing_applicant_self_reference_check(
+    text: str,
+    applicant_name: str = "",
+) -> dict:
+    """List third-person references that may denote the applicant.
+
+    ``applicant_name`` accepts comma- or pipe-separated aliases, for example
+    ``菅原,菅原賢悟,Sugahara``. Bibliographic author lines are excluded. A
+    third-person form can be legitimate in a prior-work comparison, so this
+    tool never calls a match a defect and never rewrites authorship order.
+    """
+    aliases = [
+        item.strip()
+        for item in re.split(r"[,，|]", applicant_name or "")
+        if item.strip()
+    ]
+    if not aliases:
+        return {
+            "applicable": False,
+            "score": None,
+            "automatic_judgment_prohibited": True,
+            "candidate_count": 0,
+            "candidates": [],
+            "questions": [],
+            "reason": "pass applicant_name with one or more aliases",
+            "source": "applicant self-reference fact audit",
+        }
+
+    raw = _read_source_without_latex_comments(text)
+    patterns = []
+    for alias in aliases:
+        escaped = re.escape(alias)
+        patterns.extend((
+            (alias, re.compile(escaped + r"研究室(?:で)?は")),
+            (alias, re.compile(escaped + r"ら(?:は|が|の)")),
+        ))
+
+    candidates: list[dict] = []
+    for number, line in enumerate(raw.splitlines(), 1):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        # Preserve formal author order in achievement lists. DOI-bearing and
+        # comma-rich year lines are bibliography, not applicant narration.
+        if re.search(r"\b(?:19|20)\d{2}\b", stripped) and (
+            "DOI" in stripped or stripped.count(",") >= 2
+        ):
+            continue
+        for alias, pattern in patterns:
+            match = pattern.search(stripped)
+            if match:
+                candidates.append({
+                    "line": number,
+                    "alias": alias,
+                    "match": match.group(0),
+                    "excerpt": stripped[:240],
+                })
+                break
+    return {
+        "applicable": True,
+        "score": None,
+        "automatic_judgment_prohibited": True,
+        "applicant_aliases": aliases,
+        "candidate_count": len(candidates),
+        "candidates": candidates[:40],
+        "questions": ([
+            (
+                "申請者自身を第三者として述べている可能性がある。本文なら「申請者は」"
+                "または「本研究室では」が自然か、先行研究の著者表示なら現状のままかを確認する。"
+            )
+        ] if candidates else []),
+        "note": "bibliographic author order is never rewritten by this audit",
+        "source": "applicant self-reference fact audit",
+    }
+
+
+_PRIORITY_DECLARATION_PATTERNS = (
+    re.compile(
+        r"(?:本研究の)?(?:中心|本命|核心|最重要(?:課題|成果)?)は[、,:：]?"
+        r"(?P<target>[^。．!?！？\n]{2,80}?)(?:にある|である|とする)"
+    ),
+    re.compile(
+        r"(?P<target>[^。．!?！？\n]{2,80}?)こそ(?:本研究の)?(?:中心|本命|核心)"
+    ),
+    re.compile(
+        r"(?P<target>[^。．!?！？\n]{2,80}?)(?:が|こそ)(?:本研究の)?"
+        r"(?:中心|本命|核心|要)(?:である|にある)"
+    ),
+)
+_PRIORITY_GENERIC_TERMS = frozenset({
+    "本研究", "中心", "本命", "核心", "最重要", "課題", "成果", "部分",
+    "検証", "実現", "開発", "モデル", "これ", "それ", "ため", "もの",
+})
+
+
+def _priority_anchors(target: str) -> list[str]:
+    named = re.findall(r"(?<![A-Za-z0-9])[A-Za-z][A-Za-z0-9_-]{2,}", target)
+    if named:
+        return list(dict.fromkeys(named))
+    terms = [
+        term for term in _CLAIM_TERM.findall(target)
+        if len(term) >= 2 and term not in _PRIORITY_GENERIC_TERMS
+    ]
+    return list(dict.fromkeys(terms))[:6]
+
+
+def _priority_review_sections(text: str) -> dict[str, str]:
+    headings = list(re.finditer(r"(?m)^\s*(#{1,6})\s*([^\n#]+?)\s*$", text))
+    sections: dict[str, str] = {}
+    aliases = {
+        "originality": ("独創性", "独自性", "新規性"),
+        "targets": ("達成目標", "目標と解決すべき課題", "数値目標"),
+    }
+    for index, heading in enumerate(headings):
+        title = heading.group(2).strip()
+        end = headings[index + 1].start() if index + 1 < len(headings) else len(text)
+        body = text[heading.end():end]
+        for key, markers in aliases.items():
+            if any(marker in title for marker in markers):
+                # A form commonly has both an upper field such as
+                # 「目標と解決すべき課題」 and a lower 「達成目標」 heading.
+                # Both are the evaluation field; keeping only the first made
+                # the actual target table invisible to this correspondence audit.
+                sections[key] = "\n".join(filter(None, (sections.get(key), body)))
+
+    rejection = re.search(
+        r"(?ms)^\s*(?:\*\*)?(?:棄却条件|未達条件|合否条件)(?:\*\*)?\s*[:：]?"
+        r"(?P<body>.*?)(?=\n\s*\n|^\s*#{1,6}\s|\Z)",
+        text,
+    )
+    if rejection:
+        sections["rejection_condition"] = rejection.group("body")
+    return sections
+
+
+def grant_writing_declared_priority_coverage_check(text: str) -> dict:
+    """Show where a declared centre or main aim reappears in evaluation fields.
+
+    The output is a correspondence table, not a verdict. Section detection and
+    pronoun resolution are necessarily heuristic; the author decides whether
+    an absent literal anchor is a real structural mismatch or a valid paraphrase.
+    """
+    raw = _read_source_without_latex_comments(text)
+    declarations: list[dict] = []
+    for pattern in _PRIORITY_DECLARATION_PATTERNS:
+        for match in pattern.finditer(raw):
+            target = re.sub(r"[*_`]+", "", match.group("target")).strip(" 、，,:：")
+            anchors = _priority_anchors(target)
+            # 「この未検証部分が本研究の要である」 carries its noun in the
+            # immediately preceding sentence. Resolve only to the nearest
+            # explicit Latin project/method label and still expose the
+            # resolution as a heuristic in the result.
+            resolved_from_context = False
+            if re.search(r"この|その|未検証部分|部分", target):
+                context = raw[max(0, match.start() - 240):match.start()]
+                named = re.findall(
+                    r"(?<![A-Za-z0-9])[A-Za-z][A-Za-z0-9_-]{2,}", context
+                )
+                if named:
+                    anchors = [named[-1]]
+                    resolved_from_context = True
+            line = raw.count("\n", 0, match.start()) + 1
+            declarations.append({
+                "line": line,
+                "declaration": re.sub(r"\s+", " ", match.group(0)).strip()[:200],
+                "target": target,
+                "anchors": anchors,
+                "anchors_resolved_from_context": resolved_from_context,
+            })
+    # Stable de-duplication when two patterns meet the same wording.
+    unique: list[dict] = []
+    seen = set()
+    for declaration in sorted(declarations, key=lambda item: item["line"]):
+        key = (declaration["line"], declaration["target"])
+        if key not in seen:
+            unique.append(declaration)
+            seen.add(key)
+    declarations = unique
+
+    sections = _priority_review_sections(raw)
+    required = ("originality", "targets", "rejection_condition")
+    coverage: list[dict] = []
+    uncovered: list[dict] = []
+    for declaration in declarations:
+        for section_name in required:
+            body = sections.get(section_name, "")
+            matched = [
+                anchor for anchor in declaration["anchors"]
+                if re.search(re.escape(anchor), body, flags=re.IGNORECASE)
+            ]
+            row = {
+                "declaration_line": declaration["line"],
+                "target": declaration["target"],
+                "anchors": declaration["anchors"],
+                "section": section_name,
+                "section_present": section_name in sections,
+                "matched_anchors": matched,
+                "literal_anchor_present": bool(matched),
+            }
+            coverage.append(row)
+            if declaration["anchors"] and not matched:
+                uncovered.append(row)
+
+    applicable = bool(declarations)
+    return {
+        "applicable": applicable,
+        "score": None,
+        "automatic_judgment_prohibited": True,
+        "declaration_count": len(declarations),
+        "declarations": declarations,
+        "sections_found": sorted(sections),
+        "coverage": coverage,
+        "uncovered_count": len(uncovered),
+        "uncovered": uncovered,
+        "questions": ([
+            (
+                "「中心」「本命」「要」と宣言した対象の語が、独創性・達成目標・棄却条件の"
+                "一部に見当たらない。妥当な言い換えか、評価構造からの脱落かを人が確認する。"
+            )
+        ] if uncovered else []),
+        "note": (
+            "literal absence is not a defect: a pronoun or valid paraphrase may carry the same role"
+        ),
+        "source": "declared-priority/evaluation-structure correspondence audit",
+    }
+
+
 def grant_writing_vague_claim_verb_check(text: str) -> dict:
     """Flag 統合/連携/活用 that never say how.
 
@@ -7643,6 +7927,7 @@ def grant_writing_health_report(
     program: str = "generic",
     skip: str = "",
     pdf: str = "",
+    applicant_name: str = "",
 ) -> dict:
     """Integrated grant-writing health report.
 
@@ -7655,6 +7940,8 @@ def grant_writing_health_report(
         skip: comma-separated tool ids to skip, e.g. ``sentence,literature``.
         pdf: compiled proposal to check page allowances against. When omitted
             and the source is a path, a single sibling PDF is used.
+        applicant_name: optional comma- or pipe-separated aliases used only by
+            the unscored applicant self-reference fact audit.
     """
     _validate_program(program)
     text = _read_text_if_path(text_or_path)
@@ -7666,6 +7953,7 @@ def grant_writing_health_report(
         "nouns", "originality", "pages", "persuasion", "pilot", "residue",
         "scale", "japanese", "readability", "momentum", "sections", "sentence",
         "translationese", "vague", "vocabulary", "weak", "singularity",
+        "unresolved", "self_reference", "priority_coverage",
     }
     unknown_skip_ids = sorted(skip_set - valid_skip_ids)
     if unknown_skip_ids:
@@ -7873,6 +8161,33 @@ def grant_writing_health_report(
                     "comments": residue["comments"][:5],
                 })
 
+    if "unresolved" not in skip_set:
+        unresolved = grant_writing_unresolved_target_language_check(text)
+        detailed_results["unresolved_target_language"] = unresolved
+        if unresolved["candidates"]:
+            priority_issues.append({
+                "tool": "unresolved",
+                "name": "unresolved_target_language_check",
+                "severity": "UNKNOWN",
+                "score": None,
+                "comments": unresolved["questions"],
+            })
+
+    if "self_reference" not in skip_set:
+        self_reference = grant_writing_applicant_self_reference_check(
+            text,
+            applicant_name=applicant_name,
+        )
+        detailed_results["applicant_self_reference"] = self_reference
+        if self_reference["candidates"]:
+            priority_issues.append({
+                "tool": "self_reference",
+                "name": "applicant_self_reference_check",
+                "severity": "UNKNOWN",
+                "score": None,
+                "comments": self_reference["questions"],
+            })
+
     if "vague" not in skip_set:
         vague = grant_writing_vague_claim_verb_check(text)
         detailed_results["vague_claim_verb"] = vague
@@ -8021,6 +8336,18 @@ def grant_writing_health_report(
                     "score": claim["score"],
                     "comments": claim["comments"][:5],
                 })
+
+    if "priority_coverage" not in skip_set:
+        priority_coverage = grant_writing_declared_priority_coverage_check(text)
+        detailed_results["declared_priority_coverage"] = priority_coverage
+        if priority_coverage["uncovered"]:
+            priority_issues.append({
+                "tool": "priority_coverage",
+                "name": "declared_priority_coverage_check",
+                "severity": "UNKNOWN",
+                "score": None,
+                "comments": priority_coverage["questions"],
+            })
 
     if "format" not in skip_set:
         review_format = grant_writing_kaken_review_format_check(text)
