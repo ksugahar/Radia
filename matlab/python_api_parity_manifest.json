@@ -9,6 +9,38 @@
   ],
   "rules": [
     {
+      "id": "electromagnet-validation",
+      "patterns": ["electromagnet_validation.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/electromagnetValidation.m"],
+      "notes": "Public three-formulation and ESRF validation contracts; batch-only, no duplicated numerical oracle."
+    },
+    {
+      "id": "esrf-model-definitions",
+      "patterns": ["esrf_examples.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/esrfExamples.m"],
+      "notes": "Source-traceable SI model definitions, CAD/source factories, and artifact export. Python CAD and NGSolve objects are retained at this explicit batch boundary."
+    },
+    {
+      "id": "static-electromagnet",
+      "patterns": ["static_electromagnet.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/staticElectromagnet.m"],
+      "notes": "Named MATLAB entry for the total/reduced Omega domain and solve contract. Executes the installed Python implementation without copying the formulation or claiming validation of another source revision."
+    },
+    {
+      "id": "sparsesolv-native-and-python",
+      "patterns": ["sparsesolv_ngsolve.*"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/sparsesolv.m"],
+      "notes": "Compiled public module, not discoverable by a .py-only inventory. Native AMS (real/complex, coordinate-based 3D HCurl order 1), IC and COCR operate on retained NGSolve Matrix handles. Native AMS currently exposes cycle/smoothing only; Update, detailed solver telemetry, custom gradients, AMG, GMRES and SparseSolvSolver options remain explicitly available through the named Python batch entry. Python objects and MEX handles cannot be interchanged. This is partial native coverage, not full native parity."
+    },
+    {
       "id": "core-pybind-api",
       "patterns": ["__init__.py"],
       "classification": "native-mex",
@@ -507,6 +539,14 @@
     }
   ],
   "binary_extensions": [
+    {
+      "python": "sparsesolv_ngsolve.pyd",
+      "classification": "native-mex",
+      "matlab": "matlab/+radia/+sparsesolv/AMS.m; matlab/+radia/+sparsesolv/IC.m; matlab/+radia/+sparsesolv/COCR.m",
+      "status": "focused-native-commands",
+      "native_commands": ["sparsesolv.ams", "sparsesolv.ic", "sparsesolv.cocr"],
+      "fallback": "matlab/+radia/+python/sparsesolv.m"
+    },
     {
       "python": "_radia_pybind.pyd",
       "classification": "native-mex",
