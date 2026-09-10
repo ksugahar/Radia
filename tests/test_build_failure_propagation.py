@@ -45,9 +45,18 @@ def test_native_build_guard_propagates_failure(tmp_path, target, exit_code):
 def test_plugin_configuration_failure_cannot_use_stale_build_tree():
     source = (ROOT / "Build.ps1").read_text(encoding="utf-8-sig")
     commands = re.findall(
-        r'"\$CMAKE_EXE" -G Ninja [^\n]*"%CUBIT_PLUGIN_SRC%"\n'
+        r'"\$CMAKE_EXE" -G Ninja [^\n]*"!CUBIT_PLUGIN_SRC!"\n'
         r'(?P<guard>\s*if errorlevel 1 \([^)]*\))', source,
     )
     assert len(commands) == 2
     assert all("configuration failed" in guard and "exit /b 1" in guard
                for guard in commands)
+
+
+def test_optional_cubit_build_does_not_reuse_stale_runner_environment():
+    source = (ROOT / "Build.ps1").read_text(encoding="utf-8-sig")
+    plugin_block = source[source.index('set "CUBIT_DIR='):source.index(
+        'echo Build completed.', source.index('set "CUBIT_DIR='))]
+    assert 'if exist "!CUBIT_DIR!\\CubitConfig.cmake" (' in plugin_block
+    assert plugin_block.count('-DCubit_DIR="!CUBIT_DIR!"') == 2
+    assert '%CUBIT_DIR%' not in plugin_block

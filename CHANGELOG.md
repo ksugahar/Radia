@@ -5,15 +5,21 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.83 - Safe AMS setup and physical shifted preconditioning
+
+Released 2026-09-10.
+
+- Corrected the SI normalization of `rad.FldFrc` for H-field inputs, replacing
+  a spurious factor of about 6.33e11 with the Maxwell-stress result. Centralized
+  harmonic Maxwell-stress integration in `radia.force` / `radia_mcp.force`, and
+  upgraded virtual-work and coenergy endpoint derivatives to second order for
+  nonuniform and periodic samples in both Python and MATLAB.
+
 - Retired `solve_magnetostatic_reduced_omega_kelvin`: calls now fail explicitly
   because its Kelvin exterior/interface convention is not validated. Migrate
   to the total/reduced Omega API with explicit interface/source data. Preserve
   the nonmatching historical comparison in `validation_test`, not as proof of
   complementary bounds or variable-transformation equivalence.
-
-## 4.95.82 - Safe AMS setup and physical shifted preconditioning
-
-Released 2026-09-10.
 
 - AMS construction and matrix updates now reject active NGSolve TaskManager
   contexts with a catchable error before hierarchy setup. Real/complex factories
@@ -22,6 +28,8 @@ Released 2026-09-10.
 - The Hiruma AMS benchmark now keeps its epsilon shift in the real
   preconditioner surrogate only. The physical complex system remains unshifted,
   and historical shifted-system timing data is labeled accordingly.
+- Native tag builds now skip Cubit-only targets reliably on Cubit-free runners,
+  and release-ref discovery cannot block on an interactive credential helper.
 
 - Simplified Eqnedit64 automation to a single input/output conversion contract
   and migrated the `eqnedit64` package plus `radia-mcp.presentation` bridge to

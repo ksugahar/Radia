@@ -67,7 +67,8 @@ jobs:
           $releaseTags = @()
           if ($env:GITHUB_REF_TYPE -eq 'tag') {
             $repoUrl = "https://x-access-token:$env:GITHUB_TOKEN@github.com/${{ github.repository }}.git"
-            foreach ($line in (git ls-remote --tags $repoUrl @patterns)) {
+            $env:GIT_TERMINAL_PROMPT = '0'
+            foreach ($line in (git -c credential.helper= ls-remote --tags $repoUrl @patterns)) {
               $parts = $line -split '\s+'
               if ($parts.Count -lt 2 -or $parts[0] -ne $env:GITHUB_SHA) {
                 continue
