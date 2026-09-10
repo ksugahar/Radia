@@ -539,6 +539,40 @@ def _report_direct_solve_residual(a_bf, f_lf, solution, fes, block_names=None):
     return report
 
 
+def _assembled_primal_energy(a_bf, f_lf, solution, fes, primal_blocks):
+    """The functional the discrete solve actually minimises, from the system.
+
+    The solve is a saddle point of the Lagrangian; its primal part is
+    ``J(x_P) = 1/2 x_P^T A_PP x_P - b_P^T x_P`` over the potential blocks,
+    minimised subject to the interface constraint.  Evaluating it from the
+    ASSEMBLED matrix and vector -- not by integrating a coefficient function
+    afterwards -- is what makes it comparable across orders: a monotonicity
+    statement is owed to this number, under nested admissible sets, and not
+    to an energy recomputed with a different quadrature.
+
+    The multiplier entries are zeroed before the product, so only primal rows
+    and columns contribute and the constraint right-hand side drops out.
+    """
+    import numpy as _np
+
+    x_p = solution.vec.CreateVector()
+    x_p.data = solution.vec
+    values = x_p.FV().NumPy()
+    keep = _np.zeros(len(values), dtype=bool)
+    for index in primal_blocks:
+        span = fes.Range(index)
+        keep[span.start:span.stop] = True
+    values[~keep] = 0.0
+    product = x_p.CreateVector()
+    product.data = a_bf.mat * x_p
+    half_quadratic = 0.5 * float(_np.dot(x_p.FV().NumPy(), product.FV().NumPy()))
+    linear = float(_np.dot(_np.asarray(f_lf.vec.FV()), x_p.FV().NumPy()))
+    return {"half_xAx": half_quadratic,
+            "b_dot_x": linear,
+            "energy": half_quadratic - linear,
+            "primal_blocks": list(primal_blocks)}
+
+
 def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         mesh, H_s, source_potential, R_K, offset, *, mu_r_by_material=None,
         reduced_materials, total_materials, interface_boundary,
@@ -851,6 +885,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
     linear_residual = _report_direct_solve_residual(
         a_bf, f_lf, solution, fes,
         block_names=("phi_reduced", "phi_total", "interface_constraint"))
+    assembled_energy = _assembled_primal_energy(
+        a_bf, f_lf, solution, fes, primal_blocks=(0, 1))
 
     phi_reduced_gf, phi_total_gf, multiplier_gf = solution.components[:3]
     H_reduced = H_s - grad(phi_reduced_gf)
@@ -887,6 +923,12 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
     return {
         "solution": solution,
         "linear_residual": linear_residual,
+        "assembled_energy": assembled_energy,
+        # The assembled system itself, so a caller can test whether another
+        # order's solution is admissible HERE: with the multiplier entries set
+        # to zero, the multiplier rows of f - A x are the interface constraint
+        # violation g - B x_P.
+        "system": {"bilinear_form": a_bf, "linear_form": f_lf},
         "phi_reduced": phi_reduced_gf,
         "phi_total": phi_total_gf,
         "interface_multiplier": multiplier_gf,
