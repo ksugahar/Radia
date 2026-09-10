@@ -57,7 +57,7 @@ Conversion graph:
 ```
 
 Release history now follows Radia's unified [changelog](../../CHANGELOG.md).
-See [BENCHMARKS.md](BENCHMARKS.md) for the public evaluation methodology.
+See [CONVERSION_GATES.md](CONVERSION_GATES.md) for the public conversion-gate methodology.
 
 Works without LTspice (pure-Python), but **uses LTspice's own
 `-netlist` automatically when LTspice.exe is installed** — that is the
@@ -354,7 +354,7 @@ looks like this:
 5. **Reopen in LTspice** to visually inspect and run the simulation.
    The regenerated schematic looks like one a human would have drawn
    — `.asc → .cir → .asc` count match is 100 % on real-world corpora
-   (see [BENCHMARKS.md](BENCHMARKS.md)).
+   (see [CONVERSION_GATES.md](CONVERSION_GATES.md)).
 
 ### Same loop without MCP (just the CLI)
 
@@ -455,7 +455,7 @@ parser warning.
 Radia checks more than component counts. The public regression lane verifies
 node-rename-invariant topology, grounded-pin placement, subcircuit retention,
 controlled and behavioral sources, generated script execution, CLI error
-behavior, and measure-log schemas. See [BENCHMARKS.md](BENCHMARKS.md) for the
+behavior, and measure-log schemas. See [CONVERSION_GATES.md](CONVERSION_GATES.md) for the
 reproducible public methodology.
 
 ### Third-party symbol libraries
