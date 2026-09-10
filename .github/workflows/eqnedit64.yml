@@ -51,10 +51,12 @@ jobs:
           node-version: '20'
 
       - name: Install test dependencies
-        run: python -m pip install pytest
+        # fonttools reads the shipped math font's cmap so the palette-face
+        # contract can be checked without a compiler or a registered font.
+        run: python -m pip install pytest fonttools
 
       - name: Check Eqnedit64 Web contract
-        run: python -m pytest tests/test_web_contract.py tests/test_node_dispatch.py tests/test_version_contract.py -q
+        run: python -m pytest tests/test_web_contract.py tests/test_node_dispatch.py tests/test_version_contract.py tests/test_palette_faces.py -q
 
       - name: Check Web JavaScript syntax and insertion behaviour
         run: |

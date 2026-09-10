@@ -15,6 +15,24 @@ explicit layout decision under MSVC `/W4 /WX /w14062` in release and CMake CI.
 The old generic layout fallback is forbidden. Static coverage and C++ runtime
 rejection tests protect separate failure modes.
 
+## Palette key acceptance
+
+A key is a promise about what pressing it produces, so the face is part of the
+contract and not decoration. Two rules hold, both checked from the source and
+the shipped font rather than from a rendered window.
+
+A symbol key must draw the character its command inserts. `\star` renders as
+U+22C6, so a key for it may not show U+2605; `\frown` and `\smile` are U+2322
+and U+2323, not the intersection and union signs. A face may be a word only
+where the inserted character has no standalone shape, such as the combining
+overlay behind `\not`.
+
+Every face character must be in the embedded Latin Modern Math cmap.
+`pick_button_font` gathers all faces into one sample and accepts a font only if
+it owns the whole sample, so an unavailable character does not blank its own
+key — it rejects the math font and redraws every palette in a fallback. That
+all-or-nothing gate stays; the sample is what must be kept clean.
+
 These are native-specific implementation checks. Web rendering belongs to
 MathJax; shared palette/TeX/Office contracts still require both editions' tests.
 Publish the matching Web build on the laboratory homepage, even when the only
