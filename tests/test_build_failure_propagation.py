@@ -57,8 +57,12 @@ def test_optional_cubit_build_does_not_reuse_stale_runner_environment():
     source = (ROOT / "Build.ps1").read_text(encoding="utf-8-sig")
     plugin_block = source[source.index('set "CUBIT_DIR='):source.index(
         'echo Build completed.', source.index('set "CUBIT_DIR='))]
-    assert '$BuildCubitPlugin = [bool]($CubitCmakeDir -and' in source
-    assert 'Test-Path (Join-Path $CubitCmakeDir "CubitConfig.cmake")' in source
+    assert '$DetectedCubitCmakeDir = if ($CubitInstallDir)' in source
+    assert '$BuildCubitPlugin = [bool]($CubitInstallDir -and' in source
+    assert ('Test-Path (Join-Path $CubitInstallDir '
+            '"cmake\\CubitConfig.cmake")') in source
+    assert 'set "CUBIT_DIR=$DetectedCubitCmakeDir"' in plugin_block
+    assert 'set "CUBIT_DIR=$CubitCmakeDir"' not in plugin_block
     assert 'if /I "$BuildCubitPlugin"=="True" (' in plugin_block
     assert 'if defined CUBIT_DIR' not in plugin_block
     assert plugin_block.count('-DCubit_DIR="!CUBIT_DIR!"') == 2
