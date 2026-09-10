@@ -145,15 +145,16 @@ def test_a_rule_drawn_with_axhline_is_not_data_either():
     assert figure_readability_problems(fig) == []
 
 
-def test_a_two_point_rule_in_data_coordinates_is_also_a_guide():
-    """The same boundary drawn as a plain two-point line, which is what an
-    author reaches for when ``axvline`` has already been blamed once."""
+def test_a_two_point_horizontal_data_series_is_not_mistaken_for_a_guide():
+    """A two-sample measurement may legitimately be horizontal.  Its geometry
+    alone cannot turn it into a guide and hide a covered marker."""
     fig, ax = plt.subplots(figsize=(6, 4))
-    ax.plot([2, 2], [0, 3], color="#CCCCCC", linewidth=0.8)
+    ax.plot([1, 2], [1.5, 1.5], marker="o")
     ax.set_xlim(0, 4)
     ax.set_ylim(0, 3)
-    ax.text(2.0, 1.5, "on the rule", ha="center", va="center")
-    assert figure_readability_problems(fig) == []
+    ax.text(1.0, 1.5, "covers data", ha="center", va="center")
+    problems = figure_readability_problems(fig)
+    assert any("covers" in p and "plotted point" in p for p in problems), problems
 
 
 def test_excluding_guides_does_not_excuse_a_label_on_the_curve():

@@ -71,20 +71,13 @@ def _is_guide_line(line, ax) -> bool:
     left the author choosing between a false failure and switching the gate
     off entirely.
 
-    Two signatures identify one. ``axvline``/``axhline`` use a blended
-    transform, not ``transData``; and a rule hand-drawn in data coordinates is
-    two points sharing an x or a y.
+    ``axvline``/``axhline`` use a blended transform that carries only one data
+    coordinate, whereas a plotted series carries both coordinates through
+    ``transData``.  Geometry alone is not a safe discriminator: a legitimate
+    two-point measurement can itself be horizontal or vertical.
     """
-    try:
-        if line.get_transform() is not ax.transData:
-            return True
-        xy = line.get_xydata()
-    except Exception:
-        return False
-    if xy is None or len(xy) != 2:
-        return False
-    (x0, y0), (x1, y1) = xy
-    return bool(x0 == x1 or y0 == y1)
+    carries_data = line.get_transform().contains_branch_seperately(ax.transData)
+    return tuple(carries_data) != (True, True)
 
 
 def _text_on_data(fig, renderer) -> list[str]:

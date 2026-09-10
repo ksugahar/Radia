@@ -199,6 +199,17 @@ def test_transactions_are_named_as_reviewed():
     assert result["entries"][0]["convention"] == "reviewed"
 
 
+@pytest.mark.parametrize(
+    "venue",
+    ["ieee transactions on magnetics", "IEEE TRANSACTIONS ON MAGNETICS"],
+)
+def test_english_venue_matching_is_case_insensitive(venue):
+    result = t.grant_writing_peer_review_convention_hints(
+        f"2. K. Sugahara, paper, {venue}, 2025"
+    )
+    assert result["entries"][0]["convention"] == "reviewed"
+
+
 def test_a_conference_is_reported_as_venue_dependent_not_guessed():
     """A proceedings is the genuinely ambiguous case: the check must hand it
     back rather than pick an answer the author has to un-pick later."""
@@ -212,6 +223,16 @@ def test_an_unmatched_line_is_not_reported_as_unreviewed():
     result = t.grant_writing_peer_review_convention_hints("4. 何かの成果, 2020")
     assert result["entry_count"] == 0
     assert result["applicable"] is False
+
+
+def test_collaborator_biography_is_not_counted_when_numbered_bibliography_exists():
+    text = """共同研究者はIEEE Trans. Magn., 2020の提案者である。
+1. K. Sugahara, “Paper A,” IEEE Trans. Magn., 2025
+2. K. Sugahara, “Paper B,” Proc. CEFC, 2026
+"""
+    result = t.grant_writing_peer_review_convention_hints(text)
+    assert result["entry_count"] == 2
+    assert result["by_convention"] == {"reviewed": 1, "venue_dependent": 1}
 
 
 # --- future-dated / placeholder publications --------------------------------
@@ -243,6 +264,33 @@ def test_an_entry_that_says_it_is_in_press_is_not_counted_as_undisclosed():
     )
     assert result["entries"][0]["status_disclosed"] is True
     assert result["undisclosed_count"] == 0
+
+
+@pytest.mark.parametrize("status", ["In Press", "ACCEPTED", "Submitted"])
+def test_english_disclosure_matching_is_case_insensitive(status):
+    result = t.grant_writing_future_dated_publication_check(
+        f"2. K. Sugahara, paper, IEEE Trans. Magn., 2027 ({status})",
+        application_year=2026,
+    )
+    assert result["entries"][0]["status_disclosed"] is True
+    assert result["undisclosed_count"] == 0
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "研究期間は2027年4月1日から2028年3月31日までとする。",
+        "1. 研究期間は2027年4月1日から2028年3月31日までとする。",
+        "2027年度 研究助成(A) 申請書",
+        "## __TODO__ 予算を確認する",
+    ],
+)
+def test_nonpublication_future_dates_and_markdown_are_ignored(text):
+    result = t.grant_writing_future_dated_publication_check(
+        text, application_year=2026
+    )
+    assert result["applicable"] is False
+    assert result["entry_count"] == 0
 
 
 def test_published_work_in_the_past_is_left_alone():
