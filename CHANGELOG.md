@@ -5,6 +5,11 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- AMS construction and matrix updates now reject active NGSolve TaskManager
+  contexts with a catchable error before hierarchy setup. Real/complex factories
+  and compatibility aliases are covered by subprocess regressions; parallel
+  application of an already-built preconditioner remains supported.
+
 - Simplified Eqnedit64 automation to a single input/output conversion contract
   and migrated the `eqnedit64` package plus `radia-mcp.presentation` bridge to
   it, while retaining the older native switches only as compatibility inputs.

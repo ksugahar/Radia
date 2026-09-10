@@ -13,12 +13,77 @@ based on mat.IsComplex() and auto-call Update() on construction.
 """
 
 import pytest
+import subprocess
+import sys
 from netgen.geom2d import unit_square
 from netgen.csg import unit_cube
 from ngsolve import *
 from radia.sparsesolv_ngsolve import ICPreconditioner
 from radia.sparsesolv_ngsolve import SparseSolvSolver
 from ngsolve.krylovspace import CGSolver
+
+
+@pytest.mark.parametrize("factory", [
+    "HypreBasedAMSPreconditioner", "CompactAMSPreconditioner",
+    "ComplexHypreBasedAMSPreconditioner", "ComplexCompactAMSPreconditioner",
+])
+def test_ams_taskmanager_setup_is_catchable(factory):
+    """A native crash must fail only the child, never take down the test runner."""
+    import radia.sparsesolv_ngsolve as native
+    script = r'''
+import importlib.util
+import sys
+import numpy as np
+from ngsolve import Mesh, HCurl, BilinearForm, TaskManager, curl, dx, SetNumThreads
+from netgen.csg import unit_cube
+spec = importlib.util.spec_from_file_location("sparsesolv_ngsolve", sys.argv[1])
+native = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(native)
+SetNumThreads(2)
+mesh = Mesh(unit_cube.GenerateMesh(maxh=0.8))
+space = HCurl(mesh, order=1, nograds=True)
+u, v = space.TnT()
+a = BilinearForm(space)
+a += (curl(u)*curl(v) + u*v)*dx
+a.Assemble()
+grad, h1 = space.CreateGradient()
+coords = [[mesh.ngmesh.Points()[i+1][j] for i in range(mesh.nv)] for j in range(3)]
+factory = getattr(native, sys.argv[2])
+kwargs = dict(freedofs=space.FreeDofs(), coord_x=coords[0], coord_y=coords[1], coord_z=coords[2])
+def make():
+    return factory(a.mat, grad, **kwargs)
+def rejected(operation):
+    try:
+        operation()
+    except RuntimeError as error:
+        assert "outside ngsolve.TaskManager" in str(error), str(error)
+    else:
+        raise AssertionError("AMS setup inside TaskManager was not rejected")
+with TaskManager():
+    rejected(make)
+pre = make()
+rhs, before = pre.CreateColVector(), pre.CreateRowVector()
+rhs.FV().NumPy()[:] = 1
+pre.Mult(rhs, before)
+expected = before.FV().NumPy().copy()
+with TaskManager():
+    rejected(pre.Update)
+    rejected(lambda: pre.Update(a.mat))
+    after = pre.CreateRowVector()
+    pre.Mult(rhs, after)
+np.testing.assert_allclose(after.FV().NumPy(), expected, rtol=1e-11, atol=1e-12)
+pre.Update()
+pre.Mult(rhs, after)
+np.testing.assert_allclose(after.FV().NumPy(), expected, rtol=1e-11, atol=1e-12)
+assert np.all(np.isfinite(expected)) and np.linalg.norm(expected) > 0
+print("AMS_CONTEXT_GUARD_OK")
+'''
+    result = subprocess.run(
+        [sys.executable, "-c", script, native.__file__, factory],
+        capture_output=True, text=True, timeout=90,
+    )
+    assert result.returncode == 0, (result.returncode, result.stdout, result.stderr)
+    assert "AMS_CONTEXT_GUARD_OK" in result.stdout
 
 
 # ============================================================================
