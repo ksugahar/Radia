@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 from pathlib import Path
 
 from radia_mcp.matlab import (
@@ -23,7 +24,16 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     contract = matlab_radia_mex_contract("mex")
 
     assert contract["status"] == "ready"
-    assert contract["command_count"] == 361
+    # Verify the actual general-gateway table, not a hand-maintained count.
+    root = Path(__file__).resolve().parents[3]
+    source = (root / "src/matlab/radia_mex.cpp").read_text(encoding="utf-8")
+    command_function = source.split("mxArray* Commands() {", 1)[1]
+    general_branch = command_function.split("#else", 1)[1].split("#endif", 1)[0]
+    names_array = general_branch.split("names[] = {", 1)[1].split("};", 1)[0]
+    expected_names = re.findall(r'"([a-zA-Z0-9_.]+)"', names_array)
+    assert expected_names
+    assert contract["command_names"] == expected_names
+    assert contract["command_count"] == len(set(expected_names))
     assert not any(
         command.startswith("optuna.")
         for command in contract["command_names"]

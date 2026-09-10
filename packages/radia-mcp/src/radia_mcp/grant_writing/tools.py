@@ -4372,6 +4372,8 @@ _CLAIM_MARKERS = (
     "研究目的は",
     "本研究の目的",
     "目的は",
+    "本研究の問い",
+    "研究の問い",
 )
 
 # The noun that names what the answer will BE. Parallel statements of one
@@ -4416,14 +4418,17 @@ def _claim_statements(text: str) -> list[dict]:
     so each marker takes its own sentence plus the following ones up to a
     sentence that closes the claim.
     """
-    sentences = [s for s in re.split(r"(?<=[。．!?！？])", text) if s.strip()]
+    sentences = [s for line in text.splitlines()
+                 for s in re.split(r"(?<=[。．!?！？])", line) if s.strip()]
 
     def marker_of(fragment: str) -> str | None:
         return next((m for m in _CLAIM_MARKERS if m in fragment), None)
 
     # An opener defers the claim to what follows (「中心の問いは次である。」).
-    opener = re.compile(r"(?:次である|次を問う|次のとおり|以下である)[。．]\s*$")
-    closer = re.compile(r"(?:か|である|ことである|問う|明らかにする)[。．]\s*$")
+    opener = re.compile(
+        r"(?:次である|次を問う|次のとおり|以下である|明快である|明確である|単純である)[。．]\s*$"
+    )
+    closer = re.compile(r"(?:か|である|ことである|問う|明らかにする)[。．?？]\s*$")
 
     statements: list[dict] = []
     consumed: set[int] = set()
@@ -4432,6 +4437,10 @@ def _claim_statements(text: str) -> list[dict]:
             continue
         marker = marker_of(sentence)
         if marker is None:
+            continue
+        # A bare heading must not consume the question on the following line.
+        # Short interrogatives with explicit punctuation are still sentences.
+        if not re.search(r"[。．!?！？]\s*$", sentence.strip()):
             continue
         chunk = [sentence]
         if opener.search(sentence.strip()) or not closer.search(sentence.strip()):
@@ -7649,7 +7658,7 @@ def grant_writing_health_report(
         "irreplaceable", "kaken", "kddi", "literature", "metric", "narrative",
         "nouns", "originality", "pages", "persuasion", "pilot", "residue",
         "scale", "japanese", "readability", "momentum", "sections", "sentence",
-        "translationese", "vague", "vocabulary", "weak",
+        "translationese", "vague", "vocabulary", "weak", "singularity",
     }
     unknown_skip_ids = sorted(skip_set - valid_skip_ids)
     if unknown_skip_ids:
@@ -7660,6 +7669,17 @@ def grant_writing_health_report(
     detailed_results: dict[str, dict] = {}
     detailed_scores: dict[str, float] = {}
     priority_issues: list[dict] = []
+
+    if "singularity" not in skip_set:
+        singularity = grant_writing_central_question_singularity_check(text)
+        detailed_results["central_question_singularity"] = singularity
+        if singularity["risks"]:
+            priority_issues.append({
+                "tool": "singularity",
+                "name": "central_question_singularity_check",
+                "score": None,
+                "comments": singularity["comments"],
+            })
 
     if "sections" not in skip_set:
         sections = grant_writing_section_presence(text, program=program)
@@ -8288,4 +8308,10 @@ def grant_writing_health_report(
 from ._publications import (  # noqa: F401
     grant_writing_achievement_count_check,
     grant_writing_publication_list,
+)
+
+from ._draft_checks import (  # noqa: F401
+    grant_writing_central_question_singularity_check,
+    grant_writing_draft_length_budget_check,
+    grant_writing_form_field_coverage_check,
 )
