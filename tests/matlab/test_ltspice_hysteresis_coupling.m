@@ -34,6 +34,11 @@ radia.simulink.buildHystereticLTspiceBlock(model,Netlist=fixture,Tables={{[0,1,2
 add_block("simulink/Sinks/To Workspace",model+"/CoupledOutputs",VariableName="hys_y",SaveFormat="Array",Position=[410 80 500 115]);
 add_line(model,"CommandAndPosition/1","Hysteretic LTspice Plant/1");add_line(model,"Hysteretic LTspice Plant/1","CoupledOutputs/1");set_param(model,StopTime="0.001",Solver="FixedStepDiscrete",FixedStep="0.001");
 first=sim(model);second=sim(model);y=first.hys_y;verifySize(t,y,[2,6]);verifyEqual(t,second.hys_y,y,"AbsTol",0);verifyGreaterThan(t,y(1),0);verifyGreaterThan(t,y(2),0);verifyGreaterThan(t,abs(y(4)),0);verifyGreaterThan(t,y(5),0);
+logs=dir(fullfile("C:\temp\radia_hysteretic_ltspice_block",'*radia_power_hysteresis_e2e*.log'));verifySize(t,logs,[1,1]);
+record=strtrim(string(fileread(fullfile(logs.folder,logs.name))));lines=splitlines(record);
+verifyTrue(t,contains(lines(1),"schema=radia.simulink.ltspice_hysteresis.run.v1"));
+verifyEqual(t,numel(lines(startsWith(lines,"step="))),2,"One record line per executed step.");
+verifyTrue(t,contains(lines(end),"finished failed=0"));
 clear cleanupModel cleanupAll
 end
 function testEnergyHysteresisIsRejectedAtBlockBoundary(t)

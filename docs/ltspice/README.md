@@ -62,6 +62,18 @@ that a qualifying trace exists, but cannot prove that every internal L/C state
 was saved. Production circuits must therefore validate continuous execution
 against interval execution at the intended sample time.
 
+Both coupling blocks retain run evidence asymmetrically, because the two
+failure reports that matter — "it crashed" and "the number is wrong" — need
+different artifacts. Each run writes one small record file to a deterministic
+path under the block's root directory, overwritten once per run and appended
+one line per step (inputs, outputs, iteration count, residual, and the folder
+that held that step's netlist, RAW and log). That record always survives,
+whatever the exit code. The heavy per-step folders are kept as a bounded ring
+of the most recent steps, pruned as the run advances so peak disk usage stays
+flat instead of growing with the step count. On a clean finish the ring is
+removed and the record remains; on a failure the folders are kept, so the
+failing step is still on disk next to the record that names it.
+
 Conversion graph:
 
 ```
