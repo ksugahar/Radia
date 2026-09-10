@@ -2592,6 +2592,26 @@ def test_budget_source_consistency_accepts_the_grouped_summary_headings(tmp_path
     assert wrong["differences"][0]["delta"] == 100
 
 
+def test_budget_group_includes_distinct_rows_using_group_and_member_labels(tmp_path):
+    source = tmp_path / "mixed_categories.csv"
+    source.write_text(
+        "費目区分,年度,品目,金額\n"
+        "物品費,2027,計測装置,200\n"
+        "A,2027,計算機,300\n"
+        "B,2027,消耗品,50\n",
+        encoding="utf-8-sig",
+    )
+    result = gw.grant_writing_budget_source_consistency_check(
+        str(source), expected_category_totals_json='{"物品費": 550}'
+    )
+    assert result["consistent"], result["differences"]
+    wrong = gw.grant_writing_budget_source_consistency_check(
+        str(source), expected_category_totals_json='{"物品費": 200}'
+    )
+    assert not wrong["consistent"]
+    assert wrong["differences"][0]["actual"] == 550
+
+
 def test_budget_source_consistency_accepts_japanese_category_headings(tmp_path):
     header = (
         "費目区分/Expenditure Categories,年度/FY,品名・仕様/Item (Specification),"

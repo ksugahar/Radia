@@ -7029,11 +7029,10 @@ def _with_summary_headings(ledger: dict[str, Decimal]) -> dict[str, Decimal]:
     """
     merged = dict(ledger)
     for group, members in _BUDGET_CATEGORY_GROUPS.items():
-        if group in merged:
-            # The summary heading is itself a ledger category here; adding its
-            # members again would double it.
-            continue
-        present = [merged[code] for code in members if code in merged]
+        # These totals contain accepted expenditure rows, not cached subtotal
+        # rows. A distinct expense labelled with the group heading must be
+        # added to expenses labelled with member codes, never shadow them.
+        present = [ledger[code] for code in (group, *members) if code in ledger]
         if present:
             merged[group] = sum(present, Decimal(0))
     return merged
