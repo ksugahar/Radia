@@ -1407,13 +1407,17 @@ class EddyBubbleDecomposition:
 
     @property
     def structural_keep(self) -> np.ndarray:
-        """DoFs protected from ordinary eddy-bubble elimination."""
+        """Diagnostic planned keep mask, not a constraint on EVRS construction.
+
+        Production builders retain explicit bridge/surface blocks separately;
+        this mask alone does not preserve an unexcited conductor cycle.
+        """
 
         return self.plan.conservative_structural_keep
 
     @property
     def eddy_bubble_candidate(self) -> np.ndarray:
-        """Bulk DoFs eligible for EVRS/eddy-bubble compression."""
+        """Diagnostic bulk candidate mask; not applied to EVRS free_dofs."""
 
         return self.plan.ordinary_evrs_candidate
 
@@ -5125,6 +5129,10 @@ def NgsolveEddyBubbleHCurlBasis(
     coupling to HDiv-MMM.  It generates an EVRS response basis in the high-order
     parent ``fes``, samples the physical current basis ``J = curl(T)``, and
     records the topology-aware eddy-bubbling split.
+
+    EVRS uses the caller's ``free_dofs``; ``bubbling.structural_keep`` and
+    ``eddy_bubble_candidate`` are diagnostics, not EVRS constraints. Retaining
+    topology requires explicit bridge/surface blocks in the downstream assembly.
     """
 
     if steps < 1:
