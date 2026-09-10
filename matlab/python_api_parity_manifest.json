@@ -189,6 +189,14 @@
       "notes": "Python/NumPy and MATLAB implement the same SI contracts for static and peak/RMS phasor Lorentz/Maxwell force and torque, virtual work/coenergy, air-gap estimates, and result metadata; field solution and quadrature remain solver-owned."
     },
     {
+      "id": "electromagnetic-force-ngsolve-symbolic",
+      "patterns": ["force_ngsolve.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/electromagnetics.m"],
+      "notes": "The symbolic twin of force.py integrates the Maxwell stress over an NGSolve boundary region, so its inputs are NGSolve CoefficientFunction/Mesh objects with no numeric or file ABI to carry across to MATLAB. MATLAB reaches the identical numbers natively through the sampled matlab/+radia/+force kernels; this module stays Python-owned."
+    },
+    {
       "id": "bem-peec",
       "patterns": ["bem/*.py", "bem_*.py", "ngsbem_*.py", "peec_*.py", "dielectric_solver.py", "fasthenry_parser.py", "scalar_bie_sibc.py"],
       "classification": "python-fallback",
