@@ -1,5 +1,7 @@
 function hystereticLTspiceSFunction(block)
 %HYSTERETICLTSPICESFUNCTION Full circuit/hysteresis interval coupling block.
+% Input 1 is [command; mechanical_gap_displacement_m]. GapPathFactor maps
+% that displacement to total series air-gap length; it is not extra iron.
 setup(block);
 end
 function setup(b)
@@ -36,12 +38,12 @@ catch cause
 end
 end
 function outputs(b)
-entry=store("get",key(b));c=entry.config;step=b.Dwork(1).Data+1;u=b.InputPort(1).Data(:);path=c.MagneticPath_m+c.GapPathFactor*max(u(2),0);
+entry=store("get",key(b));c=entry.config;step=b.Dwork(1).Data+1;u=b.InputPort(1).Data(:);airGap=c.GapPathFactor*max(u(2),0);
 if entry.has_pending,b.OutputPort(1).Data=entry.pending_output;return,end
 try
  r=radia.simulink.runHystereticLTspiceInterval(c.Netlist,entry.material,entry.hysteresis_state,entry.circuit_state, ...
    CommandName=c.CommandName,CommandValue=u(1),BackEmfName=c.BackEmfName,CurrentTrace=c.CurrentTrace, ...
-   Duration_s=b.DialogPrm(2).Data,Turns=c.Turns,CoreArea_m2=c.CoreArea_m2,MagneticPath_m=path,CoreVolume_m3=c.CoreVolume_m3, ...
+   Duration_s=b.DialogPrm(2).Data,Turns=c.Turns,CoreArea_m2=c.CoreArea_m2,MagneticPath_m=c.MagneticPath_m,AirGap_m=airGap,CoreVolume_m3=c.CoreVolume_m3, ...
    PreviousFlux_Wb=entry.previous_flux_Wb,OutputDirectory=fullfile(entry.folder,sprintf("step_%06d",step)), ...
    MaxIterations=c.MaxIterations,RelativeTolerance=c.RelativeTolerance,Relaxation=c.Relaxation,MaxStep_s=c.MaxStep_s,Timeout_s=c.Timeout_s,CouplingSamples=c.CouplingSamples);
  mu0=4*pi*1e-7;force=r.B_T(end)^2*c.CoreArea_m2/(2*mu0);
@@ -49,8 +51,8 @@ try
  entry.pending_hysteresis_state=r.hysteresis_state;entry.pending_circuit_state=r.circuit_state;entry.pending_flux_Wb=r.flux_Wb(end);entry.pending_output=y;entry.has_pending=true;
  entry.kept(end+1,1)=string(r.output_directory);store("set",key(b),entry);
  radia.simulink.internal.runArtifacts("append",entry.log_path,sprintf( ...
-  'step=%d t=%.17g command=%.17g position=%.17g path_m=%.17g iterations=%d residual=%.6g converged=%d current_A=%.17g B_T=%.17g flux_Wb=%.17g back_emf_V=%.17g force_N=%.17g energy_J=%.17g artifacts=%s', ...
-  step,b.CurrentTime,u(1),u(2),path,r.iterations,r.relative_residual,r.converged,y(1),y(2),y(3),y(4),y(5),y(6),r.output_directory));
+  'step=%d t=%.17g command=%.17g position_m=%.17g iron_path_m=%.17g air_gap_m=%.17g iterations=%d residual=%.6g converged=%d current_A=%.17g B_T=%.17g flux_Wb=%.17g back_emf_V=%.17g force_N=%.17g energy_J=%.17g energy_balance_residual_J=%.17g artifacts=%s', ...
+  step,b.CurrentTime,u(1),u(2),c.MagneticPath_m,airGap,r.iterations,r.relative_residual,r.converged,y(1),y(2),y(3),y(4),y(5),y(6),r.energy_balance_residual_J,r.output_directory));
 catch cause
  entry.failed=true;store("set",key(b),entry);
  radia.simulink.internal.runArtifacts("append",entry.log_path,sprintf( ...
