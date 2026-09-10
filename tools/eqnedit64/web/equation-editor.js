@@ -23,238 +23,2849 @@
    * タイトルバー・ビルドスタンプと同じ教訓）。 */
   var BUILD = "3.1.0 (2026-09-11)";
 
+  // BEGIN GENERATED PALETTES
   var PALETTES = [
-    {
-      label: "構造",
-      items: [
-        ["a/b", "\\frac{}{}", "分数"],
-        ["dfrac", "\\dfrac{}{}", "常に大きい分数（入れ子・文中でも縮まない）"],
-        ["√", "\\sqrt{}", "平方根"],
-        ["ⁿ√", "\\sqrt[]{}", "n乗根"],
-        ["x²", "^{}", "上付き"],
-        ["xᵢ", "_{}", "下付き"],
-        ["Σ", "\\sum_{}^{}", "総和"],
-        ["∏", "\\prod_{}^{}", "総乗"],
-        ["∫", "\\int_{}^{}", "積分"],
-        ["∬", "\\iint_{} ", "二重積分（面積分）"],
-        ["∭", "\\iiint_{} ", "三重積分（体積積分）"],
-        ["∮", "\\oint_{}", "周回積分"],
-        ["lim", "\\lim_{ \\to }", "極限"],
-        ["d/dx", "\\frac{\\mathrm{d} {}}{\\mathrm{d} {}}", "常微分"],
-        ["∂/∂x", "\\frac{\\partial {}}{\\partial {}}", "偏微分"],
-        /* 行列と場合分けの各セルは空欄 {} にする。Tab で順に埋められ、
-         * 挿入時にネイティブ版と同じ改行・字下げで整形して表示する。 */
-        ["行列", "\\begin{pmatrix} {} & {} \\\\ {} & {} \\end{pmatrix}", "2×2行列（丸括弧）"],
-        ["∷", "\\begin{matrix} {} & {} \\\\ {} & {} \\end{matrix}", "行列（括弧なし）"],
-        ["[∷]", "\\begin{bmatrix} {} & {} \\\\ {} & {} \\end{bmatrix}", "行列（角括弧）"],
-        ["|∷|", "\\begin{vmatrix} {} & {} \\\\ {} & {} \\end{vmatrix}", "行列式"],
-        ["場合", "\\begin{cases} {} & {} \\\\ {} & {} \\end{cases}", "場合分け"],
-        ["整列", "\\begin{aligned} {} &= {} \\\\ {} &= {} \\end{aligned}", "複数行（Enter でも行が増える）"],
-        ["↑□", "\\overset{}{}", "上側の注記（記号の上に小さく）"],
-        ["↓□", "\\underset{}{}", "下側の注記（記号の下に小さく）"]
+  {
+    "label": "関係演算子",
+    "columns": 3,
+    "items": [
+      [
+        "≤",
+        "\\leq ",
+        "以下",
+        "\\leq",
+        "symbol.\\leq",
+        0,
+        ""
+      ],
+      [
+        "≥",
+        "\\geq ",
+        "以上",
+        "\\geq",
+        "symbol.\\geq",
+        0,
+        ""
+      ],
+      [
+        "≪",
+        "\\ll ",
+        "はるかに小さい",
+        "\\ll",
+        "symbol.\\ll",
+        0,
+        ""
+      ],
+      [
+        "≫",
+        "\\gg ",
+        "はるかに大きい",
+        "\\gg",
+        "symbol.\\gg",
+        0,
+        ""
+      ],
+      [
+        "≺",
+        "\\prec ",
+        "順序が先",
+        "\\prec",
+        "symbol.\\prec",
+        0,
+        ""
+      ],
+      [
+        "≻",
+        "\\succ ",
+        "順序が後",
+        "\\succ",
+        "symbol.\\succ",
+        0,
+        ""
+      ],
+      [
+        "◁",
+        "\\triangleleft ",
+        "左向き三角",
+        "\\triangleleft",
+        "symbol.\\triangleleft",
+        0,
+        ""
+      ],
+      [
+        "▷",
+        "\\triangleright ",
+        "右向き三角",
+        "\\triangleright",
+        "symbol.\\triangleright",
+        0,
+        ""
+      ],
+      [
+        "≠",
+        "\\neq ",
+        "等しくない",
+        "\\neq",
+        "symbol.\\neq",
+        0,
+        ""
+      ],
+      [
+        "≡",
+        "\\equiv ",
+        "恒等・合同",
+        "\\equiv",
+        "symbol.\\equiv",
+        0,
+        ""
+      ],
+      [
+        "≈",
+        "\\approx ",
+        "ほぼ等しい",
+        "\\approx",
+        "symbol.\\approx",
+        0,
+        ""
+      ],
+      [
+        "≅",
+        "\\cong ",
+        "合同",
+        "\\cong",
+        "symbol.\\cong",
+        0,
+        ""
+      ],
+      [
+        "∼",
+        "\\sim ",
+        "相似",
+        "\\sim",
+        "symbol.\\sim",
+        0,
+        ""
+      ],
+      [
+        "≃",
+        "\\simeq ",
+        "漸近的に等しい",
+        "\\simeq",
+        "symbol.\\simeq",
+        0,
+        ""
+      ],
+      [
+        "∝",
+        "\\propto ",
+        "比例",
+        "\\propto",
+        "symbol.\\propto",
+        0,
+        ""
+      ],
+      [
+        "⊑",
+        "\\sqsubseteq ",
+        "角付き部分集合",
+        "\\sqsubseteq",
+        "symbol.\\sqsubseteq",
+        0,
+        ""
+      ],
+      [
+        "⊒",
+        "\\sqsupseteq ",
+        "角付き上位集合",
+        "\\sqsupseteq",
+        "symbol.\\sqsupseteq",
+        0,
+        ""
+      ],
+      [
+        "∥",
+        "\\parallel ",
+        "平行",
+        "\\parallel",
+        "symbol.\\parallel",
+        0,
+        ""
+      ],
+      [
+        "‖",
+        "\\Vert ",
+        "二重縦線（ノルム）",
+        "\\Vert",
+        "symbol.\\Vert",
+        0,
+        ""
+      ],
+      [
+        "∣",
+        "\\mid ",
+        "割り切る",
+        "\\mid",
+        "symbol.\\mid",
+        0,
+        ""
+      ],
+      [
+        "⊢",
+        "\\vdash ",
+        "導出される",
+        "\\vdash",
+        "symbol.\\vdash",
+        0,
+        ""
+      ],
+      [
+        "⊨",
+        "\\models ",
+        "充足する",
+        "\\models",
+        "symbol.\\models",
+        0,
+        ""
+      ],
+      [
+        "⌢",
+        "\\frown ",
+        "フラウン（記号）",
+        "\\frown",
+        "symbol.\\frown",
+        0,
+        ""
+      ],
+      [
+        "⌣",
+        "\\smile ",
+        "スマイル（記号）",
+        "\\smile",
+        "symbol.\\smile",
+        0,
+        ""
       ]
-    },
-    {
-      /* すべて \left…\right 対。中央の {} が空欄になり、カーソルは
-       * 括弧の内側に着地する（選択して押すと選択が包まれる）。 */
-      label: "括弧",
-      items: [
-        ["( )", "\\left( {} \\right)", "丸括弧"],
-        ["[ ]", "\\left[ {} \\right]", "角括弧"],
-        ["{ }", "\\left\\{ {} \\right\\}", "波括弧"],
-        ["| |", "\\left| {} \\right|", "絶対値"],
-        ["‖ ‖", "\\left\\| {} \\right\\|", "ノルム"],
-        ["⟨ ⟩", "\\left\\langle {} \\right\\rangle", "山括弧（内積）"],
-        ["⌊ ⌋", "\\left\\lfloor {} \\right\\rfloor", "床関数"],
-        ["⌈ ⌉", "\\left\\lceil {} \\right\\rceil", "天井関数"],
-        ["⟨ | ⟩", "\\left\\langle {} \\middle| {} \\right\\rangle", "ブラケット（\\middle| で仕切る）"]
+    ]
+  },
+  {
+    "label": "空白と点",
+    "columns": 3,
+    "items": [
+      [
+        "−",
+        "\\!",
+        "負の空き",
+        "",
+        "latex.\\!",
+        0,
+        ""
+      ],
+      [
+        "␣",
+        "\\,",
+        "細い空き（1/6 em）",
+        "",
+        "latex.\\,",
+        0,
+        ""
+      ],
+      [
+        "␣␣",
+        "\\:",
+        "中位の空き（2/9 em）",
+        "",
+        "latex.\\:",
+        0,
+        ""
+      ],
+      [
+        "␣␣␣",
+        "\\;",
+        "広い空き（5/18 em）",
+        "",
+        "latex.\\;",
+        0,
+        ""
+      ],
+      [
+        "1em",
+        "\\quad",
+        "1 em の空き",
+        "",
+        "latex.\\quad",
+        0,
+        ""
+      ],
+      [
+        "2em",
+        "\\qquad",
+        "2 em の空き",
+        "",
+        "latex.\\qquad",
+        0,
+        ""
+      ],
+      [
+        "…",
+        "\\ldots ",
+        "下寄りの省略記号",
+        "\\ldots",
+        "symbol.\\ldots",
+        0,
+        ""
+      ],
+      [
+        "⋯",
+        "\\cdots ",
+        "中央の省略記号",
+        "\\cdots",
+        "symbol.\\cdots",
+        0,
+        ""
+      ],
+      [
+        "⋮",
+        "\\vdots ",
+        "縦の省略記号",
+        "\\vdots",
+        "symbol.\\vdots",
+        0,
+        ""
+      ],
+      [
+        "⋱",
+        "\\ddots ",
+        "斜めの省略記号",
+        "\\ddots",
+        "symbol.\\ddots",
+        0,
+        ""
+      ],
+      [
+        "∴",
+        "\\therefore ",
+        "ゆえに",
+        "\\therefore",
+        "symbol.\\therefore",
+        0,
+        ""
+      ],
+      [
+        "∵",
+        "\\because ",
+        "なぜならば",
+        "\\because",
+        "symbol.\\because",
+        0,
+        ""
       ]
-    },
-    {
-      label: "装飾",
-      items: [
-        ["x̂", "\\hat{}", "ハット"],
-        ["x̄", "\\bar{}", "バー"],
-        ["x⃗", "\\vec{}", "ベクトル"],
-        ["ẋ", "\\dot{}", "ドット"],
-        ["ẍ", "\\ddot{}", "二重ドット"],
-        ["x⃛", "\\dddot{}", "三重ドット"],
-        ["ã", "\\tilde{}", "チルダ"],
-        ["x′", "'", "プライム"],
-        ["x̸", "\\cancel{}", "打ち消し線"],
-        ["¯□", "\\overline{}", "上線（伸縮）"],
-        ["_□", "\\underline{}", "下線（伸縮）"],
-        ["⏞□", "\\overbrace{}", "上の水平波括弧"],
-        ["⏟□", "\\underbrace{}", "下の水平波括弧"],
-        ["□→", "\\overrightarrow{}", "上の右向き伸縮矢印"],
-        ["←□", "\\overleftarrow{}", "上の左向き伸縮矢印"],
-        ["□↔", "\\overleftrightarrow{}", "上の両向き伸縮矢印"],
-        ["ℝ", "\\mathbb{}", "黒板太字"],
-        ["ℰ", "\\mathcal{}", "カリグラフィー体（起電力ℰなど）"],
-        ["sf", "\\mathsf{}", "サンセリフ"],
-        ["tt", "\\mathtt{}", "等幅"],
-        ["fr", "\\mathfrak{}", "フラクトゥール"],
-        ["Bα", "\\bm{}", "記号太字"],
-        ["math", "\\mathnormal{}", "標準の数式書体へ戻す"],
-        ["abc", "\\text{}", "テキスト（空白が使える）"]
+    ]
+  },
+  {
+    "label": "装飾",
+    "columns": 3,
+    "items": [
+      [
+        "^x",
+        "\\hat{}",
+        "ハット",
+        "\\hat{x}",
+        "template.hat",
+        0,
+        ""
+      ],
+      [
+        "~x",
+        "\\tilde{}",
+        "チルダ",
+        "\\tilde{x}",
+        "template.tilde",
+        0,
+        ""
+      ],
+      [
+        "¯x",
+        "\\bar{}",
+        "バー（1文字）",
+        "\\bar{x}",
+        "template.bar",
+        0,
+        ""
+      ],
+      [
+        "x→",
+        "\\vec{}",
+        "ベクトル矢印",
+        "\\vec{x}",
+        "template.vec",
+        0,
+        ""
+      ],
+      [
+        "·x",
+        "\\dot{}",
+        "ドット",
+        "\\dot{x}",
+        "template.dot",
+        0,
+        ""
+      ],
+      [
+        ":x",
+        "\\ddot{}",
+        "二重ドット",
+        "\\ddot{x}",
+        "template.ddot",
+        0,
+        ""
+      ],
+      [
+        "⋯x",
+        "\\dddot{}",
+        "三重ドット",
+        "\\dddot{x}",
+        "template.dddot",
+        0,
+        ""
+      ],
+      [
+        "x′",
+        "'",
+        "プライム",
+        "x'",
+        "template.prime",
+        0,
+        ""
+      ],
+      [
+        "x″",
+        "''",
+        "二重プライム",
+        "x''",
+        "template.dprime",
+        0,
+        ""
+      ],
+      [
+        "x‴",
+        "'''",
+        "三重プライム",
+        "x'''",
+        "template.tprime",
+        0,
+        ""
+      ],
+      [
+        "/x",
+        "\\cancel{}",
+        "打ち消し線",
+        "\\cancel{x}",
+        "template.strike",
+        0,
+        ""
+      ],
+      [
+        "⌢x",
+        "\\overset{\\frown}{}",
+        "フラウン",
+        "\\overset{\\frown}{x}",
+        "template.frown",
+        0,
+        ""
+      ],
+      [
+        "⌣x",
+        "\\overset{\\smile}{}",
+        "スマイル",
+        "\\overset{\\smile}{x}",
+        "template.smile",
+        0,
+        ""
+      ],
+      [
+        "sf",
+        "\\mathsf{}",
+        "サンセリフ（\\mathsf）",
+        "\\mathsf{A}",
+        "style.sans",
+        0,
+        ""
+      ],
+      [
+        "tt",
+        "\\mathtt{}",
+        "等幅（\\mathtt）",
+        "\\mathtt{A}",
+        "style.mono",
+        0,
+        ""
+      ],
+      [
+        "cal",
+        "\\mathcal{}",
+        "カリグラフィー（\\mathcal）",
+        "\\mathcal{A}",
+        "style.script",
+        0,
+        ""
+      ],
+      [
+        "bb",
+        "\\mathbb{}",
+        "黒板太字（\\mathbb）",
+        "\\mathbb{A}",
+        "style.double",
+        0,
+        ""
+      ],
+      [
+        "fr",
+        "\\mathfrak{}",
+        "フラクトゥール（\\mathfrak）",
+        "\\mathfrak{A}",
+        "style.fraktur",
+        0,
+        ""
+      ],
+      [
+        "Bα",
+        "\\bm{}",
+        "記号太字（\\bm）",
+        "\\bm{A}",
+        "style.boldsymbol",
+        0,
+        ""
       ]
-    },
-    {
-      /* 関数名は立体で組む。rot/div/grad は和書の流儀（curl ではなく）。 */
-      label: "関数",
-      items: [
-        ["sin", "\\sin ", ""], ["cos", "\\cos ", ""], ["tan", "\\tan ", ""],
-        ["log", "\\log ", ""], ["ln", "\\ln ", ""], ["exp", "\\exp ", ""],
-        ["rot", "\\operatorname{rot} ", "回転（和書流儀）"],
-        ["curl", "\\operatorname{curl} ", "回転（洋書流儀）"],
-        ["div", "\\operatorname{div} ", "発散"],
-        ["grad", "\\operatorname{grad} ", "勾配"],
-        ["arg min", "\\operatorname*{arg\\,min}_{} ", "最小値を与える変数"],
-        ["arg max", "\\operatorname*{arg\\,max}_{} ", "最大値を与える変数"],
-        ["∇⋅", "\\nabla\\cdot ", "発散（∇表記）"],
-        ["∇×", "\\nabla\\times ", "回転（∇表記）"],
-        ["Re", "\\operatorname{Re} ", "実部"],
-        ["Im", "\\operatorname{Im} ", "虚部"]
+    ]
+  },
+  {
+    "label": "演算子",
+    "columns": 3,
+    "items": [
+      [
+        "±",
+        "\\pm ",
+        "プラスマイナス",
+        "\\pm",
+        "symbol.\\pm",
+        0,
+        ""
+      ],
+      [
+        "∓",
+        "\\mp ",
+        "マイナスプラス",
+        "\\mp",
+        "symbol.\\mp",
+        0,
+        ""
+      ],
+      [
+        "×",
+        "\\times ",
+        "乗算",
+        "\\times",
+        "symbol.\\times",
+        0,
+        ""
+      ],
+      [
+        "÷",
+        "\\div ",
+        "除算",
+        "\\div",
+        "symbol.\\div",
+        0,
+        ""
+      ],
+      [
+        "∗",
+        "\\ast ",
+        "アスタリスク",
+        "\\ast",
+        "symbol.\\ast",
+        0,
+        ""
+      ],
+      [
+        "⋅",
+        "\\cdot ",
+        "中黒（積）",
+        "\\cdot",
+        "symbol.\\cdot",
+        0,
+        ""
+      ],
+      [
+        "⋆",
+        "\\star ",
+        "星",
+        "\\star",
+        "symbol.\\star",
+        0,
+        ""
+      ],
+      [
+        "•",
+        "\\bullet ",
+        "黒丸",
+        "\\bullet",
+        "symbol.\\bullet",
+        0,
+        ""
+      ],
+      [
+        "⊗",
+        "\\otimes ",
+        "テンソル積",
+        "\\otimes",
+        "symbol.\\otimes",
+        0,
+        ""
+      ],
+      [
+        "⊕",
+        "\\oplus ",
+        "直和",
+        "\\oplus",
+        "symbol.\\oplus",
+        0,
+        ""
+      ],
+      [
+        "⊖",
+        "\\ominus ",
+        "丸マイナス",
+        "\\ominus",
+        "symbol.\\ominus",
+        0,
+        ""
+      ],
+      [
+        "⊙",
+        "\\odot ",
+        "丸ドット",
+        "\\odot",
+        "symbol.\\odot",
+        0,
+        ""
+      ],
+      [
+        "⋄",
+        "\\diamond ",
+        "ダイヤ演算子",
+        "\\diamond",
+        "symbol.\\diamond",
+        0,
+        ""
+      ],
+      [
+        "▽",
+        "\\bigtriangledown ",
+        "下向き三角",
+        "\\bigtriangledown",
+        "symbol.\\bigtriangledown",
+        0,
+        ""
+      ],
+      [
+        "†",
+        "\\dagger ",
+        "ダガー",
+        "\\dagger",
+        "symbol.\\dagger",
+        0,
+        ""
+      ],
+      [
+        "‡",
+        "\\ddagger ",
+        "二重ダガー",
+        "\\ddagger",
+        "symbol.\\ddagger",
+        0,
+        ""
+      ],
+      [
+        "†",
+        "\\dag ",
+        "ダガー（別名）",
+        "\\dag",
+        "symbol.\\dag",
+        0,
+        ""
+      ],
+      [
+        "∖",
+        "\\setminus ",
+        "差集合",
+        "\\setminus",
+        "symbol.\\setminus",
+        0,
+        ""
+      ],
+      [
+        "\\",
+        "\\backslash ",
+        "バックスラッシュ",
+        "\\backslash",
+        "symbol.\\backslash",
+        0,
+        ""
+      ],
+      [
+        "√",
+        "\\surd ",
+        "根号記号",
+        "\\surd",
+        "symbol.\\surd",
+        0,
+        ""
       ]
-    },
-    {
-      label: "関係",
-      items: [
-        ["±", "\\pm ", ""], ["×", "\\times ", ""], ["⋅", "\\cdot ", ""],
-        ["∝", "\\propto ", "比例"], ["≈", "\\approx ", ""],
-        ["≃", "\\simeq ", "ほぼ等しい"], ["∼", "\\sim ", "同程度"],
-        ["≡", "\\equiv ", ""], ["≤", "\\leq ", ""], ["≥", "\\geq ", ""],
-        ["≠", "\\neq ", ""], ["≪", "\\ll ", "十分小さい"],
-        ["≫", "\\gg ", "十分大きい"], ["⊥", "\\perp ", "垂直"],
-        ["∥", "\\parallel ", "平行"], ["∠", "\\angle ", "角・偏角（フェーザ）"],
-        ["∓", "\\mp ", "マイナスプラス"], ["÷", "\\div ", "除算"],
-        ["∗", "\\ast ", "アスタリスク"], ["•", "\\bullet ", "黒丸"],
-        ["⊖", "\\ominus ", "丸マイナス"], ["⊙", "\\odot ", "丸ドット"],
-        ["⋄", "\\diamond ", "ダイヤ演算子"], ["▽", "\\bigtriangledown ", "下向き三角"],
-        ["∖", "\\setminus ", "差集合"], ["\\", "\\backslash ", "バックスラッシュ"],
-        ["†", "\\dagger ", "ダガー（随伴）"], ["‡", "\\ddagger ", "二重ダガー"],
-        ["≺", "\\prec ", "順序が先"], ["≻", "\\succ ", "順序が後"],
-        ["≅", "\\cong ", "合同"], ["∣", "\\mid ", "割り切る・条件付き"],
-        ["‖", "\\Vert ", "二重縦線"], ["⊢", "\\vdash ", "導出される"],
-        ["⊨", "\\models ", "充足する"], ["◁", "\\triangleleft ", "左向き三角"],
-        ["▷", "\\triangleright ", "右向き三角"], ["⊑", "\\sqsubseteq ", "角付き部分集合"],
-        ["⊒", "\\sqsupseteq ", "角付き上位集合"], ["⌢", "\\frown ", "フラウン"],
-        ["⌣", "\\smile ", "スマイル"]
+    ]
+  },
+  {
+    "label": "矢印",
+    "columns": 3,
+    "items": [
+      [
+        "→",
+        "\\rightarrow ",
+        "右矢印",
+        "\\rightarrow",
+        "symbol.\\rightarrow",
+        0,
+        ""
+      ],
+      [
+        "←",
+        "\\leftarrow ",
+        "左矢印",
+        "\\leftarrow",
+        "symbol.\\leftarrow",
+        0,
+        ""
+      ],
+      [
+        "↔",
+        "\\leftrightarrow ",
+        "両向き矢印",
+        "\\leftrightarrow",
+        "symbol.\\leftrightarrow",
+        0,
+        ""
+      ],
+      [
+        "↑",
+        "\\uparrow ",
+        "上矢印",
+        "\\uparrow",
+        "symbol.\\uparrow",
+        0,
+        ""
+      ],
+      [
+        "↓",
+        "\\downarrow ",
+        "下矢印",
+        "\\downarrow",
+        "symbol.\\downarrow",
+        0,
+        ""
+      ],
+      [
+        "↕",
+        "\\updownarrow ",
+        "上下矢印",
+        "\\updownarrow",
+        "symbol.\\updownarrow",
+        0,
+        ""
+      ],
+      [
+        "⇒",
+        "\\Rightarrow ",
+        "二重右矢印",
+        "\\Rightarrow",
+        "symbol.\\Rightarrow",
+        0,
+        ""
+      ],
+      [
+        "⇐",
+        "\\Leftarrow ",
+        "二重左矢印",
+        "\\Leftarrow",
+        "symbol.\\Leftarrow",
+        0,
+        ""
+      ],
+      [
+        "⇔",
+        "\\Leftrightarrow ",
+        "二重両向き矢印",
+        "\\Leftrightarrow",
+        "symbol.\\Leftrightarrow",
+        0,
+        ""
+      ],
+      [
+        "⇑",
+        "\\Uparrow ",
+        "二重上矢印",
+        "\\Uparrow",
+        "symbol.\\Uparrow",
+        0,
+        ""
+      ],
+      [
+        "→",
+        "\\to ",
+        "右矢印（\\to）",
+        "\\to",
+        "symbol.\\to",
+        0,
+        ""
+      ],
+      [
+        "↦",
+        "\\mapsto ",
+        "写像",
+        "\\mapsto",
+        "symbol.\\mapsto",
+        0,
+        ""
+      ],
+      [
+        "⟹",
+        "\\Longrightarrow ",
+        "長い二重右矢印",
+        "\\Longrightarrow",
+        "symbol.\\Longrightarrow",
+        0,
+        ""
+      ],
+      [
+        "⟸",
+        "\\Longleftarrow ",
+        "長い二重左矢印",
+        "\\Longleftarrow",
+        "symbol.\\Longleftarrow",
+        0,
+        ""
+      ],
+      [
+        "⟺",
+        "\\Longleftrightarrow ",
+        "長い二重両向き矢印",
+        "\\Longleftrightarrow",
+        "symbol.\\Longleftrightarrow",
+        0,
+        ""
+      ],
+      [
+        "↪",
+        "\\hookrightarrow ",
+        "右フック矢印",
+        "\\hookrightarrow",
+        "symbol.\\hookrightarrow",
+        0,
+        ""
+      ],
+      [
+        "↩",
+        "\\hookleftarrow ",
+        "左フック矢印",
+        "\\hookleftarrow",
+        "symbol.\\hookleftarrow",
+        0,
+        ""
+      ],
+      [
+        "↗",
+        "\\nearrow ",
+        "右上矢印",
+        "\\nearrow",
+        "symbol.\\nearrow",
+        0,
+        ""
+      ],
+      [
+        "↘",
+        "\\searrow ",
+        "右下矢印",
+        "\\searrow",
+        "symbol.\\searrow",
+        0,
+        ""
+      ],
+      [
+        "↙",
+        "\\swarrow ",
+        "左下矢印",
+        "\\swarrow",
+        "symbol.\\swarrow",
+        0,
+        ""
+      ],
+      [
+        "↖",
+        "\\nwarrow ",
+        "左上矢印",
+        "\\nwarrow",
+        "symbol.\\nwarrow",
+        0,
+        ""
+      ],
+      [
+        "⇀",
+        "\\rightharpoonup ",
+        "右上ハープーン",
+        "\\rightharpoonup",
+        "symbol.\\rightharpoonup",
+        0,
+        ""
+      ],
+      [
+        "⇁",
+        "\\rightharpoondown ",
+        "右下ハープーン",
+        "\\rightharpoondown",
+        "symbol.\\rightharpoondown",
+        0,
+        ""
+      ],
+      [
+        "↼",
+        "\\leftharpoonup ",
+        "左上ハープーン",
+        "\\leftharpoonup",
+        "symbol.\\leftharpoonup",
+        0,
+        ""
+      ],
+      [
+        "↽",
+        "\\leftharpoondown ",
+        "左下ハープーン",
+        "\\leftharpoondown",
+        "symbol.\\leftharpoondown",
+        0,
+        ""
       ]
-    },
-    {
-      label: "矢印・集合",
-      items: [
-        ["→", "\\to ", ""], ["⇒", "\\Rightarrow ", ""],
-        ["⇔", "\\Leftrightarrow ", "同値"], ["↦", "\\mapsto ", "写像"],
-        ["∈", "\\in ", ""], ["∉", "\\notin ", ""], ["⊂", "\\subset ", ""],
-        ["∪", "\\cup ", ""], ["∩", "\\cap ", ""], ["∀", "\\forall ", ""],
-        ["∃", "\\exists ", ""], ["∅", "\\emptyset ", ""],
-        ["∴", "\\therefore ", "ゆえに"], ["∵", "\\because ", "なぜならば"],
-        ["←", "\\leftarrow ", ""], ["↔", "\\leftrightarrow ", ""],
-        ["↑", "\\uparrow ", ""], ["↓", "\\downarrow ", ""], ["↕", "\\updownarrow ", ""],
-        ["⇐", "\\Leftarrow ", ""], ["⇑", "\\Uparrow ", ""],
-        ["⟹", "\\Longrightarrow ", "長い⇒"], ["⟸", "\\Longleftarrow ", "長い⇐"],
-        ["⟺", "\\Longleftrightarrow ", "長い⇔"],
-        ["↪", "\\hookrightarrow ", "右フック矢印"], ["↩", "\\hookleftarrow ", "左フック矢印"],
-        ["↗", "\\nearrow ", ""], ["↘", "\\searrow ", ""], ["↙", "\\swarrow ", ""], ["↖", "\\nwarrow ", ""],
-        ["⇀", "\\rightharpoonup ", "右上ハープーン"], ["⇁", "\\rightharpoondown ", "右下ハープーン"],
-        ["↼", "\\leftharpoonup ", "左上ハープーン"], ["↽", "\\leftharpoondown ", "左下ハープーン"],
-        ["∋", "\\ni ", "要素として含む"], ["⊃", "\\supset ", ""],
-        ["⊆", "\\subseteq ", ""], ["⊇", "\\supseteq ", ""],
-        ["⊄", "\\not\\subset ", "部分集合でない"],
-        ["⊔", "\\sqcup ", "角付き和"], ["⊓", "\\sqcap ", "角付き共通部分"],
-        ["⋃", "\\bigcup_{}^{}", "大きい和集合"], ["⋂", "\\bigcap_{}^{}", "大きい共通部分"],
-        ["∐", "\\coprod_{}^{}", "余積"],
-        ["¬", "\\neg ", "否定"], ["∨", "\\vee ", "論理和"],
-        ["∄", "\\nexists ", "存在しない"], ["⊤", "\\top ", "真"]
+    ]
+  },
+  {
+    "label": "論理記号",
+    "columns": 2,
+    "items": [
+      [
+        "∀",
+        "\\forall ",
+        "すべての",
+        "\\forall",
+        "symbol.\\forall",
+        0,
+        ""
+      ],
+      [
+        "∃",
+        "\\exists ",
+        "存在する",
+        "\\exists",
+        "symbol.\\exists",
+        0,
+        ""
+      ],
+      [
+        "∄",
+        "\\nexists ",
+        "存在しない",
+        "\\nexists",
+        "symbol.\\nexists",
+        0,
+        ""
+      ],
+      [
+        "¬",
+        "\\neg ",
+        "否定",
+        "\\neg",
+        "symbol.\\neg",
+        0,
+        ""
+      ],
+      [
+        "∧",
+        "\\wedge ",
+        "論理積",
+        "\\wedge",
+        "symbol.\\wedge",
+        0,
+        ""
+      ],
+      [
+        "∨",
+        "\\vee ",
+        "論理和",
+        "\\vee",
+        "symbol.\\vee",
+        0,
+        ""
+      ],
+      [
+        "⊤",
+        "\\top ",
+        "真",
+        "\\top",
+        "symbol.\\top",
+        0,
+        ""
+      ],
+      [
+        "⊥",
+        "\\perp ",
+        "垂直・偽",
+        "\\perp",
+        "symbol.\\perp",
+        0,
+        ""
+      ],
+      [
+        "not",
+        "\\not ",
+        "打ち消し",
+        "\\not=",
+        "symbol.\\not",
+        0,
+        ""
       ]
-    },
-    {
-      /* 第9章（微分形式・Hodge star・pullback・幾何代数）向け。
-       * すべて標準 LaTeX + amsmath/amssymb の範囲で組める。 */
-      label: "微分幾何",
-      items: [
-        ["∧", "\\wedge ", "ウェッジ積"],
-        ["⋆", "\\star ", "Hodge star作用素"],
-        ["dω", "\\mathrm{d} ", "外微分（立体のd）"],
-        ["ι", "\\iota_{} ", "内部積（縮約）ι_X"],
-        ["ℒ", "\\mathcal{L}_{} ", "Lie微分"],
-        ["f^*", "^{*} ", "引き戻し（pullback）"],
-        ["f_*", "_{*} ", "押し出し（pushforward）"],
-        ["♭", "^{\\flat} ", "フラット（添字を下げる）"],
-        ["♯", "^{\\sharp} ", "シャープ（添字を上げる）"],
-        ["⊗", "\\otimes ", "テンソル積"],
-        ["⊕", "\\oplus ", "直和"]
+    ]
+  },
+  {
+    "label": "集合記号",
+    "columns": 3,
+    "items": [
+      [
+        "∈",
+        "\\in ",
+        "要素である",
+        "\\in",
+        "symbol.\\in",
+        0,
+        ""
+      ],
+      [
+        "∉",
+        "\\notin ",
+        "要素でない",
+        "\\notin",
+        "symbol.\\notin",
+        0,
+        ""
+      ],
+      [
+        "∋",
+        "\\ni ",
+        "要素として含む",
+        "\\ni",
+        "symbol.\\ni",
+        0,
+        ""
+      ],
+      [
+        "⊂",
+        "\\subset ",
+        "部分集合",
+        "\\subset",
+        "symbol.\\subset",
+        0,
+        ""
+      ],
+      [
+        "⊃",
+        "\\supset ",
+        "上位集合",
+        "\\supset",
+        "symbol.\\supset",
+        0,
+        ""
+      ],
+      [
+        "⊄",
+        "\\not\\subset ",
+        "部分集合でない",
+        "\\not\\subset",
+        "symbol.\\not\\subset",
+        0,
+        ""
+      ],
+      [
+        "⊆",
+        "\\subseteq ",
+        "部分集合または等しい",
+        "\\subseteq",
+        "symbol.\\subseteq",
+        0,
+        ""
+      ],
+      [
+        "⊇",
+        "\\supseteq ",
+        "上位集合または等しい",
+        "\\supseteq",
+        "symbol.\\supseteq",
+        0,
+        ""
+      ],
+      [
+        "∅",
+        "\\emptyset ",
+        "空集合",
+        "\\emptyset",
+        "symbol.\\emptyset",
+        0,
+        ""
+      ],
+      [
+        "∪",
+        "\\cup ",
+        "和集合",
+        "\\cup",
+        "symbol.\\cup",
+        0,
+        ""
+      ],
+      [
+        "∩",
+        "\\cap ",
+        "共通部分",
+        "\\cap",
+        "symbol.\\cap",
+        0,
+        ""
+      ],
+      [
+        "⊔",
+        "\\sqcup ",
+        "角付き和",
+        "\\sqcup",
+        "symbol.\\sqcup",
+        0,
+        ""
+      ],
+      [
+        "⊓",
+        "\\sqcap ",
+        "角付き共通部分",
+        "\\sqcap",
+        "symbol.\\sqcap",
+        0,
+        ""
+      ],
+      [
+        "⋃",
+        "\\bigcup ",
+        "大きい和集合",
+        "\\bigcup",
+        "symbol.\\bigcup",
+        0,
+        ""
+      ],
+      [
+        "⋂",
+        "\\bigcap ",
+        "大きい共通部分",
+        "\\bigcap",
+        "symbol.\\bigcap",
+        0,
+        ""
       ]
-    },
-    {
-      label: "その他",
-      items: [
-        ["∂", "\\partial ", ""], ["∇", "\\nabla ", ""], ["∞", "\\infty ", ""],
-        ["ℏ", "\\hbar ", ""], ["°", "^{\\circ} ", "度"],
-        ["⋯", "\\cdots ", "横の点"], ["⋮", "\\vdots ", "縦の点"],
-        ["⋱", "\\ddots ", "斜めの点"], ["…", "\\ldots ", "下寄りの点"],
-        ["ℜ", "\\Re ", "実部（フラクトゥール）"], ["ℑ", "\\Im ", "虚部（フラクトゥール）"],
-        ["ℓ", "\\ell ", "筆記体の l"], ["℧", "\\mho ", "モー（コンダクタンス）"],
-        ["′", "\\prime ", "プライム記号"],
-        ["⌊", "\\lfloor ", ""], ["⌋", "\\rfloor ", ""],
-        ["⌈", "\\lceil ", ""], ["⌉", "\\rceil ", ""]
+    ]
+  },
+  {
+    "label": "その他の記号",
+    "columns": 3,
+    "items": [
+      [
+        "∂",
+        "\\partial ",
+        "偏微分",
+        "\\partial",
+        "symbol.\\partial",
+        0,
+        ""
+      ],
+      [
+        "∇",
+        "\\nabla ",
+        "ナブラ",
+        "\\nabla",
+        "symbol.\\nabla",
+        0,
+        ""
+      ],
+      [
+        "∞",
+        "\\infty ",
+        "無限大",
+        "\\infty",
+        "symbol.\\infty",
+        0,
+        ""
+      ],
+      [
+        "ℜ",
+        "\\Re ",
+        "実部",
+        "\\Re",
+        "symbol.\\Re",
+        0,
+        ""
+      ],
+      [
+        "ℑ",
+        "\\Im ",
+        "虚部",
+        "\\Im",
+        "symbol.\\Im",
+        0,
+        ""
+      ],
+      [
+        "ℏ",
+        "\\hbar ",
+        "換算プランク定数",
+        "\\hbar",
+        "symbol.\\hbar",
+        0,
+        ""
+      ],
+      [
+        "∠",
+        "\\angle ",
+        "角",
+        "\\angle",
+        "symbol.\\angle",
+        0,
+        ""
+      ],
+      [
+        "∘",
+        "\\circ ",
+        "合成・度（^\\circ）",
+        "\\circ",
+        "symbol.\\circ",
+        0,
+        ""
+      ],
+      [
+        "℧",
+        "\\mho ",
+        "モー（コンダクタンス）",
+        "\\mho",
+        "symbol.\\mho",
+        0,
+        ""
+      ],
+      [
+        "ℓ",
+        "\\ell ",
+        "筆記体の l",
+        "\\ell",
+        "symbol.\\ell",
+        0,
+        ""
+      ],
+      [
+        "′",
+        "\\prime ",
+        "プライム記号",
+        "\\prime",
+        "symbol.\\prime",
+        0,
+        ""
+      ],
+      [
+        "∐",
+        "\\coprod ",
+        "余積記号",
+        "\\coprod",
+        "symbol.\\coprod",
+        0,
+        ""
+      ],
+      [
+        "⟨",
+        "\\langle ",
+        "左山括弧（単体）",
+        "\\langle",
+        "symbol.\\langle",
+        0,
+        ""
+      ],
+      [
+        "⟩",
+        "\\rangle ",
+        "右山括弧（単体）",
+        "\\rangle",
+        "symbol.\\rangle",
+        0,
+        ""
+      ],
+      [
+        "⌊",
+        "\\lfloor ",
+        "左床記号（単体）",
+        "\\lfloor",
+        "symbol.\\lfloor",
+        0,
+        ""
+      ],
+      [
+        "⌋",
+        "\\rfloor ",
+        "右床記号（単体）",
+        "\\rfloor",
+        "symbol.\\rfloor",
+        0,
+        ""
+      ],
+      [
+        "⌈",
+        "\\lceil ",
+        "左天井記号（単体）",
+        "\\lceil",
+        "symbol.\\lceil",
+        0,
+        ""
+      ],
+      [
+        "⌉",
+        "\\rceil ",
+        "右天井記号（単体）",
+        "\\rceil",
+        "symbol.\\rceil",
+        0,
+        ""
       ]
-    },
-    {
-      /* TeX の空白命令。文字幅は TeX 標準（\, = 1/6 em など）。 */
-      label: "空白",
-      items: [
-        ["\\,", "\\, ", "細い空き（1/6 em）"],
-        ["\\:", "\\: ", "中位の空き（2/9 em）"],
-        ["\\;", "\\; ", "広い空き（5/18 em）"],
-        ["\\!", "\\! ", "負の空き（詰める）"],
-        ["quad", "\\quad ", "1 em の空き"],
-        ["qquad", "\\qquad ", "2 em の空き"],
-        ["~", "~", "改行しない空白"],
-        ["\\␣", "\\ ", "通常幅の空白（\\ の後に空白）"]
+    ]
+  },
+  {
+    "label": "微分幾何",
+    "columns": 4,
+    "items": [
+      [
+        "∧",
+        "\\wedge ",
+        "ウェッジ積",
+        "\\wedge ",
+        "latex.\\wedge ",
+        0,
+        ""
+      ],
+      [
+        "⋆",
+        "\\star ",
+        "Hodge star作用素",
+        "\\star ",
+        "latex.\\star ",
+        0,
+        ""
+      ],
+      [
+        "dω",
+        "\\mathrm{d} ",
+        "外微分（立体のd）",
+        "\\mathrm{d}\\omega",
+        "latex.\\mathrm{d} ",
+        0,
+        ""
+      ],
+      [
+        "ι",
+        "\\iota_{} ",
+        "内部積（縮約）ι_X",
+        "\\iota_v",
+        "latex.\\iota_{} ",
+        0,
+        ""
+      ],
+      [
+        "ℒ",
+        "\\mathcal{L}_{} ",
+        "Lie微分",
+        "\\mathcal{L}_v",
+        "latex.\\mathcal{L}_{} ",
+        0,
+        ""
+      ],
+      [
+        "f^*",
+        "{}^{*} ",
+        "引き戻し（pullback）",
+        "f^{*}",
+        "latex.{}^{*} ",
+        0,
+        ""
+      ],
+      [
+        "f_*",
+        "{}_{*} ",
+        "押し出し（pushforward）",
+        "f_{*}",
+        "latex.{}_{*} ",
+        0,
+        ""
+      ],
+      [
+        "♭",
+        "{}^{\\flat} ",
+        "フラット（添字を下げる）",
+        "v^{\\flat}",
+        "latex.{}^{\\flat} ",
+        0,
+        ""
+      ],
+      [
+        "♯",
+        "{}^{\\sharp} ",
+        "シャープ（添字を上げる）",
+        "v^{\\sharp}",
+        "latex.{}^{\\sharp} ",
+        0,
+        ""
+      ],
+      [
+        "⊗",
+        "\\otimes ",
+        "テンソル積",
+        "\\otimes ",
+        "latex.\\otimes ",
+        0,
+        ""
+      ],
+      [
+        "⊕",
+        "\\oplus ",
+        "直和",
+        "\\oplus ",
+        "latex.\\oplus ",
+        0,
+        ""
       ]
-    },
-    {
-      label: "ギリシャ",
-      items: [
-        ["α", "\\alpha ", ""], ["β", "\\beta ", ""], ["γ", "\\gamma ", ""],
-        ["δ", "\\delta ", ""], ["ε", "\\varepsilon ", ""], ["ζ", "\\zeta ", ""],
-        ["η", "\\eta ", ""], ["θ", "\\theta ", ""], ["κ", "\\kappa ", ""],
-        ["λ", "\\lambda ", ""], ["μ", "\\mu ", ""], ["ν", "\\nu ", ""],
-        ["ξ", "\\xi ", ""], ["π", "\\pi ", ""], ["ρ", "\\rho ", ""],
-        ["σ", "\\sigma ", ""], ["τ", "\\tau ", ""],
-        ["ϕ", "\\phi ", "ファイ（スカラーポテンシャル）"],
-        ["φ", "\\varphi ", ""], ["χ", "\\chi ", ""], ["ψ", "\\psi ", ""],
-        ["ω", "\\omega ", ""],
-        ["ϵ", "\\epsilon ", "イプシロン（\\varepsilon とは別字形）"],
-        ["ϑ", "\\vartheta ", "シータ（異体）"], ["ϰ", "\\varkappa ", "カッパ（異体）"],
-        ["ϖ", "\\varpi ", "パイ（異体）"], ["ϱ", "\\varrho ", "ロー（異体）"],
-        ["ς", "\\varsigma ", "シグマ（語末形）"], ["υ", "\\upsilon ", "ウプシロン"]
+    ]
+  },
+  {
+    "label": "ギリシャ小文字",
+    "columns": 4,
+    "items": [
+      [
+        "α",
+        "\\alpha ",
+        "アルファ",
+        "\\alpha",
+        "symbol.\\alpha",
+        0,
+        ""
+      ],
+      [
+        "β",
+        "\\beta ",
+        "ベータ",
+        "\\beta",
+        "symbol.\\beta",
+        0,
+        ""
+      ],
+      [
+        "γ",
+        "\\gamma ",
+        "ガンマ",
+        "\\gamma",
+        "symbol.\\gamma",
+        0,
+        ""
+      ],
+      [
+        "δ",
+        "\\delta ",
+        "デルタ",
+        "\\delta",
+        "symbol.\\delta",
+        0,
+        ""
+      ],
+      [
+        "ϵ",
+        "\\epsilon ",
+        "イプシロン",
+        "\\epsilon",
+        "symbol.\\epsilon",
+        0,
+        ""
+      ],
+      [
+        "ε",
+        "\\varepsilon ",
+        "イプシロン（異体）",
+        "\\varepsilon",
+        "symbol.\\varepsilon",
+        0,
+        ""
+      ],
+      [
+        "ζ",
+        "\\zeta ",
+        "ゼータ",
+        "\\zeta",
+        "symbol.\\zeta",
+        0,
+        ""
+      ],
+      [
+        "η",
+        "\\eta ",
+        "エータ",
+        "\\eta",
+        "symbol.\\eta",
+        0,
+        ""
+      ],
+      [
+        "θ",
+        "\\theta ",
+        "シータ",
+        "\\theta",
+        "symbol.\\theta",
+        0,
+        ""
+      ],
+      [
+        "ϑ",
+        "\\vartheta ",
+        "シータ（異体）",
+        "\\vartheta",
+        "symbol.\\vartheta",
+        0,
+        ""
+      ],
+      [
+        "ι",
+        "\\iota ",
+        "イオタ",
+        "\\iota",
+        "symbol.\\iota",
+        0,
+        ""
+      ],
+      [
+        "κ",
+        "\\kappa ",
+        "カッパ",
+        "\\kappa",
+        "symbol.\\kappa",
+        0,
+        ""
+      ],
+      [
+        "ϰ",
+        "\\varkappa ",
+        "カッパ（異体）",
+        "\\varkappa",
+        "symbol.\\varkappa",
+        0,
+        ""
+      ],
+      [
+        "λ",
+        "\\lambda ",
+        "ラムダ",
+        "\\lambda",
+        "symbol.\\lambda",
+        0,
+        ""
+      ],
+      [
+        "μ",
+        "\\mu ",
+        "ミュー",
+        "\\mu",
+        "symbol.\\mu",
+        0,
+        ""
+      ],
+      [
+        "ν",
+        "\\nu ",
+        "ニュー",
+        "\\nu",
+        "symbol.\\nu",
+        0,
+        ""
+      ],
+      [
+        "ξ",
+        "\\xi ",
+        "クサイ",
+        "\\xi",
+        "symbol.\\xi",
+        0,
+        ""
+      ],
+      [
+        "π",
+        "\\pi ",
+        "パイ",
+        "\\pi",
+        "symbol.\\pi",
+        0,
+        ""
+      ],
+      [
+        "ϖ",
+        "\\varpi ",
+        "パイ（異体）",
+        "\\varpi",
+        "symbol.\\varpi",
+        0,
+        ""
+      ],
+      [
+        "ρ",
+        "\\rho ",
+        "ロー",
+        "\\rho",
+        "symbol.\\rho",
+        0,
+        ""
+      ],
+      [
+        "ϱ",
+        "\\varrho ",
+        "ロー（異体）",
+        "\\varrho",
+        "symbol.\\varrho",
+        0,
+        ""
+      ],
+      [
+        "σ",
+        "\\sigma ",
+        "シグマ",
+        "\\sigma",
+        "symbol.\\sigma",
+        0,
+        ""
+      ],
+      [
+        "ς",
+        "\\varsigma ",
+        "シグマ（語末形）",
+        "\\varsigma",
+        "symbol.\\varsigma",
+        0,
+        ""
+      ],
+      [
+        "τ",
+        "\\tau ",
+        "タウ",
+        "\\tau",
+        "symbol.\\tau",
+        0,
+        ""
+      ],
+      [
+        "υ",
+        "\\upsilon ",
+        "ウプシロン",
+        "\\upsilon",
+        "symbol.\\upsilon",
+        0,
+        ""
+      ],
+      [
+        "ϕ",
+        "\\phi ",
+        "ファイ",
+        "\\phi",
+        "symbol.\\phi",
+        0,
+        ""
+      ],
+      [
+        "φ",
+        "\\varphi ",
+        "ファイ（異体）",
+        "\\varphi",
+        "symbol.\\varphi",
+        0,
+        ""
+      ],
+      [
+        "χ",
+        "\\chi ",
+        "カイ",
+        "\\chi",
+        "symbol.\\chi",
+        0,
+        ""
+      ],
+      [
+        "ψ",
+        "\\psi ",
+        "プサイ",
+        "\\psi",
+        "symbol.\\psi",
+        0,
+        ""
+      ],
+      [
+        "ω",
+        "\\omega ",
+        "オメガ",
+        "\\omega",
+        "symbol.\\omega",
+        0,
+        ""
       ]
-    },
-    {
-      label: "ギリシャ大",
-      items: [
-        ["Γ", "\\Gamma ", ""], ["Δ", "\\Delta ", ""], ["Θ", "\\Theta ", ""],
-        ["Λ", "\\Lambda ", ""], ["Φ", "\\Phi ", "磁束Φなど"],
-        ["Ψ", "\\Psi ", ""], ["Ω", "\\Omega ", ""],
-        ["Ξ", "\\Xi ", ""], ["Π", "\\Pi ", ""], ["Σ", "\\Sigma ", ""],
-        ["Υ", "\\Upsilon ", ""]
+    ]
+  },
+  {
+    "label": "ギリシャ大文字",
+    "columns": 4,
+    "items": [
+      [
+        "Γ",
+        "\\Gamma ",
+        "ガンマ",
+        "\\Gamma",
+        "symbol.\\Gamma",
+        0,
+        ""
+      ],
+      [
+        "Δ",
+        "\\Delta ",
+        "デルタ",
+        "\\Delta",
+        "symbol.\\Delta",
+        0,
+        ""
+      ],
+      [
+        "Θ",
+        "\\Theta ",
+        "シータ",
+        "\\Theta",
+        "symbol.\\Theta",
+        0,
+        ""
+      ],
+      [
+        "Λ",
+        "\\Lambda ",
+        "ラムダ",
+        "\\Lambda",
+        "symbol.\\Lambda",
+        0,
+        ""
+      ],
+      [
+        "Ξ",
+        "\\Xi ",
+        "クサイ",
+        "\\Xi",
+        "symbol.\\Xi",
+        0,
+        ""
+      ],
+      [
+        "Π",
+        "\\Pi ",
+        "パイ",
+        "\\Pi",
+        "symbol.\\Pi",
+        0,
+        ""
+      ],
+      [
+        "Σ",
+        "\\Sigma ",
+        "シグマ",
+        "\\Sigma",
+        "symbol.\\Sigma",
+        0,
+        ""
+      ],
+      [
+        "Υ",
+        "\\Upsilon ",
+        "ウプシロン",
+        "\\Upsilon",
+        "symbol.\\Upsilon",
+        0,
+        ""
+      ],
+      [
+        "Φ",
+        "\\Phi ",
+        "ファイ",
+        "\\Phi",
+        "symbol.\\Phi",
+        0,
+        ""
+      ],
+      [
+        "Ψ",
+        "\\Psi ",
+        "プサイ",
+        "\\Psi",
+        "symbol.\\Psi",
+        0,
+        ""
+      ],
+      [
+        "Ω",
+        "\\Omega ",
+        "オメガ",
+        "\\Omega",
+        "symbol.\\Omega",
+        0,
+        ""
       ]
-    }
-  ];
-
-  /* 行を用途別のタブに束ねる。ラベルは従来のまま残すので、タブを
-   * 開いた後は以前と同じ位置関係で記号を探せる。 */
+    ]
+  },
+  {
+    "label": "括弧",
+    "columns": 3,
+    "items": [
+      [
+        "(□)",
+        "\\left({}\\right)",
+        "丸括弧",
+        "\\left(a\\right)",
+        "template.paren",
+        0,
+        ""
+      ],
+      [
+        "[□]",
+        "\\left[{}\\right]",
+        "角括弧",
+        "\\left[a\\right]",
+        "template.bracket",
+        0,
+        ""
+      ],
+      [
+        "{□}",
+        "\\left\\{{}\\right\\}",
+        "波括弧",
+        "\\left\\{a\\right\\}",
+        "template.brace",
+        0,
+        ""
+      ],
+      [
+        "⟨□⟩",
+        "\\left\\langle {}\\right\\rangle",
+        "山括弧",
+        "\\left\\langle a\\right\\rangle",
+        "template.angle",
+        0,
+        ""
+      ],
+      [
+        "|□|",
+        "\\left|{}\\right|",
+        "絶対値",
+        "\\left|a\\right|",
+        "template.abs",
+        0,
+        ""
+      ],
+      [
+        "‖□‖",
+        "\\left\\|{}\\right\\|",
+        "ノルム",
+        "\\left\\|a\\right\\|",
+        "template.norm",
+        0,
+        ""
+      ],
+      [
+        "⌊□⌋",
+        "\\left\\lfloor {}\\right\\rfloor",
+        "床関数",
+        "\\left\\lfloor a\\right\\rfloor",
+        "template.floor",
+        0,
+        ""
+      ],
+      [
+        "⌈□⌉",
+        "\\left\\lceil {}\\right\\rceil",
+        "天井関数",
+        "\\left\\lceil a\\right\\rceil",
+        "template.ceil",
+        0,
+        ""
+      ],
+      [
+        "⟨□|□⟩",
+        "\\left\\langle {}\\middle|{}\\right\\rangle",
+        "ブラケット",
+        "\\left\\langle a\\middle|b\\right\\rangle",
+        "template.dirac",
+        0,
+        ""
+      ]
+    ]
+  },
+  {
+    "label": "分数と根号",
+    "columns": 2,
+    "items": [
+      [
+        "□/□",
+        "\\frac{}{}",
+        "分数",
+        "\\frac{a}{b}",
+        "template.frac",
+        0,
+        ""
+      ],
+      [
+        "□⁄□",
+        "{}^{}/{}_{}",
+        "スラッシュ分数",
+        "{}^{a}/{}_{b}",
+        "template.slashfrac",
+        1,
+        ""
+      ],
+      [
+        "√□",
+        "\\sqrt{}",
+        "平方根",
+        "\\sqrt{x}",
+        "template.sqrt",
+        0,
+        ""
+      ],
+      [
+        "n√□",
+        "\\sqrt[]{}",
+        "n 乗根",
+        "\\sqrt[n]{x}",
+        "template.nthroot",
+        1,
+        ""
+      ]
+    ]
+  },
+  {
+    "label": "上下付き",
+    "columns": 3,
+    "items": [
+      [
+        "□↑",
+        "{}^{}",
+        "上付き",
+        "a^{b}",
+        "template.sup",
+        0,
+        ""
+      ],
+      [
+        "□↓",
+        "{}_{}",
+        "下付き",
+        "a_{b}",
+        "template.sub",
+        0,
+        ""
+      ],
+      [
+        "□↕",
+        "{}_{}^{}",
+        "上下付き",
+        "a_{b}^{c}",
+        "template.subsup",
+        0,
+        ""
+      ],
+      [
+        "↑□",
+        "\\overset{}{}",
+        "上側の注記",
+        "\\overset{b}{a}",
+        "template.over",
+        1,
+        ""
+      ],
+      [
+        "↓□",
+        "\\underset{}{}",
+        "下側の注記",
+        "\\underset{b}{a}",
+        "template.under",
+        1,
+        ""
+      ],
+      [
+        "lim",
+        "\\lim_{}",
+        "極限（条件は下）",
+        "\\lim_{a}",
+        "template.lim",
+        0,
+        ""
+      ]
+    ]
+  },
+  {
+    "label": "総和",
+    "columns": 2,
+    "items": [
+      [
+        "∑□",
+        "\\sum_{}^{} {}",
+        "総和（上下限つき）",
+        "\\sum_{a}^{b} c",
+        "template.sum",
+        0,
+        ""
+      ],
+      [
+        "∏□",
+        "\\prod_{}^{} {}",
+        "総乗（上下限つき）",
+        "\\prod_{a}^{b} c",
+        "template.prod",
+        0,
+        ""
+      ]
+    ]
+  },
+  {
+    "label": "積分",
+    "columns": 3,
+    "items": [
+      [
+        "∫",
+        "\\int_{}^{} {}",
+        "積分",
+        "\\int_{a}^{b} c",
+        "template.int",
+        0,
+        ""
+      ],
+      [
+        "∬",
+        "\\iint_{}^{} {}",
+        "二重積分",
+        "\\iint_{a}^{b} c",
+        "template.iint",
+        0,
+        ""
+      ],
+      [
+        "∭",
+        "\\iiint_{}^{} {}",
+        "三重積分",
+        "\\iiint_{a}^{b} c",
+        "template.iiint",
+        0,
+        ""
+      ],
+      [
+        "∮",
+        "\\oint_{}^{} {}",
+        "周回積分",
+        "\\oint_{a}^{b} c",
+        "template.oint",
+        0,
+        ""
+      ]
+    ]
+  },
+  {
+    "label": "上線と下線",
+    "columns": 2,
+    "items": [
+      [
+        "¯□",
+        "\\overline{}",
+        "上線（伸縮）",
+        "\\overline{x}",
+        "template.overline",
+        0,
+        ""
+      ],
+      [
+        "_□",
+        "\\underline{}",
+        "下線（伸縮）",
+        "\\underline{x}",
+        "template.underline",
+        0,
+        ""
+      ],
+      [
+        "⏞□",
+        "\\overbrace{}^{}",
+        "上の水平波括弧",
+        "\\overbrace{x}",
+        "template.overbrace",
+        0,
+        ""
+      ],
+      [
+        "⏟□",
+        "\\underbrace{}_{}",
+        "下の水平波括弧",
+        "\\underbrace{x}",
+        "template.underbrace",
+        0,
+        ""
+      ],
+      [
+        "□→",
+        "\\overrightarrow{}",
+        "上の右向き伸縮矢印",
+        "\\overrightarrow{x}",
+        "template.overrightarrow",
+        0,
+        ""
+      ],
+      [
+        "←□",
+        "\\overleftarrow{}",
+        "上の左向き伸縮矢印",
+        "\\overleftarrow{x}",
+        "template.overleftarrow",
+        0,
+        ""
+      ],
+      [
+        "□↔",
+        "\\overleftrightarrow{}",
+        "上の両向き伸縮矢印",
+        "\\overleftrightarrow{x}",
+        "template.overleftrightarrow",
+        0,
+        ""
+      ]
+    ]
+  },
+  {
+    "label": "総乗と集合演算",
+    "columns": 2,
+    "items": [
+      [
+        "∐□",
+        "\\coprod_{}^{} {}",
+        "余積（上下限つき）",
+        "\\coprod_{a}^{b} c",
+        "template.coprod",
+        0,
+        ""
+      ],
+      [
+        "⋃□",
+        "\\bigcup_{}^{} {}",
+        "大きい和集合（上下限つき）",
+        "\\bigcup_{a}^{b} c",
+        "template.bigcup",
+        0,
+        ""
+      ],
+      [
+        "⋂□",
+        "\\bigcap_{}^{} {}",
+        "大きい共通部分（上下限つき）",
+        "\\bigcap_{a}^{b} c",
+        "template.bigcap",
+        0,
+        ""
+      ]
+    ]
+  },
+  {
+    "label": "行列",
+    "columns": 4,
+    "items": [
+      [
+        "1×2",
+        "\\begin{matrix} {} & {} \\end{matrix}",
+        "1×2",
+        "",
+        "template.matrix1x2",
+        0,
+        ""
+      ],
+      [
+        "1×3",
+        "\\begin{matrix} {} & {} & {} \\end{matrix}",
+        "1×3",
+        "",
+        "template.matrix1x3",
+        0,
+        ""
+      ],
+      [
+        "2×1",
+        "\\begin{matrix} {} \\\\ {} \\end{matrix}",
+        "2×1",
+        "",
+        "template.matrix2x1",
+        0,
+        ""
+      ],
+      [
+        "2×2",
+        "\\begin{matrix} {} & {} \\\\ {} & {} \\end{matrix}",
+        "2×2",
+        "",
+        "template.matrix2x2",
+        0,
+        ""
+      ],
+      [
+        "2×3",
+        "\\begin{matrix} {} & {} & {} \\\\ {} & {} & {} \\end{matrix}",
+        "2×3",
+        "",
+        "template.matrix2x3",
+        0,
+        ""
+      ],
+      [
+        "3×1",
+        "\\begin{matrix} {} \\\\ {} \\\\ {} \\end{matrix}",
+        "3×1",
+        "",
+        "template.matrix3x1",
+        0,
+        ""
+      ],
+      [
+        "3×2",
+        "\\begin{matrix} {} & {} \\\\ {} & {} \\\\ {} & {} \\end{matrix}",
+        "3×2",
+        "",
+        "template.matrix3x2",
+        0,
+        ""
+      ],
+      [
+        "3×3",
+        "\\begin{matrix} {} & {} & {} \\\\ {} & {} & {} \\\\ {} & {} & {} \\end{matrix}",
+        "3×3",
+        "",
+        "template.matrix3x3",
+        0,
+        ""
+      ],
+      [
+        "4×4",
+        "\\begin{matrix} {} & {} & {} & {} \\\\ {} & {} & {} & {} \\\\ {} & {} & {} & {} \\\\ {} & {} & {} & {} \\end{matrix}",
+        "4×4",
+        "",
+        "template.matrix4x4",
+        0,
+        ""
+      ],
+      [
+        "5×5",
+        "\\begin{matrix} {} & {} & {} & {} & {} \\\\ {} & {} & {} & {} & {} \\\\ {} & {} & {} & {} & {} \\\\ {} & {} & {} & {} & {} \\\\ {} & {} & {} & {} & {} \\end{matrix}",
+        "5×5",
+        "",
+        "template.matrix5x5",
+        0,
+        ""
+      ],
+      [
+        "6×6",
+        "\\begin{matrix} {} & {} & {} & {} & {} & {} \\\\ {} & {} & {} & {} & {} & {} \\\\ {} & {} & {} & {} & {} & {} \\\\ {} & {} & {} & {} & {} & {} \\\\ {} & {} & {} & {} & {} & {} \\\\ {} & {} & {} & {} & {} & {} \\end{matrix}",
+        "6×6",
+        "",
+        "template.matrix6x6",
+        0,
+        ""
+      ],
+      [
+        "+R",
+        "",
+        "行を下へ追加",
+        "",
+        "matrix.add_row",
+        0,
+        "Web版ではTeXソースの行・列を編集してください"
+      ],
+      [
+        "−R",
+        "",
+        "現在行を削除",
+        "",
+        "matrix.remove_row",
+        0,
+        "Web版ではTeXソースの行・列を編集してください"
+      ],
+      [
+        "+C",
+        "",
+        "列を右へ追加",
+        "",
+        "matrix.add_column",
+        0,
+        "Web版ではTeXソースの行・列を編集してください"
+      ],
+      [
+        "−C",
+        "",
+        "現在列を削除",
+        "",
+        "matrix.remove_column",
+        0,
+        "Web版ではTeXソースの行・列を編集してください"
+      ],
+      [
+        "{□",
+        "\\begin{cases} {} & {} \\\\ {} & {} \\end{cases}",
+        "場合分け",
+        "\\begin{cases}a&b\\\\c&d\\end{cases}",
+        "template.cases",
+        0,
+        ""
+      ]
+    ]
+  },
+  {
+    "label": "構造（Web追加）",
+    "columns": 4,
+    "items": [
+      [
+        "dfrac",
+        "\\dfrac{}{}",
+        "常に大きい分数（入れ子・文中でも縮まない）",
+        "",
+        "web.0.1",
+        0,
+        ""
+      ],
+      [
+        "x²",
+        "^{}",
+        "上付き",
+        "",
+        "web.0.4",
+        0,
+        ""
+      ],
+      [
+        "xᵢ",
+        "_{}",
+        "下付き",
+        "",
+        "web.0.5",
+        0,
+        ""
+      ],
+      [
+        "Σ",
+        "\\sum_{}^{}",
+        "総和",
+        "",
+        "web.0.6",
+        0,
+        ""
+      ],
+      [
+        "∏",
+        "\\prod_{}^{}",
+        "総乗",
+        "",
+        "web.0.7",
+        0,
+        ""
+      ],
+      [
+        "∫",
+        "\\int_{}^{}",
+        "積分",
+        "",
+        "web.0.8",
+        0,
+        ""
+      ],
+      [
+        "∬",
+        "\\iint_{} ",
+        "二重積分（面積分）",
+        "",
+        "web.0.9",
+        0,
+        ""
+      ],
+      [
+        "∭",
+        "\\iiint_{} ",
+        "三重積分（体積積分）",
+        "",
+        "web.0.10",
+        0,
+        ""
+      ],
+      [
+        "∮",
+        "\\oint_{}",
+        "周回積分",
+        "",
+        "web.0.11",
+        0,
+        ""
+      ],
+      [
+        "lim",
+        "\\lim_{ \\to }",
+        "極限",
+        "",
+        "web.0.12",
+        0,
+        ""
+      ],
+      [
+        "d/dx",
+        "\\frac{\\mathrm{d} {}}{\\mathrm{d} {}}",
+        "常微分",
+        "",
+        "web.0.13",
+        0,
+        ""
+      ],
+      [
+        "∂/∂x",
+        "\\frac{\\partial {}}{\\partial {}}",
+        "偏微分",
+        "",
+        "web.0.14",
+        0,
+        ""
+      ],
+      [
+        "行列",
+        "\\begin{pmatrix} {} & {} \\\\ {} & {} \\end{pmatrix}",
+        "2×2行列（丸括弧）",
+        "",
+        "web.0.15",
+        0,
+        ""
+      ],
+      [
+        "[∷]",
+        "\\begin{bmatrix} {} & {} \\\\ {} & {} \\end{bmatrix}",
+        "行列（角括弧）",
+        "",
+        "web.0.17",
+        0,
+        ""
+      ],
+      [
+        "|∷|",
+        "\\begin{vmatrix} {} & {} \\\\ {} & {} \\end{vmatrix}",
+        "行列式",
+        "",
+        "web.0.18",
+        0,
+        ""
+      ],
+      [
+        "整列",
+        "\\begin{aligned} {} &= {} \\\\ {} &= {} \\end{aligned}",
+        "複数行（Enter でも行が増える）",
+        "",
+        "web.0.20",
+        0,
+        ""
+      ]
+    ]
+  },
+  {
+    "label": "装飾（Web追加）",
+    "columns": 4,
+    "items": [
+      [
+        "⏞□",
+        "\\overbrace{}",
+        "上の水平波括弧",
+        "",
+        "web.1.11",
+        0,
+        ""
+      ],
+      [
+        "⏟□",
+        "\\underbrace{}",
+        "下の水平波括弧",
+        "",
+        "web.1.12",
+        0,
+        ""
+      ],
+      [
+        "math",
+        "\\mathnormal{}",
+        "標準の数式書体へ戻す",
+        "",
+        "web.1.22",
+        0,
+        ""
+      ],
+      [
+        "abc",
+        "\\text{}",
+        "テキスト（空白が使える）",
+        "",
+        "web.1.23",
+        0,
+        ""
+      ]
+    ]
+  },
+  {
+    "label": "関数（Web追加）",
+    "columns": 4,
+    "items": [
+      [
+        "sin",
+        "\\sin ",
+        "",
+        "",
+        "web.2.0",
+        0,
+        ""
+      ],
+      [
+        "cos",
+        "\\cos ",
+        "",
+        "",
+        "web.2.1",
+        0,
+        ""
+      ],
+      [
+        "tan",
+        "\\tan ",
+        "",
+        "",
+        "web.2.2",
+        0,
+        ""
+      ],
+      [
+        "log",
+        "\\log ",
+        "",
+        "",
+        "web.2.3",
+        0,
+        ""
+      ],
+      [
+        "ln",
+        "\\ln ",
+        "",
+        "",
+        "web.2.4",
+        0,
+        ""
+      ],
+      [
+        "exp",
+        "\\exp ",
+        "",
+        "",
+        "web.2.5",
+        0,
+        ""
+      ],
+      [
+        "rot",
+        "\\operatorname{rot} ",
+        "回転（和書流儀）",
+        "",
+        "web.2.6",
+        0,
+        ""
+      ],
+      [
+        "curl",
+        "\\operatorname{curl} ",
+        "回転（洋書流儀）",
+        "",
+        "web.2.7",
+        0,
+        ""
+      ],
+      [
+        "div",
+        "\\operatorname{div} ",
+        "発散",
+        "",
+        "web.2.8",
+        0,
+        ""
+      ],
+      [
+        "grad",
+        "\\operatorname{grad} ",
+        "勾配",
+        "",
+        "web.2.9",
+        0,
+        ""
+      ],
+      [
+        "arg min",
+        "\\operatorname*{arg\\,min}_{} ",
+        "最小値を与える変数",
+        "",
+        "web.2.10",
+        0,
+        ""
+      ],
+      [
+        "arg max",
+        "\\operatorname*{arg\\,max}_{} ",
+        "最大値を与える変数",
+        "",
+        "web.2.11",
+        0,
+        ""
+      ],
+      [
+        "∇⋅",
+        "\\nabla\\cdot ",
+        "発散（∇表記）",
+        "",
+        "web.2.12",
+        0,
+        ""
+      ],
+      [
+        "∇×",
+        "\\nabla\\times ",
+        "回転（∇表記）",
+        "",
+        "web.2.13",
+        0,
+        ""
+      ],
+      [
+        "Re",
+        "\\operatorname{Re} ",
+        "実部",
+        "",
+        "web.2.14",
+        0,
+        ""
+      ],
+      [
+        "Im",
+        "\\operatorname{Im} ",
+        "虚部",
+        "",
+        "web.2.15",
+        0,
+        ""
+      ]
+    ]
+  },
+  {
+    "label": "矢印・集合（Web追加）",
+    "columns": 4,
+    "items": [
+      [
+        "⋃",
+        "\\bigcup_{}^{}",
+        "大きい和集合",
+        "",
+        "web.3.41",
+        0,
+        ""
+      ],
+      [
+        "⋂",
+        "\\bigcap_{}^{}",
+        "大きい共通部分",
+        "",
+        "web.3.42",
+        0,
+        ""
+      ],
+      [
+        "∐",
+        "\\coprod_{}^{}",
+        "余積",
+        "",
+        "web.3.43",
+        0,
+        ""
+      ]
+    ]
+  },
+  {
+    "label": "微分幾何（Web追加）",
+    "columns": 4,
+    "items": [
+      [
+        "f^*",
+        "^{*} ",
+        "引き戻し（pullback）",
+        "",
+        "web.4.5",
+        0,
+        ""
+      ],
+      [
+        "f_*",
+        "_{*} ",
+        "押し出し（pushforward）",
+        "",
+        "web.4.6",
+        0,
+        ""
+      ],
+      [
+        "♭",
+        "^{\\flat} ",
+        "フラット（添字を下げる）",
+        "",
+        "web.4.7",
+        0,
+        ""
+      ],
+      [
+        "♯",
+        "^{\\sharp} ",
+        "シャープ（添字を上げる）",
+        "",
+        "web.4.8",
+        0,
+        ""
+      ]
+    ]
+  },
+  {
+    "label": "その他（Web追加）",
+    "columns": 4,
+    "items": [
+      [
+        "°",
+        "^{\\circ} ",
+        "度",
+        "",
+        "web.5.4",
+        0,
+        ""
+      ]
+    ]
+  },
+  {
+    "label": "空白（Web追加）",
+    "columns": 4,
+    "items": [
+      [
+        "~",
+        "~",
+        "改行しない空白",
+        "",
+        "web.6.6",
+        0,
+        ""
+      ],
+      [
+        "\\␣",
+        "\\ ",
+        "通常幅の空白（\\ の後に空白）",
+        "",
+        "web.6.7",
+        0,
+        ""
+      ]
+    ]
+  }
+];
   var PALETTE_TABS = [
-    { id: "basic", label: "基本", palettes: ["構造", "括弧", "装飾"] },
-    { id: "analysis", label: "解析", palettes: ["関数", "関係"] },
-    { id: "sets", label: "集合・記号", palettes: ["矢印・集合", "その他", "空白"] },
-    { id: "geometry", label: "幾何", palettes: ["微分幾何"] },
-    { id: "greek", label: "ギリシャ", palettes: ["ギリシャ", "ギリシャ大"] }
-  ];
+  {
+    "id": "basic",
+    "label": "基本",
+    "palettes": [
+      "分数と根号",
+      "上下付き",
+      "行列",
+      "括弧",
+      "装飾",
+      "上線と下線"
+    ]
+  },
+  {
+    "id": "analysis",
+    "label": "解析",
+    "palettes": [
+      "関係演算子",
+      "演算子",
+      "その他の記号",
+      "総和",
+      "積分"
+    ]
+  },
+  {
+    "id": "sets",
+    "label": "集合・記号",
+    "palettes": [
+      "矢印",
+      "集合記号",
+      "論理記号",
+      "総乗と集合演算",
+      "空白と点"
+    ]
+  },
+  {
+    "id": "geometry",
+    "label": "幾何",
+    "palettes": [
+      "微分幾何"
+    ]
+  },
+  {
+    "id": "greek",
+    "label": "ギリシャ",
+    "palettes": [
+      "ギリシャ小文字",
+      "ギリシャ大文字"
+    ]
+  },
+  {
+    "id": "web-extra",
+    "label": "Web追加",
+    "palettes": [
+      "構造（Web追加）",
+      "装飾（Web追加）",
+      "関数（Web追加）",
+      "矢印・集合（Web追加）",
+      "微分幾何（Web追加）",
+      "その他（Web追加）",
+      "空白（Web追加）"
+    ]
+  }
+];
+  // END GENERATED PALETTES
 
   /* Category-independent math alphabets.  These stay beside the tabs so a
    * user never has to remember which subject palette owns a writing style. */
@@ -283,6 +2894,11 @@
     ".eqed-row-label { font-size: 0.78rem; color: var(--muted, #717170); min-width: 3.6em; }",
     ".eqed-key { font: inherit; font-size: 0.95rem; line-height: 1; padding: 5px 8px; border: 1px solid #cfcfcb; border-radius: 6px; background: #fff; cursor: pointer; min-width: 2.1em; }",
     ".eqed-key:hover { background: #eef3f8; border-color: #9db8d2; }",
+    ".eqed-key { position: relative; min-height: 2.2em; }",
+    ".eqed-accessible-face { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }",
+    ".eqed-math-face mjx-container { margin:0 !important; }",
+    ".eqed-key:disabled { opacity:0.5; cursor:not-allowed; }",
+    ".eqed-preview-error { border-color:#b44; }",
     ".eqed-recent { display: block; width: fit-content; max-width: 100%; box-sizing: border-box; margin: 4px 0 2px; padding: 3px 8px; border: 1px solid #8fb7dc; border-radius: 5px; background: #dceeff; color: #163f63; font-family: var(--eqed-source-font); font-size: 0.88rem; white-space: pre-wrap; overflow-wrap: anywhere; }",
     ".eqed-recent[hidden] { display: none; }",
     ".eqed-recent--flash { animation: eqed-recent-flash 700ms ease-out; }",
@@ -401,7 +3017,8 @@
 
   function mathJaxTex(tex) {
     return leftAlignUnanchoredAligned(
-      tex.replace(/\\bm(?=\s*\{)/g, "\\boldsymbol"));
+      tex.replace(/\\bm(?=\s*\{)/g, "\\boldsymbol")
+        .replace(/\\dag(?![A-Za-z])/g, "\\dagger"));
   }
 
   function splitUnanchoredOfficeRows(math) {
@@ -514,7 +3131,7 @@
    * keeps the user gesture alive for the clipboard write. */
   function warmAutoloadedMacros() {
     if (!window.MathJax || typeof window.MathJax.tex2mmlPromise !== "function") return;
-    window.MathJax.tex2mmlPromise("\\boldsymbol{x}+\\cancel{x}", { display: false })
+    return window.MathJax.tex2mmlPromise("\\require{cancel}\\boldsymbol{x}+\\cancel{x}", { display: false })
       .catch(function () { /* the sync path reports its own failure */ });
   }
 
@@ -683,12 +3300,14 @@
        * previous hole can start no later than from - 2.  Starting from
        * text.length - 3 (the old bound) skipped a hole at the very end. */
       for (var i = from - 2; i >= 0; i--) {
-        if (text.charAt(i) === "{" && text.charAt(i + 1) === "}") return i + 1;
+        if ((text.charAt(i) === "{" && text.charAt(i + 1) === "}") ||
+            (text.charAt(i) === "[" && text.charAt(i + 1) === "]")) return i + 1;
       }
       return null;
     }
     for (var j = from; j + 1 < text.length; j++) {
-      if (text.charAt(j) === "{" && text.charAt(j + 1) === "}") return j + 1;
+      if ((text.charAt(j) === "{" && text.charAt(j + 1) === "}") ||
+          (text.charAt(j) === "[" && text.charAt(j + 1) === "]")) return j + 1;
     }
     return null;
   }
@@ -1117,6 +3736,24 @@
     };
   }
 
+  // A template's body is not necessarily its first lexical hole (root
+  // indices and overset annotations precede the body in TeX).
+  function composePaletteInsertion(value, start, end, item) {
+    if (item[6]) throw new Error(item[6]);
+    var snippet = item[1], slot = item[5] || 0;
+    if (/^'+$/.test(snippet) && end > start)
+      return composeInsertion(value, end, end, snippet);
+    var holes = [], match, pattern = /\{\}|\[\]/g;
+    while ((match = pattern.exec(snippet))) holes.push(match.index + 1);
+    if (!holes.length) return composeInsertion(value, start, end, snippet);
+    if (slot >= holes.length) throw new Error("Invalid palette body slot: " + item[4]);
+    var position = holes[slot];
+    var selected = value.slice(start, end);
+    var body = snippet.slice(0, position) + selected + snippet.slice(position);
+    return { value: value.slice(0, start) + body + value.slice(end),
+      caret: start + position + selected.length };
+  }
+
   function init(root) {
     installStyles();
     var input = root.querySelector(".eqed-source");
@@ -1125,6 +3762,8 @@
     /* It now carries the TeX of the cell under the cursor on purpose. */
     status.setAttribute("data-tex-literal-ok", "true");
     var paletteHost = root.querySelector(".eqed-palettes");
+    var palettePreviewQueue = window.MathJax && window.MathJax.startup
+      ? window.MathJax.startup.promise : Promise.resolve();
     var recent = el("output", "eqed-recent");
     recent.hidden = true;
     recent.setAttribute("aria-live", "polite");
@@ -1235,9 +3874,10 @@
 
     /* 挿入。選択があり、断片が空欄を持つなら選択を最初の空欄へ包む。
      * 環境テンプレートはネイティブ版と同じ改行・字下げで入れる。 */
-    function insert(snippet) {
+    function insert(snippet, item) {
       if (snippet.indexOf("\\begin{") >= 0) snippet = prettyTex(snippet);
-      var edit = composeInsertion(
+      var edit = item ? composePaletteInsertion(input.value,
+        input.selectionStart, input.selectionEnd, item) : composeInsertion(
         input.value, input.selectionStart, input.selectionEnd, snippet);
       applyEdit(input, edit);
       showRecentInsertion(snippet);
@@ -1334,11 +3974,42 @@
            * replace that name, so "arg min" would no longer address the key
            * for a screen reader, for voice control, or for the homepage QA. */
           button.title = description;
+          if (item[6]) {
+            button.disabled = true;
+            button.title += " — " + item[6];
+          }
+          // Keep the literal face as the accessible name; a typeset preview
+          // is visual only. Failed preview conversion leaves the name visible.
+          if (item[3]) {
+            var faceLabel = el("span", "eqed-face-label", item[0]);
+            button.textContent = "";
+            button.appendChild(faceLabel);
+            var mathFace = el("span", "eqed-math-face");
+            mathFace.setAttribute("aria-hidden", "true");
+            button.appendChild(mathFace);
+            palettePreviewQueue = palettePreviewQueue.then(function () {
+              if (!window.MathJax || !window.MathJax.typesetPromise)
+                throw new Error("MathJax unavailable");
+              mathFace.textContent = "\\[" + (item[3].indexOf("\\cancel") >= 0 ? "\\require{cancel}" : "")
+                + mathJaxTex(item[3]) + "\\]";
+              return window.MathJax.typesetPromise([mathFace]);
+            }).then(function () {
+              if (!mathFace.querySelector("mjx-container") ||
+                  mathFace.querySelector("mjx-merror, merror, mtext[mathcolor='red']"))
+                throw new Error("Invalid preview: " + mathFace.textContent);
+              faceLabel.classList.add("eqed-accessible-face");
+            }).catch(function (error) {
+              mathFace.textContent = "";
+              button.title += " — 見本を描画できません";
+              button.dataset.previewError = String(error.message || error);
+              button.classList.add("eqed-preview-error");
+            });
+          }
           button.addEventListener("mouseenter", function () { showKeyHelp(description); });
           button.addEventListener("focus", function () { showKeyHelp(description); });
           button.addEventListener("mouseleave", function () { clearKeyHelp(description); });
           button.addEventListener("blur", function () { clearKeyHelp(description); });
-          button.addEventListener("click", function () { insert(item[1]); });
+          button.addEventListener("click", function () { insert(item[1], item); });
           row.appendChild(button);
         });
         panel.appendChild(row);
@@ -1495,7 +4166,7 @@
 
     render();
     if (window.MathJax && window.MathJax.startup && window.MathJax.startup.promise) {
-      window.MathJax.startup.promise.then(warmAutoloadedMacros).catch(function () {});
+      palettePreviewQueue.then(warmAutoloadedMacros).catch(function () {});
     } else {
       warmAutoloadedMacros();
     }
@@ -1512,6 +4183,8 @@
         return { label: palette.label, items: palette.items.map(function (item) { return item.slice(); }) };
       }),
       composeInsertion: composeInsertion,
+      composePaletteInsertion: composePaletteInsertion,
+      paletteTabs: PALETTE_TABS,
       composeRowBreak: composeRowBreak,
       braceProblem: braceProblem,
       prettyTex: prettyTex,
