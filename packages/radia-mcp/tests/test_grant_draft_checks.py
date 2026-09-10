@@ -26,6 +26,36 @@ def test_enumerations_do_not_make_an_inapplicable_finding():
     assert len(result["enumeration_declarations"]) == 2
 
 
+@pytest.mark.parametrize("heading", ["## なぜ今か？", "  ### 何を保つか？ ###", "なぜ今か？\n---"])
+@pytest.mark.parametrize("newline", ["\n", "\r\n", "\r"])
+def test_navigation_questions_do_not_count_as_central_questions(heading, newline):
+    result = t.grant_writing_central_question_singularity_check(
+        f"本研究の問いは一つである。\n{heading}\n何が変わるか？".replace("\n", newline)
+    )
+    assert result["announcement_count"] == 1
+    assert not result["risks"]
+    assert result["score"] is None
+
+
+def test_heading_announcements_do_not_make_prose_applicable():
+    result = t.grant_writing_central_question_singularity_check(
+        "## 本研究の問いは一つである\n何が変わるか？さらに何を保つか？"
+    )
+    assert not result["applicable"]
+    assert not result["risks"]
+
+
+def test_removing_headings_preserves_real_multiple_questions(tmp_path):
+    path = tmp_path / "proposal.md"
+    path.write_text(
+        "本研究の問いは一つである。\n## なぜ今か？\n何が変わるか？さらに何を保つか？",
+        encoding="utf-8",
+    )
+    result = t.grant_writing_central_question_singularity_check(str(path))
+    assert result["risks"][0]["question_count"] == 2
+    assert result["score"] is None
+
+
 def test_separate_announcements_do_not_borrow_each_others_questions():
     result = t.grant_writing_central_question_singularity_check(
         "中心の問いは一つである。何が変わるか？\n" "本研究の問いは一つである。何が変わるか？"
