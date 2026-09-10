@@ -2567,35 +2567,16 @@ void draw_palette_cell(HDC dc, const RECT& rect, HFONT font,
         return;
     }
 
-    // Render semantic previews through the same model as insertion. Other
-    // labels remain literal glyphs; never reinterpret a symbol as TeX.
+    // Both editions consume the same reviewed preview TeX. The native
+    // renderer owns pixels, not a second palette-example vocabulary.
     eqnedit::Equation preview;
     bool semantic = false;
-    if (command.rfind("style.", 0) == 0) {
-        preview.insert_text("A");
-        preview.select_all();
-        semantic = preview.restyle_selection(command.substr(6));
-        preview.clear_selection();
-    } else {
-        static const std::vector<std::string> kinds = {
-            "frac", "slashfrac", "sqrt", "nthroot", "hat", "tilde", "bar",
-            "vec", "dot", "ddot", "dddot", "prime", "dprime", "tprime",
-            "strike", "frown", "smile", "overline", "underline",
-            "overbrace", "underbrace", "overrightarrow", "overleftarrow",
-            "overleftrightarrow"};
-        const std::string kind = command.rfind("template.", 0) == 0
-            ? command.substr(9) : std::string();
-        if (std::find(kinds.begin(), kinds.end(), kind) != kinds.end()) {
-            semantic = preview.insert_template(kind);
-            if (semantic) {
-                preview.insert_text(kind == "frac" || kind == "slashfrac" ? "a" : "x");
-                if (kind == "frac" || kind == "slashfrac" || kind == "nthroot") {
-                    preview.next_slot();
-                    preview.insert_text(kind == "nthroot" ? "n" : "b");
-                }
+    for (const auto& palette : eqnedit::palettes())
+        for (const auto& item : palette.items)
+            if (item.command == command && !item.preview_tex.empty()) {
+                if (!preview.load_latex(item.preview_tex)) return; // blank fails the visual gate
+                semantic = true;
             }
-        }
-    }
 
     // Crop actual ink, not the font's em/Windows ascent. Supersampling keeps
     // radicals and thin accents intact when a wide label must be fitted.
@@ -2676,13 +2657,19 @@ void draw_palette_cell(HDC dc, const RECT& rect, HFONT font,
 /* Run the exact owner-draw path used by WM_DRAWITEM into an off-screen menu
  * cell.  Cmap ownership prevents fallback tofu, while a minimum ink count
  * prevents an empty or one-pixel rendering from qualifying as readable. */
+void draw_selector_face(HDC dc, RECT rect, HFONT font,
+                        const std::wstring& face, int dpi, bool hot = false) {
+    InflateRect(&rect, -MulDiv(4, dpi, 96), -MulDiv(3, dpi, 96));
+    draw_palette_cell(dc, rect, font, face, hot);
+}
+
 bool palette_cell_draws_readably(HFONT font, const std::wstring& face,
                                  int dpi, const std::string& command = {},
-                                 bool hot = false) {
+                                 bool hot = false, bool selector = false) {
     if (!font || face.empty() || !font_owns_glyphs(font, face.c_str()))
         return false;
-    const int width = MulDiv(34, dpi, 96);
-    const int height = MulDiv(28, dpi, 96);
+    const int width = MulDiv(selector ? 52 : 34, dpi, 96);
+    const int height = MulDiv(selector ? 30 : 28, dpi, 96);
     HDC dc = CreateCompatibleDC(nullptr);
     if (!dc) return false;
     BITMAPINFO info{};
@@ -2702,7 +2689,10 @@ bool palette_cell_draws_readably(HFONT font, const std::wstring& face,
     }
     HGDIOBJ old = SelectObject(dc, bitmap);
     RECT rect{0, 0, width, height};
-    draw_palette_cell(dc, rect, font, face, hot, command);
+    if (selector) {
+        FillRect(dc, &rect, GetSysColorBrush(hot ? COLOR_HIGHLIGHT : COLOR_MENU));
+        draw_selector_face(dc, rect, font, face, dpi, hot);
+    } else draw_palette_cell(dc, rect, font, face, hot, command);
     GdiFlush();
     const COLORREF background = GetSysColor(hot ? COLOR_HIGHLIGHT : COLOR_MENU);
     const auto* pixels = static_cast<const unsigned char*>(bits);
@@ -2810,19 +2800,16 @@ void draw_toolbar_button(HWND hwnd, HDC dc) {
     DrawFrameControl(dc, &rc, DFC_BUTTON, frameState);
 
     std::wstring text = window_text(hwnd);
-    RECT textRc = rc;
-    InflateRect(&textRc, -scaled_px(hwnd, 4), -scaled_px(hwnd, 3));
-    if (pressed) OffsetRect(&textRc, 1, 1);
     SetBkMode(dc, TRANSPARENT);
     SetTextColor(dc, GetSysColor(IsWindowEnabled(hwnd)
                                      ? COLOR_BTNTEXT : COLOR_GRAYTEXT));
     HFONT font = HFONT(SendMessageW(hwnd, WM_GETFONT, 0, 0));
     if (!font) font = HFONT(GetStockObject(DEFAULT_GUI_FONT));
-    HGDIOBJ oldFont = SelectObject(dc, font);
-    DrawTextW(dc, text.c_str(), int(text.size()), &textRc,
-              DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX |
-                  DT_END_ELLIPSIS);
-    SelectObject(dc, oldFont);
+    // Selector and persistent-style faces must use the same ink bounds as
+    // popup cells. Latin Modern Math's line box is not its visible glyph box.
+    RECT faceRc = rc;
+    if (pressed) OffsetRect(&faceRc, 1, 1);
+    draw_selector_face(dc, faceRc, font, text, int(GetDpiForWindow(hwnd)));
 
     if (GetFocus() == hwnd) {
         RECT focus = rc;

@@ -88,11 +88,15 @@ out.
 
 Do not delegate basic clipping discovery to the user. AI reviews the actual
 owner-draw proofs first: all 19 palettes, at 96/144/192 DPI, in normal and
-selected states. `test_palette_visual` creates 114 PNGs and a command index;
+selected states. `test_palette_visual` creates 120 PNGs and a command index;
 CI retains them as `eqnedit64-palette-proofs`. The images use the production
 34-by-28 logical pixel cells and font chooser. Added gray borders are proof
 guides, not a screenshot of Windows menu chrome. Run the proof executable
-only in session 0 or the explicitly isolated CI environment.
+only in session 0 or the explicitly isolated CI environment. The additional
+six sheets exercise the 19 palette selectors and three persistent style faces
+through the same ink-fitting helper used by the toolbar, including the actual
+italic/bold font variants. Selector proofs use 52-by-30 logical pixels; the
+58-pixel persistent buttons are conservatively tested at that narrower width.
 
 The cell renderer crops measured ink, preserves aspect ratio and a clear
 margin, and never enlarges a glyph beyond its nominal size. The gate checks
@@ -105,15 +109,31 @@ The font's U+2423 hairline disappeared during downsampling at 144 DPI in the
 first implementation; the new visible-ink gate caught it. Spacing marks must
 remain visible in normal and highlighted states without relying on that glyph.
 
-Fraction/radical, accent/line and typeface commands show native-model previews
-instead of ambiguous literal abbreviations. Fractions use distinct `a`/`b`
-slots, decorated variables use `x`, typefaces use `A`; style selection must be
-cleared before rendering. The preview is derived from the insertion command,
-not from a separate hand-written TeX implementation. Literal catalogue faces
-remain the fallback/accessibility labels and the Windows glyph coverage input;
-the intent oracle still tests the actual insertion independently. Web rendering
-is unchanged in this native fix; equivalent visual goals apply to Web review,
-but GDI cropping must not be copied into the browser renderer.
+Both editions take their grouping, order, labels, insertion adapter and preview
+TeX from `shared/palettes.json`. Run `build/generate_palettes.py` after editing
+it; CI's `--check` rejects stale C++ or embedded JS output. The generator never
+reads the independent `docs/palette_intent.json` oracle. Every entry must declare
+`preview_tex`; an explicitly empty string means a literal face (matrix dimensions
+and contextual controls, for example). A failed nonempty native preview must
+fail the visible-ink gate, not silently switch to a literal label.
+
+The common catalogue has 245 keys in 19 palettes and five categories. Existing
+Web-only snippets remain in an explicit Web-additions tab; four contextual
+matrix row/column operations are disabled with an explanation on Web, where
+editing remains source-based. This is common catalogue ownership, not a claim
+that both editing engines or platform capabilities are identical. No new
+Python-facing API is required. The browser uses the declared body slot when
+wrapping selected text (root and overset indices precede their bodies in TeX).
+
+Web uses MathJax for the shared examples and retains literal accessible names.
+Preview failures are visible, not raw TeX. Native uses its existing model and
+GDI fitter. Over/underbrace examples omit annotation slots so the brace can
+remain larger; inserted expressions still include those editable slots.
+
+Pixel gates detect clipping and empty output, not minimum semantic feature
+size. Small primes and harpoon distinctions still require image review. No
+hover-performance improvement or cache claim is made without measurements;
+the current native raster path is not cached.
 
 A human may still resolve ambiguous legibility or monitor-specific perception.
 AI images are not evidence of popup positioning, pointer behavior, or the

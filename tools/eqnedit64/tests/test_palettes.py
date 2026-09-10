@@ -226,10 +226,10 @@ def test_native_geometry_palette_matches_the_web_editor():
         ("dω", r"\mathrm{d} ", "外微分（立体のd）"),
         ("ι", r"\iota_{} ", "内部積（縮約）ι_X"),
         ("ℒ", r"\mathcal{L}_{} ", "Lie微分"),
-        ("f^*", "^{*} ", "引き戻し（pullback）"),
-        ("f_*", "_{*} ", "押し出し（pushforward）"),
-        ("♭", r"^{\flat} ", "フラット（添字を下げる）"),
-        ("♯", r"^{\sharp} ", "シャープ（添字を上げる）"),
+        ("f^*", "{}^{*} ", "引き戻し（pullback）"),
+        ("f_*", "{}_{*} ", "押し出し（pushforward）"),
+        ("♭", r"{}^{\flat} ", "フラット（添字を下げる）"),
+        ("♯", r"{}^{\sharp} ", "シャープ（添字を上げる）"),
         ("⊗", r"\otimes ", "テンソル積"),
         ("⊕", r"\oplus ", "直和"),
     ]
@@ -247,11 +247,10 @@ def test_native_geometry_palette_matches_the_web_editor():
 
     source = (Path(__file__).resolve().parents[1] / "web" /
               "equation-editor.js").read_text(encoding="utf-8")
-    block = source.split('label: "微分幾何"', 1)[1].split("]\n    },", 1)[0]
-    web = []
-    for match in re.finditer(r'^\s*(\[".*"\]),?$', block, re.MULTILINE):
-        face, payload, label = json.loads(match.group(1))
-        web.append((face, payload, label))
+    block = source.split("var PALETTES = ", 1)[1].split(";\n", 1)[0]
+    catalogue = json.loads(block)
+    items = next(p["items"] for p in catalogue if p["label"] == "微分幾何")
+    web = [tuple(item[:3]) for item in items]
     assert web == expected
 
 

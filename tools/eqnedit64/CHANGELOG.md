@@ -2,6 +2,12 @@
 
 ## 3.1.0 — release candidate
 
+- Generate native and Web palettes from one production catalogue, independently
+  checked against the insertion oracle. Share category order and preview TeX,
+  preserve Web-only snippets explicitly, and explain native-only matrix actions.
+  Fit toolbar selector ink as well as popup cells, add selector/style proof
+  sheets (120 total), and simplify brace examples without removing input slots.
+
 - Fit palette ink to the cell instead of centering the font's line metrics;
   radicals and standalone slashes no longer rely on being clipped to fit.
   Show native previews for fractions, radicals, decorations and typefaces.

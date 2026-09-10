@@ -39,7 +39,7 @@ def test_source_surfaces_share_a_cjk_safe_font_stack() -> None:
 
 def test_palette_and_learning_contract() -> None:
     for label in ["基本", "解析", "集合・記号", "幾何", "ギリシャ"]:
-        assert f'label: "{label}"' in SOURCE
+        assert f'"label": "{label}"' in SOURCE
     assert "showRecentInsertion(snippet)" in SOURCE
     assert 'event.key !== "Tab"' in SOURCE
     assert "nextHole(input.value" in SOURCE
@@ -193,8 +193,8 @@ def test_autoloaded_macros_are_warmed_before_the_first_office_copy() -> None:
     failed the first copy of a `\\bm` equation on a freshly opened page.
     """
     assert "function warmAutoloadedMacros()" in SOURCE
-    assert r'tex2mmlPromise("\\boldsymbol{x}+\\cancel{x}"' in SOURCE
-    assert "window.MathJax.startup.promise.then(warmAutoloadedMacros)" in SOURCE
+    assert r'tex2mmlPromise("\\require{cancel}\\boldsymbol{x}+\\cancel{x}"' in SOURCE
+    assert "palettePreviewQueue.then(warmAutoloadedMacros)" in SOURCE
 
 
 def test_office_copy_prefers_exact_cf_html_fragment() -> None:

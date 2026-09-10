@@ -38,10 +38,19 @@ int wmain(int argc, wchar_t** argv) {
     for (int dpi : {96, 144, 192}) {
         HFONT font = pick_button_font(MulDiv(17, dpi, 96));
         if (!font_resolves_to_face(font, L"Latin Modern Math")) return 243;
+        auto proofPalettes = eqnedit::palettes();
+        eqnedit::Palette selectors{"Selectors and persistent styles", "", 4, {}};
+        for (const auto& palette : eqnedit::palettes())
+            selectors.items.push_back({"", palette.face, palette.title, "", ""});
+        for (const char* face : {"R x", "I x", "B x"})
+            selectors.items.push_back({"", face, face, "", ""});
+        proofPalettes.push_back(selectors);
         int index = 0;
-        for (const auto& palette : eqnedit::palettes()) {
+        for (const auto& palette : proofPalettes) {
+          const bool selector = size_t(index) == eqnedit::palettes().size();
           for (bool hot : {false, true}) {
-            const int cellW = MulDiv(34, dpi, 96), cellH = MulDiv(28, dpi, 96);
+            const int cellW = MulDiv(selector ? 52 : 34, dpi, 96);
+            const int cellH = MulDiv(selector ? 30 : 28, dpi, 96);
             const int rows = (int(palette.items.size()) + palette.columns - 1) / palette.columns;
             const int width = palette.columns * cellW;
             const int height = rows * cellH;
@@ -63,8 +72,14 @@ int wmain(int argc, wchar_t** argv) {
                 const int x = (itemIndex % palette.columns) * cellW;
                 const int y = (itemIndex / palette.columns) * cellH;
                 RECT cell{x, y, x + cellW, y + cellH};
-                if (!palette_cell_draws_readably(font, wide_utf8(item.face), dpi, item.command, hot)) return 94;
-                draw_palette_cell(dc, cell, font, wide_utf8(item.face), hot, item.command);
+                HFONT faceFont = font;
+                if (selector && size_t(itemIndex) >= eqnedit::palettes().size())
+                    faceFont = make_style_button_font(font, item.face == "I x",
+                        item.face == "B x" ? FW_BOLD : FW_NORMAL);
+                if (!palette_cell_draws_readably(faceFont, wide_utf8(item.face), dpi, item.command, hot, selector)) return 94;
+                if (selector) draw_selector_face(dc, cell, faceFont, wide_utf8(item.face), dpi, hot);
+                else draw_palette_cell(dc, cell, faceFont, wide_utf8(item.face), hot, item.command);
+                if (faceFont != font) DeleteObject(faceFont);
                 FrameRect(dc, &cell, GetSysColorBrush(COLOR_3DSHADOW));
                 printf("%d,%d,%d,%s\n", dpi, index, itemIndex, item.command.c_str());
                 ++itemIndex;
