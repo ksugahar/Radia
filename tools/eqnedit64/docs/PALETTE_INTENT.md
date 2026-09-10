@@ -57,12 +57,27 @@ in the existing single-process model suite on disposable Windows CI, never on
 the interactive LAB font session. These tests do not claim that Win32 pointer
 hit-testing or PowerPoint paste has been exercised.
 
-Font cmap coverage predicts which font `pick_button_font` will accept; it does
+Font cmap coverage requires every Windows Unicode subtable (platform 3,
+encoding 1 or 10), never the union of Mac Roman and Unicode tables. Tab faces
+are included: use U+2044 with the radical and `x` with U+2191, not the Mac-only
+U+00BD or U+00B2 entries of the shipped font. This predicts which font
+`pick_button_font` will accept; it does
 not observe which font a running process received. `--self-test` now makes that
 observation: it calls the production chooser, reads the physical face GDI
-resolved, and exits 243 naming the substitute if the palette is not drawing in
-Latin Modern Math. The existing hidden-executable CI step therefore fails the
-moment a face character leaves the embedded cmap again.
+resolved at 96, 120, 144, 192, 288, and 384 dpi, and exits 243 naming the
+substitute and DPI if the palette is not drawing in Latin Modern Math.
+Diagnostics separate physical-face substitution, glyph coverage, and missing
+ink; they do not infer a root cause from the selected fallback alone. The ink
+probe allocates its surface from the selected font's measured line height and
+text extent, so a large Windows ascent cannot clip the probe at high DPI.
+
+The candidate before this correction passed English Windows CI but was reported
+to return 243 on Japanese Windows on both 100 and mdx1. The Windows cmap gap
+and fixed 64px ink surface are established defects; code page 1252 versus 932
+as the reason for the differing machines remains a hypothesis. CI success is
+not proof of success on LAB. Require a Japanese Windows isolated-session check
+of the signed candidate before publication; never run this check in LAB's
+interactive session.
 
 Do not route this through `flight_note`. Those notes live in a ring buffer that
 reaches a file only on a crash or an eight-second watchdog freeze, so a healthy
