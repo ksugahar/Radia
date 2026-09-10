@@ -1886,7 +1886,7 @@ def _git_repo_owner_name():
 
 def _check_github_hosted_workflows(
     sha, *, required_names=None, require_present=None,
-    timeout_sec=1800, poll_sec=20
+    timeout_sec=1800, poll_sec=20, registration_grace_sec=90
 ):
     """Wait for SHA-bound check-runs and require their latest attempts green.
 
@@ -1938,9 +1938,9 @@ def _check_github_hosted_workflows(
         # Push-triggered workflows take time to register. A commit with no
         # applicable/registered CI is not release evidence.
         if missing_names:
-            if _time.time() - started > 90:
+            if _time.time() - started >= registration_grace_sec:
                 return False, ("required check-runs not registered for "
-                               f"{sha[:8]} after 90 s: "
+                               f"{sha[:8]} after {registration_grace_sec} s: "
                                + ", ".join(sorted(missing_names)))
             _time.sleep(poll_sec)
             continue
