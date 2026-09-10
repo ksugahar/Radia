@@ -155,3 +155,28 @@ convergence, mesh contraction, cross-formulation agreement, and independent
 host reproducibility. It certifies numerical agreement, not analytic absolute
 truth. A later implementation hash must rerun the campaign; the historical
 global-Omega certificate must not be relabelled as this result.
+
+## Kelvin exterior of the mixed total/reduced Omega engine (2026-09-08)
+
+Until `ad5d9d553` the mixed total/reduced Omega engine's Kelvin ball carried no
+unknown at all: its total-potential space was restricted to the total
+materials, but the material touching the identified physical sphere is the
+reduced source enclosure, so that space owned no degree of freedom there and
+the periodic identification paired nothing. The recorded open boundary was in
+fact a Dirichlet truncation at the sphere. The four `results/
+c_type_20260908_linear_kelvin_*_mdx1.json` artifacts are the same linear
+order-2 run before and after the fix on the same two meshes, measured against
+HDiv-MMM whose open boundary is exact.
+
+| gap-core relative RMS | coarse before | coarse after | medium before | medium after |
+|---|---|---|---|---|
+| HDiv-MMM vs mixed Omega | 0.53990% | 0.15236% | 0.45521% | 0.11700% |
+| HDiv-MMM vs reduced-A | 0.09819% | 0.09819% | 0.10879% | 0.10879% |
+| reduced-A vs mixed Omega | 0.57760% | 0.16134% | 0.50904% | 0.11569% |
+
+The HDiv/reduced-A pair is the control and is bit-identical across the pair,
+as it must be. Before the fix the Omega error barely moved under refinement,
+which is the signature of a truncation floor; after it converges like the other
+two and reaches the reduced-A level. The `after` artifacts carry a different
+`radia.kelvin_solver` implementation hash, which is how they are told apart.
+
