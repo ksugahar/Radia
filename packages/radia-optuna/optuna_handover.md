@@ -92,6 +92,18 @@ histories, cold startup, peak memory, and durable table/MAT write costs remain
 outside this measurement. The experimental service workflow lives only on
 `codex/optuna-mdx2-service-benchmark`, not in the production diagnostic.
 
+The subsequent storage attribution is documented in
+`validation_test/optimization/optuna_storage_attribution_20260910.md`, with
+raw JSON alongside it. At 10,000 trials, no-path ask/suggest/tell component
+medians sum to 10.11 ms; adding StoragePath with AutoSave=false increases
+that to 18.73 ms. Dirty table views cost 11.01 ms, while a full validated,
+backed-up save costs 9.902 s. StoragePath currently disables native history,
+and nested per-trial IntermediateValues tables dominate object counts during
+serialization. Prioritize normalized persistence and an explicit durability
+contract, then safe native-cache rebuilding for persisted studies. This is
+an investigation result, not an implemented storage change or a Rustuna
+performance-equivalence claim.
+
 ## 2. Scope and non-goals
 
 ### In scope
