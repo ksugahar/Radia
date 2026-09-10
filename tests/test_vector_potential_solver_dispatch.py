@@ -29,6 +29,28 @@ def selector(order):
     return value
 
 
+@pytest.mark.parametrize("source_kind", ["radia", "callback"])
+def test_switching_source_discards_previous_kelvin_source(monkeypatch, source_kind):
+    ng = types.ModuleType("ngsolve")
+    ng.VoxelCoefficient = lambda *args, **kwargs: object()
+    ng.CF = tuple
+    monkeypatch.setitem(sys.modules, "ngsolve", ng)
+    rad = types.ModuleType("radia")
+    rad.Fld = lambda obj, component, points: np.ones_like(points)
+    monkeypatch.setitem(sys.modules, "radia", rad)
+    value = selector(1)
+    value.mesh = types.SimpleNamespace(ngmesh=types.SimpleNamespace(
+        bounding_box=((0, 0, 0), (1, 1, 1))))
+    value.set_source_cf(object(), kelvin_source_cf=object())
+    if source_kind == "radia":
+        value.set_source_from_radia(1, resolution=2, bbox=[[0, 1]] * 3)
+    else:
+        value.set_source_from_callback(
+            lambda x, y, z: np.column_stack((x, y, z)), resolution=2)
+    assert value._kelvin_source_cf is None
+    assert len(value._B_source_cf) == 3
+
+
 def test_high_order_auto_dispatches_to_bddc_before_ams_setup():
     assert selector(2)._select_solver(200_001, "auto") == "bddc"
 
