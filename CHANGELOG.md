@@ -5,6 +5,10 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- Generalized recurring-outline detection to accept author-defined two-to-eight
+  section taxonomies even when each divider is titled with its current section
+  rather than ``Outline``.
+
 - Changed the presentation outline guidance and check to require the complete
   agenda at each major section transition, with only the section starting now
   distinctly emphasized. A one-time agenda or sparse section card no longer
