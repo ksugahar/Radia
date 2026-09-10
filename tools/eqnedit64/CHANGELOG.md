@@ -1,5 +1,22 @@
 # Eqnedit64 changelog
 
+## 3.0.16 — release candidate
+
+- Publish the native rendering corrections accumulated after 3.0.15:
+  decorations retain their distinct shapes, primes sit beside their base,
+  over-arrows have arrowheads, and slashed fractions render on one line.
+  Unknown operator/fence selectors no longer become plausible unrelated math.
+- Preserve a base in the geometry palette's standalone script fragments.
+  Decoration comparisons and the complete palette sweep protect the visual
+  contract independently of TeX round trips and Office output.
+- Make native node dispatch exhaustive, including explicit rejection of the
+  unused legacy Font/RM nodes. Remove the silent empty-layout fallback and
+  enable the same missing-enumerator build gate in the CMake CI core.
+- Synchronize native numeric/string version resources, package metadata, and
+  the Web build identifier. The previous numeric resource still said 3.0.13.
+  Web rendering continues to use MathJax; native layout code is not copied to
+  JavaScript. Both editions remain part of the same publication transaction.
+
 ## 3.0.15 — 2026-09-05
 
 - Say why an equation cannot be shown instead of leaving raw TeX in the Web
