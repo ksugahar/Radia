@@ -6,7 +6,7 @@ arguments
     file (1,1) string
     time_s (:,1) double {mustBeFinite, mustBeNonnegative}
     values (:,1) double {mustBeFinite}
-    options.TimeUnit (1,1) string = "s"
+    options.TimeUnit (1,1) string {mustBeMember(options.TimeUnit,["","s"])} = "s"
 end
 if numel(time_s) < 2 || numel(values) ~= numel(time_s)
     error("radia:ltspice:PwlSize", ...

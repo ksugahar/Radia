@@ -7,7 +7,8 @@ b.NumDialogPrms=8; b.NumInputPorts=1; b.NumOutputPorts=1;
 b.SetPreCompInpPortInfoToDynamic; b.SetPreCompOutPortInfoToDynamic;
 b.InputPort(1).Dimensions=numel(names(b.DialogPrm(2).Data)); b.InputPort(1).DirectFeedthrough=true;
 b.OutputPort(1).Dimensions=numel(names(b.DialogPrm(3).Data)); b.SampleTimes=[b.DialogPrm(4).Data 0];
-b.RegBlockMethod('PostPropagationSetup',@postSetup); b.RegBlockMethod('Start',@start); b.RegBlockMethod('Outputs',@outputs); b.RegBlockMethod('Update',@update); b.RegBlockMethod('Terminate',@terminate);
+b.SimStateCompliance='CustomSimState';
+b.RegBlockMethod('PostPropagationSetup',@postSetup); b.RegBlockMethod('Start',@start); b.RegBlockMethod('Outputs',@outputs); b.RegBlockMethod('Update',@update); b.RegBlockMethod('GetSimState',@getSimState);b.RegBlockMethod('SetSimState',@setSimState);b.RegBlockMethod('Terminate',@terminate);
 end
 function postSetup(b)
 b.NumDworks=1; b.Dwork(1).Name='step'; b.Dwork(1).Dimensions=1; b.Dwork(1).DatatypeID=0; b.Dwork(1).Complexity='Real'; b.Dwork(1).UsedAsDiscState=true;
@@ -39,7 +40,15 @@ entry=storage("get",key(b));if ~entry.has_pending,return;end
 entry.state=entry.pending_state;entry.pending_state=[];entry.pending_output=[];
 entry.has_pending=false;storage("set",key(b),entry);b.Dwork(1).Data=b.Dwork(1).Data+1;
 end
-function terminate(b),storage("remove",key(b));end
+function state=getSimState(b),state=struct("step",b.Dwork(1).Data,"entry",storage("get",key(b)));end
+function setSimState(b,state)
+if ~isstruct(state)||~all(isfield(state,["step","entry"])),error("radia:simulink:LTspiceSimState","Invalid LTspice block SimState.");end
+b.Dwork(1).Data=state.step;entry=state.entry;if ~isfolder(entry.folder),mkdir(entry.folder);end;storage("set",key(b),entry)
+end
+function terminate(b)
+k=key(b);try entry=storage("get",k);folder=entry.folder;catch,folder="";end
+storage("remove",k);if strlength(folder)>0&&isfolder(folder),try rmdir(folder,'s');catch cause,warning("radia:simulink:LTspiceCleanup","Could not remove LTspice run folder %s: %s",folder,cause.message);end,end
+end
 function answer=names(value)
 answer=string(value(:));
 answer=answer(strlength(answer)>0);if isempty(answer),error("radia:simulink:LTspiceNames","At least one name is required.");end
