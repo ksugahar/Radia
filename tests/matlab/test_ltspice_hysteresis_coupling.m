@@ -32,9 +32,13 @@ radia.simulink.buildHystereticLTspiceBlock(model,Netlist=fixture,Tables={{[0,1,2
  CurrentTrace="I(L1)",Turns=1,CoreArea_m2=1e-6,MagneticPath_m=1,CoreVolume_m3=1e-4,SampleTime_s=1e-3, ...
  MaxIterations=10,RelativeTolerance=1e-2,Relaxation=0.7,MaxStep_s=5e-6,CouplingSamples=51,Save=false);
 add_block("simulink/Sinks/To Workspace",model+"/CoupledOutputs",VariableName="hys_y",SaveFormat="Array",Position=[410 80 500 115]);
-add_line(model,"CommandAndPosition/1","Hysteretic LTspice Plant/1");add_line(model,"Hysteretic LTspice Plant/1","CoupledOutputs/1");set_param(model,StopTime="0",Solver="FixedStepDiscrete",FixedStep="0.001");
-out=sim(model);y=out.hys_y;verifySize(t,y,[1,6]);verifyGreaterThan(t,y(1),0);verifyGreaterThan(t,y(2),0);verifyGreaterThan(t,abs(y(4)),0);verifyGreaterThan(t,y(5),0);
+add_line(model,"CommandAndPosition/1","Hysteretic LTspice Plant/1");add_line(model,"Hysteretic LTspice Plant/1","CoupledOutputs/1");set_param(model,StopTime="0.001",Solver="FixedStepDiscrete",FixedStep="0.001");
+first=sim(model);second=sim(model);y=first.hys_y;verifySize(t,y,[2,6]);verifyEqual(t,second.hys_y,y,"AbsTol",0);verifyGreaterThan(t,y(1),0);verifyGreaterThan(t,y(2),0);verifyGreaterThan(t,abs(y(4)),0);verifyGreaterThan(t,y(5),0);
 clear cleanupModel cleanupAll
+end
+function testEnergyHysteresisIsRejectedAtBlockBoundary(t)
+fixture=fullfile(t.TestData.Root,"tests","matlab","fixtures","ltspice_hysteretic_drive.cir");model="radia_energy_hysteresis_rejection";cleanup=onCleanup(@()closeModel(model));new_system(model);
+verifyError(t,@()radia.simulink.buildHystereticLTspiceBlock(model,Netlist=fixture,Tables={{[0,1],[0,1]}},HysteresisKind="energy",CurrentTrace="I(L1)",Turns=1,CoreArea_m2=1e-6,MagneticPath_m=1,CoreVolume_m3=1e-4,SampleTime_s=1e-3,Save=false),"MATLAB:validators:mustBeMember");clear cleanup
 end
 function state=emptyCircuitState(),state=struct("schema","radia.ltspice.transient_state.v1","time_s",0,"node_names",strings(0,1),"node_voltages_V",zeros(0,1),"inductor_names",strings(0,1),"inductor_currents_A",zeros(0,1));end
 function closeModel(name),if bdIsLoaded(name),close_system(name,0);end,end
