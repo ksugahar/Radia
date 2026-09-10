@@ -1,5 +1,26 @@
 # Eqnedit product parity policy
 
+## Native rendering acceptance (3.0.16)
+
+Every supported decoration must render its own mathematical shape, not merely
+nonempty ink. A valid TeX/MathML result does not certify the native canvas.
+Keep the decoration pairwise comparisons and complete palette sweep, including
+styled selection and script fragments with explicit bases.
+
+Native `Node::Tag` dispatch must contain an explicit case for every enumerator
+and no default. `SizeNode` is consumed as list state; reaching scalar dispatch
+is a logic error. The unused legacy `FontNode` and `RMNode` are unsupported and
+must throw a named error, never produce an empty layout. New tags require an
+explicit layout decision under MSVC `/W4 /WX /w14062` in release and CMake CI.
+The old generic layout fallback is forbidden. Static coverage and C++ runtime
+rejection tests protect separate failure modes.
+
+These are native-specific implementation checks. Web rendering belongs to
+MathJax; shared palette/TeX/Office contracts still require both editions' tests.
+Publish the matching Web build on the laboratory homepage, even when the only
+Web source change is release identification. Do not claim public completion
+from a successful binary upload or from the browser tests alone.
+
 Eqnedit64.exe と Web/JS 数式エディタは、Radia の `tools/eqnedit64` で一緒に
 保守する同一製品系列である。研究室ホームページは Web 版の公開先であり、正本では
 ない。TeX を正本とし、次の優先順位を守る。
