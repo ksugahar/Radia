@@ -267,8 +267,8 @@ std::vector<Palette> build() {
     p.push_back({u8"上線と下線", u8"¯_", 2, {
         tpl("overline", u8"¯□", u8"上線（伸縮）", u8"\\overline{x}", u8"\\overline{}"),
         tpl("underline", u8"_□", u8"下線（伸縮）", u8"\\underline{x}", u8"\\underline{}"),
-        tpl("overbrace", u8"⏞□", u8"上の水平波括弧", u8"\\overbrace{x}", u8"\\overbrace{}^{}"),
-        tpl("underbrace", u8"⏟□", u8"下の水平波括弧", u8"\\underbrace{x}", u8"\\underbrace{}_{}"),
+        tpl("overbrace", u8"⏞□", u8"上の水平波括弧", u8"\\overbrace{xy}", u8"\\overbrace{}^{}"),
+        tpl("underbrace", u8"⏟□", u8"下の水平波括弧", u8"\\underbrace{xy}", u8"\\underbrace{}_{}"),
         tpl("overrightarrow", u8"□→", u8"上の右向き伸縮矢印", u8"\\overrightarrow{x}", u8"\\overrightarrow{}"),
         tpl("overleftarrow", u8"←□", u8"上の左向き伸縮矢印", u8"\\overleftarrow{x}", u8"\\overleftarrow{}"),
         tpl("overleftrightarrow", u8"□↔", u8"上の両向き伸縮矢印", u8"\\overleftrightarrow{x}", u8"\\overleftrightarrow{}"),

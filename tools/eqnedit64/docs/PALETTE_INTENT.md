@@ -127,8 +127,9 @@ wrapping selected text (root and overset indices precede their bodies in TeX).
 
 Web uses MathJax for the shared examples and retains literal accessible names.
 Preview failures are visible, not raw TeX. Native uses its existing model and
-GDI fitter. Over/underbrace examples omit annotation slots so the brace can
-remain larger; inserted expressions still include those editable slots.
+GDI fitter. Over/underbrace examples use a two-letter base and omit annotation
+ink so the brace can remain larger; native previews disable editing placeholders.
+Inserted expressions still include those editable annotation slots.
 
 Pixel gates detect clipping and empty output, not minimum semantic feature
 size. Small primes and harpoon distinctions still require image review. No

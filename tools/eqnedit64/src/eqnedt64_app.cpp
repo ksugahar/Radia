@@ -2614,7 +2614,9 @@ void draw_palette_cell(HDC dc, const RECT& rect, HFONT font,
         FillRect(memory, &all, HBRUSH(GetStockObject(WHITE_BRUSH)));
         SetBkMode(memory, TRANSPARENT);
         SetTextColor(memory, RGB(0, 0, 0));
-        if (semantic) preview.draw_gdi(memory, pad, pad, scale, eqnedit::SvgStyle(), true, false);
+        // These are examples, not editable documents. Empty annotation slots
+        // must not add dotted placeholder ink and force the brace to shrink.
+        if (semantic) preview.draw_gdi(memory, pad, pad, scale, eqnedit::SvgStyle(), false, false);
         else TextOutW(memory, pad, pad, face.c_str(), int(face.size()));
         GdiFlush();
         auto* px = static_cast<unsigned char*>(bits);
