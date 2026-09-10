@@ -100,6 +100,11 @@ visible ink AND an empty outer pixel border in both states, not just a font
 name or any nonzero pixel. AI additionally checks recognizability and semantic
 distinctions; automation alone cannot certify those.
 
+Thin/medium/wide spacing commands use one/two/three explicit spacing marks.
+The font's U+2423 hairline disappeared during downsampling at 144 DPI in the
+first implementation; the new visible-ink gate caught it. Spacing marks must
+remain visible in normal and highlighted states without relying on that glyph.
+
 Fraction/radical, accent/line and typeface commands show native-model previews
 instead of ambiguous literal abbreviations. Fractions use distinct `a`/`b`
 slots, decorated variables use `x`, typefaces use `A`; style selection must be
