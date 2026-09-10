@@ -15,9 +15,15 @@ if c.HysteresisKind~="play",error("radia:simulink:UnsupportedHysteresisKind","Th
 material=[];
 try
  material=radia.MatPlayHysteresis(c.K,c.EtaOrChi,c.Tables);root=string(b.DialogPrm(3).Data);if ~isfolder(root),mkdir(root);end
+ keepCount=defaultKeptStepFolders();if isfield(c,"KeepStepArtifacts"),keepCount=c.KeepStepArtifacts;end
+ logPath=radia.simulink.internal.runArtifacts("logpath",root,b.BlockHandle);
  entry=struct("config",c,"material",material,"hysteresis_state",radia.MatHysSaveState(material), ...
   "circuit_state",emptyState(),"previous_flux_Wb",0,"pending_hysteresis_state",[],"pending_circuit_state",[], ...
-  "pending_flux_Wb",[],"pending_output",[],"has_pending",false,"folder",string(tempname(root)));
+  "pending_flux_Wb",[],"pending_output",[],"has_pending",false,"folder",string(tempname(root)), ...
+  "log_path",logPath,"kept",strings(0,1),"keep_count",keepCount,"failed",false);
+ radia.simulink.internal.runArtifacts("begin",logPath,sprintf( ...
+  'schema=radia.simulink.ltspice_hysteresis.run.v1 block=%s netlist=%s sample_time_s=%.17g started=%s artifacts=%s kept_steps=%d', ...
+  getfullname(b.BlockHandle),c.Netlist,b.DialogPrm(2).Data,string(datetime("now","TimeZone","local"),"yyyy-MM-dd'T'HH:mm:ssXXX"),entry.folder,keepCount));
  mkdir(entry.folder);store("set",key(b),entry);b.Dwork(1).Data=0;
 catch cause
  if ~isempty(material)
@@ -40,15 +46,24 @@ try
    MaxIterations=c.MaxIterations,RelativeTolerance=c.RelativeTolerance,Relaxation=c.Relaxation,MaxStep_s=c.MaxStep_s,Timeout_s=c.Timeout_s,CouplingSamples=c.CouplingSamples);
  mu0=4*pi*1e-7;force=r.B_T(end)^2*c.CoreArea_m2/(2*mu0);
  y=[r.current_A(end);r.B_T(end);r.flux_Wb(end);r.back_emf_V(end);force;r.hysteresis_energy_J];b.OutputPort(1).Data=y;
- entry.pending_hysteresis_state=r.hysteresis_state;entry.pending_circuit_state=r.circuit_state;entry.pending_flux_Wb=r.flux_Wb(end);entry.pending_output=y;entry.has_pending=true;store("set",key(b),entry);
+ entry.pending_hysteresis_state=r.hysteresis_state;entry.pending_circuit_state=r.circuit_state;entry.pending_flux_Wb=r.flux_Wb(end);entry.pending_output=y;entry.has_pending=true;
+ entry.kept(end+1,1)=string(r.output_directory);store("set",key(b),entry);
+ radia.simulink.internal.runArtifacts("append",entry.log_path,sprintf( ...
+  'step=%d t=%.17g command=%.17g position=%.17g path_m=%.17g iterations=%d residual=%.6g converged=%d current_A=%.17g B_T=%.17g flux_Wb=%.17g back_emf_V=%.17g force_N=%.17g energy_J=%.17g artifacts=%s', ...
+  step,b.CurrentTime,u(1),u(2),path,r.iterations,r.relative_residual,r.converged,y(1),y(2),y(3),y(4),y(5),y(6),r.output_directory));
 catch cause
+ entry.failed=true;store("set",key(b),entry);
+ radia.simulink.internal.runArtifacts("append",entry.log_path,sprintf( ...
+  'step=%d t=%.17g command=%.17g position=%.17g FAILED identifier=%s message=%s',step,b.CurrentTime,u(1),u(2),cause.identifier,cause.message));
  error("radia:simulink:HystereticLTspiceStepFailed","Circuit/hysteresis step %d failed: %s",step,cause.message);
 end
 end
 function update(b)
 entry=store("get",key(b));if ~entry.has_pending,return,end
 entry.hysteresis_state=entry.pending_hysteresis_state;entry.circuit_state=entry.pending_circuit_state;entry.previous_flux_Wb=entry.pending_flux_Wb;
-entry.pending_hysteresis_state=[];entry.pending_circuit_state=[];entry.pending_flux_Wb=[];entry.pending_output=[];entry.has_pending=false;store("set",key(b),entry);b.Dwork(1).Data=b.Dwork(1).Data+1;
+entry.pending_hysteresis_state=[];entry.pending_circuit_state=[];entry.pending_flux_Wb=[];entry.pending_output=[];entry.has_pending=false;
+entry.kept=radia.simulink.internal.runArtifacts("prune",entry.kept,entry.keep_count);
+store("set",key(b),entry);b.Dwork(1).Data=b.Dwork(1).Data+1;
 end
 function state=getSimState(b)
 entry=store("get",key(b));state=struct("step",b.Dwork(1).Data,"hysteresis_state",entry.hysteresis_state,"circuit_state",entry.circuit_state,"previous_flux_Wb",entry.previous_flux_Wb, ...
@@ -60,20 +75,18 @@ if ~isstruct(state)||~all(isfield(state,required)),error("radia:simulink:Hystere
 entry=store("get",key(b));for name=required(2:end),entry.(name)=state.(name);end;radia.MatHysRestoreState(entry.material,entry.hysteresis_state);store("set",key(b),entry);b.Dwork(1).Data=state.step;
 end
 function terminate(b)
-k=key(b);folder="";
+k=key(b);folder="";failed=false;logPath="";
 try
- entry=store("get",k);folder=entry.folder;radia.UtiDel(entry.material);
+ entry=store("get",k);folder=entry.folder;failed=entry.failed;logPath=entry.log_path;radia.UtiDel(entry.material);
 catch
 end
 store("remove",k);
-if strlength(folder)>0&&isfolder(folder)
- try
-  rmdir(folder,'s');
- catch cause
-  warning("radia:simulink:HystereticLTspiceCleanup","Could not remove run folder %s: %s",folder,cause.message);
- end
+if strlength(logPath)>0
+ radia.simulink.internal.runArtifacts("append",logPath,sprintf('finished failed=%d artifacts_retained=%d',failed,failed));
 end
+radia.simulink.internal.runArtifacts("finish",folder,failed);
 end
+function count=defaultKeptStepFolders(),count=3;end
 function state=emptyState(),state=struct("schema","radia.ltspice.transient_state.v1","time_s",0,"node_names",strings(0,1),"node_voltages_V",zeros(0,1),"inductor_names",strings(0,1),"inductor_currents_A",zeros(0,1));end
 function answer=key(b),answer=sprintf('%.0f',b.BlockHandle);end
 function value=store(action,k,value)
