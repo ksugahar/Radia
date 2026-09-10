@@ -54,7 +54,7 @@ jobs:
         run: python -m pip install pytest
 
       - name: Check Eqnedit64 Web contract
-        run: python -m pytest tests/test_web_contract.py -q
+        run: python -m pytest tests/test_web_contract.py tests/test_node_dispatch.py tests/test_version_contract.py -q
 
       - name: Check Web JavaScript syntax and insertion behaviour
         run: |
