@@ -433,21 +433,14 @@ def run_headless_journal(
         }
     console = bin_dir / "coreform_cubit.com"
     if not console.exists():
-        if sys.platform == "win32":
-            return {
-                "status": "error", "stage": "start", "kind": "environment",
-                "error": (
-                    f"Headless Cubit console not found: {console}. "
-                    "Refusing to fall back to the GUI launcher."
-                ),
-            }
-        try:
-            console = _cubit_gui_exe(bin_dir)
-        except FileNotFoundError as exc:
-            return {
-                "status": "error", "stage": "start", "kind": "environment",
-                "error": str(exc),
-            }
+        return {
+            "status": "error", "stage": "start", "kind": "environment",
+            "gui_started": False,
+            "error": (
+                f"Headless Cubit console not found: {console}. "
+                "Refusing to fall back to the GUI launcher."
+            ),
+        }
 
     temp_root = (Path(os.environ.get("RADIA_MCP_TEMP", "C:/temp"))
                  if sys.platform == "win32"
@@ -933,8 +926,8 @@ class CubitSession:
         if session_mode == "existing" and existing is None:
             raise CubitSessionError(
                 f"RADIA_CUBIT_SESSION_MODE=existing but no live shared "
-                f"Cubit daemon was found at {drop}. Start one (any "
-                "cubit_show/cubit_exec in auto mode), or switch the mode.")
+                f"Cubit daemon was found at {drop}. This is a manual-only "
+                "GUI transport; MCP tools cannot start or attach to it.")
         if existing is not None:
             self._drop_dir = drop
             self._outbox = outbox
@@ -1323,7 +1316,8 @@ class CubitSession:
             elif _SINGLETON._mode != mode:
                 raise CubitSessionError(
                     f"Cubit singleton already uses mode={_SINGLETON._mode!r}; "
-                    f"refusing requested mode={mode!r}. Reset it explicitly "
+                    f"refusing requested mode={mode!r}. Use "
+                    "cubit_session_shutdown to reset the MCP-owned session "
                     "before changing execution mode."
                 )
             return _SINGLETON

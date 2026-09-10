@@ -407,6 +407,16 @@ flags FreeCAD as `friendly`, others as `compat`.
 
 ## Cubit execution contract
 
+Execution and handoff are separate. Humans can edit in their own Cubit GUI
+and save a `.jou`; `cubit_import_journal(path)` reads it without executing
+commands or attaching to that process. `cubit_session_journal` exports AI
+commands for human review. Imported candidates are heuristic differences
+against current-process AI history, not proof of authorship. The original
+journal, excluded lines, and source hash are retained in the response.
+Review the source and checkpoint before an explicit headless replay.
+`cubit_stage` loads artifacts into the headless session; `cubit_snapshot`
+reports unavailable rendering and never opens a window.
+
 Every Cubit operation initiated through an LLM or MCP runs with
 `-batch -nographics`. The server never launches or attaches to
 `coreform_cubit.exe` and never opens a Cubit window. Interactive GUI use is a

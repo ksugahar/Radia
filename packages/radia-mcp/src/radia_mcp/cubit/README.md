@@ -62,7 +62,7 @@ Then in a session:
 
 ```
 > cubit_status()                            # live capability list
-> cubit_show(path="coil.step")              # open in persistent Cubit session
+> cubit_stage(path="coil.step")              # open in persistent Cubit session
 > cubit_probe(query="entities")             # Probe-Don't-Guess dump
 > cubit_mesh_auto(step_path="coil.step")    # scheme-ladder auto mesh
 > cubit_check_vol(vol_path="coil.vol")      # canonical check-vol gate
@@ -72,7 +72,7 @@ Then in a session:
 
 | Family | Examples |
 |---|---|
-| **Persistent headless session** | `cubit_load`, `cubit_show`, `cubit_exec`, `cubit_exec_safely`, `cubit_probe`, `cubit_session_status`, `cubit_session_shutdown`, `cubit_session_journal` (export the session as a replayable `.jou`) |
+| **Persistent headless session** | `cubit_load`, `cubit_stage`, `cubit_exec`, `cubit_exec_safely`, `cubit_probe`, `cubit_session_status`, `cubit_session_shutdown`, `cubit_session_journal` (export the session as a replayable `.jou`) |
 | **Environment** | `cubit_doctor` (one-shot install/license/plugin/daemon diagnosis) |
 | **Checkpoint / restore** | `cubit_checkpoint`, `cubit_restore`, `cubit_list_checkpoints` |
 | **Headless batch** | `cubit_batch_try`, `cubit_mesh_auto` |
@@ -98,7 +98,7 @@ Claude Code (MCP client)
                 → cubit.cmd(...) / cubit API
 ```
 
-`cubit_show` / `cubit_exec` reuse one persistent Cubit process
+`cubit_stage` / `cubit_exec` reuse one persistent Cubit process
 (license-friendly, <1 ms per command after init); `cubit_batch_try` /
 `cubit_mesh_auto` spawn fresh headless subprocesses for dry-runs.
 `cubit_check_vol` needs **no Cubit at all** — it runs the
@@ -162,7 +162,7 @@ the headless/batch route** — `.jou` playback, `cubit_batch_try`,
 `cubit_mesh_auto`, the batch stdio daemon. That is the primary path for
 mesh generation, exports, gates, and validation, and it must never
 require a GUI window. MCP tools never launch or attach to the Cubit GUI.
-`cubit_show` stages a model in the persistent headless session, while
+`cubit_stage` stages a model in the persistent headless session, while
 `cubit_snapshot` fails explicitly because Cubit hardcopy requires rendering.
 Human GUI use and the single explicitly scoped toolbar/rendering release test
 are separate workflows outside this server.
