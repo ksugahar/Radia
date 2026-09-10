@@ -131,6 +131,10 @@ solver boundary is a checked `.vol` regardless of the creation route.
   validation inputs may produce a visible skip. Heavier `.vol` work
   belongs to `validation_test/`, and `docs/**/*.ipynb` may show the Cubit
   generation step.
+- LLM/agent-driven `cubit-mesh-export` work uses Cubit's APREPRO commands
+  through a batch/headless route; it must not launch or drive the Cubit GUI.
+  GUI launch or interaction is allowed only for an explicitly scoped GUI test
+  that protects the user-facing toolbar or visual-debugging surface.
 - Every solver-bound `.vol` passes `check-vol` with its versioned label
   contract before solver or Simulink initialization.
 - Label checks validate topology/naming; DesignSpec validates physical data.
