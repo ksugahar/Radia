@@ -79,9 +79,9 @@ def setup_problem(mesh_name):
     a_real = BilinearForm(fes_real)
     a_real += nu_cf * curl(u_r) * curl(v_r) * dx
     # The shift regularizes only the AMS surrogate.  Adding it to the physical
-    # system fixes a gauge representative and creates an artificial tiny
-    # eigenvalue; gauge-invariant observables are unchanged, but the reported
-    # condition number is then dominated by this benchmark-only shift.
+    # system perturbs the operator, not only its gauge representative. Compare
+    # curl(A), conductor losses and the common unshifted residual before
+    # claiming physical equivalence; a scalar quadratic-form match is not proof.
     a_real += preconditioner_eps * nu_cf * u_r * v_r * dx
     a_real += abs(omega) * sigma_cf * u_r * v_r * dx("cond")
     a_real.Assemble()
