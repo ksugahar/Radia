@@ -1748,11 +1748,20 @@ classdef Study < handle
             rows = obj.SamplerStateTable.Sampler == sampler & ...
                 obj.SamplerStateTable.Schema == schema;
             revision = 1;
+            target = height(obj.SamplerStateTable)+1;
             if any(rows)
                 revision = max(obj.SamplerStateTable.Revision(rows)) + 1;
-                obj.SamplerStateTable(rows,:) = [];
+                if rows(end) && nnz(rows)==1
+                    % The usual single-sampler update replaces the last row.
+                    % Preserve the public remove-and-append ordering without
+                    % deleting/reallocating all seven table columns each ask.
+                    target = height(obj.SamplerStateTable);
+                else
+                    obj.SamplerStateTable(rows,:) = [];
+                    target = height(obj.SamplerStateTable)+1;
+                end
             end
-            obj.SamplerStateTable(end+1,:) = {sampler, schema, revision, ...
+            obj.SamplerStateTable(target,:) = {sampler, schema, revision, ...
                 double(trialNumber), double(generation), {state}, ...
                 datetime("now", "TimeZone", "local")};
         end
