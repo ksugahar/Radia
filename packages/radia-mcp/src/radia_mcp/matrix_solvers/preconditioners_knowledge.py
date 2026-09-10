@@ -215,7 +215,7 @@ HCurl-specific multigrid needed.
 | Property | Classical IC on HCurl | Hiptmair-Xu AMS |
 |----------|----------------------|------------------|
 | Handles kernel | ✗ (κ blows up) | ✓ (gradient subspace = kernel) |
-| Scales with order p | ✗ degrades fast | ✓ stable up to p=10 |
+| Higher order p | Requires a suitable hierarchy | Requires matching high-order interpolation; no blanket p=10 guarantee |
 | Requires geometric MG | n/a | ✗ (uses AMG on scalar) |
 | Implementation effort | low | medium (need G, Π matrices) |
 
@@ -240,37 +240,114 @@ Performance vs HYPRE AMS + BoomerAMG (mesh1_3.5T, 197k DOFs):
 - CompactAMS + CompactAMG: 25 BiCGStab iterations to 1e-10
 - HYPRE AMS + BoomerAMG: 25 iterations (matches)
 
-## When to use
+## When to use — MEASURED, and it depends on the ORDER p (2026-09-08)
+
+**Use the current coordinate-based CompactAMS recipe with NGSolve order=1.
+For the measured order=2 workload, prefer NGSolve `bddc`.**
+The following measurements were reported on mdx1 (idle, 38 cores), on the hiruma complex eddy-current problem
+(conductor + core + air, σ=0 in air, 30 kHz, `nograds=True` tets, COCR, 1e-8):
+
+| order | use | why (measured) |
+|-------|-----|----------------|
+| **p=1** | **AMS** | 197k dof: AMS 523 MB / 2.9 s setup + 2.0 s solve, versus a direct factorisation 2029 MB / 6.4 s. Reported finite-range memory-fit exponents 0.81 versus 1.72 are not asymptotic complexity claims. |
+| **p=2** | **NGSolve `bddc`** | Reported 1.46M dof / 5.5 s / 4.35 GB; compare exact configurations before combining iteration counts from different runs. |
+| tested p=2 configuration | prefer `bddc` to tested `multigrid` | 865k dof: 205 s versus 7.2 s solve time. This is not a universal exclusion of multigrid. |
+
+These are handoff measurements, not independently certified release evidence.
+Before relying on exact timings, retrieve the input, configuration, source/binary
+identity and result JSON in `validation_test/`; private agent memory is not a
+publicly reproducible artifact.
+
+The coordinate-based recipe below does not supply a matching high-order Π.
+Do not apply it unchanged at p≥2. This is a wrapper limitation, not an AMS
+algorithm limitation: HYPRE supports high-order Nedelec discretizations when
+the caller supplies compatible discrete-gradient and interpolation matrices.
+See https://hypre.readthedocs.io/en/latest/solvers-ams.html#high-order-discretizations .
+
+**Using AMS as the BDDC coarse solver was built and measured — it is a
+TRADE-OFF in the reported configuration.** Substituting AMS in the tested
+coarse-solver construction reportedly gives **memory −63% but solve time +58%**
+at 1.46M dof. A direct factorization amortizes setup across repeated solves;
+an iterative coarse solve can require several cycles on each outer iteration.
+AMS used as a Krylov preconditioner is also applied repeatedly, not just once.
+Coarse-space compatibility must be checked explicitly; a percentage of edge
+DOFs does not establish equivalence to the full lowest-order space.
+
+The tested ICCG coarse configuration reportedly failed to converge in 1000
+iterations. Do not generalize that result to every IC construction. No measured
+BLR/HSS/H-LU result is supplied here: σ=0 air alone does not prove a lack of
+low-rank compressibility. Assess compression error, ranks, memory and time for
+the actual operator before excluding those methods.
 
 | Problem | Use CompactAMS |
 |---------|----------------|
-| Real spd HCurl curl-curl + mass | ✓ + CG |
-| Complex sym HCurl (eddy current MQS) | ✓ + COCR ★ |
+| Real spd HCurl curl-curl + mass, **p=1** | ✓ + CG |
+| Complex sym HCurl (eddy current MQS), **p=1** | ✓ + COCR ★ |
+| Same but **p=2 or higher** | This coordinate-based recipe is not validated; prefer tested `bddc` or a separately validated high-order AMS interface |
 | HCurl with air region (σ=0) | ✓ + shifted preconditioner (see em_specific) |
 | HDiv (flux variable) | Use ADS — same paper, dual construction |
 | HCurl helmholtz (high freq) | NOT a lab use case (Laplace kernel only) |
 
+## ⚠ Build it OUTSIDE `with TaskManager():`
+
+In the reported Windows builds, constructing `CompactAMSPreconditioner` /
+`ComplexCompactAMSPreconditioner` inside an active TaskManager region killed the process with `0xC0000409`
+(`__fastfail`) — **no Python exception, no traceback**.  Verified 2026-09-08 on
+the identical matrix: outside = OK, inside = dead; reproduced on two
+independently built binaries.  The unit tests pass only because they do not
+wrap.  This contradicts the CLAUDE.md "TaskManager-Only" policy, which tells
+callers to wrap the whole NGSolve block — so wrap the mesh/space/forms/assembly
+and the SOLVE, but build the preconditioner between them, outside the region.
+Treat this as a reported implementation defect and retain the workaround until
+a subprocess regression certifies the fixed build. Do not deliberately reproduce
+the crash inside a live MCP or MATLAB process.
+
 ## Code recipe
 
+The real signature takes the discrete gradient and the vertex COORDINATES —
+it does not take the FESpace.  It also needs a REAL surrogate matrix even for
+a complex system.  Verified against the shipped binary 2026-09-08.
+
 ```python
-from ngsolve import HCurl, BilinearForm, ...
-from radia.sparsesolv_ngsolve import (
-    CompactAMSPreconditioner, ComplexCompactAMSPreconditioner, COCRSolver,
-)
+from ngsolve import HCurl, BilinearForm, LinearForm, GridFunction, TaskManager, curl, dx, CF
+from radia.sparsesolv_ngsolve import ComplexCompactAMSPreconditioner, COCRSolver
 
-fes = HCurl(mesh, order=2, complex=True)
-a   = BilinearForm(fes, symmetric=True, condense=False)
-a  += SymbolicBFI(...)
-a.Assemble()
+# Caller supplies mesh, nu, eps, omega and sigma; labels are "cond" and "dirichlet".
+# order=1: supported coordinate-based recipe. See "When to use".
+kw = dict(order=1, nograds=True, dirichlet="dirichlet")
 
+with TaskManager():
+    fes = HCurl(mesh, complex=True, **kw)          # the complex system
+    u, v = fes.TnT()
+    a = BilinearForm(fes)
+    a += nu*curl(u)*curl(v)*dx + eps*nu*u*v*dx + 1j*omega*sigma*u*v*dx("cond")
+    f = LinearForm(fes); f += nu*CF((0, 0, 1))*v*dx("cond")
+    a.Assemble(); f.Assemble()
+
+    fes_r = HCurl(mesh, complex=False, **kw)       # REAL surrogate for the AMS
+    ur, vr = fes_r.TnT()
+    ar = BilinearForm(fes_r)
+    ar += nu*curl(ur)*curl(vr)*dx + eps*nu*ur*vr*dx
+    ar += abs(omega)*sigma*ur*vr*dx("cond")        # |omega|, not 1j*omega
+    ar.Assemble()
+    G, _ = fes_r.CreateGradient()
+    pts = mesh.ngmesh.Points()
+    cx, cy, cz = ([pts[i + 1][k] for i in range(mesh.nv)] for k in range(3))
+
+# BUILD OUTSIDE the TaskManager region -- inside it dies with 0xC0000409
 prec = ComplexCompactAMSPreconditioner(
-    a.mat, fes,
-    cycle_type=1, fine_smoother="l1_jacobi",
-    subspace_solver="compact_amg", amg_theta=0.25,
-)
-solver = COCRSolver(a.mat, prec, tol=1e-10, maxiter=500)
-u.vec.data = solver.Solve(f.vec)
+    a_real_mat=ar.mat, grad_mat=G, freedofs=fes_r.FreeDofs(),
+    coord_x=cx, coord_y=cy, coord_z=cz,
+    ndof_complex=fes.ndof, cycle_type=1, print_level=0)
+
+with TaskManager():
+    gfu = GridFunction(fes)
+    inv = COCRSolver(a.mat, prec, freedofs=fes.FreeDofs(), tol=1e-8, maxiter=2000)
+    gfu.vec.data = inv * f.vec
 ```
+
+For the REAL system use `CompactAMSPreconditioner(a.mat, G, freedofs=...,
+coord_x=..., coord_y=..., coord_z=...)` and NGSolve's `CGSolver`.
 
 See `radia_ngsolve` MCP tool `sparsesolv('compact_ams')` and
 `sparsesolv('example_compact_ams')` for full recipes.
