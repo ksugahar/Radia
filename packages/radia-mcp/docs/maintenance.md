@@ -20,7 +20,8 @@ packages. Do not rely on whichever `python` an unrelated shell resolves.
 ```powershell
 python -s -m radia_mcp.maintenance config C:\Users\NAME\.codex\config.toml
 python -s -m radia_mcp.maintenance config C:\Users\NAME\.claude.json
-# Review the JSON plan, stop concurrent configuration editors, then add --apply.
+# Review the plan; mutation additionally requires --apply --owner --reason
+# --targets and --clients-idle (see the ownership contract below).
 ```
 
 The command plans by default. `--apply` backs up existing bytes alongside the
@@ -52,15 +53,13 @@ maintenance never kills unrelated MATLAB, Python, or client processes.
 2. Inventory all explicitly named human users, both clients and project-scoped
    settings. LAB and 100 have separate executable/path namespaces. On 100 use
    its local `W:` path, not LAB's mapped `S:` or a UNC path.
-3. Verify the dedicated `mcp-runtime` worktree is clean and record its old SHA.
-   If dirty, stop; do not stash/reset another task. Fetch and fast-forward or
-   detach that dedicated worktree to the approved SHA during a maintenance
-   window after active work finishes. Never move the main development checkout.
-4. Using the intended Python, run
-   `python -s -m pip install -e '<runtime>/packages/radia-mcp[maintenance]'`.
-   Check the exit code. Locked Windows entry points are a blocked update, not
-   success: arrange client shutdown/retry; do not kill all Python or manually
-   fabricate package metadata. A source-only edit still requires reconnecting.
+3. Stage a separate clean snapshot at the approved SHA. Never advance or edit
+   the old source while any consumer depends on it. Keep it for rollback.
+4. Use the guarded activation command below with the intended absolute Python
+   executable. It checks the expected old source, full SHA and version before
+   changing only radia-mcp, without upgrading dependencies. Build dependencies
+   must already be installed; Python 3.10 also needs the maintenance TOML extra.
+   Locked entry points are a failed update, not success; never kill all Python.
 5. Run `doctor --expected-root <runtime>/packages/radia-mcp/src/radia_mcp
    --expected-version <approved-version> --expected-commit <full-SHA>` through
    `python -s -m radia_mcp.maintenance`. A nonzero result blocks acceptance.
@@ -70,16 +69,60 @@ maintenance never kills unrelated MATLAB, Python, or client processes.
    verify access under the intended user. An administrator's import test is not
    proof that another user's launch works. Do not change that user's unrelated
    Python site packages or copy credentials to enable impersonation.
-7. Reconnect clients, then run the existing real-transport probe
+7. Run the existing fresh-process real-transport probe
    `python -s tools/smoke_mcp_stdio.py --server <catalog-key>` from the package
    directory for each distinct launch configuration. It verifies initialize,
    tools/list, status, schema annotations and loaded-source provenance using
-   the standard launcher. This does not replace application validation.
+   the standard launcher. This does not verify an existing client. Reconnect
+   authorized idle clients through their supported controls, then inspect live
+   discovery, loaded-source provenance and a harmless changed tool through each
+   original client. Record pending clients separately.
 
-Rollback: after active clients finish, restore the dedicated runtime's recorded
-approved SHA, reinstall that editable package, and restore only the affected
-client files from their recorded backups, preserving ACLs. Repeat doctor and
-transport probes. Never roll back another user's worktree or unrelated settings.
+Rollback is another guarded activation to the retained approved snapshot,
+not a checkout/reset of the old source. Restore only approved affected settings,
+preserving ACLs, then repeat doctor, transport and per-client acceptance.
+
+## Exclusive ownership and interrupted changes
+
+The following command is an explicit mutation, not a dry run. Substitute full
+40-character SHAs and name every affected host/user/client/server. Use the
+intended absolute interpreter in place of `python`:
+
+```powershell
+python -s -m radia_mcp.maintenance activate-editable C:\runtime\NEW\packages\radia-mcp --commit NEW_FULL_SHA --expected-source C:\runtime\OLD\packages\radia-mcp --expected-commit OLD_FULL_SHA --owner TASK_ID --reason "Approved maintenance" --targets "HOST/USER/CLIENT/SERVER" --clients-idle
+```
+
+`--clients-idle` is the operator's attestation, **not automatic discovery**.
+Check all affected jobs and consumers first. Config mutations require the same
+owner, reason, targets and idle flags; byte-identical no-ops do not. Avoid secrets
+in operator-supplied text. Config receipts contain hashes, not configuration bytes.
+
+On Windows the fixed host-wide record is `C:\temp\radia-mcp-maintenance`.
+Pre-provision access for all authorized operators; retain it across handoffs.
+Access failure stops maintenance, never falls back to a private record. Other
+platforms use the system temporary directory plus `radia-mcp-maintenance`.
+A permanent `deployment.lock` uses OS exclusion. Atomic `state.json` and
+`receipts/CHANGE_ID.json` track attempts. A failed or killed operation blocks
+subsequent changes even after the OS releases the lock. Never delete the lock
+or state to bypass ownership.
+
+After auditing the actual installation/configuration and any surviving child
+processes, the original target interpreter can acknowledge an unresolved attempt:
+
+```powershell
+python -s -m radia_mcp.maintenance reconcile CHANGE_ID --owner TASK_ID --reason "Audited actual state and remaining jobs" --clients-idle
+```
+
+Reconciliation re-observes the stored scope, preserves the old receipt and writes
+a linked receipt. It neither retries nor rolls back the change. Corrupt or missing
+records require manual investigation. `completed` and `reconciled` never imply
+live acceptance: every listed client remains `unverified` until separately checked.
+
+This is a **cooperative** guard for `config --apply` and `activate-editable` only.
+Direct pip, manual edits, legacy release scripts and another host editing a NAS
+snapshot are not intercepted. Such bypasses remain prohibited by the shared
+runtime policy; coordinate cross-host ownership explicitly. No watcher, automatic
+client restart, automatic rollback or all-user process termination is installed.
 
 ## Behavioral acceptance, not just connectivity
 
