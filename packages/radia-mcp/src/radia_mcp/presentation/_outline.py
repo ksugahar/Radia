@@ -17,9 +17,9 @@ not need its own divider.
 from __future__ import annotations
 
 import re
+from collections import Counter
 
 from ._kishotenketsu import presentation_kishotenketsu_check, read_deck
-
 
 _AGENDA_TITLE = re.compile(
     r"(?i)\boutline\b|\bagenda\b|\bcontents\b|\broad ?map\b|\boverview\b"
@@ -55,14 +55,12 @@ def _normalise_agenda_item(text: str) -> str:
 
 
 def _agenda_items(slide: dict) -> list[str]:
-    """Extract the ordered rows of a titled agenda/progress slide."""
-    if not _AGENDA_TITLE.search(slide["title"] or ""):
-        return []
+    """Extract a possible ordered agenda from a compact text block."""
     lines = [line.strip() for line in (slide["text"] or "").splitlines()
              if line.strip()]
     # A progress divider needs enough context to show a route, while a long
     # prose overview is not an agenda merely because its title says Overview.
-    if not 3 <= len(lines) <= 8:
+    if not 2 <= len(lines) <= 8:
         return []
     keys = [_normalise_agenda_item(line) for line in lines]
     if any(not key for key in keys) or len(set(keys)) != len(keys):
@@ -70,14 +68,19 @@ def _agenda_items(slide: dict) -> list[str]:
     return lines
 
 
-def _looks_like_divider(slide: dict) -> tuple[bool, str, set[str], list[str]]:
+def _looks_like_divider(
+        slide: dict,
+        repeated_agendas: set[tuple[str, ...]] | None = None,
+) -> tuple[bool, str, set[str], list[str]]:
     """Recognize a repeated agenda/progress slide."""
     labels = _section_labels(slide)
     title = slide["title"] or ""
     body_lines = [line.strip() for line in (slide["text"] or "").splitlines()
                   if line.strip()]
     agenda_items = _agenda_items(slide)
-    if agenda_items:
+    agenda_key = tuple(_normalise_agenda_item(item) for item in agenda_items)
+    if agenda_items and (_AGENDA_TITLE.search(title)
+                         or agenda_key in (repeated_agendas or set())):
         return True, "agenda/progress slide", labels, agenda_items
     complete = set(_SECTION_PATTERNS).issubset(labels)
     if _AGENDA_TITLE.search(title) and complete:
@@ -99,8 +102,6 @@ def _run_signature(run) -> tuple[str, bool, float | None]:
 
 def _highlighted_section_labels(pptx_slide) -> set[str]:
     """Find the uniquely styled section label in a complete agenda."""
-    from collections import Counter
-
     signatures: dict[str, list[tuple[str, bool, float | None]]] = {}
     for shape in pptx_slide.shapes:
         if not getattr(shape, "has_text_frame", False):
@@ -128,8 +129,6 @@ def _highlighted_section_labels(pptx_slide) -> set[str]:
 
 def _highlighted_agenda_items(pptx_slide, agenda_items: list[str]) -> list[str]:
     """Return agenda rows whose dominant run style differs from the majority."""
-    from collections import Counter
-
     by_key = {_normalise_agenda_item(item): item for item in agenda_items}
     signatures: dict[str, list[tuple[str, bool, float | None]]] = {
         key: [] for key in by_key
@@ -149,6 +148,11 @@ def _highlighted_agenda_items(pptx_slide, agenda_items: list[str]) -> list[str]:
         key: Counter(values).most_common(1)[0][0]
         for key, values in signatures.items() if values
     }
+    bold_keys = [key for key, values in signatures.items()
+                 if any(signature[1] for signature in values)]
+    if len(bold_keys) == 1 and len(signatures) > 1:
+        return [item for item in agenda_items
+                if _normalise_agenda_item(item) == bold_keys[0]]
     counts = Counter(primary.values())
     if len(primary) != len(agenda_items) or not counts:
         return []
@@ -163,8 +167,6 @@ def _highlighted_agenda_items(pptx_slide, agenda_items: list[str]) -> list[str]:
 
 def _repeated_agenda_coverage(dividers: list[dict]) -> dict:
     """Check an arbitrary taxonomy by repeated order and unique emphasis."""
-    from collections import Counter
-
     sequences = [tuple(_normalise_agenda_item(item)
                        for item in divider["agenda_items"])
                  for divider in dividers if divider["agenda_items"]]
@@ -245,9 +247,17 @@ def presentation_check_outline_slide(pptx_path: str,
         "results": (arc_parts.get("ketsu") or [None])[0],
     }
 
+    agenda_counts = Counter(
+        tuple(_normalise_agenda_item(item) for item in items)
+        for slide in main if (items := _agenda_items(slide))
+    )
+    repeated_agendas = {agenda for agenda, count in agenda_counts.items()
+                        if count >= 2}
+
     dividers = []
     for slide in main:
-        ok, why, labels, agenda_items = _looks_like_divider(slide)
+        ok, why, labels, agenda_items = _looks_like_divider(
+            slide, repeated_agendas)
         if ok:
             highlighted = _highlighted_section_labels(prs.slides[slide["slide"] - 1])
             highlighted_items = _highlighted_agenda_items(
