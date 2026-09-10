@@ -27,6 +27,7 @@
 
 #include "compact_amg.hpp"
 #include <comp.hpp>
+#include <core/taskmanager.hpp>
 #include <vector>
 #include <atomic>
 #include <cmath>
@@ -47,6 +48,15 @@ namespace ngla {
 ///   // Use as preconditioner with COCR or CG
 class HypreBasedAMS : public BaseMatrix {
 public:
+    // Hierarchy setup is unsafe under an active NGSolve TaskManager.
+    // Reject before touching matrix state; Mult remains parallel-capable.
+    static void RequireSerialSetup() {
+        if (ngcore::GetTaskManager() != nullptr)
+            throw std::runtime_error(
+                "AMS construction and Update must run outside ngsolve.TaskManager; "
+                "leave the TaskManager context before setup, then re-enter for the solve.");
+    }
+
     /// @param mat       HCurl system matrix (SparseMatrix<double>)
     /// @param grad      Discrete gradient G (H1 -> HCurl)
     /// @param freedofs  Free DOFs for HCurl space
@@ -74,6 +84,7 @@ public:
           print_level_(print_level), correction_weight_(correction_weight),
           subspace_solver_(subspace_solver), amg_theta_(amg_theta)
     {
+        RequireSerialSetup();
         if ((int)coord_x.size() != ndof_h1_ ||
             (int)coord_y.size() != ndof_h1_ ||
             (int)coord_z.size() != ndof_h1_)
@@ -86,6 +97,7 @@ public:
     /// Geometry (G, Pi, transposes, work vectors) is preserved.
     /// Rebuilds: A_bc, Galerkin projections, AMG hierarchies, l1 norms.
     void Update() {
+        RequireSerialSetup();
         mult_count_ = 0;
         t_smooth_ = t_grad_ = t_nodal_ = t_bc_ = 0;
         RebuildMatrix();
@@ -93,6 +105,7 @@ public:
 
     /// Update with a new system matrix, then rebuild.
     void Update(shared_ptr<SparseMatrix<double>> new_mat) {
+        RequireSerialSetup();
         if (new_mat->Height() != mat_->Height() || new_mat->Width() != mat_->Width())
             throw std::invalid_argument("HypreBasedAMS::Update: new matrix dimension ("
                 + std::to_string(new_mat->Height()) + "x" + std::to_string(new_mat->Width())
