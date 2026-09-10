@@ -154,10 +154,12 @@ solver boundary is a checked `.vol` regardless of the creation route.
   validation inputs may produce a visible skip. Heavier `.vol` work
   belongs to `validation_test/`, and `docs/**/*.ipynb` may show the Cubit
   generation step.
-- LLM/agent-driven `cubit-mesh-export` work uses Cubit's APREPRO commands
-  through a batch/headless route; it must not launch or drive the Cubit GUI.
-  GUI launch or interaction is allowed only for an explicitly scoped GUI test
-  that protects the user-facing toolbar or visual-debugging surface.
+- Only `cubit-mesh-export` launches the Cubit GUI and owns Cubit GUI tests on licensed hosts;
+  Radia solver/application/validation/CI lanes must not launch it or duplicate those tests.
+- Radia normally reads checked `.vol` files. Generation uses APREPRO or Cubit's Python API
+  in batch/headless mode with `cubit-mesh-export` owning export; CI remains fixture-only.
+- `radia-mcp.cubit` supports human-AI collaboration through the `cubit-mesh-export` GUI;
+  it does not authorize solver-side GUI launch or interruption of human-owned sessions.
 - Every solver-bound `.vol` passes `check-vol` with its versioned label
   contract before solver or Simulink initialization.
 - Label checks validate topology/naming; DesignSpec validates physical data.
