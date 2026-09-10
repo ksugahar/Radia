@@ -425,3 +425,224 @@ def grant_writing_form_field_coverage_check(
         "warning": "Keyword hits are candidates, not coverage; no hits do not establish missing content.",
         "source": "form-field lexical candidate check",
     }
+
+
+# Japanese application forms ask for 査読の有無 entry by entry, and for most
+# venues the answer is fixed by the venue rather than by the paper. 電気学会
+#研究会資料 carries no review at all; an applicant who writes 査読あり beside one
+# has made a factual error that a reviewer in the same society notices at once.
+# A conference proceedings is the genuinely ambiguous case and is reported as
+# such rather than guessed.
+_VENUE_REVIEW_CONVENTIONS = (
+    (
+        re.compile(
+            r"電気学会研究会資料|研究会資料|電学研資|信学技報|技術研究報告",
+            re.IGNORECASE,
+        ),
+        "not_reviewed",
+        "研究会資料・技術研究報告は査読を行わない。",
+    ),
+    (
+        re.compile(r"arXiv|preprint|プレプリント", re.IGNORECASE),
+        "not_reviewed",
+        "プレプリントは査読前の公開である。",
+    ),
+    (
+        re.compile(
+            r"IEEE\s+Trans(?:actions)?\b|IEICE\s+Trans(?:actions)?\b"
+            r"|IEEJ\s+Trans(?:actions)?\b|電気学会論文誌",
+            re.IGNORECASE,
+        ),
+        "reviewed",
+        "学会論文誌は査読あり。",
+    ),
+    (
+        re.compile(
+            r"J(?:ournal)?\.?\s*(?:of\s+)?Magn(?:etics)?\.?\s*Soc"
+            r"|日本磁気学会論文誌|Journal of Magnetic Resonance",
+            re.IGNORECASE,
+        ),
+        "reviewed",
+        "学術誌は査読あり。",
+    ),
+    (
+        re.compile(
+            r"COMPUMAG|CEFC|OIPE|IGTE|ICEAA|PIERS|LDIA|ISEF"
+            r"|Int(?:ernational)?\.?\s+Conf|Proc\.|proceedings",
+            re.IGNORECASE,
+        ),
+        "venue_dependent",
+        (
+            "国際会議。採否審査はあるが、査読の有無と単位（digest か full paper か）"
+            "は会議規定による。投稿時の案内で確認する。"
+        ),
+    ),
+)
+
+_PUBLICATION_VENUE_CUE = re.compile(
+    r"IEEE|IEICE|IEEJ|Trans(?:actions)?\b|Journal\b|Proc\.|proceedings|"
+    r"研究会資料|技術研究報告|論文誌|学会誌|doi\s*:",
+    re.IGNORECASE,
+)
+_NUMBERED_LIST_ENTRY = re.compile(r"^\s*(?:[-*]\s*)?(?:\d+[.．)、]|\[\d+\])")
+_QUOTED_TITLE = re.compile(r"「[^」]+」|“[^”]+”|\"[^\"]+\"")
+
+
+def _looks_like_publication_entry(line: str) -> bool:
+    """Distinguish bibliography rows from numbered proposal prose."""
+    if _PUBLICATION_VENUE_CUE.search(line):
+        return True
+    if not _NUMBERED_LIST_ENTRY.search(line):
+        return False
+    return bool(_QUOTED_TITLE.search(line) or line.count(",") >= 2)
+
+
+def _publication_candidate_lines(raw: str) -> list[tuple[int, str]]:
+    """Prefer an explicit numbered bibliography when a full proposal is given.
+
+    A collaborator biography may mention an IEEE Transactions paper without
+    being an achievement-list entry.  If the input contains a numbered
+    bibliography, that stronger structure owns the audit; a standalone
+    unnumbered citation remains supported when no numbered list is present.
+    """
+    lines = [
+        (number, line.strip())
+        for number, line in enumerate(raw.splitlines(), 1)
+        if line.strip()
+    ]
+    candidates = [(n, line) for n, line in lines if _looks_like_publication_entry(line)]
+    numbered = [(n, line) for n, line in candidates if _NUMBERED_LIST_ENTRY.search(line)]
+    return numbered or candidates
+
+
+def grant_writing_peer_review_convention_hints(text: str) -> dict:
+    """List the peer-review convention of each venue named in an achievement list.
+
+    The form asks the applicant to state 査読の有無 per entry, and getting one
+    wrong is not a matter of emphasis: 研究会資料 is not reviewed, and claiming
+    otherwise is a false statement about a specific paper.
+
+    This reports what each named venue's convention is. It decides nothing.
+    A proceedings can be either, and only the author knows what a given paper
+    actually went through -- so entries are returned for the author to answer,
+    never as a verdict.
+    """
+    raw = text
+    from .tools import _read_text_if_path
+
+    raw = _read_text_if_path(raw)
+    entries: list[dict] = []
+    for number, stripped in _publication_candidate_lines(raw):
+        for pattern, convention, note in _VENUE_REVIEW_CONVENTIONS:
+            match = pattern.search(stripped)
+            if match:
+                entries.append({
+                    "line": number,
+                    "venue_signal": match.group(0),
+                    "convention": convention,
+                    "note": note,
+                    "excerpt": stripped[:160],
+                })
+                break
+
+    counts: dict[str, int] = {}
+    for entry in entries:
+        counts[entry["convention"]] = counts.get(entry["convention"], 0) + 1
+    return {
+        "applicable": bool(entries),
+        "score": None,
+        "automatic_judgment_prohibited": True,
+        "status": "manual_review_required",
+        "entry_count": len(entries),
+        "by_convention": counts,
+        "entries": entries,
+        "recommendations": [
+            "Write 査読の有無 on every entry; the form asks for it explicitly.",
+            "venue_dependent の行は、投稿時の案内か採録通知で確認して確定する。",
+        ],
+        "warning": (
+            "Venue conventions only. A matched venue does not establish what a "
+            "particular paper went through, and an unmatched line is not "
+            "evidence that its venue is unreviewed."
+        ),
+        "source": "venue peer-review convention hints",
+    }
+
+
+# An achievement list is read as a record of what exists. An entry dated after
+# the application, or numbered SA-27-0xx, is a plan wearing the clothes of a
+# result; left unmarked among published work it invites the reviewer to
+# discount the entries that are real.
+_PUBLICATION_PLACEHOLDER = re.compile(
+    r"0xx|x{2,}|＿＿|_{3,}|未定|未確定|TBD|\?\?+", re.IGNORECASE
+)
+_YEAR_IN_LINE = re.compile(r"(?<!\d)(20\d{2})(?!\d)")
+
+
+def grant_writing_future_dated_publication_check(
+    text: str,
+    application_year: int = 0,
+) -> dict:
+    """List achievement entries dated ahead of the application, or unfilled.
+
+    Two things make an entry unverifiable, and they usually arrive together:
+    a year later than the application, and a number the venue has not issued
+    yet. Neither is misconduct -- a paper genuinely in press belongs on the
+    list -- but an entry that states neither 発表予定 nor 投稿中 reads as a
+    published result the reviewer cannot find.
+
+    ``application_year`` defaults to the current year when omitted.
+    """
+    from datetime import datetime
+
+    from .tools import _read_text_if_path
+
+    raw = _read_text_if_path(text)
+    year_now = application_year or datetime.now().astimezone().year
+
+    # An entry that already says what it is does not need the reviewer to ask.
+    disclosed = re.compile(
+        r"発表予定|投稿中|投稿予定|採録決定|採択済|in press|accepted|submitted",
+        re.IGNORECASE,
+    )
+
+    entries: list[dict] = []
+    for number, stripped in _publication_candidate_lines(raw):
+        # The caller may pass a complete proposal, not just its bibliography.
+        # A future grant year or a Markdown placeholder is not a publication.
+        # Require either list-entry syntax or a bibliographic venue signal
+        # before interpreting dates and placeholders as publication metadata.
+        years = [int(y) for y in _YEAR_IN_LINE.findall(stripped)]
+        future = [y for y in years if y > year_now]
+        placeholder = _PUBLICATION_PLACEHOLDER.findall(stripped)
+        if not future and not placeholder:
+            continue
+        entries.append({
+            "line": number,
+            "future_years": future,
+            "placeholders": sorted(set(placeholder)),
+            "status_disclosed": bool(disclosed.search(stripped)),
+            "excerpt": stripped[:160],
+        })
+
+    undisclosed = [e for e in entries if not e["status_disclosed"]]
+    return {
+        "applicable": bool(entries),
+        "score": None,
+        "automatic_judgment_prohibited": True,
+        "status": "manual_review_required",
+        "application_year": year_now,
+        "entry_count": len(entries),
+        "undisclosed_count": len(undisclosed),
+        "entries": entries,
+        "recommendations": [
+            "各行に発表状況（発表予定・投稿中・採録決定など）を明記する。",
+            "確定していない書誌は、順位を下げるか、確定するまで載せない。",
+        ],
+        "warning": (
+            "A future year is not a defect by itself: a paper in press belongs "
+            "on the list. What this locates is an entry a reviewer cannot "
+            "verify and that does not say so."
+        ),
+        "source": "future-dated / placeholder publication audit",
+    }
