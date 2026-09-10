@@ -3,11 +3,11 @@ import pytest
 
 pptx = pytest.importorskip("pptx")
 
-from pptx.dml.color import RGBColor  # noqa: E402
-from pptx.util import Inches, Pt  # noqa: E402
-
-from radia_mcp.presentation._outline import presentation_check_outline_slide  # noqa: E402
-
+from pptx.dml.color import RGBColor
+from pptx.util import Inches, Pt
+from radia_mcp.presentation._outline import (
+    presentation_check_outline_slide,
+)
 
 ARC = [
     ("The ladder", ["Kameari 2018 builds it."], "A circuit, exact at DC."),
@@ -105,6 +105,31 @@ def test_section_names_are_examples_and_japanese_labels_work(tmp_path):
             + [_agenda("結果", items=items)] + ARC[3:])
     result = presentation_check_outline_slide(str(_deck(tmp_path, rows)))
     assert result["score"] == 10.0
+
+
+def test_four_author_defined_sections_are_discovered_without_imrad_words(tmp_path):
+    items = ["1 Context", "2 Theory", "3 Implementation", "4 Demonstration"]
+    rows = ([_agenda("Context", items=items)] + ARC[:1]
+            + [_agenda("Theory", items=items)] + ARC[1:2]
+            + [_agenda("Implementation", items=items)] + ARC[2:3]
+            + [_agenda("Demonstration", items=items)] + ARC[3:])
+    result = presentation_check_outline_slide(str(_deck(tmp_path, rows)))
+    assert result["score"] == 10.0
+    assert result["section_coverage"] == {
+        "context": [2], "theory": [4], "implementation": [6],
+        "demonstration": [8],
+    }
+
+
+def test_repeated_agenda_must_advance_in_the_authors_order(tmp_path):
+    items = ["1 Context", "2 Theory", "3 Implementation", "4 Demonstration"]
+    rows = ([_agenda("Context", items=items)] + ARC[:1]
+            + [_agenda("Implementation", items=items)] + ARC[1:2]
+            + [_agenda("Theory", items=items)] + ARC[2:3]
+            + [_agenda("Demonstration", items=items)] + ARC[3:])
+    result = presentation_check_outline_slide(str(_deck(tmp_path, rows)))
+    assert result["score"] < 10.0
+    assert result["section_coverage"]["theory"] == []
 
 
 def test_deck_too_short_to_need_sections_says_so(tmp_path):
