@@ -2,6 +2,10 @@
 
 ## 3.1.0 — release candidate
 
+- Preserve the curly glyph in wide over/underbraces instead of silently
+  substituting a horizontal line; cover multiple body widths in the decoration
+  regression. This was found by reviewing the shared-palette proof images.
+
 - Generate native and Web palettes from one production catalogue, independently
   checked against the insertion oracle. Share category order and preview TeX,
   preserve Web-only snippets explicitly, and explain native-only matrix actions.
