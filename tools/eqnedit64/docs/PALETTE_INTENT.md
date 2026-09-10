@@ -57,9 +57,19 @@ in the existing single-process model suite on disposable Windows CI, never on
 the interactive LAB font session. These tests do not claim that Win32 pointer
 hit-testing or PowerPoint paste has been exercised.
 
-Before publishing the palette-font correction, hand-test the exact staged EXE
-and inspect its `flight_note` entry `font.buttons`. Confirm `Latin Modern Math`
-and readable palette faces in the same run. Font cmap coverage and source-code
-analysis predict font selection but do not prove which font a live LAB process
-actually selected. Until this observation is recorded, the hand-test gate remains
-unverified, regardless of CI success.
+Font cmap coverage predicts which font `pick_button_font` will accept; it does
+not observe which font a running process received. `--self-test` now makes that
+observation: it calls the production chooser, reads the physical face GDI
+resolved, and exits 243 naming the substitute if the palette is not drawing in
+Latin Modern Math. The existing hidden-executable CI step therefore fails the
+moment a face character leaves the embedded cmap again.
+
+Do not route this through `flight_note`. Those notes live in a ring buffer that
+reaches a file only on a crash or an eight-second watchdog freeze, so a healthy
+run records nothing and an instruction to read `font.buttons` cannot be carried
+out.
+
+One judgement is still a person's. The automated gate proves the typeface;
+whether each key is legible at its drawn size — the primes distinguishable from
+quotation marks, the two-letter style faces readable — is decided by looking at
+the staged EXE before publication.

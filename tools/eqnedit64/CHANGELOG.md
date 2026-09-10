@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Fail `--self-test` when the palette is not drawing in the embedded math
+  font, naming the face GDI substituted. The cmap check says which character
+  would reject Latin Modern Math; this says whether the running binary got it.
+  Nothing observed that before: the only record was a flight note, and flight
+  notes reach a file solely on a crash or an eight-second watchdog freeze, so
+  3.0.16 shipped in a fallback font with every gate green.
+
 - Check every native/Web palette key against an independently reviewed TeX
   intent specification, including distinct slot operands, matrix resizing and
   persistent typeface buttons. Wrong but round-tripping commands now fail;

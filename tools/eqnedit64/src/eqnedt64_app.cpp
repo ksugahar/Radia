@@ -4272,6 +4272,37 @@ int self_test() {
     const auto japaneseMetrics = japanese.metrics();
     if (japaneseMetrics.width < 45.0 || japaneseMetrics.width > 90.0 ||
         japaneseMetrics.height > 24.0) return 157;
+    /* Which font the palette actually got.  pick_button_font is
+     * all-or-nothing by design -- it accepts a candidate only if that
+     * candidate owns EVERY face at once -- so one face character the embedded
+     * font lacks does not blank its own key, it rejects Latin Modern Math for
+     * all of them.  3.0.16 shipped that way: U+2605 on the Hodge-star key
+     * dropped all 245 keys to Segoe UI Symbol, and the prime family read as
+     * typewriter quotes.  The face catalogue is checked statically against the
+     * font's cmap, but a cmap predicts the choice rather than observing it,
+     * and the only previous record of the outcome was a flight note that
+     * reaches a file solely on a crash or an eight-second freeze.  This is the
+     * one place a real process reports the font it is drawing with. */
+    HFONT paletteFont = pick_button_font(17);
+    const bool paletteUsesMathFont =
+        font_resolves_to_face(paletteFont, L"Latin Modern Math");
+    if (!paletteUsesMathFont) {
+        wchar_t resolved[LF_FACESIZE] = {};
+        if (HDC probe = CreateCompatibleDC(nullptr)) {
+            HGDIOBJ previous = SelectObject(probe, paletteFont);
+            GetTextFaceW(probe, _countof(resolved), resolved);
+            SelectObject(probe, previous);
+            DeleteDC(probe);
+        }
+        fwprintf(stderr,
+                 L"palette font resolved to \"%s\", not Latin Modern Math; "
+                 L"a face character outside the embedded cmap rejects the "
+                 L"whole sample\n",
+                 resolved);
+    }
+    if (paletteFont && paletteFont != HFONT(GetStockObject(DEFAULT_GUI_FONT)))
+        DeleteObject(paletteFont);
+    if (!paletteUsesMathFont) return 243;
     HDC screen = GetDC(nullptr);
     HDC dc = CreateCompatibleDC(screen);
     HBITMAP bm = CreateCompatibleBitmap(screen, 640, 240);
