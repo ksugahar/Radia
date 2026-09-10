@@ -26,6 +26,29 @@ def test_explicit_mcp_source_does_not_repoint_physics():
     assert actual == canonical
 
 
+def test_explicit_source_root_repoints_only_monorepo_packages():
+    module = load_checker()
+    canonical = dict(module.expected_packages())
+    root = Path("S:/Radia/release-quad/main-current")
+    actual = dict(module.expected_packages(source_root=root))
+
+    assert actual["radia"] == str(root)
+    assert actual["cubit-mesh-export"] == str(root / "packages" / "cubit-mesh-export")
+    assert actual["radia-mcp"] == str(root / "packages" / "radia-mcp")
+    assert actual["mcp-server-document"] == canonical["mcp-server-document"]
+
+
+def test_explicit_mcp_source_can_override_source_root():
+    module = load_checker()
+    root = Path("S:/Radia/release-quad/main-current")
+    mcp = "S:/Radia/mcp-runtime/packages/radia-mcp"
+    actual = dict(module.expected_packages(mcp_source=mcp, source_root=root))
+
+    assert actual["radia"] == str(root)
+    assert actual["cubit-mesh-export"] == str(root / "packages" / "cubit-mesh-export")
+    assert actual["radia-mcp"] == mcp
+
+
 def test_failure_exit_code(monkeypatch):
     module = load_checker()
     monkeypatch.setattr(module.release_quad, "_verify_lab_editable", lambda packages: 1)
