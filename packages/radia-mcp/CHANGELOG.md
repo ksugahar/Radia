@@ -14,6 +14,8 @@ crystallized as its own package.
 - Presentation: ignore page furniture when reading takeaways and recognize
   `no <subject> <verb>` complaints so the detected turn does not fall through
   to the summary slide.
+- Presentation: share the 0.92 footer boundary between the hierarchy and arc
+  checks, and select takeaway candidates by visual rather than XML order.
 
 ## [1.4.53] - 2026-09-07
 
