@@ -90,6 +90,22 @@ aCleanup = onCleanup(@() delete(a));
 verifyError(t,@() radia.sparsesolv.AMS(a,space),'radia:mex:Exception');
 end
 
+function testRejectHigherOrderHCurl(t)
+% Order 2 with NoGrads=true keeps one gradient column per vertex, so only an
+% explicit order or structure check rejects it. Python raises RuntimeError for
+% the same space (test_ams_rejects_higher_order_space); the routes must agree.
+mesh = radia.ngsolve.Mesh.create(t.TestData.ref.mesh);
+cleanup = onCleanup(@() delete(mesh));
+space = radia.ngsolve.FESpace.create(mesh,"hcurl",2,NoGrads=true);
+spaceCleanup = onCleanup(@() delete(space));
+form = radia.ngsolve.BilinearForm.create(space,"mass");
+formCleanup = onCleanup(@() delete(form));
+a = form.matrix();
+aCleanup = onCleanup(@() delete(a));
+verifyError(t,@() radia.sparsesolv.AMS(a,space),'radia:mex:Exception');
+verifyError(t,@() radia.sparsesolv.AMS(a,space,Complex=true),'radia:mex:Exception');
+end
+
 function values = unpack(value,isComplex)
 values = value.real;
 if isComplex
