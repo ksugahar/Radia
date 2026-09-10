@@ -19,7 +19,7 @@ def _same_file(left: Path, right: Path) -> bool:
     """
     try:
         return left.samefile(right)
-    except (OSError, ValueError):
+    except FileNotFoundError:
         return left.resolve() == right.resolve()
 
 

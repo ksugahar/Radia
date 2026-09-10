@@ -59,8 +59,13 @@ import ngsolve as ng  # noqa: E402
 import numpy as np  # noqa: E402
 import radia as rad  # noqa: E402
 
-import qmag_case as Q  # noqa: E402
 from qmag_source import require_radia_source as _require_radia_source  # noqa: E402
+
+# Reject stale/editable installations before newer submodule APIs are imported.
+# Otherwise their ImportError hides the source-provenance diagnostic.
+_require_radia_source(RADIA_SOURCE, rad.__file__, REPO / "src")
+
+import qmag_case as Q  # noqa: E402
 from radia.vim import mesh_conformity_report  # noqa: E402
 
 CTYPE_RUNNER_PATH = REPO / "validation_test" / "c_type_three_engine" / "run_three_engine.py"
