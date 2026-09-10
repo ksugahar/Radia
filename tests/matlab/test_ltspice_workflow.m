@@ -338,12 +338,67 @@ editor.set_parameters(struct("Rval",2200)); verifyEqual(testCase,editor.get_para
 verifyEqual(testCase,editor.get_component_nodes("R1"),["in";"out"]);
 end
 
+function testSpiceEditorEditsOnlyResolvedComponentLine(testCase)
+fixture=tempPath(testCase,"editor_line.cir");
+writeTextFixture(fixture,"Editor regression"+newline+"R1 in out 1k"+newline+"* copy: R1 in out 1k"+newline+".end");
+editor=radia.ltspice.SpiceEditor(fixture);verifyEqual(testCase,editor.get_components(),"R1");
+editor.setComponentValue("r1","2k");output=tempPath(testCase,"editor_line_out.cir");editor.saveAs(output);text=string(fileread(output));
+verifyTrue(testCase,contains(text,"R1 in out 2k"));verifyTrue(testCase,contains(text,"* copy: R1 in out 1k"));
+end
+
+function testSpiceEditorRejectsAmbiguousAndUnterminatedEdits(testCase)
+duplicate=tempPath(testCase,"duplicate_editor.cir");writeTextFixture(duplicate,"Duplicate editor"+newline+"R1 a b 1k"+newline+"r1 b 0 2k"+newline+".param gain=1"+newline+".param GAIN=2"+newline+".end");
+editor=radia.ltspice.SpiceEditor(duplicate);verifyError(testCase,@()editor.getComponentValue("R1"),"radia:ltspice:AmbiguousComponent");verifyError(testCase,@()editor.setParameter("gain",3),"radia:ltspice:AmbiguousParameter");
+unterminated=tempPath(testCase,"unterminated_editor.cir");writeTextFixture(unterminated,"Unterminated"+newline+"R1 a 0 1k");editor=radia.ltspice.SpiceEditor(unterminated);
+verifyError(testCase,@()editor.addInstruction(".tran 1m"),"radia:ltspice:MissingEnd");verifyError(testCase,@()editor.addComponent("C1",["a";"0"],"1u"),"radia:ltspice:MissingEnd");
+end
+
+function testSpiceEditorUnderstandsSubcircuitParamsSyntax(testCase)
+fixture=tempPath(testCase,"subckt_params_editor.cir");writeTextFixture(fixture,"Subcircuit editor"+newline+"X1 in 0 divider params: R=1k"+newline+".subckt divider a b params: R=1k"+newline+"R1 a b {R}"+newline+".ends divider"+newline+".end");
+editor=radia.ltspice.SpiceEditor(fixture);verifyEqual(testCase,editor.getComponentValue("X1"),"divider");circuit=editor.getSubcircuit("X1");verifyClass(testCase,circuit,"radia.ltspice.SpiceCircuit");
+end
+
+function testSpiceEditorKeepsTopLevelAndSubcircuitComponentsSeparate(testCase)
+fixture=tempPath(testCase,"scoped_components.cir");
+writeTextFixture(fixture,"Scoped editor"+newline+"R1 in out 1k"+newline+"X1 out 0 divider"+newline+".subckt divider a b"+newline+"R1 a b 10"+newline+"C1 a b 1u"+newline+".ends divider"+newline+".end");
+editor=radia.ltspice.SpiceEditor(fixture);
+verifyEqual(testCase,editor.getComponents(),["R1";"X1"]);
+editor.setComponentValue("R1","2k");output=tempPath(testCase,"scoped_components_out.cir");editor.saveAs(output);text=string(fileread(output));
+verifyTrue(testCase,contains(text,"R1 in out 2k"));verifyTrue(testCase,contains(text,"R1 a b 10"));
+end
+
+function testSpiceEditorRejectsImplicitSubcircuitComponentEdit(testCase)
+fixture=tempPath(testCase,"nested_component_only.cir");
+writeTextFixture(fixture,"Nested only"+newline+"X1 in 0 divider"+newline+".subckt divider a b"+newline+"R1 a b 10"+newline+".ends divider"+newline+".end");
+editor=radia.ltspice.SpiceEditor(fixture);
+verifyError(testCase,@()editor.setComponentValue("R1","999k"),"radia:ltspice:ComponentInSubcircuit");
+end
+
+function testSpiceEditorAppliesParameterPolicyAtTopLevelOnly(testCase)
+fixture=tempPath(testCase,"scoped_parameters.cir");
+writeTextFixture(fixture,"Scoped params"+newline+".param gain=1"+newline+"X1 in 0 macro"+newline+".subckt macro a b"+newline+".param gain=10"+newline+"R1 a b {gain}"+newline+".ends macro"+newline+".end");
+editor=radia.ltspice.SpiceEditor(fixture);verifyEqual(testCase,editor.getAllParameterNames(),"gain");editor.setParameter("gain",2);verifyEqual(testCase,editor.getParameter("gain"),"2");
+output=tempPath(testCase,"scoped_parameters_out.cir");editor.saveAs(output);text=string(fileread(output));verifyTrue(testCase,contains(text,".param gain=10"));
+nested=tempPath(testCase,"nested_parameter_only.cir");writeTextFixture(nested,"Nested param"+newline+"X1 in 0 macro"+newline+".subckt macro a b"+newline+".param gain=10"+newline+"R1 a b {gain}"+newline+".ends macro"+newline+".end");
+nestedEditor=radia.ltspice.SpiceEditor(nested);verifyError(testCase,@()nestedEditor.getParameter("gain"),"radia:ltspice:ParameterInSubcircuit");
+end
+
+function testSpiceEditorRejectsDuplicateParameterNameEnumeration(testCase)
+fixture=tempPath(testCase,"duplicate_parameter_names.cir");writeTextFixture(fixture,"Duplicate params"+newline+".param gain=1"+newline+".param GAIN=2"+newline+".end");
+editor=radia.ltspice.SpiceEditor(fixture);verifyError(testCase,@()editor.getAllParameterNames(),"radia:ltspice:AmbiguousParameter");
+end
+
 function testAscGraphicalEditingCompatibility(testCase)
 fixture=fullfile(fileparts(mfilename("fullpath")),"fixtures","ltspice_rc.asc");editor=radia.ltspice.AscEditor(fixture);
 [position,rotation]=editor.get_component_position("R1");verifyEqual(testCase,position,[160,80]);verifyEqual(testCase,rotation,"R90");
 editor.set_component_position("R1",[192,112],"R0");editor.set_component_attribute("R1","SpiceLine","temp=25");editor.addWire([0,0],[16,0]);editor.set_parameter("gain",2);
 output=tempPath(testCase,"asc_editor_compat.asc");editor.save_as(output);text=string(fileread(output));
 verifyTrue(testCase,contains(text,"SYMBOL res 192 112 R0"));verifyTrue(testCase,contains(text,"SYMATTR SpiceLine temp=25"));verifyTrue(testCase,contains(text,"WIRE 0 0 16 0"));verifyEqual(testCase,editor.get_parameter("gain"),"2");
+end
+
+function testSchematicEditorRejectsCaseInsensitiveDuplicateReferences(testCase)
+fixture=tempPath(testCase,"duplicate.asc");writeTextFixture(fixture,"Version 4"+newline+"SHEET 1 880 680"+newline+"SYMBOL res 64 64 R0"+newline+"SYMATTR InstName R1"+newline+"SYMATTR Value 1k"+newline+"SYMBOL res 128 64 R0"+newline+"SYMATTR InstName r1"+newline+"SYMATTR Value 2k");
+editor=radia.ltspice.SchematicEditor(fixture);verifyError(testCase,@()editor.getComponentValue("R1"),"radia:ltspice:AmbiguousComponent");verifyError(testCase,@()editor.addComponent("res","R1",[192,64]),"radia:ltspice:DuplicateComponent");
 end
 
 function testSteppedLogQueriesAndRawStepConditions(testCase)
