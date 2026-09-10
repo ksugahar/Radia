@@ -1,36 +1,25 @@
-"""途中の目次: 転の直前に境目の枚があるか。
-
-松尾先生 2026-09-10:「途中に目次/アウトラインを挟むと分かりやすい。どこまでが
-現状の問題で、どこからが今回の解決法かを明示する方が聴衆には分かりやすい」。
-
-だからこの検査の要は「目次があるか」ではなく「**境目に**あるか」で、冒頭に
-一度だけ置いた目次は不合格になる ―― それがまさに、聞き手が現在地を見失う
-場面で役に立たない置き方だからである。
-"""
+"""Major sections must be announced where each section begins."""
 import pytest
 
 pptx = pytest.importorskip("pptx")
 
 from pptx.util import Inches  # noqa: E402
 
-from radia_mcp.presentation._outline import (  # noqa: E402
-    presentation_check_outline_slide,
-)
+from radia_mcp.presentation._outline import presentation_check_outline_slide  # noqa: E402
 
-# 起, 承, 転, 結, 結 -- 起承転結 の検査と同じ形。転は 4 枚目に落ちる。
+
 ARC = [
     ("The ladder", ["Kameari 2018 builds it."], "A circuit, exact at DC."),
     ("Its far end", ["Ten rungs."], "A finite ladder cannot make that slope."),
-    ("One space", ["Inspired by XFEM [10]: basis and enrichment in one matrix."],
-     "Keep the ladder, add one surface mode."),
+    ("One space", ["Inspired by XFEM [10]."], "Keep the ladder, add one surface mode."),
     ("A cylinder", ["Copper, 5 mm."], "Two unknowns hold the band to 0.06 %."),
     ("Summary", ["Bulk plus surface."], "Keep the ladder, add the surface mode."),
 ]
-# 区切りの枚。下端の主張文は持たない（持たせると筋の判定が動いてしまう）。
-DIVIDER = ("Outline", ["Background and the problem: slides 2-3",
-                       "Our method and its evidence: slides 5-7"], "")
-# 章の名前だけを並べ、どちらが問題でどちらが解決法かを言わない目次。
-BARE = ("Outline", ["The ladder", "One space", "A cylinder"], "")
+
+MOTIVATION = ("1 Motivation", ["Why the finite ladder misses the tail."], "")
+METHOD = ("2 Proposed method", ["Two spaces in one Galerkin system."], "")
+RESULTS = ("3 Results", ["Accuracy for four geometries."], "")
+AGENDA = ("Outline", ["Motivation", "Proposed method", "Results"], "")
 
 
 def _deck(tmp_path, rows, name="outline.pptx"):
@@ -54,54 +43,39 @@ def _deck(tmp_path, rows, name="outline.pptx"):
     return out
 
 
-def test_a_deck_with_no_outline_fails_and_is_told_where_to_put_one(tmp_path):
-    r = presentation_check_outline_slide(str(_deck(tmp_path, ARC)))
-    assert r["outline_slides"] == []
-    assert r["score"] == 0.0
-    # 転は 4 枚目。助言はその直前を指す。
-    assert r["turn_slide"] == 4
-    assert r["suggested_outline"]["insert_before_slide"] == 4
-    assert [s["slide"] for s in r["suggested_outline"]["problem"]] == [2, 3]
-    assert 4 in [s["slide"] for s in r["suggested_outline"]["solution"]]
+def test_deck_without_section_dividers_fails(tmp_path):
+    result = presentation_check_outline_slide(str(_deck(tmp_path, ARC)))
+    assert result["score"] == 0.0
+    assert result["section_dividers"] == []
 
 
-def test_an_outline_only_at_the_front_is_not_at_the_boundary(tmp_path):
-    rows = [DIVIDER] + ARC          # 2 枚目が目次、転は 5 枚目
-    r = presentation_check_outline_slide(str(_deck(tmp_path, rows)))
-    assert [f["slide"] for f in r["outline_slides"]] == [2]
-    assert r["outline_at_boundary"] == []
-    assert r["checks"]["目次・区切りの枚がある"] is True
-    assert r["checks"]["その一枚が転の直前にある（冒頭だけではない）"] is False
-    assert any("境目" in c for c in r["comments"])
+def test_single_front_agenda_is_not_recurring_navigation(tmp_path):
+    result = presentation_check_outline_slide(str(_deck(tmp_path, [AGENDA] + ARC)))
+    assert result["section_coverage"]["motivation"] == [2]
+    assert result["section_coverage"]["method"] == []
+    assert result["section_coverage"]["results"] == []
+    assert result["score"] == 3.3
 
 
-def test_a_divider_just_before_the_turn_passes(tmp_path):
-    rows = ARC[:2] + [DIVIDER] + ARC[2:]     # 4 枚目が区切り、転は 5 枚目
-    r = presentation_check_outline_slide(str(_deck(tmp_path, rows)))
-    assert r["turn_slide"] == 5
-    assert r["outline_at_boundary"] == [4]
-    assert r["score"] == 10.0
+def test_section_dividers_at_each_transition_pass(tmp_path):
+    rows = [MOTIVATION] + ARC[:2] + [METHOD] + ARC[2:3] + [RESULTS] + ARC[3:]
+    result = presentation_check_outline_slide(str(_deck(tmp_path, rows)))
+    assert result["score"] == 10.0
+    assert result["section_coverage"] == {
+        "motivation": [2], "method": [5], "results": [7]
+    }
 
 
-def test_an_outline_that_does_not_name_the_two_sides_is_flagged(tmp_path):
-    rows = ARC[:2] + [BARE] + ARC[2:]
-    r = presentation_check_outline_slide(str(_deck(tmp_path, rows)))
-    assert r["outline_at_boundary"] == [4]
-    assert r["checks"]["問題の側と解決法の側を両方名指ししている"] is False
-    assert any("どこまでが問題" in c for c in r["comments"])
+def test_section_names_are_examples_and_japanese_labels_work(tmp_path):
+    rows = [
+        ("背景と課題", ["有限梯子の限界"], ""), *ARC[:2],
+        ("提案手法", ["二つの空間を結合"], ""), *ARC[2:3],
+        ("検証結果", ["四形状の精度"], ""), *ARC[3:],
+    ]
+    result = presentation_check_outline_slide(str(_deck(tmp_path, rows)))
+    assert result["score"] == 10.0
 
 
-def test_a_divider_is_found_by_its_content_when_the_title_is_its_own(tmp_path):
-    # 題が目次語でなくても、デッキ自身の題を並べていれば区切りと分かる。
-    own = ("From problem to proposal", ["The ladder and its far end",
-                                       "One space, two bases",
-                                       "A cylinder"], "")
-    rows = ARC[:2] + [own] + ARC[2:]
-    r = presentation_check_outline_slide(str(_deck(tmp_path, rows)))
-    assert [f["slide"] for f in r["outline_slides"]] == [4]
-    assert "lists" in r["outline_slides"][0]["detected_by"]
-
-
-def test_a_deck_too_short_to_have_sections_says_so(tmp_path):
-    r = presentation_check_outline_slide(str(_deck(tmp_path, ARC[:2])))
-    assert "too few" in r["error"]
+def test_deck_too_short_to_need_sections_says_so(tmp_path):
+    result = presentation_check_outline_slide(str(_deck(tmp_path, ARC[:2])))
+    assert "too few" in result["error"]
