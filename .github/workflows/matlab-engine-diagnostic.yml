@@ -1,56 +1,56 @@
-name: MATLAB Engine runner diagnostic
-
+name: Optuna mdx2 service-context benchmark
 on:
   workflow_dispatch:
-
 permissions:
   contents: read
-
 jobs:
-  engine:
-    strategy:
-      fail-fast: false
-      matrix:
-        host: [mdx1, mdx2]
-    runs-on: [self-hosted, Windows, X64, '${{ matrix.host }}']
-    timeout-minutes: 3
+  benchmark:
+    runs-on: [self-hosted, Windows, X64, mdx2]
+    timeout-minutes: 12
     steps:
-      - name: Record execution identity
+      - name: Verify idle host and stage isolated run
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           whoami
-          Get-Process MATLAB,MathWorksServiceHost -ErrorAction SilentlyContinue |
-            Select-Object Id,SessionId,ProcessName
-          exit 0
-      - name: Bounded dedicated Engine startup
+          if (Get-Process python,MATLAB -ErrorAction SilentlyContinue) { throw 'Compute host is occupied' }
+          $stage = 'C:/temp/optuna-native-ab-20260909'
+          if ((Get-FileHash "$stage/matlab/optuna_mex.mexw64").Hash -ne 'F2BBD68BB3E427DDF75FDC0880D790CD24F44336B237812ABA812927358F7C3E') { throw 'Candidate hash mismatch' }
+          if ((Get-FileHash "$stage/old_optuna_mex.mexw64").Hash -ne '7FC73753784D93A49A63EB8992276079F79177C452E6E9F7764DDEEEDE27AE31') { throw 'Baseline hash mismatch' }
+          $runRoot = "C:/temp/optuna-service-$env:GITHUB_RUN_ID"
+          if (Test-Path $runRoot) { throw 'Run directory already exists' }
+          New-Item -ItemType Directory $runRoot | Out-Null
+          Copy-Item "$stage/matlab" $runRoot -Recurse
+          Copy-Item "$stage/validation_test" $runRoot -Recurse
+          Copy-Item "$stage/optuna_mdx2_bundled_run.py" $runRoot
+          Copy-Item "$stage/old_optuna_mex.mexw64" "$runRoot/old.mexw64"
+          Copy-Item "$stage/matlab/optuna_mex.mexw64" "$runRoot/new.mexw64"
+          "OPTUNA_RUN_ROOT=$runRoot" >> $env:GITHUB_ENV
+      - name: Sequential old-new-new-old and Python comparison
         shell: pwsh
         run: |
-          @'
-          import subprocess, sys, tempfile
-          code = r"""
-          import sys
-          sys.path.insert(0, r'C:\Program Files\MATLAB\R2026a\extern\engines\python\dist')
-          import matlab.engine
-          print('ENGINE_IMPORT', matlab.engine.__file__, flush=True)
-          eng = matlab.engine.start_matlab('-nodesktop')
-          try:
-              value = eng.sqrt(4.0)
-              assert value == 2.0, value
-              print('ENGINE_CALCULATION_PASS', value, flush=True)
-          finally:
-              eng.quit()
-          print('ENGINE_SHUTDOWN_PASS', flush=True)
-          """
-          with tempfile.TemporaryFile() as log:
-              child = subprocess.Popen([sys.executable, '-c', code], stdout=log, stderr=subprocess.STDOUT)
-              try:
-                  result = child.wait(timeout=60)
-              except subprocess.TimeoutExpired:
-                  subprocess.run(['taskkill', '/PID', str(child.pid), '/T', '/F'], check=True)
-                  child.wait(timeout=20)
-                  result = 124
-              log.seek(0)
-              print(log.read().decode('utf-8', errors='replace'), flush=True)
-              raise SystemExit(result)
-          '@ | & 'C:\Program Files\Python312\python.exe' -
-          exit $LASTEXITCODE
+          $ErrorActionPreference = 'Stop'
+          $runRoot = $env:OPTUNA_RUN_ROOT
+          try {
+            foreach ($label in @('old1','new1','new2','old2')) {
+              if (Get-Process python,MATLAB -ErrorAction SilentlyContinue) { throw 'Concurrent compute detected' }
+              $variant = $label.Substring(0,3)
+              Copy-Item "$runRoot/$variant.mexw64" "$runRoot/matlab/optuna_mex.mexw64"
+              python -u "$runRoot/optuna_mdx2_bundled_run.py" --root $runRoot --output "$runRoot/$label.json"
+              if ($LASTEXITCODE -ne 0) { throw "MATLAB benchmark $label failed" }
+            }
+            foreach ($label in @('python1','python2')) {
+              if (Get-Process python,MATLAB -ErrorAction SilentlyContinue) { throw 'Concurrent compute detected' }
+              C:/temp/radia-optuna50-benchmark-20260908/.venv/Scripts/python.exe "$runRoot/validation_test/optimization/benchmark_optuna50_python.py" --output "$runRoot/$label.json"
+              if ($LASTEXITCODE -ne 0) { throw "Python benchmark $label failed" }
+            }
+          } finally {
+            Copy-Item "$runRoot/new.mexw64" "$runRoot/matlab/optuna_mex.mexw64"
+          }
+      - name: Upload measured JSON
+        if: always() && env.OPTUNA_RUN_ROOT != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: optuna-mdx2-performance
+          path: ${{ env.OPTUNA_RUN_ROOT }}/*.json
+          if-no-files-found: warn
