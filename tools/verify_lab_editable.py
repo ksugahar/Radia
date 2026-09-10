@@ -1,8 +1,9 @@
 """Read-only development editable-source verification.
 
-Defaults to the canonical LAB checkout. Use --mcp-source explicitly for an
-approved clean MCP runtime. Never infer the expectation from the installed
-package: that would accept drift as its own source of truth.
+Defaults to the canonical LAB checkout. Use --source-root explicitly for an
+approved clean monorepo worktree, or --mcp-source for a separately approved
+MCP runtime. Never infer the expectation from the installed package: that
+would accept drift as its own source of truth.
 
 Pointing at the right path is not the same as running current code. The LAB
 checkout can sit on a backup branch, so an install can satisfy the path check
@@ -114,8 +115,17 @@ def verify_against_origin_main(packages):
     return stale
 
 
-def expected_packages(mcp_source=None):
+def expected_packages(mcp_source=None, source_root=None):
     packages = release_quad._canonical_lab_editable_packages()
+    if source_root:
+        root = pathlib.Path(source_root)
+        monorepo_paths = {
+            "radia": str(root),
+            "cubit-mesh-export": str(root / "packages" / "cubit-mesh-export"),
+            "radia-mcp": str(root / "packages" / "radia-mcp"),
+        }
+        packages = [(name, monorepo_paths.get(name, path))
+                    for name, path in packages]
     if mcp_source:
         packages = [(name, mcp_source if name == "radia-mcp" else path)
                     for name, path in packages]
@@ -124,12 +134,16 @@ def expected_packages(mcp_source=None):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--source-root",
+        help="Approved clean monorepo worktree used by release-quad")
     parser.add_argument("--mcp-source", help="Approved editable MCP project root")
     parser.add_argument(
         "--skip-origin-check", action="store_true",
         help="skip the origin/main comparison (offline, or origin not fetched)")
     args = parser.parse_args(argv)
-    packages = expected_packages(args.mcp_source)
+    packages = expected_packages(
+        mcp_source=args.mcp_source, source_root=args.source_root)
     drift = release_quad._verify_lab_editable(packages)
     if not args.skip_origin_check:
         drift += verify_against_origin_main(packages)
