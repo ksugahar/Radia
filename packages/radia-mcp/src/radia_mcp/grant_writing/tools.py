@@ -8321,4 +8321,6 @@ from ._draft_checks import (  # noqa: F401
     grant_writing_central_question_singularity_check,
     grant_writing_draft_length_budget_check,
     grant_writing_form_field_coverage_check,
+    grant_writing_future_dated_publication_check,
+    grant_writing_peer_review_convention_hints,
 )
