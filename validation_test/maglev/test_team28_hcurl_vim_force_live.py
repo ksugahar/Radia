@@ -3,7 +3,13 @@
 Run explicitly on an idle compute host; this is not ordinary fast CI.
 """
 import json
+
+import pytest
+
 from validation_test.maglev.team28_hcurl_vim_force import run
+
+
+pytestmark = pytest.mark.compute_host
 
 
 def test_team28_hcurl_vim_force_live(tmp_path):
