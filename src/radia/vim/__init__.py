@@ -72,6 +72,7 @@ from ._vim import (  # noqa: F401  (ngsolve.bem-style operator + .mat)
     DemagOperator,
     H1HodgeDemagOperator,
     build_charge_gram as _charge_gram_impl,
+    mesh_conformity_report,
 )
 from ._solve import hdiv_demag_solve as _solve_impl  # noqa: F401  (production demag solve)
 from ._solver import HDivSolver  # noqa: F401
@@ -357,6 +358,7 @@ for _new, _old in [
     ])
 
 __all__ = [
+    "mesh_conformity_report",
     "Solve", "HDivSolver", "DemagOperator", "H1HodgeDemagOperator", "ChargeGram",
     "MeshSoftIron", "VolSoftIron", "PlanarSolve",
     "PlanarDemagBody", "maxwell_torque_circle",

@@ -243,6 +243,7 @@ bool RadHACApKBase::BuildHMatrix(const RadHACApKParams& params) {
     cHACApK_set_sym_fill(UseSymmetricFill() ? 1 : 0);
     ScopeExit build_state_scope([this, &build_succeeded]() noexcept {
         cHACApK_set_sym_fill(0);
+        cHACApK_set_point_radius(nullptr);
         OnBuildFinished(build_succeeded);
     });
     OnBuildStarting(params);
@@ -259,6 +260,12 @@ bool RadHACApKBase::BuildHMatrix(const RadHACApKParams& params) {
     auto start_time = std::chrono::high_resolution_clock::now();
 
     ExtractCoordinates();
+    // Bounding boxes of SUPPORTS: a manager whose elements are extended sources publishes a per-element
+    // radius so the box-gap admissibility keeps touching elements in dense leaves (co-located charge
+    // modes looked like points and let ACA+ stop early on touching blocks, ESRF #6 2026-09-05).
+    if (!m_pointRadius.empty() && m_pointRadius.size() != m_coordinates.size() / 3)
+        throw std::runtime_error("BuildHMatrix: point radius table size does not match the element count");
+    cHACApK_set_point_radius(m_pointRadius.empty() ? nullptr : m_pointRadius.data());
 
     if (m_n_elem == 0) {
         std::cerr << "[HACApK] Error: No elements" << std::endl;
@@ -274,10 +281,12 @@ bool RadHACApKBase::BuildHMatrix(const RadHACApKParams& params) {
     RadHACApKCallback::ClearCallbackException();
 
     // Kernel-specific precomputation.
+    const auto t_prep0 = std::chrono::high_resolution_clock::now();
     OnBeforeBuild();
 
     // Kernel-specific initial chi.
     InitializeInvChi();
+    m_stats.t_prep = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - t_prep0).count();
 
     // Allocate opaque structures
     m_leafmtxp = HACApK_alloc_leafmtxp();
@@ -368,6 +377,9 @@ bool RadHACApKBase::BuildHMatrix(const RadHACApKParams& params) {
     m_stats.dense_memory_mb = (double)dense_bytes / (1024.0 * 1024.0);
     m_stats.compression = (dense_bytes > 0) ?
         (double)hmat_bytes / (double)dense_bytes : 1.0;
+    m_stats.t_cluster = HACApK_lcontrol_get_time(m_control, 90);
+    m_stats.t_leafgen = HACApK_lcontrol_get_time(m_control, 91);
+    m_stats.t_fill = HACApK_lcontrol_get_time(m_control, 92);
 
     auto end_time = std::chrono::high_resolution_clock::now();
     m_stats.build_time = std::chrono::duration<double>(end_time - start_time).count();
@@ -385,11 +397,13 @@ bool RadHACApKBase::BuildHMatrix(const RadHACApKParams& params) {
 
     // Cache diagonal elements N_ii for Jacobi preconditioner (reused every
     // BiCGSTAB iteration). Uses virtual GetInteractionMatrixElement.
+    const auto t_diag0 = std::chrono::high_resolution_clock::now();
     m_diag_N.resize(m_ndof);
     ngcore::ParallelFor(ngcore::IntRange(m_ndof), [&](size_t i) {
         m_diag_N[(int)i] = GetInteractionMatrixElement((int)i, (int)i);
     });
     m_diag_cached = true;
+    m_stats.t_diag = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - t_diag0).count();
 
     m_valid = true;
     build_succeeded = true;

@@ -3741,7 +3741,11 @@ PYBIND11_MODULE(_radia_pybind, m) {
                          F64Array far_tri_pts_a, F64Array far_tri_w_a,
                          double near_grade, double far_inner_factor,
                          I32Array image_masks_a, F64Array image_signs_a,
-                         double eps, int leaf, double eta, bool build) {
+                         double eps, int leaf, double eta, bool build,
+                         F64Array gl_near_a, F64Array gw_near_a, bool near_inner_exact,
+                         F64Array gl_in_self_a, F64Array gw_in_self_a,
+                         F64Array gl_pair_a, F64Array gw_pair_a,
+                         F64Array gl_pair_affine_a, F64Array gw_pair_affine_a) {
                  auto hex_cell_nodes = to_1d_vector<double>(hex_cell_nodes_a, "hex_cell_nodes");
                  auto quad_face_nodes = to_1d_vector<double>(quad_face_nodes_a, "quad_face_nodes");
                  auto charge_host = to_1d_vector<int>(charge_host_a, "charge_host");
@@ -3761,6 +3765,14 @@ PYBIND11_MODULE(_radia_pybind, m) {
                  auto far_tri_w = to_1d_vector<double>(far_tri_w_a, "far_tri_w");
                  auto image_masks = to_1d_vector<int>(image_masks_a, "image_masks");
                  auto image_signs = to_1d_vector<double>(image_signs_a, "image_signs");
+                 auto gl_near = to_1d_vector<double>(gl_near_a, "gl_near");
+                 auto gw_near = to_1d_vector<double>(gw_near_a, "gw_near");
+                 auto gl_in_self = to_1d_vector<double>(gl_in_self_a, "gl_in_self");
+                 auto gw_in_self = to_1d_vector<double>(gw_in_self_a, "gw_in_self");
+                 auto gl_pair = to_1d_vector<double>(gl_pair_a, "gl_pair");
+                 auto gw_pair = to_1d_vector<double>(gw_pair_a, "gw_pair");
+                 auto gl_pair_affine = to_1d_vector<double>(gl_pair_affine_a, "gl_pair_affine");
+                 auto gw_pair_affine = to_1d_vector<double>(gw_pair_affine_a, "gw_pair_affine");
                  return build_charge_gram_released(
                      [&]() { return std::make_shared<RadHACApKChargeGram>(
                          std::move(hex_cell_nodes), std::move(quad_face_nodes), n_el, n_bf,
@@ -3772,7 +3784,11 @@ PYBIND11_MODULE(_radia_pybind, m) {
                          std::move(far_tet_pts), std::move(far_tet_w),
                          std::move(far_tri_pts), std::move(far_tri_w),
                          near_grade, far_inner_factor,
-                         std::move(image_masks), std::move(image_signs)); },
+                         std::move(image_masks), std::move(image_signs),
+                         std::move(gl_near), std::move(gw_near), near_inner_exact,
+                         std::move(gl_in_self), std::move(gw_in_self),
+                         std::move(gl_pair), std::move(gw_pair),
+                         std::move(gl_pair_affine), std::move(gw_pair_affine)); },
                      eps, leaf, eta, build, "hex BDM1/BDM2 charge Gram H-matrix build failed");
              }),
              py::arg("hex_cell_nodes"), py::arg("quad_face_nodes"), py::arg("n_el"), py::arg("n_bf"),
@@ -3783,6 +3799,11 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("near_grade") = 1.5, py::arg("far_inner_factor") = 1.5,
              py::arg("image_masks") = I32Array(0), py::arg("image_signs") = F64Array(0),
              py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0, py::arg("build") = true,
+             py::arg("gl_near") = F64Array(0), py::arg("gw_near") = F64Array(0),
+             py::arg("near_inner_exact") = true,
+             py::arg("gl_in_self") = F64Array(0), py::arg("gw_in_self") = F64Array(0),
+             py::arg("gl_pair") = F64Array(0), py::arg("gw_pair") = F64Array(0),
+             py::arg("gl_pair_affine") = F64Array(0), py::arg("gw_pair_affine") = F64Array(0),
              "HEX BDM1/BDM2 mode: Q1/Q2 monomial charges (8/27 per hex volume + 4/9 per quad-face) on the DIRECT Q2 "
              "isoparametric geometry -- hex_cell_nodes [n_el*81] = 27-node lattice, quad_face_nodes "
              "[n_bf*27] = 9-node lattice, both from GetTrafo at the reference lattice, so ONE path covers "
@@ -4805,6 +4826,8 @@ PYBIND11_MODULE(_radia_pybind, m) {
                  d["n_dense"] = st.n_dense; d["max_rank"] = st.max_rank;
                  d["compression"] = st.compression; d["build_time"] = st.build_time;
                  d["memory_mb"] = st.memory_mb; d["dense_memory_mb"] = st.dense_memory_mb;
+                 d["build_prep_s"] = st.t_prep; d["build_cluster_s"] = st.t_cluster;
+                 d["build_leafgen_s"] = st.t_leafgen; d["build_fill_s"] = st.t_fill; d["build_diag_s"] = st.t_diag;
                  for (const auto& kv : s.HexCacheStats()) d[kv.first.c_str()] = kv.second;
                  return d;
              }, "H-matrix stats dict.");
