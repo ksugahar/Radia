@@ -6,6 +6,11 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
 ## Unreleased
 
+- Replace checkout-time freshness guesses with content-addressed provenance
+  for the native source tree and both mandatory `.ccm` / `.pyd` payloads.
+- Align package metadata with the shipped `cp312-win_amd64` wheel: CPython
+  3.12 and 64-bit Windows are the supported runtime contract.
+
 ## 0.14.17 - Refreshed Coreform Cubit backend
 
 Released 2026-09-11.
