@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Check every native/Web palette key against an independently reviewed TeX
+  intent specification, including distinct slot operands, matrix resizing and
+  persistent typeface buttons. Wrong but round-tripping commands now fail;
+  swap mutations and fail-closed catalogue coverage protect the test itself.
+
 - Draw the palette in the shipped math font again. One key face used U+2605
   BLACK STAR, which Latin Modern Math does not contain, and `pick_button_font`
   accepts a font only if it owns every face at once — so that single character
