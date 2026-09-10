@@ -1,9 +1,23 @@
 """Wheel evidence must not come from an editable or shadowing checkout."""
 
 import importlib.util
+import subprocess
 from pathlib import Path
 
 import pytest
+
+
+def _make_junction(link: Path, target: Path) -> bool:
+    """Create a Windows directory junction, or report that we cannot."""
+    link.parent.mkdir(parents=True, exist_ok=True)
+    target.mkdir(parents=True, exist_ok=True)
+    try:
+        completed = subprocess.run(
+            ["cmd", "/c", "mklink", "/J", str(link), str(target)],
+            capture_output=True, text=True)
+    except OSError:
+        return False
+    return completed.returncode == 0 and link.exists()
 
 
 @pytest.fixture
@@ -46,9 +60,33 @@ def test_repo_accepts_only_requested_checkout(source_guard, tmp_path):
             "repo", tmp_path / "another/src/radia/__init__.py", checkout)
 
 
+def test_repo_accepts_a_checkout_staged_as_a_junction(source_guard, tmp_path):
+    """mdx1 and hibino stage <checkout>/src/radia as a junction into the venv.
+
+    Path.resolve() follows it, so a plain equality test rejected the very tree
+    the runner asked for and the default --radia-source repo aborted on both
+    heavy validation hosts.
+    """
+    site_packages = tmp_path / "venv/Lib/site-packages/radia"
+    checkout = tmp_path / "repo/src"
+    link = checkout / "radia"
+    if not _make_junction(link, site_packages):
+        pytest.skip("cannot create a directory junction on this filesystem")
+    (site_packages / "__init__.py").write_text("", encoding="utf-8")
+
+    result = source_guard.require_radia_source(
+        "repo", link / "__init__.py", checkout)
+    assert result["imported_as"] == str((link / "__init__.py").absolute())
+    # The junction is what the interpreter went through, so an 'installed'
+    # claim from the same name must still be refused.
+    with pytest.raises(RuntimeError, match="which is the checkout"):
+        source_guard.require_radia_source(
+            "installed", link / "__init__.py", checkout)
+
+
 def test_installed_rejects_current_checkout(source_guard, tmp_path):
     checkout = tmp_path / "repo/src"
-    with pytest.raises(RuntimeError, match="resolved to the checkout"):
+    with pytest.raises(RuntimeError, match="which is the checkout"):
         source_guard.require_radia_source(
             "installed", checkout / "radia/__init__.py", checkout)
 
