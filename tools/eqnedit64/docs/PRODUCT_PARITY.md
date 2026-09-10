@@ -33,6 +33,12 @@ it owns the whole sample, so an unavailable character does not blank its own
 key — it rejects the math font and redraws every palette in a fallback. That
 all-or-nothing gate stays; the sample is what must be kept clean.
 
+The cmap check predicts that choice. `--self-test` observes it: it runs the
+production chooser, reads back the physical face, and exits 243 naming the
+substitute when the palette is not drawing in Latin Modern Math. Keep both —
+the static check says which character is at fault, the runtime check says
+whether the shipped binary actually got the font.
+
 These are native-specific implementation checks. Web rendering belongs to
 MathJax; shared palette/TeX/Office contracts still require both editions' tests.
 Publish the matching Web build on the laboratory homepage, even when the only
