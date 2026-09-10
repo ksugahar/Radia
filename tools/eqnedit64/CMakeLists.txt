@@ -4,7 +4,7 @@
 # `build\build_tests.bat` runs the required checks.  Nothing here writes to
 # dist, so a build from this file can never become the shipped executable.
 cmake_minimum_required(VERSION 3.20)
-project(Eqnedit64 VERSION 3.0.15 LANGUAGES CXX)
+project(Eqnedit64 VERSION 3.0.16 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -26,7 +26,7 @@ add_library(eqnedit_core STATIC ${EQNEDIT_CORE_SOURCES})
 target_include_directories(eqnedit_core PUBLIC src)
 target_compile_definitions(eqnedit_core PRIVATE _CRT_SECURE_NO_WARNINGS)
 if(MSVC)
-    target_compile_options(eqnedit_core PRIVATE /W4 /utf-8)
+    target_compile_options(eqnedit_core PRIVATE /W4 /WX /w14062 /utf-8)
 endif()
 
 if(WIN32)
@@ -63,3 +63,10 @@ if(MSVC)
     target_compile_options(test_math_alphabets PRIVATE /W4 /utf-8)
 endif()
 add_test(NAME math_alphabets COMMAND test_math_alphabets)
+
+add_executable(test_node_dispatch tests/test_node_dispatch.cpp)
+target_link_libraries(test_node_dispatch PRIVATE eqnedit_core)
+if(WIN32)
+    target_link_libraries(test_node_dispatch PRIVATE gdi32 user32)
+endif()
+add_test(NAME node_dispatch COMMAND test_node_dispatch)
