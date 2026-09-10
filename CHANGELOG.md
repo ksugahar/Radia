@@ -5,9 +5,13 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
-## 4.95.87 - Safe AMS setup and physical shifted preconditioning
+## 4.95.88 - Safe AMS setup and reliable native release smoke tests
 
-Released 2026-09-10.
+Released 2026-09-11.
+
+- Installed pytest explicitly into the native-release job's run-local Python
+  environment. Tag builds no longer depend on pytest leaking in from the
+  self-hosted runner and can execute the checked native-smoke tier after build.
 
 - Corrected the SI normalization of `rad.FldFrc` for H-field inputs, replacing
   a spurious factor of about 6.33e11 with the Maxwell-stress result. Centralized
