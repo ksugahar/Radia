@@ -80,6 +80,32 @@ verifyEqual(testCase, reloaded.best_params(), bestParams);
 verifyEqual(testCase, reloaded.best_solution().trial_number, 0);
 end
 
+function testSamplerStateReplacementPreservesStorageContract(testCase)
+% MATLAB-only persistence contract, not an upstream behavioral oracle.
+path=string(tempname("C:/temp"))+".mat";
+cleanup=onCleanup(@()deleteIfPresent(path));
+study=radia.optuna.Study(StoragePath=path,AutoSave=false);
+study.recordSamplerState("a","v1",1,2,struct("payload",1));
+previous=study.SamplerStateTable;
+study.recordSamplerState("a","v1",3,4,struct("payload",[2,3]));
+verifyEqual(testCase,height(study.SamplerStateTable),1);
+verifyEqual(testCase,previous.State{1}.payload,1);
+verifyEqual(testCase,study.SamplerStateTable.Revision,2);
+verifyEqual(testCase,study.SamplerStateTable.TrialNumber,3);
+verifyEqual(testCase,study.samplerState("a","v1").payload,[2,3]);
+study.recordSamplerState("b","v1",5,6,struct("payload",4));
+study.recordSamplerState("a","v1",7,8,struct("payload",5));
+verifyEqual(testCase,study.SamplerStateTable.Sampler,["b";"a"]);
+verifyEqual(testCase,study.SamplerStateTable.Revision,[1;3]);
+study.recordSamplerState("a","v2",9,10,struct("payload",6));
+study.recordSamplerState("a","v2",11,12,struct("payload",7));
+expected=study.SamplerStateTable;
+verifyEqual(testCase,expected.Generation,[6;8;12]);
+study.save();
+loaded=radia.optuna.Study(StoragePath=path,AutoSave=false);
+verifyEqual(testCase,loaded.SamplerStateTable,expected);
+end
+
 function testTrialCompatibilityMetadata(testCase)
 trial = radia.optuna.Study(AutoSave=false).ask();
 x = trial.suggest_float("positive", 1, 100, Log=true);
