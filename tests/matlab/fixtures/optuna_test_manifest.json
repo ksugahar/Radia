@@ -233,6 +233,13 @@
     },
     {
       "classification": "matlab-integration",
+      "file": "test_optuna_reliability.m",
+      "oracle": null,
+      "scope": "MATLAB MAT-file transaction, recovery, and sampler-state persistence",
+      "test": "testNormalizedSnapshotStoragePreservesPublicTables"
+    },
+    {
+      "classification": "matlab-integration",
       "file": "test_optuna_sampler_wrappers.m",
       "oracle": null,
       "scope": "MATLAB sampler-state persistence and AutoSampler policy integration",
