@@ -1,17 +1,20 @@
-function result = benchmark_optuna_storage_scaling(outputPath)
+function result = benchmark_optuna_storage_scaling(outputPath, withStorage)
 %BENCHMARK_OPTUNA_STORAGE_SCALING Attribute scalar TPE and storage costs.
 % Diagnostic timings, not compatibility expectations or pure transfer costs.
 arguments
     outputPath (1,1) string
+    withStorage (1,1) logical = true
 end
 root=fileparts(fileparts(fileparts(mfilename("fullpath"))));
 addpath(fullfile(root,"matlab"));
 folder=string(tempname(fileparts(outputPath))); mkdir(folder);
 cleanup=onCleanup(@() removeScratch(folder));
 levels=[100,1000,10000]; repeats=7;
+storagePath="";
+if withStorage, storagePath=fullfile(folder,"study.mat"); end
 study=radia.optuna.Study(Sampler=radia.optuna.TPESampler( ...
     Seed=37,NStartupTrials=4),AutoSave=false, ...
-    StoragePath=fullfile(folder,"study.mat"));
+    StoragePath=storagePath);
 count=0; entries=cell(1,numel(levels));
 for k=1:numel(levels)
     started=tic;
@@ -33,7 +36,11 @@ for k=1:numel(levels)
         started=tic; a=study.TrialTable; b=study.ParamTable;
         c=study.ObjectiveTable; timings(r,5)=toc(started);
         clear a b c
-        started=tic; study.save(); timings(r,6)=toc(started);
+        if withStorage
+            started=tic; study.save(); timings(r,6)=toc(started);
+        else
+            timings(r,6)=NaN;
+        end
     end
     profile clear; profile on;
     for r=1:repeats
@@ -42,16 +49,20 @@ for k=1:numel(levels)
     end
     profile off; info=profile('info');
     trialProfile=profileRows(info.FunctionTable);
-    profile clear; profile on; study.save(); profile off;
-    info=profile('info'); saveProfile=profileRows(info.FunctionTable);
-    file=dir(fullfile(folder,"study.mat"));
+    saveProfile=[]; savedBytes=0;
+    if withStorage
+        profile clear; profile on; study.save(); profile off;
+        info=profile('info'); saveProfile=profileRows(info.FunctionTable);
+        file=dir(fullfile(folder,"study.mat")); savedBytes=file.bytes;
+    end
     entries{k}=struct('history_before_probes',levels(k), ...
         'history_after_probes',count,'fill_seconds',fillSeconds, ...
         'columns',{{'ask','suggest','tell','dirty_tables','cached_tables','save_cached_tables'}}, ...
         'all_seconds',timings,'median_seconds',median(timings(3:end,:),1), ...
-        'saved_bytes',file.bytes,'trial_profile',trialProfile,'save_profile',saveProfile);
+        'saved_bytes',savedBytes,'trial_profile',trialProfile,'save_profile',saveProfile);
     result=struct('schema','radia.validation.optuna-storage-scaling.v1', ...
         'host',getenv('COMPUTERNAME'),'matlab',version,'seed',37, ...
+        'storage_path_enabled',withStorage,'autosave',false, ...
         'repeats',repeats,'discarded_repeats',2,'entries',{entries(1:k)}, ...
         'notes',{{'Scalar TPE, one float, completed trials, no callbacks.', ...
         'ask includes sampler preparation and native computation; suggest includes recording.', ...
