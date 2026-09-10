@@ -18,9 +18,13 @@ Released 2026-09-11.
   without relying on packages inherited from the runner host.
 
 - Corrected the SI normalization of `rad.FldFrc` for H-field inputs, replacing
-  a spurious factor of about 6.33e11 with the Maxwell-stress result. Centralized
-  harmonic Maxwell-stress integration in `radia.force` / `radia_mcp.force`, and
-  upgraded virtual-work and coenergy endpoint derivatives to second order for
+  a spurious factor of about 6.33e11 with the Maxwell-stress result. **Force
+  values obtained from `rad.FldFrc` before 4.95.89 must be recalculated.**
+- Added the shared NGSolve-symbolic harmonic Maxwell-stress kernel in
+  `radia.force_ngsolve`. Its current consumers are `calc_fem_kelvin.py` and
+  `radia_mcp.radia_ngsolve.force`; Motor and MagLev are not yet wired to this
+  kernel.
+- Upgraded virtual-work and coenergy endpoint derivatives to second order for
   nonuniform and periodic samples in both Python and MATLAB.
 
 - Retired `solve_magnetostatic_reduced_omega_kelvin`: calls now fail explicitly
