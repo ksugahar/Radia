@@ -1,171 +1,158 @@
-"""途中の目次: 背景がどこで終わり、提案がどこから始まるかを枚で示しているか。
+"""Check whether a talk announces each major section at its transition.
 
-松尾先生 (2026-09-10, IGTE'26 のデッキ査読):
+An outline is not merely one agenda slide near the beginning, and it is not a
+retrospective statement that the problem has ended and the solution begins.
+For a spoken research presentation, navigation has to appear where the topic
+changes: "Motivation" before the motivation, "Proposed method" before the
+method, and "Results" before the results. A repeated agenda with the current
+item highlighted is equivalent to a sparse section-divider slide.
 
-    よくあるように途中に目次/アウトラインを挟むと分かりやすいと思いました。
-    例えば、どこまでのスライドが現状の問題(あるいは背景)で、どこからが今回の
-    解決法の話になるのか、明示する方が聴衆には分かりやすいと思いました。
-
-冒頭に一度だけ目次を出す形は、この指摘には答えていない。聞き手が「今どこに
-いるのか」を見失うのは冒頭ではなく中盤である ―― 従来法の話が三枚続いたあと、
-提案が始まる境目で、いま聞いているのが「まだ問題の話」なのか「もう解決法の
-話」なのかが分からなくなる。だからこの検査は、目次が**在るか**ではなく
-**転の直前に在るか**を見る。
-
-境目は 起承転結 の 転 から取る（``presentation_kishotenketsu_check`` と同じ
-定義を使い、``read_deck`` で同じ読み方をする）。転はタイトルの語ではなく下端
-の主張文から決まるので、研究室の「タイトルは名詞句・主張は下端帯」の様式と
-衝突しない ―― 「Method」「Results」といった章題を並べる流儀を前提にした検査
-なら、この様式のデッキでは常に不合格になってしまう。
-
-目次の枚は二通りの見つけ方をする。題が目次語（Outline / 目次 / 本日の流れ …）
-であるか、あるいは本文の行がこのデッキ自身の他の枚の題を並べているか。後者が
-要るのは、区切りの枚に「Where we are going」のような固有の題を付けることが
-あるからで、題だけを見ると見落とす。
-
-短い発表では枚を一枚使う余裕がないこともある。その場合の答えは「検査を無視
-する」ではなく、**境目の枚の下端文で章が変わったと言い切る**か、置き場所を
-`suggested_outline` が指す位置に絞ることである。何秒かかるかは
-``presentation_estimate_per_slide_time`` で測れる。
+The section names are examples, not a mandatory taxonomy. Authors first
+classify the actual deck into coherent acts, then place a divider at the start
+of every substantial act. This checker uses the deck's 起承転結 arc to infer
+the common motivation/method/results spine. A one-slide closing summary does
+not need its own divider.
 """
 from __future__ import annotations
 
 import re
 
-from ._kishotenketsu import _overlap, presentation_kishotenketsu_check, read_deck
+from ._kishotenketsu import presentation_kishotenketsu_check, read_deck
 
-# 題が目次だと名乗っている枚。
-_OUTLINE_TITLE = re.compile(
+
+_AGENDA_TITLE = re.compile(
     r"(?i)\boutline\b|\bagenda\b|\bcontents\b|\broad ?map\b|\boverview\b"
-    r"|\bwhat follows\b|\bwhere we are going\b|\bthe plan of the talk\b"
+    r"|\bwhere we are going\b|\bthe plan of the talk\b"
     r"|目次|構成|本日の流れ|発表の流れ|アウトライン|お話しする順|全体像")
-# 片側が「現状・背景・問題」だと言っているか。
-_PROBLEM_SIDE = re.compile(
-    r"(?i)\bbackground\b|\bproblem\b|\bmotivation\b|\bstate of the art\b"
-    r"|\bprior work\b|\bwhat is known\b|\bwhere it fails\b|\bthe difficulty\b"
-    r"|背景|課題|問題|現状|従来|これまで")
-# もう片側が「提案・解決法・結果」だと言っているか。
-_SOLUTION_SIDE = re.compile(
-    r"(?i)\bmethod\b|\bapproach\b|\bproposal\b|\bwe propose\b|\bour \w+\b"
-    r"|\bthis talk\b|\bsolution\b|\bresults?\b|\bevidence\b|\bwhat we do\b"
-    r"|提案|手法|解決|本研究|本発表|結果|検証")
+
+_SECTION_PATTERNS = {
+    "motivation": re.compile(
+        r"(?i)\bmotivation\b|\bbackground\b|\bproblem\b|\bchallenge\b"
+        r"|\bwhy\b|動機|背景|問題|課題|目的"),
+    "method": re.compile(
+        r"(?i)\bproposed? method\b|\bmethod(?:ology)?\b|\bapproach\b"
+        r"|\bformulation\b|\bproposal\b|提案(?:法|手法)?|手法|方法|定式化"),
+    "results": re.compile(
+        r"(?i)\bresults?\b|\bvalidation\b|\bevaluation\b|\bexperiment(?:s|al)?\b"
+        r"|\bbenchmark\b|結果|検証|評価|実験"),
+}
 
 
-def _looks_like_outline(slide: dict, other_titles: list[str]) -> tuple[bool, str]:
-    """Is this slide an outline / agenda / section divider?
+def _section_labels(slide: dict) -> set[str]:
+    text = f"{slide['title'] or ''}\n{slide['text']}"
+    return {name for name, pattern in _SECTION_PATTERNS.items()
+            if pattern.search(text)}
 
-    Two signals, because a divider need not be titled "Outline": the title
-    says so, or the body lists the deck's own slide titles back to it.
-    """
-    if _OUTLINE_TITLE.search(slide["title"] or ""):
-        return True, "title"
-    lines = [ln.strip() for ln in (slide["text"] or "").splitlines()
-             if len(ln.strip()) > 3]
-    echoed = sum(1 for ln in lines
-                 if max((_overlap(ln, t) for t in other_titles), default=0.0) >= 0.5)
-    if echoed >= 2:
-        return True, f"lists {echoed} of the deck's own titles"
-    return False, ""
+
+def _looks_like_divider(slide: dict) -> tuple[bool, str, set[str]]:
+    """Recognize a section card or a repeated agenda/progress slide."""
+    labels = _section_labels(slide)
+    title = slide["title"] or ""
+    body_lines = [line.strip() for line in (slide["text"] or "").splitlines()
+                  if line.strip()]
+    title_labels = {name for name, pattern in _SECTION_PATTERNS.items()
+                    if pattern.search(title)}
+    if len(title_labels) == 1 and len(body_lines) <= 3:
+        return True, "section title", title_labels
+    if _AGENDA_TITLE.search(title) and len(labels) >= 2:
+        return True, "agenda/progress slide", labels
+    return False, "", labels
+
+
+def _near(slide_no: int, boundary: int | None, allowance: int) -> bool:
+    return boundary is not None and 0 <= boundary - slide_no <= allowance
 
 
 def presentation_check_outline_slide(pptx_path: str,
                                      backup_title: str = "Backup",
-                                     max_slides_before_turn: int = 1) -> dict:
-    """Report whether a mid-deck outline marks the problem/solution boundary.
+                                     max_slides_before_turn: int = 2) -> dict:
+    """Check recurring section dividers at the talk's major transitions.
 
-    max_slides_before_turn : how far ahead of the turn a divider still counts
-        as marking it. 1 means the slide immediately before the turn (the
-        usual placement); 0 demands the divider be the turn slide itself.
+    ``max_slides_before_turn`` is retained for API compatibility. It is the
+    maximum distance allowed between a method divider and the inferred turn;
+    two accommodates a short goal/overview slide before the detailed method.
     """
     try:
         from pptx import Presentation  # noqa: F401
     except ImportError:
         return {"error": "python-pptx not installed."}
 
-    slides, cut, main = read_deck(pptx_path, backup_title)
+    _slides, _cut, main = read_deck(pptx_path, backup_title)
     if len(main) < 4:
         return {"error": f"only {len(main)} content slides; too few to need "
-                         "an outline."}
+                         "section dividers."}
 
     arc = presentation_kishotenketsu_check(pptx_path, backup_title)
-    turn = arc.get("turn_slide")
+    arc_parts = arc.get("arc", {})
+    boundaries = {
+        "motivation": main[0]["slide"] if main else None,
+        "method": (arc_parts.get("ten") or [None])[0],
+        "results": (arc_parts.get("ketsu") or [None])[0],
+    }
 
-    titles = [s["title"] for s in main if s["title"]]
-    found = []
-    for s in main:
-        others = [t for t in titles if t != s["title"]]
-        ok, why = _looks_like_outline(s, others)
+    dividers = []
+    for slide in main:
+        ok, why, labels = _looks_like_divider(slide)
         if ok:
-            text = f"{s['title']}\n{s['text']}"
-            found.append({
-                "slide": s["slide"], "title": s["title"], "detected_by": why,
-                "names_the_problem_side": bool(_PROBLEM_SIDE.search(text)),
-                "names_the_solution_side": bool(_SOLUTION_SIDE.search(text)),
+            dividers.append({
+                "slide": slide["slide"],
+                "title": slide["title"],
+                "detected_by": why,
+                "section_labels": sorted(labels),
             })
 
-    # 「途中」= 転の直前。冒頭にしか無い目次は、境目では思い出されない。
-    at_boundary = [f for f in found
-                   if turn is not None
-                   and 0 <= turn - f["slide"] <= max_slides_before_turn]
-    marks_split = [f for f in found
-                   if f["names_the_problem_side"] and f["names_the_solution_side"]]
-
-    problem = (arc.get("arc", {}).get("ki", []) + arc.get("arc", {}).get("sho", []))
-    solution = (arc.get("arc", {}).get("ten", []) + arc.get("arc", {}).get("ketsu", []))
-    by_no = {s["slide"]: s["title"] for s in main}
-    suggested = {
-        "insert_before_slide": turn,
-        "problem": [{"slide": n, "title": by_no.get(n, "")} for n in problem],
-        "solution": [{"slide": n, "title": by_no.get(n, "")} for n in solution],
-    }
+    coverage: dict[str, list[int]] = {}
+    for section, boundary in boundaries.items():
+        matches = []
+        for divider in dividers:
+            if section not in divider["section_labels"]:
+                continue
+            allowance = 0 if section == "motivation" else max_slides_before_turn
+            if _near(divider["slide"], boundary, allowance):
+                matches.append(divider["slide"])
+        coverage[section] = matches
 
     checks = {
-        "目次・区切りの枚がある": bool(found),
-        "その一枚が転の直前にある（冒頭だけではない）": bool(at_boundary),
-        "問題の側と解決法の側を両方名指ししている": bool(marks_split),
+        "Motivation の開始をその場で示す": bool(coverage["motivation"]),
+        "Proposed method の開始をその場で示す": bool(coverage["method"]),
+        "Results の開始をその場で示す": bool(coverage["results"]),
     }
     score = round(10.0 * sum(checks.values()) / len(checks), 1)
-    comments = [f"{'OK  ' if v else 'FAIL'} {k}" for k, v in checks.items()]
+    comments = [f"{'OK  ' if value else 'FAIL'} {label}"
+                for label, value in checks.items()]
 
-    if turn is None:
+    if not dividers:
         comments.append(
-            "転が見つからないので境目を決められない。"
-            "presentation_kishotenketsu_check を先に通すこと ―― "
-            "どこから解決法かを枚で示す前に、話が転じている必要がある。")
-    elif not found:
+            "章扉が無い。スライド全体を内容で分類し、各主要章の先頭に、"
+            "これから話す章名を大きく示す区切りの枚を入れる。")
+    elif not all(checks.values()):
+        missing = [name for name, slides in coverage.items() if not slides]
         comments.append(
-            f"目次の枚が無い。{turn} 枚目から解決法の話に変わるので、その直前に"
-            f"一枚入れ、{problem and problem[0]}–{turn - 1} 枚目までが問題、"
-            f"{turn} 枚目からが提案、と明示する。"
-            "`suggested_outline` に並べる項目を入れてある。")
-    elif not at_boundary:
-        where = ", ".join(str(f["slide"]) for f in found)
-        comments.append(
-            f"目次はある（{where} 枚目）が、境目（{turn} 枚目の直前）に無い。"
-            "冒頭で一度読み上げた目次は、三枚あとの境目では思い出されない。"
-            "同じ枚を、今どこにいるかを変えてもう一度出すのが普通のやり方で、"
-            "発話は各回十数秒で済む。")
-    if found and not marks_split:
-        comments.append(
-            "目次が章の名前を並べているだけで、どこまでが問題でどこからが"
-            "解決法かを言っていない。二つの側にそれぞれ見出しを付けること"
-            "（松尾先生 2026-09-10）。")
+            "一枚の総目次だけでは足りない。欠けている章の開始位置に章扉を置く: "
+            + ", ".join(missing) + ".")
+
+    suggested = [
+        {"section": section, "insert_before_or_near_slide": boundary}
+        for section, boundary in boundaries.items()
+        if not coverage[section]
+    ]
 
     return {
         "score": score,
         "score_max": 10,
         "content_slides": len(main),
-        "turn_slide": turn,
-        "outline_slides": found,
-        "outline_at_boundary": [f["slide"] for f in at_boundary],
+        "section_boundaries": boundaries,
+        "section_dividers": dividers,
+        "outline_slides": dividers,
+        "outline_at_boundary": sorted({n for nums in coverage.values() for n in nums}),
+        "section_coverage": coverage,
         "suggested_outline": suggested,
         "checks": checks,
         "comments": comments,
-        "hint": "境目は転（起承転結）から取る。タイトルの語ではなく下端の"
-                "主張文で決まるので、「タイトルは名詞句・主張は下端帯」という"
-                "研究室の様式のままで使える。枚を足す余裕が無いときは、"
-                "境目の枚の下端文で章が変わったと言い切るのでもよい。",
-        "source": "松尾先生のデッキ査読 2026-09-10。"
-                  "presentation_kishotenketsu_check と対で使う: あちらは"
-                  "筋が転じているか、こちらはその転じ目が聴衆に見えているか。",
+        "hint": (
+            "Outline は一枚の一覧ではなく、内容が切り替わる場所で現在地を知らせる"
+            "章扉として使う。章名は例であり、実際の deck の内容から分類する。"
+            "各回は章名だけの疎な枚、または現在章を強調した反復 agenda とする。"
+        ),
+        "source": "菅原による IGTE'26 デッキ査読の明確化 2026-09-11。",
     }
