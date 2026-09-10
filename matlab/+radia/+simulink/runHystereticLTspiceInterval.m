@@ -3,9 +3,20 @@ function result=runHystereticLTspiceInterval(netlistFile,material,hysteresisStat
 % MagneticPath_m is the iron path and AirGap_m is the total series air-gap
 % length. The solved magnetic circuit is N*i=H_iron*l_iron+B*g/mu0.
 % Positive back EMF is a voltage drop along positive winding current and
-% equals d(N*A*B)/dt. The returned energy-balance residual compares its
-% electrical work with iron magnetic work and the air-gap energy change;
-% CoreVolume_m3 should therefore be consistent with the modeled iron path.
+% equals d(N*A*B)/dt.
+%
+% The lumped circuit has one area A and one iron path l, so the iron volume
+% is A*l; CoreVolume_m3 is accepted only as a consistency check and a value
+% that disagrees with A*l is rejected rather than silently rescaling the
+% iron work. The electrical work is integrated as the trapezoid of i dPhi,
+% the same rule used for H dB. Because N*i=H*l+B*g/mu0 holds at every
+% coupling sample, electrical work minus iron work minus the air-gap energy
+% change then telescopes to zero, so energy_balance_residual_J is an exact
+% bookkeeping identity (round-off only): any residual above that level is a
+% sign, volume or gap-energy error, not a discretisation effect. The balance
+% covers the interval from its first coupling sample; a flux step at the
+% interval boundary caused by a gap change between steps is mechanical work
+% and is outside it.
 arguments
  netlistFile (1,1) string {mustBeFile}; material (1,1) double {mustBePositive}
  hysteresisState (:,1) double; circuitState (1,1) struct
@@ -14,7 +25,7 @@ arguments
  options.Duration_s (1,1) double {mustBePositive}; options.Turns (1,1) double {mustBePositive}
  options.CoreArea_m2 (1,1) double {mustBePositive}; options.MagneticPath_m (1,1) double {mustBePositive}
  options.AirGap_m (1,1) double {mustBeNonnegative}=0
- options.CoreVolume_m3 (1,1) double {mustBePositive}; options.PreviousFlux_Wb (1,1) double=0
+ options.CoreVolume_m3 (1,1) double=NaN; options.PreviousFlux_Wb (1,1) double=0
  options.OutputDirectory (1,1) string=""; options.MaxIterations (1,1) double {mustBeInteger,mustBePositive}=12
  options.RelativeTolerance (1,1) double {mustBePositive}=1e-4; options.Relaxation (1,1) double {mustBeGreaterThan(options.Relaxation,0),mustBeLessThanOrEqual(options.Relaxation,1)}=0.5
  options.MaxStep_s (1,1) double {mustBePositive}=inf; options.Timeout_s (1,1) double {mustBePositive}=300
@@ -23,6 +34,7 @@ arguments
  % retain a problem-specific 51/101/201 (or finer) state-convergence check.
  options.CouplingSamples (1,1) double {mustBeInteger,mustBeGreaterThanOrEqual(options.CouplingSamples,3)}=101
 end
+radia.simulink.internal.checkCoreVolume(options.CoreVolume_m3,options.CoreArea_m2,options.MagneticPath_m);
 root=options.OutputDirectory;if strlength(root)==0,root=string(tempname("C:\temp"));end;if ~isfolder(root),mkdir(root);end
 saved=radia.MatHysSaveState(material);cleanup=onCleanup(@()radia.MatHysRestoreState(material,saved));
 tOld=[0;options.Duration_s];eOld=zeros(2,1);converged=false;history=zeros(options.MaxIterations,1);
@@ -47,8 +59,8 @@ result=struct("schema","radia.simulink.ltspice_hysteresis.interval.v1","simulati
  "circuit_state",nextCircuit,"hysteresis_state",states(end,:).',"time_s",t,"current_A",current, ...
  "B_T",B,"H_A_per_m",H,"flux_Wb",flux,"back_emf_V",emf,"hysteresis_energy_J",energy, ...
  "iterations",iteration,"relative_residual",history(iteration),"converged",converged,"output_directory",root);
-result.electrical_magnetic_energy_J=trapz(t,current.*emf);
-initialB=options.PreviousFlux_Wb/(options.Turns*options.CoreArea_m2);result.gap_energy_change_J=options.CoreArea_m2*options.AirGap_m*(B(end)^2-initialB^2)/(2*(4*pi*1e-7));
+result.electrical_magnetic_energy_J=sum(0.5*(current(1:end-1)+current(2:end)).*diff(flux));
+result.gap_energy_change_J=options.CoreArea_m2*options.AirGap_m*(B(end)^2-B(1)^2)/(2*(4*pi*1e-7));
 result.energy_balance_residual_J=result.electrical_magnetic_energy_J-result.hysteresis_energy_J-result.gap_energy_change_J;
 result.back_emf_sign_convention="positive voltage drop in the direction of positive winding current; e = d(N*A*B)/dt";
 clear cleanup;radia.MatHysRestoreState(material,saved);
@@ -62,7 +74,7 @@ for k=1:n
  if fun(lo)>0||fun(hi)<0,error("radia:simulink:HystereticFieldRange","Required magnetomotive force %.6g A-turn exceeds the B search range.",targetMMF);end
  if abs(fun(guess))<1e-12,b=guess;else,b=fzero(fun,[lo hi]);end
  h=localH(material,b,state);next=radia.MatHysCommitBatch(material,[b,0,0],state);
- B(k)=b;H(k)=h;states(k,:)=next; if k>1,energy=energy+0.5*(H(k-1)+H(k))*(B(k)-B(k-1))*o.CoreVolume_m3;end
+ B(k)=b;H(k)=h;states(k,:)=next; if k>1,energy=energy+0.5*(H(k-1)+H(k))*(B(k)-B(k-1))*o.CoreArea_m2*o.MagneticPath_m;end
  state=next;guess=b;
 end
 flux=o.Turns*o.CoreArea_m2*B;emf=zeros(n,1);
