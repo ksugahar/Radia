@@ -932,6 +932,61 @@ def time_average_air_gap_shear_torque_from_angle_samples(
     }
 
 
+def _three_point_derivative(nodes: np.ndarray, values: np.ndarray) -> np.ndarray:
+    """Second-order derivative of a table sampled on an arbitrary 1D grid.
+
+    Every sample uses the quadratic through three consecutive nodes, so the
+    result is second-order accurate at the endpoints as well as in the interior
+    and does not assume uniform spacing.  On a uniform grid the interior rows
+    reduce exactly to ``(f[i+1]-f[i-1])/(2h)`` and the endpoints to the standard
+    ``(-3f0+4f1-f2)/(2h)`` / ``(f[-3]-4f[-2]+3f[-1])/(2h)`` stencils.
+    """
+
+    step = np.diff(nodes)
+    back = step[:-1]
+    forward = step[1:]
+    derivative = np.empty_like(values)
+    derivative[1:-1] = (
+        -forward / (back * (back + forward)) * values[:-2]
+        + (forward - back) / (back * forward) * values[1:-1]
+        + back / (forward * (back + forward)) * values[2:]
+    )
+    first, second = step[0], step[1]
+    derivative[0] = (
+        -(2.0 * first + second) / (first * (first + second)) * values[0]
+        + (first + second) / (first * second) * values[1]
+        - first / (second * (first + second)) * values[2]
+    )
+    last, prior = step[-1], step[-2]
+    derivative[-1] = (
+        last / (prior * (last + prior)) * values[-3]
+        - (last + prior) / (last * prior) * values[-2]
+        + (2.0 * last + prior) / (last * (last + prior)) * values[-1]
+    )
+    return derivative
+
+
+def _periodic_three_point_derivative(
+    nodes: np.ndarray,
+    values: np.ndarray,
+    period: float,
+) -> np.ndarray:
+    """Second-order derivative of a periodic table with no duplicate endpoint."""
+
+    count = nodes.size
+    extended_nodes = np.concatenate(
+        ([nodes[-1] - period], nodes, [nodes[0] + period])
+    )
+    extended_values = np.concatenate(([values[-1]], values, [values[0]]))
+    back = np.diff(extended_nodes)[:-1]
+    forward = np.diff(extended_nodes)[1:]
+    return (
+        -forward / (back * (back + forward)) * extended_values[:-2]
+        + (forward - back) / (back * forward) * extended_values[1:-1]
+        + back / (forward * (back + forward)) * extended_values[2:]
+    )[:count]
+
+
 def virtual_work_force_from_displacement_samples(
     positions_m,
     energy_J,
@@ -940,8 +995,13 @@ def virtual_work_force_from_displacement_samples(
     """Differentiate an energy table into force samples in N.
 
     Fixed-current coenergy uses ``F=dW'/dx``; fixed-flux stored energy uses
-    ``F=-dW/dx``.  Interior points use centred differences and endpoints use
-    one-sided differences, matching the legacy radia-ngsolve force contract.
+    ``F=-dW/dx``.  Every sample -- endpoints included -- comes from the
+    quadratic through three consecutive rows, so the whole table is
+    second-order accurate and the spacing need not be uniform.
+
+    Endpoints used to be first-order two-point differences: on a uniform sweep
+    with ``h=0.1`` that made the endpoint error ~48x the interior error, and the
+    endpoint is normally the closed-gap position the sweep exists to measure.
     """
 
     positions = _real_table(positions_m, "positions_m", minimum_size=3)
@@ -949,11 +1009,7 @@ def virtual_work_force_from_displacement_samples(
     if positions.shape != energy.shape:
         raise ValueError("positions_m and energy_J must have the same length")
     _strictly_increasing(positions, "positions_m")
-    derivative = np.empty_like(energy)
-    derivative[0] = (energy[1] - energy[0]) / (positions[1] - positions[0])
-    derivative[-1] = (energy[-1] - energy[-2]) / (positions[-1] - positions[-2])
-    derivative[1:-1] = (energy[2:] - energy[:-2]) / (positions[2:] - positions[:-2])
-    return _energy_sign(energy_kind) * derivative
+    return _energy_sign(energy_kind) * _three_point_derivative(positions, energy)
 
 
 def coenergy_torque_from_angle_samples(
@@ -962,32 +1018,27 @@ def coenergy_torque_from_angle_samples(
     periodic=False,
     period_rad=2.0 * math.pi,
 ):
-    """Differentiate fixed-current coenergy into torque samples in N m."""
+    """Differentiate fixed-current coenergy into torque samples in N m.
+
+    Second-order accurate at every sample, including the endpoints of an open
+    sweep, and valid on a non-uniform angle grid.  A periodic sweep omits the
+    duplicate endpoint and wraps across ``period_rad``.
+    """
 
     angles = _real_table(angles_rad, "angles_rad", minimum_size=3)
     coenergy = _real_table(coenergy_J, "coenergy_J", minimum_size=3)
     if angles.shape != coenergy.shape:
         raise ValueError("angles_rad and coenergy_J must have the same length")
     _strictly_increasing(angles, "angles_rad")
-    torque = np.empty_like(coenergy)
     if periodic:
         period = _positive_scalar(period_rad, "period_rad")
-        count = angles.size
-        for index in range(count):
-            minus = (index - 1) % count
-            plus = (index + 1) % count
-            angle_minus = angles[minus] - (period if minus > index else 0.0)
-            angle_plus = angles[plus] + (period if plus < index else 0.0)
-            torque[index] = (
-                (coenergy[plus] - coenergy[minus]) / (angle_plus - angle_minus)
+        if angles[-1] - angles[0] >= period:
+            raise ValueError(
+                "periodic angles must omit the duplicate endpoint and span "
+                "less than period_rad"
             )
-    else:
-        torque[0] = (coenergy[1] - coenergy[0]) / (angles[1] - angles[0])
-        torque[-1] = (coenergy[-1] - coenergy[-2]) / (angles[-1] - angles[-2])
-        torque[1:-1] = (
-            (coenergy[2:] - coenergy[:-2]) / (angles[2:] - angles[:-2])
-        )
-    return torque
+        return _periodic_three_point_derivative(angles, coenergy, period)
+    return _three_point_derivative(angles, coenergy)
 
 
 def force_torque_result(
