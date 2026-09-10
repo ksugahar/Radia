@@ -43,6 +43,13 @@ if(WIN32)
         eqnedit_core user32 gdi32 comctl32 comdlg32 shell32 ole32 imm32
         windowscodecs
     )
+    # Proof images call the real owner-draw implementation, not a duplicate
+    # UI renderer. Run only in an isolated font session; never on LAB desktop.
+    add_executable(test_palette_visual tests/test_palette_visual.cpp src/eqnedit64.rc)
+    target_compile_definitions(test_palette_visual PRIVATE _CRT_SECURE_NO_WARNINGS UNICODE _UNICODE)
+    target_compile_options(test_palette_visual PRIVATE /W4 /WX /w14062 /utf-8)
+    target_link_libraries(test_palette_visual PRIVATE eqnedit_core user32 gdi32
+        comctl32 comdlg32 shell32 ole32 imm32 windowscodecs)
 endif()
 
 enable_testing()

@@ -2,6 +2,13 @@
 
 ## 3.1.0 — release candidate
 
+- Fit palette ink to the cell instead of centering the font's line metrics;
+  radicals and standalone slashes no longer rely on being clipped to fit.
+  Show native previews for fractions, radicals, decorations and typefaces.
+  Check border clearance in normal/selected states and publish 114 offscreen
+  palette proof images per CI run for AI visual review. These are evidence,
+  not an automatic claim of human legibility.
+
 - Restrict palette coverage to Windows Unicode cmaps: Mac Roman entries
   concealed missing superscript-two and one-half tab glyphs. Replace those
   tab faces with `x` plus an up arrow and a fraction slash plus a radical.

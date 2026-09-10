@@ -154,6 +154,21 @@ jobs:
           & $app --ui-interaction-test
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Render native palette review proofs
+        run: |
+          New-Item -ItemType Directory palette-proofs | Out-Null
+          & build_cmake\Release\test_palette_visual.exe palette-proofs > palette-proofs\cells.csv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (@(Get-ChildItem palette-proofs -Filter '*.png').Count -ne 114) {
+            throw 'Expected 19 palettes at 3 DPIs in normal and selected states'
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: eqnedit64-palette-proofs
+          path: tools/eqnedit64/palette-proofs/
+          if-no-files-found: error
+
       - name: Reject Windows session font-host damage
         run: >-
           pwsh -NoProfile -File build\test_font_session.ps1
