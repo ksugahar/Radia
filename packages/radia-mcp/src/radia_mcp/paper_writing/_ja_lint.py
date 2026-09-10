@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import pathlib
 import re
+from collections import Counter
 
 # Local _shared.hedges -- needed by grant_writing_lint_bedrock which
 # reports hedge counts as a sub-axis of bedrock analysis.  The original
@@ -324,6 +325,18 @@ def grant_writing_check_misuse_japanese(text: str) -> dict:
         "source": "北原保雄『問題な日本語』",
     }
 
+# A formal noun written in kanji is the classic cause of a heavy ratio, but
+# only when it sits where a formal noun sits: after kana, before a particle.
+# Keying on the bare character would count 時間 and 物理 as defects.
+_FORMAL_NOUN_IN_KANJI = re.compile(
+    r"[぀-ゟ](事|時|物|為|所|様|程)(?=[はがをにでとのやもだ、。])"
+)
+
+# Four-or-more-character kanji runs are where a technical subject's vocabulary
+# lives; repetition of these, not formal nouns, is what a domain draft can cut.
+_DOMAIN_TERM = re.compile(r"[一-鿿]{4,}")
+
+
 def grant_writing_check_kanji_ratio(text: str,
                                      min_ratio: float = 0.18,
                                      max_ratio: float = 0.40,
@@ -341,16 +354,53 @@ def grant_writing_check_kanji_ratio(text: str,
     if total == 0:
         return {"error": "no Japanese characters found"}
     ratio = kanji / total
+    # A high ratio has two very different causes and only one shared cure was
+    # ever offered. Measured on a 2026 立石財団 draft at 0.479: formal nouns
+    # written in kanji were essentially absent, and the ratio was carried by
+    # 設定電流 (16 uses), 動的口径 (7) and 再現可能 (7) -- the vocabulary of the
+    # subject itself. Telling that author to write 形式名詞 in kana fixes
+    # nothing, and pushing an electromagnetics proposal under 0.40 blurs the
+    # terms the reviewer needs. So the cause is measured before advising.
+    formal_noun_hits = _FORMAL_NOUN_IN_KANJI.findall(text)
+    repeated_terms = [
+        (term, count)
+        for term, count in Counter(
+            _DOMAIN_TERM.findall(text)
+        ).most_common()
+        if count >= 3
+    ]
     if ratio < min_ratio:
         status = "hiragana_heavy"
         hint = "漢字を増やして締まりを持たせる"
     elif ratio > max_ratio:
         status = "kanji_heavy"
-        hint = "形式名詞 (こと/とき/もの) を漢字にしない。官庁漢語を削減。"
+        if len(formal_noun_hits) >= 5:
+            hint = "形式名詞 (こと/とき/もの) を漢字にしない。官庁漢語を削減。"
+        elif repeated_terms:
+            top = "、".join(
+                f"{term}({count})" for term, count in repeated_terms[:3]
+            )
+            hint = (
+                "形式名詞の漢字化の検出は少なく、分野語彙の反復が見られる"
+                f"（頻出: {top}）。比率自体を目標にせず、"
+                "専門語の一貫性を保ち、意味が曖昧にならない範囲で重複説明を整理する。"
+            )
+        else:
+            hint = (
+                "形式名詞の漢字化の検出は少なく、頻出する長い漢字語は検出していない。"
+                "この検査だけでは原因を特定できない。比率だけを目標に用語を変えない。"
+            )
     else:
         status = "balanced"
         hint = "良好 (推奨範囲)"
     return {
+        "cause": {
+            "formal_noun_in_kanji_count": len(formal_noun_hits),
+            "formal_noun_examples": formal_noun_hits[:5],
+            "repeated_domain_terms": [
+                {"term": t, "count": c} for t, c in repeated_terms[:8]
+            ],
+        },
         "total_jp_chars": total,
         "kanji": kanji,
         "hiragana": hira,
