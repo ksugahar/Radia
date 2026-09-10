@@ -33,6 +33,8 @@ import re
 # The complaint: something the current approach cannot do, or does badly.
 _COMPLAINT = re.compile(
     r"(?i)\bcannot\b|\bcan not\b|\bfails?\b|\bno[t]? \w+ed\b|\bstops? at\b"
+    r"|\bno\b[^.;!?]{0,48}?\b(?:makes?|produces?|gives?|reach(?:es)?|holds?"
+    r"|covers?|works?|does)\b|\bneither\b"
     r"|\bby hand\b|\bceiling\b|\blimit(?:ation)?s?\b|\bprice\b|\bwrong\b"
     r"|\bmisses\b|\bbreaks?\b|\bnot the\b|できない|限界|欠陥|課題|問題")
 # The turn: an instruction or a resolution, often answering the complaint.
@@ -57,6 +59,10 @@ _INSPIRED = re.compile(
 # An acronym is NOT a credit: "as XFEM does" names a method, not a source.
 _CREDIT = re.compile(r"\[\d{1,3}\]|\bet al\.|[A-Z][a-z]{2,}(?:'s)?\s+\d{4}"
                      r"|先生|らの|ら\s*\[")
+
+# Text below this fraction is page furniture, not a takeaway: citation line,
+# institution mark, and page number. The lab takeaway band sits above it.
+FOOTER_FROM = 0.92
 
 
 def _moves(takeaway: str) -> set[str]:
@@ -83,6 +89,57 @@ def _overlap(a: str, b: str) -> float:
     return len(wa & wb) / min(len(wa), len(wb))
 
 
+def read_deck(pptx_path: str, backup_title: str = "Backup"):
+    """Read slide titles, takeaways, text, and the visible-talk boundary.
+
+    The outline and arc checks share this reader so drawn title bands, hidden
+    backup slides, and page furniture have one definition.
+    """
+    from pptx import Presentation
+
+    prs = Presentation(pptx_path)
+    slide_h = float(prs.slide_height or 0)
+    slides = []
+    for i, slide in enumerate(prs.slides, 1):
+        eligible = [
+            shape for shape in slide.shapes
+            if shape.has_text_frame and shape.text_frame.text.strip()
+            and not (shape.top is not None and slide_h
+                     and int(shape.top) > FOOTER_FROM * slide_h)
+        ]
+        if slide.shapes.title is not None:
+            title = slide.shapes.title.text.strip()
+        else:
+            heads = [
+                (int(shape.top), shape.text_frame.text.strip())
+                for shape in eligible
+                if shape.top is not None
+                and int(shape.top) < 0.25 * slide_h
+                and "\n" not in shape.text_frame.text.strip()
+            ]
+            title = min(heads)[1] if heads else ""
+
+        texts = [shape.text_frame.text.strip() for shape in eligible]
+        body = [text for text in texts if text != title]
+        # XML insertion order is not visual order; select the lowest eligible
+        # text box while excluding the footer strip above.
+        banners = [
+            (int(shape.top), int(shape.left), shape.text_frame.text.strip())
+            for shape in eligible
+            if shape.text_frame.text.strip() != title
+        ]
+        takeaway = max(banners)[2].splitlines()[-1].strip() if banners else ""
+        hidden = slide._element.get("show") == "0"
+        slides.append({"slide": i, "title": title, "takeaway": takeaway,
+                       "text": "\n".join(body), "hidden": hidden})
+
+    cut = next((index for index, slide in enumerate(slides)
+                if slide["hidden"] or slide["title"].strip() == backup_title),
+               len(slides))
+    main = slides[1:cut]  # drop the title card; never reintroduce backup
+    return slides, cut, main
+
+
 def presentation_kishotenketsu_check(pptx_path: str,
                                      backup_title: str = "Backup") -> dict:
     """Suggest a 起承転結 arc using lexical cues, not semantic validation.
@@ -95,44 +152,7 @@ def presentation_kishotenketsu_check(pptx_path: str,
     except ImportError:
         return {"error": "python-pptx not installed."}
 
-    prs = Presentation(pptx_path)
-    slide_h = float(prs.slide_height or 0)
-    slides = []
-    for i, s in enumerate(prs.slides, 1):
-        texts = [sh.text_frame.text.strip() for sh in s.shapes
-                 if sh.has_text_frame and sh.text_frame.text.strip()]
-        if s.shapes.title is not None:
-            title = s.shapes.title.text.strip()
-        else:
-            # A deck that draws its own title band has no title placeholder,
-            # so `shapes.title` is None and every slide reads as untitled --
-            # which silently disabled the backup cut on the IGTE'26 deck and
-            # let nine hidden slides into the arc (2026-09-06). Take the
-            # single-line box highest on the slide instead.
-            heads = [(int(sh.top), sh.text_frame.text.strip()) for sh in s.shapes
-                     if sh.has_text_frame and sh.text_frame.text.strip()
-                     and sh.top is not None
-                     and int(sh.top) < 0.25 * slide_h
-                     and "\n" not in sh.text_frame.text.strip()]
-            title = min(heads)[1] if heads else ""
-        body = [t for t in texts if t != title]
-        # XML insertion order is not visual order; use the lowest text box.
-        banners = [(int(sh.top), int(sh.left), sh.text_frame.text.strip())
-                   for sh in s.shapes if sh.has_text_frame
-                   and sh.text_frame.text.strip()
-                   and sh.text_frame.text.strip() != title]
-        takeaway = max(banners)[2].splitlines()[-1].strip() if banners else ""
-        # the inspiration is usually written on the slide, not in the banner
-        hidden = s._element.get("show") == "0"
-        slides.append({"slide": i, "title": title, "takeaway": takeaway,
-                       "text": "\n".join(body), "hidden": hidden})
-
-    # A hidden slide is a backup slide whatever it is called; the title is the
-    # fallback for a deck that answers questions from visible slides.
-    cut = next((k for k, s in enumerate(slides)
-                if s["hidden"] or s["title"].strip() == backup_title),
-               len(slides))
-    main = slides[1:cut]       # drop the title card, never reintroduce backup
+    slides, cut, main = read_deck(pptx_path, backup_title)
     if len(main) < 4:
         return {"error": f"only {len(main)} content slides; too few to have an arc."}
 
