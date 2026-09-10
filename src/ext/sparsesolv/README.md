@@ -71,7 +71,7 @@ anymore.
 | Poisson (H1, real) | H1 | ICCG | memory-efficient, fast |
 | Curl-curl (real) | HCurl `nograds=True` | Shifted ICCG | auto-shift IC handles semi-definite |
 | Magnetostatic, large | HCurl real p=1 | Compact AMS + CG | mesh-independent iteration count |
-| Magnetostatic, nonlinear | HCurl real | Compact AMS + CG | `Update()` works inside Newton |
+| Magnetostatic, nonlinear | HCurl real | Compact AMS + CG | `Update()` between Newton solves |
 | Eddy current, complex, large | HCurl complex p=1 | Compact AMS + COCR | mesh-independent iteration count |
 | Eddy current, complex, small/medium | HCurl complex | ICCG (`conjugate=False`) | memory-efficient |
 
@@ -79,6 +79,12 @@ anymore.
 
 Hiruma 30 kHz Cu coil + Fe core (`mu_r=1000`), tol = 1e-10.
 Intel Xeon 8-core, MSVC 2022, MKL 2024.2.
+
+The table is retained historical evidence from 2026-05-08 and used an
+`eps*M` shift in both the physical system and AMS surrogate.  The current
+benchmark follows the physical formulation: the system is unshifted and the
+shift appears only in the real AMS surrogate.  Re-run before comparing current
+timings or condition estimates with this table.
 
 | Mesh | HCurl DOFs | Iters | Time | ms/iter | Memory |
 |---|---:|---:|---:|---:|---:|
@@ -138,6 +144,7 @@ coord_x = [mesh.ngmesh.Points()[i+1][0] for i in range(mesh.nv)]
 coord_y = [mesh.ngmesh.Points()[i+1][1] for i in range(mesh.nv)]
 coord_z = [mesh.ngmesh.Points()[i+1][2] for i in range(mesh.nv)]
 
+# Hierarchy construction and Update() must run outside TaskManager.
 pre = ssn.ComplexCompactAMSPreconditioner(
     a_real_mat=a_real.mat, grad_mat=G_mat,
     freedofs=fes_real.FreeDofs(),

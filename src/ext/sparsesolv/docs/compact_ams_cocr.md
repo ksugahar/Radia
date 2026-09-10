@@ -162,6 +162,10 @@ AMS前処理は、実際の系が複素数であっても**実数SPD（対称正
 
 複素系行列 `a.mat` は外側のCOCRソルバーによる行列ベクトル積にのみ使用される。
 前処理が複素行列を直接参照することはない。
+`eps*M` はこの実数補助行列だけに入れ、物理系 `A` には入れない。物理系にも
+入れるとゲージ代表元が固定され、ゲージ不変なエネルギー、磁束密度、損失は
+変わらない一方、最小固有値が `eps` に支配されて人工的に大きな条件数を作る。
+解ベクトルのノルムはゲージ依存なので、この配置の回帰判定には使わない。
 
 ### よくある間違い
 
@@ -178,13 +182,20 @@ pre = ssn.ComplexCompactAMSPreconditioner(
     freedofs=fes_real.FreeDofs())    # fes_real is non-complex
 ```
 
-**TaskManagerの欠落：**
+**TaskManagerの範囲：**
 ```python
-# WRONG: no TaskManager -> single-threaded, 5-10x slower
+# WRONG: hierarchy setup inside TaskManager is rejected
+with TaskManager():
+    pre = ssn.ComplexCompactAMSPreconditioner(...)
+
+# CORRECT: construct or Update outside TaskManager
+pre = ssn.ComplexCompactAMSPreconditioner(...)
+
+# WRONG: no TaskManager around the solve -> single-threaded, 5-10x slower
 inv = ssn.COCRSolver(a.mat, pre, ...)
 gfu.vec.data = inv * f.vec
 
-# CORRECT: wrap solve in TaskManager
+# CORRECT: apply the already-built preconditioner inside the parallel solve
 with TaskManager():
     inv = ssn.COCRSolver(a.mat, pre, ...)
     gfu.vec.data = inv * f.vec
@@ -500,6 +511,10 @@ AMSサイクル当たり2回の細レベルSpMV評価が節約される。
 **テスト問題**: Hiruma渦電流モデル (SA-26-001)。
 銅導体 (sigma = 5.96e7 S/m) と強磁性鉄心 (mu_r = 1000)。
 周波数 30 kHz、HCurl次数 1、収束判定閾値 1e-10。
+
+以下の表は 2026-05-08 の履歴測定で、当時は `eps*M` を物理系とAMS補助行列の
+両方に入れていた。現在のベンチは物理系を無シフト、AMS補助行列だけをシフトする。
+したがって現在値として引用する場合は再測定すること。
 
 **環境**: Windows Server 2022, Intel Xeon (8 cores), MSVC 2022, MKL 2024.2。
 
