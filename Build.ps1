@@ -81,8 +81,14 @@ if ($OptunaMexOnly) {
         Write-Host "Cubit: NOT FOUND -- Cubit-plugin .pyd build will be skipped" -ForegroundColor Yellow
     }
 }
-$BuildCubitPlugin = [bool]($CubitCmakeDir -and
-    (Test-Path (Join-Path $CubitCmakeDir "CubitConfig.cmake")))
+$DetectedCubitCmakeDir = if ($CubitInstallDir) {
+    Join-Path $CubitInstallDir "cmake"
+} else {
+    ""
+}
+$BuildCubitPlugin = [bool]($CubitInstallDir -and
+    (Test-Path (Join-Path $CubitInstallDir "cmake\CubitConfig.cmake")))
+Write-Host "Cubit native targets enabled: $BuildCubitPlugin" -ForegroundColor Gray
 
 # Intel MKL 2026 (required for BLAS/LAPACK and HACApK/PARDISO). The selected
 # Python environment is authoritative; MKLROOT is an explicit fallback only.
@@ -485,7 +491,7 @@ rem 'Coreform Cubit *' under C:\Program Files). Override with env var
 rem CUBIT_INSTALL_DIR (the helper appends \cmake automatically). The
 rem outer PowerShell wrapper passes $CubitCmakeDir into the batch via
 rem this set; if discovery failed the wrapper exited before us.
-set "CUBIT_DIR=$CubitCmakeDir"
+set "CUBIT_DIR=$DetectedCubitCmakeDir"
 set "NETGEN_DIR=$NetgenPackageDir"
 rem Compact Netgen sources are in-repo (src/cubit_plugin/compact_netgen/netgen_src/).
 rem No external NETGEN_SRC_DIR needed.
