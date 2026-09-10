@@ -388,6 +388,24 @@ fixture=tempPath(testCase,"duplicate_parameter_names.cir");writeTextFixture(fixt
 editor=radia.ltspice.SpiceEditor(fixture);verifyError(testCase,@()editor.getAllParameterNames(),"radia:ltspice:AmbiguousParameter");
 end
 
+function testSpiceEditorTracksNestedSubcircuitDepth(testCase)
+for namedEnds=[false,true]
+    if namedEnds,innerEnd=".ends inner";outerEnd=".ends outer";suffix="named";else,innerEnd=".ends";outerEnd=".ends";suffix="plain";end
+    fixture=tempPath(testCase,"nested_subcircuits_"+suffix+".cir");
+    writeTextFixture(fixture,"Nested definitions"+newline+"V1 in 0 1"+newline+"X1 in 0 outer"+newline+".subckt outer a b"+newline+".subckt inner c d"+newline+"R5 c d 1"+newline+innerEnd+newline+"R6 a b 2"+newline+outerEnd+newline+".end");
+    editor=radia.ltspice.SpiceEditor(fixture);verifyEqual(testCase,editor.getComponents(),["V1";"X1"]);verifyEqual(testCase,editor.getSubcircuitNames(),"outer");
+    verifyError(testCase,@()editor.setComponentValue("R6","99"),"radia:ltspice:ComponentInSubcircuit");
+    outer=editor.getSubcircuitNamed("outer");extracted=string(fileread(outer.SourcePath));verifyTrue(testCase,contains(extracted,"R5 c d 1"));verifyTrue(testCase,contains(extracted,"R6 a b 2"));verifyTrue(testCase,contains(extracted,outerEnd));
+end
+end
+
+function testSpiceEditorSubcircuitParserHasConsistentEmptyAndInvalidResults(testCase)
+plain=tempPath(testCase,"no_subcircuits.cir");writeTextFixture(plain,"Plain circuit"+newline+"R1 in 0 1k"+newline+".end");editor=radia.ltspice.SpiceEditor(plain);
+names=editor.getSubcircuitNames();verifyClass(testCase,names,"string");verifySize(testCase,names,[0,1]);
+broken=tempPath(testCase,"unterminated_subcircuit.cir");writeTextFixture(broken,"Broken scope"+newline+"V1 in 0 1"+newline+".subckt outer a b"+newline+"R1 a b 1k"+newline+".end");editor=radia.ltspice.SpiceEditor(broken);
+verifyError(testCase,@()editor.getSubcircuitNames(),"radia:ltspice:UnterminatedSubcircuit");verifyError(testCase,@()editor.getComponents(),"radia:ltspice:UnterminatedSubcircuit");
+end
+
 function testAscGraphicalEditingCompatibility(testCase)
 fixture=fullfile(fileparts(mfilename("fullpath")),"fixtures","ltspice_rc.asc");editor=radia.ltspice.AscEditor(fixture);
 [position,rotation]=editor.get_component_position("R1");verifyEqual(testCase,position,[160,80]);verifyEqual(testCase,rotation,"R90");
