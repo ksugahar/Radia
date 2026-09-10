@@ -21,6 +21,13 @@
     0.0036824790889568256
   ],
   "relative_error_per_handoff_fit": 0.00024409339436784675,
+  "fit_model": "least squares constrained through origin",
+  "host": "lab",
+  "started_at": "2026-09-10T23:11:08+09:00",
+  "elapsed_s": 31.9792641,
+  "matlab_version": "26.1.0.3276743 (R2026a) Update 3",
+  "ltspice_version": "26.0.2.1",
+  "ltspice_executable": "C:\\Program Files\\ADI\\LTspice\\LTspice.exe",
   "gates": {
     "finite": true,
     "bounded": true,
