@@ -50,6 +50,20 @@ TWO_DOMAIN_INTERFACE_VOL = TWO_DOMAIN_VOL.replace(
 )
 
 
+def test_cubit_server_instructions_reserve_gui_for_gui_tests():
+    server_source = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "radia_mcp"
+        / "cubit"
+        / "server.py"
+    ).read_text(encoding="utf-8")
+
+    assert "LLM/agent workflows MUST NOT" in server_source
+    assert "reserved solely for explicitly scoped GUI tests" in server_source
+    assert "APREPRO commands + Python" in server_source
+
+
 async def _probe_cubit_inventory_stdio() -> dict[str, object]:
     package_root = Path(__file__).resolve().parents[1]
     env = os.environ.copy()
