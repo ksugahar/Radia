@@ -1,4 +1,5 @@
 """Read-only draft planning diagnostics; never automatic quality scores."""
+
 from __future__ import annotations
 
 import math
@@ -8,6 +9,7 @@ import re
 def _draft_prose(text: str) -> str:
     # Deferred import keeps public registration in tools without a cycle.
     from .tools import _prose_for_lint, _read_text_if_path
+
     return _prose_for_lint(_read_text_if_path(text))
 
 
@@ -92,15 +94,15 @@ def grant_writing_central_question_singularity_check(text: str) -> dict:
         marker = next((m for m in _CLAIM_MARKERS if m in stripped), None)
         if marker is None:
             continue
-        singular = next(
-            (a for a in _SINGULAR_ANNOUNCEMENTS if a in stripped), None
+        singular = next((a for a in _SINGULAR_ANNOUNCEMENTS if a in stripped), None)
+        announcements.append(
+            {
+                "sentence_index": index + 1,
+                "marker": marker,
+                "singular_phrase": singular,
+                "text": stripped[:160],
+            }
         )
-        announcements.append({
-            "sentence_index": index + 1,
-            "marker": marker,
-            "singular_phrase": singular,
-            "text": stripped[:160],
-        })
 
     risks: list[dict] = []
     # The window is the claim zone: a central question is stated close to its
@@ -108,53 +110,53 @@ def grant_writing_central_question_singularity_check(text: str) -> dict:
     window = 6
     for announcement in announcements:
         start = announcement["sentence_index"]
-        zone = sentences[start - 1:start + window]
+        zone = sentences[start - 1 : start + window]
         # Do not borrow questions from the next explicitly announced claim.
         for offset, fragment in enumerate(zone[1:], start=1):
-            if (any(marker in fragment for marker in _CLAIM_MARKERS)
-                    and any(phrase in fragment for phrase in _SINGULAR_ANNOUNCEMENTS)):
+            if any(marker in fragment for marker in _CLAIM_MARKERS) and any(
+                phrase in fragment for phrase in _SINGULAR_ANNOUNCEMENTS
+            ):
                 zone = zone[:offset]
                 break
         questions = [q.strip() for q in zone if is_question(q)]
         additive = [
             q.strip()
             for q in zone
-            if is_question(q)
-            and any(q.strip().startswith(o) for o in _ADDITIVE_OPENERS)
+            if is_question(q) and any(q.strip().startswith(o) for o in _ADDITIVE_OPENERS)
         ]
         if announcement["singular_phrase"] and len(questions) >= 2:
-            risks.append({
-                "type": "announced_singular_but_multiple",
-                "severity": "HIGH",
-                "sentence_index": announcement["sentence_index"],
-                "question_count": len(questions),
-                "comment": (
-                    "「"
-                    + announcement["singular_phrase"]
-                    + "」と宣言した直後に問いが"
-                    + str(len(questions))
-                    + "つ並んでいる。"
-                ),
-                "recommendation": (
-                    "中心の問いを一つに決める。残りは、その問いを解くための"
-                    "実装条件、検証条件、適用範囲として従属させる。"
-                ),
-                "excerpts": [q[:160] for q in questions[:3]],
-            })
+            risks.append(
+                {
+                    "type": "announced_singular_but_multiple",
+                    "severity": "HIGH",
+                    "sentence_index": announcement["sentence_index"],
+                    "question_count": len(questions),
+                    "comment": (
+                        "「"
+                        + announcement["singular_phrase"]
+                        + "」と宣言した直後に問いが"
+                        + str(len(questions))
+                        + "つ並んでいる。"
+                    ),
+                    "recommendation": (
+                        "中心の問いを一つに決める。残りは、その問いを解くための"
+                        "実装条件、検証条件、適用範囲として従属させる。"
+                    ),
+                    "excerpts": [q[:160] for q in questions[:3]],
+                }
+            )
         elif additive:
-            risks.append({
-                "type": "additive_second_question",
-                "severity": "MEDIUM",
-                "sentence_index": announcement["sentence_index"],
-                "question_count": len(questions),
-                "comment": (
-                    "中心の問いの直後に、接続語で追加された問いがある。"
-                ),
-                "recommendation": (
-                    "追加の問いを主たる問いへ従属させるか、主従を明示する。"
-                ),
-                "excerpts": [q[:160] for q in additive[:2]],
-            })
+            risks.append(
+                {
+                    "type": "additive_second_question",
+                    "severity": "MEDIUM",
+                    "sentence_index": announcement["sentence_index"],
+                    "question_count": len(questions),
+                    "comment": ("中心の問いの直後に、接続語で追加された問いがある。"),
+                    "recommendation": ("追加の問いを主たる問いへ従属させるか、主従を明示する。"),
+                    "excerpts": [q[:160] for q in additive[:2]],
+                }
+            )
 
     enumerations = [
         {"sentence_index": index + 1, "text": sentence.strip()[:120]}
@@ -165,16 +167,16 @@ def grant_writing_central_question_singularity_check(text: str) -> dict:
         "applicable": bool(announcements),
         "score": None,
         "automatic_score_prohibited": True,
-        "status": "review_required" if risks else "no_candidates" if announcements else "not_applicable",
+        "status": (
+            "review_required" if risks else "no_candidates" if announcements else "not_applicable"
+        ),
         "announcement_count": len(announcements),
         "announcements": announcements,
         "enumeration_declarations": enumerations,
         "risk_count": len(risks),
         "risks": risks,
         "comments": list(dict.fromkeys(r["comment"] for r in risks)),
-        "recommendations": list(
-            dict.fromkeys(r["recommendation"] for r in risks)
-        ),
+        "recommendations": list(dict.fromkeys(r["recommendation"] for r in risks)),
         "target": (
             "one announced central question delivers one question; "
             "further questions are subordinated to it"
@@ -217,10 +219,19 @@ def grant_writing_draft_length_budget_check(
     The estimate is deliberately coarse. It answers "is a 2,000-character cut
     coming?", not "will line 43 wrap".
     """
-    for name, value in (("page_limit", page_limit), ("chars_per_page", chars_per_page),
-                        ("reserved_pages", reserved_pages), ("figure_count", figure_count),
-                        ("figure_page_cost", figure_page_cost)):
-        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+    for name, value in (
+        ("page_limit", page_limit),
+        ("chars_per_page", chars_per_page),
+        ("reserved_pages", reserved_pages),
+        ("figure_count", figure_count),
+        ("figure_page_cost", figure_page_cost),
+    ):
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+            or value < 0
+        ):
             raise ValueError(f"{name} must be finite and nonnegative")
     if chars_per_page <= 0 or int(chars_per_page) != chars_per_page:
         raise ValueError("chars_per_page must be a positive integer")
@@ -230,16 +241,10 @@ def grant_writing_draft_length_budget_check(
 
     # Headings, list bullets and table pipes survive into the form as layout,
     # not as prose, so they are counted out of the character budget.
-    body_lines = [
-        line for line in prose.split("\n")
-        if not line.strip().startswith("#")
-    ]
+    body_lines = [line for line in prose.split("\n") if not line.strip().startswith("#")]
     body = "\n".join(body_lines)
     stripped = re.sub(r"[*_`|>\-\s]", "", body)
-    japanese = sum(
-        1 for c in stripped
-        if "\u3040" <= c <= "\u30ff" or "\u4e00" <= c <= "\u9fff"
-    )
+    japanese = sum(1 for c in stripped if "\u3040" <= c <= "\u30ff" or "\u4e00" <= c <= "\u9fff")
     counted = len(stripped)
 
     if page_limit <= 0:
@@ -254,12 +259,9 @@ def grant_writing_draft_length_budget_check(
             "japanese_characters": japanese,
             "comments": [],
             "recommendations": [],
-            "reason": (
-                "page_limit が未指定のため判定しない。様式のページ数を渡す。"
-            ),
+            "reason": ("page_limit が未指定のため判定しない。様式のページ数を渡す。"),
             "target": (
-                "a draft whose character count fits the prose pages its form "
-                "actually leaves it"
+                "a draft whose character count fits the prose pages its form " "actually leaves it"
             ),
             "source": "draft-length budget check",
         }
@@ -272,41 +274,45 @@ def grant_writing_draft_length_budget_check(
 
     risks: list[dict] = []
     if allowance <= 0:
-        risks.append({
-            "type": "no_prose_pages_left",
-            "severity": "HIGH",
-            "comment": (
-                "確保済みページと図で上限を使い切っており、本文の余地がない。"
-            ),
-            "recommendation": (
-                "reserved_pages と図の数を見直すか、様式のページ配分を変える。"
-            ),
-        })
+        risks.append(
+            {
+                "type": "no_prose_pages_left",
+                "severity": "HIGH",
+                "comment": ("確保済みページと図で上限を使い切っており、本文の余地がない。"),
+                "recommendation": ("reserved_pages と図の数を見直すか、様式のページ配分を変える。"),
+            }
+        )
     elif overflow > 0:
         severity = "HIGH" if overflow > allowance * 0.2 else "MEDIUM"
-        risks.append({
-            "type": "draft_exceeds_prose_allowance",
-            "severity": severity,
-            "overflow_characters": overflow,
-            "comment": (
-                "本文が"
-                + str(counted)
-                + "字あり、様式に収まる推定"
-                + str(allowance)
-                + "字を"
-                + str(overflow)
-                + "字超えている。"
-            ),
-            "recommendation": (
-                "章立てを様式の記入欄へ対応付けたうえで削る。"
-                "字数合わせの圧縮ではなく、二次的な結果と重複説明を落とす。"
-            ),
-        })
+        risks.append(
+            {
+                "type": "draft_exceeds_prose_allowance",
+                "severity": severity,
+                "overflow_characters": overflow,
+                "comment": (
+                    "本文が"
+                    + str(counted)
+                    + "字あり、様式に収まる推定"
+                    + str(allowance)
+                    + "字を"
+                    + str(overflow)
+                    + "字超えている。"
+                ),
+                "recommendation": (
+                    "章立てを様式の記入欄へ対応付けたうえで削る。"
+                    "字数合わせの圧縮ではなく、二次的な結果と重複説明を落とす。"
+                ),
+            }
+        )
     return {
         "applicable": True,
         "score": None,
         "automatic_score_prohibited": True,
-        "status": "no_prose_capacity" if allowance <= 0 else "exceeds_estimate" if overflow > 0 else "within_estimate",
+        "status": (
+            "no_prose_capacity"
+            if allowance <= 0
+            else "exceeds_estimate" if overflow > 0 else "within_estimate"
+        ),
         "counted_characters": counted,
         "japanese_characters": japanese,
         "page_limit": page_limit,
@@ -326,13 +332,9 @@ def grant_writing_draft_length_budget_check(
             f"(limit {page_limit} - reserved {reserved_pages} "
             f"- figures {figure_pages})"
         ),
-        "warning": (
-            "概算である。確定判定は組版後の "
-            "grant_writing_page_limit_check で行う。"
-        ),
+        "warning": ("概算である。確定判定は組版後の " "grant_writing_page_limit_check で行う。"),
         "target": (
-            "a draft whose character count fits the prose pages its form "
-            "actually leaves it"
+            "a draft whose character count fits the prose pages its form " "actually leaves it"
         ),
         "source": "draft-length budget check",
     }
@@ -369,7 +371,9 @@ _FORM_FIELD_PRESETS: dict[str, tuple[tuple[str, tuple[str, ...]], ...]] = {
 
 
 def grant_writing_form_field_coverage_check(
-    text: str, fields: str = "", preset: str = "",
+    text: str,
+    fields: str = "",
+    preset: str = "",
 ) -> dict:
     """Locate lexical candidates for form fields, never certify coverage.
 
@@ -401,15 +405,23 @@ def grant_writing_form_field_coverage_check(
         else:
             unmatched.append(item)
     return {
-        "applicable": bool(spec), "score": None,
+        "applicable": bool(spec),
+        "score": None,
         "automatic_score_prohibited": True,
         "status": "manual_review_required" if spec else "not_applicable",
-        "preset": preset or None, "available_presets": sorted(_FORM_FIELD_PRESETS),
-        "field_count": len(spec), "candidate_count": len(candidates),
+        "preset": preset or None,
+        "available_presets": sorted(_FORM_FIELD_PRESETS),
+        "field_count": len(spec),
+        "candidate_count": len(candidates),
         "unmatched_count": len(unmatched),
-        "candidate_fields": candidates, "unmatched_fields": unmatched,
-        "risk_count": 0, "risks": [], "comments": [],
-        "recommendations": ["Compare every field with the actual form and read its answer."] if spec else [],
+        "candidate_fields": candidates,
+        "unmatched_fields": unmatched,
+        "risk_count": 0,
+        "risks": [],
+        "comments": [],
+        "recommendations": (
+            ["Compare every field with the actual form and read its answer."] if spec else []
+        ),
         "warning": "Keyword hits are candidates, not coverage; no hits do not establish missing content.",
         "source": "form-field lexical candidate check",
     }
