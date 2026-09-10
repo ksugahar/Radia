@@ -159,6 +159,10 @@ def matlab_optuna_compatibility_contract(
         paths["public_api_inventory"]
     ):
         errors.append("MATLAB API coverage was not generated from the checked inventory")
+    if api_coverage.get("upstream_oracle_sha256") != _sha256(
+        paths["python_oracle"]
+    ):
+        errors.append("MATLAB API coverage was not generated from the checked oracle")
     if bool(api_coverage.get("full_compatibility_complete")):
         if (
             int(api_coverage.get("surface_missing_count", -1)) != 0
