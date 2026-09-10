@@ -71,6 +71,21 @@ saved=radia.ltspice.extractTransientState(radia.ltspice.readRaw(positive),Netlis
 verifyTrue(testCase,any(strcmpi(saved.inductor_names,"x1:L1")));
 end
 
+function testStatelessSubcircuitDoesNotRequireImpossibleStateTrace(testCase)
+netlist=fullfile(testCase.TestData.TempDirectory,"stateless_sub.cir");
+writeTextFixture(netlist,"V1 in 0 1"+newline+"X1 in 0 rdiv"+newline+".subckt rdiv a b"+newline+"R1 a b 1k"+newline+".ends"+newline+".tran 1m"+newline+".end");
+raw=struct("names",["time","V(in)","Ix(x1:a)","Ix(x1:b)"],"values",[0,0,0,0;1e-3,1,1e-3,-1e-3],"step_ranges",[1,2]);
+state=radia.ltspice.extractTransientState(raw,NetlistFile=netlist);
+verifyEmpty(testCase,state.inductor_names);
+end
+
+function testNestedStatefulSubcircuitRequiresTrace(testCase)
+netlist=fullfile(testCase.TestData.TempDirectory,"nested_state.cir");
+writeTextFixture(netlist,"Xtop in 0 outer"+newline+".subckt outer a b"+newline+"Xinner a b dynamic"+newline+".ends"+newline+".subckt dynamic a b"+newline+"C1 a b 1u"+newline+".ends"+newline+".end");
+raw=struct("names",["time","V(in)","Ix(xtop:a)"],"values",[0,0,0;1e-3,1,1e-3],"step_ranges",[1,2]);
+verifyError(testCase,@()radia.ltspice.extractTransientState(raw,NetlistFile=netlist),"radia:ltspice:MissingSubcircuitState");
+end
+
 function testProcessTreeTerminationUsesFrameworkCompatibleApi(testCase)
 if ~ispc,testCase.assumeFail("Windows-only process lifecycle test.");end
 info=System.Diagnostics.ProcessStartInfo();info.FileName='pwsh';
@@ -80,6 +95,14 @@ process=System.Diagnostics.Process();process.StartInfo=info;verifyTrue(testCase,
 cleanup=onCleanup(@()radia.ltspice.internal.terminateProcessTree(process));
 verifyTrue(testCase,radia.ltspice.internal.terminateProcessTree(process));
 verifyTrue(testCase,process.HasExited);clear cleanup
+end
+
+function testRunTimeoutTerminatesOwnedProcessTree(testCase)
+if ~ispc,testCase.assumeFail("Windows-only timeout test.");end
+fake=fullfile(testCase.TestData.TempDirectory,"slow_ltspice.cmd");
+writeTextFixture(fake,"@echo off"+newline+"ping 127.0.0.1 -n 30 >nul"+newline);
+netlist=fullfile(testCase.TestData.TempDirectory,"timeout.cir");writeTextFixture(netlist,".tran 1m"+newline+".end");
+verifyError(testCase,@()radia.ltspice.run(netlist,Executable=fake,Timeout_s=0.2,OutputDirectory=fullfile(testCase.TestData.TempDirectory,"timeout_run")),"radia:ltspice:Timeout");
 end
 
 function testStateInjectionFailsWithoutEndAndAcceptsHierarchicalInductor(testCase)

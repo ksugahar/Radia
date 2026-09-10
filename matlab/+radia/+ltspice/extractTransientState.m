@@ -13,10 +13,9 @@ inductorLike=~cellfun(@isempty,regexp(cellstr(names),'^I\((?:L|.*:L)','once','ig
 captured="I("+inductorNames+")";missing=names(inductorLike&~ismember(upper(names),upper(captured)));
 if ~isempty(missing),error("radia:ltspice:StateTraceUnsupported","Inductor state trace(s) could not be represented: %s.",join(missing,", "));end
 if strlength(options.NetlistFile)>0
- netlist=string(fileread(options.NetlistFile));
- instances=regexp(char(netlist),'(?im)^\s*(X\S+)\s+.*$','tokens');
+ instances=statefulTopLevelInstances(options.NetlistFile);
  for k=1:numel(instances)
-  instance=string(instances{k}{1});
+  instance=instances(k);
   escaped=regexptranslate('escape',char(instance));
   voltagePattern=['^V\(' escaped ':[^)]+\)$'];
   inductorPattern=['^I\(' escaped ':(?:[^():]+:)*L[^)]*\)$'];
@@ -31,4 +30,47 @@ end
 state=struct("schema","radia.ltspice.transient_state.v1","time_s",real(values(1)), ...
  "node_names",nodeNames,"node_voltages_V",nodeValues, ...
  "inductor_names",inductorNames,"inductor_currents_A",inductorValues);
+end
+
+function instances=statefulTopLevelInstances(netlistFile)
+manifest=radia.ltspice.collectDependencies(netlistFile);
+definitions=containers.Map('KeyType','char','ValueType','any');top=strings(0,2);
+for file=manifest.local_files(:).'
+ lines=splitlines(string(fileread(file)));current="";
+ for row=1:numel(lines)
+  line=strtrim(regexprep(lines(row),';.*$',''));if line==""||startsWith(line,"*"),continue,end
+  tokens=split(line);tokens(tokens=="")=[];head=lower(tokens(1));
+  if head==".subckt"&&numel(tokens)>=2
+   current=lower(tokens(2));if ~isKey(definitions,char(current)),definitions(char(current))=struct("direct",false,"children",strings(0,1));end
+  elseif head==".ends",current="";
+  elseif startsWith(head,["l","c"])&&current~=""
+   item=definitions(char(current));item.direct=true;definitions(char(current))=item;
+  elseif startsWith(head,"x")
+   child=subcircuitName(tokens);
+   if current=="",top(end+1,:)=[tokens(1),child];else,item=definitions(char(current));item.children(end+1,1)=child;definitions(char(current))=item;end
+  end
+ end
+end
+stateful=containers.Map('KeyType','char','ValueType','logical');keysList=string(keys(definitions));
+for key=keysList,stateful(char(key))=definitions(char(key)).direct;end
+changed=true;
+while changed
+ changed=false;
+ for key=keysList
+  if stateful(char(key)),continue,end
+  children=definitions(char(key)).children;
+  known=children(arrayfun(@(x)isKey(stateful,char(x)),children));
+  if any(arrayfun(@(x)stateful(char(x)),known)),stateful(char(key))=true;changed=true;end
+ end
+end
+keep=false(size(top,1),1);
+for k=1:size(top,1)
+ type=top(k,2);keep(k)=~isKey(stateful,char(type))||stateful(char(type));
+end
+instances=top(keep,1);
+end
+
+function name=subcircuitName(tokens)
+parameter=find(contains(tokens,"="),1);if isempty(parameter),index=numel(tokens);else,index=parameter-1;end
+if index<2,name="";else,name=lower(tokens(index));end
 end
