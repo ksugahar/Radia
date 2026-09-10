@@ -2534,22 +2534,129 @@ HFONT pick_button_font(int heightPx, std::wstring* diagnostics = nullptr) {
 }
 
 void draw_palette_cell(HDC dc, const RECT& rect, HFONT font,
-                       const std::wstring& face, bool hot) {
+                       const std::wstring& face, bool hot,
+                       const std::string& command = {}) {
     FillRect(dc, &rect, GetSysColorBrush(hot ? COLOR_HIGHLIGHT : COLOR_MENU));
-    SetBkMode(dc, TRANSPARENT);
-    SetTextColor(dc, GetSysColor(hot ? COLOR_HIGHLIGHTTEXT : COLOR_MENUTEXT));
-    HGDIOBJ old = SelectObject(dc, font);
-    RECT textRect = rect;
-    DrawTextW(dc, face.c_str(), int(face.size()), &textRect,
-              DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
-    SelectObject(dc, old);
+    LOGFONTW lf{};
+    if (!font || !GetObjectW(font, sizeof(lf), &lf)) return;
+    const int em = std::max(1, std::abs(int(lf.lfHeight)));
+    const int margin = std::max(2, MulDiv(2, em, 17));
+    const int availableW = int(rect.right - rect.left) - 2 * margin;
+    const int availableH = int(rect.bottom - rect.top) - 2 * margin;
+    if (availableW <= 0 || availableH <= 0) return;
+
+    // Render semantic previews through the same model as insertion. Other
+    // labels remain literal glyphs; never reinterpret a symbol as TeX.
+    eqnedit::Equation preview;
+    bool semantic = false;
+    if (command.rfind("style.", 0) == 0) {
+        preview.insert_text("A");
+        preview.select_all();
+        semantic = preview.restyle_selection(command.substr(6));
+        preview.clear_selection();
+    } else {
+        static const std::vector<std::string> kinds = {
+            "frac", "slashfrac", "sqrt", "nthroot", "hat", "tilde", "bar",
+            "vec", "dot", "ddot", "dddot", "prime", "dprime", "tprime",
+            "strike", "frown", "smile", "overline", "underline",
+            "overbrace", "underbrace", "overrightarrow", "overleftarrow",
+            "overleftrightarrow"};
+        const std::string kind = command.rfind("template.", 0) == 0
+            ? command.substr(9) : std::string();
+        if (std::find(kinds.begin(), kinds.end(), kind) != kinds.end()) {
+            semantic = preview.insert_template(kind);
+            if (semantic) {
+                preview.insert_text(kind == "frac" || kind == "slashfrac" ? "a" : "x");
+                if (kind == "frac" || kind == "slashfrac" || kind == "nthroot") {
+                    preview.next_slot();
+                    preview.insert_text(kind == "nthroot" ? "n" : "b");
+                }
+            }
+        }
+    }
+
+    // Crop actual ink, not the font's em/Windows ascent. Supersampling keeps
+    // radicals and thin accents intact when a wide label must be fitted.
+    constexpr int sampleScale = 3;
+    const int pad = em * sampleScale;
+    lf.lfHeight *= sampleScale;
+    HFONT sampleFont = CreateFontIndirectW(&lf);
+    HDC memory = CreateCompatibleDC(dc);
+    if (!memory || !sampleFont) {
+        if (memory) DeleteDC(memory);
+        if (sampleFont) DeleteObject(sampleFont);
+        return;
+    }
+    HGDIOBJ oldFont = SelectObject(memory, sampleFont);
+    TEXTMETRICW tm{};
+    SIZE extent{};
+    GetTextMetricsW(memory, &tm);
+    GetTextExtentPoint32W(memory, face.c_str(), int(face.size()), &extent);
+    const auto metrics = preview.metrics();
+    const double scale = double(em * sampleScale) / 12.0;
+    const int width = (semantic ? int(std::ceil(metrics.width * scale)) : int(extent.cx)) + 2 * pad;
+    const int height = (semantic ? int(std::ceil(metrics.height * scale)) : int(tm.tmHeight)) + 2 * pad;
+    BITMAPINFO bi{};
+    bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bi.bmiHeader.biWidth = width;
+    bi.bmiHeader.biHeight = -height;
+    bi.bmiHeader.biPlanes = 1;
+    bi.bmiHeader.biBitCount = 32;
+    void* bits = nullptr;
+    HBITMAP bitmap = width > 0 && height > 0 && width < 8192 && height < 8192
+        ? CreateDIBSection(memory, &bi, DIB_RGB_COLORS, &bits, nullptr, 0) : nullptr;
+    if (bitmap && bits) {
+        HGDIOBJ oldBitmap = SelectObject(memory, bitmap);
+        RECT all{0, 0, width, height};
+        FillRect(memory, &all, HBRUSH(GetStockObject(WHITE_BRUSH)));
+        SetBkMode(memory, TRANSPARENT);
+        SetTextColor(memory, RGB(0, 0, 0));
+        if (semantic) preview.draw_gdi(memory, pad, pad, scale, eqnedit::SvgStyle(), true, false);
+        else TextOutW(memory, pad, pad, face.c_str(), int(face.size()));
+        GdiFlush();
+        auto* px = static_cast<unsigned char*>(bits);
+        int left = width, top = height, right = -1, bottom = -1;
+        const COLORREF bg = GetSysColor(hot ? COLOR_HIGHLIGHT : COLOR_MENU);
+        const COLORREF fg = GetSysColor(hot ? COLOR_HIGHLIGHTTEXT : COLOR_MENUTEXT);
+        for (int y = 0; y < height; ++y) for (int x = 0; x < width; ++x) {
+            unsigned char* p = px + (size_t(y) * width + x) * 4;
+            const int darkness = 255 - std::min({int(p[0]), int(p[1]), int(p[2])});
+            if (darkness > 8) {
+                left = std::min(left, x); top = std::min(top, y);
+                right = std::max(right, x); bottom = std::max(bottom, y);
+            }
+            p[0] = BYTE((GetBValue(fg) * darkness + GetBValue(bg) * (255 - darkness)) / 255);
+            p[1] = BYTE((GetGValue(fg) * darkness + GetGValue(bg) * (255 - darkness)) / 255);
+            p[2] = BYTE((GetRValue(fg) * darkness + GetRValue(bg) * (255 - darkness)) / 255);
+        }
+        if (right >= left && bottom >= top) {
+            const int inkW = right - left + 1, inkH = bottom - top + 1;
+            const double fit = std::min({1.0 / sampleScale,
+                double(availableW) / inkW, double(availableH) / inkH});
+            const int outW = std::max(1, int(std::floor(inkW * fit)));
+            const int outH = std::max(1, int(std::floor(inkH * fit)));
+            const int saved = SaveDC(dc);
+            SetStretchBltMode(dc, HALFTONE);
+            SetBrushOrgEx(dc, 0, 0, nullptr);
+            StretchBlt(dc, rect.left + (rect.right - rect.left - outW) / 2,
+                rect.top + (rect.bottom - rect.top - outH) / 2, outW, outH,
+                memory, left, top, inkW, inkH, SRCCOPY);
+            RestoreDC(dc, saved);
+        }
+        SelectObject(memory, oldBitmap);
+        DeleteObject(bitmap);
+    }
+    SelectObject(memory, oldFont);
+    DeleteObject(sampleFont);
+    DeleteDC(memory);
 }
 
 /* Run the exact owner-draw path used by WM_DRAWITEM into an off-screen menu
  * cell.  Cmap ownership prevents fallback tofu, while a minimum ink count
  * prevents an empty or one-pixel rendering from qualifying as readable. */
 bool palette_cell_draws_readably(HFONT font, const std::wstring& face,
-                                 int dpi) {
+                                 int dpi, const std::string& command = {},
+                                 bool hot = false) {
     if (!font || face.empty() || !font_owns_glyphs(font, face.c_str()))
         return false;
     const int width = MulDiv(34, dpi, 96);
@@ -2573,16 +2680,21 @@ bool palette_cell_draws_readably(HFONT font, const std::wstring& face,
     }
     HGDIOBJ old = SelectObject(dc, bitmap);
     RECT rect{0, 0, width, height};
-    draw_palette_cell(dc, rect, font, face, false);
+    draw_palette_cell(dc, rect, font, face, hot, command);
     GdiFlush();
-    const COLORREF background = GetSysColor(COLOR_MENU);
+    const COLORREF background = GetSysColor(hot ? COLOR_HIGHLIGHT : COLOR_MENU);
     const auto* pixels = static_cast<const unsigned char*>(bits);
     size_t ink = 0;
+    size_t edgeInk = 0;
     for (int i = 0; i < width * height; ++i) {
         const size_t at = size_t(i) * 4;
         if (pixels[at] != GetBValue(background) ||
             pixels[at + 1] != GetGValue(background) ||
-            pixels[at + 2] != GetRValue(background)) ++ink;
+            pixels[at + 2] != GetRValue(background)) {
+            ++ink;
+            const int x = i % width, y = i / width;
+            if (x == 0 || y == 0 || x == width - 1 || y == height - 1) ++edgeInk;
+        }
     }
     SelectObject(dc, old);
     DeleteObject(bitmap);
@@ -2590,7 +2702,7 @@ bool palette_cell_draws_readably(HFONT font, const std::wstring& face,
     /* A centred dot is intentionally only a handful of pixels at 96 dpi.
      * Its exact cmap ownership is the stronger anti-tofu condition; require
      * the real draw path to add more than a lone accidental pixel. */
-    return ink >= size_t(std::max(2, dpi / 48));
+    return ink >= size_t(std::max(2, dpi / 48)) && edgeInk == 0;
 }
 
 /* Category labels are Japanese, so DEFAULT_GUI_FONT is not a sufficient
@@ -4167,7 +4279,7 @@ LRESULT CALLBACK MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (face == g.paletteFaces.end()) break;
             const bool hot = (di->itemState & ODS_SELECTED) != 0;
             draw_palette_cell(di->hDC, di->rcItem, g.paletteFont,
-                              face->second, hot);
+                              face->second, hot, g.paletteItems.at(UINT(di->itemID)));
             return TRUE;
         }
         /* Teach the exact TeX spelling while the palette is open.  The glyph
@@ -5323,7 +5435,8 @@ int visual_scale_test() {
         for (const auto& palette : eqnedit::palettes()) {
             for (const auto& item : palette.items) {
                 const std::wstring face = wide_utf8(item.face);
-                if (!palette_cell_draws_readably(paletteFont, face, dpi)) {
+                if (!palette_cell_draws_readably(paletteFont, face, dpi, item.command) ||
+                    !palette_cell_draws_readably(paletteFont, face, dpi, item.command, true)) {
                     flight_note("font.palette_cell.failed " + item.command);
                     paletteVisible = false;
                     failedPaletteCell = paletteCellIndex;
