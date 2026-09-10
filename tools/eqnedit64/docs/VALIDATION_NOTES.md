@@ -13,6 +13,11 @@
   nodes and accepting Size as list state. It runs in the disposable hosted CI,
   not on interactive LAB. Enable `/WX /w14062` for the CMake core so CI has the
   release compiler's missing-enumerator guard.
+- The unmodified dispatch compiled on LAB (MSVC 19.50). A temporary header
+  adding `kReleaseProbe`, compiled against the actual renderer with
+  `/W4 /WX /w14062`, failed with C4062/C2220 at `layout_node`. No renderer
+  process was executed. The test target also specifies UTF-8 explicitly so
+  Japanese Windows code pages cannot reinterpret the shared headers.
 - Align numeric PE version (previously 3.0.13), visible version, CMake, PyPI,
   and Web identifier at 3.0.16; a focused static test checks their agreement.
 - Pending before formal publication: candidate CI, signed O: staging and
