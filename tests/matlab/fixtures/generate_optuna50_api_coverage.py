@@ -657,9 +657,11 @@ def _matlab_surface() -> tuple[set[str], dict[str, dict[str, set[str]]]]:
     members: dict[str, dict[str, set[str]]] = {}
     parents: dict[str, str] = {}
     for path in sorted(MATLAB_DIRECTORY.rglob("*.m")):
-        if "+internal" in path.parts:
+        if "+internal" in path.parts or "private" in path.parts:
             continue
-        names.add(path.stem)
+        class_folders = [part[1:] for part in path.parts if part.startswith("@")]
+        owner_name = class_folders[-1] if class_folders else path.stem
+        names.add(owner_name)
         source = path.read_text(encoding="utf-8")
         class_match = re.search(
             r"(?m)^\s*classdef(?:\s*\([^)]*\))?\s+(\w+)"
@@ -692,7 +694,7 @@ def _matlab_surface() -> tuple[set[str], dict[str, dict[str, set[str]]]]:
                 for candidate in groups
                 if candidate
             )
-        class_members = members.setdefault(path.stem, {})
+        class_members = members.setdefault(owner_name, {})
         for name in found:
             class_members.setdefault(_normalized(name), set()).add(name)
         for qualifier, block in _class_blocks(source, "properties"):
@@ -817,8 +819,31 @@ def _scope_for(upstream: str) -> str:
     return "required"
 
 
+def _qualified_optuna_references(tree: ast.AST) -> set[str]:
+    """Conservative identity evidence: never infer an owner from a suffix.
+
+    Instance aliases/dynamic dispatch need explicit owner-aware contracts.
+    Until those exist they remain asserted, not verified. Strings, local
+    variable names and unrelated receivers are not Optuna API identities.
+    """
+    def qualified(node: ast.AST) -> str | None:
+        if isinstance(node, ast.Name) and node.id == "optuna":
+            return "optuna"
+        if isinstance(node, ast.Attribute):
+            owner = qualified(node.value)
+            return f"{owner}.{node.attr}" if owner else None
+        return None
+
+    return {
+        name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Attribute)
+        if (name := qualified(node)) is not None
+    }
+
+
 def _oracle_generator_sections() -> dict[str, set[str]]:
-    """Map upstream names to oracle sections whose generator exercises them.
+    """Map qualified Optuna references to their fixture producer sections.
 
     Presence in VERIFIED_SYMBOLS or VERIFIED_MEMBERS is an assertion, not
     evidence. The mapping below is derived from the pinned upstream fixture
@@ -880,13 +905,8 @@ def _oracle_generator_sections() -> dict[str, set[str]]:
         if function_name in seen or function_name not in functions:
             return found
         seen.add(function_name)
+        found.update(_qualified_optuna_references(functions[function_name]))
         for node in ast.walk(functions[function_name]):
-            if isinstance(node, ast.Attribute):
-                found.add(node.attr)
-            elif isinstance(node, ast.Name):
-                found.add(node.id)
-            elif isinstance(node, ast.Constant) and isinstance(node.value, str):
-                found.add(node.value)
             if (
                 depth > 0
                 and isinstance(node, ast.Call)
@@ -901,16 +921,8 @@ def _oracle_generator_sections() -> dict[str, set[str]]:
             sections.setdefault(name, set()).add(section)
 
     mcp_tree = ast.parse(mcp_source.read_text(encoding="utf-8"))
-    for node in ast.walk(mcp_tree):
-        name = None
-        if isinstance(node, ast.Attribute):
-            name = node.attr
-        elif isinstance(node, ast.Name):
-            name = node.id
-        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
-            name = node.value
-        if name:
-            sections.setdefault(name, set()).add("mcp:" + mcp_source.stem)
+    for name in _qualified_optuna_references(mcp_tree):
+        sections.setdefault(name, set()).add("mcp:" + mcp_source.stem)
     return sections
 
 
@@ -918,7 +930,7 @@ ORACLE_SECTIONS_BY_NAME = _oracle_generator_sections()
 
 
 def _oracle_sections_for(upstream: str) -> list[str]:
-    return sorted(ORACLE_SECTIONS_BY_NAME.get(upstream.rsplit(".", 1)[-1], ()))
+    return sorted(ORACLE_SECTIONS_BY_NAME.get(upstream, ()))
 
 
 def _entry(
@@ -947,9 +959,13 @@ def _matlab_qualified_names() -> dict[str, str]:
     result: dict[str, str] = {}
     for path in sorted(MATLAB_DIRECTORY.rglob("*.m")):
         relative = path.relative_to(MATLAB_DIRECTORY)
-        if "+internal" in relative.parts:
+        if "+internal" in relative.parts or "private" in relative.parts:
             continue
-        packages = relative.parts[:-1]
+        folders = relative.parts[:-1]
+        class_folders = [part[1:] for part in folders if part.startswith("@")]
+        if class_folders and path.stem != class_folders[-1]:
+            continue  # External method: identity belongs to its owning class.
+        packages = [part for part in folders if not part.startswith("@")]
         if any(not part.startswith("+") for part in packages):
             raise RuntimeError(f"Non-package public MATLAB path: {relative}")
         qualified = ".".join(
@@ -991,6 +1007,8 @@ def build_coverage() -> dict[str, Any]:
             if kind == "module":
                 present = MODULE_EQUIVALENTS.get(name, False)
                 matlab_name = f"radia.optuna ({name} namespace)" if present else None
+                if present and (MATLAB_DIRECTORY / f"+{name}").is_dir():
+                    matlab_name = f"radia.optuna.{name}"
             else:
                 surface_name = CLASS_EQUIVALENTS.get(
                     name, SYMBOL_EQUIVALENTS.get(name, name)

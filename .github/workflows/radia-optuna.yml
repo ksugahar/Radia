@@ -6,6 +6,9 @@ on:
     tags: ['radia-optuna-v*']
     paths:
       - 'packages/radia-optuna/**'
+      - 'tests/matlab/fixtures/**'
+      - 'tests/matlab/test_optuna*.m'
+      - 'tests/matlab/private/optuna*.m'
       - 'matlab/+radia/+optuna/**'
       - 'matlab/+radia/+simulink/buildOptunaBlock.m'
       - 'matlab/+radia/+simulink/optunaSFunction.m'
@@ -22,6 +25,9 @@ on:
     branches: [main]
     paths:
       - 'packages/radia-optuna/**'
+      - 'tests/matlab/fixtures/**'
+      - 'tests/matlab/test_optuna*.m'
+      - 'tests/matlab/private/optuna*.m'
       - 'matlab/+radia/+optuna/**'
       - 'matlab/+radia/+simulink/buildOptunaBlock.m'
       - 'matlab/+radia/+simulink/optunaSFunction.m'
