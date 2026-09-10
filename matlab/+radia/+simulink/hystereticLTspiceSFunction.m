@@ -2,6 +2,10 @@ function hystereticLTspiceSFunction(block)
 %HYSTERETICLTSPICESFUNCTION Full circuit/hysteresis interval coupling block.
 % Input 1 is [command; mechanical_gap_displacement_m]. GapPathFactor maps
 % that displacement to total series air-gap length; it is not extra iron.
+% Output 5 is the magnitude of the attractive gap force (it acts to close
+% the gap, along -x). With g=GapPathFactor*x the gap energy at constant flux
+% is A*g*B^2/(2*mu0), so F=-dW/dx=-GapPathFactor*A*B^2/(2*mu0); the iron
+% energy at fixed flux does not depend on x, so this holds with hysteresis.
 setup(block);
 end
 function setup(b)
@@ -46,7 +50,7 @@ try
    Duration_s=b.DialogPrm(2).Data,Turns=c.Turns,CoreArea_m2=c.CoreArea_m2,MagneticPath_m=c.MagneticPath_m,AirGap_m=airGap,CoreVolume_m3=c.CoreVolume_m3, ...
    PreviousFlux_Wb=entry.previous_flux_Wb,OutputDirectory=fullfile(entry.folder,sprintf("step_%06d",step)), ...
    MaxIterations=c.MaxIterations,RelativeTolerance=c.RelativeTolerance,Relaxation=c.Relaxation,MaxStep_s=c.MaxStep_s,Timeout_s=c.Timeout_s,CouplingSamples=c.CouplingSamples);
- mu0=4*pi*1e-7;force=r.B_T(end)^2*c.CoreArea_m2/(2*mu0);
+ mu0=4*pi*1e-7;force=c.GapPathFactor*r.B_T(end)^2*c.CoreArea_m2/(2*mu0);
  y=[r.current_A(end);r.B_T(end);r.flux_Wb(end);r.back_emf_V(end);force;r.hysteresis_energy_J];b.OutputPort(1).Data=y;
  entry.pending_hysteresis_state=r.hysteresis_state;entry.pending_circuit_state=r.circuit_state;entry.pending_flux_Wb=r.flux_Wb(end);entry.pending_output=y;entry.has_pending=true;
  entry.kept(end+1,1)=string(r.output_directory);store("set",key(b),entry);
