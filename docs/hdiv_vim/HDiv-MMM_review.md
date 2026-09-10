@@ -1657,3 +1657,12 @@ not a rerun of the integrated source. Production acceptance still requires
 the exact integrated candidate's native numerical checks, three-engine
 comparison, and release-quad deployment/import/hash gates. No 5.0 readiness
 claim follows from the source build or the provenance contract tests alone.
+
+The subsequent AMS review follow-up `b7353b8fb` (PR 131, including
+`10fdedf28`) is also integrated. It changes the Hiruma benchmark comment and
+the MCP recipe/contract test, not the numerical kernel. The recipe keeps eps
+out of the physical system and in the real preconditioner surrogate, and no
+longer equates a shifted quadratic-form match with physical equivalence.
+The two focused Hiruma/MCP recipe policy tests passed in 0.41 seconds after
+this merge. The native source and artifact used for the 146-test run above
+are unchanged; this follow-up is not a new native or MATLAB parity run.

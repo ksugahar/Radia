@@ -324,7 +324,7 @@ with TaskManager():
     fes = HCurl(mesh, complex=True, **kw)          # the complex system
     u, v = fes.TnT()
     a = BilinearForm(fes)
-    a += nu*curl(u)*curl(v)*dx + eps*nu*u*v*dx + 1j*omega*sigma*u*v*dx("cond")
+    a += nu*curl(u)*curl(v)*dx + 1j*omega*sigma*u*v*dx("cond")
     f = LinearForm(fes); f += nu*CF((0, 0, 1))*v*dx("cond")
     a.Assemble(); f.Assemble()
 
@@ -373,40 +373,31 @@ In the system
 A = ν · curl_h^T curl_h + jω·σ_h M_h
 ```
 with σ = 0 in air, the mass term M_air = 0.  The system has a huge
-null space on the air region (any solenoidal field).  CompactAMS still
+curl-free null space on the air region (admissible gradient fields, subject to
+boundary and interface constraints, not arbitrary solenoidal fields). CompactAMS still
 needs the nodal subspace correction to be NON-SINGULAR.
 
 ## Fix: shift the preconditioner ONLY
 
-```python
-# Preconditioner: shifted (non-singular on whole domain)
-a_shifted = BilinearForm(fes, symmetric=True)
-a_shifted += SymbolicBFI(ν * curl(u) * curl(v))
-a_shifted += SymbolicBFI(1j * ω * σ_cf * u * v, definedon=mesh.Materials("cond"))
-a_shifted += SymbolicBFI(eps * ν * u * v)              # eps = 1e-6 * ν
-a_shifted.Assemble()
+Use the full CompactAMS code recipe above: assemble the complex physical
+system without eps and a separate REAL surrogate with eps mass and
+abs(omega)*sigma. Supply a_real_mat, grad_mat, freedofs, vertex coordinates
+and ndof_complex to ComplexCompactAMSPreconditioner, outside TaskManager.
+The factory does not accept a FESpace in place of the discrete gradient.
 
-# System: original (singular in air, but physically correct)
-a = BilinearForm(fes, symmetric=True)
-a += SymbolicBFI(ν * curl(u) * curl(v))
-a += SymbolicBFI(1j * ω * σ_cf * u * v, definedon=mesh.Materials("cond"))
-# NO eps here
-a.Assemble()
-
-# Build preconditioner from shifted, but solve original
-prec = ComplexCompactAMSPreconditioner(a_shifted.mat, fes, ...)
-solver = COCRSolver(a.mat, prec, tol=1e-10)
-```
-
-Verified (sparsesolv repo `examples/hiruma/shifted_ams_experiment.py`):
-- ε from 1e-4 to 1e-8 give **identical** ||B||² → solution independent of ε
-- Without shift: diverges (nan)
+Validate convergence against the original unshifted system. A comparison of
+abs(x^H A x) alone is not a magnetic-energy or pure-gauge certificate, especially
+when A includes a complex conducting term and differs between variants.
+Compare curl(A), conductor losses and true residuals using a COMMON unshifted
+operator. An unshifted singular system still needs null-space compatibility;
+do not claim its ordinary condition number becomes finite when eps is removed.
 
 ## Common mistake
 
 Adding ε·M to **both** the system AND the preconditioner is the WRONG
-fix.  It modifies the physics — you get a fictitious displacement
-current in air.  Always shift the PRECONDITIONER only.
+fix. It perturbs the physical operator; it is not generally just gauge fixing.
+Keep the shift in the PRECONDITIONER only, and measure physical differences
+before claiming they are negligible for a particular mesh and parameter set.
 """
 
 
