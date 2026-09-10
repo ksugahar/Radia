@@ -435,35 +435,84 @@ def grant_writing_form_field_coverage_check(
 # such rather than guessed.
 _VENUE_REVIEW_CONVENTIONS = (
     (
-        re.compile(r"電気学会研究会資料|研究会資料|電学研資|信学技報|技術研究報告"),
+        re.compile(
+            r"電気学会研究会資料|研究会資料|電学研資|信学技報|技術研究報告",
+            re.IGNORECASE,
+        ),
         "not_reviewed",
         "研究会資料・技術研究報告は査読を行わない。",
     ),
     (
-        re.compile(r"arXiv|preprint|プレプリント"),
+        re.compile(r"arXiv|preprint|プレプリント", re.IGNORECASE),
         "not_reviewed",
         "プレプリントは査読前の公開である。",
     ),
     (
-        re.compile(r"IEEE\s+Trans(?:actions)?\b|IEICE\s+Trans(?:actions)?\b"
-                   r"|IEEJ\s+Trans(?:actions)?\b|電気学会論文誌"),
+        re.compile(
+            r"IEEE\s+Trans(?:actions)?\b|IEICE\s+Trans(?:actions)?\b"
+            r"|IEEJ\s+Trans(?:actions)?\b|電気学会論文誌",
+            re.IGNORECASE,
+        ),
         "reviewed",
         "学会論文誌は査読あり。",
     ),
     (
-        re.compile(r"J(?:ournal)?\.?\s*(?:of\s+)?Magn(?:etics)?\.?\s*Soc"
-                   r"|日本磁気学会論文誌|Journal of Magnetic Resonance"),
+        re.compile(
+            r"J(?:ournal)?\.?\s*(?:of\s+)?Magn(?:etics)?\.?\s*Soc"
+            r"|日本磁気学会論文誌|Journal of Magnetic Resonance",
+            re.IGNORECASE,
+        ),
         "reviewed",
         "学術誌は査読あり。",
     ),
     (
-        re.compile(r"COMPUMAG|CEFC|OIPE|IGTE|ICEAA|PIERS|LDIA|ISEF"
-                   r"|Int(?:ernational)?\.?\s+Conf|Proc\.|proceedings"),
+        re.compile(
+            r"COMPUMAG|CEFC|OIPE|IGTE|ICEAA|PIERS|LDIA|ISEF"
+            r"|Int(?:ernational)?\.?\s+Conf|Proc\.|proceedings",
+            re.IGNORECASE,
+        ),
         "venue_dependent",
-        "国際会議。採否審査はあるが、査読の有無と単位（digest か full paper か）"
-        "は会議規定による。投稿時の案内で確認する。",
+        (
+            "国際会議。採否審査はあるが、査読の有無と単位（digest か full paper か）"
+            "は会議規定による。投稿時の案内で確認する。"
+        ),
     ),
 )
+
+_PUBLICATION_VENUE_CUE = re.compile(
+    r"IEEE|IEICE|IEEJ|Trans(?:actions)?\b|Journal\b|Proc\.|proceedings|"
+    r"研究会資料|技術研究報告|論文誌|学会誌|doi\s*:",
+    re.IGNORECASE,
+)
+_NUMBERED_LIST_ENTRY = re.compile(r"^\s*(?:[-*]\s*)?(?:\d+[.．)、]|\[\d+\])")
+_QUOTED_TITLE = re.compile(r"「[^」]+」|“[^”]+”|\"[^\"]+\"")
+
+
+def _looks_like_publication_entry(line: str) -> bool:
+    """Distinguish bibliography rows from numbered proposal prose."""
+    if _PUBLICATION_VENUE_CUE.search(line):
+        return True
+    if not _NUMBERED_LIST_ENTRY.search(line):
+        return False
+    return bool(_QUOTED_TITLE.search(line) or line.count(",") >= 2)
+
+
+def _publication_candidate_lines(raw: str) -> list[tuple[int, str]]:
+    """Prefer an explicit numbered bibliography when a full proposal is given.
+
+    A collaborator biography may mention an IEEE Transactions paper without
+    being an achievement-list entry.  If the input contains a numbered
+    bibliography, that stronger structure owns the audit; a standalone
+    unnumbered citation remains supported when no numbered list is present.
+    """
+    lines = [
+        (number, line.strip())
+        for number, line in enumerate(raw.splitlines(), 1)
+        if line.strip()
+    ]
+    candidates = [(n, line) for n, line in lines if _looks_like_publication_entry(line)]
+    numbered = [(n, line) for n, line in candidates if _NUMBERED_LIST_ENTRY.search(line)]
+    return numbered or candidates
 
 
 def grant_writing_peer_review_convention_hints(text: str) -> dict:
@@ -483,10 +532,7 @@ def grant_writing_peer_review_convention_hints(text: str) -> dict:
 
     raw = _read_text_if_path(raw)
     entries: list[dict] = []
-    for number, line in enumerate(raw.splitlines(), 1):
-        stripped = line.strip()
-        if not stripped:
-            continue
+    for number, stripped in _publication_candidate_lines(raw):
         for pattern, convention, note in _VENUE_REVIEW_CONVENTIONS:
             match = pattern.search(stripped)
             if match:
@@ -528,7 +574,7 @@ def grant_writing_peer_review_convention_hints(text: str) -> dict:
 # result; left unmarked among published work it invites the reviewer to
 # discount the entries that are real.
 _PUBLICATION_PLACEHOLDER = re.compile(
-    r"0xx|0XX|[Xx]{2,}|＿＿|__+|未定|未確定|TBD|\?\?+"
+    r"0xx|x{2,}|＿＿|_{3,}|未定|未確定|TBD|\?\?+", re.IGNORECASE
 )
 _YEAR_IN_LINE = re.compile(r"(?<!\d)(20\d{2})(?!\d)")
 
@@ -547,21 +593,25 @@ def grant_writing_future_dated_publication_check(
 
     ``application_year`` defaults to the current year when omitted.
     """
-    from datetime import date
+    from datetime import datetime
 
     from .tools import _read_text_if_path
 
     raw = _read_text_if_path(text)
-    year_now = application_year or date.today().year
+    year_now = application_year or datetime.now().astimezone().year
 
     # An entry that already says what it is does not need the reviewer to ask.
-    disclosed = re.compile(r"発表予定|投稿中|投稿予定|採録決定|採択済|in press|accepted|submitted")
+    disclosed = re.compile(
+        r"発表予定|投稿中|投稿予定|採録決定|採択済|in press|accepted|submitted",
+        re.IGNORECASE,
+    )
 
     entries: list[dict] = []
-    for number, line in enumerate(raw.splitlines(), 1):
-        stripped = line.strip()
-        if not stripped:
-            continue
+    for number, stripped in _publication_candidate_lines(raw):
+        # The caller may pass a complete proposal, not just its bibliography.
+        # A future grant year or a Markdown placeholder is not a publication.
+        # Require either list-entry syntax or a bibliographic venue signal
+        # before interpreting dates and placeholders as publication metadata.
         years = [int(y) for y in _YEAR_IN_LINE.findall(stripped)]
         future = [y for y in years if y > year_now]
         placeholder = _PUBLICATION_PLACEHOLDER.findall(stripped)
