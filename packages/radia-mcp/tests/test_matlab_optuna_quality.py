@@ -1,4 +1,6 @@
 import json
+from copy import deepcopy
+from radia_mcp.matlab import optuna_quality
 from pathlib import Path
 
 from radia_mcp.matlab.optuna_quality import (
@@ -48,7 +50,7 @@ def test_health_uses_distribution_and_upstream_manifests_as_truth(monkeypatch):
         ).read_text(encoding="utf-8")
     )
 
-    assert health["ok"] is True
+    assert health["ok"] is coverage["full_compatibility_complete"]
     assert health["source_kind"] == "repository"
     assert health["distribution"]["matlab_file_count"] == manifest[
         "matlab_file_count"
@@ -73,13 +75,13 @@ def test_health_uses_distribution_and_upstream_manifests_as_truth(monkeypatch):
         "oracle_asserted_count"
     ]
     assert health["public_api"]["required_verified_count"] == coverage[
-        "required_entry_count"
+        "required_oracle_mapped_count"
     ]
-    assert health["public_api"]["required_asserted_count"] == 0
+    assert health["public_api"]["required_asserted_count"] == coverage["required_oracle_asserted_count"]
     assert health["public_api"]["missing_count"] == 0
     assert health["public_api"]["partial_count"] == 0
     assert health["public_api"]["unmapped_count"] == 0
-    assert health["public_api"]["complete"] is True
+    assert health["public_api"]["complete"] is coverage["full_compatibility_complete"]
     assert health["oracle"]["recorded_fixture_sha256"] == health["oracle"][
         "actual_fixture_sha256"
     ]
@@ -93,9 +95,18 @@ def test_health_uses_distribution_and_upstream_manifests_as_truth(monkeypatch):
     assert health["stewardship"]["complete"] is True
 
 
-def test_oracle_plan_targets_official_matlab_mcp_and_pinned_upstream():
+def _mock_complete_health(monkeypatch):
+    health = deepcopy(matlab_optuna_health(str(REPO_ROOT)))
+    health.update(ok=True, status="ready", errors=[])
+    monkeypatch.setattr(optuna_quality, "matlab_optuna_health", lambda *a, **k: health)
+
+
+def test_oracle_plan_targets_official_matlab_mcp_and_pinned_upstream(monkeypatch):
     plan = matlab_optuna_oracle_plan("all", str(REPO_ROOT))
 
+    assert plan["ok"] is matlab_optuna_health(str(REPO_ROOT))["ok"]
+    _mock_complete_health(monkeypatch)
+    plan = matlab_optuna_oracle_plan("all", str(REPO_ROOT))
     assert plan["ok"] is True
     assert plan["execute_with"] == "evaluate_matlab_code"
     assert plan["runtime_owner"] == "MathWorks official MATLAB MCP Server"
@@ -117,11 +128,14 @@ def test_oracle_plan_targets_official_matlab_mcp_and_pinned_upstream():
     ]["entry_count"]
 
 
-def test_benchmark_plan_reads_checked_workload_settings_and_separates_startup():
+def test_benchmark_plan_reads_checked_workload_settings_and_separates_startup(monkeypatch):
     plan = matlab_optuna_benchmark_plan(
         str(REPO_ROOT), r"C:\temp\radia-optuna-quality-test"
     )
 
+    assert plan["ok"] is matlab_optuna_health(str(REPO_ROOT))["ok"]
+    _mock_complete_health(monkeypatch)
+    plan = matlab_optuna_benchmark_plan(str(REPO_ROOT), r"C:\temp\radia-optuna-quality-test")
     assert plan["ok"] is True
     assert plan["settings"] == {
         "trials": 100,
@@ -252,8 +266,15 @@ def _passing_release_evidence() -> dict[str, object]:
     }
 
 
-def test_release_gate_accepts_complete_evidence_and_rejects_regression():
+def test_release_gate_accepts_complete_evidence_and_rejects_regression(monkeypatch):
     evidence = _passing_release_evidence()
+    actual_health = matlab_optuna_health(str(REPO_ROOT))
+    result = matlab_optuna_release_gate(evidence, str(REPO_ROOT))
+    assert result["ok"] is actual_health["ok"]
+    # Synthetic passing health tests gate mechanics, not current API closure.
+    passing_health = deepcopy(actual_health)
+    passing_health.update(ok=True, status="ready", errors=[])
+    monkeypatch.setattr(optuna_quality, "matlab_optuna_health", lambda *a, **k: passing_health)
     result = matlab_optuna_release_gate(evidence, str(REPO_ROOT))
 
     assert result["ok"] is True

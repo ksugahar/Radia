@@ -4,6 +4,40 @@ Rewritten 2026-08-29 and revised 2026-09-08 for the Optuna 5 migration. This is
 the canonical product and migration handover; the unrelated EQNEDT64 document
 is not an Optuna authority.
 
+## Release hold: evidence identity review (2026-09-11)
+
+This section supersedes historical completion/health statements below.
+The previous suffix-only evidence lookup could credit gRPC `server.stop()`
+to `optuna.study.Study.stop`. It has been replaced by a conservative exact
+Optuna-qualified reference lookup. Unresolved instance aliases, dynamic
+dispatch and string names are no longer counted as identified API evidence.
+This is static source attribution, not execution tracing or a new numerical
+oracle. The 401 required entries now have 79 qualified-reference mappings and
+322 asserted entries; `full_compatibility_complete=false`. Those 322 entries
+are an evidence backlog, not 322 newly missing implementations. Do not publish
+an exhaustive compatibility claim or bypass the release health failure.
+
+The current change also adds the missing oracle-digest check to the MCP audit,
+includes fixture/test changes in the standalone CI path filters, checks
+regenerated test-manifest content, uses LF-normalized digest comparison, and
+checks canonical regenerated coverage serialization. MATLAB resolution covers
+all class entries, public member access and enum constants, continuing after
+an unresolved class rather than aborting the audit. Public source discovery
+skips private helpers and handles external @Class method layouts.
+
+Precision evidence is rerun against the changed tests and now carries the
+exact test-source SHA256; line numbers refer to that source revision. The
+2026-09-10 precision JSON remains historical evidence of commit c90ab01cb,
+not line-addressable evidence of later test files.
+
+Still open: owner-aware contracts for instance/dynamic references; complete
+constructor-default audit; robust package-qualified/multiline inheritance
+resolution and Python-version-independent inherited-language classification.
+The uncommitted seven-file constructor audit in C:/temp/radia-optuna-ctor-audit
+is not modified or merged by this change and must be rebased separately after
+its owner commits it. The 15-point review is not fully closed by this first
+safety correction. No optimizer numerical behavior is changed.
+
 ## 1. Product goal
 
 The product is a MATLAB-native Optuna implementation that lets a student learn

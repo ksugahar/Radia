@@ -522,15 +522,19 @@ def test_optuna_compatibility_and_oracle_audit_are_checked():
     assert closure["surface_entry_count"] == 812
     assert closure["surface_present_count"] == 812
     assert closure["surface_missing_count"] == 0
-    assert closure["oracle_verified_count"] == 749
-    assert closure["oracle_asserted_count"] == 63
+    coverage = json.loads((Path(__file__).resolve().parents[3] /
+        "matlab/optuna50_api_coverage.json").read_text(encoding="utf-8"))
+    entries = coverage["entries"]
+    required = [entry for entry in entries if entry["scope"] == "required"]
+    assert closure["oracle_verified_count"] == sum(e["oracle_status"] == "verified" for e in entries)
+    assert closure["oracle_asserted_count"] == sum(e["oracle_status"] == "asserted" for e in entries)
     assert closure["oracle_partial_count"] == 0
     assert closure["oracle_unmapped_count"] == 0
     assert closure["required_entry_count"] == 401
-    assert closure["required_oracle_mapped_count"] == 401
-    assert closure["required_oracle_asserted_count"] == 0
-    assert closure["required_oracle_unmapped_count"] == 0
-    assert closure["full_compatibility_complete"] is True
+    assert closure["required_oracle_mapped_count"] == sum(e["oracle_status"] == "verified" for e in required)
+    assert closure["required_oracle_asserted_count"] == sum(e["oracle_status"] == "asserted" for e in required)
+    assert closure["required_oracle_unmapped_count"] == sum(e["oracle_status"] != "verified" for e in required)
+    assert closure["full_compatibility_complete"] is all(e["oracle_status"] == "verified" for e in required)
 
     audit = matlab_optuna_oracle_audit()
     assert audit["ok"] is True

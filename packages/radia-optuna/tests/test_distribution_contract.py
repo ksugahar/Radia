@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import hashlib
+import ast
 import json
 import re
 import tomllib
@@ -21,7 +22,7 @@ verify_wheel = importlib.util.module_from_spec(VERIFY_SPEC)
 VERIFY_SPEC.loader.exec_module(verify_wheel)
 
 
-def test_api_coverage_is_reproducible_and_names_real_matlab_packages():
+def test_api_coverage_is_reproducible_and_names_real_matlab_packages(monkeypatch, tmp_path):
     path = REPO_ROOT / "tests/matlab/fixtures/generate_optuna50_api_coverage.py"
     spec = importlib.util.spec_from_file_location("optuna_coverage_audit", path)
     assert spec is not None and spec.loader is not None
@@ -29,10 +30,18 @@ def test_api_coverage_is_reproducible_and_names_real_matlab_packages():
     spec.loader.exec_module(generator)
     committed = json.loads(generator.DESTINATION.read_text(encoding="utf-8"))
     assert committed["upstream_oracle_sha256"].lower() == hashlib.sha256(
-        generator.ORACLE_PATH.read_bytes()
+        generator.ORACLE_PATH.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n")
     ).hexdigest()
     regenerated = json.loads(json.dumps(generator.build_coverage()))
     assert committed == regenerated, "Regenerate Optuna API coverage."
+    serialized = json.dumps(generator.build_coverage(), indent=2, sort_keys=True) + "\n"
+    assert generator.DESTINATION.read_bytes().replace(b"\r\n", b"\n") == serialized.encode()
+    unrelated = ast.parse('server.stop(0); other.params; names = "stop"')
+    assert not generator._qualified_optuna_references(unrelated)
+    actual = ast.parse('optuna.study.Study.stop(study)')
+    assert "optuna.study.Study.stop" in generator._qualified_optuna_references(actual)
+    assert not generator._oracle_sections_for("optuna.study.Study.stop")
+    assert not committed["full_compatibility_complete"]
     entries = [e for e in committed["entries"] if e["kind"] != "module"]
     for entry in entries:
         name = entry["matlab_name"]
@@ -45,6 +54,30 @@ def test_api_coverage_is_reproducible_and_names_real_matlab_packages():
         for package in parts[:-1]:
             source /= "+" + package
         assert (source / (parts[-1] + ".m")).is_file(), name
+    # Public package scan ignores private helpers and recognizes @Class layout.
+    private = tmp_path / "private"
+    private.mkdir()
+    (private / "hidden.m").write_text("function hidden()\nend\n", encoding="utf-8")
+    legacy = tmp_path / "@Legacy"
+    legacy.mkdir()
+    (legacy / "Legacy.m").write_text("classdef Legacy\nend\n", encoding="utf-8")
+    (legacy / "step.m").write_text("function step(obj)\nend\n", encoding="utf-8")
+    monkeypatch.setattr(generator, "MATLAB_DIRECTORY", tmp_path)
+    assert generator._matlab_qualified_names() == {"Legacy": "radia.optuna.Legacy"}
+    names, members = generator._matlab_surface()
+    assert names == {"Legacy"}
+    assert "step" in members["Legacy"]
+
+
+def test_test_manifest_matches_its_generator():
+    path = REPO_ROOT / "tests/matlab/fixtures/generate_optuna_test_manifest.py"
+    spec = importlib.util.spec_from_file_location("optuna_test_manifest_audit", path)
+    assert spec is not None and spec.loader is not None
+    generator = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(generator)
+    expected = json.dumps(generator.build_manifest(), indent=2, sort_keys=True) + "\n"
+    actual = path.with_name("optuna_test_manifest.json").read_bytes().replace(b"\r\n", b"\n")
+    assert actual == expected.encode()
 
 
 def test_matlab_path_names_the_layout_it_resolved():
