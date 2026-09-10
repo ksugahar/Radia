@@ -100,6 +100,22 @@ raw=struct("names",["time","V(in)"],"values",[0,0;1e-3,1],"step_ranges",[1,2]);
 verifyError(testCase,@()radia.ltspice.extractTransientState(raw,NetlistFile=netlist),"radia:ltspice:UnsupportedSubcircuitState");
 end
 
+function testAlgebraicBehavioralSourceIsStateless(testCase)
+netlist=fullfile(testCase.TestData.TempDirectory,"algebraic_b.cir");
+writeTextFixture(netlist,"X1 in 0 algebraic"+newline+".subckt algebraic a b"+newline+"B1 a b V=V(a)*2"+newline+".ends"+newline+".end");
+raw=struct("names",["time","V(in)"],"values",[0,0;1e-3,1],"step_ranges",[1,2]);
+state=radia.ltspice.extractTransientState(raw,NetlistFile=netlist);verifyEmpty(testCase,state.inductor_names);
+end
+
+function testTopLevelHistoryDevicesFailLoudly(testCase)
+raw=struct("names",["time","V(in)","V(out)"],"values",[0,0,0;1e-3,1,1],"step_ranges",[1,2]);
+cases=["T1 in 0 out 0 Td=1u Z0=50","O1 in 0 out 0 LTRA","B1 out 0 V=delay(V(in),1u)"];
+for k=1:numel(cases)
+ netlist=fullfile(testCase.TestData.TempDirectory,"top_history_"+k+".cir");writeTextFixture(netlist,"* top-level history"+newline+cases(k)+newline+".end");
+ verifyError(testCase,@()radia.ltspice.extractTransientState(raw,NetlistFile=netlist),"radia:ltspice:UnsupportedTransientState");
+end
+end
+
 function testProcessTreeTerminationUsesFrameworkCompatibleApi(testCase)
 if ~ispc,testCase.assumeFail("Windows-only process lifecycle test.");end
 info=System.Diagnostics.ProcessStartInfo();info.FileName='pwsh';

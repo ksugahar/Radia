@@ -53,9 +53,11 @@ Core capabilities:
 For transient interval and Simulink handoff, the MATLAB layer restores saved
 node voltages and inductor currents. It follows nested `.subckt` definitions
 and requires explicit internal traces when L/C storage is present;
-terminal-current traces such as `Ix(x1:a)` are not state. Semiconductor,
-transmission-line, and behavioral-source internal states cannot be completely
-reconstructed by this contract and therefore fail loudly. The guard confirms
+terminal-current traces such as `Ix(x1:a)` are not state. Semiconductor state
+inside subcircuits, transmission-line history (`T`/`O`), and behavioral sources
+using memory operators such as `idt`, `sdt`, `ddt`, or `delay` cannot be
+completely reconstructed by this contract and therefore fail loudly. Purely
+algebraic behavioral sources remain supported. The guard confirms
 that a qualifying trace exists, but cannot prove that every internal L/C state
 was saved. Production circuits must therefore validate continuous execution
 against interval execution at the intended sample time.

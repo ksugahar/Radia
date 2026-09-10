@@ -43,9 +43,12 @@ for file=manifest.local_files(:).'
   if head==".subckt"&&numel(tokens)>=2
    current=lower(tokens(2));if ~isKey(definitions,char(current)),definitions(char(current))=struct("direct",false,"unsupported",false,"children",strings(0,1));end
   elseif head==".ends",current="";
+  elseif current==""&&(startsWith(head,["t","o"])||isMemoryBehavioralSource(head,line))
+   error("radia:ltspice:UnsupportedTransientState", ...
+    "Top-level element %s has history that cannot be restored by node-voltage/inductor-current handoff.",tokens(1));
   elseif startsWith(head,["l","c"])&&current~=""
    item=definitions(char(current));item.direct=true;definitions(char(current))=item;
-  elseif startsWith(head,["d","q","m","j","z","t","b"])&&current~=""
+  elseif current~=""&&(startsWith(head,["d","q","m","j","z","t","o"])||isMemoryBehavioralSource(head,line))
    item=definitions(char(current));item.unsupported=true;definitions(char(current))=item;
   elseif startsWith(head,"x")
    child=subcircuitName(tokens);
@@ -79,6 +82,11 @@ for k=1:size(top,1)
  keep(k)=~isKey(stateful,char(type))||stateful(char(type))==1;
 end
 instances=top(keep,1);
+end
+
+function tf=isMemoryBehavioralSource(head,line)
+expression=lower(regexprep(line,'\s+',''));
+tf=startsWith(head,"b")&&any(contains(expression,["idt(","idtmod(","sdt(","ddt(","delay("]));
 end
 
 function name=subcircuitName(tokens)
