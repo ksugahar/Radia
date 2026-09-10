@@ -10,16 +10,18 @@ both the route and its current position.
 
 The section names are examples, not a mandatory taxonomy. Authors first
 classify the actual deck into coherent acts, then place a divider at the start
-of every substantial act. This checker uses the deck's 起承転結 arc to infer
-the common motivation/method/results spine. A one-slide closing summary does
-not need its own divider.
+of every substantial act. This checker discovers the author's ordered section
+list from the repeated agenda itself; names such as Theory, Implementation or
+Discussion therefore work without a fixed IMRAD vocabulary. A one-slide
+closing summary does not need its own divider unless the author lists it as a
+section.
 """
 from __future__ import annotations
 
 import re
+from collections import Counter
 
-from ._kishotenketsu import presentation_kishotenketsu_check, read_deck
-
+from ._kishotenketsu import read_deck
 
 _AGENDA_TITLE = re.compile(
     r"(?i)\boutline\b|\bagenda\b|\bcontents\b|\broad ?map\b|\boverview\b"
@@ -39,24 +41,23 @@ _SECTION_PATTERNS = {
 }
 
 
-def _section_labels(slide: dict) -> set[str]:
-    text = f"{slide['title'] or ''}\n{slide['text']}"
-    return {name for name, pattern in _SECTION_PATTERNS.items()
-            if pattern.search(text)}
+def _clean_item(text: str) -> str:
+    """Remove list decoration while preserving the author's section name."""
+    return re.sub(r"^\s*(?:[•●▪◦-]\s*|\(?\d{1,2}\)?[.):、-]?\s*)", "", text).strip()
 
 
-def _looks_like_divider(slide: dict) -> tuple[bool, str, set[str]]:
-    """Recognize a repeated agenda/progress slide."""
-    labels = _section_labels(slide)
-    title = slide["title"] or ""
-    body_lines = [line.strip() for line in (slide["text"] or "").splitlines()
-                  if line.strip()]
-    complete = set(_SECTION_PATTERNS).issubset(labels)
-    if _AGENDA_TITLE.search(title) and complete:
-        return True, "agenda/progress slide", labels
-    if complete and len(body_lines) <= 6:
-        return True, "repeated full agenda", labels
-    return False, "", labels
+def _normalise_item(text: str) -> str:
+    return re.sub(r"\s+", " ", _clean_item(text)).casefold()
+
+
+def _section_key(label: str) -> str:
+    """Keep familiar keys for compatibility; accept arbitrary author labels."""
+    matches = [name for name, pattern in _SECTION_PATTERNS.items()
+               if pattern.search(label)]
+    if len(matches) == 1:
+        return matches[0]
+    ascii_key = re.sub(r"[^a-z0-9]+", "_", label.casefold()).strip("_")
+    return ascii_key or _normalise_item(label)
 
 
 def _run_signature(run) -> tuple[str, bool, float | None]:
@@ -69,37 +70,51 @@ def _run_signature(run) -> tuple[str, bool, float | None]:
     return colour, bool(run.font.bold), size
 
 
-def _highlighted_section_labels(pptx_slide) -> set[str]:
-    """Find the uniquely styled section label in a complete agenda."""
-    from collections import Counter
-
-    signatures: dict[str, list[tuple[str, bool, float | None]]] = {}
+def _agenda_block(
+        pptx_slide) -> list[tuple[str, tuple[tuple[str, bool, float | None], ...]]]:
+    """Return the most plausible 2--8 item agenda block on one slide."""
+    blocks = []
     for shape in pptx_slide.shapes:
         if not getattr(shape, "has_text_frame", False):
             continue
-        shape_labels = {name for name, pattern in _SECTION_PATTERNS.items()
-                        if pattern.search(shape.text or "")}
-        if len(shape_labels) < 2:
-            continue
+        items = []
         for paragraph in shape.text_frame.paragraphs:
-            for run in paragraph.runs:
-                for name, pattern in _SECTION_PATTERNS.items():
-                    if pattern.search(run.text or ""):
-                        signatures.setdefault(name, []).append(_run_signature(run))
+            text = "".join(run.text for run in paragraph.runs).strip()
+            if not text:
+                continue
+            signatures = tuple(dict.fromkeys(
+                _run_signature(run) for run in paragraph.runs if run.text.strip()))
+            items.append((_clean_item(text), signatures))
+        if not 2 <= len(items) <= 8:
+            continue
+        blocks.append(items)
+    return max(blocks, key=len) if blocks else []
 
-    primary = {name: Counter(values).most_common(1)[0][0]
-               for name, values in signatures.items() if values}
-    counts = Counter(primary.values())
-    if len(primary) < 2 or not counts:
-        return set()
+
+def _highlighted_item_indices(
+        block: list[tuple[str, tuple[tuple[str, bool, float | None], ...]]]) -> list[int]:
+    """Find the single agenda line whose style differs from the other lines."""
+    line_signatures = [set(signatures) for _text, signatures in block]
+    occurrences = Counter(signature for signatures in line_signatures
+                          for signature in signatures)
+    unique_style = [index for index, signatures in enumerate(line_signatures)
+                    if any(occurrences[signature] == 1 for signature in signatures)]
+    if len(unique_style) == 1:
+        return unique_style
+    bold = [index for index, signatures in enumerate(line_signatures)
+            if any(signature[1] for signature in signatures)]
+    if len(bold) == 1 and len(bold) < len(block):
+        return bold
+    primary = [next(iter(signatures), ("", False, None))
+               for signatures in line_signatures]
+    counts = Counter(primary)
+    if not counts:
+        return []
     ordinary, ordinary_count = counts.most_common(1)[0]
     if ordinary_count < 2:
-        return set()
-    return {name for name, signature in primary.items() if signature != ordinary}
-
-
-def _near(slide_no: int, boundary: int | None, allowance: int) -> bool:
-    return boundary is not None and 0 <= boundary - slide_no <= allowance
+        return []
+    return [index for index, signature in enumerate(primary)
+            if signature != ordinary]
 
 
 def presentation_check_outline_slide(pptx_path: str,
@@ -107,9 +122,8 @@ def presentation_check_outline_slide(pptx_path: str,
                                      max_slides_before_turn: int = 2) -> dict:
     """Check recurring section dividers at the talk's major transitions.
 
-    ``max_slides_before_turn`` is retained for API compatibility. It is the
-    maximum distance allowed between a method divider and the inferred turn;
-    two accommodates a short goal/overview slide before the detailed method.
+    ``max_slides_before_turn`` is retained for API compatibility. Dynamic
+    section discovery no longer assumes a fixed method/results taxonomy.
     """
     try:
         from pptx import Presentation
@@ -122,46 +136,61 @@ def presentation_check_outline_slide(pptx_path: str,
         return {"error": f"only {len(main)} content slides; too few to need "
                          "section dividers."}
 
-    arc = presentation_kishotenketsu_check(pptx_path, backup_title)
-    arc_parts = arc.get("arc", {})
-    boundaries = {
-        "motivation": main[0]["slide"] if main else None,
-        "method": (arc_parts.get("ten") or [None])[0],
-        "results": (arc_parts.get("ketsu") or [None])[0],
-    }
+    raw = []
+    for slide in main:
+        block = _agenda_block(prs.slides[slide["slide"] - 1])
+        if not block:
+            continue
+        agenda = tuple(_normalise_item(text) for text, _signature in block)
+        raw.append((slide, block, agenda))
+
+    repeated = Counter(agenda for _slide, _block, agenda in raw)
+    eligible = [entry for entry in raw
+                if _AGENDA_TITLE.search(entry[0]["title"] or "")
+                or repeated[entry[2]] >= 2]
+    reference = (max(eligible, key=lambda entry: (repeated[entry[2]], len(entry[2])))[2]
+                 if eligible else ())
+    reference_entry = next((entry for entry in eligible if entry[2] == reference), None)
+    labels = [text for text, _signature in reference_entry[1]] if reference_entry else []
+    keys = []
+    for label in labels:
+        base = _section_key(label)
+        key = base
+        suffix = 2
+        while key in keys:
+            key = f"{base}_{suffix}"
+            suffix += 1
+        keys.append(key)
 
     dividers = []
-    for slide in main:
-        ok, why, labels = _looks_like_divider(slide)
-        if ok:
-            highlighted = _highlighted_section_labels(prs.slides[slide["slide"] - 1])
-            dividers.append({
-                "slide": slide["slide"],
-                "title": slide["title"],
-                "detected_by": why,
-                "section_labels": sorted(labels),
-                "highlighted_sections": sorted(highlighted),
-            })
+    for slide, block, agenda in eligible:
+        if agenda != reference:
+            continue
+        active_indices = _highlighted_item_indices(block)
+        active = [keys[index] for index in active_indices if index < len(keys)]
+        dividers.append({
+            "slide": slide["slide"],
+            "title": slide["title"],
+            "detected_by": ("agenda/progress slide" if _AGENDA_TITLE.search(slide["title"] or "")
+                            else "repeated full agenda"),
+            "section_labels": labels,
+            "highlighted_sections": active,
+        })
 
-    coverage: dict[str, list[int]] = {}
-    for section, boundary in boundaries.items():
-        matches = []
-        for divider in dividers:
-            if not set(boundaries).issubset(divider["section_labels"]):
-                continue
-            if divider["highlighted_sections"] != [section]:
-                continue
-            allowance = 0 if section == "motivation" else max_slides_before_turn
-            if _near(divider["slide"], boundary, allowance):
-                matches.append(divider["slide"])
-        coverage[section] = matches
+    coverage: dict[str, list[int]] = {key: [] for key in keys}
+    expected = 0
+    for divider in dividers:
+        active = divider["highlighted_sections"]
+        if expected < len(keys) and active == [keys[expected]]:
+            coverage[keys[expected]].append(divider["slide"])
+            expected += 1
+        elif active:
+            break
 
-    checks = {
-        "Motivation の開始をその場で示す": bool(coverage["motivation"]),
-        "Proposed method の開始をその場で示す": bool(coverage["method"]),
-        "Results の開始をその場で示す": bool(coverage["results"]),
-    }
-    score = round(10.0 * sum(checks.values()) / len(checks), 1)
+    checks = {f"{label} の開始をその場で示す": bool(coverage[key])
+              for key, label in zip(keys, labels)}
+    score = (round(10.0 * sum(checks.values()) / len(checks), 1)
+             if checks else 0.0)
     comments = [f"{'OK  ' if value else 'FAIL'} {label}"
                 for label, value in checks.items()]
 
@@ -170,17 +199,16 @@ def presentation_check_outline_slide(pptx_path: str,
             "反復 Outline が無い。スライド全体を内容で分類し、各主要章の"
             "先頭で全章を再掲し、今から始まる章だけを強調する。")
     elif not all(checks.values()):
-        missing = [name for name, slides in coverage.items() if not slides]
+        missing = [label for key, label in zip(keys, labels) if not coverage[key]]
         comments.append(
             "各章の先頭で全項目を再掲し、現在章だけを色・太字・大きさ等で"
             "一意に強調する。満たしていない章: "
             + ", ".join(missing) + ".")
 
-    suggested = [
-        {"section": section, "insert_before_or_near_slide": boundary}
-        for section, boundary in boundaries.items()
-        if not coverage[section]
-    ]
+    suggested = [{"section": label, "insert_before_or_near_slide": None}
+                 for key, label in zip(keys, labels) if not coverage[key]]
+    boundaries = {key: (coverage[key][0] if coverage[key] else None)
+                  for key in keys}
 
     return {
         "score": score,
