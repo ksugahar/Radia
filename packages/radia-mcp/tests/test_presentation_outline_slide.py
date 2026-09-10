@@ -107,6 +107,31 @@ def test_section_names_are_examples_and_japanese_labels_work(tmp_path):
     assert result["score"] == 10.0
 
 
+def test_four_section_custom_taxonomy_repeats_and_highlights_in_order(tmp_path):
+    items = ["1 Motivation", "2 Theory", "3 Implementation", "4 Results"]
+    rows = ([_agenda("Motivation", items=items)] + ARC[:1]
+            + [_agenda("Theory", items=items)] + ARC[1:2]
+            + [_agenda("Implementation", items=items)] + ARC[2:3]
+            + [_agenda("Results", items=items)] + ARC[3:])
+    result = presentation_check_outline_slide(str(_deck(tmp_path, rows)))
+    assert result["score"] == 10.0
+    assert result["scoring_mode"] == "repeated-agenda"
+    assert result["recurring_agenda"]["items"] == items
+    assert result["recurring_agenda"]["observed_highlight_order"] == items
+
+
+def test_custom_taxonomy_rejects_changed_order(tmp_path):
+    items = ["1 Motivation", "2 Theory", "3 Implementation", "4 Results"]
+    changed = ["1 Motivation", "3 Implementation", "2 Theory", "4 Results"]
+    rows = ([_agenda("Motivation", items=items)] + ARC[:1]
+            + [_agenda("Theory", items=items)] + ARC[1:2]
+            + [_agenda("Implementation", items=changed)] + ARC[2:3]
+            + [_agenda("Results", items=items)] + ARC[3:])
+    result = presentation_check_outline_slide(str(_deck(tmp_path, rows)))
+    assert result["score"] < 10.0
+    assert not result["recurring_agenda"]["same_order"]
+
+
 def test_deck_too_short_to_need_sections_says_so(tmp_path):
     result = presentation_check_outline_slide(str(_deck(tmp_path, ARC[:2])))
     assert "too few" in result["error"]
