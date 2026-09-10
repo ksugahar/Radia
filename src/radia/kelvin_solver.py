@@ -507,6 +507,53 @@ def solve_magnetostatic_reduced_omega_kelvin(
     }
 
 
+def _report_direct_solve_residual(a_bf, f_lf, solution, fes, block_names=None):
+    """Measure ``r = b - A x`` for a solve that has no iteration history.
+
+    A direct factorisation is not exact arithmetic, and reporting nothing
+    because there is no iteration count is the same gap as treating a CG that
+    ran out of iterations as converged.  Norms are reported over the FREE dofs
+    (the system that was solved) and, for a compound space, per block, so an
+    interface-constraint defect cannot hide inside a healthy PDE residual.
+    """
+    import numpy as _np
+
+    residual = solution.vec.CreateVector()
+    residual.data = f_lf.vec - a_bf.mat * solution.vec
+    r = _np.asarray(residual.FV(), dtype=float).copy()
+    b = _np.asarray(f_lf.vec.FV(), dtype=float).copy()
+    free = _np.fromiter((bool(bit) for bit in fes.FreeDofs()), bool, len(r))
+
+    def _relative(mask):
+        if not mask.any():
+            return None
+        numerator = float(_np.linalg.norm(r[mask]))
+        denominator = float(_np.linalg.norm(b[mask]))
+        return {"residual_l2": numerator,
+                "rhs_l2": denominator,
+                "relative": (numerator / denominator if denominator > 0.0
+                             else None)}
+
+    report = {"free_dofs": _relative(free),
+              "all_dofs": _relative(_np.ones_like(free))}
+    try:
+        component_count = len(solution.components)
+    except TypeError:                                   # not a compound space
+        component_count = 0
+    names = tuple(block_names or ()) or tuple(
+        "block_%d" % index for index in range(component_count))
+    blocks = {}
+    for index in range(component_count):
+        span = fes.Range(index)
+        mask = _np.zeros_like(free)
+        mask[span.start:span.stop] = True
+        blocks[names[index] if index < len(names) else "block_%d" % index] = (
+            _relative(mask & free))
+    if blocks:
+        report["blocks"] = blocks
+    return report
+
+
 def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         mesh, H_s, source_potential, R_K, offset, *, mu_r_by_material=None,
         reduced_materials, total_materials, interface_boundary,
@@ -808,6 +855,18 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         solution.vec.data += a_bf.mat.Inverse(
             fes.FreeDofs(), inverse=inverse) * residual
 
+    # A direct solve has no iteration history, but it still has a residual.
+    # r = b - A x on the system that was ACTUALLY solved -- non-zero Dirichlet
+    # lift included, because `solution` already carries it.  Report the free
+    # dofs separately from the constrained ones: a constrained row holds the
+    # Dirichlet equation, not the system, so mixing them in hides the number
+    # that matters.  The multiplier block is split out on its own because
+    # those rows ARE the interface jump condition in weak form,
+    # ``scale * int test_multiplier (phi_total - phi_reduced - Phi_s) ds``.
+    linear_residual = _report_direct_solve_residual(
+        a_bf, f_lf, solution, fes,
+        block_names=("phi_reduced", "phi_total", "interface_constraint"))
+
     phi_reduced_gf, phi_total_gf, multiplier_gf = solution.components[:3]
     H_reduced = H_s - grad(phi_reduced_gf)
     zero_h = CoefficientFunction((0.0, 0.0, 0.0))
@@ -842,6 +901,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
     H_cf = CoefficientFunction(tuple(h_components))
     return {
         "solution": solution,
+        "linear_residual": linear_residual,
         "phi_reduced": phi_reduced_gf,
         "phi_total": phi_total_gf,
         "interface_multiplier": multiplier_gf,
