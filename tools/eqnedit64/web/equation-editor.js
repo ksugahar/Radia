@@ -2118,7 +2118,7 @@
         "⏞□",
         "\\overbrace{}^{}",
         "上の水平波括弧",
-        "\\overbrace{x}",
+        "\\overbrace{xy}",
         "template.overbrace",
         0,
         ""
@@ -2127,7 +2127,7 @@
         "⏟□",
         "\\underbrace{}_{}",
         "下の水平波括弧",
-        "\\underbrace{x}",
+        "\\underbrace{xy}",
         "template.underbrace",
         0,
         ""

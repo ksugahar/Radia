@@ -1942,7 +1942,7 @@
           "face": "⏞□",
           "label": "上の水平波括弧",
           "insert_tex": "\\overbrace{}^{}",
-          "preview_tex": "\\overbrace{x}",
+          "preview_tex": "\\overbrace{xy}",
           "selection_slot": 0
         },
         {
@@ -1950,7 +1950,7 @@
           "face": "⏟□",
           "label": "下の水平波括弧",
           "insert_tex": "\\underbrace{}_{}",
-          "preview_tex": "\\underbrace{x}",
+          "preview_tex": "\\underbrace{xy}",
           "selection_slot": 0
         },
         {
