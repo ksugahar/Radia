@@ -2,8 +2,9 @@
 
 This is the operational contract referenced by AGENTS.md and CLAUDE.md.
 It governs development, testing, release deployment and reconnect work on LAB
-and 100号機. It is a policy, not evidence that an automatic lock, launcher,
-receipt writer or per-client reconnect control has already been implemented.
+and 100号機. The maintenance CLI implements cooperative host-wide exclusion and
+activation receipts; it does not intercept arbitrary installers or provide
+per-client reconnect control. See [maintenance](../maintenance.md) for its scope.
 
 ## 1. Separate development from active service
 
@@ -132,9 +133,11 @@ They do not make existing sessions restart or older checkouts read new rules.
 Provide this policy and the current deployment record at the next owner handoff.
 Do not patch another task's dirty checkout just to distribute instructions.
 
-Subsequent implementation should add exclusive deployment ownership with
-compare-before-change protection, an atomic receipt and per-client generation
-evidence to the existing maintenance workflow. Test concurrent owners, mapped
-path aliases, interrupted activation, same-version/different-source installs,
-mixed-generation status and busy clients before enabling automated activation.
-No new watcher, service or client restart is installed by this policy change.
+The maintenance CLI now provides exclusive host-wide ownership, compare-before-
+change checks and atomic receipts for config edits and radia-mcp-only editable
+activation. Tests cover competing processes, interrupted work and same-version
+source changes. Idle status is operator-attested and client results remain
+unverified; this is not unattended deployment acceptance.
+Remaining work includes integrating legacy release entry points, cross-host
+coordination, automatic busy-client discovery and per-client generation evidence.
+No new watcher, service or client restart is installed by this implementation.
