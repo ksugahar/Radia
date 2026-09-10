@@ -55,7 +55,7 @@ end
 
 function testMissingSubcircuitStateFailsLoudly(testCase)
 netlist=fullfile(testCase.TestData.TempDirectory,"sub_state.cir");
-writeTextFixture(netlist,"X1 in 0 dynamic"+newline+".subckt dynamic a b"+newline+"L1 a b 1m"+newline+".ends"+newline+".end");
+writeTextFixture(netlist,"Subcircuit state test"+newline+"X1 in 0 dynamic"+newline+".subckt dynamic a b"+newline+"L1 a b 1m"+newline+".ends"+newline+".end");
 raw=struct("names",["time","V(in)"],"values",[0,0;1e-3,1],"step_ranges",[1,2]);
 verifyError(testCase,@()radia.ltspice.extractTransientState(raw,NetlistFile=netlist),"radia:ltspice:MissingSubcircuitState");
 end
@@ -73,7 +73,7 @@ end
 
 function testStatelessSubcircuitDoesNotRequireImpossibleStateTrace(testCase)
 netlist=fullfile(testCase.TestData.TempDirectory,"stateless_sub.cir");
-writeTextFixture(netlist,"V1 in 0 1"+newline+"X1 in 0 rdiv"+newline+".subckt rdiv a b"+newline+"R1 a b 1k"+newline+".ends"+newline+".tran 1m"+newline+".end");
+writeTextFixture(netlist,"Stateless subcircuit test"+newline+"V1 in 0 1"+newline+"X1 in 0 rdiv"+newline+".subckt rdiv a b"+newline+"R1 a b 1k"+newline+".ends"+newline+".tran 1m"+newline+".end");
 raw=struct("names",["time","V(in)","Ix(x1:a)","Ix(x1:b)"],"values",[0,0,0,0;1e-3,1,1e-3,-1e-3],"step_ranges",[1,2]);
 state=radia.ltspice.extractTransientState(raw,NetlistFile=netlist);
 verifyEmpty(testCase,state.inductor_names);
@@ -81,28 +81,28 @@ end
 
 function testNestedStatefulSubcircuitRequiresTrace(testCase)
 netlist=fullfile(testCase.TestData.TempDirectory,"nested_state.cir");
-writeTextFixture(netlist,"Xtop in 0 outer"+newline+".subckt outer a b"+newline+"Xinner a b dynamic"+newline+".ends"+newline+".subckt dynamic a b"+newline+"C1 a b 1u"+newline+".ends"+newline+".end");
+writeTextFixture(netlist,"Nested state test"+newline+"Xtop in 0 outer"+newline+".subckt outer a b"+newline+"Xinner a b dynamic"+newline+".ends"+newline+".subckt dynamic a b"+newline+"C1 a b 1u"+newline+".ends"+newline+".end");
 raw=struct("names",["time","V(in)","Ix(xtop:a)"],"values",[0,0,0;1e-3,1,1e-3],"step_ranges",[1,2]);
 verifyError(testCase,@()radia.ltspice.extractTransientState(raw,NetlistFile=netlist),"radia:ltspice:MissingSubcircuitState");
 end
 
 function testParamsSyntaxResolvesStatelessSubcircuit(testCase)
 netlist=fullfile(testCase.TestData.TempDirectory,"params_stateless.cir");
-writeTextFixture(netlist,"X1 in 0 rdiv params: R=1k"+newline+".subckt rdiv a b params: R=1k"+newline+"R1 a b {R}"+newline+".ends"+newline+".end");
+writeTextFixture(netlist,"Parameter syntax test"+newline+"X1 in 0 rdiv params: R=1k"+newline+".subckt rdiv a b params: R=1k"+newline+"R1 a b {R}"+newline+".ends"+newline+".end");
 raw=struct("names",["time","V(in)"],"values",[0,0;1e-3,1],"step_ranges",[1,2]);
 state=radia.ltspice.extractTransientState(raw,NetlistFile=netlist);verifyEmpty(testCase,state.inductor_names);
 end
 
 function testDeviceInternalSubcircuitStateFailsAsUnsupported(testCase)
 netlist=fullfile(testCase.TestData.TempDirectory,"diode_state.cir");
-writeTextFixture(netlist,"X1 in 0 dd"+newline+".subckt dd a b"+newline+"D1 a m DM"+newline+"R1 m b 1"+newline+".model DM D(Cjo=100p)"+newline+".ends"+newline+".end");
+writeTextFixture(netlist,"Device state test"+newline+"X1 in 0 dd"+newline+".subckt dd a b"+newline+"D1 a m DM"+newline+"R1 m b 1"+newline+".model DM D(Cjo=100p)"+newline+".ends"+newline+".end");
 raw=struct("names",["time","V(in)"],"values",[0,0;1e-3,1],"step_ranges",[1,2]);
 verifyError(testCase,@()radia.ltspice.extractTransientState(raw,NetlistFile=netlist),"radia:ltspice:UnsupportedSubcircuitState");
 end
 
 function testAlgebraicBehavioralSourceIsStateless(testCase)
 netlist=fullfile(testCase.TestData.TempDirectory,"algebraic_b.cir");
-writeTextFixture(netlist,"X1 in 0 algebraic"+newline+".subckt algebraic a b"+newline+"B1 a b V=V(a)*2"+newline+".ends"+newline+".end");
+writeTextFixture(netlist,"Algebraic source test"+newline+"X1 in 0 algebraic"+newline+".subckt algebraic a b"+newline+"B1 a b V=V(a)*2"+newline+".ends"+newline+".end");
 raw=struct("names",["time","V(in)"],"values",[0,0;1e-3,1],"step_ranges",[1,2]);
 state=radia.ltspice.extractTransientState(raw,NetlistFile=netlist);verifyEmpty(testCase,state.inductor_names);
 end
@@ -114,6 +114,13 @@ for k=1:numel(cases)
  netlist=fullfile(testCase.TestData.TempDirectory,"top_history_"+k+".cir");writeTextFixture(netlist,"* top-level history"+newline+cases(k)+newline+".end");
  verifyError(testCase,@()radia.ltspice.extractTransientState(raw,NetlistFile=netlist),"radia:ltspice:UnsupportedTransientState");
 end
+end
+
+function testSpiceTitleLineIsNotParsedAsDevice(testCase)
+netlist=fullfile(testCase.TestData.TempDirectory,"title_line.cir");
+writeTextFixture(netlist,"Two stage RC test"+newline+"V1 in 0 1"+newline+"R1 in 0 1k"+newline+".tran 1m"+newline+".end");
+raw=struct("names",["time","V(in)"],"values",[0,0;1e-3,1],"step_ranges",[1,2]);
+state=radia.ltspice.extractTransientState(raw,NetlistFile=netlist);verifyEmpty(testCase,state.inductor_names);
 end
 
 function testProcessTreeTerminationUsesFrameworkCompatibleApi(testCase)
