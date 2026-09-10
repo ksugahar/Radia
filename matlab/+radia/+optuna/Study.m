@@ -77,7 +77,7 @@ classdef Study < handle
 
     properties (Constant, Access=private)
         StorageSchema = "radia.optuna.study"
-        StorageVersion = 5
+        StorageVersion = 6
     end
 
     methods
@@ -724,15 +724,32 @@ classdef Study < handle
             if strlength(obj.StoragePath) == 0
                 error("radia:optuna:Storage", "StoragePath is empty.");
             end
+            % Version 6 flattens per-trial snapshots, avoiding thousands of
+            % serialized empty tables. Keep their original timestamps/order:
+            % the public normalized IntermediateTable has its own timestamps.
+            storedTrials=obj.TrialTable;
+            nested=storedTrials.IntermediateValues;
+            counts=cellfun(@height,nested);
+            present=find(counts>0);
+            snapshots=obj.IntermediateTable([],:);
+            if ~isempty(present)
+                observations=vertcat(nested{present});
+                numbers=repelem(storedTrials.TrialNumber(present),counts(present));
+                numbers=numbers(:);
+                snapshots=addvars(observations,numbers,'Before',1, ...
+                    'NewVariableNames','TrialNumber');
+            end
+            storedTrials.IntermediateValues=[];
             StudyData = struct( ...
                 "Schema", obj.StorageSchema, ...
                 "Version", obj.StorageVersion, ...
                 "Name", obj.Name, ...
                 "Directions", obj.Directions, ...
                 "NextTrialNumber", obj.NextTrialNumber, ...
-                "TrialTable", obj.TrialTable, ...
+                "TrialTable", storedTrials, ...
                 "ParamTable", obj.ParamTable, ...
                 "IntermediateTable", obj.IntermediateTable, ...
+                "TrialIntermediateSnapshots", snapshots, ...
                 "UserAttrTable", obj.UserAttrTable, ...
                 "SystemAttrTable", obj.SystemAttrTable, ...
                 "ConstraintTable", obj.ConstraintTable, ...
@@ -1395,6 +1412,25 @@ classdef Study < handle
             obj.Name = string(data.Name);
             obj.Directions = string(data.Directions);
             obj.NextTrialNumber = data.NextTrialNumber;
+            if isfield(data,"Version") && data.Version==6
+                count=height(data.TrialTable);
+                values=repmat({radia.optuna.Trial.emptyIntermediateTable()},count,1);
+                observations=data.TrialIntermediateSnapshots;
+                if ~isempty(observations)
+                    [~,owners]=ismember(observations.TrialNumber,data.TrialTable.TrialNumber);
+                    [orderedOwners,order]=sort(owners);
+                    starts=[1;find(diff(orderedOwners)~=0)+1];
+                    ends=[starts(2:end)-1;numel(order)];
+                    for index=1:numel(starts)
+                        rows=order(starts(index):ends(index));
+                        values{orderedOwners(starts(index))}= ...
+                            observations(rows,{'Step','Value','Timestamp'});
+                    end
+                end
+                data.TrialTable.IntermediateValues=values;
+                data.TrialTable=movevars(data.TrialTable,'IntermediateValues', ...
+                    'Before','ErrorMessage');
+            end
             obj.TrialTable = data.TrialTable;
             obj.ParamTable = data.ParamTable;
             obj.IntermediateTable = data.IntermediateTable;
@@ -2153,6 +2189,26 @@ classdef Study < handle
                 if ~isfield(data, field)
                     error("radia:optuna:StorageFormat", ...
                         "Storage '%s' is missing StudyData.%s.", path, field);
+                end
+            end
+            if hasVersion && version==6
+                trials=data.TrialTable;
+                if ~isfield(data,"TrialIntermediateSnapshots")
+                    error("radia:optuna:StorageFormat", ...
+                        "Storage '%s' lacks normalized trial snapshots.",path);
+                end
+                observations=data.TrialIntermediateSnapshots;
+                if ~istable(trials) || ~istable(observations) || ...
+                        ~all(ismember(["TrialNumber","ErrorMessage"], ...
+                        string(trials.Properties.VariableNames))) || ...
+                        ismember("IntermediateValues",string(trials.Properties.VariableNames)) || ...
+                        ~all(ismember(["TrialNumber","Step","Value","Timestamp"], ...
+                        string(observations.Properties.VariableNames))) || ...
+                        ~isdatetime(observations.Timestamp) || ...
+                        numel(unique(trials.TrialNumber))~=height(trials) || ...
+                        any(~ismember(observations.TrialNumber,trials.TrialNumber))
+                    error("radia:optuna:StorageFormat", ...
+                        "Storage '%s' has invalid normalized intermediate observations.",path);
                 end
             end
         end

@@ -104,6 +104,38 @@ contract, then safe native-cache rebuilding for persisted studies. This is
 an investigation result, not an implemented storage change or a Rustuna
 performance-equivalence claim.
 
+### Storage schema 6: first measured optimization
+
+The first persistence improvement now flattens per-trial intermediate
+snapshots into `StudyData.TrialIntermediateSnapshots`. The persisted
+`StudyData.TrialTable` omits its nested `IntermediateValues` column; loading
+reconstructs that public column, including original snapshot timestamps and
+order. `StudyData.IntermediateTable` remains separate because its timestamps
+are observably different. Empty per-trial tables are no longer serialized.
+
+Versions 1-5 remain readable and migrate on the next explicit/automatic save.
+Older software cannot read schema 6: retain a pre-migration file copy if a
+downgrade is required. Use `radia.optuna.Study` for the public table API;
+consumers directly reading MAT internals must understand the versioned layout.
+AutoSave frequency, primary read-back validation, atomic replacement, and
+verified backup are unchanged. Native-history eligibility is also unchanged.
+
+mdx2 run `34451777406` measured full-save medians of 0.084/0.103/0.264 seconds
+at 100/1,000/10,000 trials, compared with 0.208/1.328/9.902 seconds before.
+At 10,000 trials the observed reduction is approximately 37x; the file shrank
+from 2,508,755 to 472,890 bytes and profiled table.saveobj calls fell from
+40,096 to 44. See
+`validation_test/optimization/results_optuna_normalized_storage_mdx2_20260910.json`.
+This is a same-host, non-interleaved scalar workload comparison, not a general
+throughput claim. Next priorities remain explicit incremental durability and
+safe native-cache rebuilding for persisted/imported studies.
+
+Acceptance after this storage change: 76 upstream-oracle MATLAB tests,
+26 table/reliability/core tests (including nonempty snapshots, RUNNING state,
+version-5 migration and invalid-snapshot backup recovery), and 11 standalone
+Python package tests passed. The targeted normalized-snapshot regression also
+passed on mdx2 before its benchmark. No release or deployment is implied.
+
 ## 2. Scope and non-goals
 
 ### In scope
