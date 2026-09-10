@@ -445,7 +445,9 @@ a_real = K + eps*M + |omega|*sigma * M_cond
 - **`fes_real`**（非複素HCurl）をAMS前処理に使用する必要があります。**`fes`**（複素HCurl）はCOCRソルバーに使用します。両空間の`freedofs`は一致する必要がありますが、同じメッシュ上で同じ`order`、`dirichlet`、`nograds`設定で構築されるため、`fes_real.FreeDofs()`と`fes.FreeDofs()`は整合しています。
 - **`nograds=True` は必須です**: 勾配DOFはAMSの勾配補正（離散勾配行列G）で既に処理されます。含めると冗長になり、条件数が悪化します。
 - **`order=1` が現在の制限です**: Compact AMSは最低次Nedelec要素向けに設計されています。高次HCurl空間にはNGSolve BDDCを使用してください。
-- **`TaskManager()` コンテキストが必要です**: COCR求解とAMS前処理の並列実行に必要です。
+- **`TaskManager()` の範囲を分けます**: AMSの構築と `Update()` は外で行い、
+  構築済み前処理を使うCOCR求解は内で並列実行します。構築・更新を内で呼ぶと
+  `RuntimeError` になります。
 
 ### 完全な例題
 
@@ -509,7 +511,7 @@ coord_z = [mesh.ngmesh.Points()[i+1][2] for i in range(mesh.nv)]
 # --- Discrete gradient matrix ---
 G_mat, h1_fes = fes_real.CreateGradient()
 
-# --- Compact AMS preconditioner (built from real auxiliary matrix) ---
+# --- Compact AMS preconditioner (build outside TaskManager) ---
 t0 = time.perf_counter()
 pre = ssn.ComplexCompactAMSPreconditioner(
     a_real.mat, G_mat, freedofs=fes.FreeDofs(),

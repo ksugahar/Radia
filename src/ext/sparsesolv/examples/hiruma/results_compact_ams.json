@@ -12,7 +12,9 @@
     "frequency_hz": 30000.0,
     "sigma_cu": 59600000.0,
     "mu_r_core": 1000,
-    "epsilon_regularization": 1e-06,
+    "system_epsilon_regularization": 1e-06,
+    "preconditioner_epsilon_regularization": 1e-06,
+    "epsilon_placement": "system_and_preconditioner_historical",
     "tol": 1e-10,
     "maxiter": 2000
   },

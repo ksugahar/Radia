@@ -28,7 +28,7 @@ import radia.sparsesolv_ngsolve as ssn
 mu0 = 4e-7 * np.pi
 freq = 30e3
 omega = 2 * np.pi * freq
-eps = 1e-6
+preconditioner_eps = 1e-6
 sigma_cu = 5.96e7
 mu_r_core = 1000
 
@@ -66,7 +66,6 @@ def setup_problem(mesh_name):
 
     a = BilinearForm(fes)
     a += nu_cf * curl(u) * curl(v) * dx
-    a += eps * nu_cf * u * v * dx
     a += 1j * omega * sigma_cf * u * v * dx("cond")
     a.Assemble()
 
@@ -79,7 +78,11 @@ def setup_problem(mesh_name):
     u_r, v_r = fes_real.TnT()
     a_real = BilinearForm(fes_real)
     a_real += nu_cf * curl(u_r) * curl(v_r) * dx
-    a_real += eps * nu_cf * u_r * v_r * dx
+    # The shift regularizes only the AMS surrogate.  Adding it to the physical
+    # system fixes a gauge representative and creates an artificial tiny
+    # eigenvalue; gauge-invariant observables are unchanged, but the reported
+    # condition number is then dominated by this benchmark-only shift.
+    a_real += preconditioner_eps * nu_cf * u_r * v_r * dx
     a_real += abs(omega) * sigma_cf * u_r * v_r * dx("cond")
     a_real.Assemble()
 
@@ -235,7 +238,9 @@ def main():
             "frequency_hz": freq,
             "sigma_cu": sigma_cu,
             "mu_r_core": mu_r_core,
-            "epsilon_regularization": eps,
+            "system_epsilon_regularization": 0.0,
+            "preconditioner_epsilon_regularization": preconditioner_eps,
+            "epsilon_placement": "preconditioner_only",
             "tol": tol,
             "maxiter": maxiter,
         },

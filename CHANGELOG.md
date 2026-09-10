@@ -9,6 +9,9 @@ All notable changes to the `radia` package.  Format: each release lists
   contexts with a catchable error before hierarchy setup. Real/complex factories
   and compatibility aliases are covered by subprocess regressions; parallel
   application of an already-built preconditioner remains supported.
+- The Hiruma AMS benchmark now keeps its epsilon shift in the real
+  preconditioner surrogate only. The physical complex system remains unshifted,
+  and historical shifted-system timing data is labeled accordingly.
 
 - Simplified Eqnedit64 automation to a single input/output conversion contract
   and migrated the `eqnedit64` package plus `radia-mcp.presentation` bridge to
