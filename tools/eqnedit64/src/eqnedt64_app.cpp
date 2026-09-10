@@ -2404,11 +2404,25 @@ bool font_draws_ink(HFONT font, const wchar_t* sample) {
     HDC dc = CreateCompatibleDC(nullptr);
     if (!dc) return false;
     bool ink = false;
-    const int box = 64;
+    HGDIOBJ oldFont = SelectObject(dc, font);
+    TEXTMETRICW metrics = {};
+    SIZE extent = {};
+    if (!GetTextMetricsW(dc, &metrics) ||
+        !GetTextExtentPoint32W(dc, sample, int(wcslen(sample)), &extent) ||
+        extent.cx < 0 || extent.cx > 16384 ||
+        metrics.tmHeight <= 0 || metrics.tmHeight > 4096) {
+        SelectObject(dc, oldFont);
+        DeleteDC(dc);
+        return false;
+    }
+    // A 64px probe clips Latin Modern Math's large Windows ascent at 150%
+    // scaling. Reserve the measured line and sample, not a fixed pixel box.
+    const int width = int(extent.cx) + 8;
+    const int height = int(metrics.tmHeight) + 8;
     BITMAPINFO bi = {};
     bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
-    bi.bmiHeader.biWidth = box;
-    bi.bmiHeader.biHeight = -box;
+    bi.bmiHeader.biWidth = width;
+    bi.bmiHeader.biHeight = -height;
     bi.bmiHeader.biPlanes = 1;
     bi.bmiHeader.biBitCount = 32;
     bi.bmiHeader.biCompression = BI_RGB;
@@ -2416,20 +2430,19 @@ bool font_draws_ink(HFONT font, const wchar_t* sample) {
     if (HBITMAP bmp = CreateDIBSection(dc, &bi, DIB_RGB_COLORS, &bits,
                                        nullptr, 0)) {
         HGDIOBJ oldBmp = SelectObject(dc, bmp);
-        RECT all{0, 0, box, box};
+        RECT all{0, 0, width, height};
         FillRect(dc, &all, HBRUSH(GetStockObject(WHITE_BRUSH)));
-        HGDIOBJ oldFont = SelectObject(dc, font);
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, RGB(0, 0, 0));
         TextOutW(dc, 2, 2, sample, int(wcslen(sample)));
         GdiFlush();
         const auto* px = static_cast<const unsigned char*>(bits);
-        for (int i = 0; i < box * box && !ink; ++i)
+        for (int i = 0; i < width * height && !ink; ++i)
             if (px[size_t(i) * 4] < 200) ink = true;
-        SelectObject(dc, oldFont);
         SelectObject(dc, oldBmp);
         DeleteObject(bmp);
     }
+    SelectObject(dc, oldFont);
     DeleteDC(dc);
     return ink;
 }
@@ -2482,7 +2495,7 @@ bool font_resolves_to_face(HFONT font, const wchar_t* expected) {
  * The embedded math font leads: it ships inside the executable, the canvas
  * renders with it every run, and it covers every palette face -- so the
  * buttons no longer depend on the machine''s font table being healthy. */
-HFONT pick_button_font(int heightPx) {
+HFONT pick_button_font(int heightPx, std::wstring* diagnostics = nullptr) {
     /* Derive the required cmap from the real catalogue.  A hand-maintained
      * sample missed the old CJK actions and U+25AF, allowing font linking to
      * turn popup cells into black replacement shapes on LAB. */
@@ -2500,8 +2513,16 @@ HFONT pick_button_font(int heightPx) {
                                  FALSE, DEFAULT_CHARSET, OUT_TT_PRECIS,
                                  CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
                                  VARIABLE_PITCH, face);
-        if (font_owns_glyphs(font, sample.c_str()) &&
-            font_draws_ink(font, L"\x2264\x2260 ab")) {
+        const bool physicalFace = font_resolves_to_face(font, face);
+        const bool owns = font_owns_glyphs(font, sample.c_str());
+        const bool draws = owns && font_draws_ink(font, L"\x2264\x2260 ab");
+        if (diagnostics) {
+            *diagnostics += std::wstring(face) + L": physical-face=" +
+                (physicalFace ? L"match" : L"substituted-or-unavailable") +
+                L", glyphs=" + (owns ? L"present" : L"missing-or-unavailable") +
+                L", ink=" + (!owns ? L"not-tested" : draws ? L"present" : L"absent") + L"\n";
+        }
+        if (physicalFace && owns && draws) {
             flight_note(std::string("font.buttons ") + utf8_wide(face));
             return font;
         }
@@ -4283,26 +4304,27 @@ int self_test() {
      * and the only previous record of the outcome was a flight note that
      * reaches a file solely on a crash or an eight-second freeze.  This is the
      * one place a real process reports the font it is drawing with. */
-    HFONT paletteFont = pick_button_font(17);
-    const bool paletteUsesMathFont =
-        font_resolves_to_face(paletteFont, L"Latin Modern Math");
-    if (!paletteUsesMathFont) {
-        wchar_t resolved[LF_FACESIZE] = {};
-        if (HDC probe = CreateCompatibleDC(nullptr)) {
-            HGDIOBJ previous = SelectObject(probe, paletteFont);
-            GetTextFaceW(probe, _countof(resolved), resolved);
-            SelectObject(probe, previous);
-            DeleteDC(probe);
+    for (const int dpi : {96, 120, 144, 192, 288, 384}) {
+        std::wstring diagnostics;
+        HFONT paletteFont = pick_button_font(MulDiv(17, dpi, 96), &diagnostics);
+        const bool paletteUsesMathFont =
+            font_resolves_to_face(paletteFont, L"Latin Modern Math");
+        if (!paletteUsesMathFont) {
+            wchar_t resolved[LF_FACESIZE] = {};
+            if (HDC probe = CreateCompatibleDC(nullptr)) {
+                HGDIOBJ previous = SelectObject(probe, paletteFont);
+                GetTextFaceW(probe, _countof(resolved), resolved);
+                SelectObject(probe, previous);
+                DeleteDC(probe);
+            }
+            fwprintf(stderr,
+                     L"palette font at %d dpi resolved to \"%s\", not Latin Modern Math\n%s",
+                     dpi, resolved, diagnostics.c_str());
         }
-        fwprintf(stderr,
-                 L"palette font resolved to \"%s\", not Latin Modern Math; "
-                 L"a face character outside the embedded cmap rejects the "
-                 L"whole sample\n",
-                 resolved);
+        if (paletteFont && paletteFont != HFONT(GetStockObject(DEFAULT_GUI_FONT)))
+            DeleteObject(paletteFont);
+        if (!paletteUsesMathFont) return 243;
     }
-    if (paletteFont && paletteFont != HFONT(GetStockObject(DEFAULT_GUI_FONT)))
-        DeleteObject(paletteFont);
-    if (!paletteUsesMathFont) return 243;
     HDC screen = GetDC(nullptr);
     HDC dc = CreateCompatibleDC(screen);
     HBITMAP bm = CreateCompatibleBitmap(screen, 640, 240);
