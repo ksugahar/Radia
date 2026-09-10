@@ -9,6 +9,17 @@ All notable changes to the `radia` package.  Format: each release lists
   or five content-derived sections, agenda rows contain section names only,
   and explanatory taglines reduce the outline score. Each transition still
   repeats the same list and highlights only the section beginning there.
+- Corrected `radia.maglev.ecb.lorentz.compute_lorentz_force_via_foster`, which
+  built the eddy current as `J_y = -omega sigma Im(v)` from a scalar `v` that is
+  the reaction-field z component in tesla. That gave a current density in A/m^3
+  with the wrong parity: zero lift for a centred magnet and a horizontal force
+  that mirror symmetry forbids, 1906 N at 5 kHz against an 11.7 N physical
+  bound. The current is now `(1/mu) curl(v z)` with the full dipole field, the
+  drive projection keeps the boundary values of B_z, and the function returns
+  `(F_x, F_y, F_z)` instead of `(F_x, F_z)`. No caller in the repository used
+  it; **any result obtained from it before this release is wrong.**
+  `validation_test/maglev/ecb_foster_lorentz_reference.py` locks it against a
+  direct solve and the centred-dipole physics checks.
 
 ## 4.95.90 - Recovered motor torque and completed the AMS contract
 
