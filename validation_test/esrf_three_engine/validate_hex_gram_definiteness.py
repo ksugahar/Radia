@@ -119,6 +119,15 @@ def cluster_check(G, mesh, fes, inv_chi0):
             "negative_clusters": int(np.sum(gen_min < -1.0e-10))}
 
 
+class SolveContractError(Exception):
+    """The solver did not report what the gate needs to judge convergence.
+
+    Deliberately NOT a ``RuntimeError``: the floor scan catches RuntimeError to
+    record a genuine CG breakdown, and a missing diagnostic must not be filed
+    as one.  It is a contract failure and has to reach the caller.
+    """
+
+
 def floor_scan(G, rhs, chi0, factors, tol, maxit):
     import re
     scan = []
@@ -127,8 +136,33 @@ def floor_scan(G, rhs, chi0, factors, tol, maxit):
         entry = {"floor_factor": float(s), "mu_r_equivalent": float(1.0 + chi0 / s)}
         try:
             res = G.solve_configured_linear_material_auto_prec(float(s), rhs, tol, maxit)
-            entry.update(converged=True, iterations=int(res["iters"]), prec_min=float(res["prec_min"]),
+            # Returning without an exception only means the CG did not BREAK
+            # DOWN.  Running out of iterations is a normal return, so the
+            # convergence flag and the true relative residual the C++ already
+            # computes (rad_hacapk_hdiv.cpp, `last_solve_*`) are the only
+            # honest source for this gate.  A missing key is a contract
+            # failure, not a licence to assume success.
+            timings = res.get("timings")
+            if timings is None:
+                raise SolveContractError(
+                    "solve_configured_linear_material_auto_prec returned no "
+                    "'timings'; the floor scan cannot certify convergence")
+            missing = [key for key in ("last_solve_converged",
+                                       "last_solve_final_relative_residual")
+                       if key not in timings]
+            if missing:
+                raise SolveContractError(
+                    "solve timings lack %s; the floor scan cannot certify "
+                    "convergence" % missing)
+            residual = float(timings["last_solve_final_relative_residual"])
+            entry.update(converged=bool(float(timings["last_solve_converged"]) > 0.5),
+                         relative_residual=residual, requested_tolerance=float(tol),
+                         iterations=int(res["iters"]), prec_min=float(res["prec_min"]),
                          prec_max=float(res["prec_max"]))
+            if not entry["converged"]:
+                entry["error"] = ("CG returned without breakdown but did not reach "
+                                  "tol=%.1e: relative residual %.3e after %d iterations"
+                                  % (float(tol), residual, int(res["iters"])))
         except RuntimeError as exc:
             message = str(exc)
             match = re.search(r"iteration (\d+) -- p\^T A p = ([-+0-9.eE]+)", message)
@@ -138,8 +172,10 @@ def floor_scan(G, rhs, chi0, factors, tol, maxit):
         entry["wall_s"] = time.perf_counter() - started
         scan.append(entry)
         print(f"  floor x{s:g} (mu_r ~ {entry['mu_r_equivalent']:.0f}): "
-              + (f"converged in {entry['iterations']} iterations" if entry["converged"]
-                 else f"BREAKDOWN {entry.get('error', '')[:110]}"), flush=True)
+              + (f"converged in {entry['iterations']} iterations "
+                 f"(relative residual {entry['relative_residual']:.2e})"
+                 if entry["converged"]
+                 else f"NOT CONVERGED {entry.get('error', '')[:110]}"), flush=True)
         if not entry["converged"]:
             break
     return scan
@@ -167,14 +203,42 @@ def lobpcg_generalized(G, M_geom, n_face, k, maxiter, seed=6):
     op_minv = spla.LinearOperator((n_face, n_face), matvec=apply_minv, matmat=apply_minv, dtype=float)
     rng = np.random.default_rng(seed)
     X0 = rng.standard_normal((n_face, k))
+    tol = 1.0e-8
     started = time.perf_counter()
-    vals, vecs = spla.lobpcg(op_n, X0, B=M_geom, M=op_minv, largest=False, maxiter=maxiter, tol=1.0e-8,
-                             verbosityLevel=0)
+    # An unconverged Rayleigh-Ritz value is an UPPER bound on the eigenvalue it
+    # approximates, so a smallest Ritz value that clears the floor says nothing
+    # about lambda_min: the true one can still be below it.  Keep the residual
+    # history so the caller can withhold judgement instead of passing.
+    # SciPy signals non-convergence with a UserWarning.  Capture it rather than
+    # letting it print into the void (it did, on hibino) or abort under
+    # -W error: it is evidence the report should carry.
+    import warnings
+    with warnings.catch_warnings(record=True) as caught_low:
+        warnings.simplefilter("always")
+        vals, vecs, history = spla.lobpcg(
+            op_n, X0, B=M_geom, M=op_minv, largest=False, maxiter=maxiter, tol=tol,
+            verbosityLevel=0, retResidualNormsHistory=True)
     order = np.argsort(vals)
     vals, vecs = vals[order], vecs[:, order]
-    vals_hi, _ = spla.lobpcg(op_n, rng.standard_normal((n_face, 2)), B=M_geom, M=op_minv, largest=True,
-                             maxiter=maxiter, tol=1.0e-8, verbosityLevel=0)
-    return vals, vecs, float(np.max(vals_hi)), time.perf_counter() - started
+    with warnings.catch_warnings(record=True) as caught_high:
+        warnings.simplefilter("always")
+        vals_hi, _, history_hi = spla.lobpcg(
+            op_n, rng.standard_normal((n_face, 2)), B=M_geom, M=op_minv, largest=True,
+            maxiter=maxiter, tol=tol, verbosityLevel=0, retResidualNormsHistory=True)
+    residual_low = [float(x) for x in np.atleast_1d(history[-1])] if len(history) else []
+    residual_high = [float(x) for x in np.atleast_1d(history_hi[-1])] if len(history_hi) else []
+    diagnostics = {
+        "tolerance": tol,
+        "iterations_low": len(history),
+        "iterations_high": len(history_hi),
+        "final_residuals_low": residual_low,
+        "final_residuals_high": residual_high,
+        "converged_low": bool(residual_low) and max(residual_low) <= tol,
+        "converged_high": bool(residual_high) and max(residual_high) <= tol,
+        "warnings_low": [str(w.message)[:300] for w in caught_low],
+        "warnings_high": [str(w.message)[:300] for w in caught_high],
+    }
+    return vals, vecs, float(np.max(vals_hi)), time.perf_counter() - started, diagnostics
 
 
 def mesh_conformity(mesh) -> dict:
@@ -276,10 +340,29 @@ def main(argv=None) -> int:
             failures.append("production CG breakdown inside the floor scan")
 
         # 3. generalized spectrum edges
-        vals, vecs, lam_max, lob_s = lobpcg_generalized(G, M_geom, n_face, options.lobpcg_vectors, options.lobpcg_maxiter)
-        spectrum = {"lambda_min_ritz": [float(x) for x in vals], "lambda_max_ritz": lam_max, "wall_s": lob_s}
+        vals, vecs, lam_max, lob_s, lob_diag = lobpcg_generalized(
+            G, M_geom, n_face, options.lobpcg_vectors, options.lobpcg_maxiter)
+        spectrum = {"lambda_min_ritz": [float(x) for x in vals], "lambda_max_ritz": lam_max,
+                    "wall_s": lob_s, "lobpcg": lob_diag}
         report["checks"]["spectrum"] = spectrum
-        print(f"lobpcg: lambda_min Ritz {vals[0]:+.3e} lambda_max Ritz {lam_max:.5f} ({lob_s:.0f} s)", flush=True)
+        print(f"lobpcg: lambda_min Ritz {vals[0]:+.3e} lambda_max Ritz {lam_max:.5f} ({lob_s:.0f} s)"
+              f" converged low={lob_diag['converged_low']} high={lob_diag['converged_high']}"
+              f" residual low={max(lob_diag['final_residuals_low'] or [float('nan')]):.2e}", flush=True)
+        # Judgement is withheld, not granted, when the iteration did not
+        # converge: the smallest Ritz value only bounds lambda_min from ABOVE.
+        if not lob_diag["converged_low"]:
+            failures.append(
+                "LOBPCG did not converge on the low end (residual %.3e > tol %.1e after %d "
+                "iterations); the smallest Ritz value bounds lambda_min from above only, so "
+                "positive semidefiniteness is UNDECIDED"
+                % (max(lob_diag["final_residuals_low"] or [float("inf")]),
+                   lob_diag["tolerance"], lob_diag["iterations_low"]))
+        if not lob_diag["converged_high"]:
+            failures.append(
+                "LOBPCG did not converge on the high end (residual %.3e > tol %.1e after %d "
+                "iterations); the largest Ritz value bounds lambda_max from below only"
+                % (max(lob_diag["final_residuals_high"] or [float("inf")]),
+                   lob_diag["tolerance"], lob_diag["iterations_high"]))
         if vals[0] < options.lambda_floor:
             failures.append(f"lambda_min {vals[0]:.3e} below the floor {options.lambda_floor:.1e}")
         if lam_max > 1.0 + 1.0e-3:

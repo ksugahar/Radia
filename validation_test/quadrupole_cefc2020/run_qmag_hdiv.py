@@ -26,7 +26,33 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = next(p for p in HERE.parents if (p / "src" / "radia").exists())
-sys.path.insert(0, str(REPO / "src"))
+
+
+def _select_radia_source(argv) -> str:
+    """Choose WHICH radia this run measures, before importing it.
+
+    Silently prepending the checkout's ``src`` makes every run a source run,
+    so a result recorded as a distributed-wheel verification is not one.  The
+    choice therefore has to be explicit -- and it has to be made here, because
+    argparse runs long after ``import radia`` has already bound the module.
+    ``repo`` keeps the historical behaviour and stays the default; only
+    ``installed`` is a wheel verification.
+    """
+    source = "repo"
+    for index, item in enumerate(argv):
+        if item == "--radia-source" and index + 1 < len(argv):
+            source = argv[index + 1]
+        elif item.startswith("--radia-source="):
+            source = item.split("=", 1)[1]
+    if source not in ("repo", "installed"):
+        raise SystemExit(
+            "--radia-source must be 'repo' or 'installed'; got %r" % source)
+    return source
+
+
+RADIA_SOURCE = _select_radia_source(sys.argv[1:])
+if RADIA_SOURCE == "repo":
+    sys.path.insert(0, str(REPO / "src"))
 sys.path.insert(0, str(HERE))
 
 import ngsolve as ng  # noqa: E402
@@ -42,6 +68,25 @@ SCHEMA = "radia.qmag-cefc2020-hdiv-result.v1"
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def require_radia_source(source: str) -> dict:
+    """Fail loud when the loaded radia is not the one the run claims to test."""
+    module = Path(rad.__file__).resolve()
+    checkout = (REPO / "src").resolve()
+    from_checkout = module.is_relative_to(checkout)
+    if source == "repo" and not from_checkout:
+        raise RuntimeError(
+            "--radia-source repo was requested but radia resolved to %s, "
+            "outside the checkout at %s" % (module, checkout))
+    if source == "installed" and from_checkout:
+        raise RuntimeError(
+            "--radia-source installed was requested but radia resolved to the "
+            "checkout at %s; uninstall the editable install or run from a "
+            "directory outside the repository" % module)
+    return {"requested": source,
+            "resolved_module": str(module),
+            "resolved_from_checkout": bool(from_checkout)}
 def implementation_identity() -> dict:
     """Bind a measurement to the exact implementation that produced it.
 
@@ -117,7 +162,12 @@ def main(argv=None) -> int:
     parser.add_argument("--symmetry-tolerance", type=float, default=1.0e-3,
                         help="allowed even part of B_perp along the diagonal, relative to its maximum")
     parser.add_argument("--threads", type=int, default=0)
+    parser.add_argument("--radia-source", choices=("repo", "installed"), default="repo",
+                        help="which radia this run measures; read before 'import radia' "
+                             "and re-checked afterwards. 'installed' is the only setting "
+                             "that makes the result a distributed-wheel verification")
     options = parser.parse_args(argv)
+    radia_source = require_radia_source(options.radia_source)
     if options.threads > 0:
         ng.SetNumThreads(options.threads)
     case = parse_case(options.case)
@@ -160,6 +210,7 @@ def main(argv=None) -> int:
     report = {
         "schema": SCHEMA, "generated_at_utc": datetime.now(timezone.utc).isoformat(), "host": platform.node(),
         "implementation": implementation_identity(),
+        "radia_source": radia_source,
         "radia_version": getattr(rad, "__version__", None), "radia_file": rad.__file__,
         "case": case,
         "mesh": {"path": str(mesh_path), "sha256": _sha256(mesh_path), "ne": int(mesh.ne), "nv": int(mesh.nv),
