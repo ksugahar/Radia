@@ -7,30 +7,33 @@ receipt writer or per-client reconnect control has already been implemented.
 
 ## 1. Separate development from active service
 
-Use a task-owned worktree and virtual environment with an explicitly selected
-interpreter for installs and tests. A process-local PYTHONPATH override is
+For `radia-mcp`, developers may directly edit the canonical source used by
+the live editable installation. Routine experiments do not require a separate
+branch, frozen snapshot, or deployment approval for each source edit. Coordinate
+overlapping edits, test changed behavior, and commit useful improvements.
+Source editing does not itself reload already registered functions or schemas.
+
+Use a task-owned environment with an explicitly selected interpreter for
+isolated release builds and installation tests. A process-local PYTHONPATH override is
 acceptable for a disposable probe when dependencies are already available;
 check the resolved module path and never persist that override in a shared
 client or user environment. Neither probe verifies an existing live client.
 Do not use global/user-site pip install, uninstall, manual .pth edits, symlink
 retargeting or shared MCP configuration edits to make ordinary tests pass.
 
-For long-lived service, retain editable support but pin the source to an
-approved commit in a dedicated snapshot. A snapshot name containing a SHA is
-not proof: verify the actual Git commit and working-tree state. Complete builds
-before activation and record native artifact hashes where relevant. Do not
-edit code, advance Git HEAD, replace binaries or delete that source while any
-consumer still depends on it, including consumers on another host via the NAS.
+Long-lived development MCPs use the canonical editable source, not a release
+snapshot that hides ongoing improvements. Releases must not repoint that
+registration or overwrite developers' work. Native binary replacement and
+dependency/interpreter changes still require scoped coordination.
 
-Prefer a dedicated, explicitly configured runtime interpreter for each service
-generation so later shared site-packages changes cannot affect lazy imports.
-Migration to such interpreters is a separately scoped deployment, not an
-automatic action authorized by this policy. Until migrated, freeze the shared
-interpreter as well as its active source while its consumers remain in flight.
+Reload compatible Python changes at a safe boundary; reconnect for changed
+schemas or launch configuration when required. Preserve in-flight jobs and
+human-owned CAD/MATLAB state. Treat mixed loaded generations as unverified;
+direct editing is allowed, but is not proof that a live tool has adopted it.
 
 ## 2. One deployment owner, not one owner per chat
 
-Before any shared mutation, identify the host, resolved interpreter, affected
+Before installation, configuration, binary replacement or reconnect, identify the host, resolved interpreter, affected
 distributions, users, clients and server names. Normalize mapped-drive and UNC
 aliases when identifying the same resource. A LAB install is not evidence for
 100号機, and an administrator's client is not evidence for every user's client.
@@ -68,7 +71,7 @@ as well as successes; do not erase earlier evidence when another task takes over
 ## 3. Stage, coordinate, activate, verify
 
 1. Read the record and live status before deciding that an install has drifted.
-   The approved deployment target, not whichever checkout is newest, defines
+   The approved canonical editable target, not whichever checkout is newest, defines
    expected state. A comparison with origin/main is an advisory freshness check;
    being older can be an intentional pin, and being newer is not authorization.
 2. Build/test the candidate in isolation. A main merge or a package publication
@@ -130,8 +133,11 @@ unless that named target has been freshly checked. For code-only work say
 The policy and its synchronized documentation regression apply immediately.
 They do not make existing sessions restart or older checkouts read new rules.
 Provide this policy and the current deployment record at the next owner handoff.
-Do not patch another task's dirty checkout just to distribute instructions.
+Do not overwrite another task's uncommitted work to distribute instructions.
 
+These deployment controls do not apply to ordinary MCP source experiments.
+Solver acceptance still requires numerical evidence and reproducibility;
+MCP workflow design improves through direct use and iterative experiments.
 Subsequent implementation should add exclusive deployment ownership with
 compare-before-change protection, an atomic receipt and per-client generation
 evidence to the existing maintenance workflow. Test concurrent owners, mapped
