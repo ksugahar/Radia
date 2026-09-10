@@ -488,13 +488,16 @@ set "NETGEN_DIR=$NetgenPackageDir"
 rem Compact Netgen sources are in-repo (src/cubit_plugin/compact_netgen/netgen_src/).
 rem No external NETGEN_SRC_DIR needed.
 
-if exist "%CUBIT_DIR%\CubitConfig.cmake" (
+rem Use delayed expansion here because this whole block is parsed at once by
+rem cmd.exe.  Percent expansion can otherwise reuse a stale runner-level
+rem CUBIT_DIR even after the set above cleared it on a Cubit-free machine.
+if exist "!CUBIT_DIR!\CubitConfig.cmake" (
     if not exist "%CUBIT_PLUGIN_BUILD%" mkdir "%CUBIT_PLUGIN_BUILD%"
     cd /d "%CUBIT_PLUGIN_BUILD%"
     rem build-pyd: force FULL Netgen mode (disable compact_netgen detection)
     rem so cubit_mesh_curver.pyd builds against pip-installed Netgen + pybind11.
     rem .ccm/.ccl in build-ccm continue to use compact_netgen (no DLL deps).
-    "$CMAKE_EXE" -G Ninja -DCMAKE_BUILD_TYPE=Release -DPython3_EXECUTABLE="$PythonExecutable" -Dpybind11_DIR="$Pybind11CMakeDir" -DCubit_DIR="%CUBIT_DIR%" -DNETGEN_DIR="%NETGEN_DIR%" -DCOMPACT_NETGEN_OVERRIDES=NONE "%CUBIT_PLUGIN_SRC%"
+    "$CMAKE_EXE" -G Ninja -DCMAKE_BUILD_TYPE=Release -DPython3_EXECUTABLE="$PythonExecutable" -Dpybind11_DIR="$Pybind11CMakeDir" -DCubit_DIR="!CUBIT_DIR!" -DNETGEN_DIR="!NETGEN_DIR!" -DCOMPACT_NETGEN_OVERRIDES=NONE "!CUBIT_PLUGIN_SRC!"
     if errorlevel 1 (
         echo ERROR: cubit_mesh_curver configuration failed
         exit /b 1
@@ -519,7 +522,7 @@ if exist "%CUBIT_DIR%\CubitConfig.cmake" (
     set "CUBIT_CCM_BUILD=$PROJECT_DIR\src\cubit_plugin\build-ccm"
     if not exist "!CUBIT_CCM_BUILD!" mkdir "!CUBIT_CCM_BUILD!"
     cd /d "!CUBIT_CCM_BUILD!"
-    "$CMAKE_EXE" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DPython3_EXECUTABLE="$PythonExecutable" -Dpybind11_DIR="$Pybind11CMakeDir" -DCubit_DIR="%CUBIT_DIR%" -DNETGEN_DIR="%NETGEN_DIR%" "%CUBIT_PLUGIN_SRC%"
+    "$CMAKE_EXE" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DPython3_EXECUTABLE="$PythonExecutable" -Dpybind11_DIR="$Pybind11CMakeDir" -DCubit_DIR="!CUBIT_DIR!" -DNETGEN_DIR="!NETGEN_DIR!" "!CUBIT_PLUGIN_SRC!"
     if errorlevel 1 (
         echo ERROR: cubit_mesh_export_ccm configuration failed
         exit /b 1
@@ -532,7 +535,7 @@ if exist "%CUBIT_DIR%\CubitConfig.cmake" (
 
     cd /d "$BUILD_DIR"
 ) else (
-    echo SKIP: Cubit SDK not found at %CUBIT_DIR%
+    echo SKIP: Cubit SDK not found at !CUBIT_DIR!
 )
 
 echo.
