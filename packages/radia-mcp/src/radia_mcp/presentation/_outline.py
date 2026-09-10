@@ -4,8 +4,9 @@ An outline is not merely one agenda slide near the beginning, and it is not a
 retrospective statement that the problem has ended and the solution begins.
 For a spoken research presentation, navigation has to appear where the topic
 changes: "Motivation" before the motivation, "Proposed method" before the
-method, and "Results" before the results. A repeated agenda with the current
-item highlighted is equivalent to a sparse section-divider slide.
+method, and "Results" before the results. Each divider repeats the complete
+agenda and highlights only the section that starts now, so the audience sees
+both the route and its current position.
 
 The section names are examples, not a mandatory taxonomy. Authors first
 classify the actual deck into coherent acts, then place a divider at the start
@@ -45,18 +46,56 @@ def _section_labels(slide: dict) -> set[str]:
 
 
 def _looks_like_divider(slide: dict) -> tuple[bool, str, set[str]]:
-    """Recognize a section card or a repeated agenda/progress slide."""
+    """Recognize a repeated agenda/progress slide."""
     labels = _section_labels(slide)
     title = slide["title"] or ""
     body_lines = [line.strip() for line in (slide["text"] or "").splitlines()
                   if line.strip()]
-    title_labels = {name for name, pattern in _SECTION_PATTERNS.items()
-                    if pattern.search(title)}
-    if len(title_labels) == 1 and len(body_lines) <= 3:
-        return True, "section title", title_labels
-    if _AGENDA_TITLE.search(title) and len(labels) >= 2:
+    complete = set(_SECTION_PATTERNS).issubset(labels)
+    if _AGENDA_TITLE.search(title) and complete:
         return True, "agenda/progress slide", labels
+    if complete and len(body_lines) <= 6:
+        return True, "repeated full agenda", labels
     return False, "", labels
+
+
+def _run_signature(run) -> tuple[str, bool, float | None]:
+    """Return style signals that can distinguish the active agenda item."""
+    try:
+        colour = str(run.font.color.rgb or "")
+    except (AttributeError, TypeError):
+        colour = ""
+    size = run.font.size.pt if run.font.size is not None else None
+    return colour, bool(run.font.bold), size
+
+
+def _highlighted_section_labels(pptx_slide) -> set[str]:
+    """Find the uniquely styled section label in a complete agenda."""
+    from collections import Counter
+
+    signatures: dict[str, list[tuple[str, bool, float | None]]] = {}
+    for shape in pptx_slide.shapes:
+        if not getattr(shape, "has_text_frame", False):
+            continue
+        shape_labels = {name for name, pattern in _SECTION_PATTERNS.items()
+                        if pattern.search(shape.text or "")}
+        if len(shape_labels) < 2:
+            continue
+        for paragraph in shape.text_frame.paragraphs:
+            for run in paragraph.runs:
+                for name, pattern in _SECTION_PATTERNS.items():
+                    if pattern.search(run.text or ""):
+                        signatures.setdefault(name, []).append(_run_signature(run))
+
+    primary = {name: Counter(values).most_common(1)[0][0]
+               for name, values in signatures.items() if values}
+    counts = Counter(primary.values())
+    if len(primary) < 2 or not counts:
+        return set()
+    ordinary, ordinary_count = counts.most_common(1)[0]
+    if ordinary_count < 2:
+        return set()
+    return {name for name, signature in primary.items() if signature != ordinary}
 
 
 def _near(slide_no: int, boundary: int | None, allowance: int) -> bool:
@@ -73,10 +112,11 @@ def presentation_check_outline_slide(pptx_path: str,
     two accommodates a short goal/overview slide before the detailed method.
     """
     try:
-        from pptx import Presentation  # noqa: F401
+        from pptx import Presentation
     except ImportError:
         return {"error": "python-pptx not installed."}
 
+    prs = Presentation(pptx_path)
     _slides, _cut, main = read_deck(pptx_path, backup_title)
     if len(main) < 4:
         return {"error": f"only {len(main)} content slides; too few to need "
@@ -94,18 +134,22 @@ def presentation_check_outline_slide(pptx_path: str,
     for slide in main:
         ok, why, labels = _looks_like_divider(slide)
         if ok:
+            highlighted = _highlighted_section_labels(prs.slides[slide["slide"] - 1])
             dividers.append({
                 "slide": slide["slide"],
                 "title": slide["title"],
                 "detected_by": why,
                 "section_labels": sorted(labels),
+                "highlighted_sections": sorted(highlighted),
             })
 
     coverage: dict[str, list[int]] = {}
     for section, boundary in boundaries.items():
         matches = []
         for divider in dividers:
-            if section not in divider["section_labels"]:
+            if not set(boundaries).issubset(divider["section_labels"]):
+                continue
+            if divider["highlighted_sections"] != [section]:
                 continue
             allowance = 0 if section == "motivation" else max_slides_before_turn
             if _near(divider["slide"], boundary, allowance):
@@ -123,12 +167,13 @@ def presentation_check_outline_slide(pptx_path: str,
 
     if not dividers:
         comments.append(
-            "章扉が無い。スライド全体を内容で分類し、各主要章の先頭に、"
-            "これから話す章名を大きく示す区切りの枚を入れる。")
+            "反復 Outline が無い。スライド全体を内容で分類し、各主要章の"
+            "先頭で全章を再掲し、今から始まる章だけを強調する。")
     elif not all(checks.values()):
         missing = [name for name, slides in coverage.items() if not slides]
         comments.append(
-            "一枚の総目次だけでは足りない。欠けている章の開始位置に章扉を置く: "
+            "各章の先頭で全項目を再掲し、現在章だけを色・太字・大きさ等で"
+            "一意に強調する。満たしていない章: "
             + ", ".join(missing) + ".")
 
     suggested = [
@@ -150,9 +195,9 @@ def presentation_check_outline_slide(pptx_path: str,
         "checks": checks,
         "comments": comments,
         "hint": (
-            "Outline は一枚の一覧ではなく、内容が切り替わる場所で現在地を知らせる"
-            "章扉として使う。章名は例であり、実際の deck の内容から分類する。"
-            "各回は章名だけの疎な枚、または現在章を強調した反復 agenda とする。"
+            "Outline は内容が切り替わる場所で繰り返す。毎回すべての章を同じ順で"
+            "示し、今から始まる章だけを赤字などで強調する。章名は例であり、"
+            "実際の deck の内容から分類する。"
         ),
         "source": "菅原による IGTE'26 デッキ査読の明確化 2026-09-11。",
     }
