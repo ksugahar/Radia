@@ -6,21 +6,21 @@ function testNumericUntransformPrimitivesMatchUpstream(testCase)
 expected=testCase.TestData.Oracle.numeric_untransform;
 numerics=radia.optuna.internal.UpstreamNumerics;
 ties=reshape(double(expected.round_ties_to_even.inputs),1,[]);
-verifyEqual(testCase,numerics.roundTiesToEven(ties), ...
+verifyEqualWithPrecision(testCase,numerics.roundTiesToEven(ties), ...
     reshape(double(expected.round_ties_to_even.outputs),1,[]));
 below=reshape(double(expected.next_after_below.inputs),1,[]);
-verifyEqual(testCase,numerics.nextDown(below), ...
+verifyEqualWithPrecision(testCase,numerics.nextDown(below), ...
     reshape(double(expected.next_after_below.outputs),1,[]));
 cases=expected.float_step_high;
 for index=1:numel(cases)
     entry=cases(index);
     [high,adjusted]=numerics.adjustDiscreteUniformHigh( ...
         entry.low,entry.high,entry.step);
-    verifyEqual(testCase,high,double(entry.adjusted_high),AbsTol=0);
-    verifyEqual(testCase,adjusted,logical(entry.adjusted));
+    verifyEqualWithPrecision(testCase,high,double(entry.adjusted_high),AbsTol=0);
+    verifyEqualWithPrecision(testCase,adjusted,logical(entry.adjusted));
     distribution=radia.optuna.internal.DistributionCodec.float( ...
         entry.low,high,false,entry.step);
-    verifyEqual(testCase, ...
+    verifyEqualWithPrecision(testCase, ...
         radia.optuna.internal.DistributionCodec.isSingle(distribution), ...
         logical(entry.single));
 end
@@ -35,9 +35,9 @@ actualBaseline=runSingleDistributionStudy( ...
     double(expected.seed),numel(baseline),false,testCase);
 actualWithSingle=runSingleDistributionStudy( ...
     double(expected.seed),numel(withSingle),true,testCase);
-verifyEqual(testCase,actualBaseline,baseline,AbsTol=5e-12);
-verifyEqual(testCase,actualWithSingle,withSingle,AbsTol=5e-12);
-verifyEqual(testCase,actualWithSingle,actualBaseline,AbsTol=0);
+verifyEqualWithPrecision(testCase,actualBaseline,baseline,AbsTol=5e-12);
+verifyEqualWithPrecision(testCase,actualWithSingle,withSingle,AbsTol=5e-12);
+verifyEqualWithPrecision(testCase,actualWithSingle,actualBaseline,AbsTol=0);
 end
 
 function values=runSingleDistributionStudy(seed,count,withSingle,testCase)
@@ -48,11 +48,11 @@ values=zeros(count,1);
 for index=1:count
     trial=study.ask();
     if withSingle
-        verifyEqual(testCase,trial.suggest_float("fixed",0.5,0.5), ...
+        verifyEqualWithPrecision(testCase,trial.suggest_float("fixed",0.5,0.5), ...
             double(expected.fixed));
-        verifyEqual(testCase,trial.suggest_int("pinned",4,4), ...
+        verifyEqualWithPrecision(testCase,trial.suggest_int("pinned",4,4), ...
             double(expected.pinned));
-        verifyEqual(testCase,string(trial.suggest_categorical( ...
+        verifyEqualWithPrecision(testCase,string(trial.suggest_categorical( ...
             "only",{'solo'})),string(expected.only));
     end
     values(index)=trial.suggest_float("x",-1,1);
@@ -85,12 +85,12 @@ for index=1:numel(values)
         actualStates(index)="COMPLETE";
     end
 end
-verifyEqual(testCase,actualStates,states);
-verifyEqual(testCase,sum(actualStates=="COMPLETE"), ...
+verifyEqualWithPrecision(testCase,actualStates,states);
+verifyEqualWithPrecision(testCase,sum(actualStates=="COMPLETE"), ...
     double(expected.complete_count));
-verifyEqual(testCase,sum(actualStates=="PRUNED"), ...
+verifyEqualWithPrecision(testCase,sum(actualStates=="PRUNED"), ...
     double(expected.pruned_count));
-verifyEqual(testCase,actual,values,AbsTol=5e-12);
+verifyEqualWithPrecision(testCase,actual,values,AbsTol=5e-12);
 end
 
 function setupOnce(testCase)
@@ -102,9 +102,11 @@ if testCase.TestData.RemovePath, addpath(matlabDirectory); end
 testCase.TestData.MatlabDirectory=matlabDirectory;
 fixture=fullfile(root,"tests","matlab","fixtures","optuna50_oracle.json");
 testCase.TestData.Oracle=jsondecode(fileread(fixture));
+optunaPrecision('begin',testCase.TestData.Oracle);
 end
 
 function teardownOnce(testCase)
+optunaPrecision('finish');
 if testCase.TestData.RemovePath
     rmpath(testCase.TestData.MatlabDirectory);
 end
@@ -112,10 +114,10 @@ end
 
 function testOracleProvenance(testCase)
 oracle=testCase.TestData.Oracle;
-verifyEqual(testCase,string(oracle.schema), ...
+verifyEqualWithPrecision(testCase,string(oracle.schema), ...
     "radia.test.optuna-upstream-oracle.v1");
-verifyEqual(testCase,string(oracle.optuna_version),"5.0.0");
-verifyEqual(testCase,radia.optuna.version(),string(oracle.optuna_version));
+verifyEqualWithPrecision(testCase,string(oracle.optuna_version),"5.0.0");
+verifyEqualWithPrecision(testCase,radia.optuna.version(),string(oracle.optuna_version));
 verifyNotEmpty(testCase,string(oracle.numpy_version));
 verifyNotEmpty(testCase,string(oracle.scipy_version));
 verifyNotEmpty(testCase,string(oracle.python_version));
@@ -128,9 +130,9 @@ root=fileparts(fileparts(fileparts(mfilename("fullpath"))));
 fixtureDirectory=fullfile(root,"tests","matlab","fixtures");
 manifest=jsondecode(fileread(fullfile( ...
     fixtureDirectory,"optuna_test_manifest.json")));
-verifyEqual(testCase,string(manifest.schema), ...
+verifyEqualWithPrecision(testCase,string(manifest.schema), ...
     "radia.test.optuna-matlab-policy.v1");
-verifyEqual(testCase,string(manifest.upstream_version),"5.0.0");
+verifyEqualWithPrecision(testCase,string(manifest.upstream_version),"5.0.0");
 
 files=dir(fullfile(root,"tests","matlab","test_optuna*.m"));
 actual=strings(0,1);
@@ -155,36 +157,36 @@ for index=1:numel(entries)
         string(entries(index).test);
     verifyTrue(testCase,ismember(string(entries(index).classification),allowed));
     if string(entries(index).classification)=="upstream-python"
-        verifyEqual(testCase,string(entries(index).oracle), ...
+        verifyEqualWithPrecision(testCase,string(entries(index).oracle), ...
             "optuna50_oracle.json");
     elseif string(entries(index).classification)=="upstream-mcp"
-        verifyEqual(testCase,string(entries(index).oracle), ...
+        verifyEqualWithPrecision(testCase,string(entries(index).oracle), ...
             "optuna50_mcp_oracle.json");
     else
         verifyTrue(testCase,isempty(entries(index).oracle));
         verifyNotEmpty(testCase,string(entries(index).scope));
     end
 end
-verifyEqual(testCase,sort(declared),sort(actual));
-verifyEqual(testCase,numel(unique(declared)),numel(declared));
+verifyEqualWithPrecision(testCase,sort(declared),sort(actual));
+verifyEqualWithPrecision(testCase,numel(unique(declared)),numel(declared));
 end
 
 function testPublicAPIInventoryHasEvidenceClosedRequiredScope(testCase)
 root=fileparts(fileparts(fileparts(mfilename("fullpath"))));
 coverage=jsondecode(fileread(fullfile( ...
     root,"matlab","optuna50_api_coverage.json")));
-verifyEqual(testCase,string(coverage.schema), ...
+verifyEqualWithPrecision(testCase,string(coverage.schema), ...
     "radia.optuna50-api-coverage.v1");
-verifyEqual(testCase,string(coverage.upstream_version),"5.0.0");
-verifyEqual(testCase,double(coverage.surface_missing_count),0);
-verifyEqual(testCase,double(coverage.oracle_partial_count),0);
-verifyEqual(testCase,double(coverage.oracle_unmapped_count),0);
-verifyEqual(testCase,double(coverage.required_present_count), ...
+verifyEqualWithPrecision(testCase,string(coverage.upstream_version),"5.0.0");
+verifyEqualWithPrecision(testCase,double(coverage.surface_missing_count),0);
+verifyEqualWithPrecision(testCase,double(coverage.oracle_partial_count),0);
+verifyEqualWithPrecision(testCase,double(coverage.oracle_unmapped_count),0);
+verifyEqualWithPrecision(testCase,double(coverage.required_present_count), ...
     double(coverage.required_entry_count));
-verifyEqual(testCase,double(coverage.required_oracle_mapped_count), ...
+verifyEqualWithPrecision(testCase,double(coverage.required_oracle_mapped_count), ...
     double(coverage.required_entry_count));
-verifyEqual(testCase,double(coverage.required_oracle_asserted_count),0);
-verifyEqual(testCase,double(coverage.required_oracle_unmapped_count),0);
+verifyEqualWithPrecision(testCase,double(coverage.required_oracle_asserted_count),0);
+verifyEqualWithPrecision(testCase,double(coverage.required_oracle_unmapped_count),0);
 verifyTrue(testCase,logical(coverage.full_compatibility_complete));
 verifyTrue(testCase,all(string({coverage.entries.surface_status})=="present"));
 statuses=string({coverage.entries.oracle_status});
@@ -198,17 +200,17 @@ expected=testCase.TestData.Oracle.numpy_random_state_seed_contract;
 stream=radia.optuna.internal.NumpyRandomState(37);
 uniforms=rand(stream,400,1);
 positions=double(expected.uniform_positions_zero_based)+1;
-verifyEqual(testCase,uniforms(positions), ...
+verifyEqualWithPrecision(testCase,uniforms(positions), ...
     reshape(double(expected.uniform_values),[],1),AbsTol=0);
 
 stream=radia.optuna.internal.NumpyRandomState(37);
-verifyEqual(testCase,randn(stream,7,1), ...
+verifyEqualWithPrecision(testCase,randn(stream,7,1), ...
     reshape(double(expected.normal_values),[],1),AbsTol=0);
 stream=radia.optuna.internal.NumpyRandomState(123);
-verifyEqual(testCase,randperm(stream,10), ...
+verifyEqualWithPrecision(testCase,randperm(stream,10), ...
     reshape(double(expected.permutation_one_based),1,[]));
 stream=radia.optuna.internal.NumpyRandomState(123);
-verifyEqual(testCase,randi(stream,10,1,8), ...
+verifyEqualWithPrecision(testCase,randi(stream,10,1,8), ...
     reshape(double(expected.integers_one_based),1,[]));
 end
 
@@ -218,14 +220,14 @@ single=radia.optuna.create_study(AutoSave=false);
 multi=radia.optuna.create_study( ...
     directions=["minimize","maximize"],AutoSave=false);
 verifyTrue(testCase,startsWith(single.Name,string(expected.anonymous_prefix)));
-verifyEqual(testCase,string(class(single.Sampler)), ...
+verifyEqualWithPrecision(testCase,string(class(single.Sampler)), ...
     "radia.optuna."+string(expected.single_sampler));
-verifyEqual(testCase,string(class(multi.Sampler)), ...
+verifyEqualWithPrecision(testCase,string(class(multi.Sampler)), ...
     "radia.optuna."+string(expected.multi_sampler));
 verifyEmpty(testCase,single.Sampler.Multivariate);
-verifyEqual(testCase,single.Sampler.ConstantLiar, ...
+verifyEqualWithPrecision(testCase,single.Sampler.ConstantLiar, ...
     logical(expected.single_tpe_constant_liar));
-verifyEqual(testCase,string(class(single.Pruner)), ...
+verifyEqualWithPrecision(testCase,string(class(single.Pruner)), ...
     "radia.optuna."+string(expected.pruner));
 end
 
@@ -237,7 +239,7 @@ names=["RandomSampler","TPESampler","CmaEsSampler","GPSampler", ...
 for index=1:numel(names)
     entry=expected.constructors.(names(index));
     verifyTrue(testCase,logical(entry.default_is_none));
-    verifyEqual(testCase,string(entry.parameter),"seed");
+    verifyEqualWithPrecision(testCase,string(entry.parameter),"seed");
 end
 verifyTrue(testCase,logical(expected.exact_sequence_oracle_requires_explicit_seed));
 
@@ -256,10 +258,10 @@ globalStateAfter=rng;
 firstSeeds=cellfun(@(sampler)sampler.Seed,first);
 secondSeeds=cellfun(@(sampler)sampler.Seed,second);
 verifyTrue(testCase,all(firstSeeds~=secondSeeds));
-verifyEqual(testCase,globalStateAfter,globalStateBefore);
+verifyEqualWithPrecision(testCase,globalStateAfter,globalStateBefore);
 
-verifyEqual(testCase,radia.optuna.RandomSampler(37).Seed,37);
-verifyEqual(testCase,radia.optuna.TPESampler(Seed=37).Seed,37);
+verifyEqualWithPrecision(testCase,radia.optuna.RandomSampler(37).Seed,37);
+verifyEqualWithPrecision(testCase,radia.optuna.TPESampler(Seed=37).Seed,37);
 end
 
 function testSamplerReseedMatchesUpstreamSemantics(testCase)
@@ -296,10 +298,10 @@ for index=1:size(constructors,1)
     verifyWarningFree(testCase,@()sampler.reseed_rng(),name);
     verifyWarningFree(testCase,@()sampler.reseed_rng(),name);
     if ~isempty(seedBefore)
-        verifyEqual(testCase,sampler.Seed,seedBefore,name);
+        verifyEqualWithPrecision(testCase,sampler.Seed,seedBefore,name);
     end
 end
-verifyEqual(testCase,rng,globalStateBefore);
+verifyEqualWithPrecision(testCase,rng,globalStateBefore);
 
 freshMain={ ...
     radia.optuna.RandomSampler(37), ...
@@ -339,11 +341,11 @@ verifyFalse(testCase,isequal(first,second),"QMCSampler");
 cma=radia.optuna.CmaEsSampler(Seed=37);
 cmaState=cma.Stream.State;
 cma.reseed_rng();
-verifyEqual(testCase,cma.Stream.State,cmaState,"CmaEsSampler");
+verifyEqualWithPrecision(testCase,cma.Stream.State,cmaState,"CmaEsSampler");
 brute=radia.optuna.BruteForceSampler(Seed=37);
 bruteState=brute.Stream.State;
 brute.reseed_rng();
-verifyEqual(testCase,brute.Stream.State,bruteState,"BruteForceSampler");
+verifyEqualWithPrecision(testCase,brute.Stream.State,bruteState,"BruteForceSampler");
 end
 
 function testLoggingPublicContractMatchesUpstream(testCase)
@@ -351,29 +353,29 @@ expected=testCase.TestData.Oracle.logging;
 constants=["CRITICAL","DEBUG","ERROR","FATAL","INFO","WARN","WARNING"];
 for name=constants
     actual=feval("radia.optuna."+name);
-    verifyEqual(testCase,actual,double(expected.constants.(name)));
+    verifyEqualWithPrecision(testCase,actual,double(expected.constants.(name)));
 end
 radia.optuna.set_verbosity(radia.optuna.INFO());
-verifyEqual(testCase,radia.optuna.get_verbosity(),double(expected.initial));
+verifyEqualWithPrecision(testCase,radia.optuna.get_verbosity(),double(expected.initial));
 logger=radia.optuna.get_logger("unit");
-verifyEqual(testCase,logger.name,string(expected.logger.name));
-verifyEqual(testCase,logger.level,double(expected.logger.level));
-verifyEqual(testCase,logger.propagate,logical(expected.logger.propagate));
-verifyEqual(testCase,logger.handlers,double(expected.logger.handlers));
+verifyEqualWithPrecision(testCase,logger.name,string(expected.logger.name));
+verifyEqualWithPrecision(testCase,logger.level,double(expected.logger.level));
+verifyEqualWithPrecision(testCase,logger.propagate,logical(expected.logger.propagate));
+verifyEqualWithPrecision(testCase,logger.handlers,double(expected.logger.handlers));
 formatter=radia.optuna.create_default_formatter();
-verifyEqual(testCase,formatter.format,string(expected.formatter.format));
+verifyEqualWithPrecision(testCase,formatter.format,string(expected.formatter.format));
 radia.optuna.set_verbosity(radia.optuna.DEBUG());
-verifyEqual(testCase,radia.optuna.get_verbosity(),double(expected.after_set));
+verifyEqualWithPrecision(testCase,radia.optuna.get_verbosity(),double(expected.after_set));
 radia.optuna.disable_default_handler();
 radia.optuna.disable_propagation();
 root=radia.optuna.get_logger("optuna");
-verifyEqual(testCase,root.propagate,logical(expected.disabled.propagate));
-verifyEqual(testCase,root.handlers,double(expected.disabled.handlers));
+verifyEqualWithPrecision(testCase,root.propagate,logical(expected.disabled.propagate));
+verifyEqualWithPrecision(testCase,root.handlers,double(expected.disabled.handlers));
 radia.optuna.enable_default_handler();
 radia.optuna.enable_propagation();
 root=radia.optuna.get_logger("optuna");
-verifyEqual(testCase,root.propagate,logical(expected.enabled.propagate));
-verifyEqual(testCase,root.handlers,double(expected.enabled.handlers));
+verifyEqualWithPrecision(testCase,root.propagate,logical(expected.enabled.propagate));
+verifyEqualWithPrecision(testCase,root.handlers,double(expected.enabled.handlers));
 radia.optuna.set_verbosity(radia.optuna.WARNING());
 radia.optuna.disable_propagation();
 end
@@ -407,7 +409,7 @@ for index=1:size(constructors,1)
     actual=sampler.infer_relative_search_space(study,running);
     actualKeys=sort(reshape(string({actual.name}),1,[]));
     samplerExpected=expected.samplers.(name);
-    verifyEqual(testCase,actualKeys,sort(reshape(string( ...
+    verifyEqualWithPrecision(testCase,actualKeys,sort(reshape(string( ...
         samplerExpected.infer_relative_search_space_keys),1,[])),name);
     verifyTrue(testCase,logical(samplerExpected.before_trial_returns_none));
     verifyWarningFree(testCase,@()sampler.before_trial(study,running),name);
@@ -422,33 +424,33 @@ for index=1:size(constructors,1)
     independent=directSampler.sample_independent( ...
         directStudy,directTrial,"x", ...
         radia.optuna.FloatDistribution(0,1,Step=0.1));
-    verifyEqual(testCase,independent,samplerExpected.independent_value,name);
+    verifyEqualWithPrecision(testCase,independent,samplerExpected.independent_value,name);
     relative=directSampler.sample_relative( ...
         directStudy,directTrial,directSpace);
-    verifyEqual(testCase,string(fieldnames(relative)), ...
+    verifyEqualWithPrecision(testCase,string(fieldnames(relative)), ...
         string(fieldnames(samplerExpected.relative_params)),name);
     relativeNames=string(fieldnames(relative));
     for relativeName=reshape(relativeNames,1,[])
-        verifyEqual(testCase,relative.(relativeName), ...
+        verifyEqualWithPrecision(testCase,relative.(relativeName), ...
             samplerExpected.relative_params.(relativeName),name);
     end
 end
 
 grid=radia.optuna.GridSampler(struct("x",{{0,1}}),Seed=7);
 gridStudy=radia.optuna.Study(Sampler=grid,AutoSave=false);
-verifyEqual(testCase,grid.is_exhausted(gridStudy), ...
+verifyEqualWithPrecision(testCase,grid.is_exhausted(gridStudy), ...
     logical(expected.grid_is_exhausted_before));
 for index=1:2
     trial=gridStudy.ask();
     value=trial.suggest_int("x",0,1);
     gridStudy.tell(trial,value);
 end
-verifyEqual(testCase,grid.is_exhausted(gridStudy), ...
+verifyEqualWithPrecision(testCase,grid.is_exhausted(gridStudy), ...
     logical(expected.grid_is_exhausted_after));
 
-verifyEqual(testCase,radia.optuna.NSGAIISampler( ...
+verifyEqualWithPrecision(testCase,radia.optuna.NSGAIISampler( ...
     PopulationSize=5).population_size,double(expected.nsgaii_population_size));
-verifyEqual(testCase,radia.optuna.NSGAIIISampler( ...
+verifyEqualWithPrecision(testCase,radia.optuna.NSGAIIISampler( ...
     PopulationSize=6).population_size,double(expected.nsgaiii_population_size));
 gaMetadata=meta.class.fromName("radia.optuna.BaseGASampler");
 verifyTrue(testCase,gaMetadata.Abstract);
@@ -470,42 +472,42 @@ for gaIndex=1:size(gaConstructors,1)
     gaTrials=gaStudy.get_trials();
     generations=arrayfun(@(trial)gaSampler.get_trial_generation( ...
         gaStudy,trial),gaTrials);
-    verifyEqual(testCase,reshape(generations,1,[]), ...
+    verifyEqualWithPrecision(testCase,reshape(generations,1,[]), ...
         reshape(double(contract.generations),1,[]),gaName);
     population=gaSampler.get_population(gaStudy,0);
-    verifyEqual(testCase,[population.Number], ...
+    verifyEqualWithPrecision(testCase,[population.Number], ...
         reshape(double(contract.population_numbers),1,[]),gaName);
     parents=gaSampler.get_parent_population(gaStudy,1);
-    verifyEqual(testCase,[parents.Number], ...
+    verifyEqualWithPrecision(testCase,[parents.Number], ...
         reshape(double(contract.parent_numbers),1,[]),gaName);
     selected=gaSampler.select_parent(gaStudy,1);
-    verifyEqual(testCase,[selected.Number], ...
+    verifyEqualWithPrecision(testCase,[selected.Number], ...
         reshape(double(contract.selected_numbers),1,[]),gaName);
     gaSampler.population_size=3;
-    verifyEqual(testCase,gaSampler.population_size, ...
+    verifyEqualWithPrecision(testCase,gaSampler.population_size, ...
         double(contract.population_size_after_set),gaName);
 end
 
 warning("off","radia:optuna:FutureWarning");
 warningCleanup=onCleanup(@()warning("on","radia:optuna:FutureWarning"));
 hyperopt=radia.optuna.TPESampler.hyperopt_parameters();
-verifyEqual(testCase,hyperopt.consider_endpoints, ...
+verifyEqualWithPrecision(testCase,hyperopt.consider_endpoints, ...
     logical(expected.hyperopt_parameters.consider_endpoints));
-verifyEqual(testCase,hyperopt.consider_magic_clip, ...
+verifyEqualWithPrecision(testCase,hyperopt.consider_magic_clip, ...
     logical(expected.hyperopt_parameters.consider_magic_clip));
-verifyEqual(testCase,hyperopt.consider_prior, ...
+verifyEqualWithPrecision(testCase,hyperopt.consider_prior, ...
     logical(expected.hyperopt_parameters.consider_prior));
-verifyEqual(testCase,hyperopt.n_ei_candidates, ...
+verifyEqualWithPrecision(testCase,hyperopt.n_ei_candidates, ...
     double(expected.hyperopt_parameters.n_ei_candidates));
-verifyEqual(testCase,hyperopt.n_startup_trials, ...
+verifyEqualWithPrecision(testCase,hyperopt.n_startup_trials, ...
     double(expected.hyperopt_parameters.n_startup_trials));
-verifyEqual(testCase,hyperopt.prior_weight, ...
+verifyEqualWithPrecision(testCase,hyperopt.prior_weight, ...
     double(expected.hyperopt_parameters.prior_weight));
-verifyEqual(testCase,arrayfun(hyperopt.gamma,[0,1,16,10000]), ...
+verifyEqualWithPrecision(testCase,arrayfun(hyperopt.gamma,[0,1,16,10000]), ...
     reshape(double(expected.hyperopt_parameters.gamma),1,[]));
 weightCounts=[0,3,27];
 for index=1:numel(weightCounts)
-    verifyEqual(testCase,hyperopt.weights(weightCounts(index)), ...
+    verifyEqualWithPrecision(testCase,hyperopt.weights(weightCounts(index)), ...
         reshape(double(expected.hyperopt_parameters.weights{index}),1,[]));
 end
 clear warningCleanup
@@ -518,16 +520,16 @@ crossovers={ ...
     "uniform",radia.optuna.nsgaii.UniformCrossover(); ...
     "vsbx",radia.optuna.nsgaii.VSBXCrossover()};
 for index=1:size(crossovers,1)
-    verifyEqual(testCase,crossovers{index,2}.n_parents, ...
+    verifyEqualWithPrecision(testCase,crossovers{index,2}.n_parents, ...
         double(expected.crossover_n_parents.(crossovers{index,1})));
 end
-verifyEqual(testCase,string(expected.base_crossover_instantiation_error), ...
+verifyEqualWithPrecision(testCase,string(expected.base_crossover_instantiation_error), ...
     "TypeError");
 metadata=meta.class.fromName("radia.optuna.nsgaii.BaseCrossover");
 verifyTrue(testCase,metadata.Abstract);
 
 fixed=radia.optuna.FixedTrial(struct("x",0.5));
-verifyEqual(testCase,~ismissing(fixed.datetime_start()), ...
+verifyEqualWithPrecision(testCase,~ismissing(fixed.datetime_start()), ...
     logical(expected.fixed_trial_datetime_start_is_not_none));
 relativeStudy=radia.optuna.Study(Sampler=radia.optuna.TPESampler( ...
     Seed=7,NStartupTrials=0,Multivariate=true),AutoSave=false);
@@ -536,18 +538,18 @@ complete.suggest_float("x",0,1,Step=0.1);
 complete.suggest_int("y",1,5);
 relativeStudy.tell(complete,0.2);
 running=relativeStudy.ask();
-verifyEqual(testCase,~ismissing(running.datetime_start()), ...
+verifyEqualWithPrecision(testCase,~ismissing(running.datetime_start()), ...
     logical(expected.trial_datetime_start_is_not_none));
-verifyEqual(testCase,sort(reshape(string(fieldnames( ...
+verifyEqualWithPrecision(testCase,sort(reshape(string(fieldnames( ...
     running.relative_params)),1,[])),sort(reshape(string( ...
     expected.trial_relative_params_keys),1,[])));
 
 names=sort(reshape(string(fieldnames(expected.mapped_namespaces)),1,[]));
-verifyEqual(testCase,names,sort(["distributions","exceptions", ...
+verifyEqualWithPrecision(testCase,names,sort(["distributions","exceptions", ...
     "importance","pruners","samplers","search_space","storages", ...
     "study","trial"]));
 for name=reshape(names,1,[])
-    verifyEqual(testCase,string(expected.mapped_namespaces.(name)), ...
+    verifyEqualWithPrecision(testCase,string(expected.mapped_namespaces.(name)), ...
         "optuna."+name);
 end
 end
@@ -559,34 +561,34 @@ trial=study.ask();
 trial.report(3.5,0);
 trial.report(2.5,1);
 snapshot=study.tell(trial,State="PRUNED");
-verifyEqual(testCase,snapshot.State,string(expected.pruned_state));
-verifyEqual(testCase,snapshot.Value,double(expected.pruned_value));
+verifyEqualWithPrecision(testCase,snapshot.State,string(expected.pruned_state));
+verifyEqualWithPrecision(testCase,snapshot.Value,double(expected.pruned_value));
 
 trial=study.ask();
 snapshot=study.tell(trial,State="FAIL");
-verifyEqual(testCase,snapshot.State,string(expected.failed_state));
-verifyEqual(testCase,isnan(snapshot.Value),logical(expected.failed_value_is_none));
+verifyEqualWithPrecision(testCase,snapshot.State,string(expected.failed_state));
+verifyEqualWithPrecision(testCase,isnan(snapshot.Value),logical(expected.failed_value_is_none));
 
 trial=study.ask();
 warning("off","radia:optuna:InvalidObjectiveValue");
 cleanup=onCleanup(@()warning("on","radia:optuna:InvalidObjectiveValue"));
 snapshot=study.tell(trial);
-verifyEqual(testCase,snapshot.State,string(expected.missing_state));
+verifyEqualWithPrecision(testCase,snapshot.State,string(expected.missing_state));
 clear cleanup
 
 trial=study.ask();
 snapshot=study.tell(trial,Inf);
-verifyEqual(testCase,snapshot.State,string(expected.infinite_state));
-verifyEqual(testCase,string(expected.infinite_value),"Infinity");
-verifyEqual(testCase,snapshot.Value,Inf);
+verifyEqualWithPrecision(testCase,snapshot.State,string(expected.infinite_state));
+verifyEqualWithPrecision(testCase,string(expected.infinite_value),"Infinity");
+verifyEqualWithPrecision(testCase,snapshot.Value,Inf);
 
 trial=study.ask();
 trial.report(4.5,1);
 snapshot=study.tell(trial.Number,4.25);
-verifyEqual(testCase,snapshot.Number,double(expected.by_number.number));
-verifyEqual(testCase,snapshot.State,string(expected.by_number.state));
-verifyEqual(testCase,snapshot.Value,double(expected.by_number.value));
-verifyEqual(testCase,snapshot.last_step(),double(expected.by_number.last_step));
+verifyEqualWithPrecision(testCase,snapshot.Number,double(expected.by_number.number));
+verifyEqualWithPrecision(testCase,snapshot.State,string(expected.by_number.state));
+verifyEqualWithPrecision(testCase,snapshot.Value,double(expected.by_number.value));
+verifyEqualWithPrecision(testCase,snapshot.last_step(),double(expected.by_number.last_step));
 end
 
 function testTrialPrunedExceptionMatchesUpstream(testCase)
@@ -595,16 +597,16 @@ callbackRows=struct("state",{},"value",{},"last_step",{});
 study=radia.optuna.Study(AutoSave=false);
 study.optimize(@objective,1,Callbacks={@callback});
 snapshot=study.trials("PRUNED");
-verifyEqual(testCase,height(snapshot),1);
-verifyEqual(testCase,snapshot.State,string(expected.state));
-verifyEqual(testCase,snapshot.Value,double(expected.value));
+verifyEqualWithPrecision(testCase,height(snapshot),1);
+verifyEqualWithPrecision(testCase,snapshot.State,string(expected.state));
+verifyEqualWithPrecision(testCase,snapshot.Value,double(expected.value));
 frozen=study.get_trials("PRUNED");
-verifyEqual(testCase,numel(frozen),1);
-verifyEqual(testCase,frozen(1).last_step(),double(expected.last_step));
-verifyEqual(testCase,numel(callbackRows),double(expected.callback_count));
-verifyEqual(testCase,callbackRows(1).state,string(expected.callback.state));
-verifyEqual(testCase,callbackRows(1).value,double(expected.callback.value));
-verifyEqual(testCase,callbackRows(1).last_step, ...
+verifyEqualWithPrecision(testCase,numel(frozen),1);
+verifyEqualWithPrecision(testCase,frozen(1).last_step(),double(expected.last_step));
+verifyEqualWithPrecision(testCase,numel(callbackRows),double(expected.callback_count));
+verifyEqualWithPrecision(testCase,callbackRows(1).state,string(expected.callback.state));
+verifyEqualWithPrecision(testCase,callbackRows(1).value,double(expected.callback.value));
+verifyEqualWithPrecision(testCase,callbackRows(1).last_step, ...
     double(expected.callback.last_step));
 
     function value=objective(trial) %#ok<STOUT>
@@ -629,25 +631,25 @@ for name=reshape(names,1,[])
         arguments=constructors{index};
         exception=feval("radia.optuna."+name,arguments{:});
         item=contract.cases(index);
-        verifyEqual(testCase,exception.message,string(item.message),name);
-        verifyEqual(testCase,string(exception.args), ...
+        verifyEqualWithPrecision(testCase,exception.message,string(item.message),name);
+        verifyEqualWithPrecision(testCase,string(exception.args), ...
             reshape(string(item.args),1,[]),name);
         exception.add_note("oracle note");
-        verifyEqual(testCase,exception.notes, ...
+        verifyEqualWithPrecision(testCase,exception.notes, ...
             reshape(string(item.notes),1,[]),name);
         verifyTrue(testCase,exception.with_traceback([])==exception,name);
         try
             throw(exception);
             verifyFail(testCase,"Optuna exception was not thrown: "+name);
         catch caught
-            verifyEqual(testCase,string(caught.identifier), ...
+            verifyEqualWithPrecision(testCase,string(caught.identifier), ...
                 "radia:optuna:"+name,name);
-            verifyEqual(testCase,string(caught.message),string(item.message),name);
+            verifyEqualWithPrecision(testCase,string(caught.message),string(item.message),name);
         end
     end
-    verifyEqual(testCase,isa(feval("radia.optuna."+name), ...
+    verifyEqualWithPrecision(testCase,isa(feval("radia.optuna."+name), ...
         "radia.optuna.OptunaError"),logical(contract.is_optuna_error),name);
-    verifyEqual(testCase,name=="ExperimentalWarning", ...
+    verifyEqualWithPrecision(testCase,name=="ExperimentalWarning", ...
         logical(contract.is_warning),name);
 end
 end
@@ -659,8 +661,8 @@ trial=study.ask();
 study.tell(trial,1);
 verifyError(testCase,@()study.tell(trial,2),"radia:optuna:TrialState");
 snapshot=study.tell(trial,999,SkipIfFinished=true);
-verifyEqual(testCase,snapshot.Value,double(expected.finished_tell.skip_value));
-verifyEqual(testCase,snapshot.State,string(expected.finished_tell.skip_state));
+verifyEqualWithPrecision(testCase,snapshot.Value,double(expected.finished_tell.skip_value));
+verifyEqualWithPrecision(testCase,snapshot.State,string(expected.finished_tell.skip_state));
 
 sampler=radia.optuna.TPESampler(Seed=83, ...
     ConstraintsFcn=@(~)failingConstraintCallback());
@@ -668,9 +670,9 @@ constrained=radia.optuna.Study(Sampler=sampler,AutoSave=false);
 verifyError(testCase,@()constrained.optimize( ...
     @(item)item.suggest_float("x",0,1),1), ...
     "radia:test:ConstraintCallback");
-verifyEqual(testCase,constrained.TrialTable.State, ...
+verifyEqualWithPrecision(testCase,constrained.TrialTable.State, ...
     string(expected.constraint_callback_failure.state));
-verifyEqual(testCase,isfinite(constrained.TrialTable.Value), ...
+verifyEqualWithPrecision(testCase,isfinite(constrained.TrialTable.Value), ...
     logical(expected.constraint_callback_failure.value_is_finite));
 verifyEmpty(testCase,constrained.ConstraintTable);
 end
@@ -679,43 +681,43 @@ function testFixedTrialMatchesUpstream(testCase)
 expected=testCase.TestData.Oracle.fixed_trial;
 trial=radia.optuna.FixedTrial( ...
     struct("x",0.5,"n",3,"kind","b"),Number=7);
-verifyEqual(testCase,trial.Number,double(expected.number));
-verifyEqual(testCase,numel(fieldnames(trial.Params)), ...
+verifyEqualWithPrecision(testCase,trial.Number,double(expected.number));
+verifyEqualWithPrecision(testCase,numel(fieldnames(trial.Params)), ...
     numel(fieldnames(expected.initial_params)));
-verifyEqual(testCase,numel(fieldnames(trial.Distributions)), ...
+verifyEqualWithPrecision(testCase,numel(fieldnames(trial.Distributions)), ...
     double(expected.initial_distribution_count));
-verifyEqual(testCase,trial.suggest_float("x",0,1), ...
+verifyEqualWithPrecision(testCase,trial.suggest_float("x",0,1), ...
     double(expected.values.x));
-verifyEqual(testCase,trial.suggest_int("n",1,5), ...
+verifyEqualWithPrecision(testCase,trial.suggest_int("n",1,5), ...
     double(expected.values.n));
-verifyEqual(testCase,string(trial.suggest_categorical( ...
+verifyEqualWithPrecision(testCase,string(trial.suggest_categorical( ...
     "kind",["a","b"])),string(expected.values.kind));
-verifyEqual(testCase,trial.Params.x,double(expected.values.x));
+verifyEqualWithPrecision(testCase,trial.Params.x,double(expected.values.x));
 trial.report(2.5,3);
-verifyEqual(testCase,trial.should_prune(),logical(expected.should_prune));
+verifyEqualWithPrecision(testCase,trial.should_prune(),logical(expected.should_prune));
 trial.set_user_attr("owner","matlab");
-verifyEqual(testCase,string(trial.UserAttrs.owner), ...
+verifyEqualWithPrecision(testCase,string(trial.UserAttrs.owner), ...
     string(expected.user_attrs.owner));
 trial.set_constraint("limit",-0.5);
 lastwarn("");
 trial.set_constraint("limit",99);
 [~,constraintWarning]=lastwarn;
 trialConstraints=trial.constraints();
-verifyEqual(testCase,trialConstraints("limit"), ...
+verifyEqualWithPrecision(testCase,trialConstraints("limit"), ...
     double(expected.constraints.limit));
-verifyEqual(testCase,string(constraintWarning), ...
+verifyEqualWithPrecision(testCase,string(constraintWarning), ...
     "radia:optuna:DuplicateConstraint");
 
 lastwarn("");
 repeated=trial.suggest_float("x",0.6,1);
 [~,warningId]=lastwarn;
-verifyEqual(testCase,repeated,double(expected.repeated_out_of_range));
-verifyEqual(testCase,string(warningId),"radia:optuna:FixedParameter");
-verifyEqual(testCase,string(trial.Distributions.x.name), ...
+verifyEqualWithPrecision(testCase,repeated,double(expected.repeated_out_of_range));
+verifyEqualWithPrecision(testCase,string(warningId),"radia:optuna:FixedParameter");
+verifyEqualWithPrecision(testCase,string(trial.Distributions.x.name), ...
     string(expected.distribution_types.x));
-verifyEqual(testCase,string(trial.Distributions.n.name), ...
+verifyEqualWithPrecision(testCase,string(trial.Distributions.n.name), ...
     string(expected.distribution_types.n));
-verifyEqual(testCase,string(trial.Distributions.kind.name), ...
+verifyEqualWithPrecision(testCase,string(trial.Distributions.kind.name), ...
     string(expected.distribution_types.kind));
 verifyError(testCase,@()trial.suggest_float("missing",0,1), ...
     "radia:optuna:FixedParameterMissing");
@@ -738,20 +740,20 @@ trial=radia.optuna.create_trial(value=1.2, ...
         VariableNames=["Step","Value","Timestamp"]), ...
     user_attrs=struct("owner","upstream"), ...
     constraints=struct("limit",-0.5));
-verifyEqual(testCase,trial.suggest_float("x",0,1),double(expected.values.x));
-verifyEqual(testCase,trial.suggest_int("n",1,5),double(expected.values.n));
-verifyEqual(testCase,string(trial.suggest_categorical( ...
+verifyEqualWithPrecision(testCase,trial.suggest_float("x",0,1),double(expected.values.x));
+verifyEqualWithPrecision(testCase,trial.suggest_int("n",1,5),double(expected.values.n));
+verifyEqualWithPrecision(testCase,string(trial.suggest_categorical( ...
     "kind",["a","b"])),string(expected.values.kind));
 trial.report(99,9);
-verifyEqual(testCase,trial.last_step(),double(expected.last_step));
-verifyEqual(testCase,trial.should_prune(),logical(expected.should_prune));
+verifyEqualWithPrecision(testCase,trial.last_step(),double(expected.last_step));
+verifyEqualWithPrecision(testCase,trial.should_prune(),logical(expected.should_prune));
 trial.set_user_attr("owner","matlab");
 trial.set_constraint("margin",0.25);
-verifyEqual(testCase,string(trial.UserAttrs.owner),string(expected.user_owner));
+verifyEqualWithPrecision(testCase,string(trial.UserAttrs.owner),string(expected.user_owner));
 trialConstraints=trial.constraints();
-verifyEqual(testCase,trialConstraints("limit"), ...
+verifyEqualWithPrecision(testCase,trialConstraints("limit"), ...
     double(expected.constraints.limit));
-verifyEqual(testCase,trialConstraints("margin"), ...
+verifyEqualWithPrecision(testCase,trialConstraints("margin"), ...
     double(expected.constraints.margin));
 verifyError(testCase,@()trial.suggest_float("missing",0,1), ...
     "radia:optuna:FrozenParameterMissing");
@@ -775,59 +777,59 @@ study.add_trial(radia.optuna.createTrial(Value=1.25, ...
     UserAttrs=struct("origin","oracle")));
 
 loaded=radia.optuna.load_study(study_name="alpha",storage=source);
-verifyEqual(testCase,loaded.Name,string(expected.loaded.name));
-verifyEqual(testCase,string(loaded.direction()), ...
+verifyEqualWithPrecision(testCase,loaded.Name,string(expected.loaded.name));
+verifyEqualWithPrecision(testCase,string(loaded.direction()), ...
     string(expected.loaded.direction));
-verifyEqual(testCase,height(loaded.TrialTable), ...
+verifyEqualWithPrecision(testCase,height(loaded.TrialTable), ...
     double(expected.loaded.trial_count));
-verifyEqual(testCase,loaded.best_value(),double(expected.loaded.best_value));
-verifyEqual(testCase,radia.optuna.get_all_study_names(source), ...
+verifyEqualWithPrecision(testCase,loaded.best_value(),double(expected.loaded.best_value));
+verifyEqualWithPrecision(testCase,radia.optuna.get_all_study_names(source), ...
     string(expected.names_before_delete));
 
 radia.optuna.copy_study(from_study_name="alpha", ...
     from_storage=source,to_storage=target,to_study_name="beta");
 copied=radia.optuna.load_study(study_name="beta",storage=target);
-verifyEqual(testCase,copied.Name,string(expected.copied.name));
-verifyEqual(testCase,string(copied.direction()), ...
+verifyEqualWithPrecision(testCase,copied.Name,string(expected.copied.name));
+verifyEqualWithPrecision(testCase,string(copied.direction()), ...
     string(expected.copied.direction));
-verifyEqual(testCase,copied.best_value(),double(expected.copied.best_value));
+verifyEqualWithPrecision(testCase,copied.best_value(),double(expected.copied.best_value));
 snapshot=copied.best_trial();
-verifyEqual(testCase,snapshot.Params.x,double(expected.copied.param_x));
-verifyEqual(testCase,string(snapshot.UserAttrs.origin), ...
+verifyEqualWithPrecision(testCase,snapshot.Params.x,double(expected.copied.param_x));
+verifyEqualWithPrecision(testCase,string(snapshot.UserAttrs.origin), ...
     string(expected.copied.user_origin));
 
 summary=radia.optuna.get_all_study_summaries(target);
 verifyClass(testCase,summary,"radia.optuna.StudySummary");
-verifyEqual(testCase,string(class(summary)), ...
+verifyEqualWithPrecision(testCase,string(class(summary)), ...
     "radia.optuna."+string(expected.summary.type));
-verifyEqual(testCase,string(summary.study_name), ...
+verifyEqualWithPrecision(testCase,string(summary.study_name), ...
     string(expected.summary.name));
-verifyEqual(testCase,string(summary.directions), ...
+verifyEqualWithPrecision(testCase,string(summary.directions), ...
     string(expected.summary.directions));
-verifyEqual(testCase,string(summary.direction), ...
+verifyEqualWithPrecision(testCase,string(summary.direction), ...
     string(expected.summary.direction));
-verifyEqual(testCase,summary.n_trials,double(expected.summary.trial_count));
-verifyEqual(testCase,summary.best_trial.Value, ...
+verifyEqualWithPrecision(testCase,summary.n_trials,double(expected.summary.trial_count));
+verifyEqualWithPrecision(testCase,summary.best_trial.Value, ...
     double(expected.summary.best_value));
 withoutBest=radia.optuna.get_all_study_summaries( ...
     target,include_best_trial=false);
-verifyEqual(testCase,~isempty(withoutBest.best_trial), ...
+verifyEqualWithPrecision(testCase,~isempty(withoutBest.best_trial), ...
     logical(expected.summary.without_best_has_best));
 
 radia.optuna.create_study(study_name="multi", ...
     directions=["minimize","maximize"],storage=multiTarget);
 multiSummary=radia.optuna.get_all_study_summaries(multiTarget);
-verifyEqual(testCase,string(multiSummary.directions), ...
+verifyEqualWithPrecision(testCase,string(multiSummary.directions), ...
     reshape(string(expected.multi_summary.directions),1,[]));
-verifyEqual(testCase,string(expected.multi_summary.direction_error), ...
+verifyEqualWithPrecision(testCase,string(expected.multi_summary.direction_error), ...
     "RuntimeError");
 verifyError(testCase,@()readSummaryDirection(multiSummary), ...
     "radia:optuna:MultiObjectiveDirection");
 
 radia.optuna.delete_study(study_name="alpha",storage=source);
-verifyEqual(testCase,radia.optuna.get_all_study_names(source), ...
+verifyEqualWithPrecision(testCase,radia.optuna.get_all_study_names(source), ...
     strings(0,1));
-verifyEqual(testCase,numel(expected.names_after_delete),0);
+verifyEqualWithPrecision(testCase,numel(expected.names_after_delete),0);
 clear cleanup
 cleanupStudyFiles([source,target,multiTarget]);
 end
@@ -859,32 +861,32 @@ study.add_trial(radia.optuna.create_trial(state="FAIL", ...
 
 attrs=reshape(string(expected.attrs),1,[]);
 flat=study.trials_dataframe(attrs=attrs);
-verifyEqual(testCase,string(flat.Properties.VariableNames), ...
+verifyEqualWithPrecision(testCase,string(flat.Properties.VariableNames), ...
     reshape(string(expected.single.flat_columns),1,[]));
-verifyEqual(testCase, ...
+verifyEqualWithPrecision(testCase, ...
     reshape(string(flat.Properties.UserData.flat_columns),1,[]), ...
     reshape(string(expected.single.flat_columns),1,[]));
-verifyEqual(testCase,flat.number, ...
+verifyEqualWithPrecision(testCase,flat.number, ...
     reshape(double(expected.single.values.number),[],1));
-verifyEqual(testCase,flat.value, ...
+verifyEqualWithPrecision(testCase,flat.value, ...
     reshape(double(expected.single.values.value),[],1));
-verifyEqual(testCase,string(flat.params_mode), ...
+verifyEqualWithPrecision(testCase,string(flat.params_mode), ...
     reshape(string(expected.single.values.params_mode),[],1));
-verifyEqual(testCase,flat.params_x, ...
+verifyEqualWithPrecision(testCase,flat.params_x, ...
     reshape(double(expected.single.values.params_x),[],1));
-verifyEqual(testCase,string(flat.user_attrs_owner), ...
+verifyEqualWithPrecision(testCase,string(flat.user_attrs_owner), ...
     reshape(string(expected.single.values.user_attrs_owner),[],1));
-verifyEqual(testCase,string(flat.system_attrs_origin), ...
+verifyEqualWithPrecision(testCase,string(flat.system_attrs_origin), ...
     reshape(string(expected.single.values.system_attrs_origin),[],1));
-verifyEqual(testCase,string(flat.state), ...
+verifyEqualWithPrecision(testCase,string(flat.state), ...
     reshape(string(expected.single.values.state),[],1));
 
 multi=study.trials_dataframe(attrs=attrs,multi_index=true);
 levels=multi.Properties.UserData.column_levels;
 verifyTrue(testCase,multi.Properties.UserData.multi_index);
-verifyEqual(testCase,levels(:,1), ...
+verifyEqualWithPrecision(testCase,levels(:,1), ...
     reshape(string({expected.single.multi_columns.top}),[],1));
-verifyEqual(testCase,levels(:,2), ...
+verifyEqualWithPrecision(testCase,levels(:,2), ...
     reshape(string({expected.single.multi_columns.sub}),[],1));
 
 metricStudy=radia.optuna.Study( ...
@@ -896,16 +898,16 @@ metricStudy.add_trial(radia.optuna.create_trial(values=[1.5,2.5], ...
         "x",radia.optuna.FloatDistribution(0,1))));
 metricFrame=metricStudy.trials_dataframe( ...
     attrs=["number","value","params","state"],multi_index=true);
-verifyEqual(testCase,string(metricFrame.Properties.VariableNames), ...
+verifyEqualWithPrecision(testCase,string(metricFrame.Properties.VariableNames), ...
     reshape(string(expected.metric_names.flat_columns),1,[]));
-verifyEqual(testCase,metricFrame.values_gain, ...
+verifyEqualWithPrecision(testCase,metricFrame.values_gain, ...
     double(expected.metric_names.values.values_gain));
-verifyEqual(testCase,metricFrame.values_loss, ...
+verifyEqualWithPrecision(testCase,metricFrame.values_loss, ...
     double(expected.metric_names.values.values_loss));
 metricLevels=metricFrame.Properties.UserData.column_levels;
-verifyEqual(testCase,metricLevels(:,1), ...
+verifyEqualWithPrecision(testCase,metricLevels(:,1), ...
     reshape(string({expected.metric_names.multi_columns.top}),[],1));
-verifyEqual(testCase,metricLevels(:,2), ...
+verifyEqualWithPrecision(testCase,metricLevels(:,2), ...
     reshape(string({expected.metric_names.multi_columns.sub}),[],1));
 
 singleMetricStudy=radia.optuna.Study(AutoSave=false);
@@ -913,24 +915,24 @@ singleMetricStudy.set_metric_names("loss");
 singleMetricStudy.add_trial(radia.optuna.create_trial(value=1.2));
 singleMetricFrame=singleMetricStudy.trials_dataframe( ...
     attrs=["number","value","state"],multi_index=true);
-verifyEqual(testCase,string(singleMetricFrame.Properties.VariableNames), ...
+verifyEqualWithPrecision(testCase,string(singleMetricFrame.Properties.VariableNames), ...
     reshape(string(expected.single_metric_name.flat_columns),1,[]));
-verifyEqual(testCase,singleMetricFrame.value_loss, ...
+verifyEqualWithPrecision(testCase,singleMetricFrame.value_loss, ...
     double(expected.single_metric_name.values.value_loss));
 singleMetricLevels=singleMetricFrame.Properties.UserData.column_levels;
-verifyEqual(testCase,singleMetricLevels(:,1), ...
+verifyEqualWithPrecision(testCase,singleMetricLevels(:,1), ...
     reshape(string({expected.single_metric_name.multi_columns.top}),[],1));
-verifyEqual(testCase,singleMetricLevels(:,2), ...
+verifyEqualWithPrecision(testCase,singleMetricLevels(:,2), ...
     reshape(string({expected.single_metric_name.multi_columns.sub}),[],1));
 
 emptyStudy=radia.optuna.Study(AutoSave=false);
 emptyFrame=emptyStudy.trials_dataframe();
-verifyEqual(testCase,width(emptyFrame),double(expected.empty_column_count));
+verifyEqualWithPrecision(testCase,width(emptyFrame),double(expected.empty_column_count));
 verifyFalse(testCase,logical(expected.multi_index_default));
-verifyEqual(testCase,string(expected.errors.unknown_attr),"AttributeError");
+verifyEqualWithPrecision(testCase,string(expected.errors.unknown_attr),"AttributeError");
 verifyError(testCase,@()study.trials_dataframe(attrs="not_an_attr"), ...
     "radia:optuna:TrialsDataframeAttribute");
-verifyEqual(testCase,string(expected.errors.empty_attrs),"TypeError");
+verifyEqualWithPrecision(testCase,string(expected.errors.empty_attrs),"TypeError");
 verifyError(testCase,@()study.trials_dataframe(attrs=strings(1,0)), ...
     "radia:optuna:TrialsDataframeAttrs");
 end
@@ -943,16 +945,16 @@ result=radia.optuna.get_param_importances(study, ...
     n_trees=double(expected.evaluator.n_trees), ...
     max_depth=double(expected.evaluator.max_depth), ...
     seed=double(expected.evaluator.seed));
-verifyEqual(testCase,result.Parameter,string(expected.parameter_order));
-verifyEqual(testCase,result.Importance, ...
+verifyEqualWithPrecision(testCase,result.Parameter,string(expected.parameter_order));
+verifyEqualWithPrecision(testCase,result.Importance, ...
     reshape(double(expected.values),[],1),AbsTol=0);
-verifyEqual(testCase,sum(result.Importance),1,AbsTol=10*eps);
+verifyEqualWithPrecision(testCase,sum(result.Importance),1,AbsTol=10*eps);
 end
 
 function testImportanceEvaluatorPublicMembersMatchUpstream(testCase)
 expected=testCase.TestData.Oracle.importance;
 contract=expected.public_evaluators;
-verifyEqual(testCase,string(contract.base_construction_error),"TypeError");
+verifyEqualWithPrecision(testCase,string(contract.base_construction_error),"TypeError");
 verifyError(testCase,@()radia.optuna.BaseImportanceEvaluator(), ...
     "MATLAB:class:abstract");
 study=importanceStudy(expected);
@@ -983,12 +985,12 @@ for index=1:numel(names)
     operation=str2func("radia.optuna."+name);
     if logical(expected.available)
         symbol=operation();
-        verifyEqual(testCase,string(py.builtins.getattr( ...
+        verifyEqualWithPrecision(testCase,string(py.builtins.getattr( ...
             symbol,"__name__")),string(expected.name),name);
-        verifyEqual(testCase,string(py.builtins.getattr( ...
+        verifyEqualWithPrecision(testCase,string(py.builtins.getattr( ...
             symbol,"__module__")),string(expected.module),name);
         symbolType=py.builtins.type(symbol);
-        verifyEqual(testCase,string(py.builtins.getattr( ...
+        verifyEqualWithPrecision(testCase,string(py.builtins.getattr( ...
             symbolType,"__name__")),string(expected.type),name);
     else
         verifyNotEmpty(testCase,string(expected.error_type),name);
@@ -1030,7 +1032,7 @@ backends=string(fieldnames(expected.backends));
 for backendIndex=1:numel(backends)
     backend=backends(backendIndex);
     contract=expected.backends.(backend);
-    verifyEqual(testCase,radia.optuna.is_available(Backend=backend), ...
+    verifyEqualWithPrecision(testCase,radia.optuna.is_available(Backend=backend), ...
         logical(contract.is_available),backend);
     names=string(fieldnames(contract.functions));
     for nameIndex=1:numel(names)
@@ -1048,10 +1050,10 @@ for backendIndex=1:numel(backends)
         if logical(functionContract.available)
             result=operation(study,arguments{:});
             resultType=py.builtins.type(result);
-            verifyEqual(testCase,string(py.builtins.getattr( ...
+            verifyEqualWithPrecision(testCase,string(py.builtins.getattr( ...
                 resultType,"__name__")),string(functionContract.type), ...
                 backend+":"+name);
-            verifyEqual(testCase,string(py.builtins.getattr( ...
+            verifyEqualWithPrecision(testCase,string(py.builtins.getattr( ...
                 resultType,"__module__")),string(functionContract.module), ...
                 backend+":"+name);
         else
@@ -1082,7 +1084,7 @@ for index=1:size(rows,1)
     cvStudy.tell(trial,mean(rows(index,:)));
 end
 cvEvaluator=radia.optuna.CrossValidationErrorEvaluator();
-verifyEqual(testCase,cvEvaluator.evaluate( ...
+verifyEqualWithPrecision(testCase,cvEvaluator.evaluate( ...
     cvStudy.get_trials(),cvStudy.direction()), ...
     double(expected.cross_validation_error),AbsTol=1e-15);
 trial=cvStudy.ask();
@@ -1091,7 +1093,7 @@ verifyError(testCase,@()radia.optuna.report_cross_validation_scores( ...
 cvStudy.tell(trial,State="FAIL");
 
 staticEvaluator=radia.optuna.StaticErrorEvaluator(1.25);
-verifyEqual(testCase,staticEvaluator.evaluate([], ...
+verifyEqualWithPrecision(testCase,staticEvaluator.evaluate([], ...
     radia.optuna.StudyDirection.MINIMIZE),double(expected.static_error));
 
 medianEvaluator=radia.optuna.MedianErrorEvaluator( ...
@@ -1100,9 +1102,9 @@ medianEvaluator=radia.optuna.MedianErrorEvaluator( ...
 medianValues=[5,4,4.5,4.2];
 medianTrials=arrayfun(@(index)radia.optuna.create_trial( ...
     value=medianValues(index)),1:4);
-verifyEqual(testCase,medianEvaluator.evaluate(medianTrials,"minimize"), ...
+verifyEqualWithPrecision(testCase,medianEvaluator.evaluate(medianTrials,"minimize"), ...
     double(expected.median_error));
-verifyEqual(testCase,medianEvaluator.evaluate( ...
+verifyEqualWithPrecision(testCase,medianEvaluator.evaluate( ...
     radia.optuna.create_trial(value=100),"minimize"), ...
     double(expected.median_cached));
 
@@ -1115,16 +1117,16 @@ for value=[1,3,2.5,2]
     trial=maximize.ask(); maximize.tell(trial,value);
 end
 evaluator=radia.optuna.BestValueStagnationEvaluator(3);
-verifyEqual(testCase,evaluator.evaluate( ...
+verifyEqualWithPrecision(testCase,evaluator.evaluate( ...
     minimize.TrialTable,"minimize"),double(expected.remaining_minimize));
-verifyEqual(testCase,evaluator.evaluate( ...
+verifyEqualWithPrecision(testCase,evaluator.evaluate( ...
     maximize.TrialTable,"maximize"),double(expected.remaining_maximize));
 
 maxTrials=radia.optuna.MaxTrialsCallback(3);
 callbackStudy=radia.optuna.Study(AutoSave=false);
 callbackStudy.optimize(@(trial)trial.Number,10, ...
     Callbacks=maxTrials.callback());
-verifyEqual(testCase,height(callbackStudy.TrialTable), ...
+verifyEqualWithPrecision(testCase,height(callbackStudy.TrialTable), ...
     double(expected.max_trials_callback_count));
 
 terminator=radia.optuna.Terminator( ...
@@ -1135,9 +1137,9 @@ values=reshape(double(expected.terminator_values),1,[]);
 terminated=radia.optuna.Study(AutoSave=false);
 terminated.optimize(@(trial)values(trial.Number+1),6, ...
     Callbacks=terminatorCallback.callback());
-verifyEqual(testCase,height(terminated.TrialTable), ...
+verifyEqualWithPrecision(testCase,height(terminated.TrialTable), ...
     double(expected.terminator_trial_count));
-verifyEqual(testCase,terminated.TrialTable.Value,values');
+verifyEqualWithPrecision(testCase,terminated.TrialTable.Value,values');
 
 advanced=expected.advanced;
 advancedTrials=radia.optuna.FrozenTrial.empty(0,1);
@@ -1151,19 +1153,19 @@ end
 lastwarn("");
 emmr=radia.optuna.EMMREvaluator(min_n_trials=2,seed=101);
 [~,warningId]=lastwarn;
-verifyEqual(testCase,string(warningId),"radia:optuna:ExperimentalWarning");
-verifyEqual(testCase,string(advanced.results.emmr.warning), ...
+verifyEqualWithPrecision(testCase,string(warningId),"radia:optuna:ExperimentalWarning");
+verifyEqualWithPrecision(testCase,string(advanced.results.emmr.warning), ...
     "ExperimentalWarning");
-verifyEqual(testCase,emmr.evaluate(advancedTrials,"minimize"), ...
+verifyEqualWithPrecision(testCase,emmr.evaluate(advancedTrials,"minimize"), ...
     double(advanced.results.emmr.value),AbsTol=0);
 lastwarn("");
 regret=radia.optuna.RegretBoundEvaluator( ...
     min_n_trials=5,top_trials_ratio=0.8,seed=101);
 [~,warningId]=lastwarn;
-verifyEqual(testCase,string(warningId),"radia:optuna:ExperimentalWarning");
-verifyEqual(testCase,string(advanced.results.regret_bound.warning), ...
+verifyEqualWithPrecision(testCase,string(warningId),"radia:optuna:ExperimentalWarning");
+verifyEqualWithPrecision(testCase,string(advanced.results.regret_bound.warning), ...
     "ExperimentalWarning");
-verifyEqual(testCase,regret.evaluate(advancedTrials,"minimize"), ...
+verifyEqualWithPrecision(testCase,regret.evaluate(advancedTrials,"minimize"), ...
     double(advanced.results.regret_bound.value),AbsTol=0);
 end
 
@@ -1179,31 +1181,31 @@ store=radia.optuna.FileSystemArtifactStore(tempDirectory);
 study=radia.optuna.Study(AutoSave=false);
 artifactId=radia.optuna.upload_artifact( ...
     artifact_store=store,file_path=source,study_or_trial=study);
-verifyEqual(testCase,strlength(artifactId),strlength(string(expected.artifact_id)));
+verifyEqualWithPrecision(testCase,strlength(artifactId),strlength(string(expected.artifact_id)));
 metadata=radia.optuna.get_all_artifact_meta(study);
-verifyEqual(testCase,numel(metadata),1);
-verifyEqual(testCase,metadata.filename,string(expected.metadata.filename));
-verifyEqual(testCase,metadata.mimetype,string(expected.metadata.mimetype));
+verifyEqualWithPrecision(testCase,numel(metadata),1);
+verifyEqualWithPrecision(testCase,metadata.filename,string(expected.metadata.filename));
+verifyEqualWithPrecision(testCase,metadata.mimetype,string(expected.metadata.mimetype));
 verifyTrue(testCase,ismissing(metadata.encoding));
 destination=fullfile(tempDirectory,"downloaded.txt");
 radia.optuna.download_artifact(artifact_store=store, ...
     file_path=destination,artifact_id=artifactId);
-verifyEqual(testCase,radia.optuna.internal.ArtifactIO.readFile(destination), ...
+verifyEqualWithPrecision(testCase,radia.optuna.internal.ArtifactIO.readFile(destination), ...
     reshape(uint8(expected.downloaded),[],1));
-verifyEqual(testCase,string(expected.existing_download_error),"FileExistsError");
+verifyEqualWithPrecision(testCase,string(expected.existing_download_error),"FileExistsError");
 verifyError(testCase,@()radia.optuna.download_artifact( ...
     artifact_store=store,file_path=destination,artifact_id=artifactId), ...
     "radia:optuna:ArtifactFileExists");
-verifyEqual(testCase,string(expected.traversal_error),"ValueError");
+verifyEqualWithPrecision(testCase,string(expected.traversal_error),"ValueError");
 verifyError(testCase,@()store.open_reader("../outside"), ...
     "radia:optuna:ArtifactId");
 
 backoff=radia.optuna.Backoff(store,MaxRetries=2, ...
     MinDelay=1e-9,MaxDelay=2e-9);
 backoff.write("backoff",uint8(expected.backoff_body));
-verifyEqual(testCase,backoff.open_reader("backoff"), ...
+verifyEqualWithPrecision(testCase,backoff.open_reader("backoff"), ...
     reshape(uint8(expected.backoff_body),[],1));
-verifyEqual(testCase,string(expected.backoff_remove_error),"ArtifactNotFound");
+verifyEqualWithPrecision(testCase,string(expected.backoff_remove_error),"ArtifactNotFound");
 verifyError(testCase,@()backoff.remove("backoff"), ...
     "radia:optuna:ArtifactNotFound");
 
@@ -1211,7 +1213,7 @@ botoClient=struct( ...
     "get_object",@(~,~)reshape(uint8(expected.boto_open),[],1), ...
     "upload_fileobj",@(~,~,~)[],"delete_object",@(~,~)[]);
 boto=radia.optuna.Boto3ArtifactStore("bucket",botoClient);
-verifyEqual(testCase,boto.open_reader("cloud"), ...
+verifyEqualWithPrecision(testCase,boto.open_reader("cloud"), ...
     reshape(uint8(expected.boto_open),[],1));
 verifyWarningFree(testCase,@()boto.write("cloud",uint8(expected.boto_written)));
 verifyWarningFree(testCase,@()boto.remove("cloud"));
@@ -1220,7 +1222,7 @@ gcsClient=struct( ...
     "get_blob",@(~,~)reshape(uint8(expected.gcs_open),[],1), ...
     "upload_blob",@(~,~,~)[],"delete_blob",@(~,~)[]);
 gcs=radia.optuna.GCSArtifactStore("bucket",gcsClient);
-verifyEqual(testCase,gcs.open_reader("cloud"), ...
+verifyEqualWithPrecision(testCase,gcs.open_reader("cloud"), ...
     reshape(uint8(expected.gcs_open),[],1));
 verifyWarningFree(testCase,@()gcs.write("cloud",uint8(expected.gcs_written)));
 verifyWarningFree(testCase,@()gcs.remove("cloud"));
@@ -1230,7 +1232,7 @@ end
 function testInMemoryStorageMatchesUpstream(testCase)
 expected=testCase.TestData.Oracle.storage;
 metadata=meta.class.fromName("radia.optuna.BaseStorage");
-verifyEqual(testCase,metadata.Abstract,logical(expected.base_is_abstract));
+verifyEqualWithPrecision(testCase,metadata.Abstract,logical(expected.base_is_abstract));
 storage=radia.optuna.InMemoryStorage();
 exerciseStorageContract(testCase,storage,expected,"memory-oracle");
 end
@@ -1257,15 +1259,15 @@ function testRDBStorageMatchesUpstream(testCase)
 expected=testCase.TestData.Oracle.rdb_storage;
 storage=radia.optuna.RDBStorage("sqlite:///:memory:");
 exerciseStorageContract(testCase,storage,expected,"rdb-oracle");
-verifyEqual(testCase,storage.get_current_version(), ...
+verifyEqualWithPrecision(testCase,storage.get_current_version(), ...
     string(expected.current_version));
-verifyEqual(testCase,storage.get_head_version(),string(expected.head_version));
-verifyEqual(testCase,storage.get_all_versions(), ...
+verifyEqualWithPrecision(testCase,storage.get_head_version(),string(expected.head_version));
+verifyEqualWithPrecision(testCase,storage.get_all_versions(), ...
     reshape(string(expected.all_versions),1,[]));
 verifyEmpty(testCase,storage.get_heartbeat_interval());
 verifyEmpty(testCase,storage.get_heartbeat_stale_trial_callback());
 verifyTrue(testCase,logical(expected.failed_callback_is_none));
-verifyEqual(testCase,string(expected.failed_callback_warning),"FutureWarning");
+verifyEqualWithPrecision(testCase,string(expected.failed_callback_warning),"FutureWarning");
 verifyWarning(testCase,@()storage.get_failed_trial_callback(), ...
     "radia:optuna:FutureWarning");
 verifyWarningFree(testCase,@()storage.upgrade());
@@ -1284,7 +1286,7 @@ lastwarn("");
 server=radia.optuna.run_grpc_proxy_server(backend, ...
     host="127.0.0.1",port=port,Background=true);
 [~,warningId]=lastwarn;
-verifyEqual(testCase,string(warningId),"radia:optuna:ExperimentalWarning");
+verifyEqualWithPrecision(testCase,string(warningId),"radia:optuna:ExperimentalWarning");
 cleanup=onCleanup(@()cleanupGrpcServer(server,databasePath));
 proxy=radia.optuna.GrpcStorageProxy(host="127.0.0.1",port=port);
 % A fresh Python process may need to import SQLAlchemy and initialize the
@@ -1304,9 +1306,9 @@ function testJournalBackendMatchesUpstream(testCase)
 expected=testCase.TestData.Oracle.journal_storage;
 baseBackend=meta.class.fromName("radia.optuna.BaseJournalBackend");
 baseLog=meta.class.fromName("radia.optuna.BaseJournalLogStorage");
-verifyEqual(testCase,baseBackend.Abstract, ...
+verifyEqualWithPrecision(testCase,baseBackend.Abstract, ...
     logical(expected.base_backend_is_abstract));
-verifyEqual(testCase,baseLog.Abstract, ...
+verifyEqualWithPrecision(testCase,baseLog.Abstract, ...
     logical(expected.base_log_storage_is_abstract));
 
 path=string(tempname("C:\temp"))+".log";
@@ -1316,10 +1318,10 @@ logs={struct("operation",1,"worker","alpha"), ...
     struct("operation",2,"value",3.5)};
 verifyWarningFree(testCase,@()backend.append_logs(logs));
 verifyTrue(testCase,logical(expected.append_is_none));
-verifyEqual(testCase,string(fileread(path)),string(expected.file_text));
+verifyEqualWithPrecision(testCase,string(fileread(path)),string(expected.file_text));
 selected=backend.read_logs(1);
-verifyEqual(testCase,numel(selected),1);
-verifyEqual(testCase,selected{1},expected.selected_logs);
+verifyEqualWithPrecision(testCase,numel(selected),1);
+verifyEqualWithPrecision(testCase,selected{1},expected.selected_logs);
 
 lockClasses=["JournalFileOpenLock","JournalFileSymlinkLock"];
 lockFields=["open","symlink"];
@@ -1329,10 +1331,10 @@ for index=1:numel(lockClasses)
     fclose(fileId);
     lock=feval("radia.optuna."+lockClasses(index),target);
     expectedLock=expected.locks.(lockFields(index));
-    verifyEqual(testCase,lock.acquire(),logical(expectedLock.acquired));
+    verifyEqualWithPrecision(testCase,lock.acquire(),logical(expectedLock.acquired));
     verifyWarningFree(testCase,@()lock.release());
     verifyTrue(testCase,logical(expectedLock.release_is_none));
-    verifyEqual(testCase,string(expectedLock.second_release_error), ...
+    verifyEqualWithPrecision(testCase,string(expectedLock.second_release_error), ...
         "RuntimeError");
     verifyError(testCase,@()lock.release(), ...
         "radia:optuna:JournalLockOwnership");
@@ -1369,12 +1371,12 @@ logs={struct("operation",4,"worker","redis"), ...
 verifyWarningFree(testCase,@()backend.append_logs(logs));
 verifyTrue(testCase,logical(expected.append_is_none));
 selected=backend.read_logs(1);
-verifyEqual(testCase,numel(selected),1);
-verifyEqual(testCase,selected{1},expected.selected_logs);
+verifyEqualWithPrecision(testCase,numel(selected),1);
+verifyEqualWithPrecision(testCase,selected{1},expected.selected_logs);
 verifyWarningFree(testCase,@()backend.save_snapshot( ...
     uint8(char("snapshot-bytes"))));
 verifyTrue(testCase,logical(expected.save_snapshot_is_none));
-verifyEqual(testCase,backend.load_snapshot(), ...
+verifyEqualWithPrecision(testCase,backend.load_snapshot(), ...
     reshape(uint8(expected.load_snapshot),1,[]));
 verifyWarning(testCase,@()radia.optuna.JournalRedisStorage( ...
     "redis://oracle",use_cluster=true,prefix="oracle",Client=client), ...
@@ -1394,8 +1396,8 @@ lastwarn("");
 callback=radia.optuna.RetryHeartbeatStaleTrialCallback( ...
     max_retry=2,inherit_intermediate_values=true);
 [~,warningId]=lastwarn;
-verifyEqual(testCase,string(warningId),"radia:optuna:ExperimentalWarning");
-verifyEqual(testCase,string(expected.callback_warning),"ExperimentalWarning");
+verifyEqualWithPrecision(testCase,string(warningId),"radia:optuna:ExperimentalWarning");
+verifyEqualWithPrecision(testCase,string(expected.callback_warning),"ExperimentalWarning");
 trials=study.get_trials();
 callback.call(study,trials(1));
 trials=study.get_trials();
@@ -1404,30 +1406,30 @@ trials=study.get_trials();
 secondRetry=trials(3);
 callback.call(study,secondRetry);
 trials=study.get_trials();
-verifyEqual(testCase,numel(trials),double(expected.n_trials));
-verifyEqual(testCase,trials(2).State,string(expected.first_state));
-verifyEqual(testCase,trials(2).IntermediateValues.Value, ...
+verifyEqualWithPrecision(testCase,numel(trials),double(expected.n_trials));
+verifyEqualWithPrecision(testCase,trials(2).State,string(expected.first_state));
+verifyEqualWithPrecision(testCase,trials(2).IntermediateValues.Value, ...
     double(expected.first_intermediate.x2));
-verifyEqual(testCase,reshape(secondRetry.SystemAttrs.retry_history,1,[]), ...
+verifyEqualWithPrecision(testCase,reshape(secondRetry.SystemAttrs.retry_history,1,[]), ...
     reshape(double(expected.second_history),1,[]));
 warningState=warning("off","radia:optuna:ExperimentalWarning");
 cleanup=onCleanup(@()warning(warningState));
 number=callback.retried_trial_number(secondRetry);
 history=callback.retry_history(secondRetry);
 clear cleanup
-verifyEqual(testCase,number,double(expected.original_number));
-verifyEqual(testCase,history,reshape(double(expected.history),1,[]));
-verifyEqual(testCase,reshape(string(expected.static_warnings),1,[]), ...
+verifyEqualWithPrecision(testCase,number,double(expected.original_number));
+verifyEqualWithPrecision(testCase,history,reshape(double(expected.history),1,[]));
+verifyEqualWithPrecision(testCase,reshape(string(expected.static_warnings),1,[]), ...
     ["ExperimentalWarning","ExperimentalWarning"]);
 verifyWarning(testCase,@()callback.retried_trial_number(secondRetry), ...
     "radia:optuna:ExperimentalWarning");
 verifyWarning(testCase,@()callback.retry_history(secondRetry), ...
     "radia:optuna:ExperimentalWarning");
-verifyEqual(testCase,string(expected.alias_warning),"FutureWarning");
+verifyEqualWithPrecision(testCase,string(expected.alias_warning),"FutureWarning");
 verifyWarning(testCase,@()radia.optuna.RetryFailedTrialCallback( ...
     max_retry=1),"radia:optuna:FutureWarning");
 verifyTrue(testCase,logical(expected.fail_stale_is_none));
-verifyEqual(testCase,string(expected.fail_stale_warning),"ExperimentalWarning");
+verifyEqualWithPrecision(testCase,string(expected.fail_stale_warning),"ExperimentalWarning");
 verifyWarning(testCase,@()radia.optuna.fail_stale_trials(study), ...
     "radia:optuna:ExperimentalWarning");
 end
@@ -1435,70 +1437,70 @@ end
 function exerciseStorageContract(testCase,storage,expected,studyName)
 studyId=storage.create_new_study( ...
     radia.optuna.StudyDirection.MINIMIZE,studyName);
-verifyEqual(testCase,studyId,double(expected.study_id));
+verifyEqualWithPrecision(testCase,studyId,double(expected.study_id));
 storage.set_study_user_attr(studyId,"owner","oracle");
 storage.set_study_system_attr(studyId,"revision",4);
 trialId=storage.create_new_trial(studyId);
-verifyEqual(testCase,trialId,double(expected.trial_id));
+verifyEqualWithPrecision(testCase,trialId,double(expected.trial_id));
 storage.set_trial_param(trialId,"x",0.5, ...
     radia.optuna.FloatDistribution(0,1));
 storage.set_trial_user_attr(trialId,"label","first");
 storage.set_trial_system_attr(trialId,"worker",7);
 storage.set_trial_intermediate_value(trialId,2,3.5);
-verifyEqual(testCase,storage.get_trial(trialId).State, ...
+verifyEqualWithPrecision(testCase,storage.get_trial(trialId).State, ...
     string(expected.running_state));
-verifyEqual(testCase,storage.set_trial_state_values( ...
+verifyEqualWithPrecision(testCase,storage.set_trial_state_values( ...
     trialId,radia.optuna.TrialState.COMPLETE,1.25), ...
     logical(expected.completed));
 frozen=storage.get_trial(trialId);
-verifyEqual(testCase,frozen.State,string(expected.trial_state));
-verifyEqual(testCase,frozen.Value,double(expected.trial_value));
-verifyEqual(testCase,storage.get_trial_param(trialId,"x"), ...
+verifyEqualWithPrecision(testCase,frozen.State,string(expected.trial_state));
+verifyEqualWithPrecision(testCase,frozen.Value,double(expected.trial_value));
+verifyEqualWithPrecision(testCase,storage.get_trial_param(trialId,"x"), ...
     double(expected.param_internal));
-verifyEqual(testCase,storage.get_trial_params(trialId),expected.params);
+verifyEqualWithPrecision(testCase,storage.get_trial_params(trialId),expected.params);
 trialUserAttrs=storage.get_trial_user_attrs(trialId);
-verifyEqual(testCase,string(trialUserAttrs.label), ...
+verifyEqualWithPrecision(testCase,string(trialUserAttrs.label), ...
     string(expected.trial_user_attrs.label));
-verifyEqual(testCase,storage.get_trial_system_attrs(trialId), ...
+verifyEqualWithPrecision(testCase,storage.get_trial_system_attrs(trialId), ...
     expected.trial_system_attrs);
-verifyEqual(testCase,string(expected.finished_update_error), ...
+verifyEqualWithPrecision(testCase,string(expected.finished_update_error), ...
     "UpdateFinishedTrialError");
 verifyError(testCase,@()storage.set_trial_user_attr( ...
     trialId,"late",true),"radia:optuna:UpdateFinishedTrialError");
 
 failedId=storage.create_new_trial(studyId);
-verifyEqual(testCase,failedId,double(expected.failed_id));
+verifyEqualWithPrecision(testCase,failedId,double(expected.failed_id));
 storage.set_trial_state_values(failedId,radia.optuna.TrialState.FAIL);
 templateId=storage.create_new_trial(studyId, ...
     radia.optuna.create_trial(value=0.25));
-verifyEqual(testCase,templateId,double(expected.template_id));
-verifyEqual(testCase,storage.get_best_trial(studyId).Number, ...
+verifyEqualWithPrecision(testCase,templateId,double(expected.template_id));
+verifyEqualWithPrecision(testCase,storage.get_best_trial(studyId).Number, ...
     double(expected.best_number));
-verifyEqual(testCase,storage.get_n_trials(studyId),double(expected.n_trials));
-verifyEqual(testCase,storage.get_n_trials( ...
+verifyEqualWithPrecision(testCase,storage.get_n_trials(studyId),double(expected.n_trials));
+verifyEqualWithPrecision(testCase,storage.get_n_trials( ...
     studyId,radia.optuna.TrialState.COMPLETE),double(expected.n_complete));
 complete=storage.get_all_trials( ...
     studyId,true,radia.optuna.TrialState.COMPLETE);
-verifyEqual(testCase,[complete.Number], ...
+verifyEqualWithPrecision(testCase,[complete.Number], ...
     reshape(double(expected.complete_numbers),1,[]));
-verifyEqual(testCase,storage.get_trial_id_from_study_id_trial_number( ...
+verifyEqualWithPrecision(testCase,storage.get_trial_id_from_study_id_trial_number( ...
     studyId,frozen.Number),double(expected.trial_lookup_id));
-verifyEqual(testCase,storage.get_trial_number_from_id(trialId), ...
+verifyEqualWithPrecision(testCase,storage.get_trial_number_from_id(trialId), ...
     double(expected.trial_number));
-verifyEqual(testCase,string(storage.get_study_directions(studyId)), ...
+verifyEqualWithPrecision(testCase,string(storage.get_study_directions(studyId)), ...
     reshape(string(expected.directions),1,[]));
-verifyEqual(testCase,storage.get_study_name_from_id(studyId), ...
+verifyEqualWithPrecision(testCase,storage.get_study_name_from_id(studyId), ...
     string(expected.study_name));
-verifyEqual(testCase,storage.get_study_id_from_name(studyName),studyId);
+verifyEqualWithPrecision(testCase,storage.get_study_id_from_name(studyName),studyId);
 studyUserAttrs=storage.get_study_user_attrs(studyId);
-verifyEqual(testCase,string(studyUserAttrs.owner), ...
+verifyEqualWithPrecision(testCase,string(studyUserAttrs.owner), ...
     string(expected.study_user_attrs.owner));
-verifyEqual(testCase,storage.get_study_system_attrs(studyId), ...
+verifyEqualWithPrecision(testCase,storage.get_study_system_attrs(studyId), ...
     expected.study_system_attrs);
 summaries=storage.get_all_studies();
-verifyEqual(testCase,numel(summaries),1);
-verifyEqual(testCase,summaries(1).study_name,string(expected.summary.name));
-verifyEqual(testCase,string(expected.duplicate_error),"DuplicatedStudyError");
+verifyEqualWithPrecision(testCase,numel(summaries),1);
+verifyEqualWithPrecision(testCase,summaries(1).study_name,string(expected.summary.name));
+verifyEqualWithPrecision(testCase,string(expected.duplicate_error),"DuplicatedStudyError");
 verifyError(testCase,@()storage.create_new_study( ...
     radia.optuna.StudyDirection.MINIMIZE,studyName), ...
     "radia:optuna:DuplicatedStudyError");
@@ -1522,11 +1524,11 @@ for index=1:numel(expected)
         "log_mesh",trial.suggest_int("log_mesh",1,100,Log=true), ...
         "mode",trial.suggest_categorical("mode",["A","B","C"]));
     study.tell(trial,actual.x);
-    verifyEqual(testCase,actual.x,expected(index).x,AbsTol=0);
-    verifyEqual(testCase,actual.q,expected(index).q,AbsTol=0);
-    verifyEqual(testCase,actual.mesh,double(expected(index).mesh));
-    verifyEqual(testCase,actual.log_mesh,double(expected(index).log_mesh));
-    verifyEqual(testCase,string(actual.mode),string(expected(index).mode));
+    verifyEqualWithPrecision(testCase,actual.x,expected(index).x,AbsTol=0);
+    verifyEqualWithPrecision(testCase,actual.q,expected(index).q,AbsTol=0);
+    verifyEqualWithPrecision(testCase,actual.mesh,double(expected(index).mesh));
+    verifyEqualWithPrecision(testCase,actual.log_mesh,double(expected(index).log_mesh));
+    verifyEqualWithPrecision(testCase,string(actual.mode),string(expected(index).mode));
 end
 end
 
@@ -1540,9 +1542,9 @@ value=trial.suggest_int("mesh order",2,10,Step=3);
 lastwarn("");
 repeated=trial.suggest_int("mesh order",2,10,Step=2);
 [~,warningId]=lastwarn;
-verifyEqual(testCase,value,double(expected.integer_value));
-verifyEqual(testCase,repeated,double(expected.inconsistent_repeat_value));
-verifyEqual(testCase,string(warningId),"radia:optuna:InconsistentParameter");
+verifyEqualWithPrecision(testCase,value,double(expected.integer_value));
+verifyEqualWithPrecision(testCase,repeated,double(expected.inconsistent_repeat_value));
+verifyEqualWithPrecision(testCase,string(warningId),"radia:optuna:InconsistentParameter");
 verifyError(testCase,@()trial.suggest_float("mesh order",2,10), ...
     "radia:optuna:IncompatibleDistribution");
 verifyError(testCase,@()trial.suggest_int("mesh order",2,10,Log=true), ...
@@ -1556,21 +1558,21 @@ verifyError(testCase,@()categorical.suggest_categorical( ...
 collision=study.ask();
 first=collision.suggest_float("a-b",0,1);
 second=collision.suggest_float("a_b",0,1);
-verifyEqual(testCase,first,double(expected.colliding_names.a_b),AbsTol=0);
-verifyEqual(testCase,second,double(expected.colliding_names.a_b_1),AbsTol=0);
-verifyEqual(testCase,study.ParamTable.Name(end-1:end),["a-b";"a_b"]);
+verifyEqualWithPrecision(testCase,first,double(expected.colliding_names.a_b),AbsTol=0);
+verifyEqualWithPrecision(testCase,second,double(expected.colliding_names.a_b_1),AbsTol=0);
+verifyEqualWithPrecision(testCase,study.ParamTable.Name(end-1:end),["a-b";"a_b"]);
 
 stepped=study.ask();
 steppedValue=stepped.suggest_float("q",0,1,Step=0.3);
-verifyEqual(testCase,steppedValue,double(expected.stepped_float.value),AbsTol=0);
-verifyEqual(testCase,stepped.Distributions.q.high, ...
+verifyEqualWithPrecision(testCase,steppedValue,double(expected.stepped_float.value),AbsTol=0);
+verifyEqualWithPrecision(testCase,stepped.Distributions.q.high, ...
     double(expected.stepped_float.effective_high),AbsTol=2*eps);
 clear cleanup
 end
 
 function testDistributionPublicMembersMatchUpstream(testCase)
 expected=testCase.TestData.Oracle.distribution_public_members;
-verifyEqual(testCase,string(expected.base_construction_error),"TypeError");
+verifyEqualWithPrecision(testCase,string(expected.base_construction_error),"TypeError");
 verifyError(testCase,@()radia.optuna.BaseDistribution(), ...
     "MATLAB:class:abstract");
 
@@ -1589,26 +1591,26 @@ instances=struct( ...
     "IntLogUniformDistribution", ...
         radia.optuna.IntLogUniformDistribution(1,3,1));
 for name=reshape(string(fieldnames(instances)),1,[])
-    verifyEqual(testCase,instances.(name).single(), ...
+    verifyEqualWithPrecision(testCase,instances.(name).single(), ...
         logical(expected.single.(name)));
 end
 
 categorical=instances.CategoricalDistribution;
-verifyEqual(testCase,categorical.to_internal_repr("B"), ...
+verifyEqualWithPrecision(testCase,categorical.to_internal_repr("B"), ...
     double(expected.categorical_internal));
-verifyEqual(testCase,categorical.to_external_repr(2), ...
+verifyEqualWithPrecision(testCase,categorical.to_external_repr(2), ...
     expected.categorical_external);
-verifyEqual(testCase,instances.FloatDistribution.to_internal_repr("1.25"), ...
+verifyEqualWithPrecision(testCase,instances.FloatDistribution.to_internal_repr("1.25"), ...
     double(expected.float_internal));
-verifyEqual(testCase,instances.FloatDistribution.to_external_repr(1.25), ...
+verifyEqualWithPrecision(testCase,instances.FloatDistribution.to_external_repr(1.25), ...
     double(expected.float_external));
-verifyEqual(testCase,instances.IntDistribution.to_internal_repr("3"), ...
+verifyEqualWithPrecision(testCase,instances.IntDistribution.to_internal_repr("3"), ...
     double(expected.int_internal));
-verifyEqual(testCase,instances.IntDistribution.to_external_repr(3.9), ...
+verifyEqualWithPrecision(testCase,instances.IntDistribution.to_external_repr(3.9), ...
     double(expected.int_external));
-verifyEqual(testCase,instances.DiscreteUniformDistribution.q, ...
+verifyEqualWithPrecision(testCase,instances.DiscreteUniformDistribution.q, ...
     double(expected.discrete_q));
-verifyEqual(testCase,radia.optuna.DISTRIBUTION_CLASSES(), ...
+verifyEqualWithPrecision(testCase,radia.optuna.DISTRIBUTION_CLASSES(), ...
     reshape(string(expected.distribution_classes),1,[]));
 verifyNotEmpty(testCase,string(expected.categorical_choice_type));
 verifyNotEmpty(testCase,radia.optuna.CategoricalChoiceType());
@@ -1644,9 +1646,9 @@ trials=[complete1;complete2;pruned;failed;waiting];
 withoutPruned=radia.optuna.intersection_search_space(trials);
 withPruned=radia.optuna.intersection_search_space( ...
     trials,include_pruned=true);
-verifyEqual(testCase,sort(string(keys(withoutPruned))), ...
+verifyEqualWithPrecision(testCase,sort(string(keys(withoutPruned))), ...
     sort(reshape(string(expected.without_pruned),1,[])));
-verifyEqual(testCase,sort(string(keys(withPruned))), ...
+verifyEqualWithPrecision(testCase,sort(string(keys(withPruned))), ...
     sort(reshape(string(expected.with_pruned),1,[])));
 verifyTrue(testCase,logical(expected.single_distribution_is_included));
 verifyTrue(testCase,isKey(withoutPruned,"fixed"));
@@ -1655,7 +1657,7 @@ study=radia.optuna.Study(AutoSave=false);
 study.add_trials(trials);
 calculator=radia.optuna.IntersectionSearchSpace();
 calculated=calculator.calculate(study);
-verifyEqual(testCase,sort(string(keys(calculated))), ...
+verifyEqualWithPrecision(testCase,sort(string(keys(calculated))), ...
     sort(reshape(string(expected.calculator),1,[])));
 end
 
@@ -1668,7 +1670,7 @@ group=radia.optuna.SearchSpaceGroup();
 group.add_distributions(struct("x",base.x,"y",base.fixed));
 group.add_distributions(struct( ...
     "x",base.x,"z",radia.optuna.IntDistribution(1,3)));
-verifyEqual(testCase,groupSignatures(group.search_spaces()), ...
+verifyEqualWithPrecision(testCase,groupSignatures(group.search_spaces()), ...
     reshape(string(expected.direct_signatures),[],1));
 
 study=radia.optuna.Study(AutoSave=false);
@@ -1680,7 +1682,7 @@ study.add_trials([ ...
         radia.optuna.IntDistribution(1,3)))]);
 calculator=radia.optuna.GroupDecomposedSearchSpace();
 calculated=calculator.calculate(study);
-verifyEqual(testCase,groupSignatures(calculated.search_spaces()), ...
+verifyEqualWithPrecision(testCase,groupSignatures(calculated.search_spaces()), ...
     reshape(string(expected.calculated_signatures),[],1));
 end
 
@@ -1692,15 +1694,15 @@ directions=[radia.optuna.StudyDirection.NOT_SET, ...
 states=[radia.optuna.TrialState.RUNNING, ...
     radia.optuna.TrialState.COMPLETE,radia.optuna.TrialState.PRUNED, ...
     radia.optuna.TrialState.FAIL,radia.optuna.TrialState.WAITING];
-verifyEqual(testCase,string(directions), ...
+verifyEqualWithPrecision(testCase,string(directions), ...
     reshape(string({expected.study_direction.name}),1,[]));
-verifyEqual(testCase,double(directions), ...
+verifyEqualWithPrecision(testCase,double(directions), ...
     reshape(double([expected.study_direction.value]),1,[]));
-verifyEqual(testCase,string(states), ...
+verifyEqualWithPrecision(testCase,string(states), ...
     reshape(string({expected.trial_state.name}),1,[]));
-verifyEqual(testCase,double(states), ...
+verifyEqualWithPrecision(testCase,double(states), ...
     reshape(double([expected.trial_state.value]),1,[]));
-verifyEqual(testCase,states.is_finished(), ...
+verifyEqualWithPrecision(testCase,states.is_finished(), ...
     reshape(logical([expected.trial_state.is_finished]),1,[]));
 
 enumCases={ ...
@@ -1709,35 +1711,35 @@ enumCases={ ...
 for index=1:size(enumCases,1)
     value=enumCases{index,1};
     contract=enumCases{index,2};
-    verifyEqual(testCase,value.as_integer_ratio(), ...
+    verifyEqualWithPrecision(testCase,value.as_integer_ratio(), ...
         reshape(double(contract.as_integer_ratio),1,[]));
-    verifyEqual(testCase,value.bit_count(),double(contract.bit_count));
-    verifyEqual(testCase,value.bit_length(),double(contract.bit_length));
-    verifyEqual(testCase,value.conjugate(),double(contract.conjugate));
-    verifyEqual(testCase,value.denominator(),double(contract.denominator));
-    verifyEqual(testCase,value.imag(),double(contract.imag));
-    verifyEqual(testCase,value.is_integer(),logical(contract.is_integer));
-    verifyEqual(testCase,value.name(),string(contract.name));
-    verifyEqual(testCase,value.numerator(),double(contract.numerator));
-    verifyEqual(testCase,value.real(),double(contract.real));
-    verifyEqual(testCase,value.to_bytes(2,"big"), ...
+    verifyEqualWithPrecision(testCase,value.bit_count(),double(contract.bit_count));
+    verifyEqualWithPrecision(testCase,value.bit_length(),double(contract.bit_length));
+    verifyEqualWithPrecision(testCase,value.conjugate(),double(contract.conjugate));
+    verifyEqualWithPrecision(testCase,value.denominator(),double(contract.denominator));
+    verifyEqualWithPrecision(testCase,value.imag(),double(contract.imag));
+    verifyEqualWithPrecision(testCase,value.is_integer(),logical(contract.is_integer));
+    verifyEqualWithPrecision(testCase,value.name(),string(contract.name));
+    verifyEqualWithPrecision(testCase,value.numerator(),double(contract.numerator));
+    verifyEqualWithPrecision(testCase,value.real(),double(contract.real));
+    verifyEqualWithPrecision(testCase,value.to_bytes(2,"big"), ...
         reshape(uint8(contract.to_bytes),1,[]));
-    verifyEqual(testCase,value.value(),double(contract.value));
+    verifyEqualWithPrecision(testCase,value.value(),double(contract.value));
 end
-verifyEqual(testCase,radia.optuna.StudyDirection.from_bytes( ...
+verifyEqualWithPrecision(testCase,radia.optuna.StudyDirection.from_bytes( ...
     uint8([0,2]),"big").name(), ...
     string(expected.integer_api.study_direction.from_bytes_name));
-verifyEqual(testCase,radia.optuna.TrialState.from_bytes( ...
+verifyEqualWithPrecision(testCase,radia.optuna.TrialState.from_bytes( ...
     uint8([0,4]),"big").name(), ...
     string(expected.integer_api.trial_state.from_bytes_name));
 
 study=radia.optuna.create_study( ...
     direction=radia.optuna.StudyDirection.MINIMIZE,AutoSave=false);
-verifyEqual(testCase,study.direction(), ...
+verifyEqualWithPrecision(testCase,study.direction(), ...
     radia.optuna.StudyDirection.MINIMIZE);
 trial=radia.optuna.create_trial( ...
     state=radia.optuna.TrialState.PRUNED,value=3);
-verifyEqual(testCase,trial.State,"PRUNED");
+verifyEqualWithPrecision(testCase,trial.State,"PRUNED");
 end
 
 function testUnfinishedAddedTrialsMatchUpstream(testCase)
@@ -1750,52 +1752,52 @@ running=radia.optuna.create_trial(state=radia.optuna.TrialState.RUNNING, ...
     params=struct("x",0.75),distributions=distribution, ...
     user_attrs=struct("source","running"));
 
-verifyEqual(testCase,waiting.Number,double(expected.factory.waiting_number));
-verifyEqual(testCase,~isnat(waiting.DatetimeStart), ...
+verifyEqualWithPrecision(testCase,waiting.Number,double(expected.factory.waiting_number));
+verifyEqualWithPrecision(testCase,~isnat(waiting.DatetimeStart), ...
     logical(expected.factory.waiting_has_start));
-verifyEqual(testCase,~isnat(waiting.DatetimeComplete), ...
+verifyEqualWithPrecision(testCase,~isnat(waiting.DatetimeComplete), ...
     logical(expected.factory.waiting_has_complete));
-verifyEqual(testCase,~isnan(waiting.Duration), ...
+verifyEqualWithPrecision(testCase,~isnan(waiting.Duration), ...
     logical(expected.factory.waiting_has_duration));
-verifyEqual(testCase,running.Number,double(expected.factory.running_number));
-verifyEqual(testCase,~isnat(running.DatetimeStart), ...
+verifyEqualWithPrecision(testCase,running.Number,double(expected.factory.running_number));
+verifyEqualWithPrecision(testCase,~isnat(running.DatetimeStart), ...
     logical(expected.factory.running_has_start));
-verifyEqual(testCase,~isnat(running.DatetimeComplete), ...
+verifyEqualWithPrecision(testCase,~isnat(running.DatetimeComplete), ...
     logical(expected.factory.running_has_complete));
-verifyEqual(testCase,~isnan(running.Duration), ...
+verifyEqualWithPrecision(testCase,~isnan(running.Duration), ...
     logical(expected.factory.running_has_duration));
 
 study=radia.optuna.Study( ...
     Sampler=radia.optuna.RandomSampler(9),AutoSave=false);
 study.add_trials([waiting;running]);
 before=study.get_trials();
-verifyEqual(testCase,[before.Number], ...
+verifyEqualWithPrecision(testCase,[before.Number], ...
     reshape(double([expected.before.number]),1,[]));
-verifyEqual(testCase,[before.State], ...
+verifyEqualWithPrecision(testCase,[before.State], ...
     reshape(string({expected.before.state}),1,[]));
-verifyEqual(testCase,[before.Params],struct("x",{0.25,0.75}));
-verifyEqual(testCase,~isnat([before.DatetimeStart]), ...
+verifyEqualWithPrecision(testCase,[before.Params],struct("x",{0.25,0.75}));
+verifyEqualWithPrecision(testCase,~isnat([before.DatetimeStart]), ...
     reshape(logical([expected.before.has_start]),1,[]));
-verifyEqual(testCase,~isnat([before.DatetimeComplete]), ...
+verifyEqualWithPrecision(testCase,~isnat([before.DatetimeComplete]), ...
     reshape(logical([expected.before.has_complete]),1,[]));
-verifyEqual(testCase,~isnan([before.Duration]), ...
+verifyEqualWithPrecision(testCase,~isnan([before.Duration]), ...
     reshape(logical([expected.before.has_duration]),1,[]));
 
 claimed=study.ask();
-verifyEqual(testCase,claimed.Number,double(expected.claimed_number));
-verifyEqual(testCase,claimed.suggest_float("x",0,1), ...
+verifyEqualWithPrecision(testCase,claimed.Number,double(expected.claimed_number));
+verifyEqualWithPrecision(testCase,claimed.suggest_float("x",0,1), ...
     double(expected.claimed_value),AbsTol=0);
-verifyEqual(testCase,claimed.Params.x,double(expected.claimed_params.x));
-verifyEqual(testCase,string(claimed.UserAttrs.source), ...
+verifyEqualWithPrecision(testCase,claimed.Params.x,double(expected.claimed_params.x));
+verifyEqualWithPrecision(testCase,string(claimed.UserAttrs.source), ...
     string(expected.claimed_user_attrs.source));
 afterClaim=study.get_trials();
-verifyEqual(testCase,[afterClaim.State], ...
+verifyEqualWithPrecision(testCase,[afterClaim.State], ...
     reshape(string(expected.after_claim_states),1,[]));
-verifyEqual(testCase,~isnat([afterClaim.DatetimeStart]), ...
+verifyEqualWithPrecision(testCase,~isnat([afterClaim.DatetimeStart]), ...
     reshape(logical(expected.after_claim_has_start),1,[]));
 
 fresh=study.ask();
-verifyEqual(testCase,fresh.Number,double(expected.fresh_number));
+verifyEqualWithPrecision(testCase,fresh.Number,double(expected.fresh_number));
 verifyTrue(testCase,isempty(fieldnames(fresh.Params)));
 end
 
@@ -1808,28 +1810,28 @@ trial=study.ask();
 actual=[isa(fixed,"radia.optuna.BaseTrial"), ...
     isa(frozen,"radia.optuna.BaseTrial"), ...
     isa(trial,"radia.optuna.BaseTrial")];
-verifyEqual(testCase,actual,[logical(expected.is_base_trial.fixed), ...
+verifyEqualWithPrecision(testCase,actual,[logical(expected.is_base_trial.fixed), ...
     logical(expected.is_base_trial.frozen), ...
     logical(expected.is_base_trial.trial)]);
-verifyEqual(testCase,[fixed.number(),frozen.number(),trial.number()], ...
+verifyEqualWithPrecision(testCase,[fixed.number(),frozen.number(),trial.number()], ...
     [double(expected.numbers.fixed),double(expected.numbers.frozen), ...
     double(expected.numbers.trial)]);
-verifyEqual(testCase,string(expected.construction_error),"TypeError");
+verifyEqualWithPrecision(testCase,string(expected.construction_error),"TypeError");
 verifyError(testCase,@()radia.optuna.BaseTrial(), ...
     "MATLAB:class:abstract");
 
 components=testCase.TestData.Oracle.base_components;
 sampler=radia.optuna.RandomSampler(5);
 pruner=radia.optuna.NopPruner();
-verifyEqual(testCase,isa(sampler,"radia.optuna.BaseSampler"), ...
+verifyEqualWithPrecision(testCase,isa(sampler,"radia.optuna.BaseSampler"), ...
     logical(components.sampler_is_base));
-verifyEqual(testCase,isa(pruner,"radia.optuna.BasePruner"), ...
+verifyEqualWithPrecision(testCase,isa(pruner,"radia.optuna.BasePruner"), ...
     logical(components.pruner_is_base));
-verifyEqual(testCase,pruner.prune(study,trial), ...
+verifyEqualWithPrecision(testCase,pruner.prune(study,trial), ...
     logical(components.nop_decision));
-verifyEqual(testCase,string(components.construction_errors.sampler), ...
+verifyEqualWithPrecision(testCase,string(components.construction_errors.sampler), ...
     "TypeError");
-verifyEqual(testCase,string(components.construction_errors.pruner), ...
+verifyEqualWithPrecision(testCase,string(components.construction_errors.pruner), ...
     "TypeError");
 verifyError(testCase,@()radia.optuna.BaseSampler(), ...
     "MATLAB:class:abstract");
@@ -1857,17 +1859,17 @@ names=string(fieldnames(actual));
 for index=1:numel(names)
     name=names(index);
     encoded=radia.optuna.distribution_to_json(actual.(name));
-    verifyEqual(testCase,jsondecode(encoded), ...
+    verifyEqualWithPrecision(testCase,jsondecode(encoded), ...
         jsondecode(expected.encoded.(name)));
     decoded=radia.optuna.json_to_distribution(encoded);
-    verifyEqual(testCase,string(decoded.name), ...
+    verifyEqualWithPrecision(testCase,string(decoded.name), ...
         string(expected.roundtrip_types.(name)));
 end
 verifyTrue(testCase,radia.optuna.check_distribution_compatibility( ...
     radia.optuna.FloatDistribution(0,1), ...
     radia.optuna.FloatDistribution(-1,2,Step=0.2)));
 verifyTrue(testCase,logical(expected.compatibility.range_change_allowed));
-verifyEqual(testCase,string(struct2cell(expected.compatibility.errors)), ...
+verifyEqualWithPrecision(testCase,string(struct2cell(expected.compatibility.errors)), ...
     repmat("ValueError",3,1));
 verifyError(testCase,@()radia.optuna.check_distribution_compatibility( ...
     radia.optuna.FloatDistribution(0,1), ...
@@ -1894,7 +1896,7 @@ for index=1:numel(expected)
     actual(index)=trial.suggest_float("x",-2,2);
     study.tell(trial,(actual(index)-0.25)^2);
 end
-verifyEqual(testCase,actual,expected,AbsTol=5e-12);
+verifyEqualWithPrecision(testCase,actual,expected,AbsTol=5e-12);
 end
 
 function testNativeTPEHistorySelectionMatchesUpstream(testCase)
@@ -1919,9 +1921,14 @@ for entry=reshape(contract.cases,1,[])
         "optuna.tpe.best_grouped_history",token,24,int32([0,1]), ...
         int32(1),false,-2,2,false,NaN,int32(0), ...
         string(entry.direction)=="minimize",entry.gamma,25,1,true,false);
-    verifyEqual(testCase,actual,entry.proposal,AbsTol=5e-12);
+    verifyEqualWithPrecision(testCase,actual,entry.proposal,AbsTol=5e-12);
     delete(stream);
 end
+end
+
+function verifyEqualWithPrecision(testCase,actual,expected,varargin)
+optunaPrecision('record',actual,expected);
+testCase.verifyEqual(actual,expected,varargin{:});
 end
 
 function testTPEIntersectionTransitionsMatchUpstream(testCase)
@@ -1944,7 +1951,7 @@ for row=reshape(contract.trials,1,[])
         end
     end
     study.tell(trial,row.loss);
-    verifyEqual(testCase,[x,y],[row.x,row.y],AbsTol=5e-12);
+    verifyEqualWithPrecision(testCase,[x,y],[row.x,row.y],AbsTol=5e-12);
     count=count+1;
     if persisted && ismember(count,[5,9,16])
         study.save();
@@ -1961,10 +1968,10 @@ function testTPEConstantLiarConcurrentRunningMatchesUpstream(testCase)
 contract=testCase.TestData.Oracle.tpe_constant_liar_seed_127;
 verifyEmpty(testCase,string( ...
     contract.consider_prior_warning_categories.default));
-verifyEqual(testCase,string( ...
+verifyEqualWithPrecision(testCase,string( ...
     contract.consider_prior_warning_categories.consider_prior_true), ...
     "FutureWarning");
-verifyEqual(testCase,string( ...
+verifyEqualWithPrecision(testCase,string( ...
     contract.consider_prior_warning_categories.consider_prior_false), ...
     "FutureWarning");
 verifyWarningFree(testCase,@()radia.optuna.TPESampler());
@@ -2012,7 +2019,7 @@ for batch=0:2
     study.tell(probe,tpeConstantLiarObjective(probeRow));
     study.tell(pending{2},tpeConstantLiarObjective(pendingRows{2}));
 end
-verifyEqual(testCase,cursor-1,numel(expected));
+verifyEqualWithPrecision(testCase,cursor-1,numel(expected));
 verifyFalse(testCase,any(study.TrialTable.State=="RUNNING"));
 end
 
@@ -2024,10 +2031,10 @@ row=struct("number",trial.Number, ...
 end
 
 function verifyTPEConstantLiarRow(testCase,actual,expected)
-verifyEqual(testCase,actual.number,double(expected.number));
-verifyEqual(testCase,actual.x,double(expected.x),AbsTol=5e-12);
-verifyEqual(testCase,actual.mode,string(expected.mode));
-verifyEqual(testCase,actual.running_before,double(expected.running_before));
+verifyEqualWithPrecision(testCase,actual.number,double(expected.number));
+verifyEqualWithPrecision(testCase,actual.x,double(expected.x),AbsTol=5e-12);
+verifyEqualWithPrecision(testCase,actual.mode,string(expected.mode));
+verifyEqualWithPrecision(testCase,actual.running_before,double(expected.running_before));
 end
 
 function value=tpeConstantLiarObjective(row)
@@ -2048,7 +2055,7 @@ for index=1:numel(single)
     actual(index)=trial.suggest_float("x",-2,2);
     study.tell(trial,(actual(index)-0.35)^2);
 end
-verifyEqual(testCase,actual,single,AbsTol=5e-12);
+verifyEqualWithPrecision(testCase,actual,single,AbsTol=5e-12);
 
 sampler=radia.optuna.TPESampler(Seed=101,NStartupTrials=4, ...
     GammaFcn=@(count)min(3,count),WeightsFcn=@customTPEWeights);
@@ -2060,8 +2067,8 @@ for index=1:numel(multi)
     x=trial.suggest_float("x",-2,2);
     y=trial.suggest_float("y",-1,3);
     study.tell(trial,[(x-0.4)^2+0.1*y*y,(y+0.2)^2]);
-    verifyEqual(testCase,x,double(multi(index).x),AbsTol=5e-12);
-    verifyEqual(testCase,y,double(multi(index).y),AbsTol=5e-12);
+    verifyEqualWithPrecision(testCase,x,double(multi(index).x),AbsTol=5e-12);
+    verifyEqualWithPrecision(testCase,y,double(multi(index).y),AbsTol=5e-12);
 end
 end
 
@@ -2083,16 +2090,16 @@ for index=1:numel(expected)
     if branch=="left"
         y=trial.suggest_float("y",0,2);
         value=(x-0.2)^2+(y-0.4)^2;
-        verifyEqual(testCase,y,double(expected(index).y),AbsTol=5e-12);
+        verifyEqualWithPrecision(testCase,y,double(expected(index).y),AbsTol=5e-12);
     else
         z=trial.suggest_int("z",1,5);
         value=(x+0.1)^2+0.05*z;
-        verifyEqual(testCase,z,double(expected(index).z));
+        verifyEqualWithPrecision(testCase,z,double(expected(index).z));
     end
     study.tell(trial,value);
-    verifyEqual(testCase,trial.Number,double(expected(index).number));
-    verifyEqual(testCase,branch,string(expected(index).branch));
-    verifyEqual(testCase,x,double(expected(index).x),AbsTol=5e-12);
+    verifyEqualWithPrecision(testCase,trial.Number,double(expected(index).number));
+    verifyEqualWithPrecision(testCase,branch,string(expected(index).branch));
+    verifyEqualWithPrecision(testCase,x,double(expected(index).x),AbsTol=5e-12);
     if persisted && ismember(index,[5,9,13])
         study.save();
         study=radia.optuna.Study(StoragePath=storage,AutoSave=false, ...
@@ -2105,9 +2112,9 @@ end
 
 verifyGreaterThan(testCase, ...
     double(contract.independent_warning_enabled_count),0);
-verifyEqual(testCase, ...
+verifyEqualWithPrecision(testCase, ...
     double(contract.independent_warning_disabled_count),0);
-verifyEqual(testCase,double(contract.group_warning_count),0);
+verifyEqualWithPrecision(testCase,double(contract.group_warning_count),0);
 
 enabled=tpeWarningStudy(true,false);
 trial=enabled.ask();
@@ -2126,16 +2133,16 @@ end
 function testNSGAIIPolynomialMutationMatchesUpstream(testCase)
 expected=testCase.TestData.Oracle.nsgaii_mutation;
 mutation=radia.optuna.nsgaii.PolynomialMutation();
-verifyEqual(testCase,mutation.Eta,double(expected.default_eta));
+verifyEqualWithPrecision(testCase,mutation.Eta,double(expected.default_eta));
 stream=radia.optuna.internal.NumpyRandomState(109);
 actual=zeros(size(expected.inputs));
 for index=1:numel(actual)
     actual(index)=mutation.mutation(double(expected.inputs(index)), ...
         stream,[],[0,1]);
 end
-verifyEqual(testCase,actual,reshape(double(expected.values_seed_109), ...
+verifyEqualWithPrecision(testCase,actual,reshape(double(expected.values_seed_109), ...
     size(actual)),AbsTol=5e-15);
-verifyEqual(testCase,mutation.mutation(0.75,stream,[],[2,2]), ...
+verifyEqualWithPrecision(testCase,mutation.mutation(0.75,stream,[],[2,2]), ...
     double(expected.fixed_bound_value));
 verifyError(testCase,@()radia.optuna.nsgaii.PolynomialMutation(Eta=-1), ...
     "radia:optuna:PolynomialMutationEta");
@@ -2152,8 +2159,8 @@ for index=1:numel(expected)
     y=trial.suggest_float("y",-1,3);
     study.tell(trial,[(x-0.4)^2+0.1*y*y, ...
         (y+0.2)^2+0.1*x*x]);
-    verifyEqual(testCase,x,double(expected(index).x),AbsTol=5e-12);
-    verifyEqual(testCase,y,double(expected(index).y),AbsTol=5e-12);
+    verifyEqualWithPrecision(testCase,x,double(expected(index).x),AbsTol=5e-12);
+    verifyEqualWithPrecision(testCase,y,double(expected(index).y),AbsTol=5e-12);
 end
 end
 
@@ -2190,11 +2197,11 @@ for index=1:numel(expected)
     modePenalty=0.2*double(mode=="A")+0.35*double(mode=="C");
     loss=(x-0.2)^2+(q-0.6)^2+0.01*mesh+0.001*logMesh+modePenalty;
     study.tell(trial,loss);
-    verifyEqual(testCase,x,double(expected(index).x),AbsTol=5e-12);
-    verifyEqual(testCase,q,double(expected(index).q),AbsTol=5e-12);
-    verifyEqual(testCase,mesh,double(expected(index).mesh));
-    verifyEqual(testCase,logMesh,double(expected(index).log_mesh));
-    verifyEqual(testCase,string(mode),string(expected(index).mode));
+    verifyEqualWithPrecision(testCase,x,double(expected(index).x),AbsTol=5e-12);
+    verifyEqualWithPrecision(testCase,q,double(expected(index).q),AbsTol=5e-12);
+    verifyEqualWithPrecision(testCase,mesh,double(expected(index).mesh));
+    verifyEqualWithPrecision(testCase,logMesh,double(expected(index).log_mesh));
+    verifyEqualWithPrecision(testCase,string(mode),string(expected(index).mode));
 end
 end
 
@@ -2208,8 +2215,8 @@ for index=1:numel(expected)
     x=trial.suggest_float("x",-1,1);
     mode=trial.suggest_categorical("mode",["A","B"]);
     study.tell(trial,x);
-    verifyEqual(testCase,x,double(expected(index).x));
-    verifyEqual(testCase,string(mode),string(expected(index).mode));
+    verifyEqualWithPrecision(testCase,x,double(expected(index).x));
+    verifyEqualWithPrecision(testCase,string(mode),string(expected(index).mode));
 end
 end
 
@@ -2225,9 +2232,9 @@ for index=1:numel(expected)
     mode=trial.suggest_categorical("mode",["A","B"]);
     study.tell(trial,[x*x+0.1*mesh, ...
         (x-0.5)^2+0.2*double(mode=="B")]);
-    verifyEqual(testCase,x,double(expected(index).x),AbsTol=0);
-    verifyEqual(testCase,mesh,double(expected(index).mesh));
-    verifyEqual(testCase,string(mode),string(expected(index).mode));
+    verifyEqualWithPrecision(testCase,x,double(expected(index).x),AbsTol=0);
+    verifyEqualWithPrecision(testCase,mesh,double(expected(index).mesh));
+    verifyEqualWithPrecision(testCase,string(mode),string(expected(index).mode));
 end
 end
 
@@ -2245,9 +2252,9 @@ for index=1:numel(expected)
     study.tell(trial,[x*x+0.1*mesh, ...
         (x-0.5)^2+0.2*double(mode=="B"), ...
         (x+0.25)^2+0.05*mesh]);
-    verifyEqual(testCase,x,double(expected(index).x),AbsTol=0);
-    verifyEqual(testCase,mesh,double(expected(index).mesh));
-    verifyEqual(testCase,string(mode),string(expected(index).mode));
+    verifyEqualWithPrecision(testCase,x,double(expected(index).x),AbsTol=0);
+    verifyEqualWithPrecision(testCase,mesh,double(expected(index).mesh));
+    verifyEqualWithPrecision(testCase,string(mode),string(expected(index).mode));
 end
 end
 
@@ -2260,8 +2267,8 @@ for index=1:numel(expected)
     mesh=trial.suggest_int("mesh",1,3);
     mode=trial.suggest_categorical("mode",["A","B"]);
     study.tell(trial,mesh+0.1*double(mode=="B"));
-    verifyEqual(testCase,mesh,double(expected(index).mesh));
-    verifyEqual(testCase,string(mode),string(expected(index).mode));
+    verifyEqualWithPrecision(testCase,mesh,double(expected(index).mesh));
+    verifyEqualWithPrecision(testCase,string(mode),string(expected(index).mode));
 end
 end
 
@@ -2282,9 +2289,9 @@ for index=1:numel(expected)
         loss=double(char(value)-'A');
     end
     study.tell(trial,loss);
-    verifyEqual(testCase,branch,string(expected(index).branch));
-    verifyEqual(testCase,parameter,string(expected(index).parameter));
-    verifyEqual(testCase,value,string(expected(index).value));
+    verifyEqualWithPrecision(testCase,branch,string(expected(index).branch));
+    verifyEqualWithPrecision(testCase,parameter,string(expected(index).parameter));
+    verifyEqualWithPrecision(testCase,value,string(expected(index).value));
 end
 end
 
@@ -2297,8 +2304,8 @@ for index=1:numel(expected)
     x=trial.suggest_float("x",-2,2);
     y=trial.suggest_float("y",-1,3);
     study.tell(trial,(x-0.4)^2+0.5*(y+0.2)^2);
-    verifyEqual(testCase,x,double(expected(index).x),AbsTol=5e-12);
-    verifyEqual(testCase,y,double(expected(index).y),AbsTol=5e-12);
+    verifyEqualWithPrecision(testCase,x,double(expected(index).x),AbsTol=5e-12);
+    verifyEqualWithPrecision(testCase,y,double(expected(index).y),AbsTol=5e-12);
 end
 end
 
@@ -2315,9 +2322,9 @@ for index=1:numel(expected)
     mode=string(trial.suggest_categorical("mode",["A","B","C"]));
     penalty=0.1*find(["A","B","C"]==mode,1)-0.1;
     study.tell(trial,(x-0.4)^2+0.5*(y+0.2)^2+penalty);
-    verifyEqual(testCase,x,double(expected(index).x),AbsTol=5e-12);
-    verifyEqual(testCase,y,double(expected(index).y),AbsTol=5e-12);
-    verifyEqual(testCase,mode,string(expected(index).mode));
+    verifyEqualWithPrecision(testCase,x,double(expected(index).x),AbsTol=5e-12);
+    verifyEqualWithPrecision(testCase,y,double(expected(index).y),AbsTol=5e-12);
+    verifyEqualWithPrecision(testCase,mode,string(expected(index).mode));
 end
 end
 
@@ -2347,9 +2354,9 @@ for caseIndex=1:size(cases,1)
         x=trial.suggest_float("x",-2,2);
         y=trial.suggest_float("y",-1,3);
         study.tell(trial,(x-0.4)^2+0.5*(y+0.2)^2);
-        verifyEqual(testCase,x,double(expected(index).x), ...
+        verifyEqualWithPrecision(testCase,x,double(expected(index).x), ...
             sprintf("%s trial %d x",name,index),AbsTol=5e-12);
-        verifyEqual(testCase,y,double(expected(index).y), ...
+        verifyEqualWithPrecision(testCase,y,double(expected(index).y), ...
             sprintf("%s trial %d y",name,index),AbsTol=5e-12);
     end
 end
@@ -2369,9 +2376,9 @@ for index=1:numel(expected)
     mesh=trial.suggest_int("mesh",0,10,Step=2);
     x=trial.suggest_float("x",-2,2);
     study.tell(trial,(x-0.3)^2+0.02*mesh);
-    verifyEqual(testCase,mesh,double(expected(index).mesh), ...
+    verifyEqualWithPrecision(testCase,mesh,double(expected(index).mesh), ...
         sprintf("margin trial %d mesh",index));
-    verifyEqual(testCase,x,double(expected(index).x), ...
+    verifyEqualWithPrecision(testCase,x,double(expected(index).x), ...
         sprintf("margin trial %d x",index),AbsTol=5e-12);
 end
 clear cleanup
@@ -2392,9 +2399,9 @@ for index=1:numel(expected)
     x=trial.suggest_float("x",-2,2);
     y=trial.suggest_float("y",-1,3);
     study.tell(trial,(x-0.4)^2+0.5*(y+0.2)^2);
-    verifyEqual(testCase,x,double(expected(index).x), ...
+    verifyEqualWithPrecision(testCase,x,double(expected(index).x), ...
         sprintf("source trial %d x",index),AbsTol=5e-12);
-    verifyEqual(testCase,y,double(expected(index).y), ...
+    verifyEqualWithPrecision(testCase,y,double(expected(index).y), ...
         sprintf("source trial %d y",index),AbsTol=5e-12);
 end
 clear cleanup
@@ -2419,11 +2426,11 @@ for index=1:numel(expected)
     else
         study.tell(trial,value);
     end
-    verifyEqual(testCase,x,double(expected(index).x), ...
+    verifyEqualWithPrecision(testCase,x,double(expected(index).x), ...
         sprintf("pruned trial %d x",index),AbsTol=5e-12);
-    verifyEqual(testCase,y,double(expected(index).y), ...
+    verifyEqualWithPrecision(testCase,y,double(expected(index).y), ...
         sprintf("pruned trial %d y",index),AbsTol=5e-12);
-    verifyEqual(testCase,study.TrialTable.State(index), ...
+    verifyEqualWithPrecision(testCase,study.TrialTable.State(index), ...
         string(expected(index).state));
 end
 clear cleanup
@@ -2433,13 +2440,13 @@ function testCmaEsAdvancedWarningsAndInvalidCombinationsMatchUpstream(testCase)
 contract=testCase.TestData.Oracle.cmaes_advanced;
 sourceTrials=cmaSourceTrials(contract.source_trials);
 warnings=contract.warnings;
-verifyEqual(testCase,string(warnings.restart),"FutureWarning");
-verifyEqual(testCase,string(warnings.x0),"FutureWarning");
-verifyEqual(testCase,string(warnings.sigma0),"FutureWarning");
-verifyEqual(testCase,string(warnings.separable),"ExperimentalWarning");
-verifyEqual(testCase,string(warnings.margin),"ExperimentalWarning");
-verifyEqual(testCase,string(warnings.lr_adapt),"ExperimentalWarning");
-verifyEqual(testCase,string(warnings.source_trials),"ExperimentalWarning");
+verifyEqualWithPrecision(testCase,string(warnings.restart),"FutureWarning");
+verifyEqualWithPrecision(testCase,string(warnings.x0),"FutureWarning");
+verifyEqualWithPrecision(testCase,string(warnings.sigma0),"FutureWarning");
+verifyEqualWithPrecision(testCase,string(warnings.separable),"ExperimentalWarning");
+verifyEqualWithPrecision(testCase,string(warnings.margin),"ExperimentalWarning");
+verifyEqualWithPrecision(testCase,string(warnings.lr_adapt),"ExperimentalWarning");
+verifyEqualWithPrecision(testCase,string(warnings.source_trials),"ExperimentalWarning");
 verifyWarning(testCase,@()radia.optuna.CmaEsSampler( ...
     RestartStrategy="ipop",IncPopsize=2),"radia:optuna:FutureWarning");
 verifyWarning(testCase,@()radia.optuna.CmaEsSampler( ...
@@ -2458,7 +2465,7 @@ verifyWarning(testCase,@()radia.optuna.CmaEsSampler( ...
 errors=contract.invalid_combinations;
 names=string(fieldnames(errors));
 for index=1:numel(names)
-    verifyEqual(testCase,string(errors.(names(index))),"ValueError");
+    verifyEqualWithPrecision(testCase,string(errors.(names(index))),"ValueError");
 end
 warningState=warning;
 cleanup=onCleanup(@()warning(warningState));
@@ -2496,8 +2503,8 @@ for type=["sobol","halton"]
         x=trial.suggest_float("x",-1,1);
         y=trial.suggest_float("y",0,4);
         study.tell(trial,x*x+y*y);
-        verifyEqual(testCase,x,double(expected(index).x),AbsTol=0);
-        verifyEqual(testCase,y,double(expected(index).y),AbsTol=0);
+        verifyEqualWithPrecision(testCase,x,double(expected(index).x),AbsTol=0);
+        verifyEqualWithPrecision(testCase,y,double(expected(index).y),AbsTol=0);
     end
 end
 end
@@ -2512,9 +2519,9 @@ for index=1:numel(expected)
     mesh=trial.suggest_int("mesh",1,5,Step=2);
     mode=trial.suggest_categorical("mode",["A","B"]);
     study.tell(trial,x*x+0.1*mesh+0.2*double(mode=="B"));
-    verifyEqual(testCase,x,double(expected(index).x),AbsTol=0);
-    verifyEqual(testCase,mesh,double(expected(index).mesh));
-    verifyEqual(testCase,string(mode),string(expected(index).mode));
+    verifyEqualWithPrecision(testCase,x,double(expected(index).x),AbsTol=0);
+    verifyEqualWithPrecision(testCase,mesh,double(expected(index).mesh));
+    verifyEqualWithPrecision(testCase,string(mode),string(expected(index).mode));
 end
 end
 
@@ -2528,8 +2535,8 @@ for index=1:numel(expected)
     x=trial.suggest_float("x",-1,1);
     trial.set_user_attr("constraints",x-0.1);
     study.tell(trial,(x-0.35)^2);
-    verifyEqual(testCase,x,double(expected(index).x),AbsTol=0);
-    verifyEqual(testCase,study.constraintsForTrial(trial.Number), ...
+    verifyEqualWithPrecision(testCase,x,double(expected(index).x),AbsTol=0);
+    verifyEqualWithPrecision(testCase,study.constraintsForTrial(trial.Number), ...
         double(expected(index).constraint),AbsTol=0);
 end
 end
@@ -2555,9 +2562,9 @@ x=trial.suggest_float("x",-1,1);
 mesh=trial.suggest_int("mesh",1,5,Step=2);
 mode=trial.suggest_categorical("mode",["A","B"]);
 last=expected(end);
-verifyEqual(testCase,x,double(last.x),AbsTol=0);
-verifyEqual(testCase,mesh,double(last.mesh));
-verifyEqual(testCase,string(mode),string(last.mode));
+verifyEqualWithPrecision(testCase,x,double(last.x),AbsTol=0);
+verifyEqualWithPrecision(testCase,mesh,double(last.mesh));
+verifyEqualWithPrecision(testCase,string(mode),string(last.mode));
 clear cleanup
 cleanupStudyFiles(path);
 end
@@ -2586,11 +2593,11 @@ for caseIndex=1:size(cases,1)
         z=trial.suggest_float("z",0,3);
         study.tell(trial,[x*x+0.2*y*y+0.1*z, ...
             (x-0.4)^2+(y+0.3)^2+z*z]);
-        verifyEqual(testCase,x,double(rows(index).x), ...
+        verifyEqualWithPrecision(testCase,x,double(rows(index).x), ...
             sprintf("%s trial %d x",name,index),AbsTol=5e-12);
-        verifyEqual(testCase,y,double(rows(index).y), ...
+        verifyEqualWithPrecision(testCase,y,double(rows(index).y), ...
             sprintf("%s trial %d y",name,index),AbsTol=5e-12);
-        verifyEqual(testCase,z,double(rows(index).z), ...
+        verifyEqualWithPrecision(testCase,z,double(rows(index).z), ...
             sprintf("%s trial %d z",name,index),AbsTol=5e-12);
     end
 end
@@ -2606,8 +2613,8 @@ for index=1:numel(expected)
     x=trial.suggest_float("x",0,1);
     y=trial.suggest_float("y",-1,1);
     study.tell(trial,x*x+y*y);
-    verifyEqual(testCase,x,double(expected(index).x),AbsTol=0);
-    verifyEqual(testCase,y,double(expected(index).y),AbsTol=0);
+    verifyEqualWithPrecision(testCase,x,double(expected(index).x),AbsTol=0);
+    verifyEqualWithPrecision(testCase,y,double(expected(index).y),AbsTol=0);
 end
 end
 
@@ -2621,9 +2628,9 @@ for index=1:numel(expected)
     mesh=trial.suggest_int("mesh",1,5,Step=2);
     mode=trial.suggest_categorical("mode",["A","B"]);
     study.tell(trial,(x-0.2)^2+0.05*mesh+0.2*double(mode~="B"));
-    verifyEqual(testCase,x,double(expected(index).x),AbsTol=5e-12);
-    verifyEqual(testCase,mesh,double(expected(index).mesh));
-    verifyEqual(testCase,string(mode),string(expected(index).mode));
+    verifyEqualWithPrecision(testCase,x,double(expected(index).x),AbsTol=5e-12);
+    verifyEqualWithPrecision(testCase,mesh,double(expected(index).mesh));
+    verifyEqualWithPrecision(testCase,string(mode),string(expected(index).mode));
 end
 end
 
@@ -2638,8 +2645,8 @@ for type=["sobol","halton"]
         x=trial.suggest_float("x",-1,1);
         y=trial.suggest_float("y",0,4);
         study.tell(trial,x*x+y*y);
-        verifyEqual(testCase,x,double(expected(index).x),AbsTol=0);
-        verifyEqual(testCase,y,double(expected(index).y),AbsTol=0);
+        verifyEqualWithPrecision(testCase,x,double(expected(index).x),AbsTol=0);
+        verifyEqualWithPrecision(testCase,y,double(expected(index).y),AbsTol=0);
     end
 end
 end
@@ -2648,12 +2655,12 @@ function testNativeSobolAbove32DimensionsMatchesUpstream(testCase)
 contract=testCase.TestData.Oracle.native_sobol_high_dimension;
 dimension=double(contract.dimension);
 verifyGreaterThan(testCase,dimension,32);
-verifyEqual(testCase,double(contract.maximum_dimension),21201);
+verifyEqualWithPrecision(testCase,double(contract.maximum_dimension),21201);
 sampler=radia.optuna.QMCSampler(QMCType="sobol", ...
     Scramble=false,Seed=double(contract.seed));
 actual=sampler.unitPoints(dimension,size(contract.proposals,1)-1);
 expected=(double(contract.proposals(2:end,:))+1)/2;
-verifyEqual(testCase,actual,expected,AbsTol=0);
+verifyEqualWithPrecision(testCase,actual,expected,AbsTol=0);
 verifyError(testCase,@()sampler.unitPoints(21202,1), ...
     "radia:optuna:QMCDimension");
 end
@@ -2661,9 +2668,9 @@ end
 function testQMCWarningOptionsMatchUpstream(testCase)
 expected=testCase.TestData.Oracle.qmc_warnings;
 verifyGreaterThan(testCase,double(expected.asynchronous_enabled_count),0);
-verifyEqual(testCase,double(expected.asynchronous_disabled_count),0);
-verifyEqual(testCase,double(expected.independent_enabled_count),0);
-verifyEqual(testCase,double(expected.independent_disabled_count),0);
+verifyEqualWithPrecision(testCase,double(expected.asynchronous_disabled_count),0);
+verifyEqualWithPrecision(testCase,double(expected.independent_enabled_count),0);
+verifyEqualWithPrecision(testCase,double(expected.independent_disabled_count),0);
 
 verifyWarning(testCase,@()radia.optuna.QMCSampler( ...
     Scramble=true,WarnAsynchronousSeeding=true), ...
@@ -2702,11 +2709,11 @@ warning("off","radia:optuna:QMCConditionalSearchSpace");
 cleanup=onCleanup(@()warning( ...
     "on","radia:optuna:QMCConditionalSearchSpace"));
 space=pendingSampler.inferRelativeSearchSpace(pendingStudy,second);
-verifyEqual(testCase,string({space.name}), ...
+verifyEqualWithPrecision(testCase,string({space.name}), ...
     reshape(string(pending.union_keys),1,[]));
 pendingStudy.tell(first,0);
 space=pendingSampler.inferRelativeSearchSpace(pendingStudy,second);
-verifyEqual(testCase,string({space.name}), ...
+verifyEqualWithPrecision(testCase,string({space.name}), ...
     reshape(string(pending.frozen_keys_after_first_complete),1,[]));
 clear cleanup
 end
@@ -2720,21 +2727,21 @@ addCompletedTrial(percentile,[1,3],[1,1]);
 addCompletedTrial(percentile,[1,3],[3,3]);
 trial=percentile.ask();
 trial.report(5,1); trial.report(4,3);
-verifyEqual(testCase,percentile.Pruner.prune(percentile,trial), ...
+verifyEqualWithPrecision(testCase,percentile.Pruner.prune(percentile,trial), ...
     logical(expected.percentile_minimize));
 
 maximize=radia.optuna.Study(Directions="maximize",Pruner= ...
     radia.optuna.PercentilePruner(50,NStartupTrials=0),AutoSave=false);
 addCompletedTrial(maximize,0,1); addCompletedTrial(maximize,0,3);
 trial=maximize.ask(); trial.report(1.5,0);
-verifyEqual(testCase,maximize.Pruner.prune(maximize,trial), ...
+verifyEqualWithPrecision(testCase,maximize.Pruner.prune(maximize,trial), ...
     logical(expected.percentile_maximize));
 
 median=radia.optuna.Study(Pruner=radia.optuna.MedianPruner( ...
     NStartupTrials=0),AutoSave=false);
 addCompletedTrial(median,0,1); addCompletedTrial(median,0,3);
 medianTrial=median.ask(); medianTrial.report(5,0);
-verifyEqual(testCase,median.Pruner.prune(median,medianTrial), ...
+verifyEqualWithPrecision(testCase,median.Pruner.prune(median,medianTrial), ...
     logical(expected.median));
 
 threshold=radia.optuna.Study(Pruner=radia.optuna.ThresholdPruner( ...
@@ -2744,7 +2751,7 @@ actual(1)=threshold.Pruner.prune(threshold,trial);
 trial.report(11,1); actual(2)=threshold.Pruner.prune(threshold,trial);
 nanTrial=threshold.ask(); nanTrial.report(NaN,0);
 actual(3)=threshold.Pruner.prune(threshold,nanTrial);
-verifyEqual(testCase,actual,reshape(logical(expected.threshold),1,[]));
+verifyEqualWithPrecision(testCase,actual,reshape(logical(expected.threshold),1,[]));
 
 patient=radia.optuna.Study(Pruner=radia.optuna.PatientPruner([], ...
     Patience=1,MinDelta=0),AutoSave=false);
@@ -2755,7 +2762,7 @@ wrapped=radia.optuna.Study(Pruner=radia.optuna.PatientPruner( ...
     radia.optuna.NopPruner(),Patience=1),AutoSave=false);
 wrappedTrial=wrapped.ask();
 for index=1:4, wrappedTrial.report(patientValues(index),index-1); end
-verifyEqual(testCase,[patient.Pruner.prune(patient,trial), ...
+verifyEqualWithPrecision(testCase,[patient.Pruner.prune(patient,trial), ...
     wrapped.Pruner.prune(wrapped,wrappedTrial)], ...
     reshape(logical(expected.patient),1,[]));
 
@@ -2766,27 +2773,27 @@ first=halving.ask(); first.report(1,1);
 firstDecision=halvingPruner.prune(halving,first); halving.tell(first,1);
 second=halving.ask(); second.report(2,1);
 secondDecision=halvingPruner.prune(halving,second);
-verifyEqual(testCase,[firstDecision,secondDecision], ...
+verifyEqualWithPrecision(testCase,[firstDecision,secondDecision], ...
     reshape(logical(expected.successive_halving.decisions),1,[]));
-verifyEqual(testCase,[first.SystemAttrs.completed_rung_0, ...
+verifyEqualWithPrecision(testCase,[first.SystemAttrs.completed_rung_0, ...
     second.SystemAttrs.completed_rung_0], ...
     reshape(double(expected.successive_halving.rung_values),1,[]));
 bootstrap=radia.optuna.Study(Pruner= ...
     radia.optuna.SuccessiveHalvingPruner(MinResource=1, ...
     ReductionFactor=2,BootstrapCount=1),AutoSave=false);
 bootstrapTrial=bootstrap.ask(); bootstrapTrial.report(1,1);
-verifyEqual(testCase,bootstrap.Pruner.prune(bootstrap,bootstrapTrial), ...
+verifyEqualWithPrecision(testCase,bootstrap.Pruner.prune(bootstrap,bootstrapTrial), ...
     logical(expected.successive_halving.bootstrap));
 
 hyperbandPruner=radia.optuna.HyperbandPruner(MinResource=1, ...
     MaxResource=9,ReductionFactor=3);
 hyperband=radia.optuna.Study(Name="hb",Pruner=hyperbandPruner,AutoSave=false);
 hyperbandTrial=hyperband.ask(); hyperbandTrial.report(1,0);
-verifyEqual(testCase,hyperbandPruner.prune(hyperband,hyperbandTrial), ...
+verifyEqualWithPrecision(testCase,hyperbandPruner.prune(hyperband,hyperbandTrial), ...
     logical(expected.hyperband.first_decision));
 brackets=zeros(1,10);
 for number=0:9, brackets(number+1)=hyperbandPruner.bracketId(hyperband,number); end
-verifyEqual(testCase,brackets, ...
+verifyEqualWithPrecision(testCase,brackets, ...
     reshape(double(expected.hyperband.bracket_ids),1,[]));
 
 wilcoxon=radia.optuna.Study(Pruner=radia.optuna.WilcoxonPruner( ...
@@ -2797,7 +2804,7 @@ for step=0:5, wilcoxonTrial.report(10,step); end
 nonfinite=wilcoxon.ask(); nonfinite.report(Inf,0);
 warning("off","radia:optuna:WilcoxonNonfinite");
 cleanup=onCleanup(@()warning("on","radia:optuna:WilcoxonNonfinite"));
-verifyEqual(testCase,[wilcoxon.Pruner.prune(wilcoxon,wilcoxonTrial), ...
+verifyEqualWithPrecision(testCase,[wilcoxon.Pruner.prune(wilcoxon,wilcoxonTrial), ...
     wilcoxon.Pruner.prune(wilcoxon,nonfinite)], ...
     reshape(logical(expected.wilcoxon),1,[]));
 clear cleanup
@@ -2829,22 +2836,22 @@ for index=1:4
     study.tell(trial,values(index,:));
 end
 front=study.best_trials();
-verifyEqual(testCase,sort(reshape([front.Number],[],1)), ...
+verifyEqualWithPrecision(testCase,sort(reshape([front.Number],[],1)), ...
     reshape(double(expected.pareto_trial_numbers),[],1));
 for index=1:4
     snapshot=study.freezeTrial(index-1);
     record=snapshot.constraints();
-    verifyEqual(testCase,record("c0"), ...
+    verifyEqualWithPrecision(testCase,record("c0"), ...
         double(expected.constraints{index}.c0));
 end
 duplicate=study.ask();
-verifyEqual(testCase,study.TrialTable.State, ...
+verifyEqualWithPrecision(testCase,study.TrialTable.State, ...
     reshape(string(expected.states),[],1));
 duplicate.set_constraint("limit",1.25);
 verifyWarning(testCase,@()duplicate.set_constraint("limit",-9), ...
     "radia:optuna:DuplicateConstraint");
 duplicateConstraints=duplicate.constraints();
-verifyEqual(testCase,duplicateConstraints("limit"), ...
+verifyEqualWithPrecision(testCase,duplicateConstraints("limit"), ...
     double(expected.duplicate_value));
 verifyError(testCase,@()duplicate.set_constraint("not_nan",NaN), ...
     "radia:optuna:ConstraintNaN");
@@ -2870,20 +2877,20 @@ trialNumbers=cellfun(@(trial)trial.Number,rankTrials);
 [feasible,penalties,ranks,~,~,missing]= ...
     radia.optuna.internal.ParetoSupport.constrainedRankAndCrowding( ...
     rankStudy,trialNumbers,double(ranking.values));
-verifyEqual(testCase,feasible,[true;true;false;false]);
-verifyEqual(testCase,penalties,reshape(double(ranking.penalties),[],1));
-verifyEqual(testCase,ranks,[1;2;4;3]);
+verifyEqualWithPrecision(testCase,feasible,[true;true;false;false]);
+verifyEqualWithPrecision(testCase,penalties,reshape(double(ranking.penalties),[],1));
+verifyEqualWithPrecision(testCase,ranks,[1;2;4;3]);
 verifyFalse(testCase,any(missing));
 for left=1:4
     for right=1:4
         actual=radia.optuna.internal.ParetoSupport.constrainedDominates( ...
             rankStudy,trialNumbers(left),double(ranking.values(left,:)), ...
             trialNumbers(right),double(ranking.values(right,:)));
-        verifyEqual(testCase,actual,logical(ranking.dominates(left,right)));
+        verifyEqualWithPrecision(testCase,actual,logical(ranking.dominates(left,right)));
     end
 end
 front=rankStudy.best_trials();
-verifyEqual(testCase,reshape([front.Number],[],1), ...
+verifyEqualWithPrecision(testCase,reshape([front.Number],[],1), ...
     reshape(double(ranking.pareto_trial_numbers),[],1));
 end
 
@@ -2944,11 +2951,11 @@ end
 function verifyImportanceTable(testCase,actual,expected)
 expectedNames=reshape(string(expected.parameter_order),[],1);
 expectedValues=reshape(double(expected.values),[],1);
-verifyEqual(testCase,sort(actual.Parameter),sort(expectedNames));
+verifyEqualWithPrecision(testCase,sort(actual.Parameter),sort(expectedNames));
 for index=1:numel(expectedNames)
     row=find(actual.Parameter==expectedNames(index),1);
     verifyNotEmpty(testCase,row);
-    verifyEqual(testCase,actual.Importance(row),expectedValues(index),AbsTol=0);
+    verifyEqualWithPrecision(testCase,actual.Importance(row),expectedValues(index),AbsTol=0);
 end
 end
 
