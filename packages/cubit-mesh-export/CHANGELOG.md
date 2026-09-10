@@ -6,6 +6,13 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
 ## Unreleased
 
+## 0.14.17 - Refreshed Coreform Cubit backend
+
+Released 2026-09-11.
+
+- Refresh the bundled Coreform Cubit 2025.12 command backend from the current
+  reviewed main source while preserving the standalone mesh-export API.
+
 ## 0.14.16 - Standalone installation guidance and refreshed backend
 
 Released 2026-09-10.
