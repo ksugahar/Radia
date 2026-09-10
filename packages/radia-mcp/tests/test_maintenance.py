@@ -7,6 +7,15 @@ from types import SimpleNamespace
 import pytest
 
 from radia_mcp import maintenance as m
+from radia_mcp import _maintenance_guard as guard
+
+
+AUTH = dict(owner="test-task", reason="test change", clients_idle=True, targets="test client")
+
+
+@pytest.fixture(autouse=True)
+def isolated_guard(monkeypatch, tmp_path):
+    monkeypatch.setattr(guard, "STATE_ROOT", tmp_path / "maintenance-state")
 
 
 def test_json_plan_apply_is_explicit_preserves_policies_and_exact_repeat(tmp_path):
@@ -21,7 +30,7 @@ def test_json_plan_apply_is_explicit_preserves_policies_and_exact_repeat(tmp_pat
     before, after, report = m.plan_config(path, sys.executable)
     assert path.read_bytes() == before
     assert "never-log-this" not in json.dumps(report)
-    backup = m.apply_config(path, before, after)
+    backup = m.apply_config(path, before, after, **AUTH)
     assert Path(backup).read_bytes() == before
     updated = json.loads(path.read_bytes())
     assert updated["other"] == original["other"]
@@ -56,7 +65,7 @@ def test_toml_preserves_comments_permissions_bom_and_newlines(tmp_path):
     assert parsed["model"] == "kept"
     assert parsed["mcp_servers"]["radia-meta"]["enabled"] is False
     assert parsed["mcp_servers"]["radia-meta"]["tools"]["x"]["approval_policy"] == "always"
-    m.apply_config(path, before, after)
+    m.apply_config(path, before, after, **AUTH)
     assert m.plan_config(path, sys.executable)[1] == after
 
 
@@ -65,7 +74,7 @@ def test_apply_refuses_concurrent_change_and_does_not_overwrite(tmp_path):
     before, after, _ = m.plan_config(path, sys.executable)
     path.write_bytes(b"another session")
     with pytest.raises(ValueError, match="changed"):
-        m.apply_config(path, before, after)
+        m.apply_config(path, before, after, **AUTH)
     assert path.read_bytes() == b"another session"
 
 

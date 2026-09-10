@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import importlib.metadata as metadata
+import hashlib
 import json
 import os
 import re
@@ -119,7 +120,30 @@ def plan_config(path: Path, python: str) -> tuple[bytes | None, bytes, dict]:
         "status": "conflict" if conflicts else "ready"}
 
 
-def apply_config(path: Path, original: bytes | None, candidate: bytes) -> str | None:
+def apply_config(path: Path, original: bytes | None, candidate: bytes, *,
+                 owner: str = "", reason: str = "", clients_idle: bool = False,
+                 targets: str = "") -> str | None:
+    """Apply only within a recorded, exclusive maintenance operation."""
+    if candidate == (original or b""):
+        return _write_config(path, original, candidate)
+    from . import _maintenance_guard as guard
+    if not targets.strip():
+        raise ValueError("Affected client targets must be named")
+    with guard.change(owner=owner, reason=reason, clients_idle=clients_idle,
+                      scope={"operation": "config", "path": str(path.resolve()),
+                             "targets": targets},
+                      expected={"sha256": _digest(original)},
+                      proposed={"sha256": _digest(candidate)}) as record:
+        backup = _write_config(path, original, candidate)
+        record["observed"] = {"sha256": _digest(path.read_bytes()), "backup": backup}
+    return backup
+
+
+def _digest(value: bytes | None) -> str | None:
+    return hashlib.sha256(value).hexdigest() if value is not None else None
+
+
+def _write_config(path: Path, original: bytes | None, candidate: bytes) -> str | None:
     """Back up exact bytes, detect intervening edits, preserve existing ACLs.
 
     Stop clients editing this file before applying. This is not a distributed
@@ -207,6 +231,20 @@ def main(argv: list[str] | None = None) -> int:
     config.add_argument("path", type=Path)
     config.add_argument("--python", default=sys.executable)
     config.add_argument("--apply", action="store_true")
+    activate = commands.add_parser("activate-editable", help="Explicit radia-mcp-only activation")
+    activate.add_argument("source", type=Path, help="Approved radia-mcp package directory")
+    activate.add_argument("--commit", required=True, help="Exact approved full Git SHA")
+    activate.add_argument("--expected-source", type=Path, required=True)
+    activate.add_argument("--expected-commit", required=True)
+    recovery = commands.add_parser("reconcile", help="Record audited recovery; never retry a write")
+    recovery.add_argument("change_id")
+    for mutation in (config, activate, recovery):
+        mutation.add_argument("--owner", default="")
+        mutation.add_argument("--reason", default="")
+        if mutation is not recovery:
+            mutation.add_argument("--targets", default="", help="Affected host/user/client/server scope")
+        mutation.add_argument("--clients-idle", action="store_true",
+                              help="Operator confirms all affected consumers are idle")
     args = parser.parse_args(argv)
     try:
         if args.mode == "serve":
@@ -220,14 +258,27 @@ def main(argv: list[str] | None = None) -> int:
                 sys.argv = old_argv
         if args.mode == "doctor":
             report = doctor(args.expected_root, args.expected_version, args.expected_commit)
+        elif args.mode == "activate-editable":
+            from ._editable_activation import activate_editable
+            report = activate_editable(args.source, args.commit, args.expected_source,
+                                       args.expected_commit, owner=args.owner, reason=args.reason,
+                                       clients_idle=args.clients_idle, targets=args.targets)
+        elif args.mode == "reconcile":
+            from . import _maintenance_guard as guard
+            from ._editable_activation import observe_scope
+            report = guard.reconcile(args.change_id, owner=args.owner, reason=args.reason,
+                                     clients_idle=args.clients_idle, observe=observe_scope)
         else:
             original, candidate, report = plan_config(args.path, args.python)
             if args.apply and not report["conflicts"]:
-                report["backup"] = apply_config(args.path, original, candidate)
+                report["backup"] = apply_config(
+                    args.path, original, candidate, owner=args.owner, reason=args.reason,
+                    clients_idle=args.clients_idle, targets=args.targets,
+                )
                 report["applied"] = report["changed"]
         print(json.dumps(report, ensure_ascii=True, indent=2))
         return 1 if report["status"] in {"fail", "conflict"} else 0
-    except (ValueError, OSError, metadata.PackageNotFoundError) as exc:
+    except (ValueError, OSError, subprocess.SubprocessError, metadata.PackageNotFoundError) as exc:
         # Parser/IO error strings may contain configuration values: keep logs clean.
         print(f"Maintenance failed ({type(exc).__name__}); inspect the input locally.", file=sys.stderr)
         return 2
