@@ -263,6 +263,8 @@ Use `tools/release_quad.py` and the `release-quad` skill. Publish only when
 CI, exact package hashes, native/MEX/SLX checks, and required machine gates pass
 for the same commit. LAB and 100号機 retain approved, verified editable sources
 after release; source changes follow Shared MCP Runtime Ownership, not an automatic reset.
+`Radia Native Release` runs only on a `v*` tag or manual dispatch, never on a
+push: dispatch it on the release SHA first; `ci-verify` requires it by name.
 
 ## Optuna
 
