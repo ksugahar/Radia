@@ -3,11 +3,11 @@ import pytest
 
 pptx = pytest.importorskip("pptx")
 
-from pptx.dml.color import RGBColor  # noqa: E402
-from pptx.util import Inches, Pt  # noqa: E402
-
-from radia_mcp.presentation._outline import presentation_check_outline_slide  # noqa: E402
-
+from pptx.dml.color import RGBColor
+from pptx.util import Inches, Pt
+from radia_mcp.presentation._outline import (
+    presentation_check_outline_slide,
+)
 
 ARC = [
     ("The ladder", ["Kameari 2018 builds it."], "A circuit, exact at DC."),
@@ -117,6 +117,30 @@ def test_four_section_custom_taxonomy_repeats_and_highlights_in_order(tmp_path):
     assert result["score"] == 10.0
     assert result["scoring_mode"] == "repeated-agenda"
     assert result["recurring_agenda"]["items"] == items
+    assert result["recurring_agenda"]["observed_highlight_order"] == items
+
+
+def test_custom_section_titles_are_dividers_when_full_agenda_repeats(tmp_path):
+    items = ["1 Context", "2 Theory", "3 Implementation", "4 Demonstration"]
+    rows = ([_agenda("Context", title="1 Context", items=items)] + ARC[:1]
+            + [_agenda("Theory", title="2 Theory", items=items)] + ARC[1:2]
+            + [_agenda("Implementation", title="3 Implementation", items=items)]
+            + ARC[2:3]
+            + [_agenda("Demonstration", title="4 Demonstration", items=items)]
+            + ARC[3:])
+    result = presentation_check_outline_slide(str(_deck(tmp_path, rows)))
+    assert result["score"] == 10.0
+    assert result["scoring_mode"] == "repeated-agenda"
+    assert [divider["slide"] for divider in result["section_dividers"]] == [2, 4, 6, 8]
+
+
+def test_two_section_custom_taxonomy_is_supported(tmp_path):
+    items = ["1 Theory", "2 Demonstration"]
+    rows = ([_agenda("Theory", title="1 Theory", items=items)] + ARC[:2]
+            + [_agenda("Demonstration", title="2 Demonstration", items=items)]
+            + ARC[2:])
+    result = presentation_check_outline_slide(str(_deck(tmp_path, rows)))
+    assert result["score"] == 10.0
     assert result["recurring_agenda"]["observed_highlight_order"] == items
 
 
