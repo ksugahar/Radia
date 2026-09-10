@@ -71,12 +71,12 @@ def test_single_front_agenda_is_not_recurring_navigation(tmp_path):
     assert result["score"] == 3.3
 
 
-def test_full_agenda_with_current_item_at_each_transition_passes(tmp_path):
+def test_three_section_agenda_is_below_recommended_range(tmp_path):
     rows = ([_agenda("Motivation")] + ARC[:2]
             + [_agenda("Proposed method")] + ARC[2:3]
             + [_agenda("Results")] + ARC[3:])
     result = presentation_check_outline_slide(str(_deck(tmp_path, rows)))
-    assert result["score"] == 10.0
+    assert result["score"] == 8.0
     assert result["section_coverage"] == {
         "motivation": [2], "method": [5], "results": [7]
     }
@@ -104,7 +104,7 @@ def test_section_names_are_examples_and_japanese_labels_work(tmp_path):
             + [_agenda("提案", items=items)] + ARC[2:3]
             + [_agenda("結果", items=items)] + ARC[3:])
     result = presentation_check_outline_slide(str(_deck(tmp_path, rows)))
-    assert result["score"] == 10.0
+    assert result["score"] == 8.0
 
 
 def test_four_section_custom_taxonomy_repeats_and_highlights_in_order(tmp_path):
@@ -118,6 +118,25 @@ def test_four_section_custom_taxonomy_repeats_and_highlights_in_order(tmp_path):
     assert result["scoring_mode"] == "repeated-agenda"
     assert result["recurring_agenda"]["items"] == items
     assert result["recurring_agenda"]["observed_highlight_order"] == items
+    assert result["recurring_agenda"]["recommended_section_count"]
+    assert result["recurring_agenda"]["concise_labels"]
+
+
+def test_agenda_with_explanatory_taglines_does_not_receive_full_score(tmp_path):
+    items = [
+        "1 Motivation — why the ladder fails",
+        "2 Proposed method — two spaces",
+        "3 Results — four bodies",
+        "4 Conclusion — use both",
+    ]
+    rows = ([_agenda("Motivation", items=items)] + ARC[:1]
+            + [_agenda("Proposed method", items=items)] + ARC[1:2]
+            + [_agenda("Results", items=items)] + ARC[2:4]
+            + [_agenda("Conclusion", items=items)] + ARC[4:])
+    result = presentation_check_outline_slide(str(_deck(tmp_path, rows)))
+    assert result["score"] < 10.0
+    assert not result["recurring_agenda"]["concise_labels"]
+    assert not result["checks"]["Outline は説明文を付けず章名だけにする"]
 
 
 def test_custom_section_titles_are_dividers_when_full_agenda_repeats(tmp_path):
@@ -140,7 +159,7 @@ def test_two_section_custom_taxonomy_is_supported(tmp_path):
             + [_agenda("Demonstration", title="2 Demonstration", items=items)]
             + ARC[2:])
     result = presentation_check_outline_slide(str(_deck(tmp_path, rows)))
-    assert result["score"] == 10.0
+    assert result["score"] < 10.0
     assert result["recurring_agenda"]["observed_highlight_order"] == items
 
 
