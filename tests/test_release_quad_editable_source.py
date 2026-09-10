@@ -366,7 +366,7 @@ def test_absent_release_check_is_not_passing_evidence(monkeypatch):
     ok, message = release_quad._check_github_hosted_workflows(
         "a" * 40, required_names=None,
         require_present=[release_quad.RELEASE_CHECK_RUN],
-        timeout_sec=1, poll_sec=0,
+        timeout_sec=1, poll_sec=0, registration_grace_sec=0,
     )
 
     assert ok is False
