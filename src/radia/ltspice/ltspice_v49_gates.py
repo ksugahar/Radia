@@ -5,21 +5,14 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 
+from ._artifact_identity import (
+    digest_is_sha256 as _digest,
+    same_generation as _generation,
+)
+
 
 MONTE_CARLO = "monte_carlo_seed_distribution_sample_parameter_run_order_measure_owner_identity"
 SWITCH = "switch_hysteresis_state_timestep_breakpoint_raw_trace_owner_identity"
-
-
-def _digest(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
-
-
-def _generation(contract: Mapping[str, object], *names: str) -> bool:
-    value = str(contract.get("generation_id") or "")
-    return bool(value) and all(contract.get(name) == value for name in names)
 
 
 def _finite(values: object, *, length: int | None = None, minimum: int = 1) -> bool:
