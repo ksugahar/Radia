@@ -40,6 +40,12 @@ it does not choose the expected operator or operands. This gate is not an
 independent proof that the parser itself is correct. Parser round trips and
 rendering checks remain separate obligations.
 
+In particular, `E.tex_normalize(expected)` is a shared implementation
+dependency: a normalizer defect can move both sides of the comparison together.
+The mutation controls cover selected swaps, not every such correlated failure.
+A green run alone therefore does not establish oracle correctness; review the
+authored expectations against the mathematical meaning independently.
+
 Mutation controls deliberately interchange left/right arrows, over/under
 lines, sub/superscripts and typefaces. Each must fail despite producing valid,
 distinct, round-tripping mathematics. The existing distinct-rendering sweep
@@ -50,3 +56,10 @@ Run safe static and Web checks in the Ubuntu Eqnedit64 lane. Run native insertio
 in the existing single-process model suite on disposable Windows CI, never on
 the interactive LAB font session. These tests do not claim that Win32 pointer
 hit-testing or PowerPoint paste has been exercised.
+
+Before publishing the palette-font correction, hand-test the exact staged EXE
+and inspect its `flight_note` entry `font.buttons`. Confirm `Latin Modern Math`
+and readable palette faces in the same run. Font cmap coverage and source-code
+analysis predict font selection but do not prove which font a live LAB process
+actually selected. Until this observation is recorded, the hand-test gate remains
+unverified, regardless of CI success.
