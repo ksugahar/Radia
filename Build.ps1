@@ -81,6 +81,8 @@ if ($OptunaMexOnly) {
         Write-Host "Cubit: NOT FOUND -- Cubit-plugin .pyd build will be skipped" -ForegroundColor Yellow
     }
 }
+$BuildCubitPlugin = [bool]($CubitCmakeDir -and
+    (Test-Path (Join-Path $CubitCmakeDir "CubitConfig.cmake")))
 
 # Intel MKL 2026 (required for BLAS/LAPACK and HACApK/PARDISO). The selected
 # Python environment is authoritative; MKLROOT is an explicit fallback only.
@@ -488,14 +490,9 @@ set "NETGEN_DIR=$NetgenPackageDir"
 rem Compact Netgen sources are in-repo (src/cubit_plugin/compact_netgen/netgen_src/).
 rem No external NETGEN_SRC_DIR needed.
 
-rem Use delayed expansion here because this whole block is parsed at once by
-rem cmd.exe.  Percent expansion can otherwise reuse a stale runner-level
-rem CUBIT_DIR even after the set above cleared it on a Cubit-free machine.
-rem Also require the variable itself: an empty CUBIT_DIR turns the path below
-rem into \CubitConfig.cmake and may accidentally match a runner-root file.
-set "BUILD_CUBIT_PLUGIN="
-if defined CUBIT_DIR if exist "!CUBIT_DIR!\CubitConfig.cmake" set "BUILD_CUBIT_PLUGIN=True"
-if /I "!BUILD_CUBIT_PLUGIN!"=="True" (
+rem The outer PowerShell discovery is authoritative. Embed its boolean result
+rem so an empty or stale runner-level CUBIT_DIR cannot enable this block.
+if /I "$BuildCubitPlugin"=="True" (
     if not exist "%CUBIT_PLUGIN_BUILD%" mkdir "%CUBIT_PLUGIN_BUILD%"
     cd /d "%CUBIT_PLUGIN_BUILD%"
     rem build-pyd: force FULL Netgen mode (disable compact_netgen detection)
