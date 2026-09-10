@@ -5,7 +5,7 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
-## 4.95.86 - Safe AMS setup and physical shifted preconditioning
+## 4.95.87 - Safe AMS setup and physical shifted preconditioning
 
 Released 2026-09-10.
 
@@ -28,10 +28,11 @@ Released 2026-09-10.
 - The Hiruma AMS benchmark now keeps its epsilon shift in the real
   preconditioner surrogate only. The physical complex system remains unshifted,
   and historical shifted-system timing data is labeled accordingly.
-- Native tag builds now derive both Cubit-only target enablement and the CMake
-  path from the confirmed install directory, so a stale secondary runner
-  variable cannot enter Cubit configuration. Release-ref discovery also cannot
-  block on an interactive credential helper.
+- Native tag builds now derive Cubit-only target enablement and its CMake path
+  from the confirmed install directory, then embed fixed paths without delayed
+  batch expansion. This prevents a stale runner variable or an unescaped
+  parenthesis in the generated batch block from entering Cubit configuration.
+  Release-ref discovery also cannot block on an interactive credential helper.
 
 - Simplified Eqnedit64 automation to a single input/output conversion contract
   and migrated the `eqnedit64` package plus `radia-mcp.presentation` bridge to
