@@ -217,6 +217,29 @@ def test_kelvin_source_lift_is_shared_across_the_identification():
     assert abs(outer / inner - 1.0) < 1.0e-10
 
 
+def test_direct_solve_reports_its_own_residual():
+    """A factorisation has no iteration history, but it still has r = b - A x.
+
+    Reporting nothing because there is no iteration count is the same gap as
+    treating a Krylov solve that ran out of iterations as converged.  The free
+    degrees of freedom carry the system that was actually solved, and the
+    multiplier block carries the interface jump condition in weak form, so the
+    two are reported apart: a constraint defect must not be able to hide
+    inside a healthy PDE residual.
+    """
+    mesh = _kelvin_mesh()
+    result = _solve(mesh, _coil())
+    residual = result["linear_residual"]
+
+    assert residual["free_dofs"]["relative"] < 1.0e-8
+    assert residual["free_dofs"]["rhs_l2"] > 0.0
+    assert set(residual["blocks"]) == {
+        "phi_reduced", "phi_total", "interface_constraint"}
+    constraint = residual["blocks"]["interface_constraint"]
+    assert constraint is not None
+    assert constraint["relative"] < 1.0e-8
+
+
 def test_kelvin_material_without_its_interface_is_rejected():
     """Silently uncoupling the exterior is a fail-loud configuration error."""
     mesh = _kelvin_mesh()
