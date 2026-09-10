@@ -37,6 +37,7 @@ manifest=radia.ltspice.collectDependencies(netlistFile);
 definitions=containers.Map('KeyType','char','ValueType','any');top=strings(0,2);
 for file=manifest.local_files(:).'
  lines=splitlines(string(fileread(file)));current="";
+ if file==manifest.root&&~isempty(lines),lines(1)=[];end
  for row=1:numel(lines)
   line=strtrim(regexprep(lines(row),';.*$',''));if line==""||startsWith(line,"*"),continue,end
   tokens=split(line);tokens(tokens=="")=[];head=lower(tokens(1));
