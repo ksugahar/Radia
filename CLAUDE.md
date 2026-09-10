@@ -98,6 +98,13 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 
 ### LLM Cubit Headless Execution
 
+- This supersedes the 2026-08-05 MCP GUI-debugging policy: execution and
+  artifact handoff are separate. Humans may use their own Cubit GUI.
+- MCP may read human-saved journals and export AI journals/checkpoints for
+  human review. Import never executes a journal, starts recording in a GUI,
+  or attaches to the human process. Replay is an explicit headless operation.
+- Journal/history subtraction identifies candidates, not proven authorship;
+  preserve the original journal and exclusions for review.
 - Every Cubit operation initiated through an LLM or MCP server runs in
   `-batch -nographics` mode and must report that no persistent GUI was started.
 - LLM tools must never launch or attach to `coreform_cubit.exe`, open a Cubit

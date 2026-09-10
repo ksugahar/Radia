@@ -123,7 +123,12 @@ generation, exports, and validation. Every LLM/MCP Cubit operation is
 batch/nographics. Never launch or attach to the Cubit GUI. `cubit_snapshot`
 fails loudly because Cubit hardcopy needs a graphics window.
 
-Session model: `cubit_show`/`cubit_exec` reuse ONE headless Cubit daemon
+Human handoff: cubit_import_journal reads a human-saved .jou without
+execution or GUI attachment; cubit_session_journal exports AI history.
+Imported differences are candidate commands, not proven authorship or a
+standalone replay script. Review the source before explicit headless replay.
+
+Session model: `cubit_stage`/`cubit_exec` reuse ONE headless Cubit daemon
 (first call may take 30+ s for license + startup; later calls are
 sub-second). The MCP server owns that daemon for its lifetime. Use
 `cubit_session_status` to inspect it; do not launch Cubit executables outside
@@ -2515,7 +2520,7 @@ def _cubit_path_dispatch(path: Path) -> str:
 
 
 @mcp.tool()
-def cubit_show(path: str = "", extra_commands: list = None) -> str:
+def cubit_stage(path: str = "", extra_commands: list = None) -> str:
 	"""
 	Load a file into the persistent headless Cubit session and optionally
 	run follow-up commands. No Cubit GUI window is opened.
@@ -3025,7 +3030,7 @@ def cubit_session_journal(out_path: str = "",
 		"# Session journal exported by mcp-server-cubit",
 		f"# {time.strftime('%Y-%m-%d %H:%M:%S')}  "
 		f"({len(history)} commands)",
-		"# Replay: Cubit > Play Journal, or cubit_show(path=...)",
+		"# Replay: Cubit > Play Journal, or cubit_stage(path=...)",
 	]
 	n_failed = 0
 	for entry in history:
@@ -3052,6 +3057,64 @@ def cubit_session_journal(out_path: str = "",
 		except OSError as exc:
 			result["write_error"] = str(exc)
 	return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def cubit_import_journal(path: str) -> str:
+	"""Read a human-saved .jou without starting Cubit or executing its contents.
+
+	Return candidate human command lines after subtracting this MCP process's
+	command history and internal journal/probe lines. Attribution is heuristic:
+	an identical human command can match AI history. The original journal and
+	line-numbered exclusions remain available for review. Candidate lines are
+	not a standalone replay script (APREPRO and Python can span lines).
+	"""
+	from collections import Counter
+	import hashlib
+
+	p = Path(path)
+	if not p.is_absolute():
+		p = PROJECT_ROOT / p
+	try:
+		if p.suffix.lower() != ".jou":
+			raise ValueError("Expected a saved .jou journal")
+		raw = p.read_bytes()
+		journal = raw.decode("utf-8-sig")
+	except (OSError, ValueError) as exc:
+		return json.dumps(_error_payload("input", str(exc), kind="input"))
+	sess = _cs._SINGLETON
+	if sess is None:
+		history = []
+	else:
+		with sess._lock:
+			history = list(sess._command_history)
+	known = Counter(str(row["line"]).strip() for row in history)
+	prefixes = ("save as ", "record journal", "record stop", "probe ", "list ")
+	candidates, excluded = [], []
+	for number, original in enumerate(journal.splitlines(), 1):
+		line = original.strip()
+		reason = None
+		if not line or line.startswith("#"):
+			reason = "comment_or_blank"
+		elif line.lower().startswith(prefixes):
+			reason = "internal_command"
+		elif known[line]:
+			known[line] -= 1
+			reason = "matches_ai_history"
+		entry = {"line_number": number, "line": original}
+		if reason:
+			excluded.append({**entry, "reason": reason})
+		else:
+			candidates.append(entry)
+	return json.dumps({
+		"status": "ok", "execution_mode": "artifact_read",
+		"gui_started": False, "executed": False,
+		"path": str(p.resolve()), "sha256": hashlib.sha256(raw).hexdigest(),
+		"journal": journal, "candidate_commands": candidates,
+		"excluded": excluded, "history_entries": len(history),
+		"attribution": "heuristic_current_process_history_only",
+		"note": "Review original journal and checkpoint before explicit headless replay.",
+	}, ensure_ascii=False, indent=2)
 
 
 @mcp.tool()
@@ -3102,7 +3165,7 @@ def cubit_session_shutdown() -> str:
 	left running). The report says which process was stopped
 	(stopped: "owned-child" | "attached-daemon" | "none", plus pid).
 	"""
-	if _cs._SINGLETON is None or not _cs._SINGLETON.is_alive():
+	if _cs._SINGLETON is None:
 		return json.dumps({"status": "ok", "note": "no session running"})
 	report = _cs.CubitSession.reset()
 	return json.dumps({"status": "ok", "note": "session stopped", **report})
@@ -5256,6 +5319,8 @@ def cubit_vfrac_to_vol(vfrac_path: str,
 		"status": "ok" if all(gates.values()) else "gate_failed",
 		"gates": gates,
 		"vfrac": str(p), "vol": str(vol), "msh": str(msh),
+		"gui_started": False,
+		"execution_mode": "headless_batch",
 		"sculpt_exodus": str(sculpt_exo),
 		"vfrac_volume": v_vfrac,
 		"materials": per_material,
@@ -7322,7 +7387,7 @@ from ..common.server_hardening import (
 
 # Tools that execute commands in (or overwrite / stop) the headless session.
 _DESTRUCTIVE_TOOLS = {
-	"cubit_exec", "cubit_exec_safely", "cubit_show", "cubit_load",
+	"cubit_exec", "cubit_exec_safely", "cubit_stage", "cubit_load",
 	"cubit_restore", "cubit_session_shutdown", "cubit_mesh_apply_choice",
 }
 # Tools that create/refresh files on disk but leave the session alone.
@@ -7340,6 +7405,7 @@ _WEB_TOOLS = {"cubit_web_docs", "cubit_examples"}
 
 
 _CUBIT_READONLY_HINTS = (
+	"cubit_import_journal",
 	"_gate", "_docs", "_guide", "_tips", "_reference", "_inventory",
 	"_status", "_lookup", "_ask", "_examples", "lint_", "get_",
 	"generate_", "netgen_", "_probe", "_diagnose", "_suggest",

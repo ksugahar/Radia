@@ -1364,7 +1364,7 @@ cubit.cmd("rotate Surface {0} angle {1} about origin 0 0 0 direction {2} {3} {4}
   robust against editor auto-wrap.
 
 This affects ALL three execution paths that funnel through `play`,
-including `radia-mcp`'s `cubit_load(path=*.py)` and `cubit_show(path=*.py)`,
+including `radia-mcp`'s `cubit_load(path=*.py)` and `cubit_stage(path=*.py)`,
 both of which dispatch `.py → play "<abs_path>"`.
 
 For multi-line ergonomic Python, use **standalone mode** instead:
@@ -3541,12 +3541,17 @@ CUBIT_TRIAL_ERROR_POLICY = """
 batch mode. The persistent MCP session is headless too. Human GUI use
 is independent and outside MCP.
 
+Human cooperation uses saved artifacts: `cubit_import_journal(path)` reads
+a human-saved journal without execution, while `cubit_session_journal`
+exports AI history. Differences are heuristic candidates; preserve the
+original source and checkpoint and review before explicit headless replay.
+
 ## The two channels
 
 | Channel           | How                                        | When to use                               |
 |-------------------|--------------------------------------------|-------------------------------------------|
 | **Trial (batch)** | `coreform_cubit.com -batch -nographics -nojournal wrapper.jou`, or the MCP tool `cubit_batch_try` | Exploring recipes, probing errors, mesh ladder search |
-| **Commit (headless)** | `cubit_exec` / `cubit_show` against the persistent headless daemon | Apply a recipe whose success was already verified in batch |
+| **Commit (headless)** | `cubit_exec` / `cubit_stage` against the persistent headless daemon | Apply a recipe whose success was already verified in batch |
 
 ## Why
 
@@ -3591,7 +3596,7 @@ Always: `-batch -nographics -nojournal`.
 - Calling `cubit_exec` with a speculative command sequence: if one
   line fails, the persistent session enters a half-state and subsequent
   `cubit_exec` calls inherit the mess.
-- Running `cubit_show <new_step>` in the persistent session just to test if
+- Running `cubit_stage <new_step>` in the persistent session just to test if
   it loads: use `cubit_batch_try(step_path=new_step, commands=[])`
   instead -- zero impact on the persistent state.
 - Leaving a 1.5 M-tet mesh in the persistent session from an exploratory
