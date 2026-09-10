@@ -75,6 +75,23 @@ and MATLAB processes verified. Repeated isolated timing and the Python
 comparison remain pending. Use an available idle host or a verified working
 Engine execution context, not repeated unchanged mdx2 SSH startup probes.
 
+On 2026-09-10 the mdx2 authenticated CI service completed the old/new MEX
+comparison and pinned Python baseline (Actions run `34444333755`). The
+MATLAB-bundled Engine still timed out over SSH, but the service route worked;
+the guard now waits briefly for MATLAB shutdown before the next session.
+Evidence is in
+`validation_test/optimization/results_optuna50_native_selection_mdx2_20260910.json`.
+Same MATLAB sources, old/new MEX in old-new-new-old order, followed by two
+Python runs: median-of-run-median throughput was 1056 versus 702 trials/s for
+scalar TPE and 545 versus 239 for grouped conditional TPE (1.51x and 2.28x).
+Checksums matched. The native change alone was approximately flat for scalar
+(-0.74%) and +4.92% for grouped. Python varied materially between sessions,
+so these are descriptive ratios, not confidence bounds or universal claims.
+The Python-throughput target is met for these 100-trial workloads; larger
+histories, cold startup, peak memory, and durable table/MAT write costs remain
+outside this measurement. The experimental service workflow lives only on
+`codex/optuna-mdx2-service-benchmark`, not in the production diagnostic.
+
 ## 2. Scope and non-goals
 
 ### In scope
