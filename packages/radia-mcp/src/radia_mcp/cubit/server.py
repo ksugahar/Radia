@@ -112,23 +112,22 @@ from ..common import examples as _ex
 # operating doctrine, not per-tool docs -- those live in tool descriptions).
 _SERVER_INSTRUCTIONS = """\
 Coreform Cubit meshing MCP server (Sugahara lab). Capabilities: drive a
-persistent Cubit session (GUI or batch), headless mesh dry-runs and
+persistent headless Cubit session, isolated mesh dry-runs and
 mesh-variant races, Netgen `.vol` export gates, lint, and a curated Cubit
 knowledge corpus.
 
 Driving model (lab policy): APREPRO commands + Python on the
 HEADLESS/batch route are the PRIMARY way agents drive Cubit --
 `cubit_batch_try` / `cubit_mesh_auto` / `.jou` playback for mesh
-generation, exports, and validation. LLM/agent workflows MUST NOT
-launch or drive the Cubit GUI. GUI-session tools (`cubit_show`,
-`cubit_snapshot`) are reserved solely for explicitly scoped GUI tests
-of the user-facing toolbar, rendering, or visual-debugging surface.
-Outside those tests, users open the interactive GUI themselves.
+generation, exports, and validation. Every LLM/MCP Cubit operation is
+batch/nographics. Never launch or attach to the Cubit GUI. `cubit_snapshot`
+fails loudly because Cubit hardcopy needs a graphics window.
 
-Session model: `cubit_show`/`cubit_exec` reuse ONE persistent Cubit daemon
+Session model: `cubit_show`/`cubit_exec` reuse ONE headless Cubit daemon
 (first call may take 30+ s for license + startup; later calls are
-sub-second). The daemon deliberately survives client restarts. Use
-`cubit_session_status` to inspect it; do not spawn ad-hoc Cubit processes.
+sub-second). The MCP server owns that daemon for its lifetime. Use
+`cubit_session_status` to inspect it; do not launch Cubit executables outside
+the checked headless tools.
 
 Operating rules (lab doctrine -- follow these):
 1. Probe, don't guess: before writing entity-classification predicates,
@@ -2373,185 +2372,65 @@ def get_lint_rules() -> str:
 
 
 # ============================================================
-# Cubit GUI launcher (Cheap phase of LLM-driven Cubit loop)
+# File loader for the persistent headless session
 # ============================================================
-#
-# Motivation (2026-04-19): in the collaborative workflow (student +
-# Claude Code in VSCode), the student wants to drive mesh creation via
-# LLM but watch the result in Cubit's own native window (not OCP).
-# Phase split:
-#   - Cheap (this tool): each call launches a fresh Cubit GUI process
-#     with a wrapper .jou that either imports a file or executes a
-#     list of commands. Cubit stays open; student inspects, closes,
-#     or triggers another round.  Slow loop but zero dev cost.
-#   - Medium (TODO): use Cubit's Python binding
-#     (C:/Program Files/Coreform Cubit 2025.12/bin/python3/) to drive a
-#     persistent Cubit process in-process — sub-second command cycles.
-#     Requires binding mode that keeps GUI alive; experimental.
 
 
 @mcp.tool()
-def open_in_cubit(path: str = "",
-                  commands: list = None,
-                  cubit_exe: str = "",
-                  detach: bool = True) -> str:
+def cubit_load(path: str = "", commands: list = None) -> str:
+	"""Load a file and run commands in the persistent headless session.
+
+	This MCP tool never opens or attaches to a Cubit window.
 	"""
-	Open a file, or execute a list of commands, in **Cubit GUI**.
-	This is the "Cheap phase" of the LLM→Cubit loop: each invocation
-	launches a fresh Cubit GUI process so the student can watch the
-	result in Cubit's native window. Use for inspection / measurement
-	after Claude generates a .jou.
-
-	File-type dispatch (by extension):
-	  .jou  → `playback "<path>"`
-	  .py   → `play "<path>"`           (Cubit's `play` runs Python files)
-	  .step .stp → `import step "<path>"`
-	  .brep .brp → `import acis "<path>"`  (Cubit uses ACIS for BREP)
-	  .msh         → `import mesh "<path>"`
-	  .vol         → `import mesh "<path>"`  (Netgen .vol passes through)
-	  .g .e .exo   → `import mesh "<path>"`
-	Any `commands` given are appended AFTER the file load (useful for
-	"import this STEP then mesh it").
-
-	Args:
-	    path: file to open in Cubit. Leave empty to run only `commands`.
-	    commands: extra Cubit commands to run after loading. Each item
-	        is one line (no trailing newline).
-	    cubit_exe: override Cubit binary path.
-	    detach: if True (default), return immediately after launching
-	        Cubit; student interacts with the GUI window. If False,
-	        wait for Cubit to exit and return its output (useful for
-	        smoke tests or headless CI).
-
-	Returns:
-	    JSON with launch status, pid (when detach=True), wrapper .jou
-	    path (kept for the student to inspect/edit), exit code (when
-	    detach=False), and a copy of the commands that were issued.
-	"""
-	import json as _json
-	import subprocess as _sp
-	import tempfile as _tf
-	from pathlib import Path
-	from .session import find_cubit_install, _cubit_gui_exe
-	from .license_warmup import warmup_license
-
-	if cubit_exe:
-		exe = cubit_exe
-		bin_dir = Path(exe).parent
-	else:
-		bin_dir = find_cubit_install()
-		if bin_dir is None:
-			return _json.dumps({"status": "error", "stage": "cubit_binary", "kind": "environment",
-			                    "error": "Cubit install not found on PATH "
-			                             "or standard locations; pass cubit_exe."})
-		try:
-			exe = str(_cubit_gui_exe(bin_dir))
-		except FileNotFoundError as e:
-			return _json.dumps({"status": "error", "stage": "cubit_binary", "kind": "environment",
-			                    "error": str(e)})
-	if not Path(exe).exists():
-		return _json.dumps({"status": "error", "stage": "cubit_binary", "kind": "environment",
-		                    "error": f"Cubit exe not found: {exe}"})
-
-	# Pre-warm Learn license (same logic as cubit_session):
-	# rlm_activate --login only if cache stale, otherwise skip.
-	# This shortens the visible Cubit launch from 30 – 60 s (cold
-	# in-process checkout) to ~3 s when the cache is fresh.
-	_license_warmup = warmup_license(Path(bin_dir), timeout_s=30.0)
-
-	work = Path(_tf.mkdtemp(prefix="cubit_gui_"))
-	wrapper = work / "wrapper.jou"
-	lines = []
-
+	cmds: list[str] = []
 	if path:
 		p = Path(path)
 		if not p.is_absolute():
 			p = PROJECT_ROOT / p
 		if not p.exists():
-			return _json.dumps({"status": "error", "stage": "input", "kind": "input",
-			                    "error": f"File not found: {p}"})
-		abs_path = str(p.resolve()).replace("\\", "/")
-		suffix = p.suffix.lower()
-		if suffix == ".jou":
-			lines.append(f'playback "{abs_path}"')
-		elif suffix == ".py":
-			# Cubit の `play` は .jou と .py の両方を受け付ける.
-			lines.append(f'play "{abs_path}"')
-		elif suffix in (".step", ".stp"):
-			lines.append(f'import step "{abs_path}"')
-		elif suffix in (".brep", ".brp"):
-			# Cubit imports BREP via the ACIS kernel.
-			lines.append(f'import acis "{abs_path}"')
-		elif suffix in (".msh", ".vol", ".g", ".e", ".exo"):
-			lines.append(f'import mesh "{abs_path}"')
-		else:
-			return _json.dumps({"status": "error", "stage": "input", "kind": "input",
-			                    "error": f"Unsupported extension: {suffix}"})
-
+			return json.dumps({
+				"status": "error", "stage": "input", "kind": "input",
+				"error": f"File not found: {p}", "gui_started": False,
+			})
+		try:
+			cmds.append(_cubit_path_dispatch(p))
+		except ValueError as exc:
+			return json.dumps({
+				"status": "error", "stage": "input", "kind": "input",
+				"error": str(exc), "gui_started": False,
+			})
 	if commands:
-		lines.extend(str(c).rstrip() for c in commands)
+		cmds.extend(str(c).rstrip() for c in commands)
+	if not cmds:
+		return json.dumps({
+			"status": "error", "stage": "input", "kind": "input",
+			"error": "Either `path` or `commands` is required.",
+			"gui_started": False,
+		})
 
-	if not lines:
-		return _json.dumps({"status": "error", "stage": "input", "kind": "input",
-		                    "error": "Either `path` or `commands` is required."})
-
-	wrapper.write_text("\n".join(lines) + "\n")
-
-	# GUI mode: no -batch, no -nographics. -nojournal prevents auto-
-	# journaling of the wrapper playback (keeps the directory clean).
-	# -input <wrapper> plays our commands after GUI initialization.
-	cmd = [exe, "-nojournal", "-input", str(wrapper)]
-
+	sess, err = _cubit_session_or_error()
+	if err is not None:
+		return err
 	try:
-		if detach:
-			# stdin=DEVNULL: prevent Cubit from inheriting MCP server's
-			# stdio pipe (used for JSON-RPC with Claude Code). Without
-			# this, Cubit's startup hangs (Responding=False, threads
-			# decline) — observed 2026-04-25 LAB.
-			proc = _sp.Popen(
-				cmd,
-				stdin=_sp.DEVNULL,
-				stdout=_sp.DEVNULL,
-				stderr=_sp.DEVNULL,
-				creationflags=getattr(_sp, "DETACHED_PROCESS", 0)
-				             | getattr(_sp, "CREATE_NEW_PROCESS_GROUP", 0),
-			)
-			info = {
-				"status": "ok",
-				"mode": "gui_detached",
-				"pid": proc.pid,
-				"wrapper": str(wrapper),
-				"commands": lines,
-				"note": ("Cubit GUI launched. Student: inspect in the "
-				         "Cubit window. Close the Cubit window when done."),
-			}
-		else:
-			proc = _sp.run(cmd, capture_output=True, text=True, timeout=180)
-			info = {
-				"status": "ok",
-				"mode": "gui_blocking",
-				"exit": proc.returncode,
-				"wrapper": str(wrapper),
-				"commands": lines,
-				"stdout_tail": proc.stdout[-400:] if proc.stdout else "",
-				"stderr_tail": proc.stderr[-400:] if proc.stderr else "",
-			}
-	except _sp.TimeoutExpired:
-		return _json.dumps({"status": "error", "stage": "timeout", "kind": "environment",
-		                    "wrapper": str(wrapper)})
-	except OSError as e:
-		return _json.dumps({"status": "error", "stage": "launch", "kind": "environment",
-		                    "error": str(e)})
-
-	return _json.dumps(info, indent=2)
+		result = sess.call("cmd", cmds)
+	except _cs.CubitSessionError as exc:
+		return json.dumps(_error_payload("rpc", str(exc)))
+	return json.dumps({
+		"status": "ok",
+		"mode": "headless_persistent",
+		"gui_started": False,
+		"commands": cmds,
+		"result": result,
+		"summary": _probe_summary_safe(sess),
+	}, indent=2)
 
 
 # ============================================================
-# Cubit Viewer Session tools (OCP-inspired persistent daemon)
+# Persistent headless Cubit session tools
 # ============================================================
 #
-# Design note (2026-04-19): these tools drive a long-lived Cubit GUI
-# via a JSON-RPC daemon running under Cubit's bundled Python 3.10.
+# These tools drive a long-lived batch/nographics Cubit process via a
+# JSON-RPC daemon running under Cubit's bundled Python.
 # Launch cost is paid once (~0.7s init); subsequent commands are
 # <1 ms. The daemon is auto-discovered via `find_cubit_install()`
 # (env > registry > glob), so there is no hardcoded version path.
@@ -2590,18 +2469,20 @@ def _error_payload(stage: str, message: str, *, kind: str | None = None,
     """Cubit-flavored wrapper over the shared error contract."""
     from ..common.server_hardening import error_payload
     log = _session_log_pointer()
-    return error_payload(
+    payload = error_payload(
         stage, message, kind=kind, hint=hint,
         environment_needles=_ENVIRONMENT_ERROR_NEEDLES,
         log=(f"{log} (bootstrap.log / cubit_stderr.log / "
              "startup_error.txt hold the full record)") if log else None,
     )
+    payload["gui_started"] = False
+    return payload
 
 
 def _cubit_session_or_error():
     """Lazy-init the singleton; return (session, None) or (None, err_json)."""
     try:
-        sess = _cs.CubitSession.get()
+        sess = _cs.CubitSession.get(mode="batch")
         sess.ensure_started()
         return sess, None
     except _cs.CubitSessionError as e:
@@ -2636,9 +2517,8 @@ def _cubit_path_dispatch(path: Path) -> str:
 @mcp.tool()
 def cubit_show(path: str = "", extra_commands: list = None) -> str:
 	"""
-	Load a file into the **persistent Cubit viewer** and optionally run
-	follow-up commands. First call launches the daemon + Cubit GUI;
-	subsequent calls reuse the session (sub-second command cycles).
+	Load a file into the persistent headless Cubit session and optionally
+	run follow-up commands. No Cubit GUI window is opened.
 
 	Supported inputs: .jou (playback), .py (play — Cubit-side Python),
 	.step/.stp (import step), .brep (import acis),
@@ -2678,7 +2558,11 @@ def cubit_show(path: str = "", extra_commands: list = None) -> str:
 		r = sess.call("cmd", cmds)
 	except _cs.CubitSessionError as e:
 		return json.dumps(_error_payload("rpc", str(e)))
-	return json.dumps(r, indent=2)
+	return json.dumps({
+		"status": "ok", "mode": "headless_persistent",
+		"gui_started": False, "result": r,
+		"summary": _probe_summary_safe(sess),
+	}, indent=2)
 
 
 def _probe_summary_safe(sess) -> dict:
@@ -2709,11 +2593,10 @@ def _state_delta(before: dict, after: dict) -> dict:
 @mcp.tool()
 def cubit_exec(commands: list) -> str:
 	"""
-	Send arbitrary Cubit commands to the persistent viewer session.
+	Send arbitrary Cubit commands to the persistent headless session.
 
 	Use this for incremental modelling / meshing driven by the LLM:
-	each call appends commands to the running Cubit session, which
-	the student can watch live in Cubit's GUI window.
+	each call appends commands to the running batch/nographics session.
 
 	Args:
 	    commands: list of Cubit command strings (one per list item, no
@@ -2776,6 +2659,8 @@ def cubit_exec(commands: list) -> str:
 
 	payload: dict = {
 		"status": "ok" if all_ok else "error",
+		"mode": "headless_persistent",
+		"gui_started": False,
 		"all_ok": all_ok,
 		"executed": len(per_line),
 		"submitted": len(cmd_list),
@@ -2928,46 +2813,25 @@ def cubit_snapshot(out_path: str,
                    width: int = 800,
                    height: int = 600):
 	"""
-	Hardcopy the current Cubit view to a PNG file.
+	Report that interactive Cubit hardcopy is unavailable to MCP callers.
 
-	Use for paper/slide figures from an LLM-driven session, or for
-	a cheap "visual diff" after a command sequence.  GUI mode is
-	required in practice: batch (-nographics) has no rendering window
-	and the daemon reports ok=false with 0 bytes (the written file is
-	verified -- Cubit's rc alone lies for silently-failing hardcopies).
-
-	The captured PNG is returned INLINE as image content (so the model
-	sees the current view directly) in addition to being written to
-	`out_path` for reuse in documents.
+	Cubit 2025.12 hardcopy requires a graphics window. LLM/MCP execution is
+	headless by policy, so this tool fails loudly without starting a GUI.
+	Use exported Gmsh/VTK artifacts for LLM-visible rendering, or capture a
+	human-owned Cubit GUI outside MCP.
 
 	Args:
-	    out_path: PNG output path (absolute or relative to project root).
-	    width, height: ACCEPTED BUT IGNORED (reported back as
-	        `requested_size_ignored`): the `hardcopy ... window w h`
-	        variant writes 0-byte files in GUI mode (measured Cubit
-	        2025.12), so the image renders at the current
-	        graphics-window size.
+	    out_path: retained for API compatibility; no file is written.
+	    width, height: retained for API compatibility and ignored.
 	"""
-	from pathlib import Path as _P
-	from mcp.server.fastmcp import Image as _Image
-	sess, err = _cubit_session_or_error()
-	if err is not None:
-		return err
-	p = _P(out_path)
-	if not p.is_absolute():
-		p = PROJECT_ROOT / p
-	abs_path = str(p.resolve()).replace("\\", "/")
-	try:
-		r = sess.call("snapshot", [abs_path, int(width), int(height)])
-	except _cs.CubitSessionError as e:
-		return json.dumps(_error_payload("rpc", str(e)))
-	result_json = json.dumps(r, indent=2)
-	png = _P(abs_path)
-	if r.get("ok") and png.is_file() and png.stat().st_size > 0:
-		# Inline image + the JSON record (MathWorks figure-capture
-		# pattern: the model sees the view, nothing to chase on disk).
-		return [_Image(path=str(png)), result_json]
-	return result_json
+	del out_path, width, height
+	return json.dumps({
+		"status": "error", "stage": "policy", "kind": "policy",
+		"error": ("Cubit snapshot requires a graphics window, but LLM/MCP "
+		          "Cubit execution is headless-only."),
+		"gui_started": False,
+		"alternative": "Render an exported Gmsh or VTK artifact.",
+	}, indent=2)
 
 
 @mcp.tool()
@@ -3075,7 +2939,8 @@ def cubit_doctor() -> str:
 		                    "detail": "cubit-mesh-export not installed"}
 
 	# --- 4. Daemon state --------------------------------------------------
-	daemon = {"alive": False, "mode": None, "pid": None}
+	daemon = {"alive": False, "mode": None, "pid": None,
+	          "gui_started": False}
 	if _cs._SINGLETON is not None:
 		daemon["alive"] = _cs._SINGLETON.is_alive()
 		daemon["owned"] = _cs._SINGLETON._owned
@@ -3204,6 +3069,8 @@ def cubit_session_status() -> str:
 	}
 	if _cs._SINGLETON is not None:
 		sess = _cs._SINGLETON
+		status["execution_mode"] = sess._mode
+		status["gui_started"] = sess._mode == "gui"
 		status["owned"] = sess._owned
 		status["drop_dir"] = (str(sess._drop_dir)
 		                      if sess._drop_dir is not None else None)
@@ -3212,14 +3079,14 @@ def cubit_session_status() -> str:
 		status["alive"] = _cs._SINGLETON.is_alive()
 		if _cs._SINGLETON._proc is not None:
 			status["pid"] = _cs._SINGLETON._proc.pid
-			status["mode"] = "owned"
+			status["ownership"] = "owned"
 		elif _cs._SINGLETON._drop_dir is not None:
 			# Phase-1 attached: read PID from pid.lock
 			pid_file = _cs._SINGLETON._drop_dir / "pid.lock"
 			if pid_file.exists():
 				try:
 					status["pid"] = int(pid_file.read_text(encoding="utf-8").strip())
-					status["mode"] = "attached"
+					status["ownership"] = "attached"
 				except (OSError, ValueError):
 					pass
 		status["ready_info"] = _cs._SINGLETON._ready_info
@@ -3228,7 +3095,7 @@ def cubit_session_status() -> str:
 
 @mcp.tool()
 def cubit_session_shutdown() -> str:
-	"""Stop the persistent Cubit daemon. Next `cubit_show` relaunches.
+	"""Stop the persistent headless Cubit daemon. Next call relaunches it.
 
 	This is the EXPLICIT stop path: it also stops a daemon started by
 	another process (e.g. a hung session that recovery deliberately
@@ -3449,7 +3316,8 @@ def cubit_mesh_diagnose() -> str:
 def cubit_suggest_next(goal: str = "mesh") -> str:
 	"""Suggest concrete next Cubit commands based on the current state.
 
-	Inspects the live session (via `probe summary` + per-volume info) and
+	Inspects the persistent headless session (via `probe summary` and
+	per-volume info) and
 	proposes 2–5 commands the LLM (or user) can execute next to progress
 	toward the goal. Rule-based, not model-based — fast, predictable,
 	and independent of external LLMs.
@@ -3519,7 +3387,6 @@ def cubit_suggest_next(goal: str = "mesh") -> str:
 		add("list volume all", "Print geometry summary.")
 		add("list hex in volume all", "Print mesh counts per volume.")
 		add("quality volume all", "Mesh quality metrics.")
-		add("draw volume all", "Force a redraw if GUI out of sync.")
 	elif g == "refine":
 		add("refine volume all numsplit 1", "Uniform 1-level refine (~8× cells).")
 		add("smooth volume all", "Laplace smoothing to improve quality.")
@@ -3914,12 +3781,12 @@ def _run_batch(step_path: str | None, commands: list[str],
 
 	Starting state options (mutually exclusive):
 	  * `cub5_path` — open a .cub5 snapshot (used by `cubit_exec_safely`
-	    to seed the batch with the current live GUI state).
+	    to seed the batch with the current persistent-session state).
 	  * `step_path` — import a STEP file.
 	  * neither — start from empty.
 
 	Then run `commands`, probe state, tear down. Completely isolated
-	from the live GUI singleton.
+	from the persistent headless singleton.
 	"""
 	sess = _cs.CubitSession(mode="batch")
 	try:
@@ -5413,17 +5280,17 @@ def cubit_batch_try(commands: list, step_path: str = "",
                      timeout_s: int = 300) -> str:
 	"""Dry-run a recipe in a fresh headless Cubit subprocess.
 
-	Launches `coreform_cubit.exe` in batch / nographics / nojournal
+	Launches `coreform_cubit.com` in batch / nographics / nojournal
 	mode, optionally imports `step_path`, runs `commands` in order,
 	probes final geometry/mesh counts, and tears down. Completely
-	isolated from the live GUI session (`cubit_exec`).
+	isolated from the persistent headless session (`cubit_exec`).
 
 	Intended flow:
 	  1. AI proposes a recipe (e.g., `volume all scheme sweep` + `mesh ...`)
 	  2. AI calls `cubit_batch_try(step, recipe)` to verify it actually
 	     produces the expected element counts.
-	  3. If it works, AI calls `cubit_exec(recipe)` to replay in the live
-	     GUI window so the user can see the result.
+	  3. If it works, AI calls `cubit_exec(recipe)` to apply it to the
+	     persistent headless session.
 
 	Args:
 	    commands: list of Cubit command strings to run after import.
@@ -5518,10 +5385,10 @@ def _geom_split_recipe(summary: dict) -> list[str]:
 def cubit_mesh_auto(step_path: str = "",
                     target_size: float = 1.0,
                     prefer: str = "hex",
-                    commit_to_gui: bool = True,
+                    apply_to_session: bool = True,
                     timeout_s: int = 600) -> str:
 	"""Find a working mesh recipe by trying a scheme ladder in batch,
-	then optionally replay the winning recipe in the live GUI session.
+	then optionally replay the winner in the persistent headless session.
 
 	Ladder:
 	  1. scheme auto       (hope for the best)
@@ -5530,26 +5397,26 @@ def cubit_mesh_auto(step_path: str = "",
 	  4. scheme tetmesh    (guaranteed fallback, tet only)
 
 	Each rung is executed in a fresh headless Cubit (no GUI pollution,
-	no state entanglement with the live session). The first rung that
+	no state entanglement with the persistent session). The first rung that
 	produces >0 elements with the preferred family is the winner.
-	When `commit_to_gui=True`, the winning recipe is replayed via the
-	live GUI `CubitSession` so the user sees the mesh build live.
+	When `apply_to_session` is true, the winner is applied to the persistent
+	headless session; no Cubit window is opened.
 
 	Args:
 	    step_path: STEP file to import in each batch. Empty → caller
-	        has already imported into the GUI session, recipe is
+	        has already imported into the persistent session, recipe is
 	        validated against THAT state by rewinding with delete mesh
-	        + new scheme. If step_path empty, `commit_to_gui` also
+	        + new scheme. If step_path empty, `apply_to_session` also
 	        skips the re-import (just delete mesh + run winning recipe).
 	    target_size: mesh size command target. Passed as
 	        `volume all size <target_size>` before each scheme.
 	    prefer: "hex" (require hex>0 to accept) or "any" (any element).
-	    commit_to_gui: replay winning recipe in the live GUI session.
+	    apply_to_session: apply the winner to the
+	        persistent headless session.
 	    timeout_s: per-ladder-rung timeout.
 
 	Returns structured report: which schemes tried, element counts per
-	attempt, chosen recipe, and what the GUI session looks like after
-	replay (if commit_to_gui).
+	    attempt, chosen recipe, and the headless session state after replay.
 	"""
 	prefer = (prefer or "hex").strip().lower()
 	if prefer not in ("hex", "any"):
@@ -5612,43 +5479,51 @@ def cubit_mesh_auto(step_path: str = "",
 			            "cubit_web_docs(query='sweep complex geometry', source='cubit_forum')."),
 		}, indent=2)
 
-	# Replay the winning recipe in the live GUI session
-	gui_report: dict = {"skipped": True}
-	if commit_to_gui:
+	# Replay the winning recipe in the persistent headless session.
+	session_report: dict = {"skipped": True, "gui_started": False}
+	if apply_to_session:
 		sess, err = _cubit_session_or_error()
 		if err is not None:
-			gui_report = {"status": "error", "note": "no live GUI session; caller must replay manually",
-			              "detail": json.loads(err)}
+			session_report = {
+				"status": "error", "gui_started": False,
+				"note": "persistent headless session unavailable",
+				"detail": json.loads(err),
+			}
 		else:
-			# If caller provided a step_path, import it so GUI mirrors batch state.
-			gui_cmds: list[str] = []
+			# If supplied, import the STEP so the persistent state mirrors the trial.
+			session_cmds: list[str] = []
 			if step_path:
 				step_fwd = str(step_path).replace("\\", "/")
-				gui_cmds.append(f'reset')
-				gui_cmds.append(f'import step "{step_fwd}"')
-			gui_cmds.append("delete mesh")
-			gui_cmds.extend(winner["recipe"])
+				session_cmds.append("reset")
+				session_cmds.append(f'import step "{step_fwd}"')
+			session_cmds.append("delete mesh")
+			session_cmds.extend(winner["recipe"])
 			try:
-				rr = sess.call("cmd", gui_cmds, timeout_s=timeout_s)
+				rr = sess.call("cmd", session_cmds, timeout_s=timeout_s)
 			except _cs.CubitSessionError as e:
-				gui_report = {"status": "error", "stage": "gui_rpc", "error": str(e)}
+				session_report = {
+					"status": "error", "stage": "headless_rpc",
+					"error": str(e), "gui_started": False,
+				}
 			else:
 				per_line = rr.get("result", [])
 				try:
 					smy = sess.call("probe", ["summary"], timeout_s=30).get("result", {})
 				except _cs.CubitSessionError:
 					smy = {}
-				gui_report = {
+				session_report = {
 					"status": "ok" if all(s.get("ok") for s in per_line) else "error",
 					"summary": smy,
-					"replayed": gui_cmds,
+					"replayed": session_cmds,
+					"gui_started": False,
 				}
 
 	return json.dumps({
 		"status": "ok",
 		"winner": winner,
 		"attempts": attempts,
-		"gui": gui_report,
+		"session": session_report,
+		"gui_started": False,
 	}, indent=2)
 
 
@@ -5746,10 +5621,10 @@ def cubit_mesh_race(step_path: str,
                      recipes: list,
                      prefer: str = "hex",
                      max_concurrent: int = 4,
-                     commit_to_gui: bool = True,
+                     apply_to_session: bool = True,
                      timeout_s: int = 600) -> str:
-	"""Race N recipes in parallel batch Cubits, replay the first/best
-	winner in the live GUI.
+	"""Race N recipes in parallel batch Cubits, then optionally apply the
+	first acceptable winner to the persistent headless session.
 
 	Each `recipes[i]` is a dict:
 	    {"name": "<label>", "cmds": ["volume all size 0.5", "..."],
@@ -5761,7 +5636,7 @@ def cubit_mesh_race(step_path: str,
 	(hex>0 if `prefer='hex'`, any element if `prefer='any'`) is the
 	winner; remaining processes are not cancelled (Cubit batch lives
 	~30 s anyway), but their results aren't replayed. After the
-	winner is chosen, replays it on the live GUI session.
+	winner is chosen, it can be replayed in the headless session.
 
 	Use this when you want to parameter-sweep — e.g., "try fillet
 	radii 0.2 / 0.5 / 1.0 in parallel, ship whichever meshes
@@ -5773,7 +5648,8 @@ def cubit_mesh_race(step_path: str,
 	    recipes: list of {name, cmds} dicts.
 	    prefer: "hex" or "any".
 	    max_concurrent: pool size (default 4 — safe for 16 GB RAM).
-	    commit_to_gui: replay winner in live GUI.
+	    apply_to_session: replay the winner in the
+	        persistent headless session.
 	    timeout_s: per-batch timeout.
 	"""
 	import concurrent.futures as _cf
@@ -5824,35 +5700,40 @@ def cubit_mesh_race(step_path: str,
 			"results": results,
 		}, indent=2)
 
-	gui_report: dict = {"skipped": True}
-	if commit_to_gui:
+	session_report: dict = {"skipped": True, "gui_started": False}
+	if apply_to_session:
 		sess, err = _cubit_session_or_error()
 		if err is not None:
-			gui_report = {"status": "error", "note": "no live GUI session",
-			              "detail": json.loads(err)}
+			session_report = {
+				"status": "error", "note": "no headless session",
+				"detail": json.loads(err), "gui_started": False,
+			}
 		else:
 			step_fwd = str(step_path).replace("\\", "/") if step_path else None
-			gui_cmds = []
+			session_cmds = []
 			if step_fwd:
-				gui_cmds.append("reset")
-				gui_cmds.append(f'import step "{step_fwd}"')
-			gui_cmds.append("delete mesh")
-			gui_cmds.extend(winner["recipe"])
+				session_cmds.append("reset")
+				session_cmds.append(f'import step "{step_fwd}"')
+			session_cmds.append("delete mesh")
+			session_cmds.extend(winner["recipe"])
 			try:
-				rr = sess.call("cmd", gui_cmds, timeout_s=timeout_s)
+				rr = sess.call("cmd", session_cmds, timeout_s=timeout_s)
 			except _cs.CubitSessionError as e:
-				gui_report = {"status": "error", "stage": "gui_rpc",
-				              "error": str(e)}
+				session_report = {
+					"status": "error", "stage": "headless_rpc",
+					"error": str(e), "gui_started": False,
+				}
 			else:
 				per_line = rr.get("result", [])
 				try:
 					smy = sess.call("probe", ["summary"], timeout_s=30).get("result", {})
 				except _cs.CubitSessionError:
 					smy = {}
-				gui_report = {
+				session_report = {
 					"status": "ok" if all(s.get("ok") for s in per_line) else "error",
 					"summary": smy,
-					"replayed": gui_cmds,
+					"replayed": session_cmds,
+					"gui_started": False,
 				}
 
 	return json.dumps({
@@ -5860,7 +5741,8 @@ def cubit_mesh_race(step_path: str,
 		"winner": winner,
 		"results": results,
 		"max_concurrent": max_concurrent,
-		"gui": gui_report,
+		"session": session_report,
+		"gui_started": False,
 	}, indent=2)
 
 
@@ -6136,70 +6018,6 @@ def cubit_curate_learned_recipes(out_module_path: str = "",
 	}, indent=2, ensure_ascii=False)
 
 
-# --- Cubit journal helpers (capture human commands during race) ---
-
-# Commands the AI / our daemon is known to issue around / during a race.
-# These get filtered out of the captured journal so what remains is
-# pure human input.
-_RACE_INTERNAL_PREFIXES = (
-	"save as ", "record journal", "record stop",
-	"probe ", "list ",
-)
-
-
-def _start_journal_capture(sess, journal_path: Path) -> bool:
-	"""Try to start journal recording on the live session. Returns
-	True on success. Cubit syntax: `record journal "<path>" overwrite`.
-	"""
-	fwd = str(journal_path).replace("\\", "/")
-	try:
-		r = sess.call("cmd", [f'record journal "{fwd}" overwrite'],
-		              timeout_s=15)
-	except _cs.CubitSessionError:
-		return False
-	per = r.get("result", [])
-	return bool(per and per[0].get("ok"))
-
-
-def _stop_journal_capture(sess) -> bool:
-	for cmd in ("record stop", "set journal off"):
-		try:
-			r = sess.call("cmd", [cmd], timeout_s=15)
-		except _cs.CubitSessionError:
-			continue
-		per = r.get("result", [])
-		if per and per[0].get("ok"):
-			return True
-	return False
-
-
-def _parse_human_commands(journal_path: Path,
-                            ai_known_cmds: set[str]) -> list[str]:
-	"""Read the journal and return commands that are plausibly human-
-	authored. Filters: skip blank lines, comment lines, lines matching
-	internal/probe/save prefixes, and exact matches to anything the
-	AI/daemon issued during the race.
-	"""
-	if not journal_path.exists():
-		return []
-	try:
-		text = journal_path.read_text(encoding="utf-8", errors="replace")
-	except OSError:
-		return []
-	out: list[str] = []
-	for line in text.splitlines():
-		s = line.strip()
-		if not s or s.startswith("#"):
-			continue
-		low = s.lower()
-		if any(low.startswith(p) for p in _RACE_INTERNAL_PREFIXES):
-			continue
-		if s in ai_known_cmds:
-			continue
-		out.append(s)
-	return out
-
-
 def _run_batch_with_quality(step_path: str | None, commands: list[str],
                               timeout_s: int,
                               cub5_path: str | None = None) -> dict:
@@ -6269,8 +6087,6 @@ def _run_batch_with_quality(step_path: str | None, commands: list[str],
 def _race_review_core(recipes: list,
                         max_wait_s: int,
                         max_concurrent: int,
-                        include_human: bool,
-                        poll_interval_s: float,
                         race_id: str | None = None) -> dict:
 	"""Shared implementation for sync + async review races.
 
@@ -6281,13 +6097,11 @@ def _race_review_core(recipes: list,
 	"""
 	# (Body extracted from cubit_mesh_race_review below — see that for docs.)
 	import concurrent.futures as _cf
-	import threading
 	import time as _t
 
 	if not recipes:
 		return {"status": "error",
 		        "error": "recipes list cannot be empty"}
-
 	sess, err = _cubit_session_or_error()
 	if err is not None:
 		return {"status": "error", "stage": "session",
@@ -6300,50 +6114,9 @@ def _race_review_core(recipes: list,
 	cub5_path = path_or_err
 
 	pre = _probe_summary_safe(sess)
-	pre_h = int(pre.get("hexes", 0) or 0)
-	pre_t = int(pre.get("tets", 0) or 0)
 	t0 = _t.time()
 	if race_id is None:
 		race_id = f"race_{int(t0)}"
-
-	# Capture human commands during the race so we can learn what
-	# they tried (especially when they win). Journaling is started on
-	# the LIVE session only — batch instances are isolated.
-	journal_path = _race_history_dir() / f"{race_id}.jou"
-	journal_started = _start_journal_capture(sess, journal_path)
-
-	human_result: dict | None = None
-	human_lock = threading.Lock()
-	stop_event = threading.Event()
-
-	def _poll_human():
-		nonlocal human_result
-		while not stop_event.is_set():
-			if _t.time() - t0 > max_wait_s:
-				return
-			smy = _probe_summary_safe(sess)
-			h = int(smy.get("hexes", 0) or 0)
-			t = int(smy.get("tets", 0) or 0)
-			if (h > pre_h) or (t > pre_t):
-				try:
-					qual = sess.call("probe", ["quality_summary"], timeout_s=15).get("result", {})
-				except _cs.CubitSessionError:
-					qual = {}
-				with human_lock:
-					if human_result is None:
-						human_result = {
-							"name": "human",
-							"is_ai": False,
-							"hexes": h - pre_h,
-							"tets": t - pre_t,
-							"nodes_total": int(smy.get("nodes", 0) or 0),
-							"summary": smy,
-							"quality": qual,
-							"elapsed_s": round(_t.time() - t0, 2),
-							"recipe": ["(human-authored, not captured)"],
-						}
-				return
-			stop_event.wait(timeout=poll_interval_s)
 
 	def _ai_runner(rec: dict) -> dict:
 		t1 = _t.time()
@@ -6371,43 +6144,16 @@ def _race_review_core(recipes: list,
 
 	ai_results: list[dict] = []
 	with _cf.ThreadPoolExecutor(
-		max_workers=max(2, int(max_concurrent) + 1),
+		max_workers=max(1, int(max_concurrent)),
 	) as pool:
 		futs = [pool.submit(_ai_runner, r) for r in recipes]
-		if include_human:
-			pool.submit(_poll_human)
-		try:
-			_cf.wait(futs, timeout=max_wait_s,
-			          return_when=_cf.ALL_COMPLETED)
-		finally:
-			stop_event.set()
+		_cf.wait(futs, timeout=max_wait_s,
+		         return_when=_cf.ALL_COMPLETED)
 		for f in futs:
 			if f.done():
 				ai_results.append(f.result())
 
-	# Stop journal capture and harvest the human's commands (if any)
-	if journal_started:
-		_stop_journal_capture(sess)
-		ai_known = set()
-		for r in recipes:
-			for c in (r.get("cmds") or []):
-				ai_known.add(str(c).strip())
-		human_cmds = _parse_human_commands(journal_path, ai_known)
-		if human_result is not None and human_cmds:
-			human_result["recipe"] = human_cmds
-		# If human won, persist their winning recipe for future races
-		if human_result is not None and human_cmds:
-			sig = _geometry_signature(pre)
-			_record_learned_recipe(
-				race_id=race_id, sig=sig,
-				recipe=human_cmds,
-				quality=human_result.get("quality") or {},
-				source="human",
-			)
-
 	shortlist: list[dict] = list(ai_results)
-	if include_human and human_result is not None:
-		shortlist.append(human_result)
 
 	valid = [s for s in shortlist if (s.get("hexes", 0) + s.get("tets", 0)) > 0]
 	def _rank_key(s: dict):
@@ -6431,12 +6177,13 @@ def _race_review_core(recipes: list,
 	history = {
 		"race_id": race_id,
 		"state": "done",
+		"execution_mode": "headless_batch",
+		"gui_started": False,
 		"started_at": t0,
 		"finished_at": _t.time(),
 		"checkpoint_label": label,
 		"checkpoint_path": cub5_path,
 		"pre_race_summary": pre,
-		"journal_path": str(journal_path) if journal_started else None,
 		"shortlist": valid,
 		"all_results": shortlist,
 		"recipes_offered": [
@@ -6468,6 +6215,8 @@ def _race_review_core(recipes: list,
 
 	return {
 		"status": "ok",
+		"execution_mode": "headless_batch",
+		"gui_started": False,
 		"race_id": race_id,
 		"history_path": str(history_path),
 		"checkpoint_label": label,
@@ -6497,9 +6246,7 @@ def _race_review_core(recipes: list,
 @mcp.tool()
 def cubit_mesh_race_review_async(recipes: list,
                                    max_wait_s: int = 600,
-                                   max_concurrent: int = 4,
-                                   include_human: bool = True,
-                                   poll_interval_s: float = 5.0) -> str:
+                                   max_concurrent: int = 4) -> str:
 	"""**Background launch** of a race review — returns immediately
 	with a `race_id`, then runs in a daemon thread.
 
@@ -6513,9 +6260,8 @@ def cubit_mesh_race_review_async(recipes: list,
 	with `state` = `"running"` initially, then `"done"` when complete.
 	`cubit_mesh_apply_choice` works as soon as `state == "done"`.
 
-	Same args as `cubit_mesh_race_review`; same shortlist semantics
-	on completion (sorted by min-Jacobian, human work never
-	overwritten).
+	Same args as `cubit_mesh_race_review`; completion is sorted by
+	minimum Jacobian.
 	"""
 	import threading
 	import time as _t
@@ -6531,6 +6277,8 @@ def cubit_mesh_race_review_async(recipes: list,
 	placeholder = {
 		"race_id": race_id,
 		"state": "running",
+		"execution_mode": "headless_batch",
+		"gui_started": False,
 		"started_at": t0,
 		"max_wait_s": max_wait_s,
 		"recipes_offered": [
@@ -6552,8 +6300,6 @@ def cubit_mesh_race_review_async(recipes: list,
 				recipes=recipes,
 				max_wait_s=max_wait_s,
 				max_concurrent=max_concurrent,
-				include_human=include_human,
-				poll_interval_s=poll_interval_s,
 				race_id=race_id,
 			)
 		except Exception as e:  # noqa: BLE001
@@ -6582,9 +6328,8 @@ def cubit_mesh_race_review_async(recipes: list,
 		"note": ("Race is running in the background. Poll with "
 		         f"`cubit_mesh_race_status(race_id='{race_id}')` and "
 		         f"apply the winner with `cubit_mesh_apply_choice("
-		         f"race_id='{race_id}', variant_name=...)`. The user "
-		         f"can keep working in the live Cubit GUI in the "
-		         f"meantime."),
+		         f"race_id='{race_id}', variant_name=...)`. Cubit remains "
+		         f"headless throughout."),
 	}, indent=2, ensure_ascii=False)
 
 
@@ -6613,17 +6358,14 @@ def cubit_mesh_race_status(race_id: str) -> str:
 @mcp.tool()
 def cubit_mesh_race_review(recipes: list,
                              max_wait_s: int = 600,
-                             max_concurrent: int = 4,
-                             include_human: bool = True,
-                             poll_interval_s: float = 5.0) -> str:
-	"""Race N AI variants + observe live human, **wait for all** to
+                             max_concurrent: int = 4) -> str:
+	"""Race N headless AI variants and **wait for all** to
 	finish (or `max_wait_s`), and return a shortlist sorted by quality.
 
 	**Does NOT auto-commit anything.** The caller (typically the human
 	via the AI assistant) inspects the shortlist and picks the variant
 	to apply via `cubit_mesh_apply_choice(race_id, variant_name)`.
-	The human's own work is one of the candidates if they meshed
-	during the window — never silently overwritten.
+	The race contains headless AI candidates only.
 
 	Each variant report carries:
 	  * hex / tet / nodes counts
@@ -6638,11 +6380,6 @@ def cubit_mesh_race_review(recipes: list,
 	    max_wait_s: overall timeout (race ends and shortlist is built
 	        whenever this elapses, even if some variants still running).
 	    max_concurrent: subprocess pool size.
-	    include_human: also poll the live GUI and add 'human' to the
-	        shortlist if a mesh appears.
-	    poll_interval_s: live-GUI poll interval (only used if
-	        include_human=True).
-
 	Returns JSON: race_id (for apply_choice), shortlist sorted by
 	min-Jacobian descending, persisted history path.
 
@@ -6655,8 +6392,6 @@ def cubit_mesh_race_review(recipes: list,
 		recipes=recipes,
 		max_wait_s=max_wait_s,
 		max_concurrent=max_concurrent,
-		include_human=include_human,
-		poll_interval_s=poll_interval_s,
 	)
 	return json.dumps(r, indent=2, ensure_ascii=False)
 
@@ -6664,20 +6399,18 @@ def cubit_mesh_race_review(recipes: list,
 @mcp.tool()
 def cubit_mesh_apply_choice(race_id: str, variant_name: str,
                               timeout_s: int = 600) -> str:
-	"""Apply the human's chosen variant from a previous
+	"""Apply a chosen AI variant from a previous
 	`cubit_mesh_race_review`.
 
 	Looks up the race history by `race_id`, finds the variant by
-	`variant_name`, and replays its recipe in the live Cubit GUI
-	(after `delete mesh` to clear any prior attempt). If the chosen
-	variant is "human", this is a no-op — the human's mesh is
-	already live.
+	`variant_name`, and replays its recipe in the persistent headless session
+	(after `delete mesh` to clear any prior attempt).
 
 	Args:
 	    race_id: identifier returned from `cubit_mesh_race_review`.
 	    variant_name: which entry in the shortlist to apply.
 
-	Returns JSON with the live state after apply.
+	Returns JSON with the headless state after apply.
 	"""
 	history_path = _race_history_dir() / f"{race_id}.json"
 	if not history_path.exists():
@@ -6701,10 +6434,10 @@ def cubit_mesh_apply_choice(race_id: str, variant_name: str,
 
 	if not choice.get("is_ai"):
 		return json.dumps({
-			"status": "ok",
-			"action": "no-op",
-			"reason": "human variant chosen — mesh is already live",
+			"status": "error", "stage": "history", "kind": "policy",
+			"reason": "Only headless AI variants can be applied through MCP.",
 			"choice": choice,
+			"gui_started": False,
 		}, indent=2)
 
 	sess, err = _cubit_session_or_error()
@@ -6716,8 +6449,9 @@ def cubit_mesh_apply_choice(race_id: str, variant_name: str,
 	try:
 		r = sess.call("cmd", cmds, timeout_s=timeout_s)
 	except _cs.CubitSessionError as e:
-		return json.dumps({"status": "error", "stage": "live_rpc",
+		return json.dumps({"status": "error", "stage": "headless_rpc",
 		                   "error": str(e),
+		                   "gui_started": False,
 		                   "checkpoint_label": history.get("checkpoint_label"),
 		                   "note": "rollback via cubit_restore(label=...)"})
 	per_line = r.get("result", [])
@@ -6727,7 +6461,8 @@ def cubit_mesh_apply_choice(race_id: str, variant_name: str,
 		"status": "ok" if all_ok else "error",
 		"variant_name": variant_name,
 		"recipe_replayed": cmds,
-		"live_summary": smy,
+		"session_summary": smy,
+		"gui_started": False,
 		"checkpoint_label": history.get("checkpoint_label"),
 		"note": ("Rollback via cubit_restore(label=...) if you change "
 		         "your mind."),
@@ -6740,7 +6475,7 @@ def cubit_mesh_apply_choice(race_id: str, variant_name: str,
 
 def _generate_smart_recipes(sess, target_size: float,
                               n_variants: int) -> tuple[list[dict], list[str]]:
-	"""Inspect the live Cubit state (volumes, surfaces, schemes,
+	"""Inspect the persistent Cubit state (volumes, surfaces, schemes,
 	mesh state) and emit up to `n_variants` candidate recipes
 	with rationale. Returns (recipes, rationale_lines).
 
@@ -6895,11 +6630,9 @@ def _generate_smart_recipes(sess, target_size: float,
 def cubit_mesh_race_smart_async(target_size: float = 1.0,
                                   n_variants: int = 4,
                                   max_wait_s: int = 600,
-                                  max_concurrent: int = 4,
-                                  poll_interval_s: float = 5.0,
-                                  include_human: bool = True) -> str:
+                                  max_concurrent: int = 4) -> str:
 	"""**Background variant of `cubit_mesh_race_smart`** — AI inspects
-	the live geometry, generates *N* candidate recipes, and races them
+	the persistent geometry, generates *N* candidate recipes, and races them
 	in a daemon thread; returns immediately with `race_id`.
 
 	Recommended workflow when the AI is doing trial-and-error: don't
@@ -6922,8 +6655,6 @@ def cubit_mesh_race_smart_async(target_size: float = 1.0,
 		recipes=recipes,
 		max_wait_s=max_wait_s,
 		max_concurrent=max_concurrent,
-		include_human=include_human,
-		poll_interval_s=poll_interval_s,
 	))
 	r["rationale"] = rationale
 	r["candidates_attempted"] = [
@@ -6938,17 +6669,16 @@ def cubit_mesh_race_smart(target_size: float = 1.0,
                             n_variants: int = 4,
                             prefer: str = "hex",
                             commit_winner: bool = True,
-                            poll_interval_s: float = 5.0,
                             max_wait_s: int = 600,
                             max_concurrent: int = 4) -> str:
-	"""**The flagship workflow**: AI inspects the live Cubit state,
+	"""AI inspects the persistent headless Cubit state,
 	auto-generates *N* candidate mesh recipes (with rationale), and
-	races them against the human via `cubit_mesh_race_with_human`.
+	races them in isolated headless Cubit workers.
 
 	The user just says "AI, mesh this for me" — no need to hand-write
 	recipes. The AI:
 
-	1. Probes the live geometry (`probe summary` + `probe per_volume`).
+	1. Probes the persistent geometry (`probe summary` + `probe per_volume`).
 	2. Detects compound topology (surf/vol ratio), partial-mesh state
 	   (unmeshed volume list), and total complexity.
 	3. Generates *N* recipes via heuristics:
@@ -6958,7 +6688,7 @@ def cubit_mesh_race_smart(target_size: float = 1.0,
 	     - scheme sweep (prismatic best-hex)
 	     - finer / coarser size variants (element-count variety)
 	     - scheme tetmesh (guaranteed fallback)
-	4. Races them in parallel, **while the human keeps working**.
+	4. Races them in parallel headless workers.
 	5. Returns winner + rationale (so the AI can explain WHY this
 	   recipe was chosen).
 
@@ -6967,11 +6697,11 @@ def cubit_mesh_race_smart(target_size: float = 1.0,
 	        variants automatically explore X/2 and 2X.
 	    n_variants: cap on candidates (default 4 — safe for 16 GB RAM).
 	    prefer: "hex" (require hex>0) or "any".
-	    commit_winner: replay winning recipe in live GUI on success.
-	    poll_interval_s / max_wait_s / max_concurrent: race tunables.
+	    commit_winner: replay the winning recipe in the headless session.
+	    max_wait_s / max_concurrent: race tunables.
 
 	Returns JSON: rationale lines (the AI's reasoning) +
-	winner + ai_results + checkpoint_label + gui report.
+	winner + candidate results + checkpoint and apply reports.
 	"""
 	sess, err = _cubit_session_or_error()
 	if err is not None:
@@ -6985,16 +6715,29 @@ def cubit_mesh_race_smart(target_size: float = 1.0,
 			"rationale": rationale,
 		}, indent=2)
 
-	# Race them
-	race_raw = cubit_mesh_race_with_human(
+	# Race only headless AI candidates. Human GUI observation is outside MCP.
+	race = _race_review_core(
 		recipes=recipes,
-		poll_interval_s=poll_interval_s,
 		max_wait_s=max_wait_s,
 		max_concurrent=max_concurrent,
-		commit_winner=commit_winner,
-		prefer=prefer,
 	)
-	race = json.loads(race_raw)
+	if commit_winner and race.get("status") == "ok":
+		valid = [row for row in race.get("shortlist", [])
+		         if row.get("is_ai") and (
+			         int(row.get("hexes", 0) or 0) > 0
+			         if prefer == "hex" else
+			         int(row.get("hexes", 0) or 0)
+			         + int(row.get("tets", 0) or 0) > 0)]
+		if valid:
+			race["apply"] = json.loads(cubit_mesh_apply_choice(
+				race_id=race["race_id"], variant_name=valid[0]["name"],
+			))
+		else:
+			race["apply"] = {
+				"status": "skipped",
+				"reason": f"no candidate satisfied prefer={prefer!r}",
+				"gui_started": False,
+			}
 	# Augment with the candidate-generation rationale so the AI can
 	# explain its choices to the user
 	race["rationale"] = rationale
@@ -7006,220 +6749,11 @@ def cubit_mesh_race_smart(target_size: float = 1.0,
 
 
 # ============================================================
-# Human-vs-AI race: live human + N AI batches, first-to-mesh wins
-# ============================================================
-
-@mcp.tool()
-def cubit_mesh_race_with_human(recipes: list,
-                                 poll_interval_s: float = 5.0,
-                                 max_wait_s: int = 600,
-                                 max_concurrent: int = 4,
-                                 commit_winner: bool = False,
-                                 prefer: str = "hex") -> str:
-	"""**The radia-mcp signature workflow.**
-
-	User: "AI, this geometry won't mesh — try something while I keep
-	working on it."
-
-	Setup:
-	  1. Snapshot the live Cubit GUI state to `.cub5` (reuses
-	     `_auto_checkpoint_live`).
-	  2. Spawn `len(recipes)` batch Cubits (capped to `max_concurrent`),
-	     each opening the snapshot and running its candidate recipe.
-	  3. **Meanwhile poll the live GUI session** every `poll_interval_s`
-	     for hex/tet count. The user is expected to be actively
-	     meshing in their window.
-	  4. **First to produce mesh** (`hex > 0` for `prefer='hex'`,
-	     `(hex+tet) > 0` for `prefer='any'`) wins. Could be the human,
-	     could be one of the AI variants.
-	  5. Remaining batches are killed; live GUI is **not** modified
-	     unless `commit_winner=True` AND the human hadn't already
-	     produced mesh (so we never overwrite the user's work).
-
-	Why this exists: waiting for AI to finish is wasteful when you can
-	just keep working. This races human and AI fairly and respects
-	whoever finishes first — but defaults to "report only" so the
-	user has final say on commit.
-
-	Args:
-	    recipes: list of `{"name": str, "cmds": [str]}`. Each runs from
-	        the live snapshot.
-	    poll_interval_s: how often to ping the live session.
-	    max_wait_s: overall timeout.
-	    max_concurrent: subprocess pool size.
-	    commit_winner: if True AND winner is an AI variant AND the
-	        human hadn't meshed yet, replay the winning recipe in
-	        the live GUI. Default False (just report).
-	    prefer: "hex" or "any".
-
-	Returns JSON: winner identity (human / AI variant name) +
-	per-variant outcome + checkpoint label for revert.
-	"""
-	import concurrent.futures as _cf
-	import threading
-	import time as _t
-
-	if not recipes:
-		return json.dumps({"status": "error",
-		                   "error": "recipes list cannot be empty"})
-
-	sess, err = _cubit_session_or_error()
-	if err is not None:
-		return err
-
-	# 1. Snapshot live state — used as the seed for every AI batch
-	label, path_or_err = _auto_checkpoint_live(sess)
-	if label is None:
-		return json.dumps({"status": "error",
-		                   "stage": "checkpoint",
-		                   "error": path_or_err})
-	cub5_path = path_or_err
-
-	# Snapshot pre-race element counts so "human won" means new mesh
-	# created AFTER we started, not pre-existing mesh from before.
-	pre = _probe_summary_safe(sess)
-	pre_h = int(pre.get("hexes", 0) or 0)
-	pre_t = int(pre.get("tets", 0) or 0)
-
-	winner_event = threading.Event()
-	winner_lock = threading.Lock()
-	winner: dict | None = None  # mutated under lock
-
-	def _claim(payload: dict) -> bool:
-		"""Atomically claim winner. Returns True if this caller wins."""
-		nonlocal winner
-		with winner_lock:
-			if winner is not None:
-				return False
-			winner = payload
-			winner_event.set()
-			return True
-
-	def _human_poller():
-		"""Poll live GUI; if mesh appears, claim 'human'."""
-		deadline = _t.time() + max_wait_s
-		while not winner_event.is_set() and _t.time() < deadline:
-			smy = _probe_summary_safe(sess)
-			h = int(smy.get("hexes", 0) or 0)
-			t = int(smy.get("tets", 0) or 0)
-			ok = (h > pre_h) if prefer == "hex" \
-				else ((h + t) > (pre_h + pre_t))
-			if ok:
-				_claim({
-					"winner": "human",
-					"summary": smy,
-					"new_hex": h - pre_h,
-					"new_tet": t - pre_t,
-				})
-				return
-			# wait, but wake on event for fast cancel
-			winner_event.wait(timeout=poll_interval_s)
-
-	def _ai_runner(rec: dict) -> dict:
-		"""Run one recipe in batch, claim winner if it produces mesh."""
-		name = rec.get("name", "?")
-		cmds = list(rec.get("cmds") or [])
-		if not cmds:
-			return {"name": name, "status": "skip", "error": "empty cmds"}
-		# Bail out early if already won
-		if winner_event.is_set():
-			return {"name": name, "status": "cancelled"}
-		r = _run_batch(step_path=None, commands=cmds,
-		                timeout_s=max_wait_s, cub5_path=cub5_path)
-		smy = r.get("summary", {}) or {}
-		h = int(smy.get("hexes", 0) or 0)
-		t = int(smy.get("tets", 0) or 0)
-		ok = r.get("status") == "ok" and \
-			((h > 0) if prefer == "hex" else ((h + t) > 0))
-		out = {
-			"name": name,
-			"status": r.get("status"),
-			"hexes": h, "tets": t,
-			"nodes": int(smy.get("nodes", 0) or 0),
-			"recipe": cmds,
-		}
-		if ok and not winner_event.is_set():
-			_claim({
-				"winner": "ai",
-				"name": name,
-				"recipe": cmds,
-				"hexes": h, "tets": t,
-				"nodes": int(smy.get("nodes", 0) or 0),
-			})
-		return out
-
-	# Run all in parallel: poller as 1 thread + AI as N threads.
-	with _cf.ThreadPoolExecutor(
-		max_workers=max(2, int(max_concurrent) + 1),
-	) as pool:
-		poller_fut = pool.submit(_human_poller)
-		ai_futs = [pool.submit(_ai_runner, rec) for rec in recipes]
-		# Block until either winner_event is set or all AI futs done
-		_cf.wait(ai_futs + [poller_fut],
-		         timeout=max_wait_s,
-		         return_when=_cf.ALL_COMPLETED)
-		# Make sure poller knows we're done so it stops polling
-		winner_event.set()
-		ai_results = [f.result() for f in ai_futs if f.done()]
-
-	if winner is None:
-		return json.dumps({
-			"status": "timeout",
-			"reason": "neither human nor any AI variant produced mesh",
-			"checkpoint_label": label,
-			"checkpoint_path": cub5_path,
-			"results": ai_results,
-		}, indent=2)
-
-	# Optional commit: only if winner is AI and human hadn't already meshed
-	gui_report: dict = {"skipped": True}
-	if commit_winner and winner.get("winner") == "ai":
-		smy_now = _probe_summary_safe(sess)
-		h_now = int(smy_now.get("hexes", 0) or 0)
-		t_now = int(smy_now.get("tets", 0) or 0)
-		human_did_mesh = (h_now > pre_h) or (t_now > pre_t)
-		if human_did_mesh:
-			gui_report = {
-				"status": "skipped",
-				"reason": ("human already produced mesh while AI was "
-				           "racing — refusing to overwrite"),
-				"live_summary": smy_now,
-			}
-		else:
-			recipe = winner["recipe"]
-			try:
-				rr = sess.call("cmd", recipe, timeout_s=max_wait_s)
-			except _cs.CubitSessionError as e:
-				gui_report = {"status": "error", "stage": "gui_rpc",
-				              "error": str(e)}
-			else:
-				per_line = rr.get("result", [])
-				smy_after = _probe_summary_safe(sess)
-				gui_report = {
-					"status": "ok" if all(s.get("ok") for s in per_line) else "error",
-					"summary": smy_after,
-					"replayed": recipe,
-				}
-
-	return json.dumps({
-		"status": "ok",
-		"winner": winner,
-		"checkpoint_label": label,
-		"checkpoint_path": cub5_path,
-		"pre_race_summary": pre,
-		"ai_results": ai_results,
-		"gui": gui_report,
-		"note": ("Snapshot saved as a .cub5 — revert any AI commit via "
-		         f"`cubit_restore(label='{label}')`."),
-	}, indent=2)
-
-
-# ============================================================
-# Safe live exec: auto-checkpoint + batch dry-run + live apply
+# Safe headless exec: checkpoint + isolated dry-run + session apply
 # ============================================================
 
 def _auto_checkpoint_live(sess) -> tuple[str, str] | tuple[None, str]:
-	"""Create an `autosafe_<timestamp>` .cub5 snapshot of the live
+	"""Create an `autosafe_<timestamp>` .cub5 snapshot of the persistent
 	session. Returns (label, cub5_path) on success, or (None, error_msg).
 
 	Uses the same directory layout as `cubit_checkpoint` so the user can
@@ -7248,24 +6782,23 @@ def _auto_checkpoint_live(sess) -> tuple[str, str] | tuple[None, str]:
 
 @mcp.tool()
 def cubit_exec_safely(commands: list, timeout_s: int = 600) -> str:
-	"""Execute commands against the live GUI **with a pre-save and a
-	batch dry-run as safety gates**.
+	"""Execute commands against the persistent headless session with a
+	checkpoint and an isolated batch dry-run as safety gates.
 
 	Workflow:
-	  1. **Auto-checkpoint** the current live GUI session to
+	  1. **Auto-checkpoint** the current headless session to
 	     `_autosafe_<timestamp>.cub5`.
 	  2. **Batch dry-run**: spawn a fresh headless Cubit, open the
 	     cub5, run the commands, check for errors.
-	  3. If batch passes cleanly → **reflect to live GUI** via
-	     `cubit_exec`. User watches the successful recipe execute in
-	     their real window.
-	  4. If batch fails → **live GUI untouched**; return the error
+	  3. If batch passes cleanly, apply it to the persistent session.
+	  4. If batch fails, leave the persistent session untouched and return
+	     the error
 	     and the checkpoint label so the user stays in control.
 	  5. Label is returned regardless, so the user can later
 	     `cubit_restore(label)` to roll back (e.g., if they don't like
 	     how the mesh looks even after a successful apply).
 
-	Use this for any risky / destructive operation on a live model the
+	Use this for any risky / destructive operation on a persistent model the
 	user has been building (mesh scheme changes, boolean ops, webcut).
 	For read-only queries (probe, list, quality) use `cubit_exec`
 	directly — the safety overhead is wasteful.
@@ -7273,13 +6806,13 @@ def cubit_exec_safely(commands: list, timeout_s: int = 600) -> str:
 	Args:
 	    commands: list of Cubit command strings.
 	    timeout_s: per-rung timeout (checkpoint save + batch open +
-	        commands + live apply).
+	        commands + persistent-session apply).
 
 	Returns JSON with:
 	  - `checkpoint_label` / `checkpoint_path` — always present
 	  - `batch` — dry-run report (per_line, summary, ok/error)
-	  - `live` — live apply report (only if batch passed)
-	  - `applied_to_gui` — true iff the live session was modified
+	  - `session` — persistent-session report (only if batch passed)
+	  - `applied_to_session` — true iff that session was modified
 	"""
 	if not commands:
 		return json.dumps({"status": "error",
@@ -7290,7 +6823,7 @@ def cubit_exec_safely(commands: list, timeout_s: int = 600) -> str:
 	if err is not None:
 		return err
 
-	# 1. checkpoint live
+	# 1. Checkpoint the persistent headless session.
 	label, path_or_err = _auto_checkpoint_live(sess)
 	if label is None:
 		return json.dumps({"status": "error", "stage": "checkpoint",
@@ -7303,29 +6836,31 @@ def cubit_exec_safely(commands: list, timeout_s: int = 600) -> str:
 
 	payload: dict = {
 		"status": "ok",
+		"mode": "headless_persistent",
+		"gui_started": False,
 		"checkpoint_label": label,
 		"checkpoint_path": cub5_path,
 		"batch": batch,
-		"applied_to_gui": False,
+		"applied_to_session": False,
 	}
 
 	if batch.get("status") != "ok":
 		payload["status"] = "error"
 		payload["stage"] = "batch"
-		payload["note"] = ("Batch dry-run failed — live GUI NOT touched. "
+		payload["note"] = ("Batch dry-run failed; persistent session untouched. "
 		                   "Inspect `batch` for the failing command, fix, "
 		                   "and retry. Rollback with "
 		                   f"`cubit_restore(label='{label}')` if needed.")
 		return json.dumps(payload, indent=2)
 
-	# 3. batch passed → reflect to live
+	# 3. Batch passed: apply to the persistent headless session.
 	try:
 		r = sess.call("cmd", cmd_list, timeout_s=timeout_s)
 	except _cs.CubitSessionError as e:
 		payload["status"] = "error"
-		payload["stage"] = "live_rpc"
-		payload["live_error"] = str(e)
-		payload["note"] = ("Batch passed but live RPC failed. "
+		payload["stage"] = "headless_rpc"
+		payload["session_error"] = str(e)
+		payload["note"] = ("Batch passed but persistent-session RPC failed. "
 		                   f"Rollback: `cubit_restore(label='{label}')`.")
 		return json.dumps(payload, indent=2)
 
@@ -7335,16 +6870,16 @@ def cubit_exec_safely(commands: list, timeout_s: int = 600) -> str:
 		smy = sess.call("probe", ["summary"], timeout_s=30).get("result", {})
 	except _cs.CubitSessionError:
 		smy = {}
-	payload["live"] = {
+	payload["session"] = {
 		"status": "ok" if all_ok else "error",
 		"per_line": per_line,
 		"summary": smy,
 	}
-	payload["applied_to_gui"] = True
+	payload["applied_to_session"] = True
 	if not all_ok:
 		payload["status"] = "error"
-		payload["stage"] = "live_mid"
-		payload["note"] = ("Live exec partially failed (batch had passed). "
+		payload["stage"] = "headless_mid"
+		payload["note"] = ("Persistent-session exec partially failed. "
 		                   "Cubit state is now mixed; consider rollback via "
 		                   f"`cubit_restore(label='{label}')`.")
 	return json.dumps(payload, indent=2)
@@ -7785,13 +7320,12 @@ from ..common.server_hardening import (
 	install_call_log as _install_call_log_common,
 )
 
-# Tools that execute commands in (or overwrite / stop) the live session.
+# Tools that execute commands in (or overwrite / stop) the headless session.
 _DESTRUCTIVE_TOOLS = {
-	"cubit_exec", "cubit_exec_safely", "cubit_show", "open_in_cubit",
+	"cubit_exec", "cubit_exec_safely", "cubit_show", "cubit_load",
 	"cubit_restore", "cubit_session_shutdown", "cubit_mesh_apply_choice",
-	"cubit_mesh_race_with_human",
 }
-# Tools that create/refresh files on disk but leave the live session alone.
+# Tools that create/refresh files on disk but leave the session alone.
 _WRITING_TOOLS = {
 	"cubit_checkpoint", "cubit_snapshot", "cubit_batch_try",
 	"cubit_mesh_auto", "cubit_mesh_race", "cubit_mesh_race_smart",
@@ -7871,7 +7405,7 @@ def _maybe_eager_warmup() -> None:
 
 	def _warm():
 		try:
-			_cs.CubitSession.get().ensure_started()
+			_cs.CubitSession.get(mode="batch").ensure_started()
 		except Exception as exc:
 			print(f"[cubit eager warmup] {type(exc).__name__}: {exc}",
 			      file=sys.stderr)

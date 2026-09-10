@@ -96,6 +96,16 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 - Manuscript folders contain generated `.bbl` only, never local `.bib` copies.
   Use `bibliography_make_bbl`, regenerate after changes, and check citations.
 
+### LLM Cubit Headless Execution
+
+- Every Cubit operation initiated through an LLM or MCP server runs in
+  `-batch -nographics` mode and must report that no persistent GUI was started.
+- LLM tools must never launch or attach to `coreform_cubit.exe`, open a Cubit
+  window, or fall back from the synchronous `coreform_cubit.com` console to the
+  GUI launcher. Missing headless support fails loudly.
+- Interactive Cubit GUI use remains a human-owned workflow outside MCP. LLM
+  results are inspected through saved mesh, image, log, and result artifacts.
+
 ### MATLAB And Simulink
 
 - Use MathWorks' official MATLAB MCP Server and Simulink Agentic Toolkit.

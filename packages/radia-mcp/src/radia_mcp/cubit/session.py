@@ -6,18 +6,18 @@ This module is version-agnostic: stdlib only, works on any Python
 
 Two transport modes share the same public API (call/ping/shutdown):
 
-    mode="gui"    (DEFAULT, Plan A — 2026-04-19 file-drop bootstrap)
+    mode="batch"  (DEFAULT for MCP/LLM execution)
+        ─ Launches Cubit's bundled Python with daemon.py
+        ─ Client ↔ Daemon communicate via line-delimited JSON-RPC on
+          stdin/stdout of the subprocess
+        ─ No GUI, no user interaction; pure headless
+
+    mode="gui"    (legacy/manual viewer integration only)
         ─ Launches `coreform_cubit.exe -nojournal bootstrap.py`
         ─ Bootstrap installs a QTimer inside Cubit's Qt event loop
         ─ Client ↔ Bootstrap communicate via atomically-renamed JSON
           files in a per-session drop directory (no sockets)
         ─ Cubit GUI window is live & user-interactive throughout
-
-    mode="batch"  (legacy, CI/scripting)
-        ─ Launches Cubit's bundled Python 3.10 with daemon.py
-        ─ Client ↔ Daemon communicate via line-delimited JSON-RPC on
-          stdin/stdout of the subprocess
-        ─ No GUI, no user interaction; pure headless
 
 Both modes preserve a persistent Cubit session across many client calls
 (~2 s cold start amortized) — launching per-call would be prohibitively
@@ -25,7 +25,7 @@ slow. A process-wide singleton (`CubitSession.get()`) holds the handle.
 
 Protocol version:
     v1 — stdio JSON-RPC (daemon.py)
-    v2 — file drop JSON-RPC (bootstrap.py, this module default)
+    v2 — file drop JSON-RPC (bootstrap.py, legacy GUI mode)
 
 The ready message echoes `protocol_version` for mutual compatibility.
 """
@@ -47,7 +47,7 @@ from pathlib import Path
 from typing import Any
 
 
-PROTOCOL_VERSION = 2  # default (gui mode)
+PROTOCOL_VERSION = 2  # file-drop protocol; stdio batch uses protocol v1
 
 # Startup timeouts (step 2 of 2026-04-21 speed fix).
 # License checkout: RLM server round-trip can take 30+ s on cold start;
@@ -433,6 +433,14 @@ def run_headless_journal(
         }
     console = bin_dir / "coreform_cubit.com"
     if not console.exists():
+        if sys.platform == "win32":
+            return {
+                "status": "error", "stage": "start", "kind": "environment",
+                "error": (
+                    f"Headless Cubit console not found: {console}. "
+                    "Refusing to fall back to the GUI launcher."
+                ),
+            }
         try:
             console = _cubit_gui_exe(bin_dir)
         except FileNotFoundError as exc:
@@ -523,7 +531,7 @@ class CubitSession:
     Thread-safe via an internal lock around each call.
 
     Usage:
-        session = CubitSession.get()   # mode="gui" by default
+        session = CubitSession.get()   # mode="batch" by default
         r = session.call("cmd", ["create brick x 10"])
         if r["ok"]:
             ...
@@ -531,7 +539,7 @@ class CubitSession:
 
     def __init__(self,
                  cubit_bin_dir: Path | None = None,
-                 mode: str = "gui"):
+                 mode: str = "batch"):
         self._bin_dir = cubit_bin_dir or find_cubit_install()
         if self._bin_dir is None:
             raise CubitSessionError(
@@ -773,6 +781,9 @@ class CubitSession:
                     resp = self._call_via_filedrop(req, timeout_s=timeout_s)
                 else:
                     resp = self._call_via_stdio(req, timeout_s=timeout_s)
+                if isinstance(resp, dict):
+                    resp.setdefault("execution_mode", self._mode)
+                    resp.setdefault("gui_started", self._mode == "gui")
                 if op == "cmd":
                     self._record_cmd_history(resp)
                 return resp
@@ -1299,12 +1310,22 @@ class CubitSession:
     # ---- singleton access ----
 
     @classmethod
-    def get(cls, mode: str = "gui") -> "CubitSession":
-        """Return the process-wide singleton, creating on first call."""
+    def get(cls, mode: str = "batch") -> "CubitSession":
+        """Return a mode-consistent process-wide singleton.
+
+        A caller requesting headless execution must never inherit a GUI
+        singleton created elsewhere in the process.
+        """
         global _SINGLETON
         with _SESSION_LOCK:
             if _SINGLETON is None:
                 _SINGLETON = cls(mode=mode)
+            elif _SINGLETON._mode != mode:
+                raise CubitSessionError(
+                    f"Cubit singleton already uses mode={_SINGLETON._mode!r}; "
+                    f"refusing requested mode={mode!r}. Reset it explicitly "
+                    "before changing execution mode."
+                )
             return _SINGLETON
 
     @classmethod

@@ -72,11 +72,11 @@ Then in a session:
 
 | Family | Examples |
 |---|---|
-| **Live session** | `cubit_show`, `cubit_exec`, `cubit_exec_safely`, `cubit_probe`, `cubit_snapshot`, `cubit_session_status`, `cubit_session_shutdown`, `cubit_session_journal` (export the session as a replayable `.jou`) |
+| **Persistent headless session** | `cubit_load`, `cubit_show`, `cubit_exec`, `cubit_exec_safely`, `cubit_probe`, `cubit_session_status`, `cubit_session_shutdown`, `cubit_session_journal` (export the session as a replayable `.jou`) |
 | **Environment** | `cubit_doctor` (one-shot install/license/plugin/daemon diagnosis) |
 | **Checkpoint / restore** | `cubit_checkpoint`, `cubit_restore`, `cubit_list_checkpoints` |
-| **Headless batch** | `cubit_batch_try`, `cubit_mesh_auto`, `open_in_cubit` |
-| **Mesh race (variant exploration)** | `cubit_mesh_race`, `cubit_mesh_race_smart[_async]`, `cubit_mesh_race_review[_async]`, `cubit_mesh_race_status`, `cubit_mesh_apply_choice`, `cubit_mesh_race_with_human`, `cubit_curate_learned_recipes` |
+| **Headless batch** | `cubit_batch_try`, `cubit_mesh_auto` |
+| **Mesh race (variant exploration)** | `cubit_mesh_race`, `cubit_mesh_race_smart[_async]`, `cubit_mesh_race_review[_async]`, `cubit_mesh_race_status`, `cubit_mesh_apply_choice`, `cubit_curate_learned_recipes` |
 | **Export / .vol gates** | `cubit_check_vol` (canonical check-vol), `cubit_vol_inventory`, `cubit_gmsh_v41_inventory`, `cubit_headless_netgen_export_gate`, `cubit_mixed_order_series_gate`, ~30 further scenario gates (`*_gate`) |
 | **Cross-mesher quality** | `cubit_netgen_quality_compare` — one STEP through Netgen tet + Cubit tet + Cubit hex, judged by ONE gmsh minSICN referee (same metric implementation for every route; tet-vs-tet is the directly comparable pair, hex reported as the structured reference) |
 | **Diagnostics** | `cubit_mesh_diagnose`, `cubit_suggest_next`, `cubit_recent_failures`, `cubit_diagnostics_guide` |
@@ -155,19 +155,17 @@ Guess", "Mesh Export Consistency Check Policy"):
 - **Cubit Python API reference** (600+ functions, `api_reference.py`)
 - **In-tree examples** at `src/radia/panels/samples/*.jou`
 
-## Driving policy: headless for agents, GUI only for GUI tests
+## Driving policy: LLM execution is always headless
 
 Lab policy (revised 2026-09-10): agents drive Cubit through **APREPRO + Python on
 the headless/batch route** — `.jou` playback, `cubit_batch_try`,
 `cubit_mesh_auto`, the batch stdio daemon. That is the primary path for
 mesh generation, exports, gates, and validation, and it must never
-require or launch a GUI window. LLM/agent workflows must not call the
-persistent GUI-session tools (`cubit_show`, `cubit_snapshot`) during
-ordinary work. Those tools exist solely for explicitly scoped GUI tests
-of the user-facing toolbar, rendering, or visual-debugging surface
-(`cubit_snapshot` needs the rendering window; batch reports an honest
-`ok=false` there). Outside GUI tests, users open Cubit interactively
-themselves.
+require a GUI window. MCP tools never launch or attach to the Cubit GUI.
+`cubit_show` stages a model in the persistent headless session, while
+`cubit_snapshot` fails explicitly because Cubit hardcopy requires rendering.
+Human GUI use and the single explicitly scoped toolbar/rendering release test
+are separate workflows outside this server.
 
 ## When to use this vs Cubit GUI
 
