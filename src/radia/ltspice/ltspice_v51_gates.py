@@ -7,21 +7,14 @@ from collections.abc import Mapping
 
 from .ltspice_v52_gates import validate_ltspice_v52_identity
 
+from ._artifact_identity import (
+    digest_is_sha256 as _digest,
+    same_generation as _generation,
+)
+
 
 AC_TRANSFER = "ac_transfer_source_phase_db_groupdelay_owner_identity"
 TRANSIENT_EVENT = "transient_event_interpolation_compression_edge_window_owner_identity"
-
-
-def _digest(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
-
-
-def _generation(contract: Mapping[str, object], *names: str) -> bool:
-    generation = str(contract.get("generation_id") or "")
-    return bool(generation) and all(contract.get(name) == generation for name in names)
 
 
 def _finite(values: object, *, length: int | None = None, positive: bool = False) -> bool:

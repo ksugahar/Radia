@@ -4,12 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-
-def _digest(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value
-    return len(text) == 64 and all(char in "0123456789abcdef" for char in text.lower())
+from ._artifact_identity import (
+    digest_is_sha256 as _digest,
+)
 
 
 def _generation_closed(contract: Mapping[str, object], *names: str) -> bool:

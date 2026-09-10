@@ -8,21 +8,14 @@ from collections.abc import Mapping
 
 from .ltspice_v51_gates import validate_ltspice_v51_identity
 
+from ._artifact_identity import (
+    digest_is_sha256 as _digest,
+    same_generation as _generation,
+)
+
 
 STEP = "step_parameter_cartesian_nested_order_measure_row_owner_identity"
 NOISE = "noise_input_output_source_contribution_bandwidth_integration_owner_identity"
-
-
-def _digest(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
-
-
-def _generation(contract: Mapping[str, object], *names: str) -> bool:
-    value = str(contract.get("generation_id") or "")
-    return bool(value) and all(contract.get(name) == value for name in names)
 
 
 def _finite_list(
