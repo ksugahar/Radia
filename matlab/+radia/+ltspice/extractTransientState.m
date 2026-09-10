@@ -17,7 +17,12 @@ if strlength(options.NetlistFile)>0
  instances=regexp(char(netlist),'(?im)^\s*(X\S+)\s+.*$','tokens');
  for k=1:numel(instances)
   instance=string(instances{k}{1});
-  if ~any(contains(lower(names),"("+lower(instance)+":"))
+  escaped=regexptranslate('escape',char(instance));
+  voltagePattern=['^V\(' escaped ':[^)]+\)$'];
+  inductorPattern=['^I\(' escaped ':(?:[^():]+:)*L[^)]*\)$'];
+  carriesState=any(~cellfun(@isempty,regexp(cellstr(names),voltagePattern,'once','ignorecase'))) || ...
+   any(~cellfun(@isempty,regexp(cellstr(names),inductorPattern,'once','ignorecase')));
+  if ~carriesState
    error("radia:ltspice:MissingSubcircuitState", ...
     "No internal state traces were saved for subcircuit instance %s. Add explicit .save traces before interval handoff.",instance);
   end
