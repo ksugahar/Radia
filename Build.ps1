@@ -491,7 +491,11 @@ rem No external NETGEN_SRC_DIR needed.
 rem Use delayed expansion here because this whole block is parsed at once by
 rem cmd.exe.  Percent expansion can otherwise reuse a stale runner-level
 rem CUBIT_DIR even after the set above cleared it on a Cubit-free machine.
-if exist "!CUBIT_DIR!\CubitConfig.cmake" (
+rem Also require the variable itself: an empty CUBIT_DIR turns the path below
+rem into \CubitConfig.cmake and may accidentally match a runner-root file.
+set "BUILD_CUBIT_PLUGIN="
+if defined CUBIT_DIR if exist "!CUBIT_DIR!\CubitConfig.cmake" set "BUILD_CUBIT_PLUGIN=True"
+if /I "!BUILD_CUBIT_PLUGIN!"=="True" (
     if not exist "%CUBIT_PLUGIN_BUILD%" mkdir "%CUBIT_PLUGIN_BUILD%"
     cd /d "%CUBIT_PLUGIN_BUILD%"
     rem build-pyd: force FULL Netgen mode (disable compact_netgen detection)
