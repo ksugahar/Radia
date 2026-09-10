@@ -89,17 +89,17 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 
 ### Shared MCP Runtime Ownership
 
-- Ordinary development uses task-owned environments or process-local source
-  overrides; never change a shared interpreter's editable installs, client
-  configuration or running MCP as a side effect of tests, merge or commit.
-- Long-lived MCPs use an approved, commit-pinned source snapshot. Do not edit,
-  pull, rebase, rebuild or remove a snapshot while any consumer uses it.
+- `radia-mcp` developers may directly edit the canonical editable source used by live MCPs.
+  Experiment and improve there; routine MCP development requires no branch or frozen snapshot.
+- Ordinary development uses task-owned environments for isolated release tests; releases must
+  not repoint shared editable installs or overwrite canonical development work.
+- Source edits are allowed; reloading code or reconnecting clients is a separate operation.
 - Shared runtime changes require explicit deployment scope and one designated
   owner per host/interpreter, including all affected users. Record ownership,
   old/new sources and commits, reason, timestamps and target clients before
   changing anything; competing or unknown ownership means defer, not repair.
-- Stage and test separately; activate only at a coordinated safe boundary.
-  Retain old sources for existing processes and rollback. A package release
+- Reload at safe boundaries, preserving in-flight work and stateful sessions.
+  Retain recoverable changes in Git. A package release
   does not authorize repointing other independently released packages.
 - Report installed registration, fresh-process resolution and each client's
   live loaded source separately, with observation time and target identity.
