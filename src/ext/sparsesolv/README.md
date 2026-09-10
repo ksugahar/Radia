@@ -1,4 +1,4 @@
-# sparsesolv — Compact AMS / COCR for NGSolve
+# sparsesolv — AMS / COCR for NGSolve
 
 [![License: MPL 2.0](https://img.shields.io/badge/License-MPL_2.0-brightgreen.svg)](https://opensource.org/licenses/MPL-2.0)
 
@@ -6,8 +6,11 @@ In-tree C++17 library that adds AMS (auxiliary-space Maxwell) and
 COCR (Conjugate Orthogonal Conjugate Residual) on top of official
 [NGSolve](https://ngsolve.org/), shipped as part of the Radia wheel.
 
-- **Compact AMS** — auxiliary-space preconditioning for HCurl
-  (Hiptmair–Xu 2007). HYPRE-free, header-only C++.
+- **AMS** — auxiliary-space preconditioning for lowest-order HCurl
+  (Hiptmair–Xu 2007).  This is HYPRE's AMS algorithm (Kolev–Vassilevski
+  2009) reimplemented without HYPRE source or dependency, header-only C++.
+  The class is `HypreBasedAMSPreconditioner`; `CompactAMSPreconditioner`
+  remains as a back-compatible alias.
 - **COCR** — short-recurrence Krylov solver for complex-symmetric
   systems (A^T = A) (Sogabe–Zhang 2007).
 - **ICCG** — auto-shift IC(0) + ABMC parallel triangular solve.
@@ -70,10 +73,14 @@ anymore.
 |---|---|---|---|
 | Poisson (H1, real) | H1 | ICCG | memory-efficient, fast |
 | Curl-curl (real) | HCurl `nograds=True` | Shifted ICCG | auto-shift IC handles semi-definite |
-| Magnetostatic, large | HCurl real p=1 | Compact AMS + CG | mesh-independent iteration count |
-| Magnetostatic, nonlinear | HCurl real | Compact AMS + CG | `Update()` between Newton solves |
-| Eddy current, complex, large | HCurl complex p=1 | Compact AMS + COCR | mesh-independent iteration count |
+| Magnetostatic, large | HCurl real p=1 | AMS + CG | handles the curl-curl kernel; slow iteration growth (see Performance) |
+| Magnetostatic, nonlinear | HCurl real p=1 | AMS + CG | `Update()` between Newton solves |
+| Eddy current, complex, large | HCurl complex p=1 | AMS + COCR | handles the curl-curl kernel; slow iteration growth (see Performance) |
 | Eddy current, complex, small/medium | HCurl complex | ICCG (`conjugate=False`) | memory-efficient |
+
+AMS accepts only a lowest-order HCurl space (`order=1, nograds=True`); any
+other space raises `RuntimeError`.  For `order >= 2` use NGSolve's `bddc`
+preconditioner.
 
 ## Performance
 
@@ -93,12 +100,16 @@ timings or condition estimates with this table.
 | mesh1_5.5T  |   331,595 | 249 |  16.2 s |   57.3 |   725 MB |
 | mesh1_20.5T | 1,441,102 | 499 | 222.6 s |  396.2 | 2,933 MB |
 
-ABMC-ICCG (IC only) on mesh1_3.5T diverges (17,178 iters, 438 s,
-residual 2.8e-10) — IC cannot handle the curl-curl null space.
-AMS resolves it via discrete-gradient + Nedelec interpolation
-correction.
+The iteration count is not mesh-independent: it grows from 144 to 499 over a
+9.3-fold increase in DOFs, roughly as N^0.56.  AMS keeps that growth slow
+because it handles the curl-curl kernel, which a plain IC preconditioner
+cannot: ABMC-ICCG (IC only) on mesh1_3.5T does not reach tol = 1e-10
+(residual 2.8e-10 after 17,178 iterations, 438 s).  AMS resolves the kernel
+via discrete-gradient + Nedelec interpolation correction.
 
-Reproduce: `python examples/hiruma/bench_compact_ams.py --all`.
+Reproduce: `python examples/hiruma/bench_compact_ams.py --all`.  The Hiruma
+meshes (`mesh1_*.msh`) are not distributed with the repository (`*.msh` is
+gitignored); place them next to the script before running it.
 
 ## Quick start
 

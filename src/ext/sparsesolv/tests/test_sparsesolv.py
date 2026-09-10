@@ -86,6 +86,43 @@ print("AMS_CONTEXT_GUARD_OK")
     assert "AMS_CONTEXT_GUARD_OK" in result.stdout
 
 
+@pytest.mark.parametrize("factory", [
+    "HypreBasedAMSPreconditioner", "CompactAMSPreconditioner",
+    "ComplexHypreBasedAMSPreconditioner", "ComplexCompactAMSPreconditioner",
+])
+def test_ams_rejects_higher_order_space(factory):
+    """AMS is lowest-order only: an order-2 space must be rejected, not degraded.
+
+    With nograds=True the order-2 discrete gradient still has one column per
+    vertex, so the coordinate-size check cannot tell it from order 1.  Before
+    the structural check the constructor accepted it and CG needed about five
+    times more iterations.  The MATLAB MEX already rejected this space; the C++
+    check makes the Python route fail the same way.
+    """
+    import radia.sparsesolv_ngsolve as native
+    mesh = Mesh(unit_cube.GenerateMesh(maxh=0.5))
+    coords = [[mesh.ngmesh.Points()[i+1][j] for i in range(mesh.nv)] for j in range(3)]
+    for order, accepted in ((1, True), (2, False)):
+        space = HCurl(mesh, order=order, nograds=True)
+        u, v = space.TnT()
+        a = BilinearForm(space)
+        a += (curl(u)*curl(v) + u*v)*dx
+        a.Assemble()
+        grad, _ = space.CreateGradient()
+        assert grad.width == mesh.nv   # a dimension check alone cannot separate the orders
+
+        def make():
+            return getattr(native, factory)(
+                a.mat, grad, freedofs=space.FreeDofs(),
+                coord_x=coords[0], coord_y=coords[1], coord_z=coords[2])
+
+        if accepted:
+            make()
+        else:
+            with pytest.raises(RuntimeError, match="order=1, nograds=True"):
+                make()
+
+
 # ============================================================================
 # Fixtures
 # ============================================================================

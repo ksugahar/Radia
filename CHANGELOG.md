@@ -24,6 +24,17 @@ All notable changes to the `radia` package.  Format: each release lists
   section taxonomies even when each divider is titled with its current section
   rather than ``Outline``.
 
+- Rejected non-lowest-order HCurl input to the SparseSolv AMS preconditioners.
+  The Python constructors accepted an order-2 `nograds=True` system, whose
+  discrete gradient still has one column per vertex, and silently fell back to
+  smoothing on the non-edge dofs (about five times more CG iterations on a unit
+  cube); the MATLAB MEX already rejected it. The C++ constructor now requires
+  every discrete-gradient row to be an edge-vertex pair, so both routes raise.
+
+- Corrected the SparseSolv README: AMS iteration counts are not
+  mesh-independent (144 to 499 over a 9.3-fold DOF increase in its own table),
+  and the Hiruma benchmark meshes are documented as not distributed.
+
 - Changed the presentation outline guidance and check to require the complete
   agenda at each major section transition, with only the section starting now
   distinctly emphasized. A one-time agenda or sparse section card no longer
