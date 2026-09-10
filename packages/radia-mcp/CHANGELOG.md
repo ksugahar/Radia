@@ -7,6 +7,77 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- presentation: 質問スライドは**非表示で残す**という規約を検査に入れた
+  （菅原 2026-09-10「本編から落とした話は質問スライドにする／非表示スライド
+  として残す」）。`presentation_check_qa_backup_slides` は題が `Backup` /
+  `Q&A` / `補足` でも**表示のままなら控えではない**（本番で映る）として
+  `named_but_visible` に分け、`warnings` を返す。名前で数えるだけの検査は
+  消し忘れの枚を「控えが足りている」と報告していた。
+- presentation: `presentation_kishotenketsu_check` の二つ。実デッキから一枚を
+  控えへ移したときに、**転がまとめの枚へ滑り落ちた**（9 点台 → 3.8）ことで
+  同時に露見した。(1) 下端の主張文を**頁番号や所属の飾りから拾っていた** ――
+  研究室の版面は結論帯 (top 0.86) の下に出典行 (0.94)・所属と頁番号 (0.96) を
+  置くので、帯を持たない枚（区切りの枚がまさにそれ）では下端文が「4」に
+  なっていた。下 8 % を飾りとして除く。(2) 不足の言い方を `cannot` 系しか
+  知らず、研究室が実際に書く `no rational model makes ...` を素通りしていた。
+  承が無いと判定されると、転は承より後という規則から転が最後まで落ちる。
+  `no <名詞句> <動詞>` と `neither` を追加。テスト 2 件。
+
+- presentation: `presentation_check_outline_slide` — 話が転じていることと、
+  **聴衆にその転じ目が見えている**ことは別である、という検査（松尾先生、
+  IGTE'26 の査読、2026-09-10:「途中に目次/アウトラインを挟むと分かりやすい。
+  どこまでが現状の問題で、どこからが今回の解決法かを明示する方が聴衆には
+  分かりやすい」）。要は位置で、冒頭に一度だけ読み上げる目次はこの指摘に
+  答えていない ―― 現在地を見失うのは中盤だからである。見るのは三つ: 目次・
+  区切りの枚があるか、**それが転の直前にあるか**、問題の側と解決法の側を
+  両方名指ししているか。境目は `presentation_kishotenketsu_check` の転から
+  取るので、「タイトルは名詞句・主張は下端帯」という研究室の様式のまま使える
+  （`Method` / `Results` という章題を前提にした検査ではこの様式は常に落ちる）。
+  目次の枚は題の語だけでなく、本文がデッキ自身の題を並べているかでも見つける。
+  不合格のときは入れる位置と両側の項目を枚番号つきで返す。あわせて、枚の
+  読み取り（題・下端の主張文・控えの切り出し）を `read_deck` に括り出した:
+  二つ目の定義を書けば、自前の題帯を描くデッキで全枚が無題になる 2026-09-06
+  の穴をもう一度踏むことになる。テスト 6 件。
+
+- presentation: `presentation_kishotenketsu_check` gains the **inspired-by**
+  rule and two fixes the first real deck exposed.  A turn that names the
+  outside idea it borrowed, with a credit, is followed on first hearing --
+  the listener rides an idea they already believe instead of being sold a new
+  one (Sugahara, IGTE'26, 2026-09-06: the mixed Galerkin space is XFEM's
+  composition, ordinary basis and enrichment in one matrix, applied to the
+  Cauer ladder and the SIBC).  The check reads the whole turn slide, not the
+  takeaway, since the source is written in the body, and requires both an
+  attribution phrase and a credit -- an acronym is not a credit.  Fixed with
+  it: a deck that draws its own title band has no title placeholder, so every
+  slide read as untitled, the `Backup` cut never fired, and nine hidden slides
+  joined the arc (hidden slides are now backup whatever they are called); and
+  the turn vocabulary missed the imperative the lab actually writes
+  (`keep`, `mix`, `join`, `enrich`, ...), which located the turn on the
+  summary slide.  The module had no tests; it has eight now.
+- presentation: `presentation_check_text_box_overflow` now counts the
+  mathematics.  python-pptx reads only `a:r` runs, so OMML was zero characters
+  to the estimate and two IGTE'26 slides whose bodies are half equations were
+  reported clean and rendered under the takeaway band.  `m:t` leaves are
+  counted at `math_char_em` (0.6 em), and only a **display** equation's line
+  box is scaled by `tall_math_scale` -- scaling every paragraph that merely
+  contains a `√` reported five clean slides as overflowing.  `char_width_em`
+  drops to 0.48: bold 24 pt measures 0.505 and regular 20 pt body 0.494 or
+  less, and it is bodies that overflow, not titles.  A frame holding nothing
+  but an equation is no longer treated as empty (it used to raise IndexError
+  when it did overflow).
+- presentation: two checks the IGTE'26 deck needed.
+  `presentation_check_text_box_overflow` estimates the wrapped height of
+  every text frame and flags the bodies that cannot fit their box -- the
+  defect that recurred five times there, because the builder shrinks the
+  title and the takeaway to fit but not the body, so the overflow is only
+  visible once the slide is rendered.  `presentation_check_quoted_figure_credit`
+  requires a figure marked `quoted_from` in the deck figure evidence to name
+  its source on the same slide, and reports a credit line whose picture has no
+  such evidence as an unverified claim.
+- doc-convert: `doc_convert_session_font_check` reported a dead typeface as ok because GDI_ERROR reached it as the signed int -1 (Times New Roman, 2026-09-05); `GetFontData` / `GetGlyphOutlineW` now carry their DWORD result type, -1 counts as the error, and a fake-GDI test locks both forms. The module is
+  also a command line (`--repair --if-crashed-within N --log --notify`) for a
+  Task Scheduler task on the fontdrvhost crash event, so the session's faces
+  are reloaded before anyone sees blank text.
 - paper-writing / bibliography: standardize the canonical bibliography name
   on `references.bib`; tests, usage examples, and historical policy text no
   longer expect the withdrawn singular filename.

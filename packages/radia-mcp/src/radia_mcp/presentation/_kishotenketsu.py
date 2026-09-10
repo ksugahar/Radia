@@ -14,6 +14,15 @@ and looks for the four moves rather than for vocabulary:
   転  the turn: a proposal that answers that complaint
   結  evidence for the proposal, its limits, and the summary
 
+The turn is also where the audience most wants to know WHERE THE IDEA CAME
+FROM. A proposal that arrives from nowhere has to be taken on trust; a
+proposal that says "the extended finite element method solves the ordinary
+basis and the enrichment in one matrix, and that is what we borrowed" is
+followed on the first hearing, because the listener already believes the
+borrowed idea. Sugahara asked for this in the IGTE'26 deck on 2026-09-06:
+「inspired ロジックは伝わりやすい」. So the turn is also checked for a named,
+credited outside idea.
+
 What is measured is the SHAPE -- a complaint before the turn, a turn that
 answers it, evidence after it, a close that echoes it -- not whether the words
 match a list. A deck whose turn comes on the last slide, or which never states a
@@ -25,17 +34,42 @@ from __future__ import annotations
 import re
 
 # The complaint: something the current approach cannot do, or does badly.
+# 「no rational model makes ...」は英語としては不足の宣言だが、cannot 系だけを
+# 見ていると素通りする。承が無いと判定されると、転は承より後という規則から
+# 転が最後のまとめ枚まで滑り落ちる（2026-09-10、IGTE'26 で実際に起きた）。
 _COMPLAINT = re.compile(
     r"(?i)\bcannot\b|\bcan not\b|\bfails?\b|\bno[t]? \w+ed\b|\bstops? at\b"
+    r"|\bno\b[^.;!?]{0,48}?\b(?:makes?|produces?|gives?|reach(?:es)?|holds?"
+    r"|covers?|works?|does)\b|\bneither\b"
     r"|\bby hand\b|\bceiling\b|\blimit(?:ation)?s?\b|\bprice\b|\bwrong\b"
     r"|\bmisses\b|\bbreaks?\b|\bnot the\b|できない|限界|欠陥|課題|問題")
 # The turn: an instruction or a resolution, often answering the complaint.
+# The imperative may open ANY sentence of the takeaway, not only the
+# first: "One basis cannot make that slope. Use two, one projected on the
+# other." states the lack and the proposal in one line, and an anchored ^
+# missed it -- the turn then fell through to the summary slide.
 _TURN = re.compile(
-    r"(?i)^(?:do not|use|take|add|replace|instead)\b|\buse both\b"
+    r"(?i)(?:^|(?<=[.;!?] ))(?:do not|use|take|add|replace|instead|keep"
+    r"|mix|combine|join|enrich|project|let|drop|solve)\b|\buse both\b"
     r"|\bcomes out of\b|\bremoves?\b|\bnothing is (?:left to be )?fit"
     r"|\bnothing is fitted\b|\binstead\b|\bwe propose\b|提案|代わりに")
 # Evidence: a takeaway that carries a measured number.
 _NUMBER = re.compile(r"\d+(?:\.\d+)?\s*(?:%|x\b|×|倍)")
+# Where the idea came from: the turn names an outside idea it borrowed.
+_INSPIRED = re.compile(
+    r"(?i)\binspired by\b|\bborrow(?:ed|ing|s)?\b|\bin the spirit of\b"
+    r"|\bafter the \w+ of\b|\badapted from\b|\bfollowing \w+'s\b"
+    r"|\bthe way \w+ does\b|\bas \w+ does\b|\bthis came from\b"
+    r"|\bcame from\b|着想|示唆を得|に倣|に学|由来|ヒント")
+# ...and credits it, so the borrowing is attributable, not a vague gesture.
+# An acronym is NOT a credit: "as XFEM does" names a method, not a source.
+_CREDIT = re.compile(r"\[\d{1,3}\]|\bet al\.|[A-Z][a-z]{2,}(?:'s)?\s+\d{4}"
+                     r"|先生|らの|ら\s*\[")
+
+
+# Below this fraction of the slide height, text is furniture: the citation
+# line, the institution mark, the page number. The takeaway band sits above it.
+FOOTER_FROM = 0.92
 
 
 def _moves(takeaway: str) -> set[str]:
@@ -62,6 +96,61 @@ def _overlap(a: str, b: str) -> float:
     return len(wa & wb) / min(len(wa), len(wb))
 
 
+def read_deck(pptx_path: str, backup_title: str = "Backup"):
+    """Read a deck into per-slide title / takeaway / text, and cut the backup.
+
+    Shared with the outline check, so that "what is the title", "what is the
+    takeaway" and "where does the backup begin" have ONE definition. The title
+    fallback is the reason: a deck that draws its own title band has no title
+    placeholder, `shapes.title` is None, and reading it alone made every slide
+    untitled -- which silently disabled the backup cut on the IGTE'26 deck and
+    let nine hidden slides into the arc (2026-09-06). A second copy of this
+    loop would be a second chance to make that mistake.
+
+    Returns (slides, cut, main): every slide; the index where backup begins;
+    and the content slides with the title card dropped.
+    """
+    from pptx import Presentation
+
+    prs = Presentation(pptx_path)
+    slide_h = float(prs.slide_height or 0)
+    slides = []
+    for i, s in enumerate(prs.slides, 1):
+        # The bottom strip is page furniture -- the footnote line, the
+        # institution mark, the page number. Reading it as the takeaway made a
+        # slide with no takeaway band report its page number as its claim
+        # (IGTE'26, 2026-09-10: the outline slide's takeaway came out as "4").
+        texts = [sh.text_frame.text.strip() for sh in s.shapes
+                 if sh.has_text_frame and sh.text_frame.text.strip()
+                 and not (sh.top is not None and slide_h
+                          and int(sh.top) > FOOTER_FROM * slide_h)]
+        if s.shapes.title is not None:
+            title = s.shapes.title.text.strip()
+        else:
+            # the single-line box highest on the slide is the drawn title band
+            heads = [(int(sh.top), sh.text_frame.text.strip()) for sh in s.shapes
+                     if sh.has_text_frame and sh.text_frame.text.strip()
+                     and sh.top is not None
+                     and int(sh.top) < 0.25 * slide_h
+                     and "\n" not in sh.text_frame.text.strip()]
+            title = min(heads)[1] if heads else ""
+        body = [t for t in texts if t != title]
+        # the takeaway is the lab's bottom banner: the last text block
+        takeaway = body[-1].splitlines()[-1].strip() if body else ""
+        # the inspiration is usually written on the slide, not in the banner
+        hidden = s._element.get("show") == "0"
+        slides.append({"slide": i, "title": title, "takeaway": takeaway,
+                       "text": "\n".join(body), "hidden": hidden})
+
+    # A hidden slide is a backup slide whatever it is called; the title is the
+    # fallback for a deck that answers questions from visible slides.
+    cut = next((k for k, s in enumerate(slides)
+                if s["hidden"] or s["title"].strip() == backup_title),
+               len(slides))
+    main = slides[1:cut] if cut > 1 else slides       # drop the title card
+    return slides, cut, main
+
+
 def presentation_kishotenketsu_check(pptx_path: str,
                                      backup_title: str = "Backup") -> dict:
     """Report whether the deck has a 起承転結 arc, and where it turns.
@@ -70,24 +159,11 @@ def presentation_kishotenketsu_check(pptx_path: str,
                    out; they are answers to questions, not part of the arc.
     """
     try:
-        from pptx import Presentation
+        from pptx import Presentation  # noqa: F401
     except ImportError:
         return {"error": "python-pptx not installed."}
 
-    prs = Presentation(pptx_path)
-    slides = []
-    for i, s in enumerate(prs.slides, 1):
-        title = s.shapes.title.text.strip() if s.shapes.title else ""
-        texts = [sh.text_frame.text.strip() for sh in s.shapes
-                 if sh.has_text_frame and sh.text_frame.text.strip()]
-        body = [t for t in texts if t != title]
-        # the takeaway is the lab's bottom banner: the last text block
-        takeaway = body[-1].splitlines()[-1].strip() if body else ""
-        slides.append({"slide": i, "title": title, "takeaway": takeaway})
-
-    cut = next((k for k, s in enumerate(slides)
-                if s["title"].strip() == backup_title), len(slides))
-    main = slides[1:cut] if cut > 1 else slides       # drop the title card
+    slides, cut, main = read_deck(pptx_path, backup_title)
     if len(main) < 4:
         return {"error": f"only {len(main)} content slides; too few to have an arc."}
 
@@ -138,6 +214,18 @@ def presentation_kishotenketsu_check(pptx_path: str,
         echo = max((_overlap(main[t]["takeaway"], main[-1]["takeaway"])
                     for t in proposals), default=0.0)
 
+    # 転 が「どこから来たか」を名乗っているか。借り物の考えを credit つきで
+    # 名指しすると、聞き手は既に信じている物に相乗りできるので初聴で通る。
+    inspiration = None
+    for k in (arc.get("ten") or []):
+        slide = next(s for s in main if s["slide"] == k)
+        phrase = _INSPIRED.search(slide["text"] or "")
+        credit = _CREDIT.search(slide["text"] or "")
+        if phrase and credit:
+            inspiration = {"slide": k, "phrase": phrase.group(0),
+                           "credit": credit.group(0)}
+            break
+
     checks = {
         "起 exists (setup before any complaint)":
             first_complaint is not None and first_complaint > 0,
@@ -148,6 +236,8 @@ def presentation_kishotenketsu_check(pptx_path: str,
         "結 echoes 転 (the close returns to the proposal)": echo >= 0.15,
         "転 lands in the middle (not the last quarter)":
             turn is not None and turn < len(main) * 0.75,
+        "転 names where the idea came from (inspired-by, credited)":
+            inspiration is not None,
     }
     score = round(10.0 * sum(checks.values()) / len(checks), 1)
 
@@ -166,6 +256,16 @@ def presentation_kishotenketsu_check(pptx_path: str,
         comments.append(
             f"まとめが転に戻っていない（語の重なり {echo:.2f}）。"
             "最後の下端文は提案の言い直しにする。")
+    if turn is not None and inspiration is None:
+        comments.append(
+            "転が「どこから来たか」を言っていない。借りた外の考えを "
+            "inspired by / 着想を得た の形で名指しし、[n] などの出典を"
+            "同じ枚に添えると、提案は初聴で通る。聞き手は既に信じている"
+            "考えに相乗りできるので、新奇さを一から売り込まずに済む。")
+    elif inspiration is not None:
+        comments.append(
+            f"OK   転 {inspiration['slide']} 枚目が出所を名乗っている"
+            f"（「{inspiration['phrase']}」/ {inspiration['credit']}）。")
 
     outline = [
         {"phase": ph, "slides": arc.get(ph, []),
@@ -180,13 +280,16 @@ def presentation_kishotenketsu_check(pptx_path: str,
         "arc": {k: v for k, v in arc.items()},
         "turn_slide": main[turn]["slide"] if turn is not None else None,
         "turn_position": round((turn + 1) / len(main), 2) if turn is not None else None,
+        "turn_inspiration": inspiration,
         "turn_answers_complaint": round(answers, 2),
         "unanswered_complaints": unanswered,
         "close_echoes_turn": round(echo, 2),
         "checks": checks,
         "comments": comments,
         "outline": outline,
-        "hint": "タイトルではなく下端 takeaway で判定する。研究室の規約は"
+        "hint": "転の inspired-by だけは下端文ではなく枚全体の文字を見る"
+                "（出所は本文に書く）。ほかはタイトルではなく下端 takeaway "
+                "で判定する。研究室の規約は"
                 "タイトルを名詞句に限るので、phase キーワード方式は原理的に"
                 "使えない。承→転→結 の形そのものを見る。",
         "source": "起承転結（四段構成）を学会発表に適用。"
