@@ -142,3 +142,9 @@ PowerPointの通常貼り付け受入試験は、画面外の一時プレゼン�
   packageのlauncherや補助関数は必要に応じて同じEXEをsubprocess実行する薄い利用者であり、
   CLIの正本ではない。Web版にnative CLIを移植しない。
 - 仕様、実装、自動試験を同じ変更で更新する。引き継ぎメモだけを規範にしない。
+# Palette semantic acceptance
+
+Every offered key must pass the independent [palette intent contract](PALETTE_INTENT.md)
+and its checked expectations in `palette_intent.json`. Catalogue completeness,
+distinct drawings and TeX round trips alone do not establish the intended meaning.
+Native and Web insertions are checked separately; an unreviewed key fails closed.
