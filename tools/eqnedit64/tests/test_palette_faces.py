@@ -74,10 +74,14 @@ def symbol_table():
 
 
 def owned_code_points():
-    covered = set()
-    for table in TTFont(MATH_FONT)["cmap"].tables:
-        covered |= set(table.cmap.keys())
-    return covered
+    # GDI must not depend on Mac Roman entries or font-linking/code-page
+    # fallbacks. Require coverage in every Windows Unicode subtable; merging
+    # unrelated encodings previously hid U+00B2 and U+00BD on Japanese Windows.
+    with TTFont(MATH_FONT) as font:
+        tables = [set(table.cmap) for table in font["cmap"].tables
+                  if table.platformID == 3 and table.platEncID in (1, 10)]
+    assert tables, "The shipped font has no Windows Unicode cmap"
+    return set.intersection(*tables)
 
 
 def test_every_face_glyph_is_in_the_embedded_math_font():
@@ -94,6 +98,13 @@ def test_every_face_glyph_is_in_the_embedded_math_font():
         % (len(missing),
            ", ".join("U+%04X on %s" % (ord(character), command)
                      for character, command in missing)))
+
+
+def test_mac_only_tab_glyphs_cannot_pass_windows_coverage():
+    # Regression for the false-green union of differently encoded cmaps.
+    covered = owned_code_points()
+    assert not ({0x00B2, 0x00BD} & covered)
+    assert {0x2044, 0x221A, 0x2191} <= covered
 
 
 def test_a_symbol_key_shows_the_character_it_inserts():

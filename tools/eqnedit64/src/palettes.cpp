@@ -283,14 +283,14 @@ std::vector<Palette> build() {
         tpl("dirac", u8"⟨□|□⟩", u8"ブラケット"),
     }});
 
-    p.push_back({u8"分数と根号", u8"½√", 2, {
+    p.push_back({u8"分数と根号", u8"⁄√", 2, {
         tpl("frac", u8"□/□", u8"分数"),
         tpl("slashfrac", u8"□⁄□", u8"スラッシュ分数"),
         tpl("sqrt", u8"√□", u8"平方根"),
         tpl("nthroot", u8"n√□", u8"n 乗根"),
     }});
 
-    p.push_back({u8"上下付き", u8"x²", 3, {
+    p.push_back({u8"上下付き", u8"x↑", 3, {
         tpl("sup", u8"□↑", u8"上付き"),
         tpl("sub", u8"□↓", u8"下付き"),
         tpl("subsup", u8"□↕", u8"上下付き"),

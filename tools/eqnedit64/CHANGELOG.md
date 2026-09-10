@@ -2,6 +2,16 @@
 
 ## 3.1.0 — release candidate
 
+- Restrict palette coverage to Windows Unicode cmaps: Mac Roman entries
+  concealed missing superscript-two and one-half tab glyphs. Replace those
+  tab faces with `x` plus an up arrow and a fraction slash plus a radical.
+  Allocate the ink probe from font metrics instead of a fixed 64px square,
+  and test the physical palette font at 100--400% scaling. Report coverage,
+  physical-face substitution, and absent ink separately. The old coverage
+  check turned red for both tab glyphs before this correction; the focused
+  static suite now passes 25 checks. Japanese Windows acceptance remains a
+  separate release gate, not a conclusion drawn from English Windows CI.
+
 - Fail `--self-test` when the palette is not drawing in the embedded math
   font, naming the face GDI substituted. The cmap check says which character
   would reject Latin Modern Math; this says whether the running binary got it.
