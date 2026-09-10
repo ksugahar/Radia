@@ -1613,6 +1613,1025 @@
       "RUNNING"
     ]
   },
+  "constructor_defaults": {
+    "class_count": 59,
+    "excluded_modules": {
+      "optuna.integration": "Third-party framework callbacks are scoped out-of-scope and discharged by radia_optuna.bridge. optuna.integration also raises on attribute access for any integration whose backend is absent, so recording its defaults would make the oracle depend on optional third-party installs.",
+      "optuna.visualization": "Plotting is scoped out-of-scope; the study is exported and plotted from Python."
+    },
+    "modules": {
+      "optuna": {
+        "Study": {
+          "pruner": {
+            "annotation": "pruners.BasePruner | None",
+            "default_repr": "None",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "sampler": {
+            "annotation": "'samplers.BaseSampler' | None",
+            "default_repr": "None",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        }
+      },
+      "optuna.artifacts": {
+        "Backoff": {
+          "max_delay": {
+            "annotation": "float",
+            "default_repr": "30",
+            "kind": "KEYWORD_ONLY"
+          },
+          "max_retries": {
+            "annotation": "int",
+            "default_repr": "10",
+            "kind": "KEYWORD_ONLY"
+          },
+          "min_delay": {
+            "annotation": "float",
+            "default_repr": "0.1",
+            "kind": "KEYWORD_ONLY"
+          },
+          "multiplier": {
+            "annotation": "float",
+            "default_repr": "2",
+            "kind": "KEYWORD_ONLY"
+          }
+        },
+        "Boto3ArtifactStore": {
+          "avoid_buf_copy": {
+            "annotation": "bool",
+            "default_repr": "False",
+            "kind": "KEYWORD_ONLY"
+          },
+          "client": {
+            "annotation": "S3Client | None",
+            "default_repr": "None",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        },
+        "GCSArtifactStore": {
+          "client": {
+            "annotation": "google.cloud.storage.Client | None",
+            "default_repr": "None",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        }
+      },
+      "optuna.distributions": {
+        "FloatDistribution": {
+          "log": {
+            "annotation": "bool",
+            "default_repr": "False",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "step": {
+            "annotation": "None | float",
+            "default_repr": "None",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        },
+        "IntDistribution": {
+          "log": {
+            "annotation": "bool",
+            "default_repr": "False",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "step": {
+            "annotation": "int",
+            "default_repr": "1",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        },
+        "IntLogUniformDistribution": {
+          "step": {
+            "annotation": "int",
+            "default_repr": "1",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        },
+        "IntUniformDistribution": {
+          "step": {
+            "annotation": "int",
+            "default_repr": "1",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        }
+      },
+      "optuna.importance": {
+        "FanovaImportanceEvaluator": {
+          "max_depth": {
+            "annotation": "int",
+            "default_repr": "64",
+            "kind": "KEYWORD_ONLY"
+          },
+          "n_trees": {
+            "annotation": "int",
+            "default_repr": "64",
+            "kind": "KEYWORD_ONLY"
+          },
+          "seed": {
+            "annotation": "int | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          }
+        },
+        "MeanDecreaseImpurityImportanceEvaluator": {
+          "max_depth": {
+            "annotation": "int",
+            "default_repr": "64",
+            "kind": "KEYWORD_ONLY"
+          },
+          "n_trees": {
+            "annotation": "int",
+            "default_repr": "64",
+            "kind": "KEYWORD_ONLY"
+          },
+          "seed": {
+            "annotation": "int | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          }
+        },
+        "PedAnovaImportanceEvaluator": {
+          "evaluate_on_local": {
+            "annotation": "bool",
+            "default_repr": "True",
+            "kind": "KEYWORD_ONLY"
+          },
+          "region_quantile": {
+            "annotation": "float",
+            "default_repr": "1.0",
+            "kind": "KEYWORD_ONLY"
+          },
+          "target_quantile": {
+            "annotation": "float",
+            "default_repr": "0.1",
+            "kind": "KEYWORD_ONLY"
+          }
+        }
+      },
+      "optuna.pruners": {
+        "HyperbandPruner": {
+          "bootstrap_count": {
+            "annotation": "int",
+            "default_repr": "0",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "max_resource": {
+            "annotation": "str | int",
+            "default_repr": "'auto'",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "min_resource": {
+            "annotation": "int",
+            "default_repr": "1",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "reduction_factor": {
+            "annotation": "int",
+            "default_repr": "3",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        },
+        "MedianPruner": {
+          "interval_steps": {
+            "annotation": "int",
+            "default_repr": "1",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "n_min_trials": {
+            "annotation": "int",
+            "default_repr": "1",
+            "kind": "KEYWORD_ONLY"
+          },
+          "n_startup_trials": {
+            "annotation": "int",
+            "default_repr": "5",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "n_warmup_steps": {
+            "annotation": "int",
+            "default_repr": "0",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        },
+        "PatientPruner": {
+          "min_delta": {
+            "annotation": "float",
+            "default_repr": "0.0",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        },
+        "PercentilePruner": {
+          "interval_steps": {
+            "annotation": "int",
+            "default_repr": "1",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "n_min_trials": {
+            "annotation": "int",
+            "default_repr": "1",
+            "kind": "KEYWORD_ONLY"
+          },
+          "n_startup_trials": {
+            "annotation": "int",
+            "default_repr": "5",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "n_warmup_steps": {
+            "annotation": "int",
+            "default_repr": "0",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        },
+        "SuccessiveHalvingPruner": {
+          "bootstrap_count": {
+            "annotation": "int",
+            "default_repr": "0",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "min_early_stopping_rate": {
+            "annotation": "int",
+            "default_repr": "0",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "min_resource": {
+            "annotation": "str | int",
+            "default_repr": "'auto'",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "reduction_factor": {
+            "annotation": "int",
+            "default_repr": "4",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        },
+        "ThresholdPruner": {
+          "interval_steps": {
+            "annotation": "int",
+            "default_repr": "1",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "lower": {
+            "annotation": "float | None",
+            "default_repr": "None",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "n_warmup_steps": {
+            "annotation": "int",
+            "default_repr": "0",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "upper": {
+            "annotation": "float | None",
+            "default_repr": "None",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        },
+        "WilcoxonPruner": {
+          "n_startup_steps": {
+            "annotation": "int",
+            "default_repr": "2",
+            "kind": "KEYWORD_ONLY"
+          },
+          "p_threshold": {
+            "annotation": "float",
+            "default_repr": "0.1",
+            "kind": "KEYWORD_ONLY"
+          }
+        }
+      },
+      "optuna.samplers": {
+        "BruteForceSampler": {
+          "avoid_premature_stop": {
+            "annotation": "bool",
+            "default_repr": "False",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "seed": {
+            "annotation": "int | None",
+            "default_repr": "None",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        },
+        "CmaEsSampler": {
+          "consider_pruned_trials": {
+            "annotation": "bool",
+            "default_repr": "False",
+            "kind": "KEYWORD_ONLY"
+          },
+          "inc_popsize": {
+            "annotation": "int",
+            "default_repr": "-1",
+            "kind": "KEYWORD_ONLY"
+          },
+          "independent_sampler": {
+            "annotation": "BaseSampler | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "lr_adapt": {
+            "annotation": "bool",
+            "default_repr": "False",
+            "kind": "KEYWORD_ONLY"
+          },
+          "n_startup_trials": {
+            "annotation": "int",
+            "default_repr": "1",
+            "kind": "KEYWORD_ONLY"
+          },
+          "popsize": {
+            "annotation": "int | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "restart_strategy": {
+            "annotation": "str | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "seed": {
+            "annotation": "int | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "sigma0": {
+            "annotation": "float | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "source_trials": {
+            "annotation": "list[FrozenTrial] | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "use_separable_cma": {
+            "annotation": "bool",
+            "default_repr": "False",
+            "kind": "KEYWORD_ONLY"
+          },
+          "warn_independent_sampling": {
+            "annotation": "bool",
+            "default_repr": "True",
+            "kind": "KEYWORD_ONLY"
+          },
+          "with_margin": {
+            "annotation": "bool",
+            "default_repr": "False",
+            "kind": "KEYWORD_ONLY"
+          },
+          "x0": {
+            "annotation": "dict[str, Any] | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          }
+        },
+        "GPSampler": {
+          "constraints_func": {
+            "annotation": "Callable[[FrozenTrial], Sequence[float]] | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "deterministic_objective": {
+            "annotation": "bool",
+            "default_repr": "False",
+            "kind": "KEYWORD_ONLY"
+          },
+          "independent_sampler": {
+            "annotation": "BaseSampler | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "n_startup_trials": {
+            "annotation": "int",
+            "default_repr": "10",
+            "kind": "KEYWORD_ONLY"
+          },
+          "seed": {
+            "annotation": "int | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "warn_independent_sampling": {
+            "annotation": "bool",
+            "default_repr": "True",
+            "kind": "KEYWORD_ONLY"
+          }
+        },
+        "GridSampler": {
+          "seed": {
+            "annotation": "int | None",
+            "default_repr": "None",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        },
+        "NSGAIIISampler": {
+          "after_trial_strategy": {
+            "annotation": "Callable[[Study, FrozenTrial, TrialState, Sequence[float] | None], None] | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "child_generation_strategy": {
+            "annotation": "Callable[[Study, dict[str, BaseDistribution], list[FrozenTrial]], dict[str, Any]] | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "constraints_func": {
+            "annotation": "Callable[[FrozenTrial], Sequence[float]] | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "crossover": {
+            "annotation": "BaseCrossover | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "crossover_prob": {
+            "annotation": "float",
+            "default_repr": "0.9",
+            "kind": "KEYWORD_ONLY"
+          },
+          "dividing_parameter": {
+            "annotation": "int",
+            "default_repr": "3",
+            "kind": "KEYWORD_ONLY"
+          },
+          "elite_population_selection_strategy": {
+            "annotation": "Callable[[Study, list[FrozenTrial]], list[FrozenTrial]] | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "mutation": {
+            "annotation": "BaseMutation | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "mutation_prob": {
+            "annotation": "float | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "population_size": {
+            "annotation": "int",
+            "default_repr": "50",
+            "kind": "KEYWORD_ONLY"
+          },
+          "reference_points": {
+            "annotation": "np.ndarray | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "seed": {
+            "annotation": "int | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "swapping_prob": {
+            "annotation": "float",
+            "default_repr": "0.5",
+            "kind": "KEYWORD_ONLY"
+          }
+        },
+        "NSGAIISampler": {
+          "after_trial_strategy": {
+            "annotation": "Callable[[Study, FrozenTrial, TrialState, Sequence[float] | None], None] | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "child_generation_strategy": {
+            "annotation": "Callable[[Study, dict[str, BaseDistribution], list[FrozenTrial]], dict[str, Any]] | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "constraints_func": {
+            "annotation": "Callable[[FrozenTrial], Sequence[float]] | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "crossover": {
+            "annotation": "BaseCrossover | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "crossover_prob": {
+            "annotation": "float",
+            "default_repr": "0.9",
+            "kind": "KEYWORD_ONLY"
+          },
+          "elite_population_selection_strategy": {
+            "annotation": "Callable[[Study, list[FrozenTrial]], list[FrozenTrial]] | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "mutation": {
+            "annotation": "BaseMutation | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "mutation_prob": {
+            "annotation": "float | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "population_size": {
+            "annotation": "int",
+            "default_repr": "50",
+            "kind": "KEYWORD_ONLY"
+          },
+          "seed": {
+            "annotation": "int | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "swapping_prob": {
+            "annotation": "float",
+            "default_repr": "0.5",
+            "kind": "KEYWORD_ONLY"
+          }
+        },
+        "QMCSampler": {
+          "independent_sampler": {
+            "annotation": "BaseSampler | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "qmc_type": {
+            "annotation": "str",
+            "default_repr": "'sobol'",
+            "kind": "KEYWORD_ONLY"
+          },
+          "scramble": {
+            "annotation": "bool",
+            "default_repr": "False",
+            "kind": "KEYWORD_ONLY"
+          },
+          "seed": {
+            "annotation": "int | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "warn_asynchronous_seeding": {
+            "annotation": "bool",
+            "default_repr": "True",
+            "kind": "KEYWORD_ONLY"
+          },
+          "warn_independent_sampling": {
+            "annotation": "bool",
+            "default_repr": "True",
+            "kind": "KEYWORD_ONLY"
+          }
+        },
+        "RandomSampler": {
+          "seed": {
+            "annotation": "int | None",
+            "default_repr": "None",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        },
+        "TPESampler": {
+          "consider_endpoints": {
+            "annotation": "bool | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "consider_magic_clip": {
+            "annotation": "bool | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "consider_prior": {
+            "annotation": "bool | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "constant_liar": {
+            "annotation": "bool",
+            "default_repr": "True",
+            "kind": "KEYWORD_ONLY"
+          },
+          "constraints_func": {
+            "annotation": "Callable[[FrozenTrial], Sequence[float]] | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "gamma": {
+            "annotation": "Callable[[int], int] | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "group": {
+            "annotation": "bool",
+            "default_repr": "False",
+            "kind": "KEYWORD_ONLY"
+          },
+          "multivariate": {
+            "annotation": "bool | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "n_ei_candidates": {
+            "annotation": "int",
+            "default_repr": "24",
+            "kind": "KEYWORD_ONLY"
+          },
+          "n_startup_trials": {
+            "annotation": "int",
+            "default_repr": "10",
+            "kind": "KEYWORD_ONLY"
+          },
+          "prior_weight": {
+            "annotation": "float | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "seed": {
+            "annotation": "int | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "warn_independent_sampling": {
+            "annotation": "bool | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "weights": {
+            "annotation": "Callable[[int], np.ndarray] | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          }
+        }
+      },
+      "optuna.samplers.nsgaii": {
+        "BLXAlphaCrossover": {
+          "alpha": {
+            "annotation": "float",
+            "default_repr": "0.5",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        },
+        "PolynomialMutation": {
+          "eta": {
+            "annotation": "float",
+            "default_repr": "20.0",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        },
+        "SBXCrossover": {
+          "eta": {
+            "annotation": "float | None",
+            "default_repr": "None",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "uniform_crossover_prob": {
+            "annotation": "float",
+            "default_repr": "0.5",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "use_child_gene_prob": {
+            "annotation": "float",
+            "default_repr": "0.5",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        },
+        "SPXCrossover": {
+          "epsilon": {
+            "annotation": "float | None",
+            "default_repr": "None",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        },
+        "UNDXCrossover": {
+          "sigma_eta": {
+            "annotation": "float | None",
+            "default_repr": "None",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "sigma_xi": {
+            "annotation": "float",
+            "default_repr": "0.5",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        },
+        "UniformCrossover": {
+          "swapping_prob": {
+            "annotation": "float",
+            "default_repr": "0.5",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        },
+        "VSBXCrossover": {
+          "eta": {
+            "annotation": "float | None",
+            "default_repr": "None",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "uniform_crossover_prob": {
+            "annotation": "float",
+            "default_repr": "0.5",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "use_child_gene_prob": {
+            "annotation": "float",
+            "default_repr": "0.5",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        }
+      },
+      "optuna.search_space": {
+        "IntersectionSearchSpace": {
+          "include_pruned": {
+            "annotation": "bool",
+            "default_repr": "False",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        },
+        "_GroupDecomposedSearchSpace": {
+          "include_pruned": {
+            "annotation": "bool",
+            "default_repr": "False",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        }
+      },
+      "optuna.storages": {
+        "GrpcStorageProxy": {
+          "host": {
+            "annotation": "str",
+            "default_repr": "'localhost'",
+            "kind": "KEYWORD_ONLY"
+          },
+          "port": {
+            "annotation": "int",
+            "default_repr": "13000",
+            "kind": "KEYWORD_ONLY"
+          }
+        },
+        "JournalFileOpenLock": {
+          "grace_period": {
+            "annotation": "int | None",
+            "default_repr": "30",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        },
+        "JournalFileStorage": {
+          "lock_obj": {
+            "annotation": "BaseJournalFileLock | None",
+            "default_repr": "None",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        },
+        "JournalFileSymlinkLock": {
+          "grace_period": {
+            "annotation": "int | None",
+            "default_repr": "30",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        },
+        "JournalRedisStorage": {
+          "prefix": {
+            "annotation": "str",
+            "default_repr": "''",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "use_cluster": {
+            "annotation": "bool",
+            "default_repr": "False",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        },
+        "RDBStorage": {
+          "engine_kwargs": {
+            "annotation": "dict[str, Any] | None",
+            "default_repr": "None",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "failed_trial_callback": {
+            "annotation": "Callable[['optuna.study.Study', FrozenTrial], None] | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "grace_period": {
+            "annotation": "int | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "heartbeat_interval": {
+            "annotation": "int | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "heartbeat_stale_trial_callback": {
+            "annotation": "Callable[['optuna.study.Study', FrozenTrial], None] | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          },
+          "skip_compatibility_check": {
+            "annotation": "bool",
+            "default_repr": "False",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "skip_table_creation": {
+            "annotation": "bool",
+            "default_repr": "False",
+            "kind": "KEYWORD_ONLY"
+          }
+        },
+        "RetryFailedTrialCallback": {
+          "inherit_intermediate_values": {
+            "annotation": "bool",
+            "default_repr": "False",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "max_retry": {
+            "annotation": "int | None",
+            "default_repr": "None",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        },
+        "RetryHeartbeatStaleTrialCallback": {
+          "inherit_intermediate_values": {
+            "annotation": "bool",
+            "default_repr": "False",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "max_retry": {
+            "annotation": "int | None",
+            "default_repr": "None",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        }
+      },
+      "optuna.storages.journal": {
+        "JournalFileBackend": {
+          "lock_obj": {
+            "annotation": "BaseJournalFileLock | None",
+            "default_repr": "None",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        },
+        "JournalFileOpenLock": {
+          "grace_period": {
+            "annotation": "int | None",
+            "default_repr": "30",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        },
+        "JournalFileSymlinkLock": {
+          "grace_period": {
+            "annotation": "int | None",
+            "default_repr": "30",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        },
+        "JournalRedisBackend": {
+          "prefix": {
+            "annotation": "str",
+            "default_repr": "''",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "use_cluster": {
+            "annotation": "bool",
+            "default_repr": "False",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        }
+      },
+      "optuna.study": {
+        "MaxTrialsCallback": {
+          "states": {
+            "annotation": "Container[TrialState] | None",
+            "default_repr": "(<TrialState.COMPLETE: 1>,)",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        },
+        "Study": {
+          "pruner": {
+            "annotation": "pruners.BasePruner | None",
+            "default_repr": "None",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "sampler": {
+            "annotation": "'samplers.BaseSampler' | None",
+            "default_repr": "None",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        },
+        "StudySummary": {
+          "directions": {
+            "annotation": "Sequence[StudyDirection] | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          }
+        }
+      },
+      "optuna.terminator": {
+        "BestValueStagnationEvaluator": {
+          "max_stagnation_trials": {
+            "annotation": "int",
+            "default_repr": "30",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        },
+        "EMMREvaluator": {
+          "delta": {
+            "annotation": "float",
+            "default_repr": "0.1",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "deterministic_objective": {
+            "annotation": "bool",
+            "default_repr": "False",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "min_n_trials": {
+            "annotation": "int",
+            "default_repr": "2",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "seed": {
+            "annotation": "int | None",
+            "default_repr": "None",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        },
+        "MedianErrorEvaluator": {
+          "n_initial_trials": {
+            "annotation": "int",
+            "default_repr": "20",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "threshold_ratio": {
+            "annotation": "float",
+            "default_repr": "0.01",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "warm_up_trials": {
+            "annotation": "int",
+            "default_repr": "10",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        },
+        "RegretBoundEvaluator": {
+          "min_n_trials": {
+            "annotation": "int",
+            "default_repr": "20",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "seed": {
+            "annotation": "int | None",
+            "default_repr": "None",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "top_trials_ratio": {
+            "annotation": "float",
+            "default_repr": "0.5",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        },
+        "Terminator": {
+          "error_evaluator": {
+            "annotation": "BaseErrorEvaluator | None",
+            "default_repr": "None",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "improvement_evaluator": {
+            "annotation": "BaseImprovementEvaluator | None",
+            "default_repr": "None",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          "min_n_trials": {
+            "annotation": "int",
+            "default_repr": "20",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        },
+        "TerminatorCallback": {
+          "terminator": {
+            "annotation": "BaseTerminator | None",
+            "default_repr": "None",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        }
+      },
+      "optuna.trial": {
+        "FixedTrial": {
+          "number": {
+            "annotation": "int",
+            "default_repr": "0",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        },
+        "FrozenTrial": {
+          "values": {
+            "annotation": "Sequence[float] | None",
+            "default_repr": "None",
+            "kind": "KEYWORD_ONLY"
+          }
+        }
+      }
+    },
+    "parameter_count": 173
+  },
   "core_api": {
     "ask_fixed_distributions": {
       "mesh": 7,

@@ -30,13 +30,13 @@ exact test-source SHA256; line numbers refer to that source revision. The
 2026-09-10 precision JSON remains historical evidence of commit c90ab01cb,
 not line-addressable evidence of later test files.
 
-Still open: owner-aware contracts for instance/dynamic references; complete
-constructor-default audit; robust package-qualified/multiline inheritance
-resolution and Python-version-independent inherited-language classification.
-The uncommitted seven-file constructor audit in C:/temp/radia-optuna-ctor-audit
-is not modified or merged by this change and must be rebased separately after
-its owner commits it. The 15-point review is not fully closed by this first
-safety correction. No optimizer numerical behavior is changed.
+Still open: owner-aware contracts for instance/dynamic references; robust
+package-qualified/multiline inheritance resolution and
+Python-version-independent inherited-language classification. The
+constructor-default audit was committed separately on top of this change; it
+records three divergences that remain open (see the constructor-default
+paragraph below). The 15-point review is not fully closed by this first safety
+correction. No optimizer numerical behavior is changed.
 
 ## 1. Product goal
 
@@ -251,10 +251,19 @@ name. The existing MATLAB coverage test additionally resolves every NSGA-II
 ledger class and member through MATLAB metadata. The repository health gate
 returns `ok=true`; this is not installed-wheel or release-quad acceptance.
 
-Systematic comparison of all public constructor defaults remains a separate
-review task. Recorded class signatures and selected seed/TPE default tests do
-not establish that every constructor default has a MATLAB comparison. Do not
-use `full_compatibility_complete` as a certificate for that unimplemented audit.
+Constructor-default audit: the oracle records every defaulted constructor
+parameter of the public modules (`constructor_defaults`; `optuna.integration`
+and `optuna.visualization` are excluded with stated reasons), and the coverage
+ledger's `constructor_default_audit` pairs each one with the MATLAB `arguments`
+block of the same class. A difference must be declared as an equivalence, an
+unimplemented parameter or a divergence, and a declaration that no longer
+applies fails. Three divergences are recorded and not fixed: `Terminator()`
+defaults to BestValueStagnationEvaluator where upstream resolves
+RegretBoundEvaluator, and FanovaImportanceEvaluator and
+MeanDecreaseImpurityImportanceEvaluator pin `seed=0` where upstream `None`
+draws fresh entropy. The audit compares source literals and does not execute
+constructors; the equivalence reasons for TPE's `X | None` parameters quote
+values measured on the pinned build, not values recorded by the oracle.
 
 ## 2. Scope and non-goals
 

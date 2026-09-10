@@ -80,6 +80,68 @@ def test_test_manifest_matches_its_generator():
     assert actual == expected.encode()
 
 
+def test_constructor_defaults_are_audited_against_the_pinned_oracle():
+    """Every upstream constructor default is compared, or declared, or open.
+
+    The API inventory records classes and their public members but not
+    __init__, so before this audit a changed constructor default was invisible
+    to the coverage gate while changing every seeded result. Optuna 5.0 is
+    that case: TPESampler moved multivariate from False to None and
+    constant_liar from False to True, and only the second had a named test.
+    """
+    oracle = json.loads(
+        (REPO_ROOT / "tests/matlab/fixtures/optuna50_oracle.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    record = oracle["constructor_defaults"]
+    recorded = sum(
+        len(parameters)
+        for classes in record["modules"].values()
+        for parameters in classes.values()
+    )
+    assert recorded == record["parameter_count"]
+    assert record["parameter_count"] > 0
+
+    coverage = json.loads(
+        (REPO_ROOT / "matlab/optuna50_api_coverage.json").read_text(encoding="utf-8")
+    )
+    audit = coverage["constructor_default_audit"]
+
+    # Every audited parameter lands in exactly one bucket.
+    accounted = (
+        audit["matched_count"]
+        + audit["declared_equivalent_count"]
+        + audit["declared_not_implemented_count"]
+        + audit["declared_divergent_count"]
+    )
+    assert accounted > 0
+    assert len(audit["declared_equivalences"]) == audit["declared_equivalent_count"]
+    assert (
+        len(audit["declared_not_implemented"])
+        == audit["declared_not_implemented_count"]
+    )
+    assert len(audit["declared_divergences"]) == audit["declared_divergent_count"]
+
+    # Every declaration states a reason; an empty one is not a declaration.
+    for table in (
+        "declared_equivalences",
+        "declared_not_implemented",
+        "declared_divergences",
+    ):
+        for name, reason in audit[table].items():
+            assert reason.strip(), f"{table}[{name}] declares no reason"
+
+    # A divergence is a recorded defect, not an equivalence. A new one must
+    # fail here instead of being absorbed into a table; fixing one only
+    # shrinks the set, and the generator then rejects the stale declaration.
+    assert set(audit["declared_divergences"]) <= {
+        "FanovaImportanceEvaluator.seed",
+        "MeanDecreaseImpurityImportanceEvaluator.seed",
+        "Terminator.improvement_evaluator",
+    }
+
+
 def test_matlab_path_names_the_layout_it_resolved():
     import radia_optuna
     from radia_optuna import cli
