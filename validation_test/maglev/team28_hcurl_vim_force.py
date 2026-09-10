@@ -190,21 +190,31 @@ def _build_eddy_basis(maxh_m):
 
 
 def _measured_interaction_diagnostics(interaction):
-    info = interaction.diagnostics()
+    info = dict(interaction.diagnostics())
     if info["minimum_eigenvalue_H"] is None:
         # TEAM28 has a small reduced block; probe the live operator, not a
         # historical eigenvalue or a capability flag.
         if interaction.matrix.shape[0] > 128:
             raise ValueError("TEAM28 dense eigenvalue probe is limited to 128 reduced modes")
         matrix = np.asarray(interaction.matrix.to_dense())
-        if not np.all(np.isfinite(matrix)) or not np.allclose(
-            matrix, matrix.conj().T, rtol=1e-10, atol=0.0
-        ):
+        matrix_norm = float(np.linalg.norm(matrix))
+        hermitian_relative_error = float(
+            np.linalg.norm(matrix - matrix.conj().T)
+            / max(matrix_norm, np.finfo(float).tiny)
+        )
+        if not np.all(np.isfinite(matrix)) or hermitian_relative_error > 1.0e-10:
             raise ValueError("TEAM28 inductance probe is not finite and Hermitian")
-        eigenvalues = np.linalg.eigvalsh(matrix)
+        hermitian = 0.5 * (matrix + matrix.conj().T)
+        eigenvalues = np.linalg.eigvalsh(hermitian)
         info["minimum_eigenvalue_H"] = float(eigenvalues[0])
         info["maximum_eigenvalue_H"] = float(eigenvalues[-1])
+        info["hermitian_relative_error"] = hermitian_relative_error
         info["eigenvalue_measurement"] = "live-reduced-operator-dense-probe"
+    maximum_eigenvalue = float(info["maximum_eigenvalue_H"])
+    info["minimum_to_maximum_eigenvalue_ratio"] = float(
+        float(info["minimum_eigenvalue_H"])
+        / max(maximum_eigenvalue, np.finfo(float).tiny)
+    )
     return info
 
 
@@ -432,7 +442,7 @@ def run(maxh_values, outer_quad=4, outer_check=None, export_model=None):
             for case in cases
         ),
         "all_inductance_blocks_positive": all(
-            case["interaction"]["minimum_eigenvalue_H"] > 0.0
+            case["interaction"]["minimum_to_maximum_eigenvalue_ratio"] > 1.0e-12
             for case in cases
         ),
         "all_force_errors_below_one_percent": max_force_error < 0.01,

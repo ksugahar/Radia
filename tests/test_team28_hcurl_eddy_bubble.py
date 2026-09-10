@@ -16,7 +16,9 @@ def test_team28_p6_hcurl_eddy_bubble_plan_and_reference_record():
     assert result["p6_spatial_reduction"]["parent_order"] == 6
     assert result["reduced_mode_summary"]["parent_ndof"] > 20_000
     assert result["reduced_mode_summary"]["estimated_total_modes"] < 200
-    assert result["reduced_mode_summary"]["estimated_reduction_ratio"] < 0.01
+    assert result["checks"][
+        "p6_planned_reduction_estimate_below_one_percent"
+    ] is True
     assert result["cln_reference_acceptance"]["cln_vs_full_fem"][
         "max_abs_error_N"
     ] < 5.0e-6
