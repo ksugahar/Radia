@@ -61,12 +61,40 @@ def _escaping_text(fig, renderer) -> list[str]:
     return out
 
 
+def _is_guide_line(line, ax) -> bool:
+    """A rule drawn across the axes rather than a plotted series.
+
+    ``axvline`` / ``axhline`` land in ``ax.lines`` exactly like a curve, but a
+    reader looks past them: they are the grid, not data a label must keep
+    clear of. A Gantt chart drew its quarter boundaries with ``axvline`` and
+    every in-bar label was then reported as covering a plotted point, which
+    left the author choosing between a false failure and switching the gate
+    off entirely.
+
+    Two signatures identify one. ``axvline``/``axhline`` use a blended
+    transform, not ``transData``; and a rule hand-drawn in data coordinates is
+    two points sharing an x or a y.
+    """
+    try:
+        if line.get_transform() is not ax.transData:
+            return True
+        xy = line.get_xydata()
+    except Exception:
+        return False
+    if xy is None or len(xy) != 2:
+        return False
+    (x0, y0), (x1, y1) = xy
+    return bool(x0 == x1 or y0 == y1)
+
+
 def _text_on_data(fig, renderer) -> list[str]:
     """An annotation sitting on the curve it annotates."""
     out = []
     for ax in fig.axes:
         pts = []
         for line in ax.lines:
+            if _is_guide_line(line, ax):
+                continue
             try:
                 xy = line.get_xydata()
             except Exception:
