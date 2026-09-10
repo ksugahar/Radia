@@ -51,6 +51,14 @@ def test_mcp_impact_lane_disables_external_pytest_plugins():
     assert '*pytest_targets' in source
 
 
+def test_meta_catalog_loads_with_package_relative_imports():
+    module = _load_module()
+
+    catalog = module._load_meta_catalog()
+
+    assert "meta" in catalog
+
+
 def test_lab_unc_remap_supports_current_and_historical_nas_addresses():
     module = _load_module()
 
