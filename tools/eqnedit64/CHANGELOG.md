@@ -1,5 +1,18 @@
 # Eqnedit64 changelog
 
+## Unreleased
+
+- Draw the palette in the shipped math font again. One key face used U+2605
+  BLACK STAR, which Latin Modern Math does not contain, and `pick_button_font`
+  accepts a font only if it owns every face at once — so that single character
+  rejected Latin Modern Math and Cambria Math and dropped all 245 keys to
+  Segoe UI Symbol. The prime family then read as typewriter quotes.
+- Show the character each key inserts. The Hodge-star key drew U+2605 while
+  `\star` renders as U+22C6, and the frown/smile keys drew the intersection
+  and union signs instead of U+2322 and U+2323.
+- Check both properties from the source and the font's cmap, so a key that
+  promises the wrong glyph, or one the font cannot draw, fails before release.
+
 ## 3.0.16 — release candidate
 
 - Publish the native rendering corrections accumulated after 3.0.15:

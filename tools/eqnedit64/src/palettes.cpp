@@ -51,8 +51,8 @@ std::vector<Palette> build() {
         sym("\\mid", u8"∣", u8"割り切る"),
         sym("\\vdash", u8"⊢", u8"導出される"),
         sym("\\models", u8"⊨", u8"充足する"),
-        sym("\\frown", u8"∩", u8"フラウン（記号）"),
-        sym("\\smile", u8"∪", u8"スマイル（記号）"),
+        sym("\\frown", u8"⌢", u8"フラウン（記号）"),
+        sym("\\smile", u8"⌣", u8"スマイル（記号）"),
     }});
 
     p.push_back({u8"空白と点", u8"⋯", 3, {
@@ -82,8 +82,8 @@ std::vector<Palette> build() {
         tpl("dprime", u8"x″", u8"二重プライム"),
         tpl("tprime", u8"x‴", u8"三重プライム"),
         tpl("strike", u8"/x", u8"打ち消し線"),
-        tpl("frown", u8"∩x", u8"フラウン"),
-        tpl("smile", u8"x∪", u8"スマイル"),
+        tpl("frown", u8"⌢x", u8"フラウン"),
+        tpl("smile", u8"⌣x", u8"スマイル"),
         I{"style.sans", u8"sf", u8"サンセリフ（\\mathsf）"},
         I{"style.mono", u8"tt", u8"等幅（\\mathtt）"},
         I{"style.script", u8"cal", u8"カリグラフィー（\\mathcal）"},
@@ -207,9 +207,9 @@ std::vector<Palette> build() {
     /* Keep this palette aligned in meaning and order with the browser
      * editor's 微分幾何 palette.  Geometry must never be accidentally wired
      * to the unrelated over/underline templates again. */
-    p.push_back({u8"微分幾何", u8"∧★", 4, {
+    p.push_back({u8"微分幾何", u8"∧⋆", 4, {
         raw("\\wedge ", u8"∧", u8"ウェッジ積"),
-        raw("\\star ", u8"★", u8"Hodge star作用素"),
+        raw("\\star ", u8"⋆", u8"Hodge star作用素"),
         raw("\\mathrm{d} ", u8"dω", u8"外微分（立体のd）"),
         raw("\\iota_{} ", u8"ι", u8"内部積（縮約）ι_X"),
         raw("\\mathcal{L}_{} ", u8"ℒ", u8"Lie微分"),

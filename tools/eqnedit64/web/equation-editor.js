@@ -176,7 +176,7 @@
       label: "微分幾何",
       items: [
         ["∧", "\\wedge ", "ウェッジ積"],
-        ["★", "\\star ", "Hodge star作用素"],
+        ["⋆", "\\star ", "Hodge star作用素"],
         ["dω", "\\mathrm{d} ", "外微分（立体のd）"],
         ["ι", "\\iota_{} ", "内部積（縮約）ι_X"],
         ["ℒ", "\\mathcal{L}_{} ", "Lie微分"],
