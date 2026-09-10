@@ -31,16 +31,23 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $runRoot = $env:OPTUNA_RUN_ROOT
+          function Wait-ComputeIdle {
+            $deadline = (Get-Date).AddSeconds(15)
+            while (Get-Process python,MATLAB -ErrorAction SilentlyContinue) {
+              if ((Get-Date) -ge $deadline) { throw 'Concurrent compute or incomplete shutdown detected' }
+              Start-Sleep -Seconds 1
+            }
+          }
           try {
             foreach ($label in @('old1','new1','new2','old2')) {
-              if (Get-Process python,MATLAB -ErrorAction SilentlyContinue) { throw 'Concurrent compute detected' }
+              Wait-ComputeIdle
               $variant = $label.Substring(0,3)
               Copy-Item "$runRoot/$variant.mexw64" "$runRoot/matlab/optuna_mex.mexw64"
               python -u "$runRoot/optuna_mdx2_bundled_run.py" --root $runRoot --output "$runRoot/$label.json"
               if ($LASTEXITCODE -ne 0) { throw "MATLAB benchmark $label failed" }
             }
             foreach ($label in @('python1','python2')) {
-              if (Get-Process python,MATLAB -ErrorAction SilentlyContinue) { throw 'Concurrent compute detected' }
+              Wait-ComputeIdle
               C:/temp/radia-optuna50-benchmark-20260908/.venv/Scripts/python.exe "$runRoot/validation_test/optimization/benchmark_optuna50_python.py" --output "$runRoot/$label.json"
               if ($LASTEXITCODE -ne 0) { throw "Python benchmark $label failed" }
             }
