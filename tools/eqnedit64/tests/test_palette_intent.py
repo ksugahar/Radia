@@ -11,6 +11,7 @@ import re
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = json.loads((ROOT / "docs/palette_intent.json").read_text(encoding="utf-8"))
 STR = r'"(?:[^"\\]|\\.)*"'
+PERSISTENT_STYLES = {"roman": r"\mathrm", "italic": r"\mathit", "vector": r"\mathbf"}
 
 
 def symbol_contract():
@@ -80,6 +81,15 @@ def test_complete_native_intent_catalogue():
     check_catalogue(source_cells())
 
 
+def test_persistent_native_style_buttons():
+    source = (ROOT / "src/eqnedt64_app.cpp").read_text(encoding="utf-8")
+    calls = re.findall(r'apply_math_alphabet\("(roman|italic|vector)",[^;]+;', source)
+    assert sorted(calls) == sorted(PERSISTENT_STYLES)
+    for style, tex in PERSISTENT_STYLES.items():
+        assert re.search(r'apply_math_alphabet\("' + style + r'",[^;]*'
+                         + re.escape(json.dumps(tex)) + r'\);', source), style
+
+
 def test_swapped_commands_and_unreviewed_keys_fail():
     import pytest
     cells = source_cells()
@@ -147,6 +157,11 @@ def main():
             assert E.tex_normalize(actual) == actual, "output is not stable"
         except AssertionError as exc:
             failures.append(f"{command}: {exc}")
+    for style, tex in PERSISTENT_STYLES.items():
+        actual = execute(E, "style." + style, "")
+        expected = E.tex_normalize(tex + "{a}")
+        if actual != expected:
+            failures.append(f"persistent style {style}: {actual!r} != {expected!r}")
     # Prove that a correctly round-tripping but wrong insertion is rejected.
     for left, right in [("template.overline", "template.underline"),
                         ("template.sup", "template.sub"),
@@ -155,7 +170,7 @@ def main():
         assert wrong != E.tex_normalize(contract[left][2]), (left, right)
     for failure in failures:
         print("FAIL: " + failure)
-    print(f"Native palette intent: {len(contract)} keys, {len(failures)} failures")
+    print(f"Native palette intent: {len(contract)} keys + 3 persistent styles, {len(failures)} failures")
     return int(bool(failures))
 
 

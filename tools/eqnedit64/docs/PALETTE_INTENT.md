@@ -18,6 +18,8 @@ keys require a reviewed expectation in the same change. Unknown keys fail.
 - `native_matrix_sizes`: all offered dimensions. Fill row-major with distinct
   characters from `abcdefghijklmnopqrstuvwxyz0123456789`.
 - `native_styles`: select `a`, apply the style, compare the promised wrapper.
+  The persistent roman/italic/vector buttons additionally promise `\mathrm`,
+  `\mathit`, and `\mathbf`; check their UI dispatch and actual model output.
 - `native_raw`: face -> literal insertion. These are complete native fragments;
   a script without a preceding atom needs an explicit empty base.
 - `matrix_actions`: start with rows `[a,b]`, `[c,d]`, caret in the first cell;
