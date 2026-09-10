@@ -243,10 +243,11 @@ Discussion が複数枚あるなら、その開始にも同じ進行表示を置
 謝辞の前に機械的に増やす必要はない。分類は枚数合わせでなく、話の責任が変わる地点から
 決める。
 
-`presentation_check_outline_slide` は、起承転結から共通の
-Motivation／Proposed method／Results の切り替わりを推定し、各位置で全項目を再掲して
-現在章だけを強調しているかを検査する。不合格時は `suggested_outline` に欠けている章と
-挿入位置を返す。ツールの分類は補助であり、最終的な章分けはデッキ全体の内容から決める。
+`presentation_check_outline_slide` は、反復表示された全項目から、そのデッキ固有の章名と
+順序を抽出する。Motivation／Proposed method／Results という語を必須にせず、Theory、
+Implementation、Discussion や日本語の独自章名もそのまま扱い、各章の開始時に同じ全項目を
+再掲して現在章だけを強調しているかを検査する。不合格時は `suggested_outline` に欠けている
+章を返す。最終的な章分けは、検査器の固定語彙でなくデッキ全体の内容から決める。
 
 ### 落とした話は捨てない ― 非表示の質問スライドにする (2026-09-10)
 
