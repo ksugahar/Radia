@@ -14,7 +14,10 @@ import re
 import zipfile
 
 from radia_mcp.common.pptx_svg import picture_svg_blob, svg_geometry
-from ._kishotenketsu import presentation_kishotenketsu_check  # noqa: F401
+from ._kishotenketsu import (  # noqa: F401
+    FOOTER_FROM as TAKEAWAY_FOOTER_FROM,
+    presentation_kishotenketsu_check,
+)
 from ._outline import presentation_check_outline_slide  # noqa: F401
 
 # Plan B Tier 1 (v0.12.0) — composite score + human-advisor comments
@@ -1962,7 +1965,7 @@ def presentation_check_slide_title_verb(pptx_path: str) -> dict:
 def presentation_check_slide_message_hierarchy(
         pptx_path: str,
         bottom_start_fraction: float = 0.68,
-        footer_start_fraction: float = 0.94,
+        footer_start_fraction: float = TAKEAWAY_FOOTER_FROM,
         min_takeaway_chars: int = 8,
         max_title_chars: int = 28,
         title_style: str = "auto") -> dict:
@@ -1985,6 +1988,8 @@ def presentation_check_slide_message_hierarchy(
 
     takeaway は中央の図表・式・比較から「何が分かったか」を示す。
     footer、page number、URL、citation、所属は takeaway として数えない。
+    版面上の候補は XML の追加順ではなく上端位置で並べ、出典行より上にある
+    takeaway band を先に読む。既定の footer 境界は起承転結検査と共通である。
     """
     try:
         import pptx as _pptx
@@ -2193,6 +2198,7 @@ def presentation_check_slide_message_hierarchy(
                     candidates.append({
                         "text": text_value[:180],
                         "top_fraction": round(top_fraction, 3),
+                        "_visual_top": top_fraction,
                     })
                 elif bottom_fraction >= bottom_start_fraction:
                     lines = [line.strip() for line in shape.text_frame.text.splitlines()
@@ -2201,9 +2207,15 @@ def presentation_check_slide_message_hierarchy(
                         candidates.append({
                             "text": lines[-1][:180],
                             "top_fraction": "last-line-in-bottom-spanning-box",
+                            "_visual_top": bottom_start_fraction,
                         })
             except Exception:
                 continue
+
+        # PowerPoint's XML order is insertion order, not visual order.  The
+        # lab layout puts the takeaway band above its citation strip, so read
+        # eligible candidates from the top of the takeaway region downward.
+        candidates.sort(key=lambda item: item["_visual_top"])
 
         has_takeaway = bool(candidates)
         issues = []
