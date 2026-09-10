@@ -231,7 +231,7 @@ class VectorPotentialSolver:
             data = np.ascontiguousarray(data.transpose(2, 1, 0))
             cfs.append(VoxelCoefficient(start, end, data, linear=True))
 
-        self._B_source_cf = CF(tuple(cfs))
+        self.set_source_cf(CF(tuple(cfs)))
 
     def set_source_from_callback(self, b_func, resolution=41):
         """Set source field B_s from a Python callback.
@@ -307,7 +307,7 @@ class VectorPotentialSolver:
             data = np.ascontiguousarray(data.transpose(2, 1, 0))
             cfs.append(VoxelCoefficient(start, end, data, linear=True))
 
-        self._B_source_cf = CF(tuple(cfs))
+        self.set_source_cf(CF(tuple(cfs)))
 
     def _total_flux_density(self, reaction_cf):
         """Total B, with the Kelvin material handled explicitly.
