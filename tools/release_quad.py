@@ -1409,6 +1409,8 @@ def cmd_phase9(args):
 
 def cmd_all(args):
     """Run the full deploy + verify chain (phase8 LAB+100, phase8e mdx1+mdx2, phase9)."""
+    rc = cmd_temp_shadows(argparse.Namespace(apply=True))
+    if rc != 0: return rc
     rc = cmd_phase8(argparse.Namespace(target="lab,100"))
     if rc != 0: return rc
     rc = cmd_phase8e(args)
@@ -2027,6 +2029,11 @@ def cmd_done(args):
         fail("active LAB editable source is not the exact clean release SHA.")
         return rc
 
+    rc = cmd_temp_shadows(argparse.Namespace(apply=False))
+    if rc != 0:
+        fail("retired Omega override remains or a host could not be verified")
+        return rc
+
     rc = _verify_head_release_tag()
     if rc != 0:
         fail("release HEAD is not anchored by its declared Radia version tag.")
@@ -2344,6 +2351,20 @@ def cmd_evidence_motor(args):
 # CLI
 # ============================================================
 
+def cmd_temp_shadows(args):
+    from release_temp_shadows import inspect_shadows
+    if getattr(args, "apply", False):
+        merged = run(["git", "-c", f"safe.directory={REPO.as_posix()}",
+                      "merge-base", "--is-ancestor", "7ffda79d3", "origin/main"],
+                     check=False, capture=True)
+        if merged.returncode:
+            fail("Kelvin source commits are not confirmed in origin/main; refusing cleanup")
+            return 2
+    results = inspect_shadows(apply=getattr(args, "apply", False))
+    print(json.dumps(results, indent=2))
+    return 0 if all(record.get("passed") for record in results.values()) else 2
+
+
 def main():
     p = argparse.ArgumentParser(prog="release_quad",
                                  description="Enforce the release-quad flow.")
@@ -2409,9 +2430,12 @@ def main():
         "--simulink-package",
         help="also require a matching four-machine Simulink candidate pass")
 
+    shadows = sub.add_parser("temp-shadows", help="verify retired Omega overrides on mdx1/mdx2/hibino")
+    shadows.add_argument("--apply", action="store_true", help="remove only unused, non-linked known override trees")
     args = p.parse_args()
     handler = {
         "preflight":        cmd_preflight,
+        "temp-shadows":     cmd_temp_shadows,
         "phase0":           cmd_phase0,
         "phase8":           cmd_phase8,
         "phase8e":          cmd_phase8e,

@@ -257,6 +257,7 @@ def test_remote_restore_forces_canonical_uninstall_then_editable_install(monkeyp
 
 def test_done_keeps_exact_verified_editables_after_all_gates(monkeypatch):
     calls = []
+    monkeypatch.setattr(release_quad, "cmd_temp_shadows", lambda _args: calls.append("shadows") or 0)
     monkeypatch.setattr(release_quad, "cmd_preflight", lambda _args: calls.append("preflight") or 0)
     monkeypatch.setattr(release_quad, "_release_head", lambda: "a" * 40)
     monkeypatch.setattr(
@@ -287,7 +288,7 @@ def test_done_keeps_exact_verified_editables_after_all_gates(monkeypatch):
     args = type("Args", (), {"simulink_package": None})()
     assert release_quad.cmd_done(args) == 0
     assert calls == [
-        "preflight", "source", "tag", "lab", "100", "phase9", "guard", "main"
+        "preflight", "source", "shadows", "tag", "lab", "100", "phase9", "guard", "main"
     ]
 
 
