@@ -176,14 +176,14 @@
     "passed": true
   },
   "force_learning": "fixed-current coenergy derivative and Lorentz force give the same parallel-wire force per unit length",
-  "generated_at_utc": "2026-06-27T09:17:09Z",
+  "generated_at_utc": "2026-09-10T11:55:08Z",
   "kind": "parallel_wire_virtual_work_force_validation",
   "schema": "radia.validation.force_validation.validation_parallel_wire_virtual_work_force.v1",
   "validation_class": true,
   "versions": {
     "platform": "Windows-2022Server-10.0.20348-SP0",
     "python_version": "3.12.10",
-    "radia_mcp_version": "1.4.3",
-    "radia_version": "4.95.2"
+    "radia_mcp_version": "1.4.53",
+    "radia_version": "4.95.81"
   }
 }

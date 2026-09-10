@@ -718,7 +718,7 @@
     "sixth_harmonic_delta_error_Nm": 8.326672684688674e-17,
     "twelfth_harmonic_delta_error_Nm": 1.1553258350005535e-15
   },
-  "generated_at_utc": "2026-06-27T09:17:09Z",
+  "generated_at_utc": "2026-09-10T11:55:32Z",
   "kind": "torque_waveform_comparison_validation",
   "learning_theme": "periodic torque-angle comparisons should separate mean drift, sample-wise error, and harmonic ripple deltas",
   "schema": "radia.validation.force_validation.validation_torque_waveform_comparison.v1",
@@ -726,7 +726,7 @@
   "versions": {
     "platform": "Windows-2022Server-10.0.20348-SP0",
     "python_version": "3.12.10",
-    "radia_mcp_version": "1.4.3",
-    "radia_version": "4.95.2"
+    "radia_mcp_version": "1.4.53",
+    "radia_version": "4.95.81"
   }
 }
