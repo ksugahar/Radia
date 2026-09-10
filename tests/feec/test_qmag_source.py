@@ -2,6 +2,7 @@
 
 import importlib.util
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -124,3 +125,38 @@ def test_installed_requires_distribution_evidence(source_guard, tmp_path, monkey
     with pytest.raises(RuntimeError):
         source_guard.require_radia_source(
             "installed", dist.root / "radia/__init__.py", tmp_path / "repo/src")
+
+
+@pytest.mark.parametrize("error", [PermissionError, ValueError])
+def test_same_file_does_not_hide_access_or_path_errors(source_guard, tmp_path, monkeypatch, error):
+    def fail(*args):
+        raise error("file identity unavailable")
+
+    monkeypatch.setattr(Path, "samefile", fail)
+    with pytest.raises(error, match="file identity unavailable"):
+        source_guard._same_file(tmp_path / "module.py", tmp_path / "module.py")
+
+
+def test_runner_rejects_source_before_loading_newer_submodule_apis():
+    """An old editable package must receive the provenance error, not ImportError."""
+    repo = Path(__file__).resolve().parents[2]
+    runner = repo / "validation_test/quadrupole_cefc2020/run_qmag_hdiv.py"
+    script = f'''
+import runpy
+import sys
+import types
+for name in ("ngsolve", "numpy", "radia", "qmag_case"):
+    sys.modules[name] = types.ModuleType(name)
+sys.modules["radia"].__file__ = {str(repo / "src/radia/__init__.py")!r}
+sys.modules["radia"].__path__ = []
+# This intentionally old module does not expose mesh_conformity_report.
+sys.modules["radia.vim"] = types.ModuleType("radia.vim")
+sys.argv = [{str(runner)!r}, "--radia-source", "installed"]
+runpy.run_path({str(runner)!r}, run_name="__main__")
+'''
+    result = subprocess.run([sys.executable, "-c", script],
+                            capture_output=True, text=True, timeout=30)
+    assert result.returncode != 0
+    assert "--radia-source installed was imported as" in result.stderr
+    assert "which is the checkout" in result.stderr
+    assert "ImportError" not in result.stderr
