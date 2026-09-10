@@ -25,6 +25,18 @@ python tools/release_quad.py restore-editable
 
 ## Machine Policy
 
+### Retired Omega Override Gate
+
+After the Kelvin source commits through `7ffda79d3` are integrated into main,
+run `python tools/release_quad.py temp-shadows --apply`. This checks the exact
+`C:\temp\radia-omega-test` tree on mdx1, mdx2, and hibino. It refuses removal
+while Python/MATLAB processes are active, PYTHONPATH still names the tree, or
+reparse points are present. It never terminates research processes or removes
+other scratch directories. Unreachable hosts are unresolved, not clean.
+`all` runs this cleanup first; `done` repeats the read-only absence check.
+Keep the JSON console report with the release evidence. hibino is checked for
+this retired override only; it is not added to the four deployment targets.
+
 | Machine | Install tier | Release command path |
 |---|---|---|
 | LAB | NAS editable | `phase8 --target lab` |
