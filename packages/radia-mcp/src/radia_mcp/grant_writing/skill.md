@@ -1649,6 +1649,25 @@ limit may coexist when the prose gives them distinct roles. It is not
 applicable to a fragment carrying fewer than two claim statements. The
 integrated health report runs it for every program.
 
+Draft-stage checks are available through the composed paper-writing server:
+
+- `grant_writing_central_question_singularity_check(text)` locates candidate
+  mismatches between an announced central question and nearby interrogatives.
+  Japanese and ASCII question marks are supported. The health report includes
+  these as review questions, never as scientific-quality scores; use
+  `skip="singularity"` to omit them. Enumeration alone is not a defect.
+- `grant_writing_draft_length_budget_check(text, page_limit=...,
+  reserved_pages=..., figure_count=...)` estimates character capacity. Its
+  `status` distinguishes `no_prose_capacity`, `exceeds_estimate`, and
+  `within_estimate`; none certifies a compiled page count. Zero page limit
+  means not applicable. Negative/nonfinite inputs fail loudly. Tune
+  `chars_per_page` to the actual form, then run the compiled PDF page check.
+- `grant_writing_form_field_coverage_check(text, fields=...)` or
+  `preset="tateisi_research"` returns `candidate_fields` and
+  `unmatched_fields`. Neither keyword hits nor their absence proves that a
+  field is answered or missing. Compare the preset with the current official
+  form and read every answer. All three tools return `score=None`.
+
 Budget guidance is judged only where budget content exists.
 `grant_writing_budget_alignment_check` reports `applicable: False` for a
 research-plan or feasibility section, and the health report leaves it out of
