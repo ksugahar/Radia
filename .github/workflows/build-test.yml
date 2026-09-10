@@ -180,7 +180,18 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & $ciPython -m pip install build wheel pytest mcp "trimesh>=4.0" twine==6.2.0 --quiet
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Write-Host "build + wheel + pytest + mcp + trimesh + twine installed (radia_mcp via PYTHONPATH, not pip-installed)"
+          # Import every dependency here, at the top of the run. `pip install`
+          # succeeding is not the same as the module being importable, and a
+          # name missing from the line above otherwise surfaces only in the
+          # step that needs it -- which is how 4.95.86..4.95.89 spent four
+          # release tags discovering `pytest`, then `build`, then `wheel` one
+          # at a time. Fail here instead, before the tag is worth anything.
+          & $ciPython -c "import build, wheel, pytest, mcp, trimesh, twine; print('isolated env imports OK')"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::Isolated CI environment is missing a dependency listed above."
+            exit $LASTEXITCODE
+          }
+          Write-Host "build + wheel + pytest + mcp + trimesh + twine installed and importable (radia_mcp via PYTHONPATH, not pip-installed)"
 
       # ----------------------------------------------------------------
       # Verify NGSolve: exact pyproject-pinned version in the run-local venv.

@@ -5,6 +5,18 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- `release_quad ci-verify` now requires the native release check by name.
+  `Radia Native Release` runs only on a `v*` tag or a manual dispatch, so a
+  commit it never ran on used to verify as green on whatever else happened to
+  run. Absent evidence now fails instead of passing, and the failure says to
+  dispatch that workflow on the release SHA first.
+
+- The native release job imports `build`, `wheel`, `pytest`, `mcp`, `trimesh`
+  and `twine` immediately after installing them, so a name missing from that
+  line fails at the top of the run instead of in the later step that needs it.
+  Together these close the gap that spent four tags (4.95.86 through 4.95.89)
+  discovering one missing isolated-environment dependency at a time.
+
 ## 4.95.89 - Safe AMS setup and reliable native release packaging
 
 Released 2026-09-11.
