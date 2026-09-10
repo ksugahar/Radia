@@ -14,12 +14,19 @@ from __future__ import annotations
 
 import math
 
-from ngsolve import BND, Conj, Integrate, specialcf
+from ngsolve import (BND, BoundaryFromVolumeCF, CoefficientFunction, Conj,
+                     Integrate, dx, specialcf)
+from ngsolve import sqrt as ng_sqrt
+from ngsolve import x as ng_x
+from ngsolve import y as ng_y
 
 MU0 = 4.0e-7 * math.pi
 
 __all__ = [
     "MU0",
+    "air_gap_maxwell_torque_2d",
+    "air_gap_maxwell_torque_arkkio_2d",
+    "air_gap_maxwell_torque_line_2d",
     "maxwell_surface_force",
     "time_average_maxwell_surface_force",
 ]
@@ -130,3 +137,155 @@ def time_average_maxwell_surface_force(
         )
         for k in range(3)
     ]
+
+
+def _polar_air_gap_components(magnetic_flux_density, center_xy):
+    """Return (radius, B_radial, B_tangential) about ``center_xy`` in the plane."""
+
+    try:
+        center_x, center_y = (float(value) for value in center_xy)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("center_xy must be two finite numbers") from exc
+    dx_cf = ng_x - center_x
+    dy_cf = ng_y - center_y
+    radius = ng_sqrt(dx_cf * dx_cf + dy_cf * dy_cf)
+    cos_phi = dx_cf / radius
+    sin_phi = dy_cf / radius
+    field_x = magnetic_flux_density[0]
+    field_y = magnetic_flux_density[1]
+    radial = field_x * cos_phi + field_y * sin_phi
+    tangential = -field_x * sin_phi + field_y * cos_phi
+    return radius, radial, tangential
+
+
+def air_gap_maxwell_torque_line_2d(
+    magnetic_flux_density,
+    mesh,
+    boundary,
+    *,
+    stack_length_m=1.0,
+    center_xy=(0.0, 0.0),
+    permeability_H_per_m=MU0,
+):
+    """Maxwell-stress torque in N m from a single air-gap contour.
+
+        T = (L / mu) * oint_C r B_r B_phi dl
+
+    ``boundary`` is a closed contour lying wholly in the air gap, e.g.
+    ``mesh.Boundaries("airgap_mid")``.  ``magnetic_flux_density`` is the planar
+    two-component field, ``CF((grad(A)[1], -grad(A)[0]))`` for an A_z solve.
+
+    This is the classic single-contour Maxwell torque.  It is NOT Arkkio's
+    method: Arkkio averages the same integrand over the radial thickness of the
+    gap, which is what buys the reduced mesh sensitivity -- see
+    :func:`air_gap_maxwell_torque_arkkio_2d`.
+    """
+
+    permeability = float(permeability_H_per_m)
+    if not permeability > 0.0:
+        raise ValueError("permeability_H_per_m must be > 0")
+    length = float(stack_length_m)
+    if not length > 0.0:
+        raise ValueError("stack_length_m must be > 0")
+    # The contour is normally an INTERNAL edge and the field is normally
+    # grad() of a volume GridFunction.  Integrating such a CF directly over a
+    # BND region evaluates it in the wrong space and returns a near-zero,
+    # mesh-dependent number: measured 0.0116 -> 0.0007 against an exact 28.125
+    # as the gap thinned.  BoundaryFromVolumeCF takes the volume trace and
+    # recovers 28.110 -> 28.124.  It is a no-op for a purely analytic CF.
+    radius, radial, tangential = _polar_air_gap_components(
+        BoundaryFromVolumeCF(magnetic_flux_density), center_xy
+    )
+    value = Integrate(radius * radial * tangential, mesh, BND, definedon=boundary)
+    return (length / permeability) * float(getattr(value, "real", value))
+
+
+def air_gap_maxwell_torque_arkkio_2d(
+    magnetic_flux_density,
+    mesh,
+    region,
+    *,
+    inner_radius_m,
+    outer_radius_m,
+    stack_length_m=1.0,
+    center_xy=(0.0, 0.0),
+    permeability_H_per_m=MU0,
+):
+    """Arkkio air-gap torque in N m, averaged over the gap thickness.
+
+        T = L / (mu (r_out - r_in)) * int_S r B_r B_phi dS
+
+    ``region`` is the meshed air-gap annulus, e.g. ``mesh.Materials("airgap")``,
+    and ``inner_radius_m`` / ``outer_radius_m`` are its radial bounds.  Averaging
+    over the annulus instead of reading one contour is the whole point of
+    Arkkio's method (Arkkio 1987): it removes the sensitivity to which contour
+    the mesh happens to place elements on.  As the annulus thins about a radius
+    R this converges to :func:`air_gap_maxwell_torque_line_2d` at R.
+    """
+
+    permeability = float(permeability_H_per_m)
+    if not permeability > 0.0:
+        raise ValueError("permeability_H_per_m must be > 0")
+    length = float(stack_length_m)
+    if not length > 0.0:
+        raise ValueError("stack_length_m must be > 0")
+    inner = float(inner_radius_m)
+    outer = float(outer_radius_m)
+    if not 0.0 <= inner < outer:
+        raise ValueError("require 0 <= inner_radius_m < outer_radius_m")
+    radius, radial, tangential = _polar_air_gap_components(
+        magnetic_flux_density, center_xy
+    )
+    value = Integrate(radius * radial * tangential, mesh, definedon=region)
+    span = outer - inner
+    return (length / (permeability * span)) * float(getattr(value, "real", value))
+
+
+def air_gap_maxwell_torque_2d(
+    magnetic_flux_density,
+    mesh,
+    domain,
+    *,
+    method="line",
+    stack_length_m=1.0,
+    center_xy=(0.0, 0.0),
+    inner_radius_m=None,
+    outer_radius_m=None,
+    permeability_H_per_m=MU0,
+):
+    """Select between the single-contour and Arkkio air-gap torque routes.
+
+    ``method="line"`` reads one contour (``domain`` is a boundary region);
+    ``method="arkkio"`` averages over the gap annulus (``domain`` is a material
+    region and both radii are required).  The two agree as the annulus thins,
+    so a validation lane can quote both from one solve.
+    """
+
+    key = str(method).strip().lower()
+    if key == "line":
+        if inner_radius_m is not None or outer_radius_m is not None:
+            raise ValueError("radii apply only to method='arkkio'")
+        return air_gap_maxwell_torque_line_2d(
+            magnetic_flux_density,
+            mesh,
+            domain,
+            stack_length_m=stack_length_m,
+            center_xy=center_xy,
+            permeability_H_per_m=permeability_H_per_m,
+        )
+    if key == "arkkio":
+        if inner_radius_m is None or outer_radius_m is None:
+            raise ValueError(
+                "method='arkkio' requires inner_radius_m and outer_radius_m"
+            )
+        return air_gap_maxwell_torque_arkkio_2d(
+            magnetic_flux_density,
+            mesh,
+            domain,
+            inner_radius_m=inner_radius_m,
+            outer_radius_m=outer_radius_m,
+            stack_length_m=stack_length_m,
+            center_xy=center_xy,
+            permeability_H_per_m=permeability_H_per_m,
+        )
+    raise ValueError("method must be 'line' or 'arkkio'")
