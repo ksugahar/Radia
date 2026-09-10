@@ -1,24 +1,27 @@
 """Reference solution for the ECB plate force of radia.maglev.ecb.lorentz.
 
-``compute_lorentz_force_via_foster`` had no caller in the repository and had
-never been run end to end.  This lane solves the SAME scalar model it uses,
+``compute_lorentz_force_via_foster`` solves, in a truncated Dirichlet
+eigenbasis (the Foster expansion),
 
     (-Delta + s mu sigma) v = -s mu sigma B_z,   v = 0 on "outer",
 
-directly (no eigen-expansion) on a mirror-symmetric structured hex mesh, and
-reconstructs the eddy current two ways:
+for the z component ``v`` of the reaction field, and builds the eddy current as
+``J = (1/mu) curl(v z)``.  This lane solves the SAME model directly (no
+eigen-truncation) on a mirror-symmetric structured hex mesh and reconstructs
+the current the same way.  Force is <F> = 0.5 int Re(J) x B dV with the full
+dipole field (B_x, B_y, B_z).
 
-  curl    J = (1/mu) curl(v z) = (1/mu) (d_y v, -d_x v, 0)   -- the reference
-  kernel  J = (0, -omega sigma Im v, 0)                       -- what lorentz.py does
+The reference must meet what a centred z-dipole over a plate has to show: zero
+horizontal force (mirror symmetry), a repulsive lift (conductor Fz < 0), mesh
+convergence, a lift rising with frequency, and a lift below the infinite
+perfect-conductor image bound.  The shipped kernel is then held to the
+reference: the same symmetry and sign, the same lift within 2.5 % at 50 and
+500 Hz with 200 modes, and -- at 5 kHz, where 200 modes stop far short of the
+skin depth -- monotone convergence to the reference as the basis grows.
 
-``v`` is the z component of the reaction field (tesla), so only the curl route
-gives a current density in A/m^2 with the parity of a real eddy current.  Force
-is <F> = 0.5 int Re(J) x B dV with the full dipole field (B_x, B_y, B_z).
-
-A centred z-dipole over the plate must show: zero horizontal force (mirror
-symmetry), a repulsive lift (conductor force Fz < 0), mesh convergence, a lift
-that rises with frequency, and a lift below the infinite perfect-conductor
-image bound.  The shipped kernel is run alongside and its violations recorded.
+Until 2026-09-11 the kernel built the current as -omega sigma Im(v).  On this
+lane it gave zero lift for a centred magnet and a horizontal force of 1906 N at
+5 kHz against the 11.7 N bound; ``history`` in the summary keeps that record.
 
 Solver-heavy validation: run on an idle mdx or hibino host.  The recorded host
 is written into the summary.
@@ -65,6 +68,21 @@ MESHES = ((30, 12, 3), (40, 16, 4))
 FREQUENCIES_HZ = (50.0, 500.0, 5000.0)
 OFFSETS_M = (0.0, 0.03)
 KERNEL_EIGENMODES = 200
+KERNEL_AGREEMENT_FREQUENCIES_HZ = (50.0, 500.0)
+KERNEL_LIFT_RTOL = 0.025
+MODE_STUDY_MESH = (30, 12, 3)
+MODE_STUDY_FREQUENCY_HZ = 5000.0
+MODE_STUDY_COUNTS = (200, 400, 800, 1600)
+MODE_STUDY_FINAL_RTOL = 0.01
+
+HISTORY = {
+    "before": "2026-09-11",
+    "current_reconstruction": "J_y = -omega sigma Im(v)",
+    "drive_projection": "M_free @ Bz_free (boundary values of B_z dropped)",
+    "centred_horizontal_force_N_50_500_5000Hz": [-31.57, -1194.09, -1906.27],
+    "centred_vertical_force_N": 0.0,
+    "image_bound_N": 11.72,
+}
 
 
 def plate_mesh(nx, ny, nz):
@@ -127,6 +145,32 @@ def reference_force(mesh, fes, v, x_pm):
     ]
 
 
+def mode_study():
+    """Kernel lift error against the direct solve as the Foster basis grows."""
+    mesh = plate_mesh(*MODE_STUDY_MESH)
+    fes = H1(mesh, order=2, dirichlet="outer")
+    s = 2j * math.pi * MODE_STUDY_FREQUENCY_HZ
+    _bx, _by, bz = dipole_field(0.0)
+    reference = reference_force(mesh, fes, solve_reaction_field(mesh, fes, bz, s), 0.0)[2]
+    rows = []
+    for count in MODE_STUDY_COUNTS:
+        lam, vecs, _mass, free, _fes, _volume = _dirichlet_eigenmodes(mesh, count, "outer")
+        lift = compute_lorentz_force_via_foster(
+            mesh, lam, vecs, free, SIGMA, MU0, s, M_PM, Z_PM, 0.0)[2]
+        rows.append({
+            "modes": int(len(lam)),
+            "lambda_max_per_m2": float(lam[-1]),
+            "lambda_max_over_s_mu_sigma": float(lam[-1]) / abs(s * MU0 * SIGMA),
+            "kernel_lift_N": float(lift),
+            "relative_error": abs(float(lift) / reference - 1.0),
+        })
+        print(f"mode study {count:5d} modes: lambda_max/|s mu sigma| = "
+              f"{rows[-1]['lambda_max_over_s_mu_sigma']:.3f}, lift error "
+              f"{rows[-1]['relative_error']:.3e}", flush=True)
+    return {"mesh": list(MODE_STUDY_MESH), "frequency_hz": MODE_STUDY_FREQUENCY_HZ,
+            "reference_lift_N": reference, "rows": rows}
+
+
 def run(output):
     lift_bound = 0.5 * 3 * MU0 * M_PM ** 2 / (32 * math.pi * Z_PM ** 4)
     cases = []
@@ -142,20 +186,22 @@ def run(output):
                     _bx, _by, bz = dipole_field(x_pm)
                     v = solve_reaction_field(mesh, fes, bz, s)
                     reference = reference_force(mesh, fes, v, x_pm)
-                    kernel_fx, kernel_fz = compute_lorentz_force_via_foster(
-                        mesh, lam, vecs, free, SIGMA, MU0, s, M_PM, Z_PM, x_pm)
+                    kernel = [float(value) for value in compute_lorentz_force_via_foster(
+                        mesh, lam, vecs, free, SIGMA, MU0, s, M_PM, Z_PM, x_pm)]
                     cases.append({
                         "mesh": [nx, ny, nz],
                         "ndof": fes.ndof,
                         "frequency_hz": frequency,
                         "x_pm_m": x_pm,
                         "reference_force_N": reference,
-                        "kernel_force_xz_N": [float(kernel_fx), float(kernel_fz)],
+                        "kernel_force_N": kernel,
+                        "kernel_lift_relative_error": abs(kernel[2] / reference[2] - 1.0),
                     })
                     print(f"mesh={nx}x{ny}x{nz} f={frequency:7.1f} x_pm={x_pm:+.3f} | "
                           f"reference F=({reference[0]:+.3e},{reference[1]:+.3e},"
-                          f"{reference[2]:+.3e}) | kernel (Fx,Fz)=({kernel_fx:+.3e},"
-                          f"{kernel_fz:+.3e})", flush=True)
+                          f"{reference[2]:+.3e}) | kernel F=({kernel[0]:+.3e},"
+                          f"{kernel[1]:+.3e},{kernel[2]:+.3e})", flush=True)
+        study = mode_study()
 
     def pick(mesh, frequency, x_pm):
         return next(c for c in cases if c["mesh"] == list(mesh)
@@ -169,10 +215,16 @@ def run(output):
             / pick(coarse, f, 0.0)["reference_force_N"][2] - 1.0)
         for f in FREQUENCIES_HZ
     ]
+    agreement = [c["kernel_lift_relative_error"] for c in cases
+                 if c["frequency_hz"] in KERNEL_AGREEMENT_FREQUENCIES_HZ]
+    study_errors = [row["relative_error"] for row in study["rows"]]
+
+    def horizontal_vanishes(force):
+        return max(abs(force[0]), abs(force[1])) < 1e-9 * abs(force[2])
+
     checks = {
         "reference_horizontal_force_vanishes_when_centred": all(
-            max(abs(c["reference_force_N"][0]), abs(c["reference_force_N"][1]))
-            < 1e-9 * abs(c["reference_force_N"][2]) for c in centred),
+            horizontal_vanishes(c["reference_force_N"]) for c in centred),
         "reference_lift_repels_the_magnet": all(
             c["reference_force_N"][2] < 0.0 for c in cases),
         "reference_mesh_converged_within_1pct": max(mesh_change) < 0.01,
@@ -180,21 +232,19 @@ def run(output):
             a < b for a, b in zip(lifts, lifts[1:])),
         "reference_lift_below_image_bound": max(lifts) < lift_bound,
     }
-    kernel_record = {
-        "centred_horizontal_force_N": [c["kernel_force_xz_N"][0] for c in centred],
-        "centred_vertical_force_N": [c["kernel_force_xz_N"][1] for c in centred],
-        "violates_mirror_symmetry": any(
-            abs(c["kernel_force_xz_N"][0]) > 1.0 for c in centred),
-        "produces_no_lift_when_centred": all(
-            abs(c["kernel_force_xz_N"][1]) < 1e-9 for c in centred),
-        "exceeds_image_bound": any(
-            abs(c["kernel_force_xz_N"][0]) > lift_bound for c in centred),
-        "cause": ("J_y = -omega sigma Im(v) treats the reaction-field z component "
-                  "v [T] as a vector potential; J must be (1/mu) curl(v z)."),
+    kernel_checks = {
+        "kernel_horizontal_force_vanishes_when_centred": all(
+            horizontal_vanishes(c["kernel_force_N"]) for c in centred),
+        "kernel_lift_repels_the_magnet": all(
+            c["kernel_force_N"][2] < 0.0 for c in cases),
+        "kernel_lift_matches_reference_at_50_and_500Hz": max(agreement) < KERNEL_LIFT_RTOL,
+        "kernel_converges_with_modes_at_5kHz": (
+            all(a > b for a, b in zip(study_errors, study_errors[1:]))
+            and study_errors[-1] < MODE_STUDY_FINAL_RTOL),
     }
     import ngsolve
     payload = {
-        "schema": "radia.maglev.ecb-foster-lorentz-reference.v1",
+        "schema": "radia.maglev.ecb-foster-lorentz-reference.v2",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "runtime": {
             "radia_version": radia.__version__,
@@ -209,16 +259,24 @@ def run(output):
             "meshes": [list(m) for m in MESHES],
             "frequencies_hz": list(FREQUENCIES_HZ), "offsets_m": list(OFFSETS_M),
             "kernel_eigenmodes": KERNEL_EIGENMODES,
+            "kernel_agreement_frequencies_hz": list(KERNEL_AGREEMENT_FREQUENCIES_HZ),
+            "kernel_lift_rtol": KERNEL_LIFT_RTOL,
+            "mode_study_final_rtol": MODE_STUDY_FINAL_RTOL,
             "image_lift_bound_N": lift_bound,
         },
         "cases": cases,
         "reference_mesh_relative_change": mesh_change,
+        "mode_study": study,
         "checks": checks,
+        "kernel_checks": kernel_checks,
         "reference_passed": all(checks.values()),
-        "shipped_kernel": kernel_record,
+        "kernel_passed": all(kernel_checks.values()),
+        "history": HISTORY,
     }
     output.write_text(json.dumps(payload, indent=1) + "\n", encoding="utf-8")
-    print(f"[{'OK' if payload['reference_passed'] else 'FAIL'}] wrote {output}")
+    passed = payload["reference_passed"] and payload["kernel_passed"]
+    print(f"[{'OK' if passed else 'FAIL'}] kernel 50/500 Hz lift error "
+          f"{max(agreement):.3e}; 5 kHz mode study {study_errors}; wrote {output}")
     return payload
 
 
@@ -227,7 +285,7 @@ def main(argv=None):
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     args = parser.parse_args(argv)
     payload = run(args.output)
-    return 0 if payload["reference_passed"] else 1
+    return 0 if payload["reference_passed"] and payload["kernel_passed"] else 1
 
 
 if __name__ == "__main__":
