@@ -169,6 +169,25 @@ Incremental durability, resume latency at large history sizes, and the
 dirty-table regression remain follow-up work. No Rust/Cargo dependency was
 introduced, and Rustuna speed equivalence has not been measured.
 
+### Sampler-state row replacement (2026-09-10)
+
+The common single-sampler RNG-state update now replaces the matching tail row
+of SamplerStateTable instead of deleting it and growing the table again.
+Non-tail/multiple matches preserve the existing remove-and-append ordering.
+Exact state, revision, timestamp, schema, save frequency and backup guarantees
+are unchanged; there is no extra cache or storage format.
+
+mdx2 baseline/candidate/baseline sessions measured the 8,986-trial fill
+segment at 42.445/39.355/42.209 s (about 7% less loop time). At 10,000 rows,
+individual ask/suggest/tell component medians only improved about 1.4% against
+the repeated baseline, so do not generalize the fill result. Dirty-table and
+save timings were essentially equal in the reverse check; the previous 21 ms
+table observation did not reproduce and no extra table cache was added.
+See `validation_test/optimization/optuna_state_row_20260910.md` and its two
+raw JSON files. All 76 upstream-oracle, 27 table/reliability/core and 11 package
+tests pass. Remaining work includes incremental durability with a stated crash
+contract, long-history allocation/native costs, and measured resume latency.
+
 ## 2. Scope and non-goals
 
 ### In scope
