@@ -36,6 +36,41 @@ verifyGreaterThan(testCase,result.waveform.values(2,2),0);
 verifyLessThan(testCase,result.waveform.values(2,1),1e-6);
 end
 
+function testFastAccessDoubleRawUsesColumnMajorStorage(testCase)
+fixture="C:\temp\ltrev\fb.raw";
+if ~isfile(fixture),testCase.assumeFail("Opus fast-access fixture is unavailable.");end
+raw=radia.ltspice.readRawBinary(fixture);
+verifyTrue(testCase,any(raw.flags=="fastaccess"));
+verifyEqual(testCase,max(raw.values(:,1)),0.02,'AbsTol',1e-12);
+verifyEqual(testCase,max(abs(raw.values(:,2))),1,'AbsTol',1e-12);
+end
+
+function testRawPropertiesStopBeforeVariableTable(testCase)
+fixture="C:\temp\ltrev\b.raw";
+if ~isfile(fixture),testCase.assumeFail("Opus binary fixture is unavailable.");end
+raw=radia.ltspice.readRawBinary(fixture);
+verifyFalse(testCase,isfield(raw.raw_properties,"Variables"));
+verifyFalse(testCase,isfield(raw.raw_properties,"x2I_x1"));
+end
+
+function testMissingSubcircuitStateFailsLoudly(testCase)
+netlist=fullfile(testCase.TestData.TempDirectory,"sub_state.cir");
+writeTextFixture(netlist,"X1 in 0 dynamic"+newline+".subckt dynamic a b"+newline+"L1 a b 1m"+newline+".ends"+newline+".end");
+raw=struct("names",["time","V(in)"],"values",[0,0;1e-3,1],"step_ranges",[1,2]);
+verifyError(testCase,@()radia.ltspice.extractTransientState(raw,NetlistFile=netlist),"radia:ltspice:MissingSubcircuitState");
+end
+
+function testProcessTreeTerminationUsesFrameworkCompatibleApi(testCase)
+if ~ispc,testCase.assumeFail("Windows-only process lifecycle test.");end
+info=System.Diagnostics.ProcessStartInfo();info.FileName='pwsh';
+info.Arguments='-NoLogo -NoProfile -NonInteractive -Command "Start-Sleep -Seconds 30"';
+info.UseShellExecute=false;info.CreateNoWindow=true;
+process=System.Diagnostics.Process();process.StartInfo=info;verifyTrue(testCase,process.Start());
+cleanup=onCleanup(@()radia.ltspice.internal.terminateProcessTree(process));
+verifyTrue(testCase,radia.ltspice.internal.terminateProcessTree(process));
+verifyTrue(testCase,process.HasExited);clear cleanup
+end
+
 function testStateInjectionFailsWithoutEndAndAcceptsHierarchicalInductor(testCase)
 fixture=fullfile(testCase.TestData.TempDirectory,"missing_end.cir");writeTextFixture(fixture,"V1 in 0 1"+newline+".tran 1m");
 state=struct("schema","radia.ltspice.transient_state.v1","time_s",0,"node_names","in","node_voltages_V",1,"inductor_names","X1:L1","inductor_currents_A",2);

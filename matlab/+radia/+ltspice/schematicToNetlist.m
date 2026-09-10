@@ -25,7 +25,8 @@ if ispc
  p=System.Diagnostics.Process(); p.StartInfo.FileName='pwsh'; p.StartInfo.Arguments='-NoLogo -NoProfile -NonInteractive -EncodedCommand '+string(encoded); p.StartInfo.UseShellExecute=false; p.StartInfo.CreateNoWindow=true;
  if ~p.Start(), error("radia:ltspice:ProcessStart","Could not start LTspice schematic conversion."); end
  if ~p.WaitForExit(round(options.Timeout_s*1000))
-  try p.Kill(true);p.WaitForExit(5000);catch,end
+  terminated=radia.ltspice.internal.terminateProcessTree(p);
+  if ~terminated,error("radia:ltspice:TimeoutCleanup","LTspice schematic conversion timed out and its process tree could not be confirmed terminated.");end
   error("radia:ltspice:Timeout","LTspice schematic conversion exceeded Timeout_s=%g.",options.Timeout_s);
  end
  status=double(p.ExitCode);

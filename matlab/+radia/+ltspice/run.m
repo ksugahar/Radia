@@ -102,12 +102,13 @@ end
 
 ltArgs={'-Run','-b'}; if rawFormat=="ascii",ltArgs{end+1}='-ascii';end; ltArgs{end+1}=char(runNetlist);
 quoted=cellfun(@(x)"'"+replace(string(x),"'","''")+"'",ltArgs);
-script="$p=Start-Process -FilePath '"+replace(executable,"'","''")+"' -ArgumentList @("+join(quoted,",")+") -Wait -PassThru -WindowStyle Hidden; exit $p.ExitCode";
+stdoutFile=string(runNetlist)+".stdout.txt";stderrFile=string(runNetlist)+".stderr.txt";
+script="$p=Start-Process -FilePath '"+replace(executable,"'","''")+"' -ArgumentList @("+join(quoted,",")+") -RedirectStandardOutput '"+replace(stdoutFile,"'","''")+"' -RedirectStandardError '"+replace(stderrFile,"'","''")+"' -Wait -PassThru -WindowStyle Hidden; exit $p.ExitCode";
 encoded=matlab.net.base64encode(unicode2native(char(script),'UTF-16LE'));
 info = System.Diagnostics.ProcessStartInfo();
 info.FileName = 'pwsh'; info.Arguments='-NoLogo -NoProfile -NonInteractive -EncodedCommand '+string(encoded);
 info.UseShellExecute=false; info.CreateNoWindow=true;
-info.RedirectStandardOutput=true;info.RedirectStandardError=true;
+info.RedirectStandardOutput=false;info.RedirectStandardError=false;
 process = System.Diagnostics.Process();
 process.StartInfo = info;
 if ~process.Start()
@@ -122,24 +123,20 @@ while toc(started) <= timeout_s
     pause(0.05);
 end
 if ~process.HasExited
-    stopOwnedProcess(process);
+    terminated=stopOwnedProcess(process);
+    if ~terminated,error("radia:ltspice:TimeoutCleanup","LTspice exceeded Timeout_s=%g and its process tree could not be confirmed terminated.",timeout_s);end
     error("radia:ltspice:Timeout", ...
         "LTspice exceeded Timeout_s=%g; its owned process tree was terminated.", timeout_s);
 end
 status=double(process.ExitCode);
-output=string(process.StandardOutput.ReadToEnd())+string(process.StandardError.ReadToEnd());
+output="";
+if isfile(stdoutFile),output=output+string(fileread(stdoutFile));delete(stdoutFile);end
+if isfile(stderrFile),output=output+string(fileread(stderrFile));delete(stderrFile);end
 clear cleanup
 end
 
-function stopOwnedProcess(process)
-try
-    if ~process.HasExited
-        process.Kill(true);
-        process.WaitForExit(5000);
-    end
-catch
-    % The owned process may have exited between HasExited and Kill.
-end
+function terminated=stopOwnedProcess(process)
+terminated=radia.ltspice.internal.terminateProcessTree(process);
 end
 
 function text = applyParameters(text, parameters)

@@ -1,6 +1,6 @@
 function state=extractTransientState(raw,options)
 %EXTRACTTRANSIENTSTATE Extract capacitor-node voltages and inductor currents.
-arguments, raw; options.Step (1,1) double {mustBeInteger,mustBePositive}=1; end
+arguments, raw; options.Step (1,1) double {mustBeInteger,mustBePositive}=1; options.NetlistFile (1,1) string=""; end
 if isa(raw,"radia.ltspice.RawRead"),data=raw.Data;elseif isstruct(raw)&&isfield(raw,"waveform"),data=raw.waveform;elseif isstruct(raw),data=raw;else,error("radia:ltspice:StateInput","raw must be RawRead or RAW/run struct.");end
 range=data.step_ranges(options.Step,:); names=data.names; values=data.values(range(2),:);
 nodeNames=strings(0,1); nodeValues=zeros(0,1); inductorNames=strings(0,1); inductorValues=zeros(0,1);
@@ -12,6 +12,17 @@ end
 inductorLike=~cellfun(@isempty,regexp(cellstr(names),'^I\((?:L|.*:L)','once','ignorecase'));
 captured="I("+inductorNames+")";missing=names(inductorLike&~ismember(upper(names),upper(captured)));
 if ~isempty(missing),error("radia:ltspice:StateTraceUnsupported","Inductor state trace(s) could not be represented: %s.",join(missing,", "));end
+if strlength(options.NetlistFile)>0
+ netlist=string(fileread(options.NetlistFile));
+ instances=regexp(char(netlist),'(?im)^\s*(X\S+)\s+.*$','tokens');
+ for k=1:numel(instances)
+  instance=string(instances{k}{1});
+  if ~any(contains(lower(names),"("+lower(instance)+":"))
+   error("radia:ltspice:MissingSubcircuitState", ...
+    "No internal state traces were saved for subcircuit instance %s. Add explicit .save traces before interval handoff.",instance);
+  end
+ end
+end
 state=struct("schema","radia.ltspice.transient_state.v1","time_s",real(values(1)), ...
  "node_names",nodeNames,"node_voltages_V",nodeValues, ...
  "inductor_names",inductorNames,"inductor_currents_A",inductorValues);
