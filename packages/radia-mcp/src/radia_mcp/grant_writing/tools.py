@@ -4308,9 +4308,8 @@ def grant_writing_persuasion_quality_check(text: str) -> dict:
     )
     acronym_pile_count = 0
     # An inventory is not a sentence that hides its meaning behind acronyms.
-    # 「Adventure, CST Studio, ELF/Magic, Elmer, EMCoS, EMSolution, ...」 in an
-    # adopted proposal's 研究環境 is a list of the software the lab owns, and
-    # naming them is the whole point.
+    # A one-line list of a dozen solver names in an adopted proposal's 研究環境
+    # is the software the lab owns, and naming them is the whole point.
     for sentence in re.split(r"(?<=[。．!?！？])|\n", prose):
         acronyms = sorted(set(acronym_pattern.findall(sentence)))
         if len(acronyms) < 6:
@@ -6498,7 +6497,12 @@ def grant_writing_collaborative_integration_risk_check(text: str) -> dict:
     results, team readiness, evaluation ethics, and asset provenance.
     """
     text = _prose_for_lint(_read_text_if_path(text))
-    low = text.lower()
+    # 「連携研究者」 is a role title every KAKENHI form carries, not a claim that
+    # the proposal integrates anything. Counted as a trigger word it made a
+    # plain team sentence applicable and reported seven missing axes, so the
+    # role titles are masked before the applicability scan only; once the draft
+    # genuinely proposes coupling, the axes still read the whole prose.
+    low = _NON_MEMBER_ROLE.sub(" ", text).lower()
     applicable_hits = _contains_any(
         low,
         [
@@ -6981,6 +6985,16 @@ _BUDGET_CATEGORY_CODES: dict[str, tuple[str, ...]] = {
     "F": ("その他", "other"),
 }
 
+# The S-14 table itemises six codes, but the 公募要領 summary line and most
+# applicants write the two grouped headings instead. A declared 物品費 total has
+# to be reconciled against 設備備品費 + 消耗品費 and 旅費 against 国内旅費 +
+# 外国旅費; without the group the tool reported the applicant's own summary as
+# "category_not_in_ledger".
+_BUDGET_CATEGORY_GROUPS: dict[str, tuple[str, ...]] = {
+    "物品費": ("A", "B"),
+    "旅費": ("C", "D"),
+}
+
 
 def _budget_category_code(label: object) -> str:
     key = re.sub(r"\s+", "", str(label or "")).replace("･", "・")
@@ -7003,6 +7017,24 @@ def _totals_by_category_code(values: dict) -> dict[str, Decimal]:
     for key, value in values.items():
         code = _budget_category_code(key)
         merged[code] = merged.get(code, Decimal(0)) + Decimal(str(value))
+    return merged
+
+
+def _with_summary_headings(ledger: dict[str, Decimal]) -> dict[str, Decimal]:
+    """Add the grouped headings a declared total may be written under.
+
+    Only the ledger side is expanded. Doing it to the declared side as well
+    would report one missing category twice: a declared 国内旅費 the ledger
+    lacks would be raised once as ``C`` and again as the 旅費 it rolls up into.
+    """
+    merged = dict(ledger)
+    for group, members in _BUDGET_CATEGORY_GROUPS.items():
+        # These totals contain accepted expenditure rows, not cached subtotal
+        # rows. A distinct expense labelled with the group heading must be
+        # added to expenses labelled with member codes, never shadow them.
+        present = [ledger[code] for code in (group, *members) if code in ledger]
+        if present:
+            merged[group] = sum(present, Decimal(0))
     return merged
 
 
@@ -7030,9 +7062,11 @@ def grant_writing_budget_source_consistency_check(
     is supplied and compares exact grand/year/category totals when declared
     values are supplied. It never infers a number from persuasive prose.
 
-    Declared category totals may use the e-Rad code (``A``..``F``) or the
+    Declared category totals may use the e-Rad code (``A``..``F``), the
     Japanese heading of the S-14 table (設備備品費, 消耗品費, 国内旅費,
-    外国旅費, 人件費・謝金, その他); both are reconciled to the same code.
+    外国旅費, 人件費・謝金, その他), or the two grouped summary headings
+    (物品費 = 設備備品費 + 消耗品費, 旅費 = 国内旅費 + 外国旅費); all three
+    are reconciled to the same ledger rows.
     """
     source = pathlib.Path(budget_source)
     if not source.is_file():
@@ -7067,7 +7101,9 @@ def grant_writing_budget_source_consistency_check(
                     expected_category_totals_json, "expected_category_totals_json"
                 )
             ),
-            _totals_by_category_code(totals["category_totals_thousand_yen"]),
+            _with_summary_headings(
+                _totals_by_category_code(totals["category_totals_thousand_yen"])
+            ),
         ),
     ):
         for key in sorted(set(expected) | set(actual)):
