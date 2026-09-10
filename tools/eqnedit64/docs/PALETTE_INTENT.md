@@ -84,7 +84,32 @@ reaches a file only on a crash or an eight-second watchdog freeze, so a healthy
 run records nothing and an instruction to read `font.buttons` cannot be carried
 out.
 
-One judgement is still a person's. The automated gate proves the typeface;
-whether each key is legible at its drawn size — the primes distinguishable from
-quotation marks, the two-letter style faces readable — is decided by looking at
-the staged EXE before publication.
+## Visual acceptance, including AI review
+
+Do not delegate basic clipping discovery to the user. AI reviews the actual
+owner-draw proofs first: all 19 palettes, at 96/144/192 DPI, in normal and
+selected states. `test_palette_visual` creates 114 PNGs and a command index;
+CI retains them as `eqnedit64-palette-proofs`. The images use the production
+34-by-28 logical pixel cells and font chooser. Added gray borders are proof
+guides, not a screenshot of Windows menu chrome. Run the proof executable
+only in session 0 or the explicitly isolated CI environment.
+
+The cell renderer crops measured ink, preserves aspect ratio and a clear
+margin, and never enlarges a glyph beyond its nominal size. The gate checks
+visible ink AND an empty outer pixel border in both states, not just a font
+name or any nonzero pixel. AI additionally checks recognizability and semantic
+distinctions; automation alone cannot certify those.
+
+Fraction/radical, accent/line and typeface commands show native-model previews
+instead of ambiguous literal abbreviations. Fractions use distinct `a`/`b`
+slots, decorated variables use `x`, typefaces use `A`; style selection must be
+cleared before rendering. The preview is derived from the insertion command,
+not from a separate hand-written TeX implementation. Literal catalogue faces
+remain the fallback/accessibility labels and the Windows glyph coverage input;
+the intent oracle still tests the actual insertion independently. Web rendering
+is unchanged in this native fix; equivalent visual goals apply to Web review,
+but GDI cropping must not be copied into the browser renderer.
+
+A human may still resolve ambiguous legibility or monitor-specific perception.
+AI images are not evidence of popup positioning, pointer behavior, or the
+health of LAB's interactive font session. Record untested dimensions explicitly.
