@@ -97,7 +97,7 @@ The subsequent storage attribution is documented in
 raw JSON alongside it. At 10,000 trials, no-path ask/suggest/tell component
 medians sum to 10.11 ms; adding StoragePath with AutoSave=false increases
 that to 18.73 ms. Dirty table views cost 11.01 ms, while a full validated,
-backed-up save costs 9.902 s. StoragePath currently disables native history,
+backed-up save costs 9.902 s. At that baseline, StoragePath disabled native history,
 and nested per-trial IntermediateValues tables dominate object counts during
 serialization. Prioritize normalized persistence and an explicit durability
 contract, then safe native-cache rebuilding for persisted studies. This is
@@ -118,7 +118,7 @@ Older software cannot read schema 6: retain a pre-migration file copy if a
 downgrade is required. Use `radia.optuna.Study` for the public table API;
 consumers directly reading MAT internals must understand the versioned layout.
 AutoSave frequency, primary read-back validation, atomic replacement, and
-verified backup are unchanged. Native-history eligibility is also unchanged.
+verified backup are unchanged. That change alone left native-history eligibility unchanged.
 
 mdx2 run `34451777406` measured full-save medians of 0.084/0.103/0.264 seconds
 at 100/1,000/10,000 trials, compared with 0.208/1.328/9.902 seconds before.
@@ -135,6 +135,39 @@ Acceptance after this storage change: 76 upstream-oracle MATLAB tests,
 version-5 migration and invalid-snapshot backup recovery), and 11 standalone
 Python package tests passed. The targeted normalized-snapshot regression also
 passed on mdx2 before its benchmark. No release or deployment is implied.
+
+### Persisted native TPE history (2026-09-10)
+
+Eligible sequential scalar TPE studies now use the native history cache even
+with StoragePath configured. On initial attachment/resume, completed parameter
+records rebuild the distribution index, intersection/group decomposition and
+native observations once, without consuming RNG. The table/MAT history remains
+authoritative; the native cache is not a second database. Stored RNG restoration
+and AutoSave durability/frequency are unchanged. Generation bookkeeping uses the
+existing state counters instead of scanning trial history.
+
+PRUNED/concurrent or incompatible history still invalidates the cache under the
+existing general-computation rules. Public after_trial calls with FrozenTrial
+snapshots invalidate it instead of appending the same completed trial twice.
+This does not promise incremental cache repair after arbitrary mid-session edits.
+
+mdx2 run `34453133245` passed. With StoragePath and AutoSave=false, sums of
+ask/suggest/tell component medians changed from 3.57/4.24/15.52 ms to
+3.19/3.64/12.93 ms at 100/1,000/10,000 history rows. The 10,000-row trial
+probe improved by 16.7%, and profiling confirms native-history proposals.
+However, dirty-table materialization increased from 10.75 to 21.25 ms and
+full-save time from 0.264 to 0.324 s at that size. Do not claim improvement
+for an end-to-end workflow that materializes/saves after every trial. These
+are separate same-host sessions, not an interleaved statistical comparison.
+See `validation_test/optimization/optuna_persisted_native_20260910.md` and its
+raw JSON for all repetitions and provenance.
+
+The 76 upstream-oracle tests pass, including persisted ordinary/grouped TPE
+sequences with repeated saves/restarts, and the public FrozenTrial hook.
+The 26 table/reliability/core MATLAB tests and 11 package tests also pass.
+Incremental durability, resume latency at large history sizes, and the
+dirty-table regression remain follow-up work. No Rust/Cargo dependency was
+introduced, and Rustuna speed equivalence has not been measured.
 
 ## 2. Scope and non-goals
 

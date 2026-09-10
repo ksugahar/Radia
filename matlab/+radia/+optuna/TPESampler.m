@@ -1255,7 +1255,6 @@ classdef TPESampler < radia.optuna.BaseSampler
                 isscalar(study.Directions) && isempty(obj.GammaFcn) && ...
                 isempty(obj.WeightsFcn) && isempty(obj.ConstraintsFcn) && ...
                 ~study.hasConstraintRecords() && ...
-                strlength(study.StoragePath)==0 && ...
                 obj.Stream.nativeHandle()~=0 && ...
                 radia.optuna.internal.NativeKernels.has( ...
                     "optuna.tpe.best_grouped_history");
@@ -1283,6 +1282,13 @@ classdef TPESampler < radia.optuna.BaseSampler
             if trial.State~="COMPLETE"
                 return
             end
+            if ~isa(trial,"radia.optuna.Trial")
+                % Public after_trial accepts frozen snapshots, including a
+                % trial already present in the attached study. Do not append
+                % it twice or assume that the snapshot is a live trial.
+                obj.NativeHistoryValid=false;
+                return
+            end
             if numel(trial.Values)~=1 || ~isfinite(trial.Value) || ...
                     obj.Stream.nativeHandle()==0 || ...
                     ~radia.optuna.internal.NativeKernels.has( ...
@@ -1291,6 +1297,10 @@ classdef TPESampler < radia.optuna.BaseSampler
                 return
             end
             [names,values,distributions]=trial.parameterRecords();
+            obj.appendNativeHistory(trial.Number,trial.Value,names,values,distributions);
+        end
+
+        function appendNativeHistory(obj,number,value,names,values,distributions)
             distributionIds=zeros(numel(names),1,"int32");
             for index=1:numel(names)
                 distributionIds(index)=obj.historyDistributionId( ...
@@ -1298,7 +1308,7 @@ classdef TPESampler < radia.optuna.BaseSampler
             end
             radia.optuna.internal.NativeKernels.call( ...
                 "optuna.tpe.history.append_complete", ...
-                obj.Stream.nativeHandle(),trial.Number,trial.Value, ...
+                obj.Stream.nativeHandle(),number,value, ...
                 distributionIds,values);
             obj.NativeHistoryCompleteCount= ...
                 obj.NativeHistoryCompleteCount+1;
@@ -1306,6 +1316,62 @@ classdef TPESampler < radia.optuna.BaseSampler
                 obj.GroupDecomposition.update(names,distributions);
             else
                 obj.updateNativeIntersection(names,distributions);
+            end
+        end
+
+        function rebuildNativeHistory(obj,study)
+            % Rebuild computation-only state from authoritative column stores.
+            % This must consume no random numbers; RNG restoration is separate.
+            trials=study.trialData();
+            complete=find(trials.State=="COMPLETE");
+            obj.NativeHistoryValid=obj.isMultivariate(study) && ...
+                isscalar(study.Directions) && ~any(trials.State=="PRUNED") && ...
+                sum(trials.State=="RUNNING")<=1 && ...
+                all(isfinite(trials.Value(complete))) && ...
+                obj.Stream.nativeHandle()~=0;
+            if ~obj.NativeHistoryValid, return; end
+            if isempty(complete), return; end
+            parameters=study.parameterData();
+            [present,owners]=ismember(parameters.TrialNumber,trials.TrialNumber(complete));
+            rows=cell(numel(complete),1);
+            for index=reshape(find(present),1,[])
+                owner=owners(index);
+                rows{owner}(end+1)=index;
+            end
+            decoded=containers.Map('KeyType','char','ValueType','any');
+            for index=1:numel(complete)
+                selected=rows{index};
+                names=parameters.Name(selected);
+                values=zeros(numel(selected),1);
+                distributions=cell(numel(selected),1);
+                for column=1:numel(selected)
+                    row=selected(column);
+                    key=char(parameters.Kind(row)+":"+parameters.Distribution(row));
+                    if isKey(decoded,key)
+                        distribution=decoded(key);
+                    else
+                        distribution=radia.optuna.internal.DistributionCodec.decode( ...
+                            parameters.Kind(row),parameters.Distribution(row));
+                        decoded(key)=distribution;
+                    end
+                    distributions{column}=distribution;
+                    value=parameters.ValueNumeric(row);
+                    if distribution.kind=="categorical"
+                        token=parameters.ValueText(row);
+                        if isfinite(value), token=obj.token(value); end
+                        tokens=radia.optuna.internal.DistributionCodec.choiceTokens(distribution.choices);
+                        choice=find(tokens==token,1);
+                        if isempty(choice)
+                            error("radia:optuna:CategoricalValue", ...
+                                "Stored parameter '%s' is outside its choices.",names(column));
+                        end
+                        value=choice;
+                    end
+                    values(column)=value;
+                end
+                trialRow=complete(index);
+                obj.appendNativeHistory(trials.TrialNumber(trialRow), ...
+                    trials.Value(trialRow),names,values,distributions);
             end
         end
 
@@ -1467,11 +1533,7 @@ classdef TPESampler < radia.optuna.BaseSampler
                 obj.IntersectionTrialNumbers=zeros(0,1);
                 obj.IntersectionCache=obj.emptySearchSpace();
                 obj.IntersectionCacheReady=false;
-                trials=study.trialData();
-                terminal=trials.State=="COMPLETE" | ...
-                    trials.State=="PRUNED";
-                obj.NativeHistoryValid=strlength(study.StoragePath)==0 && ...
-                    ~any(terminal) && sum(trials.State=="RUNNING")<=1;
+                obj.NativeHistoryValid=false;
                 obj.Restored = false;
             end
             if obj.Restored
@@ -1482,6 +1544,7 @@ classdef TPESampler < radia.optuna.BaseSampler
                 obj.restoreState(state);
             end
             obj.Restored = true;
+            obj.rebuildNativeHistory(study);
         end
 
         function restoreState(obj, state)
@@ -1519,8 +1582,8 @@ classdef TPESampler < radia.optuna.BaseSampler
                 "schema", obj.StateSchema, ...
                 "seed", obj.Seed, ...
                 "random_state", obj.Stream.State);
-            trials=study.trialData();
-            generation = sum(trials.State == "COMPLETE");
+            counts=study.trialStateCounts();
+            generation = counts(1);
             study.recordSamplerState(obj.SamplerName, obj.StateSchema, ...
                 trialNumber, generation, state);
         end
