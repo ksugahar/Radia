@@ -4418,8 +4418,10 @@ def _claim_statements(text: str) -> list[dict]:
     so each marker takes its own sentence plus the following ones up to a
     sentence that closes the claim.
     """
-    sentences = [s for line in text.splitlines()
-                 for s in re.split(r"(?<=[。．!?！？])", line) if s.strip()]
+
+    sentences = [
+        s for line in text.splitlines() for s in re.split(r"(?<=[。．!?！？])", line) if s.strip()
+    ]
 
     def marker_of(fragment: str) -> str | None:
         return next((m for m in _CLAIM_MARKERS if m in fragment), None)
@@ -4440,7 +4442,12 @@ def _claim_statements(text: str) -> list[dict]:
             continue
         # A bare heading must not consume the question on the following line.
         # Short interrogatives with explicit punctuation are still sentences.
-        if not re.search(r"[。．!?！？]\s*$", sentence.strip()):
+        heading = (
+            re.sub(r"^\s*(?:#{1,6}\s*)?(?:\d+[.、)]\s*)?", "", sentence, count=1)
+            .strip()
+            .rstrip("：:")
+        )
+        if heading in _CLAIM_MARKERS:
             continue
         chunk = [sentence]
         if opener.search(sentence.strip()) or not closer.search(sentence.strip()):
@@ -7662,9 +7669,7 @@ def grant_writing_health_report(
     }
     unknown_skip_ids = sorted(skip_set - valid_skip_ids)
     if unknown_skip_ids:
-        raise ValueError(
-            "unknown grant-writing skip id(s): " + ", ".join(unknown_skip_ids)
-        )
+        raise ValueError("unknown grant-writing skip id(s): " + ", ".join(unknown_skip_ids))
 
     detailed_results: dict[str, dict] = {}
     detailed_scores: dict[str, float] = {}
@@ -7674,12 +7679,14 @@ def grant_writing_health_report(
         singularity = grant_writing_central_question_singularity_check(text)
         detailed_results["central_question_singularity"] = singularity
         if singularity["risks"]:
-            priority_issues.append({
-                "tool": "singularity",
-                "name": "central_question_singularity_check",
-                "score": None,
-                "comments": singularity["comments"],
-            })
+            priority_issues.append(
+                {
+                    "tool": "singularity",
+                    "name": "central_question_singularity_check",
+                    "score": None,
+                    "comments": singularity["comments"],
+                }
+            )
 
     if "sections" not in skip_set:
         sections = grant_writing_section_presence(text, program=program)

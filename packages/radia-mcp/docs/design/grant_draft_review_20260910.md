@@ -27,8 +27,8 @@ tree. Original patches and the release editable installation remain untouched.
 - Shared junction/lock cleanup and release deployment are outside this isolated
   integration. No active runtime was restarted or uninstalled.
 
-The three new tools' 33 regression cases cover punctuation, short questions,
+The follow-up's 34 regression cases cover punctuation, short and wrapped questions,
 applicability, question preservation in health reports, limits and invalid
 inputs, lexical false certainty, file input, and actual MCP registration.
-Impacted grant/paper/MATLAB tests pass: 432 tests. Run real paper-writing stdio
+Impacted grant/paper/MATLAB tests pass: 433 tests. Run real paper-writing stdio
 and scoped CI before merging. This is not a full-package audit or a live-client refresh.
