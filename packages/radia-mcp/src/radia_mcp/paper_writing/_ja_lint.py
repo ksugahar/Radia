@@ -337,10 +337,11 @@ _FORMAL_NOUN_IN_KANJI = re.compile(
 _DOMAIN_TERM = re.compile(r"[一-鿿]{4,}")
 
 
-def grant_writing_check_kanji_ratio(text: str,
-                                     min_ratio: float = 0.18,
-                                     max_ratio: float = 0.40,
-                                     ) -> dict:
+def grant_writing_check_kanji_ratio(
+    text: str,
+    min_ratio: float = 0.18,
+    max_ratio: float = 0.40,
+) -> dict:
     """漢字比率の偏りを検出。本多『日本語の作文技術』第四章に基づく。
 
     推奨 range: 0.25-0.35。< 0.18 = 幼稚/冗長、> 0.40 = 「官庁漢語」感。
@@ -364,9 +365,7 @@ def grant_writing_check_kanji_ratio(text: str,
     formal_noun_hits = _FORMAL_NOUN_IN_KANJI.findall(text)
     repeated_terms = [
         (term, count)
-        for term, count in Counter(
-            _DOMAIN_TERM.findall(text)
-        ).most_common()
+        for term, count in Counter(_DOMAIN_TERM.findall(text)).most_common()
         if count >= 3
     ]
     if ratio < min_ratio:
@@ -377,9 +376,7 @@ def grant_writing_check_kanji_ratio(text: str,
         if len(formal_noun_hits) >= 5:
             hint = "形式名詞 (こと/とき/もの) を漢字にしない。官庁漢語を削減。"
         elif repeated_terms:
-            top = "、".join(
-                f"{term}({count})" for term, count in repeated_terms[:3]
-            )
+            top = "、".join(f"{term}({count})" for term, count in repeated_terms[:3])
             hint = (
                 "形式名詞の漢字化の検出は少なく、分野語彙の反復が見られる"
                 f"（頻出: {top}）。比率自体を目標にせず、"
@@ -397,9 +394,7 @@ def grant_writing_check_kanji_ratio(text: str,
         "cause": {
             "formal_noun_in_kanji_count": len(formal_noun_hits),
             "formal_noun_examples": formal_noun_hits[:5],
-            "repeated_domain_terms": [
-                {"term": t, "count": c} for t, c in repeated_terms[:8]
-            ],
+            "repeated_domain_terms": [{"term": t, "count": c} for t, c in repeated_terms[:8]],
         },
         "total_jp_chars": total,
         "kanji": kanji,
@@ -412,9 +407,11 @@ def grant_writing_check_kanji_ratio(text: str,
         "source": "本多『日本語の作文技術』第四章",
     }
 
-def grant_writing_check_subject_predicate_distance(text: str,
-                                                     max_chars: int = 40,
-                                                     ) -> dict:
+
+def grant_writing_check_subject_predicate_distance(
+    text: str,
+    max_chars: int = 40,
+) -> dict:
     """主述の直結原則 (本多 p.22): 主語と述語の間の距離が遠い文を検出。
 
     判定法: 「は、」または「が、」 のパターンで **明示的な主題マーカー** を
@@ -459,6 +456,7 @@ def grant_writing_check_subject_predicate_distance(text: str,
         ),
         "source": "本多『日本語の作文技術』第一章",
     }
+
 
 def grant_writing_find_undefined_acronyms(
     text: str,
