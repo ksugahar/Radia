@@ -5,6 +5,10 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.82 - Safe AMS setup and physical shifted preconditioning
+
+Released 2026-09-10.
+
 - AMS construction and matrix updates now reject active NGSolve TaskManager
   contexts with a catchable error before hierarchy setup. Real/complex factories
   and compatibility aliases are covered by subprocess regressions; parallel
