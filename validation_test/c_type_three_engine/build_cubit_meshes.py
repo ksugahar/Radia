@@ -337,6 +337,42 @@ def _gap_inventory(path: Path) -> dict[str, object]:
     }
 
 
+# Round-off allowance on a reference barycentric coordinate.  Anything more
+# negative means the point lies outside the element the locator returned.
+_REFERENCE_ROUNDOFF = 1.0e-12
+
+
+def _containing_element(mesh, materials, x0: float, y0: float, z: float):
+    """The element the point locator returns, and whether it contains the point.
+
+    The NGSolve point locator accepts an element when the point lies within a
+    small tolerance OUTSIDE it, and returns the first element it accepts.  Near
+    a material face it can therefore report the neighbouring element.  Measured
+    on the C-type family 2026-09-11: 0.2 um below the upper pole face, in the
+    air, the locator returned the IRON element with a smallest reference
+    barycentric of -7.6e-5, while that same coordinate crosses zero exactly on
+    the pole face.  Taking such answers at face value moves every material
+    switch by the locator tolerance, which is what made the curved walk come up
+    0.2-0.45 um short of the gap on every family mesh.
+
+    Returns ``(number, margin, material)``.  ``number`` is None outside the
+    mesh; ``margin`` is the smallest reference barycentric and is negative when
+    the point lies outside the returned element.
+    """
+    import ngsolve as ng
+
+    point = mesh(float(x0), float(y0), float(z))
+    if point.nr < 0:
+        return None, None, None
+    element = mesh[ng.ElementId(ng.VOL, point.nr)]
+    if element.type != ng.ET.TET:
+        raise ValueError(f"the gap probe supports tetrahedra only; element "
+                         f"{point.nr} is {element.type}")
+    x, y, w = point.pnt
+    margin = min(x, y, w, 1.0 - x - y - w)
+    return int(point.nr), float(margin), str(materials[element.index])
+
+
 def _curved_line_segments(mesh, x0: float, y0: float, half: float,
                           coarse_samples: int = 2001, tolerance: float = 1.0e-9):
     """Segments along a gap line on the CURVED geometry.
@@ -357,50 +393,67 @@ def _curved_line_segments(mesh, x0: float, y0: float, half: float,
     2026-09-10: the two agree on the maximum segment length to about 1 um on
     the five representative lines, while one line disagreed 14 against 13 in
     the count, cause undetermined.
+
+    LOCATOR TOLERANCE: an answer the locator gives for a point OUTSIDE the
+    returned element is never used as a membership (see
+    :func:`_containing_element`).  The coarse walk skips such samples, and the
+    bisection decides the side by whether "the locator returned the low
+    element" and "the point lies inside the returned element" agree, so a
+    switch lands on the face itself rather than one tolerance band away.
     """
     import numpy as np
-    import ngsolve as ng
 
     materials = mesh.GetMaterials()
 
-    def identify(z):
-        try:
-            point = mesh(float(x0), float(y0), float(z))
-        except Exception:                                       # noqa: BLE001
-            return None
-        number = int(point.nr)
-        if str(materials[mesh[ng.ElementId(ng.VOL, number)].index]) != "air":
-            return None
-        return number
+    def locate(z):
+        return _containing_element(mesh, materials, x0, y0, z)
+
+    def on_low_side(z, low_number):
+        number, margin, _ = locate(z)
+        if number is None or low_number is None:
+            return number is None and low_number is None
+        return (number == low_number) == (margin >= -_REFERENCE_ROUNDOFF)
 
     grid = np.linspace(-half + 1e-9, half - 1e-9, int(coarse_samples))
-    ids = [identify(z) for z in grid]
-    boundaries = []
-    for index in range(1, len(grid)):
-        if ids[index] == ids[index - 1]:
+    walk, band_samples = [], 0
+    for z in grid:
+        number, margin, _ = locate(z)
+        if number is not None and margin < -_REFERENCE_ROUNDOFF:
+            band_samples += 1
             continue
-        low, high = float(grid[index - 1]), float(grid[index])
-        low_id = ids[index - 1]
+        walk.append((float(z), number))
+    boundaries = []
+    for (low, low_number), (high, high_number) in zip(walk, walk[1:]):
+        if high_number == low_number:
+            continue
         while high - low > tolerance:
             middle = 0.5 * (low + high)
-            if identify(middle) == low_id:
+            if on_low_side(middle, low_number):
                 low = middle
             else:
                 high = middle
         boundaries.append(0.5 * (low + high))
     edges = [-half] + boundaries + [half]
     segments = []
-    for index in range(len(edges) - 1):
-        centre = 0.5 * (edges[index] + edges[index + 1])
-        if identify(centre) is None:
+    for left, right in zip(edges, edges[1:]):
+        number, margin, material = locate(0.5 * (left + right))
+        if number is not None and margin < -_REFERENCE_ROUNDOFF:
+            raise RuntimeError(
+                f"segment [{left:.9e}, {right:.9e}] m on the line "
+                f"({x0}, {y0}) has its centre inside the locator tolerance "
+                "band; its material cannot be read from the locator")
+        if material != "air":
             continue
-        segments.append(edges[index + 1] - edges[index])
+        segments.append(right - left)
     return {
         "segments": len(segments),
         "maximum_segment_m": float(max(segments)) if segments else 0.0,
         "minimum_segment_m": float(min(segments)) if segments else 0.0,
         "covered_m": float(sum(segments)),
         "switch_tolerance_m": float(tolerance),
+        # Coarse samples the locator placed OUTSIDE the element it returned;
+        # they were skipped, not read as a membership.
+        "locator_band_samples": int(band_samples),
     }
 
 
@@ -478,13 +531,11 @@ def _gap_line_profile(mesh, gap_height: float,
     def _sampled_count(x0, y0, samples):
         previous, count = None, 0
         for value in np.linspace(-half + 1e-9, half - 1e-9, samples):
-            try:
-                point = mesh(float(x0), float(y0), float(value))
-            except Exception:                                   # noqa: BLE001
-                previous = None
-                continue
-            number = int(point.nr)
-            if str(materials[mesh[ng.ElementId(ng.VOL, number)].index]) != "air":
+            number, margin, material = _containing_element(
+                mesh, materials, x0, y0, value)
+            if number is not None and margin < -_REFERENCE_ROUNDOFF:
+                continue                 # locator tolerance band: no membership
+            if material != "air":
                 previous = None
                 continue
             if number != previous:
