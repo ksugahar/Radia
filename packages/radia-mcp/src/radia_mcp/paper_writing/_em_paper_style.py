@@ -1301,9 +1301,12 @@ def paper_writing_em_submission_gate(
         detail = detail or {}
         detail_status = str(detail.get("status", "")).casefold()
         error = detail.get("error")
-        if error or detail_status in {"error", "failed"}:
+        if error or detail.get("ok") is False or detail_status in {"error", "failed", "fail"}:
             status = "fail"
             summary = f"{summary}: {error or detail_status}"
+        elif detail_status in {"skip", "skipped", "not_applicable", "unavailable"} or detail.get("applicable") is False:
+            status = "skip"
+            summary = f"not evaluated: {summary}"
         elif status == "skip" and "error" in summary.casefold():
             status = "fail"
         checks.append({
@@ -1912,6 +1915,10 @@ def paper_writing_em_submission_gate(
                   f"thresholds (whitespace_threshold, "
                   f"layout_max_pages_apart) if the defaults are wrong "
                   f"for your venue.")
+    elif n_skipped > 0:
+        verdict = "warn"
+        advice = (f"INCOMPLETE: {n_skipped} check(s) were not evaluated. "
+                  "Review the skipped rows before claiming submission readiness.")
     else:
         verdict = "pass"
         advice = (f"SUBMISSION-READY: all {n_passed} checks passed "
