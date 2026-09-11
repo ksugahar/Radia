@@ -160,7 +160,8 @@ def _decode_process_output(data: bytes | str | None) -> str:
 def _generated_keys(data: bytes) -> list[str]:
     """Inspect standard BibTeX bibitems; unknown output syntax fails closed."""
     # Citation keys are ASCII by the input contract; reference text need not be.
-    active = re.sub(rb"(?<!\\)%[^\r\n]*", b"", data)
+    # Latin-1 is a reversible byte mapping; reference text is not reencoded.
+    active = _citation_text(data.decode("latin-1")).encode("latin-1")
     heads = list(re.finditer(rb"(?<!\\)\\bibitem\b", active))
     items = list(re.finditer(
         rb"(?<!\\)\\bibitem\s*(?:\[[^\]]*\]\s*)?\{([A-Za-z0-9_:./+-]+)\}", active,
@@ -168,6 +169,30 @@ def _generated_keys(data: bytes) -> list[str]:
     if len(heads) != len(items):
         raise ValueError("unsupported or malformed bibitem syntax")
     return [item[1].decode("ascii") for item in items]
+
+
+def _resolve_installed_style(style: str, directory: pathlib.Path) -> pathlib.Path:
+    """Locate the exact installed bst so generation never uses an untracked style."""
+    command = shutil.which("kpsewhich")
+    if command is None:
+        raise ValueError("kpsewhich is required to locate installed styles; provide a local bst instead")
+    try:
+        result = subprocess.run(
+            [command, "--format=bst", "--", f"{style}.bst"], cwd=directory,
+            capture_output=True, timeout=15, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise ValueError(f"cannot locate bibliography style: {exc}") from exc
+    output = _decode_process_output(result.stdout).strip()
+    if result.returncode != 0 or not output or len(output.splitlines()) != 1:
+        raise ValueError(f"installed bibliography style could not be resolved: {style}")
+    path = pathlib.Path(output)
+    if not path.is_absolute():
+        path = directory / path
+    path = path.resolve()
+    if not path.is_file() or path.suffix.casefold() != ".bst":
+        raise ValueError(f"resolved bibliography style is not a bst file: {path}")
+    return path
 
 
 def bibliography_make_bbl(
@@ -249,14 +274,19 @@ def bibliography_make_bbl(
     if bibtex is None:
         return "Error: bibtex is not on PATH; a TeX installation is required"
 
+    try:
+        selected_style = local_style if style_bytes is not None else _resolve_installed_style(style, source.parent)
+        selected_style_bytes = style_bytes if style_bytes is not None else selected_style.read_bytes()
+    except (OSError, ValueError) as exc:
+        return f"Error: cannot snapshot bibliography style: {exc}"
+
     with tempfile.TemporaryDirectory(prefix="radia-bbl-") as temp_name:
         work = pathlib.Path(temp_name)
         (work / "references.bib").write_bytes(canonical_bytes)
 
         # A publisher-provided style may live beside the manuscript rather than
         # in the TeX installation. Copy only the requested style.
-        if style_bytes is not None:
-            (work / local_style.name).write_bytes(style_bytes)
+        (work / local_style.name).write_bytes(selected_style_bytes)
 
         aux = "\\relax\n" + "".join(f"\\citation{{{key}}}\n" for key in keys)
         aux += f"\\bibstyle{{{style}}}\n\\bibdata{{references}}\n"
@@ -310,6 +340,8 @@ def bibliography_make_bbl(
             current_style = local_style.read_bytes() if local_style.exists() else None
             if current_style != style_bytes:
                 return "Error: local bibliography style changed during generation; retry"
+            if selected_style.read_bytes() != selected_style_bytes:
+                return "Error: selected bibliography style changed during generation; retry"
             for item in resolved["files_resolved"]:
                 current_hash = hashlib.sha256(pathlib.Path(item["path"]).read_bytes()).hexdigest()
                 if current_hash != item.get("sha256"):
@@ -330,8 +362,10 @@ def bibliography_make_bbl(
         f"  cited {len(keys)} canonical keys; wrote {bibitem_count} bibitems; "
         f"style {style}\n"
         f"  canonical_sha256: {hashlib.sha256(canonical_bytes).hexdigest()}\n"
+        f"  style_source: {selected_style}\n"
+        f"  style_sha256: {hashlib.sha256(selected_style_bytes).hexdigest()}\n"
         + (f"  local_style_sha256: {hashlib.sha256(style_bytes).hexdigest()}\n"
-           if style_bytes is not None else "  bibliography style resolved by the TeX installation\n")
+           if style_bytes is not None else "  installed bibliography style snapshot used\n")
         +
         "  references.bib remained canonical and was not copied into the manuscript."
     )
