@@ -183,9 +183,8 @@ def _fetch_publisher_pdf(landing_url: str, pdf_url: str, dest_path: str) -> dict
 
 def _normalize_doi(doi: str) -> str:
     """Decode URL-form DOIs once; percent signs in bare identifiers are literal."""
-    doi = re.sub(r"^doi\s*:\s*", "", doi.strip(), flags=re.IGNORECASE)
-    prefix = re.match(r"^(?:https?://)?(?:dx\.)?doi\.org/", doi, re.IGNORECASE)
-    return urllib.parse.unquote(doi[prefix.end():]) if prefix else doi
+    from ..bibliography._doi import normalize_doi
+    return normalize_doi(doi)
 
 
 def paper_writing_resolve_doi(doi: str) -> dict:

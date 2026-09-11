@@ -260,7 +260,18 @@ partial-entry success is introduced. Key-generation surname heuristics and actua
 BibTeX/Biber name rendering are not certified by these tests. No live API, MCP
 client, editable installation or canonical bibliography was changed.
 
-1. Continue other BibTeX/DOI consumers and remaining fallback paths (P63/P65/P67), then language heuristics and
+The bibliography T1 DOI adapter follow-up (2026-09-12, P63/P65/P67) adds
+20 offline cases. The prior six-file lane plus test_bibliography_doi_contract.py
+passes 960 tests. DOI normalization now lives in bibliography with the existing
+paper_writing wrapper retained. T1 checks returned DOI identity, requires title,
+authors and a valid publication year, groups corporate authors, escapes plain
+metadata text and avoids multiplying existing page-range dashes. Malformed
+Crossref envelope shapes no longer escape as AttributeError. Unsupported markup
+requires manual verification. This does not certify all metadata types, rendered
+bibliography output or other consumers. No live API, MCP client, editable
+installation or canonical bibliography was changed or exercised.
+
+1. Continue bibliography T3 Crossref search response handling, other BibTeX/DOI consumers and remaining fallback paths (P63/P65/P67), then language heuristics and
    deduplication; other PDF consumers remain separate P50 follow-up work.
 2. Review missing pattern producers (P58) and remaining ordering/context rules
    (P59); do not confuse execution-status coverage with semantic correctness.
