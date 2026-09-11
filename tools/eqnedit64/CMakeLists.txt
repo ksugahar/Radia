@@ -54,6 +54,12 @@ if(WIN32)
 endif()
 
 enable_testing()
+add_executable(test_prime_base tests/test_prime_base.cpp)
+target_link_libraries(test_prime_base PRIVATE eqnedit_core)
+if(MSVC)
+    target_compile_options(test_prime_base PRIVATE /W4 /WX /utf-8)
+endif()
+add_test(NAME prime_base COMMAND test_prime_base)
 add_executable(test_tex_document
     tests/test_tex_document.cpp
     src/tex_document.cpp

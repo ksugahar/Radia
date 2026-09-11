@@ -143,3 +143,15 @@ the current native raster path is not cached.
 A human may still resolve ambiguous legibility or monitor-specific perception.
 AI images are not evidence of popup positioning, pointer behavior, or the
 health of LAB's interactive font session. Record untested dimensions explicitly.
+
+## Prime attachment
+
+A prime decoration applies to its entire selected/template body. Native output
+must protect a compound body (including existing superscripts) as
+`{a^{2}}^{\prime }`, not `a^{2}'`. Apply the same rule for two and three primes.
+The Unicode prime symbol itself emits `\prime`, not an apostrophe: the latter
+creates a superscript and cannot substitute for a glyph inside a superscript.
+Require the first save/reparse to preserve the emitted TeX. Web selection
+decoration uses the same grouped-base form; unselected Web caret insertion
+retains its existing empty-atom protection after an exponent. No automatic
+rewrite of arbitrary manually typed TeX is implied.

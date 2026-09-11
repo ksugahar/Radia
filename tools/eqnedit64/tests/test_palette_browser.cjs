@@ -99,6 +99,16 @@ const server = http.createServer((req, res) => {
     }));
     assert.equal(result.keys,291); assert.equal(result.disabled,4);
     assert.deepEqual(result.errors,[]); assert.deepEqual(errors,[]);
+    // Independent MathJax semantics: an explicit prime glyph is in the outer
+    // exponent, not an apostrophe creating another exponent inside it.
+    const primeChecks = await page.evaluate(() => [1,2,3].map(count => {
+      const tex = "{a^{2}}^{" + "\\prime ".repeat(count) + "}";
+      const xml = new DOMParser().parseFromString(MathJax.tex2mml(tex), "text/xml");
+      return {scripts:xml.getElementsByTagName("msup").length,
+              errors:xml.getElementsByTagName("merror").length,
+              primes:(xml.documentElement.textContent.match(/′/g)||[]).length};
+    }));
+    assert.deepEqual(primeChecks,[1,2,3].map(primes => ({scripts:2,errors:0,primes})));
     assert.match(result.sans,/MJXTEX-SS/); assert.match(result.fraktur,/MJXTEX-FR/);
     assert(result.strike > 0);
     // The actual click must put selected text in the radicand, not its index.
