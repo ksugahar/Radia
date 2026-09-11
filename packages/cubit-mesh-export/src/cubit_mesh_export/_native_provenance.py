@@ -73,8 +73,8 @@ def _source_commit(repo_root: Path) -> str:
     return commit
 
 
-def verify_manifest(repo_root: Path, package_dir: Path) -> list[str]:
-    """Return every source or payload mismatch recorded by the manifest."""
+def verify_manifest(repo_root: Path | None, package_dir: Path) -> list[str]:
+    """Verify payloads; omit source comparison only for source-free sdists."""
 
     manifest_path = package_dir / "native_payloads.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -83,19 +83,20 @@ def verify_manifest(repo_root: Path, package_dir: Path) -> list[str]:
         errors.append(f"manifest schema must be {SCHEMA}")
 
     source = manifest.get("source", {})
-    actual_source_hash, actual_file_count = native_source_digest(repo_root)
     if source.get("hash_format") != HASH_FORMAT:
         errors.append(f"source hash_format must be {HASH_FORMAT}")
-    if source.get("tree_sha256") != actual_source_hash:
-        errors.append(
-            "native source content differs from manifest: "
-            f"actual={actual_source_hash} recorded={source.get('tree_sha256')}"
-        )
-    if source.get("file_count") != actual_file_count:
-        errors.append(
-            "native source file count differs from manifest: "
-            f"actual={actual_file_count} recorded={source.get('file_count')}"
-        )
+    if repo_root is not None:
+        actual_source_hash, actual_file_count = native_source_digest(repo_root)
+        if source.get("tree_sha256") != actual_source_hash:
+            errors.append(
+                "native source content differs from manifest: "
+                f"actual={actual_source_hash} recorded={source.get('tree_sha256')}"
+            )
+        if source.get("file_count") != actual_file_count:
+            errors.append(
+                "native source file count differs from manifest: "
+                f"actual={actual_file_count} recorded={source.get('file_count')}"
+            )
     if not source.get("commit"):
         errors.append("native source commit is not recorded")
 

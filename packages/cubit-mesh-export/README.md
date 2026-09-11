@@ -111,6 +111,8 @@ a native `cp312-cp312-win_amd64` wheel for CPython 3.12 on 64-bit Windows.
 Because `.pyd` files are intentionally gitignored, upload the newly named,
 content-addressed curver to the `binaries` GitHub release before pushing a
 manifest change. Release CI downloads it and checks both native payloads.
+Building a wheel from an sdist still verifies the manifest and both payloads;
+only source-tree comparison is omitted when the C++ tree is not included.
 
 For a complete deployed-export check, close the interactive Cubit process and
 run:
