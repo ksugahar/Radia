@@ -4639,6 +4639,7 @@ void NGSolveMatrixMatVec(int nlhs, mxArray* plhs[], int nrhs,
         BadArgument("NGSolve matrix and vector scalar types must match for matvec");
     auto output = transpose ? matrix.matrix->CreateRowVector()
                             : matrix.matrix->CreateColVector();
+    ngcore::RegionTaskManager task_manager;
     if (transpose)
         matrix.matrix->MultTrans(*input.vector, *output);
     else
