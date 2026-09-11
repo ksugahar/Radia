@@ -19,6 +19,12 @@ incompatible native gateways fail loudly and never redirect through
 Radia. Radia electromagnetic models and application-specific adapters are not
 part of that generic contract.
 
+The Optuna S-Function uses MATLAB/MEX samplers at step time. `auto` selects TPE
+instead of batch GP for small fixed-numeric budgets. Explicit GP and scrambled
+QMC are rejected, also when restored from a saved study; their batch APIs remain
+available. Neither an unscrambled sequence nor a different GP algorithm is
+silently substituted. Objective callbacks must also respect the step-time rule.
+
 The checked Optuna 5.0.0 public inventory contains all 812 inventoried symbols
 and public class members. Of these, 749 are mapped from executable upstream
 oracle evidence and 63 wider Python-language/replaced/bridged entries are
