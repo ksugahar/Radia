@@ -271,7 +271,17 @@ requires manual verification. This does not certify all metadata types, rendered
 bibliography output or other consumers. No live API, MCP client, editable
 installation or canonical bibliography was changed or exercised.
 
-1. Continue bibliography T3 Crossref search response handling, other BibTeX/DOI consumers and remaining fallback paths (P63/P65/P67), then language heuristics and
+The bibliography T3 search follow-up (2026-09-12, P63/P67) adds 28 offline
+cases. The prior seven-file lane plus test_bibliography_search_contract.py passes
+988 tests. Missing/malformed search envelopes do not become empty results;
+explicit empty items remain valid. Candidates require a title and DOI, while
+unknown optional author/year data displays as unknown without inventing values.
+Invalid input stops before fetching, special query characters remain encoded,
+and decode failures close the response. This is search-result formatting, not
+citation verification or rendered bibliography acceptance. No live API, MCP
+client, editable installation or canonical bibliography was changed or exercised.
+
+1. Continue citation-key/name heuristics, other BibTeX/DOI consumers and remaining fallback paths (P63/P65/P67), then language heuristics and
    deduplication; other PDF consumers remain separate P50 follow-up work.
 2. Review missing pattern producers (P58) and remaining ordering/context rules
    (P59); do not confuse execution-status coverage with semantic correctness.
