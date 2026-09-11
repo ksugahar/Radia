@@ -87,6 +87,15 @@ def paper_writing_run_full_workflow(
                 tex_or_text, bib=bib, abstract=abstract,
                 author_last_names=author_last_names, skip=skip_tools,
             )
+            if (not isinstance(rc, dict) or rc.get("error")
+                    or rc.get("status") not in {"complete", "partial", "unavailable"}
+                    or not isinstance(rc.get("detected_root_causes"), list)
+                    or type(rc.get("n_root_causes")) is not int
+                    or rc["n_root_causes"] != len(rc["detected_root_causes"])
+                    or not all(isinstance(c, dict) for c in rc["detected_root_causes"])):
+                raise ValueError("invalid root-cause result")
+            if rc["status"] != "complete":
+                output["errors"].append("phase3 root_cause incomplete")
         except Exception as e:
             rc = None
             output["errors"].append(f"phase3 root_cause failed: {e}")
@@ -97,11 +106,22 @@ def paper_writing_run_full_workflow(
                 tex_or_text, bib=bib, abstract=abstract,
                 author_last_names=author_last_names, skip=skip_tools,
             )
+            if (not isinstance(next_actions, dict) or next_actions.get("error")
+                    or next_actions.get("status") not in {"complete", "partial", "unavailable"}
+                    or not isinstance(next_actions.get("top_5_actions"), list)
+                    or not all(isinstance(a, dict) for a in next_actions["top_5_actions"])):
+                raise ValueError("invalid next-actions result")
+            if next_actions["status"] != "complete":
+                output["errors"].append("phase3 next_actions incomplete")
         except Exception as e:
+            next_actions = None
             output["errors"].append(f"phase3 next_actions failed: {e}")
 
         output["phases"]["phase3_synthesize"] = {
-            "root_causes_detected": rc.get("n_root_causes", 0) if rc else 0,
+            "status": "complete" if rc and next_actions and rc["status"] == next_actions["status"] == "complete" else "partial",
+            "root_causes_detected": rc["n_root_causes"] if rc and rc["status"] != "unavailable" else None,
+            "unknown_patterns": rc.get("unknown_patterns", []) if rc else [],
+            "unresolved_checks": next_actions.get("unresolved_checks", []) if next_actions else [],
             "top_3_root_causes": (
                 rc.get("detected_root_causes", [])[:3] if rc else []
             ),
@@ -160,7 +180,14 @@ def paper_writing_run_full_workflow(
                 rw = paper_writing_rewrite_suggest(
                     target=target, n_candidates=3
                 )
+                if (not isinstance(rw, dict) or rw.get("error")
+                        or rw.get("ok") is False
+                        or rw.get("status", "complete") != "complete"
+                        or not isinstance(rw.get("candidates"), list)
+                        or not rw["candidates"]):
+                    raise ValueError("rewrite suggestion did not produce candidates")
                 output["phases"]["phase5_suggest"] = {
+                    "status": "complete",
                     "for_top_action": tid,
                     "target": target,
                     "candidates": rw.get("candidates", []),
@@ -187,10 +214,13 @@ def paper_writing_run_full_workflow(
                 response_draft="",
                 page_line_ref="",
             )
+            if not isinstance(resp, str) or not resp.strip():
+                raise ValueError("response letter must be nonempty text")
             output["phases"]["phase6_response_letter"] = {
+                "status": "complete",
                 "note": "revision phase で reviewer_comments 指定時に生成。"
                         "多くの comments があれば caller が loop。",
-                "sample_response": str(resp)[:600],
+                "sample_response": resp[:600],
             }
         except Exception as e:
             output["errors"].append(f"phase6 failed: {e}")
