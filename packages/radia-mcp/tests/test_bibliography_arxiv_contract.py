@@ -52,3 +52,35 @@ def test_invalid_input_does_not_fetch(monkeypatch, value):
     feed().replace("</entry>", "</entry><entry/>"), None])
 def test_malformed_or_multiple_entries_rejected(body):
     assert adapter._atom_to_bibentry(body) is None
+
+
+@pytest.mark.parametrize("name", ["Ludwig van Beethoven", "Gabriel Garcia Marquez",
+    "John Smith Jr.", "Smith, John", "山田 太郎", "Research and Development Group"])
+def test_unstructured_author_names_are_not_reordered(name):
+    entry = adapter._atom_to_bibentry(feed(authors=f"<author><name>{name}</name></author>"))
+    assert entry.fields["author"] == ("{" + name + "}" if " and " in name else name)
+
+
+def test_all_authors_and_plain_text_special_characters_preserved():
+    names = [f"Author {i}" for i in range(8)]
+    body = feed(title="R&amp;D at 20%: A_B #1",
+                authors="".join(f"<author><name>{nm}</name></author>" for nm in names))
+    body = body.replace("</entry>", "<summary>50% &amp; A_B</summary></entry>")
+    entry = adapter._atom_to_bibentry(body)
+    assert entry.fields["author"] == " and ".join(names)
+    assert entry.fields["title"] == r"R\&D at 20\%: A\_B \#1"
+    assert entry.fields["abstract"] == r"50\% \& A\_B"
+
+
+@pytest.mark.parametrize("text", ["$x$ field", r"\alpha field", "&lt;math&gt;x&lt;/math&gt;",
+                                  "&lt;i&gt;&lt;/i&gt;"])
+def test_unsupported_or_empty_title_needs_manual_verification(monkeypatch, text):
+    monkeypatch.setattr(adapter, "_fetch_arxiv", lambda aid: feed(title=text))
+    result = adapter.bibliography_arxiv_to_bibtex("physics/0501123")
+    assert result.startswith("Error:") and "manually" in result
+
+
+def test_existing_paper_renderer_uses_shared_implementation():
+    from radia_mcp.bibliography._metadata_text import bibtex_text
+    from radia_mcp.paper_writing._bibtex_metadata import bibtex_text as compatible
+    assert compatible is bibtex_text
