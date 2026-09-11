@@ -266,29 +266,17 @@ after release; source changes follow Shared MCP Runtime Ownership, not an automa
 
 ## Optuna
 
-Pinned upstream Optuna 5.0.0 is the sole oracle for shared MATLAB behavior.
-Seed, options, search-space and parameter order, history, named constraints,
-values, states, warnings, defaults, extension points, and random consumption
-must match upstream-generated fixtures. Handwritten MATLAB output is not
-compatibility truth.
-
-The MATLAB implementation adopts the Optuna 5 public design in place. Do not
-keep a 4.x architecture behind compatibility shims: the atomic cutover deletes
-active `optuna49` fixtures and pins, removed public APIs and options, legacy
-sampler-state restore, and the former public multi-objective TPE sampler.
-Unified `TPESampler` owns both scalar and multi-objective TPE.
-
-MATLAB table/MAT storage, Simulink monitoring, parallel execution, and MEX are
-extensions, not permission to alter the compatible algorithm. Native MATLAB
-and MEX may outperform Python when differential results remain correct. Keep
-API coverage and oracle manifests current; unsupported behavior fails loudly.
-Fast deterministic tests belong in `tests`; long performance, scaling,
-parallel-efficiency, and maximum-dimension work belongs in `validation_test`.
-
-Released `optuna-mcp==0.2.0` owns generic Study/Trial MCP against Optuna
-5.0.0. An observed upstream `0.3.0.dev` source tree is development status, not
-an installed stable-version claim. `radia-mcp` owns only MATLAB, Simulink,
-MEX, differential-oracle, performance-gate, and Radia-domain composition.
+Pinned Optuna 5.0.0 is the sole oracle for shared MATLAB behavior: seed, options,
+parameter/search-space order, history, named constraints, values, states, warnings,
+defaults, extension points, and random consumption match upstream-generated fixtures.
+Handwritten MATLAB output is not compatibility truth.
+Adopt the Optuna 5 design in place: delete active optuna49 fixtures/pins, removed APIs/options,
+legacy sampler-state restore and public multi-objective TPE; unified TPESampler owns both objectives.
+Table/MAT storage, Simulink, parallelism and MEX are extensions, not algorithm changes.
+Native acceleration requires correct differential results; maintain API/oracle manifests and fail loudly.
+Fast deterministic tests belong in tests; long performance/scaling/parallel/dimension work in validation_test.
+Released optuna-mcp==0.2.0 owns generic Study/Trial MCP for Optuna 5.0.0; 0.3.0.dev is not a stable release.
+radia-mcp owns MATLAB, Simulink, MEX, differential-oracle, performance-gate and Radia composition.
 
 ## Git And Agents
 
