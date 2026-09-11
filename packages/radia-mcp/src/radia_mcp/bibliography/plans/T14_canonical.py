@@ -18,7 +18,8 @@ from .._bibparse import read_bib_file
 
 CANONICAL = pathlib.Path(__file__).resolve().parents[1] / "data" / "references.bib"
 
-_CITE = re.compile(r"\\(?:no)?cite[a-zA-Z]*\s*(?:\[[^\]]*\]\s*)*\{([^}]*)\}")
+_CITE = re.compile(r"\\(?P<command>(?:no)?cite[a-zA-Z]*|(?:auto|paren|text|foot|smart|super)cite)"
+                   r"\*?\s*(?:\[[^\]]*\]\s*)*\{(?P<keys>[^}]*)\}")
 
 
 def bibliography_canonical_path() -> str:
@@ -100,13 +101,43 @@ def bibliography_get_entries(keys: str) -> str:
     )
 
 
-def _keys_in_order(tex: str) -> list[str]:
+def _citation_text(tex: str) -> str:
+    """Exclude common literal-code environments and TeX line comments."""
+    tex = re.sub(r"\\begin\{(verbatim\*?|Verbatim|lstlisting|minted)\}.*?\\end\{\1\}",
+                 "", tex, flags=re.DOTALL)
+    tex = re.sub(r"\\verb\*?([^\w\s]).*?\1", "", tex)
+    lines = []
+    for line in tex.splitlines(keepends=True):
+        for index, char in enumerate(line):
+            if char != "%":
+                continue
+            before = line[:index]
+            slashes = len(before) - len(before.rstrip("\\"))
+            if slashes % 2 == 0:
+                line = before + "\n"
+                break
+        lines.append(line)
+    return "".join(lines)
+
+
+def _keys_in_order(tex: str, include_wildcard: bool = False) -> list[str]:
     """Return citation keys in first-appearance order without duplicates."""
     seen: set[str] = set()
     keys: list[str] = []
-    for group in _CITE.findall(tex):
+    tex = _citation_text(tex)
+    if re.search(r"\\(?:auto|paren|text|foot|smart|super)?cites\b|\\(?:InputIfFileExists|includeonly)\b", tex):
+        raise ValueError("conditional inputs or multi-cite commands require explicit citation resolution")
+    for match in _CITE.finditer(tex):
+        before = tex[:match.start()]
+        if (len(before) - len(before.rstrip("\\"))) % 2:
+            continue
+        group = match["keys"]
         for key in (part.strip() for part in group.split(",")):
-            if key and key != "*" and key not in seen:
+            if key == "*" and match["command"] != "nocite":
+                raise ValueError("wildcard is only supported with nocite")
+            if key == "*" and match["command"] == "nocite" and not include_wildcard:
+                continue
+            if key and key not in seen:
                 seen.add(key)
                 keys.append(key)
     return keys
@@ -152,12 +183,18 @@ def bibliography_make_bbl(
     resolved = resolve_input_chain(str(source))
     if not resolved.get("ok"):
         return f"Error: failed to resolve TeX inputs: {resolved.get('error')}"
-    keys = _keys_in_order(resolved["merged_tex"])
+    try:
+        keys = _keys_in_order(resolved["merged_tex"], include_wildcard=True)
+    except ValueError as exc:
+        return f"Error: unsupported citation syntax: {exc}"
     if not keys:
         return f"Error: no \\cite keys found in {source.name}"
 
     entries = [entry for entry in read_bib_file(CANONICAL) if entry.key]
     known = {entry.key for entry in entries}
+    if "*" in keys:
+        keys = [key for key in keys if key != "*"]
+        keys.extend(entry.key for entry in entries if entry.key not in keys)
     missing = [key for key in keys if key not in known]
     if missing:
         return (
@@ -165,9 +202,11 @@ def bibliography_make_bbl(
             + ", ".join(missing)
             + ". Add and verify them there; do not create a manuscript-local .bib."
         )
+    if any(not re.fullmatch(r"[A-Za-z0-9_:./+-]+", key) for key in keys):
+        return "Error: citation keys require a safe ASCII BibTeX identifier"
 
     if not style:
-        match = re.search(r"\\bibliographystyle\s*\{([^}]*)\}", tex)
+        match = re.search(r"\\bibliographystyle\s*\{([^}]*)\}", _citation_text(resolved["merged_tex"]))
         style = match.group(1).strip() if match else "IEEEtran"
     if not re.fullmatch(r"[A-Za-z0-9_.+-]+", style):
         return f"Error: unsafe BibTeX style name: {style!r}"

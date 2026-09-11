@@ -65,6 +65,14 @@ coverage instead of inferring recency from fabricated dates. The eleven-file lan
 passes 1072 tests. Surname matches are explicitly screening heuristics, not author
 identity verification, citation relevance or a publication acceptance rule.
 
+M04 citation-source follow-up (2026-09-12): T8 validation now uses the same
+compile-root input resolver and citation scanner as canonical bbl generation.
+19 new cases cover missing/unreadable inputs, explicit pgf suffixes, comments,
+literal code, starred/optional citation forms, duplicate keys and nocite wildcard
+expansion. The twelve-file lane passes 1091 tests, including real BibTeX output
+from synthetic canonical fixtures. Unsupported conditional/multi-cite syntax
+fails explicitly; static scanning is not a complete TeX interpreter.
+
 Completion of a scoped validation requires matching the selected source, zero unexpected failures
 or skips in the relevant lane, and retained local machine-readable evidence.
 Do not commit transient test logs or mark the package globally "complete" from
