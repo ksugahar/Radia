@@ -19,15 +19,20 @@ from .plans.T6_canonicalize_keys import bibliography_canonicalize_keys  # noqa: 
 from .plans.T7_lint import bibliography_lint  # noqa: F401
 from .plans.T8_cite_validation import bibliography_cite_validation  # noqa: F401
 from .plans.T9_self_citation_ratio import bibliography_self_citation_ratio  # noqa: F401
-from .plans.T12_year_distribution import bibliography_year_distribution  # noqa: F401
-from .plans.T13_check_surname_braces import bibliography_check_surname_braces  # noqa: F401
-from .plans.T14_canonical import (  # noqa: F401
-    bibliography_canonical_path,
-    bibliography_make_bbl,
-)
 
 # Tier 4 — format conversion
-from .plans.T10_normalize_journals import bibliography_normalize_journal_names  # noqa: F401
+from .plans.T10_normalize_journals import (
+    bibliography_normalize_journal_names,  # noqa: F401
+)
 
 # Tier 5 — Intelligence Layer
 from .plans.T11_health_report import bibliography_health_report  # noqa: F401
+from .plans.T12_year_distribution import bibliography_year_distribution  # noqa: F401
+from .plans.T13_check_surname_braces import (
+    bibliography_check_surname_braces,  # noqa: F401
+)
+from .plans.T14_canonical import (  # noqa: F401
+    bibliography_canonical_path,
+    bibliography_get_entries,
+    bibliography_make_bbl,
+)
