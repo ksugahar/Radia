@@ -35,6 +35,7 @@ Sources absorbed:
 from __future__ import annotations
 
 import io
+import gzip
 import re
 import tarfile
 import urllib.parse
@@ -57,6 +58,10 @@ EM_DEFAULT_CATEGORIES = (
     "cs.CE",             # Computational Engineering
     "math.NA",           # Numerical Analysis
 )
+
+_MAX_SOURCE_BYTES = 50 * 1024 * 1024
+_MAX_EXPANDED_BYTES = 64 * 1024 * 1024
+_MAX_SOURCE_MEMBERS = 4096
 
 
 # ============================================================
@@ -135,6 +140,11 @@ def paper_writing_arxiv_fetch_latex_source(
             blowing the context).
         max_chars_per_file: cap on chars per .tex file.
 
+    Safety limits: 50 MiB streamed download, 64 MiB expanded tar/gzip,
+    4096 archive members, 100 returned files, and 1000000 characters per
+    returned file. Individual source reads are bounded to eight times the
+    requested character limit. Files are read in memory, never extracted to disk.
+
     Returns:
         dict with:
           "arxiv_id": canonicalized ID
@@ -150,80 +160,80 @@ def paper_writing_arxiv_fetch_latex_source(
     """
     requests = _require_requests()
     aid = _normalize_arxiv_id(arxiv_id)
+    if not re.fullmatch(r"(?:\d{4}\.\d{4,5}|[A-Za-z][\w.-]*/\d{7})", aid):
+        return {"error": "invalid arXiv identifier"}
+    if (type(max_files) is not int or type(max_chars_per_file) is not int
+            or not 1 <= max_files <= 100 or not 1 <= max_chars_per_file <= 1_000_000):
+        return {"error": "max_files must be 1..100 and max_chars_per_file 1..1000000"}
     url = f"https://arxiv.org/e-print/{aid}"
+    response = None
     try:
-        r = requests.get(
-            url,
+        response = requests.get(
+            url, stream=True,
             headers={"User-Agent": "radia-mcp (mailto:ksugahar@ele.kindai.ac.jp)"},
             timeout=60,
         )
-        r.raise_for_status()
-    except Exception as e:  # noqa: BLE001 - re-raise as clean MCP-JSON
+        response.raise_for_status()
+        blob = bytearray()
+        for chunk in response.iter_content(chunk_size=65536):
+            if len(blob) + len(chunk) > _MAX_SOURCE_BYTES:
+                raise ValueError("source download exceeds safety limit")
+            blob.extend(chunk)
+    except Exception as e:
         return {"error": f"arXiv e-print fetch failed for {aid}: {e}"}
+    finally:
+        if response is not None:
+            response.close()
 
-    # arXiv returns gzipped tar (occasionally a single .gz of a .tex)
-    blob = r.content
-    if len(blob) > 50 * 1024 * 1024:
-        return {"error": "arXiv source archive exceeds the 50 MiB safety limit"}
     files = []
     main_tex = None
     n_total = 0
-
     try:
-        tar = tarfile.open(fileobj=io.BytesIO(blob), mode="r:*")
-    except tarfile.ReadError:
-        # Maybe it's a single gzipped .tex (rare but happens)
-        import gzip
+        is_gzip = blob[:2] == b"\x1f\x8b"
+        if is_gzip:
+            with gzip.GzipFile(fileobj=io.BytesIO(blob)) as compressed:
+                raw_archive = compressed.read(_MAX_EXPANDED_BYTES + 1)
+        else:
+            raw_archive = blob
+        if len(raw_archive) > _MAX_EXPANDED_BYTES:
+            raise ValueError("expanded source exceeds safety limit")
         try:
-            txt = gzip.decompress(blob).decode("utf-8", errors="replace")
-            files.append({
-                "name": f"{aid}.tex",
-                "size_bytes": len(txt.encode("utf-8")),
-                "content": txt[:max_chars_per_file],
-            })
+            tar = tarfile.open(fileobj=io.BytesIO(raw_archive), mode="r:")
+        except tarfile.ReadError:
+            if not is_gzip:
+                raise
+            if len(raw_archive) > max_chars_per_file * 8:
+                raise ValueError("single source file exceeds safety limit")
+            txt = raw_archive.decode("utf-8", errors="replace")
             return {
-                "arxiv_id": aid,
-                "main_tex": f"{aid}.tex",
-                "files": files,
+                "arxiv_id": aid, "main_tex": f"{aid}.tex",
+                "files": [{"name": f"{aid}.tex", "size_bytes": len(raw_archive),
+                           "content": txt[:max_chars_per_file]}],
                 "n_files_total": 1,
-                "advice": "Single-file .gz arXiv submission (rare path).",
+                "advice": "Single-file .gz arXiv submission.",
             }
-        except Exception as e:  # noqa: BLE001
-            return {
-                "error": f"arXiv tarball decode failed for {aid}: not tar, "
-                         f"not gz, exception={e}",
-            }
-
-    for member in tar.getmembers():
-        if not member.isfile():
-            continue
-        if not member.name.endswith(".tex"):
-            continue
-        n_total += 1
-        if len(files) >= max_files:
-            continue
-        if member.size > max_chars_per_file * 8:
-            return {
-                "error": (
-                    f"arXiv member {member.name!r} is unexpectedly large "
-                    f"({member.size} bytes)"
-                )
-            }
-        fh = tar.extractfile(member)
-        if fh is None:
-            continue
-        raw = fh.read(max_chars_per_file * 8 + 1)
-        text = raw.decode("utf-8", errors="replace")
-        is_main = "\\documentclass" in text and main_tex is None
-        if is_main:
-            main_tex = member.name
-        files.append({
-            "name": member.name,
-            "size_bytes": member.size,
-            "content": text[:max_chars_per_file],
-        })
-
-    tar.close()
+        with tar:
+            for index, member in enumerate(tar):
+                if index >= _MAX_SOURCE_MEMBERS:
+                    raise ValueError("source archive member count exceeds safety limit")
+                if not member.isfile() or not member.name.endswith(".tex"):
+                    continue
+                n_total += 1
+                if member.size > max_chars_per_file * 8:
+                    raise ValueError(f"source member {member.name!r} exceeds safety limit")
+                if len(files) >= max_files:
+                    continue
+                with tar.extractfile(member) as fh:
+                    raw = fh.read(max_chars_per_file * 8 + 1)
+                if len(raw) != member.size:
+                    raise ValueError("incomplete source member")
+                text = raw.decode("utf-8", errors="replace")
+                if "\\documentclass" in text and main_tex is None:
+                    main_tex = member.name
+                files.append({"name": member.name, "size_bytes": member.size,
+                              "content": text[:max_chars_per_file]})
+    except Exception as e:
+        return {"error": f"arXiv source decode failed for {aid}: {e}"}
 
     if not files:
         return {"error": f"No .tex files found in arXiv tarball for {aid}"}
