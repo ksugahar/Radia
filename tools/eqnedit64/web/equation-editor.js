@@ -3684,9 +3684,7 @@
 
   /* TeX reads ' as a superscript, so a prime placed straight after another
    * superscript is a double exponent: `a^{2}'` fails to convert with
-   * "Prime causes double exponent: use braces to clarify".  The structural
-   * editor cannot produce that because it attaches the prime to the base; a
-   * source pane can, because the palette inserts at the caret.  Detect the
+   * "Prime causes double exponent: use braces to clarify". Detect the
    * case so the insertion can carry MathJax's own remedy, an empty group. */
   function endsWithSuperscript(text) {
     var i = text.length - 1;
@@ -3723,8 +3721,12 @@
     var selected = value.slice(start, end);
     var after = value.slice(end);
     if (/^'+$/.test(snippet)) {
-      /* A prime is its own superscript, so it never takes a hole and never
-       * wraps a selection.  Clarify with an empty group when the caret sits
+      if (selected) {
+        var decorated = "{" + selected + "}^{" +
+          Array(snippet.length + 1).join("\\prime ") + "}";
+        return { value: before + decorated + after, caret: before.length + decorated.length };
+      }
+      /* With no selection, preserve caret insertion. Clarify with an empty group when the caret sits
        * right after another superscript, which is exactly what MathJax asks
        * for; the rendered result is unchanged where no group is needed. */
       var prime = (endsWithSuperscript(before) ? "{}" : "") + snippet;
