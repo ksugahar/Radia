@@ -341,20 +341,22 @@ def test_agent_policies_stay_compact_and_share_one_policy_body():
     # the documentation contract, not an unimplemented deployment mutex.
     assert "### Shared MCP Runtime Ownership" in policy
     normalized = " ".join(policy.split())
-    assert "Ordinary development uses task-owned environments" in normalized
-    assert "one designated owner per host/interpreter" in normalized
+    assert "Developers may edit live MCP source and change its editable source" in normalized
+    assert "no dedicated branch, frozen snapshot or separate deployment approval" in normalized
     assert "live loaded source separately" in normalized
     assert "Unknown or mixed evidence must stay unverified" in normalized
-    assert 'Never infer global runtime state from "this task made no change"' in normalized
+    assert "Manuscript folders contain generated `.bbl` only, never local `.bib` copies" in normalized
+    assert "bibliography/data/references.bib" in normalized
+    assert "commit-pinned source snapshot" not in normalized
     contract_path = "packages/radia-mcp/docs/operations/mcp-runtime-policy.md"
     assert contract_path in policy
     contract = (ROOT / contract_path).read_text(encoding="utf-8")
     for required in (
-        "One deployment owner",
-        "Required record fields",
+        "change its editable installation source",
+        "no dedicated branch, immutable snapshot or separate",
         "mixed-generation",
         "registration-time",
-        "Enforcement follow-up",
+        "Never mass-kill",
     ):
         assert required in contract
 
