@@ -130,6 +130,26 @@ cases also cover bibitem comment/literal masking. The fourteen-file lane passes
 1195 tests; isolated server registration reports 16 tools. This supersedes the
 earlier untracked-system-style limitation, not rendered-format acceptance.
 
+M04 rendered-acceptance follow-up (2026-09-12): a separate optional real-TeX
+test generates synthetic canonical fixtures through the production bbl tool,
+then compiles manuscript-only bbl delivery with shell escape disabled. Both
+plain and IEEEtran passed two pdflatex runs, one-page checks, undefined citation,
+missing glyph and overfull-box checks, plus extracted Unicode/literal text
+assertions. Full-page Poppler images were visually reviewed without clipping,
+overlap or missing glyphs. Evidence lives under
+C:/temp/pytest-bib-render-20260912-a (PDFs, acceptance.json and images); the
+dedicated pytest result has 2 passes. This closes the named synthetic rendering
+cases, not arbitrary bst styles, languages, macro expansion or real-manuscript
+submission acceptance. The test leaves visual_review=pending until human/agent
+inspection; a text-only pass must not claim visual approval.
+
+Remaining bibliography boundaries are explicit: arbitrary TeX macros and
+conditionals need resolved input, unsupported author expressions need metadata
+resolution, and snapshot checks are optimistic rather than locks on arbitrary
+external writers. Live MCP, editable, wheel and real-manuscript acceptance are
+separate operational lanes. None is represented as globally resolved by these
+static and synthetic tests.
+
 Completion of a scoped validation requires matching the selected source, zero unexpected failures
 or skips in the relevant lane, and retained local machine-readable evidence.
 Do not commit transient test logs or mark the package globally "complete" from
