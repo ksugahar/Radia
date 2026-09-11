@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import json
 import shutil
+import hashlib
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from radia_mcp.bibliography.plans.T14_canonical import (
@@ -155,3 +158,72 @@ def test_make_bbl_nocite_all_uses_canonical_fixture_and_ignores_comments(tmp_pat
     assert result.startswith("bibliography_make_bbl:"), result
     bbl = tex.with_suffix(".bbl").read_text(encoding="utf-8")
     assert r"\bibitem{one}" in bbl and r"\bibitem{two}" in bbl
+
+
+@pytest.mark.parametrize("data", [b"", b"\xff", b"@misc{one,title={unfinished}",
+                                  b"@misc{one,title={A}}\n@misc{one,title={B}}"])
+def test_invalid_canonical_snapshot_fails_closed(tmp_path, monkeypatch, data):
+    from radia_mcp.bibliography.plans import T14_canonical as canonical
+    bib = tmp_path / "fixture.bib"
+    bib.write_bytes(data)
+    monkeypatch.setattr(canonical, "CANONICAL", bib)
+    tex = tmp_path / "paper.tex"
+    tex.write_text(r"\cite{one}", encoding="utf-8")
+    output = tex.with_suffix(".bbl")
+    output.write_bytes(b"verified")
+    assert canonical.bibliography_canonical_path().startswith("Error:")
+    assert json.loads(canonical.bibliography_get_entries("one"))["ok"] is False
+    assert canonical.bibliography_make_bbl(str(tex)).startswith("Error:")
+    assert output.read_bytes() == b"verified"
+
+
+@pytest.mark.parametrize("change", ["canonical", "root", "child", "output", "replace", "none"])
+def test_bbl_publication_preserves_concurrent_work(tmp_path, monkeypatch, change):
+    from radia_mcp.bibliography.plans import T14_canonical as canonical
+    bib = tmp_path / "fixture.bib"
+    snapshot = b"@misc{one,title={First},author={Doe, Jane},year=2024}"
+    bib.write_bytes(snapshot)
+    monkeypatch.setattr(canonical, "CANONICAL", bib)
+    monkeypatch.setattr(canonical.shutil, "which", lambda name: "bibtex")
+    tex = tmp_path / "paper.tex"
+    child = tmp_path / "body.tex"
+    tex.write_text(r"\input{body}", encoding="utf-8")
+    child.write_text(r"\cite{one}", encoding="utf-8")
+    output = tex.with_suffix(".bbl")
+    output.write_bytes(b"verified")
+    generated = br"\begin{thebibliography}{1}\bibitem{one}First\end{thebibliography}"
+
+    def run(*args, cwd, **kwargs):
+        assert (cwd / "references.bib").read_bytes() == snapshot
+        (cwd / "manuscript.bbl").write_bytes(generated)
+        target = {"canonical": bib, "root": tex, "child": child, "output": output}.get(change)
+        if target is not None:
+            target.write_bytes(b"concurrent edit")
+        return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
+
+    monkeypatch.setattr(canonical.subprocess, "run", run)
+    if change == "replace":
+        def fail_replace(self, target):
+            raise PermissionError("locked output")
+        monkeypatch.setattr(Path, "replace", fail_replace)
+    result = canonical.bibliography_make_bbl(str(tex), style="plain")
+    if change == "none":
+        assert result.startswith("bibliography_make_bbl:"), result
+        assert hashlib.sha256(snapshot).hexdigest() in result
+        assert output.read_bytes() == generated
+    else:
+        assert result.startswith("Error:"), result
+        assert output.read_bytes() == (b"concurrent edit" if change == "output" else b"verified")
+    assert not list(tmp_path.glob(".paper.bbl.*.tmp"))
+
+
+@pytest.mark.parametrize("data", [b"plain\r\ntext", "日本語".encode("cp932")])
+def test_tex_resolver_fingerprints_actual_input_bytes(tmp_path, data):
+    from radia_mcp.paper_writing._tex_resolver import resolve_input_chain
+    tex = tmp_path / "paper.tex"
+    tex.write_bytes(data)
+    result = resolve_input_chain(str(tex))
+    assert result["ok"] is True
+    record = result["files_resolved"][0]
+    assert record["size_bytes"] == len(data)
+    assert record["sha256"] == hashlib.sha256(data).hexdigest()
