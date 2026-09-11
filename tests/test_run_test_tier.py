@@ -63,3 +63,30 @@ def test_unknown_base_selects_all_registered_impacts():
 def test_manifest_change_checks_all_registered_impacts():
     runner = runner_module()
     assert runner.select_impact_tests([], ['tests/test_tier_manifest.json']) == runner.select_impact_tests([], None)
+
+
+@pytest.mark.parametrize('changed,expected', [
+    ('matlab/+radia/+sparsesolv/AMS.m', 'tests/test_sparsesolv_matlab_contract.py'),
+    ('matlab/+radia/+sparsesolv/private/setup.m', 'tests/test_sparsesolv_matlab_contract.py'),
+    ('matlab/+radia/+python/sparsesolv.m', 'tests/test_matlab_python_parity_manifest.py'),
+])
+def test_directory_rules_select_descendant_changes(changed, expected):
+    assert runner_module().select_impact_tests([], [changed]) == [expected]
+
+
+@pytest.mark.parametrize('changed', [
+    'matlab/+radia/+sparsesolv_extra/AMS.m',
+    'matlab/+radia/+python_extra/sparsesolv.m',
+    'tools/release_quad.py.bak',
+])
+def test_rules_do_not_select_similarly_named_siblings(changed):
+    assert runner_module().select_impact_tests([], [changed]) == []
+
+
+@pytest.mark.parametrize('changed', [
+    '.github/workflows/ltspice-data-safety.yml',
+    '.github/workflows/radia-optuna.yml',
+    'tests/test_ltspice_ci_scope.py',
+])
+def test_ltspice_scope_regression_is_reachable_from_ci(changed):
+    assert 'tests/test_ltspice_ci_scope.py' in runner_module().select_impact_tests([], [changed])
