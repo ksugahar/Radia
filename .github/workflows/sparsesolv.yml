@@ -66,11 +66,20 @@ jobs:
         id: matlab-impact
         shell: pwsh
         run: |
-          $changed = @(git diff --name-only HEAD~1 HEAD)
-          $required = $LASTEXITCODE -ne 0 -or '${{ github.event_name }}' -eq 'workflow_dispatch'
+          $workspace = $env:GITHUB_WORKSPACE -replace '\\', '/'
+          $diff = @(git -c "safe.directory=$workspace" -C "$workspace" diff --name-only 'HEAD~1' HEAD -- 2>&1)
+          $diffFailed = $LASTEXITCODE -ne 0
+          $changed = @()
+          if ($diffFailed) {
+            Write-Warning "Cannot determine MATLAB impact in $env:GITHUB_WORKSPACE; running parity. $($diff -join ' ')"
+          } else {
+            $changed = $diff
+          }
+          $required = $diffFailed -or '${{ github.event_name }}' -eq 'workflow_dispatch'
           $required = $required -or [bool]($changed -match '^(src/ext/sparsesolv/|src/matlab/|matlab/\+radia/\+sparsesolv/|tests/matlab/.*sparsesolv|validation_test/ngsolve_matlab_parity/run_sparsesolv|CMakeLists.txt|Build.ps1|\.github/workflows/sparsesolv.yml)')
           $required = $required -or [bool]($changed -match '^matlab/(python_api_parity_manifest.json|\+radia/\+python/(sparsesolv|electromagnetValidation|esrfExamples|staticElectromagnet)\.m)')
           "required=$($required.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          Write-Host "MATLAB parity required=$required; diff_failed=$diffFailed; changed_files=$($changed.Count)"
           exit 0
 
       - name: Create isolated native environment

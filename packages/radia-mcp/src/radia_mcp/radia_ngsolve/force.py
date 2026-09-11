@@ -3394,15 +3394,15 @@ def coenergy_torque_from_angle_samples(
                 angle_plus += period
             stencil = "central_periodic"
         elif i == 0:
-            im, ip = 0, 1
+            im, ip = 0, 2
             angle_minus = angles[im]
             angle_plus = angles[ip]
-            stencil = "forward"
+            stencil = "forward_3pt"
         elif i == n - 1:
-            im, ip = n - 2, n - 1
+            im, ip = n - 3, n - 1
             angle_minus = angles[im]
             angle_plus = angles[ip]
-            stencil = "backward"
+            stencil = "backward_3pt"
         else:
             im, ip = i - 1, i + 1
             angle_minus = angles[im]
@@ -3603,10 +3603,12 @@ def virtual_work_force_from_displacement_samples(
     * fixed current / magnetic coenergy: ``F = dW_co/dx``
     * stored field energy at fixed flux: ``F = -dW/dx``
 
-    The derivative is reported in newtons because ``J/m = N``.  End points use
-    one-sided differences; interior rows use central differences.  Use matched
-    meshes or a deliberately stable remeshing recipe when the samples come from
-    separate FEM solves.
+    The derivative is reported in newtons because ``J/m = N``.  Every row --
+    endpoints included -- comes from the quadratic through three consecutive
+    samples, so the whole table is second-order accurate on an arbitrary grid;
+    ``position_minus_m`` / ``position_plus_m`` bound the stencil actually used.
+    Use matched meshes or a deliberately stable remeshing recipe when the
+    samples come from separate FEM solves.
     """
 
     positions = [float(value) for value in positions_m]
@@ -3630,11 +3632,11 @@ def virtual_work_force_from_displacement_samples(
     n = len(positions)
     for i, (position, value) in enumerate(zip(positions, values)):
         if i == 0:
-            im, ip = 0, 1
-            stencil = "forward"
+            im, ip = 0, 2
+            stencil = "forward_3pt"
         elif i == n - 1:
-            im, ip = n - 2, n - 1
-            stencil = "backward"
+            im, ip = n - 3, n - 1
+            stencil = "backward_3pt"
         else:
             im, ip = i - 1, i + 1
             stencil = "central"
@@ -4983,15 +4985,17 @@ def maxwell_surface_force_harmonic(B, mesh, surface):
     Returns (Fx, Fy, Fz) in newtons.  Validated by reduction to the
     static :func:`maxwell_surface_force` reference (validation_test/radia_mcp/test_maxwell_surface_harmonic.py).
     """
-    n = specialcf.normal(mesh.dim)
-    Bn = sum(B[k] * n[k] for k in range(3))                  # B . n  (n real)
-    B2 = sum((B[k] * Conj(B[k])).real for k in range(3))     # |B|^2 (real)
-    bnd = ds(definedon=mesh.Boundaries(surface))
-    F = []
-    for k in range(3):
-        integ = (0.5 / MU0) * (B[k] * Conj(Bn)).real - (0.25 / MU0) * B2 * n[k]
-        F.append(Integrate(integ * bnd, mesh))
-    return tuple(F)
+    from radia.force_ngsolve import time_average_maxwell_surface_force
+
+    # The identity lives in the radia wheel so this knowledge server and the
+    # production calc_* scripts cannot drift apart on the time-average factors.
+    return tuple(time_average_maxwell_surface_force(
+        B,
+        mesh,
+        mesh.Boundaries(surface),
+        permeability_H_per_m=MU0,
+        amplitude="peak",
+    ))
 
 
 def ohmic_loss_2d(Ez, mesh, sigma, region=None):

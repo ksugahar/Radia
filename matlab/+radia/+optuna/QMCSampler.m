@@ -1,5 +1,6 @@
 classdef QMCSampler < radia.optuna.BaseSampler
-    %QMCSAMPLER Sobol or Halton sampling for a fixed numeric search space.
+    %QMCSAMPLER Optuna 5 Sobol or Halton fixed-space sampler.
+    %   Numerical and categorical distributions consume QMC coordinates.
 
     properties (SetAccess=private)
         QMCType (1,1) string = "sobol"
@@ -17,7 +18,7 @@ classdef QMCSampler < radia.optuna.BaseSampler
     end
 
     properties (Constant, Access=private)
-        StateSchema = "radia.optuna.qmc-sampler-state.v1"
+        StateSchema = "radia.optuna.qmc-sampler-state.v2"
         SamplerName = "qmc"
         MaxSobolDimension = 21201
     end
@@ -82,30 +83,50 @@ classdef QMCSampler < radia.optuna.BaseSampler
             obj.recordState(study,trial.Number);
         end
 
-        function searchSpace=inferRelativeSearchSpace(~,study,~)
+        function searchSpace=inferRelativeSearchSpace(obj,study,~)
+            suggested=ismember(study.TrialTable.State,["COMPLETE","PRUNED"]);
+            if any(suggested)
+                % Once a suggested trial exists, Optuna 5 freezes the QMC
+                % space to the earliest such trial, including an empty one.
+                first=min(study.TrialTable.TrialNumber(suggested));
+                searchSpace=obj.searchSpaceForTrial(study,first);
+                return
+            end
+
+            % Parallel workers can all be RUNNING before any result exists.
+            % Optuna 5 uses the union of their declared distributions so the
+            % second QMC point does not lose coordinates merely because one
+            % worker declared them first.
+            pending=study.TrialTable.TrialNumber( ...
+                study.TrialTable.State=="RUNNING");
             searchSpace=struct("name",{},"distribution",{});
-            if isempty(study.ParamTable)
-                return
+            intersection=strings(1,0);
+            initialized=false;
+            for trialNumber=reshape(pending,1,[])
+                current=obj.searchSpaceForTrial(study,trialNumber);
+                names=reshape(string({current.name}),1,[]);
+                for index=1:numel(current)
+                    existing=find(string({searchSpace.name})==names(index),1);
+                    if isempty(existing)
+                        searchSpace(end+1)=current(index); %#ok<AGROW>
+                    else
+                        % dict.update keeps the key position and replaces
+                        % the distribution with the latest pending value.
+                        searchSpace(existing)=current(index);
+                    end
+                end
+                if ~initialized
+                    intersection=names;
+                    initialized=true;
+                elseif ~isempty(names)
+                    intersection=intersect(intersection,names,"stable");
+                end
             end
-            first=min(study.ParamTable.TrialNumber);
-            rows=find(study.ParamTable.TrialNumber==first)';
-            rows=rows(study.ParamTable.Kind(rows)~="categorical");
-            if isempty(rows)
-                return
-            end
-            firstDistribution= ...
-                radia.optuna.internal.DistributionCodec.decode( ...
-                study.ParamTable.Kind(rows(1)), ...
-                study.ParamTable.Distribution(rows(1)));
-            searchSpace=repmat(struct("name","", ...
-                "distribution",firstDistribution),1,numel(rows));
-            for index=1:numel(rows)
-                row=rows(index);
-                distribution=radia.optuna.internal.DistributionCodec.decode( ...
-                    study.ParamTable.Kind(row),study.ParamTable.Distribution(row));
-                searchSpace(index)=struct( ...
-                    "name",study.ParamTable.Name(row), ...
-                    "distribution",distribution);
+            if initialized && ...
+                    ~isequal(sort(intersection),sort(string({searchSpace.name})))
+                warning("radia:optuna:QMCConditionalSearchSpace", ...
+                    "QMCSampler assumes a non-conditional search space; " + ...
+                    "pending trials declared different parameter sets.");
             end
         end
 
@@ -159,6 +180,29 @@ classdef QMCSampler < radia.optuna.BaseSampler
     end
 
     methods (Access=private)
+        function searchSpace=searchSpaceForTrial(~,study,trialNumber)
+            rows=find(study.ParamTable.TrialNumber==trialNumber)';
+            searchSpace=struct("name",{},"distribution",{});
+            if isempty(rows)
+                return
+            end
+            firstDistribution= ...
+                radia.optuna.internal.DistributionCodec.decode( ...
+                study.ParamTable.Kind(rows(1)), ...
+                study.ParamTable.Distribution(rows(1)));
+            searchSpace=repmat(struct("name","", ...
+                "distribution",firstDistribution),1,numel(rows));
+            for index=1:numel(rows)
+                row=rows(index);
+                searchSpace(index)=struct( ...
+                    "name",study.ParamTable.Name(row), ...
+                    "distribution", ...
+                    radia.optuna.internal.DistributionCodec.decode( ...
+                    study.ParamTable.Kind(row), ...
+                    study.ParamTable.Distribution(row)));
+            end
+        end
+
         function warnIndependent(obj,study,trial,name)
             if ~obj.WarnIndependentSampling
                 return
@@ -220,7 +264,7 @@ classdef QMCSampler < radia.optuna.BaseSampler
             sampleIds=reshape(double(sampleIds),[],1);
             points=zeros(numel(sampleIds),dimension);
             if obj.Scramble
-                % Optuna 4.9 delegates scrambled Sobol/Halton generation to
+                % Optuna 5 delegates scrambled Sobol/Halton generation to
                 % scipy.stats.qmc.  Its seeded PCG64 scrambling is part of
                 % the observable proposal sequence, so use that same oracle
                 % instead of maintaining a second scramble implementation.
@@ -269,7 +313,7 @@ classdef QMCSampler < radia.optuna.BaseSampler
             catch exception
                 cause=MException("radia:optuna:QMCSciPy", ...
                     "Scrambled QMCSampler requires the configured Python " + ...
-                    "environment with scipy.stats.qmc (Optuna 4.9 oracle).");
+                    "environment with scipy.stats.qmc (Optuna 5.0 oracle).");
                 cause=addCause(cause,exception);
                 throw(cause);
             end
@@ -395,6 +439,13 @@ classdef QMCSampler < radia.optuna.BaseSampler
         end
 
         function value=untransform(obj,fraction,distribution)
+            if distribution.kind=="categorical"
+                count=numel(distribution.choices);
+                index=min(floor(fraction*count)+1,count);
+                value=radia.optuna.internal.DistributionCodec.choiceAt( ...
+                    distribution.choices,index);
+                return
+            end
             low=distribution.low;
             high=distribution.high;
             step=distribution.step;

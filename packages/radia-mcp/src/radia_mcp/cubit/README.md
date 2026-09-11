@@ -155,17 +155,19 @@ Guess", "Mesh Export Consistency Check Policy"):
 - **Cubit Python API reference** (600+ functions, `api_reference.py`)
 - **In-tree examples** at `src/radia/panels/samples/*.jou`
 
-## Driving policy: headless is primary, GUI is the user's debugger
+## Driving policy: headless for agents, GUI only for GUI tests
 
-Lab policy (2026-08-05): agents drive Cubit through **APREPRO + Python on
+Lab policy (revised 2026-09-10): agents drive Cubit through **APREPRO + Python on
 the headless/batch route** — `.jou` playback, `cubit_batch_try`,
 `cubit_mesh_auto`, the batch stdio daemon. That is the primary path for
 mesh generation, exports, gates, and validation, and it must never
-require a GUI window. The **persistent GUI session** (`cubit_show`,
-`cubit_snapshot`) is maintained as the **user's visual-debugging aid** —
-open it when a human wants to watch the model or capture a figure
+require or launch a GUI window. LLM/agent workflows must not call the
+persistent GUI-session tools (`cubit_show`, `cubit_snapshot`) during
+ordinary work. Those tools exist solely for explicitly scoped GUI tests
+of the user-facing toolbar, rendering, or visual-debugging surface
 (`cubit_snapshot` needs the rendering window; batch reports an honest
-`ok=false` there).
+`ok=false` there). Outside GUI tests, users open Cubit interactively
+themselves.
 
 ## When to use this vs Cubit GUI
 

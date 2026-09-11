@@ -1,0 +1,1711 @@
+{
+  "schema": "radia.validation.optuna-storage-scaling.v1",
+  "host": "MDX2",
+  "matlab": "26.1.0.3346908 (R2026a) Update 5",
+  "seed": 37,
+  "storage_path_enabled": true,
+  "autosave": false,
+  "repeats": 7,
+  "discarded_repeats": 2,
+  "entries": [
+    {
+      "history_before_probes": 100,
+      "history_after_probes": 114,
+      "fill_seconds": 0.6220576,
+      "columns": [
+        "ask",
+        "suggest",
+        "tell",
+        "dirty_tables",
+        "cached_tables",
+        "save_cached_tables"
+      ],
+      "all_seconds": [
+        [
+          0.0016896,
+          0.0008607,
+          0.0008429,
+          0.0320806,
+          0.0018209,
+          0.1298667
+        ],
+        [
+          0.0019746,
+          0.0009733,
+          0.0008202,
+          0.0053968,
+          0.0002288,
+          0.1190795
+        ],
+        [
+          0.0019674,
+          0.0009183,
+          0.000848,
+          0.0046201,
+          0.000224,
+          0.1034649
+        ],
+        [
+          0.0021581,
+          0.0010443,
+          0.000866,
+          0.0133404,
+          0.0002444,
+          0.0798428
+        ],
+        [
+          0.0021133,
+          0.0006431,
+          0.0005793,
+          0.0029642,
+          0.0004777,
+          0.0791042
+        ],
+        [
+          0.0019177,
+          0.000471,
+          0.000404,
+          0.0020828,
+          7.2E-6,
+          0.081885
+        ],
+        [
+          0.0019268,
+          0.0005214,
+          0.0004074,
+          0.00213,
+          6.5E-6,
+          0.0774402
+        ]
+      ],
+      "median_seconds": [
+        0.0019674,
+        0.0006431,
+        0.0005793,
+        0.0029642,
+        0.000224,
+        0.0798428
+      ],
+      "saved_bytes": 16352,
+      "trial_profile": [
+        {
+          "name": "benchmark_optuna_storage_scaling",
+          "calls": 1,
+          "inclusive_seconds": 0.3883226334459135,
+          "self_seconds": 0.045842951169924595
+        },
+        {
+          "name": "tabular.oneLevelParenAssign",
+          "calls": 7,
+          "inclusive_seconds": 0.055355761788128385,
+          "self_seconds": 0.022529025146908882
+        },
+        {
+          "name": "Study>Study.finishTrial",
+          "calls": 7,
+          "inclusive_seconds": 0.05072775662234677,
+          "self_seconds": 0.018887421082148664
+        },
+        {
+          "name": "Trial>Trial.suggestFloat",
+          "calls": 7,
+          "inclusive_seconds": 0.055269961692358288,
+          "self_seconds": 0.015626117441879937
+        },
+        {
+          "name": "Study>Study.recordParameter",
+          "calls": 7,
+          "inclusive_seconds": 0.022096424664040021,
+          "self_seconds": 0.012618914085238077
+        },
+        {
+          "name": "Study>Study.recordSamplerState",
+          "calls": 7,
+          "inclusive_seconds": 0.12903024402362154,
+          "self_seconds": 0.012550814009224753
+        },
+        {
+          "name": "tabular.parenDelete",
+          "calls": 7,
+          "inclusive_seconds": 0.032219535963461811,
+          "self_seconds": 0.011695813054872259
+        },
+        {
+          "name": "tabularDimension.tabularDimension>tabularDimension.subs2inds",
+          "calls": 28,
+          "inclusive_seconds": 0.014367216036693569,
+          "self_seconds": 0.010877112141037893
+        },
+        {
+          "name": "Study>Study.appendTrialRecord",
+          "calls": 7,
+          "inclusive_seconds": 0.010789312043035381,
+          "self_seconds": 0.0094963105997865373
+        },
+        {
+          "name": "TPESampler>TPESampler.sampleNativeGroupedHistory",
+          "calls": 7,
+          "inclusive_seconds": 0.023862526635363902,
+          "self_seconds": 0.0090866101424786835
+        },
+        {
+          "name": "Study>Study.ask",
+          "calls": 7,
+          "inclusive_seconds": 0.21233273700590494,
+          "self_seconds": 0.0087754097951167065
+        },
+        {
+          "name": "TPESampler>TPESampler.beforeTrial",
+          "calls": 7,
+          "inclusive_seconds": 0.18549170704593415,
+          "self_seconds": 0.0083919093670533629
+        },
+        {
+          "name": "datetime.parenAssign",
+          "calls": 14,
+          "inclusive_seconds": 0.00983751098063457,
+          "self_seconds": 0.007893508810738397
+        },
+        {
+          "name": "datetime.datetime>datetime.datetime",
+          "calls": 7,
+          "inclusive_seconds": 0.017361519378936426,
+          "self_seconds": 0.0076906085842610647
+        },
+        {
+          "name": "tabular.container2vars",
+          "calls": 7,
+          "inclusive_seconds": 0.015342617125436744,
+          "self_seconds": 0.0076771085691923428
+        },
+        {
+          "name": "Study>Study.tell",
+          "calls": 7,
+          "inclusive_seconds": 0.0681671760882353,
+          "self_seconds": 0.0072152080536187491
+        },
+        {
+          "name": "tabular.tabular>tabular.subs2inds",
+          "calls": 28,
+          "inclusive_seconds": 0.023520526253622914,
+          "self_seconds": 0.0068161076081426457
+        },
+        {
+          "name": "Trial>Trial.suggest_float",
+          "calls": 7,
+          "inclusive_seconds": 0.061979769181848693,
+          "self_seconds": 0.0067098074894904047
+        },
+        {
+          "name": "Trial>Trial.parameterRecords",
+          "calls": 7,
+          "inclusive_seconds": 0.0058768065596943577,
+          "self_seconds": 0.0058768065596943577
+        },
+        {
+          "name": "TPESampler>TPESampler.updateNativeHistory",
+          "calls": 7,
+          "inclusive_seconds": 0.023887826663603812,
+          "self_seconds": 0.0057244063895852126
+        },
+        {
+          "name": "TPESampler>TPESampler.canUseNativeGroupedHistory",
+          "calls": 7,
+          "inclusive_seconds": 0.010115511290938652,
+          "self_seconds": 0.0055215061631078812
+        },
+        {
+          "name": "TPESampler>TPESampler.appendNativeHistory",
+          "calls": 7,
+          "inclusive_seconds": 0.011898113280679867,
+          "self_seconds": 0.0052985059141948945
+        },
+        {
+          "name": "NativeKernels>NativeKernels.call",
+          "calls": 21,
+          "inclusive_seconds": 0.0068630076604925087,
+          "self_seconds": 0.0050809056713093962
+        },
+        {
+          "name": "Trial>Trial.relativeValue",
+          "calls": 7,
+          "inclusive_seconds": 0.006668807443726131,
+          "self_seconds": 0.0048114053704930281
+        },
+        {
+          "name": "TrialRowIndex>TrialRowIndex.append",
+          "calls": 14,
+          "inclusive_seconds": 0.0047575053103297554,
+          "self_seconds": 0.0047575053103297554
+        },
+        {
+          "name": "parseArgs",
+          "calls": 7,
+          "inclusive_seconds": 0.0045476050760390107,
+          "self_seconds": 0.0045476050760390107
+        },
+        {
+          "name": "Trial>Trial.markFinished",
+          "calls": 7,
+          "inclusive_seconds": 0.0043383048424179881,
+          "self_seconds": 0.0043383048424179881
+        },
+        {
+          "name": "tabular.dotReference",
+          "calls": 14,
+          "inclusive_seconds": 0.0041876046742063862,
+          "self_seconds": 0.0041876046742063862
+        },
+        {
+          "name": "TPESampler>TPESampler.recordState",
+          "calls": 7,
+          "inclusive_seconds": 0.13557975133418476,
+          "self_seconds": 0.0038307042758339571
+        },
+        {
+          "name": "Trial>Trial.setRelativeParameters",
+          "calls": 7,
+          "inclusive_seconds": 0.00713480796387614,
+          "self_seconds": 0.0037604041973650047
+        },
+        {
+          "name": "Trial>Trial.Trial",
+          "calls": 7,
+          "inclusive_seconds": 0.0068259076190814241,
+          "self_seconds": 0.003675004102041377
+        },
+        {
+          "name": "datetime.catUtil",
+          "calls": 7,
+          "inclusive_seconds": 0.0042096046987628241,
+          "self_seconds": 0.0034797038840471777
+        },
+        {
+          "name": "TPESampler>TPESampler.nativeGroupedMetadata",
+          "calls": 7,
+          "inclusive_seconds": 0.0036866041149893171,
+          "self_seconds": 0.003212303585574834
+        },
+        {
+          "name": "tabular.parenAssign",
+          "calls": 7,
+          "inclusive_seconds": 0.058482665278379607,
+          "self_seconds": 0.0031269034902512219
+        },
+        {
+          "name": "Trial>Trial.claimParameterName",
+          "calls": 14,
+          "inclusive_seconds": 0.0046820052260565246,
+          "self_seconds": 0.0030003033489400662
+        },
+        {
+          "name": "Study>Study.skipFinishedTrial",
+          "calls": 7,
+          "inclusive_seconds": 0.0036520040763687372,
+          "self_seconds": 0.0028760032101961906
+        },
+        {
+          "name": "TPESampler>TPESampler.updateNativeIntersection",
+          "calls": 7,
+          "inclusive_seconds": 0.0027219030381895031,
+          "self_seconds": 0.0026555029640737077
+        },
+        {
+          "name": "TPESampler>TPESampler.afterTrial",
+          "calls": 7,
+          "inclusive_seconds": 0.026447129520298908,
+          "self_seconds": 0.0025303028243252451
+        },
+        {
+          "name": "ismember>ismemberClassTypes",
+          "calls": 7,
+          "inclusive_seconds": 0.0024933027830257863,
+          "self_seconds": 0.0024933027830257863
+        },
+        {
+          "name": "datetime.datetime>datetime.vertcat",
+          "calls": 7,
+          "inclusive_seconds": 0.0066673074420518291,
+          "self_seconds": 0.002457702743289005
+        }
+      ],
+      "save_profile": [
+        {
+          "name": "Study>Study.readStudyData",
+          "calls": 2,
+          "inclusive_seconds": 0.16445356831033225,
+          "self_seconds": 0.06468976620687017
+        },
+        {
+          "name": "benchmark_optuna_storage_scaling",
+          "calls": 1,
+          "inclusive_seconds": 0.47866838989411764,
+          "self_seconds": 0.056496357821309962
+        },
+        {
+          "name": "Study>Study.save",
+          "calls": 1,
+          "inclusive_seconds": 0.42217203207280768,
+          "self_seconds": 0.030403831116861624
+        },
+        {
+          "name": "table.saveobj",
+          "calls": 44,
+          "inclusive_seconds": 0.032988333761975935,
+          "self_seconds": 0.023541724093824441
+        },
+        {
+          "name": "table.loadobj",
+          "calls": 22,
+          "inclusive_seconds": 0.045198646258644594,
+          "self_seconds": 0.023333623880843861
+        },
+        {
+          "name": "table.table>table.table",
+          "calls": 25,
+          "inclusive_seconds": 0.081046982947696231,
+          "self_seconds": 0.011590511862332467
+        },
+        {
+          "name": "unique",
+          "calls": 18,
+          "inclusive_seconds": 0.01781471823250888,
+          "self_seconds": 0.011075811335561184
+        },
+        {
+          "name": "tabular.parenReference",
+          "calls": 1,
+          "inclusive_seconds": 0.026060826672005,
+          "self_seconds": 0.0089957092066765172
+        },
+        {
+          "name": "datetime.datetime>datetime.datetime",
+          "calls": 2,
+          "inclusive_seconds": 0.026030626641096715,
+          "self_seconds": 0.008992509203401465
+        },
+        {
+          "name": "tabular.dotReference",
+          "calls": 15,
+          "inclusive_seconds": 0.015162115517697344,
+          "self_seconds": 0.0087304089351544246
+        },
+        {
+          "name": "tabular.tabular>tabular.countVarInputs",
+          "calls": 3,
+          "inclusive_seconds": 0.011424811692746298,
+          "self_seconds": 0.0086832088868474423
+        },
+        {
+          "name": "makeUniqueStrings",
+          "calls": 3,
+          "inclusive_seconds": 0.013034513340198657,
+          "self_seconds": 0.0083715085678371277
+        },
+        {
+          "name": "Study>Study.copyValidStudyFile",
+          "calls": 1,
+          "inclusive_seconds": 0.042190743180200191,
+          "self_seconds": 0.0075022076781493946
+        },
+        {
+          "name": "varNamesDim>varNamesDim.validateAndAssignLabels",
+          "calls": 3,
+          "inclusive_seconds": 0.020846021334902081,
+          "self_seconds": 0.0074345076088616294
+        },
+        {
+          "name": "tabular.dotAssign",
+          "calls": 1,
+          "inclusive_seconds": 0.011017911276303255,
+          "self_seconds": 0.0066164067715746965
+        },
+        {
+          "name": "unique>uniqueR2012a",
+          "calls": 10,
+          "inclusive_seconds": 0.0063003064480611918,
+          "self_seconds": 0.0063003064480611918
+        },
+        {
+          "name": "Study>Study.get.TrialTable",
+          "calls": 1,
+          "inclusive_seconds": 0.099868202210310592,
+          "self_seconds": 0.0060685062108247756
+        },
+        {
+          "name": "tabularDimension.tabularDimension>tabularDimension.subs2inds",
+          "calls": 2,
+          "inclusive_seconds": 0.007624407803215362,
+          "self_seconds": 0.0059926061331446907
+        },
+        {
+          "name": "ismember>ismemberR2012a",
+          "calls": 10,
+          "inclusive_seconds": 0.032395133154863594,
+          "self_seconds": 0.0059085060470722914
+        },
+        {
+          "name": "ismember>ismemberClassTypes",
+          "calls": 6,
+          "inclusive_seconds": 0.023528524080314864,
+          "self_seconds": 0.0057951059310127166
+        },
+        {
+          "name": "tabularDimension.tabularDimension>tabularDimension.init",
+          "calls": 66,
+          "inclusive_seconds": 0.0060686062109271219,
+          "self_seconds": 0.0057321058665351738
+        },
+        {
+          "name": "varNamesDim>varNamesDim.makeValidName",
+          "calls": 3,
+          "inclusive_seconds": 0.00994471017793345,
+          "self_seconds": 0.0055007056297081379
+        },
+        {
+          "name": "parseArgs",
+          "calls": 2,
+          "inclusive_seconds": 0.0054130055399513079,
+          "self_seconds": 0.0054130055399513079
+        },
+        {
+          "name": "ismember>ismemberBuiltinTypes",
+          "calls": 8,
+          "inclusive_seconds": 0.0051757052970859019,
+          "self_seconds": 0.0051757052970859019
+        },
+        {
+          "name": "varNamesDim>varNamesDim.init",
+          "calls": 22,
+          "inclusive_seconds": 0.010057010292867229,
+          "self_seconds": 0.004975305091985913
+        },
+        {
+          "name": "datetime.convertFrom",
+          "calls": 2,
+          "inclusive_seconds": 0.0090731092858917818,
+          "self_seconds": 0.0045514046581441687
+        },
+        {
+          "name": "tabular.getProperty",
+          "calls": 6,
+          "inclusive_seconds": 0.00643170658254292,
+          "self_seconds": 0.004322804424182803
+        },
+        {
+          "name": "fullfile",
+          "calls": 2,
+          "inclusive_seconds": 0.0064843066363765509,
+          "self_seconds": 0.0043173044185538124
+        },
+        {
+          "name": "Study>Study.atomicMoveFile",
+          "calls": 2,
+          "inclusive_seconds": 0.0042705043706562093,
+          "self_seconds": 0.0042705043706562093
+        },
+        {
+          "name": "tabularDimension.tabularDimension>tabularDimension.setLabels",
+          "calls": 6,
+          "inclusive_seconds": 0.026804927433556405,
+          "self_seconds": 0.0042398043392362014
+        },
+        {
+          "name": "tabular.tabular>tabular.initInternals",
+          "calls": 3,
+          "inclusive_seconds": 0.036627237486219204,
+          "self_seconds": 0.0042316043308438869
+        },
+        {
+          "name": "tabular.tabular>tabular.handleFailedToLoadVars",
+          "calls": 22,
+          "inclusive_seconds": 0.0048918050065275831,
+          "self_seconds": 0.0042251043241914405
+        },
+        {
+          "name": "@datetime\\private\\timeZoneAdjustment",
+          "calls": 2,
+          "inclusive_seconds": 0.00407180416729609,
+          "self_seconds": 0.00407180416729609
+        },
+        {
+          "name": "Study>Study.get.ParamTable",
+          "calls": 1,
+          "inclusive_seconds": 0.014268414603037363,
+          "self_seconds": 0.0040628041580850136
+        },
+        {
+          "name": "ismember",
+          "calls": 10,
+          "inclusive_seconds": 0.036418237272317522,
+          "self_seconds": 0.0040231041174539281
+        },
+        {
+          "name": "tabular.tabular>tabular.subs2inds",
+          "calls": 2,
+          "inclusive_seconds": 0.013680214001042286,
+          "self_seconds": 0.0038944039857355221
+        },
+        {
+          "name": "tabularDimension.makeLegacyNames",
+          "calls": 44,
+          "inclusive_seconds": 0.0066150067701418631,
+          "self_seconds": 0.0035794036633478134
+        },
+        {
+          "name": "parseArgsTabularConstructors",
+          "calls": 3,
+          "inclusive_seconds": 0.0035110035933436246,
+          "self_seconds": 0.0035110035933436246
+        },
+        {
+          "name": "Study>Study.get.ObjectiveTable",
+          "calls": 1,
+          "inclusive_seconds": 0.0051439052645400954,
+          "self_seconds": 0.0033717034507766172
+        },
+        {
+          "name": "tabular.dotListLength",
+          "calls": 14,
+          "inclusive_seconds": 0.0030987031713739367,
+          "self_seconds": 0.0030987031713739367
+        }
+      ]
+    },
+    {
+      "history_before_probes": 1000,
+      "history_after_probes": 1014,
+      "fill_seconds": 2.2189231,
+      "columns": [
+        "ask",
+        "suggest",
+        "tell",
+        "dirty_tables",
+        "cached_tables",
+        "save_cached_tables"
+      ],
+      "all_seconds": [
+        [
+          0.0022413,
+          0.0005116,
+          0.0004456,
+          0.0937682,
+          0.0010988,
+          0.2810826
+        ],
+        [
+          0.0030223,
+          0.0004771,
+          0.000372,
+          0.0033368,
+          7.3E-6,
+          0.1032139
+        ],
+        [
+          0.0028272,
+          0.0004765,
+          0.0003651,
+          0.0031381,
+          6.5E-6,
+          0.1021624
+        ],
+        [
+          0.0027684,
+          0.0004375,
+          0.0004064,
+          0.0030555,
+          7.1E-6,
+          0.1001452
+        ],
+        [
+          0.0028122,
+          0.0004447,
+          0.0003494,
+          0.0031396,
+          6.6E-6,
+          0.1066413
+        ],
+        [
+          0.0029159,
+          0.0004574,
+          0.0003567,
+          0.0032212,
+          6.5E-6,
+          0.1017689
+        ],
+        [
+          0.0028233,
+          0.0004633,
+          0.0003579,
+          0.0031965,
+          8E-6,
+          0.1103487
+        ]
+      ],
+      "median_seconds": [
+        0.0028233,
+        0.0004574,
+        0.0003579,
+        0.0031396,
+        6.6E-6,
+        0.1021624
+      ],
+      "saved_bytes": 58186,
+      "trial_profile": [
+        {
+          "name": "benchmark_optuna_storage_scaling",
+          "calls": 1,
+          "inclusive_seconds": 0.41102988240910371,
+          "self_seconds": 0.065874245260666875
+        },
+        {
+          "name": "tabular.oneLevelParenAssign",
+          "calls": 7,
+          "inclusive_seconds": 0.054667837561003865,
+          "self_seconds": 0.022112415192927858
+        },
+        {
+          "name": "Study>Study.finishTrial",
+          "calls": 7,
+          "inclusive_seconds": 0.049979734339916829,
+          "self_seconds": 0.018572112760468135
+        },
+        {
+          "name": "Trial>Trial.suggestFloat",
+          "calls": 7,
+          "inclusive_seconds": 0.055212037934911334,
+          "self_seconds": 0.015549210683502193
+        },
+        {
+          "name": "Study>Study.recordParameter",
+          "calls": 7,
+          "inclusive_seconds": 0.022254615290630258,
+          "self_seconds": 0.012773608776450472
+        },
+        {
+          "name": "Study>Study.recordSamplerState",
+          "calls": 7,
+          "inclusive_seconds": 0.12782298782421173,
+          "self_seconds": 0.012428908539614925
+        },
+        {
+          "name": "tabular.parenDelete",
+          "calls": 7,
+          "inclusive_seconds": 0.032089322047829286,
+          "self_seconds": 0.011683208027261402
+        },
+        {
+          "name": "tabularDimension.tabularDimension>tabularDimension.subs2inds",
+          "calls": 28,
+          "inclusive_seconds": 0.014295309821975983,
+          "self_seconds": 0.010865407465369587
+        },
+        {
+          "name": "Study>Study.appendTrialRecord",
+          "calls": 7,
+          "inclusive_seconds": 0.01114210765548387,
+          "self_seconds": 0.0098012067341819321
+        },
+        {
+          "name": "TPESampler>TPESampler.sampleNativeGroupedHistory",
+          "calls": 7,
+          "inclusive_seconds": 0.028470119561159156,
+          "self_seconds": 0.0090594062245080015
+        },
+        {
+          "name": "Study>Study.ask",
+          "calls": 7,
+          "inclusive_seconds": 0.21611874849018198,
+          "self_seconds": 0.0086891059700832662
+        },
+        {
+          "name": "TPESampler>TPESampler.beforeTrial",
+          "calls": 7,
+          "inclusive_seconds": 0.18901712986928812,
+          "self_seconds": 0.0083233057187504234
+        },
+        {
+          "name": "datetime.parenAssign",
+          "calls": 14,
+          "inclusive_seconds": 0.00983660675850447,
+          "self_seconds": 0.0079186054406902278
+        },
+        {
+          "name": "tabular.container2vars",
+          "calls": 7,
+          "inclusive_seconds": 0.01518191043113871,
+          "self_seconds": 0.0075592051937546515
+        },
+        {
+          "name": "datetime.datetime>datetime.datetime",
+          "calls": 7,
+          "inclusive_seconds": 0.017146411780902041,
+          "self_seconds": 0.0074803051395442473
+        },
+        {
+          "name": "Study>Study.tell",
+          "calls": 7,
+          "inclusive_seconds": 0.067316146251363562,
+          "self_seconds": 0.0071191048913719357
+        },
+        {
+          "name": "tabular.tabular>tabular.subs2inds",
+          "calls": 28,
+          "inclusive_seconds": 0.023225915957988431,
+          "self_seconds": 0.0065328044885385218
+        },
+        {
+          "name": "Trial>Trial.suggest_float",
+          "calls": 7,
+          "inclusive_seconds": 0.061720742406891287,
+          "self_seconds": 0.0065087044719799522
+        },
+        {
+          "name": "Trial>Trial.parameterRecords",
+          "calls": 7,
+          "inclusive_seconds": 0.00582780400414903,
+          "self_seconds": 0.00582780400414903
+        },
+        {
+          "name": "optuna_mex",
+          "calls": 21,
+          "inclusive_seconds": 0.0057954039818877267,
+          "self_seconds": 0.0057954039818877267
+        },
+        {
+          "name": "TPESampler>TPESampler.updateNativeHistory",
+          "calls": 7,
+          "inclusive_seconds": 0.023602616216810444,
+          "self_seconds": 0.0056928039113935992
+        },
+        {
+          "name": "TPESampler>TPESampler.canUseNativeGroupedHistory",
+          "calls": 7,
+          "inclusive_seconds": 0.010132606961879348,
+          "self_seconds": 0.0055225037943843333
+        },
+        {
+          "name": "TPESampler>TPESampler.appendNativeHistory",
+          "calls": 7,
+          "inclusive_seconds": 0.011680508025406284,
+          "self_seconds": 0.0051917035670991651
+        },
+        {
+          "name": "NativeKernels>NativeKernels.call",
+          "calls": 21,
+          "inclusive_seconds": 0.011462707875760852,
+          "self_seconds": 0.005036303460327355
+        },
+        {
+          "name": "TrialRowIndex>TrialRowIndex.append",
+          "calls": 14,
+          "inclusive_seconds": 0.0048519033336303025,
+          "self_seconds": 0.0048519033336303025
+        },
+        {
+          "name": "Trial>Trial.relativeValue",
+          "calls": 7,
+          "inclusive_seconds": 0.0065221044811867935,
+          "self_seconds": 0.0047229032449973337
+        },
+        {
+          "name": "parseArgs",
+          "calls": 7,
+          "inclusive_seconds": 0.0046115031684569232,
+          "self_seconds": 0.0046115031684569232
+        },
+        {
+          "name": "Trial>Trial.markFinished",
+          "calls": 7,
+          "inclusive_seconds": 0.0042381029119022626,
+          "self_seconds": 0.0042381029119022626
+        },
+        {
+          "name": "tabular.dotReference",
+          "calls": 14,
+          "inclusive_seconds": 0.0042116028936947146,
+          "self_seconds": 0.0042116028936947146
+        },
+        {
+          "name": "TPESampler>TPESampler.recordState",
+          "calls": 7,
+          "inclusive_seconds": 0.13454519244288268,
+          "self_seconds": 0.0040499027825943168
+        },
+        {
+          "name": "Trial>Trial.setRelativeParameters",
+          "calls": 7,
+          "inclusive_seconds": 0.0071832049354135889,
+          "self_seconds": 0.0038116026188637986
+        },
+        {
+          "name": "Trial>Trial.Trial",
+          "calls": 7,
+          "inclusive_seconds": 0.0068157046829126853,
+          "self_seconds": 0.0037078025475451759
+        },
+        {
+          "name": "datetime.catUtil",
+          "calls": 7,
+          "inclusive_seconds": 0.0041681028638068524,
+          "self_seconds": 0.0034050023394981725
+        },
+        {
+          "name": "TPESampler>TPESampler.nativeGroupedMetadata",
+          "calls": 7,
+          "inclusive_seconds": 0.0036542025107178331,
+          "self_seconds": 0.0031838021875166761
+        },
+        {
+          "name": "tabular.parenAssign",
+          "calls": 7,
+          "inclusive_seconds": 0.057746339676171307,
+          "self_seconds": 0.0030785021151674419
+        },
+        {
+          "name": "Trial>Trial.claimParameterName",
+          "calls": 14,
+          "inclusive_seconds": 0.00467990321545301,
+          "self_seconds": 0.0029541020296950226
+        },
+        {
+          "name": "Study>Study.skipFinishedTrial",
+          "calls": 7,
+          "inclusive_seconds": 0.0036020024748523978,
+          "self_seconds": 0.00281680193535931
+        },
+        {
+          "name": "TPESampler>TPESampler.updateNativeIntersection",
+          "calls": 7,
+          "inclusive_seconds": 0.0026305018073568111,
+          "self_seconds": 0.0025694017653763888
+        },
+        {
+          "name": "datetime.datetime>datetime.vertcat",
+          "calls": 7,
+          "inclusive_seconds": 0.0066405045625367439,
+          "self_seconds": 0.0024724016987298916
+        },
+        {
+          "name": "ismember>ismemberClassTypes",
+          "calls": 7,
+          "inclusive_seconds": 0.0024687016961877058,
+          "self_seconds": 0.0024687016961877058
+        }
+      ],
+      "save_profile": [
+        {
+          "name": "Study>Study.readStudyData",
+          "calls": 2,
+          "inclusive_seconds": 0.17025103098099634,
+          "self_seconds": 0.075827358337050232
+        },
+        {
+          "name": "benchmark_optuna_storage_scaling",
+          "calls": 1,
+          "inclusive_seconds": 0.51043079269503044,
+          "self_seconds": 0.057768844443905953
+        },
+        {
+          "name": "Study>Study.save",
+          "calls": 1,
+          "inclusive_seconds": 0.45266194825112449,
+          "self_seconds": 0.047838336803965209
+        },
+        {
+          "name": "table.saveobj",
+          "calls": 44,
+          "inclusive_seconds": 0.032582325066899009,
+          "self_seconds": 0.023191617842248553
+        },
+        {
+          "name": "table.loadobj",
+          "calls": 22,
+          "inclusive_seconds": 0.039641830498061748,
+          "self_seconds": 0.020298815616698933
+        },
+        {
+          "name": "unique",
+          "calls": 18,
+          "inclusive_seconds": 0.017933713797130549,
+          "self_seconds": 0.011061508510065383
+        },
+        {
+          "name": "table.table>table.table",
+          "calls": 25,
+          "inclusive_seconds": 0.078697160544904984,
+          "self_seconds": 0.010143407803733406
+        },
+        {
+          "name": "tabular.parenReference",
+          "calls": 1,
+          "inclusive_seconds": 0.025981719988786858,
+          "self_seconds": 0.0090145069352243756
+        },
+        {
+          "name": "datetime.datetime>datetime.datetime",
+          "calls": 2,
+          "inclusive_seconds": 0.026538420417078989,
+          "self_seconds": 0.00873240671819328
+        },
+        {
+          "name": "tabular.dotReference",
+          "calls": 15,
+          "inclusive_seconds": 0.014867811438408004,
+          "self_seconds": 0.0085704065935600388
+        },
+        {
+          "name": "tabular.tabular>tabular.countVarInputs",
+          "calls": 3,
+          "inclusive_seconds": 0.01118700860661768,
+          "self_seconds": 0.0085601065856358276
+        },
+        {
+          "name": "makeUniqueStrings",
+          "calls": 3,
+          "inclusive_seconds": 0.012551009655998794,
+          "self_seconds": 0.0081518062715139009
+        },
+        {
+          "name": "Study>Study.copyValidStudyFile",
+          "calls": 1,
+          "inclusive_seconds": 0.042770132904791175,
+          "self_seconds": 0.0079025060797171948
+        },
+        {
+          "name": "varNamesDim>varNamesDim.validateAndAssignLabels",
+          "calls": 3,
+          "inclusive_seconds": 0.020889916071456391,
+          "self_seconds": 0.0073215056327300704
+        },
+        {
+          "name": "tabular.dotAssign",
+          "calls": 1,
+          "inclusive_seconds": 0.011065408513065816,
+          "self_seconds": 0.0065942050731883708
+        },
+        {
+          "name": "unique>uniqueR2012a",
+          "calls": 10,
+          "inclusive_seconds": 0.0064438049574794855,
+          "self_seconds": 0.0064438049574794855
+        },
+        {
+          "name": "Study>Study.get.TrialTable",
+          "calls": 1,
+          "inclusive_seconds": 0.099758576748303365,
+          "self_seconds": 0.0063875049141655788
+        },
+        {
+          "name": "tabular.size",
+          "calls": 1016,
+          "inclusive_seconds": 0.0083326064106107513,
+          "self_seconds": 0.0061730047491419448
+        },
+        {
+          "name": "ismember>ismemberClassTypes",
+          "calls": 6,
+          "inclusive_seconds": 0.024008118470415476,
+          "self_seconds": 0.0061479047298314861
+        },
+        {
+          "name": "tabularDimension.tabularDimension>tabularDimension.subs2inds",
+          "calls": 2,
+          "inclusive_seconds": 0.0075737058267578731,
+          "self_seconds": 0.0059218045558834878
+        },
+        {
+          "name": "ismember>ismemberR2012a",
+          "calls": 10,
+          "inclusive_seconds": 0.032817025247463341,
+          "self_seconds": 0.0058337044881045449
+        },
+        {
+          "name": "tabularDimension.tabularDimension>tabularDimension.init",
+          "calls": 66,
+          "inclusive_seconds": 0.0060157046281246072,
+          "self_seconds": 0.005687804375857696
+        },
+        {
+          "name": "varNamesDim>varNamesDim.makeValidName",
+          "calls": 3,
+          "inclusive_seconds": 0.010076407752187575,
+          "self_seconds": 0.0056858043743190142
+        },
+        {
+          "name": "parseArgs",
+          "calls": 2,
+          "inclusive_seconds": 0.0054509041936008145,
+          "self_seconds": 0.0054509041936008145
+        },
+        {
+          "name": "ismember>ismemberBuiltinTypes",
+          "calls": 8,
+          "inclusive_seconds": 0.0051511039629523843,
+          "self_seconds": 0.0051511039629523843
+        },
+        {
+          "name": "varNamesDim>varNamesDim.init",
+          "calls": 22,
+          "inclusive_seconds": 0.0099829076802541925,
+          "self_seconds": 0.0049397038003137009
+        },
+        {
+          "name": "datetime.convertFrom",
+          "calls": 2,
+          "inclusive_seconds": 0.00986070758624072,
+          "self_seconds": 0.0047438036495997971
+        },
+        {
+          "name": "@datetime\\private\\timeZoneAdjustment",
+          "calls": 2,
+          "inclusive_seconds": 0.0047129036258271627,
+          "self_seconds": 0.0047129036258271627
+        },
+        {
+          "name": "fullfile",
+          "calls": 2,
+          "inclusive_seconds": 0.00653610502848966,
+          "self_seconds": 0.0042907033010113962
+        },
+        {
+          "name": "tabular.getProperty",
+          "calls": 6,
+          "inclusive_seconds": 0.0062974048448479654,
+          "self_seconds": 0.0042599032773156936
+        },
+        {
+          "name": "tabularDimension.tabularDimension>tabularDimension.setLabels",
+          "calls": 6,
+          "inclusive_seconds": 0.026782620604952057,
+          "self_seconds": 0.0041932032260006517
+        },
+        {
+          "name": "Study>Study.atomicMoveFile",
+          "calls": 2,
+          "inclusive_seconds": 0.0041145031654535131,
+          "self_seconds": 0.0041145031654535131
+        },
+        {
+          "name": "tabular.tabular>tabular.initInternals",
+          "calls": 3,
+          "inclusive_seconds": 0.036592828152341064,
+          "self_seconds": 0.0041085031608374678
+        },
+        {
+          "name": "Study>Study.get.ParamTable",
+          "calls": 1,
+          "inclusive_seconds": 0.014360311047967452,
+          "self_seconds": 0.0040937031494512229
+        },
+        {
+          "name": "ismember",
+          "calls": 10,
+          "inclusive_seconds": 0.036811628320672862,
+          "self_seconds": 0.0039946030732095211
+        },
+        {
+          "name": "tabular.tabular>tabular.subs2inds",
+          "calls": 2,
+          "inclusive_seconds": 0.013543310419415859,
+          "self_seconds": 0.0038310029473453393
+        },
+        {
+          "name": "height",
+          "calls": 1016,
+          "inclusive_seconds": 0.012132909334337324,
+          "self_seconds": 0.0038003029237265729
+        },
+        {
+          "name": "tabularDimension.makeLegacyNames",
+          "calls": 44,
+          "inclusive_seconds": 0.0065996050773428124,
+          "self_seconds": 0.0036041027727818703
+        },
+        {
+          "name": "parseArgsTabularConstructors",
+          "calls": 3,
+          "inclusive_seconds": 0.0034746026731522117,
+          "self_seconds": 0.0034746026731522117
+        },
+        {
+          "name": "Study>Study.get.ObjectiveTable",
+          "calls": 1,
+          "inclusive_seconds": 0.0051868039904178582,
+          "self_seconds": 0.003399502615374703
+        }
+      ]
+    },
+    {
+      "history_before_probes": 10000,
+      "history_after_probes": 10014,
+      "fill_seconds": 42.4449749,
+      "columns": [
+        "ask",
+        "suggest",
+        "tell",
+        "dirty_tables",
+        "cached_tables",
+        "save_cached_tables"
+      ],
+      "all_seconds": [
+        [
+          0.0065776,
+          0.0004232,
+          0.0003604,
+          0.0786011,
+          0.0007721,
+          0.5141422
+        ],
+        [
+          0.0155929,
+          0.0010129,
+          0.0004316,
+          0.0149107,
+          7.4E-6,
+          0.3808652
+        ],
+        [
+          0.0143735,
+          0.0010133,
+          0.0004182,
+          0.0138755,
+          7.7E-6,
+          0.4871778
+        ],
+        [
+          0.0119424,
+          0.0008631,
+          0.0003591,
+          0.0212474,
+          8E-6,
+          0.3241871
+        ],
+        [
+          0.0117283,
+          0.0008045,
+          0.0003532,
+          0.0227604,
+          8.3E-6,
+          0.3218857
+        ],
+        [
+          0.0117305,
+          0.0008102,
+          0.0003463,
+          0.0115668,
+          6.7E-6,
+          0.29529
+        ],
+        [
+          0.0116963,
+          0.0008357,
+          0.0003692,
+          0.0242939,
+          8.9E-6,
+          0.3263536
+        ]
+      ],
+      "median_seconds": [
+        0.0117305,
+        0.0008357,
+        0.0003591,
+        0.0212474,
+        8E-6,
+        0.3241871
+      ],
+      "saved_bytes": 468594,
+      "trial_profile": [
+        {
+          "name": "benchmark_optuna_storage_scaling",
+          "calls": 1,
+          "inclusive_seconds": 0.35902188248205219,
+          "self_seconds": 0.051480240505174413
+        },
+        {
+          "name": "optuna_mex",
+          "calls": 21,
+          "inclusive_seconds": 0.039712931246536395,
+          "self_seconds": 0.039712931246536395
+        },
+        {
+          "name": "tabular.oneLevelParenAssign",
+          "calls": 7,
+          "inclusive_seconds": 0.043488134216904319,
+          "self_seconds": 0.016969613351863602
+        },
+        {
+          "name": "Study>Study.finishTrial",
+          "calls": 7,
+          "inclusive_seconds": 0.038204930060025795,
+          "self_seconds": 0.01409511109017612
+        },
+        {
+          "name": "Trial>Trial.suggestFloat",
+          "calls": 7,
+          "inclusive_seconds": 0.042794333671015018,
+          "self_seconds": 0.011896409360215326
+        },
+        {
+          "name": "Study>Study.appendTrialRecord",
+          "calls": 7,
+          "inclusive_seconds": 0.012882910136404134,
+          "self_seconds": 0.01185030932394336
+        },
+        {
+          "name": "Study>Study.recordParameter",
+          "calls": 7,
+          "inclusive_seconds": 0.017597313845744707,
+          "self_seconds": 0.010372008160801038
+        },
+        {
+          "name": "Study>Study.recordSamplerState",
+          "calls": 7,
+          "inclusive_seconds": 0.10078117929565228,
+          "self_seconds": 0.00965130759374655
+        },
+        {
+          "name": "tabular.parenDelete",
+          "calls": 7,
+          "inclusive_seconds": 0.024490019268995123,
+          "self_seconds": 0.0089437070369992547
+        },
+        {
+          "name": "tabularDimension.tabularDimension>tabularDimension.subs2inds",
+          "calls": 28,
+          "inclusive_seconds": 0.011033608681355025,
+          "self_seconds": 0.00838700659898171
+        },
+        {
+          "name": "TPESampler>TPESampler.sampleNativeGroupedHistory",
+          "calls": 7,
+          "inclusive_seconds": 0.057462845212348422,
+          "self_seconds": 0.0070596055545691233
+        },
+        {
+          "name": "datetime.parenAssign",
+          "calls": 14,
+          "inclusive_seconds": 0.008330406554448222,
+          "self_seconds": 0.0068984054277352359
+        },
+        {
+          "name": "Study>Study.ask",
+          "calls": 7,
+          "inclusive_seconds": 0.20833546392045244,
+          "self_seconds": 0.0066168052061693627
+        },
+        {
+          "name": "datetime.datetime>datetime.datetime",
+          "calls": 7,
+          "inclusive_seconds": 0.014288411242266635,
+          "self_seconds": 0.0066094052003469314
+        },
+        {
+          "name": "TPESampler>TPESampler.beforeTrial",
+          "calls": 7,
+          "inclusive_seconds": 0.18319874414262677,
+          "self_seconds": 0.0065218051314223091
+        },
+        {
+          "name": "tabular.container2vars",
+          "calls": 7,
+          "inclusive_seconds": 0.012087709510732231,
+          "self_seconds": 0.0056692044605874715
+        },
+        {
+          "name": "Study>Study.tell",
+          "calls": 7,
+          "inclusive_seconds": 0.051475440501397775,
+          "self_seconds": 0.0054693043033040081
+        },
+        {
+          "name": "tabular.tabular>tabular.subs2inds",
+          "calls": 28,
+          "inclusive_seconds": 0.017762513975725841,
+          "self_seconds": 0.0049763039154063077
+        },
+        {
+          "name": "Trial>Trial.suggest_float",
+          "calls": 7,
+          "inclusive_seconds": 0.047730737555027575,
+          "self_seconds": 0.0049364038840125565
+        },
+        {
+          "name": "Trial>Trial.parameterRecords",
+          "calls": 7,
+          "inclusive_seconds": 0.0044107034703861478,
+          "self_seconds": 0.0044107034703861478
+        },
+        {
+          "name": "TPESampler>TPESampler.updateNativeHistory",
+          "calls": 7,
+          "inclusive_seconds": 0.01807601422239101,
+          "self_seconds": 0.004404703465665287
+        },
+        {
+          "name": "TPESampler>TPESampler.canUseNativeGroupedHistory",
+          "calls": 7,
+          "inclusive_seconds": 0.0077191060734708144,
+          "self_seconds": 0.0042580033502401474
+        },
+        {
+          "name": "TPESampler>TPESampler.appendNativeHistory",
+          "calls": 7,
+          "inclusive_seconds": 0.008950207042113521,
+          "self_seconds": 0.0039951031433876029
+        },
+        {
+          "name": "NativeKernels>NativeKernels.call",
+          "calls": 21,
+          "inclusive_seconds": 0.044204534780575538,
+          "self_seconds": 0.0039882031379586125
+        },
+        {
+          "name": "TrialRowIndex>TrialRowIndex.append",
+          "calls": 14,
+          "inclusive_seconds": 0.0036124028422751318,
+          "self_seconds": 0.0036124028422751318
+        },
+        {
+          "name": "Trial>Trial.relativeValue",
+          "calls": 7,
+          "inclusive_seconds": 0.0049380038852714541,
+          "self_seconds": 0.0035698028087569941
+        },
+        {
+          "name": "parseArgs",
+          "calls": 7,
+          "inclusive_seconds": 0.0034321027004131544,
+          "self_seconds": 0.0034321027004131544
+        },
+        {
+          "name": "Trial>Trial.markFinished",
+          "calls": 7,
+          "inclusive_seconds": 0.0032504025574496423,
+          "self_seconds": 0.0032504025574496423
+        },
+        {
+          "name": "tabular.dotReference",
+          "calls": 14,
+          "inclusive_seconds": 0.0032149025295178609,
+          "self_seconds": 0.0032149025295178609
+        },
+        {
+          "name": "TPESampler>TPESampler.recordState",
+          "calls": 7,
+          "inclusive_seconds": 0.1058741833028794,
+          "self_seconds": 0.0029919023540590645
+        },
+        {
+          "name": "Trial>Trial.setRelativeParameters",
+          "calls": 7,
+          "inclusive_seconds": 0.0056841044723109505,
+          "self_seconds": 0.0029323023071651448
+        },
+        {
+          "name": "Trial>Trial.Trial",
+          "calls": 7,
+          "inclusive_seconds": 0.0052468041282386123,
+          "self_seconds": 0.0027979022014177814
+        },
+        {
+          "name": "datetime.catUtil",
+          "calls": 7,
+          "inclusive_seconds": 0.0032528025593379878,
+          "self_seconds": 0.0027026021264347166
+        },
+        {
+          "name": "Trial>Trial.claimParameterName",
+          "calls": 14,
+          "inclusive_seconds": 0.0037849029779999854,
+          "self_seconds": 0.0024524019295746689
+        },
+        {
+          "name": "TPESampler>TPESampler.nativeGroupedMetadata",
+          "calls": 7,
+          "inclusive_seconds": 0.0027757021839505823,
+          "self_seconds": 0.0024203019043180438
+        },
+        {
+          "name": "tabular.parenAssign",
+          "calls": 7,
+          "inclusive_seconds": 0.045906736119884779,
+          "self_seconds": 0.0024186019029804606
+        },
+        {
+          "name": "datetime.datetime>datetime.vertcat",
+          "calls": 7,
+          "inclusive_seconds": 0.0054852043158142927,
+          "self_seconds": 0.002232401756476305
+        },
+        {
+          "name": "Study>Study.skipFinishedTrial",
+          "calls": 7,
+          "inclusive_seconds": 0.002751702165067124,
+          "self_seconds": 0.0020963016493913624
+        },
+        {
+          "name": "TPESampler>TPESampler.updateNativeIntersection",
+          "calls": 7,
+          "inclusive_seconds": 0.0019885015645731649,
+          "self_seconds": 0.0019380015248392224
+        },
+        {
+          "name": "TrialRowIndex>TrialRowIndex.lookup",
+          "calls": 14,
+          "inclusive_seconds": 0.003149802478296482,
+          "self_seconds": 0.0019300015185447364
+        }
+      ],
+      "save_profile": [
+        {
+          "name": "Study>Study.save",
+          "calls": 1,
+          "inclusive_seconds": 0.62113837652930637,
+          "self_seconds": 0.18004028015349832
+        },
+        {
+          "name": "Study>Study.readStudyData",
+          "calls": 2,
+          "inclusive_seconds": 0.19314778598892823,
+          "self_seconds": 0.12058945368613379
+        },
+        {
+          "name": "benchmark_optuna_storage_scaling",
+          "calls": 1,
+          "inclusive_seconds": 0.66603569651748484,
+          "self_seconds": 0.044897319988178475
+        },
+        {
+          "name": "tabular.size",
+          "calls": 10016,
+          "inclusive_seconds": 0.042169718773857036,
+          "self_seconds": 0.031335613950539715
+        },
+        {
+          "name": "height",
+          "calls": 10016,
+          "inclusive_seconds": 0.065314329077781688,
+          "self_seconds": 0.023144610303924652
+        },
+        {
+          "name": "table.saveobj",
+          "calls": 44,
+          "inclusive_seconds": 0.02472861100911795,
+          "self_seconds": 0.017611307840511754
+        },
+        {
+          "name": "table.loadobj",
+          "calls": 22,
+          "inclusive_seconds": 0.030661313650342845,
+          "self_seconds": 0.015535506916370187
+        },
+        {
+          "name": "isScalarInt",
+          "calls": 10016,
+          "inclusive_seconds": 0.010834104823317323,
+          "self_seconds": 0.010834104823317323
+        },
+        {
+          "name": "Study>Study.copyValidStudyFile",
+          "calls": 1,
+          "inclusive_seconds": 0.072445932252754211,
+          "self_seconds": 0.0099525044308309413
+        },
+        {
+          "name": "@datetime\\private\\timeZoneAdjustment",
+          "calls": 2,
+          "inclusive_seconds": 0.0086115038338207255,
+          "self_seconds": 0.0086115038338207255
+        },
+        {
+          "name": "unique",
+          "calls": 18,
+          "inclusive_seconds": 0.013953506212067293,
+          "self_seconds": 0.00848690377834908
+        },
+        {
+          "name": "Study>Study.get.TrialTable",
+          "calls": 1,
+          "inclusive_seconds": 0.08409583743926391,
+          "self_seconds": 0.0082437036700769989
+        },
+        {
+          "name": "table.table>table.table",
+          "calls": 25,
+          "inclusive_seconds": 0.059694226575725623,
+          "self_seconds": 0.0075317033530961641
+        },
+        {
+          "name": "tabular.parenReference",
+          "calls": 1,
+          "inclusive_seconds": 0.019911908864733777,
+          "self_seconds": 0.00691700307943308
+        },
+        {
+          "name": "datetime.datetime>datetime.datetime",
+          "calls": 2,
+          "inclusive_seconds": 0.025531611366611768,
+          "self_seconds": 0.0067165029901709236
+        },
+        {
+          "name": "tabular.dotReference",
+          "calls": 15,
+          "inclusive_seconds": 0.011390105070847291,
+          "self_seconds": 0.0065945029358567926
+        },
+        {
+          "name": "tabular.tabular>tabular.countVarInputs",
+          "calls": 3,
+          "inclusive_seconds": 0.0085611038113827566,
+          "self_seconds": 0.0065135028997957718
+        },
+        {
+          "name": "makeUniqueStrings",
+          "calls": 3,
+          "inclusive_seconds": 0.00952130423886167,
+          "self_seconds": 0.0062619027877840079
+        },
+        {
+          "name": "varNamesDim>varNamesDim.validateAndAssignLabels",
+          "calls": 3,
+          "inclusive_seconds": 0.015765307018676639,
+          "self_seconds": 0.0055729024810427345
+        },
+        {
+          "name": "tabular.dotAssign",
+          "calls": 1,
+          "inclusive_seconds": 0.0085206037933522466,
+          "self_seconds": 0.0051501022928131125
+        },
+        {
+          "name": "unique>uniqueR2012a",
+          "calls": 10,
+          "inclusive_seconds": 0.0050838022632965,
+          "self_seconds": 0.0050838022632965
+        },
+        {
+          "name": "tabularDimension.tabularDimension>tabularDimension.subs2inds",
+          "calls": 2,
+          "inclusive_seconds": 0.0057695025685686211,
+          "self_seconds": 0.0045813020395846131
+        },
+        {
+          "name": "ismember>ismemberR2012a",
+          "calls": 10,
+          "inclusive_seconds": 0.024721411005912523,
+          "self_seconds": 0.00442860197160291
+        },
+        {
+          "name": "ismember>ismemberClassTypes",
+          "calls": 6,
+          "inclusive_seconds": 0.018017608021395612,
+          "self_seconds": 0.0044069019619421192
+        },
+        {
+          "name": "tabularDimension.tabularDimension>tabularDimension.init",
+          "calls": 66,
+          "inclusive_seconds": 0.0046110020528069865,
+          "self_seconds": 0.004349001936165167
+        },
+        {
+          "name": "varNamesDim>varNamesDim.makeValidName",
+          "calls": 3,
+          "inclusive_seconds": 0.0075847033766916405,
+          "self_seconds": 0.0042943019118128478
+        },
+        {
+          "name": "parseArgs",
+          "calls": 2,
+          "inclusive_seconds": 0.0041205018344374735,
+          "self_seconds": 0.0041205018344374735
+        },
+        {
+          "name": "ismember>ismemberBuiltinTypes",
+          "calls": 8,
+          "inclusive_seconds": 0.0039472017572846976,
+          "self_seconds": 0.0039472017572846976
+        },
+        {
+          "name": "datetime.convertFrom",
+          "calls": 2,
+          "inclusive_seconds": 0.012814005704764417,
+          "self_seconds": 0.0038983017355145259
+        },
+        {
+          "name": "varNamesDim>varNamesDim.init",
+          "calls": 22,
+          "inclusive_seconds": 0.0076908034239271256,
+          "self_seconds": 0.0038475017128984782
+        },
+        {
+          "name": "Study>Study.get.ParamTable",
+          "calls": 1,
+          "inclusive_seconds": 0.011480405111048652,
+          "self_seconds": 0.003523801568787956
+        },
+        {
+          "name": "Study>Study.atomicMoveFile",
+          "calls": 2,
+          "inclusive_seconds": 0.003390001509220491,
+          "self_seconds": 0.003390001509220491
+        },
+        {
+          "name": "fullfile",
+          "calls": 2,
+          "inclusive_seconds": 0.00499750222487593,
+          "self_seconds": 0.0033370014856250081
+        },
+        {
+          "name": "tabularDimension.tabularDimension>tabularDimension.setLabels",
+          "calls": 6,
+          "inclusive_seconds": 0.020295509035511645,
+          "self_seconds": 0.0032845014622521242
+        },
+        {
+          "name": "tabular.tabular>tabular.initInternals",
+          "calls": 3,
+          "inclusive_seconds": 0.027804812378635375,
+          "self_seconds": 0.0032592014509886177
+        },
+        {
+          "name": "tabular.getProperty",
+          "calls": 6,
+          "inclusive_seconds": 0.0047956021349904983,
+          "self_seconds": 0.0031753014136365271
+        },
+        {
+          "name": "ismember",
+          "calls": 10,
+          "inclusive_seconds": 0.02776711236185142,
+          "self_seconds": 0.0030457013559388978
+        },
+        {
+          "name": "tabular.tabular>tabular.subs2inds",
+          "calls": 2,
+          "inclusive_seconds": 0.010394704627697418,
+          "self_seconds": 0.002949801313244428
+        },
+        {
+          "name": "tabularDimension.makeLegacyNames",
+          "calls": 44,
+          "inclusive_seconds": 0.0050113022310196605,
+          "self_seconds": 0.0027029012033250935
+        },
+        {
+          "name": "tabular.tabular>tabular.handleFailedToLoadVars",
+          "calls": 22,
+          "inclusive_seconds": 0.0031702014113660186,
+          "self_seconds": 0.0026411011758118706
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "Scalar TPE, one float, completed trials, no callbacks.",
+    "ask includes sampler preparation and native computation; suggest includes recording.",
+    "MEX profile time includes gateway and native work, not separately measured transfer.",
+    "save includes complete MAT serialization, read-back validation, and replacement/backup.",
+    "Profiling runs are separate from uninstrumented wall timings."
+  ]
+}

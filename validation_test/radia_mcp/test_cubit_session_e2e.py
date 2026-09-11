@@ -6,10 +6,11 @@ pattern port (waves 1-6) -- the GUI file-drop path, multi-client
 concurrency, the batch stdio path, and the cubit<->build123d probe
 contract on one geometry.
 
-Driving-policy note (Sugahara, 2026-08-05): APREPRO/Python on the
-HEADLESS route is the primary agent path; the GUI session is the USER's
-visual-debugging aid.  The GUI tests here exist to protect that
-user-facing debug surface (including cubit_snapshot, which needs a
+Driving-policy note (Sugahara, revised 2026-09-10): APREPRO/Python on
+the HEADLESS route is the only ordinary LLM/agent path.  Agents must not
+launch or drive the GUI except in an explicitly scoped GUI test.  The
+GUI tests here exist only to protect the user-facing toolbar, rendering,
+and visual-debugging surface (including cubit_snapshot, which needs a
 rendering window), not to promote GUI driving for automation.
 
 Requirements: a local Coreform Cubit install (a license seat is consumed

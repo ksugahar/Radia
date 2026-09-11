@@ -2,6 +2,9 @@ function result = AMS(matrix, space, options)
 %AMS Native coordinate-based AMS for a real, order-one HCurl auxiliary matrix.
 %   Complex=true returns a complex preconditioner for a matching eddy matrix.
 %   No Python objects or matrix copies cross this boundary. NoGrads must be true.
+%   Any other space, including Order=2 with NoGrads=true, raises
+%   radia:mex:Exception; the Python extension raises RuntimeError for the same
+%   input. Use NGSolve's bddc preconditioner for higher-order HCurl.
 arguments
     matrix (1,1) radia.ngsolve.Matrix
     space (1,1) radia.ngsolve.FESpace

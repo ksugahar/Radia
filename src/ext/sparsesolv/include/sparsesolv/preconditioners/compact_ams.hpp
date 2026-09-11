@@ -11,8 +11,9 @@
 /// (MPL-2.0, no HYPRE source, ~400 lines on CompactAMG) so it carries NO HYPRE dependency and runs natively
 /// on the NGSolve TaskManager.  The name "HypreBasedAMS" states the lineage honestly: the algorithm is
 /// HYPRE's AMS; only the implementation is ours/HYPRE-free.  (Renamed 2026-06-27 from the misleading
-/// "HypreBasedAMS", which read like a distinct reduced variant; HypreBasedAMSPreconditioner remains a back-compat
-/// alias.)  Components (identical to HYPRE AMS):
+/// "CompactAMS", which read like a distinct reduced variant; CompactAMSPreconditioner remains a back-compat
+/// alias.)  Requires a lowest-order HCurl space (order=1, nograds=True): the Pi interpolation below is
+/// built from the Whitney edge-vertex incidence.  Components (identical to HYPRE AMS):
 ///   - Gradient subspace: G^T * A_bc * G solved by CompactAMG
 ///   - Nodal subspace: Pi^T * A_bc * Pi solved by CompactAMG (component-wise)
 ///   - Fine-grid smoother: l1-Jacobi (fully TaskManager parallel)
@@ -89,8 +90,37 @@ public:
             (int)coord_y.size() != ndof_h1_ ||
             (int)coord_z.size() != ndof_h1_)
             throw std::runtime_error("HypreBasedAMS: coordinate size mismatch with H1 DOFs");
+        RequireLowestOrderGradient();
 
         Setup(coord_x, coord_y, coord_z);
+    }
+
+    /// The auxiliary spaces are built from the lowest-order (Whitney) edge-vertex
+    /// incidence: BuildPiComponents treats every row of G as an edge with two
+    /// vertices.  An order>=2 space with nograds=True still has one gradient
+    /// column per vertex, so the coordinate-size check above cannot see it, but
+    /// its non-edge rows are empty: those dofs would get smoothing only and the
+    /// preconditioner would silently degrade instead of failing.  Reject it.
+    void RequireLowestOrderGradient() const {
+        if (grad_->Height() != ndof_hc_)
+            throw std::runtime_error(
+                "HypreBasedAMS: the discrete gradient has " + std::to_string(grad_->Height())
+                + " rows but the HCurl matrix has " + std::to_string(ndof_hc_)
+                + "; build both from the same HCurl space.");
+        int bad = 0;
+        for (int e = 0; e < grad_->Height(); e++) {
+            auto vals = grad_->GetRowValues(e);
+            int nonzeros = 0;
+            for (int j = 0; j < vals.Size(); j++)
+                if (vals[j] != 0.0) nonzeros++;
+            if (nonzeros != 2) bad++;
+        }
+        if (bad > 0)
+            throw std::runtime_error(
+                "HypreBasedAMS requires a lowest-order HCurl space (order=1, nograds=True): "
+                + std::to_string(bad) + " of " + std::to_string(grad_->Height())
+                + " discrete-gradient rows are not edge-vertex pairs. "
+                  "For order >= 2 use NGSolve's bddc preconditioner.");
     }
 
     /// Update preconditioner with current matrix values.

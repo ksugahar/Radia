@@ -1,5 +1,5 @@
 function study = create_study(options)
-%CREATE_STUDY Create a study from the verified Optuna 4.9 MATLAB subset.
+%CREATE_STUDY Create a study from the verified Optuna 5 MATLAB subset.
 arguments
     options.study_name (1,1) string = ""
     options.direction = string.empty

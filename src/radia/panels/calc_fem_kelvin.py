@@ -598,7 +598,7 @@ def solve_fem(vol_file="", fes_order=1,
         # Solver-specific setup
         if solver == "ams":
             # Compact AMS preconditioner + COCR solver (AC eddy-current).
-            # Reference: src/ext/sparsesolv/examples/hiruma/bench_compact_ams.py
+            # Reference: validation_test/sparsesolv/hiruma/bench_compact_ams.py
             #
             # Re-wired 2026-05-08 for the PEEC line-integral RHS path:
             # the bilinear form a_bf above already has curl-curl + reg +
@@ -992,37 +992,24 @@ def solve_fem(vol_file="", fes_order=1,
     # Time-averaged EM force on the SIBC workpiece [N]
     # ----------------------------------------------------------------
     # The workpiece is a HOLE (no volume mesh), so the only force handle is
-    # the time-averaged Maxwell stress over its "sibc" surface.  With
-    # B = curl(A_total) (PEEC: A_r + A_s) and the time-average of the
-    # quadratic stress (n real, B complex phasor):
-    #   <F_k> = oint_S [ (1/(2 mu0)) Re(B_k conj(B.n))
-    #                     - (1/(4 mu0)) |B|^2 n_k ] dS .
-    # specialcf.normal here points OUT of the air mesh = INTO the hole, the
-    # OPPOSITE of the workpiece outward normal, so the force ON the workpiece
-    # is the NEGATED surface integral.  The 0.5/0.25 factors (vs the static
-    # 1/0.5) are the cos^2 time-average; the identity is validated by
-    # reduction to the static Maxwell force in
-    # validation_test/radia_mcp/test_maxwell_surface_harmonic.py.
+    # the time-averaged Maxwell stress over its "sibc" surface, with
+    # B = curl(A_total) (PEEC: A_r + A_s).  The stress identity itself lives in
+    # radia.force_ngsolve so this call site cannot drift from the sampled twin
+    # in radia.force; specialcf.normal points OUT of the air mesh = INTO the
+    # hole, which is what normal_points_out_of_body=False records.
     F_sibc = None
     if has_wp and use_complex:
-        try:
-            from ngsolve import specialcf
-            n_f = specialcf.normal(3)
-            B_f = (curl(gfu) + curl(peec_A_s_cf)) if peec_A_s_cf is not None \
-                else curl(gfu)
-            Bn_f = sum(B_f[k] * n_f[k] for k in range(3))
-            B2_f = sum((B_f[k] * Conj(B_f[k])).real for k in range(3))
-            F_sibc = [
-                -float(Integrate(
-                    ((0.5 / MU_0) * (B_f[k] * Conj(Bn_f)).real
-                     - (0.25 / MU_0) * B2_f * n_f[k]),
-                    mesh, BND, definedon=wp_region).real)
-                for k in range(3)]
-            _log(f"FORCE:F_sibc=({F_sibc[0]:+.3e},{F_sibc[1]:+.3e},"
-                 f"{F_sibc[2]:+.3e}) N (time-avg Maxwell stress on workpiece)")
-        except Exception as _fe:  # noqa: BLE001 -- force is a diagnostic add-on
-            _log(f"FORCE:skipped ({_fe})")
-            F_sibc = None
+        from radia.force_ngsolve import time_average_maxwell_surface_force
+
+        B_f = (curl(gfu) + curl(peec_A_s_cf)) if peec_A_s_cf is not None \
+            else curl(gfu)
+        F_sibc = time_average_maxwell_surface_force(
+            B_f, mesh, wp_region,
+            normal_points_out_of_body=False,
+            permeability_H_per_m=MU_0,
+            amplitude="peak")
+        _log(f"FORCE:F_sibc=({F_sibc[0]:+.3e},{F_sibc[1]:+.3e},"
+             f"{F_sibc[2]:+.3e}) N (time-avg Maxwell stress on workpiece)")
 
     t_total = time.perf_counter() - t_total_start
     _log(f"DONE:P={P_total:.4e} L={L*1e9:.2f}nH t={t_total:.1f}s")
