@@ -24,6 +24,11 @@ client verification are not automatically open code defects.
 | M09 / medium | publication: JA/EN/grant have distinct review objectives | `test_capability_packs.py` checks distinct routes and unsupported English grant scoring | Covered route contract; no unified quality score claimed |
 | M10 / medium | CAD: actual meshing vs available MCP tools | Cubit conformal gate regression, plus licensed live CAD/mesh lane on affected changes | Contract regression available; connectivity is not numerical acceptance |
 
+M04 follow-up (2026-09-12): bibliography T2 arXiv identity, explicit version,
+required metadata and primary-category preservation have 23 offline regression
+cases; the expanded six-file lane passes 928 tests. T2 escaping/name handling and
+rendered bibliography acceptance remain open (P63/P67).
+
 Completion of a scoped validation requires matching the selected source, zero unexpected failures
 or skips in the relevant lane, and retained local machine-readable evidence.
 Do not commit transient test logs or mark the package globally "complete" from
