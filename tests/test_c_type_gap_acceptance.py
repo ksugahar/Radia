@@ -101,6 +101,33 @@ def test_curved_walk_puts_switches_on_the_faces_not_the_band():
     assert result["locator_band_samples"] >= 1
 
 
+def _sliver_mesh():
+    """Insert a 3 um air element strictly between two coarse walk samples."""
+    import numpy as np
+
+    grid = np.linspace(-GAP / 2 + 1e-9, GAP / 2 - 1e-9, 2001)
+    start = float(grid[700]) + 1.0e-6
+    mesh = _BiasedLocatorMesh()
+    mesh.faces = (-1.0, -GAP / 2, start, start + 3.0e-6, GAP / 6, GAP / 2, 1.0)
+    mesh.element_material = (0, 1, 1, 1, 1, 0)
+    return mesh
+
+
+def test_unseeded_walk_steps_over_a_thin_element():
+    result = builder._curved_line_segments(_sliver_mesh(), 0.0, 0.0, GAP / 2)
+    assert result["segments"] == 3
+
+
+def test_seeds_make_the_walk_visit_every_element():
+    mesh = _sliver_mesh()
+    faces = mesh.faces[1:-1]
+    seeds = [0.5 * (low + high) for low, high in zip(faces, faces[1:])]
+    result = builder._curved_line_segments(mesh, 0.0, 0.0, GAP / 2, seeds=seeds)
+    assert result["segments"] == 4
+    assert result["minimum_segment_m"] == pytest.approx(3.0e-6, abs=2.0e-9)
+    assert abs(result["covered_m"] - GAP) < 1.0e-12
+
+
 def test_point_outside_the_mesh_has_no_element():
     mesh = _BiasedLocatorMesh()
     assert builder._containing_element(mesh, mesh.GetMaterials(), 0.0, 0.0, 2.0) \

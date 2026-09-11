@@ -374,7 +374,8 @@ def _containing_element(mesh, materials, x0: float, y0: float, z: float):
 
 
 def _curved_line_segments(mesh, x0: float, y0: float, half: float,
-                          coarse_samples: int = 2001, tolerance: float = 1.0e-9):
+                          coarse_samples: int = 2001, tolerance: float = 1.0e-9,
+                          seeds=()):
     """Segments along a gap line on the CURVED geometry.
 
     The vertex-tet clipping works on the straightened cell, so it can only
@@ -390,9 +391,14 @@ def _curved_line_segments(mesh, x0: float, y0: float, half: float,
     so a disagreement in the segment COUNT against the straight-geometry
     clipping is not attributable to curvature without further work -- it can
     equally be a missed short segment here.  Measured on the C-type family
-    2026-09-10: the two agree on the maximum segment length to about 1 um on
-    the five representative lines, while one line disagreed 14 against 13 in
-    the count, cause undetermined.
+    2026-09-11: on the finest level one line crosses two 3.4 um elements at
+    the pole faces, and with the 5 um coarse spacing the walk counted 12
+    elements where the straight clipping counted 14.  (The 14-against-13
+    disagreement recorded 2026-09-10 is plausibly the same, not re-measured.)
+    The caller therefore passes ``seeds`` -- the midpoints of the
+    straight-geometry segments -- so every element the clipping found is
+    sampled at least once.  An element that exists only on the curved
+    geometry and is thinner than the coarse spacing can still be missed.
 
     LOCATOR TOLERANCE: an answer the locator gives for a point OUTSIDE the
     returned element is never used as a membership (see
@@ -415,6 +421,8 @@ def _curved_line_segments(mesh, x0: float, y0: float, half: float,
         return (number == low_number) == (margin >= -_REFERENCE_ROUNDOFF)
 
     grid = np.linspace(-half + 1e-9, half - 1e-9, int(coarse_samples))
+    inside = [float(z) for z in seeds if -half < float(z) < half]
+    grid = np.unique(np.concatenate([grid, np.asarray(inside, dtype=float)]))
     walk, band_samples = [], 0
     for z in grid:
         number, margin, _ = locate(z)
@@ -454,6 +462,7 @@ def _curved_line_segments(mesh, x0: float, y0: float, half: float,
         # Coarse samples the locator placed OUTSIDE the element it returned;
         # they were skipped, not read as a membership.
         "locator_band_samples": int(band_samples),
+        "seed_samples": len(inside),
     }
 
 
@@ -568,7 +577,9 @@ def _gap_line_profile(mesh, gap_height: float,
             "overlap_m": float(overlaps),
             "sampled_4001": _sampled_count(x0, y0, 4001),
             "sampled_16001": _sampled_count(x0, y0, 16001),
-            "curved": _curved_line_segments(mesh, float(x0), float(y0), half),
+            "curved": _curved_line_segments(
+                mesh, float(x0), float(y0), half,
+                seeds=[0.5 * (low + high) for low, high in found]),
         })
     counts = [row["segments"] for row in lines if row["segments"]]
     return {
