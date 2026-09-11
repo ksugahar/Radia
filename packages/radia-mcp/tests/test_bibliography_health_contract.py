@@ -4,6 +4,8 @@ import pytest
 from radia_mcp.bibliography.plans import T11_health_report as health
 from radia_mcp.bibliography.plans.T5_dedupe import bibliography_dedupe
 from radia_mcp.bibliography.plans.T7_lint import bibliography_lint
+from radia_mcp.bibliography.plans.T9_self_citation_ratio import bibliography_self_citation_ratio
+from radia_mcp.bibliography.plans.T12_year_distribution import bibliography_year_distribution
 
 
 @pytest.mark.parametrize("mode", ["missing", "directory", "invalid_utf8", "nonbib", "malformed"])
@@ -70,3 +72,52 @@ def test_healthy_file_still_scores_success(tmp_path):
     path.write_text("@misc{doe2024magnetic,author={Doe, Jane},title={Magnetic fields},year=2024}", encoding="utf-8")
     result = health.bibliography_health_report(str(path))
     assert "100/100" in result and "VERDICT: GOOD" in result
+
+
+@pytest.mark.parametrize("matched,total,severity", [(0, 4, "PASS"), (1, 4, "PASS"),
+    (3, 10, "[MEDIUM]"), (4, 10, "[MEDIUM]"), (5, 10, "[HIGH]")])
+def test_self_citation_threshold_order_and_boundaries(tmp_path, matched, total, severity):
+    path = tmp_path / "references.bib"
+    path.write_text("\n".join(f"@misc{{key{i},author={{{'Doe' if i < matched else 'Roe'}, Jane}}}}"
+                               for i in range(total)), encoding="utf-8")
+    result = bibliography_self_citation_ratio(str(path), "Doe")
+    assert f"matches: {matched}/{total}" in result and severity in result
+    assert "rejection" not in result and "Surname-match screening only" in result
+
+
+@pytest.mark.parametrize("author,needle", [
+    ("{Research and Development Group} AND Doe, Jane", "Research and Development Group"),
+    ("Müller, Hans", "Muller"), ("Ludwig van Beethoven", "van Beethoven"),
+    ("山田, 太郎", "山田")])
+def test_self_citation_preserves_name_boundaries(tmp_path, author, needle):
+    path = tmp_path / "references.bib"
+    path.write_text(f"@misc{{one,author={{{author}}}}}", encoding="utf-8")
+    assert "matches: 1/1" in bibliography_self_citation_ratio(str(path), needle)
+
+
+@pytest.mark.parametrize("needle", ["", " ", "{}"])
+def test_empty_self_citation_target_is_error(tmp_path, needle):
+    path = tmp_path / "references.bib"
+    path.write_text("@misc{one,author={Doe, Jane}}", encoding="utf-8")
+    assert bibliography_self_citation_ratio(str(path), needle).startswith("Error:")
+
+
+def test_year_distribution_excludes_future_and_malformed_years(tmp_path):
+    import datetime
+    now = datetime.date.today().year
+    path = tmp_path / "references.bib"
+    path.write_text("\n".join(f"@misc{{key{i},year={{{year}}}}}" for i, year in enumerate(
+        [str(now), str(now - 20), str(now + 1), "2024abc", "0000", ""])), encoding="utf-8")
+    result = bibliography_year_distribution(str(path))
+    assert "total dated entries: 2" in result
+    assert "in last 5 years:  1  (50%)" in result
+    assert "unknown/invalid years: 3; future years: 1" in result
+    assert "INCOMPLETE" in result and "[MEDIUM]" not in result
+
+
+def test_future_only_years_have_no_recency_score(tmp_path):
+    path = tmp_path / "references.bib"
+    path.write_text("@misc{one,year={9999}}", encoding="utf-8")
+    result = bibliography_year_distribution(str(path))
+    assert "no valid non-future publication years" in result
+    assert "future years: 1" in result and "in last 5" not in result
