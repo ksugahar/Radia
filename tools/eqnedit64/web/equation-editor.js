@@ -3682,15 +3682,16 @@
     return null;
   }
 
-  /* TeX reads ' as a superscript, so a prime placed straight after another
-   * superscript is a double exponent: `a^{2}'` fails to convert with
-   * "Prime causes double exponent: use braces to clarify". Detect the
-   * case so the insertion can carry MathJax's own remedy, an empty group. */
-  function endsWithSuperscript(text) {
+  /* Inspect the trailing script chain, including the opposite script, so
+   * x^n_i cannot hide an existing superscript from a new suffix. */
+  function endsWithScript(text, marker) {
     var i = text.length - 1;
     while (i >= 0 && /\s/.test(text.charAt(i))) i -= 1;
     if (i < 0) return false;
-    if (text.charAt(i) === "'") return true;
+    if (text.charAt(i) === "'") {
+      if (marker === "^") return true;
+      return endsWithScript(text.slice(0, i), marker);
+    }
     var before = i;
     if (text.charAt(i) === "}" && text.charAt(i - 1) !== "\\") {
       var depth = 0;
@@ -3706,9 +3707,17 @@
       if (i <= 0) return false;
       before = i;
     }
+    if (/[A-Za-z]/.test(text.charAt(i))) {
+      var wordStart = i;
+      while (wordStart > 0 && /[A-Za-z]/.test(text.charAt(wordStart - 1))) wordStart--;
+      if (text.charAt(wordStart - 1) === "\\") before = wordStart - 1;
+    }
     var j = before - 1;
     while (j >= 0 && /\s/.test(text.charAt(j))) j -= 1;
-    return text.charAt(j) === "^";
+    if (text.charAt(j) === marker) return true;
+    if (text.charAt(j) === "^" || text.charAt(j) === "_")
+      return endsWithScript(text.slice(0, j), marker);
+    return false;
   }
 
   /* Pure insertion contract, shared by the live textarea and the Node CI
@@ -3720,18 +3729,23 @@
     var before = value.slice(0, start);
     var selected = value.slice(start, end);
     var after = value.slice(end);
-    if (/^\^\{(?:\\prime\s*)+\}$/.test(snippet) || /^'+$/.test(snippet)) {
+    if (/^[\^_]\{[^{}]*\}\s*$/.test(snippet) || /^'+$/.test(snippet)) {
       var explicitPrime = /^'+$/.test(snippet)
         ? "^{" + Array(snippet.length + 1).join("\\prime ") + "}" : snippet;
       if (selected) {
         var decorated = "{" + selected + "}" + explicitPrime;
-        return { value: before + decorated + after, caret: before.length + decorated.length };
+        var selectedHole = explicitPrime.indexOf("{}");
+        return { value: before + decorated + after, caret: selectedHole < 0
+          ? before.length + decorated.length
+          : before.length + selected.length + 2 + selectedHole + 1 };
       }
       /* With no selection, preserve caret insertion. Clarify with an empty group when the caret sits
        * right after another superscript, which is exactly what MathJax asks
        * for; the rendered result is unchanged where no group is needed. */
-      var prime = (!before.trim() || endsWithSuperscript(before) ? "{}" : "") + explicitPrime;
-      return { value: before + prime + after, caret: before.length + prime.length };
+      var prime = (!before.trim() || endsWithScript(before, explicitPrime.charAt(0)) ? "{}" : "") + explicitPrime;
+      var hole = explicitPrime.indexOf("{}");
+      return { value: before + prime + after, caret: hole < 0 ? before.length + prime.length
+        : before.length + prime.length - explicitPrime.length + hole + 1 };
     }
     var body = snippet;
     var caret;
@@ -3756,6 +3770,8 @@
   function composePaletteInsertion(value, start, end, item) {
     if (item[6]) throw new Error(item[6]);
     var snippet = item[1], slot = item[5] || 0;
+    if (/^[\^_]\{[^{}]*\}\s*$/.test(snippet))
+      return composeInsertion(value, start, end, snippet);
     if (/^'+$/.test(snippet) && end > start)
       return composeInsertion(value, end, end, snippet);
     var holes = [], match, pattern = /\{\}|\[\]/g;

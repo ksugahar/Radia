@@ -3,6 +3,26 @@
 #include <iostream>
 
 int main() {
+    for (const auto& sample : {
+            std::pair<eqnedit::Embellishment, const char*>{eqnedit::EM_HAT, "\\hat{"},
+            {eqnedit::EM_RARROW, "\\vec{"}, {eqnedit::EM_OBAR, "\\bar{"},
+            {eqnedit::EM_DOT, "\\dot{"}, {eqnedit::EM_DDOT, "\\ddot{"}}) {
+        for (const char* input : {"x", "a+b", "a^{2}", "x_{i}"}) {
+            auto base = eqnedit::parse_latex(input);
+            const auto body = eqnedit::tree_to_latex(*base);
+            auto mark = std::make_unique<eqnedit::EmbellNode>();
+            mark->embellType = sample.first;
+            mark->content = std::move(base->children);
+            eqnedit::LineNode line;
+            line.children.push_back(std::move(mark));
+            const auto tex = eqnedit::tree_to_latex(line);
+            if (tex != std::string(sample.second) + body + "}" ||
+                tex != eqnedit::tree_to_latex(*eqnedit::parse_latex(tex))) {
+                std::cerr << "Decoration attachment: " << input << " -> " << tex << '\n';
+                return 4;
+            }
+        }
+    }
     for (const char* input : {"f'(x)", "x''", "x'''", "x'^{2}"}) {
         if (eqnedit::tree_to_latex(*eqnedit::parse_latex(input)) != input) {
             std::cerr << "Legacy prime spelling changed: " << input << '\n';
@@ -43,5 +63,5 @@ int main() {
             std::cout << tex << '\n';
         }
     }
-    std::cout << "PASS: 28 prime bases, 6 grouped imports, 4 legacy spellings\n";
+    std::cout << "PASS: 20 accent bases, 28 prime bases, 6 grouped imports, 4 legacy spellings\n";
 }

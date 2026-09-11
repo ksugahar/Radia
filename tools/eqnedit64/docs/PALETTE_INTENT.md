@@ -146,6 +146,18 @@ health of LAB's interactive font session. Record untested dimensions explicitly.
 
 ## Prime attachment
 
+All Web suffix keys (degree, star, flat/sharp, primes, and editable sub/superscripts)
+share one attachment contract. A selection is the complete base, never replaced
+by the suffix or moved into its exponent. An empty script keeps its caret inside
+the script hole. Without selection, attach at the caret; insert an empty base
+only at empty input or when the preceding atom already has that script kind.
+Inspect both orders of a sub/superscript pair. For example `x^n_i` followed by
+`^{*}` becomes `x^n_i{}^{*}`, while selected `x^n_i` becomes `{x^n_i}^{*}`.
+This does not guess the extent of an unselected compound expression. Prefix
+decorations (`hat`, `vec`, `bar`, dots, over/underline) instead enclose the
+entire selected body in their argument. Cross-product tests cover empty,
+atomic, compound, and already-scripted bases, separately from key inventory.
+
 A prime decoration always uses an explicit `^{\prime }` superscript, including
 single characters and control-word atoms: `x^{\prime }`, `\alpha ^{\prime }`.
 Double/triple primes repeat the glyph in that one superscript. Native prime
