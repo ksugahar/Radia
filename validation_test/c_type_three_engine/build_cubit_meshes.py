@@ -629,12 +629,12 @@ def _kelvin_int_inventory(path: Path, radius: float,
                           tolerance: float = 1.0e-9) -> dict[str, object]:
     """Every ``kelvin_int`` boundary element must lie on the physical sphere.
 
-    ``add_kelvin_cubit`` puts the largest surface of EVERY air volume into
-    ``kelvin_int``.  With the gap cut into slabs, that includes slab faces
-    inside the gap.  On the N=6 and N=12 layered meshes the exporter dropped
-    them (same-material interior faces are not written) and ``kelvin_int``
-    kept exactly the sphere, but a solver would silently treat any survivor
-    as the Kelvin interface, so the product is checked rather than trusted.
+    ``add_kelvin_cubit`` used to put the largest surface of EVERY air volume
+    into ``kelvin_int``, slab faces inside the gap included.  The exporter
+    dropped them at N=6 and N=12 and failed outright at N=24; the helper now
+    selects faces on the air sphere only.  A solver would silently treat any
+    stray face as the Kelvin interface, so the product is still checked
+    rather than trusted.
     """
     import math
     import ngsolve as ng
