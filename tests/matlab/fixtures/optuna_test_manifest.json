@@ -408,6 +408,13 @@
     },
     {
       "classification": "matlab-integration",
+      "file": "test_optuna_simulink_block.m",
+      "oracle": null,
+      "scope": "MATLAB and Simulink block integration",
+      "test": "testAutoSamplerStaysNativeAndRejectsLegacyGP"
+    },
+    {
+      "classification": "matlab-integration",
       "file": "test_optuna_storage_bridge.m",
       "oracle": null,
       "scope": "explicit MATLAB table/JSON handoff to upstream Optuna storages",
