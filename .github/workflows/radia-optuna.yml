@@ -6,7 +6,9 @@ on:
     tags: ['radia-optuna-v*']
     paths:
       - 'packages/radia-optuna/**'
-      - 'tests/matlab/fixtures/**'
+      - 'tests/matlab/fixtures/*optuna*'
+      - 'tests/matlab/fixtures/generate_sobol_direction_numbers.py'
+      - 'tests/matlab/fixtures/ltspice_rc.cir'
       - 'tests/matlab/test_optuna*.m'
       - 'tests/matlab/private/optuna*.m'
       - 'matlab/+radia/+optuna/**'
@@ -25,7 +27,9 @@ on:
     branches: [main]
     paths:
       - 'packages/radia-optuna/**'
-      - 'tests/matlab/fixtures/**'
+      - 'tests/matlab/fixtures/*optuna*'
+      - 'tests/matlab/fixtures/generate_sobol_direction_numbers.py'
+      - 'tests/matlab/fixtures/ltspice_rc.cir'
       - 'tests/matlab/test_optuna*.m'
       - 'tests/matlab/private/optuna*.m'
       - 'matlab/+radia/+optuna/**'

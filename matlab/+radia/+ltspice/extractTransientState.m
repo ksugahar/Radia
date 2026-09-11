@@ -6,6 +6,11 @@ range=data.step_ranges(options.Step,:); names=data.names; values=data.values(ran
 nodeNames=strings(0,1); nodeValues=zeros(0,1); inductorNames=strings(0,1); inductorValues=zeros(0,1);
 for k=2:numel(names)
  name=names(k); voltage=regexp(char(name),'^V\((.+)\)$','tokens','once','ignorecase'); current=regexp(char(name),'^I\((L[^)]+)\)$','tokens','once','ignorecase');
+ hierarchical=regexp(char(name),'^I\((?:[^():]+:)+L[^():]+\)$','once','ignorecase');
+ if ~isempty(hierarchical)
+  error("radia:ltspice:UnsupportedHierarchicalState", ...
+   "Cannot safely reinject hierarchical inductor state %s; use a continuous run.",name);
+ end
  if ~isempty(voltage),nodeNames(end+1,1)=string(voltage{1});nodeValues(end+1,1)=real(values(k));
  elseif ~isempty(current),inductorNames(end+1,1)=string(current{1});inductorValues(end+1,1)=real(values(k));end
 end
