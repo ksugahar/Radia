@@ -99,6 +99,11 @@ jobs:
               init = archive.read('cubit_mesh_export/__init__.py').decode()
               native_manifest = json.loads(archive.read(
                   'cubit_mesh_export/native_payloads.json'))
+              payload_contents = {
+                  name: archive.read(f'cubit_mesh_export/{name}')
+                  for name in ('cubit_mesh_export.ccm',
+                               'cubit_mesh_curver.pyd')
+              }
               wheel_meta_path = next(
                   name for name in names
                   if name.endswith('.dist-info/WHEEL'))
@@ -112,7 +117,7 @@ jobs:
           if 'Root-Is-Purelib: false' not in wheel_meta:
               raise SystemExit('native wheel incorrectly declares purelib root')
           for name in ('cubit_mesh_export.ccm', 'cubit_mesh_curver.pyd'):
-              content = archive.read(f'cubit_mesh_export/{name}')
+              content = payload_contents[name]
               expected = native_manifest['payloads'][name]
               if (len(content) != expected['size'] or
                       hashlib.sha256(content).hexdigest() != expected['sha256']):
