@@ -393,18 +393,41 @@ def add_kelvin_cubit(R, air_block="air", symmetry=None, reduction=None,
     for vid in kelvin_vols:
         cubit.cmd('volume %d rename "kelvin_ext"' % vid)
 
-    # ---- 4. Find outer spherical surface on each air volume ----
-    # After subtract of coil/workpiece, the air volumes still have the
-    # original sphere outer surface as their LARGEST surface.
+    # ---- 4. Find the outer spherical surface of the air domain ----
+    # Only faces ON the physical air sphere belong to kelvin_int.  Taking the
+    # largest face of every air volume is wrong as soon as the air block holds
+    # an interior volume: on the C-type validation mesh with the gap air cut
+    # into slabs (2026-09-11) the slab faces went into kelvin_int, and at 24
+    # slabs the Netgen export failed on "Free sideset 2 contains a face with
+    # no adjacent volume element".  The sphere centre is the centre of the
+    # air domain's bounding box, which for a (seam-cut) sphere is exact.
+    boxes = [cubit.volume(v).bounding_box() for v in air_vols]
+    centre = [0.5 * (min(b[i] for b in boxes) + max(b[i + 3] for b in boxes))
+              for i in range(3)]
+
+    def _on_air_sphere(surface):
+        if cubit.get_surface_type(surface) != "sphere surface":
+            return False
+        near = cubit.surface(surface).closest_point_trimmed(centre)
+        distance = math.sqrt(sum((near[i] - centre[i]) ** 2 for i in range(3)))
+        return abs(distance - R) <= 1.0e-6 * R
+
     air_outer_surfs = []
     if reflect_meshed_kelvin:
         air_vols.sort(
             key=lambda v: cubit.volume(v).centroid()[2], reverse=True)
     for vid in air_vols:
-        surfs = list(cubit.get_relatives("volume", vid, "surface"))
-        if surfs:
-            outer = max(surfs, key=lambda s: cubit.surface(s).area())
-            air_outer_surfs.append(outer)
+        on_sphere = [s for s in cubit.get_relatives("volume", vid, "surface")
+                     if _on_air_sphere(s)]
+        if len(on_sphere) > 1:
+            raise RuntimeError(
+                "Air volume %d has %d faces on the sphere of radius %g; "
+                "expected at most one" % (vid, len(on_sphere), R))
+        air_outer_surfs.extend(on_sphere)
+    if not air_outer_surfs:
+        raise RuntimeError(
+            "No face of block '%s' lies on a sphere of radius %g about %s; "
+            "R must match the air sphere" % (air_block, R, centre))
 
     # ---- 5. Find hemisphere surface on each kelvin volume ----
     kelvin_outer_surfs = []
