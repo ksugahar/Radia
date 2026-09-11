@@ -1,8 +1,8 @@
 """
 md2html.py knowledge base - Markdown to HTML converter with MathJax support.
 
-Location: C:/Program Files/Python312/Scripts/md2html.py
-Command:  md2html <input.md> [output.html] [title]
+Implementation: radia_mcp.md2html.converter
+MCP tool: md2html_convert(md_file, output_file=None, title=None)
 
 This module stores the full implementation details so the MCP server can
 guide users on usage, customization, and troubleshooting.
@@ -11,22 +11,22 @@ guide users on usage, customization, and troubleshooting.
 MD2HTML_USAGE = """
 # md2html - Markdown to HTML Converter
 
-## Location
-- Script: `C:/Program Files/Python312/Scripts/md2html.py`
-- Wrapper command: `md2html` (available on PATH)
+## Entry points
+- MCP tool: `md2html_convert(md_file, output_file=None, title=None)` in radia-mcp.
+- Python: `radia_mcp.md2html.md_to_html`.
+- Do not assume a standalone executable is on PATH or use retired workstation scripts.
 
 ## Usage
 
-```bash
-# Auto-generate output filename and title from input
-md2html README.md
-# -> README.html (title extracted from first <h1>)
+```python
+from radia_mcp.md2html import md_to_html
 
-# Explicit output file and title
-md2html input.md output.html "My Document Title"
-
-# From Python
-python "C:/Program Files/Python312/Scripts/md2html.py" input.md
+# Auto-generate output filename and title from input.
+result = md_to_html("README.md")
+# Explicit output file and title.
+result = md_to_html("input.md", "output.html", "My Document Title")
+print(result["output_file"])
+print(result["log"])
 ```
 
 ## Features
@@ -42,7 +42,7 @@ python "C:/Program Files/Python312/Scripts/md2html.py" input.md
 10. **BOM output** - Writes UTF-8 with BOM (`utf-8-sig`) for Windows compatibility
 
 ## Dependencies
-- `markdown` (Python package: `pip install markdown`)
+- Install `radia-mcp[md2html]` in the selected Python environment.
 - MathJax 3 loaded from CDN (requires internet for math rendering)
 - `base64`, `mimetypes` (stdlib, for image embedding)
 """
@@ -95,10 +95,12 @@ Uses `mimetypes.guess_type()` for MIME detection.
 This makes the output HTML **self-contained** -- no external image files needed.
 Prints each embedded image filename and size for progress tracking.
 
-### `md_to_html(md_file, output_file=None, title=None) -> output_path`
+### `md_to_html(md_file, output_file=None, title=None) -> dict`
 Main conversion function. If `output_file` is None, derives from input
 (`.md` -> `.html`). If `title` is None, extracts from first `<h1>` tag.
 Automatically embeds all local images referenced by `![alt](path)` markdown.
+Returns `output_file`, `math_blocks`, `images_embedded`, and `log`.
+The MCP wrapper returns a human-readable status string, not this dictionary.
 
 ## HTML Template
 
