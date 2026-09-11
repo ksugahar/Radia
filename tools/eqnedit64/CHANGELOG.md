@@ -2,6 +2,10 @@
 
 ## 3.1.0 — release candidate
 
+- Share Web suffix attachment across degrees, stars, flat/sharp, primes and
+  editable scripts so selections survive and repeated scripts do not collide.
+  Test compound/scripted bases and prefix accents, including real degree clicks.
+
 - Use explicit prime superscripts for every prime decoration, including atoms,
   native shortcuts and Web caret insertion. Update the shared catalogue and
   independent expected TeX together; keep empty-base double-script protection.
