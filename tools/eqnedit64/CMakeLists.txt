@@ -4,7 +4,7 @@
 # `build\build_tests.bat` runs the required checks.  Nothing here writes to
 # dist, so a build from this file can never become the shipped executable.
 cmake_minimum_required(VERSION 3.20)
-project(Eqnedit64 VERSION 3.0.16 LANGUAGES CXX)
+project(Eqnedit64 VERSION 3.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -43,6 +43,14 @@ if(WIN32)
         eqnedit_core user32 gdi32 comctl32 comdlg32 shell32 ole32 imm32
         windowscodecs
     )
+    # Proof images call the real owner-draw implementation, not a duplicate
+    # UI renderer. Run only in an isolated font session; never on LAB desktop.
+    add_executable(test_palette_visual tests/test_palette_visual.cpp src/eqnedit64.rc)
+    target_include_directories(test_palette_visual PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_definitions(test_palette_visual PRIVATE _CRT_SECURE_NO_WARNINGS UNICODE _UNICODE)
+    target_compile_options(test_palette_visual PRIVATE /W4 /WX /w14062 /utf-8)
+    target_link_libraries(test_palette_visual PRIVATE eqnedit_core user32 gdi32
+        comctl32 comdlg32 shell32 ole32 imm32 windowscodecs)
 endif()
 
 enable_testing()
