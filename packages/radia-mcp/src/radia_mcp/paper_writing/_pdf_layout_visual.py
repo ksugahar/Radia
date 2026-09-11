@@ -217,30 +217,31 @@ def paper_writing_detect_page_whitespace_anomalies(
     pdf = pathlib.Path(pdf_path)
     if not pdf.exists():
         return {"error": f"pdf_path not found: {pdf_path}"}
-    doc = pymupdf.open(str(pdf))
+    with pymupdf.open(str(pdf)) as doc:
 
-    # We avoid PIL dep by inspecting the raw pixmap samples buffer.
-    # pixmap.samples is RGB bytes (3 bytes per pixel).  "White-ish"
-    # = all three channels above 240.
-    all_pages = []
-    flagged = []
-    threshold = max(0.0, min(1.0, whitespace_threshold))
-    for i, page in enumerate(doc):
-        pix = page.get_pixmap(dpi=dpi)
-        n = pix.width * pix.height
-        samp = pix.samples
-        # Stride: 3 (RGB) or 4 (RGBA).  Default get_pixmap is RGB w/o alpha.
-        stride = pix.n  # 3 or 4
-        white = 0
-        for k in range(0, len(samp), stride):
-            if samp[k] >= 240 and samp[k+1] >= 240 and samp[k+2] >= 240:
-                white += 1
-        frac = white / n if n else 1.0
-        rec = {"page": i + 1, "whitespace_fraction": round(frac, 3)}
-        all_pages.append(rec)
-        if frac > threshold:
-            flagged.append(rec)
-    doc.close()
+        # We avoid PIL dep by inspecting the raw pixmap samples buffer.
+        # pixmap.samples is RGB bytes (3 bytes per pixel).  "White-ish"
+        # = all three channels above 240.
+        all_pages = []
+        flagged = []
+        threshold = max(0.0, min(1.0, whitespace_threshold))
+        for i, page in enumerate(doc):
+            pix = page.get_pixmap(dpi=dpi)
+            n = pix.width * pix.height
+            samp = pix.samples
+            # Stride: 3 (RGB) or 4 (RGBA).  Default get_pixmap is RGB w/o alpha.
+            stride = pix.n  # 3 or 4
+            if n <= 0 or stride not in {3, 4} or len(samp) != n * stride:
+                raise ValueError(f"invalid PDF raster on page {i + 1}")
+            white = 0
+            for k in range(0, len(samp), stride):
+                if samp[k] >= 240 and samp[k+1] >= 240 and samp[k+2] >= 240:
+                    white += 1
+            frac = white / n
+            rec = {"page": i + 1, "whitespace_fraction": round(frac, 3)}
+            all_pages.append(rec)
+            if frac > threshold:
+                flagged.append(rec)
 
     advice = (
         f"Pages with whitespace > {threshold:.0%} usually come from rigid "
