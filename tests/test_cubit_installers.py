@@ -2,11 +2,15 @@ import hashlib
 import importlib.util
 import json
 import os
+import runpy
+import shutil
 import sys
 import tarfile
 import tomllib
 import xml.etree.ElementTree as ET
 from pathlib import Path
+
+import pytest
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -365,6 +369,63 @@ def test_native_manifest_rejects_drift_in_either_required_payload(
         errors = provenance.verify_manifest(tmp_path, package_dir)
         assert any(name in error for error in errors)
         path.write_bytes(original)
+
+
+@pytest.mark.parametrize("damage", [
+    None, "schema", "ccm-content", "pyd-content", "ccm-missing", "pyd-missing",
+    "size",
+])
+def test_sdist_setup_verifies_payloads_without_native_sources(
+    monkeypatch, tmp_path, damage
+):
+    import setuptools
+
+    provenance = _load_native_provenance()
+    package_root = tmp_path / "unpacked" / "cubit-mesh-export"
+    package_dir = package_root / "src" / "cubit_mesh_export"
+    package_dir.mkdir(parents=True)
+    for name in provenance.REQUIRED_PAYLOADS:
+        (package_dir / name).write_bytes(name.encode())
+    manifest_path = package_dir / "native_payloads.json"
+    manifest_path.write_text('{"payloads": {}}', encoding="utf-8")
+    monkeypatch.setattr(provenance, "_source_commit", lambda _root: "a" * 40)
+    provenance.record_manifest(tmp_path, package_dir)
+    assert provenance.verify_manifest(None, package_dir) == []
+
+    if damage in ("schema", "size"):
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if damage == "schema":
+            manifest["schema"] = "unsupported"
+        else:
+            manifest["payloads"]["cubit_mesh_export.ccm"]["size"] += 1
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    elif damage is not None:
+        name = ("cubit_mesh_export.ccm" if damage.startswith("ccm")
+                else "cubit_mesh_curver.pyd")
+        path = package_dir / name
+        if damage.endswith("missing"):
+            path.unlink()
+        else:
+            # Same size: the digest must catch corruption independently.
+            data = path.read_bytes()
+            path.write_bytes(bytes([data[0] ^ 1]) + data[1:])
+
+    original_package = PROJECT_ROOT / "packages" / "cubit-mesh-export"
+    shutil.copy2(original_package / "setup.py", package_root / "setup.py")
+    shutil.copy2(CME_SRC / "cubit_mesh_export" / "_native_provenance.py",
+                 package_dir / "_native_provenance.py")
+    assert not (tmp_path / "src" / "cubit_plugin").exists()
+    monkeypatch.delenv("CUBIT_MESH_EXPORT_SKIP_FRESHNESS_CHECK", raising=False)
+    setup_calls = []
+    monkeypatch.setattr(setuptools, "setup", lambda **kwargs: setup_calls.append(kwargs))
+    if damage is None:
+        runpy.run_path(str(package_root / "setup.py"))
+        assert len(setup_calls) == 1
+    else:
+        with pytest.raises(SystemExit) as error:
+            runpy.run_path(str(package_root / "setup.py"))
+        assert error.value.code == 1
+        assert not setup_calls
 
 
 def test_distribution_metadata_matches_the_only_supported_native_wheel():

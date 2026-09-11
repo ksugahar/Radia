@@ -6,6 +6,8 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
 ## Unreleased
 
+- Keep mandatory binary hash/size and manifest checks active when building
+  from an sdist without the native source tree.
 - Replace checkout-time freshness guesses with content-addressed provenance
   for the native source tree and both mandatory `.ccm` / `.pyd` payloads.
 - Align package metadata with the shipped `cp312-win_amd64` wheel: CPython

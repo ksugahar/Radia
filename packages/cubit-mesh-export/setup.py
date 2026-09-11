@@ -62,10 +62,9 @@ def _check_binary_provenance():
     cpp_dir = repo_root / "src" / "cubit_plugin"
 
     if not cpp_dir.is_dir():
-        # Building from an sdist — the C++ source isn't shipped, so the
-        # freshness check doesn't apply. The sdist was already built
-        # with the guard upstream.
-        return
+        # An sdist omits C++ sources, not the mandatory payload contract.
+        # Skip only source-tree comparison; still verify schema and binaries.
+        repo_root = None
 
     provenance = _load_provenance_module(pkg_dir)
     errors = provenance.verify_manifest(repo_root, pkg_dir)
