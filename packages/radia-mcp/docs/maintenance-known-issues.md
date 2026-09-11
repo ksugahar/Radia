@@ -43,6 +43,15 @@ particles/accents, title-format command exclusion, rename collisions and invalid
 UTF-8 refusal. The nine-file lane passes 1006 tests. Canonicalize/journal rewrite
 source preservation remains the next safety concern; no parent data was changed.
 
+M04 source-edit follow-up (2026-09-12): key and journal changes use parsed source
+ranges, not whole-file serialization. Comments, macros, BOM and LF/CRLF remain
+unchanged outside edited ranges; direct crossref/xref/xdata/related keys follow
+renames. Staged writes check for source drift and preserve the destination on
+failure. The expanded ten-file lane passes 1037 tests, including existing .bbl
+generation tests. The final source comparison is not a cross-process transaction
+lock; external manuscript citations still require the returned rename mapping.
+Malformed BibTeX is now rejected; no canonical bibliography was edited.
+
 Completion of a scoped validation requires matching the selected source, zero unexpected failures
 or skips in the relevant lane, and retained local machine-readable evidence.
 Do not commit transient test logs or mark the package globally "complete" from

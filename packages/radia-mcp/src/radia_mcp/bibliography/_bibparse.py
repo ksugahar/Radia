@@ -31,9 +31,11 @@ class BibEntry:
     key: str              # citation key; "" for @string/@preamble
     fields: dict[str, str]
     raw_body: str = ""    # original body for @string/@preamble
+    key_span: tuple[int, int] | None = dataclasses.field(default=None, repr=False, compare=False)
+    field_spans: dict[str, tuple[int, int]] = dataclasses.field(default_factory=dict, repr=False, compare=False)
 
 
-_ENTRY_HEAD = re.compile(r"@(?P<kind>\w+)\s*[\{(]\s*", re.IGNORECASE)
+_ENTRY_HEAD = re.compile(r"@(?P<kind>\w+)\s*(?P<open>[\{(])\s*", re.IGNORECASE)
 
 
 def _skip_ws_and_comments(s: str, i: int) -> int:
@@ -49,31 +51,39 @@ def _skip_ws_and_comments(s: str, i: int) -> int:
     return i
 
 
-def _read_value(s: str, i: int) -> tuple[str, int]:
+def _read_value(s: str, i: int) -> tuple[str, int, int]:
     """Read a single value (braced / quoted / bare) starting at ``s[i]``."""
     i = _skip_ws_and_comments(s, i)
     if i >= len(s):
-        return "", i
+        raise ValueError("missing BibTeX value")
     parts: list[str] = []
     while True:
         if i >= len(s):
-            break
+            raise ValueError("missing concatenated BibTeX value")
         c = s[i]
         if c == "{":
             depth = 1
             j = i + 1
             while j < len(s) and depth > 0:
+                if s[j] == "\\":
+                    j += 2
+                    continue
                 if s[j] == "{":
                     depth += 1
                 elif s[j] == "}":
                     depth -= 1
                 j += 1
+            if depth:
+                raise ValueError("unterminated braced BibTeX value")
             parts.append(s[i + 1:j - 1])
             i = j
         elif c == '"':
             j = i + 1
             depth = 0
             while j < len(s):
+                if s[j] == "\\":
+                    j += 2
+                    continue
                 if s[j] == "{":
                     depth += 1
                 elif s[j] == "}":
@@ -81,6 +91,8 @@ def _read_value(s: str, i: int) -> tuple[str, int]:
                 elif s[j] == '"' and depth == 0:
                     break
                 j += 1
+            if j >= len(s):
+                raise ValueError("unterminated quoted BibTeX value")
             parts.append(s[i + 1:j])
             i = j + 1
         else:
@@ -88,14 +100,17 @@ def _read_value(s: str, i: int) -> tuple[str, int]:
             j = i
             while j < len(s) and s[j] not in ",}#)\n":
                 j += 1
+            if not s[i:j].strip():
+                raise ValueError("missing BibTeX value")
             parts.append(s[i:j].strip())
             i = j
+        value_end = i
         i = _skip_ws_and_comments(s, i)
         if i < len(s) and s[i] == "#":
             i = _skip_ws_and_comments(s, i + 1)
             continue
         break
-    return "".join(parts), i
+    return "".join(parts), i, value_end
 
 
 def parse_bib(text: str) -> list[BibEntry]:
@@ -112,17 +127,31 @@ def parse_bib(text: str) -> list[BibEntry]:
             i += 1
             continue
         kind = m.group("kind").lower()
+        closing = "}" if m.group("open") == "{" else ")"
         i = m.end()
         if kind in ("string", "preamble", "comment"):
             # Treat as opaque body; consume until the matching closing brace.
             depth = 1
+            braces = 0
+            quoted = False
             j = i
             while j < len(text) and depth > 0:
-                if text[j] == "{":
-                    depth += 1
-                elif text[j] == "}":
-                    depth -= 1
+                char = text[j]
+                if char == "\\":
+                    j += 2
+                    continue
+                if char == '"' and braces == 0:
+                    quoted = not quoted
+                if not quoted:
+                    if char == "{":
+                        braces += 1
+                    elif char == "}" and braces:
+                        braces -= 1
+                    elif char == closing and braces == 0:
+                        depth = 0
                 j += 1
+            if depth:
+                raise ValueError("unterminated BibTeX directive")
             entries.append(BibEntry(kind=f"@{kind}", key="",
                                     fields={}, raw_body=text[i:j - 1]))
             i = j
@@ -130,33 +159,39 @@ def parse_bib(text: str) -> list[BibEntry]:
         # Normal entry: key , field = value , ...
         # Read key (up to ',').
         j = i
-        while j < len(text) and text[j] not in ",}":
+        while j < len(text) and text[j] not in ",})":
             j += 1
         key = text[i:j].strip()
+        key_span = (i, i + len(key))
         fields: dict[str, str] = {}
+        field_spans: dict[str, tuple[int, int]] = {}
         if j < len(text) and text[j] == ",":
             j += 1
         while True:
             j = _skip_ws_and_comments(text, j)
-            if j >= len(text) or text[j] == "}":
+            if j >= len(text) or text[j] == closing:
                 break
             # Read field name until '='.
-            k = j
-            while k < len(text) and text[k] != "=":
-                k += 1
-            field = text[j:k].strip().lower()
-            if not field:
-                break
-            j = k + 1
-            value, j = _read_value(text, j)
+            field_match = re.match(r"([\w-]+)\s*=", text[j:])
+            if not field_match:
+                raise ValueError(f"invalid BibTeX field near offset {j}")
+            field = field_match[1].lower()
+            if field in fields:
+                raise ValueError(f"duplicate BibTeX field: {field}")
+            j += field_match.end()
+            value_start = _skip_ws_and_comments(text, j)
+            value, j, value_end = _read_value(text, value_start)
             fields[field] = value
+            field_spans[field] = (value_start, value_end)
             j = _skip_ws_and_comments(text, j)
             if j < len(text) and text[j] == ",":
                 j += 1
         # Consume closing brace.
-        if j < len(text) and text[j] == "}":
-            j += 1
-        entries.append(BibEntry(kind=kind, key=key, fields=fields))
+        if j >= len(text) or text[j] != closing:
+            raise ValueError("unterminated BibTeX entry")
+        j += 1
+        entries.append(BibEntry(kind=kind, key=key, fields=fields,
+                                key_span=key_span, field_spans=field_spans))
         i = j
     return entries
 
