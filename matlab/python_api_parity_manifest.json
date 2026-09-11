@@ -234,7 +234,7 @@
       "classification": "python-fallback",
       "backend_contract": "in-process-python",
       "matlab": ["matlab/+radia/+python/machines.m"],
-      "notes": "Production human applications have Simulink blocks; reusable Python design/model APIs are not yet all native MATLAB APIs."
+      "notes": "Production human applications have Simulink blocks; reusable Python design/model APIs are not yet all native MATLAB APIs. The quantitative MagLev ECB HCurl-VIM force adapter and scalar Foster verification remain an explicit Python fallback outside Simulink step time."
     },
     {
       "id": "stream-function-python",

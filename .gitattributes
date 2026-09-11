@@ -26,4 +26,10 @@ validation_test/radia_mcp/artifacts/field_study_production_v1/*.json text eol=lf
 # to LF so Windows and Linux checkouts preserve one byte-stable oracle.
 tests/matlab/fixtures/optuna*.json text eol=lf
 matlab/optuna*.json text eol=lf
+
+# The independent MagLev 3-D validation records SHA-256 fingerprints for the
+# executed driver and force adapter.  Preserve identical bytes on Windows and
+# mdx so the evidence remains replayable across both hosts.
+validation_test/maglev/ecb_foster_lorentz_3d_reference.py text eol=lf
+src/radia/maglev/ecb/lorentz.py text eol=lf
 docs/hdiv_vim/c_type_three_formulation_convergence_iron.vol binary
