@@ -52,7 +52,7 @@ Paths in tables are relative to `src/radia_mcp/paper_writing` unless specified.
 | P09 | 3 missing inputs | 修正済み | R::test_submission_gate_rejects_supplied_missing_files. |
 | P10 | 3.1; 3.2 | 修正済み | R::test_submission_gate_maps_detector_failures_to_status checks figure references and underlines. |
 | P11 | 3.4 equation/reference/citation/abstract length | 修正済み | Same test checks each result status, not just check-name presence. |
-| P12 | 3.3; remaining 3.4 self-citation/background | 検証待ち | Inject every lower detector's error/skip/exception; test self-citation and background-ratio status independently. P11 is not complete coverage. |
+| P12 | 3.3; remaining 3.4 self-citation/background | 検証待ち | Fault-injection tests now cover exception/error/ok=false/skip/not-applicable for equation, underline and figure-reference checks. Gate no longer claims submission-ready with skipped checks. Remaining detectors and self-citation/background-ratio mapping still need independent coverage. |
 | P13 | 3.5 | 検証待ち | Gate consumers must see nested citations consistently; resolver-only success does not close this. |
 | P14 | 3.6 | 検証待ち | Observe merged-source temporary-file cleanup on success and exception paths. |
 
@@ -101,8 +101,8 @@ Paths in tables are relative to `src/radia_mcp/paper_writing` unless specified.
 | P48 | 5.3 duplicate image xrefs | 検証待ち | Repeated placements must not self-overlap. |
 | P49 | 5.3 INFO score/docstrings | 検証待ち | Base-14 font information alone must not imply a defect. |
 | P50 | 5.3 extraction errors/resource closure; 8.2 | 検証待ち | Inject extraction exceptions and assert unknown/error, not blank/clean; check document closure. |
-| P51 | 5.4 T18 phase4 | 検証待ち | Static: now reads observations.triggers/top_triggers; old key mismatch changed. Needs a nonempty phase4 regression. |
-| P52 | 5.4 T9 detector exception | 検証待ち | Static: unknown_triggers now excludes failed detectors from denominator. Still computes 0 risk/10 score when denominator is zero; inject complete and partial detector failures before closure. |
+| P51 | 5.4 T18 phase4 | 修正済み | test_paper_writing_fault_injection.py::test_workflow_keeps_active_triggers_and_forwards_bib verifies a nonempty phase4, bibliography and author forwarding. Incomplete/invalid reviewer results no longer produce a completion summary. This does not certify other phase payloads. |
+| P52 | 5.4 T9 detector exception | 修正済み | test_paper_writing_fault_injection.py injects exceptions, error/ok=false/skip, empty and non-dict results into each of seven detectors, plus complete failure and invalid counts. Unknown checks suppress score/risk (None) while retaining confirmed findings; a complete clean fixture retains score 10. |
 | P53 | 5.4 T10 English triangle | 修正済み | R::test_triangle_uses_lowercase_english_content_words. |
 | P54 | 5.4 T13 bib entry | 修正済み | R::test_citation_health_parses_single_line_nested_entry. |
 | P55 | 5.4 T11 coil/Table metadata | 修正済み | R::test_reproducibility_does_not_read_coil_or_table_as_metadata. |
@@ -135,8 +135,14 @@ Paths in tables are relative to `src/radia_mcp/paper_writing` unless specified.
 
 ## Next bounded work
 
-1. Fault-inject the submission gate and T9/T18 composite paths (P12, P51, P52):
-   these can turn missing evidence into reassuring output.
+Follow-up fault-injection verification (2026-09-11): 240 passed across
+`test_paper_writing_fault_injection.py`, `test_paper_writing_review_regressions.py`,
+`test_paper_writing.py`, and `test_paper_writing_conclusion_first_use.py`.
+This is a focused source-isolated test run, not a full-package or live-MCP check.
+No editable installation or live client was changed.
+
+1. Extend submission-gate fault injection to remaining detectors (P12) and
+   other workflow phases. T9/T18 phase4 coverage is recorded in P51/P52.
 2. Fix reproduced/static-confirmed P31/P32/P37/P38 with focused regressions.
 3. Work through external-input safety and PDF false-clean findings
    (P50, P62–P67), then language heuristics and deduplication.
