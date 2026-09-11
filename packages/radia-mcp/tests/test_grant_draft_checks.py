@@ -432,6 +432,27 @@ def test_capability_map_recognizes_proposal_wording_without_dewa():
     assert item["has_future_statement"] is True
 
 
+def test_capability_map_rejoins_soft_wrapped_markdown_prose():
+    text = (
+        "HDiv-MMMの磁界計算部は完成しつつあるが、FFAGで鉄配置探索と局所変形を\n"
+        "組み合わせるトポロジー最適化は、本研究で実装し、性能を検証する。"
+    )
+    result = t.grant_writing_capability_status_map(
+        text, capability_names="HDiv-MMM"
+    )
+    item = result["capabilities"][0]
+    assert item["has_current_statement"] is True
+    assert item["has_future_statement"] is True
+    assert item["statements"][0]["status"] == "current_and_future"
+
+
+def test_capability_map_recognizes_conjugated_future_action():
+    result = t.grant_writing_capability_status_map(
+        "本研究はRadiaを拡張し、FFAGで検証する。", capability_names="Radia"
+    )
+    assert result["capabilities"][0]["has_future_statement"] is True
+
+
 def test_capability_map_leaves_unmarked_claim_for_human_review():
     result = t.grant_writing_capability_status_map(
         "Radiaは磁場を計算する。", capability_names="Radia"
