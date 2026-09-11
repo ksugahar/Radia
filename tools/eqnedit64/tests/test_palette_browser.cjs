@@ -23,7 +23,8 @@ const server = http.createServer((req, res) => {
     res.end('<!doctype html><html lang="ja"><meta charset="utf-8">' +
       '<script>window.MathJax={startup:{typeset:false}};</script>' +
       '<script src="/mathjax/tex-chtml.js"></script>' +
-      fs.readFileSync(path.join(web, "equation-editor.fragment.html"), "utf8"));
+      fs.readFileSync(path.join(web, "equation-editor.fragment.html"), "utf8")
+        .replace(req.url === "/?cold" ? '<script src="./equation-editor.js"></script>' : "__unused__", ""));
   }
 });
 (async () => {
@@ -32,6 +33,53 @@ const server = http.createServer((req, res) => {
   try {
     browser = await chromium.launch({headless:true,
       ...(process.env.EQNEDIT64_BROWSER_PATH ? {executablePath:process.env.EQNEDIT64_BROWSER_PATH} : {})});
+    const cold = await browser.newPage();
+    let releaseCancel;
+    const cancelGate = new Promise(resolve => {releaseCancel = resolve;});
+    await cold.route("**/cancel.js", async route => {await cancelGate; await route.continue();});
+    await cold.goto("http://127.0.0.1:" + server.address().port + "/?cold");
+    await cold.evaluate(async () => {
+      await MathJax.startup.promise;
+      const typeset = MathJax.typesetPromise;
+      const gate = new Promise(resolve => {window.releasePalettePreviews = resolve;});
+      MathJax.typesetPromise = function (nodes) {
+        if (nodes && nodes[0].classList.contains("eqed-math-face")) {
+          window.palettePreviewStarted = true;
+          return gate.then(() => typeset(nodes));
+        }
+        return typeset(nodes);
+      };
+      // Capture the application's real copy event without touching the host
+      // clipboard or granting browser clipboard permissions.
+      window.capturedCopies = [];
+      const exec = document.execCommand.bind(document);
+      document.execCommand = function (command, ...args) {
+        if (command !== "copy") return exec(command, ...args);
+        const data = new DataTransfer();
+        const event = new ClipboardEvent("copy", {clipboardData:data,cancelable:true});
+        document.dispatchEvent(event);
+        window.capturedCopies.push({html:data.getData("text/html"),tex:data.getData("text/plain")});
+        return event.defaultPrevented;
+      };
+    });
+    await cold.addScriptTag({url:"http://127.0.0.1:" + server.address().port + "/equation-editor.js"});
+    assert(await cold.locator(".eqed-copy-office").isDisabled(), "Copy is unavailable while macros load");
+    await cold.locator(".eqed-source").fill("\\bm{x}+\\cancel{x}");
+    releaseCancel();
+    await cold.waitForFunction(() => !document.querySelector(".eqed-copy-office").disabled && window.palettePreviewStarted);
+    assert.equal(await cold.locator(".eqed-math-face mjx-container").count(),0);
+    await cold.locator(".eqed-copy-office").click();
+    const copies = await cold.evaluate(() => window.capturedCopies);
+    assert.equal(copies.length,1);
+    assert.equal(copies[0].tex,"\\bm{x}+\\cancel{x}");
+    assert.match(copies[0].html,/menclose/);
+    assert.match(copies[0].html,/mathvariant="bold-italic"/);
+    assert.doesNotMatch(copies[0].html,/<merror|mathcolor="red"/);
+    await cold.evaluate(() => window.releasePalettePreviews());
+    await cold.waitForFunction(() => document.querySelectorAll(".eqed-math-face").length ===
+      document.querySelectorAll(".eqed-math-face mjx-container, .eqed-preview-error .eqed-math-face").length);
+    assert.equal(await cold.locator(".eqed-preview-error").count(),0);
+    await cold.close();
     const page = await browser.newPage({viewport:{width:1400,height:1000}});
     const errors = [];
     page.on("pageerror", error => errors.push(error.message));
@@ -58,7 +106,7 @@ const server = http.createServer((req, res) => {
     await page.locator(".eqed-source").evaluate(e=>e.setSelectionRange(0,1));
     await page.locator('.eqed-key').filter({hasText:"n√□"}).click();
     assert.equal(await page.locator(".eqed-source").inputValue(),"\\sqrt[]{x}");
-    console.log("PASS: 291 browser keys, CHTML fonts, strike preview and selected root body");
+    console.log("PASS: cold first copy before palette previews; 291 browser keys, CHTML fonts, strike preview and selected root body");
   } finally {
     if (browser) await browser.close();
     server.close();
