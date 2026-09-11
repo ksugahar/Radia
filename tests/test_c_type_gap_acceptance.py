@@ -47,3 +47,61 @@ def test_incomplete_probe_rejected(field, value):
 def test_invalid_requirements_rejected(required, factor):
     with pytest.raises(ValueError):
         builder._gap_acceptance(inventory(), required, factor)
+
+
+GAP = 0.01
+BAND = 2.0e-7
+
+
+class _BiasedLocatorMesh:
+    """A stack of tetrahedra in z whose point locator mimics NGSolve's tolerance.
+
+    Elements are scanned from the top down and accepted up to ``BAND`` outside
+    their faces, so just below every face the locator returns the element
+    ABOVE it with a negative reference margin -- the behaviour measured on the
+    C-type family meshes (iron returned 0.2 um inside the air gap).
+    """
+
+    faces = (-1.0, -GAP / 2, -GAP / 6, GAP / 6, GAP / 2, 1.0)
+    element_material = (0, 1, 1, 1, 0)
+
+    def GetMaterials(self):
+        return ("iron", "air")
+
+    def __call__(self, x, y, z):
+        from types import SimpleNamespace
+        for number in reversed(range(len(self.faces) - 1)):
+            low, high = self.faces[number], self.faces[number + 1]
+            if low - BAND <= z <= high + BAND:
+                margin = min(z - low, high - z) / (high - low)
+                return SimpleNamespace(nr=number,
+                                       pnt=(margin, (1 - margin) / 3, (1 - margin) / 3))
+        return SimpleNamespace(nr=-1, pnt=(0.0, 0.0, 0.0))
+
+    def __getitem__(self, element_id):
+        import ngsolve as ng
+        from types import SimpleNamespace
+        return SimpleNamespace(index=self.element_material[element_id.nr],
+                               type=ng.ET.TET)
+
+
+def test_fake_locator_reproduces_the_band():
+    mesh = _BiasedLocatorMesh()
+    number, margin, material = builder._containing_element(
+        mesh, mesh.GetMaterials(), 0.0, 0.0, GAP / 2 - BAND / 2)
+    assert material == "iron" and margin < 0.0
+
+
+def test_curved_walk_puts_switches_on_the_faces_not_the_band():
+    result = builder._curved_line_segments(_BiasedLocatorMesh(), 0.0, 0.0, GAP / 2)
+    assert result["segments"] == 3
+    assert abs(result["covered_m"] - GAP) < 1.0e-12
+    assert result["maximum_segment_m"] == pytest.approx(GAP / 3, abs=2.0e-9)
+    assert result["minimum_segment_m"] == pytest.approx(GAP / 3, abs=2.0e-9)
+    assert result["locator_band_samples"] >= 1
+
+
+def test_point_outside_the_mesh_has_no_element():
+    mesh = _BiasedLocatorMesh()
+    assert builder._containing_element(mesh, mesh.GetMaterials(), 0.0, 0.0, 2.0) \
+        == (None, None, None)
