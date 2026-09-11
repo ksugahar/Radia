@@ -497,6 +497,40 @@ def paper_writing_arxiv_search(
 # ============================================================
 
 
+def _normalize_s2_id(paper_id: str) -> str:
+    """Normalize known identifier forms without decoding literal bare DOI percent signs."""
+    from .paper_download import _normalize_doi
+
+    if not isinstance(paper_id, str) or not paper_id.strip():
+        raise ValueError("paper_id must be a nonempty string")
+    pid = paper_id.strip()
+    if re.match(r"^(?:doi\s*:|(?:https?://)?(?:dx\.)?doi\.org/|10\.)", pid,
+                re.IGNORECASE):
+        doi = _normalize_doi(pid)
+        if not re.fullmatch(r"10\.\d{4,9}/\S+", doi):
+            raise ValueError("invalid DOI identifier")
+        return "DOI:" + doi
+    page = urllib.parse.urlsplit(pid)
+    if (page.scheme.lower() in {"http", "https"}
+            and page.hostname in {"semanticscholar.org", "www.semanticscholar.org"}):
+        parts = page.path.strip("/").split("/")
+        if len(parts) not in {2, 3} or parts[0] != "paper" or not parts[-1]:
+            raise ValueError("invalid Semantic Scholar paper URL")
+        return urllib.parse.unquote(parts[-1])
+    arxiv_url = re.match(r"^https?://(?:www\.)?arxiv\.org/(?:abs|pdf)/", pid,
+                         re.IGNORECASE)
+    if arxiv_url:
+        pid = urllib.parse.unquote(page.path.split("/", 2)[2])
+    if (arxiv_url or pid.lower().startswith("arxiv:")
+            or re.fullmatch(r"\d{4}\.\d{4,5}(?:v\d+)?", pid)
+            or re.fullmatch(r"[A-Za-z][\w.-]*/\d{7}(?:v\d+)?", pid)):
+        aid = _normalize_arxiv_id(pid).strip()
+        if not re.fullmatch(r"(?:\d{4}\.\d{4,5}|[A-Za-z][\w.-]*/\d{7})", aid):
+            raise ValueError("invalid arXiv identifier")
+        return "ARXIV:" + aid
+    return pid  # Preserve other S2 namespaces (CorpusID, PMID, ACL, URL).
+
+
 def paper_writing_semantic_scholar_lookup(
     paper_id: str,
     fields: str = "title,abstract,authors,year,venue,referenceCount,citationCount,externalIds",
@@ -526,25 +560,11 @@ def paper_writing_semantic_scholar_lookup(
         (S2 reference / citation traversal pattern)
       * https://api.semanticscholar.org/graph/v1
     """
+    try:
+        pid = _normalize_s2_id(paper_id)
+    except ValueError as exc:
+        return {"error": str(exc)}
     requests = _require_requests()
-
-    # Build S2-style ID
-    pid = paper_id.strip()
-    if pid.startswith("https://www.semanticscholar.org/paper/"):
-        pid = pid.split("/paper/")[1].split("/")[0]
-    elif pid.lower().startswith("arxiv:"):
-        pid = f"ARXIV:{pid[6:]}"
-    elif re.match(r"^(?:doi:|https?://(?:dx\.)?doi\.org/|10\.)", pid,
-                  re.IGNORECASE):
-        pid = re.sub(r"^doi\s*:\s*", "", pid, flags=re.IGNORECASE)
-        pid = re.sub(
-            r"^https?://(?:dx\.)?doi\.org/", "", pid, flags=re.IGNORECASE
-        )
-        pid = f"DOI:{pid}"
-    elif "/" in pid and re.match(r"^[a-z\-]+/\d{7}$", pid.lower()):
-        # old-style arXiv
-        pid = f"ARXIV:{pid}"
-    # else: pass through as-is (S2 will resolve)
 
     url = (
         "https://api.semanticscholar.org/graph/v1/paper/"
@@ -601,15 +621,14 @@ def paper_writing_semantic_scholar_references(
     Returns:
         dict with "references": list of paper dicts.
     """
+    try:
+        pid = _normalize_s2_id(paper_id)
+    except ValueError as exc:
+        return {"error": str(exc)}
     requests = _require_requests()
-    pid = paper_id.strip()
-    if pid.lower().startswith("arxiv:"):
-        pid = f"ARXIV:{pid[6:]}"
-    elif pid.startswith("10."):
-        pid = f"DOI:{pid}"
 
     limit = max(1, min(int(limit), 1000))
-    url = f"https://api.semanticscholar.org/graph/v1/paper/{pid}/references"
+    url = "https://api.semanticscholar.org/graph/v1/paper/" + urllib.parse.quote(pid, safe=":") + "/references"
     params = {"fields": fields, "limit": limit}
     r = None
     try:
@@ -660,15 +679,14 @@ def paper_writing_semantic_scholar_citations(
     Returns:
         dict with "citations": list of paper dicts.
     """
+    try:
+        pid = _normalize_s2_id(paper_id)
+    except ValueError as exc:
+        return {"error": str(exc)}
     requests = _require_requests()
-    pid = paper_id.strip()
-    if pid.lower().startswith("arxiv:"):
-        pid = f"ARXIV:{pid[6:]}"
-    elif pid.startswith("10."):
-        pid = f"DOI:{pid}"
 
     limit = max(1, min(int(limit), 1000))
-    url = f"https://api.semanticscholar.org/graph/v1/paper/{pid}/citations"
+    url = "https://api.semanticscholar.org/graph/v1/paper/" + urllib.parse.quote(pid, safe=":") + "/citations"
     params = {"fields": fields, "limit": limit}
     r = None
     try:
