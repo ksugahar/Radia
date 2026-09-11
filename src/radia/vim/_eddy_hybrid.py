@@ -327,9 +327,12 @@ class EddyParentOrderLedger:
 def _radia_cpp_kernel(name: str):
     try:
         from radia import _radia_pybind as _radia_cpp
-    except Exception:
-        return None
-    return getattr(_radia_cpp, name, None)
+    except ImportError as exc:
+        raise RuntimeError("Radia C++ extension is not importable; rebuild the selected source") from exc
+    kernel = getattr(_radia_cpp, name, None)
+    if not callable(kernel):
+        raise RuntimeError(f"Radia C++ extension lacks {name}; rebuild _radia_pybind")
+    return kernel
 
 
 def _as_points(points, name: str) -> np.ndarray:
@@ -6842,17 +6845,7 @@ def EVRSTMethodAlgebra(
         _as_real_matrix(port_current, "port_current"),
     )
     if backend in {"auto", "cpp"}:
-        try:
-            from radia import _radia_pybind as _radia_cpp
-        except Exception as exc:
-            if backend == "cpp":
-                raise RuntimeError("Radia C++ extension is not importable") from exc
-        else:
-            func = getattr(_radia_cpp, "_EVRSTMethodAlgebra", None)
-            if func is not None:
-                return func(*args)
-            if backend == "cpp":
-                raise RuntimeError("Radia C++ extension lacks _EVRSTMethodAlgebra; rebuild _radia_pybind")
+        return _radia_cpp_kernel("_EVRSTMethodAlgebra")(*args)
     return _evrs_tmethod_algebra_numpy(*args)
 
 
@@ -11689,9 +11682,7 @@ def SkinImpedance(s, sigma: float, mu: float = MU0):
     if not np.isfinite(mu) or mu <= 0.0:
         raise ValueError("mu must be positive")
     func = _radia_cpp_kernel("_SkinImpedance")
-    if func is not None:
-        return func(s, sigma, mu)
-    return np.sqrt(mu * s / sigma)
+    return func(s, sigma, mu)
 
 
 def SIBCAdmittanceTail(s, surface_measure: float, sigma: float, mu: float = MU0):
@@ -11716,9 +11707,7 @@ def SIBCAdmittanceTail(s, surface_measure: float, sigma: float, mu: float = MU0)
     if not np.isfinite(mu) or mu <= 0.0:
         raise ValueError("mu must be positive")
     func = _radia_cpp_kernel("_SIBCAdmittanceTail")
-    if func is not None:
-        return func(s, surface_measure, sigma, mu)
-    return surface_measure * np.sqrt(sigma / (mu * s))
+    return func(s, surface_measure, sigma, mu)
 
 
 def SIBCSchurTerminationImpedance(s, k_sibc: float, d: float = 0.0):
@@ -11744,9 +11733,7 @@ def SIBCSchurTerminationImpedance(s, k_sibc: float, d: float = 0.0):
             return 0.0j
         raise ValueError("SIBC termination impedance has a pole at s=0 when d>0")
     func = _radia_cpp_kernel("_SIBCSchurTerminationImpedance")
-    if func is not None:
-        return func(s, k_sibc, d)
-    return (s + d) / (k_sibc * np.sqrt(s))
+    return func(s, k_sibc, d)
 
 
 def SIBCSchurTerminationAdmittance(s, k_sibc: float, d: float = 0.0):
@@ -11766,9 +11753,7 @@ def SIBCSchurTerminationAdmittance(s, k_sibc: float, d: float = 0.0):
             return 0.0j
         raise ValueError("SIBC termination admittance has a pole at s=0 when d=0")
     func = _radia_cpp_kernel("_SIBCSchurTerminationAdmittance")
-    if func is not None:
-        return func(s, k_sibc, d)
-    return 1.0 / SIBCSchurTerminationImpedance(s, k_sibc, d=d)
+    return func(s, k_sibc, d)
 
 
 def ExternalVectorPotentialRHS(basis: SampledCurrentBasis, vector_potential) -> np.ndarray:
