@@ -103,7 +103,7 @@ def true_residual(p, gfu):
 
 
 def main():
-    mesh_name = sys.argv[1] if len(sys.argv) > 1 else "mesh1_3.5T"
+    mesh_name = sys.argv[1] if len(sys.argv) > 1 else "mesh1_2.5T"
     mesh_name = mesh_path(mesh_name).name
 
     print("=" * 80)
