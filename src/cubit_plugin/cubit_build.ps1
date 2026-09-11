@@ -140,4 +140,11 @@ foreach ($deployment in $deployments) {
     Write-Host "    sha256=$destinationHash" -ForegroundColor DarkGray
 }
 
+$provenanceScript = Join-Path $packageDir "_native_provenance.py"
+& $pythonExecutable $provenanceScript record `
+    --repo-root $repoRoot --package-dir $packageDir
+if ($LASTEXITCODE -ne 0) {
+    throw "Recording native payload provenance failed"
+}
+
 Write-Host "BUILD AND PROPAGATION OK" -ForegroundColor Green

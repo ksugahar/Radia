@@ -1,8 +1,8 @@
 # Claude Code - Radia Project Policy
 
-Keep active decision rules here; details belong in source, tests, package
-documentation, focused skills and `radia-mcp` knowledge.
-Historical investigations remain in Git history; do not copy them back here.
+This file contains active decision rules only. Put implementation details in
+source, tests, package docs, focused skills, and `radia-mcp` knowledge.
+Historical investigations remain in Git history.
 
 ## Mission
 
