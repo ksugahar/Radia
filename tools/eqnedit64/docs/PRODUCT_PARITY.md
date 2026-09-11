@@ -154,3 +154,21 @@ Every offered key must pass the independent [palette intent contract](PALETTE_IN
 and its checked expectations in `palette_intent.json`. Catalogue completeness,
 distinct drawings and TeX round trips alone do not establish the intended meaning.
 Native and Web insertions are checked separately; an unreviewed key fails closed.
+
+## Web first-copy readiness
+
+The Web Office-copy button stays disabled with a preparation explanation until
+the primary CHTML typesetter, followed by the MathML converter, has initialized
+bold-symbol and cancellation macros. Verify synchronous conversion before
+enabling copy. Initialization failure leaves copy disabled with a reload
+explanation; it must not masquerade as successful readiness. Defer the initial
+expression render until readiness too. Palette preview rendering follows this
+preparation but must not delay enabling Office copy.
+
+Keep clipboard writing synchronous inside the user gesture. This readiness
+change does not alter the inline MathML payload, 18 pt convention, or native
+clipboard path. The cold-browser test delays the cancellation package and holds
+all palette previews, checks the disabled state, then captures the actual copy
+event before any preview completes. The first payload must contain bold-italic
+and cancellation markup, without MathJax errors. It does not modify the user's
+system clipboard. Website hand testing remains required before publication.

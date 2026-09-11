@@ -3130,9 +3130,21 @@
    * flight.  Fire and forget: the copy path stays synchronous, which is what
    * keeps the user gesture alive for the clipboard write. */
   function warmAutoloadedMacros() {
-    if (!window.MathJax || typeof window.MathJax.tex2mmlPromise !== "function") return;
-    return window.MathJax.tex2mmlPromise("\\require{cancel}\\boldsymbol{x}+\\cancel{x}", { display: false })
-      .catch(function () { /* the sync path reports its own failure */ });
+    var mj = window.MathJax;
+    if (!mj || typeof mj.tex2mmlPromise !== "function" ||
+        typeof mj.tex2chtmlPromise !== "function")
+      return Promise.reject(new Error("MathJax conversion unavailable"));
+    // Initialize the primary typesetter first. Loading cancel only in the
+    // separate MathML converter left the primary jax with an undefined macro.
+    var sample = "\\require{cancel}\\boldsymbol{x}+\\cancel{x}";
+    return mj.tex2chtmlPromise(sample, { display: false }).then(function () {
+      return mj.tex2mmlPromise(sample, { display: false });
+    }).then(function () {
+      // Prove the synchronous, user-gesture-preserving copy route is ready.
+      var raw = mj.tex2mml("\\boldsymbol{x}+\\cancel{x}", { display: false });
+      if (/<merror|mathcolor=["']red["']/.test(raw))
+        throw new Error("MathJax macro initialization failed");
+    });
   }
 
   function officeMathMl(tex) {
@@ -3762,8 +3774,22 @@
     /* It now carries the TeX of the cell under the cursor on purpose. */
     status.setAttribute("data-tex-literal-ok", "true");
     var paletteHost = root.querySelector(".eqed-palettes");
-    var palettePreviewQueue = window.MathJax && window.MathJax.startup
-      ? window.MathJax.startup.promise : Promise.resolve();
+    var officeButton = root.querySelector(".eqed-copy-office");
+    var officeReady = false;
+    officeButton.disabled = true;
+    officeButton.title = "数式機能を準備しています";
+    var officePreparation = (window.MathJax && window.MathJax.startup
+      ? window.MathJax.startup.promise : Promise.resolve())
+      .then(warmAutoloadedMacros).then(function () {
+        officeReady = true;
+        officeButton.disabled = false;
+        officeButton.title = "";
+        render();
+      }).catch(function () {
+        officeButton.title = "数式機能を準備できませんでした。ページを再読み込みしてください";
+        say(officeButton.title);
+      });
+    var palettePreviewQueue = officePreparation;
     var recent = el("output", "eqed-recent");
     recent.hidden = true;
     recent.setAttribute("aria-live", "polite");
@@ -3811,6 +3837,10 @@
       preview.innerHTML = "";
       if (!tex) {
         preview.appendChild(el("p", "eqed-empty", "ここに数式が表示されます"));
+        return;
+      }
+      if (!officeReady) {
+        preview.appendChild(el("p", "eqed-empty", "数式機能を準備しています"));
         return;
       }
       var problem = braceProblem(tex);
@@ -4054,6 +4084,7 @@
      * PNG は暗いスライドで見えない。「貼り付けたのに何も見えない」に
      * なる。画像が欲しいときは専用の「PNGでコピー」を使う。 */
     root.querySelector(".eqed-copy-office").addEventListener("click", function () {
+      if (!officeReady) { say(officeButton.title); return; }
       var tex = input.value.trim();
       if (!tex) { say("数式が空です"); return; }
       if (!window.MathJax || typeof window.MathJax.tex2mml !== "function") {
@@ -4165,11 +4196,6 @@
         .appendChild(el("span", "eqed-build", "build " + BUILD));
 
     render();
-    if (window.MathJax && window.MathJax.startup && window.MathJax.startup.promise) {
-      palettePreviewQueue.then(warmAutoloadedMacros).catch(function () {});
-    } else {
-      warmAutoloadedMacros();
-    }
   }
 
   function ready() {

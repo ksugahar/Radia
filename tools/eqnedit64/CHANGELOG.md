@@ -2,6 +2,11 @@
 
 ## 3.1.0 — release candidate
 
+- Prepare the primary Web typesetter before the MathML converter and enable
+  Office copy only after the required macros are ready. Do not make copy wait
+  for all palette previews. A cold-browser regression holds package loading
+  and preview rendering separately, then captures the first copy event.
+
 - Preserve the curly glyph in wide over/underbraces instead of silently
   substituting a horizontal line; cover multiple body widths in the decoration
   regression. This was found by reviewing the shared-palette proof images.

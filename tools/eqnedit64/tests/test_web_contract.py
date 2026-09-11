@@ -193,8 +193,11 @@ def test_autoloaded_macros_are_warmed_before_the_first_office_copy() -> None:
     failed the first copy of a `\\bm` equation on a freshly opened page.
     """
     assert "function warmAutoloadedMacros()" in SOURCE
-    assert r'tex2mmlPromise("\\require{cancel}\\boldsymbol{x}+\\cancel{x}"' in SOURCE
-    assert "palettePreviewQueue.then(warmAutoloadedMacros)" in SOURCE
+    assert r'"\\require{cancel}\\boldsymbol{x}+\\cancel{x}"' in SOURCE
+    assert "var palettePreviewQueue = officePreparation" in SOURCE
+    assert "officeButton.disabled = true" in SOURCE
+    assert "officeButton.disabled = false" in SOURCE
+    assert "if (!officeReady)" in SOURCE
 
 
 def test_office_copy_prefers_exact_cf_html_fragment() -> None:
