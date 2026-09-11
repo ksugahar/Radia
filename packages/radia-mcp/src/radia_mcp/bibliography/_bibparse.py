@@ -256,14 +256,14 @@ def _key_letters(value: str) -> str:
     return re.sub(r"[^A-Za-z]", "", value).lower()
 
 
-def first_author_lastname(authors_field: str) -> str:
+def first_author_family(authors_field: str) -> str:
     """Return the first author's lastname from a BibTeX ``author`` field.
 
     Handles "Last, First and Last2, First2" and "First Last and First2 Last2".
-    Returns lowercase ASCII when possible.
+    Retains Unicode and brace-protected text; this is syntax, not identity verification.
     """
     if not authors_field:
-        return "unknown"
+        return ""
     first = _split_name_parts(authors_field, r"\s+and\s+")[0]
     comma_parts = _split_name_parts(first, r",")
     tokens = _split_name_parts(first, r"\s+")
@@ -275,7 +275,12 @@ def first_author_lastname(authors_field: str) -> str:
                          if token and token[0].islower()), len(tokens) - 1)
         last = " ".join(tokens[particle:])
     # Strip non-letters for the cite-key alphabet.
-    return _key_letters(last) or "unknown"
+    return last
+
+
+def first_author_lastname(authors_field: str) -> str:
+    """Return an ASCII citation-key token, not a verified author identity."""
+    return _key_letters(first_author_family(authors_field)) or "unknown"
 
 
 def first_title_word(title_field: str) -> str:
