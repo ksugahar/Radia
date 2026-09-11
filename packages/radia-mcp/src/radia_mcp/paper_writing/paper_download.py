@@ -156,6 +156,13 @@ def _save_verified_pdf(response, dest_path: str) -> dict:
             response.close()
 
 
+def _normalize_doi(doi: str) -> str:
+    """Decode URL-form DOIs once; percent signs in bare identifiers are literal."""
+    doi = re.sub(r"^doi\s*:\s*", "", doi.strip(), flags=re.IGNORECASE)
+    prefix = re.match(r"^(?:https?://)?(?:dx\.)?doi\.org/", doi, re.IGNORECASE)
+    return urllib.parse.unquote(doi[prefix.end():]) if prefix else doi
+
+
 def paper_writing_resolve_doi(doi: str) -> dict:
     """Look up a DOI's metadata via the Crossref public API.
 
@@ -171,10 +178,7 @@ def paper_writing_resolve_doi(doi: str) -> dict:
         {ok, doi, title, authors, year, journal, url} on success,
         {ok: False, error: ...} on failure.
     """
-    doi = re.sub(r"^doi\s*:\s*", "", doi.strip(), flags=re.IGNORECASE)
-    doi = re.sub(
-        r"^(?:https?://(?:dx\.)?)?doi\.org/", "", doi, flags=re.IGNORECASE
-    )
+    doi = _normalize_doi(doi)
     url = "https://api.crossref.org/works/" + urllib.parse.quote(doi, safe="/.")
     requests = _require_requests()
     try:
@@ -207,29 +211,56 @@ def paper_writing_resolve_doi(doi: str) -> dict:
             "temporary_failure": True,
         }
 
-    title = (msg.get("title") or [""])[0]
+    if not isinstance(msg, dict):
+        return {"ok": False, "error": "invalid Crossref message shape",
+                "error_kind": "temporary", "temporary_failure": True}
+
+    def first_text(value):
+        return value[0].strip() if (isinstance(value, list) and value
+                                    and isinstance(value[0], str)) else ""
+
+    title = first_text(msg.get("title"))
     authors = []
-    for author in msg.get("author", []):
+    author_records = []
+    raw_authors = msg.get("author")
+    for author in raw_authors if isinstance(raw_authors, list) else []:
+        if not isinstance(author, dict):
+            continue
+        def author_text(key):
+            value = author.get(key)
+            return value.strip() if isinstance(value, str) else ""
         personal = (
-            author.get("family", "") + ", " + author.get("given", "")
+            author_text("family") + ", " + author_text("given")
         ).strip(", ")
-        name = personal or author.get("name", "")
+        name = personal or author_text("name")
         if name:
             authors.append(name)
-    container = (msg.get("container-title") or [""])[0]
-    date_record = msg.get("published") or msg.get("issued") or msg.get("created") or {}
-    parts = date_record.get("date-parts", [[None]])
-    year = parts[0][0] if parts and parts[0] else None
+            author_records.append({"name": name, "corporate": not bool(personal)})
+    container = first_text(msg.get("container-title"))
+    year = None
+    # Crossref creation dates describe the registry record, not publication.
+    for date_key in ("published", "issued"):
+        record = msg.get(date_key)
+        parts = record.get("date-parts") if isinstance(record, dict) else None
+        if (isinstance(parts, list) and parts and isinstance(parts[0], list)
+                and parts[0] and type(parts[0][0]) is int
+                and 1 <= parts[0][0] <= 9999):
+            year = parts[0][0]
+            break
 
     return {
         "ok": True,
         "doi": doi,
         "title": title,
         "authors": authors,
+        "author_records": author_records,
+        "missing_fields": [key for key, value in
+                           (("title", title), ("authors", authors), ("year", year))
+                           if not value],
         "year": year,
         "journal": container,
-        "url": msg.get("URL", f"https://doi.org/{doi}"),
-        "type": msg.get("type", ""),
+        "url": "https://doi.org/" + urllib.parse.quote(doi, safe="/."),
+        "type": msg.get("type") if isinstance(msg.get("type"), str) else "",
     }
 
 
@@ -248,14 +279,14 @@ def paper_writing_ieee_doi_to_arnumber(doi: str) -> dict:
         {ok, doi, arnumber, abstract_url} on success,
         {ok: False, error: ...} on failure.
     """
-    doi = doi.strip().removeprefix("https://doi.org/").removeprefix("doi.org/")
+    doi = _normalize_doi(doi)
     if not doi.lower().startswith("10.1109/"):
         return {"ok": False, "error": f"not an IEEE DOI: {doi}"}
 
     requests = _require_requests()
     session = requests.Session()
     try:
-        r = session.get(f"https://doi.org/{doi}",
+        r = session.get("https://doi.org/" + urllib.parse.quote(doi, safe="/."),
                         headers=_HTML_HEADERS,
                         allow_redirects=True, timeout=30)
     except Exception as e:
@@ -507,6 +538,12 @@ def paper_writing_doi_to_bibtex(doi: str,
     if not meta["ok"]:
         return meta
 
+    missing = [key for key in ("title", "authors", "year") if not meta.get(key)]
+    if missing:
+        return {"ok": False, "error_kind": "incomplete_metadata",
+                "error": "Crossref metadata requires verification before citation",
+                "missing_fields": missing, "metadata": meta}
+
     if not citation_key:
         citation_key = _make_citation_key(
             meta["authors"], meta["year"], meta["title"]
@@ -525,6 +562,11 @@ def paper_writing_doi_to_bibtex(doi: str,
 
     # Authors → "Last, First and Last, First and ..."
     authors_bib = " and ".join(meta["authors"])
+    if meta.get("author_records"):
+        authors_bib = " and ".join(
+            "{" + item["name"] + "}" if item["corporate"] else item["name"]
+            for item in meta["author_records"]
+        )
     # Strip HTML/Crossref italic markers from title
     title_clean = re.sub(r"</?[a-zA-Z]+>", "", meta["title"])
     for _ in range(3):
