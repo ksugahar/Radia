@@ -32,6 +32,7 @@ def _ssl_context() -> ssl.SSLContext | None:
     return ctx
 
 from .._bibparse import BibEntry, make_cite_key, write_bib
+from .._metadata_text import bibtex_text
 
 
 _ARXIV_API = "https://export.arxiv.org/api/query"
@@ -94,26 +95,29 @@ def _atom_to_bibentry(atom_xml: str) -> BibEntry | None:
         authors.append(nm)
     if not authors:
         return None
-    # Convert "First Last" → "Last, First" if possible.
-    formatted_authors = []
-    for nm in authors:
-        if "," in nm:
-            formatted_authors.append(nm)
-        else:
-            parts = nm.rsplit(" ", 1)
-            if len(parts) == 2:
-                formatted_authors.append(f"{parts[1]}, {parts[0]}")
-            else:
-                formatted_authors.append(nm)
     category = entry.find("arxiv:primary_category", _NS)
+    # Atom names are unstructured: preserve order instead of inferring surnames.
+    try:
+        formatted_authors = [bibtex_text(nm) for nm in authors]
+        if not all(formatted_authors):
+            return None
+        formatted_authors = ["{" + nm + "}" if " and " in nm else nm
+                             for nm in formatted_authors]
+        title = bibtex_text(" ".join(title.split()))
+        summary = bibtex_text(" ".join(summary.split()))
+        primary_class = bibtex_text(category.get("term", "")) if category is not None else ""
+        if not title:
+            return None
+    except ValueError:
+        return None  # Unsupported TeX/math requires manual verification.
     fields = {
-        "title": " ".join(title.split()),
+        "title": title,
         "author": " and ".join(formatted_authors),
         "year": year,
         "eprint": aid,
         "archivePrefix": "arXiv",
-        "primaryClass": category.get("term", "") if category is not None else "",
-        "abstract": " ".join(summary.split()),
+        "primaryClass": primary_class,
+        "abstract": summary,
     }
     fields = {k: v for k, v in fields.items() if v}
     out = BibEntry(kind="misc", key="", fields=fields)
@@ -140,7 +144,8 @@ def bibliography_arxiv_to_bibtex(arxiv_id: str) -> str:
         return f"Error: arXiv lookup failed for {aid!r}"
     entry = _atom_to_bibentry(body)
     if entry is None or "title" not in entry.fields:
-        return f"Error: no complete valid entry returned for {aid!r}"
+        return (f"Error: no complete supported entry returned for {aid!r}; "
+                "verify metadata and any TeX/math markup manually")
     returned = entry.fields["eprint"]
     if (returned != aid if re.search(r"v\d+$", aid) else
             re.sub(r"v\d+$", "", returned) != aid):

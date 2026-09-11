@@ -26,7 +26,9 @@ client verification are not automatically open code defects.
 
 M04 follow-up (2026-09-12): bibliography T2 arXiv identity, explicit version,
 required metadata and primary-category preservation have 23 offline regression
-cases; the expanded six-file lane passes 928 tests. T2 escaping/name handling and
+cases. A further 12 cases cover T2 shared text escaping and unstructured author
+order/separator preservation; the six-file lane passes 940 tests. Unsupported
+TeX/math requires manual verification. Citation-key surname heuristics and
 rendered bibliography acceptance remain open (P63/P67).
 
 Completion of a scoped validation requires matching the selected source, zero unexpected failures

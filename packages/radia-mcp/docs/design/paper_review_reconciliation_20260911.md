@@ -249,7 +249,18 @@ stop before fetch. Its text escaping and heuristic author-name rearrangement
 remain unverified; this does not close P63. No live API, MCP client, editable
 installation or parent bibliography was changed or exercised.
 
-1. Continue bibliography T2 text escaping/name handling, other BibTeX/DOI consumers and remaining fallback paths (P63/P65/P67), then language heuristics and
+The bibliography T2 text/name follow-up (2026-09-12, P63) adds 12 offline cases;
+the same six-file lane passes 940 tests. The plain metadata renderer now lives
+under bibliography, with paper_writing compatibility imports preserving the
+existing implementation. T2 escapes title, author, abstract and category text,
+preserves unstructured author order instead of guessing surname boundaries, and
+groups embedded `and` separators within one author. Unsupported TeX/math in any
+rendered metadata field requires manual verification; no silent stripping or
+partial-entry success is introduced. Key-generation surname heuristics and actual
+BibTeX/Biber name rendering are not certified by these tests. No live API, MCP
+client, editable installation or canonical bibliography was changed.
+
+1. Continue other BibTeX/DOI consumers and remaining fallback paths (P63/P65/P67), then language heuristics and
    deduplication; other PDF consumers remain separate P50 follow-up work.
 2. Review missing pattern producers (P58) and remaining ordering/context rules
    (P59); do not confuse execution-status coverage with semantic correctness.
