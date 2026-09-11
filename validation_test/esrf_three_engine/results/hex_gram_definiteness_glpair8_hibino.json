@@ -1,0 +1,142 @@
+{
+ "schema": "radia.validation.esrf-hex-gram-definiteness.v1",
+ "generated_at_utc": "2026-09-06T20:14:26.378873+00:00",
+ "host": "Hibino",
+ "radia_version": "4.95.81",
+ "radia_file": "C:\\temp\\radia-hdiv-fix6b\\src\\radia\\__init__.py",
+ "case": 6,
+ "iron_mesh": "C:\\temp\\radia-ex6-diag\\assets_conforming\\model.vol",
+ "iron_mesh_sha256": "fdd1387281e550e27eab435cfac3ec54e0b9d1339438699fdc50c852dfcafc74",
+ "chi0": 2000.200000000012,
+ "inv_chi0": 0.000499950004999497,
+ "gram_eps": 1e-10,
+ "glpair_n": 8,
+ "checks": {
+  "clusters": {
+   "lambda_min": -4.3198173981840674e-16,
+   "lambda_max": 0.889110561468724,
+   "negative_clusters": 0,
+   "wall_s": 0.7157746000011684
+  },
+  "floor_scan": [
+   {
+    "floor_factor": 1.0,
+    "mu_r_equivalent": 2001.200000000012,
+    "converged": true,
+    "iterations": 430,
+    "prec_min": 0.10354712484494538,
+    "prec_max": 112.69117913333727,
+    "wall_s": 4.964819899993017
+   },
+   {
+    "floor_factor": 0.5,
+    "mu_r_equivalent": 4001.400000000024,
+    "converged": true,
+    "iterations": 487,
+    "prec_min": 0.05177356242247269,
+    "prec_max": 112.44414661121351,
+    "wall_s": 5.049117500006105
+   },
+   {
+    "floor_factor": 0.25,
+    "mu_r_equivalent": 8001.800000000048,
+    "converged": true,
+    "iterations": 541,
+    "prec_min": 0.025886781211236345,
+    "prec_max": 112.32063035015165,
+    "wall_s": 5.717789000002085
+   },
+   {
+    "floor_factor": 0.125,
+    "mu_r_equivalent": 16002.600000000097,
+    "converged": true,
+    "iterations": 637,
+    "prec_min": 0.012943390605618173,
+    "prec_max": 112.2588722196207,
+    "wall_s": 6.64825669999118
+   }
+  ],
+  "spectrum": {
+   "lambda_min_ritz": [
+    5.1736403802865915e-21,
+    1.4080267599709617e-18,
+    2.000301506920123e-18,
+    3.0339756078717882e-18
+   ],
+   "lambda_max_ritz": 0.9999002008088486,
+   "wall_s": 57.901513999997405
+  }
+ },
+ "mesh": {
+  "ne": 2408,
+  "ndof": 62192,
+  "nonaffine_cells": 616,
+  "conformity": {
+   "hanging_facets": 0,
+   "duplicated_boundary_face_pairs": 0,
+   "conforming": true
+  }
+ },
+ "gram_build_s": 612.3897021999874,
+ "gram_stats": {
+  "max_rank": 65.0,
+  "compression": 0.30839350319484765,
+  "hex_cache_stats_enabled": 0.0,
+  "hex_block_cache_limit": 200000.0,
+  "hex_trans_cache_enabled": 1.0,
+  "hex_congruent_cache_enabled": 1.0,
+  "hex_congruent_ready": 1.0,
+  "hex_congruent_templates": 1048.0,
+  "hex_congruent_hosts": 4608.0,
+  "hex_far_one_sided_threshold": 0.0,
+  "hex_affine_exact_near_factor": 1.0,
+  "hex_distorted_far_factor": 1.0,
+  "hex_near_inner_exact": 1.0,
+  "hex_near_inner_host_cone": 1.0,
+  "hex_near_sinh_min_width": 0.001,
+  "hex_near_sinh_max_width": 1.0,
+  "hex_pair_duffy_enabled": 1.0,
+  "hex_glpair_n": 8.0,
+  "hex_pair_nonconforming": 0.0,
+  "hex_cluster_radius_enabled": 1.0,
+  "hex_glnear_n": 8.0,
+  "hex_glout_n": 4.0,
+  "hex_glin_n": 5.0,
+  "hex_glin_self_n": 8.0,
+  "hex_blk_affine_near": 0.0,
+  "hex_blk_affine_far": 8541858.0,
+  "hex_blk_distorted_far": 6304492.0,
+  "hex_blk_general_near": 49603.0,
+  "hex_blk_general_far": 0.0,
+  "hex_s_affine_near": 0.0,
+  "hex_s_affine_far": 109.9872935,
+  "hex_s_distorted_far": 97.0404646,
+  "hex_s_general_near": 8528.6929371,
+  "hex_s_general_far": 0.0,
+  "hex_general_shared_lookups": 188230.0,
+  "hex_general_shared_hits": 138627.0,
+  "hex_general_shared_misses": 49603.0,
+  "hex_block_lookups": 0.0,
+  "hex_block_hits": 0.0,
+  "hex_block_misses": 0.0,
+  "hex_block_clears": 0.0,
+  "hex_trans_block_lookups": 0.0,
+  "hex_trans_block_hits": 0.0,
+  "hex_trans_block_misses": 0.0,
+  "hex_trans_block_clears": 0.0,
+  "hex_sym_block_lookups": 0.0,
+  "hex_sym_block_hits": 0.0,
+  "hex_sym_block_misses": 0.0,
+  "hex_sym_block_clears": 0.0,
+  "hex_sym_trans_block_lookups": 0.0,
+  "hex_sym_trans_block_hits": 0.0,
+  "hex_sym_trans_block_misses": 0.0,
+  "hex_sym_trans_block_clears": 0.0,
+  "hex_block_hit_rate": 0.0,
+  "hex_trans_block_hit_rate": 0.0,
+  "hex_sym_block_hit_rate": 0.0,
+  "hex_sym_trans_block_hit_rate": 0.0
+ },
+ "failures": [],
+ "passed": true
+}

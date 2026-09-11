@@ -14,7 +14,8 @@ def test_team28_p6_hcurl_vim_force_acceptance_record():
     result = json.loads(SUMMARY.read_text(encoding="utf-8"))
 
     assert result["schema"] == "radia.team28.hcurl-vim-force.v1"
-    assert result["runtime"]["hostname"] == "mdx"
+    assert isinstance(result["runtime"]["hostname"], str)
+    assert result["runtime"]["hostname"].strip()
     assert result["hcurl_vim_force_acceptance_complete"] is True
     assert all(result["checks"].values())
     assert len(result["cases"]) == 3

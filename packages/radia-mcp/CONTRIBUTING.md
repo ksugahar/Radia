@@ -138,32 +138,31 @@ is still recommended for clarity.
 Before publishing, treat a green matrix as a release candidate, not as
 operational completion.  The minimum pre-push health evidence is:
 
-- radia-mcp pytest matrix green (latest review evidence: 229 passed)
+- current candidate's radia-mcp matrix and explicit full-audit evidence green
 - package policy lint green
 - package version consistency green
 - live catalog and affected-server `tools/list` contracts green
 - top-level pytest collection green
 
-After PyPI upload, the release is not "done" until wheel-installed MCP
-entry points smoke and the release-quad deploy checks pass on their
-intended machines.  See
-`release_workflow(topic="mcp_quality_review")` and
-`validation/mcp_quality/release_candidate_review_2026-06-26.json`.
+Publication belongs to the monorepo's `radia-mcp-matrix.yml` workflow.
+An approved `radia-mcp-v<version>` tag runs its release checks, builds and
+verifies the wheel, then publishes that same artifact through PyPI Trusted
+Publishing in the `pypi` environment. Do not replace this lane with a local
+Twine upload or treat an old test count as current release evidence.
 
-```bash
-cd packages/radia-mcp
-rm -rf build/ dist/radia_mcp-*
-python -m build && python -m build --wheel
-PYTHONIOENCODING=utf-8 \
-  TWINE_USERNAME=__token__ TWINE_PASSWORD=$PYPI_TOKEN \
-  twine upload --disable-progress-bar dist/radia_mcp-X.Y.Z*
-```
+After publication, wheel-installed entry-point smoke and the applicable
+`tools/release_quad.py` gates must pass before reporting operational completion.
+Release-quad targets LAB, 100号機, mdx1 and mdx2 for the same release commit.
+LAB and 100号機 retain verified editable sources; mdx1/mdx2 consume Radia release
+wheels and do not receive `radia-mcp` or `cubit-mesh-export` in this release
+lane. Cubit plugin/toolbar deployment is limited to LAB and 100号機. hibino is
+a compute host, not a release-quad acceptance target.
 
-After upload, follow the monorepo release-quad deployment policy:
-LAB and 100号機 remain editable installs, mdx is a PyPI consumer for
-`radia` / `cubit-mesh-export` without `radia-mcp`, and hibino is the
-PyPI MCP consumer.  Do not claim operational release quality until the
-PyPI entry-point smoke and Phase 8/9 machine checks are green.
+Release installation tests stay isolated from live development. Do not reset
+editable sources to an outdated shared checkout or terminate other users'
+MCP/CAD/MATLAB sessions. Routine MCP source edits and editable-source changes
+follow the [shared runtime policy](docs/operations/mcp-runtime-policy.md),
+including verification of the actual import path and affected live clients.
 
 ## License
 

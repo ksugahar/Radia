@@ -326,7 +326,11 @@ struct MassRieszFactor {
         pardiso(pt, &maxfct, &mnum, &mtype, &phase, &n, a.data(), ia.data(), ja.data(),
                 &idum, &nrhs, iparm, &msglvl, const_cast<double*>(rhs), x, &error);
         if (error != 0)
-            throw std::runtime_error("MassRieszPardiso: PARDISO solve phase failed");
+            throw std::runtime_error(
+                "MassRieszPardiso: PARDISO solve phase (33) failed with error " + std::to_string((long long)error)
+                + " for n = " + std::to_string((long long)n)
+                + " (MKL codes: -2 out of memory, -4 zero pivot, -10 no license; the Q-mag BDM2 h10 mesh, "
+                  "~200k unknowns next to a 20 GB Gram on the 60 GB hibino, died here on 2026-09-07)");
     }
     void SolveMany(const double* rhs, double* x, int rhs_count) {
         // PARDISO stores dense right-hand sides column-major [n][nrhs].
@@ -864,6 +868,56 @@ static double WedgeFarOneSidedThreshold()
 // QuadBlockHexAffineFarProduct instead of the 6x6-sub graded machinery.  Default matches the accepted
 // affine far gate (HEX_AFFINE_EXACT_NEAR_FACTOR = 1.0); <= 0 disables the switch (diagnostic A/B /
 // regression-triage escape, same pattern as the one-sided thresholds above).
+// RADIA_HDIV_HEX_CLUSTER_RADIUS=0 restores plain point bounding boxes for the cluster tree
+// (diagnostic A/B only; reported as a numerical override).
+// ---- Gauss-Legendre on [0,1] for an arbitrary point count (Newton on P_n, ascending nodes) ----
+static void GaussLegendre01(int n, std::vector<double>& x, std::vector<double>& w)
+{
+    if (n < 1) throw std::invalid_argument("GaussLegendre01: n must be positive");
+    x.assign((size_t)n, 0.0); w.assign((size_t)n, 0.0);
+    const double pi = 3.14159265358979323846;
+    for (int i = 0; i < n; ++i) {
+        double z = std::cos(pi*(i + 0.75)/(n + 0.5));
+        double pp = 1.0;
+        for (int it = 0; it < 100; ++it) {
+            double p1 = 1.0, p2 = 0.0;
+            for (int j = 0; j < n; ++j) {
+                const double p3 = p2; p2 = p1;
+                p1 = ((2.0*j + 1.0)*z*p2 - j*p3)/(j + 1.0);
+            }
+            pp = n*(z*p1 - p2)/(z*z - 1.0);
+            const double dz = p1/pp;
+            z -= dz;
+            if (std::abs(dz) < 1e-15) break;
+        }
+        x[(size_t)i] = 0.5*(1.0 - z);
+        w[(size_t)i] = 1.0/((1.0 - z*z)*pp*pp);
+    }
+}
+
+// Diagnostic latch: RADIA_HDIV_HEX_PAIR_DUFFY=0 restores the block-wise near family for touching pairs
+// (an A/B path, reported as a numerical override).
+static bool HexPairDuffyEnabled()
+{
+    static const bool enabled = []() -> bool {
+        const char* v = std::getenv("RADIA_HDIV_HEX_PAIR_DUFFY");
+        if (!v || v[0] == '\0') return true;
+        return std::atoi(v) != 0;
+    }();
+    return enabled;
+}
+
+
+static bool HexClusterRadiusEnabled()
+{
+    static const bool enabled = []() -> bool {
+        const char* v = std::getenv("RADIA_HDIV_HEX_CLUSTER_RADIUS");
+        if (!v || v[0] == '\0') return true;
+        return std::atoi(v) != 0;
+    }();
+    return enabled;
+}
+
 static double HexDistortedFarFactor()
 {
     static const double factor = []() -> double {
@@ -919,12 +973,47 @@ bool RadHACApKChargeGram::HOTetImageBlockEnabled()
     return enabled;
 }
 
+// Diagnostic A/B switch for the image far rule: with RADIA_HDIV_DISABLE_HO_IMAGE_FAR set (together with
+// RADIA_HDIV_DISABLE_HO_IMAGE_BLOCK) every image term takes the legacy per-entry scalar fold, which lets a
+// validation compare the production dispatch against it bit for bit.  Cached like its siblings.
+bool RadHACApKChargeGram::HOTetImageFarEnabled()
+{
+    static const bool enabled = []() -> bool {
+        const char* v = std::getenv("RADIA_HDIV_DISABLE_HO_IMAGE_FAR");
+        return !v || v[0] == '\0' || v[0] == '0';
+    }();
+    return enabled;
+}
+
 // Read from GetHexBlock / GetHexSymBlock, i.e. once per block lookup during
 // the fill.  Same caching discipline as the switches above.
 static bool HexTransCacheEnabled()
 {
     static const bool enabled = []() -> bool {
         return std::getenv("RADIA_HDIV_DISABLE_TRANS_CACHE") == nullptr;
+    }();
+    return enabled;
+}
+
+// Translation-congruent shared cache of the expensive near blocks (see HexSharedBlockKey).  A
+// performance switch: the blocks are the same quadrature either way; the latch exists for A/B timing.
+// Diagnostic A/B of the dominant-direction point count (performance class; the effective value is
+// published in hmat_stats as hex_glpair_w_n / hex_glpair_affine_w_n).
+static int HexPairWOverride()
+{
+    static const int value = []() -> int {
+        const char* text = std::getenv("RADIA_HDIV_HEX_GLPAIR_W_N");
+        if (text == nullptr) return 0;
+        const int parsed = std::atoi(text);
+        return (parsed >= 2 && parsed <= 32) ? parsed : 0;
+    }();
+    return value;
+}
+
+static bool HexCongruentCacheEnabled()
+{
+    static const bool enabled = []() -> bool {
+        return std::getenv("RADIA_HDIV_DISABLE_CONGRUENT_CACHE") == nullptr;
     }();
     return enabled;
 }
@@ -2001,21 +2090,56 @@ void RadHACApKChargeGram::PrecomputeCurvedTouchBlocks()
     const int n_cell = (int)(m_cellVertices.size()/4);
     const int n_face = (int)(m_faceVertices.size()/3);
     const int n_host = n_cell + n_face;
-    m_curvedTouchBlockIndex.assign((size_t)n_host*n_host, -1);
+    // Candidate pairs come from the vertex -> host incidence (a touching pair shares at least one
+    // vertex), so the enumeration is O(hosts x neighbours) instead of an n_host^2 scan; the slot
+    // order (ga ascending, then gb ascending) is deterministic.
+    auto host_vertices = [&](int g, int& count) -> const int* {
+        if (g < n_cell) { count = 4; return &m_cellVertices[(size_t)4*g]; }
+        count = 3; return &m_faceVertices[(size_t)3*(g-n_cell)];
+    };
+    int n_vertex = 0;
+    for (int v : m_cellVertices) n_vertex = std::max(n_vertex, v + 1);
+    for (int v : m_faceVertices) n_vertex = std::max(n_vertex, v + 1);
+    std::vector<int> incidence_count((size_t)n_vertex + 1, 0);
+    for (int g = 0; g < n_host; ++g) {
+        int nv = 0; const int* verts = host_vertices(g, nv);
+        for (int i = 0; i < nv; ++i) ++incidence_count[(size_t)verts[i] + 1];
+    }
+    for (int v = 0; v < n_vertex; ++v) incidence_count[(size_t)v + 1] += incidence_count[(size_t)v];
+    std::vector<int> incidence(incidence_count.back());
+    {
+        std::vector<int> cursor(incidence_count.begin(), incidence_count.end() - 1);
+        for (int g = 0; g < n_host; ++g) {
+            int nv = 0; const int* verts = host_vertices(g, nv);
+            for (int i = 0; i < nv; ++i) incidence[(size_t)cursor[(size_t)verts[i]]++] = g;
+        }
+    }
+    m_curvedTouchBlockIndex.clear();
     std::vector<std::pair<int,int>> pairs;
+    std::vector<int> candidates;
     for (int ga = 0; ga < n_host; ++ga) {
         const int kindA = ga < n_cell ? 0 : 1;
         const int hostA = ga < n_cell ? ga : ga-n_cell;
-        for (int gb = ga; gb < n_host; ++gb) {
+        int nv = 0; const int* verts = host_vertices(ga, nv);
+        candidates.clear();
+        for (int i = 0; i < nv; ++i)
+            for (int k = incidence_count[(size_t)verts[i]]; k < incidence_count[(size_t)verts[i] + 1]; ++k)
+                if (incidence[(size_t)k] >= ga) candidates.push_back(incidence[(size_t)k]);
+        std::sort(candidates.begin(), candidates.end());
+        candidates.erase(std::unique(candidates.begin(), candidates.end()), candidates.end());
+        for (int gb : candidates) {
             const int kindB = gb < n_cell ? 0 : 1;
             const int hostB = gb < n_cell ? gb : gb-n_cell;
             if (!CurvedHostsTouch(kindA, hostA, kindB, hostB)) continue;
-            m_curvedTouchBlockIndex[(size_t)ga*n_host + gb] = (int)pairs.size();
+            m_curvedTouchBlockIndex.emplace(
+                ((unsigned long long)(unsigned)ga << 32) | (unsigned long long)(unsigned)gb, (int)pairs.size());
             pairs.emplace_back(ga, gb);
         }
     }
     m_curvedTouchBlocks.clear();
     m_curvedTouchBlocks.resize(pairs.size());
+    const int touch_tasks = std::max(1, std::min((int)pairs.size(),
+                                                 32 * std::max(1, ngcore::TaskManager::GetNumThreads())));
     ngcore::ParallelFor(ngcore::IntRange(pairs.size()), [&](size_t pair_index) {
         const int ga = pairs[pair_index].first, gb = pairs[pair_index].second;
         const int kindA = ga < n_cell ? 0 : 1, hostA = ga < n_cell ? ga : ga-n_cell;
@@ -2039,7 +2163,7 @@ void RadHACApKChargeGram::PrecomputeCurvedTouchBlocks()
                         0.5*(ab[(size_t)la*nB + lb] + ba[(size_t)lb*nA + la]);
         }
         m_curvedTouchBlocks[pair_index] = std::move(sym);
-    });
+    }, touch_tasks);
     const auto stop = std::chrono::high_resolution_clock::now();
     m_curvedTouchBuildTime = std::chrono::duration<double>(stop-start).count();
 }
@@ -2049,12 +2173,13 @@ bool RadHACApKChargeGram::CurvedTouchBlockValue(
 {
     if (m_curvedTouchBlockIndex.empty()) return false;
     const int n_cell = (int)(m_cellVertices.size()/4);
-    const int n_host = n_cell + (int)(m_faceVertices.size()/3);
     const int ga = kindA == 0 ? hostA : n_cell+hostA;
     const int gb = kindB == 0 ? hostB : n_cell+hostB;
     const int lo = std::min(ga, gb), hi = std::max(ga, gb);
-    const int slot = m_curvedTouchBlockIndex[(size_t)lo*n_host + hi];
-    if (slot < 0) return false;
+    const auto it = m_curvedTouchBlockIndex.find(
+        ((unsigned long long)(unsigned)lo << 32) | (unsigned long long)(unsigned)hi);
+    if (it == m_curvedTouchBlockIndex.end()) return false;
+    const int slot = it->second;
     const int kind_hi = hi < n_cell ? 0 : 1;
     const int host_hi = hi < n_cell ? hi : hi-n_cell;
     const int n_hi = kind_hi == 0 ? (int)m_hoCellCharges[host_hi].size()
@@ -2069,7 +2194,7 @@ bool RadHACApKChargeGram::CurvedTouchBlockValue(
 // avoiding a closest-point search and a curved Duffy map for every target quadrature point.  Touching pairs
 // stay on the singularity-resolving host-vector Duffy path.
 std::vector<double> RadHACApKChargeGram::QuadBlockHOCurvedDirect(
-    int kindT, int hostT, int kindS, int hostS) const
+    int kindT, int hostT, int kindS, int hostS, int img) const
 {
     const std::vector<int>& targets = kindT == 0 ? m_hoCellCharges[hostT] : m_hoFaceCharges[hostT];
     const std::vector<int>& sources = kindS == 0 ? m_hoCellCharges[hostS] : m_hoFaceCharges[hostS];
@@ -2080,7 +2205,12 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHOCurvedDirect(
     const std::vector<rad_hdiv::Vec3>& source_points = m_qp[sources[0]];
     for (size_t qt = 0; qt < target_points.size(); ++qt) {
         std::fill(inner.begin(), inner.end(), 0.0);
-        const double x0 = target_points[qt][0], x1 = target_points[qt][1], x2 = target_points[qt][2];
+        // img > 0: the image pair (T, T_img(S)) equals (T_img^-1(T), S) by the isometry, so only the target
+        // points move (ImageEvalPoint applies T^-1); the source rule and its monomial-folded weights are reused.
+        const double p0[3] = {target_points[qt][0], target_points[qt][1], target_points[qt][2]};
+        double mapped[3] = {p0[0], p0[1], p0[2]};
+        if (img != 0) ImageEvalPoint(img, p0, mapped);
+        const double x0 = mapped[0], x1 = mapped[1], x2 = mapped[2];
         for (size_t qs = 0; qs < source_points.size(); ++qs) {
             const double dx = x0-source_points[qs][0], dy = x1-source_points[qs][1],
                          dz = x2-source_points[qs][2];
@@ -2135,11 +2265,18 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHOTetImage(
     const int nT = (int)targets.size(), nS = (int)sources.size();
     std::vector<double> block((size_t)nT*nS, 0.0), inner((size_t)nS, 0.0);
     if (nT == 0 || nS == 0) return block;
-    if (m_curved)
-        throw std::logic_error("TET image host block requires flat affine hosts");
+    // CURVED hosts take the same two rules as the direct QuadBlockHOTet, applied to the image pair
+    // (T, T_img(S)) == (T_img^-1(T), S).  A non-touching image pair is a smooth double integral and takes the
+    // curved product rule; an image that touches the target (the mirror cell across a cut face, or an
+    // on-plane cut face reflected onto itself) keeps the vectorized curved Duffy so the singular /
+    // near-singular potential is integrated exactly like the direct touching pair of the full model.  An
+    // on-plane face maps onto itself point by point, so its image self block is evaluated at the SAME outer
+    // points by the SAME rule as its direct self block and the antisymmetric fold cancels to roundoff.
+    if (m_curved && CurvedDirectEnabled() && !ImageHostsTouch(kindT, hostT, kindS, hostS, img))
+        return QuadBlockHOCurvedDirect(kindT, hostT, kindS, hostS, img);
 
     // Every target mode on one host owns the same outer points.  Map those
-    // points through the inverse cyclic image once, evaluate every co-located
+    // points through the inverse image once, evaluate every co-located
     // source mode together, then contract the mode-specific target weights.
     // The scalar image path repeated this geometry/moment work per charge pair.
     const std::vector<rad_hdiv::Vec3>& points = m_qp[targets[0]];
@@ -2147,7 +2284,8 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHOTetImage(
         const double p0[3] = {points[q][0], points[q][1], points[q][2]};
         double p[3];
         ImageEvalPoint(img, p0, p);
-        PhiInnerHOHostVec(kindS, hostS, p, sources, inner.data());
+        if (m_curved) PhiInnerHOCurvedHostVec(kindS, hostS, p, sources, inner.data());
+        else PhiInnerHOHostVec(kindS, hostS, p, sources, inner.data());
         for (int lt = 0; lt < nT; ++lt) {
             const double weight = m_qw[targets[lt]][q];
             double* row = &block[(size_t)lt*nS];
@@ -2629,6 +2767,91 @@ double RadHACApKChargeGram::QuadDotRefl(int tgt, int src, int img) const
     return s * RAD_INV_FOUR_PI;
 }
 
+bool RadHACApKChargeGram::IsMirrorImage(int img) const
+{
+    if (img <= 0) return false;
+    const size_t i = (size_t)img - 1;
+    return i >= m_image_rot_angle.size() || m_image_rot_angle[i] == 0.0;
+}
+
+bool RadHACApKChargeGram::ImageFarPair(int a, int b, int img) const
+{
+    // The direct far_pair rule measured on the IMAGE geometry: |c_a - T(c_b)| == |T^-1(c_a) - c_b| by the
+    // isometry.  Self pairs are allowed -- a host far from every image plane is far from its own image.
+    // Needs the low-quad tables (m_ho_far_factor < 1e29), exactly like QuadDotFar.
+    if (img <= 0 || m_ho_far_factor >= 1e29 || !HOTetImageFarEnabled()) return false;
+    double c[3];
+    ImageEvalPoint(img, &m_cent[(size_t)3*a], c);
+    const double dx = c[0] - m_cent[(size_t)3*b];
+    const double dy = c[1] - m_cent[(size_t)3*b + 1];
+    const double dz = c[2] - m_cent[(size_t)3*b + 2];
+    return std::sqrt(dx*dx + dy*dy + dz*dz) > m_ho_far_factor * (m_size[a] + m_size[b]);
+}
+
+double RadHACApKChargeGram::QuadDotFarImage(int tgt, int src, int img) const
+{
+    // FAR image term: QuadDotFar with tgt's LOW outer points mapped by the inverse image transform.  The image
+    // of a well-separated charge is at least as well separated (isometry), so the low-order plain double
+    // Gauss is as accurate here as for the direct far pair.  For a mirror the two directions are the same sum
+    // in a different order; for a rotation they are G_T and G_{T^-1}, which the caller averages.
+    const std::vector<rad_hdiv::Vec3>& Px = m_qp_lo[tgt];
+    const std::vector<double>&         Wx = m_qw_lo[tgt];
+    const std::vector<rad_hdiv::Vec3>& Py = m_inP_lo[src];
+    const std::vector<double>&         Wy = m_inW_lo[src];
+    double s = 0.0;
+    for (size_t i = 0; i < Px.size(); ++i) {
+        const double p0[3] = {Px[i][0], Px[i][1], Px[i][2]};
+        double p[3]; ImageEvalPoint(img, p0, p);
+        double inner = 0.0;
+        for (size_t j = 0; j < Py.size(); ++j) {
+            const double dx = p[0] - Py[j][0], dy = p[1] - Py[j][1], dz = p[2] - Py[j][2];
+            const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+            if (r < 1e-300) continue;                        // an image never coincides with a far source
+            inner += Wy[j] * m_srcval_lo[src][j] / r;
+        }
+        s += Wx[i] * inner;
+    }
+    return s * RAD_INV_FOUR_PI;
+}
+
+bool RadHACApKChargeGram::ImageHostsTouch(int kindT, int hostT, int kindS, int hostS, int img) const
+{
+    if (img == 0) return CurvedHostsTouch(kindT, hostT, kindS, hostS);
+    const std::vector<int>& tc = (kindT == 0) ? m_hoCellCharges[hostT] : m_hoFaceCharges[hostT];
+    const std::vector<int>& sc = (kindS == 0) ? m_hoCellCharges[hostS] : m_hoFaceCharges[hostS];
+    if (tc.empty() || sc.empty()) return false;              // an empty host has no block to integrate
+    // Corner vertices of a high-order host: the first 4 (tet) / 3 (tri) P2 nodes when curved, else the
+    // affine corners.  P2 node order puts the corners first (rad_hdiv P2TetShape / P2TriShape).
+    auto corners = [&](int kind, int host, double c[4][3]) -> int {
+        const int n = (kind == 0) ? 4 : 3;
+        const double* s = m_curved
+            ? ((kind == 0) ? &m_cellNodes[(size_t)host*30] : &m_faceNodes[(size_t)host*18])
+            : ((kind == 0) ? &m_cellV[(size_t)host*12] : &m_faceV[(size_t)host*9]);
+        for (int i = 0; i < n; ++i)
+            for (int k = 0; k < 3; ++k) c[i][k] = s[3*i + k];
+        return n;
+    };
+    double cT[4][3], cS[4][3];
+    const int nT = corners(kindT, hostT, cT);
+    const int nS = corners(kindS, hostS, cS);
+    // Mesh vertices that coincide after the transform do so to roundoff (a plane vertex reflects onto
+    // itself exactly; a periodic sector vertex onto its identified partner), while distinct vertices are a
+    // whole element apart -- a tolerance far below the host size separates the two cases.
+    const double tol = 1e-9 * (m_size[tc[0]] + m_size[sc[0]]);
+    int shared = 0;
+    for (int j = 0; j < nS; ++j) {
+        double image_corner[3];
+        ImageApplyVector(img, cS[j], image_corner);          // T applied to a POSITION (linear, no offset)
+        for (int i = 0; i < nT; ++i) {
+            const double dx = image_corner[0] - cT[i][0];
+            const double dy = image_corner[1] - cT[i][1];
+            const double dz = image_corner[2] - cT[i][2];
+            if (dx*dx + dy*dy + dz*dz <= tol*tol) { ++shared; break; }
+        }
+    }
+    return shared >= 2 || (shared == 1 && (kindT == 1 || kindS == 1));
+}
+
 double RadHACApKChargeGram::QuadDotFar(int tgt, int src) const
 {
     // cheap FAR evaluation (near/far adaptive quadrature): plain LOW-quad double Gauss of
@@ -3108,6 +3331,12 @@ static bool HexInv3(const double A[3][3], double B[3][3])
 // Smooth far blocks use the complete-host tensor product below; applying the degree-six recurrence to every
 // far outer point was the dominant BDM2 HEX H-matrix build cost.
 static constexpr bool HEX_USE_AFFINE_EXACT_CELL_INNER = true;
+// Peak width d/|v| below which the plain Gauss rule already resolves the near-singular ray integrand
+// (error O(b^2)) and the sinh substitution would have to integrate an exponential over too many e-folds.
+static constexpr double HOST_CONE_SINH_MIN_WIDTH = 1e-3;
+// Peak width above which the peak is wider than the unit interval and the plain rule is used.
+static constexpr double HOST_CONE_SINH_MAX_WIDTH = 1.0;
+
 static constexpr double HEX_AFFINE_EXACT_NEAR_FACTOR = 1.0;
 
 // Build a Duffy-graded barycentric rule on a (dim+1)-vertex ref sub-simplex from the 1D rule (gl,gw),
@@ -3165,13 +3394,21 @@ RadHACApKChargeGram::RadHACApKChargeGram(
     std::vector<double> far_tet_pts, std::vector<double> far_tet_w,
     std::vector<double> far_tri_pts, std::vector<double> far_tri_w,
     double near_grade, double far_inner_factor,
-    std::vector<int> image_masks, std::vector<double> image_signs)
+    std::vector<int> image_masks, std::vector<double> image_signs,
+    std::vector<double> gl_near, std::vector<double> gw_near, bool near_inner_exact,
+    std::vector<double> gl_in_self, std::vector<double> gw_in_self,
+    std::vector<double> gl_pair, std::vector<double> gw_pair,
+    std::vector<double> gl_pair_affine, std::vector<double> gw_pair_affine)
     : m_n_el(n_el), m_hexmode(true), m_hex_n_bf(n_bf),
       m_hexNodes(std::move(hex_cell_nodes)), m_quadNodes(std::move(quad_face_nodes)),
       m_symTetP(std::move(sym_tet_pts)), m_symTetW(std::move(sym_tet_w)),
       m_symTriP(std::move(sym_tri_pts)), m_symTriW(std::move(sym_tri_w)),
       m_glOut(std::move(gl_out)), m_gwOut(std::move(gw_out)),
       m_glIn(std::move(gl_in)), m_gwIn(std::move(gw_in)),
+      m_glNear(std::move(gl_near)), m_gwNear(std::move(gw_near)),
+      m_glInSelf(std::move(gl_in_self)), m_gwInSelf(std::move(gw_in_self)), m_nearInnerExact(near_inner_exact),
+      m_glPair(std::move(gl_pair)), m_gwPair(std::move(gw_pair)),
+      m_glPairAffine(std::move(gl_pair_affine)), m_gwPairAffine(std::move(gw_pair_affine)),
       m_farTetP(std::move(far_tet_pts)), m_farTetW(std::move(far_tet_w)),
       m_farTriP(std::move(far_tri_pts)), m_farTriW(std::move(far_tri_w)),
       m_near_grade(near_grade), m_far_inner_factor(far_inner_factor),
@@ -3182,6 +3419,24 @@ RadHACApKChargeGram::RadHACApKChargeGram(
     m_n = (int)m_host.size();
     if (m_kind.size() != m_host.size() || m_expo.size() != 3*m_host.size())
         throw std::invalid_argument("HEX ChargeGram charge metadata sizes are inconsistent");
+    if (m_glNear.size() != m_gwNear.size())
+        throw std::invalid_argument("HEX ChargeGram gl_near/gw_near sizes differ");
+    if (m_glNear.empty()) { m_glNear = m_glOut; m_gwNear = m_gwOut; }   // legacy: one outer rule for both
+    if (m_glInSelf.size() != m_gwInSelf.size())
+        throw std::invalid_argument("HEX ChargeGram gl_in_self/gw_in_self sizes differ");
+    if (m_glInSelf.empty()) { m_glInSelf = m_glIn; m_gwInSelf = m_gwIn; }  // legacy: one radial rule for both
+    if (m_glPair.size() != m_gwPair.size())
+        throw std::invalid_argument("HEX ChargeGram gl_pair/gw_pair sizes differ");
+    if (m_glPair.empty()) GaussLegendre01(8, m_glPair, m_gwPair);      // pair-domain Duffy rule per dimension
+    if (m_glPairAffine.size() != m_gwPairAffine.size())
+        throw std::invalid_argument("HEX ChargeGram gl_pair_affine/gw_pair_affine sizes differ");
+    if (m_glPairAffine.empty()) GaussLegendre01(6, m_glPairAffine, m_gwPairAffine);   // affine-affine pairs
+    if (const int w_override = HexPairWOverride()) {
+        GaussLegendre01(w_override, m_glPairW, m_gwPairW);
+        m_glPairAffineW = m_glPairW; m_gwPairAffineW = m_gwPairW;
+    }
+    if (m_glOut.empty() || m_glIn.empty())
+        throw std::invalid_argument("HEX ChargeGram needs non-empty gl_out and gl_in rules");
     for (int exponent : m_expo)
         if (exponent < 0 || exponent > 2)
             throw std::invalid_argument("HEX ChargeGram supports reference exponents in {0,1,2}");
@@ -3440,6 +3695,7 @@ RadHACApKChargeGram::RadHACApKChargeGram(
             ok = classify_host(1, f, &m_quadNodes[(size_t)f*27], 9, (size_t)n_el + (size_t)f);
         m_hexUniformTransHosts = ok;
     }
+    BuildHexCongruenceTemplates(n_el, m_hex_n_bf);   // translation-congruent pair cache (any mesh)
     BuildHexSiteTables();   // static-site radial tables (non-self near inner) + mapped site positions
     BuildHexInnerRules();   // immutable complete-host BDM2 source rules; fill callbacks only read them
 }
@@ -3951,6 +4207,7 @@ void RadHACApKChargeGram::ResetHexCacheStats()
     m_hexBlkAffineFar.store(0, std::memory_order_relaxed);
     m_hexBlkDistortedFar.store(0, std::memory_order_relaxed);
     m_hexBlkGeneralNear.store(0, std::memory_order_relaxed);
+    m_hexPairNonconforming.store(0, std::memory_order_relaxed);
     m_hexBlkGeneralFar.store(0, std::memory_order_relaxed);
     m_hexNsAffineNear.store(0, std::memory_order_relaxed);
     m_hexNsAffineFar.store(0, std::memory_order_relaxed);
@@ -3960,6 +4217,9 @@ void RadHACApKChargeGram::ResetHexCacheStats()
     m_hexGeneralSharedLookups.store(0, std::memory_order_relaxed);
     m_hexGeneralSharedHits.store(0, std::memory_order_relaxed);
     m_hexGeneralSharedMisses.store(0, std::memory_order_relaxed);
+    m_hoImageFarEntries.store(0, std::memory_order_relaxed);
+    m_hoImageBlockEntries.store(0, std::memory_order_relaxed);
+    m_hoImageScalarEntries.store(0, std::memory_order_relaxed);
 }
 
 std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexCacheStats() const
@@ -3973,6 +4233,7 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexCacheStats()
     const bool ho_far_one_sided = HOFarOneSidedEnabled();
     const bool ho_analytic_enabled = HOAnalyticBlockEnabled();
     const bool ho_image_enabled = HOTetImageBlockEnabled();
+    const bool ho_image_far_enabled = HOTetImageFarEnabled();
     const bool trans_cache_enabled = HexTransCacheEnabled();
     const bool curved_direct_enabled = CurvedDirectEnabled();
     const size_t block_cache_limit = HexBlockCacheLimit();
@@ -3981,18 +4242,53 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexCacheStats()
     const bool numerical_override =
         hex_far_one_sided > 0.0 || wedge_far_one_sided > 0.0 ||
         distorted_far_factor != 1.0 || ho_far_one_sided ||
-        !ho_analytic_enabled || !ho_image_enabled || !curved_direct_enabled;
+        !ho_analytic_enabled || !ho_image_enabled || !ho_image_far_enabled ||
+        !curved_direct_enabled || (m_hexmode && !m_nearInnerExact) ||
+        (m_hexmode && !HexClusterRadiusEnabled()) ||
+        (m_hexmode && !HexPairDuffyEnabled()) || (m_hexmode && HexPairWOverride() != 0);
+    const bool congruent_cache_enabled = HexCongruentCacheEnabled();
     const bool performance_override =
         block_cache_limit != HEX_BLOCK_CACHE_LIMIT_DEFAULT ||
-        wedge_trans_scope != 2 || !trans_cache_enabled ||
+        wedge_trans_scope != 2 || !trans_cache_enabled || !congruent_cache_enabled ||
         m_hexCacheStatsEnabled || hmatvec_stats_enabled ||
         hmatvec_mkl_threads != 1;
     out.emplace_back("hex_cache_stats_enabled", m_hexCacheStatsEnabled ? 1.0 : 0.0);
     out.emplace_back("hex_block_cache_limit", (double)block_cache_limit);
     out.emplace_back("hex_trans_cache_enabled", trans_cache_enabled ? 1.0 : 0.0);
+    out.emplace_back("hex_congruent_cache_enabled", congruent_cache_enabled ? 1.0 : 0.0);
+    out.emplace_back("hex_congruent_ready", m_hexCongruentReady ? 1.0 : 0.0);
+    out.emplace_back("hex_congruent_templates", (double)m_hexCongruentTemplateCount);
+    out.emplace_back("hex_congruent_hosts", (double)m_hexHostCongruentTemplate.size());
     out.emplace_back("hex_far_one_sided_threshold", hex_far_one_sided);
     out.emplace_back("hex_affine_exact_near_factor", HEX_AFFINE_EXACT_NEAR_FACTOR);
     out.emplace_back("hex_distorted_far_factor", distorted_far_factor);
+    out.emplace_back("hex_near_inner_exact", m_nearInnerExact ? 1.0 : 0.0);
+    out.emplace_back("hex_near_inner_host_cone", m_nearInnerExact ? 1.0 : 0.0);   // cone/fan/sinh near inner
+    out.emplace_back("hex_near_sinh_min_width", HOST_CONE_SINH_MIN_WIDTH);
+    out.emplace_back("hex_near_sinh_max_width", HOST_CONE_SINH_MAX_WIDTH);
+    out.emplace_back("hex_pair_duffy_enabled", (m_hexAffineOrder == 1 && HexPairDuffyEnabled()) ? 1.0 : 0.0);
+    {
+        // Host classification actually used by the near-pair dispatch: an affine (parallelepiped) host
+        // takes the exact affine inner and the affine pair rule, everything else the general path.
+        double affine_cells = 0.0, affine_faces = 0.0;
+        for (unsigned char x : m_hexAffineCell) affine_cells += (double)x;
+        for (unsigned char x : m_quadAffineFace) affine_faces += (double)x;
+        out.emplace_back("hex_affine_cells", affine_cells);
+        out.emplace_back("hex_cells", (double)m_hexAffineCell.size());
+        out.emplace_back("quad_affine_faces", affine_faces);
+        out.emplace_back("quad_faces", (double)m_quadAffineFace.size());
+    }
+    out.emplace_back("hex_glpair_n", (double)m_glPair.size());
+    out.emplace_back("hex_glpair_affine_n", (double)m_glPairAffine.size());
+    out.emplace_back("hex_glpair_w_n", (double)(m_glPairW.empty() ? m_glPair.size() : m_glPairW.size()));
+    out.emplace_back("hex_glpair_affine_w_n",
+                     (double)(m_glPairAffineW.empty() ? m_glPairAffine.size() : m_glPairAffineW.size()));
+    out.emplace_back("hex_pair_nonconforming", ld(m_hexPairNonconforming));
+    out.emplace_back("hex_cluster_radius_enabled", HexClusterRadiusEnabled() ? 1.0 : 0.0);
+    out.emplace_back("hex_glnear_n", (double)m_glNear.size());
+    out.emplace_back("hex_glout_n", (double)m_glOut.size());
+    out.emplace_back("hex_glin_n", (double)m_glIn.size());
+    out.emplace_back("hex_glin_self_n", (double)m_glInSelf.size());
     out.emplace_back("curved_direct_enabled", curved_direct_enabled ? 1.0 : 0.0);
     // QuadBlockHex dispatch profile: computed blocks + accumulated wall seconds per branch (thread-summed
     // across the ParallelFor workers, so the seconds compare branch-to-branch, not to the build wall clock).
@@ -4009,6 +4305,12 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexCacheStats()
     out.emplace_back("hex_general_shared_lookups", ld(m_hexGeneralSharedLookups));
     out.emplace_back("hex_general_shared_hits", ld(m_hexGeneralSharedHits));
     out.emplace_back("hex_general_shared_misses", ld(m_hexGeneralSharedMisses));
+    {
+        // Distinct keys held by the shared cache.  With compute-once, misses == entries; the pair
+        // is kept so a regression back to duplicated evaluation would show as misses > entries.
+        std::shared_lock<std::shared_mutex> rl(m_hexGeneralSharedMutex);
+        out.emplace_back("hex_general_shared_entries", (double)m_hexGeneralSharedCache.size());
+    }
     out.emplace_back("wedge_far_one_sided_threshold", wedge_far_one_sided);
     out.emplace_back("wedge_trans_cache_scope", (double)wedge_trans_scope);
     out.emplace_back("wedge_trans_cache_enabled", wedge_trans_scope > 0 ? 1.0 : 0.0);
@@ -4017,6 +4319,7 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexCacheStats()
     out.emplace_back("ho_analytic_block_enabled",
                      m_hoAnalyticBlock && ho_analytic_enabled ? 1.0 : 0.0);
     out.emplace_back("ho_image_block_enabled", ho_image_enabled ? 1.0 : 0.0);
+    out.emplace_back("ho_image_far_enabled", ho_image_far_enabled ? 1.0 : 0.0);
     out.emplace_back("hmatvec_stats_enabled", hmatvec_stats_enabled ? 1.0 : 0.0);
     out.emplace_back("hmatvec_mkl_threads", (double)hmatvec_mkl_threads);
     out.emplace_back("nonproduction_numerical_override_active",
@@ -4045,6 +4348,9 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexCacheStats()
     out.emplace_back("ho_sym_block_hits", ld(m_hoSymBlockHits));
     out.emplace_back("ho_sym_block_misses", ld(m_hoSymBlockMisses));
     out.emplace_back("ho_sym_block_clears", ld(m_hoSymBlockClears));
+    out.emplace_back("ho_image_far_entries", ld(m_hoImageFarEntries));
+    out.emplace_back("ho_image_block_entries", ld(m_hoImageBlockEntries));
+    out.emplace_back("ho_image_scalar_entries", ld(m_hoImageScalarEntries));
     const double btot = ld(m_hexBlockLookups);
     const double ttot = ld(m_hexTransBlockLookups);
     const double sbtot = ld(m_hexSymBlockLookups);
@@ -4385,7 +4691,8 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHexAffineFarProduct(
 }
 
 void RadHACApKChargeGram::PhiInnerHexSubVec(int kindS, int hS, int subB, const double p[3],
-                                            const std::vector<int>& srcG, double* inn) const
+                                            const std::vector<int>& srcG, double* inn,
+                                            const double* anchor) const
 {
     const bool cell = (kindS == 0);
     const double* nd = cell ? &m_hexNodes[(size_t)hS*81] : &m_quadNodes[(size_t)hS*27];
@@ -4426,7 +4733,16 @@ void RadHACApKChargeGram::PhiInnerHexSubVec(int kindS, int hS, int subB, const d
     const double dxc = p[0]-cs[0], dyc = p[1]-cs[1], dzc = p[2]-cs[2];
     const bool far_pt = std::sqrt(dxc*dxc + dyc*dyc + dzc*dzc) > m_far_inner_factor*sz;
     if (!far_pt) {
-        PhiInnerHexSiteVec(kindS, hS, subB, p, srcG, inn);
+        // EXACT-anchor radial (2026-09-05): the caller passes the outer point's reference coordinates in
+        // THIS source host (HexQ2Inverse / QuadQ2ClosestReference); PhiInnerHexRadialVec clamps the anchor
+        // into the sub-simplex and tiles it with signed radial cones whose apex kills the 1/r peak, so the
+        // rule converges like the self rule.  The static-site radial anchored at the nearest of 15 / 7
+        // fixed sites underestimated touching-pair energies by ~1e-3 (ESRF #6 HEX Gram indefiniteness).
+        // FACE sources take the finer (self) radial rule: the negative face-face mode of the ESRF #6
+        // Gram (lambda -5.0e-3, all of it face-face energy on distorted cells) came from edge-sharing
+        // face pairs integrated with the 3 x glin^2 = 75-point cones against accurate self blocks.
+        if (anchor) PhiInnerHexRadialVec(kindS, hS, subB, p, anchor, srcG, inn, /*self_rule=*/!cell);
+        else        PhiInnerHexSiteVec(kindS, hS, subB, p, srcG, inn);
         return;
     }
     const std::shared_ptr<const HexQuadCloud> cl =
@@ -4533,7 +4849,7 @@ static void ClosestPointTri2D(const double V[3][2], const double p[2], double ou
 // them).  m_glIn/m_gwIn = the radial 1D Gauss rule.
 void RadHACApKChargeGram::PhiInnerHexRadialVec(int kindS, int hS, int subB, const double p[3],
                                                const double* xiT, const std::vector<int>& srcG,
-                                               double* inn) const
+                                               double* inn, bool self_rule) const
 {
     if (!xiT)
         throw std::logic_error("PhiInnerHexRadialVec: xiT required (SELF-only; non-self near uses the site radial)");
@@ -4549,9 +4865,11 @@ void RadHACApKChargeGram::PhiInnerHexRadialVec(int kindS, int hS, int subB, cons
         return;
     }
     const double* nd = cell ? &m_hexNodes[(size_t)hS*81] : &m_quadNodes[(size_t)hS*27];
-    const int nR = (int)m_glIn.size();
-    const double* GL = m_glIn.data();
-    const double* GW = m_gwIn.data();
+    const std::vector<double>& glr = self_rule ? m_glInSelf : m_glIn;   // SELF pairs: the finer radial rule
+    const std::vector<double>& gwr = self_rule ? m_gwInSelf : m_gwIn;
+    const int nR = (int)glr.size();
+    const double* GL = glr.data();
+    const double* GW = gwr.data();
     const int nS = (int)srcG.size();
     std::vector<double> acc((size_t)nS, 0.0);
 
@@ -5149,8 +5467,41 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
                          std::memory_order_relaxed);
         return out;
     };
-    if (affineT && affineS) {
-        const bool exact_near = sep <= HEX_AFFINE_EXACT_NEAR_FACTOR*(m_size[repA] + m_size[repB]);
+    // TOUCHING hosts (a shared Q2 lattice node after the image transform) never take a far tensor
+    // product: their integrand is singular on the shared node/edge/face whatever the centroid ratio says
+    // (vertex-touching affine pairs reach ratio 1.0 on the ESRF #6 mesh, 2026-09-05).
+    const bool touching_hosts = HexHostsTouch(kindT, hT, kindS, hS, img);
+    // BDM1 SELF and TOUCHING affine pairs take the graded near tensor outer of the general path (with the
+    // exact analytic inner, see QuadBlockHexNearTensor): the plain glout product outer is not graded, and
+    // the potential of a touching host is singular on the shared edge/face of the target (ESRF #6,
+    // 2026-09-05: along the CG breakdown direction the affine face self blocks were 4e-3 high and the
+    // edge-sharing face-face blocks 7e-3 low at glout 4, a cancellation error of the size of the negative
+    // energy).  BDM2 keeps the affine product for every near pair (its own contracts).
+    const bool affine_exact_near = touching_hosts
+        || sep <= HEX_AFFINE_EXACT_NEAR_FACTOR*(m_size[repA] + m_size[repB]);
+    // BDM1: the WHOLE affine near band (self, touching, and the non-touching pairs inside the
+    // HEX_AFFINE_EXACT_NEAR_FACTOR band) takes the graded near tensor path, so every near source of a
+    // target host is integrated on the same outer cloud (leaving the non-touching band on the plain
+    // product while touching pairs moved to the graded cloud exposed a 4-fold degenerate lambda -5.0e-3
+    // face-charge mode on ESRF #6: self face +0.65, touching face-face -0.46, near band -0.20 in units
+    // of the mode's M-norm).  Beyond the band the affine far product stays.
+    // BDM1 TOUCHING pairs (self, shared face/edge/vertex, affine or not): the pair-domain Duffy rule.
+    if (m_hexAffineOrder == 1 && touching_hosts && HexPairDuffyEnabled()) {
+        const HexPairAdjacency adj = HexPairAdjacencyOf(kindT, hT, kindS, hS, img);
+        if (adj.entity_dim >= 0)
+            return timed(m_hexBlkGeneralNear, m_hexNsGeneralNear,
+                         [&]{ return QuadBlockHexPairDuffy(kindT, hT, kindS, hS, img); });
+        m_hexPairNonconforming.fetch_add(1, std::memory_order_relaxed);   // graded near family below
+    }
+    // BDM1 NON-touching pairs inside the near band: the plain product rule with the pair point count
+    // (the graded cloud + fan inner of that band was the largest remaining error class on ESRF #6:
+    // +2.9e-3 of a -5e-3 mode's energy moved when the band rules were refined, 2026-09-06).
+    if (m_hexAffineOrder == 1 && HexPairDuffyEnabled()
+            && sep <= m_near_grade*(m_size[repA] + m_size[repB]))
+        return timed(m_hexBlkGeneralNear, m_hexNsGeneralNear,
+                     [&]{ return QuadBlockHexProductN(kindT, hT, kindS, hS, img); });
+    if (affineT && affineS && (m_hexAffineOrder == 2 || !affine_exact_near)) {
+        const bool exact_near = affine_exact_near;
         return exact_near
             ? timed(m_hexBlkAffineNear, m_hexNsAffineNear,
                     [&]{ return QuadBlockHexAffineProduct(kindT, hT, kindS, hS, img); })
@@ -5160,10 +5511,10 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
     // DISTORTED-pair far switch (see HexDistortedFarFactor): the tensor far product is geometry-map
     // exact (Q2 point placement, Piola reference charge measure), so a well-separated pair with a
     // distorted/curved host needs no 6x6-sub graded machinery either.  Self pairs have sep == 0 and
-    // always stay on the graded/radial path.
+    // always stay on the graded/radial path; touching hosts were excluded above.
     {
         const double fac = HexDistortedFarFactor();
-        if (fac > 0.0 && sep > fac*(m_size[repA] + m_size[repB]))
+        if (fac > 0.0 && !touching_hosts && sep > fac*(m_size[repA] + m_size[repB]))
             return timed(m_hexBlkDistortedFar, m_hexNsDistortedFar,
                          [&]{ return QuadBlockHexAffineFarProduct(kindT, hT, kindS, hS, img); });
     }
@@ -5185,7 +5536,10 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
     // source-potential eval, and never treat the pair as SELF.  img==0 => reflpt identity => byte-identical.
     auto reflpt = [this, img](const double* v, double* o){ ImageEvalPoint(img, v, o); };
     const int rt = tgtG[0], rs = srcG[0];      // representative charges (host-level cent/size)
-    const bool near_hosts = (img == 0 && kindT == kindS && hT == hS)
+    // NEAR hosts: self, touching (shared lattice node -- face/edge/vertex neighbours sit at centroid
+    // ratio 0.56..1.0 on the ESRF #6 mesh and were classified far at near_grade 0.5), or within the
+    // near_grade distance band.
+    const bool near_hosts = (img == 0 && kindT == kindS && hT == hS) || touching_hosts
                             || sep <= m_near_grade*(m_size[rt] + m_size[rs]);   // sep == reflected r_h above
     // SELF host pair: the inner takes the RADIAL decomposition with the EXACT anchor xiT (the outer
     // point's own ref coords -- no Newton).  The OUTER grading below is UNCHANGED -- it is required by the
@@ -5205,6 +5559,23 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
         const double d_ = std::abs(rc_[0]-m_cent[3*rt]) + std::abs(rc_[1]-m_cent[3*rt+1]) + std::abs(rc_[2]-m_cent[3*rt+2]);
         self_pair = (d_ < 1e-6 * m_size[rt] + 1e-12);   // T(host)==host <=> host is invariant
     }
+    // NEAR NON-SELF host pairs (touching / near_grade band): the endpoint-graded tensor outer over the whole
+    // target host with the exact-anchor radial inner (QuadBlockHexNearTensor).  It replaces the former
+    // corner-Duffy sub-tet outer + static-site inner for touching pairs, whose ~1e-3 errors made the ESRF
+    // #6 Gram indefinite (2026-09-05).  CELL self pairs keep the corner-graded sub-tet outer below:
+    // measured on the #6 distorted cells its self block converges to 1e-5 at glnear 8 (the endpoint-graded
+    // tensor outer clusters points at the sub-tet faces, where the glin-5 radial inner is coarse: 4e-3 low).
+    // FACE self pairs also take the tensor path: the face potential's edge singularities need grading at
+    // every edge of the target square, which the endpoint-graded tensor rule provides (the sector lattice
+    // left lambda_max at 1.02..1.05 with the corner-graded sub-tri outer, 0.996 with the tensor outer).
+    if (near_hosts) {
+        std::vector<double> near_blk = QuadBlockHexNearTensor(kindT, hT, kindS, hS, img, self_pair);
+        m_hexBlkGeneralNear.fetch_add(1, std::memory_order_relaxed);
+        m_hexNsGeneralNear.fetch_add((long long)std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                         std::chrono::steady_clock::now() - t_general0).count(),
+                                     std::memory_order_relaxed);
+        return near_blk;
+    }
     const int nqreg = cellT ? (int)m_symTetW.size() : (int)m_symTriW.size();
     const double* ndT = cellT ? &m_hexNodes[(size_t)hT*81] : &m_quadNodes[(size_t)hT*27];
     const int nvT = cellT ? 4 : 3;
@@ -5216,15 +5587,17 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
         for (int sB = 0; sB < nsubS; ++sB) {
             const size_t sidB = cellS ? ((size_t)hS*6 + sB) : ((size_t)hS*2 + sB);
             const double* cB0 = cellS ? &m_cellSubC[sidB*3] : &m_faceSubC[sidB*3];
-            double cB[3]; reflpt(cB0, cB);   // mapped source sub-centroid drives near/far + Duffy corner (img>0)
+            double cB[3]; reflpt(cB0, cB);   // mapped source sub-centroid drives the Duffy corner (img>0)
             const double szB = cellS ? m_cellSubS[sidB] : m_faceSubS[sidB];
             const double* cA = cellT ? &m_cellSubC[sidA*3] : &m_faceSubC[sidA*3];
             const double dx = cA[0]-cB[0], dy = cA[1]-cB[1], dz = cA[2]-cB[2];
-            const bool near_sub = near_hosts &&
+            // SELF pairs: grade the sub-tet outer toward the source sub (the validated self scheme);
+            // non-near pairs: the regular symmetric rule.
+            const bool near_sub = self_pair &&
                 std::sqrt(dx*dx + dy*dy + dz*dz) <= m_near_grade*(szA + szB);
-            // OUTER geometry cloud on target sub sA (monomial-FREE): regular symmetric or graded toward
-            // cB.  HELD as a shared_ptr: the inner calls below fetch far clouds from the same cache, and
-            // its capacity clear must not invalidate this hold (the n=10 0xC0000005 use-after-free).
+            // OUTER geometry cloud on target sub sA (monomial-FREE).  HELD as a shared_ptr: the inner
+            // calls below fetch far clouds from the same cache, and its capacity clear must not
+            // invalidate this hold (the n=10 0xC0000005 use-after-free).
             std::shared_ptr<const HexQuadCloud> oc;
             if (!near_sub) {
                 oc = HexGetCloud(m_build_id, HexCloudKey(cellT ? 0 : 1, true, false, hT, sA, 3),
@@ -5242,7 +5615,7 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
                 oc = HexGetCloud(m_build_id, HexCloudKey(cellT ? 0 : 1, true, true, hT, sA, corner),
                     [&](HexQuadCloud& c) {
                         std::vector<double> gb, gw;
-                        HexDuffyBary(cellT ? 3 : 2, corner, m_glOut, m_gwOut, gb, gw);
+                        HexDuffyBary(cellT ? 3 : 2, corner, m_glNear, m_gwNear, gb, gw);   // near outer rule (decoupled)
                         HexBuildCloud(ndT, cellT, sA, gb.data(), gw.data(), (int)gw.size(), true, c);
                     });
             }
@@ -5253,8 +5626,7 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
                 for (int ls = 0; ls < nS; ++ls) inn[ls] = 0.0;
                 double peval[3]; reflpt(pq, peval);                                             // inverse-map for the (image) source eval
                 if (self_pair) PhiInnerHexRadialVec(kindS, hS, sB, pq, xiT, srcG, inn.data());  // radial, exact anchor
-                else           PhiInnerHexSubVec(kindS, hS, sB, peval, srcG, inn.data());       // far cloud / radial (peval==pq if img==0)
-
+                else           PhiInnerHexSubVec(kindS, hS, sB, peval, srcG, inn.data());       // far cloud / site radial (peval==pq if img==0)
                 const double wg = oc->wgeo[q];
                 for (int lt = 0; lt < nT; ++lt) owt[lt] = wg*HexMonoEval(tgtG[lt], xiT);
                 for (int lt = 0; lt < nT; ++lt) {
@@ -5266,12 +5638,126 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
         }
     }
     for (double& v : blk) v *= RAD_INV_FOUR_PI;
-    (near_hosts ? m_hexBlkGeneralNear : m_hexBlkGeneralFar)
-        .fetch_add(1, std::memory_order_relaxed);
-    (near_hosts ? m_hexNsGeneralNear : m_hexNsGeneralFar)
+    (self_pair ? m_hexBlkGeneralNear : m_hexBlkGeneralFar).fetch_add(1, std::memory_order_relaxed);
+    (self_pair ? m_hexNsGeneralNear : m_hexNsGeneralFar)
         .fetch_add((long long)std::chrono::duration_cast<std::chrono::nanoseconds>(
                        std::chrono::steady_clock::now() - t_general0).count(),
                    std::memory_order_relaxed);
+    return blk;
+}
+
+// Endpoint-graded tensor cloud over the COMPLETE reference cube (cell) or square (face): the 1D near
+// rule (gl, gw) is pushed through the C2 smootherstep t = s^3 (10 - 15 s + 6 s^2), w' = w 30 s^2 (1-s)^2,
+// which clusters points quadratically at both ends of every axis.  The product rule therefore resolves
+// the boundary singularities of a self / touching source potential on every face, edge and corner of the
+// target at once (the corner-Duffy sub-tet rule resolved one corner per sub pair).  Weights are the REF
+// measure (Piola-exact charge: no Jacobian); they sum to 1 (cell) / 1 (face).
+static void HexGradedTensorCloud(const double* nd, bool cell, const std::vector<double>& gl,
+                                 const std::vector<double>& gw, HexQuadCloud& out)
+{
+    const int n = (int)gl.size();
+    std::vector<double> t((size_t)n), w((size_t)n);
+    for (int i = 0; i < n; ++i) {
+        const double s = gl[i];
+        t[(size_t)i] = s*s*s*(10.0 - 15.0*s + 6.0*s*s);
+        w[(size_t)i] = gw[i]*30.0*s*s*(1.0-s)*(1.0-s);
+    }
+    const int nq = cell ? n*n*n : n*n;
+    out.pts.resize((size_t)nq*3); out.wgeo.resize((size_t)nq); out.xi.resize((size_t)nq*3);
+    int q = 0;
+    if (cell) {
+        for (int k = 0; k < n; ++k) for (int j = 0; j < n; ++j) for (int i = 0; i < n; ++i, ++q) {
+            const double xi[3] = {t[(size_t)i], t[(size_t)j], t[(size_t)k]};
+            double X[3];
+            RadHACApKChargeGram::HexQ2MapX(nd, xi, X);
+            for (int c = 0; c < 3; ++c) { out.pts[(size_t)3*q+c] = X[c]; out.xi[(size_t)3*q+c] = xi[c]; }
+            out.wgeo[(size_t)q] = w[(size_t)i]*w[(size_t)j]*w[(size_t)k];
+        }
+    } else {
+        for (int j = 0; j < n; ++j) for (int i = 0; i < n; ++i, ++q) {
+            const double uv[2] = {t[(size_t)i], t[(size_t)j]};
+            double X[3];
+            RadHACApKChargeGram::QuadQ2MapX(nd, uv, X);
+            out.pts[(size_t)3*q] = X[0]; out.pts[(size_t)3*q+1] = X[1]; out.pts[(size_t)3*q+2] = X[2];
+            out.xi[(size_t)3*q] = uv[0]; out.xi[(size_t)3*q+1] = uv[1]; out.xi[(size_t)3*q+2] = 0.0;
+            out.wgeo[(size_t)q] = w[(size_t)i]*w[(size_t)j];
+        }
+    }
+}
+
+std::vector<double> RadHACApKChargeGram::QuadBlockHexNearTensor(int kindT, int hT, int kindS, int hS, int img,
+                                                                bool self_pair) const
+{
+    const std::vector<int>& tgtG = (kindT == 0) ? m_cellCharges[hT] : m_faceCharges[hT];
+    const std::vector<int>& srcG = (kindS == 0) ? m_cellCharges[hS] : m_faceCharges[hS];
+    const int nT = (int)tgtG.size(), nS = (int)srcG.size();
+    std::vector<double> blk((size_t)nT*nS, 0.0);
+    if (nT == 0 || nS == 0) return blk;
+    const bool cellT = (kindT == 0), cellS = (kindS == 0);
+    const int nsubS = cellS ? 6 : 2;
+    const double* ndT = cellT ? &m_hexNodes[(size_t)hT*81] : &m_quadNodes[(size_t)hT*27];
+    const double* ndS = cellS ? &m_hexNodes[(size_t)hS*81] : &m_quadNodes[(size_t)hS*27];
+    auto reflpt = [this, img](const double* v, double* o){ ImageEvalPoint(img, v, o); };
+    // Whole-host cloud (sub index 7 / corner 3 keep the key clear of the sub-simplex clouds).  HELD as a
+    // shared_ptr across the inner calls that fetch far clouds from the same cache.
+    std::shared_ptr<const HexQuadCloud> oc =
+        HexGetCloud(m_build_id, HexCloudKey(cellT ? 0 : 1, true, true, hT, 7, 3),
+            [&](HexQuadCloud& c) { HexGradedTensorCloud(ndT, cellT, m_glNear, m_gwNear, c); });
+    const int nqo = (int)oc->wgeo.size();
+    // affine sources keep the exact analytic inner (PhiInnerHexAffine*SubVec); distorted sources take the
+    // whole-host radial cones
+    const bool source_affine = cellS
+        ? (HEX_USE_AFFINE_EXACT_CELL_INNER && hS >= 0 && hS < (int)m_hexAffineCell.size() && m_hexAffineCell[hS])
+        : (hS >= 0 && hS < (int)m_quadAffineFace.size() && m_quadAffineFace[hS]);
+    std::vector<double> inn((size_t)nS), owt((size_t)nT);
+    for (int q = 0; q < nqo; ++q) {
+        const double pq[3] = {oc->pts[3*q], oc->pts[3*q+1], oc->pts[3*q+2]};
+        const double* xiT = &oc->xi[3*q];
+        for (int ls = 0; ls < nS; ++ls) inn[ls] = 0.0;
+        double peval[3]; reflpt(pq, peval);
+        if (self_pair) {
+            if (source_affine) {
+                // exact analytic inner on the affine sub-simplices
+                for (int sB = 0; sB < nsubS; ++sB) PhiInnerHexRadialVec(kindS, hS, sB, pq, xiT, srcG, inn.data(), true);
+            } else {
+                // whole-host cone/fan rule with the apex at the outer point itself: the 1/r singularity sits
+                // at the apex of all six cones (a per-sub-tet apex is displaced for the five subs that do
+                // not contain the point), and the fans resolve the face peaks of the thin cones
+                PhiInnerHexConeFanVec(kindS, hS, pq, xiT, srcG, inn.data());
+            }
+        } else if (m_nearInnerExact) {
+            if (source_affine) {
+                for (int sB = 0; sB < nsubS; ++sB) PhiInnerHexSubVec(kindS, hS, sB, peval, srcG, inn.data());
+            } else {
+                // apex = the physical closest point of the source host; the near-singular peaks of the touching
+                // pair are resolved by the sinh substitutions of the cone/fan rule
+                double anchor[3] = {0.5, 0.5, 0.5};
+                bool ok;
+                if (cellS) ok = HexQ2ClosestReference(ndS, peval, anchor);
+                else {
+                    double uv[2] = {0.5, 0.5};
+                    ok = QuadQ2ClosestReference(ndS, peval, uv);
+                    anchor[0] = uv[0]; anchor[1] = uv[1]; anchor[2] = 0.0;
+                }
+                if (!ok)
+                    throw std::runtime_error(
+                        std::string("hex charge Gram: near-pair closest-point search failed for ")
+                        + (cellS ? "cell host " : "face host ") + std::to_string(hS)
+                        + " (target " + (cellT ? "cell " : "face ") + std::to_string(hT) + ")");
+                PhiInnerHexConeFanVec(kindS, hS, peval, anchor, srcG, inn.data());
+            }
+        } else {
+            for (int sB = 0; sB < nsubS; ++sB) PhiInnerHexSubVec(kindS, hS, sB, peval, srcG, inn.data());
+        }
+        const double wg = oc->wgeo[q];
+        for (int lt = 0; lt < nT; ++lt) owt[lt] = wg*HexMonoEval(tgtG[lt], xiT);
+        for (int lt = 0; lt < nT; ++lt) {
+            const double wl = owt[lt];
+            double* row = &blk[(size_t)lt*nS];
+            for (int ls = 0; ls < nS; ++ls) row[ls] += wl*inn[ls];
+        }
+    }
+    for (double& v : blk) v *= RAD_INV_FOUR_PI;
     return blk;
 }
 
@@ -5577,6 +6063,272 @@ void RadHACApKChargeGram::PhiInnerHexRadialHostVec(
             }
         }
     }
+}
+
+
+void RadHACApKChargeGram::PhiInnerHexConeFanVec(
+    int kindS, int hS, const double p[3], const double* reference,
+    const std::vector<int>& srcG, double* inn) const
+{
+    if (!reference)
+        throw std::invalid_argument("PhiInnerHexConeFanVec requires a reference-space apex");
+    const bool cell = kindS == 0;
+    const double* nodes = cell
+        ? &m_hexNodes[(size_t)hS*81]
+        : &m_quadNodes[(size_t)hS*27];
+    const std::vector<double>& gla = m_glIn;       // smooth directions (coarse rule)
+    const std::vector<double>& gwa = m_gwIn;
+    const std::vector<double>& glr = m_glInSelf;   // substituted (peaked) directions (fine rule)
+    const std::vector<double>& gwr = m_gwInSelf;
+    const int nqa = (int)gla.size();
+    const int nqr = (int)glr.size();
+    const int nS = (int)srcG.size();
+    const size_t nmax = (size_t)std::max(nqa, nqr);
+    std::vector<double> tn(nmax), tw(nmax), sn(nmax), sw(nmax), rn(nmax), rw(nmax);
+
+    // Apex geometry: the physical apex, its distance d to the target and the reference-to-physical
+    // tangent map at the apex (the per-direction scales of the substitutions).
+    double apex[3];
+    double J[3][3] = {{0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}};
+    double T[3][2] = {{0.0, 0.0}, {0.0, 0.0}, {0.0, 0.0}};
+    if (cell) {
+        HexQ2Map(nodes, reference, apex, J);
+    } else {
+        const double uv[2] = {reference[0], reference[1]};
+        QuadQ2Map(nodes, uv, apex, T);
+    }
+    const double dpx = p[0]-apex[0], dpy = p[1]-apex[1], dpz = p[2]-apex[2];
+    const double d = std::sqrt(dpx*dpx + dpy*dpy + dpz*dpz);
+
+    auto dot3 = [](const double* a, const double* b) { return a[0]*b[0] + a[1]*b[1] + a[2]*b[2]; };
+    auto norm3 = [&](const double* v) { return std::sqrt(dot3(v, v)); };
+
+    // One-sided sinh nodes on [0,1] for a peak of width b at 0 (Johnston-Elliott): r = b sinh(2 mu t),
+    // mu = asinh(1/b)/2, so r(1) = 1 and 1/sqrt(b^2 + r^2) = 1/(b cosh(2 mu t)) cancels against dr/dt.
+    // Below HOST_CONE_SINH_MIN_WIDTH the plain rule already resolves the peak (error O(b^2)); above
+    // HOST_CONE_SINH_MAX_WIDTH the peak is wider than the interval.  Always the fine rule.
+    auto one_sided = [&](double b, double* xn, double* xw) -> int {
+        if (b >= HOST_CONE_SINH_MIN_WIDTH && b < HOST_CONE_SINH_MAX_WIDTH) {
+            const double mu = 0.5*std::asinh(1.0/b);
+            for (int i = 0; i < nqr; ++i) {
+                const double arg = 2.0*mu*glr[i];
+                xn[i] = b*std::sinh(arg);
+                xw[i] = gwr[i]*2.0*b*mu*std::cosh(arg);
+            }
+        } else {
+            for (int i = 0; i < nqr; ++i) { xn[i] = glr[i]; xw[i] = gwr[i]; }
+        }
+        return nqr;
+    };
+    // Two-sided sinh nodes on [0,1] for a peak of width b at t0: t = t0 + b sinh(mu (2u-1) - eta) with
+    // mu = [asinh(t0/b) + asinh((1-t0)/b)]/2 and eta = [asinh(t0/b) - asinh((1-t0)/b)]/2, so t(0) = 0
+    // and t(1) = 1.  Unlike the ray and fan radii, the edge integrand carries no vanishing Jacobian, so
+    // its peak keeps a mass of order b ln(1/b) however small b is and the substitution is applied for
+    // every positive width (it turns the model peak into a constant); only a peak wider than the
+    // interval takes the coarse plain rule.
+    auto two_sided = [&](double t0, double b, double* xn, double* xw) -> int {
+        if (b > 0.0 && b < HOST_CONE_SINH_MAX_WIDTH) {
+            const double s0 = std::asinh(t0/b), s1 = std::asinh((1.0-t0)/b);
+            const double mu = 0.5*(s0 + s1), eta = 0.5*(s0 - s1);
+            for (int i = 0; i < nqr; ++i) {
+                const double arg = mu*(2.0*glr[i]-1.0) - eta;
+                xn[i] = t0 + b*std::sinh(arg);
+                xw[i] = gwr[i]*2.0*b*mu*std::cosh(arg);
+            }
+            return nqr;
+        }
+        for (int i = 0; i < nqa; ++i) { xn[i] = gla[i]; xw[i] = gwa[i]; }
+        return nqa;
+    };
+
+    if (cell) {
+        // Six face cones from the apex x0: y = x0 + r (F(a,b) - x0), reference Jacobian r^2 fd da db.
+        // The face integral is a four-fan polar rule around the apex's physical foot c0 on the face
+        // (the (a,b) integrand peaks there like fd/|J(F - x0)| once the ray integral is done), each fan
+        // ray with the sinh substitution on its radius rho (width = the apex-to-foot distance combined
+        // with d) and on the edge parameter t (width = the foot-to-edge distance combined with d).
+        for (int fixed_axis = 0; fixed_axis < 3; ++fixed_axis) {
+            const int axis_a = (fixed_axis + 1) % 3;
+            const int axis_b = (fixed_axis + 2) % 3;
+            for (int side = 0; side < 2; ++side) {
+                const double nsgn = (double)side - reference[fixed_axis];
+                const double fd = std::abs(nsgn);
+                if (fd < 1e-300) continue;
+                double N3[3], A[3], B[3];
+                for (int k = 0; k < 3; ++k) {
+                    N3[k] = J[k][fixed_axis]*nsgn;    // apex -> face foot along the reference normal
+                    A[k] = J[k][axis_a];              // physical face basis
+                    B[k] = J[k][axis_b];
+                }
+                const double a0 = reference[axis_a], b0 = reference[axis_b];
+                const double AA = dot3(A, A), AB = dot3(A, B), BB = dot3(B, B);
+                const double AN = dot3(A, N3), BN = dot3(B, N3);
+                const double det = AA*BB - AB*AB;
+                double ca = a0, cb = b0;
+                if (det > 1e-24*AA*BB) {
+                    ca = std::clamp(a0 - (BB*AN - AB*BN)/det, 0.0, 1.0);
+                    cb = std::clamp(b0 - (AA*BN - AB*AN)/det, 0.0, 1.0);
+                }
+                double G0[3];
+                for (int k = 0; k < 3; ++k) G0[k] = N3[k] + (ca-a0)*A[k] + (cb-b0)*B[k];
+                const double peak = std::sqrt(dot3(G0, G0) + d*d);
+                for (int fixed2 = 0; fixed2 < 2; ++fixed2) {
+                    for (int side2 = 0; side2 < 2; ++side2) {
+                        const double c_fixed = fixed2 == 0 ? ca : cb;
+                        const double c_free = fixed2 == 0 ? cb : ca;
+                        const double s2 = std::abs((double)side2 - c_fixed);
+                        if (s2 < 1e-300) continue;
+                        const double* Efix = fixed2 == 0 ? A : B;
+                        const double* Efree = fixed2 == 0 ? B : A;
+                        double Gedge[3];
+                        for (int k = 0; k < 3; ++k) Gedge[k] = G0[k] + ((double)side2 - c_fixed)*Efix[k];
+                        const double EE = dot3(Efree, Efree);
+                        double t0 = c_free;
+                        if (EE > 0.0) t0 = std::clamp(c_free - dot3(Gedge, Efree)/EE, 0.0, 1.0);
+                        double R[3];
+                        for (int k = 0; k < 3; ++k) R[k] = Gedge[k] + (t0 - c_free)*Efree[k];
+                        const double bt = EE > 0.0 ? std::sqrt(dot3(R, R) + d*d)/std::sqrt(EE) : 0.0;
+                        const int nt = two_sided(t0, bt, tn.data(), tw.data());
+                        for (int it = 0; it < nt; ++it) {
+                            const double t = tn[it];
+                            const double wa = fixed2 == 0 ? (double)side2 - ca : t - ca;
+                            const double wb = fixed2 == 0 ? t - cb : (double)side2 - cb;
+                            double JW[3];
+                            for (int k = 0; k < 3; ++k) JW[k] = wa*A[k] + wb*B[k];
+                            const double jw = norm3(JW);
+                            const int ns = one_sided(jw > 0.0 ? peak/jw : 0.0, sn.data(), sw.data());
+                            for (int is = 0; is < ns; ++is) {
+                                const double rho = sn[is];
+                                const double wrho = tw[it]*sw[is]*rho*s2;
+                                const double a = ca + rho*wa, b = cb + rho*wb;
+                                double ray[3];
+                                ray[fixed_axis] = nsgn;
+                                ray[axis_a] = a - a0;
+                                ray[axis_b] = b - b0;
+                                double v[3];
+                                for (int k = 0; k < 3; ++k) v[k] = N3[k] + (a-a0)*A[k] + (b-b0)*B[k];
+                                const double vn = norm3(v);
+                                const int nr = one_sided(vn > 0.0 && d > 0.0 ? d/vn : 0.0, rn.data(), rw.data());
+                                for (int ir = 0; ir < nr; ++ir) {
+                                    const double r = rn[ir];
+                                    double y[3];
+                                    for (int axis = 0; axis < 3; ++axis) y[axis] = reference[axis] + r*ray[axis];
+                                    double X[3];
+                                    HexQ2MapX(nodes, y, X);
+                                    const double dx = p[0]-X[0], dy = p[1]-X[1], dz = p[2]-X[2];
+                                    const double pr = std::sqrt(dx*dx + dy*dy + dz*dz);
+                                    if (pr < 1e-300) continue;
+                                    const double weight = wrho*rw[ir]*r*r*fd/pr;
+                                    for (int local = 0; local < nS; ++local)
+                                        inn[local] += weight*HexMonoEval(srcG[local], y);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return;
+    }
+
+    // Face host: four edge fans from the apex u0 (the singular point itself), reference Jacobian rho s2,
+    // with the sinh substitution on the fan radius (width d/|J w|, the near-singular peak of a touching
+    // pair) and on the edge parameter (width = the apex-to-edge distance combined with d).
+    const double u0[2] = {reference[0], reference[1]};
+    for (int fixed2 = 0; fixed2 < 2; ++fixed2) {
+        const int free2 = 1 - fixed2;
+        for (int side2 = 0; side2 < 2; ++side2) {
+            const double s2 = std::abs((double)side2 - u0[fixed2]);
+            if (s2 < 1e-300) continue;
+            double Efix[3], Efree[3];
+            for (int k = 0; k < 3; ++k) { Efix[k] = T[k][fixed2]; Efree[k] = T[k][free2]; }
+            double Gedge[3];
+            for (int k = 0; k < 3; ++k) Gedge[k] = ((double)side2 - u0[fixed2])*Efix[k];
+            const double EE = dot3(Efree, Efree);
+            double t0 = u0[free2];
+            if (EE > 0.0) t0 = std::clamp(u0[free2] - dot3(Gedge, Efree)/EE, 0.0, 1.0);
+            double R[3];
+            for (int k = 0; k < 3; ++k) R[k] = Gedge[k] + (t0 - u0[free2])*Efree[k];
+            const double bt = EE > 0.0 ? std::sqrt(dot3(R, R) + d*d)/std::sqrt(EE) : 0.0;
+            const int nt = two_sided(t0, bt, tn.data(), tw.data());
+            for (int it = 0; it < nt; ++it) {
+                const double t = tn[it];
+                double w2[2];
+                w2[fixed2] = (double)side2 - u0[fixed2];
+                w2[free2] = t - u0[free2];
+                double Jw[3];
+                for (int k = 0; k < 3; ++k) Jw[k] = w2[0]*T[k][0] + w2[1]*T[k][1];
+                const double jw = norm3(Jw);
+                const int ns = one_sided(jw > 0.0 && d > 0.0 ? d/jw : 0.0, sn.data(), sw.data());
+                for (int is = 0; is < ns; ++is) {
+                    const double rho = sn[is];
+                    const double uv[2] = {u0[0] + rho*w2[0], u0[1] + rho*w2[1]};
+                    double X[3];
+                    QuadQ2MapX(nodes, uv, X);
+                    const double dx = p[0]-X[0], dy = p[1]-X[1], dz = p[2]-X[2];
+                    const double pr = std::sqrt(dx*dx + dy*dy + dz*dz);
+                    if (pr < 1e-300) continue;
+                    const double weight = tw[it]*sw[is]*rho*s2/pr;
+                    const double y3[3] = {uv[0], uv[1], 0.0};
+                    for (int local = 0; local < nS; ++local)
+                        inn[local] += weight*HexMonoEval(srcG[local], y3);
+                }
+            }
+        }
+    }
+}
+
+bool RadHACApKChargeGram::HexQ2ClosestReference(
+    const double* nd27, const double X[3], double xi[3])
+{
+    double inverse[3];
+    const bool converged = HexQ2Inverse(nd27, X, inverse);
+    // HexQ2Inverse returns at convergence before its clamp, so a converged exterior target comes back
+    // with an out-of-cube reference point; a converged interior target is the closest point itself.
+    const double slack = 1e-9;
+    if (converged
+            && inverse[0] >= -slack && inverse[0] <= 1.0+slack
+            && inverse[1] >= -slack && inverse[1] <= 1.0+slack
+            && inverse[2] >= -slack && inverse[2] <= 1.0+slack) {
+        for (int k = 0; k < 3; ++k) xi[k] = std::clamp(inverse[k], 0.0, 1.0);
+        return true;
+    }
+    // Exterior (or unresolved) target: the closest point lies on the boundary.  Solve the closest-point
+    // problem on each of the six Q2 faces and keep the nearest; a clamped reference inverse is only the
+    // closest point in the reference metric, which a skewed cell tilts away from the physical one.
+    double best = std::numeric_limits<double>::infinity();
+    bool found = false;
+    for (int fixed_axis = 0; fixed_axis < 3; ++fixed_axis) {
+        const int axis_a = (fixed_axis + 1) % 3;
+        const int axis_b = (fixed_axis + 2) % 3;
+        for (int side = 0; side < 2; ++side) {
+            double nd9[27];
+            for (int iv = 0; iv < 3; ++iv)
+                for (int iu = 0; iu < 3; ++iu) {
+                    int idx[3];
+                    idx[fixed_axis] = 2*side;
+                    idx[axis_a] = iu;
+                    idx[axis_b] = iv;
+                    const double* src = &nd27[3*(idx[0] + 3*idx[1] + 9*idx[2])];
+                    double* dst = &nd9[3*(iu + 3*iv)];
+                    dst[0] = src[0]; dst[1] = src[1]; dst[2] = src[2];
+                }
+            double uv[2] = {0.5, 0.5};
+            if (!QuadQ2ClosestReference(nd9, X, uv)) continue;
+            double mapped[3];
+            QuadQ2MapX(nd9, uv, mapped);
+            const double dx = mapped[0]-X[0], dy = mapped[1]-X[1], dz = mapped[2]-X[2];
+            const double d2 = dx*dx + dy*dy + dz*dz;
+            if (std::isfinite(d2) && d2 < best) {
+                best = d2;
+                found = true;
+                xi[fixed_axis] = (double)side;
+                xi[axis_a] = uv[0];
+                xi[axis_b] = uv[1];
+            }
+        }
+    }
+    return found;
 }
 
 std::vector<double> RadHACApKChargeGram::QuadBlockHexCompositeProduct(
@@ -5975,11 +6727,105 @@ static thread_local std::unordered_map<HexBlockKey, std::vector<double>, HexBloc
 // header member doc), so this test may use the cheap ctor-precomputed affinity flags
 // (m_hexAffineCell / m_quadAffineFace) instead of QuadBlockHex's per-call face_affine lattice
 // re-check.
+namespace {
+struct HexSignatureHash {
+    std::size_t operator()(const std::vector<long long>& v) const
+    {
+        std::size_t h = 1469598103934665603ull;
+        for (long long x : v) {
+            h ^= static_cast<std::size_t>(static_cast<unsigned long long>(x));
+            h *= 1099511628211ull;
+        }
+        return h;
+    }
+};
+}   // namespace
+
+// Congruence templates for the translation-congruent shared cache.  Two hosts are translated copies
+// when their Q2 lattice nodes, taken relative to the host centre and quantized to 1e-10 of the largest
+// host spread, and their charge exponents coincide.  Swept (extruded) meshes -- every 2.5-D magnet --
+// repeat each host once per layer; the pair cache in GetHexBlock then evaluates each expensive near
+// block once per congruence class instead of once per layer.  A quantization-boundary miss only costs
+// a recomputation; a false hit would need two different pairs within 1e-10 of each other.
+void RadHACApKChargeGram::BuildHexCongruenceTemplates(int n_el, int n_bf)
+{
+    const size_t n_host = (size_t)n_el + (size_t)n_bf;
+    m_hexHostCongruentTemplate.assign(n_host, -1);
+    m_hexHostCenter.assign(n_host*3, 0.0);
+    m_hexCongruentQuantum = 0.0;
+    m_hexCongruentTemplateCount = 0;
+    m_hexCongruentReady = false;
+    if (n_host == 0 || m_hexNodes.size() < (size_t)n_el*81 || m_quadNodes.size() < (size_t)n_bf*27) return;
+    auto nodes_of = [&](size_t idx, int& nnode) -> const double* {
+        if (idx < (size_t)n_el) { nnode = 27; return &m_hexNodes[idx*81]; }
+        nnode = 9;
+        return &m_quadNodes[(idx - (size_t)n_el)*27];
+    };
+    double scale = 0.0;
+    for (size_t idx = 0; idx < n_host; ++idx) {
+        int nnode = 0;
+        const double* nd = nodes_of(idx, nnode);
+        double* ctr = &m_hexHostCenter[3*idx];
+        for (int i = 0; i < nnode; ++i)
+            for (int k = 0; k < 3; ++k) ctr[k] += nd[3*i + k];
+        for (int k = 0; k < 3; ++k) ctr[k] /= (double)nnode;
+        for (int i = 0; i < nnode; ++i) {
+            const double dx = nd[3*i] - ctr[0], dy = nd[3*i + 1] - ctr[1], dz = nd[3*i + 2] - ctr[2];
+            scale = std::max(scale, std::sqrt(dx*dx + dy*dy + dz*dz));
+        }
+    }
+    if (!(scale > 0.0) || !std::isfinite(scale)) return;
+    const double quantum = 1e-10*scale;
+    std::unordered_map<std::vector<long long>, int, HexSignatureHash> templates;
+    std::vector<long long> sig;
+    for (size_t idx = 0; idx < n_host; ++idx) {
+        int nnode = 0;
+        const double* nd = nodes_of(idx, nnode);
+        const double* ctr = &m_hexHostCenter[3*idx];
+        const bool cell = idx < (size_t)n_el;
+        const std::vector<int>& grp = cell ? m_cellCharges[idx] : m_faceCharges[idx - (size_t)n_el];
+        sig.clear();
+        sig.reserve((size_t)nnode*3 + 2 + grp.size()*3);
+        sig.push_back(cell ? 0 : 1);
+        for (int i = 0; i < nnode; ++i)
+            for (int k = 0; k < 3; ++k) sig.push_back(std::llround((nd[3*i + k] - ctr[k])/quantum));
+        sig.push_back((long long)grp.size());
+        for (int g : grp)
+            for (int k = 0; k < 3; ++k) sig.push_back((long long)m_expo[(size_t)3*g + k]);
+        auto it = templates.find(sig);
+        if (it == templates.end()) it = templates.emplace(sig, (int)templates.size()).first;
+        m_hexHostCongruentTemplate[idx] = it->second;
+    }
+    m_hexCongruentQuantum = quantum;
+    m_hexCongruentTemplateCount = (int)templates.size();
+    m_hexCongruentReady = true;
+}
+
 bool RadHACApKChargeGram::HexPairTakesGeneralPath(int kindT, int hT, int kindS, int hS, int img) const
 {
     const std::vector<int>& tgtG = (kindT == 0) ? m_cellCharges[hT] : m_faceCharges[hT];
     const std::vector<int>& srcG = (kindS == 0) ? m_cellCharges[hS] : m_faceCharges[hS];
     if (tgtG.empty() || srcG.empty()) return false;
+    {
+        // Every touching pair and every near-band pair is an expensive tensor block whatever the hosts'
+        // affinity and whatever the order, so all of them belong in the instance-shared compute-once
+        // cache.  Measured per block on one Q-mag mesh: BDM1 pair-domain Duffy 265 ms (hibino), BDM2
+        // exact-affine near 442 ms and graded near 155 ms (LAB), against 2 us for a far block.  This
+        // predicate only selects WHICH CACHE serves the block -- GetHexBlock computes the same
+        // QuadBlockHex either way -- so the classification never changes a number.  Before 2026-09-08
+        // the rule was BDM1-only and the BDM2 affine-affine near blocks fell through to the per-thread
+        // caches: 60,986 evaluations of 442 ms on Q-mag h15, 70 % of that build, with no reuse between
+        // congruent hosts.
+        if (HexHostsTouch(kindT, hT, kindS, hS, img)) return true;
+        const int repA = tgtG[0], repB = srcG[0];
+        double repBc[3];
+        ImageEvalPoint(img, &m_cent[(size_t)3*repB], repBc);
+        const double sep = std::sqrt(
+            (m_cent[(size_t)3*repA]     - repBc[0])*(m_cent[(size_t)3*repA]     - repBc[0])
+          + (m_cent[(size_t)3*repA + 1] - repBc[1])*(m_cent[(size_t)3*repA + 1] - repBc[1])
+          + (m_cent[(size_t)3*repA + 2] - repBc[2])*(m_cent[(size_t)3*repA + 2] - repBc[2]));
+        if (sep <= m_near_grade*(m_size[repA] + m_size[repB])) return true;
+    }
     const bool affT = (kindT == 0)
         ? (hT >= 0 && hT < (int)m_hexAffineCell.size() && m_hexAffineCell[hT])
         : (hT >= 0 && hT < (int)m_quadAffineFace.size() && m_quadAffineFace[hT]);
@@ -5987,6 +6833,7 @@ bool RadHACApKChargeGram::HexPairTakesGeneralPath(int kindT, int hT, int kindS, 
         ? (hS >= 0 && hS < (int)m_hexAffineCell.size() && m_hexAffineCell[hS])
         : (hS >= 0 && hS < (int)m_quadAffineFace.size() && m_quadAffineFace[hS]);
     if (affT && affS) return false;
+    if (HexHostsTouch(kindT, hT, kindS, hS, img)) return true;   // touching distorted hosts: graded path
     const double fac = HexDistortedFarFactor();
     if (fac <= 0.0) return true;
     const int repA = tgtG[0], repB = srcG[0];
@@ -5999,38 +6846,416 @@ bool RadHACApKChargeGram::HexPairTakesGeneralPath(int kindT, int hT, int kindS, 
     return sep <= fac*(m_size[repA] + m_size[repB]);
 }
 
+RadHACApKChargeGram::HexPairAdjacency RadHACApKChargeGram::HexPairAdjacencyOf(
+    int kindT, int hT, int kindS, int hS, int img) const
+{
+    HexPairAdjacency adj;
+    const std::vector<int>& tgtG = (kindT == 0) ? m_cellCharges[hT] : m_faceCharges[hT];
+    const std::vector<int>& srcG = (kindS == 0) ? m_cellCharges[hS] : m_faceCharges[hS];
+    if (tgtG.empty() || srcG.empty()) return adj;
+    const int dT = (kindT == 0) ? 3 : 2, dS = (kindS == 0) ? 3 : 2;
+    const double* ndT = (kindT == 0) ? &m_hexNodes[(size_t)hT*81] : &m_quadNodes[(size_t)hT*27];
+    const double* ndS = (kindS == 0) ? &m_hexNodes[(size_t)hS*81] : &m_quadNodes[(size_t)hS*27];
+    const int nT = (kindT == 0) ? 27 : 9, nS = (kindS == 0) ? 27 : 9;
+    const double radius_sum = m_size[tgtG[0]] + m_size[srcG[0]];
+    const double tol = 1e-9*radius_sum + 1e-14;
+    std::vector<std::pair<int, int>> pairs;
+    for (int j = 0; j < nS; ++j) {
+        double image_node[3];
+        ImageApplyVector(img, &ndS[3*j], image_node);
+        for (int i = 0; i < nT; ++i) {
+            const double ex = image_node[0] - ndT[3*i], ey = image_node[1] - ndT[3*i + 1],
+                         ez = image_node[2] - ndT[3*i + 2];
+            if (ex*ex + ey*ey + ez*ez <= tol*tol) pairs.emplace_back(i, j);
+        }
+    }
+    const int count = (int)pairs.size();
+    if (count == 0) return adj;
+    int e;
+    if (count == 1) e = 0;
+    else if (count == 3) e = 1;
+    else if (count == 9) e = 2;
+    else if (count == 27 && dT == 3 && dS == 3) e = 3;
+    else {
+        // A NON-CONFORMING contact (a hanging node: one host's edge midpoint on another host's corner,
+        // ESRF #6 has 832 such pairs at its 2:1 transitions; or a partial face overlap).  No canonical
+        // frames exist for a partial entity, so the pair is reported as entity_dim -2 and the dispatch
+        // keeps it on the graded near family; the count is published in the stats.
+        adj.entity_dim = -2;
+        return adj;
+    }
+    auto ref_of = [](int dim, int node, double* z) {
+        if (dim == 3) { z[0] = 0.5*(node % 3); z[1] = 0.5*((node/3) % 3); z[2] = 0.5*(node/9); }
+        else          { z[0] = 0.5*(node % 3); z[1] = 0.5*(node/3);       z[2] = 0.0; }
+    };
+    static const int perms3[6][3] = {{0,1,2},{0,2,1},{1,0,2},{1,2,0},{2,0,1},{2,1,0}};
+    static const int perms2[2][3] = {{0,1,2},{1,0,2}};
+    auto apply = [](int dim, const int* perm, const int* flip, const double* ref, double* zeta) {
+        for (int k = 0; k < dim; ++k) zeta[k] = flip[k] ? 1.0 - ref[perm[k]] : ref[perm[k]];
+    };
+    const int nperT = dT == 3 ? 6 : 2, nperS = dS == 3 ? 6 : 2;
+    const int nflipT = 1 << dT, nflipS = 1 << dS;
+    const double eps = 1e-12;
+    for (int pT = 0; pT < nperT; ++pT) {
+        const int* permT = dT == 3 ? perms3[pT] : perms2[pT];
+        for (int fT = 0; fT < nflipT; ++fT) {
+            int flipT[3] = {(fT >> 0) & 1, (fT >> 1) & 1, (fT >> 2) & 1};
+            bool okT = true;
+            for (const auto& pr : pairs) {
+                double ref[3], zeta[3];
+                ref_of(dT, pr.first, ref);
+                apply(dT, permT, flipT, ref, zeta);
+                for (int k = e; k < dT && okT; ++k) okT = std::abs(zeta[k] - 1.0) < eps;
+                if (!okT) break;
+            }
+            if (!okT) continue;
+            for (int pS = 0; pS < nperS; ++pS) {
+                const int* permS = dS == 3 ? perms3[pS] : perms2[pS];
+                for (int fS = 0; fS < nflipS; ++fS) {
+                    int flipS[3] = {(fS >> 0) & 1, (fS >> 1) & 1, (fS >> 2) & 1};
+                    bool ok = true;
+                    for (const auto& pr : pairs) {
+                        double refT[3], zT[3], refS[3], zS[3];
+                        ref_of(dT, pr.first, refT);  apply(dT, permT, flipT, refT, zT);
+                        ref_of(dS, pr.second, refS); apply(dS, permS, flipS, refS, zS);
+                        for (int k = e; k < dS && ok; ++k) ok = std::abs(zS[k]) < eps;
+                        for (int k = 0; k < e && ok; ++k) ok = std::abs(zT[k] - zS[k]) < eps;
+                        if (!ok) break;
+                    }
+                    if (!ok) continue;
+                    adj.entity_dim = e;
+                    for (int k = 0; k < 3; ++k) {
+                        adj.permT[k] = permT[k]; adj.flipT[k] = flipT[k];
+                        adj.permS[k] = permS[k]; adj.flipS[k] = flipS[k];
+                    }
+                    return adj;
+                }
+            }
+        }
+    }
+    // A coincidence count of a conforming entity whose nodes are not that entity of both hosts (a
+    // hanging node on an edge midpoint or face centre, a partial edge overlap with 3 nodes): another
+    // non-conforming contact, kept on the graded near family and counted like the others.
+    adj.entity_dim = -2;
+    return adj;
+}
+
+bool RadHACApKChargeGram::HexHostAffine(int kind, int h) const
+{
+    return (kind == 0)
+        ? (h >= 0 && h < (int)m_hexAffineCell.size() && m_hexAffineCell[(size_t)h])
+        : (h >= 0 && h < (int)m_quadAffineFace.size() && m_quadAffineFace[(size_t)h]);
+}
+
+const std::vector<double>& RadHACApKChargeGram::PairRuleNodes(int kindT, int hT, int kindS, int hS) const
+{
+    return (HexHostAffine(kindT, hT) && HexHostAffine(kindS, hS)) ? m_glPairAffine : m_glPair;
+}
+
+const std::vector<double>& RadHACApKChargeGram::PairRuleWeights(int kindT, int hT, int kindS, int hS) const
+{
+    return (HexHostAffine(kindT, hT) && HexHostAffine(kindS, hS)) ? m_gwPairAffine : m_gwPair;
+}
+
+const std::vector<double>& RadHACApKChargeGram::PairRuleWNodes(int kindT, int hT, int kindS, int hS) const
+{
+    const bool affine = HexHostAffine(kindT, hT) && HexHostAffine(kindS, hS);
+    const std::vector<double>& rule = affine ? m_glPairAffineW : m_glPairW;
+    return rule.empty() ? PairRuleNodes(kindT, hT, kindS, hS) : rule;
+}
+
+const std::vector<double>& RadHACApKChargeGram::PairRuleWWeights(int kindT, int hT, int kindS, int hS) const
+{
+    const bool affine = HexHostAffine(kindT, hT) && HexHostAffine(kindS, hS);
+    const std::vector<double>& rule = affine ? m_gwPairAffineW : m_gwPairW;
+    return rule.empty() ? PairRuleWeights(kindT, hT, kindS, hS) : rule;
+}
+
+// Neumaier's compensated addition: sum += x with the rounding error of the add kept in comp.  The
+// final value is sum + comp; the result is independent of the summation order to a few eps.
+static inline void NeumaierAdd(double& sum, double& comp, double x)
+{
+    const double t = sum + x;
+    if (std::fabs(sum) >= std::fabs(x)) comp += (sum - t) + x;
+    else                                comp += (x - t) + sum;
+    sum = t;
+}
+
+std::vector<double> RadHACApKChargeGram::QuadBlockHexProductN(int kindT, int hT, int kindS, int hS, int img) const
+{
+    // Non-touching pairs inside the near band: plain tensor Gauss on both reference domains with the pair
+    // rule (Q2 maps, reference charge measure); the integrand is smooth because the hosts are separated,
+    // and the same point count that resolves the regularized touching integrals resolves a gap of the
+    // order of the host size.
+    const std::vector<int>& tgtG = (kindT == 0) ? m_cellCharges[hT] : m_faceCharges[hT];
+    const std::vector<int>& srcG = (kindS == 0) ? m_cellCharges[hS] : m_faceCharges[hS];
+    const int nT = (int)tgtG.size(), nS = (int)srcG.size();
+    std::vector<double> blk((size_t)nT*nS, 0.0);
+    if (nT == 0 || nS == 0) return blk;
+    const int dT = (kindT == 0) ? 3 : 2, dS = (kindS == 0) ? 3 : 2;
+    const double* ndT = (kindT == 0) ? &m_hexNodes[(size_t)hT*81] : &m_quadNodes[(size_t)hT*27];
+    const double* ndS = (kindS == 0) ? &m_hexNodes[(size_t)hS*81] : &m_quadNodes[(size_t)hS*27];
+    const std::vector<double>& gl = PairRuleNodes(kindT, hT, kindS, hS);     // 6 for affine-affine, else 8
+    const std::vector<double>& gw = PairRuleWeights(kindT, hT, kindS, hS);
+    const int N = (int)gl.size();
+    // source samples once (points and mode values), then the target loop
+    const int nptS = (dS == 3) ? N*N*N : N*N;
+    std::vector<double> XS((size_t)3*nptS), wS((size_t)nptS), qS((size_t)nptS*nS);
+    {
+        int p = 0;
+        for (int a = 0; a < N; ++a) for (int b = 0; b < N; ++b) for (int c = 0; c < (dS == 3 ? N : 1); ++c, ++p) {
+            double eta[3] = {gl[(size_t)a], gl[(size_t)b], dS == 3 ? gl[(size_t)c] : 0.0};
+            wS[(size_t)p] = gw[(size_t)a]*gw[(size_t)b]*(dS == 3 ? gw[(size_t)c] : 1.0);
+            if (dS == 3) HexQ2MapX(ndS, eta, &XS[(size_t)3*p]); else { const double uv[2] = {eta[0], eta[1]}; QuadQ2MapX(ndS, uv, &XS[(size_t)3*p]); }
+            for (int ls = 0; ls < nS; ++ls) qS[(size_t)p*nS + ls] = HexMonoEval(srcG[ls], eta);
+        }
+    }
+    std::vector<double> qT((size_t)nT), inn((size_t)nS);
+    // Neumaier compensation of the OUTER accumulation only (the inner point loop keeps plain sums: the
+    // hot loop, and its order is the same lexicographic order in every evaluation of the pair).
+    std::vector<double> comp((size_t)nT*nS, 0.0);
+    for (int a = 0; a < N; ++a) for (int b = 0; b < N; ++b) for (int c = 0; c < (dT == 3 ? N : 1); ++c) {
+        double xi[3] = {gl[(size_t)a], gl[(size_t)b], dT == 3 ? gl[(size_t)c] : 0.0};
+        const double wT = gw[(size_t)a]*gw[(size_t)b]*(dT == 3 ? gw[(size_t)c] : 1.0);
+        double XT[3], XTr[3];
+        if (dT == 3) HexQ2MapX(ndT, xi, XT); else { const double uv[2] = {xi[0], xi[1]}; QuadQ2MapX(ndT, uv, XT); }
+        ImageEvalPoint(img, XT, XTr);
+        std::fill(inn.begin(), inn.end(), 0.0);
+        for (int p = 0; p < nptS; ++p) {
+            const double dx = XTr[0]-XS[(size_t)3*p], dy = XTr[1]-XS[(size_t)3*p+1], dz = XTr[2]-XS[(size_t)3*p+2];
+            const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+            if (r < 1e-300) continue;
+            const double w = wS[(size_t)p]/r;
+            const double* q = &qS[(size_t)p*nS];
+            for (int ls = 0; ls < nS; ++ls) inn[(size_t)ls] += w*q[ls];
+        }
+        for (int lt = 0; lt < nT; ++lt) qT[(size_t)lt] = wT*HexMonoEval(tgtG[lt], xi);
+        for (int lt = 0; lt < nT; ++lt) {
+            double* row = &blk[(size_t)lt*nS];
+            double* crow = &comp[(size_t)lt*nS];
+            const double wl = qT[(size_t)lt];
+            for (int ls = 0; ls < nS; ++ls) NeumaierAdd(row[ls], crow[ls], wl*inn[(size_t)ls]);
+        }
+    }
+    for (size_t k = 0; k < blk.size(); ++k) blk[k] = (blk[k] + comp[k]) * RAD_INV_FOUR_PI;
+    return blk;
+}
+std::vector<double> RadHACApKChargeGram::QuadBlockHexPairDuffy(int kindT, int hT, int kindS, int hS, int img) const
+{
+    const std::vector<int>& tgtG = (kindT == 0) ? m_cellCharges[hT] : m_faceCharges[hT];
+    const std::vector<int>& srcG = (kindS == 0) ? m_cellCharges[hS] : m_faceCharges[hS];
+    const int nT = (int)tgtG.size(), nS = (int)srcG.size();
+    std::vector<double> blk((size_t)nT*nS, 0.0);
+    if (nT == 0 || nS == 0) return blk;
+    const HexPairAdjacency adj = HexPairAdjacencyOf(kindT, hT, kindS, hS, img);
+    if (adj.entity_dim < 0)
+        throw std::logic_error("QuadBlockHexPairDuffy: the host pair does not share a lattice node");
+    const int dT = (kindT == 0) ? 3 : 2, dS = (kindS == 0) ? 3 : 2, e = adj.entity_dim;
+    const int ntrT = dT - e, ntrS = dS - e, nrel = e, nfree = e;
+    const int kcone = nrel + ntrT + ntrS;
+    const int ndim = dT + dS;
+    // Subdomains: the dominant cone coordinate (two signs for a relative one) times the SIGNS of the
+    // other relative coordinates -- the intersection-box lengths 1 - |u_i| are only smooth on a fixed
+    // sign of u_i (splitting them is the analogue of the Sauter-Schwab sub-integrals; without it the
+    // rule converged only algebraically: unit-cube self-energy -3.1 % at N = 4, -1.4 % at N = 6).
+    const int nsub = (2*nrel + ntrT + ntrS) * (1 << std::max(0, nrel - 1)) * ((ntrT + ntrS) > 0 && nrel > 0 ? 1 : 1);
+    const double* ndT = (kindT == 0) ? &m_hexNodes[(size_t)hT*81] : &m_quadNodes[(size_t)hT*27];
+    const double* ndS = (kindS == 0) ? &m_hexNodes[(size_t)hS*81] : &m_quadNodes[(size_t)hS*27];
+    const std::vector<double>& gl = PairRuleNodes(kindT, hT, kindS, hS);     // angular / free directions
+    const std::vector<double>& gw = PairRuleWeights(kindT, hT, kindS, hS);
+    const std::vector<double>& glw = PairRuleWNodes(kindT, hT, kindS, hS);   // dominant (cone-radius) direction
+    const std::vector<double>& gww = PairRuleWWeights(kindT, hT, kindS, hS);
+    const int N = (int)gl.size();
+    const int Nw = (int)glw.size();
+    std::vector<int> idx((size_t)ndim, 0);
+    std::vector<double> qT((size_t)nT), qS((size_t)nS);
+    // The same physical pair is summed in a different SUBDOMAIN order when it is reached as a direct
+    // pair of the full model and as an image pair of the reduced model (or through another host's
+    // lattice orientation); within a subdomain the point order is the same lexicographic order.  Each
+    // subdomain is therefore summed plainly (the hot loop) and the subdomain partial sums are added
+    // with Neumaier compensation, which makes the block insensitive to that order at the level of a few
+    // eps for the full-versus-image field contract at no measurable cost.
+    std::vector<double> part((size_t)nT*nS, 0.0), comp((size_t)nT*nS, 0.0);
+    double cone[6];
+    const int ndomain = 2*nrel + ntrT + ntrS;
+    const int nsignsets = 1 << std::max(0, nrel - 1);
+    for (int sub = 0; sub < ndomain*nsignsets; ++sub) {
+        const int dsel = sub / nsignsets, signset = sub % nsignsets;
+        int dom; double sgn;
+        if (dsel < 2*nrel) { dom = dsel/2; sgn = (dsel % 2 == 0) ? 1.0 : -1.0; }
+        else               { dom = nrel + (dsel - 2*nrel); sgn = 1.0; }
+        // signs of the non-dominant relative coordinates: when the dominant one is relative there are
+        // nrel-1 of them; when it is transverse there are nrel, and the extra one takes both signs below
+        double relsign[3] = {1.0, 1.0, 1.0};
+        {
+            int bit = 0;
+            for (int c = 0; c < nrel; ++c) {
+                if (c == dom) continue;
+                if (bit < std::max(0, nrel - 1)) relsign[c] = ((signset >> bit) & 1) ? -1.0 : 1.0;
+                ++bit;
+            }
+        }
+        const int extra = (dom >= nrel && nrel > 0) ? 2 : 1;   // transverse dominant: the last relative coordinate takes both signs
+        for (int ex = 0; ex < extra; ++ex) {
+        if (extra == 2) relsign[nrel - 1] = (ex == 0) ? 1.0 : -1.0;
+        std::fill(part.begin(), part.end(), 0.0);
+        std::fill(idx.begin(), idx.end(), 0);
+        while (true) {
+            const double wv = glw[(size_t)idx[0]];
+            double weight = gww[(size_t)idx[0]];
+            int yi = 1;
+            for (int c = 0; c < kcone; ++c) {
+                if (c == dom) { cone[c] = sgn*wv; continue; }
+                const double g = gl[(size_t)idx[yi]];
+                weight *= gw[(size_t)idx[yi]];
+                ++yi;
+                if (c < nrel) { cone[c] = relsign[c]*wv*g; }
+                else          { cone[c] = wv*g; }
+            }
+            for (int c = 1; c < kcone; ++c) weight *= wv;          // Duffy Jacobian w^(kcone-1)
+            double zetaT[3] = {0.0, 0.0, 0.0}, zetaS[3] = {0.0, 0.0, 0.0};
+            for (int i = 0; i < nfree; ++i) {
+                const double u = cone[i];
+                const double lo = std::max(0.0, -u), hi = std::min(1.0, 1.0 - u);
+                const double g = gl[(size_t)idx[yi]];
+                weight *= gw[(size_t)idx[yi]]*(hi - lo);
+                ++yi;
+                const double f = lo + g*(hi - lo);
+                zetaT[i] = f; zetaS[i] = f + u;
+            }
+            for (int j = 0; j < ntrT; ++j) zetaT[e + j] = 1.0 - cone[nrel + j];
+            for (int j = 0; j < ntrS; ++j) zetaS[e + j] = cone[nrel + ntrT + j];
+            double xi[3] = {0.0, 0.0, 0.0}, eta[3] = {0.0, 0.0, 0.0};
+            for (int k = 0; k < dT; ++k) xi[adj.permT[k]] = adj.flipT[k] ? 1.0 - zetaT[k] : zetaT[k];
+            for (int k = 0; k < dS; ++k) eta[adj.permS[k]] = adj.flipS[k] ? 1.0 - zetaS[k] : zetaS[k];
+            double XT[3], XTr[3], XS[3];
+            if (dT == 3) HexQ2MapX(ndT, xi, XT); else { const double uv[2] = {xi[0], xi[1]}; QuadQ2MapX(ndT, uv, XT); }
+            ImageEvalPoint(img, XT, XTr);
+            if (dS == 3) HexQ2MapX(ndS, eta, XS); else { const double uv[2] = {eta[0], eta[1]}; QuadQ2MapX(ndS, uv, XS); }
+            const double dx = XTr[0]-XS[0], dy = XTr[1]-XS[1], dz = XTr[2]-XS[2];
+            const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+            if (r > 1e-300) {
+                weight /= r;
+                for (int lt = 0; lt < nT; ++lt) qT[(size_t)lt] = HexMonoEval(tgtG[lt], xi);
+                for (int ls = 0; ls < nS; ++ls) qS[(size_t)ls] = HexMonoEval(srcG[ls], eta);
+                for (int lt = 0; lt < nT; ++lt) {
+                    const double wl = weight*qT[(size_t)lt];
+                    double* row = &part[(size_t)lt*nS];
+                    for (int ls = 0; ls < nS; ++ls) row[ls] += wl*qS[(size_t)ls];
+                }
+            }
+            int p = 0;
+            while (p < ndim) {
+                const int limit = (p == 0) ? Nw : N;
+                if (++idx[(size_t)p] < limit) break;
+                idx[(size_t)p] = 0; ++p;
+            }
+            if (p == ndim) break;
+        }
+        for (size_t k = 0; k < blk.size(); ++k) NeumaierAdd(blk[k], comp[k], part[k]);
+        }
+    }
+    (void)nsub;
+    for (size_t k = 0; k < blk.size(); ++k) blk[k] = (blk[k] + comp[k]) * RAD_INV_FOUR_PI;
+    return blk;
+}
+
+bool RadHACApKChargeGram::HexHostsTouch(int kindT, int hT, int kindS, int hS, int img) const
+{
+    const std::vector<int>& tgtG = (kindT == 0) ? m_cellCharges[hT] : m_faceCharges[hT];
+    const std::vector<int>& srcG = (kindS == 0) ? m_cellCharges[hS] : m_faceCharges[hS];
+    if (tgtG.empty() || srcG.empty()) return false;
+    if (img == 0 && kindT == kindS && hT == hS) return true;
+    // Cheap reject: hosts whose centroids are farther apart than the sum of their bounding radii (plus
+    // a roundoff margin) cannot share a node.  This keeps the O(27*27) node comparison off the far pairs.
+    const int repA = tgtG[0], repB = srcG[0];
+    double cS[3];
+    ImageEvalPoint(img, &m_cent[(size_t)3*repB], cS);
+    const double dx = m_cent[(size_t)3*repA] - cS[0], dy = m_cent[(size_t)3*repA + 1] - cS[1],
+                 dz = m_cent[(size_t)3*repA + 2] - cS[2];
+    const double radius_sum = m_size[repA] + m_size[repB];
+    if (std::sqrt(dx*dx + dy*dy + dz*dz) > 1.05*radius_sum + 1e-12) return false;
+    const double* ndT = (kindT == 0) ? &m_hexNodes[(size_t)hT*81] : &m_quadNodes[(size_t)hT*27];
+    const double* ndS = (kindS == 0) ? &m_hexNodes[(size_t)hS*81] : &m_quadNodes[(size_t)hS*27];
+    const int nT = (kindT == 0) ? 27 : 9, nS = (kindS == 0) ? 27 : 9;
+    // Lattice nodes shared by neighbouring hosts come from each host's own GetTrafo evaluation and agree
+    // to roundoff; distinct nodes are a lattice spacing apart.
+    const double tol = 1e-9*radius_sum + 1e-14;
+    for (int j = 0; j < nS; ++j) {
+        double image_node[3];
+        ImageApplyVector(img, &ndS[3*j], image_node);       // T applied to a POSITION (linear, no offset)
+        for (int i = 0; i < nT; ++i) {
+            const double ex = image_node[0] - ndT[3*i], ey = image_node[1] - ndT[3*i + 1],
+                         ez = image_node[2] - ndT[3*i + 2];
+            if (ex*ex + ey*ey + ez*ez <= tol*tol) return true;
+        }
+    }
+    return false;
+}
+
 const std::vector<double>& RadHACApKChargeGram::GetHexBlock(int kindT, int hT, int kindS, int hS, int img) const
 {
     const int wedge_scope = m_wedgemode ? WedgeTransCacheScope() : 2;
-    const bool use_trans_cache = HexTransCacheEnabled() &&
+    // The expensive general-path blocks (graded near / site-radial band) take the INSTANCE-SHARED
+    // compute-once cache on every mesh, uniform or not.  The per-thread translation cache below is a
+    // congruence cache too, but it is per worker, size-limited and cleared per build, so on a uniform
+    // mesh it let each fill worker -- and every post-build G.entry call on the main thread -- recompute
+    // the same near block.  That is the duplication the shared cache exists to remove.
+    const bool general_path = !m_d2 && !m_wedgemode
+                              && HexPairTakesGeneralPath(kindT, hT, kindS, hS, img);
+    const bool use_trans_cache = HexTransCacheEnabled() && !general_path &&
                                  !m_d2 && m_hexUniformTransHosts && img == 0 &&
                                  (!m_wedgemode || wedge_scope >= 2 || (kindT == 0 && kindS == 0));
-    if (!use_trans_cache && !m_d2 && !m_wedgemode
-            && HexPairTakesGeneralPath(kindT, hT, kindS, hS, img)) {
+    if (general_path) {
         // Expensive general-path block (graded near or site-radial mid band): serve from the
         // instance-shared cache so the fill workers do not each recompute it (the per-thread caches
         // below duplicate ~2x).  Key packs (kinds, image index, hosts) into 64 bits; hosts < 2^28 and
         // the image index < 64 (a 63-fold cyclic group is far past any practical machine sector count).
         if (img < 0 || img > 63)
             throw std::invalid_argument("ChargeGram: image index out of range (max 63 images)");
-        const unsigned long long key =
-            (unsigned long long)(kindT != 0) | ((unsigned long long)(kindS != 0) << 1)
-          | ((unsigned long long)(unsigned)img << 2)
-          | ((unsigned long long)(unsigned)hT << 8) | ((unsigned long long)(unsigned)hS << 36);
+        HexSharedBlockKey key{};
+        key.kindT = kindT; key.kindS = kindS;
+        key.same = (kindT == kindS && hT == hS) ? 1 : 0;
+        if (HexCongruentCacheEnabled() && m_hexCongruentReady && img == 0) {
+            // Translation-congruent key: the block of (T, S) equals the block of every (T + d, S + d).
+            const size_t iT = (kindT == 0) ? (size_t)hT : (size_t)m_n_el + (size_t)hT;
+            const size_t iS = (kindS == 0) ? (size_t)hS : (size_t)m_n_el + (size_t)hS;
+            const double* cT = &m_hexHostCenter[3*iT];
+            const double* cS = &m_hexHostCenter[3*iS];
+            key.mode = 1; key.img = 0;
+            key.a = m_hexHostCongruentTemplate[iT];
+            key.b = m_hexHostCongruentTemplate[iS];
+            key.qx = std::llround((cT[0] - cS[0])/m_hexCongruentQuantum);
+            key.qy = std::llround((cT[1] - cS[1])/m_hexCongruentQuantum);
+            key.qz = std::llround((cT[2] - cS[2])/m_hexCongruentQuantum);
+        } else {
+            key.mode = 0; key.img = img; key.a = hT; key.b = hS;
+            key.qx = key.qy = key.qz = 0;
+        }
         m_hexGeneralSharedLookups.fetch_add(1, std::memory_order_relaxed);
+        HexSharedBlockSlot* slot = nullptr;
         {
             std::shared_lock<std::shared_mutex> rl(m_hexGeneralSharedMutex);
             auto it = m_hexGeneralSharedCache.find(key);
             if (it != m_hexGeneralSharedCache.end()) {
                 m_hexGeneralSharedHits.fetch_add(1, std::memory_order_relaxed);
-                return it->second;
+                slot = it->second.get();
             }
         }
-        std::vector<double> blk = QuadBlockHex(kindT, hT, kindS, hS, img);
-        m_hexGeneralSharedMisses.fetch_add(1, std::memory_order_relaxed);
-        std::unique_lock<std::shared_mutex> wl(m_hexGeneralSharedMutex);
-        auto it = m_hexGeneralSharedCache.emplace(key, std::move(blk)).first;   // racing first insert wins
-        return it->second;
+        if (!slot) {
+            std::unique_lock<std::shared_mutex> wl(m_hexGeneralSharedMutex);
+            auto it = m_hexGeneralSharedCache.find(key);
+            if (it == m_hexGeneralSharedCache.end())
+                it = m_hexGeneralSharedCache.emplace(key, std::make_unique<HexSharedBlockSlot>()).first;
+            slot = it->second.get();
+        }
+        // Compute-once: exactly one thread evaluates the block; the others block here until it is
+        // stored.  A throwing evaluation leaves the flag unset, so the next caller retries.
+        std::call_once(slot->once, [&]() {
+            slot->blk = QuadBlockHex(kindT, hT, kindS, hS, img);
+            m_hexGeneralSharedMisses.fetch_add(1, std::memory_order_relaxed);
+        });
+        return slot->blk;
     }
     if (use_trans_cache) {
         HexStatAdd(m_hexCacheStatsEnabled, m_hexTransBlockLookups);
@@ -6200,8 +7425,13 @@ const std::vector<double>& RadHACApKChargeGram::GetHOTetSymBlock(
         std::vector<double> ab = img == 0
             ? QuadBlockHOTet(kindA, hostA, kindB, hostB)
             : QuadBlockHOTetImage(kindA, hostA, kindB, hostB, img);
-        const bool direct_curved = img == 0 && m_curved && CurvedDirectEnabled() &&
-                                   !CurvedHostsTouch(kindA, hostA, kindB, hostB);
+        // The curved product rule is an exact transpose under a MIRROR (|T^-1 x - y| == |T^-1 y - x| for an
+        // involution), so the BA integration is redundant there.  A rotation image keeps both directions:
+        // 0.5*(G_T + G_{T^-1}) is the designed symmetrization.
+        const bool direct_curved = m_curved && CurvedDirectEnabled() &&
+                                   (img == 0 ? !CurvedHostsTouch(kindA, hostA, kindB, hostB)
+                                             : (IsMirrorImage(img) &&
+                                                !ImageHostsTouch(kindA, hostA, kindB, hostB, img)));
         const bool same_host = kindA == kindB && hostA == hostB;
         std::vector<double> ba;
         if (!direct_curved && !same_host)
@@ -6684,6 +7914,18 @@ void RadHACApKChargeGram::ExtractCoordinates()
     m_n_elem = m_n;
     m_ndof   = m_n;
     m_coordinates = m_cent;   // [n*3] charge centroids (the cluster-tree points)
+    m_pointRadius.clear();
+    if (m_hexmode && !m_d2 && !m_wedgemode && HexClusterRadiusEnabled()) {
+        // HEX cluster-tree boxes of SUPPORTS (2026-09-05, ESRF #6): the co-located charge centroids hide
+        // the extent of a host's charge, so HACApK's box-gap admissibility (width <= eta * gap) declared
+        // blocks between TOUCHING hosts admissible and ACA+ stopped at rank 5 on an 80x80 block whose raw
+        // quadratic was 2.9x larger (the lambda_max 2.12 mode; the physical bound is 1).  Publishing the
+        // host bounding radius per charge makes the boxes of touching hosts overlap (gap 0), so every
+        // touching pair lands in a dense leaf while a host's modes stay co-located (spreading the modes
+        // over the lattice nodes instead split hosts across clusters and put self entries into low-rank
+        // leaves: lambda in [-790, 929]).
+        m_pointRadius = m_size;
+    }
 }
 
 bool RadHACApKChargeGram::BuildHMatrix(const RadHACApKParams& params)
@@ -6746,6 +7988,10 @@ void RadHACApKChargeGram::ComputeChargeSigma()
         // build's own region, so it stands up its own.
         ngcore::RegionTaskManager rtm(
             std::max(1, (int)ngcore::TaskManager::GetMaxThreads()));
+        // Fine tasks (not one chunk per thread): the self-entries are host-ordered and on a HEX mesh
+        // the first touch of each near block class is the whole cost, so a static split leaves the
+        // workers that drew already-cached classes idle.
+        const int sigma_tasks = std::max(1, std::min(m_n, 32 * std::max(1, ngcore::TaskManager::GetNumThreads())));
         ngcore::ParallelFor(ngcore::IntRange(m_n), [&](size_t p) {
             const double d = GetInteractionMatrixElementRaw((int)p, (int)p);
             if (images_folded) {
@@ -6766,7 +8012,7 @@ void RadHACApKChargeGram::ComputeChargeSigma()
             int expected = -1;
             if (bad_charge.compare_exchange_strong(expected, (int)p))
                 bad_value = d;
-        });
+        }, sigma_tasks);
     }
     if (bad_charge.load() >= 0)
         throw std::runtime_error(
@@ -8899,6 +10145,9 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrec(
         }
     }
     std::vector<double> prec(static_cast<size_t>(n_face), 0.0);
+    std::atomic<int> jacobi_failure_dof{-1};
+    std::atomic<double> jacobi_failure_value{0.0};
+    std::atomic<double> jacobi_failure_ndiag{0.0};
     {
         ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
         ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) {
@@ -8908,10 +10157,27 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrec(
             for (size_t p = 0; p < ids.size(); ++p)
                 for (size_t q = 0; q < ids.size(); ++q)
                     ndiag += vals[p] * vals[q] * GetInteractionMatrixElement(ids[p], ids[q]);
-            double value = inv_chi * mass_diag[f] + ndiag;
-            if (!(value > 0.0) || !std::isfinite(value)) value = 1.0;
+            const double value = inv_chi * mass_diag[f] + ndiag;
+            // No-Fallbacks: a non-positive exact diagonal of inv_chi*M + B^T G B means the charge Gram lost
+            // positive definiteness on this DOF's own support.  Replacing it by 1.0 would hide exactly the
+            // defect the CG breakdown guard reports later (ESRF #6, 2026-09-05).
+            if (!(value > 0.0) || !std::isfinite(value)) {
+                jacobi_failure_dof.store(static_cast<int>(f), std::memory_order_relaxed);
+                jacobi_failure_value.store(value, std::memory_order_relaxed);
+                jacobi_failure_ndiag.store(ndiag, std::memory_order_relaxed);
+                return;
+            }
             prec[f] = value;
         });
+    }
+    if (jacobi_failure_dof.load(std::memory_order_relaxed) >= 0) {
+        const int f = jacobi_failure_dof.load(std::memory_order_relaxed);
+        throw std::runtime_error(
+            "SolveConfiguredLinearMaterialAutoPrec: the exact Jacobi diagonal of inv_chi*M + B^T G B is "
+            "not positive at DOF " + std::to_string(f) + " (value "
+            + std::to_string(jacobi_failure_value.load(std::memory_order_relaxed)) + ", B^T G B part "
+            + std::to_string(jacobi_failure_ndiag.load(std::memory_order_relaxed))
+            + "): the charge Gram is not positive definite on this DOF's own charge support.");
     }
     prec_min = n_face ? prec[0] : 0.0;
     prec_max = prec_min;
@@ -9856,6 +11122,9 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
                 support_value[static_cast<size_t>(f)].push_back(
                     m_operatorBData[static_cast<size_t>(k)]);
             }
+        std::atomic<int> jacobi_failure_dof{-1};
+        std::atomic<double> jacobi_failure_value{0.0};
+        std::atomic<double> jacobi_failure_ndiag{0.0};
         {
             ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
             ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) {
@@ -9866,10 +11135,26 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
                     for (size_t q = 0; q < ids.size(); ++q)
                         ndiag += vals[p] * vals[q] *
                             GetInteractionMatrixElement(ids[p], ids[q]);
-                double value = inv_chi * mass_diag[f] + ndiag;
-                if (!(value > 0.0) || !std::isfinite(value)) value = 1.0;
+                const double value = inv_chi * mass_diag[f] + ndiag;
+                // No-Fallbacks (see SolveConfiguredLinearMaterialAutoPrec): a non-positive exact diagonal
+                // is a lost-definiteness report, not a preconditioner detail.
+                if (!(value > 0.0) || !std::isfinite(value)) {
+                    jacobi_failure_dof.store(static_cast<int>(f), std::memory_order_relaxed);
+                    jacobi_failure_value.store(value, std::memory_order_relaxed);
+                    jacobi_failure_ndiag.store(ndiag, std::memory_order_relaxed);
+                    return;
+                }
                 prec[f] = value;
             });
+        }
+        if (jacobi_failure_dof.load(std::memory_order_relaxed) >= 0) {
+            const int f = jacobi_failure_dof.load(std::memory_order_relaxed);
+            throw std::runtime_error(
+                "SolveConfiguredLinearMaterialAutoPrecMany: the exact Jacobi diagonal of inv_chi*M + B^T G B "
+                "is not positive at DOF " + std::to_string(f) + " (value "
+                + std::to_string(jacobi_failure_value.load(std::memory_order_relaxed)) + ", B^T G B part "
+                + std::to_string(jacobi_failure_ndiag.load(std::memory_order_relaxed))
+                + "): the charge Gram is not positive definite on this DOF's own charge support.");
         }
         prec_min = n_face ? prec[0] : 0.0;
         prec_max = prec_min;
