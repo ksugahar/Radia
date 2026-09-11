@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import pathlib
 import re
+from collections import Counter
 
 from .._bibparse import (BibEntry, read_bib_file, write_bib,
                           make_cite_key, is_lab_style_key)
@@ -48,7 +49,13 @@ def bibliography_canonicalize_keys(bib_path: str,
     if not p.exists():
         return f"Error: file not found: {p}"
 
-    entries = read_bib_file(p)
+    try:
+        entries = read_bib_file(p)
+    except (OSError, UnicodeError, ValueError) as exc:
+        return f"Error: cannot read bibliography: {exc}"
+    existing_keys = Counter(e.key for e in entries if not e.kind.startswith("@"))
+    if any(count > 1 for count in existing_keys.values()):
+        return "Error: duplicate input citation keys; no changes made"
     renames: list[tuple[str, str]] = []
     new_entries: list[BibEntry] = []
     for e in entries:
@@ -66,6 +73,11 @@ def bibliography_canonicalize_keys(bib_path: str,
         new_e = BibEntry(kind=e.kind, key=new_key, fields=e.fields,
                           raw_body=e.raw_body)
         new_entries.append(new_e)
+
+    proposed_keys = Counter(e.key for e in new_entries if not e.kind.startswith("@"))
+    collisions = sorted(key for key, count in proposed_keys.items() if count > 1)
+    if collisions:
+        return f"Error: proposed citation-key collisions {collisions}; no changes made"
 
     lines = [f"bibliography_canonicalize_keys: {p}", f"  total entries: {len(entries)}",
              f"  proposed renames: {len(renames)}",
