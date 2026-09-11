@@ -30,10 +30,20 @@ def bibliography_health_report(bib_path: str) -> str:
     Returns:
         Per-axis severity counts + composite score + verdict.
     """
-    reports = {
-        "lint": bibliography_lint(bib_path),
-        "dedupe": bibliography_dedupe(bib_path),
-    }
+    reports = {}
+    failures = {}
+    for axis, tool in (("lint", bibliography_lint), ("dedupe", bibliography_dedupe)):
+        try:
+            report = tool(bib_path)
+            if not isinstance(report, str) or not report.startswith(f"bibliography_{axis}:"):
+                raise ValueError(report if isinstance(report, str) else "invalid detector response")
+            reports[axis] = report
+        except Exception as exc:
+            failures[axis] = str(exc)
+    if failures:
+        return "\n".join([f"bibliography_health_report: {bib_path}",
+                          "  composite score: unavailable", "VERDICT: UNAVAILABLE",
+                          *[f"  {axis}: {error}" for axis, error in failures.items()]])
     score = 100
     axis_sev = {}
     for axis, rep in reports.items():
