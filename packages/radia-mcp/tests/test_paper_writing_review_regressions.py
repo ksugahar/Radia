@@ -300,6 +300,7 @@ def test_crossref_http_status_classification(monkeypatch, status_code, temporary
 
     response = Response()
     response.status_code = status_code
+    response.close = lambda: None
 
     class Requests:
         @staticmethod

@@ -216,25 +216,28 @@ def paper_writing_resolve_doi(doi: str) -> dict:
             "error_kind": "temporary",
             "temporary_failure": True,
         }
-    if r.status_code != 200:
-        # 404 is a stable "not found" answer. Rate limits, server errors,
-        # access blocks, and other responses do not prove the DOI is absent.
-        temporary = r.status_code != 404
-        return {
-            "ok": False,
-            "error": f"crossref HTTP {r.status_code}",
-            "error_kind": "temporary" if temporary else "not_found",
-            "temporary_failure": temporary,
-        }
     try:
-        msg = r.json().get("message", {})
-    except Exception as e:
-        return {
-            "ok": False,
-            "error": f"json parse error: {e}",
-            "error_kind": "temporary",
-            "temporary_failure": True,
-        }
+        if r.status_code != 200:
+            # 404 is a stable "not found" answer. Rate limits, server errors,
+            # access blocks, and other responses do not prove the DOI is absent.
+            temporary = r.status_code != 404
+            return {
+                "ok": False,
+                "error": f"crossref HTTP {r.status_code}",
+                "error_kind": "temporary" if temporary else "not_found",
+                "temporary_failure": temporary,
+            }
+        try:
+            msg = r.json().get("message", {})
+        except Exception as e:
+            return {
+                "ok": False,
+                "error": f"json parse error: {e}",
+                "error_kind": "temporary",
+                "temporary_failure": True,
+            }
+    finally:
+        r.close()
 
     if not isinstance(msg, dict):
         return {"ok": False, "error": "invalid Crossref message shape",
@@ -316,23 +319,25 @@ def paper_writing_ieee_doi_to_arnumber(doi: str) -> dict:
         return {"ok": False, "error": f"not an IEEE DOI: {doi}"}
 
     requests = _require_requests()
-    session = requests.Session()
     try:
-        r = session.get("https://doi.org/" + urllib.parse.quote(doi, safe="/."),
-                        headers=_HTML_HEADERS,
-                        allow_redirects=True, timeout=30)
+        with closing(requests.Session()) as session:
+            with closing(session.get("https://doi.org/" + urllib.parse.quote(doi, safe="/."),
+                                     headers=_HTML_HEADERS,
+                                     allow_redirects=True, timeout=30)) as response:
+                status_code = response.status_code
+                final_url = str(response.url)
     except Exception as e:
         return {"ok": False, "error": f"network error: {e}"}
-    if r.status_code != 200:
-        return {"ok": False, "error": f"DOI redirect HTTP {r.status_code}",
-                "url_attempted": str(r.url)}
+    if status_code != 200:
+        return {"ok": False, "error": f"DOI redirect HTTP {status_code}",
+                "url_attempted": final_url}
 
     # Final URL should be https://ieeexplore.ieee.org/document/<arnumber>/
-    m = re.search(r"ieeexplore\.ieee\.org/document/(\d+)", r.url)
+    m = re.search(r"ieeexplore\.ieee\.org/document/(\d+)", final_url)
     if not m:
         return {
             "ok": False,
-            "error": f"could not extract arnumber from URL: {r.url}",
+            "error": f"could not extract arnumber from URL: {final_url}",
         }
     arn = m.group(1)
     return {
