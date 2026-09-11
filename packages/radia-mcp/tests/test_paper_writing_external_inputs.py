@@ -14,6 +14,88 @@ from radia_mcp.paper_writing._citation_verify import paper_writing_verify_citati
 from radia_mcp.paper_writing import paper_download as download
 
 
+def _crossref_stub(monkeypatch, message):
+    seen = []
+    def get(url, **kwargs):
+        seen.append(url)
+        return SimpleNamespace(status_code=200, json=lambda: {"message": message})
+    monkeypatch.setattr(download, "_require_requests", lambda: SimpleNamespace(get=get))
+    return seen
+
+
+@pytest.mark.parametrize("value", [
+    "10.1109/a#b?c%d", "DOI:10.1109/a#b?c%d",
+    "HTTPS://DX.DOI.ORG/10.1109/a%23b%3Fc%25d",
+    "doi.org/10.1109/a%23b%3Fc%25d",
+])
+def test_doi_consumers_share_lossless_encoding(monkeypatch, value):
+    seen = _crossref_stub(monkeypatch, {})
+    result = download.paper_writing_resolve_doi(value)
+    assert result["doi"] == "10.1109/a#b?c%d"
+    assert seen == ["https://api.crossref.org/works/10.1109/a%23b%3Fc%25d"]
+    assert result["url"] == "https://doi.org/10.1109/a%23b%3Fc%25d"
+    def get(url, **kwargs):
+        seen.append(url)
+        return SimpleNamespace(status_code=200,
+                               url="https://ieeexplore.ieee.org/document/123/")
+    monkeypatch.setattr(download, "_require_requests", lambda: SimpleNamespace(
+        Session=lambda: SimpleNamespace(get=get)))
+    ieee = download.paper_writing_ieee_doi_to_arnumber(value)
+    assert ieee["ok"] and ieee["doi"] == result["doi"]
+    assert seen[-1] == result["url"]
+
+
+@pytest.mark.parametrize("message", [None, [], "bad", 42])
+def test_crossref_invalid_message_is_not_success(monkeypatch, message):
+    _crossref_stub(monkeypatch, message)
+    result = download.paper_writing_resolve_doi("10.1234/test")
+    assert not result["ok"] and result["temporary_failure"]
+
+
+@pytest.mark.parametrize("date", [None, {}, {"date-parts": []},
+                                   {"date-parts": [[None]]},
+                                   {"date-parts": [[True]]}, "bad"])
+def test_crossref_created_date_is_never_publication_year(monkeypatch, date):
+    _crossref_stub(monkeypatch, {
+        "title": ["Test"], "author": [{"name": "Research Group"}],
+        "published": date, "created": {"date-parts": [[2026]]},
+    })
+    result = download.paper_writing_doi_to_bibtex("10.1234/test")
+    assert not result["ok"]
+    assert result["error_kind"] == "incomplete_metadata"
+    assert result["missing_fields"] == ["year"]
+    assert result["metadata"]["year"] is None
+    assert "bibtex" not in result
+
+
+def test_crossref_issued_fallback_and_corporate_author(monkeypatch):
+    _crossref_stub(monkeypatch, {
+        "title": ["Test"], "type": "journal-article",
+        "author": [{"name": "Research and Development Group"},
+                   {"family": "Doe", "given": None}],
+        "published": {"date-parts": [[]]}, "issued": {"date-parts": [[2024]]},
+    })
+    result = download.paper_writing_doi_to_bibtex("10.1234/test", "test2024")
+    assert result["ok"]
+    assert result["metadata"]["year"] == 2024
+    assert "author  = {{Research and Development Group} and Doe}" in result["bibtex"]
+
+
+@pytest.mark.parametrize("overrides,missing", [
+    ({"title": "Not a title list"}, "title"),
+    ({"author": None}, "authors"),
+    ({"author": [None, {}, {"name": 42}]}, "authors"),
+])
+def test_partial_crossref_metadata_cannot_generate_bibtex(monkeypatch, overrides, missing):
+    message = {"title": ["Test"], "author": [{"name": "Group"}],
+               "issued": {"date-parts": [[2024]]}}
+    message.update(overrides)
+    _crossref_stub(monkeypatch, message)
+    result = download.paper_writing_doi_to_bibtex("10.1234/test")
+    assert not result["ok"] and result["missing_fields"] == [missing]
+    assert "bibtex" not in result
+
+
 class StreamResponse:
     status_code = 200
 
