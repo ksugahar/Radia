@@ -22,6 +22,7 @@ from __future__ import annotations
 import os
 import pathlib
 import re
+import hashlib
 from typing import Optional
 
 
@@ -88,14 +89,14 @@ def resolve_input_chain(
     duplicate: list[dict] = []
     seen_paths: dict[str, int] = {}   # abs_path -> first inlined depth
 
-    def _read(path: str) -> str:
+    def _read(path: str) -> tuple[str, bytes]:
         raw = pathlib.Path(path).read_bytes()
         try:
-            return raw.decode(encoding, errors="strict")
+            return raw.decode(encoding, errors="strict"), raw
         except UnicodeDecodeError:
             if encoding.casefold().replace("-", "") != "utf8":
                 raise
-            return raw.decode("cp932", errors="strict")
+            return raw.decode("cp932", errors="strict"), raw
 
     def _resolve(path: str, depth: int, parent: Optional[str] = None) -> str:
         abs_path = os.path.abspath(path)
@@ -120,11 +121,12 @@ def resolve_input_chain(
             return f"\n% [resolve_input_chain: missing file {abs_path}]\n"
 
         seen_paths[abs_path] = depth
-        text = _read(abs_path)
+        text, raw = _read(abs_path)
         resolved.append({
             "path": abs_path,
             "depth": depth,
-            "size_bytes": len(text.encode("utf-8", errors="replace")),
+            "size_bytes": len(raw),
+            "sha256": hashlib.sha256(raw).hexdigest(),
         })
 
         # Replace each \\input{X} with the recursive resolution.
