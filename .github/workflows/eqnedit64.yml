@@ -120,6 +120,21 @@ jobs:
       - name: Build native targets
         run: cmake --build build_cmake --config Release --parallel 2
 
+      - name: Test font observation failure modes without native execution
+        run: python -m pytest tests/test_font_session_observation.py -q
+
+      - name: Enable isolated font lifecycle diagnostics
+        run: |
+          $directory = Join-Path $env:RUNNER_TEMP 'eqnedit64-font-trace'
+          New-Item -ItemType Directory -Path $directory | Out-Null
+          "EQNEDIT64_FONT_TRACE_DIR=$directory" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Observe first executable font lifecycles
+        run: >-
+          pwsh -NoProfile -File build\test_font_session.ps1
+          -AppPath build_cmake\Release\Eqnedit64.exe -Iterations 32
+          -OutputPath font-session-first.json
+
       - name: Build Eqnedit64 Python wheel candidate
         working-directory: .
         run: |
@@ -155,12 +170,21 @@ jobs:
       - name: Run hidden executable checks
         run: |
           $app = Resolve-Path 'build_cmake\Release\Eqnedit64.exe'
-          & $app --self-test
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & $app --visual-scale-test
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & $app --ui-interaction-test
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $commands = @()
+          try {
+            foreach ($argument in @('--self-test', '--visual-scale-test', '--ui-interaction-test')) {
+              $started = (Get-Date).ToUniversalTime().ToString('o')
+              $process = Start-Process -FilePath $app -ArgumentList $argument -WindowStyle Hidden -Wait -PassThru
+              $commands += [ordered]@{
+                argument = $argument; pid = $process.Id; exit_code = $process.ExitCode
+                started_utc = $started; ended_utc = (Get-Date).ToUniversalTime().ToString('o')
+              }
+              if ($process.ExitCode -ne 0) { throw "Hidden check failed: $argument" }
+            }
+          } finally {
+            ConvertTo-Json -InputObject $commands -Depth 4 | Set-Content -LiteralPath `
+              (Join-Path $env:EQNEDIT64_FONT_TRACE_DIR 'hidden-commands.json') -Encoding utf8
+          }
 
       - name: Render native palette review proofs
         run: |
@@ -181,6 +205,15 @@ jobs:
         run: >-
           pwsh -NoProfile -File build\test_font_session.ps1
           -AppPath build_cmake\Release\Eqnedit64.exe -Iterations 32
+          -OutputPath font-session-after-suites.json
+
+      - name: Preserve font-host acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eqnedit64-font-session
+          path: tools/eqnedit64/font-session-*.json
+          if-no-files-found: warn
 
       - name: Check command-line image artifacts
         run: |
@@ -205,3 +238,11 @@ jobs:
         run: >-
           pwsh -NoProfile -File tests/test_cli_output.ps1
           -AppPath build_cmake/Release/Eqnedit64.exe
+
+      - name: Preserve isolated font lifecycle traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eqnedit64-font-trace
+          path: ${{ runner.temp }}/eqnedit64-font-trace/
+          if-no-files-found: warn
