@@ -2,6 +2,11 @@
 
 ## 3.1.0 — release candidate
 
+- Preserve grouped and empty-base apostrophes on native import, including
+  following scripts. Restore ordinary Web preview after optional Office macro
+  preparation fails; keep copy disabled with reload guidance. Regressions check
+  first-reparse semantics and a real aborted browser package request.
+
 - Protect compound prime-decoration bases from double superscripts, preserve
   explicit prime glyphs as `\prime`, and wrap selected Web expressions without
   dropping their content. Cover single/double/triple marks and first reparse.
