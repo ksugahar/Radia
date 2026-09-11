@@ -70,11 +70,18 @@ HCurl Eddy Bubble and CLN are consecutive reductions, not competing solvers.
 The intended 3-D route is
 
     HCurl(p=6) parent
-      -> face-adjacency and conductor-cycle protection
-      -> EVRS spatial basis (HCurl Eddy Bubble)
+      -> EVRS response on caller-supplied free_dofs
+      -> current-space compression (HCurl Eddy Bubble)
+      -> explicit bridge/cycle and surface blocks with a retained block partition
       -> passive R, L, P descriptor
       -> CLN / constant-basis position interpolation
       -> force and motion coupling
+
+The topology inventory and `structural_keep` / `eddy_bubble_candidate` masks
+are diagnostic planning metadata, not constraints passed into EVRS. Protection
+in the assembled system comes from explicit bridge/surface blocks and their
+keep partition, not from the mask or its estimated reduction fraction. The
+parent-basis builder alone does not certify retention of unexcited cycles.
 
 The topology-aware parent reduction now covers every NGSolve HCurl volume-cell
 family used by this route.  All six p=6 single-cell parents are exercised by

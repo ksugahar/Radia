@@ -104,21 +104,29 @@ faces were treated as SIBC candidates, how many conductor-conductor bridge DoFs
 were replaced by cycle-basis modes, and how many DoFs remain ordinary EVRS
 reduction candidates.
 
-`EddyBubbleDecomposition` is the named production object for this split.  It
-exposes the structurally retained mask
+`EddyBubbleDecomposition` records the planned split. It exposes the diagnostic
+structural mask
 
 ```text
 structural_keep = SIBC surface + non-SIBC trace + bridge/cycle
 ```
 
-and the removable bulk mask
+and the diagnostic bulk candidate mask
 
 ```text
 eddy_bubble_candidate = ordinary interior bulk EVRS candidate.
 ```
 
-This is the point where "eddy bubble" becomes an implementation contract rather
-than a loose nickname.
+These masks describe the topology policy; they are not consumed as constraints
+by `BuildProductionEddyBubbledHCurlBasis`. That builder constructs EVRS on the
+caller's `free_dofs`, compresses its current basis, and attaches the decomposition
+as metadata afterward. Mask counts and estimated ranks do not demonstrate actual
+DoF retention or a measured reduction ratio. In particular, the mask alone does
+not preserve a conductor cycle absent from the port-driven response space.
+
+The production retention mechanism is explicit bridge/surface current blocks
+and the keep partition from `adjacency_class_block_partition()`. Distinguish
+that block-level mechanism from a hypothetical constrained-DoF EVRS algorithm.
 
 `NgsolveBridgeCycleCurrentBasis` then turns those graph cycles into a coarse
 VIM-compatible current basis.  It samples each conductor-conductor face at its
