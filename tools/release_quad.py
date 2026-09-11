@@ -1929,7 +1929,8 @@ def _check_github_hosted_workflows(
             runs = list(latest_by_name.values())
             missing_names = set() if runs else {"any check-run"}
         else:
-            runs = [latest_by_name[name] for name in required_names if name in latest_by_name]
+            selected_names = set(required_names) | set(require_present or ())
+            runs = [latest_by_name[name] for name in selected_names if name in latest_by_name]
             missing_names = set(required_names) - set(latest_by_name)
         if require_present:
             missing_names = missing_names | (
@@ -1955,8 +1956,10 @@ def _check_github_hosted_workflows(
         _time.sleep(poll_sec)
 
     # Every run completed. Green conclusions: success / skipped / neutral.
+    must_succeed = set(require_present or ())
     failures = [r for r in runs
-                if r["conclusion"] not in ("success", "skipped", "neutral")]
+                if (r["conclusion"] != "success" if r["name"] in must_succeed
+                    else r["conclusion"] not in ("success", "skipped", "neutral"))]
     if failures:
         msg = "; ".join(f"{r['name']}: {r['conclusion']}" for r in failures)
         return False, "github-hosted CI RED -- " + msg
@@ -1970,7 +1973,7 @@ def _check_github_hosted_workflows(
 # manual dispatch -- never on a push to main -- so a green main proves nothing
 # about it. ci-verify requires it by name: a SHA that never ran it carries no
 # evidence, which is not the same as passing evidence.
-RELEASE_CHECK_RUN = "build-test"
+RELEASE_CHECK_RUN = "radia-native-release-build"
 
 
 def cmd_ci_verify(args):

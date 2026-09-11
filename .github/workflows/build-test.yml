@@ -28,6 +28,7 @@ concurrency:
 
 jobs:
   build-test:
+    name: radia-native-release-build
     runs-on: [self-hosted, Windows, X64, mdx]
     # No timeout-minutes -- per 2026-05-25 user decision after
     # 45-min cap (sha 357da370 cancelled) and 70-min cap (sha
