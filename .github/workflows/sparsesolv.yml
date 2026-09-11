@@ -6,6 +6,9 @@ on:
     paths:
       - 'src/ext/sparsesolv/**'
       - 'src/matlab/radia_mex.cpp'
+      - 'matlab/+radia/+internal/callMex.m'
+      - 'matlab/+radia/setup.m'
+      - 'tests/matlab/test_mex_runtime_setup.m'
       - 'matlab/+radia/+sparsesolv/**'
       - 'matlab/+radia/+python/sparsesolv.m'
       - 'matlab/+radia/+python/electromagnetValidation.m'
@@ -28,6 +31,9 @@ on:
     paths:
       - 'src/ext/sparsesolv/**'
       - 'src/matlab/radia_mex.cpp'
+      - 'matlab/+radia/+internal/callMex.m'
+      - 'matlab/+radia/setup.m'
+      - 'tests/matlab/test_mex_runtime_setup.m'
       - 'matlab/+radia/+sparsesolv/**'
       - 'matlab/+radia/+python/sparsesolv.m'
       - 'matlab/+radia/+python/electromagnetValidation.m'
@@ -87,6 +93,7 @@ jobs:
           $required = $diffFailed -or '${{ github.event_name }}' -eq 'workflow_dispatch'
           $required = $required -or [bool]($changed -match '^(src/ext/sparsesolv/|src/matlab/|matlab/\+radia/\+sparsesolv/|tests/matlab/.*sparsesolv|validation_test/ngsolve_matlab_parity/run_sparsesolv|CMakeLists.txt|Build.ps1|\.github/workflows/sparsesolv.yml)')
           $required = $required -or [bool]($changed -match '^matlab/(python_api_parity_manifest.json|\+radia/\+python/(sparsesolv|electromagnetValidation|esrfExamples|staticElectromagnet)\.m)')
+          $required = $required -or [bool]($changed -match '^(matlab/\+radia/(setup\.m|\+internal/callMex\.m)|tests/matlab/test_mex_runtime_setup\.m)$')
           "required=$($required.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
           Write-Host "MATLAB parity required=$required; diff_failed=$diffFailed; changed_files=$($changed.Count)"
           exit 0
