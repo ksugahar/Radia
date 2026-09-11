@@ -72,3 +72,43 @@ def test_missing_diff_base_selects_matlab_without_failing_step(tmp_path):
         env={**os.environ, "GITHUB_OUTPUT": str(output)}, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     assert output.read_text().strip() == "required=true"
+
+
+@pytest.mark.parametrize('changed,event,expected', [
+    ('tools/run_test_tier.py', 'pull_request', 'false'),
+    ('matlab/+radia/+sparsesolv/AMS.m', 'pull_request', 'true'),
+    ('matlab/+radia/+python/sparsesolv.m', 'push', 'true'),
+    ('docs/intro.md', 'workflow_dispatch', 'true'),
+])
+def test_impact_uses_checkout_even_outside_repository(tmp_path, changed, event, expected):
+    pwsh, git = shutil.which('pwsh'), shutil.which('git')
+    if not pwsh or not git:
+        pytest.skip('PowerShell/Git runner contract')
+    repo = tmp_path / 'checkout with spaces'
+    repo.mkdir()
+    env = {k: v for k, v in os.environ.items()
+           if k not in ('GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE')}
+
+    def command(*args):
+        subprocess.run([git, '-C', str(repo), '-c', 'user.name=CI test',
+                        '-c', 'user.email=ci@example.invalid', *args],
+                       env=env, check=True, capture_output=True)
+
+    command('init')
+    command('commit', '--allow-empty', '-m', 'base')
+    source = repo / changed
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_text('changed\n')
+    command('add', changed)
+    command('commit', '-m', 'change')
+    workflow = yaml.safe_load((ROOT / '.github/workflows/sparsesolv.yml').read_text())
+    step = next(s for s in workflow['jobs']['ams-regression']['steps']
+                if s.get('id') == 'matlab-impact')
+    script = step['run'].replace('${{ github.event_name }}', event)
+    output = tmp_path / 'github-output'
+    result = subprocess.run([pwsh, '-NoProfile', '-Command', script], cwd=tmp_path,
+                            env={**env, 'GITHUB_WORKSPACE': str(repo),
+                                 'GITHUB_OUTPUT': str(output)},
+                            capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
+    assert output.read_text().strip() == f'required={expected}'
