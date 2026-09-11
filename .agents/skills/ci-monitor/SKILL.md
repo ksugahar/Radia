@@ -78,6 +78,9 @@ Per state change (per run):
 When ALL watched runs are completed, exits with:
 - 0 if every run was `success`
 - 1 if any run was `failure` / `cancelled` / `timed_out`
+- 2 if run discovery/state retrieval fails or no runs are supplied. This is
+  unverified CI, not evidence that the workflow itself failed. Inspect the
+  printed monitor error before retrying; do not infer release readiness.
 
 After exit, on any failure run, the script prints:
 
