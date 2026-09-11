@@ -52,6 +52,12 @@ generation tests. The final source comparison is not a cross-process transaction
 lock; external manuscript citations still require the returned rename mapping.
 Malformed BibTeX is now rejected; no canonical bibliography was edited.
 
+M04 diagnostics follow-up (2026-09-12): 21 cases cover unavailable composite
+scores, empty required fields, editor substitution only for books, key collisions,
+DOI normalization and Japanese duplicate titles. The eleven-file lane passes
+1058 tests. Missing/invalid files and detector failures do not become GOOD/100.
+Duplicate matching remains a diagnostic, not automatic removal or proof of identity.
+
 Completion of a scoped validation requires matching the selected source, zero unexpected failures
 or skips in the relevant lane, and retained local machine-readable evidence.
 Do not commit transient test logs or mark the package globally "complete" from

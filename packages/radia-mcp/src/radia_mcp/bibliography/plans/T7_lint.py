@@ -34,9 +34,9 @@ _RECOMMENDED = {
 
 
 def _missing_fields(entry, required):
-    present = set(entry.fields)
+    present = {key for key, value in entry.fields.items() if value.strip()}
     # ``author`` is sometimes provided as ``editor`` for books.
-    if "author" in required and "editor" in present:
+    if entry.kind == "book" and "author" in required and "editor" in present:
         required = required - {"author"}
     return required - present
 
@@ -66,7 +66,10 @@ def bibliography_lint(bib_path: str) -> str:
     import datetime
     next_year = datetime.date.today().year + 1
 
-    entries = [e for e in read_bib_file(p) if not e.kind.startswith("@")]
+    try:
+        entries = [e for e in read_bib_file(p) if not e.kind.startswith("@")]
+    except (OSError, UnicodeError, ValueError) as exc:
+        return f"Error: cannot read bibliography: {exc}"
     issues: list[tuple[str, str, str]] = []  # severity, key, message
     for e in entries:
         req = _REQUIRED.get(e.kind, set())
@@ -74,7 +77,7 @@ def bibliography_lint(bib_path: str) -> str:
         miss = _missing_fields(e, req)
         for f in miss:
             issues.append(("HIGH", e.key, f"missing required field {f!r} for kind={e.kind}"))
-        miss_rec = rec - set(e.fields)
+        miss_rec = rec - {key for key, value in e.fields.items() if value.strip()}
         for f in miss_rec:
             issues.append(("LOW", e.key, f"missing recommended field {f!r}"))
 
