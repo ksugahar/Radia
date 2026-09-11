@@ -436,6 +436,36 @@ def _exterior_bnd_elements(mesh, *, excluded_boundaries=()):
     return kept
 
 
+def mesh_conformity_report(mesh) -> dict:
+    """Count the non-conforming contacts of a volume mesh: hanging facets and duplicated boundary faces.
+
+    A facet owned by exactly ONE volume element must be a boundary element; otherwise a neighbour touches
+    it through a hanging node (2:1 transition) or an unmerged CAD interface.  Two boundary elements with
+    coincident corner coordinates are the two sides of an unmerged same-material interface: they carry
+    opposite surface charges whose cancellation is only as good as the block quadrature (ESRF example 6,
+    2026-09-06: 512 such pairs plus 832 hanging contacts made the HEX charge Gram indefinite; the merged
+    mesh passed).  Returns ``{"hanging_facets", "duplicated_boundary_face_pairs", "conforming"}``.
+    One O(n_el) dict pass; corner coordinates are rounded to 1e-9 for the coincidence key."""
+    pts = np.array([list(v.point) for v in mesh.vertices])
+    owners: dict = {}
+    for el in mesh.Elements(ng.VOL):
+        for fa in el.facets:
+            key = tuple(sorted(v.nr for v in mesh[fa].vertices))
+            owners[key] = owners.get(key, 0) + 1
+    bnd_keys = set()
+    coincident: dict = {}
+    for i in range(mesh.GetNE(ng.BND)):
+        e = mesh[ng.ElementId(ng.BND, i)]
+        key = tuple(sorted(v.nr for v in e.vertices))
+        bnd_keys.add(key)
+        geo = tuple(sorted(map(tuple, np.round(pts[list(key)], 9))))
+        coincident[geo] = coincident.get(geo, 0) + 1
+    hanging = sum(1 for key, n in owners.items() if n == 1 and key not in bnd_keys)
+    duplicated = sum(n * (n - 1) // 2 for n in coincident.values())
+    return {"hanging_facets": int(hanging), "duplicated_boundary_face_pairs": int(duplicated),
+            "conforming": bool(hanging == 0 and duplicated == 0)}
+
+
 def _assert_broken_hdiv(fes):
     """Require element-local HDiv unknowns for explicit interface charges.
 
@@ -1563,15 +1593,47 @@ def _charge_basis_hex(fes, cob_quad=3, *, materialize_mass=True,
                 })
 
 
-def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=0.5, far_inner=1.0,
+def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=1.0, far_inner=1.0,
                            eps=1e-12, leafsize=64, eta=2.0, image_masks=None, image_signs=None,
                            image_rot_angle=(),
                            materialize_mass=True, build_hmatrix=True,
                            internal_interfaces=False, excluded_boundaries=(),
-                           cyclic_periodic_boundaries=()):
+                           cyclic_periodic_boundaries=(), glnear_n=None, near_inner="exact",
+                           glin_self_n=None, glpair_n=None, glpair_affine_n=None):
     """Pure-hex BDM1/BDM2 charge Gram via the hex-mode C++ _ChargeGramHMatrix.  FLAT and CURVED (mesh.Curve(2))
     share ONE path (the 27-node Q2 lattice is extracted via GetTrafo either way -- the caller Curve(2)'s the
-    mesh for curved).  glout_n = the 1D outer rule.  BDM1 keeps the validated default 4.  Flat BDM2 uses
+    mesh for curved).
+
+    TOUCHING pairs (2026-09-06, BDM1): every pair of hosts sharing a Q2 lattice node (self, face, edge or
+    vertex neighbours; cell-cell, cell-face, face-face) is integrated on its (dT + dS)-dimensional product
+    domain by the pair-domain Duffy rule (``QuadBlockHexPairDuffy``, ``glpair_n`` points per dimension,
+    exponentially convergent: unit-cube self-energy to 1.8e-12 at 8 points); non-touching pairs inside the
+    ``near_grade`` band take the plain product rule with the same points (``QuadBlockHexProductN``).  The
+    block-wise near family below survives as the ``RADIA_HDIV_HEX_PAIR_DUFFY=0`` A/B path and for BDM2.
+
+    NEAR family (2026-09-05, ESRF #6 HEX Gram indefiniteness): a host pair is NEAR when the hosts are the
+    same, share a Q2 lattice node (touching), or lie within ``near_grade`` * (size_a + size_b) of each
+    other.  Near pairs are integrated with ONE endpoint-graded tensor rule over the whole target host
+    (``glnear_n`` points per axis, pushed through the C2 smootherstep so every face, edge and corner of the
+    target is resolved) and a WHOLE-HOST cone/fan inner: the six face cones of the source host from an
+    apex at the singular point -- the outer point itself for a self pair, the physical closest point of
+    the source host for a touching pair -- so the 1/r peak sits at the apex of every cone (a per-sub-tet
+    apex is displaced for the sub-tets that do not contain the point, and the displaced peak is what
+    elongated sliver sub-tets resolve badly); each face is integrated by four edge fans from the apex's
+    physical foot, because a thin cone (apex close to its face) has a 1/rho peak in the face integral
+    that tensor Gauss rules cannot resolve (their error is first order in the apex distance and moves
+    erratically with the point count).  Every peaked direction -- the ray of a touching pair
+    (1/sqrt(d^2 + r^2 |v|^2)), the fan radius and the edge parameter -- takes the Johnston-Elliott sinh
+    substitution with the physical peak width (plain Gauss below width 1e-3, where the peak is already
+    resolved, and above width 1).  A face host uses the four edge fans from the apex.  Affine sources
+    keep the exact analytic inner.  ``near_inner="site"`` restores the legacy static-site sub-simplex
+    radial for A/B only.  ``glnear_n`` is decoupled from ``glout_n`` because the far tensor product shares
+    ``glout_n`` and its cost grows like n^6.  The legacy family (near_grade 0.5, corner-Duffy sub-tet outer,
+    site inner) left ``lambda_min(M^-1 N)`` at -2e-3..-5e-3 on the ESRF #6 mesh and ``lambda_max`` at 1.08
+    on elongated sector cells; the physical band is [0, 1].
+
+    glout_n = the 1D outer rule of the affine near product and of the far tensor product.  BDM1 keeps the
+    validated default 4.  Flat BDM2 uses
     the TET-style analytic polynomial source moments plus a whole-host tensor outer for self/near hosts.
     Smooth far hosts use a reflection-invariant tensor-product rule on both complete reference domains,
     avoiding degree-six moment recurrences without changing the accepted spectrum or IMA contracts.
@@ -1603,6 +1665,35 @@ def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=0.5, far_i
     glout_n = default_outer if glout_n is None else int(glout_n)
     default_inner = 5 if p == 1 else (12 if mapped_bdm2 else 7)
     glin_n = default_inner if glin_n is None else int(glin_n)
+    # NEAR family (2026-09-05, ESRF #6 HEX Gram indefiniteness): the graded outer rule of self / touching
+    # sub pairs is decoupled from glout_n (shared by the far tensor product, whose cost grows like n^6),
+    # touching hosts are always graded (near_grade 1.0 + the C++ shared-node test), and touching pairs take
+    # the exact-anchor radial inner.  ``near_inner="site"`` restores the static-site radial for A/B only.
+    glnear_n = (8 if p == 1 else glout_n) if glnear_n is None else int(glnear_n)
+    # glin_self_n rules the sinh-substituted (peaked) directions of the cone/fan inner -- ray, fan radius,
+    # edge parameter -- and glin_n the smooth ones; 8 points integrate the substituted peaks to ~1e-6.
+    glin_self_n = (8 if p == 1 else glin_n) if glin_self_n is None else int(glin_self_n)
+    # glpair_n = the 1D Gauss rule per dimension of the pair-domain Duffy quadrature that integrates every
+    # TOUCHING BDM1 host pair (self, shared face/edge/vertex) on its (dT + dS)-dimensional product domain
+    # (2026-09-06): the near-zero modes of M^-1 N are 1e-3 cancellations of block energies, so the touching
+    # blocks need the exponentially convergent pair-domain rule.  Default 6 points (2026-09-07): the ESRF #6
+    # definiteness gate gives the same spectrum edge (lambda_max 0.99990) at 5, 6 and 8 points, the tapered
+    # sector lattice the same generalized spectrum at all three, and the CEFC 2020 quadrupole field moves by
+    # 4e-6 (relative) between 8 and 6 points -- against a 6^6 / 8^6 = 5.6x cheaper near block.  8 remains an
+    # explicit choice for entry-level accuracy studies (7e-5 -> 6e-6 on distorted hosts).
+    glpair_n = 6 if glpair_n is None else int(glpair_n)
+    if glpair_n < 2:
+        raise ValueError("_build_charge_gram_hex: glpair_n must be >= 2 (got %r)" % (glpair_n,))
+    # glpair_affine_n = the same rule for pairs whose BOTH hosts are affine (2026-09-07).  With affine
+    # maps the Duffy integrand converges exponentially (unit-cube self-energy 5e-9 at 6 points), while a
+    # distorted host converges only ~10x per two points (tapered sector lattice: 7e-5 at 6, 6e-6 at 8),
+    # so the affine-affine pairs -- most pairs of a swept magnet mesh -- can always take the smaller count.
+    # Both defaults are 6 now; the knob stays so an accuracy study can raise glpair_n alone.
+    glpair_affine_n = 6 if glpair_affine_n is None else int(glpair_affine_n)
+    if glpair_affine_n < 2:
+        raise ValueError("_build_charge_gram_hex: glpair_affine_n must be >= 2 (got %r)" % (glpair_affine_n,))
+    if near_inner not in ("exact", "site"):
+        raise ValueError("_build_charge_gram_hex: near_inner must be 'exact' or 'site' (got %r)" % (near_inner,))
     cb = _charge_basis_hex(
         fes, cob_quad=max(3, p+1), materialize_mass=materialize_mass,
         internal_interfaces=bool(internal_interfaces),
@@ -1612,6 +1703,10 @@ def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=0.5, far_i
     t1 = time.perf_counter()
     glo, gwo = _g01(glout_n)
     gli, gwi = _g01(glin_n)
+    gln, gwn = _g01(glnear_n)
+    gls, gws = _g01(glin_self_n)
+    glp, gwp = _g01(glpair_n)
+    glpa, gwpa = _g01(glpair_affine_n)
     ftp = np.asarray(_SYM5_TET[0]); ftw = np.asarray(_SYM5_TET[1])
     G = _rp._ChargeGramHMatrix(
         hex_cell_nodes=cb["cell_nodes"], quad_face_nodes=cb["face_nodes"],
@@ -1628,7 +1723,12 @@ def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=0.5, far_i
         image_masks=(_EMPTY_I32 if image_masks is None else _i32_buffer(image_masks)),
         image_signs=(_EMPTY_F64 if image_signs is None else _f64_buffer(image_signs)),
         eps=eps, leaf=leafsize, eta=eta,
-        build=bool(build_hmatrix) and not len(image_rot_angle))
+        build=bool(build_hmatrix) and not len(image_rot_angle),
+        gl_near=_f64_buffer(gln), gw_near=_f64_buffer(gwn),
+        near_inner_exact=(near_inner == "exact"),
+        gl_in_self=_f64_buffer(gls), gw_in_self=_f64_buffer(gws),
+        gl_pair=_f64_buffer(glp), gw_pair=_f64_buffer(gwp),
+        gl_pair_affine=_f64_buffer(glpa), gw_pair_affine=_f64_buffer(gwpa))
     _finish_image_rotations(G, image_rot_angle, eps=eps, leafsize=leafsize, eta=eta,
                             build_hmatrix=bool(build_hmatrix))
     t2 = time.perf_counter()
@@ -2142,7 +2242,8 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=64, eta=2.0, far_qu
                       _materialize_mass=True,
                       _build_hmatrix=True, internal_interfaces=False,
                       excluded_boundaries=(), cyclic_periodic_boundaries=(),
-                      gram_backend="hmat", exact_dense_memory_mb=None):
+                      gram_backend="hmat", exact_dense_memory_mb=None, hex_glpair_n=None,
+                      hex_glpair_affine_n=None):
     """From an HDiv FESpace (order p, the order from the fes), build the monomial charge-density map
     B (scipy CSR, n_charge x ndof), the C++ charge-Gram H-matrix G, and the HDiv mass M_mass (CSR).
     The CALLER wraps in TaskManager.
@@ -2312,7 +2413,11 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=64, eta=2.0, far_qu
             materialize_mass=_materialize_mass, build_hmatrix=_build_hmatrix,
             internal_interfaces=bool(internal_interfaces),
             excluded_boundaries=excluded_boundaries,
-            cyclic_periodic_boundaries=cyclic_periodic_boundaries)),
+            cyclic_periodic_boundaries=cyclic_periodic_boundaries,
+            # HEX-only rule counts of the pair-domain Duffy / near-band product (None = the
+            # production 8 per dimension, 6 for affine-affine pairs); the effective values are
+            # published as hex_glpair_n / hex_glpair_affine_n.
+            glpair_n=hex_glpair_n, glpair_affine_n=hex_glpair_affine_n)),
             gram_backend=gram_backend, exact_dense_memory_mb=exact_dense_memory_mb)
     if _vtypes == {6}:
         # PURE-WEDGE (PRISM) BDM1/BDM2: tri-Pp x z-Pp volume charge + mixed tri/quad-face
