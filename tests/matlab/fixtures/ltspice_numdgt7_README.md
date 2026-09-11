@@ -12,6 +12,8 @@ binary header's `double` flag. The fixture is small and does not require an
 LTspice installation when running the regression.
 
 Run `runtests('tests/matlab/test_ltspice_data_safety.m')` in MATLAB.
+The scoped `MATLAB LTspice data safety` CI runs this test through a dedicated
+MATLAB Engine on mdx without installing LTspice or building MEX binaries.
 The initial 13-test run passed through Python's MATLAB Engine. Layout tests
 also exercise mixed float/double and complex records, CRLF, unsupported flags,
 truncation, extra bytes, and fail-loud transient state injection.
