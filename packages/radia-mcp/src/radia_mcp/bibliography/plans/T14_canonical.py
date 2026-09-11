@@ -117,21 +117,8 @@ def bibliography_get_entries(keys: str) -> str:
 
 def _citation_text(tex: str) -> str:
     """Exclude common literal-code environments and TeX line comments."""
-    tex = re.sub(r"\\begin\{(verbatim\*?|Verbatim|lstlisting|minted)\}.*?\\end\{\1\}",
-                 "", tex, flags=re.DOTALL)
-    tex = re.sub(r"\\verb\*?([^\w\s]).*?\1", "", tex)
-    lines = []
-    for line in tex.splitlines(keepends=True):
-        for index, char in enumerate(line):
-            if char != "%":
-                continue
-            before = line[:index]
-            slashes = len(before) - len(before.rstrip("\\"))
-            if slashes % 2 == 0:
-                line = before + "\n"
-                break
-        lines.append(line)
-    return "".join(lines)
+    from ...paper_writing._tex_lex import mask_tex_noncode
+    return mask_tex_noncode(tex)
 
 
 def _keys_in_order(tex: str, include_wildcard: bool = False) -> list[str]:

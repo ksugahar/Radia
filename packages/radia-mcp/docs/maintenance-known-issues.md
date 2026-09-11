@@ -114,6 +114,14 @@ cover these paths. The thirteen-file lane passes 1169 tests, and an isolated
 bibliography server selftest registers 16 tools. TeX-installation-resolved styles are reported separately;
 their upstream files are not pinned or fingerprinted by this local-style check.
 
+M04 lexical-boundary follow-up (2026-09-12): input resolution and citation
+scanning now share offset-preserving comment/literal masking. Fifteen cases
+cover verbatim/minted/listings/inline verb, escaped controls and comment parity,
+unterminated literals, and cyclic versus repeated noncyclic inputs. Cycles fail
+instead of succeeding as duplicates. The fourteen-file lane passes 1184 tests.
+Macro expansion and conditional execution
+remain outside the static contract; this is not a full TeX interpreter.
+
 Completion of a scoped validation requires matching the selected source, zero unexpected failures
 or skips in the relevant lane, and retained local machine-readable evidence.
 Do not commit transient test logs or mark the package globally "complete" from
