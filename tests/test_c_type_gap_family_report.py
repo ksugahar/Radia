@@ -39,7 +39,7 @@ def _payload(name, layers, *, order=2.0, hdiv_shift=0.0, mesh_sha="m"):
             engine: {"mode": "linear", "fem_order": 1, "linear_solver": "direct",
                      "kelvin_domain_vol_sha256": "k" + name,
                      "iron_vol_sha256": "i", "observation_points": POINTS,
-                     "implementation_sha256": {"x": name}}
+                     "implementation_sha256": {"x": "same-implementation"}}
             for engine in report.ENGINES},
         "mesh_result_sha256": mesh_sha + name,
         "observation_points_m": POINTS, "gap_core_half_length_m": 0.010,
@@ -110,4 +110,20 @@ def test_scale_family_manifest_is_refused():
     manifest, results, paths = _family()
     manifest["schema"] = "radia.validation.c-type-cubit-mesh-family.v1"
     with pytest.raises(RuntimeError, match="gap family"):
+        report.analyze(manifest, results, paths, hdiv_identity_tolerance=1e-9)
+
+
+@pytest.mark.parametrize("engine", report.ENGINES)
+def test_same_version_with_changed_implementation_is_rejected(engine):
+    manifest, results, paths = _family()
+    results["n24"]["engine_checkpoint_contracts"][engine]["implementation_sha256"] = "different"
+    with pytest.raises(RuntimeError, match="contract or Radia version"):
+        report.analyze(manifest, results, paths, hdiv_identity_tolerance=1e-9)
+
+
+@pytest.mark.parametrize("engine", report.ENGINES)
+def test_missing_implementation_identity_is_rejected(engine):
+    manifest, results, paths = _family()
+    del results["n24"]["engine_checkpoint_contracts"][engine]["implementation_sha256"]
+    with pytest.raises(RuntimeError, match="implementation hashes"):
         report.analyze(manifest, results, paths, hdiv_identity_tolerance=1e-9)

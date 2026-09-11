@@ -9,9 +9,9 @@ scale family and must not be fed to ``run_mesh_convergence.py``:
   that is a gate, not a convergence quantity: the air-mesh-free route must
   not move when only the gap air changes.
 * The FEM routes' increments between levels measure gap resolution only.
-  Their observed order is in the layer count N, and the Richardson estimate
-  bounds the gap-resolution error, not the discretisation error of the whole
-  model.
+  Their observed order is in the layer count N. The Richardson estimate is
+  conditional on asymptotic convergence; it is not a rigorous gap-resolution
+  or whole-model discretisation-error bound.
 
 Reported per family (one FEM order):
 
@@ -66,7 +66,7 @@ def load_level(path: Path) -> dict:
 
 
 _PER_LEVEL_KEYS = ("iron_vol_sha256", "kelvin_domain_vol_sha256",
-                   "observation_points", "implementation_sha256")
+                   "observation_points")
 
 
 def _fem_contract(payload: dict) -> dict:
@@ -77,10 +77,15 @@ def _fem_contract(payload: dict) -> dict:
     solver, tolerances, the comparison contract, the Radia version -- must be
     identical, or the levels are not one experiment.
     """
+    contracts = payload.get("engine_checkpoint_contracts") or {}
+    if set(contracts) != set(ENGINES) or any(
+        not contract.get("implementation_sha256") for contract in contracts.values()
+    ):
+        raise RuntimeError("all engine implementation hashes are required")
     checkpoints = {
         engine: {key: value for key, value in contract.items()
                  if key not in _PER_LEVEL_KEYS}
-        for engine, contract in (payload.get("engine_checkpoint_contracts") or {}).items()
+        for engine, contract in contracts.items()
     }
     return {
         "mode": payload.get("mode"),
@@ -175,8 +180,9 @@ def analyze(manifest: dict, results: dict[str, dict], result_paths: dict[str, Pa
             "refined": manifest.get("refined"),
             "held_fixed": manifest.get("held_fixed"),
             "statement": ("gap-only refinement: the FEM routes' increments and "
-                          "Richardson estimates bound the gap-resolution error "
-                          "of THIS base mesh; HDiv-MMM is the fixed air-mesh-free "
+                          "Richardson estimates describe refinement sensitivity "
+                          "of THIS base mesh, not a rigorous error bound; "
+                          "HDiv-MMM is the fixed air-mesh-free "
                           "route, not a converged truth"),
             "analytic_absolute_truth_claimed": False,
         },

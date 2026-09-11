@@ -181,9 +181,9 @@ GAP_HEIGHT_M = 0.010
 def build_gap_family(options: argparse.Namespace) -> dict[str, object]:
     """Refine ONLY the gap: N parallel slabs and an in-gap size of h/N.
 
-    Iron, air and Kelvin sizes are held at one base level, so a converging
-    sequence bounds the gap-resolution error alone, not the discretisation
-    error of the whole model.  The manifest therefore carries its own schema
+    Iron, air and Kelvin sizes are held at one base level. The sequence probes
+    gap-refinement sensitivity, not a rigorous gap or whole-model error bound.
+    The manifest therefore carries its own schema
     and must not be read as a scale family.
     """
     output_dir = options.output_dir.resolve()

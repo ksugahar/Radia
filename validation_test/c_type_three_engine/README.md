@@ -230,7 +230,8 @@ level, and the manifest must not be read by `run_mesh_convergence.py`.
 `analyze_gap_family.py` reads one three-engine result per level, requires
 HDiv-MMM (iron mesh only) to be identical across levels, and reports the two
 FEM routes' gap-core increments, observed order in N and Richardson estimate,
-which bound the gap-resolution error of this base mesh, not the whole model.
+which estimate gap-refinement sensitivity under an asymptotic-convergence
+assumption, not a rigorous error bound for the gap or whole model.
 
 `results/lab_20260912_gap_family.json` and the three
 `lab_20260912_gap_family_n{06,12,24}_mesh.json` contracts (LAB, curve order
