@@ -38,3 +38,18 @@ mesh sizes, golden range, and one observed timing are recorded in
 Additional comparisons remain available as `bench_ams_vs_abmc.py` and
 `bench_cocr_vs_gmres.py`.  They write transient result JSON below
 `C:\temp\radia-validation`, never into the repository.
+
+## Independent-host evidence
+
+`compact_ams_results_hibino.json` records the 2026-09-11 Hibino run. Its
+fixture hash and element/DOF counts match the tracked baseline. The run passes
+the existing acceptance range: 144 iterations and true residual
+9.891989345431059e-11. The system shift is zero; epsilon=1e-6 is applied only
+in the preconditioner. Recorded setup/solve times are 1.747/3.213 seconds and
+are observations, not performance gates.
+
+The operator reported Radia 4.95.90 and NGSolve 6.2.2606. Those versions are
+not embedded in the collected JSON; neither a source commit nor a native
+binary hash was captured there. This is independent-host numerical evidence
+for the reported runtime, not acceptance of a new main build, MATLAB parity,
+or release-quad completion. The original result values are preserved.
