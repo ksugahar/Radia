@@ -106,6 +106,14 @@ T13 uses the same reader. Thirty-two cases cover no-write failure behavior.
 The thirteen-file lane passes 1164 tests. Missing years retain the explicit
 nodate convention; no dates are invented.
 
+M04 local-style follow-up (2026-09-12): a manuscript-local bst is read once,
+staged from those exact bytes, fingerprinted in the result and checked again
+before publishing bbl output. Concurrent replacement/deletion/creation and
+unreadable local styles fail without replacing the previous bbl. Five tests
+cover these paths. The thirteen-file lane passes 1169 tests, and an isolated
+bibliography server selftest registers 16 tools. TeX-installation-resolved styles are reported separately;
+their upstream files are not pinned or fingerprinted by this local-style check.
+
 Completion of a scoped validation requires matching the selected source, zero unexpected failures
 or skips in the relevant lane, and retained local machine-readable evidence.
 Do not commit transient test logs or mark the package globally "complete" from
