@@ -1,0 +1,70 @@
+{
+  "schema": "radia.matlab-setup-overhead.v1",
+  "passed": true,
+  "utc": "2026-09-11T14:29:39.910612+00:00",
+  "host": "lab",
+  "python": "3.12.10",
+  "scope": "api.commands gateway overhead; not numerical solver performance",
+  "mex": "C:\\temp\\radia-setup-probe-native\\radia_mex.mexw64",
+  "mex_sha256": "b06fd592f5792b7d8cbcb55e081346253165157f8ec0ea080361b8f7ec50d5ea",
+  "source_hashes": {
+    "matlab/+radia/setup.m": "243c128bb464e8ff4c66e1d27ba05e5b7f6d319b0f78397e753ce4cb3e936a97",
+    "matlab/+radia/+internal/callMex.m": "7da6e91ee263cf1fbc70d7cb7980dc72c174202310f454f54e56e625b9b4d53f",
+    "matlab/+radia/+internal/pythonProcessPath.m": "a7c9cf15b9e843c36e9c589899e52e2181942f7173927be22030915d14f59016",
+    "matlab/+radia/+simulink/configureFileGeneration.m": "d0f2d0f21f1e1926b8b2a7200a91a28c0b684783981986f257cb63cddfbec2e4",
+    "tests/matlab/test_mex_runtime_setup.m": "60377cc541875d45df89c8b11a9c45729fb8cf5453993bb97c168759ff2b8bb8",
+    "validation_test/matlab_runtime/benchmark_setup.py": "00d270320f77d1ad473c215f6dbc978ec3fbb1a2e8aa6678c74677680546cb28"
+  },
+  "source_base_commit": "afde0c1a1d791f8a8ace047e8c7a3e6e962b14f3",
+  "source_state": "Source hashes identify the working snapshot, not base commit alone",
+  "engine_start_seconds": 8.544162900012452,
+  "matlab": "26.1.0.3276743 (R2026a) Update 3",
+  "cold_setup_seconds": 22.1263294,
+  "samples_seconds_per_call": {
+    "setup": [
+      0.003041933,
+      0.002525115,
+      0.002371157,
+      0.0034461039999999997,
+      0.002174068,
+      0.00243913,
+      0.00213118
+    ],
+    "runtime_only": [
+      0.0007274,
+      0.000718872,
+      0.000599077,
+      0.0008244219999999999,
+      0.0008287279999999999,
+      0.001002873,
+      0.000858854
+    ],
+    "filegen": [
+      0.0014532719999999998,
+      0.001318273,
+      0.001448245,
+      0.001870038,
+      0.001536101,
+      0.001244029,
+      0.001215499
+    ],
+    "call_mex": [
+      0.002828544,
+      0.0025008599999999997,
+      0.00219064,
+      0.0027528010000000005,
+      0.002255585,
+      0.002343378,
+      0.002288417
+    ],
+    "direct_mex": [
+      5.0552e-05,
+      4.5912000000000004e-05,
+      4.555799999999999e-05,
+      4.7678e-05,
+      4.7993e-05,
+      4.5502e-05,
+      4.514e-05
+    ]
+  }
+}

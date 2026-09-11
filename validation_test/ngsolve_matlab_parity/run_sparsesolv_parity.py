@@ -53,6 +53,8 @@ def main():
                       "rev-parse", "HEAD"], cwd=root, text=True).strip(),
                   source_hashes={str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest()
                       for p in [root/"src/matlab/radia_mex.cpp", root/"tests/matlab/test_sparsesolv_mex.m",
+                                root/"tests/matlab/test_mex_runtime_setup.m", root/"matlab/+radia/+internal/callMex.m",
+                                root/"matlab/+radia/setup.m",
                                 root/"tests/matlab/sparsesolv_python_reference.py",
                                 *sorted((root/"src/ext/sparsesolv/include").rglob("*.hpp"))]},
                   passed=False)
@@ -70,8 +72,9 @@ def main():
         record["resolved_mex"] = eng.which("radia_mex")
         if Path(record["resolved_mex"]).resolve() != mex.resolve():
             raise RuntimeError("MATLAB resolved a different MEX")
-        eng.workspace["testfile"] = str(root/"tests/matlab/test_sparsesolv_mex.m")
-        eng.eval("r = runtests(testfile); disp(table(r));", nargout=0)
+        eng.workspace["testfiles"] = [str(root/"tests/matlab/test_sparsesolv_mex.m"),
+                                      str(root/"tests/matlab/test_mex_runtime_setup.m")]
+        eng.eval("r = runtests(testfiles); disp(table(r));", nargout=0)
         record["tests"] = json.loads(eng.eval("jsonencode(struct('names',{string({r.Name})},'passed',[r.Passed],'failed',[r.Failed],'incomplete',[r.Incomplete],'duration',[r.Duration]))"))
         record["passed"] = bool(eng.eval("~isempty(r) && all([r.Passed])"))
         if metrics.is_file():
