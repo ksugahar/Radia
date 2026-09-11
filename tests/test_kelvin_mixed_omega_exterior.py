@@ -240,6 +240,21 @@ def test_direct_solve_reports_its_own_residual():
     assert constraint["relative"] < 1.0e-8
 
 
+def test_assembled_system_is_not_retained_by_default():
+    """The assembled matrix must be freed after a production solve.
+
+    The system is exposed for diagnostics that embed another order's solution,
+    but the wrappers return the solver's result dict to the caller unchanged;
+    carrying the matrix in it by default would pin it in memory for every
+    solve.  The scalar diagnostics stay: they cost nothing to keep.
+    """
+    mesh = _kelvin_mesh()
+    result = _solve(mesh, _coil())
+    assert result["system"] is None
+    assert set(result["assembled_energy"]) >= {"energy", "half_xAx", "b_dot_x"}
+    assert result["linear_residual"]["free_dofs"]["relative"] < 1.0e-8
+
+
 def test_kelvin_material_without_its_interface_is_rejected():
     """Silently uncoupling the exterior is a fail-loud configuration error."""
     mesh = _kelvin_mesh()
