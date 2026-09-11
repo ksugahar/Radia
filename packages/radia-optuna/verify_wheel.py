@@ -97,7 +97,7 @@ def _source_payloads(source_manifest: dict[str, object]) -> dict[str, Path]:
             continue
         member = MATLAB_PREFIX / PurePosixPath(source.relative_to(matlab_root).as_posix())
         payloads[str(member)] = source
-    for name in ("optuna_upstream_compatibility.json", "optuna49_api_coverage.json"):
+    for name in ("optuna_upstream_compatibility.json", "optuna50_api_coverage.json"):
         payloads[str(MATLAB_PREFIX / name)] = matlab_root / name
     payloads[str(MATLAB_PREFIX / "optuna_mex.mexw64")] = (
         matlab_root / "optuna_mex.mexw64"
@@ -192,7 +192,7 @@ def verify(wheel: Path, *, release_candidate: bool = False) -> dict[str, object]
         expected_fixed = {
             str(MATLAB_PREFIX / "optuna_mex.mexw64"),
             str(MATLAB_PREFIX / "optuna_upstream_compatibility.json"),
-            str(MATLAB_PREFIX / "optuna49_api_coverage.json"),
+            str(MATLAB_PREFIX / "optuna50_api_coverage.json"),
             str(MATLAB_PREFIX / "README.md"),
             str(MATLAB_PREFIX / "LICENSE"),
             str(MATLAB_PREFIX / "THIRD_PARTY_NOTICES.md"),
@@ -330,10 +330,10 @@ def verify(wheel: Path, *, release_candidate: bool = False) -> dict[str, object]
 
         requirements = metadata.get_all("Requires-Dist", [])
         if not any(
-            re.search(r"^optuna\s*==\s*4\.9\.0\s*;.*extra\s*==\s*['\"]upstream['\"]", req)
+            re.search(r"^optuna\s*==\s*5\.0\.0\s*;.*extra\s*==\s*['\"]upstream['\"]", req)
             for req in requirements
         ):
-            errors.append("the upstream extra does not pin optuna==4.9.0")
+            errors.append("the upstream extra does not pin optuna==5.0.0")
 
     if errors:
         _fail(errors)

@@ -1,5 +1,5 @@
 classdef StudySummary
-    %STUDYSUMMARY Optuna 4.9 study metadata and aggregate results.
+    %STUDYSUMMARY Optuna 5.0 study metadata and aggregate results.
 
     properties (SetAccess=private)
         study_name (1,1) string = ""
@@ -12,24 +12,21 @@ classdef StudySummary
     properties (Dependent, SetAccess=private)
         direction
         directions
-        system_attrs
     end
 
     properties (Access=private)
         DirectionValues = []
-        SystemAttributes (1,1) struct = struct()
         StudyId (1,1) double = -1
     end
 
     methods
         function obj=StudySummary(studyName,direction,bestTrial,userAttrs, ...
-                systemAttrs,nTrials,datetimeStart,studyId,options)
+                nTrials,datetimeStart,studyId,options)
             arguments
                 studyName (1,1) string
                 direction = []
                 bestTrial = []
                 userAttrs (1,1) struct = struct()
-                systemAttrs (1,1) struct = struct()
                 nTrials (1,1) double {mustBeInteger,mustBeNonnegative} = 0
                 datetimeStart datetime = NaT
                 studyId (1,1) double {mustBeInteger} = -1
@@ -50,7 +47,6 @@ classdef StudySummary
             obj.DirectionValues=reshape(values,1,[]);
             obj.best_trial=bestTrial;
             obj.user_attrs=userAttrs;
-            obj.SystemAttributes=systemAttrs;
             obj.n_trials=nTrials;
             obj.datetime_start=datetimeStart;
             obj.StudyId=studyId;
@@ -68,12 +64,6 @@ classdef StudySummary
             value=obj.DirectionValues;
         end
 
-        function value=get.system_attrs(obj)
-            warning("radia:optuna:FutureWarning", ...
-                "StudySummary.system_attrs is deprecated in Optuna 4.9.0.");
-            value=obj.SystemAttributes;
-        end
-
         function result=eq(left,right)
             if ~isa(right,"radia.optuna.StudySummary")
                 result=false;
@@ -84,7 +74,6 @@ classdef StudySummary
                 isequaln(left.DirectionValues,right.DirectionValues) && ...
                 isequaln(left.best_trial,right.best_trial) && ...
                 isequaln(left.user_attrs,right.user_attrs) && ...
-                isequaln(left.SystemAttributes,right.SystemAttributes) && ...
                 left.n_trials==right.n_trials && ...
                 isequaln(left.datetime_start,right.datetime_start);
         end

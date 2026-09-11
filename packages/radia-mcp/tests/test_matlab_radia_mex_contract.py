@@ -20,6 +20,23 @@ from radia_mcp.matlab import (
 )
 
 
+def _expected_optuna_health_errors() -> list[str]:
+    """Errors the Optuna health gate must report for the checked ledger.
+
+    Health reports the evidence backlog honestly. While the required public
+    API is not completely evidence-mapped, that must be its only error, so no
+    other distribution regression can hide behind it; once the ledger closes,
+    no error is expected.
+    """
+    root = Path(__file__).resolve().parents[3]
+    coverage = json.loads(
+        (root / "matlab" / "optuna50_api_coverage.json").read_text(encoding="utf-8")
+    )
+    if coverage["full_compatibility_complete"]:
+        return []
+    return ["required public API scope is not completely evidence-mapped"]
+
+
 def test_radia_mex_contract_reads_the_cpp_command_inventory():
     contract = matlab_radia_mex_contract("mex")
 
@@ -45,11 +62,19 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     assert contract["command_count"] == len(set(expected_names))
     assert not any(command.startswith("optuna.") for command in contract["command_names"])
     assert contract["matlab_wrapper_count"] >= 133
-    assert contract["matlab_optuna_distribution_health"]["ok"] is True
-    assert contract["matlab_optuna_file_count"] == (contract["matlab_optuna_expected_file_count"])
+    expected_errors = _expected_optuna_health_errors()
+    assert contract["matlab_optuna_distribution_health"]["errors"] == (
+        expected_errors
+    )
+    assert contract["matlab_optuna_distribution_health"]["ok"] is (
+        not expected_errors
+    )
+    assert contract["matlab_optuna_file_count"] == (
+        contract["matlab_optuna_expected_file_count"]
+    )
     root = Path(__file__).resolve().parents[3]
     coverage = json.loads(
-        (root / "matlab" / "optuna49_api_coverage.json").read_text(
+        (root / "matlab" / "optuna50_api_coverage.json").read_text(
             encoding="utf-8"
         )
     )
@@ -64,17 +89,16 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
         "unmapped_count": 0,
         "required_count": coverage["required_entry_count"],
         "required_present_count": coverage["required_entry_count"],
-        "required_verified_count": coverage["required_entry_count"],
-        "required_asserted_count": 0,
-        "required_unmapped_count": 0,
-        "complete": True,
+        "required_verified_count": coverage["required_oracle_mapped_count"],
+        "required_asserted_count": coverage["required_oracle_asserted_count"],
+        "required_unmapped_count": coverage["required_oracle_unmapped_count"],
+        "complete": coverage["full_compatibility_complete"],
     }
     assert contract["optuna_mex_command_count"] == 21
     assert contract["matlab_optuna_class_count"] >= 92
     assert contract["matlab_optuna_function_count"] >= 85
     assert {
         "TPESampler",
-        "MOTPESampler",
         "CmaEsSampler",
         "GPSampler",
         "NSGAIISampler",
@@ -229,8 +253,8 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     assert contract["verified_contract"]["optuna_native_kernel_benchmark"].endswith(
         "results_matlab_optuna_mex_benchmark_20260806.json"
     )
-    assert contract["verified_contract"]["optuna49_performance_benchmark"].endswith(
-        "results_matlab_optuna49_performance_20260825.json"
+    assert contract["verified_contract"]["optuna50_performance_benchmark"].endswith(
+        "results_matlab_optuna50_performance_20260825.json"
     )
     assert contract["verified_contract"]["native_motor_family_artifact"].endswith(
         "native_motor_angle_family.json"
@@ -272,9 +296,9 @@ def test_optuna_simulink_contract_is_table_backed():
     assert contract["status"] == "ready"
     assert contract["package"] == "radia.optuna"
     assert contract["distribution"] == "radia-optuna"
-    assert contract["upstream_oracle_version"] == "optuna==4.9.0"
+    assert contract["upstream_oracle_version"] == "optuna==5.0.0"
     assert contract["upstream_oracle"]["oracle_owner"].startswith(
-        "optuna==4.9.0"
+        "optuna==5.0.0"
     )
     assert contract["mcp_ownership"]["routes"]["shared"]["owner"] == (
         "optuna/optuna-mcp"
@@ -285,14 +309,16 @@ def test_optuna_simulink_contract_is_table_backed():
     assert "SamplerStateTable" in contract["tables"]
     assert contract["schema"].endswith("/v3")
     assert contract["upstream_oracle"]["ok"] is True
-    assert contract["upstream_oracle"]["oracle_versions"]["optuna"] == "4.9.0"
+    assert contract["upstream_oracle"]["oracle_versions"]["optuna"] == "5.0.0"
     assert contract["native_acceleration"]["upstream_python_gp_python_per_trial"] is True
     assert contract["native_acceleration"]["full_optimizer_in_cpp"] is False
     assert contract["native_acceleration"]["gateway"] == "optuna_mex"
     assert contract["native_acceleration"]["command_count"] == (
         contract["distribution_health"]["native"]["command_count"]
     )
-    assert contract["distribution_health"]["ok"] is True
+    expected_errors = _expected_optuna_health_errors()
+    assert contract["distribution_health"]["errors"] == expected_errors
+    assert contract["distribution_health"]["ok"] is (not expected_errors)
     assert contract["native_acceleration"]["required"] is True
     assert contract["native_acceleration"]["missing_mex_fallback"] is False
     assert contract["cae_trial_contract"]["success_schema"] == (
@@ -307,7 +333,7 @@ def test_optuna_simulink_contract_is_table_backed():
     assert "SheetMetalRunner" in contract["classes"]
     assert contract["multi_objective"]["selection"].startswith("bestTrial")
     assert contract["multi_objective"]["samplers"] == [
-        "RandomSampler", "MOTPESampler", "NSGAIISampler"
+        "RandomSampler", "TPESampler", "NSGAIISampler"
     ]
     assert "parsim" in contract["parallel_trials"]["simulink"]
     assert "parfeval" in contract["parallel_trials"]["ltspice"]
@@ -488,7 +514,7 @@ def test_optuna_mcp_route_keeps_shared_tools_upstream_and_matlab_differences_loc
     assert "a second Optuna MCP server or optuna-mcp proxy" in (
         matlab["does_not_own"]
     )
-    assert differential["behavioral_oracle"] == "optuna==4.9.0"
+    assert differential["behavioral_oracle"] == "optuna==5.0.0"
     assert "does not expose a seed" in differential["seeded_numeric_route"]
     assert stewardship["upstream_runtime_bundled"] is False
     assert stewardship["validation_operation"]["shared_or_production_storage"] is False
@@ -502,13 +528,16 @@ def test_optuna_mcp_route_keeps_shared_tools_upstream_and_matlab_differences_loc
 
 
 def test_optuna_quality_helpers_are_exported_from_the_matlab_package():
+    expected_errors = _expected_optuna_health_errors()
+    expected_status = "error" if expected_errors else "ready"
     health = matlab_optuna_health()
-    assert health["ok"] is True
+    assert health["errors"] == expected_errors
+    assert health["ok"] is (not expected_errors)
     assert health["distribution"]["matlab_file_count"] == (
         health["distribution"]["expected_matlab_file_count"]
     )
-    assert matlab_optuna_oracle_plan()["status"] == "ready"
-    assert matlab_optuna_benchmark_plan()["status"] == "ready"
+    assert matlab_optuna_oracle_plan()["status"] == expected_status
+    assert matlab_optuna_benchmark_plan()["status"] == expected_status
     assert callable(matlab_optuna_release_gate)
 
 
@@ -518,12 +547,12 @@ def test_radia_matlab_tools_do_not_shadow_verified_upstream_optuna_mcp_tools():
     root = Path(__file__).resolve().parents[3]
     fixture = json.loads(
         (root / "tests" / "matlab" / "fixtures" /
-         "optuna49_mcp_oracle.json").read_text(encoding="utf-8")
+         "optuna50_mcp_oracle.json").read_text(encoding="utf-8")
     )
     upstream_tools = set(fixture["tools"])
     radia_tools = {item.name for item in asyncio.run(mcp.list_tools())}
 
-    assert fixture["optuna_version"] == "4.9.0"
+    assert fixture["optuna_version"] == "5.0.0"
     assert fixture["optuna_mcp_version"] == "0.2.0"
     assert upstream_tools.isdisjoint(radia_tools)
 
@@ -534,18 +563,22 @@ def test_optuna_compatibility_and_oracle_audit_are_checked():
     assert contract["transport"]["public_mcp_contract"] == "stdio"
     assert contract["transport"]["mcp_sampler_seed_supported"] is False
     closure = contract["public_api_closure"]
-    assert closure["surface_entry_count"] == 816
-    assert closure["surface_present_count"] == 816
+    assert closure["surface_entry_count"] == 812
+    assert closure["surface_present_count"] == 812
     assert closure["surface_missing_count"] == 0
-    assert closure["oracle_verified_count"] == 748
-    assert closure["oracle_asserted_count"] == 68
+    coverage = json.loads((Path(__file__).resolve().parents[3] /
+        "matlab/optuna50_api_coverage.json").read_text(encoding="utf-8"))
+    entries = coverage["entries"]
+    required = [entry for entry in entries if entry["scope"] == "required"]
+    assert closure["oracle_verified_count"] == sum(e["oracle_status"] == "verified" for e in entries)
+    assert closure["oracle_asserted_count"] == sum(e["oracle_status"] == "asserted" for e in entries)
     assert closure["oracle_partial_count"] == 0
     assert closure["oracle_unmapped_count"] == 0
-    assert closure["required_entry_count"] == 400
-    assert closure["required_oracle_mapped_count"] == 400
-    assert closure["required_oracle_asserted_count"] == 0
-    assert closure["required_oracle_unmapped_count"] == 0
-    assert closure["full_compatibility_complete"] is True
+    assert closure["required_entry_count"] == 401
+    assert closure["required_oracle_mapped_count"] == sum(e["oracle_status"] == "verified" for e in required)
+    assert closure["required_oracle_asserted_count"] == sum(e["oracle_status"] == "asserted" for e in required)
+    assert closure["required_oracle_unmapped_count"] == sum(e["oracle_status"] != "verified" for e in required)
+    assert closure["full_compatibility_complete"] is all(e["oracle_status"] == "verified" for e in required)
 
     audit = matlab_optuna_oracle_audit()
     assert audit["ok"] is True
@@ -560,7 +593,7 @@ def test_optimize_server_builds_multiobjective_ltspice_code():
     payload = matlab_optimize_build({
         "name": "loss-ripple",
         "directions": ["minimize", "minimize"],
-        "sampler": "motpe",
+        "sampler": "tpe",
         "n_trials": 24,
         "parallel": True,
         "runner": {
@@ -571,7 +604,7 @@ def test_optimize_server_builds_multiobjective_ltspice_code():
         },
     })
     assert payload["runtime_owner"] == "MathWorks MATLAB MCP Server"
-    assert "radia.optuna.MOTPESampler" in payload["matlab_code"]
+    assert "radia.optuna.TPESampler" in payload["matlab_code"]
     assert "runner.optimizeParallel(study,24)" in payload["matlab_code"]
     assert "pareto=study.paretoFront()" in payload["matlab_code"]
 
@@ -664,7 +697,7 @@ def test_optimize_builder_v3_covers_seeded_sampler_surface():
             "gamma_fcn": "customGamma", "weights_fcn": "customWeights",
             "multivariate": True, "group": True,
             "warn_independent_sampling": True,
-            "categorical_distance_fcn": {"mode": "modeDistance"},
+            "constant_liar": True,
         },
         "runner": {"kind": "objective", "objective_fcn": "objectiveFcn"},
     })
@@ -672,9 +705,18 @@ def test_optimize_builder_v3_covers_seeded_sampler_surface():
     assert "WeightsFcn=@customWeights" in advanced_tpe["matlab_code"]
     assert "Multivariate=true,Group=true" in advanced_tpe["matlab_code"]
     assert "WarnIndependentSampling=true" in advanced_tpe["matlab_code"]
-    assert (
-        "CategoricalDistanceFcn=containers.Map({'mode'},{@modeDistance})"
-        in advanced_tpe["matlab_code"]
+    assert "ConstantLiar=true" in advanced_tpe["matlab_code"]
+
+    mutated_nsga = matlab_optimize_build({
+        "directions": ["minimize", "minimize"],
+        "sampler": {
+            "name": "nsgaii", "seed": 13,
+            "mutation": {"name": "polynomial", "eta": 15},
+        },
+        "runner": {"kind": "objective", "objective_fcn": "objectiveFcn"},
+    })
+    assert "Mutation=radia.optuna.nsgaii.PolynomialMutation(Eta=15)" in (
+        mutated_nsga["matlab_code"]
     )
 
     cma_independent = matlab_optimize_build({
@@ -715,9 +757,17 @@ def test_optimize_builder_classifies_parallel_and_rejects_invalid_sampler_contra
             "sampler": "grid",
             "runner": {"kind": "objective", "objective_fcn": "objectiveFcn"},
         })
+    automatic_grouped = matlab_optimize_build({
+        "sampler": {"name": "tpe", "group": True},
+        "runner": {"kind": "objective", "objective_fcn": "objectiveFcn"},
+    })
+    assert "Group=true" in automatic_grouped["matlab_code"]
+    assert "Multivariate=" not in automatic_grouped["matlab_code"]
     with pytest.raises(ValueError, match="requires sampler.multivariate=true"):
         matlab_optimize_build({
-            "sampler": {"name": "tpe", "group": True},
+            "sampler": {
+                "name": "tpe", "group": True, "multivariate": False,
+            },
             "runner": {"kind": "objective", "objective_fcn": "objectiveFcn"},
         })
 

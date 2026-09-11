@@ -1,5 +1,5 @@
 classdef RegretBoundEvaluator < radia.optuna.BaseImprovementEvaluator
-    %REGRETBOUNDEVALUATOR Gaussian-process regret bound from Optuna 4.9.
+    %REGRETBOUNDEVALUATOR Gaussian-process regret bound from Optuna 5.
 
     properties (Access=private)
         PythonEvaluator
@@ -14,7 +14,7 @@ classdef RegretBoundEvaluator < radia.optuna.BaseImprovementEvaluator
                 options.seed double = NaN
             end
             warning("radia:optuna:ExperimentalWarning", ...
-                "RegretBoundEvaluator is experimental in Optuna 4.9.0.");
+                "RegretBoundEvaluator is experimental (supported from Optuna 3.2.0).");
             module=py.importlib.import_module("optuna.terminator");
             evaluatorClass=py.builtins.getattr( ...
                 module,"RegretBoundEvaluator");

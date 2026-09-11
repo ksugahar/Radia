@@ -1,6 +1,6 @@
 classdef MeanDecreaseImpurityImportanceEvaluator < ...
         radia.optuna.BaseImportanceEvaluator
-    %MEANDECREASEIMPURITYIMPORTANCEEVALUATOR Optuna 4.9 MDI evaluator.
+    %MEANDECREASEIMPURITYIMPORTANCEEVALUATOR Optuna 5 MDI evaluator.
 
     properties (SetAccess=private)
         NTrees (1,1) double = 64

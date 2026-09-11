@@ -81,10 +81,10 @@ def build_manifest() -> dict[str, object]:
             if test_name == "testOraclePolicyManifestIsComplete":
                 effective_classification = "matlab-integration"
             if effective_classification == "upstream-python":
-                oracle = "optuna49_oracle.json"
-                scope = "shared Optuna 4.9.0 behavior"
+                oracle = "optuna50_oracle.json"
+                scope = "shared Optuna 5.0.0 behavior"
             elif effective_classification == "upstream-mcp":
-                oracle = "optuna49_mcp_oracle.json"
+                oracle = "optuna50_mcp_oracle.json"
                 scope = "official Optuna MCP behavior"
             else:
                 oracle = None
@@ -103,7 +103,7 @@ def build_manifest() -> dict[str, object]:
 
     return {
         "schema": "radia.test.optuna-matlab-policy.v1",
-        "upstream_version": "4.9.0",
+        "upstream_version": "5.0.0",
         "entries": entries,
     }
 

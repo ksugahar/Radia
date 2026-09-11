@@ -1,5 +1,5 @@
 classdef UniformDistribution < radia.optuna.FloatDistribution
-    %UNIFORMDISTRIBUTION Deprecated Optuna 4.9 distribution alias.
+    %UNIFORMDISTRIBUTION Deprecated distribution alias retained by Optuna 5.
 
     methods
         function obj=UniformDistribution(low,high)

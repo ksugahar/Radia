@@ -1,5 +1,5 @@
 function encoded=distribution_to_json(distribution)
-%DISTRIBUTION_TO_JSON Serialize a distribution using Optuna 4.9 JSON.
+%DISTRIBUTION_TO_JSON Serialize a distribution using Optuna 5 JSON.
 arguments
     distribution
 end

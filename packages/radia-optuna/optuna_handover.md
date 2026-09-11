@@ -1,8 +1,42 @@
 # radia-optuna Simulink optimization — implementation handover
 
-Rewritten 2026-08-29. No tracked `optuna_handover.md` existed on the current
-main branch, so this is the new canonical handover rather than a continuation
-of the unrelated EQNEDT64 document.
+Rewritten 2026-08-29 and revised 2026-09-08 for the Optuna 5 migration. This is
+the canonical product and migration handover; the unrelated EQNEDT64 document
+is not an Optuna authority.
+
+## Release hold: evidence identity review (2026-09-11)
+
+This section supersedes historical completion/health statements below.
+The previous suffix-only evidence lookup could credit gRPC `server.stop()`
+to `optuna.study.Study.stop`. It has been replaced by a conservative exact
+Optuna-qualified reference lookup. Unresolved instance aliases, dynamic
+dispatch and string names are no longer counted as identified API evidence.
+This is static source attribution, not execution tracing or a new numerical
+oracle. The 401 required entries now have 79 qualified-reference mappings and
+322 asserted entries; `full_compatibility_complete=false`. Those 322 entries
+are an evidence backlog, not 322 newly missing implementations. Do not publish
+an exhaustive compatibility claim or bypass the release health failure.
+
+The current change also adds the missing oracle-digest check to the MCP audit,
+includes fixture/test changes in the standalone CI path filters, checks
+regenerated test-manifest content, uses LF-normalized digest comparison, and
+checks canonical regenerated coverage serialization. MATLAB resolution covers
+all class entries, public member access and enum constants, continuing after
+an unresolved class rather than aborting the audit. Public source discovery
+skips private helpers and handles external @Class method layouts.
+
+Precision evidence is rerun against the changed tests and now carries the
+exact test-source SHA256; line numbers refer to that source revision. The
+2026-09-10 precision JSON remains historical evidence of commit c90ab01cb,
+not line-addressable evidence of later test files.
+
+Still open: owner-aware contracts for instance/dynamic references; robust
+package-qualified/multiline inheritance resolution and
+Python-version-independent inherited-language classification. The
+constructor-default audit was committed separately on top of this change; it
+records three divergences that remain open (see the constructor-default
+paragraph below). The 15-point review is not fully closed by this first safety
+correction. No optimizer numerical behavior is changed.
 
 ## 1. Product goal
 
@@ -24,10 +58,212 @@ The intended experience is informed by two MathWorks products:
 Those products are references for the MATLAB and Simulink operating surface.
 They are not runtime dependencies and do not replace Optuna's algorithms.
 
-The algorithmic source of truth remains pinned upstream `optuna==4.9.0`.
+The algorithmic source of truth is pinned upstream `optuna==5.0.0`.
 MATLAB vectorization, MEX kernels, deterministic batching, table/MAT
 persistence, Simulink signals, and session tooling may improve performance and
 teaching value, but they must not silently change a shared Optuna algorithm.
+
+### Native TPE optimization boundary (2026-09-08)
+
+MATLAB tables remain the authoritative trial database, including durable
+table/MAT persistence and the history exposed to Simulink. The MEX history is
+only a rebuildable computation cache. Rustuna is a design reference, not a
+runtime dependency or a new storage backend; do not introduce Rust/Cargo,
+discard persisted trials, or adopt Rustuna's RNG in this optimization lane.
+
+The first native change references Rustuna revision
+`ebb5e6a88dec4caed0107db2cafb93807f2ebc66` and replaces whole-history ranking
+with partial selection. Trial-number indexing removes the linear replacement
+lookup, and a maintained chronological index removes the per-proposal
+chronological sort. Objective ties still resolve by trial number; estimator
+observations remain chronological, preserving Optuna 5 random consumption.
+Parameter extraction uses one lookup instead of two. Sparse per-trial parameter
+maps are retained; a columnar-cache redesign is not implemented by this change.
+
+The upstream-generated `native_tpe_history_selection` fixture covers tied
+objectives, minimize/maximize, and the all-good split boundary. Its MATLAB
+comparison also exercises reverse insertion, replacement, and cache reset.
+Performance acceptance remains separate from numerical acceptance: a speedup
+must be measured on an idle host with matching MATLAB code and old/new MEX,
+then compared against pinned Python Optuna. Busy LAB timings are not proof of
+a gain, and no Rustuna-scale acceleration is claimed. Long-run evidence belongs
+under `validation_test/optimization`, not the short regression suite.
+
+Local acceptance on 2026-09-08: the rebuilt standalone MEX passed all 76
+tests in `test_optuna_upstream_oracle.m`, including the new selection fixture;
+the 11 standalone package tests passed. Two oracle regenerations were
+byte-identical (SHA256
+`1b8640596d0d3b20abe8b34e621738abefc9b7e9f81e7c85e7cb8a7b0ff7a2b3`).
+The newly built wheel passed strict source/native fidelity verification
+(222 MATLAB files, 21 MEX commands). These gates establish tested numerical
+and distribution behavior, not a measured performance gain or exhaustive
+compatibility outside the fixtures.
+
+The 2026-09-09 mdx attempt is recorded in
+`validation_test/optimization/results_optuna50_native_selection_attempt_20260909.json`.
+Both old/new MEX completed the same MATLAB workload with matching checksums,
+but another computation started during the mdx1 comparison; the pair is not
+performance acceptance. mdx2 imported Engine but timed out during startup
+after 90 seconds; its owned process tree was terminated and absence of Python
+and MATLAB processes verified. Repeated isolated timing and the Python
+comparison remain pending. Use an available idle host or a verified working
+Engine execution context, not repeated unchanged mdx2 SSH startup probes.
+
+On 2026-09-10 the mdx2 authenticated CI service completed the old/new MEX
+comparison and pinned Python baseline (Actions run `34444333755`). The
+MATLAB-bundled Engine still timed out over SSH, but the service route worked;
+the guard now waits briefly for MATLAB shutdown before the next session.
+Evidence is in
+`validation_test/optimization/results_optuna50_native_selection_mdx2_20260910.json`.
+Same MATLAB sources, old/new MEX in old-new-new-old order, followed by two
+Python runs: median-of-run-median throughput was 1056 versus 702 trials/s for
+scalar TPE and 545 versus 239 for grouped conditional TPE (1.51x and 2.28x).
+Checksums matched. The native change alone was approximately flat for scalar
+(-0.74%) and +4.92% for grouped. Python varied materially between sessions,
+so these are descriptive ratios, not confidence bounds or universal claims.
+The Python-throughput target is met for these 100-trial workloads; larger
+histories, cold startup, peak memory, and durable table/MAT write costs remain
+outside this measurement. The experimental service workflow lives only on
+`codex/optuna-mdx2-service-benchmark`, not in the production diagnostic.
+
+The subsequent storage attribution is documented in
+`validation_test/optimization/optuna_storage_attribution_20260910.md`, with
+raw JSON alongside it. At 10,000 trials, no-path ask/suggest/tell component
+medians sum to 10.11 ms; adding StoragePath with AutoSave=false increases
+that to 18.73 ms. Dirty table views cost 11.01 ms, while a full validated,
+backed-up save costs 9.902 s. At that baseline, StoragePath disabled native history,
+and nested per-trial IntermediateValues tables dominate object counts during
+serialization. Prioritize normalized persistence and an explicit durability
+contract, then safe native-cache rebuilding for persisted studies. This is
+an investigation result, not an implemented storage change or a Rustuna
+performance-equivalence claim.
+
+### Storage schema 6: first measured optimization
+
+The first persistence improvement now flattens per-trial intermediate
+snapshots into `StudyData.TrialIntermediateSnapshots`. The persisted
+`StudyData.TrialTable` omits its nested `IntermediateValues` column; loading
+reconstructs that public column, including original snapshot timestamps and
+order. `StudyData.IntermediateTable` remains separate because its timestamps
+are observably different. Empty per-trial tables are no longer serialized.
+
+Versions 1-5 remain readable and migrate on the next explicit/automatic save.
+Older software cannot read schema 6: retain a pre-migration file copy if a
+downgrade is required. Use `radia.optuna.Study` for the public table API;
+consumers directly reading MAT internals must understand the versioned layout.
+AutoSave frequency, primary read-back validation, atomic replacement, and
+verified backup are unchanged. That change alone left native-history eligibility unchanged.
+
+mdx2 run `34451777406` measured full-save medians of 0.084/0.103/0.264 seconds
+at 100/1,000/10,000 trials, compared with 0.208/1.328/9.902 seconds before.
+At 10,000 trials the observed reduction is approximately 37x; the file shrank
+from 2,508,755 to 472,890 bytes and profiled table.saveobj calls fell from
+40,096 to 44. See
+`validation_test/optimization/results_optuna_normalized_storage_mdx2_20260910.json`.
+This is a same-host, non-interleaved scalar workload comparison, not a general
+throughput claim. Next priorities remain explicit incremental durability and
+safe native-cache rebuilding for persisted/imported studies.
+
+Acceptance after this storage change: 76 upstream-oracle MATLAB tests,
+26 table/reliability/core tests (including nonempty snapshots, RUNNING state,
+version-5 migration and invalid-snapshot backup recovery), and 11 standalone
+Python package tests passed. The targeted normalized-snapshot regression also
+passed on mdx2 before its benchmark. No release or deployment is implied.
+
+### Persisted native TPE history (2026-09-10)
+
+Eligible sequential scalar TPE studies now use the native history cache even
+with StoragePath configured. On initial attachment/resume, completed parameter
+records rebuild the distribution index, intersection/group decomposition and
+native observations once, without consuming RNG. The table/MAT history remains
+authoritative; the native cache is not a second database. Stored RNG restoration
+and AutoSave durability/frequency are unchanged. Generation bookkeeping uses the
+existing state counters instead of scanning trial history.
+
+PRUNED/concurrent or incompatible history still invalidates the cache under the
+existing general-computation rules. Public after_trial calls with FrozenTrial
+snapshots invalidate it instead of appending the same completed trial twice.
+This does not promise incremental cache repair after arbitrary mid-session edits.
+
+mdx2 run `34453133245` passed. With StoragePath and AutoSave=false, sums of
+ask/suggest/tell component medians changed from 3.57/4.24/15.52 ms to
+3.19/3.64/12.93 ms at 100/1,000/10,000 history rows. The 10,000-row trial
+probe improved by 16.7%, and profiling confirms native-history proposals.
+However, dirty-table materialization increased from 10.75 to 21.25 ms and
+full-save time from 0.264 to 0.324 s at that size. Do not claim improvement
+for an end-to-end workflow that materializes/saves after every trial. These
+are separate same-host sessions, not an interleaved statistical comparison.
+See `validation_test/optimization/optuna_persisted_native_20260910.md` and its
+raw JSON for all repetitions and provenance.
+
+The 76 upstream-oracle tests pass, including persisted ordinary/grouped TPE
+sequences with repeated saves/restarts, and the public FrozenTrial hook.
+The 26 table/reliability/core MATLAB tests and 11 package tests also pass.
+Incremental durability, resume latency at large history sizes, and the
+dirty-table regression remain follow-up work. No Rust/Cargo dependency was
+introduced, and Rustuna speed equivalence has not been measured.
+
+### Sampler-state row replacement (2026-09-10)
+
+The common single-sampler RNG-state update now replaces the matching tail row
+of SamplerStateTable instead of deleting it and growing the table again.
+Non-tail/multiple matches preserve the existing remove-and-append ordering.
+Exact state, revision, timestamp, schema, save frequency and backup guarantees
+are unchanged; there is no extra cache or storage format.
+
+mdx2 baseline/candidate/baseline sessions measured the 8,986-trial fill
+segment at 42.445/39.355/42.209 s (about 7% less loop time). At 10,000 rows,
+individual ask/suggest/tell component medians only improved about 1.4% against
+the repeated baseline, so do not generalize the fill result. Dirty-table and
+save timings were essentially equal in the reverse check; the previous 21 ms
+table observation did not reproduce and no extra table cache was added.
+See `validation_test/optimization/optuna_state_row_20260910.md` and its two
+raw JSON files. All 76 upstream-oracle, 27 table/reliability/core and 11 package
+tests pass. Remaining work includes incremental durability with a stated crash
+contract, long-history allocation/native costs, and measured resume latency.
+
+### Measured binary64 precision (2026-09-10)
+
+The opt-in differential precision audit records maximum absolute, reference-
+relative and exact ULP distances without changing existing tolerances. In the
+exercised corpus, TPE's maximum absolute error is 2.8866e-15 and CMA-ES's is
+4.4409e-15; their maximum ULP distances are 962 and 1280 respectively.
+RNG/RandomSampler and the baseline NSGA-II/III/QMC sequences are numerically
+exact in these tests, while NSGA-II crossover cases differ by up to 2 ULP.
+Thus do not claim uniform bit equality or 1-ULP agreement. GP's default Python
+delegation is not independent native-MATLAB precision evidence.
+See `validation_test/optimization/optuna_precision_20260910.md` and raw JSON.
+Reproduce with `validate_optuna_precision(outputPath)` after configuring pinned
+Python. The measured corpus and platform are the scope, not arbitrary inputs.
+
+### Independent review: coverage freshness and implementation names
+
+The review found a stale upstream-oracle digest in the committed coverage
+ledger and 25 flattened NSGA-II names that omitted the `nsgaii` package.
+The coverage generator now derives qualified names from the actual MATLAB
+package directories, including class members, and fails on ambiguous public
+basenames. Regeneration updates the oracle hash/section references and those
+25 names without changing any oracle status or the 401-entry required scope.
+
+A normal standalone-package pytest now checks oracle SHA256, full regenerated
+coverage equality, and the source path behind every non-module implementation
+name. The existing MATLAB coverage test additionally resolves every NSGA-II
+ledger class and member through MATLAB metadata. The repository health gate
+returns `ok=true`; this is not installed-wheel or release-quad acceptance.
+
+Constructor-default audit: the oracle records every defaulted constructor
+parameter of the public modules (`constructor_defaults`; `optuna.integration`
+and `optuna.visualization` are excluded with stated reasons), and the coverage
+ledger's `constructor_default_audit` pairs each one with the MATLAB `arguments`
+block of the same class. A difference must be declared as an equivalence, an
+unimplemented parameter or a divergence, and a declaration that no longer
+applies fails. Three divergences are recorded and not fixed: `Terminator()`
+defaults to BestValueStagnationEvaluator where upstream resolves
+RegretBoundEvaluator, and FanovaImportanceEvaluator and
+MeanDecreaseImpurityImportanceEvaluator pin `seed=0` where upstream `None`
+draws fresh entropy. The audit compares source literals and does not execute
+constructors; the equivalence reasons for TPE's `X | None` parameters quote
+values measured on the pinned build, not values recorded by the oracle.
 
 ## 2. Scope and non-goals
 
@@ -65,7 +301,7 @@ teaching value, but they must not silently change a shared Optuna algorithm.
 
 When references disagree, use this order:
 
-1. Upstream Optuna 4.9.0 is the behavioral oracle for shared Study, Trial,
+1. Upstream Optuna 5.0.0 is the behavioral oracle for shared Study, Trial,
    sampler, pruner, distribution, storage-state, and seeded random behavior.
 2. Global Optimization Toolbox and Simulink Design Optimization define familiar
    MATLAB workflow conventions.
@@ -77,9 +313,9 @@ Shared algorithm tests must derive expectations by executing pinned upstream
 Optuna. MATLAB-only behavior must be marked `matlab-integration` and must not be
 presented as evidence of upstream parity.
 
-## 4. Current baseline and required correction
+## 4. Migration baseline and current state
 
-The current main branch already has:
+The migration started from a completed Optuna 4.9 baseline:
 
 - `Study`, `Trial`, samplers, pruners, distributions, storage, visualization,
   integrations, and the required standalone `optuna_mex`.
@@ -91,24 +327,43 @@ The current main branch already has:
   failure classification, and model/provenance hashing.
 - A Level-2 MATLAB S-Function that runs one trial per sample, persists normalized
   tables, and emits numerical telemetry.
-- A 816-entry generated upstream public-surface inventory.
+- An 816-entry generated upstream public-surface inventory.
 
-One audit correction must land before expanding the API. The current coverage
-generator calls some entries verified because they appear in a maintained
-allow-list. Verification must instead be derived from the test manifest and
-oracle fixture provenance. The reconciled ledger distinguishes 748
-evidence-derived entries from 68 asserted mappings, while the required shared
-scope remains 400/400 directly mapped with no asserted required entry.
+That baseline was migration input, not the target compatibility claim. The
+active branch now contains only the 5.0 fixture names and bridge pin, uses
+unified public TPE, named constraints, Optuna 5 defaults and mutation points,
+and has deleted removed integrations and APIs. The local 150-test fast suite,
+wheel verification, installed-wheel Simulink E2E, and paired LAB development
+benchmark pass. Release status remains pending until the fresh long mdx
+performance lane, CI, merge, tag, publication, and release-quad gates pass.
+
+The follow-up scalar performance change enables the completed-history MEX for
+default sequential TPE, reuses unchanged distributions and NaN-bearing metadata,
+and invalidates native history on reseed. The paired prewarmed LAB measurement
+in `validation_test/optimization/results_optuna50_paired_lab_20260908.json`
+reports MATLAB/Python throughput ratios of 1.222 scalar and 2.184 grouped TPE.
+The separate table-export ratio is 0.886; no universal speed claim is made.
+All 150 MATLAB tests (74 shared-oracle and 76 integration) and 11 Python package
+tests pass after this change; the rebuilt wheel passes strict source fidelity.
+Engine startup/calculation/
+shutdown passed on both mdx CI runner accounts in run 34210024491. mdx2 has
+Engine 26.1 installed, but its SSH startup still timed out; this does not
+provide a MATLAB performance result on mdx2.
+
+The prior coverage audit also remains binding: verified entries must be derived
+from the test manifest and oracle fixture provenance. A maintained allow-list
+may describe a mapping, but it cannot turn that mapping into verification.
 
 Therefore the public claim is:
 
-> The required declared Optuna 4.9.0 compatibility scope is oracle-covered.
-> The wider MATLAB surface is present and mapped, but the coverage ledger must
-> distinguish evidence from assertion until every wider entry has direct
-> evidence.
+> The required declared Optuna 5.0.0 compatibility scope is oracle-covered only
+> after the 5.0 inventory, direct oracle fixture, real-transport MCP fixture,
+> MATLAB fast suite, and evidence ledger all agree. Historical 4.9 evidence does
+> not satisfy this claim.
 
-Do not restore the older blanket “816 verified” wording unless the generator
-can derive that number from actual oracle tests.
+Do not restore the older blanket “816 verified” wording. The generated 5.0
+ledger is 812 present, 749 oracle-verified, 63 explicitly asserted, and all
+401 required entries oracle-mapped.
 
 ## 5. Architecture
 
@@ -396,7 +651,7 @@ Session metadata adds:
 - selected trial and UI state
 - checkpoint revision and stop reason
 
-The explicit `study-export.v1` bridge to an upstream Optuna storage remains a
+The explicit `study-export.v2` bridge to an upstream Optuna storage remains a
 batch handoff, never a runtime fallback.
 
 ## 13. Performance contract
@@ -416,6 +671,12 @@ The MATLAB version should meet or exceed upstream throughput where native MEX,
 vectorization, and Simulink integration provide an advantage. It must never
 trade away seeded algorithm parity on the sequential lane merely to win a
 benchmark.
+
+The automatic-multivariate scalar TPE path maintains an incremental
+intersection-search-space cache keyed by the ordered finished-trial prefix.
+Appending a trial filters the current intersection once; a changed or restored
+history invalidates the prefix and rebuilds from source data. This removes the
+former quadratic history scan while preserving the upstream proposal sequence.
 
 Long scaling benchmarks belong in `validation_test/optimization`. Fast tests
 may assert results and conservative non-regression bounds; they must not encode
@@ -482,9 +743,99 @@ The official `optuna/optuna-mcp` server owns shared public Study/Trial operation
 Keep the independent/unofficial notice, Optuna/SciPy/Joe--Kuo notices, and pinned
 upstream handoff version. Do not use the Optuna logo or imply endorsement.
 
-## 17. Implementation order
+As of 2026-09-08 the latest released `optuna-mcp` is 0.2.0. Upstream `main`
+declares 0.3.0.dev, but its server tool implementation is unchanged from 0.2.0;
+the observed changes are packaging, container publication, CI hardening, Python
+3.13 coverage, action pinning, attestations, and development dependencies. Use
+released 0.2.0 with `optuna==5.0.0` for the real-transport fixture. Record the
+server version and transport in the fixture. Do not label an unreleased
+0.3.0.dev checkout as the supported server.
 
-Implementation record (2026-08-29):
+## 17. Optuna 5 migration and deletion plan
+
+This is a replacement migration, not a side-by-side compatibility feature.
+There will be one MATLAB implementation and one active upstream oracle.
+
+### Stage A — freeze and inventory
+
+- Preserve the last green Optuna 4.9 commit/tag as history; do not create a
+  `V49` namespace, compatibility mode, or runtime version switch.
+- Inventory 5.0 public symbols/signatures and classify added, removed, and
+  behavior-changed entries.
+- Mark the working branch and package documentation as migration in progress.
+
+Exit: the 5.0 API delta and every active 4.9 reference are mechanically listed.
+
+### Stage B — establish the 5.0 oracle before changing MATLAB behavior
+
+- Generate direct fixtures in an isolated environment pinned to
+  `optuna==5.0.0`, recording Python, NumPy, SciPy, PyTorch, and `cmaes`.
+- Generate the MCP fixture through a real stdio session using released
+  `optuna-mcp==0.2.0` running against Optuna 5.0.0.
+- Run each generator twice and require byte-identical JSON.
+- Add explicit coverage for TPE defaults and bandwidth behavior,
+  multi-objective default TPE, named constraints and duplicate/NaN behavior,
+  new NSGA-II mutation types, and removed APIs.
+
+Exit: the complete 5.0 fixtures are deterministic and regeneration fails with
+any other Optuna version.
+
+### Stage C — replace behavior in place
+
+- Change the existing MATLAB classes and MEX kernels directly. Do not retain
+  parallel 4.9 implementations.
+- Make TPE multivariate and constant-liar behavior follow 5.0 defaults and port
+  the 5.0 bandwidth rule from the upstream algorithm.
+- Make TPE the default for both single- and multi-objective studies.
+- Replace positional constraint storage at the public boundary with named
+  constraints while keeping an efficient internal numeric view for samplers.
+- Add `BaseMutation` and `PolynomialMutation` and connect them to NSGA-II/III.
+- Remove `categorical_distance_func`, public Study/Trial system-attribute APIs,
+  and the removed StudySummary field instead of emulating them.
+
+Exit: focused MATLAB tests pass against the 5.0 fixture and no production path
+selects old behavior.
+
+### Stage D — atomic oracle cutover and 4.9 deletion
+
+The first commit that declares 5.0 compatibility must do all of the following
+together:
+
+- switch every active test, package verifier, manifest, bridge, README, policy,
+  and CI command from `optuna49`/4.9.0 to `optuna50`/5.0.0;
+- delete the 4.9 oracle JSON, public-API inventory, coverage ledger, MCP fixture,
+  and their 4.9 generator scripts;
+- delete removed API code and constructor options, not merely stop testing them;
+- regenerate the distribution manifest and installed-wheel expectations;
+- fail a repository scan if active source or tests still mention `optuna49`,
+  `optuna==4.9.0`, or the removed compatibility members.
+
+Historical CHANGELOG entries, tagged release evidence, and named archived
+performance result files may retain 4.9 text. They are immutable provenance and
+must be clearly described as historical; they are never loaded by active tests.
+
+Deletion happens here—not before Stage B, because that would remove the last
+working oracle before its replacement is proven, and not after release, because
+shipping both active oracle generations would leave ambiguous truth and dead
+code.
+
+Exit: exactly one active oracle generation exists and the fast suite passes
+from a clean checkout and an isolated installed wheel.
+
+### Stage E — validation and release
+
+- Run long seeded parity and performance/scaling jobs under `validation_test`.
+- Compare warmed throughput without weakening sequential seeded parity.
+- Review licenses and third-party notices, merge, tag, publish the four
+  distributions, and run release-quad only from the same verified commit.
+
+Exit: release evidence names Optuna 5.0.0 and optuna-mcp 0.2.0 explicitly, and
+no release gate consumes an Optuna 4.9 active artifact.
+
+## 18. Historical implementation record
+
+Historical Optuna 4.9 release-candidate record (2026-08-29; not valid 5.0
+release evidence):
 
 - fast MATLAB Optuna suite: 150/150 passed, 0 failed, 0 incomplete;
 - oracle ledger: 816/816 present, 748 executable-evidence verified,
@@ -554,7 +905,51 @@ Implementation record (2026-08-29):
 - [x] radia-mcp MATLAB difference-gate update
 - [ ] version, CI, review, merge, tag, PyPI, and release-quad
 
-## 18. Definition of done
+### Performance follow-up (2026-09-08)
+
+Native sequential TPE now updates the non-group intersection from completed
+trial distributions, valid parameter names bypass redundant name conversion,
+and dataframe columns are constructed together. The seeded upstream fixture
+includes changing bounds, parameter removal/reintroduction, and an empty trial
+to guard cache invalidation.
+The case also exposed and fixed relative-proposal reuse across changed bounds,
+out-of-range historical observation removal, and per-parameter rather than
+global trial ranking. These are upstream behavior corrections, not algorithm
+changes to obtain a faster benchmark. See
+`validation_test/optimization/results_optuna50_followup_lab_20260908.json` for
+all fresh-Engine measurements. Before the correctness corrections, scalar
+measured approximately 1,280 trials/s and grouped 616--666 trials/s. Final code
+measured 1,144/473 trials/s versus Python 874/282, with 1,000-row export
+5.191 ms versus 4.885 ms. Earlier peaks are not final-code acceptance evidence.
+The final implementation passes 75 upstream-oracle and 24 table/reliability/core
+MATLAB tests, with 11 package Python tests passing.
+
+Historical 4.9 LAB scalar performance was approximately 1,375 trials/s.
+Do not declare performance complete just because 5.0 exceeds Python. Establish
+a matched-host/prewarm historical baseline and run the compute-host gate;
+the current LAB measurements include host-load variation and are not release
+acceptance. Preserve all repeated results rather than selecting the fastest.
+
+### State-count and empty-store performance increment
+
+State counts now update on mutation rather than scanning history at each TPE
+ask. Empty waiting queues bypass their scan, warm constructors reuse empty
+table caches without column decoding, unchanged intersections return early,
+and distribution equality avoids redundant normalization. Validation passes
+75 upstream-oracle tests, 25 MATLAB table/reliability/core tests, and 11 package
+Python tests. A MATLAB-only cache invariant covers enqueue through reload.
+
+Performance acceptance remains open. The JSON
+`validation_test/optimization/results_optuna50_statecount_lab_20260908.json`
+retains the five LAB development runs and marks them inconclusive because CPU
+was observed at 100 percent. Do not use these numbers to claim improvement.
+hibino/mdx1 were busy; idle mdx2 imported Engine over SSH but startup timed out
+after 90 seconds and the owned process tree was reaped. Use the already
+verified authenticated CI execution context or another idle compute host for
+the controlled before/after gate; do not reinstall Engine or repeat unchanged
+SSH startup probes.
+
+## 19. Definition of done
 
 The implementation is complete only when:
 

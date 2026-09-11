@@ -1,5 +1,5 @@
 classdef JournalRedisStorage < radia.optuna.JournalRedisBackend
-    %JOURNALREDISSTORAGE Deprecated Optuna 4.9 Redis backend name.
+    %JOURNALREDISSTORAGE Deprecated Redis backend name retained by Optuna 5.
 
     methods
         function obj=JournalRedisStorage(url,options)
