@@ -201,6 +201,76 @@ def test_arxiv_doi_route_still_delegates(monkeypatch, tmp_path):
     assert seen[0]["candidate_doi"] == "10.1234/test"
 
 
+@pytest.mark.parametrize("response", [None, [], {}, {"ok": "yes"},
+    {"ok": False, "error": "connection failed"}, {"ok": False, "error_kind": "temporary"}])
+def test_doi_unknown_resolver_failure_is_error(monkeypatch, tmp_path, response):
+    monkeypatch.setattr(download, "paper_writing_resolve_doi", lambda *_: response)
+    bib = tmp_path / "references.bib"
+    bib.write_text("", encoding="utf-8")
+    result = paper_writing_verify_citation("", str(bib), candidate_doi="10.1234/test")
+    assert result["verdict"] == "error"
+    assert result["suggested_bibtex"] is None
+
+
+@pytest.mark.parametrize("response", [None, [], {}, {"ok": True},
+    {"ok": True, "bibtex": "", "citation_key": "test"},
+    {"ok": True, "bibtex": "entry", "citation_key": None},
+    {"ok": "yes", "bibtex": "entry", "citation_key": "test"}])
+def test_doi_incomplete_generator_response_is_error(monkeypatch, tmp_path, response):
+    monkeypatch.setattr(download, "paper_writing_resolve_doi", lambda *_: {"ok": True})
+    monkeypatch.setattr(download, "paper_writing_doi_to_bibtex", lambda *_: response)
+    bib = tmp_path / "references.bib"
+    bib.write_text("", encoding="utf-8")
+    result = paper_writing_verify_citation("", str(bib), candidate_doi="10.1234/test")
+    assert result["verdict"] == "error"
+    assert result["suggested_bibtex"] is None
+
+
+@pytest.mark.parametrize("stage", ["resolver", "generator"])
+def test_doi_dependency_exception_is_error(monkeypatch, tmp_path, stage):
+    def fail(*_):
+        raise RuntimeError("dependency unavailable")
+    monkeypatch.setattr(download, "paper_writing_resolve_doi",
+                        fail if stage == "resolver" else lambda *_: {"ok": True})
+    monkeypatch.setattr(download, "paper_writing_doi_to_bibtex", fail)
+    bib = tmp_path / "references.bib"
+    bib.write_text("", encoding="utf-8")
+    result = paper_writing_verify_citation("", str(bib), candidate_doi="10.1234/test")
+    assert result["verdict"] == "error" and "dependency unavailable" in result["advice"]
+    assert result["suggested_bibtex"] is None
+
+
+@pytest.mark.parametrize("suffix", [".", ",", ";", "#?%"])
+def test_doi_equality_preserves_identifier_punctuation(suffix):
+    from radia_mcp.paper_writing._citation_verify import _doi_already_cited
+    entries = {"target": {"doi": "10.1234/test" + suffix}}
+    assert _doi_already_cited(entries, "10.1234/test") is None
+    from urllib.parse import quote
+    url = "HTTPS://DX.DOI.ORG/" + quote("10.1234/TEST" + suffix, safe="/.")
+    assert _doi_already_cited(entries, url) == "target"
+
+
+@pytest.mark.parametrize("mode", ["missing", "directory", "encoding", "denied"])
+def test_unreadable_bibliography_blocks_external_lookup(monkeypatch, tmp_path, mode):
+    from radia_mcp.paper_writing import _citation_verify as verify
+    bib = tmp_path / "references.bib"
+    if mode == "directory":
+        bib.mkdir()
+    elif mode == "encoding":
+        bib.write_bytes(b"\xff")
+    elif mode == "denied":
+        bib.write_text("", encoding="utf-8")
+        def denied(*_):
+            raise PermissionError("access denied")
+        monkeypatch.setattr(verify, "_parse_bib_lightweight", denied)
+    def unexpected(*_):
+        pytest.fail("Unreadable bibliography must stop before network lookup")
+    monkeypatch.setattr(download, "paper_writing_resolve_doi", unexpected)
+    result = verify.paper_writing_verify_citation("", str(bib), candidate_doi="10.1234/test")
+    assert result["verdict"] == "error"
+    assert result["suggested_bibtex"] is None
+
+
 class StreamResponse:
     status_code = 200
 

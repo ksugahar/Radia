@@ -275,11 +275,9 @@ def _parse_bib_lightweight(bib_path: str) -> dict:
 
 def _normalize_doi(value: str) -> str:
     """Return a resolver-independent DOI token for equality checks."""
-    value = value.strip().lower()
-    value = re.sub(r"^doi\s*:\s*", "", value)
-    value = re.sub(r"^https?://(?:dx\.)?doi\.org/", "", value)
-    value = re.sub(r"^doi\.org/", "", value)
-    return value.rstrip(".,; ")
+    from .paper_download import _normalize_doi as normalize
+    # Punctuation is part of an identifier, not evidence of prose delimiters.
+    return normalize(value).casefold()
 
 
 def _doi_already_cited(bib_entries: dict, target_doi: str) -> Optional[str]:
@@ -371,7 +369,7 @@ def paper_writing_verify_citation(
               "found_in_bib"          -- already cited; reuse existing key
               "ready_to_insert"       -- verified, suggested_bibtex valid
               "needs_disambiguation"  -- multiple candidates, user pick
-              "no_candidate_found"    -- search failed; mark as TODO
+              "no_candidate_found"    -- confirmed absence; mark as TODO
               "error"                 -- bib read failed, etc.
           "matching_key": str|None   -- existing bib key (if found_in_bib)
           "candidates": list[dict]    -- search-verified candidates
@@ -432,8 +430,21 @@ def paper_writing_verify_citation(
             paper_writing_resolve_doi,
             paper_writing_doi_to_bibtex,
         )
-        v = paper_writing_resolve_doi(candidate_doi)
-        if not v.get("ok") and v.get("temporary_failure"):
+        def doi_error(reason, metadata=None):
+            return {"verdict": "error", "matching_key": None,
+                    "candidates": [metadata] if isinstance(metadata, dict) else [],
+                    "suggested_bibtex": None, "verification_method": "doi-direct",
+                    "advice": (f"DOI verification is temporarily unavailable or incomplete: {reason}. "
+                               "Do not infer that the citation is fabricated; investigate or retry.")}
+
+        try:
+            v = paper_writing_resolve_doi(candidate_doi)
+        except Exception as exc:
+            return doi_error(str(exc))
+        if not isinstance(v, dict) or type(v.get("ok")) is not bool:
+            return doi_error("invalid resolver response")
+        if not v["ok"] and (v.get("temporary_failure")
+                            or v.get("error_kind") != "not_found"):
             return {
                 "verdict": "error",
                 "matching_key": None,
@@ -459,8 +470,17 @@ def paper_writing_verify_citation(
                             f"the user for the correct DOI.  DO NOT insert "
                             f"this DOI into the bib."),
             }
-        bib_result = paper_writing_doi_to_bibtex(candidate_doi)
-        if not bib_result.get("ok"):
+        try:
+            bib_result = paper_writing_doi_to_bibtex(candidate_doi)
+        except Exception as exc:
+            return doi_error(str(exc), v)
+        if not isinstance(bib_result, dict):
+            return doi_error("invalid BibTeX response", v)
+        if (bib_result.get("ok") is not True
+                or not isinstance(bib_result.get("bibtex"), str)
+                or not bib_result["bibtex"].strip()
+                or not isinstance(bib_result.get("citation_key"), str)
+                or not bib_result["citation_key"].strip()):
             return {
                 "verdict": "error",
                 "matching_key": None,
