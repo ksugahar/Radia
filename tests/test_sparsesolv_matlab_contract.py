@@ -106,9 +106,15 @@ def test_impact_uses_checkout_even_outside_repository(tmp_path, changed, event, 
                 if s.get('id') == 'matlab-impact')
     script = step['run'].replace('${{ github.event_name }}', event)
     output = tmp_path / 'github-output'
+    runner_env = {**env, 'GIT_TEST_ASSUME_DIFFERENT_OWNER': '1',
+                  'GIT_CONFIG_NOSYSTEM': '1',
+                  'GIT_CONFIG_GLOBAL': str(tmp_path / 'empty-gitconfig'),
+                  'GITHUB_WORKSPACE': str(repo), 'GITHUB_OUTPUT': str(output)}
+    untrusted = subprocess.run([git, '-C', str(repo), 'rev-parse', '--show-toplevel'],
+                               env=runner_env, capture_output=True, text=True)
+    assert untrusted.returncode != 0 and 'dubious ownership' in untrusted.stderr
     result = subprocess.run([pwsh, '-NoProfile', '-Command', script], cwd=tmp_path,
-                            env={**env, 'GITHUB_WORKSPACE': str(repo),
-                                 'GITHUB_OUTPUT': str(output)},
+                            env=runner_env,
                             capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stderr
     assert output.read_text().strip() == f'required={expected}'
