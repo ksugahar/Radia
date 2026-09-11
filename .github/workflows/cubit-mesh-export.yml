@@ -131,7 +131,7 @@ jobs:
         shell: pwsh
         run: |
           python -m compileall -q packages\cubit-mesh-export\src
-          python -m pip install pytest numpy `
+          python -m pip install setuptools pytest numpy `
             "netgen-mesher==6.2.2606" "ngsolve==6.2.2606"
           $env:PYTHONPATH = 'packages\cubit-mesh-export\src'
           python -m pytest tests\test_cubit_installers.py `
