@@ -280,6 +280,7 @@ rad.ObjBckgCF/
 # Generated mesh/visualization files (keep only if near corresponding .py)
 *.vol
 *.vol.json
+!validation_test/sparsesolv/hiruma/meshes/mesh1_2.5T.vol
 *.npz
 *.npy
 *.cub5
