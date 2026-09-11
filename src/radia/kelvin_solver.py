@@ -544,11 +544,10 @@ def _assembled_primal_energy(a_bf, f_lf, solution, fes, primal_blocks):
 
     The solve is a saddle point of the Lagrangian; its primal part is
     ``J(x_P) = 1/2 x_P^T A_PP x_P - b_P^T x_P`` over the potential blocks,
-    minimised subject to the interface constraint.  Evaluating it from the
-    ASSEMBLED matrix and vector -- not by integrating a coefficient function
-    afterwards -- is what makes it comparable across orders: a monotonicity
-    statement is owed to this number, under nested admissible sets, and not
-    to an energy recomputed with a different quadrature.
+    minimised subject to the interface constraint. This reports the ASSEMBLED
+    functional, rather than an energy recomputed with different quadrature.
+    Monotonicity across orders additionally requires nested admissible sets
+    and a common functional, including consistent quadrature across spaces.
 
     The multiplier entries are zeroed before the product, so only primal rows
     and columns contribute and the constraint right-hand side drops out.
@@ -583,6 +582,9 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         kelvin_source_potential=None, kelvin_source_h=None,
         total_source_h=None, total_source_materials=(), return_system=False):
     """Solve the TOSCA-style mixed total/reduced Omega formulation.
+
+    ``return_system=True`` retains assembled forms for explicit diagnostics.
+    The default returns ``system=None`` to avoid retaining their matrix storage.
 
     ``H_s`` is used in ``reduced_materials`` (the source enclosure), where
     ``H = H_s - grad(phi_reduced)``.  A linked coil may additionally supply
