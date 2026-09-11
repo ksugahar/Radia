@@ -659,9 +659,8 @@ def grant_writing_future_dated_publication_check(
 
 
 _SOFTWARE_CATEGORIES = re.compile(
-    r"オープンソース|OSS|ソフトウェア|解析基盤|計算基盤|研究基盤|"
-    r"ソルバ|ライブラリ|パッケージ|プラットフォーム|ツール|コード|"
-    r"open[- ]source|software|solver|library|package|platform|toolkit",
+    r"ソフトウェア|ソルバ|ライブラリ|パッケージ|ツール|コード|"
+    r"\b(?:software|solver|library|package|toolkit)\b",
     re.IGNORECASE,
 )
 _SOFTWARE_OPERATIONS = re.compile(
@@ -669,8 +668,8 @@ _SOFTWARE_OPERATIONS = re.compile(
     r"最適化|可視化|連成|制御|予測|評価|生成|保存|管理|変換).{0,28}"
     r"(?:計算|解析|求め|解[くき]|扱[うい]|設計|最適化|可視化|連成|制御|"
     r"予測|評価|生成|保存|管理|変換|実行)|"
-    r"(?:compute|solve|analyse|analyze|design|optimi[sz]e|simulate|visuali[sz]e|"
-    r"couple|control|predict|evaluate|generate|store|manage|convert).{0,80}",
+    r"\b(?:compute|solve|analyse|analyze|design|optimi[sz]e|simulate|visuali[sz]e|"
+    r"couple|control|predict|evaluate|generate|store|manage|convert)(?:s|d|es)?\b.{0,80}",
     re.IGNORECASE,
 )
 _IMPLEMENTATION_LABEL = re.compile(
@@ -687,18 +686,45 @@ def _named_term_pattern(name: str) -> re.Pattern[str]:
 
 
 def _named_diagnostic_sentences(raw: str) -> list[dict]:
+    from .tools import _prose_for_lint, _strip_latex_comments
+
+    # Keep source lines for locating evidence, but join physical soft wraps.
+    raw = raw.replace("\r\n", "\n").replace("\r", "\n")
+    if "\\" in raw or re.search(r"(?m)^\s*%", raw):
+        raw = _strip_latex_comments(raw)
+    def blank(match):
+        return "\n" * match.group(0).count("\n")
+
+    raw = re.sub(r"\\begin\{(tabular\*?|tabularx|longtable)\}.*?\\end\{\1\}",
+                 blank, raw, flags=re.DOTALL)
+    raw = re.sub(r"\\(?:section|subsection|subsubsection|chapter|paragraph)\*?(?:\[[^\]]*\])?\{[^{}]*\}", blank, raw)
+    raw = re.sub(r"(?m)^[ \t]{0,3}[^\s\n][^\n]*\n[ \t]{0,3}(?:=+|-+)[ \t]*$", blank, raw)
     sentences: list[dict] = []
     buffered = ""
     buffered_line = 1
 
     def flush(text: str, line_number: int) -> None:
-        for fragment in re.split(r"(?<=[。．.!?！？])", text):
+        for fragment in re.split(r"(?<=[。．!?！？])", _prose_for_lint(text)):
             text = re.sub(r"\s+", " ", fragment).strip()
             if text:
                 sentences.append({"line": line_number, "text": text})
 
+    fence = None
     for line_number, line in enumerate(raw.splitlines(), 1):
         stripped = line.strip()
+        fence_match = re.match(r"^(`{3,}|~{3,})", stripped)
+        if fence_match:
+            marker = fence_match.group(1)
+            if fence is None:
+                fence = marker
+            elif marker[0] == fence[0] and len(marker) >= len(fence):
+                fence = None
+            stripped = ""
+        elif fence is not None:
+            continue
+        # Headings and table cells are navigation/metadata, not first-use prose.
+        if re.match(r"^(?:#{1,6}(?:\s|$)|\|)", stripped):
+            stripped = ""
         is_structural = bool(re.match(r"^(?:#{1,6}\s|[-*+]\s|\d+[.)]\s|\|)", stripped))
         if not stripped or is_structural:
             if buffered:
@@ -712,7 +738,7 @@ def _named_diagnostic_sentences(raw: str) -> list[dict]:
             buffered_line = line_number
         else:
             buffered += " " + stripped
-        if re.search(r"[。．.!?！？]\s*$", stripped):
+        if re.search(r"[。．!?！？]\s*$", stripped):
             flush(buffered, buffered_line)
             buffered = ""
     if buffered:
@@ -804,17 +830,23 @@ _CURRENT_STATUS = re.compile(
     r"完成しつつある|実装済み|検証済み|開発済み|整備済み|接続済み|"
     r"公開済み|既に|すでに|現時点|現在利用|利用可能|予備検討|"
     r"動作している|動いている|利用している|継続して開発|"
-    r"already|implemented|validated|available|current(?:ly)?",
+    r"(?:実装|公開|開発|検証|整備|統合)(?:した|してきた)|"
+    r"\b(?:already|implemented|validated|available|current(?:ly)?)\b",
     re.IGNORECASE,
 )
 _FUTURE_STATUS = re.compile(
-    r"本研究(?:で|では)|助成期間|研究期間|今後|これから|新たに|着手|"
-    r"構築(?:する|し|して)|実現(?:する|し|して)|"
-    r"開発(?:する|し|して)|統合(?:する|し|して)|検証(?:する|し|して)|"
-    r"評価(?:する|し|して)|拡張(?:する|し|して)|目指す|予定|"
-    r"機能を加え(?:る|て)|つなぐ|"
-    r"will|to be (?:developed|implemented|validated|integrated)|planned|proposed",
+    r"本研究(?:では?|は)|助成期間|研究期間|今後|これから|予定|目指す|"
+    r"\b(?:will|to be (?:developed|implemented|validated|integrated)|planned|proposed)\b",
     re.IGNORECASE,
+)
+_NEGATED_STATUS = re.compile(
+    r"(?:では|じゃ|して|されて|でき|してい|されてい)?ない|未実装|未検証|未完成|未公開|"
+    r"ません|なかった|\b(?:not|never|without)\b|\b(?:isn't|wasn't|hasn't)\b",
+    re.IGNORECASE,
+)
+_AMBIGUOUS_STATUS = re.compile(
+    r"(?:計算|構築|実現|開発|統合|検証|評価|拡張|解析)(?:する|し、|し，)|"
+    r"つなぐ|扱う|求める"
 )
 
 
@@ -829,6 +861,10 @@ def grant_writing_capability_status_map(
     It only lists sentences and lexical status signals.  Whether the claimed
     baseline is true, or whether the future work is sufficiently ambitious,
     remains a source-based human judgment.
+
+    Non-past operations alone are ``ambiguous``, not evidence of future work.
+    Negation anywhere in a sentence makes it ``negated_or_mixed``: clause-level
+    attribution needs a human and the sentence must not certify current work.
 
     Pass comma-separated names such as ``Radia,HDiv-MMM,EnergyStop``.
     """
@@ -859,10 +895,18 @@ def grant_writing_capability_status_map(
                 continue
             current_hits = [m.group(0) for m in _CURRENT_STATUS.finditer(sentence["text"])]
             future_hits = [m.group(0) for m in _FUTURE_STATUS.finditer(sentence["text"])]
+            negated_hits = [m.group(0) for m in _NEGATED_STATUS.finditer(sentence["text"])]
+            ambiguous_hits = [m.group(0) for m in _AMBIGUOUS_STATUS.finditer(sentence["text"])]
+            # Sentence-level evidence cannot attach negation to the named
+            # capability reliably. Never promote such a sentence to current.
+            if negated_hits:
+                current_hits = []
             status = (
+                "negated_or_mixed" if negated_hits else
                 "current_and_future" if current_hits and future_hits else
                 "current" if current_hits else
                 "future" if future_hits else
+                "ambiguous" if ambiguous_hits else
                 "unstated"
             )
             statements.append({
@@ -870,6 +914,8 @@ def grant_writing_capability_status_map(
                 "status": status,
                 "current_signals": current_hits,
                 "future_signals": future_hits,
+                "negation_signals": negated_hits,
+                "ambiguous_signals": ambiguous_hits,
                 "excerpt": sentence["text"][:320],
             })
         capabilities.append({
@@ -882,6 +928,8 @@ def grant_writing_capability_status_map(
                 s["status"] in {"future", "current_and_future"} for s in statements
             ),
             "unstated_status_count": sum(s["status"] == "unstated" for s in statements),
+            "ambiguous_status_count": sum(s["status"] == "ambiguous" for s in statements),
+            "negated_or_mixed_count": sum(s["status"] == "negated_or_mixed" for s in statements),
             "statements": statements,
         })
 
@@ -898,7 +946,9 @@ def grant_writing_capability_status_map(
         ],
         "warning": (
             "Lexical status signals only. This map does not verify repository "
-            "state, experimental completion, or scientific readiness."
+            "state, experimental completion, or scientific readiness. Non-past "
+            "verbs alone are ambiguous; negated or mixed sentences do not "
+            "establish current or future capability."
         ),
         "source": "current/future capability status map",
     }

@@ -458,8 +458,8 @@ def test_capability_map_leaves_unmarked_claim_for_human_review():
         "Radiaは磁場を計算する。", capability_names="Radia"
     )
     item = result["capabilities"][0]
-    assert item["unstated_status_count"] == 1
-    assert item["statements"][0]["status"] == "unstated"
+    assert item["ambiguous_status_count"] == 1
+    assert item["statements"][0]["status"] == "ambiguous"
 
 
 def test_software_and_status_checks_are_registered_as_mcp_tools():
