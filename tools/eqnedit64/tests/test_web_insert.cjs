@@ -135,26 +135,33 @@ assert.equal(
  * another superscript ("Prime causes double exponent").  The palette inserts
  * at the caret, so the insertion carries MathJax's own remedy when needed and
  * stays untouched when it is not. */
-assert.deepEqual(editor.composeInsertion("a", 1, 1, "'"), { value: "a'", caret: 2 });
-assert.deepEqual(editor.composeInsertion("f", 1, 1, "''"), { value: "f''", caret: 3 });
+const onePrime = "^{\\prime }";
+for (const count of [1, 2, 3]) {
+  const snippet = "^{" + "\\prime ".repeat(count) + "}";
+  for (const base of ["x", "\\alpha"]) {
+    const expected = base + snippet;
+    assert.deepEqual(editor.composeInsertion(base, base.length, base.length, snippet),
+                     {value:expected, caret:expected.length});
+  }
+}
 for (const mark of ["'", "''", "'''"]) {
   const decorated = "{a^{2}}^{" + "\\prime ".repeat(mark.length) + "}";
   assert.deepEqual(editor.composeInsertion("a^{2}", 0, 5, mark),
                    { value: decorated, caret: decorated.length });
 }
 assert.deepEqual(editor.composeInsertion("a^{2}", 5, 5, "'"),
-                 { value: "a^{2}{}'", caret: 8 });
+                 { value: "a^{2}{}" + onePrime, caret: 7 + onePrime.length });
 assert.deepEqual(editor.composeInsertion("a^2", 3, 3, "'"),
-                 { value: "a^2{}'", caret: 6 });
+                 { value: "a^2{}" + onePrime, caret: 5 + onePrime.length });
 assert.deepEqual(editor.composeInsertion("a^{n+1} ", 8, 8, "'"),
-                 { value: "a^{n+1} {}'", caret: 11 });
+                 { value: "a^{n+1} {}" + onePrime, caret: 10 + onePrime.length });
 /* Already primed, subscripted, or plain text needs no group. */
-assert.deepEqual(editor.composeInsertion("a'", 2, 2, "'"), { value: "a''", caret: 3 });
-assert.deepEqual(editor.composeInsertion("x_{1}", 5, 5, "'"), { value: "x_{1}'", caret: 6 });
-assert.deepEqual(editor.composeInsertion("a^{2}b", 6, 6, "'"), { value: "a^{2}b'", caret: 7 });
+assert.deepEqual(editor.composeInsertion("a'", 2, 2, onePrime), { value: "a'{}" + onePrime, caret: 4 + onePrime.length });
+assert.deepEqual(editor.composeInsertion("x_{1}", 5, 5, onePrime), { value: "x_{1}" + onePrime, caret: 5 + onePrime.length });
+assert.deepEqual(editor.composeInsertion("a^{2}b", 6, 6, onePrime), { value: "a^{2}b" + onePrime, caret: 6 + onePrime.length });
 /* An escaped brace is a symbol, not the end of a superscript group. */
 assert.deepEqual(editor.composeInsertion("\\{x\\}", 5, 5, "'"),
-                 { value: "\\{x\\}'", caret: 6 });
+                 { value: "\\{x\\}" + onePrime, caret: 5 + onePrime.length });
 
 /* An unclosed group is the beginner's most frequent mistake, and MathJax
  * answers it by refusing the whole expression, which left raw TeX on screen.

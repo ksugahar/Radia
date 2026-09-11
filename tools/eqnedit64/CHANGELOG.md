@@ -2,6 +2,10 @@
 
 ## 3.1.0 — release candidate
 
+- Use explicit prime superscripts for every prime decoration, including atoms,
+  native shortcuts and Web caret insertion. Update the shared catalogue and
+  independent expected TeX together; keep empty-base double-script protection.
+
 - Preserve grouped and empty-base apostrophes on native import, including
   following scripts. Restore ordinary Web preview after optional Office macro
   preparation fails; keep copy disabled with reload guidance. Regressions check

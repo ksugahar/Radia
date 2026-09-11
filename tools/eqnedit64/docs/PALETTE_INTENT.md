@@ -146,6 +146,13 @@ health of LAB's interactive font session. Record untested dimensions explicitly.
 
 ## Prime attachment
 
+A prime decoration always uses an explicit `^{\prime }` superscript, including
+single characters and control-word atoms: `x^{\prime }`, `\alpha ^{\prime }`.
+Double/triple primes repeat the glyph in that one superscript. Native prime
+shortcuts use the same template as the palette, not literal apostrophes.
+Existing manually authored apostrophe syntax remains accepted; it is not a
+palette output oracle. Saving a decoration may rebuild it as a ScriptNode;
+the attachment and first-reparse TeX, not node-class identity, are the contract.
 A prime decoration applies to its entire selected/template body. Native output
 must protect a compound body (including existing superscripts) as
 `{a^{2}}^{\prime }`, not `a^{2}'`. Apply the same rule for two and three primes.

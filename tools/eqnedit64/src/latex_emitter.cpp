@@ -893,11 +893,13 @@ void LaTeXEmitter::emitEmbell(const EmbellNode& embell, std::string& out) {
     const int primes = embell.embellType == EM_PRIME ? 1 :
         embell.embellType == EM_DPRIME ? 2 :
         (embell.embellType == EM_TPRIME || embell.embellType == EM_BPRIME) ? 3 : 0;
-    if (primes && !is_single_tex_atom(content)) {
+    if (primes) {
         /* A suffix apostrophe supplies another superscript. Preserve the
          * whole decorated base, including an existing exponent, and use the
          * ordinary symbol emitter so save/reopen has the same spelling. */
-        out += "{"; out += content; out += "}^{";
+        if (is_single_tex_atom(content)) out += content;
+        else { out += "{"; out += content; out += "}"; }
+        out += "^{";
         for (int i = 0; i < primes; ++i) {
             CharNode mark;
             mark.charCode = 0x2032;
@@ -907,9 +909,7 @@ void LaTeXEmitter::emitEmbell(const EmbellNode& embell, std::string& out) {
         out += "}";
         return;
     }
-    /* The prime family has no prefix -- it is written entirely as a suffix
-     * (x', x'').  Requiring both halves silently dropped the mark, so a
-     * prime template produced a bare x. */
+    /* Prime decorations have already been emitted as explicit scripts. */
     if (type >= 0 && type < static_cast<int>(EMBELL_MAP_N) &&
         EMBELL_MAP[type].suffix) {
         if (EMBELL_MAP[type].prefix) out += EMBELL_MAP[type].prefix;

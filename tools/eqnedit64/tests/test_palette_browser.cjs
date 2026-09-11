@@ -132,6 +132,14 @@ const server = http.createServer((req, res) => {
     await page.locator(".eqed-source").evaluate(e=>e.setSelectionRange(0,1));
     await page.locator('.eqed-key').filter({hasText:"n√□"}).click();
     assert.equal(await page.locator(".eqed-source").inputValue(),"\\sqrt[]{x}");
+    for (const count of [1,2,3]) {
+      await page.locator(".eqed-source").fill("x");
+      await page.locator(".eqed-source").evaluate(e=>e.setSelectionRange(1,1));
+      const face = ["x′", "x″", "x‴"][count-1];
+      await page.getByRole('button', {name:face, exact:true}).click();
+      assert.equal(await page.locator(".eqed-source").inputValue(),
+                   "x^{" + "\\prime ".repeat(count) + "}");
+    }
     console.log("PASS: cold first copy before palette previews; 291 browser keys, CHTML fonts, strike preview and selected root body");
   } finally {
     if (browser) await browser.close();
