@@ -94,6 +94,17 @@ assert(string(failure.stage) == "postprocess");
 
 blockStudyFile = fullfile(scratchDirectory, "block-study.mat");
 new_system(blockModelName);
+for pythonSampler=["gp","qmc"]
+    rejected=false;
+    try
+        radia.simulink.buildOptunaStudyBlock(blockModelName, ...
+            Sampler=pythonSampler,Save=false);
+    catch exception
+        assert(string(exception.identifier)=="radia:simulink:OptunaPythonSampler");
+        rejected=true;
+    end
+    assert(rejected,"A Python sampler must not enter the step-time block.");
+end
 blockWorkspace = get_param(blockModelName, "ModelWorkspace");
 assignin(blockWorkspace, "x", NaN);
 optimizationBlock = radia.simulink.buildOptunaStudyBlock(blockModelName, ...
@@ -225,12 +236,19 @@ createdTeachingModel = radia.simulink.buildOptunaTeachingModel( ...
     StoragePath=teachingStudyFile, Save=true);
 assert(string(createdTeachingModel) == string(teachingModelFile));
 load_system(teachingModelFile);
+% The teaching facade declares numeric parameters; auto must not use Python GP.
+teachingFacades=find_system(teachingModelName,"LookUnderMasks","all", ...
+    "Name","Optuna Study");
+assert(numel(teachingFacades)==1);
+set_param(teachingFacades{1},"sampler_name","auto");
 teachingOutput = sim(teachingModelName, ReturnWorkspaceOutputs="on");
 teachingAttempted = teachingOutput.get("teaching_attempted");
 teachingStatus = teachingOutput.get("teaching_status");
 assert(teachingAttempted(end) == 12);
 assert(teachingStatus(end) == 1);
 assert(isfile(teachingStudyFile));
+teachingStudy=radia.optuna.loadStudy(storage=teachingStudyFile);
+assert(string(teachingStudy.UserAttrs.auto_sampler_decision.selected)=="tpe");
 
 result = struct( ...
     "schema", "radia-optuna.standalone-simulink-test.v1", ...
