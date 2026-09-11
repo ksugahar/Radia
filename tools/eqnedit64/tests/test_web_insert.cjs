@@ -11,6 +11,34 @@ assert.deepEqual(
 );
 
 let edit;
+// Suffix palettes share attachment semantics, not a prime-only exception.
+const suffixes = ["^{\\circ} ", "^{*} ", "_{*} ", "^{\\flat} ",
+                  "^{\\sharp} ", "^{\\prime }", "^{}", "_{}"];
+for (const snippet of suffixes) {
+  for (const base of ["", "x", "a+b", "a^{2}", "x_{i}", "x_i^n", "x^n_i"]) {
+    const selected = editor.composeInsertion(base, 0, base.length, snippet);
+    assert.equal(selected.value, "{" + base + "}" + snippet);
+    const item = ["test", snippet, "test", "", "test", 0];
+    assert.deepEqual(editor.composePaletteInsertion(base, 0, base.length, item), selected);
+  }
+}
+for (const [base, suffix, expected] of [
+  ["30", "^{\\circ}", "30^{\\circ}"],
+  ["a^{2}", "^{\\circ}", "a^{2}{}^{\\circ}"],
+  ["x_i^n", "_{*}", "x_i^n{}_{*}"],
+  ["x^n_i", "^{*}", "x^n_i{}^{*}"],
+  ["x^{\\alpha}", "^{*}", "x^{\\alpha}{}^{*}"],
+  ["x^\\alpha", "^{*}", "x^\\alpha{}^{*}"],
+  ["x_i", "^{*}", "x_i^{*}"]
+]) assert.equal(editor.composeInsertion(base, base.length, base.length, suffix).value, expected);
+
+for (const command of ["hat", "vec", "bar", "dot", "ddot", "overline", "underline"]) {
+  for (const base of ["", "x", "a+b", "a^{2}", "x_{i}"]) {
+    const snippet = "\\" + command + "{}";
+    assert.equal(editor.composeInsertion(base, 0, base.length, snippet).value,
+                 "\\" + command + "{" + base + "}");
+  }
+}
 for (const snippet of ["\\mathsf{}", "\\mathtt{}", "\\mathcal{}",
                        "\\mathbb{}", "\\mathfrak{}", "\\bm{}",
                        "\\mathnormal{}"]) {

@@ -140,7 +140,26 @@ const server = http.createServer((req, res) => {
       assert.equal(await page.locator(".eqed-source").inputValue(),
                    "x^{" + "\\prime ".repeat(count) + "}");
     }
-    console.log("PASS: cold first copy before palette previews; 291 browser keys, CHTML fonts, strike preview and selected root body");
+    await page.getByRole('tab', {name:"Web追加", exact:true}).click();
+    for (const [base, selected, expected] of [
+      ["x", true, "{x}^{\\circ}"],
+      ["a+b", true, "{a+b}^{\\circ}"],
+      ["a^{2}", false, "a^{2}{}^{\\circ}"],
+      ["x^n_i", false, "x^n_i{}^{\\circ}"]
+    ]) {
+      await page.locator(".eqed-source").fill(base);
+      await page.locator(".eqed-source").evaluate((e, selected) =>
+        e.setSelectionRange(selected ? 0 : e.value.length, e.value.length), selected);
+      await page.getByRole('button', {name:"°", exact:true}).click();
+      const tex = await page.locator(".eqed-source").inputValue();
+      assert.equal(tex.trim(), expected);
+      const errorCount = await page.evaluate(tex => {
+        const xml = new DOMParser().parseFromString(MathJax.tex2mml(tex), "text/xml");
+        return xml.getElementsByTagName("merror").length;
+      }, tex);
+      assert.equal(errorCount, 0, tex);
+    }
+    console.log("PASS: cold copy, 291 keys, fonts, root body, and degree selection/script attachment");
   } finally {
     if (browser) await browser.close();
     server.close();
