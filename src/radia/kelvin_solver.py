@@ -596,7 +596,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         interface_constraint_scale=None, total_dirichlet_cf=None,
         mu_cf=None, kelvin_interface_boundary=None,
         kelvin_source_potential=None, kelvin_source_h=None,
-        total_source_h=None, total_source_materials=()):
+        total_source_h=None, total_source_materials=(), return_system=False):
     """Solve the TOSCA-style mixed total/reduced Omega formulation.
 
     ``H_s`` is used in ``reduced_materials`` (the source enclosure), where
@@ -939,11 +939,14 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         "solution": solution,
         "linear_residual": linear_residual,
         "assembled_energy": assembled_energy,
-        # The assembled system itself, so a caller can test whether another
-        # order's solution is admissible HERE: with the multiplier entries set
-        # to zero, the multiplier rows of f - A x are the interface constraint
-        # violation g - B x_P.
-        "system": {"bilinear_form": a_bf, "linear_form": f_lf},
+        # The assembled system, ONLY on request.  A caller testing whether
+        # another order's solution is admissible HERE needs it: with the
+        # multiplier entries set to zero, the multiplier rows of f - A x are the
+        # interface constraint violation g - B x_P.  Returning it by default
+        # would keep the assembled matrix alive in every production result the
+        # wrappers hand back, where it used to be freed after the solve.
+        "system": ({"bilinear_form": a_bf, "linear_form": f_lf}
+                   if return_system else None),
         "phi_reduced": phi_reduced_gf,
         "phi_total": phi_total_gf,
         "interface_multiplier": multiplier_gf,
