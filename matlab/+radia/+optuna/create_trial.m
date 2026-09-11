@@ -1,5 +1,5 @@
 function trial = create_trial(options)
-%CREATE_TRIAL Snake-case Optuna 4.9 alias for radia.optuna.createTrial.
+%CREATE_TRIAL Snake-case Optuna 5.0 alias for radia.optuna.createTrial.
 arguments
     options.state = "COMPLETE"
     options.value double = NaN
@@ -9,8 +9,7 @@ arguments
     options.intermediate_values table = table()
     options.user_attrs (1,1) struct = struct()
     options.system_attrs (1,1) struct = struct()
-    options.constraints double = zeros(1,0)
-    options.constraint_present (1,1) logical = false
+    options.constraints = struct()
     options.datetime_start datetime = NaT
     options.datetime_complete datetime = NaT
     options.error_message (1,1) string = ""
@@ -21,7 +20,6 @@ trial=radia.optuna.createTrial(State=options.state,Value=options.value, ...
     IntermediateValues=options.intermediate_values, ...
     UserAttrs=options.user_attrs,SystemAttrs=options.system_attrs, ...
     Constraints=options.constraints, ...
-    ConstraintPresent=options.constraint_present, ...
     DatetimeStart=options.datetime_start, ...
     DatetimeComplete=options.datetime_complete, ...
     ErrorMessage=options.error_message);

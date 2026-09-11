@@ -1,5 +1,5 @@
 classdef (Abstract) BaseDistribution
-    %BASEDISTRIBUTION Public base class for Optuna 4.9 distributions.
+    %BASEDISTRIBUTION Public base class for Optuna 5 distributions.
 
     properties
         name (1,1) string = "BaseDistribution"

@@ -1,5 +1,5 @@
 classdef VSBXCrossover < radia.optuna.nsgaii.SBXCrossover
-    %VSBXCROSSOVER Modified simulated binary crossover from Optuna 4.9.
+    %VSBXCROSSOVER Modified simulated binary crossover from Optuna 5.
 
     methods
         function obj = VSBXCrossover(options)

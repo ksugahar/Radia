@@ -267,16 +267,17 @@ after release; source changes follow Shared MCP Runtime Ownership, not an automa
 
 ## Optuna
 
-Pinned upstream Optuna is the oracle for shared MATLAB behavior. Seed, options,
-search-space order, history, constraints, values, states, warnings, and random
-consumption must match upstream fixtures. Handwritten MATLAB output is not
-compatibility truth.
-
-MATLAB table/MAT storage, Simulink monitoring, parallel execution, and MEX are
-extensions, not permission to alter the compatible algorithm. Keep API coverage
-and oracle manifests current. Unsupported behavior fails loudly. Official
-`optuna/optuna-mcp` owns generic Study/Trial MCP; `radia-mcp` owns MATLAB,
-Simulink, MEX, and Radia-domain composition.
+Pinned Optuna 5.0.0 is the sole oracle for shared MATLAB behavior: seed, options,
+parameter/search-space order, history, named constraints, values, states, warnings,
+defaults, extension points, and random consumption match upstream-generated fixtures.
+Handwritten MATLAB output is not compatibility truth.
+Adopt the Optuna 5 design in place: delete active optuna49 fixtures/pins, removed APIs/options,
+legacy sampler-state restore and public multi-objective TPE; unified TPESampler owns both objectives.
+Table/MAT storage, Simulink, parallelism and MEX are extensions, not algorithm changes.
+Native acceleration requires correct differential results; maintain API/oracle manifests and fail loudly.
+Fast deterministic tests belong in tests; long performance/scaling/parallel/dimension work in validation_test.
+Released optuna-mcp==0.2.0 owns generic Study/Trial MCP for Optuna 5.0.0; 0.3.0.dev is not a stable release.
+radia-mcp owns MATLAB, Simulink, MEX, differential-oracle, performance-gate and Radia composition.
 
 ## Git And Agents
 

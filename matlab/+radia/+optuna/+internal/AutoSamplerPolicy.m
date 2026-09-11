@@ -6,7 +6,7 @@ classdef AutoSamplerPolicy
             isMultiObjective=nObjectives>1;
             if isMultiObjective
                 if spec.has_categorical || spec.is_conditional
-                    name="motpe";
+                    name="tpe";
                     reason="multiobjective_mixed_or_conditional";
                 elseif spec.fixed_numeric && nTrials<=250 && nObjectives<4
                     name="gp";
@@ -18,7 +18,7 @@ classdef AutoSamplerPolicy
                     name="nsgaii";
                     reason="fixed_numeric_population_budget";
                 else
-                    name="motpe";
+                    name="tpe";
                     reason="multiobjective_unknown_space_safe_default";
                 end
                 return

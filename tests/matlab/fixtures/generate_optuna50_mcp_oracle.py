@@ -1,6 +1,6 @@
 """Generate MATLAB parity fixtures through the official Optuna MCP server.
 
-The seeded sampler oracle lives in ``generate_optuna49_oracle.py`` because
+The seeded sampler oracle lives in ``generate_optuna50_oracle.py`` because
 optuna-mcp 0.2.0 does not expose a sampler seed.  This fixture exercises the
 public MCP Study/Trial surface over a real stdio session instead of importing
 the server implementation in-process.
@@ -12,7 +12,7 @@ import csv
 import importlib.metadata
 import io
 import json
-import shutil
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -20,7 +20,7 @@ import anyio
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-EXPECTED_OPTUNA_VERSION = "4.9.0"
+EXPECTED_OPTUNA_VERSION = "5.0.0"
 EXPECTED_OPTUNA_MCP_VERSION = "0.2.0"
 
 
@@ -122,11 +122,9 @@ async def _build_oracle() -> dict[str, object]:
             f"{EXPECTED_OPTUNA_MCP_VERSION}, found {optuna_mcp_version}."
         )
 
-    command = shutil.which("optuna-mcp")
-    if command is None:
-        raise RuntimeError("The official optuna-mcp entry point is not on PATH.")
-
-    server = StdioServerParameters(command=command, args=[])
+    # Start the server with this exact interpreter so the server cannot import
+    # a different Optuna from a globally installed console-script wrapper.
+    server = StdioServerParameters(command=sys.executable, args=["-m", "optuna_mcp"])
     async with stdio_client(server) as (read, write):  # noqa: SIM117
         async with ClientSession(read, write) as session:
             initialized = await session.initialize()
@@ -269,7 +267,7 @@ def build_oracle() -> dict[str, object]:
 
 
 def main() -> None:
-    destination = Path(__file__).with_name("optuna49_mcp_oracle.json")
+    destination = Path(__file__).with_name("optuna50_mcp_oracle.json")
     destination.write_text(
         json.dumps(build_oracle(), indent=2, sort_keys=True) + "\n",
         encoding="utf-8",

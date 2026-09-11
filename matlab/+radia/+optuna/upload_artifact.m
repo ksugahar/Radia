@@ -35,8 +35,8 @@ if isa(target,"radia.optuna.FrozenTrial")
             "storage is required for FrozenTrial.");
     end
     options.storage.set_trial_system_attr(target.Number,key,jsonencode(payload));
-elseif ismethod(target,"set_system_attr")
-    target.set_system_attr(key,jsonencode(payload));
+elseif ismethod(target,"setInternalAttribute")
+    target.setInternalAttribute(key,jsonencode(payload));
 else
     error("radia:optuna:ArtifactTarget", ...
         "study_or_trial must be an Optuna Study, Trial, or FrozenTrial.");

@@ -1,5 +1,5 @@
 classdef IntersectionSearchSpace < handle
-    %INTERSECTIONSEARCHSPACE Public Optuna 4.9 intersection-space calculator.
+    %INTERSECTIONSEARCHSPACE Public Optuna 5 intersection-space calculator.
 
     properties (SetAccess=private)
         IncludePruned (1,1) logical = false

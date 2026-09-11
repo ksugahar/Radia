@@ -1,5 +1,5 @@
 classdef FrozenTrial < radia.optuna.BaseTrial
-    %FROZENTRIAL Finished-trial snapshot matching the Optuna 4.9 subset.
+    %FROZENTRIAL Finished-trial snapshot matching the Optuna 5.0 subset.
 
     properties (SetAccess=private)
         Number (1,1) double = -1
@@ -12,6 +12,7 @@ classdef FrozenTrial < radia.optuna.BaseTrial
         UserAttrs struct = struct()
         SystemAttrs struct = struct()
         Constraints double = zeros(1,0)
+        ConstraintNames string = strings(1,0)
         ConstraintPresent (1,1) logical = false
         DatetimeStart datetime = NaT
         DatetimeComplete datetime = NaT
@@ -32,6 +33,7 @@ classdef FrozenTrial < radia.optuna.BaseTrial
                 options.UserAttrs (1,1) struct = struct()
                 options.SystemAttrs (1,1) struct = struct()
                 options.Constraints double = zeros(1,0)
+                options.ConstraintNames string = strings(1,0)
                 options.ConstraintPresent (1,1) logical = false
                 options.DatetimeStart datetime = NaT
                 options.DatetimeComplete datetime = NaT
@@ -53,6 +55,15 @@ classdef FrozenTrial < radia.optuna.BaseTrial
             obj.UserAttrs=options.UserAttrs;
             obj.SystemAttrs=options.SystemAttrs;
             obj.Constraints=reshape(double(options.Constraints),1,[]);
+            obj.ConstraintNames=reshape(string(options.ConstraintNames),1,[]);
+            if isempty(obj.ConstraintNames) && ~isempty(obj.Constraints)
+                obj.ConstraintNames=string(0:numel(obj.Constraints)-1);
+            end
+            if numel(obj.ConstraintNames)~=numel(obj.Constraints) || ...
+                    numel(unique(obj.ConstraintNames))~=numel(obj.ConstraintNames)
+                error("radia:optuna:ConstraintShape", ...
+                    "Constraint names and values must align and be unique.");
+            end
             obj.ConstraintPresent=options.ConstraintPresent || ...
                 ~isempty(options.Constraints);
             obj.DatetimeStart=options.DatetimeStart;
@@ -166,12 +177,49 @@ classdef FrozenTrial < radia.optuna.BaseTrial
             obj.setUserAttr(name,value);
         end
 
-        function setSystemAttr(obj,name,value)
-            obj.SystemAttrs.(matlab.lang.makeValidName(name))=value;
+        function setConstraint(obj,name,value)
+            try
+                value=double(value);
+            catch
+                error("radia:optuna:ConstraintType", ...
+                    "Constraint '%s' must be convertible to a scalar double.",name);
+            end
+            if ~isscalar(value) || ~isreal(value)
+                error("radia:optuna:ConstraintType", ...
+                    "Constraint '%s' must be convertible to a scalar double.",name);
+            end
+            if isnan(value)
+                error("radia:optuna:ConstraintNaN", ...
+                    "Attempted to set constraint '%s', but NaN is not allowed.",name);
+            end
+            name=string(name);
+            if any(obj.ConstraintNames==name)
+                warning("radia:optuna:DuplicateConstraint", ...
+                    "The constraint value is ignored because constraint '%s' is already set.",name);
+                return
+            end
+            obj.ConstraintNames(end+1)=name;
+            obj.Constraints(end+1)=value;
         end
 
-        function set_system_attr(obj,name,value)
-            obj.setSystemAttr(name,value);
+        function set_constraint(obj,name,value)
+            obj.setConstraint(name,value);
+        end
+
+        function value=constraints(obj)
+            value=dictionary(reshape(obj.ConstraintNames,[],1), ...
+                reshape(obj.Constraints,[],1));
+        end
+
+        function value=system_attrs(obj)
+            value=obj.SystemAttrs;
+        end
+    end
+
+    methods (Hidden)
+        function setInternalAttribute(obj,name,value)
+            % Internal storage/callback state; not an Optuna 5 public API.
+            obj.SystemAttrs.(matlab.lang.makeValidName(name))=value;
         end
     end
 

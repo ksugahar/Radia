@@ -1,5 +1,5 @@
 classdef IntLogUniformDistribution < radia.optuna.IntDistribution
-    %INTLOGUNIFORMDISTRIBUTION Deprecated Optuna 4.9 distribution alias.
+    %INTLOGUNIFORMDISTRIBUTION Deprecated distribution alias retained by Optuna 5.
 
     methods
         function obj=IntLogUniformDistribution(low,high,step)

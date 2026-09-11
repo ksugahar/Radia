@@ -1,5 +1,5 @@
 classdef DiscreteUniformDistribution < radia.optuna.FloatDistribution
-    %DISCRETEUNIFORMDISTRIBUTION Deprecated Optuna 4.9 distribution alias.
+    %DISCRETEUNIFORMDISTRIBUTION Deprecated alias retained by Optuna 5.
 
     properties (Dependent)
         q

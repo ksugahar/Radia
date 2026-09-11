@@ -7,6 +7,8 @@ classdef FixedTrial < radia.optuna.BaseTrial
         Distributions struct = struct()
         UserAttrs struct = struct()
         SystemAttrs struct = struct()
+        ConstraintNames string = strings(1,0)
+        Constraints double = zeros(1,0)
         DatetimeStart datetime = datetime("now",TimeZone="local")
     end
 
@@ -167,12 +169,19 @@ classdef FixedTrial < radia.optuna.BaseTrial
             obj.setUserAttr(name,value);
         end
 
-        function setSystemAttr(obj,name,value)
-            obj.SystemAttrs.(matlab.lang.makeValidName(name))=value;
+        function setConstraint(obj,name,value)
+            value=obj.validateConstraint(name,value);
+            if any(obj.ConstraintNames==name)
+                warning("radia:optuna:DuplicateConstraint", ...
+                    "The constraint value is ignored because constraint '%s' is already set.",name);
+                return
+            end
+            obj.ConstraintNames(end+1)=string(name);
+            obj.Constraints(end+1)=value;
         end
 
-        function set_system_attr(obj,name,value)
-            obj.setSystemAttr(name,value);
+        function set_constraint(obj,name,value)
+            obj.setConstraint(name,value);
         end
 
         function value=params(obj)
@@ -190,9 +199,31 @@ classdef FixedTrial < radia.optuna.BaseTrial
         function value=system_attrs(obj)
             value=obj.SystemAttrs;
         end
+
+        function value=constraints(obj)
+            value=dictionary(reshape(obj.ConstraintNames,[],1), ...
+                reshape(obj.Constraints,[],1));
+        end
     end
 
     methods (Access=private)
+        function value=validateConstraint(~,name,value)
+            try
+                value=double(value);
+            catch
+                error("radia:optuna:ConstraintType", ...
+                    "Constraint '%s' must be convertible to a scalar double.",name);
+            end
+            if ~isscalar(value) || ~isreal(value)
+                error("radia:optuna:ConstraintType", ...
+                    "Constraint '%s' must be convertible to a scalar double.",name);
+            end
+            if isnan(value)
+                error("radia:optuna:ConstraintNaN", ...
+                    "Attempted to set constraint '%s', but NaN is not allowed.",name);
+            end
+        end
+
         function value=suggest(obj,name,distribution)
             key=obj.keyFor(name);
             if ~isfield(obj.FixedParams,key)

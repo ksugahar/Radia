@@ -1,5 +1,5 @@
 classdef JournalRedisBackend < radia.optuna.BaseJournalBackend
-    %JOURNALREDISBACKEND Redis-backed Optuna 4.9 journal log.
+    %JOURNALREDISBACKEND Redis-backed Optuna 5 journal log.
 
     properties (SetAccess=immutable)
         url (1,1) string

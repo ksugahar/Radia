@@ -42,7 +42,7 @@ def test_optuna_workflow_installs_pinned_pybind_before_native_build():
     assert dependency < build
     assert (
         "& $env:RADIA_OPTUNA_CI_PYTHON -m pip install "
-        "build wheel pytest optuna==4.9.0"
+        "build wheel pytest optuna==5.0.0"
     ) in workflow
 
 

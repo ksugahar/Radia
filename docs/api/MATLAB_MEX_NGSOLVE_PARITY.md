@@ -23,12 +23,12 @@ silently dropped from the count.
 | Stateful pybind11 class surface | 126 / 126 covered |
 | Radia MEX gateway commands | 364 |
 | Optuna MEX gateway commands | 21 |
-| MATLAB Optuna classes | 96 |
-| MATLAB Optuna functions | 93 |
+| MATLAB Optuna classes | 95 |
+| MATLAB Optuna functions | 88 |
 
 The gateways are intentionally independent. `radia_mex` contains no
 `optuna.*` commands and owns the Radia/NGSolve/oneMKL dependency graph.
-`optuna_mex` contains two API commands and 18 optimizer commands, has no
+`optuna_mex` contains two API commands and 19 optimizer commands, has no
 NGSolve, oneMKL, Radia-core, or Python dependency, and is loaded only when
 optimization is used. A missing or non-21-command `optuna_mex` fails loudly; it
 is never replaced by a call through `radia_mex` or a silent MATLAB substitute.

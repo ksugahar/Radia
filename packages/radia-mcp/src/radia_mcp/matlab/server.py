@@ -83,7 +83,7 @@ def matlab_optuna_release_gate(evidence_json:str,repository_path:str="",max_warm
     return json.dumps(_optuna_release_gate(evidence_json,repository_path,max_warmed_time_ratio),ensure_ascii=False,indent=2)
 @mcp.tool()
 def matlab_optuna_compatibility_contract(repo_root:str="")->str:
-    """Report verified Optuna 4.9.0 parity, MATLAB-only behavior, and gaps."""
+    """Report verified Optuna 5.0.0 parity, MATLAB-only behavior, and gaps."""
     return json.dumps(_optuna_compatibility(repo_root or None),ensure_ascii=False,indent=2)
 @mcp.tool()
 def matlab_optuna_oracle_audit(repo_root:str="")->str:

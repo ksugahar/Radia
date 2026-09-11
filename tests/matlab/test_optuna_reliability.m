@@ -66,6 +66,41 @@ verifyError(testCase, @()study.tell(trial, 1), ...
     "radia:optuna:TrialState");
 end
 
+function testStateCountCacheTracksMATLABStorageLifecycle(testCase)
+% Integration invariant, not an additional upstream parity claim.
+storagePath=string(tempname("C:\temp"))+".mat";
+cleanup=onCleanup(@()deleteStudyStorage(storagePath));
+study=radia.optuna.Study(StoragePath=storagePath,AutoSave=false, ...
+    Sampler=radia.optuna.RandomSampler(17));
+verifyStateCountCache(testCase,study);
+study.enqueue_trial(struct("x",0.2));
+study.enqueue_trial(struct("x",0.4));
+verifyStateCountCache(testCase,study);
+first=study.ask();
+second=study.ask();
+third=study.ask();
+verifyStateCountCache(testCase,study);
+study.tell(first,1);
+study.tell(second,State="PRUNED");
+verifyStateCountCache(testCase,study);
+study.recoverStaleRunning(0);
+verifyStateCountCache(testCase,study);
+study.tell(third,1,SkipIfFinished=true);
+study.add_trial(radia.optuna.create_trial(value=2));
+study.save();
+reloaded=radia.optuna.Study(StoragePath=storagePath,AutoSave=false, ...
+    Sampler=radia.optuna.RandomSampler(17));
+verifyStateCountCache(testCase,reloaded);
+clear cleanup
+end
+
+function verifyStateCountCache(testCase,study)
+states=study.TrialTable.State;
+counts=sum(states==["COMPLETE","PRUNED","RUNNING","WAITING"],1);
+verifyEqual(testCase,study.trialStateCounts(),counts);
+verifyEqual(testCase,study.nonRunningTrialCount(),sum(counts(1:2)));
+end
+
 function testAtomicStorageSchemaAndBackupRecovery(testCase)
 storagePath = string(tempname("C:\temp")) + ".mat";
 cleanup = onCleanup(@()deleteStudyStorage(storagePath));
@@ -80,7 +115,7 @@ verifyTrue(testCase, isfile(storagePath + ".bak"));
 loaded = load(storagePath, "StudyData", "-mat");
 verifyEqual(testCase, string(loaded.StudyData.Schema), ...
     "radia.optuna.study");
-verifyEqual(testCase, loaded.StudyData.Version, 4);
+verifyEqual(testCase, loaded.StudyData.Version, 6);
 
 overwriteFile(storagePath, "damaged primary");
 lastwarn("");
@@ -119,7 +154,7 @@ end
 function testSamplerRandomStatesResumeDeterministically(testCase)
 verifySamplerResume(testCase, "random");
 verifySamplerResume(testCase, "tpe");
-verifySamplerResume(testCase, "motpe");
+verifySamplerResume(testCase, "tpe_multiobjective");
 verifySamplerResume(testCase, "nsgaii");
 end
 
@@ -184,8 +219,8 @@ switch name
         sampler = radia.optuna.TPESampler( ...
             Seed=seed, NStartupTrials=2, Multivariate=true);
         directions = "minimize";
-    case "motpe"
-        sampler = radia.optuna.MOTPESampler( ...
+    case "tpe_multiobjective"
+        sampler = radia.optuna.TPESampler( ...
             Seed=seed, NStartupTrials=2);
         directions = ["minimize", "minimize"];
     case "nsgaii"
@@ -211,6 +246,46 @@ function value = constraintCallbackFailure()
 value = NaN; %#ok<NASGU>
 error("radia:test:ConstraintCallback", ...
     "Constraint evaluation failed after the objective returned.");
+end
+
+function testNormalizedSnapshotStoragePreservesPublicTables(testCase)
+path=string(tempname('C:/temp'))+'.mat';
+cleanup=onCleanup(@() deleteStudyStorage(path));
+study=radia.optuna.Study(StoragePath=path,AutoSave=false, ...
+    Sampler=radia.optuna.RandomSampler(17));
+for index=1:4
+    trial=study.ask(); trial.suggest_float('x',0,1);
+    if index==2
+        trial.report(7,9); trial.report(3,2);
+    end
+    if index<4, study.tell(trial,index); end
+end
+expectedTrials=study.TrialTable; expectedIntermediate=study.IntermediateTable;
+study.save();
+raw=load(path,'StudyData');
+verifyEqual(testCase,raw.StudyData.Version,6);
+verifyFalse(testCase,ismember('IntermediateValues',raw.StudyData.TrialTable.Properties.VariableNames));
+verifyEqual(testCase,height(raw.StudyData.TrialIntermediateSnapshots),2);
+restored=radia.optuna.Study(StoragePath=path,AutoSave=false);
+verifyEqual(testCase,restored.TrialTable,expectedTrials);
+verifyEqual(testCase,restored.IntermediateTable,expectedIntermediate);
+% A version-5 file keeps its old nested representation and migrates on save.
+StudyData=raw.StudyData; StudyData.Version=5;
+StudyData.TrialTable=expectedTrials;
+StudyData=rmfield(StudyData,'TrialIntermediateSnapshots');
+save(path,'StudyData','-mat');
+legacy=radia.optuna.Study(StoragePath=path,AutoSave=false);
+verifyEqual(testCase,legacy.TrialTable,expectedTrials);
+legacy.save();
+% Invalid normalized ownership must recover the last verified backup.
+raw=load(path,'StudyData'); StudyData=raw.StudyData;
+StudyData.TrialIntermediateSnapshots.TrialNumber(1)=999;
+save(path,'StudyData','-mat');
+verifyWarning(testCase,@() radia.optuna.Study(StoragePath=path,AutoSave=false), ...
+    'radia:optuna:RecoveredStorage');
+restored=radia.optuna.Study(StoragePath=path,AutoSave=false);
+verifyEqual(testCase,restored.TrialTable,expectedTrials);
+clear cleanup
 end
 
 function deleteStudyStorage(path)
