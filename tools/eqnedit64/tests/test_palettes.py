@@ -156,6 +156,11 @@ def test_palette_faces_use_unambiguous_owned_glyphs():
         face
         for _, _, _, items in E.palettes()
         for _, face, _ in items)
+    # Naming one absent character was never the general rule: U+2605 got in
+    # later and cost the whole palette its typeface.  Every face character is
+    # now checked against the font's own cmap in test_palette_faces.py; this
+    # line stays as the built module's copy of that lesson.  Do NOT extend it
+    # by hand with the next character someone happens to notice.
     assert all("▯" not in face for face in all_faces), (
         "U+25AF is absent from the embedded Latin Modern Math cmap; "
         "use the owned U+25A1 empty slot instead")
@@ -217,14 +222,14 @@ def test_native_geometry_palette_matches_the_web_editor():
     """
     expected = [
         ("∧", r"\wedge ", "ウェッジ積"),
-        ("★", r"\star ", "Hodge star作用素"),
+        ("⋆", r"\star ", "Hodge star作用素"),
         ("dω", r"\mathrm{d} ", "外微分（立体のd）"),
         ("ι", r"\iota_{} ", "内部積（縮約）ι_X"),
         ("ℒ", r"\mathcal{L}_{} ", "Lie微分"),
-        ("f^*", "^{*} ", "引き戻し（pullback）"),
-        ("f_*", "_{*} ", "押し出し（pushforward）"),
-        ("♭", r"^{\flat} ", "フラット（添字を下げる）"),
-        ("♯", r"^{\sharp} ", "シャープ（添字を上げる）"),
+        ("f^*", "{}^{*} ", "引き戻し（pullback）"),
+        ("f_*", "{}_{*} ", "押し出し（pushforward）"),
+        ("♭", r"{}^{\flat} ", "フラット（添字を下げる）"),
+        ("♯", r"{}^{\sharp} ", "シャープ（添字を上げる）"),
         ("⊗", r"\otimes ", "テンソル積"),
         ("⊕", r"\oplus ", "直和"),
     ]
@@ -242,11 +247,10 @@ def test_native_geometry_palette_matches_the_web_editor():
 
     source = (Path(__file__).resolve().parents[1] / "web" /
               "equation-editor.js").read_text(encoding="utf-8")
-    block = source.split('label: "微分幾何"', 1)[1].split("]\n    },", 1)[0]
-    web = []
-    for match in re.finditer(r'^\s*(\[".*"\]),?$', block, re.MULTILINE):
-        face, payload, label = json.loads(match.group(1))
-        web.append((face, payload, label))
+    block = source.split("var PALETTES = ", 1)[1].split(";\n", 1)[0]
+    catalogue = json.loads(block)
+    items = next(p["items"] for p in catalogue if p["label"] == "微分幾何")
+    web = [tuple(item[:3]) for item in items]
     assert web == expected
 
 

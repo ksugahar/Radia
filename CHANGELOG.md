@@ -10,6 +10,14 @@ All notable changes to the `radia` package.  Format: each release lists
   immediately after installation so missing modules fail before the build.
   The native check has a distribution-specific name; another package's
   `build-test`, a skipped run or a neutral result cannot substitute for success.
+- Added `bibliography_get_entries` so PowerPoint and other non-LaTeX generators
+  can resolve ordered BibTeX keys from the bundled canonical bibliography and
+  record its SHA-256 instead of carrying hand-written reference lists. Added
+  the ten records needed by the IGTE 2026 Cauer/SIBC talk and corrected the
+  Senior impedance-boundary paper to its DOI-backed 1960 publication year.
+- Added the presentation rule that a claim such as “generated from the
+  canonical references.bib” is valid only when the build actually calls the
+  bibliography API, fails closed on missing keys, and records provenance.
 
 ## 4.95.91 - Corrected MagLev ECB force reconstruction
 
