@@ -9,8 +9,9 @@ import pathlib
 import re
 from collections import Counter
 
-from .._bibparse import (BibEntry, read_bib_file, write_bib,
+from .._bibparse import (BibEntry,
                           make_cite_key, is_lab_style_key)
+from .._source_edit import read_source, write_source_edits
 
 
 def _extract_keyword(key: str, author: str, year: str) -> str | None:
@@ -50,7 +51,7 @@ def bibliography_canonicalize_keys(bib_path: str,
         return f"Error: file not found: {p}"
 
     try:
-        entries = read_bib_file(p)
+        original, source, entries = read_source(p)
     except (OSError, UnicodeError, ValueError) as exc:
         return f"Error: cannot read bibliography: {exc}"
     existing_keys = Counter(e.key for e in entries if not e.kind.startswith("@"))
@@ -87,7 +88,22 @@ def bibliography_canonicalize_keys(bib_path: str,
         lines.append(f"  {old!r:35s} -> {new!r:35s} [{lab_ok}]")
 
     if not dry_run and renames:
-        out_path = p
-        out_path.write_text(write_bib(new_entries), encoding="utf-8")
-        lines.append(f"  wrote: {out_path}")
+        mapping = dict(renames)
+        edits = []
+        for entry in entries:
+            if entry.key in mapping and entry.key_span is not None:
+                edits.append((*entry.key_span, mapping[entry.key]))
+            for field in ("crossref", "xref", "xdata", "related"):
+                value = entry.fields.get(field)
+                if not value:
+                    continue
+                replaced = re.sub(r"[^,\s]+", lambda match: mapping.get(match[0], match[0]), value)
+                if replaced != value:
+                    edits.append((*entry.field_spans[field], "{" + replaced + "}"))
+        try:
+            write_source_edits(p, original, source, edits)
+        except (OSError, UnicodeError, ValueError) as exc:
+            return f"Error: cannot safely write bibliography: {exc}"
+        lines.append(f"  wrote: {p}")
+        lines.append("  Update external manuscript citations using the rename mapping above.")
     return "\n".join(lines)
