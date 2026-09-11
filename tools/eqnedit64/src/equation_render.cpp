@@ -31,6 +31,7 @@
 #define NOMINMAX          /* else windows.h's max/min macros eat std::max */
 #include <windows.h>
 #endif
+#include "font_trace.h"
 
 namespace eqnedit {
 namespace {
@@ -351,10 +352,15 @@ bool load_math_font() {
      * external PID/event gate (see VALIDATION_NOTES.md).
      * This is a cache, not an installation: there is no registry
      * entry and the EXE remains the only input. */
+    font_trace("cache.begin");
     const std::filesystem::path path = cache_embedded_math_font(bytes, size);
+    font_trace("cache.end", path.empty() ? 0 : 1);
     if (path.empty()) return false;
-    return AddFontResourceExW(path.c_str(), FR_PRIVATE | FR_NOT_ENUM,
-                              nullptr) > 0;
+    font_trace("register.begin");
+    const int added = AddFontResourceExW(path.c_str(), FR_PRIVATE | FR_NOT_ENUM,
+                                       nullptr);
+    font_trace("register.end", added);
+    return added > 0;
 }
 
 /* Keep trying until the face actually measures.  Registering it is not the
@@ -390,7 +396,9 @@ void ensure_math_font() {
     }
     if (!g_mathFontRegistered) return;
     for (int attempt = 0; attempt < 30; ++attempt) {
+        font_trace("measure.begin", attempt);
         g_mathFontLoaded = math_face_measures();
+        font_trace("measure.end", g_mathFontLoaded ? 1 : 0);
         if (g_mathFontLoaded) return;
         Sleep(25);
     }
@@ -468,8 +476,10 @@ struct MetricCache {
 
     MetricCache() { hdc = CreateCompatibleDC(nullptr); }
     ~MetricCache() {
+        font_trace("metrics.destroy.begin");
         for (auto& kv : fonts) DeleteObject(kv.second);
         if (hdc) DeleteDC(hdc);
+        font_trace("metrics.destroy.end");
     }
     /* ink_bottom is where the glyph's ink STOPS above the baseline, and
      * it is deliberately not clamped: an accent such as U+02DC is drawn
@@ -2857,7 +2867,9 @@ struct DrawFontKey {
 struct DrawFontCache {
     std::map<DrawFontKey, HFONT> fonts;
     ~DrawFontCache() {
+        font_trace("drawfonts.destroy.begin");
         for (auto& kv : fonts) DeleteObject(kv.second);
+        font_trace("drawfonts.destroy.end");
     }
     bool enabled = true;
     HFONT get(const DrawFontKey& key) {
