@@ -257,3 +257,42 @@ def test_generated_bbl_checks_key_identity_not_only_count(tmp_path, monkeypatch,
     result = canonical.bibliography_make_bbl(str(tex), style="plain")
     assert result.startswith("bibliography_make_bbl:" if valid else "Error:"), result
     assert output.read_bytes() == (generated if valid else b"verified")
+
+
+@pytest.mark.parametrize("mode", ["unchanged", "changed", "removed", "created", "unreadable"])
+def test_local_bst_snapshot_guards_publication(tmp_path, monkeypatch, mode):
+    from radia_mcp.bibliography.plans import T14_canonical as canonical
+    bib = tmp_path / "fixture.bib"
+    bib.write_bytes(b"@misc{one,title={First}}")
+    monkeypatch.setattr(canonical, "CANONICAL", bib)
+    monkeypatch.setattr(canonical.shutil, "which", lambda name: "bibtex")
+    tex = tmp_path / "paper.tex"
+    tex.write_text(r"\cite{one}", encoding="utf-8")
+    style = tmp_path / "custom.bst"
+    if mode == "unreadable":
+        style.mkdir()
+    elif mode != "created":
+        style.write_bytes(b"style snapshot")
+    output = tex.with_suffix(".bbl")
+    output.write_bytes(b"verified")
+    def run(*args, cwd, **kwargs):
+        assert mode != "unreadable"
+        staged = cwd / "custom.bst"
+        assert staged.exists() == (mode != "created")
+        if staged.exists():
+            assert staged.read_bytes() == b"style snapshot"
+        (cwd / "manuscript.bbl").write_bytes(br"\bibitem{one}First")
+        if mode in {"changed", "created"}:
+            style.write_bytes(b"concurrent style")
+        elif mode == "removed":
+            style.unlink()
+        return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
+    monkeypatch.setattr(canonical.subprocess, "run", run)
+    result = canonical.bibliography_make_bbl(str(tex), style="custom")
+    if mode == "unchanged":
+        assert result.startswith("bibliography_make_bbl:"), result
+        assert hashlib.sha256(b"style snapshot").hexdigest() in result
+    else:
+        assert result.startswith("Error:"), result
+        assert output.read_bytes() == b"verified"
+    assert not list(tmp_path.glob(".paper.bbl.*.tmp"))
