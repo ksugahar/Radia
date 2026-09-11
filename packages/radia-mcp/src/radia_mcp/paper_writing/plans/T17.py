@@ -127,22 +127,34 @@ def paper_writing_next_5_actions(
         tex_or_text = ""
 
     try:
-        from .T8 import paper_writing_health_report
+        from .T8 import paper_writing_health_report, _require_health_result
     except Exception as e:
-        return {"error": f"health_report import failed: {e}",
+        return {"status": "unavailable", "error": f"health_report import failed: {e}",
                 "source": "paper T17 next 5 actions"}
 
-    health = paper_writing_health_report(
-        tex_or_text, bib=bib, abstract=abstract,
-        author_last_names=author_last_names, skip=skip,
-    )
+    try:
+        health = _require_health_result(paper_writing_health_report(
+            tex_or_text, bib=bib, abstract=abstract,
+            author_last_names=author_last_names, skip=skip,
+        ))
+    except Exception as e:
+        return {"status": "unavailable", "error": f"health report failed: {e}",
+                "source": "paper T17"}
     priority_issues = health.get("priority_issues", [])
 
     actions: list[dict] = []
+    unresolved_checks: list[dict] = []
     for issue in priority_issues:
         tid = issue.get("tool", "")
         sev = issue.get("severity", "LOW")
-        score = issue.get("score") or 0
+        score = issue.get("score")
+        if sev == "UNKNOWN" or score is None:
+            unresolved_checks.append(issue)
+            continue
+        if (isinstance(score, bool) or not isinstance(score, (int, float))
+                or not 0 <= score <= 10):
+            unresolved_checks.append(issue)
+            continue
         est = TOOL_ESTIMATES.get(tid, {})
         effort = est.get("effort", 3)
         impact = est.get("impact", 3)
@@ -157,7 +169,7 @@ def paper_writing_next_5_actions(
             "tool_id": tid,
             "name": name,
             "severity": sev,
-            "current_score": round(score, 1) if score else None,
+            "current_score": round(score, 1),
             "estimated_effort": effort,
             "estimated_impact": impact,
             "priority_score": round(priority_score, 1),
@@ -184,7 +196,18 @@ def paper_writing_next_5_actions(
                 f"imp {a['estimated_impact']}) → {a['rewrite_example'][:70]}…"
             )
 
+    status = health["status"]
+    if unresolved_checks and status == "complete":
+        status = "partial"
+    if status != "complete":
+        comments.insert(0, "検査未完了のため対応不要とは判定できません。確認済みの修正候補と未検査項目を確認してください。")
+        if not top_5:
+            comments = comments[:1]
     return {
+        "status": status,
+        "unresolved_checks": unresolved_checks,
+        "unknown_tools": health.get("unknown_tools", []),
+        "tools_skipped": health.get("tools_skipped", []),
         "top_5_actions": top_5,
         "all_action_count": len(actions),
         "overall_score": health.get("overall_score"),
