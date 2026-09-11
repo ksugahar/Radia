@@ -73,6 +73,14 @@ expansion. The twelve-file lane passes 1091 tests, including real BibTeX output
 from synthetic canonical fixtures. Unsupported conditional/multi-cite syntax
 fails explicitly; static scanning is not a complete TeX interpreter.
 
+M04 snapshot follow-up (2026-09-12): canonical access rejects duplicate keys,
+invalid UTF-8 and malformed/empty data. Returned record hashes and BibTeX input
+now use the same byte snapshot. TeX resolution records exact input-byte hashes;
+bbl publication refuses changed canonical/TeX/output files and cleans its own
+staging file on failure. Twelve added cases bring the twelve-file lane to 1103
+passes. This is optimistic conflict detection, not a cross-process transaction
+lock, and does not certify rendered reference formatting or all TeX semantics.
+
 Completion of a scoped validation requires matching the selected source, zero unexpected failures
 or skips in the relevant lane, and retained local machine-readable evidence.
 Do not commit transient test logs or mark the package globally "complete" from
