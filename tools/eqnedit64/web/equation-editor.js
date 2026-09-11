@@ -430,27 +430,27 @@
       ],
       [
         "x′",
-        "'",
+        "^{\\prime }",
         "プライム",
-        "x'",
+        "x^{\\prime }",
         "template.prime",
         0,
         ""
       ],
       [
         "x″",
-        "''",
+        "^{\\prime \\prime }",
         "二重プライム",
-        "x''",
+        "x^{\\prime \\prime }",
         "template.dprime",
         0,
         ""
       ],
       [
         "x‴",
-        "'''",
+        "^{\\prime \\prime \\prime }",
         "三重プライム",
-        "x'''",
+        "x^{\\prime \\prime \\prime }",
         "template.tprime",
         0,
         ""
@@ -3690,7 +3690,7 @@
     var i = text.length - 1;
     while (i >= 0 && /\s/.test(text.charAt(i))) i -= 1;
     if (i < 0) return false;
-    if (text.charAt(i) === "'") return false;      /* a'' is legal */
+    if (text.charAt(i) === "'") return true;
     var before = i;
     if (text.charAt(i) === "}" && text.charAt(i - 1) !== "\\") {
       var depth = 0;
@@ -3720,16 +3720,17 @@
     var before = value.slice(0, start);
     var selected = value.slice(start, end);
     var after = value.slice(end);
-    if (/^'+$/.test(snippet)) {
+    if (/^\^\{(?:\\prime\s*)+\}$/.test(snippet) || /^'+$/.test(snippet)) {
+      var explicitPrime = /^'+$/.test(snippet)
+        ? "^{" + Array(snippet.length + 1).join("\\prime ") + "}" : snippet;
       if (selected) {
-        var decorated = "{" + selected + "}^{" +
-          Array(snippet.length + 1).join("\\prime ") + "}";
+        var decorated = "{" + selected + "}" + explicitPrime;
         return { value: before + decorated + after, caret: before.length + decorated.length };
       }
       /* With no selection, preserve caret insertion. Clarify with an empty group when the caret sits
        * right after another superscript, which is exactly what MathJax asks
        * for; the rendered result is unchanged where no group is needed. */
-      var prime = (endsWithSuperscript(before) ? "{}" : "") + snippet;
+      var prime = (!before.trim() || endsWithSuperscript(before) ? "{}" : "") + explicitPrime;
       return { value: before + prime + after, caret: before.length + prime.length };
     }
     var body = snippet;
