@@ -345,7 +345,11 @@ bool load_math_font() {
      * though the old hidden test passed.  Other applications can still crash
      * that shared host, so this is not a claim about its sole cause.  Extract
      * the verified embedded bytes once and use the file-backed, process-private
-     * API instead.  This is a cache, not an installation: there is no registry
+     * API instead. A 2026-09-11 independent review observed the same host
+     * crash signature at startup on another machine with this file-backed
+     * path. This mitigation is not proof of session safety; retain the
+     * external PID/event gate (see VALIDATION_NOTES.md).
+     * This is a cache, not an installation: there is no registry
      * entry and the EXE remains the only input. */
     const std::filesystem::path path = cache_embedded_math_font(bytes, size);
     if (path.empty()) return false;
