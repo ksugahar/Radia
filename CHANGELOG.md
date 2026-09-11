@@ -28,6 +28,10 @@ All notable changes to the `radia` package.  Format: each release lists
 
 Released 2026-09-11.
 
+- Made the MATLAB MEX `Matrix.matvec` gateway enter an NGSolve TaskManager
+  region, matching `matvec_into`. This prevents the TaskManager-parallel real
+  AMS path from intermittently returning its zero initial guess; the native
+  MATLAB parity regression now repeats that direct solve three times.
 - Refined recurring presentation agendas: full research talks now target four
   or five content-derived sections, agenda rows contain section names only,
   and explanatory taglines reduce the outline score. Each transition still
