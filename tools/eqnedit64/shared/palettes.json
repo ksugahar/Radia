@@ -1,0 +1,2664 @@
+{
+  "schema": "eqnedit64.palette.v1",
+  "groups": [
+    {
+      "id": "basic",
+      "label": "基本",
+      "palettes": [
+        12,
+        13,
+        18,
+        11,
+        2,
+        16
+      ]
+    },
+    {
+      "id": "analysis",
+      "label": "解析",
+      "palettes": [
+        0,
+        3,
+        7,
+        14,
+        15
+      ]
+    },
+    {
+      "id": "sets",
+      "label": "集合・記号",
+      "palettes": [
+        4,
+        6,
+        5,
+        17,
+        1
+      ]
+    },
+    {
+      "id": "geometry",
+      "label": "幾何",
+      "palettes": [
+        8
+      ]
+    },
+    {
+      "id": "greek",
+      "label": "ギリシャ",
+      "palettes": [
+        9,
+        10
+      ]
+    }
+  ],
+  "palettes": [
+    {
+      "label": "関係演算子",
+      "face": "≤≠",
+      "columns": 3,
+      "items": [
+        {
+          "command": "symbol.\\leq",
+          "face": "≤",
+          "label": "以下",
+          "insert_tex": "\\leq ",
+          "preview_tex": "\\leq",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\geq",
+          "face": "≥",
+          "label": "以上",
+          "insert_tex": "\\geq ",
+          "preview_tex": "\\geq",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\ll",
+          "face": "≪",
+          "label": "はるかに小さい",
+          "insert_tex": "\\ll ",
+          "preview_tex": "\\ll",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\gg",
+          "face": "≫",
+          "label": "はるかに大きい",
+          "insert_tex": "\\gg ",
+          "preview_tex": "\\gg",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\prec",
+          "face": "≺",
+          "label": "順序が先",
+          "insert_tex": "\\prec ",
+          "preview_tex": "\\prec",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\succ",
+          "face": "≻",
+          "label": "順序が後",
+          "insert_tex": "\\succ ",
+          "preview_tex": "\\succ",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\triangleleft",
+          "face": "◁",
+          "label": "左向き三角",
+          "insert_tex": "\\triangleleft ",
+          "preview_tex": "\\triangleleft",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\triangleright",
+          "face": "▷",
+          "label": "右向き三角",
+          "insert_tex": "\\triangleright ",
+          "preview_tex": "\\triangleright",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\neq",
+          "face": "≠",
+          "label": "等しくない",
+          "insert_tex": "\\neq ",
+          "preview_tex": "\\neq",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\equiv",
+          "face": "≡",
+          "label": "恒等・合同",
+          "insert_tex": "\\equiv ",
+          "preview_tex": "\\equiv",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\approx",
+          "face": "≈",
+          "label": "ほぼ等しい",
+          "insert_tex": "\\approx ",
+          "preview_tex": "\\approx",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\cong",
+          "face": "≅",
+          "label": "合同",
+          "insert_tex": "\\cong ",
+          "preview_tex": "\\cong",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\sim",
+          "face": "∼",
+          "label": "相似",
+          "insert_tex": "\\sim ",
+          "preview_tex": "\\sim",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\simeq",
+          "face": "≃",
+          "label": "漸近的に等しい",
+          "insert_tex": "\\simeq ",
+          "preview_tex": "\\simeq",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\propto",
+          "face": "∝",
+          "label": "比例",
+          "insert_tex": "\\propto ",
+          "preview_tex": "\\propto",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\sqsubseteq",
+          "face": "⊑",
+          "label": "角付き部分集合",
+          "insert_tex": "\\sqsubseteq ",
+          "preview_tex": "\\sqsubseteq",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\sqsupseteq",
+          "face": "⊒",
+          "label": "角付き上位集合",
+          "insert_tex": "\\sqsupseteq ",
+          "preview_tex": "\\sqsupseteq",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\parallel",
+          "face": "∥",
+          "label": "平行",
+          "insert_tex": "\\parallel ",
+          "preview_tex": "\\parallel",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\Vert",
+          "face": "‖",
+          "label": "二重縦線（ノルム）",
+          "insert_tex": "\\Vert ",
+          "preview_tex": "\\Vert",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\mid",
+          "face": "∣",
+          "label": "割り切る",
+          "insert_tex": "\\mid ",
+          "preview_tex": "\\mid",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\vdash",
+          "face": "⊢",
+          "label": "導出される",
+          "insert_tex": "\\vdash ",
+          "preview_tex": "\\vdash",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\models",
+          "face": "⊨",
+          "label": "充足する",
+          "insert_tex": "\\models ",
+          "preview_tex": "\\models",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\frown",
+          "face": "⌢",
+          "label": "フラウン（記号）",
+          "insert_tex": "\\frown ",
+          "preview_tex": "\\frown",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\smile",
+          "face": "⌣",
+          "label": "スマイル（記号）",
+          "insert_tex": "\\smile ",
+          "preview_tex": "\\smile",
+          "selection_slot": 0
+        }
+      ]
+    },
+    {
+      "label": "空白と点",
+      "face": "⋯",
+      "columns": 3,
+      "items": [
+        {
+          "command": "latex.\\!",
+          "face": "−",
+          "label": "負の空き",
+          "insert_tex": "\\!",
+          "preview_tex": "",
+          "selection_slot": 0
+        },
+        {
+          "command": "latex.\\,",
+          "face": "␣",
+          "label": "細い空き（1/6 em）",
+          "insert_tex": "\\,",
+          "preview_tex": "",
+          "selection_slot": 0
+        },
+        {
+          "command": "latex.\\:",
+          "face": "␣␣",
+          "label": "中位の空き（2/9 em）",
+          "insert_tex": "\\:",
+          "preview_tex": "",
+          "selection_slot": 0
+        },
+        {
+          "command": "latex.\\;",
+          "face": "␣␣␣",
+          "label": "広い空き（5/18 em）",
+          "insert_tex": "\\;",
+          "preview_tex": "",
+          "selection_slot": 0
+        },
+        {
+          "command": "latex.\\quad",
+          "face": "1em",
+          "label": "1 em の空き",
+          "insert_tex": "\\quad",
+          "preview_tex": "",
+          "selection_slot": 0
+        },
+        {
+          "command": "latex.\\qquad",
+          "face": "2em",
+          "label": "2 em の空き",
+          "insert_tex": "\\qquad",
+          "preview_tex": "",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\ldots",
+          "face": "…",
+          "label": "下寄りの省略記号",
+          "insert_tex": "\\ldots ",
+          "preview_tex": "\\ldots",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\cdots",
+          "face": "⋯",
+          "label": "中央の省略記号",
+          "insert_tex": "\\cdots ",
+          "preview_tex": "\\cdots",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\vdots",
+          "face": "⋮",
+          "label": "縦の省略記号",
+          "insert_tex": "\\vdots ",
+          "preview_tex": "\\vdots",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\ddots",
+          "face": "⋱",
+          "label": "斜めの省略記号",
+          "insert_tex": "\\ddots ",
+          "preview_tex": "\\ddots",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\therefore",
+          "face": "∴",
+          "label": "ゆえに",
+          "insert_tex": "\\therefore ",
+          "preview_tex": "\\therefore",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\because",
+          "face": "∵",
+          "label": "なぜならば",
+          "insert_tex": "\\because ",
+          "preview_tex": "\\because",
+          "selection_slot": 0
+        }
+      ]
+    },
+    {
+      "label": "装飾",
+      "face": "x′",
+      "columns": 3,
+      "items": [
+        {
+          "command": "template.hat",
+          "face": "^x",
+          "label": "ハット",
+          "insert_tex": "\\hat{}",
+          "preview_tex": "\\hat{x}",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.tilde",
+          "face": "~x",
+          "label": "チルダ",
+          "insert_tex": "\\tilde{}",
+          "preview_tex": "\\tilde{x}",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.bar",
+          "face": "¯x",
+          "label": "バー（1文字）",
+          "insert_tex": "\\bar{}",
+          "preview_tex": "\\bar{x}",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.vec",
+          "face": "x→",
+          "label": "ベクトル矢印",
+          "insert_tex": "\\vec{}",
+          "preview_tex": "\\vec{x}",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.dot",
+          "face": "·x",
+          "label": "ドット",
+          "insert_tex": "\\dot{}",
+          "preview_tex": "\\dot{x}",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.ddot",
+          "face": ":x",
+          "label": "二重ドット",
+          "insert_tex": "\\ddot{}",
+          "preview_tex": "\\ddot{x}",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.dddot",
+          "face": "⋯x",
+          "label": "三重ドット",
+          "insert_tex": "\\dddot{}",
+          "preview_tex": "\\dddot{x}",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.prime",
+          "face": "x′",
+          "label": "プライム",
+          "insert_tex": "'",
+          "preview_tex": "x'",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.dprime",
+          "face": "x″",
+          "label": "二重プライム",
+          "insert_tex": "''",
+          "preview_tex": "x''",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.tprime",
+          "face": "x‴",
+          "label": "三重プライム",
+          "insert_tex": "'''",
+          "preview_tex": "x'''",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.strike",
+          "face": "/x",
+          "label": "打ち消し線",
+          "insert_tex": "\\cancel{}",
+          "preview_tex": "\\cancel{x}",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.frown",
+          "face": "⌢x",
+          "label": "フラウン",
+          "insert_tex": "\\overset{\\frown}{}",
+          "preview_tex": "\\overset{\\frown}{x}",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.smile",
+          "face": "⌣x",
+          "label": "スマイル",
+          "insert_tex": "\\overset{\\smile}{}",
+          "preview_tex": "\\overset{\\smile}{x}",
+          "selection_slot": 0
+        },
+        {
+          "command": "style.sans",
+          "face": "sf",
+          "label": "サンセリフ（\\mathsf）",
+          "insert_tex": "\\mathsf{}",
+          "preview_tex": "\\mathsf{A}",
+          "selection_slot": 0
+        },
+        {
+          "command": "style.mono",
+          "face": "tt",
+          "label": "等幅（\\mathtt）",
+          "insert_tex": "\\mathtt{}",
+          "preview_tex": "\\mathtt{A}",
+          "selection_slot": 0
+        },
+        {
+          "command": "style.script",
+          "face": "cal",
+          "label": "カリグラフィー（\\mathcal）",
+          "insert_tex": "\\mathcal{}",
+          "preview_tex": "\\mathcal{A}",
+          "selection_slot": 0
+        },
+        {
+          "command": "style.double",
+          "face": "bb",
+          "label": "黒板太字（\\mathbb）",
+          "insert_tex": "\\mathbb{}",
+          "preview_tex": "\\mathbb{A}",
+          "selection_slot": 0
+        },
+        {
+          "command": "style.fraktur",
+          "face": "fr",
+          "label": "フラクトゥール（\\mathfrak）",
+          "insert_tex": "\\mathfrak{}",
+          "preview_tex": "\\mathfrak{A}",
+          "selection_slot": 0
+        },
+        {
+          "command": "style.boldsymbol",
+          "face": "Bα",
+          "label": "記号太字（\\bm）",
+          "insert_tex": "\\bm{}",
+          "preview_tex": "\\bm{A}",
+          "selection_slot": 0
+        }
+      ]
+    },
+    {
+      "label": "演算子",
+      "face": "±×",
+      "columns": 3,
+      "items": [
+        {
+          "command": "symbol.\\pm",
+          "face": "±",
+          "label": "プラスマイナス",
+          "insert_tex": "\\pm ",
+          "preview_tex": "\\pm",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\mp",
+          "face": "∓",
+          "label": "マイナスプラス",
+          "insert_tex": "\\mp ",
+          "preview_tex": "\\mp",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\times",
+          "face": "×",
+          "label": "乗算",
+          "insert_tex": "\\times ",
+          "preview_tex": "\\times",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\div",
+          "face": "÷",
+          "label": "除算",
+          "insert_tex": "\\div ",
+          "preview_tex": "\\div",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\ast",
+          "face": "∗",
+          "label": "アスタリスク",
+          "insert_tex": "\\ast ",
+          "preview_tex": "\\ast",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\cdot",
+          "face": "⋅",
+          "label": "中黒（積）",
+          "insert_tex": "\\cdot ",
+          "preview_tex": "\\cdot",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\star",
+          "face": "⋆",
+          "label": "星",
+          "insert_tex": "\\star ",
+          "preview_tex": "\\star",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\bullet",
+          "face": "•",
+          "label": "黒丸",
+          "insert_tex": "\\bullet ",
+          "preview_tex": "\\bullet",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\otimes",
+          "face": "⊗",
+          "label": "テンソル積",
+          "insert_tex": "\\otimes ",
+          "preview_tex": "\\otimes",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\oplus",
+          "face": "⊕",
+          "label": "直和",
+          "insert_tex": "\\oplus ",
+          "preview_tex": "\\oplus",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\ominus",
+          "face": "⊖",
+          "label": "丸マイナス",
+          "insert_tex": "\\ominus ",
+          "preview_tex": "\\ominus",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\odot",
+          "face": "⊙",
+          "label": "丸ドット",
+          "insert_tex": "\\odot ",
+          "preview_tex": "\\odot",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\diamond",
+          "face": "⋄",
+          "label": "ダイヤ演算子",
+          "insert_tex": "\\diamond ",
+          "preview_tex": "\\diamond",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\bigtriangledown",
+          "face": "▽",
+          "label": "下向き三角",
+          "insert_tex": "\\bigtriangledown ",
+          "preview_tex": "\\bigtriangledown",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\dagger",
+          "face": "†",
+          "label": "ダガー",
+          "insert_tex": "\\dagger ",
+          "preview_tex": "\\dagger",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\ddagger",
+          "face": "‡",
+          "label": "二重ダガー",
+          "insert_tex": "\\ddagger ",
+          "preview_tex": "\\ddagger",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\dag",
+          "face": "†",
+          "label": "ダガー（別名）",
+          "insert_tex": "\\dag ",
+          "preview_tex": "\\dag",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\setminus",
+          "face": "∖",
+          "label": "差集合",
+          "insert_tex": "\\setminus ",
+          "preview_tex": "\\setminus",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\backslash",
+          "face": "\\",
+          "label": "バックスラッシュ",
+          "insert_tex": "\\backslash ",
+          "preview_tex": "\\backslash",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\surd",
+          "face": "√",
+          "label": "根号記号",
+          "insert_tex": "\\surd ",
+          "preview_tex": "\\surd",
+          "selection_slot": 0
+        }
+      ]
+    },
+    {
+      "label": "矢印",
+      "face": "→⇒",
+      "columns": 3,
+      "items": [
+        {
+          "command": "symbol.\\rightarrow",
+          "face": "→",
+          "label": "右矢印",
+          "insert_tex": "\\rightarrow ",
+          "preview_tex": "\\rightarrow",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\leftarrow",
+          "face": "←",
+          "label": "左矢印",
+          "insert_tex": "\\leftarrow ",
+          "preview_tex": "\\leftarrow",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\leftrightarrow",
+          "face": "↔",
+          "label": "両向き矢印",
+          "insert_tex": "\\leftrightarrow ",
+          "preview_tex": "\\leftrightarrow",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\uparrow",
+          "face": "↑",
+          "label": "上矢印",
+          "insert_tex": "\\uparrow ",
+          "preview_tex": "\\uparrow",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\downarrow",
+          "face": "↓",
+          "label": "下矢印",
+          "insert_tex": "\\downarrow ",
+          "preview_tex": "\\downarrow",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\updownarrow",
+          "face": "↕",
+          "label": "上下矢印",
+          "insert_tex": "\\updownarrow ",
+          "preview_tex": "\\updownarrow",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\Rightarrow",
+          "face": "⇒",
+          "label": "二重右矢印",
+          "insert_tex": "\\Rightarrow ",
+          "preview_tex": "\\Rightarrow",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\Leftarrow",
+          "face": "⇐",
+          "label": "二重左矢印",
+          "insert_tex": "\\Leftarrow ",
+          "preview_tex": "\\Leftarrow",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\Leftrightarrow",
+          "face": "⇔",
+          "label": "二重両向き矢印",
+          "insert_tex": "\\Leftrightarrow ",
+          "preview_tex": "\\Leftrightarrow",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\Uparrow",
+          "face": "⇑",
+          "label": "二重上矢印",
+          "insert_tex": "\\Uparrow ",
+          "preview_tex": "\\Uparrow",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\to",
+          "face": "→",
+          "label": "右矢印（\\to）",
+          "insert_tex": "\\to ",
+          "preview_tex": "\\to",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\mapsto",
+          "face": "↦",
+          "label": "写像",
+          "insert_tex": "\\mapsto ",
+          "preview_tex": "\\mapsto",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\Longrightarrow",
+          "face": "⟹",
+          "label": "長い二重右矢印",
+          "insert_tex": "\\Longrightarrow ",
+          "preview_tex": "\\Longrightarrow",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\Longleftarrow",
+          "face": "⟸",
+          "label": "長い二重左矢印",
+          "insert_tex": "\\Longleftarrow ",
+          "preview_tex": "\\Longleftarrow",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\Longleftrightarrow",
+          "face": "⟺",
+          "label": "長い二重両向き矢印",
+          "insert_tex": "\\Longleftrightarrow ",
+          "preview_tex": "\\Longleftrightarrow",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\hookrightarrow",
+          "face": "↪",
+          "label": "右フック矢印",
+          "insert_tex": "\\hookrightarrow ",
+          "preview_tex": "\\hookrightarrow",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\hookleftarrow",
+          "face": "↩",
+          "label": "左フック矢印",
+          "insert_tex": "\\hookleftarrow ",
+          "preview_tex": "\\hookleftarrow",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\nearrow",
+          "face": "↗",
+          "label": "右上矢印",
+          "insert_tex": "\\nearrow ",
+          "preview_tex": "\\nearrow",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\searrow",
+          "face": "↘",
+          "label": "右下矢印",
+          "insert_tex": "\\searrow ",
+          "preview_tex": "\\searrow",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\swarrow",
+          "face": "↙",
+          "label": "左下矢印",
+          "insert_tex": "\\swarrow ",
+          "preview_tex": "\\swarrow",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\nwarrow",
+          "face": "↖",
+          "label": "左上矢印",
+          "insert_tex": "\\nwarrow ",
+          "preview_tex": "\\nwarrow",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\rightharpoonup",
+          "face": "⇀",
+          "label": "右上ハープーン",
+          "insert_tex": "\\rightharpoonup ",
+          "preview_tex": "\\rightharpoonup",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\rightharpoondown",
+          "face": "⇁",
+          "label": "右下ハープーン",
+          "insert_tex": "\\rightharpoondown ",
+          "preview_tex": "\\rightharpoondown",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\leftharpoonup",
+          "face": "↼",
+          "label": "左上ハープーン",
+          "insert_tex": "\\leftharpoonup ",
+          "preview_tex": "\\leftharpoonup",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\leftharpoondown",
+          "face": "↽",
+          "label": "左下ハープーン",
+          "insert_tex": "\\leftharpoondown ",
+          "preview_tex": "\\leftharpoondown",
+          "selection_slot": 0
+        }
+      ]
+    },
+    {
+      "label": "論理記号",
+      "face": "∀∧",
+      "columns": 2,
+      "items": [
+        {
+          "command": "symbol.\\forall",
+          "face": "∀",
+          "label": "すべての",
+          "insert_tex": "\\forall ",
+          "preview_tex": "\\forall",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\exists",
+          "face": "∃",
+          "label": "存在する",
+          "insert_tex": "\\exists ",
+          "preview_tex": "\\exists",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\nexists",
+          "face": "∄",
+          "label": "存在しない",
+          "insert_tex": "\\nexists ",
+          "preview_tex": "\\nexists",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\neg",
+          "face": "¬",
+          "label": "否定",
+          "insert_tex": "\\neg ",
+          "preview_tex": "\\neg",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\wedge",
+          "face": "∧",
+          "label": "論理積",
+          "insert_tex": "\\wedge ",
+          "preview_tex": "\\wedge",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\vee",
+          "face": "∨",
+          "label": "論理和",
+          "insert_tex": "\\vee ",
+          "preview_tex": "\\vee",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\top",
+          "face": "⊤",
+          "label": "真",
+          "insert_tex": "\\top ",
+          "preview_tex": "\\top",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\perp",
+          "face": "⊥",
+          "label": "垂直・偽",
+          "insert_tex": "\\perp ",
+          "preview_tex": "\\perp",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\not",
+          "face": "not",
+          "label": "打ち消し",
+          "insert_tex": "\\not ",
+          "preview_tex": "\\not=",
+          "selection_slot": 0
+        }
+      ]
+    },
+    {
+      "label": "集合記号",
+      "face": "∈∪",
+      "columns": 3,
+      "items": [
+        {
+          "command": "symbol.\\in",
+          "face": "∈",
+          "label": "要素である",
+          "insert_tex": "\\in ",
+          "preview_tex": "\\in",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\notin",
+          "face": "∉",
+          "label": "要素でない",
+          "insert_tex": "\\notin ",
+          "preview_tex": "\\notin",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\ni",
+          "face": "∋",
+          "label": "要素として含む",
+          "insert_tex": "\\ni ",
+          "preview_tex": "\\ni",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\subset",
+          "face": "⊂",
+          "label": "部分集合",
+          "insert_tex": "\\subset ",
+          "preview_tex": "\\subset",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\supset",
+          "face": "⊃",
+          "label": "上位集合",
+          "insert_tex": "\\supset ",
+          "preview_tex": "\\supset",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\not\\subset",
+          "face": "⊄",
+          "label": "部分集合でない",
+          "insert_tex": "\\not\\subset ",
+          "preview_tex": "\\not\\subset",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\subseteq",
+          "face": "⊆",
+          "label": "部分集合または等しい",
+          "insert_tex": "\\subseteq ",
+          "preview_tex": "\\subseteq",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\supseteq",
+          "face": "⊇",
+          "label": "上位集合または等しい",
+          "insert_tex": "\\supseteq ",
+          "preview_tex": "\\supseteq",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\emptyset",
+          "face": "∅",
+          "label": "空集合",
+          "insert_tex": "\\emptyset ",
+          "preview_tex": "\\emptyset",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\cup",
+          "face": "∪",
+          "label": "和集合",
+          "insert_tex": "\\cup ",
+          "preview_tex": "\\cup",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\cap",
+          "face": "∩",
+          "label": "共通部分",
+          "insert_tex": "\\cap ",
+          "preview_tex": "\\cap",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\sqcup",
+          "face": "⊔",
+          "label": "角付き和",
+          "insert_tex": "\\sqcup ",
+          "preview_tex": "\\sqcup",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\sqcap",
+          "face": "⊓",
+          "label": "角付き共通部分",
+          "insert_tex": "\\sqcap ",
+          "preview_tex": "\\sqcap",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\bigcup",
+          "face": "⋃",
+          "label": "大きい和集合",
+          "insert_tex": "\\bigcup ",
+          "preview_tex": "\\bigcup",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\bigcap",
+          "face": "⋂",
+          "label": "大きい共通部分",
+          "insert_tex": "\\bigcap ",
+          "preview_tex": "\\bigcap",
+          "selection_slot": 0
+        }
+      ]
+    },
+    {
+      "label": "その他の記号",
+      "face": "∂∞",
+      "columns": 3,
+      "items": [
+        {
+          "command": "symbol.\\partial",
+          "face": "∂",
+          "label": "偏微分",
+          "insert_tex": "\\partial ",
+          "preview_tex": "\\partial",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\nabla",
+          "face": "∇",
+          "label": "ナブラ",
+          "insert_tex": "\\nabla ",
+          "preview_tex": "\\nabla",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\infty",
+          "face": "∞",
+          "label": "無限大",
+          "insert_tex": "\\infty ",
+          "preview_tex": "\\infty",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\Re",
+          "face": "ℜ",
+          "label": "実部",
+          "insert_tex": "\\Re ",
+          "preview_tex": "\\Re",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\Im",
+          "face": "ℑ",
+          "label": "虚部",
+          "insert_tex": "\\Im ",
+          "preview_tex": "\\Im",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\hbar",
+          "face": "ℏ",
+          "label": "換算プランク定数",
+          "insert_tex": "\\hbar ",
+          "preview_tex": "\\hbar",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\angle",
+          "face": "∠",
+          "label": "角",
+          "insert_tex": "\\angle ",
+          "preview_tex": "\\angle",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\circ",
+          "face": "∘",
+          "label": "合成・度（^\\circ）",
+          "insert_tex": "\\circ ",
+          "preview_tex": "\\circ",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\mho",
+          "face": "℧",
+          "label": "モー（コンダクタンス）",
+          "insert_tex": "\\mho ",
+          "preview_tex": "\\mho",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\ell",
+          "face": "ℓ",
+          "label": "筆記体の l",
+          "insert_tex": "\\ell ",
+          "preview_tex": "\\ell",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\prime",
+          "face": "′",
+          "label": "プライム記号",
+          "insert_tex": "\\prime ",
+          "preview_tex": "\\prime",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\coprod",
+          "face": "∐",
+          "label": "余積記号",
+          "insert_tex": "\\coprod ",
+          "preview_tex": "\\coprod",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\langle",
+          "face": "⟨",
+          "label": "左山括弧（単体）",
+          "insert_tex": "\\langle ",
+          "preview_tex": "\\langle",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\rangle",
+          "face": "⟩",
+          "label": "右山括弧（単体）",
+          "insert_tex": "\\rangle ",
+          "preview_tex": "\\rangle",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\lfloor",
+          "face": "⌊",
+          "label": "左床記号（単体）",
+          "insert_tex": "\\lfloor ",
+          "preview_tex": "\\lfloor",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\rfloor",
+          "face": "⌋",
+          "label": "右床記号（単体）",
+          "insert_tex": "\\rfloor ",
+          "preview_tex": "\\rfloor",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\lceil",
+          "face": "⌈",
+          "label": "左天井記号（単体）",
+          "insert_tex": "\\lceil ",
+          "preview_tex": "\\lceil",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\rceil",
+          "face": "⌉",
+          "label": "右天井記号（単体）",
+          "insert_tex": "\\rceil ",
+          "preview_tex": "\\rceil",
+          "selection_slot": 0
+        }
+      ]
+    },
+    {
+      "label": "微分幾何",
+      "face": "∧⋆",
+      "columns": 4,
+      "items": [
+        {
+          "command": "latex.\\wedge ",
+          "face": "∧",
+          "label": "ウェッジ積",
+          "insert_tex": "\\wedge ",
+          "preview_tex": "\\wedge ",
+          "selection_slot": 0
+        },
+        {
+          "command": "latex.\\star ",
+          "face": "⋆",
+          "label": "Hodge star作用素",
+          "insert_tex": "\\star ",
+          "preview_tex": "\\star ",
+          "selection_slot": 0
+        },
+        {
+          "command": "latex.\\mathrm{d} ",
+          "face": "dω",
+          "label": "外微分（立体のd）",
+          "insert_tex": "\\mathrm{d} ",
+          "preview_tex": "\\mathrm{d}\\omega",
+          "selection_slot": 0
+        },
+        {
+          "command": "latex.\\iota_{} ",
+          "face": "ι",
+          "label": "内部積（縮約）ι_X",
+          "insert_tex": "\\iota_{} ",
+          "preview_tex": "\\iota_v",
+          "selection_slot": 0
+        },
+        {
+          "command": "latex.\\mathcal{L}_{} ",
+          "face": "ℒ",
+          "label": "Lie微分",
+          "insert_tex": "\\mathcal{L}_{} ",
+          "preview_tex": "\\mathcal{L}_v",
+          "selection_slot": 0
+        },
+        {
+          "command": "latex.{}^{*} ",
+          "face": "f^*",
+          "label": "引き戻し（pullback）",
+          "insert_tex": "{}^{*} ",
+          "preview_tex": "f^{*}",
+          "selection_slot": 0
+        },
+        {
+          "command": "latex.{}_{*} ",
+          "face": "f_*",
+          "label": "押し出し（pushforward）",
+          "insert_tex": "{}_{*} ",
+          "preview_tex": "f_{*}",
+          "selection_slot": 0
+        },
+        {
+          "command": "latex.{}^{\\flat} ",
+          "face": "♭",
+          "label": "フラット（添字を下げる）",
+          "insert_tex": "{}^{\\flat} ",
+          "preview_tex": "v^{\\flat}",
+          "selection_slot": 0
+        },
+        {
+          "command": "latex.{}^{\\sharp} ",
+          "face": "♯",
+          "label": "シャープ（添字を上げる）",
+          "insert_tex": "{}^{\\sharp} ",
+          "preview_tex": "v^{\\sharp}",
+          "selection_slot": 0
+        },
+        {
+          "command": "latex.\\otimes ",
+          "face": "⊗",
+          "label": "テンソル積",
+          "insert_tex": "\\otimes ",
+          "preview_tex": "\\otimes ",
+          "selection_slot": 0
+        },
+        {
+          "command": "latex.\\oplus ",
+          "face": "⊕",
+          "label": "直和",
+          "insert_tex": "\\oplus ",
+          "preview_tex": "\\oplus ",
+          "selection_slot": 0
+        }
+      ]
+    },
+    {
+      "label": "ギリシャ小文字",
+      "face": "αβ",
+      "columns": 4,
+      "items": [
+        {
+          "command": "symbol.\\alpha",
+          "face": "α",
+          "label": "アルファ",
+          "insert_tex": "\\alpha ",
+          "preview_tex": "\\alpha",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\beta",
+          "face": "β",
+          "label": "ベータ",
+          "insert_tex": "\\beta ",
+          "preview_tex": "\\beta",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\gamma",
+          "face": "γ",
+          "label": "ガンマ",
+          "insert_tex": "\\gamma ",
+          "preview_tex": "\\gamma",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\delta",
+          "face": "δ",
+          "label": "デルタ",
+          "insert_tex": "\\delta ",
+          "preview_tex": "\\delta",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\epsilon",
+          "face": "ϵ",
+          "label": "イプシロン",
+          "insert_tex": "\\epsilon ",
+          "preview_tex": "\\epsilon",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\varepsilon",
+          "face": "ε",
+          "label": "イプシロン（異体）",
+          "insert_tex": "\\varepsilon ",
+          "preview_tex": "\\varepsilon",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\zeta",
+          "face": "ζ",
+          "label": "ゼータ",
+          "insert_tex": "\\zeta ",
+          "preview_tex": "\\zeta",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\eta",
+          "face": "η",
+          "label": "エータ",
+          "insert_tex": "\\eta ",
+          "preview_tex": "\\eta",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\theta",
+          "face": "θ",
+          "label": "シータ",
+          "insert_tex": "\\theta ",
+          "preview_tex": "\\theta",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\vartheta",
+          "face": "ϑ",
+          "label": "シータ（異体）",
+          "insert_tex": "\\vartheta ",
+          "preview_tex": "\\vartheta",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\iota",
+          "face": "ι",
+          "label": "イオタ",
+          "insert_tex": "\\iota ",
+          "preview_tex": "\\iota",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\kappa",
+          "face": "κ",
+          "label": "カッパ",
+          "insert_tex": "\\kappa ",
+          "preview_tex": "\\kappa",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\varkappa",
+          "face": "ϰ",
+          "label": "カッパ（異体）",
+          "insert_tex": "\\varkappa ",
+          "preview_tex": "\\varkappa",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\lambda",
+          "face": "λ",
+          "label": "ラムダ",
+          "insert_tex": "\\lambda ",
+          "preview_tex": "\\lambda",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\mu",
+          "face": "μ",
+          "label": "ミュー",
+          "insert_tex": "\\mu ",
+          "preview_tex": "\\mu",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\nu",
+          "face": "ν",
+          "label": "ニュー",
+          "insert_tex": "\\nu ",
+          "preview_tex": "\\nu",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\xi",
+          "face": "ξ",
+          "label": "クサイ",
+          "insert_tex": "\\xi ",
+          "preview_tex": "\\xi",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\pi",
+          "face": "π",
+          "label": "パイ",
+          "insert_tex": "\\pi ",
+          "preview_tex": "\\pi",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\varpi",
+          "face": "ϖ",
+          "label": "パイ（異体）",
+          "insert_tex": "\\varpi ",
+          "preview_tex": "\\varpi",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\rho",
+          "face": "ρ",
+          "label": "ロー",
+          "insert_tex": "\\rho ",
+          "preview_tex": "\\rho",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\varrho",
+          "face": "ϱ",
+          "label": "ロー（異体）",
+          "insert_tex": "\\varrho ",
+          "preview_tex": "\\varrho",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\sigma",
+          "face": "σ",
+          "label": "シグマ",
+          "insert_tex": "\\sigma ",
+          "preview_tex": "\\sigma",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\varsigma",
+          "face": "ς",
+          "label": "シグマ（語末形）",
+          "insert_tex": "\\varsigma ",
+          "preview_tex": "\\varsigma",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\tau",
+          "face": "τ",
+          "label": "タウ",
+          "insert_tex": "\\tau ",
+          "preview_tex": "\\tau",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\upsilon",
+          "face": "υ",
+          "label": "ウプシロン",
+          "insert_tex": "\\upsilon ",
+          "preview_tex": "\\upsilon",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\phi",
+          "face": "ϕ",
+          "label": "ファイ",
+          "insert_tex": "\\phi ",
+          "preview_tex": "\\phi",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\varphi",
+          "face": "φ",
+          "label": "ファイ（異体）",
+          "insert_tex": "\\varphi ",
+          "preview_tex": "\\varphi",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\chi",
+          "face": "χ",
+          "label": "カイ",
+          "insert_tex": "\\chi ",
+          "preview_tex": "\\chi",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\psi",
+          "face": "ψ",
+          "label": "プサイ",
+          "insert_tex": "\\psi ",
+          "preview_tex": "\\psi",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\omega",
+          "face": "ω",
+          "label": "オメガ",
+          "insert_tex": "\\omega ",
+          "preview_tex": "\\omega",
+          "selection_slot": 0
+        }
+      ]
+    },
+    {
+      "label": "ギリシャ大文字",
+      "face": "ΓΩ",
+      "columns": 4,
+      "items": [
+        {
+          "command": "symbol.\\Gamma",
+          "face": "Γ",
+          "label": "ガンマ",
+          "insert_tex": "\\Gamma ",
+          "preview_tex": "\\Gamma",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\Delta",
+          "face": "Δ",
+          "label": "デルタ",
+          "insert_tex": "\\Delta ",
+          "preview_tex": "\\Delta",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\Theta",
+          "face": "Θ",
+          "label": "シータ",
+          "insert_tex": "\\Theta ",
+          "preview_tex": "\\Theta",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\Lambda",
+          "face": "Λ",
+          "label": "ラムダ",
+          "insert_tex": "\\Lambda ",
+          "preview_tex": "\\Lambda",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\Xi",
+          "face": "Ξ",
+          "label": "クサイ",
+          "insert_tex": "\\Xi ",
+          "preview_tex": "\\Xi",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\Pi",
+          "face": "Π",
+          "label": "パイ",
+          "insert_tex": "\\Pi ",
+          "preview_tex": "\\Pi",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\Sigma",
+          "face": "Σ",
+          "label": "シグマ",
+          "insert_tex": "\\Sigma ",
+          "preview_tex": "\\Sigma",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\Upsilon",
+          "face": "Υ",
+          "label": "ウプシロン",
+          "insert_tex": "\\Upsilon ",
+          "preview_tex": "\\Upsilon",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\Phi",
+          "face": "Φ",
+          "label": "ファイ",
+          "insert_tex": "\\Phi ",
+          "preview_tex": "\\Phi",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\Psi",
+          "face": "Ψ",
+          "label": "プサイ",
+          "insert_tex": "\\Psi ",
+          "preview_tex": "\\Psi",
+          "selection_slot": 0
+        },
+        {
+          "command": "symbol.\\Omega",
+          "face": "Ω",
+          "label": "オメガ",
+          "insert_tex": "\\Omega ",
+          "preview_tex": "\\Omega",
+          "selection_slot": 0
+        }
+      ]
+    },
+    {
+      "label": "括弧",
+      "face": "(□)",
+      "columns": 3,
+      "items": [
+        {
+          "command": "template.paren",
+          "face": "(□)",
+          "label": "丸括弧",
+          "insert_tex": "\\left({}\\right)",
+          "preview_tex": "\\left(a\\right)",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.bracket",
+          "face": "[□]",
+          "label": "角括弧",
+          "insert_tex": "\\left[{}\\right]",
+          "preview_tex": "\\left[a\\right]",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.brace",
+          "face": "{□}",
+          "label": "波括弧",
+          "insert_tex": "\\left\\{{}\\right\\}",
+          "preview_tex": "\\left\\{a\\right\\}",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.angle",
+          "face": "⟨□⟩",
+          "label": "山括弧",
+          "insert_tex": "\\left\\langle {}\\right\\rangle",
+          "preview_tex": "\\left\\langle a\\right\\rangle",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.abs",
+          "face": "|□|",
+          "label": "絶対値",
+          "insert_tex": "\\left|{}\\right|",
+          "preview_tex": "\\left|a\\right|",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.norm",
+          "face": "‖□‖",
+          "label": "ノルム",
+          "insert_tex": "\\left\\|{}\\right\\|",
+          "preview_tex": "\\left\\|a\\right\\|",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.floor",
+          "face": "⌊□⌋",
+          "label": "床関数",
+          "insert_tex": "\\left\\lfloor {}\\right\\rfloor",
+          "preview_tex": "\\left\\lfloor a\\right\\rfloor",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.ceil",
+          "face": "⌈□⌉",
+          "label": "天井関数",
+          "insert_tex": "\\left\\lceil {}\\right\\rceil",
+          "preview_tex": "\\left\\lceil a\\right\\rceil",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.dirac",
+          "face": "⟨□|□⟩",
+          "label": "ブラケット",
+          "insert_tex": "\\left\\langle {}\\middle|{}\\right\\rangle",
+          "preview_tex": "\\left\\langle a\\middle|b\\right\\rangle",
+          "selection_slot": 0
+        }
+      ]
+    },
+    {
+      "label": "分数と根号",
+      "face": "⁄√",
+      "columns": 2,
+      "items": [
+        {
+          "command": "template.frac",
+          "face": "□/□",
+          "label": "分数",
+          "insert_tex": "\\frac{}{}",
+          "preview_tex": "\\frac{a}{b}",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.slashfrac",
+          "face": "□⁄□",
+          "label": "スラッシュ分数",
+          "insert_tex": "{}^{}/{}_{}",
+          "preview_tex": "{}^{a}/{}_{b}",
+          "selection_slot": 1
+        },
+        {
+          "command": "template.sqrt",
+          "face": "√□",
+          "label": "平方根",
+          "insert_tex": "\\sqrt{}",
+          "preview_tex": "\\sqrt{x}",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.nthroot",
+          "face": "n√□",
+          "label": "n 乗根",
+          "insert_tex": "\\sqrt[]{}",
+          "preview_tex": "\\sqrt[n]{x}",
+          "selection_slot": 1
+        }
+      ]
+    },
+    {
+      "label": "上下付き",
+      "face": "x↑",
+      "columns": 3,
+      "items": [
+        {
+          "command": "template.sup",
+          "face": "□↑",
+          "label": "上付き",
+          "insert_tex": "{}^{}",
+          "preview_tex": "a^{b}",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.sub",
+          "face": "□↓",
+          "label": "下付き",
+          "insert_tex": "{}_{}",
+          "preview_tex": "a_{b}",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.subsup",
+          "face": "□↕",
+          "label": "上下付き",
+          "insert_tex": "{}_{}^{}",
+          "preview_tex": "a_{b}^{c}",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.over",
+          "face": "↑□",
+          "label": "上側の注記",
+          "insert_tex": "\\overset{}{}",
+          "preview_tex": "\\overset{b}{a}",
+          "selection_slot": 1
+        },
+        {
+          "command": "template.under",
+          "face": "↓□",
+          "label": "下側の注記",
+          "insert_tex": "\\underset{}{}",
+          "preview_tex": "\\underset{b}{a}",
+          "selection_slot": 1
+        },
+        {
+          "command": "template.lim",
+          "face": "lim",
+          "label": "極限（条件は下）",
+          "insert_tex": "\\lim_{}",
+          "preview_tex": "\\lim_{a}",
+          "selection_slot": 0
+        }
+      ]
+    },
+    {
+      "label": "総和",
+      "face": "∑",
+      "columns": 2,
+      "items": [
+        {
+          "command": "template.sum",
+          "face": "∑□",
+          "label": "総和（上下限つき）",
+          "insert_tex": "\\sum_{}^{} {}",
+          "preview_tex": "\\sum_{a}^{b} c",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.prod",
+          "face": "∏□",
+          "label": "総乗（上下限つき）",
+          "insert_tex": "\\prod_{}^{} {}",
+          "preview_tex": "\\prod_{a}^{b} c",
+          "selection_slot": 0
+        }
+      ]
+    },
+    {
+      "label": "積分",
+      "face": "∫",
+      "columns": 3,
+      "items": [
+        {
+          "command": "template.int",
+          "face": "∫",
+          "label": "積分",
+          "insert_tex": "\\int_{}^{} {}",
+          "preview_tex": "\\int_{a}^{b} c",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.iint",
+          "face": "∬",
+          "label": "二重積分",
+          "insert_tex": "\\iint_{}^{} {}",
+          "preview_tex": "\\iint_{a}^{b} c",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.iiint",
+          "face": "∭",
+          "label": "三重積分",
+          "insert_tex": "\\iiint_{}^{} {}",
+          "preview_tex": "\\iiint_{a}^{b} c",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.oint",
+          "face": "∮",
+          "label": "周回積分",
+          "insert_tex": "\\oint_{}^{} {}",
+          "preview_tex": "\\oint_{a}^{b} c",
+          "selection_slot": 0
+        }
+      ]
+    },
+    {
+      "label": "上線と下線",
+      "face": "¯_",
+      "columns": 2,
+      "items": [
+        {
+          "command": "template.overline",
+          "face": "¯□",
+          "label": "上線（伸縮）",
+          "insert_tex": "\\overline{}",
+          "preview_tex": "\\overline{x}",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.underline",
+          "face": "_□",
+          "label": "下線（伸縮）",
+          "insert_tex": "\\underline{}",
+          "preview_tex": "\\underline{x}",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.overbrace",
+          "face": "⏞□",
+          "label": "上の水平波括弧",
+          "insert_tex": "\\overbrace{}^{}",
+          "preview_tex": "\\overbrace{xy}",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.underbrace",
+          "face": "⏟□",
+          "label": "下の水平波括弧",
+          "insert_tex": "\\underbrace{}_{}",
+          "preview_tex": "\\underbrace{xy}",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.overrightarrow",
+          "face": "□→",
+          "label": "上の右向き伸縮矢印",
+          "insert_tex": "\\overrightarrow{}",
+          "preview_tex": "\\overrightarrow{x}",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.overleftarrow",
+          "face": "←□",
+          "label": "上の左向き伸縮矢印",
+          "insert_tex": "\\overleftarrow{}",
+          "preview_tex": "\\overleftarrow{x}",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.overleftrightarrow",
+          "face": "□↔",
+          "label": "上の両向き伸縮矢印",
+          "insert_tex": "\\overleftrightarrow{}",
+          "preview_tex": "\\overleftrightarrow{x}",
+          "selection_slot": 0
+        }
+      ]
+    },
+    {
+      "label": "総乗と集合演算",
+      "face": "∏∐",
+      "columns": 2,
+      "items": [
+        {
+          "command": "template.coprod",
+          "face": "∐□",
+          "label": "余積（上下限つき）",
+          "insert_tex": "\\coprod_{}^{} {}",
+          "preview_tex": "\\coprod_{a}^{b} c",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.bigcup",
+          "face": "⋃□",
+          "label": "大きい和集合（上下限つき）",
+          "insert_tex": "\\bigcup_{}^{} {}",
+          "preview_tex": "\\bigcup_{a}^{b} c",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.bigcap",
+          "face": "⋂□",
+          "label": "大きい共通部分（上下限つき）",
+          "insert_tex": "\\bigcap_{}^{} {}",
+          "preview_tex": "\\bigcap_{a}^{b} c",
+          "selection_slot": 0
+        }
+      ]
+    },
+    {
+      "label": "行列",
+      "face": "⊞",
+      "columns": 4,
+      "items": [
+        {
+          "command": "template.matrix1x2",
+          "face": "1×2",
+          "label": "1×2",
+          "insert_tex": "\\begin{matrix} {} & {} \\end{matrix}",
+          "preview_tex": "",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.matrix1x3",
+          "face": "1×3",
+          "label": "1×3",
+          "insert_tex": "\\begin{matrix} {} & {} & {} \\end{matrix}",
+          "preview_tex": "",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.matrix2x1",
+          "face": "2×1",
+          "label": "2×1",
+          "insert_tex": "\\begin{matrix} {} \\\\ {} \\end{matrix}",
+          "preview_tex": "",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.matrix2x2",
+          "face": "2×2",
+          "label": "2×2",
+          "insert_tex": "\\begin{matrix} {} & {} \\\\ {} & {} \\end{matrix}",
+          "preview_tex": "",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.matrix2x3",
+          "face": "2×3",
+          "label": "2×3",
+          "insert_tex": "\\begin{matrix} {} & {} & {} \\\\ {} & {} & {} \\end{matrix}",
+          "preview_tex": "",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.matrix3x1",
+          "face": "3×1",
+          "label": "3×1",
+          "insert_tex": "\\begin{matrix} {} \\\\ {} \\\\ {} \\end{matrix}",
+          "preview_tex": "",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.matrix3x2",
+          "face": "3×2",
+          "label": "3×2",
+          "insert_tex": "\\begin{matrix} {} & {} \\\\ {} & {} \\\\ {} & {} \\end{matrix}",
+          "preview_tex": "",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.matrix3x3",
+          "face": "3×3",
+          "label": "3×3",
+          "insert_tex": "\\begin{matrix} {} & {} & {} \\\\ {} & {} & {} \\\\ {} & {} & {} \\end{matrix}",
+          "preview_tex": "",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.matrix4x4",
+          "face": "4×4",
+          "label": "4×4",
+          "insert_tex": "\\begin{matrix} {} & {} & {} & {} \\\\ {} & {} & {} & {} \\\\ {} & {} & {} & {} \\\\ {} & {} & {} & {} \\end{matrix}",
+          "preview_tex": "",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.matrix5x5",
+          "face": "5×5",
+          "label": "5×5",
+          "insert_tex": "\\begin{matrix} {} & {} & {} & {} & {} \\\\ {} & {} & {} & {} & {} \\\\ {} & {} & {} & {} & {} \\\\ {} & {} & {} & {} & {} \\\\ {} & {} & {} & {} & {} \\end{matrix}",
+          "preview_tex": "",
+          "selection_slot": 0
+        },
+        {
+          "command": "template.matrix6x6",
+          "face": "6×6",
+          "label": "6×6",
+          "insert_tex": "\\begin{matrix} {} & {} & {} & {} & {} & {} \\\\ {} & {} & {} & {} & {} & {} \\\\ {} & {} & {} & {} & {} & {} \\\\ {} & {} & {} & {} & {} & {} \\\\ {} & {} & {} & {} & {} & {} \\\\ {} & {} & {} & {} & {} & {} \\end{matrix}",
+          "preview_tex": "",
+          "selection_slot": 0
+        },
+        {
+          "command": "matrix.add_row",
+          "face": "+R",
+          "label": "行を下へ追加",
+          "insert_tex": "",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "web_unavailable": "Web版ではTeXソースの行・列を編集してください"
+        },
+        {
+          "command": "matrix.remove_row",
+          "face": "−R",
+          "label": "現在行を削除",
+          "insert_tex": "",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "web_unavailable": "Web版ではTeXソースの行・列を編集してください"
+        },
+        {
+          "command": "matrix.add_column",
+          "face": "+C",
+          "label": "列を右へ追加",
+          "insert_tex": "",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "web_unavailable": "Web版ではTeXソースの行・列を編集してください"
+        },
+        {
+          "command": "matrix.remove_column",
+          "face": "−C",
+          "label": "現在列を削除",
+          "insert_tex": "",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "web_unavailable": "Web版ではTeXソースの行・列を編集してください"
+        },
+        {
+          "command": "template.cases",
+          "face": "{□",
+          "label": "場合分け",
+          "insert_tex": "\\begin{cases} {} & {} \\\\ {} & {} \\end{cases}",
+          "preview_tex": "\\begin{cases}a&b\\\\c&d\\end{cases}",
+          "selection_slot": 0
+        }
+      ]
+    }
+  ],
+  "web_extras": [
+    {
+      "label": "構造（Web追加）",
+      "face": "構造",
+      "columns": 4,
+      "items": [
+        {
+          "command": "web.0.1",
+          "face": "dfrac",
+          "label": "常に大きい分数（入れ子・文中でも縮まない）",
+          "insert_tex": "\\dfrac{}{}",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "構造",
+          "legacy_face": "dfrac"
+        },
+        {
+          "command": "web.0.4",
+          "face": "x²",
+          "label": "上付き",
+          "insert_tex": "^{}",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "構造",
+          "legacy_face": "x²"
+        },
+        {
+          "command": "web.0.5",
+          "face": "xᵢ",
+          "label": "下付き",
+          "insert_tex": "_{}",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "構造",
+          "legacy_face": "xᵢ"
+        },
+        {
+          "command": "web.0.6",
+          "face": "Σ",
+          "label": "総和",
+          "insert_tex": "\\sum_{}^{}",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "構造",
+          "legacy_face": "Σ"
+        },
+        {
+          "command": "web.0.7",
+          "face": "∏",
+          "label": "総乗",
+          "insert_tex": "\\prod_{}^{}",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "構造",
+          "legacy_face": "∏"
+        },
+        {
+          "command": "web.0.8",
+          "face": "∫",
+          "label": "積分",
+          "insert_tex": "\\int_{}^{}",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "構造",
+          "legacy_face": "∫"
+        },
+        {
+          "command": "web.0.9",
+          "face": "∬",
+          "label": "二重積分（面積分）",
+          "insert_tex": "\\iint_{} ",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "構造",
+          "legacy_face": "∬"
+        },
+        {
+          "command": "web.0.10",
+          "face": "∭",
+          "label": "三重積分（体積積分）",
+          "insert_tex": "\\iiint_{} ",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "構造",
+          "legacy_face": "∭"
+        },
+        {
+          "command": "web.0.11",
+          "face": "∮",
+          "label": "周回積分",
+          "insert_tex": "\\oint_{}",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "構造",
+          "legacy_face": "∮"
+        },
+        {
+          "command": "web.0.12",
+          "face": "lim",
+          "label": "極限",
+          "insert_tex": "\\lim_{ \\to }",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "構造",
+          "legacy_face": "lim"
+        },
+        {
+          "command": "web.0.13",
+          "face": "d/dx",
+          "label": "常微分",
+          "insert_tex": "\\frac{\\mathrm{d} {}}{\\mathrm{d} {}}",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "構造",
+          "legacy_face": "d/dx"
+        },
+        {
+          "command": "web.0.14",
+          "face": "∂/∂x",
+          "label": "偏微分",
+          "insert_tex": "\\frac{\\partial {}}{\\partial {}}",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "構造",
+          "legacy_face": "∂/∂x"
+        },
+        {
+          "command": "web.0.15",
+          "face": "行列",
+          "label": "2×2行列（丸括弧）",
+          "insert_tex": "\\begin{pmatrix} {} & {} \\\\ {} & {} \\end{pmatrix}",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "構造",
+          "legacy_face": "行列"
+        },
+        {
+          "command": "web.0.17",
+          "face": "[∷]",
+          "label": "行列（角括弧）",
+          "insert_tex": "\\begin{bmatrix} {} & {} \\\\ {} & {} \\end{bmatrix}",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "構造",
+          "legacy_face": "[∷]"
+        },
+        {
+          "command": "web.0.18",
+          "face": "|∷|",
+          "label": "行列式",
+          "insert_tex": "\\begin{vmatrix} {} & {} \\\\ {} & {} \\end{vmatrix}",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "構造",
+          "legacy_face": "|∷|"
+        },
+        {
+          "command": "web.0.20",
+          "face": "整列",
+          "label": "複数行（Enter でも行が増える）",
+          "insert_tex": "\\begin{aligned} {} &= {} \\\\ {} &= {} \\end{aligned}",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "構造",
+          "legacy_face": "整列"
+        }
+      ]
+    },
+    {
+      "label": "装飾（Web追加）",
+      "face": "装飾",
+      "columns": 4,
+      "items": [
+        {
+          "command": "web.1.11",
+          "face": "⏞□",
+          "label": "上の水平波括弧",
+          "insert_tex": "\\overbrace{}",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "装飾",
+          "legacy_face": "⏞□"
+        },
+        {
+          "command": "web.1.12",
+          "face": "⏟□",
+          "label": "下の水平波括弧",
+          "insert_tex": "\\underbrace{}",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "装飾",
+          "legacy_face": "⏟□"
+        },
+        {
+          "command": "web.1.22",
+          "face": "math",
+          "label": "標準の数式書体へ戻す",
+          "insert_tex": "\\mathnormal{}",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "装飾",
+          "legacy_face": "math"
+        },
+        {
+          "command": "web.1.23",
+          "face": "abc",
+          "label": "テキスト（空白が使える）",
+          "insert_tex": "\\text{}",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "装飾",
+          "legacy_face": "abc"
+        }
+      ]
+    },
+    {
+      "label": "関数（Web追加）",
+      "face": "関数",
+      "columns": 4,
+      "items": [
+        {
+          "command": "web.2.0",
+          "face": "sin",
+          "label": "",
+          "insert_tex": "\\sin ",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "関数",
+          "legacy_face": "sin"
+        },
+        {
+          "command": "web.2.1",
+          "face": "cos",
+          "label": "",
+          "insert_tex": "\\cos ",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "関数",
+          "legacy_face": "cos"
+        },
+        {
+          "command": "web.2.2",
+          "face": "tan",
+          "label": "",
+          "insert_tex": "\\tan ",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "関数",
+          "legacy_face": "tan"
+        },
+        {
+          "command": "web.2.3",
+          "face": "log",
+          "label": "",
+          "insert_tex": "\\log ",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "関数",
+          "legacy_face": "log"
+        },
+        {
+          "command": "web.2.4",
+          "face": "ln",
+          "label": "",
+          "insert_tex": "\\ln ",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "関数",
+          "legacy_face": "ln"
+        },
+        {
+          "command": "web.2.5",
+          "face": "exp",
+          "label": "",
+          "insert_tex": "\\exp ",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "関数",
+          "legacy_face": "exp"
+        },
+        {
+          "command": "web.2.6",
+          "face": "rot",
+          "label": "回転（和書流儀）",
+          "insert_tex": "\\operatorname{rot} ",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "関数",
+          "legacy_face": "rot"
+        },
+        {
+          "command": "web.2.7",
+          "face": "curl",
+          "label": "回転（洋書流儀）",
+          "insert_tex": "\\operatorname{curl} ",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "関数",
+          "legacy_face": "curl"
+        },
+        {
+          "command": "web.2.8",
+          "face": "div",
+          "label": "発散",
+          "insert_tex": "\\operatorname{div} ",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "関数",
+          "legacy_face": "div"
+        },
+        {
+          "command": "web.2.9",
+          "face": "grad",
+          "label": "勾配",
+          "insert_tex": "\\operatorname{grad} ",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "関数",
+          "legacy_face": "grad"
+        },
+        {
+          "command": "web.2.10",
+          "face": "arg min",
+          "label": "最小値を与える変数",
+          "insert_tex": "\\operatorname*{arg\\,min}_{} ",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "関数",
+          "legacy_face": "arg min"
+        },
+        {
+          "command": "web.2.11",
+          "face": "arg max",
+          "label": "最大値を与える変数",
+          "insert_tex": "\\operatorname*{arg\\,max}_{} ",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "関数",
+          "legacy_face": "arg max"
+        },
+        {
+          "command": "web.2.12",
+          "face": "∇⋅",
+          "label": "発散（∇表記）",
+          "insert_tex": "\\nabla\\cdot ",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "関数",
+          "legacy_face": "∇⋅"
+        },
+        {
+          "command": "web.2.13",
+          "face": "∇×",
+          "label": "回転（∇表記）",
+          "insert_tex": "\\nabla\\times ",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "関数",
+          "legacy_face": "∇×"
+        },
+        {
+          "command": "web.2.14",
+          "face": "Re",
+          "label": "実部",
+          "insert_tex": "\\operatorname{Re} ",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "関数",
+          "legacy_face": "Re"
+        },
+        {
+          "command": "web.2.15",
+          "face": "Im",
+          "label": "虚部",
+          "insert_tex": "\\operatorname{Im} ",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "関数",
+          "legacy_face": "Im"
+        }
+      ]
+    },
+    {
+      "label": "矢印・集合（Web追加）",
+      "face": "矢印・集合",
+      "columns": 4,
+      "items": [
+        {
+          "command": "web.3.41",
+          "face": "⋃",
+          "label": "大きい和集合",
+          "insert_tex": "\\bigcup_{}^{}",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "矢印・集合",
+          "legacy_face": "⋃"
+        },
+        {
+          "command": "web.3.42",
+          "face": "⋂",
+          "label": "大きい共通部分",
+          "insert_tex": "\\bigcap_{}^{}",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "矢印・集合",
+          "legacy_face": "⋂"
+        },
+        {
+          "command": "web.3.43",
+          "face": "∐",
+          "label": "余積",
+          "insert_tex": "\\coprod_{}^{}",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "矢印・集合",
+          "legacy_face": "∐"
+        }
+      ]
+    },
+    {
+      "label": "微分幾何（Web追加）",
+      "face": "微分幾何",
+      "columns": 4,
+      "items": [
+        {
+          "command": "web.4.5",
+          "face": "f^*",
+          "label": "引き戻し（pullback）",
+          "insert_tex": "^{*} ",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "微分幾何",
+          "legacy_face": "f^*"
+        },
+        {
+          "command": "web.4.6",
+          "face": "f_*",
+          "label": "押し出し（pushforward）",
+          "insert_tex": "_{*} ",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "微分幾何",
+          "legacy_face": "f_*"
+        },
+        {
+          "command": "web.4.7",
+          "face": "♭",
+          "label": "フラット（添字を下げる）",
+          "insert_tex": "^{\\flat} ",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "微分幾何",
+          "legacy_face": "♭"
+        },
+        {
+          "command": "web.4.8",
+          "face": "♯",
+          "label": "シャープ（添字を上げる）",
+          "insert_tex": "^{\\sharp} ",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "微分幾何",
+          "legacy_face": "♯"
+        }
+      ]
+    },
+    {
+      "label": "その他（Web追加）",
+      "face": "その他",
+      "columns": 4,
+      "items": [
+        {
+          "command": "web.5.4",
+          "face": "°",
+          "label": "度",
+          "insert_tex": "^{\\circ} ",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "その他",
+          "legacy_face": "°"
+        }
+      ]
+    },
+    {
+      "label": "空白（Web追加）",
+      "face": "空白",
+      "columns": 4,
+      "items": [
+        {
+          "command": "web.6.6",
+          "face": "~",
+          "label": "改行しない空白",
+          "insert_tex": "~",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "空白",
+          "legacy_face": "~"
+        },
+        {
+          "command": "web.6.7",
+          "face": "\\␣",
+          "label": "通常幅の空白（\\ の後に空白）",
+          "insert_tex": "\\ ",
+          "preview_tex": "",
+          "selection_slot": 0,
+          "legacy_palette": "空白",
+          "legacy_face": "\\␣"
+        }
+      ]
+    }
+  ]
+}

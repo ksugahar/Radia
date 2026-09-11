@@ -1,5 +1,5 @@
 classdef (Abstract) BaseStorage < handle
-    %BASESTORAGE Optuna 4.9 storage backend interface.
+    %BASESTORAGE Optuna 5 storage backend interface.
 
     methods (Abstract)
         check_trial_is_updatable(obj,trial_id,trial_state)

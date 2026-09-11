@@ -89,26 +89,25 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 
 ### Shared MCP Runtime Ownership
 
-- Ordinary development uses task-owned environments or process-local source
-  overrides; never change a shared interpreter's editable installs, client
-  configuration or running MCP as a side effect of tests, merge or commit.
-- Long-lived MCPs use an approved, commit-pinned source snapshot. Do not edit,
-  pull, rebase, rebuild or remove a snapshot while any consumer uses it.
-- Shared runtime changes require explicit deployment scope and one designated
-  owner per host/interpreter, including all affected users. Record ownership,
-  old/new sources and commits, reason, timestamps and target clients before
-  changing anything; competing or unknown ownership means defer, not repair.
-- Stage and test separately; activate only at a coordinated safe boundary.
-  Retain old sources for existing processes and rollback. A package release
-  does not authorize repointing other independently released packages.
-- Report installed registration, fresh-process resolution and each client's
-  live loaded source separately, with observation time and target identity.
-  Version equality, directory names and current disk hashes do not prove
-  loaded code identity. Unknown or mixed evidence must stay unverified.
-- Never infer global runtime state from "this task made no change". Reconnect
-  only scoped idle targets through supported client controls; never mass-kill
-  processes. Follow `mcp-reconnect` and the mandatory operational contract in
+- MCP is experimental development tooling, not a numerical solver release.
+  Developers may edit live MCP source and change its editable source with
+  `pip install -e`; no dedicated branch, frozen snapshot or separate deployment
+  approval is required for routine MCP experiments.
+- Coordinate overlapping edits and environment changes; preserve others' WIP
+  and active CAD/MATLAB jobs. Never mass-kill processes to refresh MCP.
+- Verify the interpreter and actual import path after repointing. Report each
+  client's live loaded source separately; reload/reconnect affected clients as
+  needed. Unknown or mixed evidence must stay unverified.
+- Solver/native numerical acceptance is unchanged. Keep release installation
+  tests isolated from development; see the
   [Shared MCP runtime policy](packages/radia-mcp/docs/operations/mcp-runtime-policy.md).
+
+### Canonical Bibliography
+
+- The single parent is `packages/radia-mcp/src/radia_mcp/bibliography/data/references.bib`.
+  Resolve it with `bibliography_canonical_path`; correct verified entries there.
+- Manuscript folders contain generated `.bbl` only, never local `.bib` copies.
+  Use `bibliography_make_bbl`, regenerate after changes, and check citations.
 
 ### MATLAB And Simulink
 
@@ -265,19 +264,21 @@ Use `tools/release_quad.py` and the `release-quad` skill. Publish only when
 CI, exact package hashes, native/MEX/SLX checks, and required machine gates pass
 for the same commit. LAB and 100号機 retain approved, verified editable sources
 after release; source changes follow Shared MCP Runtime Ownership, not an automatic reset.
+Before tagging, dispatch `Radia Native Release` on the exact release SHA; `ci-verify` requires its successful native check.
 
 ## Optuna
 
-Pinned upstream Optuna is the oracle for shared MATLAB behavior. Seed, options,
-search-space order, history, constraints, values, states, warnings, and random
-consumption must match upstream fixtures. Handwritten MATLAB output is not
-compatibility truth.
-
-MATLAB table/MAT storage, Simulink monitoring, parallel execution, and MEX are
-extensions, not permission to alter the compatible algorithm. Keep API coverage
-and oracle manifests current. Unsupported behavior fails loudly. Official
-`optuna/optuna-mcp` owns generic Study/Trial MCP; `radia-mcp` owns MATLAB,
-Simulink, MEX, and Radia-domain composition.
+Pinned Optuna 5.0.0 is the sole oracle for shared MATLAB behavior: seed, options,
+parameter/search-space order, history, named constraints, values, states, warnings,
+defaults, extension points, and random consumption match upstream-generated fixtures.
+Handwritten MATLAB output is not compatibility truth.
+Adopt the Optuna 5 design in place: delete active optuna49 fixtures/pins, removed APIs/options,
+legacy sampler-state restore and public multi-objective TPE; unified TPESampler owns both objectives.
+Table/MAT storage, Simulink, parallelism and MEX are extensions, not algorithm changes.
+Native acceleration requires correct differential results; maintain API/oracle manifests and fail loudly.
+Fast deterministic tests belong in tests; long performance/scaling/parallel/dimension work in validation_test.
+Released optuna-mcp==0.2.0 owns generic Study/Trial MCP for Optuna 5.0.0; 0.3.0.dev is not a stable release.
+radia-mcp owns MATLAB, Simulink, MEX, differential-oracle, performance-gate and Radia composition.
 
 ## Git And Agents
 

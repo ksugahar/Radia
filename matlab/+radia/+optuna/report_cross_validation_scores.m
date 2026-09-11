@@ -6,5 +6,5 @@ if numel(scores)<=1
     error("radia:optuna:CrossValidationScores", ...
         "The length of scores must be greater than one.");
 end
-trial.set_system_attr("terminator:cv_scores",scores);
+trial.setInternalAttribute("terminator:cv_scores",scores);
 end

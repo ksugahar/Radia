@@ -1,0 +1,118 @@
+{
+  "description": "Reviewed intent oracle, not generated from production catalogues. Symbols pair the visible mathematical character with permitted TeX names. Native templates specify face, distinct slot inputs, and expected TeX. Web overrides specify category/face and insertion TeX.",
+  "symbols": "≤:leq ≥:geq ≪:ll ≫:gg ≺:prec ≻:succ ◁:triangleleft ▷:triangleright ≠:neq ≡:equiv ≈:approx ≅:cong ∼:sim ≃:simeq ∝:propto ⊑:sqsubseteq ⊒:sqsupseteq ∥:parallel ‖:Vert ∣:mid ⊢:vdash ⊨:models ⌢:frown ⌣:smile …:ldots ⋯:cdots ⋮:vdots ⋱:ddots ∴:therefore ∵:because ±:pm ∓:mp ×:times ÷:div ∗:ast ⋅:cdot ⋆:star •:bullet ⊗:otimes ⊕:oplus ⊖:ominus ⊙:odot ⋄:diamond ▽:bigtriangledown †:dagger,dag ‡:ddagger ∖:setminus \\:backslash √:surd →:rightarrow,to ←:leftarrow ↔:leftrightarrow ↑:uparrow ↓:downarrow ↕:updownarrow ⇒:Rightarrow ⇐:Leftarrow ⇔:Leftrightarrow ⇑:Uparrow ↦:mapsto ⟹:Longrightarrow ⟸:Longleftarrow ⟺:Longleftrightarrow ↪:hookrightarrow ↩:hookleftarrow ↗:nearrow ↘:searrow ↙:swarrow ↖:nwarrow ⇀:rightharpoonup ⇁:rightharpoondown ↼:leftharpoonup ↽:leftharpoondown ∀:forall ∃:exists ∄:nexists ¬:neg ∧:wedge ∨:vee ⊤:top ⊥:perp not:not ∈:in ∉:notin ∋:ni ⊂:subset ⊃:supset ⊄:not\\subset ⊆:subseteq ⊇:supseteq ∅:emptyset ∪:cup ∩:cap ⊔:sqcup ⊓:sqcap ⋃:bigcup ⋂:bigcap ∂:partial ∇:nabla ∞:infty ℜ:Re ℑ:Im ℏ:hbar ∠:angle ∘:circ ℧:mho ℓ:ell ′:prime ∐:coprod ⟨:langle ⟩:rangle ⌊:lfloor ⌋:rfloor ⌈:lceil ⌉:rceil α:alpha β:beta γ:gamma δ:delta ϵ:epsilon ε:varepsilon ζ:zeta η:eta θ:theta ϑ:vartheta ι:iota κ:kappa ϰ:varkappa λ:lambda μ:mu ν:nu ξ:xi π:pi ϖ:varpi ρ:rho ϱ:varrho σ:sigma ς:varsigma τ:tau υ:upsilon ϕ:phi φ:varphi χ:chi ψ:psi ω:omega Γ:Gamma Δ:Delta Θ:Theta Λ:Lambda Ξ:Xi Π:Pi Σ:Sigma Υ:Upsilon Φ:Phi Ψ:Psi Ω:Omega",
+  "native_templates": {
+    "frac": ["□/□", "ab", "\\frac{a}{b}"],
+    "slashfrac": ["□⁄□", "ab", "{}^{a}/{}_{b}"],
+    "sqrt": ["√□", "a", "\\sqrt{a}"],
+    "nthroot": ["n√□", "ab", "\\sqrt[b]{a}"],
+    "sup": ["□↑", "ab", "a^{b}"],
+    "sub": ["□↓", "ab", "a_{b}"],
+    "subsup": ["□↕", "abc", "a_{b}^{c}"],
+    "paren": ["(□)", "a", "\\left(a\\right)"],
+    "bracket": ["[□]", "a", "\\left[a\\right]"],
+    "brace": ["{□}", "a", "\\left\\{a\\right\\}"],
+    "angle": ["⟨□⟩", "a", "\\left\\langle a\\right\\rangle"],
+    "abs": ["|□|", "a", "\\left|a\\right|"],
+    "norm": ["‖□‖", "a", "\\left\\|a\\right\\|"],
+    "floor": ["⌊□⌋", "a", "\\left\\lfloor a\\right\\rfloor"],
+    "ceil": ["⌈□⌉", "a", "\\left\\lceil a\\right\\rceil"],
+    "dirac": ["⟨□|□⟩", "ab", "\\left\\langle a\\middle|b\\right\\rangle"],
+    "over": ["↑□", "ab", "\\overset{b}{a}"],
+    "under": ["↓□", "ab", "\\underset{b}{a}"],
+    "lim": ["lim", "a", "\\lim_{a}"],
+    "sum": ["∑□", "abc", "\\sum_{a}^{b} c"],
+    "prod": ["∏□", "abc", "\\prod_{a}^{b} c"],
+    "coprod": ["∐□", "abc", "\\coprod_{a}^{b} c"],
+    "bigcup": ["⋃□", "abc", "\\bigcup_{a}^{b} c"],
+    "bigcap": ["⋂□", "abc", "\\bigcap_{a}^{b} c"],
+    "int": ["∫", "abc", "\\int_{a}^{b} c"],
+    "iint": ["∬", "abc", "\\iint_{a}^{b} c"],
+    "iiint": ["∭", "abc", "\\iiint_{a}^{b} c"],
+    "oint": ["∮", "abc", "\\oint_{a}^{b} c"],
+    "hat": ["^x", "a", "\\hat{a}"],
+    "tilde": ["~x", "a", "\\tilde{a}"],
+    "bar": ["¯x", "a", "\\bar{a}"],
+    "vec": ["x→", "a", "\\vec{a}"],
+    "dot": ["·x", "a", "\\dot{a}"],
+    "ddot": [":x", "a", "\\ddot{a}"],
+    "dddot": ["⋯x", "a", "\\dddot{a}"],
+    "prime": ["x′", "a", "a'"],
+    "dprime": ["x″", "a", "a''"],
+    "tprime": ["x‴", "a", "a'''"],
+    "strike": ["/x", "a", "\\cancel{a}"],
+    "frown": ["⌢x", "a", "\\overset{\\frown}{a}"],
+    "smile": ["⌣x", "a", "\\overset{\\smile}{a}"],
+    "overline": ["¯□", "a", "\\overline{a}"],
+    "underline": ["_□", "a", "\\underline{a}"],
+    "overbrace": ["⏞□", "ab", "\\overbrace{a}^{b}"],
+    "underbrace": ["⏟□", "ab", "\\underbrace{a}_{b}"],
+    "overrightarrow": ["□→", "a", "\\overrightarrow{a}"],
+    "overleftarrow": ["←□", "a", "\\overleftarrow{a}"],
+    "overleftrightarrow": ["□↔", "a", "\\overleftrightarrow{a}"],
+    "cases": ["{□", "abcd", "\\begin{cases}a&b\\\\c&d\\end{cases}"]
+  },
+  "native_matrix_sizes": ["1x2", "1x3", "2x1", "2x2", "2x3", "3x1", "3x2", "3x3", "4x4", "5x5", "6x6"],
+  "native_styles": {
+    "sans": ["sf", "\\mathsf{a}"], "mono": ["tt", "\\mathtt{a}"],
+    "script": ["cal", "\\mathcal{a}"], "double": ["bb", "\\mathbb{a}"],
+    "fraktur": ["fr", "\\mathfrak{a}"], "boldsymbol": ["Bα", "\\bm{a}"]
+  },
+  "native_raw": {
+    "−": "\\!", "␣": "\\,", "␣␣": "\\:", "␣␣␣": "\\;",
+    "1em": "\\quad", "2em": "\\qquad", "∧": "\\wedge ",
+    "⋆": "\\star ", "dω": "\\mathrm{d} ", "ι": "\\iota_{} ",
+    "ℒ": "\\mathcal{L}_{} ", "f^*": "{}^{*} ", "f_*": "{}_{*} ",
+    "♭": "{}^{\\flat} ", "♯": "{}^{\\sharp} ", "⊗": "\\otimes ", "⊕": "\\oplus "
+  },
+  "matrix_actions": {
+    "add_row": ["+R", [["a", "b"], ["", ""], ["c", "d"]]],
+    "remove_row": ["−R", [["c", "d"]]],
+    "add_column": ["+C", [["a", "", "b"], ["c", "", "d"]]],
+    "remove_column": ["−C", [["b"], ["d"]]]
+  },
+  "web_overrides": {
+    "構造": {
+      "a/b": "\\frac{}{}", "dfrac": "\\dfrac{}{}", "√": "\\sqrt{}", "ⁿ√": "\\sqrt[]{}",
+      "x²": "^{}", "xᵢ": "_{}", "Σ": "\\sum_{}^{}", "∏": "\\prod_{}^{}",
+      "∫": "\\int_{}^{}", "∬": "\\iint_{} ", "∭": "\\iiint_{} ", "∮": "\\oint_{}",
+      "lim": "\\lim_{ \\to }", "d/dx": "\\frac{\\mathrm{d} {}}{\\mathrm{d} {}}",
+      "∂/∂x": "\\frac{\\partial {}}{\\partial {}}",
+      "行列": "\\begin{pmatrix} {} & {} \\\\ {} & {} \\end{pmatrix}",
+      "∷": "\\begin{matrix} {} & {} \\\\ {} & {} \\end{matrix}",
+      "[∷]": "\\begin{bmatrix} {} & {} \\\\ {} & {} \\end{bmatrix}",
+      "|∷|": "\\begin{vmatrix} {} & {} \\\\ {} & {} \\end{vmatrix}",
+      "場合": "\\begin{cases} {} & {} \\\\ {} & {} \\end{cases}",
+      "整列": "\\begin{aligned} {} &= {} \\\\ {} &= {} \\end{aligned}",
+      "↑□": "\\overset{}{}", "↓□": "\\underset{}{}"
+    },
+    "括弧": {
+      "( )": "\\left( {} \\right)", "[ ]": "\\left[ {} \\right]", "{ }": "\\left\\{ {} \\right\\}",
+      "| |": "\\left| {} \\right|", "‖ ‖": "\\left\\| {} \\right\\|",
+      "⟨ ⟩": "\\left\\langle {} \\right\\rangle", "⌊ ⌋": "\\left\\lfloor {} \\right\\rfloor",
+      "⌈ ⌉": "\\left\\lceil {} \\right\\rceil", "⟨ | ⟩": "\\left\\langle {} \\middle| {} \\right\\rangle"
+    },
+    "装飾": {
+      "x̂": "\\hat{}", "x̄": "\\bar{}", "x⃗": "\\vec{}", "ẋ": "\\dot{}", "ẍ": "\\ddot{}",
+      "x⃛": "\\dddot{}", "ã": "\\tilde{}", "x′": "'", "x̸": "\\cancel{}",
+      "¯□": "\\overline{}", "_□": "\\underline{}", "⏞□": "\\overbrace{}", "⏟□": "\\underbrace{}",
+      "□→": "\\overrightarrow{}", "←□": "\\overleftarrow{}", "□↔": "\\overleftrightarrow{}",
+      "ℝ": "\\mathbb{}", "ℰ": "\\mathcal{}", "sf": "\\mathsf{}", "tt": "\\mathtt{}",
+      "fr": "\\mathfrak{}", "Bα": "\\bm{}", "math": "\\mathnormal{}", "abc": "\\text{}"
+    },
+    "関数": {
+      "sin": "\\sin ", "cos": "\\cos ", "tan": "\\tan ", "log": "\\log ", "ln": "\\ln ", "exp": "\\exp ",
+      "rot": "\\operatorname{rot} ", "curl": "\\operatorname{curl} ", "div": "\\operatorname{div} ",
+      "grad": "\\operatorname{grad} ", "arg min": "\\operatorname*{arg\\,min}_{} ",
+      "arg max": "\\operatorname*{arg\\,max}_{} ", "∇⋅": "\\nabla\\cdot ", "∇×": "\\nabla\\times ",
+      "Re": "\\operatorname{Re} ", "Im": "\\operatorname{Im} "
+    },
+    "矢印・集合": {"⋃": "\\bigcup_{}^{}", "⋂": "\\bigcap_{}^{}", "∐": "\\coprod_{}^{}"},
+    "微分幾何": {
+      "∧": "\\wedge ", "⋆": "\\star ", "dω": "\\mathrm{d} ", "ι": "\\iota_{} ", "ℒ": "\\mathcal{L}_{} ",
+      "f^*": "^{*} ", "f_*": "_{*} ", "♭": "^{\\flat} ", "♯": "^{\\sharp} ", "⊗": "\\otimes ", "⊕": "\\oplus "
+    },
+    "その他": {"°": "^{\\circ} "},
+    "空白": {"\\,": "\\, ", "\\:": "\\: ", "\\;": "\\; ", "\\!": "\\! ", "quad": "\\quad ", "qquad": "\\qquad ", "~": "~", "\\␣": "\\ "}
+  }
+}

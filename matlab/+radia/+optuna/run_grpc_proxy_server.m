@@ -8,7 +8,7 @@ arguments
     options.Background (1,1) logical = false
 end
 warning("radia:optuna:ExperimentalWarning", ...
-    "run_grpc_proxy_server is experimental in Optuna 4.9.0.");
+    "run_grpc_proxy_server is experimental (supported from Optuna 4.2.0).");
 if ~isempty(options.thread_pool)
     error("radia:optuna:GrpcThreadPool", ...
         "thread_pool cannot cross the required MATLAB/Python process boundary.");

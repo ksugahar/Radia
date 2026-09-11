@@ -6,6 +6,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import pytest
+
 
 _TOOL = Path(__file__).resolve().parents[1] / "tools" / "release_quad.py"
 _SPEC = importlib.util.spec_from_file_location("radia_release_quad_tool", _TOOL)
@@ -344,3 +346,107 @@ def test_ci_check_runs_use_latest_attempt_for_each_name(monkeypatch):
 
     assert ok is True
     assert "2 latest SHA-bound check-runs GREEN" in message
+
+
+def _green(name, run_id):
+    return {"id": run_id, "name": name,
+            "status": "completed", "conclusion": "success"}
+
+
+def test_absent_release_check_is_not_passing_evidence(monkeypatch):
+    """A SHA the release workflow never ran on must not verify.
+
+    Radia Native Release triggers only on a v* tag or a manual dispatch, so a
+    commit can be green on every check that did run while the release build
+    has never seen it. Treating that silence as success is what spent tags
+    4.95.86..4.95.89.
+    """
+    runs = {"check_runs": [_green("policy-checks", 1), _green("mcp-matrix", 2)]}
+    monkeypatch.setattr(release_quad, "_git_repo_owner_name", lambda: "owner/repo")
+    monkeypatch.setattr(release_quad, "gh_get", lambda _path: (runs, {}))
+
+    ok, message = release_quad._check_github_hosted_workflows(
+        "a" * 40, required_names=None,
+        require_present=[release_quad.RELEASE_CHECK_RUN],
+        timeout_sec=1, poll_sec=0, registration_grace_sec=0,
+    )
+
+    assert ok is False
+    assert release_quad.RELEASE_CHECK_RUN in message
+
+
+def test_present_release_check_verifies_with_the_rest(monkeypatch):
+    """require_present adds a requirement; it does not narrow the check set."""
+    runs = {"check_runs": [
+        _green("policy-checks", 1),
+        _green(release_quad.RELEASE_CHECK_RUN, 2),
+    ]}
+    monkeypatch.setattr(release_quad, "_git_repo_owner_name", lambda: "owner/repo")
+    monkeypatch.setattr(release_quad, "gh_get", lambda _path: (runs, {}))
+
+    ok, message = release_quad._check_github_hosted_workflows(
+        "a" * 40, required_names=None,
+        require_present=[release_quad.RELEASE_CHECK_RUN],
+        timeout_sec=1, poll_sec=0,
+    )
+
+    assert ok is True
+    assert "2 latest SHA-bound check-runs GREEN" in message
+
+
+def test_require_present_still_fails_on_an_unrelated_red(monkeypatch):
+    """Requiring the release build by name must not excuse any other check."""
+    runs = {"check_runs": [
+        _green(release_quad.RELEASE_CHECK_RUN, 1),
+        {"id": 2, "name": "policy-checks",
+         "status": "completed", "conclusion": "failure"},
+    ]}
+    monkeypatch.setattr(release_quad, "_git_repo_owner_name", lambda: "owner/repo")
+    monkeypatch.setattr(release_quad, "gh_get", lambda _path: (runs, {}))
+
+    ok, _message = release_quad._check_github_hosted_workflows(
+        "a" * 40, required_names=None,
+        require_present=[release_quad.RELEASE_CHECK_RUN],
+        timeout_sec=1, poll_sec=0,
+    )
+
+    assert ok is False
+
+
+def test_release_check_run_name_matches_the_workflow_job():
+    """RELEASE_CHECK_RUN must name a job that build-test.yml actually defines."""
+    workflow = (Path(__file__).resolve().parents[1]
+                / ".github" / "workflows" / "build-test.yml").read_text(encoding="utf-8")
+    assert f"\n    name: {release_quad.RELEASE_CHECK_RUN}\n" in workflow
+    assert release_quad.RELEASE_CHECK_RUN != "build-test"
+
+
+def test_other_distribution_build_does_not_certify_native_release(monkeypatch):
+    runs = {"check_runs": [_green("build-test", 1), _green("policy-checks", 2)]}
+    monkeypatch.setattr(release_quad, "_git_repo_owner_name", lambda: "owner/repo")
+    monkeypatch.setattr(release_quad, "gh_get", lambda _path: (runs, {}))
+    ok, message = release_quad._check_github_hosted_workflows(
+        "a" * 40, require_present=[release_quad.RELEASE_CHECK_RUN],
+        timeout_sec=1, poll_sec=0, registration_grace_sec=0,
+    )
+    assert not ok
+    assert release_quad.RELEASE_CHECK_RUN in message
+
+
+@pytest.mark.parametrize("conclusion", ["skipped", "neutral", "failure", "cancelled"])
+@pytest.mark.parametrize("required_names", [None, ["policy-checks"]])
+def test_native_evidence_must_succeed_even_when_other_checks_are_selected(
+    monkeypatch, conclusion, required_names
+):
+    native = _green(release_quad.RELEASE_CHECK_RUN, 2)
+    native["conclusion"] = conclusion
+    runs = {"check_runs": [_green("policy-checks", 1), native]}
+    monkeypatch.setattr(release_quad, "_git_repo_owner_name", lambda: "owner/repo")
+    monkeypatch.setattr(release_quad, "gh_get", lambda _path: (runs, {}))
+    ok, message = release_quad._check_github_hosted_workflows(
+        "a" * 40, required_names=required_names,
+        require_present=[release_quad.RELEASE_CHECK_RUN],
+        timeout_sec=1, poll_sec=0, registration_grace_sec=0,
+    )
+    assert not ok
+    assert f"{release_quad.RELEASE_CHECK_RUN}: {conclusion}" in message

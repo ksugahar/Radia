@@ -1,5 +1,5 @@
 classdef LogUniformDistribution < radia.optuna.FloatDistribution
-    %LOGUNIFORMDISTRIBUTION Deprecated Optuna 4.9 distribution alias.
+    %LOGUNIFORMDISTRIBUTION Deprecated distribution alias retained by Optuna 5.
 
     methods
         function obj=LogUniformDistribution(low,high)

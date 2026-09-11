@@ -1,5 +1,5 @@
 classdef Study < handle
-    %STUDY Table-backed implementation of a verified Optuna 4.9 subset.
+    %STUDY Table-backed implementation of the verified Optuna 5.0 surface.
 
     properties (SetAccess=private)
         Name (1,1) string
@@ -35,9 +35,11 @@ classdef Study < handle
         InOptimize (1,1) logical = false
         TrialNumberData double = zeros(0,1)
         TrialStateData string = strings(0,1)
+        % COMPLETE, PRUNED, RUNNING, WAITING; maintained at transitions.
+        TrialStateCounts (1,4) double = zeros(1,4)
         TrialValueData double = zeros(0,1)
-        TrialStartTimeData
-        TrialEndTimeData
+        TrialStartTimeData double = zeros(0,1)
+        TrialEndTimeData double = zeros(0,1)
         TrialDurationData double = zeros(0,1)
         TrialParamsData cell = cell(0,1)
         TrialIntermediateData cell = cell(0,1)
@@ -75,7 +77,7 @@ classdef Study < handle
 
     properties (Constant, Access=private)
         StorageSchema = "radia.optuna.study"
-        StorageVersion = 4
+        StorageVersion = 6
     end
 
     methods
@@ -109,15 +111,10 @@ classdef Study < handle
             obj.Sampler = options.Sampler;
             obj.Pruner = options.Pruner;
             if isempty(obj.Sampler)
-                if isscalar(obj.Directions)
-                    obj.Sampler = radia.optuna.TPESampler( ...
-                        NStartupTrials=10);
-                else
-                    % Optuna 4.9 selects NSGA-II for a multi-objective
-                    % study when no sampler is supplied.
-                    obj.Sampler = radia.optuna.NSGAIISampler( ...
-                        PopulationSize=50);
-                end
+                % Optuna 5.0 selects TPESampler for both single- and
+                % multi-objective studies. TPESampler resolves its automatic
+                % multivariate mode from the number of objectives.
+                obj.Sampler = radia.optuna.TPESampler(NStartupTrials=10);
             end
             if isempty(obj.Pruner)
                 obj.Pruner = radia.optuna.MedianPruner();
@@ -149,7 +146,10 @@ classdef Study < handle
                 error("radia:optuna:FixedDistributions", ...
                     "fixedDistributions must be a scalar struct of distributions.");
             end
-            waiting=find(obj.TrialStateData=="WAITING",1);
+            waiting=[];
+            if obj.TrialStateCounts(4)>0
+                waiting=find(obj.TrialStateData=="WAITING",1);
+            end
             if isempty(waiting)
                 trial = radia.optuna.Trial(obj, obj.NextTrialNumber);
                 obj.NextTrialNumber = obj.NextTrialNumber + 1;
@@ -166,6 +166,8 @@ classdef Study < handle
                 queuedParams=obj.QueueParamTable(rows,:);
                 trial.setFixedParameters(queuedParams.Name,queuedParams.Value);
                 obj.TrialStateData(waiting)="RUNNING";
+                obj.TrialStateCounts(3)=obj.TrialStateCounts(3)+1;
+                obj.TrialStateCounts(4)=obj.TrialStateCounts(4)-1;
                 obj.TrialStartTimeData(waiting)=trial.startTimeSerial();
                 obj.TrialEndTimeData(waiting)=NaN;
                 obj.TrialDurationData(waiting)=NaN;
@@ -438,7 +440,7 @@ classdef Study < handle
             value = obj.UserAttrs;
         end
 
-        function setSystemAttr(obj,name,value)
+        function setInternalAttribute(obj,name,value)
             arguments
                 obj
                 name (1,1) string
@@ -448,11 +450,7 @@ classdef Study < handle
             obj.persist();
         end
 
-        function set_system_attr(obj,name,value)
-            obj.setSystemAttr(name,value);
-        end
-
-        function value = system_attrs(obj)
+        function value = internalAttributes(obj)
             value=obj.SystemAttrs;
         end
 
@@ -695,6 +693,7 @@ classdef Study < handle
                 message = "Recovered stale RUNNING trial after timeout.";
             end
             trialNumbers = obj.TrialNumberData(rows);
+            obj.TrialStateCounts(3)=obj.TrialStateCounts(3)-sum(rows);
             obj.TrialStateData(rows) = "FAIL";
             obj.TrialValueData(rows) = NaN;
             obj.TrialEndTimeData(rows) = nowTime;
@@ -725,15 +724,32 @@ classdef Study < handle
             if strlength(obj.StoragePath) == 0
                 error("radia:optuna:Storage", "StoragePath is empty.");
             end
+            % Version 6 flattens per-trial snapshots, avoiding thousands of
+            % serialized empty tables. Keep their original timestamps/order:
+            % the public normalized IntermediateTable has its own timestamps.
+            storedTrials=obj.TrialTable;
+            nested=storedTrials.IntermediateValues;
+            counts=cellfun(@height,nested);
+            present=find(counts>0);
+            snapshots=obj.IntermediateTable([],:);
+            if ~isempty(present)
+                observations=vertcat(nested{present});
+                numbers=repelem(storedTrials.TrialNumber(present),counts(present));
+                numbers=numbers(:);
+                snapshots=addvars(observations,numbers,'Before',1, ...
+                    'NewVariableNames','TrialNumber');
+            end
+            storedTrials.IntermediateValues=[];
             StudyData = struct( ...
                 "Schema", obj.StorageSchema, ...
                 "Version", obj.StorageVersion, ...
                 "Name", obj.Name, ...
                 "Directions", obj.Directions, ...
                 "NextTrialNumber", obj.NextTrialNumber, ...
-                "TrialTable", obj.TrialTable, ...
+                "TrialTable", storedTrials, ...
                 "ParamTable", obj.ParamTable, ...
                 "IntermediateTable", obj.IntermediateTable, ...
+                "TrialIntermediateSnapshots", snapshots, ...
                 "UserAttrTable", obj.UserAttrTable, ...
                 "SystemAttrTable", obj.SystemAttrTable, ...
                 "ConstraintTable", obj.ConstraintTable, ...
@@ -780,6 +796,9 @@ classdef Study < handle
         function set.TrialTable(obj,value)
             obj.TrialNumberData=reshape(double(value.TrialNumber),[],1);
             obj.TrialStateData=reshape(string(value.State),[],1);
+            obj.TrialStateCounts=[sum(obj.TrialStateData=="COMPLETE"), ...
+                sum(obj.TrialStateData=="PRUNED"),sum(obj.TrialStateData=="RUNNING"), ...
+                sum(obj.TrialStateData=="WAITING")];
             obj.TrialValueData=reshape(double(value.Value),[],1);
             obj.TrialStartTimeData=reshape(datenum(value.StartTime),[],1); %#ok<DATNM>
             obj.TrialEndTimeData=reshape(datenum(value.EndTime),[],1); %#ok<DATNM>
@@ -950,12 +969,10 @@ classdef Study < handle
             top=reshape(string({columns.Top}),[],1);
             sub=reshape(string({columns.Sub}),[],1);
             metadata=obj.dataframeMetadata(top,sub,logical(multiIndex));
-            result=table();
             storageNames=matlab.lang.makeUniqueStrings( ...
                 cellstr(metadata.flat_columns));
-            for index=1:numel(columns)
-                result.(storageNames{index})=columns(index).Values;
-            end
+            columnValues={columns.Values};
+            result=table(columnValues{:},'VariableNames',storageNames);
             result.Properties.UserData=metadata;
             descriptions=top;
             nested=strlength(sub)>0;
@@ -987,8 +1004,6 @@ classdef Study < handle
             if ~isempty(obj.MetricNames)
                 labels=reshape(obj.MetricNames,[],1);
                 indices=(1:objectiveCount)';
-                [labels,order]=sort(labels);
-                indices=indices(order);
             else
                 labels=string((0:objectiveCount-1)');
                 indices=(1:objectiveCount)';
@@ -1163,6 +1178,8 @@ classdef Study < handle
             row=numel(obj.TrialNumberData)+1;
             obj.TrialNumberData(row,1)=double(number);
             obj.TrialStateData(row,1)=string(state);
+            obj.TrialStateCounts=obj.TrialStateCounts+ ...
+                double(state==["COMPLETE","PRUNED","RUNNING","WAITING"]);
             obj.TrialValueData(row,1)=double(value);
             obj.TrialStartTimeData(row,1)=double(startTime);
             obj.TrialEndTimeData(row,1)=double(endTime);
@@ -1202,8 +1219,12 @@ classdef Study < handle
 
         function count=nonRunningTrialCount(obj)
             %NONRUNNINGTRIALCOUNT COMPLETE and PRUNED TPE history trials.
-            count=sum(obj.TrialStateData=="COMPLETE" | ...
-                obj.TrialStateData=="PRUNED");
+            count=obj.TrialStateCounts(1)+obj.TrialStateCounts(2);
+        end
+
+        function counts=trialStateCounts(obj)
+            %TRIALSTATECOUNTS COMPLETE, PRUNED, RUNNING, WAITING; no history copy.
+            counts=obj.TrialStateCounts;
         end
 
         function [steps,values]=lastIntermediateValues(obj,trialNumbers)
@@ -1283,14 +1304,20 @@ classdef Study < handle
         function initializeTables(obj)
             persistent templates
             if ~isempty(templates)
-                obj.TrialTable=templates.TrialTable;
-                obj.ParamTable=templates.ParamTable;
-                obj.IntermediateTable=templates.IntermediateTable;
+                % Constructor-only: column stores already have their empty
+                % defaults. Do not decode empty table columns back into them.
+                obj.TrialTableCache=templates.TrialTable;
+                obj.ParamTableCache=templates.ParamTable;
+                obj.IntermediateTableCache=templates.IntermediateTable;
+                obj.ObjectiveTableCache=templates.ObjectiveTable;
+                obj.TrialTableDirty=false;
+                obj.ParamTableDirty=false;
+                obj.IntermediateTableDirty=false;
+                obj.ObjectiveTableDirty=false;
                 obj.UserAttrTable=templates.UserAttrTable;
                 obj.SystemAttrTable=templates.SystemAttrTable;
                 obj.ConstraintTable=templates.ConstraintTable;
                 obj.ConstraintCountTable=templates.ConstraintCountTable;
-                obj.ObjectiveTable=templates.ObjectiveTable;
                 obj.SamplerStateTable=templates.SamplerStateTable;
                 obj.QueueParamTable=templates.QueueParamTable;
                 return
@@ -1317,9 +1344,9 @@ classdef Study < handle
             obj.SystemAttrTable = table('Size', [0, 3], ...
                 'VariableTypes', {'double','string','string'}, ...
                 'VariableNames', {'TrialNumber','Name','ValueJSON'});
-            obj.ConstraintTable = table('Size', [0, 3], ...
-                'VariableTypes', {'double','double','double'}, ...
-                'VariableNames', {'TrialNumber','ConstraintIndex','Value'});
+            obj.ConstraintTable = table('Size', [0, 4], ...
+                'VariableTypes', {'double','double','string','double'}, ...
+                'VariableNames', {'TrialNumber','ConstraintIndex','Name','Value'});
             obj.ConstraintCountTable = table('Size', [0, 2], ...
                 'VariableTypes', {'double','double'}, ...
                 'VariableNames', {'TrialNumber','Count'});
@@ -1385,6 +1412,25 @@ classdef Study < handle
             obj.Name = string(data.Name);
             obj.Directions = string(data.Directions);
             obj.NextTrialNumber = data.NextTrialNumber;
+            if isfield(data,"Version") && data.Version==6
+                count=height(data.TrialTable);
+                values=repmat({radia.optuna.Trial.emptyIntermediateTable()},count,1);
+                observations=data.TrialIntermediateSnapshots;
+                if ~isempty(observations)
+                    [~,owners]=ismember(observations.TrialNumber,data.TrialTable.TrialNumber);
+                    [orderedOwners,order]=sort(owners);
+                    starts=[1;find(diff(orderedOwners)~=0)+1];
+                    ends=[starts(2:end)-1;numel(order)];
+                    for index=1:numel(starts)
+                        rows=order(starts(index):ends(index));
+                        values{orderedOwners(starts(index))}= ...
+                            observations(rows,{'Step','Value','Timestamp'});
+                    end
+                end
+                data.TrialTable.IntermediateValues=values;
+                data.TrialTable=movevars(data.TrialTable,'IntermediateValues', ...
+                    'Before','ErrorMessage');
+            end
             obj.TrialTable = data.TrialTable;
             obj.ParamTable = data.ParamTable;
             obj.IntermediateTable = data.IntermediateTable;
@@ -1394,6 +1440,13 @@ classdef Study < handle
             end
             if isfield(data, "ConstraintTable")
                 obj.ConstraintTable = data.ConstraintTable;
+                if ~ismember("Name",string( ...
+                        obj.ConstraintTable.Properties.VariableNames))
+                    obj.ConstraintTable.Name= ...
+                        string(obj.ConstraintTable.ConstraintIndex-1);
+                    obj.ConstraintTable=movevars(obj.ConstraintTable,"Name", ...
+                        "Before","Value");
+                end
             end
             if isfield(data, "ConstraintCountTable")
                 obj.ConstraintCountTable = data.ConstraintCountTable;
@@ -1495,13 +1548,15 @@ classdef Study < handle
                 startedAt=timestamps.TrialStart(row);
                 completedAt=timestamps.TrialEnd(row);
             end
-            [constraintPresent,constraints]=obj.constraintRecord(trialNumber);
+            [constraintPresent,constraints,constraintNames]= ...
+                obj.constraintRecord(trialNumber);
             frozen=radia.optuna.FrozenTrial(Number=trialNumber, ...
                 State=obj.TrialStateData(row),Values=values, ...
                 Params=obj.TrialParamsData{row}, ...
                 Distributions=distributions, ...
                 IntermediateValues=intermediate,UserAttrs=userAttrs, ...
                 SystemAttrs=systemAttrs,Constraints=constraints, ...
+                ConstraintNames=constraintNames, ...
                 ConstraintPresent=constraintPresent, ...
                 DatetimeStart=startedAt,DatetimeComplete=completedAt, ...
                 ErrorMessage=obj.TrialErrorData(row));
@@ -1642,6 +1697,7 @@ classdef Study < handle
                     obj.ConstraintTable=[obj.ConstraintTable;table( ...
                         repmat(number,numel(frozen.Constraints),1), ...
                         (1:numel(frozen.Constraints))', ...
+                        reshape(frozen.ConstraintNames,[],1), ...
                         reshape(frozen.Constraints,[],1), ...
                         'VariableNames',obj.ConstraintTable.Properties.VariableNames)];
                     for constraintRow=firstConstraintRow:height(obj.ConstraintTable)
@@ -1692,11 +1748,20 @@ classdef Study < handle
             rows = obj.SamplerStateTable.Sampler == sampler & ...
                 obj.SamplerStateTable.Schema == schema;
             revision = 1;
+            target = height(obj.SamplerStateTable)+1;
             if any(rows)
                 revision = max(obj.SamplerStateTable.Revision(rows)) + 1;
-                obj.SamplerStateTable(rows,:) = [];
+                if rows(end) && nnz(rows)==1
+                    % The usual single-sampler update replaces the last row.
+                    % Preserve the public remove-and-append ordering without
+                    % deleting/reallocating all seven table columns each ask.
+                    target = height(obj.SamplerStateTable);
+                else
+                    obj.SamplerStateTable(rows,:) = [];
+                    target = height(obj.SamplerStateTable)+1;
+                end
             end
-            obj.SamplerStateTable(end+1,:) = {sampler, schema, revision, ...
+            obj.SamplerStateTable(target,:) = {sampler, schema, revision, ...
                 double(trialNumber), double(generation), {state}, ...
                 datetime("now", "TimeZone", "local")};
         end
@@ -1822,7 +1887,7 @@ classdef Study < handle
                 error("radia:optuna:SamplerConstraints", ...
                     "The configured sampler does not implement " + ...
                     "constraint-aware ranking. Use TPESampler, " + ...
-                    "MOTPESampler, or NSGAIISampler.");
+                    "TPESampler or NSGAIISampler.");
             end
             stale=obj.ConstraintIndex.lookup( ...
                 obj.ConstraintTable.TrialNumber,trial.Number);
@@ -1838,13 +1903,35 @@ classdef Study < handle
                 firstRow=height(obj.ConstraintTable)+1;
                 obj.ConstraintTable = [obj.ConstraintTable; table( ...
                     repmat(trial.Number, numel(values), 1), ...
-                    (1:numel(values))', values, ...
+                    (1:numel(values))',string(0:numel(values)-1)',values, ...
                     'VariableNames', obj.ConstraintTable.Properties.VariableNames)];
                 for row=firstRow:height(obj.ConstraintTable)
                     obj.ConstraintIndex.append(trial.Number,row);
                 end
             end
             trial.setConstraints(values);
+            obj.persist();
+        end
+
+        function recordConstraint(obj,trial,name,value)
+            arguments
+                obj
+                trial (1,1) radia.optuna.Trial
+                name (1,1) string
+                value (1,1) double
+            end
+            [present,values,names]=obj.constraintRecord(trial.Number);
+            if any(names==name)
+                return
+            end
+            if ~present
+                obj.ConstraintCountTable(end+1,:)={trial.Number,0};
+            end
+            index=numel(values)+1;
+            obj.ConstraintTable(end+1,:)={trial.Number,index,name,value};
+            obj.ConstraintCountTable.Count( ...
+                obj.ConstraintCountTable.TrialNumber==trial.Number)=index;
+            obj.ConstraintIndex.append(trial.Number,height(obj.ConstraintTable));
             obj.persist();
         end
 
@@ -1855,7 +1942,7 @@ classdef Study < handle
             end
         end
 
-        function [present, values] = constraintRecord(obj, trialNumber)
+        function [present, values, names] = constraintRecord(obj, trialNumber)
             countRows = obj.ConstraintCountTable.TrialNumber == trialNumber;
             if sum(countRows) > 1
                 error("radia:optuna:ConstraintShape", ...
@@ -1864,6 +1951,7 @@ classdef Study < handle
             present = any(countRows);
             if ~present
                 values = zeros(1,0);
+                names = strings(1,0);
                 return
             end
             count = obj.ConstraintCountTable.Count(countRows);
@@ -1882,6 +1970,11 @@ classdef Study < handle
                     "Trial %d has an incomplete constraint vector.",trialNumber);
             end
             values = reshape(selected.Value,1,[]);
+            names = reshape(string(selected.Name),1,[]);
+            if numel(unique(names))~=numel(names)
+                error("radia:optuna:ConstraintShape", ...
+                    "Trial %d has duplicate constraint names.",trialNumber);
+            end
             if any(isnan(values))
                 error("radia:optuna:Constraints", ...
                     "Trial %d has NaN constraint values.",trialNumber);
@@ -1889,7 +1982,11 @@ classdef Study < handle
         end
 
         function result = hasConstraintRecords(obj)
-            result = ~isempty(obj.ConstraintCountTable);
+            % Optuna 5 regards an empty/missing constraint dictionary as
+            % unconstrained. Only a named value activates constrained
+            % optimization.
+            result = ~isempty(obj.ConstraintCountTable) && ...
+                any(obj.ConstraintCountTable.Count > 0);
         end
 
         function finishTrial(obj, trial, state, value, message)
@@ -1934,6 +2031,8 @@ classdef Study < handle
             end
             obj.ObjectiveTableDirty=true;
             obj.TrialStateData(rows)=state;
+            obj.TrialStateCounts=obj.TrialStateCounts+ ...
+                double(state==["COMPLETE","PRUNED","RUNNING","WAITING"])-[0,0,1,0];
             obj.TrialValueData(rows)=value(1);
             obj.TrialEndTimeData(rows)=endTime;
             obj.TrialDurationData(rows)=elapsed;
@@ -2023,19 +2122,17 @@ classdef Study < handle
         end
 
         function [feasible, constrained] = feasibleTrials(obj, trialNumbers)
-            % Once any constraint is present, missing constraint rows are
-            % unknown rather than implicitly feasible. This protects legacy
-            % and partially written studies from selecting an unchecked run.
+            % Optuna 5 exposes a dictionary per trial. Missing storage rows
+            % materialize as an empty dictionary and are therefore feasible.
             trialNumbers = reshape(double(trialNumbers), [], 1);
             constrained = obj.hasConstraintRecords();
             feasible = true(size(trialNumbers));
             if ~constrained
                 return
             end
-            feasible(:) = false;
             for index = 1:numel(trialNumbers)
                 [present,values] = obj.constraintRecord(trialNumbers(index));
-                feasible(index) = present && all(values <= 0);
+                feasible(index) = ~present || all(values <= 0);
             end
         end
 
@@ -2101,6 +2198,26 @@ classdef Study < handle
                 if ~isfield(data, field)
                     error("radia:optuna:StorageFormat", ...
                         "Storage '%s' is missing StudyData.%s.", path, field);
+                end
+            end
+            if hasVersion && version==6
+                trials=data.TrialTable;
+                if ~isfield(data,"TrialIntermediateSnapshots")
+                    error("radia:optuna:StorageFormat", ...
+                        "Storage '%s' lacks normalized trial snapshots.",path);
+                end
+                observations=data.TrialIntermediateSnapshots;
+                if ~istable(trials) || ~istable(observations) || ...
+                        ~all(ismember(["TrialNumber","ErrorMessage"], ...
+                        string(trials.Properties.VariableNames))) || ...
+                        ismember("IntermediateValues",string(trials.Properties.VariableNames)) || ...
+                        ~all(ismember(["TrialNumber","Step","Value","Timestamp"], ...
+                        string(observations.Properties.VariableNames))) || ...
+                        ~isdatetime(observations.Timestamp) || ...
+                        numel(unique(trials.TrialNumber))~=height(trials) || ...
+                        any(~ismember(observations.TrialNumber,trials.TrialNumber))
+                    error("radia:optuna:StorageFormat", ...
+                        "Storage '%s' has invalid normalized intermediate observations.",path);
                 end
             end
         end

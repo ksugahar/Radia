@@ -1,7 +1,8 @@
-"""Generate deterministic MATLAB parity fixtures from upstream Optuna 4.9.0."""
+"""Generate deterministic MATLAB parity fixtures from upstream Optuna 5.0.0."""
 
 from __future__ import annotations
 
+import importlib
 import importlib.metadata
 import inspect
 import json
@@ -23,7 +24,23 @@ import optuna.terminator
 import scipy
 from optuna.trial import TrialState
 
-EXPECTED_VERSION = "4.9.0"
+EXPECTED_VERSION = "5.0.0"
+
+CONSTRUCTOR_MODULE_NAMES = [
+    "optuna",
+    "optuna.artifacts",
+    "optuna.distributions",
+    "optuna.importance",
+    "optuna.pruners",
+    "optuna.samplers",
+    "optuna.samplers.nsgaii",
+    "optuna.search_space",
+    "optuna.storages",
+    "optuna.storages.journal",
+    "optuna.study",
+    "optuna.terminator",
+    "optuna.trial",
+]
 INTEGRATION_EXPORTS = (
     "AllenNLPExecutor",
     "AllenNLPPruningCallback",
@@ -622,7 +639,7 @@ def _artifact_contract() -> dict[str, object]:
         backoff_body = backoff.open_reader(backoff_id).read()
         try:
             backoff.remove(backoff_id)
-        except Exception as error:  # noqa: BLE001 - Optuna 4.9 retry-loop behavior.
+        except Exception as error:  # noqa: BLE001 - Optuna 5.0 retry-loop behavior.
             backoff_remove_error = type(error).__name__
 
     boto_client = BotoClient()
@@ -753,7 +770,7 @@ def _sampler_seed_default_contract() -> dict[str, object]:
     for name in constructors:
         parameter = inspect.signature(getattr(optuna.samplers, name)).parameters["seed"]
         if parameter.default is not None:
-            raise RuntimeError(f"Optuna 4.9.0 {name}.seed no longer defaults to None.")
+            raise RuntimeError(f"Optuna 5.0.0 {name}.seed no longer defaults to None.")
         defaults[name] = {
             "parameter": parameter.name,
             "default_is_none": True,
@@ -1283,31 +1300,6 @@ def _tpe_group_contract() -> dict[str, object]:
     }
 
 
-def _tpe_categorical_distance_trials() -> list[dict[str, object]]:
-    levels = ["zero", "one", "two", "three"]
-    positions = {level: index for index, level in enumerate(levels)}
-
-    def distance(first: str, second: str) -> float:
-        return float(abs(positions[first] - positions[second]))
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        sampler = optuna.samplers.TPESampler(
-            seed=107,
-            n_startup_trials=4,
-            categorical_distance_func={"level": distance},
-        )
-    study = optuna.create_study(sampler=sampler)
-    rows: list[dict[str, object]] = []
-    for _ in range(18):
-        trial = study.ask()
-        level = trial.suggest_categorical("level", levels)
-        position = positions[level]
-        study.tell(trial, (position - 1.3) ** 2)
-        rows.append({"number": trial.number, "level": level, "position": position})
-    return rows
-
-
 def _multiobjective_tpe_trials() -> list[dict[str, float]]:
     study = optuna.create_study(
         directions=["minimize", "minimize"],
@@ -1321,6 +1313,43 @@ def _multiobjective_tpe_trials() -> list[dict[str, float]]:
         study.tell(trial, [(x - 0.4) ** 2 + 0.1 * y * y, (y + 0.2) ** 2 + 0.1 * x * x])
         rows.append({"x": x, "y": y})
     return rows
+
+
+def _native_tpe_history_selection() -> dict[str, object]:
+    history = [dict(x=-1.75 + i * 0.5, value=float(i % 3)) for i in range(8)]
+    cases = []
+    for direction in ["minimize", "maximize"]:
+        for gamma in [0.1, 1.0]:
+            sampler = optuna.samplers.TPESampler(
+                seed=149, n_startup_trials=4,
+                gamma=lambda n, g=gamma: min(25, int(np.ceil(g * n))))
+            study = optuna.create_study(direction=direction, sampler=sampler)
+            for row in history:
+                study.add_trial(optuna.trial.create_trial(
+                    value=row["value"], params={"x": row["x"]},
+                    distributions={"x": optuna.distributions.FloatDistribution(-2, 2)}))
+            proposal = study.ask().suggest_float("x", -2, 2)
+            cases.append(dict(direction=direction, gamma=gamma, proposal=proposal))
+    return dict(seed=149, history=history, cases=cases)
+
+
+def _tpe_intersection_transitions() -> dict[str, object]:
+    study = optuna.create_study(
+        sampler=optuna.samplers.TPESampler(seed=137, n_startup_trials=4)
+    )
+    rows = []
+    for index in range(24):
+        trial = study.ask()
+        bounds = [-2.0, 2.0] if index < 8 else [-1.0, 2.0]
+        active = index != 16
+        include_y = index < 12 or index >= 20
+        x = trial.suggest_float("x", *bounds) if active else 0.0
+        y = trial.suggest_float("y", -1.0, 1.0) if active and include_y else 0.0
+        loss = (x - 0.25) ** 2 + (y + 0.1) ** 2
+        study.tell(trial, loss)
+        rows.append(dict(low=bounds[0], high=bounds[1], active=active,
+                         include_y=include_y, x=x, y=y, loss=loss))
+    return dict(seed=137, startup_trials=4, trials=rows)
 
 
 def _mixed_tpe_trials() -> list[dict[str, object]]:
@@ -1750,11 +1779,34 @@ def _qmc_warning_contract() -> dict[str, object]:
 
     independent_enabled = capture(lambda: sample_categorical(True))
     independent_disabled = capture(lambda: sample_categorical(False))
+
+    pending_sampler = optuna.samplers.QMCSampler(seed=13)
+    pending_study = optuna.create_study(sampler=optuna.samplers.RandomSampler(seed=13))
+    first = pending_study.ask()
+    first.suggest_float("x", 0.0, 1.0)
+    second = pending_study.ask()
+    second.suggest_int("y", 0, 4)
+    pending_contract: dict[str, object] = {}
+
+    def infer_pending_union() -> None:
+        space = pending_sampler.infer_relative_search_space(
+            pending_study, pending_study.trials[-1]
+        )
+        pending_contract["union_keys"] = list(space)
+
+    pending_messages = capture(infer_pending_union)
+    pending_study.tell(first, 0.0)
+    frozen_space = pending_sampler.infer_relative_search_space(
+        pending_study, pending_study.trials[-1]
+    )
+    pending_contract["conditional_warning_count"] = len(pending_messages)
+    pending_contract["frozen_keys_after_first_complete"] = list(frozen_space)
     return {
         "asynchronous_enabled_count": len(asynchronous_enabled),
         "asynchronous_disabled_count": len(asynchronous_disabled),
         "independent_enabled_count": len(independent_enabled),
         "independent_disabled_count": len(independent_disabled),
+        "pending_union": pending_contract,
     }
 
 
@@ -1862,6 +1914,31 @@ def _nsgaii_trials() -> list[dict[str, object]]:
 
     study.optimize(objective, n_trials=32)
     return rows
+
+
+def _nsgaii_mutation_contract() -> dict[str, object]:
+    inputs = [0.0, 0.2, 0.5, 0.9, 1.0]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        mutation = optuna.samplers.nsgaii.PolynomialMutation()
+    rng = np.random.RandomState(109)
+    values = [
+        float(mutation.mutation(value, rng, None, np.array([0.0, 1.0])))
+        for value in inputs
+    ]
+    fixed = float(mutation.mutation(0.75, rng, None, np.array([2.0, 2.0])))
+    return {
+        "base_mutation_members": sorted(
+            name
+            for name in dir(optuna.samplers.nsgaii.BaseMutation)
+            if not name.startswith("_")
+        ),
+        "default_eta": float(mutation._eta),
+        "inputs": inputs,
+        "bounds": [0.0, 1.0],
+        "values_seed_109": values,
+        "fixed_bound_value": fixed,
+    }
 
 
 def _nsgaiii_trials() -> list[dict[str, object]]:
@@ -2329,12 +2406,16 @@ def _pruner_contract() -> dict[str, object]:
     first = halving.ask()
     first.report(1.0, 1)
     first_decision = first.should_prune()
-    first_rung = first.system_attrs["completed_rung_0"]
+    first_rung = halving._storage.get_trial_system_attrs(first._trial_id)[
+        "completed_rung_0"
+    ]
     halving.tell(first, 1.0)
     second = halving.ask()
     second.report(2.0, 1)
     second_decision = second.should_prune()
-    second_rung = second.system_attrs["completed_rung_0"]
+    second_rung = halving._storage.get_trial_system_attrs(second._trial_id)[
+        "completed_rung_0"
+    ]
 
     bootstrap = optuna.create_study(
         pruner=optuna.pruners.SuccessiveHalvingPruner(
@@ -2415,22 +2496,90 @@ def _pruner_contract() -> dict[str, object]:
 
 
 def _constraint_contract() -> dict[str, object]:
-    sampler = optuna.samplers.NSGAIISampler(
-        seed=73, population_size=4, constraints_func=lambda trial: trial.user_attrs["c"]
-    )
+    sampler = optuna.samplers.NSGAIISampler(seed=73, population_size=4)
     study = optuna.create_study(directions=["minimize", "minimize"], sampler=sampler)
     values = [[0.0, 0.0], [1.0, 2.0], [2.0, 1.0], [-1.0, -1.0]]
     constraints = [[1.0], [-1.0], [0.0], [2.0]]
     for objective_values, constraint_values in zip(values, constraints, strict=True):
         trial = study.ask()
-        trial.set_user_attr("c", constraint_values)
+        trial.set_constraint("c0", constraint_values[0])
         study.tell(trial, objective_values)
+
+    duplicate = study.ask()
+    duplicate.set_constraint("limit", 1.25)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        duplicate.set_constraint("limit", -9.0)
+    nan_error = ""
+    try:
+        duplicate.set_constraint("not_nan", float("nan"))
+    except Exception as error:  # noqa: BLE001
+        nan_error = type(error).__name__
+
+    from optuna.samplers.nsgaii._constraints_evaluation import _constrained_dominates
+    from optuna.samplers.nsgaii._constraints_evaluation import _evaluate_penalty
+    from optuna.samplers.nsgaii._elite_population_selection_strategy import _rank_population
+
+    ranking = optuna.create_study(directions=["minimize", "minimize"])
+    ranking_rows = [
+        ([3.0, 3.0], {}),
+        ([4.0, 4.0], {"budget": -1.0}),
+        ([0.0, 0.0], {"thermal": 2.0}),
+        ([5.0, 5.0], {"current": 0.5, "voltage": -2.0}),
+    ]
+    for objective_values, constraint_values in ranking_rows:
+        ranking.add_trial(
+            optuna.trial.create_trial(
+                values=objective_values,
+                constraints=constraint_values,
+            )
+        )
+    population = ranking.trials
+    fronts = _rank_population(population, ranking.directions, is_constrained=True)
+    constraint_warning_categories: dict[str, list[str]] = {}
+    constraint_sampler_factories = {
+        "TPESampler": lambda: optuna.samplers.TPESampler(
+            constraints_func=lambda _: [0.0]
+        ),
+        "NSGAIISampler": lambda: optuna.samplers.NSGAIISampler(
+            constraints_func=lambda _: [0.0]
+        ),
+        "NSGAIIISampler": lambda: optuna.samplers.NSGAIIISampler(
+            constraints_func=lambda _: [0.0]
+        ),
+        "GPSampler": lambda: optuna.samplers.GPSampler(
+            constraints_func=lambda _: [0.0]
+        ),
+    }
+    for sampler_name, factory in constraint_sampler_factories.items():
+        with warnings.catch_warnings(record=True) as records:
+            warnings.simplefilter("always")
+            factory()
+        constraint_warning_categories[sampler_name] = [
+            type(record.message).__name__ for record in records
+        ]
     return {
         "pareto_trial_numbers": sorted(trial.number for trial in study.best_trials),
         "states": [trial.state.name for trial in study.trials],
-        "constraints": [
-            list(trial.system_attrs["constraints"]) for trial in study.trials
-        ],
+        "constraints": [trial.constraints for trial in study.trials],
+        "duplicate_value": duplicate.constraints["limit"],
+        "duplicate_warning_count": len(caught),
+        "nan_error": nan_error,
+        "constraints_func_warning_categories": constraint_warning_categories,
+        "named_dictionary_ranking": {
+            "values": [row[0] for row in ranking_rows],
+            "constraints": [trial.constraints for trial in population],
+            "penalties": _evaluate_penalty(population).tolist(),
+            "fronts": [[trial.number for trial in front] for front in fronts],
+            "dominates": [
+                [
+                    _constrained_dominates(left, right, ranking.directions)
+                    for right in population
+                ]
+                for left in population
+            ],
+            "pareto_trial_numbers": [trial.number for trial in ranking.best_trials],
+        },
     }
 
 
@@ -2530,7 +2679,7 @@ def _lifecycle_error_contract() -> dict[str, object]:
             "error": constraint_error,
             "state": constrained_trial.state.name,
             "value_is_finite": bool(np.isfinite(constrained_trial.value)),
-            "constraint_is_none": constrained_trial.system_attrs["constraints"] is None,
+            "constraint_count": len(constrained_trial.constraints),
         },
     }
 
@@ -2545,9 +2694,10 @@ def _fixed_trial_contract() -> dict[str, object]:
     }
     trial.report(2.5, 3)
     trial.set_user_attr("owner", "matlab")
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", FutureWarning)
-        trial.set_system_attr("generation", 2)
+    trial.set_constraint("limit", -0.5)
+    with warnings.catch_warnings(record=True) as constraint_warnings:
+        warnings.simplefilter("always")
+        trial.set_constraint("limit", 99.0)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         repeated = float(trial.suggest_float("x", 0.6, 1.0))
@@ -2579,7 +2729,10 @@ def _fixed_trial_contract() -> dict[str, object]:
             for name, distribution in trial.distributions.items()
         },
         "user_attrs": dict(trial.user_attrs),
-        "system_attrs": dict(trial.system_attrs),
+        "constraints": dict(trial.constraints),
+        "constraint_warning_categories": [
+            item.category.__name__ for item in constraint_warnings
+        ],
         "errors": errors,
     }
 
@@ -2594,7 +2747,7 @@ def _frozen_trial_contract() -> dict[str, object]:
             "kind": optuna.distributions.CategoricalDistribution(["a", "b"]),
         },
         user_attrs={"owner": "upstream"},
-        system_attrs={"generation": 1},
+        constraints={"limit": -0.5},
         intermediate_values={2: 3.0},
     )
     values = {
@@ -2604,9 +2757,7 @@ def _frozen_trial_contract() -> dict[str, object]:
     }
     trial.report(99.0, 9)
     trial.set_user_attr("owner", "matlab")
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", FutureWarning)
-        trial.set_system_attr("generation", 2)
+    trial.set_constraint("margin", 0.25)
     errors: dict[str, str] = {}
     for name, operation in {
         "missing": lambda: trial.suggest_float("missing", 0.0, 1.0),
@@ -2623,7 +2774,7 @@ def _frozen_trial_contract() -> dict[str, object]:
         "should_prune": trial.should_prune(),
         "report_is_noop": 9 not in trial.intermediate_values,
         "user_owner": trial.user_attrs["owner"],
-        "system_generation": trial.system_attrs["generation"],
+        "constraints": dict(trial.constraints),
         "errors": errors,
     }
 
@@ -3083,7 +3234,7 @@ def _terminator_contract() -> dict[str, object]:
 
 
 def _deprecated_suggest_contract() -> dict[str, object]:
-    """Optuna 4.9 still ships the v3.0-deprecated suggest aliases.
+    """Optuna 5.0 still ships the v3.0-deprecated suggest aliases.
 
     They are part of the public surface, so MATLAB implements them.  This
     records what upstream actually does -- the value each alias produces, the
@@ -3284,6 +3435,87 @@ def _terminator_base_contract() -> dict[str, object]:
     }
 
 
+def _constructor_default_contract() -> dict[str, object]:
+    """Record every defaulted constructor parameter on the public surface.
+
+    The API inventory records classes and their public members, but not
+    __init__, so a changed constructor default was invisible to the coverage
+    gate while changing every seeded result.  Optuna 5.0 is exactly that case:
+    TPESampler moved multivariate from False to None and constant_liar from
+    False to True, and only the second had a named default test.
+
+    This records the literal signature default, not a resolved value.  Several
+    5.0 parameters are typed "X | None" where None means "resolve internally",
+    so the literal is None while the effective value is something else; the
+    MATLAB comparison declares those equivalences explicitly rather than this
+    oracle guessing at private state.
+    """
+    modules: dict[str, object] = {}
+    for module_name in CONSTRUCTOR_MODULE_NAMES:
+        try:
+            module = importlib.import_module(module_name)
+        except Exception as error:  # report, never silently skip a module
+            raise RuntimeError(
+                f"Cannot import {module_name} for the constructor contract: {error}"
+            ) from error
+        exported = getattr(module, "__all__", None)
+        names = sorted(exported) if exported else sorted(
+            name for name in vars(module) if not name.startswith("_")
+        )
+        classes: dict[str, object] = {}
+        for name in names:
+            obj = getattr(module, name, None)
+            if not inspect.isclass(obj):
+                continue
+            try:
+                signature = inspect.signature(obj.__init__)
+            except (ValueError, TypeError):
+                continue
+            parameters: dict[str, object] = {}
+            for parameter in signature.parameters.values():
+                if parameter.name == "self":
+                    continue
+                if parameter.default is inspect.Parameter.empty:
+                    continue
+                annotation = parameter.annotation
+                parameters[parameter.name] = {
+                    "default_repr": repr(parameter.default),
+                    "annotation": (
+                        annotation
+                        if isinstance(annotation, str)
+                        else getattr(annotation, "__name__", str(annotation))
+                    ),
+                    "kind": parameter.kind.name,
+                }
+            if parameters:
+                classes[name] = parameters
+        if classes:
+            modules[module_name] = classes
+    total = sum(
+        len(parameters)
+        for classes in modules.values()
+        for parameters in classes.values()
+    )
+    return {
+        "modules": modules,
+        "excluded_modules": {
+            "optuna.integration": (
+                "Third-party framework callbacks are scoped out-of-scope and "
+                "discharged by radia_optuna.bridge. optuna.integration also "
+                "raises on attribute access for any integration whose backend "
+                "is absent, so recording its defaults would make the oracle "
+                "depend on optional third-party installs."
+            ),
+            "optuna.visualization": (
+                "Plotting is scoped out-of-scope; the study is exported and "
+                "plotted from Python."
+            ),
+        },
+        "class_count": sum(len(classes) for classes in modules.values()),
+        "parameter_count": total,
+    }
+
+
 def build_oracle() -> dict[str, object]:
     optuna.logging.set_verbosity(optuna.logging.WARNING)
     if optuna.__version__ != EXPECTED_VERSION:
@@ -3300,11 +3532,14 @@ def build_oracle() -> dict[str, object]:
         "python_version": sys.version.split()[0],
         "torch_version": importlib.metadata.version("torch"),
         "cmaes_version": importlib.metadata.version("cmaes"),
+        "constructor_defaults": _constructor_default_contract(),
         "defaults": {
             "anonymous_prefix": "no-name-",
             "single_sampler": type(single.sampler).__name__,
             "multi_sampler": type(multi.sampler).__name__,
-            "multi_population_size": multi.sampler._population_size,
+            "multi_population_size": getattr(multi.sampler, "_population_size", None),
+            "single_tpe_multivariate": getattr(single.sampler, "_multivariate", None),
+            "single_tpe_constant_liar": getattr(single.sampler, "_constant_liar", None),
             "pruner": type(single.pruner).__name__,
         },
         "artifacts": _artifact_contract(),
@@ -3348,17 +3583,19 @@ def build_oracle() -> dict[str, object]:
         "distribution_json": _distribution_json_contract(),
         "random_sampler_seed_123": _random_trials(),
         "tpe_sampler_seed_37": _tpe_trials(),
+        "tpe_intersection_transitions": _tpe_intersection_transitions(),
+        "native_tpe_history_selection": _native_tpe_history_selection(),
         "tpe_constant_liar_seed_127": _tpe_constant_liar_contract(),
         "numeric_untransform": _numeric_untransform_contract(),
         "single_distribution_rng": _single_distribution_rng_contract(),
         "tpe_pruned_history_seed_113": _tpe_pruned_history_trials(),
         "custom_tpe_sampler_gamma_weights": _custom_tpe_trials(),
         "tpe_group": _tpe_group_contract(),
-        "tpe_categorical_distance": _tpe_categorical_distance_trials(),
         "multiobjective_tpe_sampler_seed_41": _multiobjective_tpe_trials(),
         "mixed_tpe_sampler_seed_43": _mixed_tpe_trials(),
         "grid_sampler_seed_17": _grid_trials(),
         "nsgaii_sampler_seed_19": _nsgaii_trials(),
+        "nsgaii_mutation": _nsgaii_mutation_contract(),
         "nsgaiii_sampler_seed_23": _nsgaiii_trials(),
         "nsgaii_crossovers_seed_73": _nsgaii_crossover_trials(),
         "brute_force_sampler_seed_29": _brute_force_trials(),
@@ -3379,7 +3616,7 @@ def build_oracle() -> dict[str, object]:
 
 
 def main() -> None:
-    destination = Path(__file__).with_name("optuna49_oracle.json")
+    destination = Path(__file__).with_name("optuna50_oracle.json")
     destination.write_text(
         json.dumps(build_oracle(), indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
