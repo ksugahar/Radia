@@ -27,14 +27,12 @@ recursive-include src/radia *.pyd
 recursive-include src/radia *.dll *.so *.dylib
 recursive-include src/radia *.ccm
 
-# Include examples
-recursive-include examples *.py
-recursive-include examples *.pvsm
-recursive-include examples *.md
-recursive-include examples *.vtk
+# Public examples live in docs; never resurrect the retired scratch tree.
+prune examples
 
-# Include Cubit example sample files
-recursive-include examples/cubit *.exo *.msh *.bdf *.meg *.vol *.jou
+# Match wheel exclusions: stale local binaries are not source-release inputs.
+exclude src/radia/cubit_mesh_curver.pyd
+recursive-exclude src/radia *.locked-old.pyd *.lockedold.pyd *.pre_*.pyd *.backup*.pyd
 
 # Include tests
 recursive-include tests *.py
