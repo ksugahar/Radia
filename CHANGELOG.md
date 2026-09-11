@@ -5,6 +5,10 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.91 - Corrected MagLev ECB force reconstruction
+
+Released 2026-09-11.
+
 - Refined recurring presentation agendas: full research talks now target four
   or five content-derived sections, agenda rows contain section names only,
   and explanatory taglines reduce the outline score. Each transition still
