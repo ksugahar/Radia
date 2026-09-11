@@ -4,24 +4,32 @@ Compact AMS + COCR exploits complex symmetry (A^T = A) of eddy current system.
 COCR: O(n) memory, no restart parameter, short recurrences.
 
 Usage:
-    python bench_compact_ams.py                        # default (mesh1_3.5T)
+    python bench_compact_ams.py                        # tracked mesh1_2.5T fixture
     python bench_compact_ams.py mesh1_2.5T             # single mesh
     python bench_compact_ams.py --all                  # all available meshes
     python bench_compact_ams.py mesh1_2.5T mesh1_3.5T  # multiple meshes
+    python bench_compact_ams.py --verify-baseline      # validation gate
 """
 
+import argparse
+import hashlib
 import json
 import os
 import platform
 import psutil
-import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
+from pathlib import Path
 
 import numpy as np
 from ngsolve import *
 import radia.sparsesolv_ngsolve as ssn
 from hiruma_mesh import load_hiruma_mesh, mesh_path
+
+HERE = Path(__file__).resolve().parent
+BASELINE_PATH = HERE / "compact_ams_baseline.json"
+DEFAULT_OUTPUT = (Path(r"C:\temp") / "radia-validation" /
+                  "sparsesolv_hiruma" / "compact_ams_results.json")
 
 # Physical parameters (match Hiruma SA-26-001)
 mu0 = 4e-7 * np.pi
@@ -39,7 +47,16 @@ ALL_MESHES = [
     "mesh1_3.5T",
     "mesh1_4.5T",
     "mesh1_5.5T",
+    "mesh1_20.5T",
 ]
+
+
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 def get_peak_memory_mb():
@@ -135,6 +152,7 @@ def run_single(mesh_name):
     print(f"f={freq/1e3:.0f} kHz, sigma={sigma_cu:.2e} S/m, mu_r={mu_r_core}, tol={tol}")
     print("=" * 80)
 
+    resolved_mesh = mesh_path(mesh_name)
     p = setup_problem(mesh_name)
     ndof_hcurl = p["fes"].ndof
     ndof_h1 = p["h1_fes"].ndof
@@ -176,6 +194,7 @@ def run_single(mesh_name):
 
     return {
         "mesh": mesh_name,
+        "mesh_sha256": sha256_file(resolved_mesh),
         "ne": p["ne"],
         "nv": p["nv"],
         "ndof_hcurl": ndof_hcurl,
@@ -187,18 +206,57 @@ def run_single(mesh_name):
         "t_total": round(t_total, 3),
         "ms_per_iter": round(ms_per_iter, 1),
         "true_residual": float(res),
-        "converged": iters < maxiter,
+        "converged": iters < maxiter and res <= 2.0 * tol,
         "peak_memory_mb": round(peak_mem, 1),
     }
 
 
-def main():
-    if "--all" in sys.argv:
-        mesh_names = ALL_MESHES
-    elif len(sys.argv) > 1:
-        mesh_names = [a for a in sys.argv[1:] if not a.startswith("-")]
-    else:
-        mesh_names = ["mesh1_3.5T"]
+def verify_baseline(result, baseline_path=BASELINE_PATH):
+    """Check stable numerical ranges; timings remain reported, not gated."""
+    baseline = json.loads(Path(baseline_path).read_text(encoding="utf-8"))
+    fixture = baseline["fixture"]
+    acceptance = baseline["acceptance"]
+    failures = []
+    exact = {
+        "mesh_sha256": fixture["sha256"],
+        "ne": fixture["ne"],
+        "nv": fixture["nv"],
+        "ndof_hcurl": fixture["ndof_hcurl"],
+        "ndof_h1": fixture["ndof_h1"],
+    }
+    for key, expected in exact.items():
+        if result[key] != expected:
+            failures.append(f"{key}: got {result[key]!r}, expected {expected!r}")
+    if not acceptance["iterations_min"] <= result["iterations"] <= acceptance["iterations_max"]:
+        failures.append(
+            f"iterations: got {result['iterations']}, expected "
+            f"[{acceptance['iterations_min']}, {acceptance['iterations_max']}]")
+    if result["true_residual"] > acceptance["true_residual_max"]:
+        failures.append(
+            f"true_residual: got {result['true_residual']:.3e}, expected <= "
+            f"{acceptance['true_residual_max']:.3e}")
+    if failures:
+        raise AssertionError("Hiruma baseline failed:\n  " + "\n  ".join(failures))
+    print("\nHiruma numerical baseline: PASS")
+
+
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("meshes", nargs="*", default=["mesh1_2.5T"])
+    parser.add_argument("--all", action="store_true",
+                        help="run the full optional five-mesh scaling sweep")
+    parser.add_argument("--verify-baseline", action="store_true",
+                        help="gate the tracked mesh1_2.5T result")
+    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT,
+                        help="result JSON (default: C:\\temp\\radia-validation)")
+    return parser.parse_args(argv)
+
+
+def main(argv=None):
+    args = parse_args(argv)
+    mesh_names = ALL_MESHES if args.all else args.meshes
+    if args.verify_baseline and mesh_names != ["mesh1_2.5T"]:
+        raise ValueError("--verify-baseline requires only mesh1_2.5T")
 
     results = []
     for name in mesh_names:
@@ -222,7 +280,8 @@ def main():
 
     # Save JSON
     out = {
-        "timestamp": datetime.now().isoformat(),
+        "schema": "radia.validation.sparsesolv-hiruma.v1",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "hostname": platform.node(),
         "benchmark": "compact_ams_cocr",
         "solver": {
@@ -249,10 +308,14 @@ def main():
         "results": results,
     }
 
-    json_path = os.path.join(os.path.dirname(__file__),
-                             "results_compact_ams.json")
-    with open(json_path, "w") as fp:
+    if args.verify_baseline:
+        verify_baseline(results[0])
+
+    json_path = args.output.resolve()
+    json_path.parent.mkdir(parents=True, exist_ok=True)
+    with json_path.open("w", encoding="utf-8") as fp:
         json.dump(out, fp, indent=2, ensure_ascii=False)
+        fp.write("\n")
     print(f"\nResults saved to {json_path}")
 
 
