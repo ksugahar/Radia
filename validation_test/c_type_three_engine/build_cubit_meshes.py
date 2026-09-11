@@ -71,6 +71,7 @@ def _write_journal(
     kelvin_radius_m: float,
     kelvin_mesh_size_m: float,
     curve_order: int,
+    gap_layers: int = 0,
 ) -> None:
     cad_lines = CAD_JOURNAL.read_text(encoding="utf-8").rstrip().splitlines()
     reflect_command = "volume all copy reflect z"
@@ -92,7 +93,8 @@ def _write_journal(
         f"iron_size={float(iron_size_m):.17g}, "
         f"air_size={None if air_size_m is None else float(air_size_m)!r}, "
         f"gap_size={float(gap_size_m):.17g}, "
-        f"kelvin_radius={float(kelvin_radius_m):.17g})\n"
+        f"kelvin_radius={float(kelvin_radius_m):.17g}, "
+        f"gap_layers={int(gap_layers)})\n"
         "assert _physical is not None\n",
         encoding="utf-8",
     )
@@ -340,6 +342,11 @@ def _gap_inventory(path: Path) -> dict[str, object]:
 # Round-off allowance on a reference barycentric coordinate.  Anything more
 # negative means the point lies outside the element the locator returned.
 _REFERENCE_ROUNDOFF = 1.0e-12
+# A traversal shorter than this is the line grazing an edge, not a crossing:
+# on the axis x = y = 0 of the symmetric N=6 layered mesh the straight
+# clipping returned four 1.1e-12 m pieces.  It equals the bisection
+# resolution of the curved walk, below which a switch cannot be located.
+_GRAZING_FLOOR_M = 1.0e-9
 
 
 def _containing_element(mesh, materials, x0: float, y0: float, z: float):
@@ -453,11 +460,13 @@ def _curved_line_segments(mesh, x0: float, y0: float, half: float,
         if material != "air":
             continue
         segments.append(right - left)
+    crossings = [length for length in segments if length >= _GRAZING_FLOOR_M]
     return {
-        "segments": len(segments),
-        "maximum_segment_m": float(max(segments)) if segments else 0.0,
-        "minimum_segment_m": float(min(segments)) if segments else 0.0,
+        "segments": len(crossings),
+        "maximum_segment_m": float(max(crossings)) if crossings else 0.0,
+        "minimum_segment_m": float(min(crossings)) if crossings else 0.0,
         "covered_m": float(sum(segments)),
+        "grazing_segments": len(segments) - len(crossings),
         "switch_tolerance_m": float(tolerance),
         # Coarse samples the locator placed OUTSIDE the element it returned;
         # they were skipped, not read as a membership.
@@ -483,7 +492,12 @@ def _gap_line_profile(mesh, gap_height: float,
     The clipping uses the straight tetrahedron through the element's vertices.
     On a curved mesh that is an approximation of the curved cell, so the
     sampled counts -- which go through NGSolve's own point location and see
-    the curved geometry -- are reported next to it as a cross-check.
+    the curved geometry -- are reported next to it as a cross-check.  They
+    are seeded with the straight-segment midpoints: an unseeded 4001-point
+    walk (2.5 um spacing) missed thin elements on the N=12 layered mesh and
+    reported an unstable count that was a property of the sampling, not of
+    the mesh.  Pieces shorter than ``_GRAZING_FLOOR_M`` are reported as
+    grazing contacts and not counted as crossings.
     """
     import numpy as np
     import ngsolve as ng
@@ -502,12 +516,15 @@ def _gap_line_profile(mesh, gap_height: float,
         if hi[2] < -half or lo[2] > half:
             continue
         air_boxes.append((lo, hi, points))
+    box_lo = np.asarray([box[0] for box in air_boxes], dtype=float).reshape(-1, 3)
+    box_hi = np.asarray([box[1] for box in air_boxes], dtype=float).reshape(-1, 3)
 
     def _segments(x0, y0):
         found = []
-        for lo, hi, points in air_boxes:
-            if not (lo[0] <= x0 <= hi[0] and lo[1] <= y0 <= hi[1]):
-                continue
+        candidates = np.nonzero((box_lo[:, 0] <= x0) & (x0 <= box_hi[:, 0])
+                                & (box_lo[:, 1] <= y0) & (y0 <= box_hi[:, 1]))[0]
+        for index in candidates:
+            points = air_boxes[int(index)][2]
             low, high = -half, half
             ok = True
             for drop in range(4):
@@ -537,9 +554,11 @@ def _gap_line_profile(mesh, gap_height: float,
         found.sort()
         return found
 
-    def _sampled_count(x0, y0, samples):
+    def _sampled_count(x0, y0, samples, seeds):
+        grid = np.linspace(-half + 1e-9, half - 1e-9, samples)
+        inside = [float(z) for z in seeds if -half < float(z) < half]
         previous, count = None, 0
-        for value in np.linspace(-half + 1e-9, half - 1e-9, samples):
+        for value in np.unique(np.concatenate([grid, np.asarray(inside, dtype=float)])):
             number, margin, material = _containing_element(
                 mesh, materials, x0, y0, value)
             if number is not None and margin < -_REFERENCE_ROUNDOFF:
@@ -567,19 +586,21 @@ def _gap_line_profile(mesh, gap_height: float,
             cursor = max(cursor, high)
         if cursor < half - 1.0e-10:
             holes += half - cursor
+        crossings = [length for length in lengths if length >= _GRAZING_FLOOR_M]
+        seeds = [0.5 * (low + high) for low, high in found]
         lines.append({
             "x_m": float(x0), "y_m": float(y0),
-            "segments": len(found),
-            "maximum_segment_m": float(max(lengths)) if lengths else 0.0,
-            "minimum_segment_m": float(min(lengths)) if lengths else 0.0,
+            "segments": len(crossings),
+            "grazing_segments": len(lengths) - len(crossings),
+            "maximum_segment_m": float(max(crossings)) if crossings else 0.0,
+            "minimum_segment_m": float(min(crossings)) if crossings else 0.0,
             "covered_m": covered,
             "uncovered_m": float(holes),
             "overlap_m": float(overlaps),
-            "sampled_4001": _sampled_count(x0, y0, 4001),
-            "sampled_16001": _sampled_count(x0, y0, 16001),
+            "sampled_4001": _sampled_count(x0, y0, 4001, seeds),
+            "sampled_16001": _sampled_count(x0, y0, 16001, seeds),
             "curved": _curved_line_segments(
-                mesh, float(x0), float(y0), half,
-                seeds=[0.5 * (low + high) for low, high in found]),
+                mesh, float(x0), float(y0), half, seeds=seeds),
         })
     counts = [row["segments"] for row in lines if row["segments"]]
     return {
@@ -603,6 +624,37 @@ def _gap_line_profile(mesh, gap_height: float,
         "note": "measured on the listed representative lines only; not a "
                 "statement about the whole gap",
     }
+
+def _kelvin_int_inventory(path: Path, radius: float,
+                          tolerance: float = 1.0e-9) -> dict[str, object]:
+    """Every ``kelvin_int`` boundary element must lie on the physical sphere.
+
+    ``add_kelvin_cubit`` puts the largest surface of EVERY air volume into
+    ``kelvin_int``.  With the gap cut into slabs, that includes slab faces
+    inside the gap.  On the N=6 and N=12 layered meshes the exporter dropped
+    them (same-material interior faces are not written) and ``kelvin_int``
+    kept exactly the sphere, but a solver would silently treat any survivor
+    as the Kelvin interface, so the product is checked rather than trusted.
+    """
+    import math
+    import ngsolve as ng
+
+    mesh = ng.Mesh(str(path))
+    boundaries = mesh.GetBoundaries()
+    elements, off_sphere, worst = 0, 0, 0.0
+    for element in mesh.Elements(ng.BND):
+        if boundaries[element.index] != "kelvin_int":
+            continue
+        elements += 1
+        errors = [abs(math.sqrt(sum(c * c for c in mesh[v].point)) - radius)
+                  for v in element.vertices]
+        worst = max(worst, max(errors))
+        if max(errors) > tolerance:
+            off_sphere += 1
+    return {"elements": elements, "elements_off_sphere": off_sphere,
+            "maximum_vertex_radius_error_m": worst,
+            "radius_tolerance_m": tolerance}
+
 
 def _gap_acceptance(inventory, required, factor):
     """Accept only observed, covered traversals on the named probe lines.
@@ -679,6 +731,7 @@ def build(options: argparse.Namespace) -> dict[str, object]:
         kelvin_radius_m=options.kelvin_radius,
         kelvin_mesh_size_m=options.kelvin_mesh_size,
         curve_order=options.curve_order,
+        gap_layers=options.gap_layers,
     )
 
     runs = {}
@@ -715,6 +768,7 @@ def build(options: argparse.Namespace) -> dict[str, object]:
         kelvin_identification = _kelvin_identification_inventory(kelvin_vol)
         kelvin_fes = _kelvin_fes_inventory(kelvin_vol)
         gap_inventory = _gap_inventory(kelvin_vol)
+        kelvin_int = _kelvin_int_inventory(kelvin_vol, float(options.kelvin_radius))
     for name, inventory in inventories.items():
         if inventory["volume_element_vertex_counts"] != [4]:
             raise RuntimeError(f"{name} is not a pure TET mesh: {inventory}")
@@ -732,6 +786,8 @@ def build(options: argparse.Namespace) -> dict[str, object]:
         and kelvin_fes["slaved_free_dofs"] > 0
         and kelvin_fes["trace_norm_ratio"] is not None
         and abs(kelvin_fes["trace_norm_ratio"] - 1.0) <= 1e-12
+        and kelvin_int["elements"] > 0
+        and kelvin_int["elements_off_sphere"] == 0
     )
 
     iron_rows = checks["iron"]["payload"].get("materials", [])
@@ -786,6 +842,8 @@ def build(options: argparse.Namespace) -> dict[str, object]:
         "iron_size_m": float(options.iron_size),
         "air_size_m": float(options.air_size),
         "gap_size_m": float(options.gap_size),
+        # Parallel air slabs through the full gap (0 = historical, unlayered).
+        "gap_layers": int(options.gap_layers),
         "kelvin_mesh_size_m": float(options.kelvin_mesh_size),
         "curve_order": int(options.curve_order),
         "gap_inventory": gap_inventory,
@@ -795,6 +853,7 @@ def build(options: argparse.Namespace) -> dict[str, object]:
         "reflection_inventory": reflection,
         "kelvin_identification": kelvin_identification,
         "kelvin_fes": kelvin_fes,
+        "kelvin_int_on_sphere": kelvin_int,
         "exact_iron_volume_m3": EXACT_IRON_VOLUME_M3,
         "mesh_iron_volume_m3": iron_volume,
         "relative_iron_volume_error": volume_error,
@@ -840,10 +899,17 @@ def main() -> None:
                         help="longest traversal inside one element, as a "
                              "multiple of the nominal gap_height/N. A mesh "
                              "design tolerance, not an accuracy guarantee")
+    parser.add_argument("--gap-layers", type=int, default=0,
+                        help="cut the gap air under the pole into this many "
+                             "parallel slabs through the FULL gap (even; the "
+                             "positive half is cut and reflected). 0 keeps the "
+                             "historical unlayered gap")
     parser.add_argument("--kelvin-radius", type=float, default=0.22)
     parser.add_argument("--kelvin-mesh-size", type=float, default=0.025)
     parser.add_argument("--curve-order", type=int, choices=range(2, 6), default=2)
     options = parser.parse_args()
+    if options.gap_layers < 0 or options.gap_layers % 2:
+        raise ValueError("--gap-layers must be a non-negative even integer")
     if any(value <= 0.0 for value in (
         options.iron_size,
         options.air_size,

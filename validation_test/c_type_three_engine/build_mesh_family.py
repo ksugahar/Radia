@@ -118,6 +118,9 @@ def build_family(options: argparse.Namespace) -> dict[str, object]:
                     kelvin_radius=expected["kelvin_radius_m"],
                     kelvin_mesh_size=expected["kelvin_mesh_size_m"],
                     curve_order=expected["curve_order"],
+                    gap_layers=0,
+                    gap_elements_across=options.gap_elements_across,
+                    gap_segment_factor=options.gap_segment_factor,
                 )
             )
         rows.append(
@@ -184,6 +187,8 @@ def main() -> None:
     parser.add_argument("--kelvin-radius", type=float, default=0.22)
     parser.add_argument("--kelvin-mesh-size", type=float, default=0.050)
     parser.add_argument("--curve-order", type=int, choices=range(2, 6), default=2)
+    parser.add_argument("--gap-elements-across", type=int, default=2)
+    parser.add_argument("--gap-segment-factor", type=float, default=1.2)
     parser.add_argument("--reuse-existing", action="store_true")
     options = parser.parse_args()
     if any(
