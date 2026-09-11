@@ -81,6 +81,15 @@ staging file on failure. Twelve added cases bring the twelve-file lane to 1103
 passes. This is optimistic conflict detection, not a cross-process transaction
 lock, and does not certify rendered reference formatting or all TeX semantics.
 
+M04 surname-edit follow-up (2026-09-12): the T13 fixer uses parsed author spans
+and the shared staged writer, rather than a source-wide regular expression and
+newline-converting write. Twenty cases cover literal organizations, compound
+surnames, suffixes, comments, macros, quoted/nested values, exact byte preservation
+and write failure. Macro/concatenated author expressions make the check unavailable
+and block the whole fix; legacy undecodable input is not guessed or reencoded.
+The thirteen-file lane passes 1123 tests. This enforces a local syntactic
+convention, not identity or universal bst behavior.
+
 Completion of a scoped validation requires matching the selected source, zero unexpected failures
 or skips in the relevant lane, and retained local machine-readable evidence.
 Do not commit transient test logs or mark the package globally "complete" from
