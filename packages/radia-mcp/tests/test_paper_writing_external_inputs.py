@@ -18,7 +18,7 @@ def _crossref_stub(monkeypatch, message):
     seen = []
     def get(url, **kwargs):
         seen.append(url)
-        return SimpleNamespace(status_code=200, json=lambda: {"message": message})
+        return SimpleNamespace(status_code=200, json=lambda: {"message": message}, close=lambda: None)
     monkeypatch.setattr(download, "_require_requests", lambda: SimpleNamespace(get=get))
     return seen
 
@@ -37,9 +37,10 @@ def test_doi_consumers_share_lossless_encoding(monkeypatch, value):
     def get(url, **kwargs):
         seen.append(url)
         return SimpleNamespace(status_code=200,
+                               close=lambda: None,
                                url="https://ieeexplore.ieee.org/document/123/")
     monkeypatch.setattr(download, "_require_requests", lambda: SimpleNamespace(
-        Session=lambda: SimpleNamespace(get=get)))
+        Session=lambda: SimpleNamespace(get=get, close=lambda: None)))
     ieee = download.paper_writing_ieee_doi_to_arnumber(value)
     assert ieee["ok"] and ieee["doi"] == result["doi"]
     assert seen[-1] == result["url"]
@@ -269,6 +270,65 @@ def test_unreadable_bibliography_blocks_external_lookup(monkeypatch, tmp_path, m
     result = verify.paper_writing_verify_citation("", str(bib), candidate_doi="10.1234/test")
     assert result["verdict"] == "error"
     assert result["suggested_bibtex"] is None
+
+
+@pytest.mark.parametrize("mode", ["success", "http403", "http404", "http429", "http503",
+                                  "json_error", "bad_root", "bad_message", "network"])
+def test_crossref_response_closed_and_failure_classification(monkeypatch, mode):
+    closed = []
+    class Response:
+        status_code = int(mode[4:]) if mode.startswith("http") else 200
+        def json(self):
+            if mode == "json_error":
+                raise ValueError("invalid JSON")
+            if mode == "bad_root":
+                return []
+            return {"message": None if mode == "bad_message" else {
+                "title": ["Test"], "author": [{"name": "Group"}],
+                "issued": {"date-parts": [[2024]]}}}
+        def close(self):
+            closed.append("response")
+    def get(*args, **kwargs):
+        if mode == "network":
+            raise OSError("connection failed")
+        return Response()
+    monkeypatch.setattr(download, "_require_requests", lambda: SimpleNamespace(get=get))
+    result = download.paper_writing_resolve_doi("10.1234/test")
+    assert closed == ([] if mode == "network" else ["response"])
+    assert result["ok"] is (mode == "success")
+    if mode != "success":
+        assert result["temporary_failure"] is (mode != "http404")
+        assert result["error_kind"] == ("not_found" if mode == "http404" else "temporary")
+    else:
+        assert result["title"] == "Test" and result["year"] == 2024
+
+
+@pytest.mark.parametrize("mode", ["success", "http403", "unmatched", "network", "url_error"])
+def test_ieee_redirect_closes_owned_resources(monkeypatch, mode):
+    closed = []
+    class Response:
+        status_code = 403 if mode == "http403" else 200
+        @property
+        def url(self):
+            if mode == "url_error":
+                raise ValueError("invalid URL response")
+            return ("https://example.com/login" if mode == "unmatched" else
+                    "https://ieeexplore.ieee.org/document/123/")
+        def close(self):
+            closed.append("response")
+    class Session:
+        def get(self, *args, **kwargs):
+            if mode == "network":
+                raise OSError("connection failed")
+            return Response()
+        def close(self):
+            closed.append("session")
+    monkeypatch.setattr(download, "_require_requests", lambda: SimpleNamespace(Session=Session))
+    result = download.paper_writing_ieee_doi_to_arnumber("10.1109/test")
+    assert closed == (["session"] if mode == "network" else ["response", "session"])
+    assert result["ok"] is (mode == "success")
+    if mode == "success":
+        assert result["arnumber"] == "123" and result["doi"] == "10.1109/test"
 
 
 class StreamResponse:
