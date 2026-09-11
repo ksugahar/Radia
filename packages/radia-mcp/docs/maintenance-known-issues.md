@@ -38,6 +38,11 @@ response shape, required candidate fields, unknown optional metadata and decode
 failures; the eight-file lane passes 988 tests. Citation-key/name heuristics and
 rendered bibliography acceptance remain open; this is not package-wide closure.
 
+M04 key follow-up (2026-09-12): 18 cases cover brace-aware author separators,
+particles/accents, title-format command exclusion, rename collisions and invalid
+UTF-8 refusal. The nine-file lane passes 1006 tests. Canonicalize/journal rewrite
+source preservation remains the next safety concern; no parent data was changed.
+
 Completion of a scoped validation requires matching the selected source, zero unexpected failures
 or skips in the relevant lane, and retained local machine-readable evidence.
 Do not commit transient test logs or mark the package globally "complete" from

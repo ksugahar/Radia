@@ -21,6 +21,7 @@ from __future__ import annotations
 import dataclasses
 import pathlib
 import re
+import unicodedata
 
 
 @dataclasses.dataclass
@@ -179,11 +180,43 @@ def write_bib(entries: list[BibEntry], indent: str = "  ") -> str:
 
 def read_bib_file(path: str | pathlib.Path) -> list[BibEntry]:
     p = pathlib.Path(path)
-    text = p.read_text(encoding="utf-8", errors="replace")
+    text = p.read_text(encoding="utf-8", errors="strict")
     return parse_bib(text)
 
 
 # Citation-key handling -----------------------------------------------------
+
+def _split_name_parts(value: str, separator: str) -> list[str]:
+    """Split BibTeX name syntax only at brace depth zero."""
+    pattern = re.compile(separator, re.IGNORECASE)
+    parts = []
+    start = depth = i = 0
+    while i < len(value):
+        char = value[i]
+        if char == "\\":
+            i += 2
+            continue
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+        if depth == 0:
+            match = pattern.match(value, i)
+            if match:
+                parts.append(value[start:i].strip())
+                start = i = match.end()
+                continue
+        i += 1
+    parts.append(value[start:].strip())
+    return parts
+
+
+def _key_letters(value: str) -> str:
+    # TeX command names are formatting, not author/title words. Keep arguments.
+    value = re.sub(r"\\[A-Za-z]+\*?", "", value)
+    value = unicodedata.normalize("NFKD", value)
+    return re.sub(r"[^A-Za-z]", "", value).lower()
+
 
 def first_author_lastname(authors_field: str) -> str:
     """Return the first author's lastname from a BibTeX ``author`` field.
@@ -193,14 +226,18 @@ def first_author_lastname(authors_field: str) -> str:
     """
     if not authors_field:
         return "unknown"
-    first = authors_field.split(" and ")[0].strip()
-    if "," in first:
-        last = first.split(",", 1)[0].strip()
+    first = _split_name_parts(authors_field, r"\s+and\s+")[0]
+    comma_parts = _split_name_parts(first, r",")
+    tokens = _split_name_parts(first, r"\s+")
+    if len(comma_parts) > 1:
+        last = comma_parts[0]
     else:
-        # Take the last whitespace-separated token.
-        last = first.split()[-1] if first.split() else "unknown"
+        # Preserve brace-protected literals and BibTeX's lowercase name particles.
+        particle = next((i for i, token in enumerate(tokens[:-1])
+                         if token and token[0].islower()), len(tokens) - 1)
+        last = " ".join(tokens[particle:])
     # Strip non-letters for the cite-key alphabet.
-    return re.sub(r"[^A-Za-z]", "", last).lower() or "unknown"
+    return _key_letters(last) or "unknown"
 
 
 def first_title_word(title_field: str) -> str:
@@ -209,6 +246,9 @@ def first_title_word(title_field: str) -> str:
         "a", "an", "the", "on", "in", "of", "and", "or", "for", "with",
         "to", "by", "from", "into", "via", "using", "based",
     }
+    title_field = re.sub(r"\\[A-Za-z]+\*?", "", title_field)
+    title_field = unicodedata.normalize("NFKD", title_field)
+    title_field = "".join(c for c in title_field if not unicodedata.combining(c))
     for raw in re.split(r"[^A-Za-z]+", title_field):
         if not raw:
             continue
