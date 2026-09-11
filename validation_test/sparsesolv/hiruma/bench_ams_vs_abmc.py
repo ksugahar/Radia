@@ -22,6 +22,7 @@ import psutil
 import sys
 import time
 from datetime import datetime
+from pathlib import Path
 
 import numpy as np
 from ngsolve import *
@@ -38,7 +39,9 @@ mu_r_core = 1000
 maxiter = 20000
 tol = 1e-10
 
-ALL_MESHES = ["mesh1_2.5T", "mesh1_3.5T", "mesh1_4.5T", "mesh1_5.5T"]
+ALL_MESHES = [
+    "mesh1_2.5T", "mesh1_3.5T", "mesh1_4.5T", "mesh1_5.5T", "mesh1_20.5T"
+]
 
 
 def get_peak_memory_mb():
@@ -274,7 +277,7 @@ def main():
     elif len(sys.argv) > 1:
         mesh_names = [a for a in sys.argv[1:] if not a.startswith("-")]
     else:
-        mesh_names = ["mesh1_3.5T"]
+        mesh_names = ["mesh1_2.5T"]
 
     all_cases = []
     for name in mesh_names:
@@ -333,10 +336,12 @@ def main():
         },
         "cases": all_cases,
     }
-    json_path = os.path.join(os.path.dirname(__file__),
-                             "results_ams_vs_abmc.json")
-    with open(json_path, "w") as fp:
+    json_path = (Path(r"C:\temp") / "radia-validation" /
+                 "sparsesolv_hiruma" / "ams_vs_abmc_results.json")
+    json_path.parent.mkdir(parents=True, exist_ok=True)
+    with json_path.open("w", encoding="utf-8") as fp:
         json.dump(out, fp, indent=2, ensure_ascii=False)
+        fp.write("\n")
     print(f"\nResults saved to {json_path}")
 
 
