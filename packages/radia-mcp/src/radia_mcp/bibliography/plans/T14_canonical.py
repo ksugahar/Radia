@@ -250,8 +250,10 @@ def bibliography_make_bbl(
         return f"Error: output directory does not exist: {destination.parent}"
     try:
         previous_output = destination.read_bytes() if destination.exists() else None
+        local_style = source.parent / f"{style}.bst"
+        style_bytes = local_style.read_bytes() if local_style.exists() else None
     except OSError as exc:
-        return f"Error: cannot read existing bbl: {exc}"
+        return f"Error: cannot read existing bbl or local bibliography style: {exc}"
 
     # Validate every input that does not require an external executable first.
     # In particular, an unknown citation key must fail closed even on a host
@@ -266,9 +268,8 @@ def bibliography_make_bbl(
 
         # A publisher-provided style may live beside the manuscript rather than
         # in the TeX installation. Copy only the requested style.
-        local_style = source.parent / f"{style}.bst"
-        if local_style.is_file():
-            shutil.copyfile(local_style, work / local_style.name)
+        if style_bytes is not None:
+            (work / local_style.name).write_bytes(style_bytes)
 
         aux = "\\relax\n" + "".join(f"\\citation{{{key}}}\n" for key in keys)
         aux += f"\\bibstyle{{{style}}}\n\\bibdata{{references}}\n"
@@ -319,6 +320,9 @@ def bibliography_make_bbl(
                 output_handle.write(data)
             if CANONICAL.read_bytes() != canonical_bytes:
                 return "Error: canonical bibliography changed during generation; retry"
+            current_style = local_style.read_bytes() if local_style.exists() else None
+            if current_style != style_bytes:
+                return "Error: local bibliography style changed during generation; retry"
             for item in resolved["files_resolved"]:
                 current_hash = hashlib.sha256(pathlib.Path(item["path"]).read_bytes()).hexdigest()
                 if current_hash != item.get("sha256"):
@@ -339,5 +343,8 @@ def bibliography_make_bbl(
         f"  cited {len(keys)} canonical keys; wrote {bibitem_count} bibitems; "
         f"style {style}\n"
         f"  canonical_sha256: {hashlib.sha256(canonical_bytes).hexdigest()}\n"
+        + (f"  local_style_sha256: {hashlib.sha256(style_bytes).hexdigest()}\n"
+           if style_bytes is not None else "  bibliography style resolved by the TeX installation\n")
+        +
         "  references.bib remained canonical and was not copied into the manuscript."
     )
