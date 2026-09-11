@@ -665,7 +665,7 @@ _SOFTWARE_CATEGORIES = re.compile(
 )
 _SOFTWARE_OPERATIONS = re.compile(
     r"(?:磁場|電磁界|形状|電流|軌道|データ|モデル|方程式|解析|計算|設計|"
-    r"最適化|可視化|連成|制御|予測|評価|生成|保存|管理|変換).{0,28}"
+    r"最適化|可視化|連成|制御|予測|評価|生成|保存|管理|変換|積分|要素).{0,28}"
     r"(?:計算|解析|求め|解[くき]|扱[うい]|設計|最適化|可視化|連成|制御|"
     r"予測|評価|生成|保存|管理|変換|実行)|"
     r"\b(?:compute|solve|analyse|analyze|design|optimi[sz]e|simulate|visuali[sz]e|"
@@ -680,9 +680,20 @@ _IMPLEMENTATION_LABEL = re.compile(
 
 
 def _named_term_pattern(name: str) -> re.Pattern[str]:
-    boundary_left = r"(?<![A-Za-z0-9])" if name[:1].isascii() else ""
-    boundary_right = r"(?![A-Za-z0-9])" if name[-1:].isascii() else ""
+    boundary_left = r"(?<![A-Za-z0-9_])(?<![A-Za-z0-9][-‐‑–—])" if name[:1].isascii() else ""
+    boundary_right = r"(?![A-Za-z0-9_]|[-‐‑–—][A-Za-z0-9])" if name[-1:].isascii() else ""
     return re.compile(boundary_left + re.escape(name) + boundary_right, re.IGNORECASE)
+
+
+def _unique_named_terms(names: list[str]) -> list[str]:
+    """Preserve the first display spelling, but compare names case-insensitively."""
+    seen: set[str] = set()
+    result = []
+    for name in names:
+        if name.casefold() not in seen:
+            seen.add(name.casefold())
+            result.append(name)
+    return result
 
 
 def _named_diagnostic_sentences(raw: str) -> list[dict]:
@@ -761,7 +772,8 @@ def grant_writing_named_software_first_use_check(
     as a functional explanation.
 
     ``software_names`` may add comma-separated project-specific tools or
-    methods to the built-in list.
+    methods to the built-in list. Familiar general-purpose MATLAB and Simulink
+    names are opt-in via this argument, not automatic missing-definition flags.
     """
     from .tools import _read_text_if_path
 
@@ -769,10 +781,9 @@ def grant_writing_named_software_first_use_check(
     defaults = [
         "Radia", "NGSolve", "ONELAB", "openCFS", "FreeFEM++", "Gmsh",
         "GetDP", "preCICE", "OpenMDAO", "COMSOL", "JMAG", "ANSYS",
-        "MATLAB", "Simulink",
     ]
     extras = [name.strip() for name in software_names.split(",") if name.strip()]
-    names = list(dict.fromkeys(defaults + extras))
+    names = _unique_named_terms(defaults + extras)
     sentences = _named_diagnostic_sentences(raw)
 
     entries: list[dict] = []
@@ -782,6 +793,14 @@ def grant_writing_named_software_first_use_check(
         if first is None:
             continue
         category_hits = [m.group(0) for m in _SOFTWARE_CATEGORIES.finditer(first["text"])]
+        # An explicitly defined method need not pretend to be software. Keep
+        # the category tied to this name rather than another method in the text.
+        method_definition = re.search(
+            pattern.pattern + r"(?:は|とは)[^。！？]{1,240}?(?:手法|方法|法|アルゴリズム)(?:である|です)",
+            first["text"], re.IGNORECASE,
+        )
+        if method_definition:
+            category_hits.append("method definition")
         operation_hits = [m.group(0) for m in _SOFTWARE_OPERATIONS.finditer(first["text"])]
         implementation_claims = [
             m.group(0) for m in _IMPLEMENTATION_LABEL.finditer(first["text"])
@@ -815,9 +834,12 @@ def grant_writing_named_software_first_use_check(
             "言語や実装方式のラベルは、機能説明の代わりにせず、リポジトリ等の一次情報と一致するか。",
         ],
         "recommendations": [
-            "『公開研究基盤』だけで終えず、『磁石の形状と電流から三次元磁場を計算するソフトウェア』のように機能を先に書く。",
-            "固有名は機能説明の後に置くか、『Radiaは、…するソフトウェアである』と同じ文で定義する。",
-        ] if missing or source_checks else [],
+            f"{entry['software']}の初出に、対象・入力・処理・出力と、ソフトウェア又は手法としての役割を同じ文で説明する。"
+            for entry in missing
+        ] + [
+            f"{entry['software']}の言語・実装方式の記述を、一次情報と照合する。"
+            for entry in source_checks
+        ],
         "warning": (
             "This is a first-use readability map, not a technical-fact checker. "
             "A detected category and operation can still describe the software incorrectly."
@@ -871,7 +893,7 @@ def grant_writing_capability_status_map(
     from .tools import _read_text_if_path
 
     raw = _read_text_if_path(text)
-    names = [name.strip() for name in capability_names.split(",") if name.strip()]
+    names = _unique_named_terms([name.strip() for name in capability_names.split(",") if name.strip()])
     if not names:
         return {
             "applicable": False,

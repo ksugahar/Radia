@@ -97,3 +97,53 @@ def test_plain_percentage_does_not_start_a_tex_comment():
         "Radiaは誤差2%以下で磁場を計算するソフトウェアである。"
     )["entries"][0]
     assert entry["functional_identity_present"]
+
+
+def test_method_definition_is_not_required_to_call_itself_software():
+    result = t.grant_writing_named_software_first_use_check(
+        "HDiv-MMMは、鉄だけを要素分割し、空間の相互作用を積分で扱う磁気モーメント法である。",
+        software_names="HDiv-MMM",
+    )
+    assert result["entries"][0]["functional_identity_present"]
+    assert not result["recommendations"]
+
+
+def test_bare_method_name_is_still_not_a_functional_definition():
+    result = t.grant_writing_named_software_first_use_check(
+        "HDiv-MMMは磁気モーメント法である。", software_names="HDiv-MMM",
+    )
+    assert not result["entries"][0]["functional_identity_present"]
+
+
+@pytest.mark.parametrize("name", ["MATLAB", "Simulink"])
+def test_familiar_general_purpose_tools_are_opt_in(name):
+    assert not t.grant_writing_named_software_first_use_check(f"{name}を用いる。")["applicable"]
+    explicit = t.grant_writing_named_software_first_use_check(f"{name}を用いる。", software_names=name)
+    assert explicit["entry_count"] == 1
+    assert name in explicit["recommendations"][0]
+    assert all("Radia" not in advice for advice in explicit["recommendations"])
+
+
+def test_names_are_deduplicated_ignoring_case():
+    result = t.grant_writing_named_software_first_use_check("Radiaを用いる。", software_names="radia,RADIA")
+    assert result["entry_count"] == 1
+    status = t.grant_writing_capability_status_map("Radiaは実装済み。", capability_names="Radia,radia")
+    assert len(status["capabilities"]) == 1
+
+
+@pytest.mark.parametrize("other", ["radia-mcp", "radia_mcp", "my-Radia", "RadiaNext"])
+def test_related_package_is_not_the_base_name(other):
+    assert not t.grant_writing_named_software_first_use_check(f"{other}を用いる。")["applicable"]
+    result = t.grant_writing_named_software_first_use_check(
+        f"{other}を用いる。Radiaは磁場を計算するソフトウェアである。"
+    )
+    assert result["entries"][0]["first_use"].startswith("Radiaは")
+    assert result["entries"][0]["functional_identity_present"]
+
+
+def test_explicit_hyphenated_name_and_plus_suffix_still_match():
+    result = t.grant_writing_named_software_first_use_check(
+        "radia-mcpはデータを管理するソフトウェアである。FreeFEM++を用いる。",
+        software_names="radia-mcp",
+    )
+    assert {e["software"] for e in result["entries"]} == {"radia-mcp", "FreeFEM++"}
