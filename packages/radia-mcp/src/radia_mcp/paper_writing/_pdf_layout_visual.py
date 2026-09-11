@@ -44,6 +44,8 @@ Implementation:
 
 from __future__ import annotations
 
+from contextlib import ExitStack
+
 import json
 import os
 import pathlib
@@ -112,50 +114,51 @@ def paper_writing_render_pages_to_png(
           ``"pages_rendered"``: list of {"page": N, "path": ..., "size_bytes": ...}
           ``"total_pages"``: N (in source PDF)
           ``"hint"``: how to ask Claude vision to inspect them
+
+    Exceptions propagate after closing the PDF. PNGs already written before a
+    later page fails remain on disk; a partial run does not return a success report.
     """
     pymupdf = _require_pymupdf()
     pdf = pathlib.Path(pdf_path)
     if not pdf.exists():
         return {"error": f"pdf_path not found: {pdf_path}"}
-    doc = pymupdf.open(str(pdf))
-    total = doc.page_count
+    with pymupdf.open(str(pdf)) as doc:
+        total = doc.page_count
 
-    # Parse page_range
-    if not page_range or page_range.strip() == "":
-        page_nums = list(range(1, total + 1))
-    else:
-        page_nums = []
-        for chunk in page_range.split(","):
-            chunk = chunk.strip()
-            if "-" in chunk:
-                a, b = chunk.split("-", 1)
-                page_nums.extend(range(int(a), int(b) + 1))
-            else:
-                page_nums.append(int(chunk))
-        page_nums = sorted(set(p for p in page_nums if 1 <= p <= total))
+        # Parse page_range
+        if not page_range or page_range.strip() == "":
+            page_nums = list(range(1, total + 1))
+        else:
+            page_nums = []
+            for chunk in page_range.split(","):
+                chunk = chunk.strip()
+                if "-" in chunk:
+                    a, b = chunk.split("-", 1)
+                    page_nums.extend(range(int(a), int(b) + 1))
+                else:
+                    page_nums.append(int(chunk))
+            page_nums = sorted(set(p for p in page_nums if 1 <= p <= total))
 
-    if not page_nums:
-        doc.close()
-        return {"error": f"page_range {page_range!r} matched no pages "
-                          f"(PDF has {total} pages)"}
+        if not page_nums:
+            return {"error": f"page_range {page_range!r} matched no pages "
+                              f"(PDF has {total} pages)"}
 
-    if out_dir is None:
-        out_dir = str(pdf.parent / (pdf.stem + "_pages"))
-    os.makedirs(out_dir, exist_ok=True)
+        if out_dir is None:
+            out_dir = str(pdf.parent / (pdf.stem + "_pages"))
+        os.makedirs(out_dir, exist_ok=True)
 
-    rendered = []
-    width = max(3, len(str(total)))
-    for pn in page_nums:
-        page = doc[pn - 1]
-        pix = page.get_pixmap(dpi=dpi)
-        out_path = os.path.join(out_dir, f"{prefix}_{pn:0{width}d}.png")
-        pix.save(out_path)
-        rendered.append({
-            "page": pn,
-            "path": out_path,
-            "size_bytes": os.path.getsize(out_path),
-        })
-    doc.close()
+        rendered = []
+        width = max(3, len(str(total)))
+        for pn in page_nums:
+            page = doc[pn - 1]
+            pix = page.get_pixmap(dpi=dpi)
+            out_path = os.path.join(out_dir, f"{prefix}_{pn:0{width}d}.png")
+            pix.save(out_path)
+            rendered.append({
+                "page": pn,
+                "path": out_path,
+                "size_bytes": os.path.getsize(out_path),
+            })
 
     return {
         "out_dir": out_dir,
@@ -297,55 +300,59 @@ def paper_writing_layout_thumbnail_strip(
           "out_path", "total_pages", "thumbnail_w_h": (w, h)
           "strip_w_h": (W, H) of the composite
           "hint": how to use with vision agent
+
+    The PDF, tiles and composite image are closed on every exit. Save failures
+    propagate; existing output files are not deleted as part of cleanup.
     """
     pymupdf = _require_pymupdf()
     Image = _require_pil()
     pdf = pathlib.Path(pdf_path)
     if not pdf.exists():
         return {"error": f"pdf_path not found: {pdf_path}"}
-    doc = pymupdf.open(str(pdf))
-    total = doc.page_count
-    if total == 0:
-        doc.close()
-        return {"error": "PDF has 0 pages"}
+    with ExitStack() as resources:
+        doc = resources.enter_context(pymupdf.open(str(pdf)))
+        total = doc.page_count
+        if total == 0:
+            return {"error": "PDF has 0 pages"}
 
-    # Render every page to a PIL Image
-    tiles = []
-    for page in doc:
-        pix = page.get_pixmap(dpi=dpi)
-        img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
-        tiles.append(img)
-    doc.close()
+        # Render every page to a PIL Image
+        tiles = []
+        for page in doc:
+            pix = page.get_pixmap(dpi=dpi)
+            img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+            resources.callback(img.close)
+            tiles.append(img)
 
-    tw, th = tiles[0].size
-    n_rows = (total + cols - 1) // cols
-    W = cols * tw + (cols + 1) * gap_px
-    H = n_rows * th + (n_rows + 1) * gap_px
-    strip = Image.new("RGB", (W, H), tuple(bg_rgb))
-    for i, t in enumerate(tiles):
-        r = i // cols
-        c = i % cols
-        x = gap_px + c * (tw + gap_px)
-        y = gap_px + r * (th + gap_px)
-        strip.paste(t, (x, y))
+        tw, th = tiles[0].size
+        n_rows = (total + cols - 1) // cols
+        W = cols * tw + (cols + 1) * gap_px
+        H = n_rows * th + (n_rows + 1) * gap_px
+        strip = Image.new("RGB", (W, H), tuple(bg_rgb))
+        resources.callback(strip.close)
+        for i, t in enumerate(tiles):
+            r = i // cols
+            c = i % cols
+            x = gap_px + c * (tw + gap_px)
+            y = gap_px + r * (th + gap_px)
+            strip.paste(t, (x, y))
 
-    if out_path is None:
-        out_path = str(pdf.with_name(pdf.stem + "_strip.png"))
-    strip.save(out_path, optimize=True)
+        if out_path is None:
+            out_path = str(pdf.with_name(pdf.stem + "_strip.png"))
+        strip.save(out_path, optimize=True)
 
-    return {
-        "out_path": out_path,
-        "total_pages": total,
-        "thumbnail_w_h": (tw, th),
-        "strip_w_h": (W, H),
-        "size_bytes": os.path.getsize(out_path),
-        "hint": (
-            "Open the strip in Claude vision and ask: 'For each numbered "
-            "thumbnail, list any page that looks abnormal (mostly white, "
-            "figure pushed to wrong page, caption stranded across page "
-            "break, single-column figure spanning both columns).'"
-        ),
-    }
+        return {
+            "out_path": out_path,
+            "total_pages": total,
+            "thumbnail_w_h": (tw, th),
+            "strip_w_h": (W, H),
+            "size_bytes": os.path.getsize(out_path),
+            "hint": (
+                "Open the strip in Claude vision and ask: 'For each numbered "
+                "thumbnail, list any page that looks abnormal (mostly white, "
+                "figure pushed to wrong page, caption stranded across page "
+                "break, single-column figure spanning both columns).'"
+            ),
+        }
 
 
 # ============================================================
