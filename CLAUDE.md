@@ -89,26 +89,25 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 
 ### Shared MCP Runtime Ownership
 
-- Ordinary development uses task-owned environments or process-local source
-  overrides; never change a shared interpreter's editable installs, client
-  configuration or running MCP as a side effect of tests, merge or commit.
-- Long-lived MCPs use an approved, commit-pinned source snapshot. Do not edit,
-  pull, rebase, rebuild or remove a snapshot while any consumer uses it.
-- Shared runtime changes require explicit deployment scope and one designated
-  owner per host/interpreter, including all affected users. Record ownership,
-  old/new sources and commits, reason, timestamps and target clients before
-  changing anything; competing or unknown ownership means defer, not repair.
-- Stage and test separately; activate only at a coordinated safe boundary.
-  Retain old sources for existing processes and rollback. A package release
-  does not authorize repointing other independently released packages.
-- Report installed registration, fresh-process resolution and each client's
-  live loaded source separately, with observation time and target identity.
-  Version equality, directory names and current disk hashes do not prove
-  loaded code identity. Unknown or mixed evidence must stay unverified.
-- Never infer global runtime state from "this task made no change". Reconnect
-  only scoped idle targets through supported client controls; never mass-kill
-  processes. Follow `mcp-reconnect` and the mandatory operational contract in
+- MCP is experimental development tooling, not a numerical solver release.
+  Developers may edit live MCP source and change its editable source with
+  `pip install -e`; no dedicated branch, frozen snapshot or separate deployment
+  approval is required for routine MCP experiments.
+- Coordinate overlapping edits and environment changes; preserve others' WIP
+  and active CAD/MATLAB jobs. Never mass-kill processes to refresh MCP.
+- Verify the interpreter and actual import path after repointing. Report each
+  client's live loaded source separately; reload/reconnect affected clients as
+  needed. Unknown or mixed evidence must stay unverified.
+- Solver/native numerical acceptance is unchanged. Keep release installation
+  tests isolated from development; see the
   [Shared MCP runtime policy](packages/radia-mcp/docs/operations/mcp-runtime-policy.md).
+
+### Canonical Bibliography
+
+- The single parent is `packages/radia-mcp/src/radia_mcp/bibliography/data/references.bib`.
+  Resolve it with `bibliography_canonical_path`; correct verified entries there.
+- Manuscript folders contain generated `.bbl` only, never local `.bib` copies.
+  Use `bibliography_make_bbl`, regenerate after changes, and check citations.
 
 ### MATLAB And Simulink
 
@@ -154,10 +153,12 @@ solver boundary is a checked `.vol` regardless of the creation route.
   validation inputs may produce a visible skip. Heavier `.vol` work
   belongs to `validation_test/`, and `docs/**/*.ipynb` may show the Cubit
   generation step.
-- LLM/agent-driven `cubit-mesh-export` work uses Cubit's APREPRO commands
-  through a batch/headless route; it must not launch or drive the Cubit GUI.
-  GUI launch or interaction is allowed only for an explicitly scoped GUI test
-  that protects the user-facing toolbar or visual-debugging surface.
+- Only `cubit-mesh-export` launches the Cubit GUI and owns Cubit GUI tests on licensed hosts;
+  Radia solver/application/validation/CI lanes must not launch it or duplicate those tests.
+- Radia normally reads checked `.vol` files. Generation uses APREPRO or Cubit's Python API
+  in batch/headless mode with `cubit-mesh-export` owning export; CI remains fixture-only.
+- `radia-mcp.cubit` supports human-AI collaboration through the `cubit-mesh-export` GUI;
+  it does not authorize solver-side GUI launch or interruption of human-owned sessions.
 - Every solver-bound `.vol` passes `check-vol` with its versioned label
   contract before solver or Simulink initialization.
 - Label checks validate topology/naming; DesignSpec validates physical data.
