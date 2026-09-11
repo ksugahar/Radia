@@ -38,6 +38,7 @@
 
 #include "equation_edit.h"
 #include "equation_render.h"
+#include "font_trace.h"
 #include "tex_parser.h"
 #include "eqnedit64_resource.h"
 #include "eqnedit64_version.h"
@@ -6653,6 +6654,7 @@ int show_cli_help() {
 }  // namespace
 
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
+    eqnedit::FontTraceMainScope fontTraceScope;
     g.instance = instance;
     /* Catch crashes from the very first instruction on: the event log gave
      * us an offset, this gives us the story and a stack. */
