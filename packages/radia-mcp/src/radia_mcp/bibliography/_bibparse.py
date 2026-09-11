@@ -216,7 +216,10 @@ def write_bib(entries: list[BibEntry], indent: str = "  ") -> str:
 def read_bib_file(path: str | pathlib.Path) -> list[BibEntry]:
     p = pathlib.Path(path)
     text = p.read_text(encoding="utf-8", errors="strict")
-    return parse_bib(text)
+    entries = parse_bib(text)
+    if not entries and re.sub(r"(?m)%[^\r\n]*", "", text).strip("\ufeff \t\r\n"):
+        raise ValueError("no BibTeX entries found in nonempty input")
+    return entries
 
 
 # Citation-key handling -----------------------------------------------------
