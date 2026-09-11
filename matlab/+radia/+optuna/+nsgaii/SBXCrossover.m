@@ -1,5 +1,5 @@
 classdef SBXCrossover < radia.optuna.nsgaii.BaseCrossover
-    %SBXCROSSOVER Simulated binary crossover matching Optuna 4.9.
+    %SBXCROSSOVER Simulated binary crossover matching Optuna 5.
 
     properties (SetAccess=private)
         Eta (1,1) double = NaN

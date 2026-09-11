@@ -16,7 +16,7 @@ OPTUNA_SOURCE = MATLAB_ROOT / "+radia" / "+optuna"
 MEX_SOURCE = MATLAB_ROOT / "optuna_mex.mexw64"
 CONTRACT_SOURCES = (
     MATLAB_ROOT / "optuna_upstream_compatibility.json",
-    MATLAB_ROOT / "optuna49_api_coverage.json",
+    MATLAB_ROOT / "optuna50_api_coverage.json",
 )
 SIMULINK_SOURCES = (
     MATLAB_ROOT / "+radia" / "+simulink" / "buildOptunaBlock.m",

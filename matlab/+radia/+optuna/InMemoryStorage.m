@@ -88,7 +88,7 @@ classdef InMemoryStorage < radia.optuna.BaseStorage
         end
 
         function set_study_system_attr(obj,study_id,key,value)
-            obj.study(study_id).set_system_attr(string(key),value);
+            obj.study(study_id).setInternalAttribute(string(key),value);
         end
 
         function attributes=get_study_user_attrs(obj,study_id)
@@ -96,7 +96,7 @@ classdef InMemoryStorage < radia.optuna.BaseStorage
         end
 
         function attributes=get_study_system_attrs(obj,study_id)
-            attributes=obj.study(study_id).system_attrs();
+            attributes=obj.study(study_id).internalAttributes();
         end
 
         function trial_id=get_trial_id_from_study_id_trial_number( ...
@@ -161,11 +161,11 @@ classdef InMemoryStorage < radia.optuna.BaseStorage
                 if isscalar(directions)
                     summary=radia.optuna.StudySummary(study.Name, ...
                         directions,best,study.user_attrs(), ...
-                        study.system_attrs(),numel(trials),started,index-1);
+                        numel(trials),started,index-1);
                 else
                     summary=radia.optuna.StudySummary(study.Name,[],best, ...
-                        study.user_attrs(),study.system_attrs(), ...
-                        numel(trials),started,index-1,directions=directions);
+                        study.user_attrs(),numel(trials),started,index-1, ...
+                        directions=directions);
                 end
                 items{end+1}=summary; %#ok<AGROW>
             end
@@ -244,7 +244,7 @@ classdef InMemoryStorage < radia.optuna.BaseStorage
         end
 
         function set_trial_system_attr(obj,trial_id,key,value)
-            obj.runningTrial(trial_id).set_system_attr(string(key),value);
+            obj.runningTrial(trial_id).setInternalAttribute(string(key),value);
         end
 
         function attributes=get_trial_user_attrs(obj,trial_id)

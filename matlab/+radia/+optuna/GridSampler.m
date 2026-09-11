@@ -69,8 +69,8 @@ classdef GridSampler < radia.optuna.BaseSampler
                 end
                 gridId=target(randi(obj.Stream,numel(target)));
             end
-            trial.setSystemAttr("search_space",obj.SearchSpace);
-            trial.setSystemAttr("grid_id",gridId);
+            trial.setInternalAttribute("search_space",obj.SearchSpace);
+            trial.setInternalAttribute("grid_id",gridId);
         end
 
         function value=sampleFloat(obj,~,trial,name,low,high,options)

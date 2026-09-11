@@ -69,7 +69,7 @@ spec.fixed_numeric=false;
 [single,~]=radia.optuna.internal.AutoSamplerPolicy.choose(spec,1,100);
 [multi,~]=radia.optuna.internal.AutoSamplerPolicy.choose(spec,3,100);
 verifyEqual(testCase,single,"tpe");
-verifyEqual(testCase,multi,"motpe");
+verifyEqual(testCase,multi,"tpe");
 end
 
 function testQMCSequenceResumesFromPersistedSamplerState(testCase)

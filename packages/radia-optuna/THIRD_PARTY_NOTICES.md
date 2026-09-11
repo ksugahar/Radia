@@ -39,6 +39,40 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+## Rustuna design reference
+
+Upstream project: <https://github.com/optuna/rustuna>
+
+Reference revision: `ebb5e6a88dec4caed0107db2cafb93807f2ebc66`,
+`rustuna_sampler/src/tpe/sampler.rs` (partial selection of good observations).
+The C++ TPE history kernel uses this design as a performance reference, with
+Optuna-compatible chronological tie handling and random-number consumption.
+The distribution does not bundle Rustuna or require Rust or Cargo. MATLAB
+tables remain the authoritative history; the native history is a computation
+cache, not a replacement database. The reference license is preserved below.
+
+MIT License
+
+Copyright (c) 2026 Preferred Networks, Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
 ## SciPy Sobol direction numbers
 
 Upstream project: <https://github.com/scipy/scipy>

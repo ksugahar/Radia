@@ -19,15 +19,17 @@ incompatible native gateways fail loudly and never redirect through
 Radia. Radia electromagnetic models and application-specific adapters are not
 part of that generic contract.
 
-The checked Optuna 4.9.0 public inventory contains all 816 inventoried symbols
-and public class members. Of these, 748 are mapped from executable upstream
-oracle evidence and 68 wider Python-language/replaced/bridged entries are
-explicit assertions. The required shared MATLAB scope is 400/400
+The checked Optuna 5.0.0 public inventory contains all 812 inventoried symbols
+and public class members. Of these, 749 are mapped from executable upstream
+oracle evidence and 63 wider Python-language/replaced/bridged entries are
+explicit assertions. The required shared MATLAB scope is 401/401
 evidence-mapped with no asserted required entry.
-See `optuna_upstream_compatibility.json` and `optuna49_api_coverage.json` for
-the exact machine-readable boundary. Optuna 4.9.0 is the common algorithmic
+See `optuna_upstream_compatibility.json` and `optuna50_api_coverage.json` for
+the exact machine-readable boundary. Optuna 5.0.0 is the common algorithmic
 source of truth, while native MATLAB/MEX vectorization may execute that
-algorithm without Python. This is a MATLAB API, not a Python binary drop-in.
+algorithm without Python. Unified `TPESampler` owns both scalar and
+multi-objective TPE, and removed 4.x public APIs are not exposed. This is a
+MATLAB API, not a Python binary drop-in.
 MATLAB-only parallel
 execution, MAT/table storage, Simulink operation, and Radia adapters are
 extensions rather than Optuna parity evidence.
@@ -57,23 +59,23 @@ total budget to resume the same experiment. Variable-length histories and
 Pareto points stay in normalized MAT tables, so `reviewOptunaStudy` and
 `applyOptunaTrial` expose full saved results without adding signal lines.
 
-Release performance is measured on mdx from the raw JSON under
-`validation_test/optimization`, not inferred from unit-test timing. The
-2026-08-29 evidence passed the same-host upstream-Python, deterministic
-parallel-batch, 4,000-trial history, and cold-MEX gates; see the package README
-for the measured ratios and claim boundary.
+Release performance is measured on mdx from raw JSON under
+`validation_test/optimization`, not inferred from unit-test timing. The 5.0
+release gate requires the paired `optuna50` benchmark outputs; older results
+remain historical evidence only.
 
-Native execution covers concurrent-RUNNING constant-liar TPE, advanced CMA-ES
-modes, and deterministic unscrambled Sobol generation through 21,201
-dimensions. The Sobol table is bundled data and does not require Python or
-SciPy at MATLAB runtime.
+Native execution covers unified scalar/multi-objective TPE, automatic
+multivariate selection, concurrent-RUNNING constant liar, named constraints,
+polynomial mutation, advanced CMA-ES modes, and deterministic unscrambled
+Sobol generation through 21,201 dimensions. The Sobol table is bundled data
+and does not require Python or SciPy at MATLAB runtime.
 
 Use `radia.optuna.export_study` and `radia.optuna.import_study` for an explicit
 JSON handoff to the `radia-optuna-bridge` CLI and a real upstream Optuna
 storage. The handoff preserves original names, constraints, metric names,
 attributes, distributions, and trial state; it is not a runtime fallback.
 
-`Study.trials_dataframe` follows the Optuna 4.9.0 `attrs` expansion and column
+`Study.trials_dataframe` follows the Optuna 5.0.0 `attrs` expansion and column
 ordering while returning a native MATLAB `table`:
 
 ```matlab
@@ -83,8 +85,8 @@ frame = study.trials_dataframe( ...
 
 With `multi_index=true`, the flattened variable names remain convenient MATLAB
 identifiers and the exact pandas-style two-level labels are available in
-`frame.Properties.UserData.column_levels`. Multi-objective metric names are
-preserved and sorted using the upstream column contract.
+`frame.Properties.UserData.column_levels`. Multi-objective metric names retain
+their upstream declaration order.
 
 This is an independent, unofficial project and is not affiliated with,
 sponsored by, or endorsed by Preferred Networks, Inc. or the Optuna project.

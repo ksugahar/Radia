@@ -1,15 +1,14 @@
-classdef MOTPESampler < radia.optuna.BaseSampler
-    %MOTPESAMPLER Multi-objective TPE with Optuna-style Parzen mixtures.
-    %   Pareto rank and hypervolume contribution select and weight the
-    %   below trials. Candidate generation and acquisition evaluation share
-    %   the same Parzen implementation as TPESampler.
+classdef MultiObjectiveTPE < radia.optuna.BaseSampler
+    %MULTIOBJECTIVETPE Private Optuna 5 multi-objective TPE path.
+    %   Pareto rank selects the below trials, whose mixture weights are
+    %   uniform in Optuna 5. Candidate generation and acquisition evaluation
+    %   share the same Parzen implementation as TPESampler.
 
     properties (SetAccess=private)
         Stream
         Seed (1,1) double = 0
         NStartupTrials (1,1) double = 10
         Gamma (1,1) double = 0.1
-        MaxGoodTrials (1,1) double = 25
         GammaFcn = []
         WeightsFcn = []
         NumberOfEIChoices (1,1) double = 24
@@ -17,7 +16,6 @@ classdef MOTPESampler < radia.optuna.BaseSampler
         ConsiderMagicClip (1,1) logical = true
         ConsiderEndpoints (1,1) logical = false
         ConstraintsFcn = []
-        CategoricalDistanceFcn = []
     end
 
     properties (Access=private)
@@ -27,19 +25,17 @@ classdef MOTPESampler < radia.optuna.BaseSampler
     end
 
     properties (Constant, Access=private)
-        StateSchema = "radia.optuna.motpe-sampler-state.v1"
-        SamplerName = "motpe"
+        StateSchema = "radia.optuna.tpe-multi-objective-state.v1"
+        SamplerName = "tpe_multiobjective"
     end
 
     methods
-        function obj = MOTPESampler(options)
+        function obj = MultiObjectiveTPE(options)
             arguments
                 options.Seed double = double.empty(1,0)
                 options.NStartupTrials (1,1) double ...
                     {mustBeInteger, mustBeNonnegative} = 10
                 options.Gamma (1,1) double = 0.1
-                options.MaxGoodTrials (1,1) double ...
-                    {mustBeInteger, mustBePositive} = 25
                 options.GammaFcn = []
                 options.WeightsFcn = []
                 options.NumberOfEIChoices (1,1) double ...
@@ -48,7 +44,6 @@ classdef MOTPESampler < radia.optuna.BaseSampler
                 options.ConsiderMagicClip (1,1) logical = true
                 options.ConsiderEndpoints (1,1) logical = false
                 options.ConstraintsFcn = []
-                options.CategoricalDistanceFcn = []
             end
             if options.Gamma <= 0 || options.Gamma > 1
                 error("radia:optuna:MOTPEGamma", ...
@@ -79,7 +74,6 @@ classdef MOTPESampler < radia.optuna.BaseSampler
             obj.IndependentSampler = radia.optuna.RandomSampler(obj.Seed);
             obj.NStartupTrials = options.NStartupTrials;
             obj.Gamma = options.Gamma;
-            obj.MaxGoodTrials = options.MaxGoodTrials;
             obj.GammaFcn = options.GammaFcn;
             obj.WeightsFcn = options.WeightsFcn;
             obj.NumberOfEIChoices = options.NumberOfEIChoices;
@@ -87,9 +81,6 @@ classdef MOTPESampler < radia.optuna.BaseSampler
             obj.ConsiderMagicClip = options.ConsiderMagicClip;
             obj.ConsiderEndpoints = options.ConsiderEndpoints;
             obj.ConstraintsFcn = options.ConstraintsFcn;
-            radia.optuna.internal.CategoricalDistance.validate( ...
-                options.CategoricalDistanceFcn);
-            obj.CategoricalDistanceFcn=options.CategoricalDistanceFcn;
         end
 
         function reseed_rng(obj)
@@ -122,9 +113,10 @@ classdef MOTPESampler < radia.optuna.BaseSampler
             end
 
             nGood = obj.goodTrialCount(numel(x));
-            [goodMask, goodWeights] = ...
+            [goodMask, ~] = ...
                 radia.optuna.internal.ParetoSupport.splitMOTPE( ...
                 study, trialNumbers, objectives, nGood);
+            goodWeights=ones(sum(goodMask),1);
             estimatorOptions = { ...
                 "Log", options.Log, ...
                 "Step", options.Step, ...
@@ -195,19 +187,16 @@ classdef MOTPESampler < radia.optuna.BaseSampler
             end
 
             nGood = obj.goodTrialCount(numel(observed));
-            [goodMask, goodWeights] = ...
+            [goodMask, ~] = ...
                 radia.optuna.internal.ParetoSupport.splitMOTPE( ...
                 study, trialNumbers, objectives, nGood);
-            distanceFcn=radia.optuna.internal.CategoricalDistance. ...
-                get(obj.CategoricalDistanceFcn,name);
+            goodWeights=ones(sum(goodMask),1);
             below = radia.optuna.internal.ParzenEstimator.categorical( ...
                 observed(goodMask), count, PriorWeight=obj.PriorWeight, ...
-                ObservationWeights=goodWeights,DistanceFcn=distanceFcn, ...
-                Choices=choices);
+                ObservationWeights=goodWeights);
             above = radia.optuna.internal.ParzenEstimator.categorical( ...
                 observed(~goodMask), count, PriorWeight=obj.PriorWeight, ...
-                ObservationWeights=obj.observationWeights(sum(~goodMask)), ...
-                DistanceFcn=distanceFcn,Choices=choices);
+                ObservationWeights=obj.observationWeights(sum(~goodMask)));
             candidates = ...
                 radia.optuna.internal.ParzenEstimator.sampleCategorical( ...
                 below, obj.Stream, obj.NumberOfEIChoices);
@@ -237,8 +226,9 @@ classdef MOTPESampler < radia.optuna.BaseSampler
     methods (Access=private)
         function count = goodTrialCount(obj, finishedCount)
             if isempty(obj.GammaFcn)
-                count = min(obj.MaxGoodTrials, ...
-                    ceil(obj.Gamma * finishedCount));
+                % Optuna 5 uses default_gamma_multiobjective and does not
+                % apply the single-objective cap of 25 below trials.
+                count = ceil(obj.Gamma * finishedCount);
                 count = max(1, min(finishedCount, count));
                 return
             end
@@ -297,8 +287,9 @@ classdef MOTPESampler < radia.optuna.BaseSampler
                         ~isfield(state, "random_state") || ...
                         string(state.schema) ~= obj.StateSchema || ...
                         double(state.seed) ~= obj.Seed
-                    error("radia:optuna:MOTPEState", ...
-                        "Stored MOTPE sampler state is invalid or incompatible.");
+                    error("radia:optuna:MultiObjectiveTPEState", ...
+                        ["Stored private multi-objective TPE sampler state " ...
+                         "is invalid or incompatible."]);
                 end
                 obj.Stream.State = state.random_state;
             end
