@@ -122,7 +122,7 @@ Paths in tables are relative to `src/radia_mcp/paper_writing` unless specified.
 | P64 | 6.8 damaged PDF persistence | 修正済み | test_pdf_magic_alone_does_not_validate_corruption and test_pdf_verification_requires_parser reject magic-only validation. _save_verified_pdf streams into a same-directory temporary file, validates, then replaces the destination; failure removes only its temporary file. Tests cover interruption/size limits and all three publisher adapters preserving an existing file before a valid retry. No live publisher access or visual-fidelity certification. |
 | P65 | 6.9 DOI normalization | 検証待ち | Crossref, IEEE resolution and citation duplicate checks share normalization; offline tests cover #/?/%, doi:, case-insensitive dx.doi.org and URL-form decoding without double encoding. Duplicate equality preserves terminal period/comma/semicolon rather than conflating distinct identifiers. Other DOI consumers remain unverified. |
 | P66 | 6.10 archive resource bounds | 修正済み | test_arxiv_source_resource_limits covers streamed download, gzip expansion, member count, tar-member/single-source size limits, interruption and successful tar/gzip controls. Limits apply before unbounded download/decompression; tar members are iterated with a cap rather than getmembers(). No archive files are extracted to disk. |
-| P67 | 6.11 fallback paths | 検証待ち | arXiv search/direct and citation DOI failures have offline evidence; only explicit not_found means no candidate. Bibliography read failures stop before lookup. Publisher landing/PDF stages have 27 lifecycle/failure cases. Crossref response closure and IEEE DOI response/session closure add 14 cases covering HTTP/JSON/connection errors and positive controls. Other consumers and live publisher acceptance remain unverified. |
+| P67 | 6.11 fallback paths | 検証待ち | Citation/bibliography/publisher failure paths have scoped offline evidence. Crossref/IEEE resource closure adds 14 cases; arXiv search and all three S2 tools add 36 cases for response closure, HTTP/JSON failures, malformed graph data and true empty-list controls. Missing graph data no longer becomes zero references/citations. Other consumers and live API acceptance remain unverified. |
 | P68 | 6 duplicate implementations/docstring promise | 検証待ち | Trace Crossref/arXiv/BibTeX/DOI consumers before deduplication; verify promised search routes. |
 | P69 | 7.2 missing/stale tool guidance | 検証待ち | Correct names, routes, supported callable advice and guidance organization; old counts are historical. |
 | P70 | 7.1; 7.2 generated inventory proposal | 方針変更 | TOOLS.md inventory gate is retired. Live discovery/catalog is the source of truth, not a new committed generated index. |
@@ -220,7 +220,16 @@ session, including request/URL-read exceptions. Crossref 404 remains not_found;
 IEEE article identifiers are unchanged. No live API or MCP client was exercised,
 and no editable installation or parent bibliography was changed.
 
-1. Continue arXiv/Semantic Scholar request lifetimes, other BibTeX/DOI consumers and remaining fallback paths (P63/P65/P67), then language heuristics and
+The arXiv/Semantic Scholar lifecycle follow-up adds 36 offline cases; the five-file
+lane passes 845 tests. arXiv search and S2 lookup/references/citations close their
+responses on successful reads, HTTP errors and parse failures. S2 JSON decoding
+now occurs inside error handling; invalid roots, error payloads, missing graph
+data and malformed graph rows return errors rather than empty successful results.
+Explicit empty data lists remain valid zero-result responses. Request failure
+without a response is also tested. No live API, MCP client, editable installation
+or parent bibliography was changed or exercised.
+
+1. Continue Semantic Scholar identifier/URL normalization, other BibTeX/DOI consumers and remaining fallback paths (P63/P65/P67), then language heuristics and
    deduplication; other PDF consumers remain separate P50 follow-up work.
 2. Review missing pattern producers (P58) and remaining ordering/context rules
    (P59); do not confuse execution-status coverage with semantic correctness.
