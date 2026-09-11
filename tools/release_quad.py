@@ -918,9 +918,11 @@ def cmd_preflight(args):
                                           ".hpp", ".hh", ".hxx", ".cmake", ".txt"})
     bin_mtime = _bundled_plugin_mtime()
     if src_mtime == 0:
-        warn("could not measure src/cubit_plugin/ mtime")
+        fail("could not measure src/cubit_plugin/ mtime; plugin freshness is unverified")
+        return 2
     elif bin_mtime == 0:
         fail("bundled .ccm missing — Phase 0 not done")
+        return 2
     elif bin_mtime + 1 < src_mtime:
         from datetime import datetime
         fail(f"bundled .ccm ({datetime.fromtimestamp(bin_mtime)}) older than "
