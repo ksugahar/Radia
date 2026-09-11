@@ -107,10 +107,11 @@ cannot: ABMC-ICCG (IC only) on mesh1_3.5T does not reach tol = 1e-10
 (residual 2.8e-10 after 17,178 iterations, 438 s).  AMS resolves the kernel
 via discrete-gradient + Nedelec interpolation correction.
 
-Reproduce: `python examples/hiruma/bench_compact_ams.py --all`.  The Hiruma
-meshes (`mesh1_*.vol`) are not distributed with the repository (`*.vol` is
-gitignored); place them next to the script before running it.  A missing mesh
-raises `FileNotFoundError` listing the meshes that are present.
+Reproduce the tracked validation case with
+`python validation_test/sparsesolv/hiruma/bench_compact_ams.py
+--verify-baseline` from the repository root.  The 2.5T `.vol` fixture is
+distributed with the repository; place the optional larger `mesh1_*.vol`
+files in that validation directory's `meshes/` folder before using `--all`.
 
 ## Quick start
 
@@ -196,11 +197,13 @@ src/ext/sparsesolv/
 │   ├── preconditioners/        # IC, Compact AMG, Compact AMS
 │   ├── solvers/                # CG, COCR
 │   └── ngsolve/                # NGSolve BaseMatrix wrappers + pybind11 bindings
-├── examples/hiruma/            # complex eddy-current benchmark (30 kHz)
 ├── tests/                      # solver / preconditioner pytest suite
 ├── docs/                       # algorithm + API + tutorial markdown
 └── LICENSE
 ```
+
+The 30 kHz complex eddy-current benchmark is maintained under
+`validation_test/sparsesolv/hiruma/`, outside this library source tree.
 
 `CMakeLists.txt` and `pyproject.toml` were removed in the 2026-05-08
 in-tree merge: this directory is no longer a buildable target on its

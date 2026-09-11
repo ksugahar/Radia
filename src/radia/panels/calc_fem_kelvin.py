@@ -598,7 +598,7 @@ def solve_fem(vol_file="", fes_order=1,
         # Solver-specific setup
         if solver == "ams":
             # Compact AMS preconditioner + COCR solver (AC eddy-current).
-            # Reference: src/ext/sparsesolv/examples/hiruma/bench_compact_ams.py
+            # Reference: validation_test/sparsesolv/hiruma/bench_compact_ams.py
             #
             # Re-wired 2026-05-08 for the PEEC line-integral RHS path:
             # the bilinear form a_bf above already has curl-curl + reg +

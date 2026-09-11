@@ -23,14 +23,13 @@ All notable changes to the `radia` package.  Format: each release lists
 - Added the presentation rule that a claim such as “generated from the
   canonical references.bib” is valid only when the build actually calls the
   bibliography API, fails closed on missing keys, and records provenance.
-- The sparsesolv Hiruma benchmarks (`src/ext/sparsesolv/examples/hiruma/`)
-  load Netgen `.vol` meshes through one helper instead of reading GMSH files
-  with `ReadGmsh`, following the `.vol`-only interchange rule.  A missing mesh
-  raises `FileNotFoundError` listing the meshes present.  The `.vol` files were
-  converted once from the original GMSH meshes and compared element by
-  element: identical connectivity, material and boundary labels, and HCurl
-  DOF counts; vertex coordinates agree to 5e-17.  The meshes remain
-  undistributed.
+- Promoted the sparsesolv Hiruma benchmark to
+  `validation_test/sparsesolv/hiruma/`.  The tracked `mesh1_2.5T.vol` fixture
+  has explicit material-interface ownership, a strict label contract and a
+  passing `check-vol` report.  Its Compact AMS + COCR gate fixes the mesh hash
+  and FE dimensions, accepts 140--150 iterations and a true residual no larger
+  than 2e-10, and records timings without treating machine speed as a golden.
+  The four larger meshes remain optional scaling inputs.
 
 ## 4.95.91 - Corrected MagLev ECB force reconstruction
 
