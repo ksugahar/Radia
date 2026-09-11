@@ -55,8 +55,104 @@ class FakePdfDocument:
     def __iter__(self):
         return iter(self.pages)
 
+    def __getitem__(self, index):
+        return self.pages[index]
+
     def close(self):
         self.close_count += 1
+
+
+@pytest.mark.parametrize("stage", ["render", "save", "stat", "parse", "no_match", "success"])
+def test_page_png_renderer_closes_on_every_exit(monkeypatch, tmp_path, stage):
+    saved = []
+    def save(path):
+        if stage == "save" and saved:
+            raise OSError("injected save failure")
+        saved.append(path)
+    class Page:
+        def get_pixmap(self, **kwargs):
+            if stage == "render" and saved:
+                raise RuntimeError("injected render failure")
+            return SimpleNamespace(save=save)
+    doc = FakePdfDocument([Page(), Page()])
+    monkeypatch.setattr(pdf_layout, "_require_pymupdf", lambda: SimpleNamespace(open=lambda *a: doc))
+    def size(path):
+        if stage == "stat":
+            raise OSError("injected stat failure")
+        return 100
+    monkeypatch.setattr(pdf_layout.os.path, "getsize", size)
+    path = tmp_path / "mock.pdf"
+    path.touch()
+    kwargs = dict(pdf_path=str(path), out_dir=str(tmp_path / "pages"),
+                  page_range={"parse": "bad", "no_match": "9"}.get(stage, "1-2"))
+    if stage in {"success", "no_match"}:
+        result = pdf_layout.paper_writing_render_pages_to_png(**kwargs)
+        if stage == "success":
+            assert result["n_rendered"] == 2
+            assert [p["page"] for p in result["pages_rendered"]] == [1, 2]
+            assert len(saved) == 2
+        else:
+            assert result["error"]
+            assert saved == []
+    else:
+        with pytest.raises((RuntimeError, ValueError, OSError)):
+            pdf_layout.paper_writing_render_pages_to_png(**kwargs)
+    assert doc.close_count == 1
+
+
+@pytest.mark.parametrize("stage", ["render", "decode", "canvas", "paste", "save", "stat", "empty", "success"])
+def test_thumbnail_strip_closes_pdf_tiles_and_canvas(monkeypatch, tmp_path, stage):
+    images = []
+    class Image:
+        size = (10, 20)
+        def __init__(self):
+            self.close_count = 0
+            images.append(self)
+        def close(self):
+            self.close_count += 1
+        def paste(self, *args):
+            if stage == "paste":
+                raise RuntimeError("injected paste failure")
+        def save(self, *args, **kwargs):
+            if stage == "save":
+                raise OSError("injected save failure")
+    def decode(*args):
+        if stage == "decode" and images:
+            raise ValueError("injected second-tile decode failure")
+        return Image()
+    def canvas(*args):
+        if stage == "canvas":
+            raise MemoryError("injected canvas failure")
+        return Image()
+    class Page:
+        def get_pixmap(self, **kwargs):
+            if stage == "render" and images:
+                raise RuntimeError("injected second-page render failure")
+            return SimpleNamespace(width=10, height=20, samples=b"pixels")
+    doc = FakePdfDocument([] if stage == "empty" else [Page(), Page()])
+    monkeypatch.setattr(pdf_layout, "_require_pymupdf", lambda: SimpleNamespace(open=lambda *a: doc))
+    monkeypatch.setattr(pdf_layout, "_require_pil", lambda: SimpleNamespace(frombytes=decode, new=canvas))
+    def size(path):
+        if stage == "stat":
+            raise OSError("injected stat failure")
+        return 100
+    monkeypatch.setattr(pdf_layout.os.path, "getsize", size)
+    path = tmp_path / "mock.pdf"
+    path.touch()
+    if stage in {"success", "empty"}:
+        result = pdf_layout.paper_writing_layout_thumbnail_strip(str(path), cols=2)
+        if stage == "success":
+            assert result["total_pages"] == 2
+            assert result["strip_w_h"] == (44, 36)
+            assert len(images) == 3
+        else:
+            assert result["error"]
+            assert images == []
+    else:
+        with pytest.raises((RuntimeError, ValueError, MemoryError, OSError)):
+            pdf_layout.paper_writing_layout_thumbnail_strip(str(path), cols=2)
+    assert doc.close_count == 1
+    assert all(img.close_count == 1 for img in images)
 
 
 PDF_CHECKS = [
