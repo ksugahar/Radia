@@ -31,6 +31,11 @@ order/separator preservation; the six-file lane passes 940 tests. Unsupported
 TeX/math requires manual verification. Citation-key surname heuristics and
 rendered bibliography acceptance remain open (P63/P67).
 
+M04 T1 follow-up (2026-09-12): standalone DOI-to-BibTeX now has DOI identity,
+required metadata, corporate-author/text escaping and page-range regressions.
+The seven-file lane passes 960 tests. T3 Crossref search response handling and
+rendered bibliography acceptance remain open; this is not package-wide closure.
+
 Completion of a scoped validation requires matching the selected source, zero unexpected failures
 or skips in the relevant lane, and retained local machine-readable evidence.
 Do not commit transient test logs or mark the package globally "complete" from
