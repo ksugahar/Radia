@@ -22,15 +22,13 @@ Regions:
 import sys
 import time
 import numpy as np
-# TODO: Replace ReadGmsh with Mesh(.vol) when .vol files are generated
-from netgen.read_gmsh import ReadGmsh
 from ngsolve import *
 from ngsolve.krylovspace import CGSolver
+from hiruma_mesh import load_hiruma_mesh
 
 # ---------- mesh ----------
 mesh_name = "mesh1_2.5T"
-m = ReadGmsh(mesh_name)
-mesh = Mesh(m)
+mesh = load_hiruma_mesh(mesh_name)
 print(f"Mesh: {mesh_name}  nv={mesh.nv}  ne={mesh.ne}")
 print(f"Materials: {mesh.GetMaterials()}")
 print(f"Boundaries: {mesh.GetBoundaries()}")
