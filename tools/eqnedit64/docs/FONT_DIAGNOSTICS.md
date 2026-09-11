@@ -33,3 +33,34 @@ Microsoft documents matching flags for Add/RemoveFontResourceExW. There is no
 evidence yet that adding an explicit removal fixes this crash; do not introduce
 one as an unverified remedy or claim private registration isolates the host.
 Reference: https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-removefontresourceexw
+
+## Independent trace reading: run 34658678863
+
+Source: PR #205 at `775a03984`; executable SHA-256
+`E883E56313593A6072CE295B7077936211D49BB3BC1221994DFAB287F9984DD5`.
+Evidence is retained under `C:/temp/eqnedit-font-acceptance-34658678863`.
+All times below are UTC on 2026-09-11.
+
+| Time | Observation |
+| --- | --- |
+| 23:38:29.298 | Model process 6572 registers successfully. |
+| 23:38:32.597 | Model metrics-cache destructor begins and ends. |
+| 23:38:32.972 | Self-test process 3596 enters; first registration returns zero in the same millisecond. |
+| 23:38:33.3632636 | WER event records fontdrvhost PID 2920 crash (c0000005/366a2). |
+| 23:38:33.475 | Ninth failed registration returns zero. |
+| 23:38:33.538 | Registration succeeds; only now does the first successful measurement run. |
+| 23:38:33.757 | Self-test returns and both cache destructors complete. |
+
+The model destructor precedes self-test entry by 375 ms. The recorded self-test
+measurement and its cache destruction occur after the incident event; they
+cannot explain it as synchronous preceding operations. Registration itself is
+not exonerated: the first call could trigger failure, or encounter a host already
+failing after model-process teardown. WER time is reporting time, not a precise
+death timestamp. Nine failed calls do not prove nine crashes.
+
+Next controlled comparison uses the identical binary on independent fresh CI
+machines: self-test alone; model suite followed by idle observation with no next
+EXE; model suite immediately followed by self-test. Capture host process
+liveness from before the first operation through the idle tail, along with
+command intervals and JSONL. Keep diagnostic results separate from release
+acceptance, and do not weaken the existing failure gate or add retry-until-green.
