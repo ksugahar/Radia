@@ -410,6 +410,55 @@ def test_arxiv_search_response_closed(monkeypatch, mode):
         assert "papers" not in result
 
 
+@pytest.mark.parametrize("kind", ["lookup", "references", "citations"])
+@pytest.mark.parametrize("value,expected", [
+    ("10.1234/A#B?C%D", "DOI:10.1234/A#B?C%D"),
+    ("DOI:10.1234/A#B?C%D", "DOI:10.1234/A#B?C%D"),
+    ("HTTPS://DX.DOI.ORG/10.1234/A%23B%3FC%25D", "DOI:10.1234/A#B?C%D"),
+    ("doi.org/10.1234/A%23B%3FC%25D", "DOI:10.1234/A#B?C%D"),
+    ("10.1234/literal%23", "DOI:10.1234/literal%23"),
+    ("2603.17339", "ARXIV:2603.17339"),
+    ("arXiv:2603.17339v2", "ARXIV:2603.17339"),
+    ("HTTPS://ARXIV.ORG/pdf/2603.17339v2.pdf", "ARXIV:2603.17339"),
+    ("physics/0501123", "ARXIV:physics/0501123"),
+    ("https://arxiv.org/abs/physics/0501123v2", "ARXIV:physics/0501123"),
+    ("https://www.semanticscholar.org/paper/abc123", "abc123"),
+    ("https://www.semanticscholar.org/paper/A-title/abc123?sort=latest#ref", "abc123"),
+    ("CorpusID:12345", "CorpusID:12345"),
+    ("PMID:12345", "PMID:12345"),
+    ("ACL:2020.acl-main.1", "ACL:2020.acl-main.1"),
+])
+def test_s2_all_routes_share_identifier_encoding(monkeypatch, kind, value, expected):
+    from urllib.parse import unquote
+    def get(url, **kwargs):
+        parsed = urlsplit(url)
+        assert parsed.netloc == "api.semanticscholar.org"
+        assert not parsed.query and not parsed.fragment
+        tail = parsed.path.removeprefix("/graph/v1/paper/")
+        if kind != "lookup":
+            assert tail.endswith("/" + kind)
+            tail = tail[:-(len(kind) + 1)]
+        assert "/" not in tail
+        assert unquote(tail) == expected
+        return SimpleNamespace(status_code=200, raise_for_status=lambda: None,
+                               json=lambda: {"data": []}, close=lambda: None)
+    monkeypatch.setattr(arxiv, "_require_requests", lambda: SimpleNamespace(get=get))
+    result = getattr(arxiv, "paper_writing_semantic_scholar_" + kind)(value)
+    assert "error" not in result
+    assert result["paper_id_resolved" if kind == "lookup" else "paper_id"] == expected
+
+
+@pytest.mark.parametrize("kind", ["lookup", "references", "citations"])
+@pytest.mark.parametrize("value", ["", " ", "doi:", "arXiv:invalid",
+                                  "https://www.semanticscholar.org/paper/"])
+def test_s2_invalid_known_identifier_stops_before_request(monkeypatch, kind, value):
+    def unexpected():
+        pytest.fail("Invalid identifiers must stop before loading requests")
+    monkeypatch.setattr(arxiv, "_require_requests", unexpected)
+    result = getattr(arxiv, "paper_writing_semantic_scholar_" + kind)(value)
+    assert "error" in result
+
+
 class StreamResponse:
     status_code = 200
 

@@ -120,7 +120,7 @@ Paths in tables are relative to `src/radia_mcp/paper_writing` unless specified.
 | P62 | 6.6 arXiv escaping/error feed | 修正済み | test_paper_writing_external_inputs.py verifies Requests-prepared query roundtrips for &, #, C++, percent and Japanese text. Atom error entries, unexpected XML roots, missing title/invalid identifier, HTTP errors and genuine empty feeds are distinguished. Citation verification preserves search failure as verdict=error rather than no_candidate_found. All network calls are mocked. |
 | P63 | 6.7 metadata/BibTeX fidelity | 検証待ち | Crossref creation date is not a publication year; missing fields and partly malformed author records block generation; corporate names are grouped. Crossref and arXiv-direct citation text now decodes entities before escaping literal TeX characters; arXiv-direct retains all returned authors separated by `and`. Offline tests cover these routes. Math/unsupported markup requires manual verification; other BibTeX producers and rendered bibliography acceptance remain unverified. |
 | P64 | 6.8 damaged PDF persistence | 修正済み | test_pdf_magic_alone_does_not_validate_corruption and test_pdf_verification_requires_parser reject magic-only validation. _save_verified_pdf streams into a same-directory temporary file, validates, then replaces the destination; failure removes only its temporary file. Tests cover interruption/size limits and all three publisher adapters preserving an existing file before a valid retry. No live publisher access or visual-fidelity certification. |
-| P65 | 6.9 DOI normalization | 検証待ち | Crossref, IEEE resolution and citation duplicate checks share normalization; offline tests cover #/?/%, doi:, case-insensitive dx.doi.org and URL-form decoding without double encoding. Duplicate equality preserves terminal period/comma/semicolon rather than conflating distinct identifiers. Other DOI consumers remain unverified. |
+| P65 | 6.9 DOI normalization | 検証待ち | Crossref, IEEE, citation equality and all three S2 consumers share DOI normalization. S2 graph endpoints now encode the identifier as one URL path segment; 60 offline cases cover special characters, encoded DOI URLs, arXiv forms, S2 slug/ID URLs, namespace preservation and invalid inputs. Duplicate equality preserves terminal punctuation. Other DOI consumers remain unverified. |
 | P66 | 6.10 archive resource bounds | 修正済み | test_arxiv_source_resource_limits covers streamed download, gzip expansion, member count, tar-member/single-source size limits, interruption and successful tar/gzip controls. Limits apply before unbounded download/decompression; tar members are iterated with a cap rather than getmembers(). No archive files are extracted to disk. |
 | P67 | 6.11 fallback paths | 検証待ち | Citation/bibliography/publisher failure paths have scoped offline evidence. Crossref/IEEE resource closure adds 14 cases; arXiv search and all three S2 tools add 36 cases for response closure, HTTP/JSON failures, malformed graph data and true empty-list controls. Missing graph data no longer becomes zero references/citations. Other consumers and live API acceptance remain unverified. |
 | P68 | 6 duplicate implementations/docstring promise | 検証待ち | Trace Crossref/arXiv/BibTeX/DOI consumers before deduplication; verify promised search routes. |
@@ -229,7 +229,17 @@ Explicit empty data lists remain valid zero-result responses. Request failure
 without a response is also tested. No live API, MCP client, editable installation
 or parent bibliography was changed or exercised.
 
-1. Continue Semantic Scholar identifier/URL normalization, other BibTeX/DOI consumers and remaining fallback paths (P63/P65/P67), then language heuristics and
+The Semantic Scholar identifier follow-up adds 60 offline cases; the five-file
+lane passes 905 tests. Lookup, references and citations share known-ID
+normalization and one-segment URL encoding. DOI URL suffixes are decoded once;
+literal percent signs in bare DOIs are retained. New/old arXiv identifiers and
+URLs follow the existing unversioned-ID convention. S2 paper URLs use the final
+ID rather than a title slug. CorpusID/PMID/ACL remain unchanged, and malformed
+known identifiers fail before requests is loaded. These are local request-shape
+contracts, not verification of upstream acceptance. No live API, MCP client,
+editable installation or parent bibliography was changed or exercised.
+
+1. Continue other BibTeX/DOI consumers and remaining fallback paths (P63/P65/P67), then language heuristics and
    deduplication; other PDF consumers remain separate P50 follow-up work.
 2. Review missing pattern producers (P58) and remaining ordering/context rules
    (P59); do not confuse execution-status coverage with semantic correctness.
