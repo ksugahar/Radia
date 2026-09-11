@@ -7,10 +7,9 @@ concatenations require explicit resolution before automatic editing.
 from __future__ import annotations
 
 import pathlib
-import re
 
 from .._bibparse import _split_name_parts, parse_bib
-from .._source_edit import read_source, write_source_edits
+from .._source_edit import literal_value, read_source, write_source_edits
 
 
 def _protected(value: str) -> bool:
@@ -77,14 +76,10 @@ def _source_changes(text: str):
         total += 1
         start, end = entry.field_spans["author"]
         expression = text[start:end]
-        literal = _protected(expression) or (
-            expression.startswith('"') and expression.endswith('"')
-            and not re.search(r'(?<!\\)"\s*#', expression)
-        )
-        if not literal:
+        value = literal_value(expression)
+        if value is None:
             unresolved.append(entry.key)
             continue
-        value = expression[1:-1]
         position = 0
         changed = False
         for author in _split_authors(value):

@@ -120,3 +120,46 @@ def test_parser_source_spans_preserve_escaped_braces_and_quotes():
     entry = parse_bib(text)[0]
     assert text[slice(*entry.key_span)] == "key"
     assert text[slice(*entry.field_spans["title"])] == '"' + entry.fields["title"] + '"'
+
+
+@pytest.mark.parametrize("year", ["2024forthcoming", "2024-2025", "0000", "２０２４", "unknown"])
+@pytest.mark.parametrize("dry_run", [True, False])
+def test_key_rename_rejects_malformed_year(tmp_path, year, dry_run):
+    path = tmp_path / "fixture.bib"
+    data = f"@misc{{old,author={{Doe, Jane}},year={{{year}}},title={{Magnetic}}}}".encode()
+    path.write_bytes(data)
+    result = bibliography_canonicalize_keys(str(path), dry_run=dry_run)
+    assert result.startswith("Error:") and "year" in result
+    assert path.read_bytes() == data
+
+
+@pytest.mark.parametrize("field", ["crossref", "xref", "xdata", "related"])
+@pytest.mark.parametrize("expression", ["parent", '"ol" # "d"', '{ol} # {d}'])
+def test_key_rename_refuses_unresolved_reference_expression(tmp_path, field, expression):
+    path = tmp_path / "fixture.bib"
+    data = ('@string{parent={old}}\n@misc{old,author={Doe, Jane},year=2024,title={Magnetic}}\n'
+            '@misc{child,author={Roe, John},year=2025,title={Electric},'
+            + field + '=' + expression + '}').encode()
+    path.write_bytes(data)
+    result = bibliography_canonicalize_keys(str(path), dry_run=False)
+    assert result.startswith("Error:") and "explicit resolution" in result
+    assert path.read_bytes() == data
+
+
+@pytest.mark.parametrize("expression,expected", [
+    ('{literal # text}', 'literal # text'), ('"literal # text"', 'literal # text'),
+    ('{a} # {b}', None), ('"a" # "b"', None), ('macro', None),
+    ('"{nested "quote"}"', '{nested "quote"}'), ('{}', ''),
+])
+def test_single_literal_does_not_flatten_expressions(expression, expected):
+    assert _source_edit.literal_value(expression) == expected
+
+
+@pytest.mark.parametrize("field", ["author", "editor", "title"])
+def test_key_generation_does_not_use_macro_name_as_metadata(tmp_path, field):
+    path = tmp_path / "fixture.bib"
+    data = ('@string{value={Real metadata}}\n@misc{old,year=2024,' + field + '=value}').encode()
+    path.write_bytes(data)
+    result = bibliography_canonicalize_keys(str(path), dry_run=False)
+    assert result.startswith("Error:") and "explicit" in result
+    assert path.read_bytes() == data
