@@ -53,7 +53,10 @@ def test_matlab_lane_runs_engine_and_retains_json_on_mdx():
     job = workflow["jobs"]["ams-regression"]
     assert "mdx" in job["runs-on"]
     step = next(s for s in job["steps"] if s.get("name") == "Build and verify native MATLAB parity")
-    assert step["if"] == "steps.matlab-impact.outputs.required == 'true'"
+    assert step["if"] == (
+        "steps.native-impact.outputs.required == 'true' && "
+        "steps.matlab-impact.outputs.required == 'true'"
+    )
     assert "-MatlabMexOnly" in step["run"]
     assert "run_sparsesolv_parity.py --output" in step["run"]
     assert "sparsesolv-matlab.json" in job["steps"][-1]["with"]["path"]
