@@ -9,17 +9,15 @@ Usage:
 """
 
 import json
-import os
 import platform
 import sys
 import time
 from datetime import datetime
 
 import numpy as np
-# TODO: Replace ReadGmsh with Mesh(.vol) when .vol files are generated
-from netgen.read_gmsh import ReadGmsh
 from ngsolve import *
 import radia.sparsesolv_ngsolve as ssn
+from hiruma_mesh import load_hiruma_mesh, mesh_path
 
 mu0 = 4e-7 * np.pi
 freq = 30e3
@@ -33,9 +31,8 @@ tol = 1e-10
 
 
 def setup_problem(mesh_name):
-    mesh_file = os.path.join(os.path.dirname(__file__), mesh_name)
-    print(f"Loading mesh: {mesh_file}", flush=True)
-    mesh = Mesh(ReadGmsh(mesh_file))
+    print(f"Loading mesh: {mesh_path(mesh_name)}", flush=True)
+    mesh = load_hiruma_mesh(mesh_name)
     print(f"  ne={mesh.ne:,}, nv={mesh.nv:,}", flush=True)
 
     nu_cf = 1.0 / (mu0 * IfPos(mesh.MaterialCF({"core": 1}), mu_r_core, 1.0))
@@ -107,8 +104,7 @@ def true_residual(p, gfu):
 
 def main():
     mesh_name = sys.argv[1] if len(sys.argv) > 1 else "mesh1_3.5T"
-    if not mesh_name.endswith(".msh"):
-        mesh_name += ".msh"
+    mesh_name = mesh_path(mesh_name).name
 
     print("=" * 80)
     print("Benchmark: COCR vs GMRES(40) with Compact AMS")
