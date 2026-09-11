@@ -21,6 +21,7 @@ TESTS = (
     "test_layout.py",
     "test_embellishments.py",
     "test_palette_sweep.py",
+    "test_palette_intent.py",
     "test_usability_trace.py",
 )
 
