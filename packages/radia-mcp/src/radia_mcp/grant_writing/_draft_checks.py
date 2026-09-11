@@ -656,3 +656,299 @@ def grant_writing_future_dated_publication_check(
         ),
         "source": "future-dated / placeholder publication audit",
     }
+
+
+_SOFTWARE_CATEGORIES = re.compile(
+    r"ソフトウェア|ソルバ|ライブラリ|パッケージ|ツール|コード|"
+    r"\b(?:software|solver|library|package|toolkit)\b",
+    re.IGNORECASE,
+)
+_SOFTWARE_OPERATIONS = re.compile(
+    r"(?:磁場|電磁界|形状|電流|軌道|データ|モデル|方程式|解析|計算|設計|"
+    r"最適化|可視化|連成|制御|予測|評価|生成|保存|管理|変換).{0,28}"
+    r"(?:計算|解析|求め|解[くき]|扱[うい]|設計|最適化|可視化|連成|制御|"
+    r"予測|評価|生成|保存|管理|変換|実行)|"
+    r"\b(?:compute|solve|analyse|analyze|design|optimi[sz]e|simulate|visuali[sz]e|"
+    r"couple|control|predict|evaluate|generate|store|manage|convert)(?:s|d|es)?\b.{0,80}",
+    re.IGNORECASE,
+)
+_IMPLEMENTATION_LABEL = re.compile(
+    r"(?:Python|MATLAB|C\+\+|Java|Julia)[-‐‑–— ]?native|"
+    r"(?:Python|MATLAB|C\+\+|Java|Julia)ネイティブ",
+    re.IGNORECASE,
+)
+
+
+def _named_term_pattern(name: str) -> re.Pattern[str]:
+    boundary_left = r"(?<![A-Za-z0-9])" if name[:1].isascii() else ""
+    boundary_right = r"(?![A-Za-z0-9])" if name[-1:].isascii() else ""
+    return re.compile(boundary_left + re.escape(name) + boundary_right, re.IGNORECASE)
+
+
+def _named_diagnostic_sentences(raw: str) -> list[dict]:
+    from .tools import _prose_for_lint, _strip_latex_comments
+
+    # Keep source lines for locating evidence, but join physical soft wraps.
+    raw = raw.replace("\r\n", "\n").replace("\r", "\n")
+    if "\\" in raw or re.search(r"(?m)^\s*%", raw):
+        raw = _strip_latex_comments(raw)
+    def blank(match):
+        return "\n" * match.group(0).count("\n")
+
+    raw = re.sub(r"\\begin\{(tabular\*?|tabularx|longtable)\}.*?\\end\{\1\}",
+                 blank, raw, flags=re.DOTALL)
+    raw = re.sub(r"\\(?:section|subsection|subsubsection|chapter|paragraph)\*?(?:\[[^\]]*\])?\{[^{}]*\}", blank, raw)
+    raw = re.sub(r"(?m)^[ \t]{0,3}[^\s\n][^\n]*\n[ \t]{0,3}(?:=+|-+)[ \t]*$", blank, raw)
+    sentences: list[dict] = []
+    buffered = ""
+    buffered_line = 1
+
+    def flush(text: str, line_number: int) -> None:
+        for fragment in re.split(r"(?<=[。．!?！？])", _prose_for_lint(text)):
+            text = re.sub(r"\s+", " ", fragment).strip()
+            if text:
+                sentences.append({"line": line_number, "text": text})
+
+    fence = None
+    for line_number, line in enumerate(raw.splitlines(), 1):
+        stripped = line.strip()
+        fence_match = re.match(r"^(`{3,}|~{3,})", stripped)
+        if fence_match:
+            marker = fence_match.group(1)
+            if fence is None:
+                fence = marker
+            elif marker[0] == fence[0] and len(marker) >= len(fence):
+                fence = None
+            stripped = ""
+        elif fence is not None:
+            continue
+        # Headings and table cells are navigation/metadata, not first-use prose.
+        if re.match(r"^(?:#{1,6}(?:\s|$)|\|)", stripped):
+            stripped = ""
+        is_structural = bool(re.match(r"^(?:#{1,6}\s|[-*+]\s|\d+[.)]\s|\|)", stripped))
+        if not stripped or is_structural:
+            if buffered:
+                flush(buffered, buffered_line)
+                buffered = ""
+            if stripped:
+                flush(stripped, line_number)
+            continue
+        if not buffered:
+            buffered = stripped
+            buffered_line = line_number
+        else:
+            buffered += " " + stripped
+        if re.search(r"[。．!?！？]\s*$", stripped):
+            flush(buffered, buffered_line)
+            buffered = ""
+    if buffered:
+        flush(buffered, buffered_line)
+    return sentences
+
+
+def grant_writing_named_software_first_use_check(
+    text: str,
+    software_names: str = "",
+) -> dict:
+    """Show whether a named tool explains what it does at first use.
+
+    A label such as ``公開研究基盤Radia`` tells the reviewer how the applicant
+    values the software, not what the software accepts, computes, or returns.
+    This diagnostic therefore looks for both a generic category and a concrete
+    operation in the sentence that first names each tool.  It does not verify
+    that the description is technically true.  Architecture labels such as
+    ``Python-native`` are surfaced for source verification rather than accepted
+    as a functional explanation.
+
+    ``software_names`` may add comma-separated project-specific tools or
+    methods to the built-in list.
+    """
+    from .tools import _read_text_if_path
+
+    raw = _read_text_if_path(text)
+    defaults = [
+        "Radia", "NGSolve", "ONELAB", "openCFS", "FreeFEM++", "Gmsh",
+        "GetDP", "preCICE", "OpenMDAO", "COMSOL", "JMAG", "ANSYS",
+        "MATLAB", "Simulink",
+    ]
+    extras = [name.strip() for name in software_names.split(",") if name.strip()]
+    names = list(dict.fromkeys(defaults + extras))
+    sentences = _named_diagnostic_sentences(raw)
+
+    entries: list[dict] = []
+    for name in names:
+        pattern = _named_term_pattern(name)
+        first = next((item for item in sentences if pattern.search(item["text"])), None)
+        if first is None:
+            continue
+        category_hits = [m.group(0) for m in _SOFTWARE_CATEGORIES.finditer(first["text"])]
+        operation_hits = [m.group(0) for m in _SOFTWARE_OPERATIONS.finditer(first["text"])]
+        implementation_claims = [
+            m.group(0) for m in _IMPLEMENTATION_LABEL.finditer(first["text"])
+        ]
+        entries.append({
+            "software": name,
+            "line": first["line"],
+            "first_use": first["text"][:320],
+            "category_hits": category_hits,
+            "operation_hits": operation_hits,
+            "functional_identity_present": bool(category_hits and operation_hits),
+            "implementation_claims_requiring_source_check": implementation_claims,
+        })
+
+    missing = [entry for entry in entries if not entry["functional_identity_present"]]
+    source_checks = [
+        entry for entry in entries
+        if entry["implementation_claims_requiring_source_check"]
+    ]
+    return {
+        "applicable": bool(entries),
+        "score": None,
+        "automatic_judgment_prohibited": True,
+        "status": "manual_review_required" if entries else "not_applicable",
+        "entry_count": len(entries),
+        "missing_functional_identity_count": len(missing),
+        "source_check_count": len(source_checks),
+        "entries": entries,
+        "manual_review_prompts": [
+            "初出の一文だけで、専門外の審査者が入力・処理・出力の少なくとも一つを説明できるか。",
+            "言語や実装方式のラベルは、機能説明の代わりにせず、リポジトリ等の一次情報と一致するか。",
+        ],
+        "recommendations": [
+            "『公開研究基盤』だけで終えず、『磁石の形状と電流から三次元磁場を計算するソフトウェア』のように機能を先に書く。",
+            "固有名は機能説明の後に置くか、『Radiaは、…するソフトウェアである』と同じ文で定義する。",
+        ] if missing or source_checks else [],
+        "warning": (
+            "This is a first-use readability map, not a technical-fact checker. "
+            "A detected category and operation can still describe the software incorrectly."
+        ),
+        "source": "named-software first-use functional-identity audit",
+    }
+
+
+_CURRENT_STATUS = re.compile(
+    r"完成しつつある|実装済み|検証済み|開発済み|整備済み|接続済み|"
+    r"公開済み|既に|すでに|現時点|現在利用|利用可能|予備検討|"
+    r"動作している|動いている|利用している|継続して開発|"
+    r"(?:実装|公開|開発|検証|整備|統合)(?:した|してきた)|"
+    r"\b(?:already|implemented|validated|available|current(?:ly)?)\b",
+    re.IGNORECASE,
+)
+_FUTURE_STATUS = re.compile(
+    r"本研究(?:では?|は)|助成期間|研究期間|今後|これから|予定|目指す|"
+    r"\b(?:will|to be (?:developed|implemented|validated|integrated)|planned|proposed)\b",
+    re.IGNORECASE,
+)
+_NEGATED_STATUS = re.compile(
+    r"(?:では|じゃ|して|されて|でき|してい|されてい)?ない|未実装|未検証|未完成|未公開|"
+    r"ません|なかった|\b(?:not|never|without)\b|\b(?:isn't|wasn't|hasn't)\b",
+    re.IGNORECASE,
+)
+_AMBIGUOUS_STATUS = re.compile(
+    r"(?:計算|構築|実現|開発|統合|検証|評価|拡張|解析)(?:する|し、|し，)|"
+    r"つなぐ|扱う|求める"
+)
+
+
+def grant_writing_capability_status_map(
+    text: str,
+    capability_names: str = "",
+) -> dict:
+    """Map named capabilities to current evidence and proposed work.
+
+    The check prevents a mature foundation, a planned optimization, and a
+    planned validation from collapsing into one present-tense product claim.
+    It only lists sentences and lexical status signals.  Whether the claimed
+    baseline is true, or whether the future work is sufficiently ambitious,
+    remains a source-based human judgment.
+
+    Non-past operations alone are ``ambiguous``, not evidence of future work.
+    Negation anywhere in a sentence makes it ``negated_or_mixed``: clause-level
+    attribution needs a human and the sentence must not certify current work.
+
+    Pass comma-separated names such as ``Radia,HDiv-MMM,EnergyStop``.
+    """
+    from .tools import _read_text_if_path
+
+    raw = _read_text_if_path(text)
+    names = [name.strip() for name in capability_names.split(",") if name.strip()]
+    if not names:
+        return {
+            "applicable": False,
+            "score": None,
+            "automatic_judgment_prohibited": True,
+            "status": "not_applicable",
+            "capabilities": [],
+            "manual_review_prompts": [
+                "capability_names に、現在地と助成期間中の到達点を分けたい名称を指定する。"
+            ],
+            "source": "current/future capability status map",
+        }
+
+    sentences = _named_diagnostic_sentences(raw)
+    capabilities: list[dict] = []
+    for name in names:
+        pattern = _named_term_pattern(name)
+        statements = []
+        for sentence in sentences:
+            if not pattern.search(sentence["text"]):
+                continue
+            current_hits = [m.group(0) for m in _CURRENT_STATUS.finditer(sentence["text"])]
+            future_hits = [m.group(0) for m in _FUTURE_STATUS.finditer(sentence["text"])]
+            negated_hits = [m.group(0) for m in _NEGATED_STATUS.finditer(sentence["text"])]
+            ambiguous_hits = [m.group(0) for m in _AMBIGUOUS_STATUS.finditer(sentence["text"])]
+            # Sentence-level evidence cannot attach negation to the named
+            # capability reliably. Never promote such a sentence to current.
+            if negated_hits:
+                current_hits = []
+            status = (
+                "negated_or_mixed" if negated_hits else
+                "current_and_future" if current_hits and future_hits else
+                "current" if current_hits else
+                "future" if future_hits else
+                "ambiguous" if ambiguous_hits else
+                "unstated"
+            )
+            statements.append({
+                "line": sentence["line"],
+                "status": status,
+                "current_signals": current_hits,
+                "future_signals": future_hits,
+                "negation_signals": negated_hits,
+                "ambiguous_signals": ambiguous_hits,
+                "excerpt": sentence["text"][:320],
+            })
+        capabilities.append({
+            "capability": name,
+            "mention_count": len(statements),
+            "has_current_statement": any(
+                s["status"] in {"current", "current_and_future"} for s in statements
+            ),
+            "has_future_statement": any(
+                s["status"] in {"future", "current_and_future"} for s in statements
+            ),
+            "unstated_status_count": sum(s["status"] == "unstated" for s in statements),
+            "ambiguous_status_count": sum(s["status"] == "ambiguous" for s in statements),
+            "negated_or_mixed_count": sum(s["status"] == "negated_or_mixed" for s in statements),
+            "statements": statements,
+        })
+
+    return {
+        "applicable": True,
+        "score": None,
+        "automatic_judgment_prohibited": True,
+        "status": "manual_review_required",
+        "capabilities": capabilities,
+        "manual_review_prompts": [
+            "完成済み・完成しつつある基盤と、助成期間中に初めて行う最適化・統合・検証を別文で特定できるか。",
+            "現在地の根拠は実装・試験・公開物に結び付き、将来到達点は研究計画と評価指標に結び付いているか。",
+            "現在形の『求める』『探索する』『扱う』が、未実施の成果を完成済みに見せていないか。",
+        ],
+        "warning": (
+            "Lexical status signals only. This map does not verify repository "
+            "state, experimental completion, or scientific readiness. Non-past "
+            "verbs alone are ambiguous; negated or mixed sentences do not "
+            "establish current or future capability."
+        ),
+        "source": "current/future capability status map",
+    }
