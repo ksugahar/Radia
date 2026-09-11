@@ -14,7 +14,11 @@ import re
 import zipfile
 
 from radia_mcp.common.pptx_svg import picture_svg_blob, svg_geometry
-from ._kishotenketsu import presentation_kishotenketsu_check  # noqa: F401
+from ._kishotenketsu import (  # noqa: F401
+    FOOTER_FROM as TAKEAWAY_FOOTER_FROM,
+    presentation_kishotenketsu_check,
+)
+from ._outline import presentation_check_outline_slide  # noqa: F401
 
 # Plan B Tier 1 (v0.12.0) — composite score + human-advisor comments
 from .plans.T1 import presentation_opening_hook_strength  # noqa: F401
@@ -1007,6 +1011,311 @@ def presentation_check_slide_line_count(pptx_path: str,
     }
 
 
+_MATH_NS = "{http://schemas.openxmlformats.org/officeDocument/2006/math}"
+_DML_NS = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+# 行の高さを prose より高くする構造: 上下に限を持つ大型作用素、組み上げ分数、
+# 根号、上限・下限。インライン添字 (m:sSub) は高くしないので入れない。
+_TALL_MATH = tuple(_MATH_NS + tag
+                   for tag in ("nary", "f", "rad", "limLow", "limUpp"))
+
+
+def _paragraph_math(para) -> tuple[int, bool]:
+    """OMML の中に隠れている文字数と、行の箱が高くなるかどうか。
+
+    python-pptx が読むのは ``a:r`` の run だけなので、数式は文字数 0 に
+    見える。本文の半分が数式のスライドは半分空いていると測られ、これが
+    IGTE'26 デッキで実際の溢れを二枚見逃した原因である (2026-09-06)。
+    ``m:t`` の葉を直接数える。総和記号や根号の記号そのものは属性
+    (``m:chr``) にあって葉には現れないので、構造ごとに 1 文字足す。
+    """
+    node = para._p
+    chars = sum(len(t.text or "") for t in node.iter(_MATH_NS + "t"))
+    chars += sum(1 for tag in (_MATH_NS + "nary", _MATH_NS + "rad")
+                 for _ in node.iter(tag))
+    tall = any(True for tag in _TALL_MATH for _ in node.iter(tag))
+    return chars, tall
+
+
+def _paragraph_default_pt(para) -> float | None:
+    """段落の ``a:pPr/a:defRPr@sz`` (run を持たない数式段落の字送り)。"""
+    pPr = para._p.find(_DML_NS + "pPr")
+    if pPr is None:
+        return None
+    defRPr = pPr.find(_DML_NS + "defRPr")
+    size = defRPr.get("sz") if defRPr is not None else None
+    return float(size) / 100.0 if size else None
+
+
+def presentation_check_text_box_overflow(
+        pptx_path: str,
+        line_spacing: float = 1.2,
+        char_width_em: float = 0.48,
+        default_font_pt: float = 18.0,
+        tolerance_lines: float = 0.5,
+        math_char_em: float = 0.6,
+        tall_math_scale: float = 1.8) -> dict:
+    """本文が自分の枠に収まるかを推定し、はみ出す text frame を報告する。
+
+    スライド生成器は題と結論帯は幅に合わせて縮めても、本文は縮めない。
+    そのため本文が一行増えただけで帯の下へ潜り込み、描画するまで気づけない
+    ―― IGTE'26 デッキの制作で五回起きた不具合がこれである。
+
+    各 text frame について、段落ごとに run の最大 font size を取り、
+    ``chars_per_line = 使用可能幅pt / (char_width_em * size)`` で折り返し
+    行数を見積もり、``行数 * size * line_spacing + space_after`` を積み上げ
+    て必要高さを求め、shape の高さ（余白を引いたもの）と比べる。
+
+    ``char_width_em`` の既定 0.48 は実測較正である。二点で測った:
+    太字 24 pt は 12.13 in に 72 文字（= 873 pt / (0.505 * 24)）、
+    本文の並体 20 pt は 859 pt に 87 文字以上入る（1 文字 0.494 em 以下）。
+    溢れるのは題ではなく本文なので、並体側に寄せて 0.48 とする。0.5 では
+    87 文字の 1 行を 2 行と数え、溢れていないスライドを溢れと報告した。
+    等幅や日本語主体の版面では 0.55〜1.0 を与えること。
+
+    **数式も文字として数える。** python-pptx の run は ``a:r`` だけなので、
+    OMML の数式は素通りすると文字数 0 になる。IGTE'26 デッキで本文の半分が
+    数式の 2 枚が「溢れなし」と報告され、描画して初めて帯の下に潜っている
+    と分かった（2026-09-06）。``m:t`` の葉を数え、``math_char_em``（既定
+    0.9 em、斜体・添字・記号間隔の分だけ prose より広い）で幅に換算し、
+    総和・分数・根号を含む段落は行の箱を ``tall_math_scale`` 倍にする。
+
+    見積りなので許容を持たせる。折り返し行数は切り上げなので段落ごとに
+    誤差が積もる一方、実測では逆に過小評価もする（IGTE'26 の 4 枚目は
+    0.3 行溢れていたのに 1 行許容で見逃した）。既定の ``tolerance_lines``
+    は 0.5 行。**1 行未満の溢れは取りこぼしうる**ので、最後は必ず
+    描画して見ること。1 行以上の溢れは確実に捕まえる。
+
+    残る過小評価は箇条書きの下げ幅である。プレースホルダが版下から継ぐ
+    ``marL`` はここでは読めないので、折り返し行の使用可能幅を実際より
+    広く見ている。境界の枠を描画して確かめる理由がもう一つある。
+
+    高さが 2 行に満たない枠（題の帯、結論帯、脚注、ページ番号）は除外する。
+    そこは作者が一行に収まるよう字送りを決めている場所で、推定が口を出す
+    余地がない。枠の下端がスライド外に出ている shape も併せて報告する。
+
+    Args:
+        pptx_path: .pptx
+        line_spacing: 行送り (既定 1.2)
+        char_width_em: 1 文字の平均幅 (em 単位、既定 0.48 = 較正値)
+        default_font_pt: run が size を継承していて読めないときの既定値
+        tolerance_lines: この行数までの超過は報告しない (既定 0.5 行)
+        math_char_em: 数式 1 文字の平均幅 (em 単位、既定 0.9)
+        tall_math_scale: 総和・分数・根号を含む段落の行高倍率 (既定 1.8)
+
+    Returns:
+        ``overflows`` (溢れている shape), ``off_slide`` (下端がスライド外),
+        ``checked`` (判定できた shape 数), ``skipped`` (寸法継承や
+        一行帯で判定対象外にした shape)。``overflows`` は超過量の大きい順。
+    """
+    try:
+        import pptx  # type: ignore
+    except ImportError:
+        return {"error": "python-pptx not installed. `pip install python-pptx`"}
+    path = pathlib.Path(pptx_path)
+    if not path.exists():
+        return {"error": f"file not found: {pptx_path}"}
+    if char_width_em <= 0 or line_spacing <= 0:
+        return {"error": "char_width_em and line_spacing must be > 0."}
+    if tolerance_lines < 0:
+        return {"error": "tolerance_lines must be >= 0."}
+    if math_char_em <= 0 or tall_math_scale <= 0:
+        return {"error": "math_char_em and tall_math_scale must be > 0."}
+
+    EMU_PT = 12700.0
+    prs = pptx.Presentation(str(path))
+    slide_h_pt = float(prs.slide_height) / EMU_PT
+    overflows: list[dict] = []
+    off_slide: list[dict] = []
+    checked = 0
+    skipped: list[dict] = []
+
+    def _margin(frame, name: str, fallback_pt: float) -> float:
+        value = getattr(frame, name, None)
+        return fallback_pt if value is None else float(value) / EMU_PT
+
+    for index, slide in enumerate(prs.slides, start=1):
+        for shape in slide.shapes:
+            if not getattr(shape, "has_text_frame", False):
+                continue
+            frame = shape.text_frame
+            if frame.word_wrap is False:
+                continue        # the author declared this box never wraps
+            text = frame.text or ""
+            math_total = sum(_paragraph_math(p)[0] for p in frame.paragraphs)
+            if not text.strip() and not math_total:
+                continue        # a frame holding only an equation is NOT empty
+            if shape.width is None or shape.height is None:
+                skipped.append({"slide": index, "shape": shape.name,
+                                "why": "size inherited from the layout"})
+                continue
+            width_pt = float(shape.width) / EMU_PT
+            height_pt = float(shape.height) / EMU_PT
+            usable_w = width_pt - _margin(frame, "margin_left", 7.2) \
+                - _margin(frame, "margin_right", 7.2)
+            usable_h = height_pt - _margin(frame, "margin_top", 3.6) \
+                - _margin(frame, "margin_bottom", 3.6)
+            if usable_w <= 0 or usable_h <= 0:
+                skipped.append({"slide": index, "shape": shape.name,
+                                "why": "margins leave no room"})
+                continue
+
+            sizes_all = [float(run.font.size.pt) for para in frame.paragraphs
+                         for run in para.runs if run.font.size is not None]
+            sizes_all += [pt for pt in (_paragraph_default_pt(p)
+                                        for p in frame.paragraphs) if pt]
+            max_size = max(sizes_all) if sizes_all else default_font_pt
+            if usable_h < 2.0 * max_size * line_spacing:
+                skipped.append({"slide": index, "shape": shape.name,
+                                "why": "a one-line strip; the author fits it by hand"})
+                continue
+
+            needed = 0.0
+            lines_total = 0
+            for para in frame.paragraphs:
+                para_text = "".join(run.text for run in para.runs) or para.text or ""
+                math_chars, tall = _paragraph_math(para)
+                sizes = [float(run.font.size.pt) for run in para.runs
+                         if run.font.size is not None]
+                size = max(sizes) if sizes else (_paragraph_default_pt(para)
+                                                 or default_font_pt)
+                chars_per_line = max(1.0, usable_w / (char_width_em * size))
+                units = len(para_text) + math_chars * (math_char_em / char_width_em)
+                lines = 1 if not (para_text.strip() or math_chars) else \
+                    int(-(-units // int(chars_per_line)))
+                lines = max(1, lines)
+                lines_total += lines
+                # 行の箱が高くなるのは、段落まるごとが数式のとき (別行立て)
+                # だけ。本文に混ざった √ や添字は行を高くしないので、ここで
+                # 倍率をかけると数式を含む本文が軒並み溢れ扱いになる。
+                display_math = bool(math_chars) and not para_text.strip()
+                needed += lines * size * line_spacing \
+                    * (tall_math_scale if (tall and display_math) else 1.0)
+                after = getattr(para, "space_after", None)
+                if after is not None:
+                    needed += float(after) / EMU_PT
+            checked += 1
+            allowance = tolerance_lines * max_size * line_spacing
+            if needed > usable_h + allowance:
+                overflows.append({
+                    "slide": index,
+                    "shape": shape.name,
+                    "estimated_lines": lines_total,
+                    "needed_pt": round(needed, 1),
+                    "available_pt": round(usable_h, 1),
+                    "overflow_pt": round(needed - usable_h, 1),
+                    "overflow_lines": round((needed - usable_h)
+                                            / (max_size * line_spacing), 1),
+                    "tolerance_pt": round(allowance, 1),
+                    # a frame that is nothing but an equation has no a:t text
+                    "text_head": next((ln for ln in text.strip().splitlines()
+                                       if ln.strip()),
+                                      f"(equation, {math_total} chars)")[:70],
+                })
+            bottom_pt = (float(shape.top) + float(shape.height)) / EMU_PT \
+                if shape.top is not None else None
+            if bottom_pt is not None and bottom_pt > slide_h_pt + 1.0:
+                off_slide.append({"slide": index, "shape": shape.name,
+                                  "bottom_pt": round(bottom_pt, 1),
+                                  "slide_height_pt": round(slide_h_pt, 1)})
+
+    return {
+        "file": str(path),
+        "total_slides": len(prs.slides),
+        "checked_text_frames": checked,
+        "overflows": sorted(overflows, key=lambda o: -o["overflow_pt"])[:30],
+        "overflow_count": len(overflows),
+        "off_slide": off_slide[:20],
+        "off_slide_count": len(off_slide),
+        "skipped": skipped[:20],
+        "model": (f"chars/line = usable width / ({char_width_em} em * size); "
+                  f"OMML の 1 文字は {math_char_em} em、総和・分数・根号を含む"
+                  f"段落は行高 x{tall_math_scale}; "
+                  f"height = lines * size * {line_spacing} + space_after; "
+                  f"allowance = {tolerance_lines} line"),
+        "note": ("推定である。境界の shape は実際に描画して確かめること。"
+                 "日本語主体なら char_width_em を 1.0 に上げる。"
+                 "版下から継ぐ箇条書きの下げ幅は読めないので、幅はまだ"
+                 "やや広く見積もられる。"),
+    }
+
+
+
+def presentation_check_quoted_figure_credit(
+        pptx_path: str,
+        evidence_path: str = "",
+        credit_markers: list[str] | None = None) -> dict:
+    """Check that reproduced figures name their source on the same slide."""
+    try:
+        import pptx  # type: ignore
+        from pptx.enum.shapes import MSO_SHAPE_TYPE  # type: ignore
+    except ImportError:
+        return {"error": "python-pptx not installed. `pip install python-pptx`"}
+    path = pathlib.Path(pptx_path)
+    if not path.exists():
+        return {"error": f"file not found: {pptx_path}"}
+
+    markers = credit_markers or ["©", "(c)", "Fig.", "Figure:",
+                                 "reproduced", "courtesy", "adapted from",
+                                 "出典", "引用"]
+    ev_path = (pathlib.Path(evidence_path) if evidence_path else
+               path.parent / "figure_text_source_evidence.json")
+    quoted: dict[tuple, str] = {}
+    quoted_by_slide: dict[int, list[str]] = {}
+    evidence_found = ev_path.exists()
+    if evidence_found:
+        try:
+            payload = json.loads(ev_path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            return {"error": f"invalid figure evidence: {exc}"}
+        for item in payload.get("pictures", []):
+            source = (item.get("source_evidence") or {}).get("quoted_from")
+            if not source:
+                continue
+            slide_no = int(item.get("slide", 0))
+            quoted[(slide_no, str(item.get("shape", "")))] = str(source)
+            quoted_by_slide.setdefault(slide_no, []).append(str(source))
+
+    prs = pptx.Presentation(str(path))
+    violations: list[dict] = []
+    unverified: list[dict] = []
+    credited: list[dict] = []
+    for index, slide in enumerate(prs.slides, start=1):
+        text = " ".join(shape.text_frame.text for shape in slide.shapes
+                        if getattr(shape, "has_text_frame", False))
+        has_credit = any(marker.casefold() in text.casefold()
+                         for marker in markers)
+        pictures = [shape for shape in slide.shapes
+                    if shape.shape_type == MSO_SHAPE_TYPE.PICTURE]
+        sources = quoted_by_slide.get(index, [])
+        if sources and not has_credit:
+            violations.append({
+                "slide": index,
+                "quoted_from": sources,
+                "why": "the slide reproduces someone else's figure and names no source",
+            })
+        elif sources:
+            credited.append({"slide": index, "quoted_from": sources})
+        elif has_credit and pictures and evidence_found:
+            unverified.append({
+                "slide": index,
+                "why": ("the slide carries a credit line but no picture on it is "
+                        "recorded as quoted_from in the figure evidence"),
+            })
+
+    return {
+        "file": str(path),
+        "evidence": str(ev_path) if evidence_found else None,
+        "quoted_pictures": len(quoted),
+        "credited": credited,
+        "violations": violations,
+        "violation_count": len(violations),
+        "unverified_credit": unverified,
+        "markers": markers,
+        "note": ("由来 JSON が無いときは quoted_from を知りようがないので "
+                 "violations は空になる。ビルドに由来を書かせること。"),
+    }
+
+
 def presentation_check_hedge_on_key_slides(pptx_path: str) -> dict:
     """pptx で Result / Conclusion / Summary スライドに弱気修飾語が
     含まれていないかチェック。木下 p.235 のズバリ話法。
@@ -1656,7 +1965,7 @@ def presentation_check_slide_title_verb(pptx_path: str) -> dict:
 def presentation_check_slide_message_hierarchy(
         pptx_path: str,
         bottom_start_fraction: float = 0.68,
-        footer_start_fraction: float = 0.94,
+        footer_start_fraction: float = TAKEAWAY_FOOTER_FROM,
         min_takeaway_chars: int = 8,
         max_title_chars: int = 28,
         title_style: str = "auto") -> dict:
@@ -1679,6 +1988,8 @@ def presentation_check_slide_message_hierarchy(
 
     takeaway は中央の図表・式・比較から「何が分かったか」を示す。
     footer、page number、URL、citation、所属は takeaway として数えない。
+    版面上の候補は XML の追加順ではなく上端位置で並べ、出典行より上にある
+    takeaway band を先に読む。既定の footer 境界は起承転結検査と共通である。
     """
     try:
         import pptx as _pptx
@@ -1887,6 +2198,7 @@ def presentation_check_slide_message_hierarchy(
                     candidates.append({
                         "text": text_value[:180],
                         "top_fraction": round(top_fraction, 3),
+                        "_visual_top": top_fraction,
                     })
                 elif bottom_fraction >= bottom_start_fraction:
                     lines = [line.strip() for line in shape.text_frame.text.splitlines()
@@ -1895,9 +2207,15 @@ def presentation_check_slide_message_hierarchy(
                         candidates.append({
                             "text": lines[-1][:180],
                             "top_fraction": "last-line-in-bottom-spanning-box",
+                            "_visual_top": bottom_start_fraction,
                         })
             except Exception:
                 continue
+
+        # PowerPoint's XML order is insertion order, not visual order.  The
+        # lab layout puts the takeaway band above its citation strip, so read
+        # eligible candidates from the top of the takeaway region downward.
+        candidates.sort(key=lambda item: item["_visual_top"])
 
         has_takeaway = bool(candidates)
         issues = []
@@ -2113,7 +2431,12 @@ def presentation_check_bullet_count_per_slide(pptx_path: str,
 
 def presentation_check_qa_backup_slides(pptx_path: str,
                                           min_backup: int = 3) -> dict:
-    """pptx に Q&A backup slide (hidden or named) が N 枚以上あるか確認."""
+    """Q&A backup slides exist and slides named as backup are hidden.
+
+    Lab rule (Sugahara, 2026-09-10): material removed from the main talk stays
+    in the same file as hidden Q&A slides. A slide merely named Backup or Q&A
+    is still projected unless it is hidden, so report that state separately.
+    """
     try:
         import pptx as _pptx
     except ImportError:
@@ -2140,7 +2463,10 @@ def presentation_check_qa_backup_slides(pptx_path: str,
             backup_slides.append({"slide": i, "title": title[:60], "reason": "hidden"})
         elif is_backup_named:
             backup_named += 1
-            backup_slides.append({"slide": i, "title": title[:60], "reason": "named"})
+            backup_slides.append({"slide": i, "title": title[:60],
+                                  "reason": "named but VISIBLE"})
+    named_but_visible = [item for item in backup_slides
+                         if item["reason"] == "named but VISIBLE"]
     total_backup = hidden_count + backup_named
     return {
         "total_slides": len(prs.slides),
@@ -2150,6 +2476,15 @@ def presentation_check_qa_backup_slides(pptx_path: str,
         "min_recommended": min_backup,
         "verdict": "OK" if total_backup >= min_backup else "INSUFFICIENT",
         "backup_slides": backup_slides,
+        "named_but_visible": named_but_visible,
+        "warnings": [
+            f"スライド {item['slide']}「{item['title']}」は控えの名前だが"
+            "非表示になっていないため、本番でそのまま映る。"
+            for item in named_but_visible
+        ],
+        "rule": "本編から落とした話は捨てず、非表示の質問スライドとして"
+                "同じファイルに残す（菅原 2026-09-10）。問われたその場で"
+                "出せて、図・出典・セリフも一緒に残る。",
         "hint": f"Q&A backup {min_backup}-5 枚: method detail / failure / cost / scalability / future.",
     }
 

@@ -10,10 +10,9 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 
-
-def _sha256(value: object) -> bool:
-    text = str(value or "")
-    return len(text) == 64 and all(char in "0123456789abcdef" for char in text.lower())
+from ._artifact_identity import (
+    legacy_digest_is_sha256 as _sha256,
+)
 
 
 def _numbers_equal(contract: Mapping[str, object], fields: Sequence[str]) -> bool:

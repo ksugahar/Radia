@@ -56,9 +56,21 @@ for i = 1:numel(r.cases)
     if complexCase
         delete(cf); delete(cs); delete(weight);
     end
-    solution = inv.matvec(rhs);
-    verifyEqual(t,solution.values(),unpack(c.solution,complexCase),RelTol=1e-8,AbsTol=1e-8);
-    verifyLessThan(t,norm(dense*solution.values()-rhs.values())/norm(rhs.values()),1e-9);
+    repeatCount = 1;
+    if strcmp(c.name,'ams')
+        % The real AMS path owns TaskManager-parallel work vectors. Exercise
+        % repeated direct matvec calls so an omitted gateway TaskManager region
+        % cannot intermittently return the zero initial guess.
+        repeatCount = 3;
+    end
+    for repeatIndex = 1:repeatCount
+        solution = inv.matvec(rhs);
+        verifyEqual(t,solution.values(),unpack(c.solution,complexCase),RelTol=1e-8,AbsTol=1e-8);
+        verifyLessThan(t,norm(dense*solution.values()-rhs.values())/norm(rhs.values()),1e-9);
+        if repeatIndex < repeatCount
+            delete(solution);
+        end
+    end
     metrics(i).name = c.name;
     metrics(i).ndof = rhs.Size;
     metrics(i).preconditioner_relative_error = norm(applied.values()-unpack(c.applied,complexCase))/norm(applied.values());
@@ -88,6 +100,22 @@ formCleanup = onCleanup(@() delete(form));
 a = form.matrix();
 aCleanup = onCleanup(@() delete(a));
 verifyError(t,@() radia.sparsesolv.AMS(a,space),'radia:mex:Exception');
+end
+
+function testRejectHigherOrderHCurl(t)
+% Order 2 with NoGrads=true keeps one gradient column per vertex, so only an
+% explicit order or structure check rejects it. Python raises RuntimeError for
+% the same space (test_ams_rejects_higher_order_space); the routes must agree.
+mesh = radia.ngsolve.Mesh.create(t.TestData.ref.mesh);
+cleanup = onCleanup(@() delete(mesh));
+space = radia.ngsolve.FESpace.create(mesh,"hcurl",2,NoGrads=true);
+spaceCleanup = onCleanup(@() delete(space));
+form = radia.ngsolve.BilinearForm.create(space,"mass");
+formCleanup = onCleanup(@() delete(form));
+a = form.matrix();
+aCleanup = onCleanup(@() delete(a));
+verifyError(t,@() radia.sparsesolv.AMS(a,space),'radia:mex:Exception');
+verifyError(t,@() radia.sparsesolv.AMS(a,space,Complex=true),'radia:mex:Exception');
 end
 
 function values = unpack(value,isComplex)

@@ -40,7 +40,7 @@ def matlab_official_server_config(profile="existing",*,include_generic_extension
     candidates = _official_server_candidates()
     cmd=os.getenv("RADIA_MATLAB_MCP_SERVER") or next((str(x) for x in candidates if x.is_file()),"matlab-mcp-server")
     return {"schema":"radia-mcp.matlab-server-config/v1","status":"ok","runtime_owner":"MathWorks MATLAB MCP Server","integration_owner":"radia-mcp.matlab","command_id":"matlab-mcp-server","command":cmd,"profile":profile,"args":args,"extension_files":files,"matlab_setup_code":setup}
-def matlab_radia_acoustic_interface_contract(): return {"runtime_owner":"MathWorks MATLAB MCP Server","matlab_workflow_owner":"MathWorks MATLAB Agentic Toolkit","simulink_workflow_owner":"MathWorks Simulink Agentic Toolkit","generic_operations_owner":"radia_mcp.matlab","generic_matlab_package":"radia_mcp_matlab","production_owner":"radia.acoustics","education_solver_owner":"radia_mcp.acoustic_fembem","radia_extension_scope":["Radia MATLAB/MEX domain APIs","LTspice orchestration and result import","MATLAB Optuna 4.9.0 differential subset"]}
+def matlab_radia_acoustic_interface_contract(): return {"runtime_owner":"MathWorks MATLAB MCP Server","matlab_workflow_owner":"MathWorks MATLAB Agentic Toolkit","simulink_workflow_owner":"MathWorks Simulink Agentic Toolkit","generic_operations_owner":"radia_mcp.matlab","generic_matlab_package":"radia_mcp_matlab","production_owner":"radia.acoustics","education_solver_owner":"radia_mcp.acoustic_fembem","radia_extension_scope":["Radia MATLAB/MEX domain APIs","LTspice orchestration and result import","MATLAB Optuna 5.0.0 differential subset"]}
 
 
 def _agentic_toolkit_status():
@@ -684,7 +684,7 @@ def matlab_radia_mex_contract(topic="all"):
             "optuna_differential_oracle_gate": "matlab_optuna_oracle_plan",
             "optuna_performance_gate": "matlab_optuna_benchmark_plan -> matlab_optuna_release_gate",
             "optuna_native_kernel_benchmark": "validation_test/optimization/results_matlab_optuna_mex_benchmark_20260806.json",
-            "optuna49_performance_benchmark": "validation_test/optimization/results_matlab_optuna49_performance_20260825.json",
+            "optuna50_performance_benchmark": "validation_test/optimization/results_matlab_optuna50_performance_20260825.json",
             "runtime_probe": "radia.quickCheck()",
             "native_build": "pwsh -ExecutionPolicy Bypass -File .\\Build.ps1 -MatlabMexOnly -Verbose",
             "optuna_native_build": "pwsh -ExecutionPolicy Bypass -File .\\Build.ps1 -OptunaMexOnly",
@@ -697,7 +697,7 @@ def matlab_radia_mex_contract(topic="all"):
             "ObjMltExtPgn, ObjMltExtRtg, and ObjMltExtTri were deleted from Python, MATLAB, and the legacy C ABI; no compatibility shims remain.",
             "Mesh-backed high-order NGSolve spaces remain NGSolve-owned; MATLAB receives assembled data or diagnostics. The native HCurl CLN builder now projects M, curl-curl, and ports in C++ and returns a local diffusion model, but it does not replace topology-aware VIM/BEM/SIBC assembly.",
             "Python convenience modules are tracked separately by matlab/python_api_parity_manifest.json; native MEX coverage alone is not module-level parity.",
-            "MATLAB Optuna shared behavior is judged only against pinned optuna==4.9.0 fixtures; MATLAB-only table/MAT, Simulink, parallel, and MEX behavior is extension evidence, not upstream-parity evidence.",
+            "MATLAB Optuna shared behavior is judged only against pinned optuna==5.0.0 fixtures; MATLAB-only table/MAT, Simulink, parallel, and MEX behavior is extension evidence, not upstream-parity evidence.",
             "The native MEX target does not embed or launch Python; Python callback objects are rejected at the MEX boundary and numeric/handle equivalents are used instead. Full Python-DLL independence requires an NGSolve/Netgen build without Python support.",
             "beam.orbit.track_reference_3d shares the rad_orbit::TrackReferenceOrbit3D kernel with the pybind route but drives Radia-object sources only; the HDiv iron evaluator stays a pybind-owned handle until an evaluator handle exists in the MEX registry.",
         ],
@@ -727,7 +727,7 @@ def matlab_optuna_simulink_contract():
         "package": "radia.optuna",
         "distribution": "radia-optuna",
         "upstream_oracle": upstream,
-        "upstream_oracle_version": "optuna==4.9.0",
+        "upstream_oracle_version": "optuna==5.0.0",
         "mcp_ownership": matlab_optuna_mcp_route(),
         "distribution_health": health,
         "seed_semantics": {
@@ -743,19 +743,18 @@ def matlab_optuna_simulink_contract():
             "Trial": "suggestFloat/suggestInteger/suggestCategorical, report, shouldPrune, user attributes",
             "FixedTrial": "objective evaluation against supplied parameters with upstream-oracled suggestions, warnings, attributes, and compatibility errors",
             "TrialPruned": "throw(radia.optuna.TrialPruned()) is caught by Study.optimize and matches upstream PRUNED state, last intermediate value, and callback behavior",
-            "RandomSampler": "explicitly seeded proposals match the checked Optuna 4.9.0 oracle",
-            "TPESampler": "seeded scalar, mixed, grouped multivariate, constrained, callable gamma/weights, and categorical-distance Parzen proposals plus independent-fallback warnings match the checked Optuna 4.9.0 oracle",
-            "MOTPESampler": "seeded multi-objective TPE and constrained Pareto behavior match the checked Optuna 4.9.0 oracle",
+            "RandomSampler": "explicitly seeded proposals match the checked Optuna 5.0.0 oracle",
+            "TPESampler": "seeded scalar, mixed, automatic/grouped multivariate, multi-objective, constrained, and callable gamma/weights proposals match the checked Optuna 5.0.0 oracle",
             "CmaEsSampler": "seeded numeric proposals, restart, margin, separable, source-trial warm-start, learning-rate adaptation, pruned-trial consideration, warnings, and invalid option behavior are upstream-oracled",
-            "GPSampler": "Backend='upstream-python' delegates startup, constrained PyTorch/SciPy LogEI acquisition, and deterministic persisted-history replay to pinned Optuna 4.9.0; Backend='matlab-native' is integration-only",
-            "NSGAIISampler": "seeded population behavior and all six built-in crossover proposal sequences match Optuna 4.9.0",
-            "NSGAIIISampler": "seeded reference-line population behavior matches Optuna 4.9.0",
+            "GPSampler": "Backend='upstream-python' delegates startup, constrained PyTorch/SciPy LogEI acquisition, and deterministic persisted-history replay to pinned Optuna 5.0.0; Backend='matlab-native' is integration-only",
+            "NSGAIISampler": "seeded population behavior and all six built-in crossover proposal sequences match Optuna 5.0.0",
+            "NSGAIIISampler": "seeded reference-line population behavior matches Optuna 5.0.0",
             "QMCSampler": "seeded scrambled and deterministic unscrambled Sobol/Halton proposals match Optuna/SciPy within the documented dimension boundary",
-            "GridSampler": "finite Cartesian-grid exhaustion matches Optuna 4.9.0",
-            "BruteForceSampler": "fixed and conditional define-by-run tree exhaustion matches Optuna 4.9.0",
-            "PartialFixedSampler": "fixed and delegated proposal sequences match Optuna 4.9.0",
+            "GridSampler": "finite Cartesian-grid exhaustion matches Optuna 5.0.0",
+            "BruteForceSampler": "fixed and conditional define-by-run tree exhaustion matches Optuna 5.0.0",
+            "PartialFixedSampler": "fixed and delegated proposal sequences match Optuna 5.0.0",
             "Pruners": "Percentile, threshold, patient, no-op, successive-halving, Hyperband, and Wilcoxon decisions are upstream-oracled",
-            "Importance": "get_param_importances delegates fANOVA, mean-decrease-impurity, and PED-ANOVA evaluation to pinned Optuna 4.9.0",
+            "Importance": "get_param_importances delegates fANOVA, mean-decrease-impurity, and PED-ANOVA evaluation to pinned Optuna 5.0.0",
             "Termination": "MaxTrialsCallback, BestValueStagnationEvaluator, Terminator, and TerminatorCallback provide upstream-oracled stopping behavior",
             "LiveMonitor": "trial progress, objective history, duration, parameter history, and live two-objective Pareto display",
             "SimulinkRunner": "CAE-aware SimulationInput configuration, adaptive-batch sim/parsim, c <= 0 constraints, validation, typed failures, artifact manifests, model SHA-256, and four-part timing",
@@ -846,15 +845,15 @@ def matlab_optuna_simulink_contract():
             "storage": "ObjectiveTable has one row per trial and objective index; TrialTable.Value retains objective 1 for compatibility",
             "selection": "bestTrial, bestValue, bestParams, and bestSolution are single-objective only; paretoFront returns non-dominated trials",
             "visualization": "LiveMonitor plots objective history for one objective and a live Pareto scatter for two or more objectives",
-            "samplers": ["RandomSampler", "MOTPESampler", "NSGAIISampler"],
+            "samplers": ["RandomSampler", "TPESampler", "NSGAIISampler"],
         },
         "sampler_quality": {
             "intended_scale": "expensive CAE trials where field-solver time dominates MATLAB table-backed ask/tell overhead",
-            "tpe_boundary": "seeded scalar, mixed, multivariate, constrained, and callable gamma/weights behavior is checked against Optuna 4.9.0; group decomposition and categorical-distance hooks remain gaps",
+            "tpe_boundary": "seeded scalar, mixed, automatic/grouped multivariate, multi-objective, constrained, and callable gamma/weights behavior is checked against Optuna 5.0.0",
             "correlated_continuous": "CmaEsSampler has checked seeded numeric and independent-fallback parity; GPSampler Backend='upstream-python' owns exact checked LogEI behavior",
-            "multi_objective": "use MOTPESampler or NSGAIISampler and inspect front error plus coverage, not Pareto point count alone",
+            "multi_objective": "use TPESampler or NSGAIISampler and inspect front error plus coverage, not Pareto point count alone",
             "validation": "validation_test/optimization/validate_matlab_optuna_quality.m",
-            "python_parity_claim": "Only behavior mapped to pinned optuna==4.9.0 fixtures is parity evidence; API coverage must close before a complete-compatibility claim.",
+            "python_parity_claim": "Only behavior mapped to pinned optuna==5.0.0 fixtures is parity evidence; API coverage must close before a complete-compatibility claim.",
             "simulink_auto": "CmaEsSampler for one objective and NSGAIISampler for multiple objectives; the mask also exposes every sampler explicitly",
         },
         "parallel_trials": {
@@ -866,7 +865,7 @@ def matlab_optuna_simulink_contract():
         "ltspice_integrated_workflow": {
             "raw": "readRaw/RawRead normalize ASCII or binary, real or complex results under radia.ltspice.raw.v2 while preserving source schema",
             "parallel": "LTspiceRunner.optimizeParallel uses isolated parfeval runs and returns numerical results to the client-owned Study",
-            "pareto": "vector ScoreFcn -> ObjectiveTable -> MOTPE/NSGA-II -> LiveMonitor Pareto scatter",
+            "pareto": "vector ScoreFcn -> ObjectiveTable -> TPE/NSGA-II -> LiveMonitor Pareto scatter",
         },
         "cad_topology_optimization": {
             "cad_owner": "Cubit design cells, element IDs, material blocks, and final CAD reconstruction",
@@ -972,7 +971,7 @@ def matlab_optuna_simulink_contract():
             "Optionally adapt the environment to rlFunctionEnv.",
             "For IH, train against the native distributed Eddy/Thermal block; do not substitute a LUT or lumped thermal environment.",
         ],
-        "python_relation": "The official optuna/optuna-mcp server owns every shared operation in its live tools/list. radia-mcp owns only MATLAB/Simulink differences and never performs a Python-to-MATLAB-Engine call per trial; exact GPSampler Backend='upstream-python' intentionally uses pinned Optuna 4.9.0 in-process.",
+        "python_relation": "The official optuna/optuna-mcp server owns every shared operation in its live tools/list. radia-mcp owns only MATLAB/Simulink differences and never performs a Python-to-MATLAB-Engine call per trial; exact GPSampler Backend='upstream-python' intentionally uses pinned Optuna 5.0.0 in-process.",
         "mcp_route": "matlab_optuna_mcp_route",
     }
 
@@ -1162,7 +1161,7 @@ def matlab_simulink_library_contract():
             "pareto": "fixed-size X/Y arrays, active point count, and revision counter",
             "sheet_metal_runner": "radia.optuna.SheetMetalRunner over native MATLAB/MEX plus NGSolve/Cubit drivers",
             "quality_validation": "validation_test/optimization/validate_matlab_optuna_quality.m",
-            "sampler_mask": "auto, random, tpe, cmaes, motpe, or nsgaii; auto selects CMA-ES for one objective and NSGA-II for multiple objectives",
+            "sampler_mask": "auto, random, tpe, cmaes, gp, nsgaii, nsgaiii, bruteforce, or qmc; auto selects from the declared search space and budget",
         },
         "execute_with": "official MATLAB MCP evaluate_matlab_code",
     }

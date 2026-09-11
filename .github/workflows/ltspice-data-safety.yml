@@ -1,0 +1,70 @@
+name: MATLAB LTspice data safety
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'matlab/+radia/+ltspice/readRaw*.m'
+      - 'matlab/+radia/+ltspice/*TransientState.m'
+      - 'tests/matlab/test_ltspice_data_safety.m'
+      - 'tests/matlab/fixtures/ltspice_numdgt7*'
+      - '.github/workflows/ltspice-data-safety.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'matlab/+radia/+ltspice/readRaw*.m'
+      - 'matlab/+radia/+ltspice/*TransientState.m'
+      - 'tests/matlab/test_ltspice_data_safety.m'
+      - 'tests/matlab/fixtures/ltspice_numdgt7*'
+      - '.github/workflows/ltspice-data-safety.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ltspice-data-safety-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  matlab-data-contracts:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: [self-hosted, Windows, X64, mdx]
+    timeout-minutes: 5
+    env:
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test saved RAW fixtures through a dedicated MATLAB Engine
+        shell: pwsh
+        run: |
+          @'
+          import subprocess, sys, tempfile
+          code = r"""
+          import os
+          import matlab.engine
+          eng = matlab.engine.start_matlab('-nodesktop -nosplash')
+          try:
+              eng.cd(os.getcwd(), nargout=0)
+              eng.eval("r = runtests('tests/matlab/test_ltspice_data_safety.m'); "
+                       "disp(table(r)); assert(~isempty(r) && all([r.Passed]) "
+                       "&& ~any([r.Incomplete]));", nargout=0)
+          finally:
+              eng.quit()
+          print('LTSPICE_DATA_SAFETY_PASS', flush=True)
+          """
+          with tempfile.TemporaryFile() as log:
+              child = subprocess.Popen([sys.executable, '-c', code],
+                                       stdout=log, stderr=subprocess.STDOUT)
+              try:
+                  result = child.wait(timeout=180)
+              except subprocess.TimeoutExpired:
+                  subprocess.run(['taskkill', '/PID', str(child.pid), '/T', '/F'],
+                                 check=True)
+                  child.wait(timeout=20)
+                  result = 124
+              log.seek(0)
+              print(log.read().decode('utf-8', errors='replace'), flush=True)
+              raise SystemExit(result)
+          '@ | python -
+          exit $LASTEXITCODE

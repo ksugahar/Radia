@@ -5962,20 +5962,31 @@ PYBIND11_MODULE(_radia_pybind, m) {
     m.def("FldFrc", &radia_field_ext::FldFrc,
           py::arg("obj"), py::arg("shape"),
           R"pbdoc(
-              Compute force on object using Maxwell stress tensor.
+              Integrate the magnetic Maxwell stress over an integration shape.
+
+              F = oint_S (1/mu0) [ (B.n) B - 0.5 |B|^2 n ] dS  [N]
+
+              The shape carries its own normal n (FldFrcShpRtg puts the
+              rectangle in the plane z = center[2] with n = +z), so the result
+              is the force on the material on the -n side of the surface.
 
               Args:
-                  obj: Object handle
-                  shape: Integration shape handle
+                  obj: Object handle (the field source)
+                  shape: Integration shape handle, e.g. from FldFrcShpRtg
 
               Returns:
-                  Array [Fx, Fy, Fz, Tx, Ty, Tz] (force and torque)
+                  Array [Fx, Fy, Fz] in newtons.  Force only -- this API does
+                  not compute torque.
           )pbdoc");
 
     m.def("FldFrcShpRtg", &radia_field_ext::FldFrcShpRtg,
           py::arg("center"), py::arg("dimensions"),
           R"pbdoc(
-              Create rectangular integration shape for force calculation.
+              Create a rectangular integration surface for FldFrc.
+
+              The rectangle lies in the plane z = center[2], spans
+              dimensions[0] along x and dimensions[1] along y, and carries the
+              normal +z.
 
               Args:
                   center: Center point [x, y, z]

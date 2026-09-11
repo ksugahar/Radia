@@ -23,8 +23,9 @@ def matlab_optuna_mcp_route(topic: str = "overview") -> dict[str, Any]:
     """Return the checked owner for an Optuna/MATLAB MCP capability.
 
     The official server's live ``tools/list`` is authoritative for shared
-    Optuna behavior.  This contract records the verified 4.9.0/0.2.0 snapshot
-    but never shadows those public tools inside radia-mcp.
+    Optuna behavior. This contract records the verified Optuna 5.0.0 with
+    optuna-mcp 0.2.0 stable snapshot, while separately noting upstream MCP
+    source development without claiming an unreleased runtime.
     """
     key = str(topic or "overview").strip().lower().replace("-", "_")
     aliases = {
@@ -55,11 +56,16 @@ def matlab_optuna_mcp_route(topic: str = "overview") -> dict[str, Any]:
             "sampler selection exposed by the official MCP tool contract",
         ],
         "verified_snapshot": {
-            "optuna": "4.9.0",
+            "optuna": "5.0.0",
             "optuna_mcp": "0.2.0",
             "transport": "stdio",
-            "fixture": "tests/matlab/fixtures/optuna49_mcp_oracle.json",
+            "fixture": "tests/matlab/fixtures/optuna50_mcp_oracle.json",
             "sampler_seed_exposed": False,
+        },
+        "upstream_source_observation": {
+            "version": "0.3.0.dev",
+            "status": "observed in upstream source; not an installed stable runtime claim",
+            "ownership_changed": False,
         },
         "radia_policy": (
             "Do not proxy, rename, or reimplement an operation present in the "
@@ -100,7 +106,7 @@ def matlab_optuna_mcp_route(topic: str = "overview") -> dict[str, Any]:
     }
     differential = {
         "owner": "radia-mcp test and compatibility layer",
-        "behavioral_oracle": "optuna==4.9.0",
+        "behavioral_oracle": "optuna==5.0.0",
         "public_mcp_oracle": "optuna/optuna-mcp over a real MCP transport",
         "seeded_numeric_route": (
             "Run pinned upstream Optuna directly because optuna-mcp 0.2.0 "
@@ -114,10 +120,10 @@ def matlab_optuna_mcp_route(topic: str = "overview") -> dict[str, Any]:
             "MATLAB/Radia CAE artifact contracts",
         ],
         "fixtures": [
-            "tests/matlab/fixtures/optuna49_oracle.json",
-            "tests/matlab/fixtures/optuna49_mcp_oracle.json",
-            "tests/matlab/fixtures/optuna49_public_api.json",
-            "matlab/optuna49_api_coverage.json",
+            "tests/matlab/fixtures/optuna50_oracle.json",
+            "tests/matlab/fixtures/optuna50_mcp_oracle.json",
+            "tests/matlab/fixtures/optuna50_public_api.json",
+            "matlab/optuna50_api_coverage.json",
             "tests/matlab/fixtures/optuna_test_manifest.json",
         ],
         "disagreement_policy": (

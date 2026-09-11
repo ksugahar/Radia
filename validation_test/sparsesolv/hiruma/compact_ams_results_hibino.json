@@ -1,0 +1,46 @@
+{
+  "schema": "radia.validation.sparsesolv-hiruma.v1",
+  "generated_at_utc": "2026-09-11T05:09:53.420736+00:00",
+  "hostname": "Hibino",
+  "benchmark": "compact_ams_cocr",
+  "solver": {
+    "krylov": "COCR",
+    "preconditioner": "ComplexCompactAMS (fused Re/Im + DualMult AMG)",
+    "cycle_type": 1,
+    "amg": "CompactAMG (PMIS coarsening, l1-Jacobi, V-cycle)"
+  },
+  "physics": {
+    "frequency_hz": 30000.0,
+    "sigma_cu": 59600000.0,
+    "mu_r_core": 1000,
+    "system_epsilon_regularization": 0.0,
+    "preconditioner_epsilon_regularization": 1e-06,
+    "epsilon_placement": "preconditioner_only",
+    "tol": 1e-10,
+    "maxiter": 2000
+  },
+  "environment": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "processor": "Intel64 Family 6 Model 106 Stepping 6, GenuineIntel",
+    "python": "3.12.10"
+  },
+  "results": [
+    {
+      "mesh": "mesh1_2.5T.vol",
+      "mesh_sha256": "f3920dff6db470f8ce48a2f4983a404c564b8f92254abdae4c1e7cf8e620f33a",
+      "ne": 130460,
+      "nv": 23731,
+      "ndof_hcurl": 155527,
+      "ndof_h1": 23731,
+      "method": "Compact AMS + COCR",
+      "iterations": 144,
+      "t_setup": 1.747,
+      "t_solve": 3.213,
+      "t_total": 4.96,
+      "ms_per_iter": 22.3,
+      "true_residual": 9.891989345431059e-11,
+      "converged": true,
+      "peak_memory_mb": 452.9
+    }
+  ]
+}

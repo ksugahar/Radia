@@ -4,5 +4,5 @@ function value = version()
 %   is the language-equivalent surface for both optuna.__version__ and
 %   optuna.version.__version__.
 
-value = "4.9.0";
+value = "5.0.0";
 end

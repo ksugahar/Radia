@@ -149,10 +149,11 @@ Lightweight Ruge-Stuben variant designed for NGSolve TaskManager:
 - l1-Jacobi smoother (fully parallel, no triangular solve)
 - V-cycle, ω = 1.0
 
-Performance (mesh1_3.5T, 197k DOFs HCurl):
-- CompactAMG (Compact HX subspace solver): 25 iterations to 1e-10
-- HYPRE BoomerAMG (subspace): 25 iterations (matches)
-- Memory: ~0.3 GB (vs HYPRE ~0.8 GB including MPI buffers)
+Performance: no comparison against HYPRE BoomerAMG is stored in the
+repository.  An earlier statement here claimed an iteration count and memory
+footprint matching HYPRE; it had no evidence file behind it and has been
+withdrawn.  Measured AMS iteration counts that use CompactAMG as the subspace
+solver are in the sparsesolv README Performance table.
 
 ## Anisotropy and weak scaling
 
@@ -236,9 +237,13 @@ Validated 2026-04 on complex eddy current @ 30 kHz, 155k-1.44M DOFs:
 | AMG theta | 0.25 | strength-of-connection |
 | Correction weight | 1.0 | no damping |
 
-Performance vs HYPRE AMS + BoomerAMG (mesh1_3.5T, 197k DOFs):
-- CompactAMS + CompactAMG: 25 BiCGStab iterations to 1e-10
-- HYPRE AMS + BoomerAMG: 25 iterations (matches)
+Performance: no comparison against HYPRE AMS is stored in the repository.  An
+earlier statement here claimed an iteration count matching HYPRE; it had no
+evidence file behind it and has been withdrawn.  On the same mesh
+(mesh1_3.5T, 197k DOFs) the retained COCR table in the sparsesolv README
+records 168 iterations, and that table grows from 144 to 499 iterations over
+a 9.3-fold DOF increase: iterations grow slowly with refinement; they are not
+mesh-independent.
 
 ## When to use — MEASURED, and it depends on the ORDER p (2026-09-08)
 

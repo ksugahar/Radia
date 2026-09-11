@@ -1,5 +1,88 @@
 # Eqnedit64 changelog
 
+## 3.1.0 — release candidate
+
+- Preserve grouped and empty-base apostrophes on native import, including
+  following scripts. Restore ordinary Web preview after optional Office macro
+  preparation fails; keep copy disabled with reload guidance. Regressions check
+  first-reparse semantics and a real aborted browser package request.
+
+- Protect compound prime-decoration bases from double superscripts, preserve
+  explicit prime glyphs as `\prime`, and wrap selected Web expressions without
+  dropping their content. Cover single/double/triple marks and first reparse.
+
+- Prepare the primary Web typesetter before the MathML converter and enable
+  Office copy only after the required macros are ready. Do not make copy wait
+  for all palette previews. A cold-browser regression holds package loading
+  and preview rendering separately, then captures the first copy event.
+
+- Preserve the curly glyph in wide over/underbraces instead of silently
+  substituting a horizontal line; cover multiple body widths in the decoration
+  regression. This was found by reviewing the shared-palette proof images.
+
+- Generate native and Web palettes from one production catalogue, independently
+  checked against the insertion oracle. Share category order and preview TeX,
+  preserve Web-only snippets explicitly, and explain native-only matrix actions.
+  Fit toolbar selector ink as well as popup cells, add selector/style proof
+  sheets (120 total), and simplify brace examples without removing input slots.
+
+- Fit palette ink to the cell instead of centering the font's line metrics;
+  radicals and standalone slashes no longer rely on being clipped to fit.
+  Show native previews for fractions, radicals, decorations and typefaces.
+  Check border clearance in normal/selected states and publish 114 offscreen
+  palette proof images per CI run for AI visual review. These are evidence,
+  not an automatic claim of human legibility.
+
+- Restrict palette coverage to Windows Unicode cmaps: Mac Roman entries
+  concealed missing superscript-two and one-half tab glyphs. Replace those
+  tab faces with `x` plus an up arrow and a fraction slash plus a radical.
+  Allocate the ink probe from font metrics instead of a fixed 64px square,
+  and test the physical palette font at 100--400% scaling. Report coverage,
+  physical-face substitution, and absent ink separately. The old coverage
+  check turned red for both tab glyphs before this correction; the focused
+  static suite now passes 25 checks. Japanese Windows acceptance remains a
+  separate release gate, not a conclusion drawn from English Windows CI.
+
+- Fail `--self-test` when the palette is not drawing in the embedded math
+  font, naming the face GDI substituted. The cmap check says which character
+  would reject Latin Modern Math; this says whether the running binary got it.
+  Nothing observed that before: the only record was a flight note, and flight
+  notes reach a file solely on a crash or an eight-second watchdog freeze, so
+  3.0.16 shipped in a fallback font with every gate green.
+
+- Check every native/Web palette key against an independently reviewed TeX
+  intent specification, including distinct slot operands, matrix resizing and
+  persistent typeface buttons. Wrong but round-tripping commands now fail;
+  swap mutations and fail-closed catalogue coverage protect the test itself.
+
+- Draw the palette in the shipped math font again. One key face used U+2605
+  BLACK STAR, which Latin Modern Math does not contain, and `pick_button_font`
+  accepts a font only if it owns every face at once — so that single character
+  rejected Latin Modern Math and Cambria Math and dropped all 245 keys to
+  Segoe UI Symbol. The prime family then read as typewriter quotes.
+- Show the character each key inserts. The Hodge-star key drew U+2605 while
+  `\star` renders as U+22C6, and the frown/smile keys drew the intersection
+  and union signs instead of U+2322 and U+2323.
+- Check both properties from the source and the font's cmap, so a key that
+  promises the wrong glyph, or one the font cannot draw, fails before release.
+
+## 3.0.16 — release candidate
+
+- Publish the native rendering corrections accumulated after 3.0.15:
+  decorations retain their distinct shapes, primes sit beside their base,
+  over-arrows have arrowheads, and slashed fractions render on one line.
+  Unknown operator/fence selectors no longer become plausible unrelated math.
+- Preserve a base in the geometry palette's standalone script fragments.
+  Decoration comparisons and the complete palette sweep protect the visual
+  contract independently of TeX round trips and Office output.
+- Make native node dispatch exhaustive, including explicit rejection of the
+  unused legacy Font/RM nodes. Remove the silent empty-layout fallback and
+  enable the same missing-enumerator build gate in the CMake CI core.
+- Synchronize native numeric/string version resources, package metadata, and
+  the Web build identifier. The previous numeric resource still said 3.0.13.
+  Web rendering continues to use MathJax; native layout code is not copied to
+  JavaScript. Both editions remain part of the same publication transaction.
+
 ## 3.0.15 — 2026-09-05
 
 - Say why an equation cannot be shown instead of leaving raw TeX in the Web

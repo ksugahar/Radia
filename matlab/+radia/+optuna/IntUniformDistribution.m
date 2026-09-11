@@ -1,5 +1,5 @@
 classdef IntUniformDistribution < radia.optuna.IntDistribution
-    %INTUNIFORMDISTRIBUTION Deprecated Optuna 4.9 distribution alias.
+    %INTUNIFORMDISTRIBUTION Deprecated distribution alias retained by Optuna 5.
 
     methods
         function obj=IntUniformDistribution(low,high,step)
