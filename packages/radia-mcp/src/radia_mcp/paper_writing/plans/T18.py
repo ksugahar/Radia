@@ -63,6 +63,8 @@ def paper_writing_run_full_workflow(
                 journal_tier=journal_tier, phase=phase, skip=skip_tools,
             )
             output["phases"]["phase2_diagnose"] = {
+                "status": health.get("status", "unavailable"),
+                "unknown_tools": health.get("unknown_tools", []),
                 "overall_score": health.get("overall_score"),
                 "n_critical": health.get("n_critical_adjusted", 0),
                 "n_high": health.get("n_high_adjusted", 0),
@@ -71,6 +73,8 @@ def paper_writing_run_full_workflow(
                     health.get("adjusted_priority_issues", [])[:3]
                 ),
             }
+            if health.get("error") or health.get("status") != "complete":
+                output["errors"].append("phase2 incomplete: health checks unavailable or skipped")
         except Exception as e:
             output["errors"].append(f"phase2 failed: {e}")
 
