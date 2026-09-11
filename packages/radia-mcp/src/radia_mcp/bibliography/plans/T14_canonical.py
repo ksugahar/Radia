@@ -14,7 +14,7 @@ import shutil
 import subprocess
 import tempfile
 
-from .._bibparse import read_bib_file
+from .._bibparse import parse_bib
 
 CANONICAL = pathlib.Path(__file__).resolve().parents[1] / "data" / "references.bib"
 
@@ -22,15 +22,29 @@ _CITE = re.compile(r"\\(?P<command>(?:no)?cite[a-zA-Z]*|(?:auto|paren|text|foot|
                    r"\*?\s*(?:\[[^\]]*\]\s*)*\{(?P<keys>[^}]*)\}")
 
 
+def _canonical_snapshot():
+    raw = CANONICAL.read_bytes()
+    entries = [entry for entry in parse_bib(raw.decode("utf-8", errors="strict")) if entry.key]
+    if not entries:
+        raise ValueError("canonical bibliography contains no entries")
+    keys = [entry.key for entry in entries]
+    if len(set(keys)) != len(keys):
+        raise ValueError("canonical bibliography contains duplicate citation keys")
+    return raw, entries
+
+
 def bibliography_canonical_path() -> str:
     """Return the bundled canonical bibliography path and entry count."""
     if not CANONICAL.is_file():
         return f"canonical bibliography not found at {CANONICAL}"
-    entries = [entry for entry in read_bib_file(CANONICAL) if entry.key]
+    try:
+        snapshot, entries = _canonical_snapshot()
+    except (OSError, UnicodeError, ValueError) as exc:
+        return f"Error: cannot read canonical bibliography: {exc}"
     return (
         "bibliography_canonical_path\n"
         f"  {CANONICAL}\n"
-        f"  {len(entries)} entries, {CANONICAL.stat().st_size / 1024:.0f} KB\n"
+        f"  {len(entries)} entries, {len(snapshot) / 1024:.0f} KB\n"
         "  Cite this file as the single source of truth; ship the generated .bbl."
     )
 
@@ -65,11 +79,11 @@ def bibliography_get_entries(keys: str) -> str:
             ensure_ascii=False,
         )
 
-    available = {
-        entry.key: entry
-        for entry in read_bib_file(CANONICAL)
-        if entry.key
-    }
+    try:
+        snapshot, entries = _canonical_snapshot()
+    except (OSError, UnicodeError, ValueError) as exc:
+        return json.dumps({"ok": False, "error": f"canonical bibliography unavailable: {exc}"})
+    available = {entry.key: entry for entry in entries}
     missing = [key for key in requested if key not in available]
     if missing:
         return json.dumps(
@@ -93,7 +107,7 @@ def bibliography_get_entries(keys: str) -> str:
         {
             "ok": True,
             "canonical_path": str(CANONICAL),
-            "canonical_sha256": hashlib.sha256(CANONICAL.read_bytes()).hexdigest(),
+            "canonical_sha256": hashlib.sha256(snapshot).hexdigest(),
             "entries": records,
         },
         ensure_ascii=False,
@@ -176,8 +190,8 @@ def bibliography_make_bbl(
         return f"Error: canonical bibliography missing: {CANONICAL}"
     try:
         tex = source.read_text(encoding="utf-8")
-    except UnicodeDecodeError as exc:
-        return f"Error: manuscript is not valid UTF-8: {source} ({exc})"
+    except (UnicodeError, OSError) as exc:
+        return f"Error: manuscript is unreadable or not valid UTF-8: {source} ({exc})"
     from ...paper_writing._tex_resolver import resolve_input_chain
 
     resolved = resolve_input_chain(str(source))
@@ -190,7 +204,10 @@ def bibliography_make_bbl(
     if not keys:
         return f"Error: no \\cite keys found in {source.name}"
 
-    entries = [entry for entry in read_bib_file(CANONICAL) if entry.key]
+    try:
+        canonical_bytes, entries = _canonical_snapshot()
+    except (OSError, UnicodeError, ValueError) as exc:
+        return f"Error: cannot read canonical bibliography: {exc}"
     known = {entry.key for entry in entries}
     if "*" in keys:
         keys = [key for key in keys if key != "*"]
@@ -218,6 +235,10 @@ def bibliography_make_bbl(
         return f"Error: output path must end in .bbl: {destination}"
     if not destination.parent.is_dir():
         return f"Error: output directory does not exist: {destination.parent}"
+    try:
+        previous_output = destination.read_bytes() if destination.exists() else None
+    except OSError as exc:
+        return f"Error: cannot read existing bbl: {exc}"
 
     # Validate every input that does not require an external executable first.
     # In particular, an unknown citation key must fail closed even on a host
@@ -228,7 +249,7 @@ def bibliography_make_bbl(
 
     with tempfile.TemporaryDirectory(prefix="radia-bbl-") as temp_name:
         work = pathlib.Path(temp_name)
-        shutil.copyfile(CANONICAL, work / "references.bib")
+        (work / "references.bib").write_bytes(canonical_bytes)
 
         # A publisher-provided style may live beside the manuscript rather than
         # in the TeX installation. Copy only the requested style.
@@ -267,19 +288,34 @@ def bibliography_make_bbl(
                 + log[-1200:]
             )
 
-        with tempfile.NamedTemporaryFile(
-            dir=destination.parent,
-            prefix=f".{destination.name}.",
-            suffix=".tmp",
-            delete=False,
-        ) as output_handle:
-            output_handle.write(data)
-            temporary_output = pathlib.Path(output_handle.name)
-        temporary_output.replace(destination)
+        temporary_output = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                dir=destination.parent, prefix=f".{destination.name}.", suffix=".tmp", delete=False,
+            ) as output_handle:
+                temporary_output = pathlib.Path(output_handle.name)
+                output_handle.write(data)
+            if CANONICAL.read_bytes() != canonical_bytes:
+                return "Error: canonical bibliography changed during generation; retry"
+            for item in resolved["files_resolved"]:
+                current_hash = hashlib.sha256(pathlib.Path(item["path"]).read_bytes()).hexdigest()
+                if current_hash != item.get("sha256"):
+                    return "Error: TeX input changed during bibliography generation; retry"
+            current_output = destination.read_bytes() if destination.exists() else None
+            if current_output != previous_output:
+                return "Error: destination bbl changed during generation; retry"
+            temporary_output.replace(destination)
+            temporary_output = None
+        except OSError as exc:
+            return f"Error: cannot publish generated bbl: {exc}"
+        finally:
+            if temporary_output is not None:
+                temporary_output.unlink(missing_ok=True)
 
     return (
         f"bibliography_make_bbl: {source.name} -> {destination}\n"
         f"  cited {len(keys)} canonical keys; wrote {bibitem_count} bibitems; "
         f"style {style}\n"
+        f"  canonical_sha256: {hashlib.sha256(canonical_bytes).hexdigest()}\n"
         "  references.bib remained canonical and was not copied into the manuscript."
     )
