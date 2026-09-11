@@ -98,6 +98,14 @@ optional labels and false-count controls; the thirteen-file lane passes 1132
 tests. This does not compile/render a paper
 or certify arbitrary custom bst output syntax.
 
+M04 rename-input follow-up (2026-09-12): T6 rejects malformed publication years
+instead of truncating them, and refuses unresolved author/title/editor or
+crossref/xref/xdata/related expressions before proposing or applying renames.
+The shared literal reader distinguishes protected # text from concatenation;
+T13 uses the same reader. Thirty-two cases cover no-write failure behavior.
+The thirteen-file lane passes 1164 tests. Missing years retain the explicit
+nodate convention; no dates are invented.
+
 Completion of a scoped validation requires matching the selected source, zero unexpected failures
 or skips in the relevant lane, and retained local machine-readable evidence.
 Do not commit transient test logs or mark the package globally "complete" from
