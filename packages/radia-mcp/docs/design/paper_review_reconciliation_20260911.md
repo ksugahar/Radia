@@ -290,7 +290,15 @@ Surname fixes preserve literal organizations and reject unresolved author macros
 See maintenance-known-issues.md and the bibliography contract tests for scoped
 evidence. No canonical parent data or live MCP installation was changed.
 
-1. Continue generated-bbl acceptance, other BibTeX/DOI consumers and remaining fallback paths (P63/P65/P67), then language heuristics and
+The 2026-09-12 constraint follow-up adds a shared comment/literal lexical
+boundary, fail-loud cyclic input resolution, and fingerprinted installed bst
+snapshots. The fourteen-file regression lane passes 1195 tests. The separate
+real-TeX acceptance test passes 2 synthetic cases (plain/IEEEtran), with retained
+PDF/JSON and Poppler image inspection. This establishes scoped rendered evidence
+for accented surnames, corporate authors, protected titles and literal symbols,
+not arbitrary style/language or macro support. See the maintenance ledger.
+
+1. Continue other BibTeX/DOI consumers and remaining fallback paths (P63/P65/P67), then language heuristics and
    deduplication; other PDF consumers remain separate P50 follow-up work.
 2. Review missing pattern producers (P58) and remaining ordering/context rules
    (P59); do not confuse execution-status coverage with semantic correctness.
