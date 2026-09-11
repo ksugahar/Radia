@@ -12,6 +12,7 @@
     "tools/ci_preflight_mdx.py": ["tests/test_ci_preflight_mdx.py"],
     "tools/release_quad.py": ["tests/test_release_quad_state.py", "tests/test_release_quad_editable_source.py", "tests/test_release_quad_optuna_candidate.py", "tests/test_mdx_runner_pool.py"],
     "tools/verify_simulink_release.py": ["tests/test_simulink_release_package.py"],
+    "tools/verify_lab_editable.py": ["tests/test_editable_daily_check.py"],
     "tools/ci_preflight.py": ["tests/test_ci_preflight_scope.py"],
     "tools/run_test_tier.py": ["tests/test_run_test_tier.py"],
     "tools/sparsesolv_ci_impact.py": ["tests/test_sparsesolv_ci_contract.py"]
