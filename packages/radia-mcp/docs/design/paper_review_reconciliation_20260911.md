@@ -117,12 +117,12 @@ Paths in tables are relative to `src/radia_mcp/paper_writing` unless specified.
 | --- | --- | --- | --- |
 | P60 | 6.2 transient DOI failure | 修正済み | R::test_temporary_doi_failure_is_not_called_fabrication and test_crossref_http_status_classification. Retry-After/UA policy remains pending. |
 | P61 | 6.5 nested input resolution | 修正済み | R::test_input_chain_resolves_from_main_compile_directory. Explicit .pgf suffix and unreadable includes still need checks. |
-| P62 | 6.6 arXiv escaping/error feed | 検証待ち | Mock queries containing &, # and C++; do not make uncontrolled network requests. |
+| P62 | 6.6 arXiv escaping/error feed | 修正済み | test_paper_writing_external_inputs.py verifies Requests-prepared query roundtrips for &, #, C++, percent and Japanese text. Atom error entries, unexpected XML roots, missing title/invalid identifier, HTTP errors and genuine empty feeds are distinguished. Citation verification preserves search failure as verdict=error rather than no_candidate_found. All network calls are mocked. |
 | P63 | 6.7 metadata/BibTeX fidelity | 検証待ち | Missing published/issued, organization authors, escaped entities and complete arXiv authors. |
 | P64 | 6.8 damaged PDF persistence | 検証待ち | Malformed %PDF fixture, atomic download handling and subsequent retry. |
 | P65 | 6.9 DOI normalization | 検証待ち | Test #/?/%, doi: and dx.doi.org consistently across consumers. |
 | P66 | 6.10 archive resource bounds | 検証待ち | Compressed/member size bounds and bounded reads; no live download needed. |
-| P67 | 6.11 fallback paths | 検証待ち | Unreadable bib, resolver exceptions and publisher landing errors must not become clean results. |
+| P67 | 6.11 fallback paths | 検証待ち | arXiv search-to-citation fallback now rejects error/malformed/inconsistent payloads and preserves verdict=error (external-input tests). Unreadable bib, resolver exceptions and publisher landing errors still need their own closure evidence. |
 | P68 | 6 duplicate implementations/docstring promise | 検証待ち | Trace Crossref/arXiv/BibTeX/DOI consumers before deduplication; verify promised search routes. |
 | P69 | 7.2 missing/stale tool guidance | 検証待ち | Correct names, routes, supported callable advice and guidance organization; old counts are historical. |
 | P70 | 7.1; 7.2 generated inventory proposal | 方針変更 | TOOLS.md inventory gate is retired. Live discovery/catalog is the source of truth, not a new committed generated index. |
@@ -168,7 +168,13 @@ resource closure and unchanged success metadata, not actual image fidelity.
 Partial output files may remain after failure; cleanup does not delete outputs.
 No live MCP client or editable installation was changed.
 
-1. Continue external-input safety (P62–P67), then language heuristics and
+The arXiv search/citation follow-up adds offline external-response tests. Search
+parameter encoding was already correct; error-feed/root validation and fallback
+error propagation were strengthened. The five-file focused lane (the prior four
+files plus test_paper_writing_external_inputs.py) passes 680 tests. No live API,
+download, bibliography modification or MCP reconnection occurred.
+
+1. Continue download integrity and external-input safety (P63–P67), then language heuristics and
    deduplication; other PDF consumers remain separate P50 follow-up work.
 2. Review missing pattern producers (P58) and remaining ordering/context rules
    (P59); do not confuse execution-status coverage with semantic correctness.

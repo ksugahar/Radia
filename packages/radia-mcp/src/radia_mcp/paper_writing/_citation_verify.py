@@ -568,8 +568,29 @@ def paper_writing_verify_citation(
     if search_arxiv_if_no_doi and (candidate_title or claim):
         from ._arxiv_source import paper_writing_arxiv_search
         query = candidate_title or claim
-        hits = paper_writing_arxiv_search(query, max_results=arxiv_max_results)
-        if "error" in hits or hits.get("n_results", 0) == 0:
+        try:
+            hits = paper_writing_arxiv_search(query, max_results=arxiv_max_results)
+            if not isinstance(hits, dict) or hits.get("error"):
+                raise ValueError(hits.get("error") if isinstance(hits, dict) else "invalid search response")
+            if (type(hits.get("n_results")) is not int
+                    or not isinstance(hits.get("papers"), list)
+                    or hits["n_results"] != len(hits["papers"])
+                    or not all(isinstance(p, dict)
+                               and isinstance(p.get("title"), str) and p["title"].strip()
+                               and isinstance(p.get("arxiv_id"), str) and p["arxiv_id"].strip()
+                               for p in hits["papers"])):
+                raise ValueError("incomplete or inconsistent search response")
+        except Exception as e:  # noqa: BLE001
+            return {
+                "verdict": "error",
+                "matching_key": None,
+                "candidates": [],
+                "suggested_bibtex": None,
+                "verification_method": "arxiv-search",
+                "advice": (f"arXiv verification could not complete: {e}. "
+                           "Do not infer that no candidate exists; investigate or retry the search."),
+            }
+        if hits["n_results"] == 0:
             return {
                 "verdict": "no_candidate_found",
                 "matching_key": None,

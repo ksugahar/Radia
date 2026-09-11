@@ -411,6 +411,7 @@ def paper_writing_arxiv_search(
             timeout=30,
         )
         r.raise_for_status()
+        response_text = r.text
     except Exception as e:  # noqa: BLE001
         return {"error": f"arXiv search failed: {e}"}
 
@@ -421,9 +422,11 @@ def paper_writing_arxiv_search(
         "arxiv": "http://arxiv.org/schemas/atom",
     }
     try:
-        root = ET.fromstring(r.text)
-    except ET.ParseError as e:
+        root = ET.fromstring(response_text)
+    except (ET.ParseError, TypeError) as e:
         return {"error": f"arXiv search XML parse error: {e}"}
+    if root.tag != "{http://www.w3.org/2005/Atom}feed":
+        return {"error": "arXiv search returned an unexpected document (not an Atom feed)"}
 
     papers = []
     for entry in root.findall("atom:entry", ns):
@@ -440,6 +443,8 @@ def paper_writing_arxiv_search(
             summary_text = re.sub(r"\s+", " ", summary).strip()
             return {"error": f"arXiv API error: {summary_text or title}"}
         aid = _normalize_arxiv_id(id_url) if id_url else ""
+        if not title or not re.fullmatch(r"(?:\d{4}\.\d{4,5}|[A-Za-z][\w.-]*/\d{7})", aid):
+            return {"error": "arXiv API returned an invalid paper identifier or missing title"}
         # PDF link
         pdf_url = ""
         abs_url = ""
