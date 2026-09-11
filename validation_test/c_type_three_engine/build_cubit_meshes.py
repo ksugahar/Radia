@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import platform
 import subprocess
 import time
@@ -330,8 +331,8 @@ def _gap_inventory(path: Path) -> dict[str, object]:
         # `gap_size` from 2.5 mm to 1.28 mm and move this from 2.00 to 2.55.
         "z_resolution_indicator": (gap_height / maximum_z_span
                                    if maximum_z_span > 0.0 else 0.0),
-        # The count that the indicator only approximates: how many distinct
-        # elements a line actually crosses on its way through the gap.
+        # A separate probe measurement; the z-span indicator is not a count
+        # of the elements crossed by these lines.
         "line_profile": profile,
     }
 
@@ -541,6 +542,37 @@ def _gap_line_profile(mesh, gap_height: float,
                 "statement about the whole gap",
     }
 
+def _gap_acceptance(inventory, required, factor):
+    """Accept only observed, covered traversals on the named probe lines.
+
+    Curved point location cannot certify global overlap freedom or recover
+    intervals missed by sampling; this is a probe gate, not a mesh certificate.
+    """
+    if isinstance(required, bool) or int(required) != required or required < 1:
+        raise ValueError("gap-elements-across must be a positive integer")
+    if not math.isfinite(factor) or factor <= 0:
+        raise ValueError("gap-segment-factor must be positive and finite")
+    height = float(inventory["gap_height_m"])
+    if not math.isfinite(height) or height <= 0:
+        raise ValueError("gap height must be positive and finite")
+    profile = inventory["line_profile"]
+    lines = profile["lines"]
+    segment_limit = factor * height / required
+    curved_covered = bool(lines) and all(
+        math.isfinite(row["curved"]["covered_m"])
+        and abs(row["curved"]["covered_m"] - height) < 1.0e-9
+        for row in lines)
+    passed = bool(
+        inventory["elements"] > 0 and lines
+        and profile["minimum_segments"] >= required
+        and profile["curved_minimum_segments"] >= required
+        and profile["clean_traversal"] and curved_covered
+        and profile["sampling_is_stable"]
+        and 0 < profile["maximum_segment_m"] <= segment_limit
+        and 0 < profile["curved_maximum_segment_m"] <= segment_limit)
+    return passed, segment_limit
+
+
 def build(options: argparse.Namespace) -> dict[str, object]:
     import ngsolve as ng
 
@@ -648,10 +680,9 @@ def build(options: argparse.Namespace) -> dict[str, object]:
     volume_error = None if iron_volume is None else (
         (iron_volume - EXACT_IRON_VOLUME_M3) / EXACT_IRON_VOLUME_M3
     )
-    # The historical gate accepted TWO elements across the gap.  It stays the
-    # default so an existing family does not silently change verdict, but it
-    # is now a named, recorded requirement that a caller can raise: two
-    # elements through the gap is not a field-accuracy claim.
+    # The historical gate bounded maximum z-span by half the gap height; that
+    # was not a two-element traversal count.  The new default count of two
+    # preserves the observed old-family verdicts, not the old predicate.
     required_across_gap = float(options.gap_elements_across)
     # The requirement is on the MEASURED crossing count, not on the indicator:
     # sizing a volume does not by itself guarantee a division count, so the
@@ -662,17 +693,8 @@ def build(options: argparse.Namespace) -> dict[str, object]:
     # the nominal traversal is gap_height/N, and 1.2 times that is the mesh
     # DESIGN tolerance -- not an accuracy guarantee.  Raising N therefore
     # tightens both requirements together.
-    profile = gap_inventory["line_profile"]
-    nominal = gap_inventory["gap_height_m"] / max(required_across_gap, 1)
-    segment_limit = float(options.gap_segment_factor) * nominal
-    gap_is_resolved = bool(
-        gap_inventory["elements"] > 0
-        and profile["minimum_segments"] >= required_across_gap
-        and profile["curved_minimum_segments"] >= required_across_gap
-        and profile["clean_traversal"]
-        and profile["maximum_segment_m"] <= segment_limit
-        and profile["curved_maximum_segment_m"] <= segment_limit
-    )
+    gap_is_resolved, segment_limit = _gap_acceptance(
+        gap_inventory, required_across_gap, float(options.gap_segment_factor))
     result = {
         "schema": "radia.validation.c-type-cubit-meshes.v1",
         "passed": bool(

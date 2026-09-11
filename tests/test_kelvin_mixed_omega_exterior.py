@@ -89,7 +89,8 @@ def _coil():
 
 
 def _solve(mesh, coil, mu_r_iron=1.0, kelvin_scale=1.0,
-           kelvin_interface="kelvin_int", exact_exterior_source=False):
+           kelvin_interface="kelvin_int", exact_exterior_source=False,
+           return_system=False):
     import ngsolve as ng
     import radia as rad
     from radia.kelvin_material import make_kelvin_mu_cf, MU_0
@@ -123,7 +124,8 @@ def _solve(mesh, coil, mu_r_iron=1.0, kelvin_scale=1.0,
             kelvin_source_h=(
                 rad.KelvinRadiaFieldStrength(coil, OFFSET, RADIUS, (0.0, 0.0, 0.0))
                 if exact_exterior_source else None),
-            total_source_h=None, total_source_materials=())
+            total_source_h=None, total_source_materials=(),
+            return_system=return_system)
     return result
 
 
@@ -253,6 +255,13 @@ def test_assembled_system_is_not_retained_by_default():
     assert result["system"] is None
     assert set(result["assembled_energy"]) >= {"energy", "half_xAx", "b_dot_x"}
     assert result["linear_residual"]["free_dofs"]["relative"] < 1.0e-8
+
+
+def test_assembled_system_is_available_on_explicit_request():
+    result = _solve(_kelvin_mesh(), _coil(), return_system=True)
+    system = result["system"]
+    assert system["bilinear_form"].mat.height == result["fes"].ndof
+    assert len(system["linear_form"].vec) == result["fes"].ndof
 
 
 def test_kelvin_material_without_its_interface_is_rejected():
