@@ -38,8 +38,10 @@ def _payload() -> dict:
                 "user_attrs": [{"name": "trial-tag", "value_json": '"t1"'}],
                 "system_attrs": [{"name": "worker-id", "value_json": "3"}],
                 "intermediate_values": [{"step": 0, "value": 1.5}],
-                "constraint_present": True,
-                "constraints": [-0.5, 0.0],
+                "constraints": [
+                    {"name": "limit", "value": -0.5},
+                    {"name": "margin", "value": 0.0},
+                ],
                 "datetime_start": "2026-08-28T10:00:00.000000",
                 "datetime_complete": "2026-08-28T10:00:01.500000",
             },
@@ -51,7 +53,6 @@ def _payload() -> dict:
                 "user_attrs": [],
                 "system_attrs": [],
                 "intermediate_values": [],
-                "constraint_present": False,
                 "constraints": [],
                 "datetime_start": "2026-08-28T10:00:02.000000",
                 "datetime_complete": "2026-08-28T10:00:02.100000",
@@ -84,8 +85,10 @@ def test_roundtrip_through_real_sqlite_storage(tmp_path):
     assert first["params"][0]["name"] == "x-1"
     assert first["user_attrs"] == source["trials"][0]["user_attrs"]
     assert first["system_attrs"] == source["trials"][0]["system_attrs"]
-    assert first["constraint_present"] is True
-    assert first["constraints"] == [-0.5, 0.0]
+    assert first["constraints"] == [
+        {"name": "limit", "value": -0.5},
+        {"name": "margin", "value": 0.0},
+    ]
     assert first["intermediate_values"] == [{"step": 0, "value": 1.5}]
     assert first["datetime_start"] == "2026-08-28T10:00:00.000000"
     assert first["datetime_complete"] == "2026-08-28T10:00:01.500000"
@@ -94,6 +97,6 @@ def test_roundtrip_through_real_sqlite_storage(tmp_path):
 def test_bridge_refuses_an_unpinned_optuna(monkeypatch):
     import optuna
 
-    monkeypatch.setattr(optuna, "__version__", "4.8.0")
-    with pytest.raises(RuntimeError, match="requires optuna==4.9.0"):
+    monkeypatch.setattr(optuna, "__version__", "4.9.0")
+    with pytest.raises(RuntimeError, match="requires optuna==5.0.0"):
         bridge._optuna()

@@ -104,13 +104,15 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def select_impact_tests(paths: list[str], changed: list[str] | None) -> list[str]:
-    """Select only registered lightweight regressions; unknown bases fail broad."""
+    """Match files exactly and trailing-slash directories recursively; unknown bases fail broad."""
     rules = json.loads(MANIFEST.read_text(encoding='utf-8')).get('impact_rules', {})
     selected = list(paths)
     if changed is not None and 'tests/test_tier_manifest.json' in changed:
         changed = None
     for source, tests in rules.items():
-        if changed is None or source in changed or any(test in changed for test in tests):
+        if (changed is None or source in changed
+                or (source.endswith('/') and any(path.startswith(source) for path in changed))
+                or any(test in changed for test in tests)):
             selected.extend(tests)
     selected = list(dict.fromkeys(selected))
     for path in selected:

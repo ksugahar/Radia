@@ -1,5 +1,5 @@
 function distribution=json_to_distribution(encoded)
-%JSON_TO_DISTRIBUTION Deserialize Optuna 4.9 distribution JSON.
+%JSON_TO_DISTRIBUTION Deserialize Optuna 5 distribution JSON.
 arguments
     encoded {mustBeTextScalar}
 end

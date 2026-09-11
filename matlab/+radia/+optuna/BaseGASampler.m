@@ -54,7 +54,7 @@ classdef (Abstract) BaseGASampler < radia.optuna.BaseSampler
                     "Population size must be set.");
             end
             generation=maxGeneration+(count>=obj.population_size);
-            trial.set_system_attr(obj.generationAttribute(),generation);
+            trial.setInternalAttribute(obj.generationAttribute(),generation);
         end
 
         function population=get_population(obj,study,generation)
@@ -74,7 +74,7 @@ classdef (Abstract) BaseGASampler < radia.optuna.BaseSampler
                 return
             end
             key=matlab.lang.makeValidName(obj.parentAttribute(generation));
-            attributes=study.system_attrs();
+            attributes=study.internalAttributes();
             if isfield(attributes,key)
                 numbers=reshape(double(attributes.(key)),1,[]);
                 trials=study.get_trials();
@@ -83,7 +83,7 @@ classdef (Abstract) BaseGASampler < radia.optuna.BaseSampler
             end
             selected=obj.select_parent(study,generation);
             numbers=reshape([selected.Number],1,[]);
-            study.set_system_attr(obj.parentAttribute(generation), ...
+            study.setInternalAttribute(obj.parentAttribute(generation), ...
                 numbers);
             trials=study.get_trials();
             population=trials(ismember([trials.Number],numbers));

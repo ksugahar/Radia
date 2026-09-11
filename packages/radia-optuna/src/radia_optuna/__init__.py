@@ -5,8 +5,8 @@ from __future__ import annotations
 from importlib.resources import files
 from pathlib import Path
 
-__version__ = "0.1.6"
-ORACLE_VERSION = "4.9.0"
+__version__ = "0.2.0"
+ORACLE_VERSION = "5.0.0"
 
 
 def _staged_matlab_path() -> Path:

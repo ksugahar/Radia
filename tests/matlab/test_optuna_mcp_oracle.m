@@ -10,7 +10,7 @@ testCase.TestData.RemovePath=~any(strcmpi(entries,string(matlabDirectory)));
 if testCase.TestData.RemovePath, addpath(matlabDirectory); end
 testCase.TestData.MatlabDirectory=matlabDirectory;
 fixture=fullfile(root,"tests","matlab","fixtures", ...
-    "optuna49_mcp_oracle.json");
+    "optuna50_mcp_oracle.json");
 testCase.TestData.Oracle=jsondecode(fileread(fixture));
 end
 
@@ -25,7 +25,7 @@ oracle=testCase.TestData.Oracle;
 verifyEqual(testCase,string(oracle.schema), ...
     "radia.test.optuna-upstream-mcp-oracle.v1");
 verifyEqual(testCase,string(oracle.transport),"stdio");
-verifyEqual(testCase,string(oracle.optuna_version),"4.9.0");
+verifyEqual(testCase,string(oracle.optuna_version),"5.0.0");
 verifyEqual(testCase,string(oracle.optuna_mcp_version),"0.2.0");
 verifyEqual(testCase,string(oracle.mcp_server_name),"Optuna");
 verifyNotEmpty(testCase,string(oracle.mcp_server_reported_version));

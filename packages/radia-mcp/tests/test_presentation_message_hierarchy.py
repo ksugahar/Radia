@@ -120,6 +120,54 @@ def test_footer_and_citation_do_not_count_as_takeaway(tmp_path: Path) -> None:
     assert slide["issues"] == ["bottom_takeaway_missing"]
 
 
+def test_lab_citation_strip_at_936_percent_is_not_a_takeaway(tmp_path: Path) -> None:
+    """The IGTE layout starts citations just above the old 0.94 boundary."""
+    prs = Presentation()
+    prs.slide_width = Inches(13.333)
+    prs.slide_height = Inches(7.5)
+    _add_title_slide(prs)
+    slide = prs.slides.add_slide(prs.slide_layouts[5])
+    slide.shapes.title.text = "Problem and proposed method"
+    citation = slide.shapes.add_textbox(
+        Inches(0.6), Inches(7.02), Inches(9.0), Inches(0.25)
+    )
+    citation.text_frame.text = "[2] Kuriyama et al., IEEE Trans. Magn., 2019"
+    pptx_path = tmp_path / "citation-at-936-percent.pptx"
+    prs.save(pptx_path)
+
+    result = presentation_check_slide_message_hierarchy(str(pptx_path))
+
+    report = result["slides"][1]
+    assert report["has_bottom_takeaway"] is False
+    assert report["bottom_takeaway"] == ""
+    assert report["issues"] == ["bottom_takeaway_missing"]
+
+
+def test_takeaway_selection_uses_visual_order_not_xml_order(tmp_path: Path) -> None:
+    prs = Presentation()
+    prs.slide_width = Inches(13.333)
+    prs.slide_height = Inches(7.5)
+    _add_title_slide(prs)
+    slide = prs.slides.add_slide(prs.slide_layouts[5])
+    slide.shapes.title.text = "Admittance at both ends"
+    lower = slide.shapes.add_textbox(
+        Inches(0.6), Inches(6.80), Inches(9.0), Inches(0.25)
+    )
+    lower.text_frame.text = "Late-added lower annotation"
+    takeaway = slide.shapes.add_textbox(
+        Inches(0.0), Inches(6.42), Inches(13.333), Inches(0.60)
+    )
+    takeaway.text_frame.text = "One function has to hold from DC to deep skin."
+    pptx_path = tmp_path / "visual-order.pptx"
+    prs.save(pptx_path)
+
+    result = presentation_check_slide_message_hierarchy(str(pptx_path))
+
+    assert result["slides"][1]["bottom_takeaway"] == (
+        "One function has to hold from DC to deep skin."
+    )
+
+
 def test_structural_slide_is_skipped(tmp_path: Path) -> None:
     prs = Presentation()
     prs.slide_width = Inches(13.333)

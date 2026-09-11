@@ -342,6 +342,22 @@ private:
         }
 
         std::unique_ptr<ScriptNode> sc;
+        /* A group's braces are an attachment boundary even when it is empty.
+         * Leaving its apostrophes as sibling characters would flatten {a+b}'
+         * into a+b', and a^2{}' into an invalid double superscript. */
+        skip_space();
+        const bool groupedPrime = literalSpaceDepth_ == 0 &&
+                                  base->tag() == Node::kLine && peek() == '\'';
+        if (groupedPrime) {
+            sc = std::make_unique<ScriptNode>();
+            sc->base.push_back(std::move(base));
+            sc->hasSup = true;
+            while (peek() == '\'') {
+                ++p_;
+                sc->sup.push_back(make_char(TF_SYMBOL, 0x2032));
+                skip_space();
+            }
+        }
         for (;;) {
             skip_space();
             char c = peek();
@@ -352,7 +368,12 @@ private:
                 sc->base.push_back(std::move(base));
             }
             if (c == '_') { sc->sub = parse_arg(); sc->hasSub = true; }
-            else          { sc->sup = parse_arg(); sc->hasSup = true; }
+            else {
+                NodeList argument = parse_arg();
+                if (!groupedPrime) sc->sup.clear();
+                for (auto& node : argument) sc->sup.push_back(std::move(node));
+                sc->hasSup = true;
+            }
         }
         if (sc) return sc;
         return base;

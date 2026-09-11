@@ -1,5 +1,5 @@
 classdef (Abstract) BaseSampler < handle
-    %BASESAMPLER Common type for Optuna 4.9 sampler implementations.
+    %BASESAMPLER Common type for Optuna 5 sampler implementations.
 
     methods
         function before_trial(obj,study,trial)

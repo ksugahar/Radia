@@ -808,6 +808,21 @@ def minimum_visible_font_pt(medium: str) -> float:
     )
 
 
+# Keywords that were never parameters of ``lab_savefig``. Passed anyway they
+# used to flow into ``fig.savefig`` and raise there, so the traceback blamed the
+# backend and the author kept believing the option existed.
+_RETIRED_SAVEFIG_KWARGS = {
+    "check_overlap": (
+        "overlap checking is not optional. enforce_readable() runs on every "
+        "save; pass allow_unreadable=True to write a figure regardless."
+    ),
+    "check_readable": (
+        "readability checking is not optional. enforce_readable() runs on "
+        "every save; pass allow_unreadable=True to write one regardless."
+    ),
+}
+
+
 def lab_savefig(
     fig,
     path: str,
@@ -848,6 +863,18 @@ def lab_savefig(
     from pathlib import Path
 
     from ._readability import enforce_readable
+
+    # A keyword this function never had used to reach ``fig.savefig`` through
+    # **kwargs and fail there with matplotlib's own message, which reads as a
+    # backend problem rather than a call-site mistake. Two figures shipped with
+    # ``check_overlap=False`` written at the call site and the author believing
+    # the check was configurable and switched on.
+    for name in _RETIRED_SAVEFIG_KWARGS:
+        if name in kwargs:
+            raise TypeError(
+                f"lab_savefig() has no argument {name!r}: "
+                + _RETIRED_SAVEFIG_KWARGS[name]
+            )
 
     # "read めない図は作らない" -- the size floor below is one way a figure is
     # unreadable; a flattened panel and text lying on the data are others, and

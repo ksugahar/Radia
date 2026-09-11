@@ -419,6 +419,9 @@ Uses CompactAMG as sub-solver for gradient and nodal auxiliary spaces.
 Construct and call Update outside ngsolve.TaskManager. An active context raises
 RuntimeError; applying an already-built preconditioner may run inside TaskManager.
 
+Requires a lowest-order HCurl space (order=1, nograds=True); any other space
+raises RuntimeError. For order >= 2 use NGSolve's bddc preconditioner.
+
 Parameters:
 
 mat : SparseMatrix (real)
@@ -502,6 +505,9 @@ Use with COCRSolver (complex symmetric) or GMRESSolver (general).
 
 Construct and call Update outside ngsolve.TaskManager. An active context raises
 RuntimeError; applying an already-built preconditioner may run inside TaskManager.
+
+Requires a lowest-order HCurl space (order=1, nograds=True); any other space
+raises RuntimeError. For order >= 2 use NGSolve's bddc preconditioner.
 
 Parameters:
 

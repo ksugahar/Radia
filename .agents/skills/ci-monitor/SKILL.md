@@ -66,6 +66,12 @@ python .agents/skills/ci-monitor/monitor.py --branch v4.27.0 --auto 1
 python .agents/skills/ci-monitor/monitor.py --branch main   --auto 3
 ```
 
+`--branch <ref>` also applies when `--auto` is omitted (default count: 3).
+Automatic discovery is a convenience, not an exact release-SHA gate: it can
+select older runs on the same branch. For release acceptance, resolve and pass
+the explicit run IDs for the candidate SHA. Explicit IDs bypass discovery.
+`--poll` and `--tail` must be positive; a negative `--auto` is rejected.
+
 ## Output format
 
 Per state change (per run):
@@ -78,6 +84,9 @@ Per state change (per run):
 When ALL watched runs are completed, exits with:
 - 0 if every run was `success`
 - 1 if any run was `failure` / `cancelled` / `timed_out`
+- 2 if run discovery/state retrieval fails or no runs are supplied. This is
+  unverified CI, not evidence that the workflow itself failed. Inspect the
+  printed monitor error before retrying; do not infer release readiness.
 
 After exit, on any failure run, the script prints:
 

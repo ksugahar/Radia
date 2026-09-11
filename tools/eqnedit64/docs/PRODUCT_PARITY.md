@@ -1,5 +1,50 @@
 # Eqnedit product parity policy
 
+## Native rendering acceptance (3.0.16)
+
+Every supported decoration must render its own mathematical shape, not merely
+nonempty ink. A valid TeX/MathML result does not certify the native canvas.
+Keep the decoration pairwise comparisons and complete palette sweep, including
+styled selection and script fragments with explicit bases.
+
+Native `Node::Tag` dispatch must contain an explicit case for every enumerator
+and no default. `SizeNode` is consumed as list state; reaching scalar dispatch
+is a logic error. The unused legacy `FontNode` and `RMNode` are unsupported and
+must throw a named error, never produce an empty layout. New tags require an
+explicit layout decision under MSVC `/W4 /WX /w14062` in release and CMake CI.
+The old generic layout fallback is forbidden. Static coverage and C++ runtime
+rejection tests protect separate failure modes.
+
+## Palette key acceptance
+
+A key is a promise about what pressing it produces, so the face is part of the
+contract and not decoration. Two rules hold, both checked from the source and
+the shipped font rather than from a rendered window.
+
+A symbol key must draw the character its command inserts. `\star` renders as
+U+22C6, so a key for it may not show U+2605; `\frown` and `\smile` are U+2322
+and U+2323, not the intersection and union signs. A face may be a word only
+where the inserted character has no standalone shape, such as the combining
+overlay behind `\not`.
+
+Every face character must be in the embedded Latin Modern Math cmap.
+`pick_button_font` gathers all faces into one sample and accepts a font only if
+it owns the whole sample, so an unavailable character does not blank its own
+key — it rejects the math font and redraws every palette in a fallback. That
+all-or-nothing gate stays; the sample is what must be kept clean.
+
+The cmap check predicts that choice. `--self-test` observes it: it runs the
+production chooser, reads back the physical face, and exits 243 naming the
+substitute when the palette is not drawing in Latin Modern Math. Keep both —
+the static check says which character is at fault, the runtime check says
+whether the shipped binary actually got the font.
+
+These are native-specific implementation checks. Web rendering belongs to
+MathJax; shared palette/TeX/Office contracts still require both editions' tests.
+Publish the matching Web build on the laboratory homepage, even when the only
+Web source change is release identification. Do not claim public completion
+from a successful binary upload or from the browser tests alone.
+
 Eqnedit64.exe と Web/JS 数式エディタは、Radia の `tools/eqnedit64` で一緒に
 保守する同一製品系列である。研究室ホームページは Web 版の公開先であり、正本では
 ない。TeX を正本とし、次の優先順位を守る。
@@ -103,3 +148,27 @@ PowerPointの通常貼り付け受入試験は、画面外の一時プレゼン�
   packageのlauncherや補助関数は必要に応じて同じEXEをsubprocess実行する薄い利用者であり、
   CLIの正本ではない。Web版にnative CLIを移植しない。
 - 仕様、実装、自動試験を同じ変更で更新する。引き継ぎメモだけを規範にしない。
+# Palette semantic acceptance
+
+Every offered key must pass the independent [palette intent contract](PALETTE_INTENT.md)
+and its checked expectations in `palette_intent.json`. Catalogue completeness,
+distinct drawings and TeX round trips alone do not establish the intended meaning.
+Native and Web insertions are checked separately; an unreviewed key fails closed.
+
+## Web first-copy readiness
+
+The Web Office-copy button stays disabled with a preparation explanation until
+the primary CHTML typesetter, followed by the MathML converter, has initialized
+bold-symbol and cancellation macros. Verify synchronous conversion before
+enabling copy. Initialization failure leaves copy disabled with a reload
+explanation; it must not masquerade as successful readiness. Defer the initial
+expression render until readiness too. Palette preview rendering follows this
+preparation but must not delay enabling Office copy.
+
+Keep clipboard writing synchronous inside the user gesture. This readiness
+change does not alter the inline MathML payload, 18 pt convention, or native
+clipboard path. The cold-browser test delays the cancellation package and holds
+all palette previews, checks the disabled state, then captures the actual copy
+event before any preview completes. The first payload must contain bold-italic
+and cancellation markup, without MathJax errors. It does not modify the user's
+system clipboard. Website hand testing remains required before publication.
