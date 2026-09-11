@@ -120,6 +120,15 @@ jobs:
       - name: Build native targets
         run: cmake --build build_cmake --config Release --parallel 2
 
+      - name: Test font observation failure modes without native execution
+        run: python -m pytest tests/test_font_session_observation.py -q
+
+      - name: Observe first executable font lifecycles
+        run: >-
+          pwsh -NoProfile -File build\test_font_session.ps1
+          -AppPath build_cmake\Release\Eqnedit64.exe -Iterations 32
+          -OutputPath font-session-first.json
+
       - name: Build Eqnedit64 Python wheel candidate
         working-directory: .
         run: |
@@ -181,6 +190,15 @@ jobs:
         run: >-
           pwsh -NoProfile -File build\test_font_session.ps1
           -AppPath build_cmake\Release\Eqnedit64.exe -Iterations 32
+          -OutputPath font-session-after-suites.json
+
+      - name: Preserve font-host acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eqnedit64-font-session
+          path: tools/eqnedit64/font-session-*.json
+          if-no-files-found: warn
 
       - name: Check command-line image artifacts
         run: |
