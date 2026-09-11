@@ -3,9 +3,110 @@ import importlib
 
 import pytest
 
+from radia_mcp.paper_writing.plans import T8, T18, T20
+
 from radia_mcp.paper_writing.plans.T9 import paper_writing_reviewer_2_trigger_summary
 from radia_mcp.paper_writing.plans.T18 import paper_writing_run_full_workflow
 from radia_mcp.paper_writing._em_paper_style import paper_writing_em_submission_gate
+
+
+HEALTH_TOOLS = [
+    ("T1", "paper_writing_abstract_strength"),
+    ("T2", "paper_writing_contribution_clarity_score"),
+    ("T3", "paper_writing_claim_quantification"),
+    ("T4", "paper_writing_limitation_statement_presence"),
+    ("T5", "paper_writing_related_work_density"),
+    ("T6", "paper_writing_figure_referencing_coverage"),
+    ("T7", "paper_writing_given_new_ordering"),
+    ("T10", "paper_writing_title_abstract_conclusion_triangle"),
+    ("T11", "paper_writing_reproducibility_open_science_check"),
+    ("T14", "paper_writing_discussion_structure_4_elements"),
+]
+
+
+@pytest.fixture
+def health_detectors(monkeypatch):
+    for _, name in HEALTH_TOOLS:
+        monkeypatch.setattr(T8, name, lambda *a, **kw: {"score": 10, "comments": []})
+
+
+@pytest.mark.parametrize("tid,name", HEALTH_TOOLS)
+@pytest.mark.parametrize("mode", ["exception", "empty", "none", "error", "skip", "nan", "range", "bool"])
+def test_health_failed_detector_propagates_to_workflow(monkeypatch, health_detectors, tid, name, mode):
+    def failed(*a, **kw):
+        if mode == "exception":
+            raise RuntimeError("injected")
+        return {"empty": {}, "none": None, "error": {"error": "injected", "score": 10},
+                "skip": {"status": "skip", "score": 10}, "nan": {"score": float("nan")},
+                "range": {"score": 11}, "bool": {"score": True}}[mode]
+    monkeypatch.setattr(T8, name, failed)
+    health = T8.paper_writing_health_report("text", bib="bib", abstract="abstract")
+    assert health["status"] == "partial"
+    assert health["overall_score"] is None
+    assert health["overall_severity"] == "UNKNOWN"
+    assert health["unknown_tools"] == [tid]
+    assert health["priority_issues"][0]["severity"] == "UNKNOWN"
+    adaptive = T20.paper_writing_adaptive_health_report("text", bib="bib", abstract="abstract", phase="camera_ready")
+    assert adaptive["status"] == "partial"
+    assert adaptive["overall_score"] is None
+    assert any(p["tool"] == tid for p in adaptive["adjusted_priority_issues"])
+    workflow = T18.paper_writing_run_full_workflow("text", bib="bib", abstract="abstract",
+                                                 skip_phases="phase1,phase3,phase4,phase5,phase6")
+    assert workflow["status"] == "partial"
+    assert workflow["execution_summary"]["n_errors"] == 1
+    assert "致命傷無し" not in workflow["overall_summary"]
+
+
+def test_health_complete_clean_control(health_detectors):
+    result = T20.paper_writing_adaptive_health_report("text", bib="bib", abstract="abstract")
+    assert result["status"] == "complete"
+    assert result["overall_score"] == 10
+
+
+@pytest.mark.parametrize("skip", ["", ",".join(tid for tid, _ in HEALTH_TOOLS)])
+def test_health_all_failed_or_skipped_is_unavailable(monkeypatch, health_detectors, skip):
+    for _, name in HEALTH_TOOLS:
+        monkeypatch.setattr(T8, name, lambda *a, **kw: {"error": "injected"})
+    result = T8.paper_writing_health_report("text", bib="bib", abstract="abstract", skip=skip)
+    assert result["status"] == "unavailable"
+    assert result["overall_score"] is None
+    assert "構造は整っている" not in result["summary_comment"]
+
+
+def test_health_partial_retains_confirmed_critical_finding(monkeypatch, health_detectors):
+    monkeypatch.setattr(T8, HEALTH_TOOLS[2][1], lambda *a, **kw: {"score": 2, "comments": ["confirmed"]})
+    result = T8.paper_writing_health_report("text")  # missing abstract and bibliography
+    assert result["status"] == "partial"
+    assert result["tools_skipped"] == ["T1", "T5"]
+    assert result["priority_issues"][0]["score"] == 2
+    assert result["priority_issues"][0]["severity"] == "CRITICAL"
+
+
+@pytest.mark.parametrize("payload", [None, {}, {"error": "injected"}])
+def test_adaptive_invalid_health_result_is_unavailable(monkeypatch, payload):
+    monkeypatch.setattr(T8, "paper_writing_health_report", lambda *a, **kw: payload)
+    result = T20.paper_writing_adaptive_health_report("text")
+    assert result["status"] == "unavailable"
+    assert result["overall_score"] is None
+    assert result["error"]
+
+
+def test_adaptive_health_exception_is_unavailable(monkeypatch):
+    def crash(*a, **kw):
+        raise RuntimeError("injected")
+    monkeypatch.setattr(T8, "paper_writing_health_report", crash)
+    result = T20.paper_writing_adaptive_health_report("text")
+    assert result["status"] == "unavailable"
+    assert result["overall_score"] is None
+
+
+@pytest.mark.parametrize("payload", [None, {}, {"error": "injected"}])
+def test_workflow_invalid_phase2_result_is_not_complete(monkeypatch, payload):
+    monkeypatch.setattr(T20, "paper_writing_adaptive_health_report", lambda *a, **kw: payload)
+    result = T18.paper_writing_run_full_workflow("text", skip_phases="phase1,phase3,phase4,phase5,phase6")
+    assert result["status"] == "partial"
+    assert result["execution_summary"]["n_errors"] == 1
+    assert "致命傷無し" not in result["overall_summary"]
 
 
 DETECTORS = [

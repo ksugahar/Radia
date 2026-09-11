@@ -109,7 +109,7 @@ Paths in tables are relative to `src/radia_mcp/paper_writing` unless specified.
 | P56 | 5.4 T12 power/p-value | 修正済み | R::test_physical_unit_is_not_misread_as_p_value. |
 | P57 | 5.4 T3 unit boundaries/T4 absent discussion | 検証待ち | Reproduce “2 settings”, “Sec. 3.” and missing-section behavior. |
 | P58 | 5.4 T12/T13/T15 unreachable rules | 検証待ち | Trace T8/T16/T20 rule producers and add end-to-end signal tests. |
-| P59 | 5.4 sort/zero/substring/year/schema nits | 検証待ち | T8/T20 ordering, T17 zero, T20 substring, T5 year and nullable-score schemas need separate focused checks. |
+| P59 | 5.4 sort/zero/substring/year/schema nits | 検証待ち | T8/T20 now propagate partial/unavailable and nullable overall scores into T18 phase2; test_health_failed_detector_propagates_to_workflow covers all ten detectors with eight failure modes. All-skipped/all-failed, clean and retained-critical controls also pass. T8/T20 ordering, T17 zero, T20 substring, T5 year and other consumers remain separate checks. |
 
 ## External data, documentation and cross-cutting work
 
@@ -144,7 +144,13 @@ No editable installation or live client was changed.
 The subsequent P31/P32/P37/P38 fix adds 21 regression cases in the same four-file
 lane. These are source-level checks, not a live-client or full-package acceptance.
 
-1. Extend composite payload validation to other workflow phases. Submission-gate
+The T8 -> T20 -> T18 phase2 follow-up preserves unknown/skipped checks, suppresses
+incomplete overall scores, retains confirmed findings, and distinguishes detector
+failure from a confirmed critical manuscript defect. Context filtering does not
+erase UNKNOWN issues. The four-file focused lane now passes 593 tests; no live
+client or editable source was changed. T16/T17 and later phases are not certified.
+
+1. Extend composite payload validation to T16/T17 and T18 phase3/5/6. Submission-gate
    adapters and T9/T18 phase4 coverage are recorded in P12/P51/P52; lower-level
    detector accuracy and other nested consumers still need their own evidence.
 2. Work through external-input safety and PDF false-clean findings
