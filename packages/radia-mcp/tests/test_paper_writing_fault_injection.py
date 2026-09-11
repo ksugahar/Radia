@@ -3,7 +3,7 @@ import importlib
 
 import pytest
 
-from radia_mcp.paper_writing.plans import T8, T18, T20
+from radia_mcp.paper_writing.plans import T8, T16, T17, T18, T19, T20
 
 from radia_mcp.paper_writing.plans.T9 import paper_writing_reviewer_2_trigger_summary
 from radia_mcp.paper_writing.plans.T18 import paper_writing_run_full_workflow
@@ -22,6 +22,111 @@ HEALTH_TOOLS = [
     ("T11", "paper_writing_reproducibility_open_science_check"),
     ("T14", "paper_writing_discussion_structure_4_elements"),
 ]
+
+
+@pytest.mark.parametrize("consumer", [T16.paper_writing_root_cause_diagnosis, T17.paper_writing_next_5_actions])
+@pytest.mark.parametrize("mode", ["exception", "empty", "none", "error", "bad_score", "bad_issue"])
+def test_synthesis_rejects_invalid_health(monkeypatch, consumer, mode):
+    def failed(*a, **kw):
+        if mode == "exception":
+            raise RuntimeError("injected")
+        return {"empty": {}, "none": None, "error": {"error": "injected"},
+                "bad_score": {"status": "complete", "detailed_scores": {"T1": float("nan")},
+                              "priority_issues": []},
+                "bad_issue": {"status": "complete", "detailed_scores": {},
+                              "priority_issues": [{"score": float("nan")}]}}[mode]
+    monkeypatch.setattr(T8, "paper_writing_health_report", failed)
+    result = consumer("text")
+    assert result["status"] == "unavailable"
+    assert result["error"]
+
+
+def test_root_cause_requires_all_pattern_signals(monkeypatch):
+    monkeypatch.setattr(T8, "paper_writing_health_report", lambda *a, **kw: {
+        "status": "partial", "detailed_scores": {"T3": 0, "T4": 0, "T14": 0},
+        "priority_issues": [], "unknown_tools": ["T12"],
+    })
+    result = T16.paper_writing_root_cause_diagnosis("text")
+    assert result["status"] == "partial"
+    assert [p["pattern_name"] for p in result["detected_root_causes"]] == ["imrad_collapse"]
+    assert {"pattern_name": "unsupported_claim", "missing_signals": ["T12"]} in result["unknown_patterns"]
+
+
+def test_synthesis_complete_clean_control(monkeypatch):
+    scores = {signal: 10 for pattern in T16.ROOT_CAUSE_PATTERNS for signal in pattern["tool_signals"]}
+    monkeypatch.setattr(T8, "paper_writing_health_report", lambda *a, **kw: {
+        "status": "complete", "detailed_scores": scores, "priority_issues": [],
+    })
+    assert T16.paper_writing_root_cause_diagnosis("text")["status"] == "complete"
+    assert T17.paper_writing_next_5_actions("text")["status"] == "complete"
+
+
+def test_actions_separate_unknown_from_real_zero(monkeypatch):
+    monkeypatch.setattr(T8, "paper_writing_health_report", lambda *a, **kw: {
+        "status": "partial", "detailed_scores": {"T1": None, "T3": 0},
+        "priority_issues": [{"tool": "T1", "severity": "UNKNOWN", "score": None},
+                            {"tool": "T3", "severity": "CRITICAL", "score": 0}],
+    })
+    result = T17.paper_writing_next_5_actions("text")
+    assert result["status"] == "partial"
+    assert len(result["top_5_actions"]) == 1
+    assert result["top_5_actions"][0]["current_score"] == 0
+    assert result["unresolved_checks"][0]["tool"] == "T1"
+
+
+@pytest.fixture
+def clean_synthesis(monkeypatch):
+    monkeypatch.setattr(T16, "paper_writing_root_cause_diagnosis", lambda *a, **kw: {
+        "status": "complete", "n_root_causes": 0, "detected_root_causes": [],
+    })
+    monkeypatch.setattr(T17, "paper_writing_next_5_actions", lambda *a, **kw: {
+        "status": "complete", "top_5_actions": [{"tool_id": "T3"}],
+    })
+
+
+@pytest.mark.parametrize("phase", ["root", "actions", "rewrite", "response"])
+@pytest.mark.parametrize("mode", ["exception", "empty", "none", "error"])
+def test_later_workflow_failures_not_complete(monkeypatch, clean_synthesis, phase, mode):
+    from radia_mcp.paper_writing import tools
+    module, name = {
+        "root": (T16, "paper_writing_root_cause_diagnosis"),
+        "actions": (T17, "paper_writing_next_5_actions"),
+        "rewrite": (T19, "paper_writing_rewrite_suggest"),
+        "response": (tools, "paper_writing_generate_response_letter"),
+    }[phase]
+    def failed(*a, **kw):
+        if mode == "exception":
+            raise RuntimeError("injected")
+        return {"empty": {}, "none": None, "error": {"error": "injected"}}[mode]
+    monkeypatch.setattr(module, name, failed)
+    result = T18.paper_writing_run_full_workflow("text", phase="revision", reviewer_comments="Please clarify.",
+                                               skip_phases="phase1,phase2,phase4")
+    assert result["status"] == "partial"
+    assert result["errors"]
+    assert "Workflow 完了" not in result["overall_summary"]
+    if phase == "root":
+        assert result["phases"]["phase3_synthesize"]["root_causes_detected"] is None
+    if phase == "actions":
+        assert "phase5_suggest" not in result["phases"]
+
+
+def test_later_workflow_complete_control(clean_synthesis):
+    result = T18.paper_writing_run_full_workflow("text", phase="revision", reviewer_comments="Please clarify.",
+                                               skip_phases="phase1,phase2,phase4")
+    assert result["status"] == "complete"
+    assert result["phases"]["phase5_suggest"]["candidates"]
+    assert result["phases"]["phase6_response_letter"]["sample_response"]
+
+
+def test_real_health_failures_reach_phase3(monkeypatch, health_detectors):
+    monkeypatch.setattr(T8, HEALTH_TOOLS[0][1], lambda *a, **kw: {"error": "injected"})
+    result = T18.paper_writing_run_full_workflow("text", bib="bib", abstract="abstract",
+                                               skip_phases="phase1,phase2,phase4,phase5,phase6")
+    assert result["status"] == "partial"
+    stage = result["phases"]["phase3_synthesize"]
+    assert stage["status"] == "partial"
+    assert stage["unknown_patterns"]
+    assert stage["unresolved_checks"][0]["tool"] == "T1"
 
 
 @pytest.fixture

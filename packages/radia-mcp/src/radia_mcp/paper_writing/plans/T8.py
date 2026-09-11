@@ -39,6 +39,29 @@ def _severity_from_score(score: float | None) -> str:
     return "LOW"
 
 
+def _require_health_result(result: dict) -> dict:
+    """Validate the shared health payload before composite consumers use it."""
+    if (not isinstance(result, dict) or result.get("error")
+            or result.get("status") not in {"complete", "partial", "unavailable"}
+            or not isinstance(result.get("detailed_scores"), dict)
+            or not isinstance(result.get("priority_issues"), list)):
+        raise ValueError("invalid health report")
+    for score in result["detailed_scores"].values():
+        if score is not None and (isinstance(score, bool)
+                or not isinstance(score, (int, float))
+                or not math.isfinite(score) or not 0 <= score <= 10):
+            raise ValueError("invalid health score")
+    for issue in result["priority_issues"]:
+        if not isinstance(issue, dict) or not isinstance(issue.get("comments", []), list):
+            raise ValueError("invalid health issue")
+        score = issue.get("score")
+        if score is not None and (isinstance(score, bool)
+                or not isinstance(score, (int, float))
+                or not math.isfinite(score) or not 0 <= score <= 10):
+            raise ValueError("invalid health issue score")
+    return result
+
+
 def paper_writing_health_report(
     tex_or_text: str,
     bib: str = "",

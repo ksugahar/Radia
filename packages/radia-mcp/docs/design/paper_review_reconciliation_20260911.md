@@ -108,8 +108,8 @@ Paths in tables are relative to `src/radia_mcp/paper_writing` unless specified.
 | P55 | 5.4 T11 coil/Table metadata | 修正済み | R::test_reproducibility_does_not_read_coil_or_table_as_metadata. |
 | P56 | 5.4 T12 power/p-value | 修正済み | R::test_physical_unit_is_not_misread_as_p_value. |
 | P57 | 5.4 T3 unit boundaries/T4 absent discussion | 検証待ち | Reproduce “2 settings”, “Sec. 3.” and missing-section behavior. |
-| P58 | 5.4 T12/T13/T15 unreachable rules | 検証待ち | Trace T8/T16/T20 rule producers and add end-to-end signal tests. |
-| P59 | 5.4 sort/zero/substring/year/schema nits | 検証待ち | T8/T20 now propagate partial/unavailable and nullable overall scores into T18 phase2; test_health_failed_detector_propagates_to_workflow covers all ten detectors with eight failure modes. All-skipped/all-failed, clean and retained-critical controls also pass. T8/T20 ordering, T17 zero, T20 substring, T5 year and other consumers remain separate checks. |
+| P58 | 5.4 T12/T13/T15 unreachable rules | 検証待ち | T16 now lists unknown_patterns and missing_signals instead of inferring a full pattern from partial evidence. test_root_cause_requires_all_pattern_signals covers this. Missing T8 producers (including T9/T12/T13/T15) are not added by this fix and remain open. |
+| P59 | 5.4 sort/zero/substring/year/schema nits | 検証待ち | T8/T20 propagate partial/unavailable into T18 phase2. T16/T17 now propagate invalid/incomplete health and T18 phase3/5/6 reject invalid results. test_actions_separate_unknown_from_real_zero closes the T17 zero-versus-None case. T8/T20 ordering, T20 substring, T5 year and other schema cases remain open. |
 
 ## External data, documentation and cross-cutting work
 
@@ -148,13 +148,19 @@ The T8 -> T20 -> T18 phase2 follow-up preserves unknown/skipped checks, suppress
 incomplete overall scores, retains confirmed findings, and distinguishes detector
 failure from a confirmed critical manuscript defect. Context filtering does not
 erase UNKNOWN issues. The four-file focused lane now passes 593 tests; no live
-client or editable source was changed. T16/T17 and later phases are not certified.
+client or editable source was changed.
 
-1. Extend composite payload validation to T16/T17 and T18 phase3/5/6. Submission-gate
-   adapters and T9/T18 phase4 coverage are recorded in P12/P51/P52; lower-level
-   detector accuracy and other nested consumers still need their own evidence.
-2. Work through external-input safety and PDF false-clean findings
+The subsequent T16/T17 and T18 phase3/5/6 follow-up adds structured unavailable
+results, preserves unresolved checks separately from rewrite actions, requires all
+root-pattern signals, and rejects failed rewrite/response generation. Focused
+fault-injection, real-health propagation and successful-generation controls pass
+in the same four-file lane (626 tests). This is not a semantic accuracy audit;
+missing pattern producers remain tracked in P58. No live client was changed.
+
+1. Work through external-input safety and PDF false-clean findings
    (P50, P62–P67), then language heuristics and deduplication.
+2. Review missing pattern producers (P58) and remaining ordering/context rules
+   (P59); do not confuse execution-status coverage with semantic correctness.
 
 Update a row's evidence and status in the same change. Do not use passing tests
 for a neighboring consumer, a changed regex, or a previous release's live status

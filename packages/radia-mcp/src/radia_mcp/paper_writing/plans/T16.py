@@ -130,25 +130,32 @@ def paper_writing_root_cause_diagnosis(
         tex_or_text = ""
 
     try:
-        from .T8 import paper_writing_health_report
+        from .T8 import paper_writing_health_report, _require_health_result
     except Exception as e:
         return {
+            "status": "unavailable",
             "error": f"health_report import failed: {e}",
             "source": "paper T16 root cause diagnosis",
         }
 
-    health = paper_writing_health_report(
-        tex_or_text,
-        bib=bib,
-        abstract=abstract,
-        author_last_names=author_last_names,
-        skip=skip,
-    )
+    try:
+        health = _require_health_result(paper_writing_health_report(
+            tex_or_text, bib=bib, abstract=abstract,
+            author_last_names=author_last_names, skip=skip,
+        ))
+    except Exception as e:
+        return {"status": "unavailable", "error": f"health report failed: {e}",
+                "source": "paper T16"}
     detailed_scores: dict = health.get("detailed_scores", {})
 
     detected_root_causes: list[dict] = []
+    unknown_patterns: list[dict] = []
     for pattern in ROOT_CAUSE_PATTERNS:
         signals = pattern["tool_signals"]
+        missing = [t for t in signals if detailed_scores.get(t) is None]
+        if missing:
+            unknown_patterns.append({"pattern_name": pattern["name"], "missing_signals": missing})
+            continue
         relevant_scores = [
             detailed_scores[t] for t in signals
             if t in detailed_scores and detailed_scores[t] is not None
@@ -196,7 +203,18 @@ def paper_writing_root_cause_diagnosis(
                 f"(tools: {r['tool_signals']}) → {r['remediation'][:70]}…"
             )
 
+    status = health["status"]
+    if unknown_patterns:
+        status = "unavailable" if len(unknown_patterns) == len(ROOT_CAUSE_PATTERNS) else "partial"
+    if status != "complete":
+        comments.insert(0, "未検査の根拠があるため根本原因の総合判定は保留。検出件数は確認できたパターンのみ。")
+        if not detected_root_causes:
+            comments = comments[:1]
     return {
+        "status": status,
+        "unknown_patterns": unknown_patterns,
+        "unknown_tools": health.get("unknown_tools", []),
+        "tools_skipped": health.get("tools_skipped", []),
         "detected_root_causes": detected_root_causes,
         "n_root_causes": len(detected_root_causes),
         "health_report_overall_score": health.get("overall_score"),
