@@ -66,6 +66,12 @@ python .agents/skills/ci-monitor/monitor.py --branch v4.27.0 --auto 1
 python .agents/skills/ci-monitor/monitor.py --branch main   --auto 3
 ```
 
+`--branch <ref>` also applies when `--auto` is omitted (default count: 3).
+Automatic discovery is a convenience, not an exact release-SHA gate: it can
+select older runs on the same branch. For release acceptance, resolve and pass
+the explicit run IDs for the candidate SHA. Explicit IDs bypass discovery.
+`--poll` and `--tail` must be positive; a negative `--auto` is rejected.
+
 ## Output format
 
 Per state change (per run):
