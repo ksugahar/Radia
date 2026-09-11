@@ -1,0 +1,225 @@
+{
+  "generated_at_utc": "2026-09-11T08:49:22.618413+00:00",
+  "host": "lab",
+  "commit": "5c97f1493ae9d23895f369c6a57b8c9c38e5e1b7",
+  "worktree_dirty": false,
+  "builder_sha256": "901bfe218c94c990f82f151ffd7cf74bedb068af6320561daaae965ff333f7c0",
+  "ngsolve_version": "6.2.2606",
+  "purpose": "real-mesh regression of the curved gap probe (locator band + seeds)",
+  "rows": [
+    {
+      "level": "coarse",
+      "vol": "C:\\temp\\radia-ctype-family\\coarse\\kelvin_domain.vol",
+      "vol_sha256": "078a8fa56d065c0e0dfb8721f540e1a4b8e96a7932905305dd4c78cdda9dde2f",
+      "passed_N2": true,
+      "passed_N6": false,
+      "curved_coverage_max_deviation_m": 0.0,
+      "counts_straight_curved_4001_16001": [
+        [
+          8,
+          8,
+          8,
+          8
+        ],
+        [
+          14,
+          14,
+          14,
+          14
+        ],
+        [
+          8,
+          8,
+          8,
+          8
+        ],
+        [
+          10,
+          10,
+          10,
+          10
+        ],
+        [
+          6,
+          6,
+          6,
+          6
+        ]
+      ],
+      "maximum_segment_m": 0.0027406055702910493,
+      "curved_maximum_segment_m": 0.002740606141331788,
+      "minimum_segments": 6,
+      "curved_minimum_segments": 6,
+      "clean_traversal": true,
+      "sampling_is_stable": true,
+      "locator_band_samples": [
+        1,
+        4,
+        1,
+        5,
+        2
+      ]
+    },
+    {
+      "level": "medium",
+      "vol": "C:\\temp\\radia-ctype-family\\medium\\kelvin_domain.vol",
+      "vol_sha256": "0cc559e6dcdabc61fd37f7c09b09674c228710b9af7682b947927d41984628d4",
+      "passed_N2": true,
+      "passed_N6": false,
+      "curved_coverage_max_deviation_m": 0.0,
+      "counts_straight_curved_4001_16001": [
+        [
+          10,
+          10,
+          10,
+          10
+        ],
+        [
+          8,
+          8,
+          8,
+          8
+        ],
+        [
+          10,
+          10,
+          10,
+          10
+        ],
+        [
+          8,
+          8,
+          8,
+          8
+        ],
+        [
+          10,
+          10,
+          10,
+          10
+        ]
+      ],
+      "maximum_segment_m": 0.00294343396021535,
+      "curved_maximum_segment_m": 0.0029434338595552977,
+      "minimum_segments": 8,
+      "curved_minimum_segments": 8,
+      "clean_traversal": true,
+      "sampling_is_stable": true,
+      "locator_band_samples": [
+        1,
+        5,
+        4,
+        1,
+        4
+      ]
+    },
+    {
+      "level": "fine",
+      "vol": "C:\\temp\\radia-ctype-family\\fine\\kelvin_domain.vol",
+      "vol_sha256": "741c247e6ac4ba11b3a55aa1f98858d9247b56268573044ed1e5659d7c84deb2",
+      "passed_N2": true,
+      "passed_N6": false,
+      "curved_coverage_max_deviation_m": 0.0,
+      "counts_straight_curved_4001_16001": [
+        [
+          14,
+          14,
+          14,
+          14
+        ],
+        [
+          12,
+          12,
+          12,
+          12
+        ],
+        [
+          12,
+          12,
+          12,
+          12
+        ],
+        [
+          12,
+          12,
+          12,
+          12
+        ],
+        [
+          12,
+          12,
+          12,
+          12
+        ]
+      ],
+      "maximum_segment_m": 0.0028883997645540605,
+      "curved_maximum_segment_m": 0.0028883996908746342,
+      "minimum_segments": 12,
+      "curved_minimum_segments": 12,
+      "clean_traversal": true,
+      "sampling_is_stable": true,
+      "locator_band_samples": [
+        2,
+        1,
+        3,
+        1,
+        4
+      ]
+    },
+    {
+      "level": "finer",
+      "vol": "C:\\temp\\radia-ctype-family\\finer\\kelvin_domain.vol",
+      "vol_sha256": "649fbec7f13c723d573ec955832cad2b454629613e671fa48b2d2e0376964232",
+      "passed_N2": true,
+      "passed_N6": false,
+      "curved_coverage_max_deviation_m": 0.0,
+      "counts_straight_curved_4001_16001": [
+        [
+          18,
+          18,
+          18,
+          18
+        ],
+        [
+          12,
+          12,
+          12,
+          12
+        ],
+        [
+          12,
+          12,
+          12,
+          12
+        ],
+        [
+          14,
+          14,
+          14,
+          14
+        ],
+        [
+          16,
+          16,
+          16,
+          16
+        ]
+      ],
+      "maximum_segment_m": 0.0028120335410109533,
+      "curved_maximum_segment_m": 0.0028120331289995114,
+      "minimum_segments": 12,
+      "curved_minimum_segments": 12,
+      "clean_traversal": true,
+      "sampling_is_stable": true,
+      "locator_band_samples": [
+        2,
+        3,
+        2,
+        4,
+        2
+      ]
+    }
+  ],
+  "builder_blob_sha256": "cbdf784374a8800371d3b190710118729b84daeb55dec52fb5b19bb54a6a4d5d",
+  "provenance_note": "Run on the worktree before commit 5c97f1493; builder_sha256 is the CRLF worktree file, builder_blob_sha256 the LF committed blob; git diff --quiet HEAD on the builder exited 0 after commit."
+}
