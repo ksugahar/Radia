@@ -1,7 +1,11 @@
 """Daily checks share release verification without running deployment."""
 import importlib.util
+import json
 from pathlib import Path
 import sys
+from types import SimpleNamespace
+
+import pytest
 
 
 def load_checker():
@@ -15,6 +19,12 @@ def load_checker():
         return module
     finally:
         sys.path.pop(0)
+
+
+def test_daily_checker_is_connected_to_impact_ci():
+    root = Path(__file__).resolve().parents[1]
+    rules = json.loads((root / "tests/test_tier_manifest.json").read_text())["impact_rules"]
+    assert rules["tools/verify_lab_editable.py"] == ["tests/test_editable_daily_check.py"]
 
 
 def test_explicit_mcp_source_does_not_repoint_physics():
@@ -52,6 +62,7 @@ def test_explicit_mcp_source_can_override_source_root():
 def test_failure_exit_code(monkeypatch):
     module = load_checker()
     monkeypatch.setattr(module.release_quad, "_verify_lab_editable", lambda packages: 1)
+    monkeypatch.setattr(module, "verify_against_origin_main", lambda packages: 0)
     assert module.main([]) == 4
 
 
@@ -83,13 +94,45 @@ def test_release_order_compares_numerically_not_lexically():
     assert module._release_order("4.95.9") < module._release_order("4.95.81")
 
 
-def test_unknown_version_is_skipped_rather_than_passed(monkeypatch, capsys):
+@pytest.mark.parametrize("running,reference", [(None, "1.4.53"), ("1.4.53", None), (None, None)])
+def test_unknown_version_fails_even_when_editable_path_matches(monkeypatch, capsys, running, reference):
     """A missing answer must be visible, never counted as agreement."""
     module = load_checker()
-    monkeypatch.setattr(module, "_running_version", lambda name: (None, None))
+    monkeypatch.setattr(module, "_running_version", lambda name: (running, None))
+    monkeypatch.setattr(module, "_origin_main_version", lambda path: reference)
+    monkeypatch.setattr(module, "expected_packages", lambda **kwargs: [("radia-mcp", "source")])
+    monkeypatch.setattr(module.release_quad, "_verify_lab_editable", lambda packages: 0)
+    assert module.main([]) == 4
+    assert "UNVERIFIED" in capsys.readouterr().out
+
+
+def test_matching_version_and_path_pass(monkeypatch):
+    module = load_checker()
+    monkeypatch.setattr(module, "_running_version", lambda name: ("1.4.53", "source"))
     monkeypatch.setattr(module, "_origin_main_version", lambda path: "1.4.53")
-    assert module.verify_against_origin_main([("radia-mcp", "S:/Radia/01_GitHub")]) == 0
-    assert "skipped" in capsys.readouterr().out
+    monkeypatch.setattr(module.release_quad, "_verify_lab_editable", lambda packages: 0)
+    assert module.main([]) == 0
+
+
+@pytest.mark.parametrize("returncode,stdout,expected", [(0, '__version__ = "1.4.53"', "1.4.53"),
+                                                     (1, "", None), (0, "no version", None)])
+def test_reference_git_access_is_scoped_and_missing_data_is_unknown(monkeypatch, returncode, stdout, expected):
+    module = load_checker()
+    def run(command, **kwargs):
+        assert command == ["git", "-c", f"safe.directory={module._REPO.as_posix()}",
+                           "-C", str(module._REPO), "show", "origin/main:file.py"]
+        assert kwargs["encoding"] == "utf-8"
+        return SimpleNamespace(returncode=returncode, stdout=stdout)
+    monkeypatch.setattr(module.subprocess, "run", run)
+    assert module._origin_main_version("file.py") == expected
+
+
+def test_missing_git_is_unknown_not_an_uncaught_exception(monkeypatch):
+    module = load_checker()
+    def missing(*args, **kwargs):
+        raise FileNotFoundError("git")
+    monkeypatch.setattr(module.subprocess, "run", missing)
+    assert module._origin_main_version("file.py") is None
 
 
 def test_skip_origin_check_bypasses_the_comparison(monkeypatch):
