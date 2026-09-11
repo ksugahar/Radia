@@ -170,6 +170,19 @@ def _decode_process_output(data: bytes | str | None) -> str:
     return data.decode("utf-8", errors="replace")
 
 
+def _generated_keys(data: bytes) -> list[str]:
+    """Inspect standard BibTeX bibitems; unknown output syntax fails closed."""
+    # Citation keys are ASCII by the input contract; reference text need not be.
+    active = re.sub(rb"(?<!\\)%[^\r\n]*", b"", data)
+    heads = list(re.finditer(rb"(?<!\\)\\bibitem\b", active))
+    items = list(re.finditer(
+        rb"(?<!\\)\\bibitem\s*(?:\[[^\]]*\]\s*)?\{([A-Za-z0-9_:./+-]+)\}", active,
+    ))
+    if len(heads) != len(items):
+        raise ValueError("unsupported or malformed bibitem syntax")
+    return [item[1].decode("ascii") for item in items]
+
+
 def bibliography_make_bbl(
     tex_path: str,
     style: str = "",
@@ -279,12 +292,21 @@ def bibliography_make_bbl(
         if result.returncode != 0 or not generated.is_file():
             return "Error: BibTeX did not generate a .bbl:\n" + log[-1600:]
 
-        data = generated.read_bytes()
-        bibitem_count = data.count(b"\\bibitem")
-        if bibitem_count < len(keys):
+        try:
+            data = generated.read_bytes()
+            generated_keys = _generated_keys(data)
+        except (OSError, ValueError) as exc:
+            return f"Error: cannot validate generated bibliography: {exc}"
+        bibitem_count = len(generated_keys)
+        missing_items = set(keys) - set(generated_keys)
+        unknown_items = set(generated_keys) - known
+        duplicate_items = len(set(generated_keys)) != bibitem_count
+        if missing_items or unknown_items or duplicate_items:
             return (
-                "Error: BibTeX generated an incomplete bibliography "
-                f"({bibitem_count} bibitems for {len(keys)} cited keys).\n"
+                "Error: BibTeX generated an incomplete or inconsistent bibliography "
+                f"({bibitem_count} bibitems for {len(keys)} cited keys; "
+                f"missing={sorted(missing_items)}, unknown={sorted(unknown_items)}, "
+                f"duplicate_keys={duplicate_items}).\n"
                 + log[-1200:]
             )
 
