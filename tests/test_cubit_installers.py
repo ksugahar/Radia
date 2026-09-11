@@ -291,6 +291,7 @@ def test_distribution_ci_packages_the_exact_candidate_binaries():
     assert "native_payloads.json" in workflow
     assert "download_release_asset.py" in workflow
     assert "Get-FileHash" in workflow
+    assert "pip install setuptools pytest numpy" in workflow
     assert "_native_provenance.py" in workflow
     assert "verify --repo-root . --package-dir $destination" in workflow
     assert '"netgen-mesher==6.2.2606"' in workflow
