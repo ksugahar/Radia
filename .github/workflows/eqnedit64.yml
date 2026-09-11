@@ -51,15 +51,26 @@ jobs:
           node-version: '20'
 
       - name: Install test dependencies
-        run: python -m pip install pytest
+        # fonttools reads the shipped math font's cmap so the palette-face
+        # contract can be checked without a compiler or a registered font.
+        run: python -m pip install pytest fonttools
 
       - name: Check Eqnedit64 Web contract
-        run: python -m pytest tests/test_web_contract.py tests/test_node_dispatch.py tests/test_version_contract.py -q
+        run: |
+          python build/generate_palettes.py --check
+          python -m pytest tests/test_web_contract.py tests/test_node_dispatch.py tests/test_version_contract.py tests/test_palette_faces.py tests/test_palette_intent.py -q
 
       - name: Check Web JavaScript syntax and insertion behaviour
         run: |
           node --check web/equation-editor.js
           node tests/test_web_insert.cjs
+          node tests/test_palette_intent.cjs
+
+      - name: Check real browser palette rendering
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0 mathjax@3.2.2
+          npx playwright install --with-deps chromium
+          node tests/test_palette_browser.cjs
 
   build-test:
     # Font registration tests run only in this disposable GitHub-hosted
@@ -150,6 +161,21 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & $app --ui-interaction-test
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Render native palette review proofs
+        run: |
+          New-Item -ItemType Directory palette-proofs | Out-Null
+          & build_cmake\Release\test_palette_visual.exe palette-proofs > palette-proofs\cells.csv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (@(Get-ChildItem palette-proofs -Filter '*.png').Count -ne 120) {
+            throw 'Expected 19 palettes at 3 DPIs in normal and selected states'
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: eqnedit64-palette-proofs
+          path: tools/eqnedit64/palette-proofs/
+          if-no-files-found: error
 
       - name: Reject Windows session font-host damage
         run: >-
