@@ -688,11 +688,35 @@ def _named_term_pattern(name: str) -> re.Pattern[str]:
 
 def _named_diagnostic_sentences(raw: str) -> list[dict]:
     sentences: list[dict] = []
-    for line_number, line in enumerate(raw.splitlines(), 1):
-        for fragment in re.split(r"(?<=[。．.!?！？])", line):
+    buffered = ""
+    buffered_line = 1
+
+    def flush(text: str, line_number: int) -> None:
+        for fragment in re.split(r"(?<=[。．.!?！？])", text):
             text = re.sub(r"\s+", " ", fragment).strip()
             if text:
                 sentences.append({"line": line_number, "text": text})
+
+    for line_number, line in enumerate(raw.splitlines(), 1):
+        stripped = line.strip()
+        is_structural = bool(re.match(r"^(?:#{1,6}\s|[-*+]\s|\d+[.)]\s|\|)", stripped))
+        if not stripped or is_structural:
+            if buffered:
+                flush(buffered, buffered_line)
+                buffered = ""
+            if stripped:
+                flush(stripped, line_number)
+            continue
+        if not buffered:
+            buffered = stripped
+            buffered_line = line_number
+        else:
+            buffered += " " + stripped
+        if re.search(r"[。．.!?！？]\s*$", stripped):
+            flush(buffered, buffered_line)
+            buffered = ""
+    if buffered:
+        flush(buffered, buffered_line)
     return sentences
 
 
@@ -785,9 +809,10 @@ _CURRENT_STATUS = re.compile(
 )
 _FUTURE_STATUS = re.compile(
     r"本研究(?:で|では)|助成期間|研究期間|今後|これから|新たに|着手|"
-    r"構築する|実現する|"
-    r"開発する|統合する|検証する|評価する|拡張する|目指す|予定|"
-    r"機能を加える|つなぐ|"
+    r"構築(?:する|し|して)|実現(?:する|し|して)|"
+    r"開発(?:する|し|して)|統合(?:する|し|して)|検証(?:する|し|して)|"
+    r"評価(?:する|し|して)|拡張(?:する|し|して)|目指す|予定|"
+    r"機能を加え(?:る|て)|つなぐ|"
     r"will|to be (?:developed|implemented|validated|integrated)|planned|proposed",
     re.IGNORECASE,
 )
