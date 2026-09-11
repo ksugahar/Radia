@@ -5,21 +5,14 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 
+from ._artifact_identity import (
+    digest_is_sha256 as _digest,
+    same_generation as _generation,
+)
+
 
 BEHAVIOR = "behavioral_source_discontinuity_event_timestep_reltol_waveform_owner_identity"
 FOURIER = "fourier_harmonic_window_fundamental_phase_reference_trace_owner_identity"
-
-
-def _digest(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
-
-
-def _generation(contract: Mapping[str, object], *names: str) -> bool:
-    value = str(contract.get("generation_id") or "")
-    return bool(value) and all(contract.get(name) == value for name in names)
 
 
 def _finite(values: object, *, minimum: int = 1) -> bool:

@@ -1,4 +1,4 @@
-"""Checked Optuna 4.9.0 compatibility evidence for the MATLAB domain layer.
+"""Checked Optuna 5.0.0 compatibility evidence for the MATLAB domain layer.
 
 This module deliberately does not import Optuna.  Upstream Optuna and the
 official optuna-mcp server remain external oracle owners; radia-mcp reads and
@@ -102,15 +102,15 @@ def _evidence_paths(root: Path) -> dict[str, Path]:
     fixture = root / "tests" / "matlab" / "fixtures"
     return {
         "compatibility": root / "matlab" / "optuna_upstream_compatibility.json",
-        "api_coverage": root / "matlab" / "optuna49_api_coverage.json",
-        "python_oracle": fixture / "optuna49_oracle.json",
-        "public_api_inventory": fixture / "optuna49_public_api.json",
-        "mcp_oracle": fixture / "optuna49_mcp_oracle.json",
+        "api_coverage": root / "matlab" / "optuna50_api_coverage.json",
+        "python_oracle": fixture / "optuna50_oracle.json",
+        "public_api_inventory": fixture / "optuna50_public_api.json",
+        "mcp_oracle": fixture / "optuna50_mcp_oracle.json",
         "test_manifest": fixture / "optuna_test_manifest.json",
-        "python_generator": fixture / "generate_optuna49_oracle.py",
-        "api_inventory_generator": fixture / "generate_optuna49_api_inventory.py",
-        "api_coverage_generator": fixture / "generate_optuna49_api_coverage.py",
-        "mcp_generator": fixture / "generate_optuna49_mcp_oracle.py",
+        "python_generator": fixture / "generate_optuna50_oracle.py",
+        "api_inventory_generator": fixture / "generate_optuna50_api_inventory.py",
+        "api_coverage_generator": fixture / "generate_optuna50_api_coverage.py",
+        "mcp_generator": fixture / "generate_optuna50_mcp_oracle.py",
         "manifest_generator": fixture / "generate_optuna_test_manifest.py",
     }
 
@@ -131,7 +131,7 @@ def matlab_optuna_compatibility_contract(
         str(entry.get("classification", "")) for entry in manifest.get("entries", [])
     )
     errors: list[str] = []
-    if compatibility.get("schema") != "radia.optuna-upstream-compatibility.v1":
+    if compatibility.get("schema") != "radia.optuna-upstream-compatibility.v2":
         errors.append("unexpected compatibility schema")
     claim = str(compatibility.get("claim", ""))
     if not any(
@@ -139,26 +139,30 @@ def matlab_optuna_compatibility_contract(
         for boundary in ("not a drop-in replacement", "not a Python binary drop-in")
     ):
         errors.append("compatibility contract must reject binary drop-in parity")
-    if python_oracle.get("optuna_version") != "4.9.0":
-        errors.append("direct Python oracle is not optuna==4.9.0")
-    if mcp_oracle.get("optuna_version") != "4.9.0":
-        errors.append("official MCP oracle is not backed by optuna==4.9.0")
+    if python_oracle.get("optuna_version") != "5.0.0":
+        errors.append("direct Python oracle is not optuna==5.0.0")
+    if mcp_oracle.get("optuna_version") != "5.0.0":
+        errors.append("official MCP oracle is not backed by optuna==5.0.0")
     if mcp_oracle.get("transport") != "stdio":
         errors.append("official MCP oracle was not captured over stdio")
-    if manifest.get("upstream_version") != "4.9.0":
-        errors.append("test manifest does not pin Optuna 4.9.0")
-    if public_api.get("schema") != "radia.test.optuna49-public-api.v1":
+    if manifest.get("upstream_version") != "5.0.0":
+        errors.append("test manifest does not pin Optuna 5.0.0")
+    if public_api.get("schema") != "radia.test.optuna50-public-api.v1":
         errors.append("unexpected Optuna public API inventory schema")
-    if public_api.get("optuna_version") != "4.9.0":
-        errors.append("public API inventory is not pinned to Optuna 4.9.0")
-    if api_coverage.get("schema") != "radia.optuna49-api-coverage.v1":
+    if public_api.get("optuna_version") != "5.0.0":
+        errors.append("public API inventory is not pinned to Optuna 5.0.0")
+    if api_coverage.get("schema") != "radia.optuna50-api-coverage.v1":
         errors.append("unexpected MATLAB Optuna API coverage schema")
-    if api_coverage.get("upstream_version") != "4.9.0":
-        errors.append("MATLAB API coverage is not pinned to Optuna 4.9.0")
+    if api_coverage.get("upstream_version") != "5.0.0":
+        errors.append("MATLAB API coverage is not pinned to Optuna 5.0.0")
     if api_coverage.get("upstream_inventory_sha256") != _sha256(
         paths["public_api_inventory"]
     ):
         errors.append("MATLAB API coverage was not generated from the checked inventory")
+    if api_coverage.get("upstream_oracle_sha256") != _sha256(
+        paths["python_oracle"]
+    ):
+        errors.append("MATLAB API coverage was not generated from the checked oracle")
     if bool(api_coverage.get("full_compatibility_complete")):
         if (
             int(api_coverage.get("surface_missing_count", -1)) != 0
@@ -175,7 +179,7 @@ def matlab_optuna_compatibility_contract(
         "status": "ready" if not errors else "error",
         "ok": not errors,
         "runtime_owner": "MathWorks MATLAB MCP Server",
-        "oracle_owner": "optuna==4.9.0 and official optuna/optuna-mcp",
+        "oracle_owner": "optuna==5.0.0 and official optuna/optuna-mcp",
         "claim": claim,
         "repo_root": str(root),
         "oracle_versions": {
@@ -207,7 +211,7 @@ def matlab_optuna_compatibility_contract(
             "matlab_integration_only", []
         ),
         "unsupported_or_not_yet_oracled": compatibility.get(
-            "unsupported_or_not_yet_oracled", []
+            "unsupported_or_not_claimed", []
         ),
         "public_api_closure": {
             key: api_coverage.get(key)
@@ -283,7 +287,7 @@ def matlab_optuna_oracle_audit(
         "status": "pass" if not errors else "fail",
         "ok": not errors,
         "repo_root": str(root),
-        "upstream_version": "4.9.0",
+        "upstream_version": "5.0.0",
         "test_function_count": len(discovered),
         "manifest_entry_count": len(expected),
         "missing_manifest_entries": [list(item) for item in missing],
@@ -298,10 +302,10 @@ def matlab_optuna_oracle_audit(
             name: _sha256(path) for name, path in paths.items() if path.is_file()
         },
         "regeneration_commands": [
-            "python tests/matlab/fixtures/generate_optuna49_oracle.py",
-            "python tests/matlab/fixtures/generate_optuna49_api_inventory.py",
-            "python tests/matlab/fixtures/generate_optuna49_api_coverage.py",
-            "python tests/matlab/fixtures/generate_optuna49_mcp_oracle.py",
+            "python tests/matlab/fixtures/generate_optuna50_oracle.py",
+            "python tests/matlab/fixtures/generate_optuna50_api_inventory.py",
+            "python tests/matlab/fixtures/generate_optuna50_api_coverage.py",
+            "python tests/matlab/fixtures/generate_optuna50_mcp_oracle.py",
             "python tests/matlab/fixtures/generate_optuna_test_manifest.py",
         ],
         "matlab_verification": {

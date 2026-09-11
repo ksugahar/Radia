@@ -16,6 +16,10 @@ Literature-gap checks prevent non-detection in a bounded corpus from being
 promoted into field-wide adoption claims or the proposal's academic gap.
 Abstraction checks keep named software out of the research concept while
 retaining names where implementation or feasibility must be reproducible.
+First-use checks ask whether named software is defined by a plain-language
+function rather than only a prestige, licence, or architecture label.
+Capability-status maps separate a verified or maturing foundation from the
+optimization, integration, and validation proposed for the grant period.
 Reviewer-vocabulary checks explain OSS/AI terms, prefer readable field terms,
 and keep named benchmarks in a verification rather than significance role.
 Persuasion-quality checks catch self-negating evidence, abrupt equations,
@@ -105,7 +109,8 @@ register_status_tool(
         "international preparation evidence, internal-to-external scale, collaborative-integration "
         "risks, tool-to-domain outcomes, derived-metric validation, "
         "cross-organization pilots, literature-gap evidence scope, "
-        "named-software abstraction, "
+        "named-software abstraction and first-use functional identity, "
+        "current/future capability status maps, "
         "reviewer vocabulary and benchmark role, "
         "persuasion hierarchy and equation introductions, "
         "adjacent-domain reviewer readability and concept density, "

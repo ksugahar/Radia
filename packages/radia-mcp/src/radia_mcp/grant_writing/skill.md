@@ -770,8 +770,10 @@ Better: 「日本発の階層行列ライブラリを用いた積分方程式解
 ## What the Expanded Outcome Corpus Actually Teaches
 
 2026-08-21に非公開コーパスを19件（採択7、不採択11、未提出1）へ拡張した。
-このうち通常の科研費は10件（採択2、不採択8）である。提出版だけでなく、交付
-決定、採択通知、審査結果、または未採択として管理された原本との対応を記録した。
+このうち通常の科研費は10件（採択2、不採択8）である。上の2026-08-20の10件
+（採択3・不採択7）は複数制度にまたがる別の集合であり、件数が同じでも
+同一のコーパスではない。提出版だけでなく、交付決定、採択通知、審査結果、
+または未採択として管理された原本との対応を記録した。
 コーパス比較の数値は当時の監査記録であり、現行リポジトリに再実行スクリプトは
 同梱しない。現在の規則は公開テストの正例・負例で検証する。
 
@@ -1139,8 +1141,8 @@ Sources:
 
 カラーの図や写真は、審査時に白黒印刷される種目がある。色の違いだけで
 系列を区別した折れ線グラフは、白黒では何も伝わらない。線種・マーカー・
-直接ラベル・濃淡で区別し、白黒でも成立する図を作る(figureサーバの
-モノクロ安全則と同じ)。
+直接ラベル・濃淡で区別し、白黒でも成立する図を作る(paper-writing サーバの
+`figure_style_guide` が持つモノクロ安全則と同じ)。
 
 審査ではresearchmapが研究者番号で参照される。業績を羅列する専用欄は
 なくなったが、実行可能性の根拠として調書に業績を書くことはできる。
@@ -1418,6 +1420,8 @@ presentation（`presentation_translationese_check`）にもある。英語論文
 - `grant_writing_derived_metric_validation_check(text)`
 - `grant_writing_cross_organization_pilot_check(text)`
 - `grant_writing_named_software_abstraction_check(text)`
+- `grant_writing_named_software_first_use_check(text, software_names="")`
+- `grant_writing_capability_status_map(text, capability_names="")`
 - `grant_writing_reviewer_vocabulary_check(text)`
 - `grant_writing_persuasion_quality_check(text)`
 - `grant_writing_adjacent_reviewer_readability_check(text)`
@@ -1559,6 +1563,27 @@ named software implementation becomes the concept in the background,
 question, aims, novelty, or impact, while allowing names in methods,
 preliminary evidence, collaboration records, rights, and budget evidence.
 
+Independently of abstraction level, use
+`grant_writing_named_software_first_use_check(text, software_names="...")`
+when a proposal names software or a research code.  At first use, write its
+plain-language function, not only its prestige, licence, or distribution
+status.  For example, ``公開研究基盤Radia`` does not tell an unfamiliar
+reviewer what Radia does; state that it computes three-dimensional magnetic
+fields from magnet geometry, material properties, and current.  An
+implementation label such as ``Python-native`` is neither a functional
+explanation nor safe to infer: verify it against primary source or repository
+evidence before using it.
+
+When an application combines a maturing foundation with work proposed for the
+grant period, use
+`grant_writing_capability_status_map(text, capability_names="Radia,HDiv-MMM,EnergyStop")`.
+Write the verified current state and the proposed optimization, integration,
+or validation as separate statements.  Do not make topology optimization or
+hysteresis validation sound complete merely because HDiv-MMM itself is nearing
+completion.  The tool maps lexical evidence without scoring or verifying the
+repository; the author must connect the current state to implementation or
+test evidence and the future state to milestones and acceptance criteria.
+
 The same KAKENHI health report also runs
 `grant_writing_reviewer_vocabulary_check(text)`. It checks first-use Japanese
 explanations for OSS/AI terms, Japanese institution names, readable domain
@@ -1646,6 +1671,25 @@ on either noun: a condition, operational decision criterion, and application
 limit may coexist when the prose gives them distinct roles. It is not
 applicable to a fragment carrying fewer than two claim statements. The
 integrated health report runs it for every program.
+
+Draft-stage checks are available through the composed paper-writing server:
+
+- `grant_writing_central_question_singularity_check(text)` locates candidate
+  mismatches between an announced central question and nearby interrogatives.
+  Japanese and ASCII question marks are supported. The health report includes
+  these as review questions, never as scientific-quality scores; use
+  `skip="singularity"` to omit them. Enumeration alone is not a defect.
+- `grant_writing_draft_length_budget_check(text, page_limit=...,
+  reserved_pages=..., figure_count=...)` estimates character capacity. Its
+  `status` distinguishes `no_prose_capacity`, `exceeds_estimate`, and
+  `within_estimate`; none certifies a compiled page count. Zero page limit
+  means not applicable. Negative/nonfinite inputs fail loudly. Tune
+  `chars_per_page` to the actual form, then run the compiled PDF page check.
+- `grant_writing_form_field_coverage_check(text, fields=...)` or
+  `preset="tateisi_research"` returns `candidate_fields` and
+  `unmatched_fields`. Neither keyword hits nor their absence proves that a
+  field is answered or missing. Compare the preset with the current official
+  form and read every answer. All three tools return `score=None`.
 
 Budget guidance is judged only where budget content exists.
 `grant_writing_budget_alignment_check` reports `applicable: False` for a

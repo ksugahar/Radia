@@ -218,6 +218,59 @@ articulate されているか診断。理系 Q&A 予防の core。
 
 ---
 
+### 内容が切り替わるたびに反復型 Outline を置く (2026-09-11 修正)
+
+ここでいう Outline は、冒頭に章名を一度だけ並べる総目次でも、問題と解決法の
+境界を後から説明する一枚でもない。**これから何を話すかを、内容が切り替わる
+その場で知らせる進行表示**である。
+
+**Motivation / Proposed method / Results / Conclusion は例であり、固定分類ではない。**
+まずデッキ全体を読み、実際の内容をまとまりのある **4〜5章**へ分類する。各主要章の先頭で、
+**全章を同じ順序で再掲し、今から始まる章だけを赤字などで強調する。**
+
+たとえば手法提案の発表なら、各回とも次の四項目をすべて出す。
+
+1. `Motivation`
+2. `Proposed method`
+3. `Results`
+4. `Conclusion`
+
+**Outline に載せるのは章名だけ**とし、`Motivation — why ...` のような説明文や
+各章の要約を付けない。章の中身は直後の内容スライドで説明する。
+
+Motivation の開始では 1、提案法の開始では 2、結果の開始では 3、まとめの開始では 4 だけを赤字、太字、
+大きな文字などで一意に強調し、他の章は同じ弱い書式にそろえる。現在章だけを載せた
+疎な section card は全体のどこにいるかを示さないため不合格。一枚の agenda を冒頭に
+置くだけでも、後半で現在地を知らせられないため不十分である。
+
+Discussion が複数枚あるなら、その開始にも同じ進行表示を置く。分類は枚数合わせでなく、
+話の責任が変わる地点から決める。短い発表など明確な理由がない限り、三章以下へまとめたり
+六章以上へ細分化したりしない。
+
+`presentation_check_outline_slide` は、起承転結から共通の
+Motivation／Proposed method／Results の切り替わりを推定し、各位置で全項目を再掲して
+現在章だけを強調しているかを検査する。不合格時は `suggested_outline` に欠けている章と
+挿入位置を返す。ツールの分類は補助であり、最終的な章分けはデッキ全体の内容から決める。
+Theory／Implementation など独自の章を反復する場合は、各 Outline の章名列を直接
+比較し、全回で同じ順序か、各章が一度ずつ章順に強調されるかを検査する。独自章名の内容上の
+境界が正しいかは語彙だけで断定せず、デッキ全体を読んで確認する。
+章扉のタイトル自体は `Outline` に固定しない。`Theory` や `Implementation` のように現在章を
+タイトルにしても、同一の全章リストが反復されていれば進行表示として認識する。
+
+### 落とした話は捨てない ― 非表示の質問スライドにする (2026-09-10)
+
+本編から落とした話は削除せず、同じファイルの後ろへ `show="0"` の非表示
+スライドとして移す。問われた場で表示でき、図・出典・セリフも一緒に残る。
+別ファイルでは本番中に開きにくく、削除すれば再利用できない。
+
+`presentation_check_qa_backup_slides` は枚数だけでなく非表示状態も確認する。
+題が `Backup`、`Q&A`、`補足` でも表示のままなら控えではないため、
+`named_but_visible` と `warnings` に分けて返す。
+
+一枚を控えへ移したら、`presentation_kishotenketsu_check` で筋を測り直す。
+本文を一行でも足したら `presentation_check_text_box_overflow` を
+`tolerance_lines=0.2` で再実行し、最後は描画して確認する。
+
 ## 📋 Workflow Phases
 
 ### Phase 1: 📖 **storyboard** — スライドを作る前にストーリー
@@ -382,6 +435,8 @@ eq.markdown_to_pptx(open("talk.md", encoding="utf-8").read(), "talk.pptx",
   非表示スライドを既定で本編から除外する。謝辞は本編時間へ含める。
   speaker notesの`[Sources]`以降は出典メタデータであり、読み上げ文字数へ含めない。
   発表速度は一律固定せず、その資料のREADMEや開催要領に指定があればそちらを優先する。
+- takeaway の位置判定ではスライド高の 0.92 より下を出典・所属・頁番号として除外する。
+  PowerPoint の XML 追加順は版面順ではないため、残った候補は上端位置で並べて読む。
 - **重複・逆戻りチェック**: slideごとに「この slide で初めて言う新情報」を
   1 行で書き出す。前 slide と同じ利点・背景・課題を再説明していたら削るか、
   役割を変える。いったん比較・定式化・結果へ進んだ後に、導入済みのメリット説明へ
@@ -1502,6 +1557,18 @@ python "repo:/packages/radia-mcp/skills/pdf2ppt-pdfgear/pdf2ppt_pdfgear.py" \
   <conv_docs.json>` 経由起動、 UIA TogglePattern で 上級モード ON、 InvokePattern で
   変換ボタン発火)
 - 出力 PPTX を `presentation_check_*` の lint tool 群でチェック (font / bullet / 数式)
+
+### 参考文献は正典キーから生成する
+
+- 発表資料にも私有の `references.bib` を置かない。radia-mcp に同梱された正典
+  `bibliography/data/references.bib` を単一の情報源とする。
+- スライド原稿には全文の参考文献を手入力せず、引用番号と BibTeX キーの対応だけを置く。
+  非 LaTeX の生成器は `bibliography_get_entries(keys)` で書誌レコードを取得し、生成時に
+  表示文字列へ整形する。存在しないキー・重複キーは生成を中止する。
+- LaTeX の Digest・論文は `bibliography_make_bbl(tex_path)` で正典から `.bbl` を生成する。
+  配布物には必要な `.bbl` を含め、ローカルな `.bib` のコピーは作らない。
+- README やスライドに「正典から生成」と書くのは、ビルド経路が実際に上記 API を呼び、
+  正典の SHA-256 を記録している場合に限る。説明だけで正典利用済みとは扱わない。
 
 ---
 

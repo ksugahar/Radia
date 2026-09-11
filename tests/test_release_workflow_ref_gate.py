@@ -52,6 +52,7 @@ def test_pypi_distributions_have_independent_ci_boundaries():
     assert "cubit-mesh-export-wheel" not in native
     assert "radia-optuna-wheel" not in native
     assert "tools/run_test_tier.py --profile native-smoke" in native
+    assert "-m pip install build wheel pytest mcp" in native
     assert "'tests/'" not in native
     assert "pytest-rerunfailures" not in native
     assert "--reruns" not in native
@@ -75,6 +76,8 @@ def test_ci_records_exact_ref_context_before_release():
         assert "GITHUB_SHA" in workflow
         assert "GITHUB_RUN_ID" in workflow
         assert f"name: {artifact}" in workflow
+        assert "GIT_TERMINAL_PROMPT = '0'" in workflow
+        assert "git -c credential.helper= ls-remote" in workflow
 
 
 def test_pypi_release_jobs_require_the_triggering_ci_to_be_a_tag_run():

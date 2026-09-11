@@ -41,7 +41,7 @@
   "current1_A": 3.0,
   "current2_A": 2.0,
   "force_learning": "energy/coenergy sweeps should preserve finite-difference stencils, force-gradient estimates, and reference-force errors",
-  "generated_at_utc": "2026-06-27T09:17:09Z",
+  "generated_at_utc": "2026-09-10T11:55:10Z",
   "kind": "virtual_work_force_sweep_audit_validation",
   "reference_separation_m": 0.026000000000000002,
   "schema": "radia.validation.force_validation.validation_virtual_work_force_sweep_audit.v1",
@@ -96,10 +96,10 @@
         "index": 1,
         "position_m": 0.02,
         "position_minus_m": 0.02,
-        "position_plus_m": 0.021,
+        "position_plus_m": 0.022,
         "reference_force_N": -5.9999999999999995e-05,
         "selected_for_reference_check": false,
-        "stencil": "forward",
+        "stencil": "forward_3pt",
         "virtual_work_identity": "F = dW_co/dx at fixed current"
       },
       {
@@ -323,11 +323,11 @@
         "force_rel_error": 0.015958346066565685,
         "index": 13,
         "position_m": 0.032,
-        "position_minus_m": 0.031,
+        "position_minus_m": 0.03,
         "position_plus_m": 0.032,
         "reference_force_N": -3.75e-05,
         "selected_for_reference_check": false,
-        "stencil": "backward",
+        "stencil": "backward_3pt",
         "virtual_work_identity": "F = dW_co/dx at fixed current"
       }
     ],
@@ -338,7 +338,7 @@
   "versions": {
     "platform": "Windows-2022Server-10.0.20348-SP0",
     "python_version": "3.12.10",
-    "radia_mcp_version": "1.4.3",
-    "radia_version": "4.95.2"
+    "radia_mcp_version": "1.4.53",
+    "radia_version": "4.95.81"
   }
 }

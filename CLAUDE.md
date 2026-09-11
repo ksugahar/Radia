@@ -1,9 +1,8 @@
 # Claude Code - Radia Project Policy
 
-This file contains active decision rules only. Implementation details belong
-in source, tests, package documentation, focused skills, and `radia-mcp`
-knowledge. Historical investigations remain in Git history and must not be
-copied back here.
+This file contains active decision rules only. Put implementation details in
+source, tests, package docs, focused skills, and `radia-mcp` knowledge.
+Historical investigations remain in Git history.
 
 ## Mission
 
@@ -87,6 +86,28 @@ Standalone PySide/PyQt Radia panels and notebook workbenches are retired.
 Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 `cubit-mesh-export` toolbar. Normal Radia Python must not depend on Qt.
 
+### Shared MCP Runtime Ownership
+
+- MCP is experimental development tooling, not a numerical solver release.
+  Developers may edit live MCP source and change its editable source with
+  `pip install -e`; no dedicated branch, frozen snapshot or separate deployment
+  approval is required for routine MCP experiments.
+- Coordinate overlapping edits and environment changes; preserve others' WIP
+  and active CAD/MATLAB jobs. Never mass-kill processes to refresh MCP.
+- Verify the interpreter and actual import path after repointing. Report each
+  client's live loaded source separately; reload/reconnect affected clients as
+  needed. Unknown or mixed evidence must stay unverified.
+- Solver/native numerical acceptance is unchanged. Keep release installation
+  tests isolated from development; see the
+  [Shared MCP runtime policy](packages/radia-mcp/docs/operations/mcp-runtime-policy.md).
+
+### Canonical Bibliography
+
+- The single parent is `packages/radia-mcp/src/radia_mcp/bibliography/data/references.bib`.
+  Resolve it with `bibliography_canonical_path`; correct verified entries there.
+- Manuscript folders contain generated `.bbl` only, never local `.bib` copies.
+  Use `bibliography_make_bbl`, regenerate after changes, and check citations.
+
 ### MATLAB And Simulink
 
 - Use MathWorks' official MATLAB MCP Server and Simulink Agentic Toolkit.
@@ -131,6 +152,12 @@ solver boundary is a checked `.vol` regardless of the creation route.
   validation inputs may produce a visible skip. Heavier `.vol` work
   belongs to `validation_test/`, and `docs/**/*.ipynb` may show the Cubit
   generation step.
+- Only `cubit-mesh-export` launches the Cubit GUI and owns Cubit GUI tests on licensed hosts;
+  Radia solver/application/validation/CI lanes must not launch it or duplicate those tests.
+- Radia normally reads checked `.vol` files. Generation uses APREPRO or Cubit's Python API
+  in batch/headless mode with `cubit-mesh-export` owning export; CI remains fixture-only.
+- `radia-mcp.cubit` supports human-AI collaboration through the `cubit-mesh-export` GUI;
+  it does not authorize solver-side GUI launch or interruption of human-owned sessions.
 - Every solver-bound `.vol` passes `check-vol` with its versioned label
   contract before solver or Simulink initialization.
 - Label checks validate topology/naming; DesignSpec validates physical data.
@@ -234,21 +261,23 @@ hibino's real advantage is memory — 230 GB with no pagefile — rather than it
 
 Use `tools/release_quad.py` and the `release-quad` skill. Publish only when
 CI, exact package hashes, native/MEX/SLX checks, and required machine gates pass
-for the same commit. LAB and 100号機 return to verified canonical editable
-installs after release.
+for the same commit. LAB and 100号機 retain approved, verified editable sources
+after release; source changes follow Shared MCP Runtime Ownership, not an automatic reset.
+Before tagging, dispatch `Radia Native Release` on the exact release SHA; `ci-verify` requires its successful native check.
 
 ## Optuna
 
-Pinned upstream Optuna is the oracle for shared MATLAB behavior. Seed, options,
-search-space order, history, constraints, values, states, warnings, and random
-consumption must match upstream fixtures. Handwritten MATLAB output is not
-compatibility truth.
-
-MATLAB table/MAT storage, Simulink monitoring, parallel execution, and MEX are
-extensions, not permission to alter the compatible algorithm. Keep API coverage
-and oracle manifests current. Unsupported behavior fails loudly. Official
-`optuna/optuna-mcp` owns generic Study/Trial MCP; `radia-mcp` owns MATLAB,
-Simulink, MEX, and Radia-domain composition.
+Pinned Optuna 5.0.0 is the sole oracle for shared MATLAB behavior: seed, options,
+parameter/search-space order, history, named constraints, values, states, warnings,
+defaults, extension points, and random consumption match upstream-generated fixtures.
+Handwritten MATLAB output is not compatibility truth.
+Adopt the Optuna 5 design in place: delete active optuna49 fixtures/pins, removed APIs/options,
+legacy sampler-state restore and public multi-objective TPE; unified TPESampler owns both objectives.
+Table/MAT storage, Simulink, parallelism and MEX are extensions, not algorithm changes.
+Native acceleration requires correct differential results; maintain API/oracle manifests and fail loudly.
+Fast deterministic tests belong in tests; long performance/scaling/parallel/dimension work in validation_test.
+Released optuna-mcp==0.2.0 owns generic Study/Trial MCP for Optuna 5.0.0; 0.3.0.dev is not a stable release.
+radia-mcp owns MATLAB, Simulink, MEX, differential-oracle, performance-gate and Radia composition.
 
 ## Git And Agents
 

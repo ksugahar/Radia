@@ -137,6 +137,11 @@ assert.equal(
  * stays untouched when it is not. */
 assert.deepEqual(editor.composeInsertion("a", 1, 1, "'"), { value: "a'", caret: 2 });
 assert.deepEqual(editor.composeInsertion("f", 1, 1, "''"), { value: "f''", caret: 3 });
+for (const mark of ["'", "''", "'''"]) {
+  const decorated = "{a^{2}}^{" + "\\prime ".repeat(mark.length) + "}";
+  assert.deepEqual(editor.composeInsertion("a^{2}", 0, 5, mark),
+                   { value: decorated, caret: decorated.length });
+}
 assert.deepEqual(editor.composeInsertion("a^{2}", 5, 5, "'"),
                  { value: "a^{2}{}'", caret: 8 });
 assert.deepEqual(editor.composeInsertion("a^2", 3, 3, "'"),

@@ -19,7 +19,8 @@ At each FE-resolution time step Dt_FE:
      for each phase j, unit current -> A_j -> psi_kj column of L_inc
   4. Compute back-EMF e_bemf = omega . dpsi/dtheta (finite difference between
      two FE evaluations Dtheta apart)
-  5. Compute torque T_em via Arkkio integration on air-gap circle
+  5. Compute torque T_em by Maxwell-stress integration on the air-gap
+     contour (default) or by Arkkio annulus averaging (--airgap-torque)
   6. Hand (L_inc, e_bemf, T_em) to the circuit/mechanical ODE block
 
 Between FE steps, scipy.integrate.solve_ivp advances the circuit ODE
@@ -43,7 +44,7 @@ Material labels:
 
 Boundary labels:
   outer       -- Dirichlet A = 0
-  airgap_mid  -- Arkkio integration circle (mid-air-gap)
+  airgap_mid  -- air-gap contour for the default 'line' torque route
 
 ### JSON output
 
@@ -208,39 +209,48 @@ def _extract_L_inc(mesh, fes, A, nu_cf, phase_regions, n_turns, slot_area,
         return L_inc, gfu_phases
 
 
-def _compute_torque_arkkio(mesh, A_op, r_mid, stack_length):
-    """Maxwell-stress torque on air-gap circle (Arkkio 2D formula).
+def _compute_airgap_torque(mesh, A_op, r_mid, stack_length,
+                           method="line", airgap_region="airgap",
+                           r_inner=None, r_outer=None):
+    """Air-gap Maxwell torque [N m] through the shared radia.force_ngsolve kernel.
 
-    Computes T = (stack_length / mu_0) * integral_{airgap_mid}
-                   r * B_r * B_phi  dl
+    ``method="line"`` reads the single contour labelled "airgap_mid" -- the
+    historical behaviour of this script, and still the default so recorded
+    results do not move.  ``method="arkkio"`` averages the same integrand over
+    the meshed gap annulus, which is what Arkkio's method actually is; the
+    contour route was named after it here for years without doing it.
 
-    Requires a boundary labeled "airgap_mid" in the mesh, lying on
-    the air-gap mid-circle of radius r_mid.
-
-    For 2D A_z formulation: B = (dA/dy, -dA/dx).  In polar (r,phi):
-       B_r   =  Bx cos(phi) + By sin(phi)
-       B_phi = -Bx sin(phi) + By cos(phi)
-    where phi is the angular coordinate on the circle.
+    For the 2D A_z formulation B = (dA/dy, -dA/dx).
     """
-    from ngsolve import grad, Integrate, x, y, sqrt, BoundaryFromVolumeCF
-    if "airgap_mid" not in set(mesh.GetBoundaries()):
-        return 0.0
+    from ngsolve import CoefficientFunction, grad
+
+    from radia.force_ngsolve import (air_gap_maxwell_torque_arkkio_2d,
+                                     air_gap_maxwell_torque_line_2d)
+
     gA = grad(A_op)
-    Bx = gA[1]
-    By = -gA[0]
-    # On the air-gap circle, r = sqrt(x^2+y^2) ~ r_mid; use exact xy/r.
-    r = sqrt(x*x + y*y)
-    cos_phi = x / r
-    sin_phi = y / r
-    B_r   =  Bx * cos_phi + By * sin_phi
-    B_phi = -Bx * sin_phi + By * cos_phi
-    # Arkkio integrand: r * B_r * B_phi.  The boundary integral dl picks
-    # up r dphi as the arc-length element; for the closed circle it
-    # collapses to (r * B_r * B_phi) integrated as a surface form.
-    integrand = r * B_r * B_phi
-    val = Integrate(integrand, mesh,
-                    definedon=mesh.Boundaries("airgap_mid"))
-    return (stack_length / MU_0) * val
+    field = CoefficientFunction((gA[1], -gA[0]))
+    key = str(method).strip().lower()
+    if key == "line":
+        if "airgap_mid" not in set(mesh.GetBoundaries()):
+            return 0.0
+        return air_gap_maxwell_torque_line_2d(
+            field, mesh, mesh.Boundaries("airgap_mid"),
+            stack_length_m=stack_length, permeability_H_per_m=MU_0)
+    if key == "arkkio":
+        if airgap_region not in set(mesh.GetMaterials()):
+            raise ValueError(
+                f"--airgap-torque arkkio needs a meshed air-gap region named "
+                f"'{airgap_region}'; available materials: "
+                f"{sorted(set(mesh.GetMaterials()))}")
+        if r_inner is None or r_outer is None:
+            raise ValueError(
+                "--airgap-torque arkkio needs --r-airgap-inner and "
+                "--r-airgap-outer (the radial bounds of that region)")
+        return air_gap_maxwell_torque_arkkio_2d(
+            field, mesh, mesh.Materials(airgap_region),
+            inner_radius_m=r_inner, outer_radius_m=r_outer,
+            stack_length_m=stack_length, permeability_H_per_m=MU_0)
+    raise ValueError("airgap torque method must be 'line' or 'arkkio'")
 
 
 def _step_circuit_ode(state, t, dt, L_inc, R, e_bemf, v_source,
@@ -325,6 +335,10 @@ def solve_motor_transient(
     stack_length=0.05,            # m (axial)
     n_pole_pairs=4,
     r_airgap_mid=0.05,            # m
+    airgap_torque="line",         # "line" | "arkkio"
+    airgap_region="airgap",
+    r_airgap_inner=None,          # m, required for arkkio
+    r_airgap_outer=None,          # m, required for arkkio
     R_phase=0.3872,               # ohm
     L_endwinding=0.0,             # H, lumped end-winding inductance
     pm_Br_value=0.0,              # T, PM remanence (0 -> no PMs)
@@ -476,8 +490,11 @@ def solve_motor_transient(
         else:
             e_bemf = np.zeros(nbr_phases)
 
-        # 4) Arkkio torque on airgap_mid circle
-        T_em = _compute_torque_arkkio(mesh, A, r_airgap_mid, stack_length)
+        # 4) Air-gap Maxwell torque (contour by default, Arkkio on request)
+        T_em = _compute_airgap_torque(
+            mesh, A, r_airgap_mid, stack_length,
+            method=airgap_torque, airgap_region=airgap_region,
+            r_inner=r_airgap_inner, r_outer=r_airgap_outer)
 
         # 5) Inner circuit + mechanical ODE integration
         for k_circ in range(n_steps_per_FE):
@@ -526,7 +543,8 @@ def solve_motor_transient(
         final_force_torque_result = force_torque_result(
             None,
             [0.0, 0.0, history["T_em"][-1]],
-            method="arkkio_air_gap_stress",
+            method=("arkkio_air_gap_stress" if airgap_torque == "arkkio"
+                    else "contour_air_gap_maxwell_stress"),
             frame="global_cartesian",
             pivot_m=[0.0, 0.0, 0.0],
             dimensionality="2d_planar",
@@ -554,8 +572,10 @@ def solve_motor_transient(
         "method_paper": "Lange-Henrotte-Hameyer, IEEE TMAG 45(3) 2009",
         "e_bemf_history": history["e_bemf"],
         "notes": [
-            "Arkkio torque: integrated on labeled 'airgap_mid' boundary "
-            "(requires mesh sideset).",
+            f"Air-gap torque route '{airgap_torque}': 'line' integrates the "
+            "Maxwell stress on the labeled 'airgap_mid' boundary (requires "
+            "that sideset); 'arkkio' averages the same integrand over the "
+            "meshed gap annulus. Both come from radia.force_ngsolve.",
             "Back-EMF: PM-only finite difference d(psi)/d(theta) at "
             "delta_theta=1e-4 rad (cost: 2 extra FE solves per refresh).",
             "PM rotation: Br(theta_rotor) as analytic CF with "
@@ -595,6 +615,17 @@ def build_argparser():
     parser.add_argument("--n-pole-pairs", type=int, default=4)
     parser.add_argument("--r-airgap-mid", type=float, default=0.05,
                         help="m, air-gap mid-radius")
+    parser.add_argument("--airgap-torque", choices=("line", "arkkio"),
+                        default="line",
+                        help="air-gap torque route: 'line' integrates the "
+                             "'airgap_mid' contour (default, historical); "
+                             "'arkkio' averages over the gap annulus")
+    parser.add_argument("--airgap-region", default="airgap",
+                        help="material region of the gap annulus (arkkio)")
+    parser.add_argument("--r-airgap-inner", type=float, default=None,
+                        help="m, inner radius of the gap annulus (arkkio)")
+    parser.add_argument("--r-airgap-outer", type=float, default=None,
+                        help="m, outer radius of the gap annulus (arkkio)")
     parser.add_argument("--R-phase", type=float, default=0.3872,
                         help="ohm, per-phase resistance")
     parser.add_argument("--L-endwinding", type=float, default=0.0,
@@ -644,6 +675,10 @@ def main():
             stack_length=args.stack_length,
             n_pole_pairs=args.n_pole_pairs,
             r_airgap_mid=args.r_airgap_mid,
+            airgap_torque=args.airgap_torque,
+            airgap_region=args.airgap_region,
+            r_airgap_inner=args.r_airgap_inner,
+            r_airgap_outer=args.r_airgap_outer,
             R_phase=args.R_phase,
             L_endwinding=args.L_endwinding,
             pm_Br_value=args.pm_Br_value,

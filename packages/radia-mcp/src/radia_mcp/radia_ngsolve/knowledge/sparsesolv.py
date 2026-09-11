@@ -1119,7 +1119,7 @@ The preconditioner SETUP completes cleanly (logs `CompactAMS setup
 complete: ...s total`); the crash happens when COCR invokes the
 preconditioner's apply() during its first iteration.
 
-**Diagnostic test**: run `src/ext/sparsesolv/examples/hiruma/bench_compact_ams.py`
+**Diagnostic test**: run `validation_test/sparsesolv/hiruma/bench_compact_ams.py`
 directly without any pipeline (`python bench_compact_ams.py > log.txt
 2>&1; echo $?`).  If this canonical bench reproduces the segfault, the
 issue is NOT in your wiring -- it's in the deployed sparsesolv_ngsolve
@@ -1163,7 +1163,7 @@ mismatch and needs source-level debugging in
   the same crash; not a calc_fem_kelvin bug.
 - `src/radia/panels/calc_fem_coilmesh.py` -- declares `solver=ams` but
   errors out at runtime; not affected by this issue (different branch).
-- `src/ext/sparsesolv/examples/hiruma/bench_compact_ams.py` --
+- `validation_test/sparsesolv/hiruma/bench_compact_ams.py` --
   reference reproducer.
 
 **Memory file**: `memory/project_3turncoil_fem_convergence_blockers.md`

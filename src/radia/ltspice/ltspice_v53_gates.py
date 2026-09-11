@@ -7,21 +7,14 @@ from collections.abc import Mapping
 
 from .ltspice_v54_gates import validate_ltspice_v54_identity
 
+from ._artifact_identity import (
+    digest_is_sha256 as _digest,
+    same_generation as _generation,
+)
+
 
 NOISE = "noise_spectraldensity_integrated_bandwidth_source_owner_identity"
 STEADY = "switchmode_sampled_steadystate_cycle_phase_ripple_waveform_owner_identity"
-
-
-def _digest(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
-
-
-def _generation(contract: Mapping[str, object], *names: str) -> bool:
-    generation = str(contract.get("generation_id") or "")
-    return bool(generation) and all(contract.get(name) == generation for name in names)
 
 
 def _number(value: object, *, nonnegative: bool = False, positive: bool = False) -> bool:

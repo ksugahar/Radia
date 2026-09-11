@@ -1,9 +1,10 @@
 classdef NSGAIISampler < radia.optuna.BaseGASampler
     %NSGAIISAMPLER Optuna-compatible generational constrained NSGA-II.
-    %   The default is UniformCrossover. All Optuna 4.9 built-in numerical
+    %   The default is UniformCrossover. All Optuna 5.0 built-in numerical
     %   crossovers are available under radia.optuna.nsgaii. Categorical
-    %   parameters always use uniform crossover, and mutated/dynamic
-    %   parameters use the seeded independent random fallback.
+    %   parameters always use uniform crossover. By default mutated/dynamic
+    %   parameters use the seeded independent random fallback; an Optuna 5
+    %   BaseMutation can instead mutate numerical parameters in place.
 
     properties (SetAccess=private)
         Stream
@@ -13,6 +14,7 @@ classdef NSGAIISampler < radia.optuna.BaseGASampler
         CrossoverProbability (1,1) double = 0.9
         SwappingProbability (1,1) double = 0.5
         Crossover = []
+        Mutation = []
         % Retained for source compatibility; random fallback mutation does
         % not use the former Gaussian MutationScale.
         MutationScale (1,1) double = 0.1
@@ -33,9 +35,7 @@ classdef NSGAIISampler < radia.optuna.BaseGASampler
     end
 
     properties (Constant, Access=private)
-        StateSchema = "radia.optuna.nsgaii-sampler-state.v3"
-        LegacyStateSchemaV2 = "radia.optuna.nsgaii-sampler-state.v2"
-        LegacyStateSchemaV1 = "radia.optuna.nsgaii-sampler-state.v1"
+        StateSchema = "radia.optuna.nsgaii-sampler-state.v4"
         SamplerName = "nsgaii"
     end
 
@@ -47,6 +47,7 @@ classdef NSGAIISampler < radia.optuna.BaseGASampler
                     {mustBeInteger,mustBePositive} = 50
                 options.MutationProbability (1,1) double = NaN
                 options.Crossover = []
+                options.Mutation = []
                 options.CrossoverProbability (1,1) double = 0.9
                 options.SwappingProbability (1,1) double = 0.5
                 options.MutationScale (1,1) double {mustBePositive} = 0.1
@@ -83,6 +84,11 @@ classdef NSGAIISampler < radia.optuna.BaseGASampler
                         "%s must be a function handle.",functionNames(index));
                 end
             end
+            if ~isempty(options.ConstraintsFcn)
+                warning("radia:optuna:FutureWarning", ...
+                    "ConstraintsFcn is deprecated in Optuna 5.0 and will " + ...
+                    "be removed in 7.0. Use Trial.set_constraint instead.");
+            end
             crossover = options.Crossover;
             if isempty(crossover)
                 crossover = radia.optuna.nsgaii.UniformCrossover( ...
@@ -91,6 +97,12 @@ classdef NSGAIISampler < radia.optuna.BaseGASampler
             if ~isa(crossover,"radia.optuna.nsgaii.BaseCrossover")
                 error("radia:optuna:NSGAIICrossover", ...
                     "Crossover must derive from radia.optuna.nsgaii.BaseCrossover.");
+            end
+            mutation=options.Mutation;
+            if ~isempty(mutation) && ...
+                    ~isa(mutation,"radia.optuna.nsgaii.BaseMutation")
+                error("radia:optuna:NSGAIIMutation", ...
+                    "Mutation must derive from radia.optuna.nsgaii.BaseMutation.");
             end
             if options.PopulationSize < 2
                 error("radia:optuna:NSGAIIPopulation", ...
@@ -110,6 +122,7 @@ classdef NSGAIISampler < radia.optuna.BaseGASampler
             obj.CrossoverProbability = options.CrossoverProbability;
             obj.SwappingProbability = options.SwappingProbability;
             obj.Crossover = crossover;
+            obj.Mutation = mutation;
             obj.MutationScale = options.MutationScale;
             obj.ConstraintsFcn = options.ConstraintsFcn;
             obj.ElitePopulationSelectionStrategy = ...
@@ -141,8 +154,8 @@ classdef NSGAIISampler < radia.optuna.BaseGASampler
             obj.IndependentSampler.beforeTrial(study,trial);
             obj.attach(study);
             generation = obj.assignGeneration(study,trial.Number);
-            trial.setSystemAttr("nsgaii_generation",generation);
-            trial.setSystemAttr("NSGAIISampler:generation",generation);
+            trial.setInternalAttribute("nsgaii_generation",generation);
+            trial.setInternalAttribute("NSGAIISampler:generation",generation);
             if generation == 0
                 obj.markFallback(trial,"initial_generation");
                 obj.recordState(study,trial.Number);
@@ -162,11 +175,11 @@ classdef NSGAIISampler < radia.optuna.BaseGASampler
             if ~isempty(relativeSpace)
                 trial.setRelativeParameters(relativeSpace,child,"nsgaii");
             end
-            trial.setSystemAttr("nsgaii_sampling_mode","joint");
-            trial.setSystemAttr("nsgaii_joint_search_space", ...
+            trial.setInternalAttribute("nsgaii_sampling_mode","joint");
+            trial.setInternalAttribute("nsgaii_joint_search_space", ...
                 reshape([searchSpace.name],1,[]));
-            trial.setSystemAttr("nsgaii_mutated_parameters",mutatedNames);
-            trial.setSystemAttr("nsgaii_parent_trial_numbers", ...
+            trial.setInternalAttribute("nsgaii_mutated_parameters",mutatedNames);
+            trial.setInternalAttribute("nsgaii_parent_trial_numbers", ...
                 reshape(selectedParents,1,[]));
             obj.recordState(study,trial.Number);
         end
@@ -245,14 +258,6 @@ classdef NSGAIISampler < radia.optuna.BaseGASampler
             state=study.samplerState(obj.SamplerName,obj.StateSchema);
             if ~isempty(state)
                 obj.restoreState(state);
-            else
-                state=study.samplerState(obj.SamplerName,obj.LegacyStateSchemaV2);
-                if ~isempty(state)
-                    obj.restoreLegacyStateV2(state);
-                else
-                    state=study.samplerState(obj.SamplerName,obj.LegacyStateSchemaV1);
-                    if ~isempty(state), obj.restoreLegacyStateV1(state); end
-                end
             end
             obj.reconcileExistingTrials(study);
             obj.Restored=true;
@@ -261,7 +266,7 @@ classdef NSGAIISampler < radia.optuna.BaseGASampler
         function restoreState(obj,state)
             required=["schema","seed","random_state","population_size", ...
                 "mutation_probability","crossover_probability", ...
-                "swapping_probability","crossover","strategies", ...
+                "swapping_probability","mutation","crossover","strategies", ...
                 "generation_by_trial","generation_parent_cache"];
             compatible=isstruct(state) && isscalar(state) && ...
                 all(isfield(state,required));
@@ -272,6 +277,7 @@ classdef NSGAIISampler < radia.optuna.BaseGASampler
                     isequaln(double(state.mutation_probability),obj.MutationProbability) && ...
                     double(state.crossover_probability)==obj.CrossoverProbability && ...
                     double(state.swapping_probability)==obj.SwappingProbability && ...
+                    isequaln(state.mutation,obj.mutationConfiguration()) && ...
                     isequaln(state.crossover,obj.Crossover.configuration()) && ...
                     isequaln(state.strategies,obj.strategyConfiguration());
             end
@@ -285,48 +291,6 @@ classdef NSGAIISampler < radia.optuna.BaseGASampler
             obj.GenerationTrialNumbers=assignments(:,1);
             obj.GenerationAssignments=assignments(:,2);
             obj.ParentCaches=caches;
-        end
-
-        function restoreLegacyStateV2(obj,state)
-            required=["schema","seed","random_state","population_size", ...
-                "mutation_probability","crossover_probability", ...
-                "generation_by_trial","generation_parent_cache"];
-            compatible=isstruct(state) && isscalar(state) && ...
-                all(isfield(state,required)) && ...
-                string(state.schema)==obj.LegacyStateSchemaV2 && ...
-                double(state.seed)==obj.Seed && ...
-                double(state.population_size)==obj.PopulationSize && ...
-                isequaln(double(state.mutation_probability),obj.MutationProbability) && ...
-                double(state.crossover_probability)==obj.CrossoverProbability && ...
-                isa(obj.Crossover,"radia.optuna.nsgaii.UniformCrossover") && ...
-                obj.SwappingProbability==0.5 && obj.strategiesAreDefault();
-            if ~compatible
-                error("radia:optuna:NSGAIIState", ...
-                    "Stored NSGA-II v2 state is incompatible.");
-            end
-            legacyCaches=state.generation_parent_cache;
-            caches=struct("generation",{},"trial_numbers",{});
-            for index=1:numel(legacyCaches)
-                caches(end+1)=struct("generation",legacyCaches(index).generation, ...
-                    "trial_numbers",legacyCaches(index).trial_numbers); %#ok<AGROW>
-            end
-            [assignments,caches]=obj.validatePersistentState( ...
-                state.generation_by_trial,caches);
-            obj.Stream.State=state.random_state;
-            obj.GenerationTrialNumbers=assignments(:,1);
-            obj.GenerationAssignments=assignments(:,2);
-            obj.ParentCaches=caches;
-        end
-
-        function restoreLegacyStateV1(obj,state)
-            if ~isstruct(state) || ~isscalar(state) || ...
-                    ~all(isfield(state,["schema","seed","random_state"])) || ...
-                    string(state.schema)~=obj.LegacyStateSchemaV1 || ...
-                    double(state.seed)~=obj.Seed
-                error("radia:optuna:NSGAIIState", ...
-                    "Stored legacy NSGA-II state is invalid or incompatible.");
-            end
-            obj.Stream.State=state.random_state;
         end
 
         function [assignments,caches]=validatePersistentState(~,assignments,caches)
@@ -376,15 +340,19 @@ classdef NSGAIISampler < radia.optuna.BaseGASampler
                 "after_trial",obj.functionName(obj.AfterTrialStrategy));
         end
 
-        function result=strategiesAreDefault(obj)
-            result=isempty(obj.ConstraintsFcn) && ...
-                isempty(obj.ElitePopulationSelectionStrategy) && ...
-                isempty(obj.ChildGenerationStrategy) && ...
-                isempty(obj.AfterTrialStrategy);
-        end
-
         function name=functionName(~,handle)
             if isempty(handle), name=""; else, name=string(func2str(handle)); end
+        end
+
+        function config=mutationConfiguration(obj)
+            if isempty(obj.Mutation)
+                config=struct("class","");
+            elseif isa(obj.Mutation,"radia.optuna.nsgaii.PolynomialMutation")
+                config=struct("class","PolynomialMutation", ...
+                    "eta",obj.Mutation.Eta);
+            else
+                config=struct("class",string(class(obj.Mutation)));
+            end
         end
 
         function state=snapshot(obj)
@@ -393,6 +361,7 @@ classdef NSGAIISampler < radia.optuna.BaseGASampler
                 "mutation_probability",obj.MutationProbability, ...
                 "crossover_probability",obj.CrossoverProbability, ...
                 "swapping_probability",obj.SwappingProbability, ...
+                "mutation",obj.mutationConfiguration(), ...
                 "crossover",obj.Crossover.configuration(), ...
                 "strategies",obj.strategyConfiguration(), ...
                 "random_state",obj.Stream.State, ...
@@ -586,8 +555,27 @@ classdef NSGAIISampler < radia.optuna.BaseGASampler
             mutated=false(1,dimension);
             mutated(mutationOrder)=mutationDraws;
             mutatedNames=reshape([searchSpace(mutated).name],1,[]);
-            relativeSpace=searchSpace(~mutated);
-            child=child(~mutated);
+            keep=~mutated;
+            if ~isempty(obj.Mutation)
+                numeric=arrayfun(@(x) ...
+                    x.distribution.kind~="categorical",searchSpace);
+                custom=find(mutated & numeric);
+                for index=reshape(custom,1,[])
+                    distribution=searchSpace(index).distribution;
+                    [transformed,bounds]=obj.transformParents( ...
+                        child(index),searchSpace(index));
+                    value=obj.Mutation.mutation( ...
+                        transformed(1),obj.Stream,study,bounds(1,:));
+                    value=min(max(double(value),bounds(1,1)),bounds(1,2));
+                    converted=obj.untransformChild(value,searchSpace(index));
+                    if ~isempty(converted)
+                        child(index)=converted;
+                        keep(index)=true;
+                    end
+                end
+            end
+            relativeSpace=searchSpace(keep);
+            child=child(keep);
         end
 
         function [child,selectedParents]=performCrossover( ...
@@ -865,8 +853,8 @@ classdef NSGAIISampler < radia.optuna.BaseGASampler
         end
 
         function markFallback(~,trial,reason)
-            trial.setSystemAttr("nsgaii_sampling_mode","independent_fallback");
-            trial.setSystemAttr("nsgaii_fallback_reason",reason);
+            trial.setInternalAttribute("nsgaii_sampling_mode","independent_fallback");
+            trial.setInternalAttribute("nsgaii_fallback_reason",reason);
         end
     end
 end

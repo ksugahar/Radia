@@ -5,15 +5,122 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- Fixed MATLAB LTspice binary RAW precision/layout validation and transient
+  state injection. Unsupported layouts, malformed payload sizes, missing or
+  ambiguous `.end` directives, and unsupported hierarchical inductor states
+  now fail explicitly. Added LTspice-generated binary/ASCII regression fixtures.
+
+- `release_quad ci-verify` requires native release evidence on the exact SHA
+  before tagging. The isolated build environment imports its dependencies
+  immediately after installation so missing modules fail before the build.
+  The native check has a distribution-specific name; another package's
+  `build-test`, a skipped run or a neutral result cannot substitute for success.
+- Added `bibliography_get_entries` so PowerPoint and other non-LaTeX generators
+  can resolve ordered BibTeX keys from the bundled canonical bibliography and
+  record its SHA-256 instead of carrying hand-written reference lists. Added
+  the ten records needed by the IGTE 2026 Cauer/SIBC talk and corrected the
+  Senior impedance-boundary paper to its DOI-backed 1960 publication year.
+- Added the presentation rule that a claim such as “generated from the
+  canonical references.bib” is valid only when the build actually calls the
+  bibliography API, fails closed on missing keys, and records provenance.
+- Promoted the sparsesolv Hiruma benchmark to
+  `validation_test/sparsesolv/hiruma/`.  The tracked `mesh1_2.5T.vol` fixture
+  has explicit material-interface ownership, a strict label contract and a
+  passing `check-vol` report.  Its Compact AMS + COCR gate fixes the mesh hash
+  and FE dimensions, accepts 140--150 iterations and a true residual no larger
+  than 2e-10, and records timings without treating machine speed as a golden.
+  The four larger meshes remain optional scaling inputs.
+
+## 4.95.91 - Corrected MagLev ECB force reconstruction
+
+Released 2026-09-11.
+
+- Made the MATLAB MEX `Matrix.matvec` gateway enter an NGSolve TaskManager
+  region, matching `matvec_into`. This prevents the TaskManager-parallel real
+  AMS path from intermittently returning its zero initial guess; the native
+  MATLAB parity regression now repeats that direct solve three times.
+- Refined recurring presentation agendas: full research talks now target four
+  or five content-derived sections, agenda rows contain section names only,
+  and explanatory taglines reduce the outline score. Each transition still
+  repeats the same list and highlights only the section beginning there.
+- Corrected `radia.maglev.ecb.lorentz.compute_lorentz_force_via_foster`, which
+  built the eddy current as `J_y = -omega sigma Im(v)` from a scalar `v` that is
+  the reaction-field z component in tesla. That gave a current density in A/m^3
+  with the wrong parity: zero lift for a centred magnet and a horizontal force
+  that mirror symmetry forbids, 1906 N at 5 kHz against an 11.7 N physical
+  bound. The current is now `(1/mu) curl(v z)` with the full dipole field, the
+  drive projection keeps the boundary values of B_z, and the function returns
+  `(F_x, F_y, F_z)` instead of `(F_x, F_z)`. No caller in the repository used
+  it; **any result obtained from it before this release is wrong.**
+  `validation_test/maglev/ecb_foster_lorentz_reference.py` locks it against a
+  direct solve and the centred-dipole physics checks.
+
+## 4.95.90 - Recovered motor torque and completed the AMS contract
+
+Released 2026-09-11.
+
+- Recovered the air-gap electromagnetic torque of `calc_motor_transient`, which
+  collapsed to round-off. The contour integral passed `grad(A)` straight into a
+  boundary integral over the internal `airgap_mid` edge, which evaluates a
+  volume field in the wrong space: on the PMSM golden case the machine reported
+  max|T_em| = 1.1e-13 N m where it now reports 13.9 N m, so the mechanical
+  equation was never driven by the field. **Motor transient torque, and the
+  speed and angle histories that depend on it, from releases up to and
+  including 4.95.89 must be recalculated.**
+- Added the planar air-gap torque kernels to `radia.force_ngsolve`:
+  `air_gap_maxwell_torque_line_2d` (single contour; the default, and the route
+  the script always intended) and `air_gap_maxwell_torque_arkkio_2d` (the
+  gap-thickness average that Arkkio's method actually is). `calc_motor_transient
+  --airgap-torque {line,arkkio}` selects between them, and the force-result
+  `method` now names the route that ran instead of always claiming Arkkio.
+
+- Generalized recurring-outline detection to accept author-defined two-to-eight
+  section taxonomies even when each divider is titled with its current section
+  rather than ``Outline``.
+
+- Rejected non-lowest-order HCurl input to the SparseSolv AMS preconditioners.
+  The Python constructors accepted an order-2 `nograds=True` system, whose
+  discrete gradient still has one column per vertex, and silently fell back to
+  smoothing on the non-edge dofs (about five times more CG iterations on a unit
+  cube); the MATLAB MEX already rejected it. The C++ constructor now requires
+  every discrete-gradient row to be an edge-vertex pair, so both routes raise.
+
+- Corrected the SparseSolv README: AMS iteration counts are not
+  mesh-independent (144 to 499 over a 9.3-fold DOF increase in its own table),
+  and the Hiruma benchmark meshes are documented as not distributed.
+
+- Changed the presentation outline guidance and check to require the complete
+  agenda at each major section transition, with only the section starting now
+  distinctly emphasized. A one-time agenda or sparse section card no longer
+  counts as recurring navigation.
+
+## 4.95.89 - Safe AMS setup and reliable native release packaging
+
+Released 2026-09-11.
+
+- Installed pytest explicitly into the native-release job's run-local Python
+  environment. Tag builds no longer depend on pytest leaking in from the
+  self-hosted runner and can execute the checked native-smoke tier after build.
+
+- Installed the `build` and `wheel` packaging tools in that same isolated
+  environment so a successful native smoke run can proceed to wheel creation
+  without relying on packages inherited from the runner host.
+
+- Corrected the SI normalization of `rad.FldFrc` for H-field inputs, replacing
+  a spurious factor of about 6.33e11 with the Maxwell-stress result. **Force
+  values obtained from `rad.FldFrc` before 4.95.89 must be recalculated.**
+- Added the shared NGSolve-symbolic harmonic Maxwell-stress kernel in
+  `radia.force_ngsolve`. Its current consumers are `calc_fem_kelvin.py` and
+  `radia_mcp.radia_ngsolve.force`; Motor and MagLev are not yet wired to this
+  kernel.
+- Upgraded virtual-work and coenergy endpoint derivatives to second order for
+  nonuniform and periodic samples in both Python and MATLAB.
+
 - Retired `solve_magnetostatic_reduced_omega_kelvin`: calls now fail explicitly
   because its Kelvin exterior/interface convention is not validated. Migrate
   to the total/reduced Omega API with explicit interface/source data. Preserve
   the nonmatching historical comparison in `validation_test`, not as proof of
   complementary bounds or variable-transformation equivalence.
-
-## 4.95.82 - Safe AMS setup and physical shifted preconditioning
-
-Released 2026-09-10.
 
 - AMS construction and matrix updates now reject active NGSolve TaskManager
   contexts with a catchable error before hierarchy setup. Real/complex factories
@@ -22,6 +129,11 @@ Released 2026-09-10.
 - The Hiruma AMS benchmark now keeps its epsilon shift in the real
   preconditioner surrogate only. The physical complex system remains unshifted,
   and historical shifted-system timing data is labeled accordingly.
+- Native tag builds now derive Cubit-only target enablement and its CMake path
+  from the confirmed install directory, then embed fixed paths without delayed
+  batch expansion. This prevents a stale runner variable or an unescaped
+  parenthesis in the generated batch block from entering Cubit configuration.
+  Release-ref discovery also cannot block on an interactive credential helper.
 
 - Simplified Eqnedit64 automation to a single input/output conversion contract
   and migrated the `eqnedit64` package plus `radia-mcp.presentation` bridge to

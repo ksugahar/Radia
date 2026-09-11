@@ -4308,9 +4308,8 @@ def grant_writing_persuasion_quality_check(text: str) -> dict:
     )
     acronym_pile_count = 0
     # An inventory is not a sentence that hides its meaning behind acronyms.
-    # 「Adventure, CST Studio, ELF/Magic, Elmer, EMCoS, EMSolution, ...」 in an
-    # adopted proposal's 研究環境 is a list of the software the lab owns, and
-    # naming them is the whole point.
+    # A one-line list of a dozen solver names in an adopted proposal's 研究環境
+    # is the software the lab owns, and naming them is the whole point.
     for sentence in re.split(r"(?<=[。．!?！？])|\n", prose):
         acronyms = sorted(set(acronym_pattern.findall(sentence)))
         if len(acronyms) < 6:
@@ -4373,6 +4372,8 @@ _CLAIM_MARKERS = (
     "研究目的は",
     "本研究の目的",
     "目的は",
+    "本研究の問い",
+    "研究の問い",
 )
 
 # The noun that names what the answer will BE. Parallel statements of one
@@ -4417,14 +4418,19 @@ def _claim_statements(text: str) -> list[dict]:
     so each marker takes its own sentence plus the following ones up to a
     sentence that closes the claim.
     """
-    sentences = [s for s in re.split(r"(?<=[。．!?！？])", text) if s.strip()]
+
+    sentences = [
+        s for line in text.splitlines() for s in re.split(r"(?<=[。．!?！？])", line) if s.strip()
+    ]
 
     def marker_of(fragment: str) -> str | None:
         return next((m for m in _CLAIM_MARKERS if m in fragment), None)
 
     # An opener defers the claim to what follows (「中心の問いは次である。」).
-    opener = re.compile(r"(?:次である|次を問う|次のとおり|以下である)[。．]\s*$")
-    closer = re.compile(r"(?:か|である|ことである|問う|明らかにする)[。．]\s*$")
+    opener = re.compile(
+        r"(?:次である|次を問う|次のとおり|以下である|明快である|明確である|単純である)[。．]\s*$"
+    )
+    closer = re.compile(r"(?:か|である|ことである|問う|明らかにする)[。．?？]\s*$")
 
     statements: list[dict] = []
     consumed: set[int] = set()
@@ -4433,6 +4439,15 @@ def _claim_statements(text: str) -> list[dict]:
             continue
         marker = marker_of(sentence)
         if marker is None:
+            continue
+        # A bare heading must not consume the question on the following line.
+        # Short interrogatives with explicit punctuation are still sentences.
+        heading = (
+            re.sub(r"^\s*(?:#{1,6}\s*)?(?:\d+[.、)]\s*)?", "", sentence, count=1)
+            .strip()
+            .rstrip("：:")
+        )
+        if heading in _CLAIM_MARKERS:
             continue
         chunk = [sentence]
         if opener.search(sentence.strip()) or not closer.search(sentence.strip()):
@@ -6498,7 +6513,12 @@ def grant_writing_collaborative_integration_risk_check(text: str) -> dict:
     results, team readiness, evaluation ethics, and asset provenance.
     """
     text = _prose_for_lint(_read_text_if_path(text))
-    low = text.lower()
+    # 「連携研究者」 is a role title every KAKENHI form carries, not a claim that
+    # the proposal integrates anything. Counted as a trigger word it made a
+    # plain team sentence applicable and reported seven missing axes, so the
+    # role titles are masked before the applicability scan only; once the draft
+    # genuinely proposes coupling, the axes still read the whole prose.
+    low = _NON_MEMBER_ROLE.sub(" ", text).lower()
     applicable_hits = _contains_any(
         low,
         [
@@ -6981,6 +7001,16 @@ _BUDGET_CATEGORY_CODES: dict[str, tuple[str, ...]] = {
     "F": ("その他", "other"),
 }
 
+# The S-14 table itemises six codes, but the 公募要領 summary line and most
+# applicants write the two grouped headings instead. A declared 物品費 total has
+# to be reconciled against 設備備品費 + 消耗品費 and 旅費 against 国内旅費 +
+# 外国旅費; without the group the tool reported the applicant's own summary as
+# "category_not_in_ledger".
+_BUDGET_CATEGORY_GROUPS: dict[str, tuple[str, ...]] = {
+    "物品費": ("A", "B"),
+    "旅費": ("C", "D"),
+}
+
 
 def _budget_category_code(label: object) -> str:
     key = re.sub(r"\s+", "", str(label or "")).replace("･", "・")
@@ -7003,6 +7033,24 @@ def _totals_by_category_code(values: dict) -> dict[str, Decimal]:
     for key, value in values.items():
         code = _budget_category_code(key)
         merged[code] = merged.get(code, Decimal(0)) + Decimal(str(value))
+    return merged
+
+
+def _with_summary_headings(ledger: dict[str, Decimal]) -> dict[str, Decimal]:
+    """Add the grouped headings a declared total may be written under.
+
+    Only the ledger side is expanded. Doing it to the declared side as well
+    would report one missing category twice: a declared 国内旅費 the ledger
+    lacks would be raised once as ``C`` and again as the 旅費 it rolls up into.
+    """
+    merged = dict(ledger)
+    for group, members in _BUDGET_CATEGORY_GROUPS.items():
+        # These totals contain accepted expenditure rows, not cached subtotal
+        # rows. A distinct expense labelled with the group heading must be
+        # added to expenses labelled with member codes, never shadow them.
+        present = [ledger[code] for code in (group, *members) if code in ledger]
+        if present:
+            merged[group] = sum(present, Decimal(0))
     return merged
 
 
@@ -7030,9 +7078,11 @@ def grant_writing_budget_source_consistency_check(
     is supplied and compares exact grand/year/category totals when declared
     values are supplied. It never infers a number from persuasive prose.
 
-    Declared category totals may use the e-Rad code (``A``..``F``) or the
+    Declared category totals may use the e-Rad code (``A``..``F``), the
     Japanese heading of the S-14 table (設備備品費, 消耗品費, 国内旅費,
-    外国旅費, 人件費・謝金, その他); both are reconciled to the same code.
+    外国旅費, 人件費・謝金, その他), or the two grouped summary headings
+    (物品費 = 設備備品費 + 消耗品費, 旅費 = 国内旅費 + 外国旅費); all three
+    are reconciled to the same ledger rows.
     """
     source = pathlib.Path(budget_source)
     if not source.is_file():
@@ -7067,7 +7117,9 @@ def grant_writing_budget_source_consistency_check(
                     expected_category_totals_json, "expected_category_totals_json"
                 )
             ),
-            _totals_by_category_code(totals["category_totals_thousand_yen"]),
+            _with_summary_headings(
+                _totals_by_category_code(totals["category_totals_thousand_yen"])
+            ),
         ),
     ):
         for key in sorted(set(expected) | set(actual)):
@@ -7613,17 +7665,28 @@ def grant_writing_health_report(
         "irreplaceable", "kaken", "kddi", "literature", "metric", "narrative",
         "nouns", "originality", "pages", "persuasion", "pilot", "residue",
         "scale", "japanese", "readability", "momentum", "sections", "sentence",
-        "translationese", "vague", "vocabulary", "weak",
+        "translationese", "vague", "vocabulary", "weak", "singularity",
     }
     unknown_skip_ids = sorted(skip_set - valid_skip_ids)
     if unknown_skip_ids:
-        raise ValueError(
-            "unknown grant-writing skip id(s): " + ", ".join(unknown_skip_ids)
-        )
+        raise ValueError("unknown grant-writing skip id(s): " + ", ".join(unknown_skip_ids))
 
     detailed_results: dict[str, dict] = {}
     detailed_scores: dict[str, float] = {}
     priority_issues: list[dict] = []
+
+    if "singularity" not in skip_set:
+        singularity = grant_writing_central_question_singularity_check(text)
+        detailed_results["central_question_singularity"] = singularity
+        if singularity["risks"]:
+            priority_issues.append(
+                {
+                    "tool": "singularity",
+                    "name": "central_question_singularity_check",
+                    "score": None,
+                    "comments": singularity["comments"],
+                }
+            )
 
     if "sections" not in skip_set:
         sections = grant_writing_section_presence(text, program=program)
@@ -8248,6 +8311,16 @@ def grant_writing_health_report(
         ),
         "source": "radia_mcp.grant_writing public document server",
     }
+from ._draft_checks import (  # noqa: F401
+    grant_writing_capability_status_map,
+    grant_writing_central_question_singularity_check,
+    grant_writing_draft_length_budget_check,
+    grant_writing_form_field_coverage_check,
+    grant_writing_future_dated_publication_check,
+    grant_writing_named_software_first_use_check,
+    grant_writing_peer_review_convention_hints,
+)
+
 # Achievement section: the applicant's own papers, from the canonical bibliography
 from ._publications import (  # noqa: F401
     grant_writing_achievement_count_check,

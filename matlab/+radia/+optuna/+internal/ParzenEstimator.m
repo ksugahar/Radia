@@ -17,8 +17,6 @@ classdef ParzenEstimator
                 options.ConsiderMagicClip (1,1) logical = true
                 options.ConsiderEndpoints (1,1) logical = false
                 options.ObservationWeights double = zeros(0, 1)
-                options.MultivariateDimension (1,1) double ...
-                    {mustBeInteger, mustBeNonnegative} = 0
             end
             observations = reshape(double(observations), [], 1);
             if any(~isfinite(observations))
@@ -59,16 +57,11 @@ classdef ParzenEstimator
             end
 
             n = numel(mus);
-            if options.MultivariateDimension > 0
-                sigmas = ...
-                    radia.optuna.internal.ParzenEstimator.multivariateSigmas( ...
-                    n, internalLow, internalHigh, ...
-                    options.MultivariateDimension, options.ConsiderMagicClip);
-            else
-                sigmas = radia.optuna.internal.ParzenEstimator.sigmas( ...
-                    mus, internalLow, internalHigh, ...
-                    options.ConsiderMagicClip, options.ConsiderEndpoints);
-            end
+            % Optuna 5.0 uses the neighbor-distance bandwidth for both
+            % independent and multivariate TPE.
+            sigmas = radia.optuna.internal.ParzenEstimator.sigmas( ...
+                mus, internalLow, internalHigh, ...
+                options.ConsiderMagicClip, options.ConsiderEndpoints);
             mus = [mus; 0.5 * (internalLow + internalHigh)];
             sigmas = [sigmas; internalHigh - internalLow];
             weights = radia.optuna.internal.ParzenEstimator.mixtureWeights( ...
@@ -95,8 +88,6 @@ classdef ParzenEstimator
                 nChoices (1,1) double {mustBeInteger, mustBePositive}
                 options.PriorWeight (1,1) double = 1
                 options.ObservationWeights double = zeros(0, 1)
-                options.DistanceFcn = []
-                options.Choices = []
             end
             observedIndices = reshape(double(observedIndices), [], 1);
             if options.PriorWeight < 0 || ~isfinite(options.PriorWeight)
@@ -116,40 +107,9 @@ classdef ParzenEstimator
                 nKernels = n + 1;
                 probabilities = repmat(options.PriorWeight / nKernels, ...
                     nKernels, nChoices);
-                if isempty(options.DistanceFcn)
-                    for index = 1:n
-                        probabilities(index, observedIndices(index)) = ...
-                            probabilities(index, observedIndices(index)) + 1;
-                    end
-                else
-                    if ~isa(options.DistanceFcn,"function_handle") || ...
-                            numel(options.Choices)~=nChoices
-                        error("radia:optuna:TPECategoricalDistance", ...
-                            "Categorical choices and distance function must be provided together.");
-                    end
-                    [usedIndices,~,reverseIndices]=unique(observedIndices);
-                    distances=zeros(numel(usedIndices),nChoices);
-                    for row=1:numel(usedIndices)
-                        first=radia.optuna.internal.DistributionCodec. ...
-                            choiceAt(options.Choices,usedIndices(row));
-                        for column=1:nChoices
-                            second=radia.optuna.internal.DistributionCodec. ...
-                                choiceAt(options.Choices,column);
-                            value=options.DistanceFcn(first,second);
-                            if ~(isnumeric(value) && isreal(value) && ...
-                                    isscalar(value))
-                                error("radia:optuna:TPECategoricalDistance", ...
-                                    "A categorical distance must return a real numeric scalar.");
-                            end
-                            distances(row,column)=double(value);
-                        end
-                    end
-                    maximum=max(distances,[],2);
-                    coefficient=log(nKernels/options.PriorWeight)* ...
-                        log(nChoices)/log(6);
-                    categoricalWeights=exp(-((distances./maximum).^2)* ...
-                        coefficient);
-                    probabilities(1:n,:)=categoricalWeights(reverseIndices,:);
+                for index = 1:n
+                    probabilities(index, observedIndices(index)) = ...
+                        probabilities(index, observedIndices(index)) + 1;
                 end
                 rowSums = sum(probabilities, 2);
                 zeroRows = rowSums == 0;
@@ -424,23 +384,6 @@ classdef ParzenEstimator
             sortedSigmas = min(max(sortedSigmas, minimum), span);
             sigmas = zeros(count, 1);
             sigmas(order) = sortedSigmas;
-        end
-
-        function sigmas = multivariateSigmas( ...
-                count, low, high, dimension, magicClip)
-            if count == 0
-                sigmas = zeros(0, 1);
-                return
-            end
-            span = high - low;
-            sigma = 0.2 * max(count, 1)^(-1 / (dimension + 4)) * span;
-            minimum = eps;
-            if magicClip
-                nKernels = count + 1;
-                minimum = span / min(100, 1 + nKernels);
-            end
-            sigma = min(max(sigma, minimum), span);
-            sigmas = repmat(sigma, count, 1);
         end
 
         function weights = mixtureWeights(count, priorWeight, observationWeights)

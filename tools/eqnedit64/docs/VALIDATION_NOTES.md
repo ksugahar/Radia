@@ -1,5 +1,51 @@
 # Eqnedit64 検証記録
 
+## 2026-09-11: review 8a34e1b53 and unresolved font-host incident
+
+- User-supplied independent Opus 5 review: 100's session 0 recorded
+  Application Error 1000 at 14:21:11, fontdrvhost 10.0.20348.5256,
+  exception 0xc0000005, offset 0x366a2, PID 1124; successor PID 303888
+  started at 14:21:15. The candidate self-test started in the same second.
+  Both application checks returned zero, but the external PID gate failed.
+- This is reported evidence, not a new reproduction by Codex. It strongly
+  associates startup with the incident but does not identify the failing API
+  or establish that file-backed registration is safe. Unchanged rendering
+  source alone cannot prove absence of an intermittent regression.
+- Do not repeat on LAB's interactive desktop or 100's shared session 0.
+  Use an explicitly dedicated disposable environment for future diagnosis,
+  with idle controls, event timestamps and host PIDs around every invocation.
+  Do not bypass or weaken the host gate because application checks pass.
+  Font-host safety remains OPEN; no fix or release acceptance is claimed.
+- Review code findings are covered by grouped/empty-base prime import tests
+  and a browser request-abort test. The earlier homepage preflight failure
+  at 09:15 was followed by a successful 09:19 browser report, but neither
+  report certifies this later candidate.
+
+## 2026-09-10 3.0.16 candidate: visual fallback review follow-up
+
+- Source baseline: `77fb162dbd6cf71c1d2a410c6e752cbe9ea96577` (main).
+  The user-supplied review identifies the unreleased decoration, slashed
+  fraction and palette corrections and the remaining node-dispatch risk.
+  This is not a claim that the new candidate has passed Fable or hand testing.
+- Before the renderer change, `test_node_dispatch.py` failed with missing
+  `kSize`, `kFont`, and `kRM`. After explicit decisions and removal of the
+  fallback, the focused static/Web tests passed (19 tests).
+- Add a C++ runtime regression requiring named rejection of legacy Font/RM
+  nodes and accepting Size as list state. It runs in the disposable hosted CI,
+  not on interactive LAB. Enable `/WX /w14062` for the CMake core so CI has the
+  release compiler's missing-enumerator guard.
+- The unmodified dispatch compiled on LAB (MSVC 19.50). A temporary header
+  adding `kReleaseProbe`, compiled against the actual renderer with
+  `/W4 /WX /w14062`, failed with C4062/C2220 at `layout_node`. No renderer
+  process was executed. The test target also specifies UTF-8 explicitly so
+  Japanese Windows code pages cannot reinterpret the shared headers.
+- Align numeric PE version (previously 3.0.13), visible version, CMake, PyPI,
+  and Web identifier at 3.0.16; a focused static test checks their agreement.
+- Pending before formal publication: candidate CI, signed O: staging and
+  Sugahara hand test, recorded Fable reviewed/resolution SHAs, main CI, tag,
+  GitHub/PyPI publication, and matching homepage Web publication/verification.
+  Do not count the previously published 3.0.15 as this candidate's acceptance.
+
 この文書の2026-08-25/26記録は、公開リポジトリ移行前の内部配布ゲートで得た
 履歴である。現在の公開リリース手順は
 [`CANONICAL_OPERATION.md`](CANONICAL_OPERATION.md) と `release-eqnedit64` skillを

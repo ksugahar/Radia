@@ -121,3 +121,60 @@ def test_the_problems_are_named_not_just_counted():
         assert "floor" in str(exc)
     else:
         pytest.fail("expected a refusal")
+
+
+def test_a_rule_drawn_with_axvline_is_not_data_a_label_can_cover():
+    """A Gantt chart drew its quarter boundaries with ``axvline``. Every in-bar
+    label was then reported as covering a plotted point, so the author switched
+    the gate off rather than argue with it."""
+    fig, ax = plt.subplots(figsize=(6, 4))
+    for x in range(5):
+        ax.axvline(x, color="#CCCCCC", linewidth=0.8)
+    ax.set_xlim(0, 4)
+    ax.set_ylim(0, 3)
+    ax.text(2.0, 1.5, "error <= 2%", ha="center", va="center")
+    assert figure_readability_problems(fig) == []
+
+
+def test_a_rule_drawn_with_axhline_is_not_data_either():
+    fig, ax = plt.subplots(figsize=(6, 4))
+    ax.axhline(1.5, color="#CCCCCC", linewidth=0.8)
+    ax.set_xlim(0, 4)
+    ax.set_ylim(0, 3)
+    ax.text(2.0, 1.5, "on the rule", ha="center", va="center")
+    assert figure_readability_problems(fig) == []
+
+
+def test_a_two_point_horizontal_data_series_is_not_mistaken_for_a_guide():
+    """A two-sample measurement may legitimately be horizontal.  Its geometry
+    alone cannot turn it into a guide and hide a covered marker."""
+    fig, ax = plt.subplots(figsize=(6, 4))
+    ax.plot([1, 2], [1.5, 1.5], marker="o")
+    ax.set_xlim(0, 4)
+    ax.set_ylim(0, 3)
+    ax.text(1.0, 1.5, "covers data", ha="center", va="center")
+    problems = figure_readability_problems(fig)
+    assert any("covers" in p and "plotted point" in p for p in problems), problems
+
+
+def test_excluding_guides_does_not_excuse_a_label_on_the_curve():
+    """The exclusion is for rules only. A label still may not sit on the
+    series it annotates, which is the case the gate exists for."""
+    fig, ax = plt.subplots(figsize=(6, 5))
+    ax.axvline(2, color="#CCCCCC")
+    ax.plot([1, 2, 3], [1, 4, 9])
+    ax.text(2, 4, "covers the marker", ha="center", va="center")
+    problems = figure_readability_problems(fig)
+    assert any("covers" in p for p in problems), problems
+
+
+def test_a_keyword_lab_savefig_never_had_is_refused_at_the_call_site(tmp_path):
+    """``check_overlap=False`` was written at two call sites and believed to be
+    a switch. It was forwarded to fig.savefig, which raised about print_pdf --
+    a message that reads as a backend fault, so the belief survived."""
+    fig, ax = plt.subplots(figsize=(6, 4.5))
+    ax.plot([1, 2, 3], [1, 4, 9])
+    with pytest.raises(TypeError, match="no argument 'check_overlap'"):
+        lab_savefig(fig, str(tmp_path / "f"), check_overlap=True)
+    with pytest.raises(TypeError, match="allow_unreadable"):
+        lab_savefig(fig, str(tmp_path / "f"), check_overlap=False)

@@ -11,8 +11,8 @@ if isa(study_or_trial,"radia.optuna.FrozenTrial")
     end
     attributes=options.storage.get_trial_system_attrs( ...
         study_or_trial.Number);
-elseif ismethod(study_or_trial,"system_attrs")
-    attributes=study_or_trial.system_attrs();
+elseif ismethod(study_or_trial,"internalAttributes")
+    attributes=study_or_trial.internalAttributes();
 else
     error("radia:optuna:ArtifactTarget", ...
         "study_or_trial must be an Optuna Study, Trial, or FrozenTrial.");

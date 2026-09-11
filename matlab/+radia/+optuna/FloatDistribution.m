@@ -1,5 +1,5 @@
 classdef FloatDistribution < radia.optuna.BaseDistribution
-    %FLOATDISTRIBUTION Public Optuna 4.9 float distribution.
+    %FLOATDISTRIBUTION Public Optuna 5 float distribution.
 
     methods
         function obj=FloatDistribution(low,high,options)

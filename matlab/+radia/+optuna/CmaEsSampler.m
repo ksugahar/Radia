@@ -159,7 +159,7 @@ classdef CmaEsSampler < radia.optuna.BaseSampler
             if obj.ConsiderPrunedTrials || obj.UseSeparableCMA || ...
                     obj.WithMargin || obj.LrAdapt || ~isempty(obj.SourceTrials)
                 warning("radia:optuna:ExperimentalWarning", ...
-                    "The requested advanced CmaEsSampler option is experimental in Optuna 4.9.0.");
+                    "The requested advanced CmaEsSampler option is experimental in Optuna 5.0.0.");
             end
         end
 

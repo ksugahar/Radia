@@ -2,7 +2,7 @@ function result=getParamImportances(study,options)
 %GETPARAMIMPORTANCES CamelCase alias for GET_PARAM_IMPORTANCES.
 arguments
     study (1,1) radia.optuna.Study
-    options.Evaluator (1,1) string = "fanova"
+    options.Evaluator (1,1) string = "ped_anova"
     options.Params string = strings(1,0)
     options.Normalize (1,1) logical = true
     options.ObjectiveIndex (1,1) double {mustBeInteger,mustBePositive} = 1

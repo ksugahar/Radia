@@ -22,7 +22,7 @@ from pathlib import Path
 import numpy as np
 from scipy.linalg import eigh
 
-PROTO = Path("W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/axifem")
+PROTO = Path(__file__).resolve().parents[2] / "maglev" / "research_cln" / "axifem"
 sys.path.insert(0, str(PROTO))
 
 from axifem_quad_q2 import (  # type: ignore

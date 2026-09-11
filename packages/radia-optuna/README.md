@@ -3,15 +3,17 @@
 `radia-optuna` is an independent, separately distributed MATLAB optimization
 component from the Radia monorepo. It installs the `radia.optuna` MATLAB
 namespace, the 21-command `optuna_mex`, and checked compatibility contracts
-whose behavioral oracle is Optuna 4.9.0. Its checked public inventory contains
-816 present and mapped entries: 748 have evidence derived from an upstream
-oracle generator and 68 remain explicitly assertion-mapped. The required
-shared scope is 400/400 evidence-mapped with no asserted required entry. It
+whose behavioral oracle is Optuna 5.0.0. Its checked public inventory contains
+812 present and mapped entries: 749 have evidence derived from an upstream
+oracle generator and 63 remain explicitly assertion-mapped. The required
+shared scope is 401/401 evidence-mapped with no asserted required entry. It
 does not install or load the Radia solver, NGSolve, oneMKL, or Cubit.
 
-Optuna 4.9.0 is also the algorithmic source of truth: native MATLAB and MEX
+Optuna 5.0.0 is also the algorithmic source of truth: native MATLAB and MEX
 paths preserve its equations, transforms, state updates, boundary handling,
-and seeded random-consumption order. MATLAB vectorization, parallel trial
+defaults, extension points, and seeded random-consumption order. The active
+implementation uses the 5.0 design directly; removed 4.x APIs and state shims
+are not kept. MATLAB vectorization, parallel trial
 scheduling, table/MAT persistence, and Simulink telemetry are performance and
 workflow extensions around that common algorithm rather than alternative
 default optimizers.
@@ -89,9 +91,11 @@ start Python. Install `radia-optuna[upstream]` for features intentionally
 executed through pinned upstream Python packages, including checked GP
 acquisition, scrambled QMC, and parameter importance.
 
-The native sampler surface includes concurrent-RUNNING constant-liar TPE,
-source-trial/separable/margin/learning-rate CMA-ES modes, and deterministic
-unscrambled Sobol generation through 21,201 dimensions. The Sobol path uses a
+The native sampler surface includes unified scalar and multi-objective TPE,
+automatic multivariate selection, concurrent-RUNNING constant liar, named
+constraints, polynomial mutation, source-trial/separable/margin/learning-rate
+CMA-ES modes, and deterministic unscrambled Sobol generation through 21,201
+dimensions. The Sobol path uses a
 checked binary conversion of SciPy 1.17.1's Joe--Kuo criterion-6 direction
 numbers and does not import Python or SciPy at MATLAB runtime.
 
@@ -159,19 +163,13 @@ tables after MAT reload. Shared Study/Trial MCP operations remain upstream.
 
 ### Reproducible performance evidence
 
-Long benchmarks live under `validation_test/optimization`. The 2026-08-29 mdx
-release-candidate evidence measured MATLAB/Python warmed-time ratios of 0.670
-for scalar TPE, 0.491 for grouped conditional TPE, and 0.630 for 1,000-row
-table export; lower is faster. A deterministic four-worker batch was 2.357x
-faster than sequential evaluation, while the 4,000-trial indexed history probe
-was 5.683x faster than its scan reference. Seeded checksums, best value, table
-shape, and indexed history values matched.
-
-The complete machine/runtime/load record and raw timings are in
-`validation_test/optimization/results_optuna_release_evidence_mdx_20260829.json`.
-The parallel result is a calibrated scheduler benchmark, not a promise that
-every CAE objective scales by the same factor; cheap objectives should remain
-sequential.
+Long benchmarks live under `validation_test/optimization`. The Optuna 5 lane
+uses `benchmark_optuna50_python.py` and `benchmark_matlab_optuna50.m`, records
+the complete machine/runtime/load state, and checks seeded proposal checksums
+before comparing warmed medians. Results produced against 4.x are historical
+and cannot satisfy the 0.2.0 release gate. Parallel results remain calibrated
+scheduler evidence rather than a promise that every CAE objective scales by
+the same factor; cheap objectives should remain sequential.
 
 Publication also uses the standalone four-machine release-quad lane. After the
 successful `main` CI run, execute

@@ -5,16 +5,14 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 
+from ._artifact_identity import (
+    digest_is_sha256 as _digest,
+    same_generation as _generation,
+)
+
 
 NOISE = "acnoise_density_transfer_bandwidth_owner_identity"
 POWER = "switch_average_power_efficiency_window_owner_identity"
-
-
-def _digest(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
 
 
 def _number(value: object, *, nonnegative: bool = False, positive: bool = False) -> bool:
@@ -26,11 +24,6 @@ def _vector(value: object, *, positive: bool = False, nonnegative: bool = False)
     if not isinstance(value, list) or not value or not all(_number(item, positive=positive, nonnegative=nonnegative) for item in value):
         return []
     return [float(item) for item in value]
-
-
-def _generation(contract: Mapping[str, object], *fields: str) -> bool:
-    generation = str(contract.get("generation_id") or "")
-    return bool(generation) and all(contract.get(field) == generation for field in fields)
 
 
 def _close(left: float, right: float) -> bool:

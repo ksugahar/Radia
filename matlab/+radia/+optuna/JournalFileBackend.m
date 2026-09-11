@@ -1,5 +1,5 @@
 classdef JournalFileBackend < radia.optuna.JournalFileStorage
-    %JOURNALFILEBACKEND Optuna 4.9 journal file backend name.
+    %JOURNALFILEBACKEND Optuna 5 journal file backend name.
 
     methods
         function obj=JournalFileBackend(file_path,lock_obj)

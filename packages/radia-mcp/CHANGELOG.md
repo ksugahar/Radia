@@ -7,6 +7,21 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- matrix_solvers: withdraw the unevidenced claim that CompactAMG and
+  CompactAMS reach 25 iterations on mesh1_3.5T and match HYPRE. No HYPRE
+  comparison is stored in the repository, and the same mesh measures 130-168
+  iterations. The AMS topic now also states that iteration counts grow with
+  refinement and that AMS rejects any space other than order=1, nograds=True.
+- Presentation: add `presentation_check_outline_slide` to require a visible
+  problem-to-proposal divider near the detected turn, not only a front agenda.
+- Presentation: report backup/Q&A slides that are named but still visible;
+  preserve cut material as hidden slides in the same deck.
+- Presentation: ignore page furniture when reading takeaways and recognize
+  `no <subject> <verb>` complaints so the detected turn does not fall through
+  to the summary slide.
+- Presentation: share the 0.92 footer boundary between the hierarchy and arc
+  checks, and select takeaway candidates by visual rather than XML order.
+
 ## [1.4.53] - 2026-09-07
 
 - Compose domain capability entry points while preserving runtime status,

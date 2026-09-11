@@ -1,5 +1,5 @@
 classdef FanovaImportanceEvaluator < radia.optuna.BaseImportanceEvaluator
-    %FANOVAIMPORTANCEEVALUATOR Optuna 4.9 fANOVA importance evaluator.
+    %FANOVAIMPORTANCEEVALUATOR Optuna 5 fANOVA importance evaluator.
 
     properties (SetAccess=private)
         NTrees (1,1) double = 64
