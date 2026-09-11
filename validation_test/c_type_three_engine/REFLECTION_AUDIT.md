@@ -35,6 +35,22 @@ At this review, N=24 had a passing independent early check but no official
 early check. Before completing the family, compare the official checks with
 the early check and record the hashes of each mesh and result in the manifest.
 
+### Official family follow-up (2026-09-12)
+
+Commit `35840ff65` now records the official N=24 result and the three-level
+manifest. All nine on-disk SHA-256 checks (iron mesh, Kelvin mesh, and mesh
+result for each level) match `C:/temp/ctype_gapfamily2/gap_family.json`.
+The N=24 official result passes. Gap inventory, both reflection inventories,
+Kelvin identification, and the on-sphere check match the early check exactly.
+The only difference is floating-point-level variation in the H1 trace audit:
+inner trace norm 0.6082005475733531 versus 0.6082005475733532, and trace ratio
+1.0000000000000009 versus 1.0000000000000007. The DOF counts agree.
+
+The report's implementation identity was also hardened: same-version results
+with different or missing engine implementation hashes are rejected. All 45
+focused gap-report, reflection, and gap-acceptance tests pass. Mesh-family
+completion is established; N=24 three-formulation field validation is not.
+
 The N=6/12/24 family holds the other requested mesh sizes fixed. A subsequent
 field study measures sensitivity to this gap-refinement sequence. Neither mesh
 acceptance nor observed convergence alone is a rigorous discretization-error
