@@ -127,6 +127,8 @@ urn = [
 test = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
+    # Execute MANIFEST.in with the build backend's file-selection implementation.
+    "setuptools>=45",
     # Exercise the optional LTspice MCP entry points in the full test lane.
     "mcp>=1.0,<2",
     "schemdraw>=0.18",
@@ -134,6 +136,7 @@ test = [
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
+    "setuptools>=45",
     "matplotlib>=3.5",
     "schemdraw>=0.18",
 ]
