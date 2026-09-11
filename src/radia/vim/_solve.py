@@ -468,7 +468,8 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
                      newton_inner_tol="auto", newton_warmstart="linear",
                      newton_continuation=1, newton_reuse_tangent_steps=1,
                      newton_cg_x0=False, gram_backend="hmat",
-                     exact_dense_memory_mb=None, _operator_cache=None):
+                     exact_dense_memory_mb=None, _operator_cache=None,
+                     hex_glpair_n=None, hex_glpair_affine_n=None):
     """HDiv-type VIM soft-iron demag solve (the +N physical material system).
 
     ``leaf=64`` is the production ChargeGram H-matrix default. It is
@@ -576,6 +577,13 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
     # Mapped HEX BDM2 uses the cancellation-preserving composite charge rule
     # documented on the production high-order path below.
     order = int(order)
+    if order not in (1, 2):
+        # Production HDiv-MMM is BDM1/BDM2.  Order 0 (broken RT0) exists only as the material-topology
+        # operator space of radia.topology_optimization (DemagOperator on HDiv(order=0, discontinuous=True));
+        # it is not a solve order, and a silent order-0 solve would hide that distinction.
+        raise ValueError(
+            "vim.Solve: order must be 1 (BDM1) or 2 (BDM2); got %r.  Order 0 is the broken RT0 "
+            "material-topology space of radia.topology_optimization, not a production solve order." % (order,))
     if curve_order is None and mesh.dim == 3 and mesh.GetCurveOrder() >= 2:
         curve_order = int(mesh.GetCurveOrder())
     _vtx = _volume_vertex_counts(mesh)
@@ -683,7 +691,8 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
                               operator_cache=_operator_cache,
                               image_cyclic=image_cyclic,
                               image_cyclic_alternating=image_cyclic_alternating,
-                              cyclic_periodic_boundaries=cyclic_periodic_boundaries)
+                              cyclic_periodic_boundaries=cyclic_periodic_boundaries,
+                              hex_glpair_n=hex_glpair_n, hex_glpair_affine_n=hex_glpair_affine_n)
     if linear_recoil_pm:
         result["permanent_magnet_model"] = "linear-recoil"
         result["permanent_magnet_level"] = 2
@@ -702,7 +711,8 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
                       magnetization_sources=(), gram_backend="hmat",
                       exact_dense_memory_mb=None, operator_cache=None,
                       image_cyclic=None, image_cyclic_alternating=False,
-                      cyclic_periodic_boundaries=None):
+                      cyclic_periodic_boundaries=None,
+                      hex_glpair_n=None, hex_glpair_affine_n=None):
     """BDM1/BDM2 HDiv soft-iron demag solve.  The order-p charge-Gram demag operator N = B^T G B is
     a VALID demag operator since the per-element change-of-basis fix (2026-06-28,
     [[hdiv-highorder-material-solve-wrong]]): eig(M_mass^-1 N) in [0,1] and the material solve p-converges
@@ -861,6 +871,7 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
             excluded_boundaries=cyclic_periodic_boundaries,
             gram_backend=gram_backend,
             exact_dense_memory_mb=exact_dense_memory_mb,
+            hex_glpair_n=hex_glpair_n, hex_glpair_affine_n=hex_glpair_affine_n,
             _materialize_mass=False)
         t_after_charge_gram = time.perf_counter()
         charge_build_timings = dict(getattr(build_charge_gram, "last_timings", {}) or {})
