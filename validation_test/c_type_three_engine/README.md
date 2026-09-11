@@ -1,6 +1,12 @@
 # C-type formulation validation
 
-The accepted comparison is three-way and mandatory. The physical C-type model
+This comparison lane is three-way: all three engines are mandatory to claim
+that this lane passed. It is not an unconditional HDiv-MMM release prerequisite;
+see [production acceptance](../../docs/hdiv_vim/PRODUCTION_ACCEPTANCE.md) for
+scope-specific acceptance when a comparator is unvalidated or resource-limited.
+Such runs retain their failed or incomplete comparison status.
+
+The physical C-type model
 is evaluated by HDiv-MMM, HCurl reduced-A, and the NGSolve TOSCA-style H1 mixed
 total/reduced Omega route:
 
