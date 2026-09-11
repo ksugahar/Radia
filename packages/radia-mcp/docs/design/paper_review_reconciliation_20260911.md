@@ -118,11 +118,11 @@ Paths in tables are relative to `src/radia_mcp/paper_writing` unless specified.
 | P60 | 6.2 transient DOI failure | 修正済み | R::test_temporary_doi_failure_is_not_called_fabrication and test_crossref_http_status_classification. Retry-After/UA policy remains pending. |
 | P61 | 6.5 nested input resolution | 修正済み | R::test_input_chain_resolves_from_main_compile_directory. Explicit .pgf suffix and unreadable includes still need checks. |
 | P62 | 6.6 arXiv escaping/error feed | 修正済み | test_paper_writing_external_inputs.py verifies Requests-prepared query roundtrips for &, #, C++, percent and Japanese text. Atom error entries, unexpected XML roots, missing title/invalid identifier, HTTP errors and genuine empty feeds are distinguished. Citation verification preserves search failure as verdict=error rather than no_candidate_found. All network calls are mocked. |
-| P63 | 6.7 metadata/BibTeX fidelity | 検証待ち | Crossref resolver/BibTeX: creation date no longer substitutes for publication year; malformed message and missing title/authors/year cannot produce a successful entry; organization authors are brace-protected. Offline external-input tests cover these cases. Escaped entities, partial author lists and complete arXiv authors remain open. |
+| P63 | 6.7 metadata/BibTeX fidelity | 検証待ち | Crossref creation date is not a publication year; missing fields and partly malformed author records block generation; corporate names are grouped. Crossref and arXiv-direct citation text now decodes entities before escaping literal TeX characters; arXiv-direct retains all returned authors separated by `and`. Offline tests cover these routes. Math/unsupported markup requires manual verification; other BibTeX producers and rendered bibliography acceptance remain unverified. |
 | P64 | 6.8 damaged PDF persistence | 修正済み | test_pdf_magic_alone_does_not_validate_corruption and test_pdf_verification_requires_parser reject magic-only validation. _save_verified_pdf streams into a same-directory temporary file, validates, then replaces the destination; failure removes only its temporary file. Tests cover interruption/size limits and all three publisher adapters preserving an existing file before a valid retry. No live publisher access or visual-fidelity certification. |
 | P65 | 6.9 DOI normalization | 検証待ち | Crossref and IEEE DOI resolution share prefix normalization and URL encoding; offline tests cover #/?/%, doi:, case-insensitive dx.doi.org and URL-form decoding without double encoding. Other DOI consumers remain unverified. |
 | P66 | 6.10 archive resource bounds | 修正済み | test_arxiv_source_resource_limits covers streamed download, gzip expansion, member count, tar-member/single-source size limits, interruption and successful tar/gzip controls. Limits apply before unbounded download/decompression; tar members are iterated with a cap rather than getmembers(). No archive files are extracted to disk. |
-| P67 | 6.11 fallback paths | 検証待ち | arXiv search-to-citation fallback now rejects error/malformed/inconsistent payloads and preserves verdict=error (external-input tests). Unreadable bib, resolver exceptions and publisher landing errors still need their own closure evidence. |
+| P67 | 6.11 fallback paths | 検証待ち | arXiv search-to-citation fallback rejects error/malformed/inconsistent payloads. arXiv-direct also preserves error on Semantic Scholar failure, exception or incomplete metadata, rather than claiming no candidate or insertion readiness (offline tests). Unreadable bib, other resolver exceptions and publisher landing errors still need their own closure evidence. |
 | P68 | 6 duplicate implementations/docstring promise | 検証待ち | Trace Crossref/arXiv/BibTeX/DOI consumers before deduplication; verify promised search routes. |
 | P69 | 7.2 missing/stale tool guidance | 検証待ち | Correct names, routes, supported callable advice and guidance organization; old counts are historical. |
 | P70 | 7.1; 7.2 generated inventory proposal | 方針変更 | TOOLS.md inventory gate is retired. Live discovery/catalog is the source of truth, not a new committed generated index. |
@@ -187,7 +187,16 @@ Corporate author names are grouped, and Crossref/IEEE resolution share DOI URL
 encoding. This does not close all metadata or DOI consumers (P63/P65).
 No live API, MCP client, editable installation or parent bibliography was changed.
 
-1. Continue escaped-entity/author-list fidelity, other DOI consumers and remaining fallback paths (P63/P65/P67), then language heuristics and
+The text/author fidelity follow-up adds 30 offline regression cases; the same
+five-file lane passes 745 tests. Crossref refuses partly malformed author lists.
+arXiv-direct preserves all returned authors and distinguishes lookup failure from
+absence; successful DOI delegation remains tested. Both entry generators share
+plain-text entity decoding and escaping. TeX/math and unsupported markup fail for
+manual verification rather than being silently stripped or guessed. This is not
+a rendered BibTeX/Biber acceptance or a claim that upstream lists are complete.
+No live API, MCP client, editable installation or parent bibliography was changed.
+
+1. Continue other BibTeX/DOI consumers and remaining fallback paths (P63/P65/P67), then language heuristics and
    deduplication; other PDF consumers remain separate P50 follow-up work.
 2. Review missing pattern producers (P58) and remaining ordering/context rules
    (P59); do not confuse execution-status coverage with semantic correctness.
