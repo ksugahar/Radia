@@ -8,6 +8,8 @@ All notable changes to the `radia` package.  Format: each release lists
 - `release_quad ci-verify` requires native release evidence on the exact SHA
   before tagging. The isolated build environment imports its dependencies
   immediately after installation so missing modules fail before the build.
+  The native check has a distribution-specific name; another package's
+  `build-test`, a skipped run or a neutral result cannot substitute for success.
 
 ## 4.95.91 - Corrected MagLev ECB force reconstruction
 
