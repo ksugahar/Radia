@@ -76,14 +76,14 @@ Paths in tables are relative to `src/radia_mcp/paper_writing` unless specified.
 | P28 | 4.4; 6.3; 6.4 | 修正済み | R::test_balanced_bib_parser_and_title_match_are_exact covers nested title, @string exclusion and exact title matching. Other parser implementations/arXiv reuse remain pending. |
 | P29 | 4.5 three-letter acronym exemption | 検証待ち | Reproduce POD without definition; do not infer closure from a different acronym route. |
 | P30 | 4.5 lowercase expansion/CJK boundary/whitelist | 検証待ち | Test LPOD expansion, FEMを, IEEE/SI/Section II in both routes. |
-| P31 | 4.6 reviewer regex | 未修正 | Executed `classify_reviewer_comment('The Fig. 3 caption has a wrong unit')`: difficulty `B?`, triggers `[]`. Regex text remains in substring membership test in tools.py. |
-| P32 | 4.6 D response schema | 未修正 | Executed `classify_reviewer_comment('A fundamental flaw')`: difficulty D, no `triggers` key. |
+| P31 | 4.6 reviewer regex | 修正済み | R::test_reviewer_figure_caption_pattern_and_priority covers Fig./Figure, case and spacing, negative word boundaries and D/C/B precedence over minor-caption detection. |
+| P32 | 4.6 D response schema | 修正済み | R::test_reviewer_d_returns_matched_triggers verifies D results include the matched triggers. This does not certify semantic classification accuracy. |
 | P33 | 4.6 tense section argument | 検証待ち | Compare identical prose under Methods/Results/Introduction and documented contract. |
 | P34 | 4.6 missing-conclusion response schema | 検証待ち | Assert all public keys on not-found and update consumers consistently. |
 | P35 | 4.6 concept-drop exact text | 検証待ち | Test emphasized DtN text against original-source spans. |
 | P36 | 4.6 typography scope/dead warning branch | 検証待ち | Exercise thanks/TikZ size commands and warning counts, not just ordinary body sizes. |
-| P37 | 4.6; 8.6 personal author default | 未修正 | Static: generate_cover_letter still uses `corresponding_author or 'Kengo Sugahara'`. Public default requires explicit author or neutral placeholder. |
-| P38 | 4.6 overfull log forms | 未修正 | Static: check_overfull_hbox matches only `in paragraph at lines`; alignment/detected/output-active forms remain excluded. |
+| P37 | 4.6; 8.6 personal author default | 修正済み | R::test_cover_letter_does_not_invent_author covers empty, whitespace, None and explicit names; omitted author becomes a neutral placeholder. |
+| P38 | 4.6 overfull log forms | 修正済み | R::test_overfull_hbox_context_variants covers paragraph/alignment/detected/output-active, wrapped locations and absent context. R::test_overfull_hbox_count_not_limited_to_detail_cap preserves total count and excludes underfull/vbox. Unknown source locations remain empty, not invented. |
 | P39 | 4.6 PDF edge overflow/docstring/headers | 検証待ち | Test drawings/images and header/footer cases separately from page-boundary overflow. |
 
 ## PDF and composite plans
@@ -141,11 +141,13 @@ Follow-up fault-injection verification (2026-09-11): 481 passed across
 This is a focused source-isolated test run, not a full-package or live-MCP check.
 No editable installation or live client was changed.
 
-1. Fix reproduced/static-confirmed P31/P32/P37/P38 with focused regressions.
-2. Extend composite payload validation to other workflow phases. Submission-gate
+The subsequent P31/P32/P37/P38 fix adds 21 regression cases in the same four-file
+lane. These are source-level checks, not a live-client or full-package acceptance.
+
+1. Extend composite payload validation to other workflow phases. Submission-gate
    adapters and T9/T18 phase4 coverage are recorded in P12/P51/P52; lower-level
    detector accuracy and other nested consumers still need their own evidence.
-3. Work through external-input safety and PDF false-clean findings
+2. Work through external-input safety and PDF false-clean findings
    (P50, P62–P67), then language heuristics and deduplication.
 
 Update a row's evidence and status in the same change. Do not use passing tests
