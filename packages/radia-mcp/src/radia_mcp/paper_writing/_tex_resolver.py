@@ -24,6 +24,7 @@ import pathlib
 import re
 import hashlib
 from typing import Optional
+from ._tex_lex import mask_tex_noncode
 
 
 # Maximum recursion depth for \\input / \\include chains.  Caps a
@@ -56,7 +57,7 @@ def resolve_input_chain(
             \\documentclass{...} and \\begin{document}).
         max_depth: recursion cap (default 8).  Raises if exceeded.
         encoding: file encoding (utf-8 default; falls back to
-            cp932 for legacy Japanese files via 'replace' errors).
+            cp932 for legacy Japanese files with strict decoding).
 
     Returns:
         dict with:
@@ -88,6 +89,7 @@ def resolve_input_chain(
     missing: list[dict] = []
     duplicate: list[dict] = []
     seen_paths: dict[str, int] = {}   # abs_path -> first inlined depth
+    active_paths: set[str] = set()
 
     def _read(path: str) -> tuple[str, bytes]:
         raw = pathlib.Path(path).read_bytes()
@@ -100,10 +102,13 @@ def resolve_input_chain(
 
     def _resolve(path: str, depth: int, parent: Optional[str] = None) -> str:
         abs_path = os.path.abspath(path)
-        if abs_path in seen_paths:
+        identity = os.path.normcase(os.path.realpath(abs_path))
+        if identity in active_paths:
+            raise ValueError(f"cyclic TeX input chain at {abs_path}")
+        if identity in seen_paths:
             duplicate.append({
                 "path": abs_path,
-                "first_at": seen_paths[abs_path],
+                "first_at": seen_paths[identity],
                 "duplicate_at": depth,
                 "referenced_from": parent or "(root)",
             })
@@ -120,7 +125,8 @@ def resolve_input_chain(
             })
             return f"\n% [resolve_input_chain: missing file {abs_path}]\n"
 
-        seen_paths[abs_path] = depth
+        seen_paths[identity] = depth
+        active_paths.add(identity)
         text, raw = _read(abs_path)
         resolved.append({
             "path": abs_path,
@@ -131,24 +137,28 @@ def resolve_input_chain(
 
         # Replace each \\input{X} with the recursive resolution.
         def _sub(m):
-            # Skip if the \\input is inside a comment line: find
-            # the start of the line and check for '%' before.
-            line_start = text.rfind("\n", 0, m.start()) + 1
-            line_before = text[line_start:m.start()]
-            # If there's an unescaped %, this is a comment
-            if re.search(r"(?<!\\)%", line_before):
-                return m.group(0)
             inc = m.group(1).strip()
             if not os.path.splitext(inc)[1]:
                 inc = inc + ".tex"
             child_path = inc if os.path.isabs(inc) else os.path.join(main_dir, inc)
             return _resolve(child_path, depth + 1, parent=abs_path)
 
-        return _INPUT_PATTERN.sub(_sub, text)
+        parts = []
+        start = 0
+        masked = mask_tex_noncode(text)
+        for match in _INPUT_PATTERN.finditer(masked):
+            prefix = masked[:match.start()]
+            if (len(prefix) - len(prefix.rstrip("\\"))) % 2:
+                continue
+            parts.extend((text[start:match.start()], _sub(match)))
+            start = match.end()
+        parts.append(text[start:])
+        active_paths.remove(identity)
+        return "".join(parts)
 
     try:
         merged = _resolve(main, depth=0)
-    except (RecursionError, OSError, UnicodeError) as e:
+    except (RecursionError, OSError, UnicodeError, ValueError) as e:
         return {
             "ok": False,
             "error": str(e),
