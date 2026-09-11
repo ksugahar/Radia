@@ -108,8 +108,9 @@ cannot: ABMC-ICCG (IC only) on mesh1_3.5T does not reach tol = 1e-10
 via discrete-gradient + Nedelec interpolation correction.
 
 Reproduce: `python examples/hiruma/bench_compact_ams.py --all`.  The Hiruma
-meshes (`mesh1_*.msh`) are not distributed with the repository (`*.msh` is
-gitignored); place them next to the script before running it.
+meshes (`mesh1_*.vol`) are not distributed with the repository (`*.vol` is
+gitignored); place them next to the script before running it.  A missing mesh
+raises `FileNotFoundError` listing the meshes that are present.
 
 ## Quick start
 

@@ -19,10 +19,9 @@ import time
 from datetime import datetime
 
 import numpy as np
-# TODO: Replace ReadGmsh with Mesh(.vol) when .vol files are generated
-from netgen.read_gmsh import ReadGmsh
 from ngsolve import *
 import radia.sparsesolv_ngsolve as ssn
+from hiruma_mesh import load_hiruma_mesh, mesh_path
 
 # Physical parameters (match Hiruma SA-26-001)
 mu0 = 4e-7 * np.pi
@@ -49,9 +48,8 @@ def get_peak_memory_mb():
 
 
 def setup_problem(mesh_name):
-    mesh_file = os.path.join(os.path.dirname(__file__), mesh_name)
-    print(f"Loading mesh: {mesh_file}", flush=True)
-    mesh = Mesh(ReadGmsh(mesh_file))
+    print(f"Loading mesh: {mesh_path(mesh_name)}", flush=True)
+    mesh = load_hiruma_mesh(mesh_name)
     ne = mesh.ne
     nv = mesh.nv
     print(f"  ne={ne:,}, nv={nv:,}", flush=True)
@@ -130,8 +128,7 @@ def true_residual(p, gfu):
 
 def run_single(mesh_name):
     """Run benchmark for a single mesh, return result dict."""
-    if not mesh_name.endswith(".msh"):
-        mesh_name += ".msh"
+    mesh_name = mesh_path(mesh_name).name
 
     print("\n" + "=" * 80)
     print(f"Benchmark: Compact AMS + COCR  |  {mesh_name}")
