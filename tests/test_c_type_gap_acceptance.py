@@ -64,6 +64,7 @@ class _BiasedLocatorMesh:
 
     faces = (-1.0, -GAP / 2, -GAP / 6, GAP / 6, GAP / 2, 1.0)
     element_material = (0, 1, 1, 1, 0)
+    band = BAND
 
     def GetMaterials(self):
         return ("iron", "air")
@@ -72,7 +73,7 @@ class _BiasedLocatorMesh:
         from types import SimpleNamespace
         for number in reversed(range(len(self.faces) - 1)):
             low, high = self.faces[number], self.faces[number + 1]
-            if low - BAND <= z <= high + BAND:
+            if low - self.band <= z <= high + self.band:
                 margin = min(z - low, high - z) / (high - low)
                 return SimpleNamespace(nr=number,
                                        pnt=(margin, (1 - margin) / 3, (1 - margin) / 3))
@@ -125,6 +126,30 @@ def test_seeds_make_the_walk_visit_every_element():
     result = builder._curved_line_segments(mesh, 0.0, 0.0, GAP / 2, seeds=seeds)
     assert result["segments"] == 4
     assert result["minimum_segment_m"] == pytest.approx(3.0e-6, abs=2.0e-9)
+    assert abs(result["covered_m"] - GAP) < 1.0e-12
+
+
+def test_a_grazing_piece_is_not_a_crossing():
+    """A piece thinner than the grazing floor is reported, not counted.
+
+    The locator band is switched off and the bisection resolution raised:
+    a 0.2 um band would hide a 0.5 nm element entirely, and a 1 nm switch
+    tolerance cannot measure it.
+    """
+    import numpy as np
+
+    grid = np.linspace(-GAP / 2 + 1e-9, GAP / 2 - 1e-9, 2001)
+    start = float(grid[700]) + 1.0e-6
+    mesh = _BiasedLocatorMesh()
+    mesh.band = 0.0
+    mesh.faces = (-1.0, -GAP / 2, start, start + 5.0e-10, GAP / 6, GAP / 2, 1.0)
+    mesh.element_material = (0, 1, 1, 1, 1, 0)
+    faces = mesh.faces[1:-1]
+    seeds = [0.5 * (low + high) for low, high in zip(faces, faces[1:])]
+    result = builder._curved_line_segments(mesh, 0.0, 0.0, GAP / 2,
+                                           tolerance=1.0e-13, seeds=seeds)
+    assert result["segments"] == 3
+    assert result["grazing_segments"] == 1
     assert abs(result["covered_m"] - GAP) < 1.0e-12
 
 
