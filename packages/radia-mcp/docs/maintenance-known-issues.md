@@ -33,7 +33,9 @@ rendered bibliography acceptance remain open (P63/P67).
 
 M04 T1 follow-up (2026-09-12): standalone DOI-to-BibTeX now has DOI identity,
 required metadata, corporate-author/text escaping and page-range regressions.
-The seven-file lane passes 960 tests. T3 Crossref search response handling and
+The seven-file lane passed 960 tests. T3 Crossref search now adds 28 cases for
+response shape, required candidate fields, unknown optional metadata and decode
+failures; the eight-file lane passes 988 tests. Citation-key/name heuristics and
 rendered bibliography acceptance remain open; this is not package-wide closure.
 
 Completion of a scoped validation requires matching the selected source, zero unexpected failures
