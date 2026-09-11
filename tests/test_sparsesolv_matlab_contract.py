@@ -62,6 +62,18 @@ def test_matlab_lane_runs_engine_and_retains_json_on_mdx():
     assert "sparsesolv-matlab.json" in job["steps"][-1]["with"]["path"]
 
 
+def test_mex_runtime_boundary_has_native_ci_coverage():
+    workflow = yaml.safe_load((ROOT/".github/workflows/sparsesolv.yml").read_text())
+    triggers = workflow.get("on", workflow.get(True))
+    for event in ("push", "pull_request"):
+        for path in ("matlab/+radia/+internal/callMex.m", "matlab/+radia/setup.m",
+                     "tests/matlab/test_mex_runtime_setup.m"):
+            assert path in triggers[event]["paths"]
+    runner = (ROOT/"validation_test/ngsolve_matlab_parity/run_sparsesolv_parity.py").read_text()
+    assert 'root/"tests/matlab/test_mex_runtime_setup.m"' in runner
+    assert "runtests(testfiles)" in runner
+
+
 def test_missing_diff_base_selects_matlab_without_failing_step(tmp_path):
     pwsh = shutil.which("pwsh")
     if not pwsh:
@@ -81,6 +93,9 @@ def test_missing_diff_base_selects_matlab_without_failing_step(tmp_path):
     ('tools/run_test_tier.py', 'pull_request', 'false'),
     ('matlab/+radia/+sparsesolv/AMS.m', 'pull_request', 'true'),
     ('matlab/+radia/+python/sparsesolv.m', 'push', 'true'),
+    ('matlab/+radia/+internal/callMex.m', 'pull_request', 'true'),
+    ('matlab/+radia/setup.m', 'push', 'true'),
+    ('tests/matlab/test_mex_runtime_setup.m', 'pull_request', 'true'),
     ('docs/intro.md', 'workflow_dispatch', 'true'),
 ])
 def test_impact_uses_checkout_even_outside_repository(tmp_path, changed, event, expected):
