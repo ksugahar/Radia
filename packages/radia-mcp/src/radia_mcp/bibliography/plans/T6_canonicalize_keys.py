@@ -11,7 +11,7 @@ from collections import Counter
 
 from .._bibparse import (BibEntry,
                           make_cite_key, is_lab_style_key)
-from .._source_edit import read_source, write_source_edits
+from .._source_edit import literal_value, read_source, write_source_edits
 
 
 def _extract_keyword(key: str, author: str, year: str) -> str | None:
@@ -63,10 +63,17 @@ def bibliography_canonicalize_keys(bib_path: str,
         if e.kind.startswith("@"):
             new_entries.append(e)
             continue
+        for field in ("author", "editor", "title"):
+            if field in e.field_spans and literal_value(source[slice(*e.field_spans[field])]) is None:
+                return (f"Error: {e.key}.{field} requires explicit macro/concatenation "
+                        "resolution before generating a citation key; no changes made")
         from .._bibparse import first_author_lastname
         author = first_author_lastname(e.fields.get("author", "")
                                         or e.fields.get("editor", ""))
-        year = (e.fields.get("year", "") or "").strip()[:4] or "nodate"
+        year = (e.fields.get("year", "") or "").strip()
+        if year and (not re.fullmatch(r"[0-9]{4}", year) or year == "0000"):
+            return f"Error: invalid publication year for {e.key!r}; no changes made"
+        year = year or "nodate"
         kw = _extract_keyword(e.key, author, year)
         new_key = make_cite_key(e, keyword_override=kw)
         if new_key != e.key:
@@ -79,6 +86,18 @@ def bibliography_canonicalize_keys(bib_path: str,
     collisions = sorted(key for key, count in proposed_keys.items() if count > 1)
     if collisions:
         return f"Error: proposed citation-key collisions {collisions}; no changes made"
+
+    if renames:
+        unresolved = []
+        for entry in entries:
+            for field in ("crossref", "xref", "xdata", "related"):
+                if field in entry.field_spans:
+                    expression = source[slice(*entry.field_spans[field])]
+                    if literal_value(expression) is None:
+                        unresolved.append(f"{entry.key}.{field}")
+        if unresolved:
+            return ("Error: reference macros/concatenations require explicit resolution "
+                    "before key renaming: " + ", ".join(unresolved) + "; no changes made")
 
     lines = [f"bibliography_canonicalize_keys: {p}", f"  total entries: {len(entries)}",
              f"  proposed renames: {len(renames)}",

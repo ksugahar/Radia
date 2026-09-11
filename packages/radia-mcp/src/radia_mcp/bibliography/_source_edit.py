@@ -6,6 +6,30 @@ import tempfile
 from ._bibparse import parse_bib
 
 
+def literal_value(expression: str) -> str | None:
+    """Return one complete braced/quoted literal; never expand a macro or #."""
+    if not expression or expression[0] not in '{"':
+        return None
+    quoted = expression[0] == '"'
+    depth = 0 if quoted else 1
+    i = 1
+    while i < len(expression):
+        char = expression[i]
+        if char == "\\":
+            i += 2
+            continue
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if not quoted and depth == 0:
+                return expression[1:i] if i == len(expression) - 1 else None
+        elif quoted and char == '"' and depth == 0:
+            return expression[1:i] if i == len(expression) - 1 else None
+        i += 1
+    return None
+
+
 def read_source(path: Path):
     original = path.read_bytes()
     text = original.decode("utf-8", errors="strict")
