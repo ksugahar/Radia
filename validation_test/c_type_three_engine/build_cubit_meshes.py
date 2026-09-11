@@ -175,23 +175,24 @@ def _reflection_inventory(path: Path) -> dict[str, object]:
 
     mesh = ng.Mesh(str(path))
     coordinates = np.asarray([vertex.point for vertex in mesh.vertices], dtype=float)
-    vertex_keys = {tuple(np.round(point, 14)) for point in coordinates}
+    # One dictionary lookup per vertex.  Comparing each vertex with the whole
+    # coordinate array (np.isclose) was quadratic: 3.9 ms per vertex at 89k
+    # vertices (N=12, ~6 min) and 25.9 ms at 585k (N=24, ~4.2 h).
+    index_of: dict[tuple[float, ...], int] = {}
+    for index, point in enumerate(coordinates):
+        index_of.setdefault(tuple(np.round(point, 14)), index)
     missing_vertices = 0
     maximum_vertex_error = 0.0
     for point in coordinates:
         reflected = np.asarray((point[0], point[1], -point[2]), dtype=float)
-        key = tuple(np.round(reflected, 14))
-        if key not in vertex_keys:
+        match = index_of.get(tuple(np.round(reflected, 14)))
+        if match is None:
             missing_vertices += 1
             continue
-        candidates = coordinates[
-            np.all(np.isclose(coordinates, reflected, rtol=0.0, atol=1e-13), axis=1)
-        ]
-        if candidates.size:
-            maximum_vertex_error = max(
-                maximum_vertex_error,
-                float(np.min(np.linalg.norm(candidates - reflected, axis=1))),
-            )
+        maximum_vertex_error = max(
+            maximum_vertex_error,
+            float(np.linalg.norm(coordinates[match] - reflected)),
+        )
 
     def element_signature(element, *, reflect: bool) -> tuple[object, ...]:
         points = []
