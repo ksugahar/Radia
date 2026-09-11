@@ -1,5 +1,26 @@
 # Eqnedit64 検証記録
 
+## 2026-09-11: review 8a34e1b53 and unresolved font-host incident
+
+- User-supplied independent Opus 5 review: 100's session 0 recorded
+  Application Error 1000 at 14:21:11, fontdrvhost 10.0.20348.5256,
+  exception 0xc0000005, offset 0x366a2, PID 1124; successor PID 303888
+  started at 14:21:15. The candidate self-test started in the same second.
+  Both application checks returned zero, but the external PID gate failed.
+- This is reported evidence, not a new reproduction by Codex. It strongly
+  associates startup with the incident but does not identify the failing API
+  or establish that file-backed registration is safe. Unchanged rendering
+  source alone cannot prove absence of an intermittent regression.
+- Do not repeat on LAB's interactive desktop or 100's shared session 0.
+  Use an explicitly dedicated disposable environment for future diagnosis,
+  with idle controls, event timestamps and host PIDs around every invocation.
+  Do not bypass or weaken the host gate because application checks pass.
+  Font-host safety remains OPEN; no fix or release acceptance is claimed.
+- Review code findings are covered by grouped/empty-base prime import tests
+  and a browser request-abort test. The earlier homepage preflight failure
+  at 09:15 was followed by a successful 09:19 browser report, but neither
+  report certifies this later candidate.
+
 ## 2026-09-10 3.0.16 candidate: visual fallback review follow-up
 
 - Source baseline: `77fb162dbd6cf71c1d2a410c6e752cbe9ea96577` (main).

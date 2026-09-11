@@ -155,3 +155,18 @@ Require the first save/reparse to preserve the emitted TeX. Web selection
 decoration uses the same grouped-base form; unselected Web caret insertion
 retains its existing empty-atom protection after an exponent. No automatic
 rewrite of arbitrary manually typed TeX is implied.
+
+On native import, braces immediately before apostrophes are an attachment
+boundary, including an empty group. Thus `{a+b}'` becomes `{a+b}^{\prime }`
+and `a^{2}{}'` becomes `a^{2}{}^{\prime }`, never `a+b'` or `a^{2}'`.
+The first parse must retain that meaning and subsequent saves must be stable.
+Primes followed by a subscript or an explicit superscript retain both parts.
+
+## Web preparation failure
+
+Office macro preparation has three states: pending, ready, and failed. Copy
+stays disabled until ready. Failure must end the pending preview state, show
+reload guidance on the copy control, and allow ordinary expressions to render
+and be edited. An unavailable optional macro must not disable core preview.
+The browser regression aborts the cancel-package request and checks actual
+MathJax output before and after editing, not merely the absence of an error.

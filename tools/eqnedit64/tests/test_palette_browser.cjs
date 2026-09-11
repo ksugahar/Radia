@@ -23,6 +23,9 @@ const server = http.createServer((req, res) => {
     res.end('<!doctype html><html lang="ja"><meta charset="utf-8">' +
       '<script>window.MathJax={startup:{typeset:false}};</script>' +
       '<script src="/mathjax/tex-chtml.js"></script>' +
+      // The homepage supplies this adapter; exercise the real preview engine.
+      '<script>window.SugaharaMath={typeset:function(node){' +
+      'return MathJax.startup.promise.then(function(){return MathJax.typesetPromise([node]);}).catch(function(){});}};</script>' +
       fs.readFileSync(path.join(web, "equation-editor.fragment.html"), "utf8")
         .replace(req.url === "/?cold" ? '<script src="./equation-editor.js"></script>' : "__unused__", ""));
   }
@@ -80,6 +83,19 @@ const server = http.createServer((req, res) => {
       document.querySelectorAll(".eqed-math-face mjx-container, .eqed-preview-error .eqed-math-face").length);
     assert.equal(await cold.locator(".eqed-preview-error").count(),0);
     await cold.close();
+    const failed = await browser.newPage();
+    await failed.route("**/cancel.js", route => route.abort());
+    await failed.goto("http://127.0.0.1:" + server.address().port + "/?cold");
+    await failed.evaluate(() => MathJax.startup.promise);
+    await failed.addScriptTag({url:"http://127.0.0.1:" + server.address().port + "/equation-editor.js"});
+    await failed.locator(".eqed-source").fill("a^{2}");
+    await failed.waitForFunction(() => document.querySelector(".eqed-copy-office").title.includes("再読み込み"));
+    assert(await failed.locator(".eqed-copy-office").isDisabled());
+    await failed.locator(".eqed-preview mjx-container").waitFor({timeout:10000});
+    assert.doesNotMatch(await failed.locator(".eqed-preview").innerText(), /準備しています/);
+    await failed.locator(".eqed-source").fill("b+1");
+    await failed.waitForFunction(() => document.querySelector(".eqed-preview").textContent.includes("b"));
+    await failed.close();
     const page = await browser.newPage({viewport:{width:1400,height:1000}});
     const errors = [];
     page.on("pageerror", error => errors.push(error.message));

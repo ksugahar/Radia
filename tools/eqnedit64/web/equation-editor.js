@@ -3778,18 +3778,23 @@
     var paletteHost = root.querySelector(".eqed-palettes");
     var officeButton = root.querySelector(".eqed-copy-office");
     var officeReady = false;
+    var officePreparing = true;
     officeButton.disabled = true;
     officeButton.title = "数式機能を準備しています";
     var officePreparation = (window.MathJax && window.MathJax.startup
       ? window.MathJax.startup.promise : Promise.resolve())
       .then(warmAutoloadedMacros).then(function () {
         officeReady = true;
+        officePreparing = false;
         officeButton.disabled = false;
         officeButton.title = "";
         render();
       }).catch(function () {
+        officePreparing = false;
         officeButton.title = "数式機能を準備できませんでした。ページを再読み込みしてください";
         say(officeButton.title);
+        // Optional Office macros must not disable ordinary equation preview.
+        render();
       });
     var palettePreviewQueue = officePreparation;
     var recent = el("output", "eqed-recent");
@@ -3841,8 +3846,12 @@
         preview.appendChild(el("p", "eqed-empty", "ここに数式が表示されます"));
         return;
       }
-      if (!officeReady) {
+      if (officePreparing) {
         preview.appendChild(el("p", "eqed-empty", "数式機能を準備しています"));
+        return;
+      }
+      if (!window.MathJax || typeof window.MathJax.tex2mmlPromise !== "function") {
+        showRenderProblem("数式機能を読み込めませんでした。ページを再読み込みしてください");
         return;
       }
       var problem = braceProblem(tex);
