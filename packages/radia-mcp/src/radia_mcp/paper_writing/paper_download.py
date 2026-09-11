@@ -26,7 +26,6 @@ from __future__ import annotations
 import os
 import re
 import pathlib
-import html
 import urllib.parse
 import tempfile
 from typing import Optional
@@ -223,8 +222,10 @@ def paper_writing_resolve_doi(doi: str) -> dict:
     authors = []
     author_records = []
     raw_authors = msg.get("author")
-    for author in raw_authors if isinstance(raw_authors, list) else []:
+    invalid_author_indices = []
+    for index, author in enumerate(raw_authors if isinstance(raw_authors, list) else []):
         if not isinstance(author, dict):
+            invalid_author_indices.append(index)
             continue
         def author_text(key):
             value = author.get(key)
@@ -233,6 +234,10 @@ def paper_writing_resolve_doi(doi: str) -> dict:
             author_text("family") + ", " + author_text("given")
         ).strip(", ")
         name = personal or author_text("name")
+        if (not name or any(author.get(key) is not None
+                            and not isinstance(author[key], str)
+                            for key in ("family", "given", "name"))):
+            invalid_author_indices.append(index)
         if name:
             authors.append(name)
             author_records.append({"name": name, "corporate": not bool(personal)})
@@ -254,6 +259,7 @@ def paper_writing_resolve_doi(doi: str) -> dict:
         "title": title,
         "authors": authors,
         "author_records": author_records,
+        "invalid_author_indices": invalid_author_indices,
         "missing_fields": [key for key, value in
                            (("title", title), ("authors", authors), ("year", year))
                            if not value],
@@ -539,6 +545,8 @@ def paper_writing_doi_to_bibtex(doi: str,
         return meta
 
     missing = [key for key in ("title", "authors", "year") if not meta.get(key)]
+    if meta.get("invalid_author_indices") and "authors" not in missing:
+        missing.append("authors")
     if missing:
         return {"ok": False, "error_kind": "incomplete_metadata",
                 "error": "Crossref metadata requires verification before citation",
@@ -560,20 +568,24 @@ def paper_writing_doi_to_bibtex(doi: str,
     else:
         bib_type = "misc"
 
-    # Authors → "Last, First and Last, First and ..."
-    authors_bib = " and ".join(meta["authors"])
-    if meta.get("author_records"):
+    from ._bibtex_metadata import bibtex_text
+
+    try:
+        title_clean = bibtex_text(meta["title"])
+        if not title_clean:
+            raise ValueError("empty title after metadata normalization")
+        journal = bibtex_text(meta.get("journal", ""))
+        records = meta.get("author_records") or [
+            {"name": name, "corporate": False} for name in meta["authors"]]
+        names = [bibtex_text(item["name"]) for item in records]
+        if not all(names):
+            raise ValueError("empty author after metadata normalization")
         authors_bib = " and ".join(
-            "{" + item["name"] + "}" if item["corporate"] else item["name"]
-            for item in meta["author_records"]
-        )
-    # Strip HTML/Crossref italic markers from title
-    title_clean = re.sub(r"</?[a-zA-Z]+>", "", meta["title"])
-    for _ in range(3):
-        decoded = html.unescape(title_clean)
-        if decoded == title_clean:
-            break
-        title_clean = decoded
+            "{" + name + "}" if item["corporate"] else name
+            for item, name in zip(records, names))
+    except ValueError as exc:
+        return {"ok": False, "error_kind": "unsupported_metadata",
+                "error": str(exc), "metadata": meta}
 
     lines = [f"@{bib_type}{{{citation_key},",
               f"  title   = {{{title_clean}}},",
@@ -582,9 +594,9 @@ def paper_writing_doi_to_bibtex(doi: str,
         lines.append(f"  year    = {{{meta['year']}}},")
     if meta.get("journal"):
         if bib_type == "article":
-            lines.append(f"  journal = {{{meta['journal']}}},")
+            lines.append(f"  journal = {{{journal}}},")
         else:
-            lines.append(f"  booktitle = {{{meta['journal']}}},")
+            lines.append(f"  booktitle = {{{journal}}},")
     lines.append(f"  doi     = {{{meta['doi']}}},")
     lines.append(f"  url     = {{{meta['url']}}},")
     lines.append("}")

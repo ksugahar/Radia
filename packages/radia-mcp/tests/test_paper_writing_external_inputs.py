@@ -96,6 +96,111 @@ def test_partial_crossref_metadata_cannot_generate_bibtex(monkeypatch, overrides
     assert "bibtex" not in result
 
 
+@pytest.mark.parametrize("bad", [None, {}, {"name": 12},
+                                 {"family": "Doe", "given": 42}])
+def test_crossref_partial_author_list_blocks_bibtex(monkeypatch, bad):
+    _crossref_stub(monkeypatch, {"title": ["Test"],
+        "author": [{"name": "Group"}, bad], "issued": {"date-parts": [[2024]]}})
+    result = download.paper_writing_doi_to_bibtex("10.1234/test")
+    assert not result["ok"] and result["missing_fields"] == ["authors"]
+    assert result["metadata"]["invalid_author_indices"] == [1]
+    assert "bibtex" not in result
+
+
+def test_crossref_escapes_text_after_decoding_entities(monkeypatch):
+    _crossref_stub(monkeypatch, {
+        "title": ["&lt;i&gt;R&amp;amp;D&lt;/i&gt; at 20%: A_B #1"],
+        "type": "journal-article", "container-title": ["Science &amp; Design"],
+        "author": [{"name": "R&D Group"}], "issued": {"date-parts": [[2024]]}})
+    result = download.paper_writing_doi_to_bibtex("10.1234/test", "test2024")
+    assert result["ok"]
+    assert r"title   = {R\&D at 20\%: A\_B \#1}" in result["bibtex"]
+    assert r"journal = {Science \& Design}" in result["bibtex"]
+    assert r"author  = {{R\&D Group}}" in result["bibtex"]
+
+
+@pytest.mark.parametrize("title", ["<math>x</math>", r"A $x$ field", r"A \alpha field",
+                                  "<i></i>"])
+def test_crossref_unsupported_or_empty_markup_requires_review(monkeypatch, title):
+    _crossref_stub(monkeypatch, {"title": [title], "author": [{"name": "Group"}],
+                               "issued": {"date-parts": [[2024]]}})
+    result = download.paper_writing_doi_to_bibtex("10.1234/test")
+    assert not result["ok"] and result["error_kind"] == "unsupported_metadata"
+    assert "bibtex" not in result
+
+
+def _arxiv_citation(monkeypatch, tmp_path, lookup):
+    monkeypatch.setattr(arxiv, "paper_writing_semantic_scholar_lookup", lambda *_: lookup)
+    bib = tmp_path / "references.bib"
+    bib.write_text("", encoding="utf-8")
+    return paper_writing_verify_citation(claim="", bib_path=str(bib),
+                                        candidate_arxiv_id="2603.17339")
+
+
+def test_arxiv_bibtex_keeps_all_authors_and_escapes_text(monkeypatch, tmp_path):
+    names = [f"Author {n}" for n in range(7)]
+    result = _arxiv_citation(monkeypatch, tmp_path, {"metadata": {
+        "title": "R&amp;D at 20%", "authors": [{"name": name} for name in names],
+        "year": 2024, "externalIds": None}})
+    assert result["verdict"] == "ready_to_insert"
+    assert "author       = {" + " and ".join(names) + "}" in result["suggested_bibtex"]
+    assert r"title        = {R\&D at 20\%}" in result["suggested_bibtex"]
+    assert "Semantic Scholar" in result["advice"]
+
+
+@pytest.mark.parametrize("override", [
+    {"authors": None}, {"authors": []}, {"authors": [{"name": "A"}, {}]},
+    {"authors": [{"name": "A"}, {"name": 12}]}, {"year": None},
+    {"authors": [{"name": "<i></i>"}]},
+    {"year": True}, {"year": "2024"}, {"title": None},
+    {"title": "<i></i>"}, {"title": "$x$"}, {"externalIds": []},
+    {"externalIds": {"DOI": 42}},
+])
+def test_arxiv_incomplete_metadata_is_not_insertion_ready(monkeypatch, tmp_path, override):
+    metadata = {"title": "Test", "authors": [{"name": "A"}], "year": 2024}
+    metadata.update(override)
+    result = _arxiv_citation(monkeypatch, tmp_path, {"metadata": metadata})
+    assert result["verdict"] == "error"
+    assert result["suggested_bibtex"] is None
+
+
+@pytest.mark.parametrize("lookup", [None, [], {"error": "HTTP 429"},
+                                     {"metadata": None}, {"metadata": []}])
+def test_arxiv_failed_lookup_does_not_mean_no_candidate(monkeypatch, tmp_path, lookup):
+    result = _arxiv_citation(monkeypatch, tmp_path, lookup)
+    assert result["verdict"] == "error"
+    assert result["suggested_bibtex"] is None
+
+
+def test_arxiv_lookup_exception_is_reported(monkeypatch, tmp_path):
+    def fail(*_):
+        raise ValueError("invalid JSON")
+    monkeypatch.setattr(arxiv, "paper_writing_semantic_scholar_lookup", fail)
+    bib = tmp_path / "references.bib"
+    bib.write_text("", encoding="utf-8")
+    result = paper_writing_verify_citation(claim="", bib_path=str(bib),
+                                         candidate_arxiv_id="2603.17339")
+    assert result["verdict"] == "error" and "invalid JSON" in result["advice"]
+    assert result["suggested_bibtex"] is None
+
+
+def test_arxiv_doi_route_still_delegates(monkeypatch, tmp_path):
+    from radia_mcp.paper_writing import _citation_verify as verify
+    original = verify.paper_writing_verify_citation
+    seen = []
+    def delegated(**kwargs):
+        seen.append(kwargs)
+        return {"delegated": True}
+    monkeypatch.setattr(verify, "paper_writing_verify_citation", delegated)
+    monkeypatch.setattr(arxiv, "paper_writing_semantic_scholar_lookup", lambda *_: {
+        "metadata": {"externalIds": {"DOI": "10.1234/test"}}})
+    bib = tmp_path / "references.bib"
+    bib.write_text("", encoding="utf-8")
+    result = original(claim="claim", bib_path=str(bib), candidate_arxiv_id="2603.17339")
+    assert result == {"delegated": True}
+    assert seen[0]["candidate_doi"] == "10.1234/test"
+
+
 class StreamResponse:
     status_code = 200
 

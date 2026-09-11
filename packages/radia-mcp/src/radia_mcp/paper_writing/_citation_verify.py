@@ -489,63 +489,88 @@ def paper_writing_verify_citation(
             _normalize_arxiv_id,
         )
         aid = _normalize_arxiv_id(candidate_arxiv_id)
+        def arxiv_error(reason, metadata=None):
+            return {"verdict": "error", "matching_key": None,
+                    "candidates": [metadata] if isinstance(metadata, dict) else [],
+                    "suggested_bibtex": None, "verification_method": "arxiv-direct",
+                    "advice": f"arXiv citation requires verification: {reason}"}
+
+        if not re.fullmatch(r"(?:\d{4}\.\d{4,5}|[A-Za-z][\w.-]*/\d{7})", aid):
+            return arxiv_error("invalid arXiv identifier")
         # Try DOI lookup via S2 first (gives us a DOI to feed Crossref)
-        lookup = paper_writing_semantic_scholar_lookup(f"arXiv:{aid}")
-        if "error" not in lookup:
-            ext = lookup.get("metadata", {}).get("externalIds", {})
-            doi = ext.get("DOI") or ""
-            if doi:
-                return paper_writing_verify_citation(
-                    claim=claim, bib_path=bib_path, candidate_doi=doi,
-                )
-            # No DOI but we have S2 metadata -- check title match
-            title = lookup.get("metadata", {}).get("title", "")
-            matching = _title_already_cited(bib_entries, title)
-            if matching:
-                return {
-                    "verdict": "found_in_bib",
-                    "matching_key": matching,
-                    "candidates": [lookup.get("metadata", {})],
-                    "suggested_bibtex": None,
-                    "verification_method": "arxiv-title-match",
-                    "advice": (f"arXiv:{aid} title matches existing bib "
-                               f"entry \\cite{{{matching}}}.  Reuse."),
-                }
-            # No DOI, no title match -- emit a basic arXiv BibTeX
-            authors = ", ".join(
-                a.get("name", "?")
-                for a in lookup.get("metadata", {}).get("authors", [])[:4]
+        try:
+            lookup = paper_writing_semantic_scholar_lookup(f"arXiv:{aid}")
+        except Exception as exc:
+            return arxiv_error(str(exc))
+        if not isinstance(lookup, dict) or lookup.get("error"):
+            return arxiv_error(lookup.get("error") if isinstance(lookup, dict)
+                               else "invalid lookup response")
+        metadata = lookup.get("metadata")
+        if not isinstance(metadata, dict):
+            return arxiv_error("invalid metadata response")
+        ext = metadata.get("externalIds")
+        if ext is None:
+            ext = {}
+        if not isinstance(ext, dict) or (ext.get("DOI") is not None
+                                       and not isinstance(ext["DOI"], str)):
+            return arxiv_error("invalid external identifiers", metadata)
+        doi = ext.get("DOI") or ""
+        if doi:
+            return paper_writing_verify_citation(
+                claim=claim, bib_path=bib_path, candidate_doi=doi,
             )
-            year = lookup.get("metadata", {}).get("year", "????")
-            key = (f"arxiv_{aid.replace('/', '_').replace('.', '_')}")
-            bibtex = (
-                f"@misc{{{key},\n"
-                f"  author       = {{{authors}}},\n"
-                f"  title        = {{{title}}},\n"
-                f"  year         = {{{year}}},\n"
-                f"  archivePrefix = {{arXiv}},\n"
-                f"  eprint       = {{{aid}}},\n"
-                f"}}"
-            )
+        # No DOI but we have S2 metadata -- check title match
+        title = metadata.get("title")
+        if not isinstance(title, str) or not title.strip():
+            return arxiv_error("missing title", metadata)
+        matching = _title_already_cited(bib_entries, title)
+        if matching:
             return {
-                "verdict": "ready_to_insert",
-                "matching_key": None,
+                "verdict": "found_in_bib",
+                "matching_key": matching,
                 "candidates": [lookup.get("metadata", {})],
-                "suggested_bibtex": bibtex,
-                "verification_method": "arxiv-direct",
-                "advice": (f"Verified via arXiv (no DOI on file).  Append "
-                            f"suggested_bibtex, then \\cite{{{key}}}."),
+                "suggested_bibtex": None,
+                "verification_method": "arxiv-title-match",
+                "advice": (f"arXiv:{aid} title matches existing bib "
+                           f"entry \\cite{{{matching}}}.  Reuse."),
             }
-        # S2 lookup failed
+        # No DOI, no title match -- emit a basic arXiv BibTeX
+        raw_authors = metadata.get("authors")
+        year = metadata.get("year")
+        if (not isinstance(raw_authors, list) or not raw_authors
+                or not all(isinstance(a, dict) and isinstance(a.get("name"), str)
+                           and a["name"].strip() for a in raw_authors)
+                or type(year) is not int or not 1 <= year <= 9999):
+            return arxiv_error("incomplete authors or publication year", metadata)
+        from ._bibtex_metadata import bibtex_text
+        try:
+            names = [bibtex_text(a["name"]) for a in raw_authors]
+            if not all(names):
+                raise ValueError("empty author after metadata normalization")
+            authors = " and ".join(names)
+            title = bibtex_text(title)
+            if not title:
+                raise ValueError("empty title after metadata normalization")
+        except ValueError as exc:
+            return arxiv_error(str(exc), metadata)
+        key = (f"arxiv_{aid.replace('/', '_').replace('.', '_')}")
+        bibtex = (
+            f"@misc{{{key},\n"
+            f"  author       = {{{authors}}},\n"
+            f"  title        = {{{title}}},\n"
+            f"  year         = {{{year}}},\n"
+            f"  archivePrefix = {{arXiv}},\n"
+            f"  eprint       = {{{aid}}},\n"
+            f"}}"
+        )
         return {
-            "verdict": "no_candidate_found",
+            "verdict": "ready_to_insert",
             "matching_key": None,
-            "candidates": [],
-            "suggested_bibtex": None,
+            "candidates": [lookup.get("metadata", {})],
+            "suggested_bibtex": bibtex,
             "verification_method": "arxiv-direct",
-            "advice": (f"arXiv ID {candidate_arxiv_id!r} could not be "
-                        f"resolved via Semantic Scholar.  Verify the ID "
-                        f"is correct and try again, or supply a DOI."),
+            "advice": (f"Metadata resolved via Semantic Scholar for arXiv (no DOI on file). Append "
+                        f"suggested_bibtex, then \\cite{{{key}}}."),
         }
 
     # --- Step 2c: title-only fast-path (check bib first) ---
