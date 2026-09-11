@@ -26,10 +26,81 @@ def test_explicit_mcp_source_does_not_repoint_physics():
     assert actual == canonical
 
 
+def test_explicit_source_root_repoints_only_monorepo_packages():
+    module = load_checker()
+    canonical = dict(module.expected_packages())
+    root = Path("S:/Radia/release-quad/main-current")
+    actual = dict(module.expected_packages(source_root=root))
+
+    assert actual["radia"] == str(root)
+    assert actual["cubit-mesh-export"] == str(root / "packages" / "cubit-mesh-export")
+    assert actual["radia-mcp"] == str(root / "packages" / "radia-mcp")
+    assert actual["mcp-server-document"] == canonical["mcp-server-document"]
+
+
+def test_explicit_mcp_source_can_override_source_root():
+    module = load_checker()
+    root = Path("S:/Radia/release-quad/main-current")
+    mcp = "S:/Radia/mcp-runtime/packages/radia-mcp"
+    actual = dict(module.expected_packages(mcp_source=mcp, source_root=root))
+
+    assert actual["radia"] == str(root)
+    assert actual["cubit-mesh-export"] == str(root / "packages" / "cubit-mesh-export")
+    assert actual["radia-mcp"] == mcp
+
+
 def test_failure_exit_code(monkeypatch):
     module = load_checker()
     monkeypatch.setattr(module.release_quad, "_verify_lab_editable", lambda packages: 1)
     assert module.main([]) == 4
+
+
+def test_source_behind_origin_main_is_drift(monkeypatch, capsys):
+    """A correct pointer at a stale tree must not read as clean.
+
+    Measured 2026-09-10: every LAB editable satisfied the path check while
+    running older code than origin/main (radia-mcp 1.4.39 vs 1.4.53).
+    """
+    module = load_checker()
+    monkeypatch.setattr(module, "_running_version",
+                        lambda name: ("1.4.39", "S:/Radia/01_GitHub/.../__init__.py"))
+    monkeypatch.setattr(module, "_origin_main_version", lambda path: "1.4.53")
+    assert module.verify_against_origin_main([("radia-mcp", "S:/Radia/01_GitHub")]) == 1
+    assert "origin/main carries 1.4.53" in capsys.readouterr().out
+
+
+def test_source_ahead_of_origin_main_is_not_drift(monkeypatch):
+    """Mid-development the checkout leads origin/main; that is not drift."""
+    module = load_checker()
+    monkeypatch.setattr(module, "_running_version", lambda name: ("1.4.60", "x"))
+    monkeypatch.setattr(module, "_origin_main_version", lambda path: "1.4.53")
+    assert module.verify_against_origin_main([("radia-mcp", "S:/Radia/01_GitHub")]) == 0
+
+
+def test_release_order_compares_numerically_not_lexically():
+    """4.95.9 precedes 4.95.81; string order would invert that."""
+    module = load_checker()
+    assert module._release_order("4.95.9") < module._release_order("4.95.81")
+
+
+def test_unknown_version_is_skipped_rather_than_passed(monkeypatch, capsys):
+    """A missing answer must be visible, never counted as agreement."""
+    module = load_checker()
+    monkeypatch.setattr(module, "_running_version", lambda name: (None, None))
+    monkeypatch.setattr(module, "_origin_main_version", lambda path: "1.4.53")
+    assert module.verify_against_origin_main([("radia-mcp", "S:/Radia/01_GitHub")]) == 0
+    assert "skipped" in capsys.readouterr().out
+
+
+def test_skip_origin_check_bypasses_the_comparison(monkeypatch):
+    module = load_checker()
+    monkeypatch.setattr(module.release_quad, "_verify_lab_editable", lambda packages: 0)
+
+    def must_not_run(packages):
+        raise AssertionError("origin/main comparison should have been skipped")
+
+    monkeypatch.setattr(module, "verify_against_origin_main", must_not_run)
+    assert module.main(["--skip-origin-check"]) == 0
 
 
 def test_noneditable_install_cannot_pass(monkeypatch, capsys):

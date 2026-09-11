@@ -159,6 +159,7 @@ public:
         }
     }
 
+    bool IsComplex() const override { return mat_->IsComplex(); }
     int VHeight() const override { return static_cast<int>(height_); }
     int VWidth() const override { return static_cast<int>(width_); }
 

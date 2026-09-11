@@ -120,7 +120,7 @@ def main():
 
         # ACA+TSVD least-norm solve (wrap dense A as the entry callback)
         res = aca_tsvd(M, ndof, lambda i, j: A[i, j],
-                       modes=M, kmax=M, aca_eps=1e-10, method=3)
+                       modes=M, kmax=M, aca_eps=1e-10)
         lam = pseudo_inverse_solve(res, Btar)
 
         fit = A @ lam

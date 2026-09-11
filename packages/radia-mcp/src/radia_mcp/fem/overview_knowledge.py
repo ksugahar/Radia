@@ -12,7 +12,7 @@ LAB_STACK = r"""
 | FE space | NGSolve `H1`, `HCurl`, `HDiv`, `HDivSurface` | standard |
 | Axisym magnetic | `radia.axifem` (Henrotte basis) | `H1Henrotte` for A_phi curl-curl |
 | Open boundary | Kelvin transform + radia | natural BC via Kelvin |
-| Solver+precond | `radia.sparsesolv_ngsolve` | Compact AMS / COCR (HCurl) |
+| Solver+precond | `radia.sparsesolv_ngsolve` | AMS (lowest-order HCurl) / COCR |
 | Nonlinear | Picard / Newton with Hantila polarization | radia.hantila_solver |
 | Hysteresis | `MatEnergyHysteresis` / `MatPlayHysteresis` | radia C++ |
 | BEM coupling | `ngsolve.bem` (Weggler ST) | optional |

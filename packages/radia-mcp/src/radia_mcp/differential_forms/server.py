@@ -35,6 +35,7 @@ import sys
 
 from mcp.server.fastmcp import FastMCP
 
+from .kelvin_pullback_knowledge import get_kelvin_pullback_documentation
 from ..common import register_status_tool
 from ..common.tool_group import CoarseToolRegistry
 from .basics_knowledge import get_basics_documentation
@@ -160,6 +161,32 @@ def differential_forms_whitney(topic: str = "all") -> str:
                      why mixed nodal+edge formulations have spurious modes
     """
     return get_whitney_documentation(topic)
+
+
+@mcp.tool()
+def differential_forms_kelvin_pullback(topic: str = "all") -> str:
+    """
+    Kelvin inversion pullback for every form degree and orientation type.
+
+    The open-boundary map between the physical exterior and its Kelvin ball,
+    in BOTH directions, for 0/1/2/3-forms, straight and twisted.
+
+    Topics:
+      "all"
+      "map"     - the two-sphere offset map, its Jacobian, and why one table
+                  serves both directions (the inversion is an involution)
+      "table"   - the complete degree x orientation table, and the two
+                  independent origins of its minus signs
+      "physics" - which electromagnetic quantity is which form; why the
+                  magnetic scalar potential is a TWISTED 0-form and is
+                  anti-continuous across the identified spheres
+      "api"     - radia.kelvin_source entry points and the native
+                  KelvinRadia* coefficients
+      "traps"   - measured failure modes: physical coefficients evaluated at
+                  Kelvin coordinates, single-centre maps on two-sphere meshes,
+                  a silently uncoupled exterior, quadrature-poisoned energies
+    """
+    return get_kelvin_pullback_documentation(topic)
 
 
 @mcp.tool()

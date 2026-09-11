@@ -29,18 +29,56 @@ result-bearing documentation notebooks.
 
 ## Install
 
+`cubit-mesh-export` is standalone: it needs Coreform Cubit 2025.12, but it does
+**not** need `radia`.
+
+```bash
+pip install cubit-mesh-export
+cubit-plugin-install
+```
+
+`cubit-plugin-install` deploys the plugin binaries, the Netgen DLLs, and the
+Cubit-side Python helpers (`cubit_helpers/add_kelvin.py`,
+`cubit_helpers/auto_kelvin_entry.py`) into your Coreform Cubit 2025.12 profile.
+Use `cubit-plugin-install --all-users` for a shared lab machine.
+
+For a standalone round-trip check, supply your own Cubit journal:
+
+```bash
+cubit-smoke-test --jou path/to/sample.jou
+```
+
+The journal must produce the expected material and boundary labels; adjust
+`--expect` and `--expect-materials` for its label contract. The check exports a
+`.vol` and runs the solver-ready validation gate, including NGSolve reload.
+The no-argument `cubit-smoke-test` currently requires Radia's
+`ih_bem_sample.jou`; that fixture is not bundled in the standalone package.
+
+What you get depends on whether `radia` is installed alongside it:
+
+|                                                             | standalone | with `radia` |
+|-------------------------------------------------------------|:----------:|:------------:|
+| `export {netgen,gmsh,vtk,femeem,meg}` / `export jmag_nastran` |     yes    |      yes     |
+| `check-vol` CLI (no Cubit required)                           |     yes    |      yes     |
+| Kelvin transformation and symmetry labels                     |     yes    |      yes     |
+| **Export menu inside Cubit's GUI**                            |      —     |      yes     |
+
+The menu is registered through Cubit's own Claro API and runs in Cubit's
+embedded Python; normal Radia Python/MCP workflows and Simulink applications do
+not need PySide6.  To get the whole Radia toolchain in one step:
+
 ```bash
 pip install "radia[cubit]"
 cubit-plugin-install
 ```
 
-The second command deploys the Cubit plugin binaries, the Netgen DLLs,
-the Cubit-side Python helpers (`cubit_helpers/add_kelvin.py`,
-`cubit_helpers/auto_kelvin_entry.py`), and the Radia Export Mesh toolbar
-startup registration into your Coreform Cubit 2025.12 profiles.  The toolbar
-runs only inside Cubit's embedded Python; normal Radia Python/MCP workflows
-and Simulink applications do not need PySide6.
-Use `cubit-plugin-install --all-users` for a shared lab machine.
+> **If Cubit exits with code 2 while the export itself succeeded**, check for a
+> machine-wide `CUBIT_PLUGIN_DIR` environment variable. On LAB this caused Cubit
+> to receive a `-commandplugindir` argument and report both the flag and its
+> value as files it could not open. This is a diagnosed environment issue, not
+> a reason to accept every exit code 2. Inspect the log and correct the stale
+> setting, then rerun. An exported `.vol` must still pass `check-vol`; a valid
+> output alone does not prove the entire Cubit command completed successfully.
 
 ### Upgrade
 

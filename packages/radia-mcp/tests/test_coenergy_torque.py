@@ -45,7 +45,7 @@ def test_coenergy_torque_nonperiodic_linear_table_is_exact():
     coenergy = [1.0 + 4.0 * angle for angle in angles]
     rows = coenergy_torque_from_angle_samples(angles, coenergy)
 
-    assert [row["stencil"] for row in rows] == ["forward", "central", "central", "backward"]
+    assert [row["stencil"] for row in rows] == ["forward_3pt", "central", "central", "backward_3pt"]
     assert [row["torque_Nm"] for row in rows] == pytest.approx([4.0, 4.0, 4.0, 4.0])
 
 
@@ -103,7 +103,7 @@ def test_virtual_work_force_linear_coenergy_table_is_exact():
     rows = virtual_work_force_from_displacement_samples(positions, coenergy)
     summary = virtual_work_force_summary(positions, coenergy, energy_kind="constant_current")
 
-    assert [row["stencil"] for row in rows] == ["forward", "central", "central", "central", "backward"]
+    assert [row["stencil"] for row in rows] == ["forward_3pt", "central", "central", "central", "backward_3pt"]
     assert [row["energy_kind"] for row in rows] == ["coenergy"] * len(rows)
     assert [row["force_N"] for row in rows] == pytest.approx([expected_force] * len(rows))
     assert summary["virtual_work_identity"] == "F = dW_co/dx at fixed current"

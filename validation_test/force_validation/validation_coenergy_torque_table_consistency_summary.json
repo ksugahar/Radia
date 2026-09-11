@@ -406,13 +406,13 @@
     "rows": [
       {
         "angle_minus_rad": 0.0,
-        "angle_plus_rad": 0.03490658503988659,
+        "angle_plus_rad": 0.06981317007977318,
         "angle_rad": 0.0,
         "coenergy_J": 0.0,
         "index": 1,
         "reference_torque_Nm": 10.0,
         "selected_for_reference_check": false,
-        "stencil": "forward",
+        "stencil": "forward_3pt",
         "torque_Nm": 10.026156022927417,
         "torque_abs_error_Nm": 0.0261560229274167,
         "torque_error_Nm": 0.0261560229274167,
@@ -2925,14 +2925,14 @@
         "torque_rel_error": 9.597280382491323e-06
       },
       {
-        "angle_minus_rad": 6.2482787221397,
+        "angle_minus_rad": 6.213372137099814,
         "angle_plus_rad": 6.283185307179586,
         "angle_rad": 6.283185307179586,
         "coenergy_J": 62.83185307179586,
         "index": 181,
         "reference_torque_Nm": 10.0,
         "selected_for_reference_check": false,
-        "stencil": "backward",
+        "stencil": "backward_3pt",
         "torque_Nm": 9.97384397707251,
         "torque_abs_error_Nm": 0.02615602292748953,
         "torque_error_Nm": -0.02615602292748953,
@@ -2943,7 +2943,7 @@
     "torque_abs_tolerance_Nm": 0.002,
     "torque_rel_tolerance": 0.0003
   },
-  "generated_at_utc": "2026-06-27T09:17:09Z",
+  "generated_at_utc": "2026-09-10T11:55:08Z",
   "kind": "coenergy_torque_table_consistency_validation",
   "learning_theme": "torque-angle tables and coenergy-angle tables should agree under the fixed-current virtual-work derivative",
   "schema": "radia.validation.force_validation.validation_coenergy_torque_table_consistency.v1",
@@ -3134,7 +3134,7 @@
   "versions": {
     "platform": "Windows-2022Server-10.0.20348-SP0",
     "python_version": "3.12.10",
-    "radia_mcp_version": "1.4.3",
-    "radia_version": "4.95.2"
+    "radia_mcp_version": "1.4.53",
+    "radia_version": "4.95.81"
   }
 }
