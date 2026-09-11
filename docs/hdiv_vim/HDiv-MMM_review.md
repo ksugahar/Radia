@@ -8,6 +8,21 @@ exposed several failure modes.
 
 ## Review status
 
+- **Release status, 2026-09-11: HOLD.** Source integration is not production
+  acceptance. ESRF #6 still needs assembly/source-load quadrature re-solves,
+  region-wise energy/load consistency, and three-engine field comparison on
+  the exact candidate wheel. Earlier #6 results in section 8.16 certify only
+  their recorded implementation and must not be inherited by this candidate.
+  The current four-host 4.95.91 installation is not a v5 acceptance record.
+  Shared B-H interpolation and affine-TET BDM3 WIP are not included here.
+- Integration candidate `de7feea0dea67f0a15209c1b64a39f53fec47adb` includes
+  main through `b5a54e473`; native CI run `34587587089` built and tested its
+  wheel successfully without publishing it. Wheel SHA-256:
+  `4952ba92cc0502e81949c35745108f6da499d6c6eb5bf1055a46de1be3a9ad4a`.
+  Native SHA-256:
+  `5d8fe9320b6776ed5712ca7158b9878994a827d99d5725278263734dbb8a5ac8`.
+  The wheel still carries version 4.95.91; distinguish it from the published
+  package by hash and CI/source identity, never by version alone.
 - Revised: 2026-09-04 after the released-binary TOSCA-style mixed
   total/reduced-Omega C-yoke mesh campaign on mdx and Hibino, and the
   symmetric ChargeGram diagonal-leaf repair for ESRF Example #3.
