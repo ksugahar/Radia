@@ -342,8 +342,10 @@ def make_kelvin_aware_radia_H_s_cf(mesh, radia_obj, R_K, offset,
                                     kelvin_mats=("kelvin",)):
     """Return the exact twisted-1-form Kelvin pullback of a Radia ``H`` source.
 
-    This is the compact-current source contract for
-    :func:`radia.kelvin_solver.solve_magnetostatic_reduced_omega_kelvin`.
+    This supplies computational-frame source data, not a complete scalar
+    potential interface contract. The plain reduced-Omega Kelvin solver is
+    retired; the total/reduced solver requires explicit interface traces and
+    material partitions in addition to source fields.
     The physical region uses ``RadiaField(obj, "h")``.  In the translated
     Kelvin sphere the native coefficient evaluates at the inverted physical
     point and returns

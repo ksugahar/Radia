@@ -1,20 +1,41 @@
-"""lorentz.py -- Linear ECB drag/lift via Lorentz integral F = integral J x B dV.
+"""lorentz.py -- plate eddy-current force from a Foster expansion of the reaction field.
 
-For a PM (cube Nd or dipole) at position (x_pm, 0, z_pm) moving along
-+x at velocity v, this computes the time-averaged drag and lift forces
-on the plate using the Lorentz integral over the conductor volume:
+A z-oriented magnetic dipole of peak moment ``m`` (time-harmonic excitation,
+``s = j omega``) sits at ``(x_pm, 0, z_pm)`` above a conducting plate.  Inside
+the plate the z component of the reaction field, ``v = B_r,z`` in tesla,
+satisfies
 
-    <F_conductor> = (1/2) Re[ integral conj(J(s)) x B_ext(r) dV ]
-    <F_PM> = -<F_conductor>   (Newton's 3rd)
+    (-Delta + s mu sigma) v = -s mu sigma B_z^source,   v = 0 on "outer",
 
-J(r, s) is reconstructed from the Foster eigenmode expansion of the
-scalar A_z model.  For the full vector eddy-current formulation see
-calc_fem_kelvin.py in src/radia/panels/.
+which is diagonal in the Dirichlet eigenbasis of -Delta (the Foster expansion):
 
-Why Lorentz instead of Maxwell stress: in our framework Lorentz has
-a SHORTER error chain than Maxwell stress (no Biot-Savart of induced
-field, no surface-evaluation artifacts).  See package README for
-details.
+    v = sum_n c_n phi_n,   c_n = -s mu sigma <B_z, phi_n>_M / (lambda_n + s mu sigma).
+
+The eddy current is the in-plane curl of that field,
+
+    J = (1/mu) curl(v z) = (1/mu) (d_y v, -d_x v, 0),
+
+and the cycle-averaged force on the conductor is
+
+    <F_conductor> = (1/2) integral Re(J) x B dV,   <F_PM> = -<F_conductor>,
+
+with the full real source field ``B = (B_x, B_y, B_z)``: the dipole phase is
+the phase reference.  Keeping only the z component of the reaction field in the
+curl is the usual thin-plate stream-function approximation.
+``validation_test/maglev/ecb_foster_lorentz_reference.py`` locks this module
+against a direct solve of the same model and against what a centred dipole must
+show: zero horizontal force, a repulsive lift, and a lift below the infinite
+perfect-conductor image bound.
+
+This is an AC-excitation model.  It has no translation velocity, so it computes
+no motional drag.
+
+Before 2026-09-11 the current was built as ``J_y = -omega sigma Im(v)``, which
+reads the reaction field [T] as a vector potential: a current density in
+A/m^3 with the wrong parity, zero lift for a centred magnet, and a horizontal
+force of ~1900 N at 5 kHz against an 11.7 N physical bound.  The drive was also
+projected as ``M_free @ Bz_free``, dropping the boundary values of B_z that the
+drive -- unlike the eigenmodes -- does not vanish on.
 """
 from __future__ import annotations
 
@@ -46,103 +67,104 @@ def pm_field_xz_dipole(x, y, z, m, x_pm=0.0, y_pm=0.0, z_pm=0.0):
     return (MU_0 / (4*math.pi)) * 3*m*dx*dz/r5
 
 
-def compute_lorentz_force_via_foster(
-    mesh, lam, vecs_free, free_mask, sigma, mu, s, m_pm, z_pm_center, x_pm
-):
-    """Time-averaged drag (F_x) and lift (F_z) on the conductor.
-
-    Parameters
-    ----------
-    mesh : ngsolve.Mesh
-    lam : ndarray (n_eigen,)
-        Eigenvalues of -Lap on the conductor with Dirichlet BC.
-    vecs_free : ndarray (n_free, n_eigen)
-        M-normalized eigenvectors on free DOFs.
-    free_mask : ndarray (n_dof,) bool
-        Mask for free (non-Dirichlet) DOFs.
-    sigma : float
-        Conductivity.
-    mu : float
-        Permeability.
-    s : complex
-        Laplace variable (typically j*omega).
-    m_pm : float
-        PM magnetic moment magnitude (A m^2).
-    z_pm_center : float
-        z-coordinate of PM dipole center.
-    x_pm : float
-        x-coordinate of PM dipole center.
-
-    Returns
-    -------
-    F_x_conductor : float
-        Time-averaged x-force on the conductor (drag opposes motion).
-    F_z_conductor : float
-        Time-averaged z-force on the conductor (lift on PM is opposite).
-    """
-    import scipy.sparse as sp
-    from ngsolve import (
-        H1,
-        BilinearForm,
-        GridFunction,
-        Integrate,
-        dx,
-    )
+def _dipole_source_field(m_pm, z_pm_center, x_pm):
+    """(B_x, B_y, B_z) CoefficientFunctions of a z dipole at (x_pm, 0, z_pm)."""
     from ngsolve import x as xC
     from ngsolve import y as yC
     from ngsolve import z as zC
 
+    dz = zC - z_pm_center
+    r2 = (xC - x_pm)**2 + yC**2 + dz**2 + 1e-30
+    k = MU_0 / (4*math.pi)
+    bx = k * 3*m_pm*(xC - x_pm)*dz / r2**2.5
+    by = k * 3*m_pm*yC*dz / r2**2.5
+    bz = k * (3*m_pm*dz*dz / r2**2.5 - m_pm / r2**1.5)
+    return bx, by, bz
+
+
+def compute_lorentz_force_via_foster(
+    mesh, lam, vecs_free, free_mask, sigma, mu, s, m_pm, z_pm_center, x_pm
+):
+    """Cycle-averaged force [N] on the conductor, as ``(F_x, F_y, F_z)``.
+
+    Parameters
+    ----------
+    mesh : ngsolve.Mesh
+        Conductor mesh whose whole boundary is labelled "outer".
+    lam : ndarray (n_eigen,)
+        Eigenvalues of -Lap on the conductor with Dirichlet BC on "outer".
+    vecs_free : ndarray (n_free, n_eigen)
+        M-normalized eigenvectors on the free DOFs of ``H1(order=2)``, e.g. from
+        ``radia.maglev.mixed_galerkin.alpha._dirichlet_eigenmodes``.
+    free_mask : ndarray (n_dof,) bool
+        Mask for free (non-Dirichlet) DOFs.
+    sigma : float
+        Conductivity [S/m].
+    mu : float
+        Conductor permeability [H/m].
+    s : complex
+        Laplace variable of the excitation, ``j omega``.
+    m_pm : float
+        Peak dipole moment [A m^2], oriented along +z.
+    z_pm_center : float
+        z-coordinate of the dipole.
+    x_pm : float
+        x-coordinate of the dipole.
+
+    Returns
+    -------
+    (F_x, F_y, F_z) : tuple of float
+        Force on the conductor.  For a dipole above the plate F_z < 0 (the
+        magnet is repelled); a centred dipole has F_x = F_y = 0 by symmetry.
+
+    Notes
+    -----
+    Accuracy is set by the Foster truncation, and it depends on frequency.  On
+    a 30x12x3 plate mesh the lift error against a direct solve of the same
+    model was 1.7 % at 500 Hz and 15 % at 5 kHz with 200 modes, falling to
+    0.08 % and 0.6 % with 1600: at high frequency the basis must reach
+    eigenvalues comparable to ``|s mu sigma|`` to resolve the skin depth.  Grow
+    ``lam`` / ``vecs_free`` until the force stops changing.
+    """
+    import scipy.sparse as sp
+    from ngsolve import H1, BilinearForm, GridFunction, Integrate, dx, grad
+
     fes = H1(mesh, order=2, dirichlet="outer")
-    Bz_cf = (MU_0 / (4*math.pi)) * (
-        3*m_pm*(zC - z_pm_center)*(zC - z_pm_center) /
-        ((xC-x_pm)**2 + yC**2 + (zC-z_pm_center)**2 + 1e-30)**(5/2.0)
-        - m_pm /
-        ((xC-x_pm)**2 + yC**2 + (zC-z_pm_center)**2 + 1e-30)**(3/2.0)
-    )
-    Bx_cf = (MU_0 / (4*math.pi)) * (
-        3*m_pm*(xC-x_pm)*(zC - z_pm_center) /
-        ((xC-x_pm)**2 + yC**2 + (zC-z_pm_center)**2 + 1e-30)**(5/2.0)
-    )
+    bx_cf, by_cf, bz_cf = _dipole_source_field(m_pm, z_pm_center, x_pm)
 
-    Bz_gfu = GridFunction(fes)
-    Bz_gfu.Set(Bz_cf)
-    Bz_vec_full = np.array(Bz_gfu.vec.FV().NumPy())
-    Bz_vec_free = Bz_vec_full[free_mask]
+    bz_gfu = GridFunction(fes)
+    bz_gfu.Set(bz_cf)
+    bz_full = np.array(bz_gfu.vec.FV().NumPy())
 
-    u, v = fes.TnT()
+    u, w = fes.TnT()
     m_form = BilinearForm(fes, symmetric=True)
-    m_form += u * v * dx
+    m_form += u * w * dx
     m_form.Assemble()
     rows_m, cols_m, vals_m = m_form.mat.COO()
-    ndof = fes.ndof
-    M = sp.csr_matrix(
+    mass = sp.csr_matrix(
         (np.asarray(vals_m), (np.asarray(rows_m), np.asarray(cols_m))),
-        shape=(ndof, ndof),
+        shape=(fes.ndof, fes.ndof),
     )
-    M_free = M[free_mask][:, free_mask]
 
-    M_Bz = M_free.dot(Bz_vec_free)
-    proj_Bz = vecs_free.T @ M_Bz
-
+    # The eigenmodes vanish on "outer" but the drive does not: project with the
+    # free rows against ALL mass-matrix columns.
+    projection = vecs_free.T @ (mass[free_mask, :] @ bz_full)
     s_mu_sigma = s * mu * sigma
-    c_n = -s_mu_sigma * proj_Bz / (lam + s_mu_sigma)
+    coefficients = -s_mu_sigma * projection / (lam + s_mu_sigma)
 
-    v_vec_free = vecs_free @ c_n
-    v_vec_full = np.zeros(fes.ndof, dtype=complex)
-    v_vec_full[free_mask] = v_vec_free
+    v_full = np.zeros(fes.ndof, dtype=complex)
+    v_full[free_mask] = vecs_free @ coefficients
+    v_re = GridFunction(fes)
+    v_re.vec.FV().NumPy()[:] = v_full.real
 
-    v_gfu_re = GridFunction(fes)
-    v_gfu_im = GridFunction(fes)
-    v_gfu_re.vec.FV().NumPy()[:] = v_vec_full.real
-    v_gfu_im.vec.FV().NumPy()[:] = v_vec_full.imag
-
-    omega = s.imag
-    Jy_re = -omega * sigma * v_gfu_im   # Re[J_y] = omega sigma Im[v]
-
-    Fx_conductor = -0.5 * Integrate(Jy_re * Bz_cf, mesh)
-    Fz_conductor = +0.5 * Integrate(Jy_re * Bx_cf, mesh)
-
-    return float(Fx_conductor), float(Fz_conductor)
+    # Re(J) = (1/mu) curl(Re(v) z); B is real, so <F> = 0.5 int Re(J) x B.
+    gradient = grad(v_re)
+    jx = gradient[1] / mu
+    jy = -gradient[0] / mu
+    force_x = 0.5 * Integrate(jy * bz_cf, mesh)
+    force_y = 0.5 * Integrate(-jx * bz_cf, mesh)
+    force_z = 0.5 * Integrate(jx * by_cf - jy * bx_cf, mesh)
+    return float(force_x), float(force_y), float(force_z)
 
 
 def compute_lorentz_force_result_via_foster(
@@ -162,14 +184,13 @@ def compute_lorentz_force_result_via_foster(
 ):
     """Return conductor/PM Lorentz forces using the shared result contract.
 
-    The underlying Foster/NGSolve solve remains application-owned. This
-    adapter records the peak-phasor convention and both sides of Newton's
-    third-law pair without changing the legacy tuple-returning function.
+    The Foster/NGSolve solve remains application-owned.  This adapter records
+    the peak-phasor convention and both sides of Newton's third-law pair.
     """
 
     from radia.force import force_torque_result
 
-    force_x, force_z = compute_lorentz_force_via_foster(
+    conductor_force = list(compute_lorentz_force_via_foster(
         mesh,
         lam,
         vecs_free,
@@ -180,9 +201,8 @@ def compute_lorentz_force_result_via_foster(
         m_pm,
         z_pm_center,
         x_pm,
-    )
-    conductor_force = [force_x, 0.0, force_z]
-    source_force = [-force_x, 0.0, -force_z]
+    ))
+    source_force = [-component for component in conductor_force]
     common = {
         "method": "time_average_lorentz_body_force",
         "frame": frame,

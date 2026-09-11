@@ -67,7 +67,8 @@ jobs:
           $releaseTags = @()
           if ($env:GITHUB_REF_TYPE -eq 'tag') {
             $repoUrl = "https://x-access-token:$env:GITHUB_TOKEN@github.com/${{ github.repository }}.git"
-            foreach ($line in (git ls-remote --tags $repoUrl @patterns)) {
+            $env:GIT_TERMINAL_PROMPT = '0'
+            foreach ($line in (git -c credential.helper= ls-remote --tags $repoUrl @patterns)) {
               $parts = $line -split '\s+'
               if ($parts.Count -lt 2 -or $parts[0] -ne $env:GITHUB_SHA) {
                 continue
@@ -177,9 +178,9 @@ jobs:
           }
           & $ciPython -c "import os,sys; assert sys.prefix != sys.base_prefix and os.path.samefile(sys.prefix, os.environ['RADIA_CI_VENV']), 'CI Python must belong to RADIA_CI_VENV'"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & $ciPython -m pip install mcp "trimesh>=4.0" twine==6.2.0 --quiet
+          & $ciPython -m pip install build wheel pytest mcp "trimesh>=4.0" twine==6.2.0 --quiet
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Write-Host "mcp + trimesh + twine installed (radia_mcp via PYTHONPATH, not pip-installed)"
+          Write-Host "build + wheel + pytest + mcp + trimesh + twine installed (radia_mcp via PYTHONPATH, not pip-installed)"
 
       # ----------------------------------------------------------------
       # Verify NGSolve: exact pyproject-pinned version in the run-local venv.

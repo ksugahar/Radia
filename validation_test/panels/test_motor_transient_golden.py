@@ -99,7 +99,10 @@ def test_purely_inductive_no_pm(pmsm_mesh):
         f"unexpected torque without PMs: max={max(result['T_em_history'])}"
     assert result["force_result_schema"] == "radia.force-result/v1"
     assert result["final_force_torque_result"]["schema"] == "radia.force-result/v1"
-    assert result["final_force_torque_result"]["method"] == "arkkio_air_gap_stress"
+    # Default route is the single air-gap contour; "arkkio" is opt-in via
+    # --airgap-torque and only then may the result claim Arkkio's name.
+    assert (result["final_force_torque_result"]["method"]
+            == "contour_air_gap_maxwell_stress")
     assert result["final_force_torque_result"]["dimensionality"] == "2d_planar"
     assert result["final_force_torque_result"]["torque_Nm"][2] == pytest.approx(
         result["T_em_history"][-1]
@@ -127,10 +130,19 @@ def test_pmsm_with_rotation(pmsm_mesh):
     ])
     # With PMs: 1 op-point + 2 PM-only per FE refresh = 3 calls/refresh
     assert result["n_FE_calls"] == 15
-    # T_em finite, not insane (loose band — 8-pole BLAC ratings span 0.001
-    # to a few hundred Nm depending on geometry; our toy is tiny)
+    # T_em finite, not insane (loose band -- 8-pole BLAC ratings span 0.001
+    # to a few hundred Nm depending on geometry; our toy is tiny).
+    #
+    # The LOWER bound is the one that matters.  Until 2026-09-11 the contour
+    # integral fed grad(A) straight into a BND integral on the internal
+    # "airgap_mid" edge, so this machine reported max|T_em| = 1.1e-13 N m --
+    # round-off, i.e. the mechanical ODE was never driven by the field at all.
+    # The old band `0 <= Tmax < 100` accepted that happily.
     Tmax = max(abs(T) for T in result["T_em_history"])
     assert 0 <= Tmax < 100.0, f"|T_em| out of band: {Tmax}"
+    assert Tmax > 0.1, (
+        f"PM excitation must produce a real torque, got {Tmax:.3e} N m -- "
+        "a collapsed air-gap contour integral looks exactly like this")
     # Back-EMF: ensure the data path is exercised.  At omega=62.83
     # rad/s + Br=1.2T, expect non-trivial values (volts to hundreds of
     # volts on toy mesh).
