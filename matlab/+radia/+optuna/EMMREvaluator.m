@@ -1,5 +1,5 @@
 classdef EMMREvaluator < radia.optuna.BaseImprovementEvaluator
-    %EMMREVALUATOR Expected minimum model regret from Optuna 4.9.
+    %EMMREVALUATOR Expected minimum model regret from Optuna 5.
 
     properties (Access=private)
         PythonEvaluator
@@ -15,7 +15,7 @@ classdef EMMREvaluator < radia.optuna.BaseImprovementEvaluator
                 options.seed double = NaN
             end
             warning("radia:optuna:ExperimentalWarning", ...
-                "EMMREvaluator is experimental in Optuna 4.9.0.");
+                "EMMREvaluator is experimental (supported from Optuna 4.0.0).");
             module=py.importlib.import_module("optuna.terminator");
             evaluatorClass=py.builtins.getattr(module,"EMMREvaluator");
             keyword={"deterministic_objective", ...

@@ -2404,11 +2404,25 @@ bool font_draws_ink(HFONT font, const wchar_t* sample) {
     HDC dc = CreateCompatibleDC(nullptr);
     if (!dc) return false;
     bool ink = false;
-    const int box = 64;
+    HGDIOBJ oldFont = SelectObject(dc, font);
+    TEXTMETRICW metrics = {};
+    SIZE extent = {};
+    if (!GetTextMetricsW(dc, &metrics) ||
+        !GetTextExtentPoint32W(dc, sample, int(wcslen(sample)), &extent) ||
+        extent.cx < 0 || extent.cx > 16384 ||
+        metrics.tmHeight <= 0 || metrics.tmHeight > 4096) {
+        SelectObject(dc, oldFont);
+        DeleteDC(dc);
+        return false;
+    }
+    // A 64px probe clips Latin Modern Math's large Windows ascent at 150%
+    // scaling. Reserve the measured line and sample, not a fixed pixel box.
+    const int width = int(extent.cx) + 8;
+    const int height = int(metrics.tmHeight) + 8;
     BITMAPINFO bi = {};
     bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
-    bi.bmiHeader.biWidth = box;
-    bi.bmiHeader.biHeight = -box;
+    bi.bmiHeader.biWidth = width;
+    bi.bmiHeader.biHeight = -height;
     bi.bmiHeader.biPlanes = 1;
     bi.bmiHeader.biBitCount = 32;
     bi.bmiHeader.biCompression = BI_RGB;
@@ -2416,20 +2430,19 @@ bool font_draws_ink(HFONT font, const wchar_t* sample) {
     if (HBITMAP bmp = CreateDIBSection(dc, &bi, DIB_RGB_COLORS, &bits,
                                        nullptr, 0)) {
         HGDIOBJ oldBmp = SelectObject(dc, bmp);
-        RECT all{0, 0, box, box};
+        RECT all{0, 0, width, height};
         FillRect(dc, &all, HBRUSH(GetStockObject(WHITE_BRUSH)));
-        HGDIOBJ oldFont = SelectObject(dc, font);
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, RGB(0, 0, 0));
         TextOutW(dc, 2, 2, sample, int(wcslen(sample)));
         GdiFlush();
         const auto* px = static_cast<const unsigned char*>(bits);
-        for (int i = 0; i < box * box && !ink; ++i)
+        for (int i = 0; i < width * height && !ink; ++i)
             if (px[size_t(i) * 4] < 200) ink = true;
-        SelectObject(dc, oldFont);
         SelectObject(dc, oldBmp);
         DeleteObject(bmp);
     }
+    SelectObject(dc, oldFont);
     DeleteDC(dc);
     return ink;
 }
@@ -2482,7 +2495,7 @@ bool font_resolves_to_face(HFONT font, const wchar_t* expected) {
  * The embedded math font leads: it ships inside the executable, the canvas
  * renders with it every run, and it covers every palette face -- so the
  * buttons no longer depend on the machine''s font table being healthy. */
-HFONT pick_button_font(int heightPx) {
+HFONT pick_button_font(int heightPx, std::wstring* diagnostics = nullptr) {
     /* Derive the required cmap from the real catalogue.  A hand-maintained
      * sample missed the old CJK actions and U+25AF, allowing font linking to
      * turn popup cells into black replacement shapes on LAB. */
@@ -2500,8 +2513,16 @@ HFONT pick_button_font(int heightPx) {
                                  FALSE, DEFAULT_CHARSET, OUT_TT_PRECIS,
                                  CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
                                  VARIABLE_PITCH, face);
-        if (font_owns_glyphs(font, sample.c_str()) &&
-            font_draws_ink(font, L"\x2264\x2260 ab")) {
+        const bool physicalFace = font_resolves_to_face(font, face);
+        const bool owns = font_owns_glyphs(font, sample.c_str());
+        const bool draws = owns && font_draws_ink(font, L"\x2264\x2260 ab");
+        if (diagnostics) {
+            *diagnostics += std::wstring(face) + L": physical-face=" +
+                (physicalFace ? L"match" : L"substituted-or-unavailable") +
+                L", glyphs=" + (owns ? L"present" : L"missing-or-unavailable") +
+                L", ink=" + (!owns ? L"not-tested" : draws ? L"present" : L"absent") + L"\n";
+        }
+        if (physicalFace && owns && draws) {
             flight_note(std::string("font.buttons ") + utf8_wide(face));
             return font;
         }
@@ -2513,26 +2534,144 @@ HFONT pick_button_font(int heightPx) {
 }
 
 void draw_palette_cell(HDC dc, const RECT& rect, HFONT font,
-                       const std::wstring& face, bool hot) {
+                       const std::wstring& face, bool hot,
+                       const std::string& command = {}) {
     FillRect(dc, &rect, GetSysColorBrush(hot ? COLOR_HIGHLIGHT : COLOR_MENU));
-    SetBkMode(dc, TRANSPARENT);
-    SetTextColor(dc, GetSysColor(hot ? COLOR_HIGHLIGHTTEXT : COLOR_MENUTEXT));
-    HGDIOBJ old = SelectObject(dc, font);
-    RECT textRect = rect;
-    DrawTextW(dc, face.c_str(), int(face.size()), &textRect,
-              DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
-    SelectObject(dc, old);
+    LOGFONTW lf{};
+    if (!font || !GetObjectW(font, sizeof(lf), &lf)) return;
+    const int em = std::max(1, std::abs(int(lf.lfHeight)));
+    const int margin = std::max(2, MulDiv(2, em, 17));
+    const int availableW = int(rect.right - rect.left) - 2 * margin;
+    const int availableH = int(rect.bottom - rect.top) - 2 * margin;
+    if (availableW <= 0 || availableH <= 0) return;
+
+    // The font's OPEN BOX is a hairline that can disappear on downsampling.
+    // Space commands deliberately show one/two/three measured spacing marks,
+    // not literal whitespace and not a glyph selected through font linking.
+    const int spaceMarks = command == "latex.\\," ? 1 :
+        command == "latex.\\:" ? 2 : command == "latex.\\;" ? 3 : 0;
+    if (spaceMarks) {
+        const int markW = std::max(3, std::min(em / 2, availableW / spaceMarks - 2));
+        const int markH = std::max(2, em / 4);
+        const int x0 = int(rect.left + (rect.right - rect.left - spaceMarks * (markW + 2) + 2) / 2);
+        const int y0 = int(rect.top + (rect.bottom - rect.top - markH) / 2);
+        HPEN pen = CreatePen(PS_SOLID, std::max(1, em / 17),
+            GetSysColor(hot ? COLOR_HIGHLIGHTTEXT : COLOR_MENUTEXT));
+        HGDIOBJ old = SelectObject(dc, pen);
+        for (int i = 0; i < spaceMarks; ++i) {
+            const int x = x0 + i * (markW + 2);
+            MoveToEx(dc, x, y0, nullptr); LineTo(dc, x, y0 + markH);
+            LineTo(dc, x + markW, y0 + markH); LineTo(dc, x + markW, y0);
+        }
+        SelectObject(dc, old); DeleteObject(pen);
+        return;
+    }
+
+    // Both editions consume the same reviewed preview TeX. The native
+    // renderer owns pixels, not a second palette-example vocabulary.
+    eqnedit::Equation preview;
+    bool semantic = false;
+    for (const auto& palette : eqnedit::palettes())
+        for (const auto& item : palette.items)
+            if (item.command == command && !item.preview_tex.empty()) {
+                if (!preview.load_latex(item.preview_tex)) return; // blank fails the visual gate
+                semantic = true;
+            }
+
+    // Crop actual ink, not the font's em/Windows ascent. Supersampling keeps
+    // radicals and thin accents intact when a wide label must be fitted.
+    constexpr int sampleScale = 3;
+    const int pad = em * sampleScale;
+    lf.lfHeight *= sampleScale;
+    HFONT sampleFont = CreateFontIndirectW(&lf);
+    HDC memory = CreateCompatibleDC(dc);
+    if (!memory || !sampleFont) {
+        if (memory) DeleteDC(memory);
+        if (sampleFont) DeleteObject(sampleFont);
+        return;
+    }
+    HGDIOBJ oldFont = SelectObject(memory, sampleFont);
+    TEXTMETRICW tm{};
+    SIZE extent{};
+    GetTextMetricsW(memory, &tm);
+    GetTextExtentPoint32W(memory, face.c_str(), int(face.size()), &extent);
+    const auto metrics = preview.metrics();
+    const double scale = double(em * sampleScale) / 12.0;
+    const int width = (semantic ? int(std::ceil(metrics.width * scale)) : int(extent.cx)) + 2 * pad;
+    const int height = (semantic ? int(std::ceil(metrics.height * scale)) : int(tm.tmHeight)) + 2 * pad;
+    BITMAPINFO bi{};
+    bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bi.bmiHeader.biWidth = width;
+    bi.bmiHeader.biHeight = -height;
+    bi.bmiHeader.biPlanes = 1;
+    bi.bmiHeader.biBitCount = 32;
+    void* bits = nullptr;
+    HBITMAP bitmap = width > 0 && height > 0 && width < 8192 && height < 8192
+        ? CreateDIBSection(memory, &bi, DIB_RGB_COLORS, &bits, nullptr, 0) : nullptr;
+    if (bitmap && bits) {
+        HGDIOBJ oldBitmap = SelectObject(memory, bitmap);
+        RECT all{0, 0, width, height};
+        FillRect(memory, &all, HBRUSH(GetStockObject(WHITE_BRUSH)));
+        SetBkMode(memory, TRANSPARENT);
+        SetTextColor(memory, RGB(0, 0, 0));
+        // These are examples, not editable documents. Empty annotation slots
+        // must not add dotted placeholder ink and force the brace to shrink.
+        if (semantic) preview.draw_gdi(memory, pad, pad, scale, eqnedit::SvgStyle(), false, false);
+        else TextOutW(memory, pad, pad, face.c_str(), int(face.size()));
+        GdiFlush();
+        auto* px = static_cast<unsigned char*>(bits);
+        int left = width, top = height, right = -1, bottom = -1;
+        const COLORREF bg = GetSysColor(hot ? COLOR_HIGHLIGHT : COLOR_MENU);
+        const COLORREF fg = GetSysColor(hot ? COLOR_HIGHLIGHTTEXT : COLOR_MENUTEXT);
+        for (int y = 0; y < height; ++y) for (int x = 0; x < width; ++x) {
+            unsigned char* p = px + (size_t(y) * width + x) * 4;
+            const int darkness = 255 - std::min({int(p[0]), int(p[1]), int(p[2])});
+            if (darkness > 8) {
+                left = std::min(left, x); top = std::min(top, y);
+                right = std::max(right, x); bottom = std::max(bottom, y);
+            }
+            p[0] = BYTE((GetBValue(fg) * darkness + GetBValue(bg) * (255 - darkness)) / 255);
+            p[1] = BYTE((GetGValue(fg) * darkness + GetGValue(bg) * (255 - darkness)) / 255);
+            p[2] = BYTE((GetRValue(fg) * darkness + GetRValue(bg) * (255 - darkness)) / 255);
+        }
+        if (right >= left && bottom >= top) {
+            const int inkW = right - left + 1, inkH = bottom - top + 1;
+            const double fit = std::min({1.0 / sampleScale,
+                double(availableW) / inkW, double(availableH) / inkH});
+            const int outW = std::max(1, int(std::floor(inkW * fit)));
+            const int outH = std::max(1, int(std::floor(inkH * fit)));
+            const int saved = SaveDC(dc);
+            SetStretchBltMode(dc, HALFTONE);
+            SetBrushOrgEx(dc, 0, 0, nullptr);
+            StretchBlt(dc, rect.left + (rect.right - rect.left - outW) / 2,
+                rect.top + (rect.bottom - rect.top - outH) / 2, outW, outH,
+                memory, left, top, inkW, inkH, SRCCOPY);
+            RestoreDC(dc, saved);
+        }
+        SelectObject(memory, oldBitmap);
+        DeleteObject(bitmap);
+    }
+    SelectObject(memory, oldFont);
+    DeleteObject(sampleFont);
+    DeleteDC(memory);
 }
 
 /* Run the exact owner-draw path used by WM_DRAWITEM into an off-screen menu
  * cell.  Cmap ownership prevents fallback tofu, while a minimum ink count
  * prevents an empty or one-pixel rendering from qualifying as readable. */
+void draw_selector_face(HDC dc, RECT rect, HFONT font,
+                        const std::wstring& face, int dpi, bool hot = false) {
+    InflateRect(&rect, -MulDiv(4, dpi, 96), -MulDiv(3, dpi, 96));
+    draw_palette_cell(dc, rect, font, face, hot);
+}
+
 bool palette_cell_draws_readably(HFONT font, const std::wstring& face,
-                                 int dpi) {
+                                 int dpi, const std::string& command = {},
+                                 bool hot = false, bool selector = false) {
     if (!font || face.empty() || !font_owns_glyphs(font, face.c_str()))
         return false;
-    const int width = MulDiv(34, dpi, 96);
-    const int height = MulDiv(28, dpi, 96);
+    const int width = MulDiv(selector ? 52 : 34, dpi, 96);
+    const int height = MulDiv(selector ? 30 : 28, dpi, 96);
     HDC dc = CreateCompatibleDC(nullptr);
     if (!dc) return false;
     BITMAPINFO info{};
@@ -2552,16 +2691,24 @@ bool palette_cell_draws_readably(HFONT font, const std::wstring& face,
     }
     HGDIOBJ old = SelectObject(dc, bitmap);
     RECT rect{0, 0, width, height};
-    draw_palette_cell(dc, rect, font, face, false);
+    if (selector) {
+        FillRect(dc, &rect, GetSysColorBrush(hot ? COLOR_HIGHLIGHT : COLOR_MENU));
+        draw_selector_face(dc, rect, font, face, dpi, hot);
+    } else draw_palette_cell(dc, rect, font, face, hot, command);
     GdiFlush();
-    const COLORREF background = GetSysColor(COLOR_MENU);
+    const COLORREF background = GetSysColor(hot ? COLOR_HIGHLIGHT : COLOR_MENU);
     const auto* pixels = static_cast<const unsigned char*>(bits);
     size_t ink = 0;
+    size_t edgeInk = 0;
     for (int i = 0; i < width * height; ++i) {
         const size_t at = size_t(i) * 4;
         if (pixels[at] != GetBValue(background) ||
             pixels[at + 1] != GetGValue(background) ||
-            pixels[at + 2] != GetRValue(background)) ++ink;
+            pixels[at + 2] != GetRValue(background)) {
+            ++ink;
+            const int x = i % width, y = i / width;
+            if (x == 0 || y == 0 || x == width - 1 || y == height - 1) ++edgeInk;
+        }
     }
     SelectObject(dc, old);
     DeleteObject(bitmap);
@@ -2569,7 +2716,10 @@ bool palette_cell_draws_readably(HFONT font, const std::wstring& face,
     /* A centred dot is intentionally only a handful of pixels at 96 dpi.
      * Its exact cmap ownership is the stronger anti-tofu condition; require
      * the real draw path to add more than a lone accidental pixel. */
-    return ink >= size_t(std::max(2, dpi / 48));
+    const bool readable = ink >= size_t(std::max(2, dpi / 48)) && edgeInk == 0;
+    if (!readable) fprintf(stderr, "palette %s dpi=%d hot=%d ink=%zu edge=%zu\n",
+        command.c_str(), dpi, int(hot), ink, edgeInk);
+    return readable;
 }
 
 /* Category labels are Japanese, so DEFAULT_GUI_FONT is not a sufficient
@@ -2652,19 +2802,16 @@ void draw_toolbar_button(HWND hwnd, HDC dc) {
     DrawFrameControl(dc, &rc, DFC_BUTTON, frameState);
 
     std::wstring text = window_text(hwnd);
-    RECT textRc = rc;
-    InflateRect(&textRc, -scaled_px(hwnd, 4), -scaled_px(hwnd, 3));
-    if (pressed) OffsetRect(&textRc, 1, 1);
     SetBkMode(dc, TRANSPARENT);
     SetTextColor(dc, GetSysColor(IsWindowEnabled(hwnd)
                                      ? COLOR_BTNTEXT : COLOR_GRAYTEXT));
     HFONT font = HFONT(SendMessageW(hwnd, WM_GETFONT, 0, 0));
     if (!font) font = HFONT(GetStockObject(DEFAULT_GUI_FONT));
-    HGDIOBJ oldFont = SelectObject(dc, font);
-    DrawTextW(dc, text.c_str(), int(text.size()), &textRc,
-              DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX |
-                  DT_END_ELLIPSIS);
-    SelectObject(dc, oldFont);
+    // Selector and persistent-style faces must use the same ink bounds as
+    // popup cells. Latin Modern Math's line box is not its visible glyph box.
+    RECT faceRc = rc;
+    if (pressed) OffsetRect(&faceRc, 1, 1);
+    draw_selector_face(dc, faceRc, font, text, int(GetDpiForWindow(hwnd)));
 
     if (GetFocus() == hwnd) {
         RECT focus = rc;
@@ -4146,7 +4293,7 @@ LRESULT CALLBACK MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (face == g.paletteFaces.end()) break;
             const bool hot = (di->itemState & ODS_SELECTED) != 0;
             draw_palette_cell(di->hDC, di->rcItem, g.paletteFont,
-                              face->second, hot);
+                              face->second, hot, g.paletteItems.at(UINT(di->itemID)));
             return TRUE;
         }
         /* Teach the exact TeX spelling while the palette is open.  The glyph
@@ -4272,6 +4419,38 @@ int self_test() {
     const auto japaneseMetrics = japanese.metrics();
     if (japaneseMetrics.width < 45.0 || japaneseMetrics.width > 90.0 ||
         japaneseMetrics.height > 24.0) return 157;
+    /* Which font the palette actually got.  pick_button_font is
+     * all-or-nothing by design -- it accepts a candidate only if that
+     * candidate owns EVERY face at once -- so one face character the embedded
+     * font lacks does not blank its own key, it rejects Latin Modern Math for
+     * all of them.  3.0.16 shipped that way: U+2605 on the Hodge-star key
+     * dropped all 245 keys to Segoe UI Symbol, and the prime family read as
+     * typewriter quotes.  The face catalogue is checked statically against the
+     * font's cmap, but a cmap predicts the choice rather than observing it,
+     * and the only previous record of the outcome was a flight note that
+     * reaches a file solely on a crash or an eight-second freeze.  This is the
+     * one place a real process reports the font it is drawing with. */
+    for (const int dpi : {96, 120, 144, 192, 288, 384}) {
+        std::wstring diagnostics;
+        HFONT paletteFont = pick_button_font(MulDiv(17, dpi, 96), &diagnostics);
+        const bool paletteUsesMathFont =
+            font_resolves_to_face(paletteFont, L"Latin Modern Math");
+        if (!paletteUsesMathFont) {
+            wchar_t resolved[LF_FACESIZE] = {};
+            if (HDC probe = CreateCompatibleDC(nullptr)) {
+                HGDIOBJ previous = SelectObject(probe, paletteFont);
+                GetTextFaceW(probe, _countof(resolved), resolved);
+                SelectObject(probe, previous);
+                DeleteDC(probe);
+            }
+            fwprintf(stderr,
+                     L"palette font at %d dpi resolved to \"%s\", not Latin Modern Math\n%s",
+                     dpi, resolved, diagnostics.c_str());
+        }
+        if (paletteFont && paletteFont != HFONT(GetStockObject(DEFAULT_GUI_FONT)))
+            DeleteObject(paletteFont);
+        if (!paletteUsesMathFont) return 243;
+    }
     HDC screen = GetDC(nullptr);
     HDC dc = CreateCompatibleDC(screen);
     HBITMAP bm = CreateCompatibleBitmap(screen, 640, 240);
@@ -5270,7 +5449,8 @@ int visual_scale_test() {
         for (const auto& palette : eqnedit::palettes()) {
             for (const auto& item : palette.items) {
                 const std::wstring face = wide_utf8(item.face);
-                if (!palette_cell_draws_readably(paletteFont, face, dpi)) {
+                if (!palette_cell_draws_readably(paletteFont, face, dpi, item.command) ||
+                    !palette_cell_draws_readably(paletteFont, face, dpi, item.command, true)) {
                     flight_note("font.palette_cell.failed " + item.command);
                     paletteVisible = false;
                     failedPaletteCell = paletteCellIndex;

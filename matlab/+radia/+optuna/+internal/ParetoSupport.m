@@ -24,16 +24,16 @@ classdef ParetoSupport
             goodMask=false(count,1); goodWeights=zeros(count,1);
             if nBelow==0, return, end
             violations=zeros(count,1); feasible=true(count,1);
-            if study.hasConstraintRecords()
-                for k=1:count
-                    [present,constraints]=study.constraintRecord(trialNumbers(k));
-                    if ~present
-                        feasible(k)=false; violations(k)=Inf;
-                    else
-                        positive=max(constraints,0); feasible(k)=all(positive<=0);
-                        violations(k)=sum(positive);
-                    end
+            for k=1:count
+                [present,constraints]=study.constraintRecord(trialNumbers(k));
+                if ~present
+                    % Optuna 5 exposes constraints as a dictionary. An
+                    % unset/empty dictionary has no violated entries.
+                    continue
                 end
+                positive=max(constraints,0);
+                feasible(k)=all(positive<=0);
+                violations(k)=sum(positive);
             end
             feasibleIndices=find(feasible);
             takeFeasible=min(nBelow,numel(feasibleIndices));
@@ -49,16 +49,8 @@ classdef ParetoSupport
                 chosen=infeasibleIndices(order(1:min(remaining,numel(order))));
                 goodMask(chosen)=true;
             end
-            selected=find(goodMask);
-            selectedFeasible=selected(feasible(selected));
-            if ~isempty(selectedFeasible)
-                weights=radia.optuna.internal.ParetoSupport.hypervolumeContributions( ...
-                    values(selectedFeasible,:),study.Directions);
-                goodWeights(selectedFeasible)=weights;
-            end
-            goodWeights(goodMask & goodWeights==0)=1e-12;
-            goodWeights=goodWeights(goodMask);
-            goodWeights=goodWeights/max(max(goodWeights),1e-12);
+            % Optuna 5 removed hypervolume-contribution weighting below.
+            goodWeights=ones(sum(goodMask),1);
         end
 
         function [rank,crowding] = rankAndCrowding(values,directions)
@@ -115,7 +107,7 @@ classdef ParetoSupport
 
         function [feasible,violation,rank,crowding,order,missing] = ...
                 constrainedRankAndCrowding(study,trialNumbers,values)
-            %CONSTRAINEDRANKANDCROWDING Optuna 4.9 elite rank groups.
+            %CONSTRAINEDRANKANDCROWDING Optuna 5 elite rank groups.
             trialNumbers=reshape(double(trialNumbers),[],1);
             values=double(values);
             count=numel(trialNumbers);
@@ -131,21 +123,13 @@ classdef ParetoSupport
             missing=false(count,1);
             constrained=study.hasConstraintRecords();
             if constrained
-                feasible(:)=false;
-                violation(:)=Inf;
-                expectedCount=NaN;
                 for index=1:count
                     [present,constraints]=study.constraintRecord( ...
                         trialNumbers(index));
                     if ~present
-                        missing(index)=true;
+                        % An absent record is the same public empty
+                        % constraint dictionary exposed by FrozenTrial.
                         continue
-                    end
-                    if isnan(expectedCount)
-                        expectedCount=numel(constraints);
-                    elseif numel(constraints)~=expectedCount
-                        error("radia:optuna:ConstraintShape", ...
-                            "Trials with different numbers of constraints cannot be compared.");
                     end
                     positive=max(constraints,0);
                     feasible(index)=all(positive<=0);
@@ -163,7 +147,7 @@ classdef ParetoSupport
                 rank(feasibleIndices)=localRank;
             end
             nextRank=max([0;rank(isfinite(rank))])+1;
-            infeasibleIndices=find(~feasible & ~missing);
+            infeasibleIndices=find(~feasible);
             if ~isempty(infeasibleIndices)
                 uniqueViolation=unique(violation(infeasibleIndices),"sorted");
                 for index=1:numel(uniqueViolation)
@@ -172,13 +156,6 @@ classdef ParetoSupport
                         nextRank+index-1;
                 end
                 nextRank=nextRank+numel(uniqueViolation);
-            end
-            missingIndices=find(missing);
-            if ~isempty(missingIndices)
-                [localRank,crowding(missingIndices)]= ...
-                    radia.optuna.internal.ParetoSupport.rankAndCrowding( ...
-                    values(missingIndices,:),study.Directions);
-                rank(missingIndices)=nextRank+localRank-1;
             end
             [~,order]=sortrows([rank,(1:count)'],[1 2]);
         end
@@ -216,27 +193,19 @@ classdef ParetoSupport
                 rightNumber,rightValues)
             [leftPresent,leftConstraints]=study.constraintRecord(leftNumber);
             [rightPresent,rightConstraints]=study.constraintRecord(rightNumber);
-            if leftPresent~=rightPresent
-                result=leftPresent;
+            if ~leftPresent, leftConstraints=zeros(1,0); end
+            if ~rightPresent, rightConstraints=zeros(1,0); end
+            leftViolation=sum(max(leftConstraints,0));
+            rightViolation=sum(max(rightConstraints,0));
+            leftFeasible=leftViolation<=0;
+            rightFeasible=rightViolation<=0;
+            if leftFeasible~=rightFeasible
+                result=leftFeasible;
                 return
             end
-            if leftPresent
-                if numel(leftConstraints)~=numel(rightConstraints)
-                    error("radia:optuna:ConstraintShape", ...
-                        "Trials with different numbers of constraints cannot be compared.");
-                end
-                leftViolation=sum(max(leftConstraints,0));
-                rightViolation=sum(max(rightConstraints,0));
-                leftFeasible=leftViolation<=0;
-                rightFeasible=rightViolation<=0;
-                if leftFeasible~=rightFeasible
-                    result=leftFeasible;
-                    return
-                end
-                if ~leftFeasible
-                    result=leftViolation<rightViolation;
-                    return
-                end
+            if ~leftFeasible
+                result=leftViolation<rightViolation;
+                return
             end
             signs=ones(1,numel(study.Directions));
             signs(study.Directions=="maximize")=-1;

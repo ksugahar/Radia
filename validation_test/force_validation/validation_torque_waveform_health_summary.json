@@ -19,7 +19,7 @@
     "twelfth_amplitude_error_Nm": 2.4980018054066022e-15,
     "twelfth_variance_fraction_error": 2.914335439641036e-15
   },
-  "generated_at_utc": "2026-06-27T09:17:09Z",
+  "generated_at_utc": "2026-09-10T11:55:11Z",
   "health": {
     "ac_rms_over_mean": 0.0291547594742265,
     "ac_rms_torque_Nm": 0.291547594742265,
@@ -244,7 +244,7 @@
   "versions": {
     "platform": "Windows-2022Server-10.0.20348-SP0",
     "python_version": "3.12.10",
-    "radia_mcp_version": "1.4.3",
-    "radia_version": "4.95.2"
+    "radia_mcp_version": "1.4.53",
+    "radia_version": "4.95.81"
   }
 }

@@ -1,5 +1,5 @@
 classdef RetryFailedTrialCallback < radia.optuna.RetryHeartbeatStaleTrialCallback
-    %RETRYFAILEDTRIALCALLBACK Deprecated Optuna 4.9 retry alias.
+    %RETRYFAILEDTRIALCALLBACK Deprecated retry alias retained by Optuna 5.
 
     methods
         function obj=RetryFailedTrialCallback(options)

@@ -1,8 +1,8 @@
 function result=get_param_importances(study,options)
-%GET_PARAM_IMPORTANCES Evaluate parameter importance with Optuna 4.9.0.
+%GET_PARAM_IMPORTANCES Evaluate parameter importance with Optuna 5.0.0.
 arguments
     study (1,1) radia.optuna.Study
-    options.evaluator (1,1) string = "fanova"
+    options.evaluator (1,1) string = "ped_anova"
     options.params string = strings(1,0)
     options.normalize (1,1) logical = true
     options.objective_index (1,1) double {mustBeInteger,mustBePositive} = 1
@@ -11,7 +11,6 @@ arguments
     options.max_depth (1,1) double {mustBeInteger,mustBePositive} = 64
     options.target_quantile (1,1) double = 0.1
     options.region_quantile (1,1) double = 1.0
-    options.baseline_quantile (1,1) double = NaN
     options.evaluate_on_local (1,1) logical = true
     options.target = []
 end
@@ -84,9 +83,6 @@ switch lower(options.evaluator)
         pairs={"target_quantile",options.target_quantile, ...
             "region_quantile",options.region_quantile, ...
             "evaluate_on_local",options.evaluate_on_local};
-        if isfinite(options.baseline_quantile)
-            pairs=[pairs,{"baseline_quantile",options.baseline_quantile}];
-        end
         evaluator=importance.PedAnovaImportanceEvaluator(pyargs(pairs{:}));
     otherwise
         error("radia:optuna:ImportanceEvaluator", ...
@@ -119,9 +115,9 @@ if environment.ExecutionMode~="InProcess" || ...
         "Parameter importance requires in-process Python 3.12.");
 end
 optuna=py.importlib.import_module("optuna");
-if string(py.builtins.getattr(optuna,"__version__"))~="4.9.0"
+if string(py.builtins.getattr(optuna,"__version__"))~="5.0.0"
     error("radia:optuna:ImportancePython", ...
-        "Parameter importance requires optuna==4.9.0.");
+        "Parameter importance requires optuna==5.0.0.");
 end
 end
 

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import json
 import shutil
 
 import pytest
-
 from radia_mcp.bibliography.plans.T14_canonical import (
     _keys_in_order,
     bibliography_canonical_path,
+    bibliography_get_entries,
     bibliography_make_bbl,
 )
 
@@ -21,6 +22,53 @@ def test_canonical_path_describes_single_source_and_bbl_delivery():
 def test_citation_keys_preserve_first_appearance_order():
     tex = r"\citep[see][p.~2]{beta, alpha} \citet{alpha} \nocite{gamma}"
     assert _keys_in_order(tex) == ["beta", "alpha", "gamma"]
+
+
+def test_get_entries_returns_canonical_records_in_requested_order():
+    result = json.loads(bibliography_get_entries("YuferevIda2009, Kameari2018"))
+
+    assert result["ok"] is True
+    assert result["canonical_path"].endswith("references.bib")
+    assert len(result["canonical_sha256"]) == 64
+    assert [entry["key"] for entry in result["entries"]] == [
+        "YuferevIda2009",
+        "Kameari2018",
+    ]
+    assert result["entries"][0]["fields"]["year"] == "2009"
+
+
+def test_get_entries_fails_closed_for_missing_or_duplicate_keys():
+    missing = json.loads(bibliography_get_entries("not-a-key"))
+    duplicate = json.loads(bibliography_get_entries("Kameari2018, Kameari2018"))
+
+    assert missing == {
+        "ok": False,
+        "error": "citation keys are absent from canonical references.bib",
+        "missing": ["not-a-key"],
+    }
+    assert duplicate == {
+        "ok": False,
+        "error": "duplicate citation keys",
+        "keys": ["Kameari2018"],
+    }
+
+
+def test_igte_cauer_sibc_reference_set_is_canonical():
+    keys = (
+        "Kameari2018, Kuriyama2019, kuriyama2021multiport, Matsuo2026jmmm, "
+        "Senior1962, Mitzner1967, YuferevIda2009, QuarteroniValli1999, "
+        "gautschi2004orthogonal, HirumaXFEM2023, vandyke1975perturbation, "
+        "gallivan1996rational, oh1995efficient, deeley1990surface, "
+        "JingguoLavers1993, warne1994eddy, yuferev2001surface, "
+        "proekt2002overlapping, dauge2014corner, HirumaXFEMexact2024"
+    )
+    result = json.loads(bibliography_get_entries(keys))
+
+    assert result["ok"] is True
+    assert len(result["entries"]) == 20
+    senior = next(entry for entry in result["entries"] if entry["key"] == "Senior1962")
+    assert senior["fields"]["year"] == "1960"
+    assert senior["fields"]["doi"] == "10.1007/BF02920074"
 
 
 def test_make_bbl_rejects_unknown_key_without_partial_output(tmp_path, monkeypatch):

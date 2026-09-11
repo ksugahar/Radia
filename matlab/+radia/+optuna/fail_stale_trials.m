@@ -4,7 +4,7 @@ arguments
     study
 end
 warning("radia:optuna:ExperimentalWarning", ...
-    "fail_stale_trials is experimental in Optuna 4.9.0.");
+    "fail_stale_trials is experimental (supported from Optuna 2.9.0).");
 if isa(study,"radia.optuna.Study")
     % Native table/MAT studies do not implement heartbeat, matching
     % upstream's no-op for storage backends outside BaseHeartbeat.

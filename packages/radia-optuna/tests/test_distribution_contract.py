@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
+import ast
 import json
 import re
 import tomllib
@@ -18,6 +20,126 @@ VERIFY_SPEC = importlib.util.spec_from_file_location(
 assert VERIFY_SPEC is not None and VERIFY_SPEC.loader is not None
 verify_wheel = importlib.util.module_from_spec(VERIFY_SPEC)
 VERIFY_SPEC.loader.exec_module(verify_wheel)
+
+
+def test_api_coverage_is_reproducible_and_names_real_matlab_packages(monkeypatch, tmp_path):
+    path = REPO_ROOT / "tests/matlab/fixtures/generate_optuna50_api_coverage.py"
+    spec = importlib.util.spec_from_file_location("optuna_coverage_audit", path)
+    assert spec is not None and spec.loader is not None
+    generator = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(generator)
+    committed = json.loads(generator.DESTINATION.read_text(encoding="utf-8"))
+    assert committed["upstream_oracle_sha256"].lower() == hashlib.sha256(
+        generator.ORACLE_PATH.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    ).hexdigest()
+    regenerated = json.loads(json.dumps(generator.build_coverage()))
+    assert committed == regenerated, "Regenerate Optuna API coverage."
+    serialized = json.dumps(generator.build_coverage(), indent=2, sort_keys=True) + "\n"
+    assert generator.DESTINATION.read_bytes().replace(b"\r\n", b"\n") == serialized.encode()
+    unrelated = ast.parse('server.stop(0); other.params; names = "stop"')
+    assert not generator._qualified_optuna_references(unrelated)
+    actual = ast.parse('optuna.study.Study.stop(study)')
+    assert "optuna.study.Study.stop" in generator._qualified_optuna_references(actual)
+    assert not generator._oracle_sections_for("optuna.study.Study.stop")
+    assert not committed["full_compatibility_complete"]
+    entries = [e for e in committed["entries"] if e["kind"] != "module"]
+    for entry in entries:
+        name = entry["matlab_name"]
+        if name is None:
+            continue
+        parts = name.split(".")
+        if entry["kind"].startswith("class-"):
+            parts = parts[:-1]
+        source = REPO_ROOT / "matlab"
+        for package in parts[:-1]:
+            source /= "+" + package
+        assert (source / (parts[-1] + ".m")).is_file(), name
+    # Public package scan ignores private helpers and recognizes @Class layout.
+    private = tmp_path / "private"
+    private.mkdir()
+    (private / "hidden.m").write_text("function hidden()\nend\n", encoding="utf-8")
+    legacy = tmp_path / "@Legacy"
+    legacy.mkdir()
+    (legacy / "Legacy.m").write_text("classdef Legacy\nend\n", encoding="utf-8")
+    (legacy / "step.m").write_text("function step(obj)\nend\n", encoding="utf-8")
+    monkeypatch.setattr(generator, "MATLAB_DIRECTORY", tmp_path)
+    assert generator._matlab_qualified_names() == {"Legacy": "radia.optuna.Legacy"}
+    names, members = generator._matlab_surface()
+    assert names == {"Legacy"}
+    assert "step" in members["Legacy"]
+
+
+def test_test_manifest_matches_its_generator():
+    path = REPO_ROOT / "tests/matlab/fixtures/generate_optuna_test_manifest.py"
+    spec = importlib.util.spec_from_file_location("optuna_test_manifest_audit", path)
+    assert spec is not None and spec.loader is not None
+    generator = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(generator)
+    expected = json.dumps(generator.build_manifest(), indent=2, sort_keys=True) + "\n"
+    actual = path.with_name("optuna_test_manifest.json").read_bytes().replace(b"\r\n", b"\n")
+    assert actual == expected.encode()
+
+
+def test_constructor_defaults_are_audited_against_the_pinned_oracle():
+    """Every upstream constructor default is compared, or declared, or open.
+
+    The API inventory records classes and their public members but not
+    __init__, so before this audit a changed constructor default was invisible
+    to the coverage gate while changing every seeded result. Optuna 5.0 is
+    that case: TPESampler moved multivariate from False to None and
+    constant_liar from False to True, and only the second had a named test.
+    """
+    oracle = json.loads(
+        (REPO_ROOT / "tests/matlab/fixtures/optuna50_oracle.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    record = oracle["constructor_defaults"]
+    recorded = sum(
+        len(parameters)
+        for classes in record["modules"].values()
+        for parameters in classes.values()
+    )
+    assert recorded == record["parameter_count"]
+    assert record["parameter_count"] > 0
+
+    coverage = json.loads(
+        (REPO_ROOT / "matlab/optuna50_api_coverage.json").read_text(encoding="utf-8")
+    )
+    audit = coverage["constructor_default_audit"]
+
+    # Every audited parameter lands in exactly one bucket.
+    accounted = (
+        audit["matched_count"]
+        + audit["declared_equivalent_count"]
+        + audit["declared_not_implemented_count"]
+        + audit["declared_divergent_count"]
+    )
+    assert accounted > 0
+    assert len(audit["declared_equivalences"]) == audit["declared_equivalent_count"]
+    assert (
+        len(audit["declared_not_implemented"])
+        == audit["declared_not_implemented_count"]
+    )
+    assert len(audit["declared_divergences"]) == audit["declared_divergent_count"]
+
+    # Every declaration states a reason; an empty one is not a declaration.
+    for table in (
+        "declared_equivalences",
+        "declared_not_implemented",
+        "declared_divergences",
+    ):
+        for name, reason in audit[table].items():
+            assert reason.strip(), f"{table}[{name}] declares no reason"
+
+    # A divergence is a recorded defect, not an equivalence. A new one must
+    # fail here instead of being absorbed into a table; fixing one only
+    # shrinks the set, and the generator then rejects the stale declaration.
+    assert set(audit["declared_divergences"]) <= {
+        "FanovaImportanceEvaluator.seed",
+        "MeanDecreaseImpurityImportanceEvaluator.seed",
+        "Terminator.improvement_evaluator",
+    }
 
 
 def test_matlab_path_names_the_layout_it_resolved():
@@ -88,7 +210,7 @@ def test_staging_refuses_a_partial_native_distribution():
     assert "Build.ps1 -OptunaMexOnly" in setup_source
     assert "optuna_mex.mexw64" in setup_source
     assert "optuna_upstream_compatibility.json" in setup_source
-    assert "optuna49_api_coverage.json" in setup_source
+    assert "optuna50_api_coverage.json" in setup_source
     assert "THIRD_PARTY_NOTICES.md" in setup_source
     assert 'return "py3", "none", "win_amd64"' in setup_source
     assert '"bdist_wheel": bdist_wheel' in setup_source
@@ -110,7 +232,7 @@ def test_wheel_verifier_rejects_solver_boundary_leaks():
     for forbidden in ("radia_mex", "ngsolve", "netgen", "mkl_", "radia_pybind"):
         assert forbidden in verifier
     assert "py3-none-win_amd64" in verifier
-    assert "optuna\\s*==\\s*4\\.9\\.0" in verifier
+    assert "optuna\\s*==\\s*5\\.0\\.0" in verifier
     assert "THIRD_PARTY_NOTICES.md" in verifier
     assert "source_fidelity_verified" in verifier
     assert "wheel payload differs from the checked monorepo source" in verifier

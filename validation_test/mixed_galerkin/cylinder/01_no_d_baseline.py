@@ -30,7 +30,7 @@ After fixing the asymptote-switch artifact in Y_exact:
 
     max error anywhere = 0.064%    (was reported as 0.93% under buggy ref)
     wall band max      = 0.039%    (was reported as 0.93%)
-    SIBC tail (1e8 Hz) ~ 0.046%
+    SIBC tail (1e8 Hz) = 0.000011%
 
 The 1-DOF mixed Galerkin is actually comparable to the sphere case
 (0.11% wall band, see ../sphere/01_no_d_baseline.py).  Adding Senior

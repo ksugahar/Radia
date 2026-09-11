@@ -4,7 +4,7 @@
 # `build\build_tests.bat` runs the required checks.  Nothing here writes to
 # dist, so a build from this file can never become the shipped executable.
 cmake_minimum_required(VERSION 3.20)
-project(Eqnedit64 VERSION 3.0.15 LANGUAGES CXX)
+project(Eqnedit64 VERSION 3.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -26,7 +26,7 @@ add_library(eqnedit_core STATIC ${EQNEDIT_CORE_SOURCES})
 target_include_directories(eqnedit_core PUBLIC src)
 target_compile_definitions(eqnedit_core PRIVATE _CRT_SECURE_NO_WARNINGS)
 if(MSVC)
-    target_compile_options(eqnedit_core PRIVATE /W4 /utf-8)
+    target_compile_options(eqnedit_core PRIVATE /W4 /WX /w14062 /utf-8)
 endif()
 
 if(WIN32)
@@ -43,9 +43,23 @@ if(WIN32)
         eqnedit_core user32 gdi32 comctl32 comdlg32 shell32 ole32 imm32
         windowscodecs
     )
+    # Proof images call the real owner-draw implementation, not a duplicate
+    # UI renderer. Run only in an isolated font session; never on LAB desktop.
+    add_executable(test_palette_visual tests/test_palette_visual.cpp src/eqnedit64.rc)
+    target_include_directories(test_palette_visual PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_definitions(test_palette_visual PRIVATE _CRT_SECURE_NO_WARNINGS UNICODE _UNICODE)
+    target_compile_options(test_palette_visual PRIVATE /W4 /WX /w14062 /utf-8)
+    target_link_libraries(test_palette_visual PRIVATE eqnedit_core user32 gdi32
+        comctl32 comdlg32 shell32 ole32 imm32 windowscodecs)
 endif()
 
 enable_testing()
+add_executable(test_prime_base tests/test_prime_base.cpp)
+target_link_libraries(test_prime_base PRIVATE eqnedit_core)
+if(MSVC)
+    target_compile_options(test_prime_base PRIVATE /W4 /WX /utf-8)
+endif()
+add_test(NAME prime_base COMMAND test_prime_base)
 add_executable(test_tex_document
     tests/test_tex_document.cpp
     src/tex_document.cpp
@@ -63,3 +77,13 @@ if(MSVC)
     target_compile_options(test_math_alphabets PRIVATE /W4 /utf-8)
 endif()
 add_test(NAME math_alphabets COMMAND test_math_alphabets)
+
+add_executable(test_node_dispatch tests/test_node_dispatch.cpp)
+target_link_libraries(test_node_dispatch PRIVATE eqnedit_core)
+if(WIN32)
+    target_link_libraries(test_node_dispatch PRIVATE gdi32 user32)
+endif()
+if(MSVC)
+    target_compile_options(test_node_dispatch PRIVATE /W4 /WX /utf-8)
+endif()
+add_test(NAME node_dispatch COMMAND test_node_dispatch)
