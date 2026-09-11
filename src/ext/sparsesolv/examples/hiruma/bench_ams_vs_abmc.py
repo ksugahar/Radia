@@ -24,10 +24,9 @@ import time
 from datetime import datetime
 
 import numpy as np
-# TODO: Replace ReadGmsh with Mesh(.vol) when .vol files are generated
-from netgen.read_gmsh import ReadGmsh
 from ngsolve import *
 import radia.sparsesolv_ngsolve as ssn
+from hiruma_mesh import load_hiruma_mesh, mesh_path
 
 mu0 = 4e-7 * np.pi
 freq = 30e3
@@ -48,10 +47,7 @@ def get_peak_memory_mb():
 
 
 def setup_problem(mesh_name):
-    mesh_file = os.path.join(os.path.dirname(__file__), mesh_name)
-    if not mesh_file.endswith(".msh"):
-        mesh_file += ".msh"
-    mesh = Mesh(ReadGmsh(mesh_file))
+    mesh = load_hiruma_mesh(mesh_name)
 
     nu_cf = 1.0 / (mu0 * IfPos(mesh.MaterialCF({"core": 1}), mu_r_core, 1.0))
     sigma_cf = mesh.MaterialCF({"cond": sigma_cu}, default=0)
@@ -219,8 +215,7 @@ def run_abmc_cocr(p):
 
 
 def run_single(mesh_name):
-    if not mesh_name.endswith(".msh"):
-        mesh_name += ".msh"
+    mesh_name = mesh_path(mesh_name).name
 
     print(f"\n{'='*90}")
     print(f"Mesh: {mesh_name}, f={freq/1e3:.0f} kHz, tol={tol}")
