@@ -413,6 +413,7 @@ def paper_writing_arxiv_search(
         "sortBy": sort_by,
         "sortOrder": "descending",
     }
+    r = None
     try:
         r = requests.get(
             url,
@@ -424,6 +425,9 @@ def paper_writing_arxiv_search(
         response_text = r.text
     except Exception as e:  # noqa: BLE001
         return {"error": f"arXiv search failed: {e}"}
+    finally:
+        if r is not None:
+            r.close()
 
     # Parse Atom XML
     import xml.etree.ElementTree as ET
@@ -547,15 +551,21 @@ def paper_writing_semantic_scholar_lookup(
         + urllib.parse.quote(pid, safe=":")
     )
     params = {"fields": fields}
+    r = None
     try:
         r = requests.get(url, params=params, timeout=30)
         if r.status_code == 404:
             return {"error": f"paper not found in Semantic Scholar: {paper_id}"}
         r.raise_for_status()
+        data = r.json()
+        if not isinstance(data, dict) or data.get("error"):
+            raise ValueError("invalid Semantic Scholar response")
     except Exception as e:  # noqa: BLE001
         return {"error": f"Semantic Scholar lookup failed: {e}"}
+    finally:
+        if r is not None:
+            r.close()
 
-    data = r.json()
     return {
         "paper_id_input": paper_id,
         "paper_id_resolved": pid,
@@ -601,14 +611,24 @@ def paper_writing_semantic_scholar_references(
     limit = max(1, min(int(limit), 1000))
     url = f"https://api.semanticscholar.org/graph/v1/paper/{pid}/references"
     params = {"fields": fields, "limit": limit}
+    r = None
     try:
         r = requests.get(url, params=params, timeout=30)
         if r.status_code == 404:
             return {"error": f"paper not found: {paper_id}"}
         r.raise_for_status()
+        data = r.json()
+        if not isinstance(data, dict) or data.get("error"):
+            raise ValueError("invalid Semantic Scholar response")
+        rows = data.get("data")
+        if (not isinstance(rows, list) or not all(isinstance(row, dict)
+                and isinstance(row.get("citedPaper"), dict) for row in rows)):
+            raise ValueError("missing or malformed graph entries")
     except Exception as e:  # noqa: BLE001
         return {"error": f"S2 references lookup failed: {e}"}
-    data = r.json()
+    finally:
+        if r is not None:
+            r.close()
     return {
         "paper_id": pid,
         "n_references": len(data.get("data", [])),
@@ -650,14 +670,24 @@ def paper_writing_semantic_scholar_citations(
     limit = max(1, min(int(limit), 1000))
     url = f"https://api.semanticscholar.org/graph/v1/paper/{pid}/citations"
     params = {"fields": fields, "limit": limit}
+    r = None
     try:
         r = requests.get(url, params=params, timeout=30)
         if r.status_code == 404:
             return {"error": f"paper not found: {paper_id}"}
         r.raise_for_status()
+        data = r.json()
+        if not isinstance(data, dict) or data.get("error"):
+            raise ValueError("invalid Semantic Scholar response")
+        rows = data.get("data")
+        if (not isinstance(rows, list) or not all(isinstance(row, dict)
+                and isinstance(row.get("citingPaper"), dict) for row in rows)):
+            raise ValueError("missing or malformed graph entries")
     except Exception as e:  # noqa: BLE001
         return {"error": f"S2 citations lookup failed: {e}"}
-    data = r.json()
+    finally:
+        if r is not None:
+            r.close()
     return {
         "paper_id": pid,
         "n_citations": len(data.get("data", [])),

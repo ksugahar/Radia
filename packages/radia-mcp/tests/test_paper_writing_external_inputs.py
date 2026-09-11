@@ -331,6 +331,85 @@ def test_ieee_redirect_closes_owned_resources(monkeypatch, mode):
         assert result["arnumber"] == "123" and result["doi"] == "10.1109/test"
 
 
+@pytest.mark.parametrize("kind", ["lookup", "references", "citations"])
+@pytest.mark.parametrize("mode", ["success", "network", "http404", "http429",
+                                  "json_error", "bad_root", "error_payload"])
+def test_s2_response_lifecycle_and_errors(monkeypatch, kind, mode):
+    closed = []
+    paper = {"title": "A test paper"}
+    payload = paper if kind == "lookup" else {"data": [
+        {"citedPaper" if kind == "references" else "citingPaper": paper}]}
+    class Response:
+        status_code = int(mode[4:]) if mode.startswith("http") else 200
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise OSError(f"HTTP {self.status_code}")
+        def json(self):
+            if mode == "json_error":
+                raise ValueError("invalid JSON")
+            return ([] if mode == "bad_root" else {"error": "unavailable"}
+                    if mode == "error_payload" else payload)
+        def close(self):
+            closed.append("response")
+    def get(*args, **kwargs):
+        if mode == "network":
+            raise OSError("connection failed")
+        return Response()
+    monkeypatch.setattr(arxiv, "_require_requests", lambda: SimpleNamespace(get=get))
+    result = getattr(arxiv, "paper_writing_semantic_scholar_" + kind)("abc123")
+    assert closed == ([] if mode == "network" else ["response"])
+    assert ("error" in result) is (mode != "success")
+    if mode == "success":
+        assert result["metadata" if kind == "lookup" else kind] == (
+            paper if kind == "lookup" else [paper])
+    elif kind != "lookup":
+        assert kind not in result and "n_" + kind not in result
+
+
+@pytest.mark.parametrize("kind", ["references", "citations"])
+@pytest.mark.parametrize("rows", ["missing", None, [None], [{}], []])
+def test_s2_only_explicit_empty_graph_is_zero_results(monkeypatch, kind, rows):
+    closed = []
+    response = SimpleNamespace(status_code=200, raise_for_status=lambda: None,
+        json=lambda: {} if rows == "missing" else {"data": rows},
+        close=lambda: closed.append(True))
+    monkeypatch.setattr(arxiv, "_require_requests", lambda: SimpleNamespace(get=lambda *a, **k: response))
+    result = getattr(arxiv, "paper_writing_semantic_scholar_" + kind)("abc123")
+    assert closed == [True]
+    if rows == []:
+        assert result[kind] == [] and result["n_" + kind] == 0
+    else:
+        assert "error" in result and kind not in result
+
+
+@pytest.mark.parametrize("mode", ["success", "network", "http", "text_error", "invalid_xml"])
+def test_arxiv_search_response_closed(monkeypatch, mode):
+    closed = []
+    class Response:
+        def raise_for_status(self):
+            if mode == "http":
+                raise OSError("HTTP 503")
+        @property
+        def text(self):
+            if mode == "text_error":
+                raise ValueError("text unavailable")
+            return "invalid XML" if mode == "invalid_xml" else EMPTY_FEED
+        def close(self):
+            closed.append(True)
+    def get(*args, **kwargs):
+        if mode == "network":
+            raise OSError("connection failed")
+        return Response()
+    monkeypatch.setattr(arxiv, "_require_requests", lambda: SimpleNamespace(get=get))
+    result = arxiv.paper_writing_arxiv_search("test")
+    assert closed == ([] if mode == "network" else [True])
+    assert ("error" in result) is (mode != "success")
+    if mode == "success":
+        assert result["n_results"] == 0 and result["papers"] == []
+    else:
+        assert "papers" not in result
+
+
 class StreamResponse:
     status_code = 200
 
@@ -492,7 +571,7 @@ def mock_response(monkeypatch, text, status=200):
     def check_status():
         if status >= 400:
             raise RuntimeError(f"HTTP {status}")
-    response = SimpleNamespace(text=text, raise_for_status=check_status)
+    response = SimpleNamespace(text=text, raise_for_status=check_status, close=lambda: None)
     monkeypatch.setattr(arxiv, "_require_requests", lambda: SimpleNamespace(get=lambda *a, **kw: response))
 
 
@@ -505,7 +584,7 @@ def test_arxiv_query_special_characters_roundtrip(monkeypatch, query):
         assert parsed.fragment == ""
         assert parse_qs(parsed.query)["search_query"] == [f"all:{query}"]
         assert kwargs["timeout"] == 30
-        return SimpleNamespace(text=EMPTY_FEED, raise_for_status=lambda: None)
+        return SimpleNamespace(text=EMPTY_FEED, raise_for_status=lambda: None, close=lambda: None)
     monkeypatch.setattr(arxiv, "_require_requests", lambda: SimpleNamespace(get=get))
     result = arxiv.paper_writing_arxiv_search(query, categories="all")
     assert result["n_results"] == 0
