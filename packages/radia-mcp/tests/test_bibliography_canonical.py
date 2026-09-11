@@ -119,3 +119,39 @@ def test_make_bbl_collects_citations_from_input_files(tmp_path):
     assert r"\bibitem{abe2017passive}" in (tmp_path / "paper.bbl").read_text(
         encoding="utf-8"
     )
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("% \\cite{ignored}\n\\cite{real}", ["real"]),
+    (r"\citet*[see][p.~2]{beta,alpha} \parencite{gamma}", ["beta", "alpha", "gamma"]),
+    (r"\verb|\cite{literal}| \cite{real}", ["real"]),
+    (r"\begin{verbatim}\cite{literal}\end{verbatim}\cite{real}", ["real"]),
+    (r"\begin{lstlisting}\cite{literal}\end{lstlisting}\cite{real}", ["real"]),
+    (r"50\% \cite{real}", ["real"]),
+    ("\\\\% \\cite{ignored}\n\\cite{real}", ["real"]),
+    (r"\\cite{literal} \cite{real}", ["real"]),
+])
+def test_citation_scanner_ignores_comments_and_literal_code(text, expected):
+    assert _keys_in_order(text) == expected
+
+
+@pytest.mark.parametrize("text", [r"\parencites{one}{two}", r"\InputIfFileExists{body}{}{}",
+                                  r"\includeonly{body}", r"\cite{*}"])
+def test_unsupported_static_citation_syntax_fails_explicitly(text):
+    with pytest.raises(ValueError):
+        _keys_in_order(text)
+
+
+@pytest.mark.skipif(shutil.which("bibtex") is None, reason="BibTeX is unavailable")
+def test_make_bbl_nocite_all_uses_canonical_fixture_and_ignores_comments(tmp_path, monkeypatch):
+    from radia_mcp.bibliography.plans import T14_canonical as canonical
+    bib = tmp_path / "fixture.bib"
+    bib.write_text("@misc{one,title={First},author={Doe, Jane},year=2024}\n"
+                   "@misc{two,title={Second},author={Roe, John},year=2025}", encoding="utf-8")
+    monkeypatch.setattr(canonical, "CANONICAL", bib)
+    tex = tmp_path / "paper.tex"
+    tex.write_text("% \\cite{not_real}\n\\nocite{*}\\bibliographystyle{plain}", encoding="utf-8")
+    result = canonical.bibliography_make_bbl(str(tex))
+    assert result.startswith("bibliography_make_bbl:"), result
+    bbl = tex.with_suffix(".bbl").read_text(encoding="utf-8")
+    assert r"\bibitem{one}" in bbl and r"\bibitem{two}" in bbl
