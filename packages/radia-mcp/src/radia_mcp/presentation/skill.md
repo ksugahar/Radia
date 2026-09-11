@@ -1558,6 +1558,18 @@ python "repo:/packages/radia-mcp/skills/pdf2ppt-pdfgear/pdf2ppt_pdfgear.py" \
   変換ボタン発火)
 - 出力 PPTX を `presentation_check_*` の lint tool 群でチェック (font / bullet / 数式)
 
+### 参考文献は正典キーから生成する
+
+- 発表資料にも私有の `references.bib` を置かない。radia-mcp に同梱された正典
+  `bibliography/data/references.bib` を単一の情報源とする。
+- スライド原稿には全文の参考文献を手入力せず、引用番号と BibTeX キーの対応だけを置く。
+  非 LaTeX の生成器は `bibliography_get_entries(keys)` で書誌レコードを取得し、生成時に
+  表示文字列へ整形する。存在しないキー・重複キーは生成を中止する。
+- LaTeX の Digest・論文は `bibliography_make_bbl(tex_path)` で正典から `.bbl` を生成する。
+  配布物には必要な `.bbl` を含め、ローカルな `.bib` のコピーは作らない。
+- README やスライドに「正典から生成」と書くのは、ビルド経路が実際に上記 API を呼び、
+  正典の SHA-256 を記録している場合に限る。説明だけで正典利用済みとは扱わない。
+
 ---
 
 ## 関連 MCP
