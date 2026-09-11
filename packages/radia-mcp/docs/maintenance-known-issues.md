@@ -122,6 +122,14 @@ instead of succeeding as duplicates. The fourteen-file lane passes 1184 tests.
 Macro expansion and conditional execution
 remain outside the static contract; this is not a full TeX interpreter.
 
+M04 installed-style follow-up (2026-09-12): kpsewhich resolves an installed bst
+to a checked file; its exact bytes are staged and fingerprinted just like local
+styles, and a mid-generation change blocks publication. Missing/ambiguous style
+resolution fails explicitly (a local bst remains an alternative). Eleven added
+cases also cover bibitem comment/literal masking. The fourteen-file lane passes
+1195 tests; isolated server registration reports 16 tools. This supersedes the
+earlier untracked-system-style limitation, not rendered-format acceptance.
+
 Completion of a scoped validation requires matching the selected source, zero unexpected failures
 or skips in the relevant lane, and retained local machine-readable evidence.
 Do not commit transient test logs or mark the package globally "complete" from
