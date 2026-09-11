@@ -66,7 +66,8 @@ jobs:
         id: matlab-impact
         shell: pwsh
         run: |
-          $diff = @(git -C "$env:GITHUB_WORKSPACE" diff --name-only 'HEAD~1' HEAD -- 2>&1)
+          $workspace = $env:GITHUB_WORKSPACE -replace '\\', '/'
+          $diff = @(git -c "safe.directory=$workspace" -C "$workspace" diff --name-only 'HEAD~1' HEAD -- 2>&1)
           $diffFailed = $LASTEXITCODE -ne 0
           $changed = @()
           if ($diffFailed) {
