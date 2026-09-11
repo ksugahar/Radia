@@ -1,5 +1,6 @@
 """Detector failures must not become clean composite diagnostics."""
 import importlib
+from types import SimpleNamespace
 
 import pytest
 
@@ -8,6 +9,91 @@ from radia_mcp.paper_writing.plans import T8, T16, T17, T18, T19, T20
 from radia_mcp.paper_writing.plans.T9 import paper_writing_reviewer_2_trigger_summary
 from radia_mcp.paper_writing.plans.T18 import paper_writing_run_full_workflow
 from radia_mcp.paper_writing._em_paper_style import paper_writing_em_submission_gate
+from radia_mcp.paper_writing import _pdf_overlap_detection as pdf_overlap
+from radia_mcp.paper_writing import _pdf_layout_visual as pdf_layout
+
+
+class FakePdfPage:
+    rect = SimpleNamespace(x0=0, y0=0, x1=100, y1=100, width=100, height=100)
+
+    def __init__(self, failure=""):
+        self.failure = failure
+
+    def get_image_info(self, **kwargs):
+        if self.failure == "image":
+            raise RuntimeError("injected image failure")
+        return [{"bbox": (70, 0, 130, 45)}]
+
+    def get_text(self, mode):
+        if self.failure == "text":
+            raise RuntimeError("injected text failure")
+        if self.failure == "malformed":
+            return {}
+        block = {"type": 0, "bbox": (80, 10, 120, 40),
+                 "lines": [{"spans": [{"text": "overlapping prose"}]}]}
+        return {"blocks": [block, block]}
+
+    def get_pixmap(self, **kwargs):
+        if self.failure == "raster":
+            raise RuntimeError("injected raster failure")
+        return SimpleNamespace(width=1, height=1, n=3,
+                               samples=b"" if self.failure == "malformed" else b"\xff\xff\xff")
+
+
+class FakePdfDocument:
+    def __init__(self, pages):
+        self.pages = pages
+        self.page_count = len(pages)
+        self.close_count = 0
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
+
+    def __iter__(self):
+        return iter(self.pages)
+
+    def close(self):
+        self.close_count += 1
+
+
+PDF_CHECKS = [
+    (pdf_overlap, pdf_overlap.paper_writing_detect_text_image_overlap, "image", "n_overlaps"),
+    (pdf_overlap, pdf_overlap.paper_writing_detect_text_image_overlap, "text", "n_overlaps"),
+    (pdf_overlap, pdf_overlap.paper_writing_detect_text_overflow_page, "text", "n_overflows"),
+    (pdf_overlap, pdf_overlap.paper_writing_detect_overlapping_text_blocks, "text", "n_overlaps"),
+    (pdf_layout, pdf_layout.paper_writing_detect_page_whitespace_anomalies, "raster", "flagged_count"),
+]
+
+
+@pytest.mark.parametrize("module,check,failure,count_key", PDF_CHECKS)
+@pytest.mark.parametrize("mode", ["failure", "malformed", "success"])
+def test_pdf_extraction_failure_closes_document(monkeypatch, tmp_path, module, check, failure, count_key, mode):
+    doc = FakePdfDocument([FakePdfPage(), FakePdfPage(failure if mode == "failure" else mode)])
+    monkeypatch.setattr(module, "_require_pymupdf", lambda: SimpleNamespace(open=lambda *a: doc))
+    path = tmp_path / "mock.pdf"
+    path.touch()  # No PDF is authored: all access is mocked.
+    if mode == "success":
+        assert check(str(path))[count_key] > 0
+    else:
+        with pytest.raises((RuntimeError, ValueError)):
+            check(str(path))
+    assert doc.close_count == 1
+
+
+def test_pdf_image_failure_reaches_submission_gate(monkeypatch, gate_inputs):
+    doc = FakePdfDocument([FakePdfPage("image")])
+    monkeypatch.setattr(pdf_overlap, "_require_pymupdf", lambda: SimpleNamespace(open=lambda *a: doc))
+    # gate_inputs replaces detectors; restore this real adapter only.
+    real_detector = PDF_CHECKS[0][1]
+    monkeypatch.setattr(pdf_overlap, "paper_writing_detect_text_image_overlap", real_detector)
+    result = paper_writing_em_submission_gate(**gate_inputs)
+    row = next(c for c in result["checks"] if c["name"] == "text_image_overlap")
+    assert row["status"] == "fail"
+    assert result["verdict"] == "fail"
+    assert doc.close_count == 1
 
 
 HEALTH_TOOLS = [

@@ -100,7 +100,7 @@ Paths in tables are relative to `src/radia_mcp/paper_writing` unless specified.
 | P47 | 5.3 caption geometry | 検証待ち | Check image top/bottom, horizontal overlap and prose “Figure 1 shows”. |
 | P48 | 5.3 duplicate image xrefs | 検証待ち | Repeated placements must not self-overlap. |
 | P49 | 5.3 INFO score/docstrings | 検証待ち | Base-14 font information alone must not imply a defect. |
-| P50 | 5.3 extraction errors/resource closure; 8.2 | 検証待ち | Inject extraction exceptions and assert unknown/error, not blank/clean; check document closure. |
+| P50 | 5.3 extraction errors/resource closure; 8.2 | 検証待ち | Overlap (image/text), page overflow and whitespace detectors now close documents on extraction/render failures; image extraction no longer silently returns no images. test_pdf_extraction_failure_closes_document covers failed/malformed/successful extraction on a later page; test_pdf_image_failure_reaches_submission_gate proves gate propagation. PNG/thumbnail helpers and other PDF consumers remain unverified. This does not certify visual detector accuracy. |
 | P51 | 5.4 T18 phase4 | 修正済み | test_paper_writing_fault_injection.py::test_workflow_keeps_active_triggers_and_forwards_bib verifies a nonempty phase4, bibliography and author forwarding. Incomplete/invalid reviewer results no longer produce a completion summary. This does not certify other phase payloads. |
 | P52 | 5.4 T9 detector exception | 修正済み | test_paper_writing_fault_injection.py injects exceptions, error/ok=false/skip, empty and non-dict results into each of seven detectors, plus complete failure and invalid counts. Unknown checks suppress score/risk (None) while retaining confirmed findings; a complete clean fixture retains score 10. |
 | P53 | 5.4 T10 English triangle | 修正済み | R::test_triangle_uses_lowercase_english_content_words. |
@@ -157,8 +157,13 @@ fault-injection, real-health propagation and successful-generation controls pass
 in the same four-file lane (626 tests). This is not a semantic accuracy audit;
 missing pattern producers remain tracked in P58. No live client was changed.
 
-1. Work through external-input safety and PDF false-clean findings
-   (P50, P62–P67), then language heuristics and deduplication.
+The PDF-analysis follow-up verifies four detectors with mocked page extraction
+and raster failures, successful positive controls, document closure, and a real
+detector-to-gate error path. The same four-file lane passes 642 tests. No PDF
+artifact was authored or visually reviewed, and no live MCP client was changed.
+
+1. Finish PDF rendering-helper resource checks (remaining P50), then external-input
+   safety (P62–P67), language heuristics and deduplication.
 2. Review missing pattern producers (P58) and remaining ordering/context rules
    (P59); do not confuse execution-status coverage with semantic correctness.
 
