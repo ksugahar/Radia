@@ -5,6 +5,11 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- `release_quad ci-verify` requires native release evidence on the exact SHA
+  before tagging. The isolated build environment imports its dependencies
+  immediately after installation so missing modules fail before the build.
+  The native check has a distribution-specific name; another package's
+  `build-test`, a skipped run or a neutral result cannot substitute for success.
 - Added `bibliography_get_entries` so PowerPoint and other non-LaTeX generators
   can resolve ordered BibTeX keys from the bundled canonical bibliography and
   record its SHA-256 instead of carrying hand-written reference lists. Added
