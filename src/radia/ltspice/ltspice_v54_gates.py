@@ -7,25 +7,18 @@ from collections.abc import Mapping
 
 from .ltspice_v55_gates import validate_ltspice_v55_identity
 
+from ._artifact_identity import (
+    digest_is_sha256 as _digest,
+    same_generation as _generation,
+)
+
 
 MONTE = "montecarlo_seed_distribution_parameter_yield_sample_owner_identity"
 LOOP = "loopgain_injection_breakpoint_sign_crossover_phasemargin_owner_identity"
 
 
-def _digest(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
-
-
 def _number(value: object, *, positive: bool = False) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value)) and (not positive or float(value) > 0.0)
-
-
-def _generation(contract: Mapping[str, object], *fields: str) -> bool:
-    generation = str(contract.get("generation_id") or "")
-    return bool(generation) and all(contract.get(field) == generation for field in fields)
 
 
 def _distribution_ok(value: object) -> bool:
