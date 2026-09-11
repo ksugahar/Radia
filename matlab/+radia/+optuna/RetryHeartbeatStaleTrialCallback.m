@@ -47,7 +47,7 @@ classdef RetryHeartbeatStaleTrialCallback
             if sharedHistory
                 % Python's shallow dict expansion retains the history list,
                 % so appending is observable on the supplied FrozenTrial.
-                trial.setSystemAttr("retry_history",history);
+                trial.setInternalAttribute("retry_history",history);
             end
             if ~isnan(obj.max_retry) && obj.max_retry<numel(history)
                 return

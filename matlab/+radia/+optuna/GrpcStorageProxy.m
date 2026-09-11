@@ -1,5 +1,5 @@
 classdef GrpcStorageProxy < radia.optuna.RDBStorage
-    %GRPCSTORAGEPROXY Optuna 4.9 gRPC storage client.
+    %GRPCSTORAGEPROXY Optuna 5 gRPC storage client.
 
     properties (SetAccess=immutable)
         host (1,1) string

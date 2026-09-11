@@ -117,7 +117,7 @@
     }
   },
   "optuna_mcp_version": "0.2.0",
-  "optuna_version": "4.9.0",
+  "optuna_version": "5.0.0",
   "sampler_seed_supported": false,
   "schema": "radia.test.optuna-upstream-mcp-oracle.v1",
   "set_sampler_arguments": [

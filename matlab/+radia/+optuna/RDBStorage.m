@@ -1,6 +1,6 @@
 classdef RDBStorage < radia.optuna.BaseStorage
-    %RDBSTORAGE Optuna 4.9 relational storage through its Python backend.
-    %   SQLAlchemy schema ownership remains with pinned optuna==4.9.0. The
+    %RDBSTORAGE Optuna 5.0 relational storage through its Python backend.
+    %   SQLAlchemy schema ownership remains with pinned optuna==5.0.0. The
     %   MATLAB class converts only documented storage values and snapshots;
     %   it never substitutes MAT-file storage for a relational database.
 
@@ -393,6 +393,11 @@ classdef RDBStorage < radia.optuna.BaseStorage
             end
             userAttrs=obj.toPythonValue(source.UserAttrs);
             systemAttrs=obj.toPythonValue(source.SystemAttrs);
+            constraints=py.dict;
+            for index=1:numel(source.ConstraintNames)
+                constraints{char(source.ConstraintNames(index))}= ...
+                    double(source.Constraints(index));
+            end
             intermediate=py.dict;
             for index=1:height(source.IntermediateValues)
                 intermediate{int64(source.IntermediateValues.Step(index))}= ...
@@ -401,7 +406,8 @@ classdef RDBStorage < radia.optuna.BaseStorage
             keyword={"state",obj.pythonTrialState(source.State), ...
                 "params",params,"distributions",distributions, ...
                 "intermediate_values",intermediate, ...
-                "user_attrs",userAttrs,"system_attrs",systemAttrs};
+                "user_attrs",userAttrs,"system_attrs",systemAttrs, ...
+                "constraints",constraints};
             values=reshape(double(source.Values),1,[]);
             if numel(values)==1
                 keyword(end+1:end+2)={"value",values(1)};
@@ -427,6 +433,14 @@ classdef RDBStorage < radia.optuna.BaseStorage
             params=obj.fromPythonJson(source.params);
             userAttrs=obj.fromPythonJson(source.user_attrs);
             systemAttrs=obj.fromPythonJson(source.system_attrs);
+            constraintKeys=cell(py.list(source.constraints.keys()));
+            constraintNames=strings(1,numel(constraintKeys));
+            constraintValues=zeros(1,numel(constraintKeys));
+            for index=1:numel(constraintKeys)
+                constraintNames(index)=string(constraintKeys{index});
+                constraintValues(index)=double( ...
+                    source.constraints{constraintKeys{index}});
+            end
             distributions=struct();
             names=cell(py.list(source.distributions.keys()));
             for index=1:numel(names)
@@ -457,6 +471,8 @@ classdef RDBStorage < radia.optuna.BaseStorage
                 Values=reshape(double(values),1,[]),Params=params, ...
                 Distributions=distributions,IntermediateValues=intermediate, ...
                 UserAttrs=userAttrs,SystemAttrs=systemAttrs, ...
+                ConstraintNames=constraintNames,Constraints=constraintValues, ...
+                ConstraintPresent=~isempty(constraintNames), ...
                 DatetimeStart=obj.pythonDatetime(source.datetime_start), ...
                 DatetimeComplete=obj.pythonDatetime(source.datetime_complete));
         end
@@ -475,8 +491,7 @@ classdef RDBStorage < radia.optuna.BaseStorage
             end
             summary=radia.optuna.StudySummary(string(source.study_name),[], ...
                 best,obj.fromPythonJson(source.user_attrs), ...
-                obj.fromPythonJson(source.system_attrs),0,NaT, ...
-                double(py.builtins.getattr(source,"_study_id")), ...
+                0,NaT,double(py.builtins.getattr(source,"_study_id")), ...
                 directions=names);
         end
 
@@ -558,9 +573,9 @@ classdef RDBStorage < radia.optuna.BaseStorage
                 error("radia:optuna:RDBStoragePython", ...
                     "Install radia-optuna[upstream]: %s",cause.message);
             end
-            if version~="4.9.0"
+            if version~="5.0.0"
                 error("radia:optuna:RDBStorageVersion", ...
-                    "RDBStorage requires optuna==4.9.0, found %s.",version);
+                    "RDBStorage requires optuna==5.0.0, found %s.",version);
             end
         end
     end

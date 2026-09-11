@@ -75,9 +75,19 @@ def grant_writing_central_question_singularity_check(text: str) -> dict:
 
     The check is optional: it needs an announced question or aim.
     """
-    from .tools import _CLAIM_MARKERS
+    from .tools import _CLAIM_MARKERS, _prose_for_lint, _read_text_if_path
 
-    text = _draft_prose(text)
+    # Navigation labels are not applicant assertions. Strip Markdown headings
+    # before prose normalization, which can erase their structural markers.
+    # Limit this to the claim detector: other diagnostics need field headings.
+    raw = _read_text_if_path(text).replace("\r\n", "\n").replace("\r", "\n")
+    raw = re.sub(r"(?m)^[ \t]{0,3}#{1,6}(?:[ \t]+[^\r\n]*|[ \t]*)$", "", raw)
+    raw = re.sub(
+        r"(?m)^[ \t]{0,3}[^\s\r\n][^\r\n]*\r?\n[ \t]{0,3}(?:=+|-+)[ \t]*$",
+        "",
+        raw,
+    )
+    text = _prose_for_lint(raw)
     sentences = [
         fragment
         for line in text.split("\n")

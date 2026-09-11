@@ -1,5 +1,5 @@
 classdef IntDistribution < radia.optuna.BaseDistribution
-    %INTDISTRIBUTION Public Optuna 4.9 integer distribution.
+    %INTDISTRIBUTION Public Optuna 5 integer distribution.
 
     methods
         function obj=IntDistribution(low,high,options)

@@ -24,6 +24,8 @@ struct PaletteItem {
     std::string command;
     std::string face;    /* what the cell shows */
     std::string label;   /* what the status bar explains */
+    std::string preview_tex; /* shared, reviewed mathematical button example */
+    std::string insert_tex;  /* browser source adapter for the same command */
 };
 
 struct Palette {

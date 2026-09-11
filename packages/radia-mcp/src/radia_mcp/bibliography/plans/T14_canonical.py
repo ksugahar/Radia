@@ -6,6 +6,8 @@ ship the generated ``.bbl`` required by the publisher.
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import pathlib
 import re
 import shutil
@@ -29,6 +31,72 @@ def bibliography_canonical_path() -> str:
         f"  {CANONICAL}\n"
         f"  {len(entries)} entries, {CANONICAL.stat().st_size / 1024:.0f} KB\n"
         "  Cite this file as the single source of truth; ship the generated .bbl."
+    )
+
+
+def bibliography_get_entries(keys: str) -> str:
+    """Return canonical BibTeX records as machine-readable JSON.
+
+    ``keys`` is a comma-, semicolon-, or newline-separated list.  Order is
+    preserved and duplicates are rejected: a slide or other non-LaTeX
+    generator can therefore use symbolic citation keys without keeping a
+    private bibliography or hand-maintained rendered references.
+    """
+    requested = [
+        key.strip()
+        for key in re.split(r"[,;\n]+", keys)
+        if key.strip()
+    ]
+    if not requested:
+        return json.dumps(
+            {"ok": False, "error": "give at least one canonical citation key"},
+            ensure_ascii=False,
+        )
+    duplicates = sorted({key for key in requested if requested.count(key) > 1})
+    if duplicates:
+        return json.dumps(
+            {"ok": False, "error": "duplicate citation keys", "keys": duplicates},
+            ensure_ascii=False,
+        )
+    if not CANONICAL.is_file():
+        return json.dumps(
+            {"ok": False, "error": f"canonical bibliography missing: {CANONICAL}"},
+            ensure_ascii=False,
+        )
+
+    available = {
+        entry.key: entry
+        for entry in read_bib_file(CANONICAL)
+        if entry.key
+    }
+    missing = [key for key in requested if key not in available]
+    if missing:
+        return json.dumps(
+            {
+                "ok": False,
+                "error": "citation keys are absent from canonical references.bib",
+                "missing": missing,
+            },
+            ensure_ascii=False,
+        )
+
+    records = [
+        {
+            "key": key,
+            "kind": available[key].kind,
+            "fields": available[key].fields,
+        }
+        for key in requested
+    ]
+    return json.dumps(
+        {
+            "ok": True,
+            "canonical_path": str(CANONICAL),
+            "canonical_sha256": hashlib.sha256(CANONICAL.read_bytes()).hexdigest(),
+            "entries": records,
+        },
+        ensure_ascii=False,
+        indent=2,
     )
 
 

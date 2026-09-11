@@ -1,5 +1,5 @@
 function value=upstreamIntegration(symbolName,varargin)
-%UPSTREAMINTEGRATION Resolve or invoke an Optuna 4.9 integration export.
+%UPSTREAMINTEGRATION Resolve or invoke an Optuna 5.0 integration export.
 arguments
     symbolName (1,1) string
 end
@@ -17,9 +17,9 @@ end
 try
     optunaModule=py.importlib.import_module("optuna");
     version=string(py.builtins.getattr(optunaModule,"__version__"));
-    if version~="4.9.0"
+    if version~="5.0.0"
         error("radia:optuna:IntegrationVersion", ...
-            "Optuna integrations require optuna==4.9.0, found %s.",version);
+            "Optuna integrations require optuna==5.0.0, found %s.",version);
     end
     module=py.importlib.import_module("optuna.integration");
     symbol=py.builtins.getattr(module,char(symbolName));
