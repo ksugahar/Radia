@@ -75,3 +75,51 @@ def test_completed_success_after_pending_state(monkeypatch, capsys, monitor):
     monkeypatch.setattr(monitor, '_gh', lambda *_args, **_kwargs: next(states))
     assert monitor.watch_runs(['123'], 0, 10) == 0
     assert 'ALL GREEN (1 success' in capsys.readouterr().out
+
+
+@pytest.mark.parametrize('args,expected', [
+    ([], (None, 3)),
+    (['--branch', 'release/v5'], ('release/v5', 3)),
+    (['--branch', 'main', '--auto', '2'], ('main', 2)),
+    (['--auto', '1'], (None, 1)),
+])
+def test_cli_preserves_discovery_scope(monkeypatch, monitor, args, expected):
+    discovered = []
+    watched = []
+    def discover(branch, count):
+        discovered.append((branch, count))
+        return ['123']
+    monkeypatch.setattr(monitor.sys, 'argv', ['monitor.py', *args])
+    monkeypatch.setattr(monitor, 'discover_runs', discover)
+    monkeypatch.setattr(monitor, 'watch_runs',
+                        lambda ids, *_: watched.append(ids) or 0)
+    assert monitor.main() == 0
+    assert discovered == [expected]
+    assert watched == [['123']]
+
+
+def test_explicit_ids_never_trigger_discovery(monkeypatch, monitor):
+    monkeypatch.setattr(monitor.sys, 'argv',
+                        ['monitor.py', '123', '456', '--branch', 'main'])
+    def unexpected(*_):
+        pytest.fail('Explicit run IDs must not be replaced by discovery')
+    monkeypatch.setattr(monitor, 'discover_runs', unexpected)
+    watched = []
+    monkeypatch.setattr(monitor, 'watch_runs',
+                        lambda ids, *_: watched.append(ids) or 0)
+    assert monitor.main() == 0
+    assert watched == [['123', '456']]
+
+
+@pytest.mark.parametrize('args', [
+    ['--auto', '-1'], ['--poll', '0'], ['--poll', '-1'],
+    ['--tail', '0'], ['--tail', '-1'],
+])
+def test_invalid_cli_limits_fail_before_discovery(monkeypatch, monitor, args):
+    monkeypatch.setattr(monitor.sys, 'argv', ['monitor.py', *args])
+    def unexpected(*_):
+        pytest.fail('Invalid limits must fail before any network calls')
+    monkeypatch.setattr(monitor, 'discover_runs', unexpected)
+    with pytest.raises(SystemExit) as exc:
+        monitor.main()
+    assert exc.value.code == 2

@@ -206,17 +206,18 @@ def main():
                     help="failing-step log tail size in lines "
                          "(default 80)")
     args = p.parse_args()
+    if args.auto < 0:
+        p.error("--auto must be non-negative (0 uses the default count of 3)")
+    if args.poll <= 0:
+        p.error("--poll must be positive")
+    if args.tail <= 0:
+        p.error("--tail must be positive")
 
     if args.ids:
         run_ids = args.ids
-    elif args.auto > 0:
-        run_ids = discover_runs(args.branch, args.auto)
-        if not run_ids:
-            print("No runs found.", file=sys.stderr)
-            return 2
     else:
-        # Default: auto-discover 3 most recent.
-        run_ids = discover_runs(None, 3)
+        # The default count must not discard an explicit branch/tag filter.
+        run_ids = discover_runs(args.branch, args.auto or 3)
         if not run_ids:
             print("No runs found.", file=sys.stderr)
             return 2
