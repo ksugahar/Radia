@@ -58,6 +58,13 @@ DOI normalization and Japanese duplicate titles. The eleven-file lane passes
 1058 tests. Missing/invalid files and detector failures do not become GOOD/100.
 Duplicate matching remains a diagnostic, not automatic removal or proof of identity.
 
+M04 statistics follow-up (2026-09-12): 14 cases cover self-citation threshold
+ordering/boundaries, Unicode/brace-aware surname matching and invalid target
+rejection. Year distributions exclude future/malformed years and label incomplete
+coverage instead of inferring recency from fabricated dates. The eleven-file lane
+passes 1072 tests. Surname matches are explicitly screening heuristics, not author
+identity verification, citation relevance or a publication acceptance rule.
+
 Completion of a scoped validation requires matching the selected source, zero unexpected failures
 or skips in the relevant lane, and retained local machine-readable evidence.
 Do not commit transient test logs or mark the package globally "complete" from
