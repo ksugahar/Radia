@@ -52,7 +52,7 @@ Paths in tables are relative to `src/radia_mcp/paper_writing` unless specified.
 | P09 | 3 missing inputs | 修正済み | R::test_submission_gate_rejects_supplied_missing_files. |
 | P10 | 3.1; 3.2 | 修正済み | R::test_submission_gate_maps_detector_failures_to_status checks figure references and underlines. |
 | P11 | 3.4 equation/reference/citation/abstract length | 修正済み | Same test checks each result status, not just check-name presence. |
-| P12 | 3.3; remaining 3.4 self-citation/background | 検証待ち | Fault-injection tests now cover exception/error/ok=false/skip/not-applicable for equation, underline and figure-reference checks. Gate no longer claims submission-ready with skipped checks. Remaining detectors and self-citation/background-ratio mapping still need independent coverage. |
+| P12 | 3.3; remaining 3.4 self-citation/background | 修正済み | test_paper_writing_fault_injection.py covers all 24 detector adapters with exception/error/status=error/ok=false/skip/not-applicable/empty/None/malformed payloads. Includes self-citation OK/WARN/HIGH and background 0.25/0.40 boundaries, nonfinite/invalid measurements, preprocessing failures and an all-clean control. Missing evidence fails; skipped checks cannot claim submission-ready. This certifies adapter failure propagation, not each detector's linguistic or PDF accuracy. |
 | P13 | 3.5 | 検証待ち | Gate consumers must see nested citations consistently; resolver-only success does not close this. |
 | P14 | 3.6 | 検証待ち | Observe merged-source temporary-file cleanup on success and exception paths. |
 
@@ -135,15 +135,16 @@ Paths in tables are relative to `src/radia_mcp/paper_writing` unless specified.
 
 ## Next bounded work
 
-Follow-up fault-injection verification (2026-09-11): 240 passed across
+Follow-up fault-injection verification (2026-09-11): 481 passed across
 `test_paper_writing_fault_injection.py`, `test_paper_writing_review_regressions.py`,
 `test_paper_writing.py`, and `test_paper_writing_conclusion_first_use.py`.
 This is a focused source-isolated test run, not a full-package or live-MCP check.
 No editable installation or live client was changed.
 
-1. Extend submission-gate fault injection to remaining detectors (P12) and
-   other workflow phases. T9/T18 phase4 coverage is recorded in P51/P52.
-2. Fix reproduced/static-confirmed P31/P32/P37/P38 with focused regressions.
+1. Fix reproduced/static-confirmed P31/P32/P37/P38 with focused regressions.
+2. Extend composite payload validation to other workflow phases. Submission-gate
+   adapters and T9/T18 phase4 coverage are recorded in P12/P51/P52; lower-level
+   detector accuracy and other nested consumers still need their own evidence.
 3. Work through external-input safety and PDF false-clean findings
    (P50, P62–P67), then language heuristics and deduplication.
 
