@@ -239,7 +239,17 @@ known identifiers fail before requests is loaded. These are local request-shape
 contracts, not verification of upstream acceptance. No live API, MCP client,
 editable installation or parent bibliography was changed or exercised.
 
-1. Continue other BibTeX/DOI consumers and remaining fallback paths (P63/P65/P67), then language heuristics and
+The bibliography T2 arXiv adapter follow-up (2026-09-12, P63/P67) adds 23 offline
+cases. The prior five-file lane plus test_bibliography_arxiv_contract.py passes
+928 tests. The adapter preserves old-style archive/number identifiers and the
+primary category, validates publication dates and complete returned author names,
+and refuses malformed/error/multiple-entry feeds. Returned identity must match
+the requested paper, including an explicitly requested version. Invalid inputs
+stop before fetch. Its text escaping and heuristic author-name rearrangement
+remain unverified; this does not close P63. No live API, MCP client, editable
+installation or parent bibliography was changed or exercised.
+
+1. Continue bibliography T2 text escaping/name handling, other BibTeX/DOI consumers and remaining fallback paths (P63/P65/P67), then language heuristics and
    deduplication; other PDF consumers remain separate P50 follow-up work.
 2. Review missing pattern producers (P58) and remaining ordering/context rules
    (P59); do not confuse execution-status coverage with semantic correctness.
