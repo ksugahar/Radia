@@ -258,6 +258,108 @@ def _sweep_params(symmetry):
 # Cubit path (Layer 2 -- Cubit Python 3.10)
 # ====================================================================
 
+# ====================================================================
+# Which faces are the Kelvin interface (non-reduction path)
+# ====================================================================
+
+_SPHERE_TOLERANCE = 1.0e-6      # relative to R
+_AXIS_PROBES = ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1))
+
+
+def _faces_on_sphere(cubit, volume, centre, R):
+    """Faces of ``volume`` lying on the sphere of radius ``R`` about ``centre``."""
+    faces = []
+    for surface in cubit.get_relatives("volume", volume, "surface"):
+        if cubit.get_surface_type(surface) != "sphere surface":
+            continue
+        near = cubit.surface(surface).closest_point_trimmed(list(centre))
+        if abs(math.dist(near, centre) - R) <= _SPHERE_TOLERANCE * R:
+            faces.append(surface)
+    if len(faces) > 1:
+        raise RuntimeError(
+            "Volume %d has %d faces on the sphere of radius %g about %s; "
+            "expected at most one" % (volume, len(faces), R, tuple(centre)))
+    return faces
+
+
+def _air_sphere_faces(cubit, air_vols, R, air_block):
+    """Faces of the air domain on the physical sphere, which must sit at the origin.
+
+    Only these belong to kelvin_int.  The largest face of every air volume
+    used to be taken instead, so the faces of gap slabs inside the air went
+    in too.  The rest of add_kelvin_cubit -- the exterior sphere placed at an
+    offset from the origin, the zplane webcut, the periodic identification --
+    assumes an air sphere centred at the origin, so a shifted air domain is
+    rejected here rather than half supported.
+    """
+    boxes = [cubit.volume(v).bounding_box() for v in air_vols]
+    centre = [0.5 * (min(b[i] for b in boxes) + max(b[i + 3] for b in boxes))
+              for i in range(3)]
+    if math.dist(centre, (0.0, 0.0, 0.0)) > _SPHERE_TOLERANCE * R:
+        raise NotImplementedError(
+            "add_kelvin_cubit supports an air sphere centred at the origin "
+            "only; block '%s' is centred at %s" % (air_block, tuple(centre)))
+    faces = [face for volume in air_vols
+             for face in _faces_on_sphere(cubit, volume, (0.0, 0.0, 0.0), R)]
+    if not faces:
+        raise RuntimeError(
+            "No face of block '%s' lies on the sphere of radius %g about the "
+            "origin; R must match the air sphere" % (air_block, R))
+    return faces
+
+
+def _sphere_signature(cubit, face, centre, R):
+    """Which of the six points ``centre +/- R e_i`` lie on ``face``."""
+    signature = []
+    for axis in _AXIS_PROBES:
+        point = [centre[i] + R * axis[i] for i in range(3)]
+        near = cubit.surface(face).closest_point_trimmed(point)
+        signature.append(math.dist(near, point) <= _SPHERE_TOLERANCE * R)
+    return tuple(signature)
+
+
+def _pair_sphere_faces(cubit, air_faces, kelvin_faces, offset, R, reflected_z):
+    """Match every air sphere face to the Kelvin face that will carry its mesh.
+
+    Returns ``(pairs, reflected)``: the copy-mesh pairs ``(air, kelvin)`` and
+    the air faces the meshed z-reflection of the exterior supplies instead.
+    Faces are matched by which axis points of their own sphere they contain,
+    so a Kelvin face cut on the wrong plane does not match.  A face without a
+    partner raises; the former ``min(len(air), len(kelvin))`` dropped it.
+    """
+    origin = (0.0, 0.0, 0.0)
+    air = {face: _sphere_signature(cubit, face, origin, R) for face in air_faces}
+    kelvin = {face: _sphere_signature(cubit, face, offset, R) for face in kelvin_faces}
+    if reflected_z:
+        upper = [f for f, s in air.items() if s[4] and not s[5]]
+        lower = [f for f, s in air.items() if s[5] and not s[4]]
+        if len(air) != 2 or len(upper) != 1 or len(lower) != 1:
+            raise RuntimeError(
+                "z-reflected Kelvin needs one upper and one lower air "
+                "hemisphere; found faces %s" % sorted(air))
+        top = air[upper[0]]
+        if air[lower[0]] != top[:4] + (top[5], top[4]):
+            raise RuntimeError("The lower air hemisphere is not the mirror "
+                               "image of the upper one")
+        if len(kelvin) != 1 or next(iter(kelvin.values())) != top:
+            raise RuntimeError(
+                "The Kelvin hemisphere %s does not match the upper air "
+                "hemisphere %d" % (sorted(kelvin), upper[0]))
+        return [(upper[0], next(iter(kelvin)))], lower
+    if len(air) != len(kelvin):
+        raise RuntimeError("%d air sphere faces but %d Kelvin faces"
+                           % (len(air), len(kelvin)))
+    pairs, remaining = [], dict(kelvin)
+    for face, signature in air.items():
+        match = [k for k, s in remaining.items() if s == signature]
+        if len(match) != 1:
+            raise RuntimeError("Air sphere face %d has %d matching Kelvin faces"
+                               % (face, len(match)))
+        pairs.append((face, match[0]))
+        del remaining[match[0]]
+    return pairs, []
+
+
 def add_kelvin_cubit(R, air_block="air", symmetry=None, reduction=None,
                      offset_dir=None, offset_dist=None, mesh_size=None,
                      kelvin_block="kelvin", gnd_nodeset=100):
@@ -343,6 +445,11 @@ def add_kelvin_cubit(R, air_block="air", symmetry=None, reduction=None,
     if not air_vols:
         raise RuntimeError("Block '%s' has no volumes." % air_block)
 
+    # ---- 1b. Faces of the air domain on the physical sphere ----
+    # Selected before any geometry is created, so a rejected model is left
+    # untouched.
+    air_outer_surfs = _air_sphere_faces(cubit, air_vols, R, air_block)
+
     # ---- 2. Create exterior sphere (clean ACIS sphere) ----
     cubit.cmd("create sphere radius %g" % R)
     kelvin_sphere = cubit.get_last_id("volume")
@@ -393,56 +500,18 @@ def add_kelvin_cubit(R, air_block="air", symmetry=None, reduction=None,
     for vid in kelvin_vols:
         cubit.cmd('volume %d rename "kelvin_ext"' % vid)
 
-    # ---- 4. Find the outer spherical surface of the air domain ----
-    # Only faces ON the physical air sphere belong to kelvin_int.  Taking the
-    # largest face of every air volume is wrong as soon as the air block holds
-    # an interior volume: on the C-type validation mesh with the gap air cut
-    # into slabs (2026-09-11) the slab faces went into kelvin_int, and at 24
-    # slabs the Netgen export failed on "Free sideset 2 contains a face with
-    # no adjacent volume element".  The sphere centre is the centre of the
-    # air domain's bounding box, which for a (seam-cut) sphere is exact.
-    boxes = [cubit.volume(v).bounding_box() for v in air_vols]
-    centre = [0.5 * (min(b[i] for b in boxes) + max(b[i + 3] for b in boxes))
-              for i in range(3)]
-
-    def _on_air_sphere(surface):
-        if cubit.get_surface_type(surface) != "sphere surface":
-            return False
-        near = cubit.surface(surface).closest_point_trimmed(centre)
-        distance = math.sqrt(sum((near[i] - centre[i]) ** 2 for i in range(3)))
-        return abs(distance - R) <= 1.0e-6 * R
-
-    air_outer_surfs = []
-    if reflect_meshed_kelvin:
-        air_vols.sort(
-            key=lambda v: cubit.volume(v).centroid()[2], reverse=True)
-    for vid in air_vols:
-        on_sphere = [s for s in cubit.get_relatives("volume", vid, "surface")
-                     if _on_air_sphere(s)]
-        if len(on_sphere) > 1:
-            raise RuntimeError(
-                "Air volume %d has %d faces on the sphere of radius %g; "
-                "expected at most one" % (vid, len(on_sphere), R))
-        air_outer_surfs.extend(on_sphere)
-    if not air_outer_surfs:
-        raise RuntimeError(
-            "No face of block '%s' lies on a sphere of radius %g about %s; "
-            "R must match the air sphere" % (air_block, R, centre))
-
-    # ---- 5. Find hemisphere surface on each kelvin volume ----
-    kelvin_outer_surfs = []
-    for vid in kelvin_vols:
-        surfs = list(cubit.get_relatives("volume", vid, "surface"))
-        if surfs:
-            outer = max(surfs, key=lambda s: cubit.surface(s).area())
-            kelvin_outer_surfs.append(outer)
+    # ---- 4/5. Sphere faces of the Kelvin exterior ----
+    # (The air side was selected in step 1b.)
+    kelvin_outer_surfs = [face for vid in kelvin_vols
+                          for face in _faces_on_sphere(cubit, vid, (ox, oy, oz), R)]
 
     # ---- 6. Copy mesh: air outer surface -> kelvin surface ----
-    # Pair by matching air/kelvin volume order (both webcutted at z=0).
-    n_pairs = min(len(air_outer_surfs), len(kelvin_outer_surfs))
-    for i in range(n_pairs):
-        src = air_outer_surfs[i]
-        dst = kelvin_outer_surfs[i]
+    # Every air sphere face is matched to the Kelvin face that will carry its
+    # mesh, or -- on the reflected path -- to the reflection that supplies it.
+    pairs, reflected_air = _pair_sphere_faces(
+        cubit, air_outer_surfs, kelvin_outer_surfs, (ox, oy, oz), R,
+        reflect_meshed_kelvin)
+    for src, dst in pairs:
 
         src_curves = list(cubit.get_relatives("surface", src, "curve"))
         dst_curves = list(cubit.get_relatives("surface", dst, "curve"))
@@ -487,6 +556,13 @@ def add_kelvin_cubit(R, air_block="air", symmetry=None, reduction=None,
                 "Kelvin mesh reflection produced %d volumes instead of one: %s"
                 % (len(reflected), sorted(reflected)))
         kelvin_bottom = next(iter(reflected))
+        bottom_faces = _faces_on_sphere(cubit, kelvin_bottom, (ox, oy, oz), R)
+        if ([_sphere_signature(cubit, f, (ox, oy, oz), R) for f in bottom_faces]
+                != [_sphere_signature(cubit, f, (0.0, 0.0, 0.0), R)
+                    for f in reflected_air]):
+            raise RuntimeError(
+                "The reflected Kelvin hemisphere does not match the lower air "
+                "hemisphere; the exterior would not cover kelvin_int")
         kelvin_vols = [source, kelvin_bottom]
         k_str = " ".join(str(v) for v in kelvin_vols)
         cubit.cmd("imprint volume %s" % k_str)
