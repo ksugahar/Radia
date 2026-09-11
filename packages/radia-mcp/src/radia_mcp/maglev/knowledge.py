@@ -2035,6 +2035,22 @@ EML), the cycle-average body force is
   an EML melt -- integrate the vertical component for lift, the full
   vector for the flow drive.
 
+### ECB plate model choice
+
+For quantitative 3-D plate force, use a divergence-free HCurl current basis,
+the open-boundary VIM interaction, and
+`radia.maglev.ecb.compute_lorentz_force_via_hcurl_vim`.  The independent lane
+`validation_test/maglev/ecb_foster_lorentz_3d_reference.py` is converged in
+both reduced rank and mesh size.
+
+Do not treat `compute_lorentz_force_via_foster` as a 3-D reference.  It keeps
+only a scalar local reaction field.  Even with lateral-only boundary
+conditions and a mesh-converged direct solve, its lift differs from the 3-D
+HCurl-VIM result by 63--89% on the recorded plate case.  The
+`compute_lorentz_force_via_foster_verified` wrapper solves the same scalar PDE
+directly and falls back when the eigenbasis is too short at high frequency;
+that controls Foster truncation only and does not cure the model discrepancy.
+
 ## Consistency check
 
 Routes 1 and 3 must agree: the Maxwell stress on an enclosing surface

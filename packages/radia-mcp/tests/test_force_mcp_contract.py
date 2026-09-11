@@ -69,6 +69,12 @@ def test_force_is_the_canonical_router_for_compatibility_front_doors():
     maglev_force = get_maglev_knowledge("force_computation")
     assert knowledge.get_force_knowledge("maglev") in maglev_force
     assert knowledge.get_force_recipe("method_choice") in maglev_force
+    assert "compute_lorentz_force_via_hcurl_vim" in maglev_force
+    assert "63--89%" in maglev_force
+
+    common_maglev = knowledge.get_force_knowledge("maglev")
+    assert "compute_lorentz_force_result_via_hcurl_vim" in common_maglev
+    assert "high-frequency truncation" in common_maglev
 
 
 class _Result(list):
