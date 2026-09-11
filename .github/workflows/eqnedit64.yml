@@ -17,6 +17,11 @@ on:
       - '.github/workflows/eqnedit64.yml'
       - '.github/workflows/release-eqnedit64-pypi.yml'
   workflow_dispatch:
+    inputs:
+      font_diagnostic:
+        description: 'Run three isolated font-boundary arms, not release acceptance'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -27,6 +32,7 @@ concurrency:
 
 jobs:
   web:
+    if: ${{ inputs.font_diagnostic != true }}
     # The browser edition is pure JavaScript plus a string-contract test, so it
     # answers in seconds on a free runner instead of waiting for the Windows
     # native build.  This is a fast-feedback lane, not a replacement: the
@@ -73,6 +79,7 @@ jobs:
           node tests/test_palette_browser.cjs
 
   build-test:
+    if: ${{ inputs.font_diagnostic != true }}
     # Font registration tests run only in this disposable GitHub-hosted
     # session. They must not churn the interactive laboratory desktop's font
     # cache or disturb applications such as LINE and Office.
@@ -245,4 +252,46 @@ jobs:
         with:
           name: eqnedit64-font-trace
           path: ${{ runner.temp }}/eqnedit64-font-trace/
+          if-no-files-found: warn
+
+  font-boundary-diagnostic:
+    if: ${{ inputs.font_diagnostic == true }}
+    runs-on: windows-2022
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        arm: [self, model-idle, model-self]
+    env:
+      EQNEDIT64_ISOLATED_TEST_SESSION: '1'
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: tools/eqnedit64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile identical diagnostic sources without executing fonts
+        run: |
+          python -m pip install pybind11 pytest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake -S . -B build_cmake -A x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build_cmake --config Release --target Eqnedit64 --parallel 2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmd.exe /d /c build\build_pymodule.bat
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Observe one fresh-session arm
+        run: >-
+          pwsh -NoProfile -File build/diagnose_font_boundary.ps1
+          -Arm '${{ matrix.arm }}'
+          -OutputDirectory '${{ runner.temp }}/font-boundary'
+      - name: Preserve all diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: font-boundary-${{ matrix.arm }}
+          path: ${{ runner.temp }}/font-boundary/
           if-no-files-found: warn
