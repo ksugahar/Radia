@@ -1,7 +1,7 @@
 classdef TPESampler < radia.optuna.BaseSampler
     %TPESAMPLER Optuna-style tree-structured Parzen estimator sampler.
     %   The default settings and univariate Parzen construction follow the
-    %   Optuna 4.9 TPESampler: ten random startup trials, a ten-percent good
+    %   Optuna 5.0 TPESampler: ten random startup trials, a ten-percent good
     %   set capped at 25 trials, 24 expected-improvement candidates,
     %   observation-specific truncated-normal kernels, history weights,
     %   an explicit prior, and magic clipping.
@@ -21,12 +21,11 @@ classdef TPESampler < radia.optuna.BaseSampler
         PriorWeight (1,1) double = 1
         ConsiderMagicClip (1,1) logical = true
         ConsiderEndpoints (1,1) logical = false
-        Multivariate (1,1) logical = false
+        Multivariate = []
         Group (1,1) logical = false
         WarnIndependentSampling (1,1) logical = false
-        ConstantLiar (1,1) logical = false
+        ConstantLiar (1,1) logical = true
         ConstraintsFcn = []
-        CategoricalDistanceFcn = []
     end
 
     properties (Access=private)
@@ -40,14 +39,19 @@ classdef TPESampler < radia.optuna.BaseSampler
         EncodingCacheValues string = strings(0,1)
         NativeHistoryValid (1,1) logical = false
         NativeHistoryCompleteCount (1,1) double = 0
+        NativeIntersection struct = struct()
+        NativeIntersectionReady (1,1) logical = false
         HistoryDistributionNames string = strings(0,1)
         HistoryDistributions cell = cell(0,1)
         NativeGroupRevision (1,1) double = -1
         NativeGroupMetadata struct = struct()
+        IntersectionTrialNumbers double = zeros(0,1)
+        IntersectionCacheReady (1,1) logical = false
+        IntersectionCache struct = struct()
     end
 
     properties (Constant, Access=private)
-        StateSchema = "radia.optuna.tpe-sampler-state.v1"
+        StateSchema = "radia.optuna.tpe-sampler-state.v2"
         SamplerName = "tpe"
     end
 
@@ -65,12 +69,11 @@ classdef TPESampler < radia.optuna.BaseSampler
                 options.PriorWeight (1,1) double = 1
                 options.ConsiderMagicClip (1,1) logical = true
                 options.ConsiderEndpoints (1,1) logical = false
-                options.Multivariate (1,1) logical = false
+                options.Multivariate = []
                 options.Group (1,1) logical = false
                 options.WarnIndependentSampling (1,1) logical = false
-                options.ConstantLiar (1,1) logical = false
+                options.ConstantLiar (1,1) logical = true
                 options.ConstraintsFcn = []
-                options.CategoricalDistanceFcn = []
             end
             if ~isempty(options.ConsiderPrior)
                 warning("radia:optuna:FutureWarning", ...
@@ -123,8 +126,14 @@ classdef TPESampler < radia.optuna.BaseSampler
             obj.PriorWeight = options.PriorWeight;
             obj.ConsiderMagicClip = options.ConsiderMagicClip;
             obj.ConsiderEndpoints = options.ConsiderEndpoints;
+            if ~(isempty(options.Multivariate) || ...
+                    (islogical(options.Multivariate) && ...
+                    isscalar(options.Multivariate)))
+                error("radia:optuna:TPEMultivariate", ...
+                    "Multivariate must be empty, true, or false.");
+            end
             obj.Multivariate = options.Multivariate;
-            if options.Group && ~options.Multivariate
+            if options.Group && isequal(options.Multivariate,false)
                 error("radia:optuna:TPEGroup", ...
                     "Group can only be enabled when Multivariate is enabled.");
             end
@@ -136,37 +145,40 @@ classdef TPESampler < radia.optuna.BaseSampler
                 error("radia:optuna:ConstraintsFcn", ...
                     "ConstraintsFcn must be a function handle.");
             end
+            if ~isempty(options.ConstraintsFcn)
+                warning("radia:optuna:FutureWarning", ...
+                    "ConstraintsFcn is deprecated in Optuna 5.0 and will " + ...
+                    "be removed in 7.0. Use Trial.set_constraint instead.");
+            end
             obj.ConstraintsFcn = options.ConstraintsFcn;
-            radia.optuna.internal.CategoricalDistance.validate( ...
-                options.CategoricalDistanceFcn);
-            obj.CategoricalDistanceFcn=options.CategoricalDistanceFcn;
             obj.GroupDecomposition= ...
                 radia.optuna.internal.GroupDecomposedSearchSpace();
-            % Optuna's TPESampler owns both the single- and
-            % multi-objective TPE paths. Keep MOTPESampler as an internal
-            % compatibility implementation, but route an explicitly chosen
-            % TPESampler through it for multi-objective studies.
-            obj.MultiObjectiveSampler = radia.optuna.MOTPESampler( ...
+            obj.IntersectionCache=obj.emptySearchSpace();
+            % Optuna 5 TPESampler owns both the single- and multi-objective
+            % paths. The helper is deliberately private rather than retaining
+            % the removed standalone multi-objective public surface.
+            obj.MultiObjectiveSampler = ...
+                radia.optuna.internal.MultiObjectiveTPE( ...
                 Seed=obj.Seed, NStartupTrials=obj.NStartupTrials, ...
-                Gamma=obj.Gamma, MaxGoodTrials=obj.MaxGoodTrials, ...
+                Gamma=obj.Gamma, ...
                 GammaFcn=obj.GammaFcn, WeightsFcn=obj.WeightsFcn, ...
                 NumberOfEIChoices=obj.NumberOfEIChoices, ...
                 PriorWeight=obj.PriorWeight, ...
                 ConsiderMagicClip=obj.ConsiderMagicClip, ...
                 ConsiderEndpoints=obj.ConsiderEndpoints, ...
-                ConstraintsFcn=obj.ConstraintsFcn, ...
-                CategoricalDistanceFcn=obj.CategoricalDistanceFcn);
+                ConstraintsFcn=obj.ConstraintsFcn);
         end
 
         function reseed_rng(obj)
             freshSeed=radia.optuna.internal.resolveSeed([]);
             obj.Stream=radia.optuna.internal.NumpyRandomState(freshSeed);
+            obj.NativeHistoryValid=false;
             obj.IndependentSampler.reseed_rng();
             obj.MultiObjectiveSampler.reseed_rng();
         end
 
         function value = sampleFloat(obj, study, trial, name, low, high, options)
-            if numel(study.Directions) > 1
+            if numel(study.Directions) > 1 && ~obj.isMultivariate(study)
                 value = obj.MultiObjectiveSampler.sampleFloat( ...
                     study, trial, name, low, high, options);
                 return
@@ -185,8 +197,9 @@ classdef TPESampler < radia.optuna.BaseSampler
             end
             [x, y, trialNumbers, pending, states] = ...
                 obj.numericObservations(study, name);
-            valid = isfinite(x) & (isfinite(y) | states=="PRUNED") & ...
-                x >= low & x <= high;
+            % Upstream retains observations from earlier, wider bounds.
+            % The current bounds constrain proposals, not historical data.
+            valid = isfinite(x) & (isfinite(y) | states=="PRUNED");
             if options.Log
                 valid = valid & x > 0;
             end
@@ -196,9 +209,7 @@ classdef TPESampler < radia.optuna.BaseSampler
             pending = pending(valid);
             states = states(valid);
 
-            [good, bad] = obj.splitObservations( ...
-                x, y, study.Directions(1), study, trialNumbers, pending, ...
-                states);
+            [good, bad] = obj.splitObservations(x,study,trialNumbers);
             belowWeights=obj.observationWeights(numel(good));
             aboveWeights=obj.observationWeights(numel(bad));
             nativeHandle=obj.Stream.nativeHandle();
@@ -249,7 +260,7 @@ classdef TPESampler < radia.optuna.BaseSampler
         end
 
         function value = sampleInteger(obj, study, trial, name, low, high)
-            if numel(study.Directions) > 1
+            if numel(study.Directions) > 1 && ~obj.isMultivariate(study)
                 value = obj.MultiObjectiveSampler.sampleInteger( ...
                     study, trial, name, low, high);
                 return
@@ -269,7 +280,7 @@ classdef TPESampler < radia.optuna.BaseSampler
         end
 
         function value = sampleCategorical(obj, study, trial, name, choices)
-            if numel(study.Directions) > 1
+            if numel(study.Directions) > 1 && ~obj.isMultivariate(study)
                 value = obj.MultiObjectiveSampler.sampleCategorical( ...
                     study, trial, name, choices);
                 return
@@ -305,19 +316,13 @@ classdef TPESampler < radia.optuna.BaseSampler
             states = states(valid);
             count = numel(choiceTokens);
 
-            [good, bad] = obj.splitObservations( ...
-                observed, y, study.Directions(1), study, ...
-                trialNumbers, pending, states);
+            [good, bad] = obj.splitObservations(observed,study,trialNumbers);
             below = radia.optuna.internal.ParzenEstimator.categorical( ...
                 good, count, PriorWeight=obj.PriorWeight, ...
-                ObservationWeights=obj.observationWeights(numel(good)), ...
-                DistanceFcn=radia.optuna.internal.CategoricalDistance. ...
-                get(obj.CategoricalDistanceFcn,name),Choices=choices);
+                ObservationWeights=obj.observationWeights(numel(good)));
             above = radia.optuna.internal.ParzenEstimator.categorical( ...
                 bad, count, PriorWeight=obj.PriorWeight, ...
-                ObservationWeights=obj.observationWeights(numel(bad)), ...
-                DistanceFcn=radia.optuna.internal.CategoricalDistance. ...
-                get(obj.CategoricalDistanceFcn,name),Choices=choices);
+                ObservationWeights=obj.observationWeights(numel(bad)));
             candidates = ...
                 radia.optuna.internal.ParzenEstimator.sampleCategorical( ...
                 below, obj.Stream, obj.NumberOfEIChoices);
@@ -333,7 +338,7 @@ classdef TPESampler < radia.optuna.BaseSampler
 
         function values = sampleJoint(obj, study, trial, names, lows, highs, options)
             %SAMPLEJOINT Multivariate TPE with a shared mixture component.
-            if numel(study.Directions) > 1
+            if numel(study.Directions) > 1 && ~obj.isMultivariate(study)
                 values = zeros(1, numel(names));
                 for index = 1:numel(names)
                     values(index) = obj.MultiObjectiveSampler.sampleFloat( ...
@@ -374,7 +379,7 @@ classdef TPESampler < radia.optuna.BaseSampler
         end
 
         function searchSpace = inferRelativeSearchSpace(obj, study, trial) %#ok<INUSD>
-            if ~obj.Multivariate
+            if ~obj.isMultivariate(study)
                 searchSpace = obj.emptySearchSpace();
                 return
             end
@@ -397,7 +402,7 @@ classdef TPESampler < radia.optuna.BaseSampler
         end
 
         function beforeTrial(obj, study, trial)
-            if numel(study.Directions) > 1
+            if numel(study.Directions) > 1 && ~obj.isMultivariate(study)
                 obj.MultiObjectiveSampler.beforeTrial(study, trial);
                 return
             end
@@ -405,7 +410,7 @@ classdef TPESampler < radia.optuna.BaseSampler
                 obj.IndependentSampler.beforeTrial(study, trial);
             end
             obj.attach(study);
-            if ~obj.Multivariate || numel(study.Directions) ~= 1
+            if ~obj.isMultivariate(study)
                 return
             end
             if study.nonRunningTrialCount() < obj.NStartupTrials
@@ -465,8 +470,18 @@ classdef TPESampler < radia.optuna.BaseSampler
                     trial.setRelativeParameters(searchSpace,values,"");
                 end
             else
-                searchSpace = obj.inferRelativeSearchSpace(study, trial);
+                nativeHistory=obj.canUseNativeGroupedHistory(study);
+                if nativeHistory
+                    searchSpace=obj.NativeIntersection;
+                else
+                    searchSpace=obj.inferRelativeSearchSpace(study, trial);
+                end
                 if isempty(searchSpace), return; end
+                if nativeHistory && ...
+                        obj.sampleNativeGroupedHistory(trial,{searchSpace})
+                    obj.recordState(study, trial.Number);
+                    return
+                end
                 values = obj.sampleRelativeSpace(study, searchSpace);
                 trial.setRelativeParameters(searchSpace,values,"");
             end
@@ -474,20 +489,32 @@ classdef TPESampler < radia.optuna.BaseSampler
         end
 
         function afterTrial(obj, study, trial)
-            if numel(study.Directions) > 1
+            if numel(study.Directions) > 1 && ~obj.isMultivariate(study)
                 obj.MultiObjectiveSampler.afterTrial(study, trial);
                 return
             end
             if trial.State == "COMPLETE" && ~isempty(obj.ConstraintsFcn)
                 study.recordConstraints(trial, obj.ConstraintsFcn(trial));
             end
-            if obj.Group && obj.Multivariate
+            if obj.isMultivariate(study)
                 obj.updateNativeHistory(study,trial);
             end
         end
     end
 
     methods (Access=private)
+        function result=isMultivariate(obj,study)
+            if ~isempty(obj.Multivariate)
+                result=logical(obj.Multivariate);
+            elseif obj.Group
+                result=true;
+            else
+                % Optuna 5.0's automatic default is multivariate for a
+                % single objective and independent for multiple objectives.
+                result=isscalar(study.Directions);
+            end
+        end
+
         function groups=groupSearchSpaces(obj,study)
             if obj.NativeHistoryValid
                 groups=obj.GroupDecomposition.current(ExcludeSingle=true);
@@ -515,7 +542,8 @@ classdef TPESampler < radia.optuna.BaseSampler
         end
 
         function warnIndependent(obj,study,trial,name)
-            if ~obj.Multivariate || ~obj.WarnIndependentSampling || obj.Group
+            if ~obj.isMultivariate(study) || ...
+                    ~obj.WarnIndependentSampling || obj.Group
                 return
             end
             trials=study.trialData();
@@ -533,20 +561,12 @@ classdef TPESampler < radia.optuna.BaseSampler
             end
         end
 
-        function [good, bad] = splitObservations(obj, values, objectives, ...
-                direction, study, trialNumbers, pending, states)
-            % Match Optuna's _split_complete_trials: n_below may equal the
-            % number of observations.  In that case the above density is
-            % represented by its prior component only.
-            if nargin<8
-                states=strings(0,1);
-            end
-            nGood = obj.goodTrialCount(study.nonRunningTrialCount());
-            nGood = min(nGood,numel(values));
-            order = obj.rankObservations( ...
-                objectives, direction, study, trialNumbers, pending, states);
-            isGood = false(numel(values), 1);
-            isGood(order(1:nGood)) = true;
+        function [good, bad] = splitObservations(obj,values,study,trialNumbers)
+            % Split trials before selecting observations for this parameter,
+            % as upstream does. Missing parameters must not promote a worse
+            % trial into the below group.
+            goodNumbers=obj.globalGoodTrialNumbers(study);
+            isGood=ismember(trialNumbers,goodNumbers);
             % Keep chronological order so Optuna's history weights attach to
             % the same observations after the objective-based split.
             good = values(isGood);
@@ -664,10 +684,76 @@ classdef TPESampler < radia.optuna.BaseSampler
             indices = 1 + sum(cumulative.' < u, 2);
         end
 
-        function searchSpace = intersectionSearchSpace(~, study)
-            searchSpace = ...
-                radia.optuna.internal.IntersectionSearchSpace.calculate( ...
-                study, IncludePruned=true);
+        function searchSpace = intersectionSearchSpace(obj, study)
+            % Update the intersection only with newly finished trials. The
+            % prior implementation recomputed every pairwise intersection
+            % on every ask(), making a fixed one-parameter study quadratic.
+            trials=study.trialData();
+            finished=trials.State=="COMPLETE" | trials.State=="PRUNED";
+            trialNumbers=reshape(trials.TrialNumber(finished),[],1);
+            if isempty(trialNumbers)
+                obj.IntersectionTrialNumbers=zeros(0,1);
+                obj.IntersectionCache=obj.emptySearchSpace();
+                obj.IntersectionCacheReady=false;
+                searchSpace=obj.IntersectionCache;
+                return
+            end
+            cachedCount=numel(obj.IntersectionTrialNumbers);
+            prefixMatches=obj.IntersectionCacheReady && ...
+                cachedCount<=numel(trialNumbers) && ...
+                isequal(obj.IntersectionTrialNumbers, ...
+                    trialNumbers(1:cachedCount));
+            if ~prefixMatches
+                searchSpace= ...
+                    radia.optuna.internal.IntersectionSearchSpace.calculate( ...
+                    study,IncludePruned=true);
+            else
+                searchSpace=obj.IntersectionCache;
+                if cachedCount<numel(trialNumbers) && ~isempty(searchSpace)
+                    parameters=study.parameterData();
+                    for trialIndex=cachedCount+1:numel(trialNumbers)
+                        rows=find(parameters.TrialNumber== ...
+                            trialNumbers(trialIndex));
+                        keep=true(numel(searchSpace),1);
+                        for spaceIndex=1:numel(searchSpace)
+                            matching=rows(parameters.Name(rows)== ...
+                                searchSpace(spaceIndex).name);
+                            if numel(matching)~=1
+                                keep(spaceIndex)=false;
+                                continue
+                            end
+                            % Canonical storage repeats the same encoding for
+                            % an unchanged distribution. Reuse its validated
+                            % spec instead of decoding JSON on every trial.
+                            distribution=searchSpace(spaceIndex).distribution;
+                            if parameters.Kind(matching)==distribution.kind && ...
+                                    parameters.Distribution(matching)== ...
+                                    obj.distributionEncoding( ...
+                                        searchSpace(spaceIndex).name,distribution)
+                                continue
+                            end
+                            candidate=radia.optuna.internal. ...
+                                DistributionCodec.decode( ...
+                                parameters.Kind(matching), ...
+                                parameters.Distribution(matching));
+                            keep(spaceIndex)=radia.optuna.internal. ...
+                                DistributionCodec.equivalent( ...
+                                searchSpace(spaceIndex).distribution, ...
+                                candidate);
+                        end
+                        searchSpace=searchSpace(keep);
+                        if isempty(searchSpace)
+                            break
+                        end
+                    end
+                end
+            end
+            if ~obj.Group && ~isequaln(searchSpace,obj.IntersectionCache)
+                obj.NativeGroupRevision=-1;
+            end
+            obj.IntersectionTrialNumbers=trialNumbers;
+            obj.IntersectionCache=searchSpace;
+            obj.IntersectionCacheReady=true;
         end
 
         function searchSpace = emptySearchSpace(~)
@@ -731,7 +817,6 @@ classdef TPESampler < radia.optuna.BaseSampler
             aboveWeights = obj.observationWeights(size(bad,1));
             nativeHandle=obj.Stream.nativeHandle();
             nativeFastPath=nativeHandle~=0 && ...
-                isempty(obj.CategoricalDistanceFcn) && ...
                 radia.optuna.internal.NativeKernels.has( ...
                 "optuna.tpe.best_joint_observations");
             if nativeFastPath
@@ -757,7 +842,8 @@ classdef TPESampler < radia.optuna.BaseSampler
                     "optuna.tpe.best_joint_observations",nativeHandle, ...
                     obj.NumberOfEIChoices,categorical,lows,highs,logScale, ...
                     steps,choiceCounts,good,bad,obj.PriorWeight, ...
-                    obj.ConsiderMagicClip,belowWeights,aboveWeights);
+                    obj.ConsiderMagicClip,obj.ConsiderEndpoints, ...
+                    belowWeights,aboveWeights);
                 values=cell(1,dimension);
                 for index=1:dimension
                     distribution=searchSpace(index).distribution;
@@ -777,23 +863,16 @@ classdef TPESampler < radia.optuna.BaseSampler
                 distribution = searchSpace(index).distribution;
                 if distribution.kind == "categorical"
                     choiceCount = numel(distribution.choices);
-                    distanceFcn=radia.optuna.internal.CategoricalDistance. ...
-                        get(obj.CategoricalDistanceFcn, ...
-                        searchSpace(index).name);
                     below{index} = ...
                         radia.optuna.internal.ParzenEstimator.categorical( ...
                         good(:,index), choiceCount, ...
                         PriorWeight=obj.PriorWeight, ...
-                        ObservationWeights=belowWeights, ...
-                        DistanceFcn=distanceFcn, ...
-                        Choices=distribution.choices);
+                        ObservationWeights=belowWeights);
                     above{index} = ...
                         radia.optuna.internal.ParzenEstimator.categorical( ...
                         bad(:,index), choiceCount, ...
                         PriorWeight=obj.PriorWeight, ...
-                        ObservationWeights=aboveWeights, ...
-                        DistanceFcn=distanceFcn, ...
-                        Choices=distribution.choices);
+                        ObservationWeights=aboveWeights);
                 else
                     estimatorOptions = { ...
                         "Log", distribution.log, ...
@@ -801,7 +880,6 @@ classdef TPESampler < radia.optuna.BaseSampler
                         "PriorWeight", obj.PriorWeight, ...
                         "ConsiderMagicClip", obj.ConsiderMagicClip, ...
                         "ConsiderEndpoints", obj.ConsiderEndpoints, ...
-                        "MultivariateDimension", dimension, ...
                         "ObservationWeights", belowWeights};
                     below{index} = ...
                         radia.optuna.internal.ParzenEstimator.numerical( ...
@@ -815,7 +893,6 @@ classdef TPESampler < radia.optuna.BaseSampler
                         "PriorWeight", obj.PriorWeight, ...
                         "ConsiderMagicClip", obj.ConsiderMagicClip, ...
                         "ConsiderEndpoints", obj.ConsiderEndpoints, ...
-                        "MultivariateDimension", dimension, ...
                         "ObservationWeights", aboveWeights);
                 end
             end
@@ -1170,29 +1247,32 @@ classdef TPESampler < radia.optuna.BaseSampler
         end
 
         function result=canUseNativeGroupedHistory(obj,study)
-            result=obj.NativeHistoryValid && obj.Group && obj.Multivariate && ...
+            % beforeTrial runs before the new trial has observations. When
+            % it is the sole RUNNING trial, ConstantLiar adds no observation,
+            % so the completed-history kernel has exactly the same input.
+            result=obj.NativeHistoryValid && ...
+                obj.isMultivariate(study) && ...
                 isscalar(study.Directions) && isempty(obj.GammaFcn) && ...
                 isempty(obj.WeightsFcn) && isempty(obj.ConstraintsFcn) && ...
-                isempty(obj.CategoricalDistanceFcn) && ~obj.ConstantLiar && ...
-                strlength(study.StoragePath)==0 && ...
+                ~study.hasConstraintRecords() && ...
                 obj.Stream.nativeHandle()~=0 && ...
                 radia.optuna.internal.NativeKernels.has( ...
                     "optuna.tpe.best_grouped_history");
             if ~result
                 return
             end
-            trials=study.trialData();
-            result=sum(trials.State=="COMPLETE")== ...
+            counts=study.trialStateCounts();
+            result=counts(1)== ...
                 obj.NativeHistoryCompleteCount && ...
-                ~any(trials.State=="PRUNED") && ...
-                sum(trials.State=="RUNNING")==1;
+                counts(2)==0 && counts(3)==1;
             if ~result
                 obj.NativeHistoryValid=false;
             end
         end
 
-        function updateNativeHistory(obj,~,trial)
-            if ~obj.NativeHistoryValid || ~obj.Group || ~obj.Multivariate
+        function updateNativeHistory(obj,study,trial)
+            if ~obj.NativeHistoryValid || ...
+                    ~obj.isMultivariate(study)
                 return
             end
             if trial.State=="PRUNED"
@@ -1200,6 +1280,13 @@ classdef TPESampler < radia.optuna.BaseSampler
                 return
             end
             if trial.State~="COMPLETE"
+                return
+            end
+            if ~isa(trial,"radia.optuna.Trial")
+                % Public after_trial accepts frozen snapshots, including a
+                % trial already present in the attached study. Do not append
+                % it twice or assume that the snapshot is a live trial.
+                obj.NativeHistoryValid=false;
                 return
             end
             if numel(trial.Values)~=1 || ~isfinite(trial.Value) || ...
@@ -1210,6 +1297,10 @@ classdef TPESampler < radia.optuna.BaseSampler
                 return
             end
             [names,values,distributions]=trial.parameterRecords();
+            obj.appendNativeHistory(trial.Number,trial.Value,names,values,distributions);
+        end
+
+        function appendNativeHistory(obj,number,value,names,values,distributions)
             distributionIds=zeros(numel(names),1,"int32");
             for index=1:numel(names)
                 distributionIds(index)=obj.historyDistributionId( ...
@@ -1217,11 +1308,103 @@ classdef TPESampler < radia.optuna.BaseSampler
             end
             radia.optuna.internal.NativeKernels.call( ...
                 "optuna.tpe.history.append_complete", ...
-                obj.Stream.nativeHandle(),trial.Number,trial.Value, ...
+                obj.Stream.nativeHandle(),number,value, ...
                 distributionIds,values);
             obj.NativeHistoryCompleteCount= ...
                 obj.NativeHistoryCompleteCount+1;
-            obj.GroupDecomposition.update(names,distributions);
+            if obj.Group
+                obj.GroupDecomposition.update(names,distributions);
+            else
+                obj.updateNativeIntersection(names,distributions);
+            end
+        end
+
+        function rebuildNativeHistory(obj,study)
+            % Rebuild computation-only state from authoritative column stores.
+            % This must consume no random numbers; RNG restoration is separate.
+            trials=study.trialData();
+            complete=find(trials.State=="COMPLETE");
+            obj.NativeHistoryValid=obj.isMultivariate(study) && ...
+                isscalar(study.Directions) && ~any(trials.State=="PRUNED") && ...
+                sum(trials.State=="RUNNING")<=1 && ...
+                all(isfinite(trials.Value(complete))) && ...
+                obj.Stream.nativeHandle()~=0;
+            if ~obj.NativeHistoryValid, return; end
+            if isempty(complete), return; end
+            parameters=study.parameterData();
+            [present,owners]=ismember(parameters.TrialNumber,trials.TrialNumber(complete));
+            rows=cell(numel(complete),1);
+            for index=reshape(find(present),1,[])
+                owner=owners(index);
+                rows{owner}(end+1)=index;
+            end
+            decoded=containers.Map('KeyType','char','ValueType','any');
+            for index=1:numel(complete)
+                selected=rows{index};
+                names=parameters.Name(selected);
+                values=zeros(numel(selected),1);
+                distributions=cell(numel(selected),1);
+                for column=1:numel(selected)
+                    row=selected(column);
+                    key=char(parameters.Kind(row)+":"+parameters.Distribution(row));
+                    if isKey(decoded,key)
+                        distribution=decoded(key);
+                    else
+                        distribution=radia.optuna.internal.DistributionCodec.decode( ...
+                            parameters.Kind(row),parameters.Distribution(row));
+                        decoded(key)=distribution;
+                    end
+                    distributions{column}=distribution;
+                    value=parameters.ValueNumeric(row);
+                    if distribution.kind=="categorical"
+                        token=parameters.ValueText(row);
+                        if isfinite(value), token=obj.token(value); end
+                        tokens=radia.optuna.internal.DistributionCodec.choiceTokens(distribution.choices);
+                        choice=find(tokens==token,1);
+                        if isempty(choice)
+                            error("radia:optuna:CategoricalValue", ...
+                                "Stored parameter '%s' is outside its choices.",names(column));
+                        end
+                        value=choice;
+                    end
+                    values(column)=value;
+                end
+                trialRow=complete(index);
+                obj.appendNativeHistory(trials.TrialNumber(trialRow), ...
+                    trials.Value(trialRow),names,values,distributions);
+            end
+        end
+
+        function updateNativeIntersection(obj,names,distributions)
+            % Completed-trial specs already exist here. Intersect them once
+            % at tell(), avoiding a scan and JSON decode of stored history
+            % at every ask(). An empty intersection stays empty.
+            space=obj.NativeIntersection;
+            if ~obj.NativeIntersectionReady
+                [names,order]=sort(names);
+                for index=1:numel(names)
+                    distribution=distributions{order(index)};
+                    if ~radia.optuna.internal.DistributionCodec.isSingle(distribution)
+                        space(end+1,1)=struct('name',names(index), ...
+                            'distribution',distribution); %#ok<AGROW>
+                    end
+                end
+                obj.NativeIntersectionReady=true;
+            else
+                keep=false(numel(space),1);
+                for index=1:numel(space)
+                    matching=find(names==space(index).name,1);
+                    keep(index)=~isempty(matching) && ...
+                        radia.optuna.internal.DistributionCodec.equivalent( ...
+                            space(index).distribution,distributions{matching});
+                end
+                if all(keep)
+                    return
+                end
+                space=space(keep);
+            end
+            obj.NativeGroupRevision=-1;
+            obj.NativeIntersection=space;
         end
 
         function identifier=historyDistributionId(obj,name,distribution)
@@ -1252,7 +1435,8 @@ classdef TPESampler < radia.optuna.BaseSampler
                 metadata.categorical,metadata.lows,metadata.highs, ...
                 metadata.logScale,metadata.steps,metadata.choiceCounts, ...
                 trial.Study.Directions(1)=="minimize",obj.Gamma, ...
-                obj.MaxGoodTrials,obj.PriorWeight,obj.ConsiderMagicClip);
+                obj.MaxGoodTrials,obj.PriorWeight,obj.ConsiderMagicClip, ...
+                obj.ConsiderEndpoints);
             position=0;
             for groupIndex=1:numel(groups)
                 searchSpace=groups{groupIndex};
@@ -1340,15 +1524,16 @@ classdef TPESampler < radia.optuna.BaseSampler
                 obj.GroupDecomposition= ...
                     radia.optuna.internal.GroupDecomposedSearchSpace();
                 obj.NativeHistoryCompleteCount=0;
+                obj.NativeIntersection=obj.emptySearchSpace();
+                obj.NativeIntersectionReady=false;
                 obj.HistoryDistributionNames=strings(0,1);
                 obj.HistoryDistributions=cell(0,1);
                 obj.NativeGroupRevision=-1;
                 obj.NativeGroupMetadata=struct();
-                trials=study.trialData();
-                terminal=trials.State=="COMPLETE" | ...
-                    trials.State=="PRUNED";
-                obj.NativeHistoryValid=strlength(study.StoragePath)==0 && ...
-                    ~any(terminal) && sum(trials.State=="RUNNING")<=1;
+                obj.IntersectionTrialNumbers=zeros(0,1);
+                obj.IntersectionCache=obj.emptySearchSpace();
+                obj.IntersectionCacheReady=false;
+                obj.NativeHistoryValid=false;
                 obj.Restored = false;
             end
             if obj.Restored
@@ -1359,6 +1544,7 @@ classdef TPESampler < radia.optuna.BaseSampler
                 obj.restoreState(state);
             end
             obj.Restored = true;
+            obj.rebuildNativeHistory(study);
         end
 
         function restoreState(obj, state)
@@ -1396,8 +1582,8 @@ classdef TPESampler < radia.optuna.BaseSampler
                 "schema", obj.StateSchema, ...
                 "seed", obj.Seed, ...
                 "random_state", obj.Stream.State);
-            trials=study.trialData();
-            generation = sum(trials.State == "COMPLETE");
+            counts=study.trialStateCounts();
+            generation = counts(1);
             study.recordSamplerState(obj.SamplerName, obj.StateSchema, ...
                 trialNumber, generation, state);
         end

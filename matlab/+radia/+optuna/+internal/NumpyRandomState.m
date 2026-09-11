@@ -1,6 +1,6 @@
 classdef NumpyRandomState < handle
     %NUMPYRANDOMSTATE NumPy RandomState-compatible MT19937 uniform stream.
-    %   Optuna 4.9 samplers use NumPy's legacy RandomState. MATLAB's
+    %   Optuna 5 samplers use NumPy's legacy RandomState. MATLAB's
     %   mt19937ar has the same engine family but a different seeding and
     %   floating-point extraction contract, so it cannot be used for a
     %   seeded differential oracle.

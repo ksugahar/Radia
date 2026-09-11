@@ -29,7 +29,7 @@ classdef BruteForceSampler < radia.optuna.BaseSampler
         end
 
         function reseed_rng(~)
-            % Optuna 4.9 deliberately implements this method as a no-op.
+            % Optuna 5 deliberately implements this method as a no-op.
         end
 
         function beforeTrial(obj,study,~)

@@ -1,5 +1,5 @@
 function compatible=check_distribution_compatibility(left,right)
-%CHECK_DISTRIBUTION_COMPATIBILITY Apply Optuna 4.9 dynamic-space rules.
+%CHECK_DISTRIBUTION_COMPATIBILITY Apply Optuna 5 dynamic-space rules.
 arguments
     left
     right

@@ -1885,13 +1885,20 @@ def _git_repo_owner_name():
 
 
 def _check_github_hosted_workflows(
-    sha, *, required_names=None, timeout_sec=1800, poll_sec=20
+    sha, *, required_names=None, require_present=None,
+    timeout_sec=1800, poll_sec=20, registration_grace_sec=90
 ):
     """Wait for SHA-bound check-runs and require their latest attempts green.
 
     When ``required_names`` is omitted, every check registered for the commit
     is included. This handles path-scoped monorepo CI: only workflows affected
     by the commit need to exist, but every workflow that does exist must pass.
+
+    ``require_present`` names checks that must EXIST as well as pass, while
+    still holding every other registered check to green. Path-scoped CI makes
+    absence normal, so absence cannot be an error by default -- but a workflow
+    that never runs on push has no registration to inspect, and treating that
+    silence as success is what let four release tags burn (4.95.86..4.95.89).
 
     Returns (ok: bool, message: str).
     """
@@ -1922,15 +1929,19 @@ def _check_github_hosted_workflows(
             runs = list(latest_by_name.values())
             missing_names = set() if runs else {"any check-run"}
         else:
-            runs = [latest_by_name[name] for name in required_names if name in latest_by_name]
+            selected_names = set(required_names) | set(require_present or ())
+            runs = [latest_by_name[name] for name in selected_names if name in latest_by_name]
             missing_names = set(required_names) - set(latest_by_name)
+        if require_present:
+            missing_names = missing_names | (
+                set(require_present) - set(latest_by_name))
 
         # Push-triggered workflows take time to register. A commit with no
         # applicable/registered CI is not release evidence.
         if missing_names:
-            if _time.time() - started > 90:
+            if _time.time() - started >= registration_grace_sec:
                 return False, ("required check-runs not registered for "
-                               f"{sha[:8]} after 90 s: "
+                               f"{sha[:8]} after {registration_grace_sec} s: "
                                + ", ".join(sorted(missing_names)))
             _time.sleep(poll_sec)
             continue
@@ -1945,8 +1956,10 @@ def _check_github_hosted_workflows(
         _time.sleep(poll_sec)
 
     # Every run completed. Green conclusions: success / skipped / neutral.
+    must_succeed = set(require_present or ())
     failures = [r for r in runs
-                if r["conclusion"] not in ("success", "skipped", "neutral")]
+                if (r["conclusion"] != "success" if r["name"] in must_succeed
+                    else r["conclusion"] not in ("success", "skipped", "neutral"))]
     if failures:
         msg = "; ".join(f"{r['name']}: {r['conclusion']}" for r in failures)
         return False, "github-hosted CI RED -- " + msg
@@ -1955,19 +1968,37 @@ def _check_github_hosted_workflows(
                   f"({', '.join(names)})")
 
 
+# Job name of the release build in .github/workflows/build-test.yml
+# ("Radia Native Release"). That workflow triggers only on a v* tag or a
+# manual dispatch -- never on a push to main -- so a green main proves nothing
+# about it. ci-verify requires it by name: a SHA that never ran it carries no
+# evidence, which is not the same as passing evidence.
+RELEASE_CHECK_RUN = "radia-native-release-build"
+
+
 def cmd_ci_verify(args):
-    """Require every latest GitHub check-run for HEAD to be green."""
+    """Require every latest GitHub check-run for HEAD to be green.
+
+    Also require the release build itself to exist for this SHA. Without that,
+    tagging proceeds on a commit the release workflow has never seen, and the
+    isolated environment's missing dependencies surface only after the tag is
+    spent -- measured 4.95.86..4.95.89, four tags for four missing names.
+    """
 
     step("Phase 5.5: CI verify -- SHA-bound GitHub check-runs")
     head_sha = _release_head()
     print(f"  HEAD = {head_sha[:8]}")
     gh_ok, gh_msg = _check_github_hosted_workflows(
-        head_sha, required_names=None, timeout_sec=3600
+        head_sha, required_names=None, require_present=[RELEASE_CHECK_RUN],
+        timeout_sec=3600
     )
     print("  " + gh_msg)
     if not gh_ok:
         fail("CI is RED or unverified -- inspect at "
-             f"github.com/{_git_repo_owner_name()}/actions, fix-forward.")
+             f"github.com/{_git_repo_owner_name()}/actions, fix-forward.\n"
+             f"        If '{RELEASE_CHECK_RUN}' is simply absent, dispatch\n"
+             "        'Radia Native Release' on this exact SHA and re-run:\n"
+             "        that workflow does not run on a push to main.")
         return 4
 
     print("")

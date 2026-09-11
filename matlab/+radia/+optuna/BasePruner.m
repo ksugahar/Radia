@@ -1,5 +1,5 @@
 classdef (Abstract) BasePruner < handle
-    %BASEPRUNER Common Optuna 4.9 pruning interface.
+    %BASEPRUNER Common Optuna 5 pruning interface.
 
     methods
         function decision=prune(obj,study,trial)
