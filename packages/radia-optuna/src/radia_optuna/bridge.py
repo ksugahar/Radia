@@ -12,9 +12,8 @@ import warnings
 if TYPE_CHECKING:  # pragma: no cover
     import optuna
 
-SCHEMA = "radia.optuna.study-export.v1"
+SCHEMA = "radia.optuna.study-export.v2"
 _TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%S.%f"
-_CONSTRAINTS_KEY = "constraints"
 
 
 def _optuna():
@@ -25,9 +24,9 @@ def _optuna():
             "The storage bridge needs upstream Optuna. Install "
             "'radia-optuna[upstream]'."
         ) from error
-    if optuna.__version__ != "4.9.0":
+    if optuna.__version__ != "5.0.0":
         raise RuntimeError(
-            f"The bridge requires optuna==4.9.0, found {optuna.__version__}."
+            f"The bridge requires optuna==5.0.0, found {optuna.__version__}."
         )
     return optuna
 
@@ -97,8 +96,10 @@ def frozen_trials(payload: dict[str, Any]) -> list["optuna.trial.FrozenTrial"]:
                 optuna.distributions.json_to_distribution(item["distribution"])
             )
         system_attrs = _attributes(record, "system_attrs")
-        if record.get("constraint_present", False):
-            system_attrs[_CONSTRAINTS_KEY] = list(record.get("constraints") or [])
+        constraints = {
+            item["name"]: float(item["value"])
+            for item in _records(record, "constraints")
+        }
         trial = optuna.trial.create_trial(
             state=optuna.trial.TrialState[record["state"]],
             values=list(record.get("values") or []) or None,
@@ -106,6 +107,7 @@ def frozen_trials(payload: dict[str, Any]) -> list["optuna.trial.FrozenTrial"]:
             distributions=distributions,
             user_attrs=_attributes(record, "user_attrs"),
             system_attrs=system_attrs,
+            constraints=constraints,
             intermediate_values={
                 int(item["step"]): float(item["value"])
                 for item in _records(record, "intermediate_values")
@@ -138,10 +140,8 @@ def into_study(
     )
     for name, value in _attributes(payload, "user_attrs").items():
         study.set_user_attr(name, value)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", FutureWarning)
-        for name, value in _attributes(payload, "system_attrs").items():
-            study.set_system_attr(name, value)
+    for name, value in _attributes(payload, "system_attrs").items():
+        study._storage.set_study_system_attr(study._study_id, name, value)
     metric_names = list(payload.get("metric_names") or [])
     if metric_names:
         with warnings.catch_warnings():
@@ -157,8 +157,13 @@ def from_study(study: "optuna.Study") -> dict[str, Any]:
     records = []
     for trial in study.get_trials(deepcopy=False):
         system_attrs = dict(trial.system_attrs)
-        constraint_present = _CONSTRAINTS_KEY in system_attrs
-        constraints = list(system_attrs.pop(_CONSTRAINTS_KEY, []))
+        constraints = dict(trial.constraints)
+        system_attrs.pop("constraints", None)
+        system_attrs = {
+            name: value
+            for name, value in system_attrs.items()
+            if not name.startswith("constraints:")
+        }
         records.append(
             {
                 "number": trial.number,
@@ -182,15 +187,17 @@ def from_study(study: "optuna.Study") -> dict[str, Any]:
                     {"step": step, "value": value}
                     for step, value in sorted(trial.intermediate_values.items())
                 ],
-                "constraint_present": constraint_present,
-                "constraints": constraints,
+                "constraints": [
+                    {"name": name, "value": value}
+                    for name, value in constraints.items()
+                ],
                 "datetime_start": _format_timestamp(trial.datetime_start),
                 "datetime_complete": _format_timestamp(trial.datetime_complete),
             }
         )
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", FutureWarning)
-        system_attrs = dict(study.system_attrs)
+    system_attrs = dict(
+        study._storage.get_study_system_attrs(study._study_id)
+    )
     # Optuna persists metric names in this private system-attribute key;
     # metric_names already carries the public value in the handoff schema.
     system_attrs.pop("study:metric_names", None)

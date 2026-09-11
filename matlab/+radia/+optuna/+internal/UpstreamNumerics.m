@@ -1,5 +1,5 @@
 classdef UpstreamNumerics
-    %UPSTREAMNUMERICS Numeric primitives that must match Optuna 4.9 exactly.
+    %UPSTREAMNUMERICS Numeric primitives that must match Optuna 5 exactly.
     %   MATLAB and NumPy/Python disagree on three primitives that appear in
     %   every Optuna untransform path, so every sampler routes through this
     %   class instead of the MATLAB built-ins:

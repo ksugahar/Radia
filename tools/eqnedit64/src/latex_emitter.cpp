@@ -50,7 +50,8 @@ static const MapEntry UNICODE_MAP[] = {
     {0x03D6, "\\varpi "}, {0x03F0, "\\varkappa "}, {0x03F1, "\\varrho "},
     {0x03F5, "\\epsilon "}, {0x2016, "\\Vert "}, {0x2019, "'"},
     {0x2020, "\\dagger "}, {0x2021, "\\ddagger "}, {0x2022, "\\bullet "},
-    {0x2026, "\\ldots "}, {0x2032, "'"}, {0x2033, "''"}, {0x2034, "'''"},
+    {0x2026, "\\ldots "}, {0x2032, "\\prime "},
+    {0x2033, "\\prime \\prime "}, {0x2034, "\\prime \\prime \\prime "},
     {0x2102, "\\mathbb{C}"}, {0x210D, "\\mathbb{H}"},
     {0x210F, "\\hbar "}, {0x2111, "\\Im "},
     {0x2113, "\\ell "}, {0x2115, "\\mathbb{N}"},
@@ -889,6 +890,23 @@ void LaTeXEmitter::emitMatrix(const MatrixNode& mat, std::string& out) {
 void LaTeXEmitter::emitEmbell(const EmbellNode& embell, std::string& out) {
     const std::string content = emitNodes(embell.content);
     const int type = static_cast<int>(embell.embellType);
+    const int primes = embell.embellType == EM_PRIME ? 1 :
+        embell.embellType == EM_DPRIME ? 2 :
+        (embell.embellType == EM_TPRIME || embell.embellType == EM_BPRIME) ? 3 : 0;
+    if (primes && !is_single_tex_atom(content)) {
+        /* A suffix apostrophe supplies another superscript. Preserve the
+         * whole decorated base, including an existing exponent, and use the
+         * ordinary symbol emitter so save/reopen has the same spelling. */
+        out += "{"; out += content; out += "}^{";
+        for (int i = 0; i < primes; ++i) {
+            CharNode mark;
+            mark.charCode = 0x2032;
+            mark.typeface = TF_SYMBOL;
+            emitChar(mark, out);
+        }
+        out += "}";
+        return;
+    }
     /* The prime family has no prefix -- it is written entirely as a suffix
      * (x', x'').  Requiring both halves silently dropped the mark, so a
      * prime template produced a bare x. */

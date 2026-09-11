@@ -7,10 +7,8 @@
  * translate their children.  Nothing is emitted until the whole tree is laid
  * out, so the final viewBox is exact and no second measuring pass is needed.
  *
- * Covered in this milestone: LINE, CHAR, SIZE, SCRIPT (sub/sup/subsup), FENCE,
- * FRACT, ROOT, and the integral / big-operator families (operator glyph plus
- * limits, inline or stacked).  Remaining template classes recurse into their
- * content so nothing silently disappears.
+ * Every Node::Tag has an explicit dispatch decision. Size nodes update list
+ * state; unsupported legacy nodes fail rather than silently losing content.
  */
 #include "equation_render.h"
 #include "tex_parser.h"
@@ -25,6 +23,7 @@
 #include <map>
 #include <iomanip>
 #include <sstream>
+#include <stdexcept>
 #include <vector>
 
 #ifdef _WIN32
@@ -47,6 +46,7 @@ struct Glyph {
     bool symbol = false;        /* pick the symbol font family */
     bool cjk = false;           /* use a real CJK face, never math-font linking */
     double stretchY = 1.0;      /* vertical scale for grown fences */
+    double stretchX = 1.0;      /* horizontal scale preserving brace topology */
     /* Draw only the part of the glyph left of this x, in layout units.
      * Used for the radical: Cambria's surd ends in a flat flag thicker than
      * TeX's rule, so drawing it whole left a stub at the left of the bar.
@@ -345,7 +345,11 @@ bool load_math_font() {
      * though the old hidden test passed.  Other applications can still crash
      * that shared host, so this is not a claim about its sole cause.  Extract
      * the verified embedded bytes once and use the file-backed, process-private
-     * API instead.  This is a cache, not an installation: there is no registry
+     * API instead. A 2026-09-11 independent review observed the same host
+     * crash signature at startup on another machine with this file-backed
+     * path. This mitigation is not proof of session safety; retain the
+     * external PID/event gate (see VALIDATION_NOTES.md).
+     * This is a cache, not an installation: there is no registry
      * entry and the EXE remains the only input. */
     const std::filesystem::path path = cache_embedded_math_font(bytes, size);
     if (path.empty()) return false;
@@ -1435,7 +1439,7 @@ double layout_ink_right(const Layout& L) {
         const uint32_t cp = first_codepoint(g.text);
         right = std::max(right,
                          g.x + glyph_ink_width(cp, g.size, g.italic, g.symbol,
-                                               g.cjk));
+                                               g.cjk) * g.stretchX);
     }
     for (const auto& rule : L.rules) right = std::max(right, rule.x + rule.w);
     return right;
@@ -1451,7 +1455,7 @@ double layout_ink_left(const Layout& L) {
         const uint32_t cp = first_codepoint(g.text);
         left = std::min(left,
                         g.x + glyph_ink_left(cp, g.size, g.italic, g.symbol,
-                                             g.cjk));
+                                             g.cjk) * g.stretchX);
     }
     for (const auto& rule : L.rules) left = std::min(left, rule.x);
     return left;
@@ -1776,9 +1780,15 @@ private:
                 return glyph_layout(0x00B0, script_size(sizePt), false, false);
             case Node::kOverset:
                 return layout_overset(static_cast<const OversetNode&>(n), sizePt);
-            default:
-                return layout_fallback(n, sizePt);
+            case Node::kSize:
+                throw std::logic_error("size node must be consumed by layout_list");
+            case Node::kFont:
+                throw std::invalid_argument("unsupported legacy font node");
+            case Node::kRM:
+                throw std::invalid_argument("unsupported legacy RM node");
         }
+        // /w14062 rejects new tags until a rendering decision is supplied.
+        throw std::invalid_argument("invalid equation node tag");
     }
 
     /* The italic correction of the last character in a base, which is the one
@@ -2456,17 +2466,15 @@ private:
         uint32_t cp = over ? 0x23DE : 0x23DF;
         Layout brace = glyph_layout(cp, sizePt, false, true);
         double stretch = std::max(1.0, body.w / std::max(brace.w, 1e-6));
-        /* Horizontal growth is represented by a rule when a single brace
-         * glyph would become unreadably distorted. */
+        // Never substitute a line for a wide brace. Keep its actual glyph
+        // topology and scale only its width, in every output backend.
+        for (auto& glyph : brace.glyphs) glyph.stretchX = stretch;
+        brace.w *= stretch;
         double by = over ? -(body.asc + 0.18 * sizePt)
                          :  (body.desc + 0.60 * sizePt);
-        if (stretch < 1.8) {
-            out.absorb(brace, (body.w - brace.w) * 0.5, by);
-        } else {
-            Rule r{0, over ? by - 0.15 * sizePt : by,
-                   body.w, rule_thickness(sizePt)};
-            out.rules.push_back(r);
-        }
+        out.absorb(brace, (body.w - brace.w) * 0.5, by);
+        out.asc = std::max(out.asc, -by + brace.asc);
+        out.desc = std::max(out.desc, by + brace.desc);
         if (!label.glyphs.empty() || !label.placeholders.empty()) {
             double ly = over ? by - 0.35 * sizePt - label.desc
                              : by + 0.35 * sizePt + label.asc;
@@ -2711,19 +2719,6 @@ private:
         return out;
     }
 
-    /* Unhandled templates still show their content rather than vanishing. */
-    Layout layout_fallback(const Node& n, double sizePt) {
-        switch (n.tag()) {
-            case Node::kDecoration:
-                return layout_list(static_cast<const DecorationNode&>(n).content, sizePt);
-            case Node::kBraceDeco:
-                return layout_list(static_cast<const BraceDecoNode&>(n).content, sizePt);
-            case Node::kEmbell:
-                return layout_list(static_cast<const EmbellNode&>(n).content, sizePt);
-            default:
-                return Layout();
-        }
-    }
 };
 
 }  // namespace
@@ -2770,9 +2765,9 @@ std::string render_svg(const LineNode& root, const SvgStyle& style) {
           << " font-size=\"" << g.size << "\"";
         if (g.italic) o << " font-style=\"italic\"";
         if (g.bold) o << " font-weight=\"bold\"";
-        if (std::fabs(g.stretchY - 1.0) > 1e-6) {
+        if (std::fabs(g.stretchY - 1.0) > 1e-6 || std::fabs(g.stretchX - 1.0) > 1e-6) {
             o << " transform=\"translate(" << (g.x + pad) << ',' << (g.y + baseline)
-              << ") scale(1," << g.stretchY << ") translate("
+              << ") scale(" << g.stretchX << ',' << g.stretchY << ") translate("
               << -(g.x + pad) << ',' << -(g.y + baseline) << ")\"";
         }
         o << ">" << xml_escape(g.text) << "</text>\n";
@@ -3170,7 +3165,7 @@ void draw_equation_gdi(const LineNode& root, HDC hdc,
         const int gy = int(std::lround(top + (g.y + baseline) * scale));
         int glyphSaved = 0;
         const bool clipped = g.clipRight > 0.0;
-        if (clipped || std::fabs(g.stretchY - 1.0) > 1e-6) {
+        if (clipped || std::fabs(g.stretchY - 1.0) > 1e-6 || std::fabs(g.stretchX - 1.0) > 1e-6) {
             glyphSaved = SaveDC(hdc);
         }
         /* Clip before the world transform, so the boundary is in device
@@ -3183,10 +3178,10 @@ void draw_equation_gdi(const LineNode& root, HDC hdc,
                 LONG(std::ceil(left + (g.clipRight + style.padding) * scale)),
                 LONG(std::ceil(top + boxH)) + 1);
         }
-        if (std::fabs(g.stretchY - 1.0) > 1e-6) {
+        if (std::fabs(g.stretchY - 1.0) > 1e-6 || std::fabs(g.stretchX - 1.0) > 1e-6) {
             SetGraphicsMode(hdc, GM_ADVANCED);
-            XFORM xf{1.0f, 0.0f, 0.0f, FLOAT(g.stretchY),
-                     0.0f, FLOAT((1.0 - g.stretchY) * gy)};
+            XFORM xf{FLOAT(g.stretchX), 0.0f, 0.0f, FLOAT(g.stretchY),
+                     FLOAT((1.0 - g.stretchX) * gx), FLOAT((1.0 - g.stretchY) * gy)};
             SetWorldTransform(hdc, &xf);
         }
         if (text_as_outlines &&

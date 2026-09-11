@@ -105,6 +105,15 @@ def main() -> int:
         else:
             seen_ou[svg] = kind
 
+    # Width must not change a brace into an overline/underline. The former
+    # stretch>=1.8 fallback removed the actual glyph for a two-letter base.
+    for kind, glyph in (("overbrace", "\u23de"), ("underbrace", "\u23df")):
+        for body in ("x", "xy", "abcdefgh"):
+            source = Equation()
+            assert source.load_latex("\\" + kind + "{" + body + "}")
+            if glyph not in source.svg():
+                failures.append(f"{kind} lost its brace glyph over {body!r}")
+
     # A decoration must survive a round trip through the TeX the editor emits.
     # emitDecoration drops an unmapped selector silently, so the equation would
     # come back without it and the next load would rebuild something else.

@@ -1,5 +1,5 @@
 classdef RandomSampler < radia.optuna.BaseSampler
-    %RANDOMSAMPLER Optuna 4.9 RandomSampler for MATLAB trials.
+    %RANDOMSAMPLER Optuna 5 RandomSampler for MATLAB trials.
 
     properties (SetAccess=private)
         Stream

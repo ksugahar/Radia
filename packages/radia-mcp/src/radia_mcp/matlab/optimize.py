@@ -15,7 +15,6 @@ _SAMPLER_NAMES = {
     "cmaes",
     "gp",
     "grid",
-    "motpe",
     "nsgaii",
     "nsgaiii",
     "partial_fixed",
@@ -36,7 +35,7 @@ def matlab_optimize_build(spec: Mapping[str, Any] | str) -> dict[str, Any]:
     if not directions or any(item not in {"minimize", "maximize"} for item in directions):
         raise ValueError("directions must contain minimize or maximize")
     sampler = _sampler_spec(
-        spec.get("sampler", "motpe" if len(directions) > 1 else "tpe"),
+        spec.get("sampler", "tpe"),
         directions,
     )
     n_trials = int(spec.get("n_trials", 20))
@@ -58,7 +57,7 @@ def matlab_optimize_build(spec: Mapping[str, Any] | str) -> dict[str, Any]:
         "Parallel scheduling can change proposal consumption and is a MATLAB "
         "integration contract, even when the sampler's sequential seeded path is oracled."
         if parallel
-        else "Sequential execution with the same explicit seed is eligible for the Optuna 4.9.0 differential oracle."
+        else "Sequential execution with the same explicit seed is eligible for the Optuna 5.0.0 differential oracle."
     )
     return {
         "schema": "radia-mcp.matlab-optimize-build/v3",
@@ -79,7 +78,7 @@ def matlab_optimize_build(spec: Mapping[str, Any] | str) -> dict[str, Any]:
         },
         "matlab_code": code,
         "oracle": {
-            "version": "4.9.0",
+            "version": "5.0.0",
             "classification": oracle_classification,
             "reason": oracle_reason,
             "explicit_seed": sampler["seed"],
@@ -309,16 +308,13 @@ def _sampler_spec(value: Any, directions: list[str], *, nested: bool = False) ->
         raise ValueError("nested partial_fixed samplers are not supported")
     if len(directions) > 1 and name == "cmaes":
         raise ValueError("CmaEsSampler supports only one objective")
-    if len(directions) == 1 and name == "motpe":
-        raise ValueError("MOTPESampler requires multiple objectives")
-
     seed = _int_option(options, "seed", 0, minimum=0)
     args: list[str] = []
     supported_surface = "seeded sequential proposal sequence"
     if name == "random":
         code = f"radia.optuna.RandomSampler({seed})"
-    elif name in {"tpe", "motpe"}:
-        class_name = "TPESampler" if name == "tpe" else "MOTPESampler"
+    elif name == "tpe":
+        class_name = "TPESampler"
         args = [f"Seed={seed}"]
         _append_int(args, options, "n_startup_trials", "NStartupTrials", 10, 0)
         _append_int(args, options, "n_ei_candidates", "NumberOfEIChoices", 24, 1)
@@ -330,24 +326,26 @@ def _sampler_spec(value: Any, directions: list[str], *, nested: bool = False) ->
         _append_bool(args, options, "consider_magic_clip", "ConsiderMagicClip", True)
         _append_bool(args, options, "consider_endpoints", "ConsiderEndpoints", False)
         if name == "tpe":
-            multivariate = _bool_option(options, "multivariate", False)
+            multivariate = options.pop("multivariate", None)
+            if multivariate is not None and not isinstance(multivariate, bool):
+                raise ValueError("sampler.multivariate must be boolean or null")
             group = _bool_option(options, "group", False)
-            if group and not multivariate:
+            if group and multivariate is False:
                 raise ValueError("sampler.group requires sampler.multivariate=true")
-            args.append(f"Multivariate={_matlab_bool(multivariate)}")
+            if multivariate is not None:
+                args.append(f"Multivariate={_matlab_bool(multivariate)}")
             args.append(f"Group={_matlab_bool(group)}")
             _append_bool(
                 args, options, "warn_independent_sampling",
                 "WarnIndependentSampling", False,
             )
-            _append_bool(args, options, "constant_liar", "ConstantLiar", False)
+            _append_bool(args, options, "constant_liar", "ConstantLiar", True)
         _append_function(args, options, "constraints_fcn", "ConstraintsFcn")
-        _append_categorical_distances(args, options)
         code = f"radia.optuna.{class_name}({','.join(args)})"
         supported_surface = (
-            "seeded scalar/mixed/grouped-multivariate/constrained TPE with callable gamma/weights and categorical distances"
+            "seeded scalar/mixed/automatic-or-grouped-multivariate/constrained TPE with callable gamma/weights"
             if name == "tpe"
-            else "seeded multi-objective constrained TPE with callable gamma/weights and categorical distances"
+            else "seeded multi-objective constrained TPE with callable gamma/weights"
         )
     elif name == "cmaes":
         args = [f"Seed={seed}"]
@@ -385,7 +383,7 @@ def _sampler_spec(value: Any, directions: list[str], *, nested: bool = False) ->
         _append_function(args, options, "constraints_fcn", "ConstraintsFcn")
         code = f"radia.optuna.GPSampler({','.join(args)})"
         supported_surface = (
-            "exact pinned Optuna 4.9.0 GP including post-startup acquisition"
+            "exact pinned Optuna 5.0.0 GP including post-startup acquisition"
             if backend == "upstream-python"
             else "MATLAB-native GP integration only"
         )
@@ -397,6 +395,8 @@ def _sampler_spec(value: Any, directions: list[str], *, nested: bool = False) ->
         _append_float(args, options, "crossover_probability", "CrossoverProbability", 0.9, 0.0, 1.0)
         _append_float(args, options, "swapping_probability", "SwappingProbability", 0.5, 0.0, 1.0)
         _append_function(args, options, "constraints_fcn", "ConstraintsFcn")
+        if "mutation" in options:
+            args.append(f"Mutation={_mutation(options.pop('mutation'))}")
         if name == "nsgaiii":
             _append_int(args, options, "dividing_parameter", "DividingParameter", 3, 1)
             if "reference_points" in options:
@@ -407,7 +407,7 @@ def _sampler_spec(value: Any, directions: list[str], *, nested: bool = False) ->
         if "crossover" in options:
             args.append(f"Crossover={_crossover(options.pop('crossover'))}")
         code = f"radia.optuna.{class_name}({','.join(args)})"
-        supported_surface = "seeded NSGA-II/III population and crossover behavior"
+        supported_surface = "seeded NSGA-II/III population, crossover, and mutation behavior"
     elif name == "qmc":
         qmc_type = str(options.pop("qmc_type", "sobol")).lower()
         if qmc_type not in {"sobol", "halton"}:
@@ -521,27 +521,20 @@ def _append_function(args, options, key, matlab_name):
         args.append(f"{matlab_name}=@{value}")
 
 
-def _append_categorical_distances(args, options):
-    key = "categorical_distance_fcn"
-    if key not in options:
-        return
-    mapping = options.pop(key)
-    if not isinstance(mapping, Mapping):
-        raise ValueError(f"sampler.{key} must be a JSON object")
-    if not mapping:
-        return
-    parameter_names: list[str] = []
-    functions: list[str] = []
-    for parameter_name in sorted(mapping, key=str):
-        name = str(parameter_name)
-        function = _function(mapping[parameter_name], f"sampler.{key}.{name}")
-        parameter_names.append(f"'{_quote(name)}'")
-        functions.append(f"@{function}")
-    args.append(
-        "CategoricalDistanceFcn=containers.Map(" +
-        "{" + ",".join(parameter_names) + "}," +
-        "{" + ",".join(functions) + "})"
-    )
+def _mutation(value):
+    if isinstance(value, str):
+        options = {"name": value}
+    elif isinstance(value, Mapping):
+        options = dict(value)
+    else:
+        raise ValueError("sampler.mutation must be a name or JSON object")
+    name = str(options.pop("name", "polynomial")).lower()
+    if name != "polynomial":
+        raise ValueError("sampler.mutation.name must be polynomial")
+    eta = _float_option(options, "eta", 20.0, minimum=0.0)
+    if options:
+        raise ValueError(f"unknown sampler.mutation options: {sorted(options)}")
+    return f"radia.optuna.nsgaii.PolynomialMutation(Eta={eta:.17g})"
 
 
 def _matlab_bool(value):

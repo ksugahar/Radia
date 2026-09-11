@@ -28,6 +28,7 @@ concurrency:
 
 jobs:
   build-test:
+    name: radia-native-release-build
     runs-on: [self-hosted, Windows, X64, mdx]
     # No timeout-minutes -- per 2026-05-25 user decision after
     # 45-min cap (sha 357da370 cancelled) and 70-min cap (sha
@@ -67,7 +68,8 @@ jobs:
           $releaseTags = @()
           if ($env:GITHUB_REF_TYPE -eq 'tag') {
             $repoUrl = "https://x-access-token:$env:GITHUB_TOKEN@github.com/${{ github.repository }}.git"
-            foreach ($line in (git ls-remote --tags $repoUrl @patterns)) {
+            $env:GIT_TERMINAL_PROMPT = '0'
+            foreach ($line in (git -c credential.helper= ls-remote --tags $repoUrl @patterns)) {
               $parts = $line -split '\s+'
               if ($parts.Count -lt 2 -or $parts[0] -ne $env:GITHUB_SHA) {
                 continue
@@ -177,9 +179,20 @@ jobs:
           }
           & $ciPython -c "import os,sys; assert sys.prefix != sys.base_prefix and os.path.samefile(sys.prefix, os.environ['RADIA_CI_VENV']), 'CI Python must belong to RADIA_CI_VENV'"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & $ciPython -m pip install mcp "trimesh>=4.0" twine==6.2.0 --quiet
+          & $ciPython -m pip install build wheel pytest mcp "trimesh>=4.0" twine==6.2.0 --quiet
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Write-Host "mcp + trimesh + twine installed (radia_mcp via PYTHONPATH, not pip-installed)"
+          # Import every dependency here, at the top of the run. `pip install`
+          # succeeding is not the same as the module being importable, and a
+          # name missing from the line above otherwise surfaces only in the
+          # step that needs it -- which is how 4.95.86..4.95.89 spent four
+          # release tags discovering `pytest`, then `build`, then `wheel` one
+          # at a time. Fail here instead, before the tag is worth anything.
+          & $ciPython -c "import build, wheel, pytest, mcp, trimesh, twine; print('isolated env imports OK')"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::Isolated CI environment is missing a dependency listed above."
+            exit $LASTEXITCODE
+          }
+          Write-Host "build + wheel + pytest + mcp + trimesh + twine installed and importable (radia_mcp via PYTHONPATH, not pip-installed)"
 
       # ----------------------------------------------------------------
       # Verify NGSolve: exact pyproject-pinned version in the run-local venv.

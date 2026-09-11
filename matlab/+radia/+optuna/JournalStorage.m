@@ -1,5 +1,5 @@
 classdef JournalStorage < radia.optuna.RDBStorage
-    %JOURNALSTORAGE Operation-log storage compatible with Optuna 4.9.
+    %JOURNALSTORAGE Operation-log storage compatible with Optuna 5.
     %   The checked MATLAB file backend owns append/read interoperability;
     %   pinned Optuna owns replay ordering and conflict resolution.
 

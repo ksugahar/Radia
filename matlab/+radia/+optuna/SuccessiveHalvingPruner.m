@@ -86,7 +86,7 @@ classdef SuccessiveHalvingPruner < radia.optuna.BasePruner
                     return
                 end
                 key="completed_rung_"+string(rung);
-                trial.setSystemAttr(key,value);
+                trial.setInternalAttribute(key,value);
                 competing=obj.competingValues( ...
                     study,trial.Number,eligibleNumbers,key,value);
                 if numel(competing)<=obj.BootstrapCount || ...

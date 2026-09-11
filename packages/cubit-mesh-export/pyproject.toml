@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cubit-mesh-export"
-version = "0.14.16"
+version = "0.14.17"
 description = "Solver-neutral mesh export from Coreform Cubit: high-order curved .vol/.msh/.bdf, Kelvin transformation, Dirichlet/symmetry label conventions"
 readme = "README.md"
 license = {text = "MIT"}
-requires-python = ">=3.10"
+requires-python = ">=3.12,<3.13"
 authors = [
     {name = "Kengo Sugahara"},
 ]
@@ -18,6 +18,8 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: Microsoft :: Windows",
     "Topic :: Scientific/Engineering",
 ]
 dependencies = [

@@ -1,171 +1,401 @@
-"""途中の目次: 背景がどこで終わり、提案がどこから始まるかを枚で示しているか。
+"""Check whether a talk announces each major section at its transition.
 
-松尾先生 (2026-09-10, IGTE'26 のデッキ査読):
+An outline is not merely one agenda slide near the beginning, and it is not a
+retrospective statement that the problem has ended and the solution begins.
+For a spoken research presentation, navigation has to appear where the topic
+changes. Each divider repeats the complete agenda and highlights only the
+section that starts now, so the audience sees both the route and its current
+position. Agenda rows are concise section labels such as ``Motivation``;
+explanatory taglines belong in the content slides, not in the agenda.
 
-    よくあるように途中に目次/アウトラインを挟むと分かりやすいと思いました。
-    例えば、どこまでのスライドが現状の問題(あるいは背景)で、どこからが今回の
-    解決法の話になるのか、明示する方が聴衆には分かりやすいと思いました。
-
-冒頭に一度だけ目次を出す形は、この指摘には答えていない。聞き手が「今どこに
-いるのか」を見失うのは冒頭ではなく中盤である ―― 従来法の話が三枚続いたあと、
-提案が始まる境目で、いま聞いているのが「まだ問題の話」なのか「もう解決法の
-話」なのかが分からなくなる。だからこの検査は、目次が**在るか**ではなく
-**転の直前に在るか**を見る。
-
-境目は 起承転結 の 転 から取る（``presentation_kishotenketsu_check`` と同じ
-定義を使い、``read_deck`` で同じ読み方をする）。転はタイトルの語ではなく下端
-の主張文から決まるので、研究室の「タイトルは名詞句・主張は下端帯」の様式と
-衝突しない ―― 「Method」「Results」といった章題を並べる流儀を前提にした検査
-なら、この様式のデッキでは常に不合格になってしまう。
-
-目次の枚は二通りの見つけ方をする。題が目次語（Outline / 目次 / 本日の流れ …）
-であるか、あるいは本文の行がこのデッキ自身の他の枚の題を並べているか。後者が
-要るのは、区切りの枚に「Where we are going」のような固有の題を付けることが
-あるからで、題だけを見ると見落とす。
-
-短い発表では枚を一枚使う余裕がないこともある。その場合の答えは「検査を無視
-する」ではなく、**境目の枚の下端文で章が変わったと言い切る**か、置き場所を
-`suggested_outline` が指す位置に絞ることである。何秒かかるかは
-``presentation_estimate_per_slide_time`` で測れる。
+The section names are examples, not a mandatory taxonomy. Authors first
+classify the actual deck into coherent acts, then place a divider at the start
+of every substantial act. Four or five sections are the normal target for a
+full research talk. This checker uses the deck's 起承転結 arc to infer the
+legacy motivation/method/results spine when no custom taxonomy is available.
 """
 from __future__ import annotations
 
 import re
+from collections import Counter
 
-from ._kishotenketsu import _overlap, presentation_kishotenketsu_check, read_deck
+from ._kishotenketsu import presentation_kishotenketsu_check, read_deck
 
-# 題が目次だと名乗っている枚。
-_OUTLINE_TITLE = re.compile(
+_AGENDA_TITLE = re.compile(
     r"(?i)\boutline\b|\bagenda\b|\bcontents\b|\broad ?map\b|\boverview\b"
-    r"|\bwhat follows\b|\bwhere we are going\b|\bthe plan of the talk\b"
+    r"|\bwhere we are going\b|\bthe plan of the talk\b"
     r"|目次|構成|本日の流れ|発表の流れ|アウトライン|お話しする順|全体像")
-# 片側が「現状・背景・問題」だと言っているか。
-_PROBLEM_SIDE = re.compile(
-    r"(?i)\bbackground\b|\bproblem\b|\bmotivation\b|\bstate of the art\b"
-    r"|\bprior work\b|\bwhat is known\b|\bwhere it fails\b|\bthe difficulty\b"
-    r"|背景|課題|問題|現状|従来|これまで")
-# もう片側が「提案・解決法・結果」だと言っているか。
-_SOLUTION_SIDE = re.compile(
-    r"(?i)\bmethod\b|\bapproach\b|\bproposal\b|\bwe propose\b|\bour \w+\b"
-    r"|\bthis talk\b|\bsolution\b|\bresults?\b|\bevidence\b|\bwhat we do\b"
-    r"|提案|手法|解決|本研究|本発表|結果|検証")
+
+_SECTION_PATTERNS = {
+    "motivation": re.compile(
+        r"(?i)\bmotivation\b|\bbackground\b|\bproblem\b|\bchallenge\b"
+        r"|\bwhy\b|動機|背景|問題|課題|目的"),
+    "method": re.compile(
+        r"(?i)\bproposed? method\b|\bmethod(?:ology)?\b|\bapproach\b"
+        r"|\bformulation\b|\bproposal\b|提案(?:法|手法)?|手法|方法|定式化"),
+    "results": re.compile(
+        r"(?i)\bresults?\b|\bvalidation\b|\bevaluation\b|\bexperiment(?:s|al)?\b"
+        r"|\bbenchmark\b|結果|検証|評価|実験"),
+}
+
+_ITEM_PREFIX = re.compile(
+    r"^\s*(?:(?:\d+|[ivxlcdm]+)[\s.)\-:：]+|[-–—•●○▪▫]\s*)",
+    re.IGNORECASE)
+
+_AGENDA_EXPLANATION = re.compile(
+    r"\s(?:—|–|-)\s|[:：]\s|[.!?。！？]\s*$"
+)
+_RECOMMENDED_SECTION_COUNTS = {4, 5}
 
 
-def _looks_like_outline(slide: dict, other_titles: list[str]) -> tuple[bool, str]:
-    """Is this slide an outline / agenda / section divider?
+def _section_labels(slide: dict) -> set[str]:
+    text = f"{slide['title'] or ''}\n{slide['text']}"
+    return {name for name, pattern in _SECTION_PATTERNS.items()
+            if pattern.search(text)}
 
-    Two signals, because a divider need not be titled "Outline": the title
-    says so, or the body lists the deck's own slide titles back to it.
-    """
-    if _OUTLINE_TITLE.search(slide["title"] or ""):
-        return True, "title"
-    lines = [ln.strip() for ln in (slide["text"] or "").splitlines()
-             if len(ln.strip()) > 3]
-    echoed = sum(1 for ln in lines
-                 if max((_overlap(ln, t) for t in other_titles), default=0.0) >= 0.5)
-    if echoed >= 2:
-        return True, f"lists {echoed} of the deck's own titles"
-    return False, ""
+
+def _normalise_agenda_item(text: str) -> str:
+    """Return a comparison key without numbering or display whitespace."""
+    return re.sub(r"\s+", " ", _ITEM_PREFIX.sub("", text or "")).strip().casefold()
+
+
+def _is_concise_section_label(text: str) -> bool:
+    """Reject agenda rows that append an explanation to the section name."""
+    label = _ITEM_PREFIX.sub("", text or "").strip()
+    return bool(label) and not _AGENDA_EXPLANATION.search(label)
+
+
+def _agenda_items(slide: dict) -> list[str]:
+    """Extract a possible ordered agenda from a compact text block."""
+    lines = [line.strip() for line in (slide["text"] or "").splitlines()
+             if line.strip()]
+    # A progress divider needs enough context to show a route, while a long
+    # prose overview is not an agenda merely because its title says Overview.
+    if not 2 <= len(lines) <= 8:
+        return []
+    keys = [_normalise_agenda_item(line) for line in lines]
+    if any(not key for key in keys) or len(set(keys)) != len(keys):
+        return []
+    return lines
+
+
+def _looks_like_divider(
+        slide: dict,
+        repeated_agendas: set[tuple[str, ...]] | None = None,
+) -> tuple[bool, str, set[str], list[str]]:
+    """Recognize a repeated agenda/progress slide."""
+    labels = _section_labels(slide)
+    title = slide["title"] or ""
+    body_lines = [line.strip() for line in (slide["text"] or "").splitlines()
+                  if line.strip()]
+    agenda_items = _agenda_items(slide)
+    agenda_key = tuple(_normalise_agenda_item(item) for item in agenda_items)
+    if agenda_items and (_AGENDA_TITLE.search(title)
+                         or agenda_key in (repeated_agendas or set())):
+        return True, "agenda/progress slide", labels, agenda_items
+    complete = set(_SECTION_PATTERNS).issubset(labels)
+    if _AGENDA_TITLE.search(title) and complete:
+        return True, "agenda/progress slide", labels, body_lines
+    if complete and len(body_lines) <= 6:
+        return True, "repeated full agenda", labels, body_lines
+    return False, "", labels, []
+
+
+def _run_signature(run) -> tuple[str, bool, float | None]:
+    """Return style signals that can distinguish the active agenda item."""
+    try:
+        colour = str(run.font.color.rgb or "")
+    except (AttributeError, TypeError):
+        colour = ""
+    size = run.font.size.pt if run.font.size is not None else None
+    return colour, bool(run.font.bold), size
+
+
+def _highlighted_section_labels(pptx_slide) -> set[str]:
+    """Find the uniquely styled section label in a complete agenda."""
+    signatures: dict[str, list[tuple[str, bool, float | None]]] = {}
+    for shape in pptx_slide.shapes:
+        if not getattr(shape, "has_text_frame", False):
+            continue
+        shape_labels = {name for name, pattern in _SECTION_PATTERNS.items()
+                        if pattern.search(shape.text or "")}
+        if len(shape_labels) < 2:
+            continue
+        for paragraph in shape.text_frame.paragraphs:
+            for run in paragraph.runs:
+                for name, pattern in _SECTION_PATTERNS.items():
+                    if pattern.search(run.text or ""):
+                        signatures.setdefault(name, []).append(_run_signature(run))
+
+    primary = {name: Counter(values).most_common(1)[0][0]
+               for name, values in signatures.items() if values}
+    counts = Counter(primary.values())
+    if len(primary) < 2 or not counts:
+        return set()
+    ordinary, ordinary_count = counts.most_common(1)[0]
+    if ordinary_count < 2:
+        return set()
+    return {name for name, signature in primary.items() if signature != ordinary}
+
+
+def _highlighted_agenda_items(pptx_slide, agenda_items: list[str]) -> list[str]:
+    """Return agenda rows whose dominant run style differs from the majority."""
+    by_key = {_normalise_agenda_item(item): item for item in agenda_items}
+    signatures: dict[str, list[tuple[str, bool, float | None]]] = {
+        key: [] for key in by_key
+    }
+    for shape in pptx_slide.shapes:
+        if not getattr(shape, "has_text_frame", False):
+            continue
+        for paragraph in shape.text_frame.paragraphs:
+            key = _normalise_agenda_item(paragraph.text or "")
+            if key not in signatures:
+                continue
+            signatures[key].extend(
+                _run_signature(run) for run in paragraph.runs
+                if (run.text or "").strip())
+
+    primary = {
+        key: Counter(values).most_common(1)[0][0]
+        for key, values in signatures.items() if values
+    }
+    bold_keys = [key for key, values in signatures.items()
+                 if any(signature[1] for signature in values)]
+    if len(bold_keys) == 1 and len(signatures) > 1:
+        return [item for item in agenda_items
+                if _normalise_agenda_item(item) == bold_keys[0]]
+    counts = Counter(primary.values())
+    if len(primary) != len(agenda_items) or not counts:
+        return []
+    ordinary, ordinary_count = counts.most_common(1)[0]
+    if ordinary_count < 2:
+        return []
+    highlighted = {key for key, signature in primary.items()
+                   if signature != ordinary}
+    return [item for item in agenda_items
+            if _normalise_agenda_item(item) in highlighted]
+
+
+def _repeated_agenda_coverage(dividers: list[dict]) -> dict:
+    """Check an arbitrary taxonomy by repeated order and unique emphasis."""
+    sequences = [tuple(_normalise_agenda_item(item)
+                       for item in divider["agenda_items"])
+                 for divider in dividers if divider["agenda_items"]]
+    if not sequences:
+        return {"applicable": False}
+    canonical, repeats = Counter(sequences).most_common(1)[0]
+    if repeats < 2:
+        return {"applicable": False}
+
+    matching = [divider for divider, sequence in zip(
+        [d for d in dividers if d["agenda_items"]], sequences)
+        if sequence == canonical]
+    display = matching[0]["agenda_items"]
+    coverage = {key: [] for key in canonical}
+    observed = []
+    for divider in matching:
+        highlighted = divider["highlighted_items"]
+        if len(highlighted) != 1:
+            continue
+        key = _normalise_agenda_item(highlighted[0])
+        if key not in coverage:
+            continue
+        coverage[key].append(divider["slide"])
+        observed.append(key)
+
+    # Extra dividers within one chapter are harmless, but the first occurrence
+    # of every chapter must follow the agenda order without skipping backward.
+    first_sequence = [key for key in canonical if coverage[key]]
+    observed_unique = list(dict.fromkeys(observed))
+    order_ok = observed_unique == first_sequence
+    complete = all(coverage.values()) and observed_unique == list(canonical)
+    concise_labels = all(_is_concise_section_label(item) for item in display)
+    return {
+        "applicable": True,
+        "items": display,
+        "normalised_items": list(canonical),
+        "coverage": {
+            display[index]: coverage[key]
+            for index, key in enumerate(canonical)
+        },
+        "observed_highlight_order": [
+            display[list(canonical).index(key)] for key in observed_unique
+        ],
+        "same_order": all(sequence == canonical for sequence in sequences),
+        "highlight_order_ok": order_ok,
+        "section_count": len(canonical),
+        "recommended_section_count": len(canonical) in _RECOMMENDED_SECTION_COUNTS,
+        "concise_labels": concise_labels,
+        "complete": complete and all(sequence == canonical for sequence in sequences),
+    }
+
+
+def _near(slide_no: int, boundary: int | None, allowance: int) -> bool:
+    return boundary is not None and 0 <= boundary - slide_no <= allowance
 
 
 def presentation_check_outline_slide(pptx_path: str,
                                      backup_title: str = "Backup",
-                                     max_slides_before_turn: int = 1) -> dict:
-    """Report whether a mid-deck outline marks the problem/solution boundary.
+                                     max_slides_before_turn: int = 2) -> dict:
+    """Check recurring section dividers at the talk's major transitions.
 
-    max_slides_before_turn : how far ahead of the turn a divider still counts
-        as marking it. 1 means the slide immediately before the turn (the
-        usual placement); 0 demands the divider be the turn slide itself.
+    ``max_slides_before_turn`` is retained for API compatibility. It is the
+    maximum distance allowed between a method divider and the inferred turn;
+    two accommodates a short goal/overview slide before the detailed method.
     """
     try:
-        from pptx import Presentation  # noqa: F401
+        from pptx import Presentation
     except ImportError:
         return {"error": "python-pptx not installed."}
 
-    slides, cut, main = read_deck(pptx_path, backup_title)
+    prs = Presentation(pptx_path)
+    _slides, _cut, main = read_deck(pptx_path, backup_title)
     if len(main) < 4:
         return {"error": f"only {len(main)} content slides; too few to need "
-                         "an outline."}
+                         "section dividers."}
 
     arc = presentation_kishotenketsu_check(pptx_path, backup_title)
-    turn = arc.get("turn_slide")
+    arc_parts = arc.get("arc", {})
+    boundaries = {
+        "motivation": main[0]["slide"] if main else None,
+        "method": (arc_parts.get("ten") or [None])[0],
+        "results": (arc_parts.get("ketsu") or [None])[0],
+    }
 
-    titles = [s["title"] for s in main if s["title"]]
-    found = []
-    for s in main:
-        others = [t for t in titles if t != s["title"]]
-        ok, why = _looks_like_outline(s, others)
+    agenda_counts = Counter(
+        tuple(_normalise_agenda_item(item) for item in items)
+        for slide in main if (items := _agenda_items(slide))
+    )
+    repeated_agendas = {agenda for agenda, count in agenda_counts.items()
+                        if count >= 2}
+
+    dividers = []
+    for slide in main:
+        ok, why, labels, agenda_items = _looks_like_divider(
+            slide, repeated_agendas)
         if ok:
-            text = f"{s['title']}\n{s['text']}"
-            found.append({
-                "slide": s["slide"], "title": s["title"], "detected_by": why,
-                "names_the_problem_side": bool(_PROBLEM_SIDE.search(text)),
-                "names_the_solution_side": bool(_SOLUTION_SIDE.search(text)),
+            highlighted = _highlighted_section_labels(prs.slides[slide["slide"] - 1])
+            highlighted_items = _highlighted_agenda_items(
+                prs.slides[slide["slide"] - 1], agenda_items)
+            dividers.append({
+                "slide": slide["slide"],
+                "title": slide["title"],
+                "detected_by": why,
+                "section_labels": sorted(labels),
+                "highlighted_sections": sorted(highlighted),
+                "agenda_items": agenda_items,
+                "highlighted_items": highlighted_items,
             })
 
-    # 「途中」= 転の直前。冒頭にしか無い目次は、境目では思い出されない。
-    at_boundary = [f for f in found
-                   if turn is not None
-                   and 0 <= turn - f["slide"] <= max_slides_before_turn]
-    marks_split = [f for f in found
-                   if f["names_the_problem_side"] and f["names_the_solution_side"]]
+    coverage: dict[str, list[int]] = {}
+    for section, boundary in boundaries.items():
+        matches = []
+        for divider in dividers:
+            if not set(boundaries).issubset(divider["section_labels"]):
+                continue
+            if divider["highlighted_sections"] != [section]:
+                continue
+            allowance = 0 if section == "motivation" else max_slides_before_turn
+            if _near(divider["slide"], boundary, allowance):
+                matches.append(divider["slide"])
+        coverage[section] = matches
 
-    problem = (arc.get("arc", {}).get("ki", []) + arc.get("arc", {}).get("sho", []))
-    solution = (arc.get("arc", {}).get("ten", []) + arc.get("arc", {}).get("ketsu", []))
-    by_no = {s["slide"]: s["title"] for s in main}
-    suggested = {
-        "insert_before_slide": turn,
-        "problem": [{"slide": n, "title": by_no.get(n, "")} for n in problem],
-        "solution": [{"slide": n, "title": by_no.get(n, "")} for n in solution],
+    semantic_checks = {
+        "Motivation の開始をその場で示す": bool(coverage["motivation"]),
+        "Proposed method の開始をその場で示す": bool(coverage["method"]),
+        "Results の開始をその場で示す": bool(coverage["results"]),
     }
+    recurring = _repeated_agenda_coverage(dividers)
+    custom_taxonomy = recurring.get("applicable", False) and not (
+        len(recurring.get("normalised_items", [])) == 3
+        and all(len({name for name, pattern in _SECTION_PATTERNS.items()
+                     if pattern.search(item)}) == 1
+                for item in recurring.get("normalised_items", [])))
+    if custom_taxonomy:
+        checks = {
+            f"{item} の開始を反復 Outline で示す": bool(slides)
+            for item, slides in recurring["coverage"].items()
+        }
+        checks["全章を毎回同じ順序で再掲する"] = recurring["same_order"]
+        checks["強調章が章順に進む"] = recurring["highlight_order_ok"]
+        checks["章を4〜5分類にする"] = recurring["recommended_section_count"]
+        checks["Outline は説明文を付けず章名だけにする"] = recurring["concise_labels"]
+        score = round(10.0 * sum(checks.values()) / len(checks), 1)
+        scoring_mode = "repeated-agenda"
+    else:
+        checks = dict(semantic_checks)
+        if recurring.get("applicable", False):
+            checks["章を4〜5分類にする"] = recurring["recommended_section_count"]
+            checks["Outline は説明文を付けず章名だけにする"] = recurring["concise_labels"]
+        score = (0.0 if not any(semantic_checks.values())
+                 else round(10.0 * sum(checks.values()) / len(checks), 1))
+        scoring_mode = "semantic-boundaries"
+    comments = [f"{'OK  ' if value else 'FAIL'} {label}"
+                for label, value in checks.items()]
 
-    checks = {
-        "目次・区切りの枚がある": bool(found),
-        "その一枚が転の直前にある（冒頭だけではない）": bool(at_boundary),
-        "問題の側と解決法の側を両方名指ししている": bool(marks_split),
-    }
-    score = round(10.0 * sum(checks.values()) / len(checks), 1)
-    comments = [f"{'OK  ' if v else 'FAIL'} {k}" for k, v in checks.items()]
+    if not dividers:
+        comments.append(
+            "反復 Outline が無い。スライド全体を内容で分類し、各主要章の"
+            "先頭で全章を再掲し、今から始まる章だけを強調する。")
+    elif not all(checks.values()):
+        if custom_taxonomy:
+            missing = [name for name, slides
+                       in recurring["coverage"].items() if not slides]
+            problems = []
+            if missing:
+                problems.append("満たしていない章: " + ", ".join(missing))
+            if not recurring["same_order"] or not recurring["highlight_order_ok"]:
+                problems.append("章の再掲順または強調順が一致しない")
+            if not recurring["recommended_section_count"]:
+                problems.append("章数は4〜5を基本とする")
+            if not recurring["concise_labels"]:
+                problems.append("各項目は説明を付けず章名だけにする")
+            problem = "。".join(problems) + "。"
+        else:
+            missing = [name for name, slides in coverage.items() if not slides]
+            problems = (["満たしていない章: " + ", ".join(missing)]
+                        if missing else [])
+            if recurring.get("applicable", False):
+                if not recurring["recommended_section_count"]:
+                    problems.append("章数は4〜5を基本とする")
+                if not recurring["concise_labels"]:
+                    problems.append("各項目は説明を付けず章名だけにする")
+            problem = "。".join(problems) + "。"
+        comments.append(
+            "各章の先頭で全項目を再掲し、現在章だけを色・太字・大きさ等で"
+            "一意に強調する。" + problem)
 
-    if turn is None:
-        comments.append(
-            "転が見つからないので境目を決められない。"
-            "presentation_kishotenketsu_check を先に通すこと ―― "
-            "どこから解決法かを枚で示す前に、話が転じている必要がある。")
-    elif not found:
-        comments.append(
-            f"目次の枚が無い。{turn} 枚目から解決法の話に変わるので、その直前に"
-            f"一枚入れ、{problem and problem[0]}–{turn - 1} 枚目までが問題、"
-            f"{turn} 枚目からが提案、と明示する。"
-            "`suggested_outline` に並べる項目を入れてある。")
-    elif not at_boundary:
-        where = ", ".join(str(f["slide"]) for f in found)
-        comments.append(
-            f"目次はある（{where} 枚目）が、境目（{turn} 枚目の直前）に無い。"
-            "冒頭で一度読み上げた目次は、三枚あとの境目では思い出されない。"
-            "同じ枚を、今どこにいるかを変えてもう一度出すのが普通のやり方で、"
-            "発話は各回十数秒で済む。")
-    if found and not marks_split:
-        comments.append(
-            "目次が章の名前を並べているだけで、どこまでが問題でどこからが"
-            "解決法かを言っていない。二つの側にそれぞれ見出しを付けること"
-            "（松尾先生 2026-09-10）。")
+    if custom_taxonomy:
+        suggested = [
+            {"section": section, "insert_before_or_near_slide": None}
+            for section, slides in recurring["coverage"].items() if not slides
+        ]
+    else:
+        suggested = [
+            {"section": section, "insert_before_or_near_slide": boundary}
+            for section, boundary in boundaries.items()
+            if not coverage[section]
+        ]
 
     return {
         "score": score,
         "score_max": 10,
         "content_slides": len(main),
-        "turn_slide": turn,
-        "outline_slides": found,
-        "outline_at_boundary": [f["slide"] for f in at_boundary],
+        "section_boundaries": boundaries,
+        "section_dividers": dividers,
+        "outline_slides": dividers,
+        "outline_at_boundary": sorted({n for nums in coverage.values() for n in nums}),
+        "section_coverage": coverage,
+        "recurring_agenda": recurring,
+        "scoring_mode": scoring_mode,
         "suggested_outline": suggested,
         "checks": checks,
         "comments": comments,
-        "hint": "境目は転（起承転結）から取る。タイトルの語ではなく下端の"
-                "主張文で決まるので、「タイトルは名詞句・主張は下端帯」という"
-                "研究室の様式のままで使える。枚を足す余裕が無いときは、"
-                "境目の枚の下端文で章が変わったと言い切るのでもよい。",
-        "source": "松尾先生のデッキ査読 2026-09-10。"
-                  "presentation_kishotenketsu_check と対で使う: あちらは"
-                  "筋が転じているか、こちらはその転じ目が聴衆に見えているか。",
+        "hint": (
+            "Outline は内容が切り替わる場所で繰り返す。毎回すべての章を同じ順で"
+            "示し、今から始まる章だけを赤字などで強調する。4〜5章を基本とし、"
+            "各項目は Motivation のような章名だけにして説明文を付けない。"
+            "章名自体は実際の deck の内容から決める。"
+        ),
+        "source": "菅原による IGTE'26 デッキ査読の明確化 2026-09-11。",
     }
