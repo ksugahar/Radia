@@ -1,9 +1,10 @@
 # Radia MCP maintenance contract
 
-Maintenance is an explicit operator action, not an unrestricted auto-updater.
-Students should not need to remember package maintenance: an administrator owns
-the approved revision and runs this procedure; clients use stable editable paths.
-Reconnecting remains necessary after changing source used by a live server.
+MCP is experimental development tooling. Developers may edit source and repoint
+editable installations without a separate deployment approval or mandatory
+snapshot. Coordinate overlapping work and preserve active CAD/MATLAB jobs.
+Follow the [shared runtime policy](operations/mcp-runtime-policy.md); installation
+and fresh-process checks do not establish what existing clients have loaded.
 
 ## Standard client configuration
 
@@ -47,22 +48,24 @@ maintenance never kills unrelated MATLAB, Python, or client processes.
 
 ## Repeatable editable update
 
-1. Select an **approved full commit SHA**, after the scoped CI and relevant
-   behavior tests pass. Never select an untested moving branch as the target.
+1. Select the development source and intended interpreter. Routine experiments
+   require no dedicated branch, immutable snapshot or separate approval. Record
+   the source path and actual commit plus uncommitted changes when reporting
+   results; a commit alone does not identify modified source.
 2. Inventory all explicitly named human users, both clients and project-scoped
    settings. LAB and 100 have separate executable/path namespaces. On 100 use
    its local `W:` path, not LAB's mapped `S:` or a UNC path.
-3. Verify the dedicated `mcp-runtime` worktree is clean and record its old SHA.
-   If dirty, stop; do not stash/reset another task. Fetch and fast-forward or
-   detach that dedicated worktree to the approved SHA during a maintenance
-   window after active work finishes. Never move the main development checkout.
+3. Coordinate changes to the same source or interpreter with other developers.
+   Preserve their uncommitted changes and active jobs. Do not automatically
+   restore a source merely because it used to be canonical.
 4. Using the intended Python, run
-   `python -s -m pip install -e '<runtime>/packages/radia-mcp[maintenance]'`.
+   `python -s -m pip install -e '<checkout>/packages/radia-mcp[maintenance]'`.
    Check the exit code. Locked Windows entry points are a blocked update, not
    success: arrange client shutdown/retry; do not kill all Python or manually
-   fabricate package metadata. A source-only edit still requires reconnecting.
-5. Run `doctor --expected-root <runtime>/packages/radia-mcp/src/radia_mcp
-   --expected-version <approved-version> --expected-commit <full-SHA>` through
+   fabricate package metadata. Reload compatible code or reconnect the affected
+   client when needed; source edits do not refresh loaded objects automatically.
+5. Run `doctor --expected-root <checkout>/packages/radia-mcp/src/radia_mcp
+   --expected-version <selected-version> --expected-commit <actual-full-SHA>` through
    `python -s -m radia_mcp.maintenance`. A nonzero result blocks acceptance.
    This checks the new process, not already-running sessions. Version alone
    cannot distinguish editable changes; record the commit and source path too.
@@ -70,16 +73,21 @@ maintenance never kills unrelated MATLAB, Python, or client processes.
    verify access under the intended user. An administrator's import test is not
    proof that another user's launch works. Do not change that user's unrelated
    Python site packages or copy credentials to enable impersonation.
-7. Reconnect clients, then run the existing real-transport probe
+7. Run the existing fresh-process real-transport probe
    `python -s tools/smoke_mcp_stdio.py --server <catalog-key>` from the package
    directory for each distinct launch configuration. It verifies initialize,
    tools/list, status, schema annotations and loaded-source provenance using
-   the standard launcher. This does not replace application validation.
+   the standard launcher. Separately reload/reconnect affected clients as needed
+   using supported controls and the mcp-reconnect skill. Verify live discovery,
+   loaded-source evidence and a harmless changed call through each original
+   client. Neither doctor nor this new stdio process verifies an existing client.
 
-Rollback: after active clients finish, restore the dedicated runtime's recorded
-approved SHA, reinstall that editable package, and restore only the affected
-client files from their recorded backups, preserving ACLs. Repeat doctor and
-transport probes. Never roll back another user's worktree or unrelated settings.
+Recovery: select the intended known-working source in coordination with affected
+developers; do not reset another worktree or automatically restore an old path.
+Restore only affected settings from backups when appropriate, preserving ACLs.
+Repeat fresh-process and live-client checks. Before removing an old source,
+verify that no active consumer needs it. Release wheel tests use isolated
+environments and retain their independent publication/acceptance gates.
 
 ## Behavioral acceptance, not just connectivity
 
