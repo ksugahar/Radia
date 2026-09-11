@@ -562,7 +562,8 @@ def _assembled_primal_energy(a_bf, f_lf, solution, fes, primal_blocks):
     minimised subject to the interface constraint.  Evaluating it from the
     ASSEMBLED matrix and vector -- not by integrating a coefficient function
     afterwards -- is what makes it comparable across orders: a monotonicity
-    statement is owed to this number, under nested admissible sets, and not
+    statement additionally requires nested admissible sets AND a common
+    functional (including consistent quadrature across spaces), and not
     to an energy recomputed with a different quadrature.
 
     The multiplier entries are zeroed before the product, so only primal rows
@@ -598,6 +599,9 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         kelvin_source_potential=None, kelvin_source_h=None,
         total_source_h=None, total_source_materials=(), return_system=False):
     """Solve the TOSCA-style mixed total/reduced Omega formulation.
+
+    ``return_system=True`` retains assembled forms for explicit diagnostics.
+    The default returns ``system=None`` to avoid retaining their matrix storage.
 
     ``H_s`` is used in ``reduced_materials`` (the source enclosure), where
     ``H = H_s - grad(phi_reduced)``.  A linked coil may additionally supply
