@@ -324,7 +324,7 @@ def test_pdf_verification_requires_parser(monkeypatch, tmp_path):
     download.paper_writing_sciencedirect_download_pdf, download.paper_writing_emerald_download_pdf])
 def test_publishers_preserve_previous_file_then_allow_valid_retry(monkeypatch, tmp_path, fetch):
     response = StreamResponse(b"corrupt")
-    session = SimpleNamespace(get=lambda *a, **kw: response)
+    session = SimpleNamespace(get=lambda *a, **kw: response, close=lambda: None)
     monkeypatch.setattr(download, "_require_requests", lambda: SimpleNamespace(Session=lambda: session))
     monkeypatch.setattr(download, "_verify_pdf", lambda path: {"ok": Path(path).read_bytes() == b"verified"})
     dest = tmp_path / "paper.pdf"
@@ -337,6 +337,57 @@ def test_publishers_preserve_previous_file_then_allow_valid_retry(monkeypatch, t
     assert result["ok"] is True
     assert dest.read_bytes() == b"verified"
     assert not list(tmp_path.glob(".radia-download-*"))
+
+
+@pytest.mark.parametrize("fetch", [download.paper_writing_ieee_download_pdf,
+    download.paper_writing_sciencedirect_download_pdf, download.paper_writing_emerald_download_pdf])
+@pytest.mark.parametrize("mode", ["landing_exception", "landing_403", "landing_500",
+    "pdf_exception", "pdf_503", "interrupted", "corrupt", "success", "overwrite_guard"])
+def test_publisher_failure_stages_and_resource_ownership(monkeypatch, tmp_path, fetch, mode):
+    events = []
+    class Response(StreamResponse):
+        def __init__(self, name):
+            super().__init__(b"verified" if mode != "corrupt" else b"corrupt",
+                             fail=mode == "interrupted")
+            self.name = name
+            self.status_code = (403 if mode == "landing_403" else 500
+                                if mode == "landing_500" else 200) if name == "landing" else (
+                                    503 if mode == "pdf_503" else 200)
+        def close(self):
+            events.append(self.name + "_close")
+    class Session:
+        def get(self, url, **kwargs):
+            name = "pdf" if kwargs.get("stream") else "landing"
+            events.append(name + "_get")
+            if mode == name + "_exception":
+                raise OSError("network failed")
+            if name == "pdf":
+                assert "landing_close" in events
+                assert kwargs["headers"]["Referer"]
+            return Response(name)
+        def close(self):
+            events.append("session_close")
+    monkeypatch.setattr(download, "_require_requests", lambda: SimpleNamespace(Session=Session))
+    monkeypatch.setattr(download, "_verify_pdf", lambda path: {
+        "ok": Path(path).read_bytes() == b"verified"})
+    dest = tmp_path / "paper.pdf"
+    dest.write_bytes(b"previous")
+    result = fetch("1234567", str(dest), overwrite=mode != "overwrite_guard")
+    assert result["ok"] is (mode == "success")
+    assert dest.read_bytes() == (b"verified" if mode == "success" else b"previous")
+    assert not list(tmp_path.glob(".radia-download-*"))
+    if mode == "overwrite_guard":
+        assert not events
+        return
+    assert events.count("session_close") == 1
+    assert events.count("landing_close") == (0 if mode == "landing_exception" else 1)
+    if mode.startswith("landing"):
+        assert "pdf_get" not in events
+        assert result["stage"] == "landing"
+    else:
+        assert events.count("pdf_close") == (0 if mode == "pdf_exception" else 1)
+        if mode.startswith("pdf"):
+            assert result["stage"] == "pdf"
 
 
 @pytest.mark.parametrize("kind", ["single", "tar", "expanded", "member_count", "download", "interrupted", "member_size", "single_size"])

@@ -29,6 +29,7 @@ import pathlib
 import urllib.parse
 import tempfile
 from typing import Optional
+from contextlib import closing
 
 # requests is optional (lazy-imported via _require_requests below) --
 # this module only runs when the user invokes a download tool. Keeping
@@ -153,6 +154,31 @@ def _save_verified_pdf(response, dest_path: str) -> dict:
                 pathlib.Path(temporary).unlink(missing_ok=True)
         finally:
             response.close()
+
+
+def _fetch_publisher_pdf(landing_url: str, pdf_url: str, dest_path: str) -> dict:
+    """Own a cookie-seeded session and fail before PDF fetch on landing errors."""
+    stage = "landing"
+    url = landing_url
+    try:
+        with closing(_require_requests().Session()) as session:
+            with closing(session.get(landing_url, headers=_HTML_HEADERS, timeout=30)) as landing:
+                if landing.status_code != 200:
+                    return {"ok": False, "stage": stage, "url": url,
+                            "error": f"landing-page HTTP {landing.status_code}"}
+            stage, url = "pdf", pdf_url
+            headers = {**_PDF_HEADERS, "Referer": landing_url}
+            response = session.get(pdf_url, headers=headers, timeout=120,
+                                   stream=True, allow_redirects=True)
+            if response.status_code != 200:
+                with closing(response):
+                    return {"ok": False, "stage": stage, "url": url,
+                            "error": f"PDF HTTP {response.status_code}"}
+            # This helper owns response closure, staging and atomic publication.
+            return _save_verified_pdf(response, dest_path)
+    except Exception as exc:
+        return {"ok": False, "stage": stage, "url": url,
+                "error": f"{stage} fetch error: {exc}"}
 
 
 def _normalize_doi(doi: str) -> str:
@@ -372,40 +398,12 @@ def paper_writing_ieee_download_pdf(
         return {"ok": False,
                 "error": f"parent directory does not exist: {parent}"}
 
-    requests = _require_requests()
-    session = requests.Session()
     abstract_url = f"https://ieeexplore.ieee.org/document/{arn}/"
     pdf_url = (f"https://ieeexplore.ieee.org/stampPDF/getPDF.jsp"
                f"?tp=&arnumber={arn}&ref=")
-
-    # Step 1: visit abstract page to seed session cookies
-    try:
-        r1 = session.get(abstract_url, headers=_HTML_HEADERS, timeout=30)
-    except Exception as e:
-        return {"ok": False, "error": f"abstract fetch error: {e}"}
-    if r1.status_code != 200:
-        return {
-            "ok": False,
-            "error": f"abstract HTTP {r1.status_code} for arnumber {arn}",
-            "url": abstract_url,
-        }
-
-    # Step 2: download PDF with Referer header
-    pdf_headers = dict(_PDF_HEADERS)
-    pdf_headers["Referer"] = abstract_url
-    try:
-        r2 = session.get(pdf_url, headers=pdf_headers,
-                         timeout=120, stream=True)
-    except Exception as e:
-        return {"ok": False, "error": f"PDF fetch error: {e}"}
-    if r2.status_code != 200:
-        return {
-            "ok": False,
-            "error": f"PDF HTTP {r2.status_code} for arnumber {arn}",
-            "url": pdf_url,
-        }
-
-    verify = _save_verified_pdf(r2, dest_path)
+    verify = _fetch_publisher_pdf(abstract_url, pdf_url, dest_path)
+    if verify.get("stage"):
+        return verify
     if not verify["ok"]:
         # PDF didn't validate — likely an HTML anti-bot page disguised
         # as PDF (Cloudflare or "Temporarily Unavailable")
@@ -477,27 +475,9 @@ def paper_writing_sciencedirect_download_pdf(
         else:
             article_landing_url = article_pdf_url  # fallback
 
-    requests = _require_requests()
-    session = requests.Session()
-    try:
-        r1 = session.get(article_landing_url, headers=_HTML_HEADERS,
-                         timeout=30)
-    except Exception as e:
-        return {"ok": False, "error": f"landing-page fetch error: {e}"}
-
-    pdf_headers = dict(_PDF_HEADERS)
-    pdf_headers["Referer"] = article_landing_url
-    try:
-        r2 = session.get(article_pdf_url, headers=pdf_headers,
-                         timeout=120, stream=True, allow_redirects=True)
-    except Exception as e:
-        return {"ok": False, "error": f"PDF fetch error: {e}"}
-    if r2.status_code != 200:
-        return {"ok": False,
-                "error": f"PDF HTTP {r2.status_code}",
-                "url": article_pdf_url}
-
-    verify = _save_verified_pdf(r2, dest_path)
+    verify = _fetch_publisher_pdf(article_landing_url, article_pdf_url, dest_path)
+    if verify.get("stage"):
+        return verify
     if not verify["ok"]:
         return {
             "ok": False,
@@ -735,27 +715,9 @@ def paper_writing_emerald_download_pdf(
         # Trim the trailing .pdf and filename portion
         article_landing_url = re.sub(r"/[^/]+\.pdf$", "", article_landing_url)
 
-    requests = _require_requests()
-    session = requests.Session()
-    try:
-        r1 = session.get(article_landing_url, headers=_HTML_HEADERS,
-                         timeout=30)
-    except Exception as e:
-        return {"ok": False, "error": f"landing-page fetch error: {e}"}
-
-    pdf_headers = dict(_PDF_HEADERS)
-    pdf_headers["Referer"] = article_landing_url
-    try:
-        r2 = session.get(article_pdf_url, headers=pdf_headers,
-                         timeout=120, stream=True)
-    except Exception as e:
-        return {"ok": False, "error": f"PDF fetch error: {e}"}
-    if r2.status_code != 200:
-        return {"ok": False,
-                "error": f"PDF HTTP {r2.status_code}",
-                "url": article_pdf_url}
-
-    verify = _save_verified_pdf(r2, dest_path)
+    verify = _fetch_publisher_pdf(article_landing_url, article_pdf_url, dest_path)
+    if verify.get("stage"):
+        return verify
     if not verify["ok"]:
         return {
             "ok": False,
