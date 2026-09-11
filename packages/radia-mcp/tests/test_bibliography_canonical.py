@@ -227,3 +227,33 @@ def test_tex_resolver_fingerprints_actual_input_bytes(tmp_path, data):
     record = result["files_resolved"][0]
     assert record["size_bytes"] == len(data)
     assert record["sha256"] == hashlib.sha256(data).hexdigest()
+
+
+@pytest.mark.parametrize("generated,valid", [
+    (br"\bibitem{one}First", True),
+    (br"\bibitem[Doe et al.(2024)]{one}First", True),
+    (br"\bibitem{one}First\bibitem{parent}Parent", True),
+    (br"\bibitem{wrong}First", False),
+    (br"\bibitem{one}First\bibitem{one}Duplicate", False),
+    (br"\bibitem{parent}Only parent", False),
+    (b"% \\bibitem{one}\n", False),
+    (br"\bibitemfake{one}Not a bibitem", False),
+    (br"\bibitem{one}First\bibitem malformed", False),
+])
+def test_generated_bbl_checks_key_identity_not_only_count(tmp_path, monkeypatch, generated, valid):
+    from radia_mcp.bibliography.plans import T14_canonical as canonical
+    bib = tmp_path / "fixture.bib"
+    bib.write_text("@misc{one,title={First}}\n@misc{parent,title={Parent}}", encoding="utf-8")
+    monkeypatch.setattr(canonical, "CANONICAL", bib)
+    monkeypatch.setattr(canonical.shutil, "which", lambda name: "bibtex")
+    tex = tmp_path / "paper.tex"
+    tex.write_text(r"\cite{one}", encoding="utf-8")
+    output = tex.with_suffix(".bbl")
+    output.write_bytes(b"verified")
+    def run(*args, cwd, **kwargs):
+        (cwd / "manuscript.bbl").write_bytes(generated)
+        return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
+    monkeypatch.setattr(canonical.subprocess, "run", run)
+    result = canonical.bibliography_make_bbl(str(tex), style="plain")
+    assert result.startswith("bibliography_make_bbl:" if valid else "Error:"), result
+    assert output.read_bytes() == (generated if valid else b"verified")

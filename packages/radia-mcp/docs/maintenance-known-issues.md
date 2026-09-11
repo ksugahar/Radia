@@ -90,6 +90,14 @@ and block the whole fix; legacy undecodable input is not guessed or reencoded.
 The thirteen-file lane passes 1123 tests. This enforces a local syntactic
 convention, not identity or universal bst behavior.
 
+M04 generated-key follow-up (2026-09-12): bbl acceptance checks actual bibitem
+keys, not a substring count. Missing requested keys, unknown keys, duplicates and
+malformed bibitem syntax preserve the existing output. Canonical parent entries
+added by BibTeX cross-references remain allowed. Nine cases exercise standard
+optional labels and false-count controls; the thirteen-file lane passes 1132
+tests. This does not compile/render a paper
+or certify arbitrary custom bst output syntax.
+
 Completion of a scoped validation requires matching the selected source, zero unexpected failures
 or skips in the relevant lane, and retained local machine-readable evidence.
 Do not commit transient test logs or mark the package globally "complete" from
