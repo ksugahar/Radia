@@ -119,9 +119,9 @@ Paths in tables are relative to `src/radia_mcp/paper_writing` unless specified.
 | P61 | 6.5 nested input resolution | 修正済み | R::test_input_chain_resolves_from_main_compile_directory. Explicit .pgf suffix and unreadable includes still need checks. |
 | P62 | 6.6 arXiv escaping/error feed | 修正済み | test_paper_writing_external_inputs.py verifies Requests-prepared query roundtrips for &, #, C++, percent and Japanese text. Atom error entries, unexpected XML roots, missing title/invalid identifier, HTTP errors and genuine empty feeds are distinguished. Citation verification preserves search failure as verdict=error rather than no_candidate_found. All network calls are mocked. |
 | P63 | 6.7 metadata/BibTeX fidelity | 検証待ち | Missing published/issued, organization authors, escaped entities and complete arXiv authors. |
-| P64 | 6.8 damaged PDF persistence | 検証待ち | Malformed %PDF fixture, atomic download handling and subsequent retry. |
+| P64 | 6.8 damaged PDF persistence | 修正済み | test_pdf_magic_alone_does_not_validate_corruption and test_pdf_verification_requires_parser reject magic-only validation. _save_verified_pdf streams into a same-directory temporary file, validates, then replaces the destination; failure removes only its temporary file. Tests cover interruption/size limits and all three publisher adapters preserving an existing file before a valid retry. No live publisher access or visual-fidelity certification. |
 | P65 | 6.9 DOI normalization | 検証待ち | Test #/?/%, doi: and dx.doi.org consistently across consumers. |
-| P66 | 6.10 archive resource bounds | 検証待ち | Compressed/member size bounds and bounded reads; no live download needed. |
+| P66 | 6.10 archive resource bounds | 修正済み | test_arxiv_source_resource_limits covers streamed download, gzip expansion, member count, tar-member/single-source size limits, interruption and successful tar/gzip controls. Limits apply before unbounded download/decompression; tar members are iterated with a cap rather than getmembers(). No archive files are extracted to disk. |
 | P67 | 6.11 fallback paths | 検証待ち | arXiv search-to-citation fallback now rejects error/malformed/inconsistent payloads and preserves verdict=error (external-input tests). Unreadable bib, resolver exceptions and publisher landing errors still need their own closure evidence. |
 | P68 | 6 duplicate implementations/docstring promise | 検証待ち | Trace Crossref/arXiv/BibTeX/DOI consumers before deduplication; verify promised search routes. |
 | P69 | 7.2 missing/stale tool guidance | 検証待ち | Correct names, routes, supported callable advice and guidance organization; old counts are historical. |
@@ -174,7 +174,13 @@ error propagation were strengthened. The five-file focused lane (the prior four
 files plus test_paper_writing_external_inputs.py) passes 680 tests. No live API,
 download, bibliography modification or MCP reconnection occurred.
 
-1. Continue download integrity and external-input safety (P63–P67), then language heuristics and
+The download/archive follow-up passes 697 tests in the same five-file lane.
+PDF publication is staged and verified (PyMuPDF required); the source archive
+lane caps streamed bytes, expanded bytes, member count and per-file reads. Tests
+use synthetic in-memory archives and mocked HTTP, not live publisher downloads.
+No live MCP client, editable installation or parent bibliography was changed.
+
+1. Continue metadata/DOI fidelity and remaining fallback paths (P63/P65/P67), then language heuristics and
    deduplication; other PDF consumers remain separate P50 follow-up work.
 2. Review missing pattern producers (P58) and remaining ordering/context rules
    (P59); do not confuse execution-status coverage with semantic correctness.

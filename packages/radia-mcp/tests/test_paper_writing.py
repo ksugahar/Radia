@@ -943,6 +943,13 @@ class _FakeResponse:
     def json(self):
         return self._json or {}
 
+    def iter_content(self, chunk_size=65536):
+        for start in range(0, len(self.content), chunk_size):
+            yield self.content[start:start + chunk_size]
+
+    def close(self):
+        pass
+
 
 def test_arxiv_fetch_latex_source_mocked(monkeypatch, tmp_path):
     """Mock arXiv e-print fetch with a tiny synthetic tarball."""

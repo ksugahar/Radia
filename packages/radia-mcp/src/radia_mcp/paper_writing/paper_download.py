@@ -28,6 +28,7 @@ import re
 import pathlib
 import html
 import urllib.parse
+import tempfile
 from typing import Optional
 
 # requests is optional (lazy-imported via _require_requests below) --
@@ -77,8 +78,7 @@ _PDF_HEADERS = {
 def _verify_pdf(path: str) -> dict:
     """Return basic verification of a downloaded PDF.
 
-    Uses PyMuPDF if available; otherwise just checks magic bytes
-    + page count via a minimal parse.
+    Requires PyMuPDF; magic bytes alone do not prove integrity.
     """
     if not os.path.exists(path):
         return {"ok": False, "error": f"file not found: {path}"}
@@ -93,6 +93,8 @@ def _verify_pdf(path: str) -> dict:
     try:
         import fitz
         with fitz.open(path) as doc:
+            if doc.needs_pass or doc.page_count <= 0 or doc.is_repaired:
+                return {"ok": False, "error": "PDF is encrypted, empty or required structural repair"}
             result = {
                 "ok": True,
                 "size_bytes": size,
@@ -108,9 +110,9 @@ def _verify_pdf(path: str) -> dict:
             return result
     except ImportError:
         return {
-            "ok": True, "size_bytes": size,
+            "ok": False, "size_bytes": size,
             "page_count": None,
-            "note": "PyMuPDF not installed; size + magic OK",
+            "error": "PyMuPDF is required to validate downloaded PDF integrity",
         }
     except Exception as exc:  # noqa: BLE001
         return {
@@ -118,6 +120,40 @@ def _verify_pdf(path: str) -> dict:
             "error": f"invalid or unreadable PDF: {exc}",
             "size_bytes": size,
         }
+
+
+_MAX_PDF_DOWNLOAD_BYTES = 128 * 1024 * 1024
+
+
+def _save_verified_pdf(response, dest_path: str) -> dict:
+    """Publish only a verified download; preserve any previous destination."""
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=pathlib.Path(dest_path).absolute().parent,
+                                         suffix=".pdf", prefix=".radia-download-", delete=False) as out:
+            temporary = out.name
+            total = 0
+            for chunk in response.iter_content(chunk_size=65536):
+                if not chunk:
+                    continue
+                total += len(chunk)
+                if total > _MAX_PDF_DOWNLOAD_BYTES:
+                    raise ValueError("PDF exceeds download safety limit")
+                out.write(chunk)
+        verify = _verify_pdf(temporary)
+        if not verify.get("ok"):
+            return verify
+        os.replace(temporary, dest_path)
+        temporary = None
+        return verify
+    except Exception as exc:
+        return {"ok": False, "error": f"PDF download/validation failed: {exc}"}
+    finally:
+        try:
+            if temporary is not None:
+                pathlib.Path(temporary).unlink(missing_ok=True)
+        finally:
+            response.close()
 
 
 def paper_writing_resolve_doi(doi: str) -> dict:
@@ -332,12 +368,7 @@ def paper_writing_ieee_download_pdf(
             "url": pdf_url,
         }
 
-    with open(dest_path, "wb") as f:
-        for chunk in r2.iter_content(chunk_size=65536):
-            if chunk:
-                f.write(chunk)
-
-    verify = _verify_pdf(dest_path)
+    verify = _save_verified_pdf(r2, dest_path)
     if not verify["ok"]:
         # PDF didn't validate — likely an HTML anti-bot page disguised
         # as PDF (Cloudflare or "Temporarily Unavailable")
@@ -429,12 +460,7 @@ def paper_writing_sciencedirect_download_pdf(
                 "error": f"PDF HTTP {r2.status_code}",
                 "url": article_pdf_url}
 
-    with open(dest_path, "wb") as f:
-        for chunk in r2.iter_content(chunk_size=65536):
-            if chunk:
-                f.write(chunk)
-
-    verify = _verify_pdf(dest_path)
+    verify = _save_verified_pdf(r2, dest_path)
     if not verify["ok"]:
         return {
             "ok": False,
@@ -675,12 +701,7 @@ def paper_writing_emerald_download_pdf(
                 "error": f"PDF HTTP {r2.status_code}",
                 "url": article_pdf_url}
 
-    with open(dest_path, "wb") as f:
-        for chunk in r2.iter_content(chunk_size=65536):
-            if chunk:
-                f.write(chunk)
-
-    verify = _verify_pdf(dest_path)
+    verify = _save_verified_pdf(r2, dest_path)
     if not verify["ok"]:
         return {
             "ok": False,
