@@ -169,6 +169,8 @@ if result.converged:
 
 ヘッダオンリーC++実装。外部ライブラリ不要。
 非線形ソルバー（Newton反復）に対応: `Update()` は幾何情報を保持しつつ、行列依存部分のみを再構築する。
+構築と `Update()` は `TaskManager` の外で行う。既に構築済みの前処理の適用は
+`TaskManager` 内で並列実行できる。誤って構築・更新すると `RuntimeError` になる。
 
 ### コンストラクタ
 
@@ -234,10 +236,12 @@ pre = ssn.CompactAMSPreconditioner(a.mat, G_mat,
     coord_x=coord_x, coord_y=coord_y, coord_z=coord_z)
 
 for k in range(max_newton):
-    a.Assemble()          # Reassemble matrix with B-H curve
-    pre.Update(a.mat)     # Rebuild preconditioner (geometry retained)
-    inv = CGSolver(a.mat, pre, tol=1e-8, maxiter=500)
-    delta = inv * rhs
+    with TaskManager():
+        a.Assemble()      # Reassemble matrix with B-H curve
+    pre.Update(a.mat)     # Outside TaskManager; geometry retained
+    with TaskManager():
+        inv = CGSolver(a.mat, pre, tol=1e-8, maxiter=500)
+        delta = inv * rhs
     gfu.vec.data += delta
 ```
 
@@ -250,6 +254,8 @@ for k in range(max_newton):
 ヘッダオンリーC++実装。外部ライブラリ不要。
 Re/Im融合SpMVにより行列データを一度だけロードし、実部と虚部を同時に処理する。
 対称前処理（l1-Jacobiスムーザ）-- **COCRSolverの使用を推奨**。
+構築と `Update()` は `TaskManager` の外で行い、適用を含むCOCR求解だけを
+`TaskManager` 内で実行する。
 
 ### コンストラクタ
 
@@ -306,10 +312,12 @@ with TaskManager():
 pre = ssn.ComplexCompactAMSPreconditioner(a_real.mat, G_mat, ...)
 
 for k in range(max_newton):
-    a_real.Assemble()
-    pre.Update(a_real.mat)
-    inv = ssn.COCRSolver(a_complex.mat, pre, tol=1e-10)
-    delta = inv * rhs
+    with TaskManager():
+        a_real.Assemble()
+    pre.Update(a_real.mat)  # Outside TaskManager
+    with TaskManager():
+        inv = ssn.COCRSolver(a_complex.mat, pre, tol=1e-10)
+        delta = inv * rhs
     gfu.vec.data += delta
 ```
 

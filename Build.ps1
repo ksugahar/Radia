@@ -81,6 +81,14 @@ if ($OptunaMexOnly) {
         Write-Host "Cubit: NOT FOUND -- Cubit-plugin .pyd build will be skipped" -ForegroundColor Yellow
     }
 }
+$DetectedCubitCmakeDir = if ($CubitInstallDir) {
+    Join-Path $CubitInstallDir "cmake"
+} else {
+    ""
+}
+$BuildCubitPlugin = [bool]($CubitInstallDir -and
+    (Test-Path (Join-Path $CubitInstallDir "cmake\CubitConfig.cmake")))
+Write-Host "Cubit native targets enabled: $BuildCubitPlugin" -ForegroundColor Gray
 
 # Intel MKL 2026 (required for BLAS/LAPACK and HACApK/PARDISO). The selected
 # Python environment is authoritative; MKLROOT is an explicit fallback only.
@@ -483,18 +491,21 @@ rem 'Coreform Cubit *' under C:\Program Files). Override with env var
 rem CUBIT_INSTALL_DIR (the helper appends \cmake automatically). The
 rem outer PowerShell wrapper passes $CubitCmakeDir into the batch via
 rem this set; if discovery failed the wrapper exited before us.
-set "CUBIT_DIR=$CubitCmakeDir"
+set "CUBIT_DIR=$DetectedCubitCmakeDir"
 set "NETGEN_DIR=$NetgenPackageDir"
 rem Compact Netgen sources are in-repo (src/cubit_plugin/compact_netgen/netgen_src/).
 rem No external NETGEN_SRC_DIR needed.
 
-if exist "%CUBIT_DIR%\CubitConfig.cmake" (
+rem The PowerShell discovery result and paths are embedded as fixed batch
+rem literals. Do not rediscover Cubit from batch state; vcvars may also change
+rem delayed-expansion state, so this block intentionally contains no !VAR! use.
+if /I "$BuildCubitPlugin"=="True" (
     if not exist "%CUBIT_PLUGIN_BUILD%" mkdir "%CUBIT_PLUGIN_BUILD%"
     cd /d "%CUBIT_PLUGIN_BUILD%"
-    rem build-pyd: force FULL Netgen mode (disable compact_netgen detection)
+    rem build-pyd: force FULL Netgen mode; disable compact_netgen detection
     rem so cubit_mesh_curver.pyd builds against pip-installed Netgen + pybind11.
-    rem .ccm/.ccl in build-ccm continue to use compact_netgen (no DLL deps).
-    "$CMAKE_EXE" -G Ninja -DCMAKE_BUILD_TYPE=Release -DPython3_EXECUTABLE="$PythonExecutable" -Dpybind11_DIR="$Pybind11CMakeDir" -DCubit_DIR="%CUBIT_DIR%" -DNETGEN_DIR="%NETGEN_DIR%" -DCOMPACT_NETGEN_OVERRIDES=NONE "%CUBIT_PLUGIN_SRC%"
+    rem .ccm/.ccl in build-ccm continue to use compact_netgen without DLL deps.
+    "$CMAKE_EXE" -G Ninja -DCMAKE_BUILD_TYPE=Release -DPython3_EXECUTABLE="$PythonExecutable" -Dpybind11_DIR="$Pybind11CMakeDir" -DCubit_DIR="$DetectedCubitCmakeDir" -DNETGEN_DIR="$NetgenPackageDir" -DCOMPACT_NETGEN_OVERRIDES=NONE "$PROJECT_DIR\src\cubit_plugin"
     if errorlevel 1 (
         echo ERROR: cubit_mesh_curver configuration failed
         exit /b 1
@@ -506,20 +517,19 @@ if exist "%CUBIT_DIR%\CubitConfig.cmake" (
     )
 
     rem ========================================
-    rem   Building cubit_mesh_export.ccm (APREPRO commands; no Qt deps)
+    rem   Building cubit_mesh_export.ccm; APREPRO commands without Qt deps
     rem ========================================
-    rem radia 4.80.0 removed the Qt5 .ccl GUI component (RadiaComp.cpp);
-    rem all GUI work is now in src/radia/panels/radia_export_menu.py
-    rem (PySide6).  The .ccm has no Qt dependency and builds unconditionally
+    rem radia 4.80.0 removed the Qt5 RadiaComp.cpp .ccl GUI component;
+    rem all GUI work is now in src/radia/panels/radia_export_menu.py using
+    rem PySide6.  The .ccm has no Qt dependency and builds unconditionally
     rem when the Cubit SDK is present.
     echo.
     echo ========================================
-    echo   Building cubit_mesh_export.ccm (APREPRO commands)
+    echo   Building cubit_mesh_export.ccm - APREPRO commands
     echo ========================================
-    set "CUBIT_CCM_BUILD=$PROJECT_DIR\src\cubit_plugin\build-ccm"
-    if not exist "!CUBIT_CCM_BUILD!" mkdir "!CUBIT_CCM_BUILD!"
-    cd /d "!CUBIT_CCM_BUILD!"
-    "$CMAKE_EXE" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DPython3_EXECUTABLE="$PythonExecutable" -Dpybind11_DIR="$Pybind11CMakeDir" -DCubit_DIR="%CUBIT_DIR%" -DNETGEN_DIR="%NETGEN_DIR%" "%CUBIT_PLUGIN_SRC%"
+    if not exist "$PROJECT_DIR\src\cubit_plugin\build-ccm" mkdir "$PROJECT_DIR\src\cubit_plugin\build-ccm"
+    cd /d "$PROJECT_DIR\src\cubit_plugin\build-ccm"
+    "$CMAKE_EXE" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DPython3_EXECUTABLE="$PythonExecutable" -Dpybind11_DIR="$Pybind11CMakeDir" -DCubit_DIR="$DetectedCubitCmakeDir" -DNETGEN_DIR="$NetgenPackageDir" "$PROJECT_DIR\src\cubit_plugin"
     if errorlevel 1 (
         echo ERROR: cubit_mesh_export_ccm configuration failed
         exit /b 1
@@ -532,7 +542,7 @@ if exist "%CUBIT_DIR%\CubitConfig.cmake" (
 
     cd /d "$BUILD_DIR"
 ) else (
-    echo SKIP: Cubit SDK not found at %CUBIT_DIR%
+    echo SKIP: Cubit SDK not found at $DetectedCubitCmakeDir
 )
 
 echo.

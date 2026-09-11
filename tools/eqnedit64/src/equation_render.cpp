@@ -7,10 +7,8 @@
  * translate their children.  Nothing is emitted until the whole tree is laid
  * out, so the final viewBox is exact and no second measuring pass is needed.
  *
- * Covered in this milestone: LINE, CHAR, SIZE, SCRIPT (sub/sup/subsup), FENCE,
- * FRACT, ROOT, and the integral / big-operator families (operator glyph plus
- * limits, inline or stacked).  Remaining template classes recurse into their
- * content so nothing silently disappears.
+ * Every Node::Tag has an explicit dispatch decision. Size nodes update list
+ * state; unsupported legacy nodes fail rather than silently losing content.
  */
 #include "equation_render.h"
 #include "tex_parser.h"
@@ -25,6 +23,7 @@
 #include <map>
 #include <iomanip>
 #include <sstream>
+#include <stdexcept>
 #include <vector>
 
 #ifdef _WIN32
@@ -1776,9 +1775,15 @@ private:
                 return glyph_layout(0x00B0, script_size(sizePt), false, false);
             case Node::kOverset:
                 return layout_overset(static_cast<const OversetNode&>(n), sizePt);
-            default:
-                return layout_fallback(n, sizePt);
+            case Node::kSize:
+                throw std::logic_error("size node must be consumed by layout_list");
+            case Node::kFont:
+                throw std::invalid_argument("unsupported legacy font node");
+            case Node::kRM:
+                throw std::invalid_argument("unsupported legacy RM node");
         }
+        // /w14062 rejects new tags until a rendering decision is supplied.
+        throw std::invalid_argument("invalid equation node tag");
     }
 
     /* The italic correction of the last character in a base, which is the one
@@ -2711,19 +2716,6 @@ private:
         return out;
     }
 
-    /* Unhandled templates still show their content rather than vanishing. */
-    Layout layout_fallback(const Node& n, double sizePt) {
-        switch (n.tag()) {
-            case Node::kDecoration:
-                return layout_list(static_cast<const DecorationNode&>(n).content, sizePt);
-            case Node::kBraceDeco:
-                return layout_list(static_cast<const BraceDecoNode&>(n).content, sizePt);
-            case Node::kEmbell:
-                return layout_list(static_cast<const EmbellNode&>(n).content, sizePt);
-            default:
-                return Layout();
-        }
-    }
 };
 
 }  // namespace

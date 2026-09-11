@@ -42,6 +42,9 @@
 #include <postproc.hpp>
 #include <sparsematrix.hpp>
 #include <symbolicintegrator.hpp>
+// Shared SparseSolv types must preserve BaseMatrix scalar-type metadata.
+#include <sparsesolv/preconditioners/complex_compact_ams.hpp>
+#include <sparsesolv/ngsolve/sparsesolv_solvers.hpp>
 #endif
 
 #include <algorithm>
@@ -1484,6 +1487,7 @@ mxArray* Commands() {
         "ngsolve.matrix.info", "ngsolve.matrix.values", "ngsolve.matrix.vector",
         "ngsolve.matrix.matvec", "ngsolve.matrix.matvec_into",
         "ngsolve.matrix.inverse",
+        "sparsesolv.ams", "sparsesolv.ic", "sparsesolv.cocr",
         "ngsolve.matrix.projected_create",
         "ngsolve.matrix.reduced_block_create",
         "ngsolve.matrix.diagonal_preconditioner",
@@ -4792,6 +4796,91 @@ void NGSolveSolverSolve(int nlhs, mxArray* plhs[], int nrhs,
     result->parent_solver = holder.solver;
     result->is_view = false;
     plhs[0] = Uint64Output(RegisterVector(std::move(result)));
+}
+
+void SparseSolvAMS(int nlhs, mxArray* plhs[], int nrhs,
+                   const mxArray* prhs[]) {
+    CheckArity(nrhs, 6, nlhs, 1,
+        "h = radia_mex('sparsesolv.ams', matrix, space, complex, cycle, smooth)");
+    const auto& a = Matrix(Handle(prhs[1]));
+    const auto& space = FESpace(Handle(prhs[2]));
+    const bool complex = Boolean(prhs[3], "complex");
+    const int cycle = PositiveInteger(prhs[4], "cycle");
+    const int smooth = PositiveInteger(prhs[5], "smooth");
+    if (cycle != 1 && cycle != 7) BadArgument("AMS cycle must be 1 or 7");
+    auto hc = std::dynamic_pointer_cast<ngcomp::HCurlHighOrderFESpace>(space.fespace);
+    auto mat = std::dynamic_pointer_cast<ngla::SparseMatrix<double>>(a.matrix);
+    if (!hc || space.order != 1 || !space.nograds || space.mesh->GetDimension() != 3)
+        BadArgument("AMS requires 3D HCurl order 1 with NoGrads=true");
+    if (!mat || a.fespace != space.fespace || mat->VHeight() != mat->VWidth())
+        BadArgument("AMS requires a real sparse matrix assembled on the supplied space");
+    // Do not activate TaskManager during AMS hierarchy construction (Windows
+    // upstream/setup crash). Mult is parallelized by the normal matrix gateway.
+    auto grad = hc->CreateGradient();
+    const int nv = space.mesh->GetNV();
+    if (grad->VWidth() != nv || grad->VHeight() != mat->VHeight())
+        BadArgument("AMS gradient and vertex-coordinate layout mismatch");
+    std::vector<double> x(nv), y(nv), z(nv);
+    for (int i = 0; i < nv; ++i) {
+        const auto p = space.mesh->GetPoint<3>(i);
+        x[i] = p(0); y[i] = p(1); z[i] = p(2);
+    }
+    auto free = space.fespace->GetFreeDofs(false);
+    std::shared_ptr<ngla::BaseMatrix> result;
+    if (complex)
+        result = std::make_shared<ngla::ComplexHypreBasedAMS>(
+            mat, grad, free, x, y, z, mat->VHeight(), cycle, 0, 1.0, 0, smooth);
+    else
+        result = std::make_shared<ngla::HypreBasedAMS>(
+            mat, grad, free, x, y, z, cycle, smooth);
+    plhs[0] = Uint64Output(RegisterMatrix(MakeNGSolveMatrixHandle(
+        result, space.fespace, complex ? "sparsesolv.complex_ams" : "sparsesolv.ams")));
+}
+
+void SparseSolvIC(int nlhs, mxArray* plhs[], int nrhs,
+                  const mxArray* prhs[]) {
+    CheckArity(nrhs, 3, nlhs, 1,
+        "h = radia_mex('sparsesolv.ic', matrix, shift)");
+    const auto& a = Matrix(Handle(prhs[1]));
+    const double shift = Scalar(prhs[2], "shift");
+    if (!std::isfinite(shift) || shift <= 0 ||
+        a.matrix->VHeight() != a.matrix->VWidth())
+        BadArgument("IC requires a square matrix and finite positive shift");
+    auto free = a.fespace ? a.fespace->GetFreeDofs(false) : nullptr;
+    std::shared_ptr<ngla::BaseMatrix> result;
+    if (a.matrix->IsComplex()) {
+        auto mat = std::dynamic_pointer_cast<ngla::SparseMatrix<Complex>>(a.matrix);
+        if (!mat) BadArgument("IC requires a sparse matrix");
+        auto ic = std::make_shared<ngla::SparseSolvICPreconditioner<Complex>>(mat, free, shift);
+        ic->Update(); result = ic;
+    } else {
+        auto mat = std::dynamic_pointer_cast<ngla::SparseMatrix<double>>(a.matrix);
+        if (!mat) BadArgument("IC requires a sparse matrix");
+        auto ic = std::make_shared<ngla::SparseSolvICPreconditioner<double>>(mat, free, shift);
+        ic->Update(); result = ic;
+    }
+    plhs[0] = Uint64Output(RegisterMatrix(MakeNGSolveMatrixHandle(result, a.fespace, "sparsesolv.ic")));
+}
+
+void SparseSolvCOCR(int nlhs, mxArray* plhs[], int nrhs,
+                    const mxArray* prhs[]) {
+    CheckArity(nrhs, 5, nlhs, 1,
+        "h = radia_mex('sparsesolv.cocr', matrix, preconditioner, tolerance, maxsteps)");
+    const auto& a = Matrix(Handle(prhs[1]));
+    const auto& p = Matrix(Handle(prhs[2]));
+    const double tol = Scalar(prhs[3], "tolerance");
+    const int steps = PositiveInteger(prhs[4], "maxsteps");
+    if (!std::isfinite(tol) || tol <= 0 || a.matrix->VHeight() != a.matrix->VWidth() ||
+        p.matrix->VHeight() != a.matrix->VHeight() || p.matrix->VWidth() != a.matrix->VWidth() ||
+        p.matrix->IsComplex() != a.matrix->IsComplex())
+        BadArgument("COCR requires matching square matrix/preconditioner and positive tolerance");
+    auto free = a.fespace ? a.fespace->GetFreeDofs(false) : nullptr;
+    std::shared_ptr<ngla::BaseMatrix> result;
+    if (a.matrix->IsComplex())
+        result = std::make_shared<ngla::COCRSolverNGS<Complex>>(a.matrix, p.matrix, free, steps, tol, false);
+    else
+        result = std::make_shared<ngla::COCRSolverNGS<double>>(a.matrix, p.matrix, free, steps, tol, false);
+    plhs[0] = Uint64Output(RegisterMatrix(MakeNGSolveMatrixHandle(result, a.fespace, "sparsesolv.cocr")));
 }
 
 void NGSolveMatrixInverse(int nlhs, mxArray* plhs[], int nrhs,
@@ -12022,6 +12111,15 @@ void Dispatch(const std::string& command, int nlhs, mxArray* plhs[], int nrhs,
     if (command == "ngsolve.matrix.inverse") {
         NGSolveMatrixInverse(nlhs, plhs, nrhs, prhs);
         return;
+    }
+    if (command == "sparsesolv.ams") {
+        SparseSolvAMS(nlhs, plhs, nrhs, prhs); return;
+    }
+    if (command == "sparsesolv.ic") {
+        SparseSolvIC(nlhs, plhs, nrhs, prhs); return;
+    }
+    if (command == "sparsesolv.cocr") {
+        SparseSolvCOCR(nlhs, plhs, nrhs, prhs); return;
     }
     if (command == "ngsolve.matrix.destroy") {
         CheckArity(nrhs, 2, nlhs, 0,

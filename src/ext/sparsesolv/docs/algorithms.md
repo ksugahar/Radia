@@ -992,7 +992,7 @@ Compact AMSは、Hiptmair-Xu (2007) による**Auxiliary Space Preconditioning**
 - HCurl有限要素によるcurl-curl + mass問題に特化（実数・複素数の両方をサポート）
 - 離散勾配行列Gと頂点座標のみが必要（要素行列は不要）
 - 補助空間ソルバーとしてCompactAMG（古典的AMG）を使用
-- `Update()`は非線形ソルバー（Newton反復）をサポート: 幾何情報を保持し、行列依存部分のみを再構築
+- `Update()`は非線形ソルバー（Newton反復）をサポート: 幾何情報を保持し、行列依存部分のみを再構築。ただし構築と `Update()` は `TaskManager` 外で行い、構築済み前処理の適用だけを内で並列実行する
 - 実数の磁気静解析: `CompactAMSPreconditioner` + CG
 - 複素渦電流: `ComplexCompactAMSPreconditioner` + COCR
 

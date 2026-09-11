@@ -11,8 +11,9 @@
 /// (MPL-2.0, no HYPRE source, ~400 lines on CompactAMG) so it carries NO HYPRE dependency and runs natively
 /// on the NGSolve TaskManager.  The name "HypreBasedAMS" states the lineage honestly: the algorithm is
 /// HYPRE's AMS; only the implementation is ours/HYPRE-free.  (Renamed 2026-06-27 from the misleading
-/// "HypreBasedAMS", which read like a distinct reduced variant; HypreBasedAMSPreconditioner remains a back-compat
-/// alias.)  Components (identical to HYPRE AMS):
+/// "CompactAMS", which read like a distinct reduced variant; CompactAMSPreconditioner remains a back-compat
+/// alias.)  Requires a lowest-order HCurl space (order=1, nograds=True): the Pi interpolation below is
+/// built from the Whitney edge-vertex incidence.  Components (identical to HYPRE AMS):
 ///   - Gradient subspace: G^T * A_bc * G solved by CompactAMG
 ///   - Nodal subspace: Pi^T * A_bc * Pi solved by CompactAMG (component-wise)
 ///   - Fine-grid smoother: l1-Jacobi (fully TaskManager parallel)
@@ -27,6 +28,7 @@
 
 #include "compact_amg.hpp"
 #include <comp.hpp>
+#include <core/taskmanager.hpp>
 #include <vector>
 #include <atomic>
 #include <cmath>
@@ -47,6 +49,15 @@ namespace ngla {
 ///   // Use as preconditioner with COCR or CG
 class HypreBasedAMS : public BaseMatrix {
 public:
+    // Hierarchy setup is unsafe under an active NGSolve TaskManager.
+    // Reject before touching matrix state; Mult remains parallel-capable.
+    static void RequireSerialSetup() {
+        if (ngcore::GetTaskManager() != nullptr)
+            throw std::runtime_error(
+                "AMS construction and Update must run outside ngsolve.TaskManager; "
+                "leave the TaskManager context before setup, then re-enter for the solve.");
+    }
+
     /// @param mat       HCurl system matrix (SparseMatrix<double>)
     /// @param grad      Discrete gradient G (H1 -> HCurl)
     /// @param freedofs  Free DOFs for HCurl space
@@ -74,18 +85,49 @@ public:
           print_level_(print_level), correction_weight_(correction_weight),
           subspace_solver_(subspace_solver), amg_theta_(amg_theta)
     {
+        RequireSerialSetup();
         if ((int)coord_x.size() != ndof_h1_ ||
             (int)coord_y.size() != ndof_h1_ ||
             (int)coord_z.size() != ndof_h1_)
             throw std::runtime_error("HypreBasedAMS: coordinate size mismatch with H1 DOFs");
+        RequireLowestOrderGradient();
 
         Setup(coord_x, coord_y, coord_z);
+    }
+
+    /// The auxiliary spaces are built from the lowest-order (Whitney) edge-vertex
+    /// incidence: BuildPiComponents treats every row of G as an edge with two
+    /// vertices.  An order>=2 space with nograds=True still has one gradient
+    /// column per vertex, so the coordinate-size check above cannot see it, but
+    /// its non-edge rows are empty: those dofs would get smoothing only and the
+    /// preconditioner would silently degrade instead of failing.  Reject it.
+    void RequireLowestOrderGradient() const {
+        if (grad_->Height() != ndof_hc_)
+            throw std::runtime_error(
+                "HypreBasedAMS: the discrete gradient has " + std::to_string(grad_->Height())
+                + " rows but the HCurl matrix has " + std::to_string(ndof_hc_)
+                + "; build both from the same HCurl space.");
+        int bad = 0;
+        for (int e = 0; e < grad_->Height(); e++) {
+            auto vals = grad_->GetRowValues(e);
+            int nonzeros = 0;
+            for (int j = 0; j < vals.Size(); j++)
+                if (vals[j] != 0.0) nonzeros++;
+            if (nonzeros != 2) bad++;
+        }
+        if (bad > 0)
+            throw std::runtime_error(
+                "HypreBasedAMS requires a lowest-order HCurl space (order=1, nograds=True): "
+                + std::to_string(bad) + " of " + std::to_string(grad_->Height())
+                + " discrete-gradient rows are not edge-vertex pairs. "
+                  "For order >= 2 use NGSolve's bddc preconditioner.");
     }
 
     /// Update preconditioner with current matrix values.
     /// Geometry (G, Pi, transposes, work vectors) is preserved.
     /// Rebuilds: A_bc, Galerkin projections, AMG hierarchies, l1 norms.
     void Update() {
+        RequireSerialSetup();
         mult_count_ = 0;
         t_smooth_ = t_grad_ = t_nodal_ = t_bc_ = 0;
         RebuildMatrix();
@@ -93,6 +135,7 @@ public:
 
     /// Update with a new system matrix, then rebuild.
     void Update(shared_ptr<SparseMatrix<double>> new_mat) {
+        RequireSerialSetup();
         if (new_mat->Height() != mat_->Height() || new_mat->Width() != mat_->Width())
             throw std::invalid_argument("HypreBasedAMS::Update: new matrix dimension ("
                 + std::to_string(new_mat->Height()) + "x" + std::to_string(new_mat->Width())

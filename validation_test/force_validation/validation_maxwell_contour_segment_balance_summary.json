@@ -209,7 +209,7 @@
       0.5
     ]
   ],
-  "generated_at_utc": "2026-06-27T09:17:09Z",
+  "generated_at_utc": "2026-09-10T11:55:34Z",
   "kind": "maxwell_contour_segment_balance_validation",
   "learning_theme": "Closed 2D Maxwell stress contours can have large local segment forces while the net force cancels by symmetry",
   "schema": "radia.validation.force_validation.validation_maxwell_contour_segment_balance.v1",
@@ -221,7 +221,7 @@
   "versions": {
     "platform": "Windows-2022Server-10.0.20348-SP0",
     "python_version": "3.12.10",
-    "radia_mcp_version": "1.4.3",
-    "radia_version": "4.95.2"
+    "radia_mcp_version": "1.4.53",
+    "radia_version": "4.95.81"
   }
 }

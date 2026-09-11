@@ -87,6 +87,29 @@ Standalone PySide/PyQt Radia panels and notebook workbenches are retired.
 Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 `cubit-mesh-export` toolbar. Normal Radia Python must not depend on Qt.
 
+### Shared MCP Runtime Ownership
+
+- Ordinary development uses task-owned environments or process-local source
+  overrides; never change a shared interpreter's editable installs, client
+  configuration or running MCP as a side effect of tests, merge or commit.
+- Long-lived MCPs use an approved, commit-pinned source snapshot. Do not edit,
+  pull, rebase, rebuild or remove a snapshot while any consumer uses it.
+- Shared runtime changes require explicit deployment scope and one designated
+  owner per host/interpreter, including all affected users. Record ownership,
+  old/new sources and commits, reason, timestamps and target clients before
+  changing anything; competing or unknown ownership means defer, not repair.
+- Stage and test separately; activate only at a coordinated safe boundary.
+  Retain old sources for existing processes and rollback. A package release
+  does not authorize repointing other independently released packages.
+- Report installed registration, fresh-process resolution and each client's
+  live loaded source separately, with observation time and target identity.
+  Version equality, directory names and current disk hashes do not prove
+  loaded code identity. Unknown or mixed evidence must stay unverified.
+- Never infer global runtime state from "this task made no change". Reconnect
+  only scoped idle targets through supported client controls; never mass-kill
+  processes. Follow `mcp-reconnect` and the mandatory operational contract in
+  [Shared MCP runtime policy](packages/radia-mcp/docs/operations/mcp-runtime-policy.md).
+
 ### MATLAB And Simulink
 
 - Use MathWorks' official MATLAB MCP Server and Simulink Agentic Toolkit.
@@ -131,6 +154,10 @@ solver boundary is a checked `.vol` regardless of the creation route.
   validation inputs may produce a visible skip. Heavier `.vol` work
   belongs to `validation_test/`, and `docs/**/*.ipynb` may show the Cubit
   generation step.
+- LLM/agent-driven `cubit-mesh-export` work uses Cubit's APREPRO commands
+  through a batch/headless route; it must not launch or drive the Cubit GUI.
+  GUI launch or interaction is allowed only for an explicitly scoped GUI test
+  that protects the user-facing toolbar or visual-debugging surface.
 - Every solver-bound `.vol` passes `check-vol` with its versioned label
   contract before solver or Simulink initialization.
 - Label checks validate topology/naming; DesignSpec validates physical data.
@@ -234,8 +261,8 @@ hibino's real advantage is memory — 230 GB with no pagefile — rather than it
 
 Use `tools/release_quad.py` and the `release-quad` skill. Publish only when
 CI, exact package hashes, native/MEX/SLX checks, and required machine gates pass
-for the same commit. LAB and 100号機 return to verified canonical editable
-installs after release.
+for the same commit. LAB and 100号機 retain approved, verified editable sources
+after release; source changes follow Shared MCP Runtime Ownership, not an automatic reset.
 
 ## Optuna
 

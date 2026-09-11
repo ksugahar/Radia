@@ -13,6 +13,8 @@ based on mat.IsComplex() and auto-call Update() on construction.
 """
 
 import pytest
+import subprocess
+import sys
 from netgen.geom2d import unit_square
 from netgen.csg import unit_cube
 from ngsolve import *
@@ -21,9 +23,121 @@ from radia.sparsesolv_ngsolve import SparseSolvSolver
 from ngsolve.krylovspace import CGSolver
 
 
+@pytest.mark.parametrize("factory", [
+    "HypreBasedAMSPreconditioner", "CompactAMSPreconditioner",
+    "ComplexHypreBasedAMSPreconditioner", "ComplexCompactAMSPreconditioner",
+])
+def test_ams_taskmanager_setup_is_catchable(factory):
+    """A native crash must fail only the child, never take down the test runner."""
+    import radia.sparsesolv_ngsolve as native
+    script = r'''
+import importlib.util
+import sys
+import numpy as np
+from ngsolve import Mesh, HCurl, BilinearForm, TaskManager, curl, dx, SetNumThreads
+from netgen.csg import unit_cube
+spec = importlib.util.spec_from_file_location("sparsesolv_ngsolve", sys.argv[1])
+native = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(native)
+SetNumThreads(2)
+mesh = Mesh(unit_cube.GenerateMesh(maxh=0.8))
+space = HCurl(mesh, order=1, nograds=True)
+u, v = space.TnT()
+a = BilinearForm(space)
+a += (curl(u)*curl(v) + u*v)*dx
+a.Assemble()
+grad, h1 = space.CreateGradient()
+coords = [[mesh.ngmesh.Points()[i+1][j] for i in range(mesh.nv)] for j in range(3)]
+factory = getattr(native, sys.argv[2])
+kwargs = dict(freedofs=space.FreeDofs(), coord_x=coords[0], coord_y=coords[1], coord_z=coords[2])
+def make():
+    return factory(a.mat, grad, **kwargs)
+def rejected(operation):
+    try:
+        operation()
+    except RuntimeError as error:
+        assert "outside ngsolve.TaskManager" in str(error), str(error)
+    else:
+        raise AssertionError("AMS setup inside TaskManager was not rejected")
+with TaskManager():
+    rejected(make)
+pre = make()
+rhs, before = pre.CreateColVector(), pre.CreateRowVector()
+rhs.FV().NumPy()[:] = 1
+pre.Mult(rhs, before)
+expected = before.FV().NumPy().copy()
+with TaskManager():
+    rejected(pre.Update)
+    rejected(lambda: pre.Update(a.mat))
+    after = pre.CreateRowVector()
+    pre.Mult(rhs, after)
+np.testing.assert_allclose(after.FV().NumPy(), expected, rtol=1e-11, atol=1e-12)
+pre.Update()
+pre.Mult(rhs, after)
+np.testing.assert_allclose(after.FV().NumPy(), expected, rtol=1e-11, atol=1e-12)
+assert np.all(np.isfinite(expected)) and np.linalg.norm(expected) > 0
+print("AMS_CONTEXT_GUARD_OK")
+'''
+    result = subprocess.run(
+        [sys.executable, "-c", script, native.__file__, factory],
+        capture_output=True, text=True, timeout=90,
+    )
+    assert result.returncode == 0, (result.returncode, result.stdout, result.stderr)
+    assert "AMS_CONTEXT_GUARD_OK" in result.stdout
+
+
+@pytest.mark.parametrize("factory", [
+    "HypreBasedAMSPreconditioner", "CompactAMSPreconditioner",
+    "ComplexHypreBasedAMSPreconditioner", "ComplexCompactAMSPreconditioner",
+])
+def test_ams_rejects_higher_order_space(factory):
+    """AMS is lowest-order only: an order-2 space must be rejected, not degraded.
+
+    With nograds=True the order-2 discrete gradient still has one column per
+    vertex, so the coordinate-size check cannot tell it from order 1.  Before
+    the structural check the constructor accepted it and CG needed about five
+    times more iterations.  The MATLAB MEX already rejected this space; the C++
+    check makes the Python route fail the same way.
+    """
+    import radia.sparsesolv_ngsolve as native
+    mesh = Mesh(unit_cube.GenerateMesh(maxh=0.5))
+    coords = [[mesh.ngmesh.Points()[i+1][j] for i in range(mesh.nv)] for j in range(3)]
+    for order, accepted in ((1, True), (2, False)):
+        space = HCurl(mesh, order=order, nograds=True)
+        u, v = space.TnT()
+        a = BilinearForm(space)
+        a += (curl(u)*curl(v) + u*v)*dx
+        a.Assemble()
+        grad, _ = space.CreateGradient()
+        assert grad.width == mesh.nv   # a dimension check alone cannot separate the orders
+
+        def make():
+            return getattr(native, factory)(
+                a.mat, grad, freedofs=space.FreeDofs(),
+                coord_x=coords[0], coord_y=coords[1], coord_z=coords[2])
+
+        if accepted:
+            make()
+        else:
+            with pytest.raises(RuntimeError, match="order=1, nograds=True"):
+                make()
+
+
 # ============================================================================
 # Fixtures
 # ============================================================================
+
+@pytest.mark.parametrize("is_complex", [False, True])
+def test_operator_scalar_type_matches_native_vectors(is_complex):
+    mesh = Mesh(unit_square.GenerateMesh(maxh=0.5))
+    space = H1(mesh, order=1, complex=is_complex)
+    u, v = space.TnT()
+    a = BilinearForm(space)
+    a += u*v*dx
+    a.Assemble()
+    for operator in (ICPreconditioner(a.mat), SparseSolvSolver(a.mat)):
+        assert operator.is_complex == is_complex
+        assert operator.CreateColVector().is_complex == is_complex
 
 @pytest.fixture
 def poisson_2d():

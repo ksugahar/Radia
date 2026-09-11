@@ -123,6 +123,7 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
     nonlinear_tolerance: float = 2.0e-5,
     nonlinear_max_iterations: int = 80,
     nonlinear_relaxation: float = 0.3,
+    kelvin_source_h=None,
     inverse: str = "pardiso",
     bonus_intorder: int = 4,
 ) -> dict[str, object]:
@@ -209,15 +210,21 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
             total_source_materials,
             order=int(source_projection_order),
         )
-        kelvin_trace = project_source_interface_potential(
-            mesh,
-            source_h,
-            domain.kelvin_interface,
-            order=int(source_projection_order),
-            relative_tolerance=source_trace_tolerance,
+        # The exact pulled-back exterior source needs no interface trace at
+        # all, so the projection is skipped rather than computed and dropped.
+        kelvin_trace = (
+            None if kelvin_source_h is not None
+            else project_source_interface_potential(
+                mesh,
+                source_h,
+                domain.kelvin_interface,
+                order=int(source_projection_order),
+                relative_tolerance=source_trace_tolerance,
+            )
         )
         source_potential = source_hodge["potential"]
-        kelvin_source_potential = kelvin_trace["potential"]
+        kelvin_source_potential = (
+            None if kelvin_trace is None else kelvin_trace["potential"])
         total_source_h = source_hodge["harmonic_field"]
         source_diagnostics = {
             "contract": source_potential_contract,
@@ -226,11 +233,14 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
             "iron_relative_harmonic_norm": float(
                 source_hodge["relative_harmonic_norm"]
             ),
-            "kelvin_relative_tangential_residual": float(
-                kelvin_trace["relative_tangential_residual"]
-            ),
+            "kelvin_exterior_source": (
+                "exact pulled-back field" if kelvin_trace is None
+                else "projected interface trace"),
             "relative_tolerance": source_trace_tolerance,
         }
+        if kelvin_trace is not None:
+            source_diagnostics["kelvin_relative_tangential_residual"] = float(
+                kelvin_trace["relative_tangential_residual"])
     else:
         physical_materials = tuple(
             name for name in domain.reduced_materials + domain.total_materials
@@ -266,7 +276,9 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
         "inverse": inverse,
         "kelvin_mats": domain.kelvin_materials,
         "kelvin_interface_boundary": domain.kelvin_interface,
-        "kelvin_source_potential": kelvin_source_potential,
+        "kelvin_source_potential": (None if kelvin_source_h is not None
+                                    else kelvin_source_potential),
+        "kelvin_source_h": kelvin_source_h,
         "total_source_h": total_source_h,
         "total_source_materials": total_source_materials,
     }

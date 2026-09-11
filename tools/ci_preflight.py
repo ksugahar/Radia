@@ -30,9 +30,9 @@ Exit 0 = all green, safe to push.  Non-zero = a gate CI would fail is red.
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import os
-import runpy
 import subprocess
 import sys
 
@@ -157,6 +157,16 @@ def gate_version_consistency():
 # ======================================================================
 # Gate 4: radia-mcp impact lane
 # ======================================================================
+def _load_meta_catalog():
+    """Import the catalog as a package so its relative imports are valid."""
+    source_root = os.path.join(MCP, "src")
+    sys.path.insert(0, source_root)
+    try:
+        return importlib.import_module("radia_mcp.meta.catalog").CATALOG
+    finally:
+        sys.path.remove(source_root)
+
+
 def gate_radia_mcp_matrix():
     selector = os.path.join(MCP, "tools", "select_ci_tests.py")
     selector_cmd = [sys.executable, selector]
@@ -241,9 +251,7 @@ def gate_radia_mcp_matrix():
         return False, ("radia-mcp impact pytest FAILED: " + tail
                        + ("\n      " + "\n      ".join(errs) if errs else ""))
 
-    catalog = runpy.run_path(
-        os.path.join(MCP, "src", "radia_mcp", "meta", "catalog.py")
-    )["CATALOG"]
+    catalog = _load_meta_catalog()
     for short in plan["server_selftests"]:
         info = catalog[short]
         command = (

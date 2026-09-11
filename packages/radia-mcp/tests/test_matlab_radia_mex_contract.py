@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 from pathlib import Path
 
 from radia_mcp.matlab import (
@@ -40,11 +41,26 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     contract = matlab_radia_mex_contract("mex")
 
     assert contract["status"] == "ready"
-    assert contract["command_count"] == 361
-    assert not any(
-        command.startswith("optuna.")
-        for command in contract["command_names"]
+    # Verify the actual general-gateway table, not a hand-maintained count.
+    root = Path(__file__).resolve().parents[3]
+    source = (root / "src/matlab/radia_mex.cpp").read_text(encoding="utf-8")
+    command_function = re.search(
+        r"mxArray\s*\*\s*Commands\s*\(\s*\)\s*\{(.*?)#\s*endif\b",
+        source,
+        re.DOTALL,
     )
+    assert command_function, "Commands() preprocessor table was not found"
+    names_array = re.search(
+        r"#\s*else\b.*?names\s*\[\s*\]\s*=\s*\{(.*?)\}\s*;",
+        command_function.group(1),
+        re.DOTALL,
+    )
+    assert names_array, "General Radia command table was not found"
+    expected_names = re.findall(r'"([a-zA-Z0-9_.]+)"', names_array.group(1))
+    assert expected_names
+    assert contract["command_names"] == expected_names
+    assert contract["command_count"] == len(set(expected_names))
+    assert not any(command.startswith("optuna.") for command in contract["command_names"])
     assert contract["matlab_wrapper_count"] >= 133
     expected_errors = _expected_optuna_health_errors()
     assert contract["matlab_optuna_distribution_health"]["errors"] == (
