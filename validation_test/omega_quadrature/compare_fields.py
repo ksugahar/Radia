@@ -7,8 +7,45 @@ from pathlib import Path
 import numpy as np
 
 
+def validate_identity(payload):
+    def sha(value):
+        return (isinstance(value, str) and len(value) == 64
+                and all(c in '0123456789abcdefABCDEF' for c in value))
+
+    if payload.get('schema') != 'radia.validation.omega-quadrature.v1':
+        raise ValueError('missing or unsupported evidence schema')
+    if not sha(payload.get('mesh_sha256')):
+        raise ValueError('missing mesh hash')
+    identity = payload.get('implementation', {})
+    for key in ('native', 'python_files'):
+        hashes = identity.get(key)
+        if (not isinstance(hashes, dict) or not hashes
+                or not all(isinstance(name, str) and name and sha(value) for name, value in hashes.items())):
+            raise ValueError(f'missing or invalid {key} hashes')
+    for key in ('solver_sha256', 'factory_sha256', 'runner_sha256', 'diagnostics_sha256'):
+        if not sha(identity.get(key)):
+            raise ValueError(f'missing {key}')
+    for key in ('version', 'ngsolve', 'module', 'solver_file'):
+        if not isinstance(identity.get(key), str) or not identity[key].strip():
+            raise ValueError(f'missing {key}')
+    if payload.get('runtime', {}).get('mode') not in ('wheel', 'research'):
+        raise ValueError('missing runtime mode')
+    case = payload.get('case', {})
+    if case.get('case') != 'esrf6' or not sha(case.get('coil_source_sha256')):
+        raise ValueError('missing ESRF source identity')
+    for key in ('mu_r', 'radius'):
+        value = case.get(key)
+        if type(value) not in (float, int) or not np.isfinite(value) or value <= 0:
+            raise ValueError(f'invalid physical control: {key}')
+    for key in ('kelvin_center', 'physical_center'):
+        vector = np.asarray(case.get(key), dtype=float)
+        if vector.shape != (3,) or not np.isfinite(vector).all():
+            raise ValueError(f'invalid physical control: {key}')
+
+
 def compare_fields(low, high):
     for payload in (low, high):
+        validate_identity(payload)
         for key in ('completed', 'source_unchanged', 'mesh_unchanged'):
             if payload.get(key) is not True:
                 raise ValueError(f'unverified input: {key}')
@@ -27,7 +64,7 @@ def compare_fields(low, high):
     for key in ('centres_m', 'samples_m', 'observable'):
         if observations[0][key] != observations[1][key]:
             raise ValueError(f'incompatible observation {key}')
-    values = []
+    values, raw_samples = [], []
     for observation in observations:
         centres = np.asarray(observation['centres_m'], dtype=float)
         points = np.asarray(observation['samples_m'], dtype=float)
@@ -43,10 +80,13 @@ def compare_fields(low, high):
         if not np.array_equal(computed, average):
             raise ValueError('saved average does not match samples')
         values.append(computed)
+        raw_samples.append(samples)
     delta = values[1] - values[0]
     reference = float(np.linalg.norm(values[1]))
     difference = float(np.linalg.norm(delta))
-    if not np.isfinite([reference, difference]).all():
+    raw_delta = raw_samples[1] - raw_samples[0]
+    raw_difference = float(np.linalg.norm(raw_delta))
+    if not np.isfinite([reference, difference, raw_difference]).all():
         raise ValueError('field norm overflow')
     return {
         'schema': 'radia.validation.omega-quadrature-field-delta.v1',
@@ -56,6 +96,8 @@ def compare_fields(low, high):
         'difference_rms_T': difference / np.sqrt(len(delta)),
         'difference_relative_rms': difference / reference if reference else None,
         'difference_max_vector_T': float(np.max(np.linalg.norm(delta, axis=1))),
+        'sample_difference_rms_T': raw_difference / np.sqrt(len(raw_delta)),
+        'sample_difference_max_vector_T': float(np.max(np.linalg.norm(raw_delta, axis=1))),
         'mesh_sha256': low['mesh_sha256'],
         'native': low['implementation']['native'],
         'scope': 'linear fixed-source/fixed-order assembly-rule sensitivity only',
