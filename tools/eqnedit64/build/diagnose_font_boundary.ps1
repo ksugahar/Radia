@@ -5,7 +5,8 @@ param(
     [ValidateSet('exit', 'remove')] [string]$ReleaseMode = 'exit',
     [ValidateSet('none', 'measure')] [string]$Measurement = 'none',
     [ValidateRange(1, 64)] [int]$MaxLaunches = 64,
-    [ValidateRange(-1, 10)] [int]$ModelPrefix = -1
+    [ValidateRange(-1, 10)] [int]$ModelPrefix = -1,
+    [ValidateSet('none', 'load-only', 'metrics-ab', 'svg-ab', 'svg-math')] [string]$ModelOperation = 'none'
 )
 $ErrorActionPreference = 'Stop'
 if ($env:EQNEDIT64_ISOLATED_TEST_SESSION -ne '1') { throw 'Disposable CI only.' }
@@ -20,6 +21,7 @@ $result = [ordered]@{
     arm = $Arm; status = 'INCONCLUSIVE'; reason = ''; commands = @()
     source_sha = $env:GITHUB_SHA; host = $env:COMPUTERNAME; session = $session
     payload_source_sha = $env:EQNEDIT64_PAYLOAD_SOURCE_SHA; model_prefix = $ModelPrefix
+    model_operation = $ModelOperation
     os_version = [Environment]::OSVersion.VersionString
     app_sha256 = (Get-FileHash $app -Algorithm SHA256).Hash
     started_utc = $started.ToUniversalTime().ToString('o'); events = @()
@@ -137,6 +139,7 @@ try {
         if ($Arm -ne 'self') {
             $arguments = 'tests/run_model_tests.py'
             if ($ModelPrefix -ge 0) { $arguments += " --diagnostic-prefix $ModelPrefix" }
+            if ($ModelOperation -ne 'none') { $arguments = "tests/font_model_probe.py $ModelOperation" }
             InvokeObserved (Get-Command python).Source $arguments
         }
         if ($Arm -ne 'model-idle') { InvokeObserved $app '--self-test' }
