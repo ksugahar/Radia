@@ -4,18 +4,161 @@ Owner is the named subsystem, not an assumed student or external maintainer.
 This is a curated backlog, not a generated tool inventory. Update evidence and
 status together; a test file merely existing is not a successful run.
 
+The [2026-09-11 paper review reconciliation](design/paper_review_reconciliation_20260911.md)
+maps the complete original report to numbered finding groups and current evidence.
+Use its statuses: 修正済み (named reproduction verified), 未修正 (reproduced or
+static-confirmed), 検証待ち (not established either way), 継続検証 (operational
+acceptance), and 方針変更 (old recommendation superseded). Release gates and
+client verification are not automatically open code defects.
+
 | ID / priority | Owner / concern | Evidence or required check | Status |
 | --- | --- | --- | --- |
 | M01 / high | development: editable and loaded source mismatch | `maintenance doctor` with selected root/version/full SHA; separately inspect the affected original clients | Intentional repointing is allowed; fresh-process evidence is not live-client verification |
 | M02 / high | deployment: Windows locked entry points | pip must exit successfully after controlled client shutdown; reconnect and probe | Operational limitation; no automatic process killing |
-| M03 / high | paper: absent inputs and detector failures incorrectly passed | `test_paper_writing_review_regressions.py`: supplied missing files and detector-status mapping | Regression available; limited to asserted cases |
-| M04 / high | bibliography: nested braces, false title matches, transient DOI errors | Same suite: balanced parser, exact titles, HTTP-status classification | Regression available; not certification of every bibliography parser |
-| M05 / high | paper: destructive encoding/newline normalization | Same suite: line-ending preservation and no replacement-character writes | Regression available; no blanket approval of other writing tools |
-| M06 / medium | paper: PDF cropbox, float proximity, whitespace false reports | Same suite: cropbox, aux-page references, missing-aux behavior, whitespace threshold | Regression available; representative PDFs still required |
-| M07 / medium | paper: remaining approximately 40-item external review | Reconcile the complete 2026-09-03 review against current code, one finding per test/closure | Open: pasted summary is not a complete closure checklist |
+| M03 / high | paper: absent inputs and detector failures incorrectly passed | Reconciliation P09–P14 | Input/status cases and all 24 gate detector adapters have focused fault-injection coverage (P12); lower-detector accuracy and nested consumers remain separate 検証待ち work |
+| M04 / high | bibliography: nested braces, false title matches, transient DOI errors | Reconciliation P28, P60–P68 | Named parser/title/HTTP cases 修正済み; metadata/author/escaping, failure paths and HTTP resource closure have scoped evidence. All three S2 routes now share identifier normalization/path encoding with offline regressions (905-test lane). Other producers and rendered bibliography acceptance remain 検証待ち; unsupported math/markup requires manual verification |
+| M05 / high | paper: destructive encoding/newline normalization | Reconciliation P75; both regressions passed in the 170-test focused lane | 修正済み for those two behaviors; no blanket approval of other writing tools |
+| M06 / medium | paper: PDF diagnostics | Reconciliation P39–P50 | Named crop/float/threshold cases, four detector failure paths and PNG/thumbnail resource closure have focused evidence; visual accuracy, vector figures and other PDF consumers remain 検証待ち |
+| M07 / high | paper: external review follow-up | Full report mapped in reconciliation P01–P76; groups may contain related findings | Inventory complete, not fixes complete. Gate/composite execution-status fixes have scoped evidence. Publisher landing/PDF failure stages and resource closure now have 27 offline cases in the 795-test lane. Missing pattern producers, semantic rules, other external-input/PDF consumers and live publisher acceptance remain open |
 | M08 / high | packaging: wheel missing skills/canonical bibliography | Existing wheel-content verifier and installed-wheel lane; editable-only pass is insufficient | Required release gate; not replaced by doctor |
 | M09 / medium | publication: JA/EN/grant have distinct review objectives | `test_capability_packs.py` checks distinct routes and unsupported English grant scoring | Covered route contract; no unified quality score claimed |
 | M10 / medium | CAD: actual meshing vs available MCP tools | Cubit conformal gate regression, plus licensed live CAD/mesh lane on affected changes | Contract regression available; connectivity is not numerical acceptance |
+
+M04 follow-up (2026-09-12): bibliography T2 arXiv identity, explicit version,
+required metadata and primary-category preservation have 23 offline regression
+cases. A further 12 cases cover T2 shared text escaping and unstructured author
+order/separator preservation; the six-file lane passes 940 tests. Unsupported
+TeX/math requires manual verification. Citation-key surname heuristics and
+rendered bibliography acceptance remain open (P63/P67).
+
+M04 T1 follow-up (2026-09-12): standalone DOI-to-BibTeX now has DOI identity,
+required metadata, corporate-author/text escaping and page-range regressions.
+The seven-file lane passed 960 tests. T3 Crossref search now adds 28 cases for
+response shape, required candidate fields, unknown optional metadata and decode
+failures; the eight-file lane passes 988 tests. Citation-key/name heuristics and
+rendered bibliography acceptance remain open; this is not package-wide closure.
+
+M04 key follow-up (2026-09-12): 18 cases cover brace-aware author separators,
+particles/accents, title-format command exclusion, rename collisions and invalid
+UTF-8 refusal. The nine-file lane passes 1006 tests. Canonicalize/journal rewrite
+source preservation remains the next safety concern; no parent data was changed.
+
+M04 source-edit follow-up (2026-09-12): key and journal changes use parsed source
+ranges, not whole-file serialization. Comments, macros, BOM and LF/CRLF remain
+unchanged outside edited ranges; direct crossref/xref/xdata/related keys follow
+renames. Staged writes check for source drift and preserve the destination on
+failure. The expanded ten-file lane passes 1037 tests, including existing .bbl
+generation tests. The final source comparison is not a cross-process transaction
+lock; external manuscript citations still require the returned rename mapping.
+Malformed BibTeX is now rejected; no canonical bibliography was edited.
+
+M04 diagnostics follow-up (2026-09-12): 21 cases cover unavailable composite
+scores, empty required fields, editor substitution only for books, key collisions,
+DOI normalization and Japanese duplicate titles. The eleven-file lane passes
+1058 tests. Missing/invalid files and detector failures do not become GOOD/100.
+Duplicate matching remains a diagnostic, not automatic removal or proof of identity.
+
+M04 statistics follow-up (2026-09-12): 14 cases cover self-citation threshold
+ordering/boundaries, Unicode/brace-aware surname matching and invalid target
+rejection. Year distributions exclude future/malformed years and label incomplete
+coverage instead of inferring recency from fabricated dates. The eleven-file lane
+passes 1072 tests. Surname matches are explicitly screening heuristics, not author
+identity verification, citation relevance or a publication acceptance rule.
+
+M04 citation-source follow-up (2026-09-12): T8 validation now uses the same
+compile-root input resolver and citation scanner as canonical bbl generation.
+19 new cases cover missing/unreadable inputs, explicit pgf suffixes, comments,
+literal code, starred/optional citation forms, duplicate keys and nocite wildcard
+expansion. The twelve-file lane passes 1091 tests, including real BibTeX output
+from synthetic canonical fixtures. Unsupported conditional/multi-cite syntax
+fails explicitly; static scanning is not a complete TeX interpreter.
+
+M04 snapshot follow-up (2026-09-12): canonical access rejects duplicate keys,
+invalid UTF-8 and malformed/empty data. Returned record hashes and BibTeX input
+now use the same byte snapshot. TeX resolution records exact input-byte hashes;
+bbl publication refuses changed canonical/TeX/output files and cleans its own
+staging file on failure. Twelve added cases bring the twelve-file lane to 1103
+passes. This is optimistic conflict detection, not a cross-process transaction
+lock, and does not certify rendered reference formatting or all TeX semantics.
+
+M04 surname-edit follow-up (2026-09-12): the T13 fixer uses parsed author spans
+and the shared staged writer, rather than a source-wide regular expression and
+newline-converting write. Twenty cases cover literal organizations, compound
+surnames, suffixes, comments, macros, quoted/nested values, exact byte preservation
+and write failure. Macro/concatenated author expressions make the check unavailable
+and block the whole fix; legacy undecodable input is not guessed or reencoded.
+The thirteen-file lane passes 1123 tests. This enforces a local syntactic
+convention, not identity or universal bst behavior.
+
+M04 generated-key follow-up (2026-09-12): bbl acceptance checks actual bibitem
+keys, not a substring count. Missing requested keys, unknown keys, duplicates and
+malformed bibitem syntax preserve the existing output. Canonical parent entries
+added by BibTeX cross-references remain allowed. Nine cases exercise standard
+optional labels and false-count controls; the thirteen-file lane passes 1132
+tests. This does not compile/render a paper
+or certify arbitrary custom bst output syntax.
+
+M04 rename-input follow-up (2026-09-12): T6 rejects malformed publication years
+instead of truncating them, and refuses unresolved author/title/editor or
+crossref/xref/xdata/related expressions before proposing or applying renames.
+The shared literal reader distinguishes protected # text from concatenation;
+T13 uses the same reader. Thirty-two cases cover no-write failure behavior.
+The thirteen-file lane passes 1164 tests. Missing years retain the explicit
+nodate convention; no dates are invented.
+
+M04 local-style follow-up (2026-09-12): a manuscript-local bst is read once,
+staged from those exact bytes, fingerprinted in the result and checked again
+before publishing bbl output. Concurrent replacement/deletion/creation and
+unreadable local styles fail without replacing the previous bbl. Five tests
+cover these paths. The thirteen-file lane passes 1169 tests, and an isolated
+bibliography server selftest registers 16 tools. TeX-installation-resolved styles are reported separately;
+their upstream files are not pinned or fingerprinted by this local-style check.
+
+M04 lexical-boundary follow-up (2026-09-12): input resolution and citation
+scanning now share offset-preserving comment/literal masking. Fifteen cases
+cover verbatim/minted/listings/inline verb, escaped controls and comment parity,
+unterminated literals, and cyclic versus repeated noncyclic inputs. Cycles fail
+instead of succeeding as duplicates. The fourteen-file lane passes 1184 tests.
+Macro expansion and conditional execution
+remain outside the static contract; this is not a full TeX interpreter.
+
+M04 installed-style follow-up (2026-09-12): kpsewhich resolves an installed bst
+to a checked file; its exact bytes are staged and fingerprinted just like local
+styles, and a mid-generation change blocks publication. Missing/ambiguous style
+resolution fails explicitly (a local bst remains an alternative). Eleven added
+cases also cover bibitem comment/literal masking. The fourteen-file lane passes
+1195 tests; isolated server registration reports 16 tools. This supersedes the
+earlier untracked-system-style limitation, not rendered-format acceptance.
+
+M04 rendered-acceptance follow-up (2026-09-12): a separate optional real-TeX
+test generates synthetic canonical fixtures through the production bbl tool,
+then compiles manuscript-only bbl delivery with shell escape disabled. Both
+plain and IEEEtran passed two pdflatex runs, one-page checks, undefined citation,
+missing glyph and overfull-box checks, plus extracted Unicode/literal text
+assertions. Full-page Poppler images were visually reviewed without clipping,
+overlap or missing glyphs. Evidence lives under
+C:/temp/pytest-bib-render-20260912-a (PDFs, acceptance.json and images); the
+dedicated pytest result has 2 passes. This closes the named synthetic rendering
+cases, not arbitrary bst styles, languages, macro expansion or real-manuscript
+submission acceptance. The test leaves visual_review=pending until human/agent
+inspection; a text-only pass must not claim visual approval.
+
+Finalization follow-up (2026-09-12): optional compiled aux now supplies the
+actual TeX citation decisions without interpreting macros or executing aux code.
+Source edits and bbl generation use fail-fast OS advisory locks with persistent
+sidecars; a separate-process test verifies exclusion and release after failure.
+Ten new cases cover aux nesting/order/wildcards, malformed/missing/cyclic input,
+conflicting styles, compiled decisions, mid-run aux change and writer exclusion.
+The fifteen-file lane passes 1205 tests; isolated registration reports 16 tools.
+See [the finalization contract](operations/bibliography-finalization.md).
+
+Remaining boundaries are deliberate: callers own preexisting aux freshness,
+unsupported author expressions need metadata resolution, and nonparticipating
+external editors are protected optimistically rather than completely locked.
+Live MCP is not updated: it points at a different shared runtime, with no idle
+signal or supported reconnect control available in this task. Source integration,
+editable selection, reconnect, wheel and real-manuscript acceptance remain
+separate operational lanes, not implicit consequences of passing unit tests.
 
 Completion of a scoped validation requires matching the selected source, zero unexpected failures
 or skips in the relevant lane, and retained local machine-readable evidence.
