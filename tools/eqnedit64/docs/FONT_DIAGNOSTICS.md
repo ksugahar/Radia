@@ -224,3 +224,44 @@ subsequent EXE, not a particular suite or individual API. The next diagnostic
 `tests/font_model_probe.py` compares load-only, one Equation.metrics call on
 `ab`, one SVG layout of `ab`, and one compound SVG layout. Run each in a fresh
 worker followed by the same EXE, retaining prefix3 as a positive control.
+
+## Review clarifications and outline-format experiment
+
+The first `analysis.log` used forward slashes in the symbol-store path and
+failed symbol loading. Do not use its WRONG_SYMBOLS bucket. Subsequent
+`symbols.log`/`globals.log` used backslashes, loaded the matching public PDB and
+reported image-from-memory success. The checksum caveat above still applies;
+the corrected analysis is distinct from the initial failed attempt.
+
+`ATMallocExt` increments the first counter by requested size plus eight before
+the check and GlobalAlloc. `ATMfree` contains a conditional decrement of block
+size plus eight. Thus this is intended as outstanding-allocation accounting,
+not a monotonic lifetime allocation total. Without a heap/accounting audit,
+the value cannot prove that every counted byte is actually still live. In the
+faulting call the request is 16 bytes, so the counter immediately before that
+call's increment was 5,497,116. This is not a measurement before LoadFont starts:
+the faulting AllocateFontCollection call is already within LoadFont, which has
+earlier allocations. Attribution of all those bytes to a terminated process
+remains a hypothesis.
+
+The list comparison at CheckMemoryUsage+0x2a is consistent with a circular
+sentinel list. A null head is not its ordinary empty state (which would compare
+the next pointer equal to head). Uninitialized or destroyed head state is a
+better description than simply "empty list". The dump does not distinguish
+which path produced that null state.
+
+The proposed CFF-to-glyf diagnostic uses fontTools 4.60.1 cu2qu at maximum
+approximation error 0.5 design units, with additional integer rounding. Script:
+`build/make_diagnostic_truetype.py`. Two offline conversions produce SHA256
+a7a58548c72317360e0b396509eb3e710482d9459a1f5405152e9e4a859dcb68.
+All 4,802 glyphs and their order are preserved; cmap/MATH/GSUB/GPOS/hmtx are
+byte-identical. This is not yet proof of visual equivalence or session safety.
+Family names remain unchanged for the private selection comparison; publication
+requires separate GUST/LPPL derived-name and rendering review.
+
+Build each font flavor once from the same C++ source, with separate clean
+resource/intermediate outputs. Compare both native components (module and EXE)
+using the same flavor on each fresh worker. Record distinct font/EXE/module
+hashes: these are not identical payloads. Retain CFF positive controls and the
+external host gate. Do not infer that all CFF-related host crashes are impossible
+merely because this product's glyf candidate does not reproduce within a bound.
