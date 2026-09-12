@@ -30,6 +30,10 @@ on:
         description: 'Base64 DER public encryption key; private key stays off GitHub'
         type: string
         default: ''
+      font_probe:
+        description: 'Bounded 2x2 private-font probe with three fresh-VM replicates'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -40,7 +44,7 @@ concurrency:
 
 jobs:
   web:
-    if: ${{ inputs.font_diagnostic != true && inputs.font_dump != true }}
+    if: ${{ inputs.font_diagnostic != true && inputs.font_dump != true && inputs.font_probe != true }}
     # The browser edition is pure JavaScript plus a string-contract test, so it
     # answers in seconds on a free runner instead of waiting for the Windows
     # native build.  This is a fast-feedback lane, not a replacement: the
@@ -87,7 +91,7 @@ jobs:
           node tests/test_palette_browser.cjs
 
   build-test:
-    if: ${{ inputs.font_diagnostic != true && inputs.font_dump != true }}
+    if: ${{ inputs.font_diagnostic != true && inputs.font_dump != true && inputs.font_probe != true }}
     # Font registration tests run only in this disposable GitHub-hosted
     # session. They must not churn the interactive laboratory desktop's font
     # cache or disturb applications such as LINE and Office.
@@ -263,7 +267,7 @@ jobs:
           if-no-files-found: warn
 
   font-boundary-diagnostic:
-    if: ${{ inputs.font_diagnostic == true && inputs.font_dump != true }}
+    if: ${{ inputs.font_diagnostic == true && inputs.font_dump != true && inputs.font_probe != true }}
     runs-on: windows-2022
     timeout-minutes: 15
     strategy:
@@ -305,7 +309,7 @@ jobs:
           if-no-files-found: warn
 
   font-dump-build:
-    if: ${{ inputs.font_dump == true }}
+    if: ${{ inputs.font_dump == true && inputs.font_probe != true }}
     runs-on: windows-2022
     timeout-minutes: 15
     defaults:
@@ -343,7 +347,7 @@ jobs:
 
   font-dump-trial:
     needs: font-dump-build
-    if: ${{ inputs.font_dump == true }}
+    if: ${{ inputs.font_dump == true && inputs.font_probe != true }}
     runs-on: windows-2022
     timeout-minutes: 15
     strategy:
@@ -407,6 +411,108 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: sensitive-font-dump-${{ matrix.trial }}
+          retention-days: 1
+          path: ${{ runner.temp }}/encrypted-font-dumps/
+          if-no-files-found: warn
+
+  font-probe-build:
+    if: ${{ inputs.font_probe == true }}
+    runs-on: windows-2022
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: tools/eqnedit64
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build one standalone probe without running fonts
+        run: |
+          cmake -S . -B build_cmake -A x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build_cmake --config Release --target font_lifecycle_probe --parallel 2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $records = @(@('build_cmake/Release/font_lifecycle_probe.exe','assets/latinmodern-math.otf') | ForEach-Object {
+            [ordered]@{path=$_; sha256=(Get-FileHash $_ -Algorithm SHA256).Hash}
+          })
+          [ordered]@{source_sha=$env:GITHUB_SHA; files=$records} | ConvertTo-Json -Depth 4 | Set-Content font-probe-manifest.json -Encoding utf8
+      - uses: actions/upload-artifact@v4
+        with:
+          name: font-probe-binaries
+          retention-days: 1
+          if-no-files-found: error
+          path: |
+            tools/eqnedit64/build_cmake/Release/font_lifecycle_probe.exe
+            tools/eqnedit64/assets/latinmodern-math.otf
+            tools/eqnedit64/assets/GUST-FONT-LICENSE.txt
+            tools/eqnedit64/assets/THIRD_PARTY_NOTICES.md
+            tools/eqnedit64/font-probe-manifest.json
+
+  font-probe-trial:
+    needs: font-probe-build
+    if: ${{ inputs.font_probe == true }}
+    runs-on: windows-2022
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        release: [exit, remove]
+        measurement: [none, measure]
+        replicate: [1, 2, 3]
+    env:
+      EQNEDIT64_ISOLATED_TEST_SESSION: '1'
+      FONT_DUMP_PUBLIC_KEY: ${{ inputs.font_dump_public_key }}
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: tools/eqnedit64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: font-probe-binaries
+          path: tools/eqnedit64
+      - name: Verify common probe and font payload
+        run: |
+          if (-not $env:FONT_DUMP_PUBLIC_KEY) { throw 'Encryption key required.' }
+          python -m pip install cryptography
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $manifest = Get-Content font-probe-manifest.json -Raw | ConvertFrom-Json
+          if ($manifest.source_sha -ne $env:GITHUB_SHA) { throw 'Source mismatch.' }
+          foreach ($file in $manifest.files) {
+            if ((Get-FileHash $file.path -Algorithm SHA256).Hash -ne $file.sha256) { throw 'Payload mismatch.' }
+          }
+      - name: Configure VM-only restricted dumps
+        run: >-
+          pwsh -NoProfile -File build/enable_isolated_font_dumps.ps1
+          -DumpDirectory '${{ runner.temp }}/font-dumps'
+      - name: Observe bounded lifecycle count
+        run: >-
+          pwsh -NoProfile -File build/diagnose_font_boundary.ps1
+          -Arm probe -ReleaseMode '${{ matrix.release }}' -Measurement '${{ matrix.measurement }}'
+          -MaxLaunches 64 -OutputDirectory '${{ runner.temp }}/font-probe'
+      - name: Bounded dump completion
+        if: always()
+        run: Start-Sleep -Seconds 15
+      - name: Preserve probe count and external observations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: font-probe-${{ matrix.release }}-${{ matrix.measurement }}-${{ matrix.replicate }}
+          path: ${{ runner.temp }}/font-probe/
+          if-no-files-found: warn
+      - name: Encrypt private evidence
+        if: always()
+        run: >-
+          python build/font_dump_crypto.py encrypt --path '${{ runner.temp }}/font-dumps'
+          --output '${{ runner.temp }}/encrypted-font-dumps/evidence.enc'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: encrypted-probe-${{ matrix.release }}-${{ matrix.measurement }}-${{ matrix.replicate }}
           retention-days: 1
           path: ${{ runner.temp }}/encrypted-font-dumps/
           if-no-files-found: warn

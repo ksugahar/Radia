@@ -1,7 +1,10 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)] [ValidateSet('self', 'model-idle', 'model-self')] [string]$Arm,
-    [Parameter(Mandatory)] [string]$OutputDirectory
+    [Parameter(Mandatory)] [ValidateSet('self', 'model-idle', 'model-self', 'probe')] [string]$Arm,
+    [Parameter(Mandatory)] [string]$OutputDirectory,
+    [ValidateSet('exit', 'remove')] [string]$ReleaseMode = 'exit',
+    [ValidateSet('none', 'measure')] [string]$Measurement = 'none',
+    [ValidateRange(1, 64)] [int]$MaxLaunches = 64
 )
 $ErrorActionPreference = 'Stop'
 if ($env:EQNEDIT64_ISOLATED_TEST_SESSION -ne '1') { throw 'Disposable CI only.' }
@@ -9,14 +12,22 @@ $directory = [IO.Path]::GetFullPath($OutputDirectory)
 if (Test-Path -LiteralPath $directory) { throw 'Use a fresh evidence directory.' }
 New-Item -ItemType Directory -Path $directory | Out-Null
 $env:EQNEDIT64_FONT_TRACE_DIR = $directory
-$app = (Resolve-Path 'build_cmake/Release/Eqnedit64.exe').Path
+$app = (Resolve-Path $(if ($Arm -eq 'probe') { 'build_cmake/Release/font_lifecycle_probe.exe' } else { 'build_cmake/Release/Eqnedit64.exe' })).Path
 $session = (Get-Process -Id $PID).SessionId
 $started = Get-Date
 $result = [ordered]@{
     arm = $Arm; status = 'INCONCLUSIVE'; reason = ''; commands = @()
     source_sha = $env:GITHUB_SHA; host = $env:COMPUTERNAME; session = $session
+    os_version = [Environment]::OSVersion.VersionString
     app_sha256 = (Get-FileHash $app -Algorithm SHA256).Hash
     started_utc = $started.ToUniversalTime().ToString('o'); events = @()
+}
+if ($Arm -eq 'probe') {
+    $font = (Resolve-Path 'assets/latinmodern-math.otf').Path
+    $result.font_sha256 = (Get-FileHash $font -Algorithm SHA256).Hash
+    $result.release_mode = $ReleaseMode; $result.measurement = $Measurement
+    $result.max_launches = $MaxLaunches; $result.baseline_idle_s = 3; $result.tail_idle_s = 3
+    $result.first_failure_k = $null
 }
 function CrashEvents([datetime]$from) {
     try { $events = @(Get-WinEvent -FilterHashtable @{LogName='Application'; Id=1000; StartTime=$from} -ErrorAction Stop) }
@@ -84,12 +95,43 @@ try {
         if ($job.State -eq 'Failed' -or (Get-Date) -gt $deadline) { throw 'Font-host monitor did not become ready.' }
         Start-Sleep -Milliseconds 100
     }
-    if ($Arm -ne 'self') { InvokeObserved (Get-Command python).Source 'tests/run_model_tests.py' }
-    if ($Arm -ne 'model-idle') { InvokeObserved $app '--self-test' }
+    if ($Arm -eq 'probe') {
+        $baseline = @((Get-Content (Join-Path $directory 'font-host.jsonl') -TotalCount 1 | ConvertFrom-Json).current_ids)
+        Start-Sleep -Seconds 3
+        $current = @(Get-Process -Name fontdrvhost -ErrorAction SilentlyContinue | Where-Object SessionId -EQ $session | Select-Object -ExpandProperty Id | Sort-Object)
+        if (($current -join ',') -ne ($baseline -join ',')) { throw 'Font-host changed during baseline idle.' }
+        $result.status = 'NO_REPRODUCTION_WITHIN_BOUND'
+        for ($k = 1; $k -le $MaxLaunches; $k++) {
+            if ($job.State -ne 'Running') { throw 'Font-host monitor stopped during the trial.' }
+            $current = @(Get-Process -Name fontdrvhost -ErrorAction SilentlyContinue | Where-Object SessionId -EQ $session | Select-Object -ExpandProperty Id | Sort-Object)
+            if (($current -join ',') -ne ($baseline -join ',')) {
+                $result.status = 'HOST_CHANGED'; $result.first_failure_k = $k - 1
+                $result.reason = 'Host change observed before the next launch.'
+                break
+            }
+            $begin = (Get-Date).ToUniversalTime().ToString('o')
+            $process = Start-Process -FilePath $app -ArgumentList ('"' + $font + '" ' + $ReleaseMode + ' ' + $Measurement + ' 1') `
+                -WindowStyle Hidden -Wait -PassThru `
+                -RedirectStandardOutput (Join-Path $directory ('probe-{0:d3}.jsonl' -f $k)) `
+                -RedirectStandardError (Join-Path $directory ('probe-{0:d3}.stderr' -f $k))
+            $current = @(Get-Process -Name fontdrvhost -ErrorAction SilentlyContinue | Where-Object SessionId -EQ $session | Select-Object -ExpandProperty Id | Sort-Object)
+            $result.commands += [ordered]@{k=$k; pid=$process.Id; exit_code=$process.ExitCode
+                started_utc=$begin; ended_utc=(Get-Date).ToUniversalTime().ToString('o'); font_host_ids=$current}
+            $changed = ($current -join ',') -ne ($baseline -join ',')
+            if ($process.ExitCode -ne 0 -or $changed) {
+                $result.status = $(if ($changed) {'HOST_CHANGED'} else {'CHILD_FAILURE'})
+                $result.first_failure_k = $k
+                break
+            }
+        }
+    } else {
+        if ($Arm -ne 'self') { InvokeObserved (Get-Command python).Source 'tests/run_model_tests.py' }
+        if ($Arm -ne 'model-idle') { InvokeObserved $app '--self-test' }
+        $result.status = 'OBSERVED'
+    }
     Start-Sleep -Seconds 3
     $result.events = @(CrashEvents $started)
-    $result.status = 'OBSERVED'
-} catch { $result.reason = $_.Exception.Message }
+} catch { $result.status = 'INCONCLUSIVE'; $result.reason = $_.Exception.Message }
 finally {
     try { $result.events = @(CrashEvents $started) }
     catch { $result.status = 'INCONCLUSIVE'; $result.reason += ' Event observation failed: ' + $_.Exception.Message }
@@ -113,10 +155,16 @@ finally {
             ($_.current_ids -join ',') -ne ($samples[0].current_ids -join ',')
         }).Count -gt 0
     }
+    if ($Arm -eq 'probe' -and $result.status -eq 'NO_REPRODUCTION_WITHIN_BOUND' -and
+        ($result.events.Count -or $result.font_host_exited -or $result.font_host_changed)) {
+        $result.status = 'HOST_FAILURE_IN_OBSERVATION_WINDOW'
+        $result.reason = 'Event or timeline detects host failure; exact causative launch is not inferred.'
+    }
     $result.ended_utc = (Get-Date).ToUniversalTime().ToString('o')
     $result | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $directory 'result.json') -Encoding utf8
 }
-if ($result.status -ne 'OBSERVED') { exit 2 }
+if ($result.status -eq 'INCONCLUSIVE') { exit 2 }
+if ($result.status -in @('HOST_CHANGED', 'CHILD_FAILURE', 'HOST_FAILURE_IN_OBSERVATION_WINDOW')) { exit 1 }
 if ($result.events.Count -or $result.font_host_exited -or $result.font_host_changed) { exit 1 }
 # A diagnostic non-reproduction is not product acceptance.
 exit 0
