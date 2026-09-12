@@ -332,3 +332,17 @@ The GUST notice now identifies a modified derivative; a derivation manifest
 travels in the wheel. The product candidate still requires its own full native
 lane, physical-face checks and image review: diagnostic acceptance must not be
 transferred automatically to this renamed resource or a later signed EXE.
+
+Run 34666488337 passed the automated native and Web gates with the renamed
+resource, but failed independent visual acceptance: decoded pixels differed
+in 114/120 palette sheets (all cell sheets; selector sheets were unchanged).
+`SvgStyle::serif/symbol` also feed native DrawFontCache and still started with
+the old family. Metrics and selector fonts resolved the new family while cell
+painting silently selected a fallback. This candidate is NOT accepted merely
+because its CI is green. Evidence:
+`C:/temp/eqnedit-native-acceptance-34666488337/palette-comparison.json`.
+
+Commit 41f4d8667 ties the native wide face and the drawing/SVG default family
+to one resource-family macro. External SVG fallback families remain after the
+first entry. The fifth offline test locks this shared contract. Repeat native
+acceptance and the 120-sheet decoded-image comparison before closing the fix.
