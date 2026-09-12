@@ -14,6 +14,15 @@ The latter checks W-J-C on the newly solved field; it is not a claim that the
 fixed-rule system was solved. Repeat with increasing evaluation order before
 claiming quadrature convergence. Observed changes are not error bounds.
 
+Use `--evaluation-orders 16 22 28` to evaluate all three rules on each
+newly solved state without repeating the solve. Each completed audit is saved
+under `evaluation_audits`, with a deep copy of its energy terms and gates.
+The row gates require every requested audit to pass; while an audit is pending,
+`energy_audit_completed` is false. The legacy `energy` field contains the last
+(highest-order) audit. This option cannot be combined with `--algebraic-only`.
+Even a zero process exit code means diagnostic gates passed, not quadrature
+convergence or three-engine acceptance. The top-level acceptance stays HOLD.
+
 Example (paths refer to the compute host):
 
 ```text
