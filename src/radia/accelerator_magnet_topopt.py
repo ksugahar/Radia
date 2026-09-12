@@ -1714,7 +1714,7 @@ def optimize_hdiv_mmm_magnet_to_measured_median_plane(
         incident_response=incident,
         **generation_options,
     )
-    realized = response_matrix @ generation.state + incident
+    realized = np.asarray(generation.response, dtype=float).copy()
     ratio = float(
         np.max(
             np.abs((realized - target.response_target) / target.response_band),
@@ -1811,7 +1811,8 @@ def optimize_hdiv_mmm_magnet_from_transfer_matrix(
         response_transform=response_transform,
         response_transform_jacobian=response_transform_jacobian,
         **generation_options)
-    raw = response_matrix @ generation.state + incident
+    # The material generation owns source calibration, including incident B.
+    raw = np.asarray(generation.response, dtype=float).copy()
     transfer = objective.evaluate_transfer_map(raw)
     count = len(design_orbit.segment_lengths)
     orbit_ratio = float(np.max(np.abs(
@@ -1917,7 +1918,8 @@ def optimize_hdiv_mmm_magnet_from_transfer_matrices(
         response_transform=response_transform,
         response_transform_jacobian=response_transform_jacobian,
         **generation_options)
-    raw = response_matrix @ generation.state + incident
+    # Use the same calibrated physical response for acceptance and callers.
+    raw = np.asarray(generation.response, dtype=float).copy()
     split = objective.split_raw_response(raw)
     transfers = tuple(
         item.evaluate_transfer_map(values)

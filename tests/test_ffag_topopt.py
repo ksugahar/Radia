@@ -194,6 +194,12 @@ def test_build_fixed_design_orbit_target_family_uses_caller_maps_directly():
         family.objective.objectives[0].bend_field_band, 1.0e-3)
     np.testing.assert_allclose(
         family.objective.objectives[1].bend_field_band, 2.0e-3)
+    caller_residuals = np.array([1.0e-12, 2.0e-12])
+    copied = FFAGFixedDesignOrbitTargetFamily(
+        family.objective, target_symplectic_residuals=caller_residuals)
+    caller_residuals[:] = 1.0
+    np.testing.assert_allclose(
+        copied.target_symplectic_residuals, (1.0e-12, 2.0e-12))
 
 
 def test_fixed_design_orbit_target_selects_named_pole_components():
@@ -1026,9 +1032,10 @@ def test_fixed_design_orbit_path_never_runs_periodic_orbit_recovery(
         exact_cache_calls.append(kwargs["exact_state_cache"])
         ratio=(1.0e12 if len(correction_calls)==1 else
                (2.0 if len(correction_calls)==2 else 1.0))
+        generation_scale=2.0 if len(correction_calls)==2 else 1.0
         generation=topopt.HDivMMMGenerationResult(
-            active_candidate.copy(),np.ones(2),
-            correction.target_field_response.copy(),tuple(),False,1.0,
+            active_candidate.copy(),generation_scale*np.ones(2),
+            correction.target_field_response.copy(),tuple(),False,generation_scale,
             correction.target_field_response.copy(),"one fixed-orbit batch")
         objective=MultiMomentumTransferMatrixObjective(
             tuple(orbits),np.asarray(matrices),
@@ -1085,6 +1092,9 @@ def test_fixed_design_orbit_path_never_runs_periodic_orbit_recovery(
     np.testing.assert_array_equal(initial_state_calls[0],np.zeros(2))
     np.testing.assert_array_equal(initial_state_calls[1],np.zeros(2))
     np.testing.assert_array_equal(initial_state_calls[2],np.ones(2))
+    np.testing.assert_array_equal(
+        correction_calls[2].current_field_response,
+        correction_calls[1].target_field_response)
     assert exact_cache_calls[0] is exact_cache_calls[1]
     assert exact_cache_calls[1] is exact_cache_calls[2]
     assert material_iteration_calls==[1,1,1]
