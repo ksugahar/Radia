@@ -9,8 +9,16 @@ from __future__ import annotations
 
 import cmath
 import math
-import re
 from datetime import datetime, timezone
+
+from ._metadata_values import (
+    _coordinate_tuple,
+    _first,
+    _norm,
+    _phase_list,
+    _string_list,
+    _unit_mapping,
+)
 
 from .air_gap import (
     carter_coefficient,
@@ -447,15 +455,6 @@ def acoustic_interface_result_package_gate(
     if not rows_in:
         raise ValueError("artifacts must not be empty")
 
-    def _norm(value):
-        return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
-
-    def _first(row, names):
-        for name in names:
-            if name in row and row[name] is not None:
-                return row[name]
-        return None
-
     def _float_or_none(value):
         if value is None:
             return None
@@ -734,15 +733,6 @@ def acoustic_impedance_power_result_package_gate(
     rows_in = list(artifacts)
     if not rows_in:
         raise ValueError("artifacts must not be empty")
-
-    def _norm(value):
-        return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
-
-    def _first(row, names):
-        for name in names:
-            if name in row and row[name] is not None:
-                return row[name]
-        return None
 
     def _float_or_none(value):
         if value is None:
@@ -1807,15 +1797,6 @@ def cst_result_export_package_gate(
     if not rows_in:
         raise ValueError("artifacts must not be empty")
 
-    def _norm(value):
-        return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
-
-    def _first(row, names):
-        for name in names:
-            if name in row and row[name] is not None:
-                return row[name]
-        return None
-
     required = tuple(_norm(kind) for kind in required_kinds)
     expected_policies = {
         "touchstone_metadata": {"touchstone_port_metadata_gate"},
@@ -1998,15 +1979,6 @@ def cst_export_manifest_solver_ready_gate(
 
     if not isinstance(manifest, dict):
         raise ValueError("manifest must be a dictionary")
-
-    def _norm(value):
-        return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
-
-    def _first(row, names):
-        for name in names:
-            if name in row and row[name] is not None:
-                return row[name]
-        return None
 
     tolerance = float(frequency_rtol)
     if tolerance < 0.0:
@@ -2485,15 +2457,6 @@ def cst_touchstone_solver_ready_manifest_gate(
     if max_created_run_skew_s is not None and float(max_created_run_skew_s) < 0.0:
         raise ValueError("max_created_run_skew_s must be non-negative")
 
-    def _norm(value):
-        return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
-
-    def _first(row, names):
-        for name in names:
-            if name in row and row[name] is not None:
-                return row[name]
-        return None
-
     def _network_kind(value):
         text = str(value or "").strip().upper().replace("-", "_").replace(" ", "_")
         aliases = {
@@ -2526,62 +2489,6 @@ def cst_touchstone_solver_ready_manifest_gate(
 
     def _data_format(value):
         return str(value or "").strip().upper()
-
-    def _string_list(value):
-        if value in (None, ""):
-            return []
-        if isinstance(value, str):
-            text = value.strip()
-            if not text:
-                return []
-            for sep in (";", "\n"):
-                text = text.replace(sep, ",")
-            return [item.strip() for item in text.split(",") if item.strip()]
-        if isinstance(value, dict):
-            return [str(item).strip() for item in value.keys() if str(item).strip()]
-        return [str(item).strip() for item in value if str(item).strip()]
-
-    def _unit_mapping(value):
-        if value in (None, ""):
-            return {}
-        if isinstance(value, dict):
-            return {
-                str(key).strip(): str(unit).strip()
-                for key, unit in value.items()
-                if str(key).strip()
-            }
-        pairs = {}
-        for item in _string_list(value):
-            if ":" in item:
-                key, unit = item.split(":", 1)
-            elif "=" in item:
-                key, unit = item.split("=", 1)
-            else:
-                continue
-            key = key.strip()
-            if key:
-                pairs[key] = unit.strip()
-        return pairs
-
-    def _coordinate_tuple(value):
-        if value in (None, ""):
-            return None
-        if isinstance(value, dict):
-            lower_keys = ("x", "y", "z")
-            upper_keys = ("X", "Y", "Z")
-            if all(key in value for key in lower_keys[:2]):
-                coords = [value[key] for key in lower_keys if key in value]
-            elif all(key in value for key in upper_keys[:2]):
-                coords = [value[key] for key in upper_keys if key in value]
-            else:
-                raise ValueError("coordinate dictionaries must include x/y or X/Y")
-        elif isinstance(value, str):
-            coords = [item for item in re.split(r"[,;\s]+", value.strip()) if item]
-        else:
-            coords = list(value)
-        if len(coords) not in (2, 3):
-            raise ValueError("coordinates must contain two or three values")
-        return tuple(float(coord) for coord in coords)
 
     def _coordinate_sequence(value):
         if value in (None, ""):
@@ -5529,9 +5436,6 @@ def owned_solver_model_tag_lifecycle_gate(
             if name in row and row[name] is not None:
                 return row[name]
         return default
-
-    def _norm(value):
-        return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
 
     def _string_list(value):
         if value is None:
@@ -8763,15 +8667,6 @@ def cst_abcd_cascade_solver_ready_manifest_gate(
     if not rows_in:
         raise ValueError("artifacts must not be empty")
 
-    def _norm(value):
-        return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
-
-    def _first(row, names):
-        for name in names:
-            if name in row and row[name] is not None:
-                return row[name]
-        return None
-
     def _row_check(row, name):
         checks = row.get("checks", {})
         if isinstance(checks, dict) and name in checks:
@@ -9172,9 +9067,6 @@ def netgen_vol_first_order_fem_bem_trace_package_handoff(
 
     if not isinstance(package, dict):
         raise ValueError("package must be a dictionary")
-
-    def _norm(value):
-        return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
 
     def _as_list(value):
         if value is None:
@@ -10749,9 +10641,6 @@ def netgen_vol_boundary_orientation_trace_package_gate(
             return list(value)
         return [value]
 
-    def _norm(value):
-        return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
-
     trace = package.get("trace") or {}
     orientation = package.get("boundary_orientation") or package.get("orientation") or {}
     gypsilab = package.get("gypsilab") or {}
@@ -11404,9 +11293,6 @@ def femm_group_motion_selection_gate(
     if not entity_rows:
         raise ValueError("rows must not be empty")
 
-    def _norm(value):
-        return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
-
     expected_group = int(expected_group_id)
     if expected_group <= 0:
         raise ValueError("expected_group_id must be positive")
@@ -11765,26 +11651,6 @@ def jmag_force_table_metadata_gate(
         "total_force": "3d_total",
     }
     qdim = qdim_aliases.get(qdim_key, qdim_key)
-
-    def _coordinate_tuple(value):
-        if value in (None, ""):
-            return None
-        if isinstance(value, dict):
-            keys = ("x", "y", "z")
-            upper_keys = ("X", "Y", "Z")
-            if all(key in value for key in keys[:2]):
-                coords = [value[key] for key in keys if key in value]
-            elif all(key in value for key in upper_keys[:2]):
-                coords = [value[key] for key in upper_keys if key in value]
-            else:
-                raise ValueError("coordinate dictionaries must include x/y or X/Y")
-        elif isinstance(value, str):
-            coords = [item for item in re.split(r"[,;\s]+", value.strip()) if item]
-        else:
-            coords = list(value)
-        if len(coords) not in (2, 3):
-            raise ValueError("coordinates must contain two or three values")
-        return tuple(float(coord) for coord in coords)
 
     def _normalize_analysis_type(value):
         text = str(value).strip().lower().replace("-", "_").replace(" ", "_")
@@ -13462,42 +13328,6 @@ def jmag_airgap_torque_integration_package_gate(
             return None
         return str(value).strip()
 
-    def _string_list(value):
-        if value in (None, ""):
-            return []
-        if isinstance(value, str):
-            text = value.strip()
-            if not text:
-                return []
-            for sep in (";", "\n"):
-                text = text.replace(sep, ",")
-            return [item.strip() for item in text.split(",") if item.strip()]
-        if isinstance(value, dict):
-            return [str(item).strip() for item in value.keys() if str(item).strip()]
-        return [str(item).strip() for item in value if str(item).strip()]
-
-    def _unit_mapping(value):
-        if value in (None, ""):
-            return {}
-        if isinstance(value, dict):
-            return {
-                str(key).strip(): str(unit).strip()
-                for key, unit in value.items()
-                if str(key).strip()
-            }
-        pairs = {}
-        for item in _string_list(value):
-            if ":" in item:
-                key, unit = item.split(":", 1)
-            elif "=" in item:
-                key, unit = item.split("=", 1)
-            else:
-                continue
-            key = key.strip()
-            if key:
-                pairs[key] = unit.strip()
-        return pairs
-
     def _float_or_none(value):
         if value in (None, ""):
             return None
@@ -14553,12 +14383,6 @@ def jmag_angle_alignment_contract_gate(
         "current_angle_reference_deg",
     )
 
-    def _first(row, names):
-        for name in names:
-            if name in row and row[name] is not None:
-                return row[name]
-        return None
-
     def _delta_deg(actual, expected):
         return ((float(actual) - float(expected) + 180.0) % 360.0) - 180.0
 
@@ -14679,15 +14503,6 @@ def jmag_export_case_package_gate(
     rows_in = list(artifacts)
     if not rows_in:
         raise ValueError("artifacts must not be empty")
-
-    def _norm(value):
-        return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
-
-    def _first(row, names):
-        for name in names:
-            if name in row and row[name] is not None:
-                return row[name]
-        return None
 
     required = tuple(_norm(kind) for kind in required_kinds)
     if not required:
@@ -14887,25 +14702,6 @@ def jmag_current_torque_solver_ready_manifest_gate(
     if not rows_in:
         raise ValueError("artifacts must not be empty")
 
-    def _norm(value):
-        return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
-
-    def _first(row, names):
-        for name in names:
-            if name in row and row[name] is not None:
-                return row[name]
-        return None
-
-    def _phase_list(value):
-        if value is None:
-            return []
-        if isinstance(value, str):
-            return [part.strip() for part in value.replace(";", ",").split(",") if part.strip()]
-        try:
-            return [str(part).strip() for part in value if str(part).strip()]
-        except TypeError:
-            return [str(value).strip()]
-
     required = tuple(_norm(kind) for kind in required_kinds)
     expected_phase_list = [str(phase).strip() for phase in expected_phases]
     if not required:
@@ -15102,15 +14898,6 @@ def jmag_efficiency_operating_point_package_gate(
     rows_in = list(artifacts)
     if not rows_in:
         raise ValueError("artifacts must not be empty")
-
-    def _norm(value):
-        return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
-
-    def _first(row, names):
-        for name in names:
-            if name in row and row[name] is not None:
-                return row[name]
-        return None
 
     def _op_ids(row):
         values = row.get("operating_point_ids", row.get("point_ids"))
@@ -15611,15 +15398,6 @@ def femm_motor_model_artifact_package_gate(
     if not rows_in:
         raise ValueError("artifacts must not be empty")
 
-    def _norm(value):
-        return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
-
-    def _first(row, names):
-        for name in names:
-            if name in row and row[name] is not None:
-                return row[name]
-        return None
-
     required = tuple(_norm(kind) for kind in required_kinds)
     if not required:
         raise ValueError("required_kinds must not be empty")
@@ -15788,25 +15566,6 @@ def femm_winding_current_package_gate(
     rows_in = list(artifacts)
     if not rows_in:
         raise ValueError("artifacts must not be empty")
-
-    def _norm(value):
-        return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
-
-    def _first(row, names):
-        for name in names:
-            if name in row and row[name] is not None:
-                return row[name]
-        return None
-
-    def _phase_list(value):
-        if value is None:
-            return []
-        if isinstance(value, str):
-            return [part.strip() for part in value.replace(";", ",").split(",") if part.strip()]
-        try:
-            return [str(part).strip() for part in value if str(part).strip()]
-        except TypeError:
-            return [str(value).strip()]
 
     required = tuple(_norm(kind) for kind in required_kinds)
     expected_phase_list = [str(phase).strip() for phase in expected_phases]
@@ -15984,25 +15743,6 @@ def femm_source_current_solver_ready_manifest_gate(
     if not rows_in:
         raise ValueError("artifacts must not be empty")
 
-    def _norm(value):
-        return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
-
-    def _first(row, names):
-        for name in names:
-            if name in row and row[name] is not None:
-                return row[name]
-        return None
-
-    def _phase_list(value):
-        if value is None:
-            return []
-        if isinstance(value, str):
-            return [part.strip() for part in value.replace(";", ",").split(",") if part.strip()]
-        try:
-            return [str(part).strip() for part in value if str(part).strip()]
-        except TypeError:
-            return [str(value).strip()]
-
     required = tuple(_norm(kind) for kind in required_kinds)
     expected_phase_list = [str(phase).strip() for phase in expected_phases]
     if not required:
@@ -16177,15 +15917,6 @@ def femm_air_gap_sample_solver_ready_manifest_gate(
     rows_in = list(artifacts)
     if not rows_in:
         raise ValueError("artifacts must not be empty")
-
-    def _norm(value):
-        return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
-
-    def _first(row, names):
-        for name in names:
-            if name in row and row[name] is not None:
-                return row[name]
-        return None
 
     required = tuple(_norm(kind) for kind in required_kinds)
     if not required:
@@ -16991,15 +16722,6 @@ def maxwell_stress_surface_package_gate(
     rows = list(artifacts)
     if not rows:
         raise ValueError("artifacts must not be empty")
-
-    def _norm(value):
-        return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
-
-    def _first(row, names):
-        for name in names:
-            if name in row and row[name] is not None:
-                return row[name]
-        return None
 
     def _status_ok(row):
         status = _norm(row.get("status", "ok"))
@@ -18213,15 +17935,6 @@ def pm_demag_package_identity_gate(
     if not rows_in:
         raise ValueError("artifacts must not be empty")
 
-    def _norm(value):
-        return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
-
-    def _first(row, names):
-        for name in names:
-            if name in row and row[name] is not None:
-                return row[name]
-        return None
-
     required = tuple(_norm(kind) for kind in required_kinds)
     if not required:
         raise ValueError("required_kinds must not be empty")
@@ -18409,35 +18122,6 @@ def pm_demag_margin_screening_package_gate(
     rows_in = list(artifacts)
     if not rows_in:
         raise ValueError("artifacts must not be empty")
-
-    def _norm(value):
-        return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
-
-    def _first(row, names):
-        for name in names:
-            if name in row and row[name] is not None:
-                return row[name]
-        return None
-
-    def _coordinate_tuple(value):
-        if value in (None, ""):
-            return None
-        if isinstance(value, dict):
-            lower_keys = ("x", "y", "z")
-            upper_keys = ("X", "Y", "Z")
-            if all(key in value for key in lower_keys[:2]):
-                coords = [value[key] for key in lower_keys if key in value]
-            elif all(key in value for key in upper_keys[:2]):
-                coords = [value[key] for key in upper_keys if key in value]
-            else:
-                raise ValueError("coordinate dictionaries must include x/y or X/Y")
-        elif isinstance(value, str):
-            coords = [item for item in re.split(r"[,;\s]+", value.strip()) if item]
-        else:
-            coords = list(value)
-        if len(coords) not in (2, 3):
-            raise ValueError("coordinates must contain two or three values")
-        return tuple(float(coord) for coord in coords)
 
     required = tuple(_norm(kind) for kind in required_kinds)
     if not required:
@@ -19904,15 +19588,6 @@ def mqs_coulomb_gauge_efield_postprocess_gate(
     rows_in = list(artifacts)
     if not rows_in:
         raise ValueError("artifacts must not be empty")
-
-    def _norm(value):
-        return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
-
-    def _first(row, names):
-        for name in names:
-            if name in row and row[name] is not None:
-                return row[name]
-        return None
 
     required = tuple(_norm(kind) for kind in required_kinds)
     if not required:
