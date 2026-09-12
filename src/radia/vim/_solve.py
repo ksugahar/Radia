@@ -1339,7 +1339,8 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
         raise ValueError("vim.Solve: energy-newton inner_preconditioner must be 'mass-riesz' or 'jacobi' "
                          "(got %r)" % (inner_preconditioner,))
 
-    def _solve_W(W_matrix, rhs, *, tol_override=None, x0=None):
+    def _solve_W(W_matrix, rhs, *, tol_override=None, x0=None,
+                 context="unspecified"):
         solve_tol = float(cg_tol if tol_override is None else max(float(cg_tol), float(tol_override)))
         if inner_preconditioner == "jacobi":
             res = _h_solve_auto_prec(
@@ -1350,9 +1351,16 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
         _capture_cpp_solve_timings(res)
         it = int(res["iters"])
         if it >= int(cg_maxit):
-            raise RuntimeError("vim.Solve (energy-Newton inner W-CG): did NOT converge in %d iters "
-                               "(n_face=%d); the (W_tan + N) operator is SPD, so this means an ill-"
-                               "conditioned tangent/mesh -- tighten gram_eps or raise maxit." % (cg_maxit, n_face))
+            error = RuntimeError(
+                "vim.Solve (energy-Newton inner W-CG): did NOT converge in %d iters "
+                "(n_face=%d, context=%s, target=%.3e, preconditioner=%s); "
+                "inspect tangent conditioning, Gram accuracy and the iteration limit."
+                % (it, n_face, context, solve_tol, inner_preconditioner))
+            error.linear_context = str(context)
+            error.linear_iterations = it
+            error.linear_requested_tolerance = solve_tol
+            error.linear_preconditioner = str(inner_preconditioner)
+            raise error
         return np.asarray(res["m"], float), it
 
     def _energy(m, rhs):                        # E(m) = INT W_co(|M|) dx + 1/2 m.Nm - rhs.m
@@ -1407,7 +1415,8 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
             invchi0 = ng.GridFunction(l2)
             invchi0.vec.FV().NumPy()[:] = 1.0 / np.maximum(chi0_e, 1.0)
             m, it0 = _solve_W(
-                _W_matrix(invchi0, tensor=False), rhs_stage, tol_override=max(cg_tol, 1e-6))
+                _W_matrix(invchi0, tensor=False), rhs_stage, tol_override=max(cg_tol, 1e-6),
+                context="linear_warmstart_stage_1")
             stats["nonlinear_warmstart_solves"] += 1
             stats["nonlinear_linear_inner_iters"] += int(it0)
 
@@ -1434,7 +1443,8 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
                 stats["nonlinear_tangent_reuses"] += 1
             solve_tol = _forcing_tol(rel_step, stage_final)
             dm, itlin = _solve_W(cached_W, -R, tol_override=solve_tol,
-                                 x0=dm_prev if (cg_x0 and dm_prev is not None) else None)
+                                 x0=dm_prev if (cg_x0 and dm_prev is not None) else None,
+                                 context="newton_stage_%d_iteration_%d" % (istage + 1, it + 1))
             stats["nonlinear_linear_inner_iters"] += int(itlin)
             dec = float(-dm @ R)                             # dm.(-R) = dm^T J dm >= 0
             lam = 1.0
@@ -1453,7 +1463,8 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
                 stats["nonlinear_tangent_assemblies"] += 1
                 stats["nonlinear_fresh_tangent_retries"] += 1
                 dm, itlin = _solve_W(cached_W, -R, tol_override=max(cg_tol, min(1e-4, solve_tol)),
-                                     x0=dm_prev if (cg_x0 and dm_prev is not None) else None)
+                                     x0=dm_prev if (cg_x0 and dm_prev is not None) else None,
+                                     context="fresh_tangent_stage_%d_iteration_%d" % (istage + 1, it + 1))
                 stats["nonlinear_linear_inner_iters"] += int(itlin)
                 dec = float(-dm @ R)
                 lam = 1.0
