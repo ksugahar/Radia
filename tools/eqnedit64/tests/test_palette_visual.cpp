@@ -37,7 +37,7 @@ int wmain(int argc, wchar_t** argv) {
     if (FAILED(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED))) return 91;
     for (int dpi : {96, 144, 192}) {
         HFONT font = pick_button_font(MulDiv(17, dpi, 96));
-        if (!font_resolves_to_face(font, L"Latin Modern Math")) return 243;
+        if (!font_resolves_to_face(font, EQNEDIT64_MATH_FONT_FACE)) return 243;
         auto proofPalettes = eqnedit::palettes();
         eqnedit::Palette selectors{"Selectors and persistent styles", "", 4, {}};
         for (const auto& palette : eqnedit::palettes())
