@@ -22,6 +22,14 @@ on:
         description: 'Run three isolated font-boundary arms, not release acceptance'
         type: boolean
         default: false
+      font_dump:
+        description: 'Two isolated same-binary model/self trials with restricted one-day dumps'
+        type: boolean
+        default: false
+      font_dump_public_key:
+        description: 'Base64 DER public encryption key; private key stays off GitHub'
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -32,7 +40,7 @@ concurrency:
 
 jobs:
   web:
-    if: ${{ inputs.font_diagnostic != true }}
+    if: ${{ inputs.font_diagnostic != true && inputs.font_dump != true }}
     # The browser edition is pure JavaScript plus a string-contract test, so it
     # answers in seconds on a free runner instead of waiting for the Windows
     # native build.  This is a fast-feedback lane, not a replacement: the
@@ -79,7 +87,7 @@ jobs:
           node tests/test_palette_browser.cjs
 
   build-test:
-    if: ${{ inputs.font_diagnostic != true }}
+    if: ${{ inputs.font_diagnostic != true && inputs.font_dump != true }}
     # Font registration tests run only in this disposable GitHub-hosted
     # session. They must not churn the interactive laboratory desktop's font
     # cache or disturb applications such as LINE and Office.
@@ -255,7 +263,7 @@ jobs:
           if-no-files-found: warn
 
   font-boundary-diagnostic:
-    if: ${{ inputs.font_diagnostic == true }}
+    if: ${{ inputs.font_diagnostic == true && inputs.font_dump != true }}
     runs-on: windows-2022
     timeout-minutes: 15
     strategy:
@@ -294,4 +302,111 @@ jobs:
         with:
           name: font-boundary-${{ matrix.arm }}
           path: ${{ runner.temp }}/font-boundary/
+          if-no-files-found: warn
+
+  font-dump-build:
+    if: ${{ inputs.font_dump == true }}
+    runs-on: windows-2022
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: tools/eqnedit64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build once without font execution
+        run: |
+          python -m pip install pybind11 pytest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake -S . -B build_cmake -A x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build_cmake --config Release --target Eqnedit64 --parallel 2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmd.exe /d /c build\build_pymodule.bat
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $files = @('build_cmake/Release/Eqnedit64.exe') + @(Get-ChildItem build/eqnedit_core*.pyd | ForEach-Object { 'build/' + $_.Name })
+          if ($files.Count -ne 2) { throw 'Expected exactly one executable and one module.' }
+          $records = @($files | ForEach-Object { [ordered]@{path=$_; sha256=(Get-FileHash $_ -Algorithm SHA256).Hash} })
+          [ordered]@{source_sha=$env:GITHUB_SHA; files=$records} | ConvertTo-Json -Depth 4 | Set-Content font-binary-manifest.json -Encoding utf8
+      - uses: actions/upload-artifact@v4
+        with:
+          name: font-dump-binaries
+          retention-days: 1
+          if-no-files-found: error
+          path: |
+            tools/eqnedit64/build_cmake/Release/Eqnedit64.exe
+            tools/eqnedit64/build/eqnedit_core*.pyd
+            tools/eqnedit64/font-binary-manifest.json
+
+  font-dump-trial:
+    needs: font-dump-build
+    if: ${{ inputs.font_dump == true }}
+    runs-on: windows-2022
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        trial: [1, 2]
+    env:
+      EQNEDIT64_ISOLATED_TEST_SESSION: '1'
+      FONT_DUMP_PUBLIC_KEY: ${{ inputs.font_dump_public_key }}
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: tools/eqnedit64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: font-dump-binaries
+          path: tools/eqnedit64
+      - name: Verify identical binary payload
+        run: |
+          if (-not $env:FONT_DUMP_PUBLIC_KEY) { throw 'Public encryption key is required.' }
+          python -m pip install cryptography
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python build/font_dump_crypto.py selftest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $manifest = Get-Content font-binary-manifest.json -Raw | ConvertFrom-Json
+          if ($manifest.source_sha -ne $env:GITHUB_SHA) { throw 'Source identity mismatch.' }
+          foreach ($file in $manifest.files) {
+            if ((Get-FileHash $file.path -Algorithm SHA256).Hash -ne $file.sha256) { throw 'Binary identity mismatch.' }
+          }
+      - name: Configure VM-only restricted crash dump collection
+        run: >-
+          pwsh -NoProfile -File build/enable_isolated_font_dumps.ps1
+          -DumpDirectory '${{ runner.temp }}/font-dumps'
+      - name: Observe model then self-test once
+        run: >-
+          pwsh -NoProfile -File build/diagnose_font_boundary.ps1
+          -Arm model-self -OutputDirectory '${{ runner.temp }}/font-boundary'
+      - name: Allow bounded WER dump completion
+        if: always()
+        run: Start-Sleep -Seconds 15
+      - name: Preserve timeline evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: font-dump-timeline-${{ matrix.trial }}
+          path: ${{ runner.temp }}/font-boundary/
+          if-no-files-found: warn
+      - name: Encrypt private dump evidence before upload
+        if: always()
+        run: >-
+          python build/font_dump_crypto.py encrypt
+          --path '${{ runner.temp }}/font-dumps'
+          --output '${{ runner.temp }}/encrypted-font-dumps/evidence.enc'
+      - name: Preserve encrypted dumps for one day only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sensitive-font-dump-${{ matrix.trial }}
+          retention-days: 1
+          path: ${{ runner.temp }}/encrypted-font-dumps/
           if-no-files-found: warn
