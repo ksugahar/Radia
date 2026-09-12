@@ -585,6 +585,15 @@ may use an NGSolve expression such as ``outer|top`` and roles may overlap
 intentionally.  Empty selectors never expand silently to every boundary.  The
 removed ``--surface-label`` fails with migration guidance.
 
+In a 2D axisymmetric thermal mesh, the true ``r=0`` center axis is the natural
+symmetry boundary, not a physical heat-transfer surface.  Its revolved area is
+zero because the weak form uses ``2*pi*r*ds``.  The axisymmetric solver fails
+fast when any active heat-flux, convection, or radiation selector includes an
+axis boundary element, even when a broad boundary label also covers non-axis
+edges.  Exclude the axis and label each coil-facing or exposed physical surface
+separately.  An inner cylindrical surface at ``r>0`` is not the center axis: it
+has nonzero revolved area and may receive heat when explicitly selected.
+
 Cross-mesh q_surf transfer currently accepts ``--qsurf-order 1`` only.  The
 loader rejects higher order because its surface transfer is vertex-sampled and
 higher-order H1 coefficients are hierarchical; accepting order 2 would silently
