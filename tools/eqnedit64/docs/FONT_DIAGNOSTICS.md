@@ -83,3 +83,41 @@ EXE; model suite immediately followed by self-test. Capture host process
 liveness from before the first operation through the idle tail, along with
 command intervals and JSONL. Keep diagnostic results separate from release
 acceptance, and do not weaken the existing failure gate or add retry-until-green.
+
+## Offline dump analysis: run 34661533840 (2026-09-12)
+
+Two independent disposable windows-2022 jobs using the same binary payload
+captured full dumps. Both model and self-test returned zero despite the host
+crash. Dumps and debugger logs remain ACL-restricted local evidence, not public
+repository artifacts.
+
+Microsoft CDB with the public PDB matching the dump's CodeView GUID
+`DE2401FD-C131-8258-9A23-A072EE4125B1`, age 1, resolves both crashes to
+`fontdrvhost!CheckMemoryUsage+0x26` (module offset `0x366a2`). Both are reads
+of address `0x8`, with RDX zero, in fontdrvhost 10.0.20348.5256.
+
+The matching call chain is:
+
+```
+DrvLoadFontFile -> LoadFont -> AllocateFontCollection
+               -> ATMallocExt -> CheckMemoryUsage
+```
+
+Both dumps have identical relevant global state: the first two DWORDs at
+`atm` are `0x0053e134, 0`; `lruListHead` is null. Disassembly enters the
+list-processing path when the first DWORD exceeds `0x500000` or the second
+exceeds `0x0fa00000`, then dereferences `[lruListHead+8]` without a null check.
+The first condition holds in both dumps. This establishes the immediate fault
+mechanism, not how this inconsistent management state arose. It is not evidence
+of system-wide out-of-memory, nor proof that malformed font data is responsible.
+
+The symbol server image emits a checksum mismatch warning; do not omit it.
+CodeView GUID/age match, and `!lmi` reports the image read from dump memory and
+public PDB symbols loaded successfully. Preserve original dumps for independent
+confirmation rather than treating the downloaded image as the original binary.
+
+Next isolate which registration/measurement/process-lifetime sequence leaves
+this state, using disposable workers and retaining external host monitoring.
+Do not patch the Windows binary, weaken the release gate, or claim that an
+explicit RemoveFontResourceEx call or retry delay is a fix without controlled
+evidence. Product release remains on hold.
