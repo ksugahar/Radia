@@ -190,9 +190,19 @@ def test_provenance_helper_and_beam_contracts_are_in_ci_scope():
         triggers = workflow.get("on", workflow.get(True))
         for event in ("push", "pull_request"):
             assert helper in triggers[event]["paths"]
-    rules = json.loads((ROOT / "tests/test_tier_manifest.json").read_text())["impact_rules"]
-    assert "tests/test_native_build_provenance.py" in rules[helper]
-    assert "tests/test_native_build_provenance.py" in rules["Build.ps1"]
+    manifest = json.loads((ROOT / "tests/test_tier_manifest.json").read_text())
+    assert manifest["profiles"]["native-build-contracts"]["paths"] == [
+        "tests/test_native_build_provenance.py"
+    ]
+    workflow = yaml.safe_load((ROOT / ".github/workflows/sparsesolv.yml").read_text())
+    triggers = workflow.get("on", workflow.get(True))
+    for event in ("push", "pull_request"):
+        assert "tests/test_native_build_provenance.py" in triggers[event]["paths"]
+    steps = workflow["jobs"]["ams-regression"]["steps"]
+    contract = next(step for step in steps if step.get("name") == "Verify native build provenance contracts")
+    assert "--profile native-build-contracts" in contract["run"]
+    assert "exit $LASTEXITCODE" in contract["run"]
+    rules = manifest["impact_rules"]
     for name in (
         "benchmark_beam_transfer_mex_python.py",
         "benchmark_beam_transfer_mex_matlab.m",
