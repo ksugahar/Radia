@@ -293,10 +293,14 @@ native_manifest_path = os.path.join(
 with open(native_manifest_path, encoding="utf-8") as manifest_file:
     native_provenance = json.load(manifest_file)
 
-results_path = os.path.join(OUT_DIR, "multi_geometry_results.json")
+results_path = os.environ.get(
+    "CUBIT_VALIDATION_RESULTS",
+    os.path.join(OUT_DIR, "multi_geometry_results.json"),
+)
 with open(results_path, "w", encoding="utf-8", newline="\n") as results_file:
     json.dump({
         "schema": "cubit-mesh-export.multi-geometry-validation.v1",
+        "run_id": os.environ.get("CUBIT_VALIDATION_RUN_ID"),
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "order": ORDER,
         "plugin_dir": os.environ["CUBIT_PLUGIN_DIR"],
