@@ -94,7 +94,7 @@ def test_package_is_hashed_native_ih_allowlist(tmp_path):
     assert sums.read_text(encoding="ascii").split()[0] == \
         package_module.sha256(archive)
     assert manifest["release_channel"] == "preview"
-    assert manifest["schema"] == "radia.simulink.ih-release-manifest.v2"
+    assert manifest["schema"] == "radia.simulink.ih-release-manifest.v3"
     assert manifest["backend"] == "matlab-level2+radia-mex-handles"
     assert manifest["required_mex"] == ["matlab/radia_mex.mexw64"]
     assert manifest["standalone_mex_debug_api"] is True
@@ -111,6 +111,8 @@ def test_package_is_hashed_native_ih_allowlist(tmp_path):
     assert "matlab/radia_ih_eddy_sfun.mexw64" not in names
     assert not any("LUT" in name or "makeIHPlant" in name for name in names)
     assert "matlab/radia_simulink_library.slx" not in names
+    assert "matlab/mkl_sequential.3.dll" in names
+    assert "matlab/mkl_intel_thread.3.dll" not in names
 
 
 def test_full_library_package_includes_mex_models_and_runtime(tmp_path):
@@ -136,7 +138,7 @@ def test_full_library_package_includes_mex_models_and_runtime(tmp_path):
     )
     manifest = verify_module.verify_archive(archive)
     assert manifest["schema"] == (
-        "radia.simulink.library-release-manifest.v3"
+        "radia.simulink.library-release-manifest.v4"
     )
     assert manifest["release_channel"] == "production"
     assert manifest["entry_model"] == "matlab/radia_simulink_library.slx"
@@ -166,6 +168,8 @@ def test_full_library_package_includes_mex_models_and_runtime(tmp_path):
     with zipfile.ZipFile(archive) as bundle:
         names = set(bundle.namelist())
     assert verify_module.FULL_REQUIRED_MEMBERS <= names
+    assert "matlab/mkl_sequential.3.dll" in names
+    assert "matlab/mkl_intel_thread.3.dll" not in names
     assert "matlab/radia_electromagnet.slx" in names
     assert "matlab/radia_maglev.slx" in names
     assert "matlab/radia_nonlinear_reactor.slx" in names
