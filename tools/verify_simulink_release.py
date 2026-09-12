@@ -122,7 +122,7 @@ LEGACY_FULL_REQUIRED_MEMBERS = {
     "matlab/mkl_avx2.3.dll",
     "matlab/mkl_core.3.dll",
     "matlab/mkl_def.3.dll",
-    "matlab/mkl_sequential.3.dll",
+    "matlab/mkl_intel_thread.3.dll",
     "matlab/mkl_rt.3.dll",
 }
 
@@ -209,8 +209,9 @@ def verify_archive(archive: Path) -> dict:
             raise RuntimeError(
                 f"Simulink release archive is incomplete: {', '.join(missing)}"
             )
-        if (preview_v3 or full_v4) and \
-                "matlab/mkl_intel_thread.3.dll" in names:
+        if (preview_v3 or full_v4) and any(
+                name.casefold() == "matlab/mkl_intel_thread.3.dll"
+                for name in names):
             raise RuntimeError(
                 "Current MATLAB releases must not bundle the threaded MKL runtime"
             )

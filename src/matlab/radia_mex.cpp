@@ -841,6 +841,24 @@ std::vector<std::uint64_t> HandleVector(const mxArray* value,
     return std::vector<std::uint64_t>(data, data + count);
 }
 
+template <class Registry>
+void DestroyRegistered(Registry& registry, std::uint64_t handle,
+                       const char* stale_handle_message) {
+    bool erased = false;
+    {
+        std::lock_guard<std::mutex> guard(registry_mutex);
+        erased = registry.erase(handle) != 0;
+        if (erased)
+            --lock_count;
+    }
+    if (!erased)
+        BadArgument(stale_handle_message);
+
+    // The final unlock may synchronously invoke the registered exit handler.
+    // Never call it while registry_mutex is held.
+    mexUnlock();
+}
+
 #ifndef RADIA_OPTUNA_MEX_ONLY
 void CheckRadia(int error_code) {
     if (error_code == 0)
@@ -853,28 +871,33 @@ void CheckRadia(int error_code) {
 void Cleanup() {
     CleanupIHHandles();
     CleanupReactorHandles();
-    std::lock_guard<std::mutex> guard(registry_mutex);
-    energy_registry.clear();
-    bem_registry.clear();
-    peec_registry.clear();
-    charge_gram_registry.clear();
-    charge_gram_derivative_registry.clear();
-    hcurl_topology_registry.clear();
-    field_registry.clear();
-    planar_registry.clear();
-    coefficient_registry.clear();
-    gridfunction_registry.clear();
-    linear_form_registry.clear();
-    vector_registry.clear();
-    mesh_registry.clear();
-    fespace_registry.clear();
-    bilinear_form_registry.clear();
-    matrix_registry.clear();
-    solver_registry.clear();
-    state_space_registry.clear();
-    while (lock_count > 0) {
+    std::size_t unlock_count = 0;
+    {
+        std::lock_guard<std::mutex> guard(registry_mutex);
+        energy_registry.clear();
+        bem_registry.clear();
+        peec_registry.clear();
+        charge_gram_registry.clear();
+        charge_gram_derivative_registry.clear();
+        hcurl_topology_registry.clear();
+        field_registry.clear();
+        planar_registry.clear();
+        coefficient_registry.clear();
+        gridfunction_registry.clear();
+        linear_form_registry.clear();
+        vector_registry.clear();
+        mesh_registry.clear();
+        fespace_registry.clear();
+        bilinear_form_registry.clear();
+        matrix_registry.clear();
+        solver_registry.clear();
+        state_space_registry.clear();
+        unlock_count = lock_count;
+        lock_count = 0;
+    }
+    while (unlock_count > 0) {
         mexUnlock();
-        --lock_count;
+        --unlock_count;
     }
 }
 
@@ -931,11 +954,8 @@ EnergyStopMaterial& Energy(std::uint64_t handle) {
 }
 
 void Destroy(std::uint64_t handle) {
-    std::lock_guard<std::mutex> guard(registry_mutex);
-    if (energy_registry.erase(handle) == 0)
-        BadArgument("invalid or stale EnergyStopMaterial handle");
-    mexUnlock();
-    --lock_count;
+    DestroyRegistered(energy_registry, handle,
+                      "invalid or stale EnergyStopMaterial handle");
 }
 
 BEMHandle& BEM(std::uint64_t handle) {
@@ -947,11 +967,8 @@ BEMHandle& BEM(std::uint64_t handle) {
 }
 
 void DestroyBEM(std::uint64_t handle) {
-    std::lock_guard<std::mutex> guard(registry_mutex);
-    if (bem_registry.erase(handle) == 0)
-        BadArgument("invalid or stale HACApK BEM handle");
-    mexUnlock();
-    --lock_count;
+    DestroyRegistered(bem_registry, handle,
+                      "invalid or stale HACApK BEM handle");
 }
 
 PEECHandle& PEEC(std::uint64_t handle) {
@@ -974,11 +991,8 @@ std::uint64_t RegisterPEEC(std::unique_ptr<PEECHandle> peec) {
 }
 
 void DestroyPEEC(std::uint64_t handle) {
-    std::lock_guard<std::mutex> guard(registry_mutex);
-    if (peec_registry.erase(handle) == 0)
-        BadArgument("invalid or stale HACApK PEEC handle");
-    mexUnlock();
-    --lock_count;
+    DestroyRegistered(peec_registry, handle,
+                      "invalid or stale HACApK PEEC handle");
 }
 
 ChargeGramHandle& ChargeGram(std::uint64_t handle) {
@@ -1001,11 +1015,8 @@ std::uint64_t RegisterChargeGram(std::unique_ptr<ChargeGramHandle> gram) {
 }
 
 void DestroyChargeGram(std::uint64_t handle) {
-    std::lock_guard<std::mutex> guard(registry_mutex);
-    if (charge_gram_registry.erase(handle) == 0)
-        BadArgument("invalid or stale HACApK charge-Gram handle");
-    mexUnlock();
-    --lock_count;
+    DestroyRegistered(charge_gram_registry, handle,
+                      "invalid or stale HACApK charge-Gram handle");
 }
 
 ChargeGramDerivativeHandle& ChargeGramDerivative(std::uint64_t handle) {
@@ -1031,11 +1042,8 @@ std::uint64_t RegisterChargeGramDerivative(
 }
 
 void DestroyChargeGramDerivative(std::uint64_t handle) {
-    std::lock_guard<std::mutex> guard(registry_mutex);
-    if (charge_gram_derivative_registry.erase(handle) == 0)
-        BadArgument("invalid or stale HACApK charge-Gram derivative handle");
-    mexUnlock();
-    --lock_count;
+    DestroyRegistered(charge_gram_derivative_registry, handle,
+                      "invalid or stale HACApK charge-Gram derivative handle");
 }
 
 std::uint64_t RegisterField(std::shared_ptr<HDivFieldEvaluator> evaluator) {
@@ -1058,11 +1066,8 @@ std::shared_ptr<HDivFieldEvaluator> Field(std::uint64_t handle) {
 }
 
 void DestroyField(std::uint64_t handle) {
-    std::lock_guard<std::mutex> guard(registry_mutex);
-    if (field_registry.erase(handle) == 0)
-        BadArgument("invalid or stale HDiv field evaluator handle");
-    mexUnlock();
-    --lock_count;
+    DestroyRegistered(field_registry, handle,
+                      "invalid or stale HDiv field evaluator handle");
 }
 
 std::uint64_t RegisterPlanar(std::shared_ptr<PlanarFieldEvaluator> evaluator) {
@@ -1085,11 +1090,8 @@ std::shared_ptr<PlanarFieldEvaluator> Planar(std::uint64_t handle) {
 }
 
 void DestroyPlanar(std::uint64_t handle) {
-    std::lock_guard<std::mutex> guard(registry_mutex);
-    if (planar_registry.erase(handle) == 0)
-        BadArgument("invalid or stale planar field evaluator handle");
-    mexUnlock();
-    --lock_count;
+    DestroyRegistered(planar_registry, handle,
+                      "invalid or stale planar field evaluator handle");
 }
 
 std::uint64_t RegisterCoefficient(
@@ -1118,11 +1120,8 @@ std::shared_ptr<ngfem::CoefficientFunction> Coefficient(
 }
 
 void DestroyCoefficient(std::uint64_t handle) {
-    std::lock_guard<std::mutex> guard(registry_mutex);
-    if (coefficient_registry.erase(handle) == 0)
-        BadArgument("invalid or stale NGSolve CoefficientFunction handle");
-    mexUnlock();
-    --lock_count;
+    DestroyRegistered(coefficient_registry, handle,
+                      "invalid or stale NGSolve CoefficientFunction handle");
 }
 
 std::uint64_t RegisterGridFunction(
@@ -1148,11 +1147,8 @@ NGSolveGridFunctionHandle& GridFunction(std::uint64_t handle) {
 }
 
 void DestroyGridFunction(std::uint64_t handle) {
-    std::lock_guard<std::mutex> guard(registry_mutex);
-    if (gridfunction_registry.erase(handle) == 0)
-        BadArgument("invalid or stale NGSolve GridFunction handle");
-    mexUnlock();
-    --lock_count;
+    DestroyRegistered(gridfunction_registry, handle,
+                      "invalid or stale NGSolve GridFunction handle");
 }
 
 std::uint64_t RegisterLinearForm(
@@ -1178,11 +1174,8 @@ NGSolveLinearFormHandle& LinearForm(std::uint64_t handle) {
 }
 
 void DestroyLinearForm(std::uint64_t handle) {
-    std::lock_guard<std::mutex> guard(registry_mutex);
-    if (linear_form_registry.erase(handle) == 0)
-        BadArgument("invalid or stale NGSolve LinearForm handle");
-    mexUnlock();
-    --lock_count;
+    DestroyRegistered(linear_form_registry, handle,
+                      "invalid or stale NGSolve LinearForm handle");
 }
 
 std::uint64_t RegisterVector(std::unique_ptr<NGSolveVectorHandle> vector) {
@@ -1207,11 +1200,8 @@ NGSolveVectorHandle& Vector(std::uint64_t handle) {
 }
 
 void DestroyVector(std::uint64_t handle) {
-    std::lock_guard<std::mutex> guard(registry_mutex);
-    if (vector_registry.erase(handle) == 0)
-        BadArgument("invalid or stale NGSolve vector handle");
-    mexUnlock();
-    --lock_count;
+    DestroyRegistered(vector_registry, handle,
+                      "invalid or stale NGSolve vector handle");
 }
 
 std::uint64_t RegisterMesh(std::unique_ptr<NGSolveMeshHandle> mesh) {
@@ -1236,11 +1226,8 @@ NGSolveMeshHandle& Mesh(std::uint64_t handle) {
 }
 
 void DestroyMesh(std::uint64_t handle) {
-    std::lock_guard<std::mutex> guard(registry_mutex);
-    if (mesh_registry.erase(handle) == 0)
-        BadArgument("invalid or stale NGSolve MeshAccess handle");
-    mexUnlock();
-    --lock_count;
+    DestroyRegistered(mesh_registry, handle,
+                      "invalid or stale NGSolve MeshAccess handle");
 }
 
 std::uint64_t RegisterFESpace(std::unique_ptr<NGSolveFESpaceHandle> fespace) {
@@ -1265,11 +1252,8 @@ NGSolveFESpaceHandle& FESpace(std::uint64_t handle) {
 }
 
 void DestroyFESpace(std::uint64_t handle) {
-    std::lock_guard<std::mutex> guard(registry_mutex);
-    if (fespace_registry.erase(handle) == 0)
-        BadArgument("invalid or stale NGSolve FESpace handle");
-    mexUnlock();
-    --lock_count;
+    DestroyRegistered(fespace_registry, handle,
+                      "invalid or stale NGSolve FESpace handle");
 }
 
 std::uint64_t RegisterBilinearForm(
@@ -1295,11 +1279,8 @@ NGSolveBilinearFormHandle& BilinearForm(std::uint64_t handle) {
 }
 
 void DestroyBilinearForm(std::uint64_t handle) {
-    std::lock_guard<std::mutex> guard(registry_mutex);
-    if (bilinear_form_registry.erase(handle) == 0)
-        BadArgument("invalid or stale NGSolve BilinearForm handle");
-    mexUnlock();
-    --lock_count;
+    DestroyRegistered(bilinear_form_registry, handle,
+                      "invalid or stale NGSolve BilinearForm handle");
 }
 
 std::uint64_t RegisterMatrix(std::unique_ptr<NGSolveMatrixHandle> matrix) {
@@ -1324,11 +1305,8 @@ NGSolveMatrixHandle& Matrix(std::uint64_t handle) {
 }
 
 void DestroyMatrix(std::uint64_t handle) {
-    std::lock_guard<std::mutex> guard(registry_mutex);
-    if (matrix_registry.erase(handle) == 0)
-        BadArgument("invalid or stale NGSolve BaseMatrix handle");
-    mexUnlock();
-    --lock_count;
+    DestroyRegistered(matrix_registry, handle,
+                      "invalid or stale NGSolve BaseMatrix handle");
 }
 
 std::uint64_t RegisterSolver(std::unique_ptr<NGSolveSolverHandle> solver) {
@@ -1353,11 +1331,8 @@ NGSolveSolverHandle& Solver(std::uint64_t handle) {
 }
 
 void DestroySolver(std::uint64_t handle) {
-    std::lock_guard<std::mutex> guard(registry_mutex);
-    if (solver_registry.erase(handle) == 0)
-        BadArgument("invalid or stale NGSolve Solver handle");
-    mexUnlock();
-    --lock_count;
+    DestroyRegistered(solver_registry, handle,
+                      "invalid or stale NGSolve Solver handle");
 }
 
 std::uint64_t RegisterStateSpace(
@@ -1383,21 +1358,23 @@ NativeStateSpaceHandle& StateSpace(std::uint64_t handle) {
 }
 
 void DestroyStateSpace(std::uint64_t handle) {
-    std::lock_guard<std::mutex> guard(registry_mutex);
-    if (state_space_registry.erase(handle) == 0)
-        BadArgument("invalid or stale native Simulink state-space handle");
-    mexUnlock();
-    --lock_count;
+    DestroyRegistered(state_space_registry, handle,
+                      "invalid or stale native Simulink state-space handle");
 }
 
 #else
 
 void Cleanup() {
-    std::lock_guard<std::mutex> guard(registry_mutex);
-    optuna_random_state_registry.clear();
-    while (lock_count > 0) {
+    std::size_t unlock_count = 0;
+    {
+        std::lock_guard<std::mutex> guard(registry_mutex);
+        optuna_random_state_registry.clear();
+        unlock_count = lock_count;
+        lock_count = 0;
+    }
+    while (unlock_count > 0) {
         mexUnlock();
-        --lock_count;
+        --unlock_count;
     }
 }
 
@@ -1438,11 +1415,8 @@ OptunaRandomStateHandle& OptunaRandomState(std::uint64_t handle) {
 }
 
 void DestroyOptunaRandomState(std::uint64_t handle) {
-    std::lock_guard<std::mutex> guard(registry_mutex);
-    if (optuna_random_state_registry.erase(handle) == 0)
-        BadArgument("invalid or stale Optuna random-state handle");
-    mexUnlock();
-    --lock_count;
+    DestroyRegistered(optuna_random_state_registry, handle,
+                      "invalid or stale Optuna random-state handle");
 }
 #endif
 
@@ -8549,11 +8523,8 @@ std::uint64_t RegisterHCurlTopologyOperator(
 }
 
 void DestroyHCurlTopologyOperator(std::uint64_t handle) {
-    std::lock_guard<std::mutex> guard(registry_mutex);
-    if (hcurl_topology_registry.erase(handle) == 0)
-        BadArgument("invalid or stale HCurl topology operator handle");
-    mexUnlock();
-    --lock_count;
+    DestroyRegistered(hcurl_topology_registry, handle,
+                      "invalid or stale HCurl topology operator handle");
 }
 
 void ChargeGramDirectionalDerivativeContractions(

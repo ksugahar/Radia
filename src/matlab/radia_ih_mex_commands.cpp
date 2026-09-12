@@ -332,8 +332,15 @@ std::shared_ptr<T> get(const Registry<T>& registry, std::uint64_t handle,
 
 template <class T>
 void erase(Registry<T>& registry, std::uint64_t handle, const char* message) {
-    std::lock_guard<std::mutex> guard(registry_mutex);
-    if (registry.erase(handle) == 0) throw std::invalid_argument(message);
+    bool erased = false;
+    {
+        std::lock_guard<std::mutex> guard(registry_mutex);
+        erased = registry.erase(handle) != 0;
+    }
+    if (!erased) throw std::invalid_argument(message);
+
+    // mexUnlock may synchronously invoke CleanupIHHandles. Keep it outside
+    // the registry critical section so the exit handler cannot deadlock.
     mexUnlock();
 }
 
