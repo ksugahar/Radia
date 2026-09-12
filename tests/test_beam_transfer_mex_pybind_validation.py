@@ -168,6 +168,8 @@ def test_matlab_runner_hashes_mex_and_avoids_simulink_setup_mutation():
     assert "requireCleanSource(repoRoot)" in source
     assert "Benchmark timings must be finite and positive" in source
     assert "Benchmark observables must be finite" in source
+    assert '"radia_legacy_core_version", radia.UtiVer()' in source
+    assert '"path", "matlab/" + string(mexFile.name)' in source
     assert "permute(double(caseData.A_per_m), [2, 3, 1])" in source
     assert "item(2)+1, item(3)+1, item(4)+1, item(1)+1" in source
     assert "item(2)+1, item(3)+1, item(4)+1, item(5)+1, item(1)+1" in source
