@@ -346,3 +346,28 @@ Commit 41f4d8667 ties the native wide face and the drawing/SVG default family
 to one resource-family macro. External SVG fallback families remain after the
 first entry. The fifth offline test locks this shared contract. Repeat native
 acceptance and the 120-sheet decoded-image comparison before closing the fix.
+
+### Accepted font-fix scope
+
+Run 34667023701, source 762ac1365bb93ced2e94940550aea32935723c19,
+passed the complete native candidate lane and Web checks after the shared-family
+fix. The three lifecycle gates performed 96 launches total: all exits zero,
+unchanged font-host PID and no crash events. The 120 palette sheets match the
+corrected pre-rename reference run 34666010966 in decoded RGBA, not merely in
+dimensions or an alpha-only difference check. The previously rectangular
+decoration sheet was also inspected visually and is correct again.
+
+Evidence: `C:/temp/eqnedit-native-acceptance-34667023701/summary.json` and
+`palette-comparison.json`. Exact accepted artifacts:
+
+- EXE: 2F602B5F1C13A74CFF5C62048CB0A41BF2AE93182920236FDD98A0A0D5CEA4B0
+- Module: 7E62FE043CBED8C2A6E13CF0CC7B900D0AA8125F4B93BE648995BCA35677AAEF
+- Font: E6A371A1E7BE3DFCE9F047580CF9888A00CBC4B94C723D746A341EC46145EE3B
+
+The product-side avoidance fix for the demonstrated CFF/ATM failure path is
+accepted within this scope. This is not a Windows repair, a guarantee about
+all third-party fonts, or a release authorization. It does not restore an
+already damaged session. Main/PR204 integration, signing, O: staging and public
+release remain separate; the exact integrated/signed artifact must receive
+its own applicable acceptance. No O: file or public distribution was changed
+during these font-fix tests.
