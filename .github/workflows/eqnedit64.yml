@@ -39,7 +39,7 @@ on:
         type: boolean
         default: false
       font_acceptance:
-        description: 'Full native candidate tests with corrected diagnostic TrueType font; no release'
+        description: 'Full native candidate tests with named Eqnedit Math product asset; no release'
         type: boolean
         default: false
 
@@ -142,17 +142,17 @@ jobs:
       - name: Install test build dependencies
         run: python -m pip install pybind11 pytest
 
-      - name: Prepare corrected diagnostic TrueType candidate
+      - name: Verify named TrueType product candidate
         if: ${{ inputs.font_acceptance == true }}
         run: |
           python -m pip install pybind11==3.0.1 fonttools==4.60.1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tests/test_truetype_conversion.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python build/make_diagnostic_truetype.py assets/latinmodern-math.otf diagnostic-font.ttf
+          python build/make_diagnostic_truetype.py assets/latinmodern-math.otf diagnostic-font.ttf --family-name 'Eqnedit Math'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          if ((Get-FileHash diagnostic-font.ttf -Algorithm SHA256).Hash -ne 'B598AEE924DD8C51D07B6BE72DAEF1197EB557FBE23A92F477E35D64B3D2EBE0') { throw 'Unexpected candidate font.' }
-          Copy-Item diagnostic-font.ttf assets/latinmodern-math.otf
+          $expected = 'E6A371A1E7BE3DFCE9F047580CF9888A00CBC4B94C723D746A341EC46145EE3B'
+          if ((Get-FileHash diagnostic-font.ttf -Algorithm SHA256).Hash -ne $expected -or (Get-FileHash assets/eqnedit-math.ttf -Algorithm SHA256).Hash -ne $expected) { throw 'Unexpected or non-reproducible product font.' }
 
       - name: Configure native build
         run: cmake -S . -B build_cmake -A x64
@@ -289,7 +289,7 @@ jobs:
       - name: Identify exact native candidate payload
         if: ${{ always() && inputs.font_acceptance == true }}
         run: |
-          $files = @('build_cmake/Release/Eqnedit64.exe', 'build/eqnedit_core.cp312-win_amd64.pyd', 'assets/latinmodern-math.otf')
+          $files = @('build_cmake/Release/Eqnedit64.exe', 'build/eqnedit_core.cp312-win_amd64.pyd', 'assets/eqnedit-math.ttf')
           $records = @($files | ForEach-Object { [ordered]@{path=$_;sha256=(Get-FileHash $_ -Algorithm SHA256 -ErrorAction Stop).Hash} })
           [ordered]@{source_sha=$env:GITHUB_SHA;diagnostic_only=$true;files=$records} | ConvertTo-Json -Depth 4 | Set-Content native-candidate-manifest.json -Encoding utf8
 
@@ -307,6 +307,8 @@ jobs:
             tools/eqnedit64/build/eqnedit_core*.pyd
             tools/eqnedit64/assets/GUST-FONT-LICENSE.txt
             tools/eqnedit64/assets/THIRD_PARTY_NOTICES.md
+            tools/eqnedit64/assets/MANIFEST-eqnedit-math.txt
+            tools/eqnedit64/assets/eqnedit-math.ttf
           if-no-files-found: warn
 
       - name: Preserve isolated font lifecycle traces
@@ -378,6 +380,7 @@ jobs:
           python-version: '3.12'
       - name: Build once without font execution
         run: |
+          if (Select-String src/eqnedit64.rc -SimpleMatch 'eqnedit-math.ttf' -Quiet) { throw 'Historical outline A/B requires its pinned CFF source; use font_acceptance for the product candidate.' }
           python -m pip install pybind11==3.0.1 pytest fonttools==4.60.1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (Test-Path build_cmake) { throw 'Clean build directory required.' }
@@ -633,6 +636,7 @@ jobs:
           path: tools/eqnedit64
       - name: Verify original reproducing payload
         run: |
+          if (Select-String src/eqnedit64.rc -SimpleMatch 'eqnedit-math.ttf' -Quiet) { throw 'Historical prefix tests require their pinned test source; use font_acceptance for the product candidate.' }
           if (-not $env:FONT_DUMP_PUBLIC_KEY) { throw 'Encryption key required.' }
           python -m pip install cryptography
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
