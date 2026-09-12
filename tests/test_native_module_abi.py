@@ -97,6 +97,9 @@ def test_native_release_keeps_generated_context_outside_source_tree():
     assert memory["with"]["path"] == (
         "${{ env.RADIA_CI_OUTPUT_DIR }}/memory-*-build.json"
     )
+    assert "src/radia/*.pyd.build.json" in (
+        steps["Upload native binary artifact"]["with"]["path"]
+    )
     for key, value in {
         "OMP_NUM_THREADS": "8", "NGS_NUM_THREADS": "8",
         "OPENBLAS_NUM_THREADS": "1", "MKL_NUM_THREADS": "1",
