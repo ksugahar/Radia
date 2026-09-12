@@ -531,10 +531,10 @@ jobs:
       max-parallel: 4
       matrix:
         case:
-          - {name: edit-400, operation: edit-400, prefix: -1}
-          - {name: edit-1000, operation: edit-1000, prefix: -1}
+          - {name: deep-once, operation: deep-once, prefix: -1}
+          - {name: deep-sequence, operation: deep-sequence, prefix: -1}
+          - {name: edit-1525, operation: edit-1525, prefix: -1}
           - {name: edit-all, operation: edit-all, prefix: -1}
-          - {name: prefix3, operation: none, prefix: 3}
         replicate: [1, 2]
     env:
       EQNEDIT64_ISOLATED_TEST_SESSION: '1'
