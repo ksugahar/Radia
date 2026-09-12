@@ -11,9 +11,8 @@ Geometry convention
 -------------------
   - The workpiece thermal mesh is a 2D Netgen ``.vol`` whose
     coordinates are (r, z, 0) with r >= 0.
-  - The "outer" boundary is the heating face -- usually the curve
-    at r = R_workpiece.  Top / bottom curves participate when they
-    are also heated.
+  - Heating, convection, and radiation boundary roles are selected
+    independently and must be explicit when active.
   - The Z axis (r = 0) is the natural axisymmetric BC.  No DOFs
     are constrained there; the (2*pi*r) weight collapses to 0
     automatically.
@@ -54,8 +53,11 @@ from calc_common import setup_paths, progress, calc_main  # noqa: E402
 from calc_heat import (  # noqa: E402
     SIGMA_SB,
     THERMAL_PRESETS,
+    _boundary_role_audit,
+    _resolve_boundary_role,
     _resolve_material,
     _temperature_extrema,
+    _validate_qsurf_transfer_order,
 )
 
 
@@ -67,9 +69,9 @@ def _log(msg):
 # q_surf source for the axisym mesh
 # -----------------------------------------------------------------
 
-def _build_axisym_qsurf_gf(wp_mesh, surface_label, args):
+def _build_axisym_qsurf_gf(wp_mesh, heat_flux_boundary_names, args):
     """Return an H1 GridFunction on the axisym mesh whose values on
-    ``surface_label`` are the phi-averaged 3D q_surf.
+    ``heat_flux_boundary_names`` are the phi-averaged 3D q_surf.
 
     A scalar ``--q-uniform`` short-circuits the projection.
     """
@@ -104,13 +106,14 @@ def _build_axisym_qsurf_gf(wp_mesh, surface_label, args):
          f"{os.path.basename(em_vol)}")
 
     em_mesh = Mesh(em_vol)
-    fes_q_em = H1(em_mesh, order=int(args.qsurf_order))
+    qsurf_order = _validate_qsurf_transfer_order(args.qsurf_order)
+    fes_q_em = H1(em_mesh, order=qsurf_order)
     gf_q_em = GridFunction(fes_q_em)
     gf_q_em.Load(qsurf_sol)
 
     # Build axisym GridFunction.  Order matches qsurf order so the
     # round trip preserves the spatial detail of the EM solve.
-    fes_wp_q = H1(wp_mesh, order=int(args.qsurf_order))
+    fes_wp_q = H1(wp_mesh, order=qsurf_order)
     gf_wp_q = GridFunction(fes_wp_q)
     gf_wp_q.vec[:] = 0
 
@@ -119,7 +122,7 @@ def _build_axisym_qsurf_gf(wp_mesh, surface_label, args):
 
     surf_vertex_nrs = set()
     for el in wp_mesh.Elements(BND):
-        if surface_label and el.mat != surface_label:
+        if el.mat not in heat_flux_boundary_names:
             continue
         for v in el.vertices:
             surf_vertex_nrs.add(v.nr)
@@ -164,7 +167,9 @@ def _build_axisym_qsurf_gf(wp_mesh, surface_label, args):
 def solve_heat_axisym(wp_vol,
                       material="steel", rho=None, cp=None, k=None,
                       h_conv=10.0, t_ext=20.0, t_initial=20.0, emissivity=0.0,
-                      surface_label="",
+                      heat_flux_boundaries="",
+                      convection_boundaries="",
+                      radiation_boundaries="",
                       q_uniform=None, qsurf_sol="", em_vol="",
                       qsurf_order=1, n_phi_samples=8,
                       dt=0.5, t_end=5.0,
@@ -174,18 +179,20 @@ def solve_heat_axisym(wp_vol,
                       rotation_rpm=0.0,
                       probe_point=None,
                       msh_output="",
-                      csv_output=""):
+                      csv_output="",
+                      _wp_mesh=None,
+                      _write_solution=True):
     setup_paths()
     t0 = time.perf_counter()
 
     from ngsolve import (Mesh, H1, BilinearForm, LinearForm, GridFunction,
-                          Integrate, CF, ds, dx, BND, x as r_coord,
+                          CF, ds, dx, x as r_coord,
                           TaskManager, InnerProduct, grad)
 
-    if not os.path.isfile(wp_vol):
+    if _wp_mesh is None and not os.path.isfile(wp_vol):
         return {"error": f"--wp-vol not found: {wp_vol}"}
 
-    wp_mesh = Mesh(wp_vol)
+    wp_mesh = Mesh(wp_vol) if _wp_mesh is None else _wp_mesh
     if wp_mesh.dim != 2:
         return {"error":
                 f"--wp-vol is {wp_mesh.dim}D; axisym needs a 2D mesh "
@@ -212,19 +219,20 @@ def solve_heat_axisym(wp_vol,
          f"materials={list(wp_mesh.GetMaterials())} "
          f"boundaries={list(wp_mesh.GetBoundaries())}")
 
-    # Empty surface_label means apply qsurf + convection to ALL BND;
-    # see calc_heat.py's same block for the rationale (single-workpiece
-    # IH case where naming the sole BND is pure friction).
-    if surface_label:
-        if surface_label not in wp_mesh.GetBoundaries():
-            return {"error":
-                    f"--surface-label {surface_label!r} not in "
-                    f"{list(wp_mesh.GetBoundaries())}"}
-        surface_label_eff = surface_label
-        _log(f"BND:filter={surface_label!r}")
-    else:
-        surface_label_eff = ".*"
-        _log(f"BND:filter=ALL ({sorted(set(wp_mesh.GetBoundaries()))})")
+    try:
+        heat_flux_selector, heat_flux_names = _resolve_boundary_role(
+            wp_mesh, heat_flux_boundaries, "--heat-flux-boundaries",
+            required=True)
+        convection_selector, convection_names = _resolve_boundary_role(
+            wp_mesh, convection_boundaries, "--convection-boundaries",
+            required=float(h_conv) != 0.0)
+        radiation_selector, radiation_names = _resolve_boundary_role(
+            wp_mesh, radiation_boundaries, "--radiation-boundaries",
+            required=float(emissivity) != 0.0)
+    except ValueError as exc:
+        return {"error": str(exc)}
+    _log(f"BND:heat_flux={heat_flux_names} "
+         f"convection={convection_names} radiation={radiation_names}")
 
     rho_v, cp_v, k_v = _resolve_material(material, rho, cp, k)
     _log(f"MATERIAL:{material} rho={rho_v} cp={cp_v} k={k_v}")
@@ -279,7 +287,8 @@ def solve_heat_axisym(wp_vol,
     a_local.em_vol = em_vol
     a_local.qsurf_order = qsurf_order
     a_local.n_phi_samples = n_phi_samples
-    gf_q, q_cf = _build_axisym_qsurf_gf(wp_mesh, surface_label_eff, a_local)
+    gf_q, q_cf = _build_axisym_qsurf_gf(
+        wp_mesh, set(heat_flux_names), a_local)
 
     # ------- Bilinear forms (axisym weight = 2*pi*r) -------
     # ``r_coord`` is NGSolve's x global coordinate (= radial coord).
@@ -289,7 +298,8 @@ def solve_heat_axisym(wp_vol,
 
     a_form = BilinearForm(fes_T, symmetric=True)
     a_form += K_cf * InnerProduct(grad(u), grad(v)) * weight * dx
-    a_form += float(h_conv) * v * u * weight * ds(surface_label_eff)
+    if float(h_conv) != 0.0:
+        a_form += float(h_conv) * v * u * weight * ds(convection_selector)
 
     m_form = BilinearForm(fes_T, symmetric=True)
     m_form += rho_cp * u * v * weight * dx
@@ -328,12 +338,15 @@ def solve_heat_axisym(wp_vol,
 
     n_steps = int(math.ceil(t_end / dt))
 
-    surface_region = wp_mesh.Boundaries(surface_label_eff)
-    A_surf_axisym = float(
-        Integrate(weight, wp_mesh, BND, definedon=surface_region).real)
-    q_int = float(
-        Integrate(q_cf * weight, wp_mesh, BND,
-                  definedon=surface_region).real)
+    heat_flux_region = wp_mesh.Boundaries(heat_flux_selector)
+    heat_flux_audit = _boundary_role_audit(
+        wp_mesh, heat_flux_names, q_cf=q_cf, weight=weight)
+    convection_audit = _boundary_role_audit(
+        wp_mesh, convection_names, weight=weight)
+    radiation_audit = _boundary_role_audit(
+        wp_mesh, radiation_names, weight=weight)
+    A_surf_axisym = float(heat_flux_audit["area_m2"])
+    q_int = float(heat_flux_audit["heat_input_W"])
     _log(f"Q_SURF:int q dA = {q_int:.4e} W (axisym area "
          f"{A_surf_axisym:.4e} m^2)")
     Q_input_J = 0.0
@@ -341,14 +354,15 @@ def solve_heat_axisym(wp_vol,
     for step in range(1, n_steps + 1):
         t = step * float(dt)
         f_form = LinearForm(fes_T)
-        f_form += q_cf * v * weight * ds(surface_label_eff)
-        f_form += float(h_conv) * float(t_ext) * v * weight \
-            * ds(surface_label_eff)
+        f_form += q_cf * v * weight * ds(heat_flux_selector)
+        if float(h_conv) != 0.0:
+            f_form += float(h_conv) * float(t_ext) * v * weight \
+                * ds(convection_selector)
         if float(emissivity) > 0.0:        # radiation (explicit, prev-step T, in K)
             _TK = gfT + 273.15
             f_form += -float(emissivity) * SIGMA_SB \
                 * (_TK**4 - (float(t_ext) + 273.15)**4) * v * weight \
-                * ds(surface_label_eff)
+                * ds(radiation_selector)
         with TaskManager():
             f_form.Assemble()
             res_vec.data = f_form.vec - a_form.mat * gfT.vec
@@ -400,7 +414,7 @@ def solve_heat_axisym(wp_vol,
                 fes_qg = H1(wp_mesh, order=int(fes_order))
                 gf_qg = GridFunction(fes_qg)
                 gf_qg.vec[:] = 0
-                gf_qg.Set(q_cf, definedon=surface_region)
+                gf_qg.Set(q_cf, definedon=heat_flux_region)
                 sol_q = os.path.join(base_dir,
                                      f"{stem}_qsurf.sol").replace("\\", "/")
                 gf_qg.Save(sol_q)
@@ -418,7 +432,7 @@ def solve_heat_axisym(wp_vol,
                  f"({len(sol_entries)} fields, 2D axisym)")
         except Exception as e:
             _log(f"GMSH_ERROR:{type(e).__name__}: {e}")
-    else:
+    elif _write_solution:
         # No --msh-output: still save T.sol alongside wp_vol so a
         # later evaluation pass can reload it (mirrors qsurf.sol
         # contract on the EM side).
@@ -478,7 +492,14 @@ def solve_heat_axisym(wp_vol,
         "h_conv_W_m2K": float(h_conv),
         "t_ext_C": float(t_ext),
         "emissivity": float(emissivity),
-        "surface_label": surface_label,
+        "heat_flux_boundaries": heat_flux_selector,
+        "convection_boundaries": convection_selector,
+        "radiation_boundaries": radiation_selector,
+        "boundary_audit": {
+            "heat_flux": heat_flux_audit,
+            "convection": convection_audit,
+            "radiation": radiation_audit,
+        },
         "q_source": ("uniform" if q_uniform is not None
                      else "qsurf_sol"),
         "qsurf_sol": qsurf_sol if not q_uniform else "",
@@ -500,11 +521,17 @@ def main():
     parser.add_argument("--wp-vol", required=True,
                         help="2D axisymmetric workpiece mesh (.vol) in "
                              "the (r, z) plane.  r >= 0 required.")
-    parser.add_argument("--surface-label", default="",
-                        help="Boundary curve where q_surf and Newton "
-                             "convection are applied.  Leave empty "
-                             "(default) to apply to ALL BND -- see "
-                             "calc_heat.py for the rationale.")
+    parser.add_argument("--heat-flux-boundaries", default="",
+                        help="Required boundary name or NGSolve boundary "
+                             "expression receiving q_surf.")
+    parser.add_argument("--convection-boundaries", default="",
+                        help="Boundary expression receiving Newton "
+                             "convection. Required when --h-conv is nonzero.")
+    parser.add_argument("--radiation-boundaries", default="",
+                        help="Boundary expression receiving radiation. "
+                             "Required when --emissivity is nonzero.")
+    parser.add_argument("--surface-label", default=None,
+                        help=argparse.SUPPRESS)
     parser.add_argument("--material", default="steel",
                         choices=list(THERMAL_PRESETS) + ["custom"],
                         help="Thermal material preset.")
@@ -559,6 +586,13 @@ def main():
     parser.add_argument("--csv-output", default="")
 
     def run(args):
+        if args.surface_label is not None:
+            return {"error":
+                    "--surface-label was removed because it coupled heat "
+                    "input, convection, and radiation to one ambiguous "
+                    "boundary set. Use --heat-flux-boundaries and "
+                    "--convection-boundaries; also pass "
+                    "--radiation-boundaries when emissivity is nonzero."}
         if (args.q_uniform is None) and (not args.qsurf_sol):
             return {"error":
                     "Either --q-uniform or --qsurf-sol is required."}
@@ -582,7 +616,9 @@ def main():
             material=args.material, rho=args.rho, cp=args.cp, k=args.k,
             h_conv=args.h_conv, t_ext=args.t_ext, t_initial=args.t_initial,
             emissivity=args.emissivity,
-            surface_label=args.surface_label,
+            heat_flux_boundaries=args.heat_flux_boundaries,
+            convection_boundaries=args.convection_boundaries,
+            radiation_boundaries=args.radiation_boundaries,
             q_uniform=args.q_uniform,
             qsurf_sol=args.qsurf_sol,
             em_vol=args.em_vol,
