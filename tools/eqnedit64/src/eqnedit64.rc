@@ -4,12 +4,12 @@
 
 IDI_EQNEDIT64 ICON "assets\\Eqnedit64.ico"
 
-/* Latin Modern Math, embedded so the single portable exe carries the
- * typeface TeX itself uses.  It is extracted to a verified per-user cache
+/* Eqnedit Math, a glyf-outline derivative of Latin Modern Math. The CFF
+ * original must not enter the Windows ATM path. It uses a verified cache
  * and loaded with file-backed process-private registration -- no installer
  * and no registry entry.  GUST Font License, see
  * assets\GUST-FONT-LICENSE.txt. */
-IDR_MATH_FONT RCDATA "assets\\latinmodern-math.otf"
+IDR_MATH_FONT RCDATA "assets\\eqnedit-math.ttf"
 
 VS_VERSION_INFO VERSIONINFO
  FILEVERSION EQNEDIT64_VERSION_TUPLE
