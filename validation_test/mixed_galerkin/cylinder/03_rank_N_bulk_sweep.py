@@ -17,29 +17,17 @@ inversion:
     phi_1(r) = ...                           (-Laplacian phi_1 = phi_0)
     ...
 
-Each higher-rank mode is "closer to DC behavior" since it inverts the
-operator one more time.  Increasing rank should improve low-frequency
-accuracy, but at wall band the Senior tower truncation (see
-02_senior_tower_truncation.py) is the more effective route to higher
-accuracy.
+Compare this bulk-rank sweep with the surface-rank sweep in
+02_senior_tower_truncation.py. Their relative effectiveness must be measured;
+it is not established by the number or names of basis functions.
 
-## Expected result
+## Measurement status
 
-With proper Y_exact (post Phase 8b):
-
-   N_bulk |  basis size  |  wall band max
-   -------+-------------+----------------
-     1    |      2      |   0.04%
-     2    |      3      |   ~0.04% (no improvement)
-     3    |      4      |   ~0.04%
-     4    |      5      |   ~0.04%
-
-i.e. adding bulk rank does NOT help the wall-band peak — this is
-DOMINATED by the surface envelope's planar-SIBC approximation, not by
-the bulk Krylov truncation.  This matches the sphere result (Phase 4 +
-7) where the same phenomenon was observed.
-
-To go below 0.04%, add Senior tower DOFs on the surface (Phase 8b).
+The former table predicted rank-independent errors before the current
+reference/projection corrections. Do not treat that prediction or the shared
+WIP's replacement improvement factors as accepted evidence. `summary()` owns
+the complex-relative-error measurement interface; numerical results remain HOLD
+pending the numerical owner's independent validation on a compute host.
 """
 
 from __future__ import annotations
@@ -152,6 +140,47 @@ def Y_mixed_galerkin(s, N_bulk: int):
     return Y_DC * (1 + v_avg)
 
 
+SWEEP = np.logspace(0, 8, 81)
+WALL_BAND_HZ = (1e4, 1e6)
+METRIC = "abs(Y_exact - Y_mixed) / abs(Y_exact)"
+
+
+def summary() -> dict:
+    """Measure the existing solver; do not imply numerical acceptance."""
+    wall = (SWEEP > WALL_BAND_HZ[0]) & (SWEEP < WALL_BAND_HZ[1])
+    if not np.any(wall):
+        raise ValueError("Sweep has no points inside the wall band")
+    tower = {}
+    for rank in (1, 2, 3, 4):
+        errors = []
+        for frequency in SWEEP:
+            s = 2j * math.pi * frequency
+            exact = Y_exact_cylinder(s, A_NUM, SIGMA, MU)
+            mixed = Y_mixed_galerkin(s, rank)
+            if not np.isfinite(exact) or not np.isfinite(mixed) or abs(exact) == 0:
+                raise ValueError("Non-finite admittance or zero reference in sweep")
+            errors.append(abs(exact - mixed) / abs(exact))
+        errors = np.asarray(errors)
+        if not np.all(np.isfinite(errors)):
+            raise ValueError("Non-finite relative errors in sweep")
+        tower[str(rank)] = {
+            "n_unknowns": rank + 1,
+            "max_error_pct": float(errors.max() * 100),
+            "max_error_at_hz": float(SWEEP[errors.argmax()]),
+            "wall_band_max_error_pct": float(errors[wall].max() * 100),
+        }
+    return {
+        "case": "cylinder_bulk_tower", "validation_status": "HOLD",
+        "description": "rank-N CLN bulk + one surface DOF; numerical acceptance pending",
+        "metric": METRIC,
+        "geometry": {"a_m": A_NUM, "sigma_S_per_m": SIGMA, "mu_H_per_m": MU},
+        "sweep": {"f_lo_hz": float(SWEEP[0]), "f_hi_hz": float(SWEEP[-1]),
+                  "n_points": int(SWEEP.size), "wall_band_hz": list(WALL_BAND_HZ),
+                  "wall_band_endpoints": "excluded"},
+        "by_n_bulk": tower,
+    }
+
+
 def main():
     print("=== Cylinder mixed Galerkin: rank-N bulk Krylov + 1-DOF surface ===")
     print(f"a = {A_NUM*1e3} mm, sigma = {SIGMA:.2e} S/m, mu = {MU:.4e} H/m")
@@ -161,17 +190,12 @@ def main():
         print(f"  phi_{k}(a) = {sp.expand(p.subs(r_sym, a_sym))}")
     print()
     print("Sweep:  rank-N bulk + 1-DOF surface (envelope intrinsic, no Senior tower)")
-    fs = np.logspace(0, 8, 81)
-    wall_mask = (fs > 1e4) & (fs < 1e6)
+    measured = summary()
+    print("Numerical acceptance: HOLD")
     print(f"{'N_bulk':>7}  {'basis':>5}  {'max anywhere':>15}  {'wall band max':>15}")
-    for N_bulk in (1, 2, 3, 4):
-        errs = []
-        for f in fs:
-            s = 1j * 2 * math.pi * f
-            Y_e = Y_exact_cylinder(s, A_NUM, SIGMA, MU)
-            errs.append(abs(Y_e - Y_mixed_galerkin(s, N_bulk)) / abs(Y_e))
-        errs = np.array(errs)
-        print(f"  {N_bulk}    {N_bulk + 1:5d}  {errs.max() * 100:13.5f}%  {errs[wall_mask].max() * 100:13.5f}%")
+    for rank, row in measured["by_n_bulk"].items():
+        print(f"  {rank}    {row['n_unknowns']:5d}  {row['max_error_pct']:13.5f}%  "
+              f"{row['wall_band_max_error_pct']:13.5f}%")
 
 
 if __name__ == "__main__":
