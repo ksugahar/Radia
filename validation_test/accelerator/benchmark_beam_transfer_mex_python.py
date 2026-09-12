@@ -138,6 +138,8 @@ def _load_build_provenance(binary_path: Path, source_root: Path) -> dict:
              f"native provenance schema must be {PROVENANCE_SCHEMA}")
     _require(manifest.get("source_dirty") is False,
              "native provenance must come from a clean source build")
+    _require(_is_hex(manifest.get("source_change_fingerprint_sha256"), 64),
+             "native provenance source change fingerprint must be SHA-256 hex")
     _require(_is_hex(manifest.get("source_commit"), 40),
              "native provenance source_commit must be a full Git SHA")
     _require(manifest["source_commit"] == _git_head(source_root),
