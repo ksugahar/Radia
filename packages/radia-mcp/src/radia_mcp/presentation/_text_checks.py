@@ -1,13 +1,13 @@
-"""Self-contained generic text-quality checks used by presentation
-cross-lint.  Copied verbatim 2026-06-02 from
-mcp-server-document.grant_writing.tools (which stays LAB-private), so
-radia_mcp.presentation does not depend on grant_writing.  Same
-"each subpackage keeps its own copies" pattern as paper_writing.
+"""Presentation text checks using shared writing-family hedge patterns.
+
+The presentation-specific checks remain independent of grant-writing policy.
 """
 from __future__ import annotations
 
 import re
 import pathlib  # noqa: F401  (some checks accept path-like input)
+
+from radia_mcp._shared.hedges import scan_hedges as _scan_hedges
 
 
 _REDUNDANCY = [
