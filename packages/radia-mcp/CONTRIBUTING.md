@@ -171,10 +171,12 @@ By contributing you agree your contribution is BSD-3-Clause licensed
 
 ## Stance reminder
 
-The lab actively pushes **build123d + Cubit** as the primary CAD /
-mesh pair. CadQuery, OpenSCAD, FreeCAD adapters are welcome and
-maintained as **interop / compat** layers — they are not first-class
-authoring targets. FreeCAD specifically is a `friendly` source: the
-lab respects the FreeCAD community and maintains first-class interop
-through `freecad_to_cubit_hex`, but new lab work is authored in
-build123d.
+The lab uses **Coreform Cubit as the first-choice CAD and solver-mesh
+backend**, normally through its headless/batch route. Use Cubit Sculpt for
+suitable large, regular HEX domains. **build123d + Netgen** remains an
+explicitly selected alternative, prototype, or independent validation route;
+it is not a required automatic fallback for Cubit. CadQuery, OpenSCAD, and
+FreeCAD adapters are welcome and maintained as **interop / compat** layers —
+they are not first-class authoring targets. FreeCAD specifically is a
+`friendly` source: the lab respects the FreeCAD community and maintains
+first-class interop through `freecad_to_cubit_hex`.

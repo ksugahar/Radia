@@ -737,6 +737,58 @@ _ADJACENT_REVIEWER_TAKEAWAY_PATTERN = re.compile(
 )
 
 
+# Terms that are useful in a technical grant but usually opaque to a reviewer
+# outside the immediate field.  The check does not ban them: it asks the author
+# to put a plain-language meaning before the label at first use.  Keep this list
+# intentionally small and cross-disciplinary; ordinary scientific nouns are
+# handled by the concept-density checks below.
+_ADJACENT_REVIEWER_SPECIALIST_TERMS = (
+    "トポロジー最適化", "輸送写像", "Lie写像", "正準性", "動的口径",
+    "チューン", "ベクトルポテンシャル", "低ランク近似", "随伴法",
+    "レベルセット法", "階層行列", "表面インピーダンス",
+)
+_ADJACENT_REVIEWER_ACRONYM_PATTERN = re.compile(
+    r"(?<![A-Za-z0-9_])[A-Z][A-Za-z0-9]*(?:[-‐‑–—][A-Z][A-Za-z0-9]*)*"
+)
+_ADJACENT_REVIEWER_ACRONYM_EXEMPT = {
+    "A", "B", "C", "E", "H", "I", "J", "K", "M", "N", "P", "Q",
+    "R", "T", "U", "V", "X", "Y", "Z", "Hz", "kHz", "MHz", "GHz",
+    "eV", "keV", "MeV", "GeV", "mm", "cm", "nm", "kg", "J",
+}
+
+
+def _term_has_plain_first_use(sentence: str, term: str) -> bool:
+    """Return whether *term* is attached to a plain meaning at first use."""
+    escaped = re.escape(term)
+    # Plain expression followed by the technical label or acronym.
+    if re.search(rf"[^。！？\n]{{4,80}}[（(]{escaped}[）)]", sentence):
+        return True
+    # Technical label followed immediately by a Japanese explanation.
+    if re.search(
+        rf"{escaped}[（(][^）)\n]*[ぁ-ん一-龥々][^）)\n]*[）)]",
+        sentence,
+    ):
+        return True
+    # Explicit definition without parentheses.
+    if re.search(
+        rf"{escaped}(?:とは|は)[^。！？\n]{{2,72}}(?:こと|範囲|量|方法|仕組み|"
+        rf"規則|指標|性質|意味)(?:である|をいう|と呼ぶ)?",
+        sentence,
+    ):
+        return True
+    return False
+
+
+def _reviewer_prose_without_markdown_headings(text: str) -> str:
+    """Remove navigation labels that must not count as opening sentences."""
+    text = re.sub(
+        r"(?m)^\s*#{1,6}\s*(?:研究課題名|課題名|研究題目)\s*$"
+        r"(?:\r?\n\s*)+[^\r\n]+",
+        "",
+        text,
+    )
+    return re.sub(r"(?m)^\s*#{1,6}\s+.*$", "", text)
+
 def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
     """Find prose that is short but cognitively dense for an adjacent reviewer.
 
@@ -745,7 +797,9 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
     unpack technical nouns, an infrastructure layer, a scientific operation,
     and a decision rule at once. This diagnostic intentionally has no score.
     """
-    prose = _prose_for_lint(_read_text_if_path(text))
+    prose = _prose_for_lint(
+        _reviewer_prose_without_markdown_headings(_read_text_if_path(text))
+    )
     sentences = [
         segment.strip()
         for segment in re.split(r"[。．!?！？\n]", prose)
@@ -792,6 +846,8 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
     vague_feasibility_evidence: list[dict] = []
     scope_without_deliverables: list[dict] = []
     takeaways_after_evidence: list[dict] = []
+    undefined_specialist_terms: list[dict] = []
+    seen_specialist_terms: set[str] = set()
     representation_pattern = re.compile(
         r"(?P<answer>設計則|選択則|指針|適用条件|成立条件|知見|成果)"
         r"を[、，,\s]*(?P<representation>[^。！？\n]{0,36}"
@@ -843,6 +899,28 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
             r"(?<![A-Za-z0-9_])[A-Za-z][A-Za-z0-9_.()+/-]{1,}",
             sentence,
         )))
+        candidate_terms = [
+            term for term in _ADJACENT_REVIEWER_SPECIALIST_TERMS
+            if term in sentence and term not in seen_specialist_terms
+        ]
+        candidate_terms.extend(
+            token
+            for token in _ADJACENT_REVIEWER_ACRONYM_PATTERN.findall(sentence)
+            if token not in _ADJACENT_REVIEWER_ACRONYM_EXEMPT
+            and token not in seen_specialist_terms
+            and not any(
+                token in specialist and specialist in sentence
+                for specialist in _ADJACENT_REVIEWER_SPECIALIST_TERMS
+            )
+        )
+        for term in dict.fromkeys(candidate_terms):
+            seen_specialist_terms.add(term)
+            if not _term_has_plain_first_use(sentence, term):
+                undefined_specialist_terms.append({
+                    "index": index,
+                    "term": term,
+                    "excerpt": sentence[:240],
+                })
         if len(sentence) >= 36 and local_ratio >= 0.60 and comma_count >= 3:
             dense_sentences.append({
                 "index": index,
@@ -947,6 +1025,24 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
                 "導入する。複数手法の対応は図表又は別文へ分ける。"
             ),
             examples=notation_piles[:6],
+        )
+
+    if undefined_specialist_terms:
+        first = undefined_specialist_terms[0]
+        add_risk(
+            "specialist_term_before_plain_meaning",
+            first["excerpt"],
+            (
+                "専門語又は略語が、専門外の審査者にも分かる意味より先に現れる。"
+                "初見の読者は語を保留したまま先へ進むことになる。"
+            ),
+            (
+                "最初に日常語で役割や現象を述べ、その直後の括弧内に専門語を置く。"
+                "以後は専門語だけを使ってよい。"
+            ),
+            severity="HIGH",
+            term=first["term"],
+            examples=undefined_specialist_terms[:10],
         )
 
     if representation_mismatches:
@@ -1180,6 +1276,7 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
             "kanji_ratio": round(kanji_ratio, 3),
             "compressed_dense_sentence_count": len(dense_sentences),
             "notation_or_method_pile_count": len(notation_piles),
+            "undefined_specialist_term_count": len(undefined_specialist_terms),
             "result_representation_mismatch_count": len(
                 representation_mismatches
             ),
@@ -1219,9 +1316,39 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
             "are compressed into the same reading unit."
         ),
         "target_reader": (
-            "a reviewer who knows the broad field but not the applicant's software, "
-            "laboratory shorthand, or exact numerical formulation"
+            "a reviewer who can judge the research without prior knowledge of the "
+            "applicant's specialist terms, software, laboratory shorthand, or exact "
+            "numerical formulation"
         ),
+        "reader_contract": {
+            "one_pass_clarity": {
+                "mechanical_status": (
+                    "no_located_risk"
+                    if not any(
+                        risk["type"] != "specialist_term_before_plain_meaning"
+                        for risk in risks
+                    )
+                    else "risk_located"
+                ),
+                "quality_status": "manual_review_required",
+                "requirement": (
+                    "Each sentence closes who does what to which object; the reader "
+                    "does not need to reread or reconstruct a missing relation."
+                ),
+            },
+            "specialist_accessibility": {
+                "mechanical_status": (
+                    "no_located_risk"
+                    if not undefined_specialist_terms and not notation_piles
+                    else "risk_located"
+                ),
+                "quality_status": "manual_review_required",
+                "requirement": (
+                    "State the everyday meaning first and put the specialist label "
+                    "or acronym in parentheses at first use."
+                ),
+            },
+        },
         "source": (
             "generic adjacent-domain reviewer readability diagnostic; non-scoring"
         ),
@@ -1414,9 +1541,12 @@ def grant_writing_japanese_readability_score(
 
     adjacent_high = sum(
         risk.get("severity") == "HIGH" for risk in adjacent.get("risks", [])
+        if risk.get("type") != "specialist_term_before_plain_meaning"
     )
     adjacent_medium = sum(
-        risk.get("severity") == "MEDIUM" for risk in adjacent.get("risks", [])
+        risk.get("severity") == "MEDIUM"
+        and risk.get("type") != "specialist_term_before_plain_meaning"
+        for risk in adjacent.get("risks", [])
     )
     lexical_penalty = 8 * adjacent_high + 5 * adjacent_medium
     kanji_ratio = kanji.get("kanji_ratio", 0.0)
@@ -1581,7 +1711,9 @@ def grant_writing_reviewer_momentum_check(text: str) -> dict:
     and the observable change that move would unlock. It also keeps method
     names subordinate to that arc.
     """
-    prose = _prose_for_lint(_read_text_if_path(text))
+    prose = _prose_for_lint(
+        _reviewer_prose_without_markdown_headings(_read_text_if_path(text))
+    )
     all_sentences = [
         segment.strip()
         for segment in re.split(r"[。．!?！？\n]", prose)
@@ -1840,6 +1972,19 @@ def grant_writing_reviewer_momentum_check(text: str) -> dict:
                 "adjectives. Keep the opening's core concepts few, and introduce "
                 "method names only after the reviewer understands the problem."
             ),
+        },
+        "reader_contract": {
+            "excitement_without_hype": {
+                "mechanical_status": (
+                    "no_located_risk" if arc_complete and not risks else "risk_located"
+                ),
+                "quality_status": "manual_review_required",
+                "requirement": (
+                    "Make the reviewer see a valuable possibility, the concrete "
+                    "obstacle that blocks it, the proposed move, and the observable "
+                    "change it unlocks; do not substitute praise adjectives for evidence."
+                ),
+            },
         },
         "diagnosis": (
             "Strong adopted prose is easy to enter and gives the reviewer a reason "
@@ -7638,6 +7783,128 @@ def _find_compiled_pdf(text_or_path: str, pdf: str) -> pathlib.Path | None:
     return candidates[0] if len(candidates) == 1 else None
 
 
+def _reader_experience_contract(
+    readability: dict | None,
+    momentum: dict | None,
+) -> dict:
+    """Separate mechanical evidence from reviewer judgments that need a human."""
+    axes: dict[str, dict] = {}
+    if momentum and momentum.get("applicable"):
+        risks = momentum.get("risks", [])
+        arc_complete = bool(momentum.get("metrics", {}).get("arc_complete"))
+        located = len(risks) + (0 if arc_complete else 1)
+        axes["excitement_without_hype"] = {
+            "mechanical_status": "no_located_risk" if located == 0 else "risk_located",
+            "located_risk_count": located,
+            "quality_status": "manual_review_required",
+            "requirement": (
+                "A valuable possibility, concrete obstacle, research move, and "
+                "observable payoff create curiosity without unsupported adjectives."
+            ),
+            "manual_question": (
+                "After one reading, can a skeptical reviewer state what becomes "
+                "possible, why it is blocked now, and why this team can unlock it?"
+            ),
+        }
+    if readability and readability.get("applicable"):
+        risks = readability.get("risks", [])
+        clarity_risks = [
+            risk for risk in risks
+            if risk.get("type") != "specialist_term_before_plain_meaning"
+        ]
+        metrics = readability.get("metrics", {})
+        undefined_count = metrics.get("undefined_specialist_term_count", 0)
+        notation_piles = metrics.get("notation_or_method_pile_count", 0)
+        axes["one_pass_clarity"] = {
+            "mechanical_status": (
+                "no_located_risk" if not clarity_risks else "risk_located"
+            ),
+            "located_risk_count": len(clarity_risks),
+            "quality_status": "manual_review_required",
+            "requirement": (
+                "Every sentence closes its subject, action, object, and relation so "
+                "the reviewer never has to reread or reconstruct omitted meaning."
+            ),
+            "manual_question": (
+                "Can a reviewer summarize each paragraph without returning to an "
+                "earlier sentence to recover a subject, definition, or causal link?"
+            ),
+        }
+        specialist_risk_count = undefined_count + notation_piles
+        axes["specialist_accessibility"] = {
+            "mechanical_status": (
+                "no_located_risk" if specialist_risk_count == 0 else "risk_located"
+            ),
+            "located_risk_count": specialist_risk_count,
+            "quality_status": "manual_review_required",
+            "requirement": (
+                "The everyday meaning comes first; a specialist term or acronym is "
+                "introduced afterward as a compact label."
+            ),
+            "manual_question": (
+                "Can a scientifically literate reader with no knowledge of the named "
+                "method explain the mechanism, measure, and payoff in ordinary words?"
+            ),
+        }
+    located_total = sum(axis["located_risk_count"] for axis in axes.values())
+    return {
+        "applicable": bool(axes),
+        "status": (
+            "not_applicable" if not axes else
+            "mechanically_clear_manual_review_required" if located_total == 0 else
+            "mechanical_revision_required"
+        ),
+        "score": None,
+        "score_max": None,
+        "automatic_score_prohibited": True,
+        "located_risk_count": located_total,
+        "axes": axes,
+        "principle": (
+            "Exciting enough to keep reading, clear in one pass, and understandable "
+            "without prior knowledge of specialist vocabulary."
+        ),
+        "manual_scoring_rubric": {
+            "scale": "1-5 per axis; never generated automatically",
+            "anchors": {
+                "1": "A reviewer cannot explain the proposal after one reading.",
+                "3": "The proposal is understandable, but requires effort or trust.",
+                "5": "A skeptical adjacent-domain reviewer can explain and defend it.",
+            },
+            "required_evidence": (
+                "Quote the passage that earns the rating and name the strongest "
+                "remaining objection. A rating without both is invalid."
+            ),
+        },
+        "substantive_review_required": [
+            {
+                "axis": "scientific_novelty",
+                "question": "What becomes possible that the closest existing method cannot do?",
+            },
+            {
+                "axis": "evidence_strength",
+                "question": "Which preliminary result directly reduces the central technical risk?",
+            },
+            {
+                "axis": "feasibility",
+                "question": "Do the schedule, people, and fallback deliverables support the target?",
+            },
+            {
+                "axis": "funder_fit",
+                "question": "Why should this funder, rather than another program, pay for the work?",
+            },
+            {
+                "axis": "durable_repository_value",
+                "question": "Who can reuse the repository outcome, for what task, and with what proof?",
+            },
+        ],
+        "note": (
+            "Zero located risks means only that these detectors found no mechanical "
+            "warning. It is not a score of excitement, comprehension, merit, or funding "
+            "probability."
+        ),
+    }
+
+
 def grant_writing_health_report(
     text_or_path: str,
     program: str = "generic",
@@ -8285,6 +8552,10 @@ def grant_writing_health_report(
         )
 
     japanese = detailed_results.get("japanese_readability", {})
+    reader_experience = _reader_experience_contract(
+        detailed_results.get("adjacent_reviewer_readability"),
+        detailed_results.get("reviewer_momentum"),
+    )
     return {
         "defect_counts": defect_counts,
         "findings": findings,
@@ -8293,6 +8564,7 @@ def grant_writing_health_report(
         "score_max": 10,
         "japanese_readability_score": japanese.get("score"),
         "japanese_readability_status": japanese.get("status", "skipped"),
+        "reader_experience": reader_experience,
         "summary_comment": summary,
         "program": program,
         "detailed_scores": detailed_scores,
@@ -8307,7 +8579,10 @@ def grant_writing_health_report(
             "findings locate defects and are worth fixing; questions cannot be "
             "answered by keyword presence and are for the author to judge. "
             "defect_score measures located mechanical defects only -- it is not "
-            "a judgement of the research, and editing to raise it is wasted work."
+            "a judgement of the research, and editing to raise it is wasted work. "
+            "reader_experience deliberately has no automatic quality score: excitement, "
+            "one-pass comprehension, novelty, feasibility, funder fit, and repository "
+            "value require a cited human judgment."
         ),
         "source": "radia_mcp.grant_writing public document server",
     }
