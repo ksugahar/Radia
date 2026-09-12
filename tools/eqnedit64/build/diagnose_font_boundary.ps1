@@ -22,6 +22,7 @@ $result = [ordered]@{
     source_sha = $env:GITHUB_SHA; host = $env:COMPUTERNAME; session = $session
     payload_source_sha = $env:EQNEDIT64_PAYLOAD_SOURCE_SHA; model_prefix = $ModelPrefix
     model_operation = $ModelOperation
+    font_flavor = $env:EQNEDIT64_FONT_FLAVOR
     os_version = [Environment]::OSVersion.VersionString
     app_sha256 = (Get-FileHash $app -Algorithm SHA256).Hash
     started_utc = $started.ToUniversalTime().ToString('o'); events = @()
