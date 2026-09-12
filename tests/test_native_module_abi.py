@@ -92,6 +92,11 @@ def test_native_release_keeps_generated_context_outside_source_tree():
     assert "@rebuildFlag -RequireNativeProvenance" in build
     assert "memory-before-build.json" in build
     assert "memory-after-build.json" in build
+    memory = steps["Upload build memory diagnostics"]
+    assert memory["if"] == "always()"
+    assert memory["with"]["path"] == (
+        "${{ env.RADIA_CI_OUTPUT_DIR }}/memory-*-build.json"
+    )
     for key, value in {
         "OMP_NUM_THREADS": "8", "NGS_NUM_THREADS": "8",
         "OPENBLAS_NUM_THREADS": "1", "MKL_NUM_THREADS": "1",
