@@ -6,7 +6,7 @@ param(
     [ValidateSet('none', 'measure')] [string]$Measurement = 'none',
     [ValidateRange(1, 64)] [int]$MaxLaunches = 64,
     [ValidateRange(-1, 10)] [int]$ModelPrefix = -1,
-    [ValidateSet('none', 'load-only', 'metrics-ab', 'svg-ab', 'svg-math', 'edit-400', 'edit-1000', 'edit-all')] [string]$ModelOperation = 'none'
+    [ValidateSet('none', 'load-only', 'metrics-ab', 'svg-ab', 'svg-math', 'edit-400', 'edit-1000', 'edit-1525', 'edit-all', 'deep-once', 'deep-sequence')] [string]$ModelOperation = 'none'
 )
 $ErrorActionPreference = 'Stop'
 if ($env:EQNEDIT64_ISOLATED_TEST_SESSION -ne '1') { throw 'Disposable CI only.' }
