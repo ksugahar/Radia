@@ -7,8 +7,8 @@ import numpy as np
 import pytest
 
 
-def function(name):
-    path = Path(__file__).resolve().parents[1] / 'validation_test/omega_quadrature/diagnostics.py'
+def function(name, filename='diagnostics.py'):
+    path = Path(__file__).resolve().parents[1] / 'validation_test/omega_quadrature' / filename
     tree = ast.parse(path.read_text(encoding='utf-8'))
     node = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == name)
     namespace = {'np': np}
@@ -48,6 +48,18 @@ def result(matrix, x, rhs, free=(True, True, True)):
     class Matrix:
         def __mul__(self, vector):
             return np.array(matrix) @ vector.values
+
+        def Inverse(self, mask, inverse):
+            assert inverse == 'pardiso'
+
+            class Inverse:
+                def __mul__(self, vector):
+                    value = np.zeros(len(mask))
+                    selected = np.array(mask, dtype=bool)
+                    value[selected] = np.linalg.solve(np.array(matrix)[np.ix_(selected, selected)],
+                                                      vector.values[selected])
+                    return value
+            return Inverse()
 
     fes = SimpleNamespace(ndof=3, FreeDofs=lambda: free,
                           Range=lambda i: SimpleNamespace(start=i, stop=i+1))
@@ -146,3 +158,73 @@ def test_algebraic_cli_preserves_hold_and_never_runs_energy_audit(tmp_path, monk
     assert row['linear_residual'] == {'raw': 'retained'}
     assert row['gates'] == {'energy_audit_completed': False, 'three_engine_acceptance': False}
     assert 'energy' not in row
+
+
+def field_payload(bonus):
+    return dict(completed=True, source_unchanged=True, mesh_unchanged=True,
+                implementation={'native': {'test.pyd': 'fixture'}}, mesh_sha256='fixture',
+                case={'mu_r': 1000}, runtime={'mode': 'wheel'},
+                controls=dict(source_order=3, threads=8, evaluation_order=16, algebraic_only=True),
+                rows=[dict(order=1, ndof=3, bonus=bonus, field_observations={
+                    'centres_m': [[0, 0, 0]], 'samples_m': [[0, 0, 0]]*8,
+                    'B_samples_T': [[1, 2, 3]]*8, 'B_average_T': [[1, 2, 3]],
+                    'observable': 'shared eight-point volume average'})])
+
+
+def test_field_delta_is_not_a_convergence_certificate():
+    a, b = field_payload(4), field_payload(8)
+    observe = b['rows'][0]['field_observations']
+    observe['B_samples_T'] = [[2, 2, 3]]*8
+    observe['B_average_T'] = [[2, 2, 3]]
+    report = function('compare_fields', 'compare_fields.py')(a, b)
+    assert report['difference_rms_T'] == 1
+    assert report['difference_relative_rms'] == pytest.approx(1/np.sqrt(17))
+    assert report['acceptance'].startswith('HOLD:')
+
+
+@pytest.mark.parametrize('damage', ['identity', 'unfinished', 'average', 'points', 'order', 'nan'])
+def test_field_delta_rejects_incomparable_inputs(damage):
+    a, b = field_payload(4), field_payload(8)
+    row = b['rows'][0]
+    if damage == 'identity':
+        b['implementation']['native'] = {'test.pyd': 'different'}
+    elif damage == 'unfinished':
+        b['completed'] = False
+    elif damage == 'average':
+        row['field_observations']['B_average_T'] = [[3, 2, 1]]
+    elif damage == 'points':
+        row['field_observations']['samples_m'] = [[1, 0, 0]]*8
+    elif damage == 'order':
+        row['order'] = 2
+    else:
+        row['field_observations']['B_samples_T'][0] = [np.nan, 0, 0]
+    with pytest.raises(ValueError):
+        function('compare_fields', 'compare_fields.py')(a, b)
+
+
+@pytest.mark.parametrize('fail_after_update', [False, True])
+def test_residual_correction_measures_and_restores_original(fail_after_update):
+    data = result(np.eye(3), [1, 2, 1], [1, 1, 1])
+    original = data['solution'].vec.values.copy()
+    corrected = function('residual_correction_observation')
+    count = []
+
+    def fields(*args):
+        count.append(1)
+        if len(count) == 2 and fail_after_update:
+            raise ValueError('field probe failure')
+        return data['solution'].vec.values.tolist()
+
+    corrected.__globals__.update(field_observations=fields,
+                                 block_action_residual=function('block_action_residual'))
+    if fail_after_update:
+        with pytest.raises(ValueError, match='field probe failure'):
+            corrected(data, None, {'observation_samples': [1]})
+    else:
+        report = corrected(data, None, {'observation_samples': [1]})
+        assert report['field_before'] == [1, 2, 1]
+        assert report['field_after'] == [1, 1, 1]
+        assert report['correction_coefficient_l2'] == 1
+        assert report['corrected_block_residual']['blocks']['phi_total']['residual_l2'] == 0
+        assert report['acceptance_evidence'] is False
+    np.testing.assert_array_equal(data['solution'].vec.values, original)

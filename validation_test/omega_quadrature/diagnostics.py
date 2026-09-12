@@ -74,6 +74,35 @@ def field_observations(result, mesh, case):
             'observable': 'shared eight-point volume average',
             'acceptance_evidence': False}
 
+
+def residual_correction_observation(result, mesh, case):
+    """One frozen-system correction; restore the original solved state always."""
+    if case.get('observation_samples') is None:
+        raise ValueError('residual correction requires physical observation points')
+    system = result['system']
+    matrix, rhs = system['bilinear_form'].mat, system['linear_form'].vec
+    solution = result['solution'].vec
+    original = solution.FV().NumPy().copy()
+    residual = solution.CreateVector()
+    residual.data = rhs - matrix * solution
+    correction = solution.CreateVector()
+    correction.data = matrix.Inverse(result['fes'].FreeDofs(), inverse='pardiso') * residual
+    delta = correction.FV().NumPy()
+    if not np.isfinite(delta).all():
+        raise ValueError('nonfinite residual correction')
+    before = field_observations(result, mesh, case)
+    try:
+        solution.FV().NumPy()[:] = original + delta
+        after = field_observations(result, mesh, case)
+        corrected_residual = block_action_residual(result)
+    finally:
+        solution.FV().NumPy()[:] = original
+    return {'acceptance_evidence': False, 'original_state_restored': True,
+            'correction_coefficient_l2': float(np.linalg.norm(delta)),
+            'field_before': before, 'field_after': after,
+            'corrected_block_residual': corrected_residual,
+            'scope': 'one double-precision correction of the frozen assembled system, not an error bound'}
+
 def norm_report(squared, reference):
     if not np.isfinite(squared) or not np.isfinite(reference):
         raise ValueError("nonfinite embedding norm")
