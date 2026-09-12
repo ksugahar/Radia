@@ -6,6 +6,9 @@
     "matlab/python_api_parity_manifest.json": ["tests/test_sparsesolv_matlab_contract.py", "tests/test_matlab_python_parity_manifest.py"],
     "matlab/+radia/+python/": ["tests/test_matlab_python_parity_manifest.py"],
     "Build.ps1": ["tests/test_build_failure_propagation.py"],
+    "validation_test/accelerator/benchmark_beam_transfer_mex_python.py": ["tests/test_beam_transfer_mex_pybind_validation.py"],
+    "validation_test/accelerator/benchmark_beam_transfer_mex_matlab.m": ["tests/test_beam_transfer_mex_pybind_validation.py"],
+    "validation_test/accelerator/beam_transfer_benchmark_case.json": ["tests/test_beam_transfer_mex_pybind_validation.py"],
     ".github/workflows/sparsesolv.yml": ["tests/test_sparsesolv_ci_contract.py"],
     ".github/workflows/ltspice-data-safety.yml": ["tests/test_ltspice_ci_scope.py"],
     ".github/workflows/radia-optuna.yml": ["tests/test_ltspice_ci_scope.py"],
@@ -18,6 +21,11 @@
     "tools/sparsesolv_ci_impact.py": ["tests/test_sparsesolv_ci_contract.py"]
   },
   "profiles": {
+    "native-build-contracts": {
+      "description": "Real Git and PowerShell build-provenance contracts, without native compilation.",
+      "max_elapsed_seconds": 60,
+      "paths": ["tests/test_native_build_provenance.py"]
+    },
     "fast-contracts": {
       "description": "Pure source, policy, package, and public-notebook contracts for every push.",
       "max_elapsed_seconds": 60,

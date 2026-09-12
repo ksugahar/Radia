@@ -21,6 +21,7 @@ on:
       - 'matlab/optuna50_api_coverage.json'
       - 'src/matlab/radia_mex.cpp'
       - 'Build.ps1'
+      - 'tools/native_build_provenance.ps1'
       - 'CMakeLists.txt'
       - '.github/workflows/radia-optuna.yml'
   pull_request:
@@ -42,6 +43,7 @@ on:
       - 'matlab/optuna50_api_coverage.json'
       - 'src/matlab/radia_mex.cpp'
       - 'Build.ps1'
+      - 'tools/native_build_provenance.ps1'
       - 'CMakeLists.txt'
       - '.github/workflows/radia-optuna.yml'
   workflow_dispatch:

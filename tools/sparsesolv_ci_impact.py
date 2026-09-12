@@ -18,6 +18,8 @@ NATIVE_PATHS = (
     "matlab/python_api_parity_manifest.json", "tests/matlab/*sparsesolv*",
     "validation_test/ngsolve_matlab_parity/run_sparsesolv_parity.py",
     "src/radia/__init__.py", "CMakeLists.txt", "Build.ps1", "tools/run_test_tier.py",
+    "tools/native_build_provenance.ps1",
+    "tests/test_native_build_provenance.py",
     "tools/sparsesolv_ci_impact.py", "tests/test_sparsesolv_ci_contract.py",
     ".github/workflows/sparsesolv.yml",
 )
