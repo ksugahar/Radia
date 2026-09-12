@@ -1,5 +1,19 @@
 # Eqnedit64 検証記録
 
+## 2026-09-12: observation gate hardening, not an incident resolution
+
+- The lifecycle probe now refuses acceptance without a session font-host PID
+  or readable Application log. Empty event queries remain valid, but access
+  failures are INCONCLUSIVE. A pre-test control crash prevents native launch.
+- JSON records the EXE SHA-256, OS/session, per-iteration PIDs and exit codes,
+  control/active events, timestamps, and PASS/FAIL/INCONCLUSIVE reason.
+- CI probes before the first executable test as well as after the model suites,
+  and uploads both reports even when a step fails. This is bounded lifecycle
+  evidence, not proof about every API invocation or a differently signed EXE.
+- Ten mocked PowerShell scenarios passed without launching an executable or
+  registering any fonts on LAB. The original host incident remains OPEN until
+  the release candidate and required isolated/hand-review gates are accepted.
+
 ## 2026-09-11: review 8a34e1b53 and unresolved font-host incident
 
 - User-supplied independent Opus 5 review: 100's session 0 recorded

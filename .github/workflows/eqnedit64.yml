@@ -17,9 +17,35 @@ on:
       - '.github/workflows/eqnedit64.yml'
       - '.github/workflows/release-eqnedit64-pypi.yml'
   workflow_dispatch:
+    inputs:
+      font_diagnostic:
+        description: 'Run three isolated font-boundary arms, not release acceptance'
+        type: boolean
+        default: false
+      font_dump:
+        description: 'Diagnostic CFF/TrueType outline A/B, eight isolated trials; no release'
+        type: boolean
+        default: false
+      font_dump_public_key:
+        description: 'Base64 DER public encryption key; private key stays off GitHub'
+        type: string
+        default: ''
+      font_probe:
+        description: 'Bounded 2x2 private-font probe with three fresh-VM replicates'
+        type: boolean
+        default: false
+      font_prefix:
+        description: 'Fixed-payload deep-radical and edit-history diagnostics'
+        type: boolean
+        default: false
+      font_acceptance:
+        description: 'Full native candidate tests with named Eqnedit Math product asset; no release'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: eqnedit64-${{ github.ref }}
@@ -27,6 +53,7 @@ concurrency:
 
 jobs:
   web:
+    if: ${{ inputs.font_diagnostic != true && inputs.font_dump != true && inputs.font_probe != true && inputs.font_prefix != true }}
     # The browser edition is pure JavaScript plus a string-contract test, so it
     # answers in seconds on a free runner instead of waiting for the Windows
     # native build.  This is a fast-feedback lane, not a replacement: the
@@ -73,6 +100,7 @@ jobs:
           node tests/test_palette_browser.cjs
 
   build-test:
+    if: ${{ inputs.font_diagnostic != true && inputs.font_dump != true && inputs.font_probe != true && inputs.font_prefix != true }}
     # Font registration tests run only in this disposable GitHub-hosted
     # session. They must not churn the interactive laboratory desktop's font
     # cache or disturb applications such as LINE and Office.
@@ -114,11 +142,38 @@ jobs:
       - name: Install test build dependencies
         run: python -m pip install pybind11 pytest
 
+      - name: Verify named TrueType product candidate
+        if: ${{ inputs.font_acceptance == true }}
+        run: |
+          python -m pip install pybind11==3.0.1 fonttools==4.60.1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tests/test_truetype_conversion.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python build/make_diagnostic_truetype.py assets/latinmodern-math.otf diagnostic-font.ttf --family-name 'Eqnedit Math'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $expected = 'E6A371A1E7BE3DFCE9F047580CF9888A00CBC4B94C723D746A341EC46145EE3B'
+          if ((Get-FileHash diagnostic-font.ttf -Algorithm SHA256).Hash -ne $expected -or (Get-FileHash assets/eqnedit-math.ttf -Algorithm SHA256).Hash -ne $expected) { throw 'Unexpected or non-reproducible product font.' }
+
       - name: Configure native build
         run: cmake -S . -B build_cmake -A x64
 
       - name: Build native targets
         run: cmake --build build_cmake --config Release --parallel 2
+
+      - name: Test font observation failure modes without native execution
+        run: python -m pytest tests/test_font_session_observation.py -q
+
+      - name: Enable isolated font lifecycle diagnostics
+        run: |
+          $directory = Join-Path $env:RUNNER_TEMP 'eqnedit64-font-trace'
+          New-Item -ItemType Directory -Path $directory | Out-Null
+          "EQNEDIT64_FONT_TRACE_DIR=$directory" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Observe first executable font lifecycles
+        run: >-
+          pwsh -NoProfile -File build\test_font_session.ps1
+          -AppPath build_cmake\Release\Eqnedit64.exe -Iterations 32
+          -OutputPath font-session-first.json
 
       - name: Build Eqnedit64 Python wheel candidate
         working-directory: .
@@ -155,12 +210,21 @@ jobs:
       - name: Run hidden executable checks
         run: |
           $app = Resolve-Path 'build_cmake\Release\Eqnedit64.exe'
-          & $app --self-test
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & $app --visual-scale-test
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & $app --ui-interaction-test
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $commands = @()
+          try {
+            foreach ($argument in @('--self-test', '--visual-scale-test', '--ui-interaction-test')) {
+              $started = (Get-Date).ToUniversalTime().ToString('o')
+              $process = Start-Process -FilePath $app -ArgumentList $argument -WindowStyle Hidden -Wait -PassThru
+              $commands += [ordered]@{
+                argument = $argument; pid = $process.Id; exit_code = $process.ExitCode
+                started_utc = $started; ended_utc = (Get-Date).ToUniversalTime().ToString('o')
+              }
+              if ($process.ExitCode -ne 0) { throw "Hidden check failed: $argument" }
+            }
+          } finally {
+            ConvertTo-Json -InputObject $commands -Depth 4 | Set-Content -LiteralPath `
+              (Join-Path $env:EQNEDIT64_FONT_TRACE_DIR 'hidden-commands.json') -Encoding utf8
+          }
 
       - name: Render native palette review proofs
         run: |
@@ -181,6 +245,15 @@ jobs:
         run: >-
           pwsh -NoProfile -File build\test_font_session.ps1
           -AppPath build_cmake\Release\Eqnedit64.exe -Iterations 32
+          -OutputPath font-session-after-suites.json
+
+      - name: Preserve font-host acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eqnedit64-font-session
+          path: tools/eqnedit64/font-session-*.json
+          if-no-files-found: warn
 
       - name: Check command-line image artifacts
         run: |
@@ -205,3 +278,405 @@ jobs:
         run: >-
           pwsh -NoProfile -File tests/test_cli_output.ps1
           -AppPath build_cmake/Release/Eqnedit64.exe
+
+      - name: Check font host after the final CLI workload
+        if: ${{ always() && inputs.font_acceptance == true }}
+        run: >-
+          pwsh -NoProfile -File build/test_font_session.ps1
+          -AppPath build_cmake/Release/Eqnedit64.exe -Iterations 32
+          -OutputPath font-session-final.json
+
+      - name: Identify exact native candidate payload
+        if: ${{ always() && inputs.font_acceptance == true }}
+        run: |
+          $files = @('build_cmake/Release/Eqnedit64.exe', 'build/eqnedit_core.cp312-win_amd64.pyd', 'assets/eqnedit-math.ttf')
+          $records = @($files | ForEach-Object { [ordered]@{path=$_;sha256=(Get-FileHash $_ -Algorithm SHA256 -ErrorAction Stop).Hash} })
+          [ordered]@{source_sha=$env:GITHUB_SHA;diagnostic_only=$true;files=$records} | ConvertTo-Json -Depth 4 | Set-Content native-candidate-manifest.json -Encoding utf8
+
+      - name: Preserve final candidate evidence
+        if: ${{ always() && inputs.font_acceptance == true }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: eqnedit64-corrected-font-candidate
+          retention-days: 1
+          path: |
+            tools/eqnedit64/font-session-*.json
+            tools/eqnedit64/native-candidate-manifest.json
+            tools/eqnedit64/diagnostic-font.json
+            tools/eqnedit64/build_cmake/Release/Eqnedit64.exe
+            tools/eqnedit64/build/eqnedit_core*.pyd
+            tools/eqnedit64/assets/GUST-FONT-LICENSE.txt
+            tools/eqnedit64/assets/THIRD_PARTY_NOTICES.md
+            tools/eqnedit64/assets/MANIFEST-eqnedit-math.txt
+            tools/eqnedit64/assets/eqnedit-math.ttf
+          if-no-files-found: warn
+
+      - name: Preserve isolated font lifecycle traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eqnedit64-font-trace
+          path: ${{ runner.temp }}/eqnedit64-font-trace/
+          if-no-files-found: warn
+
+  font-boundary-diagnostic:
+    if: ${{ inputs.font_diagnostic == true && inputs.font_dump != true && inputs.font_probe != true && inputs.font_prefix != true }}
+    runs-on: windows-2022
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        arm: [self, model-idle, model-self]
+    env:
+      EQNEDIT64_ISOLATED_TEST_SESSION: '1'
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: tools/eqnedit64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile identical diagnostic sources without executing fonts
+        run: |
+          python -m pip install pybind11 pytest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake -S . -B build_cmake -A x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build_cmake --config Release --target Eqnedit64 --parallel 2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmd.exe /d /c build\build_pymodule.bat
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Observe one fresh-session arm
+        run: >-
+          pwsh -NoProfile -File build/diagnose_font_boundary.ps1
+          -Arm '${{ matrix.arm }}'
+          -OutputDirectory '${{ runner.temp }}/font-boundary'
+      - name: Preserve all diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: font-boundary-${{ matrix.arm }}
+          path: ${{ runner.temp }}/font-boundary/
+          if-no-files-found: warn
+
+  font-dump-build:
+    if: ${{ inputs.font_dump == true && inputs.font_probe != true && inputs.font_prefix != true }}
+    runs-on: windows-2022
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        flavor: [cff, ttf]
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: tools/eqnedit64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build once without font execution
+        run: |
+          if (Select-String src/eqnedit64.rc -SimpleMatch 'eqnedit-math.ttf' -Quiet) { throw 'Historical outline A/B requires its pinned CFF source; use font_acceptance for the product candidate.' }
+          python -m pip install pybind11==3.0.1 pytest fonttools==4.60.1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (Test-Path build_cmake) { throw 'Clean build directory required.' }
+          if (Get-ChildItem build -Include *.obj,*.res,*.pyd -File -Recurse) { throw 'Stale native intermediates.' }
+          $original = (Get-FileHash assets/latinmodern-math.otf -Algorithm SHA256).Hash
+          if ($original -ne '6075562B771F8B82F0C179E363389684F2DD09DE30038269E2628E504BD7BE0F') { throw 'Unexpected source font.' }
+          if ('${{ matrix.flavor }}' -eq 'ttf') {
+            python build/make_diagnostic_truetype.py assets/latinmodern-math.otf diagnostic-font.ttf
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            if ((Get-FileHash diagnostic-font.ttf -Algorithm SHA256).Hash -ne 'B598AEE924DD8C51D07B6BE72DAEF1197EB557FBE23A92F477E35D64B3D2EBE0') { throw 'Non-reproducible conversion.' }
+            Copy-Item diagnostic-font.ttf assets/latinmodern-math.otf
+          } else {
+            [ordered]@{diagnostic_only=$true;source_sha256=$original;output_sha256=$original;conversion='none';license='GUST Font License / LPPL'} | ConvertTo-Json | Set-Content diagnostic-font.json -Encoding utf8
+          }
+          cmake -S . -B build_cmake -A x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build_cmake --config Release --target Eqnedit64 --parallel 2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmd.exe /d /c build\build_pymodule.bat
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $files = @('build_cmake/Release/Eqnedit64.exe') + @(Get-ChildItem build/eqnedit_core*.pyd | ForEach-Object { 'build/' + $_.Name })
+          if ($files.Count -ne 2) { throw 'Expected exactly one executable and one module.' }
+          $records = @($files | ForEach-Object { [ordered]@{path=$_; sha256=(Get-FileHash $_ -Algorithm SHA256).Hash} })
+          $records += [ordered]@{path='assets/latinmodern-math.otf';sha256=(Get-FileHash assets/latinmodern-math.otf -Algorithm SHA256).Hash}
+          [ordered]@{source_sha=$env:GITHUB_SHA; flavor='${{ matrix.flavor }}';diagnostic_only=$true;files=$records;license='GUST Font License / LPPL';pybind11='3.0.1';fonttools='4.60.1'} | ConvertTo-Json -Depth 4 | Set-Content font-binary-manifest.json -Encoding utf8
+      - uses: actions/upload-artifact@v4
+        with:
+          name: font-outline-binaries-${{ matrix.flavor }}
+          retention-days: 1
+          if-no-files-found: error
+          path: |
+            tools/eqnedit64/build_cmake/Release/Eqnedit64.exe
+            tools/eqnedit64/build/eqnedit_core*.pyd
+            tools/eqnedit64/font-binary-manifest.json
+            tools/eqnedit64/diagnostic-font.json
+            tools/eqnedit64/assets/latinmodern-math.otf
+            tools/eqnedit64/assets/GUST-FONT-LICENSE.txt
+            tools/eqnedit64/assets/THIRD_PARTY_NOTICES.md
+
+  font-dump-trial:
+    needs: font-dump-build
+    if: ${{ inputs.font_dump == true && inputs.font_probe != true && inputs.font_prefix != true }}
+    runs-on: windows-2022
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        flavor: [cff, ttf]
+        case:
+          - {name: deep-once, operation: deep-once, prefix: -1}
+          - {name: prefix10, operation: none, prefix: 10}
+        trial: [1, 2]
+    env:
+      EQNEDIT64_ISOLATED_TEST_SESSION: '1'
+      FONT_DUMP_PUBLIC_KEY: ${{ inputs.font_dump_public_key }}
+      EQNEDIT64_PAYLOAD_SOURCE_SHA: ${{ github.sha }}
+      EQNEDIT64_FONT_FLAVOR: ${{ matrix.flavor }}
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: tools/eqnedit64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: font-outline-binaries-${{ matrix.flavor }}
+          path: tools/eqnedit64
+      - name: Verify identical binary payload
+        run: |
+          if (-not $env:FONT_DUMP_PUBLIC_KEY) { throw 'Public encryption key is required.' }
+          python -m pip install cryptography
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python build/font_dump_crypto.py selftest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $manifest = Get-Content font-binary-manifest.json -Raw | ConvertFrom-Json
+          if ($manifest.source_sha -ne $env:GITHUB_SHA) { throw 'Source identity mismatch.' }
+          if ($manifest.flavor -ne '${{ matrix.flavor }}' -or $manifest.files.Count -ne 3) { throw 'Mixed outline payload.' }
+          foreach ($file in $manifest.files) {
+            if ((Get-FileHash $file.path -Algorithm SHA256).Hash -ne $file.sha256) { throw 'Binary identity mismatch.' }
+          }
+      - name: Configure VM-only restricted crash dump collection
+        run: >-
+          pwsh -NoProfile -File build/enable_isolated_font_dumps.ps1
+          -DumpDirectory '${{ runner.temp }}/font-dumps'
+      - name: Observe model then self-test once
+        run: >-
+          pwsh -NoProfile -File build/diagnose_font_boundary.ps1
+          -Arm model-self -ModelPrefix ${{ matrix.case.prefix }} -ModelOperation '${{ matrix.case.operation }}'
+          -OutputDirectory '${{ runner.temp }}/font-boundary'
+      - name: Allow bounded WER dump completion
+        if: always()
+        run: Start-Sleep -Seconds 15
+      - name: Preserve timeline evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: font-outline-timeline-${{ matrix.flavor }}-${{ matrix.case.name }}-${{ matrix.trial }}
+          path: ${{ runner.temp }}/font-boundary/
+          if-no-files-found: warn
+      - name: Encrypt private dump evidence before upload
+        if: always()
+        run: >-
+          python build/font_dump_crypto.py encrypt
+          --path '${{ runner.temp }}/font-dumps'
+          --output '${{ runner.temp }}/encrypted-font-dumps/evidence.enc'
+      - name: Preserve encrypted dumps for one day only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sensitive-outline-${{ matrix.flavor }}-${{ matrix.case.name }}-${{ matrix.trial }}
+          retention-days: 1
+          path: ${{ runner.temp }}/encrypted-font-dumps/
+          if-no-files-found: warn
+
+  font-probe-build:
+    if: ${{ inputs.font_probe == true && inputs.font_prefix != true }}
+    runs-on: windows-2022
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: tools/eqnedit64
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build one standalone probe without running fonts
+        run: |
+          cmake -S . -B build_cmake -A x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build_cmake --config Release --target font_lifecycle_probe --parallel 2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $records = @(@('build_cmake/Release/font_lifecycle_probe.exe','assets/latinmodern-math.otf') | ForEach-Object {
+            [ordered]@{path=$_; sha256=(Get-FileHash $_ -Algorithm SHA256).Hash}
+          })
+          [ordered]@{source_sha=$env:GITHUB_SHA; files=$records} | ConvertTo-Json -Depth 4 | Set-Content font-probe-manifest.json -Encoding utf8
+      - uses: actions/upload-artifact@v4
+        with:
+          name: font-probe-binaries
+          retention-days: 1
+          if-no-files-found: error
+          path: |
+            tools/eqnedit64/build_cmake/Release/font_lifecycle_probe.exe
+            tools/eqnedit64/assets/latinmodern-math.otf
+            tools/eqnedit64/assets/GUST-FONT-LICENSE.txt
+            tools/eqnedit64/assets/THIRD_PARTY_NOTICES.md
+            tools/eqnedit64/font-probe-manifest.json
+
+  font-probe-trial:
+    needs: font-probe-build
+    if: ${{ inputs.font_probe == true && inputs.font_prefix != true }}
+    runs-on: windows-2022
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        release: [exit, remove]
+        measurement: [none, measure]
+        replicate: [1, 2, 3]
+    env:
+      EQNEDIT64_ISOLATED_TEST_SESSION: '1'
+      FONT_DUMP_PUBLIC_KEY: ${{ inputs.font_dump_public_key }}
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: tools/eqnedit64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: font-probe-binaries
+          path: tools/eqnedit64
+      - name: Verify common probe and font payload
+        run: |
+          if (-not $env:FONT_DUMP_PUBLIC_KEY) { throw 'Encryption key required.' }
+          python -m pip install cryptography
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $manifest = Get-Content font-probe-manifest.json -Raw | ConvertFrom-Json
+          if ($manifest.source_sha -ne $env:GITHUB_SHA) { throw 'Source mismatch.' }
+          foreach ($file in $manifest.files) {
+            if ((Get-FileHash $file.path -Algorithm SHA256).Hash -ne $file.sha256) { throw 'Payload mismatch.' }
+          }
+      - name: Configure VM-only restricted dumps
+        run: >-
+          pwsh -NoProfile -File build/enable_isolated_font_dumps.ps1
+          -DumpDirectory '${{ runner.temp }}/font-dumps'
+      - name: Observe bounded lifecycle count
+        run: >-
+          pwsh -NoProfile -File build/diagnose_font_boundary.ps1
+          -Arm probe -ReleaseMode '${{ matrix.release }}' -Measurement '${{ matrix.measurement }}'
+          -MaxLaunches 64 -OutputDirectory '${{ runner.temp }}/font-probe'
+      - name: Bounded dump completion
+        if: always()
+        run: Start-Sleep -Seconds 15
+      - name: Preserve probe count and external observations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: font-probe-${{ matrix.release }}-${{ matrix.measurement }}-${{ matrix.replicate }}
+          path: ${{ runner.temp }}/font-probe/
+          if-no-files-found: warn
+      - name: Encrypt private evidence
+        if: always()
+        run: >-
+          python build/font_dump_crypto.py encrypt --path '${{ runner.temp }}/font-dumps'
+          --output '${{ runner.temp }}/encrypted-font-dumps/evidence.enc'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: encrypted-probe-${{ matrix.release }}-${{ matrix.measurement }}-${{ matrix.replicate }}
+          retention-days: 1
+          path: ${{ runner.temp }}/encrypted-font-dumps/
+          if-no-files-found: warn
+
+  font-prefix-trial:
+    if: ${{ inputs.font_prefix == true }}
+    runs-on: windows-2022
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        case:
+          - {name: deep-once, operation: deep-once, prefix: -1}
+          - {name: deep-sequence, operation: deep-sequence, prefix: -1}
+          - {name: edit-1525, operation: edit-1525, prefix: -1}
+          - {name: edit-all, operation: edit-all, prefix: -1}
+        replicate: [1, 2]
+    env:
+      EQNEDIT64_ISOLATED_TEST_SESSION: '1'
+      FONT_DUMP_PUBLIC_KEY: ${{ inputs.font_dump_public_key }}
+      EQNEDIT64_PAYLOAD_SOURCE_SHA: cfba80a51ae3d77fb427838bd1ef88ef3f7a9d84
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: tools/eqnedit64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: font-dump-binaries
+          run-id: 34661533840
+          github-token: ${{ github.token }}
+          path: tools/eqnedit64
+      - name: Verify original reproducing payload
+        run: |
+          if (Select-String src/eqnedit64.rc -SimpleMatch 'eqnedit-math.ttf' -Quiet) { throw 'Historical prefix tests require their pinned test source; use font_acceptance for the product candidate.' }
+          if (-not $env:FONT_DUMP_PUBLIC_KEY) { throw 'Encryption key required.' }
+          python -m pip install cryptography
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $manifest = Get-Content font-binary-manifest.json -Raw | ConvertFrom-Json
+          if ($manifest.source_sha -ne $env:EQNEDIT64_PAYLOAD_SOURCE_SHA) { throw 'Payload source mismatch.' }
+          $expected = @{
+            'build_cmake/Release/Eqnedit64.exe'='46E9DAEAB910D83BDF2B341BB8ED8D542BBAFC072249ABCD7EE87A9CBEBD350E'
+            'build/eqnedit_core.cp312-win_amd64.pyd'='9D2BBF4E50FF9643E1E495FD8E3A2A4BD257A9C2A4B549759617B810A4D112CE'
+          }
+          if ($manifest.files.Count -ne 2) { throw 'Unexpected payload manifest.' }
+          foreach ($file in $manifest.files) {
+            if ($expected[$file.path] -ne $file.sha256 -or (Get-FileHash $file.path -Algorithm SHA256).Hash -ne $file.sha256) { throw 'Payload identity mismatch.' }
+          }
+      - name: Configure isolated dump collection
+        run: >-
+          pwsh -NoProfile -File build/enable_isolated_font_dumps.ps1
+          -DumpDirectory '${{ runner.temp }}/font-dumps'
+      - name: Observe one prefix then self-test
+        run: >-
+          pwsh -NoProfile -File build/diagnose_font_boundary.ps1 -Arm model-self
+          -ModelPrefix ${{ matrix.case.prefix }} -ModelOperation '${{ matrix.case.operation }}'
+          -OutputDirectory '${{ runner.temp }}/font-prefix'
+      - name: Bounded dump completion
+        if: always()
+        run: Start-Sleep -Seconds 15
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: font-prefix-${{ matrix.case.name }}-${{ matrix.replicate }}
+          path: ${{ runner.temp }}/font-prefix/
+          if-no-files-found: warn
+      - name: Encrypt private evidence
+        if: always()
+        run: >-
+          python build/font_dump_crypto.py encrypt --path '${{ runner.temp }}/font-dumps'
+          --output '${{ runner.temp }}/encrypted-font-dumps/evidence.enc'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: encrypted-prefix-${{ matrix.case.name }}-${{ matrix.replicate }}
+          retention-days: 1
+          path: ${{ runner.temp }}/encrypted-font-dumps/
+          if-no-files-found: warn

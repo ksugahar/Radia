@@ -10,6 +10,15 @@
   native shortcuts and Web caret insertion. Update the shared catalogue and
   independent expected TeX together; keep empty-base double-script protection.
 
+- Replace the native embedded CFF resource with Eqnedit Math, a reproducibly
+  converted TrueType-outline derivative of Latin Modern Math. Both EXE and
+  wheel module use the same asset and physical family; reject a non-TrueType
+  resource before registration. This avoids the reproduced Windows ATM host
+  failure path, rather than hiding it behind successful registration retries.
+  Preserve advances and math-layout tables, test all glyph bounds and winding,
+  and document the modified font and license. Final candidate acceptance is
+  recorded separately in FONT_DIAGNOSTICS.md; this entry is not release approval.
+
 - Preserve grouped and empty-base apostrophes on native import, including
   following scripts. Restore ordinary Web preview after optional Office macro
   preparation fails; keep copy disabled with reload guidance. Regressions check
