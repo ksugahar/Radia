@@ -13,6 +13,11 @@ def test_ih_thermal_knowledge_keeps_em_and_heat_spaces_separate():
     assert "AxiHenrotteHeatStiffnessBFI" in thermal
     assert "AxiHenrotteHeatMassBFI" in thermal
     assert "fail fast on axis-touching Q2" in thermal
+    assert "--heat-flux-boundaries" in thermal
+    assert "--convection-boundaries" in thermal
+    assert "--radiation-boundaries" in thermal
+    assert "boundary_audit" in thermal
+    assert "--surface-label`` fails" in thermal
 
 
 def test_ih_pitfalls_reject_henrotte_temperature_reuse():
@@ -35,3 +40,12 @@ def test_axifem_knowledge_routes_axisymmetric_heat_to_standard_h1():
     assert "Q2 on quadrilateral meshes" in combined
     assert "P2 on triangular meshes" in combined
     assert "fail fast" in combined
+
+
+def test_ih_thermal_knowledge_fixes_cross_mesh_qsurf_handoff_to_p1():
+    thermal = get_induction_heating_documentation("thermal")
+    rotating = get_induction_heating_documentation("rotating")
+
+    assert "fixed P1 cross-mesh handoff" in thermal
+    assert "electromagnetic solve itself uses a higher order" in thermal
+    assert "always produces this handoff at order 1" in rotating
