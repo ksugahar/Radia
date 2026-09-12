@@ -48,8 +48,8 @@ Prefer established public abstractions over proprietary plumbing.
   functions, application coupling, and validated native kernels.
 - Cubit and build123d own CAD authoring. Netgen/NGSolve and Cubit own solver
   mesh generation. Gmsh is Radia's post-processing target.
-- Build thin Python, MATLAB, and MCP adapters around coarse tested workflows.
-  Do not expose every helper as a tool or duplicate solver logic in wrappers.
+- Build thin Python/MATLAB/MCP adapters around tested domain workflows; do not duplicate solver logic or expose every helper.
+  Consolidate with preserved contracts per `packages/radia-mcp/CONTRIBUTING.md`.
 - Keep two genuinely independent analysis routes for important models when
   feasible.
 
