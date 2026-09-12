@@ -55,6 +55,10 @@ endif()
 
 enable_testing()
 if(WIN32)
+    # Manual disposable-CI diagnostic, intentionally not a CTest/release target.
+    add_executable(font_lifecycle_probe EXCLUDE_FROM_ALL tests/font_lifecycle_probe.cpp)
+    target_compile_options(font_lifecycle_probe PRIVATE /W4 /WX /utf-8)
+    target_link_libraries(font_lifecycle_probe PRIVATE gdi32 user32)
     add_executable(test_font_trace tests/test_font_trace.cpp)
     target_include_directories(test_font_trace PRIVATE src)
     target_compile_options(test_font_trace PRIVATE /W4 /WX /utf-8)

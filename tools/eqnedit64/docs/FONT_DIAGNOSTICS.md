@@ -121,3 +121,63 @@ this state, using disposable workers and retaining external host monitoring.
 Do not patch the Windows binary, weaken the release gate, or claim that an
 explicit RemoveFontResourceEx call or retry delay is a fix without controlled
 evidence. Product release remains on hold.
+
+## Connection to laboratory evidence
+
+The laboratory's historical CLAUDE.md section "Do Not Break the Interactive
+Session's Fonts (2026-09-03)" records 202 incidents since August 23 at offset
+0x366a2. The reviewer reports September 5 symbolization of 203 LAB crashes at
+the same CheckMemoryUsage location; that later count is reviewer-provided, not
+a new recount of the original event logs in this investigation.
+
+Independent non-CI evidence is recorded in
+`C:/temp/eqnedit64-palette-claude-review/REVIEW.md`, section "fontdrvhost crashed
+in 100's session 0": September 11 at 14:21:11 JST, ja-JP session 0, host
+10.0.20348.5256, c0000005/366a2, coincident with self-test startup. The review
+reports no competing Eqnedit64/python/node process in that session and only
+this event in the preceding 30 days. Both application checks returned zero.
+This makes disposable CI or en-US locale unnecessary conditions for the
+observed signature; it does not establish identical preceding host state.
+
+## Count-controlled diagnostic (not a remedy)
+
+The identical `atm` value in two independent dumps motivates a history-dependent
+accounting hypothesis. A retained counter after list teardown is one possible
+explanation, not an established leak. Deterministic counts can also arise from
+deterministic timing; variable counts do not alone prove a race. The threshold
+0x500000 is 5 MiB (5,242,880), not decimal 5 MB.
+
+`font_lifecycle_probe` is an EXCLUDE_FROM_ALL console target with no editor or
+renderer linkage, no retries and no cache writes. Build it explicitly. Its CLI:
+
+```
+font_lifecycle_probe FONT exit|remove|hold none|measure HOLD_SECONDS
+```
+
+HOLD_SECONDS is 1..60. Only hold mode sleeps. Each process registers once;
+remove mode explicitly removes once with matching flags; exit mode relies on
+Windows teardown. Optional measure mode selects Latin Modern Math, verifies
+the resolved face and measures one parenthesis before deleting its GDI objects.
+Hold mode keeps the registration alive until its bounded timeout. JSONL includes
+PID, precise FILETIME and operation boundaries/results, but not user contents.
+Both GITHUB_ACTIONS=true and EQNEDIT64_ISOLATED_TEST_SESSION=1 are required;
+these flags are a guard, not proof of actual machine isolation.
+
+Use one immutable probe/font payload on fresh hosted workers for each arm and
+replicate. Record hashes, OS/font-host version, baseline PID/start time, child
+intervals, events and first failing k. Start with exit/remove crossed with
+none/measure, three workers per arm, at most 64 sequential processes each.
+Observe a fixed idle interval before/after, stop at the first host death/change
+or child error, and report NO_REPRODUCTION_WITHIN_BOUND separately from success.
+The hold arm needs overlapping children to distinguish retained registrations
+from process teardown; cap concurrency explicitly and terminate only owned
+children after observations. Do not label an ordinary sequential hold loop as
+this control. Preserve timing as a factor rather than replacing order tests.
+
+The bundled font license is GUST Font License (LPPL), not OFL; see
+`assets/GUST-FONT-LICENSE.txt`. A CFF-to-glyf conversion is a separate diagnostic
+candidate, not an approved replacement. Preserve provenance and applicable
+license/renaming conditions, validate changed tables and outline approximation,
+and test rendering separately. Failure of CFF but not glyf within a finite
+bound supports a route-specific hypothesis; it does not prove ATM is a necessary
+condition for every incident. No Windows binary patching is contemplated.
