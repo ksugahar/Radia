@@ -383,6 +383,12 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument("--source-trace-tolerance", type=float, default=0.05)
+    parser.add_argument("--mixed-source-order", type=int, default=None,
+                        help="Hodge source projection order; default preserves API order selection")
+    parser.add_argument("--mixed-bonus", type=int, default=4,
+                        help="Mixed Omega volume/interface assembly bonus")
+    parser.add_argument("--mixed-exact-exterior-source", action="store_true",
+                        help="Use exact Kelvin-pulled source instead of projected exterior trace")
     parser.add_argument("--relative-rms-tolerance", type=float, default=0.03)
     parser.add_argument("--observation-half-width", type=float, default=2.0e-5)
     parser.add_argument("--threads", type=int, default=0)
@@ -391,6 +397,10 @@ def main(argv: list[str] | None = None) -> int:
     options = parser.parse_args(argv)
     _validated_tolerance(options.relative_rms_tolerance)
     _validated_tolerance(options.nonlinear_tolerance)
+    if options.mixed_source_order is not None and options.mixed_source_order < 1:
+        raise ValueError("--mixed-source-order must be positive")
+    if options.mixed_bonus < 0:
+        raise ValueError("--mixed-bonus must be nonnegative")
     if options.fem_order < 1:
         raise ValueError("--fem-order must be positive")
     if options.nonlinear_maximum_iterations < 1:
@@ -521,6 +531,9 @@ def main(argv: list[str] | None = None) -> int:
             kelvin_radius=case.kelvin_radius_m,
             points=field_points,
             source_trace_tolerance=options.source_trace_tolerance,
+            source_projection_order=options.mixed_source_order,
+            bonus_intorder=options.mixed_bonus,
+            exact_exterior_source=options.mixed_exact_exterior_source,
             relaxation=options.mixed_relaxation,
             anderson_depth=options.mixed_anderson_depth,
             mu_r_initial=(1000.0 if state is None
@@ -549,6 +562,11 @@ def main(argv: list[str] | None = None) -> int:
         "reduced_a": reduced_a_settings,
         "mixed_total_reduced_omega": {
             "source_potential_contract": "total_hodge",
+            "source_projection_order": (max(2, int(options.fem_order))
+                                        if options.mixed_source_order is None
+                                        else int(options.mixed_source_order)),
+            "bonus_intorder": int(options.mixed_bonus),
+            "exact_exterior_source": bool(options.mixed_exact_exterior_source),
             "source_trace_tolerance": float(options.source_trace_tolerance),
             "relaxation": float(options.mixed_relaxation),
             "anderson_depth": int(options.mixed_anderson_depth),
