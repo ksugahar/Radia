@@ -88,6 +88,7 @@ def test_build_manifest_must_match_binary_bytes_and_selected_commit(tmp_path, mo
 def test_mocked_provenance_and_comparison_contract(tmp_path):
     python = _report("python-pybind11")
     matlab = _report("matlab-mex")
+    matlab["binary"]["bytes"] = 123.0  # MATLAB JSON represents doubles as numbers.
     python_path = tmp_path / "python.json"
     matlab_path = tmp_path / "matlab.json"
     python_path.write_text(json.dumps(python), encoding="utf-8")
