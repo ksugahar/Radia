@@ -227,6 +227,7 @@ def benchmark(case_path: Path, repeats: int) -> dict:
     _require(all(_finite_number(value) for value in measured_observables.values()),
              "benchmark observables must be finite")
     binary_path = Path(native.__file__).resolve()
+    relative_binary_path = binary_path.relative_to(ROOT.resolve()).as_posix()
     return {
         "schema": RESULT_SCHEMA,
         "executed_at_utc": datetime.now(UTC).isoformat(),
@@ -238,11 +239,11 @@ def benchmark(case_path: Path, repeats: int) -> dict:
         "python_version": platform.python_version(),
         "host": platform.node(),
         "binary": {
-            "path": str(binary_path),
+            "path": relative_binary_path,
             "bytes": binary_path.stat().st_size,
             "sha256": _sha256(binary_path),
             "source_commit": source_commit,
-            "build_manifest": str(Path(f"{binary_path}.build.json")),
+            "build_manifest": f"{relative_binary_path}.build.json",
         },
         "repeats": repeats,
         "first_s": first_s,
