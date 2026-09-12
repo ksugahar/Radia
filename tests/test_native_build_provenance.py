@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
+import sys
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "tools" / "native_build_provenance.ps1"
+BUILD_SCRIPT = ROOT / "Build.ps1"
 
 
 def _git(repo: Path, *arguments: str) -> str:
@@ -118,7 +123,7 @@ def test_dirty_state_change_during_build_rejects_and_removes_stale_manifest(tmp_
     _assert_change_rejected(repo, binary, mutation)
 
 
-def test_initial_dirty_source_never_emits_manifest(tmp_path):
+def test_initial_dirty_source_completes_without_manifest(tmp_path):
     repo, binary = _repo(tmp_path)
     (repo / "source.txt").write_text("already dirty\n", encoding="utf-8")
     manifest_path = Path(f"{binary}.build.json")
@@ -126,19 +131,93 @@ def test_initial_dirty_source_never_emits_manifest(tmp_path):
         f". {_quote(SCRIPT)}; "
         f"$start=Get-NativeBuildSourceIdentity -RepoRoot {_quote(repo)}; "
         f"[IO.File]::WriteAllText({_quote(manifest_path)}, 'stale'); "
-        "try { "
         f"Write-NativeBuildProvenance -BinaryPath {_quote(binary)} "
-        f"-RepoRoot {_quote(repo)} -StartIdentity $start; exit 9 "
-        "} catch { "
-        f"if (Test-Path -LiteralPath {_quote(manifest_path)}) {{ exit 8 }}; exit 0 "
-        "}"
+        f"-RepoRoot {_quote(repo)} -StartIdentity $start; "
+        f"if (Test-Path -LiteralPath {_quote(manifest_path)}) {{ exit 8 }}"
     )
     result = _pwsh(command)
     assert result.returncode == 0, (result.stdout, result.stderr)
+    assert "provenance was not issued" in result.stdout
     assert not manifest_path.exists()
+
+
+def test_dirty_source_change_during_build_is_still_rejected(tmp_path):
+    repo, binary = _repo(tmp_path)
+    (repo / "source.txt").write_text("dirty at start\n", encoding="utf-8")
+    mutation = f"[IO.File]::WriteAllText({_quote(repo / 'source.txt')}, 'dirtier')"
+    _assert_change_rejected(repo, binary, mutation)
 
 
 def test_git_failure_rejects_and_removes_stale_manifest(tmp_path):
     repo, binary = _repo(tmp_path)
     mutation = f"Rename-Item -LiteralPath {_quote(repo / '.git')} -NewName '.git-away'"
     _assert_change_rejected(repo, binary, mutation)
+
+
+def test_build_entrypoint_declares_optional_strict_provenance_mode():
+    source = BUILD_SCRIPT.read_text(encoding="utf-8-sig")
+    assert "[switch]$RequireNativeProvenance" in source
+    assert "$RequireNativeProvenance -and $NativeBuildSourceIdentity.source_dirty" in source
+    assert "Write-NativeBuildProvenance" in source
+
+
+@pytest.mark.skipif(
+    os.environ.get("RADIA_RUN_NATIVE_BUILD_CONTRACT") != "1",
+    reason="set RADIA_RUN_NATIVE_BUILD_CONTRACT=1 to exercise real native builds",
+)
+def test_real_build_clean_certificate_and_dirty_noncertificate():
+    # Keep the mapped-drive spelling on Windows. Path.resolve() canonicalizes
+    # this checkout to UNC, while Build.ps1's native toolchain requires a drive.
+    build_root = Path.cwd()
+    assert (build_root / "Build.ps1").samefile(BUILD_SCRIPT)
+    build_script = build_root / "Build.ps1"
+    status = _git(build_root, "status", "--porcelain=v1", "--untracked-files=all")
+    assert not status, f"real build contract requires a clean checkout:\n{status}"
+    binary = build_root / "src" / "radia" / "_radia_pybind.pyd"
+    manifest = Path(f"{binary}.build.json")
+    sentinel = build_root / ".native-build-contract-dirty"
+
+    def run_build(*extra: str) -> subprocess.CompletedProcess[str]:
+        environment = os.environ.copy()
+        environment["PATH"] = os.pathsep.join(
+            [str(Path(sys.executable).parent), environment["PATH"]]
+        )
+        return subprocess.run(
+            [
+                "pwsh",
+                "-NoLogo",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(build_script),
+                "-RadiaOnly",
+                *extra,
+            ],
+            cwd=build_root,
+            text=True,
+            capture_output=True,
+            check=False,
+            env=environment,
+            timeout=300,
+        )
+
+    clean = run_build("-RequireNativeProvenance")
+    assert clean.returncode == 0, (clean.stdout, clean.stderr)
+    certificate = json.loads(manifest.read_text(encoding="utf-8"))
+    assert certificate["source_dirty"] is False
+    assert certificate["source_commit"] == _git(build_root, "rev-parse", "HEAD")
+
+    try:
+        sentinel.write_text("intentional dirty-build contract fixture\n", encoding="utf-8")
+        dirty = run_build()
+        assert dirty.returncode == 0, (dirty.stdout, dirty.stderr)
+        assert "provenance was not issued" in dirty.stdout
+        assert not manifest.exists()
+
+        strict_dirty = run_build("-RequireNativeProvenance")
+        assert strict_dirty.returncode != 0
+        assert "source checkout is dirty" in (strict_dirty.stdout + strict_dirty.stderr)
+        assert not manifest.exists()
+    finally:
+        sentinel.unlink(missing_ok=True)
