@@ -4,6 +4,76 @@ import numpy as np
 
 MU0 = 4e-7 * np.pi
 
+
+def block_action_residual(result):
+    """Expose cancellation between column blocks, without changing any gate.
+
+    The scale is ||b_i|| + sum_j ||A_ij x_j|| on free rows. This is a
+    block-action diagnostic, not componentwise backward error or a field bound.
+    """
+    fes, solution = result['fes'], result['solution']
+    system = result['system']
+    matrix, rhs = system['bilinear_form'].mat, system['linear_form'].vec
+    free = np.array(list(fes.FreeDofs()), dtype=bool)
+    names = ('phi_reduced', 'phi_total', 'interface_constraint')
+    if len(solution.components) != len(names):
+        raise ValueError('expected the three-block mixed Omega system')
+    masks = []
+    for index in range(len(names)):
+        mask = np.zeros(fes.ndof, dtype=bool)
+        span = fes.Range(index)
+        mask[span.start:span.stop] = True
+        masks.append(mask & free)
+    actions = np.zeros((len(names), len(names)))
+    part = solution.vec.CreateVector()
+    product = solution.vec.CreateVector()
+    values = solution.vec.FV().NumPy()
+    if not np.isfinite(values).all() or not np.isfinite(rhs.FV().NumPy()).all():
+        raise ValueError('nonfinite solution or right-hand side')
+    for column in range(len(names)):
+        part[:] = 0
+        span = fes.Range(column)
+        part.FV().NumPy()[span.start:span.stop] = values[span.start:span.stop]
+        product.data = matrix * part
+        for row, mask in enumerate(masks):
+            actions[row, column] = np.linalg.norm(product.FV().NumPy()[mask])
+    product.data = rhs - matrix * solution.vec
+    report = {}
+    for row, (name, mask) in enumerate(zip(names, masks)):
+        numerator = float(np.linalg.norm(product.FV().NumPy()[mask]))
+        rhs_norm = float(np.linalg.norm(rhs.FV().NumPy()[mask]))
+        scale = float(rhs_norm + actions[row].sum())
+        if not np.isfinite([numerator, rhs_norm, scale, *actions[row]]).all():
+            raise ValueError('nonfinite block action residual')
+        report[name] = {
+            'free_dofs': int(mask.sum()), 'residual_l2': numerator,
+            'rhs_l2': rhs_norm, 'column_action_l2': dict(zip(names, actions[row].tolist())),
+            'action_scale': scale,
+            'action_relative': numerator / scale if scale > 0 else None,
+        }
+    return {'blocks': report, 'acceptance_evidence': False,
+            'scale_definition': 'norm(b_i) + sum_j norm(A_ij*x_j), free rows only'}
+
+
+def field_observations(result, mesh, case):
+    points = case.get('observation_samples')
+    if points is None:
+        return None
+    points = np.asarray(points, dtype=float)
+    centres = np.asarray(case['observation_centres'], dtype=float)
+    if (centres.ndim != 2 or centres.shape[1] != 3 or len(centres) == 0
+            or points.shape != (len(centres) * 8, 3)
+            or not np.isfinite(points).all() or not np.isfinite(centres).all()):
+        raise ValueError('expected eight finite samples per observation centre')
+    values = np.array([result['B_cf'](mesh(*point)) for point in points], dtype=float)
+    if values.shape != points.shape or not np.isfinite(values).all():
+        raise ValueError('invalid magnetic flux density samples')
+    return {'centres_m': centres.tolist(), 'samples_m': points.tolist(),
+            'B_samples_T': values.tolist(),
+            'B_average_T': values.reshape(-1, 8, 3).mean(axis=1).tolist(),
+            'observable': 'shared eight-point volume average',
+            'acceptance_evidence': False}
+
 def norm_report(squared, reference):
     if not np.isfinite(squared) or not np.isfinite(reference):
         raise ValueError("nonfinite embedding norm")
