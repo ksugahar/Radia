@@ -23,7 +23,7 @@ on:
         type: boolean
         default: false
       font_dump:
-        description: 'Two isolated same-binary model/self trials with restricted one-day dumps'
+        description: 'Diagnostic CFF/TrueType outline A/B, eight isolated trials; no release'
         type: boolean
         default: false
       font_dump_public_key:
@@ -35,7 +35,7 @@ on:
         type: boolean
         default: false
       font_prefix:
-        description: 'Same-binary model prefixes 0,3,5,6,8,10 with two fresh-VM trials'
+        description: 'Fixed-payload deep-radical and edit-history diagnostics'
         type: boolean
         default: false
 
@@ -317,6 +317,10 @@ jobs:
     if: ${{ inputs.font_dump == true && inputs.font_probe != true && inputs.font_prefix != true }}
     runs-on: windows-2022
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        flavor: [cff, ttf]
     defaults:
       run:
         shell: pwsh
@@ -328,8 +332,20 @@ jobs:
           python-version: '3.12'
       - name: Build once without font execution
         run: |
-          python -m pip install pybind11 pytest
+          python -m pip install pybind11==3.0.1 pytest fonttools==4.60.1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (Test-Path build_cmake) { throw 'Clean build directory required.' }
+          if (Get-ChildItem build -Include *.obj,*.res,*.pyd -File -Recurse) { throw 'Stale native intermediates.' }
+          $original = (Get-FileHash assets/latinmodern-math.otf -Algorithm SHA256).Hash
+          if ($original -ne '6075562B771F8B82F0C179E363389684F2DD09DE30038269E2628E504BD7BE0F') { throw 'Unexpected source font.' }
+          if ('${{ matrix.flavor }}' -eq 'ttf') {
+            python build/make_diagnostic_truetype.py assets/latinmodern-math.otf diagnostic-font.ttf
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            if ((Get-FileHash diagnostic-font.ttf -Algorithm SHA256).Hash -ne 'A7A58548C72317360E0B396509EB3E710482D9459A1F5405152E9E4A859DCB68') { throw 'Non-reproducible conversion.' }
+            Copy-Item diagnostic-font.ttf assets/latinmodern-math.otf
+          } else {
+            [ordered]@{diagnostic_only=$true;source_sha256=$original;output_sha256=$original;conversion='none';license='GUST Font License / LPPL'} | ConvertTo-Json | Set-Content diagnostic-font.json -Encoding utf8
+          }
           cmake -S . -B build_cmake -A x64
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cmake --build build_cmake --config Release --target Eqnedit64 --parallel 2
@@ -339,16 +355,21 @@ jobs:
           $files = @('build_cmake/Release/Eqnedit64.exe') + @(Get-ChildItem build/eqnedit_core*.pyd | ForEach-Object { 'build/' + $_.Name })
           if ($files.Count -ne 2) { throw 'Expected exactly one executable and one module.' }
           $records = @($files | ForEach-Object { [ordered]@{path=$_; sha256=(Get-FileHash $_ -Algorithm SHA256).Hash} })
-          [ordered]@{source_sha=$env:GITHUB_SHA; files=$records} | ConvertTo-Json -Depth 4 | Set-Content font-binary-manifest.json -Encoding utf8
+          $records += [ordered]@{path='assets/latinmodern-math.otf';sha256=(Get-FileHash assets/latinmodern-math.otf -Algorithm SHA256).Hash}
+          [ordered]@{source_sha=$env:GITHUB_SHA; flavor='${{ matrix.flavor }}';diagnostic_only=$true;files=$records;license='GUST Font License / LPPL';pybind11='3.0.1';fonttools='4.60.1'} | ConvertTo-Json -Depth 4 | Set-Content font-binary-manifest.json -Encoding utf8
       - uses: actions/upload-artifact@v4
         with:
-          name: font-dump-binaries
+          name: font-outline-binaries-${{ matrix.flavor }}
           retention-days: 1
           if-no-files-found: error
           path: |
             tools/eqnedit64/build_cmake/Release/Eqnedit64.exe
             tools/eqnedit64/build/eqnedit_core*.pyd
             tools/eqnedit64/font-binary-manifest.json
+            tools/eqnedit64/diagnostic-font.json
+            tools/eqnedit64/assets/latinmodern-math.otf
+            tools/eqnedit64/assets/GUST-FONT-LICENSE.txt
+            tools/eqnedit64/assets/THIRD_PARTY_NOTICES.md
 
   font-dump-trial:
     needs: font-dump-build
@@ -357,11 +378,18 @@ jobs:
     timeout-minutes: 15
     strategy:
       fail-fast: false
+      max-parallel: 4
       matrix:
+        flavor: [cff, ttf]
+        case:
+          - {name: deep-once, operation: deep-once, prefix: -1}
+          - {name: prefix10, operation: none, prefix: 10}
         trial: [1, 2]
     env:
       EQNEDIT64_ISOLATED_TEST_SESSION: '1'
       FONT_DUMP_PUBLIC_KEY: ${{ inputs.font_dump_public_key }}
+      EQNEDIT64_PAYLOAD_SOURCE_SHA: ${{ github.sha }}
+      EQNEDIT64_FONT_FLAVOR: ${{ matrix.flavor }}
     defaults:
       run:
         shell: pwsh
@@ -373,7 +401,7 @@ jobs:
           python-version: '3.12'
       - uses: actions/download-artifact@v4
         with:
-          name: font-dump-binaries
+          name: font-outline-binaries-${{ matrix.flavor }}
           path: tools/eqnedit64
       - name: Verify identical binary payload
         run: |
@@ -384,6 +412,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $manifest = Get-Content font-binary-manifest.json -Raw | ConvertFrom-Json
           if ($manifest.source_sha -ne $env:GITHUB_SHA) { throw 'Source identity mismatch.' }
+          if ($manifest.flavor -ne '${{ matrix.flavor }}' -or $manifest.files.Count -ne 3) { throw 'Mixed outline payload.' }
           foreach ($file in $manifest.files) {
             if ((Get-FileHash $file.path -Algorithm SHA256).Hash -ne $file.sha256) { throw 'Binary identity mismatch.' }
           }
@@ -394,7 +423,8 @@ jobs:
       - name: Observe model then self-test once
         run: >-
           pwsh -NoProfile -File build/diagnose_font_boundary.ps1
-          -Arm model-self -OutputDirectory '${{ runner.temp }}/font-boundary'
+          -Arm model-self -ModelPrefix ${{ matrix.case.prefix }} -ModelOperation '${{ matrix.case.operation }}'
+          -OutputDirectory '${{ runner.temp }}/font-boundary'
       - name: Allow bounded WER dump completion
         if: always()
         run: Start-Sleep -Seconds 15
@@ -402,7 +432,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: font-dump-timeline-${{ matrix.trial }}
+          name: font-outline-timeline-${{ matrix.flavor }}-${{ matrix.case.name }}-${{ matrix.trial }}
           path: ${{ runner.temp }}/font-boundary/
           if-no-files-found: warn
       - name: Encrypt private dump evidence before upload
@@ -415,7 +445,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: sensitive-font-dump-${{ matrix.trial }}
+          name: sensitive-outline-${{ matrix.flavor }}-${{ matrix.case.name }}-${{ matrix.trial }}
           retention-days: 1
           path: ${{ runner.temp }}/encrypted-font-dumps/
           if-no-files-found: warn
