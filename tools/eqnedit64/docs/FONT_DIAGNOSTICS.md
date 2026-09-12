@@ -290,3 +290,22 @@ cmap/MATH/GSUB/GPOS remain byte-identical and all advance widths are preserved.
 hmtx is intentionally NOT byte-identical. This new hash requires a fresh host
 comparison and rendering/metrics regression before any deployment. Bounds
 agreement alone does not prove equal raster appearance or full MATH semantics.
+
+The corrected-font repeat, run 34665720979 (source 1deeb56c069cd), completed
+all eight fresh-worker arms: CFF 4/4 reproduced c0000005 at 366a2, corrected
+glyf 0/4 reproduced. Both child commands exited zero in every arm. Workload
+completion markers and host start times were recorded; control events and
+observer query errors were empty. Evidence is
+`C:/temp/eqnedit-font-outline-34665720979/summary.json`. Corrected-glyf EXE:
+3331B2D68A31157E76E3A53082AB652E856FD6784BF8B8522560D8CF334152A8;
+module: 451BD1E276AEAA5D85F1E1889C8E57B94234FB6A0D9BB908F75BE99201313839.
+The entire workflow is red because its CFF positive controls intentionally
+retain the host-failure gate; that is not a corrected-glyf test failure.
+
+`tests/test_truetype_conversion.py` supplies three offline regression tests,
+including a mutation that restores the incorrect source bearing and detects
+the resulting >16-unit displacement. No native import or registration occurs.
+The next acceptance step uses the corrected asset in the existing full native
+lane (model, ctest, executable/UI, palette images and file exports), with host
+observation extending through the last export. Product deployment remains held
+until rendering and packaging/naming contracts are accepted as well.
