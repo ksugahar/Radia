@@ -38,8 +38,9 @@ def _payload(name, layers, *, order=2.0, hdiv_shift=0.0, mesh_sha="m"):
         "engine_checkpoint_contracts": {
             engine: {"mode": "linear", "fem_order": 1, "linear_solver": "direct",
                      "kelvin_domain_vol_sha256": "k" + name,
-                     "iron_vol_sha256": "i", "observation_points": POINTS,
-                     "implementation_sha256": {"x": name}}
+                     **({"iron_vol_sha256": "i"} if engine == "hdiv_mmm" else {}),
+                     "observation_points": POINTS,
+                     "implementation_sha256": {"x": "same-tested-source"}}
             for engine in report.ENGINES},
         "mesh_result_sha256": mesh_sha + name,
         "observation_points_m": POINTS, "gap_core_half_length_m": 0.010,
@@ -110,4 +111,46 @@ def test_scale_family_manifest_is_refused():
     manifest, results, paths = _family()
     manifest["schema"] = "radia.validation.c-type-cubit-mesh-family.v1"
     with pytest.raises(RuntimeError, match="gap family"):
+        report.analyze(manifest, results, paths, hdiv_identity_tolerance=1e-9)
+
+
+@pytest.mark.parametrize('key', ['implementation_sha256', 'iron_vol_sha256'])
+def test_changed_or_missing_source_identity_is_rejected(key):
+    manifest, results, paths = _family()
+    results['n24']['engine_checkpoint_contracts']['hdiv_mmm'][key] = 'other'
+    with pytest.raises(RuntimeError, match='different formulation contract'):
+        report.analyze(manifest, results, paths, hdiv_identity_tolerance=1e-9)
+    del results['n24']['engine_checkpoint_contracts']['hdiv_mmm'][key]
+    with pytest.raises(RuntimeError, match='hashes are required'):
+        report.analyze(manifest, results, paths, hdiv_identity_tolerance=1e-9)
+
+
+@pytest.mark.parametrize('value', [float('nan'), float('inf'), -1.0])
+def test_invalid_identity_tolerance_is_rejected(value):
+    manifest, results, paths = _family()
+    with pytest.raises(ValueError, match='tolerance'):
+        report.analyze(manifest, results, paths, hdiv_identity_tolerance=value)
+
+
+@pytest.mark.parametrize('ratio', [1.0, 0.5, 3.0, float('nan')])
+def test_invalid_refinement_ratio_is_rejected(ratio):
+    manifest, results, paths = _family()
+    manifest['gap_refinement_ratio'] = ratio
+    with pytest.raises(RuntimeError, match='refinement ratio'):
+        report.analyze(manifest, results, paths, hdiv_identity_tolerance=1e-9)
+
+
+@pytest.mark.parametrize('engine', report.ENGINES)
+def test_nonfinite_field_is_rejected_even_outside_the_gap_core(engine):
+    manifest, results, paths = _family()
+    results['n12']['median_plane_projected_fields_T'][engine][0][0] = float('nan')
+    with pytest.raises(RuntimeError, match='all fields must be finite'):
+        report.analyze(manifest, results, paths, hdiv_identity_tolerance=1e-9)
+
+
+def test_unconverged_nonlinear_result_is_rejected_by_in_memory_api():
+    manifest, results, paths = _family()
+    results['n12']['mode'] = 'nonlinear'
+    results['n12']['nonlinear_converged'] = False
+    with pytest.raises(RuntimeError, match='did not converge'):
         report.analyze(manifest, results, paths, hdiv_identity_tolerance=1e-9)
