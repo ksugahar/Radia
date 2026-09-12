@@ -53,6 +53,15 @@ Prefer established public abstractions over proprietary plumbing.
 - Keep two genuinely independent analysis routes for important models when
   feasible.
 
+### MCP Consolidation
+
+Keep MCP transport, registration and argument handling thin; domain workflows
+remain directly callable and independently testable. Reuse equivalent logic
+instead of copying gates for each case. Preserve public names, result schemas,
+error behavior and domain-specific policy. Consolidate tests by distinct failure
+signal, not by deleting coverage. File splitting alone is not debt reduction;
+see `packages/radia-mcp/CONTRIBUTING.md` for the consolidation acceptance rules.
+
 ### Numerical Rules
 
 - Name eigenmode-bulk/surface coupling **Foster + SIBC**; use **CLN + SIBC**
