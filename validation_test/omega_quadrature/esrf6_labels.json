@@ -1,0 +1,13 @@
+{
+  "schema": "radia.vol-label-contract.v1",
+  "application": "esrf6_mixed_omega_quadrature",
+  "strict_labels": true,
+  "required": {
+    "materials": ["iron", "air", "kelvin"],
+    "boundaries": ["iron_air_interface", "kelvin_int", "kelvin_ext"],
+    "bbboundaries": ["GND"]
+  },
+  "allowed": {
+    "materials": ["iron", "air", "kelvin"]
+  }
+}
