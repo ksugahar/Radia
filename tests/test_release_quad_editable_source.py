@@ -221,12 +221,19 @@ def test_lab_deploy_stops_before_killing_processes_on_source_mismatch(monkeypatc
 def test_remote_deploy_checks_exact_source_before_install(monkeypatch):
     expected_sha = "a" * 40
     captured = {}
+    events = []
     monkeypatch.setattr(release_quad, "_release_head", lambda: expected_sha)
 
     def capture_run(command, **_kwargs):
         captured["command"] = command
+        events.append("deploy")
+
+    def record_intent(ssh_host, label, repo):
+        events.append(("record", ssh_host, repo))
+        return 0
 
     monkeypatch.setattr(release_quad, "run", capture_run)
+    monkeypatch.setattr(release_quad, "_record_release_intent_remote", record_intent)
 
     assert release_quad._deploy_editable_remote(
         "release-host", "release host", r"W:\Radia\release-source"
@@ -237,28 +244,15 @@ def test_remote_deploy_checks_exact_source_before_install(monkeypatch):
     assert "status --porcelain --untracked-files=no" in script
     assert script.index("rev-parse HEAD") < script.index("pip uninstall")
     assert script.index("pip uninstall") < script.index("pip install --no-deps")
+    # The installed source becomes the host's recorded editable intent.
+    assert events == ["deploy", ("record", "release-host", r"W:\Radia\release-source")]
 
 
-def test_remote_restore_forces_canonical_uninstall_then_editable_install(monkeypatch):
-    captured = {}
-
-    def capture_run(command, **_kwargs):
-        captured["command"] = command
-        return subprocess.CompletedProcess(command, 0)
-
-    monkeypatch.setattr(release_quad, "run", capture_run)
-
-    assert release_quad._restore_100_canonical_editable() == 0
-    script = base64.b64decode(captured["command"][-1]).decode("utf-16le")
-    assert "release-quad" not in script
-    assert r"W:\00_CAE\Radia\01_GitHub\packages\radia-mcp" in script
-    assert "pip uninstall -y radia cubit-mesh-export radia-mcp" in script
-    assert script.index("pip uninstall") < script.index("pip install")
-    assert "mcp-server-grant-writing --selftest" in script
-
-
-def test_done_keeps_exact_verified_editables_after_all_gates(monkeypatch):
+def test_done_keeps_exact_verified_editables_after_all_gates(monkeypatch, tmp_path):
     calls = []
+    # The release override names the source `done` verifies; the record is not read.
+    monkeypatch.setenv(release_quad.EDITABLE_REPO_LAB_ENV, "S:/Radia/release-quad/verified")
+    monkeypatch.setenv(release_quad.editable_intent.INTENT_FILE_ENV, str(tmp_path / "intent.json"))
     monkeypatch.setattr(release_quad, "cmd_preflight", lambda _args: calls.append("preflight") or 0)
     monkeypatch.setattr(release_quad, "_release_head", lambda: "a" * 40)
     monkeypatch.setattr(
@@ -293,8 +287,10 @@ def test_done_keeps_exact_verified_editables_after_all_gates(monkeypatch):
     ]
 
 
-def test_done_stops_before_machine_checks_when_active_source_is_stale(monkeypatch):
+def test_done_stops_before_machine_checks_when_active_source_is_stale(monkeypatch, tmp_path):
     calls = []
+    monkeypatch.setenv(release_quad.EDITABLE_REPO_LAB_ENV, "S:/Radia/release-quad/verified")
+    monkeypatch.setenv(release_quad.editable_intent.INTENT_FILE_ENV, str(tmp_path / "intent.json"))
     monkeypatch.setattr(release_quad, "cmd_preflight", lambda _args: calls.append("preflight") or 0)
     monkeypatch.setattr(release_quad, "_release_head", lambda: "a" * 40)
     monkeypatch.setattr(

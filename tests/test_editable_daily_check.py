@@ -21,6 +21,42 @@ def load_checker():
         sys.path.pop(0)
 
 
+_INTENT_TOOL = Path(__file__).resolve().parents[1] / "tools" / "editable_intent.py"
+
+
+def load_intent_tool():
+    spec = importlib.util.spec_from_file_location("daily_editable_intent", _INTENT_TOOL)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+RECORDED = {
+    "radia": "S:/Radia/release-quad/recorded",
+    "cubit-mesh-export": "S:/Radia/release-quad/recorded/packages/cubit-mesh-export",
+    "radia-mcp": "S:/Radia/release-quad/recorded/packages/radia-mcp",
+    "mcp-server-document": "S:/mcp-server",
+}
+
+
+@pytest.fixture(autouse=True)
+def recorded_intent(tmp_path, monkeypatch):
+    """Tests never read the machine's record; they start from a recorded intent."""
+    path = tmp_path / "editable-intent.json"
+    monkeypatch.setenv("RADIA_EDITABLE_INTENT_FILE", str(path))
+    monkeypatch.delenv("RADIA_RELEASE_EDITABLE_REPO_LAB", raising=False)
+    intent = load_intent_tool()
+    data = intent.load_intent(path)
+    for name, source in RECORDED.items():
+        intent.set_entry(data, name, {
+            "source": source, "commit": None, "tracked_clean": None,
+            "recorded_at": "2026-09-12T00:00:00Z", "recorded_by": "test",
+            "recorded_via": "test", "reason": "fixture", "pushed_refs": None,
+            "previous": None})
+    intent.save_intent(data, path)
+    return path
+
+
 def test_daily_checker_is_connected_to_impact_ci():
     root = Path(__file__).resolve().parents[1]
     rules = json.loads((root / "tests/test_tier_manifest.json").read_text())["impact_rules"]
@@ -154,3 +190,44 @@ def test_noneditable_install_cannot_pass(monkeypatch, capsys):
     output = capsys.readouterr().out
     assert "NOT EDITABLE" in output
     assert "Stop-Process" not in output
+
+
+def test_expected_packages_follow_the_record():
+    module = load_checker()
+    assert dict(module.expected_packages()) == RECORDED
+
+
+def test_no_record_is_unverified_not_drift(recorded_intent, monkeypatch, capsys):
+    """Without a record the checker must not invent an expectation."""
+    recorded_intent.unlink()
+    module = load_checker()
+
+    def must_not_run(packages):
+        raise AssertionError("no expectation exists, so nothing can be compared")
+
+    monkeypatch.setattr(module.release_quad, "_verify_lab_editable", must_not_run)
+    assert module.main(["--skip-origin-check"]) == 5
+    out = capsys.readouterr().out
+    assert "UNVERIFIED" in out
+    assert "record-current" in out
+    for forbidden in ("01_GitHub", "pip install -e", "uninstall", "Stop-Process"):
+        assert forbidden not in out
+
+
+def test_explicit_source_root_is_an_expectation_without_a_record(recorded_intent, monkeypatch):
+    recorded_intent.unlink()
+    module = load_checker()
+    seen = {}
+
+    def capture(packages):
+        seen["packages"] = packages
+        return 0
+
+    monkeypatch.setattr(module.release_quad, "_verify_lab_editable", capture)
+    root = Path("S:/Radia/release-quad/x")
+    assert module.main(["--source-root", str(root), "--skip-origin-check"]) == 0
+    assert dict(seen["packages"]) == {
+        "radia": str(root),
+        "cubit-mesh-export": str(root / "packages" / "cubit-mesh-export"),
+        "radia-mcp": str(root / "packages" / "radia-mcp"),
+    }

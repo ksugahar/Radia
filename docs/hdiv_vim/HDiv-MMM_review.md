@@ -1045,9 +1045,9 @@ The #6/#7 production three-engine acceptance and timings require the new native
 release on mdx/hibino; diagnostic MINRES results do not certify production CG.
 
 The LAB release-worktree editable path is not repaired blindly: release-quad
-intentionally retains the verified release source until the canonical development
-checkout catches up. Use its explicit restore-editable command only after that
-prerequisite is satisfied; do not redirect imports to the stale dirty shared tree.
+retains the verified release source and records it as the editable intent. Any
+later move is an explicit `repoint --reason`; do not redirect imports to the
+stale dirty shared tree merely because its path was once canonical.
 
 ### 8.6 ESRF #6/#7 restart gate (2026-09-05)
 
