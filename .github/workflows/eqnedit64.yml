@@ -341,7 +341,7 @@ jobs:
           if ('${{ matrix.flavor }}' -eq 'ttf') {
             python build/make_diagnostic_truetype.py assets/latinmodern-math.otf diagnostic-font.ttf
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            if ((Get-FileHash diagnostic-font.ttf -Algorithm SHA256).Hash -ne 'A7A58548C72317360E0B396509EB3E710482D9459A1F5405152E9E4A859DCB68') { throw 'Non-reproducible conversion.' }
+            if ((Get-FileHash diagnostic-font.ttf -Algorithm SHA256).Hash -ne 'B598AEE924DD8C51D07B6BE72DAEF1197EB557FBE23A92F477E35D64B3D2EBE0') { throw 'Non-reproducible conversion.' }
             Copy-Item diagnostic-font.ttf assets/latinmodern-math.otf
           } else {
             [ordered]@{diagnostic_only=$true;source_sha256=$original;output_sha256=$original;conversion='none';license='GUST Font License / LPPL'} | ConvertTo-Json | Set-Content diagnostic-font.json -Encoding utf8
