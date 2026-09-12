@@ -143,12 +143,22 @@ cases, not arbitrary bst styles, languages, macro expansion or real-manuscript
 submission acceptance. The test leaves visual_review=pending until human/agent
 inspection; a text-only pass must not claim visual approval.
 
-Remaining bibliography boundaries are explicit: arbitrary TeX macros and
-conditionals need resolved input, unsupported author expressions need metadata
-resolution, and snapshot checks are optimistic rather than locks on arbitrary
-external writers. Live MCP, editable, wheel and real-manuscript acceptance are
-separate operational lanes. None is represented as globally resolved by these
-static and synthetic tests.
+Finalization follow-up (2026-09-12): optional compiled aux now supplies the
+actual TeX citation decisions without interpreting macros or executing aux code.
+Source edits and bbl generation use fail-fast OS advisory locks with persistent
+sidecars; a separate-process test verifies exclusion and release after failure.
+Ten new cases cover aux nesting/order/wildcards, malformed/missing/cyclic input,
+conflicting styles, compiled decisions, mid-run aux change and writer exclusion.
+The fifteen-file lane passes 1205 tests; isolated registration reports 16 tools.
+See [the finalization contract](operations/bibliography-finalization.md).
+
+Remaining boundaries are deliberate: callers own preexisting aux freshness,
+unsupported author expressions need metadata resolution, and nonparticipating
+external editors are protected optimistically rather than completely locked.
+Live MCP is not updated: it points at a different shared runtime, with no idle
+signal or supported reconnect control available in this task. Source integration,
+editable selection, reconnect, wheel and real-manuscript acceptance remain
+separate operational lanes, not implicit consequences of passing unit tests.
 
 Completion of a scoped validation requires matching the selected source, zero unexpected failures
 or skips in the relevant lane, and retained local machine-readable evidence.
