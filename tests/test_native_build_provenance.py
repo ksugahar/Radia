@@ -181,6 +181,28 @@ def test_build_entrypoint_declares_optional_strict_provenance_mode():
     assert "Write-NativeBuildProvenance" in source
 
 
+def test_provenance_helper_and_beam_contracts_are_in_ci_scope():
+    import yaml
+
+    helper = "tools/native_build_provenance.ps1"
+    for name in ("sparsesolv.yml", "radia-optuna.yml"):
+        workflow = yaml.safe_load((ROOT / ".github/workflows" / name).read_text())
+        triggers = workflow.get("on", workflow.get(True))
+        for event in ("push", "pull_request"):
+            assert helper in triggers[event]["paths"]
+    rules = json.loads((ROOT / "tests/test_tier_manifest.json").read_text())["impact_rules"]
+    assert "tests/test_native_build_provenance.py" in rules[helper]
+    assert "tests/test_native_build_provenance.py" in rules["Build.ps1"]
+    for name in (
+        "benchmark_beam_transfer_mex_python.py",
+        "benchmark_beam_transfer_mex_matlab.m",
+        "beam_transfer_benchmark_case.json",
+    ):
+        assert "tests/test_beam_transfer_mex_pybind_validation.py" in rules[
+            f"validation_test/accelerator/{name}"
+        ]
+
+
 @pytest.mark.skipif(
     os.environ.get("RADIA_RUN_NATIVE_BUILD_CONTRACT") != "1",
     reason="set RADIA_RUN_NATIVE_BUILD_CONTRACT=1 to exercise real native builds",
