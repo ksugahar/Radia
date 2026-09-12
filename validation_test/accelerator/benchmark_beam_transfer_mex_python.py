@@ -302,16 +302,28 @@ def compare(python_path: Path, matlab_path: Path, *, rtol: float, atol: float) -
              "MATLAB/Python observable keys differ")
     for key, expected in python["observables"].items():
         actual = float(matlab["observables"][key])
-        difference = abs(actual - expected)
-        denominator = max(abs(expected), atol)
-        relative = 0.0 if difference == 0 else (
-            None if denominator == 0 else difference / denominator
-        )
+        scale = max(abs(actual), abs(expected), atol)
+        if scale == 0:
+            scaled_difference = 0.0
+            scaled_tolerance = 0.0
+        else:
+            scaled_difference = abs(actual / scale - expected / scale)
+            scaled_tolerance = atol / scale + rtol * (abs(expected) / scale)
+        if expected == 0:
+            relative = 0.0 if actual == 0 else None
+        else:
+            scaled_expected = abs(expected) / scale
+            if scaled_expected == 0 or (
+                scaled_difference > sys.float_info.max * scaled_expected
+            ):
+                relative = None
+            else:
+                relative = scaled_difference / scaled_expected
         checks[key] = {
             "python": float(expected),
             "matlab": actual,
             "relative_error": relative,
-            "pass": bool(difference <= atol + rtol * abs(expected)),
+            "pass": bool(scaled_difference <= scaled_tolerance),
         }
     metadata = {
         key: {"python": python.get(key), "matlab": matlab.get(key),

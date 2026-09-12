@@ -54,36 +54,20 @@ if ($OptunaMexOnly -and $InstallToSitePackages) {
 
 $PROJECT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BUILD_DIR = "$PROJECT_DIR\build-msvc"
-
-function Write-NativeBuildProvenance {
-    param([Parameter(Mandatory)][string]$BinaryPath)
-
-    if (-not (Test-Path -LiteralPath $BinaryPath -PathType Leaf)) {
-        throw "Cannot record native build provenance; binary is missing: $BinaryPath"
+$NativeBuildProvenanceScript = "$PROJECT_DIR\tools\native_build_provenance.ps1"
+. $NativeBuildProvenanceScript
+$NativeBuildSourceIdentity = $null
+$NativeProvenanceBinaries = @()
+if ($MatlabMexOnly) {
+    $NativeProvenanceBinaries += "$PROJECT_DIR\matlab\radia_mex.mexw64"
+} elseif (-not $AxiFemOnly -and -not $OptunaMexOnly) {
+    $NativeProvenanceBinaries += "$PROJECT_DIR\src\radia\_radia_pybind.pyd"
+}
+if ($NativeProvenanceBinaries.Count -gt 0) {
+    $NativeBuildSourceIdentity = Get-NativeBuildSourceIdentity -RepoRoot $PROJECT_DIR
+    foreach ($NativeBinary in $NativeProvenanceBinaries) {
+        Clear-NativeBuildProvenance -BinaryPath $NativeBinary
     }
-    $sourceCommit = (& git -C $PROJECT_DIR rev-parse HEAD).Trim().ToLowerInvariant()
-    if ($LASTEXITCODE -ne 0 -or $sourceCommit -notmatch '^[0-9a-f]{40}$') {
-        throw "Cannot determine the native build source commit"
-    }
-    & git -C $PROJECT_DIR diff --quiet HEAD --
-    $workingDirty = $LASTEXITCODE -ne 0
-    & git -C $PROJECT_DIR diff --cached --quiet HEAD --
-    $indexDirty = $LASTEXITCODE -ne 0
-    $binary = Get-Item -LiteralPath $BinaryPath
-    $manifest = [ordered]@{
-        schema = "radia.native-build-provenance.v1"
-        source_commit = $sourceCommit
-        source_dirty = [bool]($workingDirty -or $indexDirty)
-        binary_name = $binary.Name
-        binary_bytes = $binary.Length
-        binary_sha256 = (Get-FileHash -LiteralPath $binary.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-        generated_at_utc = [DateTimeOffset]::UtcNow.ToString("o")
-    }
-    $manifestPath = "$BinaryPath.build.json"
-    $json = $manifest | ConvertTo-Json -Depth 3
-    [IO.File]::WriteAllText($manifestPath, $json + [Environment]::NewLine,
-        [Text.UTF8Encoding]::new($false))
-    Write-Host "  Native provenance: $manifestPath" -ForegroundColor Cyan
 }
 
 $PythonCommand = Get-Command python -ErrorAction SilentlyContinue
@@ -641,7 +625,10 @@ try {
     if ($BuildResult -ne 0) { throw "Build failed with exit code $BuildResult" }
 
     if ($MatlabMexOnly) {
-        Write-NativeBuildProvenance "$PROJECT_DIR\matlab\radia_mex.mexw64"
+        Write-NativeBuildProvenance `
+            -BinaryPath "$PROJECT_DIR\matlab\radia_mex.mexw64" `
+            -RepoRoot $PROJECT_DIR `
+            -StartIdentity $NativeBuildSourceIdentity
     }
 
     # For -AxiFemOnly, axifem.pyd is already placed in src/radia/ by the
@@ -758,7 +745,10 @@ try {
         }
     }
 
-    Write-NativeBuildProvenance "$PROJECT_DIR\src\radia\_radia_pybind.pyd"
+    Write-NativeBuildProvenance `
+        -BinaryPath "$PROJECT_DIR\src\radia\_radia_pybind.pyd" `
+        -RepoRoot $PROJECT_DIR `
+        -StartIdentity $NativeBuildSourceIdentity
 
     # A copied .pyd is not necessarily usable: changing the pinned NGSolve
     # release can leave a loadable-looking but ABI-incompatible binary behind.
