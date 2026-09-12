@@ -1,8 +1,7 @@
 # Codex - Radia Project Policy
 
-This file contains active decision rules only. Put implementation details in
-source, tests, package docs, focused skills, and `radia-mcp` knowledge.
-Historical investigations remain in Git history.
+Keep active rules here; details belong in source, tests, package docs, skills,
+and `radia-mcp` knowledge. Historical investigations remain in Git history.
 
 ## Mission
 
@@ -112,6 +111,8 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 
 - Use MathWorks' official MATLAB MCP Server and Simulink Agentic Toolkit.
   The official MCP Server remains the standard MATLAB operation foundation.
+  LAB/100 track compatible stable releases: record versions before release,
+  review upgrade notes and regression-test affected Radia composition contracts.
   Use the official MATLAB Engine for Python when available and appropriate,
   particularly for SSH batch execution and shared-session connections. Keep
   Engine installed and importable on mdx1/mdx2; record the interpreter, MATLAB
@@ -154,6 +155,8 @@ solver boundary is a checked `.vol` regardless of the creation route.
   generation step.
 - Only `cubit-mesh-export` launches the Cubit GUI and owns Cubit GUI tests on licensed hosts;
   Radia solver/application/validation/CI lanes must not launch it or duplicate those tests.
+- Prefer Cubit APREPRO/Python batch for production/validation CAD and meshes;
+  consider Sculpt for suitable HEX domains; build123d/Netgen alternatives must be explicit.
 - Radia normally reads checked `.vol` files. Generation uses APREPRO or Cubit's Python API
   in batch/headless mode with `cubit-mesh-export` owning export; CI remains fixture-only.
 - `radia-mcp.cubit` supports human-AI collaboration through the `cubit-mesh-export` GUI;
@@ -292,8 +295,5 @@ unless the user explicitly assigns that work to Claude for the specific task.
 
 ## Detailed Guidance
 
-Use focused skills and `packages/radia-mcp/src/radia_mcp/**/knowledge/` for
-operational detail. In particular see `release-quad`, `simulink-app-health`,
-`verify-deploy`, `gmsh-verify`, and `api-inventory`. If detailed guidance
-conflicts with this file, update the stale detail and its focused regression.
+Use focused skills and `packages/radia-mcp/src/radia_mcp/**/knowledge/` for detail; correct policy conflicts there with a focused regression.
 Do not expand this file into a second manual.
