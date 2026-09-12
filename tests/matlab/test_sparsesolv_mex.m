@@ -50,6 +50,17 @@ for i = 1:numel(r.cases)
     rhs.setValues(unpack(c.rhs,complexCase));
     applied = pre.matvec(rhs);
     verifyEqual(t,applied.values(),unpack(c.applied,complexCase),RelTol=1e-10,AbsTol=1e-10);
+    if strcmp(c.name,'ams')
+        % A real AMS matvec must overwrite every value in a caller-owned
+        % matrix vector. This exercises the parallel-vector output type used
+        % by the MEX gateway and catches allocator NaNs leaking into A*x.
+        poisoned = a.vector();
+        poisoned.setValues(nan(rhs.Size,1));
+        pre.matvecInto(rhs,poisoned);
+        verifyEqual(t,poisoned.values(),unpack(c.applied,false), ...
+            RelTol=1e-10,AbsTol=1e-10);
+        delete(poisoned);
+    end
     inv = radia.sparsesolv.COCR(a,pre,Tolerance=1e-11);
     dense = sparse(a);
     delete(pre); delete(a); delete(aux); delete(form); delete(space); delete(mesh);

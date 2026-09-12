@@ -20,6 +20,8 @@ on:
       - 'src/radia/__init__.py'
       - 'CMakeLists.txt'
       - 'Build.ps1'
+      - 'tools/native_build_provenance.ps1'
+      - 'tests/test_native_build_provenance.py'
       - 'pyproject.toml'
       - 'tests/test_tier_manifest.json'
       - 'tools/run_test_tier.py'
@@ -45,6 +47,8 @@ on:
       - 'src/radia/__init__.py'
       - 'CMakeLists.txt'
       - 'Build.ps1'
+      - 'tools/native_build_provenance.ps1'
+      - 'tests/test_native_build_provenance.py'
       - 'pyproject.toml'
       - 'tests/test_tier_manifest.json'
       - 'tools/run_test_tier.py'
@@ -94,6 +98,7 @@ jobs:
           $required = $required -or [bool]($changed -match '^(src/ext/sparsesolv/|src/matlab/|matlab/\+radia/\+sparsesolv/|tests/matlab/.*sparsesolv|validation_test/ngsolve_matlab_parity/run_sparsesolv|CMakeLists.txt|Build.ps1|\.github/workflows/sparsesolv.yml)')
           $required = $required -or [bool]($changed -match '^matlab/(python_api_parity_manifest.json|\+radia/\+python/(sparsesolv|electromagnetValidation|esrfExamples|staticElectromagnet)\.m)')
           $required = $required -or [bool]($changed -match '^(matlab/\+radia/(setup\.m|\+internal/callMex\.m)|tests/matlab/test_mex_runtime_setup\.m)$')
+          $required = $required -or ($changed -contains 'tools/native_build_provenance.ps1')
           "required=$($required.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
           Write-Host "MATLAB parity required=$required; diff_failed=$diffFailed; changed_files=$($changed.Count)"
           exit 0
@@ -112,6 +117,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "RADIA_CI_VENV=$venv" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           (Join-Path $venv 'Scripts') | Out-File $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Verify native build provenance contracts
+        if: steps.native-impact.outputs.required == 'true'
+        shell: pwsh
+        run: |
+          python tools/run_test_tier.py --profile native-build-contracts
+          exit $LASTEXITCODE
 
       - name: Build current package and SparseSolv
         if: steps.native-impact.outputs.required == 'true'

@@ -192,7 +192,11 @@ public:
             return dt;
         };
 
-        x = 0;
+        // The matrix gateway may supply a freshly allocated parallel vector.
+        // Initialize its local real storage explicitly before the first SpMV,
+        // so the cycle does not depend on BaseVector::SetScalar behavior across
+        // concrete parallel-vector implementations.
+        x.FVDouble() = 0.0;
 
         // Zero constrained DOFs in RHS
         auto& b0 = *b0_;

@@ -8,6 +8,7 @@
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -Rebuild
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -RadiaOnly
+#   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -RadiaOnly -RequireNativeProvenance
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -MatlabMexOnly
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -OptunaMexOnly
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -Test
@@ -17,6 +18,8 @@
 #   -RadiaOnly  Build and copy only _radia_pybind.pyd
 #   -MatlabMexOnly  Configure and build the shared radia_mex native gateway
 #   -OptunaMexOnly  Configure and build only the lightweight Optuna gateway
+#   -RequireNativeProvenance  Reject dirty source before building; otherwise a
+#                 dirty development build succeeds without a provenance sidecar
 #   -Test       Run source-tree import test + pytest after build
 #   -Verbose    Show detailed build output
 #
@@ -36,6 +39,7 @@ param(
     [switch]$AxiFemOnly,           # configure + build ONLY axifem (fast C++ iteration)
     [switch]$MatlabMexOnly,        # configure + build MATLAB MEX and native S-Functions
     [switch]$OptunaMexOnly,        # configure + build only optuna_mex
+    [switch]$RequireNativeProvenance, # reject dirty source before a provenance-bearing build
     [switch]$InstallToSitePackages  # also copy rebuilt .pyd(s) into the importable site-packages\radia
 )
 
@@ -54,6 +58,25 @@ if ($OptunaMexOnly -and $InstallToSitePackages) {
 
 $PROJECT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BUILD_DIR = "$PROJECT_DIR\build-msvc"
+$NativeBuildProvenanceScript = "$PROJECT_DIR\tools\native_build_provenance.ps1"
+. $NativeBuildProvenanceScript
+$NativeBuildSourceIdentity = $null
+$NativeProvenanceBinaries = @()
+if ($MatlabMexOnly) {
+    $NativeProvenanceBinaries += "$PROJECT_DIR\matlab\radia_mex.mexw64"
+} elseif (-not $AxiFemOnly -and -not $OptunaMexOnly) {
+    $NativeProvenanceBinaries += "$PROJECT_DIR\src\radia\_radia_pybind.pyd"
+}
+if ($NativeProvenanceBinaries.Count -gt 0) {
+    $NativeBuildSourceIdentity = Get-NativeBuildSourceIdentity -RepoRoot $PROJECT_DIR
+    foreach ($NativeBinary in $NativeProvenanceBinaries) {
+        Clear-NativeBuildProvenance -BinaryPath $NativeBinary
+    }
+    if ($RequireNativeProvenance -and $NativeBuildSourceIdentity.source_dirty) {
+        throw "Native provenance was required, but the source checkout is dirty"
+    }
+}
+
 $PythonCommand = Get-Command python -ErrorAction SilentlyContinue
 $PythonExecutable = if ($PythonCommand) { $PythonCommand.Source } else { "" }
 if ((-not $OptunaMexOnly -or $Test) -and -not $PythonExecutable) {
@@ -608,6 +631,13 @@ try {
 
     if ($BuildResult -ne 0) { throw "Build failed with exit code $BuildResult" }
 
+    if ($MatlabMexOnly) {
+        Write-NativeBuildProvenance `
+            -BinaryPath "$PROJECT_DIR\matlab\radia_mex.mexw64" `
+            -RepoRoot $PROJECT_DIR `
+            -StartIdentity $NativeBuildSourceIdentity
+    }
+
     # For -AxiFemOnly, axifem.pyd is already placed in src/radia/ by the
     # CMake POST_BUILD copy, so skip the full module/cubit copy section below.
     if (-not $AxiFemOnly -and -not $MatlabMexOnly -and -not $OptunaMexOnly) {
@@ -703,7 +733,9 @@ try {
             $needCopy = $true
             if (Test-Path $dstPath) {
                 $dstInfo = Get-Item $dstPath
-                if ($srcInfo.Length -eq $dstInfo.Length -and $srcInfo.LastWriteTime -le $dstInfo.LastWriteTime) {
+                $srcHash = (Get-FileHash -LiteralPath $srcPath -Algorithm SHA256).Hash
+                $dstHash = (Get-FileHash -LiteralPath $dstPath -Algorithm SHA256).Hash
+                if ($srcHash -eq $dstHash) {
                     Write-Host "  $($mod.dst): up-to-date ($([math]::Round($srcInfo.Length / 1MB, 2)) MB)" -ForegroundColor Cyan
                     $needCopy = $false
                 }
@@ -719,6 +751,11 @@ try {
             Write-Host "  $($mod.dst): skipped" -ForegroundColor Yellow
         }
     }
+
+    Write-NativeBuildProvenance `
+        -BinaryPath "$PROJECT_DIR\src\radia\_radia_pybind.pyd" `
+        -RepoRoot $PROJECT_DIR `
+        -StartIdentity $NativeBuildSourceIdentity
 
     # A copied .pyd is not necessarily usable: changing the pinned NGSolve
     # release can leave a loadable-looking but ABI-incompatible binary behind.
