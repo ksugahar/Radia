@@ -530,7 +530,12 @@ jobs:
       fail-fast: false
       max-parallel: 4
       matrix:
-        prefix: [0, 3, 5, 6, 8, 10]
+        case:
+          - {name: load-only, operation: load-only, prefix: -1}
+          - {name: metrics-ab, operation: metrics-ab, prefix: -1}
+          - {name: svg-ab, operation: svg-ab, prefix: -1}
+          - {name: svg-math, operation: svg-math, prefix: -1}
+          - {name: prefix3, operation: none, prefix: 3}
         replicate: [1, 2]
     env:
       EQNEDIT64_ISOLATED_TEST_SESSION: '1'
@@ -573,14 +578,15 @@ jobs:
       - name: Observe one prefix then self-test
         run: >-
           pwsh -NoProfile -File build/diagnose_font_boundary.ps1 -Arm model-self
-          -ModelPrefix ${{ matrix.prefix }} -OutputDirectory '${{ runner.temp }}/font-prefix'
+          -ModelPrefix ${{ matrix.case.prefix }} -ModelOperation '${{ matrix.case.operation }}'
+          -OutputDirectory '${{ runner.temp }}/font-prefix'
       - name: Bounded dump completion
         if: always()
         run: Start-Sleep -Seconds 15
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: font-prefix-${{ matrix.prefix }}-${{ matrix.replicate }}
+          name: font-prefix-${{ matrix.case.name }}-${{ matrix.replicate }}
           path: ${{ runner.temp }}/font-prefix/
           if-no-files-found: warn
       - name: Encrypt private evidence
@@ -591,7 +597,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: encrypted-prefix-${{ matrix.prefix }}-${{ matrix.replicate }}
+          name: encrypted-prefix-${{ matrix.case.name }}-${{ matrix.replicate }}
           retention-days: 1
           path: ${{ runner.temp }}/encrypted-font-dumps/
           if-no-files-found: warn
