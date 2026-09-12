@@ -72,9 +72,6 @@ function Write-NativeBuildProvenance {
         if (-not (Test-Path -LiteralPath $BinaryPath -PathType Leaf)) {
             throw "Cannot record native build provenance; binary is missing: $BinaryPath"
         }
-        if ($StartIdentity.source_dirty) {
-            throw "Cannot record native build provenance for a dirty source checkout"
-        }
         $endIdentity = Get-NativeBuildSourceIdentity -RepoRoot $RepoRoot
         foreach ($field in @(
             "source_commit", "source_dirty", "source_change_fingerprint_sha256"
@@ -82,6 +79,13 @@ function Write-NativeBuildProvenance {
             if ($endIdentity.$field -ne $StartIdentity.$field) {
                 throw "Source identity changed during native build: $field"
             }
+        }
+        if ($StartIdentity.source_dirty) {
+            Write-Warning (
+                "Native build completed, but provenance was not issued because " +
+                "the source checkout was dirty: $BinaryPath"
+            )
+            return
         }
         $binary = Get-Item -LiteralPath $BinaryPath
         $manifest = [ordered]@{
