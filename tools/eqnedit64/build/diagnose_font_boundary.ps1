@@ -4,7 +4,8 @@ param(
     [Parameter(Mandatory)] [string]$OutputDirectory,
     [ValidateSet('exit', 'remove')] [string]$ReleaseMode = 'exit',
     [ValidateSet('none', 'measure')] [string]$Measurement = 'none',
-    [ValidateRange(1, 64)] [int]$MaxLaunches = 64
+    [ValidateRange(1, 64)] [int]$MaxLaunches = 64,
+    [ValidateRange(-1, 10)] [int]$ModelPrefix = -1
 )
 $ErrorActionPreference = 'Stop'
 if ($env:EQNEDIT64_ISOLATED_TEST_SESSION -ne '1') { throw 'Disposable CI only.' }
@@ -18,6 +19,7 @@ $started = Get-Date
 $result = [ordered]@{
     arm = $Arm; status = 'INCONCLUSIVE'; reason = ''; commands = @()
     source_sha = $env:GITHUB_SHA; host = $env:COMPUTERNAME; session = $session
+    payload_source_sha = $env:EQNEDIT64_PAYLOAD_SOURCE_SHA; model_prefix = $ModelPrefix
     os_version = [Environment]::OSVersion.VersionString
     app_sha256 = (Get-FileHash $app -Algorithm SHA256).Hash
     started_utc = $started.ToUniversalTime().ToString('o'); events = @()
@@ -38,7 +40,10 @@ function CrashEvents([datetime]$from) {
 }
 function InvokeObserved([string]$file, [string]$argument) {
     $begin = (Get-Date).ToUniversalTime().ToString('o')
-    $process = Start-Process -FilePath $file -ArgumentList $argument -WindowStyle Hidden -PassThru -Wait
+    $index = $result.commands.Count
+    $process = Start-Process -FilePath $file -ArgumentList $argument -WindowStyle Hidden -PassThru -Wait `
+        -RedirectStandardOutput (Join-Path $directory "command-$index.stdout") `
+        -RedirectStandardError (Join-Path $directory "command-$index.stderr")
     $result.commands += [ordered]@{argument=$argument; pid=$process.Id; exit_code=$process.ExitCode
         started_utc=$begin; ended_utc=(Get-Date).ToUniversalTime().ToString('o')}
     if ($process.ExitCode -ne 0) { throw "Command failed: $argument ($($process.ExitCode))" }
@@ -59,9 +64,13 @@ try {
                 foreach ($process in $current) {
                     if (-not $known.ContainsKey($process.Id)) {
                         $queryError = $null
-                        try { $null = $process.Handle } # Retain exit information if Windows permits it.
+                        $startUtc = $null
+                        try {
+                            $null = $process.Handle # Retain exit information if Windows permits it.
+                            $startUtc = $process.StartTime.ToUniversalTime().ToString('o')
+                        }
                         catch { $queryError = $_.Exception.Message }
-                        $known[$process.Id] = @{process=$process; query_error=$queryError}
+                        $known[$process.Id] = @{process=$process; query_error=$queryError; start_utc=$startUtc}
                     } else { $process.Dispose() }
                 }
                 $states = @(foreach ($entry in $known.Values) {
@@ -74,7 +83,7 @@ try {
                         } catch { $entry.query_error = $_.Exception.Message }
                     }
                     [ordered]@{pid=$process.Id; exited=$exited
-                        exit_utc=$exitUtc; query_error=$entry.query_error}
+                        start_utc=$entry.start_utc; exit_utc=$exitUtc; query_error=$entry.query_error}
                 })
                 $writer.WriteLine(([ordered]@{utc=(Get-Date).ToUniversalTime().ToString('o')
                     current_ids=$currentIds; processes=$states} | ConvertTo-Json -Compress -Depth 5))
@@ -125,7 +134,11 @@ try {
             }
         }
     } else {
-        if ($Arm -ne 'self') { InvokeObserved (Get-Command python).Source 'tests/run_model_tests.py' }
+        if ($Arm -ne 'self') {
+            $arguments = 'tests/run_model_tests.py'
+            if ($ModelPrefix -ge 0) { $arguments += " --diagnostic-prefix $ModelPrefix" }
+            InvokeObserved (Get-Command python).Source $arguments
+        }
         if ($Arm -ne 'model-idle') { InvokeObserved $app '--self-test' }
         $result.status = 'OBSERVED'
     }
@@ -149,6 +162,8 @@ finally {
     if (Test-Path $timeline) {
         $samples = @(Get-Content $timeline | ConvertFrom-Json)
         $result.samples = $samples.Count
+        $result.query_errors = @($samples.processes | Where-Object query_error | Select-Object -ExpandProperty query_error -Unique)
+        if ($result.query_errors.Count) { $result.status = 'INCONCLUSIVE'; $result.reason += ' Process observation errors.' }
         if (-not $samples.Count) { $result.status = 'INCONCLUSIVE'; $result.reason += ' Empty timeline.' }
         $result.font_host_exited = @($samples.processes | Where-Object exited -EQ $true).Count -gt 0
         $result.font_host_changed = @($samples | Where-Object {
