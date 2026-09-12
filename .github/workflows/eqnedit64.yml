@@ -38,6 +38,10 @@ on:
         description: 'Fixed-payload deep-radical and edit-history diagnostics'
         type: boolean
         default: false
+      font_acceptance:
+        description: 'Full native candidate tests with corrected diagnostic TrueType font; no release'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -137,6 +141,18 @@ jobs:
 
       - name: Install test build dependencies
         run: python -m pip install pybind11 pytest
+
+      - name: Prepare corrected diagnostic TrueType candidate
+        if: ${{ inputs.font_acceptance == true }}
+        run: |
+          python -m pip install pybind11==3.0.1 fonttools==4.60.1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tests/test_truetype_conversion.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python build/make_diagnostic_truetype.py assets/latinmodern-math.otf diagnostic-font.ttf
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ((Get-FileHash diagnostic-font.ttf -Algorithm SHA256).Hash -ne 'B598AEE924DD8C51D07B6BE72DAEF1197EB557FBE23A92F477E35D64B3D2EBE0') { throw 'Unexpected candidate font.' }
+          Copy-Item diagnostic-font.ttf assets/latinmodern-math.otf
 
       - name: Configure native build
         run: cmake -S . -B build_cmake -A x64
@@ -262,6 +278,36 @@ jobs:
         run: >-
           pwsh -NoProfile -File tests/test_cli_output.ps1
           -AppPath build_cmake/Release/Eqnedit64.exe
+
+      - name: Check font host after the final CLI workload
+        if: ${{ always() && inputs.font_acceptance == true }}
+        run: >-
+          pwsh -NoProfile -File build/test_font_session.ps1
+          -AppPath build_cmake/Release/Eqnedit64.exe -Iterations 32
+          -OutputPath font-session-final.json
+
+      - name: Identify exact native candidate payload
+        if: ${{ always() && inputs.font_acceptance == true }}
+        run: |
+          $files = @('build_cmake/Release/Eqnedit64.exe', 'build/eqnedit_core.cp312-win_amd64.pyd', 'assets/latinmodern-math.otf')
+          $records = @($files | ForEach-Object { [ordered]@{path=$_;sha256=(Get-FileHash $_ -Algorithm SHA256 -ErrorAction Stop).Hash} })
+          [ordered]@{source_sha=$env:GITHUB_SHA;diagnostic_only=$true;files=$records} | ConvertTo-Json -Depth 4 | Set-Content native-candidate-manifest.json -Encoding utf8
+
+      - name: Preserve final candidate evidence
+        if: ${{ always() && inputs.font_acceptance == true }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: eqnedit64-corrected-font-candidate
+          retention-days: 1
+          path: |
+            tools/eqnedit64/font-session-*.json
+            tools/eqnedit64/native-candidate-manifest.json
+            tools/eqnedit64/diagnostic-font.json
+            tools/eqnedit64/build_cmake/Release/Eqnedit64.exe
+            tools/eqnedit64/build/eqnedit_core*.pyd
+            tools/eqnedit64/assets/GUST-FONT-LICENSE.txt
+            tools/eqnedit64/assets/THIRD_PARTY_NOTICES.md
+          if-no-files-found: warn
 
       - name: Preserve isolated font lifecycle traces
         if: always()
