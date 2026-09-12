@@ -7,7 +7,8 @@ Inputs
 ``--wp-vol``          Workpiece volume mesh (.vol).  MUST be a
                       WORKPIECE-ONLY 3D volume mesh: a single solid with
                       exactly one volume material region and a
-                      heating-side surface label (``--surface-label``).
+                      explicitly named heat-flux, convection, and
+                      radiation boundary roles.
                       The coil / air / Kelvin regions belong to the EM
                       mesh, NOT this thermal mesh.  In Kubota's flow this
                       mesh is SEPARATE from the EM mesh: the EM .vol
@@ -37,11 +38,14 @@ Inputs
 
 Physics
 -------
-Heat equation with surface heat flux Neumann BC + Newton convection
-on the same surface (the SIBC twin):
+Heat equation with independently selected surface heat-flux and Newton
+convection boundary roles:
 
     rho * cp * dT/dt = div(k grad T)                    (volume)
-    -k dT/dn = q_surf(x,y,z) - h_conv (T - T_ext)        (heating face)
+     k dT/dn = q_surf(x,y,z)                              (heating face)
+     k dT/dn = -h_conv (T - T_ext)                        (cooling face)
+
+The roles may intentionally overlap, but they are never coupled implicitly.
 
 Discretization: backward Euler in time, H1 in space.
 
@@ -60,6 +64,7 @@ import argparse
 import json
 import math
 import os
+import re
 import sys
 import time
 
@@ -71,6 +76,9 @@ if _this_dir not in sys.path:
     sys.path.insert(0, _this_dir)
 
 from calc_common import setup_paths, progress, calc_main  # noqa: E402
+
+
+QSURF_HANDOFF_ORDER = 1
 
 
 def _log(msg):
@@ -166,6 +174,80 @@ def _resolve_material(name, rho, cp, k):
         f"Choose from {list(THERMAL_PRESETS) + ['custom']}.")
 
 
+def _resolve_boundary_role(mesh, selector, option_name, *, required):
+    """Validate one thermal boundary-role selector against ``mesh``.
+
+    NGSolve boundary selectors are regular expressions.  Return the selector
+    unchanged for ``ds``/``Boundaries`` plus the concrete boundary names it
+    matches, so result artifacts can state exactly where each physical term
+    was applied.  Empty active roles and selectors matching no boundary fail
+    before assembly.
+    """
+    text = str(selector or "").strip()
+    if not text:
+        if required:
+            raise ValueError(
+                f"{option_name} is required for this active thermal "
+                "boundary condition. Pass an explicit mesh boundary name "
+                "or NGSolve boundary expression such as 'side|top'.")
+        return "", []
+
+    available = sorted(set(mesh.GetBoundaries()))
+    try:
+        pattern = re.compile(text)
+    except re.error as exc:
+        raise ValueError(
+            f"{option_name}={text!r} is not a valid boundary expression: "
+            f"{exc}") from exc
+    matched = [name for name in available if pattern.fullmatch(name)]
+    if not matched:
+        raise ValueError(
+            f"{option_name}={text!r} matches no mesh boundary. "
+            f"Available boundaries: {available}")
+    return text, matched
+
+
+def _boundary_role_audit(mesh, boundary_names, *, q_cf=None, weight=None):
+    """Return deterministic per-boundary area and optional heat input."""
+    from ngsolve import BND, CF, Integrate
+
+    measure = CF(1.0) if weight is None else weight
+    rows = []
+    for name in boundary_names:
+        region = mesh.Boundaries(name)
+        area = float(Integrate(
+            measure, mesh, BND, definedon=region).real)
+        row = {"boundary": name, "area_m2": area}
+        if q_cf is not None:
+            power = float(Integrate(
+                q_cf * measure, mesh, BND, definedon=region).real)
+            row["heat_input_W"] = power
+            row["q_mean_W_m2"] = power / area if area > 0.0 else 0.0
+        rows.append(row)
+
+    result = {
+        "matched_boundaries": list(boundary_names),
+        "area_m2": sum(row["area_m2"] for row in rows),
+        "by_boundary": rows,
+    }
+    if q_cf is not None:
+        result["heat_input_W"] = sum(
+            row["heat_input_W"] for row in rows)
+    return result
+
+
+def _validate_qsurf_transfer_order(order):
+    """Return the supported cross-mesh q_surf order or fail loudly."""
+    value = int(order)
+    if value != QSURF_HANDOFF_ORDER:
+        raise ValueError(
+            "Cross-mesh q_surf transfer currently supports "
+            "--qsurf-order 1 only. Higher-order H1 coefficients are "
+            "hierarchical and cannot be reconstructed by assigning surface "
+            "vertex samples; refusing a silently distorted heat source.")
+    return value
+
+
 # -----------------------------------------------------------------
 # q_surf source: spatial (.sol) or uniform scalar
 # -----------------------------------------------------------------
@@ -235,7 +317,8 @@ def _build_qsurf_cf(wp_mesh, args):
          f"{os.path.basename(em_vol)}")
 
     em_mesh = Mesh(em_vol)
-    fes_q_em = H1(em_mesh, order=int(args.qsurf_order))
+    qsurf_order = _validate_qsurf_transfer_order(args.qsurf_order)
+    fes_q_em = H1(em_mesh, order=qsurf_order)
     gf_q_em = GridFunction(fes_q_em)
     gf_q_em.Load(qsurf_sol)
 
@@ -243,17 +326,17 @@ def _build_qsurf_cf(wp_mesh, args):
     # The wp thermal mesh and the EM mesh both describe the same
     # physical workpiece outer surface, possibly with different
     # element sizes -- pointwise sampling handles that.
-    fes_wp_q = H1(wp_mesh, order=int(args.qsurf_order))
+    fes_wp_q = H1(wp_mesh, order=qsurf_order)
     gf_wp_q = GridFunction(fes_wp_q)
     gf_wp_q.vec[:] = 0
 
     # Enumerate surface vertices by walking boundary elements (NGSolve
     # does not expose "vertices on boundary X" directly).  Filter by the
-    # requested boundary label (``el.mat`` is the BND name); an empty
-    # ``surface_label`` means every boundary.
+    # requested heat-flux boundaries (``el.mat`` is the BND name).
+    heat_flux_boundary_names = set(args.heat_flux_boundary_names)
     surf_vertex_nrs = set()
     for el in wp_mesh.Elements(BND):
-        if args.surface_label and el.mat != args.surface_label:
+        if el.mat not in heat_flux_boundary_names:
             continue
         for v in el.vertices:
             surf_vertex_nrs.add(v.nr)
@@ -400,7 +483,9 @@ SIGMA_SB = 5.670374419e-8     # Stefan-Boltzmann constant [W/m^2/K^4]
 def solve_heat(wp_vol,
                material="steel", rho=None, cp=None, k=None,
                h_conv=10.0, t_ext=20.0, t_initial=20.0, emissivity=0.0,
-               surface_label="",
+               heat_flux_boundaries="",
+               convection_boundaries="",
+               radiation_boundaries="",
                q_uniform=None, qsurf_sol="", em_vol="",
                qsurf_order=1,
                q_phi_average=False, q_phi_average_n=48,
@@ -412,7 +497,9 @@ def solve_heat(wp_vol,
                rotation_axis="z",
                probe_point=None,
                msh_output="",
-               csv_output=""):
+               csv_output="",
+               _wp_mesh=None,
+               _write_solution=True):
     """Run the transient heat solve.  See module docstring for inputs."""
     setup_paths()
     t0 = time.perf_counter()
@@ -422,10 +509,10 @@ def solve_heat(wp_vol,
                           Integrate, CF, CoefficientFunction, ds, dx, BND,
                           TaskManager)
 
-    if not os.path.isfile(wp_vol):
+    if _wp_mesh is None and not os.path.isfile(wp_vol):
         return {"error": f"--wp-vol not found: {wp_vol}"}
 
-    wp_mesh = Mesh(wp_vol)
+    wp_mesh = Mesh(wp_vol) if _wp_mesh is None else _wp_mesh
 
     # --- Workpiece-only volume mesh contract (radia-ih thermal) -------
     # The thermal step targets the WORKPIECE SOLID only.  The coil /
@@ -464,24 +551,20 @@ def solve_heat(wp_vol,
          f"materials={list(wp_mesh.GetMaterials())} "
          f"boundaries={list(wp_mesh.GetBoundaries())}")
 
-    # Resolve the BND filter.  Empty surface_label means "apply qsurf
-    # + convection to ALL boundary elements" -- the common case for a
-    # single-workpiece .vol where there is exactly one BND label (e.g.
-    # 'sibc' for IH workpieces) and asking the user to retype it just
-    # to match the panel default 'outer' is friction.  Pass ".*" to
-    # NGSolve's regex-based Boundaries() / ds() to match every BND.
-    if surface_label:
-        if surface_label not in wp_mesh.GetBoundaries():
-            return {"error":
-                    f"--surface-label {surface_label!r} not found in "
-                    f"{wp_vol} boundaries={list(wp_mesh.GetBoundaries())}"}
-        surface_label_eff = surface_label
-        _log(f"BND:filter={surface_label!r}")
-    else:
-        surface_label_eff = ".*"
-        _log(f"BND:filter=ALL (surface_label empty -- all "
-             f"{len(set(wp_mesh.GetBoundaries()))} BND labels: "
-             f"{sorted(set(wp_mesh.GetBoundaries()))})")
+    try:
+        heat_flux_selector, heat_flux_names = _resolve_boundary_role(
+            wp_mesh, heat_flux_boundaries, "--heat-flux-boundaries",
+            required=True)
+        convection_selector, convection_names = _resolve_boundary_role(
+            wp_mesh, convection_boundaries, "--convection-boundaries",
+            required=float(h_conv) != 0.0)
+        radiation_selector, radiation_names = _resolve_boundary_role(
+            wp_mesh, radiation_boundaries, "--radiation-boundaries",
+            required=float(emissivity) != 0.0)
+    except ValueError as exc:
+        return {"error": str(exc)}
+    _log(f"BND:heat_flux={heat_flux_names} "
+         f"convection={convection_names} radiation={radiation_names}")
 
     rho_v, cp_v, k_v = _resolve_material(material, rho, cp, k)
     _log(f"MATERIAL:{material} rho={rho_v} cp={cp_v} k={k_v}")
@@ -507,11 +590,11 @@ def solve_heat(wp_vol,
     a_local.qsurf_sol = qsurf_sol
     a_local.em_vol = em_vol
     a_local.qsurf_order = qsurf_order
-    a_local.surface_label = surface_label_eff
+    a_local.heat_flux_boundary_names = heat_flux_names
     a_local.rotation_axis = rotation_axis
     a_local.q_phi_average = q_phi_average
     a_local.q_phi_average_n = q_phi_average_n
-    surface_region = wp_mesh.Boundaries(surface_label_eff)
+    heat_flux_region = wp_mesh.Boundaries(heat_flux_selector)
     q_cf, q_resample = _build_qsurf_cf(wp_mesh, a_local)
 
     # Rotation control: when --rotation-rpm > 0 AND a resampler is
@@ -536,7 +619,8 @@ def solve_heat(wp_vol,
 
     a_form = BilinearForm(fes_T, symmetric=True)
     a_form += K_cf * grad_dot(u, v) * dx
-    a_form += float(h_conv) * v * u * ds(surface_label_eff)
+    if float(h_conv) != 0.0:
+        a_form += float(h_conv) * v * u * ds(convection_selector)
     a_form.Assemble()
 
     m_form = BilinearForm(fes_T, symmetric=True)
@@ -571,9 +655,12 @@ def solve_heat(wp_vol,
 
     n_steps = int(math.ceil(t_end / dt))
     Q_input_J = 0.0
-    A_surf = float(Integrate(CF(1), wp_mesh, BND, definedon=surface_region).real)
-    q_int = float(Integrate(q_cf, wp_mesh, BND,
-                             definedon=surface_region).real)
+    heat_flux_audit = _boundary_role_audit(
+        wp_mesh, heat_flux_names, q_cf=q_cf)
+    convection_audit = _boundary_role_audit(wp_mesh, convection_names)
+    radiation_audit = _boundary_role_audit(wp_mesh, radiation_names)
+    A_surf = float(heat_flux_audit["area_m2"])
+    q_int = float(heat_flux_audit["heat_input_W"])
     _log(f"Q_SURF:int q_surf dA = {q_int:.4e} W "
          f"(area {A_surf:.4e} m^2)")
 
@@ -586,12 +673,15 @@ def solve_heat(wp_vol,
             # place; q_int (the integrated heat input) tracks below.
             q_resample(omega_mech * t)
         f_form = LinearForm(fes_T)
-        f_form += q_cf * v * ds(surface_label_eff)
-        f_form += float(h_conv) * float(t_ext) * v * ds(surface_label_eff)
+        f_form += q_cf * v * ds(heat_flux_selector)
+        if float(h_conv) != 0.0:
+            f_form += float(h_conv) * float(t_ext) * v \
+                * ds(convection_selector)
         if float(emissivity) > 0.0:        # radiation (explicit, prev-step T, in K)
             _TK = gfT + 273.15
             f_form += -float(emissivity) * SIGMA_SB \
-                * (_TK**4 - (float(t_ext) + 273.15)**4) * v * ds(surface_label_eff)
+                * (_TK**4 - (float(t_ext) + 273.15)**4) * v \
+                * ds(radiation_selector)
         f_form.Assemble()
         with TaskManager():
             res_vec.data = f_form.vec - a_form.mat * gfT.vec
@@ -600,8 +690,9 @@ def solve_heat(wp_vol,
             # q_int can drift with rotation if the EM-frame hotspot
             # only partially overlaps the wp surface at some angles.
             # Re-integrate to keep Q_input_J honest.
-            q_int = float(Integrate(q_cf, wp_mesh, BND,
-                                     definedon=surface_region).real)
+            heat_flux_audit = _boundary_role_audit(
+                wp_mesh, heat_flux_names, q_cf=q_cf)
+            q_int = float(heat_flux_audit["heat_input_W"])
         Q_input_J += q_int * float(dt)
         t_arr.append(t)
         if probe_point is not None:
@@ -663,7 +754,7 @@ def solve_heat(wp_vol,
                 gf_qg = GridFunction(fes_qg)
                 gf_qg.vec[:] = 0
                 gf_qg.Set(q_cf,
-                           definedon=wp_mesh.Boundaries(surface_label_eff))
+                           definedon=heat_flux_region)
                 sol_q = os.path.join(base_dir,
                                      f"{stem}_qsurf.sol").replace("\\", "/")
                 gf_qg.Save(sol_q)
@@ -681,7 +772,7 @@ def solve_heat(wp_vol,
                  f"({len(sol_entries)} fields)")
         except Exception as e:
             _log(f"GMSH_ERROR:{type(e).__name__}: {e}")
-    else:
+    elif _write_solution:
         # No --msh-output requested.  Still save the T GridFunction
         # next to the wp .vol so a later evaluation pass (e.g.
         # reload + post-process T at arbitrary points, or feed T
@@ -749,7 +840,14 @@ def solve_heat(wp_vol,
         "h_conv_W_m2K": float(h_conv),
         "t_ext_C": float(t_ext),
         "emissivity": float(emissivity),
-        "surface_label": surface_label,
+        "heat_flux_boundaries": heat_flux_selector,
+        "convection_boundaries": convection_selector,
+        "radiation_boundaries": radiation_selector,
+        "boundary_audit": {
+            "heat_flux": heat_flux_audit,
+            "convection": convection_audit,
+            "radiation": radiation_audit,
+        },
         "q_source": ("uniform" if q_uniform is not None
                      else ("qsurf_sol_phi_average" if q_phi_average
                            else "qsurf_sol")),
@@ -783,17 +881,18 @@ def main():
         description="Transient heat-transfer solver for IH workpieces.")
     parser.add_argument("--wp-vol", required=True,
                         help="Workpiece volume mesh (.vol).")
-    parser.add_argument("--surface-label", default="",
-                        help="Boundary label where q_surf and Newton "
-                             "convection are applied.  Leave empty "
-                             "(default) to apply to ALL BND -- the "
-                             "single-workpiece common case where "
-                             "explicitly naming the sole BND label is "
-                             "pure friction.  Pass a specific name "
-                             "(e.g. 'top' / 'sides') only when the "
-                             "workpiece has multiple BND sidesets and "
-                             "heating + convection should be restricted "
-                             "to a subset.")
+    parser.add_argument("--heat-flux-boundaries", default="",
+                        help="Required boundary name or NGSolve boundary "
+                             "expression receiving q_surf, for example "
+                             "'heated_outer|heated_end'.")
+    parser.add_argument("--convection-boundaries", default="",
+                        help="Boundary expression receiving Newton "
+                             "convection. Required when --h-conv is nonzero.")
+    parser.add_argument("--radiation-boundaries", default="",
+                        help="Boundary expression receiving radiation. "
+                             "Required when --emissivity is nonzero.")
+    parser.add_argument("--surface-label", default=None,
+                        help=argparse.SUPPRESS)
     # Material thermal properties.
     parser.add_argument("--material", default="steel",
                         choices=list(THERMAL_PRESETS) + ["custom"],
@@ -832,8 +931,8 @@ def main():
                              "be passed explicitly.  Auto-detection from "
                              "the .sol stem was removed 2026-05-20.")
     parser.add_argument("--qsurf-order", type=int, default=1,
-                        help="H1 order used when calc_fem_kelvin.py "
-                             "saved qsurf.sol (must match).")
+                        help="Fixed H1 order for the cross-mesh qsurf.sol "
+                             "handoff (only 1 is supported).")
     parser.add_argument("--q-phi-average", action="store_true",
                         help="Circumferentially (phi) average the spatial "
                              "--qsurf-sol into an AXISYMMETRIC q_surf "
@@ -896,6 +995,13 @@ def main():
                              "history.")
 
     def run(args):
+        if args.surface_label is not None:
+            return {"error":
+                    "--surface-label was removed because it coupled heat "
+                    "input, convection, and radiation to one ambiguous "
+                    "boundary set. Use --heat-flux-boundaries and "
+                    "--convection-boundaries; also pass "
+                    "--radiation-boundaries when emissivity is nonzero."}
         if (args.q_uniform is None) and (not args.qsurf_sol):
             return {"error":
                     "Either --q-uniform or --qsurf-sol is required."}
@@ -913,7 +1019,9 @@ def main():
             material=args.material, rho=args.rho, cp=args.cp, k=args.k,
             h_conv=args.h_conv, t_ext=args.t_ext, t_initial=args.t_initial,
             emissivity=args.emissivity,
-            surface_label=args.surface_label,
+            heat_flux_boundaries=args.heat_flux_boundaries,
+            convection_boundaries=args.convection_boundaries,
+            radiation_boundaries=args.radiation_boundaries,
             q_uniform=args.q_uniform,
             qsurf_sol=args.qsurf_sol,
             em_vol=args.em_vol,
