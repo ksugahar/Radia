@@ -57,6 +57,9 @@ concept load, notation consistency, and committed proposal wording. English
 is outside that score and is never averaged into it. A required genre contract
 rejects research-meeting manuscripts and routes them to paper-writing because
 scientific traceability and funding-review decision flow are different tasks.
+The integrated health report exposes a non-scoring reader-experience contract
+for excitement without hype, one-pass clarity, and specialist accessibility.
+Zero detector findings do not prove comprehension, merit, or funding success.
 
 Promoted to radia-mcp so the document-writing servers are registered in
 parallel: paper-writing / grant-writing.
@@ -153,6 +156,8 @@ def main():
         )
         report = grant_writing_health_report(sample, program="kddi_digital")
         assert report["tools_run"]
+        assert report["reader_experience"]["score"] is None
+        assert report["reader_experience"]["automatic_score_prohibited"]
         assert 0.0 <= report["defect_score"] <= 10.0
         readable = grant_writing_japanese_readability_score(
             "設計条件の選択には時間を要する。"

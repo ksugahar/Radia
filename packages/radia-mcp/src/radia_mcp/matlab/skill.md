@@ -19,6 +19,12 @@ failed or empty version probes, and malformed toolkit configuration report
 `needs_attention`. Installed version information is not proof of the latest
 upstream release. `RADIA_MATLAB_MCP_SERVER` overrides automatic discovery.
 
+Use the official `model_read`, `model_edit`, `model_check`, and `model_test`
+tools for generic Simulink work. Radia extensions own domain-specific CAE,
+MEX, artifact, and validation behavior, not generic connection notices or model
+operations. Keep custom-library toolkit configuration project-relative so
+projects can move between development hosts without embedded workstation paths.
+
 Call `matlab_optuna_mcp_route` first, then call `matlab_optuna_health` before
 executing or releasing the MATLAB package. The health gate derives its counts
 from the checked `radia-optuna` manifest, complete Optuna 5.0.0 public-API
