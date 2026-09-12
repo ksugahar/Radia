@@ -1,9 +1,9 @@
 {
   "schema": "cubit-mesh-export.multi-geometry-validation.v1",
-  "generated_at_utc": "2026-09-12T04:30:39.862348+00:00",
+  "generated_at_utc": "2026-09-12T04:34:10.861430+00:00",
   "order": 2,
   "plugin_dir": "C:\\temp\\radia-cubit-internal-surface-review\\src\\cubit_plugin\\build-ccm",
-  "stdout_log": "C:\\temp\\cubit-multi-geometry-c265d3419.log",
+  "stdout_log": "C:\\temp\\cubit-multi-geometry-07d26466f.log",
   "native_provenance": {
     "schema": "cubit-mesh-export.native-payloads.v2",
     "payloads": {
@@ -37,8 +37,8 @@
     {
       "name": "sphere",
       "volume_exact": 0.0005235987755982989,
-      "volume_measured": 0.0005235907121882667,
-      "volume_error_percent": -0.0015399978777681563,
+      "volume_measured": 0.0005235907121882666,
+      "volume_error_percent": -0.0015399978777888628,
       "area_exact": 0.031415926535897934,
       "area_measured": 0.03141560452998459,
       "area_error_percent": -0.0010249766562679698,
@@ -85,8 +85,8 @@
       "volume_measured": 0.00010000000000000185,
       "volume_error_percent": 1.8295911660692883e-12,
       "area_exact": 0.016,
-      "area_measured": 0.016000000000000087,
-      "area_error_percent": 5.421010862427522e-13,
+      "area_measured": 0.01600000000000009,
+      "area_error_percent": 5.637851296924623e-13,
       "ne": 8745,
       "nse": 1796,
       "nedges": 11588,
@@ -97,8 +97,8 @@
     {
       "name": "two_volume",
       "volume_exact": 0.0038985987755983005,
-      "volume_measured": 0.0038984961586020165,
-      "volume_error_percent": -0.0026321507339073453,
+      "volume_measured": 0.003898496158602016,
+      "volume_error_percent": -0.002632150733918469,
       "area_exact": null,
       "area_measured": 0.1664118458841326,
       "area_error_percent": null,
@@ -115,8 +115,8 @@
       "volume_measured": 0.00025000000000000467,
       "volume_error_percent": 1.843143693225357e-12,
       "area_exact": 0.025000000000000005,
-      "area_measured": 0.024999999999999988,
-      "area_error_percent": -6.938893903907227e-14,
+      "area_measured": 0.024999999999999984,
+      "area_error_percent": -8.326672684688672e-14,
       "ne": 17673,
       "nse": 2342,
       "nedges": 22421,
@@ -130,7 +130,7 @@
       "volume_measured": 0.0002119999980417788,
       "volume_error_percent": null,
       "area_exact": null,
-      "area_measured": 0.029229024881559828,
+      "area_measured": 0.029229024881559824,
       "area_error_percent": null,
       "ne": 9052,
       "nse": 2010,
@@ -142,7 +142,7 @@
     {
       "name": "loft_circle",
       "volume_exact": null,
-      "volume_measured": 0.00029321233545488706,
+      "volume_measured": 0.000293212335454887,
       "volume_error_percent": null,
       "area_exact": null,
       "area_measured": 0.03179109999059672,
@@ -157,8 +157,8 @@
     {
       "name": "cone",
       "volume_exact": 0.0001759291886010284,
-      "volume_measured": 0.00017592724238951635,
-      "volume_error_percent": -0.0011062470801582193,
+      "volume_measured": 0.00017592724238951632,
+      "volume_error_percent": -0.0011062470801736263,
       "area_exact": null,
       "area_measured": 0.018761369510521462,
       "area_error_percent": null,
@@ -172,8 +172,8 @@
     {
       "name": "hex_cylinder",
       "volume_exact": 0.00028274333882308137,
-      "volume_measured": 0.00028274247699473565,
-      "volume_error_percent": -0.0003048094251518848,
+      "volume_measured": 0.0002827424769947357,
+      "volume_error_percent": -0.0003048094251327119,
       "area_exact": 0.024504422698000385,
       "area_measured": 0.024504322836873125,
       "area_error_percent": -0.00040752287246439923,
@@ -205,8 +205,18 @@
     "label": "intentional_cut",
     "output_path": "validation_test\\cubit\\export_netgen_test\\same_material_labelled.vol",
     "output_exists": false,
-    "observed_in_stdout": "Same-material internal surface 6 is explicitly labelled 'intentional_cut'",
-    "passed": true
+    "expected_diagnostic": "Same-material internal surface 6 is explicitly labelled 'intentional_cut'",
+    "passed": true,
+    "diagnostic_matched_in_stdout": true
   },
-  "all_passed": true
+  "all_passed": true,
+  "subprocess_returncode": 0,
+  "loaded_ccm": {
+    "path": "C:\\temp\\radia-cubit-internal-surface-review\\src\\cubit_plugin\\build-ccm\\cubit_mesh_export.ccm",
+    "sha256": "327bba1de087685a2846a3ed088c8a6984c6feba91e8ff62bd4edba36c4cf247",
+    "size": 2302464,
+    "load_line": "Loading Plugin: 'C:\\temp\\radia-cubit-internal-surface-review\\src\\cubit_plugin\\build-ccm\\cubit_mesh_export.ccm'",
+    "observed_in_stdout": true,
+    "matches_manifest": true
+  }
 }
