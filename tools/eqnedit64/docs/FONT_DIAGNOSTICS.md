@@ -207,3 +207,20 @@ EXE/pyd payload across arms and record runner and payload source separately.
 If the full-prefix control does not reproduce, do not interpret shorter prefixes
 as exoneration. Query failures are INCONCLUSIVE; record host StartTime as well
 as PID. Product release stays on hold.
+
+### Model-prefix result: 34663950430
+
+Prefix zero completed twice without a host event/change. Prefixes 3,5,6,8,10
+each reproduced twice (10 incidents total), all c0000005/366a2 in host version
+10.0.20348.5256. Both child processes returned zero in every arm; observer
+query errors were zero. The full-prefix positive control reproduced 2/2.
+Evidence: `C:/temp/eqnedit-font-prefix-34663950430`. The fixed EXE is the
+46E9DAEA... payload from run 34661533840, not a newly compiled product.
+
+For prefix3 replicate1, model end was 01:09:43.3044518 UTC, self start
+01:09:43.3061540, and WER time 01:09:43.7676563 on September 12.
+This localizes sufficient prior history to the first three suites plus the
+subsequent EXE, not a particular suite or individual API. The next diagnostic
+`tests/font_model_probe.py` compares load-only, one Equation.metrics call on
+`ab`, one SVG layout of `ab`, and one compound SVG layout. Run each in a fresh
+worker followed by the same EXE, retaining prefix3 as a positive control.
