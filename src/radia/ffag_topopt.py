@@ -2220,9 +2220,11 @@ def optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
     accepted_result = None
     initial_max_band_ratio = None
     termination_reason = "maximum fixed-orbit optics iterations reached"
+    # Warm starts solve the reference-current RHS; optics uses the calibrated
+    # physical response of the accepted material generation.
+    current_raw_field = np.asarray(
+        response_matrix @ state + incident, dtype=float)
     for optics_iteration in range(optics_count):
-        current_raw_field = np.asarray(
-            response_matrix @ state + incident, dtype=float)
         current_ratio = float(np.max(np.abs(
             (objective.transform(current_raw_field)
              - objective.response_target) / objective.response_band)))
@@ -2293,7 +2295,13 @@ def optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
                 accepted_result = last_attempt
                 optics_history.append(last_attempt)
                 active = next_active
-                state = last_attempt.generation.state.copy()
+                generation_scale = float(last_attempt.generation.source_scale)
+                if not np.isfinite(generation_scale) or generation_scale <= 0.0:
+                    raise RuntimeError(
+                        "material source calibration returned an invalid scale")
+                state = (last_attempt.generation.state / generation_scale).copy()
+                current_raw_field = np.asarray(
+                    last_attempt.generation.response, dtype=float).copy()
                 break
             if trial_fraction is None:
                 break
@@ -2365,7 +2373,13 @@ def optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
                 accepted_result = last_attempt
                 optics_history.append(last_attempt)
                 active = next_active
-                state = last_attempt.generation.state.copy()
+                generation_scale = float(last_attempt.generation.source_scale)
+                if not np.isfinite(generation_scale) or generation_scale <= 0.0:
+                    raise RuntimeError(
+                        "material source calibration returned an invalid scale")
+                state = (last_attempt.generation.state / generation_scale).copy()
+                current_raw_field = np.asarray(
+                    last_attempt.generation.response, dtype=float).copy()
         if not accepted:
             termination_reason = "map-level trust-region proposals rejected"
             break
