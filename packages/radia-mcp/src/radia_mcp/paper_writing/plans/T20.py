@@ -104,17 +104,28 @@ def paper_writing_adaptive_health_report(
     try:
         from .T8 import paper_writing_health_report
     except Exception as e:
-        return {"error": f"health_report import failed: {e}",
+        return {"status": "unavailable", "overall_score": None,
+                "error": f"health_report import failed: {e}",
                 "source": "paper T20 adaptive health report"}
 
-    health = paper_writing_health_report(
-        tex_or_text, bib=bib, abstract=abstract,
-        author_last_names=author_last_names, skip=skip,
-    )
+    try:
+        health = paper_writing_health_report(
+            tex_or_text, bib=bib, abstract=abstract,
+            author_last_names=author_last_names, skip=skip,
+        )
+        if (not isinstance(health, dict) or health.get("error")
+                or health.get("status") not in {"complete", "partial", "unavailable"}
+                or not isinstance(health.get("detailed_scores"), dict)
+                or not isinstance(health.get("priority_issues"), list)):
+            raise ValueError("invalid health report")
+    except Exception as e:
+        return {"status": "unavailable", "overall_score": None,
+                "error": f"health_report failed: {e}",
+                "source": "paper T20 adaptive health report"}
 
     ctx = {"journal_tier": journal_tier, "phase": phase}
     detailed_scores = health.get("detailed_scores", {})
-    priority_issues = list(health.get("priority_issues", []))
+    priority_issues = [dict(issue) for issue in health.get("priority_issues", [])]
     adjustments_applied: list[dict] = []
     skipped_tools: list[str] = []
 
@@ -126,7 +137,8 @@ def paper_writing_adaptive_health_report(
             if rule.get("skip"):
                 skipped_tools.append(tid)
                 priority_issues = [
-                    p for p in priority_issues if p.get("tool") != tid
+                    p for p in priority_issues
+                    if p.get("tool") != tid or p.get("severity") == "UNKNOWN"
                 ]
                 adjustments_applied.append({
                     "tool": tid,
@@ -167,6 +179,8 @@ def paper_writing_adaptive_health_report(
     n_high = sum(1 for p in priority_issues if p.get("severity") == "HIGH")
 
     comments: list[str] = []
+    if health["status"] != "complete":
+        comments.append("検査未完了のため総合判定は保留。context調整では未検査を解消できません。")
     if not journal_tier and not phase:
         comments.append(
             "journal_tier / phase が未指定。固定閾値 health_report と同じ。"
@@ -190,6 +204,8 @@ def paper_writing_adaptive_health_report(
         comments.append(f"Adjusted HIGH: {n_high} 件")
 
     return {
+        "status": health["status"],
+        "unknown_tools": health.get("unknown_tools", []),
         "context": ctx,
         "adjusted_priority_issues": priority_issues,
         "adjustments_applied": adjustments_applied,

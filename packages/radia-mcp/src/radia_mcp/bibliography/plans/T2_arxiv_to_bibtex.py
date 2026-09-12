@@ -9,6 +9,7 @@ arXiv API endpoint: https://export.arxiv.org/api/query?id_list=...
 from __future__ import annotations
 
 import re
+from datetime import date
 import ssl
 import urllib.error
 import urllib.parse
@@ -31,6 +32,7 @@ def _ssl_context() -> ssl.SSLContext | None:
     return ctx
 
 from .._bibparse import BibEntry, make_cite_key, write_bib
+from .._metadata_text import bibtex_text
 
 
 _ARXIV_API = "https://export.arxiv.org/api/query"
@@ -44,9 +46,12 @@ def _normalize_arxiv_id(s: str) -> str:
     s = s.strip()
     if s.lower().startswith("arxiv:"):
         s = s[6:]
-    if s.lower().startswith("https://arxiv.org/abs/"):
-        s = s[22:]
-    # Strip version suffix like v2 for the lookup, the API accepts both.
+    if re.match(r"^https?://(?:www\.)?arxiv\.org/(?:abs|pdf)/", s, re.IGNORECASE):
+        s = urllib.parse.unquote(urllib.parse.urlsplit(s).path.split("/", 2)[2])
+    s = s.removesuffix(".pdf").strip()
+    if not re.fullmatch(r"(?:\d{4}\.\d{4,5}|[A-Za-z][\w.-]*/\d{7})(?:v[1-9]\d*)?", s):
+        raise ValueError("invalid arXiv identifier")
+    # Preserve an explicitly requested version.
     return s
 
 
@@ -59,46 +64,60 @@ def _fetch_arxiv(arxiv_id: str, timeout: float = 15.0):
         with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
             return resp.read().decode("utf-8")
     except (urllib.error.URLError, urllib.error.HTTPError,
-            TimeoutError, OSError):
+            TimeoutError, OSError, UnicodeError):
         return None
 
 
 def _atom_to_bibentry(atom_xml: str) -> BibEntry | None:
     try:
         root = ET.fromstring(atom_xml)
-    except ET.ParseError:
+    except (ET.ParseError, TypeError):
         return None
-    entry = root.find("a:entry", _NS)
-    if entry is None:
+    entries = root.findall("a:entry", _NS)
+    if root.tag != "{http://www.w3.org/2005/Atom}feed" or len(entries) != 1:
         return None
+    entry = entries[0]
     title = (entry.findtext("a:title", default="", namespaces=_NS) or "").strip()
     summary = (entry.findtext("a:summary", default="", namespaces=_NS) or "").strip()
     published = (entry.findtext("a:published", default="", namespaces=_NS) or "").strip()
-    year = published[:4] if published else ""
+    try:
+        year = str(date.fromisoformat(published[:10]).year)
+        aid = _normalize_arxiv_id(entry.findtext("a:id", default="", namespaces=_NS))
+    except ValueError:
+        return None
+    if not title or title.casefold() == "error":
+        return None
     authors = []
     for a in entry.findall("a:author", _NS):
         nm = (a.findtext("a:name", default="", namespaces=_NS) or "").strip()
-        if nm:
-            authors.append(nm)
-    # Convert "First Last" → "Last, First" if possible.
-    formatted_authors = []
-    for nm in authors:
-        if "," in nm:
-            formatted_authors.append(nm)
-        else:
-            parts = nm.rsplit(" ", 1)
-            if len(parts) == 2:
-                formatted_authors.append(f"{parts[1]}, {parts[0]}")
-            else:
-                formatted_authors.append(nm)
+        if not nm:
+            return None
+        authors.append(nm)
+    if not authors:
+        return None
+    category = entry.find("arxiv:primary_category", _NS)
+    # Atom names are unstructured: preserve order instead of inferring surnames.
+    try:
+        formatted_authors = [bibtex_text(nm) for nm in authors]
+        if not all(formatted_authors):
+            return None
+        formatted_authors = ["{" + nm + "}" if " and " in nm else nm
+                             for nm in formatted_authors]
+        title = bibtex_text(" ".join(title.split()))
+        summary = bibtex_text(" ".join(summary.split()))
+        primary_class = bibtex_text(category.get("term", "")) if category is not None else ""
+        if not title:
+            return None
+    except ValueError:
+        return None  # Unsupported TeX/math requires manual verification.
     fields = {
-        "title": " ".join(title.split()),
+        "title": title,
         "author": " and ".join(formatted_authors),
         "year": year,
-        "eprint": entry.findtext("a:id", default="", namespaces=_NS).rsplit("/", 1)[-1],
+        "eprint": aid,
         "archivePrefix": "arXiv",
-        "primaryClass": (entry.find("arxiv:primary_category", _NS) or ET.Element("x")).get("term", ""),
-        "abstract": " ".join(summary.split()),
+        "primaryClass": primary_class,
+        "abstract": summary,
     }
     fields = {k: v for k, v in fields.items() if v}
     out = BibEntry(kind="misc", key="", fields=fields)
@@ -116,11 +135,19 @@ def bibliography_arxiv_to_bibtex(arxiv_id: str) -> str:
     Returns:
         BibTeX entry text, or an error message.
     """
-    aid = _normalize_arxiv_id(arxiv_id)
+    try:
+        aid = _normalize_arxiv_id(arxiv_id)
+    except ValueError as exc:
+        return f"Error: {exc}"
     body = _fetch_arxiv(aid)
     if body is None:
         return f"Error: arXiv lookup failed for {aid!r}"
     entry = _atom_to_bibentry(body)
     if entry is None or "title" not in entry.fields:
-        return f"Error: no entry returned for {aid!r}"
+        return (f"Error: no complete supported entry returned for {aid!r}; "
+                "verify metadata and any TeX/math markup manually")
+    returned = entry.fields["eprint"]
+    if (returned != aid if re.search(r"v\d+$", aid) else
+            re.sub(r"v\d+$", "", returned) != aid):
+        return f"Error: returned arXiv identifier does not match {aid!r}"
     return write_bib([entry]).strip()

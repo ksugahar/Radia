@@ -11,6 +11,8 @@ paper_writing Plan B T1-T7 を束ね、修正優先度付きの summary を返�
 """
 from __future__ import annotations
 
+import math
+
 from .T1 import paper_writing_abstract_strength
 from .T2 import paper_writing_contribution_clarity_score
 from .T3 import paper_writing_claim_quantification
@@ -37,6 +39,29 @@ def _severity_from_score(score: float | None) -> str:
     return "LOW"
 
 
+def _require_health_result(result: dict) -> dict:
+    """Validate the shared health payload before composite consumers use it."""
+    if (not isinstance(result, dict) or result.get("error")
+            or result.get("status") not in {"complete", "partial", "unavailable"}
+            or not isinstance(result.get("detailed_scores"), dict)
+            or not isinstance(result.get("priority_issues"), list)):
+        raise ValueError("invalid health report")
+    for score in result["detailed_scores"].values():
+        if score is not None and (isinstance(score, bool)
+                or not isinstance(score, (int, float))
+                or not math.isfinite(score) or not 0 <= score <= 10):
+            raise ValueError("invalid health score")
+    for issue in result["priority_issues"]:
+        if not isinstance(issue, dict) or not isinstance(issue.get("comments", []), list):
+            raise ValueError("invalid health issue")
+        score = issue.get("score")
+        if score is not None and (isinstance(score, bool)
+                or not isinstance(score, (int, float))
+                or not math.isfinite(score) or not 0 <= score <= 10):
+            raise ValueError("invalid health issue score")
+    return result
+
+
 def paper_writing_health_report(
     tex_or_text: str,
     bib: str = "",
@@ -59,7 +84,7 @@ def paper_writing_health_report(
 
     Returns:
         dict:
-          - overall_score: 0-10 の平均 (skip/None 除外)
+          - overall_score: 0-10 mean; None when any check is unknown/skipped
           - score_max: 10
           - overall_severity: CRITICAL/HIGH/MEDIUM/LOW
           - summary_comment: 1-2 文の統合判定
@@ -113,21 +138,39 @@ def paper_writing_health_report(
          (tex_or_text,), {}),
     ]
 
-    detailed_scores: dict[str, float] = {}
+    detailed_scores: dict[str, float | None] = {}
     detailed_results: dict[str, dict] = {}
     priority_issues: list[dict] = []
+    unknown_tools: list[str] = []
 
     for tid, name, func, args, kwargs in tools_to_run:
         if tid in skip_set:
             continue
         try:
             r = func(*args, **kwargs)
+            if not isinstance(r, dict):
+                raise ValueError("detector result must be a dict")
+            if (r.get("error") or r.get("ok") is False
+                    or r.get("applicable") is False
+                    or str(r.get("status", "")).casefold() in {
+                        "error", "failed", "skip", "skipped", "partial", "unavailable", "not_applicable",
+                    }):
+                raise ValueError("detector did not complete")
+            score = r.get("score")
+            if (not isinstance(score, (int, float)) or isinstance(score, bool)
+                    or not math.isfinite(score) or not 0 <= score <= 10):
+                raise ValueError("detector score must be a finite number in [0, 10]")
+            if not isinstance(r.get("comments", []), list):
+                raise ValueError("detector comments must be a list")
         except Exception as e:
+            unknown_tools.append(tid)
+            detailed_scores[tid] = None
             priority_issues.append({
                 "tool": tid,
                 "name": name,
-                "severity": "CRITICAL",
-                "reason": f"tool crashed: {e}",
+                "severity": "UNKNOWN",
+                "score": None,
+                "reason": f"detector unavailable: {e}",
                 "comments": [],
             })
             continue
@@ -156,8 +199,9 @@ def paper_writing_health_report(
 
     # overall_score = 単純平均 (None 除外)
     valid_scores = [s for s in detailed_scores.values() if s is not None]
+    incomplete = bool(unknown_tools or skip_set or not valid_scores)
     overall_score = (round(sum(valid_scores) / len(valid_scores), 1)
-                     if valid_scores else 0.0)
+                     if valid_scores and not incomplete else None)
     overall_severity = _severity_from_score(overall_score)
 
     # summary_comment
@@ -191,7 +235,12 @@ def paper_writing_health_report(
             "著者の声で Given-New / Abstract / Contribution を最終判定。"
         )
 
+    if incomplete:
+        summary = "検査未完了のため総合判定は保留。確認済みの指摘と未検査項目を確認してください。"
+
     return {
+        "status": "unavailable" if not valid_scores else "partial" if incomplete else "complete",
+        "unknown_tools": unknown_tools,
         "overall_score": overall_score,
         "score_max": 10,
         "overall_severity": overall_severity,

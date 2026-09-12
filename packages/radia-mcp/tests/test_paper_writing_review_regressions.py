@@ -27,6 +27,69 @@ def _checks_by_name(result: dict) -> dict[str, dict]:
     return {check["name"]: check for check in result["checks"]}
 
 
+@pytest.mark.parametrize("comment,difficulty", [
+    ("The Fig. 3 caption has a wrong unit", "A"),
+    ("FIG.12 caption has a wrong unit", "A"),
+    ("Figure 2 caption has a wrong unit", "A"),
+    ("The Fig. 3 caption is unclear; please clarify", "B"),
+    ("Please compare with new data in Fig. 3 caption", "C"),
+    ("A fundamental flaw in Fig. 3 caption", "D"),
+    ("The configuration 3 caption needs attention", "B?"),
+    ("The Fig. 3 captioning process needs attention", "B?"),
+])
+def test_reviewer_figure_caption_pattern_and_priority(comment, difficulty):
+    result = pw.paper_writing_classify_reviewer_comment(comment)
+    assert result["difficulty"] == difficulty
+    assert isinstance(result["triggers"], list)
+
+
+def test_reviewer_d_returns_matched_triggers():
+    result = pw.paper_writing_classify_reviewer_comment("A FUNDAMENTAL FLAW is unable to be fixed")
+    assert result["difficulty"] == "D"
+    assert result["triggers"] == ["fundamental flaw", "unable to be fixed"]
+
+
+@pytest.mark.parametrize("author,signature", [
+    ("", "[Corresponding author name]"),
+    (None, "[Corresponding author name]"),
+    ("  ", "[Corresponding author name]"),
+    ("  Jane Smith  ", "Jane Smith"),
+])
+def test_cover_letter_does_not_invent_author(author, signature):
+    letter = pw.paper_writing_generate_cover_letter("Journal", "Title", "Abstract", corresponding_author=author)
+    assert f"Sincerely,\n{signature}\n" in letter
+    assert "Kengo Sugahara" not in letter
+
+
+@pytest.mark.parametrize("context,lines", [
+    ("in paragraph at lines 12--15", "12-15"),
+    ("in paragraph at lines 12", "12"),
+    ("in alignment at lines 20--23", "20-23"),
+    ("detected at line 31", "31"),
+    ("has occurred while \\output is active", ""),
+    ("in paragraph at lines\n42--44", "42-44"),
+    ("", ""),
+])
+def test_overfull_hbox_context_variants(tmp_path, context, lines):
+    log = tmp_path / "paper.log"
+    log.write_text(f"Overfull \\hbox (3.5pt too wide) {context}\n[]\n", encoding="utf-8")
+    result = pw.paper_writing_check_overfull_hbox(str(log))
+    assert result["overfull_count"] == 1
+    assert result["overfull_details"][0]["lines"] == lines
+    assert result["overfull_details"][0]["severity"] == "3.5pt too wide"
+
+
+def test_overfull_hbox_count_not_limited_to_detail_cap(tmp_path):
+    log = tmp_path / "paper.log"
+    log.write_text("Overfull \\hbox (1.0pt too wide) detected at line 5\n" * 23
+                   + "Underfull \\hbox (badness 10000) in paragraph at lines 1--2\n"
+                   + "Overfull \\vbox (2.0pt too high) has occurred while \\output is active\n",
+                   encoding="utf-8")
+    result = pw.paper_writing_check_overfull_hbox(str(log))
+    assert result["overfull_count"] == 23
+    assert len(result["overfull_details"]) == 20
+
+
 def test_submission_gate_rejects_supplied_missing_files(tmp_path):
     result = paper_writing_em_submission_gate(
         tex_path=str(tmp_path / "missing.tex"),
@@ -237,6 +300,7 @@ def test_crossref_http_status_classification(monkeypatch, status_code, temporary
 
     response = Response()
     response.status_code = status_code
+    response.close = lambda: None
 
     class Requests:
         @staticmethod
