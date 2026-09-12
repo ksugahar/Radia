@@ -34,6 +34,39 @@ first.
   IPC, no sockets) is non-negotiable for the live-Cubit path; if you
   need a different transport, justify it in the PR description.
 
+## Consolidation before expansion
+
+During the maintenance program, prioritize reducing duplicated implementation
+over adding near-identical tools, gates or numbered test generations.
+
+The two layers are thin MCP adapters (registration, SDK argument validation,
+dispatch and serialization) and directly callable domain workflows (inspection,
+document policy and CAE operations). Keep transport dependencies out of pure
+domain helpers. Use the existing domain packages; this is not a new distribution
+or an instruction to move all logic into a generic framework.
+
+- Prove behavioral equivalence before sharing implementations. Japanese papers,
+  English papers and grants may share primitives but keep distinct policies.
+- Share equivalent parsing and schema rules. Case-specific field names and
+  requirements may be declarative data; thresholds and failure semantics must
+  remain visible. Never replace a physical check with metadata completeness.
+- Move substantial knowledge prose and case data out of executable code only
+  with installed-wheel resource tests and preserved lookup identifiers.
+- Parameterize equivalent tests while retaining every distinct failure signal,
+  boundary case and regression. Do not add another `generalization_vNN` file
+  when the existing owning test can express the case.
+- Preserve public tool names, signatures, result schemas and error behavior.
+  Keep compatibility entry points thin and do not auto-publish private helpers.
+- Review reductions by eliminated duplicate logic, dependency boundaries and
+  retained coverage. Moving lines between files or compressing formatting is
+  not consolidation. Report implementation and test line counts separately;
+  do not set an arbitrary line-count quota.
+
+Start with metadata-reader duplication in `radia_ngsolve/slot_gates.py`, then
+review cohesive gate families, copied writing checks and embedded knowledge.
+Each slice needs focused tests and the affected SDK/server contract checks.
+Do not combine unrelated solver, runtime installation or release changes.
+
 ## High-value contribution areas
 
 ### 1. New scrape sub-sources in `radia_mcp.common.examples`
