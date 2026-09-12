@@ -115,8 +115,9 @@ def test_shared_volume_average_and_nonfinite_field():
         observe({'B_cf': lambda point: (1, np.nan, 3)}, lambda *point: point, case)
 
 
-@pytest.mark.parametrize('energy_sweep', [False, True])
-def test_algebraic_cli_preserves_hold_and_never_runs_energy_audit(tmp_path, monkeypatch, energy_sweep):
+@pytest.mark.parametrize('scenario', ['algebraic', 'energy', 'first_gate_fails',
+                                      'middle_gate_fails', 'second_audit_raises'])
+def test_cli_preserves_hold_and_partial_energy_evidence(tmp_path, monkeypatch, scenario):
     import argparse
     import copy
     from contextlib import nullcontext
@@ -124,6 +125,9 @@ def test_algebraic_cli_preserves_hold_and_never_runs_energy_audit(tmp_path, monk
     import platform
     import sys
     import time
+
+    energy_sweep = scenario != 'algebraic'
+    failed_q = {'first_gate_fails': 16, 'middle_gate_fails': 22}.get(scenario)
 
     path = Path(__file__).resolve().parents[1] / 'validation_test/omega_quadrature/run.py'
     tree = ast.parse(path.read_text(encoding='utf-8'))
@@ -143,6 +147,8 @@ def test_algebraic_cli_preserves_hold_and_never_runs_energy_audit(tmp_path, monk
     def audit_energy(result, *args):
         audits.append(args[-1])
         result.setdefault('assembled_energy', {})['fixed_rule_order'] = args[-1]
+        if scenario == 'second_audit_raises' and args[-1] == 22:
+            raise RuntimeError('second quadrature audit failed')
 
     namespace = dict(argparse=argparse, copy=copy, Path=Path, json=json, platform=platform, time=time,
                      check_runtime=lambda mode: {'mode': mode},
@@ -152,7 +158,7 @@ def test_algebraic_cli_preserves_hold_and_never_runs_energy_audit(tmp_path, monk
                      block_action_residual=lambda r: {'acceptance_evidence': False},
                      field_observations=lambda *a: None,
                      audit_energy=audit_energy if energy_sweep else forbidden,
-                     gates=lambda result: {'synthetic_identity': True},
+                     gates=lambda result: {'synthetic_identity': result['assembled_energy']['fixed_rule_order'] != failed_q},
                      constraint_violation=(lambda *a: {}) if energy_sweep else forbidden)
     exec(compile(ast.Module(body=[main_node], type_ignores=[]), str(path), 'exec'), namespace)
     output = tmp_path / 'result.json'
@@ -161,16 +167,31 @@ def test_algebraic_cli_preserves_hold_and_never_runs_energy_audit(tmp_path, monk
                                     '--orders', '1', '--bonuses', '4']
     args += ['--evaluation-orders', '16', '22', '28'] if energy_sweep else ['--algebraic-only']
     monkeypatch.setattr(sys, 'argv', args)
-    assert namespace['main']() == (0 if energy_sweep else 2)
+    if scenario == 'second_audit_raises':
+        with pytest.raises(RuntimeError, match='second quadrature audit failed'):
+            namespace['main']()
+    else:
+        assert namespace['main']() == (0 if scenario == 'energy' else 2)
     report = json.loads(output.read_text())
     assert len(calls) == 1 and calls[0]['return_system'] is True
-    assert report['completed'] and report['acceptance'].startswith('HOLD:')
+    assert report['acceptance'].startswith('HOLD:')
     row = report['rows'][0]
     assert row['linear_residual'] == {'raw': 'retained'}
+    if scenario == 'second_audit_raises':
+        assert report.get('completed') is not True
+        assert audits == [16, 22]
+        assert row['gates'] == {'energy_audit_completed': False}
+        assert len(row['evaluation_audits']) == 1
+        assert row['evaluation_audits'][0]['energy']['fixed_rule_order'] == 16
+        assert row['evaluation_audits'][0]['gates'] == {'synthetic_identity': True}
+        return
+    assert report['completed']
     if energy_sweep:
         assert audits == [16, 22, 28]
         assert [a['energy']['fixed_rule_order'] for a in row['evaluation_audits']] == audits
-        assert row['gates'] == {'synthetic_identity': True}
+        assert row['gates'] == {'synthetic_identity': failed_q is None}
+        assert [a['gates']['synthetic_identity'] for a in row['evaluation_audits']] == [
+            q != failed_q for q in audits]
         return
     assert report['nesting'] == []
     assert row['gates'] == {'energy_audit_completed': False, 'three_engine_acceptance': False}
