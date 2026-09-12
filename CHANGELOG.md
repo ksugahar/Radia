@@ -22,6 +22,9 @@ All notable changes to the `radia` package.  Format: each release lists
   input-power audits. The EM-to-thermal `q_surf.sol` handoff is now fixed to
   P1 independently of EM and thermal solve order, avoiding invalid
   reconstruction of hierarchical high-order H1 coefficients from vertices.
+  Axisymmetric heat now also rejects active surface selectors containing the
+  zero-revolved-area `r=0` symmetry axis, including broad labels shared with
+  physical surfaces.
 
 - Fixed MATLAB LTspice binary RAW precision/layout validation and transient
   state injection. Unsupported layouts, malformed payload sizes, missing or
