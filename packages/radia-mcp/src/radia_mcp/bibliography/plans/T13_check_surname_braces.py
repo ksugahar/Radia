@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import pathlib
 
-from .._bibparse import _split_name_parts, parse_bib
+from .. import _bibparse
+from .._bibparse import parse_bib
 from .._source_edit import literal_value, read_source, write_source_edits
 
 
@@ -36,10 +37,10 @@ def _surname_span(name: str) -> tuple[int, int]:
     start = len(name) - len(name.lstrip())
     end = len(name.rstrip())
     body = name[start:end]
-    commas = _split_name_parts(body, r",")
+    commas = _bibparse._split_name_parts(body, r",")
     if len(commas) > 1:
         return start, start + len(commas[0])
-    tokens = _split_name_parts(body, r"\s+")
+    tokens = _bibparse._split_name_parts(body, r"\s+")
     particle = next((i for i, token in enumerate(tokens[:-1])
                      if token and token[0].islower()), len(tokens) - 1)
     position = 0
@@ -64,7 +65,7 @@ def _wrap_surname(name: str) -> str:
 
 
 def _split_authors(value: str) -> list[str]:
-    return _split_name_parts(value, r"\s+and\s+")
+    return _bibparse._split_name_parts(value, r"\s+and\s+")
 
 
 def _source_changes(text: str):
