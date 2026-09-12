@@ -4,6 +4,7 @@ from radia_mcp.radia_ngsolve.knowledge.axifem import get_axifem_documentation
 
 def test_ih_thermal_knowledge_keeps_em_and_heat_spaces_separate():
     thermal = get_induction_heating_documentation("thermal")
+    normalized = " ".join(thermal.split())
 
     assert "Henrotte for EM, NGSolve H1 for heat" in thermal
     assert "H1Henrotte" in thermal
@@ -18,6 +19,10 @@ def test_ih_thermal_knowledge_keeps_em_and_heat_spaces_separate():
     assert "--radiation-boundaries" in thermal
     assert "boundary_audit" in thermal
     assert "--surface-label`` fails" in thermal
+    assert "true ``r=0`` center axis" in normalized
+    assert "zero because the weak form uses ``2*pi*r*ds``" in normalized
+    assert "solver fails fast" in normalized
+    assert "inner cylindrical surface at ``r>0``" in normalized
 
 
 def test_ih_pitfalls_reject_henrotte_temperature_reuse():

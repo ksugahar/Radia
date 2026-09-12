@@ -65,6 +65,47 @@ def _log(msg):
     progress("HEAT_AXI", msg)
 
 
+def _reject_axis_boundary_roles(mesh, role_specs):
+    """Reject active physical surface roles that include the ``r = 0`` axis.
+
+    The axis has zero revolved area because every boundary integral is weighted
+    by ``2*pi*r``.  Selecting it is therefore never a meaningful heat-flux,
+    convection, or radiation configuration.  Inspect boundary *elements*, not
+    just names, so a broad label shared by the axis and a physical surface also
+    fails loudly.
+    """
+    from ngsolve import BND
+
+    radial_scale = max(
+        (abs(float(vertex.point[0])) for vertex in mesh.vertices),
+        default=0.0,
+    )
+    axis_tol = max(1.0e-14, radial_scale * 1.0e-12)
+
+    for option_name, boundary_names in role_specs:
+        selected = set(boundary_names)
+        axis_labels = set()
+        for element in mesh.Elements(BND):
+            if element.mat not in selected:
+                continue
+            radii = [
+                abs(float(mesh.vertices[vertex.nr].point[0]))
+                for vertex in element.vertices
+            ]
+            if radii and max(radii) <= axis_tol:
+                axis_labels.add(element.mat)
+        if axis_labels:
+            labels = sorted(axis_labels)
+            raise ValueError(
+                f"{option_name} includes r=0 axis boundary elements through "
+                f"{labels}. In an axisymmetric (r, z) heat model the center "
+                "axis is the natural symmetry boundary and has zero-revolved-"
+                "area (2*pi*r*ds = 0). Remove the axis from this selector and "
+                "give the coil-facing or exposed physical surface a separate "
+                "boundary label."
+            )
+
+
 # -----------------------------------------------------------------
 # q_surf source for the axisym mesh
 # -----------------------------------------------------------------
@@ -229,6 +270,21 @@ def solve_heat_axisym(wp_vol,
         radiation_selector, radiation_names = _resolve_boundary_role(
             wp_mesh, radiation_boundaries, "--radiation-boundaries",
             required=float(emissivity) != 0.0)
+    except ValueError as exc:
+        return {"error": str(exc)}
+    try:
+        active_roles = [
+            ("--heat-flux-boundaries", heat_flux_names),
+        ]
+        if float(h_conv) != 0.0:
+            active_roles.append(
+                ("--convection-boundaries", convection_names)
+            )
+        if float(emissivity) != 0.0:
+            active_roles.append(
+                ("--radiation-boundaries", radiation_names)
+            )
+        _reject_axis_boundary_roles(wp_mesh, active_roles)
     except ValueError as exc:
         return {"error": str(exc)}
     _log(f"BND:heat_flux={heat_flux_names} "
