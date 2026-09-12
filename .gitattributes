@@ -28,3 +28,8 @@ tests/matlab/fixtures/optuna*.json text eol=lf
 matlab/optuna*.json text eol=lf
 docs/hdiv_vim/c_type_three_formulation_convergence_iron.vol binary
 validation_test/sparsesolv/hiruma/meshes/*.vol binary
+
+# Preserve the exact remote evidence bytes referenced by SHA256 in comparisons.
+validation_test/omega_quadrature/bonus4_algebraic_20260912.json -text
+validation_test/omega_quadrature/bonus8_algebraic_20260912.json -text
+validation_test/omega_quadrature/bonus4_correction_20260912.json -text
