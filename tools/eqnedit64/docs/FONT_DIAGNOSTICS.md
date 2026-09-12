@@ -265,3 +265,28 @@ using the same flavor on each fresh worker. Record distinct font/EXE/module
 hashes: these are not identical payloads. Retain CFF positive controls and the
 external host gate. Do not infer that all CFF-related host crashes are impossible
 merely because this product's glyf candidate does not reproduce within a bound.
+
+### E4 result and corrected bearings
+
+Run 34665310648 compared deep-once and prefix10 twice per format on fresh
+workers: CFF reproduced the same host fault 4/4; glyf reproduced 0/4. All
+children returned zero and completed their requested workloads; observer query
+errors were zero. Evidence: `C:/temp/eqnedit-font-outline-34665310648/summary.json`.
+This supports outline-format avoidance for these workloads, not a general
+Windows-font safety guarantee or final product acceptance.
+
+An independent bounds comparison rejected the first glyf asset for geometry:
+glyph u1D664 shifted by 16.923 design units. Its raw quadratic curve was close
+to the source, but preserving CFF hmtx LSB=70 with TT control-point xMin=53
+introduced a 17-unit translation. TrueType bearings must use the converted
+control-point xMin, not the original CFF curve-extrema bearing. Advance widths
+remain unchanged. The converter now checks every reloaded glyph's bounds
+(maximum allowed difference 1.5 units), including empty/nonempty agreement.
+
+The corrected asset is SHA256
+b598aee924dd8c51d07b6be72daef1197eb557fbe23a92f477e35d64b3d2ebe0.
+Across 4,802 glyphs its maximum bounds difference is 0.7289258214 design units;
+cmap/MATH/GSUB/GPOS remain byte-identical and all advance widths are preserved.
+hmtx is intentionally NOT byte-identical. This new hash requires a fresh host
+comparison and rendering/metrics regression before any deployment. Bounds
+agreement alone does not prove equal raster appearance or full MATH semantics.
