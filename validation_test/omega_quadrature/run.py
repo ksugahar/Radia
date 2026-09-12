@@ -69,16 +69,20 @@ def gates(result):
     relative = residual['free_dofs']['relative']
     audit = result['assembled_energy']
     ident = audit['fixed_rule_identity']
+    identity_finite = all(np.isfinite(ident[key]) for key in
+                          ('W', 'J', 'source_offset', 'W_minus_J_minus_offset'))
+    reconstruction_finite = all(np.isfinite(audit[key]) for key in
+                                ('energy', 'default_reconstruction_difference'))
     scale = max(abs(ident['W']), abs(ident['J']), abs(ident['source_offset']), 1e-30)
     checks = {
-        'free_residual': relative is not None and np.isfinite(relative) and relative <= 1e-8,
-        'same_rule_energy': abs(ident['W_minus_J_minus_offset']) <= 1e-10 * scale,
-        'assembly_reconstruction': abs(audit['default_reconstruction_difference'])
+        'free_residual': relative is not None and np.isfinite(relative) and 0 <= relative <= 1e-8,
+        'same_rule_energy': identity_finite and abs(ident['W_minus_J_minus_offset']) <= 1e-10 * scale,
+        'assembly_reconstruction': reconstruction_finite and abs(audit['default_reconstruction_difference'])
         <= 1e-10 * max(abs(audit['energy']), 1e-30),
     }
     for name, row in residual['blocks'].items():
         value = row['relative'] if row is not None else None
-        checks['residual_' + name] = (value is not None and np.isfinite(value) and value <= 1e-8)
+        checks['residual_' + name] = (value is not None and np.isfinite(value) and 0 <= value <= 1e-8)
     return checks
 
 
