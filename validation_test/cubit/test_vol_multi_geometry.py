@@ -20,7 +20,10 @@ sys.path.insert(0, os.path.join(_repo_root, 'src', 'radia'))
 from install_panels import find_cubit_bin
 _cubit_path = find_cubit_bin()
 if _cubit_path: sys.path.append(_cubit_path)
-os.environ['CUBIT_PLUGIN_DIR'] = os.path.join(_cubit_path, 'plugins') if _cubit_path else ''
+os.environ['CUBIT_PLUGIN_DIR'] = os.environ.get(
+    'CUBIT_PLUGIN_DIR',
+    os.path.join(_cubit_path, 'plugins') if _cubit_path else '',
+)
 
 import netgen.meshing
 from ngsolve import Mesh, Integrate, CF, BND, TaskManager
@@ -96,6 +99,21 @@ test_cases = [
       'block 2 name "air"'],
      (4.0/3.0)*math.pi*R_sph**3 + (3*R_sph)**3,
      None),  # complex boundary, skip area check
+
+    ("same_material_webcut",
+     ["create brick x 0.05 y 0.05 z 0.05",
+      "create brick x 0.05 y 0.05 z 0.05",
+      "volume 1 move -0.025 0 0",
+      "volume 2 move 0.025 0 0",
+      "imprint volume all",
+      "merge volume all",
+      "volume all scheme tetmesh",
+      "volume all size auto factor 5",
+      "mesh volume all",
+      "block 1 add volume all",
+      'block 1 name "solid"'],
+     0.1*0.05*0.05,
+     2*(0.1*0.05 + 0.1*0.05 + 0.05*0.05)),
 
     ("loft_rect",
      [# Bottom: rectangle in XY plane
@@ -223,3 +241,28 @@ if all_pass:
     print("ALL SHAPES: volume accuracy OK  (PASS)")
 else:
     print("SOME SHAPES FAILED: investigate errors above")
+
+# A labelled same-material internal face cannot be represented as a Netgen
+# boundary (DomainIn would equal DomainOut). The exporter must fail loudly
+# instead of silently dropping the user's sideset label.
+cubit.cmd("reset")
+for cmd in test_cases[5][1]:
+    cubit.cmd(cmd)
+internal_surfaces = [
+    sid for sid in cubit.parse_cubit_list("surface", "all")
+    if len(cubit.get_relatives("surface", sid, "volume")) >= 2
+]
+assert len(internal_surfaces) == 1, internal_surfaces
+cubit.cmd(f"sideset 1 add surface {internal_surfaces[0]}")
+cubit.cmd('sideset 1 name "intentional_cut"')
+labelled_path = os.path.join(OUT_DIR, "same_material_labelled.vol")
+if os.path.exists(labelled_path):
+    os.remove(labelled_path)
+cubit.cmd(f'export netgen "{labelled_path}" order {ORDER} overwrite')
+assert not os.path.exists(labelled_path), (
+    "labelled same-material internal surface was silently exported or removed"
+)
+print("LABELLED SAME-MATERIAL INTERNAL SURFACE: fail-loud OK  (PASS)")
+
+if not all_pass:
+    raise SystemExit(1)
