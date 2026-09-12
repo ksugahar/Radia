@@ -1,10 +1,10 @@
-Set-StrictMode -Version Latest
-
 function Invoke-NativeProvenanceGit {
     param(
         [Parameter(Mandatory)][string]$RepoRoot,
         [Parameter(Mandatory)][string[]]$Arguments
     )
+
+    Set-StrictMode -Version Latest
 
     $output = @(& git -C $RepoRoot @Arguments 2>&1)
     if ($LASTEXITCODE -ne 0) {
@@ -16,6 +16,7 @@ function Invoke-NativeProvenanceGit {
 function Get-NativeBuildSourceIdentity {
     param([Parameter(Mandatory)][string]$RepoRoot)
 
+    Set-StrictMode -Version Latest
     # The full build may refresh this tracked distribution artifact. It is an
     # output, not an input to _radia_pybind or radia_mex, so exclude it from
     # the source-state race check.
@@ -33,19 +34,23 @@ function Get-NativeBuildSourceIdentity {
     $diff = Invoke-NativeProvenanceGit -RepoRoot $RepoRoot `
         -Arguments (@("diff", "--binary", "HEAD") + $sourcePathspec)
     $stateBytes = [Text.Encoding]::UTF8.GetBytes($status + "`0" + $diff)
-    $stateHash = [Convert]::ToHexString(
+    # This fingerprints Git's status plus tracked binary diff. For untracked
+    # paths the status records names, not contents; such a build remains dirty
+    # and is never eligible for an accepted manifest.
+    $changeFingerprint = [Convert]::ToHexString(
         [Security.Cryptography.SHA256]::HashData($stateBytes)
     ).ToLowerInvariant()
     return [pscustomobject]@{
         source_commit = $commit
         source_dirty = [bool]($status.Length -gt 0)
-        source_state_sha256 = $stateHash
+        source_change_fingerprint_sha256 = $changeFingerprint
     }
 }
 
 function Clear-NativeBuildProvenance {
     param([Parameter(Mandatory)][string]$BinaryPath)
 
+    Set-StrictMode -Version Latest
     $manifestPath = "$BinaryPath.build.json"
     if (Test-Path -LiteralPath $manifestPath) {
         Remove-Item -LiteralPath $manifestPath -Force
@@ -59,6 +64,7 @@ function Write-NativeBuildProvenance {
         [Parameter(Mandatory)]$StartIdentity
     )
 
+    Set-StrictMode -Version Latest
     $manifestPath = "$BinaryPath.build.json"
     $temporaryPath = "$manifestPath.tmp-$PID-$([Guid]::NewGuid().ToString('N'))"
     Clear-NativeBuildProvenance -BinaryPath $BinaryPath
@@ -66,8 +72,13 @@ function Write-NativeBuildProvenance {
         if (-not (Test-Path -LiteralPath $BinaryPath -PathType Leaf)) {
             throw "Cannot record native build provenance; binary is missing: $BinaryPath"
         }
+        if ($StartIdentity.source_dirty) {
+            throw "Cannot record native build provenance for a dirty source checkout"
+        }
         $endIdentity = Get-NativeBuildSourceIdentity -RepoRoot $RepoRoot
-        foreach ($field in @("source_commit", "source_dirty", "source_state_sha256")) {
+        foreach ($field in @(
+            "source_commit", "source_dirty", "source_change_fingerprint_sha256"
+        )) {
             if ($endIdentity.$field -ne $StartIdentity.$field) {
                 throw "Source identity changed during native build: $field"
             }
@@ -77,7 +88,8 @@ function Write-NativeBuildProvenance {
             schema = "radia.native-build-provenance.v1"
             source_commit = $StartIdentity.source_commit
             source_dirty = $StartIdentity.source_dirty
-            source_state_sha256 = $StartIdentity.source_state_sha256
+            source_change_fingerprint_sha256 = `
+                $StartIdentity.source_change_fingerprint_sha256
             binary_name = $binary.Name
             binary_bytes = $binary.Length
             binary_sha256 = (Get-FileHash -LiteralPath $binary.FullName `

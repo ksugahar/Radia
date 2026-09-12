@@ -70,6 +70,7 @@ def test_build_manifest_must_match_binary_bytes_and_selected_commit(tmp_path, mo
         "schema": MODULE.PROVENANCE_SCHEMA,
         "source_commit": "a" * 40,
         "source_dirty": False,
+        "source_change_fingerprint_sha256": "d" * 64,
         "binary_name": binary.name,
         "binary_bytes": binary.stat().st_size,
         "binary_sha256": MODULE._sha256(binary),
@@ -199,4 +200,4 @@ def test_build_writes_hash_bound_native_provenance_manifests():
     assert "radia.native-build-provenance.v1" in helper
     assert "binary_sha256" in helper
     assert "source_dirty" in helper
-    assert "source_state_sha256" in helper
+    assert "source_change_fingerprint_sha256" in helper
