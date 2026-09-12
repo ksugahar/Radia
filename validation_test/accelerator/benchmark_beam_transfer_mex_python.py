@@ -61,6 +61,10 @@ def _finite_number(value: object) -> bool:
     )
 
 
+def _positive_integer_value(value: object) -> bool:
+    return _finite_number(value) and value > 0 and float(value).is_integer()
+
+
 def _reject_json_constant(value: str):
     raise ValueError(f"non-finite JSON constant is forbidden: {value}")
 
@@ -262,7 +266,8 @@ def validate_backend_report(report: dict, expected_backend: str) -> None:
     binary = report.get("binary")
     _require(isinstance(binary, dict), "binary provenance is required")
     _require(isinstance(binary.get("path"), str) and binary["path"], "binary.path is required")
-    _require(isinstance(binary.get("bytes"), int) and binary["bytes"] > 0, "binary.bytes must be positive")
+    _require(_positive_integer_value(binary.get("bytes")),
+             "binary.bytes must be a positive integer value")
     _require(_is_hex(binary.get("sha256"), 64), "binary.sha256 must be SHA-256 hex")
     _require(binary.get("source_commit") == report["radia_git_head"],
              "binary.source_commit must match radia_git_head")
