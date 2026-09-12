@@ -1,0 +1,43 @@
+{
+  "command": [
+    "C:\\temp\\omega-candidate-de7feea0\\venv\\Scripts\\python.exe",
+    "-u",
+    "C:\\temp\\omega-candidate-de7feea0\\lane\\omega_quadrature\\run.py",
+    "--mode",
+    "wheel",
+    "--factory",
+    "C:\\temp\\omega-candidate-de7feea0\\lane\\omega_quadrature\\esrf6.py",
+    "--mesh",
+    "C:/temp/radia-esrf-fem/example6/coil_yoke_kelvin.vol",
+    "--orders",
+    "1",
+    "--bonuses",
+    "4",
+    "8",
+    "--evaluation-order",
+    "16",
+    "--source-order",
+    "3",
+    "--threads",
+    "8",
+    "--output",
+    "C:\\temp\\omega-candidate-de7feea0\\threads8\\result.json"
+  ],
+  "sampling_seconds": 2,
+  "run_id": "de7feea0-p1-threads8",
+  "heap_setting": "default; SetHeapSize probe ineffective for Integrate",
+  "peak_tree_rss_bytes": 551841792,
+  "processes": {
+    "14408": {
+      "exe": "C:\\temp\\omega-candidate-de7feea0\\venv\\Scripts\\python.exe",
+      "peak_wset_bytes": 4177920
+    },
+    "14096": {
+      "exe": "C:\\Program Files\\Python312\\python.exe",
+      "peak_wset_bytes": 1455706112
+    }
+  },
+  "exit_code": 2,
+  "driver_pid": 14408,
+  "elapsed_s": 20115.007173899998
+}
