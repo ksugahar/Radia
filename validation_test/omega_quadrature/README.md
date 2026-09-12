@@ -75,6 +75,15 @@ those checks do not retroactively appear in these older result schemas.
   non-nested assembled constraint set in this C-type control; it is not #6
   acceptance or a variational-bound proof.
 
-Fast regression: 8 gate tests passed. No p=4, large #6, native build, installation,
-or formal-wheel acceptance run was started. The formal candidate remains the
-release coordinator's responsibility.
+The original lane had 8 passing gate tests. This describes the scope of the
+2026-09-11 small runs only, not the status of subsequent remote campaigns.
+The formal candidate remains the release coordinator's responsibility.
+
+## Recovery review, 2026-09-12
+
+The gate now rejects nonfinite energy operands and negative residual norms.
+An infinite reference energy must not turn an invalid comparison into a pass.
+Saved results retain their original hashes and gate values; changing the
+validator does not retroactively certify them. The small-run JSON files above
+remain HOLD evidence. No new solve or native validation was performed during
+this recovery review.

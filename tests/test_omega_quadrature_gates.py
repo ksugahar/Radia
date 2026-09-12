@@ -31,7 +31,7 @@ def test_consistent_diagnostics(lane):
     assert all(lane.gates(sample()).values())
 
 
-@pytest.mark.parametrize('value', [None, float('nan'), 1e-4])
+@pytest.mark.parametrize('value', [None, float('nan'), 1e-4, -1e-12])
 def test_missing_or_bad_constraint_residual_fails(lane, value):
     data = sample()
     data['linear_residual']['blocks']['interface_constraint']['relative'] = value
@@ -42,6 +42,27 @@ def test_energy_mismatch_fails(lane):
     data = sample()
     data['assembled_energy']['fixed_rule_identity']['W_minus_J_minus_offset'] = 0.01
     assert not lane.gates(data)['same_rule_energy']
+
+
+@pytest.mark.parametrize('value', [float('inf'), float('-inf'), float('nan')])
+@pytest.mark.parametrize('key', ['W', 'J', 'source_offset', 'W_minus_J_minus_offset'])
+def test_nonfinite_identity_fails(lane, key, value):
+    data = sample()
+    data['assembled_energy']['fixed_rule_identity'][key] = value
+    assert not lane.gates(data)['same_rule_energy']
+
+
+@pytest.mark.parametrize('key', ['energy', 'default_reconstruction_difference'])
+def test_infinite_reconstruction_fails(lane, key):
+    data = sample()
+    data['assembled_energy'][key] = float('inf')
+    assert not lane.gates(data)['assembly_reconstruction']
+
+
+def test_negative_free_residual_fails(lane):
+    data = sample()
+    data['linear_residual']['free_dofs']['relative'] = -1e-12
+    assert not lane.gates(data)['free_residual']
 
 
 def test_norm_nonfinite_rejected(lane):
