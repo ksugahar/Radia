@@ -555,6 +555,39 @@ classdef HACApKChargeGram < handle
                 options.MassRiesz);
         end
 
+        function result = reduceConfiguredCandidateDirectionalSchur( ...
+                obj, invChi, candidateDofs, blockOffsets, directions, ...
+                rhs, state, responseMatrix, adjoints, options)
+            arguments
+                obj
+                invChi (1,1) double
+                candidateDofs
+                blockOffsets
+                directions
+                rhs
+                state
+                responseMatrix (:,:) double
+                adjoints (:,:) double
+                options.Tol (1,1) double = 1e-5
+                options.MaxIt (1,1) double = 5000
+                options.SolveBatchSize (1,1) double = 64
+                options.MassRiesz (1,1) logical = true
+            end
+            obj.assertAlive();
+            candidateDofs = checkedInt32( ...
+                candidateDofs, "candidateDofs");
+            blockOffsets = checkedInt32( ...
+                blockOffsets, "blockOffsets");
+            result = radia.internal.callMex( ...
+                ['hacapk.charge_gram.' ...
+                 'reduce_configured_candidate_directional_schur'], ...
+                obj.NativeHandle, invChi, candidateDofs, ...
+                blockOffsets, double(directions), double(rhs), ...
+                double(state), double(responseMatrix), double(adjoints), ...
+                options.Tol, options.MaxIt, options.SolveBatchSize, ...
+                options.MassRiesz);
+        end
+
         function result = solveConfiguredLinearMaterial(obj, invChi, rhs, options)
             arguments
                 obj
@@ -1188,4 +1221,19 @@ classdef HACApKChargeGram < handle
             end
         end
     end
+end
+
+function value = checkedInt32(value, name)
+if ~(isnumeric(value) && isreal(value) && ...
+        all(isfinite(value), "all") && all(value == fix(value), "all"))
+    error("radia:HACApKChargeGram:Int32Input", ...
+        "%s must be a real, finite numeric array of integers.", name);
+end
+asDouble = double(value);
+if any(asDouble < double(intmin("int32")) | ...
+        asDouble > double(intmax("int32")), "all")
+    error("radia:HACApKChargeGram:Int32Input", ...
+        "%s values must fit in int32.", name);
+end
+value = int32(value);
 end

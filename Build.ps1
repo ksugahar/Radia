@@ -103,9 +103,23 @@ if ($OptunaMexOnly) {
     if ($env:MKLROOT -and (Test-Path $env:MKLROOT)) {
         $MklCandidates += $env:MKLROOT
     }
-    $INTEL_MKL = $MklCandidates | Where-Object { Test-Path "$_\lib\mkl_rt.lib" } | Select-Object -First 1
-    if (-not $INTEL_MKL) {
-        $INTEL_MKL = $MklCandidates | Select-Object -First 1
+    $MklRuntimeNames = @("mkl_rt", "mkl_core", "mkl_intel_thread", "mkl_avx2", "mkl_def")
+    if ($MatlabMexOnly) {
+        $MklRuntimeNames += "mkl_sequential"
+    }
+    $INTEL_MKL = ""
+    foreach ($candidate in ($MklCandidates | Select-Object -Unique)) {
+        if (-not (Test-Path "$candidate\lib\mkl_rt.lib")) {
+            continue
+        }
+        $missingRuntime = @($MklRuntimeNames | Where-Object {
+            -not (Test-Path "$candidate\bin\$_.3.dll")
+        })
+        if ($missingRuntime.Count -eq 0) {
+            $INTEL_MKL = $candidate
+            break
+        }
+        Write-Host "Ignoring incomplete MKL candidate $candidate (missing $($missingRuntime -join ', '))" -ForegroundColor Yellow
     }
     $MklImportLibrary = "$INTEL_MKL\lib\mkl_rt.lib"
     $MklRuntime = "$INTEL_MKL\bin\mkl_rt.3.dll"
@@ -115,7 +129,7 @@ if ($OptunaMexOnly) {
         # populated build dir may retain cached MKL paths, so warn, don't exit.
             Write-Host "WARNING: Intel MKL not found at $INTEL_MKL -- continuing (-AxiFemOnly does not need MKL)" -ForegroundColor Yellow
         } else {
-            Write-Host "ERROR: Intel MKL 2026 not found at $INTEL_MKL" -ForegroundColor Red
+            Write-Host "ERROR: complete Intel MKL 2026 runtime not found" -ForegroundColor Red
             Write-Host 'Install with: python -m pip install "mkl-devel>=2026,<2027"' -ForegroundColor Yellow
             exit 1
         }
