@@ -20,6 +20,7 @@ import ngsolve as ng
 import numpy as np
 
 from diagnostics import audit_energy, block_action_residual, constraint_violation, field_observations
+from diagnostics import residual_correction_observation
 
 
 def digest(path):
@@ -100,6 +101,8 @@ def main():
     parser.add_argument('--threads', type=int, default=4)
     parser.add_argument('--algebraic-only', action='store_true',
                         help='record solve, block actions and field samples; no energy/embedding acceptance')
+    parser.add_argument('--residual-correction', action='store_true',
+                        help='measure one frozen-system correction and restore the original solution')
     args = parser.parse_args()
     if min(args.bonuses) < 0 or args.evaluation_order < 1:
         parser.error('quadrature orders must be nonnegative (evaluation >= 1)')
@@ -152,11 +155,14 @@ def main():
                 solve_s = time.perf_counter() - start
                 actions = block_action_residual(result)
                 observations = field_observations(result, mesh, case)
+                correction = (residual_correction_observation(result, mesh, case)
+                              if args.residual_correction else None)
                 if args.algebraic_only:
                     rows.append({'order': order, 'bonus': bonus, 'solve_s': solve_s,
                                  'total_s': time.perf_counter()-start, 'ndof': result['fes'].ndof,
                                  'linear_residual': result['linear_residual'],
                                  'block_action_residual': actions, 'field_observations': observations,
+                                 'residual_correction': correction,
                                  'gates': {'energy_audit_completed': False,
                                            'three_engine_acceptance': False}})
                     save()
@@ -168,6 +174,7 @@ def main():
                              'total_s': time.perf_counter()-start, 'ndof': result['fes'].ndof,
                              'linear_residual': result['linear_residual'],
                              'block_action_residual': actions, 'field_observations': observations,
+                             'residual_correction': correction,
                              'energy': result['assembled_energy'], 'gates': gates(result)})
                 results[order] = result
                 save()

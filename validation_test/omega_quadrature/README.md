@@ -91,6 +91,15 @@ not an alternative release gate. The additional residual scale is
 not componentwise backward error, discretization error, or a field-error bound.
 No existing residual threshold is changed and historical JSON is unchanged.
 
+`--residual-correction` additionally solves `A delta = b - A x` on the free
+DOFs with the same frozen matrix, evaluates the shared B samples before and
+after `x + delta`, then restores `x` even if the field audit raises. This is
+one double-precision iterative-refinement observation, not a rigorous forward
+error bound or a substitute for quadrature convergence. `compare_fields.py`
+compares two saved one-row assembly sweeps only after checking matching source,
+native, mesh, physical controls and sample coordinates. Its report remains
+HOLD even for a zero observed difference.
+
 The gate now rejects nonfinite energy operands and negative residual norms.
 An infinite reference energy must not turn an invalid comparison into a pass.
 Saved results retain their original hashes and gate values; changing the
