@@ -436,6 +436,9 @@ def solve_omega(
     anderson_depth: int = 0,
     mu_r_initial=1000.0,
     observation_points=None,
+    source_projection_order: int | None = None,
+    bonus_intorder: int = 4,
+    exact_exterior_source: bool = False,
 ) -> tuple[np.ndarray, dict[str, object]]:
     """Run the TOSCA-style total/reduced Omega route on the Kelvin mesh.
 
@@ -452,7 +455,19 @@ def solve_omega(
     per-element state; the caller persists or discards it.
     """
     started = time.perf_counter()
+    if source_projection_order is not None and (
+            type(source_projection_order) is not int or source_projection_order < 1):
+        raise ValueError("source_projection_order must be a positive integer")
+    if type(bonus_intorder) is not int or bonus_intorder < 0:
+        raise ValueError("bonus_intorder must be a nonnegative integer")
+    if type(exact_exterior_source) is not bool:
+        raise ValueError("exact_exterior_source must be boolean")
     source_h = rad.RadiaField(coil, "h")
+    exterior_source = (rad.KelvinRadiaFieldStrength(
+        coil, kelvin_center, kelvin_radius, (0.0, 0.0, 0.0))
+        if exact_exterior_source else None)
+    if exact_exterior_source and exterior_source is None:
+        raise RuntimeError("exact Kelvin exterior source was not constructed")
     with ng.TaskManager():
         result = solve_static_electromagnet_mixed_total_reduced_omega(
             mesh,
@@ -465,6 +480,9 @@ def solve_omega(
             bh_table=material if nonlinear else None,
             source_trace_tolerance=source_trace_tolerance,
             source_potential_contract="total_hodge",
+            source_projection_order=source_projection_order,
+            bonus_intorder=bonus_intorder,
+            kelvin_source_h=exterior_source,
             nonlinear_tolerance=nonlinear_tolerance,
             nonlinear_max_iterations=nonlinear_maximum_iterations,
             nonlinear_relaxation=float(relaxation),
@@ -489,9 +507,11 @@ def solve_omega(
                 source_trace["iron_relative_harmonic_norm"]
             ),
             "kelvin_interface_boundary": "kelvin_int",
-            "kelvin_relative_tangential_residual": float(
-                source_trace["kelvin_relative_tangential_residual"]
-            ),
+            "kelvin_relative_tangential_residual": (
+                None if exact_exterior_source else
+                float(source_trace["kelvin_relative_tangential_residual"])),
+            "kelvin_exterior_source": ("exact pulled-back field"
+                                        if exact_exterior_source else "projected interface trace"),
             "relative_tolerance": float(source_trace_tolerance),
             "cut_policy": (
                 "the iron volume Hodge split retains the linked-source "
@@ -501,6 +521,7 @@ def solve_omega(
         },
         "kelvin_center_m": list(kelvin_center),
         "kelvin_radius_m": kelvin_radius,
+        "bonus_intorder": bonus_intorder,
         "mesh_elements": int(mesh.ne),
         "mesh_vertices": int(mesh.nv),
         "ndof": int(result["fes"].ndof),
