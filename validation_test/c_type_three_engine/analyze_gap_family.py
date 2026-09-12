@@ -186,7 +186,15 @@ def analyze(manifest: dict, results: dict[str, dict], result_paths: dict[str, Pa
     }
 
     levels = []
-    for name, row, payload in zip(names, manifest["levels"], payloads):
+    for index, (name, row, payload) in enumerate(zip(names, manifest["levels"], payloads)):
+        pairs = {}
+        for left_index, left in enumerate(ENGINES):
+            for right in ENGINES[left_index + 1:]:
+                a, b = fields[left][index], fields[right][index]
+                pairs[f"{left}__vs__{right}"] = {
+                    "relative_rms": convergence._relative_rms(a, b),
+                    "maximum_absolute_difference_T": float(np.max(np.linalg.norm(a - b, axis=1))),
+                }
         levels.append({
             "name": name,
             "gap_layers": int(row["gap_layers"]),
@@ -195,9 +203,9 @@ def analyze(manifest: dict, results: dict[str, dict], result_paths: dict[str, Pa
             "result_sha256": sha256(result_paths[name]),
             "machine": payload.get("machine"),
             "maximum_gap_core_pairwise_relative_rms":
-                float(payload["maximum_gap_core_pairwise_relative_rms"]),
+                max(pair["relative_rms"] for pair in pairs.values()),
             "pairwise_median_projected_gap_core":
-                payload["pairwise_median_projected_gap_core"],
+                pairs,
             "engines": {engine: {key: payload["engines"][engine].get(key)
                                  for key in ("ndof", "mesh_elements", "runtime_s")}
                         for engine in ENGINES},
@@ -244,6 +252,7 @@ def analyze(manifest: dict, results: dict[str, dict], result_paths: dict[str, Pa
 
 def _parse_result(value: str) -> tuple[str, Path]:
     name, _, raw = value.partition("=")
+    name, raw = name.strip(), raw.strip()
     if not name or not raw:
         raise argparse.ArgumentTypeError("result must be NAME=PATH")
     return name.strip(), Path(raw.strip())
@@ -257,6 +266,9 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--hdiv-identity-tolerance", type=float, default=1.0e-9)
     options = parser.parse_args()
+    names = [name for name, _ in options.result]
+    if len(names) != len(set(names)):
+        parser.error("duplicate --result level name")
     manifest = json.loads(options.gap_family.read_text(encoding="utf-8"))
     result_paths = {name: path.resolve() for name, path in options.result}
     results = {name: load_level(path) for name, path in result_paths.items()}
@@ -264,8 +276,9 @@ def main() -> None:
                      hdiv_identity_tolerance=options.hdiv_identity_tolerance)
     report["gap_family"] = str(options.gap_family.resolve())
     report["gap_family_sha256"] = sha256(options.gap_family)
+    serialized = json.dumps(report, indent=2, allow_nan=False) + "\n"
     options.output.parent.mkdir(parents=True, exist_ok=True)
-    options.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    options.output.write_text(serialized, encoding="utf-8")
     print(json.dumps({"event": "gap_family_report", "passed": report["passed"],
                       "output": str(options.output)}, sort_keys=True))
     if not report["passed"]:

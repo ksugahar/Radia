@@ -1,5 +1,7 @@
 """The gap-family report: synthetic three-engine results, no solver."""
 import importlib.util
+import json
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -76,6 +78,44 @@ def test_second_order_gap_convergence_is_recovered():
         assert row["contracting"]
         assert row["observed_order"] == pytest.approx(2.0, abs=1e-6)
         assert out["distance_to_hdiv_shrinks_every_level"][engine]
+
+
+@pytest.mark.parametrize('stale', [0.0, float('nan'), float('inf')])
+def test_pairwise_summary_is_recomputed(stale):
+    manifest, results, paths = _family()
+    for payload in results.values():
+        payload['maximum_gap_core_pairwise_relative_rms'] = stale
+        payload['pairwise_median_projected_gap_core'] = {'stale': stale}
+    out = report.analyze(manifest, results, paths, hdiv_identity_tolerance=1e-9)
+    json.dumps(out, allow_nan=False)
+    for row in out['levels']:
+        assert row['maximum_gap_core_pairwise_relative_rms'] > 0
+        assert len(row['pairwise_median_projected_gap_core']) == 3
+        assert 'stale' not in row['pairwise_median_projected_gap_core']
+
+
+def test_cli_rejects_duplicate_names_before_reading_files(monkeypatch):
+    monkeypatch.setattr(sys, 'argv', ['analyze', '--gap-family', 'missing.json',
+        '--result', 'n06=a.json', '--result', 'n06=b.json', '--output', 'out.json'])
+    with pytest.raises(SystemExit) as exc:
+        report.main()
+    assert exc.value.code == 2
+
+
+def test_cli_rejects_nonfinite_report_before_writing(monkeypatch, tmp_path):
+    manifest, results, _ = _family()
+    family = tmp_path / 'family.json'
+    family.write_text(json.dumps(manifest), encoding='utf-8')
+    argv = ['analyze', '--gap-family', str(family), '--output', str(tmp_path / 'out.json')]
+    results['n06']['engines']['reduced_a']['runtime_s'] = float('nan')
+    for name, payload in results.items():
+        file = tmp_path / (name + '.json')
+        file.write_text(json.dumps(payload), encoding='utf-8')
+        argv += ['--result', name + '=' + str(file)]
+    monkeypatch.setattr(sys, 'argv', argv)
+    with pytest.raises(ValueError, match='JSON compliant'):
+        report.main()
+    assert not (tmp_path / 'out.json').exists()
 
 
 def test_hdiv_that_moves_with_the_gap_fails_the_gate():
