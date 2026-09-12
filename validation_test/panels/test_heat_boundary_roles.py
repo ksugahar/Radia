@@ -34,6 +34,21 @@ def _annulus_section_mesh(maxh=0.16):
     return Mesh(geometry.GenerateMesh(maxh=maxh))
 
 
+def _axis_touching_section_mesh(
+    maxh=0.16, *, outer_label="outer", axis_label="axis"
+):
+    from netgen.geom2d import SplineGeometry
+    from ngsolve import Mesh
+
+    geometry = SplineGeometry()
+    geometry.AddRectangle(
+        (0.0, 0.0),
+        (1.0, 1.0),
+        bcs=("bottom", outer_label, "top", axis_label),
+    )
+    return Mesh(geometry.GenerateMesh(maxh=maxh))
+
+
 def _slab_mesh(maxh=0.35):
     from netgen.occ import Box, OCCGeometry, Pnt
     from ngsolve import Mesh
@@ -136,6 +151,107 @@ def test_axisym_heat_separates_heating_and_cooling_boundaries():
     )
     assert result["T_probe_history_C"][-1] == pytest.approx(
         expected_probe, abs=0.02
+    )
+
+
+def test_axisym_heat_rejects_center_axis_as_heat_inflow_boundary():
+    mesh = _axis_touching_section_mesh(
+        outer_label="surface", axis_label="surface"
+    )
+
+    result = calc_heat_axisym.solve_heat_axisym(
+        "<in-memory-axis-touching-section>",
+        material="custom",
+        rho=1.0,
+        cp=1.0,
+        k=1.0,
+        h_conv=0.0,
+        emissivity=0.0,
+        heat_flux_boundaries="surface",
+        q_uniform=10.0,
+        dt=0.1,
+        t_end=0.1,
+        fes_order=2,
+        _wp_mesh=mesh,
+        _write_solution=False,
+    )
+
+    assert "error" in result
+    assert "--heat-flux-boundaries" in result["error"]
+    assert "natural symmetry boundary" in result["error"]
+    assert "zero-revolved-area" in result["error"]
+
+
+@pytest.mark.parametrize(
+    ("option_name", "role_args"),
+    [
+        (
+            "--convection-boundaries",
+            {"h_conv": 5.0, "convection_boundaries": "axis"},
+        ),
+        (
+            "--radiation-boundaries",
+            {"emissivity": 0.5, "radiation_boundaries": "axis"},
+        ),
+    ],
+)
+def test_axisym_heat_rejects_center_axis_for_active_exchange_roles(
+    option_name, role_args
+):
+    mesh = _axis_touching_section_mesh()
+    kwargs = {
+        "h_conv": 0.0,
+        "emissivity": 0.0,
+        **role_args,
+    }
+
+    result = calc_heat_axisym.solve_heat_axisym(
+        "<in-memory-axis-touching-section>",
+        material="custom",
+        rho=1.0,
+        cp=1.0,
+        k=1.0,
+        heat_flux_boundaries="outer",
+        q_uniform=10.0,
+        dt=0.1,
+        t_end=0.1,
+        fes_order=2,
+        _wp_mesh=mesh,
+        _write_solution=False,
+        **kwargs,
+    )
+
+    assert "error" in result
+    assert option_name in result["error"]
+    assert "natural symmetry boundary" in result["error"]
+
+
+def test_axisym_heat_outer_surface_excludes_axis_and_has_expected_power():
+    mesh = _axis_touching_section_mesh()
+
+    result = calc_heat_axisym.solve_heat_axisym(
+        "<in-memory-axis-touching-section>",
+        material="custom",
+        rho=1.0,
+        cp=1.0,
+        k=1.0,
+        h_conv=0.0,
+        emissivity=0.0,
+        heat_flux_boundaries="outer",
+        q_uniform=10.0,
+        dt=0.1,
+        t_end=0.1,
+        fes_order=2,
+        _wp_mesh=mesh,
+        _write_solution=False,
+    )
+
+    assert "error" not in result, result
+    assert result["surface_area_m2"] == pytest.approx(
+        2.0 * math.pi, rel=1.0e-10
+    )
+    assert result["q_surf_int_W"] == pytest.approx(
+        20.0 * math.pi, rel=1.0e-10
     )
 
 
