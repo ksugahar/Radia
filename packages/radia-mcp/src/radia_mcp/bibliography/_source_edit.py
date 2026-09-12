@@ -4,6 +4,7 @@ from pathlib import Path
 import tempfile
 
 from ._bibparse import parse_bib
+from ._write_lock import target_lock
 
 
 def literal_value(expression: str) -> str | None:
@@ -37,6 +38,11 @@ def read_source(path: Path):
 
 
 def write_source_edits(path: Path, original: bytes, text: str, edits: list) -> None:
+    with target_lock(path):
+        _write_source_edits_unlocked(path, original, text, edits)
+
+
+def _write_source_edits_unlocked(path: Path, original: bytes, text: str, edits: list) -> None:
     """Stage validated non-overlapping ranges; never serialize the entire database."""
     edits = sorted(edits)
     previous_end = 0

@@ -33,7 +33,7 @@ Tools (prefix ``bibliography_``):
     Tier 6 — Canonical bibliography:
         bibliography_canonical_path()
         bibliography_get_entries(keys)
-        bibliography_make_bbl(tex_path, style="", out_path=None)
+        bibliography_make_bbl(tex_path, style="", out_path=None, aux_path=None)
 """
 from . import tools as _tools
 

@@ -199,6 +199,29 @@ def bibliography_make_bbl(
     tex_path: str,
     style: str = "",
     out_path: str | None = None,
+    aux_path: str | None = None,
+) -> str:
+    """Generate canonical bbl; optional fresh compiled aux resolves macros/conditionals.
+
+    The caller owns aux freshness and must regenerate it after source changes.
+    No TeX or aux commands are executed here. Cooperating writers use an OS lock.
+    """
+    from .._write_lock import target_lock
+    destination = pathlib.Path(out_path).resolve() if out_path else pathlib.Path(tex_path).resolve().with_suffix(".bbl")
+    if not destination.parent.is_dir() or destination.suffix.casefold() != ".bbl":
+        return "Error: output requires an existing directory and .bbl suffix"
+    try:
+        with target_lock(destination):
+            return _make_bbl_unlocked(tex_path, style, out_path, aux_path)
+    except OSError as exc:
+        return f"Error: bibliography generation unavailable: {exc}"
+
+
+def _make_bbl_unlocked(
+    tex_path: str,
+    style: str = "",
+    out_path: str | None = None,
+    aux_path: str | None = None,
 ) -> str:
     """Generate one manuscript's ``.bbl`` from canonical ``references.bib``.
 
@@ -219,11 +242,22 @@ def bibliography_make_bbl(
         return f"Error: manuscript is unreadable or not valid UTF-8: {source} ({exc})"
     from ...paper_writing._tex_resolver import resolve_input_chain
 
-    resolved = resolve_input_chain(str(source))
+    compiled_style = ""
+    if aux_path:
+        from .._compiled_aux import read_compiled_aux
+        try:
+            keys, compiled_style, snapshots = read_compiled_aux(pathlib.Path(aux_path))
+            snapshots.append({"path": str(source), "sha256": hashlib.sha256(source.read_bytes()).hexdigest()})
+        except (OSError, UnicodeError, ValueError) as exc:
+            return f"Error: invalid compiled aux: {exc}"
+        resolved = {"ok": True, "merged_tex": "", "files_resolved": snapshots}
+    else:
+        resolved = resolve_input_chain(str(source))
     if not resolved.get("ok"):
         return f"Error: failed to resolve TeX inputs: {resolved.get('error')}"
     try:
-        keys = _keys_in_order(resolved["merged_tex"], include_wildcard=True)
+        if not aux_path:
+            keys = _keys_in_order(resolved["merged_tex"], include_wildcard=True)
     except ValueError as exc:
         return f"Error: unsupported citation syntax: {exc}"
     if not keys:
@@ -249,7 +283,7 @@ def bibliography_make_bbl(
 
     if not style:
         match = re.search(r"\\bibliographystyle\s*\{([^}]*)\}", _citation_text(resolved["merged_tex"]))
-        style = match.group(1).strip() if match else "IEEEtran"
+        style = compiled_style or (match.group(1).strip() if match else "IEEEtran")
     if not re.fullmatch(r"[A-Za-z0-9_.+-]+", style):
         return f"Error: unsafe BibTeX style name: {style!r}"
 
@@ -362,6 +396,7 @@ def bibliography_make_bbl(
         f"  cited {len(keys)} canonical keys; wrote {bibitem_count} bibitems; "
         f"style {style}\n"
         f"  canonical_sha256: {hashlib.sha256(canonical_bytes).hexdigest()}\n"
+        f"  citation_source: {'caller-supplied compiled aux (freshness caller-owned)' if aux_path else 'static TeX scan'}\n"
         f"  style_source: {selected_style}\n"
         f"  style_sha256: {hashlib.sha256(selected_style_bytes).hexdigest()}\n"
         + (f"  local_style_sha256: {hashlib.sha256(style_bytes).hexdigest()}\n"
