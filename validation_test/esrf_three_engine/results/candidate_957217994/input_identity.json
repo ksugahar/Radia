@@ -1,0 +1,16 @@
+{
+  "schema": "radia.validation.case6-mesh-identity.v1",
+  "identity_passed": true,
+  "numerical_acceptance": "HOLD: identity is not numerical acceptance",
+  "contract_sha256": "374d8c2579ce4bd23b45d54c04a8960b06148538dbd396b388e09f126dcf81a5",
+  "meshes": {
+    "iron": {
+      "path": "C:\\temp\\radia-ex6-diag\\assets_conforming\\model.vol",
+      "sha256": "fdd1387281e550e27eab435cfac3ec54e0b9d1339438699fdc50c852dfcafc74"
+    },
+    "fem": {
+      "path": "C:\\temp\\radia-esrf-fem\\example6\\coil_yoke_kelvin.vol",
+      "sha256": "dfc12b84f80db1fa17fb5012b6f87c072e8aa1fb3c085b61269f047a879a54ac"
+    }
+  }
+}

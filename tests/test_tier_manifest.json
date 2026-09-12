@@ -1,6 +1,8 @@
 {
   "schema": "radia.test-tier-manifest.v1",
   "impact_rules": {
+    "validation_test/esrf_three_engine/check_case6_inputs.py": ["tests/test_esrf6_mesh_identity.py"],
+    "validation_test/esrf_three_engine/case6_mesh_contract.json": ["tests/test_esrf6_mesh_identity.py"],
     "validation_test/esrf_three_engine/run_coil_yoke_three_engine.py": ["tests/test_esrf_three_engine_finite_gate.py", "tests/test_esrf_mixed_quadrature_wiring.py"],
     "validation_test/c_type_three_engine/run_three_engine.py": ["tests/test_esrf_mixed_quadrature_wiring.py"],
     "validation_test/omega_quadrature/": ["tests/test_omega_block_action_diagnostics.py"],
