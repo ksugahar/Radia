@@ -1,5 +1,6 @@
 """validate_q2_codegen.py — Verify the JSON closed-form Q2 element matrices
-agree with the high-order Gauss prototype (axifem/axifem_quad_q2.py).
+agree with the high-order Gauss prototype
+(validation_test/maglev/research_cln/axifem/axifem_quad_q2.py).
 
 Procedure:
   1. Load reference numerical values produced by codegen_q2_henrotte.py from

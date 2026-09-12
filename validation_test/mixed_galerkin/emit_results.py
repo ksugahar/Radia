@@ -47,6 +47,16 @@ CASES = [
 ]
 
 PENDING = {
+    "cylinder_bulk_tower": {
+        "script": "cylinder/03_rank_N_bulk_sweep.py",
+        "status": "HOLD",
+        "why": "Measurement interface recovered; numerical acceptance not established",
+    },
+    "cylinder_two_point_ladder": {
+        "script": "cylinder/04_two_point_ladder.py",
+        "status": "HOLD",
+        "why": "Shared WIP only; modal/reference contract requires numerical-owner review",
+    },
     "cube3d_ngsolve_ground_truth": {
         "script": "cube3d/06_ngsolve_ground_truth.py",
         "why": "NGSolve FEM solve; belongs on a quiet compute host",
