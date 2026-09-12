@@ -81,6 +81,16 @@ The formal candidate remains the release coordinator's responsibility.
 
 ## Recovery review, 2026-09-12
 
+`--algebraic-only` is an explicit short diagnostic: it still re-solves every
+requested assembly rule, records the original RHS-relative residual and the
+norm of each column-block action on each free row block, and samples the
+ESRF shared eight-point magnetic-field observable. It omits energy and embedding
+audits, records their absence, and exits 2 even when the solve succeeds. It is
+not an alternative release gate. The additional residual scale is
+`||b_i|| + sum_j ||A_ij x_j||`; this measures cancellation between block actions,
+not componentwise backward error, discretization error, or a field-error bound.
+No existing residual threshold is changed and historical JSON is unchanged.
+
 The gate now rejects nonfinite energy operands and negative residual norms.
 An infinite reference energy must not turn an invalid comparison into a pass.
 Saved results retain their original hashes and gate values; changing the

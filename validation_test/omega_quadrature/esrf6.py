@@ -18,8 +18,10 @@ def create_case(mesh_path):
     rad.UtiDelAll()
     coil, _ = model.build_radia_coil_source(6)
     center = tuple(float(v) for v in detect_kelvin_offset(mesh))
+    centres, samples = model.observation_volume_quadrature(6)
     import hashlib
     return {'mesh': mesh, 'H_s': rad.RadiaField(coil, 'h'),
+            'observation_centres': centres, 'observation_samples': samples,
             'H_ext': rad.KelvinRadiaFieldStrength(coil, center, 0.16, (0., 0., 0.)),
             'radius': 0.16, 'center': center, 'mu_r': 1000.0,
             'controls': {'case': 'esrf6', 'mu_r': 1000.0, 'radius': 0.16,
