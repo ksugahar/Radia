@@ -88,6 +88,26 @@ def test_manifest_is_emitted_only_when_start_and_end_identity_match(tmp_path):
     assert len(manifest["source_change_fingerprint_sha256"]) == 64
 
 
+def test_selected_checkout_trust_is_invocation_local(tmp_path):
+    repo, _ = _repo(tmp_path)
+    isolated_config = tmp_path / "global.gitconfig"
+    command = (
+        "$ErrorActionPreference='Stop'; "
+        f". {_quote(SCRIPT)}; "
+        "$env:GIT_TEST_ASSUME_DIFFERENT_OWNER='1'; "
+        "$env:GIT_CONFIG_NOSYSTEM='1'; "
+        f"$env:GIT_CONFIG_GLOBAL={_quote(isolated_config)}; "
+        f"$identity=Get-NativeBuildSourceIdentity -RepoRoot {_quote(repo)}; "
+        "$identity | ConvertTo-Json -Compress; "
+        f"git -C {_quote(repo)} rev-parse HEAD 2>$null; "
+        "if ($LASTEXITCODE -eq 0) { exit 7 }; exit 0"
+    )
+    result = _pwsh(command)
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert json.loads(result.stdout)["source_commit"] == _git(repo, "rev-parse", "HEAD")
+    assert not isolated_config.exists()
+
+
 def _assert_change_rejected(repo: Path, binary: Path, mutation: str) -> None:
     manifest_path = Path(f"{binary}.build.json")
     command = (

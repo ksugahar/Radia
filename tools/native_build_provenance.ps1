@@ -6,7 +6,10 @@ function Invoke-NativeProvenanceGit {
 
     Set-StrictMode -Version Latest
 
-    $output = @(& git -C $RepoRoot @Arguments 2>&1)
+    # Build.ps1 explicitly selected this checkout. Trust only that directory for
+    # this invocation; runners may retain files owned by their former account.
+    $trustedRoot = (Resolve-Path -LiteralPath $RepoRoot).ProviderPath.Replace('\', '/')
+    $output = @(& git -c "safe.directory=$trustedRoot" -C $RepoRoot @Arguments 2>&1)
     if ($LASTEXITCODE -ne 0) {
         throw "git $($Arguments -join ' ') failed in ${RepoRoot}: $($output -join [Environment]::NewLine)"
     }
