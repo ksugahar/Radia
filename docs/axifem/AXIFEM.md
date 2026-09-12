@@ -169,11 +169,11 @@ $$\tau_{\text{pair}}[k] = L_{2k+1} / R_{2k}.$$
 Two paths to the same ladder, both implemented in this repository:
 
 * **(A) Nagamine BEM-Foster pipeline** — independent reference. Mathematica
-  [`bem_disk_axisym_cauer.wls`](../../../W%3A/30_CauerLadderNetwork/2026_04_01_長方形CLN/ngsolve_validation/bem_disk_axisym_cauer.wls)
+  [`bem_disk_axisym_cauer.wls`](../../validation_test/maglev/research_cln/ngsolve_validation/bem_disk_axisym_cauer.wls)
   builds a 1920-element ring mesh with the elliptic-integral Newton kernel,
   solves the symmetric eigenproblem (top 50 modes) and computes 20 Foster
   Taylor moments `α_n`. Python
-  [`disk_bem_cauer.py`](../../../W%3A/30_CauerLadderNetwork/2026_04_01_長方形CLN/ngsolve_validation/disk_bem_cauer.py)
+  [`disk_bem_cauer.py`](../../validation_test/maglev/research_cln/ngsolve_validation/disk_bem_cauer.py)
   applies a 50-digit `mpmath` classical Cauer extraction (Foster → Taylor →
   CFE → Cauer ladder of Nagamine Fig. 5; mathematically equivalent to the
   paper's QD + equivalence-transform pipeline). Note that we do **not**
@@ -301,7 +301,8 @@ K_V = T · V⁻ᵀ · K_phi · V⁻¹ · T,    T = diag(2π r_node)
 ```
 
 with `K_phi` provided in *closed form* by the Mathematica derivation
-(`axifem/derive_quad_q2_henrotte.wls` → `q2_henrotte_generated.hpp`).
+(`validation_test/maglev/research_cln/axifem/derive_quad_q2_henrotte.wls`
+→ `q2_henrotte_generated.hpp`).
 
 ### Q2 curved quad status
 
@@ -337,9 +338,12 @@ matrices must keep the Hessian convention.
 
 ## Cross-validation references (per-element, machine precision)
 
-* `axifem/axifem_quad.py` — validated Python prototype for `p=1`, gives
-  τ₁ = 223.06 µs on the Cu disk (matches BEM v3 to 0.55 %).
-* `axifem/axifem_quad_q2.py` — Python `p=2` Gauss-8×8 prototype; agrees
+* `validation_test/maglev/research_cln/axifem/axifem_quad.py` (shipped test
+  fixture: `tests/axifem/_reference_python/axifem_quad.py`) — validated
+  Python prototype for `p=1`, gives τ₁ = 223.06 µs on the Cu disk (matches
+  BEM v3 to 0.55 %).
+* `validation_test/maglev/research_cln/axifem/axifem_quad_q2.py` — Python
+  `p=2` Gauss-8×8 prototype; agrees
   with the Mathematica closed form to ~ 3.4 × 10⁻⁸ relative.
 * `validation_test/axifem/research/validate_q2_codegen.py` — runs both at the
   per-entry level after every `derive_quad_q2_henrotte.wls` re-run.
