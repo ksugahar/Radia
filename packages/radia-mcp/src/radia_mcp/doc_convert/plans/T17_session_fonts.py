@@ -47,8 +47,18 @@ def _is_gdi_error(value):
     return int(value) in (-1, 0xFFFFFFFF)
 
 
+def _validate_face(face: str) -> str:
+    if not isinstance(face, str):
+        raise ValueError("face must be a string")
+    face = face.strip()
+    if not face or len(face) > 31 or "\x00" in face or "," in face:
+        raise ValueError("Provide one face name of 1-31 characters without NUL or comma")
+    return face
+
+
 def probe_face(face: str) -> dict:
     """Inspect one realized face; failed queries do not prove font-host damage."""
+    face = _validate_face(face)
     result = {"face": face, "ok": False, "status": "unverified"}
     hdc = font = previous = None
     cleanup_errors = []
@@ -165,8 +175,9 @@ def doc_convert_session_font_check(faces: str = "Times New Roman, Arial, Calibri
     if not isinstance(faces, str):
         raise ValueError("faces must be a comma-separated string")
     names = list(dict.fromkeys(name.strip() for name in faces.split(",") if name.strip()))
-    if not names or len(names) > 32 or any(len(name) > 31 or "\x00" in name for name in names):
-        raise ValueError("Provide 1-32 face names of 1-31 characters without NUL")
+    if not names or len(names) > 32:
+        raise ValueError("Provide 1-32 face names")
+    names = [_validate_face(name) for name in names]
     rows = [probe_face(name) for name in names]
     return {"ok": all(row["ok"] for row in rows), "faces": rows,
             "scope": "current process/session only", "repair_performed": False}
@@ -180,9 +191,10 @@ def main(argv=None) -> int:
     parser.add_argument("--crash-window", type=int)
     args = parser.parse_args(argv)
     result = doc_convert_session_font_check(args.faces)
+    result["face_ok"] = result["ok"]
     if args.crash_window is not None:
         result["crash"] = fontdrvhost_crashed_within(args.crash_window)
-        if result["crash"]["status"] == "unverified":
+        if result["crash"]["status"] != "observed" or result["crash"]["crashed"] is not False:
             result["ok"] = False
     print(json.dumps(result, ensure_ascii=False))
     return 0 if result["ok"] else 1
