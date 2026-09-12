@@ -28,6 +28,10 @@ arguments
     options.Save (1,1) logical = true
 end
 
+if ismember(options.Sampler,["gp","qmc"])
+    error("radia:simulink:OptunaPythonSampler", ...
+        "GP and scrambled QMC use Python per trial. Use them in a batch study.");
+end
 [rootName, parentPath] = normalizeParent(parent);
 radia.simulink.makeOptunaMonitorBusObject();
 if ~bdIsLoaded(rootName)
@@ -140,7 +144,7 @@ mask.addParameter(Type="checkbox", Name="live_visualization", ...
     Prompt="External MATLAB monitor", Value=liveValue);
 mask.addParameter(Type="popup", Name="sampler_name", Prompt="Sampler", ...
     TypeOptions={"auto","random","tpe","cmaes","nsgaii", ...
-    "gp","nsgaiii","bruteforce","qmc"}, Value=options.Sampler);
+    "nsgaiii","bruteforce"}, Value=options.Sampler);
 mask.addParameter(Type="edit", Name="seed", ...
     Prompt="Sampler seed ([] = fresh)", Value=seedExpression, ...
     Evaluate="on");
