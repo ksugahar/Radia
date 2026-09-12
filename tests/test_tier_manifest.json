@@ -1,6 +1,7 @@
 {
   "schema": "radia.test-tier-manifest.v1",
   "impact_rules": {
+    "validation_test/feec/check_wedge_charge_pullback.py": ["tests/test_wedge_charge_pullback_contract.py"],
     "src/matlab/radia_mex.cpp": ["tests/test_sparsesolv_matlab_contract.py"],
     "matlab/+radia/+sparsesolv/": ["tests/test_sparsesolv_matlab_contract.py"],
     "matlab/python_api_parity_manifest.json": ["tests/test_sparsesolv_matlab_contract.py", "tests/test_matlab_python_parity_manifest.py"],
