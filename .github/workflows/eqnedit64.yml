@@ -34,9 +34,14 @@ on:
         description: 'Bounded 2x2 private-font probe with three fresh-VM replicates'
         type: boolean
         default: false
+      font_prefix:
+        description: 'Same-binary model prefixes 0,3,5,6,8,10 with two fresh-VM trials'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: eqnedit64-${{ github.ref }}
@@ -44,7 +49,7 @@ concurrency:
 
 jobs:
   web:
-    if: ${{ inputs.font_diagnostic != true && inputs.font_dump != true && inputs.font_probe != true }}
+    if: ${{ inputs.font_diagnostic != true && inputs.font_dump != true && inputs.font_probe != true && inputs.font_prefix != true }}
     # The browser edition is pure JavaScript plus a string-contract test, so it
     # answers in seconds on a free runner instead of waiting for the Windows
     # native build.  This is a fast-feedback lane, not a replacement: the
@@ -91,7 +96,7 @@ jobs:
           node tests/test_palette_browser.cjs
 
   build-test:
-    if: ${{ inputs.font_diagnostic != true && inputs.font_dump != true && inputs.font_probe != true }}
+    if: ${{ inputs.font_diagnostic != true && inputs.font_dump != true && inputs.font_probe != true && inputs.font_prefix != true }}
     # Font registration tests run only in this disposable GitHub-hosted
     # session. They must not churn the interactive laboratory desktop's font
     # cache or disturb applications such as LINE and Office.
@@ -267,7 +272,7 @@ jobs:
           if-no-files-found: warn
 
   font-boundary-diagnostic:
-    if: ${{ inputs.font_diagnostic == true && inputs.font_dump != true && inputs.font_probe != true }}
+    if: ${{ inputs.font_diagnostic == true && inputs.font_dump != true && inputs.font_probe != true && inputs.font_prefix != true }}
     runs-on: windows-2022
     timeout-minutes: 15
     strategy:
@@ -309,7 +314,7 @@ jobs:
           if-no-files-found: warn
 
   font-dump-build:
-    if: ${{ inputs.font_dump == true && inputs.font_probe != true }}
+    if: ${{ inputs.font_dump == true && inputs.font_probe != true && inputs.font_prefix != true }}
     runs-on: windows-2022
     timeout-minutes: 15
     defaults:
@@ -347,7 +352,7 @@ jobs:
 
   font-dump-trial:
     needs: font-dump-build
-    if: ${{ inputs.font_dump == true && inputs.font_probe != true }}
+    if: ${{ inputs.font_dump == true && inputs.font_probe != true && inputs.font_prefix != true }}
     runs-on: windows-2022
     timeout-minutes: 15
     strategy:
@@ -416,7 +421,7 @@ jobs:
           if-no-files-found: warn
 
   font-probe-build:
-    if: ${{ inputs.font_probe == true }}
+    if: ${{ inputs.font_probe == true && inputs.font_prefix != true }}
     runs-on: windows-2022
     timeout-minutes: 10
     defaults:
@@ -449,7 +454,7 @@ jobs:
 
   font-probe-trial:
     needs: font-probe-build
-    if: ${{ inputs.font_probe == true }}
+    if: ${{ inputs.font_probe == true && inputs.font_prefix != true }}
     runs-on: windows-2022
     timeout-minutes: 10
     strategy:
@@ -513,6 +518,80 @@ jobs:
         if: always()
         with:
           name: encrypted-probe-${{ matrix.release }}-${{ matrix.measurement }}-${{ matrix.replicate }}
+          retention-days: 1
+          path: ${{ runner.temp }}/encrypted-font-dumps/
+          if-no-files-found: warn
+
+  font-prefix-trial:
+    if: ${{ inputs.font_prefix == true }}
+    runs-on: windows-2022
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        prefix: [0, 3, 5, 6, 8, 10]
+        replicate: [1, 2]
+    env:
+      EQNEDIT64_ISOLATED_TEST_SESSION: '1'
+      FONT_DUMP_PUBLIC_KEY: ${{ inputs.font_dump_public_key }}
+      EQNEDIT64_PAYLOAD_SOURCE_SHA: cfba80a51ae3d77fb427838bd1ef88ef3f7a9d84
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: tools/eqnedit64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: font-dump-binaries
+          run-id: 34661533840
+          github-token: ${{ github.token }}
+          path: tools/eqnedit64
+      - name: Verify original reproducing payload
+        run: |
+          if (-not $env:FONT_DUMP_PUBLIC_KEY) { throw 'Encryption key required.' }
+          python -m pip install cryptography
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $manifest = Get-Content font-binary-manifest.json -Raw | ConvertFrom-Json
+          if ($manifest.source_sha -ne $env:EQNEDIT64_PAYLOAD_SOURCE_SHA) { throw 'Payload source mismatch.' }
+          $expected = @{
+            'build_cmake/Release/Eqnedit64.exe'='46E9DAEAB910D83BDF2B341BB8ED8D542BBAFC072249ABCD7EE87A9CBEBD350E'
+            'build/eqnedit_core.cp312-win_amd64.pyd'='9D2BBF4E50FF9643E1E495FD8E3A2A4BD257A9C2A4B549759617B810A4D112CE'
+          }
+          if ($manifest.files.Count -ne 2) { throw 'Unexpected payload manifest.' }
+          foreach ($file in $manifest.files) {
+            if ($expected[$file.path] -ne $file.sha256 -or (Get-FileHash $file.path -Algorithm SHA256).Hash -ne $file.sha256) { throw 'Payload identity mismatch.' }
+          }
+      - name: Configure isolated dump collection
+        run: >-
+          pwsh -NoProfile -File build/enable_isolated_font_dumps.ps1
+          -DumpDirectory '${{ runner.temp }}/font-dumps'
+      - name: Observe one prefix then self-test
+        run: >-
+          pwsh -NoProfile -File build/diagnose_font_boundary.ps1 -Arm model-self
+          -ModelPrefix ${{ matrix.prefix }} -OutputDirectory '${{ runner.temp }}/font-prefix'
+      - name: Bounded dump completion
+        if: always()
+        run: Start-Sleep -Seconds 15
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: font-prefix-${{ matrix.prefix }}-${{ matrix.replicate }}
+          path: ${{ runner.temp }}/font-prefix/
+          if-no-files-found: warn
+      - name: Encrypt private evidence
+        if: always()
+        run: >-
+          python build/font_dump_crypto.py encrypt --path '${{ runner.temp }}/font-dumps'
+          --output '${{ runner.temp }}/encrypted-font-dumps/evidence.enc'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: encrypted-prefix-${{ matrix.prefix }}-${{ matrix.replicate }}
           retention-days: 1
           path: ${{ runner.temp }}/encrypted-font-dumps/
           if-no-files-found: warn
