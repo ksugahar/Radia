@@ -110,6 +110,7 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 ### MATLAB And Simulink
 
 - Use MathWorks' official MATLAB MCP Server and Simulink Agentic Toolkit.
+  The official MCP Server remains the standard MATLAB operation foundation.
   LAB/100 track compatible stable releases: record versions before release,
   review upgrade notes and regression-test affected Radia composition contracts.
   Use the official MATLAB Engine for Python when available and appropriate,
@@ -156,6 +157,8 @@ solver boundary is a checked `.vol` regardless of the creation route.
   Radia solver/application/validation/CI lanes must not launch it or duplicate those tests.
 - Prefer Cubit APREPRO/Python batch for production/validation CAD and meshes;
   consider Sculpt for suitable HEX domains; build123d/Netgen alternatives must be explicit.
+- Radia normally reads checked `.vol` files. Generation uses APREPRO or Cubit's Python API
+  in batch/headless mode with `cubit-mesh-export` owning export; CI remains fixture-only.
 - `radia-mcp.cubit` supports human-AI collaboration through the `cubit-mesh-export` GUI;
   it does not authorize solver-side GUI launch or interruption of human-owned sessions.
 - Every solver-bound `.vol` passes `check-vol` with its versioned label
@@ -292,8 +295,5 @@ unless the user explicitly assigns that work to Claude for the specific task.
 
 ## Detailed Guidance
 
-Use focused skills and `packages/radia-mcp/src/radia_mcp/**/knowledge/` for
-operational detail. In particular see `release-quad`, `simulink-app-health`,
-`verify-deploy`, `gmsh-verify`, and `api-inventory`. If detailed guidance
-conflicts with this file, update the stale detail and its focused regression.
+Use focused skills and `packages/radia-mcp/src/radia_mcp/**/knowledge/` for detail; correct policy conflicts there with a focused regression.
 Do not expand this file into a second manual.
