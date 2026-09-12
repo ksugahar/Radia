@@ -50,6 +50,16 @@ def test_case_contract_builds_expected_sparse_tensors():
     assert f3[2, 3, 0, 0, 0] == pytest.approx(-0.7)
 
 
+def test_fast_ci_declares_numpy_for_array_contracts():
+    import yaml
+
+    workflow = yaml.safe_load((ROOT / ".github/workflows/radia-fast.yml").read_text())
+    steps = workflow["jobs"]["fast-contracts"]["steps"]
+    setup = next(step for step in steps if step.get("name") == "Create isolated fast-CI environment")
+    install = next(line for line in setup["run"].splitlines() if "pip install" in line)
+    assert "numpy" in install.split()
+
+
 def test_pybind_lane_fails_loudly_without_matching_source_artifact(tmp_path):
     with pytest.raises(RuntimeError, match="installed-wheel fallback is forbidden"):
         MODULE._load_source_backend(tmp_path)
