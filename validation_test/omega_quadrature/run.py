@@ -7,6 +7,7 @@ This diagnostic lane never grants three-engine field acceptance.
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import importlib.metadata
 import importlib.util
@@ -97,6 +98,8 @@ def main():
     parser.add_argument('--orders', nargs='+', type=int, choices=(1, 2, 3), default=[1, 2, 3])
     parser.add_argument('--bonuses', nargs='+', type=int, default=[4, 8, 12])
     parser.add_argument('--evaluation-order', type=int, default=16)
+    parser.add_argument('--evaluation-orders', nargs='+', type=int,
+                        help='audit several integration rules on each frozen re-solved state')
     parser.add_argument('--source-order', type=int, default=3)
     parser.add_argument('--threads', type=int, default=4)
     parser.add_argument('--algebraic-only', action='store_true',
@@ -106,6 +109,8 @@ def main():
     args = parser.parse_args()
     if min(args.bonuses) < 0 or args.evaluation_order < 1:
         parser.error('quadrature orders must be nonnegative (evaluation >= 1)')
+    if args.evaluation_orders and (min(args.evaluation_orders) < 1 or args.algebraic_only):
+        parser.error('evaluation-orders must be positive and require the energy audit')
     if args.mode == 'wheel' and args.research_solver:
         parser.error('wheel mode forbids Python solver overrides')
     runtime = check_runtime(args.mode)
@@ -169,13 +174,27 @@ def main():
                     print('algebraic diagnostic', bonus, order, actions, flush=True)
                     del result
                     continue
-                audit_energy(result, mesh, h_s, h_ext, source['harmonic_field'], bonus, args.evaluation_order)
                 rows.append({'order': order, 'bonus': bonus, 'solve_s': solve_s,
                              'total_s': time.perf_counter()-start, 'ndof': result['fes'].ndof,
                              'linear_residual': result['linear_residual'],
                              'block_action_residual': actions, 'field_observations': observations,
                              'residual_correction': correction,
-                             'energy': result['assembled_energy'], 'gates': gates(result)})
+                             'evaluation_audits': [],
+                             'gates': {'energy_audit_completed': False}})
+                save()
+                for evaluation_order in sorted(set(args.evaluation_orders or [args.evaluation_order])):
+                    audit_energy(result, mesh, h_s, h_ext, source['harmonic_field'], bonus, evaluation_order)
+                    rows[-1]['evaluation_audits'].append({
+                        'evaluation_order': evaluation_order,
+                        'energy': copy.deepcopy(result['assembled_energy']),
+                        'gates': gates(result)})
+                    rows[-1]['total_s'] = time.perf_counter() - start
+                    save()
+                rows[-1]['energy'] = copy.deepcopy(result['assembled_energy'])
+                checks = rows[-1]['evaluation_audits']
+                rows[-1]['gates'] = {
+                    name: all(audit['gates'][name] for audit in checks)
+                    for name in checks[0]['gates']}
                 results[order] = result
                 save()
                 print('solved', bonus, order, rows[-1]['gates'], flush=True)

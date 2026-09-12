@@ -115,8 +115,10 @@ def test_shared_volume_average_and_nonfinite_field():
         observe({'B_cf': lambda point: (1, np.nan, 3)}, lambda *point: point, case)
 
 
-def test_algebraic_cli_preserves_hold_and_never_runs_energy_audit(tmp_path, monkeypatch):
+@pytest.mark.parametrize('energy_sweep', [False, True])
+def test_algebraic_cli_preserves_hold_and_never_runs_energy_audit(tmp_path, monkeypatch, energy_sweep):
     import argparse
+    import copy
     from contextlib import nullcontext
     import json
     import platform
@@ -127,6 +129,7 @@ def test_algebraic_cli_preserves_hold_and_never_runs_energy_audit(tmp_path, monk
     tree = ast.parse(path.read_text(encoding='utf-8'))
     main_node = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'main')
     calls = []
+    audits = []
     solver = SimpleNamespace(
         project_source_total_hodge=lambda *a, **kw: {
             'potential': 0, 'harmonic_field': 0, 'relative_harmonic_norm': 0},
@@ -137,26 +140,39 @@ def test_algebraic_cli_preserves_hold_and_never_runs_energy_audit(tmp_path, monk
     def forbidden(*args, **kwargs):
         raise AssertionError('algebraic mode must not run an energy or embedding audit')
 
-    namespace = dict(argparse=argparse, Path=Path, json=json, platform=platform, time=time,
+    def audit_energy(result, *args):
+        audits.append(args[-1])
+        result.setdefault('assembled_energy', {})['fixed_rule_order'] = args[-1]
+
+    namespace = dict(argparse=argparse, copy=copy, Path=Path, json=json, platform=platform, time=time,
                      check_runtime=lambda mode: {'mode': mode},
                      identity=lambda *a: {'source': 'fixed'}, digest=lambda p: 'hash',
                      load_module=lambda p, name: solver if 'solver' in name else SimpleNamespace(create_case=lambda p: case),
                      ng=SimpleNamespace(SetNumThreads=lambda n: None, TaskManager=nullcontext),
                      block_action_residual=lambda r: {'acceptance_evidence': False},
-                     field_observations=lambda *a: None, audit_energy=forbidden,
-                     constraint_violation=forbidden)
+                     field_observations=lambda *a: None,
+                     audit_energy=audit_energy if energy_sweep else forbidden,
+                     gates=lambda result: {'synthetic_identity': True},
+                     constraint_violation=(lambda *a: {}) if energy_sweep else forbidden)
     exec(compile(ast.Module(body=[main_node], type_ignores=[]), str(path), 'exec'), namespace)
     output = tmp_path / 'result.json'
-    monkeypatch.setattr(sys, 'argv', ['run.py', '--mode', 'research', '--research-solver', 'solver.py',
+    args = ['run.py', '--mode', 'research', '--research-solver', 'solver.py',
                                     '--factory', 'factory.py', '--mesh', 'mesh.vol', '--output', str(output),
-                                    '--orders', '1', '--bonuses', '4', '--algebraic-only'])
-    assert namespace['main']() == 2
+                                    '--orders', '1', '--bonuses', '4']
+    args += ['--evaluation-orders', '16', '22', '28'] if energy_sweep else ['--algebraic-only']
+    monkeypatch.setattr(sys, 'argv', args)
+    assert namespace['main']() == (0 if energy_sweep else 2)
     report = json.loads(output.read_text())
     assert len(calls) == 1 and calls[0]['return_system'] is True
     assert report['completed'] and report['acceptance'].startswith('HOLD:')
-    assert report['nesting'] == []
     row = report['rows'][0]
     assert row['linear_residual'] == {'raw': 'retained'}
+    if energy_sweep:
+        assert audits == [16, 22, 28]
+        assert [a['energy']['fixed_rule_order'] for a in row['evaluation_audits']] == audits
+        assert row['gates'] == {'synthetic_identity': True}
+        return
+    assert report['nesting'] == []
     assert row['gates'] == {'energy_audit_completed': False, 'three_engine_acceptance': False}
     assert 'energy' not in row
 
