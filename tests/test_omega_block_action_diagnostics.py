@@ -100,3 +100,49 @@ def test_shared_volume_average_and_nonfinite_field():
     assert value['acceptance_evidence'] is False
     with pytest.raises(ValueError, match='invalid magnetic'):
         observe({'B_cf': lambda point: (1, np.nan, 3)}, lambda *point: point, case)
+
+
+def test_algebraic_cli_preserves_hold_and_never_runs_energy_audit(tmp_path, monkeypatch):
+    import argparse
+    from contextlib import nullcontext
+    import json
+    import platform
+    import sys
+    import time
+
+    path = Path(__file__).resolve().parents[1] / 'validation_test/omega_quadrature/run.py'
+    tree = ast.parse(path.read_text(encoding='utf-8'))
+    main_node = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'main')
+    calls = []
+    solver = SimpleNamespace(
+        project_source_total_hodge=lambda *a, **kw: {
+            'potential': 0, 'harmonic_field': 0, 'relative_harmonic_norm': 0},
+        solve_magnetostatic_mixed_total_reduced_omega_kelvin=lambda *a, **kw: (
+            calls.append(kw) or {'fes': SimpleNamespace(ndof=3), 'linear_residual': {'raw': 'retained'}}))
+    case = dict(mesh=SimpleNamespace(ne=1), H_s=0, H_ext=0, controls={}, radius=1, center=(0, 0, 0), mu_r=1)
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError('algebraic mode must not run an energy or embedding audit')
+
+    namespace = dict(argparse=argparse, Path=Path, json=json, platform=platform, time=time,
+                     check_runtime=lambda mode: {'mode': mode},
+                     identity=lambda *a: {'source': 'fixed'}, digest=lambda p: 'hash',
+                     load_module=lambda p, name: solver if 'solver' in name else SimpleNamespace(create_case=lambda p: case),
+                     ng=SimpleNamespace(SetNumThreads=lambda n: None, TaskManager=nullcontext),
+                     block_action_residual=lambda r: {'acceptance_evidence': False},
+                     field_observations=lambda *a: None, audit_energy=forbidden,
+                     constraint_violation=forbidden)
+    exec(compile(ast.Module(body=[main_node], type_ignores=[]), str(path), 'exec'), namespace)
+    output = tmp_path / 'result.json'
+    monkeypatch.setattr(sys, 'argv', ['run.py', '--mode', 'research', '--research-solver', 'solver.py',
+                                    '--factory', 'factory.py', '--mesh', 'mesh.vol', '--output', str(output),
+                                    '--orders', '1', '--bonuses', '4', '--algebraic-only'])
+    assert namespace['main']() == 2
+    report = json.loads(output.read_text())
+    assert len(calls) == 1 and calls[0]['return_system'] is True
+    assert report['completed'] and report['acceptance'].startswith('HOLD:')
+    assert report['nesting'] == []
+    row = report['rows'][0]
+    assert row['linear_residual'] == {'raw': 'retained'}
+    assert row['gates'] == {'energy_audit_completed': False, 'three_engine_acceptance': False}
+    assert 'energy' not in row
