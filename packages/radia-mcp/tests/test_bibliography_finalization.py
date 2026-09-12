@@ -7,7 +7,7 @@ import pytest
 
 from radia_mcp.bibliography._compiled_aux import read_compiled_aux
 from radia_mcp.bibliography._write_lock import target_lock
-from radia_mcp.bibliography import _source_edit
+from radia_mcp.bibliography import _source_edit, _write_lock
 
 
 def test_aux_resolves_compiled_citation_order_and_nested_inputs(tmp_path):
@@ -60,14 +60,17 @@ def test_bbl_uses_compiled_decisions_instead_of_static_macros(tmp_path, monkeypa
 
 def test_lock_excludes_another_process_and_releases_on_exception(tmp_path):
     path = tmp_path / "target.bib"
-    code = ("from pathlib import Path; from radia_mcp.bibliography._write_lock import target_lock; "
+    code = ("from pathlib import Path; import runpy,sys; "
+            "target_lock=runpy.run_path(sys.argv[2])['target_lock']; "
             "ctx=target_lock(Path(__import__('sys').argv[1])); ctx.__enter__(); ctx.__exit__(None,None,None)")
+    # Test this exact implementation, not editable-package startup over SMB.
+    command = [sys.executable, "-S", "-c", code, str(path), _write_lock.__file__]
     with pytest.raises(RuntimeError):
         with target_lock(path):
-            result = subprocess.run([sys.executable, "-c", code, str(path)], capture_output=True, timeout=20)
+            result = subprocess.run(command, capture_output=True, timeout=20)
             assert result.returncode != 0 and b"target busy" in result.stderr
             raise RuntimeError("operation failed")
-    result = subprocess.run([sys.executable, "-c", code, str(path)], capture_output=True, timeout=20)
+    result = subprocess.run(command, capture_output=True, timeout=20)
     assert result.returncode == 0, result.stderr
     assert path.with_name(".target.bib.radia-write-lock").exists()
 
