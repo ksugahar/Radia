@@ -176,7 +176,9 @@ class AsyncRunner:
                         self._progress.message = "Completed successfully."
                         self._progress.result = result
                     self._progress.end_time = datetime.now()
-            except Exception as e:
+            except BaseException as e:
+                # A target's SystemExit/KeyboardInterrupt only ends this worker,
+                # not the process. Preserve a terminal state for every exit.
                 with self._lock:
                     self._progress.status = RunStatus.FAILED
                     self._progress.error = str(e)
