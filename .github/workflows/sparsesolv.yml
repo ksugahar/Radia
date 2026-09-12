@@ -6,6 +6,9 @@ on:
     paths:
       - 'src/ext/sparsesolv/**'
       - 'src/matlab/radia_mex.cpp'
+      - 'matlab/+radia/+internal/callMex.m'
+      - 'matlab/+radia/setup.m'
+      - 'tests/matlab/test_mex_runtime_setup.m'
       - 'matlab/+radia/+sparsesolv/**'
       - 'matlab/+radia/+python/sparsesolv.m'
       - 'matlab/+radia/+python/electromagnetValidation.m'
@@ -20,6 +23,7 @@ on:
       - 'pyproject.toml'
       - 'tests/test_tier_manifest.json'
       - 'tools/run_test_tier.py'
+      - 'tools/sparsesolv_ci_impact.py'
       - 'tests/test_sparsesolv_ci_contract.py'
       - '.github/workflows/sparsesolv.yml'
   push:
@@ -27,6 +31,9 @@ on:
     paths:
       - 'src/ext/sparsesolv/**'
       - 'src/matlab/radia_mex.cpp'
+      - 'matlab/+radia/+internal/callMex.m'
+      - 'matlab/+radia/setup.m'
+      - 'tests/matlab/test_mex_runtime_setup.m'
       - 'matlab/+radia/+sparsesolv/**'
       - 'matlab/+radia/+python/sparsesolv.m'
       - 'matlab/+radia/+python/electromagnetValidation.m'
@@ -41,6 +48,7 @@ on:
       - 'pyproject.toml'
       - 'tests/test_tier_manifest.json'
       - 'tools/run_test_tier.py'
+      - 'tools/sparsesolv_ci_impact.py'
       - 'tests/test_sparsesolv_ci_contract.py'
       - '.github/workflows/sparsesolv.yml'
   workflow_dispatch:
@@ -62,6 +70,13 @@ jobs:
         with:
           fetch-depth: 2
 
+      - name: Select native AMS impact
+        id: native-impact
+        shell: pwsh
+        run: |
+          python tools/sparsesolv_ci_impact.py
+          exit $LASTEXITCODE
+
       - name: Select MATLAB parity impact
         id: matlab-impact
         shell: pwsh
@@ -78,11 +93,13 @@ jobs:
           $required = $diffFailed -or '${{ github.event_name }}' -eq 'workflow_dispatch'
           $required = $required -or [bool]($changed -match '^(src/ext/sparsesolv/|src/matlab/|matlab/\+radia/\+sparsesolv/|tests/matlab/.*sparsesolv|validation_test/ngsolve_matlab_parity/run_sparsesolv|CMakeLists.txt|Build.ps1|\.github/workflows/sparsesolv.yml)')
           $required = $required -or [bool]($changed -match '^matlab/(python_api_parity_manifest.json|\+radia/\+python/(sparsesolv|electromagnetValidation|esrfExamples|staticElectromagnet)\.m)')
+          $required = $required -or [bool]($changed -match '^(matlab/\+radia/(setup\.m|\+internal/callMex\.m)|tests/matlab/test_mex_runtime_setup\.m)$')
           "required=$($required.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
           Write-Host "MATLAB parity required=$required; diff_failed=$diffFailed; changed_files=$($changed.Count)"
           exit 0
 
       - name: Create isolated native environment
+        if: steps.native-impact.outputs.required == 'true'
         shell: pwsh
         run: |
           $venv = Join-Path $env:RUNNER_TEMP "sparsesolv-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
@@ -97,6 +114,7 @@ jobs:
           (Join-Path $venv 'Scripts') | Out-File $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Build current package and SparseSolv
+        if: steps.native-impact.outputs.required == 'true'
         shell: pwsh
         run: |
           # The package facade requires _radia_pybind; never borrow a developer binary.
@@ -110,6 +128,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Verify source provenance and run required AMS tests
+        if: steps.native-impact.outputs.required == 'true'
         shell: pwsh
         env:
           PYTHONPATH: '${{ github.workspace }}\src'
@@ -120,7 +139,7 @@ jobs:
           exit $LASTEXITCODE
 
       - name: Build and verify native MATLAB parity
-        if: steps.matlab-impact.outputs.required == 'true'
+        if: steps.native-impact.outputs.required == 'true' && steps.matlab-impact.outputs.required == 'true'
         shell: pwsh
         env:
           PYTHONPATH: '${{ github.workspace }}\src'
@@ -135,7 +154,7 @@ jobs:
           exit $LASTEXITCODE
 
       - name: Upload solver test results
-        if: always()
+        if: always() && steps.native-impact.outputs.required == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: sparsesolv-results

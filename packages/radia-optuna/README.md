@@ -79,6 +79,14 @@ without rewiring the model. The complete six-input/eighteen-output
 advanced interface. `radia.simulink.addOptunaMonitor` remains available where
 wired Scope/XY telemetry is genuinely useful.
 
+Both block interfaces require MATLAB/MEX sampling at step time. Their `auto`
+route uses TPE for small fixed-numeric budgets where batch routing selects GP.
+Explicit GP and scrambled QMC (the short-name `qmc` route) are rejected, including
+legacy blocks and resumed GP/QMC studies: they call Python per trial. Use those
+samplers in a batch study instead. The block does not silently substitute
+unscrambled QMC or the non-oracle MATLAB GP backend. User objective callbacks
+remain responsible for obeying the same step-time boundary.
+
 `radia_optuna_teaching.slx` and
 `radia.simulink.buildOptunaTeachingModel` provide known-optimum, Pareto, and
 pruned/failed student exercises. See
