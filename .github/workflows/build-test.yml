@@ -537,6 +537,7 @@ jobs:
           name: radia-pyd
           path: |
             src/radia/*.pyd
+            src/radia/*.pyd.build.json
             src/radia/*.dll
             src/radia/*.so
             src/radia/*.dylib
