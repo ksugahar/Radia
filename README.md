@@ -388,6 +388,10 @@ callable native MEX functions. Checked `uint64` handles own meshes, spaces,
 coefficient and grid functions, forms, vectors, matrices, and repeated native
 state without exposing raw pointers.
 
+MathWorks' official MATLAB MCP Server and Simulink Agentic Toolkit own generic
+MATLAB/Simulink operations. Radia follows their compatible stable interfaces and
+adds CAE-domain MEX, artifact, and workflow contracts above that foundation.
+
 The standalone MEX ABI is both a user surface and a debugging boundary. It is
 tested independently for numerical parity, error propagation, lifecycle, and
 performance before a Simulink block depends on it. MATLAB wrappers use an
@@ -500,7 +504,7 @@ explicit configuration.
 | NGSolve / Netgen | 6.2.2606 |
 | MATLAB / Simulink package | R2026a, Windows x64 |
 | Coreform Cubit | 2025.12, optional |
-| Native build | Visual Studio 2022, CMake/Ninja, Intel MKL |
+| Native build | Visual Studio 2022, CMake/Ninja, pip `mkl-devel` oneMKL |
 
 ### Python packages
 
@@ -519,8 +523,8 @@ integration ships inside `radia`; its extra only adds schemdraw support.
 | `radia[ltspice]` | `python -m pip install "radia[ltspice]"` | Radia plus schemdraw support for built-in SPICE/LTspice conversion and circuit coupling |
 
 The separately verified `radia-optuna` wheel is also emitted as a CI artifact.
-Its first PyPI release requires registration of the repository's trusted
-publisher and a matching `radia-optuna-v<version>` tag.
+Release-quad validates that exact candidate on four hosts; the dedicated release
+workflow publishes the verified artifact without rebuilding it.
 
 Pin release versions together when reproducing a validated deployment. Release
 notes and immutable native/Simulink assets are published on the
