@@ -500,12 +500,17 @@ PATTERNS: list[dict] = [
                       ".pth pointer with a regular install.  Easy "
                       "trap when Phase 8 deploy commands accidentally "
                       "run on LAB.",
-        "detection": "tools/release_quad.py done's LAB-editable "
-                     "gate (POLICY 2026-05-27).",
-        "prevention": "Phase 8 deploy commands keep LAB + 100号機 editable, "
-                      "deploy hibino from PyPI, and leave mdx to phase8e.  "
-                      "After any release, run `python tools/release_quad.py done` and "
-                      "fix any DRIFT it reports.",
+        "detection": "tools/release_quad.py verify-editable / done compare each "
+                     "package with the recorded editable intent "
+                     "(tools/editable_intent.py); an unrecorded pointer is "
+                     "UNVERIFIED, not drift.",
+        "prevention": "Phase 8 deploy commands keep LAB + 100号機 editable and "
+                      "record the installed source as intent; deploy hibino from "
+                      "PyPI and leave mdx to phase8e.  A pointer that differs from "
+                      "the record is moved only by an explicit `release_quad "
+                      "repoint --package ... --source ... --reason ...` (no "
+                      "uninstall-first, no process stop, no canonical default; "
+                      "policy P02, 2026-09-11).",
         "related": ["memory/project_ci_radia_mcp_editable_drift_fix.md",
                     "tools/release_quad.py: cmd_done"],
     },
