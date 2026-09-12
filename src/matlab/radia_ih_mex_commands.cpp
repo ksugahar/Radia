@@ -339,8 +339,8 @@ void erase(Registry<T>& registry, std::uint64_t handle, const char* message) {
     }
     if (!erased) throw std::invalid_argument(message);
 
-    // mexUnlock may synchronously invoke CleanupIHHandles. Keep it outside
-    // the registry critical section so the exit handler cannot deadlock.
+    // Keep MATLAB API calls outside the registry critical section; cleanup
+    // timing must not be part of this mutex's locking contract.
     mexUnlock();
 }
 

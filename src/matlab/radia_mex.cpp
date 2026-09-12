@@ -854,8 +854,8 @@ void DestroyRegistered(Registry& registry, std::uint64_t handle,
     if (!erased)
         BadArgument(stale_handle_message);
 
-    // The final unlock may synchronously invoke the registered exit handler.
-    // Never call it while registry_mutex is held.
+    // Keep MATLAB API calls outside the registry critical section; cleanup
+    // timing must not be part of this mutex's locking contract.
     mexUnlock();
 }
 
@@ -1638,6 +1638,7 @@ mxArray* Commands() {
         "hacapk.charge_gram.configured_linear_material_element_blocks",
         "hacapk.charge_gram.configured_linear_material_candidate_clusters",
         "hacapk.charge_gram.reduce_configured_candidate_schur",
+        "hacapk.charge_gram.reduce_configured_candidate_directional_schur",
         "hacapk.charge_gram.solve_configured_linear_material",
         "hacapk.charge_gram.solve_configured_linear_material_auto_prec",
         "hacapk.charge_gram.solve_configured_linear_material_auto_prec_many",
@@ -10030,6 +10031,75 @@ void ChargeGramReduceConfiguredCandidateSchur(
                mxCreateDoubleScalar(reduced.contraction_s));
 }
 
+void ChargeGramReduceConfiguredCandidateDirectionalSchur(
+    int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
+    CheckArity(nrhs, 14, nlhs, 1,
+        "result = radia_mex('hacapk.charge_gram."
+        "reduce_configured_candidate_directional_schur', handle, inv_chi, "
+        "candidate_dofs, block_offsets, directions, rhs, state, "
+        "response_matrix, adjoints, tol, maxit, solve_batch_size, mass_riesz)");
+    ChargeGramHandle& holder = ChargeGram(Handle(prhs[1]));
+    const double inv_chi = Scalar(prhs[2], "inv_chi");
+    auto candidate_dofs = IntegerVector(prhs[3], "candidate_dofs");
+    auto block_offsets = IntegerVector(prhs[4], "block_offsets");
+    auto directions = RealVector(prhs[5], "directions");
+    auto rhs = RealVector(prhs[6], "rhs");
+    auto state = RealVector(prhs[7], "state");
+    std::size_t n_response = 0, response_cols = 0;
+    auto response = RealMatrix(
+        prhs[8], n_response, response_cols, "response_matrix");
+    std::size_t adjoint_rows = 0, adjoint_cols = 0;
+    auto adjoints = RealMatrix(
+        prhs[9], adjoint_rows, adjoint_cols, "adjoints");
+    const int n_face = holder.manager->ConfiguredNFace();
+    if (n_response == 0 || response_cols != static_cast<std::size_t>(n_face) ||
+        adjoint_rows != n_response || adjoint_cols != response_cols)
+        BadArgument(
+            "response_matrix and adjoints must share shape n_response-by-configured_n_face");
+    if (n_response >
+        static_cast<std::size_t>(std::numeric_limits<int>::max()))
+        BadArgument("the response count exceeds the native integer range");
+    const double tol = Scalar(prhs[10], "tol");
+    const int maxit = PositiveInteger(prhs[11], "maxit");
+    const int solve_batch_size = PositiveInteger(prhs[12], "solve_batch_size");
+    const bool mass_riesz = Boolean(prhs[13], "mass_riesz");
+    auto reduced = holder.manager->ReduceConfiguredCandidateDirectionalSchur(
+        inv_chi, candidate_dofs, block_offsets, directions, rhs, state,
+        response, adjoints, static_cast<int>(n_response), tol, maxit,
+        solve_batch_size, mass_riesz);
+    const char* fields[] = {
+        "schur", "rhs", "response", "iters", "coupling_mode_iters",
+        "coupling_rank", "coupling_relative_truncation_error", "operator_s",
+        "solve_s", "contraction_s"};
+    plhs[0] = mxCreateStructMatrix(1, 1, 10, fields);
+    mxSetField(plhs[0], 0, "schur",
+        RealMatrixOutput(reduced.schur, reduced.n_candidate,
+                         reduced.n_candidate));
+    mxSetField(plhs[0], 0, "rhs", RealColumn(reduced.rhs));
+    mxSetField(plhs[0], 0, "response",
+        RealMatrixOutput(reduced.response, reduced.n_response,
+                         reduced.n_candidate));
+    const std::vector<double> iterations(
+        reduced.iterations.begin(), reduced.iterations.end());
+    const std::vector<double> coupling_iterations(
+        reduced.coupling_mode_iterations.begin(),
+        reduced.coupling_mode_iterations.end());
+    mxSetField(plhs[0], 0, "iters", RealColumn(iterations));
+    mxSetField(plhs[0], 0, "coupling_mode_iters",
+               RealColumn(coupling_iterations));
+    mxSetField(plhs[0], 0, "coupling_rank",
+               mxCreateDoubleScalar(reduced.coupling_rank));
+    mxSetField(plhs[0], 0, "coupling_relative_truncation_error",
+               mxCreateDoubleScalar(
+                   reduced.coupling_relative_truncation_error));
+    mxSetField(plhs[0], 0, "operator_s",
+               mxCreateDoubleScalar(reduced.operator_s));
+    mxSetField(plhs[0], 0, "solve_s",
+               mxCreateDoubleScalar(reduced.solve_s));
+    mxSetField(plhs[0], 0, "contraction_s",
+               mxCreateDoubleScalar(reduced.contraction_s));
+}
+
 void ChargeGramSolveConfigured(const std::string& command, int nlhs,
                                mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
     if (nlhs != 1 || nrhs < 4 || nrhs > 8)
@@ -12375,6 +12445,12 @@ void Dispatch(const std::string& command, int nlhs, mxArray* plhs[], int nrhs,
     if (command ==
         "hacapk.charge_gram.reduce_configured_candidate_schur") {
         ChargeGramReduceConfiguredCandidateSchur(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "hacapk.charge_gram."
+                   "reduce_configured_candidate_directional_schur") {
+        ChargeGramReduceConfiguredCandidateDirectionalSchur(
+            nlhs, plhs, nrhs, prhs);
         return;
     }
     if (command ==
