@@ -34,6 +34,25 @@ evidence yet that adding an explicit removal fixes this crash; do not introduce
 one as an unverified remedy or claim private registration isolates the host.
 Reference: https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-removefontresourceexw
 
+## API and dump documentation check
+
+Microsoft's AddFontResourceExW contract explicitly provides no extended error
+information on failure. Do not report GetLastError as the registration failure
+reason. Count returned-zero calls, retain timestamps, and correlate external
+host events/dumps. FR_PRIVATE resources are removed by Windows at process
+termination; private visibility does not imply a private font-driver host.
+https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-addfontresourceexw
+
+WER LocalDumps supports per-executable configuration. Its output directory must
+grant write access to the crashing process identity, not just the CI account.
+Configure only the disposable CI machine, retain dumps privately and briefly,
+and regard an empty dump directory as missing evidence rather than no crash.
+https://learn.microsoft.com/en-us/windows/win32/wer/collecting-user-mode-dumps
+
+Exact searches for fontdrvhost with offset 366a2, version 20348.5256, Latin
+Modern, and AddFontResourceEx did not identify a matching published fix. This
+negative search result does not establish that no upstream defect exists.
+
 ## Independent trace reading: run 34658678863
 
 Source: PR #205 at `775a03984`; executable SHA-256
