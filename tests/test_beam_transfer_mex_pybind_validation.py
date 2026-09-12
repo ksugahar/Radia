@@ -28,8 +28,12 @@ def _report(backend: str) -> dict:
             "bytes": 123,
             "sha256": "c" * 64,
             "source_commit": "b" * 40,
+            "build_manifest": f"C:/temp/{backend}.pyd.build.json",
         },
+        "repeats": 3,
+        "first_s": 0.5,
         "median_s": 0.25,
+        "min_s": 0.2,
         "observables": {"R_fro": 1.0, "T_211": 0.6, "U_3111": 1.08},
     }
 
@@ -50,6 +54,35 @@ def test_pybind_lane_fails_loudly_without_matching_source_artifact(tmp_path):
     with pytest.raises(RuntimeError, match="installed-wheel fallback is forbidden"):
         MODULE._load_source_backend(tmp_path)
 
+    stale = tmp_path / "stale" / "src" / "radia" / "_radia_pybind.pyd"
+    stale.parent.mkdir(parents=True)
+    stale.write_bytes(b"old-binary-must-not-be-imported")
+    with pytest.raises(RuntimeError, match="provenance manifest is missing"):
+        MODULE._load_source_backend(tmp_path / "stale")
+
+
+def test_build_manifest_must_match_binary_bytes_and_selected_commit(tmp_path, monkeypatch):
+    source_root = tmp_path / "source"
+    binary = source_root / "src" / "radia" / "_radia_pybind.pyd"
+    binary.parent.mkdir(parents=True)
+    binary.write_bytes(b"native-v1")
+    manifest = {
+        "schema": MODULE.PROVENANCE_SCHEMA,
+        "source_commit": "a" * 40,
+        "source_dirty": False,
+        "binary_name": binary.name,
+        "binary_bytes": binary.stat().st_size,
+        "binary_sha256": MODULE._sha256(binary),
+    }
+    manifest_path = Path(f"{binary}.build.json")
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    monkeypatch.setattr(MODULE, "_git_head", lambda root=MODULE.ROOT: "a" * 40)
+
+    assert MODULE._load_build_provenance(binary, source_root)["source_commit"] == "a" * 40
+    binary.write_bytes(b"native-v2")
+    with pytest.raises(ValueError, match="binary_sha256"):
+        MODULE._load_build_provenance(binary, source_root)
+
 
 def test_mocked_provenance_and_comparison_contract(tmp_path):
     python = _report("python-pybind11")
@@ -68,6 +101,47 @@ def test_mocked_provenance_and_comparison_contract(tmp_path):
     with pytest.raises(ValueError, match="binary.source_commit"):
         MODULE.compare(python_path, matlab_path, rtol=1e-11, atol=1e-12)
 
+    matlab = _report("matlab-mex")
+    matlab["repeats"] = 0
+    matlab_path.write_text(json.dumps(matlab), encoding="utf-8")
+    with pytest.raises(ValueError, match="repeats must be a positive integer"):
+        MODULE.compare(python_path, matlab_path, rtol=1e-11, atol=1e-12)
+
+
+def test_comparison_rejects_nonfinite_values_and_handles_zero_tolerances(tmp_path):
+    python = _report("python-pybind11")
+    matlab = _report("matlab-mex")
+    python["observables"] = {"zero": 0.0}
+    matlab["observables"] = {"zero": 0.0}
+    python_path = tmp_path / "python.json"
+    matlab_path = tmp_path / "matlab.json"
+    python_path.write_text(json.dumps(python), encoding="utf-8")
+    matlab_path.write_text(json.dumps(matlab), encoding="utf-8")
+
+    assert MODULE.compare(python_path, matlab_path, rtol=0.0, atol=0.0)["pass"]
+    with pytest.raises(ValueError, match="rtol must be finite"):
+        MODULE.compare(python_path, matlab_path, rtol=float("inf"), atol=0.0)
+
+    matlab["observables"]["zero"] = 1.0
+    matlab_path.write_text(json.dumps(matlab), encoding="utf-8")
+    comparison = MODULE.compare(python_path, matlab_path, rtol=0.0, atol=0.0)
+    assert not comparison["pass"]
+    assert comparison["checks"]["zero"]["relative_error"] is None
+    MODULE._json_text(comparison)
+
+    matlab_path.write_text(json.dumps(matlab).replace("1.0", "NaN", 1), encoding="utf-8")
+    with pytest.raises(ValueError, match="non-finite JSON constant"):
+        MODULE.compare(python_path, matlab_path, rtol=0.0, atol=0.0)
+    with pytest.raises(ValueError, match="Out of range float values"):
+        MODULE._json_text({"forbidden": float("nan")})
+
+
+def test_benchmark_function_rejects_invalid_repeats_before_native_import():
+    with pytest.raises(ValueError, match="positive integer"):
+        MODULE.benchmark(Path("unused.json"), repeats=0)
+    with pytest.raises(ValueError, match="positive integer"):
+        MODULE.benchmark(Path("unused.json"), repeats=True)
+
 
 def test_matlab_runner_hashes_mex_and_avoids_simulink_setup_mutation():
     source = (
@@ -76,9 +150,12 @@ def test_matlab_runner_hashes_mex_and_avoids_simulink_setup_mutation():
     assert "radia.beam.propagateVariationalMap" in source
     assert '"sha256", sha256File(mexPath)' in source
     assert '"source_commit", sourceCommit' in source
+    assert "readBuildProvenance(buildManifestPath, mexPath, repoRoot)" in source
     assert "ConfigureSimulinkFileGeneration=false" in source
     assert "radia_mex resolved outside the selected MATLAB source tree" in source
     assert "requireCleanSource(repoRoot)" in source
+    assert "Benchmark timings must be finite and positive" in source
+    assert "Benchmark observables must be finite" in source
     assert "permute(double(caseData.A_per_m), [2, 3, 1])" in source
     assert "item(2)+1, item(3)+1, item(4)+1, item(1)+1" in source
     assert "item(2)+1, item(3)+1, item(4)+1, item(5)+1, item(1)+1" in source
@@ -99,3 +176,13 @@ def test_current_native_api_retains_canonical_h5_and_f4_outputs():
     assert "A/F2/F3/F4" in matlab_api
     assert '"H5_per_m"' in mex_api
     assert '"F4_per_m"' in mex_api
+
+
+def test_build_writes_hash_bound_native_provenance_manifests():
+    source = (ROOT / "Build.ps1").read_text(encoding="utf-8")
+    assert "radia.native-build-provenance.v1" in source
+    assert "binary_sha256" in source
+    assert "source_dirty" in source
+    assert "$srcHash -eq $dstHash" in source
+    assert 'Write-NativeBuildProvenance "$PROJECT_DIR\\matlab\\radia_mex.mexw64"' in source
+    assert 'Write-NativeBuildProvenance "$PROJECT_DIR\\src\\radia\\_radia_pybind.pyd"' in source
