@@ -50,7 +50,8 @@ jobs:
       RUN_SLOW_TESTS: ${{ github.event_name == 'workflow_dispatch' && inputs.full_slow == true }}
       RUN_VALIDATION_TESTS: ${{ github.event_name == 'workflow_dispatch' && (inputs.run_validation_test == true || inputs.full_slow == true) }}
       RADIA_CI_OUTPUT_DIR: 'C:\temp\radia-ci-output-${{ github.run_id }}-${{ github.run_attempt }}'
-      # Import checks are not scaling benchmarks; bound nested BLAS pools.
+      # This CI lane (including opt-in tests) is not a scaling benchmark.
+      # Bound nested pools; use dedicated validation runs for performance claims.
       OMP_NUM_THREADS: '8'
       NGS_NUM_THREADS: '8'
       OPENBLAS_NUM_THREADS: '1'
@@ -297,6 +298,15 @@ jobs:
             exit $rc
           }
           Write-Host "Build completed successfully."
+
+      - name: Upload build memory diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-memory-${{ github.sha }}
+          path: '${{ env.RADIA_CI_OUTPUT_DIR }}/memory-*-build.json'
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Upload build log on failure
         if: failure()
