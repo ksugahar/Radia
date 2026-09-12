@@ -29,6 +29,8 @@ skill.md NG #1-#7 / Wallwork §8.12 (quantification) / §9.12 (limitation) /
 
 from __future__ import annotations
 
+import math
+
 
 # ------------------------------------------------------------------
 # Trigger weights
@@ -73,6 +75,26 @@ def _safe_get(d: dict, *keys, default=None):
     return cur
 
 
+def _measurement(result, *keys, expected=(int, float)):
+    """Require a successful detector payload; missing data is not a clean count."""
+    if not isinstance(result, dict):
+        raise ValueError("detector returned a non-dict result")
+    if (result.get("error") or result.get("ok") is False
+            or result.get("applicable") is False
+            or str(result.get("status", "")).casefold() in {
+                "error", "failed", "skip", "skipped", "not_applicable", "unavailable",
+            }):
+        raise ValueError(f"detector did not complete: {result}")
+    value = _safe_get(result, *keys)
+    if not isinstance(value, expected):
+        raise ValueError(f"missing or invalid measurement: {'.'.join(keys)}")
+    if expected == (int, float) and (
+        isinstance(value, bool) or not math.isfinite(value) or value < 0
+    ):
+        raise ValueError(f"invalid count/ratio: {'.'.join(keys)}")
+    return value
+
+
 # ------------------------------------------------------------------
 # Main
 # ------------------------------------------------------------------
@@ -93,8 +115,10 @@ def paper_writing_reviewer_2_trigger_summary(
         author_last_names: 自分+共著者の姓をカンマ区切り (self-cite 判定用)。
 
     返り値:
-        dict: score / score_max / comments / observations / hint / source
-            score は逆スケール (高 = safe、低 = reviewer が攻撃する可能性高)。
+        dict: status / score / score_max / comments / observations / hint / source.
+            score is reverse-scaled (high = fewer detected risks). If any check
+            is unknown or skipped, score and observations.risk_percent are None;
+            status is partial or unavailable. Confirmed triggers are preserved.
     """
     if tex_or_text is None:
         tex_or_text = ""
@@ -115,7 +139,7 @@ def paper_writing_reviewer_2_trigger_summary(
     )
 
     # --------------------------------------------------------------
-    # 1. 下位ツールを呼ぶ (例外は "その trigger は 0" として扱う)
+    # 1. Call detectors; failures remain unknown, never clean counts.
     # --------------------------------------------------------------
     counts: dict[str, float] = {}
     raw_extra: dict[str, dict] = {}
@@ -125,8 +149,7 @@ def paper_writing_reviewer_2_trigger_summary(
     try:
         r_t3 = paper_writing_claim_quantification(tex_or_text)
         counts["unquantified_hype"] = float(
-            _safe_get(r_t3, "observations", "unquantified_count", default=0)
-            or 0
+            _measurement(r_t3, "observations", "unquantified_count")
         )
         raw_extra["unquantified_hype"] = {
             "source_tool": "paper_writing_claim_quantification",
@@ -149,8 +172,7 @@ def paper_writing_reviewer_2_trigger_summary(
                 author_last_names=author_last_names,
             )
             ratio = float(
-                _safe_get(r_t5, "observations", "self_cite_ratio", default=0.0)
-                or 0.0
+                _measurement(r_t5, "observations", "self_cite_ratio")
             )
             # bool trigger: excess = (ratio > 0.20)
             counts["self_cite_excess"] = 1.0 if ratio > _SELF_CITE_THRESHOLD else 0.0
@@ -177,11 +199,10 @@ def paper_writing_reviewer_2_trigger_summary(
     try:
         r_t4 = paper_writing_limitation_statement_presence(tex_or_text)
         lim_paras = (
-            _safe_get(r_t4, "observations", "limitation_paragraphs", default=[])
-            or []
+            _measurement(r_t4, "observations", "limitation_paragraphs", expected=list)
         )
         disc_found = bool(
-            _safe_get(r_t4, "observations", "discussion_found", default=False)
+            _measurement(r_t4, "observations", "discussion_found", expected=bool)
         )
         # Discussion 未検出なら trigger を ON にはしない (検査対象外)
         if disc_found and not lim_paras:
@@ -202,8 +223,7 @@ def paper_writing_reviewer_2_trigger_summary(
     try:
         r_t6 = paper_writing_figure_referencing_coverage(tex_or_text)
         unref = (
-            _safe_get(r_t6, "observations", "unreferenced_labels", default=[])
-            or []
+            _measurement(r_t6, "observations", "unreferenced_labels", expected=list)
         )
         counts["unreferenced_figures"] = float(len(unref))
         raw_extra["unreferenced_figures"] = {
@@ -219,7 +239,7 @@ def paper_writing_reviewer_2_trigger_summary(
     try:
         r_acro = paper_writing_find_undefined_acronyms(tex_or_text)
         counts["undefined_acronyms"] = float(
-            r_acro.get("undefined_count", 0) or 0
+            _measurement(r_acro, "undefined_count")
         )
         raw_extra["undefined_acronyms"] = {
             "source_tool": "paper_writing_find_undefined_acronyms",
@@ -237,7 +257,7 @@ def paper_writing_reviewer_2_trigger_summary(
     try:
         r_weak = paper_writing_count_weak_expressions(tex_or_text)
         counts["weak_expressions"] = float(
-            r_weak.get("total_weak_expressions", 0) or 0
+            _measurement(r_weak, "total_weak_expressions")
         )
         raw_extra["weak_expressions"] = {
             "source_tool": "paper_writing_count_weak_expressions",
@@ -252,10 +272,8 @@ def paper_writing_reviewer_2_trigger_summary(
         r_rf = paper_writing_check_english_redflags(tex_or_text)
         # 仕様書では "total_red_flags"、実装では "total_issues"。
         # 互換のため両方見る。
-        rf_n = (
-            r_rf.get("total_red_flags")
-            or r_rf.get("total_issues")
-            or 0
+        rf_n = _measurement(
+            r_rf, "total_red_flags" if "total_red_flags" in r_rf else "total_issues"
         )
         counts["english_redflags"] = float(rf_n)
         raw_extra["english_redflags"] = {
@@ -327,7 +345,7 @@ def paper_writing_reviewer_2_trigger_summary(
 
     observations = {
         "risk_score_raw": round(risk_score_raw, 3),
-        "risk_percent": round(risk_percent, 1),
+        "risk_percent": None if unknown_triggers else round(risk_percent, 1),
         "triggers": triggers_sorted,
         "top_triggers": top_triggers,
         "unknown_triggers": sorted(unknown_triggers),
@@ -344,6 +362,13 @@ def paper_writing_reviewer_2_trigger_summary(
         score,
         risk_percent,
     )
+    if unknown_triggers:
+        comments = [
+            "検査未完了のため総合点・総合リスクは判定保留: "
+            + ", ".join(sorted(unknown_triggers)),
+            *[_comment_for(name, int(counts[name]), raw_extra[name])
+              for name in top_triggers],
+        ]
 
     hint = (
         "5-7 属性の weighted union。実際の reviewer 攻撃は分野・journal 文化で "
@@ -358,7 +383,9 @@ def paper_writing_reviewer_2_trigger_summary(
     )
 
     return {
-        "score": float(score),
+        "status": ("unavailable" if total_possible == 0 else "partial")
+        if unknown_triggers else "complete",
+        "score": None if unknown_triggers else float(score),
         "score_max": 10,
         "comments": comments,
         "observations": observations,

@@ -1297,15 +1297,89 @@ def paper_writing_em_submission_gate(
 
     checks: list[dict] = []
 
+    # Minimum evidence consumed by each detector adapter. An empty payload is
+    # not evidence of zero findings. Tuples name supported alternative keys.
+    required_evidence = {
+        "target_venue_policy": [("status",)],
+        "figure_forward_reference": [("dangling_ref_count", "dangling_refs"),
+                                     ("orphan_label_count", "orphan_labels")],
+        "equation_numbering": [("dangling_refs",), ("unused_labels",)],
+        "count_underlines": [("total_underlines",)],
+        "undefined_variables": [("n_undefined",)],
+        "undefined_acronyms": [("n_undefined",)],
+        "ref_label_consistency": [("status",)],
+        "ieee_keywords": [("status",)],
+        "digest_human_review_triggers": [("status",)],
+        "bilingual_adjacent_reviewer_readability": [("status",)],
+        "lint_reference_format": [("problems",)],
+        "check_citation_usage": [("missing_in_bib_count",), ("unused_in_tex_count",)],
+        "self_citation_ratio": [("self_citation_ratio",), ("verdict",)],
+        "citation_keys_exist": [("status",)],
+        "validate_abstract_length": [("within_limit",)],
+        "abstract_background_ratio": [("background_ratio",)],
+        "abstract_weak_expressions": [("total_weak_expressions",)],
+        "abstract_no_math_no_citation": [("status",)],
+        "validate_pdf_pages": [("page_count", "n_pages", "count")],
+        "page_whitespace_anomalies": [("flagged_count",)],
+        "floats_far_from_reference": [("flagged_count",)],
+        "text_image_overlap": [("n_overlaps",)],
+        "text_overflow_page": [("n_overflows",)],
+        "pdf_unresolved_markers": [("status",)],
+    }
+
+    def _invalid_evidence(name, detail):
+        import math
+
+        invalid = []
+        list_fields = {"dangling_refs", "orphan_labels", "unused_labels", "problems"}
+        for keys in required_evidence[name]:
+            key = next((key for key in keys if key in detail), None)
+            if key is None:
+                invalid.append("/".join(keys))
+                continue
+            value = detail[key]
+            if key == "status":
+                valid = isinstance(value, str) and value.casefold() in {
+                    "pass", "clean", "warn", "warning", "missing", "reject", "selection_required",
+                }
+            elif key == "verdict":
+                valid = isinstance(value, str) and value.upper() in {"OK", "WARN", "HIGH"}
+            elif key == "within_limit":
+                valid = isinstance(value, bool)
+            elif key in list_fields:
+                valid = isinstance(value, list)
+            else:
+                valid = (isinstance(value, (int, float)) and not isinstance(value, bool)
+                         and math.isfinite(value) and value >= 0)
+                if valid and key.endswith("ratio"):
+                    valid = value <= 1
+                elif valid:
+                    valid = value == int(value)
+                    if name == "validate_pdf_pages":
+                        valid = valid and value > 0
+            if not valid:
+                invalid.append(key)
+        return invalid
+
     def _add(name, status, summary, detail=None):
         detail = detail or {}
         detail_status = str(detail.get("status", "")).casefold()
         error = detail.get("error")
-        if error or detail_status in {"error", "failed"}:
+        if error or detail.get("ok") is False or detail_status in {"error", "failed", "fail"}:
             status = "fail"
             summary = f"{summary}: {error or detail_status}"
+        elif detail_status in {"skip", "skipped", "not_applicable", "unavailable"} or detail.get("applicable") is False:
+            status = "skip"
+            summary = f"not evaluated: {summary}"
         elif status == "skip" and "error" in summary.casefold():
             status = "fail"
+        elif name in required_evidence:
+            invalid = _invalid_evidence(name, detail)
+            if invalid:
+                status = "fail"
+                summary = "invalid detector result; missing/invalid evidence: " + ", ".join(invalid)
+            elif detail_status in {"warn", "warning"} and status == "pass":
+                status = "warn"
         checks.append({
             "name": name,
             "status": status,
@@ -1331,7 +1405,12 @@ def paper_writing_em_submission_gate(
         if supplied and not valid:
             _add(name, "fail", f"supplied file does not exist: {supplied}")
 
-    target_profile = _t.paper_writing_target_venue_policy(target_venue)
+    try:
+        target_profile = _t.paper_writing_target_venue_policy(target_venue)
+        if not isinstance(target_profile, dict):
+            raise ValueError("target policy must return a dict")
+    except Exception as e:  # noqa: BLE001
+        target_profile = {"error": f"target policy error: {e}"}
     target_category = target_profile.get("target_category")
     target_status = target_profile.get("status")
     _add(
@@ -1356,7 +1435,8 @@ def paper_writing_em_submission_gate(
     if tex_valid and auto_resolve_inputs:
         try:
             r = resolve_input_chain(tex_path)
-            if r.get("ok") and r.get("files_resolved"):
+            if (r.get("ok") and r.get("files_resolved")
+                    and not r.get("error") and not r.get("files_missing")):
                 n_inputs = len(r["files_resolved"]) - 1   # exclude main
                 if n_inputs > 0:
                     merged_temp_dir = tempfile.TemporaryDirectory(
@@ -1373,7 +1453,7 @@ def paper_writing_em_submission_gate(
                         {"files_resolved": r["files_resolved"],
                          "files_missing": r["files_missing"]},
                     )
-            elif r.get("error") or not r.get("ok"):
+            else:
                 _add(
                     "multifile_resolved",
                     "fail",
@@ -1391,6 +1471,8 @@ def paper_writing_em_submission_gate(
                       errors="replace") as fh:
                 src = fh.read()
             extracted = extract_abstract_from_tex(src)
+            if extracted is not None and not isinstance(extracted, str):
+                raise ValueError("abstract extractor must return text or None")
             if extracted:
                 abstract_text = extracted
                 _add(
@@ -1557,7 +1639,8 @@ def paper_writing_em_submission_gate(
                     target_profile,
                 )
         except Exception as e:  # noqa: BLE001
-            _add("target_keywords", "skip", f"tool error: {e}")
+            _add("ieee_keywords" if target_category == "ieee" else "target_keywords",
+                 "skip", f"tool error: {e}")
 
         # 2026-06-24: one-page digest human-review triggers
         try:
@@ -1912,6 +1995,10 @@ def paper_writing_em_submission_gate(
                   f"thresholds (whitespace_threshold, "
                   f"layout_max_pages_apart) if the defaults are wrong "
                   f"for your venue.")
+    elif n_skipped > 0:
+        verdict = "warn"
+        advice = (f"INCOMPLETE: {n_skipped} check(s) were not evaluated. "
+                  "Review the skipped rows before claiming submission readiness.")
     else:
         verdict = "pass"
         advice = (f"SUBMISSION-READY: all {n_passed} checks passed "
