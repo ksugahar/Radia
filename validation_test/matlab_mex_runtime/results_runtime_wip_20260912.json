@@ -1,0 +1,64 @@
+{
+  "schema": "radia.matlab-mex-runtime-validation.v1",
+  "generated_at_utc": "2026-09-12T04:43:28.164Z",
+  "source_commit": "5759bd85326c2f08ff37b6e0be78173b7895854e",
+  "mex_path": "C:\\temp\\radia-matlab-runtime-wip\\matlab\\radia_mex.mexw64",
+  "mex_sha256": "38bfdea548e35d2ebd2112fad3658aa56264dc2b4ea2688c3e66fb185c2c29f1",
+  "matlab_release": "2026a",
+  "matlab_version": "26.1.0.3276743 (R2026a) Update 3",
+  "mkl_threading_layer_requested": "SEQUENTIAL",
+  "checks": {
+    "lifecycle": true,
+    "wrong_type_and_stale_handle_rejection": true,
+    "repeated_clear": true,
+    "directional_schur_multiple_response": true,
+    "directional_schur_nontrivial_direction": true,
+    "fractional_index_rejected_before_mex": true,
+    "out_of_range_index_rejected_before_mex": true
+  },
+  "tests": [
+    {
+      "name": "test_radia_mex/testOptunaRandomStateNativeLifecycle",
+      "passed": true,
+      "failed": false,
+      "incomplete": false,
+      "duration_s": 23.0619111
+    },
+    {
+      "name": "test_radia_mex/testIHHandleCommandsAndLifecycle",
+      "passed": true,
+      "failed": false,
+      "incomplete": false,
+      "duration_s": 0.34711949999999997
+    },
+    {
+      "name": "test_radia_mex/testNativeSimulinkStateSpaceHandle",
+      "passed": true,
+      "failed": false,
+      "incomplete": false,
+      "duration_s": 0.0593741
+    },
+    {
+      "name": "test_radia_mex/testHACApKBEMLifecycle",
+      "passed": true,
+      "failed": false,
+      "incomplete": false,
+      "duration_s": 0.1012197
+    },
+    {
+      "name": "test_radia_mex/testHACApKChargeGramLifecycle",
+      "passed": true,
+      "failed": false,
+      "incomplete": false,
+      "duration_s": 11.394957799999998
+    },
+    {
+      "name": "test_radia_mex/testEnergyStopLifecycle",
+      "passed": true,
+      "failed": false,
+      "incomplete": false,
+      "duration_s": 0.2126104
+    }
+  ],
+  "passed": true
+}
