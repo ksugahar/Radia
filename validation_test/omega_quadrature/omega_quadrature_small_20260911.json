@@ -1,0 +1,1879 @@
+{
+  "schema": "radia.validation.omega-quadrature.v1",
+  "host": "mdx2",
+  "runtime": {
+    "mode": "research",
+    "direct_url": {}
+  },
+  "implementation": {
+    "version": "4.95.81",
+    "module": "C:\\temp\\radia-tosca-exp\\src\\radia",
+    "native": {
+      "_radia_pybind.pyd": "d0749cbc13dccb3444ede9d4ad6ada87723c8704da338bfcbc38359d795a5324"
+    },
+    "python_files": {
+      "__init__.py": "c0a3de6ad79b5bf0785db7017606bedff68c35a5e21e9aa956d9dd29183e04ce",
+      "_b3d_shim.py": "76f63abffb68d376024905f9ec5634d26e8b26bac8fcb7212f1a3d42e42b108b",
+      "_topopt_graph.py": "ecd2cb4505b3e5492604d7c90f9c3b2a02a033fc13a99358519391f5c890c679",
+      "accelerator_abe_topopt.py": "5dddd245a35bffb5922adff28c1ab6ca8362aa0e41bbba6826a8e1ef320c06e9",
+      "accelerator_field_validation.py": "47230d3bb7b2a46135d010a7b11851f50d7f3c26467564b6dfc3b7daa27d1f64",
+      "accelerator_lie_topopt.py": "f759140c20f8ef0037af76477760d0216337516bee2e10e7c2b8019bce13269a",
+      "accelerator_magnet_topopt.py": "859a20e12d68a97d9cc9bab03bcced193902da42a12eed6f661877d6ed9c84a4",
+      "accelerator_section_optics.py": "cdfd7e6636b842f3bf16146c42e1289cec1417da0fcd25841bbb48e31d12434f",
+      "accelerator_taylor_topopt.py": "38adc874e92ea6c3fb0eca554c04c9396ea106961cfc1a11b16fddc946b2c25b",
+      "acoustics/__init__.py": "ed3b2ca9324e4256d133e580dc7ec0e5e351dde897a896eb81c6e3094f540f95",
+      "acoustics/cq.py": "807379967d3eb93f262fba0a47fa2de3f6ce0eaacd51743ea1803f7f2234ff7a",
+      "acoustics/fsi.py": "9acdd9d243ed89f72307b2b5cba3ffed35b1daf294733b26bd37a9ebc1eee7fc",
+      "acoustics/scattering.py": "376a7ccd51a6cad9e90e1dba61fb3441626231d2339e9b090b53f9f2e95d01ac",
+      "analysis.py": "7eaec52242a8d9dda6e7c3f5f9f0b374b37213098124381a0b2cffbdfdc8f034",
+      "analytical_formulas/__init__.py": "0efc32d4869d31e2a4dc15a0f4770459f1a3f8c62bb6d313c4d03ac9694e27fd",
+      "analytical_formulas/ac_locus.py": "85ab76f235a1b8d7405bd738e003d81bad92fcb6278ea9d8349f02f8ba62643d",
+      "analytical_formulas/adaptive_quadrature.py": "e61143bca892758cd21ccb4dd6fc260f6fe41dbe4eccc928d1080477843ee8e9",
+      "analytical_formulas/conductor_impedance.py": "9455fd54f60e704e69312ad562dba1889af7f1a7e593f3bbf30f05acd7028e99",
+      "analytical_formulas/cuboid_average_field.py": "f809095f27bb3228bd6b9047459631880b8939343d9e232d965e69ab90f34228",
+      "analytical_formulas/ellipsoid.py": "e42fc2cb5fabb0e6a733c57b229bd18f5edbbb0616f7c2f7b6a4fe92027f2657",
+      "analytical_formulas/elliptic_integrals.py": "3eeaa9ec0cc5058e91921b36255e362195dbe2424b250cbfe59bd5f544ed39f3",
+      "analytical_formulas/gauss_legendre.py": "87769189749eed5f956f5a0b7ffc74d26f1cf33fd54a40aaed2bb4b8a22bdc03",
+      "analytical_formulas/induction_heating.py": "73bc50d6cd4ea8814d2c8a0e86f4a160e31715595e594b5fa66b00fa6c5c6faa",
+      "analytical_formulas/plate_eddy.py": "6db277b55a08f198af0847bf35b001e7d43ef0e69a0d845bca4255f3657d5732",
+      "analytical_formulas/rect_magnet_2d.py": "9a1ab642e27e2a4e9834cc4fc7d13ec1731ef341173430012d96f56324dd96d4",
+      "analytical_formulas/rectangular_prism.py": "5d966dbf6b5c2f15fb0daef07515ad697ab50a029f881500bc380be566be0a0c",
+      "analytical_formulas/shielding.py": "a69c046a4172917c2cace8c4c020258797777cb0e98bdc0ae5db2040369484c5",
+      "analytical_formulas/solenoid_central.py": "a9c66eef2d147a3fbb5dcd75d172e0a2780cb94d2f9c21765110baef1ca5be04",
+      "analytical_formulas/sphere_eddy.py": "ffe0318577f2419560746960f4c617b86aedba60c11dcd33d25299419d8601ab",
+      "analytical_formulas/three_phase_line.py": "bbffcaf5fc56febec74604da8cab5e5eea5de98df9e824498204317ef09e5bee",
+      "analytical_magnet.py": "60458dd70a37262d578b32c32755d96bfc938a47d375ed9583de2f93eb471bc2",
+      "beam.py": "131be7441d6c1b8efb7696c1360f1b0994e4c06cd9d3f8b68c05dd65d1be74bc",
+      "beam_canonical_hcurl.py": "48505295b35fd7eddaa311c44d486e9e47ece3c53395770fbe42d91801083e64",
+      "beam_curvilinear.py": "f9ebbcf174949b8c8231470bfbe96eaa4e71c098020ca66680399baf2f5a8de0",
+      "bem/__init__.py": "58e5360ad18d19425744d3ed40db21b17c0996dce53b7f7c2d0c27805bf0aac5",
+      "bem/coil_inductance_ngsolve.py": "8d1eb790ac062bb1707f3689d75a66faee4030a07731face66a867dae305fec1",
+      "bem/electrostatic_p1.py": "4aaa331511175dd109d9e771ce806f1e583f7fc5ae68dbfec0fa41dddd07d9cc",
+      "bem/sibc_hacapk.py": "feca4d1c802ac12462ee7a284aa7b10218f431dee1f34e4c2a8db2c1b7acf14c",
+      "bem_coupled_solver.py": "ca5f1e78a6b9e5b7178efa07d03ff35d92b8b717dc7502b6cde610a244b5c779",
+      "bem_inductance.py": "d7dc0b33442a52798f1edead276fd623960f06de1c7acb1bb5f49b19e0594d98",
+      "bem_loop_extension.py": "d3ac427aef2ad04343e000a2487742caab95f85d83f02d4c6788d01ae7098229",
+      "bem_sibc_solver.py": "bba28b3457ef2366bdeb7cb4c26fdbde0379f349554df52e15fb93d729e48888",
+      "biot_savart.py": "3f9d956d456ba4ceaea116e7e37b2b7cea550140a046ccfe16dfc4b337ab11d7",
+      "clebsch_potential.py": "7a2b5872cde46e04d0c083114b7e47526a7e986bcb2629362811da05b014e6b0",
+      "cohomology.py": "a673df2e7632923611e1b8c4071ae1170e7f4ff82ef1cd5caf5fb67ab9131511",
+      "cohomology_cut.py": "b93443b68aeb046c0ea473658f57de0f5c719b4a27816d4a3dc1098a0de5d917",
+      "coil_builder.py": "7f8202fdd353c032c404674e1d5360c0551c82507dd323913a12a61a80b78574",
+      "coil_from_cad.py": "ecd329bdd89e23f65fb43cda87eb5cb27d67490d7202f2421d9b75970c594cc8",
+      "coil_from_step.py": "7f940677c94f5ff2d35024a1b7c9275f4b97805e21436170c68a0e03597c54c3",
+      "coil_geometry.py": "9c1eb222c8029230d3236c8909505e1fda5f7282c61a53ae061ed28440fd759b",
+      "coil_profile.py": "ef8704a49b1afd8f3983fdd424a47c45eb3d9c3feb3ed4d987f2f0b49ab4cfd7",
+      "coil_profile_occ.py": "0d0d1b5180c77ea49f2c2f539d8670efd0dd5e0fae9eb98076b7d054933f44e5",
+      "coil_spec.py": "98a03642699d3bee9f0fcdbd93ba4e308d72403b30606bd79107077fab93cc40",
+      "coil_topology.py": "82484da9c5302b119a7446201342dadeb0db97964723959dac9377a4728fddcc",
+      "coils.py": "87c15e64fe4617f01e9609f102659241b9313eb55042a248ea6363b9a1d93cd1",
+      "cubit_bem_extractor.py": "925a8085a3d50f47870c5e24431495d868a895e692922b8d64f5553debfcda0d",
+      "cubit_toolbar_smoke.py": "084e9f182e7c1c45394ad57f0f23447e978691d006c06184682db69da6d5e44c",
+      "cylindrical_magnet.py": "e7bfe7dbb59e9dc69b09fe87a77be0b598b56c1584bffd5eca6ce635a3c7002b",
+      "dielectric_solver.py": "6f59682a73173ee50a8f9b84d42be31e395617554a6b4feeb5662b715fbaf284",
+      "electromagnet_validation.py": "1d76c7c06ea547af43ad8c9d5b98bb760070f10e12ad8bb1a461e7e36f58a4cf",
+      "em_design.py": "947e5c609e7a474db5eab9f93587de1e6703f0f0973a3547e352e57884dd6a80",
+      "em_material.py": "5e7b946ff95ce03a17a37525ec5151a3666c918ba917fc9d4f23716bce86d743",
+      "energy_play_model.py": "5be2a25ba5c742bdc869b77487ca72b070fb15c42d9b611c277fb054c4c6f367",
+      "equation/__init__.py": "910db4eeeb315a664e252126bdd33d3c4c4fc245065f6cc080eeb7ef06ba5a26",
+      "equation/office.py": "fc9eb9a4b7576410c4abcfe1a1a76fe01df42a81e45594fe3ef77c777e9a8818",
+      "equivalence_source.py": "7200555371a12050639177eed2ba4763a58be4fda2f26cae0c89d2abb019bc19",
+      "esim_anderson.py": "5ec8c574c82fc5f4a33ebcd4f44ac8a4cc5c3678858af1d5bee60492723a4088",
+      "esim_cell_problem.py": "244e2822c5e8cbbf394923ecbb75f6b482d0a8023650d729ac149f87f362d70c",
+      "esim_coupled_solver.py": "4db7e42657114b15a1a7558cc5931fe487e193335899a731a46affe36c3b86ed",
+      "esim_multiport.py": "5618740c231b9c5b1fd7de35e7fa1ac883133b88a74dd6aecd93826db6991b63",
+      "esim_workpiece.py": "99c493f62a9620907bc08045ea04e45adca5040d820542d861529cbabd9abd48",
+      "esrf_examples.py": "9a932cc71305f6b5e22f5100d42d757cb0af7501f9ee8fe25501894d713e460f",
+      "fasthenry_parser.py": "38a7f1556056775d836660e8243fced722620846d1fa9543ca06399da5a06358",
+      "ffag_taylor_topopt.py": "12b49c2bdfd131d7d81813557fdec9b103d7bb144ab1aa8d6ab2a1a75295eb33",
+      "ffag_topopt.py": "2bb5c4442206e0ca1035ea64310089e2f1eb8722c33d1e92d441207102c72f37",
+      "field_study_design.py": "18efa499a650b196b6ee709be90f1cf65eb1b5f7994129385e018af6cc2d40cc",
+      "filament_bundle.py": "3939c4f0f1f63038f7b0123acdcbd75a809be1fa043cd0980b6b7522fdee088b",
+      "force.py": "b8deaa59250b4a22b2a8287c4c2774640526829b0b5607847d48a8ca31a4d81e",
+      "gmsh_post_export.py": "7d058a551c13f92d572cbf75a8eddb98ab22fcea28bfdb8b04b447f44029dfab",
+      "harmonic_balance.py": "757ae5d73bd8d9405e5a89efc6c6d30f0047b095402b21d7dce0acaeb18b01ff",
+      "hcurl_topology_optimization.py": "f6a66773a02803c7571b011b264bfedae8d5d98fe90b59e962791059d0c5243a",
+      "hysteresis_io.py": "e47a968e84514a149d9522bb6fef0392a6f653c128e328aa00bf2b4236485197",
+      "ih_design.py": "26eca561b3b539d66b1fca89a20810d32cc9db37669b968078ecf5a15601ea01",
+      "ih_optimize.py": "48de5621cb78796691a1597bf248dfdb2cd853fa5db12894b231c4cbe8e03e7c",
+      "ih_pipeline.py": "1ac2fd5a56a686235714072cc80f2e3de8097dabbb64a8b52f980f40c1e037ba",
+      "ima_field.py": "ed67248e5f07b5686501e1cf9a6913b9fd5f2cc84500a5522159ed0e97e2c001",
+      "infinite_element.py": "39f51eb0736b9ed43a54141d84104e332a9e44ac8c491ac7900b417d941654fd",
+      "install_panels.py": "f2477b5b48e8147ade71953a5ad169cb6d5bf23db4effed91493317ec1e6ec40",
+      "isochronous_topopt.py": "cd0652ff24d2b6836bc7871e02ba9bc38098c58f8b0792466617d53b197908d4",
+      "kelvin_geometry.py": "92cbdc8f83a29cd7d8c86b8bec2af7353432bb310a5f5fb90e4730691bba5e4e",
+      "kelvin_identify_ngsolve.py": "4780d28048467def4b3b58cb1d1d8f282990dac5c7063d518d6bc669bb8fca00",
+      "kelvin_material.py": "86b3d34a10f1b5bddab1d0ce34a9e123851295768f9cadc66a0242a9606ec060",
+      "kelvin_solver.py": "5e11bf6751e8d121c56116741d40464499067977796518f6c4f80366c67651c7",
+      "kelvin_source.py": "5724d093b6812313ca6dc80c55679452ecd816d0a22c477668546253e859f115",
+      "kelvin_validate.py": "edfea6ae9713dbaa67d3cbd89c26b199c2ed9cbf629e0525279b636abaff168c",
+      "lamination.py": "4292ad92503645c4e5e0eec7d6b3c2b3364f3aa4da81124dfe24813d96f54c77",
+      "lanczos_reduction.py": "f00e01484918230a1be0660c20888dd619d629e3264e27e88bab0782f3b12963",
+      "ltspice/__init__.py": "7887ad2de9888752fa6914f27a3384ed28e97150e77a1c6348cd4905cf39201f",
+      "ltspice/_shared.py": "6a2ee36936d5c01d9f2751dbbce7767b36d833e7f50ebc303e4fdd7a92712793",
+      "ltspice/allpass_gate.py": "5e737800bcf82b284081f67fea408164a3e688888384c10b52a82e59fb371824",
+      "ltspice/bandwidth_gate.py": "3f387f733199bd924ea58d50fc15a757ef15d95ddc96cd72e87d5db7e49b738e",
+      "ltspice/bipolar_efficiency_gate.py": "da7842c96417f99cfd41a89788e6992b6fbaa6f6f9e113ca300d4e478a49b466",
+      "ltspice/bipolar_rail_gate.py": "c471af0081f7b19afa2cf535850f047dac757195fb5935dab7384b32bdd8c587",
+      "ltspice/bipolar_startup_gate.py": "62c687fb8bf8fab08638e58ae232e62f01504662c6f8b3945c4a2f773c594250",
+      "ltspice/boost_gate.py": "68cdde10fe43437091b72271e7dc7383c68591a835d820cea27a12e8be5bb73f",
+      "ltspice/bridge_rectifier_gate.py": "74d413b9af5929f4e0e0dc770da981b1922809ca12bce4e489d7219504aa32ab",
+      "ltspice/cli.py": "15652a12e6dd6ac80c71d9ee2d8d8c8d5ba7d82b7dbe397fd038c45921e2ac14",
+      "ltspice/complex_zero_gate.py": "de9b33ccc0663c28bf1936cde9053a7c9e18e989a9a18d72aec3e999dd69e1e0",
+      "ltspice/conversion.py": "39e187b118a2637b7a3fa48ff6da3dee81e9411379d1b2cc56b4bbe8e08b588d",
+      "ltspice/distributed_line_gate.py": "5a1acb08d7208518770b896ea9e75252cfefb1b3b71df761b3a3708b4d43502e",
+      "ltspice/filter_gates.py": "2016b9d512a213b3135158a22d0e022177e10fb6895feeea30410bc04223b71b",
+      "ltspice/hysteresis_gate.py": "c3fa2858f1858db88320d12f7f7dc02e69300f7d21965ef6fad13501726559b4",
+      "ltspice/ideal_transformer_gate.py": "fc705cb15a48c3ae45a432afab5c8acbed18a393e52c4be8d8e909b7692fc994",
+      "ltspice/knowledge.py": "387eaa78f766001a6a17d75986a325df75eaa6b4dcbaefa12af148cd32941074",
+      "ltspice/learning_quality.py": "b86524ada9088da010948a609a34d715f46325a2965d050b5242e4cadc27212f",
+      "ltspice/ltspice_v43_gates.py": "2df107707663d949a410baf17a8e7951ac9229fff0a6267a19310c36c10d784b",
+      "ltspice/ltspice_v44_gates.py": "6b492e1efabc670d23ead3c817b1c0151526412ade91838fbd04cc7dc651fc2a",
+      "ltspice/ltspice_v45_gates.py": "3a17a703a1ed5b123395917d2d3f392d70f0cfd26bc7ab31eece3e86c3579f14",
+      "ltspice/ltspice_v46_gates.py": "90f7df41dc6f4df6bca652ff54ea7ea063089dff47f3bfb7ff4a00ed45e57ade",
+      "ltspice/ltspice_v47_gates.py": "fecce53b69b7ffeb2fc903c7133fb8bde448242a7aa044ad19b7337048b69233",
+      "ltspice/ltspice_v48_gates.py": "8ce785bb0ef02f983265c3971795a1e374b7e7db7dd7c9f1a034726300cb8ead",
+      "ltspice/ltspice_v49_gates.py": "8814c7a6f73d29febca96242510505206d42bd5a36f049a2dd70cc26fac8f276",
+      "ltspice/ltspice_v50_gates.py": "eeae1fee6cf2b3cd35e3aea2b1f1f60c3d89da0069521d178d611ac5d4bceac7",
+      "ltspice/ltspice_v51_gates.py": "6200d5ec67e39438e331a2716b1666ab94ba7631210f310e74609141ed02ac8d",
+      "ltspice/ltspice_v52_gates.py": "dcc7210f7a60afd6c6d94fc68f9fbc458743c2097df92e262f3fd78d26815962",
+      "ltspice/ltspice_v53_gates.py": "4cb268069baa495d850f540ba183435381616f97701fc4afdd8f5b66c1a0e902",
+      "ltspice/ltspice_v54_gates.py": "837101b0b34669fd4252bab8c02c7c671f26860ca4546d20b31cefba2de3a058",
+      "ltspice/ltspice_v55_gates.py": "0821b825bee4114cc26f998edadddece4a49e6bf0e6cbce239a829f2f5d4514d",
+      "ltspice/mcp_server.py": "364c0323d5bbc1c84ae0a9b302aaabdd43f8a7399740eb1fd3acbb05a92800d8",
+      "ltspice/measure.py": "870ea55879acd0c7f1dbf23bf17d61fa7b5ed8d50090ac0cb8cd365be7ef8cce",
+      "ltspice/monte_carlo_gate.py": "dd8d32a84606568f4c8b9b8b00c885981252d4830624623d3d35d6ffaae59775",
+      "ltspice/noise_gate.py": "81a4384fd4b067685533cd2bb0965dfc4b67290d127b12e390b226e0525e0385",
+      "ltspice/parser/__init__.py": "1cb6a03518c986fd8b6a329407d2449a533c768abf3a87b708aab63469739ea6",
+      "ltspice/parser/asc_parser.py": "032fe63427057874622497ab1b951289b5d15cfc72ba995680fe98c98105ca3f",
+      "ltspice/parser/asc_to_schemdraw.py": "04ec91cb8d924fd29c914847259f98871dd673ffb4c04b35581c1baf44eee0c1",
+      "ltspice/parser/cir_to_schemdraw.py": "d2a7ae7dd9d762d44c526165a27dd99665492ff67d8db4e390e5ee29bbee6a7d",
+      "ltspice/parser/netlist_to_asc.py": "033461dce56fe032243bb1ce08d933f760c8a8e951c67ed9087e4b5e0ddb85a6",
+      "ltspice/parser/schemdraw_to_cir.py": "c8eb263f6b44750ed04c68cdbb24ba76d183eec78086be9e3ea8961b2fde8ccb",
+      "ltspice/parser/schemdraw_to_ltspice.py": "65ca24577b2332467fad68362284f91df0c8f32cb46809bf097e5eeabc87b8ab",
+      "ltspice/patentability.py": "d1a88cfff7a40b9edb122d4cbdc1b10bd5f289c649410967f535022872d77da6",
+      "ltspice/psrr_gate.py": "cb0f52ac4b02eb012b5918f9acd4f5a7f188b926af4a461002b7d057b18b6289",
+      "ltspice/rectifier_gate.py": "9cadf24e3c04824997d5cda928b153f16e02ce16c0d64df6f36693d308a8abb6",
+      "ltspice/series_rlc_gate.py": "2de0902728baf98f34219be74e3e3b492edc73737ed724d4d4669f735e2cd204",
+      "ltspice/three_phase_delta_gate.py": "d1848f35554848384837157e2de896a496741638a35edfff973a544524fd45fe",
+      "ltspice/topology.py": "0208a433daf336197beff6270664150ed26b8c9bf116a1e481f6cc591b4c44be",
+      "ltspice/voltage_multiplier_gate.py": "0a536021bf33e720a5cab5866fd4362c2ae9d3fae8dee1520cc8765f59781270",
+      "maglev/__init__.py": "24d9b40c49dc9e1afde4f2a3177359abbed9ebc05896c20a86b4fcd669451415",
+      "maglev/ecb/__init__.py": "204dc3d2bda5b6f14ac0d47971f0511ad543506985a7e4dc06b37d69d3ecf4e6",
+      "maglev/ecb/lorentz.py": "71c11a02c41c712a50af0184ca33d6598d8a89deacdc81db3070868a449e09c8",
+      "maglev/ecb/plate_response.py": "0e4eb6f9db90c8eb3866b11cf9f4e0434b3172767a1c78ff7f2574f5282f4181",
+      "maglev/mixed_galerkin/__init__.py": "ad8d5ae196dcf4221da0758b192f21db967bb900b1a118c0c5ccf2c7c0414794",
+      "maglev/mixed_galerkin/alpha.py": "3864529f50ccf39f126888d05f105ccead38d6b317a47b0b14341c8fb3b2899a",
+      "maglev/mixed_galerkin/cad_edges.py": "014f435421b55b33bf5333a11e62dd908f2129aebd93464e70f4600881dfbe6c",
+      "maglev/mixed_galerkin/references.py": "4bf2098ec80008f9b9efb6759a297a9eef32c8e1ad21f55ed123b98276804319",
+      "maglev/mixed_galerkin/rom_fit.py": "fea35e5d71844970a9bafe6b3a532a4af1bf6ac8c0a9b98479fa1572af9d66f2",
+      "maglev/mixed_galerkin/schur.py": "e6a5aa3a64c240034162aaabf59ff9202d0f2c9dc597f06366072bb82bf2b354",
+      "maglev/mixed_galerkin/vector_bulk.py": "42788c5e6c7fd4337bf27f6bb94b134f48f8d595ca3d5871db14460eac84f30c",
+      "maglev/position_cln.py": "ba77f27008107084eb9930d9dc7659f39bc32d16fb75bea38313e985c7b8c309",
+      "maglev/simulink/__init__.py": "3b3002b736f27171edacd4255615e3c249b37fb82e86e568dbcd0443866a84db",
+      "maglev/simulink/export.py": "e037db19d74c0391e92838dd52484648733a4d361b6bf82d8ab09d3f0619d763",
+      "magnet.py": "e27e5df02a1444e2483a84f42b1314c07f15fe9c2af49c7cc63b2b293b4eda70",
+      "magnetic_shield_optimization.py": "6a1ea998a1ed7b888916cdad778349ac8fcd83a36b8c62dfe0b0eaf58c59c74f",
+      "mmm_topology.py": "c031da4e4e20b0c38018e4b0ea90754efdb83914d5e746bda22a452b56bb2899",
+      "motor_design.py": "5ad82089289a15d98d4fd65bf5a82819699b0f49b62a3cb6c3e358bcaf17f8ea",
+      "motor_hdiv.py": "9ea98b5e45f1a1e69b3d22ffda5c75691cfa3aa2510bbe1ac98d5a645ee2d7a4",
+      "motor_rom.py": "4bd6a93e2c0e211e7eab0ac7effe8b80858168c332dd5eeae877794e849de500",
+      "motor_rom_export.py": "cb8d349dedaf771321bf12de2332c227cd95c8dfffbc1f86f920707d0edf4d05",
+      "netgen_mesh_import.py": "0edc5c86c1a9e5b6e10d1e99004b9c3d1c08adc31986f8ccc03b0c209078b8e7",
+      "ngsbem_eddy.py": "b3543bde87e3912a8c3e9e8bf6a08c03c7fa19aa23e76585490003fcd72b0f4b",
+      "ngsbem_interface.py": "128c75b4bf8b64ee9f3066711a727408424a666171a8779659d8e60730ea6aef",
+      "ngsbem_peec.py": "5f9311074a114b6a2d8ef62b87806dd96a5e057892470dc8ad00d07165644842",
+      "ngsbem_peec_body_coupling.py": "383871e63cbde55b314ef75b99ab58b04e862a4bab87db3480509af22a0e850b",
+      "open_boundary/__init__.py": "ba7a129c2c7571f3adc01336a026a31cebd58c101e1498aa2b55066e74a29ca7",
+      "open_boundary/dtn_cln.py": "ac705d2c39713dd0f897bc0951d3149e28a73fc858de5a14d6e39c31a5a72aec",
+      "open_boundary/kelvin_dtn.py": "5b043f2adb1bac0ecad71916507b9576ab9220b10b2701c7813f8cb48752917e",
+      "panel_design_common.py": "b80a3b2305691fb8840eaf25a73b4f8b70ad989801bc9c8af434471b0958204b",
+      "panels/add_kelvin.py": "b9956badec8291d1562eef77d3616cac2c37d5c61ca5fe4cafc84f386a0e6d32",
+      "panels/calc_accel_hdiv.py": "29fd7120e6b6cf4b452f7964e7be7ccc12d3307daf5c060302b9078042ba405b",
+      "panels/calc_accel_magnet.py": "2c7cd3d1aa57f9f063002c527e61987ce2685b3a6c123f934bc1a0c6072465cb",
+      "panels/calc_analytic.py": "99aed4875bb38879874b2e6b80b4e8ddaf02c78577211a22c8810ddc96b84037",
+      "panels/calc_axisym_volumetric.py": "82ec05e401d08eeb34e62ecd5f620218deb0877ced4a92d6fb0caf4fbc11d8bd",
+      "panels/calc_clebsch_hodograph.py": "204219063f1c38ddf46ebeb97dd199982fbf2807a0d420120710094ca240f247",
+      "panels/calc_common.py": "502c1e6b5b139cedab37588e220ef6164d48bf1e7b855c58c7647d82b6a0523d",
+      "panels/calc_em_table.py": "d19285a39e1bcc292f39be97a7b7cea4c5c1fbfcb2a46b39d6a9a0666f8ccefa",
+      "panels/calc_equivalence_source.py": "d18a2a4284308e96425e3d0b2429b7fe74e23545a4ecee1340d08882c7c8b28b",
+      "panels/calc_fem_coilmesh.py": "ed01c0917ba5d363b974e3d1cdab38ac4bd9543d0796867550273565f1fe52b3",
+      "panels/calc_fem_kelvin.py": "ab96f37a1da837b69d0ffad4b4f7e6d0a21bbc68bf30232b2c2f7456c6ec89e0",
+      "panels/calc_heat.py": "b4928b3baa9e66213599a41f39909e104d02c8a39f7396347f3fb17c75b7d101",
+      "panels/calc_heat_axisym.py": "fede17717db939dc9147b9ec472cb3494b437a884a10b4a47771af08c11ce5b8",
+      "panels/calc_heat_with_em_table.py": "4c0701aaf60001ade1ea67904470d65348a5bab1190b15ea985c9fb19db29bc9",
+      "panels/calc_inductance.py": "c9c802470288e08787876e844c7e792572a906a7e3ca407cfdfedeae6725533e",
+      "panels/calc_kelvin_benchmark.py": "19cb43ea3aafe1dbbb239666d4effbeae40a82728ae2bbe2f1c02b0d810ade14",
+      "panels/calc_mesh_eval.py": "3d861ac53f140b229def75e8bf59e3f9ee0d4a075d0919052d1e9aa6b2608c2d",
+      "panels/calc_motor_hdiv_reduced.py": "11cdf8e8847bc9b5b72770bf2353c0568dd650bd8661641344dfa46c37006706",
+      "panels/calc_motor_lamination.py": "4d00892cc6d622414fb47142225a2ef63ba66977eecd75e6a03233773164c055",
+      "panels/calc_motor_transient.py": "5ab4ff4dcccab1c6cf84c1f0e650466e6fea69164a095b6b14dfe9e58db11b97",
+      "panels/calc_pcb_peec.py": "1daec6ee3d1ea926d910f131a60fe15d7cf881b2b1e79877369cdfb872f6f8b9",
+      "panels/calc_peec.py": "44741a55596f6c6560f8d70206aaf8e66a2197943f5730fa3c963952f97356fa",
+      "panels/calc_stream_coil.py": "ae4f9afb73296f53f3e5c0d7d23209fbb28d315b58e8034d3522795277934000",
+      "panels/calc_streamfunction.py": "fa3e6e57cfa47846060045b1c6ff2959cd42d41a41b3014598d2653541d2892a",
+      "panels/calc_streamfunction_volume.py": "f2feda7eef529f36b01942f71a3ae4ddd9504d30201865e9034b1d3f0b0d370c",
+      "panels/calc_surface.py": "f0466fcffb14af4f4b58ec3df22dc57979176984a715b6e42eecc0fa84e9acc6",
+      "panels/calc_verify_vol.py": "cdb0bae448707e7a87c361b28f39e0ff2b01ec545e2f5c8e43bdac5d305a6545",
+      "panels/calc_volume.py": "b742ed2530b2c4b9a34816501cd46b85d70afad2be9714901bfbe50a6d019f7d",
+      "panels/check_vol_consistency.py": "6a795bf4ef3d2703430e7d3c836c2c88d03f314dbdaa751faca7da61232fb6d1",
+      "panels/cubit_toolbar/scripts/export_femeem.py": "c179ff9d52e0762cc3758f1909ebd0218400691e642b3d41197c79c46cea902d",
+      "panels/cubit_toolbar/scripts/export_gmsh.py": "15468aefe7060821f065a36e08bc06c3101b76a61cbe405ae27d2a902d040513",
+      "panels/cubit_toolbar/scripts/export_meg.py": "aea98d0e9b8364b71b2617ddec78daf15b94b223464f267c4073cf7e22095796",
+      "panels/cubit_toolbar/scripts/export_nastran.py": "e021ac2ab0ffd67769b66b303b6ca606c6771f0b16b48cc4a13fa0695f39f4d0",
+      "panels/cubit_toolbar/scripts/export_netgen.py": "996222904e23d96f52241ad61e3495ee7b21a72cbd3aaa602ba9a4ad6f3968d6",
+      "panels/cubit_toolbar/scripts/export_vtk.py": "1186d854b8901e3d9efc2898e92d4c9303f0e876679befee83605225176ed5fe",
+      "panels/cubit_toolbar_probe.py": "bc401887458f0dbe60daf2ccb3c51421b64e4243a7c0291c94b42cdc1ab329c6",
+      "panels/em_table.py": "2746bd0d376edadb28bffc07c3242ed1b4115813e3582d6ef31535fee4099a47",
+      "panels/generate_coil.py": "cef58bcab776e8583b5a4d1a9e64074c9f47815bed0a1c768f2db910c4dcc87d",
+      "panels/open_gmsh.py": "191e442b8fb169b982aaf6d464cfe510acc6f8aca08abd18fb2334490b135e41",
+      "panels/panel_log.py": "f8f0b76bf3d6bbdc2e758d619ee3d665dcd069c9e8ca881d3359e56c75f28aa2",
+      "panels/radia_export_menu.py": "01e460bcbb95e34db02988f68379ea62fcdcf11c11dd7a87c9aa1d72cd13dcfc",
+      "panels/register_toolbar.py": "0bb19e5dacbfb369c16185d264b6d6d4936d07ca897bdc900ba9eb9260658115",
+      "panels/samples/em/em_elf_yoke_builder.py": "f4f288a749c24aaa091180e956a12d61243ebd93ef2e3052928b9f47f30ad343",
+      "panels/samples/em_elf_coil.py": "a39d635844c0e70737a1db7a4bf4f73f82d60ad7f53080a192eebcfe55a208d8",
+      "panels/samples/em_sample_coil.py": "eb0aedf6136f1e27e6c5fef8f274b2f0518df8820065b2aacd94a3deec995f2c",
+      "panels/samples/ih_fem_kelvin_demo.py": "fda61ab3d1cbcf5c31ec2a561eb6494ad3fe9e628aa7289b1312469c41949ae5",
+      "panels/samples/kelvin_benchmark_sphere_1_2_build.py": "0226bbbbc41aade7c1181419c4d7a4e981630bf51a62d9d6c8b5f20ead94a234",
+      "panels/samples/kelvin_benchmark_sphere_1_4_build.py": "11ccbda4bf4db973bba10353f277f6a3ad26c48d844de5afae587a9ff1fd8687",
+      "panels/samples/kelvin_benchmark_sphere_1_8_build.py": "ebc5a442f87c637479fad659d16460dd7cc7e489ba4a98907381840ad34e0a3e",
+      "panels/samples/kelvin_benchmark_sphere_build.py": "487c00a2c9134f92740f6df3f0bbbe0592d50e0d7341ff773aea1ef557bbb579",
+      "panels/startup.py": "c27d91b5a5cb06fddf79536e3e417e4b7847131e66116ac12255356dfa60b621",
+      "panels/surface_mesh_extract.py": "f954edb2056f35c092f743c08f7d8f62e4d93137e390f006cfd3b8e9a0cd08c5",
+      "particle_tracking.py": "c6beb144439238a19e3531dad8ad95a2a29242897354b79a491e234d454fc841",
+      "pcb_design.py": "8db44831e4b22239f4ed4d240639bdd9439892517f12d7e37c28bec7a694aacd",
+      "peec_bundle.py": "6a6a2c3bdc81f260cdf3cf03f74076ed115e8aaa2bb680b05e3f8884ff8cd616",
+      "peec_coupled_bem_solver.py": "2a9df928b9939ceb27969f2fdb5188e10ebf875a62a83382256c75f273fb3f8c",
+      "peec_hacapk_solver.py": "787d1c0027a22538d4fb1fc00830a66d2a050c0aa4638898bca731bbd33e7ba8",
+      "peec_matrices.py": "d45f50ed5277fcf07fc2324bb88212cd5b70b85ceb2bd0a84c49a5f955846799",
+      "peec_mesh_import.py": "4459da2d000b7d926cb4eafb784f35146a7dd5b722abe90b1e9bc434b0d02967",
+      "peec_proximity.py": "c189d64e21924aaf17c59004348537fec48e1919924bb9e70748c6dcc8de4c96",
+      "peec_shield.py": "7e4669526dfa4873db603e25fb30cda5b0a9b41c75494b620f8b7c9e82a24715",
+      "peec_shielded.py": "4a89e5c80e0ee0e2c169e538bc81b38521a6371621a2ff31d7faf30ff7c86864",
+      "peec_topology.py": "95cb785aa06b225223a4d51770004754bd3327b0cc10ea970b1cb09208d45b9c",
+      "planar_aniso.py": "21d0eeb70f0662ef008b3ccd736e43e47745784e693f07e8cfc3f717a2c93880",
+      "planar_charges.py": "c344a431113075a26792a35a0bb503d6222c3043b75837d14c2c93eda4a8da0b",
+      "planar_eddy.py": "d36923c6ec70fae54d3130fd1abd63c47f65f572ff011928f5f6355b1b5ddc0c",
+      "planar_geometry.py": "ee50cd2299a54b952041bdf858c4ce057e87992575c78d54e5408c3822dc74a3",
+      "planar_hysteresis.py": "8c33b3d65eae8d84324c3c11342189d97b4121950d5dbb0a81b4d9418fc03bfd",
+      "planar_materials.py": "7b016296b6f5950bbb6026d209aa16c15e66df3405edd9e0aabdcb37c7db56c5",
+      "prima_hacapk.py": "1271e6e627719a00c3562345e92a5011e0eefa4a161b8817db9edbc30a417fd4",
+      "radia_ngsolve.py": "80808e1bdc620ce523715184694183b9a87e14796b1906c4a85bd7a78985f2b9",
+      "round_bodies.py": "47c9122d82326eb48214e9f7268ade058a0943510011daebd5cccb5dbac6b17d",
+      "scalar_bie_sibc.py": "73074f589587d8ddb8f41ec529c768e03f1f978395a9001f895f7aceaaee5ec3",
+      "scalar_potential_solver.py": "349b4d887e6ba61c600fcc4ad111b19edc41e63f45b7c13ba48642e62e2220db",
+      "setup_cubit.py": "f30ac0da7680671cd6b099ba576f1b0b7290b85b599c35a73bdb08d14b143628",
+      "sheet_metal_optimization.py": "fe22152a7f4ba1032fae697cac16836d2aac397b5105c458500d371c11aa1144",
+      "simulink/__init__.py": "33ecefde464c822c980ca2665f208642adaef3c8efc62c3978644f5b0780be30",
+      "simulink/application.py": "1aee7f462c61b37d6165356250daf8dc7307ae1ca4e8011ad9b4fbb59638a46c",
+      "simulink/ih_operator_assembly.py": "3298ab87a45ac05481e4d498cee6dcfb764f67a8211f5c3556fcea751a752a2c",
+      "soft_iron.py": "4fd1fd996e8fb74650f32c0f5f42cc8564b09b7e1f1ad75722f525aaf6dae655",
+      "static_electromagnet.py": "3486a191cf6ca698711508207f615cbf404a22e3890db8bcdfba625546e610bf",
+      "step_mesh_builder.py": "81963bd395ac4b6527ab4c5aff8ff20ea68a403efca05d2e8b398ea42ffc7b7e",
+      "stream_function.py": "c52b02864520c1f14353dff1e6bde07d8c322dd5ed84c3f0f9375d86faae8d4d",
+      "streamfunction_design.py": "c731845602d974793995c283984cb76466e2c0fdc86430bdcc6a8b469be3fc3f",
+      "streamfunction_volume.py": "f9922b11645089599bcacfb3090514203dd15ba3d130abe907d7c921dabba577",
+      "tools/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "topology_optimization.py": "02010b269510d6188f59a2fca6af1711bb098dbf6e9701bd2e59479d7af4379e",
+      "topopt_cad.py": "78ecf3719fd84f466021b052e2305059ccadb2c6d023d0841c2e8231b2d90a69",
+      "urn/__init__.py": "e3b3fb61aec20c867d71ad199b69e8daa50e54845cb9598412ff69497f384513",
+      "urn/cauer_ladder_urn.py": "cd71b7c1e40abe913386270ce1b37992629672218699b0390c0c81ca794f8d22",
+      "urn/cln_peeling_urn.py": "13241cfc5cab3e8f7f4ebb984d5334fbb654a410d3aabbee11a65fedc17ebd92",
+      "urn/relaxation_basis_library.py": "f1f5112b25fbb62ad4cff13ad50a09287fbff2b31813c33df3400c73b2edb706",
+      "urn/universal_relaxation_network.py": "ff94e49d2f8d7a693c42b7abab8f5065609a48e3add27d5547aaa5fc98441ed2",
+      "urn/y_admittance_urn.py": "0416a3566a61145382941b826b3d4f8fa0ccbd9f2e6972758459b79c9c13549a",
+      "vector_potential_solver.py": "16d6320488200db9c3242cc24529abc43d72ad0f65ffcd10094795949a4cb61d",
+      "veriloga_generator.py": "2d254fb9a50512b080cd37da0b7bfd8eb747205c401afa19486f8f6d98c58993",
+      "vim/__init__.py": "7067cb8a0bd859198e2512f63c34949384423e7d3489395e7e388850e3a5e099",
+      "vim/_capabilities.py": "e99a55353cf51525d03fecdad1f154dd21904150a4315657662d49b7de6c92bc",
+      "vim/_coupled.py": "cf8654084bc16afe1cb093486c8664dfc3c6efd0002fc7b05e0a751cf06230da",
+      "vim/_eddy_hybrid.py": "ded4f9c62aa8624ceb67b31b04e0f7ef7bdc4aaed3e4cb4c71daf8c165532135",
+      "vim/_field_batch.py": "9ac33e732808ecd6c9481c72d4f52d6646ddd7c0f317adafc12fc1058e8ebd26",
+      "vim/_hcurl_planar_interaction.py": "f3fc0b963f7e877e2933b4f7d8ef631bcd451ebee130bdd432061e1eec668bc7",
+      "vim/_hcurl_tet_interaction.py": "d8a1baa58cc5660cfa913a34c5894158ffec9b8efc67f61e635b3efa40b8fb9d",
+      "vim/_hysteresis.py": "971caa03483527aa3166cd6be7cad03f6af80a2ad08eb653779420bcfddec768",
+      "vim/_image.py": "330c5648aaa82d975a36c3d7470a784b8e6dba26e8bbd7f55c5d7c4d59d074ec",
+      "vim/_magnetization_source.py": "c49df497ec1182154884a6d4b79dee53f0148529a472936396e86ae3f54aa3ca",
+      "vim/_matlab_bridge.py": "d68e25732364a234296c9b0a9559a755b1c17e7a90f339a9471d7da82461154f",
+      "vim/_nonlinear.py": "54edefc4001251d41d836bc4580ac781e83f021539910a4cafd63821ca6e6b70",
+      "vim/_radsolve.py": "c252a4c59c9e524a69eb451b45a491de531e27d4bad5be9482eb6e8f9d5ea608",
+      "vim/_shapes.py": "5a5cde2b382a77a70a7ada13e9fd2183cb80d80bf9033066f1e3d37d79d27b5e",
+      "vim/_slab_eddy.py": "6a0904bd2f886db8e2b0a3ec3015a5e9c07dcbb9dc8a802f0b86c965db77c563",
+      "vim/_solve.py": "c8d8eb056190b1ec330a36fe02bc9fdc92739969b1116f9e7e2c29d47d43f866",
+      "vim/_solver.py": "4aceb258eeb2c13fc3ca80f73267199940a0da63d7d9f88ece5dfd2223c99e32",
+      "vim/_transient.py": "4874be643cfab97e5d44f56d4325fa5306a1a0fe4e21058da5cb27f73e991e88",
+      "vim/_vim.py": "2feeb20b145d7de864ce00985827fb9a05cb39a2418f26b862d83d7d6b7180e5",
+      "vim/_vim2d.py": "f6ceea5ab7b88e1bef7c684a1f6dba2a96ec2595abfc8d3567a5c9bbbf26fc3a",
+      "workpiece_surface.py": "5d736c69b6af70f68ac25547eb87187c093af0c02171b3276a469c19d01aa6b4",
+      "xsuite_bridge.py": "acdc52660bd6d0b0a51acf77cb5304fd3a18a6a7ee2768497efcf5187d18b1d0"
+    },
+    "ngsolve": "6.2.2606",
+    "solver_file": "C:\\temp\\omega-quadrature-small\\kelvin_solver.py",
+    "solver_sha256": "7d207b91c9f3498d5f8b659ef7824aad31d70e6ccf868d6fe4f0fef44bdf9931",
+    "factory_sha256": "aa9616a6fdd77108dd4b0e3b8665e34e321cda74ec22fe3d5ffda188dec44f27",
+    "runner_sha256": "931f3d674b0da6cdad133da6ec9274590df139f5fb94d0f4104943692f00f752",
+    "diagnostics_sha256": "953c742f1beb089264cef2bf16c9752d52f944a12a45500d1308f6cf347753d5"
+  },
+  "controls": {
+    "factory": "C:\\temp\\omega-quadrature-small\\ctype.py",
+    "mesh": "C:\\temp\\radia-ctype-family\\coarse\\kelvin_domain.vol",
+    "output": "C:\\temp\\omega-quadrature-small\\result.json",
+    "mode": "research",
+    "research_solver": "C:\\temp\\omega-quadrature-small\\kelvin_solver.py",
+    "orders": [
+      1
+    ],
+    "bonuses": [
+      4,
+      8
+    ],
+    "evaluation_order": 8,
+    "source_order": 3,
+    "threads": 24
+  },
+  "mesh_sha256": "078a8fa56d065c0e0dfb8721f540e1a4b8e96a7932905305dd4c78cdda9dde2f",
+  "mesh_elements": 24134,
+  "case": {
+    "case": "ctype",
+    "current_A": -2000.0,
+    "mu_r": 1000.0,
+    "physical_center": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "kelvin_center": [
+      0.6600000000000004,
+      7.697835424647081e-18,
+      -1.1985861142263254e-16
+    ],
+    "kelvin_radius": 0.22,
+    "arc_segment_length": 0.004,
+    "mesh_report": {
+      "schema": "radia.validation.c-type-cubit-meshes.v1",
+      "passed": true,
+      "machine": "lab",
+      "cad_authority": "C:\\temp\\radia-hdiv-fix6\\validation_test\\c_type_three_engine\\cad\\c_type_iron.jou",
+      "cad_sha256": "dc857c13ada42f8c7f73f7e0eab634523a839c185af376c6b5e2634aa2abfb1f",
+      "cubit": "C:\\Program Files\\Coreform Cubit 2025.12\\bin\\coreform_cubit.com",
+      "command_plugin_dir": null,
+      "mesh_policy": {
+        "hdiv_mmm": "exact iron-only Cubit/ACIS TET .vol; Coulomb open boundary",
+        "reduced_a": "exact iron + locally refined physical air + Kelvin exterior",
+        "mixed_total_reduced_omega": "same periodic Kelvin .vol as reduced-A; H1 TOSCA mixed total/reduced Omega"
+      },
+      "kelvin_radius_m": 0.22,
+      "kelvin_physical_center_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "iron_size_m": 0.0375,
+      "air_size_m": 0.05,
+      "gap_size_m": 0.0025,
+      "kelvin_mesh_size_m": 0.0625,
+      "curve_order": 2,
+      "gap_inventory": {
+        "elements": 1158,
+        "maximum_edge_m": 0.007046956681776465,
+        "maximum_z_span_m": 0.005,
+        "gap_height_m": 0.01
+      },
+      "reflection_inventory": {
+        "iron": {
+          "vertex_count": 179,
+          "missing_reflected_vertices": 0,
+          "maximum_reflected_vertex_error_m": 0.0,
+          "volume_element_count": 434,
+          "missing_reflected_volume_elements": 0
+        },
+        "kelvin_domain": {
+          "vertex_count": 4396,
+          "missing_reflected_vertices": 0,
+          "maximum_reflected_vertex_error_m": 0.0,
+          "volume_element_count": 24134,
+          "missing_reflected_volume_elements": 0
+        }
+      },
+      "kelvin_identification": {
+        "pair_count": 297,
+        "translation_m": [
+          0.6599999999999971,
+          1.1120920869561753e-17,
+          0.0
+        ],
+        "maximum_pair_translation_error_m": 2.9992664160719813e-15
+      },
+      "kelvin_fes": {
+        "base_h1_ndof": 4396,
+        "periodic_h1_ndof": 4396,
+        "slaved_free_dofs": 297,
+        "kelvin_int_trace_norm": 0.6081837622858427,
+        "kelvin_ext_trace_norm": 0.6081837622858436,
+        "trace_norm_ratio": 1.0000000000000016
+      },
+      "exact_iron_volume_m3": 0.001446095333333,
+      "mesh_iron_volume_m3": 0.0014460953333333615,
+      "relative_iron_volume_error": 2.4996485084668267e-13,
+      "artifacts": {
+        "iron_vol": "C:\\temp\\radia-ctype-family\\coarse\\iron.vol",
+        "iron_vol_sha256": "f9cf6eeb0fe99f775d99aad5740cd8e63ee6f845489cfb9a2ccb534bda0d44b0",
+        "kelvin_domain_vol": "C:\\temp\\radia-ctype-family\\coarse\\kelvin_domain.vol",
+        "kelvin_domain_vol_sha256": "078a8fa56d065c0e0dfb8721f540e1a4b8e96a7932905305dd4c78cdda9dde2f"
+      },
+      "inventory": {
+        "iron": {
+          "elements": 434,
+          "vertices": 179,
+          "materials": [
+            "iron"
+          ],
+          "boundaries": [
+            "iron_boundary"
+          ],
+          "volume_element_vertex_counts": [
+            4
+          ]
+        },
+        "kelvin_domain": {
+          "elements": 24134,
+          "vertices": 4396,
+          "materials": [
+            "iron",
+            "air",
+            "kelvin"
+          ],
+          "boundaries": [
+            "iron_air_interface",
+            "kelvin_ext",
+            "kelvin_int"
+          ],
+          "volume_element_vertex_counts": [
+            4
+          ]
+        }
+      },
+      "checks": {
+        "iron": {
+          "run": {
+            "command": [
+              "check-vol",
+              "C:\\temp\\radia-ctype-family\\coarse\\iron.vol",
+              "--strict-labels",
+              "--required-materials",
+              "iron",
+              "--required-boundaries",
+              "iron_boundary",
+              "--report-json",
+              "C:\\temp\\radia-ctype-family\\coarse\\iron.vol-check.json",
+              "--format",
+              "json"
+            ],
+            "returncode": 0,
+            "runtime_s": 0.9746887999936007,
+            "log": "C:\\temp\\radia-ctype-family\\coarse\\iron.check-vol.log"
+          },
+          "report": "C:\\temp\\radia-ctype-family\\coarse\\iron.vol-check.json",
+          "payload": {
+            "schema": "cubit-mesh-export.vol-check.v1",
+            "generated_at_utc": "2026-09-07T07:31:01.392171+00:00",
+            "versions": {
+              "cubit_mesh_export": "0.14.9",
+              "ngsolve": "6.2.2606",
+              "python": "3.12.10"
+            },
+            "passed": true,
+            "vol_file": "C:\\temp\\radia-ctype-family\\coarse\\iron.vol",
+            "json_file": "C:\\temp\\radia-ctype-family\\coarse\\iron.vol.json",
+            "threshold_pct": 1.0,
+            "cad_reference": {
+              "available": true,
+              "file": "C:\\temp\\radia-ctype-family\\coarse\\iron.vol.json",
+              "auto_discovered": true,
+              "mesh_only_materials": [],
+              "metadata_checks": {
+                "n_elements": {
+                  "expected": 434,
+                  "actual": 434,
+                  "passed": true
+                },
+                "n_points": {
+                  "expected": 179,
+                  "actual": 179,
+                  "passed": true
+                },
+                "order": {
+                  "expected": 1,
+                  "actual": 1,
+                  "passed": true
+                }
+              }
+            },
+            "mesh": {
+              "dimension": 3,
+              "curve_order": 1,
+              "n_elements": 434,
+              "n_points": 179
+            },
+            "order": 1,
+            "n_elements": 434,
+            "n_points": 179,
+            "labels": {
+              "schema": "radia.vol-label-contract.v1",
+              "passed": true,
+              "application": null,
+              "strict_labels": true,
+              "materials": [
+                "iron"
+              ],
+              "boundaries": [
+                "iron_boundary"
+              ],
+              "bboundaries": [
+                "default"
+              ],
+              "bbboundaries": [],
+              "required": {
+                "materials": [
+                  "iron"
+                ],
+                "boundaries": [
+                  "iron_boundary"
+                ],
+                "bboundaries": [],
+                "bbboundaries": []
+              },
+              "allowed": {
+                "materials": [],
+                "boundaries": [],
+                "bboundaries": [],
+                "bbboundaries": []
+              },
+              "allowed_specified": {
+                "materials": false,
+                "boundaries": false,
+                "bboundaries": false,
+                "bbboundaries": false
+              },
+              "missing": {
+                "materials": [],
+                "boundaries": [],
+                "bboundaries": [],
+                "bbboundaries": []
+              },
+              "unexpected": {
+                "materials": [],
+                "boundaries": [],
+                "bboundaries": [],
+                "bbboundaries": []
+              },
+              "invalid": {
+                "materials": [],
+                "boundaries": [],
+                "bboundaries": [],
+                "bbboundaries": []
+              },
+              "autogenerated": {
+                "materials": [],
+                "boundaries": [],
+                "bboundaries": [],
+                "bbboundaries": []
+              },
+              "casefold_collisions": {
+                "materials": [],
+                "boundaries": [],
+                "bboundaries": [],
+                "bbboundaries": []
+              },
+              "relational_issues": [],
+              "warnings": []
+            },
+            "quality": {
+              "passed": true,
+              "curve_order": 1,
+              "integration_order": 1,
+              "volume_element_count": 434,
+              "tetrahedron_count": 434,
+              "mapping_sample_count": 434,
+              "finite_jacobian_sample_count": 434,
+              "finite_scaled_jacobian_sample_count": 434,
+              "minimum_jacobian": -7.236027455853734e-05,
+              "maximum_jacobian": -1.701909682447783e-06,
+              "minimum_absolute_jacobian": 1.701909682447783e-06,
+              "minimum_scaled_jacobian": 0.25245152164478474,
+              "invalid_jacobian_sample_count": 0,
+              "orientation_flip_sample_count": 0,
+              "negative_jacobian_sample_count": 434,
+              "positive_orientation_element_count": 0,
+              "negative_orientation_element_count": 434,
+              "low_scaled_jacobian_sample_count": 0,
+              "invalid_jacobian_elements": [],
+              "low_scaled_jacobian_elements": [],
+              "materials": [
+                "iron"
+              ],
+              "boundaries": [
+                "iron_boundary"
+              ],
+              "missing_materials": [],
+              "missing_boundaries": [],
+              "adjacency": {
+                "enabled": false,
+                "conductive_materials": [],
+                "air_materials": [
+                  "air",
+                  "vacuum"
+                ]
+              },
+              "warnings": []
+            },
+            "boundary_domain_ownership": {
+              "passed": true,
+              "volume_element_count": 434,
+              "surface_element_count": 324,
+              "volume_domain_counts": {
+                "1": 434
+              },
+              "surface_domain_pair_counts": {
+                "1->0": 324
+              },
+              "domain_surface_incidence_counts": {
+                "1": 324
+              },
+              "exterior_surface_element_count": 324,
+              "exterior_surface_domain_counts": {
+                "1": 324
+              },
+              "internal_interface_element_count": 0,
+              "internal_interface_domain_pair_counts": {},
+              "material_ids": [
+                1
+              ],
+              "missing_material_ids": [],
+              "unknown_surface_domains": [],
+              "unreferenced_volume_domains": [],
+              "invalid_volume_rows": [],
+              "invalid_surface_rows": [],
+              "invalid_surface_connectivity_rows": [],
+              "duplicate_surface_connectivity_rows": [],
+              "zero_zero_rows": [],
+              "equal_domain_rows": [],
+              "issues": []
+            },
+            "materials": [
+              {
+                "name": "iron",
+                "ng_volume": 0.0014460953333333615,
+                "cad_volume": 0.001446095333333334,
+                "error_pct": 1.9043512931926432e-12
+              }
+            ],
+            "boundaries": [
+              {
+                "name": "iron_boundary",
+                "ng_area": 0.11760085771569828,
+                "cad_area": 0.11760085771569954,
+                "error_pct": -1.0738686052478706e-12
+              }
+            ],
+            "edges": [
+              {
+                "name": "default",
+                "ng_length": 3.5538512516843963
+              },
+              {
+                "name": "curve_10",
+                "cad_length": 0.024
+              },
+              {
+                "name": "curve_103",
+                "cad_length": 0.055
+              },
+              {
+                "name": "curve_104",
+                "cad_length": 0.055
+              },
+              {
+                "name": "curve_105",
+                "cad_length": 0.05
+              },
+              {
+                "name": "curve_106",
+                "cad_length": 0.08000000000000002
+              },
+              {
+                "name": "curve_107",
+                "cad_length": 0.05
+              },
+              {
+                "name": "curve_108",
+                "cad_length": 0.08000000000000002
+              },
+              {
+                "name": "curve_109",
+                "cad_length": 0.10500000000000001
+              },
+              {
+                "name": "curve_11",
+                "cad_length": 0.034
+              },
+              {
+                "name": "curve_110",
+                "cad_length": 0.10500000000000001
+              },
+              {
+                "name": "curve_111",
+                "cad_length": 0.05
+              },
+              {
+                "name": "curve_112",
+                "cad_length": 0.1825
+              },
+              {
+                "name": "curve_113",
+                "cad_length": 0.1825
+              },
+              {
+                "name": "curve_114",
+                "cad_length": 0.05
+              },
+              {
+                "name": "curve_115",
+                "cad_length": 0.09200000000000001
+              },
+              {
+                "name": "curve_116",
+                "cad_length": 0.05
+              },
+              {
+                "name": "curve_117",
+                "cad_length": 0.09200000000000001
+              },
+              {
+                "name": "curve_118",
+                "cad_length": 0.042
+              },
+              {
+                "name": "curve_119",
+                "cad_length": 0.04
+              },
+              {
+                "name": "curve_12",
+                "cad_length": 0.024
+              },
+              {
+                "name": "curve_120",
+                "cad_length": 0.042
+              },
+              {
+                "name": "curve_121",
+                "cad_length": 0.05
+              },
+              {
+                "name": "curve_122",
+                "cad_length": 0.04
+              },
+              {
+                "name": "curve_123",
+                "cad_length": 0.034
+              },
+              {
+                "name": "curve_124",
+                "cad_length": 0.024
+              },
+              {
+                "name": "curve_125",
+                "cad_length": 0.034
+              },
+              {
+                "name": "curve_126",
+                "cad_length": 0.024
+              },
+              {
+                "name": "curve_127",
+                "cad_length": 0.01385640646055102
+              },
+              {
+                "name": "curve_128",
+                "cad_length": 0.01385640646055102
+              },
+              {
+                "name": "curve_129",
+                "cad_length": 0.01385640646055102
+              },
+              {
+                "name": "curve_13",
+                "cad_length": 0.01385640646055102
+              },
+              {
+                "name": "curve_130",
+                "cad_length": 0.01385640646055102
+              },
+              {
+                "name": "curve_14",
+                "cad_length": 0.05
+              },
+              {
+                "name": "curve_15",
+                "cad_length": 0.01385640646055102
+              },
+              {
+                "name": "curve_16",
+                "cad_length": 0.01385640646055102
+              },
+              {
+                "name": "curve_17",
+                "cad_length": 0.04
+              },
+              {
+                "name": "curve_18",
+                "cad_length": 0.01385640646055102
+              },
+              {
+                "name": "curve_19",
+                "cad_length": 0.05
+              },
+              {
+                "name": "curve_20",
+                "cad_length": 0.04
+              },
+              {
+                "name": "curve_29",
+                "cad_length": 0.09200000000000001
+              },
+              {
+                "name": "curve_45",
+                "cad_length": 0.1825
+              },
+              {
+                "name": "curve_48",
+                "cad_length": 0.05
+              },
+              {
+                "name": "curve_54",
+                "cad_length": 0.09200000000000001
+              },
+              {
+                "name": "curve_70",
+                "cad_length": 0.05
+              },
+              {
+                "name": "curve_71",
+                "cad_length": 0.1825
+              },
+              {
+                "name": "curve_85",
+                "cad_length": 0.0625
+              },
+              {
+                "name": "curve_86",
+                "cad_length": 0.05
+              },
+              {
+                "name": "curve_87",
+                "cad_length": 0.0625
+              },
+              {
+                "name": "curve_88",
+                "cad_length": 0.05
+              },
+              {
+                "name": "curve_89",
+                "cad_length": 0.055
+              },
+              {
+                "name": "curve_9",
+                "cad_length": 0.034
+              },
+              {
+                "name": "curve_90",
+                "cad_length": 0.055
+              },
+              {
+                "name": "curve_91",
+                "cad_length": 0.10500000000000001
+              },
+              {
+                "name": "curve_92",
+                "cad_length": 0.10500000000000001
+              },
+              {
+                "name": "curve_93",
+                "cad_length": 0.05
+              },
+              {
+                "name": "curve_94",
+                "cad_length": 0.08000000000000002
+              },
+              {
+                "name": "curve_95",
+                "cad_length": 0.05
+              },
+              {
+                "name": "curve_96",
+                "cad_length": 0.08000000000000002
+              },
+              {
+                "name": "curve_97",
+                "cad_length": 0.042
+              },
+              {
+                "name": "curve_98",
+                "cad_length": 0.042
+              }
+            ],
+            "edge_check": {
+              "available": true,
+              "error": null,
+              "per_edge_mapping": "best-effort",
+              "total_length_comparison": "used for the CAD gate when edges exist"
+            },
+            "warnings": [],
+            "total_edge_length": {
+              "cad": 3.5538512516844083,
+              "ng": 3.5538512516843963,
+              "error_pct": -3.37391967665181e-13
+            }
+          }
+        },
+        "kelvin_domain": {
+          "run": {
+            "command": [
+              "check-vol",
+              "C:\\temp\\radia-ctype-family\\coarse\\kelvin_domain.vol",
+              "--strict-labels",
+              "--required-materials",
+              "iron,air,kelvin",
+              "--required-boundaries",
+              "iron_air_interface,kelvin_int,kelvin_ext",
+              "--air-materials",
+              "air,kelvin",
+              "--report-json",
+              "C:\\temp\\radia-ctype-family\\coarse\\kelvin_domain.vol-check.json",
+              "--format",
+              "json"
+            ],
+            "returncode": 0,
+            "runtime_s": 38.624228000000585,
+            "log": "C:\\temp\\radia-ctype-family\\coarse\\kelvin_domain.check-vol.log"
+          },
+          "report": "C:\\temp\\radia-ctype-family\\coarse\\kelvin_domain.vol-check.json",
+          "payload": {
+            "schema": "cubit-mesh-export.vol-check.v1",
+            "generated_at_utc": "2026-09-07T07:31:40.019396+00:00",
+            "versions": {
+              "cubit_mesh_export": "0.14.9",
+              "ngsolve": "6.2.2606",
+              "python": "3.12.10"
+            },
+            "passed": true,
+            "vol_file": "C:\\temp\\radia-ctype-family\\coarse\\kelvin_domain.vol",
+            "json_file": "C:\\temp\\radia-ctype-family\\coarse\\kelvin_domain.vol.json",
+            "threshold_pct": 1.0,
+            "cad_reference": {
+              "available": true,
+              "file": "C:\\temp\\radia-ctype-family\\coarse\\kelvin_domain.vol.json",
+              "auto_discovered": true,
+              "mesh_only_materials": [],
+              "metadata_checks": {
+                "n_elements": {
+                  "expected": 24134,
+                  "actual": 24134,
+                  "passed": true
+                },
+                "n_points": {
+                  "expected": 4396,
+                  "actual": 4396,
+                  "passed": true
+                },
+                "order": {
+                  "expected": 2,
+                  "actual": 2,
+                  "passed": true
+                }
+              }
+            },
+            "mesh": {
+              "dimension": 3,
+              "curve_order": 2,
+              "n_elements": 24134,
+              "n_points": 4396
+            },
+            "order": 2,
+            "n_elements": 24134,
+            "n_points": 4396,
+            "labels": {
+              "schema": "radia.vol-label-contract.v1",
+              "passed": true,
+              "application": null,
+              "strict_labels": true,
+              "materials": [
+                "air",
+                "iron",
+                "kelvin"
+              ],
+              "boundaries": [
+                "iron_air_interface",
+                "kelvin_ext",
+                "kelvin_int"
+              ],
+              "bboundaries": [
+                "default"
+              ],
+              "bbboundaries": [
+                "GND"
+              ],
+              "required": {
+                "materials": [
+                  "air",
+                  "iron",
+                  "kelvin"
+                ],
+                "boundaries": [
+                  "iron_air_interface",
+                  "kelvin_ext",
+                  "kelvin_int"
+                ],
+                "bboundaries": [],
+                "bbboundaries": []
+              },
+              "allowed": {
+                "materials": [],
+                "boundaries": [],
+                "bboundaries": [],
+                "bbboundaries": []
+              },
+              "allowed_specified": {
+                "materials": false,
+                "boundaries": false,
+                "bboundaries": false,
+                "bbboundaries": false
+              },
+              "missing": {
+                "materials": [],
+                "boundaries": [],
+                "bboundaries": [],
+                "bbboundaries": []
+              },
+              "unexpected": {
+                "materials": [],
+                "boundaries": [],
+                "bboundaries": [],
+                "bbboundaries": []
+              },
+              "invalid": {
+                "materials": [],
+                "boundaries": [],
+                "bboundaries": [],
+                "bbboundaries": []
+              },
+              "autogenerated": {
+                "materials": [],
+                "boundaries": [],
+                "bboundaries": [],
+                "bbboundaries": []
+              },
+              "casefold_collisions": {
+                "materials": [],
+                "boundaries": [],
+                "bboundaries": [],
+                "bbboundaries": []
+              },
+              "relational_issues": [],
+              "warnings": []
+            },
+            "quality": {
+              "passed": true,
+              "curve_order": 2,
+              "integration_order": 6,
+              "volume_element_count": 24134,
+              "tetrahedron_count": 24134,
+              "mapping_sample_count": 1544576,
+              "finite_jacobian_sample_count": 1544576,
+              "finite_scaled_jacobian_sample_count": 1544576,
+              "minimum_jacobian": -0.00030372329482186423,
+              "maximum_jacobian": -7.233399387104121e-09,
+              "minimum_absolute_jacobian": 7.233399387104121e-09,
+              "minimum_scaled_jacobian": 0.11136771480101339,
+              "invalid_jacobian_sample_count": 0,
+              "orientation_flip_sample_count": 0,
+              "negative_jacobian_sample_count": 1544576,
+              "positive_orientation_element_count": 0,
+              "negative_orientation_element_count": 24134,
+              "low_scaled_jacobian_sample_count": 0,
+              "invalid_jacobian_elements": [],
+              "low_scaled_jacobian_elements": [],
+              "materials": [
+                "air",
+                "iron",
+                "kelvin"
+              ],
+              "boundaries": [
+                "iron_air_interface",
+                "kelvin_ext",
+                "kelvin_int"
+              ],
+              "missing_materials": [],
+              "missing_boundaries": [],
+              "adjacency": {
+                "enabled": false,
+                "conductive_materials": [],
+                "air_materials": [
+                  "air",
+                  "kelvin"
+                ]
+              },
+              "warnings": []
+            },
+            "boundary_domain_ownership": {
+              "passed": true,
+              "volume_element_count": 24134,
+              "surface_element_count": 2938,
+              "volume_domain_counts": {
+                "1": 6844,
+                "2": 14854,
+                "3": 2436
+              },
+              "surface_domain_pair_counts": {
+                "1->2": 1758,
+                "2->0": 590,
+                "3->0": 590
+              },
+              "domain_surface_incidence_counts": {
+                "1": 1758,
+                "2": 2348,
+                "3": 590
+              },
+              "exterior_surface_element_count": 1180,
+              "exterior_surface_domain_counts": {
+                "2": 590,
+                "3": 590
+              },
+              "internal_interface_element_count": 1758,
+              "internal_interface_domain_pair_counts": {
+                "1<->2": 1758
+              },
+              "material_ids": [
+                1,
+                2,
+                3
+              ],
+              "missing_material_ids": [],
+              "unknown_surface_domains": [],
+              "unreferenced_volume_domains": [],
+              "invalid_volume_rows": [],
+              "invalid_surface_rows": [],
+              "invalid_surface_connectivity_rows": [],
+              "duplicate_surface_connectivity_rows": [],
+              "zero_zero_rows": [],
+              "equal_domain_rows": [],
+              "issues": []
+            },
+            "materials": [
+              {
+                "name": "air",
+                "ng_volume": 0.04315298832602439,
+                "cad_volume": 0.043156142767232133,
+                "error_pct": -0.007309367810640724
+              },
+              {
+                "name": "iron",
+                "ng_volume": 0.0014460953333333625,
+                "cad_volume": 0.001446095333333334,
+                "error_pct": 1.979325753554559e-12
+              },
+              {
+                "name": "kelvin",
+                "ng_volume": 0.044599083659358024,
+                "cad_volume": 0.0446022381005655,
+                "error_pct": -0.007072383229662521
+              }
+            ],
+            "boundaries": [
+              {
+                "name": "iron_air_interface",
+                "ng_area": 0.11760085771569884,
+                "cad_area": 0.11760085771569954,
+                "error_pct": -6.018384490949604e-13
+              },
+              {
+                "name": "kelvin_ext",
+                "ng_area": 0.6081837622810314,
+                "cad_area": 0.608212337734984,
+                "error_pct": -0.004698269367394606
+              },
+              {
+                "name": "kelvin_int",
+                "ng_area": 0.6081837622810311,
+                "cad_area": 0.608212337734984,
+                "error_pct": -0.0046982693674493675
+              }
+            ],
+            "edges": [
+              {
+                "name": "default",
+                "ng_length": 6.31842623523082
+              },
+              {
+                "name": "curve_10",
+                "cad_length": 0.024
+              },
+              {
+                "name": "curve_11",
+                "cad_length": 0.034
+              },
+              {
+                "name": "curve_12",
+                "cad_length": 0.024
+              },
+              {
+                "name": "curve_13",
+                "cad_length": 0.01385640646055102
+              },
+              {
+                "name": "curve_137",
+                "cad_length": 0.055
+              },
+              {
+                "name": "curve_138",
+                "cad_length": 0.055
+              },
+              {
+                "name": "curve_139",
+                "cad_length": 0.05
+              },
+              {
+                "name": "curve_14",
+                "cad_length": 0.05
+              },
+              {
+                "name": "curve_140",
+                "cad_length": 0.08000000000000002
+              },
+              {
+                "name": "curve_141",
+                "cad_length": 0.05
+              },
+              {
+                "name": "curve_142",
+                "cad_length": 0.08000000000000002
+              },
+              {
+                "name": "curve_143",
+                "cad_length": 0.10500000000000001
+              },
+              {
+                "name": "curve_144",
+                "cad_length": 0.10500000000000001
+              },
+              {
+                "name": "curve_145",
+                "cad_length": 0.05
+              },
+              {
+                "name": "curve_146",
+                "cad_length": 0.1825
+              },
+              {
+                "name": "curve_147",
+                "cad_length": 0.1825
+              },
+              {
+                "name": "curve_148",
+                "cad_length": 0.05
+              },
+              {
+                "name": "curve_149",
+                "cad_length": 0.09200000000000001
+              },
+              {
+                "name": "curve_15",
+                "cad_length": 0.01385640646055102
+              },
+              {
+                "name": "curve_150",
+                "cad_length": 0.05
+              },
+              {
+                "name": "curve_151",
+                "cad_length": 0.09200000000000001
+              },
+              {
+                "name": "curve_152",
+                "cad_length": 0.042
+              },
+              {
+                "name": "curve_153",
+                "cad_length": 0.04
+              },
+              {
+                "name": "curve_154",
+                "cad_length": 0.042
+              },
+              {
+                "name": "curve_155",
+                "cad_length": 0.05
+              },
+              {
+                "name": "curve_156",
+                "cad_length": 0.04
+              },
+              {
+                "name": "curve_157",
+                "cad_length": 0.034
+              },
+              {
+                "name": "curve_158",
+                "cad_length": 0.024
+              },
+              {
+                "name": "curve_159",
+                "cad_length": 0.034
+              },
+              {
+                "name": "curve_16",
+                "cad_length": 0.01385640646055102
+              },
+              {
+                "name": "curve_160",
+                "cad_length": 0.024
+              },
+              {
+                "name": "curve_161",
+                "cad_length": 0.01385640646055102
+              },
+              {
+                "name": "curve_162",
+                "cad_length": 0.01385640646055102
+              },
+              {
+                "name": "curve_163",
+                "cad_length": 0.01385640646055102
+              },
+              {
+                "name": "curve_164",
+                "cad_length": 0.01385640646055102
+              },
+              {
+                "name": "curve_17",
+                "cad_length": 0.04
+              },
+              {
+                "name": "curve_18",
+                "cad_length": 0.01385640646055102
+              },
+              {
+                "name": "curve_19",
+                "cad_length": 0.05
+              },
+              {
+                "name": "curve_198",
+                "cad_length": 1.382300767579509
+              },
+              {
+                "name": "curve_20",
+                "cad_length": 0.04
+              },
+              {
+                "name": "curve_29",
+                "cad_length": 0.09200000000000001
+              },
+              {
+                "name": "curve_45",
+                "cad_length": 0.1825
+              },
+              {
+                "name": "curve_48",
+                "cad_length": 0.05
+              },
+              {
+                "name": "curve_54",
+                "cad_length": 0.09200000000000001
+              },
+              {
+                "name": "curve_70",
+                "cad_length": 0.05
+              },
+              {
+                "name": "curve_71",
+                "cad_length": 0.1825
+              },
+              {
+                "name": "curve_85",
+                "cad_length": 0.0625
+              },
+              {
+                "name": "curve_86",
+                "cad_length": 0.05
+              },
+              {
+                "name": "curve_87",
+                "cad_length": 0.0625
+              },
+              {
+                "name": "curve_88",
+                "cad_length": 0.05
+              },
+              {
+                "name": "curve_89",
+                "cad_length": 0.055
+              },
+              {
+                "name": "curve_9",
+                "cad_length": 0.034
+              },
+              {
+                "name": "curve_90",
+                "cad_length": 0.055
+              },
+              {
+                "name": "curve_91",
+                "cad_length": 0.10500000000000001
+              },
+              {
+                "name": "curve_92",
+                "cad_length": 0.10500000000000001
+              },
+              {
+                "name": "curve_93",
+                "cad_length": 0.05
+              },
+              {
+                "name": "curve_94",
+                "cad_length": 0.08000000000000002
+              },
+              {
+                "name": "curve_95",
+                "cad_length": 0.05
+              },
+              {
+                "name": "curve_96",
+                "cad_length": 0.08000000000000002
+              },
+              {
+                "name": "curve_97",
+                "cad_length": 0.042
+              },
+              {
+                "name": "curve_98",
+                "cad_length": 0.042
+              },
+              {
+                "name": "curve_99",
+                "cad_length": 1.382300767579509
+              }
+            ],
+            "edge_check": {
+              "available": true,
+              "error": null,
+              "per_edge_mapping": "best-effort",
+              "total_length_comparison": "used for the CAD gate when edges exist"
+            },
+            "warnings": [],
+            "total_edge_length": {
+              "cad": 6.318452786843427,
+              "ng": 6.31842623523082,
+              "error_pct": -0.0004202233284329876
+            }
+          }
+        }
+      },
+      "runs": {
+        "iron": {
+          "command": [
+            "C:\\Program Files\\Coreform Cubit 2025.12\\bin\\coreform_cubit.com",
+            "-nographics",
+            "-batch",
+            "-nojournal",
+            "-input",
+            "C:\\temp\\radia-ctype-family\\coarse\\build_iron.jou"
+          ],
+          "returncode": 0,
+          "runtime_s": 1.7521624000073643,
+          "log": "C:\\temp\\radia-ctype-family\\coarse\\iron.cubit.log"
+        },
+        "kelvin_domain": {
+          "command": [
+            "C:\\Program Files\\Coreform Cubit 2025.12\\bin\\coreform_cubit.com",
+            "-nographics",
+            "-batch",
+            "-nojournal",
+            "-input",
+            "C:\\temp\\radia-ctype-family\\coarse\\build_kelvin_domain.jou"
+          ],
+          "returncode": 0,
+          "runtime_s": 3.062765800001216,
+          "log": "C:\\temp\\radia-ctype-family\\coarse\\kelvin_domain.cubit.log"
+        }
+      }
+    }
+  },
+  "rows": [
+    {
+      "order": 1,
+      "bonus": 4,
+      "solve_s": 2.4938227999955416,
+      "total_s": 18.779112500022165,
+      "ndof": 6913,
+      "linear_residual": {
+        "free_dofs": {
+          "residual_l2": 2.373372405653254e-16,
+          "rhs_l2": 7.233451066401093e-05,
+          "relative": 3.2811066030119617e-12
+        },
+        "all_dofs": {
+          "residual_l2": 5.40175622468365e-16,
+          "rhs_l2": 7.233451066401094e-05,
+          "relative": 7.467744199963492e-12
+        },
+        "blocks": {
+          "phi_reduced": {
+            "residual_l2": 3.573105669116967e-19,
+            "rhs_l2": 1.9161363446849966e-05,
+            "relative": 1.864745000546591e-14
+          },
+          "phi_total": {
+            "residual_l2": 2.373369714496487e-16,
+            "rhs_l2": 1.0178420336340649e-15,
+            "relative": 0.23317662624156885
+          },
+          "interface_constraint": {
+            "residual_l2": 8.451659179770287e-21,
+            "rhs_l2": 6.975043787575554e-05,
+            "relative": 1.211699802490844e-16
+          }
+        }
+      },
+      "energy": {
+        "half_xAx": 1.7089540808669996,
+        "b_dot_x": -0.0740994364276736,
+        "energy": 1.7830535172946733,
+        "primal_blocks": [
+          0,
+          1
+        ],
+        "term_audit": [
+          {
+            "rule": "assembly_default",
+            "terms": [
+              {
+                "term": "quadratic_coupled",
+                "contracted": 1.5859138841924616
+              },
+              {
+                "term": "quadratic_iron",
+                "contracted": 0.1230401966745378
+              },
+              {
+                "term": "load_air",
+                "contracted": -0.034090739713978226
+              },
+              {
+                "term": "load_kelvin",
+                "contracted": -0.04000869671354232
+              },
+              {
+                "term": "load_iron",
+                "contracted": -1.5303691907625102e-13
+              }
+            ],
+            "half_xAx": 1.7089540808669994,
+            "b_dot_x": -0.07409943642767358,
+            "energy": 1.783053517294673
+          },
+          {
+            "rule": "fixed_rule",
+            "terms": [
+              {
+                "term": "quadratic_coupled",
+                "contracted": 1.5858750773446149,
+                "integrated": 1.5858750773446189,
+                "difference": 3.9968028886505635e-15
+              },
+              {
+                "term": "quadratic_iron",
+                "contracted": 0.12304019667484678,
+                "integrated": 0.12304019667490422,
+                "difference": 5.744016373654404e-14
+              },
+              {
+                "term": "load_air",
+                "contracted": -0.03402175783998326,
+                "integrated": -0.03402175783998331,
+                "difference": -4.85722573273506e-17
+              },
+              {
+                "term": "load_kelvin",
+                "contracted": -0.04000202945339205,
+                "integrated": -0.04000202945339211,
+                "difference": -6.245004513516506e-17
+              },
+              {
+                "term": "load_iron",
+                "contracted": 0.00013657118874437066,
+                "integrated": 0.00013657118874435033,
+                "difference": -2.0328790734103208e-17
+              }
+            ],
+            "half_xAx": 1.7089152740194615,
+            "b_dot_x": -0.07388721610463093,
+            "energy": 1.7828024901240924
+          }
+        ],
+        "fixed_rule_order": 8,
+        "default_reconstruction_difference": -2.220446049250313e-16,
+        "fixed_rule_identity": {
+          "W": 1.7467340139445875,
+          "J": 1.7828024901240924,
+          "source_offset": -0.03606847617956221,
+          "W_minus_J_minus_offset": 5.728056917675417e-14
+        }
+      },
+      "gates": {
+        "free_residual": true,
+        "same_rule_energy": true,
+        "assembly_reconstruction": true,
+        "residual_phi_reduced": true,
+        "residual_phi_total": false,
+        "residual_interface_constraint": true
+      }
+    },
+    {
+      "order": 1,
+      "bonus": 8,
+      "solve_s": 5.937500300002284,
+      "total_s": 24.657585100008873,
+      "ndof": 6913,
+      "linear_residual": {
+        "free_dofs": {
+          "residual_l2": 2.1829536522286118e-16,
+          "rhs_l2": 7.509147214409622e-05,
+          "relative": 2.9070593369639223e-12
+        },
+        "all_dofs": {
+          "residual_l2": 2.2092669841011063e-16,
+          "rhs_l2": 7.509147214409622e-05,
+          "relative": 2.942101041595842e-12
+        },
+        "blocks": {
+          "phi_reduced": {
+            "residual_l2": 3.6086632811035445e-19,
+            "rhs_l2": 2.775996897513264e-05,
+            "relative": 1.2999522025172947e-14
+          },
+          "phi_total": {
+            "residual_l2": 2.1829506678757934e-16,
+            "rhs_l2": 1.7290828226769359e-06,
+            "relative": 1.2624905176584817e-10
+          },
+          "interface_constraint": {
+            "residual_l2": 8.33557932716704e-21,
+            "rhs_l2": 6.975043787575512e-05,
+            "relative": 1.1950576341922068e-16
+          }
+        }
+      },
+      "energy": {
+        "half_xAx": 1.7090119265820367,
+        "b_dot_x": -0.0819157131989332,
+        "energy": 1.79092763978097,
+        "primal_blocks": [
+          0,
+          1
+        ],
+        "term_audit": [
+          {
+            "rule": "assembly_default",
+            "terms": [
+              {
+                "term": "quadratic_coupled",
+                "contracted": 1.5856102061175021
+              },
+              {
+                "term": "quadratic_iron",
+                "contracted": 0.12340172046453435
+              },
+              {
+                "term": "load_air",
+                "contracted": -0.04153865774206659
+              },
+              {
+                "term": "load_kelvin",
+                "contracted": -0.040468161346321446
+              },
+              {
+                "term": "load_iron",
+                "contracted": 9.11058894548357e-05
+              }
+            ],
+            "half_xAx": 1.7090119265820365,
+            "b_dot_x": -0.0819157131989332,
+            "energy": 1.7909276397809697
+          },
+          {
+            "rule": "fixed_rule",
+            "terms": [
+              {
+                "term": "quadratic_coupled",
+                "contracted": 1.5856102061175021,
+                "integrated": 1.5856102061174997,
+                "difference": -2.4424906541753444e-15
+              },
+              {
+                "term": "quadratic_iron",
+                "contracted": 0.12340172046453435,
+                "integrated": 0.12340172046457266,
+                "difference": 3.8316572137375715e-14
+              },
+              {
+                "term": "load_air",
+                "contracted": -0.03351688986563699,
+                "integrated": -0.03351688986563692,
+                "difference": 6.938893903907228e-17
+              },
+              {
+                "term": "load_kelvin",
+                "contracted": -0.04046680302814547,
+                "integrated": -0.04046680302814551,
+                "difference": -4.163336342344337e-17
+              },
+              {
+                "term": "load_iron",
+                "contracted": 0.00013753957828553632,
+                "integrated": 0.00013753957828551808,
+                "difference": -1.8241701552068612e-17
+              }
+            ],
+            "half_xAx": 1.7090119265820365,
+            "b_dot_x": -0.07384615331549692,
+            "energy": 1.7828580798975333
+          }
+        ],
+        "fixed_rule_order": 8,
+        "default_reconstruction_difference": -2.220446049250313e-16,
+        "fixed_rule_identity": {
+          "W": 1.746789603718005,
+          "J": 1.7828580798975333,
+          "source_offset": -0.0360684761795622,
+          "W_minus_J_minus_offset": 3.3958946765721976e-14
+        }
+      },
+      "gates": {
+        "free_residual": true,
+        "same_rule_energy": true,
+        "assembly_reconstruction": true,
+        "residual_phi_reduced": true,
+        "residual_phi_total": true,
+        "residual_interface_constraint": true
+      }
+    }
+  ],
+  "nesting": [
+    {
+      "bonus": 4,
+      "low": 1,
+      "high": 1,
+      "embedding_relative_error": {
+        "phi_reduced": 9.741591687289867e-16,
+        "phi_total": 1.0099529689706023e-13
+      },
+      "embedding_checks": {
+        "phi_reduced": {
+          "value": {
+            "absolute": 1.2027773681055812e-14,
+            "relative": 1.8815022406842678e-16
+          },
+          "gradient": {
+            "absolute": 1.5249298191126138e-12,
+            "relative": 9.741591687289867e-16
+          },
+          "interface_trace": {
+            "absolute": 4.0853201750291207e-14,
+            "relative": 1.5359510944280253e-16
+          },
+          "constrained_coefficient_max_abs": 1.0848934081655207e-15,
+          "constrained_dof_count": 1053,
+          "constraint_scope": "all nonfree DOFs, including inactive and zero gauge"
+        },
+        "phi_total": {
+          "value": {
+            "absolute": 6.06942915141701e-15,
+            "relative": 1.6629928533843244e-16
+          },
+          "gradient": {
+            "absolute": 1.4133011891641478e-12,
+            "relative": 1.0099529689706023e-13
+          },
+          "interface_trace": {
+            "absolute": 5.209523292017911e-14,
+            "relative": 1.582550348443479e-16
+          },
+          "constrained_coefficient_max_abs": null,
+          "constrained_dof_count": 0,
+          "constraint_scope": "all nonfree DOFs, including inactive and zero gauge"
+        }
+      },
+      "constraint_violation_l2": 1.000381499355644e-20,
+      "constraint_rhs_l2": 6.975043787575554e-05,
+      "constraint_violation_relative": 1.4342297049627058e-16,
+      "constraint_global_rhs_relative": 1.3829933874887885e-16,
+      "interpretation": "diagnostic only; inspect value, trace and gauge before nesting"
+    },
+    {
+      "bonus": 8,
+      "low": 1,
+      "high": 1,
+      "embedding_relative_error": {
+        "phi_reduced": 9.384586343118294e-16,
+        "phi_total": 1.0388363236754307e-13
+      },
+      "embedding_checks": {
+        "phi_reduced": {
+          "value": {
+            "absolute": 1.1314449206596944e-14,
+            "relative": 1.7666069035109462e-16
+          },
+          "gradient": {
+            "absolute": 1.4686475132064316e-12,
+            "relative": 9.384586343118294e-16
+          },
+          "interface_trace": {
+            "absolute": 3.712931696711502e-14,
+            "relative": 1.3961002557938188e-16
+          },
+          "constrained_coefficient_max_abs": 4.1216918566753937e-16,
+          "constrained_dof_count": 1053,
+          "constraint_scope": "all nonfree DOFs, including inactive and zero gauge"
+        },
+        "phi_total": {
+          "value": {
+            "absolute": 6.1255400059471495e-15,
+            "relative": 1.6783594589972904e-16
+          },
+          "gradient": {
+            "absolute": 1.4558539187702812e-12,
+            "relative": 1.0388363236754307e-13
+          },
+          "interface_trace": {
+            "absolute": 5.378920109522898e-14,
+            "relative": 1.634001942940823e-16
+          },
+          "constrained_coefficient_max_abs": null,
+          "constrained_dof_count": 0,
+          "constraint_scope": "all nonfree DOFs, including inactive and zero gauge"
+        }
+      },
+      "constraint_violation_l2": 1.2947945945832808e-20,
+      "constraint_rhs_l2": 6.975043787575512e-05,
+      "constraint_violation_relative": 1.8563246827061775e-16,
+      "constraint_global_rhs_relative": 1.7242897996441518e-16,
+      "interpretation": "diagnostic only; inspect value, trace and gauge before nesting"
+    }
+  ],
+  "embedding_quadrature_order": 16,
+  "assembly_scope": "bonus applies to volume and interface terms; not load-only",
+  "acceptance": "HOLD: diagnostics are not three-engine field acceptance",
+  "source_harmonic_norm": 0.006810317429934673,
+  "source_unchanged": true,
+  "completed": true
+}
