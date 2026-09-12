@@ -39,6 +39,13 @@ def register(mcp) -> int:
     count = 0
     for name in dir(_tools):
         if name.startswith("doc_convert_") and callable(getattr(_tools, name)):
-            mcp.tool()(getattr(_tools, name))
+            if name == "doc_convert_session_font_check":
+                from mcp.types import ToolAnnotations
+                mcp.tool(annotations=ToolAnnotations(
+                    readOnlyHint=True, destructiveHint=False,
+                    idempotentHint=True, openWorldHint=False,
+                ))(getattr(_tools, name))
+            else:
+                mcp.tool()(getattr(_tools, name))
             count += 1
     return count
