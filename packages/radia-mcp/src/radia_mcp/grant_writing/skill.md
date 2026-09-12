@@ -1,5 +1,13 @@
 # grant-writing
 
+The integrated health report's `reader_experience` separates three manual
+review axes: excitement without hype, one-pass clarity, and specialist
+accessibility. It never assigns an automatic quality score. Quote the relevant
+passage and strongest remaining objection when making a human judgment; zero
+detector findings do not establish comprehension, merit, or funding likelihood.
+Specialist first-use findings are review prompts, not an added numerical
+penalty in the existing Japanese readability score.
+
 Use this skill for grant proposal drafts, recommendation letters, and final
 pre-submission checks. Use `paper-writing` for journal, digest, and research-
 meeting manuscripts. Figure and presentation helpers are tool families rather
