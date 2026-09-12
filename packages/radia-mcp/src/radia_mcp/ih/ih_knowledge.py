@@ -571,18 +571,25 @@ python -m radia.panels.calc_heat \\
     --wp-vol workpiece_thermal.vol \\
     --qsurf-sol  <stem>_qsurf.sol \\  # REQUIRED for spatial mode
     --em-vol     <stem>_fem.vol   \\  # REQUIRED (no auto-locate)
-    --qsurf-order 1                \\  # MUST equal EM fes_order
+    --qsurf-order 1                \\  # cross-mesh transfer is P1 only
+    --heat-flux-boundaries heated_outer \\
+    --convection-boundaries 'outer|top|bottom' \\
     --material steel --dt 0.5 --t-end 5.0 \\
     --rotation-rpm 12                  # see ``rotating`` topic
-    # --surface-label is OPTIONAL: empty = all BND.
-    # Pass a specific name only when the workpiece has MULTIPLE BND
-    # sidesets and heating + convection should be restricted to a
-    # subset. The Simulink configuration validates this label before
-    # native state is created.
 ```
 
-`--qsurf-order` must match the EM solve's `--fes-order` exactly;
-mismatch reads garbage silently (no NGSolve error).  Defaults: both 1.
+The boundary roles are independent.  ``--heat-flux-boundaries`` is always
+required; ``--convection-boundaries`` is required when ``--h-conv`` is nonzero;
+and ``--radiation-boundaries`` is required when emissivity is nonzero.  A role
+may use an NGSolve expression such as ``outer|top`` and roles may overlap
+intentionally.  Empty selectors never expand silently to every boundary.  The
+removed ``--surface-label`` fails with migration guidance.
+
+Cross-mesh q_surf transfer currently accepts ``--qsurf-order 1`` only.  The
+loader rejects higher order because its surface transfer is vertex-sampled and
+higher-order H1 coefficients are hierarchical; accepting order 2 would silently
+distort the heat source.  ``calc_fem_kelvin.py`` therefore saves this handoff
+as P1 even when the electromagnetic solve itself uses a higher order.
 
 The headless runner and Simulink initialization both fail before solving when
 the ``.sol`` / ``.vol`` pair is incomplete or incompatible.  They do not infer
@@ -593,7 +600,7 @@ a missing companion file from a filename convention.
 `calc_fem_kelvin.py` saves q_surf as:
 
 ```python
-fes_q = H1(mesh, order=fes_order)        # VOLUME H1 on the EM mesh
+fes_q = H1(mesh, order=1)                # fixed P1 cross-mesh handoff
 gf_q = GridFunction(fes_q)
 gf_q.vec[:] = 0                          # interior DOFs stay 0
 gf_q.Set(q_surf_cf, definedon=wp_region) # only workpiece-boundary DOFs touched
@@ -625,6 +632,7 @@ JSON output keys (calc_heat / calc_heat_axisym):
 | ``heat_vol_file`` | absolute path to the companion `.vol`.  Empty when no separate companion was written (then re-use the `--wp-vol` input as the companion). |
 | ``msh_file`` | GMSH `.msh v4.1` (T_C + q_surf fields) when `--msh-output` was set |
 | ``csv_file`` | probe history CSV when both `--probe-point` + `--csv-output` were set |
+| ``boundary_audit`` | Concrete matched heat-flux, convection, and radiation boundaries; per-boundary area; and per-boundary heat input |
 
 Naming convention:
 
@@ -904,7 +912,8 @@ can generate the equivalent angle history from ``--rotation-rpm``:
 ```bash
 python -m radia.panels.calc_heat \\
     --wp-vol     workpiece_thermal.vol \\
-    --surface-label sibc \\
+    --heat-flux-boundaries heated_outer \\
+    --convection-boundaries 'outer|top|bottom' \\
     --qsurf-sol  ih_em_qsurf.sol \\
     --em-vol     ih_em_fem.vol \\
     --material   steel \\
@@ -969,13 +978,13 @@ and the thermal solve (calc_heat.py):
    `*_fem.vol` file that `calc_fem_kelvin.py` saves alongside
    `*_qsurf.sol`.
 
-2. **`qsurf_order` MUST equal the EM `fes_order`**.  The thermal solver
-   rebuilds `H1(em_mesh, order=qsurf_order)` and loads the .sol into
-   it.  If the orders disagree the coefficient vector lands in a
-   space with a different DOF count and the loaded field is garbage
-   (no NGSolve-level error, silent corruption).  Default for both is
-   1.  When the EM solve uses `--fes-order 2`, pass `--qsurf-order 2`
-   to calc_heat too.
+2. **`qsurf_order` is currently fixed to 1 for cross-mesh transfer**.
+   The thermal solver rebuilds `H1(em_mesh, order=qsurf_order)` and loads
+   the .sol into it, then transfers surface vertex values.  It rejects
+   any order other than 1 because higher-order H1 coefficients are
+   hierarchical and vertex-only reconstruction is not a valid projection.
+   ``calc_fem_kelvin.py`` always produces this handoff at order 1,
+   independently of the electromagnetic solve order.
 
 3. **q_surf is a volume H1 GF with non-zero values ONLY on the
    workpiece boundary**.  calc_fem_kelvin does
@@ -986,6 +995,12 @@ and the thermal solve (calc_heat.py):
    the boundary node values are recovered exactly.  Wp surface
    vertices that fall OUTSIDE the EM mesh (mesh mismatch) are set to
    0 and a count is reported in the run log.
+
+4. **Thermal boundary roles are explicit and independently audited**.
+   Heat flux, convection, and radiation use separate selectors.  The
+   result JSON records each selector, every concrete matched boundary,
+   its area, and the boundary-wise heat input.  Inspect ``boundary_audit``
+   before interpreting a temperature hotspot.
 
 ## Test coverage
 

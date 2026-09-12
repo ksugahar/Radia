@@ -57,7 +57,8 @@ def test_calc_heat_axisym_temperature_band(regenerate_fixture, tmp_path):
     order-1 path; the default is order 2 -- see the test below)."""
     cmd = [sys.executable, SCRIPT,
            "--wp-vol", regenerate_fixture,
-           "--surface-label", "outer",
+           "--heat-flux-boundaries", "outer",
+           "--convection-boundaries", "outer",
            "--q-uniform", "1e5",
            "--material", "steel",
            "--t-end", "10",
@@ -114,7 +115,8 @@ def test_calc_heat_axisym_default_order2_band(regenerate_fixture, tmp_path):
     constant (Set(), not vec[:] = T0)."""
     cmd = [sys.executable, SCRIPT,
            "--wp-vol", regenerate_fixture,
-           "--surface-label", "outer",
+           "--heat-flux-boundaries", "outer",
+           "--convection-boundaries", "outer",
            "--q-uniform", "1e5",
            "--material", "steel",
            "--t-end", "10",

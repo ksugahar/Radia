@@ -138,7 +138,12 @@ def test_geometry_role_notes_roundtrip_accepts_list():
     ],
 )
 def test_thermal_fes_order_uses_method_specific_default(method, expected_order):
-    command = IHDesignSpec(method=method, wp_vol="workpiece.vol").build_command(
+    command = IHDesignSpec(
+        method=method,
+        wp_vol="workpiece.vol",
+        heat_flux_boundaries="heated",
+        convection_boundaries="exposed",
+    ).build_command(
         python="python", panels_dir="panels"
     )
     assert command[command.index("--fes-order") + 1] == expected_order
@@ -149,6 +154,8 @@ def test_thermal_fes_order_explicit_override_is_preserved(method):
     command = IHDesignSpec(
         method=method,
         wp_vol="workpiece.vol",
+        heat_flux_boundaries="heated",
+        convection_boundaries="exposed",
         thermal_fes_order=3,
     ).build_command(python="python", panels_dir="panels")
     assert command[command.index("--fes-order") + 1] == "3"
@@ -159,6 +166,8 @@ def test_thermal_spatial_output_is_gmsh_only(method):
     command = IHDesignSpec(
         method=method,
         wp_vol="workpiece.vol",
+        heat_flux_boundaries="heated",
+        convection_boundaries="exposed",
     ).build_command(python="python", panels_dir="panels")
     assert command[command.index("--msh-output") + 1].endswith("_heat.msh")
     assert "--vtu-prefix" not in command
@@ -173,4 +182,56 @@ def test_thermal_fes_order_rejects_invalid_values(invalid):
         thermal_fes_order=invalid,
     )
     with pytest.raises(ValueError, match="positive integer"):
+        spec.build_command(python="python", panels_dir="panels")
+
+
+def test_thermal_boundary_roles_are_independent_cli_settings():
+    spec = IHDesignSpec(
+        method=METHOD_THERMAL_AXISYM,
+        wp_vol="workpiece.vol",
+        heat_flux_boundaries="heated_outer|heated_end",
+        convection_boundaries="outer|top|bottom",
+        radiation_boundaries="outer",
+        emissivity="0.8",
+    )
+    command = spec.build_command(python="python", panels_dir="panels")
+
+    assert command[command.index("--heat-flux-boundaries") + 1] == (
+        "heated_outer|heated_end"
+    )
+    assert command[command.index("--convection-boundaries") + 1] == (
+        "outer|top|bottom"
+    )
+    assert command[command.index("--radiation-boundaries") + 1] == "outer"
+    assert "--surface-label" not in command
+
+
+def test_thermal_boundary_roles_fail_fast_when_active_role_is_missing():
+    spec = IHDesignSpec(
+        method=METHOD_THERMAL_AXISYM,
+        wp_vol="workpiece.vol",
+        heat_flux_boundaries="heated",
+    )
+    assert spec.missing_required_inputs() == ["Convection boundary selector"]
+    with pytest.raises(ValueError, match="convection_boundaries"):
+        spec.build_command(python="python", panels_dir="panels")
+
+
+def test_legacy_surface_label_is_rejected_with_migration_guidance():
+    with pytest.raises(ValueError, match="heat_flux_boundaries"):
+        IHDesignSpec(surface_label="outer")
+
+
+def test_spatial_qsurf_high_order_is_rejected_before_command_execution():
+    spec = IHDesignSpec(
+        method=METHOD_THERMAL_AXISYM,
+        wp_vol="workpiece.vol",
+        heat_source=HEAT_SRC_SPATIAL,
+        qsurf_sol="q.sol",
+        em_vol="em.vol",
+        qsurf_order=2,
+        heat_flux_boundaries="heated",
+        convection_boundaries="exposed",
+    )
+    with pytest.raises(ValueError, match="qsurf_order=1"):
         spec.build_command(python="python", panels_dir="panels")

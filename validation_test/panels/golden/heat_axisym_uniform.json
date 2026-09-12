@@ -3,7 +3,8 @@
   "fixture": "validation_test/panels/fixtures/heat_workpiece_cylinder_R25_H25_axisym.vol",
   "fixture_generator": "validation_test/panels/fixtures/generate_heat_cylinder_axisym.py",
   "cli": {
-    "surface_label": "outer",
+    "heat_flux_boundaries": "outer",
+    "convection_boundaries": "outer",
     "material": "steel",
     "q_uniform_Wm2": 1.0e4,
     "h_conv_Wm2K": 10.0,

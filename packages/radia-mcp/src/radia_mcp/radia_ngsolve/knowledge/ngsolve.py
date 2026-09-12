@@ -1808,7 +1808,7 @@ coefficient vectors -- no mesh, no fes-order header.
 Save side (Producer; e.g. `calc_fem_kelvin.py` IH):
 
 ```python
-fes_q = H1(mesh, order=fes_order)
+fes_q = H1(mesh, order=1)                # fixed cross-mesh handoff order
 gf_q = GridFunction(fes_q)
 gf_q.vec[:] = 0                          # interior DOFs stay 0
 gf_q.Set(q_surf_cf, definedon=wp_region) # only boundary DOFs touched
@@ -1817,16 +1817,16 @@ gf_q.Save("q.sol")                       # raw coefficient vector
 
 `wp_region = mesh.Boundaries("sibc")` is a Region; passing it to
 `.Set(definedon=...)` triggers a boundary projection -- only the H1
-DOFs that live on that boundary (vertex DOFs on boundary nodes, edge
-DOFs on boundary edges, face DOFs on boundary faces; order >= 2) get
-populated.  Interior bubbles stay 0.
+DOFs that live on that boundary get populated.  The Radia IH handoff is
+deliberately P1 because its downstream nonmatching-mesh transfer samples
+physical surface vertices.  Interior bubbles stay 0.
 
 Load side (Consumer; e.g. `calc_heat.py` Phase B):
 
 ```python
 em_mesh = Mesh("em.vol")                  # MUST be passed explicitly --
                                           # .sol is mesh-free.
-fes_q_em = H1(em_mesh, order=fes_order)   # MUST match save-side order.
+fes_q_em = H1(em_mesh, order=1)           # fixed producer/consumer contract.
 gf_q_em = GridFunction(fes_q_em)
 gf_q_em.Load("q.sol")
 ```
@@ -1838,10 +1838,11 @@ THREE contracts that must hold:
    silent-fallback footgun (`<stem>_fem.vol` next to `<stem>_qsurf.sol`
    was the convention; tightened to required 2026-05-20 per
    CLAUDE.md "No Fallbacks").
-2. The FES order MUST match the producer's.  No header in .sol means
-   a mismatch loads garbage silently (no NGSolve error).  Default
-   for radia panel chain is 1 on both sides; for `--fes-order 2` EM
-   solves, pass matching `--qsurf-order 2` to the thermal consumer.
+2. The Radia IH handoff FES order is fixed to 1 on both sides.  No header
+   in .sol means a mismatch loads garbage silently (no NGSolve error), and
+   higher-order H1 coefficients are hierarchical rather than vertex values.
+   `calc_fem_kelvin.py` therefore saves P1 q_surf even for a higher-order EM
+   solve; the thermal consumer rejects `--qsurf-order` other than 1.
 3. The producer must `gf.vec[:] = 0` BEFORE `Set(definedon=...)`.
    Otherwise the interior DOFs carry whatever the previous state was;
    downstream consumers expect interior=0.
@@ -1879,10 +1880,14 @@ in `ds(label)`:
 
 ```python
 f_form = LinearForm(fes_T)
-f_form += q_cf * v * ds(surface_label)   # NGSolve auto-traces both
-                                         # q_cf and v's volume bases.
+f_form += q_cf * v * ds(heat_flux_selector)  # NGSolve auto-traces both
+                                              # q_cf and v's volume bases.
 f_form.Assemble()
 ```
+
+In Radia IH, ``heat_flux_selector`` is resolved independently from the
+convection and radiation selectors.  Never reuse one generic surface label
+for all three roles unless the overlap is intentional and explicit.
 
 Diagnostic value of POINT-EVALUATION over `.Trace()`: when wp surface
 vertices fall slightly OUTSIDE the EM mesh (mesh-mismatch, geometry
