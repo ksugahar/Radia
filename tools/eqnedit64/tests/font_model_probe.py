@@ -13,7 +13,8 @@ import sys
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("case", choices=("load-only", "metrics-ab", "svg-ab", "svg-math",
-                                        "edit-400", "edit-1000", "edit-all"))
+                                        "edit-400", "edit-1000", "edit-1525", "edit-all",
+                                        "deep-once", "deep-sequence"))
     args = parser.parse_args()
     if (os.environ.get("GITHUB_ACTIONS") != "true" or
             os.environ.get("EQNEDIT64_ISOLATED_TEST_SESSION") != "1"):
@@ -34,6 +35,17 @@ def main():
         source = "ab" if args.case == "svg-ab" else r"\frac{a}{b}+\sqrt{x^{2}}+\sum_{i=1}^{n}x_i"
         if "<svg" not in core.tex_to_svg(source):
             return 3
+    elif args.case.startswith("deep-"):
+        # Reproduce the depth fixture without any unrelated editing suite.
+        depths = (200,) if args.case == "deep-once" else range(1, 201)
+        for depth in depths:
+            equation = core.Equation()
+            source = r"\sqrt{" * depth + "}" * depth
+            if not equation.load_latex(source):
+                return 4
+            equation.metrics()
+        if "<svg" not in equation.svg():
+            return 5
     elif args.case.startswith("edit-"):
         # A diagnostic prefix of the pinned source, not a shortened acceptance test.
         path = Path(__file__).with_name("test_edit.py")
