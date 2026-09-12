@@ -48,19 +48,10 @@ Prefer established public abstractions over proprietary plumbing.
   functions, application coupling, and validated native kernels.
 - Cubit and build123d own CAD authoring. Netgen/NGSolve and Cubit own solver
   mesh generation. Gmsh is Radia's post-processing target.
-- Build thin Python, MATLAB, and MCP adapters around coarse tested workflows.
-  Do not expose every helper as a tool or duplicate solver logic in wrappers.
+- Build thin Python, MATLAB, and MCP adapters around reusable domain workflows.
+  Consolidate duplicates; preserve contracts. Follow `packages/radia-mcp/CONTRIBUTING.md`.
 - Keep two genuinely independent analysis routes for important models when
   feasible.
-
-### MCP Consolidation
-
-Keep MCP transport, registration and argument handling thin; domain workflows
-remain directly callable and independently testable. Reuse equivalent logic
-instead of copying gates for each case. Preserve public names, result schemas,
-error behavior and domain-specific policy. Consolidate tests by distinct failure
-signal, not by deleting coverage. File splitting alone is not debt reduction;
-see `packages/radia-mcp/CONTRIBUTING.md` for the consolidation acceptance rules.
 
 ### Numerical Rules
 
