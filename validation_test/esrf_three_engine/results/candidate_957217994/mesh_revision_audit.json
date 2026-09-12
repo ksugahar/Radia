@@ -1,0 +1,58 @@
+{
+  "scope": "topology and trace coupling, not discretization convergence",
+  "meshes": {
+    "iron": {
+      "path": "C:\\temp\\radia-ex6-diag\\assets_conforming\\model.vol",
+      "sha256": "fdd1387281e550e27eab435cfac3ec54e0b9d1339438699fdc50c852dfcafc74",
+      "elements": 2408,
+      "curve_order": 2,
+      "conformity": {
+        "hanging_facets": 0,
+        "duplicated_boundary_face_pairs": 0,
+        "conforming": true
+      },
+      "elapsed_s": 0.7678066000225954
+    },
+    "fem": {
+      "path": "C:\\temp\\radia-esrf-fem\\example6\\coil_yoke_kelvin.vol",
+      "sha256": "dfc12b84f80db1fa17fb5012b6f87c072e8aa1fb3c085b61269f047a879a54ac",
+      "elements": 134686,
+      "curve_order": 2,
+      "conformity": {
+        "hanging_facets": 0,
+        "duplicated_boundary_face_pairs": 0,
+        "conforming": true
+      },
+      "kelvin_pairs": {
+        "count": 1393,
+        "translation_m": [
+          0.4800000000000095,
+          -2.7811303451630325e-17,
+          0.0
+        ],
+        "max_translation_error_m": 9.604111156642696e-15
+      },
+      "h1_trace_checks": [
+        {
+          "order": 1,
+          "norms": {
+            "kelvin_int": 0.32169839873891226,
+            "kelvin_ext": 0.3216983987389132
+          },
+          "ratio": 1.0000000000000029,
+          "slaved_free_dofs": 1393
+        },
+        {
+          "order": 2,
+          "norms": {
+            "kelvin_int": 0.3216983987389122,
+            "kelvin_ext": 0.32169839873891337
+          },
+          "ratio": 1.0000000000000036,
+          "slaved_free_dofs": 5566
+        }
+      ],
+      "elapsed_s": 8.409738099988317
+    }
+  }
+}
