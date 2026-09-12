@@ -52,6 +52,12 @@ maintenance never kills unrelated MATLAB, Python, or client processes.
    require no dedicated branch, immutable snapshot or separate approval. Record
    the source path and actual commit plus uncommitted changes when reporting
    results; a commit alone does not identify modified source.
+   `python tools/release_quad.py repoint --package radia-mcp --source
+   <checkout>/packages/radia-mcp --reason "<why>"` performs steps 4-5 for one
+   package: it records the previous pointer, installs, verifies a fresh process
+   and records the new intent. `repoint --record-current --reason "<why>"`
+   adopts an already installed pointer. Verification tools treat an unrecorded
+   pointer as UNVERIFIED and never propose a repair target.
 2. Inventory all explicitly named human users, both clients and project-scoped
    settings. LAB and 100 have separate executable/path namespaces. On 100 use
    its local `W:` path, not LAB's mapped `S:` or a UNC path.
@@ -83,7 +89,9 @@ maintenance never kills unrelated MATLAB, Python, or client processes.
    client. Neither doctor nor this new stdio process verifies an existing client.
 
 Recovery: select the intended known-working source in coordination with affected
-developers; do not reset another worktree or automatically restore an old path.
+developers (`repoint --rollback --package <name>` reinstalls the previous
+recorded pointer without uninstalling or stopping processes); do not reset
+another worktree or automatically restore an old path.
 Restore only affected settings from backups when appropriate, preserving ACLs.
 Repeat fresh-process and live-client checks. Before removing an old source,
 verify that no active consumer needs it. Release wheel tests use isolated

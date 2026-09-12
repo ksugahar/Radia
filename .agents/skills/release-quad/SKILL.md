@@ -20,7 +20,8 @@ python tools/release_quad.py optuna-candidate --ci-run-id <id> --target all
 python tools/release_quad.py optuna-done --wheel <path>
 python tools/release_quad.py all
 python tools/release_quad.py done --simulink-package <zip>
-python tools/release_quad.py restore-editable
+python tools/release_quad.py verify-editable
+python tools/release_quad.py repoint --package <name> --source <path> --reason "<why>"
 ```
 
 ## Machine Policy
@@ -95,14 +96,29 @@ python tools/release_quad.py all
 
 The release worktree must contain the native build outputs needed by editable
 installs. QUAD verifies its exact Git SHA and tracked-clean state on LAB and
-100号機 before killing processes or installing anything. Repeat the same two
-environment variables for `done`. The final `done` gate is non-mutating: it
-requires the active LAB source to remain at the exact tracked-clean release SHA,
-requires that SHA to equal the peeled `v<radia-version>` tag, verifies editable
-metadata and actual import origins on LAB/100号機, and leaves those verified
-pointers unchanged. After the canonical `01_GitHub` tree catches up with
-published `main`, run `restore-editable` explicitly to return the development
-tier to that tree.
+100号機 before killing processes or installing anything, and Phase 8 records
+the installed source as each host's editable intent (`tools/editable_intent.py`,
+`%ProgramData%\Radia\editable-intent.json`, override with
+`RADIA_EDITABLE_INTENT_FILE`). Repeat the same two environment variables for
+`done`. The final `done` gate is non-mutating: it requires the active LAB source
+(the override when set, otherwise the recorded intent; neither means
+UNVERIFIED, exit 5) to remain at the exact tracked-clean release SHA, requires
+that SHA to equal the peeled `v<radia-version>` tag, verifies editable metadata
+and actual import origins on LAB/100号機, and leaves those verified pointers
+unchanged.
+
+There is no default tree to return to afterwards (policy P02, 2026-09-11).
+Moving any package of the development tier, in either direction, is an
+explicit `repoint --package <name> --source <path> --reason "<why>"` (add
+`--host 100` and spell the path as 100号機 sees it). It records the previous
+pointer, runs `pip install -e`, verifies registration and a fresh-process
+import, then records the new intent. It never stops processes and never
+uninstalls; `repoint --rollback --package <name>` reinstalls the previous
+pointer, and `repoint --record-current --reason "<why>"` adopts an already
+installed pointer. `verify-editable` reports a package without a record as
+UNVERIFIED, not as drift, and prints no repair target. `restore-editable` was
+removed. Reserve `--require-pushed` for formal handoff or completion evidence;
+routine MCP development does not require a pushed ref.
 
 ## Rules
 

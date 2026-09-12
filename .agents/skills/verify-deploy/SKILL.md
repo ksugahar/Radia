@@ -26,19 +26,24 @@ python -c "import pathlib,radia; print(radia.__version__); print(pathlib.Path(ra
 python -c "import pathlib,radia.simulink.application as m; print(pathlib.Path(m.__file__).resolve())"
 ```
 
-Both paths must resolve to the intended canonical editable checkout, not a
-wheel under `site-packages` and not a release worktree. LAB and 100号機 use
-editable installs. If the source is wrong, stop the running MCP/MATLAB clients,
-then reinstall from the canonical checkout:
+Both paths must resolve to the source recorded as the editable intent for this
+host and interpreter (`python tools/release_quad.py verify-editable`, or
+`python tools/verify_lab_editable.py` on LAB), not a wheel under
+`site-packages`. LAB and 100号機 use editable installs. A pointer without a
+record is UNVERIFIED, not wrong: record it if it is intended
+(`repoint --record-current --reason "<why>"`). If a different source is
+intended, move it explicitly and let the record follow:
 
 ```powershell
-python -m pip uninstall -y radia
-python -m pip install -e . --no-deps
+python tools/release_quad.py repoint --package radia --source <checkout> --reason "<why>"
 ```
 
-Reconnect long-lived MCP and MATLAB processes after changing the editable
-source. A process keeps imported modules and registered tool objects until it
-reloads or restarts.
+`repoint` records the previous pointer, runs `pip install -e`, verifies a
+fresh-process import and records the new intent. It does not uninstall first
+and does not stop processes; a locked entry point is reported for you to
+resolve at a quiet boundary. Reconnect long-lived MCP and MATLAB processes
+after changing the editable source. A process keeps imported modules and
+registered tool objects until it reloads or restarts.
 
 ## 2. Verify the Simulink application boundary
 
