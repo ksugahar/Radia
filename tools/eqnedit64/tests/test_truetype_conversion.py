@@ -84,6 +84,16 @@ class ConversionTest(unittest.TestCase):
             self.assertIn('eqnedit-math.ttf', text)
             self.assertNotIn('latinmodern-math.otf', text)
 
+    def test_native_metrics_and_paint_share_resource_family(self):
+        resource = (ROOT / 'src/eqnedit64_resource.h').read_text(encoding='utf-8')
+        style = (ROOT / 'src/equation_render.h').read_text(encoding='utf-8')
+        renderer = (ROOT / 'src/equation_render.cpp').read_text(encoding='utf-8')
+        self.assertIn('#define EQNEDIT64_MATH_FONT_FAMILY "Eqnedit Math"', resource)
+        self.assertIn('#define EQNEDIT64_MATH_FONT_FACE L"" EQNEDIT64_MATH_FONT_FAMILY', resource)
+        for field in ('serif', 'symbol'):
+            self.assertIn('std::string ' + field + ' = EQNEDIT64_MATH_FONT_FAMILY', style)
+        self.assertIn('wcscpy_s(lf.lfFaceName, EQNEDIT64_MATH_FONT_FACE)', renderer)
+
 
 if __name__ == '__main__':
     unittest.main()
