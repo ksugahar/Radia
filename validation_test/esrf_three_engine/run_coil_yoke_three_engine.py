@@ -78,13 +78,37 @@ def _load_shared_engines():
     return module
 
 
+def _validated_field(value, expected_count: int | None = None) -> np.ndarray:
+    raw = np.asarray(value)
+    if raw.dtype.kind not in "fiu":
+        raise ValueError("field must contain real numeric values")
+    field = np.asarray(raw, dtype=float)
+    if (field.ndim != 2 or field.shape[1] != 3 or not len(field)
+            or (expected_count is not None and len(field) != expected_count)
+            or not np.isfinite(field).all()):
+        raise ValueError("field must be finite, nonempty and have shape (N, 3)")
+    return field
+
+
+def _validated_tolerance(value) -> float:
+    if (isinstance(value, (bool, str)) or not np.isscalar(value)
+            or not np.isrealobj(value) or not np.isfinite(value) or not 0 < value < 1):
+        raise ValueError("tolerance must be finite and lie in (0, 1)")
+    return float(value)
+
+
 def _relative_rms(reference: np.ndarray, candidate: np.ndarray) -> float:
+    reference = _validated_field(reference)
+    candidate = _validated_field(candidate, len(reference))
     denominator = float(np.sqrt(np.mean(np.sum(reference * reference, axis=1))))
-    if denominator <= 0.0:
-        raise RuntimeError("three-engine comparison has a zero reference field")
-    return float(
+    if not np.isfinite(denominator) or denominator <= 0.0:
+        raise ValueError("three-engine reference norm must be finite and positive")
+    relative = float(
         np.sqrt(np.mean(np.sum((candidate - reference) ** 2, axis=1))) / denominator
     )
+    if not np.isfinite(relative):
+        raise ValueError("nonfinite three-engine relative RMS")
+    return relative
 
 
 CHECKPOINT_SCHEMA = "radia.validation.esrf-coil-yoke-checkpoint.v3"
@@ -129,9 +153,9 @@ def _legacy_contract(payload: dict[str, object]) -> dict[str, object]:
 
 
 def _is_converged_result(diagnostics: dict[str, object]) -> bool:
-    if not diagnostics.get("nonlinear", True):
+    if diagnostics.get("nonlinear") is False:
         return True
-    return bool(dict(diagnostics.get("nonlinear_stats") or {}).get("converged", False))
+    return dict(diagnostics.get("nonlinear_stats") or {}).get("converged") is True
 
 
 def _read_checkpoint(path: Path, contract: dict[str, object]):
@@ -157,7 +181,9 @@ def _read_checkpoint(path: Path, contract: dict[str, object]):
     if not _is_converged_result(diagnostics):
         raise RuntimeError(
             f"checkpoint holds a non-converged solve and is not a result: remove {path}")
-    return np.asarray(payload["field_T"], dtype=float), diagnostics
+    count = (len(contract["observation_points_m"])
+             if "observation_points_m" in contract else None)
+    return _validated_field(payload["field_T"], count), diagnostics
 
 
 def _write_checkpoint(
@@ -167,6 +193,9 @@ def _write_checkpoint(
     if not _is_converged_result(diagnostics):
         raise RuntimeError(
             "refusing to write a non-converged solve as a result checkpoint")
+    count = (len(contract["observation_points_m"])
+             if "observation_points_m" in contract else None)
+    field = _validated_field(field, count)
     path.write_text(
         json.dumps(
             {
@@ -176,7 +205,7 @@ def _write_checkpoint(
                 "field_T": np.asarray(field, dtype=float).tolist(),
                 "diagnostics": diagnostics,
             },
-            indent=2,
+            indent=2, allow_nan=False,
         )
         + "\n",
         encoding="utf-8",
@@ -228,19 +257,42 @@ def _picard_state(name: str, stats: dict[str, object], material_key: str) -> dic
 
 
 def _pairwise(fields: dict[str, np.ndarray], selector: np.ndarray) -> dict[str, object]:
+    required = {"hdiv_mmm", "reduced_a", "mixed_total_reduced_omega"}
+    if set(fields) != required:
+        raise ValueError("expected all three named engines, without extras")
+    checked = {name: _validated_field(value) for name, value in fields.items()}
+    count = len(next(iter(checked.values())))
+    if any(len(value) != count for value in checked.values()):
+        raise ValueError("engine field shapes differ")
+    selector = np.asarray(selector)
+    if selector.dtype.kind != "b" or selector.shape != (count,) or not selector.any():
+        raise ValueError("selector must be nonempty boolean mask matching field rows")
     rows: dict[str, object] = {}
-    names = tuple(fields)
+    names = tuple(checked)
     for index, left in enumerate(names):
         for right in names[index + 1 :]:
-            left_values = fields[left][selector]
-            right_values = fields[right][selector]
+            left_values = checked[left][selector]
+            right_values = checked[right][selector]
             rows[f"{left}__vs__{right}"] = {
                 "relative_rms": _relative_rms(left_values, right_values),
                 "maximum_absolute_difference_T": float(
                     np.max(np.linalg.norm(left_values - right_values, axis=1))
                 ),
             }
+            if not all(np.isfinite(value) for value in rows[f"{left}__vs__{right}"].values()):
+                raise ValueError("nonfinite pairwise metric")
     return rows
+
+
+def _comparison_gate(fields, selector, tolerance):
+    tolerance = _validated_tolerance(tolerance)
+    pairs = _pairwise(fields, selector)
+    values = [row["relative_rms"] for row in pairs.values()]
+    # All inputs and all metrics are checked before any max aggregation.
+    if len(values) != 3 or not all(np.isfinite(value) for value in values):
+        raise ValueError("expected three finite pairwise comparisons")
+    maximum = max(values)
+    return pairs, maximum, all(value <= tolerance for value in values)
 
 
 def _require_mesh_contract(path: Path) -> dict[str, object]:
@@ -337,6 +389,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--preflight", action="store_true")
     options = parser.parse_args(argv)
+    _validated_tolerance(options.relative_rms_tolerance)
+    _validated_tolerance(options.nonlinear_tolerance)
     if options.fem_order < 1:
         raise ValueError("--fem-order must be positive")
     if options.nonlinear_maximum_iterations < 1:
@@ -574,7 +628,9 @@ def main(argv: list[str] | None = None) -> int:
                     f"{state_path} for a warm restart with --resume"
                 )
             raise RuntimeError(f"{name} did not converge")
-        fields[name] = average_observation_field(field_samples, len(points))
+        field_samples = _validated_field(field_samples, len(field_points))
+        fields[name] = _validated_field(
+            average_observation_field(field_samples, len(points)), len(points))
         diagnostics[name]["observation_contract"] = {
             "kind": "volume_average",
             "quadrature": "tensor_gauss_2x2x2",
@@ -589,15 +645,13 @@ def main(argv: list[str] | None = None) -> int:
     all_points = np.ones(len(points), dtype=bool)
     core = core_selector(case.number, points)
     raw_pairs = _pairwise(fields, all_points)
-    core_pairs = _pairwise(fields, core)
-    maximum_core_relative_rms = max(
-        float(row["relative_rms"]) for row in core_pairs.values()
-    )
+    core_pairs, maximum_core_relative_rms, fields_agree = _comparison_gate(
+        fields, core, options.relative_rms_tolerance)
     nonlinear_converged = all(
-        bool(row.get("nonlinear_stats", {}).get("converged", False))
+        row.get("nonlinear_stats", {}).get("converged") is True
         for row in diagnostics.values()
     )
-    passed = nonlinear_converged and maximum_core_relative_rms <= options.relative_rms_tolerance
+    passed = nonlinear_converged and fields_agree
     result = {
         "schema": "radia.validation.esrf-coil-yoke-three-engine.v2",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -644,7 +698,7 @@ def main(argv: list[str] | None = None) -> int:
             "checkpoint_schema": CHECKPOINT_SCHEMA,
         },
     }
-    output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+    output.write_text(json.dumps(result, indent=2, allow_nan=False) + "\n", encoding="utf-8")
     if not passed:
         raise RuntimeError(f"three-engine comparison did not pass; see {output}")
     return 0

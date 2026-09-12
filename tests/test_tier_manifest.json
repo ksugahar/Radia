@@ -1,6 +1,7 @@
 {
   "schema": "radia.test-tier-manifest.v1",
   "impact_rules": {
+    "validation_test/esrf_three_engine/run_coil_yoke_three_engine.py": ["tests/test_esrf_three_engine_finite_gate.py"],
     "validation_test/omega_quadrature/": ["tests/test_omega_block_action_diagnostics.py"],
     "validation_test/feec/check_wedge_charge_pullback.py": ["tests/test_wedge_charge_pullback_contract.py"],
     "src/matlab/radia_mex.cpp": ["tests/test_sparsesolv_matlab_contract.py"],
