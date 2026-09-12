@@ -135,6 +135,16 @@ def test_comparison_rejects_nonfinite_values_and_handles_zero_tolerances(tmp_pat
     with pytest.raises(ValueError, match="Out of range float values"):
         MODULE._json_text({"forbidden": float("nan")})
 
+    python = _report("python-pybind11")
+    matlab = _report("matlab-mex")
+    python["observables"] = {"huge": 1.0e308}
+    matlab["observables"] = {"huge": -1.0e308}
+    python_path.write_text(json.dumps(python), encoding="utf-8")
+    matlab_path.write_text(json.dumps(matlab), encoding="utf-8")
+    overflow_case = MODULE.compare(python_path, matlab_path, rtol=1.9, atol=0.0)
+    assert not overflow_case["pass"]
+    MODULE._json_text(overflow_case)
+
 
 def test_benchmark_function_rejects_invalid_repeats_before_native_import():
     with pytest.raises(ValueError, match="positive integer"):
@@ -180,9 +190,13 @@ def test_current_native_api_retains_canonical_h5_and_f4_outputs():
 
 def test_build_writes_hash_bound_native_provenance_manifests():
     source = (ROOT / "Build.ps1").read_text(encoding="utf-8")
-    assert "radia.native-build-provenance.v1" in source
-    assert "binary_sha256" in source
-    assert "source_dirty" in source
+    helper = (ROOT / "tools" / "native_build_provenance.ps1").read_text(
+        encoding="utf-8"
+    )
+    assert "Get-NativeBuildSourceIdentity" in source
+    assert "Clear-NativeBuildProvenance" in source
     assert "$srcHash -eq $dstHash" in source
-    assert 'Write-NativeBuildProvenance "$PROJECT_DIR\\matlab\\radia_mex.mexw64"' in source
-    assert 'Write-NativeBuildProvenance "$PROJECT_DIR\\src\\radia\\_radia_pybind.pyd"' in source
+    assert "radia.native-build-provenance.v1" in helper
+    assert "binary_sha256" in helper
+    assert "source_dirty" in helper
+    assert "source_state_sha256" in helper
