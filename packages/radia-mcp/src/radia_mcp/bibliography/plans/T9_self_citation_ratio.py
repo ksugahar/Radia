@@ -9,7 +9,8 @@ import pathlib
 import re
 import unicodedata
 
-from .._bibparse import read_bib_file, first_author_family, _split_name_parts
+from .. import _bibparse
+from .._bibparse import read_bib_file
 
 
 def _normalize_name(s: str) -> str:
@@ -21,11 +22,11 @@ def _normalize_name(s: str) -> str:
 def _entry_authors(author_field: str) -> list[str]:
     """Return list of normalized lastnames."""
     out = []
-    for a in _split_name_parts(author_field or "", r"\s+and\s+"):
+    for a in _bibparse._split_name_parts(author_field or "", r"\s+and\s+"):
         a = a.strip()
         if not a:
             continue
-        last = first_author_family(a)
+        last = _bibparse.first_author_family(a)
         out.append(_normalize_name(last))
     return [x for x in out if x]
 
