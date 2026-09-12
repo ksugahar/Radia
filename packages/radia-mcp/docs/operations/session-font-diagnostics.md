@@ -21,6 +21,11 @@ The optional bounded event-log query reads XML. Command errors, invalid output,
 timeouts and truncated coverage remain unknown and cause a nonzero CLI result.
 Application-log events are not session-specific proof, and an observed crash
 does not establish the cause of a glyph-query failure.
+When `--crash-window` is explicitly requested, both an observed crash and an
+unknown query cause nonzero exit. `face_ok` reports only the face checks;
+aggregate `ok` additionally requires a successful query with no matching crash
+in that window. This does not certify accident-free operation outside that
+window or attribute an observed event to the checked face or current session.
 
 The shared WIP's `--repair`, `--force`, `--notify`, registration/unregistration,
 automatic-repair and `msg *` behavior were deliberately not recovered. Existing
