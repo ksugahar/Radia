@@ -181,3 +181,29 @@ license/renaming conditions, validate changed tables and outline approximation,
 and test rendering separately. Failure of CFF but not glyf within a finite
 bound supports a route-specific hypothesis; it does not prove ATM is a necessary
 condition for every incident. No Windows binary patching is contemplated.
+
+### Count-controlled result: 34663488070
+
+All 12 fresh-worker trials (exit/remove crossed with none/one-glyph measurement,
+three replicates each) completed 64 successful registrations: 768 launches in
+total. No child, measurement, removal, host-exit/PID-change, WER or monitor
+query error was recorded. All report NO_REPRODUCTION_WITHIN_BOUND. Evidence:
+`C:/temp/eqnedit-font-probe-34663488070/summary.json` and adjacent artifacts.
+Probe SHA256: BFE93F6EDF8F1A4D397974844C3F1E9D491441046E0F6F7CD5D84FE96CA22146.
+Font SHA256: 6075562B771F8B82F0C179E363389684F2DD09DE30038269E2628E504BD7BE0F.
+Host StartTime was not recorded in this round; retain that limitation.
+
+This does not support adopting explicit removal as a remedy: neither control
+nor removal reproduced. Registration count alone under these conditions is
+insufficient to trigger the known crash. It does not exclude accounting driven
+by a richer preceding drawing history.
+
+Next use `run_model_tests.py --diagnostic-prefix N`, followed immediately by
+the fixed reproducing self-test EXE, on fresh workers. Prefix zero still imports
+the module and loads/measures the embedded font; prefix ten is the full known
+reproducing workload. Prefixes 0,3,5,6,8,10 with two replicates each localize the
+required history without changing the default acceptance suite. Reuse the same
+EXE/pyd payload across arms and record runner and payload source separately.
+If the full-prefix control does not reproduce, do not interpret shorter prefixes
+as exoneration. Query failures are INCONCLUSIVE; record host StartTime as well
+as PID. Product release stays on hold.
