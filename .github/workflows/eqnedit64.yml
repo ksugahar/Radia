@@ -531,10 +531,9 @@ jobs:
       max-parallel: 4
       matrix:
         case:
-          - {name: load-only, operation: load-only, prefix: -1}
-          - {name: metrics-ab, operation: metrics-ab, prefix: -1}
-          - {name: svg-ab, operation: svg-ab, prefix: -1}
-          - {name: svg-math, operation: svg-math, prefix: -1}
+          - {name: edit-400, operation: edit-400, prefix: -1}
+          - {name: edit-1000, operation: edit-1000, prefix: -1}
+          - {name: edit-all, operation: edit-all, prefix: -1}
           - {name: prefix3, operation: none, prefix: 3}
         replicate: [1, 2]
     env:
