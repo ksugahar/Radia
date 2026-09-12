@@ -193,6 +193,37 @@ def test_cli_unknown_event_query_fails(native, event_query, capsys):
     assert '"crashed": null' in capsys.readouterr().out
 
 
+def test_cli_observed_crash_fails_without_attributing_it_to_this_face(native, event_query, capsys):
+    import json
+    event_query[0].stdout = ('<Event><EventData><Data Name="AppName">'
+                            'fontdrvhost.exe</Data></EventData></Event>').encode("utf-16")
+    assert t.main(["--faces", "Arial", "--crash-window", "60"]) == 1
+    result = json.loads(capsys.readouterr().out)
+    assert result["face_ok"] is True and result["ok"] is False
+    assert result["faces"][0]["status"] == "ok"
+    assert result["crash"]["crashed"] is True
+    assert "not proof about this session" in result["crash"]["scope"]
+
+
+def test_cli_successful_no_crash_query_passes(native, event_query, capsys):
+    import json
+    assert t.main(["--faces", "Arial", "--crash-window", "60"]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["face_ok"] is True and result["ok"] is True
+    assert result["crash"]["crashed"] is False
+
+
+@pytest.mark.parametrize("face", [None, "", "  ", "A\x00B", "x" * 32, "Arial, Calibri"])
+def test_direct_probe_validates_before_loading_native_api(monkeypatch, face):
+    monkeypatch.setattr(t, "_gdi", lambda: pytest.fail("Unexpected native API call"))
+    with pytest.raises(ValueError):
+        t.probe_face(face)
+
+
+def test_direct_probe_normalizes_whitespace(native):
+    assert t.probe_face("  Arial  ")["face"] == "Arial"
+
+
 def test_registration_exposes_only_readonly_font_tool():
     from radia_mcp.doc_convert import tools
     assert tools.doc_convert_session_font_check is t.doc_convert_session_font_check
