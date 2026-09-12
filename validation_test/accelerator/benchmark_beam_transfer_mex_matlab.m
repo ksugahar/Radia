@@ -35,7 +35,9 @@ if ~strcmpi(string(fileparts(mexPath)), matlabRoot)
         "radia_mex resolved outside the selected MATLAB source tree: %s", mexPath);
 end
 requireCleanSource(repoRoot);
-sourceCommit = gitHead(repoRoot);
+buildManifestPath = mexPath + ".build.json";
+buildProvenance = readBuildProvenance(buildManifestPath, mexPath, repoRoot);
+sourceCommit = string(buildProvenance.source_commit);
 mexFile = dir(mexPath);
 api = radia.apiInfo();
 run = @() radia.beam.propagateVariationalMap( ...
@@ -51,6 +53,14 @@ for index = 1:options.Repeats
     timer = tic;
     sample = run(); %#ok<NASGU>
     samples(index) = toc(timer);
+end
+if ~isfinite(firstSeconds) || firstSeconds < 0 || ...
+        any(~isfinite(samples), "all") || any(samples <= 0, "all")
+    error("radia:benchmark:Timing", "Benchmark timings must be finite and positive");
+end
+measuredObservables = observables(first);
+if any(~isfinite(cell2mat(struct2cell(measuredObservables))), "all")
+    error("radia:benchmark:Observables", "Benchmark observables must be finite");
 end
 
 result = struct( ...
@@ -69,6 +79,7 @@ result = struct( ...
         "bytes", mexFile.bytes, ...
         "sha256", sha256File(mexPath), ...
         "source_commit", sourceCommit, ...
+        "build_manifest", buildManifestPath, ...
         "modified", datetime(mexFile.datenum, ConvertFrom="datenum", ...
             TimeZone="local", Format="yyyy-MM-dd'T'HH:mm:ssXXX"), ...
         "api_version", api.api_version), ...
@@ -76,7 +87,7 @@ result = struct( ...
     "first_s", firstSeconds, ...
     "median_s", median(samples), ...
     "min_s", min(samples), ...
-    "observables", observables(first));
+    "observables", measuredObservables);
 
 outputDirectory = fileparts(outputPath);
 if strlength(outputDirectory) > 0 && ~isfolder(outputDirectory)
@@ -163,6 +174,35 @@ function requireCleanSource(repoRoot)
 if workingStatus ~= 0 || stagedStatus ~= 0
     error("radia:benchmark:DirtySource", ...
         "Beam backend validation requires a clean source checkout: %s", repoRoot);
+end
+end
+
+function manifest = readBuildProvenance(manifestPath, binaryPath, repoRoot)
+if ~isfile(manifestPath)
+    error("radia:benchmark:BuildProvenance", ...
+        "Native build provenance manifest is missing: %s", manifestPath);
+end
+manifest = jsondecode(fileread(manifestPath));
+expectedSchema = "radia.native-build-provenance.v1";
+if ~isfield(manifest, "schema") || string(manifest.schema) ~= expectedSchema
+    error("radia:benchmark:BuildProvenance", ...
+        "Native provenance schema must be %s", expectedSchema);
+end
+if ~isfield(manifest, "source_dirty") || ~isequal(manifest.source_dirty, false)
+    error("radia:benchmark:BuildProvenance", ...
+        "Native provenance must come from a clean source build");
+end
+sourceCommit = string(manifest.source_commit);
+if sourceCommit ~= gitHead(repoRoot)
+    error("radia:benchmark:BuildProvenance", ...
+        "Native provenance source commit does not match the selected checkout");
+end
+binary = dir(binaryPath);
+if string(manifest.binary_name) ~= string(binary.name) || ...
+        manifest.binary_bytes ~= binary.bytes || ...
+        string(manifest.binary_sha256) ~= sha256File(binaryPath)
+    error("radia:benchmark:BuildProvenance", ...
+        "Native provenance does not match the loaded binary");
 end
 end
 
