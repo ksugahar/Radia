@@ -10,9 +10,10 @@ import pytest
 def function(name, filename='diagnostics.py'):
     path = Path(__file__).resolve().parents[1] / 'validation_test/omega_quadrature' / filename
     tree = ast.parse(path.read_text(encoding='utf-8'))
-    node = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == name)
+    nodes = [n for n in tree.body if isinstance(n, ast.FunctionDef)
+             and n.name in (name, 'validate_identity')]
     namespace = {'np': np}
-    exec(compile(ast.Module(body=[node], type_ignores=[]), str(path), 'exec'), namespace)
+    exec(compile(ast.Module(body=nodes, type_ignores=[]), str(path), 'exec'), namespace)
     return namespace[name]
 
 
@@ -161,9 +162,14 @@ def test_algebraic_cli_preserves_hold_and_never_runs_energy_audit(tmp_path, monk
 
 
 def field_payload(bonus):
-    return dict(completed=True, source_unchanged=True, mesh_unchanged=True,
-                implementation={'native': {'test.pyd': 'fixture'}}, mesh_sha256='fixture',
-                case={'mu_r': 1000}, runtime={'mode': 'wheel'},
+    identity = {key: 'a'*64 for key in ('solver_sha256', 'factory_sha256', 'runner_sha256', 'diagnostics_sha256')}
+    identity.update(native={'test.pyd': 'b'*64}, python_files={'test.py': 'c'*64},
+                    version='test', ngsolve='test', module='fixture', solver_file='fixture.py')
+    return dict(schema='radia.validation.omega-quadrature.v1',
+                completed=True, source_unchanged=True, mesh_unchanged=True,
+                implementation=identity, mesh_sha256='d'*64,
+                case=dict(case='esrf6', mu_r=1000, radius=.16, coil_source_sha256='e'*64,
+                          kelvin_center=[1, 0, 0], physical_center=[0, 0, 0]), runtime={'mode': 'wheel'},
                 controls=dict(source_order=3, threads=8, evaluation_order=16, algebraic_only=True),
                 rows=[dict(order=1, ndof=3, bonus=bonus, field_observations={
                     'centres_m': [[0, 0, 0]], 'samples_m': [[0, 0, 0]]*8,
@@ -198,6 +204,25 @@ def test_field_delta_rejects_incomparable_inputs(damage):
         row['order'] = 2
     else:
         row['field_observations']['B_samples_T'][0] = [np.nan, 0, 0]
+    with pytest.raises(ValueError):
+        function('compare_fields', 'compare_fields.py')(a, b)
+
+
+@pytest.mark.parametrize('field', ['schema', 'mesh_sha256', 'runtime', 'case', 'implementation'])
+def test_matching_missing_provenance_is_rejected(field):
+    a, b = field_payload(4), field_payload(8)
+    a.pop(field)
+    b.pop(field)
+    with pytest.raises(ValueError):
+        function('compare_fields', 'compare_fields.py')(a, b)
+
+
+@pytest.mark.parametrize('field', ['native', 'python_files', 'factory_sha256', 'solver_sha256',
+                                 'runner_sha256', 'diagnostics_sha256'])
+def test_matching_partial_identity_is_rejected(field):
+    a, b = field_payload(4), field_payload(8)
+    a['implementation'].pop(field)
+    b['implementation'].pop(field)
     with pytest.raises(ValueError):
         function('compare_fields', 'compare_fields.py')(a, b)
 
