@@ -419,24 +419,24 @@
           "command": "template.prime",
           "face": "x′",
           "label": "プライム",
-          "insert_tex": "'",
-          "preview_tex": "x'",
+          "insert_tex": "^{\\prime }",
+          "preview_tex": "x^{\\prime }",
           "selection_slot": 0
         },
         {
           "command": "template.dprime",
           "face": "x″",
           "label": "二重プライム",
-          "insert_tex": "''",
-          "preview_tex": "x''",
+          "insert_tex": "^{\\prime \\prime }",
+          "preview_tex": "x^{\\prime \\prime }",
           "selection_slot": 0
         },
         {
           "command": "template.tprime",
           "face": "x‴",
           "label": "三重プライム",
-          "insert_tex": "'''",
-          "preview_tex": "x'''",
+          "insert_tex": "^{\\prime \\prime \\prime }",
+          "preview_tex": "x^{\\prime \\prime \\prime }",
           "selection_slot": 0
         },
         {

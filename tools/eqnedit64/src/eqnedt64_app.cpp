@@ -3321,10 +3321,10 @@ LRESULT canvas_keydown(WPARAM key) {
             insert_template("dot"); return 0;
         }
         if (alt && layout_key_matches(key, L'\'', shift)) {
-            g.equation.insert_text("'"); model_changed("shortcut.prime"); return 0;
+            insert_template("prime"); return 0;
         }
         if (shift && layout_key_matches(key, L'\"', shift)) {
-            g.equation.insert_text("''"); model_changed("shortcut.double_prime"); return 0;
+            insert_template("dprime"); return 0;
         }
         if (layout_key_matches(key, L'=', shift, false)) {
             if (shift && !alt) set_input_style('M', L"数学");
@@ -3429,10 +3429,10 @@ LRESULT canvas_keydown(WPARAM key) {
                 break;
             case VK_OEM_7:
                 if (alt) {
-                    g.equation.insert_text("'"); model_changed("shortcut.prime"); return 0;
+                    insert_template("prime"); return 0;
                 }
                 if (shift) {
-                    g.equation.insert_text("''"); model_changed("shortcut.double_prime"); return 0;
+                    insert_template("dprime"); return 0;
                 }
                 break;
             case '1': g.zoom = 1.0; InvalidateRect(g.canvas, nullptr, FALSE);
