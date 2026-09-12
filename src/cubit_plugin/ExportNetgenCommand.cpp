@@ -27,6 +27,18 @@
 #include <set>
 #include "utf8_path.hpp"
 
+static std::string explicit_surface_label(int surface_id)
+{
+  std::string label = CubitInterface::get_entity_name("surface", surface_id);
+  // Cubit reports its generated display name even when the user did not name
+  // the entity.  That is not an authored boundary contract.
+  if (label == "Surface " + std::to_string(surface_id) ||
+      label == "Surface_" + std::to_string(surface_id) ||
+      label == "surface_" + std::to_string(surface_id))
+    return {};
+  return label;
+}
+
 // Ensure Netgen DLLs (nglib.dll, ngcore.dll) can be found.
 // They live in plugins/ which may not be on the DLL search path.
 static void ensure_netgen_dll_path()
@@ -480,11 +492,25 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
     }
   }
 
+  // Record user-authored sideset labels before same-material seam cleanup.
+  // A same-domain internal surface is not a valid Netgen boundary, but an
+  // explicitly labelled one must not disappear silently: it may represent a
+  // user-intended interface or cut that needs distinct domain topology.
+  std::map<int, std::string> surf_to_ssname;
+  for (auto &sg : md.sidesets) {
+    std::string ssname = sg.name.empty()
+        ? "sideset_" + std::to_string(sg.id) : sg.name;
+    surf_to_ssname[-sg.id] = ssname;
+    for (int sid : CubitInterface::get_sideset_surfaces(sg.id))
+      surf_to_ssname[sid] = ssname;
+  }
+
   // ---- Fix FaceDescriptor DomainIn/DomainOut ----
   // NetgenCurver hardcodes DomainIn=1, DomainOut=0 for all faces.
   // Fix: use Cubit surface-volume topology to set correct domain indices.
   // This is required for periodic identification to work correctly.
   std::set<int> same_material_face_descriptors;
+  std::map<int, std::string> labelled_same_material_surfaces;
   std::set<int> mesh_support_surface_ids;
   {
     // Build volume_id -> domain_index map
@@ -535,9 +561,30 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
       }
       ng_mesh->GetFaceDescriptor(fi).SetDomainIn(domin);
       ng_mesh->GetFaceDescriptor(fi).SetDomainOut(domout);
-      if (domin > 0 && domin == domout)
-        same_material_face_descriptors.insert(fi);
+      if (domin > 0 && domin == domout) {
+        std::string explicit_label;
+        auto sideset = surf_to_ssname.find(cubit_sid);
+        if (sideset != surf_to_ssname.end())
+          explicit_label = sideset->second;
+        else
+          explicit_label = explicit_surface_label(cubit_sid);
+        if (explicit_label.empty())
+          same_material_face_descriptors.insert(fi);
+        else
+          labelled_same_material_surfaces[cubit_sid] = explicit_label;
+      }
     }
+  }
+
+  if (!labelled_same_material_surfaces.empty()) {
+    for (const auto &[surface_id, label] : labelled_same_material_surfaces) {
+      PRINT_ERROR("Same-material internal surface %d is explicitly labelled "
+                  "'%s'. Netgen cannot encode it as a boundary with identical "
+                  "DomainIn/DomainOut. Remove that surface from the sideset, "
+                  "or model the intended interface/cut with distinct domains.\n",
+                  surface_id, label.c_str());
+    }
+    return false;
   }
 
   // A Cubit webcut may split one material volume only to provide CAD curves
@@ -601,19 +648,6 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   // larger than the number of FaceDescriptors.  NGSolve expects BCProperty
   // to be a contiguous 1-based index into the bcnames array.  Remap here.
   int nfd = ng_mesh->GetNFD();
-
-  // Build surface_id -> sideset name map
-  std::map<int, std::string> surf_to_ssname;
-  for (auto &sg : md.sidesets) {
-    std::string ssname = sg.name.empty()
-        ? "sideset_" + std::to_string(sg.id) : sg.name;
-    surf_to_ssname[-sg.id] = ssname;
-    std::vector<int> ss_surfs = CubitInterface::get_sideset_surfaces(sg.id);
-    for (int sid : ss_surfs) {
-      if (!sg.name.empty())
-        surf_to_ssname[sid] = sg.name;
-    }
-  }
 
   // Save original Cubit surface IDs before remapping (for companion JSON)
   std::vector<int> orig_surf_ids(nfd);
