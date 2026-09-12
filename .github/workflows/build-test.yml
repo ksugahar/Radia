@@ -50,6 +50,11 @@ jobs:
       RUN_SLOW_TESTS: ${{ github.event_name == 'workflow_dispatch' && inputs.full_slow == true }}
       RUN_VALIDATION_TESTS: ${{ github.event_name == 'workflow_dispatch' && (inputs.run_validation_test == true || inputs.full_slow == true) }}
       RADIA_CI_OUTPUT_DIR: 'C:\temp\radia-ci-output-${{ github.run_id }}-${{ github.run_attempt }}'
+      # Import checks are not scaling benchmarks; bound nested BLAS pools.
+      OMP_NUM_THREADS: '8'
+      NGS_NUM_THREADS: '8'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
 
     steps:
       - uses: actions/checkout@v4
@@ -91,8 +96,9 @@ jobs:
             release_tags = @($releaseTags | Sort-Object -Unique)
           }
           $json = $context | ConvertTo-Json
+          New-Item -ItemType Directory -Force -Path $env:RADIA_CI_OUTPUT_DIR | Out-Null
           [IO.File]::WriteAllText(
-            (Join-Path $env:GITHUB_WORKSPACE 'ci-release-context.json'),
+            (Join-Path $env:RADIA_CI_OUTPUT_DIR 'ci-release-context.json'),
             $json,
             [Text.UTF8Encoding]::new($false))
           Write-Host $json
@@ -101,7 +107,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ci-release-context
-          path: ci-release-context.json
+          path: ${{ env.RADIA_CI_OUTPUT_DIR }}/ci-release-context.json
           retention-days: 30
 
       # ----------------------------------------------------------------
@@ -272,8 +278,14 @@ jobs:
           } else {
               Write-Host "Non-tag push -- forcing -Rebuild to defeat ninja #deps 0 stale-.obj bug"
           }
-          & "${{ github.workspace }}\Build.ps1" @rebuildFlag *>&1 | Tee-Object -FilePath $buildLog
+          Get-CimInstance Win32_OperatingSystem |
+            Select-Object TotalVisibleMemorySize,FreePhysicalMemory,TotalVirtualMemorySize,FreeVirtualMemory |
+            ConvertTo-Json | Set-Content (Join-Path $env:RADIA_CI_OUTPUT_DIR 'memory-before-build.json')
+          & "${{ github.workspace }}\Build.ps1" @rebuildFlag -RequireNativeProvenance *>&1 | Tee-Object -FilePath $buildLog
           $rc = $LASTEXITCODE
+          Get-CimInstance Win32_OperatingSystem |
+            Select-Object TotalVisibleMemorySize,FreePhysicalMemory,TotalVirtualMemorySize,FreeVirtualMemory |
+            ConvertTo-Json | Set-Content (Join-Path $env:RADIA_CI_OUTPUT_DIR 'memory-after-build.json')
           Write-Host "Build.ps1 exit=$rc"
           Write-Host "Captured log size: $((Get-Item $buildLog -EA SilentlyContinue).Length) bytes"
           if ($rc -ne 0) {

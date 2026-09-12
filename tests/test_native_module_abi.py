@@ -72,3 +72,28 @@ def test_build_contract_syncs_and_load_checks_peec_matrices():
     assert 'dst = "peec_matrices.pyd"; required = $true' in build
     assert '"radia.peec_matrices"' in build
     assert "check_native_module_abi.py" in build
+
+
+def test_native_release_keeps_generated_context_outside_source_tree():
+    import yaml
+
+    workflow = yaml.safe_load(
+        (ROOT / ".github/workflows/build-test.yml").read_text(encoding="utf-8")
+    )
+    job = workflow["jobs"]["build-test"]
+    steps = {step.get("name"): step for step in job["steps"]}
+    context = steps["Record exact CI ref context"]["run"]
+    assert "Join-Path $env:RADIA_CI_OUTPUT_DIR 'ci-release-context.json'" in context
+    assert "Join-Path $env:GITHUB_WORKSPACE 'ci-release-context.json'" not in context
+    assert steps["Upload exact CI ref context"]["with"]["path"] == (
+        "${{ env.RADIA_CI_OUTPUT_DIR }}/ci-release-context.json"
+    )
+    build = steps["Build with MSVC + MKL"]["run"]
+    assert "@rebuildFlag -RequireNativeProvenance" in build
+    assert "memory-before-build.json" in build
+    assert "memory-after-build.json" in build
+    for key, value in {
+        "OMP_NUM_THREADS": "8", "NGS_NUM_THREADS": "8",
+        "OPENBLAS_NUM_THREADS": "1", "MKL_NUM_THREADS": "1",
+    }.items():
+        assert job["env"][key] == value
