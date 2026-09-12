@@ -46,7 +46,7 @@ FULL_RUNTIME_DLLS = (
     "mkl_avx2.3.dll",
     "mkl_core.3.dll",
     "mkl_def.3.dll",
-    "mkl_intel_thread.3.dll",
+    "mkl_sequential.3.dll",
     "mkl_rt.3.dll",
 )
 PACKAGE_FILES = (
@@ -59,6 +59,7 @@ PACKAGE_FILES = (
     "radia_ih_monitor_sfun.m",
     "verify_radia_ih_release.m",
     "+radia/setup.m",
+    "+radia/+internal/expectedNGSolveVersion.m",
     "+radia/+internal/pythonProcessPath.m",
     "+radia/+simulink/buildIHNativeModel.m",
     "+radia/+simulink/addIHMonitorBus.m",
@@ -234,9 +235,9 @@ def build_package(
                 })
         manifest = {
             "schema": (
-                "radia.simulink.library-release-manifest.v3"
+                "radia.simulink.library-release-manifest.v4"
                 if full_library
-                else "radia.simulink.ih-release-manifest.v2"
+                else "radia.simulink.ih-release-manifest.v3"
             ),
             "package": package_name,
             "version": package_version,
