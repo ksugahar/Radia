@@ -2309,7 +2309,7 @@ void handle_command(UINT id, bool fromAccelerator = false) {
                  module_path() +
                  L"\n\n64-bitネイティブ構造編集\n"
                  L"標準形式: TeX equation環境\nSVG書き出し対応\n"
-                 L"数式フォント: Latin Modern Math (Computer Modern) 内蔵").c_str(),
+                 L"数式フォント: Eqnedit Math (Latin Modern Math 派生) 内蔵").c_str(),
                 kTitle, MB_OK | MB_ICONINFORMATION); break;
     }
 }
@@ -2507,7 +2507,7 @@ HFONT pick_button_font(int heightPx, std::wstring* diagnostics = nullptr) {
             sample += wide_utf8(item.face);
     }
     eqnedit::ensure_math_font_ready();
-    const wchar_t* candidates[] = {L"Latin Modern Math", L"Cambria Math",
+    const wchar_t* candidates[] = {EQNEDIT64_MATH_FONT_FACE, L"Cambria Math",
                                    L"Segoe UI Symbol"};
     for (const wchar_t* face : candidates) {
         HFONT font = CreateFontW(-heightPx, 0, 0, 0, FW_NORMAL, FALSE, FALSE,
@@ -4435,7 +4435,7 @@ int self_test() {
         std::wstring diagnostics;
         HFONT paletteFont = pick_button_font(MulDiv(17, dpi, 96), &diagnostics);
         const bool paletteUsesMathFont =
-            font_resolves_to_face(paletteFont, L"Latin Modern Math");
+            font_resolves_to_face(paletteFont, EQNEDIT64_MATH_FONT_FACE);
         if (!paletteUsesMathFont) {
             wchar_t resolved[LF_FACESIZE] = {};
             if (HDC probe = CreateCompatibleDC(nullptr)) {
@@ -4445,7 +4445,7 @@ int self_test() {
                 DeleteDC(probe);
             }
             fwprintf(stderr,
-                     L"palette font at %d dpi resolved to \"%s\", not Latin Modern Math\n%s",
+                     L"palette font at %d dpi resolved to \"%s\", not Eqnedit Math\n%s",
                      dpi, resolved, diagnostics.c_str());
         }
         if (paletteFont && paletteFont != HFONT(GetStockObject(DEFAULT_GUI_FONT)))

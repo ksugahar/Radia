@@ -1,8 +1,8 @@
 """Make a private CFF/glyf A/B asset; not a distribution/release font.
 
-Keep family names for the controlled GDI selection comparison. The output file
-has a distinct name; preserve the GUST/LPPL notices and review derived naming
-before any publication. This script never registers or renders a font.
+By default keep family names for the controlled GDI selection comparison.
+Use --family-name for the separately validated derived asset. Preserve GUST/LPPL
+notices and review naming before publication. This script never registers a font.
 """
 import argparse
 import hashlib
@@ -25,7 +25,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("source", type=Path)
     parser.add_argument("output", type=Path)
+    parser.add_argument("--family-name", help="Distinct derived family (ASCII, at most 31 characters)")
     args = parser.parse_args()
+    if args.family_name and (not args.family_name.isascii() or len(args.family_name) > 31
+                             or not args.family_name.strip()):
+        parser.error("family name must be nonempty ASCII within the Windows face-name limit")
     if args.output.exists() or args.source.resolve() == args.output.resolve():
         parser.error("output must be a new, separate diagnostic file")
     font = TTFont(args.source, recalcTimestamp=False)
@@ -62,6 +66,18 @@ def main():
     for name in order:
         font["hmtx"].metrics[name] = (source_metrics[name][0], getattr(glyphs[name], "xMin", 0))
     font["head"].flags |= 2
+    if args.family_name:
+        family = args.family_name
+        psname = family.replace(" ", "") + "-Regular"
+        names = {1: family, 2: "Regular", 3: psname + ";glyf-1", 4: family,
+                 6: psname, 16: family, 17: "Regular", 18: family,
+                 21: family, 22: "Regular"}
+        for record in list(font["name"].names):
+            if record.nameID in names:
+                font["name"].setName(names[record.nameID], record.nameID,
+                                     record.platformID, record.platEncID, record.langID)
+        for name_id in (1, 2, 3, 4, 6, 16, 17):
+            font["name"].setName(names[name_id], name_id, 3, 1, 0x409)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     font.save(args.output)
     with TTFont(args.output, recalcTimestamp=False) as check:
@@ -90,7 +106,8 @@ def main():
                       bearings="TrueType control-point xMin; not CFF extrema LSB",
                       note="Coordinate integer rounding is additional; no visual-equivalence claim.",
                       byte_identical_tables=preserved,
-                      family_names_preserved_for_ab=True, license="GUST Font License / LPPL")
+                      family_names_preserved_for_ab=not bool(args.family_name),
+                      derived_family=args.family_name, license="GUST Font License / LPPL")
     args.output.with_suffix(".json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(report, indent=2))
 

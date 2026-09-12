@@ -11,6 +11,7 @@
  * state; unsupported legacy nodes fail rather than silently losing content.
  */
 #include "equation_render.h"
+#include "eqnedit64_resource.h"
 #include "tex_parser.h"
 
 #include <algorithm>
@@ -219,7 +220,7 @@ bool math_face_measures() {
     LOGFONTW lf = {};
     lf.lfHeight = -kEm;
     lf.lfCharSet = DEFAULT_CHARSET;
-    wcscpy_s(lf.lfFaceName, L"Latin Modern Math");
+    wcscpy_s(lf.lfFaceName, EQNEDIT64_MATH_FONT_FACE);
     HFONT probe = CreateFontIndirectW(&lf);
     if (!probe) return false;
     HDC dc = CreateCompatibleDC(nullptr);
@@ -290,8 +291,8 @@ std::filesystem::path cache_embedded_math_font(const unsigned char* bytes,
     if (error) return {};
 
     std::wostringstream filename;
-    filename << L"latinmodern-math-" << std::hex << std::setw(16)
-             << std::setfill(L'0') << font_bytes_hash(bytes, size) << L".otf";
+    filename << L"eqnedit-math-" << std::hex << std::setw(16)
+             << std::setfill(L'0') << font_bytes_hash(bytes, size) << L".ttf";
     const std::filesystem::path target = directory / filename.str();
     if (file_matches_bytes(target, bytes, size)) return target;
 
@@ -339,7 +340,13 @@ bool load_math_font() {
     HGLOBAL block = LoadResource(self, found);
     const auto* bytes = block
         ? static_cast<const unsigned char*>(LockResource(block)) : nullptr;
-    if (!bytes || !size) return false;
+    // Reject an accidentally re-embedded CFF/OTTO asset before any GDI call.
+    // The shipped standalone TrueType resource has sfnt version 0x00010000.
+    if (!bytes || size < 12 || bytes[0] != 0 || bytes[1] != 1 ||
+        bytes[2] != 0 || bytes[3] != 0) {
+        font_trace("resource.unsupported-outline");
+        return false;
+    }
 
     /* A controlled 2026-08-29 A/B run identified AddFontMemResourceEx as one
      * trigger for Server 2022's per-session fontdrvhost.exe (0xc0000005), even
@@ -462,7 +469,7 @@ HFONT make_font(bool italic, bool symbol, bool cjk) {
      * RadicalRuleThickness and FractionRuleThickness are both 0.040 em and
      * AxisHeight is 0.250 em. */
     const wchar_t* face = cjk ? cjk_face_name().c_str()
-                              : L"Latin Modern Math";
+                              : EQNEDIT64_MATH_FONT_FACE;
     (void)symbol;
     wcscpy_s(lf.lfFaceName, face);
     return CreateFontIndirectW(&lf);

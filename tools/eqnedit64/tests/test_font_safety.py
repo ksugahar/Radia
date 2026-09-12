@@ -13,6 +13,11 @@ def main() -> int:
     ).read_text(encoding="utf-8")
 
     failures: list[str] = []
+    asset = (ROOT / "assets/eqnedit-math.ttf").read_bytes()
+    if asset[:4] != b"\x00\x01\x00\x00":
+        failures.append("embedded asset is not standalone TrueType")
+    if 'font_trace("resource.unsupported-outline")' not in render:
+        failures.append("native loader no longer rejects CFF resources before registration")
     if "AddFontMemResourceEx(" in render:
         failures.append("unsafe memory-font registration returned")
     for required in (

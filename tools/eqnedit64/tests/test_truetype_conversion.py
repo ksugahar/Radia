@@ -71,6 +71,19 @@ class ConversionTest(unittest.TestCase):
         self.assertTrue(report['diagnostic_only'])
         self.assertTrue(report['advance_widths_preserved'])
 
+    def test_product_asset_is_named_glyf_not_cff(self):
+        with TTFont(ROOT / 'assets/eqnedit-math.ttf') as product:
+            self.assertIn('glyf', product)
+            self.assertNotIn('CFF ', product)
+            self.assertNotIn('CFF2', product)
+            self.assertEqual(product['name'].getDebugName(1), 'Eqnedit Math')
+            for tag in ('glyf', 'loca', 'hmtx', 'cmap', 'MATH', 'GSUB', 'GPOS'):
+                self.assertEqual(product.getTableData(tag), self.converted.getTableData(tag))
+        for path in (ROOT / 'src/eqnedit64.rc', ROOT.parents[1] / 'packages/eqnedit64/CMakeLists.txt'):
+            text = path.read_text(encoding='utf-8')
+            self.assertIn('eqnedit-math.ttf', text)
+            self.assertNotIn('latinmodern-math.otf', text)
+
 
 if __name__ == '__main__':
     unittest.main()

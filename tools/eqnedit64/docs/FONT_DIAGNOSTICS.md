@@ -309,3 +309,26 @@ The next acceptance step uses the corrected asset in the existing full native
 lane (model, ctest, executable/UI, palette images and file exports), with host
 observation extending through the last export. Product deployment remains held
 until rendering and packaging/naming contracts are accepted as well.
+
+### Product candidate wiring (not yet release approval)
+
+The full diagnostic native lane 34666010966 passed on source c83c1404f with
+the B598... asset: ctest, ten model suites, hidden executable/UI checks,
+120 palette proofs, installed-wheel verification and PNG/EMF/CLI checks.
+Three lifecycle gates performed 32 launches each with one unchanged host PID,
+no control/active crash events and all child exits zero. Evidence:
+`C:/temp/eqnedit-native-acceptance-34666010966/summary.json`.
+
+The product candidate uses the separately named `assets/eqnedit-math.ttf`,
+family `Eqnedit Math`, hash e6a371a1e7be3dfce9f047580cf9888a00cbc4b94c723d746a341ec46145ee3b.
+Its outline, layout and advance tables match the corrected diagnostic asset;
+the family/name records differ. EXE and wheel-module resources both select
+this file, with a common native face-name constant. The cache uses a distinct
+TTF name and verifies bytes, so an old cached CFF file is not reused. The
+native loader rejects a non-TrueType sfnt signature before registration.
+The original CFF file is retained only as conversion/diagnostic source.
+
+The GUST notice now identifies a modified derivative; a derivation manifest
+travels in the wheel. The product candidate still requires its own full native
+lane, physical-face checks and image review: diagnostic acceptance must not be
+transferred automatically to this renamed resource or a later signed EXE.
