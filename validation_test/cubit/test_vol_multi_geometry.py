@@ -308,7 +308,7 @@ with open(results_path, "w", encoding="utf-8", newline="\n") as results_file:
             "label": "intentional_cut",
             "output_path": os.path.relpath(labelled_path, _repo_root),
             "output_exists": os.path.exists(labelled_path),
-            "observed_in_stdout": (
+            "expected_diagnostic": (
                 f"Same-material internal surface {internal_surfaces[0]} is explicitly labelled "
                 "'intentional_cut'"
             ),
