@@ -67,8 +67,9 @@ The original solution is restored after one PARDISO solve of `A delta = b-Ax`.
 - Correction coefficient L2: 2.21217e-8 (not a gauge-invariant field error).
 - Relative RMS change of the 45 averaged B vectors: 9.51857e-16.
 - Maximum B-vector change: 1.33292e-16 T.
-- Iron residual L2 before/after: 8.65766e-17 / 8.76428e-17. The residual
-  does not decrease beyond its roundoff-scale floor in this observation.
+- Iron residual L2 before/after: 8.65766e-17 / 8.76428e-17. It did not decrease
+  after this correction; its magnitude is consistent with rounding at the
+  observed block-action scale. One correction does not establish an error floor.
 
 Thus the approximately 3 percent RHS-relative block residual is not a
 3 percent field change under this correction in this linear p=1 case.
