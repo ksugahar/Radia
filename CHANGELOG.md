@@ -5,6 +5,15 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- Split IH thermal boundary selection into explicit heat-flux, convection,
+  and radiation roles. The former empty `surface_label` default silently
+  applied every term to every workpiece boundary and could create or conceal
+  inner-surface hotspots on multi-sideset meshes; the legacy option now fails
+  with migration guidance. Thermal results include boundary-wise area and
+  input-power audits. The EM-to-thermal `q_surf.sol` handoff is now fixed to
+  P1 independently of EM and thermal solve order, avoiding invalid
+  reconstruction of hierarchical high-order H1 coefficients from vertices.
+
 - Fixed MATLAB LTspice binary RAW precision/layout validation and transient
   state injection. Unsupported layouts, malformed payload sizes, missing or
   ambiguous `.end` directives, and unsupported hierarchical inductor states

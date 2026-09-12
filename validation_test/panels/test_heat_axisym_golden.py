@@ -54,7 +54,8 @@ def test_heat_axisym_uniform_golden(tmp_path):
     cmd = [
         sys.executable, CALC,
         "--wp-vol", WP_VOL_AXI,
-        "--surface-label", c["surface_label"],
+        "--heat-flux-boundaries", c["heat_flux_boundaries"],
+        "--convection-boundaries", c["convection_boundaries"],
         "--material", c["material"],
         "--q-uniform", str(c["q_uniform_Wm2"]),
         "--h-conv", str(c["h_conv_Wm2K"]),
