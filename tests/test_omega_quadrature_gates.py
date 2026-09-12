@@ -1,5 +1,6 @@
 """Fast gates: a completed diagnostic is not numerical release acceptance."""
 import importlib.util
+import json
 from pathlib import Path
 import sys
 
@@ -85,3 +86,26 @@ def test_wheel_rejects_editable(lane, monkeypatch):
     monkeypatch.setattr(lane.importlib.metadata, 'distribution', lambda name: dist)
     with pytest.raises(RuntimeError, match='editable'):
         lane.check_runtime('wheel')
+
+
+def test_preserved_candidate_is_hold_and_retains_failed_gate(lane):
+    directory = Path(lane.__file__).parent / 'candidate_de7feea0'
+    result = json.loads((directory / 'threads8/result.json').read_text())
+    preflight = json.loads((directory / 'preflight.json').read_text())
+    telemetry = json.loads((directory / 'threads8/telemetry.json').read_text())
+    assert result['completed'] and result['source_unchanged'] and result['mesh_unchanged']
+    assert result['acceptance'].startswith('HOLD:')
+    assert preflight['candidate_unpublished']
+    assert result['mesh_sha256'] == preflight['mesh_sha256']
+    assert preflight['native_sha256'] in result['implementation']['native'].values()
+    assert result['runtime']['direct_url']['archive_info']['hashes']['sha256'] == preflight['wheel_sha256']
+    assert telemetry['exit_code'] == 2
+    assert result['controls']['orders'] == [1]
+    assert result['controls']['bonuses'] == [4, 8]
+    assert result['controls']['threads'] == 8
+    assert len(result['rows']) == 2
+    for row in result['rows']:
+        assert lane.gates({'linear_residual': row['linear_residual'],
+                           'assembled_energy': row['energy']}) == row['gates']
+    assert not result['rows'][0]['gates']['residual_phi_total']
+    assert all(result['rows'][1]['gates'].values())
