@@ -194,6 +194,12 @@ def test_build_fixed_design_orbit_target_family_uses_caller_maps_directly():
         family.objective.objectives[0].bend_field_band, 1.0e-3)
     np.testing.assert_allclose(
         family.objective.objectives[1].bend_field_band, 2.0e-3)
+    caller_residuals = np.array([1.0e-12, 2.0e-12])
+    copied = FFAGFixedDesignOrbitTargetFamily(
+        family.objective, target_symplectic_residuals=caller_residuals)
+    caller_residuals[:] = 1.0
+    np.testing.assert_allclose(
+        copied.target_symplectic_residuals, (1.0e-12, 2.0e-12))
 
 
 def test_fixed_design_orbit_target_selects_named_pole_components():

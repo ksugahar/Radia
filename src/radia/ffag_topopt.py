@@ -863,7 +863,7 @@ class FFAGFixedDesignOrbitTargetFamily:
         object.__setattr__(self, "controlled_components", components)
         object.__setattr__(
             self, "target_symplectic_residuals",
-            np.ascontiguousarray(residuals))
+            np.ascontiguousarray(residuals).copy())
 
     @property
     def design_orbits(self) -> tuple[PlanarDesignOrbit, ...]:
