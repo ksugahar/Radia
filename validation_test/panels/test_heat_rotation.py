@@ -81,9 +81,10 @@ def test_rotation_zero_matches_identity(synthetic_setup):
         gf_q_em.Save(sol)
         em_mesh.ngmesh.Save(vol)
 
-        args = SimpleNamespace(q_uniform=None, qsurf_sol=sol, em_vol=vol,
-                               qsurf_order=1, surface_label="default")
-        # The helper walks BND vertices (filtered by args.surface_label)
+        args = SimpleNamespace(
+            q_uniform=None, qsurf_sol=sol, em_vol=vol, qsurf_order=1,
+            heat_flux_boundary_names=["default"])
+        # The helper walks BND vertices filtered by the resolved heat-flux role
         # to enumerate surf_vertex_nrs.
         q_cf, resample = calc_heat._build_qsurf_cf(wp_mesh, args)
         assert resample is not None
@@ -115,8 +116,9 @@ def test_rotation_pi_inverts_x_signed_value(synthetic_setup):
         gf_q_em.Save(sol)
         em_mesh.ngmesh.Save(vol)
 
-        args = SimpleNamespace(q_uniform=None, qsurf_sol=sol, em_vol=vol,
-                               qsurf_order=1, surface_label="default")
+        args = SimpleNamespace(
+            q_uniform=None, qsurf_sol=sol, em_vol=vol, qsurf_order=1,
+            heat_flux_boundary_names=["default"])
         q_cf, resample = calc_heat._build_qsurf_cf(wp_mesh, args)
 
         # Locate the surface vertex nearest to body (+1, 0, 0).
@@ -144,8 +146,9 @@ def test_rotation_pi_over_2_swaps_x_to_y(synthetic_setup):
         gf_q_em.Save(sol)
         em_mesh.ngmesh.Save(vol)
 
-        args = SimpleNamespace(q_uniform=None, qsurf_sol=sol, em_vol=vol,
-                               qsurf_order=1, surface_label="default")
+        args = SimpleNamespace(
+            q_uniform=None, qsurf_sol=sol, em_vol=vol, qsurf_order=1,
+            heat_flux_boundary_names=["default"])
         q_cf, resample = calc_heat._build_qsurf_cf(wp_mesh, args)
 
         # Locate the surface vertex nearest to body (+1, 0, 0).
@@ -176,10 +179,10 @@ def test_phi_average_uniform_of_x_is_zero(synthetic_setup):
         gf_q_em.Save(sol)
         em_mesh.ngmesh.Save(vol)
 
-        args = SimpleNamespace(q_uniform=None, qsurf_sol=sol, em_vol=vol,
-                               qsurf_order=1, surface_label="default",
-                               rotation_axis="z",
-                               q_phi_average=True, q_phi_average_n=48)
+        args = SimpleNamespace(
+            q_uniform=None, qsurf_sol=sol, em_vol=vol, qsurf_order=1,
+            heat_flux_boundary_names=["default"], rotation_axis="z",
+            q_phi_average=True, q_phi_average_n=48)
         q_cf, resample = calc_heat._build_qsurf_cf(wp_mesh, args)
 
         # phi-average produces a STATIC axisymmetric source -> NO resampler
@@ -201,9 +204,9 @@ def test_phi_average_requires_spatial_not_uniform(synthetic_setup):
     from types import SimpleNamespace
 
     _em, _gf, wp_mesh = synthetic_setup
-    args = SimpleNamespace(q_uniform=1.0e6, qsurf_sol="", em_vol="",
-                           qsurf_order=1, surface_label="default",
-                           rotation_axis="z",
-                           q_phi_average=True, q_phi_average_n=48)
+    args = SimpleNamespace(
+        q_uniform=1.0e6, qsurf_sol="", em_vol="", qsurf_order=1,
+        heat_flux_boundary_names=["default"], rotation_axis="z",
+        q_phi_average=True, q_phi_average_n=48)
     with pytest.raises(ValueError, match="q-phi-average"):
         calc_heat._build_qsurf_cf(wp_mesh, args)

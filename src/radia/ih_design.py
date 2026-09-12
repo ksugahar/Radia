@@ -198,7 +198,12 @@ class IHDesignSpec:
     qsurf_order: int = 1
     q_phi_average: bool = False
     n_phi_samples: int = 8
-    surface_label: str = ""
+    heat_flux_boundaries: str = ""
+    convection_boundaries: str = ""
+    radiation_boundaries: str = ""
+    # Migration-only trap.  Never translate this legacy setting silently:
+    # it mixed three independent physical boundary roles.
+    surface_label: str | None = None
     thermal_material: str = "Steel (Fe)"
     override_kcprho: bool = False
     rho: str = "7800"
@@ -222,6 +227,13 @@ class IHDesignSpec:
     geometry_role_notes: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
+        if self.surface_label is not None:
+            raise ValueError(
+                "surface_label was removed because it coupled heat input, "
+                "convection, and radiation to one ambiguous boundary set. "
+                "Set heat_flux_boundaries and convection_boundaries "
+                "independently, plus radiation_boundaries when emissivity "
+                "is nonzero.")
         # Preserve the pre-dropdown constructor contract without reviving the
         # removed unextended genus-1 route.
         if isinstance(self.wp_loop_dof, bool):
@@ -353,7 +365,8 @@ class IHDesignSpec:
             })
         if thermal:
             fields.update({
-                "thermal_mesh_type", "heat_source", "surface_label",
+                "thermal_mesh_type", "heat_source", "heat_flux_boundaries",
+                "convection_boundaries", "radiation_boundaries",
                 "thermal_material", "override_kcprho", "rho", "cp", "k",
                 "h_conv", "t_ext", "emissivity", "t_init", "time_scheme",
                 "dt", "t_end", "linear_solver", "thermal_fes_order",
@@ -399,6 +412,22 @@ class IHDesignSpec:
         if self.method in THERMAL_METHODS and self.heat_source == HEAT_SRC_SPATIAL:
             need(self.qsurf_sol, "qsurf .sol")
             need(self.em_vol, "EM .vol")
+        if self.method in THERMAL_METHODS:
+            need(self.heat_flux_boundaries, "Heat-flux boundary selector")
+            try:
+                convection_active = float(self.h_conv) != 0.0
+            except (TypeError, ValueError):
+                convection_active = True
+            if convection_active:
+                need(self.convection_boundaries,
+                     "Convection boundary selector")
+            try:
+                radiation_active = float(self.emissivity) != 0.0
+            except (TypeError, ValueError):
+                radiation_active = True
+            if radiation_active:
+                need(self.radiation_boundaries,
+                     "Radiation boundary selector")
         return missing
 
     def is_runnable(self, *, check_exists: bool = False) -> bool:
@@ -698,11 +727,24 @@ class IHDesignSpec:
         scheme_cli = TIME_SCHEME_TO_CLI.get(self.time_scheme, "backward-euler")
         rotation_rpm = 0.0 if self.method == METHOD_THERMAL_3D_STATIC else self.rotation_rpm
 
+        boundary_missing = []
+        if not self.heat_flux_boundaries.strip():
+            boundary_missing.append("heat_flux_boundaries")
+        if float(self.h_conv) != 0.0 and not self.convection_boundaries.strip():
+            boundary_missing.append("convection_boundaries")
+        if (float(self.emissivity) != 0.0
+                and not self.radiation_boundaries.strip()):
+            boundary_missing.append("radiation_boundaries")
+        if boundary_missing:
+            raise ValueError(
+                "Thermal boundary roles must be explicit; missing "
+                + ", ".join(boundary_missing) + ".")
+
         cmd = [
             py,
             calc_script(calc, panels_dir),
             "--wp-vol", wp,
-            "--surface-label", self.surface_label,
+            "--heat-flux-boundaries", self.heat_flux_boundaries,
             "--material", material_cli,
             "--h-conv", self.h_conv,
             "--t-ext", self.t_ext,
@@ -719,6 +761,11 @@ class IHDesignSpec:
             "--output", json_output(wp, "_heat"),
         ]
 
+        if self.convection_boundaries:
+            cmd += ["--convection-boundaries", self.convection_boundaries]
+        if self.radiation_boundaries:
+            cmd += ["--radiation-boundaries", self.radiation_boundaries]
+
         if material_cli == "custom" or self.override_kcprho:
             cmd += ["--rho", self.rho, "--cp", self.cp, "--k", self.k]
 
@@ -729,6 +776,11 @@ class IHDesignSpec:
                 raise ValueError(
                     "Spatial qsurf mode requires a qsurf .sol and its companion EM .vol."
                 )
+            if int(self.qsurf_order) != 1:
+                raise ValueError(
+                    "Spatial cross-mesh qsurf currently requires "
+                    "qsurf_order=1; higher-order H1 transfer is not a "
+                    "vertex-sampling contract.")
             cmd += [
                 "--qsurf-sol", self.qsurf_sol,
                 "--em-vol", self.em_vol,
