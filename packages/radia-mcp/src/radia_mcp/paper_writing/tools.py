@@ -369,14 +369,24 @@ def paper_writing_check_overfull_hbox(log_path: str) -> dict:
     if not p.exists():
         return {"error": f"file not found: {log_path}"}
     text = p.read_text(encoding="utf-8", errors="replace")
-    matches = re.findall(
-        r"Overfull \\hbox \(([^)]+)\) in paragraph at lines (\d+)(?:--(\d+))?",
-        text,
-    )
-    details = [
-        {"severity": m[0], "lines": m[1] + (f"-{m[2]}" if m[2] else "")}
-        for m in matches[:20]
-    ]
+    # Count warning headers independently of TeX's context suffix. Alignment,
+    # detected-at-line and output-active warnings are not paragraph warnings.
+    matches = list(re.finditer(
+        r"^Overfull \\hbox \(([^)\r\n]+)\)([^\r\n]*)", text, re.MULTILINE,
+    ))
+    details = []
+    for match in matches[:20]:
+        context = match.group(2).strip()
+        if re.search(r"at lines?\s*$", context):
+            # TeX can wrap the source-line number onto the next log line.
+            following = text[match.end():].lstrip("\r\n").splitlines()
+            if following and re.match(r"\s*\d+(?:--\d+)?\s*$", following[0]):
+                context += " " + following[0].strip()
+        location = re.search(r"\bat lines?\s+(\d+)(?:--(\d+))?", context)
+        lines = ""
+        if location:
+            lines = location[1] + (f"-{location[2]}" if location[2] else "")
+        details.append({"severity": match[1], "lines": lines, "context": context})
     return {
         "file": str(p),
         "overfull_count": len(matches),
@@ -3233,12 +3243,12 @@ def paper_writing_generate_cover_letter(journal: str,
         title: 論文タイトル
         abstract: abstract 本文 (200-250 words)
         contribution: 箇条書きした貢献 (任意、改行区切り)
-        corresponding_author: 対応著者名
+        corresponding_author: 対応著者名。未指定時は記入用プレースホルダー。
 
     Returns:
         cover letter テンプレ (plain text)
     """
-    corr = corresponding_author or "Kengo Sugahara"
+    corr = (corresponding_author or "").strip() or "[Corresponding author name]"
     contrib_lines = ""
     if contribution:
         lines = [f"  - {c.strip()}" for c in contribution.split("\n") if c.strip()]
@@ -3340,9 +3350,11 @@ def paper_writing_classify_reviewer_comment(comment: str) -> dict:
     """
     c = comment.lower()
     # D-level: "impossible", "fundamental flaw", "reject" strong
-    if any(k in c for k in ("fundamental flaw", "completely wrong",
-                             "unable to be fixed", "intractable")):
+    d_triggers = [k for k in ("fundamental flaw", "completely wrong",
+                              "unable to be fixed", "intractable") if k in c]
+    if d_triggers:
         return {"difficulty": "D", "confidence": "medium",
+                "triggers": d_triggers,
                 "suggested_stance": "partial-or-disagree",
                 "hint": "技術的に不可能な要求。agree first で受け止め、代替提案を用意。"}
     # C-level: demands experiment/data
@@ -3363,8 +3375,9 @@ def paper_writing_classify_reviewer_comment(comment: str) -> dict:
                 "hint": "書き直し + 引用追加。同意して改訂版をインラインで提示。",
                 "triggers": ["rewrite / citation request"]}
     # A-level: typo / simple
-    if any(k in c for k in ("typo", "grammar", "spelling", "missing comma",
-                             "fig.\\s*\\d+ caption", "誤植", "スペル")):
+    if (any(k in c for k in ("typo", "grammar", "spelling", "missing comma",
+                            "誤植", "スペル"))
+            or re.search(r"\b(?:fig\.?|figure)\s*\d+\s+caption\b", c)):
         return {"difficulty": "A", "confidence": "high",
                 "suggested_stance": "agree",
                 "hint": "Typo / 軽微な指摘。すぐ直して "
