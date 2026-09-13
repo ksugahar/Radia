@@ -6,6 +6,154 @@ import math
 from typing import Any
 
 
+def nonlinear_magnetic_spatial_evidence_gate(
+    summary: dict[str, Any],
+    *,
+    max_average_vector_relative_difference: float = 0.07,
+    max_rms_magnitude_relative_difference: float = 0.10,
+    min_tensor_gauss_samples: int = 27,
+) -> dict[str, Any]:
+    """Gate nonlinear magnetic evidence using a matched volume observable.
+
+    A converged fixed-point residual or one field sample is not sufficient. The
+    response and material-update polynomial orders must be compatible, and the
+    candidate must be compared with an independent result carrying the same
+    observable identity, field unit, and coordinate system.
+    """
+
+    if not isinstance(summary, dict):
+        raise ValueError("summary must be a mapping")
+    average_limit = float(max_average_vector_relative_difference)
+    rms_limit = float(max_rms_magnitude_relative_difference)
+    min_samples = int(min_tensor_gauss_samples)
+    if any(
+        not math.isfinite(value) or value < 0.0
+        for value in (average_limit, rms_limit)
+    ):
+        raise ValueError("relative tolerances must be finite and nonnegative")
+    if min_samples < 1:
+        raise ValueError("min_tensor_gauss_samples must be positive")
+
+    def finite_number(payload: dict[str, Any], name: str) -> float | None:
+        try:
+            value = float(payload.get(name))
+        except (TypeError, ValueError):
+            return None
+        return value if math.isfinite(value) else None
+
+    def finite_vector(payload: dict[str, Any], name: str) -> list[float] | None:
+        raw = payload.get(name)
+        if not isinstance(raw, (list, tuple)) or len(raw) != 3:
+            return None
+        try:
+            values = [float(value) for value in raw]
+        except (TypeError, ValueError):
+            return None
+        return values if all(math.isfinite(value) for value in values) else None
+
+    try:
+        response_order = int(summary.get("response_order"))
+        material_order = int(summary.get("material_update_order"))
+        sample_count = int(summary.get("sample_count", 0))
+        integration_order = int(summary.get("integration_order", 0))
+    except (TypeError, ValueError):
+        response_order = material_order = sample_count = integration_order = -1
+    observable = str(summary.get("spatial_observable") or "").strip()
+    average = finite_vector(summary, "average_field_T")
+    volume = finite_number(summary, "volume_m3")
+    rms = finite_number(summary, "rms_magnitude_T")
+    average_magnitude = (
+        math.sqrt(sum(value * value for value in average)) if average is not None else None
+    )
+
+    reference = summary.get("reference")
+    reference = reference if isinstance(reference, dict) else {}
+    reference_average = finite_vector(reference, "average_field_T")
+    reference_rms = finite_number(reference, "rms_magnitude_T")
+    reference_average_magnitude = (
+        math.sqrt(sum(value * value for value in reference_average))
+        if reference_average is not None
+        else None
+    )
+    average_difference = (
+        math.sqrt(
+            sum(
+                (candidate - expected) ** 2
+                for candidate, expected in zip(average, reference_average)
+            )
+        )
+        / reference_average_magnitude
+        if average is not None
+        and reference_average is not None
+        and reference_average_magnitude is not None
+        and reference_average_magnitude > 0.0
+        else math.inf
+    )
+    rms_difference = (
+        abs(rms - reference_rms) / reference_rms
+        if rms is not None and reference_rms is not None and reference_rms > 0.0
+        else math.inf
+    )
+    identity_fields = ("observable_id", "field_unit", "coordinate_system")
+    identity_matches = all(
+        bool(str(summary.get(name) or "").strip())
+        and str(summary.get(name)).strip() == str(reference.get(name) or "").strip()
+        for name in identity_fields
+    )
+    sampling_sufficient = (
+        observable == "volume_integral"
+        and integration_order >= max(2, 2 * max(response_order, 1))
+    ) or (observable == "tensor_gauss" and sample_count >= min_samples)
+
+    checks = {
+        "nonlinear_constitutive_result": summary.get("nonlinear") is True,
+        "solver_converged": summary.get("solver_converged") is True,
+        "not_linear_only_evidence": summary.get("linear_reference_only") is not True,
+        "response_material_orders_compatible": (
+            response_order >= 1 and material_order >= max(response_order - 1, 0)
+        ),
+        "spatial_observable_supported": observable in {"volume_integral", "tensor_gauss"},
+        "spatial_sampling_sufficient": sampling_sufficient,
+        "volume_positive": volume is not None and volume > 0.0,
+        "field_finite_nonzero": average_magnitude is not None and average_magnitude > 0.0,
+        "rms_consistent_with_average": (
+            rms is not None
+            and average_magnitude is not None
+            and rms + 1.0e-12 * max(rms, average_magnitude, 1.0) >= average_magnitude
+        ),
+        "reference_identity_matches": identity_matches,
+        "average_vector_matches_reference": average_difference <= average_limit,
+        "rms_magnitude_matches_reference": rms_difference <= rms_limit,
+    }
+    return {
+        "policy": "nonlinear_magnetic_spatial_evidence_gate_v1",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "checks": checks,
+        "issues": [name for name, accepted in checks.items() if not accepted],
+        "metrics": {
+            "response_order": response_order,
+            "material_update_order": material_order,
+            "sample_count": sample_count,
+            "integration_order": integration_order,
+            "volume_m3": volume,
+            "average_magnitude_T": average_magnitude,
+            "rms_magnitude_T": rms,
+            "average_vector_relative_difference": average_difference,
+            "rms_magnitude_relative_difference": rms_difference,
+        },
+        "tolerances": {
+            "max_average_vector_relative_difference": average_limit,
+            "max_rms_magnitude_relative_difference": rms_limit,
+            "min_tensor_gauss_samples": min_samples,
+        },
+        "notes": [
+            "a center-point match and a converged nonlinear iteration are necessary but insufficient",
+            "linear-source agreement cannot establish nonlinear constitutive parity",
+            "response p-refinement is not evidence when the nonlinear material update remains lower order",
+        ],
+    }
+
+
 def symmetric_complex_field_curve_gate(
     axis_positions: list[float],
     field_real: list[float],
