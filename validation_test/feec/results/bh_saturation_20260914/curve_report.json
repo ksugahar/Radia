@@ -1,0 +1,47 @@
+{
+  "regression_table": {
+    "schema": "radia.bh-saturation-audit.v1",
+    "rows": 13,
+    "source_sha256": "0373b08363372407a4ea28ddddc144a44ab90797e7f4ee7f3a88c083174e2edc",
+    "endpoint_M_Am": 989436.7886486917,
+    "peak_M_Am": 1641129.5543735905,
+    "peak_H_Am": 29637.04625432178,
+    "minimum_interpolated_chi": -0.8042141573075894,
+    "chi_roundoff_tolerance": 2.842170943040401e-14,
+    "interpolated_M_nondecreasing": false,
+    "first_decreasing_node_interval": [
+      30000.0,
+      100000.0
+    ],
+    "inverse_error": null,
+    "barrier_M_Am": 989436.787659255,
+    "barrier_to_peak_ratio": 0.6028998655361595,
+    "tangent_below": 0.0007830370212492095,
+    "tangent_above": 1000.0,
+    "tangent_jump_ratio": 1277078.826240758
+  },
+  "shipped_sample": {
+    "schema": "radia.bh-saturation-audit.v1",
+    "rows": 100,
+    "source_sha256": "0373b08363372407a4ea28ddddc144a44ab90797e7f4ee7f3a88c083174e2edc",
+    "endpoint_M_Am": 1760345.9000424214,
+    "peak_M_Am": 1760345.9000424214,
+    "peak_H_Am": 318000.0,
+    "minimum_interpolated_chi": 0.2292692585557905,
+    "chi_roundoff_tolerance": 3.493793367840085e-14,
+    "interpolated_M_nondecreasing": true,
+    "first_decreasing_node_interval": null,
+    "inverse_error": null,
+    "barrier_M_Am": 1760345.8982820755,
+    "barrier_to_peak_ratio": 0.999999999,
+    "tangent_below": 3.548926119932651,
+    "tangent_above": 1000.0,
+    "tangent_jump_ratio": 281.77537829921835
+  },
+  "input_sha256": {
+    "validation_test\\feec\\test_hdiv_vim_energy_newton.py": "f3dba9b2ec3923ed736d5272b9783c5c3252f27b5a076932e47bb055897d1df7",
+    "src\\radia\\panels\\samples\\em_sample_bh.txt": "7a0711748f130a636f19957ac6f2de2d00d32bf164c7c244d09aaae5af5222ee"
+  },
+  "scipy_version": "1.17.1",
+  "scope": "Constitutive curve properties only; not a solver convergence verdict."
+}
