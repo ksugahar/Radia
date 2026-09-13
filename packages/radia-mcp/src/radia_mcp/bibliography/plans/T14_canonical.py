@@ -33,6 +33,52 @@ def _canonical_snapshot():
     return raw, entries
 
 
+def _citation_source_sha256(keys: list[str], source: bytes) -> str:
+    """Fingerprint cited records/dependencies, not unrelated parent entries.
+
+    Preserve raw value expressions so string-macro and literal values cannot
+    collide. Global string/preamble directives are conservatively included.
+    """
+    from .._source_edit import literal_value
+
+    text = source.decode("utf-8").replace("\r\n", "\n")
+    entries = parse_bib(text)
+    by_key = {entry.key: entry for entry in entries if entry.key}
+    if len(by_key) != sum(bool(entry.key) for entry in entries):
+        raise ValueError("duplicate canonical citation keys")
+    selected = {}
+    visiting = set()
+
+    def visit(key):
+        if key in visiting:
+            raise ValueError(f"cyclic bibliography dependency: {key}")
+        if key in selected:
+            return
+        if key not in by_key:
+            raise ValueError(f"missing bibliography dependency: {key}")
+        visiting.add(key)
+        entry = by_key[key]
+        fields = {name: text[start:end] for name, (start, end) in entry.field_spans.items()}
+        for name in ("crossref", "xref", "xdata", "related"):
+            if name in fields:
+                target = literal_value(fields[name])
+                if target is None:
+                    raise ValueError(f"bibliography dependency requires literal keys: {key}.{name}")
+                for dependency in re.split(r"[,\s]+", target.strip()):
+                    if dependency:
+                        visit(dependency)
+        visiting.remove(key)
+        selected[key] = {"kind": entry.kind, "fields": fields}
+
+    for key in keys:
+        visit(key)
+    payload = {
+        "keys": keys, "entries": selected,
+        "directives": [(e.kind, e.raw_body) for e in entries if e.kind in ("@string", "@preamble")],
+    }
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
+
+
 def bibliography_canonical_path() -> str:
     """Return the bundled canonical bibliography path and entry count."""
     if not CANONICAL.is_file():
@@ -306,6 +352,13 @@ def _make_bbl_unlocked(
     if any(not re.fullmatch(r"[A-Za-z0-9_:./+-]+", key) for key in keys):
         return "Error: citation keys require a safe ASCII BibTeX identifier"
 
+    notebook_fingerprint = ""
+    if source.suffix.casefold() == ".ipynb":
+        try:
+            notebook_fingerprint = _citation_source_sha256(keys, canonical_bytes)
+        except ValueError as exc:
+            return f"Error: cannot resolve notebook bibliography dependencies: {exc}"
+
     if not style:
         match = re.search(r"\\bibliographystyle\s*\{([^}]*)\}", _citation_text(resolved["merged_tex"]))
         style = compiled_style or (match.group(1).strip() if match else "IEEEtran")
@@ -426,6 +479,8 @@ def _make_bbl_unlocked(
         f"  cited {len(keys)} canonical keys; wrote {bibitem_count} bibitems; "
         f"style {style}\n"
         f"  canonical_sha256: {hashlib.sha256(canonical_bytes).hexdigest()}\n"
+        + (f"  selected_source_sha256: {notebook_fingerprint}\n" if notebook_fingerprint else "")
+        +
         f"  citation_source: {citation_source}\n"
         f"  style_source: {selected_style}\n"
         f"  style_sha256: {hashlib.sha256(selected_style_bytes).hexdigest()}\n"
