@@ -1,0 +1,492 @@
+{
+  "schema": "radia.energy-newton-native-audit.v1",
+  "host": "Hibino",
+  "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+  "executable": "C:\\temp\\hdiv-bh-audit-20260914\\venv\\Scripts\\python.exe",
+  "package": "C:\\temp\\hdiv-bh-audit-20260914\\venv\\Lib\\site-packages\\radia",
+  "versions": {
+    "radia": "4.95.91",
+    "ngsolve": "6.2.2606",
+    "numpy": "2.4.3",
+    "scipy": "1.17.1",
+    "pytest": "9.0.2",
+    "threadpoolctl": "3.6.0"
+  },
+  "pip_check": "No broken requirements found.",
+  "wheel_sha256": "e9e6b9f09d105552330ac9b2b6d870187d825d11bf7a78f407553c8c7a866e25",
+  "native_sha256": "932e49626c05c1e3d459f20649632d4bfa0adf9b37f325dace4093d74aeeb7b5",
+  "test_sha256": "f3dba9b2ec3923ed736d5272b9783c5c3252f27b5a076932e47bb055897d1df7",
+  "runner_sha256": "28a678f4d5be63031d12969a74f32bc0adca523c5255c2b0bdaba73c93d7ff6c",
+  "threads": 2,
+  "solves": [
+    {
+      "test": "test_hdiv_vim_energy_newton.py::test_default_nonlinear_is_energy_newton_cpp",
+      "preconditioner": "auto",
+      "solver": "default",
+      "M_avg": [
+        -3.8737284948828608,
+        -0.4580638897767192,
+        1500.6359977510647
+      ],
+      "statistics": {
+        "nonlinear_inner_preconditioner": "mass-riesz",
+        "nonlinear_inner_tol": "auto",
+        "nonlinear_continuation_steps": 1,
+        "nonlinear_reuse_tangent_steps": 1,
+        "nonlinear_cg_x0": false,
+        "nonlinear_newton_iters": 1,
+        "nonlinear_warmstart_solves": 1,
+        "nonlinear_linear_inner_iters": 29,
+        "nonlinear_line_search_backtracks": 0,
+        "nonlinear_tangent_assemblies": 0,
+        "nonlinear_tangent_reuses": 0,
+        "nonlinear_fresh_tangent_retries": 0,
+        "nonlinear_material_quadrature_order": 6,
+        "nonlinear_final_rel_step": 0.0,
+        "nonlinear_final_relative_residual": 7.50167188893887e-07,
+        "nonlinear_final_settled_iters": 0,
+        "nonlinear_converged_final_stage": true
+      },
+      "elapsed_s": 7.313625700015109
+    },
+    {
+      "test": "test_hdiv_vim_energy_newton.py::test_default_nonlinear_is_energy_newton_cpp",
+      "preconditioner": "auto",
+      "solver": "default",
+      "M_avg": [
+        -38.73728494882965,
+        -4.58063889776766,
+        15006.359977510645
+      ],
+      "statistics": {
+        "nonlinear_inner_preconditioner": "mass-riesz",
+        "nonlinear_inner_tol": "auto",
+        "nonlinear_continuation_steps": 1,
+        "nonlinear_reuse_tangent_steps": 1,
+        "nonlinear_cg_x0": false,
+        "nonlinear_newton_iters": 1,
+        "nonlinear_warmstart_solves": 1,
+        "nonlinear_linear_inner_iters": 29,
+        "nonlinear_line_search_backtracks": 0,
+        "nonlinear_tangent_assemblies": 0,
+        "nonlinear_tangent_reuses": 0,
+        "nonlinear_fresh_tangent_retries": 0,
+        "nonlinear_material_quadrature_order": 6,
+        "nonlinear_final_rel_step": 0.0,
+        "nonlinear_final_relative_residual": 7.501671888170275e-07,
+        "nonlinear_final_settled_iters": 0,
+        "nonlinear_converged_final_stage": true
+      },
+      "elapsed_s": 6.176411099964753
+    },
+    {
+      "test": "test_hdiv_vim_energy_newton.py::test_energy_newton_deep_saturation",
+      "preconditioner": "auto",
+      "solver": "default",
+      "M_avg": [
+        -287.7965034207443,
+        -33.17625819599411,
+        992102.6527491506
+      ],
+      "statistics": {
+        "nonlinear_inner_preconditioner": "mass-riesz",
+        "nonlinear_inner_tol": "auto",
+        "nonlinear_continuation_steps": 1,
+        "nonlinear_reuse_tangent_steps": 1,
+        "nonlinear_cg_x0": false,
+        "nonlinear_newton_iters": 9,
+        "nonlinear_warmstart_solves": 1,
+        "nonlinear_linear_inner_iters": 332,
+        "nonlinear_line_search_backtracks": 1,
+        "nonlinear_tangent_assemblies": 9,
+        "nonlinear_tangent_reuses": 0,
+        "nonlinear_fresh_tangent_retries": 0,
+        "nonlinear_material_quadrature_order": 6,
+        "nonlinear_final_rel_step": 2.1378503890085616e-06,
+        "nonlinear_final_relative_residual": 3.120699979652404e-08,
+        "nonlinear_final_settled_iters": 2,
+        "nonlinear_converged_final_stage": true
+      },
+      "elapsed_s": 87.16486279998207
+    },
+    {
+      "test": "test_hdiv_vim_energy_newton.py::test_picard_energy_matches_energy_newton",
+      "preconditioner": "auto",
+      "solver": "default",
+      "M_avg": [
+        -38.75491206649466,
+        -4.475272832105381,
+        15006.357394621722
+      ],
+      "statistics": {
+        "nonlinear_inner_preconditioner": "mass-riesz",
+        "nonlinear_inner_tol": "auto",
+        "nonlinear_continuation_steps": 1,
+        "nonlinear_reuse_tangent_steps": 1,
+        "nonlinear_cg_x0": false,
+        "nonlinear_newton_iters": 1,
+        "nonlinear_warmstart_solves": 1,
+        "nonlinear_linear_inner_iters": 29,
+        "nonlinear_line_search_backtracks": 0,
+        "nonlinear_tangent_assemblies": 0,
+        "nonlinear_tangent_reuses": 0,
+        "nonlinear_fresh_tangent_retries": 0,
+        "nonlinear_material_quadrature_order": 6,
+        "nonlinear_final_rel_step": 0.0,
+        "nonlinear_final_relative_residual": 7.503875726188588e-07,
+        "nonlinear_final_settled_iters": 0,
+        "nonlinear_converged_final_stage": true
+      },
+      "elapsed_s": 7.0190579000045545
+    },
+    {
+      "test": "test_hdiv_vim_energy_newton.py::test_picard_energy_matches_energy_newton",
+      "preconditioner": "auto",
+      "solver": "picard-energy",
+      "M_avg": [
+        -38.752713433152294,
+        -4.475119045951497,
+        15006.357394682609
+      ],
+      "statistics": {
+        "nonlinear_inner_preconditioner": "mass-riesz",
+        "nonlinear_inner_tol": "auto",
+        "nonlinear_continuation_steps": 1,
+        "nonlinear_reuse_tangent_steps": 1,
+        "nonlinear_cg_x0": false,
+        "nonlinear_newton_iters": 1,
+        "nonlinear_warmstart_solves": 0,
+        "nonlinear_linear_inner_iters": 0,
+        "nonlinear_line_search_backtracks": 0,
+        "nonlinear_tangent_assemblies": 0,
+        "nonlinear_tangent_reuses": 0,
+        "nonlinear_fresh_tangent_retries": 0,
+        "nonlinear_material_quadrature_order": 6,
+        "nonlinear_final_rel_step": 0.0,
+        "nonlinear_final_relative_residual": 8.726585575107961e-09,
+        "nonlinear_final_settled_iters": 0,
+        "nonlinear_converged_final_stage": true
+      },
+      "elapsed_s": 13.066311900038272
+    },
+    {
+      "test": "test_hdiv_vim_energy_newton.py::test_picard_mass_riesz_reports_a_final_convergence_contract",
+      "preconditioner": "mass-riesz",
+      "solver": "picard-mass-riesz",
+      "M_avg": [
+        -38.752713433152294,
+        -4.475119045951497,
+        15006.357394682609
+      ],
+      "statistics": {
+        "nonlinear_solver": "picard-mass-riesz",
+        "nonlinear_picard_iters": 2,
+        "nonlinear_material_relaxation": 0.7,
+        "nonlinear_linear_inner_iters": 44,
+        "nonlinear_final_rel_step": 0.0,
+        "nonlinear_converged_final_stage": true
+      },
+      "elapsed_s": 8.541450400021859
+    },
+    {
+      "test": "test_hdiv_vim_energy_newton.py::test_energy_newton_fast_knobs_preserve_solution_and_report_stats",
+      "preconditioner": "auto",
+      "solver": "default",
+      "M_avg": [
+        -38.75491206649466,
+        -4.475272832105381,
+        15006.357394621722
+      ],
+      "statistics": {
+        "nonlinear_inner_preconditioner": "mass-riesz",
+        "nonlinear_inner_tol": "auto",
+        "nonlinear_continuation_steps": 1,
+        "nonlinear_reuse_tangent_steps": 1,
+        "nonlinear_cg_x0": false,
+        "nonlinear_newton_iters": 1,
+        "nonlinear_warmstart_solves": 1,
+        "nonlinear_linear_inner_iters": 29,
+        "nonlinear_line_search_backtracks": 0,
+        "nonlinear_tangent_assemblies": 0,
+        "nonlinear_tangent_reuses": 0,
+        "nonlinear_fresh_tangent_retries": 0,
+        "nonlinear_material_quadrature_order": 6,
+        "nonlinear_final_rel_step": 0.0,
+        "nonlinear_final_relative_residual": 7.503875726188588e-07,
+        "nonlinear_final_settled_iters": 0,
+        "nonlinear_converged_final_stage": true
+      },
+      "elapsed_s": 6.03897799999686
+    },
+    {
+      "test": "test_hdiv_vim_energy_newton.py::test_energy_newton_fast_knobs_preserve_solution_and_report_stats",
+      "preconditioner": "auto",
+      "solver": "default",
+      "M_avg": [
+        -38.75341206358395,
+        -4.475149964142875,
+        15006.357987597037
+      ],
+      "statistics": {
+        "nonlinear_inner_preconditioner": "mass-riesz",
+        "nonlinear_inner_tol": "auto",
+        "nonlinear_continuation_steps": 2,
+        "nonlinear_reuse_tangent_steps": 2,
+        "nonlinear_cg_x0": false,
+        "nonlinear_newton_iters": 3,
+        "nonlinear_warmstart_solves": 1,
+        "nonlinear_linear_inner_iters": 59,
+        "nonlinear_line_search_backtracks": 0,
+        "nonlinear_tangent_assemblies": 1,
+        "nonlinear_tangent_reuses": 1,
+        "nonlinear_fresh_tangent_retries": 0,
+        "nonlinear_material_quadrature_order": 6,
+        "nonlinear_final_rel_step": 0.003205486641763337,
+        "nonlinear_final_relative_residual": 3.0448963000010024e-07,
+        "nonlinear_final_settled_iters": 0,
+        "nonlinear_converged_final_stage": true
+      },
+      "elapsed_s": 22.235855900042225
+    },
+    {
+      "test": "test_hdiv_vim_energy_newton.py::test_energy_newton_jacobi_inner_preconditioner_preserves_solution",
+      "preconditioner": "auto",
+      "solver": "default",
+      "M_avg": [
+        -38.75491206649466,
+        -4.475272832105381,
+        15006.357394621722
+      ],
+      "statistics": {
+        "nonlinear_inner_preconditioner": "mass-riesz",
+        "nonlinear_inner_tol": "auto",
+        "nonlinear_continuation_steps": 1,
+        "nonlinear_reuse_tangent_steps": 1,
+        "nonlinear_cg_x0": false,
+        "nonlinear_newton_iters": 1,
+        "nonlinear_warmstart_solves": 1,
+        "nonlinear_linear_inner_iters": 29,
+        "nonlinear_line_search_backtracks": 0,
+        "nonlinear_tangent_assemblies": 0,
+        "nonlinear_tangent_reuses": 0,
+        "nonlinear_fresh_tangent_retries": 0,
+        "nonlinear_material_quadrature_order": 6,
+        "nonlinear_final_rel_step": 0.0,
+        "nonlinear_final_relative_residual": 7.503875726188588e-07,
+        "nonlinear_final_settled_iters": 0,
+        "nonlinear_converged_final_stage": true
+      },
+      "elapsed_s": 7.126474899996538
+    },
+    {
+      "test": "test_hdiv_vim_energy_newton.py::test_energy_newton_jacobi_inner_preconditioner_preserves_solution",
+      "preconditioner": "jacobi",
+      "solver": "default",
+      "M_avg": [
+        -38.75305172540931,
+        -4.475415837076471,
+        15006.357394990733
+      ],
+      "statistics": {
+        "nonlinear_inner_preconditioner": "jacobi",
+        "nonlinear_inner_tol": "auto",
+        "nonlinear_continuation_steps": 2,
+        "nonlinear_reuse_tangent_steps": 3,
+        "nonlinear_cg_x0": true,
+        "nonlinear_newton_iters": 3,
+        "nonlinear_warmstart_solves": 1,
+        "nonlinear_linear_inner_iters": 314,
+        "nonlinear_line_search_backtracks": 0,
+        "nonlinear_tangent_assemblies": 1,
+        "nonlinear_tangent_reuses": 1,
+        "nonlinear_fresh_tangent_retries": 0,
+        "nonlinear_material_quadrature_order": 6,
+        "nonlinear_final_rel_step": 0.04535474811602519,
+        "nonlinear_final_relative_residual": 3.710712184640417e-07,
+        "nonlinear_final_settled_iters": 0,
+        "nonlinear_converged_final_stage": true
+      },
+      "elapsed_s": 16.429126799979713
+    },
+    {
+      "test": "test_hdiv_vim_energy_newton.py::test_energy_newton_jacobi_inner_preconditioner_deep_saturation",
+      "preconditioner": "auto",
+      "solver": "default",
+      "M_avg": [
+        -287.9154073903481,
+        -32.4209013841704,
+        992102.6527975396
+      ],
+      "statistics": {
+        "nonlinear_inner_preconditioner": "mass-riesz",
+        "nonlinear_inner_tol": "auto",
+        "nonlinear_continuation_steps": 1,
+        "nonlinear_reuse_tangent_steps": 1,
+        "nonlinear_cg_x0": false,
+        "nonlinear_newton_iters": 9,
+        "nonlinear_warmstart_solves": 1,
+        "nonlinear_linear_inner_iters": 333,
+        "nonlinear_line_search_backtracks": 1,
+        "nonlinear_tangent_assemblies": 9,
+        "nonlinear_tangent_reuses": 0,
+        "nonlinear_fresh_tangent_retries": 0,
+        "nonlinear_material_quadrature_order": 6,
+        "nonlinear_final_rel_step": 2.1498729457120303e-06,
+        "nonlinear_final_relative_residual": 3.1501283573723466e-08,
+        "nonlinear_final_settled_iters": 2,
+        "nonlinear_converged_final_stage": true
+      },
+      "elapsed_s": 85.0288453999674
+    },
+    {
+      "test": "test_hdiv_vim_energy_newton.py::test_energy_newton_jacobi_inner_preconditioner_deep_saturation",
+      "preconditioner": "jacobi",
+      "solver": "default",
+      "M_avg": [
+        -287.9153022135274,
+        -32.42077244751664,
+        992102.6527896146
+      ],
+      "statistics": {
+        "nonlinear_inner_preconditioner": "jacobi",
+        "nonlinear_inner_tol": "auto",
+        "nonlinear_continuation_steps": 2,
+        "nonlinear_reuse_tangent_steps": 3,
+        "nonlinear_cg_x0": false,
+        "nonlinear_newton_iters": 40,
+        "nonlinear_warmstart_solves": 1,
+        "nonlinear_linear_inner_iters": 12702,
+        "nonlinear_line_search_backtracks": 86,
+        "nonlinear_tangent_assemblies": 14,
+        "nonlinear_tangent_reuses": 26,
+        "nonlinear_fresh_tangent_retries": 0,
+        "nonlinear_material_quadrature_order": 6,
+        "nonlinear_final_rel_step": 2.3260436119998103e-06,
+        "nonlinear_final_relative_residual": 4.027517527834659e-08,
+        "nonlinear_final_settled_iters": 2,
+        "nonlinear_converged_final_stage": true
+      },
+      "elapsed_s": 697.9111155999708
+    },
+    {
+      "test": "test_hdiv_vim_energy_newton.py::test_energy_newton_jacobi_inner_preconditioner_multiregion_bh_dict",
+      "preconditioner": "auto",
+      "solver": "default",
+      "M_avg": [
+        6.346248511161292,
+        11.393356044642058,
+        14382.746120693573
+      ],
+      "statistics": {
+        "nonlinear_inner_preconditioner": "mass-riesz",
+        "nonlinear_inner_tol": "auto",
+        "nonlinear_continuation_steps": 1,
+        "nonlinear_reuse_tangent_steps": 1,
+        "nonlinear_cg_x0": false,
+        "nonlinear_newton_iters": 1,
+        "nonlinear_warmstart_solves": 1,
+        "nonlinear_linear_inner_iters": 27,
+        "nonlinear_line_search_backtracks": 0,
+        "nonlinear_tangent_assemblies": 0,
+        "nonlinear_tangent_reuses": 0,
+        "nonlinear_fresh_tangent_retries": 0,
+        "nonlinear_material_quadrature_order": 6,
+        "nonlinear_final_rel_step": 0.0,
+        "nonlinear_final_relative_residual": 5.309327030907434e-07,
+        "nonlinear_final_settled_iters": 0,
+        "nonlinear_converged_final_stage": true
+      },
+      "elapsed_s": 5.231565800029784
+    },
+    {
+      "test": "test_hdiv_vim_energy_newton.py::test_energy_newton_jacobi_inner_preconditioner_multiregion_bh_dict",
+      "preconditioner": "jacobi",
+      "solver": "default",
+      "M_avg": [
+        6.343772522624448,
+        11.392771390540485,
+        14382.746568604814
+      ],
+      "statistics": {
+        "nonlinear_inner_preconditioner": "jacobi",
+        "nonlinear_inner_tol": "auto",
+        "nonlinear_continuation_steps": 2,
+        "nonlinear_reuse_tangent_steps": 3,
+        "nonlinear_cg_x0": false,
+        "nonlinear_newton_iters": 3,
+        "nonlinear_warmstart_solves": 1,
+        "nonlinear_linear_inner_iters": 87,
+        "nonlinear_line_search_backtracks": 0,
+        "nonlinear_tangent_assemblies": 1,
+        "nonlinear_tangent_reuses": 1,
+        "nonlinear_fresh_tangent_retries": 0,
+        "nonlinear_material_quadrature_order": 6,
+        "nonlinear_final_rel_step": 0.1096010545207945,
+        "nonlinear_final_relative_residual": 2.0529007426905497e-07,
+        "nonlinear_final_settled_iters": 0,
+        "nonlinear_converged_final_stage": true
+      },
+      "elapsed_s": 21.870787299994845
+    }
+  ],
+  "tests": [
+    {
+      "nodeid": "test_hdiv_vim_energy_newton.py::test_auto_preconditioner_policy_is_energy_newton_specific",
+      "phase": "call",
+      "outcome": "passed",
+      "seconds": 0.00018829997861757874
+    },
+    {
+      "nodeid": "test_hdiv_vim_energy_newton.py::test_default_nonlinear_is_energy_newton_cpp",
+      "phase": "call",
+      "outcome": "passed",
+      "seconds": 13.608691600034945
+    },
+    {
+      "nodeid": "test_hdiv_vim_energy_newton.py::test_energy_newton_deep_saturation",
+      "phase": "call",
+      "outcome": "passed",
+      "seconds": 87.25132459995802
+    },
+    {
+      "nodeid": "test_hdiv_vim_energy_newton.py::test_picard_energy_matches_energy_newton",
+      "phase": "call",
+      "outcome": "passed",
+      "seconds": 20.155754900013562
+    },
+    {
+      "nodeid": "test_hdiv_vim_energy_newton.py::test_picard_mass_riesz_reports_a_final_convergence_contract",
+      "phase": "call",
+      "outcome": "passed",
+      "seconds": 8.60799320001388
+    },
+    {
+      "nodeid": "test_hdiv_vim_energy_newton.py::test_energy_newton_fast_knobs_preserve_solution_and_report_stats",
+      "phase": "call",
+      "outcome": "passed",
+      "seconds": 28.34763070003828
+    },
+    {
+      "nodeid": "test_hdiv_vim_energy_newton.py::test_energy_newton_jacobi_inner_preconditioner_preserves_solution",
+      "phase": "call",
+      "outcome": "passed",
+      "seconds": 23.62520479998784
+    },
+    {
+      "nodeid": "test_hdiv_vim_energy_newton.py::test_energy_newton_jacobi_inner_preconditioner_deep_saturation",
+      "phase": "call",
+      "outcome": "passed",
+      "seconds": 783.005992499995
+    },
+    {
+      "nodeid": "test_hdiv_vim_energy_newton.py::test_energy_newton_jacobi_inner_preconditioner_multiregion_bh_dict",
+      "phase": "call",
+      "outcome": "passed",
+      "seconds": 27.170988099998794
+    }
+  ],
+  "completed": true,
+  "exit_code": 0,
+  "elapsed_s": 992.3489330000011,
+  "passed": true
+}
