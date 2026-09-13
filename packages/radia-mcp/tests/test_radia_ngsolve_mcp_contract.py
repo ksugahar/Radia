@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import sys
 from pathlib import Path
@@ -53,6 +54,43 @@ async def _probe_hdiv_vim_stdio() -> dict[str, object]:
             initialized = await session.initialize()
             listed = await session.list_tools()
             called = await session.call_tool("hdiv_vim", {"topic": "eddy_bubble"})
+            identity = {
+                "observable_id": "iron_volume_B",
+                "field_unit": "T",
+                "coordinate_system": "right-handed Cartesian",
+            }
+            summary = {
+                **identity,
+                "nonlinear": True,
+                "solver_converged": True,
+                "linear_reference_only": False,
+                "response_order": 1,
+                "material_update_order": 0,
+                "spatial_observable": "volume_integral",
+                "integration_order": 8,
+                "sample_count": 0,
+                "volume_m3": 1.0e-6,
+                "average_field_T": [0.0, 0.0, -1.50],
+                "rms_magnitude_T": 1.62,
+                "reference": {
+                    **identity,
+                    "average_field_T": [0.0, 0.0, -1.48],
+                    "rms_magnitude_T": 1.60,
+                },
+            }
+            catalog = await session.call_tool(
+                "radia_ngsolve_validation_catalog",
+                {"query": "nonlinear_magnetic_spatial_evidence_gate"},
+            )
+            catalog_payload = catalog.structuredContent or json.loads(catalog.content[0].text)
+            nonlinear_gate = await session.call_tool(
+                "radia_ngsolve_validation_run",
+                {
+                    "name": "nonlinear_magnetic_spatial_evidence_gate",
+                    "arguments": {"summary_json": json.dumps(summary)},
+                },
+            )
+            nonlinear_payload = json.loads(nonlinear_gate.content[0].text)
             text = called.content[0].text
             normalized = " ".join(text.split())
             return {
@@ -61,6 +99,12 @@ async def _probe_hdiv_vim_stdio() -> dict[str, object]:
                 "tool_count": len(listed.tools),
                 "listed": any(tool.name == "hdiv_vim" for tool in listed.tools),
                 "is_error": bool(called.isError),
+                "nonlinear_gate_discovered": any(
+                    operation["name"] == "nonlinear_magnetic_spatial_evidence_gate"
+                    for operation in catalog_payload["operations"]
+                ),
+                "nonlinear_gate_is_error": bool(nonlinear_gate.isError),
+                "nonlinear_gate_status": nonlinear_payload["status"],
                 "teaches_direct_q2": "direct-Q2" in text,
                 "bounds_h_convergence": (
                     "for this thin magnetic-conductor disk lane" in normalized
@@ -115,6 +159,9 @@ def test_hdiv_vim_passes_real_stdio_initialize_list_call():
     assert 40 <= result["tool_count"] < 100
     assert result["listed"] is True
     assert result["is_error"] is False
+    assert result["nonlinear_gate_discovered"] is True
+    assert result["nonlinear_gate_is_error"] is False
+    assert result["nonlinear_gate_status"] == "ok"
     assert result["teaches_direct_q2"] is True
     assert result["bounds_h_convergence"] is True
     assert result["teaches_mapped_bdm2_gate"] is True

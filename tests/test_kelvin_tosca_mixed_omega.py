@@ -307,7 +307,7 @@ def _picard_solve(mesh, h_source, potential, bh_table, **overrides):
         bh_table=bh_table,
         nonlinear_materials=("total",), reduced_materials=("reduced",),
         total_materials=("total",), interface_boundary="source_total_interface",
-        order=2, dirichlet_bbbnd="outer", tolerance=1.0e-6,
+        order=1, dirichlet_bbbnd="outer", tolerance=1.0e-6,
         max_iterations=60, relaxation=0.3)
     settings.update(overrides)
     with ng.TaskManager():
@@ -393,6 +393,12 @@ def test_mixed_omega_picard_non_convergence_raises_with_the_state():
     resumed = _picard_solve(mesh, h_source, potential, bh_table,
                             mu_r_initial=np.asarray(state["mu_r_elements"]))
     assert resumed["nonlinear_stats"]["converged"]
+
+
+def test_mixed_omega_picard_rejects_unmatched_high_order_nonlinear_material_update():
+    mesh, h_source, potential, bh_table = _picard_case()
+    with pytest.raises(ValueError, match="order-0 centroid value per element"):
+        _picard_solve(mesh, h_source, potential, bh_table, order=2)
 
 
 def test_mixed_omega_envelope_includes_interpolated_material_targets(monkeypatch):

@@ -2238,7 +2238,13 @@ is a general scalar-Omega source contract for a compound current coil.
 For memoryless nonlinear iron, use
 `solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin`; it shares the
 same interface trace and B(H) law.  This Picard helper is not a hysteresis
-model.
+model. Its current material update is one element-centroid, order-0
+permeability. Use response `order=1`, demonstrate h-convergence, and compare a
+volume integral or a sufficiently resolved volume quadrature through
+`nonlinear_magnetic_spatial_evidence_gate`. A center-point match and nonlinear
+iteration convergence are not spatial validation. A genuinely nonlinear table
+with response `order>1` is rejected until a material-order-matched update is
+implemented.
 
 Validated path: `validation_test/c_type_three_engine/run_three_engine.py`.
 The legacy scalar-potential recipe is retained in this source only for

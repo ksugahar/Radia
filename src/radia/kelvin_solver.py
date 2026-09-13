@@ -1007,6 +1007,12 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
     iteration change of B at those points, so the stopping criterion can be judged
     where the result is consumed instead of only through the material step.
 
+    The present material update is one order-0 permeability value sampled at
+    each nonlinear element centroid. A genuinely nonlinear B(H) table therefore
+    supports ``order=1`` only. Higher response order fails loudly instead of
+    presenting p-refinement with an unmatched constitutive polynomial order as
+    improved evidence.
+
     The result has the same field keys as the linear mixed solve plus
     ``nonlinear_stats`` (with the per-iteration ``history``, a contraction-rate
     estimate, and the per-element ``mu_r_elements`` state).  A loop that reaches
@@ -1040,6 +1046,21 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
     bh_array = np.asarray(bh_table, dtype=float)
     if bh_array.ndim != 2 or bh_array.shape[1] < 2:
         raise ValueError("bh_table must contain [H, B] rows")
+    positive_rows = (bh_array[:, 0] > 0.0) & (bh_array[:, 1] > 0.0)
+    secants = bh_array[positive_rows, 1] / bh_array[positive_rows, 0]
+    genuinely_nonlinear = (
+        secants.size > 1
+        and float(np.ptp(secants))
+        > 1.0e-12 * max(float(np.max(np.abs(secants))), MU_0)
+    )
+    if genuinely_nonlinear and int(order) > 1:
+        raise ValueError(
+            "nonlinear mixed total/reduced Omega currently updates permeability "
+            "as one order-0 centroid value per element; response order > 1 would "
+            "use an unmatched material polynomial order. Use order=1 with an "
+            "h-convergence and volume-observable gate until a material-order-matched "
+            "nonlinear update is selected explicitly."
+        )
     B_of_H = _build_bh_interpolator(bh_array[:, :2])
     B_scale = max(float(bh_array[:, 1].max()), MU_0)
     positive = (bh_array[:, 0] > 0.0) & (bh_array[:, 1] > 0.0)
@@ -1183,6 +1204,9 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
         "tolerance": float(tolerance),
         "relaxation": float(relaxation),
         "anderson_depth": int(anderson_depth),
+        "response_order": int(order),
+        "material_update_order": 0,
+        "material_sampling": "element_centroid",
         "warm_start": bool(initial.ndim > 0),
         "history": history,
         "contraction_rate_estimate": estimate_contraction_rate(
