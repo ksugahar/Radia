@@ -17,13 +17,14 @@
 </p>
 
 <p align="center">
-  <img src="docs/gmsh_post/output/raster_pair.png"
-       alt="Magnetic-field magnitude over CAD geometry and LIC field-flow visualization"
+  <img src="docs/stream_function/demo_active_shield.png"
+       alt="Active-shield coil demonstration comparing external stray fields with and without shielding"
        width="1100">
 </p>
 <p align="center">
-  <sub>Checked Gmsh post-processing artifacts: ray-cast field magnitude over
-  STEP geometry and line-integral-convolution field flow.</sub>
+  <sub>Design for a field target: a stream-function active-shield demonstration.
+  This comparison is for the illustrated coil configuration, not a universal
+  shielding-performance claim.</sub>
 </p>
 
 **AI designs. Radia provides the engineering platform.**
@@ -44,10 +45,38 @@ orchestration around that foundation.
 
 > **Radia extends NGSolve; it does not compete with it.**
 
-[Quick start](#quick-start) | [Capabilities](#capabilities) |
+[Quick start](#quick-start) | [NGSolve from MATLAB](#ngsolve-from-matlab) | [Capabilities](#capabilities) |
 [Simulink](#simulink) | [MCP](#python-and-mcp) |
 [Eqnedit64](#eqnedit64) |
 [Documentation](#documentation) | [Contributing](#contributing)
+
+## NGSolve from MATLAB
+
+**Use NGSolve meshes, finite-element spaces, fields, and sparse operators from
+MATLAB, then connect the result to your circuit, optimizer, or Simulink model.**
+Radia is not only a Python package: its `radia.ngsolve` MATLAB namespace exposes
+selected NGSolve operations through a standalone native MEX gateway.
+
+- **Keep the model native.** Meshes, forms, matrices, and vectors can remain
+  C++-owned across calls through checked handles. Export a MATLAB sparse matrix
+  when you need one; repeated native operations need not export it each time.
+- **Use the same numerical kernels.** The native MATLAB and Python adapters
+  share C++ implementations, including the focused AMS/COCR solver interface.
+- **Build an application around the field solve.** Readable MATLAB
+  S-Functions connect supported native states to Simulink; LTspice adapters
+  and the independently distributed `radia-optuna` add circuit and optimization
+  workflows.
+
+Start with the [MATLAB mesh and matrix walkthrough](matlab/README.md#persistent-mesh-space-form-and-matrix-handles),
+explore the [Simulink library](#simulink), or inspect the
+[Python/MATLAB comparison cases and saved results](validation_test/ngsolve_matlab_parity/README.md).
+
+This is Radia's MATLAB interface to NGSolve, not an official NGSolve MATLAB
+distribution or a claim of complete native API parity. The
+[backend map](matlab/python_api_parity_manifest.json) distinguishes native MEX,
+MATLAB-native, explicit Python batch fallbacks, and private capabilities.
+MATLAB/Simulink licensing and the [supported runtime](#supported-production-stack)
+still apply.
 
 ## Why Radia?
 
