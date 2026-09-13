@@ -7,7 +7,7 @@ claim to have checked every scientific statement for sufficient citation.
 Initially there were no `.bib` or `.bbl` files below docs and no notebook
 declarations using the canonical bibliography pipeline.
 
-## Two migrated notebooks
+## Three migrated notebooks
 
 `docs/open_boundary/open_boundary_demo.ipynb` now declares seven explicit
 canonical keys and ships its generated `.bbl`. The reference cell is the actual
@@ -38,7 +38,16 @@ Calculation cells, saved outputs and widget state are unchanged; no numerical
 revalidation is claimed. The parent addition also leaves the first notebook's
 selected-source fingerprint valid.
 
-## Six notebooks remain unresolved
+`docs/nodal_force/nodal_force.ipynb` was migrated on 2026-09-14 with three
+explicit keys and the same generated-bbl/display contract. Two missing records
+were verified against [IEEE-deposited Crossref metadata](https://api.crossref.org/works/10.1109/TMAG.1983.1062812)
+and the [Elsevier article](https://www.sciencedirect.com/science/article/pii/S0377042703009816).
+The [Emerald eggshell record](https://doi.org/10.1108/03321640410553427) identifies
+the COMPEL article as 2004, not 2003, and spells the coauthor Deliége. The
+notebook now explicitly cites that journal article; no separate 2003 conference
+publication is claimed. Its calculation cells and saved outputs are unchanged.
+
+## Five notebooks remain unresolved
 
 | Notebook (below docs) | Citation work still required |
 | --- | --- |
@@ -46,7 +55,6 @@ selected-source fingerprint valid.
 | `cohomology/tomega_wire.ipynb` | Identify Kotiuga 1987, the particular Bossavit source, and Pellikka 2013; an author surname alone does not identify a publication. |
 | `mesh_fusion/mesh_fusion.ipynb` | Register the exact Becker/Hansbo/Stenberg, Hansbo/Larson, Buffa/Maday/Rapetti and Egger papers, including arXiv 2005.12020 and 2112.05572. |
 | `mixed_galerkin/mixed_galerkin_results.ipynb` | Resolve legacy Senior 1962 versus parent key `Senior1962` (verified record year 1960), and Yuferev–Ida 2010 versus parent `YuferevIda2009`. Mitzner, Kameari and Quarteroni/Valli have candidate parent keys. Do not silently change publication identity to match a year. |
-| `nodal_force/nodal_force.ipynb` | Verify Coulomb 1983, Henrotte/Hameyer 2004, and the eggshell attribution written as 2003 (parent `henrotte2004` is a 2004 COMPEL paper). |
 | `peec_integration/peec_showcase.ipynb` | Resolve Grover and FastHenry reference identities; Dowell has parent `dowell1966eddy`. Named PRIMA/source figure provenance also needs source-level review. |
 
 The other 43 notebooks were not assigned dummy bibliographies. Screening found
@@ -63,6 +71,6 @@ to generate from `metadata.radia.bibliography.keys` through the existing
 `bibliography_make_bbl` tool and render the bbl with installed TeX4ht.
 No separate MCP tool, parser, notebook-local `.bib`, or JSON sidecar was added.
 The fast contract checks only notebooks that explicitly declare migration;
-it must not be reported as resolving the six rows above.
+it must not be reported as resolving the five rows above.
 
 No shared editable installation, live client or solver binary was changed.
