@@ -12,6 +12,7 @@ import asyncio
 import json
 import os
 from pathlib import Path
+import subprocess
 import sys
 from typing import Any
 
@@ -38,7 +39,7 @@ def _status_payload(result: Any) -> dict[str, Any]:
     raise AssertionError("status tools/call returned no structured JSON object")
 
 
-async def _probe_server(short_name: str) -> dict[str, Any]:
+async def _probe_server(short_name: str, installed_wheel: bool = False) -> dict[str, Any]:
     info = CATALOG[short_name]
     entry_point = str(info["entry_point"])
     subpackage = str(info["subpackage"])
@@ -48,10 +49,12 @@ async def _probe_server(short_name: str) -> dict[str, Any]:
     )
     environment = os.environ.copy()
     environment["RADIA_MCP_CALL_LOG"] = "0"
+    if installed_wheel:
+        environment.pop("RADIA_MCP_HOT_RELOAD", None)
     parameters = StdioServerParameters(
         command=sys.executable,
         args=[
-            "-s", "-m", "radia_mcp.maintenance", "serve", short_name,
+            "-I" if installed_wheel else "-s", "-m", "radia_mcp.maintenance", "serve", short_name,
         ],
         env=environment,
     )
@@ -150,6 +153,7 @@ async def _probe_server(short_name: str) -> dict[str, Any]:
             "source_changed_since_registration"
         ),
         "distribution": distribution,
+        "reload_tools": sorted(name for name in by_name if name.endswith("_reload_code")),
         "mcp_sdk_version": provenance.get("mcp_sdk_version"),
         "structured_status": bool(
             getattr(by_name[status_name], "outputSchema", None)
@@ -157,11 +161,33 @@ async def _probe_server(short_name: str) -> dict[str, Any]:
     }
 
 
-def probe_server(short_name: str, timeout: float = 60.0) -> dict[str, Any]:
+def probe_server(short_name: str, timeout: float = 60.0, *, installed_wheel: bool = False) -> dict[str, Any]:
     """Synchronously probe one catalog server through stdio."""
     if short_name not in CATALOG:
         raise KeyError(f"unknown server {short_name!r}")
-    return asyncio.run(asyncio.wait_for(_probe_server(short_name), timeout))
+    return asyncio.run(asyncio.wait_for(_probe_server(short_name, installed_wheel), timeout))
+
+
+def run_selftest(short_name: str, timeout: float, *, installed_wheel: bool = False) -> None:
+    """Use the existing maintenance launcher; failure/timeout never becomes a skip."""
+    result = subprocess.run(
+        [sys.executable, "-I" if installed_wheel else "-s", "-m",
+         "radia_mcp.maintenance", "serve", short_name, "--selftest"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        timeout=timeout, check=False,
+    )
+    if result.returncode:
+        raise AssertionError(f"{short_name}: selftest failed ({result.returncode}): "
+                             f"{result.stdout[-2000:]}\n{result.stderr[-2000:]}")
+
+
+def check_wheel_result(result: dict[str, Any], root: str) -> None:
+    if not _is_below(result["module_file"], root):
+        raise AssertionError(f"{result['server']}: module outside installed wheel root")
+    if result.get("distribution", {}).get("editable") is not False:
+        raise AssertionError(f"{result['server']}: wheel registration is not verified noneditable")
+    if result.get("reload_tools"):
+        raise AssertionError(f"{result['server']}: installed wheel exposes reload tools")
 
 
 def _is_below(path: str, root: str) -> bool:
@@ -172,22 +198,31 @@ def _is_below(path: str, root: str) -> bool:
         return False
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--server", choices=sorted(CATALOG))
     group.add_argument("--all", action="store_true")
     parser.add_argument("--timeout", type=float, default=60.0)
+    parser.add_argument("--selftest", action="store_true", help="Also run every selected server's --selftest.")
+    parser.add_argument("--installed-wheel", action="store_true", help="Use isolated Python and require noneditable provenance and no reload tools.")
     parser.add_argument(
         "--expect-module-root",
         help="Fail unless each loaded server module is below this directory.",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+    if args.installed_wheel:
+        import radia_mcp
+
+        if not args.expect_module_root:
+            parser.error("--installed-wheel requires --expect-module-root")
+        if not _is_below(radia_mcp.__file__, args.expect_module_root):
+            raise AssertionError("probe itself imported radia_mcp outside the installed wheel root")
 
     selected = sorted(CATALOG) if args.all else [args.server]
     results = []
     for name in selected:
-        result = probe_server(name, timeout=args.timeout)
+        result = probe_server(name, timeout=args.timeout, installed_wheel=args.installed_wheel)
         if args.expect_module_root and not _is_below(
             result["module_file"], args.expect_module_root
         ):
@@ -195,6 +230,11 @@ def main() -> int:
                 f"{name}: loaded {result['module_file']}, expected below "
                 f"{args.expect_module_root}"
             )
+        if args.installed_wheel:
+            check_wheel_result(result, args.expect_module_root)
+        if args.selftest:
+            run_selftest(name, args.timeout, installed_wheel=args.installed_wheel)
+            result["selftest"] = "passed"
         results.append(result)
         print(
             f"OK {name}: {result['n_tools']} tools, "
