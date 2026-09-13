@@ -63,7 +63,7 @@ def test_unknown_base_selects_all_registered_impacts():
     assert 'tests/test_ci_preflight_mdx.py' in selected
 
 
-def test_manifest_change_checks_all_registered_impacts():
+def test_manifest_change_without_comparison_checks_all_registered_impacts():
     runner = runner_module()
     assert runner.select_impact_tests([], ['tests/test_tier_manifest.json']) == runner.select_impact_tests([], None)
 
@@ -88,20 +88,36 @@ def test_additive_manifest_selects_new_rules_and_ordinary_impacts(monkeypatch, t
     }
 
 
-@pytest.mark.parametrize('change', ['remove_rule', 'replace_tests', 'append_test',
-                                     'profile', 'schema', 'missing_rules'])
-def test_nonadditive_manifest_stays_broad(change, monkeypatch, tmp_path):
+@pytest.mark.parametrize('change', ['remove_rule', 'replace_tests', 'append_test'])
+def test_changed_manifest_rule_selects_only_old_and_new_tests(change, monkeypatch, tmp_path):
     runner = runner_module()
     current = json.loads(runner.MANIFEST.read_text(encoding='utf-8'))
     previous = copy.deepcopy(current)
     source = next(iter(current['impact_rules']))
+    old_tests = list(previous['impact_rules'][source])
     if change == 'remove_rule':
-        previous['impact_rules']['src/removed.py'] = ['tests/test_ci_monitor.py']
+        del current['impact_rules'][source]
+        expected = set(old_tests)
     elif change == 'replace_tests':
-        previous['impact_rules'][source] = ['tests/test_ci_monitor.py']
-    elif change == 'append_test':
+        current['impact_rules'][source] = ['tests/test_ci_monitor.py']
+        expected = {*old_tests, 'tests/test_ci_monitor.py'}
+    else:
         current['impact_rules'][source].append('tests/test_ci_monitor.py')
-    elif change == 'profile':
+        expected = {*old_tests, 'tests/test_ci_monitor.py'}
+    manifest = tmp_path / 'manifest.json'
+    manifest.write_text(json.dumps(current), encoding='utf-8')
+    monkeypatch.setattr(runner, 'MANIFEST', manifest)
+    assert set(runner.select_impact_tests(
+        [], ['tests/test_tier_manifest.json'], previous_manifest=previous,
+    )) == expected
+
+
+@pytest.mark.parametrize('change', ['profile', 'schema', 'missing_rules'])
+def test_structural_manifest_change_stays_broad(change, monkeypatch, tmp_path):
+    runner = runner_module()
+    current = json.loads(runner.MANIFEST.read_text(encoding='utf-8'))
+    previous = copy.deepcopy(current)
+    if change == 'profile':
         previous['profiles']['fast-contracts']['max_elapsed_seconds'] = 59
     elif change == 'schema':
         previous['schema'] = 'other-schema'
