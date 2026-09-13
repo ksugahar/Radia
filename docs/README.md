@@ -1,11 +1,35 @@
-# Radia Documentation
+# Explore Radia
 
-**Version:** 4.55.0
+**From a magnet or coil to fields, circuits, optimization, and Simulink.**
+These pages show what you can make with Radia. Start with saved results in a
+notebook, then follow the MATLAB or Python interface into your own application.
 
-For installation, see the top-level [README.md](../README.md) Quick Start (covers
-the pinned production install of `radia[cubit]` + `radia-mcp` + `cubit-mesh-export`,
-multi-user lab deploy, verify, and troubleshooting).
+![External stray field with and without an active-shield coil](stream_function/demo_active_shield.png)
 
+*Design for a field target: external stray fields in a stream-function
+active-shield demonstration. The plotted comparison applies to this coil
+configuration; it is not a general performance guarantee.*
+
+## Choose a Starting Point
+
+| What would you like to do? | Start here |
+| :--- | :--- |
+| Work with NGSolve from MATLAB | [Native mesh, space, and matrix walkthrough](../matlab/README.md#persistent-mesh-space-form-and-matrix-handles) |
+| See Radia and NGSolve working together | [Integration notebook with saved results](ngsolve_integration/integration_basics.ipynb) |
+| Design coils and current sheets | [Stream-function applications](stream_function/application.md) |
+| Connect a circuit to a field workflow | [LTspice integration](ltspice/README.md) |
+| Build a MATLAB/Simulink application | [Radia library and native MEX interfaces](../matlab/README.md) |
+| Explore magnetic materials and open boundaries | [HDiv-MMM](hdiv_vim/README.md) and [Kelvin transformation](kelvin/KELVIN_TRANSFORMATION.md) |
+
+The native MATLAB interface retains selected NGSolve objects in C++; it is more
+than a launcher for a Python script. Other capabilities use explicitly declared
+Python batch fallbacks. Check the [backend map](../matlab/python_api_parity_manifest.json)
+for the capability you need, and the
+[Python/MATLAB validation record](../validation_test/ngsolve_matlab_parity/README.md)
+for the tested cases. A demonstration is not a guarantee for every geometry,
+material, or backend.
+
+For installation and supported platforms, see the [Quick start](../README.md#quick-start).
 For release-by-release changes, see [CHANGELOG.md](../CHANGELOG.md).
 
 ## Repository Examples
@@ -24,10 +48,28 @@ Benchmark timing, convergence studies, and golden numerical evidence live in
 [`validation_test/`](../validation_test/) with committed JSON provenance.
 Docs notebooks are demonstrations and do not require JSON sidecars.
 
-These notebooks explain and reproduce a workflow. The final human operating
+These notebooks introduce capabilities through visible results: the engineering
+question, the computed field or design, and a route to trying it yourself.
+They are not timing competitions or release-acceptance certificates.
+The final human operating
 interface for Radia applications remains the masked Simulink block library.
 Its spatial field results are durable GMSH `.msh v4.1` artifacts in the run
 directory; interactive WebGUI scenes remain the notebook explanation layer.
+
+### References in Notebooks
+
+The parent bibliography is
+[`references.bib`](../packages/radia-mcp/src/radia_mcp/bibliography/data/references.bib).
+Notebook literature references must come from a `.bbl` generated from that
+parent through `bibliography_make_bbl`, not from a manuscript-local `.bib` or
+a separately maintained reference list. Keep the generated `.bbl` beside the
+notebook and make its references readable in the saved notebook. A notebook
+without literature citations does not need a dummy bibliography.
+
+Correct citation metadata and keys in the parent, then regenerate the `.bbl`
+and its notebook presentation together. Do not hand-edit generated entries.
+This is the required authoring policy, not a claim that every legacy notebook
+has already passed the bibliography audit.
 
 > **Where is the canonical PEEC / FEM / Cubit knowledge?**
 > Per CLAUDE.md "MCP Knowledge Placement Policy", the **single source of
@@ -49,7 +91,6 @@ directory; interactive WebGUI scenes remain the notebook explanation layer.
 ## Solver Architecture
 
 - [EDDY_CURRENT_METHODS.md](solver/EDDY_CURRENT_METHODS.md) - Conductor eddy current modeling: method comparison (NGSolve + ngbem)
-- [tetra_field_accuracy_evaluation/tetra_field_accuracy_validation.ipynb](tetra_field_accuracy_evaluation/tetra_field_accuracy_validation.ipynb) - Result-bearing tetrahedron field-accuracy validation view synchronized with `validation_test/tetra_field_accuracy_evaluation/` JSON results.
 
 ## FEEC / HDiv-type VIM
 
