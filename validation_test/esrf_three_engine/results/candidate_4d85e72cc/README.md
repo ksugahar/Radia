@@ -43,6 +43,19 @@ SHA-256 `3b198c0a9aba3b6aad02eeecde9014a9eea57f10bef8296bca131a9c8e006808`.
 All 34 manifest entries were independently hashed after recovery, and the
 installed Python/native identity was rechecked unchanged after the solve.
 
+After evidence commit `c68a2a769`, the job-owned hibino venv, outputs, temporary
+profiler, recovery ZIP/helper, and the four recovered input files were deleted.
+All named targets were verified absent. An unrelated IH process was detected
+and preserved. The durable cleanup report is
+`S:/Radia/validation_artifacts/esrf6_mesh_audit_20260913/esrf6_acceptance_cleanup.json`,
+SHA-256 `83ca8552d6564c146a1ef4fbbefa14e3d886652e22c3e502431f018b110ed0e8`.
+Future runs must explicitly restage the verified inputs from the recovery
+archive; do not silently substitute another mesh when old scratch paths vanish.
+
+The final focused selection passed 150 tests, including the numerical-record
+replay. The separate installed-wheel deep-saturation regression passed on
+hibino (one test, 85.48 s). Neither result waives CI-built release requirements.
+
 This closes the nominal BDM1 field-agreement item. Separate work remains for
 iron-sensitive nonlinear observables, BDM2/IMA application qualification,
 source-load quadrature convergence and CI-built release acceptance. The later
