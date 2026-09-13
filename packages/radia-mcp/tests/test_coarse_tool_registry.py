@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import asyncio
 import ast
+import asyncio
 import json
 import os
 import subprocess
@@ -12,7 +12,8 @@ from pathlib import Path
 
 import pytest
 from mcp.server.fastmcp import FastMCP
-
+from mcp.server.fastmcp.tools.base import Tool
+from pydantic import TypeAdapter, ValidationError
 from radia_mcp.common.lazy_call import lazy_callable
 from radia_mcp.common.status import register_status_tool
 from radia_mcp.common.tool_group import CoarseToolRegistry, selected_tool_profile
@@ -138,6 +139,124 @@ def test_full_profile_keeps_individual_tools_for_compatibility():
         "demo_validation_catalog",
         "demo_validation_run",
     }
+
+
+def _grouped_server(function):
+    mcp = FastMCP("input-contract")
+    registry = CoarseToolRegistry(mcp, namespace="demo", profile="core", min_group_size=1)
+    registry.tool()(function)
+    registry.install()
+    return mcp
+
+
+def _grouped_runner(function):
+    return _tool_functions(_grouped_server(function))["demo_validation_run"]
+
+
+def test_sdk_dispatch_serializes_grouped_input_error_payload():
+    def gate(value: int):
+        raise AssertionError("invalid input must not execute")
+
+    server = _grouped_server(gate)
+    result = asyncio.run(server.call_tool("demo_validation_run", {
+        "name": "gate", "arguments": {"value": "bad"},
+    }))
+    content = result[0] if isinstance(result, tuple) else result
+    payload = json.loads(content[0].text)
+    assert payload["status"] == "error"
+    assert payload["kind"] == "input"
+
+
+@pytest.mark.parametrize("asynchronous", [False, True])
+@pytest.mark.parametrize("arguments", [
+    {"value": 2},
+    {"value": "2", "weights": "[1, 2.5]", "enabled": "false"},
+    {"value": 3, "weights": [2, 4], "enabled": True},
+    {"value": 1, "weights": None},
+])
+def test_grouped_arguments_match_sdk_defaults_coercion_and_json(asynchronous, arguments):
+    def gate(value: int, *, weights: list[float] | None = None, enabled: bool = True) -> dict:
+        return {"value": value, "weights": weights, "enabled": enabled}
+
+    async def async_gate(value: int, *, weights: list[float] | None = None, enabled: bool = True) -> dict:
+        return gate(value, weights=weights, enabled=enabled)
+
+    function = async_gate if asynchronous else gate
+    runner = _grouped_runner(function)
+    original = dict(arguments)
+    expected = asyncio.run(Tool.from_function(function).run(arguments))
+    assert asyncio.run(runner(function.__name__, arguments)) == expected
+    assert arguments == original
+
+
+@pytest.mark.parametrize("arguments", [{}, {"value": "bad"},
+    {"value": 1, "surprise": 2}, {"value": []}, [], "not a mapping"])
+def test_invalid_grouped_input_returns_payload_without_execution(arguments):
+    executed = []
+
+    def gate(value: int) -> int:
+        executed.append(value)
+        return value
+
+    payload = asyncio.run(_grouped_runner(gate)("gate", arguments))
+    assert payload["status"] == "error"
+    assert payload["kind"] == "input"
+    assert payload["stage"] == "demo_validation_run"
+    assert payload["error"]
+    assert executed == []
+
+
+def test_unknown_grouped_operation_returns_input_error():
+    def gate() -> bool:
+        return True
+
+    result = asyncio.run(_grouped_runner(gate)("missing"))
+    assert result["kind"] == "input"
+    assert "demo_validation_catalog" in result["error"]
+
+
+def test_grouped_none_arguments_apply_defaults_and_preserve_domain_result():
+    result = {"passed": False, "reason": "domain gate failed"}
+
+    def gate(value: int = 7):
+        assert value == 7
+        return result
+
+    assert asyncio.run(_grouped_runner(gate)("gate")) is result
+
+
+@pytest.mark.parametrize("asynchronous", [False, True])
+@pytest.mark.parametrize("failure", [TypeError, ValidationError])
+def test_body_errors_are_not_reclassified_as_input(asynchronous, failure):
+    def gate(value: int):
+        if failure is TypeError:
+            raise TypeError("internal implementation defect")
+        TypeAdapter(int).validate_python("not an integer")
+
+    async def async_gate(value: int):
+        return gate(value)
+
+    function = async_gate if asynchronous else gate
+    with pytest.raises(failure):
+        asyncio.run(_grouped_runner(function)(function.__name__, {"value": 1}))
+
+
+def test_grouped_named_protocol_rejects_positional_only_before_execution():
+    def gate(value: int, /):
+        raise AssertionError("must not execute")
+
+    result = asyncio.run(_grouped_runner(gate)("gate", {"value": 1}))
+    assert result["kind"] == "input"
+    assert "positional" in result["error"]
+
+
+def test_grouped_sync_callable_awaitable_result_is_still_awaited():
+    def gate(value: int):
+        async def complete():
+            return value + 1
+        return complete()
+
+    assert asyncio.run(_grouped_runner(gate)("gate", {"value": "3"})) == 4
 
 
 def test_lazy_callable_resolves_only_on_call_and_tracks_reloaded_attribute(
