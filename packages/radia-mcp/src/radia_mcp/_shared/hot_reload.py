@@ -1,7 +1,6 @@
 """Reload changed radia_mcp modules and re-register their tools without a restart.
 
-Every radia-mcp server is an editable install, and every server still had to
-be restarted after a code change (2026-09-02). An editable install only tells
+Development radia-mcp servers may use editable installs. An editable install only tells
 Python which file to read at import time; a running server has already
 imported its modules and holds the old function objects, FastMCP's tool
 registry points at those objects, and the client froze the tool list when it
@@ -402,7 +401,18 @@ def _declare_tool_list_changed(mcp: Any) -> None:
 
 
 def register_reload_tool(mcp: Any, tool_name: str, module_prefix: str = "radia_mcp") -> None:
-    """Register ``tool_name`` on ``mcp``: reload, refresh, notify the client."""
+    """Expose reload only for a verified editable install without an opt-out."""
+    if os.environ.get("RADIA_MCP_HOT_RELOAD", "").strip() == "0":
+        return
+    # Import locally: status registration calls this function during server setup.
+    from ..common.status import _distribution_provenance
+
+    try:
+        editable = _distribution_provenance().get("editable") is True
+    except (OSError, TypeError, ValueError, AttributeError):
+        editable = False
+    if not editable:
+        return
     _prime_mtimes(module_prefix)
     _declare_tool_list_changed(mcp)
     reload_lock = asyncio.Lock()
