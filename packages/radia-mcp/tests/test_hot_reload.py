@@ -10,14 +10,56 @@ import textwrap
 import time
 from pathlib import Path
 
+import pytest
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp.server.fastmcp import FastMCP
-
 from radia_mcp._shared import hot_reload
 
-
 _clock = [time.time() + 2]
+
+
+@pytest.fixture
+def editable_runtime(monkeypatch):
+    from radia_mcp.common import status
+
+    monkeypatch.setattr(status, "_distribution_provenance", lambda: {"editable": True})
+    monkeypatch.delenv("RADIA_MCP_HOT_RELOAD", raising=False)
+    return status
+
+
+@pytest.mark.parametrize("provenance", [{}, {"editable": False},
+                                      {"editable": None}, {"editable": "true"}])
+def test_reload_is_not_registered_without_verified_editable(provenance, editable_runtime, monkeypatch):
+    monkeypatch.setattr(editable_runtime, "_distribution_provenance", lambda: provenance)
+    server = FastMCP("closed-reload")
+    before = server._mcp_server.create_initialization_options().capabilities
+    hot_reload.register_reload_tool(server, "closed_reload_code")
+    after = server._mcp_server.create_initialization_options().capabilities
+    assert not server._tool_manager.list_tools()
+    assert after == before
+
+
+def test_reload_opt_out_precedes_provenance_and_registration(editable_runtime, monkeypatch):
+    def must_not_probe():
+        raise AssertionError("explicit opt-out must take precedence")
+
+    monkeypatch.setenv("RADIA_MCP_HOT_RELOAD", "0")
+    monkeypatch.setattr(editable_runtime, "_distribution_provenance", must_not_probe)
+    server = FastMCP("disabled-reload")
+    hot_reload.register_reload_tool(server, "disabled_reload_code")
+    assert not server._tool_manager.list_tools()
+    assert not getattr(server._mcp_server, "_radia_declares_tool_list_changed", False)
+
+
+def test_reload_unreadable_provenance_fails_closed(editable_runtime, monkeypatch):
+    def unreadable():
+        raise OSError("metadata unavailable")
+
+    monkeypatch.setattr(editable_runtime, "_distribution_provenance", unreadable)
+    server = FastMCP("unreadable-reload")
+    hot_reload.register_reload_tool(server, "unreadable_reload_code")
+    assert not server._tool_manager.list_tools()
 
 
 def _write(path, body: str) -> None:
@@ -43,7 +85,7 @@ def _call(mcp: FastMCP, name: str):
         return result[0].text
 
 
-def test_reload_updates_stale_tools_and_registers_new_ones(tmp_path, monkeypatch):
+def test_reload_updates_stale_tools_and_registers_new_ones(tmp_path, monkeypatch, editable_runtime):
     pkg = tmp_path / "hotpkg"
     pkg.mkdir()
     _write(pkg / "__init__.py", "")
@@ -118,7 +160,7 @@ def test_reload_updates_stale_tools_and_registers_new_ones(tmp_path, monkeypatch
 
 
 def test_registered_mtime_baseline_handles_a_file_server_clock_skew(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, editable_runtime
 ):
     pkg = tmp_path / "skewpkg"
     pkg.mkdir()
@@ -144,7 +186,7 @@ def test_registered_mtime_baseline_handles_a_file_server_clock_skew(
         sys.modules.pop(name, None)
 
 
-def test_reload_tool_declares_tools_list_changed_capability():
+def test_reload_tool_declares_tools_list_changed_capability(editable_runtime):
     mcp = FastMCP("cap-test")
     hot_reload.register_reload_tool(mcp, "cap_reload_code", module_prefix="radia_mcp")
 
@@ -154,12 +196,16 @@ def test_reload_tool_declares_tools_list_changed_capability():
     assert options.capabilities.tools.listChanged is True
 
 
-async def _probe_reload_notification_over_stdio() -> dict:
+async def _probe_reload_notification_over_stdio(editable, opt_out) -> dict:
     package_root = Path(__file__).resolve().parents[1]
     env = os.environ.copy()
     env["PYTHONPATH"] = os.pathsep.join(
         [str(package_root / "src"), env.get("PYTHONPATH", "")]
     ).rstrip(os.pathsep)
+    if opt_out is None:
+        env.pop("RADIA_MCP_HOT_RELOAD", None)
+    else:
+        env["RADIA_MCP_HOT_RELOAD"] = opt_out
     notifications: list[str] = []
 
     async def handle_message(message) -> None:
@@ -169,7 +215,11 @@ async def _probe_reload_notification_over_stdio() -> dict:
 
     params = StdioServerParameters(
         command=sys.executable,
-        args=["-m", "radia_mcp.grant_writing.server"],
+        # Simulate install provenance, not the protocol: use an actual server
+        # and actual stdio calls without repointing the developer's install.
+        args=["-c", "from radia_mcp.common import status; "
+              f"status._distribution_provenance=lambda: {{'editable': {editable!r}}}; "
+              "from radia_mcp.grant_writing.server import main; main()"],
         cwd=str(package_root),
         env=env,
     )
@@ -180,18 +230,31 @@ async def _probe_reload_notification_over_stdio() -> dict:
             message_handler=handle_message,
         ) as session:
             initialized = await session.initialize()
+            listed = await session.list_tools()
+            exposed = "grant_writing_reload_code" in {tool.name for tool in listed.tools}
+            if not exposed:
+                return {"exposed": False, "notifications": notifications}
             called = await session.call_tool("grant_writing_reload_code", {})
             await asyncio.sleep(0.05)
             return {
+                "exposed": True,
                 "list_changed": initialized.capabilities.tools.listChanged,
                 "payload": json.loads(called.content[0].text),
                 "notifications": notifications,
             }
 
 
-def test_reload_tool_notifies_a_real_stdio_client():
-    result = asyncio.run(_probe_reload_notification_over_stdio())
+@pytest.mark.parametrize("editable,opt_out,exposed", [
+    (True, None, True), (True, "0", False),
+    (False, None, False), (False, "1", False),
+])
+def test_reload_tool_registration_and_notification_over_stdio(editable, opt_out, exposed):
+    result = asyncio.run(_probe_reload_notification_over_stdio(editable, opt_out))
 
+    assert result["exposed"] is exposed
+    if not exposed:
+        assert result["notifications"] == []
+        return
     assert result["list_changed"] is True
     assert result["payload"]["client_notified"] is True
     assert "ToolListChangedNotification" in result["notifications"]
