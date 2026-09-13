@@ -161,6 +161,7 @@ _linked_study_silent_noop_gate = lazy_callable(".linked_study_noop_gate", "linke
 _reciprocal_two_port_power_sweep_gate = lazy_callable(".two_port_power_gate", "reciprocal_two_port_power_sweep_gate", __package__)
 _fem_bem_capstone_suite_gate = lazy_callable(".fem_bem_capstone_gate", "fem_bem_capstone_suite_gate", __package__)
 _helmholtz_dual_formulation_axis_gate = lazy_callable(".helmholtz_dual_formulation_gate", "helmholtz_dual_formulation_axis_gate", __package__)
+_finite_section_helmholtz_mixed_omega_gate = lazy_callable(".finite_section_helmholtz_gate", "finite_section_helmholtz_mixed_omega_gate", __package__)
 _lossy_power_refinement_gate = lazy_callable(".lossy_dielectric_power_gate", "lossy_dielectric_complex_power_refinement_gate", __package__)
 _heterogeneous_current_flow_gate = lazy_callable(".heterogeneous_current_flow_gate", "heterogeneous_current_flow_p1_reintegration_gate", __package__)
 _thermal_robin_boundary_balance_gate = lazy_callable(".thermal_robin_balance_gate", "thermal_robin_boundary_balance_gate", __package__)
@@ -4217,6 +4218,21 @@ def helmholtz_dual_formulation_axis_gate(summary_json: str) -> str:
     except (json.JSONDecodeError, TypeError, ValueError) as exc:
         result = {
             "policy": "helmholtz_dual_formulation_axis_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@_validation.tool()
+def finite_section_helmholtz_mixed_omega_gate(summary_json: str) -> str:
+    """Gate a finite-section CoilBuilder source and mixed total/reduced Omega solve."""
+
+    try:
+        result = _finite_section_helmholtz_mixed_omega_gate(json.loads(summary_json))
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "finite_section_helmholtz_mixed_omega_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
