@@ -176,8 +176,8 @@ Supplying quadrature positions and a pivot to
 contracts are available in MATLAB under `radia.force`, including
 `integrateLorentzForceTorque`, `integrateTimeAverageMaxwellSurfaceForceTorque`,
 `virtualWorkForce`, and `coenergyTorque`.
-The [force validation notebook](validation_test/force_validation/force_validation.ipynb)
-shows the Lorentz, Maxwell-stress, and virtual-work identities used to check
+The [force and torque validation corpus](validation_test/force_validation/README.md)
+records the Lorentz, Maxwell-stress, and virtual-work checks used to verify
 signs and force extraction before attaching them to a production field solve.
 
 Install only the integrations you need:

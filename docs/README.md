@@ -91,7 +91,6 @@ has already passed the bibliography audit.
 ## Solver Architecture
 
 - [EDDY_CURRENT_METHODS.md](solver/EDDY_CURRENT_METHODS.md) - Conductor eddy current modeling: method comparison (NGSolve + ngbem)
-- [tetra_field_accuracy_evaluation/tetra_field_accuracy_validation.ipynb](tetra_field_accuracy_evaluation/tetra_field_accuracy_validation.ipynb) - Result-bearing tetrahedron field-accuracy validation view synchronized with `validation_test/tetra_field_accuracy_evaluation/` JSON results.
 
 ## FEEC / HDiv-type VIM
 
