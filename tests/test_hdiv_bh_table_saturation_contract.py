@@ -1,5 +1,6 @@
 """Curve diagnostics only: a tangent jump is not a solver failure verdict."""
 import importlib.util
+import json
 from pathlib import Path
 
 import numpy as np
@@ -65,3 +66,26 @@ def test_monotone_node_m_does_not_guarantee_monotone_pchip_b():
 def test_invalid_table_fails_loudly(table):
     with pytest.raises(ValueError):
         AUDIT.saturation_report(table)
+
+
+def test_recorded_native_repeat_reaches_the_true_residual():
+    """Replay evidence, not a substitute for running the native regression module."""
+    path = ROOT / 'validation_test/feec/results/bh_saturation_20260914/qualified/result.json'
+    report = json.loads(path.read_text(encoding='utf-8'))
+    assert report['completed'] is True and report['passed'] is True
+    assert report['exit_code'] == 0
+    assert report['pip_check'] == 'No broken requirements found.'
+    assert len(report['tests']) == 9
+    assert all(item['outcome'] == 'passed' for item in report['tests'])
+    deep_jacobi = []
+    for solve in report['solves']:
+        assert 'exception' not in solve
+        stats = solve['statistics']
+        assert stats['nonlinear_converged_final_stage'] is True
+        if stats.get('nonlinear_solver') == 'picard-mass-riesz':
+            continue  # This existing test exercises a different convergence contract.
+        residual = stats['nonlinear_final_relative_residual']
+        assert np.isfinite(residual) and 0 <= residual <= 1e-6
+        if 'deep_saturation' in solve['test'] and solve['preconditioner'] == 'jacobi':
+            deep_jacobi.append(solve)
+    assert len(deep_jacobi) == 1

@@ -1,0 +1,32 @@
+[
+  {
+    "name": "result.json",
+    "bytes": 18660,
+    "sha256": "180cf420bf925310d3f20269896314af2de48e08a99984f1b13d388be14ad5ef"
+  },
+  {
+    "name": "junit.xml",
+    "bytes": 1399,
+    "sha256": "b569e7ff66619a5eb37db1287481c9709bc4010f7f46f12bc540e22484a839ce"
+  },
+  {
+    "name": "run_energy_newton_audit.py",
+    "bytes": 4970,
+    "sha256": "28a678f4d5be63031d12969a74f32bc0adca523c5255c2b0bdaba73c93d7ff6c"
+  },
+  {
+    "name": "test_hdiv_vim_energy_newton.py",
+    "bytes": 11677,
+    "sha256": "f3dba9b2ec3923ed736d5272b9783c5c3252f27b5a076932e47bb055897d1df7"
+  },
+  {
+    "name": "pip_freeze.txt",
+    "bytes": 1748,
+    "sha256": "b2a1c9d6a4ac36933f274313ad8daedb0ed1842f48d790f454fefbb4399eca98"
+  },
+  {
+    "name": "radia-4.95.91-cp312-cp312-win_amd64.whl",
+    "bytes": 5367139,
+    "sha256": "e9e6b9f09d105552330ac9b2b6d870187d825d11bf7a78f407553c8c7a866e25"
+  }
+]
