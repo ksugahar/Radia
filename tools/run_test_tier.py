@@ -5,11 +5,10 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
 import subprocess
 import sys
 import time
-
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "tests" / "test_tier_manifest.json"
@@ -65,13 +64,16 @@ def main(argv: list[str] | None = None) -> int:
         paths, budget = load_profile(args.profile)
         if args.since is not None:
             changed = None
+            previous_manifest = None
             if args.since:
                 diff = subprocess.run(
                     ['git', '-c', f'safe.directory={ROOT}', 'diff', '--name-only', '-z',
                      args.since, 'HEAD', '--'], cwd=ROOT, capture_output=True)
                 if diff.returncode == 0:
                     changed = diff.stdout.decode('utf-8').split('\0')
-            paths = select_impact_tests(paths, changed)
+                    if 'tests/test_tier_manifest.json' in changed:
+                        previous_manifest = read_previous_manifest(args.since)
+            paths = select_impact_tests(paths, changed, previous_manifest=previous_manifest)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         print(f"test-tier configuration error: {exc}", file=sys.stderr)
         return 2
@@ -103,14 +105,53 @@ def main(argv: list[str] | None = None) -> int:
     return result.returncode
 
 
-def select_impact_tests(paths: list[str], changed: list[str] | None) -> list[str]:
+def read_previous_manifest(ref: str) -> dict | None:
+    """Read the exact comparison tree; missing or invalid evidence stays unknown."""
+    try:
+        result = subprocess.run(
+            ['git', '-c', f'safe.directory={ROOT}', 'show',
+             f'{ref}:tests/test_tier_manifest.json'],
+            cwd=ROOT, capture_output=True, timeout=30, check=False,
+        )
+        if result.returncode != 0:
+            return None
+        data = json.loads(result.stdout.decode('utf-8'))
+        return data if isinstance(data, dict) else None
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return None
+
+
+def added_impact_sources(current: dict, previous: dict | None) -> set[str] | None:
+    """Scope only new rule additions; every other manifest change remains broad."""
+    if not isinstance(previous, dict):
+        return None
+    if ({key: value for key, value in current.items() if key != 'impact_rules'}
+            != {key: value for key, value in previous.items() if key != 'impact_rules'}):
+        return None
+    before = previous.get('impact_rules')
+    after = current.get('impact_rules')
+    if not isinstance(before, dict) or not isinstance(after, dict):
+        return None
+    if any(key not in after or after[key] != value for key, value in before.items()):
+        return None
+    return set(after) - set(before)
+
+
+def select_impact_tests(
+    paths: list[str], changed: list[str] | None, *, previous_manifest: dict | None = None,
+) -> list[str]:
     """Match files exactly and trailing-slash directories recursively; unknown bases fail broad."""
-    rules = json.loads(MANIFEST.read_text(encoding='utf-8')).get('impact_rules', {})
+    manifest = json.loads(MANIFEST.read_text(encoding='utf-8'))
+    rules = manifest.get('impact_rules', {})
     selected = list(paths)
+    added = set()
     if changed is not None and 'tests/test_tier_manifest.json' in changed:
-        changed = None
+        added = added_impact_sources(manifest, previous_manifest)
+        if added is None:
+            changed = None
+            added = set()
     for source, tests in rules.items():
-        if (changed is None or source in changed
+        if (changed is None or source in added or source in changed
                 or (source.endswith('/') and any(path.startswith(source) for path in changed))
                 or any(test in changed for test in tests)):
             selected.extend(tests)
