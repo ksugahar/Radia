@@ -126,8 +126,14 @@ and their `.vol` files. The two removed relative paths on every host were
 hash, explicit resolved-path and parent-reparse checks, no Git worktree, no
 active compute process, and nonrecursive `Remove-Item -LiteralPath`.
 
-Audit scratch cleanup follows durable recovery, hash verification, and this
-evidence commit. The candidate environment and selected physical meshes remain
+Audit scratch cleanup completed after durable recovery, hash verification, and
+evidence commit `d3b6e0e2a`. The remote verification/deletion receipts record
+25 files removed on hibino and 5 on each mdx host. Transfer manifests and helper
+scripts were also removed. Receipts were recovered, hash-verified, and removed
+remotely; the durable archive contains `recovery_verification.json` and each
+host's `recovery_receipt.json`.
+
+The candidate environment and selected physical meshes remain
 temporarily because ESRF6 is unfinished. Their owner is the execution task on
 branch `codex/hdiv-energy-newton-consistency-20260913`, not the release manager.
 Trigger: finish ESRF6, recover required inputs/results with verified hashes, then
