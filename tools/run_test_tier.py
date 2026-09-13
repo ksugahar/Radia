@@ -122,17 +122,35 @@ def read_previous_manifest(ref: str) -> dict | None:
 
 
 def changed_impact_tests(current: dict, previous: dict | None) -> set[str] | None:
-    """Return tests owned by changed rules; structural changes remain broad."""
+    """Select rule/membership deltas; budgets, inheritance and unknowns stay broad."""
     if not isinstance(previous, dict):
         return None
-    if ({key: value for key, value in current.items() if key != 'impact_rules'}
-            != {key: value for key, value in previous.items() if key != 'impact_rules'}):
+    excluded = {'impact_rules', 'profiles'}
+    if ({key: value for key, value in current.items() if key not in excluded}
+            != {key: value for key, value in previous.items() if key not in excluded}):
         return None
+    before_profiles, after_profiles = previous.get('profiles'), current.get('profiles')
+    if (not isinstance(before_profiles, dict) or not isinstance(after_profiles, dict)
+            or before_profiles.keys() != after_profiles.keys()):
+        return None
+    selected: set[str] = set()
+    for name, after_profile in after_profiles.items():
+        before_profile = before_profiles[name]
+        if not isinstance(before_profile, dict) or not isinstance(after_profile, dict):
+            return None
+        if ({key: value for key, value in before_profile.items() if key != 'paths'}
+                != {key: value for key, value in after_profile.items() if key != 'paths'}):
+            return None
+        old_paths, new_paths = before_profile.get('paths', []), after_profile.get('paths', [])
+        for paths in (old_paths, new_paths):
+            if (not isinstance(paths, list) or not all(isinstance(path, str) for path in paths)
+                    or len(paths) != len(set(paths))):
+                return None
+        selected.update(set(old_paths) ^ set(new_paths))
     before = previous.get('impact_rules')
     after = current.get('impact_rules')
     if not isinstance(before, dict) or not isinstance(after, dict):
         return None
-    selected: set[str] = set()
     for source in before.keys() | after.keys():
         old_tests = before.get(source, [])
         new_tests = after.get(source, [])
@@ -166,10 +184,18 @@ def select_impact_tests(
                 or any(test in changed for test in tests)):
             selected.extend(tests)
     selected = list(dict.fromkeys(selected))
+    current_references = {test for tests in rules.values() for test in tests}
+    current_references.update(test for profile in manifest.get('profiles', {}).values()
+                              for test in profile.get('paths', []))
+    runnable = []
     for path in selected:
         if not (ROOT / path).is_file():
+            if path in manifest_tests and path not in current_references:
+                print(f'Retired test removed from manifest and checkout: {path}')
+                continue
             raise ValueError(f'impact rule names missing test: {path}')
-    return selected
+        runnable.append(path)
+    return runnable
 
 
 if __name__ == "__main__":

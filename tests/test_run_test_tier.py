@@ -112,7 +112,9 @@ def test_changed_manifest_rule_selects_only_old_and_new_tests(change, monkeypatc
     )) == expected
 
 
-@pytest.mark.parametrize('change', ['profile', 'schema', 'missing_rules'])
+@pytest.mark.parametrize('change', ['profile', 'schema', 'missing_rules', 'inheritance',
+                                  'description', 'new_profile_key', 'profile_added',
+                                  'invalid_paths', 'duplicate_paths'])
 def test_structural_manifest_change_stays_broad(change, monkeypatch, tmp_path):
     runner = runner_module()
     current = json.loads(runner.MANIFEST.read_text(encoding='utf-8'))
@@ -121,14 +123,121 @@ def test_structural_manifest_change_stays_broad(change, monkeypatch, tmp_path):
         previous['profiles']['fast-contracts']['max_elapsed_seconds'] = 59
     elif change == 'schema':
         previous['schema'] = 'other-schema'
-    else:
+    elif change == 'missing_rules':
         del previous['impact_rules']
+    elif change == 'inheritance':
+        previous['profiles']['native-smoke']['extends'] = 'other-profile'
+    elif change == 'description':
+        previous['profiles']['fast-contracts']['description'] = 'other-description'
+    elif change == 'new_profile_key':
+        previous['profiles']['native-smoke']['unknown_policy'] = True
+    elif change == 'profile_added':
+        previous['profiles']['another-profile'] = {'paths': []}
+    elif change == 'invalid_paths':
+        previous['profiles']['fast-contracts']['paths'] = 'not-a-list'
+    else:
+        previous['profiles']['fast-contracts']['paths'] *= 2
     manifest = tmp_path / 'manifest.json'
     manifest.write_text(json.dumps(current), encoding='utf-8')
     monkeypatch.setattr(runner, 'MANIFEST', manifest)
     assert runner.select_impact_tests(
         [], ['tests/test_tier_manifest.json'], previous_manifest=previous,
     ) == runner.select_impact_tests([], None)
+
+
+@pytest.mark.parametrize('change', ['add', 'remove', 'replace', 'reorder'])
+def test_profile_membership_only_selects_changed_tests(change, monkeypatch, tmp_path):
+    runner = runner_module()
+    current = json.loads(runner.MANIFEST.read_text(encoding='utf-8'))
+    previous = copy.deepcopy(current)
+    paths = current['profiles']['fast-contracts']['paths']
+    before = set(paths)
+    if change == 'add':
+        paths.append('tests/test_ci_preflight_mdx.py')
+    elif change == 'remove':
+        paths.remove('tests/test_ci_monitor.py')
+    elif change == 'replace':
+        paths.remove('tests/test_ci_monitor.py')
+        paths.append('tests/test_ci_preflight_mdx.py')
+    else:
+        paths.reverse()
+    manifest = tmp_path / 'manifest.json'
+    manifest.write_text(json.dumps(current), encoding='utf-8')
+    monkeypatch.setattr(runner, 'MANIFEST', manifest)
+    selected = runner.select_impact_tests([], ['tests/test_tier_manifest.json'], previous_manifest=previous)
+    assert set(selected) == before ^ set(paths)
+
+
+@pytest.mark.parametrize('renamed', [False, True])
+def test_removed_test_is_not_passed_to_pytest(renamed, monkeypatch, tmp_path):
+    runner = runner_module()
+    previous = {'schema': 'v1', 'impact_rules': {}, 'profiles': {'fast': {'paths': ['old.py']}}}
+    current = copy.deepcopy(previous)
+    current['profiles']['fast']['paths'] = ['new.py'] if renamed else []
+    if renamed:
+        (tmp_path / 'new.py').write_text('')
+    manifest = tmp_path / 'manifest.json'
+    manifest.write_text(json.dumps(current), encoding='utf-8')
+    monkeypatch.setattr(runner, 'MANIFEST', manifest)
+    monkeypatch.setattr(runner, 'ROOT', tmp_path)
+    selected = runner.select_impact_tests([], ['tests/test_tier_manifest.json'], previous_manifest=previous)
+    assert selected == (['new.py'] if renamed else [])
+
+
+def test_missing_test_still_referenced_by_current_manifest_fails(monkeypatch, tmp_path):
+    runner = runner_module()
+    previous = {'schema': 'v1', 'impact_rules': {}, 'profiles': {'fast': {'paths': ['old.py']}}}
+    current = copy.deepcopy(previous)
+    current['profiles']['fast']['paths'] = []
+    current['impact_rules']['source.py'] = ['old.py']
+    manifest = tmp_path / 'manifest.json'
+    manifest.write_text(json.dumps(current), encoding='utf-8')
+    monkeypatch.setattr(runner, 'MANIFEST', manifest)
+    monkeypatch.setattr(runner, 'ROOT', tmp_path)
+    with pytest.raises(ValueError, match='missing test: old.py'):
+        runner.select_impact_tests([], ['tests/test_tier_manifest.json'], previous_manifest=previous)
+
+
+def test_new_missing_profile_member_fails_before_pytest(monkeypatch, tmp_path):
+    runner = runner_module()
+    previous = {'schema': 'v1', 'impact_rules': {}, 'profiles': {'fast': {'paths': []}}}
+    current = copy.deepcopy(previous)
+    current['profiles']['fast']['paths'] = ['typo.py']
+    manifest = tmp_path / 'manifest.json'
+    manifest.write_text(json.dumps(current), encoding='utf-8')
+    monkeypatch.setattr(runner, 'MANIFEST', manifest)
+    monkeypatch.setattr(runner, 'ROOT', tmp_path)
+    with pytest.raises(ValueError, match='missing test: typo.py'):
+        runner.select_impact_tests([], ['tests/test_tier_manifest.json'], previous_manifest=previous)
+
+
+@pytest.mark.parametrize('changed', [
+    'src/radia/vim/_nonlinear.py', 'src/radia/panels/samples/em_sample_bh.txt',
+    'validation_test/feec/bh_saturation_audit.py',
+    'validation_test/feec/test_hdiv_vim_energy_newton.py',
+    'validation_test/feec/run_energy_newton_audit.py',
+    'validation_test/feec/results/bh_saturation_20260914/qualified/result.json',
+    '.github/workflows/radia-fast.yml', 'tests/test_hdiv_bh_table_saturation_contract.py',
+])
+def test_bh_dependency_changes_select_bh_contract(changed):
+    runner = runner_module()
+    base, _ = runner.load_profile('fast-contracts')
+    contract = 'tests/test_hdiv_bh_table_saturation_contract.py'
+    assert contract not in base
+    assert contract in runner.select_impact_tests(base, [changed])
+    native, _ = runner.load_profile('native-smoke')
+    assert contract in native
+
+
+def test_fast_workflow_checks_dependencies_without_unrelated_impacts():
+    runner = runner_module()
+    base, _ = runner.load_profile('fast-contracts')
+    selected = runner.select_impact_tests(base, ['.github/workflows/radia-fast.yml'])
+    assert set(base) <= set(selected)
+    assert 'tests/test_hdiv_bh_table_saturation_contract.py' in selected
+    assert 'tests/test_simulink_release_package.py' not in selected
+    assert 'tests/test_build_failure_propagation.py' not in selected
+    assert 'tests/test_hdiv_bh_table_saturation_contract.py' not in runner.select_impact_tests(base, ['docs/intro.md'])
 
 
 @pytest.mark.parametrize('payload,code', [(b'not json', 0), (b'[]', 0), (b'', 1),
