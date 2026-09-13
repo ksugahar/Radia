@@ -418,7 +418,9 @@ def test_root_readme_publishes_native_topology_mex_parity():
     matlab_readme = " ".join(
         (root / "matlab" / "README.md").read_text(encoding="utf-8").split()
     )
-    assert "126 stateful class members" in matlab_readme
+    assert f"{contract['pybind_public_count']} mapped public top-level names" in matlab_readme
+    assert f"{contract['pybind_internal_numerical_count']} underscore-prefixed numerical kernels" in matlab_readme
+    assert f"{contract['pybind_class_surface_count']} stateful class members" in matlab_readme
     mapped_count = (
         contract["pybind_public_count"]
         + contract["pybind_internal_numerical_count"]
