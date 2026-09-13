@@ -7,7 +7,7 @@ claim to have checked every scientific statement for sufficient citation.
 Initially there were no `.bib` or `.bbl` files below docs and no notebook
 declarations using the canonical bibliography pipeline.
 
-## Three migrated notebooks
+## Eight migrated notebooks
 
 `docs/open_boundary/open_boundary_demo.ipynb` now declares seven explicit
 canonical keys and ships its generated `.bbl`. The reference cell is the actual
@@ -47,15 +47,15 @@ the COMPEL article as 2004, not 2003, and spells the coauthor Deliége. The
 notebook now explicitly cites that journal article; no separate 2003 conference
 publication is claimed. Its calculation cells and saved outputs are unchanged.
 
-## Five notebooks remain unresolved
+## Final five migrations (2026-09-14)
 
-| Notebook (below docs) | Citation work still required |
+| Notebook (below docs) | Explicit canonical bibliography |
 | --- | --- |
-| `analytical_formulas/analytical_formulas.ipynb` | Identify and register the IEEJ Parts 1–9 series, Weissenburger/Christensen report, Montgomery book and Ortner formulation from the source cross-reference table. |
-| `cohomology/tomega_wire.ipynb` | Identify Kotiuga 1987, the particular Bossavit source, and Pellikka 2013; an author surname alone does not identify a publication. |
-| `mesh_fusion/mesh_fusion.ipynb` | Register the exact Becker/Hansbo/Stenberg, Hansbo/Larson, Buffa/Maday/Rapetti and Egger papers, including arXiv 2005.12020 and 2112.05572. |
-| `mixed_galerkin/mixed_galerkin_results.ipynb` | Resolve legacy Senior 1962 versus parent key `Senior1962` (verified record year 1960), and Yuferev–Ida 2010 versus parent `YuferevIda2009`. Mitzner, Kameari and Quarteroni/Valli have candidate parent keys. Do not silently change publication identity to match a year. |
-| `peec_integration/peec_showcase.ipynb` | Resolve Grover and FastHenry reference identities; Dowell has parent `dowell1966eddy`. Named PRIMA/source figure provenance also needs source-level review. |
+| `analytical_formulas/analytical_formulas.ipynb` | 12 records: nine IEE Japan reports, PPPL-1517, Montgomery (1969), Ortner et al. (2023 volume; online 2022). |
+| `cohomology/tomega_wire.ipynb` | Kotiuga (1987), explicitly selected Bossavit book (1998), Pellikka et al. (2013). |
+| `mesh_fusion/mesh_fusion.ipynb` | Five records: Becker et al., Hansbo et al., Buffa et al., and Egger preprints 2005.12020 / 2112.05572. |
+| `mixed_galerkin/mixed_galerkin_results.ipynb` | Six records, explicitly distinguishing Senior's 1960 article and 1962 note, plus Mitzner, Yuferev/Ida, Kameari and Quarteroni/Valli. |
+| `peec_integration/peec_showcase.ipynb` | Dowell, FASTHENRY, explicitly selected Grover 2004 reprint and PRIMA. Numeric/figure provenance is separately qualified below and in the notebook. |
 
 The other 43 notebooks were not assigned dummy bibliographies. Screening found
 internal file links, implementation dates and numerical reference comparisons;
@@ -64,25 +64,39 @@ bibliography declaration is **unclaimed**, not an all-clear citation audit.
 The Kelvin notebook's laboratory webpage link remains an ordinary source link,
 not a generated scholarly reference list.
 
-## Follow-up source reconciliation (2026-09-14)
+## Source reconciliation and remaining evidence limits
 
-The remaining five rows were investigated, not silently filled with plausible
-author/year matches. Their blockers are now more specific:
+All eight screened notebooks now use the generated-bbl/display contract. This
+closes their bibliography-pipeline migration, **not** every historical attribution
+or numerical validation question. Ambiguous old labels were not silently promoted
+to verified citations: newly selected background works and remaining limitations
+are explicit in the notebook narrative, which supersedes retained script labels.
 
-- **Analytical formulas:** the repository cross-reference and module docstrings
-  supply report identifiers such as SA-02-28/RM-02-64 and SA-04-44/RM-04-68,
-  but the nine source PDFs are described as lab-internal and are not included.
-  The aggregate author list is not proof of each part's author list. Obtain the
-  actual report front pages before creating nine parent records. The book/report
-  and Ortner references also need their exact cited editions/publications.
+- **Analytical formulas:** the previously unavailable nine originals were located
+  in `W:/03_文献・論文/00_電磁界解析/02_解析積分公式集/00_electromagnetic_integral_formula_series/`.
+  Their front-page author lists and SA/RM identifiers were read and visually
+  verified. Part 4 uses its own front-page author order, not a later part's
+  reordered citation; Part 8 has Matsuo alone. Years follow report identifiers,
+  not received dates (Part 2 received in 2002 belongs to 2003; Part 9 received
+  in 2006 belongs to 2007). The nine source PDFs remain in the literature store,
+  not copied into Git. Part 1 reference 15 and the
+  [PPPL report](https://www.osti.gov/servlets/purl/6159556) identify Weissenburger
+  and Christensen (1979), PPPL-1517. The
+  [digitized Montgomery book record](https://books.google.com/books?id=D1138LYUoXAC)
+  identifies Wiley-Interscience (1969). The
+  [Ortner publisher record](https://www.mdpi.com/2673-8724/3/1/2) distinguishes
+  online publication on 2022-12-30 from Magnetism 3(1), 11--31 (2023).
 - **Cohomology:** [Kotiuga's own publication list](https://people.bu.edu/prk/Publications.htm)
   identifies the 1987 cuts paper (J. Appl. Phys. 61(8), 3916--3918), and the
   [SIAM record](https://epubs.siam.org/doi/10.1137/130906556) identifies Pellikka
-  et al. (2013). The bare Bossavit attribution still does not identify a work.
-  `src/radia/esim_multiport.py` mentions 1998, and the
+  et al. (2013). The revision explicitly selects the
   [1998 Academic Press book](https://www.sciencedirect.com/book/monograph/9780121187101/computational-electromagnetism)
-  is a candidate, not proof that it was the intended source. No candidate was
-  substituted into the saved notebook as a verified original citation.
+  as background, not proof of the original bare surname's intent. The lab copy
+  under `01_教科書/20_数学/01_微分幾何・外微分形式/03_Bossavit/01_Computational_Electromagnetism/`
+  includes a corrected author version (`00Frontpages.pdf`, correction note dated
+  2003-11-20). `2.pdf`, printed p. 58, solution 2.6 discusses cuts and relative
+  homology; that passage was read and visually verified. The reference still
+  identifies the published 1998 book, not an invented 2003 edition.
 - **Mesh fusion:** [arXiv 2005.12020](https://arxiv.org/abs/2005.12020) lists
   Egger, Harutyunyan, Merkel and Schöps, unlike the saved code-cell attribution
   containing Loescher and Steinbach. [arXiv 2112.05572](https://arxiv.org/abs/2112.05572)
@@ -90,24 +104,35 @@ author/year matches. Their blockers are now more specific:
   journal publication (the preprint is 2021). The
   [composite-grid candidate](https://doi.org/10.1051/m2an:2003039) has **Anita
   Hansbo, Peter Hansbo and Mats G. Larson**, not just the abbreviated pair in
-  the notebook. Its identity does not establish the notebook's specific
+  the notebook. The exact
+  [Becker publisher paper](https://www.esaim-m2an.org/articles/m2an/pdf/2003/02/m2an0173.pdf)
+  and [Buffa archive record](https://www.numdam.org/item/M2AN_2001__35_2_191_0/)
+  also identify the other works. Bibliographic identity does not establish the notebook's specific
   corner-stabilization claim. That claim needs a matching passage/theorem;
   do not certify it merely by adding a bibliography entry.
 - **Legacy mixed_galerkin:** Senior's *A note on impedance boundary conditions*
-  (Canadian J. Phys. 40, 663--665, 1962) is a distinct candidate, not the
-  1960 article currently stored under `Senior1962`. The saved notebook gives
-  neither title nor DOI, so the intended work must be confirmed. Yuferev/Ida's
-  book also needs the cited edition/date convention resolved: the parent uses
-  the 2009 publication date while the book's copyright page says 2010. Keep
-  legacy calculation cells unchanged until the bibliographic intent is clear.
+  ([publisher-deposited metadata](https://api.crossref.org/works/10.1139/p62-067),
+  Canadian J. Phys. 40, 663--665, 1962) is distinct from the 1960 article under
+  `Senior1962`. Both are now explicitly cited as background, not as proof of
+  which paper supplied the notebook's "Senior tower" coefficients. Existing
+  keys are not renamed. Yuferev/Ida uses the parent publication year 2009; the
+  shared `34_SIBC/00_Comprehensive/Surface Impedance Boundary Conditions a Comprehensive Approach.pdf`
+  copyright page (PDF page 4, ISBN 978-1-4200-4489-8) was visually checked and
+  says 2010. Both date conventions are explained rather than inventing a second
+  work. The accuracy table and coefficient derivations were not revalidated.
 - **PEEC:** `validation_test/peec_integration/ngsbem_peec_demo/compute_L_final.py`
   repeats the FastHenry 21.6 nH comparison as a printed constant. The sibling
   `verify_loop_peec_vs_ngsbem.py` gives a Grover-labelled formula but no edition,
   page or equation locator. FastHenry-like Radia examples are not independent
   upstream FastHenry run evidence. Locate the actual run/model and Grover
-  passage before claiming those numerical references are sourced. Adding the
-  general FastHenry or PRIMA papers would not validate the saved numbers or
-  figure provenance.
+  passage before claiming those numerical references are sourced. The
+  [digitized Grover record](https://books.google.com/books?id=K3KHi9lIltsC)
+  identifies the 2004 reprint of the 1946 book; that edition is explicitly
+  selected only as background. General FASTHENRY/PRIMA papers do not validate
+  saved constants or figure provenance. The notebook now says this prominently
+  and no longer calls its opening summary an independently verified showcase.
+  The four script-generated figure filenames are not evidence of an external
+  publication or measured-data origin.
 
 These findings do not change solver code or invalidate/recompute saved output;
 they limit what this bibliography migration can responsibly claim.
@@ -119,6 +144,18 @@ to generate from `metadata.radia.bibliography.keys` through the existing
 `bibliography_make_bbl` tool and render the bbl with installed TeX4ht.
 No separate MCP tool, parser, notebook-local `.bib`, or JSON sidecar was added.
 The fast contract checks only notebooks that explicitly declare migration;
-it must not be reported as resolving the five rows above.
+it must not be reported as resolving the scientific evidence limitations above.
+All original code cells (including outputs, execution counts and cell metadata)
+and pre-existing notebook metadata/widget state are preserved. No calculation
+was executed to manufacture missing provenance.
+
+Final-five acceptance: 113 focused tests passed (docs notebook contract plus
+bibliography canonical/finalization/citation-source contracts). All 27 original
+code cells compare equal to the base, including saved outputs and execution
+metadata; all original notebook metadata, including widget state, also compares
+equal after removing only the new bibliography declaration. Five independent
+bbl generations matched their rendering copies byte-for-byte after LF
+normalization, and all five TeX4ht renders succeeded. The earlier three notebooks'
+selected-source fingerprints remain valid after the 21 parent additions.
 
 No shared editable installation, live client or solver binary was changed.

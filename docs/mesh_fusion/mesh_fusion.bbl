@@ -1,0 +1,35 @@
+\begin{thebibliography}{1}
+
+\bibitem{becker2003nonmatching}
+Roland Becker, Peter Hansbo, and Rolf Stenberg.
+\newblock A finite element method for domain decomposition with non-matching
+  grids.
+\newblock {\em ESAIM: Mathematical Modelling and Numerical Analysis},
+  37(2):209--225, 2003.
+
+\bibitem{hansbo2003composite}
+Anita Hansbo, Peter Hansbo, and Mats~G. Larson.
+\newblock A finite element method on composite grids based on {Nitsche}'s
+  method.
+\newblock {\em ESAIM: Mathematical Modelling and Numerical Analysis},
+  37(3):495--514, 2003.
+
+\bibitem{buffa2001sliding}
+Annalisa Buffa, Yvon Maday, and Francesca Rapetti.
+\newblock A sliding {Mesh-Mortar} method for a two dimensional eddy currents
+  model of electric engines.
+\newblock {\em ESAIM: Mathematical Modelling and Numerical Analysis},
+  35(2):191--228, 2001.
+
+\bibitem{egger2020harmonic}
+Herbert Egger, Man{\'e} Harutyunyan, Melina Merkel, and Sebastian Sch{\"o}ps.
+\newblock On the stability of harmonic mortar methods with application to
+  electric machines, 2020.
+
+\bibitem{egger2021torque}
+Herbert Egger, Man{\'e} Harutyunyan, Richard L{\"o}scher, Melina Merkel, and
+  Sebastian Sch{\"o}ps.
+\newblock On torque computation in electric machine simulation by harmonic
+  mortar methods, 2021.
+
+\end{thebibliography}
