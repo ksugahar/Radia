@@ -155,7 +155,25 @@ def _legacy_contract(payload: dict[str, object]) -> dict[str, object]:
 def _is_converged_result(diagnostics: dict[str, object]) -> bool:
     if diagnostics.get("nonlinear") is False:
         return True
-    return dict(diagnostics.get("nonlinear_stats") or {}).get("converged") is True
+    stats = dict(diagnostics.get("nonlinear_stats") or {})
+    if stats.get("converged") is not True:
+        return False
+    mode = stats.get("nonlinear_convergence_mode")
+    if stats.get("nonlinear_line_search_exhausted") or (mode is not None and mode != "tolerance"):
+        return False
+    if mode is not None:
+        residual = stats.get("nonlinear_final_relative_residual")
+        tolerance = stats.get("nonlinear_residual_tolerance")
+        if (not isinstance(residual, (int, float)) or isinstance(residual, bool)
+                or not isinstance(tolerance, (int, float)) or isinstance(tolerance, bool)
+                or not np.isfinite(residual) or not np.isfinite(tolerance)
+                or tolerance <= 0 or not 0 <= residual <= tolerance):
+            return False
+    # Legacy HDiv checkpoints could accept a tiny, never-approved Armijo step.
+    # Aggregate backtracks alone are not evidence of failure in the new solver.
+    if mode is None and int(stats.get("nonlinear_line_search_backtracks", 0)) >= 33:
+        return False
+    return True
 
 
 def _read_checkpoint(path: Path, contract: dict[str, object]):
@@ -665,10 +683,7 @@ def main(argv: list[str] | None = None) -> int:
     raw_pairs = _pairwise(fields, all_points)
     core_pairs, maximum_core_relative_rms, fields_agree = _comparison_gate(
         fields, core, options.relative_rms_tolerance)
-    nonlinear_converged = all(
-        row.get("nonlinear_stats", {}).get("converged") is True
-        for row in diagnostics.values()
-    )
+    nonlinear_converged = all(_is_converged_result(row) for row in diagnostics.values())
     passed = nonlinear_converged and fields_agree
     result = {
         "schema": "radia.validation.esrf-coil-yoke-three-engine.v2",
