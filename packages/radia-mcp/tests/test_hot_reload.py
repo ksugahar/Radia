@@ -9,6 +9,7 @@ import sys
 import textwrap
 import time
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 from mcp import ClientSession, StdioServerParameters
@@ -62,6 +63,18 @@ def test_reload_unreadable_provenance_fails_closed(editable_runtime, monkeypatch
     assert not server._tool_manager.list_tools()
 
 
+def test_refresh_does_not_match_a_similarly_named_package(monkeypatch):
+    module = ModuleType("sample_extra")
+    exec("def sample_ping(): return 'old'", module.__dict__)
+    monkeypatch.setitem(sys.modules, module.__name__, module)
+    server = FastMCP("boundary")
+    server.add_tool(module.sample_ping)
+    exec("def sample_ping(): return 'new'", module.__dict__)
+    report = hot_reload.refresh_tools(server, "sample", reloaded_modules={module.__name__})
+    assert report["updated"] == []
+    assert _call(server, "sample_ping") == "old"
+
+
 def _write(path, body: str) -> None:
     path.write_text(textwrap.dedent(body), encoding="utf-8")
     # Python validates a cached .pyc by whole-second source mtime and size, so
@@ -85,7 +98,7 @@ def _call(mcp: FastMCP, name: str):
         return result[0].text
 
 
-def test_reload_updates_stale_tools_and_registers_new_ones(tmp_path, monkeypatch, editable_runtime):
+def test_reload_updates_registered_tools_without_publishing_new_callables(tmp_path, monkeypatch, editable_runtime):
     pkg = tmp_path / "hotpkg"
     pkg.mkdir()
     _write(pkg / "__init__.py", "")
@@ -108,7 +121,8 @@ def test_reload_updates_stale_tools_and_registers_new_ones(tmp_path, monkeypatch
     hot_reload.register_reload_tool(mcp, "hot_reload_code", module_prefix="hotpkg")
     assert _call(mcp, "hot_ping") == {"value": "one"}
 
-    # Edit a dependency and add a tool: both land after one reload.
+    # Edit a dependency and add a same-prefix callable: only the registered
+    # tool is refreshed; matching names are not authority to publish tools.
     _write(pkg / "_helper.py", "VALUE = 'two'  # edited while the server ran\n")
     _write(
         pkg / "tools.py",
@@ -127,21 +141,20 @@ def test_reload_updates_stale_tools_and_registers_new_ones(tmp_path, monkeypatch
     assert set(report["reloaded"]) >= {"hotpkg._helper", "hotpkg.tools"}
     assert report["errors"] == {}
     assert report["updated"] == ["hot_ping"]
-    assert report["added"] == ["hot_pong"]
+    assert report["added"] == []
     assert report["removed"] == []
-    assert report["added_tools_need_reconnect_for_server_policy"] is True
+    assert report["added_tools_need_reconnect_for_server_policy"] is False
     assert _call(mcp, "hot_ping") == {"value": "two"}
-    assert _call(mcp, "hot_pong") == {"value": "two!"}
-    added = mcp._tool_manager._tools["hot_pong"]
-    assert added.annotations.destructiveHint is True
-    assert added.annotations.readOnlyHint is False
+    assert "hot_pong" not in mcp._tool_manager._tools
     assert "hot_reload_code" in {t.name for t in mcp._tool_manager.list_tools()}
 
     # Nothing changed since: nothing reloaded, nothing re-registered.
     again = hot_reload.reload_and_refresh(mcp, "hotpkg")
     assert again["reloaded"] == [] and again["updated"] == [] and again["added"] == []
 
-    # Removing a source function removes its stale registered tool too.
+    # Register a new tool explicitly, as normal startup would do. Removing
+    # its source function subsequently removes the stale registration.
+    mcp.add_tool(tools.hot_pong)
     _write(
         pkg / "tools.py",
         """

@@ -144,3 +144,27 @@ contents, installs the wheel, changes outside the checkout and probes the meta
 server over stdio with an expected site-packages root. Extending that isolated
 wheel lane to all servers remains a separate acceptance task; do not duplicate
 the existing content/provenance verifier or claim it is already all-server.
+
+## Follow-up: registered-only reload and installed-wheel verification
+
+Removed prefix-based discovery rather than introducing another allowlist. Reload
+updates/removes registered functions; new tools require normal startup registration
+and policy checks. The module filter also respects package boundaries instead of
+matching similarly named sibling packages. Existing refresh rollback and deletion
+contracts remain tested; the empty `added` result stays for compatibility.
+
+The existing wheel lane now runs `smoke_mcp_stdio.py --all --selftest
+--installed-wheel` outside the checkout with isolated Python. Both the probe and
+server module paths must resolve below the expected installation root. Every
+catalog server must report noneditable provenance, expose no reload tool and pass
+its selftest. Failures and timeouts fail the lane. No duplicate server inventory,
+workflow or content verifier was added.
+
+Local verification: 64 focused tests pass with SDK 1.20.0; the corresponding
+64 plus three shared runtime tests pass with SDK 1.27.0. A fresh venv with the
+built wheel and SDK 1.20.0 passes all 56 catalog servers' actual stdio and
+selftests, and all nine required wheel assets are present. The SDK/settings
+combination emits an unresolved-lifespan annotation warning; no warning was
+suppressed. This is transport/package evidence, not optional numerical-backend
+acceptance or a claim that every monorepo-dependent test runs from a wheel.
+No live installation or client was changed.
