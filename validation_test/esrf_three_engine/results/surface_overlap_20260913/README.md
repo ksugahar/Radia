@@ -140,3 +140,27 @@ Trigger: finish ESRF6, recover required inputs/results with verified hashes, the
 remove its candidate/staging/job workspace. Other jobs' or CI-owned workspaces
 are outside this cleanup. This report does not claim that all historical
 `C:/temp` contents on all hosts have been cleaned.
+
+## CAD, Coil and Gap Follow-Up
+
+Hibino's installed repair candidate also ran `geometry_audit.json` and
+`gap_membership.json`. The seven source/input/result files were recovered to
+`S:/Radia/validation_artifacts/esrf6_mesh_audit_20260913/geometry/`; every SHA-256
+matched the remote file before cleanup. The scripts remain in that archive.
+
+The STEP and rebuilt model contain 40 iron solids and 64 coil solids. Total
+volume differences are 3.08e-12 relative for iron and 2.13e-14 for coils.
+Matched individual solid centres and volumes pass the recorded checks.
+The selected HEX and FEM iron vertex bounding boxes agree exactly; integrated
+iron volumes at orders 4 and 8 agree with CAD to about 4e-12 relative.
+Coil currents and segment counts match the manifest. Path-area diagnostics
+record winding orientation only: the physical source remains solid-current
+CoilBuilder, not filaments.
+
+At the 27 recorded gap probes, FEM classifies air and the iron-only mesh has
+no element. OCC Boolean point membership finds neither iron nor coil there;
+inside-solid and far-away controls pass. Positive CAD boundary distance alone
+is explicitly not used to infer membership. These finite checks do not prove
+complete shape equivalence, global clearance, or mesh-resolution convergence.
+They permit proceeding to the repaired HDiv validation solve, not declaring
+three-method or nonlinear production acceptance.
