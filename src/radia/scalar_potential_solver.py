@@ -74,6 +74,40 @@ def _build_bh_interpolator(bh_data):
     return B_of_H
 
 
+def _build_bh_coefficient_function(H_magnitude, bh_data):
+    """Return the monotone-PCHIP B(H) law as an NGSolve coefficient function."""
+
+    from ngsolve import IfPos
+    from scipy.interpolate import PchipInterpolator
+
+    bh = np.asarray(bh_data, dtype=float)
+    if bh.ndim != 2 or bh.shape[1] < 2 or bh.shape[0] < 2:
+        raise ValueError("bh_data must contain at least two [H, B] rows")
+    H_tab = bh[:, 0]
+    B_tab = bh[:, 1]
+    if not np.all(np.isfinite(H_tab)) or not np.all(np.isfinite(B_tab)):
+        raise ValueError("bh_data must contain finite H and B values")
+    if np.any(np.diff(H_tab) <= 0.0):
+        raise ValueError("bh_data H values must be strictly increasing")
+    if np.any(np.diff(B_tab) < 0.0):
+        raise ValueError("bh_data B values must be non-decreasing")
+
+    pchip = PchipInterpolator(H_tab, B_tab, extrapolate=False)
+    coefficients = np.asarray(pchip.c, dtype=float)
+    H_cf = H_magnitude
+    result = float(B_tab[-1]) + MU_0 * (H_cf - float(H_tab[-1]))
+    for interval in range(len(H_tab) - 2, -1, -1):
+        delta = H_cf - float(H_tab[interval])
+        polynomial = (
+            float(coefficients[0, interval]) * delta**3
+            + float(coefficients[1, interval]) * delta**2
+            + float(coefficients[2, interval]) * delta
+            + float(coefficients[3, interval])
+        )
+        result = IfPos(float(H_tab[interval + 1]) - H_cf, polynomial, result)
+    return IfPos(H_cf - float(H_tab[0]), result, float(B_tab[0]))
+
+
 class ScalarPotentialSolver:
     """Simkin-Trowbridge magnetostatic solver (Radia + NGSolve).
 
