@@ -986,7 +986,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
         kelvin_interface_boundary=None, kelvin_source_potential=None,
         kelvin_source_h=None,
         total_source_h=None, total_source_materials=(),
-        anderson_depth=0, anderson_transform="log", observation_points=None):
+        anderson_depth=0, anderson_transform="log", observation_points=None,
+        material_update_order=None, material_log_state_initial=None):
     """Picard solve for the mixed total/reduced Omega formulation.
 
     The source split and its interface trace stay fixed throughout the
@@ -1007,11 +1008,13 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
     iteration change of B at those points, so the stopping criterion can be judged
     where the result is consumed instead of only through the material step.
 
-    The present material update is one order-0 permeability value sampled at
-    each nonlinear element centroid. A genuinely nonlinear B(H) table therefore
-    supports ``order=1`` only. Higher response order fails loudly instead of
-    presenting p-refinement with an unmatched constitutive polynomial order as
-    improved evidence.
+    The default material update is one order-0 permeability value sampled at
+    each nonlinear element centroid and therefore supports ``order=1`` only.
+    A genuinely nonlinear ``order=2`` solve must explicitly select
+    ``material_update_order=1``. That path projects the logarithm of the B-H
+    secant permeability into discontinuous L2 and exponentiates a bounded field,
+    so the physical permeability remains positive while its spatial order is
+    compatible with the response.
 
     The result has the same field keys as the linear mixed solve plus
     ``nonlinear_stats`` (with the per-iteration ``history``, a contraction-rate
@@ -1053,13 +1056,64 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
         and float(np.ptp(secants))
         > 1.0e-12 * max(float(np.max(np.abs(secants))), MU_0)
     )
-    if genuinely_nonlinear and int(order) > 1:
+    requested_material_order = (
+        None if material_update_order is None else int(material_update_order)
+    )
+    if genuinely_nonlinear and int(order) > 1 and requested_material_order is None:
         raise ValueError(
             "nonlinear mixed total/reduced Omega currently updates permeability "
             "as one order-0 centroid value per element; response order > 1 would "
             "use an unmatched material polynomial order. Use order=1 with an "
-            "h-convergence and volume-observable gate until a material-order-matched "
-            "nonlinear update is selected explicitly."
+            "h-convergence and volume-observable gate, or explicitly select "
+            "material_update_order=order-1."
+        )
+    if requested_material_order is not None and requested_material_order < 0:
+        raise ValueError("material_update_order must be nonnegative")
+    if genuinely_nonlinear and int(order) > 1:
+        if requested_material_order != int(order) - 1:
+            raise ValueError(
+                "a high-order nonlinear response requires "
+                "material_update_order=order-1"
+            )
+        if int(anderson_depth) != 0:
+            raise ValueError(
+                "anderson_depth must be 0 for the projected high-order material path"
+            )
+        return _solve_mixed_omega_projected_log_material(
+            mesh,
+            H_s,
+            source_potential,
+            R_K,
+            offset,
+            bh_array=bh_array,
+            nonlinear_materials=nonlinear_materials,
+            reduced_materials=reduced_materials,
+            total_materials=total_materials,
+            interface_boundary=interface_boundary,
+            order=int(order),
+            material_update_order=requested_material_order,
+            dirichlet_bbbnd=dirichlet_bbbnd,
+            bonus_intorder=bonus_intorder,
+            kelvin_mats=kelvin_mats,
+            inverse=inverse,
+            mu_r_initial=mu_r_initial,
+            tolerance=tolerance,
+            max_iterations=max_iterations,
+            relaxation=relaxation,
+            interface_constraint_scale=interface_constraint_scale,
+            kelvin_interface_boundary=kelvin_interface_boundary,
+            kelvin_source_potential=kelvin_source_potential,
+            kelvin_source_h=kelvin_source_h,
+            total_source_h=total_source_h,
+            total_source_materials=total_source_materials,
+            observation_points=observation_points,
+            material_log_state_initial=material_log_state_initial,
+        )
+    if requested_material_order not in (None, 0):
+        raise ValueError("order=1 supports material_update_order=0 only")
+    if material_log_state_initial is not None:
+        raise ValueError(
+            "material_log_state_initial is only valid for the projected high-order path"
         )
     B_of_H = _build_bh_interpolator(bh_array[:, :2])
     B_scale = max(float(bh_array[:, 1].max()), MU_0)
@@ -1226,6 +1280,272 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
             {"mu_r_elements": mu_r_current.tolist(),
              "element_numbers": element_numbers,
              "nonlinear_stats": stats})
+    result["mu_cf"] = mixed_mu_cf()
+    result["B_cf"] = result["mu_cf"] * result["H_cf"]
+    result["nonlinear_stats"] = stats
+    return result
+
+
+def _solve_mixed_omega_projected_log_material(
+        mesh, H_s, source_potential, R_K, offset, *, bh_array,
+        nonlinear_materials, reduced_materials, total_materials,
+        interface_boundary, order, material_update_order,
+        dirichlet_bbbnd, bonus_intorder, kelvin_mats, inverse,
+        mu_r_initial, tolerance, max_iterations, relaxation,
+        interface_constraint_scale, kelvin_interface_boundary,
+        kelvin_source_potential, kelvin_source_h,
+        total_source_h, total_source_materials, observation_points,
+        material_log_state_initial):
+    """Picard lane with a positive spatial L2 secant-permeability field."""
+
+    from ngsolve import (
+        GridFunction,
+        IfPos,
+        InnerProduct,
+        Integrate,
+        L2,
+        exp,
+        log,
+        sqrt,
+    )
+    from radia.picard_acceleration import estimate_contraction_rate
+    from radia.scalar_potential_solver import _build_bh_coefficient_function
+
+    initial = np.asarray(mu_r_initial, dtype=float)
+    if initial.ndim != 0:
+        raise ValueError(
+            "projected high-order material updates currently require scalar "
+            "mu_r_initial; resume states use nonlinear_stats.material_log_state_dofs"
+        )
+    initial_mu_r = float(initial)
+    if not math.isfinite(initial_mu_r) or initial_mu_r < 1.0:
+        raise ValueError("mu_r_initial must be finite and >= 1")
+
+    positive = (bh_array[:, 0] > 0.0) & (bh_array[:, 1] > 0.0)
+    secant_upper = (
+        float(np.max(bh_array[positive, 1] / (MU_0 * bh_array[positive, 0])))
+        if np.any(positive)
+        else 1.0
+    )
+    mu_r_upper = max(initial_mu_r, secant_upper, 1.0)
+    log_mu_upper = math.log(mu_r_upper)
+
+    nonlinear_materials = tuple(nonlinear_materials)
+    nonlinear_set = set(nonlinear_materials)
+    nonlinear_selector = mesh.Materials("|".join(nonlinear_materials))
+    material_fes = L2(mesh, order=int(material_update_order))
+    log_mu = GridFunction(material_fes, name="mixed_omega_log_mu")
+    log_mu.Set(math.log(initial_mu_r), definedon=nonlinear_selector)
+    target_log_mu = GridFunction(material_fes, name="mixed_omega_target_log_mu")
+    active_mask = material_fes.GetDofs(nonlinear_selector)
+    active_dofs = [index for index in range(material_fes.ndof) if active_mask[index]]
+    if not active_dofs:
+        raise ValueError("nonlinear material selector has no material-update degrees of freedom")
+    warm_state = None
+    if material_log_state_initial is not None:
+        warm_state = np.asarray(material_log_state_initial, dtype=float)
+        if warm_state.shape != (len(active_dofs),):
+            raise ValueError(
+                "material_log_state_initial must contain one value per active "
+                f"material degree of freedom ({len(active_dofs)}); got {warm_state.shape}"
+            )
+        if not np.all(np.isfinite(warm_state)):
+            raise ValueError("material_log_state_initial must be finite")
+        log_mu.vec.FV().NumPy()[active_dofs] = warm_state
+
+    bounded_log_mu = IfPos(
+        log_mu,
+        IfPos(log_mu_upper - log_mu, log_mu, log_mu_upper),
+        0.0,
+    )
+    kelvin_mu = make_kelvin_mu_cf(
+        mesh, R_K, offset, kelvin_mats=kelvin_mats, mu_r_by_material={}
+    )
+
+    def mixed_mu_cf():
+        values = {}
+        for material in mesh.GetMaterials():
+            if material in nonlinear_set:
+                values[material] = MU_0 * exp(bounded_log_mu)
+            elif any(key in material.lower() for key in kelvin_mats):
+                values[material] = kelvin_mu
+            else:
+                values[material] = MU_0
+        return mesh.MaterialCF(values, default=MU_0)
+
+    observation = None
+    if observation_points is not None:
+        observation = np.asarray(observation_points, dtype=float).reshape(-1, 3)
+        for point in observation:
+            if not mesh(*map(float, point)):
+                raise ValueError(
+                    f"observation point lies outside the mesh: {point.tolist()}"
+                )
+
+    b_fes = L2(mesh, order=int(material_update_order))
+    b_projected = GridFunction(b_fes, name="mixed_omega_B_magnitude")
+    b_previous = GridFunction(b_fes, name="mixed_omega_B_magnitude_previous")
+    have_previous = False
+    observed_previous = None
+    observed_field = None
+    history = []
+    result = None
+    converged = False
+    relative_change = float("inf")
+    integration_order = max(4, 2 * int(material_update_order) + 2)
+
+    def solve_current_material_state():
+        return solve_magnetostatic_mixed_total_reduced_omega_kelvin(
+            mesh,
+            H_s,
+            source_potential,
+            R_K,
+            offset,
+            mu_r_by_material=None,
+            reduced_materials=reduced_materials,
+            total_materials=total_materials,
+            interface_boundary=interface_boundary,
+            order=order,
+            dirichlet_bbbnd=dirichlet_bbbnd,
+            bonus_intorder=bonus_intorder,
+            kelvin_mats=kelvin_mats,
+            inverse=inverse,
+            interface_constraint_scale=interface_constraint_scale,
+            mu_cf=mixed_mu_cf(),
+            kelvin_interface_boundary=kelvin_interface_boundary,
+            kelvin_source_potential=kelvin_source_potential,
+            kelvin_source_h=kelvin_source_h,
+            total_source_h=total_source_h,
+            total_source_materials=total_source_materials,
+        )
+
+    for iteration in range(1, int(max_iterations) + 1):
+        result = solve_current_material_state()
+        H_magnitude = sqrt(InnerProduct(result["H_cf"], result["H_cf"]) + 1.0e-24)
+        B_target = _build_bh_coefficient_function(H_magnitude, bh_array)
+        mu_r_target = B_target / (MU_0 * H_magnitude)
+        admissible_mu_r_target = IfPos(mu_r_target - 1.0, mu_r_target, 1.0)
+        target_log_mu.Set(log(admissible_mu_r_target), definedon=nonlinear_selector)
+
+        b_magnitude = sqrt(InnerProduct(result["B_cf"], result["B_cf"]) + 1.0e-30)
+        b_projected.Set(b_magnitude, definedon=nonlinear_selector)
+        entry = {"iteration": int(iteration)}
+        if have_previous:
+            difference_sq = float(
+                Integrate(
+                    (b_projected - b_previous) ** 2,
+                    mesh,
+                    definedon=nonlinear_selector,
+                    order=integration_order,
+                ).real
+            )
+            scale_sq = float(
+                Integrate(
+                    b_projected**2,
+                    mesh,
+                    definedon=nonlinear_selector,
+                    order=integration_order,
+                ).real
+            )
+            relative_change = math.sqrt(
+                max(difference_sq, 0.0) / max(scale_sq, 1.0e-60)
+            )
+            entry["relative_B_l2_change"] = relative_change
+        b_previous.vec.data = b_projected.vec
+        have_previous = True
+
+        if observation is not None:
+            observed_field = np.asarray(
+                [
+                    [float(value) for value in result["B_cf"](mesh(*point))]
+                    for point in observation
+                ],
+                dtype=float,
+            )
+            if observed_previous is not None:
+                scale = max(
+                    float(np.max(np.linalg.norm(observed_field, axis=1))), 1.0e-30
+                )
+                entry["observation_relative_change"] = float(
+                    np.max(np.linalg.norm(observed_field - observed_previous, axis=1))
+                    / scale
+                )
+            observed_previous = observed_field
+
+        current_coefficients = log_mu.vec.FV().NumPy()
+        target_coefficients = target_log_mu.vec.FV().NumPy()
+        if iteration == 1:
+            current_coefficients[active_dofs] = target_coefficients[active_dofs]
+        else:
+            current_coefficients[active_dofs] = (
+                (1.0 - float(relaxation)) * current_coefficients[active_dofs]
+                + float(relaxation) * target_coefficients[active_dofs]
+            )
+        entry["material_log_state_min"] = float(
+            np.min(current_coefficients[active_dofs])
+        )
+        entry["material_log_state_max"] = float(
+            np.max(current_coefficients[active_dofs])
+        )
+        history.append(entry)
+        if iteration > 1 and relative_change <= tolerance:
+            converged = True
+            break
+
+    if result is None:  # pragma: no cover - guarded by validation
+        raise RuntimeError("projected mixed Omega Picard iteration did not start")
+    if converged:
+        result = solve_current_material_state()
+        if observation is not None:
+            observed_field = np.asarray(
+                [
+                    [float(value) for value in result["B_cf"](mesh(*point))]
+                    for point in observation
+                ],
+                dtype=float,
+            )
+    state = log_mu.vec.FV().NumPy()[active_dofs].copy()
+    stats = {
+        "method": "Picard projected log-permeability",
+        "iterations": int(iteration),
+        "converged": converged,
+        "relative_B_change": relative_change,
+        "relative_B_change_norm": "L2(nonlinear_materials)",
+        "tolerance": float(tolerance),
+        "relaxation": float(relaxation),
+        "anderson_depth": 0,
+        "anderson": None,
+        "response_order": int(order),
+        "material_update_order": int(material_update_order),
+        "material_sampling": "L2_log_secant_projection",
+        "physical_permeability_bounds": [1.0, float(mu_r_upper)],
+        "history": history,
+        "contraction_rate_estimate": estimate_contraction_rate(
+            [
+                row["relative_B_l2_change"]
+                for row in history
+                if "relative_B_l2_change" in row
+            ]
+        ),
+        "material_log_state_dofs": state.tolist(),
+        "material_state_dof_numbers": active_dofs,
+        "warm_start": warm_state is not None,
+        "final_material_state_resolved": converged,
+    }
+    if observed_field is not None:
+        stats["observation_points_m"] = observation.tolist()
+        stats["observation_field_T"] = observed_field.tolist()
+    if not converged:
+        raise MixedOmegaPicardNotConverged(
+            "projected mixed total/reduced Omega Picard iteration did not converge: "
+            f"iterations={iteration}, relative_B_change={relative_change:.3e}, "
+            f"tolerance={tolerance:.3e}",
+            {
+                "material_log_state_dofs": state.tolist(),
+                "material_state_dof_numbers": active_dofs,
+                "nonlinear_stats": stats,
+            },
+        )
     result["mu_cf"] = mixed_mu_cf()
     result["B_cf"] = result["mu_cf"] * result["H_cf"]
     result["nonlinear_stats"] = stats

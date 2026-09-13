@@ -128,6 +128,8 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
     nonlinear_anderson_transform: str = "log",
     nonlinear_mu_r_initial=1000.0,
     nonlinear_observation_points=None,
+    nonlinear_material_update_order: int | None = None,
+    nonlinear_material_log_state_initial=None,
     inverse: str = "pardiso",
     bonus_intorder: int = 4,
 ) -> dict[str, object]:
@@ -141,6 +143,10 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
     ``nonlinear_observation_points`` records the per-iteration field change at
     the points where the result is consumed.  A non-converged loop raises
     :class:`radia.kelvin_solver.MixedOmegaPicardNotConverged` with that state.
+    Response order two requires an explicit
+    ``nonlinear_material_update_order=1``; its positive log-permeability field
+    is a separate spatial material state and does not use the element-centroid
+    warm-start array.
 
     ``source_potential_contract="total_hodge"`` is the general CoilBuilder
     route.  It retains the non-exact harmonic/cut component of a linked source
@@ -325,6 +331,8 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
             anderson_transform=str(nonlinear_anderson_transform),
             mu_r_initial=nonlinear_mu_r_initial,
             observation_points=nonlinear_observation_points,
+            material_update_order=nonlinear_material_update_order,
+            material_log_state_initial=nonlinear_material_log_state_initial,
             **common,
         )
     result["static_electromagnet_contract"] = domain.as_dict()
