@@ -1,0 +1,102 @@
+{
+  "assertions_passed": true,
+  "length_tolerance_m": 1e-10,
+  "area_tolerance_m2": 1e-16,
+  "overlay_grid_m": 1e-12,
+  "positive_translation_m": [
+    1e-06,
+    0.0,
+    0.0
+  ],
+  "negative_contact": null,
+  "positive_contact": {
+    "kind": "coplanar_positive_area",
+    "overlap_area_m2": 5.098975283407465e-13
+  },
+  "negative_three_projections": [
+    {
+      "dropped_axis": 0,
+      "normal_component": 0.0,
+      "usable_for_area": false,
+      "projected_area_m2": 0.0,
+      "physical_area_m2": null
+    },
+    {
+      "dropped_axis": 1,
+      "normal_component": -0.7071067811865481,
+      "usable_for_area": true,
+      "projected_area_m2": 0.0,
+      "physical_area_m2": 0.0
+    },
+    {
+      "dropped_axis": 2,
+      "normal_component": -0.707106781186547,
+      "usable_for_area": true,
+      "projected_area_m2": 0.0,
+      "physical_area_m2": 0.0
+    }
+  ],
+  "positive_three_projections": [
+    {
+      "dropped_axis": 0,
+      "normal_component": 0.0,
+      "usable_for_area": false,
+      "projected_area_m2": 0.0,
+      "physical_area_m2": null
+    },
+    {
+      "dropped_axis": 1,
+      "normal_component": -0.7071067811865481,
+      "usable_for_area": true,
+      "projected_area_m2": 3.6055200000000193e-13,
+      "physical_area_m2": 5.098975283407465e-13
+    },
+    {
+      "dropped_axis": 2,
+      "normal_component": -0.707106781186547,
+      "usable_for_area": true,
+      "projected_area_m2": 3.6055199999913456e-13,
+      "physical_area_m2": 5.098975283395207e-13
+    }
+  ],
+  "positive_projection_relative_spread": 2.404076937523314e-12,
+  "original_triangle_coordinates_m": [
+    [
+      [
+        0.0007499999999999998,
+        0.0979132938463439,
+        0.0010816555197760997
+      ],
+      [
+        0.0014999999999999497,
+        0.09899494936612,
+        0.0
+      ],
+      [
+        0.00224999999999995,
+        0.0979132938463439,
+        0.0010816555197760997
+      ]
+    ],
+    [
+      [
+        -0.0007499999999999998,
+        0.09791329384634387,
+        0.0010816555197760997
+      ],
+      [
+        0.0,
+        0.09899494936612,
+        0.0
+      ],
+      [
+        0.0007500000000000002,
+        0.0979132938463439,
+        0.0010816555197760997
+      ]
+    ]
+  ],
+  "script_sha256": "95731128100b909d26b499dbe3654d378eece07be356920514eaf1d469dbf1e7",
+  "audit_script_sha256": "8b2cf6f81c3ce11d5e2d01aeaa693ccb03a935ccb4df7e84c3e04eefe533a230",
+  "note": "Projection along a zero normal component collapses area and is explicitly unusable."
+}

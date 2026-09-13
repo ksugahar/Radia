@@ -1,0 +1,151 @@
+{
+  "narrow_phase": {
+    "partial": {
+      "kind": "coplanar_positive_area",
+      "overlap_area_m2": 0.245
+    },
+    "different_subdivision": {
+      "kind": "coplanar_positive_area",
+      "overlap_area_m2": 0.125
+    },
+    "adjacent": null,
+    "transverse": {
+      "kind": "transverse_interior_intersection",
+      "points_m": [
+        [
+          0.2,
+          0.2,
+          0.0
+        ]
+      ]
+    },
+    "separated": null,
+    "opposite_diagonal_tessellations_area": 0.9999999999999999
+  },
+  "normal_two_owner": {
+    "path": "C:\\temp\\esrf6-newton-4d85e72cc\\control_two_owner.vol",
+    "sha256": "d3d7d122a97621bb1abcd67229f0af4b95a79db90e44415cca235d171b05a065",
+    "volume_elements": 2,
+    "boundary_elements": 7,
+    "curve_order": 1,
+    "subdivisions": 2,
+    "mapped_triangles": 28,
+    "topology": {
+      "volume_face_owner_histogram": {
+        "1": 6,
+        "2": 1
+      },
+      "boundary_face_owner_histogram": {
+        "2": 1,
+        "1": 6
+      },
+      "repeated_boundary_face_ids": [],
+      "unregistered_one_owner_faces": [],
+      "nonmanifold_volume_faces": []
+    },
+    "length_tolerance_m": 1e-10,
+    "area_tolerance_m2": 1e-16,
+    "nonplanar_boundary_elements": 0,
+    "maximum_sampled_parent_planarity_m": 2.2347587242195256e-16,
+    "maximum_sampled_edge_chord_deviation_m": 0.0,
+    "nonstraight_boundary_edge_parent_count": 0,
+    "aabb_candidate_pairs": 183,
+    "tested_triangle_pairs": 183,
+    "detected_parent_pairs": 0,
+    "contacts": [],
+    "elapsed_s": 0.5232276000024285,
+    "scope": "All registered boundary faces, including once-registered two-owner interfaces. Coordinates use NGSolve curved mapping. Triangle intersections are on a finite tessellation, not a certified curved-patch intersection proof. Positive-area coplanar overlaps and strict transverse piercings are reported; tangencies and very small features can remain unresolved."
+  },
+  "partial_overlap": {
+    "path": "C:\\temp\\esrf6-newton-4d85e72cc\\control_partial_overlap.vol",
+    "sha256": "7e5f25bd2da68675a6eb17e412076fe72c226526c36a8e314639e891db7b6f7e",
+    "volume_elements": 2,
+    "boundary_elements": 8,
+    "curve_order": 1,
+    "subdivisions": 2,
+    "mapped_triangles": 32,
+    "topology": {
+      "volume_face_owner_histogram": {
+        "1": 8
+      },
+      "boundary_face_owner_histogram": {
+        "1": 8
+      },
+      "repeated_boundary_face_ids": [],
+      "unregistered_one_owner_faces": [],
+      "nonmanifold_volume_faces": []
+    },
+    "length_tolerance_m": 1e-10,
+    "area_tolerance_m2": 1e-16,
+    "nonplanar_boundary_elements": 0,
+    "maximum_sampled_parent_planarity_m": 2.2347587242195256e-16,
+    "maximum_sampled_edge_chord_deviation_m": 7.850462293418875e-17,
+    "nonstraight_boundary_edge_parent_count": 0,
+    "aabb_candidate_pairs": 179,
+    "tested_triangle_pairs": 170,
+    "detected_parent_pairs": 1,
+    "contacts": [
+      {
+        "kind": "coplanar_positive_area",
+        "overlap_area_m2": 0.005000000000000009,
+        "boundary_element_ids": [
+          0,
+          4
+        ],
+        "boundary_names": [
+          "fixture_boundary",
+          "fixture_boundary"
+        ],
+        "parent_planarity_m": [
+          0.0,
+          0.0
+        ],
+        "mapped_subtriangle_ids": [
+          0,
+          19
+        ],
+        "triangle_coordinates_m": [
+          [
+            [
+              0.0,
+              1.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.5,
+              0.0
+            ],
+            [
+              0.5,
+              0.5,
+              0.0
+            ]
+          ],
+          [
+            [
+              0.2,
+              0.6000000000000001,
+              0.0
+            ],
+            [
+              0.2,
+              0.10000000000000009,
+              0.0
+            ],
+            [
+              0.7,
+              0.10000000000000009,
+              0.0
+            ]
+          ]
+        ]
+      }
+    ],
+    "elapsed_s": 0.5393037000030745,
+    "scope": "All registered boundary faces, including once-registered two-owner interfaces. Coordinates use NGSolve curved mapping. Triangle intersections are on a finite tessellation, not a certified curved-patch intersection proof. Positive-area coplanar overlaps and strict transverse piercings are reported; tangencies and very small features can remain unresolved."
+  },
+  "assertions_passed": true,
+  "control_script_sha256": "85b1eb37b983367a78d9fde5b05643fc4810ea96a810200b841a86f9e3a39865",
+  "audit_script_sha256": "165ee7660eadcc05ce69b12ce290b623ce85088a1507c15d69a5f616a0868b1e"
+}
