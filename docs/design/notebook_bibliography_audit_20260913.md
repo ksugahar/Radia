@@ -159,3 +159,10 @@ normalization, and all five TeX4ht renders succeeded. The earlier three notebook
 selected-source fingerprints remain valid after the 21 parent additions.
 
 No shared editable installation, live client or solver binary was changed.
+
+Subsequent source-level work is recorded in
+[the evidence closeout](notebook_evidence_closeout_20260914.md): constructive
+Bessel-coefficient verification, PEEC figure lineage and arithmetic mismatch,
+remaining-43 citation screening, and protection against synthetic NASA-labelled
+fixtures overwriting measured inputs. That follow-up does not declare the
+original datasets, all remaining citations, or live deployment accepted.
