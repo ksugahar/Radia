@@ -1,7 +1,8 @@
 # ESRF6 energy-Newton repair candidate
 
-Status: focused tests and small native smoke checks passed; actual ESRF6
-nonlinear convergence remains unverified. The preceding candidate's three-engine
+Status: focused tests, small native checks, and the actual ESRF6 BDM1/mass-Riesz
+nonlinear residual gate passed. Other paths and three-method acceptance remain HOLD.
+The preceding candidate's three-engine
 `passed=true` is not accepted: 34 Armijo backtracks exhausted the line search,
 but the tiny rejected step was accepted as convergence after one iteration.
 
@@ -49,7 +50,8 @@ Six strong-drive native cases (TET/HEX/WEDGE, orders 1/2) require actual Newton
 updates and finish with true relative residual at most `1.59e-5` for tolerance
 `2e-5`. These are not the ESRF6 acceptance run. Keep three claims separate:
 surface overlap not detected in the audited meshes; actual ESRF6 nonlinear
-convergence unverified; actual ESRF6 three-method numerical acceptance HOLD.
+convergence must be established per path (BDM1/mass-Riesz now passed below);
+actual ESRF6 three-method numerical acceptance HOLD.
 
 Finding B is distinct: `project_source_total_hodge` currently assembles with
 default `dx`, while the mixed load has an explicit `bonus_intorder`. A matching
@@ -70,3 +72,29 @@ Do not use `Newton iterations > 1` as a universal acceptance rule: a good warm
 start can already meet tolerance. Require the true nonlinear residual and no
 accepted exhausted-line-search step. Iteration/backtracking counts remain
 diagnostic evidence for this particular failing example.
+
+### Follow-Up Implementation
+
+The diagnostic follow-up names `tolerance`, `iteration-limit`, and
+`line-search-exhausted` outcomes and reports the residual target. Exhaustion
+attaches the statistics and rejected Newton correction/decrement to the error.
+An undefined relative correction at zero magnetization is null, with the
+absolute correction and state norms retained. No settled-step success is restored.
+
+The shared HDiv runner requires a finite true nonlinear residual at its requested
+tolerance. New checkpoint modes additionally require the recorded residual and
+target; the word `tolerance` alone cannot certify a solve. Legacy checkpoints
+without this mode are conservatively rejected at 33 or more aggregate backtracks.
+That legacy rule is a quarantine heuristic, not a theorem that 33 accumulated
+backtracks always mean exhaustion. Both committed ESRF6 and CEFC J3.0 false
+convergence records are explicit regression fixtures. New successful results
+are not rejected solely for a large accumulated backtrack count.
+
+These diagnostic additions are not in the running `4d85e72cc` wheel. Its first
+actual ESRF6 BDM1/mass-Riesz solve converged in eight Newton iterations, with one
+backtrack and true residual 3.278340250386088e-7 at tolerance 2e-5. This isolates
+the prior false-convergence issue; BDM2, Picard-route consistency and nonlinear
+three-method acceptance remain separate. Gap-field agreement alone is not
+nonlinear acceptance. The diagnostic runner retains all cell-average M vectors
+for iron-side comparisons, not just the near-zero global average of a quadrupole.
+Those averages are not a complete high-order M norm or a peak-field certificate.

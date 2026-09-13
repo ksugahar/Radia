@@ -302,8 +302,14 @@ def solve_hdiv(
     field = MU0 * (np.asarray(demag_h, dtype=float) + coil_h)
     nonlinear_stats = dict(result.get("nonlinear_solve_stats", {}))
     if nonlinear:
+        residual = nonlinear_stats.get("nonlinear_final_relative_residual")
+        nonlinear_stats["nonlinear_residual_tolerance"] = float(nonlinear_tolerance)
         nonlinear_stats["converged"] = bool(
             nonlinear_stats.get("nonlinear_converged_final_stage", False)
+            and nonlinear_stats.get("nonlinear_convergence_mode", "tolerance") == "tolerance"
+            and not nonlinear_stats.get("nonlinear_line_search_exhausted", False)
+            and residual is not None and np.isfinite(residual)
+            and residual <= nonlinear_tolerance
         )
     timing_keys = (
         "fes_wall_s",

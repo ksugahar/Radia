@@ -199,12 +199,19 @@ def test_production_newton_requires_a_residual_root(mode):
         if mode == "continuation":
             options["continuation_steps"] = 3
         if mode == "reject":
-            with pytest.raises(RuntimeError, match="Armijo line search failed"):
+            with pytest.raises(RuntimeError, match="Armijo line search failed") as exc:
                 solve(mesh, fes, table, demag, fes.ndof, h, 1e-10, 500, 80, 1e-8, **options)
             assert captured[-1]["nonlinear_converged_final_stage"] is False
+            assert captured[-1]["nonlinear_line_search_exhausted"] is True
+            assert captured[-1]["nonlinear_convergence_mode"] == "line-search-exhausted"
+            assert exc.value.nonlinear_stats == captured[-1]
+            assert captured[-1]["nonlinear_rejected_newton_step_norm"] > 0
+            assert captured[-1]["nonlinear_rejected_relative_newton_step"] is None
             return
         m, _ = solve(mesh, fes, table, demag, fes.ndof, h, 1e-10, 500, 80, 1e-8, **options)
         assert captured[-1]["nonlinear_final_relative_residual"] <= 1e-8
+        assert captured[-1]["nonlinear_convergence_mode"] == "tolerance"
+        assert captured[-1]["nonlinear_line_search_exhausted"] is False
         law = material_module._EnergyMaterialQuadrature(fes, table)
         law.update(m)
         load = ng.LinearForm(fes)

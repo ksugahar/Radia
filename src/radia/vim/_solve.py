@@ -1355,6 +1355,9 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
         "nonlinear_tangent_reuses": 0,
         "nonlinear_fresh_tangent_retries": 0,
         "nonlinear_material_quadrature_order": material.order,
+        "nonlinear_convergence_mode": "running",
+        "nonlinear_line_search_exhausted": False,
+        "nonlinear_residual_tolerance": float(nl_tol),
     }
     alphas = np.linspace(1.0 / nstage, 1.0, nstage)
     invchi0 = None
@@ -1442,11 +1445,22 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
             if lam is None:
                 stats["nonlinear_final_relative_residual"] = relative_residual
                 stats["nonlinear_converged_final_stage"] = False
+                stats["nonlinear_convergence_mode"] = "line-search-exhausted"
+                stats["nonlinear_line_search_exhausted"] = True
+                step_norm = float(np.linalg.norm(dm))
+                state_norm = float(np.linalg.norm(m))
+                stats["nonlinear_rejected_newton_step_norm"] = step_norm
+                stats["nonlinear_rejected_state_norm"] = state_norm
+                stats["nonlinear_rejected_relative_newton_step"] = (
+                    step_norm / state_norm if state_norm > step_norm / np.finfo(float).max else None)
+                stats["nonlinear_rejected_predicted_decrease"] = dec
                 _capture_nonlinear_solve_stats(stats)
-                raise RuntimeError(
+                error = RuntimeError(
                     "vim.Solve (energy-Newton): Armijo line search failed at stage %d iteration %d; "
                     "relative residual %.3e (target %.3e). No rejected step is accepted."
                     % (istage + 1, it + 1, relative_residual, nl_tol))
+                error.nonlinear_stats = dict(stats)
+                raise error
             step = lam * dm
             rel_step = float(np.linalg.norm(step)) / (float(np.linalg.norm(m)) + 1e-30)
             m = m + step
@@ -1464,6 +1478,9 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
                 break
         if not converged:
             m = mbest
+            stats["nonlinear_final_relative_residual"] = float(relative_residual)
+            stats["nonlinear_converged_final_stage"] = False
+            stats["nonlinear_convergence_mode"] = "iteration-limit"
             _capture_nonlinear_solve_stats(stats)
             raise RuntimeError("vim.Solve (energy-Newton): did NOT converge -- relative residual=%.2e (tol %.1e), "
                                "%d settled iters after %d (returning M would be a silent wrong result).  For an "
@@ -1477,5 +1494,6 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
     stats["nonlinear_final_relative_residual"] = float(relative_residual)
     stats["nonlinear_final_settled_iters"] = int(final_settled)
     stats["nonlinear_converged_final_stage"] = bool(converged_final)
+    stats["nonlinear_convergence_mode"] = "tolerance"
     _capture_nonlinear_solve_stats(stats)
     return m, total_nit
