@@ -101,7 +101,7 @@ def test_radia_mcp_publishes_only_from_its_successful_tag_ci():
     assert "workflow_run:" not in workflow
     assert "release-radia-mcp.yml" not in workflow
     assert "radia-mcp-ci-release-context" not in workflow
-    assert "needs: [scope, selftest]" in workflow
+    assert "needs: [scope, selftest, minimum-sdk]" in workflow
     assert "github.ref_type == 'tag'" in workflow
     assert "startsWith(github.ref_name, 'radia-mcp-v')" in workflow
     assert "Download wheel built by this tag CI" in workflow

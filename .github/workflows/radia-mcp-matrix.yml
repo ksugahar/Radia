@@ -136,6 +136,40 @@ jobs:
           echo "changed_files_json=$changed_files_json" >> "$GITHUB_OUTPUT"
           echo "Selected radia-mcp CI mode: $mode"
 
+  minimum-sdk:
+    needs: scope
+    if: needs.scope.outputs.mode != 'docs'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install declared minimum SDK in isolation
+        shell: bash
+        run: |
+          python -m pip install pytest tomli
+          SDK_MIN=$(python - <<'PY'
+          import tomli
+          from packaging.requirements import Requirement
+          with open("packages/radia-mcp/pyproject.toml", "rb") as stream:
+              dependencies = tomli.load(stream)["project"]["dependencies"]
+          requirement = next(Requirement(value) for value in dependencies if Requirement(value).name == "mcp")
+          floors = [item.version for item in requirement.specifier if item.operator == ">="]
+          assert len(floors) == 1, "MCP must declare exactly one inclusive SDK floor"
+          print(floors[0])
+          PY
+          )
+          python -m pip install -e "packages/radia-mcp[maintenance]" "mcp==$SDK_MIN"
+          echo "RADIA_MCP_EXPECTED_SDK=$SDK_MIN" >> "$GITHUB_ENV"
+      - name: Verify SDK registration, dispatch and real stdio reload
+        run: |
+          python -m pytest -q \
+            packages/radia-mcp/tests/test_mcp_sdk_dependency_contract.py \
+            packages/radia-mcp/tests/test_coarse_tool_registry.py \
+            packages/radia-mcp/tests/test_hot_reload.py
+
   selftest:
     needs: scope
     runs-on: ubuntu-latest
@@ -377,7 +411,7 @@ jobs:
           if-no-files-found: error
 
   publish:
-    needs: [scope, selftest]
+    needs: [scope, selftest, minimum-sdk]
     if: >-
       github.ref_type == 'tag' &&
       startsWith(github.ref_name, 'radia-mcp-v')
