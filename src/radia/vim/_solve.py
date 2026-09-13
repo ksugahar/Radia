@@ -1253,85 +1253,33 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
     Globalization: a chi0 (zero-field) LINEAR W-CG warmstart; an Armijo line search on the CONVEX ENERGY E
     (the merit -- ||R|| stalls in saturation where the inverse-BH
     H(M) blows up, but E keeps decreasing); a HARD-SATURATION BARRIER in the inverse BH (M cannot exceed
-    Msat) that repels the M-iterates from the unphysical |M| > Mmax region.  Convergence: tight (relative
-    Newton step < nl_tol -- 1-2 iters at moderate drive, == the forward Newton to ~1e-13), OR -- for the deep-
-    saturation regime where the hard-saturation M-form intrinsically limit-cycles at the achievable precision
-    -- a settled-step acceptance (rel step < 3e-4 for 5 consecutive iters -> accept the best-energy iterate;
-    the production order-1 limit-cycle plateau is ~1.5-1.9e-4, so the floor is 3e-4; M matched the
-    analytic uniform sphere to ~2e-3 at H0 up to 5e6, knee*5000).  Single-region (scalar
+    Msat) that repels the M-iterates from the unphysical |M| > Mmax region. Convergence requires the
+    assembled nonlinear residual relative to the fixed stage source (or initial residual for zero source).
+    A rejected or settled step cannot certify convergence. Single-region (scalar
     bh_table) AND per-region (dict) iron; prescribed fixed-M sources enter through h_ext before this
     constitutive solve.  CALLER opens TaskManager."""
+    from ._nonlinear import _EnergyMaterialQuadrature
+
     rhs_src = _geometry_mass_apply(H, h_ext)
     Id = ng.Id(3); uf, vf = fes.TnT()
     gfM = ng.GridFunction(fes); l2 = ng.L2(mesh, order=0)
-    # element volumes (for the co-energy integral) = the L2(0) mass diagonal
-    mvol = ng.BilinearForm(l2); mvol += l2.TrialFunction() * l2.TestFunction() * ng.dx; mvol.Assemble()
-    rv, cv, vvv = mvol.mat.COO(); Vol = np.zeros(mesh.ne)
-    for r_, c_, v_ in zip(rv, cv, vvv):
-        if r_ == c_:
-            Vol[int(r_)] = v_
+    material = _EnergyMaterialQuadrature(fes, bh_table)
 
-    # ---- per-region OR single inverse-BH reluctivity fields + co-energy + zero-field chi0 (warmstart) ----
-    if isinstance(bh_table, dict):
-        mats = list(mesh.GetMaterials())
-        missing = sorted(set(mats) - set(bh_table))
-        if missing:
-            raise ValueError("vim.Solve: bh_table dict missing region(s) %s; mesh materials are %s"
-                             % (missing, mats))
-        region_names = list(bh_table)
-        name_to_ridx = {nm: k for k, nm in enumerate(region_names)}
-        region_fields, region_wco = [], []
-        for nm in region_names:
-            arr = np.asarray(bh_table[nm], float)
-            if arr.ndim != 2 or arr.shape[1] != 2:
-                raise ValueError("vim.Solve: bh_table[%r] must be [[H,B], ...] (A/m, T)" % (nm,))
-            f, w, _ = _bh_inverse_funcs(arr[:, 0], arr[:, 1]); region_fields.append(f); region_wco.append(w)
-        elem_region = np.array([name_to_ridx[mesh[ng.ElementId(ng.VOL, i)].mat] for i in range(mesh.ne)],
-                               dtype=int)
-
-        def _reluct(g):
-            return _reluctivity_tangent_multi(g, mesh, region_fields, elem_region, Id)
-
-        def _wco_all(Mmag):
-            out = np.empty_like(Mmag)
-            for ridx, w in enumerate(region_wco):
-                sel = elem_region == ridx
-                if np.any(sel):
-                    out[sel] = w(Mmag[sel])
-            return out
-
-        chi0_e = np.empty(mesh.ne)
-        for ridx, f in enumerate(region_fields):
-            _, nd0 = f(np.array([1e-12])); chi0_e[elem_region == ridx] = 1.0 / max(float(nd0[0]), 1e-30)
-    else:
-        arr = np.asarray(bh_table, float)
-        if arr.ndim != 2 or arr.shape[1] != 2:
-            raise ValueError("vim.Solve: bh_table must be [[H,B], ...] (A/m, T)")
-        fields, wco, _ = _bh_inverse_funcs(arr[:, 0], arr[:, 1])
-
-        def _reluct(g):
-            return _reluctivity_tangent(g, mesh, fields, Id)
-
-        def _wco_all(Mmag):
-            return wco(Mmag)
-
-        _, nd0 = fields(np.array([1e-12])); chi0_e = np.full(mesh.ne, 1.0 / max(float(nd0[0]), 1e-30))
+    def _reluct(g):
+        material.update(g.vec.FV().NumPy())
+        return material.field, material.tangent
 
     def _N_apply(v):
         return np.asarray(H.apply_configured_demag(_f64(v), True), float)
 
-    def _Mmag(m):
-        gfM.vec.FV().NumPy()[:] = m
-        gfn = ng.GridFunction(l2); gfn.Set(ng.sqrt(ng.InnerProduct(gfM, gfM) + 1e-30))
-        return np.maximum(gfn.vec.FV().NumPy(), 1e-30)
-
     def _bH(H_cf):
-        lf = ng.LinearForm(fes); lf += H_cf * vf * ng.dx; lf.Assemble()
+        lf = ng.LinearForm(fes); lf += H_cf * vf * material.measure; lf.Assemble()
         return lf.vec.FV().NumPy().copy()
 
     def _W_matrix(weight_cf, tensor):
         a = ng.BilinearForm(fes)
-        a += (ng.InnerProduct(weight_cf * uf, vf) if tensor else weight_cf * uf * vf) * ng.dx
+        form = ng.InnerProduct(weight_cf * uf, vf) if tensor else weight_cf * uf * vf
+        a += material.bilinear_integrator(form)
         a.Assemble()
         return a.mat
 
@@ -1364,7 +1312,19 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
         return np.asarray(res["m"], float), it
 
     def _energy(m, rhs):                        # E(m) = INT W_co(|M|) dx + 1/2 m.Nm - rhs.m
-        return float(np.dot(_wco_all(_Mmag(m)), Vol)) + 0.5 * float(m @ _N_apply(m)) - float(rhs @ m)
+        return material.update(m) + 0.5 * float(m @ _N_apply(m)) - float(rhs @ m)
+
+    def _line_search(m, dm, rhs, energy, decrement):
+        if not np.isfinite(decrement) or decrement <= 0 or not np.isfinite(dm).all():
+            return None, None, 0
+        lam, backtracks = 1.0, 0
+        while lam > 1e-10:
+            trial_energy = _energy(m + lam * dm, rhs)
+            if np.isfinite(trial_energy) and trial_energy <= energy - 1e-4 * lam * decrement:
+                return lam, trial_energy, backtracks
+            lam *= 0.5
+            backtracks += 1
+        return None, None, backtracks
 
     def _forcing_tol(prev_rel_step, stage_final):
         if inner_tol in (None, "fixed"):
@@ -1394,6 +1354,7 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
         "nonlinear_tangent_assemblies": 0,
         "nonlinear_tangent_reuses": 0,
         "nonlinear_fresh_tangent_retries": 0,
+        "nonlinear_material_quadrature_order": material.order,
     }
     alphas = np.linspace(1.0 / nstage, 1.0, nstage)
     invchi0 = None
@@ -1406,14 +1367,15 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
     final_rel_step = float("inf")
     final_settled = 0
     converged_final = False
+    relative_residual = float("inf")
 
     for istage, alpha in enumerate(alphas):
         rhs_stage = float(alpha) * rhs_src
         stage_final = istage == len(alphas) - 1
-        if not m0_provided and istage == 0 and warmstart == "linear":
+        if not m0_provided and istage == 0 and warmstart == "linear" and np.any(rhs_stage):
             # chi0 (zero-field) LINEAR warmstart: (M_{1/chi0} + N) m = M_mass h_ext.
             invchi0 = ng.GridFunction(l2)
-            invchi0.vec.FV().NumPy()[:] = 1.0 / np.maximum(chi0_e, 1.0)
+            invchi0.Set(material.initial_reluctivity)
             m, it0 = _solve_W(
                 _W_matrix(invchi0, tensor=False), rhs_stage, tol_override=max(cg_tol, 1e-6),
                 context="linear_warmstart_stage_1")
@@ -1428,12 +1390,24 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
         mbest = m.copy()
         cached_W = None
         cached_it = -10**9
+        residual_scale = None
         for it in range(int(nl_maxit)):
             total_nit += 1
             stats["nonlinear_newton_iters"] += 1
             gfM.vec.FV().NumPy()[:] = m
             H_cf, nud = _reluct(gfM)
             R = _bH(H_cf) + _N_apply(m) - rhs_stage
+            if not np.isfinite(R).all() or not np.isfinite(E):
+                raise RuntimeError("vim.Solve (energy-Newton): non-finite residual or energy")
+            if residual_scale is None:
+                residual_scale = float(np.linalg.norm(rhs_stage))
+                if residual_scale == 0:
+                    residual_scale = max(float(np.linalg.norm(R)), np.finfo(float).tiny)
+            relative_residual = float(np.linalg.norm(R)) / residual_scale
+            if relative_residual <= nl_tol:
+                converged = True
+                rel_step = 0.0 if not np.isfinite(rel_step) else rel_step
+                break
             rebuild = cached_W is None or (it - cached_it) >= reuse_steps
             if rebuild:
                 cached_W = _W_matrix(nud, tensor=True)
@@ -1447,17 +1421,13 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
                                  context="newton_stage_%d_iteration_%d" % (istage + 1, it + 1))
             stats["nonlinear_linear_inner_iters"] += int(itlin)
             dec = float(-dm @ R)                             # dm.(-R) = dm^T J dm >= 0
-            lam = 1.0
             E0 = E
-            backtracks = 0
-            while lam > 1e-10:
-                if _energy(m + lam * dm, rhs_stage) <= E0 - 1e-4 * lam * dec:
-                    break
-                lam *= 0.5
-                backtracks += 1
-            if lam <= 1e-10 and not rebuild:
+            lam, trial_energy, backtracks = _line_search(m, dm, rhs_stage, E0, dec)
+            stats["nonlinear_line_search_backtracks"] += int(backtracks)
+            if lam is None and not rebuild:
                 # A reused/chord tangent can occasionally lose descent.  Pay for one fresh tangent before
-                # accepting a microscopic step.
+                # reporting failure; rejected trial evaluations changed the quadrature state.
+                material.update(m)
                 cached_W = _W_matrix(nud, tensor=True)
                 cached_it = it
                 stats["nonlinear_tangent_assemblies"] += 1
@@ -1467,42 +1437,44 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
                                      context="fresh_tangent_stage_%d_iteration_%d" % (istage + 1, it + 1))
                 stats["nonlinear_linear_inner_iters"] += int(itlin)
                 dec = float(-dm @ R)
-                lam = 1.0
-                backtracks = 0
-                while lam > 1e-10:
-                    if _energy(m + lam * dm, rhs_stage) <= E0 - 1e-4 * lam * dec:
-                        break
-                    lam *= 0.5
-                    backtracks += 1
-            stats["nonlinear_line_search_backtracks"] += int(backtracks)
+                lam, trial_energy, backtracks = _line_search(m, dm, rhs_stage, E0, dec)
+                stats["nonlinear_line_search_backtracks"] += int(backtracks)
+            if lam is None:
+                stats["nonlinear_final_relative_residual"] = relative_residual
+                stats["nonlinear_converged_final_stage"] = False
+                _capture_nonlinear_solve_stats(stats)
+                raise RuntimeError(
+                    "vim.Solve (energy-Newton): Armijo line search failed at stage %d iteration %d; "
+                    "relative residual %.3e (target %.3e). No rejected step is accepted."
+                    % (istage + 1, it + 1, relative_residual, nl_tol))
             step = lam * dm
             rel_step = float(np.linalg.norm(step)) / (float(np.linalg.norm(m)) + 1e-30)
             m = m + step
             dm_prev = dm
-            E = _energy(m, rhs_stage)
+            E = trial_energy
             if E < Ebest:
                 Ebest = E
                 mbest = m.copy()
             settled = settled + 1 if rel_step < 3e-4 else 0
-            if rel_step < nl_tol:
+            material.update(m)
+            final_R = _bH(material.field) + _N_apply(m) - rhs_stage
+            relative_residual = float(np.linalg.norm(final_R)) / residual_scale
+            if np.isfinite(relative_residual) and relative_residual <= nl_tol:
                 converged = True
-                break
-            if settled >= 5:
-                converged = True
-                m = mbest
                 break
         if not converged:
             m = mbest
             _capture_nonlinear_solve_stats(stats)
-            raise RuntimeError("vim.Solve (energy-Newton): did NOT converge -- rel step=%.2e (tol %.1e), "
+            raise RuntimeError("vim.Solve (energy-Newton): did NOT converge -- relative residual=%.2e (tol %.1e), "
                                "%d settled iters after %d (returning M would be a silent wrong result).  For an "
                                "extreme-saturation / ill-conditioned case, increase continuation or use the "
-                               "mass-Riesz preconditioner." % (rel_step, nl_tol, settled, total_nit))
+                               "mass-Riesz preconditioner." % (relative_residual, nl_tol, settled, total_nit))
         final_rel_step = rel_step
         final_settled = settled
         converged_final = stage_final
 
     stats["nonlinear_final_rel_step"] = float(final_rel_step)
+    stats["nonlinear_final_relative_residual"] = float(relative_residual)
     stats["nonlinear_final_settled_iters"] = int(final_settled)
     stats["nonlinear_converged_final_stage"] = bool(converged_final)
     _capture_nonlinear_solve_stats(stats)

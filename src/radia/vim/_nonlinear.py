@@ -185,11 +185,11 @@ def _bh_inverse_funcs(Harr, Barr):
       wco(Mmag)   -> the co-energy density INT_0^|M| H(s) ds  (the line-search merit -- E is convex, R is
                       its gradient, so an Armijo line search on E is robust where ||R|| stalls in saturation).
     HARD-SATURATION BARRIER: the table saturates M at Mmax (M cannot exceed Msat); for |M| > Mmax the inverse
-    is undefined, so H(M) is extended with a steep but C1-smooth barrier (slope Kbar = 1/_CHI_DIFF_FLOOR = the
-    table's saturation nu_diff) -> the energy form is repelled from the unphysical |M| > Mmax region (without
+    is undefined, so H(M) is extended continuously with a steep linear barrier (slope Kbar = 1/_CHI_DIFF_FLOOR).
+    Its energy is C1; the tangent can jump at the barrier -> the energy form is repelled from the unphysical |M| > Mmax region (without
     it, the M-iterates overshoot Msat and the Newton wanders / limit-cycles)."""
     from scipy.interpolate import PchipInterpolator
-    Mof, Bpch, Bder, Hmax, Mmax = _bh_table_funcs(Harr, Barr)
+    Mof, _, _, Hmax, Mmax = _bh_table_funcs(Harr, Barr)
     Hs = np.concatenate([[0.0], np.logspace(-2, np.log10(max(Hmax, 1.0)), 800)])
     Ms = np.array([Mof(h) for h in Hs])                       # should be monotone 0..Mmax
     # Saturating BH tables can produce tiny PCHIP ripples in M(H).  PCHIP for the
@@ -205,21 +205,22 @@ def _bh_inverse_funcs(Harr, Barr):
     if len(Mgrid) < 2:
         raise ValueError("vim.Solve: inverse BH table did not produce a monotone M(H) curve")
     Hof = PchipInterpolator(Mgrid, Hgrid)                     # |H| given |M|
-    Wco_grid = np.concatenate([[0.0], np.cumsum(0.5 * (Hgrid[1:] + Hgrid[:-1]) * np.diff(Mgrid))])
-    Wco = PchipInterpolator(Mgrid, Wco_grid)
-    Hlast = float(Hgrid[-1])
+    Wco = Hof.antiderivative()
+    Hder = Hof.derivative()
     Kbar = 1.0 / _CHI_DIFF_FLOOR
     Mcap = Mmax * (1.0 - 1e-9)
+    Hlast = float(Hof(Mcap))
+    Wzero = float(Wco(0.0))
 
     def fields(Mmag):
         Mmag = np.asarray(Mmag, float)
         Mm = np.minimum(Mmag, Mcap)
         h = Hof(Mm)
-        chid = np.maximum(Bder(np.minimum(h, Hmax)) / _MU0 - 1.0, _CHI_DIFF_FLOOR)
-        nu_sec = h / np.maximum(Mmag, 1e-30)
-        nu_diff = 1.0 / chid
+        nu_diff = Hder(Mm)
+        nu_sec = np.divide(h, Mmag, out=np.full_like(Mmag, float(Hder(0.0))),
+                           where=Mmag > 0)
         over = Mmag > Mcap
-        if np.any(over):                                      # C1-smooth barrier beyond Mmax
+        if np.any(over):                                      # continuous H, C1 energy beyond Mcap
             nu_sec[over] = (Hlast + Kbar * (Mmag[over] - Mcap)) / Mmag[over]
             nu_diff[over] = Kbar
         return nu_sec, nu_diff
@@ -228,9 +229,84 @@ def _bh_inverse_funcs(Harr, Barr):
         Mmag = np.asarray(Mmag, float)
         Mm = np.minimum(Mmag, Mcap)
         d = np.maximum(Mmag - Mcap, 0.0)
-        return Wco(Mm) + Hlast * d + 0.5 * Kbar * d * d
+        return Wco(Mm) - Wzero + Hlast * d + 0.5 * Kbar * d * d
 
     return fields, wco, Mmax
+
+
+class _EnergyMaterialQuadrature:
+    """One NGSolve quadrature rule for material energy, gradient and Hessian."""
+
+    def __init__(self, fes, bh_table):
+        from ngsolve.comp import IntegrationRuleSpace
+
+        self.mesh = fes.mesh
+        self.m_field = ng.GridFunction(fes)
+        self.order = max(6, 2 * int(fes.globalorder) + 2)
+        self.space = IntegrationRuleSpace(self.mesh, order=self.order)
+        self.measure = ng.dx(intrules=self.space.GetIntegrationRules())
+        self.vector_space = ng.VectorValued(self.space, dim=3)
+        self.samples = ng.GridFunction(self.vector_space)
+        self.secant = ng.GridFunction(self.space)
+        self.differential = ng.GridFunction(self.space)
+        self.tensor_samples = ng.GridFunction(ng.VectorValued(self.space, dim=9))
+        weights = ng.LinearForm(self.space)
+        weights += self.space.TestFunction() * self.measure
+        weights.Assemble()
+        self.weights = weights.vec.FV().NumPy().copy()
+        self.npoints = int(self.space.ndof)
+        tables = bh_table if isinstance(bh_table, dict) else {
+            name: bh_table for name in self.mesh.GetMaterials()}
+        missing = set(self.mesh.GetMaterials()) - set(tables)
+        if missing:
+            raise ValueError("vim.Solve: bh_table missing regions %s" % sorted(missing))
+        names = list(tables)
+        self.curves = []
+        for name in names:
+            arr = np.asarray(tables[name], dtype=float)
+            if arr.ndim != 2 or arr.shape[1] != 2:
+                raise ValueError("vim.Solve: bh_table must contain [[H,B], ...]")
+            self.curves.append(_bh_inverse_funcs(arr[:, 0], arr[:, 1]))
+        region = ng.GridFunction(self.space)
+        region.Interpolate(self.mesh.MaterialCF({name: i for i, name in enumerate(names)}))
+        self.regions = np.rint(region.vec.FV().NumPy()).astype(int)
+        initial_slopes = {name: float(curve[0](np.array([0.0]))[1][0])
+                          for name, curve in zip(names, self.curves)}
+        if any(not np.isfinite(value) or value <= 0 for value in initial_slopes.values()):
+            raise ValueError("vim.Solve: inverse BH needs a positive finite zero-field tangent")
+        self.initial_reluctivity = self.mesh.MaterialCF(initial_slopes)
+        self.field = self.secant * self.m_field
+        self.tangent = ng.CF(tuple(self.tensor_samples[i] for i in range(9)), dims=(3, 3))
+
+    def bilinear_integrator(self, form):
+        # NGSolve 6.2.2606 tensor IntegrationRuleSpace evaluation needs the
+        # scalar evaluator; its SIMD path terminates the process on this form.
+        integrator = ng.SymbolicBFI(form, simd_evaluate=False)
+        for element_type, rule in self.space.GetIntegrationRules().items():
+            integrator.SetIntegrationRule(element_type, rule)
+        return integrator
+
+    def update(self, coefficients):
+        self.m_field.vec.FV().NumPy()[:] = coefficients
+        self.samples.Interpolate(self.m_field)
+        values = self.samples.vec.FV().NumPy().reshape(3, self.npoints).T
+        magnitude = np.linalg.norm(values, axis=1)
+        energy = np.empty(self.npoints)
+        secant = self.secant.vec.FV().NumPy()
+        differential = self.differential.vec.FV().NumPy()
+        for i, (fields, wco, _) in enumerate(self.curves):
+            selected = self.regions == i
+            secant[selected], differential[selected] = fields(magnitude[selected])
+            energy[selected] = wco(magnitude[selected])
+        if not (np.isfinite(energy).all() and np.isfinite(secant).all()
+                and np.isfinite(differential).all()):
+            raise RuntimeError("vim.Solve: non-finite material quadrature state")
+        unit = np.divide(values, magnitude[:, None], out=np.zeros_like(values),
+                         where=magnitude[:, None] > 0)
+        tensor = (secant[:, None, None] * np.eye(3)
+                  + (differential-secant)[:, None, None] * unit[:, :, None] * unit[:, None, :])
+        self.tensor_samples.vec.FV().NumPy()[:] = tensor.reshape(self.npoints, 9).T.ravel()
+        return float(self.weights @ energy)
 
 
 def _reluctivity_tangent(gfM, mesh, fields, Id):
