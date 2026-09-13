@@ -4,6 +4,9 @@
     "src/radia/vim/_nonlinear.py": ["tests/test_hdiv_energy_material_consistency.py", "tests/test_hdiv_bh_table_saturation_contract.py"],
     "src/radia/panels/samples/em_sample_bh.txt": ["tests/test_hdiv_bh_table_saturation_contract.py"],
     "validation_test/feec/bh_saturation_audit.py": ["tests/test_hdiv_bh_table_saturation_contract.py"],
+    "validation_test/feec/test_hdiv_vim_energy_newton.py": ["tests/test_hdiv_bh_table_saturation_contract.py"],
+    "validation_test/feec/run_energy_newton_audit.py": ["tests/test_hdiv_bh_table_saturation_contract.py"],
+    ".github/workflows/radia-fast.yml": ["tests/test_ci_execution_policy.py", "tests/test_run_test_tier.py", "tests/test_test_tier_policy.py", "tests/test_hdiv_bh_table_saturation_contract.py"],
     "validation_test/feec/results/bh_saturation_20260914/qualified/result.json": ["tests/test_hdiv_bh_table_saturation_contract.py"],
     "src/radia/vim/_solve.py": ["tests/test_hdiv_energy_material_consistency.py", "tests/test_hdiv_newton_failure_contract.py", "tests/test_esrf_three_engine_finite_gate.py"],
     "validation_test/esrf_three_engine/check_case6_inputs.py": ["tests/test_esrf6_mesh_identity.py"],
@@ -42,7 +45,6 @@
       "description": "Pure source, policy, package, and public-notebook contracts for every push.",
       "max_elapsed_seconds": 60,
       "paths": [
-        "tests/test_hdiv_bh_table_saturation_contract.py",
         "tests/test_ci_execution_policy.py",
         "tests/test_ci_monitor.py",
         "tests/test_mdx_runner_pool.py",
@@ -61,6 +63,7 @@
       "extends": "fast-contracts",
       "max_elapsed_seconds": 120,
       "paths": [
+        "tests/test_hdiv_bh_table_saturation_contract.py",
         "tests/test_simple.py",
         "tests/test_radia.py",
         "tests/test_meshless_relaxation_contract.py",
