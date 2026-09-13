@@ -240,7 +240,9 @@ def grant_writing_find_undefined_acronyms(
             "未定義 acronym は **選択的に** 初出で `ACRONYM (展開)` を足す。"
             "ドメイン固有語 (ESIM, MSFEM 等) を reviewer が知っている前提なら "
             "定義不要。全件を 0 に潰そうとすると冗長で逆に読みにくくなる。"
-            "whitelist 引数で skip 対象をカンマ区切り指定可。"
+            "whitelist 引数で skip 対象をカンマ区切り指定可。ただし、発表の専門語を"
+            "初出確認前に whitelist へ入れると未定義を見逃す。組織名・出版社名など、"
+            "展開しないと決めた語だけを除外する。"
             "**使用頻度を含めた総合判定は grant_writing_acronym_usage_audit** を使う。"
         ),
         "source": "木下『理科系の作文技術』原則 9「誤解できないように書け」"
@@ -352,7 +354,8 @@ def grant_writing_acronym_usage_audit(
             "grant-writing 独自ルール: **初出 full form → 2 回目以降 略語**。"
             f"**{min_uses_for_abbrev} 回未満の登場なら略語を導入しない**。"
             "hint として使う — 審査員の既知略語 (IEEE / JSPS 等) は "
-            "組み込み whitelist + user whitelist で skip 可。"
+            "組み込み whitelist + user whitelist で skip 可。ただし専門語は初出の"
+            "full formを確認してから除外する。"
         ),
         "source": "grant-writing rule (2026-04-22): full-form-first, "
                   "abbreviate only if it earns its keep (>=3 occurrences)。",
@@ -489,16 +492,22 @@ def grant_writing_check_notation_variants(text: str) -> dict:
         has_digit = any(c.isdigit() for c in tok)
         return upper >= 2 or has_digit
 
+    # URLs legitimately lowercase host names (``GitHub`` vs
+    # ``https://github.com``). They are identifiers, not prose variants, so
+    # exclude them before comparing case forms.
+    prose_without_urls = re.sub(r"(?:https?://|www\.)\S+", "", text)
     token_re = re.compile(r"\b([A-Za-z][A-Za-z0-9]{3,})\b")
     tokens: dict[str, set[str]] = {}
-    for m in token_re.finditer(text):
+    for m in token_re.finditer(prose_without_urls):
         t = m.group(1)
         tokens.setdefault(t.lower(), set()).add(t)
     case_variants = [
         {
             "lowercase": k,
             "variants": sorted(v),
-            "counts": {form: len(re.findall(r"\b" + re.escape(form) + r"\b", text))
+            "counts": {form: len(re.findall(
+                r"\b" + re.escape(form) + r"\b", prose_without_urls
+            ))
                        for form in v},
         }
         for k, v in tokens.items()
@@ -551,7 +560,12 @@ def grant_writing_check_notation_variants(text: str) -> dict:
         findings.append({
             "type": "hyphen_variants",
             "examples": hyphen_variants[:5],
-            "action": "ハイフン・スペース・連結形を統一する。",
+            "requires_context_review": True,
+            "action": (
+                "候補を文脈確認する。同じ文法的役割なら統一するが、"
+                "複合形容詞 (full-band model) と名詞句 (the full band) のように"
+                "役割が違えば両方とも正しい。"
+            ),
         })
 
     return {
@@ -560,7 +574,8 @@ def grant_writing_check_notation_variants(text: str) -> dict:
         "hint": (
             "表記ゆれは審査員の集中力を削ぐ。1 文書内で同一概念は 1 表記に統一する。"
             "形式名詞はひらがな、固有名詞は公式表記、数値+単位は LaTeX の `\\,` "
-            "(thin space) を標準とする。"
+            "(thin space) を標準とする。検出結果は候補であり合否ではない。"
+            "URL 内の大小文字は比較せず、ハイフン形は文法的役割を確認する。"
         ),
         "source": "本多『日本語の作文技術』 + 共通工学日本語スタイルガイド",
     }
