@@ -109,3 +109,13 @@ active job-owned Python processes and reparse points; absence was verified.
 No other job directory was removed. Final local checks: 8 focused tests PASS,
 532 fast-contract tests PASS in 25.03 seconds including runner overhead, and
 Ruff F/E9 clean. This work does not merge main, tag, or publish a release.
+
+CI follow-up: run 34771540139 exposed a missing SciPy dependency in the
+minimal fast-CI venv (five BH audit failures). `radia-fast.yml` now explicitly
+installs SciPy for production PCHIP evaluation, with a workflow regression
+test. A fresh venv containing only the declared fast-lane dependencies passed
+all eight BH checks and all fourteen CI-policy checks; the complete tier passed
+507 tests in 45.27 seconds including overhead. Its one pre-existing module-level
+skip is `test_hdiv_energy_material_consistency.py` requiring NGSolve, not the BH
+audit. No new skip or optional-dependency fallback was added. Native evidence,
+numerical fixtures, and candidate wheel remain unchanged.
