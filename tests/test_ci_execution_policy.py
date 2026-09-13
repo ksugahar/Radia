@@ -51,6 +51,19 @@ def test_fast_ci_runs_only_on_mdx_and_native_is_a_named_release_lane():
     assert 'workflows: ["Radia Native Release"]' in release
 
 
+def test_fast_ci_declares_scalar_bh_audit_dependencies():
+    import yaml
+
+    workflow = yaml.safe_load((ROOT / '.github/workflows/radia-fast.yml').read_text(encoding='utf-8'))
+    steps = workflow['jobs']['fast-contracts']['steps']
+    setup = next(step['run'] for step in steps
+                 if step.get('name') == 'Create isolated fast-CI environment')
+    installs = [line.split() for line in setup.splitlines() if '-m pip install ' in line]
+    assert any({'numpy', 'scipy', 'pytest'}.issubset(tokens) for tokens in installs)
+    assert 'python -m venv' in setup
+    assert 'ngsolve' not in setup.lower()
+
+
 def test_no_workflow_selects_a_lab_runner():
     """No lane may ask for a LAB runner, the signing release included.
 
