@@ -175,8 +175,12 @@ solver boundary is a checked `.vol` regardless of the creation route.
 
 ### CI Execution, Validation Evidence, and Notebook Policy (2026-09-03)
 
-**POLICY**: **mdx1 and mdx2** are Radia's self-hosted CI and preflight pool. LAB and
-100号機 are development machines. Both mdx hosts give CI and preflight priority.
+**POLICY**: **mdx1 and mdx2** are Radia's self-hosted CI and preflight pool.
+LAB is the development host. 100号機 is the student-facing release and usage
+host, not a routine development-test host. Do not run development test suites
+or heavy validation there; limit release acceptance to necessary installation,
+import, and student-facing application smoke checks. Both mdx hosts give CI
+and preflight priority.
 GitHub Actions uses the shared `mdx` label and assigns jobs to an available runner.
 Release-quad requires LAB, 100号機, mdx1, and mdx2 for the same release commit.
 LAB/100号機 retain verified editable installs; mdx1/mdx2 consume release wheels.
@@ -249,6 +253,30 @@ hibino's real advantage is memory — 230 GB with no pagefile — rather than it
 76 logical cores.
 
 **POLICY**: 全てのベンチマークスクリプトは機械可読な JSON 結果を保存すること。
+
+### Compute Scratch Cleanup
+
+**POLICY (2026-09-13)**: On mdx1, mdx2, and hibino, a computation is not
+complete until its results are recovered and its job-owned `C:\temp` workspace
+is removed. Compute hosts are not permanent result archives.
+
+- Recover result JSON, logs, exact commands, runtime/source identity, input
+  hashes, and any non-reconstructible inputs to the owning LAB repository or
+  durable artifact location. Numerical evidence belongs in `validation_test/`;
+  public demonstrations belong in executed, result-bearing `docs/**/*.ipynb`.
+  Keep raw operational inventories and transient logs outside tracked source.
+- Verify destination hashes before deleting remote copies. Commit the intended
+  tracked evidence before removing its only remote copy. Failed runs also need
+  their diagnostic evidence recovered; failure is not permission to lose it.
+- Remove completed job inputs, outputs, staging copies, disposable environments,
+  and helper scripts. Verify deletion and report the recovered location and
+  cleanup result. Result recovery alone is not task completion.
+- Never blanket-delete `C:\temp` while other jobs or CI own files there. Check
+  active and queued work, resolve each approved absolute target, reject
+  out-of-scope links/junctions, and use literal-path file operations.
+- Any temporary retention needs an explicit owner, reason, and cleanup trigger
+  (for example, an unfinished validation consuming a candidate environment).
+  Do not silently retain completed work or repoint jobs to stale inputs.
 
 ## Build And Release
 
