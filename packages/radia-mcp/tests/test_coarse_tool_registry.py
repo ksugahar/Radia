@@ -141,12 +141,30 @@ def test_full_profile_keeps_individual_tools_for_compatibility():
     }
 
 
-def _grouped_runner(function):
+def _grouped_server(function):
     mcp = FastMCP("input-contract")
     registry = CoarseToolRegistry(mcp, namespace="demo", profile="core", min_group_size=1)
     registry.tool()(function)
     registry.install()
-    return _tool_functions(mcp)["demo_validation_run"]
+    return mcp
+
+
+def _grouped_runner(function):
+    return _tool_functions(_grouped_server(function))["demo_validation_run"]
+
+
+def test_sdk_dispatch_serializes_grouped_input_error_payload():
+    def gate(value: int):
+        raise AssertionError("invalid input must not execute")
+
+    server = _grouped_server(gate)
+    result = asyncio.run(server.call_tool("demo_validation_run", {
+        "name": "gate", "arguments": {"value": "bad"},
+    }))
+    content = result[0] if isinstance(result, tuple) else result
+    payload = json.loads(content[0].text)
+    assert payload["status"] == "error"
+    assert payload["kind"] == "input"
 
 
 @pytest.mark.parametrize("asynchronous", [False, True])
