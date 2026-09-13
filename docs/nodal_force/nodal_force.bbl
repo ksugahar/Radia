@@ -1,0 +1,23 @@
+\begin{thebibliography}{1}
+
+\bibitem{coulomb1983methodology}
+J.~{Coulomb}.
+\newblock A methodology for the determination of global electromechanical
+  quantities from a finite element analysis and its application to the
+  evaluation of magnetic forces, torques and stiffness.
+\newblock {\em IEEE Transactions on Magnetics}, 19(6):2514--2519, 1983.
+
+\bibitem{henrotte2004force}
+F.~{Henrotte} and K.~{Hameyer}.
+\newblock Computation of electromagnetic force densities: {Maxwell} stress
+  tensor vs. virtual work principle.
+\newblock {\em Journal of Computational and Applied Mathematics},
+  168(1--2):235--243, 2004.
+
+\bibitem{henrotte2004}
+F.~{Henrotte}, G.~{Deli{\'e}ge}, and K.~{Hameyer}.
+\newblock The eggshell approach for the computation of electromagnetic forces
+  in 2{D} and 3{D}.
+\newblock {\em COMPEL}, 23(4):996--1005, 2004.
+
+\end{thebibliography}
