@@ -1,0 +1,659 @@
+{
+  "radia_version": "4.95.91",
+  "radia_path": "C:\\temp\\esrf6-newton-4d85e72cc\\venv\\Lib\\site-packages\\radia\\__init__.py",
+  "ngsolve_version": "6.2.2606",
+  "inputs": {
+    "iron_step_sha256": "cc34b508a472603d1c225cce11b932e1b3589d277122acc0de1a97f6f18c2ba4",
+    "coil_step_sha256": "d81bac4c8312db14c2d653ffa9be43827b91ebf8da0318e9dd6fa588bbc6cef6",
+    "manifest_sha256": "b2bbe5db90d581df6719edeaaf8d699b74dae4288701914417a8fe94a1b0c7ac"
+  },
+  "cad": {
+    "iron": {
+      "step": {
+        "volume_m3": 0.001024780794804311,
+        "solid_count": 40,
+        "bbox_m": [
+          [
+            -0.03000010000000396,
+            -0.124450893489,
+            -0.124450893489
+          ],
+          [
+            0.030000100000007197,
+            0.124450893489,
+            0.124450893489
+          ]
+        ]
+      },
+      "rebuilt": {
+        "volume_m3": 0.001024780794801162,
+        "solid_count": 40,
+        "bbox_m": [
+          [
+            -0.03000015,
+            -0.12445094348883237,
+            -0.12445094348883237
+          ],
+          [
+            0.030000150000000007,
+            0.12445094348883237,
+            0.12445094348883237
+          ]
+        ]
+      },
+      "relative_volume_difference": 3.0728101128868388e-12,
+      "maximum_bbox_difference_m": 4.9999996039329364e-08
+    },
+    "coil": {
+      "step": {
+        "volume_m3": 0.0008739836916742753,
+        "solid_count": 64,
+        "bbox_m": [
+          [
+            -0.061000100000000015,
+            -0.0806102730552705,
+            -0.0806102730552705
+          ],
+          [
+            0.0610001,
+            0.0806102730552705,
+            0.0806102730552705
+          ]
+        ]
+      },
+      "rebuilt": {
+        "volume_m3": 0.0008739836916742938,
+        "solid_count": 64,
+        "bbox_m": [
+          [
+            -0.061000100000000036,
+            -0.08061027305526647,
+            -0.08061027305526645
+          ],
+          [
+            0.06100010000000002,
+            0.08061027305526647,
+            0.08061027305526647
+          ]
+        ]
+      },
+      "relative_volume_difference": 2.1213047023778722e-14,
+      "maximum_bbox_difference_m": 4.052314039881821e-15
+    }
+  },
+  "meshes": {
+    "iron": {
+      "path": "C:/temp/radia-ex6-diag/assets_conforming/model.vol",
+      "sha256": "fdd1387281e550e27eab435cfac3ec54e0b9d1339438699fdc50c852dfcafc74",
+      "iron_elements": 2408,
+      "iron_vertex_bbox_m": [
+        [
+          -0.03,
+          -0.124450793489,
+          -0.124450793489
+        ],
+        [
+          0.03,
+          0.124450793489,
+          0.124450793489
+        ]
+      ],
+      "iron_volume_m3": {
+        "4": 0.0010247807948003517,
+        "8": 0.0010247807948003341
+      },
+      "gap_materials": [
+        "outside_mesh",
+        "outside_mesh",
+        "outside_mesh",
+        "outside_mesh",
+        "outside_mesh",
+        "outside_mesh",
+        "outside_mesh",
+        "outside_mesh",
+        "outside_mesh",
+        "outside_mesh",
+        "outside_mesh",
+        "outside_mesh",
+        "outside_mesh",
+        "outside_mesh",
+        "outside_mesh",
+        "outside_mesh",
+        "outside_mesh",
+        "outside_mesh",
+        "outside_mesh",
+        "outside_mesh",
+        "outside_mesh",
+        "outside_mesh",
+        "outside_mesh",
+        "outside_mesh",
+        "outside_mesh",
+        "outside_mesh",
+        "outside_mesh"
+      ]
+    },
+    "fem": {
+      "path": "C:/temp/radia-esrf-fem/example6/coil_yoke_kelvin.vol",
+      "sha256": "dfc12b84f80db1fa17fb5012b6f87c072e8aa1fb3c085b61269f047a879a54ac",
+      "iron_elements": 34228,
+      "iron_vertex_bbox_m": [
+        [
+          -0.03,
+          -0.124450793489,
+          -0.124450793489
+        ],
+        [
+          0.03,
+          0.124450793489,
+          0.124450793489
+        ]
+      ],
+      "iron_volume_m3": {
+        "4": 0.001024780794800863,
+        "8": 0.0010247807948008283
+      },
+      "gap_materials": [
+        "air",
+        "air",
+        "air",
+        "air",
+        "air",
+        "air",
+        "air",
+        "air",
+        "air",
+        "air",
+        "air",
+        "air",
+        "air",
+        "air",
+        "air",
+        "air",
+        "air",
+        "air",
+        "air",
+        "air",
+        "air",
+        "air",
+        "air",
+        "air",
+        "air",
+        "air",
+        "air"
+      ]
+    }
+  },
+  "scope": "Finite provenance, volume/bounds, source manifest, and gap classification checks; not a full CAD/volume equivalence or resolution-convergence proof.",
+  "coil_manifest_match": true,
+  "coil_sources": [
+    {
+      "index": 0,
+      "current_A": -1560.0,
+      "segment_count": 8,
+      "closed": true,
+      "closure_gap_m": 9.813077866773595e-18,
+      "path_bbox_m": [
+        [
+          -0.0385,
+          -0.050558134854838156,
+          0.020152543263816595
+        ],
+        [
+          0.0385,
+          -0.020152543263816606,
+          0.05055813485483815
+        ]
+      ],
+      "cross_section_width_range_m": [
+        0.013000000000000001,
+        0.013000000000000001
+      ],
+      "cross_section_height_range_m": [
+        0.04,
+        0.04
+      ]
+    },
+    {
+      "index": 1,
+      "current_A": 1560.0,
+      "segment_count": 8,
+      "closed": true,
+      "closure_gap_m": 7.757919228897728e-18,
+      "path_bbox_m": [
+        [
+          -0.0385,
+          -0.050558134854838156,
+          -0.050558134854838156
+        ],
+        [
+          0.0385,
+          -0.02015254326381661,
+          -0.020152543263816595
+        ]
+      ],
+      "cross_section_width_range_m": [
+        0.013000000000000001,
+        0.013000000000000001
+      ],
+      "cross_section_height_range_m": [
+        0.04,
+        0.04
+      ]
+    },
+    {
+      "index": 2,
+      "current_A": -1560.0,
+      "segment_count": 8,
+      "closed": true,
+      "closure_gap_m": 3.469446951953614e-18,
+      "path_bbox_m": [
+        [
+          -0.0385,
+          0.0201525432638166,
+          -0.05055813485483815
+        ],
+        [
+          0.0385,
+          0.05055813485483815,
+          -0.0201525432638166
+        ]
+      ],
+      "cross_section_width_range_m": [
+        0.013000000000000001,
+        0.013000000000000001
+      ],
+      "cross_section_height_range_m": [
+        0.04,
+        0.04
+      ]
+    },
+    {
+      "index": 3,
+      "current_A": 1560.0,
+      "segment_count": 8,
+      "closed": true,
+      "closure_gap_m": 1.4304896245381992e-17,
+      "path_bbox_m": [
+        [
+          -0.0385,
+          0.02015254326381662,
+          0.02015254326381659
+        ],
+        [
+          0.0385,
+          0.05055813485483816,
+          0.05055813485483816
+        ]
+      ],
+      "cross_section_width_range_m": [
+        0.013000000000000001,
+        0.013000000000000001
+      ],
+      "cross_section_height_range_m": [
+        0.04,
+        0.04
+      ]
+    },
+    {
+      "index": 4,
+      "current_A": -960.0,
+      "segment_count": 8,
+      "closed": true,
+      "closure_gap_m": 6.938893903907228e-18,
+      "path_bbox_m": [
+        [
+          -0.053,
+          -0.06788225099390857,
+          0.016970562748477133
+        ],
+        [
+          0.053,
+          -0.016970562748477136,
+          0.06788225099390857
+        ]
+      ],
+      "cross_section_width_range_m": [
+        0.016,
+        0.016
+      ],
+      "cross_section_height_range_m": [
+        0.02,
+        0.02
+      ]
+    },
+    {
+      "index": 5,
+      "current_A": 960.0,
+      "segment_count": 8,
+      "closed": true,
+      "closure_gap_m": 1.5515838457795457e-17,
+      "path_bbox_m": [
+        [
+          -0.053,
+          -0.06788225099390857,
+          -0.06788225099390857
+        ],
+        [
+          0.053,
+          -0.01697056274847715,
+          -0.016970562748477122
+        ]
+      ],
+      "cross_section_width_range_m": [
+        0.016,
+        0.016
+      ],
+      "cross_section_height_range_m": [
+        0.02,
+        0.02
+      ]
+    },
+    {
+      "index": 6,
+      "current_A": -960.0,
+      "segment_count": 8,
+      "closed": true,
+      "closure_gap_m": 9.813077866773595e-18,
+      "path_bbox_m": [
+        [
+          -0.053,
+          0.01697056274847713,
+          -0.06788225099390856
+        ],
+        [
+          0.053,
+          0.06788225099390856,
+          -0.016970562748477136
+        ]
+      ],
+      "cross_section_width_range_m": [
+        0.016,
+        0.016
+      ],
+      "cross_section_height_range_m": [
+        0.02,
+        0.02
+      ]
+    },
+    {
+      "index": 7,
+      "current_A": 960.0,
+      "segment_count": 8,
+      "closed": true,
+      "closure_gap_m": 9.813077866773595e-18,
+      "path_bbox_m": [
+        [
+          -0.053,
+          0.01697056274847716,
+          0.01697056274847711
+        ],
+        [
+          0.053,
+          0.06788225099390857,
+          0.06788225099390857
+        ]
+      ],
+      "cross_section_width_range_m": [
+        0.016,
+        0.016
+      ],
+      "cross_section_height_range_m": [
+        0.02,
+        0.02
+      ]
+    }
+  ],
+  "materialized_source": {
+    "authority": "ESRF Example 6 CoilBuilder solid-current paths",
+    "case": 6,
+    "source_is_meshed": false,
+    "coil_count": 8,
+    "radia_object_count": 64,
+    "coils": [
+      {
+        "index": 0,
+        "current_A": -1560.0,
+        "segment_count": 8,
+        "closed": true,
+        "closure_gap_m": 9.813077866773595e-18,
+        "radia_object_count": 8
+      },
+      {
+        "index": 1,
+        "current_A": 1560.0,
+        "segment_count": 8,
+        "closed": true,
+        "closure_gap_m": 7.757919228897728e-18,
+        "radia_object_count": 8
+      },
+      {
+        "index": 2,
+        "current_A": -1560.0,
+        "segment_count": 8,
+        "closed": true,
+        "closure_gap_m": 3.469446951953614e-18,
+        "radia_object_count": 8
+      },
+      {
+        "index": 3,
+        "current_A": 1560.0,
+        "segment_count": 8,
+        "closed": true,
+        "closure_gap_m": 1.4304896245381992e-17,
+        "radia_object_count": 8
+      },
+      {
+        "index": 4,
+        "current_A": -960.0,
+        "segment_count": 8,
+        "closed": true,
+        "closure_gap_m": 6.938893903907228e-18,
+        "radia_object_count": 8
+      },
+      {
+        "index": 5,
+        "current_A": 960.0,
+        "segment_count": 8,
+        "closed": true,
+        "closure_gap_m": 1.5515838457795457e-17,
+        "radia_object_count": 8
+      },
+      {
+        "index": 6,
+        "current_A": -960.0,
+        "segment_count": 8,
+        "closed": true,
+        "closure_gap_m": 9.813077866773595e-18,
+        "radia_object_count": 8
+      },
+      {
+        "index": 7,
+        "current_A": 960.0,
+        "segment_count": 8,
+        "closed": true,
+        "closure_gap_m": 9.813077866773595e-18,
+        "radia_object_count": 8
+      }
+    ]
+  },
+  "source_count_and_current_match": true,
+  "gap_points_m": [
+    [
+      -0.02,
+      -0.005,
+      -0.005
+    ],
+    [
+      -0.02,
+      -0.005,
+      0.0
+    ],
+    [
+      -0.02,
+      -0.005,
+      0.005
+    ],
+    [
+      -0.02,
+      0.0,
+      -0.005
+    ],
+    [
+      -0.02,
+      0.0,
+      0.0
+    ],
+    [
+      -0.02,
+      0.0,
+      0.005
+    ],
+    [
+      -0.02,
+      0.005,
+      -0.005
+    ],
+    [
+      -0.02,
+      0.005,
+      0.0
+    ],
+    [
+      -0.02,
+      0.005,
+      0.005
+    ],
+    [
+      0.0,
+      -0.005,
+      -0.005
+    ],
+    [
+      0.0,
+      -0.005,
+      0.0
+    ],
+    [
+      0.0,
+      -0.005,
+      0.005
+    ],
+    [
+      0.0,
+      0.0,
+      -0.005
+    ],
+    [
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.005
+    ],
+    [
+      0.0,
+      0.005,
+      -0.005
+    ],
+    [
+      0.0,
+      0.005,
+      0.0
+    ],
+    [
+      0.0,
+      0.005,
+      0.005
+    ],
+    [
+      0.02,
+      -0.005,
+      -0.005
+    ],
+    [
+      0.02,
+      -0.005,
+      0.0
+    ],
+    [
+      0.02,
+      -0.005,
+      0.005
+    ],
+    [
+      0.02,
+      0.0,
+      -0.005
+    ],
+    [
+      0.02,
+      0.0,
+      0.0
+    ],
+    [
+      0.02,
+      0.0,
+      0.005
+    ],
+    [
+      0.02,
+      0.005,
+      -0.005
+    ],
+    [
+      0.02,
+      0.005,
+      0.0
+    ],
+    [
+      0.02,
+      0.005,
+      0.005
+    ]
+  ],
+  "gap_distance_to_iron_cad_m": [
+    0.012928932188133182,
+    0.01670774794963832,
+    0.012928932188133182,
+    0.01670774794963832,
+    0.019999999999998658,
+    0.01670774794963832,
+    0.012928932188133182,
+    0.01670774794963832,
+    0.012928932188133182,
+    0.012928932188133182,
+    0.01670774794963832,
+    0.012928932188133182,
+    0.01670774794963832,
+    0.019999999999998658,
+    0.01670774794963832,
+    0.012928932188133182,
+    0.01670774794963832,
+    0.012928932188133182,
+    0.012928932188133182,
+    0.01670774794963832,
+    0.012928932188133182,
+    0.01670774794963832,
+    0.019999999999998658,
+    0.01670774794963832,
+    0.012928932188133182,
+    0.01670774794963832,
+    0.012928932188133182
+  ],
+  "cad_distance_control": {
+    "first_solid_centre_m": [
+      6.393830378790555e-16,
+      -0.01864761951788257,
+      0.028933352219376214
+    ],
+    "centre_distance_m": 0.007273111342698385,
+    "far_point_distance_m": 1.6430892894247473
+  },
+  "elapsed_s": 4.860578399995575,
+  "script_sha256": "b7399785e6a992a14484931779ec5f8e25ab467c6c5a329e949702606a391c94",
+  "source_builder_sha256": "f226f0dfa4990b666690b0ed0f2240c9e1822c33ac87d9cd9464edb4ca034c3c",
+  "three_engine_source_adapter_sha256": "97af991d78d25e043e88e6152fd1aadfafbed9df6adfb5ece4c626f4a1f34899"
+}
