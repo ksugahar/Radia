@@ -1,13 +1,10 @@
 # Codex - Radia Project Policy
 
-Keep active rules here; details belong in source, tests, package docs, skills,
-and `radia-mcp` knowledge. Historical investigations remain in Git history.
+Keep active rules here; details belong in source, tests, package docs, skills and `radia-mcp` knowledge. Historical investigations remain in Git history.
 
 ## Mission
-
-Radia is an AI-native electromagnetic CAE platform, not another standalone
-solver. AI designs; Radia provides the engineering platform. Respect NGSolve as
-the numerical foundation and extend it only for missing engineering capability.
+Radia is an AI-native electromagnetic CAE platform, not another standalone solver.
+AI designs; Radia provides the engineering platform. Extend NGSolve only for missing engineering capability.
 
 Until explicitly closed, work is limited to:
 
@@ -18,11 +15,8 @@ Until explicitly closed, work is limited to:
 Do not add unrelated features during this maintenance program.
 
 ## Repository Boundaries
-
-The monorepo contains independently released `radia`, `cubit-mesh-export`,
-`radia-mcp`, `radia-optuna`, and `eqnedit64`. Keep commits and CI scoped
-to the owning distribution. A shared file may trigger multiple lanes only when
-it changes a real shared ABI, build, or integration contract.
+The monorepo independently releases `radia`, `cubit-mesh-export`, `radia-mcp`, `radia-optuna` and `eqnedit64`.
+Scope commits and CI to the owner. Shared files trigger multiple lanes only for real shared ABI, build or integration changes.
 
 - `src/`, `matlab/`, `packages/`: production implementation.
 - `tests/`: fast deterministic bug and contract protection.
@@ -33,12 +27,10 @@ it changes a real shared ABI, build, or integration contract.
 - `C:\temp`: disposable prototypes and generated work.
 - `examples/`: retired; never add files.
 
-Do not commit logs, transient solver output, binary backups, lock copies,
-generated inventories, or root scratch. Do not keep two tests with the same
-purpose and failure signal.
+Do not commit logs, transient solver output, binary backups, lock copies, generated inventories or root scratch.
+Do not keep two tests with the same purpose and failure signal.
 
 ## Engineering Architecture
-
 Prefer established public abstractions over proprietary plumbing.
 
 - NGSolve owns spaces, orientation, Piola maps, curved geometry, quadrature,
@@ -54,7 +46,6 @@ Prefer established public abstractions over proprietary plumbing.
   feasible.
 
 ### Numerical Rules
-
 - Name eigenmode-bulk/surface coupling **Foster + SIBC**; use **CLN + SIBC**
   for an actual CLN/Krylov bulk basis. Do not call these scalar enriched-space
   models "mixed Galerkin". Legacy API/path identifiers remain compatible.
@@ -75,7 +66,6 @@ Prefer established public abstractions over proprietary plumbing.
   state. Never silently substitute a numerically different route.
 
 ## Interfaces
-
 Python/MCP is the first-class AI interface. Masked blocks in the single Radia
 Simulink library are the human production interface. Implement and study both
 MCP+LLM and Simulink+MCP workflows; their relative effectiveness is an active
@@ -86,7 +76,6 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 `cubit-mesh-export` toolbar. Normal Radia Python must not depend on Qt.
 
 ### Shared MCP Runtime Ownership
-
 - MCP is experimental development tooling, not a numerical solver release.
   Developers may edit live MCP source and change its editable source with
   `pip install -e`; no dedicated branch, frozen snapshot or separate deployment
@@ -176,11 +165,9 @@ solver boundary is a checked `.vol` regardless of the creation route.
 ### CI Execution, Validation Evidence, and Notebook Policy (2026-09-03)
 
 **POLICY**: **mdx1 and mdx2** are Radia's self-hosted CI and preflight pool.
-LAB is the development host. 100号機 is the student-facing release and usage
-host, not a routine development-test host. Do not run development test suites
-or heavy validation there; limit release acceptance to necessary installation,
-import, and student-facing application smoke checks. Both mdx hosts give CI
-and preflight priority.
+LAB is the development host; 100号機 is the student-facing release and usage host.
+Do not run development suites or heavy validation on 100号機; limit release acceptance
+to necessary installation, import and student-facing application smoke checks. Both mdx hosts give CI and preflight priority.
 GitHub Actions uses the shared `mdx` label and assigns jobs to an available runner.
 Release-quad requires LAB, 100号機, mdx1, and mdx2 for the same release commit.
 LAB/100号機 retain verified editable installs; mdx1/mdx2 consume release wheels.
@@ -222,16 +209,10 @@ geometry/mesh and primary-field scenes.
 Developer pre-push hooks run only the impact-scoped mdx preflight. Release
 workflows, never developer hooks, publish immutable artifacts.
 
-No workflow selects a LAB runner. The EqnEdit64 signed-standalone release job
-once did, to read the LAB-owned OneDrive release manifest, and that was never
-reachable: a runner service executes as NETWORK SERVICE, which sees no per-user
-mapped drive, and these machines are the workgroup HFEM rather than a domain,
-so the laboratory share refuses its machine account outright. Making LAB a
-runner would also hand it Radia's heavy build and test work. The signed
-executable now reaches CI as an asset of the eqnedit64-staging release, staged
-by sync_to_o.ps1 in the same transaction that updates O:, and the whole release
-lane runs GitHub-hosted. O: stays the human hand-test entry point, not a CI
-input.
+No workflow selects a LAB runner. EqnEdit64 signed executables reach GitHub-hosted CI
+through the eqnedit64-staging release, staged by sync_to_o.ps1 while updating O:.
+O: is the human hand-test entry point, not a CI input; service accounts cannot use
+LAB-owned mapped drives or the workgroup share. Do not restore that dependency.
 
 ### Compute Host Routing
 
@@ -256,27 +237,17 @@ hibino's real advantage is memory — 230 GB with no pagefile — rather than it
 
 ### Compute Scratch Cleanup
 
-**POLICY (2026-09-13)**: On mdx1, mdx2, and hibino, a computation is not
-complete until its results are recovered and its job-owned `C:\temp` workspace
-is removed. Compute hosts are not permanent result archives.
-
-- Recover result JSON, logs, exact commands, runtime/source identity, input
-  hashes, and any non-reconstructible inputs to the owning LAB repository or
-  durable artifact location. Numerical evidence belongs in `validation_test/`;
-  public demonstrations belong in executed, result-bearing `docs/**/*.ipynb`.
-  Keep raw operational inventories and transient logs outside tracked source.
-- Verify destination hashes before deleting remote copies. Commit the intended
-  tracked evidence before removing its only remote copy. Failed runs also need
-  their diagnostic evidence recovered; failure is not permission to lose it.
-- Remove completed job inputs, outputs, staging copies, disposable environments,
-  and helper scripts. Verify deletion and report the recovered location and
-  cleanup result. Result recovery alone is not task completion.
-- Never blanket-delete `C:\temp` while other jobs or CI own files there. Check
-  active and queued work, resolve each approved absolute target, reject
-  out-of-scope links/junctions, and use literal-path file operations.
-- Any temporary retention needs an explicit owner, reason, and cleanup trigger
-  (for example, an unfinished validation consuming a candidate environment).
-  Do not silently retain completed work or repoint jobs to stale inputs.
+**POLICY (2026-09-13)**: mdx1/mdx2/hibino jobs finish only after verified recovery
+and cleanup of their job-owned `C:\temp` inputs, outputs, staging, environments and helpers.
+- Recover JSON, logs, commands, runtime/source identity, hashes and non-reconstructible inputs
+  to LAB durable storage. Numerical evidence goes in `validation_test/`, public demonstrations
+  in executed `docs/**/*.ipynb`; raw operational logs/inventories stay outside tracked source.
+- Verify destination hashes and commit intended evidence before deleting its remote copy,
+  including failed-run diagnostics. Verify deletion and report locations and cleanup outcome.
+- Never blanket-delete `C:\temp`: preserve active/queued jobs and CI; resolve approved absolute
+  targets, reject escaping links/junctions and use literal-path operations.
+- Retention requires an explicit owner, reason and cleanup trigger for unfinished work.
+  Never silently retain completed work or reuse stale inputs. Compute hosts are not archives.
 
 ## Build And Release
 
