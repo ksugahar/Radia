@@ -53,16 +53,28 @@ copy the generated bbl as `references.bbl` and create `references.tex`:
 Run `make4ht -u references.tex`. Preserve the generated HTML body in the notebook's
 single reference Markdown cell, tagged with `metadata.radia_bibliography` holding
 the sibling `bbl` filename, its `bbl_sha256_lf` (SHA-256 after CRLF-to-LF
-normalization for portable Git checkouts), and the `renderer` version. Retain
+normalization for portable Git checkouts), `selected_source_sha256` returned by
+generation, the selected `style`, the `renderer` version, and `display_sha256_lf`
+(SHA-256 of the full generated cell source joined as UTF-8 with LF newlines). Retain
 the bbl link and all generated entry anchors. Keep scratch TeX/HTML/CSS out of
 docs; existing calculation cells and outputs are not rerun by this operation.
 If BibTeX or TeX4ht is unavailable or rendering fails, report the missing stage;
 do not hand-author replacement reference text. This adds no Python dependency.
 
 After a parent entry, citation key or style changes, regenerate both bbl and
-display. The fast docs contract checks declared keys, generated item membership and
-display/bbl hash association; it does not prove scholarly citation completeness
-or independently re-run TeX4ht. Preserve an explicit unresolved list for legacy
+display. The fast docs contract reuses the existing bibliography parser and
+bibitem extractor, including optional labels. Its selected-source fingerprint
+covers cited entries and literal crossref/xref/xdata/related dependencies; global
+string/preamble directives are conservatively included. Unrelated ordinary
+entries do not invalidate it. Missing, cyclic or macro-derived dependency keys
+fail closed instead of claiming complete dependency resolution. Raw field
+expressions distinguish string macros from literal text.
+
+The check also verifies generated item membership, style, bbl and display hashes.
+This detects stale artifacts or unsynchronized display edits, but it is not a
+cryptographic attestation that an editor has not rewritten both text and hashes,
+does not prove scholarly citation completeness and does not independently re-run
+TeX4ht. Preserve an explicit unresolved list for legacy
 notebooks rather than calling absent declarations compliant.
 
 ## Writer exclusion

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import hashlib
-import re
 from pathlib import Path
 
 
@@ -13,8 +12,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_declared_notebook_bibliographies_keep_generated_bbl_and_display():
     """Migrated notebooks fail on stale/missing artifacts; unclaimed ones stay unclaimed."""
+    from radia_mcp.bibliography.plans.T14_canonical import _citation_source_sha256, _generated_keys
     canonical = ROOT / "packages/radia-mcp/src/radia_mcp/bibliography/data/references.bib"
-    available = set(re.findall(r"^@\w+\{([^,]+),", canonical.read_text(encoding="utf-8"), re.M))
     for path in (ROOT / "docs").rglob("*.ipynb"):
         notebook = json.loads(path.read_text(encoding="utf-8"))
         declaration = notebook.get("metadata", {}).get("radia", {}).get("bibliography")
@@ -22,18 +21,20 @@ def test_declared_notebook_bibliographies_keep_generated_bbl_and_display():
             continue
         keys = declaration["keys"]
         assert keys and len(keys) == len(set(keys)), path
-        assert set(keys) <= available, path
         bbl = path.with_suffix(".bbl")
         raw = bbl.read_bytes()
-        generated = re.findall(r"\\bibitem\{([^}]+)\}", raw.decode("utf-8"))
+        generated = _generated_keys(raw)
         assert len(generated) == len(keys) and set(generated) == set(keys), path
         cells = [cell for cell in notebook["cells"] if "radia_bibliography" in cell.get("metadata", {})]
         assert len(cells) == 1, path
         display = cells[0]
         provenance = display["metadata"]["radia_bibliography"]
+        assert provenance["style"] == declaration.get("style", "IEEEtran"), path
+        assert provenance["selected_source_sha256"] == _citation_source_sha256(keys, canonical.read_bytes()), path
         assert provenance["bbl"] == bbl.name, path
         assert provenance["bbl_sha256_lf"] == hashlib.sha256(raw.replace(b"\r\n", b"\n")).hexdigest(), path
         rendered = "".join(display["source"])
+        assert provenance["display_sha256_lf"] == hashlib.sha256(rendered.replace("\r\n", "\n").encode("utf-8")).hexdigest(), path
         assert "doc-bibliography" in rendered, path
         assert all(f"id='X{key}'" in rendered for key in keys), path
 

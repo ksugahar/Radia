@@ -9,10 +9,37 @@ from types import SimpleNamespace
 import pytest
 from radia_mcp.bibliography.plans.T14_canonical import (
     _keys_in_order,
+    _citation_source_sha256,
     bibliography_canonical_path,
     bibliography_get_entries,
     bibliography_make_bbl,
 )
+
+
+def test_selected_bibliography_fingerprint_tracks_dependencies_not_unrelated_entries():
+    source = b'@book{parent,title={Collected},year={2000}}\n@inbook{child,title={Chapter},crossref={parent}}\n@book{other,title={Unrelated}}'
+    fingerprint = _citation_source_sha256(["child"], source)
+    assert fingerprint == _citation_source_sha256(["child"], source.replace(b"Unrelated", b"Other book"))
+    assert fingerprint != _citation_source_sha256(["child"], source.replace(b"Chapter", b"Corrected chapter"))
+    assert fingerprint != _citation_source_sha256(["child"], source.replace(b"2000", b"2001"))
+    assert fingerprint == _citation_source_sha256(["child"], source.replace(b"\n", b"\r\n"))
+
+
+def test_selected_bibliography_fingerprint_preserves_macro_expressions_and_directives():
+    source = b'@string{journal="First"}\n@article{a,title={A},journal=journal}'
+    original = _citation_source_sha256(["a"], source)
+    assert original != _citation_source_sha256(["a"], source.replace(b'"First"', b'"Second"'))
+    assert original != _citation_source_sha256(["a"], source.replace(b'journal=journal', b'journal={journal}'))
+
+
+@pytest.mark.parametrize("source", [
+    b'@inbook{a,crossref={missing}}',
+    b'@inbook{a,crossref={a}}',
+    b'@inbook{a,crossref=macro}',
+])
+def test_selected_bibliography_fingerprint_fails_on_unresolved_dependencies(source):
+    with pytest.raises(ValueError):
+        _citation_source_sha256(["a"], source)
 
 
 def test_canonical_path_describes_single_source_and_bbl_delivery():
