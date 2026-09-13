@@ -120,3 +120,27 @@ The existing coarse-registry test file now compares valid calls against SDK
 `Tool.run`, covers invalid inputs without executing the body, and distinguishes
 body failures from input failures. No new public tool, standalone validation
 framework, live installation change or solver acceptance claim is introduced.
+
+## Fable follow-up: reload registration controls
+
+The user-relayed review verified grouped calls on SDK 1.20.0 and 1.30.
+Its suggested argument-model cache already exists: `_Entry.argument_metadata`
+is a `cached_property` on the frozen entry. No additional cache was introduced.
+
+Reload tool registration now reuses `_distribution_provenance()` and requires
+`editable is True`; absent/unknown/unreadable registration information does not
+expose the tool. `RADIA_MCP_HOT_RELOAD=0` takes precedence and skips both the
+tool and reload-specific list-change capability setup. An explicit `1` never
+overrides a noneditable installation. Settings take effect at registration;
+this patch neither reconnects clients nor changes their installations.
+
+Tests cover unavailable provenance, opt-out precedence and capability stability,
+plus actual grant-writing stdio registration/notifications with simulated
+editable and noneditable metadata. These simulated-provenance transport tests
+are not an installed-wheel audit. Existing reload rollback tests remain intact.
+
+The callable-discovery prefix policy remains open. Wheel CI already verifies
+contents, installs the wheel, changes outside the checkout and probes the meta
+server over stdio with an expected site-packages root. Extending that isolated
+wheel lane to all servers remains a separate acceptance task; do not duplicate
+the existing content/provenance verifier or claim it is already all-server.
