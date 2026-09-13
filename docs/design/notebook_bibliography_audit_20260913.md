@@ -64,6 +64,54 @@ bibliography declaration is **unclaimed**, not an all-clear citation audit.
 The Kelvin notebook's laboratory webpage link remains an ordinary source link,
 not a generated scholarly reference list.
 
+## Follow-up source reconciliation (2026-09-14)
+
+The remaining five rows were investigated, not silently filled with plausible
+author/year matches. Their blockers are now more specific:
+
+- **Analytical formulas:** the repository cross-reference and module docstrings
+  supply report identifiers such as SA-02-28/RM-02-64 and SA-04-44/RM-04-68,
+  but the nine source PDFs are described as lab-internal and are not included.
+  The aggregate author list is not proof of each part's author list. Obtain the
+  actual report front pages before creating nine parent records. The book/report
+  and Ortner references also need their exact cited editions/publications.
+- **Cohomology:** [Kotiuga's own publication list](https://people.bu.edu/prk/Publications.htm)
+  identifies the 1987 cuts paper (J. Appl. Phys. 61(8), 3916--3918), and the
+  [SIAM record](https://epubs.siam.org/doi/10.1137/130906556) identifies Pellikka
+  et al. (2013). The bare Bossavit attribution still does not identify a work.
+  `src/radia/esim_multiport.py` mentions 1998, and the
+  [1998 Academic Press book](https://www.sciencedirect.com/book/monograph/9780121187101/computational-electromagnetism)
+  is a candidate, not proof that it was the intended source. No candidate was
+  substituted into the saved notebook as a verified original citation.
+- **Mesh fusion:** [arXiv 2005.12020](https://arxiv.org/abs/2005.12020) lists
+  Egger, Harutyunyan, Merkel and Schöps, unlike the saved code-cell attribution
+  containing Loescher and Steinbach. [arXiv 2112.05572](https://arxiv.org/abs/2112.05572)
+  has five authors, including Löscher and Merkel, and corresponds to a 2022
+  journal publication (the preprint is 2021). The
+  [composite-grid candidate](https://doi.org/10.1051/m2an:2003039) has **Anita
+  Hansbo, Peter Hansbo and Mats G. Larson**, not just the abbreviated pair in
+  the notebook. Its identity does not establish the notebook's specific
+  corner-stabilization claim. That claim needs a matching passage/theorem;
+  do not certify it merely by adding a bibliography entry.
+- **Legacy mixed_galerkin:** Senior's *A note on impedance boundary conditions*
+  (Canadian J. Phys. 40, 663--665, 1962) is a distinct candidate, not the
+  1960 article currently stored under `Senior1962`. The saved notebook gives
+  neither title nor DOI, so the intended work must be confirmed. Yuferev/Ida's
+  book also needs the cited edition/date convention resolved: the parent uses
+  the 2009 publication date while the book's copyright page says 2010. Keep
+  legacy calculation cells unchanged until the bibliographic intent is clear.
+- **PEEC:** `validation_test/peec_integration/ngsbem_peec_demo/compute_L_final.py`
+  repeats the FastHenry 21.6 nH comparison as a printed constant. The sibling
+  `verify_loop_peec_vs_ngsbem.py` gives a Grover-labelled formula but no edition,
+  page or equation locator. FastHenry-like Radia examples are not independent
+  upstream FastHenry run evidence. Locate the actual run/model and Grover
+  passage before claiming those numerical references are sourced. Adding the
+  general FastHenry or PRIMA papers would not validate the saved numbers or
+  figure provenance.
+
+These findings do not change solver code or invalidate/recompute saved output;
+they limit what this bibliography migration can responsibly claim.
+
 ## Reproduction and acceptance
 
 Use the [notebook finalization procedure](../../packages/radia-mcp/docs/operations/bibliography-finalization.md#notebook-references)
