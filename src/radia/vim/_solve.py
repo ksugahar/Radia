@@ -499,6 +499,13 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
     H_ext      : NGSolve CoefficientFunction, the applied field (A/m) -- uniform, analytic, or a coil's
                  Biot-Savart field rad.RadiaField(coil,'h').  Required unless ``B_r``, a magnetization
                   source, or the planar magnets path supplies the drive.
+    nl_tol     : for 3D energy-Newton, the norm of the assembled nonlinear
+                 residual divided by the fixed stage source-load norm (the
+                 initial residual norm for a zero source). It no longer means
+                 relative step size. Tiny or settled steps do not certify
+                 convergence; existing tolerances must be reassessed using
+                 nonlinear_final_relative_residual. Picard stopping contracts
+                 are documented separately and are not changed by this rule.
     cyclic_periodic_boundaries : the two named azimuthal cut faces of a
                  connected pure-HEX sector.  The mesh must carry NGSolve
                  PERIODIC point identifications and ``image_cyclic=N`` must
