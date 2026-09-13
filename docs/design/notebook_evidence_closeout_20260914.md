@@ -117,3 +117,38 @@ Its bibliography has 466 entries; `ieej2007integrals9`, `senior1962note` and
 deployment**. A server-module unchanged hash does not attest to bibliography
 currency. No install, source repoint, reload or process termination was performed
 by this initial read-only check.
+
+## Primary NASA archive verification (2026-09-14 follow-up)
+
+The [NASA PCoE repository](https://www.nasa.gov/intelligent-systems-division/discovery-and-systems-health/pcoe/pcoe-data-set-repository/)
+links the [battery archive](https://phm-datasets.s3.amazonaws.com/NASA/5.+Battery+Data+Set.zip).
+The original-source availability question is now closed; a user copy is not
+needed. The downloaded archive was inspected in memory without extracting into
+the repository. Reproducible identities (SHA-256):
+
+- Outer archive: `82302a7db4fc1b34e0b6676326610438d43b816bdf11a69d1d012a464ef2f92e`.
+- Nested `1. BatteryAgingARC-FY08Q4.zip`: `f3a4fcd7c3434e06906f4222778445ce6ad42f49c5c78a785bdd676b7c223a2e`.
+- `B0005.mat`: `0eae4585baf3f200c09fe24c5ab884f1889679fc75206ca1aa19da704104f0b0`.
+
+The first impedance operation is zero-based cycle 40. Its 48 complex
+`Battery_impedance` samples are finite. The tracked CSV's 47 complex samples
+match `Battery_impedance[1:]` **exactly** (maximum absolute difference zero).
+The excluded first sample has negative real impedance. This establishes the
+saved impedance lineage, not the validity of that filtering choice.
+
+The MAT fields are `Sense_current`, `Battery_current`, `Current_ratio`,
+`Battery_impedance`, `Rectified_Impedance`, `Re`, and `Rct`; no frequency field
+is present. The archive README provides sweep endpoints but not sample ordering
+or spacing. The saved frequency column matches the generated 47-point
+`logspace(-1, log10(5000), 47)` exactly. It is therefore a model-assigned axis,
+not a verified instrument axis. Frequency-dependent fitting accuracy remains
+unqualified until instrument records identify that axis; no retraining can
+repair missing independent frequency evidence.
+
+`extract_real_eis.py` now refuses measured export without an explicit,
+sample-aligned positive finite frequency vector and source locator. It preserves
+the caller's sample order and does not fabricate or silently sort frequencies.
+The ZIP member is read in memory, removing a separate overwrite/delete hazard
+for pre-existing MAT files. Fast tests cover missing/invalid axes, sample order,
+real MAT parsing, unknown cycle selectors, and preservation of caller files.
+Historical CSV values and notebook outputs remain unchanged.
