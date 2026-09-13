@@ -1,0 +1,119 @@
+# Notebook evidence closeout
+
+Base: `b79c281cd`, 2026-09-14. This investigation separates reproducible
+mathematics, repository-generated figures, unsupported historical comparisons
+and live-client deployment. It does not rename uncertainty as acceptance.
+
+## Cylinder coefficients: constructive derivation
+
+Let `R(z) = I1(z)/I0(z)`. The modified-Bessel equation
+([NIST DLMF 10.25.1](https://dlmf.nist.gov/10.25.E1)) and derivative identity
+([10.29.3](https://dlmf.nist.gov/10.29.E3)) give
+
+```math
+R'(z) = 1 - R(z)/z - R(z)^2.
+```
+
+Substitute `R(z) ~ sum(n>=0) b_n z^(-n)`, `b_0=1`. Coefficient matching gives
+
+```math
+2b_n=(n-2)b_{n-1}-\sum_{i=1}^{n-1}b_i b_{n-i}.
+```
+
+Thus `b_1..b_6 = (-1/2, -1/8, -1/8, -25/128, -13/32, -1073/1024)`, exactly the
+tuple in `src/radia/maglev/mixed_galerkin/references.py`. The existing fast test
+module now derives it with rational arithmetic and separately compares the
+production continuation against scaled Bessel functions across the crossover
+and deep-skin points on the positive-real and positive/negative frequency rays.
+This closes the coefficient origin without claiming an unlocated Senior passage.
+It does not prove that a finite enriched Galerkin basis automatically recovers
+all these coefficients, or revalidate the saved wall-band accuracy table.
+
+For the implemented spherical reference, the normalized surface factor is
+`coth(z)-1/z`. In the right half-plane it is `1-1/z` plus exponentially small
+terms. The algebraic inverse-power expansion terminates; this does **not** mean
+that every further finite-frequency basis function adds no value. That stronger
+claim in the historical script has no such proof.
+
+## PEEC figure lineage
+
+The executable source is the `fig1_peec_matrix_verification` through
+`fig4_wpt_coil_characteristics` definitions in the saved code cell of
+`docs/peec_integration/peec_showcase.ipynb`. No external measurement file is
+read by these four functions.
+
+| Figure | Actual source | Acceptance limit |
+| --- | --- | --- |
+| 1, matrix properties | `PEECBuilder.create_loop`, matrix eigenvalues, symmetry norms | Internal numerical diagnostic, not external measurement. |
+| 2, reduction | `LanczosReducer.lanczos_symmetric` and projected R/L matrices | Not demonstrated to be the complete PRIMA algorithm; catches singular solves by substituting a diagonal entry. Plot labels do not establish algorithm equivalence. |
+| 3, adaptive error/speedup | Assumed `(a/r)^3` curve, assumed near-field fraction and cost ratio 10 | Conceptual model, **not measured error or benchmark**. |
+| 4, WPT | PEEC loop matrices, `sum(R + j*omega*L)` | Simulated model only; the marked 85 kHz sweep point uses the nearest grid sample, not necessarily exactly 85 kHz. |
+
+The original code and outputs remain intact; prominent figure-section text
+qualifies their use. No source publication or measurement record is inferred
+from a filename. Replacing these figures with benchmark/measurement evidence
+requires actual run/data artifacts, not a new bibliography citation.
+
+The `analytical_square_loop` function in
+`validation_test/peec_integration/ngsbem_peec_demo/verify_loop_peec_vs_ngsbem.py`
+was evaluated in isolation (only that AST function, no solver imports): its
+10 mm side / 1 mm width inputs give **29.760609107860034 nH**, not the 24 nH
+printed reference. This proves a mismatch between the historical constant and
+the displayed formula, not the physical validity of either. Original FastHenry
+run/model evidence and a Grover equation locator remain required.
+
+## Remaining-43 screening: source questions are now explicit
+
+The Markdown source of all 43 undeclared notebooks was rescreened for named
+methods, references, papers, data providers and benchmark attributions. This
+is source-oriented screening, not a claim of full scientific peer review.
+Do not add dummy bibliographies to API examples or internal regression galleries.
+The following substantive source families need reconciliation before the set
+can be called citation-complete:
+
+- Clebsch/hodograph and particle-orbit notebooks: SCOFF/Enge and classical
+  fringe/edge-focusing claims; existing internal derivations are not publication
+  identities. The cut-selection notebook also names a Takahashi workpiece.
+- Hysteresis and NGSolve integration: Egger, measured B-H and Simkin benchmark
+  source identities and original measurement lineage.
+- Maglev: TEAM 28 benchmark specification. Induction heating: the named IGTE
+  digest versus internal results. Neither a benchmark name nor a conference year
+  identifies a source by itself.
+- Dowell and stream-function companions: the linked theory Markdown owns
+  literature today; reconcile the actual Dowell/Kuijpers claims with those
+  sources rather than inventing notebook-local bibliographies.
+- URN: the additional concrete data-provenance findings below take priority
+  over adding generic NASA/TDK citations.
+
+### URN data source correction
+
+`extract_nasa_eis.py:create_representative_eis_csv` generates model data but
+formerly labelled it `REAL MEASUREMENT DATA` and overwrote `nasa_18650_eis.csv`.
+It now writes `synthetic_18650_eis.csv`, explicitly labelled synthetic; its
+documentation writes `SYNTHETIC_DATA.md`, never the measured-data README.
+The fresh/aged synthetic generators in `download_nasa_data.py` likewise have
+synthetic names and labels. Fast isolated function tests protect measured-file
+sentinels and verify the actual generated headers and row counts.
+
+The existing tracked `nasa_18650_eis.csv` claims B0005 cycle 40 extraction and
+contains 47 valid points, so the mere existence of a synthetic generator is
+**not proof that this saved curve is synthetic**. However,
+`extract_real_eis.py` assumes a log-spaced 0.1 Hz--5 kHz frequency vector instead
+of reading instrument frequency metadata. Original MAT identity, exact sample
+ordering, frequency mapping and CSV hashes must be reconciled before claiming
+independent measured-spectrum validation. The TDK generator converts permeability
+to impedance with an explicitly assumed ten-turn geometry: the resulting Z is
+derived, not directly measured impedance. The notebook now states these limits.
+No existing CSV numeric value, fit output or figure was rewritten or retrained.
+
+## Live publication server
+
+The current task's actual `radia-publication` connection was queried through
+`capability_pack_status`, `bibliography_status`, `bibliography_canonical_path`
+and `bibliography_get_entries`. It reports editable radia-mcp 1.4.53 from
+`release-quad/radia-4.95.91-runtime`, Python 3.12.10 and MCP SDK 1.27.0.
+Its bibliography has 466 entries; `ieej2007integrals9`, `senior1962note` and
+`grover2004inductance` are absent. Therefore main integration is **not live
+deployment**. A server-module unchanged hash does not attest to bibliography
+currency. No install, source repoint, reload or process termination was performed
+by this initial read-only check.
