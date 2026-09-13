@@ -38,6 +38,7 @@ from .cq_urn import cq_response_reality_gate as _cq_response_reality_gate
 _cq_scattering_arrival_gate = lazy_callable(".cq_scattering_arrival_gate", "cq_scattering_arrival_gate", __package__)
 _physics_result_preflight_gate = lazy_callable(".physics_result_preflight_gate", "physics_result_preflight_gate", __package__)
 _dual_formulation_symmetric_field_profile_gate = lazy_callable(".field_profile_gate", "dual_formulation_symmetric_field_profile_gate", __package__)
+_nonlinear_magnetic_spatial_evidence_gate = lazy_callable(".field_profile_gate", "nonlinear_magnetic_spatial_evidence_gate", __package__)
 _symmetric_complex_field_curve_gate = lazy_callable(".field_profile_gate", "symmetric_complex_field_curve_gate", __package__)
 _symmetric_axial_field_profile_gate = lazy_callable(".field_profile_gate", "symmetric_axial_field_profile_gate", __package__)
 _helmholtz_double_layer_low_frequency_gate = lazy_callable(".acoustic_kernel_gate", "helmholtz_double_layer_low_frequency_gate", __package__)
@@ -2330,6 +2331,31 @@ def cq_response_reality_gate(
     return json.dumps(_cq_response_reality_gate(
         json.loads(summary_json), residual_tolerance=residual_tolerance,
         imaginary_tolerance=imaginary_tolerance), indent=2, sort_keys=True)
+
+
+@_validation.tool()
+def nonlinear_magnetic_spatial_evidence_gate(
+    summary_json: str,
+    max_average_vector_relative_difference: float = 0.07,
+    max_rms_magnitude_relative_difference: float = 0.10,
+    min_tensor_gauss_samples: int = 27,
+) -> str:
+    """Gate nonlinear magnetic volume evidence and material/response order compatibility."""
+
+    try:
+        result = _nonlinear_magnetic_spatial_evidence_gate(
+            json.loads(summary_json),
+            max_average_vector_relative_difference=max_average_vector_relative_difference,
+            max_rms_magnitude_relative_difference=max_rms_magnitude_relative_difference,
+            min_tensor_gauss_samples=min_tensor_gauss_samples,
+        )
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        result = {
+            "policy": "nonlinear_magnetic_spatial_evidence_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
 
 
 @_validation.tool()
