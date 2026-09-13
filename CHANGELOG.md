@@ -5,6 +5,15 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- HDiv 3D energy-Newton now evaluates material energy, residual and tangent on
+  shared quadrature samples and rejects exhausted Armijo searches. `nl_tol`
+  now bounds the assembled nonlinear residual relative to the fixed stage
+  source-load norm (initial residual for zero source), rather than a relative
+  step or settled-step criterion. Existing numerical tolerance values are not
+  equivalent to the former ones; campaigns must record and check
+  `nonlinear_final_relative_residual`. This change does not redefine the
+  stopping criteria of the separate Picard and FEM solvers.
+
 - Fixed MATLAB LTspice binary RAW precision/layout validation and transient
   state injection. Unsupported layouts, malformed payload sizes, missing or
   ambiguous `.end` directives, and unsupported hierarchical inductor states

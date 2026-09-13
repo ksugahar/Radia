@@ -25,6 +25,19 @@ python tools/release_quad.py restore-editable
 
 ## Machine Policy
 
+100号機 is the student-facing release/usage host, not a routine development
+test machine. Keep release installation, import, and application smoke checks
+there minimal; run development regression suites on LAB or the mdx CI pool
+and solver-heavy validation on hibino. This role does not change the approved
+editable installation tier. Do not expand a release check into general testing
+on 100号機.
+
+For mdx1/mdx2/hibino computations, completion includes durable result recovery,
+hash verification, and removal of the completed job's C:\temp workspace,
+including disposable staging/environments. Preserve other active/queued jobs
+and CI-owned files; explicitly record owner, reason, and trigger for any
+unfinished-job retention. Follow AGENTS.md's Compute Scratch Cleanup policy.
+
 | Machine | Install tier | Release command path |
 |---|---|---|
 | LAB | NAS editable | `phase8 --target lab` |

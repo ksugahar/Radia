@@ -28,6 +28,48 @@ def gate():
     return ns
 
 
+@pytest.mark.parametrize('backtracks', [33, 34, 68])
+def test_legacy_exhausted_newton_result_cannot_resume(gate, backtracks):
+    diagnostic = {'nonlinear': True, 'nonlinear_stats': {
+        'converged': True, 'nonlinear_newton_iters': 1,
+        'nonlinear_line_search_backtracks': backtracks,
+        'nonlinear_final_rel_step': 9.8e-13}}
+    assert not gate['_is_converged_result'](diagnostic)
+
+
+@pytest.mark.parametrize('mode', ['settled', 'line-search-exhausted', 'iteration-limit', 'running'])
+def test_nonresidual_modes_are_not_convergence(gate, mode):
+    assert not gate['_is_converged_result']({'nonlinear_stats': {
+        'converged': True, 'nonlinear_convergence_mode': mode}})
+
+
+def test_new_tolerance_contract_does_not_use_aggregate_backtrack_heuristic(gate):
+    stats = {'converged': True, 'nonlinear_convergence_mode': 'tolerance',
+             'nonlinear_line_search_backtracks': 40, 'nonlinear_line_search_exhausted': False,
+             'nonlinear_final_relative_residual': 1e-6, 'nonlinear_residual_tolerance': 2e-5}
+    assert gate['_is_converged_result']({'nonlinear_stats': stats})
+    stats['nonlinear_line_search_exhausted'] = True
+    assert not gate['_is_converged_result']({'nonlinear_stats': stats})
+
+
+@pytest.mark.parametrize('residual', [None, float('nan'), float('inf'), -1., 3e-5, True])
+def test_mode_alone_does_not_certify_a_residual(gate, residual):
+    assert not gate['_is_converged_result']({'nonlinear_stats': {
+        'converged': True, 'nonlinear_convergence_mode': 'tolerance',
+        'nonlinear_final_relative_residual': residual, 'nonlinear_residual_tolerance': 2e-5}})
+
+
+@pytest.mark.parametrize('path', [
+    'validation_test/esrf_three_engine/results/case6_nonlinear_three_engine_mdx1.json',
+    'validation_test/quadrupole_cefc2020/results/three_engine_J3.0_hibino.json',
+])
+def test_published_false_convergence_evidence_is_rejected(gate, path):
+    payload = json.loads((RUNNER.parents[2] / path).read_text(encoding='utf-8'))
+    diagnostic = payload['engines']['hdiv_mmm']
+    assert diagnostic['nonlinear_stats']['nonlinear_line_search_backtracks'] == 34
+    assert not gate['_is_converged_result'](diagnostic)
+
+
 @pytest.mark.parametrize("order", list(itertools.permutations(NAMES)))
 @pytest.mark.parametrize("bad_engine", NAMES)
 @pytest.mark.parametrize("bad", [np.nan, np.inf, -np.inf])

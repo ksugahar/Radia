@@ -198,7 +198,7 @@ def main(argv=None) -> int:
     if not np.isfinite(field).all():
         failures.append("non-finite field")
     if case["nonlinear"] and not diagnostics["nonlinear_stats"].get("converged", False):
-        failures.append("nonlinear Picard loop did not converge")
+        failures.append("nonlinear solve did not satisfy the true residual convergence contract")
     if even_part > options.symmetry_tolerance:
         failures.append(f"B_perp is not odd along the diagonal (even part {even_part:.2e})")
     report = {

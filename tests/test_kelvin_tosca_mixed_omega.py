@@ -148,7 +148,8 @@ def test_global_physical_source_potential_rejects_current_linked_field():
         )
 
 
-def test_total_hodge_projection_retains_a_linked_harmonic_source():
+@pytest.mark.parametrize("bonus", [0, 6])
+def test_total_hodge_projection_retains_a_linked_harmonic_source(bonus):
     """A linked curl-free field is split, not rejected or scalarized away."""
     from netgen.occ import Box, Glue, OCCGeometry, Pnt
     import ngsolve as ng
@@ -168,8 +169,19 @@ def test_total_hodge_projection_retains_a_linked_harmonic_source():
 
     with ng.TaskManager():
         source = project_source_total_hodge(
-            mesh, linked_h, ("total",), order=2)
+            mesh, linked_h, ("total",), order=2, bonus_intorder=bonus)
+        test = source["fes"].TestFunction()
+        measure = ng.dx(definedon=mesh.Materials("total"), bonus_intorder=bonus)
+        orthogonality = ng.LinearForm(source["fes"])
+        orthogonality += (ng.InnerProduct(source["harmonic_field"], ng.grad(test))
+                          + 1e-12 * source["potential"] * test) * measure
+        orthogonality.Assemble()
+        load = ng.LinearForm(source["fes"])
+        load += ng.InnerProduct(linked_h, ng.grad(test)) * measure
+        load.Assemble()
+        assert ng.Norm(orthogonality.vec) / ng.Norm(load.vec) < 1e-10
 
+    assert source["bonus_intorder"] == bonus
     assert source["relative_harmonic_norm"] > 0.5
     reconstructed = -ng.grad(source["potential"]) + source["harmonic_field"]
     error = ng.sqrt(ng.Integrate(

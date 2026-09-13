@@ -1,0 +1,58 @@
+{
+  "controls": {
+    "partial": {
+      "kind": "coplanar_positive_area",
+      "overlap_area_m2": 0.245
+    },
+    "different_subdivision": {
+      "kind": "coplanar_positive_area",
+      "overlap_area_m2": 0.125
+    },
+    "adjacent": null,
+    "transverse": {
+      "kind": "transverse_interior_intersection",
+      "points_m": [
+        [
+          0.2,
+          0.2,
+          0.0
+        ]
+      ]
+    },
+    "separated": null
+  },
+  "ngsolve_version": "6.2.2606",
+  "shapely_version": "2.1.2",
+  "script_sha256": "1994e036343742a27a76a8855bc88a9ee640ce3f0d3507a1ef825d74c9419774",
+  "audit": {
+    "path": "C:\\temp\\radia-ex6-diag\\assets_conforming\\model.vol",
+    "sha256": "fdd1387281e550e27eab435cfac3ec54e0b9d1339438699fdc50c852dfcafc74",
+    "volume_elements": 2408,
+    "boundary_elements": 2200,
+    "curve_order": 2,
+    "subdivisions": 2,
+    "mapped_triangles": 17600,
+    "topology": {
+      "volume_face_owner_histogram": {
+        "2": 6124,
+        "1": 2200
+      },
+      "boundary_face_owner_histogram": {
+        "1": 2200
+      },
+      "repeated_boundary_face_ids": [],
+      "unregistered_one_owner_faces": [],
+      "nonmanifold_volume_faces": []
+    },
+    "length_tolerance_m": 1e-10,
+    "area_tolerance_m2": 1e-16,
+    "nonplanar_boundary_elements": 0,
+    "maximum_sampled_parent_planarity_m": 1.197768170778618e-15,
+    "aabb_candidate_pairs": 83458,
+    "tested_triangle_pairs": 83458,
+    "detected_parent_pairs": 0,
+    "contacts": [],
+    "elapsed_s": 56.37153250002302,
+    "scope": "All registered boundary faces, including once-registered two-owner interfaces. Coordinates use NGSolve curved mapping. Triangle intersections are on a finite tessellation, not a certified curved-patch intersection proof. Positive-area coplanar overlaps and strict transverse piercings are reported; tangencies and very small features can remain unresolved."
+  }
+}

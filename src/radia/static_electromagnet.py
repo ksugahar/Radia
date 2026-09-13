@@ -222,6 +222,7 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
             source_h,
             total_source_materials,
             order=int(source_projection_order),
+            bonus_intorder=bonus_intorder,
         )
         # The exact pulled-back exterior source needs no interface trace at
         # all, so the projection is skipped rather than computed and dropped.
@@ -246,6 +247,7 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
             "iron_relative_harmonic_norm": float(
                 source_hodge["relative_harmonic_norm"]
             ),
+            "projection_bonus_intorder": source_hodge["bonus_intorder"],
             "kelvin_exterior_source": (
                 "exact pulled-back field" if kelvin_trace is None
                 else "projected interface trace"),

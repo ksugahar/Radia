@@ -221,7 +221,7 @@ def project_source_physical_potential(
 
 def project_source_total_hodge(
         mesh, H_s, total_source_materials, *, order=2, inverse="pardiso",
-        gauge_epsilon=1.0e-12):
+        gauge_epsilon=1.0e-12, bonus_intorder=4):
     """Split a linked source inside total-potential materials.
 
     On a multiply connected iron body a curl-free coil field need not be the
@@ -232,6 +232,10 @@ def project_source_total_hodge(
     ``Phi_s`` supplies the reduced/total interface jump and ``H_harmonic``
     carries the non-exact cohomology class in the total region.  The caller
     owns the surrounding :class:`ngsolve.TaskManager` region.
+    ``bonus_intorder`` controls projection assembly and norm diagnostics;
+    use the mixed solver's value when composing the two operations. Matching
+    bonuses does not establish source quadrature convergence or orthogonality
+    against a different test space.
     """
     names = tuple(str(name) for name in total_source_materials)
     if not names or len(names) != len(set(names)) or any(not name for name in names):
@@ -239,6 +243,8 @@ def project_source_total_hodge(
             "total_source_materials must contain unique non-empty names")
     if int(order) < 1:
         raise ValueError("order must be positive")
+    if isinstance(bonus_intorder, bool) or int(bonus_intorder) != bonus_intorder or bonus_intorder < 0:
+        raise ValueError("bonus_intorder must be a nonnegative integer")
     if gauge_epsilon <= 0.0 or not math.isfinite(gauge_epsilon):
         raise ValueError("gauge_epsilon must be positive and finite")
     actual = {str(name) for name in mesh.GetMaterials()}
@@ -252,7 +258,7 @@ def project_source_total_hodge(
     selector = mesh.Materials("|".join(names))
     fes = Compress(H1(mesh, order=int(order), definedon=selector))
     potential, test = fes.TnT()
-    d_total = dx(definedon=selector)
+    d_total = dx(definedon=selector, bonus_intorder=int(bonus_intorder))
     a_bf = BilinearForm(fes, symmetric=True)
     a_bf += InnerProduct(grad(potential), grad(test)) * d_total
     a_bf += float(gauge_epsilon) * potential * test * d_total
@@ -277,6 +283,7 @@ def project_source_total_hodge(
         "harmonic_norm": harmonic_norm,
         "source_norm": source_norm,
         "total_source_materials": names,
+        "bonus_intorder": int(bonus_intorder),
     }
 
 
