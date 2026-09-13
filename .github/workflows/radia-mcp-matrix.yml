@@ -411,7 +411,7 @@ jobs:
           if-no-files-found: error
 
   publish:
-    needs: [scope, selftest]
+    needs: [scope, selftest, minimum-sdk]
     if: >-
       github.ref_type == 'tag' &&
       startsWith(github.ref_name, 'radia-mcp-v')
