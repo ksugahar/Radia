@@ -6,6 +6,207 @@ import math
 from typing import Any
 
 
+def nonlinear_magnetic_refinement_energy_gate(
+    summary: dict[str, Any],
+    *,
+    max_refinement_growth_factor: float = 1.05,
+    max_finest_pair_relative_change: float = 0.05,
+    min_refinement_levels: int = 3,
+) -> dict[str, Any]:
+    """Gate nonlinear volume observables across a material-matched h ladder.
+
+    Every level must use a response/material order pair of ``p``/``p-1``, a
+    finite positive physical permeability field, and matching field/energy
+    identities.  Successive average-field and RMS changes must contract toward
+    the finest mesh; a single close result is intentionally insufficient.
+    """
+
+    if not isinstance(summary, dict):
+        raise ValueError("summary must be a mapping")
+    growth_limit = float(max_refinement_growth_factor)
+    finest_limit = float(max_finest_pair_relative_change)
+    level_limit = int(min_refinement_levels)
+    if not math.isfinite(growth_limit) or growth_limit < 1.0:
+        raise ValueError("max_refinement_growth_factor must be finite and >= 1")
+    if not math.isfinite(finest_limit) or finest_limit < 0.0:
+        raise ValueError("max_finest_pair_relative_change must be finite and nonnegative")
+    if level_limit < 3:
+        raise ValueError("min_refinement_levels must be at least 3")
+
+    raw_levels = summary.get("levels")
+    if not isinstance(raw_levels, list):
+        raise ValueError("levels must be a list")
+
+    identity_keys = ("material_domain", "coordinate_system", "nonlinear_state_id")
+    levels: list[dict[str, Any]] = []
+    for index, raw in enumerate(raw_levels):
+        if not isinstance(raw, dict):
+            raise ValueError(f"levels[{index}] must be a mapping")
+
+        def number(name: str) -> float | None:
+            try:
+                value = float(raw.get(name))
+            except (TypeError, ValueError):
+                return None
+            return value if math.isfinite(value) else None
+
+        average_raw = raw.get("average_field_T")
+        try:
+            average = [float(value) for value in average_raw]
+        except (TypeError, ValueError):
+            average = []
+        if len(average) != 3 or not all(math.isfinite(value) for value in average):
+            average = []
+        try:
+            response_order = int(raw.get("response_order"))
+            material_order = int(raw.get("material_update_order"))
+        except (TypeError, ValueError):
+            response_order = material_order = -1
+        bounds = raw.get("physical_relative_permeability_bounds")
+        try:
+            permeability_bounds = [float(value) for value in bounds]
+        except (TypeError, ValueError):
+            permeability_bounds = []
+        field_identity = raw.get("field_identity")
+        energy_identity = raw.get("energy_identity")
+        field_identity = field_identity if isinstance(field_identity, dict) else {}
+        energy_identity = energy_identity if isinstance(energy_identity, dict) else {}
+        identities_match = (
+            all(
+                bool(str(field_identity.get(name) or "").strip())
+                and str(field_identity.get(name)).strip()
+                == str(energy_identity.get(name) or "").strip()
+                for name in identity_keys
+            )
+            and str(field_identity.get("unit") or "").strip() == "T"
+            and str(energy_identity.get("unit") or "").strip() == "J"
+        )
+        levels.append(
+            {
+                "mesh_size_m": number("mesh_size_m"),
+                "response_order": response_order,
+                "material_update_order": material_order,
+                "solver_converged": raw.get("solver_converged") is True,
+                "volume_m3": number("volume_m3"),
+                "average_field_T": average,
+                "rms_magnitude_T": number("rms_magnitude_T"),
+                "magnetic_energy_J": number("magnetic_energy_J"),
+                "physical_relative_permeability_bounds": permeability_bounds,
+                "field_energy_identity_matches": identities_match,
+            }
+        )
+
+    mesh_sizes = [level["mesh_size_m"] for level in levels]
+    mesh_ordered = all(
+        mesh_sizes[index] is not None
+        and mesh_sizes[index + 1] is not None
+        and mesh_sizes[index] > mesh_sizes[index + 1] > 0.0
+        for index in range(max(0, len(mesh_sizes) - 1))
+    )
+    level_validity = []
+    for level in levels:
+        average = level["average_field_T"]
+        average_magnitude = (
+            math.sqrt(sum(value * value for value in average)) if average else None
+        )
+        rms = level["rms_magnitude_T"]
+        bounds = level["physical_relative_permeability_bounds"]
+        level_validity.append(
+            {
+                "solver_converged": level["solver_converged"],
+                "response_material_orders_compatible": (
+                    level["response_order"] >= 1
+                    and level["material_update_order"] == level["response_order"] - 1
+                ),
+                "volume_positive": level["volume_m3"] is not None and level["volume_m3"] > 0.0,
+                "field_finite_nonzero": average_magnitude is not None and average_magnitude > 0.0,
+                "rms_consistent_with_average": (
+                    rms is not None
+                    and average_magnitude is not None
+                    and rms + 1.0e-12 * max(rms, average_magnitude, 1.0)
+                    >= average_magnitude
+                ),
+                "energy_finite_nonnegative": (
+                    level["magnetic_energy_J"] is not None
+                    and level["magnetic_energy_J"] >= 0.0
+                ),
+                "physical_permeability_positive": (
+                    len(bounds) == 2
+                    and all(math.isfinite(value) for value in bounds)
+                    and 0.0 < bounds[0] <= bounds[1]
+                ),
+                "field_energy_identity_matches": level["field_energy_identity_matches"],
+            }
+        )
+
+    pair_changes: list[dict[str, float]] = []
+    for coarse, fine in zip(levels, levels[1:]):
+        coarse_average = coarse["average_field_T"]
+        fine_average = fine["average_field_T"]
+        coarse_rms = coarse["rms_magnitude_T"]
+        fine_rms = fine["rms_magnitude_T"]
+        if not coarse_average or not fine_average or coarse_rms is None or fine_rms is None:
+            pair_changes.append({"average": math.inf, "rms": math.inf, "combined": math.inf})
+            continue
+        average_scale = max(
+            math.sqrt(sum(value * value for value in fine_average)), 1.0e-300
+        )
+        average_change = (
+            math.sqrt(
+                sum(
+                    (fine_value - coarse_value) ** 2
+                    for coarse_value, fine_value in zip(coarse_average, fine_average)
+                )
+            )
+            / average_scale
+        )
+        rms_change = abs(fine_rms - coarse_rms) / max(abs(fine_rms), 1.0e-300)
+        pair_changes.append(
+            {
+                "average": average_change,
+                "rms": rms_change,
+                "combined": max(average_change, rms_change),
+            }
+        )
+
+    changes_contract = all(
+        pair_changes[index + 1]["combined"]
+        <= growth_limit * pair_changes[index]["combined"]
+        for index in range(max(0, len(pair_changes) - 1))
+    )
+    finest_change = pair_changes[-1]["combined"] if pair_changes else math.inf
+    checks = {
+        "refinement_levels_sufficient": len(levels) >= level_limit,
+        "mesh_sizes_strictly_decrease": mesh_ordered,
+        "all_levels_valid": bool(level_validity)
+        and all(all(checks.values()) for checks in level_validity),
+        "field_rms_changes_contract": changes_contract,
+        "finest_pair_is_stable": finest_change <= finest_limit,
+    }
+    return {
+        "policy": "nonlinear_magnetic_refinement_energy_gate_v1",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "checks": checks,
+        "issues": [name for name, accepted in checks.items() if not accepted],
+        "level_checks": level_validity,
+        "pair_relative_changes": pair_changes,
+        "metrics": {
+            "refinement_level_count": len(levels),
+            "finest_pair_relative_change": finest_change,
+        },
+        "tolerances": {
+            "max_refinement_growth_factor": growth_limit,
+            "max_finest_pair_relative_change": finest_limit,
+            "min_refinement_levels": level_limit,
+        },
+        "notes": [
+            "one mesh or one point cannot establish nonlinear spatial convergence",
+            "field and energy observables must bind the same material domain, frame, and nonlinear state",
+            "the gate diagnoses evidence quality and does not assert cross-solver parity by itself",
+        ],
+    }
+
+
 def nonlinear_magnetic_spatial_evidence_gate(
     summary: dict[str, Any],
     *,

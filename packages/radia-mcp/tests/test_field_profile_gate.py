@@ -4,9 +4,11 @@ import json
 
 from radia_mcp.radia_ngsolve.field_profile_gate import (
     dual_formulation_symmetric_field_profile_gate,
+    nonlinear_magnetic_refinement_energy_gate,
     nonlinear_magnetic_spatial_evidence_gate,
 )
 from radia_mcp.radia_ngsolve.server import (
+    nonlinear_magnetic_refinement_energy_gate as mcp_nonlinear_refinement_gate,
     nonlinear_magnetic_spatial_evidence_gate as mcp_nonlinear_gate,
 )
 
@@ -125,4 +127,67 @@ def test_nonlinear_magnetic_spatial_gate_rejects_rms_disagreement_and_wraps_mcp(
     result = nonlinear_magnetic_spatial_evidence_gate(bad)
     assert result["checks"]["rms_magnitude_matches_reference"] is False
     wrapped = json.loads(mcp_nonlinear_gate(json.dumps(bad)))
+    assert wrapped["status"] == "needs_attention"
+
+
+def _nonlinear_refinement_summary():
+    def level(mesh_size, average_z, rms, energy):
+        identity = {
+            "material_domain": "iron",
+            "coordinate_system": "right-handed Cartesian",
+            "nonlinear_state_id": "bh-state-17",
+        }
+        return {
+            "mesh_size_m": mesh_size,
+            "solver_converged": True,
+            "response_order": 2,
+            "material_update_order": 1,
+            "physical_relative_permeability_bounds": [1.0, 2100.0],
+            "volume_m3": 1.0e-6,
+            "average_field_T": [0.0, 0.0, average_z],
+            "rms_magnitude_T": rms,
+            "magnetic_energy_J": energy,
+            "field_identity": {**identity, "unit": "T"},
+            "energy_identity": {**identity, "unit": "J"},
+        }
+
+    return {
+        "levels": [
+            level(8.0e-3, -1.42, 1.66, 1.20e-3),
+            level(4.0e-3, -1.48, 1.62, 1.24e-3),
+            level(2.0e-3, -1.50, 1.61, 1.25e-3),
+        ]
+    }
+
+
+def test_nonlinear_refinement_energy_gate_accepts_contracting_matched_ladder():
+    result = nonlinear_magnetic_refinement_energy_gate(_nonlinear_refinement_summary())
+    assert result["status"] == "ok"
+    assert all(result["checks"].values())
+    assert result["pair_relative_changes"][1]["combined"] < result["pair_relative_changes"][0]["combined"]
+
+
+def test_nonlinear_refinement_energy_gate_rejects_nonpositive_material_state():
+    bad = _nonlinear_refinement_summary()
+    bad["levels"][1]["physical_relative_permeability_bounds"] = [0.0, 2100.0]
+    result = nonlinear_magnetic_refinement_energy_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["all_levels_valid"] is False
+    assert result["level_checks"][1]["physical_permeability_positive"] is False
+
+
+def test_nonlinear_refinement_energy_gate_rejects_noncontracting_ladder():
+    bad = _nonlinear_refinement_summary()
+    bad["levels"][2]["average_field_T"] = [0.0, 0.0, -1.25]
+    result = nonlinear_magnetic_refinement_energy_gate(bad)
+    assert result["checks"]["field_rms_changes_contract"] is False
+
+
+def test_nonlinear_refinement_energy_gate_rejects_field_energy_identity_mismatch_and_wraps_mcp():
+    bad = _nonlinear_refinement_summary()
+    bad["levels"][2]["energy_identity"]["nonlinear_state_id"] = "stale-state"
+    result = nonlinear_magnetic_refinement_energy_gate(bad)
+    assert result["checks"]["all_levels_valid"] is False
+    assert result["level_checks"][2]["field_energy_identity_matches"] is False
+    wrapped = json.loads(mcp_nonlinear_refinement_gate(json.dumps(bad)))
     assert wrapped["status"] == "needs_attention"

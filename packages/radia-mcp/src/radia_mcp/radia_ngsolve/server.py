@@ -39,6 +39,7 @@ _cq_scattering_arrival_gate = lazy_callable(".cq_scattering_arrival_gate", "cq_s
 _physics_result_preflight_gate = lazy_callable(".physics_result_preflight_gate", "physics_result_preflight_gate", __package__)
 _dual_formulation_symmetric_field_profile_gate = lazy_callable(".field_profile_gate", "dual_formulation_symmetric_field_profile_gate", __package__)
 _nonlinear_magnetic_spatial_evidence_gate = lazy_callable(".field_profile_gate", "nonlinear_magnetic_spatial_evidence_gate", __package__)
+_nonlinear_magnetic_refinement_energy_gate = lazy_callable(".field_profile_gate", "nonlinear_magnetic_refinement_energy_gate", __package__)
 _symmetric_complex_field_curve_gate = lazy_callable(".field_profile_gate", "symmetric_complex_field_curve_gate", __package__)
 _symmetric_axial_field_profile_gate = lazy_callable(".field_profile_gate", "symmetric_axial_field_profile_gate", __package__)
 _helmholtz_double_layer_low_frequency_gate = lazy_callable(".acoustic_kernel_gate", "helmholtz_double_layer_low_frequency_gate", __package__)
@@ -2331,6 +2332,31 @@ def cq_response_reality_gate(
     return json.dumps(_cq_response_reality_gate(
         json.loads(summary_json), residual_tolerance=residual_tolerance,
         imaginary_tolerance=imaginary_tolerance), indent=2, sort_keys=True)
+
+
+@_validation.tool()
+def nonlinear_magnetic_refinement_energy_gate(
+    summary_json: str,
+    max_refinement_growth_factor: float = 1.05,
+    max_finest_pair_relative_change: float = 0.05,
+    min_refinement_levels: int = 3,
+) -> str:
+    """Gate a nonlinear magnetic h ladder, material bounds, and field/energy identity."""
+
+    try:
+        result = _nonlinear_magnetic_refinement_energy_gate(
+            json.loads(summary_json),
+            max_refinement_growth_factor=max_refinement_growth_factor,
+            max_finest_pair_relative_change=max_finest_pair_relative_change,
+            min_refinement_levels=min_refinement_levels,
+        )
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        result = {
+            "policy": "nonlinear_magnetic_refinement_energy_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
 
 
 @_validation.tool()

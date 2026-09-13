@@ -91,6 +91,50 @@ async def _probe_hdiv_vim_stdio() -> dict[str, object]:
                 },
             )
             nonlinear_payload = json.loads(nonlinear_gate.content[0].text)
+            refinement_catalog = await session.call_tool(
+                "radia_ngsolve_validation_catalog",
+                {"query": "nonlinear_magnetic_refinement_energy_gate"},
+            )
+            refinement_catalog_payload = (
+                refinement_catalog.structuredContent
+                or json.loads(refinement_catalog.content[0].text)
+            )
+            refinement_identity = {
+                "material_domain": "iron",
+                "coordinate_system": "right-handed Cartesian",
+                "nonlinear_state_id": "state-1",
+            }
+            refinement_levels = []
+            for mesh_size, average_z, rms in (
+                (8.0e-3, -1.42, 1.66),
+                (4.0e-3, -1.48, 1.62),
+                (2.0e-3, -1.20, 1.61),
+            ):
+                refinement_levels.append(
+                    {
+                        "mesh_size_m": mesh_size,
+                        "solver_converged": True,
+                        "response_order": 2,
+                        "material_update_order": 1,
+                        "physical_relative_permeability_bounds": [1.0, 2100.0],
+                        "volume_m3": 1.0e-6,
+                        "average_field_T": [0.0, 0.0, average_z],
+                        "rms_magnitude_T": rms,
+                        "magnetic_energy_J": 1.2e-3,
+                        "field_identity": {**refinement_identity, "unit": "T"},
+                        "energy_identity": {**refinement_identity, "unit": "J"},
+                    }
+                )
+            refinement_gate = await session.call_tool(
+                "radia_ngsolve_validation_run",
+                {
+                    "name": "nonlinear_magnetic_refinement_energy_gate",
+                    "arguments": {
+                        "summary_json": json.dumps({"levels": refinement_levels})
+                    },
+                },
+            )
+            refinement_payload = json.loads(refinement_gate.content[0].text)
             text = called.content[0].text
             normalized = " ".join(text.split())
             return {
@@ -105,6 +149,13 @@ async def _probe_hdiv_vim_stdio() -> dict[str, object]:
                 ),
                 "nonlinear_gate_is_error": bool(nonlinear_gate.isError),
                 "nonlinear_gate_status": nonlinear_payload["status"],
+                "refinement_gate_discovered": any(
+                    operation["name"] == "nonlinear_magnetic_refinement_energy_gate"
+                    for operation in refinement_catalog_payload["operations"]
+                ),
+                "refinement_gate_is_error": bool(refinement_gate.isError),
+                "refinement_gate_status": refinement_payload["status"],
+                "refinement_gate_issues": refinement_payload["issues"],
                 "teaches_direct_q2": "direct-Q2" in text,
                 "bounds_h_convergence": (
                     "for this thin magnetic-conductor disk lane" in normalized
@@ -162,6 +213,10 @@ def test_hdiv_vim_passes_real_stdio_initialize_list_call():
     assert result["nonlinear_gate_discovered"] is True
     assert result["nonlinear_gate_is_error"] is False
     assert result["nonlinear_gate_status"] == "ok"
+    assert result["refinement_gate_discovered"] is True
+    assert result["refinement_gate_is_error"] is False
+    assert result["refinement_gate_status"] == "needs_attention"
+    assert "field_rms_changes_contract" in result["refinement_gate_issues"]
     assert result["teaches_direct_q2"] is True
     assert result["bounds_h_convergence"] is True
     assert result["teaches_mapped_bdm2_gate"] is True

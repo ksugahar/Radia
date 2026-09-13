@@ -2238,13 +2238,23 @@ is a general scalar-Omega source contract for a compound current coil.
 For memoryless nonlinear iron, use
 `solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin`; it shares the
 same interface trace and B(H) law.  This Picard helper is not a hysteresis
-model. Its current material update is one element-centroid, order-0
-permeability. Use response `order=1`, demonstrate h-convergence, and compare a
-volume integral or a sufficiently resolved volume quadrature through
-`nonlinear_magnetic_spatial_evidence_gate`. A center-point match and nonlinear
-iteration convergence are not spatial validation. A genuinely nonlinear table
-with response `order>1` is rejected until a material-order-matched update is
-implemented.
+model.  The default path uses one element-centroid order-0 permeability and is
+therefore limited to response `order=1`.  A response `order=2` solve must opt in
+with `material_update_order=1`; that path projects the monotone-PCHIP B(H)
+secant law into a discontinuous P1 log-permeability field, bounds the physical
+relative permeability above zero, and returns restartable material-state DoFs.
+The final field is re-solved after the material convergence test so H and mu
+belong to the same nonlinear state.
+
+For either path, compare a volume integral or sufficiently resolved volume
+quadrature through `nonlinear_magnetic_spatial_evidence_gate`.  Production
+evidence also needs at least three h levels through
+`nonlinear_magnetic_refinement_energy_gate`: response/material orders must be
+`p`/`p-1`, average-B and RMS changes must contract, every material quadrature
+state must remain physically positive, and field/energy observables must bind
+the same material domain, coordinate frame, and nonlinear-state identity.  A
+center-point match, one close mesh, or nonlinear iteration convergence alone is
+not spatial validation or cross-solver parity.
 
 Validated path: `validation_test/c_type_three_engine/run_three_engine.py`.
 The legacy scalar-potential recipe is retained in this source only for
