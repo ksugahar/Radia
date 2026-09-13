@@ -9,10 +9,37 @@ from types import SimpleNamespace
 import pytest
 from radia_mcp.bibliography.plans.T14_canonical import (
     _keys_in_order,
+    _citation_source_sha256,
     bibliography_canonical_path,
     bibliography_get_entries,
     bibliography_make_bbl,
 )
+
+
+def test_selected_bibliography_fingerprint_tracks_dependencies_not_unrelated_entries():
+    source = b'@book{parent,title={Collected},year={2000}}\n@inbook{child,title={Chapter},crossref={parent}}\n@book{other,title={Unrelated}}'
+    fingerprint = _citation_source_sha256(["child"], source)
+    assert fingerprint == _citation_source_sha256(["child"], source.replace(b"Unrelated", b"Other book"))
+    assert fingerprint != _citation_source_sha256(["child"], source.replace(b"Chapter", b"Corrected chapter"))
+    assert fingerprint != _citation_source_sha256(["child"], source.replace(b"2000", b"2001"))
+    assert fingerprint == _citation_source_sha256(["child"], source.replace(b"\n", b"\r\n"))
+
+
+def test_selected_bibliography_fingerprint_preserves_macro_expressions_and_directives():
+    source = b'@string{journal="First"}\n@article{a,title={A},journal=journal}'
+    original = _citation_source_sha256(["a"], source)
+    assert original != _citation_source_sha256(["a"], source.replace(b'"First"', b'"Second"'))
+    assert original != _citation_source_sha256(["a"], source.replace(b'journal=journal', b'journal={journal}'))
+
+
+@pytest.mark.parametrize("source", [
+    b'@inbook{a,crossref={missing}}',
+    b'@inbook{a,crossref={a}}',
+    b'@inbook{a,crossref=macro}',
+])
+def test_selected_bibliography_fingerprint_fails_on_unresolved_dependencies(source):
+    with pytest.raises(ValueError):
+        _citation_source_sha256(["a"], source)
 
 
 def test_canonical_path_describes_single_source_and_bbl_delivery():
@@ -54,6 +81,47 @@ def test_get_entries_fails_closed_for_missing_or_duplicate_keys():
         "error": "duplicate citation keys",
         "keys": ["Kameari2018"],
     }
+
+
+@pytest.mark.parametrize("keys", [[], "Kameari2018", ["Kameari2018", "Kameari2018"], ["*"], [None]])
+def test_notebook_bbl_rejects_ambiguous_metadata_without_overwriting(tmp_path, keys):
+    notebook = tmp_path / "demo.ipynb"
+    notebook.write_text(json.dumps({"metadata": {"radia": {"bibliography": {"keys": keys}}}}))
+    output = notebook.with_suffix(".bbl")
+    output.write_text("previous")
+    assert bibliography_make_bbl(str(notebook)).startswith("Error: invalid notebook")
+    assert output.read_text() == "previous"
+
+
+@pytest.mark.parametrize("contents", ["not JSON", "{}", "[]", '{"metadata":null}'])
+def test_notebook_bbl_requires_an_explicit_declaration(tmp_path, contents):
+    notebook = tmp_path / "demo.ipynb"
+    notebook.write_text(contents)
+    assert "invalid notebook bibliography metadata" in bibliography_make_bbl(str(notebook))
+    assert not notebook.with_suffix(".bbl").exists()
+
+
+def test_notebook_bbl_rejects_unknown_key_before_requiring_tex(tmp_path, monkeypatch):
+    monkeypatch.setattr(shutil, "which", lambda name: None)
+    notebook = tmp_path / "demo.ipynb"
+    notebook.write_text(json.dumps({"metadata": {"radia": {"bibliography": {"keys": ["unknown_notebook_reference"]}}}}))
+    assert "absent from canonical" in bibliography_make_bbl(str(notebook))
+    assert not notebook.with_suffix(".bbl").exists()
+
+
+@pytest.mark.skipif(shutil.which("bibtex") is None, reason="BibTeX is unavailable")
+def test_notebook_bbl_uses_explicit_keys_and_never_executes_cells(tmp_path):
+    notebook = tmp_path / "demo.ipynb"
+    notebook.write_text(json.dumps({
+        "metadata": {"radia": {"bibliography": {"keys": ["freeman1989"], "style": "plain"}}},
+        "cells": [{"cell_type": "code", "source": ["raise RuntimeError('must not run')"]}],
+    }))
+    result = bibliography_make_bbl(str(notebook))
+    assert result.startswith("bibliography_make_bbl:")
+    assert "notebook explicit keys" in result
+    assert r"\bibitem{freeman1989}" in notebook.with_suffix(".bbl").read_text()
+    assert not list(tmp_path.glob("*.bib"))
+    assert "compiled aux is not supported" in bibliography_make_bbl(str(notebook), aux_path="unused.aux")
 
 
 def test_igte_cauer_sibc_reference_set_is_canonical():
