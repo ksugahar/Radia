@@ -1,7 +1,9 @@
 {
   "schema": "radia.test-tier-manifest.v1",
   "impact_rules": {
-    "src/radia/vim/_nonlinear.py": ["tests/test_hdiv_energy_material_consistency.py"],
+    "src/radia/vim/_nonlinear.py": ["tests/test_hdiv_energy_material_consistency.py", "tests/test_hdiv_bh_table_saturation_contract.py"],
+    "src/radia/panels/samples/em_sample_bh.txt": ["tests/test_hdiv_bh_table_saturation_contract.py"],
+    "validation_test/feec/bh_saturation_audit.py": ["tests/test_hdiv_bh_table_saturation_contract.py"],
     "src/radia/vim/_solve.py": ["tests/test_hdiv_energy_material_consistency.py", "tests/test_hdiv_newton_failure_contract.py", "tests/test_esrf_three_engine_finite_gate.py"],
     "validation_test/esrf_three_engine/check_case6_inputs.py": ["tests/test_esrf6_mesh_identity.py"],
     "validation_test/esrf_three_engine/case6_mesh_contract.json": ["tests/test_esrf6_mesh_identity.py"],
@@ -39,6 +41,7 @@
       "description": "Pure source, policy, package, and public-notebook contracts for every push.",
       "max_elapsed_seconds": 60,
       "paths": [
+        "tests/test_hdiv_bh_table_saturation_contract.py",
         "tests/test_ci_execution_policy.py",
         "tests/test_ci_monitor.py",
         "tests/test_mdx_runner_pool.py",
