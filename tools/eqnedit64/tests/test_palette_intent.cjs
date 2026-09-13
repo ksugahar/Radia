@@ -25,7 +25,8 @@ function check(category, face, snippet) {
     const actual = editor.composeInsertion("LxR", 1, end, snippet);
     const selected = end === 2;
     let wanted = snippet;
-    if (selected && wanted.includes("{}")) wanted = wanted.replace("{}", "{x}");
+    if (selected && /^[\^_]\{/.test(wanted)) wanted = "{x}" + wanted;
+    else if (selected && wanted.includes("{}")) wanted = wanted.replace("{}", "{x}");
     assert.equal(actual.value, "L" + wanted + (selected ? "R" : "xR"), `${category}/${face}: insertion`);
     assert(actual.caret >= 1 && actual.caret <= actual.value.length - 1);
   }
