@@ -1,9 +1,52 @@
 # Repaired energy-Newton candidate: Hibino native checks
 
-Status: **HOLD for three-method ESRF6 acceptance**. Small native checks and the
-actual ESRF6 BDM1/mass-Riesz residual gate passed. The finite mesh/CAD/gap/coil
+Status: **PASS for nominal ESRF6 BDM1 three-method acceptance**. Both FEM routes
+were re-solved using the same installed candidate as HDiv. This is not a
+CI-artifact release approval, BDM2 qualification, or an absolute-error certificate.
+Small native checks and the actual ESRF6 BDM1/mass-Riesz residual gate passed.
+The finite mesh/CAD/gap/coil
 audit is recorded in `../surface_overlap_20260913/`. The execution task owns
 the re-solves and scratch cleanup; management owns integration and release.
+
+## Same-wheel three-method result
+
+`case6_fem_repaired_acceptance.json` completed successfully on hibino with
+eight threads. The physical source, BH table, observations and installed Python
+and native bytes match the repaired HDiv record; the FEM mesh matches the
+audited identity. Reduced-A and mixed Omega use order 2. HDiv uses BDM1,
+mass-Riesz, the full iron model and no IMA.
+
+| Pair | Core 27-point relative vector RMS | All 45-point relative vector RMS |
+| --- | ---: | ---: |
+| HDiv / reduced-A | 0.334891% | 0.674624% |
+| HDiv / mixed Omega | 0.669467% | 1.196424% |
+| reduced-A / mixed Omega | 0.781827% | 1.407877% |
+
+Each relative RMS uses the left field as denominator. The predeclared gate is
+3% on the core 27 points, not the raw 45-point set or a pointwise relative
+maximum. The replay regression independently recomputes the core values.
+
+Reduced-A converged in 31 iterations with relative change 1.859221e-5;
+mixed Omega converged in 14 iterations with relative B change 7.565560e-6.
+Both requested 2e-5. These Picard stopping measures are not true-error bounds
+and are distinct from HDiv's assembled nonlinear residual (3.278340e-7).
+The runtimes were 1355.54 s and 5609.86 s respectively. This run was not an
+isolated performance benchmark and must not be advertised as one.
+
+The FEM result SHA-256 is
+`66280ab5bda2e3a5a4c0b410b3daa051d011b7446b8949e65330f4ac6d9ac3b8`.
+Both linked result JSON files preserve their original bytes through explicit
+`-text` attributes; the HDiv evidence bytes are unchanged numerically.
+The recovery archive is
+`S:/Radia/validation_artifacts/esrf6_mesh_audit_20260913/esrf6-newton-4d85e72cc-recovery.zip`,
+SHA-256 `3b198c0a9aba3b6aad02eeecde9014a9eea57f10bef8296bca131a9c8e006808`.
+All 34 manifest entries were independently hashed after recovery, and the
+installed Python/native identity was rechecked unchanged after the solve.
+
+This closes the nominal BDM1 field-agreement item. Separate work remains for
+iron-sensitive nonlinear observables, BDM2/IMA application qualification,
+source-load quadrature convergence and CI-built release acceptance. The later
+Hodge quadrature-wiring source change is not included in this candidate wheel.
 
 ## Actual ESRF6 BDM1
 
@@ -21,6 +64,14 @@ The durable copy is in `S:/Radia/validation_artifacts/esrf6_mesh_audit_20260913/
 Cell-average M is retained for iron-side comparisons. Global average M is
 almost zero by quadrupole symmetry and is not an adequate nonlinear observable.
 
+The nominal core-field agreement does not certify the nonlinear material over
+its full excitation range. A separate iron-sensitive acceptance should compare
+section fluxes and material energy using the same constitutive law and physical
+integration domain. For a reversible nonlinear B-H law, use the integral of H
+with respect to B, not one half of B dot H (the latter is the linear-law
+expression). Cell-average M alone cannot reconstruct this energy or pointwise
+peak fields. Do not change the running nominal acceptance to add these checks.
+
 ## Build and identity
 
 - Source: `4d85e72cce70e02417abcd7972b509dfc2bac632`.
@@ -30,8 +81,9 @@ almost zero by quadrupole symmetry and is not an adequate nonlinear observable.
 - Native SHA256: `932e49626c05c1e3d459f20649632d4bfa0adf9b37f325dace4093d74aeeb7b5`.
 - NGSolve/Netgen 6.2.2606; NumPy 2.5.3; SciPy 1.18.1; MKL 2026.1.0.
 
-GitHub workflow dispatch failed twice with HTTP 500 and PR creation failed
-with HTTP 502. This is not a CI-built or CI-approved wheel. It was built in an
+At candidate manufacture, GitHub workflow dispatch failed twice with HTTP 500
+and PR creation failed with HTTP 502. PR #231 was subsequently created and its
+source CI passed, but this does not make this wheel a CI-built artifact. It was built in an
 isolated LAB venv from the clean committed source with
 `Build.ps1 -RequireNativeProvenance`, then `Build_Wheel.ps1 -DryRun`.
 The wheel verification passed. The builder's final interactive key prompt was
@@ -74,6 +126,9 @@ polyhedra, not the ESRF6 magnet or curved-CAD validation. Separate local tests
 checked the real NGSolve material weak-form derivatives on quadratic
 deformations, distinct materials, and zero-field Hessians. The focused source,
 material and tier-policy selection passed 51 tests before wheel manufacture.
+The WEDGE order-2 stopping residual is not an estimate of its attainable
+accuracy: a tighter tolerance requires another solve, not a prediction that the
+case must fail because it stopped near the current threshold.
 
 ## Mesh audit handoff
 
@@ -86,6 +141,10 @@ and the FEM SHA `dfc12b84...`; the full values are in the identity report.
 The actual Hibino iron mesh was recovered to
 `C:/temp/esrf6-mesh-audit-20260913/iron_conforming.vol`. The LAB asset mesh has
 the same SHA; its adjacent STEP files, manifest and journal were recovered
-separately for the management task's geometric audit. The full ESRF6 rerun
-must wait for that audit. No successful field-comparison notebook or production
-release claim is derived from these smoke tests.
+separately for the management task's geometric audit. That finite audit is now
+complete in `../surface_overlap_20260913/`: the final detector found no overlap
+in its sampled surface checks, and the selected CAD, coil and gap checks passed.
+It is not a proof covering every point of the continuous curved geometry.
+The same-wheel mixed Omega rerun has now passed the nominal BDM1 acceptance
+above. No production release claim is derived from the native smoke tests or
+this finite geometry audit alone.
