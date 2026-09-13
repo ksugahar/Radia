@@ -1,0 +1,63 @@
+{
+  "controls": {
+    "partial": {
+      "kind": "coplanar_positive_area",
+      "overlap_area_m2": 0.245
+    },
+    "different_subdivision": {
+      "kind": "coplanar_positive_area",
+      "overlap_area_m2": 0.125
+    },
+    "adjacent": null,
+    "transverse": {
+      "kind": "transverse_interior_intersection",
+      "points_m": [
+        [
+          0.2,
+          0.2,
+          0.0
+        ]
+      ]
+    },
+    "separated": null,
+    "opposite_diagonal_tessellations_area": 1.0,
+    "reported_grazing_contact": null
+  },
+  "ngsolve_version": "6.2.2606",
+  "shapely_version": "2.1.2",
+  "script_sha256": "8b2cf6f81c3ce11d5e2d01aeaa693ccb03a935ccb4df7e84c3e04eefe533a230",
+  "audit": {
+    "path": "C:\\temp\\radia-ex6-diag\\assets_conforming\\model.vol",
+    "sha256": "fdd1387281e550e27eab435cfac3ec54e0b9d1339438699fdc50c852dfcafc74",
+    "volume_elements": 2408,
+    "boundary_elements": 2200,
+    "curve_order": 2,
+    "subdivisions": 4,
+    "mapped_triangles": 70400,
+    "topology": {
+      "volume_face_owner_histogram": {
+        "2": 6124,
+        "1": 2200
+      },
+      "boundary_face_owner_histogram": {
+        "1": 2200
+      },
+      "repeated_boundary_face_ids": [],
+      "unregistered_one_owner_faces": [],
+      "nonmanifold_volume_faces": []
+    },
+    "length_tolerance_m": 1e-10,
+    "area_tolerance_m2": 1e-16,
+    "coplanar_overlay_grid_m": 1e-12,
+    "nonplanar_boundary_elements": 0,
+    "maximum_sampled_parent_planarity_m": 1.1845766500193743e-15,
+    "maximum_sampled_edge_chord_deviation_m": 1.0408340855867623e-17,
+    "nonstraight_boundary_edge_parent_count": 0,
+    "aabb_candidate_pairs": 182279,
+    "tested_triangle_pairs": 182279,
+    "detected_parent_pairs": 0,
+    "contacts": [],
+    "elapsed_s": 67.79757629998494,
+    "scope": "All registered boundary faces, including once-registered two-owner interfaces. Coordinates use NGSolve curved mapping. Triangle intersections are on a finite tessellation, not a certified curved-patch intersection proof. Positive-area coplanar overlaps and strict transverse piercings are reported; tangencies and very small features can remain unresolved."
+  }
+}

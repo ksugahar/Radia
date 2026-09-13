@@ -1,0 +1,1012 @@
+{
+  "membership_controls": {
+    "solid_centre_m": [
+      6.393830378790555e-16,
+      -0.01864761951788257,
+      0.028933352219376214
+    ],
+    "solid_centre_is_inside": true,
+    "far_point_is_inside": false
+  },
+  "gap_points": [
+    {
+      "point_m": [
+        -0.02,
+        -0.005,
+        -0.005
+      ],
+      "in_iron_cad": false,
+      "in_coil_cad": false
+    },
+    {
+      "point_m": [
+        -0.02,
+        -0.005,
+        0.0
+      ],
+      "in_iron_cad": false,
+      "in_coil_cad": false
+    },
+    {
+      "point_m": [
+        -0.02,
+        -0.005,
+        0.005
+      ],
+      "in_iron_cad": false,
+      "in_coil_cad": false
+    },
+    {
+      "point_m": [
+        -0.02,
+        0.0,
+        -0.005
+      ],
+      "in_iron_cad": false,
+      "in_coil_cad": false
+    },
+    {
+      "point_m": [
+        -0.02,
+        0.0,
+        0.0
+      ],
+      "in_iron_cad": false,
+      "in_coil_cad": false
+    },
+    {
+      "point_m": [
+        -0.02,
+        0.0,
+        0.005
+      ],
+      "in_iron_cad": false,
+      "in_coil_cad": false
+    },
+    {
+      "point_m": [
+        -0.02,
+        0.005,
+        -0.005
+      ],
+      "in_iron_cad": false,
+      "in_coil_cad": false
+    },
+    {
+      "point_m": [
+        -0.02,
+        0.005,
+        0.0
+      ],
+      "in_iron_cad": false,
+      "in_coil_cad": false
+    },
+    {
+      "point_m": [
+        -0.02,
+        0.005,
+        0.005
+      ],
+      "in_iron_cad": false,
+      "in_coil_cad": false
+    },
+    {
+      "point_m": [
+        0.0,
+        -0.005,
+        -0.005
+      ],
+      "in_iron_cad": false,
+      "in_coil_cad": false
+    },
+    {
+      "point_m": [
+        0.0,
+        -0.005,
+        0.0
+      ],
+      "in_iron_cad": false,
+      "in_coil_cad": false
+    },
+    {
+      "point_m": [
+        0.0,
+        -0.005,
+        0.005
+      ],
+      "in_iron_cad": false,
+      "in_coil_cad": false
+    },
+    {
+      "point_m": [
+        0.0,
+        0.0,
+        -0.005
+      ],
+      "in_iron_cad": false,
+      "in_coil_cad": false
+    },
+    {
+      "point_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "in_iron_cad": false,
+      "in_coil_cad": false
+    },
+    {
+      "point_m": [
+        0.0,
+        0.0,
+        0.005
+      ],
+      "in_iron_cad": false,
+      "in_coil_cad": false
+    },
+    {
+      "point_m": [
+        0.0,
+        0.005,
+        -0.005
+      ],
+      "in_iron_cad": false,
+      "in_coil_cad": false
+    },
+    {
+      "point_m": [
+        0.0,
+        0.005,
+        0.0
+      ],
+      "in_iron_cad": false,
+      "in_coil_cad": false
+    },
+    {
+      "point_m": [
+        0.0,
+        0.005,
+        0.005
+      ],
+      "in_iron_cad": false,
+      "in_coil_cad": false
+    },
+    {
+      "point_m": [
+        0.02,
+        -0.005,
+        -0.005
+      ],
+      "in_iron_cad": false,
+      "in_coil_cad": false
+    },
+    {
+      "point_m": [
+        0.02,
+        -0.005,
+        0.0
+      ],
+      "in_iron_cad": false,
+      "in_coil_cad": false
+    },
+    {
+      "point_m": [
+        0.02,
+        -0.005,
+        0.005
+      ],
+      "in_iron_cad": false,
+      "in_coil_cad": false
+    },
+    {
+      "point_m": [
+        0.02,
+        0.0,
+        -0.005
+      ],
+      "in_iron_cad": false,
+      "in_coil_cad": false
+    },
+    {
+      "point_m": [
+        0.02,
+        0.0,
+        0.0
+      ],
+      "in_iron_cad": false,
+      "in_coil_cad": false
+    },
+    {
+      "point_m": [
+        0.02,
+        0.0,
+        0.005
+      ],
+      "in_iron_cad": false,
+      "in_coil_cad": false
+    },
+    {
+      "point_m": [
+        0.02,
+        0.005,
+        -0.005
+      ],
+      "in_iron_cad": false,
+      "in_coil_cad": false
+    },
+    {
+      "point_m": [
+        0.02,
+        0.005,
+        0.0
+      ],
+      "in_iron_cad": false,
+      "in_coil_cad": false
+    },
+    {
+      "point_m": [
+        0.02,
+        0.005,
+        0.005
+      ],
+      "in_iron_cad": false,
+      "in_coil_cad": false
+    }
+  ],
+  "solid_comparisons": {
+    "iron": {
+      "pairs": [
+        {
+          "step_solid": 0,
+          "rebuilt_solid": 0,
+          "centre_distance_m": 1.2432872774774514e-15,
+          "relative_volume_difference": 4.110350568161804e-14
+        },
+        {
+          "step_solid": 1,
+          "rebuilt_solid": 1,
+          "centre_distance_m": 1.5131881118151072e-15,
+          "relative_volume_difference": 2.4213848518837057e-13
+        },
+        {
+          "step_solid": 2,
+          "rebuilt_solid": 2,
+          "centre_distance_m": 2.9254495220676564e-15,
+          "relative_volume_difference": 3.471789364054537e-14
+        },
+        {
+          "step_solid": 3,
+          "rebuilt_solid": 3,
+          "centre_distance_m": 1.2887417170450158e-13,
+          "relative_volume_difference": 6.3266801645890074e-12
+        },
+        {
+          "step_solid": 4,
+          "rebuilt_solid": 4,
+          "centre_distance_m": 1.235008846048716e-13,
+          "relative_volume_difference": 3.6653172208403153e-11
+        },
+        {
+          "step_solid": 5,
+          "rebuilt_solid": 5,
+          "centre_distance_m": 2.3434838487757834e-15,
+          "relative_volume_difference": 8.588293463557975e-14
+        },
+        {
+          "step_solid": 6,
+          "rebuilt_solid": 6,
+          "centre_distance_m": 2.2807332656746844e-15,
+          "relative_volume_difference": 8.492917017802393e-14
+        },
+        {
+          "step_solid": 7,
+          "rebuilt_solid": 7,
+          "centre_distance_m": 2.935447380484907e-15,
+          "relative_volume_difference": 1.9178499077334401e-13
+        },
+        {
+          "step_solid": 8,
+          "rebuilt_solid": 8,
+          "centre_distance_m": 8.701962686168739e-14,
+          "relative_volume_difference": 4.3125099670292744e-12
+        },
+        {
+          "step_solid": 9,
+          "rebuilt_solid": 9,
+          "centre_distance_m": 1.7039433836869693e-13,
+          "relative_volume_difference": 1.9892377050595427e-11
+        },
+        {
+          "step_solid": 10,
+          "rebuilt_solid": 10,
+          "centre_distance_m": 1.240687756426314e-15,
+          "relative_volume_difference": 4.076933083867805e-14
+        },
+        {
+          "step_solid": 11,
+          "rebuilt_solid": 11,
+          "centre_distance_m": 1.5210270958264928e-15,
+          "relative_volume_difference": 2.4259023609357275e-13
+        },
+        {
+          "step_solid": 12,
+          "rebuilt_solid": 12,
+          "centre_distance_m": 2.931015400454541e-15,
+          "relative_volume_difference": 3.5345325453326314e-14
+        },
+        {
+          "step_solid": 13,
+          "rebuilt_solid": 13,
+          "centre_distance_m": 1.2890125982403806e-13,
+          "relative_volume_difference": 6.32610977203193e-12
+        },
+        {
+          "step_solid": 14,
+          "rebuilt_solid": 14,
+          "centre_distance_m": 1.2350434325294398e-13,
+          "relative_volume_difference": 3.665352078163246e-11
+        },
+        {
+          "step_solid": 15,
+          "rebuilt_solid": 15,
+          "centre_distance_m": 2.339774513301976e-15,
+          "relative_volume_difference": 8.588293463557975e-14
+        },
+        {
+          "step_solid": 16,
+          "rebuilt_solid": 16,
+          "centre_distance_m": 2.2846775776562926e-15,
+          "relative_volume_difference": 8.538092108322618e-14
+        },
+        {
+          "step_solid": 17,
+          "rebuilt_solid": 17,
+          "centre_distance_m": 2.946677911276878e-15,
+          "relative_volume_difference": 1.9220327864853124e-13
+        },
+        {
+          "step_solid": 18,
+          "rebuilt_solid": 18,
+          "centre_distance_m": 8.703045385020736e-14,
+          "relative_volume_difference": 4.31239588851786e-12
+        },
+        {
+          "step_solid": 19,
+          "rebuilt_solid": 19,
+          "centre_distance_m": 1.70393607119968e-13,
+          "relative_volume_difference": 1.9892202763980776e-11
+        },
+        {
+          "step_solid": 20,
+          "rebuilt_solid": 20,
+          "centre_distance_m": 1.240343108770537e-15,
+          "relative_volume_difference": 4.110350568161804e-14
+        },
+        {
+          "step_solid": 21,
+          "rebuilt_solid": 21,
+          "centre_distance_m": 1.534766649773444e-15,
+          "relative_volume_difference": 2.4228906882343797e-13
+        },
+        {
+          "step_solid": 22,
+          "rebuilt_solid": 22,
+          "centre_distance_m": 2.922757332719059e-15,
+          "relative_volume_difference": 3.5345325453326314e-14
+        },
+        {
+          "step_solid": 23,
+          "rebuilt_solid": 23,
+          "centre_distance_m": 1.2890125982377008e-13,
+          "relative_volume_difference": 6.326109772031927e-12
+        },
+        {
+          "step_solid": 24,
+          "rebuilt_solid": 24,
+          "centre_distance_m": 1.2351479125617709e-13,
+          "relative_volume_difference": 3.6654915074549644e-11
+        },
+        {
+          "step_solid": 25,
+          "rebuilt_solid": 25,
+          "centre_distance_m": 2.347053122288574e-15,
+          "relative_volume_difference": 8.621710947851975e-14
+        },
+        {
+          "step_solid": 26,
+          "rebuilt_solid": 26,
+          "centre_distance_m": 2.2732159564909556e-15,
+          "relative_volume_difference": 8.507975381309134e-14
+        },
+        {
+          "step_solid": 27,
+          "rebuilt_solid": 27,
+          "centre_distance_m": 2.927300512962281e-15,
+          "relative_volume_difference": 1.9262156652371847e-13
+        },
+        {
+          "step_solid": 28,
+          "rebuilt_solid": 28,
+          "centre_distance_m": 8.707533331551357e-14,
+          "relative_volume_difference": 4.312624045540691e-12
+        },
+        {
+          "step_solid": 29,
+          "rebuilt_solid": 29,
+          "centre_distance_m": 1.7037846320921289e-13,
+          "relative_volume_difference": 1.9890982757678196e-11
+        },
+        {
+          "step_solid": 30,
+          "rebuilt_solid": 30,
+          "centre_distance_m": 1.2376490371857339e-15,
+          "relative_volume_difference": 4.110350568161804e-14
+        },
+        {
+          "step_solid": 31,
+          "rebuilt_solid": 31,
+          "centre_distance_m": 1.5210270753195042e-15,
+          "relative_volume_difference": 2.4228906882343797e-13
+        },
+        {
+          "step_solid": 32,
+          "rebuilt_solid": 32,
+          "centre_distance_m": 2.939536917490594e-15,
+          "relative_volume_difference": 3.555446939091996e-14
+        },
+        {
+          "step_solid": 33,
+          "rebuilt_solid": 33,
+          "centre_distance_m": 1.289381346173623e-13,
+          "relative_volume_difference": 6.32576753649768e-12
+        },
+        {
+          "step_solid": 34,
+          "rebuilt_solid": 34,
+          "centre_distance_m": 1.2350780195644332e-13,
+          "relative_volume_difference": 3.6655089361164285e-11
+        },
+        {
+          "step_solid": 35,
+          "rebuilt_solid": 35,
+          "centre_distance_m": 2.344498732456521e-15,
+          "relative_volume_difference": 8.588293463557975e-14
+        },
+        {
+          "step_solid": 36,
+          "rebuilt_solid": 36,
+          "centre_distance_m": 2.2796985949048348e-15,
+          "relative_volume_difference": 8.538092108322618e-14
+        },
+        {
+          "step_solid": 37,
+          "rebuilt_solid": 37,
+          "centre_distance_m": 2.957930916456103e-15,
+          "relative_volume_difference": 1.9241242258612485e-13
+        },
+        {
+          "step_solid": 38,
+          "rebuilt_solid": 38,
+          "centre_distance_m": 8.705054881015195e-14,
+          "relative_volume_difference": 4.312281810006445e-12
+        },
+        {
+          "step_solid": 39,
+          "rebuilt_solid": 39,
+          "centre_distance_m": 1.7040472944794053e-13,
+          "relative_volume_difference": 1.9891157044292863e-11
+        }
+      ],
+      "maximum_centre_distance_m": 1.7040472944794053e-13,
+      "maximum_relative_volume_difference": 3.6655089361164285e-11
+    },
+    "coil": {
+      "pairs": [
+        {
+          "step_solid": 0,
+          "rebuilt_solid": 0,
+          "centre_distance_m": 3.346281135516028e-15,
+          "relative_volume_difference": 8.00671676472694e-14
+        },
+        {
+          "step_solid": 1,
+          "rebuilt_solid": 1,
+          "centre_distance_m": 2.2711393011672587e-15,
+          "relative_volume_difference": 7.149172450957795e-14
+        },
+        {
+          "step_solid": 2,
+          "rebuilt_solid": 2,
+          "centre_distance_m": 4.235461870636342e-15,
+          "relative_volume_difference": 1.5137999082978405e-13
+        },
+        {
+          "step_solid": 3,
+          "rebuilt_solid": 3,
+          "centre_distance_m": 3.1528951129502358e-15,
+          "relative_volume_difference": 7.332171745778594e-14
+        },
+        {
+          "step_solid": 4,
+          "rebuilt_solid": 4,
+          "centre_distance_m": 3.3560798037314374e-15,
+          "relative_volume_difference": 7.994186691542704e-14
+        },
+        {
+          "step_solid": 5,
+          "rebuilt_solid": 5,
+          "centre_distance_m": 3.6794593136175995e-15,
+          "relative_volume_difference": 2.378990832656831e-14
+        },
+        {
+          "step_solid": 6,
+          "rebuilt_solid": 6,
+          "centre_distance_m": 1.909045893294321e-15,
+          "relative_volume_difference": 2.7409117421400875e-13
+        },
+        {
+          "step_solid": 7,
+          "rebuilt_solid": 7,
+          "centre_distance_m": 3.102517897791263e-15,
+          "relative_volume_difference": 1.610393794413841e-14
+        },
+        {
+          "step_solid": 8,
+          "rebuilt_solid": 8,
+          "centre_distance_m": 3.38551186403689e-15,
+          "relative_volume_difference": 7.994186691542705e-14
+        },
+        {
+          "step_solid": 9,
+          "rebuilt_solid": 9,
+          "centre_distance_m": 3.681861388600771e-15,
+          "relative_volume_difference": 2.4155906916207826e-14
+        },
+        {
+          "step_solid": 10,
+          "rebuilt_solid": 10,
+          "centre_distance_m": 1.9087864082892536e-15,
+          "relative_volume_difference": 2.736567983436221e-13
+        },
+        {
+          "step_solid": 11,
+          "rebuilt_solid": 11,
+          "centre_distance_m": 3.107696950506337e-15,
+          "relative_volume_difference": 1.5493940294739228e-14
+        },
+        {
+          "step_solid": 12,
+          "rebuilt_solid": 12,
+          "centre_distance_m": 3.3511984184705415e-15,
+          "relative_volume_difference": 7.994186691542704e-14
+        },
+        {
+          "step_solid": 13,
+          "rebuilt_solid": 13,
+          "centre_distance_m": 2.251892913044535e-15,
+          "relative_volume_difference": 7.149172450957795e-14
+        },
+        {
+          "step_solid": 14,
+          "rebuilt_solid": 14,
+          "centre_distance_m": 4.235599652338612e-15,
+          "relative_volume_difference": 1.509456149593973e-13
+        },
+        {
+          "step_solid": 15,
+          "rebuilt_solid": 15,
+          "centre_distance_m": 3.1712870770153113e-15,
+          "relative_volume_difference": 7.319971792790608e-14
+        },
+        {
+          "step_solid": 16,
+          "rebuilt_solid": 16,
+          "centre_distance_m": 3.365914317738218e-15,
+          "relative_volume_difference": 7.981656618358469e-14
+        },
+        {
+          "step_solid": 17,
+          "rebuilt_solid": 17,
+          "centre_distance_m": 3.697436024368848e-15,
+          "relative_volume_difference": 2.4033907386327986e-14
+        },
+        {
+          "step_solid": 18,
+          "rebuilt_solid": 18,
+          "centre_distance_m": 1.9296499638114116e-15,
+          "relative_volume_difference": 2.7365679834362206e-13
+        },
+        {
+          "step_solid": 19,
+          "rebuilt_solid": 19,
+          "centre_distance_m": 3.089280976201305e-15,
+          "relative_volume_difference": 1.5371940764859392e-14
+        },
+        {
+          "step_solid": 20,
+          "rebuilt_solid": 20,
+          "centre_distance_m": 3.356137189538431e-15,
+          "relative_volume_difference": 7.93153632562152e-14
+        },
+        {
+          "step_solid": 21,
+          "rebuilt_solid": 21,
+          "centre_distance_m": 3.681369328003008e-15,
+          "relative_volume_difference": 2.3789908326568308e-14
+        },
+        {
+          "step_solid": 22,
+          "rebuilt_solid": 22,
+          "centre_distance_m": 1.9163897229271355e-15,
+          "relative_volume_difference": 2.740911742140086e-13
+        },
+        {
+          "step_solid": 23,
+          "rebuilt_solid": 23,
+          "centre_distance_m": 3.094871143104514e-15,
+          "relative_volume_difference": 1.5615939824619064e-14
+        },
+        {
+          "step_solid": 24,
+          "rebuilt_solid": 24,
+          "centre_distance_m": 3.3708243859848268e-15,
+          "relative_volume_difference": 7.994186691542705e-14
+        },
+        {
+          "step_solid": 25,
+          "rebuilt_solid": 25,
+          "centre_distance_m": 3.69046101337299e-15,
+          "relative_volume_difference": 2.4033907386327986e-14
+        },
+        {
+          "step_solid": 26,
+          "rebuilt_solid": 26,
+          "centre_distance_m": 1.9353787514391495e-15,
+          "relative_volume_difference": 2.7409117421400875e-13
+        },
+        {
+          "step_solid": 27,
+          "rebuilt_solid": 27,
+          "centre_distance_m": 3.1003891125040923e-15,
+          "relative_volume_difference": 1.5371940764859392e-14
+        },
+        {
+          "step_solid": 28,
+          "rebuilt_solid": 28,
+          "centre_distance_m": 3.366007296722195e-15,
+          "relative_volume_difference": 7.93153632562152e-14
+        },
+        {
+          "step_solid": 29,
+          "rebuilt_solid": 29,
+          "centre_distance_m": 2.251892913044535e-15,
+          "relative_volume_difference": 7.173572356933759e-14
+        },
+        {
+          "step_solid": 30,
+          "rebuilt_solid": 30,
+          "centre_distance_m": 4.235983349446703e-15,
+          "relative_volume_difference": 1.5181436670017072e-13
+        },
+        {
+          "step_solid": 31,
+          "rebuilt_solid": 31,
+          "centre_distance_m": 3.1791570591748317e-15,
+          "relative_volume_difference": 7.356571651754561e-14
+        },
+        {
+          "step_solid": 32,
+          "rebuilt_solid": 32,
+          "centre_distance_m": 4.033192910280594e-15,
+          "relative_volume_difference": 7.981656618358465e-14
+        },
+        {
+          "step_solid": 33,
+          "rebuilt_solid": 33,
+          "centre_distance_m": 3.574042319894513e-15,
+          "relative_volume_difference": 3.956365189092087e-14
+        },
+        {
+          "step_solid": 34,
+          "rebuilt_solid": 34,
+          "centre_distance_m": 3.3273749340143792e-15,
+          "relative_volume_difference": 1.431132750464874e-13
+        },
+        {
+          "step_solid": 35,
+          "rebuilt_solid": 35,
+          "centre_distance_m": 4.05905276844949e-15,
+          "relative_volume_difference": 3.194398560081988e-14
+        },
+        {
+          "step_solid": 36,
+          "rebuilt_solid": 36,
+          "centre_distance_m": 4.013566842111626e-15,
+          "relative_volume_difference": 8.002017987282849e-14
+        },
+        {
+          "step_solid": 37,
+          "rebuilt_solid": 37,
+          "centre_distance_m": 3.4277310652661948e-15,
+          "relative_volume_difference": 7.473134246063184e-15
+        },
+        {
+          "step_solid": 38,
+          "rebuilt_solid": 38,
+          "centre_distance_m": 3.729623357384774e-15,
+          "relative_volume_difference": 4.058699538926873e-15
+        },
+        {
+          "step_solid": 39,
+          "rebuilt_solid": 39,
+          "centre_distance_m": 4.039588099188997e-15,
+          "relative_volume_difference": 3.179745355677942e-14
+        },
+        {
+          "step_solid": 40,
+          "rebuilt_solid": 40,
+          "centre_distance_m": 4.038084523062585e-15,
+          "relative_volume_difference": 8.002017987282849e-14
+        },
+        {
+          "step_solid": 41,
+          "rebuilt_solid": 41,
+          "centre_distance_m": 3.4219582853419215e-15,
+          "relative_volume_difference": 7.766198334144094e-15
+        },
+        {
+          "step_solid": 42,
+          "rebuilt_solid": 42,
+          "centre_distance_m": 3.7106411196702495e-15,
+          "relative_volume_difference": 4.235164736271521e-15
+        },
+        {
+          "step_solid": 43,
+          "rebuilt_solid": 43,
+          "centre_distance_m": 4.053331279996459e-15,
+          "relative_volume_difference": 3.179745355677942e-14
+        },
+        {
+          "step_solid": 44,
+          "rebuilt_solid": 44,
+          "centre_distance_m": 4.033222755164993e-15,
+          "relative_volume_difference": 7.981656618358465e-14
+        },
+        {
+          "step_solid": 45,
+          "rebuilt_solid": 45,
+          "centre_distance_m": 3.581089465198187e-15,
+          "relative_volume_difference": 3.985671597900176e-14
+        },
+        {
+          "step_solid": 46,
+          "rebuilt_solid": 46,
+          "centre_distance_m": 1.758939313175821e-15,
+          "relative_volume_difference": 4.5245676599146734e-13
+        },
+        {
+          "step_solid": 47,
+          "rebuilt_solid": 47,
+          "centre_distance_m": 3.8090293181530625e-15,
+          "relative_volume_difference": 5.216540767839872e-14
+        },
+        {
+          "step_solid": 48,
+          "rebuilt_solid": 48,
+          "centre_distance_m": 4.038108370065373e-15,
+          "relative_volume_difference": 7.981656618358465e-14
+        },
+        {
+          "step_solid": 49,
+          "rebuilt_solid": 49,
+          "centre_distance_m": 3.434500149750632e-15,
+          "relative_volume_difference": 7.473134246063183e-15
+        },
+        {
+          "step_solid": 50,
+          "rebuilt_solid": 50,
+          "centre_distance_m": 3.723132169150056e-15,
+          "relative_volume_difference": 4.23516473627152e-15
+        },
+        {
+          "step_solid": 51,
+          "rebuilt_solid": 51,
+          "centre_distance_m": 4.047760803134038e-15,
+          "relative_volume_difference": 3.2090517644860336e-14
+        },
+        {
+          "step_solid": 52,
+          "rebuilt_solid": 52,
+          "centre_distance_m": 4.003747795456285e-15,
+          "relative_volume_difference": 7.981656618358465e-14
+        },
+        {
+          "step_solid": 53,
+          "rebuilt_solid": 53,
+          "centre_distance_m": 3.560572229315399e-15,
+          "relative_volume_difference": 4.0003248023042206e-14
+        },
+        {
+          "step_solid": 54,
+          "rebuilt_solid": 54,
+          "centre_distance_m": 2.5478514135861506e-15,
+          "relative_volume_difference": 3.2028433318042983e-13
+        },
+        {
+          "step_solid": 55,
+          "rebuilt_solid": 55,
+          "centre_distance_m": 4.04953426143503e-15,
+          "relative_volume_difference": 3.194398560081988e-14
+        },
+        {
+          "step_solid": 56,
+          "rebuilt_solid": 56,
+          "centre_distance_m": 4.038108370065373e-15,
+          "relative_volume_difference": 7.961295249434082e-14
+        },
+        {
+          "step_solid": 57,
+          "rebuilt_solid": 57,
+          "centre_distance_m": 3.4558965863983773e-15,
+          "relative_volume_difference": 7.033538113941819e-15
+        },
+        {
+          "step_solid": 58,
+          "rebuilt_solid": 58,
+          "centre_distance_m": 3.7073554260818466e-15,
+          "relative_volume_difference": 4.0586995389268734e-15
+        },
+        {
+          "step_solid": 59,
+          "rebuilt_solid": 59,
+          "centre_distance_m": 4.043547768899566e-15,
+          "relative_volume_difference": 3.1650921512738965e-14
+        },
+        {
+          "step_solid": 60,
+          "rebuilt_solid": 60,
+          "centre_distance_m": 4.023559378806138e-15,
+          "relative_volume_difference": 7.940933880509698e-14
+        },
+        {
+          "step_solid": 61,
+          "rebuilt_solid": 61,
+          "centre_distance_m": 3.572162530321773e-15,
+          "relative_volume_difference": 4.0149780067082655e-14
+        },
+        {
+          "step_solid": 62,
+          "rebuilt_solid": 62,
+          "centre_distance_m": 1.7397600326626847e-15,
+          "relative_volume_difference": 4.528096963861562e-13
+        },
+        {
+          "step_solid": 63,
+          "rebuilt_solid": 63,
+          "centre_distance_m": 3.8069825782451644e-15,
+          "relative_volume_difference": 5.260500381052005e-14
+        }
+      ],
+      "maximum_centre_distance_m": 4.235983349446703e-15,
+      "maximum_relative_volume_difference": 4.528096963861562e-13
+    }
+  },
+  "coil_direction_diagnostics": [
+    {
+      "coil": 0,
+      "current_A": -1560.0,
+      "sampled_oriented_path_area_m2": [
+        0.0,
+        -0.002297368677239061,
+        0.002297368677239065
+      ],
+      "current_times_path_area_Am2": [
+        -0.0,
+        3.5838951364929352,
+        -3.5838951364929414
+      ]
+    },
+    {
+      "coil": 1,
+      "current_A": 1560.0,
+      "sampled_oriented_path_area_m2": [
+        2.168404344971009e-19,
+        -0.0022973686772390658,
+        -0.00229736867723906
+      ],
+      "current_times_path_area_Am2": [
+        3.382710778154774e-16,
+        -3.583895136492943,
+        -3.583895136492934
+      ]
+    },
+    {
+      "coil": 2,
+      "current_A": -1560.0,
+      "sampled_oriented_path_area_m2": [
+        3.2526065174565133e-19,
+        0.002297368677239062,
+        -0.002297368677239065
+      ],
+      "current_times_path_area_Am2": [
+        -5.074066167232161e-16,
+        -3.5838951364929366,
+        3.5838951364929414
+      ]
+    },
+    {
+      "coil": 3,
+      "current_A": 1560.0,
+      "sampled_oriented_path_area_m2": [
+        0.0,
+        0.0022973686772390666,
+        0.00229736867723906
+      ],
+      "current_times_path_area_Am2": [
+        0.0,
+        3.583895136492944,
+        3.583895136492934
+      ]
+    },
+    {
+      "coil": 4,
+      "current_A": -960.0,
+      "sampled_oriented_path_area_m2": [
+        0.0,
+        -0.005075491106021066,
+        0.005075491106021066
+      ],
+      "current_times_path_area_Am2": [
+        -0.0,
+        4.872471461780223,
+        -4.872471461780223
+      ]
+    },
+    {
+      "coil": 5,
+      "current_A": 960.0,
+      "sampled_oriented_path_area_m2": [
+        1.3010426069826053e-18,
+        -0.005075491106021065,
+        -0.005075491106021066
+      ],
+      "current_times_path_area_Am2": [
+        1.2490009027033011e-15,
+        -4.872471461780222,
+        -4.872471461780223
+      ]
+    },
+    {
+      "coil": 6,
+      "current_A": -960.0,
+      "sampled_oriented_path_area_m2": [
+        3.2526065174565133e-19,
+        0.005075491106021064,
+        -0.005075491106021066
+      ],
+      "current_times_path_area_Am2": [
+        -3.122502256758253e-16,
+        -4.872471461780221,
+        4.872471461780223
+      ]
+    },
+    {
+      "coil": 7,
+      "current_A": 960.0,
+      "sampled_oriented_path_area_m2": [
+        3.3610267347050637e-18,
+        0.005075491106021072,
+        0.005075491106021063
+      ],
+      "current_times_path_area_Am2": [
+        3.226585665316861e-15,
+        4.872471461780229,
+        4.87247146178022
+      ]
+    }
+  ],
+  "assertions_passed": true,
+  "note": "OCC Boolean point membership, not positive distance, determines CAD occupancy. Wire samples describe orientation only; physical coil source remains solid-current CoilBuilder. Solid centres/volumes are placement checks, not full Boolean shape-equivalence proofs.",
+  "script_sha256": "b35698b637cdcda410dfbaefd00b4b1929cdfbceaec95772034e6fddf6ff5de7",
+  "geometry_audit_sha256": "4682b3336d90ee407831e12713758328fcc755b388088ffa8512a86cf9fbc5fa"
+}
