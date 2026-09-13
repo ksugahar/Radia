@@ -33,6 +33,7 @@ def test_mcp_sdk_dependency_and_minimal_ci_are_synchronized():
     assert 'minimum-sdk:' in workflow
     assert '"mcp==$SDK_MIN"' in workflow
     assert 'RADIA_MCP_EXPECTED_SDK' in workflow
+    assert 'needs: [scope, selftest, minimum-sdk]' in workflow
 
 
 def test_supported_sdk_registers_metadata_lists_schema_and_calls_tool():
