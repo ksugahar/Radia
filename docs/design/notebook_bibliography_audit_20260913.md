@@ -7,7 +7,7 @@ claim to have checked every scientific statement for sufficient citation.
 Initially there were no `.bib` or `.bbl` files below docs and no notebook
 declarations using the canonical bibliography pipeline.
 
-## One migrated notebook
+## Two migrated notebooks
 
 `docs/open_boundary/open_boundary_demo.ipynb` now declares seven explicit
 canonical keys and ships its generated `.bbl`. The reference cell is the actual
@@ -26,7 +26,19 @@ entries were verified and added using the publisher's metadata:
 This establishes the citation pipeline, not numerical equivalence to those
 papers. Existing parent records were reused without inventing missing metadata.
 
-## Seven notebooks remain unresolved
+On 2026-09-14, `docs/section_optics/section_optics_design.ipynb` was migrated
+using the same pipeline and the explicit key `steinberg2024beamline`. Its
+handwritten full citation was replaced by a link to the generated reference
+cell; the open-access preprint link and the distinction between the paper's
+Halbach arrays and this notebook's iron electromagnet remain intact. The
+[APS publisher record](https://journals.aps.org/prab/abstract/10.1103/PhysRevAccelBeams.27.071601)
+verifies the authors, title, volume 27, article 071601 and publication year
+2024; [arXiv 2402.01120](https://arxiv.org/abs/2402.01120) verifies the preprint.
+Calculation cells, saved outputs and widget state are unchanged; no numerical
+revalidation is claimed. The parent addition also leaves the first notebook's
+selected-source fingerprint valid.
+
+## Six notebooks remain unresolved
 
 | Notebook (below docs) | Citation work still required |
 | --- | --- |
@@ -36,7 +48,6 @@ papers. Existing parent records were reused without inventing missing metadata.
 | `mixed_galerkin/mixed_galerkin_results.ipynb` | Resolve legacy Senior 1962 versus parent key `Senior1962` (verified record year 1960), and Yuferev–Ida 2010 versus parent `YuferevIda2009`. Mitzner, Kameari and Quarteroni/Valli have candidate parent keys. Do not silently change publication identity to match a year. |
 | `nodal_force/nodal_force.ipynb` | Verify Coulomb 1983, Henrotte/Hameyer 2004, and the eggshell attribution written as 2003 (parent `henrotte2004` is a 2004 COMPEL paper). |
 | `peec_integration/peec_showcase.ipynb` | Resolve Grover and FastHenry reference identities; Dowell has parent `dowell1966eddy`. Named PRIMA/source figure provenance also needs source-level review. |
-| `section_optics/section_optics_design.ipynb` | Register the explicitly named Steinberg et al. PRAB 27, 071601 (2024), arXiv 2402.01120, then replace its handwritten citation display. |
 
 The other 43 notebooks were not assigned dummy bibliographies. Screening found
 internal file links, implementation dates and numerical reference comparisons;
@@ -52,6 +63,6 @@ to generate from `metadata.radia.bibliography.keys` through the existing
 `bibliography_make_bbl` tool and render the bbl with installed TeX4ht.
 No separate MCP tool, parser, notebook-local `.bib`, or JSON sidecar was added.
 The fast contract checks only notebooks that explicitly declare migration;
-it must not be reported as resolving the seven rows above.
+it must not be reported as resolving the six rows above.
 
 No shared editable installation, live client or solver binary was changed.
