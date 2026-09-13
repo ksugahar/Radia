@@ -121,8 +121,8 @@ def read_previous_manifest(ref: str) -> dict | None:
         return None
 
 
-def added_impact_sources(current: dict, previous: dict | None) -> set[str] | None:
-    """Scope only new rule additions; every other manifest change remains broad."""
+def changed_impact_tests(current: dict, previous: dict | None) -> set[str] | None:
+    """Return tests owned by changed rules; structural changes remain broad."""
     if not isinstance(previous, dict):
         return None
     if ({key: value for key, value in current.items() if key != 'impact_rules'}
@@ -132,9 +132,17 @@ def added_impact_sources(current: dict, previous: dict | None) -> set[str] | Non
     after = current.get('impact_rules')
     if not isinstance(before, dict) or not isinstance(after, dict):
         return None
-    if any(key not in after or after[key] != value for key, value in before.items()):
-        return None
-    return set(after) - set(before)
+    selected: set[str] = set()
+    for source in before.keys() | after.keys():
+        old_tests = before.get(source, [])
+        new_tests = after.get(source, [])
+        if old_tests == new_tests:
+            continue
+        if not isinstance(old_tests, list) or not isinstance(new_tests, list):
+            return None
+        selected.update(old_tests)
+        selected.update(new_tests)
+    return selected
 
 
 def select_impact_tests(
@@ -144,14 +152,16 @@ def select_impact_tests(
     manifest = json.loads(MANIFEST.read_text(encoding='utf-8'))
     rules = manifest.get('impact_rules', {})
     selected = list(paths)
-    added = set()
+    manifest_tests = set()
     if changed is not None and 'tests/test_tier_manifest.json' in changed:
-        added = added_impact_sources(manifest, previous_manifest)
-        if added is None:
+        manifest_tests = changed_impact_tests(manifest, previous_manifest)
+        if manifest_tests is None:
             changed = None
-            added = set()
+            manifest_tests = set()
+        else:
+            selected.extend(sorted(manifest_tests))
     for source, tests in rules.items():
-        if (changed is None or source in added or source in changed
+        if (changed is None or source in changed
                 or (source.endswith('/') and any(path.startswith(source) for path in changed))
                 or any(test in changed for test in tests)):
             selected.extend(tests)
