@@ -92,3 +92,31 @@ Before ver5 acceptance, select the affected numerical parity lane against the
 exact candidate MEX/source provenance. Production geometry, nonlinear/moving
 applications and the complete upstream NGSolve API are not proven by these
 bounded linear parity results. No new heavy numerical run was launched here.
+
+## Fable follow-up: grouped input validation
+
+The user relayed Fable 5.1's independent main review: the four original
+high-priority defects are resolved. Its next recommendation is the default
+core profile's grouped-call argument boundary.
+
+`CoarseToolRegistry` now lazily builds each operation's SDK `func_metadata`
+and applies the SDK's JSON pre-parser and Pydantic argument model. This retains
+SDK defaults, coercion and one-level model conversion without serializing or
+changing the operation's domain return value. Binding the named Python
+signature first preserves rejection of unknown keywords, which the SDK's
+argument model otherwise ignores. A positional-only callable cannot be invoked
+through this named-argument protocol and fails before execution.
+
+Unknown operation names, non-dictionary argument containers, binding failures
+and SDK input-validation failures return `error_payload(kind="input")` with
+the runner name as stage and a catalog hint where applicable. Metadata/schema
+construction errors and exceptions raised by the tool body are outside this
+input-error boundary: an internal `TypeError` or `ValidationError` is not
+misreported as bad user input. Existing domain failure dictionaries remain
+unchanged. Sync functions, async functions and sync-returned awaitables retain
+their existing execution behavior.
+
+The existing coarse-registry test file now compares valid calls against SDK
+`Tool.run`, covers invalid inputs without executing the body, and distinguishes
+body failures from input failures. No new public tool, standalone validation
+framework, live installation change or solver acceptance claim is introduced.
