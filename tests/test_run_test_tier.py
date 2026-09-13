@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import copy
 import importlib.util
+import json
+import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
-
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "tools" / "run_test_tier.py"
@@ -63,6 +66,93 @@ def test_unknown_base_selects_all_registered_impacts():
 def test_manifest_change_checks_all_registered_impacts():
     runner = runner_module()
     assert runner.select_impact_tests([], ['tests/test_tier_manifest.json']) == runner.select_impact_tests([], None)
+
+
+def test_additive_manifest_selects_new_rules_and_ordinary_impacts(monkeypatch, tmp_path):
+    runner = runner_module()
+    previous = json.loads(runner.MANIFEST.read_text(encoding='utf-8'))
+    current = copy.deepcopy(previous)
+    # Source need not change: adding a mapping must exercise its tests anyway.
+    current['impact_rules']['src/new_gate.py'] = ['tests/test_ci_monitor.py']
+    manifest = tmp_path / 'manifest.json'
+    manifest.write_text(json.dumps(current), encoding='utf-8')
+    monkeypatch.setattr(runner, 'MANIFEST', manifest)
+    selected = runner.select_impact_tests(
+        ['tests/test_test_tier_policy.py'],
+        ['tests/test_tier_manifest.json', 'tools/ci_preflight_mdx.py'],
+        previous_manifest=previous,
+    )
+    assert set(selected) == {
+        'tests/test_test_tier_policy.py', 'tests/test_ci_monitor.py',
+        'tests/test_ci_preflight_mdx.py',
+    }
+
+
+@pytest.mark.parametrize('change', ['remove_rule', 'replace_tests', 'append_test',
+                                     'profile', 'schema', 'missing_rules'])
+def test_nonadditive_manifest_stays_broad(change, monkeypatch, tmp_path):
+    runner = runner_module()
+    current = json.loads(runner.MANIFEST.read_text(encoding='utf-8'))
+    previous = copy.deepcopy(current)
+    source = next(iter(current['impact_rules']))
+    if change == 'remove_rule':
+        previous['impact_rules']['src/removed.py'] = ['tests/test_ci_monitor.py']
+    elif change == 'replace_tests':
+        previous['impact_rules'][source] = ['tests/test_ci_monitor.py']
+    elif change == 'append_test':
+        current['impact_rules'][source].append('tests/test_ci_monitor.py')
+    elif change == 'profile':
+        previous['profiles']['fast-contracts']['max_elapsed_seconds'] = 59
+    elif change == 'schema':
+        previous['schema'] = 'other-schema'
+    else:
+        del previous['impact_rules']
+    manifest = tmp_path / 'manifest.json'
+    manifest.write_text(json.dumps(current), encoding='utf-8')
+    monkeypatch.setattr(runner, 'MANIFEST', manifest)
+    assert runner.select_impact_tests(
+        [], ['tests/test_tier_manifest.json'], previous_manifest=previous,
+    ) == runner.select_impact_tests([], None)
+
+
+@pytest.mark.parametrize('payload,code', [(b'not json', 0), (b'[]', 0), (b'', 1),
+                                         (b'\xff', 0)])
+def test_unavailable_previous_manifest_remains_unknown(monkeypatch, payload, code):
+    runner = runner_module()
+    monkeypatch.setattr(runner.subprocess, 'run',
+                        lambda *args, **kwargs: SimpleNamespace(stdout=payload, returncode=code))
+    assert runner.read_previous_manifest('base') is None
+
+
+def test_cli_passes_exact_base_manifest_to_selection(monkeypatch):
+    runner = runner_module()
+    previous = json.loads(runner.MANIFEST.read_text(encoding='utf-8'))
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append(command)
+        if 'diff' in command:
+            return SimpleNamespace(returncode=0, stdout=b'tests/test_tier_manifest.json\0')
+        if 'show' in command:
+            assert command[-1] == 'exact-base:tests/test_tier_manifest.json'
+            return SimpleNamespace(returncode=0, stdout=json.dumps(previous).encode())
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(runner.subprocess, 'run', fake_run)
+    assert runner.main(['--since', 'exact-base', '--collect-only']) == 0
+    selected = calls[-1]
+    assert 'tests/test_ci_preflight_mdx.py' not in selected
+    assert 'tests/test_run_test_tier.py' in selected
+
+
+def test_previous_manifest_timeout_remains_unknown(monkeypatch):
+    runner = runner_module()
+
+    def timeout(*args, **kwargs):
+        raise subprocess.TimeoutExpired('git', 30)
+
+    monkeypatch.setattr(runner.subprocess, 'run', timeout)
+    assert runner.read_previous_manifest('base') is None
 
 
 @pytest.mark.parametrize('changed,expected', [
