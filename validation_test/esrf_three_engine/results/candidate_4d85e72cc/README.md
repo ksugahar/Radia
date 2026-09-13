@@ -1,9 +1,25 @@
 # Repaired energy-Newton candidate: Hibino native checks
 
-Status: **HOLD for ESRF6 acceptance**. The repaired candidate passed the small
-native tests below. ESRF6 itself was **not re-solved**: the latest user request
-prioritizes a fresh mesh/CAD/gap/coil-placement audit, owned by the management
-task. Existing mesh checks do not replace that audit.
+Status: **HOLD for three-method ESRF6 acceptance**. Small native checks and the
+actual ESRF6 BDM1/mass-Riesz residual gate passed. The finite mesh/CAD/gap/coil
+audit is recorded in `../surface_overlap_20260913/`. The execution task owns
+the re-solves and scratch cleanup; management owns integration and release.
+
+## Actual ESRF6 BDM1
+
+`case6_bdm1_mass_riesz.json` records the installed candidate on hibino:
+Newton 8 iterations, one backtrack, residual 3.278340250386088e-7 at target
+2e-5, 62,192 HDiv DoFs, full iron model, no IMA, 8 threads. Gram build took
+267.55 s, solve 383.99 s, total including field observations 655.35 s.
+These are diagnostic timings, not a controlled performance comparison: another
+unrelated `freq8000Hz_mur1.0_toymodel_maxTemp.py` job (PID 12152) existed at the
+initial resource probe; later it disappeared and another Python job appeared.
+Neither was stopped or modified. BDM1 is not final BDM2 acceptance.
+
+Recovery SHA-256 is `18a5b1c97d28f738191d4c40d1aee1a5d19997ac22824526b4fc3286d2d553ce`.
+The durable copy is in `S:/Radia/validation_artifacts/esrf6_mesh_audit_20260913/`.
+Cell-average M is retained for iron-side comparisons. Global average M is
+almost zero by quadrupole symmetry and is not an adequate nonlinear observable.
 
 ## Build and identity
 
