@@ -1,0 +1,10 @@
+{
+  "schema": "radia.native-build-provenance.v1",
+  "source_commit": "4d85e72cce70e02417abcd7972b509dfc2bac632",
+  "source_dirty": false,
+  "source_change_fingerprint_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
+  "binary_name": "_radia_pybind.pyd",
+  "binary_bytes": 3842048,
+  "binary_sha256": "932e49626c05c1e3d459f20649632d4bfa0adf9b37f325dace4093d74aeeb7b5",
+  "generated_at_utc": "2026-09-13T09:03:43.8998421+00:00"
+}
