@@ -440,7 +440,7 @@ def test_mixed_omega_picard_projects_positive_order_matched_material_state():
         order=2,
         material_update_order=1,
         anderson_depth=0,
-        material_log_state_initial=stats["material_log_state_dofs"],
+        material_log_state_initial=stats["material_restart_state"],
     )
     resumed_stats = resumed["nonlinear_stats"]
     assert resumed_stats["converged"]
@@ -452,24 +452,48 @@ def test_ngsolve_bh_coefficient_function_matches_scalar_pchip_and_vacuum_tail():
     import ngsolve as ng
     from radia.scalar_potential_solver import (
         _build_bh_coefficient_function,
+        _build_bh_coenergy_coefficient_function,
+        _build_bh_coenergy_interpolator,
         _build_bh_interpolator,
     )
 
     mesh, _, _, bh_table = _picard_case()
     parameter = ng.Parameter(0.0)
     coefficient = _build_bh_coefficient_function(parameter, bh_table)
+    coenergy_coefficient = _build_bh_coenergy_coefficient_function(parameter, bh_table)
     scalar = _build_bh_interpolator(bh_table)
+    coenergy_scalar = _build_bh_coenergy_interpolator(bh_table)
     point = mesh(0.5, 0.1, 0.2)
     for H_value in (0.0, 0.25, 0.5, 1.1, 5.0, 20.0, 40.0, 100.0):
         parameter.Set(H_value)
         assert float(coefficient(point)) == pytest.approx(
             scalar(H_value), rel=2.0e-12, abs=1.0e-15
         )
+        assert float(coenergy_coefficient(point)) == pytest.approx(
+            coenergy_scalar(H_value), rel=2.0e-12, abs=1.0e-15
+        )
+    for H_value in (0.25, 1.1, 20.0, 100.0):
+        step = 1.0e-6 * max(H_value, 1.0)
+        derivative = (
+            coenergy_scalar(H_value + step) - coenergy_scalar(H_value - step)
+        ) / (2.0 * step)
+        assert derivative == pytest.approx(scalar(H_value), rel=2.0e-8, abs=1.0e-10)
 
 
 def test_mixed_omega_projected_material_state_validates_resume_shape():
     mesh, h_source, potential, bh_table = _picard_case()
-    with pytest.raises(ValueError, match="one value per active material degree"):
+    solved = _picard_solve(
+        mesh,
+        h_source,
+        potential,
+        bh_table,
+        order=2,
+        material_update_order=1,
+        anderson_depth=0,
+    )
+    restart = dict(solved["nonlinear_stats"]["material_restart_state"])
+    restart["values"] = [0.0]
+    with pytest.raises(ValueError, match="one value per active"):
         _picard_solve(
             mesh,
             h_source,
@@ -478,8 +502,59 @@ def test_mixed_omega_projected_material_state_validates_resume_shape():
             order=2,
             material_update_order=1,
             anderson_depth=0,
-            material_log_state_initial=[0.0],
+            material_log_state_initial=restart,
         )
+
+
+def test_mixed_omega_projected_material_state_rejects_identity_mismatch():
+    mesh, h_source, potential, bh_table = _picard_case()
+    solved = _picard_solve(
+        mesh,
+        h_source,
+        potential,
+        bh_table,
+        order=2,
+        material_update_order=1,
+        anderson_depth=0,
+    )
+    restart = solved["nonlinear_stats"]["material_restart_state"]
+    changed_table = list(bh_table)
+    changed_table[-1] = (changed_table[-1][0], changed_table[-1][1] * 1.01)
+    with pytest.raises(ValueError, match="does not match the current mesh"):
+        _picard_solve(
+            mesh,
+            h_source,
+            potential,
+            changed_table,
+            order=2,
+            material_update_order=1,
+            anderson_depth=0,
+            material_log_state_initial=restart,
+        )
+
+
+def test_mixed_omega_projected_energy_uses_current_solution_and_material_state():
+    mesh, h_source, potential, bh_table = _picard_case()
+    solved = _picard_solve(
+        mesh,
+        h_source,
+        potential,
+        bh_table,
+        order=2,
+        material_update_order=1,
+        anderson_depth=0,
+    )
+    energy = solved["energy_observables"]
+    stats = solved["nonlinear_stats"]
+    assert energy["energy_J"] > 0.0
+    assert energy["coenergy_J"] > 0.0
+    assert energy["identity"]["material_state_identity_sha256"] == stats[
+        "material_state_identity_sha256"
+    ]
+    assert energy["identity"]["bh_table_sha256"] == stats[
+        "material_state_identity"
+    ]["bh_table_sha256"]
+    assert len(energy["identity"]["solution_sha256"]) == 64
 
 
 def test_mixed_omega_envelope_includes_interpolated_material_targets(monkeypatch):

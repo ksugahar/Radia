@@ -2352,7 +2352,7 @@ def nonlinear_magnetic_refinement_energy_gate(
         )
     except (TypeError, ValueError, json.JSONDecodeError) as exc:
         result = {
-            "policy": "nonlinear_magnetic_refinement_energy_gate_v1",
+            "policy": "nonlinear_magnetic_refinement_energy_gate_v2",
             "status": "invalid_input",
             "error": str(exc),
         }

@@ -139,14 +139,15 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
     :func:`radia.kelvin_solver.solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin`:
     ``nonlinear_anderson_depth`` enables its constrained Anderson mixing,
     ``nonlinear_mu_r_initial`` is a scalar or the per-element warm start of an
-    earlier ``nonlinear_stats["mu_r_elements"]``, and
+    earlier order-one ``nonlinear_stats["mu_r_elements"]``, and
     ``nonlinear_observation_points`` records the per-iteration field change at
     the points where the result is consumed.  A non-converged loop raises
     :class:`radia.kelvin_solver.MixedOmegaPicardNotConverged` with that state.
     Response order two requires an explicit
     ``nonlinear_material_update_order=1``; its positive log-permeability field
-    is a separate spatial material state and does not use the element-centroid
-    warm-start array.
+    is a separate spatial material state. Resume it with the complete
+    ``nonlinear_stats["material_restart_state"]`` mapping so mesh, B-H table,
+    material selector, orders, and active DOFs are checked before solving.
 
     ``source_potential_contract="total_hodge"`` is the general CoilBuilder
     route.  It retains the non-exact harmonic/cut component of a linked source

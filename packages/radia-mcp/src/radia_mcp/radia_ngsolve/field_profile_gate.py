@@ -17,8 +17,8 @@ def nonlinear_magnetic_refinement_energy_gate(
 
     Every level must use a response/material order pair of ``p``/``p-1``, a
     finite positive physical permeability field, and matching field/energy
-    identities.  Successive average-field and RMS changes must contract toward
-    the finest mesh; a single close result is intentionally insufficient.
+    identities. Successive average-field, RMS, and energy changes must contract
+    toward the finest mesh; a single close result is intentionally insufficient.
     """
 
     if not isinstance(summary, dict):
@@ -37,7 +37,16 @@ def nonlinear_magnetic_refinement_energy_gate(
     if not isinstance(raw_levels, list):
         raise ValueError("levels must be a list")
 
-    identity_keys = ("material_domain", "coordinate_system", "nonlinear_state_id")
+    identity_keys = (
+        "material_domain",
+        "coordinate_system",
+        "unit_system",
+        "nonlinear_state_id",
+        "mesh_topology_geometry_sha256",
+        "bh_table_sha256",
+        "material_state_identity_sha256",
+        "solution_sha256",
+    )
     levels: list[dict[str, Any]] = []
     for index, raw in enumerate(raw_levels):
         if not isinstance(raw, dict):
@@ -91,6 +100,7 @@ def nonlinear_magnetic_refinement_energy_gate(
                 "average_field_T": average,
                 "rms_magnitude_T": number("rms_magnitude_T"),
                 "magnetic_energy_J": number("magnetic_energy_J"),
+                "magnetic_coenergy_J": number("magnetic_coenergy_J"),
                 "physical_relative_permeability_bounds": permeability_bounds,
                 "field_energy_identity_matches": identities_match,
             }
@@ -129,6 +139,8 @@ def nonlinear_magnetic_refinement_energy_gate(
                 "energy_finite_nonnegative": (
                     level["magnetic_energy_J"] is not None
                     and level["magnetic_energy_J"] >= 0.0
+                    and level["magnetic_coenergy_J"] is not None
+                    and level["magnetic_coenergy_J"] >= 0.0
                 ),
                 "physical_permeability_positive": (
                     len(bounds) == 2
@@ -145,8 +157,24 @@ def nonlinear_magnetic_refinement_energy_gate(
         fine_average = fine["average_field_T"]
         coarse_rms = coarse["rms_magnitude_T"]
         fine_rms = fine["rms_magnitude_T"]
-        if not coarse_average or not fine_average or coarse_rms is None or fine_rms is None:
-            pair_changes.append({"average": math.inf, "rms": math.inf, "combined": math.inf})
+        coarse_energy = coarse["magnetic_energy_J"]
+        fine_energy = fine["magnetic_energy_J"]
+        if (
+            not coarse_average
+            or not fine_average
+            or coarse_rms is None
+            or fine_rms is None
+            or coarse_energy is None
+            or fine_energy is None
+        ):
+            pair_changes.append(
+                {
+                    "average": math.inf,
+                    "rms": math.inf,
+                    "energy": math.inf,
+                    "combined": math.inf,
+                }
+            )
             continue
         average_scale = max(
             math.sqrt(sum(value * value for value in fine_average)), 1.0e-300
@@ -161,11 +189,15 @@ def nonlinear_magnetic_refinement_energy_gate(
             / average_scale
         )
         rms_change = abs(fine_rms - coarse_rms) / max(abs(fine_rms), 1.0e-300)
+        energy_change = abs(fine_energy - coarse_energy) / max(
+            abs(fine_energy), 1.0e-300
+        )
         pair_changes.append(
             {
                 "average": average_change,
                 "rms": rms_change,
-                "combined": max(average_change, rms_change),
+                "energy": energy_change,
+                "combined": max(average_change, rms_change, energy_change),
             }
         )
 
@@ -180,11 +212,11 @@ def nonlinear_magnetic_refinement_energy_gate(
         "mesh_sizes_strictly_decrease": mesh_ordered,
         "all_levels_valid": bool(level_validity)
         and all(all(checks.values()) for checks in level_validity),
-        "field_rms_changes_contract": changes_contract,
+        "field_rms_energy_changes_contract": changes_contract,
         "finest_pair_is_stable": finest_change <= finest_limit,
     }
     return {
-        "policy": "nonlinear_magnetic_refinement_energy_gate_v1",
+        "policy": "nonlinear_magnetic_refinement_energy_gate_v2",
         "status": "ok" if all(checks.values()) else "needs_attention",
         "checks": checks,
         "issues": [name for name, accepted in checks.items() if not accepted],
@@ -201,7 +233,7 @@ def nonlinear_magnetic_refinement_energy_gate(
         },
         "notes": [
             "one mesh or one point cannot establish nonlinear spatial convergence",
-            "field and energy observables must bind the same material domain, frame, and nonlinear state",
+            "field and energy observables must bind the same mesh, solution, B-H table, material state, domain, and frame",
             "the gate diagnoses evidence quality and does not assert cross-solver parity by itself",
         ],
     }

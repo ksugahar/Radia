@@ -133,9 +133,14 @@ def test_nonlinear_magnetic_spatial_gate_rejects_rms_disagreement_and_wraps_mcp(
 def _nonlinear_refinement_summary():
     def level(mesh_size, average_z, rms, energy):
         identity = {
-            "material_domain": "iron",
+            "material_domain": "air|iron",
             "coordinate_system": "right-handed Cartesian",
+            "unit_system": "SI",
             "nonlinear_state_id": "bh-state-17",
+            "mesh_topology_geometry_sha256": "1" * 64,
+            "bh_table_sha256": "2" * 64,
+            "material_state_identity_sha256": "3" * 64,
+            "solution_sha256": "4" * 64,
         }
         return {
             "mesh_size_m": mesh_size,
@@ -147,6 +152,7 @@ def _nonlinear_refinement_summary():
             "average_field_T": [0.0, 0.0, average_z],
             "rms_magnitude_T": rms,
             "magnetic_energy_J": energy,
+            "magnetic_coenergy_J": 1.1 * energy,
             "field_identity": {**identity, "unit": "T"},
             "energy_identity": {**identity, "unit": "J"},
         }
@@ -180,7 +186,7 @@ def test_nonlinear_refinement_energy_gate_rejects_noncontracting_ladder():
     bad = _nonlinear_refinement_summary()
     bad["levels"][2]["average_field_T"] = [0.0, 0.0, -1.25]
     result = nonlinear_magnetic_refinement_energy_gate(bad)
-    assert result["checks"]["field_rms_changes_contract"] is False
+    assert result["checks"]["field_rms_energy_changes_contract"] is False
 
 
 def test_nonlinear_refinement_energy_gate_rejects_field_energy_identity_mismatch_and_wraps_mcp():
@@ -191,3 +197,11 @@ def test_nonlinear_refinement_energy_gate_rejects_field_energy_identity_mismatch
     assert result["level_checks"][2]["field_energy_identity_matches"] is False
     wrapped = json.loads(mcp_nonlinear_refinement_gate(json.dumps(bad)))
     assert wrapped["status"] == "needs_attention"
+
+
+def test_nonlinear_refinement_energy_gate_rejects_stale_solution_digest():
+    bad = _nonlinear_refinement_summary()
+    bad["levels"][1]["energy_identity"]["solution_sha256"] = "5" * 64
+    result = nonlinear_magnetic_refinement_energy_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert result["level_checks"][1]["field_energy_identity_matches"] is False

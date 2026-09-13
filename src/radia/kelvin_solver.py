@@ -24,6 +24,9 @@ two-sphere Kelvin geometry built via
 from __future__ import annotations
 
 import math
+import hashlib
+import json
+from collections.abc import Mapping
 
 import numpy as np
 
@@ -32,6 +35,66 @@ from ngsolve import (H1, HCurl, BilinearForm, LinearForm, GridFunction,
                       curl, dx, ds, grad, InnerProduct, Conj, Integrate)
 
 from radia.kelvin_material import make_kelvin_mu_cf, make_kelvin_nu_cf, MU_0, NU_0
+
+
+def _canonical_array_sha256(values):
+    array = np.ascontiguousarray(np.asarray(values, dtype="<f8"))
+    digest = hashlib.sha256()
+    digest.update(json.dumps(list(array.shape), separators=(",", ":")).encode("ascii"))
+    digest.update(array.tobytes(order="C"))
+    return digest.hexdigest()
+
+
+def _mesh_topology_geometry_sha256(mesh):
+    from ngsolve import VOL
+
+    vertices = [
+        [int(vertex.nr), *[float(value) for value in vertex.point]]
+        for vertex in mesh.vertices
+    ]
+    elements = [
+        [
+            int(element.nr),
+            int(element.index),
+            *[int(vertex.nr) for vertex in element.vertices],
+        ]
+        for element in mesh.Elements(VOL)
+    ]
+    payload = {
+        "vertices": vertices,
+        "volume_elements": elements,
+        "materials": [str(value) for value in mesh.GetMaterials()],
+        "geometry_order": int(mesh.GetCurveOrder()),
+        "deformation_sha256": None,
+    }
+    deformation = getattr(mesh, "deformation", None)
+    if deformation is not None:
+        try:
+            payload["deformation_sha256"] = _canonical_array_sha256(
+                deformation.vec.FV().NumPy()
+            )
+        except (AttributeError, TypeError) as exc:
+            raise ValueError(
+                "cannot establish restart identity for this deformed mesh"
+            ) from exc
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
+def _identity_sha256(identity):
+    return hashlib.sha256(
+        json.dumps(identity, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
+def _validate_restart_identity_digest(value):
+    canonical = str(value or "").strip().lower()
+    if len(canonical) != 64 or any(
+        character not in "0123456789abcdef" for character in canonical
+    ):
+        raise ValueError("material restart state identity_sha256 is not a SHA-256 digest")
+    return canonical
 
 
 def _constrains_point_gauge(mesh, selector, dirichlet_bbbnd):
@@ -1014,11 +1077,16 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
     ``material_update_order=1``. That path projects the logarithm of the B-H
     secant permeability into discontinuous L2 and exponentiates a bounded field,
     so the physical permeability remains positive while its spatial order is
-    compatible with the response.
+    compatible with the response. Its restart input is the complete
+    ``nonlinear_stats["material_restart_state"]`` mapping. Bare coefficient
+    arrays are rejected because their mesh, material, order, and B-H identity
+    cannot be verified.
 
     The result has the same field keys as the linear mixed solve plus
     ``nonlinear_stats`` (with the per-iteration ``history``, a contraction-rate
-    estimate, and the per-element ``mu_r_elements`` state).  A loop that reaches
+    estimate, and its restart state). The projected high-order path also returns
+    energy and coenergy evaluated from the final solution and the exact PCHIP
+    H-potential under a shared identity. A loop that reaches
     ``max_iterations`` raises :class:`MixedOmegaPicardNotConverged` carrying that
     state.  Caller wraps the complete operation in :class:`ngsolve.TaskManager`.
     """
@@ -1309,7 +1377,10 @@ def _solve_mixed_omega_projected_log_material(
         sqrt,
     )
     from radia.picard_acceleration import estimate_contraction_rate
-    from radia.scalar_potential_solver import _build_bh_coefficient_function
+    from radia.scalar_potential_solver import (
+        _build_bh_coefficient_function,
+        _build_bh_coenergy_coefficient_function,
+    )
 
     initial = np.asarray(mu_r_initial, dtype=float)
     if initial.ndim != 0:
@@ -1341,12 +1412,40 @@ def _solve_mixed_omega_projected_log_material(
     active_dofs = [index for index in range(material_fes.ndof) if active_mask[index]]
     if not active_dofs:
         raise ValueError("nonlinear material selector has no material-update degrees of freedom")
+    material_state_identity = {
+        "schema": "radia.mixed-omega-material-state.v1",
+        "mesh_topology_geometry_sha256": _mesh_topology_geometry_sha256(mesh),
+        "bh_table_sha256": _canonical_array_sha256(bh_array[:, :2]),
+        "nonlinear_materials": sorted(str(value) for value in nonlinear_materials),
+        "response_order": int(order),
+        "material_update_order": int(material_update_order),
+        "active_material_dof_numbers": [int(value) for value in active_dofs],
+    }
+    material_state_identity_sha256 = _identity_sha256(material_state_identity)
     warm_state = None
     if material_log_state_initial is not None:
-        warm_state = np.asarray(material_log_state_initial, dtype=float)
+        if not isinstance(material_log_state_initial, Mapping):
+            raise ValueError(
+                "material_log_state_initial must be the material_restart_state "
+                "mapping from an earlier solve, not a bare coefficient array"
+            )
+        supplied_identity = material_log_state_initial.get("identity")
+        supplied_identity_sha256 = _validate_restart_identity_digest(
+            material_log_state_initial.get("identity_sha256")
+        )
+        if not isinstance(supplied_identity, Mapping):
+            raise ValueError("material restart state is missing its identity mapping")
+        if _identity_sha256(dict(supplied_identity)) != supplied_identity_sha256:
+            raise ValueError("material restart state identity digest is internally inconsistent")
+        if supplied_identity_sha256 != material_state_identity_sha256:
+            raise ValueError(
+                "material restart state does not match the current mesh, B-H table, "
+                "material selector, response order, material order, and active DOFs"
+            )
+        warm_state = np.asarray(material_log_state_initial.get("values"), dtype=float)
         if warm_state.shape != (len(active_dofs),):
             raise ValueError(
-                "material_log_state_initial must contain one value per active "
+                "material restart state must contain one value per active "
                 f"material degree of freedom ({len(active_dofs)}); got {warm_state.shape}"
             )
         if not np.all(np.isfinite(warm_state)):
@@ -1505,6 +1604,11 @@ def _solve_mixed_omega_projected_log_material(
                 dtype=float,
             )
     state = log_mu.vec.FV().NumPy()[active_dofs].copy()
+    material_restart_state = {
+        "values": state.tolist(),
+        "identity": material_state_identity,
+        "identity_sha256": material_state_identity_sha256,
+    }
     stats = {
         "method": "Picard projected log-permeability",
         "iterations": int(iteration),
@@ -1529,6 +1633,9 @@ def _solve_mixed_omega_projected_log_material(
         ),
         "material_log_state_dofs": state.tolist(),
         "material_state_dof_numbers": active_dofs,
+        "material_state_identity": material_state_identity,
+        "material_state_identity_sha256": material_state_identity_sha256,
+        "material_restart_state": material_restart_state,
         "warm_start": warm_state is not None,
         "final_material_state_resolved": converged,
     }
@@ -1543,11 +1650,90 @@ def _solve_mixed_omega_projected_log_material(
             {
                 "material_log_state_dofs": state.tolist(),
                 "material_state_dof_numbers": active_dofs,
+                "material_restart_state": material_restart_state,
                 "nonlinear_stats": stats,
             },
         )
     result["mu_cf"] = mixed_mu_cf()
     result["B_cf"] = result["mu_cf"] * result["H_cf"]
+    H_magnitude = sqrt(InnerProduct(result["H_cf"], result["H_cf"]) + 1.0e-24)
+    B_law = _build_bh_coefficient_function(H_magnitude, bh_array)
+    coenergy_density = _build_bh_coenergy_coefficient_function(H_magnitude, bh_array)
+    nonlinear_coenergy = float(
+        Integrate(
+            coenergy_density,
+            mesh,
+            definedon=nonlinear_selector,
+            order=max(integration_order, 2 * int(order) + 2),
+        ).real
+    )
+    nonlinear_energy = float(
+        Integrate(
+            H_magnitude * B_law - coenergy_density,
+            mesh,
+            definedon=nonlinear_selector,
+            order=max(integration_order, 2 * int(order) + 2),
+        ).real
+    )
+    physical_linear_materials = [
+        str(material)
+        for material in mesh.GetMaterials()
+        if material not in nonlinear_set
+        and not any(key.lower() in str(material).lower() for key in kelvin_mats)
+    ]
+    linear_energy = 0.0
+    if physical_linear_materials:
+        linear_energy = float(
+            Integrate(
+                0.5 * MU_0 * H_magnitude**2,
+                mesh,
+                definedon=mesh.Materials("|".join(physical_linear_materials)),
+                order=max(integration_order, 2 * int(order) + 2),
+            ).real
+        )
+    solution_sha256 = _canonical_array_sha256(result["solution"].vec.FV().NumPy())
+    energy_identity = {
+        "schema": "radia.nonlinear-magnetic-energy-identity.v1",
+        "mesh_topology_geometry_sha256": material_state_identity[
+            "mesh_topology_geometry_sha256"
+        ],
+        "bh_table_sha256": material_state_identity["bh_table_sha256"],
+        "material_state_identity_sha256": material_state_identity_sha256,
+        "solution_sha256": solution_sha256,
+        "nonlinear_materials": sorted(str(value) for value in nonlinear_materials),
+        "linear_physical_materials": sorted(physical_linear_materials),
+        "material_domain": "|".join(
+            sorted([*map(str, nonlinear_materials), *physical_linear_materials])
+        ),
+        "nonlinear_state_id": material_state_identity_sha256,
+        "coordinate_system": "right-handed Cartesian",
+        "unit_system": "SI",
+        "unit": "J",
+        "integration_order": max(integration_order, 2 * int(order) + 2),
+    }
+    field_identity = {
+        key: value
+        for key, value in energy_identity.items()
+        if key not in {"schema", "integration_order", "unit"}
+    }
+    field_identity.update(
+        {
+            "schema": "radia.nonlinear-magnetic-field-identity.v1",
+            "unit": "T",
+        }
+    )
+    result["field_observable_identity"] = field_identity
+    result["energy_observables"] = {
+        "identity": energy_identity,
+        "identity_sha256": _identity_sha256(energy_identity),
+        "energy_J": nonlinear_energy + linear_energy,
+        "coenergy_J": nonlinear_coenergy + linear_energy,
+        "nonlinear_energy_J": nonlinear_energy,
+        "nonlinear_coenergy_J": nonlinear_coenergy,
+        "linear_physical_energy_J": linear_energy,
+        "nonlinear_constitutive_relation": "energy=H*B-integral_0^H_Bdh",
+        "nonlinear_coenergy_relation": "coenergy=integral_0^H_Bdh",
+    }
     result["nonlinear_stats"] = stats
     return result
 
