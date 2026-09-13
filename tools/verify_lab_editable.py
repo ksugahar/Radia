@@ -12,6 +12,11 @@ radia-mcp resolved to the canonical tree carrying 1.4.39 while origin/main
 carried 1.4.53, and the path check called that clean. So also compare the
 version that actually imports against origin/main. origin/main is the
 reference; the installed package still never is.
+
+Version ordering requires the `packaging` package (python -m pip install
+packaging). Missing comparison support fails closed; --skip-origin-check is
+still an explicit path-only check. Equal versions do not prove equal source
+contents or native binaries; release acceptance checks those separately.
 """
 from __future__ import annotations
 
@@ -80,7 +85,9 @@ def _origin_main_version(relative_path):
 
 
 def _release_order(version):
-    return tuple(int(part) for part in re.findall(r"\d+", version))
+    from packaging.version import Version
+
+    return Version(version)
 
 
 def verify_against_origin_main(packages):
@@ -106,9 +113,20 @@ def verify_against_origin_main(packages):
                 "        Check the import source and local origin/main ref. "
                 "No installation was changed.")
             continue
-        if running == reference:
+        try:
+            running_order = _release_order(running)
+            reference_order = _release_order(reference)
+        except (ImportError, ValueError) as exc:
+            stale += 1
+            release_quad.fail(
+                f"{name:<26} version comparison UNVERIFIED "
+                f"(running={running}, origin/main={reference}): {exc}\n"
+                "        Require valid PEP 440 versions and the packaging package "
+                "(python -m pip install packaging). No installation was changed.")
+            continue
+        if running_order == reference_order:
             release_quad.ok(f"{name:<26} {running} matches origin/main")
-        elif _release_order(running) < _release_order(reference):
+        elif running_order < reference_order:
             stale += 1
             release_quad.fail(
                 f"{name:<26} runs {running}, origin/main carries {reference}\n"

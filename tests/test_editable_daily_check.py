@@ -94,6 +94,41 @@ def test_release_order_compares_numerically_not_lexically():
     assert module._release_order("4.95.9") < module._release_order("4.95.81")
 
 
+@pytest.mark.parametrize("running,reference,failures,message", [
+    ("5.0.0rc1", "5.0.0", 1, "origin/main carries"),
+    ("5.0.0.dev10", "5.0.0rc1", 1, "origin/main carries"),
+    ("5.0.0", "5.0.0rc1", 0, "ahead of"),
+    ("5.0.0.post1", "5.0.0", 0, "ahead of"),
+    ("5.0", "5.0.0", 0, "matches"),
+    ("1!1.0", "9.0", 0, "ahead of"),
+    ("5.0+lab.1", "5.0", 0, "ahead of"),
+    ("broken999", "5.0", 1, "UNVERIFIED"),
+    ("5.0", "broken999", 1, "UNVERIFIED"),
+    ("broken999", "broken999", 1, "UNVERIFIED"),
+])
+def test_pep440_version_comparison(monkeypatch, capsys, running, reference, failures, message):
+    module = load_checker()
+    monkeypatch.setattr(module, "_running_version", lambda name: (running, "source"))
+    monkeypatch.setattr(module, "_origin_main_version", lambda path: reference)
+    assert module.verify_against_origin_main([("radia", "source")]) == failures
+    assert message in capsys.readouterr().out
+
+
+def test_missing_version_parser_fails_closed(monkeypatch, capsys):
+    module = load_checker()
+    monkeypatch.setattr(module, "_running_version", lambda name: ("5.0", "source"))
+    monkeypatch.setattr(module, "_origin_main_version", lambda path: "5.0")
+    monkeypatch.setattr(module.release_quad, "_verify_lab_editable", lambda packages: 0)
+
+    def unavailable(version):
+        raise ModuleNotFoundError("No module named 'packaging'")
+
+    monkeypatch.setattr(module, "_release_order", unavailable)
+    assert module.main([]) == 4
+    assert "python -m pip install packaging" in capsys.readouterr().out
+    assert module.main(["--skip-origin-check"]) == 0
+
+
 @pytest.mark.parametrize("running,reference", [(None, "1.4.53"), ("1.4.53", None), (None, None)])
 def test_unknown_version_fails_even_when_editable_path_matches(monkeypatch, capsys, running, reference):
     """A missing answer must be visible, never counted as agreement."""
