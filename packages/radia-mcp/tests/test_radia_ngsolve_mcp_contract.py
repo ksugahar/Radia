@@ -216,7 +216,7 @@ def test_hdiv_vim_passes_real_stdio_initialize_list_call():
     assert result["refinement_gate_discovered"] is True
     assert result["refinement_gate_is_error"] is False
     assert result["refinement_gate_status"] == "needs_attention"
-    assert "field_rms_changes_contract" in result["refinement_gate_issues"]
+    assert "field_rms_energy_changes_contract" in result["refinement_gate_issues"]
     assert result["teaches_direct_q2"] is True
     assert result["bounds_h_convergence"] is True
     assert result["teaches_mapped_bdm2_gate"] is True
