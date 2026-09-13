@@ -399,8 +399,9 @@ jobs:
           cd "$RUNNER_TEMP"
           python -c "import radia_mcp; print(radia_mcp.__version__)"
           SITE_PACKAGES=$(python -c "import site; print(site.getsitepackages()[0])")
-          python "$GITHUB_WORKSPACE/packages/radia-mcp/tools/smoke_mcp_stdio.py" \
-            --server meta --expect-module-root "$SITE_PACKAGES"
+          python -I "$GITHUB_WORKSPACE/packages/radia-mcp/tools/smoke_mcp_stdio.py" \
+            --all --selftest --installed-wheel --timeout 120 \
+            --expect-module-root "$SITE_PACKAGES"
 
       - name: Upload radia-mcp wheel
         if: matrix.python-version == '3.12' && needs.scope.outputs.build_wheel == 'true'
