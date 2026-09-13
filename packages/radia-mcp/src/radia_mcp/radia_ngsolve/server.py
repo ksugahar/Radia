@@ -147,6 +147,7 @@ _loss_temperature_coupling_gate = lazy_callable(".loss_temperature_coupling_gate
 _transient_coupled_coil_response_gate = lazy_callable(".transient_coupled_coil_gate", "transient_coupled_coil_response_gate", __package__)
 _source_off_linear_relaxation_gate = lazy_callable(".source_off_relaxation_gate", "source_off_linear_relaxation_gate", __package__)
 _nonlinear_bh_piecewise_material_gate = lazy_callable(".nonlinear_bh_curve_gate", "nonlinear_bh_piecewise_material_gate", __package__)
+_nonlinear_bh_canonical_table_gate = lazy_callable(".nonlinear_bh_table_gate", "nonlinear_bh_canonical_table_gate", __package__)
 _skin_effect_adaptive_energy_loss_gate = lazy_callable(".skin_effect_adaptive_gate", "skin_effect_adaptive_energy_loss_gate", __package__)
 _global_local_optimization_replay_gate = lazy_callable(".global_local_optimization_gate", "global_local_optimization_replay_gate", __package__)
 _alternate_eddy_loss_formulation_gate = lazy_callable(".eddy_loss_formulation_gate", "alternate_eddy_loss_formulation_gate", __package__)
@@ -4410,6 +4411,21 @@ def nonlinear_bh_piecewise_material_gate(
     except (KeyError, TypeError, ValueError) as exc:
         result = {
             "policy": "piecewise_bh_secant_and_left_interval_differential_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@_validation.tool()
+def nonlinear_bh_canonical_table_gate(contract: dict) -> str:
+    """Gate explicit SI H,B data for a single-valued nonlinear material solve."""
+
+    try:
+        result = _nonlinear_bh_canonical_table_gate(contract)
+    except (KeyError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "explicit_si_h_b_single_valued_material_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
