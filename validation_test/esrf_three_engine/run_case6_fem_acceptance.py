@@ -15,6 +15,7 @@ import ngsolve as ng
 import numpy as np
 import radia as rad
 
+from case6_acceptance_contract import require_accepted_hdiv, verify_relocated_identity
 from esrf_coil_yoke import (average_observation_field, build_radia_coil_source,
                            core_selector, get_case, observation_volume_quadrature)
 from run_coil_yoke_three_engine import (_comparison_gate, _is_converged_result,
@@ -27,6 +28,10 @@ from radia.kelvin_identify_ngsolve import detect_kelvin_offset, has_kelvin_ident
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--hdiv-result', type=Path, required=True)
+    parser.add_argument('--iron-mesh', type=Path, required=True,
+                        help='Restaged iron input matching the accepted HDiv SHA-256')
+    parser.add_argument('--wheel', type=Path, required=True,
+                        help='Original candidate wheel matching the accepted HDiv SHA-256')
     parser.add_argument('--fem-mesh', type=Path, required=True)
     parser.add_argument('--fem-report', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
@@ -36,23 +41,13 @@ def main():
     if args.output.exists():
         raise FileExistsError(args.output)
     hdiv = json.loads(args.hdiv_result.read_text(encoding='utf-8'))
-    if not hdiv.get('completed') or not hdiv.get('accepted') or hdiv.get('case') != 6:
-        raise ValueError('An accepted, completed ESRF6 HDiv result is required')
-    stats = hdiv['nonlinear_stats']
-    if not (stats['nonlinear_final_relative_residual'] <= hdiv['options']['nl_tol']
-            and stats['nonlinear_converged_final_stage'] is True):
-        raise ValueError('HDiv true residual did not pass')
+    require_accepted_hdiv(hdiv)
     direct = json.loads(importlib.metadata.distribution('radia').read_text('direct_url.json') or '{}')
     if direct.get('dir_info', {}).get('editable'):
         raise RuntimeError('Use the non-editable repair wheel')
     package = Path(rad.__file__).resolve().parent
-    for name, item in hdiv['implementation']['identities'].items():
-        path = package / '_radia_pybind.pyd' if name == 'native' else Path(item['path'])
-        if _sha256(path) != item['sha256']:
-            raise RuntimeError(f'{name} differs from the HDiv input/runtime')
-    actual_sources = {str(p.relative_to(package)): _sha256(p) for p in sorted(package.rglob('*.py'))}
-    if actual_sources != hdiv['implementation']['python_sources']:
-        raise RuntimeError('Installed Python sources differ from the HDiv wheel')
+    runtime_identity = verify_relocated_identity(
+        hdiv['implementation'], package, args.iron_mesh, args.wheel)
     fem_sha = _sha256(args.fem_mesh)
     if fem_sha != 'dfc12b84f80db1fa17fb5012b6f87c072e8aa1fb3c085b61269f047a879a54ac':
         raise RuntimeError('FEM mesh is not the audited ESRF6 mesh')
@@ -89,9 +84,11 @@ def main():
     report = dict(schema='radia.validation.esrf6-repaired-three-engine.v1',
                   machine=platform.node(), started_utc=datetime.now(timezone.utc).isoformat(),
                   argv=sys.argv, implementation=hdiv['implementation'],
+                  runtime_identity=runtime_identity,
                   hdiv_result_sha256=_sha256(args.hdiv_result), fem_mesh_sha256=fem_sha,
                   fem_report_sha256=_sha256(args.fem_report), fem_contract=mesh_contract,
                   runner_sha256=_sha256(Path(__file__)),
+                  contract_sha256=_sha256(Path(require_accepted_hdiv.__code__.co_filename)),
                   adapter_sha256=_sha256(Path(engines.__file__)),
                   source=source, bh_table=bh.tolist(), observation_points_m=points.tolist(),
                   observation_half_width_m=hdiv['observation_half_width_m'],

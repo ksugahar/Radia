@@ -52,6 +52,16 @@ SHA-256 `83ca8552d6564c146a1ef4fbbefa14e3d886652e22c3e502431f018b110ed0e8`.
 Future runs must explicitly restage the verified inputs from the recovery
 archive; do not silently substitute another mesh when old scratch paths vanish.
 
+The follow-up driver requires `--iron-mesh` and `--wheel` in addition to its
+HDiv result, FEM mesh/report and output arguments. These explicit inputs must
+match the original recorded hashes. Native and all Python source identities
+are checked at the current installed package, not at historical absolute paths.
+`implementation` retains the original HDiv provenance; `runtime_identity`
+records the paths and hashes actually checked in a new run. The input gate
+requires literal boolean success, a finite nonnegative residual and a finite
+positive tolerance. This runner-only hardening does not modify the completed
+result JSON or require another numerical solve.
+
 The final focused selection passed 150 tests, including the numerical-record
 replay. The separate installed-wheel deep-saturation regression passed on
 hibino (one test, 85.48 s). Neither result waives CI-built release requirements.
