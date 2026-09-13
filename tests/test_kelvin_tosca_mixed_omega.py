@@ -401,6 +401,87 @@ def test_mixed_omega_picard_rejects_unmatched_high_order_nonlinear_material_upda
         _picard_solve(mesh, h_source, potential, bh_table, order=2)
 
 
+def test_mixed_omega_picard_projects_positive_order_matched_material_state():
+    mesh, h_source, potential, bh_table = _picard_case()
+    observation = np.array([[0.5, 0.1, 0.2]])
+    result = _picard_solve(
+        mesh,
+        h_source,
+        potential,
+        bh_table,
+        order=2,
+        material_update_order=1,
+        anderson_depth=0,
+        observation_points=observation,
+    )
+    stats = result["nonlinear_stats"]
+    assert stats["converged"]
+    assert stats["response_order"] == 2
+    assert stats["material_update_order"] == 1
+    assert stats["material_sampling"] == "L2_log_secant_projection"
+    assert stats["physical_permeability_bounds"][0] == 1.0
+    assert stats["final_material_state_resolved"]
+    assert len(stats["material_log_state_dofs"]) == len(
+        stats["material_state_dof_numbers"]
+    )
+    assert len(stats["material_log_state_dofs"]) > 0
+    np.testing.assert_allclose(
+        stats["observation_field_T"],
+        [np.asarray(result["B_cf"](mesh(*observation[0])))],
+        rtol=1.0e-12,
+        atol=1.0e-12,
+    )
+
+    resumed = _picard_solve(
+        mesh,
+        h_source,
+        potential,
+        bh_table,
+        order=2,
+        material_update_order=1,
+        anderson_depth=0,
+        material_log_state_initial=stats["material_log_state_dofs"],
+    )
+    resumed_stats = resumed["nonlinear_stats"]
+    assert resumed_stats["converged"]
+    assert resumed_stats["warm_start"]
+    assert resumed_stats["final_material_state_resolved"]
+
+
+def test_ngsolve_bh_coefficient_function_matches_scalar_pchip_and_vacuum_tail():
+    import ngsolve as ng
+    from radia.scalar_potential_solver import (
+        _build_bh_coefficient_function,
+        _build_bh_interpolator,
+    )
+
+    mesh, _, _, bh_table = _picard_case()
+    parameter = ng.Parameter(0.0)
+    coefficient = _build_bh_coefficient_function(parameter, bh_table)
+    scalar = _build_bh_interpolator(bh_table)
+    point = mesh(0.5, 0.1, 0.2)
+    for H_value in (0.0, 0.25, 0.5, 1.1, 5.0, 20.0, 40.0, 100.0):
+        parameter.Set(H_value)
+        assert float(coefficient(point)) == pytest.approx(
+            scalar(H_value), rel=2.0e-12, abs=1.0e-15
+        )
+
+
+def test_mixed_omega_projected_material_state_validates_resume_shape():
+    mesh, h_source, potential, bh_table = _picard_case()
+    with pytest.raises(ValueError, match="one value per active material degree"):
+        _picard_solve(
+            mesh,
+            h_source,
+            potential,
+            bh_table,
+            order=2,
+            material_update_order=1,
+            anderson_depth=0,
+            material_log_state_initial=[0.0],
+        )
+
+
 def test_mixed_omega_envelope_includes_interpolated_material_targets(monkeypatch):
     import math
     from radia.kelvin_solver import MixedOmegaPicardNotConverged
