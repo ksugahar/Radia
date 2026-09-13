@@ -4,6 +4,8 @@ from __future__ import annotations
 import ast
 import csv
 import os
+import io
+import zipfile
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -63,3 +65,53 @@ def test_synthetic_documentation_does_not_replace_measured_readme(tmp_path):
     namespace["create_readme"](str(tmp_path))
     assert (tmp_path / "README.md").read_text(encoding="utf-8") == "measurement-owned sentinel"
     assert "not extracted from NASA" in (tmp_path / "SYNTHETIC_DATA.md").read_text(encoding="utf-8")
+
+
+def _extractor_namespace():
+    path = DATA / "extract_real_eis.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    nodes = [n for n in tree.body if isinstance(n, ast.FunctionDef)]
+    namespace = {"np": np, "os": os, "io": io, "zipfile": zipfile}
+    exec(compile(ast.Module(body=nodes, type_ignores=[]), str(path), "exec"), namespace)
+    return namespace
+
+
+@pytest.mark.parametrize(("values", "source"), [
+    (None, "instrument log"), ([1, 2], ""), ([1, 2], "\nforged"),
+    ([1], "log"), ([0, 2], "log"), ([1, np.nan], "log"),
+    ([1, np.inf], "log"), ([1, 1], "log"), ([[1, 2]], "log"),
+])
+def test_measured_frequency_rejects_undocumented_or_invalid_axis(values, source):
+    with pytest.raises(ValueError):
+        _extractor_namespace()["validate_frequency_axis"](values, 2, source)
+
+
+def test_measured_frequency_preserves_instrument_sample_order():
+    actual = _extractor_namespace()["validate_frequency_axis"]([5000, 1, 100], 3, "instrument.csv:rows 2-4")
+    np.testing.assert_array_equal(actual, [5000, 1, 100])
+
+
+def test_real_extraction_never_extracts_archive_members_or_invents_frequency(tmp_path):
+    import scipy.io
+
+    data = {"Battery_impedance": np.array([1 + 2j, 3 + 4j])}
+    stream = io.BytesIO()
+    cycles = np.empty((1, 1), dtype=[("type", "O"), ("data", "O")])
+    cycles[0, 0] = ("impedance", data)
+    scipy.io.savemat(stream, {"B0005": {"cycle": cycles}})
+    with zipfile.ZipFile(tmp_path / "1. BatteryAgingARC-FY08Q4.zip", "w") as archive:
+        archive.writestr("nested/B0005.mat", stream.getvalue())
+    sentinel = tmp_path / "B0005.mat"
+    sentinel.write_bytes(b"caller-owned")
+    namespace = _extractor_namespace()
+    namespace.update(NASA_DATA_DIR=str(tmp_path), scipy=SimpleNamespace(io=scipy.io))
+    extract = namespace["extract_eis_from_nasa"]
+    with pytest.raises(ValueError, match="documented frequency"):
+        extract()
+    result = extract(frequency_hz=[5000, 1], frequency_source="instrument record")
+    np.testing.assert_array_equal(result["frequency"], [5000, 1])
+    np.testing.assert_array_equal(result["Z"], [1 + 2j, 3 + 4j])
+    assert sentinel.read_bytes() == b"caller-owned"
+    assert not (tmp_path / "nested").exists()
+    with pytest.raises(ValueError, match="cycle_type"):
+        extract(cycle_type="typo")
