@@ -201,10 +201,12 @@ def bibliography_make_bbl(
     out_path: str | None = None,
     aux_path: str | None = None,
 ) -> str:
-    """Generate canonical bbl; optional fresh compiled aux resolves macros/conditionals.
+    """Generate canonical bbl from TeX or explicit notebook bibliography keys.
 
     The caller owns aux freshness and must regenerate it after source changes.
     No TeX or aux commands are executed here. Cooperating writers use an OS lock.
+    Notebooks declare metadata.radia.bibliography.keys and optional style; their
+    code cells are never executed or scanned for implicit citation identities.
     """
     from .._write_lock import target_lock
     destination = pathlib.Path(out_path).resolve() if out_path else pathlib.Path(tex_path).resolve().with_suffix(".bbl")
@@ -237,13 +239,36 @@ def _make_bbl_unlocked(
     if not CANONICAL.is_file():
         return f"Error: canonical bibliography missing: {CANONICAL}"
     try:
-        tex = source.read_text(encoding="utf-8")
+        source_bytes = source.read_bytes()
+        tex = source_bytes.decode("utf-8")
     except (UnicodeError, OSError) as exc:
         return f"Error: manuscript is unreadable or not valid UTF-8: {source} ({exc})"
     from ...paper_writing._tex_resolver import resolve_input_chain
 
     compiled_style = ""
-    if aux_path:
+    if source.suffix.casefold() == ".ipynb":
+        if aux_path:
+            return "Error: compiled aux is not supported for notebook citation keys"
+        try:
+            notebook = json.loads(tex)
+            bibliography = notebook["metadata"]["radia"]["bibliography"]
+            keys = bibliography["keys"]
+            if (not isinstance(keys, list) or not keys
+                    or any(not isinstance(key, str) or not re.fullmatch(r"[A-Za-z0-9_:./+-]+", key) for key in keys)
+                    or len(set(keys)) != len(keys)):
+                raise ValueError("keys must be a nonempty list of unique safe canonical identifiers")
+            if not style:
+                style = bibliography.get("style", "IEEEtran")
+            if not isinstance(style, str):
+                raise ValueError("style must be a string")
+        except (KeyError, TypeError, ValueError) as exc:
+            return f"Error: invalid notebook bibliography metadata: {exc}"
+        resolved = {
+            "ok": True,
+            "merged_tex": "".join(f"\\cite{{{key}}}" for key in keys),
+            "files_resolved": [{"path": str(source), "sha256": hashlib.sha256(source_bytes).hexdigest()}],
+        }
+    elif aux_path:
         from .._compiled_aux import read_compiled_aux
         try:
             keys, compiled_style, snapshots = read_compiled_aux(pathlib.Path(aux_path))
@@ -391,12 +416,17 @@ def _make_bbl_unlocked(
             if temporary_output is not None:
                 temporary_output.unlink(missing_ok=True)
 
+    citation_source = (
+        "notebook explicit keys" if source.suffix.casefold() == ".ipynb"
+        else "caller-supplied compiled aux (freshness caller-owned)" if aux_path
+        else "static TeX scan"
+    )
     return (
         f"bibliography_make_bbl: {source.name} -> {destination}\n"
         f"  cited {len(keys)} canonical keys; wrote {bibitem_count} bibitems; "
         f"style {style}\n"
         f"  canonical_sha256: {hashlib.sha256(canonical_bytes).hexdigest()}\n"
-        f"  citation_source: {'caller-supplied compiled aux (freshness caller-owned)' if aux_path else 'static TeX scan'}\n"
+        f"  citation_source: {citation_source}\n"
         f"  style_source: {selected_style}\n"
         f"  style_sha256: {hashlib.sha256(selected_style_bytes).hexdigest()}\n"
         + (f"  local_style_sha256: {hashlib.sha256(style_bytes).hexdigest()}\n"

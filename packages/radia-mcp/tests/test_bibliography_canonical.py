@@ -56,6 +56,47 @@ def test_get_entries_fails_closed_for_missing_or_duplicate_keys():
     }
 
 
+@pytest.mark.parametrize("keys", [[], "Kameari2018", ["Kameari2018", "Kameari2018"], ["*"], [None]])
+def test_notebook_bbl_rejects_ambiguous_metadata_without_overwriting(tmp_path, keys):
+    notebook = tmp_path / "demo.ipynb"
+    notebook.write_text(json.dumps({"metadata": {"radia": {"bibliography": {"keys": keys}}}}))
+    output = notebook.with_suffix(".bbl")
+    output.write_text("previous")
+    assert bibliography_make_bbl(str(notebook)).startswith("Error: invalid notebook")
+    assert output.read_text() == "previous"
+
+
+@pytest.mark.parametrize("contents", ["not JSON", "{}", "[]", '{"metadata":null}'])
+def test_notebook_bbl_requires_an_explicit_declaration(tmp_path, contents):
+    notebook = tmp_path / "demo.ipynb"
+    notebook.write_text(contents)
+    assert "invalid notebook bibliography metadata" in bibliography_make_bbl(str(notebook))
+    assert not notebook.with_suffix(".bbl").exists()
+
+
+def test_notebook_bbl_rejects_unknown_key_before_requiring_tex(tmp_path, monkeypatch):
+    monkeypatch.setattr(shutil, "which", lambda name: None)
+    notebook = tmp_path / "demo.ipynb"
+    notebook.write_text(json.dumps({"metadata": {"radia": {"bibliography": {"keys": ["unknown_notebook_reference"]}}}}))
+    assert "absent from canonical" in bibliography_make_bbl(str(notebook))
+    assert not notebook.with_suffix(".bbl").exists()
+
+
+@pytest.mark.skipif(shutil.which("bibtex") is None, reason="BibTeX is unavailable")
+def test_notebook_bbl_uses_explicit_keys_and_never_executes_cells(tmp_path):
+    notebook = tmp_path / "demo.ipynb"
+    notebook.write_text(json.dumps({
+        "metadata": {"radia": {"bibliography": {"keys": ["freeman1989"], "style": "plain"}}},
+        "cells": [{"cell_type": "code", "source": ["raise RuntimeError('must not run')"]}],
+    }))
+    result = bibliography_make_bbl(str(notebook))
+    assert result.startswith("bibliography_make_bbl:")
+    assert "notebook explicit keys" in result
+    assert r"\bibitem{freeman1989}" in notebook.with_suffix(".bbl").read_text()
+    assert not list(tmp_path.glob("*.bib"))
+    assert "compiled aux is not supported" in bibliography_make_bbl(str(notebook), aux_path="unused.aux")
+
+
 def test_igte_cauer_sibc_reference_set_is_canonical():
     keys = (
         "Kameari2018, Kuriyama2019, kuriyama2021multiport, Matsuo2026jmmm, "
