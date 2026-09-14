@@ -165,8 +165,33 @@ def test_notebook_citation_audit_ignores_python_decorators_in_code_fences(tmp_pa
         str(repo), bibliography_path=str(bib), tracked_only=False,
     )
 
-    assert result["summary"]["gaps"] == 0
-    assert result["summary"]["ok_no_citations_detected"] == 1
+    assert result["rows"][0]["citation_keys"] == []
+    assert result["summary"]["gaps"] == 1
+    assert result["gaps"][0]["status"] == "needs_method_citations_or_specific_exemption"
+
+
+def test_notebook_citation_audit_does_not_pass_a_citation_free_notebook(tmp_path):
+    _write_notebook(tmp_path / "docs" / "method.ipynb")
+    bib = tmp_path / "references.bib"
+    _write_bibliography(bib, "")
+    result = document_meta_notebook_citation_audit(
+        str(tmp_path), bibliography_path=str(bib), tracked_only=False,
+    )
+    assert result["summary"]["ok_no_citations_detected"] == 0
+    assert result["summary"]["gaps"] == 1
+
+
+def test_notebook_citation_exemption_does_not_hide_broken_key(tmp_path):
+    _write_notebook(tmp_path / "docs" / "method.ipynb", metadata={"radia": {
+        "citation_keys": ["missing"],
+        "citation_audit_exempt_reason": "Only file-export operations are intended.",
+    }})
+    bib = tmp_path / "references.bib"
+    _write_bibliography(bib, "")
+    result = document_meta_notebook_citation_audit(
+        str(tmp_path), bibliography_path=str(bib), tracked_only=False,
+    )
+    assert result["gaps"][0]["status"] == "citation_key_missing_from_canonical_bibliography"
 
 
 def test_notebook_citation_audit_allows_reasoned_internal_reference_exemption(tmp_path):
@@ -399,6 +424,33 @@ def test_examples_notebook_audit_uses_kelvin_docs_alias(tmp_path):
     assert row["docs_notebook_count"] == 1
     assert row["result_saved_notebook_count"] == 1
     assert row["status"] == "notebook_result_saved"
+
+
+def test_scholarly_identifier_normalizes_doi_urls():
+    from radia_mcp.document_meta.tools import _normalise_scholarly_identifier
+
+    expected = "10.1016/s0021-9991(03)00320-6"
+    for identifier in (
+        "10.1016/S0021-9991(03)00320-6",
+        "https://doi.org/10.1016/S0021-9991(03)00320-6",
+        "http://dx.doi.org/10.1016/S0021-9991(03)00320-6",
+        "doi: 10.1016/S0021-9991(03)00320-6",
+    ):
+        assert _normalise_scholarly_identifier(identifier) == expected
+
+
+def test_generated_html_doi_links_do_not_include_html_delimiters(tmp_path):
+    from radia_mcp.document_meta.tools import _notebook_citation_summary
+
+    notebook = tmp_path / 'generated.ipynb'
+    notebook.write_text(json.dumps({'cells': [{
+        'cell_type': 'markdown',
+        'source': [
+            "<a href='https://doi.org/10.1063/1.1656680'>https://doi.org/10.1063/1.1656680</a>\n",
+            '<a href="https://doi.org/10.1063/1.1656680">DOI</a>\n',
+        ],
+    }]}), encoding='utf-8')
+    assert _notebook_citation_summary(notebook, tmp_path)['dois'] == ['10.1063/1.1656680']
 
 
 def test_panel_layout_audit_reports_old_path_references(tmp_path):

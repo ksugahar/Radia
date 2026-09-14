@@ -1,14 +1,19 @@
 # Clebsch Hodograph Docs
 
-The public demo entry point is
-[`public_demo.ipynb`](public_demo.ipynb), synchronized with
-[`public_demo_results.json`](public_demo_results.json) and
-[`public_demo_result.json`](public_demo_result.json).
+Explore how coordinate-based magnet design changes bending and focusing,
+and which field assumptions survive numerical checks. Start with the saved
+results, equations and references in these Python notebooks:
 
-The full source/result catalog is
-[`examples_catalog.ipynb`](examples_catalog.ipynb), synchronized with
-[`examples_catalog_results.json`](examples_catalog_results.json) and
-[`examples_catalog_result.json`](examples_catalog_result.json).
+- [Two-dimensional feasibility](hodograph_feasibility_2d.ipynb)
+- [Bending and transverse response](hodograph_bending_sy.ipynb)
+- [Excitation-invariant field construction](excitation_invariant_field.ipynb)
+- [Edge focusing and particle tracking](edge_focusing_tracking.ipynb)
+
+The Radia MCP electromagnet and NGSolve tool families own current operating
+guidance; Python is driven through MCP by an LLM. These research demonstrations
+do not certify every geometry or replace the formal Simulink UI.
+The former source catalogs are [internal maintenance records](../../validation_test/documentation_maintenance/README.md),
+not executable capability showcases.
 
 Use the existing notes as the theory spine:
 

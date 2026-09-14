@@ -2,7 +2,7 @@
   "schema": "radia.notebook_result.v1",
   "generated_at_utc": "2026-09-14T02:51:22Z",
   "notebook": "planar_vim_motor.ipynb",
-  "notebook_sha256": "fa1d087da168362d56dde0d5d7d0fda02c0bfe516d81b5e2417fe32e74431bde",
+  "notebook_sha256": "9cefbd6c228f7e37e0171ae104fba10ea38a52c4319971e38581df87e0c6b137",
   "versions": {
     "python_version": "3.12.10",
     "python_executable_name": "python.exe",
@@ -11,8 +11,8 @@
     "radia_version": "4.95.91"
   },
   "summary": {
-    "path": "planar_vim_motor.ipynb",
-    "cells": 14,
+    "path": "docs/electric_machine/planar_vim_motor.ipynb",
+    "cells": 16,
     "code_cells": 7,
     "executed_code_cells": 7,
     "code_cells_with_outputs": 7,
@@ -35,8 +35,10 @@
     "webgui_field_ready": true,
     "metadata_keys": [
       "kernelspec",
-      "language_info"
-    ]
+      "language_info",
+      "radia"
+    ],
+    "error_outputs": []
   },
   "outputs": [
     {
@@ -368,5 +370,12 @@
     "result_saved": true,
     "json_has_generated_at_utc": true,
     "json_has_versions": true
+  },
+  "documentation_revision": {
+    "date": "2026-09-14",
+    "previous_notebook_sha256": "e4ba0cc00e1712b3be43bd7a99f769757af0cb9250eeb89593d25768071c3b85",
+    "code_and_saved_outputs_unchanged": true,
+    "comparison": "All complete code-cell objects equal the Git HEAD notebook.",
+    "note": "Original result timestamp/runtime retained; this is not a new numerical run."
   }
 }

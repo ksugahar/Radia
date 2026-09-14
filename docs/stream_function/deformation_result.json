@@ -2,7 +2,7 @@
   "schema": "radia.notebook_result.v1",
   "generated_at_utc": "2026-06-29T04:56:47Z",
   "notebook": "docs/stream_function/deformation.ipynb",
-  "notebook_sha256": "caf673cf2af5d7d79ade23311655cba43b4142aadc8afc25246282d8a598597d",
+  "notebook_sha256": "874174e1756d130680acac2efe963a0f325a018697ae4b6afbc3f5c103da39f4",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
@@ -12,7 +12,7 @@
   },
   "summary": {
     "path": "docs/stream_function/deformation.ipynb",
-    "cells": 13,
+    "cells": 15,
     "code_cells": 7,
     "executed_code_cells": 7,
     "code_cells_with_outputs": 7,
@@ -21,8 +21,24 @@
     "result_saved": true,
     "metadata_keys": [
       "kernelspec",
-      "language_info"
-    ]
+      "language_info",
+      "radia"
+    ],
+    "error_outputs": [],
+    "notebook_role": "",
+    "webgui_required": false,
+    "webgui_field_required": false,
+    "webgui_import_present": false,
+    "webgui_draw_present": false,
+    "webgui_draw_cell_count": 0,
+    "executed_webgui_draw_cell_count": 0,
+    "webgui_draw_cells_with_rich_outputs": 0,
+    "webgui_ready": true,
+    "parameterized_field_draw_present": false,
+    "parameterized_field_draw_cell_count": 0,
+    "executed_parameterized_field_draw_cell_count": 0,
+    "parameterized_field_draw_cells_with_rich_outputs": 0,
+    "webgui_field_ready": true
   },
   "outputs": [
     {
@@ -160,5 +176,12 @@
     "result_saved": true,
     "json_has_generated_at_utc": true,
     "json_has_versions": true
+  },
+  "documentation_revision": {
+    "date": "2026-09-14",
+    "previous_notebook_sha256": "d08b0cb4d87e858712593498e8778af6519958ca0b8e24080d4711f817982e73",
+    "code_and_saved_outputs_unchanged": true,
+    "comparison": "All complete code-cell objects equal the Git HEAD notebook.",
+    "note": "Original result timestamp/runtime retained; this is not a new numerical run."
   }
 }

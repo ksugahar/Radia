@@ -216,5 +216,12 @@
     "D_dir_max": 0.00018441849881704474,
     "linear_control_max": 8.335363544149058e-16
   },
-  "notebook_sha256": "93559ff5abdfb11443be4d12452a890cc93dabb2c96126c2aa6df8e7c3630ec1"
+  "notebook_sha256": "d6d564aaef547c7192960b22c022803be15b373722f039c727ccabd7cbf8fa19",
+  "documentation_revision": {
+    "date": "2026-09-14",
+    "previous_notebook_sha256": "38bcd51c40b805151a44e2bce9210c50bf1fd3a2bf7bc5e531edf6fb725abdb7",
+    "code_and_saved_outputs_unchanged": true,
+    "comparison": "All complete code-cell objects equal the Git HEAD notebook.",
+    "note": "Original result timestamp/runtime retained; this is not a new numerical run."
+  }
 }

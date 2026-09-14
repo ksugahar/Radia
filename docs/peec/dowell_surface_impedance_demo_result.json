@@ -2,7 +2,7 @@
   "schema": "radia.notebook_result.v1",
   "generated_at_utc": "2026-06-27T02:45:18Z",
   "notebook": "docs/peec/dowell_surface_impedance_demo.ipynb",
-  "notebook_sha256": "8960610f5ff82d65bd5f1839b5f767b6046cb0b0ba8def550071d94b98267e60",
+  "notebook_sha256": "7fad2c62f90f0253b84ce104f74a656f7fca3b2ba08572f809aad3d349ccff34",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
@@ -12,7 +12,7 @@
   },
   "summary": {
     "path": "docs/peec/dowell_surface_impedance_demo.ipynb",
-    "cells": 20,
+    "cells": 22,
     "code_cells": 9,
     "executed_code_cells": 9,
     "code_cells_with_outputs": 9,
@@ -21,8 +21,24 @@
     "result_saved": true,
     "metadata_keys": [
       "kernelspec",
-      "language_info"
-    ]
+      "language_info",
+      "radia"
+    ],
+    "error_outputs": [],
+    "notebook_role": "",
+    "webgui_required": false,
+    "webgui_field_required": false,
+    "webgui_import_present": false,
+    "webgui_draw_present": false,
+    "webgui_draw_cell_count": 0,
+    "executed_webgui_draw_cell_count": 0,
+    "webgui_draw_cells_with_rich_outputs": 0,
+    "webgui_ready": true,
+    "parameterized_field_draw_present": false,
+    "parameterized_field_draw_cell_count": 0,
+    "executed_parameterized_field_draw_cell_count": 0,
+    "parameterized_field_draw_cells_with_rich_outputs": 0,
+    "webgui_field_ready": true
   },
   "outputs": [
     {
@@ -251,5 +267,12 @@
     "result_saved": true,
     "json_has_generated_at_utc": true,
     "json_has_versions": true
+  },
+  "documentation_revision": {
+    "date": "2026-09-14",
+    "previous_notebook_sha256": "c4238888e8bc5ebabf0f1efb72faf1cb62b32ddc338e862d671a4f274897a6be",
+    "code_and_saved_outputs_unchanged": true,
+    "comparison": "All complete code-cell objects equal the Git HEAD notebook.",
+    "note": "Original result timestamp/runtime retained; this is not a new numerical run."
   }
 }

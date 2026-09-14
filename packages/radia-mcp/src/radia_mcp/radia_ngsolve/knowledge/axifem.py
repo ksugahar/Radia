@@ -683,7 +683,7 @@ The Mathematica derivation lives upstream at
 
 Comprehensive design + theory documentation: `docs/axifem/AXIFEM.md`.
 
-`docs/axifem/README.ipynb` is the public capability notebook. The executed
+`validation_test/documentation_maintenance/axifem/README.ipynb` is the public capability notebook. The executed
 P1/Q1/P2/Q2/P2-curved/Q2-curved proof is regression-gated under
 `validation_test/documentation_maintenance/axifem/`.
 """
