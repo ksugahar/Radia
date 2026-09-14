@@ -1,0 +1,15 @@
+\begin{thebibliography}{1}
+
+\bibitem{lewiner2003marching}
+Thomas Lewiner, H{\'e}lio Lopes, Ant{\^o}nio~Wilson Vieira, and Geovan Tavares.
+\newblock Efficient implementation of marching cubes cases with topological
+  guarantees.
+\newblock {\em Journal of Graphics Tools}, 8(2):1--15, 2003.
+
+\bibitem{trimesh_smoothing_docs}
+{Trimesh contributors}.
+\newblock Trimesh smoothing api documentation.
+\newblock \url{https://trimesh.org/trimesh.smoothing.html}.
+\newblock Accessed 2026-09-14; nu is the positive dilation parameter.
+
+\end{thebibliography}
