@@ -1366,6 +1366,114 @@ def nonlinear_field_energy_observable_comparison_gate_v9(
     }
 
 
+def nonlinear_vector_observable_comparison_gate_v10(
+    summary: dict[str, Any],
+    *,
+    max_relative_difference: float = 0.05,
+    absolute_floor: float = 1.0e-12,
+) -> dict[str, Any]:
+    """Compare vector field/force/torque samples after frame and unit checks."""
+
+    if not isinstance(summary, dict):
+        raise ValueError("summary must be a mapping")
+    difference_limit = float(max_relative_difference)
+    floor = float(absolute_floor)
+    if not math.isfinite(difference_limit) or difference_limit < 0.0:
+        raise ValueError("max_relative_difference must be finite and nonnegative")
+    if not math.isfinite(floor) or floor <= 0.0:
+        raise ValueError("absolute_floor must be finite and positive")
+    identity_keys = (
+        "geometry_identity_sha256",
+        "material_table_sha256",
+        "excitation_identity_sha256",
+        "mesh_identity_sha256",
+        "coordinate_frame_identity_sha256",
+        "coordinate_system",
+        "unit_system",
+    )
+    vector_keys = ("field_vector_T", "force_vector_N", "torque_vector_Nm")
+    required_units = {"field_vector_T": "T", "force_vector_N": "N", "torque_vector_Nm": "N*m"}
+
+    def valid_sha(value: object) -> bool:
+        text = str(value or "").strip().lower()
+        return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
+
+    def lane_contract(name: str) -> dict[str, Any]:
+        lane = summary.get(name)
+        if not isinstance(lane, dict):
+            raise ValueError(f"{name} must be a mapping")
+        identity = lane.get("identity")
+        identity = identity if isinstance(identity, dict) else {}
+        observables = lane.get("observables")
+        observables = observables if isinstance(observables, dict) else {}
+        sample_ids = observables.get("sample_id")
+        vectors = {key: observables.get(key) for key in vector_keys}
+        vectors_are_lists = isinstance(sample_ids, list) and all(isinstance(value, list) for value in vectors.values())
+        shape_valid = vectors_are_lists and all(
+            len(value) == len(sample_ids) and all(isinstance(vector, list) and len(vector) == 3 for vector in value)
+            for value in vectors.values()
+        )
+        finite = False
+        sample_contract = False
+        if shape_valid:
+            try:
+                finite = all(math.isfinite(float(component)) for values in vectors.values() for vector in values for component in vector)
+                sample_contract = (
+                    bool(sample_ids)
+                    and all(isinstance(item, (int, str)) and not isinstance(item, bool) for item in sample_ids)
+                    and len(set(sample_ids)) == len(sample_ids)
+                )
+            except (TypeError, ValueError):
+                finite = sample_contract = False
+        checks = {
+            "identity_fields_present": all(bool(str(identity.get(key) or "").strip()) for key in identity_keys),
+            "identity_digests_valid": all(valid_sha(identity.get(key)) for key in identity_keys[:5]),
+            "vector_columns_exact": observables.get("vector_observable_columns") == list(vector_keys),
+            "vector_units_exact": observables.get("vector_observable_units") == required_units,
+            "vector_arrays_are_lists": vectors_are_lists,
+            "vector_shapes_are_three_component": shape_valid,
+            "vector_values_finite": finite,
+            "sample_identity_valid": sample_contract,
+        }
+        return {"identity": identity, "observables": observables, "checks": checks, "sample_ids": sample_ids, "vectors": vectors}
+
+    candidate = lane_contract("candidate")
+    reference = lane_contract("reference")
+    identity_matches = {key: candidate["identity"].get(key) == reference["identity"].get(key) for key in identity_keys}
+    sample_ids_match = candidate["sample_ids"] == reference["sample_ids"]
+    if candidate["checks"]["vector_values_finite"] and reference["checks"]["vector_values_finite"] and sample_ids_match:
+        differences = [
+            abs(float(left) - float(right)) / max(abs(float(left)), abs(float(right)), floor)
+            for key in vector_keys
+            for left_vector, right_vector in zip(candidate["vectors"][key], reference["vectors"][key])
+            for left, right in zip(left_vector, right_vector)
+        ]
+        max_difference = max(differences, default=math.inf)
+    else:
+        max_difference = math.inf
+    checks = {
+        "candidate_contract_valid": all(candidate["checks"].values()),
+        "reference_contract_valid": all(reference["checks"].values()),
+        "comparison_identity_matches": all(identity_matches.values()),
+        "vector_sample_identity_matches": sample_ids_match,
+        "vector_differences_within_limit": max_difference <= difference_limit,
+    }
+    return {
+        "policy": "nonlinear_vector_observable_comparison_gate_v10",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "accepted": all(checks.values()),
+        "checks": checks,
+        "issues": [name for name, accepted in checks.items() if not accepted],
+        "max_relative_difference": max_difference,
+        "tolerances": {"max_relative_difference": difference_limit, "absolute_floor": floor},
+        "notes": [
+            "coordinate-frame identity is required before component-wise comparison",
+            "field, force, and torque vectors are required to have three finite components",
+            "component-wise agreement is not a claim of solver correctness without independent physics gates",
+        ],
+    }
+
+
 def nonlinear_constitutive_response_parity_gate(
     summary: dict[str, Any],
     *,

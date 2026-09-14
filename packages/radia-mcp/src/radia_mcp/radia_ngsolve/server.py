@@ -46,6 +46,7 @@ _nonlinear_field_energy_artifact_contract_gate_v6 = lazy_callable(".field_profil
 _nonlinear_field_energy_lineage_gate_v7 = lazy_callable(".field_profile_gate", "nonlinear_field_energy_lineage_gate_v7", __package__)
 _nonlinear_field_energy_physical_admissibility_gate_v8 = lazy_callable(".field_profile_gate", "nonlinear_field_energy_physical_admissibility_gate_v8", __package__)
 _nonlinear_field_energy_observable_comparison_gate_v9 = lazy_callable(".field_profile_gate", "nonlinear_field_energy_observable_comparison_gate_v9", __package__)
+_nonlinear_vector_observable_comparison_gate_v10 = lazy_callable(".field_profile_gate", "nonlinear_vector_observable_comparison_gate_v10", __package__)
 _nonlinear_constitutive_response_parity_gate = lazy_callable(".field_profile_gate", "nonlinear_constitutive_response_parity_gate", __package__)
 _nonlinear_constitutive_point_sample_gate = lazy_callable(".field_profile_gate", "nonlinear_constitutive_point_sample_gate", __package__)
 _controlled_uniform_field_constitutive_sweep_gate = lazy_callable(".field_profile_gate", "controlled_uniform_field_constitutive_sweep_gate", __package__)
@@ -2475,6 +2476,22 @@ def nonlinear_field_energy_observable_comparison_gate_v9(summary_json: str) -> s
     except (TypeError, ValueError, json.JSONDecodeError) as exc:
         result = {
             "policy": "nonlinear_field_energy_observable_comparison_gate_v9",
+            "status": "invalid_input",
+            "accepted": False,
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@_validation.tool()
+def nonlinear_vector_observable_comparison_gate_v10(summary_json: str) -> str:
+    """Compare field, force, and torque vectors after frame and unit checks."""
+
+    try:
+        result = _nonlinear_vector_observable_comparison_gate_v10(json.loads(summary_json))
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        result = {
+            "policy": "nonlinear_vector_observable_comparison_gate_v10",
             "status": "invalid_input",
             "accepted": False,
             "error": str(exc),

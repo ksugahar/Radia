@@ -23,6 +23,7 @@ from radia_mcp.radia_ngsolve.field_profile_gate import (
     nonlinear_field_energy_lineage_gate_v7,
     nonlinear_field_energy_physical_admissibility_gate_v8,
     nonlinear_field_energy_observable_comparison_gate_v9,
+    nonlinear_vector_observable_comparison_gate_v10,
     nonlinear_magnetic_field_energy_parity_gate,
     nonlinear_magnetic_refinement_energy_gate,
     nonlinear_magnetic_spatial_evidence_gate,
@@ -40,6 +41,7 @@ from radia_mcp.radia_ngsolve.server import (
     nonlinear_field_energy_lineage_gate_v7 as mcp_nonlinear_lineage_v7_gate,
     nonlinear_field_energy_physical_admissibility_gate_v8 as mcp_nonlinear_physical_v8_gate,
     nonlinear_field_energy_observable_comparison_gate_v9 as mcp_nonlinear_comparison_v9_gate,
+    nonlinear_vector_observable_comparison_gate_v10 as mcp_nonlinear_vector_v10_gate,
 )
 
 
@@ -357,6 +359,67 @@ def test_nonlinear_field_energy_observable_comparison_v9_rejects_tolerance_excee
     result = nonlinear_field_energy_observable_comparison_gate_v9(bad)
     assert result["status"] == "needs_attention"
     assert result["checks"]["observable_differences_within_limit"] is False
+
+
+def _v10_vector_observable_comparison_summary():
+    identity = {
+        "geometry_identity_sha256": "1" * 64,
+        "material_table_sha256": "2" * 64,
+        "excitation_identity_sha256": "3" * 64,
+        "mesh_identity_sha256": "4" * 64,
+        "coordinate_frame_identity_sha256": "5" * 64,
+        "coordinate_system": "right-handed Cartesian",
+        "unit_system": "SI",
+    }
+    observables = {
+        "vector_observable_columns": ["field_vector_T", "force_vector_N", "torque_vector_Nm"],
+        "vector_observable_units": {"field_vector_T": "T", "force_vector_N": "N", "torque_vector_Nm": "N*m"},
+        "sample_id": ["op0", "op1"],
+        "field_vector_T": [[0.1, 0.0, 0.2], [0.2, 0.1, 0.3]],
+        "force_vector_N": [[1.0, 0.0, -1.0], [1.1, 0.1, -0.9]],
+        "torque_vector_Nm": [[0.0, 0.2, 0.0], [0.0, 0.3, 0.0]],
+    }
+
+    def lane():
+        return {"identity": dict(identity), "observables": json.loads(json.dumps(observables))}
+
+    return {"candidate": lane(), "reference": lane()}
+
+
+def test_nonlinear_vector_observable_comparison_v10_accepts_and_wraps_mcp():
+    summary = _v10_vector_observable_comparison_summary()
+    result = nonlinear_vector_observable_comparison_gate_v10(summary)
+    assert result["status"] == "ok"
+    assert result["accepted"] is True
+    wrapped = json.loads(mcp_nonlinear_vector_v10_gate(json.dumps(summary)))
+    assert wrapped["policy"] == "nonlinear_vector_observable_comparison_gate_v10"
+    assert wrapped["status"] == "ok"
+
+
+def test_nonlinear_vector_observable_comparison_v10_rejects_frame_and_units_drift():
+    bad = _v10_vector_observable_comparison_summary()
+    bad["candidate"]["identity"]["coordinate_frame_identity_sha256"] = ""
+    bad["candidate"]["observables"]["vector_observable_units"]["force_vector_N"] = "kN"
+    result = nonlinear_vector_observable_comparison_gate_v10(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["candidate_contract_valid"] is False
+    assert result["checks"]["comparison_identity_matches"] is False
+
+
+def test_nonlinear_vector_observable_comparison_v10_rejects_shape_drift():
+    bad = _v10_vector_observable_comparison_summary()
+    bad["candidate"]["observables"]["force_vector_N"][1] = [1.1, 0.1]
+    result = nonlinear_vector_observable_comparison_gate_v10(bad)
+    assert result["checks"]["candidate_contract_valid"] is False
+    assert result["checks"]["vector_differences_within_limit"] is False
+
+
+def test_nonlinear_vector_observable_comparison_v10_rejects_tolerance_exceedance():
+    bad = _v10_vector_observable_comparison_summary()
+    bad["candidate"]["observables"]["torque_vector_Nm"][1][1] = 0.5
+    result = nonlinear_vector_observable_comparison_gate_v10(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["vector_differences_within_limit"] is False
 
 
 def test_build_comparison_candidate_keeps_piecewise_linear_out_of_solver_mode():
