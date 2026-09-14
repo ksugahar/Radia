@@ -467,19 +467,24 @@ if selectedName == "auto"
     [selectedName, reason] = chooseAutoSampler( ...
         spec, numel(directions), nTrials);
 end
+% Also reject Python samplers restored from a checkpoint or legacy block.
+if ismember(selectedName,["gp","qmc"])
+    error('radia:simulink:OptunaPythonSampler', ...
+        'GP and scrambled QMC use Python per trial. Run that study outside Simulink.');
+end
 if spec.has_constraints && selectedName == "cmaes"
     error('radia:simulink:OptunaSampler', ...
         ['This MATLAB sampler does not implement constrained ranking; ' ...
-        'use GP, TPE, NSGA-II, or NSGA-III.']);
+        'use TPE, NSGA-II, or NSGA-III.']);
 end
 if isMultiObjective && selectedName == "cmaes"
     error('radia:simulink:OptunaSampler', ...
-        ['Use random, tpe, gp, nsgaii, nsgaiii, bruteforce, ' ...
+        ['Use random, tpe, nsgaii, nsgaiii, bruteforce, ' ...
         'or qmc for multiple objectives.']);
 end
 if ~isMultiObjective && ismember(selectedName, ["nsgaii","nsgaiii"])
     error('radia:simulink:OptunaSampler', ...
-        ['Use random, tpe, cmaes, gp, bruteforce, or qmc for ' ...
+        ['Use random, tpe, cmaes, bruteforce, or qmc for ' ...
         'a single objective.']);
 end
 % The short-name mapping lives in one place, shared with
@@ -506,6 +511,11 @@ end
 function [name, reason] = chooseAutoSampler(spec, nObjectives, nTrials)
 [name,reason]=radia.optuna.internal.AutoSamplerPolicy. ...
     choose(spec,nObjectives,nTrials);
+% Batch routing may use Python GP; step-time routing is MATLAB/MEX only.
+if name == "gp"
+    name = "tpe";
+    reason = "native_step_time_small_budget";
+end
 end
 
 function value = metadataLogical(metadata, names, fallback)

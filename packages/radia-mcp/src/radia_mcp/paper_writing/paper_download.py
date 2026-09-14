@@ -26,9 +26,10 @@ from __future__ import annotations
 import os
 import re
 import pathlib
-import html
 import urllib.parse
+import tempfile
 from typing import Optional
+from contextlib import closing
 
 # requests is optional (lazy-imported via _require_requests below) --
 # this module only runs when the user invokes a download tool. Keeping
@@ -77,8 +78,7 @@ _PDF_HEADERS = {
 def _verify_pdf(path: str) -> dict:
     """Return basic verification of a downloaded PDF.
 
-    Uses PyMuPDF if available; otherwise just checks magic bytes
-    + page count via a minimal parse.
+    Requires PyMuPDF; magic bytes alone do not prove integrity.
     """
     if not os.path.exists(path):
         return {"ok": False, "error": f"file not found: {path}"}
@@ -93,6 +93,8 @@ def _verify_pdf(path: str) -> dict:
     try:
         import fitz
         with fitz.open(path) as doc:
+            if doc.needs_pass or doc.page_count <= 0 or doc.is_repaired:
+                return {"ok": False, "error": "PDF is encrypted, empty or required structural repair"}
             result = {
                 "ok": True,
                 "size_bytes": size,
@@ -108,9 +110,9 @@ def _verify_pdf(path: str) -> dict:
             return result
     except ImportError:
         return {
-            "ok": True, "size_bytes": size,
+            "ok": False, "size_bytes": size,
             "page_count": None,
-            "note": "PyMuPDF not installed; size + magic OK",
+            "error": "PyMuPDF is required to validate downloaded PDF integrity",
         }
     except Exception as exc:  # noqa: BLE001
         return {
@@ -118,6 +120,71 @@ def _verify_pdf(path: str) -> dict:
             "error": f"invalid or unreadable PDF: {exc}",
             "size_bytes": size,
         }
+
+
+_MAX_PDF_DOWNLOAD_BYTES = 128 * 1024 * 1024
+
+
+def _save_verified_pdf(response, dest_path: str) -> dict:
+    """Publish only a verified download; preserve any previous destination."""
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=pathlib.Path(dest_path).absolute().parent,
+                                         suffix=".pdf", prefix=".radia-download-", delete=False) as out:
+            temporary = out.name
+            total = 0
+            for chunk in response.iter_content(chunk_size=65536):
+                if not chunk:
+                    continue
+                total += len(chunk)
+                if total > _MAX_PDF_DOWNLOAD_BYTES:
+                    raise ValueError("PDF exceeds download safety limit")
+                out.write(chunk)
+        verify = _verify_pdf(temporary)
+        if not verify.get("ok"):
+            return verify
+        os.replace(temporary, dest_path)
+        temporary = None
+        return verify
+    except Exception as exc:
+        return {"ok": False, "error": f"PDF download/validation failed: {exc}"}
+    finally:
+        try:
+            if temporary is not None:
+                pathlib.Path(temporary).unlink(missing_ok=True)
+        finally:
+            response.close()
+
+
+def _fetch_publisher_pdf(landing_url: str, pdf_url: str, dest_path: str) -> dict:
+    """Own a cookie-seeded session and fail before PDF fetch on landing errors."""
+    stage = "landing"
+    url = landing_url
+    try:
+        with closing(_require_requests().Session()) as session:
+            with closing(session.get(landing_url, headers=_HTML_HEADERS, timeout=30)) as landing:
+                if landing.status_code != 200:
+                    return {"ok": False, "stage": stage, "url": url,
+                            "error": f"landing-page HTTP {landing.status_code}"}
+            stage, url = "pdf", pdf_url
+            headers = {**_PDF_HEADERS, "Referer": landing_url}
+            response = session.get(pdf_url, headers=headers, timeout=120,
+                                   stream=True, allow_redirects=True)
+            if response.status_code != 200:
+                with closing(response):
+                    return {"ok": False, "stage": stage, "url": url,
+                            "error": f"PDF HTTP {response.status_code}"}
+            # This helper owns response closure, staging and atomic publication.
+            return _save_verified_pdf(response, dest_path)
+    except Exception as exc:
+        return {"ok": False, "stage": stage, "url": url,
+                "error": f"{stage} fetch error: {exc}"}
+
+
+def _normalize_doi(doi: str) -> str:
+    """Decode URL-form DOIs once; percent signs in bare identifiers are literal."""
+    from ..bibliography._doi import normalize_doi
+    return normalize_doi(doi)
 
 
 def paper_writing_resolve_doi(doi: str) -> dict:
@@ -135,10 +202,7 @@ def paper_writing_resolve_doi(doi: str) -> dict:
         {ok, doi, title, authors, year, journal, url} on success,
         {ok: False, error: ...} on failure.
     """
-    doi = re.sub(r"^doi\s*:\s*", "", doi.strip(), flags=re.IGNORECASE)
-    doi = re.sub(
-        r"^(?:https?://(?:dx\.)?)?doi\.org/", "", doi, flags=re.IGNORECASE
-    )
+    doi = _normalize_doi(doi)
     url = "https://api.crossref.org/works/" + urllib.parse.quote(doi, safe="/.")
     requests = _require_requests()
     try:
@@ -151,49 +215,86 @@ def paper_writing_resolve_doi(doi: str) -> dict:
             "error_kind": "temporary",
             "temporary_failure": True,
         }
-    if r.status_code != 200:
-        # 404 is a stable "not found" answer. Rate limits, server errors,
-        # access blocks, and other responses do not prove the DOI is absent.
-        temporary = r.status_code != 404
-        return {
-            "ok": False,
-            "error": f"crossref HTTP {r.status_code}",
-            "error_kind": "temporary" if temporary else "not_found",
-            "temporary_failure": temporary,
-        }
     try:
-        msg = r.json().get("message", {})
-    except Exception as e:
-        return {
-            "ok": False,
-            "error": f"json parse error: {e}",
-            "error_kind": "temporary",
-            "temporary_failure": True,
-        }
+        if r.status_code != 200:
+            # 404 is a stable "not found" answer. Rate limits, server errors,
+            # access blocks, and other responses do not prove the DOI is absent.
+            temporary = r.status_code != 404
+            return {
+                "ok": False,
+                "error": f"crossref HTTP {r.status_code}",
+                "error_kind": "temporary" if temporary else "not_found",
+                "temporary_failure": temporary,
+            }
+        try:
+            msg = r.json().get("message", {})
+        except Exception as e:
+            return {
+                "ok": False,
+                "error": f"json parse error: {e}",
+                "error_kind": "temporary",
+                "temporary_failure": True,
+            }
+    finally:
+        r.close()
 
-    title = (msg.get("title") or [""])[0]
+    if not isinstance(msg, dict):
+        return {"ok": False, "error": "invalid Crossref message shape",
+                "error_kind": "temporary", "temporary_failure": True}
+
+    def first_text(value):
+        return value[0].strip() if (isinstance(value, list) and value
+                                    and isinstance(value[0], str)) else ""
+
+    title = first_text(msg.get("title"))
     authors = []
-    for author in msg.get("author", []):
+    author_records = []
+    raw_authors = msg.get("author")
+    invalid_author_indices = []
+    for index, author in enumerate(raw_authors if isinstance(raw_authors, list) else []):
+        if not isinstance(author, dict):
+            invalid_author_indices.append(index)
+            continue
+        def author_text(key):
+            value = author.get(key)
+            return value.strip() if isinstance(value, str) else ""
         personal = (
-            author.get("family", "") + ", " + author.get("given", "")
+            author_text("family") + ", " + author_text("given")
         ).strip(", ")
-        name = personal or author.get("name", "")
+        name = personal or author_text("name")
+        if (not name or any(author.get(key) is not None
+                            and not isinstance(author[key], str)
+                            for key in ("family", "given", "name"))):
+            invalid_author_indices.append(index)
         if name:
             authors.append(name)
-    container = (msg.get("container-title") or [""])[0]
-    date_record = msg.get("published") or msg.get("issued") or msg.get("created") or {}
-    parts = date_record.get("date-parts", [[None]])
-    year = parts[0][0] if parts and parts[0] else None
+            author_records.append({"name": name, "corporate": not bool(personal)})
+    container = first_text(msg.get("container-title"))
+    year = None
+    # Crossref creation dates describe the registry record, not publication.
+    for date_key in ("published", "issued"):
+        record = msg.get(date_key)
+        parts = record.get("date-parts") if isinstance(record, dict) else None
+        if (isinstance(parts, list) and parts and isinstance(parts[0], list)
+                and parts[0] and type(parts[0][0]) is int
+                and 1 <= parts[0][0] <= 9999):
+            year = parts[0][0]
+            break
 
     return {
         "ok": True,
         "doi": doi,
         "title": title,
         "authors": authors,
+        "author_records": author_records,
+        "invalid_author_indices": invalid_author_indices,
+        "missing_fields": [key for key, value in
+                           (("title", title), ("authors", authors), ("year", year))
+                           if not value],
         "year": year,
         "journal": container,
-        "url": msg.get("URL", f"https://doi.org/{doi}"),
-        "type": msg.get("type", ""),
+        "url": "https://doi.org/" + urllib.parse.quote(doi, safe="/."),
+        "type": msg.get("type") if isinstance(msg.get("type"), str) else "",
     }
 
 
@@ -212,28 +313,30 @@ def paper_writing_ieee_doi_to_arnumber(doi: str) -> dict:
         {ok, doi, arnumber, abstract_url} on success,
         {ok: False, error: ...} on failure.
     """
-    doi = doi.strip().removeprefix("https://doi.org/").removeprefix("doi.org/")
+    doi = _normalize_doi(doi)
     if not doi.lower().startswith("10.1109/"):
         return {"ok": False, "error": f"not an IEEE DOI: {doi}"}
 
     requests = _require_requests()
-    session = requests.Session()
     try:
-        r = session.get(f"https://doi.org/{doi}",
-                        headers=_HTML_HEADERS,
-                        allow_redirects=True, timeout=30)
+        with closing(requests.Session()) as session:
+            with closing(session.get("https://doi.org/" + urllib.parse.quote(doi, safe="/."),
+                                     headers=_HTML_HEADERS,
+                                     allow_redirects=True, timeout=30)) as response:
+                status_code = response.status_code
+                final_url = str(response.url)
     except Exception as e:
         return {"ok": False, "error": f"network error: {e}"}
-    if r.status_code != 200:
-        return {"ok": False, "error": f"DOI redirect HTTP {r.status_code}",
-                "url_attempted": str(r.url)}
+    if status_code != 200:
+        return {"ok": False, "error": f"DOI redirect HTTP {status_code}",
+                "url_attempted": final_url}
 
     # Final URL should be https://ieeexplore.ieee.org/document/<arnumber>/
-    m = re.search(r"ieeexplore\.ieee\.org/document/(\d+)", r.url)
+    m = re.search(r"ieeexplore\.ieee\.org/document/(\d+)", final_url)
     if not m:
         return {
             "ok": False,
-            "error": f"could not extract arnumber from URL: {r.url}",
+            "error": f"could not extract arnumber from URL: {final_url}",
         }
     arn = m.group(1)
     return {
@@ -299,45 +402,12 @@ def paper_writing_ieee_download_pdf(
         return {"ok": False,
                 "error": f"parent directory does not exist: {parent}"}
 
-    requests = _require_requests()
-    session = requests.Session()
     abstract_url = f"https://ieeexplore.ieee.org/document/{arn}/"
     pdf_url = (f"https://ieeexplore.ieee.org/stampPDF/getPDF.jsp"
                f"?tp=&arnumber={arn}&ref=")
-
-    # Step 1: visit abstract page to seed session cookies
-    try:
-        r1 = session.get(abstract_url, headers=_HTML_HEADERS, timeout=30)
-    except Exception as e:
-        return {"ok": False, "error": f"abstract fetch error: {e}"}
-    if r1.status_code != 200:
-        return {
-            "ok": False,
-            "error": f"abstract HTTP {r1.status_code} for arnumber {arn}",
-            "url": abstract_url,
-        }
-
-    # Step 2: download PDF with Referer header
-    pdf_headers = dict(_PDF_HEADERS)
-    pdf_headers["Referer"] = abstract_url
-    try:
-        r2 = session.get(pdf_url, headers=pdf_headers,
-                         timeout=120, stream=True)
-    except Exception as e:
-        return {"ok": False, "error": f"PDF fetch error: {e}"}
-    if r2.status_code != 200:
-        return {
-            "ok": False,
-            "error": f"PDF HTTP {r2.status_code} for arnumber {arn}",
-            "url": pdf_url,
-        }
-
-    with open(dest_path, "wb") as f:
-        for chunk in r2.iter_content(chunk_size=65536):
-            if chunk:
-                f.write(chunk)
-
-    verify = _verify_pdf(dest_path)
+    verify = _fetch_publisher_pdf(abstract_url, pdf_url, dest_path)
+    if verify.get("stage"):
+        return verify
     if not verify["ok"]:
         # PDF didn't validate — likely an HTML anti-bot page disguised
         # as PDF (Cloudflare or "Temporarily Unavailable")
@@ -409,32 +479,9 @@ def paper_writing_sciencedirect_download_pdf(
         else:
             article_landing_url = article_pdf_url  # fallback
 
-    requests = _require_requests()
-    session = requests.Session()
-    try:
-        r1 = session.get(article_landing_url, headers=_HTML_HEADERS,
-                         timeout=30)
-    except Exception as e:
-        return {"ok": False, "error": f"landing-page fetch error: {e}"}
-
-    pdf_headers = dict(_PDF_HEADERS)
-    pdf_headers["Referer"] = article_landing_url
-    try:
-        r2 = session.get(article_pdf_url, headers=pdf_headers,
-                         timeout=120, stream=True, allow_redirects=True)
-    except Exception as e:
-        return {"ok": False, "error": f"PDF fetch error: {e}"}
-    if r2.status_code != 200:
-        return {"ok": False,
-                "error": f"PDF HTTP {r2.status_code}",
-                "url": article_pdf_url}
-
-    with open(dest_path, "wb") as f:
-        for chunk in r2.iter_content(chunk_size=65536):
-            if chunk:
-                f.write(chunk)
-
-    verify = _verify_pdf(dest_path)
+    verify = _fetch_publisher_pdf(article_landing_url, article_pdf_url, dest_path)
+    if verify.get("stage"):
+        return verify
     if not verify["ok"]:
         return {
             "ok": False,
@@ -481,6 +528,14 @@ def paper_writing_doi_to_bibtex(doi: str,
     if not meta["ok"]:
         return meta
 
+    missing = [key for key in ("title", "authors", "year") if not meta.get(key)]
+    if meta.get("invalid_author_indices") and "authors" not in missing:
+        missing.append("authors")
+    if missing:
+        return {"ok": False, "error_kind": "incomplete_metadata",
+                "error": "Crossref metadata requires verification before citation",
+                "missing_fields": missing, "metadata": meta}
+
     if not citation_key:
         citation_key = _make_citation_key(
             meta["authors"], meta["year"], meta["title"]
@@ -497,15 +552,24 @@ def paper_writing_doi_to_bibtex(doi: str,
     else:
         bib_type = "misc"
 
-    # Authors → "Last, First and Last, First and ..."
-    authors_bib = " and ".join(meta["authors"])
-    # Strip HTML/Crossref italic markers from title
-    title_clean = re.sub(r"</?[a-zA-Z]+>", "", meta["title"])
-    for _ in range(3):
-        decoded = html.unescape(title_clean)
-        if decoded == title_clean:
-            break
-        title_clean = decoded
+    from ._bibtex_metadata import bibtex_text
+
+    try:
+        title_clean = bibtex_text(meta["title"])
+        if not title_clean:
+            raise ValueError("empty title after metadata normalization")
+        journal = bibtex_text(meta.get("journal", ""))
+        records = meta.get("author_records") or [
+            {"name": name, "corporate": False} for name in meta["authors"]]
+        names = [bibtex_text(item["name"]) for item in records]
+        if not all(names):
+            raise ValueError("empty author after metadata normalization")
+        authors_bib = " and ".join(
+            "{" + name + "}" if item["corporate"] else name
+            for item, name in zip(records, names))
+    except ValueError as exc:
+        return {"ok": False, "error_kind": "unsupported_metadata",
+                "error": str(exc), "metadata": meta}
 
     lines = [f"@{bib_type}{{{citation_key},",
               f"  title   = {{{title_clean}}},",
@@ -514,9 +578,9 @@ def paper_writing_doi_to_bibtex(doi: str,
         lines.append(f"  year    = {{{meta['year']}}},")
     if meta.get("journal"):
         if bib_type == "article":
-            lines.append(f"  journal = {{{meta['journal']}}},")
+            lines.append(f"  journal = {{{journal}}},")
         else:
-            lines.append(f"  booktitle = {{{meta['journal']}}},")
+            lines.append(f"  booktitle = {{{journal}}},")
     lines.append(f"  doi     = {{{meta['doi']}}},")
     lines.append(f"  url     = {{{meta['url']}}},")
     lines.append("}")
@@ -655,32 +719,9 @@ def paper_writing_emerald_download_pdf(
         # Trim the trailing .pdf and filename portion
         article_landing_url = re.sub(r"/[^/]+\.pdf$", "", article_landing_url)
 
-    requests = _require_requests()
-    session = requests.Session()
-    try:
-        r1 = session.get(article_landing_url, headers=_HTML_HEADERS,
-                         timeout=30)
-    except Exception as e:
-        return {"ok": False, "error": f"landing-page fetch error: {e}"}
-
-    pdf_headers = dict(_PDF_HEADERS)
-    pdf_headers["Referer"] = article_landing_url
-    try:
-        r2 = session.get(article_pdf_url, headers=pdf_headers,
-                         timeout=120, stream=True)
-    except Exception as e:
-        return {"ok": False, "error": f"PDF fetch error: {e}"}
-    if r2.status_code != 200:
-        return {"ok": False,
-                "error": f"PDF HTTP {r2.status_code}",
-                "url": article_pdf_url}
-
-    with open(dest_path, "wb") as f:
-        for chunk in r2.iter_content(chunk_size=65536):
-            if chunk:
-                f.write(chunk)
-
-    verify = _verify_pdf(dest_path)
+    verify = _fetch_publisher_pdf(article_landing_url, article_pdf_url, dest_path)
+    if verify.get("stage"):
+        return verify
     if not verify["ok"]:
         return {
             "ok": False,

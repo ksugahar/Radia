@@ -829,7 +829,7 @@ def matlab_optuna_simulink_contract():
             "policy": "Require the exact independent 21-command optuna_mex gateway for checked optimizer kernels; keep Study/Trial, persistence, callbacks, and unsupported fused-option orchestration in readable MATLAB. A missing or incompatible optuna_mex is an error and never redirects through radia_mex or a silent substitute.",
             "missing_mex_fallback": False,
             "full_optimizer_in_cpp": False,
-            "python_per_trial": "false for MATLAB-native samplers; true only for GPSampler Backend='upstream-python'",
+            "python_per_trial": "false for MATLAB-native samplers; GPSampler Backend='upstream-python' and scrambled QMCSampler use Python and are excluded from the step-time block",
             "upstream_python_gp_python_per_trial": True,
         },
         "cae_trial_contract": {
@@ -854,7 +854,7 @@ def matlab_optuna_simulink_contract():
             "multi_objective": "use TPESampler or NSGAIISampler and inspect front error plus coverage, not Pareto point count alone",
             "validation": "validation_test/optimization/validate_matlab_optuna_quality.m",
             "python_parity_claim": "Only behavior mapped to pinned optuna==5.0.0 fixtures is parity evidence; API coverage must close before a complete-compatibility claim.",
-            "simulink_auto": "CmaEsSampler for one objective and NSGAIISampler for multiple objectives; the mask also exposes every sampler explicitly",
+            "simulink_auto": "Use the declared search space and budget: small fixed-numeric budgets use native TPE instead of batch GP; larger eligible cases use CMA-ES or NSGA-II/III. Explicit GP and scrambled QMC are batch-only and rejected at step time, including resumed studies.",
         },
         "parallel_trials": {
             "simulink": "SimulinkRunner.optimizeParallel asks adaptive client-side batches and evaluates each SimulationInput batch with parsim so completed trials influence later proposals",
@@ -1161,7 +1161,7 @@ def matlab_simulink_library_contract():
             "pareto": "fixed-size X/Y arrays, active point count, and revision counter",
             "sheet_metal_runner": "radia.optuna.SheetMetalRunner over native MATLAB/MEX plus NGSolve/Cubit drivers",
             "quality_validation": "validation_test/optimization/validate_matlab_optuna_quality.m",
-            "sampler_mask": "auto, random, tpe, cmaes, gp, nsgaii, nsgaiii, bruteforce, or qmc; auto selects from the declared search space and budget",
+            "sampler_mask": "auto, random, tpe, cmaes, nsgaii, nsgaiii, or bruteforce; auto selects native samplers from the declared search space and budget. GP and scrambled QMC require Python per trial and remain batch-only.",
         },
         "execute_with": "official MATLAB MCP evaluate_matlab_code",
     }

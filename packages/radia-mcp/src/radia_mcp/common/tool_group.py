@@ -13,14 +13,18 @@ historical individual tools while migrating existing clients.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import inspect
 import os
 import sys
-from typing import Any, Callable
+from collections.abc import Callable
+from dataclasses import dataclass
+from functools import cached_property
+from typing import Any
 
-from .server_hardening import ANN_READONLY, ANN_WRITES
+from mcp.server.fastmcp.utilities.func_metadata import func_metadata
+from pydantic import ValidationError
 
+from .server_hardening import ANN_READONLY, ANN_WRITES, error_payload
 
 _VALID_PROFILES = frozenset({"core", "full"})
 
@@ -77,6 +81,12 @@ class _Entry:
     description: str
     decorator_args: tuple[Any, ...]
     decorator_kwargs: dict[str, Any]
+
+    @cached_property
+    def argument_metadata(self):
+        # Match SDK input semantics without converting the domain return value.
+        # Build lazily so catalog discovery does not compile every gate schema.
+        return func_metadata(self.function, structured_output=False)
 
 
 class CoarseToolRegistry:
@@ -177,11 +187,30 @@ class CoarseToolRegistry:
             entry = self._entries.get(name)
             if entry is None:
                 available = ", ".join(sorted(self._entries)[:12])
-                raise ValueError(
+                return error_payload(
+                    run_name,
                     f"unknown {self.category} operation {name!r}; "
-                    f"query {catalog_name} first (first names: {available})"
+                    f"query {catalog_name} first (first names: {available})",
+                    kind="input",
                 )
-            kwargs = {} if arguments is None else dict(arguments)
+            if arguments is not None and not isinstance(arguments, dict):
+                return error_payload(run_name, "arguments must be a dictionary",
+                                     kind="input", hint=f"Query {catalog_name} for signatures.")
+            kwargs = {} if arguments is None else arguments
+            # Retain rejection of unknown keywords (the SDK model ignores extras).
+            # Bind only, never execute a tool inside the input-error boundary.
+            try:
+                inspect.signature(entry.function).bind(**kwargs)
+            except TypeError as exc:
+                return error_payload(run_name, str(exc), kind="input",
+                                     hint=f"Query {catalog_name} for {name}'s signature.")
+            metadata = entry.argument_metadata
+            try:
+                parsed = metadata.pre_parse_json(kwargs)
+                kwargs = metadata.arg_model.model_validate(parsed).model_dump_one_level()
+            except ValidationError as exc:
+                return error_payload(run_name, str(exc), kind="input",
+                                     hint=f"Query {catalog_name} for {name}'s signature.")
             result = entry.function(**kwargs)
             if inspect.isawaitable(result):
                 result = await result

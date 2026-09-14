@@ -15,6 +15,7 @@ def test_every_python_module_has_a_checked_matlab_classification():
     assert result["ok"], result["errors"]
     assert result["classified_file_count"] == result["python_file_count"]
     for module, owner in [
+        ("picard_acceleration.py", "picardAcceleration"),
         ("electromagnet_validation.py", "electromagnetValidation"),
         ("esrf_examples.py", "esrfExamples"),
         ("static_electromagnet.py", "staticElectromagnet"),

@@ -597,17 +597,15 @@ EMD（辺ベース磁場分解法）の論文結果
 
 ## ベンチマークの再現方法
 
-```bash
-cd examples/hiruma
+```powershell
+# Tracked Compact AMS + COCR numerical gate
+python validation_test/sparsesolv/hiruma/bench_compact_ams.py --verify-baseline
 
-# Compact AMS + COCR (single mesh)
-python bench_compact_ams.py mesh1_3.5T
-
-# Compact AMS + COCR (all standard meshes)
-python bench_compact_ams.py --all
+# Optional full scaling sweep (place the larger .vol files in meshes/ first)
+python validation_test/sparsesolv/hiruma/bench_compact_ams.py --all
 
 # Comparison with ABMC-ICCG
-python bench_ams_vs_abmc.py mesh1_3.5T
+python validation_test/sparsesolv/hiruma/bench_ams_vs_abmc.py mesh1_3.5T
 
-# Results saved to results_compact_ams.json, results_ams_vs_abmc.json
+# Transient results are written below C:\temp\radia-validation
 ```

@@ -13,6 +13,8 @@ Usage: python validation_test/cubit/test_vol_multi_geometry.py
 import sys
 import os
 import math
+import json
+from datetime import datetime, timezone
 
 _test_dir = os.path.dirname(os.path.abspath(__file__))
 _repo_root = os.path.dirname(os.path.dirname(_test_dir))
@@ -20,7 +22,10 @@ sys.path.insert(0, os.path.join(_repo_root, 'src', 'radia'))
 from install_panels import find_cubit_bin
 _cubit_path = find_cubit_bin()
 if _cubit_path: sys.path.append(_cubit_path)
-os.environ['CUBIT_PLUGIN_DIR'] = os.path.join(_cubit_path, 'plugins') if _cubit_path else ''
+os.environ['CUBIT_PLUGIN_DIR'] = os.environ.get(
+    'CUBIT_PLUGIN_DIR',
+    os.path.join(_cubit_path, 'plugins') if _cubit_path else '',
+)
 
 import netgen.meshing
 from ngsolve import Mesh, Integrate, CF, BND, TaskManager
@@ -96,6 +101,21 @@ test_cases = [
       'block 2 name "air"'],
      (4.0/3.0)*math.pi*R_sph**3 + (3*R_sph)**3,
      None),  # complex boundary, skip area check
+
+    ("same_material_webcut",
+     ["create brick x 0.05 y 0.05 z 0.05",
+      "create brick x 0.05 y 0.05 z 0.05",
+      "volume 1 move -0.025 0 0",
+      "volume 2 move 0.025 0 0",
+      "imprint volume all",
+      "merge volume all",
+      "volume all scheme tetmesh",
+      "volume all size auto factor 5",
+      "mesh volume all",
+      "block 1 add volume all",
+      'block 1 name "solid"'],
+     0.1*0.05*0.05,
+     2*(0.1*0.05 + 0.1*0.05 + 0.05*0.05)),
 
     ("loft_rect",
      [# Bottom: rectangle in XY plane
@@ -174,6 +194,7 @@ print(header)
 print("-" * len(header))
 
 all_pass = True
+case_results = []
 
 for name, cmds, v_exact, a_exact in test_cases:
     cubit.cmd("reset")
@@ -197,7 +218,7 @@ for name, cmds, v_exact, a_exact in test_cases:
             lines = f.readlines()
         for i, line in enumerate(lines):
             s = line.strip()
-            if s == 'surfaceelements':
+            if s in {'surfaceelements', 'surfaceelementsuv'}:
                 info['nse'] = int(lines[i+1].strip())
             elif s == 'curvedelements':
                 ned = int(lines[i+1].strip())
@@ -217,9 +238,90 @@ for name, cmds, v_exact, a_exact in test_cases:
         all_pass = False
 
     print(f"{name:<14} {verr:>+12.6e} {aerr:>+12.6e} {mesh.ne:>7} {si.get('nse','?'):>6} {si.get('nedges','?'):>7} {si.get('n_ho_e','?'):>7} {tag:>8}")
+    case_results.append({
+        "name": name,
+        "volume_exact": v_exact,
+        "volume_measured": vol,
+        "volume_error_percent": verr if v_exact else None,
+        "area_exact": a_exact,
+        "area_measured": area,
+        "area_error_percent": aerr if a_exact else None,
+        "ne": mesh.ne,
+        "nse": si.get("nse"),
+        "nedges": si.get("nedges"),
+        "n_high_order_edges": si.get("n_ho_e"),
+        "passed": ok,
+        "vol_path": os.path.relpath(vol_path, _repo_root),
+    })
 
 print("-" * len(header))
 if all_pass:
     print("ALL SHAPES: volume accuracy OK  (PASS)")
 else:
     print("SOME SHAPES FAILED: investigate errors above")
+
+# A labelled same-material internal face cannot be represented as a Netgen
+# boundary (DomainIn would equal DomainOut). The exporter must fail loudly
+# instead of silently dropping the user's sideset label.
+cubit.cmd("reset")
+for cmd in test_cases[5][1]:
+    cubit.cmd(cmd)
+internal_surfaces = [
+    sid for sid in cubit.parse_cubit_list("surface", "all")
+    if len(cubit.get_relatives("surface", sid, "volume")) >= 2
+]
+assert len(internal_surfaces) == 1, internal_surfaces
+cubit.cmd(f"sideset 1 add surface {internal_surfaces[0]}")
+cubit.cmd('sideset 1 name "intentional_cut"')
+labelled_path = os.path.join(OUT_DIR, "same_material_labelled.vol")
+if os.path.exists(labelled_path):
+    os.remove(labelled_path)
+cubit.cmd(f'export netgen "{labelled_path}" order {ORDER} overwrite')
+assert not os.path.exists(labelled_path), (
+    "labelled same-material internal surface was silently exported or removed"
+)
+print("LABELLED SAME-MATERIAL INTERNAL SURFACE: fail-loud OK  (PASS)")
+
+native_manifest_path = os.path.join(
+    _repo_root,
+    "packages",
+    "cubit-mesh-export",
+    "src",
+    "cubit_mesh_export",
+    "native_payloads.json",
+)
+with open(native_manifest_path, encoding="utf-8") as manifest_file:
+    native_provenance = json.load(manifest_file)
+
+results_path = os.environ.get(
+    "CUBIT_VALIDATION_RESULTS",
+    os.path.join(OUT_DIR, "multi_geometry_results.json"),
+)
+with open(results_path, "w", encoding="utf-8", newline="\n") as results_file:
+    json.dump({
+        "schema": "cubit-mesh-export.multi-geometry-validation.v1",
+        "run_id": os.environ.get("CUBIT_VALIDATION_RUN_ID"),
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "order": ORDER,
+        "plugin_dir": os.environ["CUBIT_PLUGIN_DIR"],
+        "stdout_log": os.environ.get("CUBIT_VALIDATION_LOG"),
+        "native_provenance": native_provenance,
+        "cases": case_results,
+        "labelled_same_material_internal_surface": {
+            "surface_id": internal_surfaces[0],
+            "label": "intentional_cut",
+            "output_path": os.path.relpath(labelled_path, _repo_root),
+            "output_exists": os.path.exists(labelled_path),
+            "expected_diagnostic": (
+                f"Same-material internal surface {internal_surfaces[0]} is explicitly labelled "
+                "'intentional_cut'"
+            ),
+            "passed": not os.path.exists(labelled_path),
+        },
+        "all_passed": all_pass and not os.path.exists(labelled_path),
+    }, results_file, indent=2, ensure_ascii=False, allow_nan=False)
+    results_file.write("\n")
+print(f"RESULT JSON: {results_path}")
+
+if not all_pass:
+    raise SystemExit(1)

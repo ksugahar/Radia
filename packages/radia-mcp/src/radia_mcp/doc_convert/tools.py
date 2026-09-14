@@ -483,3 +483,5 @@ from .plans.T16_book_pdf_rename import (  # noqa: E402,F401
     doc_convert_extract_title_from_image,
     doc_convert_rename_pdf_by_title,
 )
+
+from .plans.T17_session_fonts import doc_convert_session_font_check  # noqa: E402,F401

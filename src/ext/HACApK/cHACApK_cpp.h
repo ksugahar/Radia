@@ -271,6 +271,9 @@ int HACApK_leafmtxp_get_nlf(void *ptr);
 int HACApK_leafmtxp_get_nlfkt(void *ptr);
 int HACApK_leafmtxp_get_ktmax(void *ptr);
 int* HACApK_lcontrol_get_lod(void *ptr);
+/* Build-phase wall clocks recorded by the uniform build wrapper: time[90] cluster tree + bounding
+ * boxes, time[91] leaf generation + sort, time[92] ACA+ fill (seconds; 0 when not recorded). */
+double HACApK_lcontrol_get_time(void *ptr, int idx);
 
 /**
  * Calculate actual H-matrix memory usage (ELF-compatible)

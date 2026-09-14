@@ -1,0 +1,142 @@
+{
+ "schema": "radia.validation.esrf-hex-gram-definiteness.v1",
+ "generated_at_utc": "2026-09-06T20:12:02.833239+00:00",
+ "host": "Hibino",
+ "radia_version": "4.95.81",
+ "radia_file": "C:\\temp\\radia-hdiv-fix6b\\src\\radia\\__init__.py",
+ "case": 6,
+ "iron_mesh": "C:\\temp\\radia-ex6-diag\\assets_conforming\\model.vol",
+ "iron_mesh_sha256": "fdd1387281e550e27eab435cfac3ec54e0b9d1339438699fdc50c852dfcafc74",
+ "chi0": 2000.200000000012,
+ "inv_chi0": 0.000499950004999497,
+ "gram_eps": 1e-10,
+ "glpair_n": 5,
+ "checks": {
+  "clusters": {
+   "lambda_min": -4.0284786204723424e-16,
+   "lambda_max": 0.8890986346251173,
+   "negative_clusters": 0,
+   "wall_s": 0.8804977999971015
+  },
+  "floor_scan": [
+   {
+    "floor_factor": 1.0,
+    "mu_r_equivalent": 2001.200000000012,
+    "converged": true,
+    "iterations": 430,
+    "prec_min": 0.10354712484494538,
+    "prec_max": 112.69113321551428,
+    "wall_s": 4.7217881999968085
+   },
+   {
+    "floor_factor": 0.5,
+    "mu_r_equivalent": 4001.400000000024,
+    "converged": true,
+    "iterations": 486,
+    "prec_min": 0.05177356242247269,
+    "prec_max": 112.44410069339052,
+    "wall_s": 5.131922999993549
+   },
+   {
+    "floor_factor": 0.25,
+    "mu_r_equivalent": 8001.800000000048,
+    "converged": true,
+    "iterations": 541,
+    "prec_min": 0.025886781211236345,
+    "prec_max": 112.32058443232866,
+    "wall_s": 5.652178699994693
+   },
+   {
+    "floor_factor": 0.125,
+    "mu_r_equivalent": 16002.600000000097,
+    "converged": true,
+    "iterations": 638,
+    "prec_min": 0.012943390605618173,
+    "prec_max": 112.25882630179771,
+    "wall_s": 6.368657900005928
+   }
+  ],
+  "spectrum": {
+   "lambda_min_ritz": [
+    8.902479771257144e-21,
+    8.0218165147312675e-19,
+    1.5440188228897451e-18,
+    1.9567493916252256e-18
+   ],
+   "lambda_max_ritz": 0.9999009611440944,
+   "wall_s": 57.12371719999646
+  }
+ },
+ "mesh": {
+  "ne": 2408,
+  "ndof": 62192,
+  "nonaffine_cells": 616,
+  "conformity": {
+   "hanging_facets": 0,
+   "duplicated_boundary_face_pairs": 0,
+   "conforming": true
+  }
+ },
+ "gram_build_s": 51.364260000002105,
+ "gram_stats": {
+  "max_rank": 65.0,
+  "compression": 0.3083983331307232,
+  "hex_cache_stats_enabled": 0.0,
+  "hex_block_cache_limit": 200000.0,
+  "hex_trans_cache_enabled": 1.0,
+  "hex_congruent_cache_enabled": 1.0,
+  "hex_congruent_ready": 1.0,
+  "hex_congruent_templates": 1048.0,
+  "hex_congruent_hosts": 4608.0,
+  "hex_far_one_sided_threshold": 0.0,
+  "hex_affine_exact_near_factor": 1.0,
+  "hex_distorted_far_factor": 1.0,
+  "hex_near_inner_exact": 1.0,
+  "hex_near_inner_host_cone": 1.0,
+  "hex_near_sinh_min_width": 0.001,
+  "hex_near_sinh_max_width": 1.0,
+  "hex_pair_duffy_enabled": 1.0,
+  "hex_glpair_n": 5.0,
+  "hex_pair_nonconforming": 0.0,
+  "hex_cluster_radius_enabled": 1.0,
+  "hex_glnear_n": 8.0,
+  "hex_glout_n": 4.0,
+  "hex_glin_n": 5.0,
+  "hex_glin_self_n": 8.0,
+  "hex_blk_affine_near": 0.0,
+  "hex_blk_affine_far": 8544102.0,
+  "hex_blk_distorted_far": 6303274.0,
+  "hex_blk_general_near": 49485.0,
+  "hex_blk_general_far": 0.0,
+  "hex_s_affine_near": 0.0,
+  "hex_s_affine_far": 113.1358517,
+  "hex_s_distorted_far": 99.6900167,
+  "hex_s_general_near": 571.3175276000001,
+  "hex_s_general_far": 0.0,
+  "hex_general_shared_lookups": 188052.0,
+  "hex_general_shared_hits": 138567.0,
+  "hex_general_shared_misses": 49485.0,
+  "hex_block_lookups": 0.0,
+  "hex_block_hits": 0.0,
+  "hex_block_misses": 0.0,
+  "hex_block_clears": 0.0,
+  "hex_trans_block_lookups": 0.0,
+  "hex_trans_block_hits": 0.0,
+  "hex_trans_block_misses": 0.0,
+  "hex_trans_block_clears": 0.0,
+  "hex_sym_block_lookups": 0.0,
+  "hex_sym_block_hits": 0.0,
+  "hex_sym_block_misses": 0.0,
+  "hex_sym_block_clears": 0.0,
+  "hex_sym_trans_block_lookups": 0.0,
+  "hex_sym_trans_block_hits": 0.0,
+  "hex_sym_trans_block_misses": 0.0,
+  "hex_sym_trans_block_clears": 0.0,
+  "hex_block_hit_rate": 0.0,
+  "hex_trans_block_hit_rate": 0.0,
+  "hex_sym_block_hit_rate": 0.0,
+  "hex_sym_trans_block_hit_rate": 0.0
+ },
+ "failures": [],
+ "passed": true
+}

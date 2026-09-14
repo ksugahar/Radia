@@ -125,6 +125,8 @@ def test_chargegram_hex_shortcut_forwards_image_params(monkeypatch):
         "internal_interfaces": False,
         "excluded_boundaries": (),
         "cyclic_periodic_boundaries": (),
+        "glpair_n": None,
+        "glpair_affine_n": None,
     }]
 
 
@@ -147,9 +149,16 @@ def test_chargegram_curved_tet_matches_mesh_geometry_by_default(monkeypatch):
                         (([[0.0, 0.0]], [1.0]))))
     monkeypatch.setattr(V, "_g01", lambda _order: ([0.0], [1.0]))
     monkeypatch.setattr(V._rp, "_ChargeGramHMatrix", lambda **_kwargs: "G")
-    monkeypatch.setattr(V, "_configure_cpp_operator", lambda *args: args)
+    configured = []
+
+    def fake_configure(B, G, mass, ngsolve_mass):
+        configured.append((B, G, mass, ngsolve_mass))
+        return B, G, mass
+
+    monkeypatch.setattr(V, "_configure_cpp_operator", fake_configure)
 
     result = V.build_charge_gram(_FES(_Mesh(3, 4, curve_order=2)))
 
     assert calls == [(3, True)]
-    assert result == ("B", "G", "M", "M_ng")
+    assert configured == [("B", "G", "M", "M_ng")]
+    assert result == ("B", "G", "M")

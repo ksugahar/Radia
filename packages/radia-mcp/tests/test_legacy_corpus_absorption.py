@@ -121,7 +121,7 @@ def test_boolean_counters_are_rejected() -> None:
     assert not result["checks"]["model_surface_complete"]
 
 
-def test_mcp_tool_returns_gate_result_and_is_read_only() -> None:
+def test_mcp_tool_returns_gate_result_with_conservative_dispatcher_hints() -> None:
     result = json.loads(fem_legacy_corpus_absorption_gate(json.dumps(_packet())))
     assert result["status"] == "accepted"
     tool = mcp._tool_manager._tools["fem_validation_run"]
@@ -129,9 +129,10 @@ def test_mcp_tool_returns_gate_result_and_is_read_only() -> None:
         query="legacy_corpus"
     )
     assert catalog["operations"][0]["name"] == "fem_legacy_corpus_absorption_gate"
-    assert tool.annotations.readOnlyHint is True
+    # Other operations behind this dispatcher can write artifacts.
+    assert tool.annotations.readOnlyHint is False
     assert tool.annotations.destructiveHint is False
-    assert tool.annotations.idempotentHint is True
+    assert tool.annotations.idempotentHint is False
 
 
 def test_mcp_tool_rejects_non_object_input() -> None:

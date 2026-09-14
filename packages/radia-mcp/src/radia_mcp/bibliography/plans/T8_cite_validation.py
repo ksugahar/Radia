@@ -8,41 +8,19 @@ Cross-check ``\\cite{key}`` references in .tex against keys defined in
 from __future__ import annotations
 
 import pathlib
-import re
 
 from .._bibparse import read_bib_file
 
 
-_CITE_CMD_RE = re.compile(r"\\(?:no)?cite[a-zA-Z]*\*?(?:\[[^\]]*\])?\{([^}]+)\}")
-
-
 def _collect_cited_keys(tex_path: pathlib.Path) -> set[str]:
-    """Walk a .tex tree (single file or via \\input/\\include) for \\cite keys."""
-    seen_files: set[str] = set()
-    keys: set[str] = set()
+    """Use the same input resolver and citation scanner as canonical bbl export."""
+    from ...paper_writing._tex_resolver import resolve_input_chain
+    from .T14_canonical import _keys_in_order
 
-    def visit(path: pathlib.Path) -> None:
-        if not path.exists() or str(path) in seen_files:
-            return
-        seen_files.add(str(path))
-        try:
-            text = path.read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            return
-        for m in _CITE_CMD_RE.finditer(text):
-            for k in m.group(1).split(","):
-                k = k.strip()
-                if k:
-                    keys.add(k)
-        for inc_match in re.finditer(r"\\(?:input|include|InputIfFileExists)\{([^}]+)\}", text):
-            target = inc_match.group(1)
-            cand = path.parent / target
-            if not cand.suffix:
-                cand = cand.with_suffix(".tex")
-            visit(cand)
-
-    visit(tex_path)
-    return keys
+    resolved = resolve_input_chain(str(tex_path))
+    if not resolved.get("ok"):
+        raise ValueError(f"cannot resolve TeX inputs: {resolved.get('error')}")
+    return set(_keys_in_order(resolved["merged_tex"], include_wildcard=True))
 
 
 def bibliography_cite_validation(tex_path: str, bib_path: str) -> str:
@@ -67,8 +45,17 @@ def bibliography_cite_validation(tex_path: str, bib_path: str) -> str:
     if not bp.exists():
         return f"Error: bib file not found: {bp}"
 
-    cited = _collect_cited_keys(tp)
-    bib_keys = {e.key for e in read_bib_file(bp) if not e.kind.startswith("@")}
+    try:
+        cited = _collect_cited_keys(tp)
+        entries = [e for e in read_bib_file(bp) if not e.kind.startswith("@")]
+    except (OSError, UnicodeError, ValueError) as exc:
+        return f"Error: citation validation incomplete: {exc}"
+    bib_keys = {e.key for e in entries}
+    if len(bib_keys) != len(entries):
+        return "Error: duplicate bibliography keys make citation validation ambiguous"
+    if "*" in cited:
+        cited.remove("*")
+        cited.update(bib_keys)
 
     missing = cited - bib_keys
     uncited = bib_keys - cited

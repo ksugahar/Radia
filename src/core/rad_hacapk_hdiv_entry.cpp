@@ -10,6 +10,12 @@ namespace {
 
 constexpr double kInvFourPi = 0.07957747154594766788;
 
+// Same relaxed, flag-gated counter as HexStatAdd (file-local in rad_hacapk_hdiv.cpp).
+inline void EntryStatAdd(bool enabled, std::atomic<long long>& value)
+{
+    if (enabled) value.fetch_add(1, std::memory_order_relaxed);
+}
+
 }  // namespace
 
 struct RadHACApKChargeGram::SampledLaplaceEntryStrategy final : EntryStrategy {
@@ -142,25 +148,43 @@ double RadHACApKChargeGram::HighOrderTetEntryStrategy::Evaluate(
     else
         value = 0.5 * (owner.QuadDot(a, b) + owner.QuadDot(b, a));
 
+    // IMAGE terms (mirror and cyclic alike) follow the direct dispatch: a FAR image pair takes the cheap
+    // low-quad rule on the image geometry, a near pair the host-block rule (curved: product rule or
+    // vectorized Duffy chosen by ImageHostsTouch; flat: the analytic host block), and only the
+    // configurations without a host block (flat BDM1, polynomial-combination charges) keep the per-entry
+    // scalar fold.  Before this dispatch every MIRROR image on a curved mesh was a per-entry scalar curved
+    // Duffy -- thousands of curved-map evaluations per (outer point, source charge), no far rule, no reuse
+    // across the co-located charges of a host -- which made an IMA build 10-100x slower than the direct
+    // build of a mesh twice its size.
+    const bool image_block =
+        HOTetImageBlockEnabled() && !owner.m_polyCombo && !owner.m_hexmode && !owner.m_wedgemode &&
+        (owner.m_curved || (owner.m_hoAnalyticBlock && HOAnalyticBlockEnabled()));
     for (size_t image = 0; image < owner.m_image_masks.size(); ++image) {
         const int image_id = (int)image + 1;
-        const bool rotation_image = image < owner.m_image_rot_angle.size() &&
-                                    owner.m_image_rot_angle[image] != 0.0;
-        if (rotation_image && !owner.m_curved && !owner.m_polyCombo && !owner.m_hexmode &&
-            !owner.m_wedgemode && owner.m_hoAnalyticBlock && HOAnalyticBlockEnabled() &&
-            HOTetImageBlockEnabled()) {
+        const double sign = owner.m_image_signs[image];
+        if (owner.ImageFarPair(a, b, image_id)) {
+            EntryStatAdd(owner.m_hexCacheStatsEnabled, owner.m_hoImageFarEntries);
+            value += sign * (HOFarOneSidedEnabled()
+                ? owner.QuadDotFarImage(a, b, image_id)
+                : 0.5 * (owner.QuadDotFarImage(a, b, image_id) +
+                         owner.QuadDotFarImage(b, a, image_id)));
+        }
+        else if (image_block) {
+            EntryStatAdd(owner.m_hexCacheStatsEnabled, owner.m_hoImageBlockEntries);
             const int kind_a = owner.m_kind[a], host_a = owner.m_host[a];
             const int kind_b = owner.m_kind[b], host_b = owner.m_host[b];
             const int local_a = owner.m_hoLocalOf[a], local_b = owner.m_hoLocalOf[b];
             const int count_b = kind_b == 0 ? (int)owner.m_hoCellCharges[host_b].size()
                                             : (int)owner.m_hoFaceCharges[host_b].size();
-            value += owner.m_image_signs[image] *
+            value += sign *
                 owner.GetHOTetSymBlock(kind_a, host_a, kind_b, host_b, image_id)
                     [(size_t)local_a * count_b + local_b];
         }
-        else
-            value += owner.m_image_signs[image] * 0.5 *
+        else {
+            EntryStatAdd(owner.m_hexCacheStatsEnabled, owner.m_hoImageScalarEntries);
+            value += sign * 0.5 *
                 (owner.QuadDotRefl(a, b, image_id) + owner.QuadDotRefl(b, a, image_id));
+        }
     }
     return value;
 }

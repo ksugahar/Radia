@@ -115,6 +115,12 @@ bullet 数で 1 メッセージ違反を粗く判定 (bullet >= 4 で warn)。�
 - 日本語: 300 字/分 (学会), 400 字/分 (速め)
 - 英語: 130 wpm (standard), 150 wpm (native fast)
 - 持ち時間 20 分 → 6000 字 or 2600 words が上限
+- 内容スライドの発話時間は **60〜90 秒を目安**にする。画面が長く変わらず聴衆が
+  退屈するのを避けつつ、一枚の主張を説明する時間を確保するためである。
+- **60〜90 秒は絶対条件でも合否基準でもない。** 導入・章扉・結論は短くてよく、
+  複雑な図や定式化は理解に必要なら 90 秒を超えてよい。時間だけを合わせるために
+  説明を削ったり無意味な間を足したりせず、全体の持ち時間、理解しやすさ、画面の
+  変化を優先する。
 
 ### T6. Q&A defense → ✅ `presentation_check_qa_backup_slides` + v0.12.0 takehome
 Q&A 対応 slides の有無、takehome slide の質を評価。
@@ -152,6 +158,20 @@ Q&A 対応 slides の有無、takehome slide の質を評価。
 notation_variants / find_undefined_acronyms / acronym_usage_audit /
 check_kanji_ratio / lint_bedrock / check_misuse_japanese /
 suggest_redundancy_fixes / translationese_check
+
+表記ゆれ検査は、表示スライド本文と発話ノートを結合して実行する。結果は**修正候補**であり、
+件数を合否に使わない。URLのホスト名は小文字が正しく、`full-band model` と
+`the full band` のように複合形容詞と名詞句でハイフンが変わる場合も正しい。
+検査器はURL内の大小文字を除外し、ハイフン候補には文脈確認が必要だと返す。
+
+略語検査では、SIBCやXFEMのような**その発表の専門語を初出確認前にwhitelistへ入れない**。
+先に `full form (ACRONYM)` が聴衆へ見えるか、少なくとも初出時に聞こえるかを確認する。
+whitelistはIEEE、出版社名、会議名など、展開しないと判断した語に限る。
+
+正規表現だけでは、`surface impedance condition` と
+`surface impedance boundary condition` のような同義・近義表現を同一概念と判断できない。
+主要概念について「正式名称／略語／許容する短縮形」の用語台帳を作り、章をまたいで
+本文・図ラベル・発話ノートを照合する。機械検査を通過しても、この意味的な照合は省略しない。
 
 `presentation_translationese_check` は直訳調・AI調の候補を返す（2026-09-02
 追加）。上の検査をすべて通過した科研費原稿に「〜へ発展する」（自動詞の

@@ -211,6 +211,10 @@ extern void cHACApK_fill_leafmtx_hyp(
  * Set to 1 around ONE BuildHMatrix of a symmetric-use manager, reset to 0 after. */
 extern void cHACApK_set_sym_fill(int flag);
 
+/* Per-point support radius (original 0-based order, n_elem entries) used by cHACApK_bndbox to build
+ * bounding boxes of SUPPORTS; NULL = plain point boxes.  Set around ONE build, reset to NULL after. */
+extern void cHACApK_set_point_radius(const double* radius);
+
 extern void cHACApK_count_blrnmb(
   st_cHACApK_cluster st_cltl,
   st_cHACApK_cluster st_cltt,

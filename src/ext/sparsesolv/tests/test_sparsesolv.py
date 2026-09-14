@@ -1351,6 +1351,11 @@ class TestCompactAMS:
                                         coord_x=coord_x, coord_y=coord_y,
                                         coord_z=coord_z)
 
+        poisoned = f.vec.CreateVector()
+        poisoned.FV().NumPy()[:] = float("nan")
+        pre.Mult(f.vec, poisoned)
+        assert not any(value != value for value in poisoned.FV().NumPy())
+
         inv = CGSolver(a.mat, pre, printrates=False, tol=1e-8, maxiter=200)
 
         gfu = GridFunction(fes)

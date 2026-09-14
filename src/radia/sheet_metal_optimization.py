@@ -145,7 +145,7 @@ class CubitShapeRemeshRequest:
 
 @dataclass(frozen=True)
 class CubitShapeRemeshResult:
-    """Mesh plus the machine-readable Cubit/Sculpt validation report."""
+    """Mesh plus the machine-readable Cubit validation report."""
     mesh: object
     report: object = None
 
@@ -583,7 +583,7 @@ def apply_ngsolve_mesh_route(mesh, deformation, decision: MeshUpdateDecision):
     """Apply an NGSolve-owned deformation/refinement route.
 
     A Cubit rebuild is deliberately returned as an external action because it
-    changes CAD topology and must pass the Cubit Sculpt validation gates.
+    changes CAD topology and must pass the application-owned Cubit gates.
     """
     if decision.route=="ngsolve_deform":
         mesh.SetDeformation(deformation)
@@ -746,7 +746,7 @@ def _normalize_cubit_shape_result(value):
 
 
 def _default_cubit_shape_gate(result):
-    """Require the three solver-facing Sculpt gates when a report is present."""
+    """Require the three solver-facing Cubit gates when a report is present."""
     report = result.report
     if report is None:
         return True, "legacy backend supplied no mesh report"
@@ -780,7 +780,7 @@ def _cubit_shape_equivalence(trial, remeshed, linearization, *,
                     linearization.response_band, dtype=float))))
             if not np.isfinite(ratio) or ratio > tolerance:
                 return False, (
-                    "Sculpt response changed by "
+                    "Cubit remesh response changed by "
                     f"{ratio:.6g} response-band units")
     if objective_tolerance is not None:
         tolerance = float(objective_tolerance)
@@ -791,14 +791,15 @@ def _cubit_shape_equivalence(trial, remeshed, linearization, *,
             abs(float(trial.objective)), 1.0e-300)
         if not np.isfinite(relative) or relative > tolerance:
             return False, (
-                "Sculpt objective changed by relative "
+                "Cubit remesh objective changed by relative "
                 f"{relative:.6g}")
-    return True, "Sculpt physical equivalence gates passed"
+    return True, "Cubit remesh physical equivalence gates passed"
 
 
 def optimize_topology_preserving_shape(
         initial_state: TopologyPreservingShapeState, *, linearize_step,
         deformation_factory, rebuild_model, evaluate_model, move_limit,
+        trial_model_gate=None,
         parameter_bounds=None, laplacian=None, curvature_limit=None,
         A_ub=None, b_ub=None, cubit_backend=None,
         cubit_work_directory=None, max_iterations=20,
@@ -814,11 +815,14 @@ def optimize_topology_preserving_shape(
         iteration_callback=None):
     """Run clay-like, topology-preserving HDiv-MMM shape optimization.
 
-    Every trial is fully re-solved.  Safe steps stay as an NGSolve
+    Every trial is fully re-solved.  ``trial_model_gate`` may reject a rebuilt
+    model before its objective/response is considered; applications use this
+    to fail closed when an iterative physical solve has not converged.  Safe
+    steps stay as an NGSolve
     deformation; a quality-limit crossing requests one application-owned
     Cubit rebuild without changing the accepted iron topology.  Optional
     interval/displacement batching checkpoints several accepted GetTrafo
-    steps in one Sculpt rebuild.  A scheduled checkpoint that fails its mesh
+    steps in one Cubit rebuild.  A scheduled checkpoint that fails its mesh
     or physical-equivalence gates leaves the accepted GetTrafo shape intact;
     a quality-mandated rebuild still backtracks.
     """
@@ -882,8 +886,10 @@ def optimize_topology_preserving_shape(
         mesh = state.mesh
         if getattr(mesh, "deformation", None) is not None:
             mesh.UnsetDeformation()
-        reference_determinants, _ = sample_trafo_quality(
+        reference_determinants, reference_conditions = sample_trafo_quality(
             mesh, integration_order=integration_order)
+        condition_limit = reference_aware_condition_limit(
+            reference_conditions, requested=maximum_condition)
         scale = 1.0
         accepted = None
         nonlinear_resolves = 0
@@ -901,10 +907,10 @@ def optimize_topology_preserving_shape(
                     refine_threshold=refine_threshold,
                     rebuild_threshold=rebuild_threshold,
                     minimum_jacobian=minimum_jacobian_ratio,
-                    maximum_condition=maximum_condition,
+                    maximum_condition=condition_limit,
                     topology_changed=False)
                 unsafe = (np.any(ratios <= minimum_jacobian_ratio)
-                          or np.any(conditions >= 2 * maximum_condition))
+                          or np.any(conditions >= 2 * condition_limit))
                 needs_cubit = decision.route != "ngsolve_deform"
                 if unsafe or (needs_cubit and cubit_backend is None):
                     mesh.UnsetDeformation()
@@ -914,6 +920,11 @@ def optimize_topology_preserving_shape(
                     mesh, candidate, "ngsolve_deform")
                 trial_evaluation = evaluate_model(trial_model)
                 nonlinear_resolves += 1
+                if (trial_model_gate is not None
+                        and not bool(trial_model_gate(trial_model))):
+                    mesh.UnsetDeformation()
+                    scale *= contraction
+                    continue
                 ok, before_ratio, after_ratio = (
                     _accept_perturbative_shape_trial(
                         state.evaluation, trial_evaluation, linearization,
@@ -972,19 +983,32 @@ def optimize_topology_preserving_shape(
                     if not scheduled_cubit:
                         raise
                     mesh_gate_ok = False
-                    remesh_reason = f"scheduled Sculpt failed: {exc}"
+                    remesh_reason = f"scheduled Cubit rebuild failed: {exc}"
                 if mesh_gate_ok:
                     remeshed_mesh = result.mesh
                     remeshed_model = rebuild_model(
                         remeshed_mesh, candidate, "cubit_rebuild")
                     remeshed_evaluation = evaluate_model(remeshed_model)
                     nonlinear_resolves += 1
-                    remesh_ok, remesh_before_ratio, remesh_after_ratio = (
-                        _accept_perturbative_shape_trial(
-                            state.evaluation, remeshed_evaluation,
-                            linearization, update.delta, scale, armijo=armijo,
-                            objective_tolerance=objective_tolerance,
-                            band_tolerance=band_tolerance))
+                    remesh_model_ok = bool(
+                        trial_model_gate is None
+                        or trial_model_gate(remeshed_model))
+                    if remesh_model_ok:
+                        (remesh_ok, remesh_before_ratio,
+                         remesh_after_ratio) = (
+                            _accept_perturbative_shape_trial(
+                                state.evaluation, remeshed_evaluation,
+                                linearization, update.delta, scale,
+                                armijo=armijo,
+                                objective_tolerance=objective_tolerance,
+                                band_tolerance=band_tolerance))
+                    else:
+                        remesh_ok = False
+                        remesh_before_ratio = before_ratio
+                        remesh_after_ratio = after_ratio
+                        remesh_reason = (
+                            remesh_reason
+                            + "; rebuilt model failed the application gate")
                     equivalent, equivalence_reason = _cubit_shape_equivalence(
                         trial_evaluation, remeshed_evaluation, linearization,
                         response_tolerance=

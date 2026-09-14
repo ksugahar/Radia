@@ -5,11 +5,10 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
 import subprocess
 import sys
 import time
-
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "tests" / "test_tier_manifest.json"
@@ -65,13 +64,16 @@ def main(argv: list[str] | None = None) -> int:
         paths, budget = load_profile(args.profile)
         if args.since is not None:
             changed = None
+            previous_manifest = None
             if args.since:
                 diff = subprocess.run(
                     ['git', '-c', f'safe.directory={ROOT}', 'diff', '--name-only', '-z',
                      args.since, 'HEAD', '--'], cwd=ROOT, capture_output=True)
                 if diff.returncode == 0:
                     changed = diff.stdout.decode('utf-8').split('\0')
-            paths = select_impact_tests(paths, changed)
+                    if 'tests/test_tier_manifest.json' in changed:
+                        previous_manifest = read_previous_manifest(args.since)
+            paths = select_impact_tests(paths, changed, previous_manifest=previous_manifest)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         print(f"test-tier configuration error: {exc}", file=sys.stderr)
         return 2
@@ -103,20 +105,97 @@ def main(argv: list[str] | None = None) -> int:
     return result.returncode
 
 
-def select_impact_tests(paths: list[str], changed: list[str] | None) -> list[str]:
-    """Select only registered lightweight regressions; unknown bases fail broad."""
-    rules = json.loads(MANIFEST.read_text(encoding='utf-8')).get('impact_rules', {})
+def read_previous_manifest(ref: str) -> dict | None:
+    """Read the exact comparison tree; missing or invalid evidence stays unknown."""
+    try:
+        result = subprocess.run(
+            ['git', '-c', f'safe.directory={ROOT}', 'show',
+             f'{ref}:tests/test_tier_manifest.json'],
+            cwd=ROOT, capture_output=True, timeout=30, check=False,
+        )
+        if result.returncode != 0:
+            return None
+        data = json.loads(result.stdout.decode('utf-8'))
+        return data if isinstance(data, dict) else None
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return None
+
+
+def changed_impact_tests(current: dict, previous: dict | None) -> set[str] | None:
+    """Select rule/membership deltas; budgets, inheritance and unknowns stay broad."""
+    if not isinstance(previous, dict):
+        return None
+    excluded = {'impact_rules', 'profiles'}
+    if ({key: value for key, value in current.items() if key not in excluded}
+            != {key: value for key, value in previous.items() if key not in excluded}):
+        return None
+    before_profiles, after_profiles = previous.get('profiles'), current.get('profiles')
+    if (not isinstance(before_profiles, dict) or not isinstance(after_profiles, dict)
+            or before_profiles.keys() != after_profiles.keys()):
+        return None
+    selected: set[str] = set()
+    for name, after_profile in after_profiles.items():
+        before_profile = before_profiles[name]
+        if not isinstance(before_profile, dict) or not isinstance(after_profile, dict):
+            return None
+        if ({key: value for key, value in before_profile.items() if key != 'paths'}
+                != {key: value for key, value in after_profile.items() if key != 'paths'}):
+            return None
+        old_paths, new_paths = before_profile.get('paths', []), after_profile.get('paths', [])
+        for paths in (old_paths, new_paths):
+            if (not isinstance(paths, list) or not all(isinstance(path, str) for path in paths)
+                    or len(paths) != len(set(paths))):
+                return None
+        selected.update(set(old_paths) ^ set(new_paths))
+    before = previous.get('impact_rules')
+    after = current.get('impact_rules')
+    if not isinstance(before, dict) or not isinstance(after, dict):
+        return None
+    for source in before.keys() | after.keys():
+        old_tests = before.get(source, [])
+        new_tests = after.get(source, [])
+        if old_tests == new_tests:
+            continue
+        if not isinstance(old_tests, list) or not isinstance(new_tests, list):
+            return None
+        selected.update(old_tests)
+        selected.update(new_tests)
+    return selected
+
+
+def select_impact_tests(
+    paths: list[str], changed: list[str] | None, *, previous_manifest: dict | None = None,
+) -> list[str]:
+    """Match files exactly and trailing-slash directories recursively; unknown bases fail broad."""
+    manifest = json.loads(MANIFEST.read_text(encoding='utf-8'))
+    rules = manifest.get('impact_rules', {})
     selected = list(paths)
+    manifest_tests = set()
     if changed is not None and 'tests/test_tier_manifest.json' in changed:
-        changed = None
+        manifest_tests = changed_impact_tests(manifest, previous_manifest)
+        if manifest_tests is None:
+            changed = None
+            manifest_tests = set()
+        else:
+            selected.extend(sorted(manifest_tests))
     for source, tests in rules.items():
-        if changed is None or source in changed or any(test in changed for test in tests):
+        if (changed is None or source in changed
+                or (source.endswith('/') and any(path.startswith(source) for path in changed))
+                or any(test in changed for test in tests)):
             selected.extend(tests)
     selected = list(dict.fromkeys(selected))
+    current_references = {test for tests in rules.values() for test in tests}
+    current_references.update(test for profile in manifest.get('profiles', {}).values()
+                              for test in profile.get('paths', []))
+    runnable = []
     for path in selected:
         if not (ROOT / path).is_file():
+            if path in manifest_tests and path not in current_references:
+                print(f'Retired test removed from manifest and checkout: {path}')
+                continue
             raise ValueError(f'impact rule names missing test: {path}')
-    return selected
+        runnable.append(path)
+    return runnable
 
 
 if __name__ == "__main__":

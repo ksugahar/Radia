@@ -79,6 +79,14 @@ def _area(rect: tuple) -> float:
     return max(0.0, (x1 - x0)) * max(0.0, (y1 - y0))
 
 
+def _text_blocks(page) -> list:
+    """Require a completed extraction, not a missing block list."""
+    result = page.get_text("dict")
+    if not isinstance(result, dict) or not isinstance(result.get("blocks"), list):
+        raise ValueError("invalid PDF text extraction result")
+    return result["blocks"]
+
+
 def _intersection_area(a: tuple, b: tuple) -> float:
     """Area of intersection of two rects in pt^2."""
     ax0, ay0, ax1, ay1 = a
@@ -143,63 +151,61 @@ def paper_writing_detect_text_image_overlap(
     pdf = pathlib.Path(pdf_path)
     if not pdf.exists():
         return {"error": f"pdf_path not found: {pdf_path}"}
-    doc = pymupdf.open(str(pdf))
+    with pymupdf.open(str(pdf)) as doc:
 
-    overlaps = []
-    for page_idx, page in enumerate(doc):
-        page_area = abs(page.rect.width * page.rect.height)
-        # Collect image bboxes via get_image_info (more reliable than
-        # get_images + per-name lookup).
-        try:
-            img_infos = page.get_image_info(xrefs=True)
-        except Exception:  # noqa: BLE001
-            img_infos = []
-        # Filter out full-page images
-        img_bboxes = []
-        for info in img_infos:
-            bbox = info.get("bbox")
-            if not bbox or len(bbox) != 4:
-                continue
-            if ignore_full_page_images:
-                if _area(bbox) / page_area > full_page_image_area_ratio:
+        overlaps = []
+        for page_idx, page in enumerate(doc):
+            page_area = abs(page.rect.width * page.rect.height)
+            # Collect image bboxes via get_image_info (more reliable than
+            # get_images + per-name lookup).
+            try:
+                img_infos = page.get_image_info(xrefs=True)
+            except Exception as e:  # noqa: BLE001
+                raise RuntimeError(f"image extraction failed on page {page_idx + 1}") from e
+            # Filter out full-page images
+            img_bboxes = []
+            for info in img_infos:
+                bbox = info.get("bbox")
+                if not bbox or len(bbox) != 4:
                     continue
-            img_bboxes.append(tuple(bbox))
+                if ignore_full_page_images:
+                    if _area(bbox) / page_area > full_page_image_area_ratio:
+                        continue
+                img_bboxes.append(tuple(bbox))
 
-        if not img_bboxes:
-            continue
-
-        # Walk text blocks
-        text_dict = page.get_text("dict")
-        for block in text_dict.get("blocks", []):
-            if block.get("type") != 0:  # 0 = text, 1 = image
+            if not img_bboxes:
                 continue
-            bbox = block.get("bbox")
-            if not bbox or len(bbox) != 4:
-                continue
-            text_bbox = tuple(bbox)
-            # Extract a tiny snippet for the report
-            snippet_chars = []
-            for line in block.get("lines", []):
-                for span in line.get("spans", []):
-                    snippet_chars.append(span.get("text", ""))
-            snippet = " ".join(snippet_chars).strip()
-            snippet = (snippet[:40] + "...") if len(snippet) > 43 else snippet
 
-            for ib in img_bboxes:
-                iou = _iou(text_bbox, ib)
-                inter_area = _intersection_area(text_bbox, ib)
-                if (iou >= iou_threshold
-                        and inter_area >= min_intersection_area_pt2):
-                    overlaps.append({
-                        "page": page_idx + 1,
-                        "text_snippet": snippet,
-                        "text_bbox": text_bbox,
-                        "image_bbox": ib,
-                        "iou": round(iou, 4),
-                        "intersection_area_pt2": round(inter_area, 2),
-                    })
-    _n_pages = doc.page_count
-    doc.close()
+            # Walk text blocks
+            for block in _text_blocks(page):
+                if block.get("type") != 0:  # 0 = text, 1 = image
+                    continue
+                bbox = block.get("bbox")
+                if not bbox or len(bbox) != 4:
+                    continue
+                text_bbox = tuple(bbox)
+                # Extract a tiny snippet for the report
+                snippet_chars = []
+                for line in block.get("lines", []):
+                    for span in line.get("spans", []):
+                        snippet_chars.append(span.get("text", ""))
+                snippet = " ".join(snippet_chars).strip()
+                snippet = (snippet[:40] + "...") if len(snippet) > 43 else snippet
+
+                for ib in img_bboxes:
+                    iou = _iou(text_bbox, ib)
+                    inter_area = _intersection_area(text_bbox, ib)
+                    if (iou >= iou_threshold
+                            and inter_area >= min_intersection_area_pt2):
+                        overlaps.append({
+                            "page": page_idx + 1,
+                            "text_snippet": snippet,
+                            "text_bbox": text_bbox,
+                            "image_bbox": ib,
+                            "iou": round(iou, 4),
+                            "intersection_area_pt2": round(inter_area, 2),
+                        })
+        _n_pages = doc.page_count
 
     advice = (
         "Text-on-image overlap = a caption / page number / paragraph "
@@ -290,8 +296,7 @@ def paper_writing_detect_text_overflow_page(
                 box_type = "normalized_mediabox"
             page_box = (pbox.x0, pbox.y0, pbox.x1, pbox.y1)
 
-            text_dict = page.get_text("dict")
-            for block in text_dict.get("blocks", []):
+            for block in _text_blocks(page):
                 if block.get("type") != 0:
                     continue
                 bbox = block.get("bbox")
@@ -380,51 +385,49 @@ def paper_writing_detect_overlapping_text_blocks(
     pdf = pathlib.Path(pdf_path)
     if not pdf.exists():
         return {"error": f"pdf_path not found: {pdf_path}"}
-    doc = pymupdf.open(str(pdf))
+    with pymupdf.open(str(pdf)) as doc:
 
-    overlaps = []
-    for page_idx, page in enumerate(doc):
-        text_dict = page.get_text("dict")
-        text_blocks = []
-        for block in text_dict.get("blocks", []):
-            if block.get("type") != 0:
-                continue
-            bbox = block.get("bbox")
-            if not bbox or len(bbox) != 4:
-                continue
-            snippet_chars = []
-            for line in block.get("lines", []):
-                for span in line.get("spans", []):
-                    snippet_chars.append(span.get("text", ""))
-            snippet = " ".join(snippet_chars).strip()
-            snippet = (snippet[:40] + "...") if len(snippet) > 43 else snippet
-            letters = sum(char.isalpha() for char in snippet)
-            if letters / max(len(snippet), 1) < 0.4:
-                # Display equations are often emitted as overlapping glyph
-                # fragments; they are not prose-on-prose collisions.
-                continue
-            text_blocks.append((tuple(bbox), snippet))
+        overlaps = []
+        for page_idx, page in enumerate(doc):
+            text_blocks = []
+            for block in _text_blocks(page):
+                if block.get("type") != 0:
+                    continue
+                bbox = block.get("bbox")
+                if not bbox or len(bbox) != 4:
+                    continue
+                snippet_chars = []
+                for line in block.get("lines", []):
+                    for span in line.get("spans", []):
+                        snippet_chars.append(span.get("text", ""))
+                snippet = " ".join(snippet_chars).strip()
+                snippet = (snippet[:40] + "...") if len(snippet) > 43 else snippet
+                letters = sum(char.isalpha() for char in snippet)
+                if letters / max(len(snippet), 1) < 0.4:
+                    # Display equations are often emitted as overlapping glyph
+                    # fragments; they are not prose-on-prose collisions.
+                    continue
+                text_blocks.append((tuple(bbox), snippet))
 
-        n = len(text_blocks)
-        for i in range(n):
-            for j in range(i + 1, n):
-                a, snip_a = text_blocks[i]
-                b, snip_b = text_blocks[j]
-                iou = _iou(a, b)
-                inter = _intersection_area(a, b)
-                if (iou >= iou_threshold
-                        and inter >= min_intersection_area_pt2):
-                    overlaps.append({
-                        "page": page_idx + 1,
-                        "block_a_snippet": snip_a,
-                        "block_a_bbox": a,
-                        "block_b_snippet": snip_b,
-                        "block_b_bbox": b,
-                        "iou": round(iou, 4),
-                        "intersection_area_pt2": round(inter, 2),
-                    })
-    _n_pages = doc.page_count
-    doc.close()
+            n = len(text_blocks)
+            for i in range(n):
+                for j in range(i + 1, n):
+                    a, snip_a = text_blocks[i]
+                    b, snip_b = text_blocks[j]
+                    iou = _iou(a, b)
+                    inter = _intersection_area(a, b)
+                    if (iou >= iou_threshold
+                            and inter >= min_intersection_area_pt2):
+                        overlaps.append({
+                            "page": page_idx + 1,
+                            "block_a_snippet": snip_a,
+                            "block_a_bbox": a,
+                            "block_b_snippet": snip_b,
+                            "block_b_bbox": b,
+                            "iou": round(iou, 4),
+                            "intersection_area_pt2": round(inter, 2),
+                        })
+        _n_pages = doc.page_count
 
     advice = (
         "Text-on-text overlap suggests (a) caption straddling a page "

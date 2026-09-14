@@ -1,0 +1,30 @@
+{
+  "schema": "radia.validation.sparsesolv-hiruma-baseline.v1",
+  "fixture": {
+    "file": "meshes/mesh1_2.5T.vol",
+    "sha256": "f3920dff6db470f8ce48a2f4983a404c564b8f92254abdae4c1e7cf8e620f33a",
+    "source_msh_converted_vol_sha256": "e2be81cd53d86266f2693abcdcdff8c91ded862c3ab2d54d96c64b82f6b32315",
+    "ne": 130460,
+    "nv": 23731,
+    "ndof_hcurl": 155527,
+    "ndof_h1": 23731,
+    "material_interface_elements": 32654
+  },
+  "acceptance": {
+    "iterations_min": 140,
+    "iterations_max": 150,
+    "true_residual_max": 2e-10,
+    "timing_is_report_only": true
+  },
+  "reference_observation": {
+    "date": "2026-09-11",
+    "machine": "LAB",
+    "radia": "4.95.91",
+    "ngsolve": "6.2.2606",
+    "iterations": 144,
+    "true_residual": 9.521874e-11,
+    "setup_seconds": 0.672,
+    "solve_seconds": 3.165,
+    "assembled_system_relative_difference_from_pre_interface_fixture": 0.0
+  }
+}

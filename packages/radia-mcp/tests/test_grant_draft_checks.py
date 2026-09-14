@@ -347,3 +347,133 @@ def test_both_new_checks_are_registered_as_mcp_tools():
     register(rec)
     assert "grant_writing_peer_review_convention_hints" in rec.names
     assert "grant_writing_future_dated_publication_check" in rec.names
+
+
+# --- named-software first use / current-future capability map ---------------
+
+def test_public_platform_label_does_not_explain_what_radia_does():
+    result = t.grant_writing_named_software_first_use_check(
+        "公開研究基盤Radiaを用いる。"
+    )
+    assert result["applicable"]
+    assert result["score"] is None
+    assert result["automatic_judgment_prohibited"] is True
+    assert result["missing_functional_identity_count"] == 1
+    assert result["entries"][0]["software"] == "Radia"
+    assert result["entries"][0]["functional_identity_present"] is False
+
+
+def test_plain_language_functional_identity_is_visible_at_first_use():
+    result = t.grant_writing_named_software_first_use_check(
+        "Radiaは、磁石の形状と電流から三次元磁場を計算する"
+        "オープンソース解析ソフトウェアである。"
+    )
+    assert result["missing_functional_identity_count"] == 0
+    assert result["entries"][0]["functional_identity_present"] is True
+    assert result["recommendations"] == []
+
+
+def test_implementation_language_label_is_not_silently_accepted_as_identity():
+    result = t.grant_writing_named_software_first_use_check(
+        "Python-nativeな三次元電磁界解析ソルバRadiaを用いる。"
+    )
+    assert result["source_check_count"] == 1
+    assert result["entries"][0][
+        "implementation_claims_requiring_source_check"
+    ] == ["Python-native"]
+
+
+def test_project_specific_software_name_can_be_supplied():
+    result = t.grant_writing_named_software_first_use_check(
+        "MySolverは磁場を計算するソフトウェアである。",
+        software_names="MySolver",
+    )
+    assert result["entry_count"] == 1
+    assert result["entries"][0]["functional_identity_present"] is True
+
+
+def test_capability_map_requires_explicit_names_and_never_scores():
+    result = t.grant_writing_capability_status_map("HDiv-MMMは完成しつつある。")
+    assert result["applicable"] is False
+    assert result["score"] is None
+    assert result["automatic_judgment_prohibited"] is True
+
+
+def test_capability_map_separates_existing_foundation_from_future_work():
+    text = (
+        "HDiv-MMMは完成しつつある。"
+        "本研究ではHDiv-MMMを用いたトポロジー最適化を実現する。"
+        "EnergyStopは今後FFAGへ統合して検証する。"
+    )
+    result = t.grant_writing_capability_status_map(
+        text, capability_names="HDiv-MMM,EnergyStop"
+    )
+    by_name = {item["capability"]: item for item in result["capabilities"]}
+    assert by_name["HDiv-MMM"]["has_current_statement"] is True
+    assert by_name["HDiv-MMM"]["has_future_statement"] is True
+    assert [s["status"] for s in by_name["HDiv-MMM"]["statements"]] == [
+        "current", "future"
+    ]
+    assert by_name["EnergyStop"]["has_current_statement"] is False
+    assert by_name["EnergyStop"]["has_future_statement"] is True
+
+
+def test_capability_map_recognizes_proposal_wording_without_dewa():
+    text = (
+        "磁極を探索する機能はすでに動いている。"
+        "FFAGの形状最適化とヒステリシス解析をつなぐ手順は、まだない。"
+        "本研究でEnergyStopをFFAGへつなぐ。"
+    )
+    result = t.grant_writing_capability_status_map(
+        text, capability_names="EnergyStop"
+    )
+    item = result["capabilities"][0]
+    assert item["has_current_statement"] is False
+    assert item["has_future_statement"] is True
+
+
+def test_capability_map_rejoins_soft_wrapped_markdown_prose():
+    text = (
+        "HDiv-MMMの磁界計算部は完成しつつあるが、FFAGで鉄配置探索と局所変形を\n"
+        "組み合わせるトポロジー最適化は、本研究で実装し、性能を検証する。"
+    )
+    result = t.grant_writing_capability_status_map(
+        text, capability_names="HDiv-MMM"
+    )
+    item = result["capabilities"][0]
+    assert item["has_current_statement"] is True
+    assert item["has_future_statement"] is True
+    assert item["statements"][0]["status"] == "current_and_future"
+
+
+def test_capability_map_recognizes_conjugated_future_action():
+    result = t.grant_writing_capability_status_map(
+        "本研究はRadiaを拡張し、FFAGで検証する。", capability_names="Radia"
+    )
+    assert result["capabilities"][0]["has_future_statement"] is True
+
+
+def test_capability_map_leaves_unmarked_claim_for_human_review():
+    result = t.grant_writing_capability_status_map(
+        "Radiaは磁場を計算する。", capability_names="Radia"
+    )
+    item = result["capabilities"][0]
+    assert item["ambiguous_status_count"] == 1
+    assert item["statements"][0]["status"] == "ambiguous"
+
+
+def test_software_and_status_checks_are_registered_as_mcp_tools():
+    class _Rec:
+        def __init__(self):
+            self.names = []
+
+        def tool(self, **_kw):
+            def deco(fn):
+                self.names.append(fn.__name__)
+                return fn
+            return deco
+
+    rec = _Rec()
+    register(rec)
+    assert "grant_writing_named_software_first_use_check" in rec.names
+    assert "grant_writing_capability_status_map" in rec.names

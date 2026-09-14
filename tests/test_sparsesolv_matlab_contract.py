@@ -53,10 +53,25 @@ def test_matlab_lane_runs_engine_and_retains_json_on_mdx():
     job = workflow["jobs"]["ams-regression"]
     assert "mdx" in job["runs-on"]
     step = next(s for s in job["steps"] if s.get("name") == "Build and verify native MATLAB parity")
-    assert step["if"] == "steps.matlab-impact.outputs.required == 'true'"
+    assert step["if"] == (
+        "steps.native-impact.outputs.required == 'true' && "
+        "steps.matlab-impact.outputs.required == 'true'"
+    )
     assert "-MatlabMexOnly" in step["run"]
     assert "run_sparsesolv_parity.py --output" in step["run"]
     assert "sparsesolv-matlab.json" in job["steps"][-1]["with"]["path"]
+
+
+def test_mex_runtime_boundary_has_native_ci_coverage():
+    workflow = yaml.safe_load((ROOT/".github/workflows/sparsesolv.yml").read_text())
+    triggers = workflow.get("on", workflow.get(True))
+    for event in ("push", "pull_request"):
+        for path in ("matlab/+radia/+internal/callMex.m", "matlab/+radia/setup.m",
+                     "tests/matlab/test_mex_runtime_setup.m"):
+            assert path in triggers[event]["paths"]
+    runner = (ROOT/"validation_test/ngsolve_matlab_parity/run_sparsesolv_parity.py").read_text()
+    assert 'root/"tests/matlab/test_mex_runtime_setup.m"' in runner
+    assert "runtests(testfiles)" in runner
 
 
 def test_missing_diff_base_selects_matlab_without_failing_step(tmp_path):
@@ -72,3 +87,52 @@ def test_missing_diff_base_selects_matlab_without_failing_step(tmp_path):
         env={**os.environ, "GITHUB_OUTPUT": str(output)}, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     assert output.read_text().strip() == "required=true"
+
+
+@pytest.mark.parametrize('changed,event,expected', [
+    ('tools/run_test_tier.py', 'pull_request', 'false'),
+    ('matlab/+radia/+sparsesolv/AMS.m', 'pull_request', 'true'),
+    ('matlab/+radia/+python/sparsesolv.m', 'push', 'true'),
+    ('matlab/+radia/+internal/callMex.m', 'pull_request', 'true'),
+    ('matlab/+radia/setup.m', 'push', 'true'),
+    ('tests/matlab/test_mex_runtime_setup.m', 'pull_request', 'true'),
+    ('docs/intro.md', 'workflow_dispatch', 'true'),
+])
+def test_impact_uses_checkout_even_outside_repository(tmp_path, changed, event, expected):
+    pwsh, git = shutil.which('pwsh'), shutil.which('git')
+    if not pwsh or not git:
+        pytest.skip('PowerShell/Git runner contract')
+    repo = tmp_path / 'checkout with spaces'
+    repo.mkdir()
+    env = {k: v for k, v in os.environ.items()
+           if k not in ('GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE')}
+
+    def command(*args):
+        subprocess.run([git, '-C', str(repo), '-c', 'user.name=CI test',
+                        '-c', 'user.email=ci@example.invalid', *args],
+                       env=env, check=True, capture_output=True)
+
+    command('init')
+    command('commit', '--allow-empty', '-m', 'base')
+    source = repo / changed
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_text('changed\n')
+    command('add', changed)
+    command('commit', '-m', 'change')
+    workflow = yaml.safe_load((ROOT / '.github/workflows/sparsesolv.yml').read_text())
+    step = next(s for s in workflow['jobs']['ams-regression']['steps']
+                if s.get('id') == 'matlab-impact')
+    script = step['run'].replace('${{ github.event_name }}', event)
+    output = tmp_path / 'github-output'
+    runner_env = {**env, 'GIT_TEST_ASSUME_DIFFERENT_OWNER': '1',
+                  'GIT_CONFIG_NOSYSTEM': '1',
+                  'GIT_CONFIG_GLOBAL': str(tmp_path / 'empty-gitconfig'),
+                  'GITHUB_WORKSPACE': str(repo), 'GITHUB_OUTPUT': str(output)}
+    untrusted = subprocess.run([git, '-C', str(repo), 'rev-parse', '--show-toplevel'],
+                               env=runner_env, capture_output=True, text=True)
+    assert untrusted.returncode != 0 and 'dubious ownership' in untrusted.stderr
+    result = subprocess.run([pwsh, '-NoProfile', '-Command', script], cwd=tmp_path,
+                            env=runner_env,
+                            capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
+    assert output.read_text().strip() == f'required={expected}'

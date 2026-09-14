@@ -190,7 +190,15 @@ function testBuilderExposesLargeNativeSamplerChoices(testCase)
 m="radia_optuna_large_sampler_choices";
 cleanup=onCleanup(@()closeModel(m));
 new_system(m);
-for choice=["gp","nsgaiii","bruteforce","qmc"]
+for choice=["gp","qmc"]
+    verifyError(testCase,@()radia.simulink.buildOptunaBlock(m, ...
+        ObjectiveFcn="radia_optuna_quadratic",Sampler=choice,Save=false), ...
+        "radia:simulink:OptunaPythonSampler");
+    verifyError(testCase,@()radia.simulink.buildOptunaStudyBlock(m, ...
+        ObjectiveFcn="radia_optuna_quadratic",Sampler=choice,Save=false), ...
+        "radia:simulink:OptunaPythonSampler");
+end
+for choice=["nsgaiii","bruteforce"]
     path=radia.simulink.buildOptunaBlock(m, ...
         ObjectiveFcn="radia_optuna_quadratic",NumTrials=2, ...
         Sampler=choice,Save=false);
@@ -198,7 +206,8 @@ for choice=["gp","nsgaiii","bruteforce","qmc"]
     parameter=Simulink.Mask.get(path).getParameter("sampler_name");
     options=string(parameter.TypeOptions);
     verifyTrue(testCase,all(ismember( ...
-        ["gp","nsgaiii","bruteforce","qmc"],options)));
+        ["nsgaiii","bruteforce"],options)));
+    verifyFalse(testCase,any(ismember(options,["gp","qmc"])));
     delete_block(path);
 end
 clear cleanup; closeModel(m);
@@ -263,5 +272,48 @@ verifyEqual(testCase,selected(end),0);
 verifyGreaterThan(testCase,checkpoint(end),0);
 verifyTrue(testCase,isfinite(evalin("base","simulink_session_x")));
 clear directoryCleanup baseCleanup cleanup
+end
+function testAutoSamplerStaysNativeAndRejectsLegacyGP(testCase)
+for objectives=[1,2]
+    m="radia_optuna_native_auto_test";
+    directory=string(tempname("C:\temp")); mkdir(directory);
+    directoryCleanup=onCleanup(@()rmdir(directory,"s"));
+    cleanup=onCleanup(@()closeModel(m)); new_system(m);
+    if objectives==1
+        objective="radia_optuna_quadratic";
+    else
+        objective="radia_optuna_biobjective";
+    end
+    storage=directory+"\study.mat";
+    block=radia.simulink.buildOptunaBlock(m,ObjectiveFcn=objective, ...
+        Directions=repmat("minimize",1,objectives),NumTrials=2, ...
+        StoragePath=storage,Seed=53,Save=false);
+    % Fixed numeric small budgets select Python GP in the batch policy.
+    parameters=get_param(block,"Parameters");
+    set_param(block,"Parameters",strrep(parameters, ...
+        "'Parameters',parameter_spec", ...
+        "'FixedNumeric',true,'Dimensions',2,'Parameters',parameter_spec"));
+    add_block("simulink/Sources/Constant",m+"/Start",Value="1");
+    add_line(m,"Start/1","Optuna Optimization/1");
+    sim(m,StopTime="2",ReturnWorkspaceOutputs="on");
+    study=radia.optuna.loadStudy(storage=storage);
+    decision=study.UserAttrs.auto_sampler_decision;
+    verifyEqual(testCase,string(decision.selected),"tpe");
+    verifyEqual(testCase,string(decision.reason),"native_step_time_small_budget");
+    verifyEqual(testCase,sum(study.TrialTable.State=="COMPLETE"),2);
+    % A legacy block bypasses the builder's early rejection but not runtime.
+    set_param(block,"Parameters",strrep(parameters, ...
+        "'Name',sampler_name", "'Name','gp'"));
+    set_param(block,"storage_path","''");
+    failed=false;
+    try
+        sim(m,StopTime="0",ReturnWorkspaceOutputs="on");
+    catch exception
+        failed=true;
+        verifyTrue(testCase,contains(getReport(exception),"use Python per trial"));
+    end
+    verifyTrue(testCase,failed,"Legacy GP must fail before a trial is run.");
+    clear cleanup directoryCleanup
+end
 end
 function closeModel(m), if bdIsLoaded(m), close_system(m,0); end, end

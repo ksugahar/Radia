@@ -1,0 +1,21 @@
+{
+  "schema": "radia.validation.case6-mesh-contract.v1",
+  "case": 6,
+  "scope": "Selected input identity and known partition-fix provenance; not mesh-convergence or numerical acceptance",
+  "iron": {
+    "sha256": "fdd1387281e550e27eab435cfac3ec54e0b9d1339438699fdc50c852dfcafc74",
+    "elements": 2408,
+    "family": "HEX",
+    "curve_order": 2,
+    "partition_fix_commit": "caa4294ab1fc47df82dc4899c2fdf8fd71ce9f09",
+    "rejected_pre_fix_sha256": "0d4449962b60757cba78e771a136b2805a4323e26a1ee6d7ae482751bb7e5a5f"
+  },
+  "fem": {
+    "sha256": "dfc12b84f80db1fa17fb5012b6f87c072e8aa1fb3c085b61269f047a879a54ac",
+    "elements": 134686,
+    "family": "TET",
+    "curve_order": 2,
+    "asset_manifest_sha256": "b2bbe5db90d581df6719edeaaf8d699b74dae4288701914417a8fe94a1b0c7ac",
+    "provenance_note": "The September 7 generation record names the corrected iron assets. The mesh bytes also match the September 4 local-gap artifact. This does not independently certify when these bytes were generated."
+  }
+}

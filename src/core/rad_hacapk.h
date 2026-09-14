@@ -67,6 +67,9 @@ struct RadHACApKStats {
     double build_time;   // Time to build H-matrix (seconds)
     double memory_mb;    // Actual H-matrix memory usage [MB]
     double dense_memory_mb;  // Full dense matrix memory [MB]
+    // Build-phase wall clocks (seconds): kernel precomputation (OnBeforeBuild + InitializeInvChi),
+    // HACApK cluster tree + boxes, leaf generation + sort, ACA+ fill, and the diagonal cache.
+    double t_prep = 0.0, t_cluster = 0.0, t_leafgen = 0.0, t_fill = 0.0, t_diag = 0.0;
 
     RadHACApKStats() :
         n_lowrank(0), n_dense(0), max_rank(0), n_leaves(0),
@@ -247,6 +250,9 @@ protected:
 
     // Element center coordinates for clustering, size = n_elem * 3
     std::vector<double> m_coordinates;
+    // Optional per-element support radius for the cluster-tree bounding boxes (see
+    // cHACApK_set_point_radius); empty = plain point boxes.  Filled by ExtractCoordinates.
+    std::vector<double> m_pointRadius;
 
     // Current inverse susceptibility (1/chi per DOF), size = n_dof
     std::vector<double> m_inv_chi;

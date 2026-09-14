@@ -27,3 +27,13 @@ validation_test/radia_mcp/artifacts/field_study_production_v1/*.json text eol=lf
 tests/matlab/fixtures/optuna*.json text eol=lf
 matlab/optuna*.json text eol=lf
 docs/hdiv_vim/c_type_three_formulation_convergence_iron.vol binary
+validation_test/sparsesolv/hiruma/meshes/*.vol binary
+
+# Preserve the exact remote evidence bytes referenced by SHA256 in comparisons.
+validation_test/omega_quadrature/bonus4_algebraic_20260912.json -text
+validation_test/omega_quadrature/bonus8_algebraic_20260912.json -text
+validation_test/omega_quadrature/bonus4_correction_20260912.json -text
+
+# ESRF6 acceptance links the original HDiv result by its remote byte hash.
+validation_test/esrf_three_engine/results/candidate_4d85e72cc/case6_bdm1_mass_riesz.json -text whitespace=cr-at-eol
+validation_test/esrf_three_engine/results/candidate_4d85e72cc/case6_fem_repaired_acceptance.json -text whitespace=cr-at-eol

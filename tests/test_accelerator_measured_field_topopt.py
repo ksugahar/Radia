@@ -90,7 +90,9 @@ def test_measured_field_topology_objective_never_reconstructs_off_plane(
         [[1.0, 0.0], [0.0, 1.0], [1.0, 1.0], [2.0, 1.0]]
     )
     generation = SimpleNamespace(
-        state=np.array([1.0, 2.0]),
+        state=np.array([0.5, 1.0]),
+        response=np.array([1.0, 2.0, 3.0, 4.0]),
+        source_scale=2.0,
         active_elements=np.array([True, False]),
         converged=True,
     )
@@ -112,6 +114,7 @@ def test_measured_field_topology_objective_never_reconstructs_off_plane(
         inv_chi=0.5,
         rhs=np.zeros(2),
         field_response_matrix=response_matrix,
+        incident_field_response=np.array([0.25, 0.5, 0.75, 1.0]),
         active_elements=np.array([True, False]),
         element_volumes=np.ones(2),
         volume_max=2.0,

@@ -9,6 +9,14 @@
   ],
   "rules": [
     {
+      "id": "picard-acceleration",
+      "patterns": ["picard_acceleration.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/picardAcceleration.m"],
+      "notes": "Batch-only construction of the shared stateful constrained Anderson accelerator and contraction-rate diagnostics. The Python object remains in result.value; step/reset/stats use that same state, without a second numerical implementation or per-step Simulink fallback. Native promotion is deferred until a stable state ABI and end-to-end benefit are measured."
+    },
+    {
       "id": "electromagnet-validation",
       "patterns": ["electromagnet_validation.py"],
       "classification": "python-fallback",

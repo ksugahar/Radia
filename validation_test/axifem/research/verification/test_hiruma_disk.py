@@ -53,10 +53,11 @@ SIGMA_CU = 5.8e7
 MU0 = 4 * pi * 1e-7
 B0 = 1.0  # imposed axial flux density [T]
 
-BEM_TAU_REF_PATH = (
-    r"W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/ngsolve_validation/"
-    r"bem_disk_axisym_v3_refined.json"
-)
+BEM_TAU_REF_PATH = os.path.normpath(os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "..", "..", "..", "maglev", "research_cln", "ngsolve_validation",
+    "bem_disk_axisym_v3_refined.json",
+))
 
 
 def build_disk_mesh(R_air=200e-3, Z_air=200e-3, maxh_disk=0.2e-3, maxh_air=10e-3):

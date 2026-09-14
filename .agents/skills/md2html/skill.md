@@ -1,44 +1,33 @@
 ---
 name: md2html
-description: DEPRECATED — moved to mcp-server-document as md2html_convert tool
-allowed-tools: Bash(python *), Read
+description: Compatibility guidance for Markdown to HTML conversion through radia-mcp.
 ---
 
-# md2html — moved to mcp-server-document
+# Markdown to HTML
 
-This skill has been promoted to a tool in **mcp-server-document** on
-2026-05-03 so it is reachable from any MCP-aware client without going
-through the slash-command skill mechanism.
+Use the `radia-mcp` tool `md2html_convert` or its public Python helper:
 
-## New invocation
-
-Through MCP (preferred):
-
-- Server: `mcp-server-document`
-- Tool: `md2html_convert(md_file, output_file=None, title=None)`
-
-The tool returns a status string with output path, math-block count,
-embedded image count, and per-image embedding warnings.
-
-Source: `S:\mcp-server\src\mcp_server_document\md2html\`
-- `tools.py` — MCP tool wrapper (`md2html_convert`)
-- `converter.py` — pure conversion core (`md_to_html`)
-
-## Legacy CLI (still works)
-
-The original standalone script remains at this folder and can be run
-directly when MCP is unavailable:
-
-```bash
-python md2html.py <input.md> [<output.html>] [<title>]
+```python
+from radia_mcp.md2html import md_to_html
+result = md_to_html("input.md", "output.html", "Document title")
+print(result["output_file"])
 ```
 
-## Why moved
+The helper returns a dictionary containing the output path, math/image counts,
+and conversion log. Read warnings about missing local images before accepting
+the output. MathJax rendering requires access to its CDN.
 
-- Single MCP server (`mcp-server-document`) already handles
-  paper_writing / presentation / diagram / ocr / etc., and md2html is
-  a natural fit for the document family.
-- MCP tools are usable from any client (Codex Desktop, Codex,
-  custom integrations); skills are Codex only.
-- Pure-function `converter.md_to_html` is now importable as a regular
-  Python API for other tools.
+The canonical implementation is
+`packages/radia-mcp/src/radia_mcp/md2html/converter.py`.
+Do not use old workstation script paths or assume an `md2html` executable exists.
+
+For callers of the old repository CLI, `md2html.py` in this directory delegates
+to the same installed package and retains its path-string return value:
+
+```powershell
+python .agents/skills/md2html/md2html.py input.md output.html "Document title"
+```
+
+Install `radia-mcp[md2html]` in the chosen interpreter if needed. Missing
+dependencies fail visibly; do not restore a second converter implementation or
+repoint a shared editable installation merely to run this command.

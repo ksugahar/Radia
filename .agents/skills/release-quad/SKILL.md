@@ -25,6 +25,19 @@ python tools/release_quad.py restore-editable
 
 ## Machine Policy
 
+100号機 is the student-facing release/usage host, not a routine development
+test machine. Keep release installation, import, and application smoke checks
+there minimal; run development regression suites on LAB or the mdx CI pool
+and solver-heavy validation on hibino. This role does not change the approved
+editable installation tier. Do not expand a release check into general testing
+on 100号機.
+
+For mdx1/mdx2/hibino computations, completion includes durable result recovery,
+hash verification, and removal of the completed job's C:\temp workspace,
+including disposable staging/environments. Preserve other active/queued jobs
+and CI-owned files; explicitly record owner, reason, and trigger for any
+unfinished-job retention. Follow AGENTS.md's Compute Scratch Cleanup policy.
+
 | Machine | Install tier | Release command path |
 |---|---|---|
 | LAB | NAS editable | `phase8 --target lab` |
@@ -105,6 +118,27 @@ published `main`, run `restore-editable` explicitly to return the development
 tier to that tree.
 
 ## Rules
+
+### Preserve An Approved MCP Development Source
+
+MCP may have a separately approved development package root. Before deployment,
+set `RADIA_RELEASE_PRESERVE_MCP_SOURCE_LAB` and/or
+`RADIA_RELEASE_PRESERVE_MCP_SOURCE_100` to that host's approved absolute
+**package directory** (the directory containing the radia-mcp pyproject.toml,
+not the repository root). The 100-machine value must use its real local drive
+path, never a LAB drive mapping or UNC path. Do not derive approval from the
+currently installed distribution itself.
+
+Run `python tools/release_quad.py deployment-plan` for a side-effect-free dry
+run. It prints selected paths/actions, not a verification pass. With a preserve
+value, phase8 checks editable metadata and fresh import origin before and after
+deployment, excludes MCP from uninstall/install, and does not stop MCP transports.
+`verify-editable` and `done` use the same approved source contract. Keep the same
+environment values throughout the release. Solver/Cubit clean-SHA, version,
+tag, and phase9 gates remain unchanged; MCP cross-host version checks still apply.
+Without these variables the existing three-package reinstall behavior remains.
+`restore-editable` refuses while preservation is selected because its canonical
+reset would contradict the approved source; clear it only after explicit approval.
 
 - Do not call a release done until `python tools/release_quad.py done`
   exits 0.

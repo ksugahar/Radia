@@ -195,10 +195,29 @@ if(WIN32)
 	if(DEFINED ENV{MKLROOT})
 		list(APPEND _MKL_CANDIDATES "$ENV{MKLROOT}")
 	endif()
+	set(_MKL_REQUIRED_RUNTIME_NAMES
+		mkl_rt
+		mkl_core
+		mkl_intel_thread
+		mkl_avx2
+		mkl_def
+	)
+	if(RADIA_BUILD_MATLAB_MEX)
+		list(APPEND _MKL_REQUIRED_RUNTIME_NAMES mkl_sequential)
+	endif()
 	set(MKL_DIR "")
 	foreach(_MKL_CANDIDATE IN LISTS _MKL_CANDIDATES)
 		file(TO_CMAKE_PATH "${_MKL_CANDIDATE}" _MKL_CANDIDATE_NORM)
-		if(EXISTS "${_MKL_CANDIDATE_NORM}/lib/mkl_rt.lib")
+		set(_MKL_CANDIDATE_COMPLETE TRUE)
+		if(NOT EXISTS "${_MKL_CANDIDATE_NORM}/lib/mkl_rt.lib")
+			set(_MKL_CANDIDATE_COMPLETE FALSE)
+		endif()
+		foreach(_MKL_RUNTIME_NAME IN LISTS _MKL_REQUIRED_RUNTIME_NAMES)
+			if(NOT EXISTS "${_MKL_CANDIDATE_NORM}/bin/${_MKL_RUNTIME_NAME}.3.dll")
+				set(_MKL_CANDIDATE_COMPLETE FALSE)
+			endif()
+		endforeach()
+		if(_MKL_CANDIDATE_COMPLETE)
 			set(MKL_DIR "${_MKL_CANDIDATE_NORM}")
 			break()
 		endif()
@@ -208,6 +227,8 @@ if(WIN32)
 	set(MKL_BIN_DIR "${MKL_DIR}/bin")
 	set(MKL_RUNTIME_ABI "3")
 	set(MKL_RT_DLL "${MKL_BIN_DIR}/mkl_rt.${MKL_RUNTIME_ABI}.dll")
+	# Python extensions retain the threaded oneMKL closure. MATLAB gets a
+	# separate sequential closure because MATLAB owns process-level scheduling.
 	set(MKL_RUNTIME_DLLS)
 	foreach(_MKL_RUNTIME_NAME IN ITEMS
 		mkl_rt
@@ -225,6 +246,25 @@ if(WIN32)
 		endif()
 		list(APPEND MKL_RUNTIME_DLLS "${_MKL_RUNTIME_DLL}")
 	endforeach()
+	set(MKL_MATLAB_RUNTIME_DLLS)
+	if(RADIA_BUILD_MATLAB_MEX)
+		foreach(_MKL_RUNTIME_NAME IN ITEMS
+			mkl_rt
+			mkl_core
+			mkl_sequential
+			mkl_avx2
+			mkl_def
+		)
+			set(_MKL_RUNTIME_DLL
+				"${MKL_BIN_DIR}/${_MKL_RUNTIME_NAME}.${MKL_RUNTIME_ABI}.dll")
+			if(NOT EXISTS "${_MKL_RUNTIME_DLL}")
+				message(FATAL_ERROR
+					"MATLAB sequential MKL 2026 runtime not found: ${_MKL_RUNTIME_DLL}. "
+					"Install pip package mkl-devel>=2026,<2027.")
+			endif()
+			list(APPEND MKL_MATLAB_RUNTIME_DLLS "${_MKL_RUNTIME_DLL}")
+		endforeach()
+	endif()
 
 	# Use mkl_rt.lib (dynamic linking) - works with both Intel and MSVC compilers
 	set(MKL_LIB "${MKL_LIB_DIR}/mkl_rt.lib")
@@ -873,7 +913,7 @@ if(RADIA_BUILD_MATLAB_MEX)
 		# oneMKL dispatch DLLs beside radia_mex so it does not depend on the
 		# host Python installation.  Do not copy libiomp5md.dll: MATLAB already
 		# owns an OpenMP runtime and loading a second copy aborts the process.
-		foreach(_MKL_RUNTIME_DLL IN LISTS MKL_RUNTIME_DLLS)
+		foreach(_MKL_RUNTIME_DLL IN LISTS MKL_MATLAB_RUNTIME_DLLS)
 			get_filename_component(_MKL_RUNTIME_FILENAME "${_MKL_RUNTIME_DLL}" NAME)
 			add_custom_command(TARGET radia_mex POST_BUILD
 				COMMAND ${CMAKE_COMMAND} -E copy_if_different

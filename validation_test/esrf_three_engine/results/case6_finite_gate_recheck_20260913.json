@@ -1,0 +1,33 @@
+{
+  "schema": "radia.esrf-finite-recheck.v1",
+  "runner_sha256": "3957bea460a489eef780ab1a0428049c0a708de2f785b67869d50de4454fb58c",
+  "new_solves": 0,
+  "input_files_modified": false,
+  "rows": [
+    {
+      "path": "validation_test/esrf_three_engine/results/case6_nonlinear_three_engine_mdx1.json",
+      "sha256": "a28ea3b48d8dea8463d15ad051bac319e123d7fc75fda1118bd45c357dfac580",
+      "stored_passed": true,
+      "acceptance": "HOLD: historical source, not final candidate",
+      "finite_gate_passed": true,
+      "maximum": 0.007836200595697606,
+      "stored_maximum": 0.007836200595697606,
+      "pairs": {
+        "hdiv_mmm__vs__reduced_a": {
+          "relative_rms": 0.0034449688297968134,
+          "maximum_absolute_difference_T": 0.0010397236268905137
+        },
+        "hdiv_mmm__vs__mixed_total_reduced_omega": {
+          "relative_rms": 0.006962371077009257,
+          "maximum_absolute_difference_T": 0.001744251841574633
+        },
+        "reduced_a__vs__mixed_total_reduced_omega": {
+          "relative_rms": 0.007836200595697606,
+          "maximum_absolute_difference_T": 0.0020706829826411272
+        }
+      }
+    }
+  ],
+  "gate_source_commit": "008f87228e5480e466a3e58d4a54fcc8736013d5",
+  "scope": "Historical saved field arithmetic recheck only; no final-candidate identity or convergence certification"
+}

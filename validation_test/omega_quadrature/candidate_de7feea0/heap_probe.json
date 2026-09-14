@@ -1,0 +1,10 @@
+[
+  {
+    "heap": 1000000,
+    "error": "Local Heap overflow\n\tName: integrate-lh\n\tSize: 166666\n"
+  },
+  {
+    "heap": 200000000,
+    "error": "Local Heap overflow\n\tName: integrate-lh\n\tSize: 166666\n"
+  }
+]

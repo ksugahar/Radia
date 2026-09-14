@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from radia.accelerator_magnet_topopt import (
     CoilBuilderHDivSource,
@@ -31,6 +32,49 @@ def _one_segment_arc(*, radius=10.0, angle=0.1, rigidity=1.5):
     return PlanarDesignOrbit(
         positions,tangents,magnetic_rigidity=rigidity,
         bend_axis=np.array([0.0,0.0,1.0]))
+
+
+@pytest.mark.parametrize("orbit_count", [1, 2])
+def test_material_map_acceptance_uses_calibrated_incident_field(monkeypatch, orbit_count):
+    from types import SimpleNamespace
+    import radia.accelerator_magnet_topopt as magnet
+
+    orbit = _one_segment_arc()
+    raw_one = np.array([orbit.magnetic_rigidity * orbit.signed_curvature[0], 0.17])
+    raw = np.tile(raw_one, orbit_count)
+    response_matrix = np.tile(np.eye(2), (orbit_count, 1))
+    incident = raw / 4.0
+    scale = 2.0
+    state = raw_one / 2.0
+    np.testing.assert_allclose(response_matrix @ state + scale * incident, raw)
+    target = combined_function_transfer_map_from_field_response(
+        raw_one, orbit.segment_lengths, orbit.magnetic_rigidity).matrix
+
+    def material_kernel(**kwargs):
+        np.testing.assert_array_equal(kwargs["incident_response"], incident)
+        return magnet.HDivMMMGenerationResult(
+            np.ones(2, dtype=bool), state.copy(), raw.copy(), (), True, scale)
+
+    monkeypatch.setattr(magnet, "grow_hdiv_mmm_by_superposition", material_kernel)
+    monkeypatch.setattr(magnet, "ngsolve_growth_topology", lambda *args: SimpleNamespace(valid=True))
+    kwargs = dict(
+        transfer_matrix_band=1e-9, bend_field_band=1e-9,
+        charge_gram=object(), fes=SimpleNamespace(ndof=2, mesh=object()),
+        inv_chi=0.1, rhs=np.ones(2), field_response_matrix=response_matrix,
+        active_elements=np.ones(2, dtype=bool), element_volumes=np.ones(2),
+        volume_max=2.0, incident_field_response=incident)
+    if orbit_count == 1:
+        result = magnet.optimize_hdiv_mmm_magnet_from_transfer_matrix(orbit, target, **kwargs)
+        np.testing.assert_array_equal(result.realized_field_response, raw)
+        assert result.orbit_field_max_band_ratio < 1e-6
+        assert result.transfer_matrix_max_band_ratio < 1e-6
+    else:
+        result = magnet.optimize_hdiv_mmm_magnet_from_transfer_matrices(
+            (orbit,) * orbit_count, np.repeat(target[None], orbit_count, axis=0), **kwargs)
+        np.testing.assert_array_equal(np.concatenate(result.realized_field_responses), raw)
+        assert np.max(result.orbit_field_max_band_ratios) < 1e-6
+        assert np.max(result.transfer_matrix_max_band_ratios) < 1e-6
+    assert result.converged
 
 
 def test_planar_transfer_matrix_objective_uses_orbit_curvature_and_full_map():

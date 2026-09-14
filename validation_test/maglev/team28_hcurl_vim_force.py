@@ -189,6 +189,25 @@ def _build_eddy_basis(maxh_m):
     return ng, mesh, fes, basis
 
 
+def _measured_interaction_diagnostics(interaction):
+    info = interaction.diagnostics()
+    if info["minimum_eigenvalue_H"] is None:
+        # TEAM28 has a small reduced block; probe the live operator, not a
+        # historical eigenvalue or a capability flag.
+        if interaction.matrix.shape[0] > 128:
+            raise ValueError("TEAM28 dense eigenvalue probe is limited to 128 reduced modes")
+        matrix = np.asarray(interaction.matrix.to_dense())
+        if not np.all(np.isfinite(matrix)) or not np.allclose(
+            matrix, matrix.conj().T, rtol=1e-10, atol=0.0
+        ):
+            raise ValueError("TEAM28 inductance probe is not finite and Hermitian")
+        eigenvalues = np.linalg.eigvalsh(matrix)
+        info["minimum_eigenvalue_H"] = float(eigenvalues[0])
+        info["maximum_eigenvalue_H"] = float(eigenvalues[-1])
+        info["eigenvalue_measurement"] = "live-reduced-operator-dense-probe"
+    return info
+
+
 def run_case(maxh_m, outer_quad, export_model=None):
     started = time.perf_counter()
     ng, mesh, fes, basis = _build_eddy_basis(maxh_m)
@@ -258,7 +277,7 @@ def run_case(maxh_m, outer_quad, export_model=None):
         "target_physical_force_magnitude_N": TARGET_PHYSICAL_FORCE_N,
         "magnitude_relative_error": float(relative_error),
         "transverse_force_ratio": transverse_ratio,
-        "interaction": interaction.diagnostics(),
+        "interaction": _measured_interaction_diagnostics(interaction),
         "cln_handoff": cln_model.diagnostics(),
         "eddy_bubble": basis.eddy_bubbling.diagnostics(),
         "elapsed_seconds": time.perf_counter() - started,
