@@ -191,3 +191,58 @@ Following the user's Restart, the original task directly verified the new
 `mcp-development-main` source, 349 publication tools and all three previously
 absent bibliography keys. That task's publication reconnect is closed. It does
 not establish the state of other clients, users or the 100 host.
+
+## Remaining 41 notebooks: full editorial triage
+
+All 41 notebooks without a bibliography declaration at the start of this pass
+received an individually written source/evidence scope cell. This is an editorial
+assessment, not 41 completed literature reviews or numerical validations.
+All original code cells, saved outputs, execution counts and existing notebook
+metadata were preserved; only cut selection gains bibliography metadata.
+
+The decisions are **5 API examples, 1 navigation page, 10 internal evidence
+records, and 25 with open source or scientific-acceptance work**. An `internal`
+classification supports the particular recorded comparison, not a blanket
+citation exemption for a future methods paper. No dummy references were added.
+
+Cut selection now cites existing canonical `kotiuga1987cuts` and
+`pellikka2013homology` as general background through generated BibTeX/TeX4ht
+artifacts. Kotiuga's [author publication list](https://people.bu.edu/prk/Publications.htm)
+confirms the 1987 title, journal, volume and pages. These references do not
+identify the unnamed Takahashi benchmark or prove the one-handle algorithm.
+There are now **11 generated bibliographies among 51 notebooks**. The other
+40 absent declarations neither prove citation completeness nor automatically
+require a bibliography: follow each notebook's explicit review scope.
+
+### Work retained explicitly
+
+- **CG and Kelvin:** the unconditional Prager-Synge paragraph was rewritten.
+  Boundary/source admissibility, constitutive energy norm and theorem
+  correspondence remain open. Kelvin retained/lost fractions and growth
+  conventions need reconciliation rather than a guessed correction.
+- **Fringe/hodograph theory:** resolve Enge/SCOFF and Chaplygin/von Mises
+  sources, focusing units and tanh-profile assumptions. Angular-drift reduction
+  is not a measured saturation-range extension. Historical output remains saved
+  but its overstatements are explicitly superseded by the scope note.
+- **Named algorithms and benchmarks:** Love/Stratton-Chu, streamline/LIC,
+  geometry processing, hysteresis, TEAM 28, Simkin, optimization and CQ require
+  source-to-implementation correspondence. Finding a paper title alone does
+  not establish a numerical acceptance certificate.
+- **Model/data provenance:** closed-torus BEM behavior is case-specific;
+  analytical hysteresis fixtures are not measured samples; slab/cylinder
+  comparisons require a geometry argument. URN TDK captions now say derived
+  impedance. NASA frequency and external-run gaps above remain open.
+- **Optimization:** sampled feasible/nondominated designs are not guaranteed
+  optima or complete Pareto fronts. Current norm, magnetic energy and dissipation
+  are distinct objectives. Low-rank Tikhonov comparisons must state the retained
+  operator and metric/nullspace assumptions.
+
+The next pass should close each precise source/assumption gap and regenerate
+references where applicable. It should not remove an open qualification merely
+because a bibliography entry exists, or rerun expensive notebooks without a
+specific validation question.
+
+Verification: all 41 code/output/metadata preservation checks passed, and the
+existing notebook plus canonical-bibliography regression selection passed
+**103 tests**. No solver code, parent bibliography, editable installation or
+live-client connection was changed in this pass.
