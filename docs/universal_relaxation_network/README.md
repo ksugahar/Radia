@@ -64,8 +64,6 @@ import torch
 # Set RADIA_NASA_EIS_CSV to its path outside the repository.
 from generate_paper_figures import load_nasa_battery_data
 freq, Z = load_nasa_battery_data()
-if freq is None:
-    raise RuntimeError('Provide a private, documented EIS dataset first')
 
 # Configure and train the legacy URN path
 config = URNConfig(n_debye=3, n_cole_cole=2, n_warburg=2, sparsity_weight=0.01)
