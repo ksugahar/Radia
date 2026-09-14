@@ -1,0 +1,98 @@
+{
+  "schema": "radia.docs.webgui_supplement.v1",
+  "generated_at_utc": "2026-09-14T20:22:04.611647+00:00",
+  "host": "mdx2",
+  "python_executable": "C:\\temp\\radia_docs_webgui_20260915\\env\\Scripts\\python.exe",
+  "python_version": "3.12.10",
+  "versions": {
+    "ngsolve": "6.2.2606",
+    "netgen-mesher": "6.2.2606",
+    "anywidget": "0.11.0",
+    "cubit-mesh-export": "0.14.15"
+  },
+  "metrics": {
+    "reference": "prescribed source only, no material response",
+    "samples": [
+      {
+        "point_m": [
+          0,
+          0,
+          0
+        ],
+        "B_T": [
+          -8.673617379884035e-18,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "point_m": [
+          0.005,
+          0,
+          0
+        ],
+        "B_T": [
+          0.0,
+          0.04999999999999999,
+          0.0
+        ]
+      },
+      {
+        "point_m": [
+          0,
+          0.005,
+          0
+        ],
+        "B_T": [
+          0.05,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "point_m": [
+          0.005,
+          0.005,
+          0
+        ],
+        "B_T": [
+          0.05,
+          0.05,
+          0.0
+        ]
+      }
+    ],
+    "n_elements": 399,
+    "gradient_T_per_m": 10.0
+  },
+  "threads": 2,
+  "notebook": "docs/background_fields/background_fields.ipynb",
+  "baseline_notebook_sha256": "c14aaec75b6cefc495f04f209e3f8b95cd1141014c10384dd42ad60ae74c1520",
+  "notebook_sha256": "43221d1281c31ffd97b33e7d1433d4bc8b6e54d3e77c80f4e0c635dc8237f35e",
+  "historical_code_cells_preserved": true,
+  "historical_code_cells_sha256": "fb27775980beb7f44bb50a2f38737ce95cdfd7d57927c39d680a627809f2abfb",
+  "source_cells": [
+    {
+      "id": "webgui-20260915-background_fields-1",
+      "source": "from pathlib import Path\nimport hashlib, json, math, platform, socket, sys\nfrom datetime import datetime, timezone\nfrom importlib.metadata import version\nimport ngsolve as ng\nfrom ngsolve.webgui import Draw\nng.SetNumThreads(2)\nfrom netgen.occ import Box, Pnt, OCCGeometry\ndomain=Box(Pnt(-0.01,-0.01,-0.01), Pnt(0.01,0.01,0.01))\ndomain.mat('source_view_not_iron')\nmesh=ng.Mesh(OCCGeometry(domain).GenerateMesh(maxh=0.005))\ngradient=10.0\nsource=ng.CF((gradient*ng.y, gradient*ng.x, 0))\nmagnitude=ng.Norm(source)\nchecks=[]\nfor point in [(0,0,0),(0.005,0,0),(0,0.005,0),(0.005,0.005,0)]:\n    actual=list(source(mesh(*point)))\n    expected=[gradient*point[1],gradient*point[0],0]\n    assert all(math.isclose(x,y,abs_tol=1e-12) for x,y in zip(actual,expected))\n    checks.append(dict(point_m=point,B_T=actual))\nmetrics=dict(reference='prescribed source only, no material response',\n             samples=checks,n_elements=mesh.ne,gradient_T_per_m=gradient)\nprint(json.dumps(metrics,indent=2))\n"
+    },
+    {
+      "id": "webgui-20260915-background_fields-3",
+      "source": "scene = Draw(mesh, name='Quadrupole_sampling_mesh', draw_vol=True, draw_surf=True, width='100%', height='480px')\nscene.GenerateHTML(filename='scene_0.html')\n"
+    },
+    {
+      "id": "webgui-20260915-background_fields-5",
+      "source": "scene = Draw(magnitude, mesh, name='Prescribed_B_magnitude_T', order=2, draw_vol=True, draw_surf=True, autoscale=False, min=0, max=0.142, clipping={'x':0,'y':0,'z':1,'dist':0}, vectors=False, width='100%', height='480px')\nscene.GenerateHTML(filename='scene_1.html')\n"
+    },
+    {
+      "id": "webgui-20260915-background_fields-7",
+      "source": "scene = Draw(source, mesh, name='Prescribed_B_vector_T', order=2, draw_vol=True, draw_surf=True, autoscale=True, clipping={'x':0,'y':0,'z':1,'dist':0}, vectors={'grid_size':15}, width='100%', height='480px')\nscene.GenerateHTML(filename='scene_2.html')\n"
+    },
+    {
+      "id": "webgui-20260915-background_fields-8",
+      "source": "evidence=dict(schema='radia.docs.webgui_supplement.v1',\n    generated_at_utc=datetime.now(timezone.utc).isoformat(),host=socket.gethostname(),\n    python_executable=sys.executable,python_version=platform.python_version(),\n    versions={p:version(p) for p in ['ngsolve','netgen-mesher','anywidget','cubit-mesh-export']},\n    metrics=metrics,threads=2)\nPath('evidence.json').write_text(json.dumps(evidence,indent=2),encoding='utf-8')\n"
+    }
+  ],
+  "supplement_sha256": "e55f4856f000c2328badcc2cb980678863fdd416fee396111004ac1517f9dc70",
+  "visual_qa": "Saved rich output and state audited; rendered visual QA pending."
+}
