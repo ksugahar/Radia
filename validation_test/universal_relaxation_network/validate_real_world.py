@@ -116,27 +116,7 @@ def load_nasa_battery_data() -> Tuple[np.ndarray, np.ndarray]:
     Returns:
         (frequency, Z_complex) arrays
     """
-    csv_path = os.path.join(
-        script_dir, "data", "real_world", "nasa_battery",
-        "nasa_18650_eis.csv"
-    )
-
-    if not os.path.exists(csv_path):
-        raise FileNotFoundError(f"NASA battery data not found: {csv_path}")
-
-    # Read CSV, skip comment lines
-    df = pd.read_csv(csv_path, comment='#')
-
-    freq = df['frequency_Hz'].values
-    Z_real = df['Z_real_Ohm'].values
-    Z_imag = df['Z_imag_Ohm'].values
-
-    Z = Z_real + 1j * Z_imag
-
-    print(f"Loaded NASA 18650: {len(freq)} points, "
-          f"{freq[0]:.2f} Hz - {freq[-1]/1e3:.1f} kHz")
-
-    return freq, Z
+    raise RuntimeError('Legacy bundled NASA mode is retired: measurements are private and the old frequency axis is unverified. Use the documented private-input consumers in docs/universal_relaxation_network.')
 
 
 def compute_fit_metrics(Z_true: np.ndarray, Z_fit: np.ndarray) -> Tuple[float, float]:
@@ -368,6 +348,8 @@ def run_full_validation() -> List[ValidationResult]:
     Returns:
         List of ValidationResult objects
     """
+    # Fail before any training; do not report a partial five-dataset aggregate.
+    load_nasa_battery_data()
     results = []
 
     # 1-4. TDK Ferrite materials
