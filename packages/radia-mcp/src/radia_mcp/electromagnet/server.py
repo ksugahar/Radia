@@ -32,7 +32,9 @@ from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 
 from ..common import register_status_tool, register_topics_tool
+from ..common.server_hardening import ANN_READONLY
 from .accelerator_fundamentals_knowledge import get_accelerator_source_guide
+from .coil_exchange import build_shared_pole_coil_exchange_json
 from .em_knowledge import TOPICS, get_electromagnet_documentation
 
 mcp = FastMCP("mcp-server-electromagnet")
@@ -95,6 +97,22 @@ def electromagnet_accelerator_sources(query: str = "") -> str:
                ``superconducting``. Empty returns the complete guide.
     """
     return get_accelerator_source_guide(query)
+
+
+@mcp.tool(
+    title="Build shared pole and CoilBuilder exchange",
+    annotations=ANN_READONLY,
+)
+def electromagnet_shared_pole_coil_exchange(payload_json: str) -> dict:
+    """Build a digest-bound Radia/ModelIR adapter from a neutral SI contract.
+
+    The contract supports explicitly labelled axis-aligned magnetic poles and
+    rounded-rectangle racetrack coils. Unsupported or lossy geometry, stale
+    identity digests, non-SI units, and left-handed frames are rejected. The
+    operation does not change Radia/NGSolve B-H interpolation semantics.
+    """
+
+    return build_shared_pole_coil_exchange_json(payload_json)
 
 
 def _load_coils_for_audit(coil_script: str):
