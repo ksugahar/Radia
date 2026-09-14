@@ -8,6 +8,213 @@ import json
 from typing import Any
 
 
+def build_constitutive_comparison_candidate(
+    bh_table: list[list[float]],
+    h_values: list[float],
+    *,
+    constitutive_interpolation: str = "monotone_pchip",
+) -> dict[str, Any]:
+    """Build a comparison response without changing Radia's production law."""
+
+    mode = str(constitutive_interpolation)
+    if mode not in {"monotone_pchip", "piecewise_linear"}:
+        raise ValueError(
+            "constitutive interpolation must be monotone_pchip or piecewise_linear"
+        )
+    if not isinstance(bh_table, list) or len(bh_table) < 2:
+        raise ValueError("bh_table must contain at least two [H, B] rows")
+    try:
+        table = [[float(row[0]), float(row[1])] for row in bh_table]
+        grid = [float(value) for value in h_values]
+    except (IndexError, TypeError, ValueError) as exc:
+        raise ValueError("bh_table and h_values must contain numeric values") from exc
+    if any(not math.isfinite(value) for row in table for value in row):
+        raise ValueError("bh_table must contain finite H and B values")
+    h_tab = [row[0] for row in table]
+    b_tab = [row[1] for row in table]
+    if any(right <= left for left, right in zip(h_tab, h_tab[1:])):
+        raise ValueError("bh_table H values must be strictly increasing")
+    if any(right < left for left, right in zip(b_tab, b_tab[1:])):
+        raise ValueError("bh_table B values must be non-decreasing")
+    if len(grid) < 2:
+        raise ValueError("h_values must contain at least two samples")
+    if any(not math.isfinite(value) or value < 0.0 for value in grid):
+        raise ValueError("h_values must be finite and nonnegative")
+    if any(right <= left for left, right in zip(grid, grid[1:])):
+        raise ValueError("h_values must be strictly increasing")
+
+    mu_0 = 4.0 * math.pi * 1.0e-7
+    widths = [right - left for left, right in zip(h_tab, h_tab[1:])]
+    slopes = [
+        (right - left) / width
+        for left, right, width in zip(b_tab, b_tab[1:], widths)
+    ]
+
+    def endpoint_slope(h0, h1, d0, d1):
+        value = ((2.0 * h0 + h1) * d0 - h0 * d1) / (h0 + h1)
+        if value * d0 <= 0.0:
+            return 0.0
+        if d0 * d1 < 0.0 and abs(value) > abs(3.0 * d0):
+            return 3.0 * d0
+        return value
+
+    if len(table) == 2:
+        pchip_derivatives = [slopes[0], slopes[0]]
+    else:
+        pchip_derivatives = [
+            endpoint_slope(widths[0], widths[1], slopes[0], slopes[1])
+        ]
+        for index in range(1, len(table) - 1):
+            left_slope = slopes[index - 1]
+            right_slope = slopes[index]
+            if left_slope * right_slope <= 0.0:
+                pchip_derivatives.append(0.0)
+            else:
+                left_weight = 2.0 * widths[index] + widths[index - 1]
+                right_weight = widths[index] + 2.0 * widths[index - 1]
+                pchip_derivatives.append(
+                    (left_weight + right_weight)
+                    / (left_weight / left_slope + right_weight / right_slope)
+                )
+        pchip_derivatives.append(
+            endpoint_slope(widths[-1], widths[-2], slopes[-1], slopes[-2])
+        )
+
+    pchip_coefficients = []
+    for index, secant in enumerate(slopes):
+        width = widths[index]
+        left_derivative = pchip_derivatives[index]
+        right_derivative = pchip_derivatives[index + 1]
+        pchip_coefficients.append(
+            (
+                float(b_tab[index]),
+                left_derivative,
+                (3.0 * secant - 2.0 * left_derivative - right_derivative) / width,
+                (left_derivative + right_derivative - 2.0 * secant) / width**2,
+            )
+        )
+    cumulative_linear = [float(b_tab[0] * h_tab[0])]
+    for index, slope in enumerate(slopes):
+        delta = float(h_tab[index + 1] - h_tab[index])
+        cumulative_linear.append(
+            cumulative_linear[-1]
+            + float(b_tab[index]) * delta
+            + 0.5 * float(slope) * delta**2
+        )
+    cumulative_pchip = [float(b_tab[0] * h_tab[0])]
+    for width, coefficients in zip(widths, pchip_coefficients):
+        c0, c1, c2, c3 = coefficients
+        cumulative_pchip.append(
+            cumulative_pchip[-1]
+            + c0 * width
+            + 0.5 * c1 * width**2
+            + c2 * width**3 / 3.0
+            + 0.25 * c3 * width**4
+        )
+
+    b_values = []
+    tangent_values = []
+    coenergy_values = []
+    for raw_h_value in grid:
+        h_value = float(raw_h_value)
+        if h_value < h_tab[0]:
+            b_value = float(b_tab[0])
+            tangent = 0.0
+            coenergy = float(b_tab[0]) * h_value
+        elif h_value > h_tab[-1]:
+            delta = h_value - float(h_tab[-1])
+            b_value = float(b_tab[-1]) + mu_0 * delta
+            tangent = mu_0
+            value_at_max = (
+                cumulative_pchip[-1]
+                if mode == "monotone_pchip"
+                else cumulative_linear[-1]
+            )
+            coenergy = (
+                value_at_max
+                + float(b_tab[-1]) * delta
+                + 0.5 * mu_0 * delta**2
+            )
+        else:
+            interval = next(
+                (
+                    index
+                    for index in range(len(slopes))
+                    if h_tab[index] <= h_value < h_tab[index + 1]
+                ),
+                len(slopes) - 1,
+            )
+            delta = h_value - float(h_tab[interval])
+            if mode == "monotone_pchip":
+                c0, c1, c2, c3 = pchip_coefficients[interval]
+                b_value = c0 + c1 * delta + c2 * delta**2 + c3 * delta**3
+                tangent = c1 + 2.0 * c2 * delta + 3.0 * c3 * delta**2
+                coenergy = (
+                    cumulative_pchip[interval]
+                    + c0 * delta
+                    + 0.5 * c1 * delta**2
+                    + c2 * delta**3 / 3.0
+                    + 0.25 * c3 * delta**4
+                )
+            else:
+                tangent = float(slopes[interval])
+                b_value = float(b_tab[interval]) + tangent * delta
+                coenergy = (
+                    cumulative_linear[interval]
+                    + float(b_tab[interval]) * delta
+                    + 0.5 * tangent * delta**2
+                )
+        b_values.append(float(b_value))
+        tangent_values.append(float(tangent))
+        coenergy_values.append(float(coenergy))
+
+    canonical_table = table
+    canonical_grid = grid
+
+    def digest(value: object) -> str:
+        encoded = json.dumps(
+            value, ensure_ascii=True, separators=(",", ":")
+        ).encode("ascii")
+        return hashlib.sha256(encoded).hexdigest()
+
+    return {
+        "schema": "radia.nonlinear-constitutive-comparison-candidate.v1",
+        "identity": {
+            "bh_table_sha256": digest(canonical_table),
+            "response_grid_sha256": digest(canonical_grid),
+            "material_model": "single_valued_isotropic_soft_magnetic",
+            "magnetic_anisotropy": "isotropic",
+            "constitutive_interpolation": mode,
+            "constitutive_extrapolation": "vacuum_slope",
+            "candidate_only": True,
+            "solver_runtime_mode": mode == "monotone_pchip",
+            "radia_production_interpolation": "monotone_pchip",
+            "H_unit": "A/m",
+            "B_unit": "T",
+            "differential_permeability_unit": "H/m",
+            "energy_density_unit": "J/m^3",
+        },
+        "H_A_per_m": canonical_grid,
+        "B_T": b_values,
+        "differential_permeability_H_per_m": tangent_values,
+        "energy_density_J_per_m3": [
+            h_value * b_value - coenergy
+            for h_value, b_value, coenergy in zip(
+                canonical_grid, b_values, coenergy_values
+            )
+        ],
+        "coenergy_density_J_per_m3": coenergy_values,
+        "d_energy_d_B_A_per_m": canonical_grid,
+        "d_coenergy_d_H_T": b_values,
+        "last_table_H_A_per_m": h_tab[-1],
+        "last_table_B_T": b_tab[-1],
+        "claim_boundary": (
+            "The piecewise-linear option is a comparison candidate only; Radia "
+            "and NGSolve production solves retain the monotone-PCHIP law."
+        ),
+    }
+
+
 def nonlinear_magnetic_refinement_energy_gate(
     summary: dict[str, Any],
     *,

@@ -3,14 +3,17 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import math
 import os
 import sys
 from pathlib import Path
 
+import pytest
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 from radia_mcp.radia_ngsolve.field_profile_gate import (
+    build_constitutive_comparison_candidate,
     controlled_uniform_field_constitutive_sweep_gate,
     dual_formulation_symmetric_field_profile_gate,
     nonlinear_constitutive_point_sample_gate,
@@ -20,6 +23,7 @@ from radia_mcp.radia_ngsolve.field_profile_gate import (
     nonlinear_magnetic_spatial_evidence_gate,
 )
 from radia_mcp.radia_ngsolve.server import (
+    build_constitutive_comparison_candidate as mcp_build_comparison_candidate,
     controlled_uniform_field_constitutive_sweep_gate as mcp_controlled_sweep_gate,
     nonlinear_constitutive_point_sample_gate as mcp_constitutive_point_gate,
     nonlinear_magnetic_field_energy_parity_gate as mcp_nonlinear_parity_gate,
@@ -27,6 +31,68 @@ from radia_mcp.radia_ngsolve.server import (
     nonlinear_magnetic_refinement_energy_gate as mcp_nonlinear_refinement_gate,
     nonlinear_magnetic_spatial_evidence_gate as mcp_nonlinear_gate,
 )
+
+
+def test_build_comparison_candidate_keeps_piecewise_linear_out_of_solver_mode():
+    table = [[0.0, 0.0], [100.0, 0.5], [1000.0, 1.4]]
+    h_values = [0.0, 50.0, 500.0, 2000.0]
+    result = build_constitutive_comparison_candidate(
+        table,
+        h_values,
+        constitutive_interpolation="piecewise_linear",
+    )
+    assert result["identity"]["constitutive_interpolation"] == "piecewise_linear"
+    assert result["identity"]["constitutive_extrapolation"] == "vacuum_slope"
+    assert result["identity"]["candidate_only"] is True
+    assert result["identity"]["solver_runtime_mode"] is False
+    assert result["identity"]["radia_production_interpolation"] == "monotone_pchip"
+    assert result["B_T"][1] == 0.25
+    assert result["B_T"][2] == pytest.approx(0.9)
+    wrapped = json.loads(
+        mcp_build_comparison_candidate(
+            json.dumps(table),
+            json.dumps(h_values),
+            "piecewise_linear",
+        )
+    )
+    assert wrapped["B_T"] == pytest.approx(result["B_T"])
+
+
+def test_build_comparison_candidate_matches_pchip_and_energy_identity():
+    from scipy.interpolate import PchipInterpolator
+
+    table = [[0.0, 0.0], [100.0, 0.5], [1000.0, 1.4], [10000.0, 1.7]]
+    h_values = [0.0, 50.0, 500.0, 10000.0, 20000.0]
+    candidate = build_constitutive_comparison_candidate(table, h_values)
+    pchip = PchipInterpolator(
+        [row[0] for row in table], [row[1] for row in table], extrapolate=False
+    )
+    expected_inside = [float(pchip(value)) for value in h_values[:-1]]
+    assert candidate["identity"]["constitutive_interpolation"] == "monotone_pchip"
+    assert candidate["identity"]["solver_runtime_mode"] is True
+    assert candidate["B_T"][:-1] == pytest.approx(expected_inside, rel=1.0e-14)
+    assert candidate["B_T"][-1] == pytest.approx(
+        table[-1][1] + 4.0e-7 * math.pi * (h_values[-1] - table[-1][0])
+    )
+    for h_value, b_value, energy, coenergy in zip(
+        candidate["H_A_per_m"],
+        candidate["B_T"],
+        candidate["energy_density_J_per_m3"],
+        candidate["coenergy_density_J_per_m3"],
+    ):
+        assert energy + coenergy == pytest.approx(h_value * b_value, abs=1.0e-10)
+
+
+def test_build_comparison_candidate_rejects_unknown_mode_through_mcp():
+    result = json.loads(
+        mcp_build_comparison_candidate(
+            "[[0.0, 0.0], [1.0, 1.0]]",
+            "[0.0, 1.0]",
+            "source_default",
+        )
+    )
+    assert result["status"] == "invalid_input"
+    assert "constitutive interpolation" in result["error"]
 
 
 def _summary():
