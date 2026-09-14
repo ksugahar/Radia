@@ -1,0 +1,19 @@
+\begin{thebibliography}{1}
+
+\bibitem{bergqvist1997}
+A.~{Bergqvist}.
+\newblock Magnetic vector hysteresis model with dry friction-like pinning.
+\newblock {\em Physica B: Condensed Matter}, 233(4):342--347, 1997.
+
+\bibitem{prigozhin2016}
+L.~{Prigozhin}, V.~{Sokolovsky}, J.~W. {Barrett}, and S.~E. {Zirka}.
+\newblock On the energy-based variational model for vector magnetic hysteresis.
+\newblock {\em IEEE Trans. Magn.}, 52(12):1--11, 2016.
+
+\bibitem{egger2025compumag}
+Herbert Egger, Felix Engertsberger, and Andreas Schafelner.
+\newblock Efficient evaluation of forward and inverse energy-based magnetic
+  hysteresis operators.
+\newblock {\em IEEE Transactions on Magnetics}, 62(7):7300706, 2026.
+
+\end{thebibliography}
