@@ -1,0 +1,46 @@
+{
+  "schema": "cubit-mesh-export.standalone-acceptance.v1",
+  "passed": true,
+  "gui_started": false,
+  "host": "lab",
+  "python": "C:\\temp\\cubit-standalone-1.0.0-venv\\Scripts\\python.exe",
+  "wheel": "C:\\temp\\radia-cubit-1.0.0-dist\\cubit_mesh_export-1.0.0-cp312-cp312-win_amd64.whl",
+  "radia_absent": true,
+  "radia_mcp_absent": true,
+  "version": "1.0.0",
+  "import_path": "C:\\temp\\cubit-standalone-1.0.0-venv\\Lib\\site-packages\\cubit_mesh_export",
+  "wheel_sha256": "dd9afd666391a525c9d43e24fbbb0aa08f6d9577da14241aa1806325d954aa03",
+  "native_import_path": "C:\\temp\\cubit-standalone-1.0.0-venv\\Lib\\site-packages\\cubit_mesh_export\\cubit_mesh_curver.pyd",
+  "dependencies": {
+    "netgen-mesher": "6.2.2606",
+    "ngsolve": "6.2.2606",
+    "numpy": "2.5.3"
+  },
+  "payloads": {
+    "cubit_mesh_curver.pyd": "9b632d2924874c6c64d08cb2fcfba5c3062ed784f9b1cfc654fb12abc70826f5",
+    "cubit_mesh_export.ccm": "327bba1de087685a2846a3ed088c8a6984c6feba91e8ff62bd4edba36c4cf247"
+  },
+  "journal_sha256": "fbbe38c174dc2c22d8caa0d737315c65d15183c80d29ee3ce7ae244104f72e42",
+  "plugin_directory": "C:\\Program Files\\Coreform Cubit 2025.12\\bin\\plugins",
+  "command": [
+    "C:\\Program Files\\Coreform Cubit 2025.12\\bin\\coreform_cubit.com",
+    "-batch",
+    "-nographics",
+    "-nojournal",
+    "-noinitfile",
+    "-commandplugindir",
+    "C:\\Program Files\\Coreform Cubit 2025.12\\bin\\plugins",
+    "C:\\temp\\cubit-standalone-1.0.0-final\\driver.jou"
+  ],
+  "cubit_exit_code": 0,
+  "issues": [],
+  "vol_sha256": "1e23078fca2700c7a0dbfc2152acff3635f96a7caf5bf01c786d047694be9166",
+  "check_report": "C:\\temp\\cubit-standalone-1.0.0-final\\vol-check.json",
+  "mesh": {
+    "dimension": 3,
+    "curve_order": 2,
+    "n_elements": 1386,
+    "n_points": 329
+  },
+  "elapsed_seconds": 1.485000000000582
+}
