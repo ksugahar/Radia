@@ -62,8 +62,8 @@ be laid on a sphere.  See
 (uniform Bz: cres 3e-15, single-stroke 0.24 %; Z2 shim: 0.36 % after
 sheet-metal distortion).
 
-Pros: continuous ψ, smooth contour family, Path-A iteration converges
-**monotonically** (on simple topologies), arbitrary polynomial order via
+Pros: continuous ψ, improved contour stability, and **observed monotone
+improvement in the cited planar run** (not a general convergence guarantee), arbitrary polynomial order via
 `H1(mesh, order=p)`, **arbitrary former shape**.
 Cons: per-entry integration is more expensive than basis-loop kernel
 evaluation; without ACA+ the assembly is O(M × ndof × quad_pts).
@@ -165,11 +165,16 @@ re-solve the magnetic system after each material batch.
 
 ## Path-A compensated iteration (new 2026-05-30)
 
-Kuijpers et al. Compumag 2023 [525] observe that **the deviation of the
-single-stroke chain from the iso-contour lines is collocated with the
-field error in the target region**: parasitic field from the connection
-segments degrades the design.  They observe and select-against the
-deviation; we **fold it back into the solve**:
+Kuijpers, Jansen and Lomonova's COMPUMAG 2023 contribution 525,
+*Comparison of Discretization Methods for Continuous Stream-Function
+Distributions*, is identified by the official conference program. It is
+distinct from the same authors' 2023 extended-stream-function journal article.
+The program establishes the contribution's identity, not the previous claim
+that the authors proved spatial collocation of chain deviation and target-field
+error. That passage has not been verified and is not asserted here.
+
+The following **Radia-specific compensation iteration** folds the computed
+wire-field residual back into the solve; it is not attributed to that paper:
 
     ψ⁽⁰⁾ = pseudo_inverse(B_target)         # initial SF
     repeat:
@@ -188,17 +193,19 @@ substitution + one chain rebuild) → cheap.
     contour family JUMPS under small ψ perturbations → `B_c(ψ)` not
     smooth → Picard does NOT contract.  Best-effort tracking finds
     marginally better neighbourhoods.
-  - FE-direct H¹ ψ: continuous GridFunction → contour family deforms
-    smoothly → `B_c(ψ)` smooth → Picard CONTRACTS.  Iterations 40-47
+  - FE-direct H¹ ψ: a continuous GridFunction can improve contour stability,
+    but continuity alone proves neither smooth topology changes nor a
+    contraction of this iteration. In the saved example, iterations 40-47
     on the planar uniform Bz benchmark drop **monotonically**
     0.62 % → 0.49 % RMS, converging to **0.47 %**.
 
-This is the empirical justification for the FE-direct upgrade.
+This is empirical evidence for that example, not a general convergence theorem.
 
 ## Complexity tier framework
 
-A coil's reachable design quality (via Kuijpers chain + Path-A) is
-bounded by its TOPOLOGY CLASS:
+The saved examples motivate the following empirical topology-based grouping
+of design difficulty (chain construction + Radia Path-A). These are example
+results, not universal lower bounds on reachable error:
 
 | Tier   | Topology                  | Baseline RMS  | + Path-A      | Behaviour                    |
 |--------|---------------------------|---------------|---------------|------------------------------|
