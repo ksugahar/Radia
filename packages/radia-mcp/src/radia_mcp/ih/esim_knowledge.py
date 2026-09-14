@@ -758,6 +758,11 @@ and bilinearly interpolates q_surf from the table at every surface DOF.
 Dominant simplification: the SPATIAL shape of |H_t(r)| is frozen at the
 reference solve; only the amplitude follows I(t).
 
+The runtime loads `--wp-vol` without calling `mesh.Curve()`.  Its H1
+`--fes-order` changes the temperature approximation only; it must never be used
+to re-curve an imported `.vol`.  Curved geometry must be baked into the `.vol`
+by the originating mesher and is then preserved exactly.
+
 Reference field --ht-source:
   kelvin (recommended)  --ht-sol <stem>_Jsurf.sol + --em-vol
                         <stem>_fem.vol from a calc_fem_kelvin run.

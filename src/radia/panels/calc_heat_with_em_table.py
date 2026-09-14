@@ -75,6 +75,7 @@ from calc_heat import (  # noqa: E402
     SIGMA_SB,
     THERMAL_PRESETS,
     _boundary_role_audit,
+    _input_mesh_geometry_audit,
     _resolve_boundary_role,
     _resolve_material,
 )
@@ -327,10 +328,16 @@ def solve_heat_em_table(wp_vol, em_table_path,
          f"H_range=[{tab.H_grid[0]:.2e},{tab.H_grid[-1]:.2e}] A/m "
          f"T_range=[{tab.T_grid[0]:.1f},{tab.T_grid[-1]:.1f}] C")
 
-    wp_mesh = Mesh(wp_vol).Curve(int(fes_order))
+    wp_mesh = Mesh(wp_vol)
+    try:
+        mesh_geometry = _input_mesh_geometry_audit(wp_mesh, fes_order)
+    except ValueError as exc:
+        return {"error": str(exc)}
     _log(f"MESH:loaded {os.path.basename(wp_vol)} "
          f"materials={list(wp_mesh.GetMaterials())} "
-         f"boundaries={list(wp_mesh.GetBoundaries())}")
+         f"boundaries={list(wp_mesh.GetBoundaries())} "
+         f"geometry_order={mesh_geometry['input_curve_order']} "
+         f"field_order={fes_order} (input geometry preserved)")
 
     try:
         heat_flux_selector, heat_flux_names = _resolve_boundary_role(
@@ -594,6 +601,7 @@ def solve_heat_em_table(wp_vol, em_table_path,
         "material": material,
         "ndof": int(fes_T.ndof),
         "fes_order": int(fes_order),
+        "mesh_geometry": mesh_geometry,
         "t_total_s": round(t_total, 2),
     }
 

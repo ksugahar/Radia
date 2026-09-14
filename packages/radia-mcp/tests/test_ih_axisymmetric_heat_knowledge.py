@@ -23,6 +23,21 @@ def test_ih_thermal_knowledge_keeps_em_and_heat_spaces_separate():
     assert "zero because the weak form uses ``2*pi*r*ds``" in normalized
     assert "solver fails fast" in normalized
     assert "inner cylindrical surface at ``r>0``" in normalized
+    assert "Thermal `.vol` geometry contract: preserve after load" in thermal
+    assert "do NOT call wp_mesh.Curve(2)" in thermal
+    assert "preserve-input-vol-geometry" in thermal
+    assert "post_load_curve_applied=false" in thermal
+    assert "297 million times" in thermal
+
+
+def test_ih_curve_guidance_distinguishes_live_geometry_from_loaded_vol():
+    combined = get_induction_heating_documentation("gmsh_mesh")
+    normalized = " ".join(combined.split())
+
+    assert "Curve a mesh only while its generating geometry is live" in combined
+    assert "Never call `mesh.Curve()`" in combined
+    assert "after loading an arbitrary `.vol`" in normalized
+    assert "ngsolve-curve-after-vol-import" in combined
 
 
 def test_ih_pitfalls_reject_henrotte_temperature_reuse():
