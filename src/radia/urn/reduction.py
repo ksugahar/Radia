@@ -74,8 +74,10 @@ def reduce_y_admittance_urn(
     error budget. Acceptance requires every |Zfit-Zdata|/budget <= 1. It is not
     an S-domain tolerance or a probabilistic confidence interval. The caller
     must supply its measurement meaning; no precision is inferred from data.
-    Duplicate candidates are removed first, otherwise the least influential
-    basis is removed. Rejected trials remain in the trace and are never labeled
+    Duplicate candidates are removed first; within the candidate pool, minimize
+    the unrefitted error in the configured fitting metric (S or log components),
+    not raw impedance magnitude that can hide real-part loss. Rejected trials
+    remain in the trace and are never labeled
     acceptable. This checks training samples, not independent generalization.
     The input model is not mutated; trace contains no raw measurement samples.
     """
@@ -133,11 +135,33 @@ def reduce_y_admittance_urn(
         active = current.active_bases(freqs, threshold=0.0)
         duplicate_indices = {i for pair in pairs for i in pair["indices"]}
         pool = [b for b in active if b.basis_index in duplicate_indices] or active
-        victim = min(pool, key=lambda b: (b.importance, b.basis_index))
+        scores = {}
+        omega = torch.tensor(2 * np.pi * freqs, dtype=torch.float64)
+        with torch.no_grad():
+            for basis in pool:
+                mask = torch.ones(
+                    current.config.total_basis_functions, dtype=torch.float64
+                )
+                mask[basis.basis_index] = 0.0
+                without = current(omega, mask=mask).cpu().numpy()
+                if current.config.loss_mode == "log_components":
+                    score = log_component_rmse(
+                        without,
+                        target,
+                        floor=model.z0 * model.config.log_loss_floor_relative,
+                    )
+                else:
+                    score = s_domain_rmse(without, target, z0=model.z0)
+                if not np.isfinite(score):
+                    raise RuntimeError("nonfinite candidate ablation error")
+                scores[basis.basis_index] = score
+        victim = min(pool, key=lambda b: (scores[b.basis_index], b.basis_index))
         removed = {
             "index": victim.basis_index,
             "basis_type": victim.basis_type,
             "reason": "redundant_response" if duplicate_indices else "output_ablation",
+            "ablation_metric": current.config.loss_mode,
+            "unrefitted_error": scores[victim.basis_index],
         }
         retained = [b for b in active if b.basis_index != victim.basis_index]
         config = replace(
