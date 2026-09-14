@@ -65,12 +65,8 @@ def make_sector_mesh(R1=0.05, R2=0.15, angle_deg=60.0, z0=0.02, thick=0.03,
     return Mesh(OCCGeometry(ring * hs1 * hs2).GenerateMesh(maxh=maxh))
 
 
-@pytest.fixture(scope="module")
-def regen(tmp_path_factory):
-    out = tmp_path_factory.mktemp("shape_regen")
-    timings = {}
-    SetNumThreads(4)
-    chi_iron = 1000.0
+def shape_load_builders():
+    """The same fixed physical loads are used before and after regeneration."""
     span = (pi / 12, pi / 2 - pi / 12)
     obj_pts, obj_radial = orbit_arc_points(0.115, 0.0, 7, span=span)
     pair_pts, pair_wts = gradient_pair_points(
@@ -93,6 +89,17 @@ def regen(tmp_path_factory):
         return build
 
     con_builders = [constraint_builder(r) for r in (0.08, 0.10)]
+    return state_builder, objective_builder, con_builders
+
+
+def prepare_shape(out):
+    """Compute the design and STL on an idle compute host (no Cubit)."""
+    out = Path(out)
+    out.mkdir(parents=True, exist_ok=True)
+    timings = {}
+    SetNumThreads(4)
+    chi_iron = 1000.0
+    state_builder, objective_builder, con_builders = shape_load_builders()
     started = time.perf_counter()
     with TaskManager():
         mesh = make_sector_mesh()
@@ -145,22 +152,6 @@ def regen(tmp_path_factory):
     assert coarse_stl_info["watertight"] is True
     timings["surface_generation"] = time.perf_counter() - started
 
-    from radia_mcp.cubit.server import cubit_stl_to_vol
-
-    mesh_specs = {
-        "tet_reference": (coarse_stl, "tet", 0.01, 0.05),
-        "hex_coarse": (coarse_stl, "hex", 0.01, 0.12),
-        "hex_fine": (stl, "hex", 0.0, 0.03),
-    }
-    mesh_results = {}
-    for name, (mesh_stl, scheme, size, closure_gate) in mesh_specs.items():
-        started = time.perf_counter()
-        mesh_results[name] = json.loads(cubit_stl_to_vol(
-            stl_path=str(mesh_stl), scheme=scheme, size=size,
-            closure_tolerance=closure_gate,
-            out_vol=str(out / f"{name}.vol"),
-            out_msh=str(out / f"{name}.msh")))
-        timings[f"mesh_{name}"] = time.perf_counter() - started
     return SimpleNamespace(out=out, mesh=mesh, nodal=nodal,
                            chi_iron=chi_iron,
                            state_builder=state_builder,
@@ -169,8 +160,34 @@ def regen(tmp_path_factory):
                            stl=stl, stl_info=stl_info,
                            coarse_stl=coarse_stl,
                            coarse_stl_info=coarse_stl_info,
-                           mesh_results=mesh_results,
                            timings=timings)
+
+
+def mesh_shape(regen):
+    """Run only the licensed mesh phase on LAB/100."""
+    from radia_mcp.cubit.server import cubit_stl_to_vol
+
+    mesh_specs = {
+        "tet_reference": (regen.coarse_stl, "tet", 0.01, 0.05),
+        "hex_coarse": (regen.coarse_stl, "hex", 0.01, 0.12),
+        "hex_fine": (regen.stl, "hex", 0.0, 0.03),
+    }
+    mesh_results = {}
+    for name, (mesh_stl, scheme, size, closure_gate) in mesh_specs.items():
+        started = time.perf_counter()
+        mesh_results[name] = json.loads(cubit_stl_to_vol(
+            stl_path=str(mesh_stl), scheme=scheme, size=size,
+            closure_tolerance=closure_gate,
+            out_vol=str(regen.out / f"{name}.vol"),
+            out_msh=str(regen.out / f"{name}.msh")))
+        regen.timings[f"mesh_{name}"] = time.perf_counter() - started
+    regen.mesh_results = mesh_results
+    return regen
+
+
+@pytest.fixture(scope="module")
+def regen(tmp_path_factory):
+    return mesh_shape(prepare_shape(tmp_path_factory.mktemp("shape_regen")))
 
 
 def test_grid_iso_stl_is_watertight_with_small_drift(regen):
@@ -182,13 +199,18 @@ def test_grid_iso_stl_is_watertight_with_small_drift(regen):
 
 def test_cubit_iso_blocks_union_watertight(regen):
     """The official ATO block semantics on a boundary-touching design."""
+    exo = regen.out / "design_lsd.exo"
+    write_levelset_exodus(regen.mesh, regen.nodal, exo, level=0.5)
+    validate_cubit_iso_union(exo, regen.out)
+
+
+def validate_cubit_iso_union(exo, out):
+    """Validate the compute-host Exodus handoff without recomputing its mesh."""
     import trimesh
     from netCDF4 import Dataset
     from radia_mcp.cubit.server import _run_batch
 
-    exo = regen.out / "design_lsd.exo"
-    write_levelset_exodus(regen.mesh, regen.nodal, exo, level=0.5)
-    iso_e = str(regen.out / "design_iso.e").replace(os.sep, "/")
+    iso_e = str(out / "design_iso.e").replace(os.sep, "/")
     r = _run_batch(None, [
         "set dev on",
         f'import mesh "{str(exo).replace(os.sep, "/")}" nodal_var "LSD" '
@@ -220,6 +242,8 @@ def test_cubit_iso_blocks_union_watertight(regen):
     m.fix_normals()
     assert m.is_watertight, (len(m.faces), new_ids)
     assert abs(m.volume) > 0.0
+    return {"watertight": True, "volume": float(abs(m.volume)),
+            "faces": len(m.faces), "tri_blocks": new_ids}
 
 
 def test_stl_to_vol_gates(regen):
@@ -234,6 +258,22 @@ def test_stl_to_vol_gates(regen):
     # Sculpt cell refinement must improve the geometry-volume closure.
     assert (regen.mesh_results["hex_fine"]["closure"]
             < regen.mesh_results["hex_coarse"]["closure"])
+
+
+def evaluate_staircase(regen):
+    """Persist a scalar reference from the exact design run; no FE checkpoint."""
+    started = time.perf_counter()
+    with TaskManager():
+        mesh = regen.verification.iron_mesh
+        fes = HDiv(mesh, order=1)
+        problem = DensityAdjointVIM(fes, eps=1e-7)
+        field, iterations = problem.solve(
+            np.full(problem.n_el, 1.0 / 100.0), regen.state_builder(fes),
+            tol=1e-8, maxiter=5000, solver="native")
+        objective = float(ng.InnerProduct(regen.objective_builder(fes).vec, field.vec))
+    assert iterations < 5000
+    return {"J": objective, "iterations": int(iterations), "ne": int(mesh.ne),
+            "chi_eval": 100.0, "elapsed_s": time.perf_counter()-started}
 
 
 def test_functional_reevaluation_on_regenerated_body(regen):
@@ -291,17 +331,11 @@ def test_functional_reevaluation_on_regenerated_body(regen):
         demag_factor_z = float(fine_problem.demag.DemagFactor(
             ng.CoefficientFunction((0.0, 0.0, 1.0))))
 
-        started = time.perf_counter()
-        stair_mesh = regen.verification.iron_mesh
-        stair_fes = HDiv(stair_mesh, order=1)
-        stair_problem = DensityAdjointVIM(stair_fes, eps=1e-7)
-        stair_field, stair_iterations = stair_problem.solve(
-            np.full(stair_problem.n_el, 1.0 / chi_eval),
-            regen.state_builder(stair_fes), tol=1e-8,
-            maxiter=5000, solver="native")
-        J_stair = float(ng.InnerProduct(
-            regen.objective_builder(stair_fes).vec, stair_field.vec))
-        stair_elapsed = time.perf_counter() - started
+    staircase = getattr(regen, "staircase", None)
+    if staircase is None:
+        staircase = evaluate_staircase(regen)
+    assert staircase["chi_eval"] == chi_eval
+    J_stair = staircase["J"]
 
     J_fine = evaluations["hex_fine"]["J_native"]
     J_coarse = evaluations["hex_coarse"]["J_native"]
@@ -330,7 +364,7 @@ def test_functional_reevaluation_on_regenerated_body(regen):
         f"physics_{name}": values["elapsed_s"]
         for name, values in evaluations.items()
     })
-    timing_candidates["physics_staircase"] = stair_elapsed
+    timing_candidates["physics_staircase"] = staircase["elapsed_s"]
     top_timings = dict(sorted(
         timing_candidates.items(), key=lambda item: item[1], reverse=True)[:4])
     record = dict(
@@ -345,11 +379,11 @@ def test_functional_reevaluation_on_regenerated_body(regen):
         meshes={name: compact_mesh(result)
                 for name, result in regen.mesh_results.items()},
         evaluations=evaluations,
-        ne_staircase=int(stair_mesh.ne),
+        ne_staircase=staircase["ne"],
         chi_eval=chi_eval,
         demag_factor_z_fine_hex=demag_factor_z,
         J_staircase=J_stair,
-        staircase_iterations=int(stair_iterations),
+        staircase_iterations=staircase["iterations"],
         fine_hex_vs_staircase_relative=fine_vs_stair,
         fine_hex_vs_tet_relative=fine_vs_tet,
         coarse_hex_vs_tet_relative=coarse_vs_tet,

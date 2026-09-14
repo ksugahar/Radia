@@ -54,6 +54,32 @@ test convergence. The thin-wire expression with constant -2 is an asymptotic
 external-inductance reference, not a finite-wire DC reference with internal
 inductance. Do not certify this extractor by matching it with arbitrary excitation.
 
+### Validated closed-torus current route (2026-09-14)
+
+Use `validation_test/bem/validate_torus_current_constraint.py` for the bounded
+magnetostatic surface-current model. It assembles NGSolve surface divergence D
+and the physical functional c(J) = integral J.grad(phi)/(2*pi) dS. On a closed
+torus with div_surface J=0 this equals the current across a meridional cut.
+Minimize magnetic energy subject to D J=0 and c(J)=1 A; do not use ones/n.
+Select active DOFs through boundary-element GetDofNrs before dense algebra:
+the volume mesh's interior edges are not surface-current unknowns. Reject a
+mesh whose divergence-free space cannot resolve the toroidal current.
+The reduced operator's relative asymmetry must be at most 1e-6; solve its
+symmetric part only after Cholesky confirms positive definiteness, and require
+a relative KKT residual below 1e-10. This is an explicit quadrature
+symmetrization, not an assumption that an arbitrary Galerkin matrix is an energy.
+
+NGSolve 6.2.2606 results at curvaturesafety 0.65/0.8/1.0 were
+159.672/155.914/152.603 nH (513/693/1203 active boundary DOFs).
+Surface-area errors were -9.76/-6.64/-3.90 percent, so these are explicitly
+flat-mesh convergence results, not exact-geometry certification. Raising
+bonus_intorder from 4 to 8 at the first mesh changed L by 5.63e-9 relative;
+current conservation and basis-sign covariance passed. The finest result is
+about 1.96 percent above the thin-wire asymptotic external-inductance estimate.
+This does not validate finite-frequency/resistive ports, internal inductance,
+other topologies, or the historical coefficient-ones extractor. The executable
+driver and `validation_test/bem/torus_current_cs*_q*.json` own the evidence.
+
 ## When to Use ngsolve.bem
 
 | Task | Use ngsolve.bem? | Alternative |

@@ -1,5 +1,27 @@
 # NASA 18650 Li-ion Battery EIS Data
 
+## Acceptance status: historical hybrid, not frequency-domain validation
+
+The 47 complex impedance values in `nasa_18650_eis.csv` match NASA B0005's
+first impedance operation (zero-based cycle 40), after dropping its first
+sample. The frequency column does **not** come from that MAT file: it is a
+47-point model-assigned logarithmic axis. The original README states sweep
+endpoints only; it does not establish sample spacing or ordering.
+
+Do not use this bundled CSV to claim measured Bode accuracy, identified
+relaxation times, or experimental time-domain/SPICE validation. The fitting
+and SPICE loaders now reject it. Preserve the numerical rows as historical
+evidence; do not replace the axis with another guessed sequence.
+
+To enable measured fitting, obtain an independent, sample-aligned instrument
+frequency record and regenerate using `extract_real_eis.py` with explicit
+`frequency_hz` and `frequency_source`. Its provenance header is required by
+both consumers. A synthetic example belongs in the separate `synthetic_*`
+files and must remain labelled synthetic.
+
+Archive identities and the exact complex-value comparison are recorded in
+`docs/design/notebook_evidence_closeout_20260914.md` at the repository root.
+
 ## Data Source
 
 **Dataset**: Li-ion Battery Aging Datasets
@@ -52,9 +74,9 @@ Parameters:
 - alpha = 0.85 (Cole-Cole/CPE exponent)
 - sigma_w = 15 Ohm*s^-0.5 (Warburg coefficient)
 
-## Usage for URN Validation
+## Historical fitting example (disabled until the axis is verified)
 
-This electrochemical impedance data demonstrates URN's ability to fit:
+The model families of interest are:
 1. Cole-Cole relaxation (charge transfer)
 2. Warburg diffusion (45-degree line)
 3. Multi-element RC networks
@@ -62,7 +84,8 @@ This electrochemical impedance data demonstrates URN's ability to fit:
 ```python
 from radia.urn import UniversalRelaxationNetwork
 
-# Load data
+# Do not run this against the historical bundled CSV. First regenerate it
+# from an independently documented sample-frequency record as described above.
 import pandas as pd
 df = pd.read_csv('nasa_18650_eis.csv', comment='#')
 
@@ -74,5 +97,9 @@ urn.fit(df['frequency_Hz'].values,
 
 ## License
 
-The NASA battery dataset is publicly available for research purposes.
-See NASA's data policy at https://data.nasa.gov/
+The official [NASA dataset listing](https://data.nasa.gov/dataset/groups/li-ion-battery-aging-datasets)
+reports **License not specified** (checked 2026-09-14). Public download access
+does not by itself establish redistribution permission. Do not add downloaded
+MAT/ZIP files or newly extracted measurement CSVs to this public repository
+without verifying the applicable permission. The pre-existing CSV's retention
+is under review; this README does not grant a license to NASA data.
