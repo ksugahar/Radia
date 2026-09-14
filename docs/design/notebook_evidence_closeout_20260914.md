@@ -152,3 +152,42 @@ The ZIP member is read in memory, removing a separate overwrite/delete hazard
 for pre-existing MAT files. Fast tests cover missing/invalid axes, sample order,
 real MAT parsing, unknown cycle selectors, and preservation of caller files.
 Historical CSV values and notebook outputs remain unchanged.
+
+## Focused companion citation reconciliation
+
+The stream-function and Dowell executable companions now declare selected
+canonical keys and carry generated BibTeX/TeX4ht reference displays. This is two
+additional notebook migrations, not a claim that all 43 screened notebooks or
+all methods in these two companions are citation-complete.
+
+- The [official COMPUMAG program](https://compumag2023.com/program/www.conftool.pro/compumag2023/index43b4.html?form_session=29&ismobile=false&page=browseSessions&print=export)
+  identifies contribution 525 (PC-A1:6, May 25, 2023) as *Comparison of
+  Discretization Methods for Continuous Stream-Function Distributions* by
+  Kuijpers, Jansen and Lomonova. The parent gains the distinct key
+  `kuijpers2023discretization`; `kuijpers2023` continues to identify their
+  different journal article. The university repository confirms the conference
+  title but lists only Kuijpers, so the author list follows the official program.
+  Program identity does not verify the former spatial-collocation attribution.
+  That attribution is withdrawn; Path-A is labelled Radia's own residual
+  correction. Continuous FE representation alone is no contraction proof, and
+  the companion now distinguishes saved empirical convergence from a theorem.
+- `dowell1966eddy` is reused for the winding-loss background. Publisher-deposited
+  [Crossref metadata](https://api.crossref.org/works/10.1049/piee.1966.0236)
+  confirms author, title, volume 113, issue 8, year 1966 and first page 1387.
+  This check does not certify the companion's boundary interpretation, scaling,
+  continued-fraction/PRIMA composition or saved numerical agreement. Kernel
+  agreement is explicitly an internal check, not experimental validation.
+
+No calculation cells, saved numerical outputs or figures were rerun or changed.
+The generated-reference contract checks both new notebooks and the earlier
+migrations against the parent. ACA/TSVD/DUCAS source reconciliation, the other
+named source families above, and missing instrument/external-run evidence remain
+separate follow-up work; no dummy citations were added to API-only notebooks.
+
+### Live status correction
+
+The earlier live-server paragraph is a historical pre-update observation.
+Following the user's Restart, the original task directly verified the new
+`mcp-development-main` source, 349 publication tools and all three previously
+absent bibliography keys. That task's publication reconnect is closed. It does
+not establish the state of other clients, users or the 100 host.
