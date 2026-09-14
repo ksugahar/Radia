@@ -16,7 +16,7 @@ __version__ = "4.95.92"
 # 2026-04-14 stale Cubit-plugin incident is the canonical reason this
 # matters. cubit-plugin-install enforces this at deploy time.
 COMPAT_CUBIT_MESH_EXPORT_MIN = "0.5.0"
-COMPAT_CUBIT_MESH_EXPORT_MAX = "0.999.999"  # bumped on next radia minor
+COMPAT_CUBIT_MESH_EXPORT_MAX = "1.0.0"  # independently validated standalone exporter
 
 # DLL loader for Windows
 # MKL DLLs are installed via pip dependency (mkl>=2026,<2027)
