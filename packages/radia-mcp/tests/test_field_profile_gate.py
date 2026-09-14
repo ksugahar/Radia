@@ -212,6 +212,15 @@ def test_nonlinear_refinement_energy_gate_rejects_stale_solution_digest():
     assert result["level_checks"][1]["field_energy_identity_matches"] is False
 
 
+def test_nonlinear_refinement_energy_gate_rejects_material_domain_mismatch():
+    bad = _nonlinear_refinement_summary()
+    bad["levels"][1]["energy_identity"]["material_domain"] = "iron"
+    result = nonlinear_magnetic_refinement_energy_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["all_levels_valid"] is False
+    assert result["level_checks"][1]["field_energy_identity_matches"] is False
+
+
 def test_nonlinear_refinement_energy_gate_rejects_stale_parent_lineage():
     bad = _nonlinear_refinement_summary()
     for identity_name in ("field_identity", "energy_identity"):
