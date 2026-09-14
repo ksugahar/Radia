@@ -1,0 +1,16 @@
+\begin{thebibliography}{1}
+
+\bibitem{TWP28_1}
+{H.~Karl}, {J.~Fetzer}, {S.~Kurz}, {G.~Lehner}, and {W.~M.~Rucker}.
+\newblock Description of {TEAM} {Workshop} {Problem} 28: An electrodynamic
+  levitation device.
+\newblock {\em Proc. of the {TEAM} {Workshop}, {Graz}, {Austria}}, pages
+  41--42, 1996.
+
+\bibitem{TWP28_2}
+Seung-Myen {Lee}, Se-Hee {Lee}, Hong-Soon {Choi}, and Il-Han {Park}.
+\newblock Reduced modeling of eddy current-driven electromechanical system
+  using conductor segmentation and circuit parameters extracted by fea.
+\newblock {\em IEEE Transactions on Magnetics}, 41(5):1448--1451, 2005.
+
+\end{thebibliography}
