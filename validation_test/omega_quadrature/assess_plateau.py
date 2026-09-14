@@ -83,8 +83,13 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("input", type=Path)
     parser.add_argument("output", type=Path)
+    parser.add_argument("--low-bonus", type=int, default=8)
+    parser.add_argument("--high-bonus", type=int, default=12)
     args = parser.parse_args()
-    result = assess(json.loads(args.input.read_text(encoding="utf-8")))
+    if not 0 <= args.low_bonus < args.high_bonus:
+        parser.error("bonuses must be nonnegative and strictly increasing")
+    result = assess(json.loads(args.input.read_text(encoding="utf-8")),
+                    args.low_bonus, args.high_bonus)
     args.output.write_text(json.dumps(result, indent=2, allow_nan=False) + "\n", encoding="utf-8")
     return 0 if result["passed"] else 2
 
