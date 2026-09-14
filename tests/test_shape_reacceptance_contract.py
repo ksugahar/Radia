@@ -1,6 +1,7 @@
 """Cross-host scientific receipts must not mix designs or reuse stale success."""
 import importlib.util
 import json
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -114,6 +115,16 @@ def test_post_execution_audit_preserves_numerical_provenance(tmp_path):
     assert result['original_driver_sha256'] == 'original-driver'
     assert result['validator_sha256'] == DRIVER.digest(DRIVER.__file__)
     assert before == {p.name: p.read_bytes() for p in tmp_path.iterdir()}
+
+
+def test_committed_fixture_preserves_original_receipt_bytes(tmp_path):
+    fixture = ROOT / 'validation_test/isochronous_topopt/fixtures/shape_reacceptance_20260914.zip'
+    with zipfile.ZipFile(fixture) as archive:
+        archive.extractall(tmp_path)
+    result = DRIVER.audit_completed_receipts(tmp_path)
+    recorded = json.loads((ROOT / 'validation_test/isochronous_topopt/shape_reacceptance_20260914_audit.json').read_text())
+    for key in ('parent_receipt_sha256', 'field_sha256', 'original_driver_sha256'):
+        assert result[key] == recorded[key]
 
 
 @pytest.mark.parametrize('mutation', ['uuid', 'mesh_receipt', 'input', 'vol', 'staircase'])
