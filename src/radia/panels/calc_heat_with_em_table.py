@@ -71,7 +71,14 @@ if _panels_dir not in sys.path:
 
 from calc_common import setup_paths, progress, calc_main  # noqa: E402
 from em_table import load_em_table, interp_qsurf  # noqa: E402
-from calc_heat import THERMAL_PRESETS, _resolve_material, SIGMA_SB  # noqa: E402
+from calc_heat import (  # noqa: E402
+    SIGMA_SB,
+    THERMAL_PRESETS,
+    _boundary_role_audit,
+    _input_mesh_geometry_audit,
+    _resolve_boundary_role,
+    _resolve_material,
+)
 
 
 def _log(msg):
@@ -120,7 +127,7 @@ def _load_current_trajectory(scalar_val, csv_path):
     return I_const
 
 
-def _collect_surface_dofs(wp_mesh, surface_label_eff, fes_T):
+def _collect_surface_dofs(wp_mesh, heat_flux_boundary_names, fes_T):
     """Return ``(dof_indices, dof_xyz)`` for the H1 DOFs lying on the
     heating face.  H1 DOFs are vertices, so this is just the BND
     vertex set under the requested label.
@@ -129,7 +136,7 @@ def _collect_surface_dofs(wp_mesh, surface_label_eff, fes_T):
 
     vnrs = set()
     for el in wp_mesh.Elements(BND):
-        if surface_label_eff != ".*" and el.mat != surface_label_eff:
+        if el.mat not in heat_flux_boundary_names:
             continue
         for v in el.vertices:
             vnrs.add(v.nr)
@@ -206,7 +213,7 @@ def _coil_segments_from_step(coil_step):
     return _polyline_to_filament_segments(res.polyline, closed), closed
 
 
-def _surface_vertex_normals(wp_mesh, surface_label_eff, dof_vnrs):
+def _surface_vertex_normals(wp_mesh, heat_flux_boundary_names, dof_vnrs):
     """Area-weighted unit surface normals aligned to ``dof_vnrs``.
 
     Returns an (n, 3) array.  Each boundary polygon's Newell normal
@@ -225,7 +232,7 @@ def _surface_vertex_normals(wp_mesh, surface_label_eff, dof_vnrs):
     nv = wp_mesh.nv
     acc = np.zeros((nv, 3), dtype=float)
     for el in wp_mesh.Elements(BND):
-        if surface_label_eff != ".*" and el.mat != surface_label_eff:
+        if el.mat not in heat_flux_boundary_names:
             continue
         vs = [v.nr for v in el.vertices]
         m = len(vs)
@@ -294,7 +301,9 @@ def solve_heat_em_table(wp_vol, em_table_path,
                          coil_step="", biot_image_factor=1.0,
                          material="steel", rho=None, cp=None, k=None,
                          h_conv=10.0, t_ext=20.0, t_initial=20.0, emissivity=0.0,
-                         surface_label="",
+                         heat_flux_boundaries="",
+                         convection_boundaries="",
+                         radiation_boundaries="",
                          dt=0.5, t_end=60.0,
                          fes_order=1,
                          linear_solver="sparsecholesky",
@@ -319,20 +328,31 @@ def solve_heat_em_table(wp_vol, em_table_path,
          f"H_range=[{tab.H_grid[0]:.2e},{tab.H_grid[-1]:.2e}] A/m "
          f"T_range=[{tab.T_grid[0]:.1f},{tab.T_grid[-1]:.1f}] C")
 
-    wp_mesh = Mesh(wp_vol).Curve(int(fes_order))
+    wp_mesh = Mesh(wp_vol)
+    try:
+        mesh_geometry = _input_mesh_geometry_audit(wp_mesh, fes_order)
+    except ValueError as exc:
+        return {"error": str(exc)}
     _log(f"MESH:loaded {os.path.basename(wp_vol)} "
          f"materials={list(wp_mesh.GetMaterials())} "
-         f"boundaries={list(wp_mesh.GetBoundaries())}")
+         f"boundaries={list(wp_mesh.GetBoundaries())} "
+         f"geometry_order={mesh_geometry['input_curve_order']} "
+         f"field_order={fes_order} (input geometry preserved)")
 
-    if surface_label:
-        if surface_label not in wp_mesh.GetBoundaries():
-            return {"error":
-                    f"--surface-label {surface_label!r} not found in "
-                    f"{wp_vol} boundaries={list(wp_mesh.GetBoundaries())}"}
-        surface_label_eff = surface_label
-    else:
-        surface_label_eff = ".*"
-    _log(f"BND:filter={surface_label_eff!r}")
+    try:
+        heat_flux_selector, heat_flux_names = _resolve_boundary_role(
+            wp_mesh, heat_flux_boundaries, "--heat-flux-boundaries",
+            required=True)
+        convection_selector, convection_names = _resolve_boundary_role(
+            wp_mesh, convection_boundaries, "--convection-boundaries",
+            required=float(h_conv) != 0.0)
+        radiation_selector, radiation_names = _resolve_boundary_role(
+            wp_mesh, radiation_boundaries, "--radiation-boundaries",
+            required=float(emissivity) != 0.0)
+    except ValueError as exc:
+        return {"error": str(exc)}
+    _log(f"BND:heat_flux={heat_flux_names} "
+         f"convection={convection_names} radiation={radiation_names}")
 
     rho_v, cp_v, k_v = _resolve_material(material, rho, cp, k)
     _log(f"MATERIAL:{material} rho={rho_v} cp={cp_v} k={k_v}")
@@ -345,9 +365,10 @@ def solve_heat_em_table(wp_vol, em_table_path,
 
     # -------------------- |H_t_ref(r)| --------------------
     dof_vnrs, dof_xyz = _collect_surface_dofs(
-        wp_mesh, surface_label_eff, fes_T)
+        wp_mesh, set(heat_flux_names), fes_T)
     n_surf = len(dof_vnrs)
-    _log(f"BND_DOF:{n_surf} surface DOFs on filter {surface_label_eff!r}")
+    _log(f"BND_DOF:{n_surf} heat-flux surface DOFs on "
+         f"{heat_flux_names}")
 
     if ht_source == "kelvin":
         if not ht_sol or not em_vol:
@@ -388,7 +409,7 @@ def solve_heat_em_table(wp_vol, em_table_path,
         _log(f"BIOT:centerline {segs.shape[0]} segments closed={closed} "
              f"from {os.path.basename(coil_step)}")
         normals = _surface_vertex_normals(
-            wp_mesh, surface_label_eff, dof_vnrs)
+            wp_mesh, set(heat_flux_names), dof_vnrs)
         n_proj = int((np.linalg.norm(normals, axis=1) > 1e-9).sum())
         Ht_ref_arr = _biot_Ht_on_surface(
             segs, dof_xyz, normals, current=I_ref,
@@ -413,7 +434,8 @@ def solve_heat_em_table(wp_vol, em_table_path,
 
     a_form = BilinearForm(fes_T, symmetric=True)
     a_form += K_cf * InnerProduct(grad(u), grad(v)) * dx
-    a_form += float(h_conv) * v * u * ds(surface_label_eff)
+    if float(h_conv) != 0.0:
+        a_form += float(h_conv) * v * u * ds(convection_selector)
     a_form.Assemble()
 
     m_form = BilinearForm(fes_T, symmetric=True)
@@ -435,9 +457,9 @@ def solve_heat_em_table(wp_vol, em_table_path,
     gf_q.vec[:] = 0
     qv_fv = gf_q.vec.FV()
     Tv_fv = gfT.vec.FV()
-    surface_region = wp_mesh.Boundaries(surface_label_eff)
-    A_surf = float(Integrate(CF(1), wp_mesh, BND,
-                              definedon=surface_region).real)
+    heat_flux_region = wp_mesh.Boundaries(heat_flux_selector)
+    A_surf = float(_boundary_role_audit(
+        wp_mesh, heat_flux_names)["area_m2"])
 
     # -------------------- Time loop --------------------
     n_steps = int(math.ceil(float(t_end) / float(dt)))
@@ -473,19 +495,22 @@ def solve_heat_em_table(wp_vol, em_table_path,
             qv_fv[int(idx)] = float(q_dof[k_dof])
 
         f_form = LinearForm(fes_T)
-        f_form += gf_q * v * ds(surface_label_eff)
-        f_form += float(h_conv) * float(t_ext) * v * ds(surface_label_eff)
+        f_form += gf_q * v * ds(heat_flux_selector)
+        if float(h_conv) != 0.0:
+            f_form += float(h_conv) * float(t_ext) * v \
+                * ds(convection_selector)
         if float(emissivity) > 0.0:        # radiation (explicit, prev-step T, in K)
             _TK = gfT + 273.15
             f_form += -float(emissivity) * SIGMA_SB \
-                * (_TK**4 - (float(t_ext) + 273.15)**4) * v * ds(surface_label_eff)
+                * (_TK**4 - (float(t_ext) + 273.15)**4) * v \
+                * ds(radiation_selector)
         f_form.Assemble()
         with TaskManager():
             res_vec.data = f_form.vec - a_form.mat * gfT.vec
             gfT.vec.data += float(dt) * (inv * res_vec)
 
         q_int = float(Integrate(gf_q, wp_mesh, BND,
-                                 definedon=surface_region).real)
+                                 definedon=heat_flux_region).real)
         Q_input_J += q_int * float(dt)
 
         T_vol = np.asarray(gfT.vec.FV().NumPy())
@@ -515,6 +540,10 @@ def solve_heat_em_table(wp_vol, em_table_path,
              f"T_max={T_max_now:.2f}C")
 
     T_arr_final = np.asarray(gfT.vec.FV().NumPy())
+    heat_flux_audit = _boundary_role_audit(
+        wp_mesh, heat_flux_names, q_cf=gf_q)
+    convection_audit = _boundary_role_audit(wp_mesh, convection_names)
+    radiation_audit = _boundary_role_audit(wp_mesh, radiation_names)
     t_total = time.perf_counter() - t0
     _log(f"DONE:T_max={float(np.max(T_arr_final)):.2f}C "
          f"T_avg={float(np.mean(T_arr_final)):.2f}C "
@@ -549,6 +578,14 @@ def solve_heat_em_table(wp_vol, em_table_path,
         "T_max_history_C": [float(t_initial)] + T_max_hist,
         "Q_input_J": Q_input_J,
         "surface_area_m2": A_surf,
+        "heat_flux_boundaries": heat_flux_selector,
+        "convection_boundaries": convection_selector,
+        "radiation_boundaries": radiation_selector,
+        "boundary_audit": {
+            "heat_flux": heat_flux_audit,
+            "convection": convection_audit,
+            "radiation": radiation_audit,
+        },
         "n_surface_dofs": int(n_surf),
         "n_steps": int(n_steps),
         "dt_s": float(dt),
@@ -564,6 +601,7 @@ def solve_heat_em_table(wp_vol, em_table_path,
         "material": material,
         "ndof": int(fes_T.ndof),
         "fes_order": int(fes_order),
+        "mesh_geometry": mesh_geometry,
         "t_total_s": round(t_total, 2),
     }
 
@@ -654,14 +692,28 @@ def main():
     parser.add_argument("--linear-solver", default="sparsecholesky",
                         choices=["sparsecholesky", "umfpack", "pardiso"])
 
-    parser.add_argument("--surface-label", default="",
-                        help="Optional BND filter (default: all).")
+    parser.add_argument("--heat-flux-boundaries", default="",
+                        help="Required boundary expression receiving q_surf.")
+    parser.add_argument("--convection-boundaries", default="",
+                        help="Boundary expression receiving convection; "
+                             "required when --h-conv is nonzero.")
+    parser.add_argument("--radiation-boundaries", default="",
+                        help="Boundary expression receiving radiation; "
+                             "required when --emissivity is nonzero.")
+    parser.add_argument("--surface-label", default=None,
+                        help=argparse.SUPPRESS)
     parser.add_argument("--probe-point", default="",
                         help="Optional 'x,y,z' [m] probe point.")
     parser.add_argument("--csv-output", default="",
                         help="Optional CSV of (t, I, P, T_avg, T_max).")
 
     def run(args):
+        if args.surface_label is not None:
+            return {"error":
+                    "--surface-label was removed because it coupled heat "
+                    "input, convection, and radiation. Use the separate "
+                    "--heat-flux-boundaries, --convection-boundaries, and "
+                    "--radiation-boundaries options."}
         probe_point = None
         if args.probe_point:
             probe_point = [float(s) for s in args.probe_point.split(",")]
@@ -687,7 +739,9 @@ def main():
             rho=args.rho, cp=args.cp, k=args.k,
             h_conv=args.h_conv, t_ext=args.t_ext,
             t_initial=args.t_initial, emissivity=args.emissivity,
-            surface_label=args.surface_label,
+            heat_flux_boundaries=args.heat_flux_boundaries,
+            convection_boundaries=args.convection_boundaries,
+            radiation_boundaries=args.radiation_boundaries,
             dt=args.dt, t_end=args.t_end,
             fes_order=args.fes_order,
             linear_solver=args.linear_solver,

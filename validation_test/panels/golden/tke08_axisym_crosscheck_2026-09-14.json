@@ -1,0 +1,131 @@
+{
+  "schema": "radia.validation.axisym-thermal-crosscheck.v1",
+  "status": "pass",
+  "validated_at": "2026-09-14",
+  "purpose": "Independent 3D-order-2 versus 2D-axisymmetric-order-2 thermal cross-check using Takahashi TKE08 inputs",
+  "input_location": "to_developers/takahashi/TKE08_thermal_order_verification (lab-only, not tracked)",
+  "inputs": [
+    {
+      "file": "data/work_occ_h0.0018.vol",
+      "bytes": 6916132,
+      "sha256": "9e74d4602aa79b301a6187658d4de3a20cccd3f5d35a4c89b4adc1ee5a748fd3"
+    },
+    {
+      "file": "data/qsurf_caseA_9048A.sol",
+      "bytes": 184480,
+      "sha256": "cf63365d42f656725961df2a20abc28b71bc10f93a07e5009e62a6ed0d639881"
+    },
+    {
+      "file": "data/qsurf_caseB_8293A.sol",
+      "bytes": 184480,
+      "sha256": "6b57a7419ad78fa19e828a718720fa205cbb6a4e0515f2644bb7369698b0de3f"
+    },
+    {
+      "file": "data/meridian.csv",
+      "bytes": 6366,
+      "sha256": "8a93bf38e6ecb912d40f281824242d664bf14ac677a762b1bfcb41a4597d4edd"
+    },
+    {
+      "file": "data/stations.csv",
+      "bytes": 4175,
+      "sha256": "93f2cb00db31788433a25b87465bb050470a7ef2f96f3d618612cf8a206ac04d"
+    }
+  ],
+  "axisymmetric_method": {
+    "space": "standard ngsolve.H1",
+    "fes_order": 2,
+    "weight": "2*pi*r",
+    "mesh": "in-memory 2D triangular meridian mesh; no NgMesh.Save and no post-load Curve",
+    "maxh_m": 0.0018,
+    "n_phi_samples": 128,
+    "qsurf_evaluation_region": "BND",
+    "dt_s": 0.1,
+    "t_end_s": 5.0,
+    "rho_kg_m3": 7800.0,
+    "cp_J_kgK": 467.0,
+    "k_W_mK": 46.6,
+    "h_conv_W_m2K": 10.0,
+    "t_initial_C": 25.0,
+    "t_external_C": 25.0
+  },
+  "geometry": {
+    "axisymmetric_vertices": 1393,
+    "axisymmetric_triangles": 2389,
+    "revolved_volume_m3": 0.0001149099659885331,
+    "relative_volume_difference_from_3d": -0.0011100983151419719,
+    "revolved_surface_area_m2": 0.023311866313474552,
+    "relative_surface_area_difference_from_3d": 0.0013594291621841226
+  },
+  "azimuth_convergence": {
+    "reference_samples": 256,
+    "case_A_relative_power_difference_at_128": 0.00012827160180806096,
+    "case_B_relative_power_difference_at_128": 0.00012921537798060712,
+    "transfer_coverage_fraction_at_128": 0.9814477848101266,
+    "failed_target_vertices": 0
+  },
+  "cases": {
+    "A": {
+      "power_3d_W": 61537.8239799075,
+      "power_axisymmetric_W": 61580.5242242239,
+      "relative_power_difference": 0.000693886159029322,
+      "T_mean_3d_C": 757.894601492257,
+      "T_mean_axisymmetric_C": 759.21663308586,
+      "T_mean_difference_C": 1.32203159360301,
+      "T_max_3d_C": 1339.46751898222,
+      "T_max_axisymmetric_C": 1304.79219417531,
+      "mean_absolute_850C_depth_difference_mm": 0.0239518505156044,
+      "axisymmetric_p2_p3_T_mean_difference_C": 0.00000234744379667973
+    },
+    "B": {
+      "power_3d_W": 56125.5045466806,
+      "power_axisymmetric_W": 56196.9084331018,
+      "relative_power_difference": 0.00127221816530398,
+      "T_mean_3d_C": 693.4398180302,
+      "T_mean_axisymmetric_C": 695.03265205843,
+      "T_mean_difference_C": 1.59283402822984,
+      "T_max_3d_C": 1250.97026572223,
+      "T_max_axisymmetric_C": 1246.78199219312,
+      "mean_absolute_850C_depth_difference_mm": 0.0289969620554596,
+      "axisymmetric_p2_p3_T_mean_difference_C": 0.00000231486910706735
+    }
+  },
+  "mesh_convergence_case_A_order_2": [
+    {
+      "maxh_mm": 3.0,
+      "ndof": 4202,
+      "power_W": 61858.7199435585,
+      "T_mean_C": 762.535856764197,
+      "T_max_C": 1304.80765012371
+    },
+    {
+      "maxh_mm": 1.8,
+      "ndof": 5174,
+      "power_W": 61580.5242242239,
+      "T_mean_C": 759.21663308586,
+      "T_max_C": 1304.79219417531
+    },
+    {
+      "maxh_mm": 1.0,
+      "ndof": 8064,
+      "power_W": 61541.3436188814,
+      "T_mean_C": 758.749244648358,
+      "T_max_C": 1304.64168610931
+    },
+    {
+      "maxh_mm": 0.6,
+      "ndof": 15887,
+      "power_W": 61584.1328254563,
+      "T_mean_C": 759.259617447097,
+      "T_max_C": 1304.72346916293
+    }
+  ],
+  "acceptance": {
+    "phi_128_power_within_0_1_percent_of_phi_256": true,
+    "p2_p3_volume_mean_within_1_C": true,
+    "axisymmetric_power_within_2_percent_of_3d": true,
+    "axisymmetric_volume_mean_within_15_C_of_3d": true,
+    "mean_absolute_850C_depth_within_0_75_mm_of_3d": true,
+    "maxh_1mm_versus_0_6mm_volume_mean_within_1_C": true
+  },
+  "conclusion": "The TKE08 thermal problem is adequately represented by 2D axisymmetric H1 heat after circumferential averaging of the 3D EM surface loss. A 3D EM mesh does not by itself require a 3D thermal solve."
+}

@@ -24,7 +24,7 @@ at that point.  A regression in any of:
   - the .sol companion path convention
     (``<msh stem>_qsurf.sol`` and ``<msh stem>_fem.vol``),
   - calc_heat's surface-vertex enumeration (when filtering by
-    ``--surface-label``),
+    explicit heat-flux and convection boundary roles),
 
 would silently leave most of the workpiece surface at zero flux and
 the thermal solve would look "right but cold".  The integral cross-
@@ -167,11 +167,12 @@ def test_fem_kelvin_to_heat_chain(tmp_path):
     heat_cmd = [
         sys.executable, CALC_HEAT,
         "--wp-vol", wp_vol,
-        "--surface-label", "outer",
+        "--heat-flux-boundaries", "outer",
+        "--convection-boundaries", "outer",
         "--material", phys["thermal_material"],
         "--qsurf-sol", em_qsurf,
         "--em-vol", em_fem_vol,
-        "--qsurf-order", str(phys["fes_order_em"]),
+        "--qsurf-order", str(em_result["qsurf_order"]),
         "--h-conv", str(phys["h_conv_Wm2K"]),
         "--t-ext", str(phys["t_ext_C"]),
         "--t-initial", str(phys["t_initial_C"]),
@@ -254,11 +255,12 @@ def test_fem_kelvin_to_heat_chain(tmp_path):
     heat_axi_cmd = [
         sys.executable, CALC_HEAT_AXI,
         "--wp-vol", wp_vol_axi,
-        "--surface-label", "outer",
+        "--heat-flux-boundaries", "outer",
+        "--convection-boundaries", "outer",
         "--material", phys["thermal_material"],
         "--qsurf-sol", em_qsurf,
         "--em-vol", em_fem_vol,
-        "--qsurf-order", str(phys["fes_order_em"]),
+        "--qsurf-order", str(em_result["qsurf_order"]),
         "--n-phi-samples", str(exp_a["n_phi_samples"]),
         "--h-conv", str(phys["h_conv_Wm2K"]),
         "--t-ext", str(phys["t_ext_C"]),

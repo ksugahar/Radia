@@ -223,12 +223,22 @@ mean the .jou does not follow convention; fix the .jou, not the GUI.
 
 ## Curve Order vs FES Order (CRITICAL for IH accuracy)
 
-**CRITICAL**: Both `fem_esim_kelvin.py` (2D axi) and `fem_esim_3d.py` (3D)
-MUST call `mesh.Curve(>=2)` after `Mesh()` if FES order >= 1 and the
-geometry contains curved entities (circles, torus, sphere, cylinder).
-Missing `mesh.Curve()` causes a **systematic L under-prediction of
-~10 %**, because circular coil cross-sections and Kelvin arcs collapse
-to polygons.
+**CRITICAL**: Curve a mesh only while its generating geometry is live.  Both
+`fem_esim_kelvin.py` (2D axi) and `fem_esim_3d.py` (3D) should call
+`mesh.Curve(>=2)` on the mesh freshly generated from their in-memory
+SplineGeometry/OCCGeometry when the geometry contains circles, a torus, a
+sphere, or a cylinder.  Missing that construction-time curving causes a
+**systematic L under-prediction of ~10 %**, because curved entities collapse to
+polygons.
+
+Never call `mesh.Curve()` merely because the FES order was raised after loading
+an arbitrary `.vol`.  The imported file already owns its geometry order; its
+CAD association may be absent or incomplete.  Post-load `Curve()` can silently
+flatten a baked-in curved mesh or create an invalid mapping.  To change geometry
+order, curve in the originating mesher and re-export the `.vol`.  To change only
+the approximation order, use `H1(mesh, order=p)` or `HCurl(mesh, order=p)` and
+leave the loaded mesh unchanged.  This is guarded repository-wide by the HIGH
+lint rule `ngsolve-curve-after-vol-import`.
 
 ### Practical recommendation (Sugahara, 2026-04-14)
 
@@ -249,8 +259,8 @@ finer geometry than Curve(2) can capture on a maxh=15 mm mesh.
 | HCurl order=1 + Curve(3)    | **-5.37 %**   | **-0.46 %**   | 26 s    |
 | HCurl order=2 + Curve(2)    | +3.2 % (but spurious P -26 %) | | 1371 s  |
 
-**Bottom line for current 3D IH panel code** (`fem_esim_3d.py`,
-`calc_fem_kelvin.py`):
+**Bottom line for geometry-construction code** (`fem_esim_3d.py`,
+`calc_fem_kelvin.py` when they still own the live geometry):
 
 - Start with `HCurl order=1 + mesh.Curve(max(order+1, 2))`
 - If L seems too low (-5 % or worse) and P looks OK, **raise Curve
@@ -263,9 +273,10 @@ finer geometry than Curve(2) can capture on a maxh=15 mm mesh.
 ### Why 2D is less sensitive than 3D
 
 2D axisym has only planar curves (coil circle + Kelvin arc). H1 scalar
-elements with `Curve(order=2 or 3)` match the geometry accurately
-even at moderate mesh resolution. 3D adds sphere + torus in space --
-strong Gaussian curvature that needs better surface approximation.
+elements curved at mesh-construction time with order 2 or 3 match the geometry
+accurately even at moderate mesh resolution. 3D adds sphere + torus in space --
+strong Gaussian curvature that needs better surface approximation.  This does
+not authorize re-curving a loaded `.vol`.
 
 ### Companion fix (2026-04-14)
 
@@ -560,6 +571,39 @@ Workflow:
 The headless ``calc_heat.py`` and ``calc_heat_axisym.py`` paths remain reusable
 batch and validation entry points.  They are not desktop interfaces.
 
+## Thermal dimensionality: 3D EM does not require 3D heat
+
+Use ``calc_heat_axisym.py`` when the workpiece shape, thermal properties,
+thermal boundary conditions, and the circumferentially averaged heat input are
+rotation invariant.  The electromagnetic solve may still be 3D: transfer its
+surface-loss field by averaging around each ``(r,z)`` circle, then solve the
+scalar temperature field on the 2D meridian with standard NGSolve H1 and the
+``2*pi*r`` Jacobian.  This is the production choice for an axisymmetric
+workpiece after the EM hotspot has been rotation/time averaged.
+
+Use the 3D thermal solver only when angular temperature structure is physically
+required, for example a non-axisymmetric workpiece or material, angularly
+different cooling/contact boundaries, or a transient rotating hotspot whose
+period is not short compared with the thermal response.  Do not select 3D heat
+merely because the supplied EM mesh or ``qsurf.sol`` is 3D.
+
+The received TKE08 order-verification package used 3D heat because it supplied a
+fixed full-workpiece 3D ``.vol`` and intentionally varied only H1 order.  That
+was an experiment constraint, not a formulation requirement.  The independent
+2D meridian cross-check (2026-09-14, H1 order 2, 128 azimuth samples) agreed
+with the 3D order-2 solve as follows:
+
+| TKE08 case | input-power difference | volume-mean T difference | mean absolute 850 C depth difference |
+|---|---:|---:|---:|
+| A | 0.069% | 1.32 C | 0.024 mm |
+| B | 0.127% | 1.59 C | 0.029 mm |
+
+Axisymmetric heat requires a separately generated 2D ``(r,z)`` workpiece mesh.
+Loading a 3D ``.vol`` and calling ``Curve()`` cannot turn it into a 2D mesh:
+``Curve()`` changes geometry order, not dimension.  Moreover, post-load
+``Curve()`` is forbidden by the thermal geometry contract below.  Generate the
+2D mesh in memory or export it at the intended geometry order before solving.
+
 ## ``.sol + .vol`` strict contract (4.58.0+)
 
 NGSolve ``.sol`` files are coefficient vectors only -- no embedded
@@ -571,18 +615,44 @@ python -m radia.panels.calc_heat \\
     --wp-vol workpiece_thermal.vol \\
     --qsurf-sol  <stem>_qsurf.sol \\  # REQUIRED for spatial mode
     --em-vol     <stem>_fem.vol   \\  # REQUIRED (no auto-locate)
-    --qsurf-order 1                \\  # MUST equal EM fes_order
+    --qsurf-order 1                \\  # cross-mesh transfer is P1 only
+    --heat-flux-boundaries heated_outer \\
+    --convection-boundaries 'outer|top|bottom' \\
     --material steel --dt 0.5 --t-end 5.0 \\
     --rotation-rpm 12                  # see ``rotating`` topic
-    # --surface-label is OPTIONAL: empty = all BND.
-    # Pass a specific name only when the workpiece has MULTIPLE BND
-    # sidesets and heating + convection should be restricted to a
-    # subset. The Simulink configuration validates this label before
-    # native state is created.
 ```
 
-`--qsurf-order` must match the EM solve's `--fes-order` exactly;
-mismatch reads garbage silently (no NGSolve error).  Defaults: both 1.
+The boundary roles are independent.  ``--heat-flux-boundaries`` is always
+required; ``--convection-boundaries`` is required when ``--h-conv`` is nonzero;
+and ``--radiation-boundaries`` is required when emissivity is nonzero.  A role
+may use an NGSolve expression such as ``outer|top`` and roles may overlap
+intentionally.  Empty selectors never expand silently to every boundary.  The
+removed ``--surface-label`` fails with migration guidance.
+
+In a 2D axisymmetric thermal mesh, the true ``r=0`` center axis is the natural
+symmetry boundary, not a physical heat-transfer surface.  Its revolved area is
+zero because the weak form uses ``2*pi*r*ds``.  The axisymmetric solver fails
+fast when any active heat-flux, convection, or radiation selector includes an
+axis boundary element, even when a broad boundary label also covers non-axis
+edges.  Exclude the axis and label each coil-facing or exposed physical surface
+separately.  An inner cylindrical surface at ``r>0`` is not the center axis: it
+has nonzero revolved area and may receive heat when explicitly selected.
+
+Cross-mesh q_surf transfer currently accepts ``--qsurf-order 1`` only.  The
+loader rejects higher order because its surface transfer is vertex-sampled and
+higher-order H1 coefficients are hierarchical; accepting order 2 would silently
+distort the heat source.  ``calc_fem_kelvin.py`` therefore saves this handoff
+as P1 even when the electromagnetic solve itself uses a higher order.
+
+For the 3D-to-axisymmetric handoff, ``calc_heat_axisym.py`` evaluates the source
+GridFunction through NGSolve's boundary point locator (``BND``), not a volume
+point lookup.  Independently meshed representations of the same CAD surface
+have slightly different facets; volume lookup previously rejected some valid
+TKE08 meridian points and silently left them at zero flux.  The default is 128
+azimuth samples (within 0.013% of 256 samples for both TKE08 cases).  Result JSON
+``qsurf_projection`` records requested/accepted samples, coverage, and partial
+vertices.  A missing target vertex or less than 80% global sample coverage is a
+hard error; there is no zero-flux fallback.
 
 The headless runner and Simulink initialization both fail before solving when
 the ``.sol`` / ``.vol`` pair is incomplete or incompatible.  They do not infer
@@ -593,19 +663,19 @@ a missing companion file from a filename convention.
 `calc_fem_kelvin.py` saves q_surf as:
 
 ```python
-fes_q = H1(mesh, order=fes_order)        # VOLUME H1 on the EM mesh
+fes_q = H1(mesh, order=1)                # fixed P1 cross-mesh handoff
 gf_q = GridFunction(fes_q)
 gf_q.vec[:] = 0                          # interior DOFs stay 0
 gf_q.Set(q_surf_cf, definedon=wp_region) # only workpiece-boundary DOFs touched
 gf_q.Save(qsurf_sol_path)
 ```
 
-The thermal solver re-projects this onto the wp-mesh surface
-vertices by point evaluation.  When wp-mesh and em-mesh share the
-same physical workpiece geometry, vertices land on the EM boundary
-faces and H1 continuity guarantees the boundary node values are
-recovered exactly.  See ``radia_mcp.radia_ngsolve.ngsolve`` Section
-18c for the broader pattern (surface-restricted H1 GF save/load).
+The thermal solver re-projects this onto the wp-mesh surface vertices by
+surface point evaluation.  The axisymmetric route explicitly requests a
+boundary mapped point so equivalent independently faceted 2D/3D surfaces are
+handled as a surface projection and audited.  See
+``radia_mcp.radia_ngsolve.ngsolve`` Section 18c for the broader pattern
+(surface-restricted H1 GF save/load).
 
 ## Output: T .sol re-loadable for later evaluation (radia 4.59.0+)
 
@@ -621,10 +691,13 @@ JSON output keys (calc_heat / calc_heat_axisym):
 
 | key | content |
 |---|---|
+| ``T_mean_C`` | physical volume mean; the axisymmetric route uses ``int(T*2*pi*r)/int(2*pi*r)`` |
 | ``T_sol_file`` | absolute path to the final-T NGSolve `.sol` |
 | ``heat_vol_file`` | absolute path to the companion `.vol`.  Empty when no separate companion was written (then re-use the `--wp-vol` input as the companion). |
 | ``msh_file`` | GMSH `.msh v4.1` (T_C + q_surf fields) when `--msh-output` was set |
 | ``csv_file`` | probe history CSV when both `--probe-point` + `--csv-output` were set |
+| ``boundary_audit`` | Concrete matched heat-flux, convection, and radiation boundaries; per-boundary area; and per-boundary heat input |
+| ``qsurf_projection`` | axisymmetric 3D-boundary transfer coverage and sample counts (or ``mode=uniform``) |
 
 Naming convention:
 
@@ -651,6 +724,31 @@ T_at = float(gfT(wp_mesh(x, y, z)))      # sample at body point
 Same three contracts as the qsurf side (see "Strict .sol + .vol
 contract" above): the `.sol` is a raw coefficient vector, the
 `.vol` carries the mesh, the FES order must match.
+
+## Thermal `.vol` geometry contract: preserve after load
+
+The thermal field order and the serialized mesh geometry order are independent:
+
+```python
+wp_mesh = Mesh("workpiece_thermal.vol")
+fes_T = H1(wp_mesh, order=2)  # field P2/Q2; do NOT call wp_mesh.Curve(2)
+```
+
+`calc_heat.py`, `calc_heat_axisym.py`, and `calc_heat_with_em_table.py` preserve
+the loaded `.vol` exactly.  They never infer a geometry order from
+`--fes-order`.  If a curved thermal mesh is required, the mesher must create it
+at the desired order before saving the `.vol`; re-export rather than attempting
+to curve it after load.  This is a fail-safe geometry policy, not a flat-mesh
+fallback.
+
+The result JSON records this decision in `mesh_geometry`: policy
+`preserve-input-vol-geometry`, `post_load_curve_applied=false`, the field and
+input curve orders, and the consumed domain and boundary measures.  On the
+reported TKE08 curved CAD `.vol`, the removed post-load `Curve(2)` call returned
+without an exception but inflated the boundary measure from about 0.0233 square
+metres to 6.91 million square metres (about 297 million times).  Therefore
+`GetCurveOrder()` or lack of an exception is not evidence that post-load curving
+was valid.
 
 ## Axisymmetric discretization contract: Henrotte for EM, NGSolve H1 for heat
 
@@ -904,7 +1002,8 @@ can generate the equivalent angle history from ``--rotation-rpm``:
 ```bash
 python -m radia.panels.calc_heat \\
     --wp-vol     workpiece_thermal.vol \\
-    --surface-label sibc \\
+    --heat-flux-boundaries heated_outer \\
+    --convection-boundaries 'outer|top|bottom' \\
     --qsurf-sol  ih_em_qsurf.sol \\
     --em-vol     ih_em_fem.vol \\
     --material   steel \\
@@ -969,13 +1068,13 @@ and the thermal solve (calc_heat.py):
    `*_fem.vol` file that `calc_fem_kelvin.py` saves alongside
    `*_qsurf.sol`.
 
-2. **`qsurf_order` MUST equal the EM `fes_order`**.  The thermal solver
-   rebuilds `H1(em_mesh, order=qsurf_order)` and loads the .sol into
-   it.  If the orders disagree the coefficient vector lands in a
-   space with a different DOF count and the loaded field is garbage
-   (no NGSolve-level error, silent corruption).  Default for both is
-   1.  When the EM solve uses `--fes-order 2`, pass `--qsurf-order 2`
-   to calc_heat too.
+2. **`qsurf_order` is currently fixed to 1 for cross-mesh transfer**.
+   The thermal solver rebuilds `H1(em_mesh, order=qsurf_order)` and loads
+   the .sol into it, then transfers surface vertex values.  It rejects
+   any order other than 1 because higher-order H1 coefficients are
+   hierarchical and vertex-only reconstruction is not a valid projection.
+   ``calc_fem_kelvin.py`` always produces this handoff at order 1,
+   independently of the electromagnetic solve order.
 
 3. **q_surf is a volume H1 GF with non-zero values ONLY on the
    workpiece boundary**.  calc_fem_kelvin does
@@ -986,6 +1085,12 @@ and the thermal solve (calc_heat.py):
    the boundary node values are recovered exactly.  Wp surface
    vertices that fall OUTSIDE the EM mesh (mesh mismatch) are set to
    0 and a count is reported in the run log.
+
+4. **Thermal boundary roles are explicit and independently audited**.
+   Heat flux, convection, and radiation use separate selectors.  The
+   result JSON records each selector, every concrete matched boundary,
+   its area, and the boundary-wise heat input.  Inspect ``boundary_audit``
+   before interpreting a temperature hotspot.
 
 ## Test coverage
 
@@ -1542,10 +1647,11 @@ for el in mesh.Elements(BND):
     esim_local = ESIMFiniteSlabSolver(half_thickness=R_local, ..., geometry=geometry)
 ```
 
-**NGSolve advantage**: `mesh.Curve(order)` provides exact high-order geometry
-via `GetTrafo`. From the element Jacobian, the second fundamental form
-(Weingarten map) gives exact principal curvatures at any point. This is
-unavailable with flat (order=1) elements — another reason to use Curve(3)+.
+**NGSolve advantage**: a mesh curved while its valid generating geometry is
+attached provides high-order geometry via `GetTrafo`. From the element Jacobian,
+the second fundamental form (Weingarten map) gives principal curvatures at any
+point. For an imported `.vol`, consume the baked-in curved elements as-is; never
+invoke post-load `Curve(3)` as a substitute for re-exporting the mesh.
 
 ### Accuracy at Target Conditions
 

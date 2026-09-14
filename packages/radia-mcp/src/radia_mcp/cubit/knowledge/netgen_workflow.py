@@ -1294,7 +1294,7 @@ window). The single-process recipe above only works when that panel plugin is ab
      gracefully ("Cubit main window not found -- Radia Export menu not installed", then
      continues) instead of crashing:
 
-         coreform_cubit.exe -nographics -batch -nojournal mesh_export.py
+         coreform_cubit.com -nographics -batch -nojournal mesh_export.py
 
      In a script launched this way, `cubit` is PRE-INJECTED -- do NOT `import cubit` or
      call `cubit.init()` (that re-inits and can crash). Just use `cubit.cmd(...)`.
