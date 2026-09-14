@@ -63,7 +63,7 @@ Private NASA inputs and noise-aware model selection:
   The docs consumers accept data_path or RADIA_NASA_EIS_CSV and fail loudly for
   missing data or an undocumented axis. Legacy bundled-NASA validation modes
   are retired; no synthetic fallback or successful partial aggregate is allowed.
-- Include the richer 22-basis Y-domain candidate where applicable, then compare
+- Start with the single-layer 34-basis Y-domain research dictionary, then compare
   smaller active sets. Report candidate basis count and retained basis count
   separately. Do not force an arbitrary 1e-3 error target on noisy measurements.
 - Prefer a smaller active set when it explains data within independently
@@ -73,6 +73,24 @@ Private NASA inputs and noise-aware model selection:
   Fewer bases alone do not prove physical truth; lower training error alone
   does not justify more bases. Do not claim a new fit without an executed result.
 
+Current SA/RM research route (supersedes the historical CLN-peeling route below):
+- YAdmittanceURNConfig.research_34_basis() expands the legacy 22-basis factory:
+  six series RLC, four parallel RLC and four coil anti-resonance bases; no
+  frequency-dependent attention. Fit with train_y_admittance_urn.
+- reduce_y_admittance_urn(model, frequencies, impedance, uncertainty_ohm=...)
+  refits a duplicate-aware ablation path down to ONE basis, not a fixed 10/12
+  floor. Supply an independently justified positive ohmic error budget, scalar
+  or per sample. No default 1e-3 measurement accuracy is assumed.
+- redundant_y_bases compares same-family complex response shapes over the band;
+  close time constants alone do not prove redundancy. Ten fitted bases may
+  still duplicate mechanisms. Removal is followed by refitting, not blind merging.
+- The reducer returns (selected_model, trace); selected_model is None when no
+  candidate meets the budget. It reports both S and log-component errors and
+  selects the smallest TESTED acceptable model, not a global minimal circuit.
+  Its sampled error budget is not a statistical noise model or held-out proof.
+- log_loss_floor_relative=1e-3 is an arcsinh/log scale, NOT a fit acceptance
+  target. Keep the measured uncertainty separate from that numerical scale.
+
 Pipeline:
   freq response Z(omega)  --train_urn-->  sparse relaxation model
        --get_active_components-->  {tau, alpha, beta, weight} per mechanism
@@ -81,6 +99,13 @@ Pipeline:
 
 URN_METHOD = r"""
 # URN method
+
+Current single-layer Y-URN route: research_34_basis -> train_y_admittance_urn
+-> reduce_y_admittance_urn with caller-owned uncertainty_ohm. Start with 34
+candidates; 10 and 12 are comparisons, not minimum retained counts. Inspect
+redundant_y_bases and both error metrics. See overview for acceptance semantics.
+The 22-basis, Cauer and CLN-peeling descriptions below are historical or
+alternative implementations, not the adopted SA/RM reduction recommendation.
 
 Model:  Z(omega) = Z_inf + sum_k w_k * basis_k(omega; tau_k, ...)   (series)
                           + parallel/admittance branch (Y-space)
