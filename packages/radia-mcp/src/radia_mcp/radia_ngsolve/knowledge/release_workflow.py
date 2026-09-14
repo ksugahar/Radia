@@ -149,6 +149,19 @@ Release only after `done` exits 0.
 The standalone IH preview remains supported by the same packager without
 `--full-library`; it does not replace the production full-library gate.
 
+For an independently approved MCP development source, set
+`RADIA_RELEASE_PRESERVE_MCP_SOURCE_LAB` and/or
+`RADIA_RELEASE_PRESERVE_MCP_SOURCE_100` to the absolute radia-mcp package root
+on that host (not the repository root). The 100-machine path must be local to
+that host. `deployment-plan` is a no-mutation dry run, not an acceptance gate.
+Phase8 verifies metadata and fresh import origins before/after deployment and
+leaves MCP installation and transports unchanged. `verify-editable` and `done`
+use the same explicit roots; never approve a source merely because it is already
+installed. Keep the environment contract through all release gates. Solver/Cubit
+SHA checks and cross-machine version checks remain unchanged. Without overrides,
+the existing three-package reinstall applies. `restore-editable` refuses these
+overrides; clearing them requires explicit approval to repoint MCP.
+
 ## ===
 ## optuna_candidate — exact standalone wheel publication gate
 ## ===
