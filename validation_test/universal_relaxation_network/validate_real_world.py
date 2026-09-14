@@ -342,14 +342,14 @@ def validate_urn_on_dataset(
 
 
 def run_full_validation() -> List[ValidationResult]:
-    # Fail before any training; do not report a partial five-dataset aggregate.
-    load_nasa_battery_data()
     """
     Run validation on all 5 real-world datasets.
 
     Returns:
         List of ValidationResult objects
     """
+    # Fail before any training; do not report a partial five-dataset aggregate.
+    load_nasa_battery_data()
     results = []
 
     # 1-4. TDK Ferrite materials
