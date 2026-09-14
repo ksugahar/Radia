@@ -650,6 +650,218 @@ def nonlinear_magnetic_field_energy_parity_gate(
     }
 
 
+def nonlinear_field_energy_identity_gate_v5(
+    summary: dict[str, Any],
+    *,
+    max_energy_derivative_relative_residual: float = 1.0e-8,
+    min_response_samples: int = 4,
+) -> dict[str, Any]:
+    """Validate canonical geometry/frame/refinement identity and energy derivatives.
+
+    This is deliberately solver-neutral. It accepts no numeric parity claim until
+    both lanes carry recomputable geometry and frame identities, a monotone unique
+    refinement ladder, and discrete constitutive energy identities.
+    """
+
+    if not isinstance(summary, dict):
+        raise ValueError("summary must be a mapping")
+    residual_limit = float(max_energy_derivative_relative_residual)
+    sample_limit = int(min_response_samples)
+    if not math.isfinite(residual_limit) or residual_limit < 0.0:
+        raise ValueError(
+            "max_energy_derivative_relative_residual must be finite and nonnegative"
+        )
+    if sample_limit < 4:
+        raise ValueError("min_response_samples must be at least 4")
+
+    def digest(value: object) -> str:
+        encoded = json.dumps(
+            value, ensure_ascii=True, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()
+
+    def is_sha256(value: object) -> bool:
+        text = str(value or "").strip().lower()
+        return len(text) == 64 and all(
+            character in "0123456789abcdef" for character in text
+        )
+
+    def frame_ok(matrix: object) -> bool:
+        if not isinstance(matrix, list) or len(matrix) != 3:
+            return False
+        if any(
+            not isinstance(row, list)
+            or len(row) != 3
+            or any(not isinstance(value, (int, float)) or not math.isfinite(float(value)) for value in row)
+            for row in matrix
+        ):
+            return False
+        rows = [[float(value) for value in row] for row in matrix]
+        orthogonal = all(
+            abs(
+                sum(rows[i][axis] * rows[j][axis] for axis in range(3))
+                - (1.0 if i == j else 0.0)
+            )
+            <= 1.0e-10
+            for i in range(3)
+            for j in range(3)
+        )
+        determinant = (
+            rows[0][0] * (rows[1][1] * rows[2][2] - rows[1][2] * rows[2][1])
+            - rows[0][1] * (rows[1][0] * rows[2][2] - rows[1][2] * rows[2][0])
+            + rows[0][2] * (rows[1][0] * rows[2][1] - rows[1][1] * rows[2][0])
+        )
+        return orthogonal and determinant > 0.0
+
+    def refinement_signature(identity: dict[str, Any]) -> tuple[bool, list[object]]:
+        raw_levels = identity.get("refinement_levels")
+        if not isinstance(raw_levels, list) or not raw_levels:
+            return False, []
+        level_ids: list[str] = []
+        counts: list[int] = []
+        mesh_digests: list[str] = []
+        for level in raw_levels:
+            if not isinstance(level, dict):
+                return False, []
+            level_id = str(level.get("level_id") or "").strip()
+            digest_value = str(level.get("mesh_identity_sha256") or "").strip().lower()
+            try:
+                element_count = int(level.get("element_count"))
+            except (TypeError, ValueError):
+                return False, []
+            if not level_id or element_count <= 0 or not is_sha256(digest_value):
+                return False, []
+            level_ids.append(level_id)
+            counts.append(element_count)
+            mesh_digests.append(digest_value)
+        valid = (
+            len(level_ids) == len(set(level_ids))
+            and len(mesh_digests) == len(set(mesh_digests))
+            and all(left < right for left, right in zip(counts, counts[1:]))
+        )
+        return valid, [level_ids, counts, mesh_digests]
+
+    def lane_identity(name: str) -> dict[str, Any]:
+        raw = summary.get(name)
+        if not isinstance(raw, dict):
+            raise ValueError(f"{name} must be a mapping")
+        identity = raw.get("identity")
+        if not isinstance(identity, dict):
+            identity = {}
+        geometry = identity.get("canonical_geometry")
+        frame = identity.get("coordinate_frame_matrix")
+        geometry_digest = str(identity.get("geometry_canonical_sha256") or "").strip().lower()
+        frame_digest = str(identity.get("coordinate_frame_sha256") or "").strip().lower()
+        response = raw.get("constitutive_response")
+        if not isinstance(response, dict):
+            response = {}
+        return {
+            "identity": identity,
+            "geometry_digest_valid": bool(geometry) and geometry_digest == digest(geometry),
+            "frame_valid": frame_ok(frame),
+            "frame_digest_valid": frame_ok(frame) and frame_digest == digest(frame),
+            "geometry_digest": geometry_digest,
+            "frame_digest": frame_digest,
+            "refinement": refinement_signature(identity),
+            "response": response,
+        }
+
+    candidate = lane_identity("candidate")
+    reference = lane_identity("reference")
+
+    identity_checks = {
+        "canonical_geometry_digest_matches": candidate["geometry_digest_valid"]
+        and reference["geometry_digest_valid"]
+        and candidate["geometry_digest"] == reference["geometry_digest"],
+        "right_handed_frame_digest_matches": candidate["frame_digest_valid"]
+        and reference["frame_digest_valid"]
+        and candidate["frame_digest"] == reference["frame_digest"],
+        "unique_monotone_refinement_identity_matches": candidate["refinement"][0]
+        and reference["refinement"][0]
+        and candidate["refinement"][1] == reference["refinement"][1],
+    }
+
+    def derivative_residual(response: dict[str, Any]) -> dict[str, Any]:
+        try:
+            h_values = [float(value) for value in response.get("H_A_per_m")]
+            b_values = [float(value) for value in response.get("B_T")]
+            energy = [float(value) for value in response.get("energy_density_J_per_m3")]
+            coenergy = [
+                float(value) for value in response.get("coenergy_density_J_per_m3")
+            ]
+        except (TypeError, ValueError):
+            return {"valid": False, "max_relative_residual": math.inf}
+        valid_arrays = (
+            len(h_values) >= sample_limit
+            and len(h_values) == len(b_values) == len(energy) == len(coenergy)
+            and all(
+                math.isfinite(value)
+                for values in (h_values, b_values, energy, coenergy)
+                for value in values
+            )
+            and all(right > left for left, right in zip(h_values, h_values[1:]))
+            and all(right > left for left, right in zip(b_values, b_values[1:]))
+        )
+        if not valid_arrays:
+            return {"valid": False, "max_relative_residual": math.inf}
+        residuals: list[float] = []
+        for index in range(len(h_values) - 1):
+            d_energy_d_b = (energy[index + 1] - energy[index]) / (
+                b_values[index + 1] - b_values[index]
+            )
+            d_coenergy_d_h = (coenergy[index + 1] - coenergy[index]) / (
+                h_values[index + 1] - h_values[index]
+            )
+            residuals.extend(
+                [
+                    abs(d_energy_d_b - 0.5 * (h_values[index] + h_values[index + 1]))
+                    / max(abs(d_energy_d_b), 1.0),
+                    abs(d_coenergy_d_h - 0.5 * (b_values[index] + b_values[index + 1]))
+                    / max(abs(d_coenergy_d_h), 1.0),
+                ]
+            )
+        maximum = max(residuals, default=math.inf)
+        return {
+            "valid": maximum <= residual_limit,
+            "max_relative_residual": maximum,
+            "sample_count": len(h_values),
+        }
+
+    candidate_derivative = derivative_residual(candidate["response"])
+    reference_derivative = derivative_residual(reference["response"])
+    checks = {
+        **identity_checks,
+        "candidate_energy_derivative_identity": candidate_derivative["valid"],
+        "reference_energy_derivative_identity": reference_derivative["valid"],
+    }
+    return {
+        "policy": "nonlinear_field_energy_identity_gate_v5",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "accepted": all(checks.values()),
+        "checks": checks,
+        "issues": [name for name, accepted in checks.items() if not accepted],
+        "identity": {
+            "candidate_geometry_digest": candidate["geometry_digest"],
+            "reference_geometry_digest": reference["geometry_digest"],
+            "candidate_frame_digest": candidate["frame_digest"],
+            "reference_frame_digest": reference["frame_digest"],
+        },
+        "derivative_identity": {
+            "candidate": candidate_derivative,
+            "reference": reference_derivative,
+        },
+        "tolerances": {
+            "max_energy_derivative_relative_residual": residual_limit,
+            "min_response_samples": sample_limit,
+        },
+        "notes": [
+            "canonical geometry and frame digests are recomputed from supplied structures",
+            "refinement levels require unique identifiers, unique mesh identities, and increasing element counts",
+            "dW/dB=H and dWstar/dH=B are checked before any cross-lane numeric claim",
+        ],
+    }
+
+
 def nonlinear_constitutive_response_parity_gate(
     summary: dict[str, Any],
     *,
