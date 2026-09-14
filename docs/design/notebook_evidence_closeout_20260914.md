@@ -492,7 +492,7 @@ boundary with 16 intervals changed meshing conditions, not acceptance tolerances
 Scientific records are in `validation_test/isochronous_topopt/`:
 `shape_reacceptance_20260914.json`, its separate `_audit.json`, and first-party
 fixture `fixtures/shape_reacceptance_20260914.zip` (SHA-256
-`2214de50f572113a3e51ef0fe51d1be7744bc8392f1552a889882f2bdc6ff7cd`).
+`333a8ba2bdd199b26bea1104c90bff87023e67f4fcd962b6c792a347ae9025ce`).
 The original numerical driver hash `859f26f5...` is preserved. The later audit
 checks parent hashes, phase/UUID completion and actual geometry/mesh hashes;
 it explicitly records that no numerical recomputation occurred. Six additional

@@ -64,10 +64,11 @@ coarse hex's 16.3797%; it differed from the original staircase by -2.9249%.
 All pre-existing field tolerances passed without relaxation.
 
 The first-party fixture `fixtures/shape_reacceptance_20260914.zip` contains the
-exact generated geometry, solver meshes, mesh reports, parent receipts and
+exact generated geometry, solver meshes, mesh reports, original field result, parent receipts and
 original source variants. No externally downloaded dataset is included. To
-audit it, extract into a fresh directory, copy the result above as `field.json`,
-and run the `audit` phase. The separate
+audit it, extract into a fresh directory and run the `audit` phase. Use the
+archived `field.json`: Git may normalize line endings in the readable tracked
+JSON copy, whereas the receipt digest identifies original bytes. The separate
 `shape_reacceptance_20260914_audit.json` records post-execution validation;
 `numerical_recomputed=false` means it does not impersonate a new solver run.
 Original numerical driver SHA is preserved rather than replaced by the later
