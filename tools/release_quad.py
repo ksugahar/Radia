@@ -1420,7 +1420,16 @@ _PHASE9_COMPUTE_NA = frozenset(_PHASE9_FIELDS[1:5])
 
 
 def _parse_phase9_probe(label, output):
-    """Require a complete, unique typed field set before comparing any host."""
+    """Require complete unique fields, PEP 440 versions and ordered inclusive bounds.
+
+    The packaging parser is mandatory; missing support fails the gate. Bounds
+    certify a well-formed declared interval, not installed-version membership.
+    Cross-host comparison still requires identical reported declarations.
+    """
+    try:
+        from packaging.version import InvalidVersion, Version
+    except ImportError as exc:
+        raise ValueError("phase9 requires packaging; install it with python -m pip install packaging") from exc
     result = {}
     for line in output.splitlines():
         if not line.strip():
@@ -1439,9 +1448,19 @@ def _parse_phase9_probe(label, output):
         elif key.startswith("COMPAT "):
             bounds = value[1:-1].split(",")
             valid = (value.startswith("[") and value.endswith("]") and len(bounds) == 2
-                     and all(b.strip() and b.strip()[0].isdigit() for b in bounds))
+                     and all(b.strip() for b in bounds))
+            if valid:
+                try:
+                    lower, upper = (Version(b.strip()) for b in bounds)
+                    valid = lower <= upper
+                except InvalidVersion:
+                    valid = False
         else:
-            valid = value[0].isdigit() and not any(c.isspace() for c in value)
+            try:
+                Version(value)
+                valid = True
+            except InvalidVersion:
+                valid = False
         if not valid:
             raise ValueError(f"{label}: invalid value for {key}: {value!r}")
         result[key] = value
