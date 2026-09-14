@@ -1,0 +1,5 @@
+--- a/01_solve.py
++++ b/01_solve.py
+@@ -55,1 +55,1 @@
+-    gfT.vec[:] = T_INIT
++    gfT.Set(CF(T_INIT))
