@@ -27,6 +27,26 @@ python validation_test/universal_relaxation_network/vf_benchmark_same_data.py
 ```
 
 The remaining `validate_*`, `benchmark_*`, ablation, LTspice, and time-domain
-drivers also live here. Their immutable NASA and TDK input CSV files remain in
-`docs/universal_relaxation_network/data/real_world/`; generated JSON, plots,
+drivers also live here. TDK input CSV files remain in
+`docs/universal_relaxation_network/data/real_world/`; NASA inputs are private.
+Generated JSON, plots,
 netlists, and timing records stay under this validation directory.
+
+## Retired bundled-NASA entry points
+
+The former bundled NASA CSV had an undocumented frequency axis and is no longer
+distributed. These legacy modes fail explicitly rather than silently skipping
+NASA, substituting synthetic data, or generating a misleading aggregate:
+
+- `verify_timedomain_stability.py` and `validate_urn_vs_vf.py` default NASA routes;
+- `validate_real_world.py` full five-dataset run and NASA loader;
+- `validate_all_datasets.py` historical aggregate;
+- `validate_real_data.py --bundled-nasa`;
+- `run_ltspice_verification.py`, `benchmark_urn_vs_skrf_vf.py` and
+  `ablation_study.py` when `--dataset battery` is selected.
+
+Their numerical helpers and non-NASA modes are not removed. For private NASA
+data with independently documented frequencies, use the explicit-path/environment
+consumers documented in `docs/universal_relaxation_network/data/real_world/nasa_battery/README.md`.
+Historical result JSON is not a new acceptance claim. Neither private storage
+nor a larger URN basis resolves an unverified measurement axis.
