@@ -197,7 +197,10 @@ class IHDesignSpec:
     em_vol: str = ""
     qsurf_order: int = 1
     q_phi_average: bool = False
-    n_phi_samples: int = 8
+    # Used only by the axisymmetric thermal route with spatial q_surf.
+    # 128 resolved the circumferential mean of the faceted TKE08 3D EM
+    # surface to about 0.1% in the independent 2D cross-check.
+    n_phi_samples: int = 128
     heat_flux_boundaries: str = ""
     convection_boundaries: str = ""
     radiation_boundaries: str = ""
@@ -756,10 +759,14 @@ class IHDesignSpec:
             "--linear-solver", self.linear_solver,
             "--fes-order", str(thermal_fes_order),
             "--rotation-rpm", str(rotation_rpm),
-            "--rotation-axis", str(self.rotation_axis),
             "--msh-output", msh_output(wp, "_heat"),
             "--output", json_output(wp, "_heat"),
         ]
+
+        # A 2D (r,z) solve is already fixed about the z axis.
+        # calc_heat_axisym.py intentionally has no rotation-axis option.
+        if not is_axisym:
+            cmd += ["--rotation-axis", str(self.rotation_axis)]
 
         if self.convection_boundaries:
             cmd += ["--convection-boundaries", self.convection_boundaries]
@@ -787,7 +794,21 @@ class IHDesignSpec:
                 "--qsurf-order", str(self.qsurf_order),
             ]
             if is_axisym:
-                cmd += ["--n-phi-samples", str(self.n_phi_samples)]
+                if isinstance(self.n_phi_samples, bool):
+                    raise ValueError(
+                        "n_phi_samples must be a positive integer"
+                    )
+                try:
+                    n_phi = int(self.n_phi_samples)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(
+                        "n_phi_samples must be a positive integer"
+                    ) from exc
+                if n_phi < 1 or str(n_phi) != str(self.n_phi_samples).strip():
+                    raise ValueError(
+                        "n_phi_samples must be a positive integer"
+                    )
+                cmd += ["--n-phi-samples", str(n_phi)]
             elif self.q_phi_average:
                 cmd += ["--q-phi-average"]
 

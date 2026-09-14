@@ -20,12 +20,19 @@ Geometry convention
 q_surf cross-mesh transfer
 --------------------------
 The EM .vol from calc_fem_kelvin is 3D.  For each surface vertex
-(r, z) on the axisym mesh we sample the 3D GridFunction at multiple
-azimuth angles (default 8) around the circle (r*cos(phi),
+(r, z) on the axisym mesh we sample the 3D GridFunction on its boundary at
+multiple azimuth angles (default 128) around the circle (r*cos(phi),
 r*sin(phi), z) and average.  When the EM model is also rotationally
 symmetric (the typical IH solenoid) the values agree across phi
 within numerical noise; when it is not (gapped torus) the average
 is the right physical quantity for the axisym thermal model.
+
+Boundary evaluation is essential here.  Independently generated 2D and 3D
+meshes generally describe the same CAD surface with slightly different
+facets.  Volume-point lookup can therefore reject a valid surface point and
+used to leave the corresponding thermal flux node silently at zero.  The
+transfer now projects through NGSolve's boundary point locator, records its
+coverage, and fails if the two surfaces are not compatible.
 
 Output schema mirrors calc_heat.py so the Heat panel does not need
 to know which solver produced the JSON.
@@ -121,7 +128,23 @@ def _build_axisym_qsurf_gf(wp_mesh, heat_flux_boundary_names, args):
 
     if args.q_uniform is not None:
         _log(f"Q_SURF:uniform {args.q_uniform:.4e} W/m^2")
-        return None, CoefficientFunction(float(args.q_uniform))
+        return (
+            None,
+            CoefficientFunction(float(args.q_uniform)),
+            {
+                "mode": "uniform",
+                "evaluation_region": "not-applicable",
+                "n_phi_samples": 0,
+                "target_surface_vertices": 0,
+                "requested_samples": 0,
+                "accepted_samples": 0,
+                "coverage_fraction": 1.0,
+                "fully_sampled_vertices": 0,
+                "partially_sampled_vertices": 0,
+                "failed_vertices": 0,
+                "minimum_samples_per_vertex": 0,
+            },
+        )
 
     if not args.qsurf_sol:
         raise ValueError(
@@ -159,7 +182,16 @@ def _build_axisym_qsurf_gf(wp_mesh, heat_flux_boundary_names, args):
     gf_wp_q = GridFunction(fes_wp_q)
     gf_wp_q.vec[:] = 0
 
-    n_phi = max(1, int(args.n_phi_samples))
+    if isinstance(args.n_phi_samples, bool):
+        raise ValueError("--n-phi-samples must be a positive integer")
+    try:
+        n_phi = int(args.n_phi_samples)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "--n-phi-samples must be a positive integer"
+        ) from exc
+    if n_phi < 1 or str(n_phi) != str(args.n_phi_samples).strip():
+        raise ValueError("--n-phi-samples must be a positive integer")
     phis = [2 * math.pi * k / n_phi for k in range(n_phi)]
 
     surf_vertex_nrs = set()
@@ -169,8 +201,12 @@ def _build_axisym_qsurf_gf(wp_mesh, heat_flux_boundary_names, args):
         for v in el.vertices:
             surf_vertex_nrs.add(v.nr)
 
-    n_ok = 0
+    n_full = 0
+    n_partial = 0
     n_fail = 0
+    accepted_samples = 0
+    minimum_samples = n_phi if surf_vertex_nrs else 0
+    failed_coordinates = []
     for vnr in surf_vertex_nrs:
         v = wp_mesh.vertices[vnr]
         # 2D mesh stores axisym coords as (r, z, 0).
@@ -180,26 +216,80 @@ def _build_axisym_qsurf_gf(wp_mesh, heat_flux_boundary_names, args):
         for phi in phis:
             x3, y3, z3 = r * math.cos(phi), r * math.sin(phi), z
             try:
-                em_mip = em_mesh(x3, y3, z3)
+                # q_surf is a boundary field.  Independent 2D and 3D
+                # meshes usually have slightly different facets even when
+                # they came from the same CAD body, so volume lookup is not
+                # a valid surface-to-surface transfer.
+                em_mip = em_mesh(x3, y3, z3, BND)
                 val = gf_q_em(em_mip)
                 accum += float(getattr(val, "real", val))
                 n_local += 1
             except Exception:
-                pass
+                # Individual misses are counted below.  A missing target
+                # vertex or poor global coverage is an error, never a
+                # zero-flux fallback.
+                continue
+        accepted_samples += n_local
+        minimum_samples = min(minimum_samples, n_local)
         if n_local > 0:
             gf_wp_q.vec.FV()[vnr] = accum / n_local
-            n_ok += 1
+            if n_local == n_phi:
+                n_full += 1
+            else:
+                n_partial += 1
         else:
             n_fail += 1
+            if len(failed_coordinates) < 5:
+                failed_coordinates.append([r, z])
 
-    _log(f"Q_SURF:phi-averaged {n_ok}/{n_ok + n_fail} surface "
-         f"vertices using n_phi={n_phi}")
-    if n_fail > n_ok:
-        _log("Q_SURF:WARNING majority of axisym surface vertices "
-             "fell outside the EM mesh -- check that the axisym "
-             "geometry mirrors the 3D EM workpiece.")
+    target_vertices = len(surf_vertex_nrs)
+    requested_samples = target_vertices * n_phi
+    coverage = (
+        accepted_samples / requested_samples
+        if requested_samples else 0.0
+    )
+    audit = {
+        "mode": "phi-averaged-3d-boundary",
+        "evaluation_region": "BND",
+        "n_phi_samples": n_phi,
+        "target_surface_vertices": target_vertices,
+        "requested_samples": requested_samples,
+        "accepted_samples": accepted_samples,
+        "coverage_fraction": coverage,
+        "fully_sampled_vertices": n_full,
+        "partially_sampled_vertices": n_partial,
+        "failed_vertices": n_fail,
+        "minimum_samples_per_vertex": minimum_samples,
+    }
+    _log(
+        f"Q_SURF:phi-averaged boundary transfer: vertices="
+        f"{target_vertices - n_fail}/{target_vertices}, samples="
+        f"{accepted_samples}/{requested_samples} ({coverage:.1%}), "
+        f"n_phi={n_phi}"
+    )
+    if target_vertices == 0:
+        raise ValueError(
+            "The selected heat-flux boundaries contain no boundary vertices."
+        )
+    if n_fail:
+        raise ValueError(
+            "Axisymmetric q_surf transfer could not locate the 3D EM "
+            f"boundary for {n_fail}/{target_vertices} thermal boundary "
+            f"vertices (first (r,z) coordinates: {failed_coordinates}). "
+            "The 2D thermal meridian must describe the same physical "
+            "workpiece surface as --em-vol; no zero-flux fallback was "
+            "applied."
+        )
+    if coverage < 0.80:
+        raise ValueError(
+            "Axisymmetric q_surf boundary-transfer coverage is only "
+            f"{coverage:.1%} ({accepted_samples}/{requested_samples} "
+            "azimuth samples). The 2D thermal meridian does not match the "
+            "3D EM workpiece closely enough; no partial-transfer fallback "
+            "was applied."
+        )
 
-    return gf_wp_q, gf_wp_q
+    return gf_wp_q, gf_wp_q, audit
 
 
 # -----------------------------------------------------------------
@@ -213,7 +303,7 @@ def solve_heat_axisym(wp_vol,
                       convection_boundaries="",
                       radiation_boundaries="",
                       q_uniform=None, qsurf_sol="", em_vol="",
-                      qsurf_order=1, n_phi_samples=8,
+                      qsurf_order=1, n_phi_samples=128,
                       dt=0.5, t_end=5.0,
                       time_scheme="backward-euler",
                       linear_solver="sparsecholesky",
@@ -229,7 +319,7 @@ def solve_heat_axisym(wp_vol,
 
     from ngsolve import (Mesh, H1, BilinearForm, LinearForm, GridFunction,
                           CF, ds, dx, x as r_coord,
-                          TaskManager, InnerProduct, grad)
+                          TaskManager, InnerProduct, Integrate, grad)
 
     if _wp_mesh is None and not os.path.isfile(wp_vol):
         return {"error": f"--wp-vol not found: {wp_vol}"}
@@ -349,7 +439,7 @@ def solve_heat_axisym(wp_vol,
     a_local.em_vol = em_vol
     a_local.qsurf_order = qsurf_order
     a_local.n_phi_samples = n_phi_samples
-    gf_q, q_cf = _build_axisym_qsurf_gf(
+    gf_q, q_cf, qsurf_projection = _build_axisym_qsurf_gf(
         wp_mesh, set(heat_flux_names), a_local)
 
     # ------- Bilinear forms (axisym weight = 2*pi*r) -------
@@ -446,6 +536,13 @@ def solve_heat_axisym(wp_vol,
     T_min, T_max, T_extrema = _temperature_extrema(
         gfT, wp_mesh, fes_order
     )
+    # Physical volume mean.  The computational mesh is a meridian section,
+    # so both numerator and denominator require the same 2*pi*r Jacobian.
+    revolved_volume = float(Integrate(weight, wp_mesh))
+    T_mean = (
+        float(Integrate(gfT * weight, wp_mesh)) / revolved_volume
+        if revolved_volume > 0.0 else T_max
+    )
 
     # Final-state field export.  GmshPostExport handles 2D meshes
     # natively (z is padded to 0 in the .msh nodes table) so the
@@ -531,6 +628,7 @@ def solve_heat_axisym(wp_vol,
         "T_max_C": T_max,
         "T_min_C": T_min,
         "T_extrema": T_extrema,
+        "T_mean_C": T_mean,
         "T_initial_C": float(t_initial),
         "T_probe_history_C": T_probe if probe_point is not None else None,
         "t_history_s": t_arr,
@@ -546,7 +644,9 @@ def solve_heat_axisym(wp_vol,
         "ne": int(wp_mesh.ne),
         "fes_order": int(fes_order),
         "mesh_geometry": mesh_geometry,
+        "revolved_volume_m3": revolved_volume,
         "n_phi_samples": int(n_phi_samples),
+        "qsurf_projection": qsurf_projection,
         "material": material,
         "rho_kg_m3": float(rho_v),
         "cp_J_kgK": float(cp_v),
@@ -621,9 +721,9 @@ def main():
                              "auto-detection from the .sol stem was "
                              "removed 2026-05-20.")
     parser.add_argument("--qsurf-order", type=int, default=1)
-    parser.add_argument("--n-phi-samples", type=int, default=8,
+    parser.add_argument("--n-phi-samples", type=int, default=128,
                         help="Azimuth samples for phi-averaging the 3D "
-                             "qsurf onto the axisym mesh (default 8).  "
+                             "qsurf onto the axisym mesh (default 128).  "
                              "Use 1 if you know the EM problem is "
                              "exactly rotationally symmetric.")
     parser.add_argument("--dt", type=float, default=0.5)

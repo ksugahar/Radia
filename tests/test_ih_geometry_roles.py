@@ -161,6 +161,37 @@ def test_thermal_fes_order_explicit_override_is_preserved(method):
     assert command[command.index("--fes-order") + 1] == "3"
 
 
+def test_axisym_spatial_heat_uses_converged_phi_default_and_no_3d_axis_flag():
+    command = IHDesignSpec(
+        method=METHOD_THERMAL_AXISYM,
+        wp_vol="workpiece_axisym.vol",
+        heat_source=HEAT_SRC_SPATIAL,
+        qsurf_sol="qsurf.sol",
+        em_vol="em.vol",
+        heat_flux_boundaries="heated",
+        convection_boundaries="exposed",
+    ).build_command(python="python", panels_dir="panels")
+
+    assert command[command.index("--n-phi-samples") + 1] == "128"
+    assert "--rotation-axis" not in command
+
+
+@pytest.mark.parametrize("invalid", [True, 0, -1, 1.5, "two"])
+def test_axisym_spatial_heat_rejects_invalid_phi_sample_count(invalid):
+    spec = IHDesignSpec(
+        method=METHOD_THERMAL_AXISYM,
+        wp_vol="workpiece_axisym.vol",
+        heat_source=HEAT_SRC_SPATIAL,
+        qsurf_sol="qsurf.sol",
+        em_vol="em.vol",
+        n_phi_samples=invalid,
+        heat_flux_boundaries="heated",
+        convection_boundaries="exposed",
+    )
+    with pytest.raises(ValueError, match="positive integer"):
+        spec.build_command(python="python", panels_dir="panels")
+
+
 @pytest.mark.parametrize("method", [METHOD_THERMAL_AXISYM, METHOD_THERMAL_3D_STATIC])
 def test_thermal_spatial_output_is_gmsh_only(method):
     command = IHDesignSpec(
