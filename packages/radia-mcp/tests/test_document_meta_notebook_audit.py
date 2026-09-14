@@ -1,6 +1,7 @@
 import json
 
 from radia_mcp.document_meta import PUBLIC_TOOLS
+from radia_mcp.document_meta import tools as document_tools
 from radia_mcp.document_meta.tools import (
     document_meta_notebook_citation_audit,
     document_meta_notebook_result_audit,
@@ -89,6 +90,40 @@ def test_notebook_citation_audit_cross_checks_key_doi_and_arxiv(tmp_path):
 
     assert result["summary"]["gaps"] == 0
     assert result["summary"]["ok_citations_resolved"] == 1
+
+
+def test_tracked_notebooks_skip_redundant_ignore_checks(tmp_path, monkeypatch):
+    nb = tmp_path / "docs" / "demo.ipynb"
+    _write_notebook(nb)
+    monkeypatch.setattr(
+        document_tools,
+        "_tracked_notebook_set",
+        lambda repo_root, scan_root: {"docs/demo.ipynb"},
+    )
+
+    def fail_if_called(path, repo_root):
+        raise AssertionError("tracked files must not call git check-ignore")
+
+    monkeypatch.setattr(document_tools, "_is_git_ignored", fail_if_called)
+    found = list(document_tools._iter_notebooks(
+        tmp_path / "docs", tmp_path, include_gitignored=False, tracked_only=True,
+    ))
+    assert found == [nb]
+
+
+def test_notebook_citation_audit_honors_max_items(tmp_path):
+    _write_notebook(tmp_path / "docs" / "one.ipynb")
+    _write_notebook(tmp_path / "docs" / "two.ipynb")
+    bib = tmp_path / "references.bib"
+    bib.write_text("", encoding="utf-8")
+
+    result = document_meta_notebook_citation_audit(
+        str(tmp_path), bibliography_path=str(bib), tracked_only=False, max_items=0,
+    )
+
+    assert result["summary"]["notebooks_scanned"] == 2
+    assert result["rows"] == []
+    assert result["rows_truncated"] is True
 
 
 def test_notebook_result_audit_needs_saved_outputs_but_not_json(tmp_path):
