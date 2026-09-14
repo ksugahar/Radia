@@ -6,6 +6,45 @@ from pathlib import Path
 import numpy as np
 
 
+def test_ci_wheel_nominal_three_engine_record():
+    directory = (Path(__file__).resolve().parents[1] / 'validation_test' /
+                 'esrf_three_engine/results/candidate_59b094d8')
+    path = directory / 'three_engine_case6_bdm1_bonus12.json'
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == (
+        'b00ba5d7a6532721e23eefe6e8b1c0b8889b9f52e1f4240bbd2f2a99570d722f')
+    result = json.loads(path.read_bytes())
+    assert result['passed'] is True and result['nonlinear_converged'] is True
+    runtime = result['runtime_identity']
+    assert runtime['editable'] is False and runtime['installed_import'] is True
+    assert runtime['direct_url']['archive_info']['hashes']['sha256'] == (
+        '46e3aa1ddd89010e21419e1d28f6e44e403cf95014d7e5486109eca4232145b9')
+    assert result['implementation_sha256']['radia._radia_pybind'] == (
+        'cbc9bbbc61b5cd0ee7035c642197522b2615a871e3d4c49c2887184f4f9040ec')
+    hdiv = result['engines']['hdiv_mmm']['nonlinear_stats']
+    assert hdiv['nonlinear_line_search_exhausted'] is False
+    assert hdiv['nonlinear_converged_final_stage'] is True
+    assert 0 <= hdiv['nonlinear_final_relative_residual'] <= 2e-5
+    for name, key in [('reduced_a', 'final_relative_change'),
+                      ('mixed_total_reduced_omega', 'relative_B_change')]:
+        stats = result['engines'][name]['nonlinear_stats']
+        assert stats['converged'] is True
+        assert 0 <= stats[key] <= 2e-5
+    assert result['provenance']['engine_settings']['mixed_total_reduced_omega']['bonus_intorder'] == 12
+    points = np.asarray(result['observation_points_m'])
+    core = abs(points[:, 0]) <= .02
+    assert core.sum() == 27
+    errors = []
+    for pair, recorded in result['pairwise_core'].items():
+        left, right = pair.split('__vs__')
+        a, b = (np.asarray(result['fields_T'][name])[core] for name in (left, right))
+        error = np.linalg.norm(a-b) / np.linalg.norm(a)
+        assert np.isfinite(error) and error <= .03
+        np.testing.assert_allclose(error, recorded['relative_rms'], rtol=1e-13)
+        errors.append(error)
+    assert len(errors) == 3
+    np.testing.assert_allclose(max(errors), result['maximum_core_pairwise_relative_rms'], rtol=1e-13)
+
+
 def test_repaired_bdm1_nominal_three_engine_record():
     directory = (Path(__file__).resolve().parents[1] / 'validation_test' /
                  'esrf_three_engine/results/candidate_4d85e72cc')

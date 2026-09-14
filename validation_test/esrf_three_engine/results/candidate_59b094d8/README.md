@@ -1,8 +1,8 @@
 # CI candidate: ESRF6 quadrature evidence
 
-Status: the order-2 mixed-Omega bonus 12/16 plateau passed. The same-wheel
-nonlinear three-engine run is still pending; this record does not approve a
-release, BDM2, IMA, or general production acceptance.
+Status: PASS for nominal ESRF6 BDM1 same-CI-wheel three-engine acceptance
+and the order-2 mixed-Omega bonus 12/16 plateau. This is not release approval,
+BDM2/IMA qualification, or an absolute-error certificate.
 
 The candidate is CI run 34800439509, source
 `59b094d8ed2c19e35967fd7631f3a1473eb3d200`, Radia 4.95.91.
@@ -33,6 +33,25 @@ Passing two quadrature rules is observed stability, not a rigorous integration
 error bound. Projection and assembly use the same bonus within each solve.
 The replay test recomputes the complete assessment from the raw JSON.
 
-The existing hibino job directory remains owned by the HDiv acceptance task
-until its running three-engine computation finishes. Cleanup follows recovery,
-hash verification and commit of the final evidence, not this partial record.
+## Final nonlinear comparison
+
+All three engines converged. HDiv used 8 Newton iterations, residual
+1.6618566e-5 against 2e-5, one backtrack and no exhausted line search.
+Reduced-A used 31 iterations (relative change 1.8592208e-5); mixed Omega
+used 33 (relative B change 1.7435746e-5). FEM changes are stopping measures,
+not true-error bounds. Mixed source projection and assembly use bonus 12.
+
+Core 27-point vector RMS differences: HDiv/reduced-A 0.334891%, HDiv/mixed
+0.669497%, reduced-A/mixed 0.781862%; the predeclared limit is 3%.
+This acceptance uses full iron, BDM1, no IMA, nominal excitation and FEM order 2.
+It does not qualify strong-saturation material accuracy from bore fields alone.
+
+Final JSON SHA-256:
+`b00ba5d7a6532721e23eefe6e8b1c0b8889b9f52e1f4240bbd2f2a99570d722f`.
+Recovery archive (inputs, outputs, drivers, wheel and pip inventory):
+`S:/Radia/validation_artifacts/esrf6_ci_acceptance_20260915/radia-hdiv-production-34800439509-recovery.tar.gz`.
+Archive SHA-256:
+`66371be72e10d1a4cd5efe1d8f78426513792b96838344f9d97342cb3a85828c`.
+All 34 entries in `recovery_manifest.json` were verified after extraction.
+The HDiv task owns cleanup of the completed hibino directory after this evidence
+commit; no unrelated compute or shared runtime is included.
