@@ -10,6 +10,14 @@ result-bearing documentation notebooks.
 
 ## Features
 
+The 1.0.0 candidate retains the 0.14.17 command and label contracts. Its
+supported binary runtime is 64-bit Windows, CPython 3.12, Coreform Cubit
+2025.12, and the exact Netgen/NGSolve versions declared in package metadata.
+For LLM operation, the canonical manual is the `radia-mcp` Cubit server:
+start with `cubit_status` and `cubit_docs`; use APREPRO through its headless
+execution tools and `cubit_check_vol` before handing a mesh to a solver.
+Release acceptance and publication are still pending for this candidate.
+
 - **Cubit plugin** (`.ccm` + `.pyd`, Coreform Cubit 2025.12+):
   - `export {netgen|gmsh|vtk|femeem|meg|nastran_bdf}` APREPRO commands
   - Cubit-owned **Export** menu plus the Radia Export WorkflowToolbar
