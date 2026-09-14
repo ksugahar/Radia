@@ -139,10 +139,39 @@ def test_levelset_exodus_rejects_nonfinite_and_invalid_name(ball, tmp_path):
                               varname="x" * 33)
 
 
-def test_grid_iso_stl_recovers_a_known_sphere(tmp_path):
+@pytest.mark.parametrize("smooth_iterations", [0, 2, 3, 4])
+def test_grid_iso_stl_recovers_a_known_sphere(tmp_path, monkeypatch,
+                                             smooth_iterations):
     pytest.importorskip("skimage")
-    pytest.importorskip("trimesh")
+    trimesh = pytest.importorskip("trimesh")
     pytest.importorskip("scipy")
+    original_filter = trimesh.smoothing.filter_taubin
+    observed = []
+
+    def check_filter(surface, **kwargs):
+        # Independent alternating Laplacian updates: dilation subtracts a
+        # POSITIVE coefficient. Do not copy the production keyword into this
+        # oracle; doing so would reproduce the historical double-shrink bug.
+        laplacian = trimesh.smoothing.laplacian_calculation(surface)
+        expected = np.array(surface.vertices, copy=True)
+        for step in range(smooth_iterations):
+            delta = laplacian.dot(expected) - expected
+            expected += (0.5 if step % 2 == 0 else -0.53) * delta
+        before = surface.volume
+        contracting = surface.copy()
+        original_filter(contracting, lamb=0.5, nu=-0.53,
+                        iterations=smooth_iterations)
+        result = original_filter(surface, **kwargs)
+        assert np.isfinite(surface.vertices).all()
+        np.testing.assert_allclose(surface.vertices, expected, rtol=1e-12,
+                                   atol=1e-12)
+        assert surface.is_watertight
+        assert surface.volume > 0
+        assert abs(surface.volume - before) < abs(contracting.volume - before)
+        observed.append((surface.volume - before) / before)
+        return result
+
+    monkeypatch.setattr(trimesh.smoothing, "filter_taubin", check_filter)
     # The coarse module fixture cannot represent an r=0.6 body in its nodal
     # field.  A finer mesh is required; this is a property of P0->P1
     # averaging, not a bug.
@@ -163,8 +192,12 @@ def test_grid_iso_stl_recovers_a_known_sphere(tmp_path):
     nodal = nodal_from_element_density(fine, rho)
 
     out = tmp_path / "sphere.stl"
-    info = iso_stl_from_grid(fine, nodal, out, level=0.5, resolution=64)
+    info = iso_stl_from_grid(fine, nodal, out, level=0.5, resolution=64,
+                             smooth_iterations=smooth_iterations)
     assert info["watertight"] is True
+    assert len(observed) == bool(smooth_iterations)
+    assert info["smoothing_volume_drift"] == pytest.approx(
+        observed[0] if observed else 0.0, abs=1e-12)
     v_exact = 4.0 / 3.0 * np.pi * 0.6 ** 3
     # Allow the expected one-layer inward bias of averaging a P0 step to P1.
     assert abs(info["volume"] - v_exact) / v_exact < 0.25, info["volume"]
