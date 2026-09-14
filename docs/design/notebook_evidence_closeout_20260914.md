@@ -317,7 +317,7 @@ were checked for affected selected-source hashes.
 1. **BEM extractor:** independently specify the current/internal-inductance
    convention and investigate the actual matrix rank/spectrum before assigning
    a general cause to the closed-torus observation.
-2. **Shape regeneration:** `topopt_cad.py` passes `nu=-0.53` to Trimesh's
+2. **Shape regeneration (original finding; implementation fixed below):** `topopt_cad.py` passed `nu=-0.53` to Trimesh's
    subtractive dilation pass. Trimesh 4.12.2 independently reproduces this sign
    problem on a one-subdivision icosphere: two-pass volume ratios are 0.57641
    for negative nu versus 0.99187 for positive nu. The code and saved geometry
@@ -336,3 +336,27 @@ The 103 notebook/canonical-bibliography tests pass. This pass changes no solver,
 installation, running client, or saved numerical result. Parent edits take effect
 for a manuscript only after its generated bibliography is refreshed; this is not
 a claim of live-client synchronization.
+
+### Taubin implementation repair
+
+`iso_stl_from_grid` now passes positive `nu=0.53` to Trimesh's subtractive
+dilation pass. The existing known-sphere regression now covers 0, 2, 3 and 4
+passes, including the three-pass setting used by `test_shape_regen_lane.py`.
+Its coordinate oracle directly performs alternating Laplacian updates; it
+does not read the production coefficient. It also checks finite coordinates,
+watertightness, positive volume, geometric sphere accuracy, the reported volume
+drift, and smaller volume drift than the former negative-nu control.
+
+Before the fix the two-pass case failed: 16,297 of 16,440 coordinate entries
+differed from the oracle (maximum absolute difference 0.0108824). After the fix,
+all 25 tests in `tests/test_topopt_cad.py` passed on Python 3.12.10 with Trimesh
+4.12.2. Because this checkout has no native Radia extension, the exact checkout
+file was loaded with `importlib.util.spec_from_file_location` as
+`radia.topopt_cad` before running pytest; no installed source was substituted
+and no editable installation was changed. These are small in-memory Netgen
+geometry tests, not a Cubit remeshing or magnetic re-solve acceptance run.
+
+The original shape notebook's code and saved results remain unchanged and
+explicitly historical. Full downstream shape/field reacceptance remains open;
+the numerical sign defect itself now has a failing-before/passing-after
+behavioral regression. The other five scientific evidence gaps are unchanged.
