@@ -20,6 +20,7 @@ from radia_mcp.radia_ngsolve.field_profile_gate import (
     nonlinear_constitutive_response_parity_gate,
     nonlinear_field_energy_identity_gate_v5,
     nonlinear_field_energy_artifact_contract_gate_v6,
+    nonlinear_field_energy_lineage_gate_v7,
     nonlinear_magnetic_field_energy_parity_gate,
     nonlinear_magnetic_refinement_energy_gate,
     nonlinear_magnetic_spatial_evidence_gate,
@@ -34,6 +35,7 @@ from radia_mcp.radia_ngsolve.server import (
     nonlinear_magnetic_spatial_evidence_gate as mcp_nonlinear_gate,
     nonlinear_field_energy_identity_gate_v5 as mcp_nonlinear_identity_v5_gate,
     nonlinear_field_energy_artifact_contract_gate_v6 as mcp_nonlinear_artifact_v6_gate,
+    nonlinear_field_energy_lineage_gate_v7 as mcp_nonlinear_lineage_v7_gate,
 )
 
 
@@ -189,6 +191,67 @@ def test_nonlinear_field_energy_artifact_contract_v6_rejects_incomplete_converge
     bad["candidate"]["solver_converged"] = False
     result = nonlinear_field_energy_artifact_contract_gate_v6(bad)
     assert result["checks"]["candidate_contract_valid"] is False
+
+
+def _v7_lineage_summary():
+    digest = lambda value: hashlib.sha256(
+        json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    base = {
+        "geometry_identity_sha256": "1" * 64,
+        "material_table_sha256": "2" * 64,
+        "excitation_identity_sha256": "3" * 64,
+        "mesh_identity_sha256": "4" * 64,
+        "solver_version": "solver-v7",
+    }
+
+    def lane(artifact_id: str, run_id: str) -> dict:
+        identity = {**base, "run_id": run_id}
+        identity["run_identity_sha256"] = digest(identity)
+        return {
+            "artifact_id": artifact_id,
+            "identity": identity,
+            "lineage": {
+                "source_kind": "solver_output",
+                "root_case_id": "case-v7",
+                "parent_artifact_id": "input-v7",
+                "parent_artifact_sha256": "a" * 64,
+            },
+        }
+
+    return {"candidate": lane("candidate-v7", "candidate-run-v7"), "reference": lane("reference-v7", "reference-run-v7")}
+
+
+def test_nonlinear_field_energy_lineage_v7_accepts_and_wraps_mcp():
+    summary = _v7_lineage_summary()
+    result = nonlinear_field_energy_lineage_gate_v7(summary)
+    assert result["status"] == "ok"
+    assert result["accepted"] is True
+    wrapped = json.loads(mcp_nonlinear_lineage_v7_gate(json.dumps(summary)))
+    assert wrapped["policy"] == "nonlinear_field_energy_lineage_gate_v7"
+    assert wrapped["status"] == "ok"
+
+
+def test_nonlinear_field_energy_lineage_v7_rejects_parent_and_run_digest_drift():
+    bad = _v7_lineage_summary()
+    bad["candidate"]["lineage"]["parent_artifact_sha256"] = ""
+    bad["candidate"]["identity"]["run_identity_sha256"] = "f" * 64
+    result = nonlinear_field_energy_lineage_gate_v7(bad)
+    assert result["checks"]["candidate_lineage_contract_valid"] is False
+
+
+def test_nonlinear_field_energy_lineage_v7_rejects_mesh_lineage_drift():
+    bad = _v7_lineage_summary()
+    bad["candidate"]["identity"]["mesh_identity_sha256"] = "5" * 64
+    result = nonlinear_field_energy_lineage_gate_v7(bad)
+    assert result["checks"]["cross_lane_physical_identity_matches"] is False
+
+
+def test_nonlinear_field_energy_lineage_v7_rejects_non_output_lineage_role():
+    bad = _v7_lineage_summary()
+    bad["candidate"]["lineage"]["source_kind"] = "solver_input"
+    result = nonlinear_field_energy_lineage_gate_v7(bad)
+    assert result["checks"]["candidate_lineage_contract_valid"] is False
 
 
 def test_build_comparison_candidate_keeps_piecewise_linear_out_of_solver_mode():
