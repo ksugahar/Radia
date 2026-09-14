@@ -73,7 +73,7 @@ research question.
 
 Standalone PySide/PyQt Radia panels and notebook workbenches are retired.
 Coreform Cubit's private PySide6 is allowed only inside Cubit for the
-`cubit-mesh-export` toolbar. Normal Radia Python must not depend on Qt.
+`cubit-mesh-export` toolbar. Normal Radia Python must not depend on Qt. LLM/MCP Cubit execution is always batch/nographics and fails rather than launching or attaching to a GUI; the only GUI run is the separately scoped human-facing release test, while journal/checkpoint handoff remains artifact-only.
 
 ### Shared MCP Runtime Ownership
 - MCP is experimental development tooling, not a numerical solver release.
