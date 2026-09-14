@@ -1,0 +1,33 @@
+{
+  "schema": "radia.closed-torus-diagnostic.v1",
+  "host": "mdx2",
+  "python": "3.12.10",
+  "ngsolve": "6.2.2606",
+  "numpy": "2.4.3",
+  "notebook_sha256": "3cfe1a2e9bb09d6465d73e4d0b40c8693dbeeb0fb34bdd85beea617586db77c0",
+  "diagnostic_sha256": "41e0152f1db98e67ef3ddec650a6c8ce5ed9e217bd836b9ad0cb769e3eed4ea2",
+  "radius_m": 0.05,
+  "wire_radius_m": 0.005,
+  "curvaturesafety": 0.5,
+  "threads": 2,
+  "ndof": 269,
+  "free_dofs": 269,
+  "boundaries": [
+    "default"
+  ],
+  "selected_boundary": "default",
+  "rank": 269,
+  "rank_tolerance": 6.966911067292274e-22,
+  "singular_min": 4.452065072605298e-11,
+  "singular_max": 1.1664006723636011e-08,
+  "relative_symmetry_error": 0.05221728075697537,
+  "zero_columns": 0,
+  "legacy_L_H": 1.7277872263809026e-07,
+  "legacy_relative_residual": 6.0730796518231835e-15,
+  "basis_transformed_covariant_L_H": 1.7277872263809026e-07,
+  "basis_transformed_covariant_relative_residual": 6.0730796518231835e-15,
+  "basis_transformed_ones_L_H": 1.1510588573775355e-07,
+  "basis_transformed_ones_relative_residual": 5.074047429960021e-15,
+  "elapsed_s": 84.91702560003614,
+  "scope": "One coarse matrix diagnostic. e=ones/n is a coefficient-space constraint, not a specified physical loop current. No general closed-surface nullspace conclusion or physical inductance acceptance."
+}

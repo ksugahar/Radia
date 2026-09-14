@@ -91,7 +91,7 @@ def main():
     if eq is not None:
         print(f"\n CLN levitation equilibrium (PHYSICAL lift==weight): dZ = "
               f"{eq:.2f} mm  -> absolute z = {10.8 + eq:.2f} mm")
-        print(" (published measured steady-state z = 11.5 mm)")
+        print(" (published measured steady-state z = 11.3 mm)")
     else:
         print("\n (equilibrium not bracketed)")
 
