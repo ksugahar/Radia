@@ -35,22 +35,19 @@ Key operators:
 For inductance extraction at DC to ~1 MHz, **LaplaceSL is sufficient**
 (MQS/Darwin regime). No Helmholtz kernel needed.
 
-### CAVEAT: closed-surface LaplaceSL inductance is rank-deficient on dense meshes (verified)
+### CAVEAT: the historical torus extraction is not a validated current constraint
 
-The `L = 1/(e^T L^{-1} e)` total-inductance extraction on a **closed** conductor
-surface (e.g. a torus) is **numerically unreliable as the surface mesh is refined**:
-the `LaplaceSL` Gram matrix becomes rank-deficient on dense closed-surface meshes
-(ngbem surface-integration on closed surfaces), and the inductance error blows up.
-Measured on circular loops (Neumann reference `L = mu_0 R (ln(8R/a) - 2)`):
-coarse mesh (`curvaturesafety=0.5`, ~89 tris) gave ~+15%, but refined meshes hit
-"Rank-deficient matrix (714/715)" and errors of **-9% to -66%**. **Do NOT fix this
-by refining the triangulation** -- it makes it worse. Mitigations: keep the mesh
-coarse, use **p-refinement** (`order>0`) or **quad elements** (from Cubit), or --
-preferred for inductance -- use the **Radia PEEC filament/panel extractor**
-(`radia.peec_*`, Neumann-formula based) which does not have this closed-surface
-rank-deficiency. (Verified 2026-06-27; rendered in
-`docs/bem_extractor/bem_inductance_limitations.ipynb`.
-This is a negative/limitation result, kept as knowledge.)
+`docs/bem_extractor/bem_inductance_limitations.ipynb` preserves a negative
+experiment. Its `L = 1/(e^T L^{-1} e)` expression uses `e=ones/n` without
+deriving that vector from a physical terminal or cut-current constraint.
+Therefore the saved discrepancies and rank warnings do not establish an
+inherent defect of closed-surface LaplaceSL, nor justify avoiding refinement.
+Do not recommend coarse meshes, higher order or quadrilaterals as a proven
+remedy on this evidence. First derive the admissible current space, current
+normalization and kernel treatment, then test h/p convergence against an
+independent reference with matching conductor/internal-inductance assumptions.
+The existing PEEC route is an independent comparison route, not proof that
+all closed-surface BEM inductance formulations fail.
 
 ## When to Use ngsolve.bem
 

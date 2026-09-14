@@ -1280,7 +1280,8 @@ def document_meta_notebook_result_audit(repo_root: str = "",
 
 
 def _normalise_scholarly_identifier(value: str) -> str:
-    return value.strip().lower().rstrip(".,;)}]>")
+    value = value.strip().lower().rstrip(".,;)}]>")
+    return re.sub(r"^(?:https?://(?:dx\.)?doi\.org/|doi:\s*)", "", value)
 
 
 def _notebook_citation_summary(path: pathlib.Path, repo_root: pathlib.Path) -> dict:
@@ -1328,7 +1329,7 @@ def _notebook_citation_summary(path: pathlib.Path, repo_root: pathlib.Path) -> d
         _normalise_scholarly_identifier(value)
         for value in re.findall(
             r"(?i)(?:https?://(?:dx\.)?doi\.org/|\bdoi\s*[:=]\s*)"
-            r"(10\.\d{4,9}/[^\s\]}>;,]+)",
+            r"""(10\.\d{4,9}/[^\s\]}>;,<"']+)""",
             citation_text,
         )
     }
@@ -1452,14 +1453,14 @@ def document_meta_notebook_citation_audit(
                 row["status"] = "scholarly_identifier_ambiguous_in_canonical_bibliography"
             elif undeclared_identifier_keys:
                 row["status"] = "needs_citation_key_metadata"
-            elif row["has_reference_heading"] and row["citation_audit_exempt_reason"]:
+            elif not keys and row["citation_audit_exempt_reason"]:
                 row["status"] = "ok_reference_section_exempted"
             elif row["has_reference_heading"] and not keys and not resolved_identifier_keys:
                 row["status"] = "reference_section_not_machine_auditable"
             elif keys or resolved_identifier_keys:
                 row["status"] = "ok_citations_resolved"
             else:
-                row["status"] = "ok_no_citations_detected"
+                row["status"] = "needs_method_citations_or_specific_exemption"
         rows.append(row)
         if not row["status"].startswith("ok_") and len(gaps) < max_items:
             gaps.append(row)
@@ -1469,6 +1470,11 @@ def document_meta_notebook_citation_audit(
         "policy": {
             "canonical_bibliography": _rel(canonical, root),
             "notebook_contract": "metadata.radia.citation_keys plus inline DOI/arXiv/cite evidence",
+            "coverage_contract": (
+                "Citation-free notebooks require a specific operational exemption. "
+                "Resolved keys establish bibliography integrity, not scientific validation "
+                "or completeness of the method-to-implementation explanation."
+            ),
         },
         "summary": {
             "repo_root": str(root),

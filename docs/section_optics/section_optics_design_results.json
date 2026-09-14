@@ -8,7 +8,7 @@
     "ngsolve": "6.2.2604"
   },
   "notebook": "section_optics_design.ipynb",
-  "notebook_sha256": "7c0a5753efe84dcc8827ab09b49e22f472586eb8d369af4a8186ba4cb6c7c8ca",
+  "notebook_sha256": "606934ae86bf324724b570dcc14692fbc76eab0e9f5c36f0211dc724d3d4aa85",
   "notebook_bytes": 905379,
   "results": {
     "orbit": {
@@ -167,5 +167,12 @@
         }
       ]
     }
+  },
+  "documentation_revision": {
+    "date": "2026-09-14",
+    "previous_notebook_sha256": "f56c7af9a519d7d1c66d6e09d8f1efb00d72e251113cccb50d38bc45d08045c5",
+    "code_and_saved_outputs_unchanged": true,
+    "comparison": "All complete code-cell objects equal the Git HEAD notebook.",
+    "note": "Original result timestamp/runtime retained; this is not a new numerical run."
   }
 }

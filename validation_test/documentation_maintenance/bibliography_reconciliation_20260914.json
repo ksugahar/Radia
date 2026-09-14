@@ -1,0 +1,5715 @@
+{
+  "schema": "radia.bibliography.reconciliation.v1",
+  "sources": {
+    "\\\\192.168.121.100\\work\\00_CAE\\Radia\\01_GitHub\\packages\\radia-mcp\\src\\radia_mcp\\bibliography\\data\\references.bib": "7dc705a8364d3f66dcec714a86e7f2e1aa78075876d329ec6d495debffd35c6b",
+    "C:\\Users\\Administrator\\Radia\\mcp-development-main\\packages\\radia-mcp\\src\\radia_mcp\\bibliography\\data\\references.bib": "f2ba242a2ba1086d0b59e9c1b4a8b0ef1d857e0ad62a2a82cd047cc32b909c2b"
+  },
+  "rows": [
+    {
+      "live_key": "lubich1988cq",
+      "candidates": [
+        "lubich1988convolution"
+      ],
+      "method": "doi",
+      "field_differences": {
+        "author": {
+          "live": "C. Lubich",
+          "worktree": "Lubich, C."
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "bertrand2019pragersynge",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "Fleurianne Bertrand and Daniele Boffi",
+        "title": "The {Prager--Synge} theorem in reconstruction based a posteriori error estimation",
+        "howpublished": "arXiv:1907.00440v1",
+        "year": "2019",
+        "doi": "10.48550/arXiv.1907.00440"
+      }
+    },
+    {
+      "live_key": "jobard1997streamlines",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "Bruno Jobard and Wilfrid Lefer",
+        "title": "Creating Evenly-Spaced Streamlines of Arbitrary Density",
+        "booktitle": "Visualization in Scientific Computing '97",
+        "publisher": "Springer",
+        "pages": "43--55",
+        "year": "1997",
+        "doi": "10.1007/978-3-7091-6876-9_5"
+      }
+    },
+    {
+      "live_key": "cabral1993lic",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "Brian Cabral and Leith Casey Leedom",
+        "title": "Imaging vector fields using line integral convolution",
+        "booktitle": "Proceedings of SIGGRAPH '93",
+        "pages": "263--270",
+        "year": "1993",
+        "doi": "10.1145/166117.166151"
+      }
+    },
+    {
+      "live_key": "lewiner2003marching",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "Thomas Lewiner and H{\\'e}lio Lopes and Ant{\\^o}nio Wilson Vieira and Geovan Tavares",
+        "title": "Efficient implementation of marching cubes cases with topological guarantees",
+        "journal": "Journal of Graphics Tools",
+        "volume": "8",
+        "number": "2",
+        "pages": "1--15",
+        "year": "2003",
+        "doi": "10.1080/10867651.2003.10487582"
+      }
+    },
+    {
+      "live_key": "trimesh_smoothing_docs",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "{Trimesh contributors}",
+        "title": "Trimesh smoothing API documentation",
+        "howpublished": "\\url{https://trimesh.org/trimesh.smoothing.html}",
+        "note": "Accessed 2026-09-14; nu is the positive dilation parameter"
+      }
+    },
+    {
+      "live_key": "akiba2019optuna",
+      "candidates": [
+        "akiba2019optuna"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {
+        "doi": {
+          "live": "10.48550/arXiv.1907.10902",
+          "worktree": null
+        },
+        "eprint": {
+          "live": null,
+          "worktree": "1907.10902"
+        },
+        "howpublished": {
+          "live": "arXiv:1907.10902",
+          "worktree": null
+        },
+        "url": {
+          "live": null,
+          "worktree": "https://arxiv.org/abs/1907.10902"
+        },
+        "note": {
+          "live": null,
+          "worktree": "Author preprint; accepted at KDD 2019 Applied Data Science track"
+        },
+        "archiveprefix": {
+          "live": null,
+          "worktree": "arXiv"
+        },
+        "author": {
+          "live": "Takuya Akiba and Shotaro Sano and Toshihiko Yanase and Takeru Ohta and Masanori Koyama",
+          "worktree": "Akiba, Takuya and Sano, Shotaro and Yanase, Toshihiko and Ohta, Takeru and Koyama, Masanori"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "abe2017passive",
+      "candidates": [
+        "abe2017passive"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Abe_1",
+      "candidates": [
+        "abe2013design"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "ACA",
+      "candidates": [
+        "mach2016adaptive"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "adam2014",
+      "candidates": [
+        "kingma2014adam"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Agarwal1959",
+      "candidates": [
+        "agarwal1959eddy"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Aharoni1998demag",
+      "candidates": [
+        "aharoni1998demagnetizing"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "akaike1974new",
+      "candidates": [
+        "akaike1974new"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "albanese1988",
+      "candidates": [
+        "albanese1988integral"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "amano1975",
+      "candidates": [
+        "amano1975"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "analytic_ECT",
+      "candidates": [
+        "dodd1968analytical"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Antar1989",
+      "candidates": [
+        "antar1989high"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "anthropic2024mcp",
+      "candidates": [
+        "anthropic2024mcp"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Antoulas2005",
+      "candidates": [
+        "antoulas2005approximation"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "arnold1957functions",
+      "candidates": [
+        "arnold1957functions"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "arnold2006",
+      "candidates": [
+        "arnold2006finite"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "arsenovic2022skrf",
+      "candidates": [
+        "arsenovic2022skrf"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "article",
+      "candidates": [
+        "hibino2024nmr"
+      ],
+      "method": "doi",
+      "field_differences": {
+        "title": {
+          "live": "NMR Quantum Computer for Education卓上型NMR装置を利用した教育用量子コンピュータ",
+          "worktree": "{NMR} Quantum Computer for Education"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "b4",
+      "candidates": [
+        "debroy2018additive"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "babuska1994",
+      "candidates": [
+        "babuska1994versions"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "barsoukov2018impedance",
+      "candidates": [
+        "barsoukov2018impedance"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "bdm1985",
+      "candidates": [
+        "brezzi1985two"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "bebendorf2000approximation",
+      "candidates": [
+        "bebendorf2000approximation"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "bendsoe2003",
+      "candidates": [
+        "bendse2003topology"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "BerengerPML",
+      "candidates": [
+        "berenger1994perfectly"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "bergqvist1997",
+      "candidates": [
+        "bergqvist1997magnetic"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "bettess1977",
+      "candidates": [
+        "bettess1977infinite"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "bib1",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "Campbell, S. L. and Gear, C. W.",
+        "title": "The index of general nonlinear {D}{A}{E}{S}",
+        "journal": "Numer. {M}ath.",
+        "volume": "72",
+        "number": "2",
+        "pages": "173--196",
+        "year": "1995"
+      }
+    },
+    {
+      "live_key": "bib10",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "Babichev, S. A. and Ries, J. and Lvovsky, A. I.",
+        "title": "Quantum scissors: teleportation of single-mode optical states by means \n\t\t\t\t\tof a nonlocal single photon",
+        "year": "2002",
+        "note": "Preprint at \\url{https://arxiv.org/abs/quant-ph/0208066v1}"
+      }
+    },
+    {
+      "live_key": "bib11",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "Beneke, M. and Buchalla, G. and Dunietz, I.",
+        "title": "Mixing induced {CP} asymmetries in inclusive {B} decays",
+        "journal": "Phys. {L}ett.",
+        "volume": "B393",
+        "year": "1997",
+        "pages": "132-142",
+        "archiveprefix": "arXiv",
+        "eprint": "0707.3168",
+        "primaryclass": "gr-gc"
+      }
+    },
+    {
+      "live_key": "bib12",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "Stahl, B.",
+        "title": "deep{SIP}: deep learning of {S}upernova {I}a {P}arameters",
+        "version": "0.42",
+        "keywords": "Software",
+        "howpublished": "Astrophysics {S}ource {C}ode {L}ibrary",
+        "year": "2020",
+        "month": "Jun",
+        "eid": "ascl:2006.023",
+        "pages": "ascl:2006.023",
+        "archiveprefix": "ascl",
+        "eprint": "2006.023",
+        "adsurl": "{https://ui.adsabs.harvard.edu/abs/2020ascl.soft06023S}",
+        "adsnote": "Provided by the SAO/NASA Astrophysics Data System"
+      }
+    },
+    {
+      "live_key": "bib13",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "Abbott, T. M. C. and others",
+        "collaboration": "DES",
+        "title": "{Dark Energy Survey Year 1 Results: Constraints on Extended Cosmological Models from Galaxy Clustering and Weak Lensing}",
+        "eprint": "1810.02499",
+        "archiveprefix": "arXiv",
+        "primaryclass": "astro-ph.CO",
+        "reportnumber": "FERMILAB-PUB-18-507-PPD",
+        "doi": "10.1103/PhysRevD.99.123505",
+        "journal": "Phys. Rev. D",
+        "volume": "99",
+        "number": "12",
+        "pages": "123505",
+        "year": "2019"
+      }
+    },
+    {
+      "live_key": "bib2",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "Slifka, M. K. and Whitton, J. L.",
+        "title": "Clinical implications of dysregulated cytokine production",
+        "journal": "J. {M}ol. {M}ed.",
+        "volume": "78",
+        "pages": "74--80",
+        "year": "2000",
+        "doi": "10.1007/s001090000086"
+      }
+    },
+    {
+      "live_key": "bib3",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "Hamburger, C.",
+        "title": "Quasimonotonicity, regularity and duality for nonlinear systems of \n\t\t\t\t\tpartial differential equations",
+        "journal": "Ann. Mat. Pura. Appl.",
+        "volume": "169",
+        "number": "2",
+        "pages": "321--354",
+        "year": "1995"
+      }
+    },
+    {
+      "live_key": "bib4",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "Geddes, K. O. and Czapor, S. R. and Labahn, G.",
+        "title": "Algorithms for {C}omputer {A}lgebra",
+        "address": "Boston",
+        "publisher": "Kluwer",
+        "year": "1992"
+      }
+    },
+    {
+      "live_key": "bib5",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "Broy, M.",
+        "title": "Software engineering---from auxiliary to key technologies",
+        "editor": "Broy, M. and Denert, E.",
+        "booktitle": "Software Pioneers",
+        "pages": "10--13",
+        "address": "New {Y}ork",
+        "publisher": "Springer",
+        "year": "1992"
+      }
+    },
+    {
+      "live_key": "bib6",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "editor": "Seymour, R. S.",
+        "title": "Conductive {P}olymers",
+        "address": "New {Y}ork",
+        "publisher": "Plenum",
+        "year": "1981"
+      }
+    },
+    {
+      "live_key": "bib7",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "Smith, S. E.",
+        "title": "Neuromuscular blocking drugs in man",
+        "editor": "Zaimis, E.",
+        "volume": "42",
+        "booktitle": "Neuromuscular junction. {H}andbook of experimental pharmacology",
+        "pages": "593--660",
+        "address": "Heidelberg",
+        "publisher": "Springer",
+        "year": "1976"
+      }
+    },
+    {
+      "live_key": "bib8",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "Chung, S. T. and Morris, R. L.",
+        "title": "Isolation and characterization of plasmid deoxyribonucleic acid from \n\t\t\t\t\tStreptomyces fradiae",
+        "year": "1978",
+        "note": "Paper presented at the 3rd international symposium on the genetics \n\t\t\t\t\tof industrial microorganisms, University of {W}isconsin, {M}adison, \n\t\t\t\t\t4--9 June 1978"
+      }
+    },
+    {
+      "live_key": "bib9",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "Hao, Z. and AghaKouchak, A. and Nakhjiri, N. and Farahmand, A.",
+        "title": "Global integrated drought monitoring and prediction system (GIDMaPS) data sets",
+        "year": "2014",
+        "note": "figshare \\url{https://doi.org/10.6084/m9.figshare.853801}"
+      }
+    },
+    {
+      "live_key": "Bilicz2023",
+      "candidates": [
+        "bilicz2023nonlocal"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "birk2022",
+      "candidates": [
+        "birk2022magnetostatic"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "biro1989use",
+      "candidates": [
+        "biro1989use"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "biro1993computation",
+      "candidates": [
+        "biro1993computation"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "biro1999",
+      "candidates": [
+        "biro1999edge"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "BiroKoester2022scalar",
+      "candidates": [
+        "bro2022generating"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "BLUMICH20162",
+      "candidates": [
+        "blumich2016introduction"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "BLUMICH20183",
+      "candidates": [
+        "blumich2018beyond"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Blumich2019",
+      "candidates": [
+        "blumich2019low"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "bobbio1997play",
+      "candidates": [
+        "bobbio1997play"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "bossavit1983",
+      "candidates": [
+        "bossavit1983trifou"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "bossavit1983_b",
+      "candidates": [
+        "bossavit1983b"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "bossavit1988",
+      "candidates": [
+        "bossavit1988whitney"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "bossavit1998",
+      "candidates": [
+        "bossavit1998computational"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "boulmezaoud2005",
+      "candidates": [
+        "boulmezaoud2005inverted"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Brideson2002",
+      "candidates": [
+        "brideson2002determining"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "brunotte1992",
+      "candidates": [
+        "brunotte1992finite"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "build123d",
+      "candidates": [
+        "maitland2025build"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "burnett1994",
+      "candidates": [
+        "burnett1994three"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "CAE1960",
+      "candidates": [
+        "turner1956stiffness"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "CAE1990",
+      "candidates": [
+        "sienz2001integrated"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "calcfemkelvin2026",
+      "candidates": [
+        "sugahara2026production"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "cauer1958synthesis",
+      "candidates": [
+        "cauer1958synthesis"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "cefc2026_hmatrix",
+      "candidates": [
+        "sugahara2026matrix"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Celebi2017",
+      "candidates": [
+        "celebi2017fast"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "chadebec2006review",
+      "candidates": [
+        "chadebec2006review"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "charef1992fractal",
+      "candidates": [
+        "charef1992fractal"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "chedid1996",
+      "candidates": [
+        "chedid1996automatic"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "chen1997review",
+      "candidates": [
+        "chen1997review"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "CHONLATHEP2017114",
+      "candidates": [
+        "chonlathep2017simple"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "chubar1998three",
+      "candidates": [
+        "chubar1998three"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {
+        "doi": {
+          "live": null,
+          "worktree": "10.1107/S0909049597013502"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "ciric1986inversion",
+      "candidates": [
+        "ciric1986inversion"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "CLN_dynamic",
+      "candidates": [
+        "shindo2017dynamical"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "CLN_expansion",
+      "candidates": [
+        "kuriyama2019cauer"
+      ],
+      "method": "doi",
+      "field_differences": {
+        "doi": {
+          "live": "10.1109/TMAG.2019.2900766",
+          "worktree": "10.1109/tmag.2019.2900766"
+        },
+        "pages": {
+          "live": "1-4",
+          "worktree": "1--4"
+        },
+        "author": {
+          "live": "K. {Kuriyama} and A. {Kameari} and H. {Ebrahimi} and T. {Fujiwara} and K. {Sugahara} and Y. {Shindo} and T. {Matsuo}",
+          "worktree": "{Kuriyama}, Kenta and {Kameari}, Akihisa and {Ebrahimi}, Hassan and {Fujiwara}, Takayuki and {Sugahara}, Kengo and {Shindo}, Yuji and {Matsuo}, Tetsuji"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "CLN_matrix",
+      "candidates": [
+        "matsuo2018matrix"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "CLN_open_bd",
+      "candidates": [
+        "sugahara2018finite"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "CLN_sugahara",
+      "candidates": [
+        "sugahara2019cauer"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "CMA-ES",
+      "candidates": [
+        "hansen2001completely"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "cole1941dispersion",
+      "candidates": [
+        "cole1941dispersion"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "compumag2025",
+      "candidates": [
+        "hibino2025coil"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "COMSOL",
+      "candidates": [
+        "COMSOL"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {
+        "year": {
+          "live": null,
+          "worktree": "2026"
+        },
+        "author": {
+          "live": null,
+          "worktree": "{COMSOL AB}"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "conformaltransformation",
+      "candidates": [
+        "yeh2023conformal"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "CPML",
+      "candidates": [
+        "roden2000convolution"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "davidson1951dielectric",
+      "candidates": [
+        "davidson1951dielectric"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Davies1990",
+      "candidates": [
+        "davies1990conduction"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "debye1929polar",
+      "candidates": [
+        "debye1929polar"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "dellatorre1999magnetic",
+      "candidates": [
+        "dellatorre1999magnetic"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "demarcke2011",
+      "candidates": [
+        "demarcke2011poincare"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "demkowicz2000",
+      "candidates": [
+        "demkowicz2000rham"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "demkowicz2006",
+      "candidates": [
+        "demkowicz2006conjugated"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "dempster1977",
+      "candidates": [
+        "dempster1977maximum"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "deschrijver2008macromodeling",
+      "candidates": [
+        "deschrijver2008macromodeling"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Deutsch_1",
+      "candidates": [
+        "deutsch1985quantum"
+      ],
+      "method": "doi",
+      "field_differences": {
+        "author": {
+          "live": "{Deutsch}, David and {Penrose}, Roger",
+          "worktree": "{Deutsch}, David"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Deutsch_2",
+      "candidates": [
+        "deutsch1992rapid"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "dlotko2009",
+      "candidates": [
+        "dotko2009automatic"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Dlotko2019",
+      "candidates": [
+        "dlotko2019fake"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "dowell1966eddy",
+      "candidates": [
+        "dowell1966eddy"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Duan",
+      "candidates": [
+        "duan2016benchmarking"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "DuBarrioJiangCheng2017",
+      "candidates": [
+        "du2017stability"
+      ],
+      "method": "title_year",
+      "field_differences": {
+        "doi": {
+          "live": "10.1016/j.amc.2017.04.020",
+          "worktree": null
+        },
+        "note": {
+          "live": null,
+          "worktree": "{DOI unverified: the recorded DOI resolved to an unrelated paper}"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "dyck1996",
+      "candidates": [
+        "dyck1996automated"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "egger2024hoconv",
+      "candidates": [
+        "egger2026convergence"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "egger2025compumag",
+      "candidates": [
+        "egger2026efficient"
+      ],
+      "method": "doi",
+      "field_differences": {
+        "pages": {
+          "live": "7300706",
+          "worktree": "7300706--7300706"
+        },
+        "author": {
+          "live": "Herbert Egger and Felix Engertsberger and Andreas Schafelner",
+          "worktree": "Egger, Herbert and Engertsberger, Felix and Schafelner, Andreas"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "egger2025schurinverse",
+      "candidates": [
+        "egger2025schurinverse"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {
+        "doi": {
+          "live": "10.48550/arXiv.2507.15289",
+          "worktree": null
+        },
+        "eprint": {
+          "live": null,
+          "worktree": "2507.15289"
+        },
+        "howpublished": {
+          "live": "arXiv:2507.15289",
+          "worktree": null
+        },
+        "url": {
+          "live": null,
+          "worktree": "https://arxiv.org/abs/2507.15289"
+        },
+        "note": {
+          "live": null,
+          "worktree": "Preprint of the journal article recorded as egger2026efficient"
+        },
+        "archiveprefix": {
+          "live": null,
+          "worktree": "arXiv"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "egger2025tmag",
+      "candidates": [
+        "egger2025tmag"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {
+        "number": {
+          "live": "7",
+          "worktree": "4"
+        },
+        "doi": {
+          "live": "10.1109/TMAG.2025.3530000",
+          "worktree": "10.1109/TMAG.2025.3544507"
+        },
+        "note": {
+          "live": "Unverified legacy record: DOI lookup failed and title/author correspondence is unresolved; do not cite as verified. Use egger2025compumag only when the intended work is the separately verified forward/inverse article",
+          "worktree": null
+        },
+        "pages": {
+          "live": null,
+          "worktree": "1--7"
+        },
+        "author": {
+          "live": "{Egger}, H. and {Engertsberger}, M. and {Schafelner}, L.",
+          "worktree": "Egger, Herbert and Engertsberger, Felix and Domenig, Lukas and Roppert, Klaus and Kaltenbacher, Manfred"
+        },
+        "title": {
+          "live": "Efficient Numerical Evaluation of Energy-Based Magnetic\n             Hysteresis Operators",
+          "worktree": "On Forward and Inverse Energy-Based Magnetic Vector Hysteresis Operators"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": true
+    },
+    {
+      "live_key": "ELF",
+      "candidates": [
+        "ELF"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {
+        "year": {
+          "live": null,
+          "worktree": "2026"
+        },
+        "author": {
+          "live": null,
+          "worktree": "{ELF Corporation}"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "elf_magic",
+      "candidates": [
+        "corporation2025elf"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "elf_magic_b",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "{ELF {Corporation}}",
+        "title": "{ELF/MAGIC}: Magnetic Field Analysis Software",
+        "howpublished": "\\url{https://www.elf.co.jp/en/}",
+        "note": "Accessed: 2026-07-27"
+      }
+    },
+    {
+      "live_key": "en17205145",
+      "candidates": [
+        "kiss2024model"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "EngquistMajda1977",
+      "candidates": [
+        "engquist1977absorbing"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "ES_1+1",
+      "candidates": [
+        "rechenberg1971evolutionsstrategie"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "ES_mu+lambda",
+      "candidates": [
+        "schwefel1981numerical"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "ES_mu_lambda",
+      "candidates": [
+        "schwefel1977numerische"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Eschmann",
+      "candidates": [
+        "eschmann2021reward"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "exafmm2021",
+      "candidates": [
+        "wang2021exafmm"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "FEM_with_playmodel",
+      "candidates": [
+        "kitao2014loss"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "FEMM",
+      "candidates": [
+        "FEMM"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {
+        "year": {
+          "live": null,
+          "worktree": "2026"
+        },
+        "author": {
+          "live": null,
+          "worktree": "{Meeker}, David"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "FEMM_b",
+      "candidates": [
+        "meeker2015finite"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "femtet",
+      "candidates": [
+        "femtet"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {
+        "author": {
+          "live": null,
+          "worktree": "{Murata Software}"
+        }
+      },
+      "kind_difference": true,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "fetzer1997",
+      "candidates": [
+        "fetzer1997coupling"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "foster1924reactance",
+      "candidates": [
+        "foster1924reactance"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "francois2013energy",
+      "candidates": [
+        "francoislavet2013energy"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "freefem",
+      "candidates": [
+        "freefem"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {
+        "author": {
+          "live": null,
+          "worktree": "{Hecht}, Fr\\'ed\\'eric"
+        }
+      },
+      "kind_difference": true,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "freeman1988novel",
+      "candidates": [
+        "freeman1988novel"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "freeman1989",
+      "candidates": [
+        "freeman1989open"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "frozen2",
+      "candidates": [
+        "dlala2007locally"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "frozen3",
+      "candidates": [
+        "dlala2008fast"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Fujita",
+      "candidates": [
+        "fujita2017finite"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "fujiwara1990",
+      "candidates": [
+        "fujiwara1990results"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "gao2026novelhys",
+      "candidates": [
+        "gao2026novelhys"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "gao2026pwmloss",
+      "candidates": [
+        "gao2026pwmloss"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "gfun1972",
+      "candidates": [
+        "newman1972gfun"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "givoli1992",
+      "candidates": [
+        "givoli1992numerical"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "GivoliKeller1989",
+      "candidates": [
+        "givoli1989finite"
+      ],
+      "method": "title_year",
+      "field_differences": {
+        "doi": {
+          "live": "10.1016/0045-7825(89)90139-8",
+          "worktree": null
+        },
+        "note": {
+          "live": null,
+          "worktree": "{DOI unverified: DOI 10.1016/0045-7825(89)90139-8 does not resolve}"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "golub2013matrix",
+      "candidates": [
+        "golub2013matrix"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Greengard1987",
+      "candidates": [
+        "greengard1987fast"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "grilli2018ale",
+      "candidates": [
+        "grilli2018ale"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Guo2023",
+      "candidates": [
+        "guo2023efficient"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "gustavsen1999rational",
+      "candidates": [
+        "gustavsen1999rational"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "gustavsen2001passivity",
+      "candidates": [
+        "gustavsen2001passivity"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "gustavsen2006improving",
+      "candidates": [
+        "gustavsen2006improving"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "gustavsen2008passivity",
+      "candidates": [
+        "gustavsen2008passivity"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "hacapk_github",
+      "candidates": [
+        "ida2025hacapk"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "HACApK_online",
+      "candidates": [
+        "HACApK_online"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {
+        "year": {
+          "live": null,
+          "worktree": "2025"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Hackbusch1999",
+      "candidates": [
+        "hackbusch1999sparse"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "hafla2005efficient",
+      "candidates": [
+        "hafla2005efficient"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Hagstrom1999",
+      "candidates": [
+        "hagstrom1999radiation"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Halko2011",
+      "candidates": [
+        "halko2011finding"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Hansen1987",
+      "candidates": [
+        "hansen1987truncated"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "hansen1998rank",
+      "candidates": [
+        "hansen1998rank"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "hantila1975",
+      "candidates": [
+        "hantila1975method"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "hantila2000",
+      "candidates": [
+        "hantila2000polarization"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Harrington1961",
+      "candidates": [
+        "harrington1961time"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "havriliak1967complex",
+      "candidates": [
+        "havriliak1967complex"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Henrotte1993",
+      "candidates": [
+        "henrotte1993new"
+      ],
+      "method": "generated_key_candidate_only",
+      "field_differences": {
+        "journal": {
+          "live": "IEEE Trans. Magn.",
+          "worktree": "IEEE Transactions on Magnetics"
+        },
+        "doi": {
+          "live": "10.1109/CEFC.1992.720582",
+          "worktree": "10.1109/20.250649"
+        },
+        "title": {
+          "live": "A New Method for Axisymmetric Linear and Nonlinear Problems",
+          "worktree": "{A new method for axisymmetrical linear and nonlinear problems}"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": true
+    },
+    {
+      "live_key": "henrotte2004",
+      "candidates": [
+        "henrotte2004eggshell"
+      ],
+      "method": "doi",
+      "field_differences": {
+        "author": {
+          "live": "F. {Henrotte} and G. {Deli{\\'e}ge} and K. {Hameyer}",
+          "worktree": "F. {Henrotte} and G. {Deli{\\`e}ge} and K. {Hameyer}"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "henrotte2006energy",
+      "candidates": [
+        "henrotte2006energy"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Henrotte_axisym",
+      "candidates": [
+        "henrotte2006structure"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "hestenes1952",
+      "candidates": [
+        "hestenes1952methods"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "HIBINO2018128",
+      "candidates": [
+        "hibino2018simple"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "HIBINO2024",
+      "candidates": [
+        "hibino2024nmr"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "hibino2026aca",
+      "candidates": [
+        "hibino2026aca"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "hiptmair2002",
+      "candidates": [
+        "hiptmair2002finite"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "hirschorn2010determination",
+      "candidates": [
+        "hirschorn2010determination"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "hirt1974ale",
+      "candidates": [
+        "hirt1974ale"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Hiruma",
+      "candidates": [
+        "hiruma2017lanczos"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Hiruma2020",
+      "candidates": [
+        "hiruma2020model"
+      ],
+      "method": "title_year",
+      "field_differences": {
+        "doi": {
+          "live": "10.1109/TMAG.2019.2956170",
+          "worktree": null
+        },
+        "note": {
+          "live": null,
+          "worktree": "{DOI unverified: DOI 10.1109/TMAG.2019.2956170 does not resolve}"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "hiruma2020model",
+      "candidates": [
+        "hiruma2020model"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {
+        "doi": {
+          "live": "10.1109/TMAG.2019.2962665",
+          "worktree": null
+        },
+        "note": {
+          "live": null,
+          "worktree": "{DOI unverified: DOI 10.1109/TMAG.2019.2956170 does not resolve}"
+        },
+        "keywords": {
+          "live": "Symmetric matrices;Magnetic circuits;Magnetic domains;Maxwell equations;Iron;Integrated circuit modeling;Mathematical model;Continued fraction;Krylov subspace methods;Lanczos algorithm;Padé approximation;self-adjoint matrix;transfer function",
+          "worktree": null
+        },
+        "pages": {
+          "live": "1-8",
+          "worktree": "1--4"
+        },
+        "author": {
+          "live": "{H.~{Shingo}} and {H.~{Igarashi}}",
+          "worktree": "{Hiruma}, S. and {Igarashi}, H."
+        },
+        "title": {
+          "live": "{M}odel {O}rder {R}eduction for {L}inear {T}ime-{I}nvariant {S}ystem {W}ith {S}ymmetric {P}ositive-{D}efinite {M}atrices: {S}ynthesis of {C}auer-{E}quivalent {C}ircuit",
+          "worktree": "{Model Order Reduction of 3-D Eddy Current Problems by Cauer\n             Ladder Network Method}"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": true
+    },
+    {
+      "live_key": "Hiruma2022",
+      "candidates": [
+        "hiruma2022error"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Hiruma_2020",
+      "candidates": [
+        "hiruma2020three"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Hiruma_c",
+      "candidates": [
+        "hshingo2020model"
+      ],
+      "method": "doi",
+      "field_differences": {
+        "doi": {
+          "live": "10.1109/tmag.2019.2962665",
+          "worktree": "10.1109/TMAG.2019.2962665"
+        },
+        "keywords": {
+          "live": null,
+          "worktree": "Symmetric matrices;Magnetic circuits;Magnetic domains;Maxwell equations;Iron;Integrated circuit modeling;Mathematical model;Continued fraction;Krylov subspace methods;Lanczos algorithm;Padé approximation;self-adjoint matrix;transfer function"
+        },
+        "pages": {
+          "live": "1--8",
+          "worktree": "1-8"
+        },
+        "author": {
+          "live": "S. {Hiruma} and H. {Igarashi}",
+          "worktree": "{H.~{Shingo}} and {H.~{Igarashi}}"
+        },
+        "title": {
+          "live": "Model Order Reduction for Linear Time-Invariant System With Symmetric Positive-Definite Matrices: Synthesis of Cauer-Equivalent Circuit",
+          "worktree": "{M}odel {O}rder {R}eduction for {L}inear {T}ime-{I}nvariant {S}ystem {W}ith {S}ymmetric {P}ositive-{D}efinite {M}atrices: {S}ynthesis of {C}auer-{E}quivalent {C}ircuit"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Hiruma_integral",
+      "candidates": [
+        "hiruma2017fast"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Hiruma_Litz",
+      "candidates": [
+        "hiruma2018eddy"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "HirumaCLNUnitCell2024",
+      "candidates": [
+        "hiruma2024homogenization"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "HirumaIgarashi2020unitcell",
+      "candidates": [
+        "hiruma2020homogenization"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "HirumaXFEM2023",
+      "candidates": [
+        "hiruma2023extended"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "HirumaXFEMexact2024",
+      "candidates": [
+        "hiruma2024extended"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Hitotsumatsu2008",
+      "candidates": [
+        "hitotsumatsu2008pod"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Hoffman2016",
+      "candidates": [
+        "hoffman2016verified"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "hohage2021",
+      "candidates": [
+        "hohage2021learned"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Hollaus2025",
+      "candidates": [
+        "hollaus2026nonlinear"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "hornik1989multilayer",
+      "candidates": [
+        "hornik1989multilayer"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "hugon2010",
+      "candidates": [
+        "hugon2010design"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "HUGON201075",
+      "candidates": [
+        "hugon2010designb"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "hurley2000optimizing",
+      "candidates": [
+        "hurley2000optimizing"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "IABC",
+      "candidates": [
+        "meeker2013improvised"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "IABC_ksug",
+      "candidates": [
+        "sugahara2015improvised"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "IABC_PIERS",
+      "candidates": [
+        "sugahara2016electromagnetic"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "ICHIJO201457",
+      "candidates": [
+        "ichijo2014paramagnetic"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "ida2",
+      "candidates": [
+        "ida2018lattice"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Ida2014",
+      "candidates": [
+        "hibino2026coil"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "ida2014parallel",
+      "candidates": [
+        "ida2014parallel"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "ida2015variable",
+      "candidates": [
+        "ida2016variable"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Igarashi_semi",
+      "candidates": [
+        "igarashi2017semi"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "imhoff1990",
+      "candidates": [
+        "imhoff1990original"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "infinite1995",
+      "candidates": [
+        "webb1995application"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "iTiger",
+      "candidates": [
+        "fukushima2020tiger"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "ItoSugahara2026",
+      "candidates": [
+        "ItoSugahara2026"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "jackson1998",
+      "candidates": [
+        "jackson1998classical"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "janet2004simplified",
+      "candidates": [
+        "janet2004simplified"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "janet2005magnetic",
+      "candidates": [
+        "janet2005magnetic"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "jiles1986theory",
+      "candidates": [
+        "jiles1986theory"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "JinFEM",
+      "candidates": [
+        "JinFEM"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {
+        "author": {
+          "live": null,
+          "worktree": "{Jin}, Jianming"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "JingguoLavers1993",
+      "candidates": [
+        "wang1993modified"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "JMAG",
+      "candidates": [
+        "JMAG"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {
+        "year": {
+          "live": null,
+          "worktree": "2026"
+        },
+        "author": {
+          "live": null,
+          "worktree": "{JSOL Corporation}"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "johnson1980",
+      "candidates": [
+        "johnson1980coupling"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "jorcin2006cpe",
+      "candidates": [
+        "jorcin2006cpe"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "JP-MARs",
+      "candidates": [
+        "JP-MARs"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {
+        "year": {
+          "live": null,
+          "worktree": "2024"
+        },
+        "author": {
+          "live": null,
+          "worktree": "{JP-MARs Project}"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "JSOL_zooming",
+      "candidates": [
+        "katagiri2017fast"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Kameari2018",
+      "candidates": [
+        "kameari2018cauer"
+      ],
+      "method": "doi",
+      "field_differences": {
+        "note": {
+          "live": null,
+          "worktree": "Art no. 7201804"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Kameari_canonical",
+      "candidates": [
+        "kameari2017canonical"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Kamon1994",
+      "candidates": [
+        "kamon1994fasthenry"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Karl",
+      "candidates": [
+        "hollaus2018some"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Kawase",
+      "candidates": [
+        "kawase2016finite"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "keller1989",
+      "candidates": [
+        "keller1989exact"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "kelley1995",
+      "candidates": [
+        "kelley1995iterative"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "kellogg1953foundations",
+      "candidates": [
+        "kellogg1953foundations"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "kelvin1986acoustic",
+      "candidates": [
+        "dassios1989kelvin"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "kelvin2010electrostatic",
+      "candidates": [
+        "zhang2010calculation"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "kelvin2018transmission",
+      "candidates": [
+        "farah2018finite"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "KelvinFiniteDifference",
+      "candidates": [
+        "gold2020kelvin"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "kettunen1992volume",
+      "candidates": [
+        "kettunen1992volume"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Kim",
+      "candidates": [
+        "kim2023control"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "knockaert2008",
+      "candidates": [
+        "knockaert2008schur"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "knupp2001",
+      "candidates": [
+        "knupp2001algebraic"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Koester2021industrial",
+      "candidates": [
+        "koster2021application"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Koester2021PGDCLN",
+      "candidates": [
+        "koster2021proper"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Koester2023stranded",
+      "candidates": [
+        "koster2023modelling"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "koizumi1995new",
+      "candidates": [
+        "koizumi1995new"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "kolmogorov1957representation",
+      "candidates": [
+        "kolmogorov1957representation"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "kosaka2020virtual",
+      "candidates": [
+        "kosaka2020virtual"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Krahenbuhl1993",
+      "candidates": [
+        "krahenbuhl1993thin"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "kuijpers2023discretization",
+      "candidates": [
+        "kuijpers2023discretization"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {
+        "note": {
+          "live": "Conference contribution 525, session PC-A1:6, May 25",
+          "worktree": "Conference contribution 525, session PC-A1:6"
+        },
+        "author": {
+          "live": "{Kuijpers}, B. J. A. and {Jansen}, J. W. and {Lomonova}, E. A.",
+          "worktree": "Kuijpers, B. J. A. and Jansen, J. W. and Lomonova, E. A."
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "kuijpers2023",
+      "candidates": [
+        "kuijpers2023optimal"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Kuriyama2019",
+      "candidates": [
+        "kuriyama2019cauer"
+      ],
+      "method": "doi",
+      "field_differences": {
+        "keywords": {
+          "live": null,
+          "worktree": "ladder networks;vectors;magnetic-current vector potential;efficient model order eddy-current field reduction;CLN method;Cauer ladder network method;multiple expansion points;Mathematical model;Electric potential;Magnetic domains;Finite element analysis;Computational modeling;Integrated circuit modeling;Magnetic analysis;Cauer ladder network (CLN);magnetic/current vector potential;model order reduction (MOR);multiple expansion points"
+        },
+        "issn": {
+          "live": null,
+          "worktree": "0018-9464"
+        },
+        "month": {
+          "live": null,
+          "worktree": "June"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Kurz1995fembem",
+      "candidates": [
+        "kurz1995improved"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "kurz1998",
+      "candidates": [
+        "kurz1998novel"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "ladas2008",
+      "candidates": [
+        "ladas2008energy"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Lanczos",
+      "candidates": [
+        "feldmann1995efficient"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "LaversBiringer1985",
+      "candidates": [
+        "lavers1985efficient"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "le2012coupling",
+      "candidates": [
+        "leduc2012coupling"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Lebedev1976",
+      "candidates": [
+        "lebedev1976quadratures"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "lee2004",
+      "candidates": [
+        "lee2004accelerator"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "lemdiasov2005stream",
+      "candidates": [
+        "lemdiasov2005stream"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "levan2014aca",
+      "candidates": [
+        "levan2014aca"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "levan2015facet",
+      "candidates": [
+        "levan2015facet"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "levitt2013spin",
+      "candidates": [
+        "levitt2013spin"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "li2001improved",
+      "candidates": [
+        "li2001improved"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Li2018",
+      "candidates": [
+        "li2018accelerating"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "littin2021",
+      "candidates": [
+        "littin2021methods"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "liu2024kan",
+      "candidates": [
+        "liu2024kan"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "louizos2018l0",
+      "candidates": [
+        "louizos2018l"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "lowther1989",
+      "candidates": [
+        "lowther1989sparse"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "LQR",
+      "candidates": [
+        "bryson1975applied"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "mairal2009online",
+      "candidates": [
+        "mairal2009online"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "MANZ2008131",
+      "candidates": [
+        "manz2008simple"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "matsuo2003stopplay",
+      "candidates": [
+        "matsuo2003stopplay"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "matsuo2004identification",
+      "candidates": [
+        "matsuo2004identification"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "matsuo2008vecstop",
+      "candidates": [
+        "matsuo2008vecstop"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Matsuo2020motor",
+      "candidates": [
+        "matsuo2020model"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Matsuo2026jmmm",
+      "candidates": [
+        "matsuo2026representation"
+      ],
+      "method": "doi",
+      "field_differences": {
+        "pages": {
+          "live": "174229",
+          "worktree": null
+        },
+        "note": {
+          "live": null,
+          "worktree": "Article 174229; formal version of the earlier IEEJ\n             SA-26-014 research-meeting manuscript"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Matsuo2026sa26014",
+      "candidates": [
+        "matsuo2026investigation"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "matsuoshimasaki2005representation",
+      "candidates": [
+        "matsuo2005representation"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "mayergoyz1986preisach",
+      "candidates": [
+        "mayergoyz1986preisach"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "mcdonald1972",
+      "candidates": [
+        "mcdonald1972finite"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "mcdowell2017",
+      "candidates": [
+        "mcdowell2017thin"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "McDowell2018",
+      "candidates": [
+        "mcdowell2018adjustable"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Meeker",
+      "candidates": [
+        "meeker2006continuum"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "meeker2014improvised",
+      "candidates": [
+        "meeker2014improvised"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "mendeley_eis",
+      "candidates": [
+        "mingant2024soc"
+      ],
+      "method": "title_year",
+      "field_differences": {
+        "doi": {
+          "live": "10.1016/j.dib.2024.110807",
+          "worktree": null
+        },
+        "note": {
+          "live": null,
+          "worktree": "{DOI unverified: the recorded DOI resolved to a bacterial genome paper}"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "merkel1987solution",
+      "candidates": [
+        "merkel1987solution"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "mitsuoka2013vectorplay",
+      "candidates": [
+        "mitsuoka2013vectorplay"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "mittra1989review",
+      "candidates": [
+        "mittra1989review"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Mitzner1967",
+      "candidates": [
+        "mitzner1967integral"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "MOR_T.H&S.C",
+      "candidates": [
+        "henneron2015model"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "MOR_Y.STO&H.Igarashi",
+      "candidates": [
+        "sato2013model"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "morrison1959rc",
+      "candidates": [
+        "morrison1959rc"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {
+        "doi": {
+          "live": "10.1109/TCT.1959.1086564",
+          "worktree": "10.1109/tct.1959.1086554"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": true
+    },
+    {
+      "live_key": "multipole",
+      "candidates": [
+        "jgardner1991vector"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "nabizadeh2021kelvin",
+      "candidates": [
+        "nabizadeh2021kelvin"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Nagamine2022a",
+      "candidates": [
+        "nagamine2022cauer"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Nagamine2023",
+      "candidates": [
+        "nagamine2023henrici"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Nagamine2026",
+      "candidates": [
+        "nagamine2026verified"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "nagamine2026_b",
+      "candidates": [
+        "nagamine2026b"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "nagel1975spice2",
+      "candidates": [
+        "nagel1975spice"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "nagy2000",
+      "candidates": [
+        "nagy2000gravitational"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "NakatsukasaSeteTrefethen2018",
+      "candidates": [
+        "nakatsukasa2018aaa"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "nasa_battery",
+      "candidates": [
+        "excellence2024ion"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Natalini2000",
+      "candidates": [
+        "natalini2000inequalities"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "nedelec1980",
+      "candidates": [
+        "nedelec1980mixed"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "ngsolve",
+      "candidates": [
+        "schoberl2014implementation"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "NGSOLVE_b",
+      "candidates": [
+        "NGSOLVE_b"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {
+        "year": {
+          "live": null,
+          "worktree": "2024"
+        },
+        "author": {
+          "live": null,
+          "worktree": "{Sch\\\"oberl}, Joachim"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "NGSolveWeb",
+      "candidates": [
+        "schoberl2026netgen"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "nicolet1994",
+      "candidates": [
+        "nicolet1994transformation"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "nmr_Deutsch_1",
+      "candidates": [
+        "do2005experimental"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "nmr_Deutsch_2",
+      "candidates": [
+        "jones1998implementation"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "nojima1988new",
+      "candidates": [
+        "nojima1988new"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Noll1976",
+      "candidates": [
+        "noll1976zernike"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Non-MaxwellianPML",
+      "candidates": [
+        "ozgun2007non"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Nonlin_CLN_1",
+      "candidates": [
+        "eskandari2020cauer"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Nonlin_CLN_2",
+      "candidates": [
+        "tobita2022nonlinear"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "odabasioglu1998prima",
+      "candidates": [
+        "odabasioglu1998prima"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "ohnishi2017superkekb",
+      "candidates": [
+        "ohnishi2017superkekb"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "OPERA_website",
+      "candidates": [
+        "OPERA_website"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {
+        "year": {
+          "live": null,
+          "worktree": "2026"
+        },
+        "author": {
+          "live": null,
+          "worktree": "{Dassault Syst\\`emes}"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "OptimizationPML",
+      "candidates": [
+        "ddek2002optimization"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "paszke2019pytorch",
+      "candidates": [
+        "paszke2019pytorch"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "PID",
+      "candidates": [
+        "strom2006advanced"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "POD",
+      "candidates": [
+        "pierquin2015model"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Podlubny1999",
+      "candidates": [
+        "podlubny1999fractional"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "potter1971",
+      "candidates": [
+        "potter1971self"
+      ],
+      "method": "doi",
+      "field_differences": {
+        "author": {
+          "live": "R. Potter and R. Schmulian",
+          "worktree": "Potter, R. and Schmulian, R."
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "pragersynge1947",
+      "candidates": [
+        "prager1947approximations"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "prigozhin2016",
+      "candidates": [
+        "prigozhin2016energy"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "QuarteroniValli1999",
+      "candidates": [
+        "quarteroni1999domain"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "R_Turner_1986",
+      "candidates": [
+        "turner1986target"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "radia_esrf",
+      "candidates": [
+        "chubar2024radia"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "radia_fork",
+      "candidates": [
+        "sugahara2025radia"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Radia_GitHub",
+      "candidates": [
+        "sugahara2026radia"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "radia_mcp",
+      "candidates": [
+        "radia_mcp"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {
+        "year": {
+          "live": null,
+          "worktree": "2026"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "radia_repo",
+      "candidates": [
+        "sugahara2026radiab"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "radia_sugahara",
+      "candidates": [
+        "sugahara2025radiab"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Radia_website",
+      "candidates": [
+        "Radia_website"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {
+        "year": {
+          "live": null,
+          "worktree": "2026"
+        },
+        "author": {
+          "live": null,
+          "worktree": "{ESRF}"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "RadiaSugahara",
+      "candidates": [
+        "sugahara2026radiac"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "radiation1987",
+      "candidates": [
+        "kriegsmann1987new"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "raissi2019physics",
+      "candidates": [
+        "raissi2019physics"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "ramsay1988",
+      "candidates": [
+        "ramsay1988monotone"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "randles1947kinetics",
+      "candidates": [
+        "randles1947kinetics"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "RaoWiltonGlisson1982",
+      "candidates": [
+        "rao1982electromagnetic"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "raviart1977",
+      "candidates": [
+        "raviart1977mixed"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "ref2",
+      "candidates": [
+        "althuwayb2022dilemma"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "ref3",
+      "candidates": [
+        "qi2020improved"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "ref4",
+      "candidates": [
+        "kaimori2021investigation"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "ref5",
+      "candidates": [
+        "zhu2011rigorous"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "ref6",
+      "candidates": [
+        "schwarzbach2009stability"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "ref7",
+      "candidates": [
+        "ostrowski2012transient"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "ref8",
+      "candidates": [
+        "zhao2019novel"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "remacle1995",
+      "candidates": [
+        "remacle1994comparison"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "rikabi1988",
+      "candidates": [
+        "rikabi1988error"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "RLToolbox",
+      "candidates": [
+        "mathworks2024reinforcement"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Romeo1984",
+      "candidates": [
+        "romeo1984magnet"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "RPM1",
+      "candidates": [
+        "onchi2023basic"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "RPM2",
+      "candidates": [
+        "onchi2023efficiency"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "RRQR_ref",
+      "candidates": [
+        "chan1987rank"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "rucker1992nonlinearBEM",
+      "candidates": [
+        "rucker1992nonlinearbem"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Rudnev2017",
+      "candidates": [
+        "rudnev2017handbook"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Ruehli1974",
+      "candidates": [
+        "ruehli1974equivalent"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Rumsey1954",
+      "candidates": [
+        "rumsey1954reaction"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Saad",
+      "candidates": [
+        "saad2011numerical"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "saad2003",
+      "candidates": [
+        "saad2003iterative"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Sabariego_mover",
+      "candidates": [
+        "sabariego2022ladder"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "SAC",
+      "candidates": [
+        "haarnoja2018soft"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Sandham_1954",
+      "candidates": [
+        "sandham1954some"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Saraswat2007",
+      "candidates": [
+        "saraswat2005global"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Sato2017synthesis",
+      "candidates": [
+        "sato2017synthesis"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "schoberl2005high",
+      "candidates": [
+        "schoberl2005high"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "schoberl2014",
+      "candidates": [
+        "schoberl2024ngsolve"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Schoberl_NGSolve",
+      "candidates": [
+        "schoberl1997netgen"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Schoebinger2026",
+      "candidates": [
+        "schobinger2026effective"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "schwab1998",
+      "candidates": [
+        "schwab1998finite"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "schwarz1978estimating",
+      "candidates": [
+        "schwarz1978estimating"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Schweitzer",
+      "candidates": [
+        "schweitzer2009magnetic"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Sekine2021",
+      "candidates": [
+        "sekine2021numerical"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Senior1962",
+      "candidates": [
+        "senior1962impedance"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "shahzadi1965",
+      "candidates": [
+        "shahzadi1965untitled"
+      ],
+      "method": "generated_key_candidate_only",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "shape_identification",
+      "candidates": [
+        "matsuo2005identification"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "sheetmetal",
+      "candidates": [
+        "sugahara2026sheet"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "shimizu2025",
+      "candidates": [
+        "shimizu2025automatic"
+      ],
+      "method": "title_year",
+      "field_differences": {
+        "author": {
+          "live": "Y. {Shimizu} and K. {Sugahara} and K. {Sugahara}",
+          "worktree": "Y. {Shimizu} and K. {Sugahara}"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "shimming_1",
+      "candidates": [
+        "seiya2016shimming"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Shimotani2016blockmor",
+      "candidates": [
+        "shimotani2016fast"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Shimotani2016pod",
+      "candidates": [
+        "shimotani2016equivalent"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "shindo2015cauer",
+      "candidates": [
+        "shindo2015cauer"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Shindo2017",
+      "candidates": [
+        "shindo2017high"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Shindo2017b",
+      "candidates": [
+        "shindo2017efficient"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Shindo2018dynamical",
+      "candidates": [
+        "shindo2018dynamical"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Shindo_mover",
+      "candidates": [
+        "shindo2020equivalent"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "ShindoNoro2014",
+      "candidates": [
+        "shindo2014simple"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Siegman:77",
+      "candidates": [
+        "siegman1977quasi"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "simkin1980three",
+      "candidates": [
+        "simkin1980three"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Singh2016",
+      "candidates": [
+        "singh2016nmr"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "skrfvf",
+      "candidates": [
+        "developers2026vector"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "snelling1988soft",
+      "candidates": [
+        "snelling1988soft"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "spinq_1",
+      "candidates": [
+        "hou2021spinq"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "stafl1967electrodynamics",
+      "candidates": [
+        "stafl1967electrodynamics"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "StaticPML",
+      "candidates": [
+        "alfonzetti1999some"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "steinbach2008",
+      "candidates": [
+        "steinbach2008numerical"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "steinmetz1892law",
+      "candidates": [
+        "steinmetz1892law"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "stimpson2007",
+      "candidates": [
+        "stimpson2007verdict"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Stokes1983",
+      "candidates": [
+        "stokes1983stable"
+      ],
+      "method": "generated_key_candidate_only",
+      "field_differences": {
+        "journal": {
+          "live": "Numerische Mathematik",
+          "worktree": "Mathematics of Computation"
+        },
+        "year": {
+          "live": "1983",
+          "worktree": "1980"
+        },
+        "volume": {
+          "live": "42",
+          "worktree": "34"
+        },
+        "number": {
+          "live": "2",
+          "worktree": "150"
+        },
+        "doi": {
+          "live": "10.1007/BF01395312",
+          "worktree": "10.1090/s0025-5718-1980-0559199-4"
+        },
+        "pages": {
+          "live": "185--197",
+          "worktree": "515--519"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": true
+    },
+    {
+      "live_key": "Stoll1974",
+      "candidates": [
+        "stoll1974analysis"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "stream_2",
+      "candidates": [
+        "peeren2003stream"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Sugahara2008",
+      "candidates": [
+        "sugahara2008investigation"
+      ],
+      "method": "title_year",
+      "field_differences": {
+        "doi": {
+          "live": "10.1109/TAP.2007.915472",
+          "worktree": null
+        },
+        "note": {
+          "live": null,
+          "worktree": "{DOI unverified: the recorded DOI resolved to a planar-array synthesis paper}"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "sugahara2013",
+      "candidates": [
+        "sugahara2013periodic"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "sugahara2017",
+      "candidates": [
+        "sugahara2017improvised"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Sugahara2017team28",
+      "candidates": [
+        "sugahara2018numerical"
+      ],
+      "method": "title_year",
+      "field_differences": {
+        "doi": {
+          "live": "10.1109/TMAG.2017.2761870",
+          "worktree": null
+        },
+        "note": {
+          "live": null,
+          "worktree": "{DOI unverified: DOI 10.1109/TMAG.2017.2761870 does not resolve}"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Sugahara2019",
+      "candidates": [
+        "sugahara2019untitled"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "sugahara2022Kelvin",
+      "candidates": [
+        "sugahara2022kelvin"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Sugahara2022kelvin_b",
+      "candidates": [
+        "sugahara2022kelvinb"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "sugahara2023cln",
+      "candidates": [
+        "sugahara2023cln"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "sugahara2024cauer",
+      "candidates": [
+        "sugahara2024cauer"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Sugahara2024hysteresis",
+      "candidates": [
+        "sugahara2024fixed"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "sugahara2025",
+      "candidates": [
+        "sugahara2025extended"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "sugahara2026binput",
+      "candidates": [
+        "hane2026experimental"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "sugahara2026binput_b",
+      "candidates": [
+        "sugahara2026binputb"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Sugahara2026companion",
+      "candidates": [
+        "sugahara2026supporting"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Sugahara2026PaperI",
+      "candidates": [
+        "sugahara2026universal"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Sugahara2026PaperII",
+      "candidates": [
+        "sugahara2026per"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "sugahara2026radia",
+      "candidates": [
+        "sugahara2026radia"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {
+        "note": {
+          "live": null,
+          "worktree": "accessed May 2026"
+        },
+        "howpublished": {
+          "live": "[Online]. Available: \\url{https://github.com/ksugahar/Radia}",
+          "worktree": "GitHub repository, \\url{https://github.com/ksugahar/Radia}"
+        },
+        "author": {
+          "live": "K. {Sugahara}",
+          "worktree": "{Sugahara}, K."
+        },
+        "title": {
+          "live": "{Radia} fork with {NGSolve} integration",
+          "worktree": "{Radia}: Electromagnetic Simulation Framework for Magnetic Levitation Systems"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": true
+    },
+    {
+      "live_key": "Sugahara2026supplement",
+      "candidates": [
+        "sugahara2026supplementary"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "sugahara2026urn",
+      "candidates": [
+        "sugahara2026urn"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "sugahara2027hdiv",
+      "candidates": [
+        "sugahara2027hdiv"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Sugahara_TEAM28_2017",
+      "candidates": [
+        "sugahara2017eddy"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "sullivan1999optimal",
+      "candidates": [
+        "sullivan1999optimal"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "suzumura2022mdx",
+      "candidates": [
+        "suzumura2022mdx"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "szabo1991",
+      "candidates": [
+        "szabo1991finite"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Tabuchi",
+      "candidates": [
+        "suzuki2008effective"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "takahashi1999preisach",
+      "candidates": [
+        "takahashi1999preisach"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "takahashi2006large",
+      "candidates": [
+        "takahashi2006large"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "takahashi2007large",
+      "candidates": [
+        "takahashi2007large"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "TakahashiCLNFEM2024",
+      "candidates": [
+        "takahashi2024time"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Taniguchi2025ainput",
+      "candidates": [
+        "taniguchi2025application"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "taroudaki2015spectral",
+      "candidates": [
+        "taroudaki2015spectral"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "tdk_ferrite",
+      "candidates": [
+        "corporation2022ferrite"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "team20",
+      "candidates": [
+        "takahashi1995summary"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Theory",
+      "candidates": [
+        "belevitch1977theory"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "tibshirani1996regression",
+      "candidates": [
+        "tibshirani1996regression"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "tikhonov1977solutions",
+      "candidates": [
+        "tikhonov1977solutions"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "tittarelli2017comparison",
+      "candidates": [
+        "tittarelli2017comparison"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "tokumasu",
+      "candidates": [
+        "tokumasu"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "tomasi2001stream",
+      "candidates": [
+        "tomasi2001stream"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "TSVD_1",
+      "candidates": [
+        "landreman2017improved"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "TWP28_1",
+      "candidates": [
+        "karl1996description"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "TWP28_2",
+      "candidates": [
+        "lee2005reduced"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "UBERRUCK201977",
+      "candidates": [
+        "uberruck2019variable"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "unsplitPML",
+      "candidates": [
+        "becache2004long"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "valsa2013rc",
+      "candidates": [
+        "valsa2013rc"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "vansteenkiste2014",
+      "candidates": [
+        "vansteenkiste2014design"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "vecchi1999",
+      "candidates": [
+        "vecchi1999loop"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Vorst",
+      "candidates": [
+        "vorst1982generalized"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "WalkerNi2011",
+      "candidates": [
+        "walker2011anderson"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Wall1948",
+      "candidates": [
+        "wall1948analytic"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "WangLaversZhou1992",
+      "candidates": [
+        "wang1992modified"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Warburg1899",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "{Warburg}, E.",
+        "title": "{\\\"U}ber das Verhalten sogenannter unpolarisirbarer Elektroden gegen Wechselstrom",
+        "journal": "Annalen der Physik und Chemie",
+        "volume": "303",
+        "number": "3",
+        "pages": "493--499",
+        "year": "1899"
+      }
+    },
+    {
+      "live_key": "warburg1899ueber",
+      "candidates": [
+        "warburg1899ueber"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Westerlund1994",
+      "candidates": [
+        "westerlund1994capacitor"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "wolfsong2001",
+      "candidates": [
+        "wolf2001scaled"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "wong1985method",
+      "candidates": [
+        "wong1985method"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Wynn1956",
+      "candidates": [
+        "wynn1956device"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Xu_2017",
+      "candidates": [
+        "xu2017some"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Yano2023",
+      "candidates": [
+        "yano2023magnetic"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "yano2023_b",
+      "candidates": [
+        "yano2023magnetic"
+      ],
+      "method": "generated_key_candidate_only",
+      "field_differences": {
+        "journal": {
+          "live": "J. Magn. Soc. Jpn.",
+          "worktree": "Journal of the Magnetics Society of Japan"
+        },
+        "volume": {
+          "live": "47",
+          "worktree": "advpub"
+        },
+        "pages": {
+          "live": "52--56",
+          "worktree": "2303R004"
+        },
+        "number": {
+          "live": null,
+          "worktree": " "
+        },
+        "doi": {
+          "live": null,
+          "worktree": "10.3379/msjmag.2303R004"
+        },
+        "title": {
+          "live": "Magnetic Moment Method with the Idea of Magnetic Surface Charge",
+          "worktree": "Magnetic Moment Method with the Idea of Magnetic Surface Charge Method"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "yano2026sa",
+      "candidates": [
+        "yano2026sa"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Ysato",
+      "candidates": [
+        "ysato2016generation"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Yuferev1999",
+      "candidates": [
+        "yuferev1999surface"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "yuferev2010",
+      "candidates": [
+        "yuferev2010surface"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "YuferevIda2009",
+      "candidates": [
+        "yuferev2009surface"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "zaglmayr2006",
+      "candidates": [
+        "zaglmayr2006high"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Zhao",
+      "candidates": [
+        "zhao2020sim"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "Zolotarev1877",
+      "candidates": [
+        "zolotarev1877application"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "丸尾昭二2020",
+      "candidates": [
+        "maruo2020multimaterial"
+      ],
+      "method": "doi",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "加藤春弥2022cln",
+      "candidates": [
+        "kato2022cln"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "正方形角柱導体精度保証付き数値計算",
+      "candidates": [
+        "nagamine2025verified"
+      ],
+      "method": "title_year",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "kuriyama2021multiport",
+      "candidates": [
+        "kuriyama2021multiport"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {
+        "note": {
+          "live": null,
+          "worktree": "Cited beside kuriyama2019cauer wherever the expansion point is switched mid-ladder: the multiport form of the same construction. DOI and authors checked against Crossref 2026-09-04."
+        },
+        "issn": {
+          "live": null,
+          "worktree": "0018-9464"
+        },
+        "month": {
+          "live": null,
+          "worktree": "June"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "gautschi2004orthogonal",
+      "candidates": [
+        "gautschi2004orthogonal"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {
+        "title": {
+          "live": "Orthogonal Polynomials: Computation and Approximation",
+          "worktree": "{Orthogonal Polynomials: Computation and Approximation}"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "vandyke1975perturbation",
+      "candidates": [
+        "vandyke1975perturbation"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {
+        "note": {
+          "live": "Annotated edition",
+          "worktree": "Annotated edition. Matched asymptotic expansions; the composite expansion is outer plus inner minus their common part"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "gallivan1996rational",
+      "candidates": [
+        "gallivan1996rational"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {
+        "note": {
+          "live": null,
+          "worktree": "A Lanczos process with a sequence of expansion points; the reduced matrix leaves tridiagonal form where the point changes. The Cauer ladder with the expansion point switched mid-way (Kuriyama 2019) is this process. DOI checked against Crossref 2026-09-02"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "oh1995efficient",
+      "candidates": [
+        "oh1995efficient"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "deeley1990surface",
+      "candidates": [
+        "deeley1990surface"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {
+        "author": {
+          "live": "{Deeley}, E. M.",
+          "worktree": "Deeley, E. M."
+        },
+        "publisher": {
+          "live": null,
+          "worktree": "Institute of Electrical and Electronics Engineers (IEEE)"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "warne1994eddy",
+      "candidates": [
+        "warne1994eddy"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {
+        "author": {
+          "live": "{Warne}, L. K.",
+          "worktree": "{Warne}, L.K."
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "yuferev2001surface",
+      "candidates": [
+        "yuferev2001surface"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {
+        "author": {
+          "live": "{Yuferev}, S. and {Proekt}, L. and {Ida}, N.",
+          "worktree": "Yuferev, S. and Proekt, L. and Ida, N."
+        },
+        "title": {
+          "live": "Surface impedance boundary conditions near corners and edges: rigorous consideration",
+          "worktree": "Surface impedance boundary conditions near corners and edges:\n           rigorous consideration"
+        },
+        "publisher": {
+          "live": null,
+          "worktree": "Institute of Electrical and Electronics Engineers (IEEE)"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "proekt2002overlapping",
+      "candidates": [
+        "proekt2002overlapping"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "dauge2014corner",
+      "candidates": [
+        "dauge2014corner"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {},
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "fujinaga2016anisotropic",
+      "candidates": [
+        "fujinaga2016anisotropic"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {
+        "pages": {
+          "live": "1--4",
+          "worktree": "7300604"
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "grote1995exact",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "Marcus J. {Grote} and Joseph B. {Keller}",
+        "title": "Exact Nonreflecting Boundary Conditions for the Time Dependent Wave Equation",
+        "journal": "SIAM Journal on Applied Mathematics",
+        "volume": "55",
+        "number": "2",
+        "pages": "280--297",
+        "year": "1995",
+        "doi": "10.1137/S0036139993269266"
+      }
+    },
+    {
+      "live_key": "hagstrom2009complete",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "Thomas {Hagstrom} and Timothy {Warburton}",
+        "title": "Complete Radiation Boundary Conditions: Minimizing the Long Time Error Growth of Local Methods",
+        "journal": "SIAM Journal on Numerical Analysis",
+        "volume": "47",
+        "number": "5",
+        "pages": "3678--3704",
+        "year": "2009",
+        "doi": "10.1137/090745477"
+      }
+    },
+    {
+      "live_key": "steinberg2024beamline",
+      "candidates": [
+        "steinberg2024design"
+      ],
+      "method": "doi",
+      "field_differences": {
+        "number": {
+          "live": null,
+          "worktree": "7"
+        },
+        "url": {
+          "live": null,
+          "worktree": "https://arxiv.org/abs/2402.01120"
+        },
+        "author": {
+          "live": "A. F. {Steinberg} and R. B. {Appleby} and J. S. L. {Yap} and S. L. {Sheehy}",
+          "worktree": "{Steinberg}, A. F. and {Appleby}, R. B. and {Yap}, J. S. L. and {Sheehy}, S. L."
+        },
+        "primaryclass": {
+          "live": "physics.acc-ph",
+          "worktree": null
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "coulomb1983methodology",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "J. {Coulomb}",
+        "title": "A methodology for the determination of global electromechanical quantities from a finite element analysis and its application to the evaluation of magnetic forces, torques and stiffness",
+        "journal": "IEEE Transactions on Magnetics",
+        "volume": "19",
+        "number": "6",
+        "pages": "2514--2519",
+        "year": "1983",
+        "doi": "10.1109/TMAG.1983.1062812"
+      }
+    },
+    {
+      "live_key": "henrotte2004force",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "F. {Henrotte} and K. {Hameyer}",
+        "title": "Computation of electromagnetic force densities: {Maxwell} stress tensor vs. virtual work principle",
+        "journal": "Journal of Computational and Applied Mathematics",
+        "volume": "168",
+        "number": "1--2",
+        "pages": "235--243",
+        "year": "2004",
+        "doi": "10.1016/j.cam.2003.06.012"
+      }
+    },
+    {
+      "live_key": "ieej2002integrals1",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "Shinji Wakao and Hajime Igarashi and Koji Fujiwara and Akihisa Kameari",
+        "title": "Useful Formulas of Analytical Integration in Electromagnetic Field Computations ({Part 1})",
+        "institution": "The Institute of Electrical Engineers of Japan",
+        "number": "SA-02-28 / RM-02-64",
+        "year": "2002"
+      }
+    },
+    {
+      "live_key": "ieej2003integrals2",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "Shinji Wakao and Hajime Igarashi and Koji Fujiwara and Akihisa Kameari",
+        "title": "Useful Formulas of Analytical Integration in Electromagnetic Field Computations ({Part 2})",
+        "institution": "The Institute of Electrical Engineers of Japan",
+        "number": "SA-03-8 / RM-03-8",
+        "year": "2003"
+      }
+    },
+    {
+      "live_key": "ieej2003integrals3",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "Shinji Wakao and Koji Fujiwara and Akihisa Kameari",
+        "title": "Useful Formulas of Analytical Integration in Electromagnetic Field Computations ({Part 3})",
+        "institution": "The Institute of Electrical Engineers of Japan",
+        "number": "SA-03-52 / RM-03-54",
+        "year": "2003"
+      }
+    },
+    {
+      "live_key": "ieej2004integrals4",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "Shinji Wakao and Koji Fujiwara and So Noguchi and Tetsuji Matsuo and Akihisa Kameari",
+        "title": "Useful Formulas of Analytical Integration in Electromagnetic Field Computations ({Part 4})",
+        "institution": "The Institute of Electrical Engineers of Japan",
+        "number": "SA-04-1 / RM-04-1",
+        "year": "2004"
+      }
+    },
+    {
+      "live_key": "ieej2004integrals5",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "Shinji Wakao and Koji Fujiwara and Akihisa Kameari",
+        "title": "Useful Formulas of Analytical Integration in Electromagnetic Field Computations ({Part 5})",
+        "institution": "The Institute of Electrical Engineers of Japan",
+        "number": "SA-04-44 / RM-04-68",
+        "year": "2004"
+      }
+    },
+    {
+      "live_key": "ieej2005integrals6",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "Shinji Wakao and Koji Fujiwara and Tadashi Tokumasu and Akihisa Kameari",
+        "title": "Useful Formulas of Analytical Integration in Electromagnetic Field Computations ({Part 6})",
+        "institution": "The Institute of Electrical Engineers of Japan",
+        "number": "SA-05-15 / RM-05-15",
+        "year": "2005"
+      }
+    },
+    {
+      "live_key": "ieej2006integrals7",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "Tetsuji Matsuo and Koji Fujiwara and Shoji Hamada and Akihisa Kameari and Shinji Wakao",
+        "title": "Useful Formulas of Analytical Integration in Electromagnetic Field Computations ({Part 7})",
+        "institution": "The Institute of Electrical Engineers of Japan",
+        "number": "SA-06-1 / RM-06-1",
+        "year": "2006"
+      }
+    },
+    {
+      "live_key": "ieej2006integrals8",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "Tetsuji Matsuo",
+        "title": "Useful Formulas of Analytical Integration in Electromagnetic Field Computations ({Part 8})",
+        "institution": "The Institute of Electrical Engineers of Japan",
+        "number": "SA-06-76 / RM-06-78",
+        "year": "2006"
+      }
+    },
+    {
+      "live_key": "ieej2007integrals9",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "Tetsuji Matsuo and Akihisa Kameari and Tadashi Tokumasu",
+        "title": "Useful Formulas of Analytical Integration in Electromagnetic Field Computations ({Part 9})",
+        "institution": "The Institute of Electrical Engineers of Japan",
+        "number": "SA-07-1 / RM-07-1",
+        "year": "2007"
+      }
+    },
+    {
+      "live_key": "weissenburger1979eddy",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "D. W. Weissenburger and U. R. Christensen",
+        "title": "Transient eddy currents on finite plane and toroidal conducting surfaces",
+        "institution": "Princeton Plasma Physics Laboratory",
+        "number": "PPPL-1517",
+        "year": "1979",
+        "url": "https://www.osti.gov/biblio/6159556"
+      }
+    },
+    {
+      "live_key": "montgomery1969solenoid",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "Donald Bruce Montgomery",
+        "title": "Solenoid Magnet Design: The Magnetic and Mechanical Aspects of Resistive and Superconducting Systems",
+        "publisher": "Wiley-Interscience",
+        "year": "1969",
+        "isbn": "9780471614203"
+      }
+    },
+    {
+      "live_key": "ortner2023currentloop",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "Michael Ortner and Peter Leitner and Florian Slanovc",
+        "title": "Numerically Stable and Computationally Efficient Expression for the Magnetic Field of a Current Loop",
+        "journal": "Magnetism",
+        "volume": "3",
+        "number": "1",
+        "pages": "11--31",
+        "year": "2023",
+        "doi": "10.3390/magnetism3010002",
+        "note": "Published online 30 December 2022"
+      }
+    },
+    {
+      "live_key": "kotiuga1987cuts",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "P. R. Kotiuga",
+        "title": "On making cuts for magnetic scalar potentials in multiply connected regions",
+        "journal": "Journal of Applied Physics",
+        "volume": "61",
+        "number": "8",
+        "pages": "3916--3918",
+        "year": "1987",
+        "doi": "10.1063/1.338583"
+      }
+    },
+    {
+      "live_key": "pellikka2013homology",
+      "candidates": [
+        "pellikka2013homology"
+      ],
+      "method": "same_key_requires_metadata_review",
+      "field_differences": {
+        "author": {
+          "live": "M. Pellikka and S. Suuriniemi and L. Kettunen and C. Geuzaine",
+          "worktree": "Pellikka, M. and Suuriniemi, S. and Kettunen, L. and Geuzaine, C."
+        }
+      },
+      "kind_difference": false,
+      "identity_conflict": false
+    },
+    {
+      "live_key": "becker2003nonmatching",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "Roland Becker and Peter Hansbo and Rolf Stenberg",
+        "title": "A finite element method for domain decomposition with non-matching grids",
+        "journal": "ESAIM: Mathematical Modelling and Numerical Analysis",
+        "volume": "37",
+        "number": "2",
+        "pages": "209--225",
+        "year": "2003",
+        "doi": "10.1051/m2an:2003023"
+      }
+    },
+    {
+      "live_key": "hansbo2003composite",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "Anita Hansbo and Peter Hansbo and Mats G. Larson",
+        "title": "A finite element method on composite grids based on {Nitsche}'s method",
+        "journal": "ESAIM: Mathematical Modelling and Numerical Analysis",
+        "volume": "37",
+        "number": "3",
+        "pages": "495--514",
+        "year": "2003",
+        "doi": "10.1051/m2an:2003039"
+      }
+    },
+    {
+      "live_key": "buffa2001sliding",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "Annalisa Buffa and Yvon Maday and Francesca Rapetti",
+        "title": "A sliding {Mesh-Mortar} method for a two dimensional Eddy currents model of electric engines",
+        "journal": "ESAIM: Mathematical Modelling and Numerical Analysis",
+        "volume": "35",
+        "number": "2",
+        "pages": "191--228",
+        "year": "2001",
+        "url": "https://www.numdam.org/item/M2AN_2001__35_2_191_0/"
+      }
+    },
+    {
+      "live_key": "egger2020harmonic",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "Herbert Egger and Man{\\'e} Harutyunyan and Melina Merkel and Sebastian Sch{\\\"o}ps",
+        "title": "On the stability of harmonic mortar methods with application to electric machines",
+        "year": "2020",
+        "eprint": "2005.12020",
+        "archiveprefix": "arXiv",
+        "url": "https://arxiv.org/abs/2005.12020"
+      }
+    },
+    {
+      "live_key": "egger2021torque",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "Herbert Egger and Man{\\'e} Harutyunyan and Richard L{\\\"o}scher and Melina Merkel and Sebastian Sch{\\\"o}ps",
+        "title": "On torque computation in electric machine simulation by harmonic mortar methods",
+        "year": "2021",
+        "eprint": "2112.05572",
+        "archiveprefix": "arXiv",
+        "url": "https://arxiv.org/abs/2112.05572"
+      }
+    },
+    {
+      "live_key": "senior1962note",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "T. B. A. Senior",
+        "title": "A note on impedance boundary conditions",
+        "journal": "Canadian Journal of Physics",
+        "volume": "40",
+        "number": "5",
+        "pages": "663--665",
+        "year": "1962",
+        "doi": "10.1139/p62-067"
+      }
+    },
+    {
+      "live_key": "grover2004inductance",
+      "candidates": [],
+      "method": "generated_key_candidate_only",
+      "live_fields": {
+        "author": "Frederick W. Grover",
+        "title": "Inductance Calculations: Working Formulas and Tables",
+        "publisher": "Dover Publications",
+        "year": "2004",
+        "note": "Reprint of the 1946 edition",
+        "url": "https://books.google.com/books?id=K3KHi9lIltsC"
+      }
+    }
+  ],
+  "automatic_mutation": false
+}

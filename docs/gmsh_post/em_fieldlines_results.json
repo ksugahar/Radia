@@ -25,5 +25,12 @@
     }
   },
   "notebook": "docs/gmsh_post/em_fieldlines.ipynb",
-  "notebook_sha256": "148d235ad26b13d8a7676f977c8713b9c3c401e7c44ce5d338531fdb3652c0d7"
+  "notebook_sha256": "78dc561a685b20b60397a271a589eee7dc75e5a0c6720df5cc70ebd2fc051ccf",
+  "documentation_revision": {
+    "date": "2026-09-14",
+    "previous_notebook_sha256": "9cac2465e2052fd254dec0f1034a1fcfdcf95047fdd063a754dae82d72bd22a3",
+    "code_and_saved_outputs_unchanged": true,
+    "comparison": "All complete code-cell objects equal the Git HEAD notebook.",
+    "note": "Original result timestamp/runtime retained; this is not a new numerical run."
+  }
 }

@@ -2,7 +2,7 @@
   "schema": "radia.notebook_result.v1",
   "generated_at_utc": "2026-07-22T07:19:36Z",
   "notebook": "integration_basics.ipynb",
-  "notebook_sha256": "2bc2957e95737f04d4f635f8aa845b0c51c0c2b6fd14d9b40d8a213202166947",
+  "notebook_sha256": "0a6f543b091ec3db00e84b22c327387fad31bd57ae61de023be7104d848551ea",
   "versions": {
     "python_version": "3.12.10",
     "python_executable_name": "python.exe",
@@ -11,8 +11,8 @@
     "radia_version": "4.95.22"
   },
   "summary": {
-    "path": "integration_basics.ipynb",
-    "cells": 11,
+    "path": "docs/ngsolve_integration/integration_basics.ipynb",
+    "cells": 13,
     "code_cells": 5,
     "executed_code_cells": 5,
     "code_cells_with_outputs": 5,
@@ -38,7 +38,8 @@
       "language_info",
       "radia",
       "widgets"
-    ]
+    ],
+    "error_outputs": []
   },
   "outputs": [
     {
@@ -215,5 +216,12 @@
     "result_saved": true,
     "json_has_generated_at_utc": true,
     "json_has_versions": true
+  },
+  "documentation_revision": {
+    "date": "2026-09-14",
+    "previous_notebook_sha256": "8d65220fefb7288b13d0ba300fa923c38574a5d2e10687247f1299c571fb305f",
+    "code_and_saved_outputs_unchanged": true,
+    "comparison": "All complete code-cell objects equal the Git HEAD notebook.",
+    "note": "Original result timestamp/runtime retained; this is not a new numerical run."
   }
 }

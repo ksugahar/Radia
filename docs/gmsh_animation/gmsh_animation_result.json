@@ -1,8 +1,8 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-08-05T05:11:01Z",
+  "generated_at_utc": "2026-09-14T20:22:50Z",
   "notebook": "gmsh_animation.ipynb",
-  "notebook_sha256": "3bd5a3abe72ce883adc073dbc9bb3f371afa77a6b279ea2fdb4f7a72752afe9d",
+  "notebook_sha256": "ee48809cc90402c17814ccc23e56031f862b84694621491d471e9786ef601bf3",
   "versions": {
     "python_version": "3.12.10",
     "python_executable_name": "python.exe",
@@ -12,21 +12,21 @@
   },
   "summary": {
     "path": "gmsh_animation.ipynb",
-    "cells": 4,
-    "code_cells": 2,
-    "executed_code_cells": 2,
-    "code_cells_with_outputs": 2,
-    "output_count": 2,
+    "cells": 13,
+    "code_cells": 6,
+    "executed_code_cells": 6,
+    "code_cells_with_outputs": 6,
+    "output_count": 8,
     "error_output_count": 0,
     "result_saved": true,
-    "notebook_role": "",
-    "webgui_required": false,
+    "notebook_role": "example",
+    "webgui_required": true,
     "webgui_field_required": false,
-    "webgui_import_present": false,
-    "webgui_draw_present": false,
-    "webgui_draw_cell_count": 0,
-    "executed_webgui_draw_cell_count": 0,
-    "webgui_draw_cells_with_rich_outputs": 0,
+    "webgui_import_present": true,
+    "webgui_draw_present": true,
+    "webgui_draw_cell_count": 2,
+    "executed_webgui_draw_cell_count": 2,
+    "webgui_draw_cells_with_rich_outputs": 2,
     "webgui_ready": true,
     "parameterized_field_draw_present": false,
     "parameterized_field_draw_cell_count": 0,
@@ -35,12 +35,106 @@
     "webgui_field_ready": true,
     "metadata_keys": [
       "kernelspec",
-      "language_info"
+      "language_info",
+      "radia",
+      "widgets"
     ]
   },
   "outputs": [
     {
-      "cell_index": 1,
+      "cell_index": 2,
+      "execution_count": 1,
+      "source_sha256": "ce3cf75b2507152d87d1eed87d590cd7ce08032d6f780e30ac7121fe3623b6d7",
+      "source_preview": "from pathlib import Path\nimport hashlib, json, math, platform, socket, sys\nfrom datetime import datetime, timezone\nfrom importlib.metadata import version\nimport ngsolve as ng\nfrom ngsolve.webgui import Draw\nng.SetNumThreads(2)\nfrom collections import Counter\nfrom cubit_mesh_export.check import check_consistency\nmeshes={}\nrows=[]\nfor name in ['rotor','stator']:\n    path=Path(name+'.vol')\n    report=check_consistency(str(path))\n    assert report['passed'], report\n    mesh=ng.Mesh(str(path))\n    meshes[name]=mesh\n    rows.append(dict(name=name,sha256=hashlib.sha256(path.read_bytes()).hexdigest(),\n                     elements=dict(Counter(str(e.type) for e in mesh.Elements(ng.VOL))),\n                     materials=list(mesh.GetMaterials()),boundaries=list(mesh.GetBoundaries()),\n                     check_vol=report))\nmetrics=dict(meshes=rows)\nprint(json.dumps(metrics,indent=2))\n",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 11957,
+          "text_sha256": "a270e551726a73dcb1f70846c47135efb3d7ef4f574fff9b2b0a2953358667a6",
+          "text_preview": "{\n  \"meshes\": [\n    {\n      \"name\": \"rotor\",\n      \"sha256\": \"3dda7f5b6608763cf65c2484c191eef265d3fc37811d7ba58cd5cbfd6aaa95b6\",\n      \"elements\": {\n        \"ET.TET\": 1003\n      },\n      \"materials\": [\n        \"rotor\"\n      ],\n      \"boundaries\": [\n        \"rotor_surface\",\n        \"rotor_surface\",\n        \"rotor_surface\"\n      ],\n      \"check_vol\": {\n        \"schema\": \"cubit-mesh-export.vol-check.v1\",\n        \"generated_at_utc\": \"2026-09-14T20:22:07.018158+00:00\",\n        \"versions\": {\n          \"cubit_mesh_export\": \"0.14.15\",\n          \"ngsolve\": \"6.2.2606\",\n          \"python\": \"3.12.10\"\n        },\n        \"passed\": true,\n        \"vol_file\": \"rotor.vol\",\n        \"json_file\": null,\n        \"threshold_pct\": 1.0,\n        \"cad_reference\": {\n          \"available\": false,\n          \"file\": null,\n          \"auto_discovered\": false,\n          \"mesh_only_materials\": [],\n          \"metadata_checks\": {}\n        },\n        \"mesh\": {\n          \"dimension\": 3,\n          \"curve_order\": 2,\n          \"n_elements\": 1003,\n          \"n_points\": 292\n        },\n        \"order\": 2,\n        \"n_elements\": 1003,\n        \"n_points\": 292,\n        \"labels\": {\n          \"schema\": \"radia.vol-label-contract.v1\",\n          \"passed\": true,\n          \"application\": null,\n          \"strict_labels\": false,\n          \"materials\": [\n            \"rotor\"\n          ],\n          \"boundaries\": [\n            \"rotor_surface\"\n          ],\n          \"bboundaries\": [\n            \"default\"\n          ],\n          \"bbboundaries\": [],\n          \"required\": {\n            \"materials\": [],\n            \"boundaries\": [],\n            \"bboundaries\": [],\n            \"bbboundaries\": []\n          },\n          \"allowed\": {\n            \"materials\": [],\n            \"boundaries\": [],\n            \"bboundaries\": [],\n            \"bbboundaries\": []\n          },\n          \"allowed_specified\": {\n            \"materials\": false,\n            \"boundaries\": false,\n            \"bboundaries\": false,\n            \"bbboundaries\": false\n          },\n          \"missing\": {\n            \"materials\": [],\n            \"boundaries\": [],\n            \"bboundaries\": [],\n            \"bbboundaries\": []\n          },\n          \"unexpected\": {\n            \"materials\": [],\n            \"boundaries\": [],\n            \"bboundaries\": [],\n            \"bbboundaries\": []\n          },\n          \"invalid\": {\n            \"materials\": [],\n            \"boundaries\": [],\n            \"bboundaries\": [],\n            \"bbboundaries\": []\n          },\n          \"autogenerated\": {\n            \"materials\": [],\n            \"boundaries\": [],\n            \"bboundaries\": [],\n            \"bbboundaries\": []\n          },\n          \"casefold_collisions\": {\n            \"materials\": [],\n            \"boundaries\": [],\n            \"bboundaries\": [],\n            \"bbboundaries\": []\n          },\n          \"relational_issues\": [],\n          \"warnings\": []\n        },\n        \"quality\": {\n          \"passed\": true,\n          \"curve_order\": 2,\n          \"integration_order\": 6,\n          \"volume_element_count\": 1003,\n          \"tetrahedron_count\": 1003,\n          \"mapping_sample_count\": 64192,\n          \"finite_jacobian_sample_count\": 64192,\n          \"finite_scaled_jacobian_sample_count\": 64192,\n          \"minimum_jacobian\": 2.1532425368632868e-06,\n          \"maximum_jacobian\": 1.577767044772984e-05,\n          \"minimum_absolute_jacobian\": 2.1532425368632868e-06,\n          \"minimum_scaled_jacobian\": 0.21014443734135405,\n          \"invalid_jacobian_sample_count\": 0,\n          \"orientation_flip_sample_count\": 0,\n          \"negative_jacobian_sample_count\": 0,\n          \"positive_orientation_element_count\": 1003,\n          \"negative_orientation_element_count\": 0,\n          \"low_scaled_jacobian_sample_count\": 0,\n          \"invalid_jacobian_elements\": [],\n          \"low_scaled_jacobian_elements\": [],\n          \"materials\": [\n            \"rotor\"\n          ],\n          \"boundaries\": [\n            \"rotor_surface\"\n          ],\n          \"missing_materials\": [],\n          \"missing",
+          "text_truncated": true
+        }
+      ]
+    },
+    {
+      "cell_index": 4,
+      "execution_count": 2,
+      "source_sha256": "9e6d95e86668779c7a631f452fcc2d56fcee61b8a1986eca8fd12c016fc48369",
+      "source_preview": "scene = Draw(meshes['rotor'], name='Rotor_input_mesh', order=3, draw_vol=True, draw_surf=True, width='100%', height='480px')\nscene.GenerateHTML(filename='scene_0.html')\n",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "application/vnd.jupyter.widget-view+json",
+            "text/plain"
+          ],
+          "text_plain_chars": 57,
+          "text_plain_sha256": "006b4887de4c27e47b9068e5f4f1101c64a1a4bb84172d4508a338703559c644",
+          "text_plain_preview": "<netgen.webgui.WebGuiWidget object at 0x0000028529815F70>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "execute_result",
+          "data_keys": [
+            "text/plain"
+          ],
+          "text_plain_chars": 207025,
+          "text_plain_sha256": "6ded012951ac0352bd96a006cab42c501d97044df31ef53195e0d981299a622d",
+          "text_plain_preview": "'\\n<!DOCTYPE html>\\n<html>\\n    <head>\\n        <title>NGSolve WebGUI</title>\\n        <meta name=\\'viewport\\' content=\\'width=device-width, user-scalable=no\\'/>\\n        <style>\\n            body{\\n                margin:0;\\n                overflow:hidden;\\n            }\\n            canvas{\\n                cursor:grab;\\n                cursor:-webkit-grab;\\n                cursor:-moz-grab;\\n            }\\n            canvas:active{\\n                cursor:grabbing;\\n                cursor:-webkit-grabbing;\\n                cursor:-moz-grabbing;\\n            }\\n        </style>\\n    </head>\\n    <body>\\n          <script src=\"https://cdn.jsdelivr.net/npm/webgui@0.2.39/dist/webgui.js\"></script>\\n          </script>\\n          <script>\\n            var render_data = {\"gui_settings\": {}, \"ngsolve_version\": \"6.2.2606\", \"mesh_dim\": 3, \"order2d\": 3, \"order3d\": 2, \"draw_vol\": null, \"draw_surf\": null, \"objects\": [], \"deformation\": false, \"mesh_regions_2d\": 3, \"mesh_regions_3d\": 1, \"names\": [\"rotor_surface\", \"rotor_surface\", \"rotor_surface\"], \"edge_names\": [\"default\", \"default\", \"default\"], \"funcdim\": 0, \"colors\": [[0.0, 1.0, 0.0, 1.0, 1.0], [0.0, 1.0, 0.0, 1.0, 1.0], [0.0, 1.0, 0.0, 1.0, 1.0]], \"show_wireframe\": true, \"show_mesh\": true, \"Bezier_points\": [\"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",
+          "text_plain_truncated": true
+        }
+      ]
+    },
+    {
+      "cell_index": 6,
+      "execution_count": 3,
+      "source_sha256": "a02a167d0bc63de13ffd09340e5bb68d5014859a8141645d4c35b00741e52fdd",
+      "source_preview": "scene = Draw(meshes['stator'], name='Stator_reference_mesh', order=3, draw_vol=True, draw_surf=True, width='100%', height='480px')\nscene.GenerateHTML(filename='scene_1.html')\n",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "application/vnd.jupyter.widget-view+json",
+            "text/plain"
+          ],
+          "text_plain_chars": 57,
+          "text_plain_sha256": "b6da188e15b2488f60aa4a28a38bee7fe979cf8a361a484fa8e285f3351adf98",
+          "text_plain_preview": "<netgen.webgui.WebGuiWidget object at 0x00000285298561E0>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "execute_result",
+          "data_keys": [
+            "text/plain"
+          ],
+          "text_plain_chars": 506357,
+          "text_plain_sha256": "640aeb2fed437ac698f719ca0b6b0ab4a853b9dd43676449eecc333023640b45",
+          "text_plain_preview": "'\\n<!DOCTYPE html>\\n<html>\\n    <head>\\n        <title>NGSolve WebGUI</title>\\n        <meta name=\\'viewport\\' content=\\'width=device-width, user-scalable=no\\'/>\\n        <style>\\n            body{\\n                margin:0;\\n                overflow:hidden;\\n            }\\n            canvas{\\n                cursor:grab;\\n                cursor:-webkit-grab;\\n                cursor:-moz-grab;\\n            }\\n            canvas:active{\\n                cursor:grabbing;\\n                cursor:-webkit-grabbing;\\n                cursor:-moz-grabbing;\\n            }\\n        </style>\\n    </head>\\n    <body>\\n          <script src=\"https://cdn.jsdelivr.net/npm/webgui@0.2.39/dist/webgui.js\"></script>\\n          </script>\\n          <script>\\n            var render_data = {\"gui_settings\": {}, \"ngsolve_version\": \"6.2.2606\", \"mesh_dim\": 3, \"order2d\": 3, \"order3d\": 2, \"draw_vol\": null, \"draw_surf\": null, \"objects\": [], \"deformation\": false, \"mesh_regions_2d\": 4, \"mesh_regions_3d\": 1, \"names\": [\"default\", \"default\", \"default\", \"default\"], \"edge_names\": [\"default\", \"default\", \"default\", \"default\", \"default\", \"default\"], \"funcdim\": 0, \"colors\": [[0.0, 1.0, 0.0, 1.0, 1.0], [0.0, 1.0, 0.0, 1.0, 1.0], [0.0, 1.0, 0.0, 1.0, 1.0], [0.0, 1.0, 0.0, 1.0, 1.0]], \"show_wireframe\": true, \"show_mesh\": true, \"Bezier_points\": [\"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",
+          "text_plain_truncated": true
+        }
+      ]
+    },
+    {
+      "cell_index": 7,
+      "execution_count": 4,
+      "source_sha256": "b8b33e266433942db6ca856e1933b547c4e55dc2636566b11c262a6a59d254f6",
+      "source_preview": "evidence=dict(schema='radia.docs.webgui_supplement.v1',\n    generated_at_utc=datetime.now(timezone.utc).isoformat(),host=socket.gethostname(),\n    python_executable=sys.executable,python_version=platform.python_version(),\n    versions={p:version(p) for p in ['ngsolve','netgen-mesher','anywidget','cubit-mesh-export']},\n    metrics=metrics,threads=2)\nPath('evidence.json').write_text(json.dumps(evidence,indent=2),encoding='utf-8')\n",
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data_keys": [
+            "text/plain"
+          ],
+          "text_plain_chars": 5,
+          "text_plain_sha256": "e90f9b09d844fd2aa447965f7db64dda82006fe45c50f0a02135c9df411a3ab6",
+          "text_plain_preview": "13215",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 8,
       "execution_count": 1,
       "source_sha256": "015ab65e39323d62142add321f73ce2ef2cfd9708f76a8f4c1d0c12d02285be2",
       "source_preview": "from pathlib import Path\nimport sys\n\nNOTEBOOK_DIR = Path.cwd()\nif not (NOTEBOOK_DIR / 'gmsh_animation_inspect.py').exists():\n    NOTEBOOK_DIR = Path('docs/gmsh_animation').resolve()\nsys.path.insert(0, str(NOTEBOOK_DIR))\n\nfrom gmsh_animation_inspect import inspect_example, write_results_json, format_summary\n\nresult = inspect_example()\njson_path = write_results_json(result, NOTEBOOK_DIR / 'gmsh_animation_results.json')\nprint(format_summary(result))\nprint(f'\\nwrote {json_path.relative_to(NOTEBOOK_DIR)}')",
@@ -56,7 +150,7 @@
       ]
     },
     {
-      "cell_index": 2,
+      "cell_index": 9,
       "execution_count": 2,
       "source_sha256": "f7aae3d9410dd22dadbd38dc318e266bf4a30823df3071a15bed2957cf52788f",
       "source_preview": "import matplotlib.pyplot as plt\n\nframes = result['msh']['node_data']\ntimes = [row['time_value'] for row in frames]\nmax_disp = [row['max_norm'] for row in frames]\nmean_disp = [row['mean_norm'] for row in frames]\n\nfig, ax = plt.subplots(figsize=(6.2, 3.6))\nax.plot(times, max_disp, marker='o', label='max |u|')\nax.plot(times, mean_disp, marker='s', label='mean |u|')\nax.set_xlabel('time value')\nax.set_ylabel('displacement magnitude (m)')\nax.grid(True, alpha=0.3)\nax.legend()\nfig.tight_layout()\nplt.show()",
@@ -85,5 +179,483 @@
     "result_saved": true,
     "json_has_generated_at_utc": true,
     "json_has_versions": true
-  }
+  },
+  "sidecar_writer_versions": {
+    "python_version": "3.12.10",
+    "python_executable_name": "python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.39",
+    "radia_version": "4.95.92"
+  },
+  "historical_execution": {
+    "generated_at_utc": "2026-08-05T05:11:01Z",
+    "versions": {
+      "python_version": "3.12.10",
+      "python_executable_name": "python.exe",
+      "platform": "Windows-2022Server-10.0.20348-SP0",
+      "radia_mcp_version": "1.4.28",
+      "radia_version": "4.95.40"
+    }
+  },
+  "visualization_execution": {
+    "schema": "radia.docs.webgui_supplement.v1",
+    "generated_at_utc": "2026-09-14T20:22:07.644198+00:00",
+    "host": "mdx2",
+    "python_executable": "C:\\temp\\radia_docs_webgui_20260915\\env\\Scripts\\python.exe",
+    "python_version": "3.12.10",
+    "versions": {
+      "ngsolve": "6.2.2606",
+      "netgen-mesher": "6.2.2606",
+      "anywidget": "0.11.0",
+      "cubit-mesh-export": "0.14.15"
+    },
+    "metrics": {
+      "meshes": [
+        {
+          "name": "rotor",
+          "sha256": "3dda7f5b6608763cf65c2484c191eef265d3fc37811d7ba58cd5cbfd6aaa95b6",
+          "elements": {
+            "ET.TET": 1003
+          },
+          "materials": [
+            "rotor"
+          ],
+          "boundaries": [
+            "rotor_surface",
+            "rotor_surface",
+            "rotor_surface"
+          ],
+          "check_vol": {
+            "schema": "cubit-mesh-export.vol-check.v1",
+            "generated_at_utc": "2026-09-14T20:22:07.018158+00:00",
+            "versions": {
+              "cubit_mesh_export": "0.14.15",
+              "ngsolve": "6.2.2606",
+              "python": "3.12.10"
+            },
+            "passed": true,
+            "vol_file": "rotor.vol",
+            "json_file": null,
+            "threshold_pct": 1.0,
+            "cad_reference": {
+              "available": false,
+              "file": null,
+              "auto_discovered": false,
+              "mesh_only_materials": [],
+              "metadata_checks": {}
+            },
+            "mesh": {
+              "dimension": 3,
+              "curve_order": 2,
+              "n_elements": 1003,
+              "n_points": 292
+            },
+            "order": 2,
+            "n_elements": 1003,
+            "n_points": 292,
+            "labels": {
+              "schema": "radia.vol-label-contract.v1",
+              "passed": true,
+              "application": null,
+              "strict_labels": false,
+              "materials": [
+                "rotor"
+              ],
+              "boundaries": [
+                "rotor_surface"
+              ],
+              "bboundaries": [
+                "default"
+              ],
+              "bbboundaries": [],
+              "required": {
+                "materials": [],
+                "boundaries": [],
+                "bboundaries": [],
+                "bbboundaries": []
+              },
+              "allowed": {
+                "materials": [],
+                "boundaries": [],
+                "bboundaries": [],
+                "bbboundaries": []
+              },
+              "allowed_specified": {
+                "materials": false,
+                "boundaries": false,
+                "bboundaries": false,
+                "bbboundaries": false
+              },
+              "missing": {
+                "materials": [],
+                "boundaries": [],
+                "bboundaries": [],
+                "bbboundaries": []
+              },
+              "unexpected": {
+                "materials": [],
+                "boundaries": [],
+                "bboundaries": [],
+                "bbboundaries": []
+              },
+              "invalid": {
+                "materials": [],
+                "boundaries": [],
+                "bboundaries": [],
+                "bbboundaries": []
+              },
+              "autogenerated": {
+                "materials": [],
+                "boundaries": [],
+                "bboundaries": [],
+                "bbboundaries": []
+              },
+              "casefold_collisions": {
+                "materials": [],
+                "boundaries": [],
+                "bboundaries": [],
+                "bbboundaries": []
+              },
+              "relational_issues": [],
+              "warnings": []
+            },
+            "quality": {
+              "passed": true,
+              "curve_order": 2,
+              "integration_order": 6,
+              "volume_element_count": 1003,
+              "tetrahedron_count": 1003,
+              "mapping_sample_count": 64192,
+              "finite_jacobian_sample_count": 64192,
+              "finite_scaled_jacobian_sample_count": 64192,
+              "minimum_jacobian": 2.1532425368632868e-06,
+              "maximum_jacobian": 1.577767044772984e-05,
+              "minimum_absolute_jacobian": 2.1532425368632868e-06,
+              "minimum_scaled_jacobian": 0.21014443734135405,
+              "invalid_jacobian_sample_count": 0,
+              "orientation_flip_sample_count": 0,
+              "negative_jacobian_sample_count": 0,
+              "positive_orientation_element_count": 1003,
+              "negative_orientation_element_count": 0,
+              "low_scaled_jacobian_sample_count": 0,
+              "invalid_jacobian_elements": [],
+              "low_scaled_jacobian_elements": [],
+              "materials": [
+                "rotor"
+              ],
+              "boundaries": [
+                "rotor_surface"
+              ],
+              "missing_materials": [],
+              "missing_boundaries": [],
+              "adjacency": {
+                "enabled": false,
+                "conductive_materials": [],
+                "air_materials": [
+                  "air",
+                  "vacuum"
+                ]
+              },
+              "warnings": []
+            },
+            "boundary_domain_ownership": {
+              "passed": true,
+              "volume_element_count": 1003,
+              "surface_element_count": 422,
+              "volume_domain_counts": {
+                "1": 1003
+              },
+              "surface_domain_pair_counts": {
+                "1->0": 422
+              },
+              "domain_surface_incidence_counts": {
+                "1": 422
+              },
+              "exterior_surface_element_count": 422,
+              "exterior_surface_domain_counts": {
+                "1": 422
+              },
+              "internal_interface_element_count": 0,
+              "internal_interface_domain_pair_counts": {},
+              "material_ids": [
+                1
+              ],
+              "missing_material_ids": [],
+              "unknown_surface_domains": [],
+              "unreferenced_volume_domains": [],
+              "invalid_volume_rows": [],
+              "invalid_surface_rows": [],
+              "invalid_surface_connectivity_rows": [],
+              "duplicate_surface_connectivity_rows": [],
+              "zero_zero_rows": [],
+              "equal_domain_rows": [],
+              "issues": []
+            },
+            "materials": [
+              {
+                "name": "rotor",
+                "ng_volume": 0.0007853748802863071
+              }
+            ],
+            "boundaries": [
+              {
+                "name": "rotor_surface",
+                "ng_area": 0.04712260137156226
+              }
+            ],
+            "edges": [
+              {
+                "name": "default",
+                "ng_length": 1.2566041645633108
+              }
+            ],
+            "edge_check": {
+              "available": true,
+              "error": null,
+              "per_edge_mapping": "best-effort",
+              "total_length_comparison": "used for the CAD gate when edges exist"
+            },
+            "warnings": []
+          }
+        },
+        {
+          "name": "stator",
+          "sha256": "576261bff514619a70e919255235d103ddb0c6100bd64c518b59a5282974f18b",
+          "elements": {
+            "ET.TET": 1483
+          },
+          "materials": [
+            "stator"
+          ],
+          "boundaries": [
+            "default",
+            "default",
+            "default",
+            "default"
+          ],
+          "check_vol": {
+            "schema": "cubit-mesh-export.vol-check.v1",
+            "generated_at_utc": "2026-09-14T20:22:07.457468+00:00",
+            "versions": {
+              "cubit_mesh_export": "0.14.15",
+              "ngsolve": "6.2.2606",
+              "python": "3.12.10"
+            },
+            "passed": true,
+            "vol_file": "stator.vol",
+            "json_file": null,
+            "threshold_pct": 1.0,
+            "cad_reference": {
+              "available": false,
+              "file": null,
+              "auto_discovered": false,
+              "mesh_only_materials": [],
+              "metadata_checks": {}
+            },
+            "mesh": {
+              "dimension": 3,
+              "curve_order": 2,
+              "n_elements": 1483,
+              "n_points": 538
+            },
+            "order": 2,
+            "n_elements": 1483,
+            "n_points": 538,
+            "labels": {
+              "schema": "radia.vol-label-contract.v1",
+              "passed": true,
+              "application": null,
+              "strict_labels": false,
+              "materials": [
+                "stator"
+              ],
+              "boundaries": [
+                "default"
+              ],
+              "bboundaries": [
+                "default"
+              ],
+              "bbboundaries": [
+                "default"
+              ],
+              "required": {
+                "materials": [],
+                "boundaries": [],
+                "bboundaries": [],
+                "bbboundaries": []
+              },
+              "allowed": {
+                "materials": [],
+                "boundaries": [],
+                "bboundaries": [],
+                "bbboundaries": []
+              },
+              "allowed_specified": {
+                "materials": false,
+                "boundaries": false,
+                "bboundaries": false,
+                "bbboundaries": false
+              },
+              "missing": {
+                "materials": [],
+                "boundaries": [],
+                "bboundaries": [],
+                "bbboundaries": []
+              },
+              "unexpected": {
+                "materials": [],
+                "boundaries": [],
+                "bboundaries": [],
+                "bbboundaries": []
+              },
+              "invalid": {
+                "materials": [],
+                "boundaries": [],
+                "bboundaries": [],
+                "bbboundaries": []
+              },
+              "autogenerated": {
+                "materials": [],
+                "boundaries": [],
+                "bboundaries": [],
+                "bbboundaries": []
+              },
+              "casefold_collisions": {
+                "materials": [],
+                "boundaries": [],
+                "bboundaries": [],
+                "bbboundaries": []
+              },
+              "relational_issues": [],
+              "warnings": []
+            },
+            "quality": {
+              "passed": true,
+              "curve_order": 2,
+              "integration_order": 6,
+              "volume_element_count": 1483,
+              "tetrahedron_count": 1483,
+              "mapping_sample_count": 94912,
+              "finite_jacobian_sample_count": 94912,
+              "finite_scaled_jacobian_sample_count": 94912,
+              "minimum_jacobian": 1.6073568393145506e-06,
+              "maximum_jacobian": 1.0338624070413214e-05,
+              "minimum_absolute_jacobian": 1.6073568393145506e-06,
+              "minimum_scaled_jacobian": 0.15209063357566088,
+              "invalid_jacobian_sample_count": 0,
+              "orientation_flip_sample_count": 0,
+              "negative_jacobian_sample_count": 0,
+              "positive_orientation_element_count": 1483,
+              "negative_orientation_element_count": 0,
+              "low_scaled_jacobian_sample_count": 0,
+              "invalid_jacobian_elements": [],
+              "low_scaled_jacobian_elements": [],
+              "materials": [
+                "stator"
+              ],
+              "boundaries": [
+                "default"
+              ],
+              "missing_materials": [],
+              "missing_boundaries": [],
+              "adjacency": {
+                "enabled": false,
+                "conductive_materials": [],
+                "air_materials": [
+                  "air",
+                  "vacuum"
+                ]
+              },
+              "warnings": []
+            },
+            "boundary_domain_ownership": {
+              "passed": true,
+              "volume_element_count": 1483,
+              "surface_element_count": 1052,
+              "volume_domain_counts": {
+                "1": 1483
+              },
+              "surface_domain_pair_counts": {
+                "1->0": 1052
+              },
+              "domain_surface_incidence_counts": {
+                "1": 1052
+              },
+              "exterior_surface_element_count": 1052,
+              "exterior_surface_domain_counts": {
+                "1": 1052
+              },
+              "internal_interface_element_count": 0,
+              "internal_interface_domain_pair_counts": {},
+              "material_ids": [
+                1
+              ],
+              "missing_material_ids": [],
+              "unknown_surface_domains": [],
+              "unreferenced_volume_domains": [],
+              "invalid_volume_rows": [],
+              "invalid_surface_rows": [],
+              "invalid_surface_connectivity_rows": [],
+              "duplicate_surface_connectivity_rows": [],
+              "zero_zero_rows": [],
+              "equal_domain_rows": [],
+              "issues": []
+            },
+            "materials": [
+              {
+                "name": "stator",
+                "ng_volume": 0.0011611450311950773
+              }
+            ],
+            "boundaries": [
+              {
+                "name": "default",
+                "ng_area": 0.1061606039848891
+              }
+            ],
+            "edges": [
+              {
+                "name": "default",
+                "ng_length": 1.858742888797717
+              }
+            ],
+            "edge_check": {
+              "available": true,
+              "error": null,
+              "per_edge_mapping": "best-effort",
+              "total_length_comparison": "used for the CAD gate when edges exist"
+            },
+            "warnings": []
+          }
+        }
+      ]
+    },
+    "threads": 2,
+    "notebook": "docs/gmsh_animation/gmsh_animation.ipynb",
+    "baseline_notebook_sha256": "67cecb0de91de642afab71d5f668bff62346c73517631679e46e091b5baa4aae",
+    "notebook_sha256": "ee48809cc90402c17814ccc23e56031f862b84694621491d471e9786ef601bf3",
+    "historical_code_cells_preserved": true,
+    "historical_code_cells_sha256": "cc02bc52a9e63c419f93e22e2aec673dc458b74f6c72affe4cfed2679efec827",
+    "source_cells": [
+      {
+        "id": "webgui-20260915-gmsh_animation-1",
+        "source": "from pathlib import Path\nimport hashlib, json, math, platform, socket, sys\nfrom datetime import datetime, timezone\nfrom importlib.metadata import version\nimport ngsolve as ng\nfrom ngsolve.webgui import Draw\nng.SetNumThreads(2)\nfrom collections import Counter\nfrom cubit_mesh_export.check import check_consistency\nmeshes={}\nrows=[]\nfor name in ['rotor','stator']:\n    path=Path(name+'.vol')\n    report=check_consistency(str(path))\n    assert report['passed'], report\n    mesh=ng.Mesh(str(path))\n    meshes[name]=mesh\n    rows.append(dict(name=name,sha256=hashlib.sha256(path.read_bytes()).hexdigest(),\n                     elements=dict(Counter(str(e.type) for e in mesh.Elements(ng.VOL))),\n                     materials=list(mesh.GetMaterials()),boundaries=list(mesh.GetBoundaries()),\n                     check_vol=report))\nmetrics=dict(meshes=rows)\nprint(json.dumps(metrics,indent=2))\n"
+      },
+      {
+        "id": "webgui-20260915-gmsh_animation-3",
+        "source": "scene = Draw(meshes['rotor'], name='Rotor_input_mesh', order=3, draw_vol=True, draw_surf=True, width='100%', height='480px')\nscene.GenerateHTML(filename='scene_0.html')\n"
+      },
+      {
+        "id": "webgui-20260915-gmsh_animation-5",
+        "source": "scene = Draw(meshes['stator'], name='Stator_reference_mesh', order=3, draw_vol=True, draw_surf=True, width='100%', height='480px')\nscene.GenerateHTML(filename='scene_1.html')\n"
+      },
+      {
+        "id": "webgui-20260915-gmsh_animation-6",
+        "source": "evidence=dict(schema='radia.docs.webgui_supplement.v1',\n    generated_at_utc=datetime.now(timezone.utc).isoformat(),host=socket.gethostname(),\n    python_executable=sys.executable,python_version=platform.python_version(),\n    versions={p:version(p) for p in ['ngsolve','netgen-mesher','anywidget','cubit-mesh-export']},\n    metrics=metrics,threads=2)\nPath('evidence.json').write_text(json.dumps(evidence,indent=2),encoding='utf-8')\n"
+      }
+    ],
+    "supplement_sha256": "41658f504814b844304d5690c72a78f18e55071bc44e2ed32fc4380995be13be",
+    "visual_qa": "Saved rich output and state audited; rendered visual QA pending."
+  },
+  "execution_scope": "Mixed provenance: original campaigns preserved; only added visualization cells executed on mdx."
 }

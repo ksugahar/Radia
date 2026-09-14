@@ -2,7 +2,7 @@
   "schema": "radia.notebook_result.v1",
   "generated_at_utc": "2026-07-22T07:19:38Z",
   "notebook": "loop_dof_cut_selection.ipynb",
-  "notebook_sha256": "4093ab9a6e2ba2c9ce6905ce93d8ad254031a8a682cf87d1fc49cc59ae54a8d6",
+  "notebook_sha256": "acd43b6e82eb1cf3fb1c9d998305380c4567ebe7209b532f64dbb3e58d81cf8f",
   "versions": {
     "python_version": "3.12.10",
     "python_executable_name": "python.exe",
@@ -11,8 +11,8 @@
     "radia_version": "4.95.22"
   },
   "summary": {
-    "path": "loop_dof_cut_selection.ipynb",
-    "cells": 9,
+    "path": "docs/cohomology/loop_dof_cut_selection.ipynb",
+    "cells": 11,
     "code_cells": 6,
     "executed_code_cells": 6,
     "code_cells_with_outputs": 6,
@@ -38,7 +38,8 @@
       "language_info",
       "radia",
       "widgets"
-    ]
+    ],
+    "error_outputs": []
   },
   "outputs": [
     {
@@ -173,5 +174,12 @@
     "result_saved": true,
     "json_has_generated_at_utc": true,
     "json_has_versions": true
+  },
+  "documentation_revision": {
+    "date": "2026-09-14",
+    "previous_notebook_sha256": "04cd3caae6aabb9172f7c0c8541330bc5e5c0e075df279987b43591cdd4546aa",
+    "code_and_saved_outputs_unchanged": true,
+    "comparison": "All complete code-cell objects equal the Git HEAD notebook.",
+    "note": "Original result timestamp/runtime retained; this is not a new numerical run."
   }
 }

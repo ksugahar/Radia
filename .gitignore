@@ -496,3 +496,6 @@ memory/
 # Build.ps1-generated temporary MSVC batch (regenerated each build; never commit)
 /build_temp_msvc.bat
 
+# Stable advisory-lock sidecars for canonical bibliography writers (not content).
+*.radia-write-lock
+

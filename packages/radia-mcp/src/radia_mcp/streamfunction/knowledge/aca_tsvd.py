@@ -1165,7 +1165,7 @@ Five chain attempts that REDUCED field accuracy (Gx, kuijpers 16.24 % ref):
 
 ## 5. Demo file ledger
 
-Demo records cataloged by ``docs/stream_function/examples_catalog.ipynb``:
+Demo records cataloged by ``validation_test/documentation_maintenance/stream_function/examples_catalog.ipynb``:
 
   | File                                 | Role                                   | Best RMS | Path-A |
   | ------------------------------------ | -------------------------------------- | -------- | ------ |

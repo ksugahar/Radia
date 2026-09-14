@@ -1,0 +1,442 @@
+from __future__ import annotations
+
+import json
+import shutil
+import hashlib
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+from radia_mcp.bibliography.plans.T14_canonical import (
+    _keys_in_order,
+    _citation_source_sha256,
+    bibliography_canonical_path,
+    bibliography_get_entries,
+    bibliography_make_bbl,
+)
+
+
+def test_selected_bibliography_fingerprint_tracks_dependencies_not_unrelated_entries():
+    source = b'@book{parent,title={Collected},year={2000}}\n@inbook{child,title={Chapter},crossref={parent}}\n@book{other,title={Unrelated}}'
+    fingerprint = _citation_source_sha256(["child"], source)
+    assert fingerprint == _citation_source_sha256(["child"], source.replace(b"Unrelated", b"Other book"))
+    assert fingerprint != _citation_source_sha256(["child"], source.replace(b"Chapter", b"Corrected chapter"))
+    assert fingerprint != _citation_source_sha256(["child"], source.replace(b"2000", b"2001"))
+    assert fingerprint == _citation_source_sha256(["child"], source.replace(b"\n", b"\r\n"))
+
+
+def test_selected_bibliography_fingerprint_preserves_macro_expressions_and_directives():
+    source = b'@string{journal="First"}\n@hibino2024nmr{a,title={A},journal=journal}'
+    original = _citation_source_sha256(["a"], source)
+    assert original != _citation_source_sha256(["a"], source.replace(b'"First"', b'"Second"'))
+    assert original != _citation_source_sha256(["a"], source.replace(b'journal=journal', b'journal={journal}'))
+
+
+@pytest.mark.parametrize("source", [
+    b'@inbook{a,crossref={missing}}',
+    b'@inbook{a,crossref={a}}',
+    b'@inbook{a,crossref=macro}',
+])
+def test_selected_bibliography_fingerprint_fails_on_unresolved_dependencies(source):
+    with pytest.raises(ValueError):
+        _citation_source_sha256(["a"], source)
+
+
+def test_canonical_path_describes_single_source_and_bbl_delivery():
+    result = bibliography_canonical_path()
+    assert "references.bib" in result
+    assert "single source of truth" in result
+    assert "generated .bbl" in result
+
+
+def test_citation_keys_preserve_first_appearance_order():
+    tex = r"\citep[see][p.~2]{beta, alpha} \citet{alpha} \nocite{gamma}"
+    assert _keys_in_order(tex) == ["beta", "alpha", "gamma"]
+
+
+def test_integration_preserves_additional_worktree_bibliography_tools():
+    from radia_mcp.bibliography import tools
+
+    for name in (
+        'bibliography_verify_dois', 'bibliography_refresh_unpublished',
+        'bibliography_find_stray_bibs', 'bibliography_check_keys',
+        'bibliography_search', 'bibliography_landmarks',
+        'bibliography_get_entries', 'bibliography_make_bbl',
+    ):
+        assert callable(getattr(tools, name))
+
+
+def test_get_entries_returns_canonical_records_in_requested_order():
+    result = json.loads(bibliography_get_entries("yuferev2009surface, kameari2018cauer"))
+
+    assert result["ok"] is True
+    assert result["canonical_path"].endswith("references.bib")
+    assert len(result["canonical_sha256"]) == 64
+    assert [entry["key"] for entry in result["entries"]] == [
+        "yuferev2009surface",
+        "kameari2018cauer",
+    ]
+    assert result["entries"][0]["fields"]["year"] == "2009"
+
+
+def test_get_entries_fails_closed_for_missing_or_duplicate_keys():
+    missing = json.loads(bibliography_get_entries("not-a-key"))
+    duplicate = json.loads(bibliography_get_entries("kameari2018cauer, kameari2018cauer"))
+
+    assert missing == {
+        "ok": False,
+        "error": "citation keys are absent from canonical references.bib",
+        "missing": ["not-a-key"],
+    }
+    assert duplicate == {
+        "ok": False,
+        "error": "duplicate citation keys",
+        "keys": ["kameari2018cauer"],
+    }
+
+
+@pytest.mark.parametrize("keys", [[], "kameari2018cauer", ["kameari2018cauer", "kameari2018cauer"], ["*"], [None]])
+def test_notebook_bbl_rejects_ambiguous_metadata_without_overwriting(tmp_path, keys):
+    notebook = tmp_path / "demo.ipynb"
+    notebook.write_text(json.dumps({"metadata": {"radia": {"bibliography": {"keys": keys}}}}))
+    output = notebook.with_suffix(".bbl")
+    output.write_text("previous")
+    assert bibliography_make_bbl(str(notebook)).startswith("Error: invalid notebook")
+    assert output.read_text() == "previous"
+
+
+@pytest.mark.parametrize("contents", ["not JSON", "{}", "[]", '{"metadata":null}'])
+def test_notebook_bbl_requires_an_explicit_declaration(tmp_path, contents):
+    notebook = tmp_path / "demo.ipynb"
+    notebook.write_text(contents)
+    assert "invalid notebook bibliography metadata" in bibliography_make_bbl(str(notebook))
+    assert not notebook.with_suffix(".bbl").exists()
+
+
+def test_notebook_bbl_rejects_unknown_key_before_requiring_tex(tmp_path, monkeypatch):
+    monkeypatch.setattr(shutil, "which", lambda name: None)
+    notebook = tmp_path / "demo.ipynb"
+    notebook.write_text(json.dumps({"metadata": {"radia": {"bibliography": {"keys": ["unknown_notebook_reference"]}}}}))
+    assert "absent from canonical" in bibliography_make_bbl(str(notebook))
+    assert not notebook.with_suffix(".bbl").exists()
+
+
+@pytest.mark.skipif(shutil.which("bibtex") is None, reason="BibTeX is unavailable")
+def test_notebook_bbl_uses_explicit_keys_and_never_executes_cells(tmp_path):
+    notebook = tmp_path / "demo.ipynb"
+    notebook.write_text(json.dumps({
+        "metadata": {"radia": {"bibliography": {"keys": ["freeman1989open"], "style": "plain"}}},
+        "cells": [{"cell_type": "code", "source": ["raise RuntimeError('must not run')"]}],
+    }))
+    result = bibliography_make_bbl(str(notebook))
+    assert result.startswith("bibliography_make_bbl:")
+    assert "notebook explicit keys" in result
+    assert r"\bibitem{freeman1989open}" in notebook.with_suffix(".bbl").read_text()
+    assert not list(tmp_path.glob("*.bib"))
+    assert "compiled aux is not supported" in bibliography_make_bbl(str(notebook), aux_path="unused.aux")
+
+
+def test_igte_cauer_sibc_reference_set_is_canonical():
+    keys = (
+        "kameari2018cauer, kuriyama2019cauer, kuriyama2021multiport, matsuo2026representation, "
+        "senior1962impedance, mitzner1967integral, yuferev2009surface, quarteroni1999domain, "
+        "gautschi2004orthogonal, hiruma2023extended, vandyke1975perturbation, "
+        "gallivan1996rational, oh1995efficient, deeley1990surface, "
+        "wang1993modified, warne1994eddy, yuferev2001surface, "
+        "proekt2002overlapping, dauge2014corner, hiruma2024extended"
+    )
+    result = json.loads(bibliography_get_entries(keys))
+
+    assert result["ok"] is True
+    assert len(result["entries"]) == 20
+    senior = next(entry for entry in result["entries"] if entry["key"] == "senior1962impedance")
+    assert senior["fields"]["year"] == "1960"
+    assert senior["fields"]["doi"] == "10.1007/BF02920074"
+
+
+def test_make_bbl_rejects_unknown_key_without_partial_output(tmp_path, monkeypatch):
+    monkeypatch.setattr(shutil, "which", lambda _name: None)
+    tex = tmp_path / "paper.tex"
+    tex.write_text(r"\cite{not_in_the_canonical_bibliography}", encoding="utf-8")
+    out = tmp_path / "paper.bbl"
+    out.write_text("previous verified bibliography", encoding="utf-8")
+
+    result = bibliography_make_bbl(str(tex), style="plain", out_path=str(out))
+
+    assert result.startswith("Error:")
+    assert "absent from canonical references.bib" in result
+    assert out.read_text(encoding="utf-8") == "previous verified bibliography"
+
+
+@pytest.mark.skipif(shutil.which("bibtex") is None, reason="BibTeX is unavailable")
+def test_make_bbl_exports_only_the_generated_bbl(tmp_path):
+    tex = tmp_path / "paper.tex"
+    tex.write_text(
+        r"\documentclass{hibino2024nmr}\begin{document}\cite{abe2017passive}"
+        r"\bibliographystyle{plain}\bibliography{references}\end{document}",
+        encoding="utf-8",
+    )
+
+    result = bibliography_make_bbl(str(tex))
+
+    bbl = tmp_path / "paper.bbl"
+    assert result.startswith("bibliography_make_bbl:")
+    assert bbl.is_file()
+    assert r"\bibitem{abe2017passive}" in bbl.read_text(encoding="utf-8")
+    assert not (tmp_path / "references.bib").exists()
+
+
+@pytest.mark.skipif(shutil.which("bibtex") is None, reason="BibTeX is unavailable")
+def test_make_bbl_collects_citations_from_input_files(tmp_path):
+    (tmp_path / "body.tex").write_text(r"\cite{abe2017passive}", encoding="utf-8")
+    tex = tmp_path / "paper.tex"
+    tex.write_text(
+        r"\documentclass{hibino2024nmr}\begin{document}\input{body}"
+        r"\bibliographystyle{plain}\bibliography{references}\end{document}",
+        encoding="utf-8",
+    )
+
+    result = bibliography_make_bbl(str(tex))
+
+    assert result.startswith("bibliography_make_bbl:")
+    assert r"\bibitem{abe2017passive}" in (tmp_path / "paper.bbl").read_text(
+        encoding="utf-8"
+    )
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("% \\cite{ignored}\n\\cite{real}", ["real"]),
+    (r"\citet*[see][p.~2]{beta,alpha} \parencite{gamma}", ["beta", "alpha", "gamma"]),
+    (r"\verb|\cite{literal}| \cite{real}", ["real"]),
+    (r"\begin{verbatim}\cite{literal}\end{verbatim}\cite{real}", ["real"]),
+    (r"\begin{lstlisting}\cite{literal}\end{lstlisting}\cite{real}", ["real"]),
+    (r"50\% \cite{real}", ["real"]),
+    ("\\\\% \\cite{ignored}\n\\cite{real}", ["real"]),
+    (r"\\cite{literal} \cite{real}", ["real"]),
+])
+def test_citation_scanner_ignores_comments_and_literal_code(text, expected):
+    assert _keys_in_order(text) == expected
+
+
+@pytest.mark.parametrize("text", [r"\parencites{one}{two}", r"\InputIfFileExists{body}{}{}",
+                                  r"\includeonly{body}", r"\cite{*}"])
+def test_unsupported_static_citation_syntax_fails_explicitly(text):
+    with pytest.raises(ValueError):
+        _keys_in_order(text)
+
+
+@pytest.mark.skipif(shutil.which("bibtex") is None, reason="BibTeX is unavailable")
+def test_make_bbl_nocite_all_uses_canonical_fixture_and_ignores_comments(tmp_path, monkeypatch):
+    from radia_mcp.bibliography.plans import T14_canonical as canonical
+    bib = tmp_path / "fixture.bib"
+    bib.write_text("@misc{one,title={First},author={Doe, Jane},year=2024}\n"
+                   "@misc{two,title={Second},author={Roe, John},year=2025}", encoding="utf-8")
+    monkeypatch.setattr(canonical, "CANONICAL", bib)
+    tex = tmp_path / "paper.tex"
+    tex.write_text("% \\cite{not_real}\n\\nocite{*}\\bibliographystyle{plain}", encoding="utf-8")
+    result = canonical.bibliography_make_bbl(str(tex))
+    assert result.startswith("bibliography_make_bbl:"), result
+    bbl = tex.with_suffix(".bbl").read_text(encoding="utf-8")
+    assert r"\bibitem{one}" in bbl and r"\bibitem{two}" in bbl
+
+
+@pytest.mark.parametrize("data", [b"", b"\xff", b"@misc{one,title={unfinished}",
+                                  b"@misc{one,title={A}}\n@misc{one,title={B}}"])
+def test_invalid_canonical_snapshot_fails_closed(tmp_path, monkeypatch, data):
+    from radia_mcp.bibliography.plans import T14_canonical as canonical
+    bib = tmp_path / "fixture.bib"
+    bib.write_bytes(data)
+    monkeypatch.setattr(canonical, "CANONICAL", bib)
+    tex = tmp_path / "paper.tex"
+    tex.write_text(r"\cite{one}", encoding="utf-8")
+    output = tex.with_suffix(".bbl")
+    output.write_bytes(b"verified")
+    assert canonical.bibliography_canonical_path().startswith("Error:")
+    assert json.loads(canonical.bibliography_get_entries("one"))["ok"] is False
+    assert canonical.bibliography_make_bbl(str(tex)).startswith("Error:")
+    assert output.read_bytes() == b"verified"
+
+
+@pytest.mark.parametrize("change", ["canonical", "root", "child", "output", "replace", "none"])
+def test_bbl_publication_preserves_concurrent_work(tmp_path, monkeypatch, change):
+    from radia_mcp.bibliography.plans import T14_canonical as canonical
+    bib = tmp_path / "fixture.bib"
+    snapshot = b"@misc{one,title={First},author={Doe, Jane},year=2024}"
+    bib.write_bytes(snapshot)
+    monkeypatch.setattr(canonical, "CANONICAL", bib)
+    monkeypatch.setattr(canonical.shutil, "which", lambda name: "bibtex")
+    (tmp_path / "plain.bst").write_bytes(b"test style")
+    tex = tmp_path / "paper.tex"
+    child = tmp_path / "body.tex"
+    tex.write_text(r"\input{body}", encoding="utf-8")
+    child.write_text(r"\cite{one}", encoding="utf-8")
+    output = tex.with_suffix(".bbl")
+    output.write_bytes(b"verified")
+    generated = br"\begin{thebibliography}{1}\bibitem{one}First\end{thebibliography}"
+
+    def run(*args, cwd, **kwargs):
+        assert (cwd / "references.bib").read_bytes() == snapshot
+        (cwd / "manuscript.bbl").write_bytes(generated)
+        target = {"canonical": bib, "root": tex, "child": child, "output": output}.get(change)
+        if target is not None:
+            target.write_bytes(b"concurrent edit")
+        return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
+
+    monkeypatch.setattr(canonical.subprocess, "run", run)
+    if change == "replace":
+        def fail_replace(self, target):
+            raise PermissionError("locked output")
+        monkeypatch.setattr(Path, "replace", fail_replace)
+    result = canonical.bibliography_make_bbl(str(tex), style="plain")
+    if change == "none":
+        assert result.startswith("bibliography_make_bbl:"), result
+        assert hashlib.sha256(snapshot).hexdigest() in result
+        assert output.read_bytes() == generated
+    else:
+        assert result.startswith("Error:"), result
+        assert output.read_bytes() == (b"concurrent edit" if change == "output" else b"verified")
+    assert not list(tmp_path.glob(".paper.bbl.*.tmp"))
+
+
+@pytest.mark.parametrize("data", [b"plain\r\ntext", "日本語".encode("cp932")])
+def test_tex_resolver_fingerprints_actual_input_bytes(tmp_path, data):
+    from radia_mcp.paper_writing._tex_resolver import resolve_input_chain
+    tex = tmp_path / "paper.tex"
+    tex.write_bytes(data)
+    result = resolve_input_chain(str(tex))
+    assert result["ok"] is True
+    record = result["files_resolved"][0]
+    assert record["size_bytes"] == len(data)
+    assert record["sha256"] == hashlib.sha256(data).hexdigest()
+
+
+@pytest.mark.parametrize("generated,valid", [
+    (br"\bibitem{one}First", True),
+    (br"\bibitem[Doe et al.(2024)]{one}First", True),
+    (br"\bibitem{one}First\bibitem{parent}Parent", True),
+    (br"\bibitem{wrong}First", False),
+    (br"\bibitem{one}First\bibitem{one}Duplicate", False),
+    (br"\bibitem{parent}Only parent", False),
+    (b"% \\bibitem{one}\n", False),
+    (br"\\% \bibitem{one}", False),
+    (br"\verb|\bibitem{one}|", False),
+    (br"\bibitemfake{one}Not a bibitem", False),
+    (br"\bibitem{one}First\bibitem malformed", False),
+])
+def test_generated_bbl_checks_key_identity_not_only_count(tmp_path, monkeypatch, generated, valid):
+    from radia_mcp.bibliography.plans import T14_canonical as canonical
+    bib = tmp_path / "fixture.bib"
+    bib.write_text("@misc{one,title={First}}\n@misc{parent,title={Parent}}", encoding="utf-8")
+    monkeypatch.setattr(canonical, "CANONICAL", bib)
+    monkeypatch.setattr(canonical.shutil, "which", lambda name: "bibtex")
+    (tmp_path / "plain.bst").write_bytes(b"test style")
+    tex = tmp_path / "paper.tex"
+    tex.write_text(r"\cite{one}", encoding="utf-8")
+    output = tex.with_suffix(".bbl")
+    output.write_bytes(b"verified")
+    def run(*args, cwd, **kwargs):
+        (cwd / "manuscript.bbl").write_bytes(generated)
+        return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
+    monkeypatch.setattr(canonical.subprocess, "run", run)
+    result = canonical.bibliography_make_bbl(str(tex), style="plain")
+    assert result.startswith("bibliography_make_bbl:" if valid else "Error:"), result
+    assert output.read_bytes() == (generated if valid else b"verified")
+
+
+@pytest.mark.parametrize("mode", ["unchanged", "changed", "removed", "created", "unreadable"])
+def test_local_bst_snapshot_guards_publication(tmp_path, monkeypatch, mode):
+    from radia_mcp.bibliography.plans import T14_canonical as canonical
+    bib = tmp_path / "fixture.bib"
+    bib.write_bytes(b"@misc{one,title={First}}")
+    monkeypatch.setattr(canonical, "CANONICAL", bib)
+    monkeypatch.setattr(canonical.shutil, "which", lambda name: "bibtex")
+    installed = tmp_path / "installed.bst"
+    installed.write_bytes(b"installed style")
+    monkeypatch.setattr(canonical, "_resolve_installed_style", lambda *args: installed)
+    tex = tmp_path / "paper.tex"
+    tex.write_text(r"\cite{one}", encoding="utf-8")
+    style = tmp_path / "custom.bst"
+    if mode == "unreadable":
+        style.mkdir()
+    elif mode != "created":
+        style.write_bytes(b"style snapshot")
+    output = tex.with_suffix(".bbl")
+    output.write_bytes(b"verified")
+    def run(*args, cwd, **kwargs):
+        assert mode != "unreadable"
+        staged = cwd / "custom.bst"
+        assert staged.exists()
+        if staged.exists():
+            assert staged.read_bytes() == (b"installed style" if mode == "created" else b"style snapshot")
+        (cwd / "manuscript.bbl").write_bytes(br"\bibitem{one}First")
+        if mode in {"changed", "created"}:
+            style.write_bytes(b"concurrent style")
+        elif mode == "removed":
+            style.unlink()
+        return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
+    monkeypatch.setattr(canonical.subprocess, "run", run)
+    result = canonical.bibliography_make_bbl(str(tex), style="custom")
+    if mode == "unchanged":
+        assert result.startswith("bibliography_make_bbl:"), result
+        assert hashlib.sha256(b"style snapshot").hexdigest() in result
+    else:
+        assert result.startswith("Error:"), result
+        assert output.read_bytes() == b"verified"
+    assert not list(tmp_path.glob(".paper.bbl.*.tmp"))
+
+
+@pytest.mark.parametrize("mode", ["valid", "missing_command", "missing_file", "failed", "empty", "multiple", "timeout"])
+def test_installed_style_resolution_fails_explicitly(tmp_path, monkeypatch, mode):
+    from radia_mcp.bibliography.plans import T14_canonical as canonical
+    style = tmp_path / "installed.bst"
+    style.write_bytes(b"snapshot")
+    monkeypatch.setattr(canonical.shutil, "which", lambda name: None if mode == "missing_command" else "kpsewhich")
+    def run(args, **kwargs):
+        assert args == ["kpsewhich", "--format=bst", "--", "custom.bst"]
+        if mode == "timeout":
+            raise canonical.subprocess.TimeoutExpired(args, 15)
+        output = str(style)
+        if mode == "missing_file":
+            output = str(tmp_path / "absent.bst")
+        elif mode == "empty":
+            output = ""
+        elif mode == "multiple":
+            output += "\n" + str(style)
+        return SimpleNamespace(returncode=1 if mode == "failed" else 0, stdout=output.encode(), stderr=b"")
+    monkeypatch.setattr(canonical.subprocess, "run", run)
+    if mode == "valid":
+        assert canonical._resolve_installed_style("custom", tmp_path) == style
+    else:
+        with pytest.raises(ValueError):
+            canonical._resolve_installed_style("custom", tmp_path)
+
+
+@pytest.mark.parametrize("changed", [False, True])
+def test_installed_style_bytes_are_staged_and_rechecked(tmp_path, monkeypatch, changed):
+    from radia_mcp.bibliography.plans import T14_canonical as canonical
+    bib = tmp_path / "fixture.bib"
+    bib.write_bytes(b"@misc{one,title={First}}")
+    installed = tmp_path / "installed.bst"
+    installed.write_bytes(b"installed snapshot")
+    monkeypatch.setattr(canonical, "CANONICAL", bib)
+    monkeypatch.setattr(canonical.shutil, "which", lambda name: "bibtex")
+    monkeypatch.setattr(canonical, "_resolve_installed_style", lambda *args: installed)
+    tex = tmp_path / "paper.tex"
+    tex.write_text(r"\cite{one}", encoding="utf-8")
+    output = tex.with_suffix(".bbl")
+    output.write_bytes(b"verified")
+    def run(*args, cwd, **kwargs):
+        assert (cwd / "custom.bst").read_bytes() == b"installed snapshot"
+        (cwd / "manuscript.bbl").write_bytes(br"\bibitem{one}First")
+        if changed:
+            installed.write_bytes(b"concurrent update")
+        return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
+    monkeypatch.setattr(canonical.subprocess, "run", run)
+    result = canonical.bibliography_make_bbl(str(tex), style="custom")
+    if changed:
+        assert result.startswith("Error:") and output.read_bytes() == b"verified"
+    else:
+        assert result.startswith("bibliography_make_bbl:"), result
+        assert str(installed) in result
+        assert hashlib.sha256(b"installed snapshot").hexdigest() in result
+    assert not list(tmp_path.glob(".paper.bbl.*.tmp"))

@@ -2,7 +2,7 @@
   "schema": "radia.notebook_result.v1",
   "generated_at_utc": "2026-06-28T02:07:04Z",
   "notebook": "docs/cubit_mesh_export/netgen/p_convergence_demo.ipynb",
-  "notebook_sha256": "5903c99ccc18ee4f3b7473f094da905e116a49c90dce582b0b1f06cb20b67876",
+  "notebook_sha256": "b392ab4464ac5aaeab17b66299e7d358771edf9ceb2b2fcd2df91338c17a7558",
   "versions": {
     "python_version": "3.12.10",
     "platform": "Windows-2022Server-10.0.20348-SP0",
@@ -11,14 +11,34 @@
   },
   "summary": {
     "path": "docs/cubit_mesh_export/netgen/p_convergence_demo.ipynb",
-    "cells": 9,
+    "cells": 11,
     "code_cells": 5,
     "executed_code_cells": 5,
     "code_cells_with_outputs": 5,
     "output_count": 6,
     "error_output_count": 0,
     "result_saved": true,
-    "results_json": "docs/cubit_mesh_export/netgen/p_convergence_demo_results.json"
+    "results_json": "docs/cubit_mesh_export/netgen/p_convergence_demo_results.json",
+    "error_outputs": [],
+    "notebook_role": "",
+    "webgui_required": false,
+    "webgui_field_required": false,
+    "webgui_import_present": false,
+    "webgui_draw_present": false,
+    "webgui_draw_cell_count": 0,
+    "executed_webgui_draw_cell_count": 0,
+    "webgui_draw_cells_with_rich_outputs": 0,
+    "webgui_ready": true,
+    "parameterized_field_draw_present": false,
+    "parameterized_field_draw_cell_count": 0,
+    "executed_parameterized_field_draw_cell_count": 0,
+    "parameterized_field_draw_cells_with_rich_outputs": 0,
+    "webgui_field_ready": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info",
+      "radia"
+    ]
   },
   "outputs": [
     {
@@ -108,5 +128,12 @@
         }
       ]
     }
-  ]
+  ],
+  "documentation_revision": {
+    "date": "2026-09-14",
+    "previous_notebook_sha256": "3aa8a62203dd3a26c4a6a082c5e272cdfa764e51ba30d9319dd180818416b87c",
+    "code_and_saved_outputs_unchanged": true,
+    "comparison": "All complete code-cell objects equal the Git HEAD notebook.",
+    "note": "Original result timestamp/runtime retained; this is not a new numerical run."
+  }
 }

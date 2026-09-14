@@ -695,5 +695,12 @@
       "source_text": "\\begin{table}[t]\n\\centering\n\\caption{PEEC filament-level scaling: dense LU vs HACApK BiCGSTAB. Helical solenoid, 20 turns, 25 seg/turn, $n_{\\text{winc}}^2$ parallel sub-filaments. 10~kHz. BiCGSTAB rtol $10^{-6}$.}\n\\label{tab:peec_hacapk_scaling}\n\\begin{tabular}{rrrrrrrrrrr}\n\\toprule\n & \\multicolumn{4}{c}{Dense} & \\multicolumn{6}{c}{HACApK} \\\\\n\\cmidrule(lr){2-5} \\cmidrule(lr){6-11}\n$N$ & $L$ & build & solve & peak & H-mat & ratio & build & solve & iter & $\\|r\\|$ \\\\\n\\midrule\n500 & 2 MB & 20.2 ms & 67.5 ms & 144 MB & 2 MB & 100.0% & 39.9 ms & 3.1 ms & 13 & 9.2e-07 \\\\\n2000 & 31 MB & 315.5 ms & 1.65 s & 395 MB & 27 MB & 90.0% & 575.8 ms & 235.4 ms & 36 & 9.9e-07 \\\\\n4500 & 154 MB & 1.60 s & 16.13 s & 1.49 GB & 77 MB & 50.0% & 1.61 s & 842.8 ms & 43 & 5.7e-07 \\\\\n8000 & 488 MB & 5.12 s & 1.40 min & 4.42 GB & 64 MB & 13.1% & 1.27 s & 1.09 s & 67 & 8.6e-07 \\\\\n12500 & 1.16 GB & 14.89 s & 5.81 min & 10.60 GB & 80 MB & 6.7% & 1.46 s & 1.37 s & 61 & 8.8e-07 \\\\\n18000 & -- & -- & -- & -- & 90 MB & 3.6% & 1.61 s & 1.77 s & 71 & 9.9e-07 \\\\\n24500 & -- & -- & -- & -- & 157 MB & 3.4% & 2.68 s & 3.05 s & 70 & 9.3e-07 \\\\\n\\bottomrule\n\\end{tabular}\n\\end{table}\n"
     }
   ],
-  "notebook_sha256": "baa008047a6fe5eeff2952e2d213459c0d5d85f1ac4b44badf61afd4b44e782e"
+  "notebook_sha256": "23c83a291f04d6452be6b044d740832c86c6a36424c242d525cab72457c7eb8c",
+  "documentation_revision": {
+    "date": "2026-09-14",
+    "previous_notebook_sha256": "9fcc7b6ba7124c2bae8b1e1d12eb6bc01f5aaafd009d7cb4180ec81e34757976",
+    "code_and_saved_outputs_unchanged": true,
+    "comparison": "All complete code-cell objects equal the Git HEAD notebook.",
+    "note": "Original result timestamp/runtime retained; this is not a new numerical run."
+  }
 }

@@ -1,8 +1,8 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-27T15:43:13Z",
-  "notebook": "docs/background_fields/background_fields.ipynb",
-  "notebook_sha256": "494d9adb328281d64e05c697b3527c9da5ff1f77ba74fca166869cc453ed821c",
+  "generated_at_utc": "2026-09-14T20:22:50Z",
+  "notebook": "background_fields.ipynb",
+  "notebook_sha256": "43221d1281c31ffd97b33e7d1433d4bc8b6e54d3e77c80f4e0c635dc8237f35e",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
@@ -11,22 +11,159 @@
     "radia_version": "4.95.2"
   },
   "summary": {
-    "path": "docs/background_fields/background_fields.ipynb",
-    "cells": 9,
-    "code_cells": 4,
-    "executed_code_cells": 4,
-    "code_cells_with_outputs": 4,
-    "output_count": 4,
+    "path": "background_fields.ipynb",
+    "cells": 20,
+    "code_cells": 9,
+    "executed_code_cells": 9,
+    "code_cells_with_outputs": 9,
+    "output_count": 12,
     "error_output_count": 0,
     "result_saved": true,
+    "notebook_role": "example",
+    "webgui_required": true,
+    "webgui_field_required": true,
+    "webgui_import_present": true,
+    "webgui_draw_present": true,
+    "webgui_draw_cell_count": 3,
+    "executed_webgui_draw_cell_count": 3,
+    "webgui_draw_cells_with_rich_outputs": 3,
+    "webgui_ready": true,
+    "parameterized_field_draw_present": true,
+    "parameterized_field_draw_cell_count": 2,
+    "executed_parameterized_field_draw_cell_count": 2,
+    "parameterized_field_draw_cells_with_rich_outputs": 2,
+    "webgui_field_ready": true,
     "metadata_keys": [
       "kernelspec",
-      "language_info"
+      "language_info",
+      "radia",
+      "widgets"
     ]
   },
   "outputs": [
     {
       "cell_index": 2,
+      "execution_count": 1,
+      "source_sha256": "ebf0932f5a38bccaa5a9c5fbd83cdfeeab9f7c704d7bc717c79847ad8ba75385",
+      "source_preview": "from pathlib import Path\nimport hashlib, json, math, platform, socket, sys\nfrom datetime import datetime, timezone\nfrom importlib.metadata import version\nimport ngsolve as ng\nfrom ngsolve.webgui import Draw\nng.SetNumThreads(2)\nfrom netgen.occ import Box, Pnt, OCCGeometry\ndomain=Box(Pnt(-0.01,-0.01,-0.01), Pnt(0.01,0.01,0.01))\ndomain.mat('source_view_not_iron')\nmesh=ng.Mesh(OCCGeometry(domain).GenerateMesh(maxh=0.005))\ngradient=10.0\nsource=ng.CF((gradient*ng.y, gradient*ng.x, 0))\nmagnitude=ng.Norm(source)\nchecks=[]\nfor point in [(0,0,0),(0.005,0,0),(0,0.005,0),(0.005,0.005,0)]:\n    actual=list(source(mesh(*point)))\n    expected=[gradient*point[1],gradient*point[0],0]\n    assert all(math.isclose(x,y,abs_tol=1e-12) for x,y in zip(actual,expected))\n    checks.append(dict(point_m=point,B_T=actual))\nmetrics=dict(reference='prescribed source only, no material response',\n             samples=checks,n_elements=mesh.ne,gradient_T_per_m=gradient)\nprint(json.dumps(metrics,indent=2))\n",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 724,
+          "text_sha256": "c935253c04268faf47e47244cc999d4d9f09d62cdd17999eb3a3bbfc48bbbba6",
+          "text_preview": "{\n  \"reference\": \"prescribed source only, no material response\",\n  \"samples\": [\n    {\n      \"point_m\": [\n        0,\n        0,\n        0\n      ],\n      \"B_T\": [\n        -8.673617379884035e-18,\n        0.0,\n        0.0\n      ]\n    },\n    {\n      \"point_m\": [\n        0.005,\n        0,\n        0\n      ],\n      \"B_T\": [\n        0.0,\n        0.04999999999999999,\n        0.0\n      ]\n    },\n    {\n      \"point_m\": [\n        0,\n        0.005,\n        0\n      ],\n      \"B_T\": [\n        0.05,\n        0.0,\n        0.0\n      ]\n    },\n    {\n      \"point_m\": [\n        0.005,\n        0.005,\n        0\n      ],\n      \"B_T\": [\n        0.05,\n        0.05,\n        0.0\n      ]\n    }\n  ],\n  \"n_elements\": 399,\n  \"gradient_T_per_m\": 10.0\n}\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 4,
+      "execution_count": 2,
+      "source_sha256": "8a8ea6095ca83f776d13d0eabda1fd2c251784ae81ff27d8d0817f85113c306b",
+      "source_preview": "scene = Draw(mesh, name='Quadrupole_sampling_mesh', draw_vol=True, draw_surf=True, width='100%', height='480px')\nscene.GenerateHTML(filename='scene_0.html')\n",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "application/vnd.jupyter.widget-view+json",
+            "text/plain"
+          ],
+          "text_plain_chars": 57,
+          "text_plain_sha256": "495a3dd475bb42b90b67dc9555ffaab410a1feb797df3b81059b8c52b94349a8",
+          "text_plain_preview": "<netgen.webgui.WebGuiWidget object at 0x00000295D1AA27E0>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "execute_result",
+          "data_keys": [
+            "text/plain"
+          ],
+          "text_plain_chars": 46198,
+          "text_plain_sha256": "89a7eef1fdc968aaac80f31a91fb9512f0a09a190fa51e9e6dfed3fec6146532",
+          "text_plain_preview": "'\\n<!DOCTYPE html>\\n<html>\\n    <head>\\n        <title>NGSolve WebGUI</title>\\n        <meta name=\\'viewport\\' content=\\'width=device-width, user-scalable=no\\'/>\\n        <style>\\n            body{\\n                margin:0;\\n                overflow:hidden;\\n            }\\n            canvas{\\n                cursor:grab;\\n                cursor:-webkit-grab;\\n                cursor:-moz-grab;\\n            }\\n            canvas:active{\\n                cursor:grabbing;\\n                cursor:-webkit-grabbing;\\n                cursor:-moz-grabbing;\\n            }\\n        </style>\\n    </head>\\n    <body>\\n          <script src=\"https://cdn.jsdelivr.net/npm/webgui@0.2.39/dist/webgui.js\"></script>\\n          </script>\\n          <script>\\n            var render_data = {\"gui_settings\": {}, \"ngsolve_version\": \"6.2.2606\", \"mesh_dim\": 3, \"order2d\": 1, \"order3d\": 1, \"draw_vol\": null, \"draw_surf\": null, \"objects\": [], \"deformation\": false, \"mesh_regions_2d\": 6, \"mesh_regions_3d\": 1, \"names\": [\"default\", \"default\", \"default\", \"default\", \"default\", \"default\"], \"edge_names\": [\"default\", \"default\", \"default\", \"default\", \"default\", \"default\", \"default\", \"default\", \"default\", \"default\", \"default\", \"default\"], \"funcdim\": 0, \"colors\": [[0.0, 1.0, 0.0, 1.0, 1.0], [0.0, 1.0, 0.0, 1.0, 1.0], [0.0, 1.0, 0.0, 1.0, 1.0], [0.0, 1.0, 0.0, 1.0, 1.0], [0.0, 1.0, 0.0, 1.0, 1.0], [0.0, 1.0, 0.0, 1.0, 1.0]], \"show_wireframe\": true, \"show_mesh\": true, \"Bezier_points\": [\"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",
+          "text_plain_truncated": true
+        }
+      ]
+    },
+    {
+      "cell_index": 6,
+      "execution_count": 3,
+      "source_sha256": "3ed3d4d6fcc52ad6314d7a77956fff836ad9cc1eb29fe58634ee989a5a66b4b5",
+      "source_preview": "scene = Draw(magnitude, mesh, name='Prescribed_B_magnitude_T', order=2, draw_vol=True, draw_surf=True, autoscale=False, min=0, max=0.142, clipping={'x':0,'y':0,'z':1,'dist':0}, vectors=False, width='100%', height='480px')\nscene.GenerateHTML(filename='scene_1.html')\n",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "application/vnd.jupyter.widget-view+json",
+            "text/plain"
+          ],
+          "text_plain_chars": 57,
+          "text_plain_sha256": "f7b9affde2144ec12b272de44b6fc62d4bce7cfcb14f15e93438ef9996becf62",
+          "text_plain_preview": "<netgen.webgui.WebGuiWidget object at 0x00000295D1AA21B0>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "execute_result",
+          "data_keys": [
+            "text/plain"
+          ],
+          "text_plain_chars": 160280,
+          "text_plain_sha256": "46caa9c0c482fc17c5f3aad15db8fc17c0091fcb2fc48a08aa7fd0299ffee50d",
+          "text_plain_preview": "'\\n<!DOCTYPE html>\\n<html>\\n    <head>\\n        <title>NGSolve WebGUI</title>\\n        <meta name=\\'viewport\\' content=\\'width=device-width, user-scalable=no\\'/>\\n        <style>\\n            body{\\n                margin:0;\\n                overflow:hidden;\\n            }\\n            canvas{\\n                cursor:grab;\\n                cursor:-webkit-grab;\\n                cursor:-moz-grab;\\n            }\\n            canvas:active{\\n                cursor:grabbing;\\n                cursor:-webkit-grabbing;\\n                cursor:-moz-grabbing;\\n            }\\n        </style>\\n    </head>\\n    <body>\\n          <script src=\"https://cdn.jsdelivr.net/npm/webgui@0.2.39/dist/webgui.js\"></script>\\n          </script>\\n          <script>\\n            var render_data = {\"gui_settings\": {}, \"ngsolve_version\": \"6.2.2606\", \"mesh_dim\": 3, \"order2d\": 2, \"order3d\": 2, \"draw_vol\": true, \"draw_surf\": true, \"objects\": [], \"deformation\": false, \"funcdim\": 1, \"show_wireframe\": true, \"show_mesh\": true, \"Bezier_points\": [\"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",
+          "text_plain_truncated": true
+        }
+      ]
+    },
+    {
+      "cell_index": 8,
+      "execution_count": 4,
+      "source_sha256": "db5a2d3928debd1a6e68d69d4ed1ce5374f62438f1b327de4f5423382282ee72",
+      "source_preview": "scene = Draw(source, mesh, name='Prescribed_B_vector_T', order=2, draw_vol=True, draw_surf=True, autoscale=True, clipping={'x':0,'y':0,'z':1,'dist':0}, vectors={'grid_size':15}, width='100%', height='480px')\nscene.GenerateHTML(filename='scene_2.html')\n",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "application/vnd.jupyter.widget-view+json",
+            "text/plain"
+          ],
+          "text_plain_chars": 57,
+          "text_plain_sha256": "5fd972382a94da4d625353d133f3f398fba43df474a47caae4ff52aa37d9e5e1",
+          "text_plain_preview": "<netgen.webgui.WebGuiWidget object at 0x00000295C8C7F770>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "execute_result",
+          "data_keys": [
+            "text/plain"
+          ],
+          "text_plain_chars": 238117,
+          "text_plain_sha256": "317ddcd2108bbf8411e78772ad29ffcdaf7534e8b6fed6a950dd786c0b836bd0",
+          "text_plain_preview": "'\\n<!DOCTYPE html>\\n<html>\\n    <head>\\n        <title>NGSolve WebGUI</title>\\n        <meta name=\\'viewport\\' content=\\'width=device-width, user-scalable=no\\'/>\\n        <style>\\n            body{\\n                margin:0;\\n                overflow:hidden;\\n            }\\n            canvas{\\n                cursor:grab;\\n                cursor:-webkit-grab;\\n                cursor:-moz-grab;\\n            }\\n            canvas:active{\\n                cursor:grabbing;\\n                cursor:-webkit-grabbing;\\n                cursor:-moz-grabbing;\\n            }\\n        </style>\\n    </head>\\n    <body>\\n          <script src=\"https://cdn.jsdelivr.net/npm/webgui@0.2.39/dist/webgui.js\"></script>\\n          </script>\\n          <script>\\n            var render_data = {\"gui_settings\": {}, \"ngsolve_version\": \"6.2.2606\", \"mesh_dim\": 3, \"order2d\": 2, \"order3d\": 2, \"draw_vol\": true, \"draw_surf\": true, \"objects\": [], \"deformation\": false, \"funcdim\": 3, \"show_wireframe\": true, \"show_mesh\": true, \"Bezier_points\": [\"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",
+          "text_plain_truncated": true
+        }
+      ]
+    },
+    {
+      "cell_index": 9,
+      "execution_count": 5,
+      "source_sha256": "b8b33e266433942db6ca856e1933b547c4e55dc2636566b11c262a6a59d254f6",
+      "source_preview": "evidence=dict(schema='radia.docs.webgui_supplement.v1',\n    generated_at_utc=datetime.now(timezone.utc).isoformat(),host=socket.gethostname(),\n    python_executable=sys.executable,python_version=platform.python_version(),\n    versions={p:version(p) for p in ['ngsolve','netgen-mesher','anywidget','cubit-mesh-export']},\n    metrics=metrics,threads=2)\nPath('evidence.json').write_text(json.dumps(evidence,indent=2),encoding='utf-8')\n",
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data_keys": [
+            "text/plain"
+          ],
+          "text_plain_chars": 4,
+          "text_plain_sha256": "dfcafae694259c719203dd502252ab975bf6849dc6c8f5fcbe1eda19a821db4d",
+          "text_plain_preview": "1250",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 11,
       "execution_count": 1,
       "source_sha256": "74b7ecbc091d95c770f50fd3a346e6837943ce9e991a09aa704d0893a302fca2",
       "source_preview": "import sys, os\nsys.argv = [\"notebook\"]\n\n#!/usr/bin/env python\n# -*- coding: utf-8 -*-\n\"\"\"\nSimple test to verify B->H conversion in rad.ObjBckg()\n\nTests that quadrupole background field defined in Tesla is correctly\nconverted to H field internally.\n\"\"\"\n\nimport sys\nimport os\n\nimport numpy as np\nimport radia as rd\n\nmm = 1e-3  # 1 mm in meters\n\nprint(\"=\" * 70)\nprint(\"ObjBckg B->H Conversion Test\")\nprint(\"=\" * 70)\n\n# Parameters\ngradient = 10.0  # Quadrupole gradient [T/m]\n\nprint(\"\\nParameters:\")\nprint(f\"  Quadrupole gradient: {gradient} T/m\")\n\n# ============================================================================\n# Test 1: Create quadrupole background field using ObjBckg\n# ============================================================================\n\nprint(\"\\n[Test 1] Quadrupole Background Field (ObjBckg)\")\nprint(\"-\" * 70)\n\ndef quadrupole_field_callback(gradient):\n\t\"\"\"Create quadrupole field callback for rd.ObjBckg.\n\n\tReturns a callable(pos) -> [Bx, By, Bz] in Tesla.\n\t\"\"\"\n\tcall_count",
@@ -42,7 +179,7 @@
       ]
     },
     {
-      "cell_index": 4,
+      "cell_index": 13,
       "execution_count": 2,
       "source_sha256": "8f437cc628140d71fa7acf5f5cbaddcdbde54d81ab7b1d802fb472f20b196c5c",
       "source_preview": "import sys, os\nsys.argv = [\"notebook\"]\n\n#!/usr/bin/env python\n# -*- coding: utf-8 -*-\n\"\"\"\nAnalytical Solution Comparison for Quadrupole Field with ObjBckg\n\nTests magnetizable cube (approximating sphere) in quadrupole background field.\nCompares Radia numerical solution with analytical quadrupole field\nat points outside the cube.\n\"\"\"\n\nimport sys\nimport os\n\nimport numpy as np\nimport radia as rd\n\nmm = 1e-3  # 1 mm in meters\n\nprint(\"=\" * 80)\nprint(\"Quadrupole Field - Analytical Solution Comparison\")\nprint(\"=\" * 80)\n\n# Parameters\ngradient = 10.0  # T/m\nR_sphere = 5.0 * mm   # half-size of cube (sphere approximation)\n\nprint(\"\\nParameters:\")\nprint(f\"  Cube half-size: {R_sphere/mm:.1f} mm\")\nprint(f\"  Quadrupole gradient: {gradient} T/m\")\n\n# ============================================================================\n# Create Geometry\n# ============================================================================\n\nprint(\"\\n[Step 1] Creating Geometry\")\nprint(\"-\" * 80)\n\n# Simple cubic approximation",
@@ -58,7 +195,7 @@
       ]
     },
     {
-      "cell_index": 6,
+      "cell_index": 15,
       "execution_count": 3,
       "source_sha256": "60c5a7a255a9786bb1d2fb4d26ce10971703c1b07bb6544922ddf6ff62678766",
       "source_preview": "import sys, os\nsys.argv = [\"notebook\"]\n\n#!/usr/bin/env python\n# -*- coding: utf-8 -*-\n\"\"\"\nPermeability Comparison - Analytical Solution Test\n\nCompares Radia numerical solutions with analytical quadrupole field\nfor different permeability values (mu_r).\n\nTests magnetizable cube (approximating sphere) in quadrupole background field with:\n- mu_r = 10 (low permeability)\n- mu_r = 100 (medium permeability)\n- mu_r = 1000 (high permeability - soft iron)\n\"\"\"\n\nimport sys\nimport os\n\nimport numpy as np\nimport radia as rd\n\nmm = 1e-3  # 1 mm in meters\n\nprint(\"=\" * 80)\nprint(\"Permeability Comparison - Analytical Solution Test\")\nprint(\"=\" * 80)\n\n# Test parameters\ngradient = 10.0  # T/m\nR_sphere = 5.0 * mm   # half-size of cube (sphere approximation)\npermeability_values = [10, 100, 1000]\n\n# Test points outside the cube (field ~= background + stray field from cube)\n# Note: The magnetized cube produces stray fields that decay with distance.\n# Points farther from the cube give closer agreement with the pur",
@@ -74,7 +211,7 @@
       ]
     },
     {
-      "cell_index": 8,
+      "cell_index": 17,
       "execution_count": 4,
       "source_sha256": "90403738bfd6bd2b5073750857cb8b270b2b22e9baa365c1fef7715a60b2c569",
       "source_preview": "\nfrom pathlib import Path\nimport datetime as _dt\nimport hashlib\nimport importlib.metadata as _metadata\nimport json\nimport platform\nimport subprocess\nimport sys\n\nNOTEBOOK_DIR = Path.cwd()\nif not (NOTEBOOK_DIR / 'quadrupole_analytical.py').exists():\n    NOTEBOOK_DIR = Path('docs/background_fields').resolve()\n\n\ndef _sha256(path):\n    return hashlib.sha256(path.read_bytes()).hexdigest()\n\n\ndef _version(name):\n    try:\n        return _metadata.version(name)\n    except Exception:\n        return None\n\nscripts_to_run = [\n    'quadrupole_analytical.py',\n    'sphere_in_quadrupole.py',\n    'permeability_comparison.py',\n]\nscript_runs = []\nfor script in scripts_to_run:\n    proc = subprocess.run(\n        [sys.executable, str(NOTEBOOK_DIR / script)],\n        cwd=NOTEBOOK_DIR,\n        text=True,\n        capture_output=True,\n        timeout=120,\n    )\n    tail = proc.stdout.splitlines()[-14:]\n    script_runs.append({\n        'script': script,\n        'returncode': proc.returncode,\n        'stdout_sha256",
@@ -94,5 +231,121 @@
     "result_saved": true,
     "json_has_generated_at_utc": true,
     "json_has_versions": true
-  }
+  },
+  "sidecar_writer_versions": {
+    "python_version": "3.12.10",
+    "python_executable_name": "python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.39",
+    "radia_version": "4.95.92"
+  },
+  "historical_execution": {
+    "generated_at_utc": "2026-06-27T15:43:13Z",
+    "versions": {
+      "python_version": "3.12.10",
+      "python_executable": "C:\\Program Files\\Python312\\python.exe",
+      "platform": "Windows-2022Server-10.0.20348-SP0",
+      "radia_mcp_version": "1.4.3",
+      "radia_version": "4.95.2"
+    }
+  },
+  "visualization_execution": {
+    "schema": "radia.docs.webgui_supplement.v1",
+    "generated_at_utc": "2026-09-14T20:22:04.611647+00:00",
+    "host": "mdx2",
+    "python_executable": "C:\\temp\\radia_docs_webgui_20260915\\env\\Scripts\\python.exe",
+    "python_version": "3.12.10",
+    "versions": {
+      "ngsolve": "6.2.2606",
+      "netgen-mesher": "6.2.2606",
+      "anywidget": "0.11.0",
+      "cubit-mesh-export": "0.14.15"
+    },
+    "metrics": {
+      "reference": "prescribed source only, no material response",
+      "samples": [
+        {
+          "point_m": [
+            0,
+            0,
+            0
+          ],
+          "B_T": [
+            -8.673617379884035e-18,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "point_m": [
+            0.005,
+            0,
+            0
+          ],
+          "B_T": [
+            0.0,
+            0.04999999999999999,
+            0.0
+          ]
+        },
+        {
+          "point_m": [
+            0,
+            0.005,
+            0
+          ],
+          "B_T": [
+            0.05,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "point_m": [
+            0.005,
+            0.005,
+            0
+          ],
+          "B_T": [
+            0.05,
+            0.05,
+            0.0
+          ]
+        }
+      ],
+      "n_elements": 399,
+      "gradient_T_per_m": 10.0
+    },
+    "threads": 2,
+    "notebook": "docs/background_fields/background_fields.ipynb",
+    "baseline_notebook_sha256": "c14aaec75b6cefc495f04f209e3f8b95cd1141014c10384dd42ad60ae74c1520",
+    "notebook_sha256": "43221d1281c31ffd97b33e7d1433d4bc8b6e54d3e77c80f4e0c635dc8237f35e",
+    "historical_code_cells_preserved": true,
+    "historical_code_cells_sha256": "fb27775980beb7f44bb50a2f38737ce95cdfd7d57927c39d680a627809f2abfb",
+    "source_cells": [
+      {
+        "id": "webgui-20260915-background_fields-1",
+        "source": "from pathlib import Path\nimport hashlib, json, math, platform, socket, sys\nfrom datetime import datetime, timezone\nfrom importlib.metadata import version\nimport ngsolve as ng\nfrom ngsolve.webgui import Draw\nng.SetNumThreads(2)\nfrom netgen.occ import Box, Pnt, OCCGeometry\ndomain=Box(Pnt(-0.01,-0.01,-0.01), Pnt(0.01,0.01,0.01))\ndomain.mat('source_view_not_iron')\nmesh=ng.Mesh(OCCGeometry(domain).GenerateMesh(maxh=0.005))\ngradient=10.0\nsource=ng.CF((gradient*ng.y, gradient*ng.x, 0))\nmagnitude=ng.Norm(source)\nchecks=[]\nfor point in [(0,0,0),(0.005,0,0),(0,0.005,0),(0.005,0.005,0)]:\n    actual=list(source(mesh(*point)))\n    expected=[gradient*point[1],gradient*point[0],0]\n    assert all(math.isclose(x,y,abs_tol=1e-12) for x,y in zip(actual,expected))\n    checks.append(dict(point_m=point,B_T=actual))\nmetrics=dict(reference='prescribed source only, no material response',\n             samples=checks,n_elements=mesh.ne,gradient_T_per_m=gradient)\nprint(json.dumps(metrics,indent=2))\n"
+      },
+      {
+        "id": "webgui-20260915-background_fields-3",
+        "source": "scene = Draw(mesh, name='Quadrupole_sampling_mesh', draw_vol=True, draw_surf=True, width='100%', height='480px')\nscene.GenerateHTML(filename='scene_0.html')\n"
+      },
+      {
+        "id": "webgui-20260915-background_fields-5",
+        "source": "scene = Draw(magnitude, mesh, name='Prescribed_B_magnitude_T', order=2, draw_vol=True, draw_surf=True, autoscale=False, min=0, max=0.142, clipping={'x':0,'y':0,'z':1,'dist':0}, vectors=False, width='100%', height='480px')\nscene.GenerateHTML(filename='scene_1.html')\n"
+      },
+      {
+        "id": "webgui-20260915-background_fields-7",
+        "source": "scene = Draw(source, mesh, name='Prescribed_B_vector_T', order=2, draw_vol=True, draw_surf=True, autoscale=True, clipping={'x':0,'y':0,'z':1,'dist':0}, vectors={'grid_size':15}, width='100%', height='480px')\nscene.GenerateHTML(filename='scene_2.html')\n"
+      },
+      {
+        "id": "webgui-20260915-background_fields-8",
+        "source": "evidence=dict(schema='radia.docs.webgui_supplement.v1',\n    generated_at_utc=datetime.now(timezone.utc).isoformat(),host=socket.gethostname(),\n    python_executable=sys.executable,python_version=platform.python_version(),\n    versions={p:version(p) for p in ['ngsolve','netgen-mesher','anywidget','cubit-mesh-export']},\n    metrics=metrics,threads=2)\nPath('evidence.json').write_text(json.dumps(evidence,indent=2),encoding='utf-8')\n"
+      }
+    ],
+    "supplement_sha256": "e55f4856f000c2328badcc2cb980678863fdd416fee396111004ac1517f9dc70",
+    "visual_qa": "Saved rich output and state audited; rendered visual QA pending."
+  },
+  "execution_scope": "Mixed provenance: original campaigns preserved; only added visualization cells executed on mdx."
 }

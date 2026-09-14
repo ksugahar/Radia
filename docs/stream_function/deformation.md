@@ -17,7 +17,7 @@ This is the SA-25-020 "(ACA+)+TSVD + CMA-ES" pattern extended with
 
 ## Implementation
 
-[`demo_planar_uniform_fem_psi_advanced.py`](examples_catalog.ipynb)
+[`demo_planar_uniform_fem_psi_advanced.py`](../../validation_test/documentation_maintenance/stream_function/examples_catalog.ipynb)
 ships the framework:
 
 ```bash

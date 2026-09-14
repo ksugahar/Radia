@@ -1,34 +1,191 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-27T23:00:06Z",
-  "notebook": "docs/cubit_mesh_export/cubit_mesh_export_showcase.ipynb",
-  "notebook_sha256": "f40e2bac03cd785ef615bae0a05cb804f91a0b0c9a5fe081e9918d247d101852",
+  "generated_at_utc": "2026-09-14T07:53:23Z",
+  "notebook": "cubit_mesh_export_showcase.ipynb",
+  "notebook_sha256": "1dbc5014490a3cd0ff60d5055edf314f770c9daf23024efdbca9112bc31a8fdc",
   "versions": {
+    "ngsolve": "6.2.2606",
+    "netgen-mesher": "6.2.2606",
+    "cubit-mesh-export": "0.14.15",
+    "webgui-jupyter-widgets": "0.2.37",
+    "anywidget": "0.11.0",
     "python_version": "3.12.10",
-    "python_executable": "C:\\Program Files\\Python312\\python.exe",
-    "platform": "Windows-2022Server-10.0.20348-SP0",
-    "radia_mcp_version": "1.4.3",
-    "radia_version": "4.95.2",
-    "cubit_mesh_export_version": "0.14.0"
+    "python_executable": "C:\\temp\\radia_mesh_webgui_20260914\\env\\Scripts\\python.exe"
   },
   "summary": {
-    "path": "docs/cubit_mesh_export/cubit_mesh_export_showcase.ipynb",
-    "cells": 11,
-    "code_cells": 5,
-    "executed_code_cells": 5,
-    "code_cells_with_outputs": 5,
-    "output_count": 7,
+    "path": "cubit_mesh_export_showcase.ipynb",
+    "cells": 22,
+    "code_cells": 10,
+    "executed_code_cells": 10,
+    "code_cells_with_outputs": 10,
+    "output_count": 17,
     "error_output_count": 0,
     "result_saved": true,
+    "notebook_role": "example",
+    "webgui_required": true,
+    "webgui_field_required": true,
+    "webgui_import_present": true,
+    "webgui_draw_present": true,
+    "webgui_draw_cell_count": 4,
+    "executed_webgui_draw_cell_count": 4,
+    "webgui_draw_cells_with_rich_outputs": 4,
+    "webgui_ready": true,
+    "parameterized_field_draw_present": true,
+    "parameterized_field_draw_cell_count": 1,
+    "executed_parameterized_field_draw_cell_count": 1,
+    "parameterized_field_draw_cells_with_rich_outputs": 1,
+    "webgui_field_ready": true,
     "metadata_keys": [
       "kernelspec",
-      "language_info"
+      "language_info",
+      "radia",
+      "widgets"
     ]
   },
   "outputs": [
     {
-      "cell_index": 1,
+      "cell_index": 2,
       "execution_count": 1,
+      "source_sha256": "dd374fd89f331de17364b2bd0cb103538626dc6e8ea2ed41e862268471c358c5",
+      "source_preview": "from pathlib import Path\nfrom collections import Counter\nfrom datetime import datetime, timezone\nimport hashlib, json, math, platform, socket, sys\nfrom importlib.metadata import version\nfrom IPython.display import display, Markdown\nimport ngsolve as ng\nfrom ngsolve.webgui import Draw\nfrom cubit_mesh_export.check import check_consistency\n\nHERE = next(p for p in [Path.cwd(), Path.cwd() / 'docs/cubit_mesh_export']\n            if (p / 'hex_sphere_highorder/hexsph_o1.vol').exists())\nng.SetNumThreads(2)\nmeshes, mesh_records = {}, []\nfor order in (1, 2, 3):\n    path = HERE / 'hex_sphere_highorder' / f'hexsph_o{order}.vol'\n    report = check_consistency(str(path))\n    assert report['passed'], report\n    mesh = ng.Mesh(str(path))\n    meshes[order] = mesh\n    counts = dict(Counter(str(e.type) for e in mesh.Elements(ng.VOL)))\n    with ng.TaskManager():\n        volume = ng.Integrate(ng.CF(1), mesh, order=10)\n    mesh_records.append(dict(order=order, mesh_path=path.relative_to(HERE).as_posix(),\n   ",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 480,
+          "text_sha256": "73f7a809dd1ab510c144a2ca8d61b1a26907d23612bd98fcb2016af2c26e0d4e",
+          "text_preview": "Geometry order: 1 elements: {'ET.HEX': 56} volume: 0.0004012929288806234\nMaterials: ('sphere',) boundaries: ('Surface_1',)\ncheck-vol: True CAD reference: False\nGeometry order: 2 elements: {'ET.HEX': 56} volume: 0.0005224932630323719\nMaterials: ('sphere',) boundaries: ('Surface_1',)\ncheck-vol: True CAD reference: False\nGeometry order: 3 elements: {'ET.HEX': 56} volume: 0.0005242825318831584\nMaterials: ('sphere',) boundaries: ('Surface_1',)\ncheck-vol: True CAD reference: False\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 4,
+      "execution_count": 2,
+      "source_sha256": "059ec1c476622c48d9157ead3e7a796d10838d3749d8c0547e35733e12aceea3",
+      "source_preview": "mesh = meshes[1]\nscene = Draw(mesh, name=\"Cubit_HEX_geometry_order_1\", order=3,\n     draw_vol=True, draw_surf=True, width=\"100%\", height=\"480px\",\n     settings={\"Objects\": {\"Edges\": True, \"Wireframe\": True}})\nscene.GenerateHTML(filename=str(HERE / 'hex_order_1.html'))\n",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "application/vnd.jupyter.widget-view+json",
+            "text/plain"
+          ],
+          "text_plain_chars": 57,
+          "text_plain_sha256": "5d6b1d30644ab5daef2d1fa161b8b85eead83a232cadbc52b71213b02625d0b1",
+          "text_plain_preview": "<netgen.webgui.WebGuiWidget object at 0x0000020264995D30>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "execute_result",
+          "data_keys": [
+            "text/plain"
+          ],
+          "text_plain_chars": 8796,
+          "text_plain_sha256": "c93737e9d6da2b3eadf4fa27f917ed5a473236612cd1e8a158d90b87adc4cb5b",
+          "text_plain_preview": "'\\n<!DOCTYPE html>\\n<html>\\n    <head>\\n        <title>NGSolve WebGUI</title>\\n        <meta name=\\'viewport\\' content=\\'width=device-width, user-scalable=no\\'/>\\n        <style>\\n            body{\\n                margin:0;\\n                overflow:hidden;\\n            }\\n            canvas{\\n                cursor:grab;\\n                cursor:-webkit-grab;\\n                cursor:-moz-grab;\\n            }\\n            canvas:active{\\n                cursor:grabbing;\\n                cursor:-webkit-grabbing;\\n                cursor:-moz-grabbing;\\n            }\\n        </style>\\n    </head>\\n    <body>\\n          <script src=\"https://cdn.jsdelivr.net/npm/webgui@0.2.39/dist/webgui.js\"></script>\\n          </script>\\n          <script>\\n            var render_data = {\"gui_settings\": {\"Objects\": {\"Edges\": true, \"Wireframe\": true}}, \"ngsolve_version\": \"6.2.2606\", \"mesh_dim\": 3, \"order2d\": 1, \"order3d\": 1, \"draw_vol\": null, \"draw_surf\": null, \"objects\": [], \"deformation\": false, \"mesh_regions_2d\": 1, \"mesh_regions_3d\": 1, \"names\": [\"Surface_1\"], \"edge_names\": [], \"funcdim\": 0, \"colors\": [[0.0, 1.0, 0.0, 1.0, 1.0]], \"show_wireframe\": true, \"show_mesh\": true, \"Bezier_points\": [\"w9AQPQAAAADD0BA9AAAAAMPQED0AAAAAw9AQPQAAAACQe+w8kHvsPJB77DwAAAAAzcxMPQAAAAAAAAAAAAAAAMPQED3D0BA9AAAAAAAAAADD0BA9w9AQPQAAAAAAAAAAkHvsPJB77DyQe+w8AAAAAAAAAADNzEw9AAAAAAAAAAAAAAAAw9AQPcPQED0AAAAAAAAAAMPQED3D0BA9AAAAAJB77DyQe+w8kHvsPAAAAAAAAAAAAAAAAM3MTD0AAAAAAAAAAMPQED3D0BA9AAAAAAAAAADD0BA9w9AQPQAAAACQe+y8kHvsPJB77DwAAAAAAAAAAM3MTD0AAAAAAAAAAMPQEL3D0BA9AAAAAAAAAADD0BC9w9AQPQAAAAAAAAAAkHvsvJB77DyQe+w8AAAAAM3MTL0AAAAAAAAAAAAAAADD0BC9AAAAAMPQED0AAAAAw9AQvQAAAADD0BA9AAAAAJB77LyQe+w8kHvsPAAAAAAAAAAAAAAAAM3MTD0AAAAAw9AQvQAAAADD0BA9AAAAAMPQEL0AAAAAw9AQPQAAAACQe+y8kHvsvJB77DwAAAAAzcxMvQAAAAAAAAAAAAAAAMPQEL3D0BC9AAAAAAAAAADD0BC9w9AQvQAAAAAAAAAAkHvsvJB77LyQe+w8AAAAAAAAAADNzEy9AAAAAAAAAAAAAAAAw9AQvcPQED0AAAAAAAAAAMPQEL3D0BA9AAAAAJB77LyQe+y8kHvsPAAAAAAAAAAAAAAAAM3MTD0AAAAAAAAAAMPQEL3D0BA9AAAAAAAAAADD0BC9w9AQPQAAAACQe+w8kHvsvJB77DwAAAAAAAAAAM3MTL0AAAAAAAAAAMPQED3D0BC9AAAAAAAAAADD0BA9w9AQvQAAAAAAAAAAkHvsPJB77LyQe+w8AAAAAM3MTD0AAAAAAAAAAAAAAADD0BA9AAAAAMPQED0AAAAAw9AQPQAAAADD0BA9AAAAAJB77DyQe+y8kHvsPAAAAAAAAAAAAAAAAM3MTD0AAAAAAAAAAMPQED3D0BC9AAAAAAAAAADD0BA9w9AQvQAAAACQe+w8kHvsPJB77LwAAAAAAAAAAM3MTD0AAAAAAAAAAMPQED3D0BA9AAAAAAAAAADD0BA9w9AQPQAAAAAAAAAAkHvsPJB77DyQe+y8AAAAAM3MTD0AAAAAAAAAAAAAAADD0BA9AAAAAMPQEL0AAAAAw9AQPQAAAADD0BC9AAAAAJB77DyQe+w8kHvsvAAAAAAAAAAAAAAAAM3MTL0AAAAAw9AQvQAAAADD0BC9AAAAAMPQEL0AAAAAw9AQvQAAAACQe+y8kHvsPJB77LwAAAAAzcxMvQAAAAAAAAAAAAAAAMPQEL3D0BA9AAAAAAAAAADD0BC9w9AQPQAAAAAAAAAAkHvsvJB77DyQe+y8AAAAAAAAAADNzEw9AAAAAAAAAAAAAAAAw9AQPcPQEL0AAAAAAAAAAMPQED3D0BC9AAAAAJB77LyQe+w8kHvsvAAAAAAAAAAAAAAAAM3MTL0AAAAAAAAAAMPQEL3D0BC9AAAAAAAAAADD0BC9w9AQvQAAAACQe+y8kHvsvJB77LwAAAAAAAAAAM3MTL0AAAAAAAAAAMPQEL3D0BC9AAAAAAAAAADD0BC9w9AQvQAAAAAAAAAAkHvsvJB77LyQe+y8AAAAAM3MTL0AAAAAAAAAAAAAAADD0BC9AAAAAMPQEL0AAAAAw9AQvQAAAADD0BC9AAAAAJB77LyQe+y8kHvsvAAAAAAAAAAAAAAAAM3MTL0AAAAAw9AQPQAAAADD0BC9AAAAAMPQED0AAAAAw9AQvQAAAACQe+w8kHvsvJB77LwAAAAAzcxMPQAAAAAAAAAAAAAAAMPQED3D0BC9AAAAAAAAAADD0BA9w9AQvQAAAAAAAAAAkHvsPJB77LyQe+y8AAAAAAAAAADNzEy9AAAAAAAAAAAAAAAAw9AQvcPQEL0AAAAAAAAAAMPQEL3D0BC9AAAAAJB77DyQe+y8kHvsvAAAAAAAAAAAAAAAAM3MTL0AAAAA\", \"zcxMPQAAAAAAAAAAAAAAAJB77DyQe+w8kHvsPAAAAADD0BA9w9AQPQAAAAAAAAAAw9AQPcPQED0AAAAAAAAAAAAAAADNzEw9AAAAAAAAAACQe+w8kHvsPJB77DwAAAAAAAAAAMPQED3D0BA9AAAAAAAAAADD0BA9w9AQPQAAAAAAAAAAAAAAAM3MTD0AAAAAkHvsPJB77DyQe+w8AAAAAMPQED0AAAAAw9AQPQAAAADD0BA9AAAAAMPQED0AAAAAAAAAAM3MTD0AAAAAAAAAAJB77LyQe+w8kHvsPAAAAADD0BC9w9AQPQAAAAAAAAAAw9AQvcPQED0AAAAAAAAAAM3MTL0AAAAAAAAAAAAAAACQe+y8kHvsPJB77DwAAAAAw9AQvQAAAADD0BA9AAAAAMPQEL0AAAAAw9AQPQAAAAAAAAAAAAAAAM3MTD0AAAAAkHvsvJB77DyQe+w8AAAAAAAAAADD0BA9w9AQPQAAAAAAAAAAw9AQPcPQED0AAAAAzcxMvQAAAAAAAAAAAAAAAJB77LyQe+y8kHvsPAAAAADD0BC9w9AQvQAAAAAAAAAAw9AQvcPQEL0AAAAAAAAAAAAAAADNzEy9AAAAAAAAAACQe+y8kHvsvJB77DwAAAAAAAAAAMPQEL3D0BA9AAAAAAAAAADD0BC9w9AQPQAAAAAAAAAAAAAAAM3MTD0AAAAAkHvsvJB77LyQe+w8AAAAAMPQEL0AAAAAw9AQPQAAAADD0BC9AA",
+          "text_plain_truncated": true
+        }
+      ]
+    },
+    {
+      "cell_index": 6,
+      "execution_count": 3,
+      "source_sha256": "6f70e836c74810f75c99229d9fd6f6fbd49ddf0411d12265b5bd48f168d341d9",
+      "source_preview": "mesh = meshes[2]\nscene = Draw(mesh, name=\"Cubit_HEX_geometry_order_2\", order=3,\n     draw_vol=True, draw_surf=True, width=\"100%\", height=\"480px\",\n     settings={\"Objects\": {\"Edges\": True, \"Wireframe\": True}})\nscene.GenerateHTML(filename=str(HERE / 'hex_order_2.html'))\n",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "application/vnd.jupyter.widget-view+json",
+            "text/plain"
+          ],
+          "text_plain_chars": 57,
+          "text_plain_sha256": "fbe7536fa8104a2afc8103d54249840ed194847f2239e7afd0838b3b579a9140",
+          "text_plain_preview": "<netgen.webgui.WebGuiWidget object at 0x000002042A2505C0>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "execute_result",
+          "data_keys": [
+            "text/plain"
+          ],
+          "text_plain_chars": 20104,
+          "text_plain_sha256": "777fe442d2e21fd485e208e16f96353268ae8eac9a87d9d67e5463947c5649be",
+          "text_plain_preview": "'\\n<!DOCTYPE html>\\n<html>\\n    <head>\\n        <title>NGSolve WebGUI</title>\\n        <meta name=\\'viewport\\' content=\\'width=device-width, user-scalable=no\\'/>\\n        <style>\\n            body{\\n                margin:0;\\n                overflow:hidden;\\n            }\\n            canvas{\\n                cursor:grab;\\n                cursor:-webkit-grab;\\n                cursor:-moz-grab;\\n            }\\n            canvas:active{\\n                cursor:grabbing;\\n                cursor:-webkit-grabbing;\\n                cursor:-moz-grabbing;\\n            }\\n        </style>\\n    </head>\\n    <body>\\n          <script src=\"https://cdn.jsdelivr.net/npm/webgui@0.2.39/dist/webgui.js\"></script>\\n          </script>\\n          <script>\\n            var render_data = {\"gui_settings\": {\"Objects\": {\"Edges\": true, \"Wireframe\": true}}, \"ngsolve_version\": \"6.2.2606\", \"mesh_dim\": 3, \"order2d\": 3, \"order3d\": 2, \"draw_vol\": null, \"draw_surf\": null, \"objects\": [], \"deformation\": false, \"mesh_regions_2d\": 1, \"mesh_regions_3d\": 1, \"names\": [\"Surface_1\"], \"edge_names\": [], \"funcdim\": 0, \"colors\": [[0.0, 1.0, 0.0, 1.0, 1.0]], \"show_wireframe\": true, \"show_mesh\": true, \"Bezier_points\": [\"w9AQPQAAAADD0BA9AAAAAMPQED0AAAAAw9AQPQAAAACQe+w8kHvsPJB77DwAAAAAzcxMPQAAAAAAAAAAAAAAAMPQED3D0BA9AAAAAAAAAADD0BA9w9AQPQAAAAAAAAAAkHvsPJB77DyQe+w8AAAAAAAAAADNzEw9AAAAAAAAAAAAAAAAw9AQPcPQED0AAAAAAAAAAMPQED3D0BA9AAAAAJB77DyQe+w8kHvsPAAAAAAAAAAAAAAAAM3MTD0AAAAAAAAAAMPQED3D0BA9AAAAAAAAAADD0BA9w9AQPQAAAACQe+y8kHvsPJB77DwAAAAAAAAAAM3MTD0AAAAAAAAAAMPQEL3D0BA9AAAAAAAAAADD0BC9w9AQPQAAAAAAAAAAkHvsvJB77DyQe+w8AAAAAM3MTL0AAAAAAAAAAAAAAADD0BC9AAAAAMPQED0AAAAAw9AQvQAAAADD0BA9AAAAAJB77LyQe+w8kHvsPAAAAAAAAAAAAAAAAM3MTD0AAAAAw9AQvQAAAADD0BA9AAAAAMPQEL0AAAAAw9AQPQAAAACQe+y8kHvsvJB77DwAAAAAzcxMvQAAAAAAAAAAAAAAAMPQEL3D0BC9AAAAAAAAAADD0BC9w9AQvQAAAAAAAAAAkHvsvJB77LyQe+w8AAAAAAAAAADNzEy9AAAAAAAAAAAAAAAAw9AQvcPQED0AAAAAAAAAAMPQEL3D0BA9AAAAAJB77LyQe+y8kHvsPAAAAAAAAAAAAAAAAM3MTD0AAAAAAAAAAMPQEL3D0BA9AAAAAAAAAADD0BC9w9AQPQAAAACQe+w8kHvsvJB77DwAAAAAAAAAAM3MTL0AAAAAAAAAAMPQED3D0BC9AAAAAAAAAADD0BA9w9AQvQAAAAAAAAAAkHvsPJB77LyQe+w8AAAAAM3MTD0AAAAAAAAAAAAAAADD0BA9AAAAAMPQED0AAAAAw9AQPQAAAADD0BA9AAAAAJB77DyQe+y8kHvsPAAAAAAAAAAAAAAAAM3MTD0AAAAAAAAAAMPQED3D0BC9AAAAAAAAAADD0BA9w9AQvQAAAACQe+w8kHvsPJB77LwAAAAAAAAAAM3MTD0AAAAAAAAAAMPQED3D0BA9AAAAAAAAAADD0BA9w9AQPQAAAAAAAAAAkHvsPJB77DyQe+y8AAAAAM3MTD0AAAAAAAAAAAAAAADD0BA9AAAAAMPQEL0AAAAAw9AQPQAAAADD0BC9AAAAAJB77DyQe+w8kHvsvAAAAAAAAAAAAAAAAM3MTL0AAAAAw9AQvQAAAADD0BC9AAAAAMPQEL0AAAAAw9AQvQAAAACQe+y8kHvsPJB77LwAAAAAzcxMvQAAAAAAAAAAAAAAAMPQEL3D0BA9AAAAAAAAAADD0BC9w9AQPQAAAAAAAAAAkHvsvJB77DyQe+y8AAAAAAAAAADNzEw9AAAAAAAAAAAAAAAAw9AQPcPQEL0AAAAAAAAAAMPQED3D0BC9AAAAAJB77LyQe+w8kHvsvAAAAAAAAAAAAAAAAM3MTL0AAAAAAAAAAMPQEL3D0BC9AAAAAAAAAADD0BC9w9AQvQAAAACQe+y8kHvsvJB77LwAAAAAAAAAAM3MTL0AAAAAAAAAAMPQEL3D0BC9AAAAAAAAAADD0BC9w9AQvQAAAAAAAAAAkHvsvJB77LyQe+y8AAAAAM3MTL0AAAAAAAAAAAAAAADD0BC9AAAAAMPQEL0AAAAAw9AQvQAAAADD0BC9AAAAAJB77LyQe+y8kHvsvAAAAAAAAAAAAAAAAM3MTL0AAAAAw9AQPQAAAADD0BC9AAAAAMPQED0AAAAAw9AQvQAAAACQe+w8kHvsvJB77LwAAAAAzcxMPQAAAAAAAAAAAAAAAMPQED3D0BC9AAAAAAAAAADD0BA9w9AQvQAAAAAAAAAAkHvsPJB77LyQe+y8AAAAAAAAAADNzEy9AAAAAAAAAAAAAAAAw9AQvcPQEL0AAAAAAAAAAMPQEL3D0BC9AAAAAJB77DyQe+y8kHvsvAAAAAAAAAAAAAAAAM3MTL0AAAAA\", \"X643PfOYu6BtuNA8AAAAABaDED02CS08FoMQPQAAAABtpwc9bacHPXZYpTwAAAAADa1LPYFaYDwCkjigAAAAAG240Dxfrjc985i7oAAAAAAWgxA9FoMQPTYJLTwAAAAAdlilPG2nBz1tpwc9AAAAAA5MhKANrUs9gVpgPAAAAAAAnOOgbbjQPF+uNz0AAAAANgktPBaDED0WgxA9AAAAAG2nBz12WKU8bacHPQAAAACBWmA8DkyEoA2tSz0AAAAA85i7IF+uNz1tuNA8AAAAADYJLbwWgxA9FoMQPQAAAABtpwe9bacHPXZYpTwAAAAAgVpgvA2tSz0CkjigAAAAAF+uN71tuNA885i7oAAAAAAWgxC9FoMQPTYJLTwAAAAAbacHvXZYpTxtpwc9AAAAAA2tS70OTISggVpgPAAAAABtuNC8AJzjoF+uNz0AAAAAFoMQvTYJLTwWgxA9AAAAAHZYpbxtpwc9bacHPQAAAAAOTIQggVpgPA2tSz0AAAAAX643vfOYuyBtuNA8AAAAABaDEL02CS28FoMQPQAAAABtpwe9bacHvXZYpTwAAAAADa1LvYFaYLwCkjigAAAAAG240Lxfrje985i7oAAAAAAWgxC9FoMQvTYJLTwAAAAAdlilvG2nB71tpwc9AAAAAA5MhCANrUu9gVpgPAAAAAAAnOMgbbjQvF+uNz0AAAAANgktvBaDEL0WgxA9AAAAAG2nB712WKW8bacHPQAAAACBWmC8Ap",
+          "text_plain_truncated": true
+        }
+      ]
+    },
+    {
+      "cell_index": 8,
+      "execution_count": 4,
+      "source_sha256": "f1866c66f5bccbac6a77798747aceb211beb313e7251e23a0ec3071401d93f3e",
+      "source_preview": "mesh = meshes[3]\nscene = Draw(mesh, name=\"Cubit_HEX_geometry_order_3\", order=3,\n     draw_vol=True, draw_surf=True, width=\"100%\", height=\"480px\",\n     settings={\"Objects\": {\"Edges\": True, \"Wireframe\": True}})\nscene.GenerateHTML(filename=str(HERE / 'hex_order_3.html'))\n",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "application/vnd.jupyter.widget-view+json",
+            "text/plain"
+          ],
+          "text_plain_chars": 57,
+          "text_plain_sha256": "11d0abf86500201d74fa5e9ace5bc283dd5b20d728a579786b5ac348010363b7",
+          "text_plain_preview": "<netgen.webgui.WebGuiWidget object at 0x000002042A22F590>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "execute_result",
+          "data_keys": [
+            "text/plain"
+          ],
+          "text_plain_chars": 20104,
+          "text_plain_sha256": "d146c0ae400d130e11d20877e220b614aa9046b20293ee493d5f19c761a45e08",
+          "text_plain_preview": "'\\n<!DOCTYPE html>\\n<html>\\n    <head>\\n        <title>NGSolve WebGUI</title>\\n        <meta name=\\'viewport\\' content=\\'width=device-width, user-scalable=no\\'/>\\n        <style>\\n            body{\\n                margin:0;\\n                overflow:hidden;\\n            }\\n            canvas{\\n                cursor:grab;\\n                cursor:-webkit-grab;\\n                cursor:-moz-grab;\\n            }\\n            canvas:active{\\n                cursor:grabbing;\\n                cursor:-webkit-grabbing;\\n                cursor:-moz-grabbing;\\n            }\\n        </style>\\n    </head>\\n    <body>\\n          <script src=\"https://cdn.jsdelivr.net/npm/webgui@0.2.39/dist/webgui.js\"></script>\\n          </script>\\n          <script>\\n            var render_data = {\"gui_settings\": {\"Objects\": {\"Edges\": true, \"Wireframe\": true}}, \"ngsolve_version\": \"6.2.2606\", \"mesh_dim\": 3, \"order2d\": 3, \"order3d\": 2, \"draw_vol\": null, \"draw_surf\": null, \"objects\": [], \"deformation\": false, \"mesh_regions_2d\": 1, \"mesh_regions_3d\": 1, \"names\": [\"Surface_1\"], \"edge_names\": [], \"funcdim\": 0, \"colors\": [[0.0, 1.0, 0.0, 1.0, 1.0]], \"show_wireframe\": true, \"show_mesh\": true, \"Bezier_points\": [\"w9AQPQAAAADD0BA9AAAAAMPQED0AAAAAw9AQPQAAAACQe+w8kHvsPJB77DwAAAAAzcxMPQAAAAAAAAAAAAAAAMPQED3D0BA9AAAAAAAAAADD0BA9w9AQPQAAAAAAAAAAkHvsPJB77DyQe+w8AAAAAAAAAADNzEw9AAAAAAAAAAAAAAAAw9AQPcPQED0AAAAAAAAAAMPQED3D0BA9AAAAAJB77DyQe+w8kHvsPAAAAAAAAAAAAAAAAM3MTD0AAAAAAAAAAMPQED3D0BA9AAAAAAAAAADD0BA9w9AQPQAAAACQe+y8kHvsPJB77DwAAAAAAAAAAM3MTD0AAAAAAAAAAMPQEL3D0BA9AAAAAAAAAADD0BC9w9AQPQAAAAAAAAAAkHvsvJB77DyQe+w8AAAAAM3MTL0AAAAAAAAAAAAAAADD0BC9AAAAAMPQED0AAAAAw9AQvQAAAADD0BA9AAAAAJB77LyQe+w8kHvsPAAAAAAAAAAAAAAAAM3MTD0AAAAAw9AQvQAAAADD0BA9AAAAAMPQEL0AAAAAw9AQPQAAAACQe+y8kHvsvJB77DwAAAAAzcxMvQAAAAAAAAAAAAAAAMPQEL3D0BC9AAAAAAAAAADD0BC9w9AQvQAAAAAAAAAAkHvsvJB77LyQe+w8AAAAAAAAAADNzEy9AAAAAAAAAAAAAAAAw9AQvcPQED0AAAAAAAAAAMPQEL3D0BA9AAAAAJB77LyQe+y8kHvsPAAAAAAAAAAAAAAAAM3MTD0AAAAAAAAAAMPQEL3D0BA9AAAAAAAAAADD0BC9w9AQPQAAAACQe+w8kHvsvJB77DwAAAAAAAAAAM3MTL0AAAAAAAAAAMPQED3D0BC9AAAAAAAAAADD0BA9w9AQvQAAAAAAAAAAkHvsPJB77LyQe+w8AAAAAM3MTD0AAAAAAAAAAAAAAADD0BA9AAAAAMPQED0AAAAAw9AQPQAAAADD0BA9AAAAAJB77DyQe+y8kHvsPAAAAAAAAAAAAAAAAM3MTD0AAAAAAAAAAMPQED3D0BC9AAAAAAAAAADD0BA9w9AQvQAAAACQe+w8kHvsPJB77LwAAAAAAAAAAM3MTD0AAAAAAAAAAMPQED3D0BA9AAAAAAAAAADD0BA9w9AQPQAAAAAAAAAAkHvsPJB77DyQe+y8AAAAAM3MTD0AAAAAAAAAAAAAAADD0BA9AAAAAMPQEL0AAAAAw9AQPQAAAADD0BC9AAAAAJB77DyQe+w8kHvsvAAAAAAAAAAAAAAAAM3MTL0AAAAAw9AQvQAAAADD0BC9AAAAAMPQEL0AAAAAw9AQvQAAAACQe+y8kHvsPJB77LwAAAAAzcxMvQAAAAAAAAAAAAAAAMPQEL3D0BA9AAAAAAAAAADD0BC9w9AQPQAAAAAAAAAAkHvsvJB77DyQe+y8AAAAAAAAAADNzEw9AAAAAAAAAAAAAAAAw9AQPcPQEL0AAAAAAAAAAMPQED3D0BC9AAAAAJB77LyQe+w8kHvsvAAAAAAAAAAAAAAAAM3MTL0AAAAAAAAAAMPQEL3D0BC9AAAAAAAAAADD0BC9w9AQvQAAAACQe+y8kHvsvJB77LwAAAAAAAAAAM3MTL0AAAAAAAAAAMPQEL3D0BC9AAAAAAAAAADD0BC9w9AQvQAAAAAAAAAAkHvsvJB77LyQe+y8AAAAAM3MTL0AAAAAAAAAAAAAAADD0BC9AAAAAMPQEL0AAAAAw9AQvQAAAADD0BC9AAAAAJB77LyQe+y8kHvsvAAAAAAAAAAAAAAAAM3MTL0AAAAAw9AQPQAAAADD0BC9AAAAAMPQED0AAAAAw9AQvQAAAACQe+w8kHvsvJB77LwAAAAAzcxMPQAAAAAAAAAAAAAAAMPQED3D0BC9AAAAAAAAAADD0BA9w9AQvQAAAAAAAAAAkHvsPJB77LyQe+y8AAAAAAAAAADNzEy9AAAAAAAAAAAAAAAAw9AQvcPQEL0AAAAAAAAAAMPQEL3D0BC9AAAAAJB77DyQe+y8kHvsvAAAAAAAAAAAAAAAAM3MTL0AAAAA\", \"dYQ0PXc3CZ4H/988AAAAAENdET0u3h08Q10RPQAAAABBzQY9Qc0GPfrtrDwAAAAA9tZOPU3NQTz7aCOdAAAAAAf/3zx1hDQ9dzcJngAAAABDXRE9Q10RPS7eHTwAAAAA+u2sPEHNBj1BzQY9AAAAAGXRfp721k49Tc1BPAAAAADajNOeB//fPHWEND0AAAAALt4dPENdET1DXRE9AAAAAEHNBj367aw8Qc0GPQAAAABNzUE8ZdF+nvbWTj0AAAAAdzcJHnWEND0H/988AAAAAC7eHbxDXRE9Q10RPQAAAABBzQa9Qc0GPfrtrDwAAAAATc1BvPbWTj37aCOdAAAAAHWENL0H/988dzcJngAAAABDXRG9Q10RPS7eHTwAAAAAQc0GvfrtrDxBzQY9AAAAAPbWTr1l0X6eTc1BPAAAAAAH/9+82ozTnnWEND0AAAAAQ10RvS7eHTxDXRE9AAAAAPrtrLxBzQY9Qc0GPQAAAABl0X4eTc1BPPbWTj0AAAAAdYQ0vXc3CR4H/988AAAAAENdEb0u3h28Q10RPQAAAABBzQa9Qc0GvfrtrDwAAAAA9tZOvU3NQbz7aCOdAAAAAAf/37x1hDS9dzcJngAAAABDXRG9Q10RvS7eHTwAAAAA+u2svEHNBr1BzQY9AAAAAGXRfh721k69Tc1BPAAAAADajNMeB//fvHWEND0AAAAALt4dvENdEb1DXRE9AAAAAEHNBr367ay8Qc0GPQAAAABNzUG8+2",
+          "text_plain_truncated": true
+        }
+      ]
+    },
+    {
+      "cell_index": 10,
+      "execution_count": 5,
+      "source_sha256": "2ab0912c27685a2c732b0850e151b853e61232d27dcb1b97eea95d1cd0cb1bd0",
+      "source_preview": "mesh = meshes[3]\nwith ng.TaskManager():\n    exact = ng.sin(8*ng.x)*ng.cos(6*ng.y)\n    fes = ng.H1(mesh, order=3, dirichlet=\".*\")\n    solution = ng.GridFunction(fes)\n    solution.Set(exact, ng.BND)\n    u, v = fes.TnT()\n    a = ng.BilinearForm(ng.grad(u)*ng.grad(v)*ng.dx).Assemble()\n    rhs = ng.LinearForm(100*exact*v*ng.dx).Assemble()\n    residual = rhs.vec - a.mat*solution.vec\n    solution.vec.data += a.mat.Inverse(fes.FreeDofs())*residual\n    l2_error = math.sqrt(ng.Integrate((solution-exact)**2, mesh, order=10))\nassert math.isfinite(l2_error)\nprint('H1 DOFs:', fes.ndof, 'L2 error:', l2_error)\nscene = Draw(solution, mesh, name=\"Manufactured_Poisson_solution\", order=3,\n     draw_vol=True, draw_surf=True, autoscale=True,\n     clipping={\"x\": 0, \"y\": 0, \"z\": 1, \"dist\": 0},\n     vectors=False, width=\"100%\", height=\"480px\")\n\nscene.GenerateHTML(filename=str(HERE / 'poisson_field.html'))\n\nevidence = dict(schema=\"radia.cubit_mesh_webgui.v1\",\n    generated_at_utc=datetime.now(timezone.utc).isof",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 46,
+          "text_sha256": "2b1318d27b91f7bb3641a79718b81c4fddaac2fd26dcd0cf46b63c0d0cd6cfc8",
+          "text_preview": "H1 DOFs: 1651 L2 error: 3.709016794121025e-07\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "application/vnd.jupyter.widget-view+json",
+            "text/plain"
+          ],
+          "text_plain_chars": 57,
+          "text_plain_sha256": "7e0829210d57fb84d300eb460d235b55bb78b81b2b5de2cfaf9b793421f394ab",
+          "text_plain_preview": "<netgen.webgui.WebGuiWidget object at 0x000002042A22EB70>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "execute_result",
+          "data_keys": [
+            "text/plain"
+          ],
+          "text_plain_chars": 5,
+          "text_plain_sha256": "115cdbde8d595a04ac839f69c0c0ceca4e9c85820221cf6fdecf925f1191dc29",
+          "text_plain_preview": "18540",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 11,
+      "execution_count": 6,
       "source_sha256": "5fda2d05eabdb0d8b0666f3b10216e882c52e27b26f1ec9cd63d5955b4c71793",
       "source_preview": "from pathlib import Path\nimport json\nfrom IPython.display import Markdown, display\n\ncandidates = [\n    Path('cubit_mesh_export_showcase_results.json'),\n    Path('docs/cubit_mesh_export/cubit_mesh_export_showcase_results.json'),\n]\nresult_path = next((p for p in candidates if p.exists()), None)\nassert result_path is not None, candidates\ndata = json.loads(result_path.read_text(encoding='utf-8'))\nsummary = data['summary']\nprint('result_json:', result_path)\nfor key in ['validation_script_count', 'validation_summary_count', 'python_script_count', 'asset_count']:\n    print(f'{key}: {summary[key]}')\nprint('high_order_hex_max_abs_error_percent:', summary['hex_high_order_max_abs_error_percent'])\nprint('poisson_error_drop_order1_to_3:', summary['hex_poisson_error_drop_ratio_order1_to_3'])\nassert summary['validation_script_count'] == 18\nassert summary['validation_summary_count'] == 18\nassert summary['all_validation_summaries_present'] is True",
       "outputs": [
@@ -43,8 +200,8 @@
       ]
     },
     {
-      "cell_index": 3,
-      "execution_count": 2,
+      "cell_index": 13,
+      "execution_count": 7,
       "source_sha256": "de5416b5e8b8e4c44031d2001467bbaa505cd5035896b3dd4f38bf9ed0f9eba3",
       "source_preview": "rows = []\nfor rec in data['validation_records']:\n    payload = rec.get('summary') or {}\n    kind = payload.get('schema') or payload.get('kind') or rec['name'].replace('.py', '')\n    checks = payload.get('checks') if isinstance(payload, dict) else None\n    if isinstance(checks, dict):\n        check_preview = ', '.join(list(checks.keys())[:4])\n    else:\n        check_preview = ', '.join(rec.get('summary_keys', [])[:4])\n    rows.append((rec['path'], kind, rec['line_count'], check_preview))\n\nheader = '| Script | Summary kind | Lines | Representative keys |\\n|---|---|---:|---|'\nbody = [f'| `{path}` | `{kind}` | {lines} | {keys} |' for path, kind, lines, keys in rows]\ndisplay(Markdown('\\n'.join([header] + body)))",
       "outputs": [
@@ -57,19 +214,15 @@
           "text_plain_chars": 38,
           "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
           "text_plain_preview": "<IPython.core.display.Markdown object>",
-          "text_plain_truncated": false,
-          "text_markdown_chars": 4209,
-          "text_markdown_sha256": "1996c8db9382e32c65ecfeb711df6314bba10dcefa69809ed91b6b5e02c754cb",
-          "text_markdown_preview": "| Script | Summary kind | Lines | Representative keys |\n|---|---|---:|---|\n| `validation_test/cubit_mesh_export/validation_p1_surface_triangle_element_summary.py` | `p1_surface_triangle_element_summary_validation` | 113 | area, constant_load_integral, gradient_partition_residual, mass_integral_of_one |\n| `validation_test/cubit_mesh_export/validation_vol_boundary_condition_assignment.py` | `vol_boundary_condition_assignment_validation` | 189 | clean_boundary_count, clean_condition_counts, clean_ok, missing_boundary_count |\n| `validation_test/cubit_mesh_export/validation_vol_boundary_edge_inventory.py` | `vol_boundary_edge_inventory_validation` | 174 | boundary_count, overused_edges_total, perimeter_edges_total, shared_diagonal_edges_total |\n| `validation_test/cubit_mesh_export/validation_vol_boundary_inventory.py` | `validation_vol_boundary_inventory` | 215 | builtin_all_faces_have_four_trace_nodes, builtin_all_faces_have_two_triangles, builtin_boundary_count, builtin_boundary_names |\n|",
-          "text_markdown_truncated": true
+          "text_plain_truncated": false
         }
       ]
     },
     {
-      "cell_index": 5,
-      "execution_count": 3,
+      "cell_index": 15,
+      "execution_count": 8,
       "source_sha256": "5dfdd34e17297352c6f53b282c883c2d0b39cd4b1292a6e4afe186d92583ec6b",
-      "source_preview": "def find_summary(name):\n    for rec in data['validation_records']:\n        if rec['name'] == name:\n            return rec['summary']\n    raise KeyError(name)\n\nnormal = find_summary('validation_vol_boundary_normal_vectors.py')\npressure = find_summary('validation_vol_boundary_pressure_resultant.py')\ntraction = find_summary('validation_vol_boundary_traction_moment.py')\nhealth = find_summary('validation_vol_mesh_health.py')\n\nprint('[boundary normals]')\nfor row in normal.get('builtin_boundary_rows', normal.get('rows', []))[:6]:\n    name = row.get('boundary') or row.get('name')\n    area = row.get('area') or row.get('surface_area')\n    vector = row.get('vector_area') or row.get('area_vector')\n    print(f'  {name}: area={area}, vector={vector}')\n\nprint('\\n[pressure resultant checks]')\nfor key, value in (pressure.get('checks') or pressure).items():\n    if 'force' in key or 'moment' in key or 'error' in key:\n        print(f'  {key}: {value}')\n\nprint('\\n[traction moment checks]')\nfor key, value in (traction.get('checks') or traction).items():\n    if 'force' in key or 'moment' in key or 'error' in key:\n        print(f'  {key}: {value}')\n\nprint('\\n[mesh health statuses]')\nfor row in health.get('rows', []):\n    print(f\"  {row.get('name')}: status={row.get('status')} ok={row.get('ok')}\")",
+      "source_preview": "def find_summary(name):\n    for rec in data['validation_records']:\n        if rec['name'] == name:\n            return rec['summary']\n    raise KeyError(name)\n\nnormal = find_summary('validation_vol_boundary_normal_vectors.py')\npressure = find_summary('validation_vol_boundary_pressure_resultant.py')\ntraction = find_summary('validation_vol_boundary_traction_moment.py')\nhealth = find_summary('validation_vol_mesh_health.py')\n\nprint('[boundary normals]')\nfor row in normal.get('builtin_boundary_rows', normal.get('rows', []))[:6]:\n    name = row.get('boundary') or row.get('name')\n    area = row.get('area') or row.get('surface_area')\n    vector = row.get('vector_area') or row.get('area_vector')\n    print(f'  {name}: area={area}, vector={vector}')\n\nprint('\\n[pressure resultant checks]')\nfor key, value in (pressure.get('checks') or pressure).items():\n    if 'force' in key or 'moment' in key or 'error' in key:\n        print(f'  {key}: {value}')\n\nprint('\\n[traction moment checks]')\nfor key, value i",
       "outputs": [
         {
           "output_type": "stream",
@@ -82,8 +235,8 @@
       ]
     },
     {
-      "cell_index": 7,
-      "execution_count": 4,
+      "cell_index": 17,
+      "execution_count": 9,
       "source_sha256": "fa5553f9c0288ca3dc60642d6677b8f1981b007563511358ca9e41b6f4d077eb",
       "source_preview": "volume_rows = data['hex_highorder']['volume_rows']\npoisson_rows = data['hex_highorder']['poisson_rows']\n\nheader = '| Order | HEX count | Sphere volume error | Poisson ndof | Poisson L2 error |\\n|---:|---:|---:|---:|---:|'\nbody = []\nfor v, p in zip(volume_rows, poisson_rows):\n    body.append(\n        f\"| {v['order']} | {p['hex']} | {v['error_percent']:+.3f}% | {p['ndof']} | {p['l2_error']:.3e} |\"\n    )\ndisplay(Markdown('\\n'.join([header] + body)))\n\nprint(data['hex_highorder']['volume_stdout'])\nprint(data['hex_highorder']['poisson_stdout'])\nassert max(abs(r['error_percent']) for r in volume_rows if r['order'] >= 2) < 1.0\nassert poisson_rows[2]['l2_error'] < poisson_rows[1]['l2_error'] < poisson_rows[0]['l2_error']",
       "outputs": [
@@ -96,11 +249,7 @@
           "text_plain_chars": 38,
           "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
           "text_plain_preview": "<IPython.core.display.Markdown object>",
-          "text_plain_truncated": false,
-          "text_markdown_chars": 222,
-          "text_markdown_sha256": "598cc9a40df8d91d7910c7a165525588bfd24ae5c2eefbfc045c43fa94d99693",
-          "text_markdown_preview": "| Order | HEX count | Sphere volume error | Poisson ndof | Poisson L2 error |\n|---:|---:|---:|---:|---:|\n| 1 | 56 | -23.359% | 79 | 8.001e-06 |\n| 2 | 56 | -0.211% | 517 | 1.267e-06 |\n| 3 | 56 | +0.131% | 1651 | 3.927e-07 |",
-          "text_markdown_truncated": false
+          "text_plain_truncated": false
         },
         {
           "output_type": "stream",
@@ -113,8 +262,8 @@
       ]
     },
     {
-      "cell_index": 9,
-      "execution_count": 5,
+      "cell_index": 19,
+      "execution_count": 10,
       "source_sha256": "753e7a37032706a6141db792258e4156a368120dec8a2445eac505f5a5f0300c",
       "source_preview": "source_by_path = {rec['path']: rec.get('source') for rec in data['validation_records']}\n\ndef read_repo_relative_text(path):\n    for base in [Path.cwd(), *Path.cwd().parents]:\n        candidate = base / path\n        if candidate.exists():\n            return candidate.read_text(encoding='utf-8')\n    raise FileNotFoundError(path)\n\n# Non-validation showcase helpers are maintained as live docs files, not in a source archive.\nfor path in [\n    'docs/cubit_mesh_export/hex_sphere_highorder/hex_sphere_curved_ngsolve.py',\n]:\n    source_by_path.setdefault(path, read_repo_relative_text(path))\n\nfor path in [\n    'docs/cubit_mesh_export/hex_sphere_highorder/hex_sphere_curved_ngsolve.py',\n    'validation_test/cubit_mesh_export/validation_vol_boundary_normal_vectors.py',\n]:\n    src = source_by_path.get(path)\n    assert src, path\n    excerpt = '\\n'.join(src.splitlines()[:85])\n    display(Markdown(f'### `{path}`\\n```python\\n{excerpt}\\n```'))",
       "outputs": [
@@ -127,11 +276,7 @@
           "text_plain_chars": 38,
           "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
           "text_plain_preview": "<IPython.core.display.Markdown object>",
-          "text_plain_truncated": false,
-          "text_markdown_chars": 2618,
-          "text_markdown_sha256": "41457a6c0d9b633610082c5ff64533a24fd0e828cb3108605348014022c4b55d",
-          "text_markdown_preview": "### `docs/cubit_mesh_export/hex_sphere_highorder/hex_sphere_curved_ngsolve.py`\n```python\n# -*- coding: utf-8 -*-\n\"\"\"High-order CURVED HEX mesh in NGSolve -- the cubit-mesh-export capability.\n\nCoreform Cubit meshes a sphere with HEXES ('volume scheme sphere') and exports a\nhigh-order Netgen .vol (order 1/2/3) via the plugin command\n\n    block 1 add hex all\n    export netgen \"hexsph_oN.vol\" order N overwrite\n\nNGSolve loads the .vol directly and integrates the volume; as the element order rises\nthe curved hex boundary captures the sphere and the volume converges to 4/3 pi r^3:\n\n    order 1 (straight hex) :  ~ -23 %    (a coarse 56-hex faceted sphere)\n    order 2 (curved hex)   :  ~ -0.2 %\n    order 3 (curved hex)   :  ~ +0.1 %\n\nThat is high-order *hexahedral* FEM geometry inside NGSolve -- which the Netgen mesher\nalone does not provide (it curves tetrahedra).  See packages/cubit-mesh-export.\n\nGOTCHA (important): a high-order .vol already carries its curved mid-side nodes.  Load\nit with pl",
-          "text_markdown_truncated": true
+          "text_plain_truncated": false
         },
         {
           "output_type": "display_data",
@@ -142,11 +287,7 @@
           "text_plain_chars": 38,
           "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
           "text_plain_preview": "<IPython.core.display.Markdown object>",
-          "text_plain_truncated": false,
-          "text_markdown_chars": 1732,
-          "text_markdown_sha256": "2b6a7083358f36086b69630859e095dab390ed45f72efa5e41bf309edb53389c",
-          "text_markdown_preview": "### `validation_test/cubit_mesh_export/validation_vol_boundary_normal_vectors.py`\n```python\n\"\"\"Validation-class `.vol` boundary normal/vector-area rows.\n\nElectromagnetic force extraction needs surface orientation before it needs a\nlarge solver: Maxwell stress integrates ``T n dS``.  This example checks that\nnamed Coreform/Cubit sidesets exported through Netgen `.vol` preserve enough\ntriangle orientation information to recover each boundary's vector area and\nplanar unit normal.\n\nRun:\n\n    python validation_test/cubit_mesh_export/validation_vol_boundary_normal_vectors.py\n    python validation_test/cubit_mesh_export/validation_vol_boundary_normal_vectors.py --vol C:\\\\temp\\\\box.vol\n\"\"\"\n\nfrom __future__ import annotations\n\nimport argparse\nimport json\nimport math\nimport sys\nfrom pathlib import Path\n\n\nROOT = Path(__file__).resolve().parents[2]\nSRC = ROOT / \"packages\" / \"radia-mcp\" / \"src\"\nif str(SRC) not in sys.path:\n    sys.path.insert(0, str(SRC))\n\nfrom radia_mcp.radia_ngsolve.netgen_vol im",
-          "text_markdown_truncated": true
+          "text_plain_truncated": false
         }
       ]
     }
@@ -155,5 +296,63 @@
     "result_saved": true,
     "json_has_generated_at_utc": true,
     "json_has_versions": true
-  }
+  },
+  "sidecar_writer_versions": {
+    "python_version": "3.12.10",
+    "python_executable_name": "python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.39",
+    "radia_version": "4.95.92"
+  },
+  "execution_provenance": {
+    "host": "mdx2",
+    "generated_at_utc": "2026-09-14T07:51:30.795653+00:00",
+    "scope": "Reload historical Cubit exports; check-vol, integrate and solve on mdx; no fresh Cubit export",
+    "threads": 2,
+    "evidence": "cubit_mesh_webgui_results.json",
+    "evidence_sha256": "b503423473ab99370e3b41b1c135b0e99fe111c570a34412503502041a82cc3b"
+  },
+  "source_cells": [
+    {
+      "id": "cubit-showcase-02",
+      "source": "from pathlib import Path\nfrom collections import Counter\nfrom datetime import datetime, timezone\nimport hashlib, json, math, platform, socket, sys\nfrom importlib.metadata import version\nfrom IPython.display import display, Markdown\nimport ngsolve as ng\nfrom ngsolve.webgui import Draw\nfrom cubit_mesh_export.check import check_consistency\n\nHERE = next(p for p in [Path.cwd(), Path.cwd() / 'docs/cubit_mesh_export']\n            if (p / 'hex_sphere_highorder/hexsph_o1.vol').exists())\nng.SetNumThreads(2)\nmeshes, mesh_records = {}, []\nfor order in (1, 2, 3):\n    path = HERE / 'hex_sphere_highorder' / f'hexsph_o{order}.vol'\n    report = check_consistency(str(path))\n    assert report['passed'], report\n    mesh = ng.Mesh(str(path))\n    meshes[order] = mesh\n    counts = dict(Counter(str(e.type) for e in mesh.Elements(ng.VOL)))\n    with ng.TaskManager():\n        volume = ng.Integrate(ng.CF(1), mesh, order=10)\n    mesh_records.append(dict(order=order, mesh_path=path.relative_to(HERE).as_posix(),\n        sha256=hashlib.sha256(path.read_bytes()).hexdigest(), elements=counts,\n        materials=list(mesh.GetMaterials()), boundaries=list(mesh.GetBoundaries()),\n        volume=volume, volume_error_percent=100*(volume/(4*math.pi*0.05**3/3)-1),\n        check_vol=report))\n    print('Geometry order:', order, 'elements:', counts, 'volume:', volume)\n    print('Materials:', mesh.GetMaterials(), 'boundaries:', mesh.GetBoundaries())\n    print('check-vol:', report['passed'], 'CAD reference:', report['cad_reference']['available'])\n"
+    },
+    {
+      "id": "cubit-showcase-04",
+      "source": "mesh = meshes[1]\nscene = Draw(mesh, name=\"Cubit_HEX_geometry_order_1\", order=3,\n     draw_vol=True, draw_surf=True, width=\"100%\", height=\"480px\",\n     settings={\"Objects\": {\"Edges\": True, \"Wireframe\": True}})\nscene.GenerateHTML(filename=str(HERE / 'hex_order_1.html'))\n"
+    },
+    {
+      "id": "cubit-showcase-06",
+      "source": "mesh = meshes[2]\nscene = Draw(mesh, name=\"Cubit_HEX_geometry_order_2\", order=3,\n     draw_vol=True, draw_surf=True, width=\"100%\", height=\"480px\",\n     settings={\"Objects\": {\"Edges\": True, \"Wireframe\": True}})\nscene.GenerateHTML(filename=str(HERE / 'hex_order_2.html'))\n"
+    },
+    {
+      "id": "cubit-showcase-08",
+      "source": "mesh = meshes[3]\nscene = Draw(mesh, name=\"Cubit_HEX_geometry_order_3\", order=3,\n     draw_vol=True, draw_surf=True, width=\"100%\", height=\"480px\",\n     settings={\"Objects\": {\"Edges\": True, \"Wireframe\": True}})\nscene.GenerateHTML(filename=str(HERE / 'hex_order_3.html'))\n"
+    },
+    {
+      "id": "cubit-showcase-10",
+      "source": "mesh = meshes[3]\nwith ng.TaskManager():\n    exact = ng.sin(8*ng.x)*ng.cos(6*ng.y)\n    fes = ng.H1(mesh, order=3, dirichlet=\".*\")\n    solution = ng.GridFunction(fes)\n    solution.Set(exact, ng.BND)\n    u, v = fes.TnT()\n    a = ng.BilinearForm(ng.grad(u)*ng.grad(v)*ng.dx).Assemble()\n    rhs = ng.LinearForm(100*exact*v*ng.dx).Assemble()\n    residual = rhs.vec - a.mat*solution.vec\n    solution.vec.data += a.mat.Inverse(fes.FreeDofs())*residual\n    l2_error = math.sqrt(ng.Integrate((solution-exact)**2, mesh, order=10))\nassert math.isfinite(l2_error)\nprint('H1 DOFs:', fes.ndof, 'L2 error:', l2_error)\nscene = Draw(solution, mesh, name=\"Manufactured_Poisson_solution\", order=3,\n     draw_vol=True, draw_surf=True, autoscale=True,\n     clipping={\"x\": 0, \"y\": 0, \"z\": 1, \"dist\": 0},\n     vectors=False, width=\"100%\", height=\"480px\")\n\nscene.GenerateHTML(filename=str(HERE / 'poisson_field.html'))\n\nevidence = dict(schema=\"radia.cubit_mesh_webgui.v1\",\n    generated_at_utc=datetime.now(timezone.utc).isoformat(),\n    host=socket.gethostname(), python_executable=sys.executable,\n    versions={p: version(p) for p in ['ngsolve', 'netgen-mesher', 'cubit-mesh-export', 'webgui-jupyter-widgets', 'anywidget']},\n    python_version=platform.python_version(), threads=2,\n    scope=\"Reload historical Cubit exports; check-vol, integrate and solve on mdx; no fresh Cubit export\",\n    meshes=mesh_records, poisson=dict(geometry_order=3, fe_order=3, ndof=fes.ndof, l2_error=l2_error))\n(HERE / 'cubit_mesh_webgui_results.json').write_text(json.dumps(evidence, indent=2), encoding='utf-8')\n"
+    },
+    {
+      "id": "d6698102",
+      "source": "from pathlib import Path\nimport json\nfrom IPython.display import Markdown, display\n\ncandidates = [\n    Path('cubit_mesh_export_showcase_results.json'),\n    Path('docs/cubit_mesh_export/cubit_mesh_export_showcase_results.json'),\n]\nresult_path = next((p for p in candidates if p.exists()), None)\nassert result_path is not None, candidates\ndata = json.loads(result_path.read_text(encoding='utf-8'))\nsummary = data['summary']\nprint('result_json:', result_path)\nfor key in ['validation_script_count', 'validation_summary_count', 'python_script_count', 'asset_count']:\n    print(f'{key}: {summary[key]}')\nprint('high_order_hex_max_abs_error_percent:', summary['hex_high_order_max_abs_error_percent'])\nprint('poisson_error_drop_order1_to_3:', summary['hex_poisson_error_drop_ratio_order1_to_3'])\nassert summary['validation_script_count'] == 18\nassert summary['validation_summary_count'] == 18\nassert summary['all_validation_summaries_present'] is True"
+    },
+    {
+      "id": "7ca46260",
+      "source": "rows = []\nfor rec in data['validation_records']:\n    payload = rec.get('summary') or {}\n    kind = payload.get('schema') or payload.get('kind') or rec['name'].replace('.py', '')\n    checks = payload.get('checks') if isinstance(payload, dict) else None\n    if isinstance(checks, dict):\n        check_preview = ', '.join(list(checks.keys())[:4])\n    else:\n        check_preview = ', '.join(rec.get('summary_keys', [])[:4])\n    rows.append((rec['path'], kind, rec['line_count'], check_preview))\n\nheader = '| Script | Summary kind | Lines | Representative keys |\\n|---|---|---:|---|'\nbody = [f'| `{path}` | `{kind}` | {lines} | {keys} |' for path, kind, lines, keys in rows]\ndisplay(Markdown('\\n'.join([header] + body)))"
+    },
+    {
+      "id": "76ff3525",
+      "source": "def find_summary(name):\n    for rec in data['validation_records']:\n        if rec['name'] == name:\n            return rec['summary']\n    raise KeyError(name)\n\nnormal = find_summary('validation_vol_boundary_normal_vectors.py')\npressure = find_summary('validation_vol_boundary_pressure_resultant.py')\ntraction = find_summary('validation_vol_boundary_traction_moment.py')\nhealth = find_summary('validation_vol_mesh_health.py')\n\nprint('[boundary normals]')\nfor row in normal.get('builtin_boundary_rows', normal.get('rows', []))[:6]:\n    name = row.get('boundary') or row.get('name')\n    area = row.get('area') or row.get('surface_area')\n    vector = row.get('vector_area') or row.get('area_vector')\n    print(f'  {name}: area={area}, vector={vector}')\n\nprint('\\n[pressure resultant checks]')\nfor key, value in (pressure.get('checks') or pressure).items():\n    if 'force' in key or 'moment' in key or 'error' in key:\n        print(f'  {key}: {value}')\n\nprint('\\n[traction moment checks]')\nfor key, value in (traction.get('checks') or traction).items():\n    if 'force' in key or 'moment' in key or 'error' in key:\n        print(f'  {key}: {value}')\n\nprint('\\n[mesh health statuses]')\nfor row in health.get('rows', []):\n    print(f\"  {row.get('name')}: status={row.get('status')} ok={row.get('ok')}\")"
+    },
+    {
+      "id": "08da8ea3",
+      "source": "volume_rows = data['hex_highorder']['volume_rows']\npoisson_rows = data['hex_highorder']['poisson_rows']\n\nheader = '| Order | HEX count | Sphere volume error | Poisson ndof | Poisson L2 error |\\n|---:|---:|---:|---:|---:|'\nbody = []\nfor v, p in zip(volume_rows, poisson_rows):\n    body.append(\n        f\"| {v['order']} | {p['hex']} | {v['error_percent']:+.3f}% | {p['ndof']} | {p['l2_error']:.3e} |\"\n    )\ndisplay(Markdown('\\n'.join([header] + body)))\n\nprint(data['hex_highorder']['volume_stdout'])\nprint(data['hex_highorder']['poisson_stdout'])\nassert max(abs(r['error_percent']) for r in volume_rows if r['order'] >= 2) < 1.0\nassert poisson_rows[2]['l2_error'] < poisson_rows[1]['l2_error'] < poisson_rows[0]['l2_error']"
+    },
+    {
+      "id": "68a13409",
+      "source": "source_by_path = {rec['path']: rec.get('source') for rec in data['validation_records']}\n\ndef read_repo_relative_text(path):\n    for base in [Path.cwd(), *Path.cwd().parents]:\n        candidate = base / path\n        if candidate.exists():\n            return candidate.read_text(encoding='utf-8')\n    raise FileNotFoundError(path)\n\n# Non-validation showcase helpers are maintained as live docs files, not in a source archive.\nfor path in [\n    'docs/cubit_mesh_export/hex_sphere_highorder/hex_sphere_curved_ngsolve.py',\n]:\n    source_by_path.setdefault(path, read_repo_relative_text(path))\n\nfor path in [\n    'docs/cubit_mesh_export/hex_sphere_highorder/hex_sphere_curved_ngsolve.py',\n    'validation_test/cubit_mesh_export/validation_vol_boundary_normal_vectors.py',\n]:\n    src = source_by_path.get(path)\n    assert src, path\n    excerpt = '\\n'.join(src.splitlines()[:85])\n    display(Markdown(f'### `{path}`\\n```python\\n{excerpt}\\n```'))"
+    }
+  ],
+  "visual_review": "Saved scene/state checks passed; browser local-file policy prevented rendered visual QA."
 }

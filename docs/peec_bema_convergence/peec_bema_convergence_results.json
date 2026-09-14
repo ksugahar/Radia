@@ -257,5 +257,12 @@
       }
     }
   },
-  "notebook_sha256": "467a58762310fb7ced78d3492b37c2b3f3ab75ad146a70c4050cba3d313082e7"
+  "notebook_sha256": "5d160569b37e35a42a0d84386fc4538eec2d4f3fa381ad32e05fe79373bf6d2b",
+  "documentation_revision": {
+    "date": "2026-09-14",
+    "previous_notebook_sha256": "e0dcb08d831618731f47e694a9894d934d724cb7653974a9d080a40a646fa95a",
+    "code_and_saved_outputs_unchanged": true,
+    "comparison": "All complete code-cell objects equal the Git HEAD notebook.",
+    "note": "Original result timestamp/runtime retained; this is not a new numerical run."
+  }
 }

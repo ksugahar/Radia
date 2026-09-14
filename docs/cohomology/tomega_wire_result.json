@@ -2,7 +2,7 @@
   "schema": "radia.notebook_result.v1",
   "generated_at_utc": "2026-07-22T07:19:38Z",
   "notebook": "tomega_wire.ipynb",
-  "notebook_sha256": "944082449508898f7af9625d647c0137b622223c1cd8468438b7935a03db1ffb",
+  "notebook_sha256": "cd8b89a0f3840266da02e034a938c2816b06f6d56c98d35874a4d09d82b5915c",
   "versions": {
     "python_version": "3.12.10",
     "python_executable_name": "python.exe",
@@ -11,8 +11,8 @@
     "radia_version": "4.95.22"
   },
   "summary": {
-    "path": "tomega_wire.ipynb",
-    "cells": 3,
+    "path": "docs/cohomology/tomega_wire.ipynb",
+    "cells": 5,
     "code_cells": 2,
     "executed_code_cells": 2,
     "code_cells_with_outputs": 2,
@@ -38,7 +38,8 @@
       "language_info",
       "radia",
       "widgets"
-    ]
+    ],
+    "error_outputs": []
   },
   "outputs": [
     {
@@ -102,5 +103,12 @@
     "result_saved": true,
     "json_has_generated_at_utc": true,
     "json_has_versions": true
+  },
+  "documentation_revision": {
+    "date": "2026-09-14",
+    "previous_notebook_sha256": "d8188b365f54b831ada5bd0cbc816e0a23350ac48406afc30d9a776fe9b72157",
+    "code_and_saved_outputs_unchanged": true,
+    "comparison": "All complete code-cell objects equal the Git HEAD notebook.",
+    "note": "Original result timestamp/runtime retained; this is not a new numerical run."
   }
 }

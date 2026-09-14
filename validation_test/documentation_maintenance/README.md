@@ -1,22 +1,23 @@
 # Documentation maintenance evidence
 
-This directory contains migration ledgers, cleanup records, release evidence,
-and other internal documentation-maintenance artifacts. They are retained for
-traceability and regression work, but they are not public capability pages.
+This directory preserves internal source catalogs and migration ledgers moved
+out of `docs/` on 2026-09-14. They are not current capability showcases or
+production workbenches. Their saved outputs and historical timestamps are
+retained; relocation is not a numerical rerun. Relative executable paths in
+these historical records must be reviewed before any reuse.
 
-The supported user entry point is the Radia MCP server. Its tool descriptions,
-schemas, workflow guidance, and knowledge resources form the canonical manual.
-GitHub-facing content under `docs/` is the discovery and evidence layer: it
-should show the engineering problem, what Radia can do, the expected result or
-artifact, and the owning MCP tool family.
+Moved notebooks (with their existing JSON companions):
 
-Radia is MCP-native. LLM agents drive the Python implementation through Radia
-MCP, while the formal Simulink UI requires MathWorks' official MATLAB MCP
-Server. Missing MCP connectivity is an explicit failure, not a reason to route
-users to Python or private MATLAB automation.
+- `axifem/README.ipynb`
+- `clebsch_hodograph/examples_catalog.ipynb`
+- `clebsch_hodograph/public_demo.ipynb`
+- `induction_heating/induction_heating_demo_showcase.ipynb`
+- `induction_heating/public_demo.ipynb`
+- `kelvin/kelvin_classic_demos.ipynb`
+- `stream_function/demo_gallery.ipynb`
+- `stream_function/examples_catalog.ipynb`
 
-Masked Simulink blocks are Radia's formal human-facing UI. MATLAB and MEX assets
-support that UI, integration, validation, and parity work; a separate standalone
-MATLAB edition remains undecided. MATLAB `.m` and `.mlx` files are implementation
-assets under `matlab/`, not public `docs/` content. Use Markdown or an executed
-Python `.ipynb` for the GitHub-facing capability account.
+The public discovery layer is `README.md` and substantive, result-bearing
+Python notebooks under `docs/`. Radia MCP remains the canonical operating
+manual. Removing a catalog does not establish that its entire capability
+family has a complete public notebook replacement.

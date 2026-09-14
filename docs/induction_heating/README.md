@@ -1,32 +1,26 @@
-# Induction Heating Examples
+# Induction heating: field, loss and coupling
 
-This directory is the docs promotion layer for the induction-heating example
-cleanup. The old loose examples topic is closed; public demonstrations now live
-as result-saved notebooks plus synchronized JSON, while executable validation
-history lives under `validation_test/induction_heating/`.
+Radia can resolve conductor skin effects, calculate electromagnetic loss and
+couple eddy-current heating to thermal evolution. Look for checked spatial
+loss/temperature artifacts, not merely a successful solver exit. The Radia MCP
+IH tool family owns the live workflow, supported configurations, dependencies
+and validation routes. Simulink's IH blocks are the formal human UI and require
+MathWorks' official MATLAB MCP Server.
 
-Start with the public result-saved notebook:
+Start with the result-bearing Python notebooks:
 
-- `public_demo.ipynb`
-- `public_demo_results.json`
-- `public_demo_result.json`
+- [ESIM method and benchmark](../ih_esim_benchmark/esim_showcase.ipynb):
+  equations, implementation assumptions and saved comparisons.
+- [Loop degrees of freedom and cut selection](../cohomology/loop_dof_cut_selection.ipynb):
+  why conductor topology matters to current representation.
+- [Dowell and surface-impedance comparison](../peec/dowell_surface_impedance_demo.ipynb):
+  analytical loss models and their frequency/geometry limits.
 
-The closed public demo showcase is:
+These are discovery and reproducibility pages, not notebook workbenches.
+Python implementations are LLM-driven through MCP. Electromagnetic examples
+alone do not certify a coupled transient thermal application. Numerical
+acceptance remains in [IH validation](../../validation_test/induction_heating/).
 
-- `induction_heating_demo_showcase.ipynb`
-- `induction_heating_demo_showcase_results.json`
-- `induction_heating_demo_showcase_result.json`
-
-## Current Routing
-
-- ESIM/WPT/RWG tutorials are represented by
-  `induction_heating_demo_showcase.ipynb` and its JSON source/hash archive.
-- Legacy `bem_reference/` has been split: reusable solver modules now live as
-  `radia.bem_inductance`, `radia.bem_coupled_solver`, and `radia.ngsbem_*`;
-  runnable reference scripts and sweep data live under
-  `validation_test/induction_heating/bem_reference/`.
-- `scattered_rhs_clean_test/` has been promoted to
-  `validation_test/induction_heating/scattered_rhs_clean_test/` because it
-  already carries a `.vol` fixture and `results.json`.
-- Former demoted Cubit samples live under
-  `validation_test/induction_heating/demoted_samples_legacy/`.
+The former source/hash catalogs are preserved in
+[documentation maintenance](../../validation_test/documentation_maintenance/README.md);
+they are not public numerical demonstrations.

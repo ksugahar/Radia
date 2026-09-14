@@ -1,7 +1,13 @@
-# Stream Function Method (SFM) coil design — full documentation
+# Stream-function coil design: capabilities and evidence
 
-This folder is the **canonical documentation** for the Radia stream-function
-coil-design framework: kernel-agnostic (ACA+)+TSVD least-norm solver,
+The Radia MCP streamfunction tool family is the canonical operating manual.
+This folder explains what engineers can design, the mathematical methods and
+the saved evidence. Python is LLM-driven through MCP; the Stream Function block
+in the Radia Simulink library is the formal human UI and requires MathWorks'
+official MATLAB MCP Server.
+
+Radia's stream-function coil-design capabilities include a kernel-agnostic
+(ACA+)+TSVD least-norm solver,
 single-stroke chain construction (field_aware / Kuijpers), FE-direct ψ with
 H1 / σ-weighted / inductance / L∞ regularisation, Path-A compensated
 iteration, Optuna CMA-ES surface-deformation outer loop, **single-current
@@ -22,7 +28,7 @@ short *entry point*; this folder is the detailed reference.
 | You want to … | Read |
 |----------------|------|
 | Understand the SFM and ACA+TSVD math | [theory.md](theory.md) |
-| **Run the design / pareto / manufacture GUI panel** (`calc_streamfunction.py`) | [**panel.md**](panel.md) |
+| Understand the design / Pareto / manufacture block contract | [Application contract](panel.md); use MCP for current operation |
 | Pick the current-confinement BC (`--confine off/on/abe`, Abe edge-equipotential) | [panel.md § confinement](panel.md#current-confinement-boundary-condition---confine-off-on-abe) |
 | Draw order-p contours / bubble-system flux lines (`--contour-sub`, `--flux-plot`) | [panel.md § contour=flux-line](panel.md#contour-drawing--flux-line-drawing) |
 | Connect contours into one wire | [single_stroke.md](single_stroke.md) |
@@ -33,8 +39,7 @@ short *entry point*; this folder is the detailed reference.
 | Optimise the coil SURFACE geometry (bilevel) | [deformation.md](deformation.md) |
 | Look up the Python API | [api.md](api.md) |
 | Reproduce a published benchmark | [benchmarks.md](benchmarks.md) |
-| Run the public demo gallery | [demo_gallery.ipynb](demo_gallery.ipynb) |
-| Audit / migrate the remaining example scripts | [examples_catalog.ipynb](examples_catalog.ipynb) |
+| Explore saved design results | [theory.ipynb](theory.ipynb), [regularization.ipynb](regularization.ipynb), [deformation.ipynb](deformation.ipynb) |
 | Hook ngsolve.bem H-matrix (2604+) | [ngsbem_integration.md](ngsbem_integration.md) |
 | **Design a stellarator coil** (REGCOIL / NESCOIL / FOCUS: winding-surface current potential, net current, coil force/stress, VMEC boundary, winding-shape) | [**fusion.md**](fusion.md) |
 | Cite / publish this work | paper outline (W:\02_学会資料\2025年度\2026_01_JIAM\streamfunction\, not in repo) |
@@ -53,7 +58,7 @@ short *entry point*; this folder is the detailed reference.
 > bends the manufactured *wire* (one current) to cancel the single-stroke
 > residual.  (1) and (2) are surface reshapes that re-solve ψ; (3) keeps ψ.
 
-## Quick-start (5 lines)
+## Implementation illustration (not the operating manual)
 
 ```python
 from radia.stream_function import aca_tsvd, pseudo_inverse_solve, radia_field_kernel
@@ -66,20 +71,19 @@ res = aca_tsvd(len(obs), len(sources), entry, modes=20)
 phi = pseudo_inverse_solve(res, B_target, k_mode=10)
 ```
 
-For the human-facing path, start from the result-saved public notebooks instead
-of running loose example scripts:
+For technical discovery, start from the result-saved public notebooks. These
+are not production workbenches:
 
 | Route | Artifact |
 |-------|----------|
-| Public demo gallery | [`demo_gallery.ipynb`](demo_gallery.ipynb), synchronized with [`demo_gallery_results.json`](demo_gallery_results.json) |
-| Full source/result ledger | [`examples_catalog.ipynb`](examples_catalog.ipynb), synchronized with [`examples_catalog_results.json`](examples_catalog_results.json) |
 | Theory and FE-direct psi | [`theory.ipynb`](theory.ipynb) |
 | Regularization and Pareto trade-offs | [`regularization.ipynb`](regularization.ipynb) |
 | Surface deformation search | [`deformation.ipynb`](deformation.ipynb) |
 | Runnable validation/benchmarks | [`validation_test/stream_function/`](../../validation_test/stream_function/) |
 | Reusable Stage-2 API/CLI | [`src/radia/panels/calc_streamfunction.py`](../../src/radia/panels/calc_streamfunction.py) |
 
-The transitional demo source names are cataloged in
+The former gallery and source ledger are [internal maintenance records](../../validation_test/documentation_maintenance/README.md), not public result demonstrations.
+Transitional demo source names are cataloged in
 [`examples.md`](examples.md); new public links should point to the notebooks,
 JSON sidecars, `validation_test`, or `src` API rather than the old examples
 tree.
