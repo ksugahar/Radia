@@ -35,7 +35,9 @@ def test_urn_manual_keeps_private_inputs_and_noise_aware_basis_selection():
     from radia_mcp.radia_ngsolve.knowledge.urn import get_urn_documentation
     guidance = get_urn_documentation('overview')
     assert 'RADIA_NASA_EIS_CSV' in guidance
-    assert '22-basis' in guidance
+    assert '34-basis' in guidance
+    assert 'uncertainty_ohm' in guidance
+    assert 'down to ONE basis' in guidance
     assert 'retained basis count' in guidance
     assert 'Do not force an arbitrary 1e-3' in guidance
     assert 'Fewer bases alone do not prove physical truth' in guidance
