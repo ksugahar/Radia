@@ -87,5 +87,8 @@ def test_bem_inductance_guidance_requires_physical_current_constraints():
     assert "rank 269/269" in NGBEM_OVERVIEW
     assert "transforming both A and e" in NGBEM_OVERVIEW
     assert "Do NOT fix this" not in NGBEM_OVERVIEW
+    assert "GetDofNrs" in NGBEM_OVERVIEW
+    assert "c(J)=1 A" in NGBEM_OVERVIEW
+    assert "flat-mesh convergence" in NGBEM_OVERVIEW
     assert "including at order=0 (RT0)" in NGSOLVE_BEM
     assert "only valid for order=0" not in NGSOLVE_BEM
