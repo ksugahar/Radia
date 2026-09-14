@@ -17,6 +17,9 @@ multiple formats via Cubit plugin commands (`export ...`) and the `cubit_mesh_ex
 
 `cubit-mesh-export` is independently installable without `radia` or
 `radia-mcp`. Radia adds optional toolbar integration; MCP owns AI operation.
+Radia's current source accepts exporter 1.0.0 explicitly; older Radia releases
+may still cap it at 0.999.999. Check both installed compatibility windows before
+combined deployment. Do not infer that later unvalidated exporter versions pass.
 Its standalone release acceptance uses
 `validation_test/cubit_mesh_export/validate_standalone_wheel.py` in an isolated
 wheel-installed venv with Radia/MCP absent. It loads the candidate plugin via
