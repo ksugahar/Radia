@@ -24,6 +24,7 @@ from radia_mcp.radia_ngsolve.field_profile_gate import (
     nonlinear_field_energy_physical_admissibility_gate_v8,
     nonlinear_field_energy_observable_comparison_gate_v9,
     nonlinear_vector_observable_comparison_gate_v10,
+    nonlinear_live_execution_identity_gate_v11,
     nonlinear_magnetic_field_energy_parity_gate,
     nonlinear_magnetic_refinement_energy_gate,
     nonlinear_magnetic_spatial_evidence_gate,
@@ -42,6 +43,7 @@ from radia_mcp.radia_ngsolve.server import (
     nonlinear_field_energy_physical_admissibility_gate_v8 as mcp_nonlinear_physical_v8_gate,
     nonlinear_field_energy_observable_comparison_gate_v9 as mcp_nonlinear_comparison_v9_gate,
     nonlinear_vector_observable_comparison_gate_v10 as mcp_nonlinear_vector_v10_gate,
+    nonlinear_live_execution_identity_gate_v11 as mcp_nonlinear_live_v11_gate,
 )
 
 
@@ -420,6 +422,85 @@ def test_nonlinear_vector_observable_comparison_v10_rejects_tolerance_exceedance
     result = nonlinear_vector_observable_comparison_gate_v10(bad)
     assert result["status"] == "needs_attention"
     assert result["checks"]["vector_differences_within_limit"] is False
+
+
+def _v11_live_execution_identity_summary():
+    physical = {
+        "geometry_identity_sha256": "1" * 64,
+        "material_table_sha256": "2" * 64,
+        "excitation_identity_sha256": "3" * 64,
+        "mesh_identity_sha256": "4" * 64,
+        "coordinate_system": "right-handed Cartesian",
+        "unit_system": "SI",
+    }
+    execution_keys = (
+        "run_id",
+        "solver_version",
+        "execution_mode",
+        "input_sha256",
+        "output_sha256",
+        "result_sha256",
+    )
+
+    def lane(run_id):
+        execution = {
+            "run_id": run_id,
+            "solver_version": "open-solver-live-1",
+            "execution_mode": "live",
+            "input_sha256": "a" * 64,
+            "output_sha256": "b" * 64,
+            "result_sha256": "c" * 64,
+            "status": "completed",
+            "solver_work_performed": True,
+            "cleanup_verified": True,
+            "source_modified": False,
+            "existing_processes_modified": False,
+        }
+        core = {key: execution[key] for key in execution_keys}
+        execution["execution_identity_sha256"] = hashlib.sha256(
+            json.dumps(core, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        return {"identity": dict(physical), "execution": execution}
+
+    return {"candidate": lane("run-candidate"), "reference": lane("run-reference")}
+
+
+def test_nonlinear_live_execution_identity_v11_accepts_and_wraps_mcp():
+    summary = _v11_live_execution_identity_summary()
+    result = nonlinear_live_execution_identity_gate_v11(summary)
+    assert result["status"] == "ok"
+    assert result["accepted"] is True
+    wrapped = json.loads(mcp_nonlinear_live_v11_gate(json.dumps(summary)))
+    assert wrapped["policy"] == "nonlinear_live_execution_identity_gate_v11"
+    assert wrapped["status"] == "ok"
+
+
+def test_nonlinear_live_execution_identity_v11_rejects_cleanup_and_digest_drift():
+    bad = _v11_live_execution_identity_summary()
+    bad["candidate"]["execution"]["cleanup_verified"] = False
+    result = nonlinear_live_execution_identity_gate_v11(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["candidate_execution_contract_valid"] is False
+
+    bad = _v11_live_execution_identity_summary()
+    bad["candidate"]["execution"]["execution_identity_sha256"] = "d" * 64
+    result = nonlinear_live_execution_identity_gate_v11(bad)
+    assert result["checks"]["candidate_execution_contract_valid"] is False
+
+
+def test_nonlinear_live_execution_identity_v11_rejects_solver_not_performed():
+    bad = _v11_live_execution_identity_summary()
+    bad["candidate"]["execution"]["solver_work_performed"] = False
+    result = nonlinear_live_execution_identity_gate_v11(bad)
+    assert result["checks"]["candidate_execution_contract_valid"] is False
+
+
+def test_nonlinear_live_execution_identity_v11_rejects_physical_identity_drift():
+    bad = _v11_live_execution_identity_summary()
+    bad["candidate"]["identity"]["mesh_identity_sha256"] = "e" * 64
+    result = nonlinear_live_execution_identity_gate_v11(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["cross_lane_mesh_identity_sha256"] is False
 
 
 def test_build_comparison_candidate_keeps_piecewise_linear_out_of_solver_mode():

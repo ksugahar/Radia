@@ -2662,3 +2662,92 @@ def dual_formulation_symmetric_field_profile_gate(
             "a zero field cannot pass a relative-agreement gate",
         ],
     }
+
+
+def nonlinear_live_execution_identity_gate_v11(
+    summary: dict[str, Any],
+) -> dict[str, Any]:
+    """Require completed live execution and physical/artifact identity before comparison.
+
+    This is a provenance gate, not a numerical solver-parity claim.  Each lane
+    must report recomputable execution metadata and explicit evidence that only
+    owned worker processes were cleaned up.
+    """
+
+    if not isinstance(summary, dict):
+        raise ValueError("summary must be a mapping")
+
+    physical_keys = (
+        "geometry_identity_sha256",
+        "material_table_sha256",
+        "excitation_identity_sha256",
+        "mesh_identity_sha256",
+        "coordinate_system",
+        "unit_system",
+    )
+
+    def valid_sha(value: object) -> bool:
+        text = str(value or "").strip().lower()
+        return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
+
+    def digest(value: object) -> str:
+        encoded = json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()
+
+    execution_keys = (
+        "run_id",
+        "solver_version",
+        "execution_mode",
+        "input_sha256",
+        "output_sha256",
+        "result_sha256",
+    )
+
+    def lane_contract(name: str) -> dict[str, Any]:
+        lane = summary.get(name)
+        if not isinstance(lane, dict):
+            raise ValueError(f"{name} must be a mapping")
+        identity = lane.get("identity")
+        identity = identity if isinstance(identity, dict) else {}
+        execution = lane.get("execution")
+        execution = execution if isinstance(execution, dict) else {}
+        execution_core = {key: execution.get(key) for key in execution_keys}
+        checks = {
+            "execution_fields_present": all(bool(str(execution.get(key) or "").strip()) for key in execution_keys),
+            "execution_completed": execution.get("status") == "completed",
+            "live_mode_declared": execution.get("execution_mode") == "live",
+            "solver_work_performed": execution.get("solver_work_performed") is True,
+            "cleanup_verified": execution.get("cleanup_verified") is True,
+            "source_unmodified": execution.get("source_modified") is False,
+            "existing_processes_unmodified": execution.get("existing_processes_modified") is False,
+            "execution_artifact_digests_valid": all(valid_sha(execution.get(key)) for key in ("input_sha256", "output_sha256", "result_sha256")),
+            "execution_identity_digest_valid": valid_sha(execution.get("execution_identity_sha256")) and str(execution.get("execution_identity_sha256") or "").casefold() == digest(execution_core),
+            "physical_identity_fields_present": all(bool(str(identity.get(key) or "").strip()) for key in physical_keys),
+            "physical_identity_digests_valid": all(valid_sha(identity.get(key)) for key in physical_keys[:4]),
+        }
+        return {"checks": checks, "identity": identity, "execution": execution}
+
+    candidate = lane_contract("candidate")
+    reference = lane_contract("reference")
+    candidate_identity = candidate["identity"]
+    reference_identity = reference["identity"]
+    physical_matches = {
+        key: candidate_identity.get(key) == reference_identity.get(key)
+        for key in physical_keys
+    }
+    checks = {
+        "candidate_execution_contract_valid": all(candidate["checks"].values()),
+        "reference_execution_contract_valid": all(reference["checks"].values()),
+        "run_ids_are_distinct": candidate["execution"].get("run_id") != reference["execution"].get("run_id"),
+        "cross_lane_physical_identity_matches": all(physical_matches.values()),
+    }
+    checks.update({f"cross_lane_{key}": value for key, value in physical_matches.items()})
+    return {
+        "policy": "nonlinear_live_execution_identity_gate_v11",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "accepted": all(checks.values()),
+        "checks": checks,
+        "issues": [name for name, accepted in checks.items() if not accepted],
+        "lane_details": {"candidate": candidate, "reference": reference},
+        "claim_boundary": "This gate proves completed live execution metadata, physical identity, artifact digests, and owned-process cleanup evidence; it does not establish numerical solver parity or universal speed/accuracy.",
+    }
