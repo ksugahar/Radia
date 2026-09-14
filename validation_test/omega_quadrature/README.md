@@ -4,9 +4,12 @@ Run this heavy validation on mdx or hibino, not as part of fast CI. This lane
 does not grant #6 or three-engine field acceptance. No p=4 run is needed.
 It uses the production mixed solver, requests the assembled system explicitly,
 and solves again for every assembly bonus and response order. The source Hodge
-projection is constructed once and held fixed across the sweep.
+projection is reconstructed for every bonus with that same `bonus_intorder`;
+the saved `source_hodge_by_bonus` and per-row `source_hodge` fields make this
+alignment auditable.
 
-`bonus_intorder` controls volume stiffness, source loads AND interface terms.
+`bonus_intorder` controls the Hodge projection, volume stiffness, source loads
+AND interface terms.
 This is not an isolated load-only intervention. The independent term audit
 splits air, iron and Kelvin loads, reconstructs the default assembled primal J,
 then contracts and integrates with an explicit fixed volume quadrature rule.
