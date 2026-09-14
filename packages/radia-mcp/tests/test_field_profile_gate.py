@@ -21,6 +21,7 @@ from radia_mcp.radia_ngsolve.field_profile_gate import (
     nonlinear_field_energy_identity_gate_v5,
     nonlinear_field_energy_artifact_contract_gate_v6,
     nonlinear_field_energy_lineage_gate_v7,
+    nonlinear_field_energy_physical_admissibility_gate_v8,
     nonlinear_magnetic_field_energy_parity_gate,
     nonlinear_magnetic_refinement_energy_gate,
     nonlinear_magnetic_spatial_evidence_gate,
@@ -36,6 +37,7 @@ from radia_mcp.radia_ngsolve.server import (
     nonlinear_field_energy_identity_gate_v5 as mcp_nonlinear_identity_v5_gate,
     nonlinear_field_energy_artifact_contract_gate_v6 as mcp_nonlinear_artifact_v6_gate,
     nonlinear_field_energy_lineage_gate_v7 as mcp_nonlinear_lineage_v7_gate,
+    nonlinear_field_energy_physical_admissibility_gate_v8 as mcp_nonlinear_physical_v8_gate,
 )
 
 
@@ -252,6 +254,46 @@ def test_nonlinear_field_energy_lineage_v7_rejects_non_output_lineage_role():
     bad["candidate"]["lineage"]["source_kind"] = "solver_input"
     result = nonlinear_field_energy_lineage_gate_v7(bad)
     assert result["checks"]["candidate_lineage_contract_valid"] is False
+
+
+def _v8_physical_summary():
+    response = {
+        "H_A_per_m": [0.0, 1.0, 2.0, 3.0],
+        "B_T": [0.0, 1.0, 2.0, 3.0],
+        "energy_density_J_per_m3": [0.0, 0.5, 2.0, 4.5],
+        "coenergy_density_J_per_m3": [0.0, 0.5, 2.0, 4.5],
+        "differential_permeability_H_per_m": [1.0, 1.0, 1.0, 1.0],
+    }
+
+    def lane():
+        return {"identity": {"comparison_case_id": "case-v8"}, "response": json.loads(json.dumps(response))}
+
+    return {"candidate": lane(), "reference": lane()}
+
+
+def test_nonlinear_field_energy_physical_admissibility_v8_accepts_and_wraps_mcp():
+    summary = _v8_physical_summary()
+    result = nonlinear_field_energy_physical_admissibility_gate_v8(summary)
+    assert result["status"] == "ok"
+    assert result["accepted"] is True
+    wrapped = json.loads(mcp_nonlinear_physical_v8_gate(json.dumps(summary)))
+    assert wrapped["policy"] == "nonlinear_field_energy_physical_admissibility_gate_v8"
+    assert wrapped["status"] == "ok"
+
+
+def test_nonlinear_field_energy_physical_admissibility_v8_rejects_negative_energy_and_slope():
+    bad = _v8_physical_summary()
+    bad["candidate"]["response"]["energy_density_J_per_m3"][2] = -1.0
+    bad["candidate"]["response"]["differential_permeability_H_per_m"][1] = 0.0
+    result = nonlinear_field_energy_physical_admissibility_gate_v8(bad)
+    assert result["checks"]["candidate_physical_contract_valid"] is False
+
+
+def test_nonlinear_field_energy_physical_admissibility_v8_rejects_legendre_drift():
+    bad = _v8_physical_summary()
+    bad["candidate"]["response"]["coenergy_density_J_per_m3"][2] = 3.0
+    result = nonlinear_field_energy_physical_admissibility_gate_v8(bad)
+    assert result["checks"]["candidate_physical_contract_valid"] is False
 
 
 def test_build_comparison_candidate_keeps_piecewise_linear_out_of_solver_mode():
