@@ -18,16 +18,62 @@ the RESEARCH-MESH configurations with golden bands set from the measured
 | `test_vfrac_periodic_lane.py` | Sculpt `--periodic` on the volume-fraction route: a simple-cubic array of overlapping spheres (R = 0.55 L, minimum-image sampling) meshed as a periodic RVE, with the same input meshed plainly as the negative control | the writer's `bounds=` spans exactly one period with no guard ring; the periodic cell's node set is invariant under the period (matched +/- counts equal, seam fill rate >= 0.98 -- measured 1.000 on all three axes) while the plain mesh fills only 0.061 of its seam; solver gates (closure, inversion, outer skin) unaffected. Requires a Cubit license (~1 min). |
 | `test_vfrac_multimaterial_lane.py` | the same chain with a PARTITIONED two-material body (core r<=0.3 inside shell r<=0.6, union = the single-material sphere): conformal Sculpt interface, named `.vol` regions, per-region `mu_r` | gates green with the OUTER faces matching the topological skin and interface faces > 0 (measured 894 + 190); core/shell share interface nodes; uniform `mu_r` recovers the sphere's 1/3 (measured 0.327) with per-region mean-magnetization ratio ~1 (1.001), while a 200x contrast drives that ratio below 0.5 (0.006) -- the demag factor is geometric and stays 0.32734 in both, so it cannot be the discriminator. Requires a Cubit license (~5 min). |
 
-Run:
+Run solver-heavy lanes only on an idle compute host under the repository host
+policy. Do not run this whole directory on LAB/100 merely because Cubit is
+installed there. The former one-minute development-host estimate does not apply
+to shape reacceptance with resolved facet boundaries.
+
+For the post-Taubin shape lane, use the staged driver:
 
 ```bash
-python -m pytest validation_test/isochronous_topopt -v
+python validation_test/isochronous_topopt/run_shape_reacceptance.py prepare --directory C:/temp/shape-run
+# Transfer prepare.json, prepare.state.json, both STLs and design_lsd.exo to LAB.
+python validation_test/isochronous_topopt/run_shape_reacceptance.py mesh --directory C:/temp/shape-run --command-plugin-directory "C:/Program Files/Coreform Cubit 2025.12/bin/plugins" --tet-curve-interval 16
+# Transfer the resulting directory back to the same isolated compute environment.
+python validation_test/isochronous_topopt/run_shape_reacceptance.py evaluate --directory C:/temp/shape-run
+# After recovering the completed directory, independently audit receipt consistency.
+python validation_test/isochronous_topopt/run_shape_reacceptance.py audit --directory C:/temp/shape-run
 ```
 
-Wall time ~1 minute on a development host (the solves are warm-started CG on
-the build-once charge-Gram H-matrix).  Timings recorded inside the histories
-are informal; benchmark-grade study-scale timings run on the quiet compute
-hosts per the repository benchmark policy.
+Use a fresh owned directory; a repeated or failed phase is deliberately refused.
+For Python-only CAD experiments, all compute phases use the same explicit
+`--topopt-cad` source, and the record identifies that overlay separately from
+the installed numerical wheel. It is not a release acceptance of a rebuilt wheel.
+The prepare phase records the staircase scalar from the same optimization that
+produced the STL; re-running optimization is not a valid way to reconstruct its
+identity because small floating-point differences can change decimation.
+
+The interval override changes the original mesh-generation conditions: it resolves
+all imported facet boundary curves, including tiny sliver surfaces that the old
+global size missed. No CAD face is deleted, relabelled away, or exempted from
+`check-vol`. All commands and clean process exits are recorded. The original
+field tolerances remain unchanged. A successful mesh receipt alone is not field
+acceptance: require `field.json` with `completed=true`, its matching completed
+evaluation state, and the verified prepare/mesh parent receipt chain.
+
+### Post-Taubin acceptance, 2026-09-14
+
+`shape_reacceptance_20260914.json` records a completed mdx2 run against candidate
+wheel source `59b094d8ed2c19e35967fd7631f3a1473eb3d200`, with the explicit
+`topopt_cad.py` overlay identified inside the result. This is acceptance of this
+shape lane, not acceptance of every solver or of a new binary release.
+The native/NGSolve objective discrepancy was at most `6.272e-10`; independent
+direct-field reciprocity discrepancy was at most `4.038e-8`. The refined hex
+objective differed from the tetrahedral reference by 2.2805%, improving on the
+coarse hex's 16.3797%; it differed from the original staircase by -2.9249%.
+All pre-existing field tolerances passed without relaxation.
+
+The first-party fixture `fixtures/shape_reacceptance_20260914.zip` contains the
+exact generated geometry, solver meshes, mesh reports, original field result, parent receipts and
+original source variants. No externally downloaded dataset is included. To
+audit it, extract into a fresh directory and run the `audit` phase. Use the
+archived `field.json`: Git may normalize line endings in the readable tracked
+JSON copy, whereas the receipt digest identifies original bytes. The separate
+`shape_reacceptance_20260914_audit.json` records post-execution validation;
+`numerical_recomputed=false` means it does not impersonate a new solver run.
+Original numerical driver SHA is preserved rather than replaced by the later
+validator's SHA. Full console logs and failed mesh trials are retained on LAB,
+not published as repository log files.
 
 Notes fixed by this lane (do not re-walk):
 
