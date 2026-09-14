@@ -63,8 +63,8 @@ Private NASA inputs and noise-aware model selection:
   The docs consumers accept data_path or RADIA_NASA_EIS_CSV and fail loudly for
   missing data or an undocumented axis. Legacy bundled-NASA validation modes
   are retired; no synthetic fallback or successful partial aggregate is allowed.
-- Start with the single-layer 34-basis Y-domain research dictionary, then compare
-  smaller active sets. Report candidate basis count and retained basis count
+- The optional single-layer 34-basis Y-domain research dictionary is a case
+  configuration, not the urn_fit default. Report candidate basis count and retained basis count
   separately. Do not force an arbitrary 1e-3 error target on noisy measurements.
 - Prefer a smaller active set when it explains data within independently
   estimated measurement uncertainty. Check held-out error, relaxation-time and
@@ -79,7 +79,14 @@ Private NASA inputs and noise-aware model selection:
   The current Huber fit and error-budget reducer do not declare a probabilistic
   noise model and must not be reported as calibrated maximum-likelihood inference.
 
-Current SA/RM research route (supersedes the historical CLN-peeling route below):
+Tool contract and optional research route:
+- urn_fit uses URNConfig / train_urn (the existing Z-domain implementation).
+  It does not invoke Y-domain fitting or reduction. Its NRMSE is the complex
+  RMS residual divided by RMS measured magnitude, not maximum pointwise error,
+  component-wise error, or measurement precision.
+- Research basis counts (34, 10, 8 or 5) and illustrative error budgets such as
+  5% are not universal defaults or established physical circuit counts.
+  Fitted components are model-assigned, not identified internal physical parts.
 - YAdmittanceURNConfig.research_34_basis() expands the legacy 22-basis factory:
   six series RLC, four parallel RLC and four coil anti-resonance bases; no
   frequency-dependent attention. Fit with train_y_admittance_urn.
@@ -108,18 +115,17 @@ Pipeline:
 URN_METHOD = r"""
 # URN method
 
-Current single-layer Y-URN route: research_34_basis -> train_y_admittance_urn
--> reduce_y_admittance_urn with caller-owned uncertainty_ohm. Start with 34
-candidates; 10 and 12 are comparisons, not minimum retained counts. Inspect
+Optional single-layer Y-URN research route: research_34_basis -> train_y_admittance_urn
+-> reduce_y_admittance_urn with caller-owned uncertainty_ohm. Its 34
+candidates and 10/12 comparisons are case settings, not mandatory defaults. Inspect
 redundant_y_bases and both error metrics. See overview for acceptance semantics.
 The 22-basis, Cauer and CLN-peeling descriptions below are historical or
 alternative implementations, not the adopted SA/RM reduction recommendation.
 
 Model:  Z(omega) = Z_inf + sum_k w_k * basis_k(omega; tau_k, ...)   (series)
                           + parallel/admittance branch (Y-space)
-The current SA/RM direction avoids frequency-dependent attention and instead
-uses continued-fraction residual peeling to obtain frequency selectivity from
-the circuit topology.
+Continued-fraction residual peeling is a historical alternative, not the
+default urn_fit execution path or the adopted single-layer research route.
 
 Relaxation basis library (relaxation_basis_library.py):
   Debye:             1 / (1 + j w tau)
@@ -380,14 +386,26 @@ def run_urn_fit(freqs, Z, n_debye=3, n_cole_cole=2, n_warburg=1,
     freqs : array of frequencies in Hz.   Z : complex array (same length).
     Lower n_epochs / n_restarts for a faster (rougher) fit."""
     import numpy as np
+    freqs = np.asarray(freqs, dtype=float)
+    Z = np.asarray(Z, dtype=complex)
+    if freqs.ndim != 1 or Z.ndim != 1 or freqs.shape != Z.shape or freqs.size < 2:
+        raise ValueError("freqs and Z must be aligned one-dimensional arrays with at least two samples")
+    if not np.all(np.isfinite(freqs) & (freqs > 0)):
+        raise ValueError("frequencies must be finite and positive (Hz)")
+    if not np.all(np.isfinite(Z)) or not np.any(np.abs(Z) > 0):
+        raise ValueError("Z must be finite and not identically zero")
+    counts = [_integer_option(v, k) for k, v in (
+        ("n_debye", n_debye), ("n_cole_cole", n_cole_cole),
+        ("n_warburg", n_warburg), ("n_cole_davidson", n_cole_davidson))]
+    if not sum(counts):
+        raise ValueError("at least one basis is required")
+    n_epochs = _integer_option(n_epochs, "n_epochs", minimum=1)
+    n_restarts = _integer_option(n_restarts, "n_restarts", minimum=1)
+    if not np.isfinite(sparsity_weight) or sparsity_weight < 0:
+        raise ValueError("sparsity_weight must be finite and nonnegative")
     import torch
-    from radia.urn import (
-        URNConfig, train_urn, generate_spice_netlist)
 
-    freqs = np.asarray(freqs, dtype=float).ravel()
-    Z = np.asarray(Z, dtype=complex).ravel()
-    if freqs.shape != Z.shape:
-        raise ValueError("freqs and Z must have the same length")
+    from radia.urn import URNConfig, generate_spice_netlist, train_urn
 
     cfg = URNConfig(n_debye=int(n_debye), n_cole_cole=int(n_cole_cole),
                     n_warburg=int(n_warburg), n_cole_davidson=int(n_cole_davidson),
@@ -407,13 +425,14 @@ def run_urn_fit(freqs, Z, n_debye=3, n_cole_cole=2, n_warburg=1,
         try:
             out["spice_netlist"] = generate_spice_netlist(model, "Z")
         except Exception as e:  # noqa: BLE001
-            out["spice_netlist"] = f"(SPICE synthesis failed: {e})"
+            out["spice_error"] = f"SPICE synthesis failed: {e}"
     return out
 
 
 def _format_report(res: dict) -> str:
-    lines = [f"URN fit: NRMSE = {res['nrmse']:.4e}   active mechanisms = {res['n_active']}",
-             "discovered relaxation mechanisms (tau in seconds):"]
+    lines = [f"URN fit: NRMSE = {res['nrmse']:.4e}   active components = {res['n_active']}",
+             "NRMSE = RMS complex residual / RMS measured magnitude (not maximum error).",
+             "Model-assigned components, not uniquely identified physical parts (tau in seconds):"]
     for mtype, comps in res["mechanisms"].items():
         if not comps:
             continue
@@ -430,7 +449,22 @@ def _format_report(res: dict) -> str:
     if "spice_netlist" in res:
         lines.append("\nSPICE netlist (== auxiliary-ODE ladder for FETD):")
         lines.append(res["spice_netlist"])
+    if "spice_error" in res:
+        lines.append(res["spice_error"])
     return "\n".join(lines)
+
+
+def _integer_option(value, name, minimum=0):
+    import operator
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be an integer >= {minimum}")  # noqa: TRY004 -- uniform input validation contract
+    try:
+        parsed = operator.index(value)
+    except TypeError as exc:
+        raise ValueError(f"{name} must be an integer >= {minimum}") from exc
+    if parsed < minimum:
+        raise ValueError(f"{name} must be an integer >= {minimum}")
+    return parsed
 
 
 def urn_fit_from_csv(data_csv, freq_col=0, real_col=1, imag_col=2,
@@ -442,15 +476,22 @@ def urn_fit_from_csv(data_csv, freq_col=0, real_col=1, imag_col=2,
     import numpy as np
     if not os.path.isfile(data_csv):
         return f"CSV not found: {data_csv}"
-    data = np.loadtxt(data_csv, delimiter=delimiter, skiprows=int(skip_rows))
-    freqs = data[:, int(freq_col)]
-    Z = data[:, int(real_col)] + 1j * data[:, int(imag_col)]
+    columns = [_integer_option(v, k) for k, v in (
+        ("freq_col", freq_col), ("real_col", real_col), ("imag_col", imag_col))]
+    if len(set(columns)) != 3:
+        raise ValueError("frequency, real and imaginary columns must be distinct")
+    skip_rows = _integer_option(skip_rows, "skip_rows")
+    data = np.loadtxt(data_csv, delimiter=delimiter, skiprows=skip_rows, ndmin=2)
+    if data.shape[0] < 2 or data.shape[1] <= max(columns):
+        raise ValueError("CSV needs at least two rows and all selected columns")
+    freqs = data[:, columns[0]]
+    Z = data[:, columns[1]] + 1j * data[:, columns[2]]
     res = run_urn_fit(freqs, Z, n_debye=n_debye, n_cole_cole=n_cole_cole,
                       n_warburg=n_warburg, n_cole_davidson=n_cole_davidson,
                       sparsity_weight=sparsity_weight, n_epochs=n_epochs,
                       n_restarts=n_restarts, spice=True)
     if spice_out and "spice_netlist" in res:
-        with open(spice_out, "w") as f:
+        with open(spice_out, "w", encoding="utf-8") as f:
             f.write(res["spice_netlist"])
         res = dict(res)
         res["spice_netlist"] = (res["spice_netlist"]
