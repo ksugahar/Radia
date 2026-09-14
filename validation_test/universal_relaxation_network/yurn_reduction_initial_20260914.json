@@ -1,0 +1,648 @@
+{
+  "schema": "radia.yurn-private-reduction-validation.v1",
+  "host": "mdx2",
+  "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+  "torch": "2.14.0+cpu",
+  "numpy": "2.4.3",
+  "threads": 1,
+  "epochs": 6000,
+  "restarts": 1,
+  "source_sha256": {
+    "y_admittance_urn.py": "2a1d521765324287ebb378e23dbe9dfb419f7d480da12b692198edf684c2844c",
+    "reduction.py": "dc04ed2ce049518efe63770af5d2d266501e5cc2358d12f285a1d840aa4d1354"
+  },
+  "measurement_uncertainty_established": false,
+  "scope": "scenario sensitivity on all training samples; no held-out accuracy claim",
+  "checkpoints": [
+    {
+      "name": "yurn34_pcb_log_components",
+      "bases": 34,
+      "samples": 2001,
+      "hashes": {
+        "yurn34_pcb_log_components.pt": "9836394f4baaa349b2cbda4c81fa3dcd3e8026e7b6a47b22dcdd4306c1ea43ad",
+        "yurn34_pcb_log_components.npz": "e1174fe31a1035945558c376488e9aae69d73f03be2649a97dbcb14724619855"
+      },
+      "source_device": "cpu",
+      "replay_device": "cpu",
+      "replay_max_relative_error": 2.083378398427674e-15,
+      "s_domain_rmse": 0.003660496216306348,
+      "log_component_rmse": 0.06901774441498795,
+      "redundant_pairs": [
+        {
+          "indices": [
+            5,
+            6
+          ],
+          "basis_type": "magnetic_debye",
+          "response_distance": 5.060234192660313e-05
+        },
+        {
+          "indices": [
+            5,
+            7
+          ],
+          "basis_type": "magnetic_debye",
+          "response_distance": 8.43680877484478e-06
+        },
+        {
+          "indices": [
+            6,
+            7
+          ],
+          "basis_type": "magnetic_debye",
+          "response_distance": 5.903915069407537e-05
+        },
+        {
+          "indices": [
+            13,
+            14
+          ],
+          "basis_type": "magnetic_cole_cole",
+          "response_distance": 0.00020176003112032945
+        },
+        {
+          "indices": [
+            16,
+            17
+          ],
+          "basis_type": "inductive_cpe",
+          "response_distance": 0.0012990161077014444
+        },
+        {
+          "indices": [
+            18,
+            19
+          ],
+          "basis_type": "capacitive_cpe",
+          "response_distance": 0.00027633750668165045
+        },
+        {
+          "indices": [
+            26,
+            27
+          ],
+          "basis_type": "parallel_rlc",
+          "response_distance": 2.178748271785955e-06
+        },
+        {
+          "indices": [
+            28,
+            29
+          ],
+          "basis_type": "parallel_rlc",
+          "response_distance": 4.044587172209196e-05
+        },
+        {
+          "indices": [
+            30,
+            31
+          ],
+          "basis_type": "coil_antiresonance",
+          "response_distance": 0.0002558554278189479
+        },
+        {
+          "indices": [
+            30,
+            32
+          ],
+          "basis_type": "coil_antiresonance",
+          "response_distance": 0.002086303094939748
+        },
+        {
+          "indices": [
+            31,
+            32
+          ],
+          "basis_type": "coil_antiresonance",
+          "response_distance": 0.001830610991010433
+        }
+      ]
+    },
+    {
+      "name": "yurn_compact_pcb_log_components",
+      "bases": 10,
+      "samples": 2001,
+      "hashes": {
+        "yurn_compact_pcb_log_components.pt": "7a253aa8bb56d0f4e63eb8d74c103c43acaf5ebdf6e3283574a97abfdbd5b71e",
+        "yurn_compact_pcb_log_components.npz": "5ec1f22c37b23ed8b92c59cca3a8beebd4d91562b0e7800d24cd3a22fe62beb3"
+      },
+      "source_device": "cuda",
+      "replay_device": "cpu",
+      "replay_max_relative_error": 4.008238808879296e-15,
+      "s_domain_rmse": 0.004049685146164282,
+      "log_component_rmse": 0.043515886413158254,
+      "redundant_pairs": [
+        {
+          "indices": [
+            6,
+            7
+          ],
+          "basis_type": "parallel_rlc",
+          "response_distance": 1.2683647311604085e-07
+        }
+      ]
+    },
+    {
+      "name": "yurn34_nl87_log_components",
+      "bases": 34,
+      "samples": 2001,
+      "hashes": {
+        "yurn34_nl87_log_components.pt": "505cf56c27a05d7068efca3b42c60e218c456d5f733a1e6bc056023fa5dfb13c",
+        "yurn34_nl87_log_components.npz": "a5dc9f48cbb414b26d323971fa37d84db30ff69e7471f87b0848d5792198ffe2"
+      },
+      "source_device": "cuda",
+      "replay_device": "cpu",
+      "replay_max_relative_error": 4.242855081541945e-16,
+      "s_domain_rmse": 0.0014865833256688687,
+      "log_component_rmse": 0.008077517997987713,
+      "redundant_pairs": [
+        {
+          "indices": [
+            2,
+            3
+          ],
+          "basis_type": "debye",
+          "response_distance": 0.008882941896009735
+        },
+        {
+          "indices": [
+            5,
+            6
+          ],
+          "basis_type": "magnetic_debye",
+          "response_distance": 4.295962741996412e-05
+        },
+        {
+          "indices": [
+            5,
+            7
+          ],
+          "basis_type": "magnetic_debye",
+          "response_distance": 0.00025045737259550826
+        },
+        {
+          "indices": [
+            6,
+            7
+          ],
+          "basis_type": "magnetic_debye",
+          "response_distance": 0.00020749774621569084
+        },
+        {
+          "indices": [
+            10,
+            11
+          ],
+          "basis_type": "cole_cole",
+          "response_distance": 0.002019471200836567
+        },
+        {
+          "indices": [
+            13,
+            14
+          ],
+          "basis_type": "magnetic_cole_cole",
+          "response_distance": 0.0002373100986644409
+        },
+        {
+          "indices": [
+            16,
+            17
+          ],
+          "basis_type": "inductive_cpe",
+          "response_distance": 0.00041968181977800024
+        },
+        {
+          "indices": [
+            27,
+            28
+          ],
+          "basis_type": "parallel_rlc",
+          "response_distance": 1.2283624868364482e-05
+        },
+        {
+          "indices": [
+            27,
+            29
+          ],
+          "basis_type": "parallel_rlc",
+          "response_distance": 1.2956436582472486e-05
+        },
+        {
+          "indices": [
+            28,
+            29
+          ],
+          "basis_type": "parallel_rlc",
+          "response_distance": 6.771304027566089e-07
+        },
+        {
+          "indices": [
+            30,
+            31
+          ],
+          "basis_type": "coil_antiresonance",
+          "response_distance": 0.00012836552123695607
+        }
+      ]
+    },
+    {
+      "name": "yurn_compact_nl87_log_components",
+      "bases": 10,
+      "samples": 2001,
+      "hashes": {
+        "yurn_compact_nl87_log_components.pt": "28350077436624ca3ed84f048cc842d34ce1f993fedbeccf640f924bbb7296ad",
+        "yurn_compact_nl87_log_components.npz": "e31dff13018ad9daa04161d6d4dd9e9fb474dc4fc4fff741078c0c19f1748865"
+      },
+      "source_device": "cuda",
+      "replay_device": "cpu",
+      "replay_max_relative_error": 4.231234353832359e-16,
+      "s_domain_rmse": 0.0015513582597947724,
+      "log_component_rmse": 0.09163367057005008,
+      "redundant_pairs": []
+    }
+  ],
+  "reductions": [
+    {
+      "dataset": "pcb",
+      "elapsed_seconds": 312.10695340001257,
+      "scenarios": [
+        {
+          "assumed_relative_budget_percent": 0.5,
+          "selected_basis_count": null
+        },
+        {
+          "assumed_relative_budget_percent": 1,
+          "selected_basis_count": null
+        },
+        {
+          "assumed_relative_budget_percent": 2,
+          "selected_basis_count": null
+        },
+        {
+          "assumed_relative_budget_percent": 5,
+          "selected_basis_count": null
+        },
+        {
+          "assumed_relative_budget_percent": 10,
+          "selected_basis_count": null
+        },
+        {
+          "assumed_relative_budget_percent": 20,
+          "selected_basis_count": 3
+        }
+      ],
+      "trace": {
+        "schema": "radia.yurn-reduction.v1",
+        "status": "no_acceptable_candidate",
+        "source_basis_count": 10,
+        "selected_basis_count": null,
+        "selection": "smallest tested candidate within caller-supplied per-sample ohmic budget",
+        "uncertainty_ohm_range": [
+          0.010469529686951407,
+          393.1055361182786
+        ],
+        "response_tolerance": 0.01,
+        "refit_epochs": 6000,
+        "refit_restarts": 1,
+        "independent_validation": false,
+        "trials": [
+          {
+            "basis_count": 10,
+            "max_uncertainty_ratio": 18.72852893399916,
+            "accepted": false,
+            "s_domain_rmse": 0.004049685146164282,
+            "log_component_rmse": 0.043515886413158254,
+            "redundant_pairs": [
+              {
+                "indices": [
+                  6,
+                  7
+                ],
+                "basis_type": "parallel_rlc",
+                "response_distance": 1.2683647311604085e-07
+              }
+            ],
+            "removed_basis": null
+          },
+          {
+            "basis_count": 9,
+            "max_uncertainty_ratio": 18.741642568017856,
+            "accepted": false,
+            "s_domain_rmse": 0.004072008811276445,
+            "log_component_rmse": 0.043903465117608065,
+            "redundant_pairs": [],
+            "removed_basis": {
+              "index": 6,
+              "basis_type": "parallel_rlc",
+              "reason": "redundant_response"
+            }
+          },
+          {
+            "basis_count": 8,
+            "max_uncertainty_ratio": 18.820823027458225,
+            "accepted": false,
+            "s_domain_rmse": 0.004051672758421799,
+            "log_component_rmse": 0.045262373910428144,
+            "redundant_pairs": [],
+            "removed_basis": {
+              "index": 5,
+              "basis_type": "series_rlc",
+              "reason": "output_ablation"
+            }
+          },
+          {
+            "basis_count": 7,
+            "max_uncertainty_ratio": 33.5875851443844,
+            "accepted": false,
+            "s_domain_rmse": 0.0044296359764820405,
+            "log_component_rmse": 0.5591080820633023,
+            "redundant_pairs": [],
+            "removed_basis": {
+              "index": 1,
+              "basis_type": "debye",
+              "reason": "output_ablation"
+            }
+          },
+          {
+            "basis_count": 6,
+            "max_uncertainty_ratio": 19.0562747746606,
+            "accepted": false,
+            "s_domain_rmse": 0.004315274987775341,
+            "log_component_rmse": 0.24536902612874306,
+            "redundant_pairs": [],
+            "removed_basis": {
+              "index": 0,
+              "basis_type": "debye",
+              "reason": "output_ablation"
+            }
+          },
+          {
+            "basis_count": 5,
+            "max_uncertainty_ratio": 40.70365942051584,
+            "accepted": false,
+            "s_domain_rmse": 0.005825250387434659,
+            "log_component_rmse": 0.6261551405750269,
+            "redundant_pairs": [],
+            "removed_basis": {
+              "index": 3,
+              "basis_type": "parallel_rlc",
+              "reason": "output_ablation"
+            }
+          },
+          {
+            "basis_count": 4,
+            "max_uncertainty_ratio": 18.12849538006061,
+            "accepted": false,
+            "s_domain_rmse": 0.0042394324001338085,
+            "log_component_rmse": 0.2795789563223744,
+            "redundant_pairs": [],
+            "removed_basis": {
+              "index": 4,
+              "basis_type": "coil_antiresonance",
+              "reason": "output_ablation"
+            }
+          },
+          {
+            "basis_count": 3,
+            "max_uncertainty_ratio": 18.950297409506092,
+            "accepted": false,
+            "s_domain_rmse": 0.004617927512875556,
+            "log_component_rmse": 0.3181640194503833,
+            "redundant_pairs": [],
+            "removed_basis": {
+              "index": 3,
+              "basis_type": "coil_antiresonance",
+              "reason": "output_ablation"
+            }
+          },
+          {
+            "basis_count": 2,
+            "max_uncertainty_ratio": 3318.3797608090085,
+            "accepted": false,
+            "s_domain_rmse": 0.04529533503128975,
+            "log_component_rmse": 9.329391885025801,
+            "redundant_pairs": [],
+            "removed_basis": {
+              "index": 0,
+              "basis_type": "magnetic_cole_cole",
+              "reason": "output_ablation"
+            }
+          },
+          {
+            "basis_count": 1,
+            "max_uncertainty_ratio": 3332.7587689726793,
+            "accepted": false,
+            "s_domain_rmse": 0.04541884301790176,
+            "log_component_rmse": 9.33400776543232,
+            "redundant_pairs": [],
+            "removed_basis": {
+              "index": 0,
+              "basis_type": "series_rlc",
+              "reason": "output_ablation"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "dataset": "nl87",
+      "elapsed_seconds": 296.9109334999812,
+      "scenarios": [
+        {
+          "assumed_relative_budget_percent": 0.5,
+          "selected_basis_count": null
+        },
+        {
+          "assumed_relative_budget_percent": 1,
+          "selected_basis_count": null
+        },
+        {
+          "assumed_relative_budget_percent": 2,
+          "selected_basis_count": null
+        },
+        {
+          "assumed_relative_budget_percent": 5,
+          "selected_basis_count": 10
+        },
+        {
+          "assumed_relative_budget_percent": 10,
+          "selected_basis_count": 10
+        },
+        {
+          "assumed_relative_budget_percent": 20,
+          "selected_basis_count": 10
+        }
+      ],
+      "trace": {
+        "schema": "radia.yurn-reduction.v1",
+        "status": "no_acceptable_candidate",
+        "source_basis_count": 10,
+        "selected_basis_count": null,
+        "selection": "smallest tested candidate within caller-supplied per-sample ohmic budget",
+        "uncertainty_ohm_range": [
+          0.0744627540166855,
+          368.32534819309694
+        ],
+        "response_tolerance": 0.01,
+        "refit_epochs": 6000,
+        "refit_restarts": 1,
+        "independent_validation": false,
+        "trials": [
+          {
+            "basis_count": 10,
+            "max_uncertainty_ratio": 3.9129432650966125,
+            "accepted": false,
+            "s_domain_rmse": 0.0015513582597947724,
+            "log_component_rmse": 0.09163367057005008,
+            "redundant_pairs": [],
+            "removed_basis": null
+          },
+          {
+            "basis_count": 9,
+            "max_uncertainty_ratio": 24.18235199531896,
+            "accepted": false,
+            "s_domain_rmse": 0.0020195107388451547,
+            "log_component_rmse": 0.4237515423621791,
+            "redundant_pairs": [
+              {
+                "indices": [
+                  1,
+                  2
+                ],
+                "basis_type": "magnetic_debye",
+                "response_distance": 0.0017062721389768803
+              },
+              {
+                "indices": [
+                  3,
+                  4
+                ],
+                "basis_type": "magnetic_cole_cole",
+                "response_distance": 0.005344400985212421
+              }
+            ],
+            "removed_basis": {
+              "index": 0,
+              "basis_type": "debye",
+              "reason": "output_ablation"
+            }
+          },
+          {
+            "basis_count": 8,
+            "max_uncertainty_ratio": 22.466900012494992,
+            "accepted": false,
+            "s_domain_rmse": 0.0018785637268435938,
+            "log_component_rmse": 0.2570686199517992,
+            "redundant_pairs": [
+              {
+                "indices": [
+                  2,
+                  3
+                ],
+                "basis_type": "magnetic_cole_cole",
+                "response_distance": 9.432152353334911e-06
+              }
+            ],
+            "removed_basis": {
+              "index": 2,
+              "basis_type": "magnetic_debye",
+              "reason": "redundant_response"
+            }
+          },
+          {
+            "basis_count": 7,
+            "max_uncertainty_ratio": 22.185516665375175,
+            "accepted": false,
+            "s_domain_rmse": 0.001956526594862758,
+            "log_component_rmse": 0.31948901162087673,
+            "redundant_pairs": [],
+            "removed_basis": {
+              "index": 3,
+              "basis_type": "magnetic_cole_cole",
+              "reason": "redundant_response"
+            }
+          },
+          {
+            "basis_count": 6,
+            "max_uncertainty_ratio": 22.113434424571416,
+            "accepted": false,
+            "s_domain_rmse": 0.002024467006410347,
+            "log_component_rmse": 0.2580651643836363,
+            "redundant_pairs": [],
+            "removed_basis": {
+              "index": 6,
+              "basis_type": "series_rlc",
+              "reason": "output_ablation"
+            }
+          },
+          {
+            "basis_count": 5,
+            "max_uncertainty_ratio": 22.091205977795365,
+            "accepted": false,
+            "s_domain_rmse": 0.00231593748028638,
+            "log_component_rmse": 0.26315975111633705,
+            "redundant_pairs": [],
+            "removed_basis": {
+              "index": 3,
+              "basis_type": "magnetic_cole_cole",
+              "reason": "output_ablation"
+            }
+          },
+          {
+            "basis_count": 4,
+            "max_uncertainty_ratio": 22.07484573371288,
+            "accepted": false,
+            "s_domain_rmse": 0.0035822453138810335,
+            "log_component_rmse": 0.43716770992932424,
+            "redundant_pairs": [],
+            "removed_basis": {
+              "index": 0,
+              "basis_type": "magnetic_debye",
+              "reason": "output_ablation"
+            }
+          },
+          {
+            "basis_count": 3,
+            "max_uncertainty_ratio": 22.177101502595967,
+            "accepted": false,
+            "s_domain_rmse": 0.0031718945925514577,
+            "log_component_rmse": 0.5065828738510972,
+            "redundant_pairs": [],
+            "removed_basis": {
+              "index": 3,
+              "basis_type": "series_rlc",
+              "reason": "output_ablation"
+            }
+          },
+          {
+            "basis_count": 2,
+            "max_uncertainty_ratio": 22.153378556964128,
+            "accepted": false,
+            "s_domain_rmse": 0.0032612833010974293,
+            "log_component_rmse": 0.3508453051736611,
+            "redundant_pairs": [],
+            "removed_basis": {
+              "index": 0,
+              "basis_type": "magnetic_debye",
+              "reason": "output_ablation"
+            }
+          },
+          {
+            "basis_count": 1,
+            "max_uncertainty_ratio": 807.4718467025185,
+            "accepted": false,
+            "s_domain_rmse": 0.01898243712308458,
+            "log_component_rmse": 7.9747993906978545,
+            "redundant_pairs": [],
+            "removed_basis": {
+              "index": 0,
+              "basis_type": "magnetic_cole_cole",
+              "reason": "output_ablation"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

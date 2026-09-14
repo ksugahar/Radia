@@ -102,47 +102,52 @@ truth; check passivity and consistency with the measurement conditions too.
 The undocumented NASA frequency axis remains a separate blocker to interpreting
 relaxation times, irrespective of the number of bases.
 
-The SA/RM-2026 research-meeting manuscript uses a newer attention-free Y-base
-formulation: 22 physical basis functions are
-summed as a parallel admittance network, fitted through an S-domain Huber loss,
-and selected by output ablation.  The Radia package exposes this variant
-without replacing the older Z-domain implementation:
+The current SA/RM-2026 research route starts from a single-layer, attention-free
+**34-basis Y-domain dictionary**, not the earlier 22-basis or CLN-peeling route.
+Its engineering objective is a compact passive response within a caller-owned
+measurement error budget, rather than the smallest possible training residual.
+Ten or twelve retained bases are comparison points, not lower bounds: even ten
+bases can contain repeated response shapes. Basis count is not mechanism count.
+Parameter fitting and basis-count selection are separate decisions. A better
+fit alone does not justify extra bases that explain measurement error rather
+than a reproducible response. A likelihood-based fit requires a declared noise
+model; the current Huber fit/error-budget selection is not calibrated
+maximum-likelihood inference. Parsimony remains an explicit selection objective.
+
+The owning MCP `urn(topic="overview")` and `urn(topic="method")` describe the
+workflow and acceptance contract. The implementation composition is:
 
 ```python
 from radia.urn import (
     YAdmittanceURNConfig,
-    refit_y_admittance_active_bases,
-    s_domain_rmse,
+    reduce_y_admittance_urn,
     train_y_admittance_urn,
 )
 
-cfg = YAdmittanceURNConfig.paper_22_basis()
+cfg = YAdmittanceURNConfig.research_34_basis()
 model = train_y_admittance_urn(freq_hz, Z_measured, cfg)
-active = model.active_bases()  # output-ablation ranking
-Z_fit = model.predict(freq_hz)
-rmse_s = s_domain_rmse(Z_fit, Z_measured)
-
-realizable = refit_y_admittance_active_bases(freq_hz, Z_measured, active, cfg)
-Z_realizable = realizable.predict(freq_hz)
+compact, trace = reduce_y_admittance_urn(
+    model, freq_hz, Z_measured, uncertainty_ohm=measurement_error_budget_ohm,
+)
+# compact is None if no tested candidate meets the supplied measurement budget.
 ```
 
-Use this API when reproducing the SA-26/RM-26 draft model
-(Debye/magnetic-Debye/Cole-Cole/magnetic-Cole-Cole/inductive-CPE/
-capacitive-CPE/series-RLC in Y space).  Use `train_urn` for the original
-Radia URN model used by the NASA/TDK validation notebooks.
+The error budget must come from the caller's measurement assumptions; it is
+not inferred as `1e-3`. The trace reports S-domain and log-component errors,
+duplicate-response pairs and all candidate decisions, without raw data rows.
+This greedy path selects the smallest tested acceptable model, not a globally
+minimal circuit or an independently validated physical interpretation.
 
 When checking a conference figure rather than the original measurement CSV,
 treat digitized points as approximate. Use original measurement data for
 quantitative claims; figure-extracted points are suitable only for qualitative
 workflow checks.
 
-For time-domain review, this attention-free Y-branch is now treated mainly as a
-branch model for CLN peeling.  A single parallel 22-basis sum is not rich enough
-to claim VF-level accuracy on the extracted SA/RM curves; the preferred path is
-to use it inside a continued-fraction residual peeling topology.
+The Cauer and CLN-peeling sections below preserve historical alternatives.
+They are not the adopted SA/RM single-layer reduction recommendation.
 
 See [`model_inventory.md`](model_inventory.md) for candidate models beyond the
-current 22-basis dictionary, including parallel-RLC anti-resonance branches,
+original 22-basis dictionary, including parallel-RLC anti-resonance branches,
 skin/proximity ladders, Havriliak-Negami relaxation, DRT diagnostics, and
 passive rational macromodeling.
 

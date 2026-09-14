@@ -2,9 +2,10 @@
 
 This module implements the admittance-domain formulation used in the
 SA/RM-2026 URN manuscript draft: physical basis functions are summed in
-admittance space, fitted through an S-domain loss, and pruned by output
-ablation.  It is intentionally additive to the older ``UniversalRelaxationNetwork``
-API, whose series/parallel Z-domain model remains the default production path.
+admittance space, fitted through S-domain or log-component loss, and pruned by
+output ablation. The current research route starts from 34 bases and reduces
+against caller-supplied measurement uncertainty. The older 22-basis and
+``UniversalRelaxationNetwork`` APIs remain available for compatibility.
 """
 
 from __future__ import annotations
@@ -105,6 +106,16 @@ class YAdmittanceURNConfig:
             + self.n_ideal_inductor
             + self.n_ideal_capacitor
         )
+
+    @classmethod
+    def research_34_basis(cls, **overrides: Any) -> "YAdmittanceURNConfig":
+        """Single-layer expanded dictionary; basis count is not mechanism count."""
+        values = dict(n_series_rlc=6, n_parallel_rlc=4, n_coil_antiresonance=4,
+                      loss_mode="log_components", conductance_floor=1e-6,
+                      sparsity_weight=1e-6, n_epochs=16_000, n_restarts=3,
+                      seed=77)
+        values.update(overrides)
+        return cls.paper_22_basis(**values)
 
     @classmethod
     def paper_22_basis(cls, **overrides: Any) -> "YAdmittanceURNConfig":
