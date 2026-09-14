@@ -1,5 +1,6 @@
 import copy
 import importlib.util
+import json
 from pathlib import Path
 
 
@@ -32,6 +33,7 @@ def test_formal_plateau_passes_only_with_matched_high_rule_evidence():
     result = MODULE.assess(payload())
     assert result["passed"] is True
     assert result["scope"].startswith("ESRF6 nominal order-2")
+    assert json.loads(json.dumps(result, allow_nan=False))["passed"] is True
 
 
 def test_formal_plateau_rejects_field_drift_and_hodge_mismatch():
