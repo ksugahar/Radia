@@ -18,6 +18,22 @@ _GIT = shutil.which("git")
 assert _GIT is not None, "Git is required by the release-quad contract tests"
 
 
+@pytest.mark.parametrize("returncode", [0, 1])
+def test_preflight_requires_native_manifest_verification(monkeypatch, returncode):
+    calls = []
+
+    def verify(command, **kwargs):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, returncode, "payload evidence", "")
+
+    monkeypatch.setattr(release_quad.subprocess, "run", verify)
+    monkeypatch.setattr(release_quad, "_check_main_synced", lambda **kwargs: None)
+    assert release_quad.cmd_preflight(None) == (2 if returncode else 0)
+    assert len(calls) == 1
+    assert Path(calls[0][1]).name == "_native_provenance.py"
+    assert calls[0][2] == "verify"
+
+
 def _git(repo, *args):
     return subprocess.run(
         [_GIT, "-C", str(repo), *args],
