@@ -19,6 +19,7 @@ from radia_mcp.radia_ngsolve.field_profile_gate import (
     nonlinear_constitutive_point_sample_gate,
     nonlinear_constitutive_response_parity_gate,
     nonlinear_field_energy_identity_gate_v5,
+    nonlinear_field_energy_artifact_contract_gate_v6,
     nonlinear_magnetic_field_energy_parity_gate,
     nonlinear_magnetic_refinement_energy_gate,
     nonlinear_magnetic_spatial_evidence_gate,
@@ -32,6 +33,7 @@ from radia_mcp.radia_ngsolve.server import (
     nonlinear_magnetic_refinement_energy_gate as mcp_nonlinear_refinement_gate,
     nonlinear_magnetic_spatial_evidence_gate as mcp_nonlinear_gate,
     nonlinear_field_energy_identity_gate_v5 as mcp_nonlinear_identity_v5_gate,
+    nonlinear_field_energy_artifact_contract_gate_v6 as mcp_nonlinear_artifact_v6_gate,
 )
 
 
@@ -107,6 +109,86 @@ def test_nonlinear_field_energy_identity_v5_rejects_duplicate_refinement_identit
     bad["candidate"]["identity"]["refinement_levels"][2]["level_id"] = "h1"
     result = nonlinear_field_energy_identity_gate_v5(bad)
     assert result["checks"]["unique_monotone_refinement_identity_matches"] is False
+
+
+def _v6_artifact_summary():
+    digest = lambda value: hashlib.sha256(
+        json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    response = {
+        "observable_columns": [
+            "sample_id",
+            "H_A_per_m",
+            "B_T",
+            "energy_density_J_per_m3",
+            "coenergy_density_J_per_m3",
+        ],
+        "observable_units": {
+            "sample_id": "1",
+            "H_A_per_m": "A/m",
+            "B_T": "T",
+            "energy_density_J_per_m3": "J/m^3",
+            "coenergy_density_J_per_m3": "J/m^3",
+        },
+        "dimension_order": "C",
+        "sample_id": [0, 1, 2, 3],
+        "H_A_per_m": [0.0, 1.0, 2.0, 3.0],
+        "B_T": [0.0, 1.0, 2.0, 3.0],
+        "energy_density_J_per_m3": [0.0, 0.5, 2.0, 4.5],
+        "coenergy_density_J_per_m3": [0.0, 0.5, 2.0, 4.5],
+    }
+    identity = {
+        "geometry_identity_sha256": "1" * 64,
+        "material_table_sha256": "2" * 64,
+        "excitation_identity_sha256": "3" * 64,
+        "coordinate_system": "right-handed Cartesian",
+        "unit_system": "SI",
+    }
+    lanes = []
+    for artifact_id in ("candidate-v6", "reference-v6"):
+        lane_identity = {
+            **identity,
+            "response_identity_sha256": digest(response),
+        }
+        lanes.append(
+            {
+                "schema": "radia.nonlinear-field-energy-artifact.v1",
+                "artifact_id": artifact_id,
+                "status": "completed",
+                "solver_converged": True,
+                "residual_norm": 1.0e-12,
+                "identity": lane_identity,
+                "response": json.loads(json.dumps(response)),
+            }
+        )
+    return {"candidate": lanes[0], "reference": lanes[1]}
+
+
+def test_nonlinear_field_energy_artifact_contract_v6_accepts_and_wraps_mcp():
+    summary = _v6_artifact_summary()
+    result = nonlinear_field_energy_artifact_contract_gate_v6(summary)
+    assert result["status"] == "ok"
+    assert result["accepted"] is True
+    wrapped = json.loads(mcp_nonlinear_artifact_v6_gate(json.dumps(summary)))
+    assert wrapped["policy"] == "nonlinear_field_energy_artifact_contract_gate_v6"
+    assert wrapped["status"] == "ok"
+
+
+def test_nonlinear_field_energy_artifact_contract_v6_rejects_units_and_stale_digest():
+    bad = _v6_artifact_summary()
+    bad["candidate"]["response"]["observable_units"]["B_T"] = "mT"
+    bad["candidate"]["identity"]["response_identity_sha256"] = "f" * 64
+    result = nonlinear_field_energy_artifact_contract_gate_v6(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["candidate_contract_valid"] is False
+
+
+def test_nonlinear_field_energy_artifact_contract_v6_rejects_incomplete_convergence():
+    bad = _v6_artifact_summary()
+    bad["candidate"]["status"] = "completed"
+    bad["candidate"]["solver_converged"] = False
+    result = nonlinear_field_energy_artifact_contract_gate_v6(bad)
+    assert result["checks"]["candidate_contract_valid"] is False
 
 
 def test_build_comparison_candidate_keeps_piecewise_linear_out_of_solver_mode():

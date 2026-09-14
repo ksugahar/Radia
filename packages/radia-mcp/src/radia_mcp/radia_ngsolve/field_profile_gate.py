@@ -862,6 +862,182 @@ def nonlinear_field_energy_identity_gate_v5(
     }
 
 
+def nonlinear_field_energy_artifact_contract_gate_v6(
+    summary: dict[str, Any],
+    *,
+    max_residual_norm: float = 1.0e-8,
+    min_response_samples: int = 4,
+) -> dict[str, Any]:
+    """Validate completed field-energy result artifacts before comparison.
+
+    The v5 gate proves geometric and constitutive identities. This independent
+    gate checks the result envelope itself: schema, completion/convergence,
+    SI observable units, finite ordered samples, and a recomputable response
+    digest. It deliberately does not read paths or claim solver parity.
+    """
+
+    if not isinstance(summary, dict):
+        raise ValueError("summary must be a mapping")
+    residual_limit = float(max_residual_norm)
+    sample_limit = int(min_response_samples)
+    if not math.isfinite(residual_limit) or residual_limit < 0.0:
+        raise ValueError("max_residual_norm must be finite and nonnegative")
+    if sample_limit < 4:
+        raise ValueError("min_response_samples must be at least 4")
+
+    def digest(value: object) -> str:
+        encoded = json.dumps(
+            value, ensure_ascii=True, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()
+
+    def valid_sha(value: object) -> bool:
+        text = str(value or "").strip().lower()
+        return len(text) == 64 and all(
+            character in "0123456789abcdef" for character in text
+        )
+
+    required_columns = [
+        "sample_id",
+        "H_A_per_m",
+        "B_T",
+        "energy_density_J_per_m3",
+        "coenergy_density_J_per_m3",
+    ]
+    required_units = {
+        "sample_id": "1",
+        "H_A_per_m": "A/m",
+        "B_T": "T",
+        "energy_density_J_per_m3": "J/m^3",
+        "coenergy_density_J_per_m3": "J/m^3",
+    }
+    identity_keys = (
+        "geometry_identity_sha256",
+        "material_table_sha256",
+        "excitation_identity_sha256",
+        "coordinate_system",
+        "unit_system",
+    )
+
+    def lane_contract(name: str) -> dict[str, Any]:
+        raw = summary.get(name)
+        if not isinstance(raw, dict):
+            raise ValueError(f"{name} must be a mapping")
+        identity = raw.get("identity")
+        identity = identity if isinstance(identity, dict) else {}
+        response = raw.get("response")
+        response = response if isinstance(response, dict) else {}
+        columns = response.get("observable_columns")
+        units = response.get("observable_units")
+        sample_ids = response.get("sample_id")
+        h_values = response.get("H_A_per_m")
+        b_values = response.get("B_T")
+        energy = response.get("energy_density_J_per_m3")
+        coenergy = response.get("coenergy_density_J_per_m3")
+        arrays = (sample_ids, h_values, b_values, energy, coenergy)
+        arrays_are_lists = all(isinstance(values, list) for values in arrays)
+        lengths_match = arrays_are_lists and len({len(values) for values in arrays}) == 1
+        sample_count = len(h_values) if isinstance(h_values, list) else 0
+        finite = False
+        ordered = False
+        if lengths_match and sample_count >= sample_limit:
+            try:
+                finite = all(
+                    math.isfinite(float(value))
+                    for values in arrays[1:]
+                    for value in values
+                ) and all(isinstance(value, int) and not isinstance(value, bool) for value in sample_ids)
+                ordered = (
+                    len(set(sample_ids)) == len(sample_ids)
+                    and all(right > left for left, right in zip(sample_ids, sample_ids[1:]))
+                    and all(right > left for left, right in zip(h_values, h_values[1:]))
+                    and all(right >= left for left, right in zip(b_values, b_values[1:]))
+                )
+            except (TypeError, ValueError):
+                finite = False
+                ordered = False
+        response_core = {
+            "observable_columns": columns,
+            "observable_units": units,
+            "dimension_order": response.get("dimension_order"),
+            "sample_id": sample_ids,
+            "H_A_per_m": h_values,
+            "B_T": b_values,
+            "energy_density_J_per_m3": energy,
+            "coenergy_density_J_per_m3": coenergy,
+        }
+        checks = {
+            "artifact_schema_supported": raw.get("schema") == "radia.nonlinear-field-energy-artifact.v1",
+            "artifact_id_present": bool(str(raw.get("artifact_id") or "").strip()),
+            "result_completed": raw.get("status") == "completed",
+            "solver_converged": raw.get("solver_converged") is True,
+            "residual_norm_finite_and_bounded": (
+                isinstance(raw.get("residual_norm"), (int, float))
+                and math.isfinite(float(raw["residual_norm"]))
+                and float(raw["residual_norm"]) <= residual_limit
+            ),
+            "identity_contract_present": all(
+                bool(str(identity.get(key) or "").strip()) for key in identity_keys
+            ),
+            "identity_digests_valid": all(
+                valid_sha(identity.get(key))
+                for key in identity_keys[:3]
+            ),
+            "observable_columns_exact": columns == required_columns,
+            "observable_units_exact": units == required_units,
+            "dimension_order_is_c": response.get("dimension_order") == "C",
+            "response_arrays_are_lists": arrays_are_lists,
+            "response_lengths_match": lengths_match,
+            "response_sample_count_sufficient": sample_count >= sample_limit,
+            "response_values_finite": finite,
+            "response_samples_strict_and_monotone": ordered,
+            "response_digest_matches": (
+                valid_sha(identity.get("response_identity_sha256"))
+                and identity.get("response_identity_sha256", "").casefold() == digest(response_core)
+            ),
+        }
+        return {
+            "checks": checks,
+            "response_digest": str(identity.get("response_identity_sha256") or "").lower(),
+            "sample_count": sample_count,
+        }
+
+    candidate = lane_contract("candidate")
+    reference = lane_contract("reference")
+    candidate_identity = summary["candidate"].get("identity", {})
+    reference_identity = summary["reference"].get("identity", {})
+    identity_matches = {
+        key: candidate_identity.get(key) == reference_identity.get(key)
+        for key in identity_keys
+    }
+    checks = {
+        "candidate_contract_valid": all(candidate["checks"].values()),
+        "reference_contract_valid": all(reference["checks"].values()),
+        "artifact_ids_are_distinct": (
+            summary["candidate"].get("artifact_id") != summary["reference"].get("artifact_id")
+        ),
+        "comparison_identity_matches": all(identity_matches.values()),
+    }
+    checks.update({f"comparison_{key}": value for key, value in identity_matches.items()})
+    return {
+        "policy": "nonlinear_field_energy_artifact_contract_gate_v6",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "accepted": all(checks.values()),
+        "checks": checks,
+        "issues": [name for name, accepted in checks.items() if not accepted],
+        "lane_details": {"candidate": candidate, "reference": reference},
+        "tolerances": {
+            "max_residual_norm": residual_limit,
+            "min_response_samples": sample_limit,
+        },
+        "notes": [
+            "result paths are never opened; only the supplied artifact contract is checked",
+            "units and dimension order are explicit to prevent numerically plausible misinterpretation",
+            "a valid result envelope is necessary but insufficient for cross-solver numerical parity",
+        ],
+    }
+
+
 def nonlinear_constitutive_response_parity_gate(
     summary: dict[str, Any],
     *,

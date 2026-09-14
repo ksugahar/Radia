@@ -42,6 +42,7 @@ _nonlinear_magnetic_spatial_evidence_gate = lazy_callable(".field_profile_gate",
 _nonlinear_magnetic_refinement_energy_gate = lazy_callable(".field_profile_gate", "nonlinear_magnetic_refinement_energy_gate", __package__)
 _nonlinear_magnetic_field_energy_parity_gate = lazy_callable(".field_profile_gate", "nonlinear_magnetic_field_energy_parity_gate", __package__)
 _nonlinear_field_energy_identity_gate_v5 = lazy_callable(".field_profile_gate", "nonlinear_field_energy_identity_gate_v5", __package__)
+_nonlinear_field_energy_artifact_contract_gate_v6 = lazy_callable(".field_profile_gate", "nonlinear_field_energy_artifact_contract_gate_v6", __package__)
 _nonlinear_constitutive_response_parity_gate = lazy_callable(".field_profile_gate", "nonlinear_constitutive_response_parity_gate", __package__)
 _nonlinear_constitutive_point_sample_gate = lazy_callable(".field_profile_gate", "nonlinear_constitutive_point_sample_gate", __package__)
 _controlled_uniform_field_constitutive_sweep_gate = lazy_callable(".field_profile_gate", "controlled_uniform_field_constitutive_sweep_gate", __package__)
@@ -2407,6 +2408,22 @@ def nonlinear_field_energy_identity_gate_v5(summary_json: str) -> str:
     except (TypeError, ValueError, json.JSONDecodeError) as exc:
         result = {
             "policy": "nonlinear_field_energy_identity_gate_v5",
+            "status": "invalid_input",
+            "accepted": False,
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@_validation.tool()
+def nonlinear_field_energy_artifact_contract_gate_v6(summary_json: str) -> str:
+    """Gate completed result schema, units, finite samples, and response digest."""
+
+    try:
+        result = _nonlinear_field_energy_artifact_contract_gate_v6(json.loads(summary_json))
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        result = {
+            "policy": "nonlinear_field_energy_artifact_contract_gate_v6",
             "status": "invalid_input",
             "accepted": False,
             "error": str(exc),
