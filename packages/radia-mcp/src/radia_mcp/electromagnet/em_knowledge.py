@@ -204,6 +204,20 @@ coil = (CoilBuilder(current=2000)
 | `to_wire_segments()` | (segments, current) | Wire model for panels |
 | `combined_occ([other_coils])` | Fused OCC shape | Multi-coil STEP |
 
+## Neutral pole/coil exchange
+
+Use `electromagnet_shared_pole_coil_exchange` when a labelled magnetic body
+and a winding come from another authoring environment. The input is a strict
+SI contract with axis-aligned pole boxes plus rounded-rectangle racetracks.
+The tool returns the exact `CoilBuilder.rounded_rectangle_racetrack` arguments,
+a CoilBuilder-compatible geometry/excitation identity, and a `modelir`
+fragment. It rejects stale identity digests, current-density/current mismatch,
+left-handed frames, and unsupported geometry instead of approximating them.
+
+The exchange deliberately does not import a source tool's B-H interpolation.
+Nonlinear material response remains governed by the Radia/NGSolve material
+implementation and is compared through a separate constitutive-response gate.
+
 See also: `docs/complex_coil_geometry/complex_coil.ipynb` -- 8-segment beam-steering
 coil showcase using CoilBuilder add_straight/add_arc with a Biot-Savart field map.
 
