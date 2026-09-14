@@ -1,0 +1,20 @@
+{
+  "schema": "radia.team28-reference-regression.v1",
+  "host": "mdx2",
+  "python": "3.12.10",
+  "packages": {
+    "ngsolve": "6.2.2606",
+    "numpy": "2.4.3",
+    "scipy": "1.17.1",
+    "pytest": "9.1.1"
+  },
+  "threads": 2,
+  "exit_code": 0,
+  "elapsed_s": 48.099606700008735,
+  "input_sha256": {
+    "tests\\test_team28_cln_golden.py": "f19e9bf831772cefaddaa478287f7cda52c24a6db1ceb96ee2b087c279f001e2",
+    "docs\\maglev\\demos\\team28\\team28_cln_force.py": "d7a5dad5feee1eb91d71b1d46a82bd632da7ac11ac502a6d597686e2236bcea2",
+    "validation_test\\maglev\\team28_reference.json": "3562cd78badbc2fedeb5a0ad1f52f51b352097a55811e27f33b1129569578679"
+  },
+  "scope": "Exact Python source hashes; NGSolve axisymmetric FEM and CLN. No Radia native kernel, Cubit, transient motion acceptance or editable change."
+}
