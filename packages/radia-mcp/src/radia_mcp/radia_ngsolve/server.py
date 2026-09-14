@@ -857,7 +857,8 @@ def urn(topic: str = "all") -> str:
     Use to turn a frequency-domain absorbing-BC / dispersive-layer response into
     a stable broadband time-domain model.  For transient FEM/BEM or Maxwell
     solvers, topic="cq" explains the URN H(s) -> convolution-quadrature bridge.
-    Run the fit with the urn_fit tool.
+    urn_fit runs the existing Z-domain URNConfig/train_urn path, not the optional
+    34-basis Y-domain research route. Research counts and error budgets are not defaults.
     Ref: Sugahara & Sato, IEEE Access-format draft, 2026 (publication unverified);
     impl src/radia/urn, evidence docs/universal_relaxation_network.
 
@@ -875,12 +876,16 @@ def urn_fit(data_csv: str, freq_col: int = 0, real_col: int = 1,
             n_epochs: int = 2000, n_restarts: int = 3, spice_out: str = "") -> str:
     """
     Fit a complex frequency response with a Universal Relaxation Network and
-    return the discovered relaxation mechanisms, the fit NRMSE, and a SPICE
+    return model-assigned relaxation components, the fit NRMSE, and a SPICE
     netlist (== the auxiliary-ODE ladder for a time-domain / Newmark-beta solver).
 
-    Input is a CSV with columns (frequency_Hz, Re(Z), Im(Z)).  Requires torch;
+    NRMSE is RMS complex residual / RMS measured magnitude, not maximum error
+    or measurement precision. Components do not uniquely identify physical parts.
+    Input needs at least two samples with distinct columns, unique positive Hz,
+    and finite complex values. This uses the existing Z-domain model, not Y-URN.
+    Requires torch;
     training is iterative -- lower n_epochs / n_restarts for a faster, rougher
-    fit (defaults ~2000/3 are a responsive compromise; the paper uses 6000/10).
+    fit. SPICE synthesis failure is reported and does not create a netlist file.
 
     Args:
         data_csv: path to a CSV of the frequency response.
