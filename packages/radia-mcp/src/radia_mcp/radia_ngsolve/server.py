@@ -881,8 +881,9 @@ def urn_fit(data_csv: str, freq_col: int = 0, real_col: int = 1,
 
     NRMSE is RMS complex residual / RMS measured magnitude, not maximum error
     or measurement precision. Components do not uniquely identify physical parts.
-    Input needs at least two samples with distinct columns, unique positive Hz,
-    and finite complex values. This uses the existing Z-domain model, not Y-URN.
+    Input needs at least two samples with distinct columns, positive Hz,
+    and finite complex values. Repeated frequencies remain separate observations.
+    This uses the existing Z-domain model, not Y-URN.
     Requires torch;
     training is iterative -- lower n_epochs / n_restarts for a faster, rougher
     fit. SPICE synthesis failure is reported and does not create a netlist file.
