@@ -1,0 +1,101 @@
+{
+  "schema": "radia.docs.compute_recovery.v1",
+  "host": "mdx2",
+  "scope": "Curved HEX historical-export reload, check-vol, volume integration, Poisson solution and saved WebGUI scenes",
+  "command": "C:/temp/radia_mesh_webgui_20260914/env/Scripts/python.exe -u C:/temp/radia_mesh_webgui_20260914/execute_cubit_webgui.py",
+  "temporary_environment": "venv --system-site-packages; pip install nbclient nbformat ipykernel webgui_jupyter_widgets anywidget; ipykernel install --prefix <env> --name python3",
+  "remote_root": "C:/temp/radia_mesh_webgui_20260914",
+  "recovered_root": "C:\\temp\\radia_mesh_webgui_stage",
+  "recovery_hashes_compared_to_remote": true,
+  "artifacts": [
+    {
+      "name": "cubit_mesh_export_showcase.ipynb",
+      "sha256": "1dbc5014490a3cd0ff60d5055edf314f770c9daf23024efdbca9112bc31a8fdc"
+    },
+    {
+      "name": "cubit_mesh_webgui_results.json",
+      "sha256": "b503423473ab99370e3b41b1c135b0e99fe111c570a34412503502041a82cc3b"
+    },
+    {
+      "name": "hex_order_1.html",
+      "sha256": "416c03bf6fa628febad12ec1dd2c15cb0491d3f994583a16c2dcffa2f0f88e10"
+    },
+    {
+      "name": "hex_order_2.html",
+      "sha256": "14a8c7f81289519fa6ce7667ee132cf605a2f2351df49f5623224366eeba271e"
+    },
+    {
+      "name": "hex_order_3.html",
+      "sha256": "e8f070026a430ddffcdca064be6f5043499cb3bd84fc193cdf4bfbe68f8205cf"
+    },
+    {
+      "name": "poisson_field.html",
+      "sha256": "589ccd5ef9334fa5b0a93d09b075fe09bc5ba0385ebb70a7a3dd76c288c0b626"
+    }
+  ],
+  "execution_driver": "\"\"\"Foreground, isolated mdx notebook execution; recover outputs before cleanup.\"\"\"\nimport os\nfrom pathlib import Path\nimport sys\nos.environ['JUPYTER_PATH'] = str(Path(sys.prefix) / 'share/jupyter')\nos.environ['PYTHONIOENCODING'] = 'utf-8'\nimport nbformat\nfrom nbclient import NotebookClient\np=Path(__file__).parent/'docs/cubit_mesh_export/cubit_mesh_export_showcase.ipynb'\nn=nbformat.read(p,as_version=4)\nclient=NotebookClient(n,timeout=180,kernel_name='python3',resources={'metadata':{'path':str(p.parent)}})\nclient.execute()\nnbformat.write(n,p)\nprint('Executed:',p,flush=True)\n",
+  "code_cells": [
+    {
+      "id": "cubit-showcase-02",
+      "source": "from pathlib import Path\nfrom collections import Counter\nfrom datetime import datetime, timezone\nimport hashlib, json, math, platform, socket, sys\nfrom importlib.metadata import version\nfrom IPython.display import display, Markdown\nimport ngsolve as ng\nfrom ngsolve.webgui import Draw\nfrom cubit_mesh_export.check import check_consistency\n\nHERE = next(p for p in [Path.cwd(), Path.cwd() / 'docs/cubit_mesh_export']\n            if (p / 'hex_sphere_highorder/hexsph_o1.vol').exists())\nng.SetNumThreads(2)\nmeshes, mesh_records = {}, []\nfor order in (1, 2, 3):\n    path = HERE / 'hex_sphere_highorder' / f'hexsph_o{order}.vol'\n    report = check_consistency(str(path))\n    assert report['passed'], report\n    mesh = ng.Mesh(str(path))\n    meshes[order] = mesh\n    counts = dict(Counter(str(e.type) for e in mesh.Elements(ng.VOL)))\n    with ng.TaskManager():\n        volume = ng.Integrate(ng.CF(1), mesh, order=10)\n    mesh_records.append(dict(order=order, mesh_path=path.relative_to(HERE).as_posix(),\n        sha256=hashlib.sha256(path.read_bytes()).hexdigest(), elements=counts,\n        materials=list(mesh.GetMaterials()), boundaries=list(mesh.GetBoundaries()),\n        volume=volume, volume_error_percent=100*(volume/(4*math.pi*0.05**3/3)-1),\n        check_vol=report))\n    print('Geometry order:', order, 'elements:', counts, 'volume:', volume)\n    print('Materials:', mesh.GetMaterials(), 'boundaries:', mesh.GetBoundaries())\n    print('check-vol:', report['passed'], 'CAD reference:', report['cad_reference']['available'])\n",
+      "execution_count": 1
+    },
+    {
+      "id": "cubit-showcase-04",
+      "source": "mesh = meshes[1]\nscene = Draw(mesh, name=\"Cubit_HEX_geometry_order_1\", order=3,\n     draw_vol=True, draw_surf=True, width=\"100%\", height=\"480px\",\n     settings={\"Objects\": {\"Edges\": True, \"Wireframe\": True}})\nscene.GenerateHTML(filename=str(HERE / 'hex_order_1.html'))\n",
+      "execution_count": 2
+    },
+    {
+      "id": "cubit-showcase-06",
+      "source": "mesh = meshes[2]\nscene = Draw(mesh, name=\"Cubit_HEX_geometry_order_2\", order=3,\n     draw_vol=True, draw_surf=True, width=\"100%\", height=\"480px\",\n     settings={\"Objects\": {\"Edges\": True, \"Wireframe\": True}})\nscene.GenerateHTML(filename=str(HERE / 'hex_order_2.html'))\n",
+      "execution_count": 3
+    },
+    {
+      "id": "cubit-showcase-08",
+      "source": "mesh = meshes[3]\nscene = Draw(mesh, name=\"Cubit_HEX_geometry_order_3\", order=3,\n     draw_vol=True, draw_surf=True, width=\"100%\", height=\"480px\",\n     settings={\"Objects\": {\"Edges\": True, \"Wireframe\": True}})\nscene.GenerateHTML(filename=str(HERE / 'hex_order_3.html'))\n",
+      "execution_count": 4
+    },
+    {
+      "id": "cubit-showcase-10",
+      "source": "mesh = meshes[3]\nwith ng.TaskManager():\n    exact = ng.sin(8*ng.x)*ng.cos(6*ng.y)\n    fes = ng.H1(mesh, order=3, dirichlet=\".*\")\n    solution = ng.GridFunction(fes)\n    solution.Set(exact, ng.BND)\n    u, v = fes.TnT()\n    a = ng.BilinearForm(ng.grad(u)*ng.grad(v)*ng.dx).Assemble()\n    rhs = ng.LinearForm(100*exact*v*ng.dx).Assemble()\n    residual = rhs.vec - a.mat*solution.vec\n    solution.vec.data += a.mat.Inverse(fes.FreeDofs())*residual\n    l2_error = math.sqrt(ng.Integrate((solution-exact)**2, mesh, order=10))\nassert math.isfinite(l2_error)\nprint('H1 DOFs:', fes.ndof, 'L2 error:', l2_error)\nscene = Draw(solution, mesh, name=\"Manufactured_Poisson_solution\", order=3,\n     draw_vol=True, draw_surf=True, autoscale=True,\n     clipping={\"x\": 0, \"y\": 0, \"z\": 1, \"dist\": 0},\n     vectors=False, width=\"100%\", height=\"480px\")\n\nscene.GenerateHTML(filename=str(HERE / 'poisson_field.html'))\n\nevidence = dict(schema=\"radia.cubit_mesh_webgui.v1\",\n    generated_at_utc=datetime.now(timezone.utc).isoformat(),\n    host=socket.gethostname(), python_executable=sys.executable,\n    versions={p: version(p) for p in ['ngsolve', 'netgen-mesher', 'cubit-mesh-export', 'webgui-jupyter-widgets', 'anywidget']},\n    python_version=platform.python_version(), threads=2,\n    scope=\"Reload historical Cubit exports; check-vol, integrate and solve on mdx; no fresh Cubit export\",\n    meshes=mesh_records, poisson=dict(geometry_order=3, fe_order=3, ndof=fes.ndof, l2_error=l2_error))\n(HERE / 'cubit_mesh_webgui_results.json').write_text(json.dumps(evidence, indent=2), encoding='utf-8')\n",
+      "execution_count": 5
+    },
+    {
+      "id": "d6698102",
+      "source": "from pathlib import Path\nimport json\nfrom IPython.display import Markdown, display\n\ncandidates = [\n    Path('cubit_mesh_export_showcase_results.json'),\n    Path('docs/cubit_mesh_export/cubit_mesh_export_showcase_results.json'),\n]\nresult_path = next((p for p in candidates if p.exists()), None)\nassert result_path is not None, candidates\ndata = json.loads(result_path.read_text(encoding='utf-8'))\nsummary = data['summary']\nprint('result_json:', result_path)\nfor key in ['validation_script_count', 'validation_summary_count', 'python_script_count', 'asset_count']:\n    print(f'{key}: {summary[key]}')\nprint('high_order_hex_max_abs_error_percent:', summary['hex_high_order_max_abs_error_percent'])\nprint('poisson_error_drop_order1_to_3:', summary['hex_poisson_error_drop_ratio_order1_to_3'])\nassert summary['validation_script_count'] == 18\nassert summary['validation_summary_count'] == 18\nassert summary['all_validation_summaries_present'] is True",
+      "execution_count": 6
+    },
+    {
+      "id": "7ca46260",
+      "source": "rows = []\nfor rec in data['validation_records']:\n    payload = rec.get('summary') or {}\n    kind = payload.get('schema') or payload.get('kind') or rec['name'].replace('.py', '')\n    checks = payload.get('checks') if isinstance(payload, dict) else None\n    if isinstance(checks, dict):\n        check_preview = ', '.join(list(checks.keys())[:4])\n    else:\n        check_preview = ', '.join(rec.get('summary_keys', [])[:4])\n    rows.append((rec['path'], kind, rec['line_count'], check_preview))\n\nheader = '| Script | Summary kind | Lines | Representative keys |\\n|---|---|---:|---|'\nbody = [f'| `{path}` | `{kind}` | {lines} | {keys} |' for path, kind, lines, keys in rows]\ndisplay(Markdown('\\n'.join([header] + body)))",
+      "execution_count": 7
+    },
+    {
+      "id": "76ff3525",
+      "source": "def find_summary(name):\n    for rec in data['validation_records']:\n        if rec['name'] == name:\n            return rec['summary']\n    raise KeyError(name)\n\nnormal = find_summary('validation_vol_boundary_normal_vectors.py')\npressure = find_summary('validation_vol_boundary_pressure_resultant.py')\ntraction = find_summary('validation_vol_boundary_traction_moment.py')\nhealth = find_summary('validation_vol_mesh_health.py')\n\nprint('[boundary normals]')\nfor row in normal.get('builtin_boundary_rows', normal.get('rows', []))[:6]:\n    name = row.get('boundary') or row.get('name')\n    area = row.get('area') or row.get('surface_area')\n    vector = row.get('vector_area') or row.get('area_vector')\n    print(f'  {name}: area={area}, vector={vector}')\n\nprint('\\n[pressure resultant checks]')\nfor key, value in (pressure.get('checks') or pressure).items():\n    if 'force' in key or 'moment' in key or 'error' in key:\n        print(f'  {key}: {value}')\n\nprint('\\n[traction moment checks]')\nfor key, value in (traction.get('checks') or traction).items():\n    if 'force' in key or 'moment' in key or 'error' in key:\n        print(f'  {key}: {value}')\n\nprint('\\n[mesh health statuses]')\nfor row in health.get('rows', []):\n    print(f\"  {row.get('name')}: status={row.get('status')} ok={row.get('ok')}\")",
+      "execution_count": 8
+    },
+    {
+      "id": "08da8ea3",
+      "source": "volume_rows = data['hex_highorder']['volume_rows']\npoisson_rows = data['hex_highorder']['poisson_rows']\n\nheader = '| Order | HEX count | Sphere volume error | Poisson ndof | Poisson L2 error |\\n|---:|---:|---:|---:|---:|'\nbody = []\nfor v, p in zip(volume_rows, poisson_rows):\n    body.append(\n        f\"| {v['order']} | {p['hex']} | {v['error_percent']:+.3f}% | {p['ndof']} | {p['l2_error']:.3e} |\"\n    )\ndisplay(Markdown('\\n'.join([header] + body)))\n\nprint(data['hex_highorder']['volume_stdout'])\nprint(data['hex_highorder']['poisson_stdout'])\nassert max(abs(r['error_percent']) for r in volume_rows if r['order'] >= 2) < 1.0\nassert poisson_rows[2]['l2_error'] < poisson_rows[1]['l2_error'] < poisson_rows[0]['l2_error']",
+      "execution_count": 9
+    },
+    {
+      "id": "68a13409",
+      "source": "source_by_path = {rec['path']: rec.get('source') for rec in data['validation_records']}\n\ndef read_repo_relative_text(path):\n    for base in [Path.cwd(), *Path.cwd().parents]:\n        candidate = base / path\n        if candidate.exists():\n            return candidate.read_text(encoding='utf-8')\n    raise FileNotFoundError(path)\n\n# Non-validation showcase helpers are maintained as live docs files, not in a source archive.\nfor path in [\n    'docs/cubit_mesh_export/hex_sphere_highorder/hex_sphere_curved_ngsolve.py',\n]:\n    source_by_path.setdefault(path, read_repo_relative_text(path))\n\nfor path in [\n    'docs/cubit_mesh_export/hex_sphere_highorder/hex_sphere_curved_ngsolve.py',\n    'validation_test/cubit_mesh_export/validation_vol_boundary_normal_vectors.py',\n]:\n    src = source_by_path.get(path)\n    assert src, path\n    excerpt = '\\n'.join(src.splitlines()[:85])\n    display(Markdown(f'### `{path}`\\n```python\\n{excerpt}\\n```'))",
+      "execution_count": 10
+    }
+  ],
+  "checks": {
+    "pytest_passed": 23,
+    "mesh_check_vol_passed": 3,
+    "recoverable_widget_scenes": 4
+  },
+  "visual_review": "Not accepted: local-file browser policy prevented rendered visual QA; no workaround attempted.",
+  "diagnostics": [
+    "First run saved a missing-anywidget placeholder instead of scenes; installed anywidget in disposable environment and reran.",
+    "ipykernel emitted loopback TCP/no-encryption and Windows Proactor/selector-thread warnings; foreground execution completed."
+  ],
+  "numerical_evidence": "docs/cubit_mesh_export/cubit_mesh_webgui_results.json",
+  "cleanup_policy": "After committing numerical evidence and this receipt, delete the exact remote_root; LAB recovery retained by documentation maintenance until visual QA and docs commit."
+}
