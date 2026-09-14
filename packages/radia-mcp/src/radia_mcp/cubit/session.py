@@ -6,18 +6,18 @@ This module is version-agnostic: stdlib only, works on any Python
 
 Two transport modes share the same public API (call/ping/shutdown):
 
-    mode="gui"    (DEFAULT, Plan A — 2026-04-19 file-drop bootstrap)
+    mode="batch"  (DEFAULT for MCP/LLM execution)
+        ─ Launches Cubit's bundled Python with daemon.py
+        ─ Client ↔ Daemon communicate via line-delimited JSON-RPC on
+          stdin/stdout of the subprocess
+        ─ No GUI, no user interaction; pure headless
+
+    mode="gui"    (legacy/manual viewer integration only)
         ─ Launches `coreform_cubit.exe -nojournal bootstrap.py`
         ─ Bootstrap installs a QTimer inside Cubit's Qt event loop
         ─ Client ↔ Bootstrap communicate via atomically-renamed JSON
           files in a per-session drop directory (no sockets)
         ─ Cubit GUI window is live & user-interactive throughout
-
-    mode="batch"  (legacy, CI/scripting)
-        ─ Launches Cubit's bundled Python 3.10 with daemon.py
-        ─ Client ↔ Daemon communicate via line-delimited JSON-RPC on
-          stdin/stdout of the subprocess
-        ─ No GUI, no user interaction; pure headless
 
 Both modes preserve a persistent Cubit session across many client calls
 (~2 s cold start amortized) — launching per-call would be prohibitively
@@ -25,7 +25,7 @@ slow. A process-wide singleton (`CubitSession.get()`) holds the handle.
 
 Protocol version:
     v1 — stdio JSON-RPC (daemon.py)
-    v2 — file drop JSON-RPC (bootstrap.py, this module default)
+    v2 — file drop JSON-RPC (bootstrap.py, legacy GUI mode)
 
 The ready message echoes `protocol_version` for mutual compatibility.
 """
@@ -47,7 +47,7 @@ from pathlib import Path
 from typing import Any
 
 
-PROTOCOL_VERSION = 2  # default (gui mode)
+PROTOCOL_VERSION = 2  # file-drop protocol; stdio batch uses protocol v1
 
 # Startup timeouts (step 2 of 2026-04-21 speed fix).
 # License checkout: RLM server round-trip can take 30+ s on cold start;
@@ -429,17 +429,19 @@ def run_headless_journal(
     if bin_dir is None:
         return {
             "status": "error", "stage": "start", "kind": "environment",
+            "gui_started": False,
             "error": "Could not locate Coreform Cubit install",
         }
     console = bin_dir / "coreform_cubit.com"
     if not console.exists():
-        try:
-            console = _cubit_gui_exe(bin_dir)
-        except FileNotFoundError as exc:
-            return {
-                "status": "error", "stage": "start", "kind": "environment",
-                "error": str(exc),
-            }
+        return {
+            "status": "error", "stage": "start", "kind": "environment",
+            "gui_started": False,
+            "error": (
+                f"Headless Cubit console not found: {console}. "
+                "Refusing to fall back to the GUI launcher."
+            ),
+        }
 
     temp_root = (Path(os.environ.get("RADIA_MCP_TEMP", "C:/temp"))
                  if sys.platform == "win32"
@@ -453,6 +455,7 @@ def run_headless_journal(
         if not plugin_dir.is_dir():
             return {
                 "status": "error", "stage": "preflight", "kind": "input",
+                "gui_started": False,
                 "error": f"command plugin directory not found: {plugin_dir}",
             }
 
@@ -478,6 +481,7 @@ def run_headless_journal(
         except subprocess.TimeoutExpired as exc:
             return {
                 "status": "error", "stage": "timeout", "kind": "timeout",
+                "gui_started": False,
                 "error": f"Cubit headless journal exceeded {timeout_s}s",
                 "timeout_s": timeout_s,
                 "stdout_tail": (exc.stdout or "")[-4000:],
@@ -486,6 +490,7 @@ def run_headless_journal(
         except OSError as exc:
             return {
                 "status": "error", "stage": "start", "kind": "environment",
+                "gui_started": False,
                 "error": f"{type(exc).__name__}: {exc}",
             }
 
@@ -502,7 +507,7 @@ def run_headless_journal(
         ],
         "command_plugin_directory": str(plugin_dir) if plugin_dir else None,
         "user_init_loaded": plugin_dir is None,
-        "persistent_gui_started": False,
+        "gui_started": False,
         "command_count": len(commands),
         "stdout_tail": (proc.stdout or "")[-8000:],
         "stderr_tail": (proc.stderr or "")[-8000:],
@@ -523,7 +528,7 @@ class CubitSession:
     Thread-safe via an internal lock around each call.
 
     Usage:
-        session = CubitSession.get()   # mode="gui" by default
+        session = CubitSession.get()   # mode="batch" by default
         r = session.call("cmd", ["create brick x 10"])
         if r["ok"]:
             ...
@@ -531,7 +536,7 @@ class CubitSession:
 
     def __init__(self,
                  cubit_bin_dir: Path | None = None,
-                 mode: str = "gui"):
+                 mode: str = "batch"):
         self._bin_dir = cubit_bin_dir or find_cubit_install()
         if self._bin_dir is None:
             raise CubitSessionError(
@@ -569,6 +574,14 @@ class CubitSession:
         # records {ts, line, ok} for every op=="cmd" line sent.
         self._command_history: list[dict] = []
         self._command_history_max = 20000
+
+        # Cubit's own command record is the provenance source of truth.  The
+        # in-memory response history above is retained only for diagnostics
+        # (not for reconstructing a journal).  A new file is started after
+        # each daemon generation so recovery never splices unlike sessions.
+        self._native_journal_path: Path | None = None
+        self._native_journal_paths: list[Path] = []
+        self._native_journal_error: str | None = None
 
         # batch-mode (stdio) stderr retention
         self._stderr_tail: list[bytes] = []
@@ -714,6 +727,7 @@ class CubitSession:
         self._proc = None
         self._ready_info = None
         self._owned = False
+        self._native_journal_path = None
         return report
 
     def is_alive(self) -> bool:
@@ -761,6 +775,8 @@ class CubitSession:
         with self._lock:
             try:
                 self.ensure_started()
+                if op == "cmd" and self._mode == "batch":
+                    self._start_native_journal_locked(timeout_s=timeout_s)
                 req_id = self._next_id
                 self._next_id += 1
                 req = {
@@ -773,6 +789,9 @@ class CubitSession:
                     resp = self._call_via_filedrop(req, timeout_s=timeout_s)
                 else:
                     resp = self._call_via_stdio(req, timeout_s=timeout_s)
+                if isinstance(resp, dict):
+                    resp.setdefault("execution_mode", self._mode)
+                    resp.setdefault("gui_started", self._mode == "gui")
                 if op == "cmd":
                     self._record_cmd_history(resp)
                 return resp
@@ -786,6 +805,73 @@ class CubitSession:
         if isinstance(resp, dict):
             resp.setdefault("_recovered", True)
         return resp
+
+    def _start_native_journal_locked(self, timeout_s: float) -> None:
+        """Start Cubit's native ``record \"file\"`` stream once per daemon.
+
+        Caller holds ``self._lock``.  Cubit 2025.12 does not accept the older
+        ``record journal ... overwrite`` spelling; the destination must be a
+        fresh path.  Failing closed prevents an apparently reproducible AI
+        session whose journal was actually reconstructed from RPC responses.
+        """
+        if getattr(self, "_native_journal_path", None) is not None:
+            return
+        paths = getattr(self, "_native_journal_paths", None)
+        if paths is None:
+            paths = self._native_journal_paths = []
+        temp_root = (Path(os.environ.get("RADIA_MCP_TEMP", "C:/temp"))
+                     if sys.platform == "win32"
+                     else Path(tempfile.gettempdir()))
+        journal_dir = temp_root / "radia-mcp" / "cubit-journals"
+        journal_dir.mkdir(parents=True, exist_ok=True)
+        generation = len(paths) + 1
+        path = journal_dir / (
+            f"ai-{self._client_id}-generation-{generation:03d}.jou")
+        if path.exists():
+            raise CubitSessionError(
+                f"refusing to overwrite native Cubit journal: {path}")
+        command = f'record "{str(path).replace(chr(92), "/")}"'
+        req_id = self._next_id
+        self._next_id += 1
+        request = {
+            "id": req_id,
+            "op": "cmd",
+            "args": [command],
+            "protocol_version": 1,
+        }
+        response = self._call_via_stdio(request, timeout_s=timeout_s)
+        per_line = response.get("result") if isinstance(response, dict) else None
+        ok = bool(response.get("ok")) if isinstance(response, dict) else False
+        ok = ok and isinstance(per_line, list) and bool(per_line)
+        ok = ok and bool(per_line[0].get("ok"))
+        if not ok:
+            self._native_journal_error = (
+                f"Cubit rejected {command!r}: {response!r}")
+            raise CubitSessionError(self._native_journal_error)
+        self._native_journal_path = path
+        paths.append(path)
+        self._native_journal_error = None
+
+    def native_journal_snapshot(self) -> dict:
+        """Return Cubit-recorded journal generations without starting Cubit."""
+        paths = list(getattr(self, "_native_journal_paths", []))
+        chunks: list[str] = []
+        readable: list[str] = []
+        errors: list[str] = []
+        for path in paths:
+            try:
+                chunks.append(path.read_text(encoding="utf-8-sig"))
+                readable.append(str(path))
+            except OSError as exc:
+                errors.append(f"{path}: {exc}")
+        return {
+            "journal": "\n".join(chunk.rstrip("\n") for chunk in chunks)
+                       + ("\n" if chunks else ""),
+            "paths": readable,
+            "generation_count": len(paths),
+            "errors": errors,
+            "recording_error": getattr(self, "_native_journal_error", None),
+        }
 
     def _record_cmd_history(self, resp) -> None:
         """Append per-line results of an op=="cmd" response to the
@@ -822,6 +908,7 @@ class CubitSession:
         Killing an attached-but-hung daemon requires the explicit
         `cubit_session_shutdown` tool, not an implicit retry path.
         """
+        self._native_journal_path = None
         proc = self._proc
         if proc is not None and proc.poll() is None:
             try:
@@ -922,8 +1009,8 @@ class CubitSession:
         if session_mode == "existing" and existing is None:
             raise CubitSessionError(
                 f"RADIA_CUBIT_SESSION_MODE=existing but no live shared "
-                f"Cubit daemon was found at {drop}. Start one (any "
-                "cubit_show/cubit_exec in auto mode), or switch the mode.")
+                f"Cubit daemon was found at {drop}. This is a manual-only "
+                "GUI transport; MCP tools cannot start or attach to it.")
         if existing is not None:
             self._drop_dir = drop
             self._outbox = outbox
@@ -1299,12 +1386,23 @@ class CubitSession:
     # ---- singleton access ----
 
     @classmethod
-    def get(cls, mode: str = "gui") -> "CubitSession":
-        """Return the process-wide singleton, creating on first call."""
+    def get(cls, mode: str = "batch") -> "CubitSession":
+        """Return a mode-consistent process-wide singleton.
+
+        A caller requesting headless execution must never inherit a GUI
+        singleton created elsewhere in the process.
+        """
         global _SINGLETON
         with _SESSION_LOCK:
             if _SINGLETON is None:
                 _SINGLETON = cls(mode=mode)
+            elif _SINGLETON._mode != mode:
+                raise CubitSessionError(
+                    f"Cubit singleton already uses mode={_SINGLETON._mode!r}; "
+                    f"refusing requested mode={mode!r}. Use "
+                    "cubit_session_shutdown to reset the MCP-owned session "
+                    "before changing execution mode."
+                )
             return _SINGLETON
 
     @classmethod
