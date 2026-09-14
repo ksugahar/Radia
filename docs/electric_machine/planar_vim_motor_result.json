@@ -1,17 +1,17 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-07-03T14:00:45Z",
-  "notebook": "docs/electric_machine/planar_vim_motor.ipynb",
-  "notebook_sha256": "10321df14dfd186319453ba353bae2e3b1a9191919335d66de2b544b063dce6b",
+  "generated_at_utc": "2026-09-14T02:51:22Z",
+  "notebook": "planar_vim_motor.ipynb",
+  "notebook_sha256": "fa1d087da168362d56dde0d5d7d0fda02c0bfe516d81b5e2417fe32e74431bde",
   "versions": {
     "python_version": "3.12.10",
-    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "python_executable_name": "python.exe",
     "platform": "Windows-2022Server-10.0.20348-SP0",
-    "radia_mcp_version": "1.4.3",
-    "radia_version": "4.95.5"
+    "radia_mcp_version": "1.4.39",
+    "radia_version": "4.95.91"
   },
   "summary": {
-    "path": "docs/electric_machine/planar_vim_motor.ipynb",
+    "path": "planar_vim_motor.ipynb",
     "cells": 14,
     "code_cells": 7,
     "executed_code_cells": 7,
@@ -19,6 +19,20 @@
     "output_count": 29,
     "error_output_count": 0,
     "result_saved": true,
+    "notebook_role": "",
+    "webgui_required": false,
+    "webgui_field_required": false,
+    "webgui_import_present": false,
+    "webgui_draw_present": false,
+    "webgui_draw_cell_count": 0,
+    "executed_webgui_draw_cell_count": 0,
+    "webgui_draw_cells_with_rich_outputs": 0,
+    "webgui_ready": true,
+    "parameterized_field_draw_present": false,
+    "parameterized_field_draw_cell_count": 0,
+    "executed_parameterized_field_draw_cell_count": 0,
+    "parameterized_field_draw_cells_with_rich_outputs": 0,
+    "webgui_field_ready": true,
     "metadata_keys": [
       "kernelspec",
       "language_info"
@@ -28,15 +42,15 @@
     {
       "cell_index": 1,
       "execution_count": 1,
-      "source_sha256": "73d6672aa9ce02e6658f51055bd3b804832b60ad34cecad2ad54ae71865ee023",
-      "source_preview": "import json, platform, time\nimport numpy as np\nimport matplotlib.pyplot as plt\nimport ngsolve as ng\nfrom netgen.occ import WorkPlane, OCCGeometry\nimport radia\nfrom radia.vim import hdiv_demag_solve, PlanarDemagBody, maxwell_torque_circle\nimport planar_vim_motor_helpers as H\n\nRESULTS = {\"radia_version\": radia.__version__, \"platform\": platform.platform()}\nprint(\"radia\", radia.__version__, \"| numpy\", np.__version__)",
+      "source_sha256": "013c59969e9292a656d17a4fcb38a969eeffc9eca972e83aa70d10e69efc8082",
+      "source_preview": "import json, platform, time\nimport numpy as np\nimport matplotlib.pyplot as plt\nimport ngsolve as ng\nfrom netgen.occ import WorkPlane, OCCGeometry\nimport radia\nfrom radia.vim import Solve, PlanarDemagBody, maxwell_torque_circle\nimport planar_vim_motor_helpers as H\n\nRESULTS = {\"radia_version\": radia.__version__, \"platform\": platform.platform()}\nprint(\"radia\", radia.__version__, \"| numpy\", np.__version__)",
       "outputs": [
         {
           "output_type": "stream",
           "name": "stdout",
-          "text_chars": 27,
-          "text_sha256": "47af502626bc65096739e59fe50eae283acd1ae56777c7d02d0e7bde02378eea",
-          "text_preview": "radia 4.95.5 | numpy 2.4.6\n",
+          "text_chars": 28,
+          "text_sha256": "ca6a407a404f431090feac7d9ea11d740ae916d5cf9dd49e0183408f5443180c",
+          "text_preview": "radia 4.95.91 | numpy 2.4.3\n",
           "text_truncated": false
         }
       ]
@@ -44,8 +58,8 @@
     {
       "cell_index": 3,
       "execution_count": 2,
-      "source_sha256": "2a5b969d42c49334e99d351c41dd52679419eaf205c9781cf612d0213dd68415",
-      "source_preview": "wp = WorkPlane().Circle(0, 0, 1.0).Face()\nmesh_disk = ng.Mesh(OCCGeometry(wp, dim=2).GenerateMesh(maxh=0.3))\ntab = H.bh_table()\nrows = []\nfor H0 in (1e3, 1e4, 1e5, 1e6):\n    with ng.TaskManager():\n        res = hdiv_demag_solve(mesh_disk, None, ng.CoefficientFunction((H0, 0.0)), bh_table=tab)\n    Mref = H.fixed_point_disk(H0)\n    rel = abs(res[\"M_avg\"][0] - Mref) / Mref\n    rows.append({\"H0\": H0, \"M_vim\": res[\"M_avg\"][0], \"M_ref\": Mref, \"rel\": rel,\n                 \"iters\": res[\"iters\"], \"M_over_Msat\": res[\"M_avg\"][0] / H.MSAT})\n    print(f\"H0={H0:8.0e}: M={res['M_avg'][0]:12.1f}  ref={Mref:12.1f}  rel={rel:.2e}\"\n          f\"  M/Msat={res['M_avg'][0]/H.MSAT:.3f}  picard={res['iters']}\")\n    assert rel < 1e-3\nRESULTS[\"disk_deep_saturation\"] = rows",
+      "source_sha256": "88f83fc929f27494f61b112f40e7c719cd21b161908ece9f1977ea06171df03a",
+      "source_preview": "wp = WorkPlane().Circle(0, 0, 1.0).Face()\nmesh_disk = ng.Mesh(OCCGeometry(wp, dim=2).GenerateMesh(maxh=0.3))\ntab = H.bh_table()\nrows = []\nfor H0 in (1e3, 1e4, 1e5, 1e6):\n    with ng.TaskManager():\n        res = Solve(mesh_disk, None, ng.CoefficientFunction((H0, 0.0)), bh_table=tab)\n    Mref = H.fixed_point_disk(H0)\n    rel = abs(res[\"M_avg\"][0] - Mref) / Mref\n    rows.append({\"H0\": H0, \"M_vim\": res[\"M_avg\"][0], \"M_ref\": Mref, \"rel\": rel,\n                 \"iters\": res[\"iters\"], \"M_over_Msat\": res[\"M_avg\"][0] / H.MSAT})\n    print(f\"H0={H0:8.0e}: M={res['M_avg'][0]:12.1f}  ref={Mref:12.1f}  rel={rel:.2e}\"\n          f\"  M/Msat={res['M_avg'][0]/H.MSAT:.3f}  picard={res['iters']}\")\n    assert rel < 1e-3\nRESULTS[\"disk_deep_saturation\"] = rows",
       "outputs": [
         {
           "output_type": "stream",
@@ -90,9 +104,9 @@
         {
           "output_type": "stream",
           "name": "stdout",
-          "text_chars": 138,
-          "text_sha256": "8d5291b52f00aa8dfd4bf3b534e7f96e5623fe15880b52ac1c6652cba1e94d6e",
-          "text_preview": "N built once: 0.31 s;  per-angle solve: 27 ms  (no rebuild, no remesh)\n3-way torque agreement: volume 0.68%, Maxwell circle 1.49% of Tmax\n",
+          "text_chars": 139,
+          "text_sha256": "8574a49f9c96d6604765b319a6ae082605204ed7e2e0f2ffebed101f2488b9b7",
+          "text_preview": "N built once: 0.12 s;  per-angle solve: 126 ms  (no rebuild, no remesh)\n3-way torque agreement: volume 0.68%, Maxwell circle 1.49% of Tmax\n",
           "text_truncated": false
         },
         {
@@ -343,8 +357,8 @@
           "output_type": "stream",
           "name": "stdout",
           "text_chars": 3001,
-          "text_sha256": "37ff42beaee8c861c586b0d74e953ca35475390a72b638361d1a2290eb385c18",
-          "text_preview": "{\n \"radia_version\": \"4.95.5\",\n \"platform\": \"Windows-2022Server-10.0.20348-SP0\",\n \"disk_deep_saturation\": [\n  {\n   \"H0\": 1000.0,\n   \"M_vim\": 1996.6012840799206,\n   \"M_ref\": 1996.0013462089573,\n   \"rel\": 0.00030056987291251293,\n   \"iters\": 4,\n   \"M_over_Msat\": 0.0016638344033999338\n  },\n  {\n   \"H0\": 10000.0,\n   \"M_vim\": 19965.404061155117,\n   \"M_ref\": 19959.405994480112,\n   \"rel\": 0.00030051328564908433,\n   \"iters\": 6,\n   \"M_over_Msat\": 0.016637836717629265\n  },\n  {\n   \"H0\": 100000.0,\n   \"M_vim\": 199581.19917032152,\n   \"M_ref\": 199521.3777725824,\n   \"rel\": 0.00029982450205059567,\n   \"iters\": 10,\n   \"M_over_Msat\": 0.16631766597526793\n  },\n  {\n   \"H0\": 1000000.0,\n   \"M_vim\": 1196422.9916173543,\n   \"M_ref\": 1196426.6807211721,\n   \"rel\": 3.083434929398576e-06,\n   \"iters\": 10,\n   \"M_over_Msat\": 0.9970191596811286\n  }\n ],\n \"ellipse_torque\": {\n  \"rows\": [\n   {\n    \"theta\": 0.0,\n    \"T_ref\": 0.0,\n    \"T_vol\": -0.20103183774216157,\n    \"T_mx\": -0.19938928274595336\n   },\n   {\n    \"theta\": 15.0,\n    \"T_ref\": 294.7603838834776,\n    \"T_vol\": 292.58087532144543,\n    \"T_mx\": 290.1903078175639\n   },\n   {\n    \"theta\": 30.0,\n    \"T_ref\": 510.5399609446897,\n    \"T_vol\": 506.96597321746043,\n    \"T_mx\": 502.8237462868184\n   },\n   {\n    \"theta\": 45.0,\n    \"T_ref\": 589.5207677669555,\n    \"T_vol\": 585.509947999799,\n    \"T_mx\": 580.7259680033286\n   },\n   {\n    \"theta\": 60.0,\n    \"T_ref\": 510.5399609446897,\n    \"T_vol\": 507.16700505520276,\n    \"T_mx\": 503.0231355695648\n   },\n   {\n    \"theta\": 75.0,\n    \"T_ref\": 294.7603838834777,\n    \"T_vol\": 292.92907267835386,\n    \"T_mx\": 290.53566018576475\n   },\n   {\n    \"theta\": 90.0,\n    \"T_ref\": 7.219547212766918e-14,\n    \"T_vol\": 0.20103183774224673,\n    \"T_mx\": 0.19938928274625456\n   }\n  ],\n  \"t_build_s\": 0.3116958999999042,\n  \"t_per_angle_ms\": 26.60657142847153,\n  \"max_rel_volume\": 0.006803525823778953,\n  \"max_rel_maxwell\": 0.014918557995744049\n },\n \"salient_bar_motor\": {\n  \"rows\": [\n   {\n    \"theta\": 0.0,\n    \"T_vim\": 11.892291416446183,\n    \"T_fem\": -25.526285544671335,\n    \"picard\": 68,\n    \"newton\": 9\n   },\n   {\n    \"theta\": 15.0,\n    \"T_vim\": -1807.2593056142016,\n    \"T_fem\": -1801.8284781226935,\n    \"picard\": 50,\n    \"newton\": 9\n   },\n   {\n    \"theta\": 30.0,\n    \"T_vim\": -3472.996109832021,\n    \"T_fem\": -3498.293288216497,\n    \"picard\": 54,\n    \"newton\": 9\n   },\n   {\n    \"theta\": 45.0,\n    \"T_vim\": -4243.980481167261,\n    \"T_fem\": -4230.309627142192,\n    \"picard\": 44,\n    \"newton\": 9\n   },\n   {\n    \"theta\": 60.0,\n    \"T_vim\": -3509.5494960861024,\n    \"T_fem\": -3538.321188349239,\n    \"picard\": 42,\n    \"newton\": 8\n   },\n   {\n    \"theta\": 75.0,\n    \"T_vim\": -1774.876177372022,\n    \"T_fem\": -1782.8002470235506,\n    \"picard\": 39,\n    \"newton\": 8\n   },\n   {\n    \"theta\": 90.0,\n    \"T_vim\": -0.3399388898629774,\n    \"T_fem\": 53.97931766457515,\n    \"picard\": 40,\n    \"newton\": 7\n   }\n  ],\n  \"mean_rel\": 0.0058365351328409235,\n  \"max_rel\": 0.012840491912440412\n },\n \"rotating_cylinder\": {\n  \"rows\": [\n   {\n    \"omega\": 0.3,\n    \"T_analytic\"\n",
+          "text_sha256": "f7c344a04349b71bfbcc101eedefd39c3425ea73728bbfef709032d1d05ca59f",
+          "text_preview": "{\n \"radia_version\": \"4.95.91\",\n \"platform\": \"Windows-11-10.0.26200-SP0\",\n \"disk_deep_saturation\": [\n  {\n   \"H0\": 1000.0,\n   \"M_vim\": 1996.601284068939,\n   \"M_ref\": 1996.0013462089573,\n   \"rel\": 0.00030056986741077996,\n   \"iters\": 4,\n   \"M_over_Msat\": 0.0016638344033907827\n  },\n  {\n   \"H0\": 10000.0,\n   \"M_vim\": 19965.403986965903,\n   \"M_ref\": 19959.405994480112,\n   \"rel\": 0.0003005095686439529,\n   \"iters\": 6,\n   \"M_over_Msat\": 0.01663783665580492\n  },\n  {\n   \"H0\": 100000.0,\n   \"M_vim\": 199581.19783627836,\n   \"M_ref\": 199521.3777725824,\n   \"rel\": 0.0002998178158339287,\n   \"iters\": 10,\n   \"M_over_Msat\": 0.1663176648635653\n  },\n  {\n   \"H0\": 1000000.0,\n   \"M_vim\": 1196422.9913268576,\n   \"M_ref\": 1196426.6807211721,\n   \"rel\": 3.0836777330280595e-06,\n   \"iters\": 10,\n   \"M_over_Msat\": 0.997019159439048\n  }\n ],\n \"ellipse_torque\": {\n  \"rows\": [\n   {\n    \"theta\": 0.0,\n    \"T_ref\": 0.0,\n    \"T_vol\": -0.20103182851958354,\n    \"T_mx\": -0.19938927359867822\n   },\n   {\n    \"theta\": 15.0,\n    \"T_ref\": 294.7603838834776,\n    \"T_vol\": 292.5808753215484,\n    \"T_mx\": 290.19030781766617\n   },\n   {\n    \"theta\": 30.0,\n    \"T_ref\": 510.5399609446897,\n    \"T_vol\": 506.9659732173026,\n    \"T_mx\": 502.82374628666236\n   },\n   {\n    \"theta\": 45.0,\n    \"T_ref\": 589.5207677669555,\n    \"T_vol\": 585.5099479993083,\n    \"T_mx\": 580.7259680028424\n   },\n   {\n    \"theta\": 60.0,\n    \"T_ref\": 510.5399609446897,\n    \"T_vol\": 507.16700505440093,\n    \"T_mx\": 503.02313556876976\n   },\n   {\n    \"theta\": 75.0,\n    \"T_ref\": 294.7603838834777,\n    \"T_vol\": 292.9290726770047,\n    \"T_mx\": 290.5356601844269\n   },\n   {\n    \"theta\": 90.0,\n    \"T_ref\": 7.219547212766918e-14,\n    \"T_vol\": 0.20103183491233098,\n    \"T_mx\": 0.19938927993922437\n   }\n  ],\n  \"t_build_s\": 0.12006490002386272,\n  \"t_per_angle_ms\": 125.512371430107,\n  \"max_rel_volume\": 0.006803525824611277,\n  \"max_rel_maxwell\": 0.01491855799656885\n },\n \"salient_bar_motor\": {\n  \"rows\": [\n   {\n    \"theta\": 0.0,\n    \"T_vim\": 11.892292004912779,\n    \"T_fem\": -25.526285544677226,\n    \"picard\": 68,\n    \"newton\": 9\n   },\n   {\n    \"theta\": 15.0,\n    \"T_vim\": -1807.2593073757782,\n    \"T_fem\": -1801.828478122692,\n    \"picard\": 50,\n    \"newton\": 9\n   },\n   {\n    \"theta\": 30.0,\n    \"T_vim\": -3472.9961237177417,\n    \"T_fem\": -3498.293288216497,\n    \"picard\": 54,\n    \"newton\": 9\n   },\n   {\n    \"theta\": 45.0,\n    \"T_vim\": -4243.980480061357,\n    \"T_fem\": -4230.309627142195,\n    \"picard\": 44,\n    \"newton\": 9\n   },\n   {\n    \"theta\": 60.0,\n    \"T_vim\": -3509.5495020351736,\n    \"T_fem\": -3538.3211883492413,\n    \"picard\": 42,\n    \"newton\": 8\n   },\n   {\n    \"theta\": 75.0,\n    \"T_vim\": -1774.8761796924725,\n    \"T_fem\": -1782.8002470235454,\n    \"picard\": 39,\n    \"newton\": 8\n   },\n   {\n    \"theta\": 90.0,\n    \"T_vim\": -0.33994003883228835,\n    \"T_fem\": 53.97931766457123,\n    \"picard\": 40,\n    \"newton\": 7\n   }\n  ],\n  \"mean_rel\": 0.005836534465475517,\n  \"max_rel\": 0.012840492184043546\n },\n \"rotating_cylinder\": {\n  \"rows\": [\n   {\n    \"omega\": 0.3,\n    \"T_analytic\": 2.0606425\n",
           "text_truncated": false
         }
       ]
