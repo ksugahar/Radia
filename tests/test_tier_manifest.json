@@ -14,7 +14,8 @@
     "validation_test/esrf_three_engine/run_coil_yoke_three_engine.py": ["tests/test_esrf_three_engine_finite_gate.py", "tests/test_esrf_mixed_quadrature_wiring.py"],
     "validation_test/c_type_three_engine/run_three_engine.py": ["tests/test_esrf_mixed_quadrature_wiring.py", "tests/test_esrf_three_engine_finite_gate.py", "tests/test_hdiv_newton_failure_contract.py"],
     "validation_test/quadrupole_cefc2020/run_qmag_hdiv.py": ["tests/test_esrf_three_engine_finite_gate.py", "tests/test_hdiv_newton_failure_contract.py"],
-    "validation_test/omega_quadrature/": ["tests/test_omega_block_action_diagnostics.py"],
+    "validation_test/omega_quadrature/": ["tests/test_omega_block_action_diagnostics.py", "tests/test_omega_quadrature_plateau.py"],
+    "validation_test/esrf_three_engine/results/candidate_59b094d8/": ["tests/test_omega_quadrature_plateau.py", "tests/test_esrf6_repaired_acceptance_record.py"],
     "validation_test/feec/check_wedge_charge_pullback.py": ["tests/test_wedge_charge_pullback_contract.py"],
     "src/matlab/radia_mex.cpp": ["tests/test_sparsesolv_matlab_contract.py"],
     "matlab/+radia/+sparsesolv/": ["tests/test_sparsesolv_matlab_contract.py"],
@@ -46,6 +47,8 @@
       "max_elapsed_seconds": 60,
       "paths": [
         "tests/test_ci_execution_policy.py",
+        "tests/test_omega_quadrature_plateau.py",
+        "tests/test_esrf6_repaired_acceptance_record.py",
         "tests/test_ci_monitor.py",
         "tests/test_mdx_runner_pool.py",
         "tests/test_release_quad_optuna_candidate.py",
