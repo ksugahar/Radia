@@ -56,7 +56,7 @@ build123d script  →  STEP  →  Cubit hex mesh  →  .msh v4.1 / .vol  →  ng
    AI authors                   AI iterates safely
    (Builder API)                 (auto-checkpoint
                                   + batch dry-run
-                                  + live GUI replay)
+                                  + persistent headless replay)
 ```
 
 What makes it different from typical CAD-MCP servers (FreeCAD, OpenSCAD,
@@ -64,7 +64,7 @@ Blender):
 
 - **Test-then-reflect safety pattern**: every risky operation
   auto-checkpoints to `.cub5`, runs in a disposable batch Cubit first,
-  reflects to the live GUI only when batch passes cleanly. The user
+  applies to the persistent headless session only when batch passes cleanly. The user
   watches success paths, not failures.
 - **Scheme ladder with geometry split**: `cubit_mesh_auto` walks
   `auto → sweep → polyhedron → tetmesh`, auto-detects compound bodies
@@ -148,7 +148,7 @@ in one call:
 3. cubit_batch_try (headless): scheme ladder
    ├─ auto → 1668 hex / 0 tet ✓ WIN
    └─ (sweep / polyhedron / tetmesh skipped)
-4. live Cubit GUI replay → user sees the winning recipe execute
+4. persistent headless replay → artifacts and diagnostics record the winner
 5. .cub5 checkpoint preserved for rollback
 ```
 
@@ -405,34 +405,35 @@ flags FreeCAD as `friendly`, others as `compat`.
 
 ---
 
-## Design pattern: Checkpoint-Batch-Commit-Race (CBCR)
+## Cubit execution contract
 
-The signature workflow `cubit_mesh_race_with_human` realizes a
-publishable design pattern we call **CBCR**: the user and *N* AI
-agents race the same starting state; first-to-finish wins; the
-human's in-progress work is never silently overwritten.
+Execution and handoff are separate. Humans can edit in their own Cubit GUI
+and save a `.jou`; `cubit_import_journal(path)` reads it without executing
+commands or attaching to that process. `cubit_session_journal` exports the
+AI session's actual Cubit-native `record "file"` journal for human review,
+including its APREPRO definitions. Imported candidates are exact command
+differences against that native AI journal, not a reconstruction from RPC
+responses or proof of authorship. Both originals, exclusions, and hashes remain.
+Review the source and checkpoint before an explicit headless replay.
+`cubit_stage` loads artifacts into the headless session; `cubit_snapshot`
+reports unavailable rendering and never opens a window.
 
-Full design document (defensive prior-art publication, BSD-3-Clause):
-[`docs/design/checkpoint_batch_commit_race.md`](docs/design/checkpoint_batch_commit_race.md).
+Every Cubit operation initiated through an LLM or MCP runs with
+`-batch -nographics`. The server never launches or attaches to
+`coreform_cubit.exe` and never opens a Cubit window. Interactive GUI use is a
+separate, human-owned workflow; LLM runs communicate through STEP, SAT,
+`.cub5`, `.jou`, `.vol`, Gmsh, log, and result artifacts.
 
-## Architecture (Plan A)
+The server combines two headless channels:
 
-The Cubit server uses **Plan A**: launch
-`coreform_cubit.exe -nojournal cubit_bootstrap.py`, which installs a
-PySide6 `QTimer` (200 ms poll) inside Cubit's Qt event loop. The MCP
-side drops `*.req.json` into a temp directory; the bootstrap polls,
-runs `cubit.cmd()` on the Qt main thread, and writes `out/*.resp.json`
-back. **No sockets, no pipes** — just atomically-renamed JSON files.
+1. Candidate recipes run in isolated `coreform_cubit.com` processes.
+2. Accepted recipes may be replayed in an MCP-owned persistent headless session.
+3. Every response reports `execution_mode` and `gui_started=false`.
+4. Missing console/headless support fails loudly instead of falling back to GUI.
 
-This sidesteps every ABI / event-loop / GIL issue the COMSOL-style
-"external Python + library load" approach hits.
-
-`cubit_exec_safely` adds a second safety layer on top:
-
-1. Auto-`save as` the live GUI state to `~/.cubit_viewer/checkpoints/autosafe_<ts>.cub5`.
-2. Spawn a fresh batch Cubit, `open` the checkpoint, run candidate commands.
-3. If batch passes (and `cubit.get_error_count()` didn't tick up — silent-error guard), replay on the live GUI.
-4. Otherwise: live GUI untouched, checkpoint label returned for `cubit_restore`.
+`cubit_exec_safely` checkpoints the persistent session, verifies candidate
+commands in an isolated batch process, then applies only a successful recipe
+to the persistent headless session.
 
 ---
 
@@ -445,13 +446,13 @@ build123d_to_cubit_hex(
     script=generate_build123d_script("helix_coil")["script"],
     target_size=1.0,
     prefer="hex",
-    commit_to_gui=True,
+    apply_to_session=True,
 )
-# ⇒ STEP exported → batch ladder picks scheme auto → live Cubit GUI
-#   shows 1668 hex / 0 tet / 3780 nodes
+# ⇒ STEP exported → batch ladder picks scheme auto → persistent headless
+#   session reports 1668 hex / 0 tet / 3780 nodes
 ```
 
-### Safe Cubit live edit
+### Safe persistent-session edit
 
 ```python
 cubit_exec_safely(commands=[
@@ -459,8 +460,8 @@ cubit_exec_safely(commands=[
     "volume all scheme tetmesh",
     "mesh volume all",
 ])
-# ⇒ auto-checkpoint → batch dry-run → only on pass: live GUI mesh
-#   if dry-run fails, GUI is untouched + rollback label returned
+# ⇒ auto-checkpoint → batch dry-run → only on pass: persistent-session mesh
+#   if dry-run fails, persistent state is untouched + rollback label returned
 ```
 
 ### Search any layer of knowledge

@@ -56,6 +56,8 @@ def _run_heat(wp_vol, tmp_path):
     cmd = [sys.executable, CALC_HEAT,
            "--wp-vol", wp_vol,
            "--q-uniform", "1.0e6",
+           "--heat-flux-boundaries", "outer",
+           "--convection-boundaries", "outer",
            "--dt", "1.0", "--t-end", "1.0",
            "--output", str(tmp_path / "heat.json"),
            "--msh-output", str(tmp_path / "heat_T.msh")]

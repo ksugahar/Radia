@@ -5,6 +5,38 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.92 - Corrected axisymmetric IH thermal handoff
+
+Released 2026-09-14.
+
+- Corrected the 3D-EM-to-2D-axisymmetric-heat surface-loss projection to
+  evaluate the source mesh on its boundary facets rather than through a volume
+  lookup.  The handoff now records sample and vertex coverage and fails fast
+  instead of silently assigning zero heat flux to unmapped target vertices.
+  The default azimuthal sampling count is 128.  TKE08 validation against an
+  independent 3D heat solve agreed within 0.13% in input power, 1.6 degC in
+  volume-mean temperature, and 0.03 mm in the 850 degC penetration depth.
+  Axisymmetric heat results now also report the physical revolved volume and
+  volume-weighted mean temperature.
+
+- Split IH thermal boundary selection into explicit heat-flux, convection,
+  and radiation roles. The former empty `surface_label` default silently
+  applied every term to every workpiece boundary and could create or conceal
+  inner-surface hotspots on multi-sideset meshes; the legacy option now fails
+  with migration guidance. Thermal results include boundary-wise area and
+  input-power audits. The EM-to-thermal `q_surf.sol` handoff is now fixed to
+  P1 independently of EM and thermal solve order, avoiding invalid
+  reconstruction of hierarchical high-order H1 coefficients from vertices.
+  Axisymmetric heat now also rejects active surface selectors containing the
+  zero-revolved-area `r=0` symmetry axis, including broad labels shared with
+  physical surfaces.
+- Decoupled IH thermal field order from serialized mesh geometry.  The 3D,
+  axisymmetric, and EM-table heat solvers now preserve a loaded `.vol` exactly
+  instead of calling `Mesh.Curve(fes_order)` after import; that call can silently
+  destroy a curved CAD mapping (the reported TKE08 mesh inflated its boundary
+  area by about 297 million times).  Results now record the input curve order,
+  domain/boundary measures, and the no-post-load-Curve policy.
+
 - HDiv 3D energy-Newton now evaluates material energy, residual and tangent on
   shared quadrature samples and rejects exhausted Armijo searches. `nl_tol`
   now bounds the assembled nonlinear residual relative to the fixed stage

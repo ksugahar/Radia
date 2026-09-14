@@ -6,12 +6,11 @@ pattern port (waves 1-6) -- the GUI file-drop path, multi-client
 concurrency, the batch stdio path, and the cubit<->build123d probe
 contract on one geometry.
 
-Driving-policy note (Sugahara, revised 2026-09-10): APREPRO/Python on
-the HEADLESS route is the only ordinary LLM/agent path.  Agents must not
-launch or drive the GUI except in an explicitly scoped GUI test.  The
-GUI tests here exist only to protect the user-facing toolbar, rendering,
-and visual-debugging surface (including cubit_snapshot, which needs a
-rendering window), not to promote GUI driving for automation.
+Driving policy (2026-09-10): MCP execution is headless; human cooperation
+uses saved journals and checkpoints. The legacy GUI transport tests are
+manual-only and require RADIA_MANUAL_GUI_VALIDATION=1. LLM/CI runs must
+not enable that opt-in. Snapshot here tests the private GUI transport,
+not the MCP cubit_snapshot tool, which reports rendering unavailable.
 
 Requirements: a local Coreform Cubit install (a license seat is consumed
 briefly per test; sessions use RADIA_CUBIT_SESSION_MODE=new so the
@@ -35,6 +34,8 @@ pytestmark = pytest.mark.skipif(
 @pytest.fixture()
 def gui_session(monkeypatch):
     """A fresh private-daemon GUI session, always shut down."""
+    if os.environ.get("RADIA_MANUAL_GUI_VALIDATION") != "1":
+        pytest.skip("Manual GUI regression only; LLM runs must remain headless")
     monkeypatch.setenv("RADIA_CUBIT_SESSION_MODE", "new")
     sess = cs.CubitSession(mode="gui")
     try:

@@ -37,6 +37,7 @@ from calc_common import (MU_0, NU_0, setup_paths,
                           detect_kelvin_offset,
                           progress, calc_main,
                           EMMaterial, add_material_args)
+from calc_heat import QSURF_HANDOFF_ORDER
 
 
 def _log(msg):
@@ -1041,13 +1042,16 @@ def solve_fem(vol_file="", fes_order=1,
             Integrate(q_surf_cf, mesh, BND, definedon=wp_region).real)
         q_surf_mean = P_total_check / max(A_wp, 1e-30)
 
-        # Project to a global H1 GridFunction for stats + .sol storage.
+        # Project to a global P1 H1 GridFunction for stats + .sol storage.
         # Set on the workpiece boundary only; the rest of the field is
         # zero and tells the loader (Phase B thermal) which DOFs are
-        # active.  H1 order matches fes_order so the projection has the
-        # same accuracy as the EM solve itself.
+        # active.  The handoff is deliberately P1 even when the EM solve is
+        # higher order: Phase B transfers it between nonmatching meshes by
+        # physical surface-vertex sampling, while higher-order NGSolve H1
+        # coefficients are hierarchical and cannot be reconstructed from
+        # vertex samples alone.
         try:
-            fes_q = H1(mesh, order=fes_order)
+            fes_q = H1(mesh, order=QSURF_HANDOFF_ORDER)
             gf_q = GridFunction(fes_q)
             gf_q.vec[:] = 0
             gf_q.Set(q_surf_cf, definedon=wp_region)
@@ -1200,8 +1204,8 @@ def solve_fem(vol_file="", fes_order=1,
             # Surface heat-flux distribution q_surf [W/m^2] on the
             # workpiece SIBC face.  Phase B (calc_heat.py) loads this
             # .sol and applies it as the Neumann BC for the heat solve.
-            # Saved at the same H1 order as the EM solve so the
-            # spatial detail is preserved in the round trip.
+            # Saved as the fixed P1 cross-mesh handoff contract.  The EM
+            # solution itself may use a higher order.
             if gf_q is not None:
                 sol_Q = os.path.join(base_dir,
                                      f"{name_stem}_qsurf.sol").replace("\\", "/")
@@ -1209,7 +1213,8 @@ def solve_fem(vol_file="", fes_order=1,
                 qsurf_sol_path = sol_Q
                 sol_paths["q_surf"] = sol_Q
                 sol_entries.append(
-                    {"sol": sol_Q, "fes": "H1", "fes_order": fes_order,
+                    {"sol": sol_Q, "fes": "H1",
+                     "fes_order": QSURF_HANDOFF_ORDER,
                      "fes_dim": 1, "name": "q_surf", "ncomp": 1})
             if gf_J is not None:
                 sol_J = os.path.join(base_dir,
@@ -1275,6 +1280,7 @@ def solve_fem(vol_file="", fes_order=1,
         "q_surf_p95": q_surf_p95,
         "P_total_check": P_total_check,
         "qsurf_sol": qsurf_sol_path,
+        "qsurf_order": QSURF_HANDOFF_ORDER if qsurf_sol_path else None,
         "delta": float(delta_skin),
         "ndof": ndof,
         "ne": ne,

@@ -48,6 +48,7 @@ def main():
     res = solve_heat_axisym(
         VOL, material="steel",
         q_uniform=Q, emissivity=EPS, h_conv=0.0, t_ext=T_EXT, t_initial=T_EXT,
+        heat_flux_boundaries="outer", radiation_boundaries="outer",
         dt=5.0, t_end=900.0, fes_order=1, linear_solver="sparsecholesky")
 
     assert "error" not in res, res
