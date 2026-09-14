@@ -58,8 +58,7 @@ def load_nasa_battery_data(data_path=None):
     data_path = Path(data_path or os.environ.get('RADIA_NASA_EIS_CSV') or
                      Path(__file__).parent / 'data/real_world/nasa_battery/nasa_18650_eis.csv')
     if not data_path.exists():
-        print(f"[WARN] Private NASA data not found: {data_path}; set RADIA_NASA_EIS_CSV")
-        return None, None
+        raise FileNotFoundError(f"Private NASA data not found: {data_path}; set RADIA_NASA_EIS_CSV")
     header = data_path.read_text(encoding='utf-8')
     if not any(line.startswith('#   Frequency source: ') and
                line.partition(': ')[2].strip() for line in header.splitlines()):
