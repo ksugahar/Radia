@@ -72,6 +72,12 @@ Private NASA inputs and noise-aware model selection:
   If noise is unknown, report sensitivity rather than inventing a noise floor.
   Fewer bases alone do not prove physical truth; lower training error alone
   does not justify more bases. Do not claim a new fit without an executed result.
+- Separate parameter estimation from model selection. Even when a declared
+  measurement-error likelihood is used to fit parameters, improving the fitted
+  likelihood alone does not justify adding bases. Parsimony is an explicit
+  objective: do not spend additional bases explaining measurement error.
+  The current Huber fit and error-budget reducer do not declare a probabilistic
+  noise model and must not be reported as calibrated maximum-likelihood inference.
 
 Current SA/RM research route (supersedes the historical CLN-peeling route below):
 - YAdmittanceURNConfig.research_34_basis() expands the legacy 22-basis factory:
@@ -84,6 +90,8 @@ Current SA/RM research route (supersedes the historical CLN-peeling route below)
 - redundant_y_bases compares same-family complex response shapes over the band;
   close time constants alone do not prove redundancy. Ten fitted bases may
   still duplicate mechanisms. Removal is followed by refitting, not blind merging.
+  Within the candidate pool, rank removal by error against the measurements in
+  the configured S/log-component metric, not raw impedance magnitude alone.
 - The reducer returns (selected_model, trace); selected_model is None when no
   candidate meets the budget. It reports both S and log-component errors and
   selects the smallest TESTED acceptable model, not a global minimal circuit.
