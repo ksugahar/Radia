@@ -7,6 +7,15 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.54] - 2026-09-14
+
+- Clarify that axisymmetric workpieces normally use standard NGSolve H1 heat
+  with the revolved measure even when the electromagnetic solve is 3D;
+  Henrotte remains the electromagnetic formulation.  Document the TKE08
+  3D-versus-axisymmetric thermal cross-check, boundary-facet heat transfer,
+  coverage audit, fail-fast rules, and the prohibition on post-load
+  `Mesh.Curve()` for serialized `.vol` meshes.
+
 - matrix_solvers: withdraw the unevidenced claim that CompactAMG and
   CompactAMS reach 25 iterations on mesh1_3.5T and match HYPRE. No HYPRE
   comparison is stored in the repository, and the same mesh measures 130-168
