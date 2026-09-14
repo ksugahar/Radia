@@ -16,27 +16,25 @@ def state(**targets):
     return {'schema': 'test', 'commit': 'a', 'package_sha256': 'hash', 'targets': targets}
 
 
-@pytest.mark.parametrize('source_time,binary_time,expected', [
-    (0, 0, 2),
-    (0, 100, 2),
-    (100, 0, 2),
-    (100, 98, 2),
-    (100, 100, 0),
-    (100, 101, 0),
-])
-def test_preflight_requires_verifiable_plugin_freshness(
-        monkeypatch, source_time, binary_time, expected):
+@pytest.mark.parametrize('returncode', [0, 1, 2])
+def test_preflight_requires_native_manifest_verification(monkeypatch, returncode):
     versions = dict.fromkeys([
         'radia', 'radia.__version__', 'cubit-mesh-export', 'cme.__version__',
         'radia-mcp', 'radia-optuna', 'optuna.__version__'], '1.0.0')
     monkeypatch.setattr(module, '_read_repo_versions', lambda: versions)
-    monkeypatch.setattr(module, '_newest_mtime', lambda *_: source_time)
-    monkeypatch.setattr(module, '_bundled_plugin_mtime', lambda: binary_time)
+    calls = []
+    def verify(command, **kwargs):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, returncode, 'payload evidence', '')
+    monkeypatch.setattr(module.subprocess, 'run', verify)
     checked_main = []
     monkeypatch.setattr(module, '_check_main_synced',
                         lambda **_: checked_main.append(True))
-    assert module.cmd_preflight(None) == expected
-    assert bool(checked_main) == (expected == 0)
+    assert module.cmd_preflight(None) == (2 if returncode else 0)
+    assert bool(checked_main) == (returncode == 0)
+    assert len(calls) == 1
+    assert Path(calls[0][1]).name == '_native_provenance.py'
+    assert calls[0][2] == 'verify'
 
 
 def test_stale_snapshot_does_not_erase_another_host(tmp_path):
