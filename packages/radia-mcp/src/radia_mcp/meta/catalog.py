@@ -654,6 +654,7 @@ CATALOG: dict[str, dict[str, Any]] = {
                        "notebook/WebGUI audits.",
         "primary_tools": [
             "document_meta_notebook_result_audit",
+            "document_meta_notebook_citation_audit",
             "document_meta_lint_all",
         ],
         "related": [
