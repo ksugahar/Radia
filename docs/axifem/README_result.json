@@ -30,7 +30,7 @@
       "cell_index": 1,
       "execution_count": 1,
       "source_sha256": "108d7f22786a120c937a28b46da1f8e3e4ccb1451164b025dc7e24b21cf156a0",
-      "source_preview": "from pathlib import Path\nimport json\np = Path(\"axifem_element_evidence.json\")\nif not p.exists():\n    p = Path(\"docs/axifem/axifem_element_evidence.json\")\nevidence = json.loads(p.read_text(encoding=\"utf-8\"))\nprint(json.dumps(evidence[\"version_stamp\"], indent=2, ensure_ascii=False))\n",
+      "source_preview": "from pathlib import Path\nimport json\np = Path(\"axifem_element_evidence.json\")\nif not p.exists():\n    p = Path(\"validation_test/documentation_maintenance/axifem/axifem_element_evidence.json\")\nevidence = json.loads(p.read_text(encoding=\"utf-8\"))\nprint(json.dumps(evidence[\"version_stamp\"], indent=2, ensure_ascii=False))\n",
       "outputs": [
         {
           "output_type": "stream",
@@ -46,7 +46,7 @@
       "cell_index": 2,
       "execution_count": 2,
       "source_sha256": "44b7dc9b71c10ab1d92b01f7d533d59518331f935f113f5da4594a00f476a1a6",
-      "source_preview": "from IPython.display import Markdown, display\ndisplay(Markdown('| Notebook | Role |\\n| --- | --- |\\n| `AXIFEM_ELEMENT_EVIDENCE.ipynb` | Executed evidence for P1, Q1, P2, Q2, P2 curved, Q2 curved |\\n| `AXIFEM.md` | API-facing design notes for AXIFEM |\\n| `FORMULATION.md` | Mathematical formulation and implementation notes |'))\n",
+      "source_preview": "from IPython.display import Markdown, display\ndisplay(Markdown('| Notebook | Role |\\n| --- | --- |\\n| `../../validation_test/documentation_maintenance/axifem/AXIFEM_ELEMENT_EVIDENCE.ipynb` | Executed evidence for P1, Q1, P2, Q2, P2 curved, Q2 curved |\\n| `AXIFEM.md` | API-facing design notes for AXIFEM |\\n| `FORMULATION.md` | Mathematical formulation and implementation notes |'))\n",
       "outputs": [
         {
           "output_type": "display_data",

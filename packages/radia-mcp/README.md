@@ -48,6 +48,20 @@ build123d script  →  STEP  →  Cubit hex mesh  →  .msh v4.1 / .vol  →  ng
                                   + live GUI replay)
 ```
 
+It is also Radia's **primary and canonical manual**. The live MCP status,
+usage, and recipe tools own current workflow guidance, accepted inputs,
+constraints, artifacts, failure modes, provenance, and validation routes for
+every public Radia capability. The repository README and `docs/` introduce
+what Radia can do and show result-bearing evidence; they do not maintain a
+competing procedural manual. Start with the selected capability pack's
+`capability_pack_status`, then follow the domain tools it reports.
+
+MCP is currently Radia's only supported user entrypoint. MATLAB/MEX/Simulink
+assets are integration and parity surfaces while their future product role is
+undecided; they do not define a separate primary manual. MATLAB Live Scripts
+may accompany a capability, but a GitHub-renderable Markdown or saved-output
+`.ipynb` page must carry the public discovery story and results.
+
 What makes it different from typical CAD-MCP servers (FreeCAD, OpenSCAD,
 Blender):
 

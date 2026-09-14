@@ -1,7 +1,7 @@
 {
   "schema": "radia.notebook_result.v1",
   "generated_at_utc": "2026-06-29T06:43:30Z",
-  "notebook": "docs/peec_integration/verification_migration.ipynb",
+  "notebook": "validation_test/documentation_maintenance/peec_integration/verification_migration.ipynb",
   "notebook_sha256": "0bca51a184a4ab5554e9400569f8dbe6c5ca7d53dd4fd8b5211904a88060532c",
   "versions": {
     "python_version": "3.12.10",
@@ -11,7 +11,7 @@
     "radia_version": "4.95.2"
   },
   "summary": {
-    "path": "docs/peec_integration/verification_migration.ipynb",
+    "path": "validation_test/documentation_maintenance/peec_integration/verification_migration.ipynb",
     "cells": 7,
     "code_cells": 5,
     "executed_code_cells": 5,
@@ -30,7 +30,7 @@
       "cell_index": 1,
       "execution_count": 1,
       "source_sha256": "18a75945299a7a3847b23b0ae55ddb13e4584a9e482f6824fff379406602f463",
-      "source_preview": "from pathlib import Path\nimport json, platform, sys\nrepo = Path.cwd()\nresult_path = repo / 'docs/peec_integration/verification_migration_results.json'\ndata = json.loads(result_path.read_text(encoding='utf-8'))\nprint(json.dumps({\n    'generated_at_utc': data['generated_at_utc'],\n    'checked_at_utc': data['post_migration']['checked_at_utc'],\n    'python': sys.version.split()[0],\n    'platform': platform.platform(),\n    'radia_version': data['runtime']['radia_version'],\n    'git_head': data['runtime']['git_head'],\n    'git_dirty': data['runtime']['git_dirty'],\n}, indent=2, ensure_ascii=False))\n",
+      "source_preview": "from pathlib import Path\nimport json, platform, sys\nrepo = Path.cwd()\nresult_path = repo / 'validation_test/documentation_maintenance/peec_integration/verification_migration_results.json'\ndata = json.loads(result_path.read_text(encoding='utf-8'))\nprint(json.dumps({\n    'generated_at_utc': data['generated_at_utc'],\n    'checked_at_utc': data['post_migration']['checked_at_utc'],\n    'python': sys.version.split()[0],\n    'platform': platform.platform(),\n    'radia_version': data['runtime']['radia_version'],\n    'git_head': data['runtime']['git_head'],\n    'git_dirty': data['runtime']['git_dirty'],\n}, indent=2, ensure_ascii=False))\n",
       "outputs": [
         {
           "output_type": "stream",
