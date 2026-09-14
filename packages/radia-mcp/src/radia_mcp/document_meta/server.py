@@ -8,6 +8,7 @@ Cross-cutting document helpers that do not belong to one document type:
   * document_meta_write_notebook_result_json -- write versioned JSON sidecar from saved outputs
   * document_meta_write_docs_notebook_result_jsons -- batch sidecars for docs notebooks
   * document_meta_notebook_result_audit -- check saved outputs, WebGUI scenes, and JSON sidecars
+  * document_meta_notebook_citation_audit -- check notebook citations against canonical references.bib
   * document_meta_examples_notebook_audit -- examples -> docs or validation_test audit
   * document_meta_panel_layout_audit -- root-level panels migration impact audit
 
