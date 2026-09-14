@@ -4,7 +4,15 @@ All notable changes to `cubit-mesh-export` — the high-order curved
 mesh export package for Coreform Cubit (Netgen / GMSH / Nastran /
 VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
-## Unreleased
+## 1.0.0 - Stable standalone mesh export (release candidate)
+
+Publication pending release acceptance.
+
+- Promote the existing standalone export and checker interfaces to 1.0.0;
+  no command or label-contract migration is required from 0.14.17.
+- Preserve explicitly labelled same-material internal surfaces by rejecting
+  unsupported ambiguous boundaries instead of silently deleting their labels.
+- Refresh the bundled command backend with the labelled-surface protection.
 
 - Keep mandatory binary hash/size and manifest checks active when building
   from an sdist without the native source tree.
