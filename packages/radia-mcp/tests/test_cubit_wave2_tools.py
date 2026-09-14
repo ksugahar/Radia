@@ -4,6 +4,7 @@ command-history recorder.  No Cubit license needed."""
 
 import asyncio
 import json
+import threading
 
 from radia_mcp.cubit import server as cubit_server
 from radia_mcp.cubit import session as cubit_session
@@ -24,7 +25,8 @@ def test_doctor_returns_per_check_statuses():
         assert out["problems"] == []
 
 
-def test_session_journal_empty_history():
+def test_session_journal_empty_history(monkeypatch):
+    monkeypatch.setattr(cubit_session, "_SINGLETON", None)
     out = json.loads(cubit_session_journal())
     assert out["status"] == "ok"
     assert out["n_commands"] == 0
@@ -47,18 +49,32 @@ def test_record_cmd_history_and_journal_format(monkeypatch, tmp_path):
             {"result": [{"line": f"cmd {i}", "ok": True}]})
     assert len(sess._command_history) == 10
 
-    # journal formatting through the tool (patch the singleton)
+    # Native Cubit journal is the source of truth; response history only
+    # contributes the diagnostic failure count.
     sess._command_history = [
         {"ts": 0.0, "line": "brick x 1", "ok": True},
         {"ts": 0.0, "line": "mesh volume 99", "ok": False},
     ]
+    native = tmp_path / "native.jou"
+    native.write_text("#{size = 1}\nbrick x {size}\nmesh volume 99\n",
+                      encoding="utf-8")
+    sess._lock = threading.Lock()
+    sess.native_journal_snapshot = lambda: {
+        "journal": native.read_text(encoding="utf-8"),
+        "paths": [str(native)],
+        "generation_count": 1,
+        "errors": [],
+        "recording_error": None,
+    }
     monkeypatch.setattr(cubit_session, "_SINGLETON", sess)
     out_file = tmp_path / "session.jou"
     out = json.loads(cubit_session_journal(out_path=str(out_file)))
-    assert out["n_commands"] == 2 and out["n_failed"] == 1
+    assert out["n_commands"] == 3 and out["n_failed"] == 1
+    assert out["provenance"] == "cubit_native_record"
     text = out_file.read_text(encoding="utf-8")
-    assert "brick x 1" in text
-    assert "# FAILED: mesh volume 99" in text
+    assert "#{size = 1}" in text
+    assert "brick x {size}" in text
+    assert "mesh volume 99" in text
 
 
 def test_attach_ping_detects_unresponsive_daemon(monkeypatch, tmp_path):
