@@ -102,7 +102,13 @@ async def _probe_hdiv_vim_stdio() -> dict[str, object]:
             refinement_identity = {
                 "material_domain": "iron",
                 "coordinate_system": "right-handed Cartesian",
+                "unit_system": "SI",
                 "nonlinear_state_id": "state-1",
+                "mesh_topology_geometry_sha256": "1" * 64,
+                "bh_table_sha256": "2" * 64,
+                "material_state_identity_sha256": "3" * 64,
+                "solution_sha256": "4" * 64,
+                "refinement_parent_identity_sha256": "5" * 64,
             }
             refinement_levels = []
             for mesh_size, average_z, rms in (
@@ -121,6 +127,9 @@ async def _probe_hdiv_vim_stdio() -> dict[str, object]:
                         "average_field_T": [0.0, 0.0, average_z],
                         "rms_magnitude_T": rms,
                         "magnetic_energy_J": 1.2e-3,
+                        "magnetic_coenergy_J": 1.3e-3,
+                        "h_dot_b_integral_J": 2.5e-3,
+                        "legendre_residual_relative": 0.0,
                         "field_identity": {**refinement_identity, "unit": "T"},
                         "energy_identity": {**refinement_identity, "unit": "J"},
                     }
@@ -135,6 +144,53 @@ async def _probe_hdiv_vim_stdio() -> dict[str, object]:
                 },
             )
             refinement_payload = json.loads(refinement_gate.content[0].text)
+            parity_identity = {
+                "geometry_identity_sha256": "6" * 64,
+                "material_identity_sha256": "7" * 64,
+                "excitation_identity_sha256": "8" * 64,
+                "bh_table_sha256": "9" * 64,
+                "constitutive_interpolation": "monotone_pchip",
+                "constitutive_extrapolation": "vacuum_slope",
+                "magnetic_anisotropy": "isotropic",
+                "region_labels": ["iron"],
+                "coordinate_system": "right-handed Cartesian",
+                "unit_system": "SI",
+                "analysis_kind": "magnetostatic",
+                "case_index": 1,
+                "time_semantics": "static",
+            }
+            parity_summary = {
+                "candidate": {
+                    "identity": parity_identity,
+                    "average_field_T": [0.0, 0.0, 1.01],
+                    "rms_magnitude_T": 1.11,
+                    "magnetic_energy_J": 2.01,
+                    "magnetic_coenergy_J": 2.99,
+                },
+                "reference": {
+                    "identity": dict(parity_identity),
+                    "average_field_T": [0.0, 0.0, 1.0],
+                    "rms_magnitude_T": 1.1,
+                    "magnetic_energy_J": 2.0,
+                    "magnetic_coenergy_J": 3.0,
+                },
+            }
+            parity_catalog = await session.call_tool(
+                "radia_ngsolve_validation_catalog",
+                {"query": "nonlinear_magnetic_field_energy_parity_gate"},
+            )
+            parity_catalog_payload = (
+                parity_catalog.structuredContent
+                or json.loads(parity_catalog.content[0].text)
+            )
+            parity_gate = await session.call_tool(
+                "radia_ngsolve_validation_run",
+                {
+                    "name": "nonlinear_magnetic_field_energy_parity_gate",
+                    "arguments": {"summary_json": json.dumps(parity_summary)},
+                },
+            )
+            parity_payload = json.loads(parity_gate.content[0].text)
             text = called.content[0].text
             normalized = " ".join(text.split())
             return {
@@ -156,6 +212,13 @@ async def _probe_hdiv_vim_stdio() -> dict[str, object]:
                 "refinement_gate_is_error": bool(refinement_gate.isError),
                 "refinement_gate_status": refinement_payload["status"],
                 "refinement_gate_issues": refinement_payload["issues"],
+                "parity_gate_discovered": any(
+                    operation["name"]
+                    == "nonlinear_magnetic_field_energy_parity_gate"
+                    for operation in parity_catalog_payload["operations"]
+                ),
+                "parity_gate_is_error": bool(parity_gate.isError),
+                "parity_gate_status": parity_payload["status"],
                 "teaches_direct_q2": "direct-Q2" in text,
                 "bounds_h_convergence": (
                     "for this thin magnetic-conductor disk lane" in normalized
@@ -217,6 +280,9 @@ def test_hdiv_vim_passes_real_stdio_initialize_list_call():
     assert result["refinement_gate_is_error"] is False
     assert result["refinement_gate_status"] == "needs_attention"
     assert "field_rms_energy_changes_contract" in result["refinement_gate_issues"]
+    assert result["parity_gate_discovered"] is True
+    assert result["parity_gate_is_error"] is False
+    assert result["parity_gate_status"] == "ok"
     assert result["teaches_direct_q2"] is True
     assert result["bounds_h_convergence"] is True
     assert result["teaches_mapped_bdm2_gate"] is True

@@ -33,6 +33,17 @@ BH_TABLE = (
     (8.0, 2.0e-3),
     (40.0, 2.4e-3),
 )
+REFINEMENT_PARENT_IDENTITY = {
+    "schema": "radia.nonlinear-magnetic-refinement-parent.v1",
+    "geometry": "two-unit-boxes-sharing-x0-interface",
+    "materials": {
+        "reduced": "vacuum",
+        "total": "single-valued-isotropic-soft-magnetic",
+    },
+    "excitation": "fixed-analytic-source-field-and-interface-trace",
+    "coordinate_system": "right-handed Cartesian",
+    "unit_system": "SI",
+}
 
 
 def build_case(maxh: float):
@@ -91,6 +102,7 @@ def solve_level(maxh: float) -> dict:
             max_iterations=60,
             relaxation=0.3,
             anderson_depth=0,
+            refinement_parent_identity=REFINEMENT_PARENT_IDENTITY,
         )
         selector = mesh.Materials("total")
         volume = float(ng.Integrate(1.0, mesh, definedon=selector, order=8))
@@ -128,6 +140,10 @@ def solve_level(maxh: float) -> dict:
         "rms_magnitude_T": rms,
         "magnetic_energy_J": float(energy["energy_J"]),
         "magnetic_coenergy_J": float(energy["coenergy_J"]),
+        "h_dot_b_integral_J": float(energy["h_dot_b_integral_J"]),
+        "legendre_residual_relative": float(
+            energy["legendre_residual_relative"]
+        ),
         "field_identity": solved["field_observable_identity"],
         "energy_identity": energy["identity"],
         "elapsed_seconds": time.perf_counter() - started,
@@ -180,6 +196,8 @@ def write_hdf5(path: Path, payload: dict) -> None:
             ("rms_magnitude_T", "T"),
             ("magnetic_energy_J", "J"),
             ("magnetic_coenergy_J", "J"),
+            ("h_dot_b_integral_J", "J"),
+            ("legendre_residual_relative", "1"),
             ("elapsed_seconds", "s"),
         ):
             dataset = levels.create_dataset(
@@ -236,7 +254,7 @@ def main() -> None:
     gate = nonlinear_magnetic_refinement_energy_gate({"levels": levels})
     repo = Path(__file__).resolve().parents[2]
     payload = {
-        "schema": "cae-ai-lab.nonlinear-mixed-omega-energy-refinement.v1",
+        "schema": "cae-ai-lab.nonlinear-mixed-omega-energy-refinement.v2",
         "artifact_id": "nonlinear-mixed-omega-energy-three-level",
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "source_commit": subprocess.check_output(

@@ -543,6 +543,11 @@ def test_mixed_omega_projected_energy_uses_current_solution_and_material_state()
         order=2,
         material_update_order=1,
         anderson_depth=0,
+        refinement_parent_identity={
+            "geometry": "two-box-interface-v1",
+            "material": "saturating-table-v1",
+            "excitation": "fixed-source-field-v1",
+        },
     )
     energy = solved["energy_observables"]
     stats = solved["nonlinear_stats"]
@@ -555,6 +560,33 @@ def test_mixed_omega_projected_energy_uses_current_solution_and_material_state()
         "material_state_identity"
     ]["bh_table_sha256"]
     assert len(energy["identity"]["solution_sha256"]) == 64
+    assert len(energy["identity"]["refinement_parent_identity_sha256"]) == 64
+    assert energy["identity"]["constitutive_interpolation"] == "monotone_pchip"
+    assert energy["identity"]["constitutive_extrapolation"] == "vacuum_slope"
+    assert energy["identity"]["magnetic_anisotropy"] == "isotropic"
+    assert energy["h_dot_b_integral_J"] > 0.0
+    assert energy["legendre_residual_relative"] < 1.0e-12
+    np.testing.assert_allclose(
+        energy["energy_J"] + energy["coenergy_J"],
+        energy["h_dot_b_integral_J"],
+        rtol=1.0e-12,
+        atol=1.0e-14,
+    )
+
+
+def test_mixed_omega_projected_rejects_invalid_refinement_parent_identity():
+    mesh, h_source, potential, bh_table = _picard_case()
+    with pytest.raises(ValueError, match="must be a mapping"):
+        _picard_solve(
+            mesh,
+            h_source,
+            potential,
+            bh_table,
+            order=2,
+            material_update_order=1,
+            anderson_depth=0,
+            refinement_parent_identity="stale-parent",
+        )
 
 
 def test_mixed_omega_envelope_includes_interpolated_material_targets(monkeypatch):
