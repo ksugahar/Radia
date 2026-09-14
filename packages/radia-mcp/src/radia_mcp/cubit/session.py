@@ -429,6 +429,7 @@ def run_headless_journal(
     if bin_dir is None:
         return {
             "status": "error", "stage": "start", "kind": "environment",
+            "gui_started": False,
             "error": "Could not locate Coreform Cubit install",
         }
     console = bin_dir / "coreform_cubit.com"
@@ -454,6 +455,7 @@ def run_headless_journal(
         if not plugin_dir.is_dir():
             return {
                 "status": "error", "stage": "preflight", "kind": "input",
+                "gui_started": False,
                 "error": f"command plugin directory not found: {plugin_dir}",
             }
 
@@ -479,6 +481,7 @@ def run_headless_journal(
         except subprocess.TimeoutExpired as exc:
             return {
                 "status": "error", "stage": "timeout", "kind": "timeout",
+                "gui_started": False,
                 "error": f"Cubit headless journal exceeded {timeout_s}s",
                 "timeout_s": timeout_s,
                 "stdout_tail": (exc.stdout or "")[-4000:],
@@ -487,6 +490,7 @@ def run_headless_journal(
         except OSError as exc:
             return {
                 "status": "error", "stage": "start", "kind": "environment",
+                "gui_started": False,
                 "error": f"{type(exc).__name__}: {exc}",
             }
 
@@ -503,7 +507,7 @@ def run_headless_journal(
         ],
         "command_plugin_directory": str(plugin_dir) if plugin_dir else None,
         "user_init_loaded": plugin_dir is None,
-        "persistent_gui_started": False,
+        "gui_started": False,
         "command_count": len(commands),
         "stdout_tail": (proc.stdout or "")[-8000:],
         "stderr_tail": (proc.stderr or "")[-8000:],
@@ -570,6 +574,14 @@ class CubitSession:
         # records {ts, line, ok} for every op=="cmd" line sent.
         self._command_history: list[dict] = []
         self._command_history_max = 20000
+
+        # Cubit's own command record is the provenance source of truth.  The
+        # in-memory response history above is retained only for diagnostics
+        # (not for reconstructing a journal).  A new file is started after
+        # each daemon generation so recovery never splices unlike sessions.
+        self._native_journal_path: Path | None = None
+        self._native_journal_paths: list[Path] = []
+        self._native_journal_error: str | None = None
 
         # batch-mode (stdio) stderr retention
         self._stderr_tail: list[bytes] = []
@@ -715,6 +727,7 @@ class CubitSession:
         self._proc = None
         self._ready_info = None
         self._owned = False
+        self._native_journal_path = None
         return report
 
     def is_alive(self) -> bool:
@@ -762,6 +775,8 @@ class CubitSession:
         with self._lock:
             try:
                 self.ensure_started()
+                if op == "cmd" and self._mode == "batch":
+                    self._start_native_journal_locked(timeout_s=timeout_s)
                 req_id = self._next_id
                 self._next_id += 1
                 req = {
@@ -790,6 +805,73 @@ class CubitSession:
         if isinstance(resp, dict):
             resp.setdefault("_recovered", True)
         return resp
+
+    def _start_native_journal_locked(self, timeout_s: float) -> None:
+        """Start Cubit's native ``record \"file\"`` stream once per daemon.
+
+        Caller holds ``self._lock``.  Cubit 2025.12 does not accept the older
+        ``record journal ... overwrite`` spelling; the destination must be a
+        fresh path.  Failing closed prevents an apparently reproducible AI
+        session whose journal was actually reconstructed from RPC responses.
+        """
+        if getattr(self, "_native_journal_path", None) is not None:
+            return
+        paths = getattr(self, "_native_journal_paths", None)
+        if paths is None:
+            paths = self._native_journal_paths = []
+        temp_root = (Path(os.environ.get("RADIA_MCP_TEMP", "C:/temp"))
+                     if sys.platform == "win32"
+                     else Path(tempfile.gettempdir()))
+        journal_dir = temp_root / "radia-mcp" / "cubit-journals"
+        journal_dir.mkdir(parents=True, exist_ok=True)
+        generation = len(paths) + 1
+        path = journal_dir / (
+            f"ai-{self._client_id}-generation-{generation:03d}.jou")
+        if path.exists():
+            raise CubitSessionError(
+                f"refusing to overwrite native Cubit journal: {path}")
+        command = f'record "{str(path).replace(chr(92), "/")}"'
+        req_id = self._next_id
+        self._next_id += 1
+        request = {
+            "id": req_id,
+            "op": "cmd",
+            "args": [command],
+            "protocol_version": 1,
+        }
+        response = self._call_via_stdio(request, timeout_s=timeout_s)
+        per_line = response.get("result") if isinstance(response, dict) else None
+        ok = bool(response.get("ok")) if isinstance(response, dict) else False
+        ok = ok and isinstance(per_line, list) and bool(per_line)
+        ok = ok and bool(per_line[0].get("ok"))
+        if not ok:
+            self._native_journal_error = (
+                f"Cubit rejected {command!r}: {response!r}")
+            raise CubitSessionError(self._native_journal_error)
+        self._native_journal_path = path
+        paths.append(path)
+        self._native_journal_error = None
+
+    def native_journal_snapshot(self) -> dict:
+        """Return Cubit-recorded journal generations without starting Cubit."""
+        paths = list(getattr(self, "_native_journal_paths", []))
+        chunks: list[str] = []
+        readable: list[str] = []
+        errors: list[str] = []
+        for path in paths:
+            try:
+                chunks.append(path.read_text(encoding="utf-8-sig"))
+                readable.append(str(path))
+            except OSError as exc:
+                errors.append(f"{path}: {exc}")
+        return {
+            "journal": "\n".join(chunk.rstrip("\n") for chunk in chunks)
+                       + ("\n" if chunks else ""),
+            "paths": readable,
+            "generation_count": len(paths),
+            "errors": errors,
+            "recording_error": getattr(self, "_native_journal_error", None),
+        }
 
     def _record_cmd_history(self, resp) -> None:
         """Append per-line results of an op=="cmd" response to the
@@ -826,6 +908,7 @@ class CubitSession:
         Killing an attached-but-hung daemon requires the explicit
         `cubit_session_shutdown` tool, not an implicit retry path.
         """
+        self._native_journal_path = None
         proc = self._proc
         if proc is not None and proc.poll() is None:
             try:
