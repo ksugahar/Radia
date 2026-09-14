@@ -1,0 +1,22 @@
+{
+  "schema": "radia.hysteresis-fixture-lineage.v1",
+  "host": "lab",
+  "python": "3.12.10",
+  "numpy": "2.5.2",
+  "source_kind": "analytical Potter-Schmulian branch data; not a measured specimen",
+  "source_generator": "CASE_02.m uses S=0.9, Ms=1.91, Hc=500; fminsearch and makima interpolation",
+  "verification_scope": "Reidentification from preserved MAT branches, not a rerun of MATLAB generation or the coupled field solve",
+  "loops": 20,
+  "dB_T": 0.095,
+  "Bmax_T": 1.9,
+  "K": 40,
+  "verified_fields": 128,
+  "max_absolute_difference": 0.0,
+  "sha256": {
+    "validation_test\\hysteresis\\fixtures\\potter_schmulian\\B_input.mat": "9f9ff054db68196f5a4ec5afa491343ec694e72d8c9f59224bf462f34732ba03",
+    "validation_test\\hysteresis\\fixtures\\potter_schmulian\\CASE_02.m": "4dccffb650cc88460229ba0d84120ee01b5f8fcf9143a5db55296a5ac85121b4",
+    "validation_test\\hysteresis\\binput_play_fixture.npz": "cdd61c9a17976a6b27dd236c03c241241f5572237fa5658f8640ca0b9cc16e01",
+    "src\\radia\\hysteresis_io.py": "e47a968e84514a149d9522bb6fef0392a6f653c128e328aa00bf2b4236485197"
+  },
+  "passed": true
+}

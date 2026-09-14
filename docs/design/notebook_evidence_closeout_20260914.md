@@ -360,3 +360,47 @@ The original shape notebook's code and saved results remain unchanged and
 explicitly historical. Full downstream shape/field reacceptance remains open;
 the numerical sign defect itself now has a failing-before/passing-after
 behavioral regression. The other five scientific evidence gaps are unchanged.
+
+### Remaining-evidence investigation
+
+- **Hysteresis source lineage recovered.** The original analytical `B_input.mat`
+  and `CASE_02.m` are preserved in `validation_test/hysteresis/fixtures/potter_schmulian`.
+  Reidentification with current `hysteresis_io.py` matches all 128 fields of the
+  existing K=40 NPZ exactly, including the K=20 subset. Hashes and zero maximum
+  absolute discrepancy are in `fixture_lineage.json`; the executable verifier
+  never overwrites the fixture. This closes missing identification lineage,
+  not a claim of measurement or a new coupled-field acceptance run.
+- **Simkin image source recovered.** Git commit
+  `3b6731aa7186c0a6b790b444b918a2fa08a1348c` contains the generating script and
+  the exact current image blob. The script constructs a synthetic K=10 material
+  and plots computed gap Bz versus NI. `hysteresis_gallery_lineage.json` records
+  identities and parameters. No laboratory specimen or raw step/convergence
+  records are claimed. Retired meshing code is not restored as a supported demo.
+- **TEAM 28 reference corrected and model mapping checked.** The current official
+  [Model A specification](https://www.compumag.org/jsite/images/stories/TEAM/problem28.pdf),
+  sections II-III and Figure 2, matches model geometry, conductivity, turns,
+  current amplitude and frequency. Its stated stationary height is 11.3 mm;
+  11.5 mm occurs in transient Table I samples, not as that stated reference.
+  Source PDF SHA-256 is `f0013db710e2109dcbea37a213d750deaa245f1004a0a8044289535bb6e7f041`.
+  Code and tests use `team28_reference.json`. Four actual FEM/CLN regressions
+  passed on mdx2 (2 threads; final run 48 s), with unchanged tolerances. Exact source
+  hashes/runtime are in `team28_reference_regression.json`. The retained model
+  weight 1.055 N differs from the reference mass 0.107 kg; dZ=0 is a steady
+  frequency-domain sample at 10.8 mm, not the nominal initial height 3.8 mm.
+  No existing plot or JSON is relabelled as a newly run transient experiment.
+- **BEM matrix/excitation diagnosis completed for the coarse case.** The
+  269-by-269 matrix is full rank with no zero columns. Its relative asymmetry is
+  0.0522. Alternating basis signs with unchanged `e=ones/n` changes 172.779 nH to
+  115.106 nH; transforming the excitation with the basis preserves the value.
+  `validation_test/bem/closed_torus_diagnostic.json` records the spectrum,
+  residuals, hashes and 85 s mdx2 run. The MCP blanket closed-surface nullspace
+  claim and advice against refinement are withdrawn. This is not acceptance of
+  physical loop inductance: current conservation/port constraints and quadrature
+  convergence remain necessary before promoting that historical extractor.
+
+**Still open:** full post-Taubin Cubit shape/field reacceptance; a physically
+constrained BEM extractor acceptance (the cause claim is corrected, not the
+entire formulation); and the NASA original sample-frequency mapping plus
+manuscript identity. The NASA archive inspection above proves why its original
+frequency axis cannot be reconstructed just from sweep endpoints. None of these
+items is marked passed by substituting metadata or synthetic data.

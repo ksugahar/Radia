@@ -12,6 +12,7 @@ Run:  python team28_cln_sweep_full.py   (~75 s; 25 axisymmetric solves)
 import json
 import os
 import sys
+from pathlib import Path
 
 import numpy as np
 
@@ -42,14 +43,15 @@ from _validation_output import validation_output  # noqa: E402
 # floats where the PHYSICAL lift equals its weight, so the levitation
 # equilibrium MUST use F_z / 2, not F_z.  (Earlier code balanced the 2x
 # integral against the 1x weight -> a spurious dZ=+4.1mm / 14.9mm height; the
-# physical equilibrium is ~dZ=+0.2mm / 11.0mm, matching the published 11.5mm.)
+# physical equilibrium is ~dZ=+0.2mm / 11.0mm, matching the published 11.3mm.)
 PHYS = 0.5                    # physical force = PHYS * (verbatim TEAM 28 integral)
 DISK_BOTTOM_DZ0_MM = 10.8     # absolute disk-bottom height (above coil top) at dZ=0
 # Published TEAM 28 reference (Karl, Fetzer, Kurz, Lehner, Rucker, Univ.
-# Stuttgart): rest z=3.8mm, measured stationary levitation height z=11.5mm
+# Stuttgart): rest z=3.8mm, measured stationary levitation height z=11.3mm
 # (laser triangulation, 4-measurement average), i_hat=20A peak, f=50Hz.
-PUBLISHED_REST_MM = 3.8
-PUBLISHED_LEVITATION_MM = 11.5
+REFERENCE = json.loads((Path(__file__).resolve().parents[4] / "validation_test/maglev/team28_reference.json").read_text(encoding="utf-8"))
+PUBLISHED_REST_MM = REFERENCE["nominal_rest_height_mm"]
+PUBLISHED_LEVITATION_MM = REFERENCE["stationary_height_mm"]
 
 
 def equilibrium(dz_mm, force):
@@ -105,6 +107,9 @@ def run():
         "equilibrium_abs_height_mm": {"cln": z_cln,
                                       "disk_bottom_at_dz0": DISK_BOTTOM_DZ0_MM},
         "published_ref": {"authors": "Karl-Fetzer-Kurz-Lehner-Rucker",
+                          "source_url": REFERENCE["source_url"],
+                          "reference_mass_kg": REFERENCE["disk_mass_kg"],
+                          "comparison_scope": "stationary height only; historical model weight 1.055 N retained",
                           "rest_mm": PUBLISHED_REST_MM,
                           "levitation_height_mm": PUBLISHED_LEVITATION_MM,
                           "agreement_percent": pub_err},
@@ -139,10 +144,10 @@ def plot(dz_mm, fz_full, fz_cln, fz_lab, eq_cln, z_cln):
         ax.text(eq_cln, PHYS * np.array(fz_full).min(),
                 f"  z={z_cln:.1f} mm", va="bottom", ha="left",
                 fontsize=8, color="C3")
-    # published measured steady-state levitation height (z=11.5mm -> dZ)
+    # published measured steady-state levitation height (z=11.3mm -> dZ)
     dz_pub = PUBLISHED_LEVITATION_MM - DISK_BOTTOM_DZ0_MM
     ax.axvline(dz_pub, color="0.3", ls="--", lw=0.8)
-    ax.text(dz_pub, -DISK_WEIGHT * 1.9, "published\n11.5 mm", va="bottom",
+    ax.text(dz_pub, -DISK_WEIGHT * 1.9, "published\n11.3 mm", va="bottom",
             ha="center", fontsize=7, color="0.3")
     ax.set_xlabel(r"disk displacement $\Delta z$ (mm)")
     ax.set_ylabel(r"levitation force $\langle F_z\rangle$ (N)")

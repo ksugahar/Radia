@@ -1,0 +1,16 @@
+{
+  "schema": "radia.historical-figure-lineage.v1",
+  "source_commit": "3b6731aa7186c0a6b790b444b918a2fa08a1348c",
+  "source_path": "examples/NGSolve_Integration/demo_hysteresis_simkin.py",
+  "source_git_blob": "1c338d2d67266d69fad8cd49ccb857eade6c00f0",
+  "image_path": "docs/ngsolve_integration/demo_hysteresis_simkin.png",
+  "image_git_blob": "96d6abdaa28f226ac2433431746897fb96302277",
+  "image_sha256": "22da6be064c8bf2853fcffa194c5d628b935c1aaf27be155f51458456029bc7d",
+  "source_kind": "internal numerical demonstration with synthetic energy-play material",
+  "material": {"K": 10, "As_A_per_m": 8000, "Js_T_per_operator": 0.18, "chi_min_A_per_m": 0, "chi_max_A_per_m": 200},
+  "observable": "computed gap-center Bz in mT against coil NI in A-turns",
+  "measured_data": false,
+  "recovered_raw_step_results": false,
+  "current_solver_acceptance": false,
+  "note": "Git source writes the exact image filename; image blob is unchanged since that commit. Historical generator uses retired geometry plumbing and catches field-evaluation exceptions with zero output. Provenance identification does not certify convergence or numerical validity."
+}
