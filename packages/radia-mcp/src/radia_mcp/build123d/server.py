@@ -1860,21 +1860,17 @@ def _execute_build123d_sync(
 @mcp.tool()
 def preview_shape_in_cubit(script: str, label: str = "preview") -> str:
     """
-    Run a build123d script and show the resulting Shape in the
-    **persistent Cubit Viewer** (GUI window), replacing OCP CAD Viewer.
-
-    Lab direction (2026-04-19): Cubit Viewer is the single CAD preview
-    target — industrial-grade visualization / measurement. OCP CAD
-    Viewer has been retired; Plan A's persistent Cubit GUI handles
-    both AI-driven and user-interactive workflows in one window.
+    Run a build123d script and stage the resulting Shape in the
+    persistent headless Cubit session. No Cubit window is opened.
 
     Pipeline:
       1. exec the build123d script (like execute_build123d).
       2. Extract the last Shape found in the namespace.
       3. Export to a temp STEP file.
-      4. Hand to the persistent Cubit session (`cubit_show`-equivalent);
-         the daemon imports STEP into its live Cubit GUI window.
-      5. Temp STEP is deleted by default (Cubit now owns the geometry).
+      4. Hand to the persistent headless Cubit session.
+      5. Return shape statistics and command diagnostics for artifact-based
+         inspection; interactive GUI inspection remains human-owned.
+      6. Temp STEP is deleted by default (Cubit now owns the geometry).
 
     Performance:
       - First call: ~0.7-1.0 s (Cubit daemon cold-start) + STEP roundtrip
@@ -1944,7 +1940,7 @@ def preview_shape_in_cubit(script: str, label: str = "preview") -> str:
             "error": _tb.format_exc(),
         }, indent=2)
 
-    # Hand to Cubit viewer (lazy-start daemon).
+    # Hand to the persistent headless Cubit session (lazy-start daemon).
     try:
         from radia_mcp.cubit import session as _cs
     except ImportError as e:
@@ -1955,7 +1951,7 @@ def preview_shape_in_cubit(script: str, label: str = "preview") -> str:
         }, indent=2)
 
     try:
-        sess = _cs.CubitSession.get()
+        sess = _cs.CubitSession.get(mode="batch")
         sess.ensure_started()
     except _cs.CubitSessionError as e:
         return _dumps({
@@ -1978,8 +1974,9 @@ def preview_shape_in_cubit(script: str, label: str = "preview") -> str:
 
     info = {
         "status": "ok",
-        "stage": "shown_in_cubit",
-        "viewer": "cubit_persistent_session",
+        "stage": "loaded_in_cubit_headless",
+        "viewer": "cubit_persistent_headless_session",
+        "gui_started": False,
         "label": label,
         "variable": target_name,
         "type": type(target).__name__,
@@ -3257,26 +3254,26 @@ def execute_cadquery(script: str,
 def cadquery_to_cubit_hex(script: str,
                           target_size: float = 1.0,
                           prefer: str = "hex",
-                          commit_to_gui: bool = True,
+                          apply_to_session: bool = True,
                           timeout_s: int = 600) -> str:
     """End-to-end: cadquery script → STEP → Cubit `cubit_mesh_auto`
-    (batch-validated scheme ladder → winning recipe replayed in GUI).
+    (batch-validated ladder → winner replayed in a headless session).
 
     One call, three libraries, one output. Intended for the flow:
     "I have a cadquery geometry (from cadquery-mcp, a community
-    gist, or my own script) — hex-mesh it and show me in Cubit."
+    gist, or my own script) — hex-mesh it with Cubit."
 
     Args:
         script: cadquery script that assigns the final shape to
             `result` (or leaves one Workplane/Shape in the namespace).
         target_size: mesh element size (passed to `volume all size`).
         prefer: "hex" (require hex>0 to accept) or "any".
-        commit_to_gui: replay winning recipe in the live Cubit GUI.
+        apply_to_session: replay the winner in the persistent headless session.
         timeout_s: per-rung timeout for the mesh-auto ladder.
 
     Returns:
         JSON with cadquery info (validity/volume/bbox) + STEP path +
-        cubit_mesh_auto result (attempts ladder + winner + GUI replay).
+        cubit_mesh_auto result (attempts ladder + winner + session replay).
     """
     try:
         import cadquery as cq  # noqa: F401
@@ -3316,7 +3313,7 @@ def cadquery_to_cubit_hex(script: str,
     mesh_raw = cubit_mesh_auto(step_path=step_path,
                                 target_size=target_size,
                                 prefer=prefer,
-                                commit_to_gui=commit_to_gui,
+                                apply_to_session=apply_to_session,
                                 timeout_s=timeout_s)
     mesh_info = json.loads(mesh_raw)
     return _dumps({
@@ -4035,10 +4032,10 @@ def build123d_try_race(scripts: list,
 def build123d_to_cubit_hex(script: str,
                            target_size: float = 1.0,
                            prefer: str = "hex",
-                           commit_to_gui: bool = True,
+                           apply_to_session: bool = True,
                            timeout_s: int = 600) -> str:
     """End-to-end: build123d script → STEP → `cubit_mesh_auto` (batch-
-    validated scheme ladder → winner replayed in live Cubit GUI).
+    validated ladder → winner replayed in a persistent headless session).
 
     Mirror of `cadquery_to_cubit_hex` for the build123d side. Use this
     when the user says "make a hex mesh of <build123d shape>" and you
@@ -4049,11 +4046,11 @@ def build123d_to_cubit_hex(script: str,
             the namespace (or assign to `part`) so it can be exported.
         target_size: mesh size (`volume all size`).
         prefer: "hex" (need hex>0 to accept) or "any".
-        commit_to_gui: replay the winning recipe in the live Cubit GUI.
+        apply_to_session: replay the winner in the persistent headless session.
         timeout_s: per-rung timeout.
 
     Returns JSON with: build123d info (validity/volume/bbox) + STEP
-    path + cubit_mesh_auto ladder report + GUI replay state.
+    path + cubit_mesh_auto ladder report + headless-session replay state.
     """
     import tempfile
     tmp_dir = Path(tempfile.mkdtemp(prefix="b3d_to_cubit_"))
@@ -4079,7 +4076,7 @@ def build123d_to_cubit_hex(script: str,
     mesh_raw = cubit_mesh_auto(step_path=step_path,
                                 target_size=target_size,
                                 prefer=prefer,
-                                commit_to_gui=commit_to_gui,
+                                apply_to_session=apply_to_session,
                                 timeout_s=timeout_s)
     mesh_info = json.loads(mesh_raw)
     return _dumps({
@@ -4146,10 +4143,10 @@ def build123d_suggest_next(goal: str = "cae_pipeline",
                 "critical for named physical groups.")
         add("build123d_try(script)  # before hitting Cubit",
             "Run in a subprocess first to catch OCCT errors without "
-            "polluting the live MCP session.")
+            "polluting the persistent MCP session.")
         add("build123d_to_cubit_hex(script, target_size=1.0)",
             "One-shot pipeline: build123d → STEP → Cubit scheme ladder "
-            "→ live GUI replay.")
+            "→ persistent headless replay.")
     elif g == "clean":
         add("part.is_valid",
             "Check OCCT validity before export; invalid parts break mesh.")
