@@ -57,10 +57,14 @@ orchestration around that foundation.
   Kelvin and DtN techniques, volume and boundary integral methods, SIBC, and
   model reduction without automatically surrounding every problem with a
   large air mesh.
-- **MCP is the current user surface.** It exposes Radia's capabilities and
-  executable manual through inspectable engineering contracts. MATLAB/MEX and
-  Simulink remain integration and parity surfaces while their eventual product
-  role is evaluated.
+- **MCP and Simulink have distinct roles.** MCP is the primary AI-facing
+  surface and canonical operating manual. The masked blocks in the single
+  **Radia** Simulink library are the formal human-facing UI. A separate
+  standalone MATLAB edition remains undecided.
+- **Radia is MCP-native.** LLM agents drive the Python solver and workflow
+  implementations through Radia MCP. Simulink operation requires MathWorks'
+  official MATLAB MCP Server; missing MCP connectivity fails fast rather than
+  switching to an undocumented direct-execution path.
 - **The numerical backend stays visible.** NGSolve owns finite-element
   mathematics. Radia supplies the missing physical operator or coupling and
   keeps independent analytical or integral routes where they improve trust.
@@ -198,9 +202,9 @@ the source of numerical truth.
 | Layer | Owns |
 | :--- | :--- |
 | **NGSolve / ngsolve.bem** | FE spaces, element orientation, Piola maps, curved geometry, quadrature, weak-form assembly, GridFunctions, and BEM operators |
-| **Radia C++ and Python** | Analytical fields, electromagnetic physical methods, open-boundary operators, material/circuit coupling, reduced models, and artifact schemas |
-| **MATLAB and Simulink** | Integration/parity experiments, typed signal flow, lifecycle, controls, monitoring, and native MEX state ownership; product role not yet fixed |
-| **radia-mcp** | Current user entrypoint and canonical manual: executable domain knowledge, tool discovery, workflow selection, validation guidance, and orchestration |
+| **Radia C++ and Python** | LLM-driven solver/workflow implementation behind Radia MCP: analytical fields, physical methods, open-boundary operators, coupling, reduced models, and artifact schemas |
+| **MATLAB and Simulink** | Formal masked-block human UI on the required MathWorks MATLAB MCP foundation; typed signal flow, lifecycle, controls, monitoring, and native MEX state ownership |
+| **radia-mcp** | Primary AI-facing entrypoint and canonical manual: executable domain knowledge, tool discovery, workflow selection, validation guidance, and orchestration |
 | **CAD and visualization tools** | Geometry/mesh authoring and durable inspection through explicit STEP, VOL, MSH, and result boundaries |
 
 ## Capabilities
@@ -373,53 +377,21 @@ MEX commands before they are composed into Simulink blocks.
 - [MATLAB integration and MEX contracts](matlab/README.md)
 - [NGSolve/MEX parity map](docs/api/MATLAB_MEX_NGSOLVE_PARITY.md)
 
-### MATLAB and Simulink integration
+### Simulink: the formal human-facing product UI
 
-The repository currently carries a single **Radia** Simulink library as an
-integration and parity surface. It is not yet designated as Radia's separate
-end-user edition or final UI. Its current contents are:
+The single **Radia** Simulink library is the final human-facing product. Its
+operation requires MathWorks' official MATLAB MCP Server; Radia MCP is the
+canonical manual and AI-facing workflow surface. A separate standalone MATLAB
+product edition is not currently defined.
 
-| Group | Blocks |
-| :--- | :--- |
-| **Applications** | Electromagnet, Electromagnet Topology Optimization, PCB PEEC, Motor, Stream Function, Stream Function Optimization, Induction Heating, Magnetic Levitation, Field Study |
-| **Material and coupling** | Temperature-Dependent BH, Material Database, Material Dictionary, Winding Dictionary, Field Study Configuration |
-| **Optimization** | Optuna Optimization, Optuna Monitor, Sheet Metal Optimization, Adjoint Topology Optimization |
-| **Reduced models and circuits** | Nonlinear HDiv-MMM Reactor, Motor Angle Family, LTspice Circuit, Hysteretic LTspice Plant |
-| **Utilities** | Distributed-field statistics and checked result logging |
+![Radia Simulink library showing application, optimization, material, coupling, reduced-model, LTspice, and utility blocks](.github/assets/radia_simulink_library.png)
 
-Register the library after adding the repository's `matlab` directory to the
-MATLAB path:
-
-```matlab
-addpath("matlab")
-radia.setup()
-radia.simulink.buildLibrary()
-sl_refresh_customizations
-```
-
-Application blocks use explicit triggers for expensive CAD, mesh, and field
-solves. Native dynamic blocks use readable Level-2 MATLAB S-Functions for
-ports and lifecycle, with standalone MEX handles for repeated numerical work.
-
-The tracked `radia_nonlinear_reactor.slx` sample solves a nonlinear retained
-HDiv magnetic-moment state at every accepted sample. It exposes terminal
-voltage, flux linkage, differential inductance, peak and distributed magnetic
-flux density, energy, and Newton diagnostics. The block uses no LUT, lumped
-surrogate, or per-step Python call; open it with
-`radia.simulink.openNonlinearReactor()`.
-
-Induction Heating uses separate Eddy and Thermal S-Functions. Eddy accepts
-current, workpiece angle, and distributed temperature and emits distributed
-heat density; Thermal advances the accepted temperature field. Geometry
-updates accept checked workpiece `.vol`/`.vol.gz` and coil STEP or labeled VOL
-inputs, assemble the physical operators, and write evidence before simulation.
-There is no LUT or lumped thermal substitute hidden behind the production
-block.
-
-Tracked `.slx` samples have canonical MATLAB builders and load/update
-regressions. Packaged Simulink releases include the library, MATLAB support
-files, MEX assets, runtime dependencies, a manifest, and checksums. The exact
-archive is published only after it passes the multi-host release gate.
+The actual tracked library is shown above. Its Optimization group includes
+Optuna Optimization and Optuna Monitor blocks, so optimization studies can be
+composed and observed directly in Simulink. For installation and operation,
+query the Radia MATLAB MCP capability pack; this README does not duplicate the
+live manual. Discover the underlying Python-implemented capabilities, equations,
+citations, and executed results in [`docs/`](docs/README.md).
 
 ### Documentation and visualization
 
@@ -434,6 +406,16 @@ Published examples are executed notebooks with narrative, code, saved results,
 and applicable `ngsolve.webgui.Draw` or `netgen.webgui.Draw` scenes. They are
 not hidden production workbenches; machine-readable validation evidence belongs
 under `validation_test/`.
+
+These notebooks are intentionally technical: they present the governing
+equations, explain the physical or numerical method, cite the relevant papers
+through the canonical `references.bib`, and then show executable evidence. They
+answer “what can Radia do, and why does the method work?”; MCP answers “how do
+I run the current workflow?”.
+
+Each capability notebook is maintained as a living executable technical paper:
+problem statement, literature context, derivation, implementation, and
+validation evolve with the code instead of waiting for a separate manuscript.
 
 Field-producing application runs write checked Gmsh `.msh v4.1` artifacts.
 The Gmsh toolchain supports scalar/vector/tensor fields, sections, clipping,

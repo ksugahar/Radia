@@ -8,13 +8,19 @@ capability: what it does, when to use it, accepted inputs, workflow steps,
 constraints, artifacts, provenance, and relevant validation routes. This is a
 repository-wide rule, not a MATLAB/Simulink-only convention.
 
-The only currently supported user entrypoint is MCP. The product role of a
-separate MATLAB/MEX/Simulink edition is not yet decided. Existing MATLAB and
-Simulink assets remain implementation, integration, validation, and parity
-surfaces; do not describe them as Radia's final human interface, primary UI, or
-independent primary manual until an explicit product decision changes this
-policy. This section supersedes older final-Simulink-interface claims elsewhere
-in the repository.
+MCP is the primary AI-facing entrypoint and canonical operating manual.
+Simulink is Radia's formal human-facing UI through the masked blocks in the
+single **Radia** library. The product role of a separate standalone MATLAB
+edition is not yet decided; MATLAB/MEX assets support the Simulink UI,
+integration, validation, and Python capability parity. This section supersedes
+conflicting claims elsewhere in the repository.
+
+Radia is MCP-native by design. Public Python capabilities are solver and
+workflow implementations driven by an LLM through Radia MCP, not a separate
+direct-user product surface. The Simulink UI requires MathWorks' official
+MATLAB MCP Server for MATLAB execution and model operations; Radia MCP supplies
+the domain workflow, contracts, and manual above that foundation. Missing MCP
+connectivity must fail fast rather than silently selecting a non-MCP workflow.
 
 - The top-level `README.md` and `docs/` are the discovery, explanation, and
   evidence layer. Their first job is to show what engineers can do with Radia,
@@ -33,16 +39,29 @@ in the repository.
   notebook is not the primary manual and must not become a production
   workbench. Validation thresholds and machine-readable benchmark evidence
   remain under `validation_test/`.
+- Public method and application notebooks are substantive technical discovery
+  pages, not thin galleries. Include the governing equations and derivation at
+  the level needed to understand the method, cite the relevant papers
+  generously, and declare machine-auditable citation keys in
+  `metadata.radia.citation_keys`. Every citation must resolve against the
+  canonical `references.bib`; add only verified metadata there. A purely
+  operational notebook may omit scholarly citations only with a specific
+  `metadata.radia.citation_audit_exempt_reason`.
+- Treat each capability notebook as a living, executable technical paper kept
+  current with the implementation. Do not postpone the durable problem
+  statement, literature context, derivation, implementation notes, and
+  validation evidence merely because no separate journal manuscript is planned.
+  Do not describe repository documentation as peer reviewed unless it is.
 - API reference files, docstrings, and source comments may document signatures
   and implementation details, but they do not supersede MCP workflow guidance.
   When a public capability, contract, or recommended route changes, update its
   MCP manual surface in the same change; update README/docs discovery text when
   the user-visible capability claim changes.
-- A MATLAB Live Script (`.mlx`) is not sufficient as the sole public showcase
-  because GitHub does not render its contents as a readable page. If a MATLAB
-  implementation is shown publicly, put the discovery narrative and saved
-  results in GitHub-renderable Markdown or `.ipynb`; link the `.m`/`.mlx` source
-  as an optional executable companion. MCP remains the operating manual.
+- MATLAB `.m` and `.mlx` files are implementation assets, not `docs/` content.
+  Keep `.m` entry points under `matlab/+radia/`, Simulink builders and runtime
+  adapters under `matlab/+radia/+simulink/`, and MATLAB tests under their test
+  tree. GitHub-facing discovery and saved results remain Markdown or executed
+  Python `.ipynb`; MCP remains the operating manual.
 
 
 This document contains development guidelines and policies for the Radia project when working with Codex.
@@ -157,8 +176,8 @@ one generic GUI.
 - MCP servers are the supported user entrypoint and canonical manual. Reusable
   capability stays in C++/Python/MATLAB APIs, headless CLI tools,
   result-bearing notebooks, and validation tests. Application-specific
-  Simulink blocks remain integration assets and a possible future human
-  interface while their product role is evaluated.
+  Simulink blocks provide the formal human UI. A standalone MATLAB edition
+  remains a separate, undecided product question.
 - MCP servers encode executable knowledge, support autonomous validation /
   self-learning, and should reflect the same layer boundaries as the source
   tree.
@@ -247,24 +266,59 @@ Runge--Kutta routes remain separate enough to cross-check one another.
   (Lie versus unexpanded canonical A-map RK), the A/B field-route discrepancy,
   and the total Lie-versus-B-map discrepancy.
 
-### MATLAB and Simulink Integration Policy (2026-07-20, revised 2026-09-14)
+### MATLAB and Simulink Interface Policy (2026-07-20, revised 2026-09-14)
 
 **POLICY**: Use MathWorks' official MATLAB MCP Server as the MATLAB execution
 foundation and the Simulink Agentic Toolkit for generic model operations.
 Radia-specific MATLAB, LTspice, NGSolve, optimization, and Simulink behavior is
-the domain layer above those official foundations. Maintained Simulink
-integrations use masked blocks in the single **Radia** Library Browser entry;
-this does not designate Simulink as Radia's final human interface or a separate
-product edition. MCP is the supported user entrypoint while that product
-decision remains open.
+the domain layer above those official foundations. The masked blocks in the
+single **Radia** Library Browser entry are Radia's formal human-facing UI. MCP
+is the primary AI-facing entrypoint and canonical operating manual. Whether to
+publish a separate standalone MATLAB edition remains undecided. Production
+operation requires MathWorks' official MATLAB MCP Server; do not substitute a
+private MATLAB automation path when that foundation is unavailable.
 
 | Layer | Responsibility |
 |-------|----------------|
 | MATLAB MCP Server | Start/connect MATLAB, evaluate code, run `.m` files and tests, detect toolboxes, and run Code Analyzer checks. |
 | Simulink Agentic Toolkit | Read, edit, check, test, and query generic Simulink models and Model-Based Design settings. |
 | Radia C++ / Python / MATLAB APIs | Own numerical methods, NGSolve integration, artifact schemas, and the headless computation contract. |
-| Radia Simulink blocks | Provide an application-specific integration surface through masks, typed ports, initialization, diagnostics, and result artifacts; product status remains undecided. |
-| Python / MCP | Provide the supported user operating surface and canonical manual over the same numerical and artifact contracts. |
+| Radia Simulink blocks | Provide the formal application-specific human UI through masks, typed ports, initialization, diagnostics, and result artifacts. |
+| Python / MCP | Provide the primary AI-facing operating surface and canonical manual over the same numerical and artifact contracts. |
+
+### MathWorks Foundation Currency Policy (2026-09-01)
+
+**POLICY**: MathWorks' official MATLAB MCP Server and the MATLAB/Simulink
+Agentic Toolkits are release-managed foundations. LAB and 100号機 track the
+latest compatible stable official release; before a Radia release, record the
+installed server's `--version`, inspect its release notes, and run the focused
+MATLAB/Simulink regression lane when an upgrade changes behavior.
+
+- MathWorks owns generic MATLAB and Simulink operations. `radia-mcp` adds only
+  Radia-domain MEX, artifact, CAE, and workflow extensions; it must not fork or
+  reimplement generic official-tool behavior.
+- Each official-server update receives a `radia-mcp` composition review: adopt
+  applicable generic capabilities in the domain workflow, preserve the public
+  artifact contract, and add a focused regression when a changed official
+  behavior affects Radia.
+- The generic official model lane is `model_read`, `model_edit`,
+  `model_check`, then `model_test`. Use `model_read_diagnostics` for compile or
+  simulation failures rather than recreating generic diagnostics through
+  `evaluate_matlab_code`.
+- Register the Radia library through the official `satk.Configuration` custom
+  library mechanism. Persist project-scoped library references as relative
+  paths so checked models work unchanged on LAB and 100号機; never retain a
+  workstation-specific library path or duplicate the toolkit's block-policy
+  logic in Radia.
+- The official C Function Block capability is a generated-code option. It does
+  not replace Radia's standalone checked MEX ABI and readable Level-2 MATLAB
+  S-Function default; promote an application only when its code-generation or
+  runtime requirements meet the existing native-promotion criteria.
+- `radia-mcp.matlab_official_server_status` is the executable inventory for the
+  discovered server command and version. It reports the local foundation, not a
+  claim that an unqueried upstream release is installed.
+- mdx remains a MATLAB compute host, not an Agentic Toolkit/MCP development
+  host. It receives validated MATLAB workloads rather than the desktop tooling.
 
 **Rules**:
 - Keep this entire policy section synchronized verbatim with the corresponding
@@ -299,8 +353,8 @@ decision remains open.
 - All Jupyter notebook panels and workbenches, including the former `radia-ih`
   comparison workbench, are retired as production interfaces. Remove their
   launchers and adapters; do not retain notebook-only production features or
-  create new notebook panels. Any maintained Simulink application uses a masked
-  block as its integration surface, without predetermining the final product UI.
+  create new notebook panels. Every production Radia application uses a masked
+  Simulink block as its formal human operating surface.
 - `docs/**/*.ipynb` is the canonical public example, derivation, reproduction,
   and validation layer, not a production GUI. Every repository-published CAE
   example MUST be an executed, result-bearing notebook with narrative, code,

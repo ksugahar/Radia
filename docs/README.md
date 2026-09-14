@@ -14,6 +14,10 @@ The `radia-mcp` MCP servers are the primary manual for Radia. Query the owning
 server's status, usage, or recipe tool for the current workflow, accepted
 inputs, constraints, and output-artifact contract.
 
+Radia is MCP-native: an LLM drives the Python solver/workflow implementation
+through Radia MCP. Python code shown here demonstrates what the implementation
+can compute; it is not a competing direct-user manual or product interface.
+
 This page and the rest of `docs/` answer a different question: **what can Radia
 do for an engineering problem, and what evidence shows that it works?** A
 public capability page or notebook should therefore open with the problem, the
@@ -22,11 +26,29 @@ instructions. Migration ledgers, cleanup routing, and implementation handoffs
 belong outside the public documentation unless rewritten as capability
 showcases.
 
-MCP is currently the only supported user entrypoint. MATLAB/MEX/Simulink work
-remains an integration and parity lane while its future product role is
-undecided. A MATLAB Live Script (`.mlx`) must not be the sole public showcase:
-GitHub-readable Markdown or a saved-output `.ipynb` carries the discovery page,
-with `.m`/`.mlx` linked only as an executable companion.
+The discovery layer is technically substantial. A public method or application
+notebook should include the governing equations and enough derivation to make
+the numerical route intelligible, cite the relevant papers generously, and
+declare those keys in `metadata.radia.citation_keys`. Keys and scholarly
+identifiers are checked against the canonical
+`packages/radia-mcp/src/radia_mcp/bibliography/data/references.bib`. A notebook
+may omit scholarly citations only when it is genuinely operational and records
+a specific `metadata.radia.citation_audit_exempt_reason`.
+
+Maintain each capability notebook as a living executable technical paper. It
+should preserve the problem statement, literature context, derivation,
+implementation notes, and validation evidence even when no separate journal
+paper is planned. Repository documentation must not be labeled peer reviewed
+unless it actually is.
+
+MCP is the primary AI-facing entrypoint and canonical manual. Simulink is the
+formal human-facing UI, but `docs/` does not duplicate its operating manual;
+these pages introduce capabilities and results. A separate standalone MATLAB
+edition remains undecided. Simulink operation requires MathWorks' official
+MATLAB MCP Server. A MATLAB Live Script (`.mlx`) must not be the sole public showcase:
+GitHub-readable Markdown or a saved-output Python `.ipynb` carries the discovery
+page. MATLAB `.m`/`.mlx` implementation files belong under `matlab/`, not
+`docs/`.
 
 Start an MCP-guided task with the relevant pack's `capability_pack_status`,
 then use the domain status/usage/recipe tool it reports:
@@ -56,8 +78,8 @@ explicitly and name/configure the view, for example
 
 These notebooks demonstrate and reproduce a capability claim; they are not the
 primary operating manual. Machine-readable validation evidence belongs under
-`validation_test/`. MCP remains the supported user entrypoint; the eventual
-product role of MATLAB/MEX/Simulink is intentionally undecided.
+`validation_test/`. MCP remains the canonical operating manual, while masked
+Simulink blocks provide the formal human UI.
 Its spatial field results are durable GMSH `.msh v4.1` artifacts in the run
 directory; interactive WebGUI scenes remain the notebook explanation layer.
 
