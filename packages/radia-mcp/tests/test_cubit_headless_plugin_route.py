@@ -28,7 +28,7 @@ def test_headless_journal_can_select_isolated_command_plugin_directory(
     )
 
     assert result["status"] == "completed"
-    assert result["persistent_gui_started"] is False
+    assert result["gui_started"] is False
     assert result["command_plugin_directory"] == str(plugin_dir)
     assert result["user_init_loaded"] is False
     assert "-noinitfile" in result["headless_flags"]
@@ -54,4 +54,5 @@ def test_headless_journal_rejects_missing_command_plugin_directory(
     assert result["status"] == "error"
     assert result["stage"] == "preflight"
     assert result["kind"] == "input"
+    assert result["gui_started"] is False
     assert "command plugin directory not found" in result["error"]
