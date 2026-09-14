@@ -1,6 +1,7 @@
 """MCP boundary checks only: no optimizer or private research data required."""
 
 import sys
+from importlib import import_module
 from types import ModuleType, SimpleNamespace
 
 import numpy as np
@@ -90,7 +91,10 @@ def test_research_settings_are_not_mcp_defaults():
 
 
 def test_registered_tool_keeps_the_same_csv_boundary(tmp_path):
-    from radia_mcp.radia_ngsolve.server import urn_fit
+    # The conservative collection scanner follows even uncalled solver imports
+    # inside server.py. Import at execution time: this exercises only the CSV
+    # boundary, which must work without any optional numerical solver installed.
+    urn_fit = import_module('radia_mcp.radia_ngsolve.server').urn_fit
 
     source = tmp_path/'one_row.csv'
     source.write_text('1,2,3\n', encoding='utf-8')
