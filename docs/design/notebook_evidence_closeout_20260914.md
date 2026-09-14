@@ -246,3 +246,93 @@ Verification: all 41 code/output/metadata preservation checks passed, and the
 existing notebook plus canonical-bibliography regression selection passed
 **103 tests**. No solver code, parent bibliography, editable installation or
 live-client connection was changed in this pass.
+
+## Source-resolution follow-up for the 25 open notebooks
+
+Every one of the 25 received a claim-to-source or claim-to-implementation
+resolution, replacing the initial screening note. **19 are now qualified as
+bounded demonstrations; 6 retain specific evidence gaps.** Qualified means the
+claims were narrowed to the supported demonstration, not that a broad theorem
+was proved or a historical benchmark rerun. In particular, unlocated classical
+attributions in the hodograph/edge examples are not silently promoted to verified
+citations; the displayed local derivation or explicit proxy is the asserted model.
+
+Eighteen additional notebooks now carry canonical BibTeX/TeX4ht artifacts;
+cut selection reuses its existing generated references. There are 29 declared
+bibliographies in the 51-notebook corpus. Six of these 25 use repository-local
+derivations/roadmap claims without invented external references. Code cells,
+execution counts, saved outputs and non-bibliography metadata were preserved
+in all 25, checked against the start commit.
+
+### Corrections supported by implementation and algebra
+
+- The Kelvin tests check field ratios Z/B1 = 2/3 and B0/B1 = 4/3, hence a
+  one-third deficit/excess, not a loss of two thirds. The uniform potential
+  grows as inverse radius after inversion; its gradient grows as inverse
+  radius squared. Historical diagnostic strings inside saved code/output are
+  retained but explicitly superseded in the prose.
+- The edge proxy at zero tilt is `-tan(w/(2*rho))/rho`; `-w/(2*rho^2)` is its
+  first-order approximation. The finite-z polynomial fringe is a local
+  expansion with an order-z-squared curl residual, not an exact vacuum field
+  over an arbitrary aperture.
+- The IH Bessel helper explicitly passes `geometry='cylinder'`. The class name
+  `ESIMFiniteSlabSolver` did not imply a slab/cylinder comparison.
+- The CG notebook computes an unweighted H reconstruction difference (with
+  radial integration weight), not the constitutive-energy norm or error against
+  an exact solution. [Bertrand and Boffi, section 2](https://arxiv.org/html/1907.00440v1)
+  supplies the relevant admissibility/equilibrium context, not a blanket bound
+  for this saved indicator.
+- The regularized formula applies to the retained operator A_k and an SPD free-DOF
+  metric. An independent small NumPy comparison with the dense A_k Tikhonov
+  equations agreed to 2.33e-16. This is an algebra check, not solver validation.
+- A current seminorm is not magnetic stored energy; sampled nondominated trials
+  are not a complete Pareto front. Those interpretations were corrected.
+
+### Parent bibliography reconciliation
+
+New entries identify Lubich CQ, Bertrand/Boffi hypercircle reconstruction,
+Jobard/Lefer streamline placement, Cabral/Leedom LIC, Lewiner marching cubes,
+Trimesh smoothing API and the Optuna framework. Verification used the
+[Springer CQ record](https://doi.org/10.1007/BF01398686),
+[Springer streamline chapter](https://link.springer.com/chapter/10.1007/978-3-7091-6876-9_5),
+[Lewiner's author page](https://thomas.lewiner.org/pub/marching_cubes_jgt.html),
+[Trimesh API](https://trimesh.org/trimesh.smoothing.html), author arXiv records,
+and publisher-deposited Crossref metadata. References are background only where
+the implementation or experimental correspondence has not been demonstrated.
+
+Publisher metadata for [10.1109/TMAG.2025.3621134](https://api.crossref.org/works/10.1109/TMAG.2025.3621134)
+identifies Herbert Egger, Felix Engertsberger and Andreas Schafelner, the
+forward/inverse title, volume 62(7), article 7300706 (2026).
+The misleading conference/journal hybrid record is corrected under its retained
+key; the separate [arXiv version](https://arxiv.org/abs/2507.15289) retains a
+separate key and correct title. The old `egger2025tmag` title/DOI cannot be
+confidently identified: a 404 is not proof of fabrication, so it remains flagged
+unverified rather than being silently reassigned to another paper. None of the
+new references cite it. Potter's [publisher metadata](https://api.crossref.org/works/10.1109/TMAG.1971.1067251)
+restores coauthor R. Schmulian and pages 873-880. Existing generated references
+were checked for affected selected-source hashes.
+
+### Six evidence gaps that references cannot close
+
+1. **BEM extractor:** independently specify the current/internal-inductance
+   convention and investigate the actual matrix rank/spectrum before assigning
+   a general cause to the closed-torus observation.
+2. **Shape regeneration:** `topopt_cad.py` passes `nu=-0.53` to Trimesh's
+   subtractive dilation pass. Trimesh 4.12.2 independently reproduces this sign
+   problem on a one-subdivision icosphere: two-pass volume ratios are 0.57641
+   for negative nu versus 0.99187 for positive nu. The code and saved geometry
+   are not modified in this documentation pass. A focused implementation fix
+   plus regenerated shape evidence is required; merely citing Taubin is not a fix.
+3. **Hysteresis gallery:** recover dataset/identification/preprocessing lineage
+   for measured-B-H claims. The analytical Potter fixture is not a measured specimen.
+4. **Maglev:** match inputs and observations to the current official TEAM 28
+   specification, not just its preliminary-description citation.
+5. **NGSolve integration gallery:** identify the Simkin-labelled hysteresis image
+   and underlying data. An unrelated scalar-potential paper is not its provenance.
+6. **URN:** obtain the original sample-to-frequency record and accepted manuscript
+   identity; NASA samples and derived TDK impedance remain as qualified earlier.
+
+The 103 notebook/canonical-bibliography tests pass. This pass changes no solver,
+installation, running client, or saved numerical result. Parent edits take effect
+for a manuscript only after its generated bibliography is refreshed; this is not
+a claim of live-client synchronization.
