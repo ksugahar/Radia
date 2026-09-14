@@ -10,8 +10,13 @@ GitHub-facing content under `docs/` is the discovery and evidence layer: it
 should show the engineering problem, what Radia can do, the expected result or
 artifact, and the owning MCP tool family.
 
-MATLAB, MEX, and Simulink assets currently serve implementation, integration,
-validation, and parity work while their product role is evaluated. An `.mlx`
-file must not be the sole public explanation because GitHub does not render it
-as a readable notebook page; use Markdown or a saved-output `.ipynb` for the
-GitHub-facing account.
+Radia is MCP-native. LLM agents drive the Python implementation through Radia
+MCP, while the formal Simulink UI requires MathWorks' official MATLAB MCP
+Server. Missing MCP connectivity is an explicit failure, not a reason to route
+users to Python or private MATLAB automation.
+
+Masked Simulink blocks are Radia's formal human-facing UI. MATLAB and MEX assets
+support that UI, integration, validation, and parity work; a separate standalone
+MATLAB edition remains undecided. MATLAB `.m` and `.mlx` files are implementation
+assets under `matlab/`, not public `docs/` content. Use Markdown or an executed
+Python `.ipynb` for the GitHub-facing capability account.

@@ -7,11 +7,15 @@ description: Compatibility note for auditing result-bearing Radia docs notebooks
 
 No Radia application has a notebook production workbench. `docs/**/*.ipynb`
 is the public capability-showcase, reproduction, and field-inspection layer
-only. The `radia-mcp` MCP servers are the primary manual for current operating
-instructions and the only currently supported user entrypoint. MATLAB/MEX and
-Simulink remain integration/parity surfaces with an undecided product role;
-`.mlx` files are never the sole public showcase because GitHub does not render
-them as readable pages.
+only. The `radia-mcp` MCP servers are the primary AI-facing entrypoint and
+canonical manual for current operating instructions. Masked Simulink blocks
+are the formal human UI but are not documented through competing notebook
+workbenches. A separate standalone MATLAB edition remains undecided; `.mlx`
+and `.m` files remain implementation assets under `matlab/`, not `docs/`
+content. Public notebooks in `docs/` are executed Python capability showcases.
+The Python shown there is an LLM-driven implementation behind Radia MCP, not a
+separate direct-user product. Simulink operation requires MathWorks' official
+MATLAB MCP Server and fails fast when that connection is unavailable.
 
 ## Gates
 
@@ -23,6 +27,11 @@ Verify that:
 
 - the opening states the engineering problem, the Radia capability/route, the
   expected result or artifact, and the owning MCP capability pack;
+- method/application notebooks include governing equations, sufficient
+  derivation, and relevant literature citations declared in
+  `metadata.radia.citation_keys` and resolved against canonical
+  `references.bib`; a citation-free operational notebook records a specific
+  `metadata.radia.citation_audit_exempt_reason`;
 - the notebook is executed and has no saved error output;
 - public examples save WebGUI rich output;
 - a primary field uses `Draw(field, mesh, name=..., ...)` with explicit display
