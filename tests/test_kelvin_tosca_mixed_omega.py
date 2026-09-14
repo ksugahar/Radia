@@ -6,6 +6,26 @@ import numpy as np
 import pytest
 
 
+def test_realized_bh_response_binds_pchip_tangent_energy_and_vacuum_tail():
+    from radia.scalar_potential_solver import MU_0, sample_bh_constitutive_response
+
+    table = [(0.0, 0.0), (100.0, 0.5), (1000.0, 1.4), (10000.0, 1.7)]
+    grid = [0.0, 50.0, 100.0, 500.0, 1000.0, 10000.0, 20000.0]
+    response = sample_bh_constitutive_response(table, grid)
+
+    assert response["identity"]["constitutive_interpolation"] == "monotone_pchip"
+    assert response["identity"]["constitutive_extrapolation"] == "vacuum_slope"
+    assert response["B_T"][-1] == pytest.approx(1.7 + MU_0 * 10000.0)
+    assert response["differential_permeability_H_per_m"][-1] == pytest.approx(MU_0)
+    for h, b, energy, coenergy in zip(
+        response["H_A_per_m"],
+        response["B_T"],
+        response["energy_density_J_per_m3"],
+        response["coenergy_density_J_per_m3"],
+    ):
+        assert energy + coenergy == pytest.approx(h * b, abs=1.0e-10)
+
+
 def _two_region_mesh(maxh):
     from netgen.occ import Box, Glue, OCCGeometry, Pnt, X
     import ngsolve as ng
