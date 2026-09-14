@@ -36,8 +36,8 @@ def _relative_nodeid(nodeid: str) -> str:
 _CI_SELECTED_FILES = {_selector_file(selector) for selector in _CI_SELECTORS}
 _CI_SELECT_ALL = not _CI_SELECTORS or "tests" in _CI_SELECTED_FILES
 
-# The radia-mcp matrix CI ("lightweight selftest") installs ONLY mcp + pytest
-# + radia-mcp[maintenance]: NO ngsolve / netgen / scipy / numpy / matplotlib /
+# The radia-mcp matrix CI ("lightweight selftest") installs mcp + pytest + numpy
+# + radia-mcp[maintenance]: NO ngsolve / netgen / scipy / matplotlib /
 # gmsh / chromadb / ...  A test that imports ANY such module AT MODULE LEVEL
 # crashes pytest COLLECTION there (ModuleNotFoundError) and reddens the whole
 # suite.  So skip collecting any test file whose imports include a module that
@@ -50,7 +50,7 @@ _CI_SELECT_ALL = not _CI_SELECTORS or "tests" in _CI_SELECTED_FILES
 #
 # RADIA_MCP_FORCE_MINIMAL=1 reproduces the matrix's minimal env on a full-env
 # box (for tools/ci_preflight.py): treat everything OUTSIDE the minimal
-# baseline (stdlib + mcp + pytest + radia_mcp) as absent.  This is what catches
+# baseline (stdlib + mcp + pytest + numpy + radia_mcp) as absent. This catches
 # a heavy-import CI break (the 2026-06-05 ngsolve incident class) BEFORE push.
 _FORCE_MINIMAL = os.environ.get("RADIA_MCP_FORCE_MINIMAL") == "1"
 _MINIMAL_BASELINE = set(getattr(sys, "stdlib_module_names", ())) | {
@@ -63,6 +63,8 @@ _MINIMAL_BASELINE = set(getattr(sys, "stdlib_module_names", ())) | {
     "rpds", "sse_starlette", "starlette", "typing_inspection", "uvicorn",
     # Lightweight optional maintenance extra, exercised by the matrix.
     "tomlkit",
+    # CSV/input contracts install NumPy in the test environment, not the wheel.
+    "numpy",
 }
 _PROJECT_IMPORT_CACHE = {}
 
@@ -72,12 +74,11 @@ if _FORCE_MINIMAL:
     def _minimal_find_spec(name, package=None):
         """Make dynamic optional-dependency probes match GitHub minimal CI."""
         top_module = name.split(".", 1)[0]
-        if top_module not in _MINIMAL_BASELINE:
-            if not (
-                (_TEST_ROOT / f"{top_module}.py").exists()
-                or (_TEST_ROOT / top_module).is_dir()
-            ):
-                return None
+        if top_module not in _MINIMAL_BASELINE and not (
+            (_TEST_ROOT / f"{top_module}.py").exists()
+            or (_TEST_ROOT / top_module).is_dir()
+        ):
+            return None
         return _real_find_spec(name, package)
 
     importlib.util.find_spec = _minimal_find_spec
