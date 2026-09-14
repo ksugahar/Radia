@@ -41,6 +41,10 @@ include tests/README.md
 # Include documentation
 recursive-include docs *.md
 
+# Caller-owned downloaded NASA measurements must not enter source distributions,
+# even when present locally or selected by a VCS-aware file finder.
+recursive-exclude docs/universal_relaxation_network/data/real_world/nasa_battery *.csv *.mat *.zip
+
 # Exclude build artifacts
 global-exclude __pycache__
 global-exclude *.pyc

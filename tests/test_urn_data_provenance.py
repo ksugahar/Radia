@@ -16,6 +16,29 @@ ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "docs/universal_relaxation_network/data/real_world/nasa_battery"
 
 
+@pytest.mark.parametrize('filename', [
+    'verify_timedomain_stability.py', 'validate_urn_vs_vf.py',
+    'validate_real_world.py', 'validate_all_datasets.py', 'validate_real_data.py',
+    'run_ltspice_verification.py', 'benchmark_urn_vs_skrf_vf.py', 'ablation_study.py',
+])
+def test_legacy_bundled_nasa_modes_have_explicit_retirement(filename):
+    path = ROOT / 'validation_test/universal_relaxation_network' / filename
+    source = path.read_text(encoding='utf-8')
+    tree = ast.parse(source)
+    guards = [n for n in ast.walk(tree) if isinstance(n, ast.Raise)
+              and 'Legacy bundled NASA mode is retired' in ast.get_source_segment(source, n)]
+    assert len(guards) == 1
+    with pytest.raises(RuntimeError, match='private'):
+        exec(compile(ast.Module(body=guards, type_ignores=[]), str(path), 'exec'), {})
+    assert 'nasa_18650_eis.csv' not in source
+
+
+def test_nasa_downloads_excluded_from_source_distribution():
+    manifest = (ROOT / 'MANIFEST.in').read_text()
+    assert ('recursive-exclude docs/universal_relaxation_network/data/real_world/'
+            'nasa_battery *.csv *.mat *.zip') in manifest
+
+
 @pytest.mark.parametrize(("filename", "function"), [
     ("generate_paper_figures.py", "load_nasa_battery_data"),
     ("demo_spice_timedomain.py", "load_battery_data"),
