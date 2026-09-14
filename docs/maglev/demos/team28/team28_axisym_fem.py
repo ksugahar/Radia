@@ -11,7 +11,9 @@ in-repo baseline before layering the CLN reduction on top.
 
 Reference (from the lab .mat, Fz1 vs dZ): at dZ=0 (disk bottom at 10.8mm)
 F_z = -2.1928 N  (sign convention: NEGATIVE F_z = upward lift).  Disk
-weight ~1.055 N; stable levitation equilibrium ~dZ=+4mm.
+weight ~1.055 N. F_z is the legacy integral, not the physical time-average;
+the corrected sweep balances physical lift and gives an equilibrium near
+dZ=+0.2mm. See validation_test/maglev/team28_reference.json for comparison conditions.
 
 Run:  python team28_axisym_fem.py
 """
