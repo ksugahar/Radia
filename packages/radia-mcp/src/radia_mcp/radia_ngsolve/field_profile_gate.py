@@ -681,6 +681,255 @@ def nonlinear_constitutive_response_parity_gate(
     }
 
 
+def nonlinear_constitutive_point_sample_gate(
+    summary: dict[str, Any],
+    *,
+    max_response_relative_difference: float = 0.05,
+    max_direction_sine: float = 0.02,
+    max_vector_magnitude_relative_residual: float = 1.0e-9,
+    min_response_samples: int = 5,
+) -> dict[str, Any]:
+    """Gate pointwise constitutive evidence without accepting recovered fields.
+
+    A postprocessor's nodally averaged or equivalent-source-integrated B/H
+    values are useful spatial-field evidence, but they are not an unsmoothed
+    element-local evaluation of the material law.  This gate keeps that
+    distinction explicit and only admits an identity-bound ``ELEMENT_LOCAL``
+    reference as constitutive evidence.
+    """
+
+    if not isinstance(summary, dict):
+        raise ValueError("summary must be a mapping")
+    response_limit = float(max_response_relative_difference)
+    direction_limit = float(max_direction_sine)
+    magnitude_limit = float(max_vector_magnitude_relative_residual)
+    sample_limit = int(min_response_samples)
+    if any(
+        not math.isfinite(value) or value < 0.0
+        for value in (response_limit, direction_limit, magnitude_limit)
+    ):
+        raise ValueError("relative tolerances must be finite and nonnegative")
+    if direction_limit > 1.0:
+        raise ValueError("max_direction_sine must not exceed 1")
+    if sample_limit < 5:
+        raise ValueError("min_response_samples must be at least 5")
+
+    source = summary.get("source")
+    candidate = summary.get("candidate")
+    source = source if isinstance(source, dict) else {}
+    candidate = candidate if isinstance(candidate, dict) else {}
+    source_identity = source.get("identity")
+    source_identity = source_identity if isinstance(source_identity, dict) else {}
+    candidate_identity = candidate.get("identity")
+    candidate_identity = (
+        candidate_identity if isinstance(candidate_identity, dict) else {}
+    )
+    values = source.get("values")
+    values = values if isinstance(values, list) else []
+
+    def canonical_digest(value: Any) -> str:
+        payload = json.dumps(
+            value, ensure_ascii=True, separators=(",", ":"), sort_keys=True
+        ).encode("ascii")
+        return hashlib.sha256(payload).hexdigest()
+
+    source_rows: list[tuple[float, float, float, float]] = []
+    source_schema_valid = bool(values)
+    max_b_magnitude_residual = math.inf
+    max_h_magnitude_residual = math.inf
+    max_cross_relative = math.inf
+    min_cosine = -1.0
+    b_residuals: list[float] = []
+    h_residuals: list[float] = []
+    cross_values: list[float] = []
+    cosine_values: list[float] = []
+    for value in values:
+        if not isinstance(value, dict):
+            source_schema_valid = False
+            break
+        try:
+            b_vector = [float(item) for item in value["field_T"]]
+            h_vector = [
+                float(item)
+                for item in value["magnetic_field_strength_A_per_m"]
+            ]
+            b_magnitude = float(value["magnitude_T"])
+            h_magnitude = float(
+                value["magnetic_field_strength_magnitude_A_per_m"]
+            )
+        except (KeyError, TypeError, ValueError):
+            source_schema_valid = False
+            break
+        if len(b_vector) != 3 or len(h_vector) != 3 or not all(
+            math.isfinite(item)
+            for item in (*b_vector, *h_vector, b_magnitude, h_magnitude)
+        ):
+            source_schema_valid = False
+            break
+        b_norm = math.sqrt(sum(item * item for item in b_vector))
+        h_norm = math.sqrt(sum(item * item for item in h_vector))
+        denominator = b_norm * h_norm
+        if denominator <= 1.0e-300:
+            source_schema_valid = False
+            break
+        cross = (
+            (b_vector[1] * h_vector[2] - b_vector[2] * h_vector[1]) ** 2
+            + (b_vector[2] * h_vector[0] - b_vector[0] * h_vector[2]) ** 2
+            + (b_vector[0] * h_vector[1] - b_vector[1] * h_vector[0]) ** 2
+        ) ** 0.5 / denominator
+        cosine = sum(b * h for b, h in zip(b_vector, h_vector)) / denominator
+        b_residuals.append(abs(b_norm - b_magnitude) / max(abs(b_magnitude), 1.0e-300))
+        h_residuals.append(abs(h_norm - h_magnitude) / max(abs(h_magnitude), 1.0e-300))
+        cross_values.append(cross)
+        cosine_values.append(cosine)
+        source_rows.append((h_magnitude, b_magnitude, cross, cosine))
+
+    if source_schema_valid:
+        source_rows.sort(key=lambda row: row[0])
+        max_b_magnitude_residual = max(b_residuals)
+        max_h_magnitude_residual = max(h_residuals)
+        max_cross_relative = max(cross_values)
+        min_cosine = min(cosine_values)
+
+    try:
+        candidate_h = [float(item) for item in candidate.get("H_A_per_m", [])]
+        candidate_b = [float(item) for item in candidate.get("B_T", [])]
+    except (TypeError, ValueError):
+        candidate_h = []
+        candidate_b = []
+    candidate_valid = (
+        len(candidate_h) == len(candidate_b)
+        and len(candidate_h) >= sample_limit
+        and all(math.isfinite(item) for item in (*candidate_h, *candidate_b))
+        and all(right > left for left, right in zip(candidate_h, candidate_h[1:]))
+    )
+    source_h = [row[0] for row in source_rows]
+    source_b = [row[1] for row in source_rows]
+    candidate_at_source: list[float] = []
+    grids_match = candidate_valid
+    if grids_match:
+        for source_value in source_h:
+            matching = [
+                b_value
+                for h_value, b_value in zip(candidate_h, candidate_b)
+                if math.isclose(
+                    source_value, h_value, rel_tol=1.0e-12, abs_tol=1.0e-12
+                )
+            ]
+            if len(matching) != 1:
+                grids_match = False
+                candidate_at_source = []
+                break
+            candidate_at_source.append(matching[0])
+    pointwise_relative_difference: list[float] = []
+    rms_relative_difference: float | None = None
+    if source_schema_valid and grids_match:
+        pointwise_relative_difference = [
+            abs(actual - expected) / max(abs(expected), 1.0e-300)
+            for actual, expected in zip(source_b, candidate_at_source)
+        ]
+        rms_relative_difference = math.sqrt(
+            sum(
+                (actual - expected) ** 2
+                for actual, expected in zip(source_b, candidate_at_source)
+            )
+            / max(
+                sum(expected * expected for expected in candidate_at_source),
+                1.0e-300,
+            )
+        )
+
+    point_set = source_identity.get("point_set_m")
+    point_set = point_set if isinstance(point_set, list) else []
+    material_curve = source_identity.get("material_curve")
+    material_curve = material_curve if isinstance(material_curve, dict) else {}
+    claimed_identity_digest = str(
+        source_identity.get("constitutive_identity_sha256") or ""
+    )
+    identity_core = {
+        key: value
+        for key, value in source_identity.items()
+        if key != "constitutive_identity_sha256"
+    }
+    checks = {
+        "source_completed": source.get("status") == "completed",
+        "sample_count_sufficient": len(source_rows) >= sample_limit,
+        "joint_point_fields_finite": source_schema_valid,
+        "SI_units_explicit": source_identity.get("response_units")
+        == {"H": "A/m", "B": "T"},
+        "point_set_identity_valid": bool(point_set)
+        and source_identity.get("point_set_sha256") == canonical_digest(point_set),
+        "source_identity_digest_valid": bool(identity_core)
+        and claimed_identity_digest == canonical_digest(identity_core),
+        "material_table_identity_matches": bool(
+            material_curve.get("canonical_table_sha256")
+        )
+        and material_curve.get("canonical_table_sha256")
+        == candidate_identity.get("bh_table_sha256"),
+        "source_is_unsmoothed_element_local": (
+            source.get("response_evidence_status")
+            == "source_native_element_local_B_H_samples"
+            and source.get("constitutive_oracle") is True
+            and source.get("constitutive_comparison_ready") is True
+            and source_identity.get("constitutive_oracle") is True
+            and source_identity.get("field_recovery") == "ELEMENT_LOCAL"
+            and source_identity.get("field_recovery_semantics")
+            == "unsmoothed_element_local_evaluation"
+        ),
+        "candidate_grid_matches_source_samples": grids_match,
+        "reported_vector_magnitudes_match": (
+            max_b_magnitude_residual <= magnitude_limit
+            and max_h_magnitude_residual <= magnitude_limit
+        ),
+        "isotropic_B_H_directions_collinear": (
+            max_cross_relative <= direction_limit and min_cosine >= 0.0
+        ),
+        "B_response_matches": bool(pointwise_relative_difference)
+        and max(pointwise_relative_difference) <= response_limit
+        and rms_relative_difference is not None
+        and rms_relative_difference <= response_limit,
+    }
+    return {
+        "policy": "nonlinear_constitutive_point_sample_gate_v1",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "checks": checks,
+        "issues": [name for name, accepted in checks.items() if not accepted],
+        "comparison_performed": source_schema_valid and grids_match,
+        "constitutive_parity_established": all(checks.values()),
+        "metrics": {
+            "sample_count": len(source_rows),
+            "H_range_A_per_m": (
+                [min(source_h), max(source_h)] if source_h else None
+            ),
+            "max_B_relative_difference": (
+                max(pointwise_relative_difference)
+                if pointwise_relative_difference
+                else None
+            ),
+            "rms_B_relative_difference": rms_relative_difference,
+            "max_B_H_direction_sine": max_cross_relative,
+            "min_B_H_direction_cosine": min_cosine,
+            "max_B_magnitude_relative_residual": max_b_magnitude_residual,
+            "max_H_magnitude_relative_residual": max_h_magnitude_residual,
+        },
+        "source_recovery": {
+            "mode": source_identity.get("field_recovery"),
+            "semantics": source_identity.get("field_recovery_semantics"),
+            "constitutive_oracle": source_identity.get("constitutive_oracle"),
+        },
+        "tolerances": {
+            "response_relative_difference": response_limit,
+            "direction_sine": direction_limit,
+            "vector_magnitude_relative_residual": magnitude_limit,
+            "minimum_response_samples": sample_limit,
+        },
+        "notes": [
+            "NODAL and INTEGRATION point fields remain valid spatial observables but are rejected as element-local material-law evidence",
+            "an accepted point contract proves only the sampled constitutive response, not whole-solver equivalence",
+        ],
+    }
+
+
 def nonlinear_magnetic_spatial_evidence_gate(
     summary: dict[str, Any],
     *,
