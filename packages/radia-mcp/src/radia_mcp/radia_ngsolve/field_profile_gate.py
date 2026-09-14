@@ -1038,6 +1038,112 @@ def nonlinear_field_energy_artifact_contract_gate_v6(
     }
 
 
+def nonlinear_field_energy_lineage_gate_v7(summary: dict[str, Any]) -> dict[str, Any]:
+    """Validate result lineage and run identity before cross-solver comparison.
+
+    This gate is independent of the v6 result-envelope checks. It verifies that
+    each result is a solver output with a declared parent, that its run digest
+    is recomputable from the physical identity, and that both lanes share the
+    same geometry/material/excitation/mesh lineage.
+    """
+
+    if not isinstance(summary, dict):
+        raise ValueError("summary must be a mapping")
+
+    def digest(value: object) -> str:
+        encoded = json.dumps(
+            value, ensure_ascii=True, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()
+
+    def valid_sha(value: object) -> bool:
+        text = str(value or "").strip().lower()
+        return len(text) == 64 and all(
+            character in "0123456789abcdef" for character in text
+        )
+
+    identity_keys = (
+        "geometry_identity_sha256",
+        "material_table_sha256",
+        "excitation_identity_sha256",
+        "mesh_identity_sha256",
+    )
+    run_keys = (*identity_keys, "solver_version", "run_id")
+
+    def lane_contract(name: str) -> dict[str, Any]:
+        lane = summary.get(name)
+        if not isinstance(lane, dict):
+            raise ValueError(f"{name} must be a mapping")
+        identity = lane.get("identity")
+        identity = identity if isinstance(identity, dict) else {}
+        lineage = lane.get("lineage")
+        lineage = lineage if isinstance(lineage, dict) else {}
+        run_core = {key: identity.get(key) for key in run_keys}
+        checks = {
+            "artifact_id_present": bool(str(lane.get("artifact_id") or "").strip()),
+            "lineage_is_solver_output": lineage.get("source_kind") == "solver_output",
+            "root_case_id_present": bool(str(lineage.get("root_case_id") or "").strip()),
+            "parent_artifact_id_present": bool(str(lineage.get("parent_artifact_id") or "").strip()),
+            "parent_artifact_digest_valid": valid_sha(lineage.get("parent_artifact_sha256")),
+            "identity_fields_present": all(
+                bool(str(identity.get(key) or "").strip()) for key in run_keys
+            ),
+            "identity_digests_valid": all(valid_sha(identity.get(key)) for key in identity_keys),
+            "run_identity_digest_matches": (
+                valid_sha(identity.get("run_identity_sha256"))
+                and str(identity.get("run_identity_sha256")).casefold() == digest(run_core)
+            ),
+        }
+        return {
+            "checks": checks,
+            "root_case_id": str(lineage.get("root_case_id") or ""),
+            "parent_artifact_id": str(lineage.get("parent_artifact_id") or ""),
+            "run_id": str(identity.get("run_id") or ""),
+        }
+
+    candidate = lane_contract("candidate")
+    reference = lane_contract("reference")
+    candidate_lane = summary["candidate"]
+    reference_lane = summary["reference"]
+    candidate_identity = candidate_lane.get("identity", {})
+    reference_identity = reference_lane.get("identity", {})
+    candidate_lineage = candidate_lane.get("lineage", {})
+    reference_lineage = reference_lane.get("lineage", {})
+    identity_matches = {
+        key: candidate_identity.get(key) == reference_identity.get(key)
+        for key in identity_keys
+    }
+    checks = {
+        "candidate_lineage_contract_valid": all(candidate["checks"].values()),
+        "reference_lineage_contract_valid": all(reference["checks"].values()),
+        "artifact_ids_are_distinct": candidate_lane.get("artifact_id") != reference_lane.get("artifact_id"),
+        "run_ids_are_distinct": candidate["run_id"] != reference["run_id"],
+        "root_case_identity_matches": (
+            candidate["root_case_id"]
+            and candidate["root_case_id"] == reference["root_case_id"]
+        ),
+        "parent_lineage_is_declared": (
+            candidate_lineage.get("parent_artifact_id")
+            and reference_lineage.get("parent_artifact_id")
+        ),
+        "cross_lane_physical_identity_matches": all(identity_matches.values()),
+    }
+    checks.update({f"cross_lane_{key}": value for key, value in identity_matches.items()})
+    return {
+        "policy": "nonlinear_field_energy_lineage_gate_v7",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "accepted": all(checks.values()),
+        "checks": checks,
+        "issues": [name for name, accepted in checks.items() if not accepted],
+        "lane_details": {"candidate": candidate, "reference": reference},
+        "notes": [
+            "run identity is recomputed from physical identity and solver run metadata",
+            "parent lineage is metadata-only and does not open or trust arbitrary paths",
+            "matching lineage is necessary but insufficient for numerical solver parity",
+        ],
+    }
+
+
 def nonlinear_constitutive_response_parity_gate(
     summary: dict[str, Any],
     *,
