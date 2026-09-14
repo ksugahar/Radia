@@ -2,7 +2,7 @@
   "schema": "radia.notebook_result.v1",
   "generated_at_utc": "2026-06-27T02:30:27Z",
   "notebook": "docs/hiruma_xfem_comparison/hiruma_xfem_comparison.ipynb",
-  "notebook_sha256": "efd524e891d12019a3ce2ee18ab26be4c5cf1043f58f3add2a703794073f500c",
+  "notebook_sha256": "1b44c7d986c5d725dc414d9f82d8b0943ee2679a9b2ffd2e36537cdcb1eb4933",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
@@ -12,7 +12,7 @@
   },
   "summary": {
     "path": "docs/hiruma_xfem_comparison/hiruma_xfem_comparison.ipynb",
-    "cells": 13,
+    "cells": 15,
     "code_cells": 6,
     "executed_code_cells": 6,
     "code_cells_with_outputs": 6,
@@ -21,8 +21,24 @@
     "result_saved": true,
     "metadata_keys": [
       "kernelspec",
-      "language_info"
-    ]
+      "language_info",
+      "radia"
+    ],
+    "error_outputs": [],
+    "notebook_role": "",
+    "webgui_required": false,
+    "webgui_field_required": false,
+    "webgui_import_present": false,
+    "webgui_draw_present": false,
+    "webgui_draw_cell_count": 0,
+    "executed_webgui_draw_cell_count": 0,
+    "webgui_draw_cells_with_rich_outputs": 0,
+    "webgui_ready": true,
+    "parameterized_field_draw_present": false,
+    "parameterized_field_draw_cell_count": 0,
+    "executed_parameterized_field_draw_cell_count": 0,
+    "parameterized_field_draw_cells_with_rich_outputs": 0,
+    "webgui_field_ready": true
   },
   "outputs": [
     {
@@ -1319,5 +1335,12 @@
     "result_saved": true,
     "json_has_generated_at_utc": true,
     "json_has_versions": true
+  },
+  "documentation_revision": {
+    "date": "2026-09-14",
+    "previous_notebook_sha256": "0a230bc894a8fdd20b050a163fcc9c89e3bf02189c8ba2415fc7c7ab8fe00dca",
+    "code_and_saved_outputs_unchanged": true,
+    "comparison": "All complete code-cell objects equal the Git HEAD notebook.",
+    "note": "Original result timestamp/runtime retained; this is not a new numerical run."
   }
 }

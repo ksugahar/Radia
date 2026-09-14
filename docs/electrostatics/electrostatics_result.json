@@ -1,8 +1,8 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-27T09:17:07Z",
-  "notebook": "docs/electrostatics/electrostatics.ipynb",
-  "notebook_sha256": "b3cfcca12017bb793a2ea11c7f9fd1c292078c7d695e8700fa6381eadd56db62",
+  "generated_at_utc": "2026-09-14T20:22:47Z",
+  "notebook": "electrostatics.ipynb",
+  "notebook_sha256": "79ab228843ae30d6ffaba5868f2e9ea50aa3535c7cedbfec2aaab907103180ec",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
@@ -11,22 +11,159 @@
     "radia_version": "4.95.2"
   },
   "summary": {
-    "path": "docs/electrostatics/electrostatics.ipynb",
-    "cells": 11,
-    "code_cells": 5,
-    "executed_code_cells": 5,
-    "code_cells_with_outputs": 5,
-    "output_count": 5,
+    "path": "electrostatics.ipynb",
+    "cells": 22,
+    "code_cells": 10,
+    "executed_code_cells": 10,
+    "code_cells_with_outputs": 10,
+    "output_count": 13,
     "error_output_count": 0,
     "result_saved": true,
+    "notebook_role": "example",
+    "webgui_required": true,
+    "webgui_field_required": true,
+    "webgui_import_present": true,
+    "webgui_draw_present": true,
+    "webgui_draw_cell_count": 3,
+    "executed_webgui_draw_cell_count": 3,
+    "webgui_draw_cells_with_rich_outputs": 3,
+    "webgui_ready": true,
+    "parameterized_field_draw_present": true,
+    "parameterized_field_draw_cell_count": 2,
+    "executed_parameterized_field_draw_cell_count": 2,
+    "parameterized_field_draw_cells_with_rich_outputs": 2,
+    "webgui_field_ready": true,
     "metadata_keys": [
       "kernelspec",
-      "language_info"
+      "language_info",
+      "radia",
+      "widgets"
     ]
   },
   "outputs": [
     {
       "cell_index": 2,
+      "execution_count": 1,
+      "source_sha256": "b06d18b815df7104da50c71256fc25a2fd969e379521b0f68607431ca430b274",
+      "source_preview": "from pathlib import Path\nimport hashlib, json, math, platform, socket, sys\nfrom datetime import datetime, timezone\nfrom importlib.metadata import version\nimport ngsolve as ng\nfrom ngsolve.webgui import Draw\nng.SetNumThreads(2)\nfrom netgen.occ import Cylinder, Pnt, Dir, OCCGeometry\na, b, length, voltage = 0.005, 0.015, 0.04, 100.0\nouter = Cylinder(Pnt(0,0,-length/2), Dir(0,0,1), b, length)\ninner = Cylinder(Pnt(0,0,-length/2), Dir(0,0,1), a, length)\ndomain = outer-inner\ndomain.mat('dielectric_view')\nmesh = ng.Mesh(OCCGeometry(domain).GenerateMesh(maxh=0.004))\nmesh.Curve(3)  # Here the mesh has an in-memory CAD geometry; not a loaded .vol.\nr2 = ng.x**2+ng.y**2\npotential = voltage*ng.log(b/ng.sqrt(r2))/math.log(b/a)\nelectric = voltage/math.log(b/a)*ng.CF((ng.x/r2, ng.y/r2, 0))\nchecks=[]\nfor radius in [0.006,0.010,0.014]:\n    actual=float(potential(mesh(radius,0,0)))\n    expected=voltage*math.log(b/radius)/math.log(b/a)\n    assert math.isclose(actual,expected,rel_tol=1e-12)\n    checks.appen",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 375,
+          "text_sha256": "9a96f99c6b0a57605901499a065a672bc07e592ced3e354acebf60360350404f",
+          "text_preview": "{\n  \"reference\": \"infinite coax, analytical; no fringing\",\n  \"samples\": [\n    {\n      \"radius_m\": 0.006,\n      \"potential_V\": 83.40437671464697\n    },\n    {\n      \"radius_m\": 0.01,\n      \"potential_V\": 36.90702464285427\n    },\n    {\n      \"radius_m\": 0.014,\n      \"potential_V\": 6.280001798504744\n    }\n  ],\n  \"n_elements\": 2880,\n  \"materials\": [\n    \"dielectric_view\"\n  ]\n}\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 4,
+      "execution_count": 2,
+      "source_sha256": "64195d5fd0bf8280ccea68e9edae8446182613147c37fcac96b19691b6b4269a",
+      "source_preview": "scene = Draw(mesh, name='Coax_dielectric_mesh', order=3, draw_vol=True, draw_surf=True, width='100%', height='480px')\nscene.GenerateHTML(filename='scene_0.html')\n",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "application/vnd.jupyter.widget-view+json",
+            "text/plain"
+          ],
+          "text_plain_chars": 57,
+          "text_plain_sha256": "47baf1468676ee2d50e3a73cab63f3331d71af519dfc2f437231c9610e82a31b",
+          "text_plain_preview": "<netgen.webgui.WebGuiWidget object at 0x0000021F196AED20>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "execute_result",
+          "data_keys": [
+            "text/plain"
+          ],
+          "text_plain_chars": 568728,
+          "text_plain_sha256": "81010c9ecb245b973824d77f8a82368ec268dce07d7ce7c019157e5b90fad200",
+          "text_plain_preview": "'\\n<!DOCTYPE html>\\n<html>\\n    <head>\\n        <title>NGSolve WebGUI</title>\\n        <meta name=\\'viewport\\' content=\\'width=device-width, user-scalable=no\\'/>\\n        <style>\\n            body{\\n                margin:0;\\n                overflow:hidden;\\n            }\\n            canvas{\\n                cursor:grab;\\n                cursor:-webkit-grab;\\n                cursor:-moz-grab;\\n            }\\n            canvas:active{\\n                cursor:grabbing;\\n                cursor:-webkit-grabbing;\\n                cursor:-moz-grabbing;\\n            }\\n        </style>\\n    </head>\\n    <body>\\n          <script src=\"https://cdn.jsdelivr.net/npm/webgui@0.2.39/dist/webgui.js\"></script>\\n          </script>\\n          <script>\\n            var render_data = {\"gui_settings\": {}, \"ngsolve_version\": \"6.2.2606\", \"mesh_dim\": 3, \"order2d\": 3, \"order3d\": 2, \"draw_vol\": null, \"draw_surf\": null, \"objects\": [], \"deformation\": false, \"mesh_regions_2d\": 4, \"mesh_regions_3d\": 1, \"names\": [\"default\", \"default\", \"default\", \"default\"], \"edge_names\": [\"default\", \"default\", \"default\", \"default\", \"default\", \"default\"], \"funcdim\": 0, \"colors\": [[0.0, 1.0, 0.0, 1.0, 1.0], [0.0, 1.0, 0.0, 1.0, 1.0], [0.0, 1.0, 0.0, 1.0, 1.0], [0.0, 1.0, 0.0, 1.0, 1.0]], \"show_wireframe\": true, \"show_mesh\": true, \"Bezier_points\": [\"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",
+          "text_plain_truncated": true
+        }
+      ]
+    },
+    {
+      "cell_index": 6,
+      "execution_count": 3,
+      "source_sha256": "324fd2aa5809748eb3c10d949168b4149ed4773026862e9982e387f1159e59db",
+      "source_preview": "scene = Draw(potential, mesh, name='Coax_potential_V', order=3, draw_vol=True, draw_surf=True, autoscale=False, min=0, max=100, clipping={'x':0,'y':0,'z':1,'dist':0}, vectors=False, width='100%', height='480px')\nscene.GenerateHTML(filename='scene_1.html')\n",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "application/vnd.jupyter.widget-view+json",
+            "text/plain"
+          ],
+          "text_plain_chars": 57,
+          "text_plain_sha256": "3b7fdb236a1c014c72d59ae5fee376a615faf0be3bf900af72ad10dd8e8c46b2",
+          "text_plain_preview": "<netgen.webgui.WebGuiWidget object at 0x0000022129D9A330>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "execute_result",
+          "data_keys": [
+            "text/plain"
+          ],
+          "text_plain_chars": 1183018,
+          "text_plain_sha256": "8cba0ea23c514dff26f93c43179ca05d088d2e2ecdad3d066711dca4a3ea5e29",
+          "text_plain_preview": "'\\n<!DOCTYPE html>\\n<html>\\n    <head>\\n        <title>NGSolve WebGUI</title>\\n        <meta name=\\'viewport\\' content=\\'width=device-width, user-scalable=no\\'/>\\n        <style>\\n            body{\\n                margin:0;\\n                overflow:hidden;\\n            }\\n            canvas{\\n                cursor:grab;\\n                cursor:-webkit-grab;\\n                cursor:-moz-grab;\\n            }\\n            canvas:active{\\n                cursor:grabbing;\\n                cursor:-webkit-grabbing;\\n                cursor:-moz-grabbing;\\n            }\\n        </style>\\n    </head>\\n    <body>\\n          <script src=\"https://cdn.jsdelivr.net/npm/webgui@0.2.39/dist/webgui.js\"></script>\\n          </script>\\n          <script>\\n            var render_data = {\"gui_settings\": {}, \"ngsolve_version\": \"6.2.2606\", \"mesh_dim\": 3, \"order2d\": 3, \"order3d\": 2, \"draw_vol\": true, \"draw_surf\": true, \"objects\": [], \"deformation\": false, \"funcdim\": 1, \"show_wireframe\": true, \"show_mesh\": true, \"Bezier_points\": [\"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",
+          "text_plain_truncated": true
+        }
+      ]
+    },
+    {
+      "cell_index": 8,
+      "execution_count": 4,
+      "source_sha256": "89c06da9f60def5a62dc2e955fce7a0dfc5ae8d2abef03ebd22d40955b62909a",
+      "source_preview": "scene = Draw(electric, mesh, name='Coax_E_V_per_m', order=3, draw_vol=True, draw_surf=True, autoscale=True, clipping={'x':0,'y':0,'z':1,'dist':0}, vectors={'grid_size':20}, width='100%', height='480px')\nscene.GenerateHTML(filename='scene_2.html')\n",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "application/vnd.jupyter.widget-view+json",
+            "text/plain"
+          ],
+          "text_plain_chars": 57,
+          "text_plain_sha256": "699867378b4039223996b8b54b5e29827923e55b3f3827f330bc201a7227b24b",
+          "text_plain_preview": "<netgen.webgui.WebGuiWidget object at 0x0000022129D9B170>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "execute_result",
+          "data_keys": [
+            "text/plain"
+          ],
+          "text_plain_chars": 1769591,
+          "text_plain_sha256": "4cb19616bb232297834823e04002a49f34a800c9293a6ad92738718cd050738c",
+          "text_plain_preview": "'\\n<!DOCTYPE html>\\n<html>\\n    <head>\\n        <title>NGSolve WebGUI</title>\\n        <meta name=\\'viewport\\' content=\\'width=device-width, user-scalable=no\\'/>\\n        <style>\\n            body{\\n                margin:0;\\n                overflow:hidden;\\n            }\\n            canvas{\\n                cursor:grab;\\n                cursor:-webkit-grab;\\n                cursor:-moz-grab;\\n            }\\n            canvas:active{\\n                cursor:grabbing;\\n                cursor:-webkit-grabbing;\\n                cursor:-moz-grabbing;\\n            }\\n        </style>\\n    </head>\\n    <body>\\n          <script src=\"https://cdn.jsdelivr.net/npm/webgui@0.2.39/dist/webgui.js\"></script>\\n          </script>\\n          <script>\\n            var render_data = {\"gui_settings\": {}, \"ngsolve_version\": \"6.2.2606\", \"mesh_dim\": 3, \"order2d\": 3, \"order3d\": 2, \"draw_vol\": true, \"draw_surf\": true, \"objects\": [], \"deformation\": false, \"funcdim\": 3, \"show_wireframe\": true, \"show_mesh\": true, \"Bezier_points\": [\"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",
+          "text_plain_truncated": true
+        }
+      ]
+    },
+    {
+      "cell_index": 9,
+      "execution_count": 5,
+      "source_sha256": "b8b33e266433942db6ca856e1933b547c4e55dc2636566b11c262a6a59d254f6",
+      "source_preview": "evidence=dict(schema='radia.docs.webgui_supplement.v1',\n    generated_at_utc=datetime.now(timezone.utc).isoformat(),host=socket.gethostname(),\n    python_executable=sys.executable,python_version=platform.python_version(),\n    versions={p:version(p) for p in ['ngsolve','netgen-mesher','anywidget','cubit-mesh-export']},\n    metrics=metrics,threads=2)\nPath('evidence.json').write_text(json.dumps(evidence,indent=2),encoding='utf-8')\n",
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data_keys": [
+            "text/plain"
+          ],
+          "text_plain_chars": 3,
+          "text_plain_sha256": "130790feced08212eed7d1490dd4d7abf138543be61a4744a03f69ecb9609764",
+          "text_plain_preview": "833",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 11,
       "execution_count": 1,
       "source_sha256": "52be99baf4a3cca0fd5dea157ba5ea55e4e05ae8bed7f252c25866be00ea4bc0",
       "source_preview": "import sys, os\nfrom pathlib import Path\n__file__ = str(Path(os.getcwd()).resolve() / \"validation_test\" / \"electrostatics\" / \"validation_parallel_plate_electrostatic_force.py\")\nsys.path.insert(0, str(Path(__file__).resolve().parent))\nsys.modules.pop(\"result_metadata\", None)\nsys.argv = [\"notebook\"]\n\n\"\"\"Validation-class parallel-plate electrostatic force identity.\n\nThis example connects three equivalent public textbook views of the same\nnormal electrostatic force:\n\n    C = eps A / d\n    W = 0.5 C V^2\n    p = 0.5 eps (V / d)^2\n    F = p A = W / d\n\nRun:\n\n    python validation_test/electrostatics/validation_parallel_plate_electrostatic_force.py\n\"\"\"\n\nimport argparse\nimport json\nimport sys\nfrom pathlib import Path\n\n\nHERE = Path(__file__).resolve().parent\nREPO = HERE.parents[1]\nSRC = REPO / \"packages\" / \"radia-mcp\" / \"src\"\nif str(SRC) not in sys.path:\n    sys.path.insert(0, str(SRC))\n\nfrom radia_mcp.radia_ngsolve.electrostatics import (  # noqa: E402\n    EPS0,\n    parallel_plate_capacitor_energ",
@@ -42,7 +179,7 @@
       ]
     },
     {
-      "cell_index": 4,
+      "cell_index": 13,
       "execution_count": 2,
       "source_sha256": "12c56b7e04f923cc942cd36797f264c6cd16b69d140f3be641c6138700303d7b",
       "source_preview": "import sys, os\nfrom pathlib import Path\n__file__ = str(Path(os.getcwd()).resolve() / \"validation_test\" / \"electrostatics\" / \"validation_coaxial_capacitor_force.py\")\nsys.path.insert(0, str(Path(__file__).resolve().parent))\nsys.modules.pop(\"result_metadata\", None)\nsys.argv = [\"notebook\"]\n\n\"\"\"Validation-class coaxial capacitor electrostatic force.\n\nRun:\n\n    python validation_test/electrostatics/validation_coaxial_capacitor_force.py\n\nThe coaxial capacitor is the cylindrical analogue of the parallel-plate force\ngate: capacitance, stored energy, Maxwell pressure, and capacitance-gradient\nforce all collapse to the same closed form.\n\"\"\"\n\nimport json\nimport math\nimport sys\nfrom pathlib import Path\n\nROOT = Path(__file__).resolve().parents[1]\nSRC = ROOT / \"packages\" / \"radia-mcp\" / \"src\"\nif str(SRC) not in sys.path:\n    sys.path.insert(0, str(SRC))\n\nfrom radia_mcp.radia_ngsolve.electrostatics import (  # noqa: E402\n    EPS0,\n    capacitance_gradient_force_summary,\n    coaxial_capacitor_energy_fo",
@@ -58,7 +195,7 @@
       ]
     },
     {
-      "cell_index": 6,
+      "cell_index": 15,
       "execution_count": 3,
       "source_sha256": "8062478cbef5e968bf42e00cbf800ca3d74e2bfdcfe347c8debd9622356ae59a",
       "source_preview": "import sys, os\nfrom pathlib import Path\n__file__ = str(Path(os.getcwd()).resolve() / \"validation_test\" / \"electrostatics\" / \"validation_capacitance_gradient_force.py\")\nsys.path.insert(0, str(Path(__file__).resolve().parent))\nsys.modules.pop(\"result_metadata\", None)\nsys.argv = [\"notebook\"]\n\n\"\"\"Validation-class electrostatic force from a capacitance gradient.\n\nFor a displacement coordinate x and capacitance C(x),\n\n    fixed voltage: F_x = 0.5 V^2 dC/dx\n    fixed charge:  F_x = 0.5 Q^2 C^-2 dC/dx\n\nThe sign is along increasing x.  If x is a gap or height, dC/dx is usually\nnegative, so the force is negative: attraction toward the smaller gap.\n\nRun:\n\n    python validation_test/electrostatics/validation_capacitance_gradient_force.py\n\"\"\"\n\nimport argparse\nimport json\nimport math\nimport sys\nfrom pathlib import Path\n\n\nHERE = Path(__file__).resolve().parent\nREPO = HERE.parents[1]\nSRC = REPO / \"packages\" / \"radia-mcp\" / \"src\"\nif str(SRC) not in sys.path:\n    sys.path.insert(0, str(SRC))\n\nfrom radia",
@@ -74,7 +211,7 @@
       ]
     },
     {
-      "cell_index": 8,
+      "cell_index": 17,
       "execution_count": 4,
       "source_sha256": "280708186ea5a90fa8e749cbd223a168b8e094e9c6fff82bb118ca7338943a2c",
       "source_preview": "import sys, os\nfrom pathlib import Path\n__file__ = str(Path(os.getcwd()).resolve() / \"validation_test\" / \"electrostatics\" / \"validation_sphere_ground_plane_capacitance.py\")\nsys.path.insert(0, str(Path(__file__).resolve().parent))\nsys.modules.pop(\"result_metadata\", None)\nsys.argv = [\"notebook\"]\n\n\"\"\"Validation-class sphere-over-ground-plane capacitance example.\n\nThis example exercises the image-series capacitance helper on a sweep that is\nlarge enough to catch truncation mistakes:\n\n* near the plane, the image series converges slowly and C rises well above the\n  isolated-sphere value;\n* far from the plane, C approaches 4*pi*eps0*a with the first correction a/(2h);\n* the electrostatic attraction inferred from -dC/dh is positive.\n\nRun:\n\n    python validation_test/electrostatics/validation_sphere_ground_plane_capacitance.py\n\"\"\"\n\nimport argparse\nimport json\nimport math\nimport sys\nfrom pathlib import Path\n\n\nHERE = Path(__file__).resolve().parent\nREPO = HERE.parents[1]\nSRC = REPO / \"packages\" /",
@@ -90,7 +227,7 @@
       ]
     },
     {
-      "cell_index": 10,
+      "cell_index": 19,
       "execution_count": 5,
       "source_sha256": "1222b069033b2b6b2804b9b162b62d53dee992b3e82661ffb8f68b7c0b735b56",
       "source_preview": "import sys, os\nfrom pathlib import Path\n__file__ = str(Path(os.getcwd()).resolve() / \"validation_test\" / \"electrostatics\" / \"validation_electrostatic_maxwell_traction.py\")\nsys.path.insert(0, str(Path(__file__).resolve().parent))\nsys.modules.pop(\"result_metadata\", None)\nsys.argv = [\"notebook\"]\n\n\"\"\"Validation-class electrostatic Maxwell stress / traction identities.\n\nFor a field normal to a conductor/dielectric interface, the electrostatic\nMaxwell stress gives the familiar pressure\n\n    p = 0.5 * eps0 * E^2.\n\nThis example mirrors the magnetic Maxwell-traction validation in a form that is\neasy to compare with electrostatic FEM post-processing.\n\nRun:\n\n    python validation_test/electrostatics/validation_electrostatic_maxwell_traction.py\n\"\"\"\n\nimport argparse\nimport json\nimport sys\nfrom pathlib import Path\n\n\nHERE = Path(__file__).resolve().parent\nREPO = HERE.parents[1]\nSRC = REPO / \"packages\" / \"radia-mcp\" / \"src\"\nif str(SRC) not in sys.path:\n    sys.path.insert(0, str(SRC))\n\nfrom radia_mcp.",
@@ -110,5 +247,87 @@
     "result_saved": true,
     "json_has_generated_at_utc": true,
     "json_has_versions": true
-  }
+  },
+  "sidecar_writer_versions": {
+    "python_version": "3.12.10",
+    "python_executable_name": "python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.39",
+    "radia_version": "4.95.92"
+  },
+  "historical_execution": {
+    "generated_at_utc": "2026-06-27T09:17:07Z",
+    "versions": {
+      "python_version": "3.12.10",
+      "python_executable": "C:\\Program Files\\Python312\\python.exe",
+      "platform": "Windows-2022Server-10.0.20348-SP0",
+      "radia_mcp_version": "1.4.3",
+      "radia_version": "4.95.2"
+    }
+  },
+  "visualization_execution": {
+    "schema": "radia.docs.webgui_supplement.v1",
+    "generated_at_utc": "2026-09-14T20:22:02.104638+00:00",
+    "host": "mdx2",
+    "python_executable": "C:\\temp\\radia_docs_webgui_20260915\\env\\Scripts\\python.exe",
+    "python_version": "3.12.10",
+    "versions": {
+      "ngsolve": "6.2.2606",
+      "netgen-mesher": "6.2.2606",
+      "anywidget": "0.11.0",
+      "cubit-mesh-export": "0.14.15"
+    },
+    "metrics": {
+      "reference": "infinite coax, analytical; no fringing",
+      "samples": [
+        {
+          "radius_m": 0.006,
+          "potential_V": 83.40437671464697
+        },
+        {
+          "radius_m": 0.01,
+          "potential_V": 36.90702464285427
+        },
+        {
+          "radius_m": 0.014,
+          "potential_V": 6.280001798504744
+        }
+      ],
+      "n_elements": 2880,
+      "materials": [
+        "dielectric_view"
+      ]
+    },
+    "threads": 2,
+    "notebook": "docs/electrostatics/electrostatics.ipynb",
+    "baseline_notebook_sha256": "014b7da60a2cbda3c31f6b72b69a9587c68ea90953f75e88d679a814d189323f",
+    "notebook_sha256": "79ab228843ae30d6ffaba5868f2e9ea50aa3535c7cedbfec2aaab907103180ec",
+    "historical_code_cells_preserved": true,
+    "historical_code_cells_sha256": "548c1c6d9917bedf6989ac2381ca85092c0682bb16fa1540c5e8b6b93510adae",
+    "source_cells": [
+      {
+        "id": "webgui-20260915-electrostatics-1",
+        "source": "from pathlib import Path\nimport hashlib, json, math, platform, socket, sys\nfrom datetime import datetime, timezone\nfrom importlib.metadata import version\nimport ngsolve as ng\nfrom ngsolve.webgui import Draw\nng.SetNumThreads(2)\nfrom netgen.occ import Cylinder, Pnt, Dir, OCCGeometry\na, b, length, voltage = 0.005, 0.015, 0.04, 100.0\nouter = Cylinder(Pnt(0,0,-length/2), Dir(0,0,1), b, length)\ninner = Cylinder(Pnt(0,0,-length/2), Dir(0,0,1), a, length)\ndomain = outer-inner\ndomain.mat('dielectric_view')\nmesh = ng.Mesh(OCCGeometry(domain).GenerateMesh(maxh=0.004))\nmesh.Curve(3)  # Here the mesh has an in-memory CAD geometry; not a loaded .vol.\nr2 = ng.x**2+ng.y**2\npotential = voltage*ng.log(b/ng.sqrt(r2))/math.log(b/a)\nelectric = voltage/math.log(b/a)*ng.CF((ng.x/r2, ng.y/r2, 0))\nchecks=[]\nfor radius in [0.006,0.010,0.014]:\n    actual=float(potential(mesh(radius,0,0)))\n    expected=voltage*math.log(b/radius)/math.log(b/a)\n    assert math.isclose(actual,expected,rel_tol=1e-12)\n    checks.append(dict(radius_m=radius,potential_V=actual))\nmetrics=dict(reference='infinite coax, analytical; no fringing', samples=checks,\n             n_elements=mesh.ne, materials=list(mesh.GetMaterials()))\nprint(json.dumps(metrics,indent=2))\n"
+      },
+      {
+        "id": "webgui-20260915-electrostatics-3",
+        "source": "scene = Draw(mesh, name='Coax_dielectric_mesh', order=3, draw_vol=True, draw_surf=True, width='100%', height='480px')\nscene.GenerateHTML(filename='scene_0.html')\n"
+      },
+      {
+        "id": "webgui-20260915-electrostatics-5",
+        "source": "scene = Draw(potential, mesh, name='Coax_potential_V', order=3, draw_vol=True, draw_surf=True, autoscale=False, min=0, max=100, clipping={'x':0,'y':0,'z':1,'dist':0}, vectors=False, width='100%', height='480px')\nscene.GenerateHTML(filename='scene_1.html')\n"
+      },
+      {
+        "id": "webgui-20260915-electrostatics-7",
+        "source": "scene = Draw(electric, mesh, name='Coax_E_V_per_m', order=3, draw_vol=True, draw_surf=True, autoscale=True, clipping={'x':0,'y':0,'z':1,'dist':0}, vectors={'grid_size':20}, width='100%', height='480px')\nscene.GenerateHTML(filename='scene_2.html')\n"
+      },
+      {
+        "id": "webgui-20260915-electrostatics-8",
+        "source": "evidence=dict(schema='radia.docs.webgui_supplement.v1',\n    generated_at_utc=datetime.now(timezone.utc).isoformat(),host=socket.gethostname(),\n    python_executable=sys.executable,python_version=platform.python_version(),\n    versions={p:version(p) for p in ['ngsolve','netgen-mesher','anywidget','cubit-mesh-export']},\n    metrics=metrics,threads=2)\nPath('evidence.json').write_text(json.dumps(evidence,indent=2),encoding='utf-8')\n"
+      }
+    ],
+    "supplement_sha256": "b4653a1a6273c7b3d5d3b496dcd920cf192e4d30daf5c3b7c2e02b7d87765c87",
+    "visual_qa": "Saved rich output and state audited; rendered visual QA pending."
+  },
+  "execution_scope": "Mixed provenance: original campaigns preserved; only added visualization cells executed on mdx."
 }

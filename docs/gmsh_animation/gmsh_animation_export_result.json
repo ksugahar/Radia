@@ -2,7 +2,7 @@
   "schema": "radia.notebook_result.v1",
   "generated_at_utc": "2026-08-05T05:11:03Z",
   "notebook": "gmsh_animation_export.ipynb",
-  "notebook_sha256": "dbe0c02934ddd9d28f810954882ff1a4321c5109ed3e1527f8009106436a43a4",
+  "notebook_sha256": "42a0f24e27c170fa2c62b3d8c7175ae948362bc75e99c629d2e205e9fb3f1812",
   "versions": {
     "python_version": "3.12.10",
     "python_executable_name": "python.exe",
@@ -11,8 +11,8 @@
     "radia_version": "4.95.40"
   },
   "summary": {
-    "path": "gmsh_animation_export.ipynb",
-    "cells": 5,
+    "path": "docs/gmsh_animation/gmsh_animation_export.ipynb",
+    "cells": 7,
     "code_cells": 4,
     "executed_code_cells": 4,
     "code_cells_with_outputs": 4,
@@ -35,8 +35,10 @@
     "webgui_field_ready": true,
     "metadata_keys": [
       "kernelspec",
-      "language_info"
-    ]
+      "language_info",
+      "radia"
+    ],
+    "error_outputs": []
   },
   "outputs": [
     {
@@ -119,5 +121,12 @@
     "result_saved": true,
     "json_has_generated_at_utc": true,
     "json_has_versions": true
+  },
+  "documentation_revision": {
+    "date": "2026-09-14",
+    "previous_notebook_sha256": "8343432db701198501c4aa2f96266a6cb2cba6bf22639efdeac2e5c459da8b15",
+    "code_and_saved_outputs_unchanged": true,
+    "comparison": "All complete code-cell objects equal the Git HEAD notebook.",
+    "note": "Original result timestamp/runtime retained; this is not a new numerical run."
   }
 }

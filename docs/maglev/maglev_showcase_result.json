@@ -2,7 +2,7 @@
   "schema": "radia.notebook_result.v1",
   "generated_at_utc": "2026-09-02T13:59:02Z",
   "notebook": "maglev_showcase.ipynb",
-  "notebook_sha256": "c9b4525ffc5a62df0321321619d618508b9bf8d388a52f5bcbbf5298a2379eb0",
+  "notebook_sha256": "623423705fcacfb93753fdbd04628d641699f0f9265b3ab1861bfeacac760ca3",
   "versions": {
     "python_version": "3.12.10",
     "python_executable_name": "python.exe",
@@ -11,8 +11,8 @@
     "radia_version": "4.95.55"
   },
   "summary": {
-    "path": "maglev_showcase.ipynb",
-    "cells": 20,
+    "path": "docs/maglev/maglev_showcase.ipynb",
+    "cells": 22,
     "code_cells": 9,
     "executed_code_cells": 9,
     "code_cells_with_outputs": 9,
@@ -35,8 +35,10 @@
     "webgui_field_ready": true,
     "metadata_keys": [
       "kernelspec",
-      "language_info"
-    ]
+      "language_info",
+      "radia"
+    ],
+    "error_outputs": []
   },
   "outputs": [
     {
@@ -260,5 +262,12 @@
     "result_saved": true,
     "json_has_generated_at_utc": true,
     "json_has_versions": true
+  },
+  "documentation_revision": {
+    "date": "2026-09-14",
+    "previous_notebook_sha256": "98ca7e74518d1ad11659e5320c95ae9638c315b012315c46ec08cec4645e4f3c",
+    "code_and_saved_outputs_unchanged": true,
+    "comparison": "All complete code-cell objects equal the Git HEAD notebook.",
+    "note": "Original result timestamp/runtime retained; this is not a new numerical run."
   }
 }

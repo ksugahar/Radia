@@ -1430,11 +1430,15 @@ GMSH can animate mesh displacement using $NodeData with VectorType=5
 Combined with STEP geometry (static), this creates stator + moving body animations.
 
 Runnable artifact-inspection notebook:
-`docs/gmsh_animation/gmsh_animation.ipynb`.  Its synchronized JSON sidecars are
-`docs/gmsh_animation/gmsh_animation_results.json` (domain values) and
-`docs/gmsh_animation/gmsh_animation_result.json` (notebook-output sync).  The
-docs-local artifact inspected there is `docs/gmsh_animation/`: MSH v4.1,
+`docs/gmsh_animation/gmsh_animation.ipynb`. The notebook itself embeds the
+public rendered result; numerical acceptance belongs to its named validation
+lane. The docs-local artifact inspected there is `docs/gmsh_animation/`: MSH v4.1,
 2430 nodes, 1003 elements, 21 vector NodeData frames, final displacement 0.15 m.
+The saved WebGUI supplement separately displays the adjacent rotor/stator
+`.vol` meshes after `check-vol`; its independently centered views are not a
+registered assembly or an animation. Input hashes and full check reports
+are in `gmsh_animation_webgui_results.json`. Historical mesh reloads do not
+establish a new Cubit-export provenance or a physical dynamics solution.
 
 Runnable export notebook:
 `docs/gmsh_animation/gmsh_animation_export.ipynb`.  It opens the docs-local

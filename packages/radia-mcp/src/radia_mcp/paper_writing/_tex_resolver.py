@@ -20,8 +20,11 @@ theses / long IEEE papers using \\input get scanned in full.
 from __future__ import annotations
 
 import os
+import pathlib
 import re
+import hashlib
 from typing import Optional
+from ._tex_lex import mask_tex_noncode
 
 
 # Maximum recursion depth for \\input / \\include chains.  Caps a
@@ -54,7 +57,7 @@ def resolve_input_chain(
             \\documentclass{...} and \\begin{document}).
         max_depth: recursion cap (default 8).  Raises if exceeded.
         encoding: file encoding (utf-8 default; falls back to
-            cp932 for legacy Japanese files via 'replace' errors).
+            cp932 for legacy Japanese files with strict decoding).
 
     Returns:
         dict with:
@@ -70,10 +73,12 @@ def resolve_input_chain(
     Notes:
         * Comments after \\input{...} % comment are stripped.
         * \\input inside a comment line (leading %) is skipped.
-        * Relative paths are resolved against the INCLUDING file's
-          directory (LaTeX semantics), not the main file's directory.
+        * Relative paths are resolved against the compilation working
+          directory, represented here by the main file's directory. TeX does
+          not change its working directory when it enters an input file.
     """
     main = os.path.abspath(main_tex_path)
+    main_dir = os.path.dirname(main)
     if not os.path.exists(main):
         return {
             "ok": False,
@@ -84,20 +89,26 @@ def resolve_input_chain(
     missing: list[dict] = []
     duplicate: list[dict] = []
     seen_paths: dict[str, int] = {}   # abs_path -> first inlined depth
+    active_paths: set[str] = set()
 
-    def _read(path: str) -> str:
+    def _read(path: str) -> tuple[str, bytes]:
+        raw = pathlib.Path(path).read_bytes()
         try:
-            with open(path, encoding=encoding, errors="replace") as fh:
-                return fh.read()
-        except Exception as e:  # noqa: BLE001
-            return f"% [resolve_input_chain: read error on {path}: {e}]\n"
+            return raw.decode(encoding, errors="strict"), raw
+        except UnicodeDecodeError:
+            if encoding.casefold().replace("-", "") != "utf8":
+                raise
+            return raw.decode("cp932", errors="strict"), raw
 
     def _resolve(path: str, depth: int, parent: Optional[str] = None) -> str:
         abs_path = os.path.abspath(path)
-        if abs_path in seen_paths:
+        identity = os.path.normcase(os.path.realpath(abs_path))
+        if identity in active_paths:
+            raise ValueError(f"cyclic TeX input chain at {abs_path}")
+        if identity in seen_paths:
             duplicate.append({
                 "path": abs_path,
-                "first_at": seen_paths[abs_path],
+                "first_at": seen_paths[identity],
                 "duplicate_at": depth,
                 "referenced_from": parent or "(root)",
             })
@@ -114,36 +125,40 @@ def resolve_input_chain(
             })
             return f"\n% [resolve_input_chain: missing file {abs_path}]\n"
 
-        seen_paths[abs_path] = depth
-        text = _read(abs_path)
+        seen_paths[identity] = depth
+        active_paths.add(identity)
+        text, raw = _read(abs_path)
         resolved.append({
             "path": abs_path,
             "depth": depth,
-            "size_bytes": len(text.encode("utf-8", errors="replace")),
+            "size_bytes": len(raw),
+            "sha256": hashlib.sha256(raw).hexdigest(),
         })
 
-        # Replace each \\input{X} with the recursive resolution
-        this_dir = os.path.dirname(abs_path)
-
+        # Replace each \\input{X} with the recursive resolution.
         def _sub(m):
-            # Skip if the \\input is inside a comment line: find
-            # the start of the line and check for '%' before.
-            line_start = text.rfind("\n", 0, m.start()) + 1
-            line_before = text[line_start:m.start()]
-            # If there's an unescaped %, this is a comment
-            if re.search(r"(?<!\\)%", line_before):
-                return m.group(0)
             inc = m.group(1).strip()
-            if not inc.endswith(".tex"):
+            if not os.path.splitext(inc)[1]:
                 inc = inc + ".tex"
-            child_path = os.path.join(this_dir, inc)
+            child_path = inc if os.path.isabs(inc) else os.path.join(main_dir, inc)
             return _resolve(child_path, depth + 1, parent=abs_path)
 
-        return _INPUT_PATTERN.sub(_sub, text)
+        parts = []
+        start = 0
+        masked = mask_tex_noncode(text)
+        for match in _INPUT_PATTERN.finditer(masked):
+            prefix = masked[:match.start()]
+            if (len(prefix) - len(prefix.rstrip("\\"))) % 2:
+                continue
+            parts.extend((text[start:match.start()], _sub(match)))
+            start = match.end()
+        parts.append(text[start:])
+        active_paths.remove(identity)
+        return "".join(parts)
 
     try:
         merged = _resolve(main, depth=0)
-    except RecursionError as e:
+    except (RecursionError, OSError, UnicodeError, ValueError) as e:
         return {
             "ok": False,
             "error": str(e),
@@ -151,8 +166,8 @@ def resolve_input_chain(
             "files_missing": missing,
         }
 
-    return {
-        "ok": True,
+    result = {
+        "ok": not missing,
         "main": main_tex_path,
         "merged_tex": merged,
         "files_resolved": resolved,
@@ -160,6 +175,9 @@ def resolve_input_chain(
         "files_duplicate": duplicate,
         "total_chars": len(merged),
     }
+    if missing:
+        result["error"] = f"{len(missing)} TeX input file(s) could not be resolved"
+    return result
 
 
 def paper_writing_resolve_input_chain(
@@ -273,8 +291,20 @@ def paper_writing_extract_abstract(
             "abstract": None,
         }
 
-    with open(tex_path, encoding=encoding, errors="replace") as fh:
-        src = fh.read()
+    try:
+        raw = pathlib.Path(tex_path).read_bytes()
+        try:
+            src = raw.decode(encoding, errors="strict")
+        except UnicodeDecodeError:
+            if encoding.casefold().replace("-", "") != "utf8":
+                raise
+            src = raw.decode("cp932", errors="strict")
+    except (OSError, UnicodeError) as exc:
+        return {
+            "ok": False,
+            "error": f"failed to read tex: {exc}",
+            "abstract": None,
+        }
 
     # Try direct first
     abs_text = extract_abstract_from_tex(src)

@@ -7,9 +7,9 @@ computation, transient thermal analysis, rotating workpiece, VTK output,
 and post-processing patterns.
 
 Public docs/notebooks:
-  - docs/induction_heating/public_demo.ipynb -- human-facing ESIM/BEM/WPT
+  - validation_test/documentation_maintenance/induction_heating/public_demo.ipynb -- human-facing ESIM/BEM/WPT
     induction-heating entry point with saved outputs and JSON sidecar.
-  - docs/induction_heating/induction_heating_demo_showcase.ipynb -- saved
+  - validation_test/documentation_maintenance/induction_heating/induction_heating_demo_showcase.ipynb -- saved
     promotion notebook for the closed public ESIM/WPT/RWG demo scripts.
   - docs/ih_esim_benchmark/esim_showcase.ipynb -- nonlinear ESIM benchmark
     figures/results.

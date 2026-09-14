@@ -1,0 +1,54 @@
+{
+  "source": "Live bibliography_doi_to_bibtex via Crossref; read-only metadata lookup",
+  "date": "2026-09-14",
+  "rows": [
+    {
+      "doi": "10.1007/978-3-7091-6876-9_5",
+      "result": "@incollection{jobard1997creating,\n  title = {Creating Evenly-Spaced Streamlines of Arbitrary Density},\n  author = {Jobard, Bruno and Lefer, Wilfrid},\n  year = {1997},\n  booktitle = {Eurographics},\n  pages = {43--55},\n  doi = {10.1007/978-3-7091-6876-9_5},\n  publisher = {Springer Vienna}\n}"
+    },
+    {
+      "doi": "10.1145/166117.166151",
+      "result": "@inproceedings{cabral1993imaging,\n  title = {Imaging vector fields using line integral convolution},\n  author = {Cabral, Brian and Leedom, Leith Casey},\n  year = {1993},\n  booktitle = {Proceedings of the 20th annual conference on Computer graphics and interactive techniques},\n  pages = {263--270},\n  doi = {10.1145/166117.166151},\n  publisher = {ACM}\n}"
+    },
+    {
+      "doi": "10.1080/10867651.2003.10487582",
+      "result": "@article{lewiner2003efficient,\n  title = {Efficient Implementation of Marching Cubes' Cases with Topological Guarantees},\n  author = {Lewiner, Thomas and Lopes, Hélio and Vieira, Antônio Wilson and Tavares, Geovan},\n  year = {2003},\n  journal = {Journal of Graphics Tools},\n  volume = {8},\n  number = {2},\n  pages = {1--15},\n  doi = {10.1080/10867651.2003.10487582},\n  publisher = {Informa UK Limited}\n}"
+    },
+    {
+      "doi": "10.1137/S0036139993269266",
+      "result": "@article{grote1995exact,\n  title = {Exact Nonreflecting Boundary Conditions for the Time Dependent Wave Equation},\n  author = {Grote, Marcus J. and Keller, Joseph B.},\n  year = {1995},\n  journal = {SIAM Journal on Applied Mathematics},\n  volume = {55},\n  number = {2},\n  pages = {280--297},\n  doi = {10.1137/s0036139993269266},\n  publisher = {Society for Industrial \\& Applied Mathematics (SIAM)}\n}"
+    },
+    {
+      "doi": "10.1137/090745477",
+      "result": "@article{hagstrom2009complete,\n  title = {Complete Radiation Boundary Conditions: Minimizing the Long Time Error Growth of Local Methods},\n  author = {Hagstrom, Thomas and Warburton, Timothy},\n  year = {2009},\n  journal = {SIAM Journal on Numerical Analysis},\n  volume = {47},\n  number = {5},\n  pages = {3678--3704},\n  doi = {10.1137/090745477},\n  publisher = {Society for Industrial \\& Applied Mathematics (SIAM)}\n}"
+    },
+    {
+      "doi": "10.1109/TMAG.1983.1062812",
+      "result": "@article{coulomb1983methodology,\n  title = {A methodology for the determination of global electromechanical quantities from a finite element analysis and its application to the evaluation of magnetic forces, torques and stiffness},\n  author = {Coulomb, J.},\n  year = {1983},\n  journal = {IEEE Transactions on Magnetics},\n  volume = {19},\n  number = {6},\n  pages = {2514--2519},\n  doi = {10.1109/tmag.1983.1062812},\n  publisher = {Institute of Electrical and Electronics Engineers (IEEE)}\n}"
+    },
+    {
+      "doi": "10.1016/j.cam.2003.06.012",
+      "result": "@article{henrotte2004computation,\n  title = {Computation of electromagnetic force densities: Maxwell stress tensor vs. virtual work principle},\n  author = {Henrotte, François and Hameyer, Kay},\n  year = {2004},\n  journal = {Journal of Computational and Applied Mathematics},\n  volume = {168},\n  number = {1-2},\n  pages = {235--243},\n  doi = {10.1016/j.cam.2003.06.012},\n  publisher = {Elsevier BV}\n}"
+    },
+    {
+      "doi": "10.3390/magnetism3010002",
+      "result": "@article{ortner2022numerically,\n  title = {Numerically Stable and Computationally Efficient Expression for the Magnetic Field of a Current Loop},\n  author = {Ortner, Michael and Leitner, Peter and Slanovc, Florian},\n  year = {2022},\n  journal = {Magnetism},\n  volume = {3},\n  number = {1},\n  pages = {11--31},\n  doi = {10.3390/magnetism3010002},\n  publisher = {MDPI AG}\n}"
+    },
+    {
+      "doi": "10.1063/1.338583",
+      "result": "@article{kotiuga1987making,\n  title = {On making cuts for magnetic scalar potentials in multiply connected regions},\n  author = {Kotiuga, P. R.},\n  year = {1987},\n  journal = {Journal of Applied Physics},\n  volume = {61},\n  number = {8},\n  pages = {3916--3918},\n  doi = {10.1063/1.338583},\n  publisher = {AIP Publishing}\n}"
+    },
+    {
+      "doi": "10.1051/m2an:2003023",
+      "result": "@article{becker2003finite,\n  title = {A finite element method for domain decomposition with non-matching grids},\n  author = {Becker, Roland and Hansbo, Peter and Stenberg, Rolf},\n  year = {2003},\n  journal = {ESAIM: Mathematical Modelling and Numerical Analysis},\n  volume = {37},\n  number = {2},\n  pages = {209--225},\n  doi = {10.1051/m2an:2003023},\n  publisher = {EDP Sciences}\n}"
+    },
+    {
+      "doi": "10.1051/m2an:2003039",
+      "result": "@article{hansbo2003finite,\n  title = {A finite element method on composite grids based on Nitsche's method},\n  author = {Hansbo, Anita and Hansbo, Peter and Larson, Mats G.},\n  year = {2003},\n  journal = {ESAIM: Mathematical Modelling and Numerical Analysis},\n  volume = {37},\n  number = {3},\n  pages = {495--514},\n  doi = {10.1051/m2an:2003039},\n  publisher = {EDP Sciences}\n}"
+    },
+    {
+      "doi": "10.1139/p62-067",
+      "result": "@article{senior1962note,\n  title = {A NOTE ON IMPEDANCE BOUNDARY CONDITIONS},\n  author = {Senior, T. B. A.},\n  year = {1962},\n  journal = {Canadian Journal of Physics},\n  volume = {40},\n  number = {5},\n  pages = {663--665},\n  doi = {10.1139/p62-067},\n  publisher = {Canadian Science Publishing}\n}"
+    }
+  ]
+}

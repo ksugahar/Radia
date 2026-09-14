@@ -36,7 +36,7 @@ Reference docs (consolidated 2026-05-04):
     - §2: 1-form / 2-form pullback derivation
     - §7: Reduced potential formulations + Kelvin
       including the (nu - nu_0) form pitfall (CRITICAL)
-  docs/kelvin/kelvin_classic_demos.ipynb (executed source map for the 37
+  validation_test/documentation_maintenance/kelvin/kelvin_classic_demos.ipynb (executed source map for the 37
     classic A/H/Omega/Radia-IEM demos pruned from examples/, with
     representative excerpts plus full source text and SHA-256 hashes in the
     synchronized JSON)
@@ -917,14 +917,17 @@ for level in range(max_refinements):
 
 ## Equilibrated (Prager-Synge) Estimator + CG-Smoother Acceleration
 
-For an A-formulation solve, a reliable equilibrated estimator is
-eta = ||H_A - grad(Omega)||, obtained from a CHEAP scalar H1 (Omega) problem
-that minimizes ||grad(Omega) - H_A||^2. Key fact: grad(Omega) is curl-free for
-ANY Omega (curl(grad) = 0 identically), so by Prager-Synge the Omega solve can
-be a CG iteration TRUNCATED after ~10-20 steps and still give a valid AMR
-indicator -- only the bound tightness (effectivity) degrades, not validity.
+The saved CG-smoother experiment minimizes an unweighted H-field discrepancy
+eta = ||H_A - grad(Omega)|| in a conforming scalar H1 space. Each truncated
+iterate remains curl-free, but this fact alone does NOT prove a Prager-Synge
+energy-error upper bound. Such a bound requires the appropriate constitutive
+energy norm, compatible boundary/source conditions and both admissible fields.
+For nonuniform permeability, the unweighted discrepancy is not automatically
+that norm. Treat the notebook quantity as a tested AMR heuristic unless these
+additional conditions have been established for the actual problem.
 
-Verified on the mu_r=100 magnetic sphere (axisymmetric, order 2, ~2660 elems):
+Historical saved comparison on the mu_r=100 magnetic sphere (axisymmetric,
+order 2, ~2660 elems; not a new numerical validation of a bound):
 CG(20) reaches the direct estimator within ~1.3% (0.00% by CG 50), element-wise
 correlation 0.976 vs direct, top-10% refine-set overlap 97.7%. The dual
 direction (Omega-primal -> A-method/HCurl equilibration) is NOT accelerated this

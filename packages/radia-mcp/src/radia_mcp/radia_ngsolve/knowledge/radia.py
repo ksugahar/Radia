@@ -121,6 +121,13 @@ SHOWCASE NOTEBOOK: `docs/background_fields/background_fields.ipynb` -- a
 spatially-varying quadrupole `ObjBckg` callback driving a nonlinear soft-iron
 cube / sphere, plus a permeability sweep (executed + rendered). Durable run
 metadata and script/source hashes are in `docs/background_fields/background_fields_results.json`.
+Its saved WebGUI supplement shows the prescribed quadrupole source on a
+sampling mesh (magnitude and vector direction), not a newly solved iron
+response. `background_fields_webgui_results.json` records that separate run.
+For electric-field intuition, `docs/electrostatics/electrostatics.ipynb`
+shows the analytical infinite-coax potential and radial electric field on an
+annular viewing mesh. It does not claim finite-length fringing or a FEM solve.
+These notebooks are discovery/evidence; MCP retains the operating contract.
 
 ## Containers
 
@@ -2279,7 +2286,7 @@ B_voxel = create_voxel_cf(combined, 'b', mesh=mesh, resolution=61)
 ## Test Scripts
 
 - `validation_test/ngsolve_integration/mesh_magnetization_import/verified_ngsolve_to_radia.py` - FEM->Radia analytical pipeline
-- `docs/kelvin/kelvin_classic_demos.ipynb` +
+- `validation_test/documentation_maintenance/kelvin/kelvin_classic_demos.ipynb` +
   `docs/kelvin/kelvin_classic_demos_results.json` - result-bearing Kelvin
   classic demos; maintained convention is `radia.kelvin_source`
 """

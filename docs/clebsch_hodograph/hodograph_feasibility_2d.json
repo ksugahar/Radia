@@ -64,5 +64,12 @@
     "pole_match": 2.5394824243463177e-08,
     "pde_resid_coarse": 0.00261762920912161
   },
-  "notebook_sha256": "44f8fa95e68f00b9335c46520292c575d593321b3104c87b2db9634af132e391"
+  "notebook_sha256": "2a5b2892ac3f55477ba27c37c6b0535b6dec85428c3e9e45be80e4668695084c",
+  "documentation_revision": {
+    "date": "2026-09-14",
+    "previous_notebook_sha256": "8e4738f9d53b33695dd1b0f1fd9f57b3aa9c74d1c2a398d97791ba8d09de78f3",
+    "code_and_saved_outputs_unchanged": true,
+    "comparison": "All complete code-cell objects equal the Git HEAD notebook.",
+    "note": "Original result timestamp/runtime retained; this is not a new numerical run."
+  }
 }

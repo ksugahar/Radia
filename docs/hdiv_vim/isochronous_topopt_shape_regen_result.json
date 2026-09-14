@@ -2,7 +2,7 @@
   "schema": "radia.notebook_result.v1",
   "generated_at_utc": "2026-08-09T16:24:42Z",
   "notebook": "isochronous_topopt_shape_regen.ipynb",
-  "notebook_sha256": "88fddf607b67485ac9ad81c0ba40b2b09a028a33de33568c295616891abb026e",
+  "notebook_sha256": "e3b1e5f6087d6c77b25db8bb6096c0aca6f756b2131b73293ee725167cb821d9",
   "versions": {
     "python_version": "3.12.10",
     "python_executable_name": "python.exe",
@@ -11,8 +11,8 @@
     "radia_version": "4.95.50"
   },
   "summary": {
-    "path": "isochronous_topopt_shape_regen.ipynb",
-    "cells": 9,
+    "path": "docs/hdiv_vim/isochronous_topopt_shape_regen.ipynb",
+    "cells": 11,
     "code_cells": 4,
     "executed_code_cells": 4,
     "code_cells_with_outputs": 4,
@@ -38,7 +38,8 @@
       "language_info",
       "radia",
       "widgets"
-    ]
+    ],
+    "error_outputs": []
   },
   "outputs": [
     {
@@ -142,5 +143,12 @@
     "result_saved": true,
     "json_has_generated_at_utc": true,
     "json_has_versions": true
+  },
+  "documentation_revision": {
+    "date": "2026-09-14",
+    "previous_notebook_sha256": "552f8c0e3af96b577ff7f37be1e8c4a1f87548ef56cb685937ce008af8d1c30e",
+    "code_and_saved_outputs_unchanged": true,
+    "comparison": "All complete code-cell objects equal the Git HEAD notebook.",
+    "note": "Original result timestamp/runtime retained; this is not a new numerical run."
   }
 }

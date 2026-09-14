@@ -1,6 +1,6 @@
 {
   "generated_at_utc": "2026-07-14T09:55:47.129438+00:00",
-  "notebook_sha256": "0775ce3f11ed4fff9dc104dd4d585987899738f77d5e3b956187f2d651fa263a",
+  "notebook_sha256": "791c54a91b85354a7067f8f864a3268dc3af0b9c4cb7f632c5a83a1a0293e7f4",
   "radia_version": "4.95.10",
   "ngsolve_version": "6.2.2604",
   "python_version": "3.12.10",
@@ -143,5 +143,12 @@
     "beta0_baseline": -0.010003025398674458,
     "finest_w": 0.005,
     "finest_w_slope": 0.9896295342570783
+  },
+  "documentation_revision": {
+    "date": "2026-09-14",
+    "previous_notebook_sha256": "43697cc856696f6ebfdeff35fc39edd8744e8d15345e527524bd5044ee084447",
+    "code_and_saved_outputs_unchanged": true,
+    "comparison": "All complete code-cell objects equal the Git HEAD notebook.",
+    "note": "Original result timestamp/runtime retained; this is not a new numerical run."
   }
 }

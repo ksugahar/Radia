@@ -128,7 +128,7 @@ DOCS + DEMOS
   docs/stream_function/  (README, theory, regularization, single_stroke,
     deformation, examples, api, benchmarks)
   SHOWCASE NOTEBOOKS (executed, outputs embedded -- the method run live):
-    docs/stream_function/demo_gallery.ipynb    -- public demo gallery for the
+    validation_test/documentation_maintenance/stream_function/demo_gallery.ipynb    -- public demo gallery for the
        remaining human-facing examples; validation/benchmark runners are split
        to validation_test/stream_function, with reusable computation promoted
        to src/radia APIs
@@ -142,7 +142,7 @@ DOCS + DEMOS
     docs/stream_function/deformation.ipynb     -- run_deformation_search live:
        penalty form (--minimize-reg) + NSGA-II Pareto front (--pareto);
        cost-vs-trial + (RMS, psi^T S psi) front; flat/accuracy/reg-min table
-    docs/stream_function/examples_catalog.ipynb -- source/result migration
+    validation_test/documentation_maintenance/stream_function/examples_catalog.ipynb -- source/result migration
        ledger for transitional demo scripts, synchronized with JSON sidecars.
     (the .md keeps the prose/derivations; the .ipynb embeds the produced
     numbers + figures; validation and benchmarks execute from validation_test)
@@ -365,7 +365,7 @@ fusion-specific solver code.
 DOCS / VALIDATION SURFACES
 --------------------------
   docs/stream_function/fusion.md
-  docs/stream_function/demo_gallery.ipynb
+  validation_test/documentation_maintenance/stream_function/demo_gallery.ipynb
   validation_test/stream_function/regcoil_fusion_helpers.py
 
 demo_regcoil_fusion.py

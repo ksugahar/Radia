@@ -12,8 +12,8 @@ companion notes are specializations of it:
   `hodograph`, `canonical`, `surface_derham`, `dtn_geometry`).
 
 The public result-saved demo entry point is
-[`public_demo.ipynb`](public_demo.ipynb). The full source/result catalog is
-[`examples_catalog.ipynb`](examples_catalog.ipynb). Together they keep the
+[`public_demo.ipynb`](../../validation_test/documentation_maintenance/clebsch_hodograph/public_demo.ipynb). The full source/result catalog is
+[`examples_catalog.ipynb`](../../validation_test/documentation_maintenance/clebsch_hodograph/examples_catalog.ipynb). Together they keep the
 runnable example sources, saved figures/JSON, and protected validation
 references visible beside this theory map.
 

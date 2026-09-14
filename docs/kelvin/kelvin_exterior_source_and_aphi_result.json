@@ -2,7 +2,7 @@
   "schema": "radia.notebook_result.v1",
   "generated_at_utc": "2026-07-25T10:45:38Z",
   "notebook": "kelvin_exterior_source_and_aphi.ipynb",
-  "notebook_sha256": "c8ccf8a850bb4d2bdb7b5100518ce776a18e52ec30c51a862fbc958789aba943",
+  "notebook_sha256": "dc3953994fddf7716ffced220a1efc29d8533f3430ac4bd8d460969870b82c5a",
   "versions": {
     "python_version": "3.12.10",
     "python_executable_name": "python.exe",
@@ -11,8 +11,8 @@
     "radia_version": "4.95.23"
   },
   "summary": {
-    "path": "kelvin_exterior_source_and_aphi.ipynb",
-    "cells": 17,
+    "path": "docs/kelvin/kelvin_exterior_source_and_aphi.ipynb",
+    "cells": 19,
     "code_cells": 7,
     "executed_code_cells": 7,
     "code_cells_with_outputs": 7,
@@ -34,8 +34,10 @@
     "parameterized_field_draw_cells_with_rich_outputs": 0,
     "webgui_field_ready": true,
     "metadata_keys": [
-      "language_info"
-    ]
+      "language_info",
+      "radia"
+    ],
+    "error_outputs": []
   },
   "outputs": [
     {
@@ -171,5 +173,12 @@
     "result_saved": true,
     "json_has_generated_at_utc": true,
     "json_has_versions": true
+  },
+  "documentation_revision": {
+    "date": "2026-09-14",
+    "previous_notebook_sha256": "5e367f51f2260c5ccb2775fc0dcf43073eafef9d8851eec3de212e76191eb274",
+    "code_and_saved_outputs_unchanged": true,
+    "comparison": "All complete code-cell objects equal the Git HEAD notebook.",
+    "note": "Original result timestamp/runtime retained; this is not a new numerical run."
   }
 }

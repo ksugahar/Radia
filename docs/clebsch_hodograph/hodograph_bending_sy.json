@@ -74,5 +74,12 @@
     "best_a": 4.4,
     "rogowski_limit": 1.0
   },
-  "notebook_sha256": "c17cfd2d449e44fa0dfd416f9cffe5eff913dfe9522f16ed245199f9c1d66ea7"
+  "notebook_sha256": "dfe24b973489c54de33e40fa2b50772617799fa0f9126c3d6714ed460539e71f",
+  "documentation_revision": {
+    "date": "2026-09-14",
+    "previous_notebook_sha256": "d7158b0c1be39d5320453c39ef2aa8668e6ddd61e606c8b6ff56ac08c2e47275",
+    "code_and_saved_outputs_unchanged": true,
+    "comparison": "All complete code-cell objects equal the Git HEAD notebook.",
+    "note": "Original result timestamp/runtime retained; this is not a new numerical run."
+  }
 }

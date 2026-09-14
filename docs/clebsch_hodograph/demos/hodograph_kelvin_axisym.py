@@ -8,7 +8,7 @@ axisymmetric Kelvin transformation (open boundary), so the field is exact
 and the hodograph is computed on an exact field.
 
 It reuses the verified Omega-Reduced-Omega + Kelvin pattern captured in
-``docs/kelvin/kelvin_classic_demos.ipynb`` and implemented through
+``validation_test/documentation_maintenance/kelvin/kelvin_classic_demos.ipynb`` and implemented through
 ``radia.kelvin_source`` helpers (interior physical half-disk + exterior
 Kelvin half-disk offset in z, periodic kelvin_int <-> kelvin_ext,
 mu_ext = mu0 (R/rho')^2), then ADDS the hodograph post-processing on the
