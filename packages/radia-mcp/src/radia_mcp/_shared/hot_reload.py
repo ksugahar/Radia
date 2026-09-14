@@ -1,15 +1,13 @@
 """Reload changed radia_mcp modules and re-register their tools without a restart.
 
-Every radia-mcp server is an editable install, and every server still had to
-be restarted after a code change (2026-09-02). An editable install only tells
+Development radia-mcp servers may use editable installs. An editable install only tells
 Python which file to read at import time; a running server has already
 imported its modules and holds the old function objects, FastMCP's tool
 registry points at those objects, and the client froze the tool list when it
 connected. Three things therefore have to happen inside the running process:
 
 1. reload the modules whose source changed on disk (dependencies first);
-2. replace every registered tool whose function object is now stale, and
-   register callables that appeared since start-up;
+2. replace every registered tool whose function object is now stale;
 3. tell the client that the tool list changed
    (``notifications/tools/list_changed``), which the client only honours when
    the server declared ``tools.listChanged`` at initialisation.
@@ -213,32 +211,18 @@ def reload_changed_modules(
     }
 
 
-def _common_tool_prefix(names: list[str]) -> str:
-    if not names:
-        return ""
-    prefix = os.path.commonprefix(names)
-    # Cut back to the last underscore so ``grant_writing_check_kanji_ratio``
-    # and ``grant_writing_check_misuse`` share ``grant_writing_`` rather than
-    # ``grant_writing_check_``.
-    if len(names) == 1:
-        head = names[0].split("_")
-        return head[0] + "_" if len(head) > 1 else names[0]
-    return prefix[: prefix.rfind("_") + 1] if "_" in prefix else prefix
-
-
 def refresh_tools(
     mcp: Any,
     module_prefix: str = "radia_mcp",
     *,
     reloaded_modules: set[str] | None = None,
 ) -> dict[str, Any]:
-    """Re-register stale tools and pick up callables added since start-up."""
+    """Refresh registered tools only; new tools require normal server startup."""
     manager = mcp._tool_manager
     updated: list[str] = []
     added: list[str] = []
     removed: list[str] = []
     skipped: list[str] = []
-    names_by_module: dict[str, list[str]] = {}
     selected_modules = set(reloaded_modules or ())
     registry = getattr(manager, "_tools", None)
     if not isinstance(registry, dict):
@@ -250,7 +234,7 @@ def refresh_tools(
             fn = getattr(tool, "fn", None)
             module_name = getattr(fn, "__module__", "") or ""
             if (
-                not module_name.startswith(module_prefix)
+                not (module_name == module_prefix or module_name.startswith(module_prefix + "."))
                 or module_name not in selected_modules
             ):
                 continue
@@ -258,7 +242,6 @@ def refresh_tools(
             if module is None:
                 skipped.append(tool.name)
                 continue
-            names_by_module.setdefault(module_name, []).append(tool.name)
             # Closures such as the shared status/reload tools cannot be looked
             # up as module globals. Their global namespace is refreshed in
             # place when the owning module reloads, so leave them registered.
@@ -283,33 +266,6 @@ def refresh_tools(
             )
             updated.append(tool.name)
 
-        registered = {tool.name for tool in manager.list_tools()}
-        for module_name, names in names_by_module.items():
-            module = sys.modules.get(module_name)
-            prefix = _common_tool_prefix(sorted(names))
-            if module is None or not prefix:
-                continue
-            for attr in dir(module):
-                if not attr.startswith(prefix) or attr in registered:
-                    continue
-                candidate = getattr(module, attr)
-                if callable(candidate) and getattr(candidate, "__module__", "") == module_name:
-                    # The server-specific annotation/contract pass does not run
-                    # again until reconnect. A newly discovered callable is
-                    # therefore deliberately conservative for this session.
-                    from mcp.types import ToolAnnotations
-
-                    mcp.add_tool(
-                        candidate,
-                        annotations=ToolAnnotations(
-                            readOnlyHint=False,
-                            destructiveHint=True,
-                            idempotentHint=False,
-                            openWorldHint=True,
-                        ),
-                    )
-                    registered.add(attr)
-                    added.append(attr)
     except Exception:
         registry.clear()
         registry.update(registry_snapshot)
@@ -402,7 +358,18 @@ def _declare_tool_list_changed(mcp: Any) -> None:
 
 
 def register_reload_tool(mcp: Any, tool_name: str, module_prefix: str = "radia_mcp") -> None:
-    """Register ``tool_name`` on ``mcp``: reload, refresh, notify the client."""
+    """Expose reload only for a verified editable install without an opt-out."""
+    if os.environ.get("RADIA_MCP_HOT_RELOAD", "").strip() == "0":
+        return
+    # Import locally: status registration calls this function during server setup.
+    from ..common.status import _distribution_provenance
+
+    try:
+        editable = _distribution_provenance().get("editable") is True
+    except (OSError, TypeError, ValueError, AttributeError):
+        editable = False
+    if not editable:
+        return
     _prime_mtimes(module_prefix)
     _declare_tool_list_changed(mcp)
     reload_lock = asyncio.Lock()
@@ -420,8 +387,8 @@ def register_reload_tool(mcp: Any, tool_name: str, module_prefix: str = "radia_m
         report["note"] = (
             "Changed implementation modules were reloaded transactionally and "
             "their tools refreshed in this process. A changed server module, "
-            "the reload implementation itself, or a newly added tool that needs "
-            "the server-specific policy pass still requires reconnecting. Tool "
+            "the reload implementation itself, or a newly added tool still "
+            "requires reconnecting for normal registration and policy checks. Tool "
             "schemas refresh only if the client honours "
             "notifications/tools/list_changed."
         )

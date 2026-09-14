@@ -17,6 +17,7 @@ Date: 2026-01-19
 """
 
 import os
+import io
 import zipfile
 import scipy.io
 import numpy as np
@@ -29,17 +30,21 @@ NASA_DATA_DIR = os.path.join(
 )
 
 
-def extract_eis_from_nasa(battery_id: str = "B0005", cycle_type: str = "first") -> dict:
+def extract_eis_from_nasa(battery_id: str = "B0005", cycle_type: str = "first", *, frequency_hz=None, frequency_source: str = "") -> dict:
     """
     Extract EIS data from NASA battery dataset.
 
     Args:
         battery_id: Battery ID (B0005, B0006, B0007, or B0018)
         cycle_type: "first" for fresh battery, "last" for aged battery
+        frequency_hz: Documented frequencies in the original impedance sample order.
+        frequency_source: Instrument-record locator supporting that exact vector.
 
     Returns:
         Dictionary with frequency and impedance arrays
     """
+    if cycle_type not in {"first", "last"}:
+        raise ValueError("cycle_type must be first or last")
     zip_path = os.path.join(NASA_DATA_DIR, "1. BatteryAgingARC-FY08Q4.zip")
 
     if not os.path.exists(zip_path):
@@ -58,14 +63,9 @@ def extract_eis_from_nasa(battery_id: str = "B0005", cycle_type: str = "first") 
             print(f"ERROR: {mat_name} not found in archive")
             return None
 
-        # Extract to temp
-        temp_dir = os.path.dirname(os.path.abspath(__file__))
-        zf.extract(mat_files[0], temp_dir)
-        mat_path = os.path.join(temp_dir, mat_files[0])
-
-        try:
-            # Load MATLAB file
-            mat_data = scipy.io.loadmat(mat_path)
+        # Read the member in memory: never overwrite/delete a caller's MAT file.
+        with io.BytesIO(zf.read(mat_files[0])) as mat_stream:
+            mat_data = scipy.io.loadmat(mat_stream)
             battery = mat_data[battery_id]
             cycles = battery['cycle'][0, 0]
             n_cycles = cycles.shape[1]
@@ -113,34 +113,38 @@ def extract_eis_from_nasa(battery_id: str = "B0005", cycle_type: str = "first") 
             if 'Rectified_Impedance' in data.dtype.names:
                 result['Z_rect'] = data['Rectified_Impedance'].flatten()
 
-            # NASA EIS frequency range is 0.1 Hz to 5 kHz
-            # Generate frequency array based on number of points
+            # Sweep endpoints do not specify sample ordering or spacing.
+            # Require an independently documented vector; never fabricate one.
             n_points = len(result.get('Z', []))
             if n_points > 0:
-                # Assume log-spaced frequency sweep
-                result['frequency'] = np.logspace(-1, np.log10(5000), n_points)
+                result['frequency'] = validate_frequency_axis(
+                    frequency_hz, n_points, frequency_source
+                )
+                result['frequency_source'] = frequency_source
 
             return result
 
-        finally:
-            # Clean up
-            if os.path.exists(mat_path):
-                os.remove(mat_path)
-            # Remove extracted directory if empty
-            extracted_dir = os.path.dirname(mat_path)
-            if extracted_dir != temp_dir and os.path.exists(extracted_dir):
-                try:
-                    os.rmdir(extracted_dir)
-                except:
-                    pass
+def validate_frequency_axis(frequency_hz, n_points: int, frequency_source: str):
+    """Require positive sample-aligned frequencies and an explicit source locator."""
+    if frequency_hz is None or not isinstance(frequency_source, str) or not frequency_source.strip():
+        raise ValueError("Measured EIS export requires a documented frequency vector and source locator")
+    if "\n" in frequency_source or "\r" in frequency_source:
+        raise ValueError("frequency_source must be a single-line source locator")
+    values = np.asarray(frequency_hz, dtype=float)
+    if values.ndim != 1 or len(values) != n_points or not np.all(np.isfinite(values)) or np.any(values <= 0):
+        raise ValueError("Frequency vector must contain one finite positive value per impedance sample")
+    if len(np.unique(values)) != len(values):
+        raise ValueError("Frequency vector contains duplicate samples")
+    return values
 
 
-def create_real_eis_csv(output_dir: str):
+def create_real_eis_csv(output_dir: str, *, frequency_hz=None, frequency_source: str = ""):
     """
     Create EIS CSV from real NASA measurement data.
     """
     # Extract fresh battery EIS
-    eis_data = extract_eis_from_nasa("B0005", "first")
+    eis_data = extract_eis_from_nasa("B0005", "first", frequency_hz=frequency_hz,
+                                     frequency_source=frequency_source)
 
     if eis_data is None or 'Z' not in eis_data:
         print("WARNING: Could not extract real EIS data from NASA dataset")
@@ -176,7 +180,8 @@ def create_real_eis_csv(output_dir: str):
 # Temperature: 24 C (room temperature)
 #
 # EIS measurement conditions:
-#   Frequency range: 0.1 Hz - 5 kHz (estimated)
+#   Frequency source: {eis_data['frequency_source']}
+#   Frequency range: {freq.min()} Hz - {freq.max()} Hz
 #   Points: {len(Z)}
 #
 """
@@ -202,7 +207,7 @@ if __name__ == '__main__':
     if result is None:
         print("\n" + "="*60)
         print("Could not extract real EIS from NASA .mat files")
-        print("Using representative data based on NASA documentation instead")
+        print("No measurement CSV generated; no synthetic fallback is performed")
         print("="*60)
     else:
         print("\n" + "="*60)

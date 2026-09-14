@@ -943,6 +943,13 @@ class _FakeResponse:
     def json(self):
         return self._json or {}
 
+    def iter_content(self, chunk_size=65536):
+        for start in range(0, len(self.content), chunk_size):
+            yield self.content[start:start + chunk_size]
+
+    def close(self):
+        pass
+
 
 def test_arxiv_fetch_latex_source_mocked(monkeypatch, tmp_path):
     """Mock arXiv e-print fetch with a tiny synthetic tarball."""
@@ -1568,7 +1575,7 @@ def test_verify_citation_doi_resolve_failure_marks_no_candidate(
     from radia_mcp.paper_writing import paper_download as pd
 
     def fake_resolve_doi(doi):
-        return {"ok": False, "error": "Crossref returned 404"}
+        return {"ok": False, "error": "Crossref returned 404", "error_kind": "not_found"}
 
     monkeypatch.setattr(pd, "paper_writing_resolve_doi", fake_resolve_doi)
 

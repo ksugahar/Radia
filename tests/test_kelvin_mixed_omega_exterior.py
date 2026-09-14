@@ -89,7 +89,8 @@ def _coil():
 
 
 def _solve(mesh, coil, mu_r_iron=1.0, kelvin_scale=1.0,
-           kelvin_interface="kelvin_int", exact_exterior_source=False):
+           kelvin_interface="kelvin_int", exact_exterior_source=False,
+           return_system=False):
     import ngsolve as ng
     import radia as rad
     from radia.kelvin_material import make_kelvin_mu_cf, MU_0
@@ -123,7 +124,7 @@ def _solve(mesh, coil, mu_r_iron=1.0, kelvin_scale=1.0,
             kelvin_source_h=(
                 rad.KelvinRadiaFieldStrength(coil, OFFSET, RADIUS, (0.0, 0.0, 0.0))
                 if exact_exterior_source else None),
-            total_source_h=None, total_source_materials=())
+            total_source_h=None, total_source_materials=(), return_system=return_system)
     return result
 
 
@@ -215,6 +216,50 @@ def test_kelvin_source_lift_is_shared_across_the_identification():
                                    order=4))
     assert inner > 0.0
     assert abs(outer / inner - 1.0) < 1.0e-10
+
+
+def test_direct_solve_reports_its_own_residual():
+    """A factorisation has no iteration history, but it still has r = b - A x.
+
+    Reporting nothing because there is no iteration count is the same gap as
+    treating a Krylov solve that ran out of iterations as converged.  The free
+    degrees of freedom carry the system that was actually solved, and the
+    multiplier block carries the interface jump condition in weak form, so the
+    two are reported apart: a constraint defect must not be able to hide
+    inside a healthy PDE residual.
+    """
+    mesh = _kelvin_mesh()
+    result = _solve(mesh, _coil())
+    residual = result["linear_residual"]
+
+    assert residual["free_dofs"]["relative"] < 1.0e-8
+    assert residual["free_dofs"]["rhs_l2"] > 0.0
+    assert set(residual["blocks"]) == {
+        "phi_reduced", "phi_total", "interface_constraint"}
+    constraint = residual["blocks"]["interface_constraint"]
+    assert constraint is not None
+    assert constraint["relative"] < 1.0e-8
+
+
+def test_assembled_system_is_not_retained_by_default():
+    """The assembled matrix must be freed after a production solve.
+
+    The system is exposed for diagnostics that embed another order's solution,
+    but the wrappers return the solver's result dict to the caller unchanged;
+    carrying the matrix in it by default would pin it in memory for every
+    solve.  The scalar diagnostics stay: they cost nothing to keep.
+    """
+    mesh = _kelvin_mesh()
+    result = _solve(mesh, _coil())
+    assert result["system"] is None
+    assert set(result["assembled_energy"]) >= {"energy", "half_xAx", "b_dot_x"}
+    assert result["linear_residual"]["free_dofs"]["relative"] < 1.0e-8
+
+
+def test_assembled_system_is_available_on_explicit_request():
+    result = _solve(_kelvin_mesh(), _coil(), return_system=True)
+    assert result["system"]["bilinear_form"].mat.height == result["fes"].ndof
+    assert len(result["system"]["linear_form"].vec) == result["fes"].ndof
 
 
 def test_kelvin_material_without_its_interface_is_rejected():

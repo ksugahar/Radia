@@ -1130,6 +1130,46 @@ def test_adjacent_reviewer_readability_accepts_plain_causal_sequence():
     assert result["risk_count"] == 0
 
 
+def test_adjacent_reviewer_flags_specialist_term_before_plain_meaning():
+    text = (
+        "本研究ではHDiv-MMMを使う。"
+        "動的口径を広げ、粒子を安定して運べる磁石を設計する。"
+    )
+
+    result = gw.grant_writing_adjacent_reviewer_readability_check(text)
+    risks = [
+        risk for risk in result["risks"]
+        if risk["type"] == "specialist_term_before_plain_meaning"
+    ]
+
+    assert risks
+    assert {item["term"] for item in risks[0]["examples"]} >= {
+        "HDiv-MMM", "動的口径",
+    }
+    assert (
+        result["reader_contract"]["specialist_accessibility"]["mechanical_status"]
+        == "risk_located"
+    )
+
+
+def test_adjacent_reviewer_accepts_plain_meaning_before_specialist_label():
+    text = (
+        "## 研究課題名\n\n"
+        "HDiv-MMMによるFFAG磁石のトポロジー最適化\n\n"
+        "本研究では、鉄の中の磁気の流れだけを解く方法（HDiv-MMM）を使う。"
+        "粒子が安定して周回できる範囲（動的口径）を広げる。"
+    )
+
+    result = gw.grant_writing_adjacent_reviewer_readability_check(text)
+    types = {risk["type"] for risk in result["risks"]}
+
+    assert "specialist_term_before_plain_meaning" not in types
+    assert (
+        result["reader_contract"]["specialist_accessibility"]["mechanical_status"]
+        == "no_located_risk"
+    )
+
+
 def test_adjacent_reviewer_readability_flags_section_claim_compression():
     text = (
         "独創性は、機器設計則を、校正・保留検証済み区間として与える点にある。"
@@ -3476,6 +3516,63 @@ def test_health_report_scores_translationese_and_surfaces_non_scoring_diagnostic
     question_names = {question["name"] for question in result["questions"]}
     assert "adjacent_reviewer_readability_check" in question_names
     assert "reviewer_momentum_check" in question_names
+
+
+def test_health_report_exposes_three_axis_reader_experience_contract():
+    text = (
+        "粒子線がん治療では、患者に合わせた高精度な照射が求められる。"
+        "しかし、磁極を直すたびに半年の試行錯誤を要し、装置の運用を圧迫する。"
+        "そこで本研究では、鉄の中の磁気の流れだけを解く方法（HDiv-MMM）を使う。"
+        "粒子が安定して周回できる範囲（動的口径）を20%広げ、性能を向上する。"
+    )
+
+    result = gw.grant_writing_health_report(text)
+    contract = result["reader_experience"]
+
+    assert set(contract["axes"]) == {
+        "excitement_without_hype",
+        "one_pass_clarity",
+        "specialist_accessibility",
+    }
+    assert contract["score"] is None
+    assert contract["score_max"] is None
+    assert contract["automatic_score_prohibited"]
+    assert contract["status"] == "mechanically_clear_manual_review_required"
+    assert all(
+        axis["mechanical_status"] == "no_located_risk"
+        for axis in contract["axes"].values()
+    )
+    assert all(
+        axis["quality_status"] == "manual_review_required"
+        for axis in contract["axes"].values()
+    )
+    assert {item["axis"] for item in contract["substantive_review_required"]} >= {
+        "scientific_novelty", "evidence_strength", "feasibility",
+        "funder_fit", "durable_repository_value",
+    }
+
+
+def test_reader_experience_never_turns_zero_regex_hits_into_quality_100():
+    text = (
+        "患者の負担を減らす装置が必要である。"
+        "しかし、現在の設計には半年の試行錯誤を要する。"
+        "そこで本研究では、候補を比較する方法を作る。"
+        "設計時間を短縮し、装置性能を向上する。"
+    )
+
+    contract = gw.grant_writing_health_report(text)["reader_experience"]
+
+    assert contract["score"] is None
+    assert contract["automatic_score_prohibited"]
+    assert "100" not in contract["note"]
+
+
+def test_reader_experience_without_applicable_diagnostics_is_not_a_failure():
+    result = gw._reader_experience_contract(None, {"applicable": False})
+    assert result["status"] == "not_applicable"
+    assert result["axes"] == {}
+    assert result["located_risk_count"] == 0
+    assert result["score"] is None
 
 
 def test_japanese_readability_requires_the_grant_genre_and_excludes_english():

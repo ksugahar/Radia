@@ -166,29 +166,53 @@ def _ngsolve_inventory(path: Path) -> dict[str, object]:
     }
 
 
+def _reflected_vertex_inventory(coordinates) -> dict[str, object]:
+    """Preserve the rounded-key gate and nearest-distance semantics.
+
+    Exact mirrors use dictionary lookups. Non-exact matches use a spatial
+    tree, including candidates across rounding-cell boundaries, rather than
+    scanning every vertex. This checks vertices, not the curved element map.
+    """
+    import numpy as np
+
+    coordinates = np.asarray(coordinates, dtype=float)
+    if coordinates.ndim != 2 or coordinates.shape[1] != 3:
+        raise ValueError("vertex coordinates must have shape (N, 3)")
+    if not np.isfinite(coordinates).all():
+        raise ValueError("vertex coordinates must be finite")
+    vertex_keys = {tuple(point) for point in np.round(coordinates, 14)}
+    exact_points = {tuple(point) for point in coordinates}
+    missing_vertices = 0
+    maximum_vertex_error = 0.0
+    approximate = []
+    for point in coordinates:
+        reflected = np.asarray((point[0], point[1], -point[2]), dtype=float)
+        if tuple(np.round(reflected, 14)) not in vertex_keys:
+            missing_vertices += 1
+            continue
+        if tuple(reflected) not in exact_points:
+            approximate.append(reflected)
+    if approximate:
+        from scipy.spatial import cKDTree
+
+        # A rounded-key match is within sqrt(3)*1e-14 m, hence the nearest
+        # point is also inside the old componentwise 1e-13 m candidate band.
+        distances, _ = cKDTree(coordinates).query(np.asarray(approximate))
+        maximum_vertex_error = float(np.max(distances))
+    return {
+        "vertex_count": int(len(coordinates)),
+        "missing_reflected_vertices": int(missing_vertices),
+        "maximum_reflected_vertex_error_m": maximum_vertex_error,
+    }
+
+
 def _reflection_inventory(path: Path) -> dict[str, object]:
     import ngsolve as ng
     import numpy as np
 
     mesh = ng.Mesh(str(path))
     coordinates = np.asarray([vertex.point for vertex in mesh.vertices], dtype=float)
-    vertex_keys = {tuple(np.round(point, 14)) for point in coordinates}
-    missing_vertices = 0
-    maximum_vertex_error = 0.0
-    for point in coordinates:
-        reflected = np.asarray((point[0], point[1], -point[2]), dtype=float)
-        key = tuple(np.round(reflected, 14))
-        if key not in vertex_keys:
-            missing_vertices += 1
-            continue
-        candidates = coordinates[
-            np.all(np.isclose(coordinates, reflected, rtol=0.0, atol=1e-13), axis=1)
-        ]
-        if candidates.size:
-            maximum_vertex_error = max(
-                maximum_vertex_error,
-                float(np.min(np.linalg.norm(candidates - reflected, axis=1))),
-            )
+    vertices = _reflected_vertex_inventory(coordinates)
 
     def element_signature(element, *, reflect: bool) -> tuple[object, ...]:
         points = []
@@ -206,9 +230,7 @@ def _reflection_inventory(path: Path) -> dict[str, object]:
         for element in elements
     )
     return {
-        "vertex_count": int(len(coordinates)),
-        "missing_reflected_vertices": int(missing_vertices),
-        "maximum_reflected_vertex_error_m": maximum_vertex_error,
+        **vertices,
         "volume_element_count": int(len(elements)),
         "missing_reflected_volume_elements": int(missing_elements),
     }

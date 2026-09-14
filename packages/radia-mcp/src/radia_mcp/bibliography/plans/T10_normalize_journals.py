@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pathlib
 
-from .._bibparse import read_bib_file, write_bib
+from .._source_edit import read_source, write_source_edits
 from ..data.journal_abbreviations import lookup, reverse_lookup
 
 
@@ -32,8 +32,14 @@ def bibliography_normalize_journal_names(bib_path: str,
     if not p.exists():
         return f"Error: file not found: {p}"
 
-    entries = read_bib_file(p)
+    if style not in {"ieee", "ieice", "iso4", "full"}:
+        return f"Error: unsupported journal style: {style}"
+    try:
+        original, source, entries = read_source(p)
+    except (OSError, UnicodeError, ValueError) as exc:
+        return f"Error: cannot read bibliography: {exc}"
     changes: list[tuple[str, str, str, str]] = []
+    edits = []
     for e in entries:
         if e.kind.startswith("@"):
             continue
@@ -48,6 +54,7 @@ def bibliography_normalize_journal_names(bib_path: str,
             if new != old:
                 e.fields[f] = new
                 changes.append((e.key, f, old, new))
+                edits.append((*e.field_spans[f], "{" + new + "}"))
 
     lines = [f"bibliography_normalize_journal_names: {p}",
              f"  style={style}  dry_run={dry_run}",
@@ -56,7 +63,10 @@ def bibliography_normalize_journal_names(bib_path: str,
         lines.append(f"  {key}.{fld}: {old!r} → {new!r}")
 
     if not dry_run and changes:
-        p.write_text(write_bib(entries), encoding="utf-8")
+        try:
+            write_source_edits(p, original, source, edits)
+        except (OSError, UnicodeError, ValueError) as exc:
+            return f"Error: cannot safely write bibliography: {exc}"
         lines.append(f"  wrote: {p}")
     elif not changes:
         lines.append("PASS — no changes needed (already canonical for this style)")

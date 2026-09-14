@@ -44,6 +44,23 @@ def _add_sideset(cubit, sideset_id: int, name: str, surfaces: set[int]) -> None:
     cubit.cmd(f'sideset {sideset_id} name "{name}"')
 
 
+def _material_boundary_surfaces(cubit, volumes: list[int]) -> set[int]:
+    """Return surfaces that do not merely separate volumes in one material."""
+    material_volumes = set(volumes)
+    surfaces: set[int] = set()
+    for volume in material_volumes:
+        surfaces.update(cubit.get_relatives("volume", volume, "surface"))
+    return {
+        surface
+        for surface in surfaces
+        if not (
+            len(parents := set(cubit.get_relatives(
+                "surface", surface, "volume"))) >= 2
+            and parents <= material_volumes
+        )
+    }
+
+
 def build_reflection_invariant_physical_mesh(
     *,
     iron_size: float,
@@ -70,8 +87,8 @@ def build_reflection_invariant_physical_mesh(
         cubit.cmd(f"imprint volume {iron_up} {iron_down}")
         cubit.cmd(f"merge volume {iron_up} {iron_down}")
         _add_block(cubit, 1, "iron", [iron_up, iron_down])
-        iron_surfaces = set(cubit.get_relatives("volume", iron_up, "surface"))
-        iron_surfaces.update(cubit.get_relatives("volume", iron_down, "surface"))
+        iron_surfaces = _material_boundary_surfaces(
+            cubit, [iron_up, iron_down])
         _add_sideset(cubit, 1, "iron_boundary", iron_surfaces)
         return {
             "iron_up": iron_up,
@@ -134,8 +151,7 @@ def build_reflection_invariant_physical_mesh(
 
     _add_block(cubit, 1, "iron", [iron_up, iron_down])
     _add_block(cubit, 2, "air", [air_up, air_down])
-    iron_surfaces = set(cubit.get_relatives("volume", iron_up, "surface"))
-    iron_surfaces.update(cubit.get_relatives("volume", iron_down, "surface"))
+    iron_surfaces = _material_boundary_surfaces(cubit, [iron_up, iron_down])
     _add_sideset(cubit, 1, "iron_air_interface", iron_surfaces)
 
     return {

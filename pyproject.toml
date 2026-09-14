@@ -27,6 +27,8 @@ classifiers = [
 
 dependencies = [
     "numpy>=1.20",
+    # CoilBuilder's orientation and standard source construction require SciPy.
+    "scipy>=1.11",
     # Coordinate-defining SVDs use a one-thread BLAS context so canonical
     # HCurl bases remain bit-reproducible across caller thread settings.
     "threadpoolctl>=3.1",
@@ -104,10 +106,8 @@ build123d = [
 ]
 beam = [
     # Radia owns inspectable native SI Lorentz/RK4/Boris and transfer kernels.
-    # Xsuite adds accelerator-coordinate workflows; SciPy adds adaptive
-    # integration, event handling, and closed-orbit orchestration.
+    # Xsuite adds accelerator-coordinate workflows; SciPy is a core dependency.
     "xtrack>=0.109.1",
-    "scipy>=1.11",
 ]
 viz = [
     "matplotlib>=3.5",
@@ -127,6 +127,8 @@ urn = [
 test = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
+    # Execute MANIFEST.in with the build backend's file-selection implementation.
+    "setuptools>=45",
     # Exercise the optional LTspice MCP entry points in the full test lane.
     "mcp>=1.0,<2",
     "schemdraw>=0.18",
@@ -134,6 +136,7 @@ test = [
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
+    "setuptools>=45",
     "matplotlib>=3.5",
     "schemdraw>=0.18",
 ]

@@ -1,0 +1,45 @@
+\begin{thebibliography}{1}
+
+\bibitem{grote1995exact}
+Marcus~J. {Grote} and Joseph~B. {Keller}.
+\newblock Exact nonreflecting boundary conditions for the time dependent wave
+  equation.
+\newblock {\em SIAM Journal on Applied Mathematics}, 55(2):280--297, 1995.
+
+\bibitem{hagstrom2009complete}
+Thomas {Hagstrom} and Timothy {Warburton}.
+\newblock Complete radiation boundary conditions: Minimizing the long time
+  error growth of local methods.
+\newblock {\em SIAM Journal on Numerical Analysis}, 47(5):3678--3704, 2009.
+
+\bibitem{warburg1899ueber}
+Emil {Warburg}.
+\newblock Ueber das verhalten sogenannter unpolarisirbarer elektroden gegen
+  wechselstrom.
+\newblock {\em Annalen der Physik}, 303(3):493--499, 1899.
+
+\bibitem{cauer1958synthesis}
+Wilhelm {Cauer}.
+\newblock {\em Synthesis of Linear Communication Networks}.
+\newblock McGraw-Hill, 1958.
+
+\bibitem{Kameari2018}
+Akihisa {Kameari}, Hassan {Ebrahimi}, Kengo {Sugahara}, Yuji {Shindo}, and
+  Tetsuji {Matsuo}.
+\newblock Cauer ladder network representation of eddy-current fields for model
+  order reduction using finite-element method.
+\newblock {\em IEEE Transactions on Magnetics}, 54(3):1–4, Mar 2018.
+
+\bibitem{freeman1988novel}
+EM~{Freeman} and DA~{Lowther}.
+\newblock A novel mapping technique for open boundary finite element solutions
+  to poisson's equation.
+\newblock {\em IEEE Transactions on magnetics}, 24(6):2934--2936, 1988.
+
+\bibitem{freeman1989}
+E.~M. {Freeman} and D.~A. {Lowther}.
+\newblock An open boundary technique for axisymmetric and three dimensional
+  magnetic and electric field problems.
+\newblock {\em IEEE Trans. Magn.}, 25(5):4135--4137, 1989.
+
+\end{thebibliography}

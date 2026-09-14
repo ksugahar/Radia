@@ -12,7 +12,7 @@ CLI surface:
     python monitor.py --tail <N>         # log tail size on failure (default 80)
 
 Exit codes:
-    0 = every watched run ended in `success`
+    0 = every watched run ended in `success` or `skipped`
     1 = at least one watched run ended in `failure` / `cancelled` /
         `timed_out` / unknown conclusion
     2 = monitor itself errored (e.g. gh CLI not installed, JSON parse
@@ -93,8 +93,16 @@ def get_run_state(run_id: str) -> dict:
         return {"status": "error", "conclusion": "error",
                 "name": "?", "headBranch": "?", "_err": err.strip()}
     try:
-        return json.loads(out)
-    except json.JSONDecodeError as exc:
+        state = json.loads(out)
+        if (not isinstance(state, dict)
+                or any(not isinstance(state.get(key), str)
+                       for key in ("status", "name", "headBranch"))
+                or "conclusion" not in state
+                or (state["conclusion"] is not None
+                    and not isinstance(state["conclusion"], str))):
+            raise ValueError("gh run view returned an invalid run-state object")
+        return state
+    except ValueError as exc:
         return {"status": "error", "conclusion": "error",
                 "name": "?", "headBranch": "?", "_err": str(exc)}
 
@@ -124,8 +132,11 @@ def watch_runs(run_ids: Iterable[str], poll_seconds: int,
                 tail_lines: int) -> int:
     """Poll ``run_ids`` until all are completed, emit per state change,
     print failing-step log tail at exit on failure.  Returns exit code
-    (0 = all success, 1 = any failure)."""
+    (0 = success/skipped, 1 = CI failure, 2 = monitor error)."""
     run_ids = list(run_ids)
+    if not run_ids:
+        print("ERROR: no CI runs to verify", file=sys.stderr)
+        return 2
     prev = {rid: None for rid in run_ids}
     final = {}
 
@@ -161,7 +172,8 @@ def watch_runs(run_ids: Iterable[str], poll_seconds: int,
         print(f"ALL GREEN ({n_success} success, {n_skipped} skipped, "
               f"0 failure)")
         return 0
-    print(f"{len(bad)} run(s) FAILED:")
+    monitor_failed = any(st.get("status") == "error" for st in final.values())
+    print(f"{len(bad)} run(s) failed or could not be verified:")
     for rid in bad:
         st = final[rid]
         print()
@@ -171,7 +183,7 @@ def watch_runs(run_ids: Iterable[str], poll_seconds: int,
             print(f"  monitor error: {st.get('_err','?')}")
             continue
         print(fetch_failing_log_tail(rid, tail_lines))
-    return 1
+    return 2 if monitor_failed else 1
 
 
 def main():
@@ -194,17 +206,18 @@ def main():
                     help="failing-step log tail size in lines "
                          "(default 80)")
     args = p.parse_args()
+    if args.auto < 0:
+        p.error("--auto must be non-negative (0 uses the default count of 3)")
+    if args.poll <= 0:
+        p.error("--poll must be positive")
+    if args.tail <= 0:
+        p.error("--tail must be positive")
 
     if args.ids:
         run_ids = args.ids
-    elif args.auto > 0:
-        run_ids = discover_runs(args.branch, args.auto)
-        if not run_ids:
-            print("No runs found.", file=sys.stderr)
-            return 2
     else:
-        # Default: auto-discover 3 most recent.
-        run_ids = discover_runs(None, 3)
+        # The default count must not discard an explicit branch/tag filter.
+        run_ids = discover_runs(args.branch, args.auto or 3)
         if not run_ids:
             print("No runs found.", file=sys.stderr)
             return 2

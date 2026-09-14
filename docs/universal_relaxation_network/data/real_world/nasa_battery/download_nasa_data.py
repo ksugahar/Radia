@@ -161,10 +161,10 @@ def create_eis_csv(output_dir: str) -> None:
     })
 
     # Save to CSV
-    output_file = os.path.join(output_dir, "nasa_18650_eis_fresh.csv")
+    output_file = os.path.join(output_dir, "synthetic_18650_eis_fresh.csv")
 
-    header = """# NASA 18650 Li-ion Battery EIS Data (Representative)
-# Source: NASA Ames Prognostics Center of Excellence (PCoE)
+    header = """# SYNTHETIC 18650 Li-ion Battery EIS Data (Fresh)
+# Source: Cole-Cole plus Warburg model, NOT NASA measurements
 # Dataset: Li-ion Battery Aging Datasets
 # URL: https://data.nasa.gov/dataset/li-ion-battery-aging-datasets
 #
@@ -220,10 +220,10 @@ def create_eis_csv(output_dir: str) -> None:
         'Z_phase_deg': np.degrees(np.angle(Z_aged))
     })
 
-    output_file_aged = os.path.join(output_dir, "nasa_18650_eis_aged.csv")
+    output_file_aged = os.path.join(output_dir, "synthetic_18650_eis_aged.csv")
 
-    header_aged = """# NASA 18650 Li-ion Battery EIS Data (Aged - Representative)
-# Source: NASA Ames Prognostics Center of Excellence (PCoE)
+    header_aged = """# SYNTHETIC 18650 Li-ion Battery EIS Data (Aged)
+# Source: Cole-Cole plus Warburg model, NOT NASA measurements
 # Dataset: Li-ion Battery Aging Datasets
 # URL: https://data.nasa.gov/dataset/li-ion-battery-aging-datasets
 #

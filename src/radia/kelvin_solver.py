@@ -221,7 +221,7 @@ def project_source_physical_potential(
 
 def project_source_total_hodge(
         mesh, H_s, total_source_materials, *, order=2, inverse="pardiso",
-        gauge_epsilon=1.0e-12):
+        gauge_epsilon=1.0e-12, bonus_intorder=4):
     """Split a linked source inside total-potential materials.
 
     On a multiply connected iron body a curl-free coil field need not be the
@@ -232,6 +232,10 @@ def project_source_total_hodge(
     ``Phi_s`` supplies the reduced/total interface jump and ``H_harmonic``
     carries the non-exact cohomology class in the total region.  The caller
     owns the surrounding :class:`ngsolve.TaskManager` region.
+    ``bonus_intorder`` controls projection assembly and norm diagnostics;
+    use the mixed solver's value when composing the two operations. Matching
+    bonuses does not establish source quadrature convergence or orthogonality
+    against a different test space.
     """
     names = tuple(str(name) for name in total_source_materials)
     if not names or len(names) != len(set(names)) or any(not name for name in names):
@@ -239,6 +243,8 @@ def project_source_total_hodge(
             "total_source_materials must contain unique non-empty names")
     if int(order) < 1:
         raise ValueError("order must be positive")
+    if isinstance(bonus_intorder, bool) or int(bonus_intorder) != bonus_intorder or bonus_intorder < 0:
+        raise ValueError("bonus_intorder must be a nonnegative integer")
     if gauge_epsilon <= 0.0 or not math.isfinite(gauge_epsilon):
         raise ValueError("gauge_epsilon must be positive and finite")
     actual = {str(name) for name in mesh.GetMaterials()}
@@ -252,7 +258,7 @@ def project_source_total_hodge(
     selector = mesh.Materials("|".join(names))
     fes = Compress(H1(mesh, order=int(order), definedon=selector))
     potential, test = fes.TnT()
-    d_total = dx(definedon=selector)
+    d_total = dx(definedon=selector, bonus_intorder=int(bonus_intorder))
     a_bf = BilinearForm(fes, symmetric=True)
     a_bf += InnerProduct(grad(potential), grad(test)) * d_total
     a_bf += float(gauge_epsilon) * potential * test * d_total
@@ -277,6 +283,7 @@ def project_source_total_hodge(
         "harmonic_norm": harmonic_norm,
         "source_norm": source_norm,
         "total_source_materials": names,
+        "bonus_intorder": int(bonus_intorder),
     }
 
 
@@ -492,6 +499,86 @@ def solve_magnetostatic_reduced_omega_kelvin(
         "data; automatic substitution is not supported.")
 
 
+def _report_direct_solve_residual(a_bf, f_lf, solution, fes, block_names=None):
+    """Measure ``r = b - A x`` for a solve that has no iteration history.
+
+    A direct factorisation is not exact arithmetic, and reporting nothing
+    because there is no iteration count is the same gap as treating a CG that
+    ran out of iterations as converged.  Norms are reported over the FREE dofs
+    (the system that was solved) and, for a compound space, per block, so an
+    interface-constraint defect cannot hide inside a healthy PDE residual.
+    """
+    import numpy as _np
+
+    residual = solution.vec.CreateVector()
+    residual.data = f_lf.vec - a_bf.mat * solution.vec
+    r = _np.asarray(residual.FV(), dtype=float).copy()
+    b = _np.asarray(f_lf.vec.FV(), dtype=float).copy()
+    free = _np.fromiter((bool(bit) for bit in fes.FreeDofs()), bool, len(r))
+
+    def _relative(mask):
+        if not mask.any():
+            return None
+        numerator = float(_np.linalg.norm(r[mask]))
+        denominator = float(_np.linalg.norm(b[mask]))
+        return {"residual_l2": numerator,
+                "rhs_l2": denominator,
+                "relative": (numerator / denominator if denominator > 0.0
+                             else None)}
+
+    report = {"free_dofs": _relative(free),
+              "all_dofs": _relative(_np.ones_like(free))}
+    try:
+        component_count = len(solution.components)
+    except TypeError:                                   # not a compound space
+        component_count = 0
+    names = tuple(block_names or ()) or tuple(
+        "block_%d" % index for index in range(component_count))
+    blocks = {}
+    for index in range(component_count):
+        span = fes.Range(index)
+        mask = _np.zeros_like(free)
+        mask[span.start:span.stop] = True
+        blocks[names[index] if index < len(names) else "block_%d" % index] = (
+            _relative(mask & free))
+    if blocks:
+        report["blocks"] = blocks
+    return report
+
+
+def _assembled_primal_energy(a_bf, f_lf, solution, fes, primal_blocks):
+    """The functional the discrete solve actually minimises, from the system.
+
+    The solve is a saddle point of the Lagrangian; its primal part is
+    ``J(x_P) = 1/2 x_P^T A_PP x_P - b_P^T x_P`` over the potential blocks,
+    minimised subject to the interface constraint. This reports the ASSEMBLED
+    functional, rather than an energy recomputed with different quadrature.
+    Monotonicity across orders additionally requires nested admissible sets
+    and a common functional, including consistent quadrature across spaces.
+
+    The multiplier entries are zeroed before the product, so only primal rows
+    and columns contribute and the constraint right-hand side drops out.
+    """
+    import numpy as _np
+
+    x_p = solution.vec.CreateVector()
+    x_p.data = solution.vec
+    values = x_p.FV().NumPy()
+    keep = _np.zeros(len(values), dtype=bool)
+    for index in primal_blocks:
+        span = fes.Range(index)
+        keep[span.start:span.stop] = True
+    values[~keep] = 0.0
+    product = x_p.CreateVector()
+    product.data = a_bf.mat * x_p
+    half_quadratic = 0.5 * float(_np.dot(x_p.FV().NumPy(), product.FV().NumPy()))
+    linear = float(_np.dot(_np.asarray(f_lf.vec.FV()), x_p.FV().NumPy()))
+    return {"half_xAx": half_quadratic,
+            "b_dot_x": linear,
+            "energy": half_quadratic - linear,
+            "primal_blocks": list(primal_blocks)}
+
+
 def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         mesh, H_s, source_potential, R_K, offset, *, mu_r_by_material=None,
         reduced_materials, total_materials, interface_boundary,
@@ -500,8 +587,11 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         interface_constraint_scale=None, total_dirichlet_cf=None,
         mu_cf=None, kelvin_interface_boundary=None,
         kelvin_source_potential=None, kelvin_source_h=None,
-        total_source_h=None, total_source_materials=()):
+        total_source_h=None, total_source_materials=(), return_system=False):
     """Solve the TOSCA-style mixed total/reduced Omega formulation.
+
+    ``return_system=True`` retains assembled forms for explicit diagnostics.
+    The default returns ``system=None`` to avoid retaining their matrix storage.
 
     ``H_s`` is used in ``reduced_materials`` (the source enclosure), where
     ``H = H_s - grad(phi_reduced)``.  A linked coil may additionally supply
@@ -793,6 +883,20 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         solution.vec.data += a_bf.mat.Inverse(
             fes.FreeDofs(), inverse=inverse) * residual
 
+    # A direct solve has no iteration history, but it still has a residual.
+    # r = b - A x on the system that was ACTUALLY solved -- non-zero Dirichlet
+    # lift included, because `solution` already carries it.  Report the free
+    # dofs separately from the constrained ones: a constrained row holds the
+    # Dirichlet equation, not the system, so mixing them in hides the number
+    # that matters.  The multiplier block is split out on its own because
+    # those rows ARE the interface jump condition in weak form,
+    # ``scale * int test_multiplier (phi_total - phi_reduced - Phi_s) ds``.
+    linear_residual = _report_direct_solve_residual(
+        a_bf, f_lf, solution, fes,
+        block_names=("phi_reduced", "phi_total", "interface_constraint"))
+    assembled_energy = _assembled_primal_energy(
+        a_bf, f_lf, solution, fes, primal_blocks=(0, 1))
+
     phi_reduced_gf, phi_total_gf, multiplier_gf = solution.components[:3]
     H_reduced = H_s - grad(phi_reduced_gf)
     zero_h = CoefficientFunction((0.0, 0.0, 0.0))
@@ -827,6 +931,16 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
     H_cf = CoefficientFunction(tuple(h_components))
     return {
         "solution": solution,
+        "linear_residual": linear_residual,
+        "assembled_energy": assembled_energy,
+        # The assembled system, ONLY on request.  A caller testing whether
+        # another order's solution is admissible HERE needs it: with the
+        # multiplier entries set to zero, the multiplier rows of f - A x are the
+        # interface constraint violation g - B x_P.  Returning it by default
+        # would keep the assembled matrix alive in every production result the
+        # wrappers hand back, where it used to be freed after the solve.
+        "system": ({"bilinear_form": a_bf, "linear_form": f_lf}
+                   if return_system else None),
         "phi_reduced": phi_reduced_gf,
         "phi_total": phi_total_gf,
         "interface_multiplier": multiplier_gf,
@@ -848,6 +962,20 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
     }
 
 
+class MixedOmegaPicardNotConverged(RuntimeError):
+    """Fail-loud non-convergence of the mixed total/reduced Omega Picard loop.
+
+    ``state`` carries the per-element permeability (``mu_r_elements`` in the order
+    of ``element_numbers``) and the full ``nonlinear_stats`` so a caller can persist
+    them as an explicitly partial state and warm-start a later run through
+    ``mu_r_initial``.  No field result leaves a non-converged loop.
+    """
+
+    def __init__(self, message, state):
+        super().__init__(message)
+        self.state = state
+
+
 def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
         mesh, H_s, source_potential, R_K, offset, *, bh_table,
         nonlinear_materials, reduced_materials, total_materials,
@@ -857,7 +985,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
         relaxation=0.3, interface_constraint_scale=None,
         kelvin_interface_boundary=None, kelvin_source_potential=None,
         kelvin_source_h=None,
-        total_source_h=None, total_source_materials=()):
+        total_source_h=None, total_source_materials=(),
+        anderson_depth=0, anderson_transform="log", observation_points=None):
     """Picard solve for the mixed total/reduced Omega formulation.
 
     The source split and its interface trace stay fixed throughout the
@@ -866,11 +995,27 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
     hysteretic state evolution: the latter needs its own committed material
     history and is not silently approximated by a memoryless Picard update.
 
+    ``mu_r_initial`` is one scalar or one value per nonlinear element in mesh
+    element order (``nonlinear_stats["element_numbers"]`` of an earlier solve),
+    which is the warm start of a resumed iteration.  ``anderson_depth`` > 0 mixes
+    the per-element permeability with the constrained Anderson accelerator of
+    :mod:`radia.picard_acceleration` (real-valued, projected onto the secant range
+    of the B(H) law, extrapolated in ``anderson_transform`` space -- ``"log"`` by
+    default because a shielded yoke spans decades of secant permeability -- and
+    reverted whenever an accelerated iterate worsens the residual); depth 0 is the
+    plain damped update.  ``observation_points`` (N, 3) records the iteration-to-
+    iteration change of B at those points, so the stopping criterion can be judged
+    where the result is consumed instead of only through the material step.
+
     The result has the same field keys as the linear mixed solve plus
-    ``nonlinear_stats``.  Caller wraps the complete operation in
-    :class:`ngsolve.TaskManager`.
+    ``nonlinear_stats`` (with the per-iteration ``history``, a contraction-rate
+    estimate, and the per-element ``mu_r_elements`` state).  A loop that reaches
+    ``max_iterations`` raises :class:`MixedOmegaPicardNotConverged` carrying that
+    state.  Caller wraps the complete operation in :class:`ngsolve.TaskManager`.
     """
     from ngsolve import GridFunction, L2, VOL
+    from radia.picard_acceleration import (
+        ConstrainedAndersonAccelerator, estimate_contraction_rate)
     from radia.scalar_potential_solver import _build_bh_interpolator
 
     nonlinear_materials = tuple(nonlinear_materials)
@@ -883,27 +1028,29 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
     if nonlinear_set - actual_materials:
         raise ValueError(
             f"nonlinear_materials are not mesh materials: {sorted(nonlinear_set - actual_materials)}")
-    if not math.isfinite(mu_r_initial) or mu_r_initial <= 0.0:
-        raise ValueError("mu_r_initial must be positive and finite")
     if not math.isfinite(tolerance) or tolerance <= 0.0:
         raise ValueError("tolerance must be positive and finite")
     if int(max_iterations) < 1:
         raise ValueError("max_iterations must be positive")
     if not 0.0 < relaxation <= 1.0:
         raise ValueError("relaxation must lie in (0, 1]")
+    if int(anderson_depth) < 0:
+        raise ValueError("anderson_depth must be non-negative")
 
     bh_array = np.asarray(bh_table, dtype=float)
     if bh_array.ndim != 2 or bh_array.shape[1] < 2:
         raise ValueError("bh_table must contain [H, B] rows")
     B_of_H = _build_bh_interpolator(bh_array[:, :2])
     B_scale = max(float(bh_array[:, 1].max()), MU_0)
+    positive = (bh_array[:, 0] > 0.0) & (bh_array[:, 1] > 0.0)
+    secant_upper = (float(np.max(bh_array[positive, 1] / (MU_0 * bh_array[positive, 0])))
+                    if np.any(positive) else 1.0)
 
     mu_elements = GridFunction(L2(mesh, order=0), name="mixed_omega_mu")
     nonlinear_elements = []
     for element in mesh.Elements(VOL):
         material = str(element.mat)
         if material in nonlinear_set:
-            mu_elements.vec[element.nr] = MU_0 * float(mu_r_initial)
             coordinates = [mesh.vertices[vertex.nr].point for vertex in element.vertices]
             centroid = tuple(
                 sum(float(point[component]) for point in coordinates) / len(coordinates)
@@ -911,6 +1058,25 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
             nonlinear_elements.append((element.nr, centroid))
         else:
             mu_elements.vec[element.nr] = MU_0
+    element_numbers = [int(number) for number, _ in nonlinear_elements]
+    initial = np.asarray(mu_r_initial, dtype=float)
+    if initial.ndim == 0:
+        if not math.isfinite(float(initial)) or float(initial) <= 0.0:
+            raise ValueError("mu_r_initial must be positive and finite")
+        mu_r_current = np.full(len(nonlinear_elements), float(initial))
+    else:
+        if initial.shape != (len(nonlinear_elements),):
+            raise ValueError(
+                "mu_r_initial must be a scalar or one value per nonlinear element "
+                f"({len(nonlinear_elements)}); got shape {initial.shape}")
+        if not np.all(np.isfinite(initial)) or np.any(initial < 1.0):
+            raise ValueError("per-element mu_r_initial must be finite and >= 1")
+        mu_r_current = initial.astype(float, copy=True)
+    mu_r_zero_field = mu_r_current.copy()
+    mu_r_upper = max(float(np.max(mu_r_current)) if mu_r_current.size else 1.0,
+                     secant_upper, 1.0)
+    for index, (element_nr, _) in enumerate(nonlinear_elements):
+        mu_elements.vec[element_nr] = MU_0 * float(mu_r_current[index])
 
     kelvin_mu = make_kelvin_mu_cf(
         mesh, R_K, offset, kelvin_mats=kelvin_mats, mu_r_by_material={})
@@ -926,7 +1092,21 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
                 values[material] = MU_0
         return mesh.MaterialCF(values, default=MU_0)
 
+    observation = None
+    if observation_points is not None:
+        observation = np.asarray(observation_points, dtype=float).reshape(-1, 3)
+        for point in observation:
+            if not mesh(*map(float, point)):
+                raise ValueError(
+                    f"observation point lies outside the mesh: {point.tolist()}")
+
+    accelerator = ConstrainedAndersonAccelerator(
+        depth=int(anderson_depth), relaxation=float(relaxation),
+        lower=1.0, upper=mu_r_upper, transform=str(anderson_transform))
+    history = []
     B_previous = np.zeros(len(nonlinear_elements))
+    observed_previous = None
+    observed_field = None
     result = None
     converged = False
     relative_change = float("inf")
@@ -945,46 +1125,86 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
             total_source_h=total_source_h,
             total_source_materials=total_source_materials)
         B_current = np.zeros(len(nonlinear_elements))
+        mu_r_target = np.empty(len(nonlinear_elements))
         for index, (element_nr, centroid) in enumerate(nonlinear_elements):
             H_value = result["H_cf"](mesh(*centroid))
             H_magnitude = math.sqrt(sum(float(value) ** 2 for value in H_value))
             B_current[index] = B_of_H(H_magnitude)
             if H_magnitude <= 1.0e-12:
-                mu_r_next = float(mu_r_initial)
+                mu_r_target[index] = mu_r_zero_field[index]
             else:
-                mu_r_next = max(1.0, B_current[index] / (MU_0 * H_magnitude))
-            if iteration > 1:
-                mu_r_previous = float(mu_elements.vec[element_nr]) / MU_0
-                mu_r_next = (
-                    relaxation * mu_r_next + (1.0 - relaxation) * mu_r_previous)
-            mu_elements.vec[element_nr] = MU_0 * mu_r_next
-
+                mu_r_target[index] = max(1.0, B_current[index] / (MU_0 * H_magnitude))
+        entry = {"iteration": int(iteration)}
+        if observation is not None:
+            # Evaluate before the permeability update so the recorded field is the
+            # one this iteration actually solved for.
+            observed_field = np.asarray(
+                [[float(value) for value in result["B_cf"](mesh(*point))]
+                 for point in observation], dtype=float)
+            if observed_previous is not None:
+                scale = max(float(np.max(np.linalg.norm(observed_field, axis=1))), 1.0e-30)
+                entry["observation_relative_change"] = float(
+                    np.max(np.linalg.norm(observed_field - observed_previous, axis=1)) / scale)
+            observed_previous = observed_field
+        # PCHIP secants can exceed the secants at the tabulated nodes.
+        # A safeguard must not clip the constitutive law's own target.
+        if mu_r_target.size:
+            accelerator.upper = max(accelerator.upper, float(np.max(mu_r_target)))
+        if iteration == 1 and initial.ndim == 0:
+            # A scalar start is a guess: jump to the first material estimate
+            # undamped.  A per-element warm start is an iterate of this very
+            # loop, so it takes the damped / accelerated update from the start.
+            mu_r_next = np.maximum(mu_r_target, 1.0)
+        else:
+            mu_r_next = accelerator.step(mu_r_current, mu_r_target)
+        mu_r_current = np.asarray(mu_r_next, dtype=float)
+        for index, (element_nr, _) in enumerate(nonlinear_elements):
+            mu_elements.vec[element_nr] = MU_0 * float(mu_r_current[index])
         if iteration > 1:
             relative_change = float(
                 np.max(np.abs(B_current - B_previous))
                 / max(B_scale, 1.0e-30))
-            if relative_change <= tolerance:
-                converged = True
-                break
+            entry["relative_B_change"] = relative_change
+        entry["mu_r_min"] = float(np.min(mu_r_current)) if mu_r_current.size else None
+        entry["mu_r_max"] = float(np.max(mu_r_current)) if mu_r_current.size else None
+        history.append(entry)
+        if iteration > 1 and relative_change <= tolerance:
+            converged = True
+            break
         B_previous = B_current
 
     if result is None:  # pragma: no cover - guarded by max_iterations validation
         raise RuntimeError("mixed total/reduced Omega Picard iteration did not start")
-    result["mu_cf"] = mixed_mu_cf()
-    result["B_cf"] = result["mu_cf"] * result["H_cf"]
-    result["nonlinear_stats"] = {
+    stats = {
         "method": "Picard",
         "iterations": iteration,
         "converged": converged,
         "relative_B_change": relative_change,
         "tolerance": float(tolerance),
         "relaxation": float(relaxation),
+        "anderson_depth": int(anderson_depth),
+        "warm_start": bool(initial.ndim > 0),
+        "history": history,
+        "contraction_rate_estimate": estimate_contraction_rate(
+            [row["relative_B_change"] for row in history if "relative_B_change" in row]),
+        "mu_r_elements": mu_r_current.tolist(),
+        "element_numbers": element_numbers,
+        "anderson": accelerator.stats(),
     }
+    if observed_field is not None:
+        stats["observation_points_m"] = observation.tolist()
+        stats["observation_field_T"] = observed_field.tolist()
     if not converged:
-        raise RuntimeError(
+        raise MixedOmegaPicardNotConverged(
             "mixed total/reduced Omega Picard iteration did not converge: "
             f"iterations={iteration}, relative_B_change={relative_change:.3e}, "
-            f"tolerance={tolerance:.3e}")
+            f"tolerance={tolerance:.3e}",
+            {"mu_r_elements": mu_r_current.tolist(),
+             "element_numbers": element_numbers,
+             "nonlinear_stats": stats})
+    result["mu_cf"] = mixed_mu_cf()
+    result["B_cf"] = result["mu_cf"] * result["H_cf"]
+    result["nonlinear_stats"] = stats
     return result
 
 

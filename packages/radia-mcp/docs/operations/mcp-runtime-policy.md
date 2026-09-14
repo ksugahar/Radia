@@ -42,6 +42,24 @@ controls as needed; use the mcp-reconnect skill. Preserve active jobs, and defer
 disruptive operations on busy clients. Never mass-kill Python, MATLAB, Cubit or
 client processes merely to refresh MCP.
 
+The `_reload_code` MCP tool is registered at server startup only when installed
+distribution metadata confirms an editable installation. Set
+`RADIA_MCP_HOT_RELOAD=0` in the server environment to disable its registration;
+setting it to `1` does not enable it for a wheel or unknown installation.
+After changing this setting, reconnect the affected client through supported
+controls. This is a tool-exposure policy, not a restriction on source edits or
+direct Python development helpers. Registration metadata alone still does not
+prove the live imported source: keep the three provenance observations separate.
+
+Reload refreshes or removes already registered tools only. A matching name prefix
+does not authorize a new callable as a public tool. Reconnect to run normal
+server registration and policy checks when adding tools.
+
+The wheel verification lane runs every catalog server's stdio status contract
+and `--selftest` from isolated Python outside the checkout. It requires actual
+module paths under the installation root, noneditable registration, and no
+exposed reload tool; a failure or timeout is not a successful skip.
+
 Before deleting a superseded source tree, check that no active consumer still
 needs it. Do not automatically restore an older tree because its path was once
 canonical. Report source integration, installation and live-client verification

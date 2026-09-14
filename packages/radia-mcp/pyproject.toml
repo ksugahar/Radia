@@ -19,7 +19,7 @@ authors = [{name = "Kengo Sugahara"}]
 # need Cubit integration can `pip install radia-mcp` without pulling in
 # the full radia wheel.
 dependencies = [
-    "mcp>=1.0,<2",
+    "mcp>=1.20.0,<2",
 ]
 
 [project.optional-dependencies]

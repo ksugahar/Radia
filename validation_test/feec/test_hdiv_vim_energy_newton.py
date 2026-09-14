@@ -1,10 +1,10 @@
-"""Golden: all-C++ SYMMETRIC ENERGY-NEWTON is the default nonlinear HDiv-VIM solver.
+"""Golden: symmetric energy-Newton is the default nonlinear HDiv-VIM solver.
 
-The nonlinear inner Newton step is now solved by the EXISTING C++ symmetric W-CG
+The nonlinear inner Newton step is solved by the C++ symmetric W-CG
 (configured C++ linear-material solve, W = the differential-reluctivity tangent mass, mass-Riesz PARDISO, N
-H-matvec) -- bringing the nonlinear solve to C++ parity with the linear path (no SciPy solve or
-M_mass^-1).  The co-energy form is robust through deep saturation via a hard-saturation barrier, a
-co-energy line search, and settled-step acceptance for the achievable-precision limit cycle of the M-form.
+H-matvec). Python orchestrates the outer iteration and NGSolve assembles material
+terms. Co-energy line searches accept evaluated descending steps; convergence
+requires the true assembled nonlinear residual, including at deep saturation.
 
 Locks: (1) the default nonlinear solver is 'energy-newton-cpp'; (2) moderate and deep drives converge;
 (3) deep saturation converges to M ~ Msat.
@@ -88,18 +88,18 @@ def test_default_nonlinear_is_energy_newton_cpp(monkeypatch):
 
 
 def test_energy_newton_deep_saturation():
-    """Deep saturation (H0 well past the table) drives M to ~Msat and converges (the hard-saturation barrier
-    + settled acceptance handle the M-form limit cycle)."""
+    """Deep saturation reaches the true residual target with the extended BH law."""
     mesh = _sphere()
     with ng.TaskManager():
         r = Solve(mesh, bh_table=_BH, H_ext=ng.CoefficientFunction((0, 0, 3e6)), order=1)
     assert r["linear_solver"] == "energy-newton-cpp"
-    # at deep drive M_avg -> Msat (the table's saturation; demag-independent there).  The soft hard-saturation
-    # barrier permits a small (<~1%) overshoot of the uniform Msat at the discrete/volume-average level.
+    # Compare the volume average with the table-end magnetization. The extended
+    # constitutive law and FE discretization do not impose a pointwise hard cap.
     assert 0.95 * _MSAT < r["M_avg"][2] < 1.03 * _MSAT, (r["M_avg"][2], _MSAT)
-    # it converged (returning, not raising) -- the deep-saturation M-form iteration count is table-dependent
-    # and higher than the forward H-form (the M-form limit-cycles to the achievable precision); a generous
-    # bound catches a runaway without being brittle to the table shape.
+    stats = r["nonlinear_solve_stats"]
+    assert stats["nonlinear_final_relative_residual"] <= 1e-6
+    assert stats["nonlinear_converged_final_stage"]
+    # A generous bound catches runaway iterations without prescribing a step-size criterion.
     assert r["iters"] < 100
 
 
