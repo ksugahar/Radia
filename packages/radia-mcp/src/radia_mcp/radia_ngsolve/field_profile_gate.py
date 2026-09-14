@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import math
+import hashlib
+import json
 from typing import Any
 
 
@@ -298,6 +300,8 @@ def nonlinear_magnetic_field_energy_parity_gate(
         "energy": float(max_energy_relative_difference),
         "coenergy": float(max_coenergy_relative_difference),
     }
+
+
     if any(not math.isfinite(value) or value < 0.0 for value in tolerances.values()):
         raise ValueError("all parity tolerances must be finite and nonnegative")
 
@@ -435,6 +439,244 @@ def nonlinear_magnetic_field_energy_parity_gate(
         "notes": [
             "numeric parity is never evaluated before geometry, material, B-H interpolation/extrapolation, excitation, region, frame, units, case, and time semantics match",
             "an accepted contract is evidence for these observables and tolerances, not universal solver equivalence",
+        ],
+    }
+
+
+def nonlinear_constitutive_response_parity_gate(
+    summary: dict[str, Any],
+    *,
+    max_response_relative_difference: float = 1.0e-6,
+    max_integrability_relative_residual: float = 1.0e-8,
+    min_response_samples: int = 5,
+) -> dict[str, Any]:
+    """Compare realized nonlinear material responses on one explicit H grid."""
+
+    if not isinstance(summary, dict):
+        raise ValueError("summary must be a mapping")
+    response_limit = float(max_response_relative_difference)
+    identity_limit = float(max_integrability_relative_residual)
+    sample_limit = int(min_response_samples)
+    if not math.isfinite(response_limit) or response_limit < 0.0:
+        raise ValueError("max_response_relative_difference must be finite and nonnegative")
+    if not math.isfinite(identity_limit) or identity_limit < 0.0:
+        raise ValueError("max_integrability_relative_residual must be finite and nonnegative")
+    if sample_limit < 5:
+        raise ValueError("min_response_samples must be at least 5")
+
+    identity_keys = (
+        "bh_table_sha256",
+        "material_model",
+        "magnetic_anisotropy",
+        "H_unit",
+        "B_unit",
+        "differential_permeability_unit",
+        "energy_density_unit",
+    )
+    array_keys = (
+        "H_A_per_m",
+        "B_T",
+        "differential_permeability_H_per_m",
+        "energy_density_J_per_m3",
+        "coenergy_density_J_per_m3",
+        "d_energy_d_B_A_per_m",
+        "d_coenergy_d_H_T",
+    )
+
+    def grid_digest(values: list[float]) -> str:
+        encoded = json.dumps(
+            values, ensure_ascii=True, separators=(",", ":")
+        ).encode("ascii")
+        return hashlib.sha256(encoded).hexdigest()
+
+    def relative_residual(actual: list[float], expected: list[float]) -> float:
+        numerator = math.sqrt(sum((a - b) ** 2 for a, b in zip(actual, expected)))
+        denominator = max(
+            math.sqrt(sum(value * value for value in expected)), 1.0e-300
+        )
+        return numerator / denominator
+
+    def normalized_lane(name: str) -> dict[str, Any]:
+        raw = summary.get(name)
+        if not isinstance(raw, dict):
+            raise ValueError(f"{name} must be a mapping")
+        identity = raw.get("identity")
+        if not isinstance(identity, dict):
+            identity = {}
+        arrays: dict[str, list[float]] = {}
+        for key in array_keys:
+            value = raw.get(key)
+            if not isinstance(value, (list, tuple)):
+                arrays[key] = []
+                continue
+            try:
+                arrays[key] = [float(item) for item in value]
+            except (TypeError, ValueError):
+                arrays[key] = []
+        lengths = {len(value) for value in arrays.values()}
+        finite = bool(arrays["H_A_per_m"]) and all(
+            math.isfinite(item) for values in arrays.values() for item in values
+        )
+        aligned = len(lengths) == 1
+        h_values = arrays["H_A_per_m"]
+        b_values = arrays["B_T"]
+        tangent = arrays["differential_permeability_H_per_m"]
+        monotone_h = bool(h_values) and h_values[0] >= 0.0 and all(
+            right > left for left, right in zip(h_values, h_values[1:])
+        )
+        monotone_b = bool(b_values) and all(
+            right >= left for left, right in zip(b_values, b_values[1:])
+        )
+        tangent_nonnegative = bool(tangent) and all(value >= 0.0 for value in tangent)
+        computed_grid_digest = grid_digest(h_values) if h_values else ""
+        bh_digest = str(identity.get("bh_table_sha256") or "")
+        response_digest = str(identity.get("response_grid_sha256") or "")
+        valid_hex = set("0123456789abcdefABCDEF")
+        bh_digest_valid = len(bh_digest) == 64 and set(bh_digest) <= valid_hex
+        response_digest_valid = (
+            len(response_digest) == 64 and set(response_digest) <= valid_hex
+        )
+        residuals = {
+            "legendre": math.inf,
+            "energy_derivative": math.inf,
+            "coenergy_derivative": math.inf,
+        }
+        interval_integrability = {
+            "coenergy_in_monotone_bounds": False,
+            "energy_in_monotone_bounds": False,
+        }
+        if finite and aligned and len(h_values) >= sample_limit:
+            energy = arrays["energy_density_J_per_m3"]
+            coenergy = arrays["coenergy_density_J_per_m3"]
+            residuals = {
+                "legendre": relative_residual(
+                    [w + ws for w, ws in zip(energy, coenergy)],
+                    [h * b for h, b in zip(h_values, b_values)],
+                ),
+                "energy_derivative": relative_residual(
+                    arrays["d_energy_d_B_A_per_m"], h_values
+                ),
+                "coenergy_derivative": relative_residual(
+                    arrays["d_coenergy_d_H_T"], b_values
+                ),
+            }
+            tolerance = 1.0e-12
+            coenergy_bounds = []
+            energy_bounds = []
+            for index in range(len(h_values) - 1):
+                delta_h = h_values[index + 1] - h_values[index]
+                delta_b = b_values[index + 1] - b_values[index]
+                delta_coenergy = coenergy[index + 1] - coenergy[index]
+                delta_energy = energy[index + 1] - energy[index]
+                coenergy_bounds.append(
+                    delta_h * b_values[index] - tolerance
+                    <= delta_coenergy
+                    <= delta_h * b_values[index + 1] + tolerance
+                )
+                energy_bounds.append(
+                    h_values[index] * delta_b - tolerance
+                    <= delta_energy
+                    <= h_values[index + 1] * delta_b + tolerance
+                )
+            interval_integrability = {
+                "coenergy_in_monotone_bounds": all(coenergy_bounds),
+                "energy_in_monotone_bounds": all(energy_bounds),
+            }
+        checks = {
+            "sample_count_sufficient": len(h_values) >= sample_limit,
+            "arrays_finite_and_aligned": finite and aligned,
+            "H_grid_strictly_increasing": monotone_h,
+            "B_response_monotone": monotone_b,
+            "differential_permeability_nonnegative": tangent_nonnegative,
+            "SI_units_explicit": identity.get("H_unit") == "A/m"
+            and identity.get("B_unit") == "T"
+            and identity.get("differential_permeability_unit") == "H/m"
+            and identity.get("energy_density_unit") == "J/m^3",
+            "identity_digests_valid": bh_digest_valid and response_digest_valid,
+            "reported_grid_digest_matches": bool(computed_grid_digest)
+            and identity.get("response_grid_sha256") == computed_grid_digest,
+            "legendre_identity_satisfied": residuals["legendre"] <= identity_limit,
+            "energy_derivative_identity_satisfied": (
+                residuals["energy_derivative"] <= identity_limit
+            ),
+            "coenergy_derivative_identity_satisfied": (
+                residuals["coenergy_derivative"] <= identity_limit
+            ),
+            **interval_integrability,
+        }
+        return {
+            "identity": identity,
+            "arrays": arrays,
+            "checks": checks,
+            "integrability_relative_residuals": residuals,
+            "valid": all(checks.values()),
+        }
+
+    candidate = normalized_lane("candidate")
+    reference = normalized_lane("reference")
+    identity_checks = {
+        key: bool(candidate["identity"].get(key) not in (None, "", []))
+        and candidate["identity"].get(key) == reference["identity"].get(key)
+        for key in identity_keys
+    }
+    grids_match = (
+        candidate["arrays"]["H_A_per_m"] == reference["arrays"]["H_A_per_m"]
+        and candidate["identity"].get("response_grid_sha256")
+        == reference["identity"].get("response_grid_sha256")
+    )
+    comparison_performed = (
+        candidate["valid"]
+        and reference["valid"]
+        and all(identity_checks.values())
+        and grids_match
+    )
+    compared_keys = (
+        "B_T",
+        "differential_permeability_H_per_m",
+        "energy_density_J_per_m3",
+        "coenergy_density_J_per_m3",
+    )
+    differences: dict[str, float | None] = {key: None for key in compared_keys}
+    if comparison_performed:
+        differences = {
+            key: relative_residual(candidate["arrays"][key], reference["arrays"][key])
+            for key in compared_keys
+        }
+    checks = {
+        "candidate_response_valid": candidate["valid"],
+        "reference_response_valid": reference["valid"],
+        "constitutive_identity_matches": all(identity_checks.values()),
+        "response_grid_matches": grids_match,
+        **{
+            f"{key}_matches": value is not None and value <= response_limit
+            for key, value in differences.items()
+        },
+    }
+    return {
+        "policy": "nonlinear_constitutive_response_parity_gate_v1",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "checks": checks,
+        "issues": [name for name, accepted in checks.items() if not accepted],
+        "identity_checks": identity_checks,
+        "lane_checks": {
+            "candidate": candidate["checks"],
+            "reference": reference["checks"],
+        },
+        "integrability_relative_residuals": {
+            "candidate": candidate["integrability_relative_residuals"],
+            "reference": reference["integrability_relative_residuals"],
+        },
+        "comparison_performed": comparison_performed,
+        "relative_differences": differences,
+        "tolerances": {
+            "response_relative_difference": response_limit,
+            "integrability_relative_residual": identity_limit,
+            "minimum_response_samples": sample_limit,
+        },
+        "notes": [
+            "equal B-H knot digests do not establish equal realized interpolation, tangent permeability, or saturation-tail response",
+            "numeric comparison requires one explicit SI H grid and independently integrable energy/coenergy responses",
+            "an accepted response contract is constitutive evidence only, not whole-solver equivalence",
         ],
     }
 

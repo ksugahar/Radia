@@ -1,15 +1,24 @@
 from __future__ import annotations
 
+import asyncio
 import json
+import os
+import sys
+from pathlib import Path
+
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
 
 from radia_mcp.radia_ngsolve.field_profile_gate import (
     dual_formulation_symmetric_field_profile_gate,
+    nonlinear_constitutive_response_parity_gate,
     nonlinear_magnetic_field_energy_parity_gate,
     nonlinear_magnetic_refinement_energy_gate,
     nonlinear_magnetic_spatial_evidence_gate,
 )
 from radia_mcp.radia_ngsolve.server import (
     nonlinear_magnetic_field_energy_parity_gate as mcp_nonlinear_parity_gate,
+    nonlinear_constitutive_response_parity_gate as mcp_constitutive_parity_gate,
     nonlinear_magnetic_refinement_energy_gate as mcp_nonlinear_refinement_gate,
     nonlinear_magnetic_spatial_evidence_gate as mcp_nonlinear_gate,
 )
@@ -293,3 +302,113 @@ def test_nonlinear_field_energy_parity_gate_rejects_material_law_before_numbers(
     assert result["identity_checks"]["constitutive_interpolation"] is False
     assert result["comparison_performed"] is False
     assert all(value is None for value in result["relative_differences"].values())
+
+
+def _constitutive_response_summary():
+    h_values = [0.0, 100.0, 500.0, 1000.0, 5000.0, 10000.0]
+    b_values = [0.0, 0.4, 1.0, 1.3, 1.6, 1.7]
+    coenergy = [0.0, 20.0, 300.0, 875.0, 6675.0, 14925.0]
+    energy = [h * b - ws for h, b, ws in zip(h_values, b_values, coenergy)]
+    grid_sha = "ab5a4869477578a2f3d7244d52af91efb58ec84f39d5ab1454f307452bed9700"
+    identity = {
+        "bh_table_sha256": "4" * 64,
+        "response_grid_sha256": grid_sha,
+        "material_model": "single_valued_isotropic_soft_magnetic",
+        "magnetic_anisotropy": "isotropic",
+        "H_unit": "A/m",
+        "B_unit": "T",
+        "differential_permeability_unit": "H/m",
+        "energy_density_unit": "J/m^3",
+    }
+    lane = {
+        "identity": identity,
+        "H_A_per_m": h_values,
+        "B_T": b_values,
+        "differential_permeability_H_per_m": [0.004, 0.003, 0.001, 1.0e-4, 2.0e-5, 1.256637e-6],
+        "energy_density_J_per_m3": energy,
+        "coenergy_density_J_per_m3": coenergy,
+        "d_energy_d_B_A_per_m": h_values,
+        "d_coenergy_d_H_T": b_values,
+    }
+    return {"candidate": json.loads(json.dumps(lane)), "reference": lane}
+
+
+def test_constitutive_response_gate_accepts_realized_common_grid_and_wraps_mcp():
+    result = nonlinear_constitutive_response_parity_gate(_constitutive_response_summary())
+    assert result["status"] == "ok"
+    assert result["comparison_performed"] is True
+    wrapped = json.loads(mcp_constitutive_parity_gate(json.dumps(_constitutive_response_summary())))
+    assert wrapped["status"] == "ok"
+
+
+def test_constitutive_response_gate_rejects_same_table_digest_but_different_response():
+    bad = _constitutive_response_summary()
+    bad["candidate"]["B_T"][3] *= 1.02
+    result = nonlinear_constitutive_response_parity_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["B_T_matches"] is False
+
+
+def test_constitutive_response_gate_rejects_saturation_transition_mismatch():
+    bad = _constitutive_response_summary()
+    bad["candidate"]["differential_permeability_H_per_m"][-1] = 1.0e-4
+    result = nonlinear_constitutive_response_parity_gate(bad)
+    assert result["checks"]["differential_permeability_H_per_m_matches"] is False
+
+
+def test_constitutive_response_gate_rejects_non_si_grid_units_before_comparison():
+    bad = _constitutive_response_summary()
+    bad["candidate"]["identity"]["H_unit"] = "Oe"
+    bad["reference"]["identity"]["H_unit"] = "Oe"
+    result = nonlinear_constitutive_response_parity_gate(bad)
+    assert result["comparison_performed"] is False
+    assert result["lane_checks"]["candidate"]["SI_units_explicit"] is False
+
+
+def test_constitutive_response_gate_rejects_broken_energy_derivative_identity():
+    bad = _constitutive_response_summary()
+    bad["candidate"]["d_energy_d_B_A_per_m"][2] += 20.0
+    result = nonlinear_constitutive_response_parity_gate(bad)
+    assert result["checks"]["candidate_response_valid"] is False
+    assert result["lane_checks"]["candidate"]["energy_derivative_identity_satisfied"] is False
+
+
+async def _probe_constitutive_gate_stdio():
+    repo = Path(__file__).resolve().parents[3]
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = os.pathsep.join(
+        [
+            str(repo / "packages" / "radia-mcp" / "src"),
+            str(repo / "src"),
+            environment.get("PYTHONPATH", ""),
+        ]
+    ).rstrip(os.pathsep)
+    params = StdioServerParameters(
+        command=sys.executable,
+        args=["-m", "radia_mcp.radia_ngsolve.server"],
+        cwd=str(repo),
+        env=environment,
+    )
+    async with stdio_client(params) as (read_stream, write_stream):
+        async with ClientSession(read_stream, write_stream) as session:
+            initialized = await session.initialize()
+            tools = {tool.name for tool in (await session.list_tools()).tools}
+            called = await session.call_tool(
+                "radia_ngsolve_validation_run",
+                {
+                    "name": "nonlinear_constitutive_response_parity_gate",
+                    "arguments": {
+                        "summary_json": json.dumps(_constitutive_response_summary())
+                    },
+                },
+            )
+            return initialized.serverInfo.name, tools, json.loads(called.content[0].text)
+
+
+def test_constitutive_response_gate_passes_real_stdio_protocol():
+    server_name, tools, result = asyncio.run(
+        asyncio.wait_for(_probe_constitutive_gate_stdio(), timeout=45)
+    )
+    assert server_name == "mcp-server-radia-ngsolve"
+    assert "radia_ngsolve_validation_run" in tools
+    assert result["status"] == "ok"
