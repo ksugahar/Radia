@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import sys
@@ -11,12 +12,14 @@ from mcp.client.stdio import stdio_client
 
 from radia_mcp.radia_ngsolve.field_profile_gate import (
     dual_formulation_symmetric_field_profile_gate,
+    nonlinear_constitutive_point_sample_gate,
     nonlinear_constitutive_response_parity_gate,
     nonlinear_magnetic_field_energy_parity_gate,
     nonlinear_magnetic_refinement_energy_gate,
     nonlinear_magnetic_spatial_evidence_gate,
 )
 from radia_mcp.radia_ngsolve.server import (
+    nonlinear_constitutive_point_sample_gate as mcp_constitutive_point_gate,
     nonlinear_magnetic_field_energy_parity_gate as mcp_nonlinear_parity_gate,
     nonlinear_constitutive_response_parity_gate as mcp_constitutive_parity_gate,
     nonlinear_magnetic_refinement_energy_gate as mcp_nonlinear_refinement_gate,
@@ -373,6 +376,124 @@ def test_constitutive_response_gate_rejects_broken_energy_derivative_identity():
     assert result["lane_checks"]["candidate"]["energy_derivative_identity_satisfied"] is False
 
 
+def _canonical_digest(value):
+    return hashlib.sha256(
+        json.dumps(value, ensure_ascii=True, separators=(",", ":"), sort_keys=True).encode(
+            "ascii"
+        )
+    ).hexdigest()
+
+
+def _constitutive_point_summary():
+    h_values = [100.0, 200.0, 400.0, 800.0, 1600.0]
+    b_values = [0.2, 0.4, 0.8, 1.2, 1.5]
+    points = [[float(index), 0.0, 0.0] for index in range(5)]
+    table_sha = "8" * 64
+    identity = {
+        "observable_components": [
+            "BX",
+            "BY",
+            "BZ",
+            "BMOD",
+            "HX",
+            "HY",
+            "HZ",
+            "HMOD",
+        ],
+        "response_units": {"H": "A/m", "B": "T"},
+        "point_set_m": points,
+        "point_set_sha256": _canonical_digest(points),
+        "material_curve": {
+            "sha256": "7" * 64,
+            "canonical_table_sha256": table_sha,
+        },
+        "field_recovery": "ELEMENT_LOCAL",
+        "field_recovery_semantics": "unsmoothed_element_local_evaluation",
+        "constitutive_oracle": True,
+    }
+    identity["constitutive_identity_sha256"] = _canonical_digest(identity)
+    values = [
+        {
+            "point_m": point,
+            "field_T": [0.0, 0.0, b_value],
+            "magnitude_T": b_value,
+            "magnetic_field_strength_A_per_m": [0.0, 0.0, h_value],
+            "magnetic_field_strength_magnitude_A_per_m": h_value,
+        }
+        for point, h_value, b_value in zip(points, h_values, b_values)
+    ]
+    return {
+        "source": {
+            "status": "completed",
+            "response_evidence_status": "source_native_element_local_B_H_samples",
+            "constitutive_oracle": True,
+            "constitutive_comparison_ready": True,
+            "identity": identity,
+            "values": values,
+        },
+        "candidate": {
+            "identity": {"bh_table_sha256": table_sha},
+            "H_A_per_m": h_values,
+            "B_T": b_values,
+        },
+    }
+
+
+def test_constitutive_point_gate_accepts_identity_bound_element_local_samples():
+    summary = _constitutive_point_summary()
+    result = nonlinear_constitutive_point_sample_gate(summary)
+    assert result["status"] == "ok"
+    assert result["constitutive_parity_established"] is True
+    wrapped = json.loads(mcp_constitutive_point_gate(json.dumps(summary)))
+    assert wrapped["status"] == "ok"
+
+
+def test_constitutive_point_gate_rejects_nodal_recovery_as_material_oracle():
+    bad = _constitutive_point_summary()
+    source = bad["source"]
+    source["response_evidence_status"] = "source_native_joint_point_fields"
+    source["constitutive_oracle"] = False
+    source["constitutive_comparison_ready"] = False
+    identity = source["identity"]
+    identity["field_recovery"] = "NODAL"
+    identity["field_recovery_semantics"] = "nodally_averaged_interpolation"
+    identity["constitutive_oracle"] = False
+    identity["constitutive_identity_sha256"] = _canonical_digest(
+        {key: value for key, value in identity.items() if key != "constitutive_identity_sha256"}
+    )
+    result = nonlinear_constitutive_point_sample_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["source_is_unsmoothed_element_local"] is False
+    assert result["comparison_performed"] is True
+
+
+def test_constitutive_point_gate_rejects_noncollinear_isotropic_fields():
+    bad = _constitutive_point_summary()
+    value = bad["source"]["values"][2]
+    value["field_T"] = [0.3, 0.0, 0.8]
+    value["magnitude_T"] = (0.3**2 + 0.8**2) ** 0.5
+    bad["candidate"]["B_T"][2] = value["magnitude_T"]
+    result = nonlinear_constitutive_point_sample_gate(bad)
+    assert result["checks"]["isotropic_B_H_directions_collinear"] is False
+
+
+def test_constitutive_point_gate_rejects_point_and_material_identity_mismatch():
+    bad = _constitutive_point_summary()
+    bad["source"]["identity"]["point_set_sha256"] = "0" * 64
+    bad["candidate"]["identity"]["bh_table_sha256"] = "9" * 64
+    result = nonlinear_constitutive_point_sample_gate(bad)
+    assert result["checks"]["point_set_identity_valid"] is False
+    assert result["checks"]["material_table_identity_matches"] is False
+
+
+def test_constitutive_point_gate_reports_incomplete_H_coverage():
+    bad = _constitutive_point_summary()
+    bad["candidate"]["H_A_per_m"][-1] = 1700.0
+    result = nonlinear_constitutive_point_sample_gate(bad)
+    assert result["checks"]["candidate_grid_matches_source_samples"] is False
+    assert result["checks"]["B_response_matches"] is False
+
+
 async def _probe_constitutive_gate_stdio():
     repo = Path(__file__).resolve().parents[3]
     environment = os.environ.copy()
@@ -402,13 +523,28 @@ async def _probe_constitutive_gate_stdio():
                     },
                 },
             )
-            return initialized.serverInfo.name, tools, json.loads(called.content[0].text)
+            point_called = await session.call_tool(
+                "radia_ngsolve_validation_run",
+                {
+                    "name": "nonlinear_constitutive_point_sample_gate",
+                    "arguments": {
+                        "summary_json": json.dumps(_constitutive_point_summary())
+                    },
+                },
+            )
+            return (
+                initialized.serverInfo.name,
+                tools,
+                json.loads(called.content[0].text),
+                json.loads(point_called.content[0].text),
+            )
 
 
 def test_constitutive_response_gate_passes_real_stdio_protocol():
-    server_name, tools, result = asyncio.run(
+    server_name, tools, result, point_result = asyncio.run(
         asyncio.wait_for(_probe_constitutive_gate_stdio(), timeout=45)
     )
     assert server_name == "mcp-server-radia-ngsolve"
     assert "radia_ngsolve_validation_run" in tools
     assert result["status"] == "ok"
+    assert point_result["status"] == "ok"
