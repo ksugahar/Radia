@@ -16,18 +16,43 @@ ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "docs/universal_relaxation_network/data/real_world/nasa_battery"
 
 
+@pytest.mark.parametrize('filename', [
+    'verify_timedomain_stability.py', 'validate_urn_vs_vf.py',
+    'validate_real_world.py', 'validate_all_datasets.py', 'validate_real_data.py',
+    'run_ltspice_verification.py', 'benchmark_urn_vs_skrf_vf.py', 'ablation_study.py',
+])
+def test_legacy_bundled_nasa_modes_have_explicit_retirement(filename):
+    path = ROOT / 'validation_test/universal_relaxation_network' / filename
+    source = path.read_text(encoding='utf-8')
+    tree = ast.parse(source)
+    guards = [n for n in ast.walk(tree) if isinstance(n, ast.Raise)
+              and 'Legacy bundled NASA mode is retired' in ast.get_source_segment(source, n)]
+    assert len(guards) == 1
+    with pytest.raises(RuntimeError, match='private'):
+        exec(compile(ast.Module(body=guards, type_ignores=[]), str(path), 'exec'), {})
+    assert 'nasa_18650_eis.csv' not in source
+
+
+def test_nasa_downloads_excluded_from_source_distribution():
+    manifest = (ROOT / 'MANIFEST.in').read_text()
+    assert ('recursive-exclude docs/universal_relaxation_network/data/real_world/'
+            'nasa_battery *.csv *.mat *.zip') in manifest
+
+
 @pytest.mark.parametrize(("filename", "function"), [
     ("generate_paper_figures.py", "load_nasa_battery_data"),
     ("demo_spice_timedomain.py", "load_battery_data"),
 ])
-def test_historical_nasa_consumers_reject_unverified_frequency(filename, function):
+def test_historical_nasa_consumers_reject_unverified_frequency(tmp_path, filename, function):
     path = DATA.parents[2] / filename
     node = next(n for n in ast.parse(path.read_text(encoding="utf-8")).body
                 if isinstance(n, ast.FunctionDef) and n.name == function)
     namespace = {"Path": Path, "__file__": str(path), "np": np}
     exec(compile(ast.Module(body=[node], type_ignores=[]), str(path), "exec"), namespace)
+    fixture = tmp_path / 'unverified.csv'
+    fixture.write_text('frequency_Hz,Z_real_Ohm,Z_imag_Ohm\n1,2,3\n2,3,4\n')
     with pytest.raises(ValueError, match="frequency axis is unverified"):
-        namespace[function]()
+        namespace[function](fixture)
 
 
 def test_documented_nasa_figure_loader_parses_columns_not_fixed_header_lines(tmp_path):
@@ -44,6 +69,28 @@ def test_documented_nasa_figure_loader_parses_columns_not_fixed_header_lines(tmp
     frequency, impedance = namespace["load_nasa_battery_data"]()
     np.testing.assert_array_equal(frequency, [5000, 1])
     np.testing.assert_array_equal(impedance, [1+2j, 3+4j])
+
+
+@pytest.mark.parametrize(('filename', 'function'), [
+    ('generate_paper_figures.py', 'load_nasa_battery_data'),
+    ('demo_spice_timedomain.py', 'load_battery_data'),
+])
+def test_nasa_consumers_accept_private_path_and_environment(tmp_path, monkeypatch, filename, function):
+    path = DATA.parents[2] / filename
+    node = next(n for n in ast.parse(path.read_text(encoding='utf-8')).body
+                if isinstance(n, ast.FunctionDef) and n.name == function)
+    namespace = {'Path': Path, '__file__': str(tmp_path / filename), 'np': np}
+    exec(compile(ast.Module(body=[node], type_ignores=[]), str(path), 'exec'), namespace)
+    private = tmp_path / 'private.csv'
+    private.write_text('#   Frequency source: synthetic test only\n'
+                       'frequency_Hz,Z_real_Ohm,Z_imag_Ohm\n5,1,2\n1,3,4\n')
+    monkeypatch.setenv('RADIA_NASA_EIS_CSV', str(tmp_path / 'missing.csv'))
+    np.testing.assert_array_equal(namespace[function](private)[0], [5, 1])
+    monkeypatch.setenv('RADIA_NASA_EIS_CSV', str(private))
+    np.testing.assert_array_equal(namespace[function]()[1], [1+2j, 3+4j])
+    monkeypatch.delenv('RADIA_NASA_EIS_CSV')
+    with pytest.raises(FileNotFoundError, match='RADIA_NASA_EIS_CSV'):
+        namespace[function]()
 
 
 @pytest.mark.parametrize(('filename', 'function'), [

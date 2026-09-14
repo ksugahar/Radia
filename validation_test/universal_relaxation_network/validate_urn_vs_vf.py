@@ -44,13 +44,7 @@ DOCS_URN_DIR = (
 
 def load_battery_data():
     """Load NASA Li-ion battery EIS data (real measurement)."""
-    data_path = DOCS_URN_DIR / 'data' / 'real_world' / 'nasa_battery' / 'nasa_18650_eis.csv'
-    print("  Using real NASA 18650 battery EIS data")
-    data = pd.read_csv(data_path, comment='#')
-    freq = data['frequency_Hz'].to_numpy()
-    Z_real = data['Z_real_Ohm'].to_numpy()
-    Z_imag = data['Z_imag_Ohm'].to_numpy()
-    return freq, Z_real + 1j * Z_imag
+    raise RuntimeError('Legacy bundled NASA mode is retired: measurements are private and the old frequency axis is unverified. Use the documented private-input consumers in docs/universal_relaxation_network.')
 
 
 def load_ferrite_data():

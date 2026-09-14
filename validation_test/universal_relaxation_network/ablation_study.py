@@ -385,7 +385,7 @@ def main():
     args = parser.parse_args()
 
     if args.dataset == 'battery':
-        data_path = DOCS_URN_DIR / 'data' / 'real_world' / 'nasa_battery' / 'nasa_18650_eis.csv'
+        raise RuntimeError('Legacy bundled NASA mode is retired: measurements are private and the old frequency axis is unverified. Use the documented private-input consumers in docs/universal_relaxation_network.')
     else:
         data_path = DOCS_URN_DIR / 'data' / 'real_world' / 'tdk_ferrite' / 'tdk_pc50_impedance.csv'
 
