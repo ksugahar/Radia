@@ -6,12 +6,11 @@ Runs under Cubit's bundled Python 3.10 (`C:/Program Files/Coreform Cubit
 the `cubit` Python binding is a compiled extension (`_cubit3.pyd`) tied
 to the Cubit ABI + Python 3.10.
 
-Role in the lab stack (2026-04-19 Cubit Viewer):
-    VSCode Claude Code
+Role in the lab stack:
+    LLM client
         → mcp-server-cubit (Python 3.12)
             → THIS DAEMON (Python 3.10, subprocess)
-                → cubit.cmd(...)
-                    → Cubit GUI (FLTK, persistent window)
+                → cubit.cmd(...) in batch/nographics mode
 
 Design follows the OCP CAD Viewer philosophy transposed to Cubit:
 a persistent backend, lightweight client calls, no per-action launch
@@ -128,7 +127,7 @@ def _op_cmd(cubit_mod, args):
     ERROR ("No volume with ID 99" etc.) — accepted but silent no-op.
     We sample `get_error_count()` around each call so silent failures
     are reported as ok=False instead of slipping through the batch
-    dry-run into the live GUI.
+    dry-run into the persistent headless session.
     """
     results = []
     for line in args:
@@ -181,7 +180,8 @@ def _op_snapshot(cubit_mod, args):
 
 def main():
     """Entry point: initialize Cubit, emit ready, enter RPC loop."""
-    gui = os.environ.get("CUBIT_DAEMON_MODE", "gui").lower() != "batch"
+    requested_mode = os.environ.get("CUBIT_DAEMON_MODE", "batch").lower()
+    gui = requested_mode == "gui"
 
     try:
         cubit_mod = _init_cubit(gui=gui)
