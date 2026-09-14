@@ -11,25 +11,31 @@ def nonlinear_magnetic_refinement_energy_gate(
     *,
     max_refinement_growth_factor: float = 1.05,
     max_finest_pair_relative_change: float = 0.05,
+    max_legendre_relative_residual: float = 1.0e-8,
     min_refinement_levels: int = 3,
 ) -> dict[str, Any]:
     """Gate nonlinear volume observables across a material-matched h ladder.
 
     Every level must use a response/material order pair of ``p``/``p-1``, a
     finite positive physical permeability field, and matching field/energy
-    identities. Successive average-field, RMS, and energy changes must contract
-    toward the finest mesh; a single close result is intentionally insufficient.
+    identities. Every level must descend from one physical refinement parent
+    and satisfy ``W + W* = integral(H dot B)``. Successive average-field, RMS,
+    energy, and coenergy changes must contract toward the finest mesh; a single
+    close result is intentionally insufficient.
     """
 
     if not isinstance(summary, dict):
         raise ValueError("summary must be a mapping")
     growth_limit = float(max_refinement_growth_factor)
     finest_limit = float(max_finest_pair_relative_change)
+    legendre_limit = float(max_legendre_relative_residual)
     level_limit = int(min_refinement_levels)
     if not math.isfinite(growth_limit) or growth_limit < 1.0:
         raise ValueError("max_refinement_growth_factor must be finite and >= 1")
     if not math.isfinite(finest_limit) or finest_limit < 0.0:
         raise ValueError("max_finest_pair_relative_change must be finite and nonnegative")
+    if not math.isfinite(legendre_limit) or legendre_limit < 0.0:
+        raise ValueError("max_legendre_relative_residual must be finite and nonnegative")
     if level_limit < 3:
         raise ValueError("min_refinement_levels must be at least 3")
 
@@ -46,6 +52,7 @@ def nonlinear_magnetic_refinement_energy_gate(
         "bh_table_sha256",
         "material_state_identity_sha256",
         "solution_sha256",
+        "refinement_parent_identity_sha256",
     )
     levels: list[dict[str, Any]] = []
     for index, raw in enumerate(raw_levels):
@@ -101,8 +108,13 @@ def nonlinear_magnetic_refinement_energy_gate(
                 "rms_magnitude_T": number("rms_magnitude_T"),
                 "magnetic_energy_J": number("magnetic_energy_J"),
                 "magnetic_coenergy_J": number("magnetic_coenergy_J"),
+                "h_dot_b_integral_J": number("h_dot_b_integral_J"),
+                "legendre_residual_relative": number("legendre_residual_relative"),
                 "physical_relative_permeability_bounds": permeability_bounds,
                 "field_energy_identity_matches": identities_match,
+                "refinement_parent_identity_sha256": str(
+                    energy_identity.get("refinement_parent_identity_sha256") or ""
+                ).strip().lower(),
             }
         )
 
@@ -142,6 +154,12 @@ def nonlinear_magnetic_refinement_energy_gate(
                     and level["magnetic_coenergy_J"] is not None
                     and level["magnetic_coenergy_J"] >= 0.0
                 ),
+                "legendre_energy_identity_satisfied": (
+                    level["h_dot_b_integral_J"] is not None
+                    and level["h_dot_b_integral_J"] >= 0.0
+                    and level["legendre_residual_relative"] is not None
+                    and level["legendre_residual_relative"] <= legendre_limit
+                ),
                 "physical_permeability_positive": (
                     len(bounds) == 2
                     and all(math.isfinite(value) for value in bounds)
@@ -151,6 +169,14 @@ def nonlinear_magnetic_refinement_energy_gate(
             }
         )
 
+    parent_digests = [level["refinement_parent_identity_sha256"] for level in levels]
+    refinement_parent_consistent = bool(parent_digests) and all(
+        len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+        and value == parent_digests[0]
+        for value in parent_digests
+    )
+
     pair_changes: list[dict[str, float]] = []
     for coarse, fine in zip(levels, levels[1:]):
         coarse_average = coarse["average_field_T"]
@@ -159,6 +185,8 @@ def nonlinear_magnetic_refinement_energy_gate(
         fine_rms = fine["rms_magnitude_T"]
         coarse_energy = coarse["magnetic_energy_J"]
         fine_energy = fine["magnetic_energy_J"]
+        coarse_coenergy = coarse["magnetic_coenergy_J"]
+        fine_coenergy = fine["magnetic_coenergy_J"]
         if (
             not coarse_average
             or not fine_average
@@ -166,12 +194,15 @@ def nonlinear_magnetic_refinement_energy_gate(
             or fine_rms is None
             or coarse_energy is None
             or fine_energy is None
+            or coarse_coenergy is None
+            or fine_coenergy is None
         ):
             pair_changes.append(
                 {
                     "average": math.inf,
                     "rms": math.inf,
                     "energy": math.inf,
+                    "coenergy": math.inf,
                     "combined": math.inf,
                 }
             )
@@ -192,12 +223,18 @@ def nonlinear_magnetic_refinement_energy_gate(
         energy_change = abs(fine_energy - coarse_energy) / max(
             abs(fine_energy), 1.0e-300
         )
+        coenergy_change = abs(fine_coenergy - coarse_coenergy) / max(
+            abs(fine_coenergy), 1.0e-300
+        )
         pair_changes.append(
             {
                 "average": average_change,
                 "rms": rms_change,
                 "energy": energy_change,
-                "combined": max(average_change, rms_change, energy_change),
+                "coenergy": coenergy_change,
+                "combined": max(
+                    average_change, rms_change, energy_change, coenergy_change
+                ),
             }
         )
 
@@ -210,13 +247,14 @@ def nonlinear_magnetic_refinement_energy_gate(
     checks = {
         "refinement_levels_sufficient": len(levels) >= level_limit,
         "mesh_sizes_strictly_decrease": mesh_ordered,
+        "refinement_parent_identity_consistent": refinement_parent_consistent,
         "all_levels_valid": bool(level_validity)
         and all(all(checks.values()) for checks in level_validity),
         "field_rms_energy_changes_contract": changes_contract,
         "finest_pair_is_stable": finest_change <= finest_limit,
     }
     return {
-        "policy": "nonlinear_magnetic_refinement_energy_gate_v2",
+        "policy": "nonlinear_magnetic_refinement_energy_gate_v3",
         "status": "ok" if all(checks.values()) else "needs_attention",
         "checks": checks,
         "issues": [name for name, accepted in checks.items() if not accepted],
@@ -230,11 +268,173 @@ def nonlinear_magnetic_refinement_energy_gate(
             "max_refinement_growth_factor": growth_limit,
             "max_finest_pair_relative_change": finest_limit,
             "min_refinement_levels": level_limit,
+            "max_legendre_relative_residual": legendre_limit,
         },
         "notes": [
             "one mesh or one point cannot establish nonlinear spatial convergence",
             "field and energy observables must bind the same mesh, solution, B-H table, material state, domain, and frame",
+            "every level must descend from one explicit physical refinement parent",
+            "energy and coenergy must close independently against the same-state H dot B integral",
             "the gate diagnoses evidence quality and does not assert cross-solver parity by itself",
+        ],
+    }
+
+
+def nonlinear_magnetic_field_energy_parity_gate(
+    summary: dict[str, Any],
+    *,
+    max_average_vector_relative_difference: float = 0.05,
+    max_rms_magnitude_relative_difference: float = 0.05,
+    max_energy_relative_difference: float = 0.05,
+    max_coenergy_relative_difference: float = 0.05,
+) -> dict[str, Any]:
+    """Compare nonlinear field and energy only after physical identity matches."""
+
+    if not isinstance(summary, dict):
+        raise ValueError("summary must be a mapping")
+    tolerances = {
+        "average_vector": float(max_average_vector_relative_difference),
+        "rms_magnitude": float(max_rms_magnitude_relative_difference),
+        "energy": float(max_energy_relative_difference),
+        "coenergy": float(max_coenergy_relative_difference),
+    }
+    if any(not math.isfinite(value) or value < 0.0 for value in tolerances.values()):
+        raise ValueError("all parity tolerances must be finite and nonnegative")
+
+    identity_keys = (
+        "geometry_identity_sha256",
+        "material_identity_sha256",
+        "excitation_identity_sha256",
+        "bh_table_sha256",
+        "constitutive_interpolation",
+        "constitutive_extrapolation",
+        "magnetic_anisotropy",
+        "region_labels",
+        "coordinate_system",
+        "unit_system",
+        "analysis_kind",
+        "case_index",
+        "time_semantics",
+    )
+
+    def normalized_lane(name: str) -> dict[str, Any]:
+        raw = summary.get(name)
+        if not isinstance(raw, dict):
+            raise ValueError(f"{name} must be a mapping")
+        identity = raw.get("identity")
+        if not isinstance(identity, dict):
+            identity = {}
+        try:
+            average = [float(value) for value in raw.get("average_field_T")]
+        except (TypeError, ValueError):
+            average = []
+        if len(average) != 3 or not all(math.isfinite(value) for value in average):
+            average = []
+
+        def number(key: str) -> float | None:
+            try:
+                value = float(raw.get(key))
+            except (TypeError, ValueError):
+                return None
+            return value if math.isfinite(value) else None
+
+        return {
+            "identity": identity,
+            "average_field_T": average,
+            "rms_magnitude_T": number("rms_magnitude_T"),
+            "magnetic_energy_J": number("magnetic_energy_J"),
+            "magnetic_coenergy_J": number("magnetic_coenergy_J"),
+        }
+
+    candidate = normalized_lane("candidate")
+    reference = normalized_lane("reference")
+    identity_checks = {
+        key: bool(candidate["identity"].get(key) not in (None, "", []))
+        and candidate["identity"].get(key) == reference["identity"].get(key)
+        for key in identity_keys
+    }
+    identities_match = all(identity_checks.values())
+    candidate_values_valid = (
+        bool(candidate["average_field_T"])
+        and candidate["rms_magnitude_T"] is not None
+        and candidate["rms_magnitude_T"] >= 0.0
+        and candidate["magnetic_energy_J"] is not None
+        and candidate["magnetic_energy_J"] >= 0.0
+        and candidate["magnetic_coenergy_J"] is not None
+        and candidate["magnetic_coenergy_J"] >= 0.0
+    )
+    reference_values_valid = (
+        bool(reference["average_field_T"])
+        and reference["rms_magnitude_T"] is not None
+        and reference["rms_magnitude_T"] >= 0.0
+        and reference["magnetic_energy_J"] is not None
+        and reference["magnetic_energy_J"] >= 0.0
+        and reference["magnetic_coenergy_J"] is not None
+        and reference["magnetic_coenergy_J"] >= 0.0
+    )
+
+    relative_differences: dict[str, float | None] = {
+        "average_vector": None,
+        "rms_magnitude": None,
+        "energy": None,
+        "coenergy": None,
+    }
+    if identities_match and candidate_values_valid and reference_values_valid:
+        reference_average_norm = math.sqrt(
+            sum(value * value for value in reference["average_field_T"])
+        )
+        relative_differences = {
+            "average_vector": math.sqrt(
+                sum(
+                    (candidate_value - reference_value) ** 2
+                    for candidate_value, reference_value in zip(
+                        candidate["average_field_T"], reference["average_field_T"]
+                    )
+                )
+            )
+            / max(reference_average_norm, 1.0e-300),
+            "rms_magnitude": abs(
+                candidate["rms_magnitude_T"] - reference["rms_magnitude_T"]
+            )
+            / max(abs(reference["rms_magnitude_T"]), 1.0e-300),
+            "energy": abs(
+                candidate["magnetic_energy_J"] - reference["magnetic_energy_J"]
+            )
+            / max(abs(reference["magnetic_energy_J"]), 1.0e-300),
+            "coenergy": abs(
+                candidate["magnetic_coenergy_J"]
+                - reference["magnetic_coenergy_J"]
+            )
+            / max(abs(reference["magnetic_coenergy_J"]), 1.0e-300),
+        }
+
+    checks = {
+        "physical_identity_matches": identities_match,
+        "candidate_observables_valid": candidate_values_valid,
+        "reference_observables_valid": reference_values_valid,
+        "average_vector_matches": relative_differences["average_vector"] is not None
+        and relative_differences["average_vector"] <= tolerances["average_vector"],
+        "rms_magnitude_matches": relative_differences["rms_magnitude"] is not None
+        and relative_differences["rms_magnitude"] <= tolerances["rms_magnitude"],
+        "energy_matches": relative_differences["energy"] is not None
+        and relative_differences["energy"] <= tolerances["energy"],
+        "coenergy_matches": relative_differences["coenergy"] is not None
+        and relative_differences["coenergy"] <= tolerances["coenergy"],
+    }
+    return {
+        "policy": "nonlinear_magnetic_field_energy_parity_gate_v1",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "checks": checks,
+        "issues": [name for name, accepted in checks.items() if not accepted],
+        "identity_checks": identity_checks,
+        "comparison_performed": identities_match
+        and candidate_values_valid
+        and reference_values_valid,
+        "relative_differences": relative_differences,
+        "tolerances": tolerances,
+        "notes": [
+            "numeric parity is never evaluated before geometry, material, B-H interpolation/extrapolation, excitation, region, frame, units, case, and time semantics match",
+            "an accepted contract is evidence for these observables and tolerances, not universal solver equivalence",
         ],
     }
 

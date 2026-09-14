@@ -2246,15 +2246,28 @@ relative permeability above zero, and returns restartable material-state DoFs.
 The final field is re-solved after the material convergence test so H and mu
 belong to the same nonlinear state.
 
+The material field is assembled and evaluated as an NGSolve
+``CoefficientFunction`` on the selected finite-element space and is integrated
+with NGSolve quadrature.  The current Radia table adapter constructs that
+coefficient function from monotone PCHIP B(H) segments and continues beyond
+the last knot with vacuum slope.  Therefore equal B-H knots from another
+solver are not yet an equal constitutive law: bind the table digest,
+interpolation, extrapolation, and anisotropy contract explicitly.
+
 For either path, compare a volume integral or sufficiently resolved volume
 quadrature through `nonlinear_magnetic_spatial_evidence_gate`.  Production
 evidence also needs at least three h levels through
 `nonlinear_magnetic_refinement_energy_gate`: response/material orders must be
 `p`/`p-1`, average-B and RMS changes must contract, every material quadrature
 state must remain physically positive, and field/energy observables must bind
-the same material domain, coordinate frame, and nonlinear-state identity.  A
-center-point match, one close mesh, or nonlinear iteration convergence alone is
-not spatial validation or cross-solver parity.
+the same material domain, coordinate frame, nonlinear-state identity, and
+physical refinement parent.  Each level must also close
+``W + W* = integral(H dot B)`` from the same converged state.  Use
+`nonlinear_magnetic_field_energy_parity_gate` for a second solver: it refuses
+numeric comparison until geometry, B-H interpolation/extrapolation,
+anisotropy, excitation, region, frame, units, case, and time semantics match.
+A center-point match, one close mesh, or nonlinear iteration convergence alone
+is not spatial validation or cross-solver parity.
 
 Validated path: `validation_test/c_type_three_engine/run_three_engine.py`.
 The legacy scalar-potential recipe is retained in this source only for

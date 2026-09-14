@@ -1050,7 +1050,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
         kelvin_source_h=None,
         total_source_h=None, total_source_materials=(),
         anderson_depth=0, anderson_transform="log", observation_points=None,
-        material_update_order=None, material_log_state_initial=None):
+        material_update_order=None, material_log_state_initial=None,
+        refinement_parent_identity=None):
     """Picard solve for the mixed total/reduced Omega formulation.
 
     The source split and its interface trace stay fixed throughout the
@@ -1081,6 +1082,12 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
     ``nonlinear_stats["material_restart_state"]`` mapping. Bare coefficient
     arrays are rejected because their mesh, material, order, and B-H identity
     cannot be verified.
+
+    ``refinement_parent_identity`` is an optional non-empty mapping that names
+    the common physical geometry, material, and excitation contract shared by
+    an h-refinement family. Its canonical digest is attached to field and
+    energy observables, allowing a convergence gate to reject a stale or
+    unrelated mesh level before comparing numbers.
 
     The result has the same field keys as the linear mixed solve plus
     ``nonlinear_stats`` (with the per-iteration ``history``, a contraction-rate
@@ -1113,6 +1120,23 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
         raise ValueError("relaxation must lie in (0, 1]")
     if int(anderson_depth) < 0:
         raise ValueError("anderson_depth must be non-negative")
+    if refinement_parent_identity is None:
+        normalized_refinement_parent_identity = None
+        refinement_parent_identity_sha256 = None
+    else:
+        if not isinstance(refinement_parent_identity, Mapping):
+            raise ValueError("refinement_parent_identity must be a mapping")
+        normalized_refinement_parent_identity = dict(refinement_parent_identity)
+        if not normalized_refinement_parent_identity:
+            raise ValueError("refinement_parent_identity must not be empty")
+        try:
+            refinement_parent_identity_sha256 = _identity_sha256(
+                normalized_refinement_parent_identity
+            )
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                "refinement_parent_identity must be JSON serializable"
+            ) from exc
 
     bh_array = np.asarray(bh_table, dtype=float)
     if bh_array.ndim != 2 or bh_array.shape[1] < 2:
@@ -1176,6 +1200,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
             total_source_materials=total_source_materials,
             observation_points=observation_points,
             material_log_state_initial=material_log_state_initial,
+            refinement_parent_identity=normalized_refinement_parent_identity,
+            refinement_parent_identity_sha256=refinement_parent_identity_sha256,
         )
     if requested_material_order not in (None, 0):
         raise ValueError("order=1 supports material_update_order=0 only")
@@ -1363,7 +1389,8 @@ def _solve_mixed_omega_projected_log_material(
         interface_constraint_scale, kelvin_interface_boundary,
         kelvin_source_potential, kelvin_source_h,
         total_source_h, total_source_materials, observation_points,
-        material_log_state_initial):
+        material_log_state_initial, refinement_parent_identity,
+        refinement_parent_identity_sha256):
     """Picard lane with a positive spatial L2 secant-permeability field."""
 
     from ngsolve import (
@@ -1675,6 +1702,14 @@ def _solve_mixed_omega_projected_log_material(
             order=max(integration_order, 2 * int(order) + 2),
         ).real
     )
+    nonlinear_h_dot_b = float(
+        Integrate(
+            H_magnitude * B_law,
+            mesh,
+            definedon=nonlinear_selector,
+            order=max(integration_order, 2 * int(order) + 2),
+        ).real
+    )
     physical_linear_materials = [
         str(material)
         for material in mesh.GetMaterials()
@@ -1682,15 +1717,31 @@ def _solve_mixed_omega_projected_log_material(
         and not any(key.lower() in str(material).lower() for key in kelvin_mats)
     ]
     linear_energy = 0.0
+    linear_h_dot_b = 0.0
     if physical_linear_materials:
+        linear_selector = mesh.Materials("|".join(physical_linear_materials))
         linear_energy = float(
             Integrate(
                 0.5 * MU_0 * H_magnitude**2,
                 mesh,
-                definedon=mesh.Materials("|".join(physical_linear_materials)),
+                definedon=linear_selector,
                 order=max(integration_order, 2 * int(order) + 2),
             ).real
         )
+        linear_h_dot_b = float(
+            Integrate(
+                MU_0 * H_magnitude**2,
+                mesh,
+                definedon=linear_selector,
+                order=max(integration_order, 2 * int(order) + 2),
+            ).real
+        )
+    energy_total = nonlinear_energy + linear_energy
+    coenergy_total = nonlinear_coenergy + linear_energy
+    h_dot_b_total = nonlinear_h_dot_b + linear_h_dot_b
+    legendre_residual = abs(energy_total + coenergy_total - h_dot_b_total) / max(
+        abs(energy_total), abs(coenergy_total), abs(h_dot_b_total), 1.0e-300
+    )
     solution_sha256 = _canonical_array_sha256(result["solution"].vec.FV().NumPy())
     energy_identity = {
         "schema": "radia.nonlinear-magnetic-energy-identity.v1",
@@ -1698,6 +1749,9 @@ def _solve_mixed_omega_projected_log_material(
             "mesh_topology_geometry_sha256"
         ],
         "bh_table_sha256": material_state_identity["bh_table_sha256"],
+        "constitutive_interpolation": "monotone_pchip",
+        "constitutive_extrapolation": "vacuum_slope",
+        "magnetic_anisotropy": "isotropic",
         "material_state_identity_sha256": material_state_identity_sha256,
         "solution_sha256": solution_sha256,
         "nonlinear_materials": sorted(str(value) for value in nonlinear_materials),
@@ -1710,7 +1764,10 @@ def _solve_mixed_omega_projected_log_material(
         "unit_system": "SI",
         "unit": "J",
         "integration_order": max(integration_order, 2 * int(order) + 2),
+        "refinement_parent_identity_sha256": refinement_parent_identity_sha256,
     }
+    if refinement_parent_identity is not None:
+        energy_identity["refinement_parent_identity"] = refinement_parent_identity
     field_identity = {
         key: value
         for key, value in energy_identity.items()
@@ -1726,11 +1783,15 @@ def _solve_mixed_omega_projected_log_material(
     result["energy_observables"] = {
         "identity": energy_identity,
         "identity_sha256": _identity_sha256(energy_identity),
-        "energy_J": nonlinear_energy + linear_energy,
-        "coenergy_J": nonlinear_coenergy + linear_energy,
+        "energy_J": energy_total,
+        "coenergy_J": coenergy_total,
+        "h_dot_b_integral_J": h_dot_b_total,
+        "legendre_residual_relative": legendre_residual,
         "nonlinear_energy_J": nonlinear_energy,
         "nonlinear_coenergy_J": nonlinear_coenergy,
+        "nonlinear_h_dot_b_integral_J": nonlinear_h_dot_b,
         "linear_physical_energy_J": linear_energy,
+        "linear_physical_h_dot_b_integral_J": linear_h_dot_b,
         "nonlinear_constitutive_relation": "energy=H*B-integral_0^H_Bdh",
         "nonlinear_coenergy_relation": "coenergy=integral_0^H_Bdh",
     }
