@@ -814,12 +814,15 @@ e = np.ones(n) / n
 L_total = 1.0 / (e @ np.linalg.solve(L_mat, e))
 ```
 
-**IMPORTANT**: The `e = ones/n` uniform excitation is only valid for order=0 (RT0).
-For higher-order HDivSurface (order >= 1), project the current excitation properly.
+**IMPORTANT**: This legacy `e = ones/n` example is not a validated physical
+loop-current excitation, including at order=0 (RT0). Its coefficients depend
+on basis orientation. Define/project a physical current or port functional,
+transform it with the basis, and impose current conservation before extraction.
 
-### Verified accuracy (circular loop, Neumann formula L = mu_0*R*(ln(8R/a) - 2)):
-- 89 elements, order=0, Curve(1): +16% error (very coarse mesh)
-- For < 5% error: use finer mesh (curvaturesafety >= 1.0) or higher order
+### Historical comparison, not acceptance:
+The old coarse-loop result differed by about 16% from an asymptotic external-
+inductance expression. Neither this match nor a mesh-size recommendation validates
+the excitation. See the closed-torus diagnostic in `ngsbem_inductance`.
 
 ## Stabilized BEM for Low-Frequency (Weggler)
 

@@ -1,0 +1,29 @@
+{
+  "schema": "radia.torus-physical-current.v1",
+  "host": "mdx2",
+  "python": "3.12.10",
+  "ngsolve": "6.2.2606",
+  "numpy": "2.4.3",
+  "notebook_sha256": "d3cf7ef93c7e75e2c8d90bafd3de021359f5bafb21dc545c1e4d6c9371d9757d",
+  "driver_sha256": "49ffb40fd0b8f9dd4ae4faa300f9131e25a6eb767d5eb026c8fde5aa4a1cc079",
+  "curvaturesafety": 0.8,
+  "bonus_intorder": 4,
+  "threads": 2,
+  "ndof": 925,
+  "active_boundary_dofs": 693,
+  "divergence_free_dimension": 232,
+  "optimality": {
+    "reduced_relative_symmetry_error": 1.871270740322847e-08,
+    "reduced_positive_definite": true,
+    "relative_kkt_residual": 2.683686383174099e-16
+  },
+  "current_A": 0.9999999999999998,
+  "relative_conservation_residual": 5.658847964436705e-17,
+  "L_H": 1.5591388561192178e-07,
+  "basis_transformed_L_H": 1.5591388561192176e-07,
+  "relative_basis_invariance_error": 1.6977179099738186e-16,
+  "relative_symmetry_error": 2.390783063289315e-08,
+  "relative_surface_area_error": -0.06642057097519061,
+  "elapsed_s": 51.79874270001892,
+  "scope": "Divergence-free unit toroidal current, minimum magnetic energy; no finite-frequency, resistive, or experimental acceptance."
+}
