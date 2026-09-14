@@ -15,6 +15,15 @@ multiple formats via Cubit plugin commands (`export ...`) and the `cubit_mesh_ex
 
 ## Typical Workflow
 
+`cubit-mesh-export` is independently installable without `radia` or
+`radia-mcp`. Radia adds optional toolbar integration; MCP owns AI operation.
+Its standalone release acceptance uses
+`validation_test/cubit_mesh_export/validate_standalone_wheel.py` in an isolated
+wheel-installed venv with Radia/MCP absent. It loads the candidate plugin via
+the headless console, checks an APREPRO sphere journal, and retains wheel/native
+hashes plus the strict `check-vol` result. Do not substitute the no-argument
+IH smoke test (which needs Radia's sample) for standalone acceptance.
+
 ```
 1. Create geometry (Cubit commands or STEP import)
 2. Set mesh scheme (tetmesh, map, sweep, etc.)
