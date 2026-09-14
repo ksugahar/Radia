@@ -31,6 +31,8 @@ python validation_test/isochronous_topopt/run_shape_reacceptance.py prepare --di
 python validation_test/isochronous_topopt/run_shape_reacceptance.py mesh --directory C:/temp/shape-run --command-plugin-directory "C:/Program Files/Coreform Cubit 2025.12/bin/plugins" --tet-curve-interval 16
 # Transfer the resulting directory back to the same isolated compute environment.
 python validation_test/isochronous_topopt/run_shape_reacceptance.py evaluate --directory C:/temp/shape-run
+# After recovering the completed directory, independently audit receipt consistency.
+python validation_test/isochronous_topopt/run_shape_reacceptance.py audit --directory C:/temp/shape-run
 ```
 
 Use a fresh owned directory; a repeated or failed phase is deliberately refused.
@@ -48,6 +50,29 @@ global size missed. No CAD face is deleted, relabelled away, or exempted from
 field tolerances remain unchanged. A successful mesh receipt alone is not field
 acceptance: require `field.json` with `completed=true`, its matching completed
 evaluation state, and the verified prepare/mesh parent receipt chain.
+
+### Post-Taubin acceptance, 2026-09-14
+
+`shape_reacceptance_20260914.json` records a completed mdx2 run against candidate
+wheel source `59b094d8ed2c19e35967fd7631f3a1473eb3d200`, with the explicit
+`topopt_cad.py` overlay identified inside the result. This is acceptance of this
+shape lane, not acceptance of every solver or of a new binary release.
+The native/NGSolve objective discrepancy was at most `6.272e-10`; independent
+direct-field reciprocity discrepancy was at most `4.038e-8`. The refined hex
+objective differed from the tetrahedral reference by 2.2805%, improving on the
+coarse hex's 16.3797%; it differed from the original staircase by -2.9249%.
+All pre-existing field tolerances passed without relaxation.
+
+The first-party fixture `fixtures/shape_reacceptance_20260914.zip` contains the
+exact generated geometry, solver meshes, mesh reports, parent receipts and
+original source variants. No externally downloaded dataset is included. To
+audit it, extract into a fresh directory, copy the result above as `field.json`,
+and run the `audit` phase. The separate
+`shape_reacceptance_20260914_audit.json` records post-execution validation;
+`numerical_recomputed=false` means it does not impersonate a new solver run.
+Original numerical driver SHA is preserved rather than replaced by the later
+validator's SHA. Full console logs and failed mesh trials are retained on LAB,
+not published as repository log files.
 
 Notes fixed by this lane (do not re-walk):
 

@@ -16,6 +16,7 @@ import platform
 import sys
 import uuid
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -75,8 +76,45 @@ def verify_parent_receipt(out, parent):
     return digest(out / f'{parent}.json')
 
 
+def audit_completed_receipts(out):
+    parents = {p: verify_parent_receipt(out, p) for p in ('prepare', 'mesh')}
+    preparation = json.loads((out / 'prepare.json').read_text(encoding='utf-8'))
+    meshes = json.loads((out / 'mesh.json').read_text(encoding='utf-8'))
+    field = json.loads((out / 'field.json').read_text(encoding='utf-8'))
+    state = json.loads((out / 'evaluate.state.json').read_text(encoding='utf-8'))
+    verify_mesh_parent(out, preparation, meshes)
+    if (state.get('status') != 'completed' or state.get('phase') != 'evaluate'
+            or not state.get('run_id') or state['run_id'] != field.get('run_id')
+            or field.get('completed') is not True):
+        raise ValueError('Field completion receipt mismatch')
+    if (field['mesh_receipt_sha256'] != parents['mesh']
+            or field['mesh_identity'] != meshes
+            or field['preparation']['inputs'] != preparation['inputs']
+            or field['preparation']['staircase'] != preparation['staircase']
+            or field['J_staircase'] != preparation['staircase']['J']):
+        raise ValueError('Field belongs to different mesh/design evidence')
+    for name, expected in preparation['inputs'].items():
+        if digest(out / name) != expected:
+            raise ValueError(f'Preparation input changed: {name}')
+    for name, expected in meshes['vol_sha256'].items():
+        if digest(out / f'{name}.vol') != expected:
+            raise ValueError(f'Solver mesh changed: {name}')
+    return {'schema': 'radia.shape-receipt-audit.v1', 'passed': True,
+            'audited_at_utc': datetime.now(timezone.utc).isoformat(),
+            'parent_receipt_sha256': parents, 'field_sha256': digest(out / 'field.json'),
+            'original_driver_sha256': field['provenance']['driver_sha256'],
+            'validator_sha256': digest(__file__), 'numerical_recomputed': False,
+            'scope': 'Post-execution receipt consistency; original numerical provenance preserved.'}
+
+
 def run_phase(args):
     out = args.directory.resolve()
+    if args.phase == 'audit':
+        result = audit_completed_receipts(out)
+        result['run_id'] = args.run_id
+        (out / 'audit.json').write_text(json.dumps(result, indent=2), encoding='utf-8')
+        print(json.dumps(result, indent=2), flush=True)
+        return
     import radia
     if args.topopt_cad:
         load(args.topopt_cad.resolve(), "radia.topopt_cad")
@@ -194,7 +232,7 @@ def run_phase(args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('phase', choices=('prepare', 'mesh', 'evaluate'))
+    parser.add_argument('phase', choices=('prepare', 'mesh', 'evaluate', 'audit'))
     parser.add_argument('--directory', type=Path, required=True)
     parser.add_argument('--topopt-cad', type=Path)
     parser.add_argument('--command-plugin-directory', type=Path)
