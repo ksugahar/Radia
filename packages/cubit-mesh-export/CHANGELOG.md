@@ -4,7 +4,21 @@ All notable changes to `cubit-mesh-export` — the high-order curved
 mesh export package for Coreform Cubit (Netgen / GMSH / Nastran /
 VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
-## Unreleased
+## 1.0.0 - Stable standalone mesh export
+
+- Standalone wheel acceptance passed on LAB without Radia or radia-mcp:
+  headless APREPRO sphere, order-2 export, strict labels, CAD measures,
+  NGSolve reload and mapped Jacobians. Evidence is retained in
+  `validation_test/cubit_mesh_export/standalone_1_0_0_lab_result.json`.
+- Radia 4.95.91 declares an exporter upper bound of 0.999.999. Its
+  compatibility gate rejects 1.0.0; keep 0.14.17 in that combined environment
+  until Radia publishes an updated compatibility declaration.
+
+- Promote the existing standalone export and checker interfaces to 1.0.0;
+  no command or label-contract migration is required from 0.14.17.
+- Preserve explicitly labelled same-material internal surfaces by rejecting
+  unsupported ambiguous boundaries instead of silently deleting their labels.
+- Refresh the bundled command backend with the labelled-surface protection.
 
 - Keep mandatory binary hash/size and manifest checks active when building
   from an sdist without the native source tree.
