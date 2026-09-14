@@ -55,6 +55,7 @@ def test_research_34_dictionary_and_duplicate_response_reduction():
     assert selected.config.total_basis_functions == 1
     assert [t['basis_count'] for t in trace['trials']] == [3, 2, 1]
     assert trace['trials'][1]['removed_basis']['reason'] == 'redundant_response'
+    assert trace['trials'][1]['removed_basis']['ablation_metric'] == cfg.loss_mode
     assert trace['independent_validation'] is False
     for key, value in model.state_dict().items():
         assert torch.equal(value, before[key])
@@ -84,6 +85,35 @@ def test_equal_time_constants_with_different_exponents_are_not_duplicates():
     model = YAdmittanceURN(freqs, active_basis_refit_config(active))
     model.initialize_from_active_bases(active)
     assert redundant_y_bases(model, freqs) == []
+
+
+def test_reduction_ranks_removal_in_fitting_metric_not_magnitude(monkeypatch):
+    from radia.urn import reduce_y_admittance_urn
+
+    freqs = np.logspace(1, 6, 30)
+    active = [YAdmittanceURNActiveBasis(i, 'debye', i, 1, gate,
+              {'tau': tau}) for i, (tau, gate) in enumerate([(1e-4, 1), (1e-2, 10)])]
+    cfg = active_basis_refit_config(active, loss_mode='log_components')
+    model = YAdmittanceURN(freqs, cfg)
+    model.initialize_from_active_bases(active)
+    target = model.predict(freqs)
+    omega = torch.tensor(2*np.pi*freqs, dtype=torch.float64)
+    scores = []
+    with torch.no_grad():
+        for i in range(2):
+            mask = torch.ones(2, dtype=torch.float64)
+            mask[i] = 0
+            scores.append(log_component_rmse(model(omega, mask=mask).numpy(), target,
+                          floor=model.z0*cfg.log_loss_floor_relative))
+    expected = int(np.argmin(scores))
+    wrong_importance = np.ones(2)
+    wrong_importance[1-expected] = 0.0
+    monkeypatch.setattr(model, 'output_ablation_importance', lambda *args: wrong_importance)
+    _, trace = reduce_y_admittance_urn(model, freqs, target, uncertainty_ohm=1e6,
+                                     refit_epochs=1, refit_restarts=1)
+    removal = trace['trials'][1]['removed_basis']
+    assert removal['index'] == expected
+    assert removal['unrefitted_error'] == pytest.approx(min(scores))
 
 
 def test_paper_22_basis_uses_research_meeting_training_defaults():

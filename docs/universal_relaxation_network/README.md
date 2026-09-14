@@ -108,6 +108,11 @@ Its engineering objective is a compact passive response within a caller-owned
 measurement error budget, rather than the smallest possible training residual.
 Ten or twelve retained bases are comparison points, not lower bounds: even ten
 bases can contain repeated response shapes. Basis count is not mechanism count.
+Parameter fitting and basis-count selection are separate decisions. A better
+fit alone does not justify extra bases that explain measurement error rather
+than a reproducible response. A likelihood-based fit requires a declared noise
+model; the current Huber fit/error-budget selection is not calibrated
+maximum-likelihood inference. Parsimony remains an explicit selection objective.
 
 The owning MCP `urn(topic="overview")` and `urn(topic="method")` describe the
 workflow and acceptance contract. The implementation composition is:
