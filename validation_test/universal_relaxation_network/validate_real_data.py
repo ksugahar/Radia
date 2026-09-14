@@ -16,7 +16,7 @@ Supported datasets:
    - Contains: EIS at 19 SoC levels for 11 LiFePO4 batteries
 
 Usage:
-    python validation_test/universal_relaxation_network/validate_real_data.py --bundled-nasa
+    # Legacy --bundled-nasa is retired; NASA measurements are private inputs.
     python validation_test/universal_relaxation_network/validate_real_data.py --mendeley-path C:/data/cell.csv
 
 Author: K. Sugahara, Y. Sato
@@ -502,7 +502,7 @@ def main():
     parser.add_argument('--nasa-path', type=str, help='Path to NASA battery .mat file')
     parser.add_argument('--mendeley-path', type=str, help='Path to Mendeley EIS .csv file')
     parser.add_argument('--bundled-nasa', action='store_true',
-                        help='Use the bundled NASA 18650 measurement CSV')
+                        help='Retired: fails explicitly; NASA measurements are not distributed')
     parser.add_argument(
         '--output-dir', type=str,
         default=str(Path(__file__).resolve().parent / 'real_data'),
@@ -524,28 +524,12 @@ def main():
     elif args.mendeley_path:
         freq, Z, metadata = load_mendeley_eis(args.mendeley_path)
     elif args.bundled_nasa:
-        print("Using bundled NASA 18650 measurement data...")
-        data_path = (
-            DOCS_URN_DIR / 'data' / 'real_world' / 'nasa_battery'
-            / 'nasa_18650_eis.csv'
-        )
-        if not data_path.exists():
-            print(f"ERROR: Bundled NASA data not found at {data_path}")
-            sys.exit(1)
-        data = pd.read_csv(data_path, comment='#')
-        freq = data['frequency_Hz'].to_numpy()
-        Z = data['Z_real_Ohm'].to_numpy() + 1j * data['Z_imag_Ohm'].to_numpy()
-        metadata = {
-            'source': 'NASA 18650 Battery EIS',
-            'file': str(data_path),
-            'n_points': len(freq),
-            'note': 'Bundled measured data for algorithm validation'
-        }
+        raise RuntimeError('Legacy bundled NASA mode is retired: measurements are private and the old frequency axis is unverified. Use the documented private-input consumers in docs/universal_relaxation_network.')
     else:
         print("ERROR: Please specify data source:")
         print("  --nasa-path <path>     : NASA battery .mat file")
         print("  --mendeley-path <path> : Mendeley EIS .csv file")
-        print("  --bundled-nasa         : Use bundled NASA measurement data")
+        print("  --bundled-nasa is retired; see the private-input workflow in docs")
         sys.exit(1)
 
     # Run main validation
