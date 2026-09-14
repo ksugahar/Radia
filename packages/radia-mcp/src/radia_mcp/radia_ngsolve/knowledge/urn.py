@@ -25,7 +25,7 @@ URN provides the causal broadband surrogate.
 
 Reference: K. Sugahara and Y. Sato, "KAN-inspired Universal Relaxation Network
 for Automatic Discovery of Physical Relaxation Mechanisms with Direct Circuit
-Synthesis," IEEE Access, 2026.  Canonical runtime implementation:
+Synthesis," IEEE Access-format draft, 2026 (publication not established). Canonical runtime implementation:
 src/radia/urn; paper assets and benchmarks:
 docs/universal_relaxation_network/.
 
@@ -49,10 +49,29 @@ Why it exists (vs Vector Fitting):
   enforced post-hoc and can fail for fractional-order (Cole-Cole/CPE) data.
 - URN's bases ARE passive relaxations, so the model is causal/passive BY
   CONSTRUCTION, and each term is physically interpretable (a tau, an exponent).
-- On real data (NASA 18650 battery EIS, TDK MnZn power ferrites PC47/50/95/200)
-  URN matches or beats VF -- average ~22.8% lower NRMSE, with the largest gains
-  (39-66%) exactly where Cole-Cole / fractional dynamics dominate; VF wins only
-  on near-ideal single-Debye behaviour.
+- Historical NASA/TDK comparisons are archived evidence, not renewed measured
+  accuracy claims. The historical NASA frequency axis was model-assigned;
+  neither its error nor the aggregate 22.8% improvement establishes measured
+  frequency-domain accuracy.
+
+Private NASA inputs and noise-aware model selection:
+- NASA measurement CSV/MAT/ZIP files are not distributed in the current public
+  tree. Keep caller-owned downloads outside Git; do not attach raw rows to
+  public reports or release artifacts. Existing Git history is not rewritten.
+- Before fitting, establish an independent sample-aligned frequency record,
+  units and provenance. Private retention does not validate a guessed axis.
+  The docs consumers accept data_path or RADIA_NASA_EIS_CSV and fail loudly for
+  missing data or an undocumented axis. Legacy bundled-NASA validation modes
+  are retired; no synthetic fallback or successful partial aggregate is allowed.
+- Include the richer 22-basis Y-domain candidate where applicable, then compare
+  smaller active sets. Report candidate basis count and retained basis count
+  separately. Do not force an arbitrary 1e-3 error target on noisy measurements.
+- Prefer a smaller active set when it explains data within independently
+  estimated measurement uncertainty. Check held-out error, relaxation-time and
+  weight stability across repeated fits/noise perturbations, and passivity.
+  If noise is unknown, report sensitivity rather than inventing a noise floor.
+  Fewer bases alone do not prove physical truth; lower training error alone
+  does not justify more bases. Do not claim a new fit without an executed result.
 
 Pipeline:
   freq response Z(omega)  --train_urn-->  sparse relaxation model

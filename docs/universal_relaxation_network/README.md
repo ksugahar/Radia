@@ -6,6 +6,10 @@ approach for automatic discovery of physical relaxation mechanisms from
 impedance data. The maintained implementation is the `radia.urn` package under
 `src/radia/urn/`.
 
+The canonical operating manual is the radia-ngsolve MCP `urn(topic="overview")`
+tool; use `urn(topic="method")` for the model families. This page provides
+discovery and historical evidence, not an independent workflow policy.
+
 ## Validation Results (2026-01-19)
 
 ### Comprehensive Real-World Data Performance
