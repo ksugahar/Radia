@@ -67,3 +67,16 @@ def test_success_receipt_finishes_only_after_body(tmp_path):
         run_id = receipt['run_id']
     assert json.loads((tmp_path / 'prepare.state.json').read_text()) == {
         'run_id': run_id, 'phase': 'prepare', 'status': 'completed'}
+
+
+@pytest.mark.parametrize('mutation', [dict(run_id='other'), dict(phase='mesh'), dict(status='failed')])
+def test_parent_receipt_rejects_other_run_or_phase(tmp_path, mutation):
+    result = {'run_id': 'expected'}
+    state = {'run_id': 'expected', 'phase': 'prepare', 'status': 'completed'}
+    (tmp_path / 'prepare.json').write_text(json.dumps(result))
+    (tmp_path / 'prepare.state.json').write_text(json.dumps(state))
+    DRIVER.verify_parent_receipt(tmp_path, 'prepare')
+    state.update(mutation)
+    (tmp_path / 'prepare.state.json').write_text(json.dumps(state))
+    with pytest.raises(ValueError, match='receipt mismatch'):
+        DRIVER.verify_parent_receipt(tmp_path, 'prepare')

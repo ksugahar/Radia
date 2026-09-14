@@ -468,3 +468,12 @@ The exact notebook input is preserved in
 Its sole member is the first-party `bem_inductance_limitations.ipynb`, with
 the raw hash recorded by all four runs. No downloaded third-party dataset is
 included in this archive.
+
+The independent review added a strict minimum-energy check. The reduced
+operator must be symmetric within relative 1e-6; its symmetric part must pass
+Cholesky, and the constrained KKT residual must be below 1e-10. The solve uses
+that symmetric part explicitly, not a claim that the quadrature operator was
+exactly symmetric. All four cases were rerun with this implementation: reduced
+asymmetry is at most 4.55e-8 and KKT residual at most 3.29e-16. The reported
+inductance uses the original quadratic form (the skew part contributes zero).
+Four algebraic tests now include nonsymmetric and indefinite rejection cases.
