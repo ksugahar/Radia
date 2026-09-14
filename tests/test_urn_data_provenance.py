@@ -66,11 +66,8 @@ def test_nasa_consumers_accept_private_path_and_environment(tmp_path, monkeypatc
     monkeypatch.setenv('RADIA_NASA_EIS_CSV', str(private))
     np.testing.assert_array_equal(namespace[function]()[1], [1+2j, 3+4j])
     monkeypatch.delenv('RADIA_NASA_EIS_CSV')
-    if function == 'load_battery_data':
-        with pytest.raises(FileNotFoundError, match='RADIA_NASA_EIS_CSV'):
-            namespace[function]()
-    else:
-        assert namespace[function]() == (None, None)
+    with pytest.raises(FileNotFoundError, match='RADIA_NASA_EIS_CSV'):
+        namespace[function]()
 
 
 @pytest.mark.parametrize(('filename', 'function'), [
