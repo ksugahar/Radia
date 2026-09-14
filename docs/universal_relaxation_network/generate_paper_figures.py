@@ -52,18 +52,20 @@ def setup_axis(ax, xlabel, ylabel, title=None):
     ax.tick_params(which='minor', direction='in', top=True, right=True, width=0.3, length=2)
 
 
-def load_nasa_battery_data():
+def load_nasa_battery_data(data_path=None):
     """Reject the historical fixture until its frequency axis is documented."""
-    data_path = Path(__file__).parent / 'data' / 'real_world' / 'nasa_battery' / 'nasa_18650_eis.csv'
+    import os
+    data_path = Path(data_path or os.environ.get('RADIA_NASA_EIS_CSV') or
+                     Path(__file__).parent / 'data/real_world/nasa_battery/nasa_18650_eis.csv')
     if not data_path.exists():
-        print(f"[WARN] NASA data not found: {data_path}")
+        print(f"[WARN] Private NASA data not found: {data_path}; set RADIA_NASA_EIS_CSV")
         return None, None
     header = data_path.read_text(encoding='utf-8')
     if not any(line.startswith('#   Frequency source: ') and
                line.partition(': ')[2].strip() for line in header.splitlines()):
         raise ValueError('NASA frequency axis is unverified; regenerate with '
                          'extract_real_eis.py and a sample-aligned instrument record. '
-                         'The bundled logspace axis is not measurement evidence.')
+                         'A model-assigned logspace axis is not measurement evidence.')
     rows = [line for line in header.splitlines() if line.strip() and not line.startswith('#')]
     data = np.genfromtxt(rows, delimiter=',', names=True)
     freq = data['frequency_Hz']
