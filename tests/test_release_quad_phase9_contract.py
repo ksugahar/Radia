@@ -52,8 +52,11 @@ def test_phase9_accepts_complete_shuffled_output(monkeypatch):
     lambda text: text.replace("4.95.91", ""),
     lambda text: text.replace("0123456789ab", "MISSING"),
     lambda text: text.replace("4.95.91", "MISSING"),
+    lambda text: text.replace("4.95.91", "1garbage"),
     lambda text: text.replace("4.95.91", "N/A"),
     lambda text: text.replace("[4.5.0, 4.999.999]", "invalid"),
+    lambda text: text.replace("[4.5.0, 4.999.999]", "[1bad, 2bad]"),
+    lambda text: text.replace("[4.5.0, 4.999.999]", "[5.0, 4.0]"),
     lambda text: text.replace("0123456789ab", "not-a-hash!!"),
 ])
 def test_phase9_rejects_malformed_probe_even_when_all_hosts_agree(monkeypatch, corrupt):
@@ -101,6 +104,27 @@ def test_failed_exit_rejects_even_complete_stdout(monkeypatch):
     monkeypatch.setattr(quad.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
         a, 1, stdout=probe("LAB"), stderr="failed after output"))
     assert quad._probe("LAB", ["python", "-"]) is None
+
+
+def test_missing_version_parser_fails_closed(monkeypatch):
+    import builtins
+
+    original = builtins.__import__
+    def without_packaging(name, *args, **kwargs):
+        if name == "packaging.version":
+            raise ModuleNotFoundError("packaging unavailable")
+        return original(name, *args, **kwargs)
+    monkeypatch.setattr(builtins, "__import__", without_packaging)
+    monkeypatch.setattr(quad, "_probe", lambda label, *a: probe(label))
+    assert quad.cmd_phase9(None) == 4
+
+
+def test_pep440_versions_and_inclusive_compatibility_bounds():
+    text = probe("LAB").replace("4.95.91", "5.0rc1").replace(
+        "[4.5.0, 4.999.999]", "[5.0rc1, 5.0]")
+    assert quad._parse_phase9_probe("LAB", text)["VER radia"] == "5.0rc1"
+    text = text.replace("[5.0rc1, 5.0]", "[5.0, 5.0]")
+    assert quad._parse_phase9_probe("LAB", text)["COMPAT cme -> radia"] == "[5.0, 5.0]"
 
 
 def test_mcp_preservation_does_not_waive_phase9_version_match(monkeypatch):
