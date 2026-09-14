@@ -5,7 +5,6 @@ from types import ModuleType, SimpleNamespace
 
 import numpy as np
 import pytest
-
 from radia_mcp.radia_ngsolve.knowledge import urn
 
 
