@@ -3,11 +3,17 @@ import json
 from radia_mcp.document_meta.tools import (
     document_meta_examples_migration_policy,
     document_meta_examples_notebook_audit,
+    document_meta_notebook_citation_audit,
     document_meta_notebook_result_audit,
     document_meta_panel_layout_audit,
     document_meta_write_docs_notebook_result_jsons,
     document_meta_write_notebook_result_json,
 )
+
+
+def _write_bibliography(path, body):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(body, encoding="utf-8")
 
 
 def test_examples_migration_policy_marks_protected_refs_as_blockers():
@@ -68,6 +74,131 @@ def test_notebook_result_audit_requires_saved_outputs_and_versioned_json(tmp_pat
     assert result["summary"]["notebooks_scanned"] == 1
     assert result["summary"]["ok_result_saved"] == 1
     assert result["gaps"] == []
+
+
+def test_notebook_citation_audit_resolves_metadata_and_arxiv(tmp_path):
+    repo = tmp_path
+    (repo / "examples").mkdir()
+    docs = repo / "docs" / "demo"
+    docs.mkdir(parents=True)
+    nb = docs / "demo.ipynb"
+    _write_notebook(
+        nb,
+        metadata={"radia": {"citation_keys": ["steinberg2024design"]}},
+    )
+    data = json.loads(nb.read_text(encoding="utf-8"))
+    data["cells"].insert(0, {
+        "cell_type": "markdown",
+        "metadata": {},
+        "source": ["Reference: https://arxiv.org/abs/2402.01120\n"],
+    })
+    nb.write_text(json.dumps(data), encoding="utf-8")
+    bib = repo / "references.bib"
+    _write_bibliography(
+        bib,
+        """@article{steinberg2024design,
+  author = {Steinberg, A. F.},
+  title = {Design of a large energy acceptance beamline},
+  journal = {Physical Review Accelerators and Beams},
+  year = {2024},
+  doi = {10.1103/PhysRevAccelBeams.27.071601},
+  eprint = {2402.01120},
+  archiveprefix = {arXiv}
+}
+""",
+    )
+
+    result = document_meta_notebook_citation_audit(
+        str(repo), bibliography_path=str(bib), tracked_only=False,
+    )
+
+    assert result["summary"]["notebooks_with_citations"] == 1
+    assert result["summary"]["ok_citations_resolved"] == 1
+    assert result["gaps"] == []
+
+
+def test_notebook_citation_audit_flags_unregistered_identifier(tmp_path):
+    repo = tmp_path
+    (repo / "examples").mkdir()
+    docs = repo / "docs" / "demo"
+    docs.mkdir(parents=True)
+    nb = docs / "demo.ipynb"
+    _write_notebook(nb)
+    data = json.loads(nb.read_text(encoding="utf-8"))
+    data["cells"].insert(0, {
+        "cell_type": "markdown",
+        "metadata": {},
+        "source": ["Reference: https://doi.org/10.1234/not-in-bib\n"],
+    })
+    nb.write_text(json.dumps(data), encoding="utf-8")
+    bib = repo / "references.bib"
+    _write_bibliography(bib, "")
+
+    result = document_meta_notebook_citation_audit(
+        str(repo), bibliography_path=str(bib), tracked_only=False,
+    )
+
+    assert result["summary"]["gaps"] == 1
+    assert result["gaps"][0]["status"] == (
+        "scholarly_identifier_missing_from_canonical_bibliography"
+    )
+
+
+def test_notebook_citation_audit_ignores_python_decorators_in_code_fences(tmp_path):
+    repo = tmp_path
+    (repo / "examples").mkdir()
+    docs = repo / "docs" / "demo"
+    docs.mkdir(parents=True)
+    nb = docs / "demo.ipynb"
+    _write_notebook(nb)
+    data = json.loads(nb.read_text(encoding="utf-8"))
+    data["cells"].insert(0, {
+        "cell_type": "markdown",
+        "metadata": {},
+        "source": ["```python\n@dataclass\nclass Demo:\n    pass\n```\n"],
+    })
+    nb.write_text(json.dumps(data), encoding="utf-8")
+    bib = repo / "references.bib"
+    _write_bibliography(bib, "")
+
+    result = document_meta_notebook_citation_audit(
+        str(repo), bibliography_path=str(bib), tracked_only=False,
+    )
+
+    assert result["summary"]["gaps"] == 0
+    assert result["summary"]["ok_no_citations_detected"] == 1
+
+
+def test_notebook_citation_audit_allows_reasoned_internal_reference_exemption(tmp_path):
+    repo = tmp_path
+    (repo / "examples").mkdir()
+    docs = repo / "docs" / "demo"
+    docs.mkdir(parents=True)
+    nb = docs / "demo.ipynb"
+    _write_notebook(
+        nb,
+        metadata={"radia": {
+            "citation_audit_exempt_reason": (
+                "Reference section contains only repository-internal evidence."
+            ),
+        }},
+    )
+    data = json.loads(nb.read_text(encoding="utf-8"))
+    data["cells"].insert(0, {
+        "cell_type": "markdown",
+        "metadata": {},
+        "source": ["## References\n\n- User report\n- `src/radia/example.py`\n"],
+    })
+    nb.write_text(json.dumps(data), encoding="utf-8")
+    bib = repo / "references.bib"
+    _write_bibliography(bib, "")
+
+    result = document_meta_notebook_citation_audit(
+        str(repo), bibliography_path=str(bib), tracked_only=False,
+    )
+
+    assert result["summary"]["gaps"] == 0
+    assert result["summary"]["ok_reference_section_exempted"] == 1
 
 
 def test_notebook_result_audit_flags_stale_json_sidecar(tmp_path):
