@@ -204,7 +204,8 @@ jobs:
           # tomllib is stdlib only on 3.11+).  No-op on 3.11/3.12 via the env marker.
           python -m pip install -e "packages/radia-mcp[maintenance]" "tomli; python_version < '3.11'"
           if [[ "$RUN_TESTS" == "true" ]]; then
-            python -m pip install pytest
+            # CSV/input contracts need NumPy, but never the optional solver stack.
+            python -m pip install pytest numpy
           fi
 
       - name: Prepare impact-scoped test plan
