@@ -58,6 +58,7 @@ def assess(payload: dict, low_bonus: int = 8, high_bonus: int = 12) -> dict:
         maximum_scaled_change=maximum_scaled_change <= 5e-3,
         harmonic_relative_change=harmonic_relative_change <= 1e-4,
     )
+    checks = {name: bool(value) for name, value in checks.items()}
     return {
         "schema": "radia.validation.omega-quadrature-plateau.v1",
         "passed": all(checks.values()),
