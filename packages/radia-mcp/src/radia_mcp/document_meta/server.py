@@ -6,6 +6,7 @@ Cross-cutting document helpers that do not belong to one document type:
   * document_meta_template_loader    -- LaTeX skeletons (IEEE/IEEJ/APS/Beamer/JSPS)
   * document_meta_lint_all           -- run every applicable radia-mcp lint over a file
   * document_meta_notebook_result_audit -- check saved outputs and WebGUI scenes
+  * document_meta_notebook_citation_audit -- cross-check notebook citations against references.bib
 
 Promoted + REDESIGNED 2026-06-02 into radia-mcp's public PyPI package.
 The lint registry now covers radia-mcp's public document subpackages
