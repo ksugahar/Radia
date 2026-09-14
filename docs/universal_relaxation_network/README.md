@@ -344,9 +344,14 @@ python validation_test/universal_relaxation_network/run_ltspice_verification.py 
 
 ## Related Paper
 
-This implementation accompanies the paper:
+This implementation accompanied the following **draft**, not a verified
+published or accepted IEEE Access article:
 
-> K. Sugahara and Y. Sato, "KAN-inspired Universal Relaxation Network for Automatic Discovery of Physical Relaxation Mechanisms with Direct Circuit Synthesis," IEEE Access, 2026.
+> K. Sugahara and Y. Sato, "KAN-inspired Universal Relaxation Network for Automatic Discovery of Physical Relaxation Mechanisms with Direct Circuit Synthesis," IEEE Access-format draft, 2026.
+
+The located `paper/urn_paper.tex` has placeholder publication dates and DOI
+`10.1109/ACCESS.2026.XXXXXXX`. Its adjacent `REVIEW.md` records an AI-agent
+review, not publisher acceptance. Do not cite this as an accepted article.
 
 The manuscript source is maintained **outside** the code repository in the
 lab's conference-materials archive. The reproducibility scripts, result JSON,
