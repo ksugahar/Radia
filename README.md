@@ -57,10 +57,10 @@ orchestration around that foundation.
   Kelvin and DtN techniques, volume and boundary integral methods, SIBC, and
   model reduction without automatically surrounding every problem with a
   large air mesh.
-- **AI and humans share the engineering contract.** Python and MCP are the
-  first-class AI surface; MATLAB and masked Simulink blocks are the production
-  human surface; both produce inspectable artifacts rather than hidden GUI
-  state.
+- **MCP is the current user surface.** It exposes Radia's capabilities and
+  executable manual through inspectable engineering contracts. MATLAB/MEX and
+  Simulink remain integration and parity surfaces while their eventual product
+  role is evaluated.
 - **The numerical backend stays visible.** NGSolve owns finite-element
   mathematics. Radia supplies the missing physical operator or coupling and
   keeps independent analytical or integral routes where they improve trust.
@@ -199,8 +199,8 @@ the source of numerical truth.
 | :--- | :--- |
 | **NGSolve / ngsolve.bem** | FE spaces, element orientation, Piola maps, curved geometry, quadrature, weak-form assembly, GridFunctions, and BEM operators |
 | **Radia C++ and Python** | Analytical fields, electromagnetic physical methods, open-boundary operators, material/circuit coupling, reduced models, and artifact schemas |
-| **MATLAB and Simulink** | Human-facing composition, typed signal flow, lifecycle, controls, monitoring, and native MEX state ownership |
-| **radia-mcp** | Executable domain knowledge, tool discovery, workflow selection, validation guidance, and AI orchestration |
+| **MATLAB and Simulink** | Integration/parity experiments, typed signal flow, lifecycle, controls, monitoring, and native MEX state ownership; product role not yet fixed |
+| **radia-mcp** | Current user entrypoint and canonical manual: executable domain knowledge, tool discovery, workflow selection, validation guidance, and orchestration |
 | **CAD and visualization tools** | Geometry/mesh authoring and durable inspection through explicit STEP, VOL, MSH, and result boundaries |
 
 ## Capabilities
@@ -344,10 +344,10 @@ contract tools can run without loading the full native Radia/NGSolve stack.
 python -m pip install radia-mcp
 ```
 
-Treat `radia-mcp` as the executable operating manual for agent-driven work.
-The top-level README explains the platform; MCP returns the current workflow,
-arguments, prerequisites, failure modes, and validation route for a concrete
-operation.
+Treat `radia-mcp` as the primary and canonical operating manual for current
+Radia workflows. The top-level README explains what the platform can do; MCP
+returns the current workflow, arguments, prerequisites, failure modes,
+artifacts, and validation route for a concrete operation.
 
 - [MCP package and client setup](packages/radia-mcp/README.md)
 - [Generated MCP tool catalog](packages/radia-mcp/docs/TOOLS.md)
@@ -373,10 +373,11 @@ MEX commands before they are composed into Simulink blocks.
 - [MATLAB integration and MEX contracts](matlab/README.md)
 - [NGSolve/MEX parity map](docs/api/MATLAB_MEX_NGSOLVE_PARITY.md)
 
-### Simulink
+### MATLAB and Simulink integration
 
-The final human-facing application interface is the single **Radia** Simulink
-library. The current library contains:
+The repository currently carries a single **Radia** Simulink library as an
+integration and parity surface. It is not yet designated as Radia's separate
+end-user edition or final UI. Its current contents are:
 
 | Group | Blocks |
 | :--- | :--- |
@@ -422,10 +423,17 @@ archive is published only after it passes the multi-host release gate.
 
 ### Documentation and visualization
 
-`docs/**/*.ipynb` is the public explanation and reproduction layer. Published
-examples are executed notebooks with narrative, code, synchronized JSON, and
-saved `ngsolve.webgui.Draw` or `netgen.webgui.Draw` scenes. They are not hidden
-production workbenches.
+The `radia-mcp` MCP servers are Radia's primary manual: query their status,
+usage, and recipe tools for current workflows, inputs, constraints, artifacts,
+and validation routes. The top-level README and `docs/` are the discovery and
+evidence layer; they show what Radia can do, why a capability matters, and what
+result it produces without duplicating a second procedural manual.
+
+`docs/**/*.ipynb` provides executable capability showcases and reproduction.
+Published examples are executed notebooks with narrative, code, saved results,
+and applicable `ngsolve.webgui.Draw` or `netgen.webgui.Draw` scenes. They are
+not hidden production workbenches; machine-readable validation evidence belongs
+under `validation_test/`.
 
 Field-producing application runs write checked Gmsh `.msh v4.1` artifacts.
 The Gmsh toolchain supports scalar/vector/tensor fields, sections, clipping,

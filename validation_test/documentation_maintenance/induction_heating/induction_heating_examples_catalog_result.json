@@ -1,7 +1,7 @@
 {
   "schema": "radia.notebook_result.v1",
   "generated_at_utc": "2026-06-28T16:50:10Z",
-  "notebook": "docs/induction_heating/induction_heating_examples_catalog.ipynb",
+  "notebook": "validation_test/documentation_maintenance/induction_heating/induction_heating_examples_catalog.ipynb",
   "notebook_sha256": "c68a448c3bad365c3e8536f289226928fcf00fed4217d5a859d8358d2ca66871",
   "versions": {
     "python_version": "3.12.10",
@@ -11,7 +11,7 @@
     "radia_version": "4.95.2"
   },
   "summary": {
-    "path": "docs/induction_heating/induction_heating_examples_catalog.ipynb",
+    "path": "validation_test/documentation_maintenance/induction_heating/induction_heating_examples_catalog.ipynb",
     "cells": 4,
     "code_cells": 3,
     "executed_code_cells": 3,

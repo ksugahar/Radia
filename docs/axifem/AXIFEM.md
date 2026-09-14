@@ -34,9 +34,8 @@ custom `BilinearFormIntegrator`s).
 
 ### Result-bearing evidence
 
-The executed proof artifact is
-[`AXIFEM_ELEMENT_EVIDENCE.ipynb`](AXIFEM_ELEMENT_EVIDENCE.ipynb), backed by
-[`axifem_element_evidence.json`](axifem_element_evidence.json).  It records
+The executed proof artifact is retained in the
+[internal AXIFEM validation bundle](../../validation_test/documentation_maintenance/axifem/). It records
 the current `radia` runtime version, execution date, pytest output, and an
 evidence matrix for all six shipping paths: P1, Q1, P2, Q2, P2 curved, and
 Q2 curved.
@@ -365,9 +364,11 @@ tests/axifem/                            # public test surface
     sigma_mass.py                         #   σ-mass operator ref
 
 docs/axifem/
-  README.ipynb                            # notebook index
-  AXIFEM_ELEMENT_EVIDENCE.ipynb           # executed P1/Q1/P2/Q2/P2-curved/Q2-curved proof
-  axifem_element_evidence.json            # version-stamped result JSON consumed by notebook
+  README.ipynb                            # public capability notebook
+
+validation_test/documentation_maintenance/axifem/
+  AXIFEM_ELEMENT_EVIDENCE.ipynb           # executed internal element proof
+  axifem_element_evidence.json            # version-stamped result JSON
 
 validation_test/axifem/                  # validation-class research checks
   research/validate_q2_codegen.py         # Q2 closed-form matrix check

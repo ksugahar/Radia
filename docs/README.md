@@ -8,11 +8,45 @@ multi-user lab deploy, verify, and troubleshooting).
 
 For release-by-release changes, see [CHANGELOG.md](../CHANGELOG.md).
 
-## Repository Examples
+## Documentation roles
+
+The `radia-mcp` MCP servers are the primary manual for Radia. Query the owning
+server's status, usage, or recipe tool for the current workflow, accepted
+inputs, constraints, and output-artifact contract.
+
+This page and the rest of `docs/` answer a different question: **what can Radia
+do for an engineering problem, and what evidence shows that it works?** A
+public capability page or notebook should therefore open with the problem, the
+Radia route, the expected result, and the MCP tool family that owns the live
+instructions. Migration ledgers, cleanup routing, and implementation handoffs
+belong outside the public documentation unless rewritten as capability
+showcases.
+
+MCP is currently the only supported user entrypoint. MATLAB/MEX/Simulink work
+remains an integration and parity lane while its future product role is
+undecided. A MATLAB Live Script (`.mlx`) must not be the sole public showcase:
+GitHub-readable Markdown or a saved-output `.ipynb` carries the discovery page,
+with `.m`/`.mlx` linked only as an executable companion.
+
+Start an MCP-guided task with the relevant pack's `capability_pack_status`,
+then use the domain status/usage/recipe tool it reports:
+
+| What you want to do | Primary MCP pack |
+| :--- | :--- |
+| Solve magnetostatic, eddy-current, PEEC, SIBC, ESIM, or induction-heating problems | `radia-analysis` |
+| Design magnets, motors, MagLev systems, trajectories, or optimized fields | `radia-motion` |
+| Build and classify parametric CAD geometry | `radia-build123d` |
+| Generate, label, export, and check solver meshes in Cubit | `radia-cubit` |
+| Inspect fields and create durable post-processing artifacts | `radia-gmsh` |
+| Run MATLAB and connect Radia's MATLAB/Simulink domain layer | `radia-matlab` |
+| Audit papers, figures, citations, and result-bearing notebooks | `radia-publication` |
+| Inspect package/tool ownership and cross-pack capability inventory | `radia-meta` |
+
+## Capability showcases
 
 Runnable CAE examples published in this repository are executed
 `docs/**/*.ipynb` notebooks, not loose scripts. Each example keeps its computed
-outputs, a synchronized result JSON, and an interactive
+outputs and, where applicable, an interactive
 `ngsolve.webgui.Draw` scene for the mesh and principal field (or
 `netgen.webgui.Draw` for pre-mesh CAD). Static figures may supplement the
 scene, but do not replace it. Principal-field scenes pass the field and mesh
@@ -20,19 +54,21 @@ explicitly and name/configure the view, for example
 `Draw(field, mesh, name="B_magnitude", draw_vol=True, ...)`. Start with
 [Radia <-> NGSolve integration basics](ngsolve_integration/integration_basics.ipynb).
 
-These notebooks explain and reproduce a workflow. The final human operating
-interface for Radia applications remains the masked Simulink block library.
+These notebooks demonstrate and reproduce a capability claim; they are not the
+primary operating manual. Machine-readable validation evidence belongs under
+`validation_test/`. MCP remains the supported user entrypoint; the eventual
+product role of MATLAB/MEX/Simulink is intentionally undecided.
 Its spatial field results are durable GMSH `.msh v4.1` artifacts in the run
 directory; interactive WebGUI scenes remain the notebook explanation layer.
 
 > **Where is the canonical PEEC / FEM / Cubit knowledge?**
 > Per CLAUDE.md "MCP Knowledge Placement Policy", the **single source of
 > truth** for PEEC / FEM / Cubit / build123d / GMSH knowledge is the
-> `radia-mcp` package's knowledge modules at
+> `radia-mcp` package's MCP servers and knowledge modules at
 > [packages/radia-mcp/src/radia_mcp/](../packages/radia-mcp/src/radia_mcp/),
-> not `docs/`.  `docs/` is the **academic / user-facing reference layer** --
-> useful for citations and architectural overviews, but not the place to
-> look for "how do I do X today".  For runnable how-tos and the current
+> not `docs/`. `docs/` is the **capability-showcase and evidence layer** --
+> useful for discovery, citations, derivations, and reproduced results, but not
+> the place to look for "how do I do X today". For runnable how-tos and the current
 > recipe for any task, query `radia-mcp` via Claude / your MCP client
 > (e.g. `peec_inductance(topic="step_authoring")` returns Cubit + build123d
 > recipes for auto-detect-friendly STEPs).

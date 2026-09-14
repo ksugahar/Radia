@@ -1,7 +1,7 @@
 {
   "schema": "radia.notebook_result.v1",
   "generated_at_utc": "2026-06-29T06:43:30Z",
-  "notebook": "docs/peec_integration/cleanup_routing.ipynb",
+  "notebook": "validation_test/documentation_maintenance/peec_integration/cleanup_routing.ipynb",
   "notebook_sha256": "5fe8f6b17fde04ce4c6b20fd45e3c99357afecdb7ced4bb64e01d5bf2dd7db1b",
   "versions": {
     "python_version": "3.12.10",
@@ -11,7 +11,7 @@
     "radia_version": "4.95.2"
   },
   "summary": {
-    "path": "docs/peec_integration/cleanup_routing.ipynb",
+    "path": "validation_test/documentation_maintenance/peec_integration/cleanup_routing.ipynb",
     "cells": 6,
     "code_cells": 5,
     "executed_code_cells": 5,

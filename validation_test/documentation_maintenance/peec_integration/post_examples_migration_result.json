@@ -1,7 +1,7 @@
 {
   "schema": "radia.notebook_result.v1",
   "generated_at_utc": "2026-06-29T06:50:22Z",
-  "notebook": "docs/peec_integration/post_examples_migration.ipynb",
+  "notebook": "validation_test/documentation_maintenance/peec_integration/post_examples_migration.ipynb",
   "notebook_sha256": "a396b457b2a19718e61d8d23e3d451fc679b45532e2b90a791b2b1f067b394fc",
   "versions": {
     "python_version": "3.12.10",
@@ -11,7 +11,7 @@
     "radia_version": "4.95.2"
   },
   "summary": {
-    "path": "docs/peec_integration/post_examples_migration.ipynb",
+    "path": "validation_test/documentation_maintenance/peec_integration/post_examples_migration.ipynb",
     "cells": 4,
     "code_cells": 3,
     "executed_code_cells": 3,
