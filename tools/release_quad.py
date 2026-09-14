@@ -1344,7 +1344,7 @@ CROSS_MACHINE_PROBE_NO_MCP = CROSS_MACHINE_PROBE.replace(
 # what the consumers' wheel was built from, immune to (a) uncommitted WIP and
 # (b) post-release commits on main.  Versions/COMPAT come from installed
 # metadata (re-synced to the release in Phase 8), identical to the consumer
-# probe so the 10 rows line up 1:1 for the row-by-row comparison.
+# probe. Phase9 requires the complete field set and compares by key.
 CROSS_MACHINE_PROBE_LAB = '''import hashlib, os, shutil, subprocess
 import importlib.metadata as md
 
@@ -1394,12 +1394,80 @@ def _probe(host_label, cmd_prefix, probe_src=CROSS_MACHINE_PROBE):
     files).  LAB passes CROSS_MACHINE_PROBE_LAB (hashes tracked files at the
     release tag via git) -- see those probe strings for the rationale.
     """
-    p = subprocess.run(cmd_prefix, input=probe_src,
-                        capture_output=True, text=True, shell=False)
+    try:
+        p = subprocess.run(cmd_prefix, input=probe_src,
+                           capture_output=True, text=True, shell=False, timeout=120)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        fail(f"probe could not run on {host_label}: {exc}")
+        return None
     if p.returncode != 0:
         fail(f"probe failed on {host_label}: {p.stderr.strip()}")
         return None
     return p.stdout
+
+
+_PHASE9_FIELDS = (
+    "VER radia", "VER cubit-mesh-export", "VER radia-mcp",
+    "COMPAT cme -> radia", "COMPAT rad -> cme",
+    "SHA radia/panels/register_toolbar.py",
+    "SHA radia/panels/radia_export_menu.py",
+    "SHA radia/simulink/application.py",
+    "SHA radia/panels/calc_inductance.py",
+    "SHA radia/panels/calc_fem_kelvin.py",
+    "SHA radia/panels/calc_fem_coilmesh.py",
+)
+_PHASE9_COMPUTE_NA = frozenset(_PHASE9_FIELDS[1:5])
+
+
+def _parse_phase9_probe(label, output):
+    """Require complete unique fields, PEP 440 versions and ordered inclusive bounds.
+
+    The packaging parser is mandatory; missing support fails the gate. Bounds
+    certify a well-formed declared interval, not installed-version membership.
+    Cross-host comparison still requires identical reported declarations.
+    """
+    try:
+        from packaging.version import InvalidVersion, Version
+    except ImportError as exc:
+        raise ValueError("phase9 requires packaging; install it with python -m pip install packaging") from exc
+    result = {}
+    for line in output.splitlines():
+        if not line.strip():
+            continue
+        key, separator, value = line.partition("=")
+        key, value = " ".join(key.split()), value.strip()
+        if not separator or key not in _PHASE9_FIELDS or not value:
+            raise ValueError(f"{label}: invalid probe row {line!r}")
+        if key in result:
+            raise ValueError(f"{label}: duplicate field {key}")
+        expected_na = label in ("mdx1", "mdx2") and key in _PHASE9_COMPUTE_NA
+        if expected_na:
+            valid = value == "N/A"
+        elif key.startswith("SHA "):
+            valid = len(value) == 12 and all(c in "0123456789abcdef" for c in value)
+        elif key.startswith("COMPAT "):
+            bounds = value[1:-1].split(",")
+            valid = (value.startswith("[") and value.endswith("]") and len(bounds) == 2
+                     and all(b.strip() for b in bounds))
+            if valid:
+                try:
+                    lower, upper = (Version(b.strip()) for b in bounds)
+                    valid = lower <= upper
+                except InvalidVersion:
+                    valid = False
+        else:
+            try:
+                Version(value)
+                valid = True
+            except InvalidVersion:
+                valid = False
+        if not valid:
+            raise ValueError(f"{label}: invalid value for {key}: {value!r}")
+        result[key] = value
+    missing = set(_PHASE9_FIELDS) - result.keys()
+    if missing:
+        raise ValueError(f"{label}: missing fields: {', '.join(sorted(missing))}")
+    return result
 
 
 def cmd_phase9(args):
@@ -1417,35 +1485,26 @@ def cmd_phase9(args):
         if not out:
             fail(f"could not collect probe data from {label}")
             return 4
-        outputs.append((label, out.strip().splitlines()))
+        try:
+            outputs.append((label, _parse_phase9_probe(label, out)))
+        except ValueError as exc:
+            fail(str(exc))
+            return 4
 
     if not outputs:
         fail("could not collect probe data from any machine")
         return 4
 
-    n = min(len(rows) for _, rows in outputs)
     drift = 0
-
-    def split(s):
-        k, _, v = s.partition("=")
-        k = k.strip()
-        # strip leading "VER " / "SHA " / "COMPAT " from key
-        for prefix in ("VER ", "SHA ", "COMPAT "):
-            if k.startswith(prefix):
-                k = k[len(prefix):]
-        return k.strip(), v.strip()
 
     labels = [label for label, _ in outputs]
     header = f"\n  {'field':<44} | " + " | ".join(f"{label:<18}" for label in labels)
     print(header)
     print("  " + "-" * max(110, len(header) - 2))
-    for i in range(n):
-        parsed = [split(rows[i]) for _, rows in outputs]
-        key = parsed[0][0]
-        values = [value for _, value in parsed]
+    for key in _PHASE9_FIELDS:
+        values = [rows[key] for _, rows in outputs]
         comparable = [value for value in values if value != "N/A"]
         match = bool(comparable) and all(value == comparable[0] for value in comparable)
-        marker = ok.__name__.upper() if match else "DRIFT"
         marker = _color("32;1", "OK") if match else _color("31;1", "DRIFT")
         if not match:
             drift += 1
