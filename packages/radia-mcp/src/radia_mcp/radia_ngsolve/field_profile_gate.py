@@ -1144,6 +1144,117 @@ def nonlinear_field_energy_lineage_gate_v7(summary: dict[str, Any]) -> dict[str,
     }
 
 
+def nonlinear_field_energy_physical_admissibility_gate_v8(
+    summary: dict[str, Any],
+    *,
+    max_legendre_relative_residual: float = 1.0e-8,
+    min_response_samples: int = 4,
+) -> dict[str, Any]:
+    """Reject physically inadmissible nonlinear field-energy responses."""
+
+    if not isinstance(summary, dict):
+        raise ValueError("summary must be a mapping")
+    residual_limit = float(max_legendre_relative_residual)
+    sample_limit = int(min_response_samples)
+    if not math.isfinite(residual_limit) or residual_limit < 0.0:
+        raise ValueError("max_legendre_relative_residual must be finite and nonnegative")
+    if sample_limit < 4:
+        raise ValueError("min_response_samples must be at least 4")
+
+    def lane_contract(name: str) -> dict[str, Any]:
+        lane = summary.get(name)
+        if not isinstance(lane, dict):
+            raise ValueError(f"{name} must be a mapping")
+        response = lane.get("response")
+        response = response if isinstance(response, dict) else {}
+        names = (
+            "H_A_per_m",
+            "B_T",
+            "energy_density_J_per_m3",
+            "coenergy_density_J_per_m3",
+            "differential_permeability_H_per_m",
+        )
+        arrays = {key: response.get(key) for key in names}
+        arrays_are_lists = all(isinstance(values, list) for values in arrays.values())
+        lengths_match = arrays_are_lists and len({len(values) for values in arrays.values()}) == 1
+        finite = False
+        ordered = False
+        nonnegative = False
+        positive_tangent = False
+        legendre_residual = math.inf
+        if lengths_match and len(arrays["H_A_per_m"]) >= sample_limit:
+            try:
+                finite = all(
+                    math.isfinite(float(value))
+                    for values in arrays.values()
+                    for value in values
+                )
+                ordered = (
+                    all(right > left for left, right in zip(arrays["H_A_per_m"], arrays["H_A_per_m"][1:]))
+                    and all(right >= left for left, right in zip(arrays["B_T"], arrays["B_T"][1:]))
+                )
+                nonnegative = all(
+                    float(value) >= 0.0
+                    for key in ("energy_density_J_per_m3", "coenergy_density_J_per_m3")
+                    for value in arrays[key]
+                )
+                positive_tangent = all(float(value) > 0.0 for value in arrays["differential_permeability_H_per_m"])
+                residuals = [
+                    abs(float(energy) + float(coenergy) - float(h) * float(b))
+                    / max(abs(float(h) * float(b)), 1.0)
+                    for h, b, energy, coenergy in zip(
+                        arrays["H_A_per_m"],
+                        arrays["B_T"],
+                        arrays["energy_density_J_per_m3"],
+                        arrays["coenergy_density_J_per_m3"],
+                    )
+                ]
+                legendre_residual = max(residuals, default=math.inf)
+            except (TypeError, ValueError, ZeroDivisionError):
+                finite = ordered = nonnegative = positive_tangent = False
+        checks = {
+            "response_arrays_are_lists": arrays_are_lists,
+            "response_lengths_match": lengths_match,
+            "response_sample_count_sufficient": (
+                isinstance(arrays["H_A_per_m"], list)
+                and len(arrays["H_A_per_m"]) >= sample_limit
+            ),
+            "response_values_finite": finite,
+            "field_samples_ordered": ordered,
+            "energy_and_coenergy_nonnegative": nonnegative,
+            "differential_permeability_positive": positive_tangent,
+            "legendre_energy_identity_satisfied": legendre_residual <= residual_limit,
+        }
+        return {"checks": checks, "max_legendre_relative_residual": legendre_residual}
+
+    candidate = lane_contract("candidate")
+    reference = lane_contract("reference")
+    candidate_case = summary["candidate"].get("identity", {}).get("comparison_case_id")
+    reference_case = summary["reference"].get("identity", {}).get("comparison_case_id")
+    checks = {
+        "candidate_physical_contract_valid": all(candidate["checks"].values()),
+        "reference_physical_contract_valid": all(reference["checks"].values()),
+        "comparison_case_identity_matches": bool(candidate_case) and candidate_case == reference_case,
+    }
+    return {
+        "policy": "nonlinear_field_energy_physical_admissibility_gate_v8",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "accepted": all(checks.values()),
+        "checks": checks,
+        "issues": [name for name, accepted in checks.items() if not accepted],
+        "lane_details": {"candidate": candidate, "reference": reference},
+        "tolerances": {
+            "max_legendre_relative_residual": residual_limit,
+            "min_response_samples": sample_limit,
+        },
+        "notes": [
+            "energy and coenergy must be nonnegative with positive differential permeability",
+            "W + W* = H dot B is recomputed at every response sample",
+            "physical admissibility is necessary but insufficient for cross-solver numerical parity",
+        ],
+    }
+
+
 def nonlinear_constitutive_response_parity_gate(
     summary: dict[str, Any],
     *,
