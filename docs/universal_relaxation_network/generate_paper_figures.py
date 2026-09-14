@@ -53,14 +53,26 @@ def setup_axis(ax, xlabel, ylabel, title=None):
 
 
 def load_nasa_battery_data():
-    """Load NASA 18650 battery EIS data."""
+    """Reject the historical fixture until its frequency axis is documented."""
     data_path = Path(__file__).parent / 'data' / 'real_world' / 'nasa_battery' / 'nasa_18650_eis.csv'
     if not data_path.exists():
         print(f"[WARN] NASA data not found: {data_path}")
         return None, None
-    data = np.loadtxt(data_path, delimiter=',', skiprows=24)
-    freq = data[:, 0]
-    Z = data[:, 1] + 1j * data[:, 2]
+    header = data_path.read_text(encoding='utf-8')
+    if not any(line.startswith('#   Frequency source: ') and
+               line.partition(': ')[2].strip() for line in header.splitlines()):
+        raise ValueError('NASA frequency axis is unverified; regenerate with '
+                         'extract_real_eis.py and a sample-aligned instrument record. '
+                         'The bundled logspace axis is not measurement evidence.')
+    rows = [line for line in header.splitlines() if line.strip() and not line.startswith('#')]
+    data = np.genfromtxt(rows, delimiter=',', names=True)
+    freq = data['frequency_Hz']
+    if (np.ndim(freq) != 1 or len(freq) < 2 or not np.isfinite(freq).all()
+            or np.any(freq <= 0) or len(np.unique(freq)) != len(freq)
+            or not np.isfinite(data['Z_real_Ohm']).all()
+            or not np.isfinite(data['Z_imag_Ohm']).all()):
+        raise ValueError('EIS requires at least two unique positive finite frequencies and finite impedances')
+    Z = data['Z_real_Ohm'] + 1j * data['Z_imag_Ohm']
     return freq, Z
 
 

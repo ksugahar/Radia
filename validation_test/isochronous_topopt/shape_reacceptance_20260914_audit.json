@@ -1,0 +1,15 @@
+{
+  "schema": "radia.shape-receipt-audit.v1",
+  "passed": true,
+  "audited_at_utc": "2026-09-14T05:50:09.861536+00:00",
+  "parent_receipt_sha256": {
+    "prepare": "c19d69195b517ed66015e7d1c72f2d1f558a68ce5ef9ee6fa85668f306b3f471",
+    "mesh": "3261d120ed4e5bb96534324c5a15ae8aa2e8e0096db04b5b6e461075fa1c0bb0"
+  },
+  "field_sha256": "934a17f7692b5266023cb29ca88a565e5307bde52afd666c09439afa4246a403",
+  "original_driver_sha256": "859f26f572fcd89e4e7e91316436c9302459d6a500104620a3b3e2c061ac4a6b",
+  "validator_sha256": "57a151609a02979e6deedfa8d908523da290ccd2c1bd68f7885dbf07cf98362c",
+  "numerical_recomputed": false,
+  "scope": "Post-execution receipt consistency; original numerical provenance preserved.",
+  "run_id": "471cb93c-36f5-4254-990f-2afe7b427bb5"
+}

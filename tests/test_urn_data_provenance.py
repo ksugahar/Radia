@@ -16,6 +16,59 @@ ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "docs/universal_relaxation_network/data/real_world/nasa_battery"
 
 
+@pytest.mark.parametrize(("filename", "function"), [
+    ("generate_paper_figures.py", "load_nasa_battery_data"),
+    ("demo_spice_timedomain.py", "load_battery_data"),
+])
+def test_historical_nasa_consumers_reject_unverified_frequency(filename, function):
+    path = DATA.parents[2] / filename
+    node = next(n for n in ast.parse(path.read_text(encoding="utf-8")).body
+                if isinstance(n, ast.FunctionDef) and n.name == function)
+    namespace = {"Path": Path, "__file__": str(path), "np": np}
+    exec(compile(ast.Module(body=[node], type_ignores=[]), str(path), "exec"), namespace)
+    with pytest.raises(ValueError, match="frequency axis is unverified"):
+        namespace[function]()
+
+
+def test_documented_nasa_figure_loader_parses_columns_not_fixed_header_lines(tmp_path):
+    path = DATA.parents[2] / "generate_paper_figures.py"
+    node = next(n for n in ast.parse(path.read_text(encoding="utf-8")).body
+                if isinstance(n, ast.FunctionDef) and n.name == "load_nasa_battery_data")
+    destination = tmp_path / "data/real_world/nasa_battery"
+    destination.mkdir(parents=True)
+    (destination / "nasa_18650_eis.csv").write_text(
+        "# documented fixture\n#   Frequency source: instrument.csv:rows2-3\n"
+        "frequency_Hz,Z_real_Ohm,Z_imag_Ohm\n5000,1,2\n1,3,4\n", encoding="utf-8")
+    namespace = {"Path": Path, "__file__": str(tmp_path / path.name), "np": np}
+    exec(compile(ast.Module(body=[node], type_ignores=[]), str(path), "exec"), namespace)
+    frequency, impedance = namespace["load_nasa_battery_data"]()
+    np.testing.assert_array_equal(frequency, [5000, 1])
+    np.testing.assert_array_equal(impedance, [1+2j, 3+4j])
+
+
+@pytest.mark.parametrize(('filename', 'function'), [
+    ('generate_paper_figures.py', 'load_nasa_battery_data'),
+    ('demo_spice_timedomain.py', 'load_battery_data'),
+])
+@pytest.mark.parametrize('rows', [
+    '1,1,2\n', '0,1,2\n2,3,4\n', '1,1,2\n1,3,4\n',
+    'nan,1,2\n2,3,4\n', '1,nan,2\n2,3,4\n', '1,1,inf\n2,3,4\n',
+])
+def test_documented_nasa_consumers_still_validate_numerical_data(tmp_path, filename, function, rows):
+    path = DATA.parents[2] / filename
+    node = next(n for n in ast.parse(path.read_text(encoding='utf-8')).body
+                if isinstance(n, ast.FunctionDef) and n.name == function)
+    destination = tmp_path / 'data/real_world/nasa_battery'
+    destination.mkdir(parents=True)
+    (destination / 'nasa_18650_eis.csv').write_text(
+        '#   Frequency source: instrument.csv\nfrequency_Hz,Z_real_Ohm,Z_imag_Ohm\n'+rows,
+        encoding='utf-8')
+    namespace = {'Path': Path, '__file__': str(tmp_path / filename), 'np': np}
+    exec(compile(ast.Module(body=[node], type_ignores=[]), str(path), 'exec'), namespace)
+    with pytest.raises(ValueError, match='positive finite'):
+        namespace[function]()
+
+
 class _DataFrame:
     """Exercise generator I/O without importing its download or pandas setup."""
 
