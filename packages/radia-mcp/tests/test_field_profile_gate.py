@@ -18,6 +18,7 @@ from radia_mcp.radia_ngsolve.field_profile_gate import (
     dual_formulation_symmetric_field_profile_gate,
     nonlinear_constitutive_point_sample_gate,
     nonlinear_constitutive_response_parity_gate,
+    nonlinear_field_energy_identity_gate_v5,
     nonlinear_magnetic_field_energy_parity_gate,
     nonlinear_magnetic_refinement_energy_gate,
     nonlinear_magnetic_spatial_evidence_gate,
@@ -30,7 +31,82 @@ from radia_mcp.radia_ngsolve.server import (
     nonlinear_constitutive_response_parity_gate as mcp_constitutive_parity_gate,
     nonlinear_magnetic_refinement_energy_gate as mcp_nonlinear_refinement_gate,
     nonlinear_magnetic_spatial_evidence_gate as mcp_nonlinear_gate,
+    nonlinear_field_energy_identity_gate_v5 as mcp_nonlinear_identity_v5_gate,
 )
+
+
+def _v5_identity_summary():
+    geometry = {"parts": [{"id": "stator", "primitive": "box", "size_m": [1.0, 2.0, 3.0]}]}
+    frame = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+    digest = lambda value: hashlib.sha256(
+        json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    refinement = [
+        {"level_id": "h0", "element_count": 10, "mesh_identity_sha256": "1" * 64},
+        {"level_id": "h1", "element_count": 20, "mesh_identity_sha256": "2" * 64},
+        {"level_id": "h2", "element_count": 40, "mesh_identity_sha256": "3" * 64},
+    ]
+    response = {
+        "H_A_per_m": [0.0, 1.0, 2.0, 3.0],
+        "B_T": [0.0, 2.0, 4.0, 6.0],
+        "energy_density_J_per_m3": [0.0, 1.0, 4.0, 9.0],
+        "coenergy_density_J_per_m3": [0.0, 1.0, 4.0, 9.0],
+    }
+    identity = {
+        "canonical_geometry": geometry,
+        "geometry_canonical_sha256": digest(geometry),
+        "coordinate_frame_matrix": frame,
+        "coordinate_frame_sha256": digest(frame),
+        "refinement_levels": refinement,
+    }
+    return {
+        "candidate": {
+            "identity": dict(identity),
+            "constitutive_response": {key: list(values) for key, values in response.items()},
+        },
+        "reference": {
+            "identity": dict(identity),
+            "constitutive_response": {key: list(values) for key, values in response.items()},
+        },
+    }
+
+
+def test_nonlinear_field_energy_identity_v5_accepts_recomputed_contract_and_wraps_mcp():
+    summary = _v5_identity_summary()
+    result = nonlinear_field_energy_identity_gate_v5(summary)
+    assert result["status"] == "ok"
+    assert result["accepted"] is True
+    wrapped = json.loads(mcp_nonlinear_identity_v5_gate(json.dumps(summary)))
+    assert wrapped["policy"] == "nonlinear_field_energy_identity_gate_v5"
+    assert wrapped["status"] == "ok"
+
+
+def test_nonlinear_field_energy_identity_v5_rejects_derivative_mismatch():
+    bad = _v5_identity_summary()
+    bad["candidate"]["constitutive_response"]["energy_density_J_per_m3"][2] = 5.0
+    result = nonlinear_field_energy_identity_gate_v5(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["candidate_energy_derivative_identity"] is False
+
+
+def test_nonlinear_field_energy_identity_v5_rejects_frame_and_geometry_digest_drift():
+    bad = _v5_identity_summary()
+    bad["candidate"]["identity"]["coordinate_frame_matrix"] = [
+        [1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0],
+        [0.0, 1.0, 0.0],
+    ]
+    bad["candidate"]["identity"]["geometry_canonical_sha256"] = "f" * 64
+    result = nonlinear_field_energy_identity_gate_v5(bad)
+    assert result["checks"]["right_handed_frame_digest_matches"] is False
+    assert result["checks"]["canonical_geometry_digest_matches"] is False
+
+
+def test_nonlinear_field_energy_identity_v5_rejects_duplicate_refinement_identity():
+    bad = _v5_identity_summary()
+    bad["candidate"]["identity"]["refinement_levels"][2]["level_id"] = "h1"
+    result = nonlinear_field_energy_identity_gate_v5(bad)
+    assert result["checks"]["unique_monotone_refinement_identity_matches"] is False
 
 
 def test_build_comparison_candidate_keeps_piecewise_linear_out_of_solver_mode():
