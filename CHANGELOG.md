@@ -25,6 +25,12 @@ All notable changes to the `radia` package.  Format: each release lists
   Axisymmetric heat now also rejects active surface selectors containing the
   zero-revolved-area `r=0` symmetry axis, including broad labels shared with
   physical surfaces.
+- Decoupled IH thermal field order from serialized mesh geometry.  The 3D,
+  axisymmetric, and EM-table heat solvers now preserve a loaded `.vol` exactly
+  instead of calling `Mesh.Curve(fes_order)` after import; that call can silently
+  destroy a curved CAD mapping (the reported TKE08 mesh inflated its boundary
+  area by about 297 million times).  Results now record the input curve order,
+  domain/boundary measures, and the no-post-load-Curve policy.
 
 - Fixed MATLAB LTspice binary RAW precision/layout validation and transient
   state injection. Unsupported layouts, malformed payload sizes, missing or

@@ -85,6 +85,49 @@ def _log(msg):
     progress("HEAT", msg)
 
 
+def _input_mesh_geometry_audit(mesh, fes_order):
+    """Record the geometry that the thermal solve actually consumes.
+
+    The polynomial order of ``H1`` is independent of the geometry order stored
+    in a Netgen ``.vol``.  In particular, calling ``mesh.Curve(fes_order)``
+    after loading a ``.vol`` is not a valid way to raise the field order: the
+    generating CAD association may be absent or incomplete, and NGSolve can
+    silently replace valid imported geometry with a corrupt mapping.  Curving
+    must therefore happen in the mesher, before the ``.vol`` is written.
+
+    This helper is deliberately read-only.  The returned measures make that
+    contract visible in ``result.json`` and give downstream audits a stable
+    record of the input geometry used by the solve.
+    """
+    from ngsolve import BND, CF, Integrate
+
+    dimension = int(mesh.dim)
+    domain_measure = float(Integrate(CF(1), mesh).real)
+    boundary_measure = float(Integrate(CF(1), mesh, BND).real)
+    if not math.isfinite(domain_measure) or domain_measure <= 0.0:
+        raise ValueError(
+            "thermal input mesh has a non-positive or non-finite domain "
+            f"measure ({domain_measure!r})"
+        )
+    if not math.isfinite(boundary_measure) or boundary_measure <= 0.0:
+        raise ValueError(
+            "thermal input mesh has a non-positive or non-finite boundary "
+            f"measure ({boundary_measure!r})"
+        )
+
+    return {
+        "policy": "preserve-input-vol-geometry",
+        "post_load_curve_applied": False,
+        "field_order": int(fes_order),
+        "input_curve_order": int(mesh.GetCurveOrder()),
+        "dimension": dimension,
+        "domain_measure": domain_measure,
+        "domain_measure_unit": "m^3" if dimension == 3 else "m^2",
+        "boundary_measure": boundary_measure,
+        "boundary_measure_unit": "m^2" if dimension == 3 else "m",
+    }
+
+
 def _temperature_extrema(gf_temperature, mesh, fes_order):
     """Return deterministic physical-field extrema and sampling metadata.
 
@@ -546,10 +589,15 @@ def solve_heat(wp_vol,
                 f"the coil / air / Kelvin regions belong to the EM mesh, "
                 f"not the thermal mesh."}
 
-    wp_mesh.Curve(int(fes_order))
+    try:
+        mesh_geometry = _input_mesh_geometry_audit(wp_mesh, fes_order)
+    except ValueError as exc:
+        return {"error": str(exc)}
     _log(f"MESH:loaded {os.path.basename(wp_vol)} "
          f"materials={list(wp_mesh.GetMaterials())} "
-         f"boundaries={list(wp_mesh.GetBoundaries())}")
+         f"boundaries={list(wp_mesh.GetBoundaries())} "
+         f"geometry_order={mesh_geometry['input_curve_order']} "
+         f"field_order={fes_order} (input geometry preserved)")
 
     try:
         heat_flux_selector, heat_flux_names = _resolve_boundary_role(
@@ -832,6 +880,7 @@ def solve_heat(wp_vol,
         "ndof": int(fes_T.ndof),
         "ne": int(wp_mesh.ne),
         "fes_order": int(fes_order),
+        "mesh_geometry": mesh_geometry,
         "material": material,
         "rho_kg_m3": float(rho_v),
         "cp_J_kgK": float(cp_v),

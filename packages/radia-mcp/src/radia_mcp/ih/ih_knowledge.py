@@ -223,12 +223,22 @@ mean the .jou does not follow convention; fix the .jou, not the GUI.
 
 ## Curve Order vs FES Order (CRITICAL for IH accuracy)
 
-**CRITICAL**: Both `fem_esim_kelvin.py` (2D axi) and `fem_esim_3d.py` (3D)
-MUST call `mesh.Curve(>=2)` after `Mesh()` if FES order >= 1 and the
-geometry contains curved entities (circles, torus, sphere, cylinder).
-Missing `mesh.Curve()` causes a **systematic L under-prediction of
-~10 %**, because circular coil cross-sections and Kelvin arcs collapse
-to polygons.
+**CRITICAL**: Curve a mesh only while its generating geometry is live.  Both
+`fem_esim_kelvin.py` (2D axi) and `fem_esim_3d.py` (3D) should call
+`mesh.Curve(>=2)` on the mesh freshly generated from their in-memory
+SplineGeometry/OCCGeometry when the geometry contains circles, a torus, a
+sphere, or a cylinder.  Missing that construction-time curving causes a
+**systematic L under-prediction of ~10 %**, because curved entities collapse to
+polygons.
+
+Never call `mesh.Curve()` merely because the FES order was raised after loading
+an arbitrary `.vol`.  The imported file already owns its geometry order; its
+CAD association may be absent or incomplete.  Post-load `Curve()` can silently
+flatten a baked-in curved mesh or create an invalid mapping.  To change geometry
+order, curve in the originating mesher and re-export the `.vol`.  To change only
+the approximation order, use `H1(mesh, order=p)` or `HCurl(mesh, order=p)` and
+leave the loaded mesh unchanged.  This is guarded repository-wide by the HIGH
+lint rule `ngsolve-curve-after-vol-import`.
 
 ### Practical recommendation (Sugahara, 2026-04-14)
 
@@ -249,8 +259,8 @@ finer geometry than Curve(2) can capture on a maxh=15 mm mesh.
 | HCurl order=1 + Curve(3)    | **-5.37 %**   | **-0.46 %**   | 26 s    |
 | HCurl order=2 + Curve(2)    | +3.2 % (but spurious P -26 %) | | 1371 s  |
 
-**Bottom line for current 3D IH panel code** (`fem_esim_3d.py`,
-`calc_fem_kelvin.py`):
+**Bottom line for geometry-construction code** (`fem_esim_3d.py`,
+`calc_fem_kelvin.py` when they still own the live geometry):
 
 - Start with `HCurl order=1 + mesh.Curve(max(order+1, 2))`
 - If L seems too low (-5 % or worse) and P looks OK, **raise Curve
@@ -263,9 +273,10 @@ finer geometry than Curve(2) can capture on a maxh=15 mm mesh.
 ### Why 2D is less sensitive than 3D
 
 2D axisym has only planar curves (coil circle + Kelvin arc). H1 scalar
-elements with `Curve(order=2 or 3)` match the geometry accurately
-even at moderate mesh resolution. 3D adds sphere + torus in space --
-strong Gaussian curvature that needs better surface approximation.
+elements curved at mesh-construction time with order 2 or 3 match the geometry
+accurately even at moderate mesh resolution. 3D adds sphere + torus in space --
+strong Gaussian curvature that needs better surface approximation.  This does
+not authorize re-curving a loaded `.vol`.
 
 ### Companion fix (2026-04-14)
 
@@ -668,6 +679,31 @@ T_at = float(gfT(wp_mesh(x, y, z)))      # sample at body point
 Same three contracts as the qsurf side (see "Strict .sol + .vol
 contract" above): the `.sol` is a raw coefficient vector, the
 `.vol` carries the mesh, the FES order must match.
+
+## Thermal `.vol` geometry contract: preserve after load
+
+The thermal field order and the serialized mesh geometry order are independent:
+
+```python
+wp_mesh = Mesh("workpiece_thermal.vol")
+fes_T = H1(wp_mesh, order=2)  # field P2/Q2; do NOT call wp_mesh.Curve(2)
+```
+
+`calc_heat.py`, `calc_heat_axisym.py`, and `calc_heat_with_em_table.py` preserve
+the loaded `.vol` exactly.  They never infer a geometry order from
+`--fes-order`.  If a curved thermal mesh is required, the mesher must create it
+at the desired order before saving the `.vol`; re-export rather than attempting
+to curve it after load.  This is a fail-safe geometry policy, not a flat-mesh
+fallback.
+
+The result JSON records this decision in `mesh_geometry`: policy
+`preserve-input-vol-geometry`, `post_load_curve_applied=false`, the field and
+input curve orders, and the consumed domain and boundary measures.  On the
+reported TKE08 curved CAD `.vol`, the removed post-load `Curve(2)` call returned
+without an exception but inflated the boundary measure from about 0.0233 square
+metres to 6.91 million square metres (about 297 million times).  Therefore
+`GetCurveOrder()` or lack of an exception is not evidence that post-load curving
+was valid.
 
 ## Axisymmetric discretization contract: Henrotte for EM, NGSolve H1 for heat
 
@@ -1566,10 +1602,11 @@ for el in mesh.Elements(BND):
     esim_local = ESIMFiniteSlabSolver(half_thickness=R_local, ..., geometry=geometry)
 ```
 
-**NGSolve advantage**: `mesh.Curve(order)` provides exact high-order geometry
-via `GetTrafo`. From the element Jacobian, the second fundamental form
-(Weingarten map) gives exact principal curvatures at any point. This is
-unavailable with flat (order=1) elements — another reason to use Curve(3)+.
+**NGSolve advantage**: a mesh curved while its valid generating geometry is
+attached provides high-order geometry via `GetTrafo`. From the element Jacobian,
+the second fundamental form (Weingarten map) gives principal curvatures at any
+point. For an imported `.vol`, consume the baked-in curved elements as-is; never
+invoke post-load `Curve(3)` as a substitute for re-exporting the mesh.
 
 ### Accuracy at Target Conditions
 
