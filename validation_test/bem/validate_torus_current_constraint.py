@@ -22,13 +22,27 @@ from scipy.linalg import null_space
 
 def constrained_energy(matrix, divergence, current):
     basis = null_space(divergence, rcond=1e-11)
-    reduced = basis.T @ matrix @ basis
+    raw_reduced = basis.T @ matrix @ basis
+    symmetry = np.linalg.norm(raw_reduced-raw_reduced.T)/np.linalg.norm(raw_reduced)
+    if not np.isfinite(symmetry) or symmetry > 1e-6:
+        raise ValueError('Reduced magnetic energy matrix is not symmetric within quadrature tolerance')
+    reduced = (raw_reduced + raw_reduced.T)/2
+    # Strict convexity on the divergence-free subspace certifies a minimum.
+    np.linalg.cholesky(reduced)
     load = basis.T @ current
     if np.linalg.norm(load) <= 1e-6*np.linalg.norm(current):
         raise ValueError('Mesh has no resolved divergence-free toroidal current; refine/check topology')
     solution = basis @ np.linalg.solve(reduced, load)
     solution /= current @ solution
-    return solution, float(solution @ matrix @ solution), basis.shape[1]
+    energy = float(solution @ matrix @ solution)
+    gradient = reduced @ (basis.T @ solution)
+    kkt = float(np.linalg.norm(gradient-energy*load)/
+                max(np.linalg.norm(gradient), abs(energy)*np.linalg.norm(load)))
+    if not np.isfinite(kkt) or kkt > 1e-10:
+        raise ValueError('Constrained magnetic energy KKT residual exceeds tolerance')
+    return solution, energy, basis.shape[1], {
+        'reduced_relative_symmetry_error': float(symmetry),
+        'reduced_positive_definite': True, 'relative_kkt_residual': kkt}
 
 
 def run(notebook, output, curvaturesafety, bonus):
@@ -70,9 +84,9 @@ def run(notebook, output, curvaturesafety, bonus):
     matrix = matrix[np.ix_(active, active)]
     divergence = divergence[:, active]
     current = current[active]
-    solution, inductance, nullity = constrained_energy(matrix, divergence, current)
+    solution, inductance, nullity, optimality = constrained_energy(matrix, divergence, current)
     signs = np.where(np.arange(len(active))%2, -1., 1.)
-    transformed, invariant, _ = constrained_energy(
+    transformed, invariant, _, _ = constrained_energy(
         signs[:, None]*matrix*signs[None, :], divergence*signs[None, :], current*signs)
     conservation = float(np.linalg.norm(divergence@solution) /
                          (np.linalg.norm(divergence)*np.linalg.norm(solution)))
@@ -84,6 +98,7 @@ def run(notebook, output, curvaturesafety, bonus):
         'curvaturesafety': curvaturesafety, 'bonus_intorder': bonus, 'threads': 2,
         'ndof': space.ndof, 'active_boundary_dofs': len(active),
         'divergence_free_dimension': nullity,
+        'optimality': optimality,
         'current_A': float(current@solution), 'relative_conservation_residual': conservation,
         'L_H': inductance, 'basis_transformed_L_H': invariant,
         'relative_basis_invariance_error': float(abs(invariant-inductance)/abs(inductance)),

@@ -66,6 +66,15 @@ def verify_mesh_parent(out, preparation, meshes):
             raise ValueError(f'Incomplete/unexpected mesh set: {field}')
 
 
+def verify_parent_receipt(out, parent):
+    state = json.loads((out / f'{parent}.state.json').read_text(encoding='utf-8'))
+    result = json.loads((out / f'{parent}.json').read_text(encoding='utf-8'))
+    if (state.get('status') != 'completed' or state.get('phase') != parent
+            or not state.get('run_id') or state['run_id'] != result.get('run_id')):
+        raise ValueError(f'Parent receipt mismatch or incomplete: {parent}')
+    return digest(out / f'{parent}.json')
+
+
 def run_phase(args):
     out = args.directory.resolve()
     import radia
@@ -98,6 +107,7 @@ def run_phase(args):
         }
         (out / "prepare.json").write_text(json.dumps(data, indent=2), encoding="utf-8")
     elif args.phase == "mesh":
+        prepare_hash = verify_parent_receipt(out, 'prepare')
         data = json.loads((out / "prepare.json").read_text(encoding="utf-8"))
         for name, expected in data["inputs"].items():
             assert digest(out / name) == expected, name
@@ -142,10 +152,12 @@ def run_phase(args):
                 threshold_pct=regen.mesh_results[name]["closure_tolerance"] * 100,
                 report_json=str(out / f"{name}.check.json")))
             assert checks[name].get("passed") is True, checks[name]
+        if digest(out / 'prepare.json') != prepare_hash:
+            raise ValueError('Preparation changed during meshing')
         data = {"run_id": args.run_id, "provenance": provenance, "mesh_results": regen.mesh_results,
                 "timings": regen.timings, "checks": checks,
                 "iso_union": iso_union,
-                "prepare_sha256": digest(out / 'prepare.json'),
+                "prepare_sha256": prepare_hash,
                 "input_sha256": data['inputs'],
                 "vol_sha256": {n: digest(out / f"{n}.vol") for n in regen.mesh_results}}
         (out / "mesh.json").write_text(json.dumps(data, indent=2), encoding="utf-8")
@@ -196,9 +208,7 @@ def main():
         if args.phase != 'prepare':
             parents = ('prepare',) if args.phase == 'mesh' else ('prepare', 'mesh')
             for parent in parents:
-                state = json.loads((out / f'{parent}.state.json').read_text(encoding='utf-8'))
-                if state['status'] != 'completed':
-                    raise ValueError(f'Parent phase incomplete: {parent}')
+                verify_parent_receipt(out, parent)
         run_phase(args)
 
 

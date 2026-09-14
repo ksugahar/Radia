@@ -64,6 +64,10 @@ Minimize magnetic energy subject to D J=0 and c(J)=1 A; do not use ones/n.
 Select active DOFs through boundary-element GetDofNrs before dense algebra:
 the volume mesh's interior edges are not surface-current unknowns. Reject a
 mesh whose divergence-free space cannot resolve the toroidal current.
+The reduced operator's relative asymmetry must be at most 1e-6; solve its
+symmetric part only after Cholesky confirms positive definiteness, and require
+a relative KKT residual below 1e-10. This is an explicit quadrature
+symmetrization, not an assumption that an arbitrary Galerkin matrix is an energy.
 
 NGSolve 6.2.2606 results at curvaturesafety 0.65/0.8/1.0 were
 159.672/155.914/152.603 nH (513/693/1203 active boundary DOFs).
