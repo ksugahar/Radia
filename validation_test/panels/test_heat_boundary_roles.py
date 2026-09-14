@@ -52,6 +52,40 @@ def _axis_touching_section_mesh(
     return Mesh(geometry.GenerateMesh(maxh=maxh))
 
 
+def _write_uniform_qsurf_cylinder(tmp_path, q_flux=10.0):
+    """Write a 3D EM-mesh/qsurf pair for cross-mesh transfer tests."""
+    from netgen.occ import Cylinder, OCCGeometry, Z
+    from ngsolve import CF, GridFunction, H1, Mesh
+
+    cylinder = Cylinder((0.0, 0.0, 0.0), Z, r=1.0, h=1.0)
+    cylinder.faces.name = "em_surface"
+    cylinder.solids.name = "workpiece"
+    ngmesh = OCCGeometry(cylinder).GenerateMesh(maxh=0.28)
+    em_vol = tmp_path / "em_cylinder.vol"
+    ngmesh.Save(str(em_vol))
+
+    em_mesh = Mesh(str(em_vol))
+    gf_q = GridFunction(H1(em_mesh, order=1))
+    gf_q.Set(CF(q_flux))
+    q_sol = tmp_path / "qsurf.sol"
+    gf_q.Save(str(q_sol))
+    return em_vol, q_sol
+
+
+def _slightly_offset_axisym_cylinder(radius=1.00005, maxh=0.16):
+    """2D meridian whose surface facets are independent of the 3D mesh."""
+    from netgen.geom2d import SplineGeometry
+    from ngsolve import Mesh
+
+    geometry = SplineGeometry()
+    geometry.AddRectangle(
+        (0.0, 0.0),
+        (radius, 1.0),
+        bcs=("bottom", "heated", "top", "axis"),
+    )
+    return Mesh(geometry.GenerateMesh(maxh=maxh))
+
+
 def _slab_mesh(maxh=0.35):
     from netgen.occ import Box, OCCGeometry, Pnt
     from ngsolve import Mesh
@@ -149,6 +183,11 @@ def test_axisym_heat_separates_heating_and_cooling_boundaries():
     assert result["q_surf_int_W"] == pytest.approx(
         expected_power, rel=1.0e-10
     )
+    assert result["revolved_volume_m3"] == pytest.approx(
+        math.pi * (2.0**2 - 1.0**2), rel=1.0e-10
+    )
+    assert result["T_min_C"] <= result["T_mean_C"] <= result["T_max_C"]
+    assert result["qsurf_projection"]["mode"] == "uniform"
 
     audit = result["boundary_audit"]
     assert audit["heat_flux"]["matched_boundaries"] == ["heated"]
@@ -279,6 +318,70 @@ def test_axisym_heat_outer_surface_excludes_axis_and_has_expected_power():
     assert result["q_surf_int_W"] == pytest.approx(
         20.0 * math.pi, rel=1.0e-10
     )
+
+
+def test_axisym_qsurf_uses_boundary_projection_and_reports_coverage(tmp_path):
+    """A small independent-facet offset must not become silent zero flux."""
+    q_flux = 10.0
+    radius = 1.00005
+    em_vol, q_sol = _write_uniform_qsurf_cylinder(tmp_path, q_flux)
+    mesh = _slightly_offset_axisym_cylinder(radius)
+
+    result = calc_heat_axisym.solve_heat_axisym(
+        "<in-memory-offset-meridian>",
+        material="custom",
+        rho=1.0,
+        cp=1.0,
+        k=1.0,
+        h_conv=0.0,
+        emissivity=0.0,
+        heat_flux_boundaries="heated",
+        qsurf_sol=str(q_sol),
+        em_vol=str(em_vol),
+        qsurf_order=1,
+        n_phi_samples=32,
+        dt=0.1,
+        t_end=0.1,
+        fes_order=2,
+        _wp_mesh=mesh,
+        _write_solution=False,
+    )
+
+    assert "error" not in result, result
+    assert result["q_surf_int_W"] == pytest.approx(
+        q_flux * 2.0 * math.pi * radius, rel=1.0e-8
+    )
+    audit = result["qsurf_projection"]
+    assert audit["evaluation_region"] == "BND"
+    assert audit["target_surface_vertices"] > 0
+    assert audit["failed_vertices"] == 0
+    assert audit["coverage_fraction"] >= 0.80
+
+
+def test_axisym_qsurf_rejects_incompatible_meridian_without_fallback(tmp_path):
+    em_vol, q_sol = _write_uniform_qsurf_cylinder(tmp_path)
+    mesh = _slightly_offset_axisym_cylinder(radius=1.2)
+
+    with pytest.raises(ValueError, match="no zero-flux fallback"):
+        calc_heat_axisym.solve_heat_axisym(
+            "<in-memory-incompatible-meridian>",
+            material="custom",
+            rho=1.0,
+            cp=1.0,
+            k=1.0,
+            h_conv=0.0,
+            emissivity=0.0,
+            heat_flux_boundaries="heated",
+            qsurf_sol=str(q_sol),
+            em_vol=str(em_vol),
+            qsurf_order=1,
+            n_phi_samples=16,
+            dt=0.1,
+            t_end=0.1,
+            fes_order=2,
+            _wp_mesh=mesh,
+            _write_solution=False,
+        )
 
 
 def test_3d_heat_separates_heating_and_cooling_boundaries():
