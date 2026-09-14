@@ -16,6 +16,10 @@ Literature-gap checks prevent non-detection in a bounded corpus from being
 promoted into field-wide adoption claims or the proposal's academic gap.
 Abstraction checks keep named software out of the research concept while
 retaining names where implementation or feasibility must be reproducible.
+First-use checks ask whether named software is defined by a plain-language
+function rather than only a prestige, licence, or architecture label.
+Capability-status maps separate a verified or maturing foundation from the
+optimization, integration, and validation proposed for the grant period.
 Reviewer-vocabulary checks explain OSS/AI terms, prefer readable field terms,
 and keep named benchmarks in a verification rather than significance role.
 Persuasion-quality checks catch self-negating evidence, abrupt equations,
@@ -53,6 +57,9 @@ concept load, notation consistency, and committed proposal wording. English
 is outside that score and is never averaged into it. A required genre contract
 rejects research-meeting manuscripts and routes them to paper-writing because
 scientific traceability and funding-review decision flow are different tasks.
+The integrated health report exposes a non-scoring reader-experience contract
+for excitement without hype, one-pass clarity, and specialist accessibility.
+Zero detector findings do not prove comprehension, merit, or funding success.
 
 Promoted to radia-mcp so the document-writing servers are registered in
 parallel: paper-writing / grant-writing.
@@ -105,7 +112,8 @@ register_status_tool(
         "international preparation evidence, internal-to-external scale, collaborative-integration "
         "risks, tool-to-domain outcomes, derived-metric validation, "
         "cross-organization pilots, literature-gap evidence scope, "
-        "named-software abstraction, "
+        "named-software abstraction and first-use functional identity, "
+        "current/future capability status maps, "
         "reviewer vocabulary and benchmark role, "
         "persuasion hierarchy and equation introductions, "
         "adjacent-domain reviewer readability and concept density, "
@@ -148,6 +156,8 @@ def main():
         )
         report = grant_writing_health_report(sample, program="kddi_digital")
         assert report["tools_run"]
+        assert report["reader_experience"]["score"] is None
+        assert report["reader_experience"]["automatic_score_prohibited"]
         assert 0.0 <= report["defect_score"] <= 10.0
         readable = grant_writing_japanese_readability_score(
             "設計条件の選択には時間を要する。"

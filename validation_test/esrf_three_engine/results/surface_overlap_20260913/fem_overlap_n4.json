@@ -1,0 +1,119 @@
+{
+  "controls": {
+    "partial": {
+      "kind": "coplanar_positive_area",
+      "overlap_area_m2": 0.245
+    },
+    "different_subdivision": {
+      "kind": "coplanar_positive_area",
+      "overlap_area_m2": 0.125
+    },
+    "adjacent": null,
+    "transverse": {
+      "kind": "transverse_interior_intersection",
+      "points_m": [
+        [
+          0.2,
+          0.2,
+          0.0
+        ]
+      ]
+    },
+    "separated": null,
+    "opposite_diagonal_tessellations_area": 0.9999999999999999
+  },
+  "ngsolve_version": "6.2.2606",
+  "shapely_version": "2.1.2",
+  "script_sha256": "165ee7660eadcc05ce69b12ce290b623ce85088a1507c15d69a5f616a0868b1e",
+  "audit": {
+    "path": "C:\\temp\\radia-esrf-fem\\example6\\coil_yoke_kelvin.vol",
+    "sha256": "dfc12b84f80db1fa17fb5012b6f87c072e8aa1fb3c085b61269f047a879a54ac",
+    "volume_elements": 134686,
+    "boundary_elements": 12180,
+    "curve_order": 2,
+    "subdivisions": 4,
+    "mapped_triangles": 194880,
+    "topology": {
+      "volume_face_owner_histogram": {
+        "2": 266590,
+        "1": 5564
+      },
+      "boundary_face_owner_histogram": {
+        "2": 6616,
+        "1": 5564
+      },
+      "repeated_boundary_face_ids": [],
+      "unregistered_one_owner_faces": [],
+      "nonmanifold_volume_faces": []
+    },
+    "length_tolerance_m": 1e-10,
+    "area_tolerance_m2": 1e-16,
+    "nonplanar_boundary_elements": 5564,
+    "maximum_sampled_parent_planarity_m": 0.0003783927447409418,
+    "maximum_sampled_edge_chord_deviation_m": 0.0004917051442420388,
+    "nonstraight_boundary_edge_parent_count": 5564,
+    "aabb_candidate_pairs": 529761,
+    "tested_triangle_pairs": 529758,
+    "detected_parent_pairs": 1,
+    "contacts": [
+      {
+        "kind": "coplanar_positive_area",
+        "overlap_area_m2": 1.1472689294122711e-06,
+        "boundary_element_ids": [
+          3840,
+          3878
+        ],
+        "boundary_names": [
+          "iron_air_interface",
+          "iron_air_interface"
+        ],
+        "parent_planarity_m": [
+          7.037415531673554e-19,
+          1.853738629597257e-17
+        ],
+        "mapped_subtriangle_ids": [
+          61453,
+          62063
+        ],
+        "triangle_coordinates_m": [
+          [
+            [
+              0.0007499999999999998,
+              0.0979132938463439,
+              0.0010816555197760997
+            ],
+            [
+              0.0014999999999999497,
+              0.09899494936612,
+              0.0
+            ],
+            [
+              0.00224999999999995,
+              0.0979132938463439,
+              0.0010816555197760997
+            ]
+          ],
+          [
+            [
+              -0.0007499999999999998,
+              0.09791329384634387,
+              0.0010816555197760997
+            ],
+            [
+              0.0,
+              0.09899494936612,
+              0.0
+            ],
+            [
+              0.0007500000000000002,
+              0.0979132938463439,
+              0.0010816555197760997
+            ]
+          ]
+        ]
+      }
+    ],
+    "elapsed_s": 312.98644829998375,
+    "scope": "All registered boundary faces, including once-registered two-owner interfaces. Coordinates use NGSolve curved mapping. Triangle intersections are on a finite tessellation, not a certified curved-patch intersection proof. Positive-area coplanar overlaps and strict transverse piercings are reported; tangencies and very small features can remain unresolved."
+  }
+}

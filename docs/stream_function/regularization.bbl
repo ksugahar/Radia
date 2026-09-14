@@ -1,0 +1,20 @@
+\begin{thebibliography}{1}
+
+\bibitem{ACA}
+T.~{Mach}, L.~{Reichel}, M.~{Van {Barel}}, and R.~{Vandebril}.
+\newblock Adaptive cross approximation for ill-posed problems.
+\newblock {\em Journal of Computational and Applied Mathematics}, 303:206--217,
+  2016.
+
+\bibitem{hansen1998rank}
+Per~Christian Hansen.
+\newblock {\em Rank-Deficient and Discrete Ill-Posed Problems: Numerical
+  Aspects of Linear Inversion}.
+\newblock SIAM, Philadelphia, 1998.
+
+\bibitem{tikhonov1977solutions}
+Andrey~N. Tikhonov and Vasiliy~Y. Arsenin.
+\newblock {\em Solutions of Ill-Posed Problems}.
+\newblock Winston/Wiley, New York, 1977.
+
+\end{thebibliography}

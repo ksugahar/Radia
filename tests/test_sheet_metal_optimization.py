@@ -7,7 +7,7 @@ from radia.sheet_metal_optimization import (apply_ngsolve_mesh_route,
     backtrack_ngsolve_deformation, backtrack_ngsolve_target_deformation,
     combine_deformation_modes, elastic_normal_deformation_modes,
     optimize_topology_preserving_shape, relative_gettrafo_displacements,
-    route_mesh_update, sample_trafo_quality,
+    reference_aware_condition_limit, route_mesh_update, sample_trafo_quality,
     sample_affine_gettrafo_cells, solve_sheet_metal_lp, local_trust_region)
 from radia.sheet_metal_optimization import (
     CubitSculptShapeRemeshBackend, CubitShapeRemeshRequest,
@@ -97,6 +97,108 @@ def test_topology_preserving_shape_driver_resolves_every_trial(monkeypatch):
     objectives = [item.objective_after for item in result.history]
     assert objectives == sorted(objectives, reverse=True)
     assert objectives[-1] == 0.0
+
+
+def test_topology_preserving_shape_admits_accepted_anisotropic_base_mesh(
+        monkeypatch):
+    """Quality routing measures deformation damage, not base aspect ratio."""
+    import radia.sheet_metal_optimization as sm
+
+    class Mesh:
+        deformation = None
+
+        def SetDeformation(self, value):
+            self.deformation = value
+
+        def UnsetDeformation(self):
+            self.deformation = None
+
+    mesh = Mesh()
+    quality_calls = {"count": 0}
+
+    def quality(unused_mesh, **kwargs):
+        quality_calls["count"] += 1
+        condition = 80.0 if "reference_determinants" not in kwargs else 81.0
+        return np.ones(1), np.full(1, condition)
+
+    monkeypatch.setattr(sm, "sample_trafo_quality", quality)
+    monkeypatch.setattr(
+        sm, "relative_gettrafo_displacements",
+        lambda unused_mesh, deformation: np.full(1, .02))
+    initial = TopologyPreservingShapeState(
+        mesh, {"q": 0.0}, np.array([0.]), np.array([0.]),
+        ShapeModelEvaluation(1.0, np.empty(0)))
+    linearization = ShapeLinearization(
+        1.0, np.array([-1.0]), np.empty(0), np.zeros((0, 1)),
+        np.empty(0), np.empty(0))
+    solves = []
+
+    result = optimize_topology_preserving_shape(
+        initial, linearize_step=lambda state: linearization,
+        deformation_factory=lambda unused_mesh, reference, candidate: float(
+            candidate[0] - reference[0]),
+        rebuild_model=lambda unused_mesh, parameters, route: solves.append(
+            (float(parameters[0]), route)) or {"q": float(parameters[0])},
+        evaluate_model=lambda model: ShapeModelEvaluation(
+            1.0-model["q"], np.empty(0)),
+        move_limit=.25, maximum_condition=20.0, max_iterations=1)
+
+    assert reference_aware_condition_limit([80.0], requested=20.0) == 100.0
+    assert quality_calls["count"] == 2
+    assert solves == [(0.25, "ngsolve_deform")]
+    assert len(result.history) == 1
+
+
+def test_topology_preserving_shape_backtracks_failed_application_model_gate(
+        monkeypatch):
+    """An unconverged physical solve must never become the accepted state."""
+    import radia.sheet_metal_optimization as sm
+
+    class Mesh:
+        deformation = None
+
+        def SetDeformation(self, value):
+            self.deformation = value
+
+        def UnsetDeformation(self):
+            self.deformation = None
+
+    mesh = Mesh()
+    monkeypatch.setattr(
+        sm, "sample_trafo_quality",
+        lambda unused_mesh, **kwargs: (np.ones(1), np.ones(1)))
+    monkeypatch.setattr(
+        sm, "relative_gettrafo_displacements",
+        lambda unused_mesh, deformation: np.full(1, .02))
+    initial = TopologyPreservingShapeState(
+        mesh, {"q": 0.0, "converged": True}, np.array([0.]), np.array([0.]),
+        ShapeModelEvaluation(1.0, np.empty(0)))
+    linearization = ShapeLinearization(
+        1.0, np.array([-1.0]), np.empty(0), np.zeros((0, 1)),
+        np.empty(0), np.empty(0))
+    solves = []
+
+    def rebuild(unused_mesh, parameters, route):
+        q = float(parameters[0])
+        model = {"q": q, "route": route, "converged": q <= 0.125}
+        solves.append(model)
+        return model
+
+    result = optimize_topology_preserving_shape(
+        initial, linearize_step=lambda state: linearization,
+        deformation_factory=lambda unused_mesh, reference, candidate: float(
+            candidate[0] - reference[0]),
+        rebuild_model=rebuild,
+        evaluate_model=lambda model: ShapeModelEvaluation(
+            1.0-model["q"], np.empty(0)),
+        trial_model_gate=lambda model: model["converged"],
+        move_limit=.25, max_iterations=1, minimum_scale=.25)
+
+    assert [model["q"] for model in solves] == [0.25, 0.125]
+    np.testing.assert_allclose(result.state.parameters, [0.125])
+    assert result.state.model["converged"]
+    assert len(result.history) == 1
+    assert result.history[0].nonlinear_resolves == 2
 
 
 def test_topology_preserving_shape_clears_deformation_after_solver_error(
@@ -209,8 +311,9 @@ def test_topology_preserving_shape_batches_sculpt_and_checks_equivalence(
         result.state.reference_parameters, result.state.parameters)
 
 
+@pytest.mark.parametrize("failure", ["mesh", "model"])
 def test_scheduled_sculpt_gate_failure_keeps_accepted_gettrafo(
-        monkeypatch, tmp_path):
+        monkeypatch, tmp_path, failure):
     import radia.sheet_metal_optimization as sm
 
     class Mesh:
@@ -240,8 +343,8 @@ def test_scheduled_sculpt_gate_failure_keeps_accepted_gettrafo(
     class Backend:
         def rebuild(self, request):
             return CubitShapeRemeshResult(Mesh(), {
-                "status": "gate_failed", "gates": {
-                    "closure_ok": False,
+                "status": "gate_failed" if failure == "mesh" else "ok", "gates": {
+                    "closure_ok": failure != "mesh",
                     "no_inverted_elements": True,
                     "boundary_faces_ok": True,
                 }})
@@ -258,13 +361,14 @@ def test_scheduled_sculpt_gate_failure_keeps_accepted_gettrafo(
         evaluate_model=lambda model: ShapeModelEvaluation(
             1. - model["q"], np.empty(0)),
         move_limit=.25, max_iterations=1, cubit_backend=Backend(),
-        cubit_work_directory=tmp_path, cubit_batch_interval=1)
-    assert calls["trial"] == 1
+        cubit_work_directory=tmp_path, cubit_batch_interval=1,
+        trial_model_gate=lambda model: model["route"] != "cubit_rebuild")
+    assert calls["trial"] == (1 if failure == "mesh" else 2)
     assert len(result.history) == 1
     row = result.history[0]
     assert row.route == "ngsolve_deform"
     assert row.remesh_attempted and not row.remesh_accepted
-    assert "status" in row.remesh_reason
+    assert ("status" if failure == "mesh" else "application gate") in row.remesh_reason
     assert result.state.mesh is mesh and mesh.deformation is not None
     np.testing.assert_allclose(result.state.reference_parameters, [0.])
 

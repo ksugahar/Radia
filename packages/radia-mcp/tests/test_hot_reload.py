@@ -9,15 +9,70 @@ import sys
 import textwrap
 import time
 from pathlib import Path
+from types import ModuleType
 
+import pytest
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp.server.fastmcp import FastMCP
-
 from radia_mcp._shared import hot_reload
 
-
 _clock = [time.time() + 2]
+
+
+@pytest.fixture
+def editable_runtime(monkeypatch):
+    from radia_mcp.common import status
+
+    monkeypatch.setattr(status, "_distribution_provenance", lambda: {"editable": True})
+    monkeypatch.delenv("RADIA_MCP_HOT_RELOAD", raising=False)
+    return status
+
+
+@pytest.mark.parametrize("provenance", [{}, {"editable": False},
+                                      {"editable": None}, {"editable": "true"}])
+def test_reload_is_not_registered_without_verified_editable(provenance, editable_runtime, monkeypatch):
+    monkeypatch.setattr(editable_runtime, "_distribution_provenance", lambda: provenance)
+    server = FastMCP("closed-reload")
+    before = server._mcp_server.create_initialization_options().capabilities
+    hot_reload.register_reload_tool(server, "closed_reload_code")
+    after = server._mcp_server.create_initialization_options().capabilities
+    assert not server._tool_manager.list_tools()
+    assert after == before
+
+
+def test_reload_opt_out_precedes_provenance_and_registration(editable_runtime, monkeypatch):
+    def must_not_probe():
+        raise AssertionError("explicit opt-out must take precedence")
+
+    monkeypatch.setenv("RADIA_MCP_HOT_RELOAD", "0")
+    monkeypatch.setattr(editable_runtime, "_distribution_provenance", must_not_probe)
+    server = FastMCP("disabled-reload")
+    hot_reload.register_reload_tool(server, "disabled_reload_code")
+    assert not server._tool_manager.list_tools()
+    assert not getattr(server._mcp_server, "_radia_declares_tool_list_changed", False)
+
+
+def test_reload_unreadable_provenance_fails_closed(editable_runtime, monkeypatch):
+    def unreadable():
+        raise OSError("metadata unavailable")
+
+    monkeypatch.setattr(editable_runtime, "_distribution_provenance", unreadable)
+    server = FastMCP("unreadable-reload")
+    hot_reload.register_reload_tool(server, "unreadable_reload_code")
+    assert not server._tool_manager.list_tools()
+
+
+def test_refresh_does_not_match_a_similarly_named_package(monkeypatch):
+    module = ModuleType("sample_extra")
+    exec("def sample_ping(): return 'old'", module.__dict__)
+    monkeypatch.setitem(sys.modules, module.__name__, module)
+    server = FastMCP("boundary")
+    server.add_tool(module.sample_ping)
+    exec("def sample_ping(): return 'new'", module.__dict__)
+    report = hot_reload.refresh_tools(server, "sample", reloaded_modules={module.__name__})
+    assert report["updated"] == []
+    assert _call(server, "sample_ping") == "old"
 
 
 def _write(path, body: str) -> None:
@@ -43,7 +98,7 @@ def _call(mcp: FastMCP, name: str):
         return result[0].text
 
 
-def test_reload_updates_stale_tools_and_registers_new_ones(tmp_path, monkeypatch):
+def test_reload_updates_registered_tools_without_publishing_new_callables(tmp_path, monkeypatch, editable_runtime):
     pkg = tmp_path / "hotpkg"
     pkg.mkdir()
     _write(pkg / "__init__.py", "")
@@ -66,7 +121,8 @@ def test_reload_updates_stale_tools_and_registers_new_ones(tmp_path, monkeypatch
     hot_reload.register_reload_tool(mcp, "hot_reload_code", module_prefix="hotpkg")
     assert _call(mcp, "hot_ping") == {"value": "one"}
 
-    # Edit a dependency and add a tool: both land after one reload.
+    # Edit a dependency and add a same-prefix callable: only the registered
+    # tool is refreshed; matching names are not authority to publish tools.
     _write(pkg / "_helper.py", "VALUE = 'two'  # edited while the server ran\n")
     _write(
         pkg / "tools.py",
@@ -85,21 +141,20 @@ def test_reload_updates_stale_tools_and_registers_new_ones(tmp_path, monkeypatch
     assert set(report["reloaded"]) >= {"hotpkg._helper", "hotpkg.tools"}
     assert report["errors"] == {}
     assert report["updated"] == ["hot_ping"]
-    assert report["added"] == ["hot_pong"]
+    assert report["added"] == []
     assert report["removed"] == []
-    assert report["added_tools_need_reconnect_for_server_policy"] is True
+    assert report["added_tools_need_reconnect_for_server_policy"] is False
     assert _call(mcp, "hot_ping") == {"value": "two"}
-    assert _call(mcp, "hot_pong") == {"value": "two!"}
-    added = mcp._tool_manager._tools["hot_pong"]
-    assert added.annotations.destructiveHint is True
-    assert added.annotations.readOnlyHint is False
+    assert "hot_pong" not in mcp._tool_manager._tools
     assert "hot_reload_code" in {t.name for t in mcp._tool_manager.list_tools()}
 
     # Nothing changed since: nothing reloaded, nothing re-registered.
     again = hot_reload.reload_and_refresh(mcp, "hotpkg")
     assert again["reloaded"] == [] and again["updated"] == [] and again["added"] == []
 
-    # Removing a source function removes its stale registered tool too.
+    # Register a new tool explicitly, as normal startup would do. Removing
+    # its source function subsequently removes the stale registration.
+    mcp.add_tool(tools.hot_pong)
     _write(
         pkg / "tools.py",
         """
@@ -118,7 +173,7 @@ def test_reload_updates_stale_tools_and_registers_new_ones(tmp_path, monkeypatch
 
 
 def test_registered_mtime_baseline_handles_a_file_server_clock_skew(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, editable_runtime
 ):
     pkg = tmp_path / "skewpkg"
     pkg.mkdir()
@@ -144,7 +199,7 @@ def test_registered_mtime_baseline_handles_a_file_server_clock_skew(
         sys.modules.pop(name, None)
 
 
-def test_reload_tool_declares_tools_list_changed_capability():
+def test_reload_tool_declares_tools_list_changed_capability(editable_runtime):
     mcp = FastMCP("cap-test")
     hot_reload.register_reload_tool(mcp, "cap_reload_code", module_prefix="radia_mcp")
 
@@ -154,12 +209,16 @@ def test_reload_tool_declares_tools_list_changed_capability():
     assert options.capabilities.tools.listChanged is True
 
 
-async def _probe_reload_notification_over_stdio() -> dict:
+async def _probe_reload_notification_over_stdio(editable, opt_out) -> dict:
     package_root = Path(__file__).resolve().parents[1]
     env = os.environ.copy()
     env["PYTHONPATH"] = os.pathsep.join(
         [str(package_root / "src"), env.get("PYTHONPATH", "")]
     ).rstrip(os.pathsep)
+    if opt_out is None:
+        env.pop("RADIA_MCP_HOT_RELOAD", None)
+    else:
+        env["RADIA_MCP_HOT_RELOAD"] = opt_out
     notifications: list[str] = []
 
     async def handle_message(message) -> None:
@@ -169,7 +228,11 @@ async def _probe_reload_notification_over_stdio() -> dict:
 
     params = StdioServerParameters(
         command=sys.executable,
-        args=["-m", "radia_mcp.grant_writing.server"],
+        # Simulate install provenance, not the protocol: use an actual server
+        # and actual stdio calls without repointing the developer's install.
+        args=["-c", "from radia_mcp.common import status; "
+              f"status._distribution_provenance=lambda: {{'editable': {editable!r}}}; "
+              "from radia_mcp.grant_writing.server import main; main()"],
         cwd=str(package_root),
         env=env,
     )
@@ -180,18 +243,31 @@ async def _probe_reload_notification_over_stdio() -> dict:
             message_handler=handle_message,
         ) as session:
             initialized = await session.initialize()
+            listed = await session.list_tools()
+            exposed = "grant_writing_reload_code" in {tool.name for tool in listed.tools}
+            if not exposed:
+                return {"exposed": False, "notifications": notifications}
             called = await session.call_tool("grant_writing_reload_code", {})
             await asyncio.sleep(0.05)
             return {
+                "exposed": True,
                 "list_changed": initialized.capabilities.tools.listChanged,
                 "payload": json.loads(called.content[0].text),
                 "notifications": notifications,
             }
 
 
-def test_reload_tool_notifies_a_real_stdio_client():
-    result = asyncio.run(_probe_reload_notification_over_stdio())
+@pytest.mark.parametrize("editable,opt_out,exposed", [
+    (True, None, True), (True, "0", False),
+    (False, None, False), (False, "1", False),
+])
+def test_reload_tool_registration_and_notification_over_stdio(editable, opt_out, exposed):
+    result = asyncio.run(_probe_reload_notification_over_stdio(editable, opt_out))
 
+    assert result["exposed"] is exposed
+    if not exposed:
+        assert result["notifications"] == []
+        return
     assert result["list_changed"] is True
     assert result["payload"]["client_notified"] is True
     assert "ToolListChangedNotification" in result["notifications"]

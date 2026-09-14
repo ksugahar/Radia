@@ -468,7 +468,8 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
                      newton_inner_tol="auto", newton_warmstart="linear",
                      newton_continuation=1, newton_reuse_tangent_steps=1,
                      newton_cg_x0=False, gram_backend="hmat",
-                     exact_dense_memory_mb=None, _operator_cache=None):
+                     exact_dense_memory_mb=None, _operator_cache=None,
+                     hex_glpair_n=None, hex_glpair_affine_n=None):
     """HDiv-type VIM soft-iron demag solve (the +N physical material system).
 
     ``leaf=64`` is the production ChargeGram H-matrix default. It is
@@ -498,6 +499,13 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
     H_ext      : NGSolve CoefficientFunction, the applied field (A/m) -- uniform, analytic, or a coil's
                  Biot-Savart field rad.RadiaField(coil,'h').  Required unless ``B_r``, a magnetization
                   source, or the planar magnets path supplies the drive.
+    nl_tol     : for 3D energy-Newton, the norm of the assembled nonlinear
+                 residual divided by the fixed stage source-load norm (the
+                 initial residual norm for a zero source). It no longer means
+                 relative step size. Tiny or settled steps do not certify
+                 convergence; existing tolerances must be reassessed using
+                 nonlinear_final_relative_residual. Picard stopping contracts
+                 are documented separately and are not changed by this rule.
     cyclic_periodic_boundaries : the two named azimuthal cut faces of a
                  connected pure-HEX sector.  The mesh must carry NGSolve
                  PERIODIC point identifications and ``image_cyclic=N`` must
@@ -576,6 +584,13 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
     # Mapped HEX BDM2 uses the cancellation-preserving composite charge rule
     # documented on the production high-order path below.
     order = int(order)
+    if order not in (1, 2):
+        # Production HDiv-MMM is BDM1/BDM2.  Order 0 (broken RT0) exists only as the material-topology
+        # operator space of radia.topology_optimization (DemagOperator on HDiv(order=0, discontinuous=True));
+        # it is not a solve order, and a silent order-0 solve would hide that distinction.
+        raise ValueError(
+            "vim.Solve: order must be 1 (BDM1) or 2 (BDM2); got %r.  Order 0 is the broken RT0 "
+            "material-topology space of radia.topology_optimization, not a production solve order." % (order,))
     if curve_order is None and mesh.dim == 3 and mesh.GetCurveOrder() >= 2:
         curve_order = int(mesh.GetCurveOrder())
     _vtx = _volume_vertex_counts(mesh)
@@ -683,7 +698,8 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
                               operator_cache=_operator_cache,
                               image_cyclic=image_cyclic,
                               image_cyclic_alternating=image_cyclic_alternating,
-                              cyclic_periodic_boundaries=cyclic_periodic_boundaries)
+                              cyclic_periodic_boundaries=cyclic_periodic_boundaries,
+                              hex_glpair_n=hex_glpair_n, hex_glpair_affine_n=hex_glpair_affine_n)
     if linear_recoil_pm:
         result["permanent_magnet_model"] = "linear-recoil"
         result["permanent_magnet_level"] = 2
@@ -702,7 +718,8 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
                       magnetization_sources=(), gram_backend="hmat",
                       exact_dense_memory_mb=None, operator_cache=None,
                       image_cyclic=None, image_cyclic_alternating=False,
-                      cyclic_periodic_boundaries=None):
+                      cyclic_periodic_boundaries=None,
+                      hex_glpair_n=None, hex_glpair_affine_n=None):
     """BDM1/BDM2 HDiv soft-iron demag solve.  The order-p charge-Gram demag operator N = B^T G B is
     a VALID demag operator since the per-element change-of-basis fix (2026-06-28,
     [[hdiv-highorder-material-solve-wrong]]): eig(M_mass^-1 N) in [0,1] and the material solve p-converges
@@ -861,6 +878,7 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
             excluded_boundaries=cyclic_periodic_boundaries,
             gram_backend=gram_backend,
             exact_dense_memory_mb=exact_dense_memory_mb,
+            hex_glpair_n=hex_glpair_n, hex_glpair_affine_n=hex_glpair_affine_n,
             _materialize_mass=False)
         t_after_charge_gram = time.perf_counter()
         charge_build_timings = dict(getattr(build_charge_gram, "last_timings", {}) or {})
@@ -1242,85 +1260,33 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
     Globalization: a chi0 (zero-field) LINEAR W-CG warmstart; an Armijo line search on the CONVEX ENERGY E
     (the merit -- ||R|| stalls in saturation where the inverse-BH
     H(M) blows up, but E keeps decreasing); a HARD-SATURATION BARRIER in the inverse BH (M cannot exceed
-    Msat) that repels the M-iterates from the unphysical |M| > Mmax region.  Convergence: tight (relative
-    Newton step < nl_tol -- 1-2 iters at moderate drive, == the forward Newton to ~1e-13), OR -- for the deep-
-    saturation regime where the hard-saturation M-form intrinsically limit-cycles at the achievable precision
-    -- a settled-step acceptance (rel step < 3e-4 for 5 consecutive iters -> accept the best-energy iterate;
-    the production order-1 limit-cycle plateau is ~1.5-1.9e-4, so the floor is 3e-4; M matched the
-    analytic uniform sphere to ~2e-3 at H0 up to 5e6, knee*5000).  Single-region (scalar
+    Msat) that repels the M-iterates from the unphysical |M| > Mmax region. Convergence requires the
+    assembled nonlinear residual relative to the fixed stage source (or initial residual for zero source).
+    A rejected or settled step cannot certify convergence. Single-region (scalar
     bh_table) AND per-region (dict) iron; prescribed fixed-M sources enter through h_ext before this
     constitutive solve.  CALLER opens TaskManager."""
+    from ._nonlinear import _EnergyMaterialQuadrature
+
     rhs_src = _geometry_mass_apply(H, h_ext)
     Id = ng.Id(3); uf, vf = fes.TnT()
     gfM = ng.GridFunction(fes); l2 = ng.L2(mesh, order=0)
-    # element volumes (for the co-energy integral) = the L2(0) mass diagonal
-    mvol = ng.BilinearForm(l2); mvol += l2.TrialFunction() * l2.TestFunction() * ng.dx; mvol.Assemble()
-    rv, cv, vvv = mvol.mat.COO(); Vol = np.zeros(mesh.ne)
-    for r_, c_, v_ in zip(rv, cv, vvv):
-        if r_ == c_:
-            Vol[int(r_)] = v_
+    material = _EnergyMaterialQuadrature(fes, bh_table)
 
-    # ---- per-region OR single inverse-BH reluctivity fields + co-energy + zero-field chi0 (warmstart) ----
-    if isinstance(bh_table, dict):
-        mats = list(mesh.GetMaterials())
-        missing = sorted(set(mats) - set(bh_table))
-        if missing:
-            raise ValueError("vim.Solve: bh_table dict missing region(s) %s; mesh materials are %s"
-                             % (missing, mats))
-        region_names = list(bh_table)
-        name_to_ridx = {nm: k for k, nm in enumerate(region_names)}
-        region_fields, region_wco = [], []
-        for nm in region_names:
-            arr = np.asarray(bh_table[nm], float)
-            if arr.ndim != 2 or arr.shape[1] != 2:
-                raise ValueError("vim.Solve: bh_table[%r] must be [[H,B], ...] (A/m, T)" % (nm,))
-            f, w, _ = _bh_inverse_funcs(arr[:, 0], arr[:, 1]); region_fields.append(f); region_wco.append(w)
-        elem_region = np.array([name_to_ridx[mesh[ng.ElementId(ng.VOL, i)].mat] for i in range(mesh.ne)],
-                               dtype=int)
-
-        def _reluct(g):
-            return _reluctivity_tangent_multi(g, mesh, region_fields, elem_region, Id)
-
-        def _wco_all(Mmag):
-            out = np.empty_like(Mmag)
-            for ridx, w in enumerate(region_wco):
-                sel = elem_region == ridx
-                if np.any(sel):
-                    out[sel] = w(Mmag[sel])
-            return out
-
-        chi0_e = np.empty(mesh.ne)
-        for ridx, f in enumerate(region_fields):
-            _, nd0 = f(np.array([1e-12])); chi0_e[elem_region == ridx] = 1.0 / max(float(nd0[0]), 1e-30)
-    else:
-        arr = np.asarray(bh_table, float)
-        if arr.ndim != 2 or arr.shape[1] != 2:
-            raise ValueError("vim.Solve: bh_table must be [[H,B], ...] (A/m, T)")
-        fields, wco, _ = _bh_inverse_funcs(arr[:, 0], arr[:, 1])
-
-        def _reluct(g):
-            return _reluctivity_tangent(g, mesh, fields, Id)
-
-        def _wco_all(Mmag):
-            return wco(Mmag)
-
-        _, nd0 = fields(np.array([1e-12])); chi0_e = np.full(mesh.ne, 1.0 / max(float(nd0[0]), 1e-30))
+    def _reluct(g):
+        material.update(g.vec.FV().NumPy())
+        return material.field, material.tangent
 
     def _N_apply(v):
         return np.asarray(H.apply_configured_demag(_f64(v), True), float)
 
-    def _Mmag(m):
-        gfM.vec.FV().NumPy()[:] = m
-        gfn = ng.GridFunction(l2); gfn.Set(ng.sqrt(ng.InnerProduct(gfM, gfM) + 1e-30))
-        return np.maximum(gfn.vec.FV().NumPy(), 1e-30)
-
     def _bH(H_cf):
-        lf = ng.LinearForm(fes); lf += H_cf * vf * ng.dx; lf.Assemble()
+        lf = ng.LinearForm(fes); lf += H_cf * vf * material.measure; lf.Assemble()
         return lf.vec.FV().NumPy().copy()
 
     def _W_matrix(weight_cf, tensor):
         a = ng.BilinearForm(fes)
-        a += (ng.InnerProduct(weight_cf * uf, vf) if tensor else weight_cf * uf * vf) * ng.dx
+        form = ng.InnerProduct(weight_cf * uf, vf) if tensor else weight_cf * uf * vf
+        a += material.bilinear_integrator(form)
         a.Assemble()
         return a.mat
 
@@ -1328,7 +1294,8 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
         raise ValueError("vim.Solve: energy-newton inner_preconditioner must be 'mass-riesz' or 'jacobi' "
                          "(got %r)" % (inner_preconditioner,))
 
-    def _solve_W(W_matrix, rhs, *, tol_override=None, x0=None):
+    def _solve_W(W_matrix, rhs, *, tol_override=None, x0=None,
+                 context="unspecified"):
         solve_tol = float(cg_tol if tol_override is None else max(float(cg_tol), float(tol_override)))
         if inner_preconditioner == "jacobi":
             res = _h_solve_auto_prec(
@@ -1339,13 +1306,32 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
         _capture_cpp_solve_timings(res)
         it = int(res["iters"])
         if it >= int(cg_maxit):
-            raise RuntimeError("vim.Solve (energy-Newton inner W-CG): did NOT converge in %d iters "
-                               "(n_face=%d); the (W_tan + N) operator is SPD, so this means an ill-"
-                               "conditioned tangent/mesh -- tighten gram_eps or raise maxit." % (cg_maxit, n_face))
+            error = RuntimeError(
+                "vim.Solve (energy-Newton inner W-CG): did NOT converge in %d iters "
+                "(n_face=%d, context=%s, target=%.3e, preconditioner=%s); "
+                "inspect tangent conditioning, Gram accuracy and the iteration limit."
+                % (it, n_face, context, solve_tol, inner_preconditioner))
+            error.linear_context = str(context)
+            error.linear_iterations = it
+            error.linear_requested_tolerance = solve_tol
+            error.linear_preconditioner = str(inner_preconditioner)
+            raise error
         return np.asarray(res["m"], float), it
 
     def _energy(m, rhs):                        # E(m) = INT W_co(|M|) dx + 1/2 m.Nm - rhs.m
-        return float(np.dot(_wco_all(_Mmag(m)), Vol)) + 0.5 * float(m @ _N_apply(m)) - float(rhs @ m)
+        return material.update(m) + 0.5 * float(m @ _N_apply(m)) - float(rhs @ m)
+
+    def _line_search(m, dm, rhs, energy, decrement):
+        if not np.isfinite(decrement) or decrement <= 0 or not np.isfinite(dm).all():
+            return None, None, 0
+        lam, backtracks = 1.0, 0
+        while lam > 1e-10:
+            trial_energy = _energy(m + lam * dm, rhs)
+            if np.isfinite(trial_energy) and trial_energy <= energy - 1e-4 * lam * decrement:
+                return lam, trial_energy, backtracks
+            lam *= 0.5
+            backtracks += 1
+        return None, None, backtracks
 
     def _forcing_tol(prev_rel_step, stage_final):
         if inner_tol in (None, "fixed"):
@@ -1375,6 +1361,10 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
         "nonlinear_tangent_assemblies": 0,
         "nonlinear_tangent_reuses": 0,
         "nonlinear_fresh_tangent_retries": 0,
+        "nonlinear_material_quadrature_order": material.order,
+        "nonlinear_convergence_mode": "running",
+        "nonlinear_line_search_exhausted": False,
+        "nonlinear_residual_tolerance": float(nl_tol),
     }
     alphas = np.linspace(1.0 / nstage, 1.0, nstage)
     invchi0 = None
@@ -1387,16 +1377,18 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
     final_rel_step = float("inf")
     final_settled = 0
     converged_final = False
+    relative_residual = float("inf")
 
     for istage, alpha in enumerate(alphas):
         rhs_stage = float(alpha) * rhs_src
         stage_final = istage == len(alphas) - 1
-        if not m0_provided and istage == 0 and warmstart == "linear":
+        if not m0_provided and istage == 0 and warmstart == "linear" and np.any(rhs_stage):
             # chi0 (zero-field) LINEAR warmstart: (M_{1/chi0} + N) m = M_mass h_ext.
             invchi0 = ng.GridFunction(l2)
-            invchi0.vec.FV().NumPy()[:] = 1.0 / np.maximum(chi0_e, 1.0)
+            invchi0.Set(material.initial_reluctivity)
             m, it0 = _solve_W(
-                _W_matrix(invchi0, tensor=False), rhs_stage, tol_override=max(cg_tol, 1e-6))
+                _W_matrix(invchi0, tensor=False), rhs_stage, tol_override=max(cg_tol, 1e-6),
+                context="linear_warmstart_stage_1")
             stats["nonlinear_warmstart_solves"] += 1
             stats["nonlinear_linear_inner_iters"] += int(it0)
 
@@ -1408,12 +1400,24 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
         mbest = m.copy()
         cached_W = None
         cached_it = -10**9
+        residual_scale = None
         for it in range(int(nl_maxit)):
             total_nit += 1
             stats["nonlinear_newton_iters"] += 1
             gfM.vec.FV().NumPy()[:] = m
             H_cf, nud = _reluct(gfM)
             R = _bH(H_cf) + _N_apply(m) - rhs_stage
+            if not np.isfinite(R).all() or not np.isfinite(E):
+                raise RuntimeError("vim.Solve (energy-Newton): non-finite residual or energy")
+            if residual_scale is None:
+                residual_scale = float(np.linalg.norm(rhs_stage))
+                if residual_scale == 0:
+                    residual_scale = max(float(np.linalg.norm(R)), np.finfo(float).tiny)
+            relative_residual = float(np.linalg.norm(R)) / residual_scale
+            if relative_residual <= nl_tol:
+                converged = True
+                rel_step = 0.0 if not np.isfinite(rel_step) else rel_step
+                break
             rebuild = cached_W is None or (it - cached_it) >= reuse_steps
             if rebuild:
                 cached_W = _W_matrix(nud, tensor=True)
@@ -1423,65 +1427,80 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
                 stats["nonlinear_tangent_reuses"] += 1
             solve_tol = _forcing_tol(rel_step, stage_final)
             dm, itlin = _solve_W(cached_W, -R, tol_override=solve_tol,
-                                 x0=dm_prev if (cg_x0 and dm_prev is not None) else None)
+                                 x0=dm_prev if (cg_x0 and dm_prev is not None) else None,
+                                 context="newton_stage_%d_iteration_%d" % (istage + 1, it + 1))
             stats["nonlinear_linear_inner_iters"] += int(itlin)
             dec = float(-dm @ R)                             # dm.(-R) = dm^T J dm >= 0
-            lam = 1.0
             E0 = E
-            backtracks = 0
-            while lam > 1e-10:
-                if _energy(m + lam * dm, rhs_stage) <= E0 - 1e-4 * lam * dec:
-                    break
-                lam *= 0.5
-                backtracks += 1
-            if lam <= 1e-10 and not rebuild:
+            lam, trial_energy, backtracks = _line_search(m, dm, rhs_stage, E0, dec)
+            stats["nonlinear_line_search_backtracks"] += int(backtracks)
+            if lam is None and not rebuild:
                 # A reused/chord tangent can occasionally lose descent.  Pay for one fresh tangent before
-                # accepting a microscopic step.
+                # reporting failure; rejected trial evaluations changed the quadrature state.
+                material.update(m)
                 cached_W = _W_matrix(nud, tensor=True)
                 cached_it = it
                 stats["nonlinear_tangent_assemblies"] += 1
                 stats["nonlinear_fresh_tangent_retries"] += 1
                 dm, itlin = _solve_W(cached_W, -R, tol_override=max(cg_tol, min(1e-4, solve_tol)),
-                                     x0=dm_prev if (cg_x0 and dm_prev is not None) else None)
+                                     x0=dm_prev if (cg_x0 and dm_prev is not None) else None,
+                                     context="fresh_tangent_stage_%d_iteration_%d" % (istage + 1, it + 1))
                 stats["nonlinear_linear_inner_iters"] += int(itlin)
                 dec = float(-dm @ R)
-                lam = 1.0
-                backtracks = 0
-                while lam > 1e-10:
-                    if _energy(m + lam * dm, rhs_stage) <= E0 - 1e-4 * lam * dec:
-                        break
-                    lam *= 0.5
-                    backtracks += 1
-            stats["nonlinear_line_search_backtracks"] += int(backtracks)
+                lam, trial_energy, backtracks = _line_search(m, dm, rhs_stage, E0, dec)
+                stats["nonlinear_line_search_backtracks"] += int(backtracks)
+            if lam is None:
+                stats["nonlinear_final_relative_residual"] = relative_residual
+                stats["nonlinear_converged_final_stage"] = False
+                stats["nonlinear_convergence_mode"] = "line-search-exhausted"
+                stats["nonlinear_line_search_exhausted"] = True
+                step_norm = float(np.linalg.norm(dm))
+                state_norm = float(np.linalg.norm(m))
+                stats["nonlinear_rejected_newton_step_norm"] = step_norm
+                stats["nonlinear_rejected_state_norm"] = state_norm
+                stats["nonlinear_rejected_relative_newton_step"] = (
+                    step_norm / state_norm if state_norm > step_norm / np.finfo(float).max else None)
+                stats["nonlinear_rejected_predicted_decrease"] = dec
+                _capture_nonlinear_solve_stats(stats)
+                error = RuntimeError(
+                    "vim.Solve (energy-Newton): Armijo line search failed at stage %d iteration %d; "
+                    "relative residual %.3e (target %.3e). No rejected step is accepted."
+                    % (istage + 1, it + 1, relative_residual, nl_tol))
+                error.nonlinear_stats = dict(stats)
+                raise error
             step = lam * dm
             rel_step = float(np.linalg.norm(step)) / (float(np.linalg.norm(m)) + 1e-30)
             m = m + step
             dm_prev = dm
-            E = _energy(m, rhs_stage)
+            E = trial_energy
             if E < Ebest:
                 Ebest = E
                 mbest = m.copy()
             settled = settled + 1 if rel_step < 3e-4 else 0
-            if rel_step < nl_tol:
+            material.update(m)
+            final_R = _bH(material.field) + _N_apply(m) - rhs_stage
+            relative_residual = float(np.linalg.norm(final_R)) / residual_scale
+            if np.isfinite(relative_residual) and relative_residual <= nl_tol:
                 converged = True
-                break
-            if settled >= 5:
-                converged = True
-                m = mbest
                 break
         if not converged:
             m = mbest
+            stats["nonlinear_final_relative_residual"] = float(relative_residual)
+            stats["nonlinear_converged_final_stage"] = False
+            stats["nonlinear_convergence_mode"] = "iteration-limit"
             _capture_nonlinear_solve_stats(stats)
-            raise RuntimeError("vim.Solve (energy-Newton): did NOT converge -- rel step=%.2e (tol %.1e), "
+            raise RuntimeError("vim.Solve (energy-Newton): did NOT converge -- relative residual=%.2e (tol %.1e), "
                                "%d settled iters after %d (returning M would be a silent wrong result).  For an "
                                "extreme-saturation / ill-conditioned case, increase continuation or use the "
-                               "mass-Riesz preconditioner." % (rel_step, nl_tol, settled, total_nit))
+                               "mass-Riesz preconditioner." % (relative_residual, nl_tol, settled, total_nit))
         final_rel_step = rel_step
         final_settled = settled
         converged_final = stage_final
 
     stats["nonlinear_final_rel_step"] = float(final_rel_step)
+    stats["nonlinear_final_relative_residual"] = float(relative_residual)
     stats["nonlinear_final_settled_iters"] = int(final_settled)
     stats["nonlinear_converged_final_stage"] = bool(converged_final)
+    stats["nonlinear_convergence_mode"] = "tolerance"
     _capture_nonlinear_solve_stats(stats)
     return m, total_nit

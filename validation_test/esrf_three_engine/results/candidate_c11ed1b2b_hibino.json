@@ -1,0 +1,65 @@
+{
+  "schema": "radia.validation.esrf-candidate-assessment.v1",
+  "date": "2026-09-05",
+  "machine": "Hibino",
+  "passed": false,
+  "release_blocking": true,
+  "candidate_only": true,
+  "source_commit": "c11ed1b2bbd7addad1f8f4c61a11ec372d8f7996",
+  "wheel_sha256": "a9c3ee6cdf2263eb020a21f07514ddc9c254cf129a2fd9f2d250a1b5d1ecac90",
+  "native_sha256": "4d90f48f6edd4f5ba40dea78a90e96df2a256dc7ccdc4eada2530056ea237f24",
+  "version_string": "4.95.81",
+  "published_artifact": false,
+  "venv": "C:/temp/radia-candidate-c11ed1b2b/venv",
+  "environment": {
+    "python": "3.12.10",
+    "ngsolve": "6.2.2606",
+    "netgen-mesher": "6.2.2606",
+    "numpy": "2.4.3",
+    "scipy": "1.17.1",
+    "mkl": "2026.1.0",
+    "system_dependencies_read_only": true,
+    "numerical_overrides": {},
+    "pip_check_passed": true,
+    "wheel_files_verified": 336
+  },
+  "tests": {
+    "local_focused_passed": 41,
+    "installed_wheel_passed": 31,
+    "installed_wheel_duration_s": 56.26,
+    "new_material_envelope_regressions_fail_on_previous_implementation": 2
+  },
+  "case6": {
+    "status": "failed_hdiv_cg",
+    "comparison_complete": false,
+    "hdiv_order": 1,
+    "fem_order": 1,
+    "image": null,
+    "gram_eps": 1e-10,
+    "threads": 32,
+    "nonlinear_tolerance": 2e-5,
+    "nonlinear_maximum_iterations": 160,
+    "cg_breakdown_iteration": 86,
+    "pAp": -1893733131.842714,
+    "error": "SolveLinearMaterial: CG breakdown; the charge-Gram operator is not SPD. Raising maxit will not help.",
+    "diagnostic_minres_used": false,
+    "fem_engines_executed": false
+  },
+  "case7": {
+    "status": "hdiv_converged_fem_material_bounds_corrected_rerun_pending",
+    "comparison_complete": false,
+    "hdiv_evidence": "case7_hdiv_6d66d38f9_hibino.json",
+    "hdiv_evidence_source_commit": "6d66d38f9b0aa3eb914215e2161b791d0d0d9401",
+    "hdiv_evidence_wheel_sha256": "8c34e57bd9ef9dc98ea788941266133f1cea06e5625be98897428480a9b58a7d",
+    "hdiv_native_matches_this_candidate": true,
+    "invalid_fem_pilots_stopped": true,
+    "invalid_fem_fields_accepted": false,
+    "corrected_fem_full_model_validated": false
+  },
+  "acceptance": {
+    "required_engines": ["hdiv_mmm", "reduced_a", "mixed_total_reduced_omega"],
+    "relative_rms_tolerance": 0.03,
+    "tolerance_relaxed": false,
+    "three_engine_agreement_claimed": false
+  }
+}

@@ -6,7 +6,7 @@ pytest.importorskip("netgen.occ")
 from validation_test.maglev.team28_hcurl_eddy_bubble import run
 
 
-def test_team28_p6_hcurl_eddy_bubble_structural_acceptance():
+def test_team28_p6_hcurl_eddy_bubble_plan_and_reference_record():
     result = run()
 
     assert result["structural_and_reference_acceptance_passed"] is True
@@ -20,8 +20,5 @@ def test_team28_p6_hcurl_eddy_bubble_structural_acceptance():
     assert result["cln_reference_acceptance"]["cln_vs_full_fem"][
         "max_abs_error_N"
     ] < 5.0e-6
-    assert result["hcurl_vim_force_acceptance_complete"] is True
-    assert result["hcurl_vim_force_acceptance"]["validation_host"] == "mdx"
-    assert result["hcurl_vim_force_acceptance"][
-        "maximum_force_relative_error"
-    ] < 0.01
+    # Numerical force acceptance is checked by its record test and the live
+    # validation lane, not by asserting the same copied summary here.

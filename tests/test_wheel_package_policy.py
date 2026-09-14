@@ -7,6 +7,11 @@ import tomllib
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_coil_builder_dependency_is_available_without_extras():
+    config = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    assert "scipy>=1.11" in config["project"]["dependencies"]
+
+
 def test_radia_wheel_excludes_native_backup_files():
     config = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     excluded = set(
@@ -18,6 +23,34 @@ def test_radia_wheel_excludes_native_backup_files():
         "*.pre_*.pyd",
         "*.backup*.pyd",
     } <= excluded
+
+
+def test_sdist_manifest_excludes_retired_and_backup_payloads():
+    from setuptools._distutils.filelist import FileList
+
+    kept = {
+        str(Path("src/radia/_radia_pybind.pyd")),
+        str(Path("src/radia/radia_motor_rom.dll")),
+        str(Path("src/radia/panels/cubit_toolbar/icons/export.svg")),
+    }
+    excluded = {
+        str(Path("src/radia/cubit_mesh_curver.pyd")),
+        str(Path("src/radia/_radia_pybind.locked-old.pyd")),
+        str(Path("src/radia/_radia_pybind.lockedold.pyd")),
+        str(Path("src/radia/_radia_pybind.pre_release.pyd")),
+        str(Path("src/radia/_radia_pybind.backup1.pyd")),
+        str(Path("examples/retired.py")),
+        str(Path("examples/cubit/retired.vol")),
+    }
+    files = FileList()
+    files.set_allfiles(sorted(kept | excluded))
+    # Also cover files found before MANIFEST.in processing (e.g. cached lists).
+    files.files = sorted(kept | excluded)
+    for line in (ROOT / "MANIFEST.in").read_text(encoding="utf-8").splitlines():
+        if line.strip() and not line.lstrip().startswith("#"):
+            files.process_template_line(line)
+    assert kept <= set(files.files)
+    assert not excluded.intersection(files.files)
 
 
 def test_mkl_is_external_but_the_radia_owned_motor_abi_is_documented():

@@ -35,6 +35,7 @@ Sources absorbed:
 from __future__ import annotations
 
 import io
+import gzip
 import re
 import tarfile
 import urllib.parse
@@ -57,6 +58,10 @@ EM_DEFAULT_CATEGORIES = (
     "cs.CE",             # Computational Engineering
     "math.NA",           # Numerical Analysis
 )
+
+_MAX_SOURCE_BYTES = 50 * 1024 * 1024
+_MAX_EXPANDED_BYTES = 64 * 1024 * 1024
+_MAX_SOURCE_MEMBERS = 4096
 
 
 # ============================================================
@@ -135,6 +140,11 @@ def paper_writing_arxiv_fetch_latex_source(
             blowing the context).
         max_chars_per_file: cap on chars per .tex file.
 
+    Safety limits: 50 MiB streamed download, 64 MiB expanded tar/gzip,
+    4096 archive members, 100 returned files, and 1000000 characters per
+    returned file. Individual source reads are bounded to eight times the
+    requested character limit. Files are read in memory, never extracted to disk.
+
     Returns:
         dict with:
           "arxiv_id": canonicalized ID
@@ -150,80 +160,80 @@ def paper_writing_arxiv_fetch_latex_source(
     """
     requests = _require_requests()
     aid = _normalize_arxiv_id(arxiv_id)
+    if not re.fullmatch(r"(?:\d{4}\.\d{4,5}|[A-Za-z][\w.-]*/\d{7})", aid):
+        return {"error": "invalid arXiv identifier"}
+    if (type(max_files) is not int or type(max_chars_per_file) is not int
+            or not 1 <= max_files <= 100 or not 1 <= max_chars_per_file <= 1_000_000):
+        return {"error": "max_files must be 1..100 and max_chars_per_file 1..1000000"}
     url = f"https://arxiv.org/e-print/{aid}"
+    response = None
     try:
-        r = requests.get(
-            url,
+        response = requests.get(
+            url, stream=True,
             headers={"User-Agent": "radia-mcp (mailto:ksugahar@ele.kindai.ac.jp)"},
             timeout=60,
         )
-        r.raise_for_status()
-    except Exception as e:  # noqa: BLE001 - re-raise as clean MCP-JSON
+        response.raise_for_status()
+        blob = bytearray()
+        for chunk in response.iter_content(chunk_size=65536):
+            if len(blob) + len(chunk) > _MAX_SOURCE_BYTES:
+                raise ValueError("source download exceeds safety limit")
+            blob.extend(chunk)
+    except Exception as e:
         return {"error": f"arXiv e-print fetch failed for {aid}: {e}"}
+    finally:
+        if response is not None:
+            response.close()
 
-    # arXiv returns gzipped tar (occasionally a single .gz of a .tex)
-    blob = r.content
-    if len(blob) > 50 * 1024 * 1024:
-        return {"error": "arXiv source archive exceeds the 50 MiB safety limit"}
     files = []
     main_tex = None
     n_total = 0
-
     try:
-        tar = tarfile.open(fileobj=io.BytesIO(blob), mode="r:*")
-    except tarfile.ReadError:
-        # Maybe it's a single gzipped .tex (rare but happens)
-        import gzip
+        is_gzip = blob[:2] == b"\x1f\x8b"
+        if is_gzip:
+            with gzip.GzipFile(fileobj=io.BytesIO(blob)) as compressed:
+                raw_archive = compressed.read(_MAX_EXPANDED_BYTES + 1)
+        else:
+            raw_archive = blob
+        if len(raw_archive) > _MAX_EXPANDED_BYTES:
+            raise ValueError("expanded source exceeds safety limit")
         try:
-            txt = gzip.decompress(blob).decode("utf-8", errors="replace")
-            files.append({
-                "name": f"{aid}.tex",
-                "size_bytes": len(txt.encode("utf-8")),
-                "content": txt[:max_chars_per_file],
-            })
+            tar = tarfile.open(fileobj=io.BytesIO(raw_archive), mode="r:")
+        except tarfile.ReadError:
+            if not is_gzip:
+                raise
+            if len(raw_archive) > max_chars_per_file * 8:
+                raise ValueError("single source file exceeds safety limit")
+            txt = raw_archive.decode("utf-8", errors="replace")
             return {
-                "arxiv_id": aid,
-                "main_tex": f"{aid}.tex",
-                "files": files,
+                "arxiv_id": aid, "main_tex": f"{aid}.tex",
+                "files": [{"name": f"{aid}.tex", "size_bytes": len(raw_archive),
+                           "content": txt[:max_chars_per_file]}],
                 "n_files_total": 1,
-                "advice": "Single-file .gz arXiv submission (rare path).",
+                "advice": "Single-file .gz arXiv submission.",
             }
-        except Exception as e:  # noqa: BLE001
-            return {
-                "error": f"arXiv tarball decode failed for {aid}: not tar, "
-                         f"not gz, exception={e}",
-            }
-
-    for member in tar.getmembers():
-        if not member.isfile():
-            continue
-        if not member.name.endswith(".tex"):
-            continue
-        n_total += 1
-        if len(files) >= max_files:
-            continue
-        if member.size > max_chars_per_file * 8:
-            return {
-                "error": (
-                    f"arXiv member {member.name!r} is unexpectedly large "
-                    f"({member.size} bytes)"
-                )
-            }
-        fh = tar.extractfile(member)
-        if fh is None:
-            continue
-        raw = fh.read(max_chars_per_file * 8 + 1)
-        text = raw.decode("utf-8", errors="replace")
-        is_main = "\\documentclass" in text and main_tex is None
-        if is_main:
-            main_tex = member.name
-        files.append({
-            "name": member.name,
-            "size_bytes": member.size,
-            "content": text[:max_chars_per_file],
-        })
-
-    tar.close()
+        with tar:
+            for index, member in enumerate(tar):
+                if index >= _MAX_SOURCE_MEMBERS:
+                    raise ValueError("source archive member count exceeds safety limit")
+                if not member.isfile() or not member.name.endswith(".tex"):
+                    continue
+                n_total += 1
+                if member.size > max_chars_per_file * 8:
+                    raise ValueError(f"source member {member.name!r} exceeds safety limit")
+                if len(files) >= max_files:
+                    continue
+                with tar.extractfile(member) as fh:
+                    raw = fh.read(max_chars_per_file * 8 + 1)
+                if len(raw) != member.size:
+                    raise ValueError("incomplete source member")
+                text = raw.decode("utf-8", errors="replace")
+                if "\\documentclass" in text and main_tex is None:
+                    main_tex = member.name
+                files.append({"name": member.name, "size_bytes": member.size,
+                              "content": text[:max_chars_per_file]})
+    except Exception as e:
+        return {"error": f"arXiv source decode failed for {aid}: {e}"}
 
     if not files:
         return {"error": f"No .tex files found in arXiv tarball for {aid}"}
@@ -403,6 +413,7 @@ def paper_writing_arxiv_search(
         "sortBy": sort_by,
         "sortOrder": "descending",
     }
+    r = None
     try:
         r = requests.get(
             url,
@@ -411,8 +422,12 @@ def paper_writing_arxiv_search(
             timeout=30,
         )
         r.raise_for_status()
+        response_text = r.text
     except Exception as e:  # noqa: BLE001
         return {"error": f"arXiv search failed: {e}"}
+    finally:
+        if r is not None:
+            r.close()
 
     # Parse Atom XML
     import xml.etree.ElementTree as ET
@@ -421,9 +436,11 @@ def paper_writing_arxiv_search(
         "arxiv": "http://arxiv.org/schemas/atom",
     }
     try:
-        root = ET.fromstring(r.text)
-    except ET.ParseError as e:
+        root = ET.fromstring(response_text)
+    except (ET.ParseError, TypeError) as e:
         return {"error": f"arXiv search XML parse error: {e}"}
+    if root.tag != "{http://www.w3.org/2005/Atom}feed":
+        return {"error": "arXiv search returned an unexpected document (not an Atom feed)"}
 
     papers = []
     for entry in root.findall("atom:entry", ns):
@@ -440,6 +457,8 @@ def paper_writing_arxiv_search(
             summary_text = re.sub(r"\s+", " ", summary).strip()
             return {"error": f"arXiv API error: {summary_text or title}"}
         aid = _normalize_arxiv_id(id_url) if id_url else ""
+        if not title or not re.fullmatch(r"(?:\d{4}\.\d{4,5}|[A-Za-z][\w.-]*/\d{7})", aid):
+            return {"error": "arXiv API returned an invalid paper identifier or missing title"}
         # PDF link
         pdf_url = ""
         abs_url = ""
@@ -478,6 +497,40 @@ def paper_writing_arxiv_search(
 # ============================================================
 
 
+def _normalize_s2_id(paper_id: str) -> str:
+    """Normalize known identifier forms without decoding literal bare DOI percent signs."""
+    from .paper_download import _normalize_doi
+
+    if not isinstance(paper_id, str) or not paper_id.strip():
+        raise ValueError("paper_id must be a nonempty string")
+    pid = paper_id.strip()
+    if re.match(r"^(?:doi\s*:|(?:https?://)?(?:dx\.)?doi\.org/|10\.)", pid,
+                re.IGNORECASE):
+        doi = _normalize_doi(pid)
+        if not re.fullmatch(r"10\.\d{4,9}/\S+", doi):
+            raise ValueError("invalid DOI identifier")
+        return "DOI:" + doi
+    page = urllib.parse.urlsplit(pid)
+    if (page.scheme.lower() in {"http", "https"}
+            and page.hostname in {"semanticscholar.org", "www.semanticscholar.org"}):
+        parts = page.path.strip("/").split("/")
+        if len(parts) not in {2, 3} or parts[0] != "paper" or not parts[-1]:
+            raise ValueError("invalid Semantic Scholar paper URL")
+        return urllib.parse.unquote(parts[-1])
+    arxiv_url = re.match(r"^https?://(?:www\.)?arxiv\.org/(?:abs|pdf)/", pid,
+                         re.IGNORECASE)
+    if arxiv_url:
+        pid = urllib.parse.unquote(page.path.split("/", 2)[2])
+    if (arxiv_url or pid.lower().startswith("arxiv:")
+            or re.fullmatch(r"\d{4}\.\d{4,5}(?:v\d+)?", pid)
+            or re.fullmatch(r"[A-Za-z][\w.-]*/\d{7}(?:v\d+)?", pid)):
+        aid = _normalize_arxiv_id(pid).strip()
+        if not re.fullmatch(r"(?:\d{4}\.\d{4,5}|[A-Za-z][\w.-]*/\d{7})", aid):
+            raise ValueError("invalid arXiv identifier")
+        return "ARXIV:" + aid
+    return pid  # Preserve other S2 namespaces (CorpusID, PMID, ACL, URL).
+
+
 def paper_writing_semantic_scholar_lookup(
     paper_id: str,
     fields: str = "title,abstract,authors,year,venue,referenceCount,citationCount,externalIds",
@@ -507,40 +560,32 @@ def paper_writing_semantic_scholar_lookup(
         (S2 reference / citation traversal pattern)
       * https://api.semanticscholar.org/graph/v1
     """
+    try:
+        pid = _normalize_s2_id(paper_id)
+    except ValueError as exc:
+        return {"error": str(exc)}
     requests = _require_requests()
-
-    # Build S2-style ID
-    pid = paper_id.strip()
-    if pid.startswith("https://www.semanticscholar.org/paper/"):
-        pid = pid.split("/paper/")[1].split("/")[0]
-    elif pid.lower().startswith("arxiv:"):
-        pid = f"ARXIV:{pid[6:]}"
-    elif re.match(r"^(?:doi:|https?://(?:dx\.)?doi\.org/|10\.)", pid,
-                  re.IGNORECASE):
-        pid = re.sub(r"^doi\s*:\s*", "", pid, flags=re.IGNORECASE)
-        pid = re.sub(
-            r"^https?://(?:dx\.)?doi\.org/", "", pid, flags=re.IGNORECASE
-        )
-        pid = f"DOI:{pid}"
-    elif "/" in pid and re.match(r"^[a-z\-]+/\d{7}$", pid.lower()):
-        # old-style arXiv
-        pid = f"ARXIV:{pid}"
-    # else: pass through as-is (S2 will resolve)
 
     url = (
         "https://api.semanticscholar.org/graph/v1/paper/"
         + urllib.parse.quote(pid, safe=":")
     )
     params = {"fields": fields}
+    r = None
     try:
         r = requests.get(url, params=params, timeout=30)
         if r.status_code == 404:
             return {"error": f"paper not found in Semantic Scholar: {paper_id}"}
         r.raise_for_status()
+        data = r.json()
+        if not isinstance(data, dict) or data.get("error"):
+            raise ValueError("invalid Semantic Scholar response")
     except Exception as e:  # noqa: BLE001
         return {"error": f"Semantic Scholar lookup failed: {e}"}
+    finally:
+        if r is not None:
+            r.close()
 
-    data = r.json()
     return {
         "paper_id_input": paper_id,
         "paper_id_resolved": pid,
@@ -576,24 +621,33 @@ def paper_writing_semantic_scholar_references(
     Returns:
         dict with "references": list of paper dicts.
     """
+    try:
+        pid = _normalize_s2_id(paper_id)
+    except ValueError as exc:
+        return {"error": str(exc)}
     requests = _require_requests()
-    pid = paper_id.strip()
-    if pid.lower().startswith("arxiv:"):
-        pid = f"ARXIV:{pid[6:]}"
-    elif pid.startswith("10."):
-        pid = f"DOI:{pid}"
 
     limit = max(1, min(int(limit), 1000))
-    url = f"https://api.semanticscholar.org/graph/v1/paper/{pid}/references"
+    url = "https://api.semanticscholar.org/graph/v1/paper/" + urllib.parse.quote(pid, safe=":") + "/references"
     params = {"fields": fields, "limit": limit}
+    r = None
     try:
         r = requests.get(url, params=params, timeout=30)
         if r.status_code == 404:
             return {"error": f"paper not found: {paper_id}"}
         r.raise_for_status()
+        data = r.json()
+        if not isinstance(data, dict) or data.get("error"):
+            raise ValueError("invalid Semantic Scholar response")
+        rows = data.get("data")
+        if (not isinstance(rows, list) or not all(isinstance(row, dict)
+                and isinstance(row.get("citedPaper"), dict) for row in rows)):
+            raise ValueError("missing or malformed graph entries")
     except Exception as e:  # noqa: BLE001
         return {"error": f"S2 references lookup failed: {e}"}
-    data = r.json()
+    finally:
+        if r is not None:
+            r.close()
     return {
         "paper_id": pid,
         "n_references": len(data.get("data", [])),
@@ -625,24 +679,33 @@ def paper_writing_semantic_scholar_citations(
     Returns:
         dict with "citations": list of paper dicts.
     """
+    try:
+        pid = _normalize_s2_id(paper_id)
+    except ValueError as exc:
+        return {"error": str(exc)}
     requests = _require_requests()
-    pid = paper_id.strip()
-    if pid.lower().startswith("arxiv:"):
-        pid = f"ARXIV:{pid[6:]}"
-    elif pid.startswith("10."):
-        pid = f"DOI:{pid}"
 
     limit = max(1, min(int(limit), 1000))
-    url = f"https://api.semanticscholar.org/graph/v1/paper/{pid}/citations"
+    url = "https://api.semanticscholar.org/graph/v1/paper/" + urllib.parse.quote(pid, safe=":") + "/citations"
     params = {"fields": fields, "limit": limit}
+    r = None
     try:
         r = requests.get(url, params=params, timeout=30)
         if r.status_code == 404:
             return {"error": f"paper not found: {paper_id}"}
         r.raise_for_status()
+        data = r.json()
+        if not isinstance(data, dict) or data.get("error"):
+            raise ValueError("invalid Semantic Scholar response")
+        rows = data.get("data")
+        if (not isinstance(rows, list) or not all(isinstance(row, dict)
+                and isinstance(row.get("citingPaper"), dict) for row in rows)):
+            raise ValueError("missing or malformed graph entries")
     except Exception as e:  # noqa: BLE001
         return {"error": f"S2 citations lookup failed: {e}"}
-    data = r.json()
+    finally:
+        if r is not None:
+            r.close()
     return {
         "paper_id": pid,
         "n_citations": len(data.get("data", [])),

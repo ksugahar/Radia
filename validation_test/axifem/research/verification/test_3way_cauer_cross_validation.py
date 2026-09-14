@@ -25,15 +25,16 @@ So the cross-check is BEM (integral, Nagamine) vs FE (differential, Hiruma);
 the FE side is shown at two basis orders for free convergence-study evidence.
 
 Pipelines:
-  1. BEM Foster -> Cauer:    `W:/.../bem_disk_axisym_cauer.{wls,json}` +
-                             `W:/.../disk_bem_cauer.py`
+  1. BEM Foster -> Cauer:    `bem_disk_axisym_cauer.{wls,json}` +
+                             `disk_bem_cauer.py` under
+                             validation_test/maglev/research_cln/ngsolve_validation/
   2. order=1 Hiruma 3-term:  `tests/test_hiruma_disk_q1.py`, very-fine
                              mesh (ne=15170, ndof=14904).
   3. order=2 Hiruma 3-term:  `tests/test_hiruma_disk_q2.py`, fine mesh
                              (ne=2530, ndof=9919).
 
-Reference data location (separate working tree, not part of this repo):
-  W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/ngsolve_validation/
+Reference data location (in-repo; regenerate missing result JSONs first):
+  validation_test/maglev/research_cln/ngsolve_validation/
     bem_disk_axisym_cauer.wls
     bem_disk_axisym_cauer.json                    (BEM output)
     disk_bem_cauer.py                             (Cauer-I CFE)
@@ -50,8 +51,9 @@ from pathlib import Path
 
 import pytest
 
-BEM_REF = Path("W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/ngsolve_validation/"
-               "bem_disk_axisym_cauer_python_results.json")
+BEM_DIR = (Path(__file__).resolve().parents[3]
+           / "maglev" / "research_cln" / "ngsolve_validation")
+BEM_REF = BEM_DIR / "bem_disk_axisym_cauer_python_results.json"
 Q2_RES = Path(__file__).parent / "test_hiruma_disk_q2_results.json"
 Q1_RES = Path(__file__).parent / "test_hiruma_disk_q1_results.json"
 
@@ -59,8 +61,8 @@ Q1_RES = Path(__file__).parent / "test_hiruma_disk_q1_results.json"
 def main():
     if not BEM_REF.exists():
         print(f"SKIP: BEM reference data not found at {BEM_REF}")
-        print("       Run W:/.../ngsolve_validation/bem_disk_axisym_cauer.wls")
-        print("       and W:/.../ngsolve_validation/disk_bem_cauer.py first.")
+        print(f"       Run {BEM_DIR / 'bem_disk_axisym_cauer.wls'}")
+        print(f"       and {BEM_DIR / 'disk_bem_cauer.py'} first.")
         return
 
     bem = json.loads(BEM_REF.read_text(encoding="utf-8"))

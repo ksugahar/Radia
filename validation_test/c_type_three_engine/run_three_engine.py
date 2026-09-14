@@ -302,8 +302,14 @@ def solve_hdiv(
     field = MU0 * (np.asarray(demag_h, dtype=float) + coil_h)
     nonlinear_stats = dict(result.get("nonlinear_solve_stats", {}))
     if nonlinear:
+        residual = nonlinear_stats.get("nonlinear_final_relative_residual")
+        nonlinear_stats["nonlinear_residual_tolerance"] = float(nonlinear_tolerance)
         nonlinear_stats["converged"] = bool(
             nonlinear_stats.get("nonlinear_converged_final_stage", False)
+            and nonlinear_stats.get("nonlinear_convergence_mode", "tolerance") == "tolerance"
+            and not nonlinear_stats.get("nonlinear_line_search_exhausted", False)
+            and residual is not None and np.isfinite(residual)
+            and residual <= nonlinear_tolerance
         )
     timing_keys = (
         "fes_wall_s",
@@ -354,7 +360,19 @@ def solve_reduced_a(
     kelvin_center: tuple[float, float, float],
     kelvin_radius: float,
     points: np.ndarray,
+    anderson_depth: int = 0,
+    nu_initial=None,
+    observation_points=None,
 ) -> tuple[np.ndarray, dict[str, object]]:
+    """HCurl reduced-A on the Kelvin mesh.
+
+    ``anderson_depth`` enables the constrained Anderson mixing of the per-element
+    reluctivity, ``nu_initial`` is the per-element warm start of an earlier
+    ``nonlinear_stats["nu_elements"]``, and ``observation_points`` records the
+    per-iteration field change where the comparison is made.  A non-converged
+    Picard loop is reported through ``nonlinear_stats["converged"]``; the caller
+    decides whether that is a failure.
+    """
     started = time.perf_counter()
     solver = VectorPotentialSolver(
         mesh,
@@ -376,6 +394,9 @@ def solve_reduced_a(
                 dirichlet="GND",
                 verbose=nonlinear_verbose,
                 solver=linear_solver,
+                anderson_depth=int(anderson_depth),
+                nu_initial=nu_initial,
+                observation_points=observation_points,
             )
         else:
             solution = solver.solve_linear(
@@ -417,15 +438,42 @@ def solve_omega(
     kelvin_radius: float,
     points: np.ndarray,
     source_trace_tolerance: float,
+    relaxation: float = 0.3,
+    anderson_depth: int = 0,
+    mu_r_initial=1000.0,
+    observation_points=None,
+    source_projection_order: int | None = None,
+    bonus_intorder: int = 4,
+    exact_exterior_source: bool = False,
 ) -> tuple[np.ndarray, dict[str, object]]:
     """Run the TOSCA-style total/reduced Omega route on the Kelvin mesh.
 
     The physical air contains the CoilBuilder source and is the reduced
     region.  Iron and the Kelvin exterior are total-potential regions, so the
     source field is never numerically cancelled in high-permeability iron.
+
+    ``relaxation`` / ``anderson_depth`` control the damped Picard loop and its
+    constrained Anderson mixing, ``mu_r_initial`` is a scalar or the per-element
+    warm start of an earlier ``nonlinear_stats["mu_r_elements"]``, and
+    ``observation_points`` records the per-iteration field change where the
+    comparison is made.  A non-converged loop raises
+    :class:`radia.kelvin_solver.MixedOmegaPicardNotConverged` carrying the
+    per-element state; the caller persists or discards it.
     """
     started = time.perf_counter()
+    if source_projection_order is not None and (
+            type(source_projection_order) is not int or source_projection_order < 1):
+        raise ValueError("source_projection_order must be a positive integer")
+    if type(bonus_intorder) is not int or bonus_intorder < 0:
+        raise ValueError("bonus_intorder must be a nonnegative integer")
+    if type(exact_exterior_source) is not bool:
+        raise ValueError("exact_exterior_source must be boolean")
     source_h = rad.RadiaField(coil, "h")
+    exterior_source = (rad.KelvinRadiaFieldStrength(
+        coil, kelvin_center, kelvin_radius, (0.0, 0.0, 0.0))
+        if exact_exterior_source else None)
+    if exact_exterior_source and exterior_source is None:
+        raise RuntimeError("exact Kelvin exterior source was not constructed")
     with ng.TaskManager():
         result = solve_static_electromagnet_mixed_total_reduced_omega(
             mesh,
@@ -438,9 +486,15 @@ def solve_omega(
             bh_table=material if nonlinear else None,
             source_trace_tolerance=source_trace_tolerance,
             source_potential_contract="total_hodge",
+            source_projection_order=source_projection_order,
+            bonus_intorder=bonus_intorder,
+            kelvin_source_h=exterior_source,
             nonlinear_tolerance=nonlinear_tolerance,
             nonlinear_max_iterations=nonlinear_maximum_iterations,
-            nonlinear_relaxation=0.3,
+            nonlinear_relaxation=float(relaxation),
+            nonlinear_anderson_depth=int(anderson_depth),
+            nonlinear_mu_r_initial=mu_r_initial,
+            nonlinear_observation_points=observation_points,
         )
     field = evaluate_cf(result["B_cf"], mesh, points)
     source_trace = result["static_electromagnet_contract"]["source_trace"]
@@ -459,9 +513,11 @@ def solve_omega(
                 source_trace["iron_relative_harmonic_norm"]
             ),
             "kelvin_interface_boundary": "kelvin_int",
-            "kelvin_relative_tangential_residual": float(
-                source_trace["kelvin_relative_tangential_residual"]
-            ),
+            "kelvin_relative_tangential_residual": (
+                None if exact_exterior_source else
+                float(source_trace["kelvin_relative_tangential_residual"])),
+            "kelvin_exterior_source": ("exact pulled-back field"
+                                        if exact_exterior_source else "projected interface trace"),
             "relative_tolerance": float(source_trace_tolerance),
             "cut_policy": (
                 "the iron volume Hodge split retains the linked-source "
@@ -471,6 +527,7 @@ def solve_omega(
         },
         "kelvin_center_m": list(kelvin_center),
         "kelvin_radius_m": kelvin_radius,
+        "bonus_intorder": bonus_intorder,
         "mesh_elements": int(mesh.ne),
         "mesh_vertices": int(mesh.nv),
         "ndof": int(result["fes"].ndof),
@@ -478,6 +535,18 @@ def solve_omega(
         "nonlinear_stats": result.get("nonlinear_stats", {}),
         "runtime_s": float(time.perf_counter() - started),
     }
+
+
+def _process_peak_memory_mb() -> float | None:
+    """Peak working set of this process in MB (Windows ``peak_wset``, else RSS), for memory evidence."""
+    try:
+        import os
+        import psutil
+    except ImportError:  # pragma: no cover - psutil is a runtime dependency on the validation hosts
+        return None
+    info = psutil.Process(os.getpid()).memory_info()
+    peak = getattr(info, "peak_wset", None) or info.rss
+    return float(peak) / (1024.0 * 1024.0)
 
 
 def main() -> None:
@@ -764,6 +833,7 @@ def main() -> None:
         "passed": passed,
         "machine": platform.node(),
         "python": sys.version,
+        "peak_process_memory_mb": _process_peak_memory_mb(),
         "radia_version": radia_version,
         "radia_module": str(rad.__file__),
         "mode": options.mode,

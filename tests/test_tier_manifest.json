@@ -1,19 +1,46 @@
 {
   "schema": "radia.test-tier-manifest.v1",
   "impact_rules": {
+    "src/radia/vim/_nonlinear.py": ["tests/test_hdiv_energy_material_consistency.py", "tests/test_hdiv_bh_table_saturation_contract.py"],
+    "src/radia/panels/samples/em_sample_bh.txt": ["tests/test_hdiv_bh_table_saturation_contract.py"],
+    "validation_test/feec/bh_saturation_audit.py": ["tests/test_hdiv_bh_table_saturation_contract.py"],
+    "validation_test/feec/test_hdiv_vim_energy_newton.py": ["tests/test_hdiv_bh_table_saturation_contract.py"],
+    "validation_test/feec/run_energy_newton_audit.py": ["tests/test_hdiv_bh_table_saturation_contract.py"],
+    ".github/workflows/radia-fast.yml": ["tests/test_ci_execution_policy.py", "tests/test_run_test_tier.py", "tests/test_test_tier_policy.py", "tests/test_hdiv_bh_table_saturation_contract.py"],
+    "validation_test/feec/results/bh_saturation_20260914/qualified/result.json": ["tests/test_hdiv_bh_table_saturation_contract.py"],
+    "src/radia/vim/_solve.py": ["tests/test_hdiv_energy_material_consistency.py", "tests/test_hdiv_newton_failure_contract.py", "tests/test_esrf_three_engine_finite_gate.py"],
+    "validation_test/esrf_three_engine/check_case6_inputs.py": ["tests/test_esrf6_mesh_identity.py"],
+    "validation_test/esrf_three_engine/case6_mesh_contract.json": ["tests/test_esrf6_mesh_identity.py"],
+    "validation_test/esrf_three_engine/run_coil_yoke_three_engine.py": ["tests/test_esrf_three_engine_finite_gate.py", "tests/test_esrf_mixed_quadrature_wiring.py"],
+    "validation_test/c_type_three_engine/run_three_engine.py": ["tests/test_esrf_mixed_quadrature_wiring.py", "tests/test_esrf_three_engine_finite_gate.py", "tests/test_hdiv_newton_failure_contract.py"],
+    "validation_test/quadrupole_cefc2020/run_qmag_hdiv.py": ["tests/test_esrf_three_engine_finite_gate.py", "tests/test_hdiv_newton_failure_contract.py"],
+    "validation_test/omega_quadrature/": ["tests/test_omega_block_action_diagnostics.py"],
+    "validation_test/feec/check_wedge_charge_pullback.py": ["tests/test_wedge_charge_pullback_contract.py"],
     "src/matlab/radia_mex.cpp": ["tests/test_sparsesolv_matlab_contract.py"],
     "matlab/+radia/+sparsesolv/": ["tests/test_sparsesolv_matlab_contract.py"],
     "matlab/python_api_parity_manifest.json": ["tests/test_sparsesolv_matlab_contract.py", "tests/test_matlab_python_parity_manifest.py"],
     "matlab/+radia/+python/": ["tests/test_matlab_python_parity_manifest.py"],
     "Build.ps1": ["tests/test_build_failure_propagation.py"],
+    "validation_test/accelerator/benchmark_beam_transfer_mex_python.py": ["tests/test_beam_transfer_mex_pybind_validation.py"],
+    "validation_test/accelerator/benchmark_beam_transfer_mex_matlab.m": ["tests/test_beam_transfer_mex_pybind_validation.py"],
+    "validation_test/accelerator/beam_transfer_benchmark_case.json": ["tests/test_beam_transfer_mex_pybind_validation.py"],
     ".github/workflows/sparsesolv.yml": ["tests/test_sparsesolv_ci_contract.py"],
+    ".github/workflows/ltspice-data-safety.yml": ["tests/test_ltspice_ci_scope.py"],
+    ".github/workflows/radia-optuna.yml": ["tests/test_ltspice_ci_scope.py"],
     "tools/ci_preflight_mdx.py": ["tests/test_ci_preflight_mdx.py"],
-    "tools/release_quad.py": ["tests/test_release_quad_state.py", "tests/test_release_quad_editable_source.py", "tests/test_release_quad_optuna_candidate.py", "tests/test_mdx_runner_pool.py"],
+    "tools/release_quad.py": ["tests/test_release_quad_state.py", "tests/test_release_quad_editable_source.py", "tests/test_release_quad_optuna_candidate.py", "tests/test_release_quad_phase9_contract.py", "tests/test_mdx_runner_pool.py"],
     "tools/verify_simulink_release.py": ["tests/test_simulink_release_package.py"],
+    "tools/verify_lab_editable.py": ["tests/test_editable_daily_check.py"],
     "tools/ci_preflight.py": ["tests/test_ci_preflight_scope.py"],
-    "tools/run_test_tier.py": ["tests/test_run_test_tier.py"]
+    "tools/run_test_tier.py": ["tests/test_run_test_tier.py"],
+    "tools/sparsesolv_ci_impact.py": ["tests/test_sparsesolv_ci_contract.py"]
   },
   "profiles": {
+    "native-build-contracts": {
+      "description": "Real Git and PowerShell build-provenance contracts, without native compilation.",
+      "max_elapsed_seconds": 60,
+      "paths": ["tests/test_native_build_provenance.py"]
+    },
     "fast-contracts": {
       "description": "Pure source, policy, package, and public-notebook contracts for every push.",
       "max_elapsed_seconds": 60,
@@ -36,6 +63,7 @@
       "extends": "fast-contracts",
       "max_elapsed_seconds": 120,
       "paths": [
+        "tests/test_hdiv_bh_table_saturation_contract.py",
         "tests/test_simple.py",
         "tests/test_radia.py",
         "tests/test_meshless_relaxation_contract.py",

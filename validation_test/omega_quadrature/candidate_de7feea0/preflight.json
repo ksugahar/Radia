@@ -1,0 +1,342 @@
+{
+  "candidate_source_sha": "de7feea0dea67f0a15209c1b64a39f53fec47adb",
+  "lane_commit": "6d3af08f3",
+  "candidate_unpublished": true,
+  "wheel_sha256": "4952ba92cc0502e81949c35745108f6da499d6c6eb5bf1055a46de1be3a9ad4a",
+  "native_sha256": "5d8fe9320b6776ed5712ca7158b9878994a827d99d5725278263734dbb8a5ac8",
+  "radia_module": "C:\\temp\\omega-candidate-de7feea0\\venv\\Lib\\site-packages\\radia\\__init__.py",
+  "python_executable": "C:\\temp\\omega-candidate-de7feea0\\venv\\Scripts\\python.exe",
+  "pythonpath": null,
+  "packages": {
+    "cubit-mesh-export": "0.14.17",
+    "intel-cmplr-lib-rt": "2026.1.2",
+    "intel-cmplr-lib-ur": "2026.1.2",
+    "intel-openmp": "2026.1.2",
+    "mkl": "2026.1.0",
+    "netgen-mesher": "6.2.2606",
+    "netgen_occt": "7.8.1",
+    "ngsolve": "6.2.2606",
+    "ngsolve_openblas": "0.3.33",
+    "numpy": "2.5.3",
+    "onemkl-license": "2026.1.0",
+    "pip": "25.0.1",
+    "psutil": "7.2.2",
+    "radia": "4.95.91",
+    "scipy": "1.18.1",
+    "tbb": "2023.1.0",
+    "tcmlib": "1.5.0",
+    "threadpoolctl": "3.6.0",
+    "umf": "1.1.0"
+  },
+  "lane_files": {
+    "lane\\esrf_three_engine\\esrf_coil_yoke.py": "97af991d78d25e043e88e6152fd1aadfafbed9df6adfb5ece4c626f4a1f34899",
+    "lane\\omega_quadrature\\diagnostics.py": "061b53ed58897df6f3b2e1d84e810cda700054f7f6b02c810382ddb7a624bce4",
+    "lane\\omega_quadrature\\esrf6.py": "9f752a197b5aa37c374c8faf4f08ef92d85a6663365815403b36b2e0a6c66759",
+    "lane\\omega_quadrature\\run.py": "0fabec7e1ce167fecda78c1d2e00b71faf6699493a1523b2b30e05e4753dc77a",
+    "esrf6_labels.json": "8d0362a0dd93118d1c4ebf71e1d42dc7b4c54f9ddd2ae035bf8665470c399612"
+  },
+  "mesh_sha256": "dfc12b84f80db1fa17fb5012b6f87c072e8aa1fb3c085b61269f047a879a54ac",
+  "coil_contract": {
+    "authority": "ESRF Example 6 CoilBuilder solid-current paths",
+    "case": 6,
+    "source_is_meshed": false,
+    "coil_count": 8,
+    "radia_object_count": 64,
+    "coils": [
+      {
+        "index": 0,
+        "current_A": -1560.0,
+        "segment_count": 8,
+        "closed": true,
+        "closure_gap_m": 9.813077866773595e-18,
+        "radia_object_count": 8
+      },
+      {
+        "index": 1,
+        "current_A": 1560.0,
+        "segment_count": 8,
+        "closed": true,
+        "closure_gap_m": 7.757919228897728e-18,
+        "radia_object_count": 8
+      },
+      {
+        "index": 2,
+        "current_A": -1560.0,
+        "segment_count": 8,
+        "closed": true,
+        "closure_gap_m": 3.469446951953614e-18,
+        "radia_object_count": 8
+      },
+      {
+        "index": 3,
+        "current_A": 1560.0,
+        "segment_count": 8,
+        "closed": true,
+        "closure_gap_m": 1.4304896245381992e-17,
+        "radia_object_count": 8
+      },
+      {
+        "index": 4,
+        "current_A": -960.0,
+        "segment_count": 8,
+        "closed": true,
+        "closure_gap_m": 6.938893903907228e-18,
+        "radia_object_count": 8
+      },
+      {
+        "index": 5,
+        "current_A": 960.0,
+        "segment_count": 8,
+        "closed": true,
+        "closure_gap_m": 1.5515838457795457e-17,
+        "radia_object_count": 8
+      },
+      {
+        "index": 6,
+        "current_A": -960.0,
+        "segment_count": 8,
+        "closed": true,
+        "closure_gap_m": 9.813077866773595e-18,
+        "radia_object_count": 8
+      },
+      {
+        "index": 7,
+        "current_A": 960.0,
+        "segment_count": 8,
+        "closed": true,
+        "closure_gap_m": 9.813077866773595e-18,
+        "radia_object_count": 8
+      }
+    ]
+  },
+  "probe_points_m": [
+    [
+      -0.024,
+      -0.006,
+      -0.006
+    ],
+    [
+      -0.024,
+      -0.006,
+      0.0
+    ],
+    [
+      -0.024,
+      -0.006,
+      0.006
+    ],
+    [
+      -0.024,
+      0.0,
+      -0.006
+    ],
+    [
+      -0.024,
+      0.0,
+      0.0
+    ],
+    [
+      -0.024,
+      0.0,
+      0.006
+    ],
+    [
+      -0.024,
+      0.006,
+      -0.006
+    ],
+    [
+      -0.024,
+      0.006,
+      0.0
+    ],
+    [
+      -0.024,
+      0.006,
+      0.006
+    ],
+    [
+      -0.012,
+      -0.006,
+      -0.006
+    ],
+    [
+      -0.012,
+      -0.006,
+      0.0
+    ],
+    [
+      -0.012,
+      -0.006,
+      0.006
+    ],
+    [
+      -0.012,
+      0.0,
+      -0.006
+    ],
+    [
+      -0.012,
+      0.0,
+      0.0
+    ],
+    [
+      -0.012,
+      0.0,
+      0.006
+    ],
+    [
+      -0.012,
+      0.006,
+      -0.006
+    ],
+    [
+      -0.012,
+      0.006,
+      0.0
+    ],
+    [
+      -0.012,
+      0.006,
+      0.006
+    ],
+    [
+      0.0,
+      -0.006,
+      -0.006
+    ],
+    [
+      0.0,
+      -0.006,
+      0.0
+    ],
+    [
+      0.0,
+      -0.006,
+      0.006
+    ],
+    [
+      0.0,
+      0.0,
+      -0.006
+    ],
+    [
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.006
+    ],
+    [
+      0.0,
+      0.006,
+      -0.006
+    ],
+    [
+      0.0,
+      0.006,
+      0.0
+    ],
+    [
+      0.0,
+      0.006,
+      0.006
+    ],
+    [
+      0.012,
+      -0.006,
+      -0.006
+    ],
+    [
+      0.012,
+      -0.006,
+      0.0
+    ],
+    [
+      0.012,
+      -0.006,
+      0.006
+    ],
+    [
+      0.012,
+      0.0,
+      -0.006
+    ],
+    [
+      0.012,
+      0.0,
+      0.0
+    ],
+    [
+      0.012,
+      0.0,
+      0.006
+    ],
+    [
+      0.012,
+      0.006,
+      -0.006
+    ],
+    [
+      0.012,
+      0.006,
+      0.0
+    ],
+    [
+      0.012,
+      0.006,
+      0.006
+    ],
+    [
+      0.024,
+      -0.006,
+      -0.006
+    ],
+    [
+      0.024,
+      -0.006,
+      0.0
+    ],
+    [
+      0.024,
+      -0.006,
+      0.006
+    ],
+    [
+      0.024,
+      0.0,
+      -0.006
+    ],
+    [
+      0.024,
+      0.0,
+      0.0
+    ],
+    [
+      0.024,
+      0.0,
+      0.006
+    ],
+    [
+      0.024,
+      0.006,
+      -0.006
+    ],
+    [
+      0.024,
+      0.006,
+      0.0
+    ],
+    [
+      0.024,
+      0.006,
+      0.006
+    ]
+  ],
+  "probe_count": 45,
+  "probe_sha256": "a73d8ff3aa03673d2fc3ee10543f1a5801ea61c6d1ca9abe3a8b9eb4c18f2770",
+  "note": "Probe contract recorded; this p1 energy lane does not compute probe fields."
+}

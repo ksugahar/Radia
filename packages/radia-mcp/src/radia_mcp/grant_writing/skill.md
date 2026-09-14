@@ -1,5 +1,13 @@
 # grant-writing
 
+The integrated health report's `reader_experience` separates three manual
+review axes: excitement without hype, one-pass clarity, and specialist
+accessibility. It never assigns an automatic quality score. Quote the relevant
+passage and strongest remaining objection when making a human judgment; zero
+detector findings do not establish comprehension, merit, or funding likelihood.
+Specialist first-use findings are review prompts, not an added numerical
+penalty in the existing Japanese readability score.
+
 Use this skill for grant proposal drafts, recommendation letters, and final
 pre-submission checks. Use `paper-writing` for journal, digest, and research-
 meeting manuscripts. Figure and presentation helpers are tool families rather
@@ -1420,6 +1428,8 @@ presentation（`presentation_translationese_check`）にもある。英語論文
 - `grant_writing_derived_metric_validation_check(text)`
 - `grant_writing_cross_organization_pilot_check(text)`
 - `grant_writing_named_software_abstraction_check(text)`
+- `grant_writing_named_software_first_use_check(text, software_names="")`
+- `grant_writing_capability_status_map(text, capability_names="")`
 - `grant_writing_reviewer_vocabulary_check(text)`
 - `grant_writing_persuasion_quality_check(text)`
 - `grant_writing_adjacent_reviewer_readability_check(text)`
@@ -1560,6 +1570,27 @@ For KAKENHI framing, also use
 named software implementation becomes the concept in the background,
 question, aims, novelty, or impact, while allowing names in methods,
 preliminary evidence, collaboration records, rights, and budget evidence.
+
+Independently of abstraction level, use
+`grant_writing_named_software_first_use_check(text, software_names="...")`
+when a proposal names software or a research code.  At first use, write its
+plain-language function, not only its prestige, licence, or distribution
+status.  For example, ``公開研究基盤Radia`` does not tell an unfamiliar
+reviewer what Radia does; state that it computes three-dimensional magnetic
+fields from magnet geometry, material properties, and current.  An
+implementation label such as ``Python-native`` is neither a functional
+explanation nor safe to infer: verify it against primary source or repository
+evidence before using it.
+
+When an application combines a maturing foundation with work proposed for the
+grant period, use
+`grant_writing_capability_status_map(text, capability_names="Radia,HDiv-MMM,EnergyStop")`.
+Write the verified current state and the proposed optimization, integration,
+or validation as separate statements.  Do not make topology optimization or
+hysteresis validation sound complete merely because HDiv-MMM itself is nearing
+completion.  The tool maps lexical evidence without scoring or verifying the
+repository; the author must connect the current state to implementation or
+test evidence and the future state to milestones and acceptance criteria.
 
 The same KAKENHI health report also runs
 `grant_writing_reviewer_vocabulary_check(text)`. It checks first-use Japanese

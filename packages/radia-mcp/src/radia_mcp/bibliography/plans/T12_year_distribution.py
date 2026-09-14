@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import datetime
 import pathlib
+import re
 
 from .._bibparse import read_bib_file
 
@@ -27,18 +28,25 @@ def bibliography_year_distribution(bib_path: str) -> str:
     if not p.exists():
         return f"Error: file not found: {p}"
 
-    entries = [e for e in read_bib_file(p) if not e.kind.startswith("@")]
+    try:
+        entries = [e for e in read_bib_file(p) if not e.kind.startswith("@")]
+    except (OSError, UnicodeError, ValueError) as exc:
+        return f"Error: cannot read bibliography: {exc}"
     now = datetime.date.today().year
     counts: dict[int, int] = {}
+    unknown = future = 0
     for e in entries:
-        y = (e.fields.get("year", "") or "").strip()[:4]
-        try:
+        y = (e.fields.get("year", "") or "").strip()
+        if not re.fullmatch(r"[0-9]{4}", y) or int(y) == 0:
+            unknown += 1
+        elif int(y) > now:
+            future += 1
+        else:
             counts[int(y)] = counts.get(int(y), 0) + 1
-        except ValueError:
-            pass
 
     if not counts:
-        return f"bibliography_year_distribution: {p}\n  no year fields parseable"
+        return (f"bibliography_year_distribution: {p}\n  no valid non-future publication years\n"
+                f"  unknown/invalid years: {unknown}; future years: {future}")
 
     total = sum(counts.values())
     recent_5 = sum(c for y, c in counts.items() if now - y <= 5)
@@ -46,6 +54,8 @@ def bibliography_year_distribution(bib_path: str) -> str:
 
     lines = [f"bibliography_year_distribution: {p}",
              f"  total dated entries: {total}",
+             f"  unknown/invalid years: {unknown}; future years: {future}",
+             "  Percentages use only valid non-future dated entries.",
              f"  in last 5 years:  {recent_5}  ({recent_5/total:.0%})",
              f"  in last 10 years: {recent_10} ({recent_10/total:.0%})",
              "  histogram (year: count, bar):"]
@@ -60,8 +70,10 @@ def bibliography_year_distribution(bib_path: str) -> str:
         lines.append(f"    {b}–{b+4}: {bins[b]:3d}  {bar}")
 
     # Recency advisory
-    if recent_5 / total < 0.20:
+    if unknown or future:
+        lines.append("INCOMPLETE — verify excluded years before assessing literature recency")
+    elif recent_5 / total < 0.20:
         lines.append("[MEDIUM] <20% in last 5 years — lit review may look stale")
-    if total >= 10 and recent_5 / total > 0.90 and recent_10 / total > 0.95:
+    if not (unknown or future) and total >= 10 and recent_5 / total > 0.90 and recent_10 / total > 0.95:
         lines.append("[MEDIUM] >90% in last 5y — foundational refs may be missing")
     return "\n".join(lines)
