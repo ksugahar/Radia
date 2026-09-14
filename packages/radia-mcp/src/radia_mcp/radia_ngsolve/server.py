@@ -850,14 +850,16 @@ def urn(topic: str = "all") -> str:
     attention.  Every basis is passive, so the fit is causal/passive BY
     CONSTRUCTION and maps to one first-order auxiliary ODE per pole (fractional
     terms -> short RC/RL ladder) -- the local-in-time operator an FETD /
-    Newmark-beta solver needs.  Beats Vector Fitting on fractional/Cole-Cole data
-    (avg ~22.8% lower NRMSE on NASA battery + TDK ferrite datasets).
+    Newmark-beta solver needs. Historical NASA/TDK comparisons are not renewed
+    measurement acceptance: the historical NASA frequency axis was unverified.
+    See overview for private data and noise-aware basis-selection requirements.
 
     Use to turn a frequency-domain absorbing-BC / dispersive-layer response into
     a stable broadband time-domain model.  For transient FEM/BEM or Maxwell
     solvers, topic="cq" explains the URN H(s) -> convolution-quadrature bridge.
     Run the fit with the urn_fit tool.
-    Ref: Sugahara & Sato, IEEE Access 2026; impl docs/universal_relaxation_network.
+    Ref: Sugahara & Sato, IEEE Access-format draft, 2026 (publication unverified);
+    impl src/radia/urn, evidence docs/universal_relaxation_network.
 
     Args:
         topic: all | overview | method | api | timedomain | cq | application
