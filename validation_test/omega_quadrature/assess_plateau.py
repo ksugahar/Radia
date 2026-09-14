@@ -9,7 +9,14 @@ import numpy as np
 
 
 def assess(payload: dict, low_bonus: int = 8, high_bonus: int = 12) -> dict:
-    rows = {(int(row["bonus"]), int(row["order"])): row for row in payload["rows"]}
+    if not 0 <= low_bonus < high_bonus:
+        raise ValueError("bonuses must be nonnegative and strictly increasing")
+    rows = {}
+    for row in payload["rows"]:
+        key = (int(row["bonus"]), int(row["order"]))
+        if key in rows:
+            raise ValueError(f"duplicate bonus/order row: {key}")
+        rows[key] = row
     low = rows[(low_bonus, 2)]
     high = rows[(high_bonus, 2)]
     fields = []
@@ -26,25 +33,36 @@ def assess(payload: dict, low_bonus: int = 8, high_bonus: int = 12) -> dict:
     for bonus, row in ((low_bonus, low), (high_bonus, high)):
         source = row.get("source_hodge", {})
         checks[f"hodge_bonus_{bonus}"] = source.get("bonus_intorder") == bonus
-        harmonic.append(float(source["relative_harmonic_norm"]))
+        norm = float(source["relative_harmonic_norm"])
+        if not np.isfinite(norm) or norm < 0:
+            raise ValueError("harmonic norm must be finite and nonnegative")
+        harmonic.append(norm)
         residual = row["linear_residual"]["free_dofs"]["relative"]
         checks[f"free_residual_{bonus}"] = (
             residual is not None and np.isfinite(residual) and 0 <= residual <= 1e-8
         )
-        action = row["block_action_residual"]["blocks"]
-        checks[f"block_action_{bonus}"] = all(
+        action = row.get("block_action_residual", {}).get("blocks", {})
+        required_blocks = {"phi_reduced", "phi_total", "interface_constraint"}
+        checks[f"block_action_{bonus}"] = set(action) == required_blocks and all(
             value.get("action_relative") is not None
             and np.isfinite(value["action_relative"])
             and 0 <= value["action_relative"] <= 1e-8
             for value in action.values()
         )
         field = np.asarray(row["field_observations"]["B_samples_T"], dtype=float)
+        samples = np.asarray(row["field_observations"]["samples_m"], dtype=float)
+        if (samples.ndim != 2 or samples.shape[1] != 3 or len(samples) == 0
+                or not np.isfinite(samples).all() or field.shape != samples.shape
+                or not np.isfinite(field).all()):
+            raise ValueError("samples and fields must be matching nonempty finite Nx3 arrays")
         checks[f"finite_field_{bonus}"] = field.ndim == 2 and field.shape[1] == 3 and np.isfinite(field).all()
         fields.append(field)
     checks["same_samples"] = (
         low["field_observations"]["samples_m"] == high["field_observations"]["samples_m"]
         and fields[0].shape == fields[1].shape
     )
+    if fields[0].shape != fields[1].shape:
+        raise ValueError("quadrature rows must have the same field shape")
     delta = fields[0] - fields[1]
     high_norm = float(np.linalg.norm(fields[1]))
     field_relative_rms = float(np.linalg.norm(delta) / high_norm) if high_norm else float("inf")

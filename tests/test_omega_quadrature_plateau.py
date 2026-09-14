@@ -4,6 +4,8 @@ import json
 import hashlib
 from pathlib import Path
 
+import pytest
+
 
 PATH = Path(__file__).resolve().parents[1] / "validation_test/omega_quadrature/assess_plateau.py"
 SPEC = importlib.util.spec_from_file_location("omega_plateau", PATH)
@@ -61,3 +63,60 @@ def test_formal_plateau_rejects_field_drift_and_hodge_mismatch():
     result = MODULE.assess(mismatched)
     assert result["passed"] is False
     assert result["checks"]["hodge_bonus_12"] is False
+
+
+@pytest.mark.parametrize("missing", [None, "phi_reduced", "phi_total", "interface_constraint"])
+def test_missing_residual_blocks_cannot_pass(missing):
+    data = payload()
+    blocks = data["rows"][0]["block_action_residual"]["blocks"]
+    if missing is None:
+        blocks.clear()
+    else:
+        del blocks[missing]
+    result = MODULE.assess(data)
+    assert result["passed"] is False
+    assert result["checks"]["block_action_8"] is False
+
+
+def test_committed_empty_blocks_reproduction_is_rejected():
+    path = PATH.parents[1] / "esrf_three_engine/results/candidate_59b094d8/omega_algebraic_bonus12_16.json"
+    data = json.loads(path.read_bytes())
+    for row in data["rows"]:
+        row["block_action_residual"]["blocks"] = {}
+    assert MODULE.assess(data, 12, 16)["passed"] is False
+
+
+def test_duplicate_rows_are_rejected():
+    data = payload()
+    data["rows"].append(copy.deepcopy(data["rows"][0]))
+    with pytest.raises(ValueError, match="duplicate"):
+        MODULE.assess(data)
+
+
+@pytest.mark.parametrize("level", ["block_action_residual", "blocks"])
+def test_missing_block_diagnostics_are_rejected(level):
+    data = payload()
+    row = data["rows"][0]
+    if level == "blocks":
+        del row["block_action_residual"]["blocks"]
+    else:
+        del row[level]
+    assert MODULE.assess(data)["passed"] is False
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), -1.0])
+def test_invalid_harmonic_norm_is_rejected(value):
+    data = payload()
+    data["rows"][0]["source_hodge"]["relative_harmonic_norm"] = value
+    with pytest.raises(ValueError, match="harmonic"):
+        MODULE.assess(data)
+
+
+@pytest.mark.parametrize("key", ["samples_m", "B_samples_T"])
+@pytest.mark.parametrize("value", [[], [[0, 0]], [[0, 0, 0]],
+                                   [[0, 0, float("nan")], [1, 0, 0]]])
+def test_invalid_observation_arrays_are_rejected(key, value):
+    data = payload()
+    data["rows"][0]["field_observations"][key] = value
+    with pytest.raises(ValueError, match="Nx3"):
+        MODULE.assess(data)
