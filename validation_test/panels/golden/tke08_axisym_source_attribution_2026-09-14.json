@@ -1,0 +1,114 @@
+{
+  "method": "axisymmetric standard H1 p2, 2*pi*r, dt=0.1s, 5s",
+  "runtime": {
+    "host": "lab",
+    "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+    "radia_version": "4.95.92",
+    "ngsolve_version": "6.2.2606",
+    "solver_file": "\\\\192.168.121.100\\work\\00_CAE\\Radia\\release-quad\\ih-4.95.92-7a139b7af\\src\\radia\\panels\\calc_heat_axisym.py",
+    "solver_sha256": "27ffb36388a4c034c1dbb361ed7d607656b763d94f9041c2ab94c3663b8f400e"
+  },
+  "scope": "source attribution only; deleting inner loss is not a validated correction",
+  "input_sha256": {
+    "work_occ_h0.0018.vol": "9e74d4602aa79b301a6187658d4de3a20cccd3f5d35a4c89b4adc1ee5a748fd3",
+    "qsurf_caseA_9048A.sol": "cf63365d42f656725961df2a20abc28b71bc10f93a07e5009e62a6ed0d639881",
+    "qsurf_caseB_8293A.sol": "6b57a7419ad78fa19e828a718720fa205cbb6a4e0515f2644bb7369698b0de3f"
+  },
+  "cases": {
+    "A": {
+      "power_W": {
+        "inner": 14423.317170856913,
+        "outer": 47157.20705336672
+      },
+      "inner_power_fraction": 0.23421881110234657,
+      "transfer": {
+        "mode": "phi-averaged-3d-boundary",
+        "evaluation_region": "BND",
+        "n_phi_samples": 128,
+        "target_surface_vertices": 395,
+        "requested_samples": 50560,
+        "accepted_samples": 49622,
+        "coverage_fraction": 0.9814477848101266,
+        "fully_sampled_vertices": 187,
+        "partially_sampled_vertices": 208,
+        "failed_vertices": 0,
+        "minimum_samples_per_vertex": 3
+      },
+      "runs": {
+        "all": {
+          "power_W": 61580.524224223635,
+          "Tmean_C": 759.2166330858604,
+          "Tinner_mean_C": 976.4013782699298,
+          "energy_relative_residual": 1.7014111354873294e-15
+        },
+        "outer": {
+          "power_W": 47157.20705336672,
+          "Tmean_C": 587.1741915119247,
+          "Tinner_mean_C": 408.0712385798325,
+          "energy_relative_residual": 3.57956348979756e-15
+        },
+        "inner": {
+          "power_W": 14423.317170856913,
+          "Tmean_C": 197.04244157393464,
+          "Tinner_mean_C": 593.3301396900971,
+          "energy_relative_residual": 2.2196151636388825e-15
+        },
+        "outer_equal_power": {
+          "power_W": 61580.524224223635,
+          "Tmean_C": 759.1185702422107,
+          "Tinner_mean_C": 525.235895231725,
+          "energy_relative_residual": 2.2685481806497726e-15
+        }
+      },
+      "superposition_relative_L2": 3.325244193236915e-16
+    },
+    "B": {
+      "power_W": {
+        "inner": 13504.833769836692,
+        "outer": 42692.07466326484
+      },
+      "inner_power_fraction": 0.24031275289659834,
+      "transfer": {
+        "mode": "phi-averaged-3d-boundary",
+        "evaluation_region": "BND",
+        "n_phi_samples": 128,
+        "target_surface_vertices": 395,
+        "requested_samples": 50560,
+        "accepted_samples": 49622,
+        "coverage_fraction": 0.9814477848101266,
+        "fully_sampled_vertices": 187,
+        "partially_sampled_vertices": 208,
+        "failed_vertices": 0,
+        "minimum_samples_per_vertex": 3
+      },
+      "runs": {
+        "all": {
+          "power_W": 56196.90843310153,
+          "Tmean_C": 695.0326520584297,
+          "Tinner_mean_C": 931.2918954299124,
+          "energy_relative_residual": 2.0715609643459135e-15
+        },
+        "outer": {
+          "power_W": 42692.07466326484,
+          "Tmean_C": 533.9489371162103,
+          "Tinner_mean_C": 396.6452797487912,
+          "energy_relative_residual": 4.090290390376828e-15
+        },
+        "inner": {
+          "power_W": 13504.833769836692,
+          "Tmean_C": 186.08371494222047,
+          "Tinner_mean_C": 559.6466156811211,
+          "energy_relative_residual": 5.603175905542647e-15
+        },
+        "outer_equal_power": {
+          "power_W": 56196.90843310153,
+          "Tmean_C": 694.9453479794125,
+          "Tinner_mean_C": 514.2082645402182,
+          "energy_relative_residual": 2.4858731572150963e-15
+        }
+      },
+      "superposition_relative_L2": 3.707034096125006e-16
+    }
+  },
+  "status": "pass"
+}
