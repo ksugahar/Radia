@@ -10,6 +10,10 @@ impedance data. The maintained implementation is the `radia.urn` package under
 
 ### Comprehensive Real-World Data Performance
 
+Historical results below are not renewed experimental acceptance. In particular,
+the NASA frequency axis was model-assigned: its row and aggregate improvement
+must not be cited as measured frequency-domain accuracy.
+
 | Dataset | VF NRMSE | URN NRMSE | Improvement | URN Time |
 |---------|----------|-----------|-------------|----------|
 | NASA 18650 Battery | 0.2700 | **0.2454** | 9.1% | 178s |
@@ -34,7 +38,7 @@ universal_relaxation_network/
   data/
     real_world/                   # Real measurement datasets
       nasa_battery/               # NASA Li-ion Battery Aging Dataset
-        nasa_18650_eis.csv        # Extracted EIS data (included)
+        README.md                # Acquisition/provenance; measurements kept private
       tdk_ferrite/                # TDK MnZn ferrite datasheet data
         tdk_pc50_impedance.csv    # PC50 impedance (included)
   demo_spice_timedomain.py        # Time-domain SPICE simulation demo
@@ -56,11 +60,10 @@ from radia.urn import (
 import numpy as np
 import torch
 
-# Load impedance data (use real NASA battery data if available)
-data = np.loadtxt('data/real_world/nasa_battery/nasa_18650_eis.csv',
-                  delimiter=',', skiprows=24)
-freq = data[:, 0]
-Z = data[:, 1] + 1j * data[:, 2]
+# Load caller-owned data only after establishing the sample-aligned frequency axis.
+# Set RADIA_NASA_EIS_CSV to its path outside the repository.
+from generate_paper_figures import load_nasa_battery_data
+freq, Z = load_nasa_battery_data()
 
 # Configure and train the legacy URN path
 config = URNConfig(n_debye=3, n_cole_cole=2, n_warburg=2, sparsity_weight=0.01)
@@ -80,6 +83,20 @@ print("SPICE netlist saved to battery_model.sp")
 ```
 
 ## SA/RM-2026 Y-Domain Variant
+
+### Noise-aware basis selection
+
+Include the richer basis candidate in comparisons, but do not increase basis
+count merely to force fitting error below an arbitrary value such as 1e-3.
+For noisy measurements, prefer a smaller active set when it explains the data
+within independently estimated measurement uncertainty. Report the starting
+basis count and the retained count separately, along with residuals, held-out
+performance when available, and stability of relaxation times/weights under
+repeated fits or noise perturbations. If noise is unknown, report sensitivity
+rather than inventing a noise floor. Parsimony alone does not establish physical
+truth; check passivity and consistency with the measurement conditions too.
+The undocumented NASA frequency axis remains a separate blocker to interpreting
+relaxation times, irrespective of the number of bases.
 
 The SA/RM-2026 research-meeting manuscript uses a newer attention-free Y-base
 formulation: 22 physical basis functions are
