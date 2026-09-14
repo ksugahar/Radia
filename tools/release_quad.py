@@ -949,25 +949,19 @@ def cmd_preflight(args):
     if not (pp_radia and pp_cme and pp_optuna):
         return 2
 
-    # Cubit plugin freshness
-    src_dir = REPO / "src/cubit_plugin"
-    src_mtime = _newest_mtime(src_dir, {".cpp", ".cc", ".cxx", ".c", ".h",
-                                          ".hpp", ".hh", ".hxx", ".cmake", ".txt"})
-    bin_mtime = _bundled_plugin_mtime()
-    if src_mtime == 0:
-        fail("could not measure src/cubit_plugin/ mtime; plugin freshness is unverified")
+    # A fresh checkout changes mtimes without changing source or payload bytes.
+    # Reuse the wheel's content-addressed gate for both mandatory binaries.
+    pkg = REPO / "packages/cubit-mesh-export/src/cubit_mesh_export"
+    result = subprocess.run(
+        [sys.executable, str(pkg / "_native_provenance.py"), "verify",
+         "--repo-root", str(REPO), "--package-dir", str(pkg)],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    if result.returncode:
+        fail("native source/payload provenance failed: " +
+             (result.stdout + result.stderr).strip())
         return 2
-    elif bin_mtime == 0:
-        fail("bundled .ccm missing — Phase 0 not done")
-        return 2
-    elif bin_mtime + 1 < src_mtime:
-        from datetime import datetime
-        fail(f"bundled .ccm ({datetime.fromtimestamp(bin_mtime)}) older than "
-              f"src/cubit_plugin/ ({datetime.fromtimestamp(src_mtime)}). "
-              "Run `python tools/release_quad.py phase0`.")
-        return 2
-    else:
-        ok("bundled plugin .ccm >= src/cubit_plugin/ mtime")
+    ok("native source and both mandatory payload hashes match")
 
     _check_main_synced(hard=False)
 
