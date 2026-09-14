@@ -2644,7 +2644,7 @@ build123d (Python) → STEP → Cubit (hex mesh) → .msh v4.1 or .vol
 
 One-call equivalents (radia-mcp ≥ 0.17):
   * `build123d_to_cubit_hex(script, target_size=1.0)` — build123d →
-    STEP → `cubit_mesh_auto` → live GUI replay.
+    STEP → `cubit_mesh_auto` → persistent headless replay.
   * `cadquery_to_cubit_hex(...)` — same from cadquery source.
 
 ## Hex-friendly geometry checklist
