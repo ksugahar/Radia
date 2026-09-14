@@ -1,7 +1,8 @@
 """Re-solve mixed Omega with controlled assembly quadrature (p <= 3).
 
 A factory module supplies create_case(mesh_path), returning mesh, H_s,
-Kelvin H_s, radius, center and mu_r. Sources are constructed once per run.
+Kelvin H_s, radius, center and mu_r. The Hodge source is reconstructed with
+the same assembly quadrature as each mixed-Omega solve.
 This diagnostic lane never grants three-engine field acceptance.
 """
 from __future__ import annotations
@@ -127,8 +128,9 @@ def main():
                'runtime': runtime, 'implementation': before, 'controls': vars(args).copy(),
                'mesh_sha256': digest(args.mesh), 'mesh_elements': mesh.ne,
                'case': case['controls'], 'rows': rows, 'nesting': nesting,
+               'source_hodge_by_bonus': {},
                'embedding_quadrature_order': 16,
-               'assembly_scope': 'bonus applies to volume and interface terms; not load-only',
+               'assembly_scope': 'bonus applies to Hodge projection, volume and interface terms',
                'acceptance': 'HOLD: diagnostics are not three-engine field acceptance'}
     args.output.parent.mkdir(parents=True, exist_ok=True)
 
@@ -143,9 +145,16 @@ def main():
             raise RuntimeError('Source or mesh changed during validation')
 
     with ng.TaskManager():
-        source = solver.project_source_total_hodge(mesh, h_s, ('iron',), order=args.source_order)
-        payload['source_harmonic_norm'] = source['relative_harmonic_norm']
         for bonus in sorted(set(args.bonuses)):
+            source = solver.project_source_total_hodge(
+                mesh, h_s, ('iron',), order=args.source_order, bonus_intorder=bonus)
+            source_hodge = {
+                'bonus_intorder': source.get('bonus_intorder'),
+                'relative_harmonic_norm': source['relative_harmonic_norm'],
+            }
+            if source_hodge['bonus_intorder'] != bonus:
+                raise RuntimeError('Hodge projection did not preserve the requested bonus_intorder')
+            payload['source_hodge_by_bonus'][str(bonus)] = source_hodge
             results = {}
             for order in sorted(set(args.orders)):
                 start = time.perf_counter()
@@ -164,6 +173,7 @@ def main():
                               if args.residual_correction else None)
                 if args.algebraic_only:
                     rows.append({'order': order, 'bonus': bonus, 'solve_s': solve_s,
+                                 'source_hodge': source_hodge,
                                  'total_s': time.perf_counter()-start, 'ndof': result['fes'].ndof,
                                  'linear_residual': result['linear_residual'],
                                  'block_action_residual': actions, 'field_observations': observations,
@@ -175,6 +185,7 @@ def main():
                     del result
                     continue
                 rows.append({'order': order, 'bonus': bonus, 'solve_s': solve_s,
+                             'source_hodge': source_hodge,
                              'total_s': time.perf_counter()-start, 'ndof': result['fes'].ndof,
                              'linear_residual': result['linear_residual'],
                              'block_action_residual': actions, 'field_observations': observations,
