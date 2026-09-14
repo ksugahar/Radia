@@ -8,6 +8,7 @@ PUBLIC_TOOLS = (
     "document_meta_template_loader",
     "document_meta_lint_all",
     "document_meta_notebook_result_audit",
+    "document_meta_notebook_citation_audit",
 )
 
 

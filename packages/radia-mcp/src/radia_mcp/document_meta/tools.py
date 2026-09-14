@@ -845,3 +845,198 @@ def document_meta_notebook_result_audit(repo_root: str = "",
         "notebooks": rows[:max_items],
         "notebooks_truncated": len(rows) > max_items,
     }
+
+
+def _normalise_scholarly_identifier(value: str) -> str:
+    return value.strip().lower().rstrip(".,;)}]>")
+
+
+def _notebook_citation_summary(path: pathlib.Path, repo_root: pathlib.Path) -> dict:
+    try:
+        notebook = json.loads(path.read_text(encoding="utf-8-sig"))
+    except Exception as exc:
+        return {"path": _rel(path, repo_root), "error": f"notebook read/parse failed: {exc}"}
+
+    metadata = notebook.get("metadata", {})
+    radia_metadata = metadata.get("radia", {}) if isinstance(metadata, dict) else {}
+    if not isinstance(radia_metadata, dict):
+        radia_metadata = {}
+    declared = radia_metadata.get("citation_keys", [])
+    if isinstance(declared, str):
+        declared = [declared]
+    if not isinstance(declared, list):
+        declared = []
+    declared_keys = {str(key).strip() for key in declared if str(key).strip()}
+    exemption_reason = str(radia_metadata.get("citation_audit_exempt_reason", "")).strip()
+
+    markdown = "\n".join(
+        "".join(cell.get("source", []))
+        if isinstance(cell.get("source", []), list)
+        else str(cell.get("source", ""))
+        for cell in notebook.get("cells", [])
+        if cell.get("cell_type") == "markdown"
+    )
+    citation_text = re.sub(r"(?s)```.*?```|~~~.*?~~~", "", markdown)
+    citation_text = re.sub(r"`[^`\n]*`", "", citation_text)
+    inline_keys: set[str] = set()
+    for group in re.findall(r"\\cite\w*\s*\{([^}]+)\}", citation_text):
+        inline_keys.update(key.strip() for key in group.split(",") if key.strip())
+    inline_keys.update(re.findall(r"(?<!\w)@([A-Za-z0-9_:.+\-/]+)", citation_text))
+
+    dois = {
+        _normalise_scholarly_identifier(value)
+        for value in re.findall(
+            r"(?i)(?:https?://(?:dx\.)?doi\.org/|\bdoi\s*[:=]\s*)"
+            r"(10\.\d{4,9}/[^\s\]}>;,]+)", citation_text,
+        )
+    }
+    arxiv_ids = {
+        _normalise_scholarly_identifier(value)
+        for value in re.findall(
+            r"(?i)(?:https?://arxiv\.org/(?:abs|pdf)/|\barxiv\s*:\s*)"
+            r"([a-z.\-]+/\d{7}|\d{4}\.\d{4,5})(?:v\d+)?", citation_text,
+        )
+    }
+    has_reference_heading = bool(re.search(
+        r"(?im)^#{1,6}\s+(?:references|bibliography|参考文献)\s*$", citation_text,
+    ))
+    return {
+        "path": _rel(path, repo_root),
+        "declared_citation_keys": sorted(declared_keys),
+        "inline_citation_keys": sorted(inline_keys),
+        "citation_keys": sorted(declared_keys | inline_keys),
+        "dois": sorted(dois),
+        "arxiv_ids": sorted(arxiv_ids),
+        "has_reference_heading": has_reference_heading,
+        "citation_audit_exempt_reason": exemption_reason,
+    }
+
+
+def document_meta_notebook_citation_audit(
+        repo_root: str = "",
+        notebook_root: str = "docs",
+        bibliography_path: str = "",
+        include_gitignored: bool = False,
+        tracked_only: bool = True,
+        max_items: int = 50) -> dict:
+    """Cross-check notebook citation keys, DOI values and arXiv IDs against references.bib."""
+    from ..bibliography._bibparse import read_bib_file
+
+    root = _resolve_repo_root(repo_root)
+    scan_root = pathlib.Path(notebook_root).expanduser()
+    if not scan_root.is_absolute():
+        scan_root = root / scan_root
+    canonical = pathlib.Path(bibliography_path).expanduser() if bibliography_path else (
+        root / "packages" / "radia-mcp" / "src" / "radia_mcp"
+        / "bibliography" / "data" / "references.bib"
+    )
+    if not scan_root.exists():
+        return {"error": f"notebook_root not found: {scan_root}"}
+    if not canonical.is_file():
+        return {"error": f"canonical bibliography not found: {canonical}"}
+
+    entries = [entry for entry in read_bib_file(canonical) if entry.key]
+    by_key = {entry.key: entry for entry in entries}
+    doi_to_keys: dict[str, set[str]] = {}
+    arxiv_to_keys: dict[str, set[str]] = {}
+    for entry in entries:
+        doi = _normalise_scholarly_identifier(entry.fields.get("doi", ""))
+        if doi:
+            doi_to_keys.setdefault(doi, set()).add(entry.key)
+        arxiv_values: list[str] = []
+        eprint = entry.fields.get("eprint", "").strip()
+        if re.fullmatch(r"(?i)(?:[a-z.\-]+/\d{7}|\d{4}\.\d{4,5})(?:v\d+)?", eprint):
+            arxiv_values.append(eprint)
+        linked_text = " ".join(
+            entry.fields.get(name, "") for name in ("url", "journal", "note")
+        )
+        arxiv_values.extend(re.findall(
+            r"(?i)(?:arxiv\.org/(?:abs|pdf)/|\barxiv\s*:\s*)"
+            r"([a-z.\-]+/\d{7}|\d{4}\.\d{4,5})(?:v\d+)?", linked_text,
+        ))
+        for arxiv_id in arxiv_values:
+            arxiv_to_keys.setdefault(
+                _normalise_scholarly_identifier(arxiv_id), set()
+            ).add(entry.key)
+
+    rows: list[dict] = []
+    gaps: list[dict] = []
+    for notebook in _iter_notebooks(
+            scan_root, root, include_gitignored, tracked_only=tracked_only):
+        row = _notebook_citation_summary(notebook, root)
+        if row.get("error"):
+            row["status"] = "notebook_parse_error"
+        else:
+            keys = set(row["citation_keys"])
+            resolved_identifier_keys: set[str] = set()
+            unresolved_identifiers: list[str] = []
+            ambiguous_identifiers: list[str] = []
+            for kind, values, index in (
+                    ("doi", row["dois"], doi_to_keys),
+                    ("arxiv", row["arxiv_ids"], arxiv_to_keys)):
+                for value in values:
+                    matches = index.get(value, set())
+                    if not matches:
+                        unresolved_identifiers.append(f"{kind}:{value}")
+                    elif len(matches) > 1:
+                        ambiguous_identifiers.append(f"{kind}:{value}")
+                    resolved_identifier_keys.update(matches)
+            missing_keys = sorted(key for key in keys if key not in by_key)
+            undeclared_identifier_keys = sorted(resolved_identifier_keys - keys)
+            row.update({
+                "missing_canonical_keys": missing_keys,
+                "resolved_identifier_keys": sorted(resolved_identifier_keys),
+                "unresolved_identifiers": unresolved_identifiers,
+                "ambiguous_identifiers": ambiguous_identifiers,
+                "undeclared_identifier_keys": undeclared_identifier_keys,
+            })
+            if missing_keys:
+                row["status"] = "citation_key_missing_from_canonical_bibliography"
+            elif unresolved_identifiers:
+                row["status"] = "scholarly_identifier_missing_from_canonical_bibliography"
+            elif ambiguous_identifiers:
+                row["status"] = "scholarly_identifier_ambiguous_in_canonical_bibliography"
+            elif undeclared_identifier_keys:
+                row["status"] = "needs_citation_key_metadata"
+            elif row["has_reference_heading"] and row["citation_audit_exempt_reason"]:
+                row["status"] = "ok_reference_section_exempted"
+            elif row["has_reference_heading"] and not keys and not resolved_identifier_keys:
+                row["status"] = "reference_section_not_machine_auditable"
+            elif keys or resolved_identifier_keys:
+                row["status"] = "ok_citations_resolved"
+            else:
+                row["status"] = "ok_no_citations_detected"
+        rows.append(row)
+        if not row["status"].startswith("ok_") and len(gaps) < max_items:
+            gaps.append(row)
+
+    gap_count = sum(1 for row in rows if not row["status"].startswith("ok_"))
+    return {
+        "policy": {
+            "canonical_bibliography": _rel(canonical, root),
+            "notebook_contract": "metadata.radia.citation_keys plus inline DOI/arXiv/cite evidence",
+        },
+        "summary": {
+            "repo_root": str(root),
+            "scan_root": _rel(scan_root, root),
+            "notebooks_scanned": len(rows),
+            "canonical_entries": len(entries),
+            "notebooks_with_citations": sum(
+                1 for row in rows
+                if row.get("citation_keys") or row.get("dois") or row.get("arxiv_ids")
+            ),
+            "ok_citations_resolved": sum(
+                1 for row in rows if row["status"] == "ok_citations_resolved"
+            ),
+            "ok_no_citations_detected": sum(
+                1 for row in rows if row["status"] == "ok_no_citations_detected"
+            ),
+            "ok_reference_section_exempted": sum(
+                1 for row in rows if row["status"] == "ok_reference_section_exempted"
+            ),
+            "gaps": gap_count,
+        },
+        "rows": rows,
+        "gaps": gaps,
+        "gaps_truncated": gap_count > len(gaps),
+    }
