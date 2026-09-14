@@ -5,6 +5,12 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- ESRF6 mixed-Omega production validation now rebuilds the total-volume Hodge
+  source at the same `bonus_intorder` as every volume/interface solve, records
+  the alignment per row, and applies a predeclared high-rule plateau gate.
+  Formal three-engine runs can require and record a non-editable wheel runtime
+  plus the exact native/Python implementation hashes.
+
 ## 4.95.92 - Corrected axisymmetric IH thermal handoff
 
 Released 2026-09-14.
