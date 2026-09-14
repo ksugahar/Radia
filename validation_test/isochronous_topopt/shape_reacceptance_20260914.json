@@ -1,0 +1,1167 @@
+{
+  "schema": "radia.isochronous-topopt-shape-regen/v4",
+  "executed_at_utc": "2026-09-14T05:49:13.164127+00:00",
+  "radia_version": "4.95.91",
+  "ngsolve_version": "6.2.2606",
+  "cubit_runtime": "Coreform Cubit 2025.12 headless batch",
+  "timing_breakdown_s": {
+    "physics_hex_fine": 939.8913490000414,
+    "physics_tet_reference": 227.38207029999467,
+    "physics_hex_coarse": 134.71330339997075,
+    "density_design": 20.442078299995046
+  },
+  "stl": {
+    "n_faces": 1500,
+    "n_vertices": 752,
+    "volume": 0.0001171847821493139,
+    "volume_before_smoothing": 0.00011760695872857243,
+    "smoothing_volume_drift": -0.00019947441108018207,
+    "decimation_volume_drift": -0.003390926476166993,
+    "grid_resolution": 96,
+    "median_edge_length": 0.025882774660573954,
+    "cutoff": 0.031059329592688742,
+    "watertight": true
+  },
+  "coarse_stl": {
+    "n_faces": 300,
+    "n_vertices": 152,
+    "volume": 0.00011565287722275668,
+    "watertight": true
+  },
+  "meshes": {
+    "tet_reference": {
+      "scheme": "tet",
+      "size": 0.01,
+      "stl_volume": 0.00011565287640438565,
+      "mesh_volume": 0.0001153059258952649,
+      "closure": 0.00299992978910117,
+      "closure_tolerance": 0.05,
+      "total_negative": 0,
+      "min_jacobian_det": 5.87036999999711e-15,
+      "vol_boundary_faces": 5318,
+      "msh_skin_faces": 5318,
+      "by_type": [
+        {
+          "element": "Tetrahedron 4",
+          "n": 26948,
+          "min": 0.028069442302632888,
+          "mean": 0.8597233371150125
+        }
+      ],
+      "dof_estimate": {
+        "h1_p1": 5929,
+        "hcurl_lowest": 35535,
+        "hdiv_lowest": 56555,
+        "l2_p0": 26948
+      },
+      "gates": {
+        "closure_ok": true,
+        "no_inverted_elements": true,
+        "boundary_faces_ok": true
+      }
+    },
+    "hex_coarse": {
+      "scheme": "hex",
+      "size": 0.01,
+      "stl_volume": 0.00011565287640438565,
+      "mesh_volume": 0.00010200345337649014,
+      "closure": 0.11802061005529747,
+      "closure_tolerance": 0.12,
+      "total_negative": 0,
+      "min_jacobian_det": 6.379750583589915e-09,
+      "vol_boundary_faces": 158,
+      "msh_skin_faces": 158,
+      "by_type": [
+        {
+          "element": "Hexahedron 8",
+          "n": 235,
+          "min": 0.3787393484109261,
+          "mean": 0.7195839321545848
+        }
+      ],
+      "dof_estimate": {
+        "h1_p1": 339,
+        "hcurl_lowest": 887,
+        "hdiv_lowest": 784,
+        "l2_p0": 235
+      },
+      "gates": {
+        "closure_ok": true,
+        "no_inverted_elements": true,
+        "boundary_faces_ok": true
+      }
+    },
+    "hex_fine": {
+      "scheme": "hex",
+      "size": 0.005256327117056621,
+      "stl_volume": 0.00011718478190559714,
+      "mesh_volume": 0.0001145020350893225,
+      "closure": 0.022893303828784066,
+      "closure_tolerance": 0.03,
+      "total_negative": 0,
+      "min_jacobian_det": 6.538641588650302e-10,
+      "vol_boundary_faces": 722,
+      "msh_skin_faces": 722,
+      "by_type": [
+        {
+          "element": "Hexahedron 8",
+          "n": 1461,
+          "min": 0.3986674953400772,
+          "mean": 0.8161453906983402
+        }
+      ],
+      "dof_estimate": {
+        "h1_p1": 1871,
+        "hcurl_lowest": 5153,
+        "hdiv_lowest": 4744,
+        "l2_p0": 1461
+      },
+      "gates": {
+        "closure_ok": true,
+        "no_inverted_elements": true,
+        "boundary_faces_ok": true
+      }
+    }
+  },
+  "evaluations": {
+    "tet_reference": {
+      "ne": 26948,
+      "ndof": 169665,
+      "native_iterations": 40,
+      "ngsolve_iterations": 40,
+      "J_native": 0.7558914379514218,
+      "J_ngsolve": 0.755891437477354,
+      "J_direct_field": 0.7558914379511431,
+      "solver_parity_relative": 6.271638512138871e-10,
+      "reciprocity_relative": 3.686587321801703e-13,
+      "elapsed_s": 227.38207029999467
+    },
+    "hex_coarse": {
+      "ne": 235,
+      "ndof": 5956,
+      "native_iterations": 20,
+      "ngsolve_iterations": 22,
+      "J_native": 0.632079311529945,
+      "J_ngsolve": 0.6320793111805811,
+      "J_direct_field": 0.6320793370473965,
+      "solver_parity_relative": 5.527215730467225e-10,
+      "reciprocity_relative": 4.0370646514654325e-08,
+      "elapsed_s": 134.71330339997075
+    },
+    "hex_fine": {
+      "ne": 1461,
+      "ndof": 36508,
+      "native_iterations": 21,
+      "ngsolve_iterations": 22,
+      "J_native": 0.7386539978065297,
+      "J_ngsolve": 0.7386539978065301,
+      "J_direct_field": 0.738653997768395,
+      "solver_parity_relative": 4.509105865217081e-16,
+      "reciprocity_relative": 5.1627308213526055e-11,
+      "elapsed_s": 939.8913490000414
+    }
+  },
+  "ne_staircase": 66,
+  "chi_eval": 100.0,
+  "demag_factor_z_fine_hex": 0.46275280434566207,
+  "J_staircase": 0.760909963459243,
+  "staircase_iterations": 31,
+  "fine_hex_vs_staircase_relative": -0.029249144736564314,
+  "fine_hex_vs_tet_relative": 0.022804121437872166,
+  "coarse_hex_vs_tet_relative": 0.16379617522461432,
+  "boundary_face_incident": "fixed: direct/free Sculpt sideset faces are exported to .vol; all three meshes now require vol_boundary_faces == msh_skin_faces",
+  "completed": true,
+  "provenance": {
+    "host": "mdx2",
+    "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+    "interpreter": "C:\\temp\\radia-shape-reaccept-20260914\\venv\\Scripts\\python.exe",
+    "radia_file": "C:\\temp\\radia-shape-reaccept-20260914\\venv\\Lib\\site-packages\\radia\\__init__.py",
+    "radia_version": "4.95.91",
+    "ngsolve_version": "6.2.2606",
+    "topopt_cad_file": "C:\\temp\\radia-shape-reaccept-20260914\\topopt_cad.py",
+    "topopt_cad_sha256": "f3d6c8043465d4d53fadc6fc4d2a0aadc8e61845d9933e80d5deafc3a2b58329",
+    "lane_sha256": "d78daeb8f1a42da428a74cdd4c3392fdd743523d4d0b57c7b73ddf0f01666ea3",
+    "driver_sha256": "859f26f572fcd89e4e7e91316436c9302459d6a500104620a3b3e2c061ac4a6b",
+    "native_files": {
+      "axifem.pyd": "4834cced55db57ce342829fb28c04ef487a5149f535c4ff4795504059524dacf",
+      "cln_core.pyd": "966cd9e50ee75b6a75c59c75b7db70e12e9039e7fea8e4a968b5ce0a35b6bada",
+      "peec_matrices.pyd": "7aee76da1adc7e0815aea00b8fbc3f56d65ea1f41cbee800362111404632f8e5",
+      "sparsesolv_ngsolve.pyd": "051c6473984ad52add73260f67a08ddad98d36c82de1eb8038119724dc2bbde9",
+      "_equation.pyd": "7036ff48e7e0257a37449ae9aaee930d451c8c9a16d213d599d97c952ae9d17b",
+      "_radia_pybind.pyd": "cbc9bbbc61b5cd0ee7035c642197522b2615a871e3d4c49c2887184f4f9040ec"
+    }
+  },
+  "preparation": {
+    "run_id": "ec439165-bbdf-425f-853c-f34720cd6093",
+    "provenance": {
+      "host": "mdx2",
+      "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+      "interpreter": "C:\\temp\\radia-shape-reaccept-20260914\\venv\\Scripts\\python.exe",
+      "radia_file": "C:\\temp\\radia-shape-reaccept-20260914\\venv\\Lib\\site-packages\\radia\\__init__.py",
+      "radia_version": "4.95.91",
+      "ngsolve_version": "6.2.2606",
+      "topopt_cad_file": "C:\\temp\\radia-shape-reaccept-20260914\\topopt_cad.py",
+      "topopt_cad_sha256": "f3d6c8043465d4d53fadc6fc4d2a0aadc8e61845d9933e80d5deafc3a2b58329",
+      "lane_sha256": "d78daeb8f1a42da428a74cdd4c3392fdd743523d4d0b57c7b73ddf0f01666ea3",
+      "driver_sha256": "f67ff0ee188814a1dcc6ce49708f617987833f07aa4e5100411ea6ed1cfd1ac7",
+      "native_files": {
+        "axifem.pyd": "4834cced55db57ce342829fb28c04ef487a5149f535c4ff4795504059524dacf",
+        "cln_core.pyd": "966cd9e50ee75b6a75c59c75b7db70e12e9039e7fea8e4a968b5ce0a35b6bada",
+        "peec_matrices.pyd": "7aee76da1adc7e0815aea00b8fbc3f56d65ea1f41cbee800362111404632f8e5",
+        "sparsesolv_ngsolve.pyd": "051c6473984ad52add73260f67a08ddad98d36c82de1eb8038119724dc2bbde9",
+        "_equation.pyd": "7036ff48e7e0257a37449ae9aaee930d451c8c9a16d213d599d97c952ae9d17b",
+        "_radia_pybind.pyd": "cbc9bbbc61b5cd0ee7035c642197522b2615a871e3d4c49c2887184f4f9040ec"
+      }
+    },
+    "stl_info": {
+      "path": "C:\\temp\\radia-shape-reaccept-20260914\\accepted\\design.stl",
+      "n_faces": 1500,
+      "n_vertices": 752,
+      "volume": 0.0001171847821493139,
+      "volume_before_smoothing": 0.00011760695872857243,
+      "smoothing_volume_drift": -0.00019947441108018207,
+      "decimation_volume_drift": -0.003390926476166993,
+      "grid_resolution": 96,
+      "median_edge_length": 0.025882774660573954,
+      "cutoff": 0.031059329592688742,
+      "watertight": true
+    },
+    "staircase": {
+      "J": 0.760909963459243,
+      "iterations": 31,
+      "ne": 66,
+      "chi_eval": 100.0,
+      "elapsed_s": 0.9882753999554552
+    },
+    "coarse_stl_info": {
+      "n_faces": 300,
+      "n_vertices": 152,
+      "volume": 0.00011565287722275668,
+      "watertight": true
+    },
+    "timings": {
+      "density_design": 20.442078299995046,
+      "surface_generation": 1.0632405999931507,
+      "mesh_tet_reference": 8.869293900002958,
+      "mesh_hex_coarse": 3.427632699997048,
+      "mesh_hex_fine": 3.095319100000779
+    },
+    "inputs": {
+      "design.stl": "48130502b0f1a0eac4e19cbba14a3a19cca06237333acea48627b8e40eede3d2",
+      "design_300.stl": "0b30ed3530f09b650106edbe541fa2d6a5b859e9cc6a967031adf16842ee6615",
+      "design_lsd.exo": "f0a07e3385709aa1d2fca632f6580d6b213dbc70c241768d4d105fb1b114a9d4"
+    }
+  },
+  "mesh_identity": {
+    "run_id": "166abc27-1b2e-4ca3-a5fa-d8a93eba1b7f",
+    "provenance": {
+      "host": "lab",
+      "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+      "interpreter": "C:\\Program Files\\Python312\\python.exe",
+      "radia_file": "\\\\192.168.121.100\\work\\00_CAE\\Radia\\release-quad\\radia-4.95.91-runtime\\src\\radia\\__init__.py",
+      "radia_version": "4.95.91",
+      "ngsolve_version": "6.2.2606",
+      "topopt_cad_file": "C:\\temp\\radia-notebook-bibliography-audit\\src\\radia\\topopt_cad.py",
+      "topopt_cad_sha256": "f3d6c8043465d4d53fadc6fc4d2a0aadc8e61845d9933e80d5deafc3a2b58329",
+      "lane_sha256": "d78daeb8f1a42da428a74cdd4c3392fdd743523d4d0b57c7b73ddf0f01666ea3",
+      "driver_sha256": "859f26f572fcd89e4e7e91316436c9302459d6a500104620a3b3e2c061ac4a6b",
+      "native_files": {
+        "axifem.pyd": "239cedc09cb1d3dc918372095844c2cde448a7f1c15ec1b41d0f86f033e009b4",
+        "cln_core.pyd": "11c937bb92076590bed216548181d3e1fb66982e8aedba7141cf20250f419c68",
+        "peec_matrices.pyd": "fa371612a79001eab4505df059c8adc65d1d2b3f909f4f74cb392a0bfbdf7484",
+        "sparsesolv_ngsolve.pyd": "567634a35c9bd86dd04fb233749cd1c9f3903d773e8ee1ae1842effc37d96fd0",
+        "_equation.pyd": "6949ac465c5a85a9ad9ebd3e2764a8247223f1df49f2d583f3e270cd124da678",
+        "_radia_pybind.pyd": "a395ff229cb6fd80ad7f1f86f855d7f94bd9fd67a4a118b6bfbdc6ad1c529da3"
+      }
+    },
+    "mesh_results": {
+      "tet_reference": {
+        "status": "ok",
+        "gates": {
+          "closure_ok": true,
+          "no_inverted_elements": true,
+          "boundary_faces_ok": true
+        },
+        "scheme": "tet",
+        "size": 0.01,
+        "stl": "C:\\temp\\radia-shape-reaccept-lab-20260914\\curves16\\design_300.stl",
+        "vol": "C:\\temp\\radia-shape-reaccept-lab-20260914\\curves16\\tet_reference.vol",
+        "msh": "C:\\temp\\radia-shape-reaccept-lab-20260914\\curves16\\tet_reference.msh",
+        "stl_volume": 0.00011565287640438565,
+        "mesh_volume": 0.0001153059258952649,
+        "closure": 0.00299992978910117,
+        "closure_tolerance": 0.05,
+        "total_negative": 0,
+        "min_jacobian_det": 5.87036999999711e-15,
+        "vol_boundary_faces": 5318,
+        "vol_outer_faces": 5318,
+        "vol_interface_faces": 0,
+        "vol_faces_classified": true,
+        "msh_skin_faces": 5318,
+        "by_type": [
+          {
+            "element": "Tetrahedron 4",
+            "n": 26948,
+            "min": 0.028069442302632888,
+            "mean": 0.8597233371150125
+          }
+        ],
+        "dof_estimate": {
+          "h1_p1": 5929,
+          "hcurl_lowest": 35535,
+          "hdiv_lowest": 56555,
+          "l2_p0": 26948
+        },
+        "process": {
+          "exit_code": 0,
+          "console": "C:\\Program Files\\Coreform Cubit 2025.12\\bin\\coreform_cubit.com",
+          "headless_flags": [
+            "-nographics",
+            "-batch",
+            "-nojournal",
+            "-noinitfile",
+            "-commandplugindir"
+          ],
+          "persistent_gui_started": false
+        },
+        "note": "min quality is reported, not gated; gate on inverted elements and closure (mesh-quality study finding)"
+      },
+      "hex_coarse": {
+        "status": "ok",
+        "gates": {
+          "closure_ok": true,
+          "no_inverted_elements": true,
+          "boundary_faces_ok": true
+        },
+        "scheme": "hex",
+        "size": 0.01,
+        "stl": "C:\\temp\\radia-shape-reaccept-lab-20260914\\curves16\\design_300.stl",
+        "vol": "C:\\temp\\radia-shape-reaccept-lab-20260914\\curves16\\hex_coarse.vol",
+        "msh": "C:\\temp\\radia-shape-reaccept-lab-20260914\\curves16\\hex_coarse.msh",
+        "stl_volume": 0.00011565287640438565,
+        "mesh_volume": 0.00010200345337649014,
+        "closure": 0.11802061005529747,
+        "closure_tolerance": 0.12,
+        "total_negative": 0,
+        "min_jacobian_det": 6.379750583589915e-09,
+        "vol_boundary_faces": 158,
+        "vol_outer_faces": 158,
+        "vol_interface_faces": 0,
+        "vol_faces_classified": true,
+        "msh_skin_faces": 158,
+        "by_type": [
+          {
+            "element": "Hexahedron 8",
+            "n": 235,
+            "min": 0.3787393484109261,
+            "mean": 0.7195839321545848
+          }
+        ],
+        "dof_estimate": {
+          "h1_p1": 339,
+          "hcurl_lowest": 887,
+          "hdiv_lowest": 784,
+          "l2_p0": 235
+        },
+        "process": {
+          "exit_code": 0,
+          "console": "C:\\Program Files\\Coreform Cubit 2025.12\\bin\\coreform_cubit.com",
+          "headless_flags": [
+            "-nographics",
+            "-batch",
+            "-nojournal",
+            "-noinitfile",
+            "-commandplugindir"
+          ],
+          "persistent_gui_started": false
+        },
+        "note": "min quality is reported, not gated; gate on inverted elements and closure (mesh-quality study finding)"
+      },
+      "hex_fine": {
+        "status": "ok",
+        "gates": {
+          "closure_ok": true,
+          "no_inverted_elements": true,
+          "boundary_faces_ok": true
+        },
+        "scheme": "hex",
+        "size": 0.005256327117056621,
+        "stl": "C:\\temp\\radia-shape-reaccept-lab-20260914\\curves16\\design.stl",
+        "vol": "C:\\temp\\radia-shape-reaccept-lab-20260914\\curves16\\hex_fine.vol",
+        "msh": "C:\\temp\\radia-shape-reaccept-lab-20260914\\curves16\\hex_fine.msh",
+        "stl_volume": 0.00011718478190559714,
+        "mesh_volume": 0.0001145020350893225,
+        "closure": 0.022893303828784066,
+        "closure_tolerance": 0.03,
+        "total_negative": 0,
+        "min_jacobian_det": 6.538641588650302e-10,
+        "vol_boundary_faces": 722,
+        "vol_outer_faces": 722,
+        "vol_interface_faces": 0,
+        "vol_faces_classified": true,
+        "msh_skin_faces": 722,
+        "by_type": [
+          {
+            "element": "Hexahedron 8",
+            "n": 1461,
+            "min": 0.3986674953400772,
+            "mean": 0.8161453906983402
+          }
+        ],
+        "dof_estimate": {
+          "h1_p1": 1871,
+          "hcurl_lowest": 5153,
+          "hdiv_lowest": 4744,
+          "l2_p0": 1461
+        },
+        "process": {
+          "exit_code": 0,
+          "console": "C:\\Program Files\\Coreform Cubit 2025.12\\bin\\coreform_cubit.com",
+          "headless_flags": [
+            "-nographics",
+            "-batch",
+            "-nojournal",
+            "-noinitfile",
+            "-commandplugindir"
+          ],
+          "persistent_gui_started": false
+        },
+        "note": "min quality is reported, not gated; gate on inverted elements and closure (mesh-quality study finding)"
+      }
+    },
+    "timings": {
+      "mesh_tet_reference": 8.869293900002958,
+      "mesh_hex_coarse": 3.427632699997048,
+      "mesh_hex_fine": 3.095319100000779
+    },
+    "checks": {
+      "tet_reference": {
+        "status": "ok",
+        "schema": "cubit-mesh-export.vol-check.v1",
+        "generated_at_utc": "2026-09-14T05:27:01.564561+00:00",
+        "versions": {
+          "cubit_mesh_export": "0.14.17",
+          "ngsolve": "6.2.2606",
+          "python": "3.12.10"
+        },
+        "passed": true,
+        "vol_file": "C:\\temp\\radia-shape-reaccept-lab-20260914\\curves16\\tet_reference.vol",
+        "json_file": "C:\\temp\\radia-shape-reaccept-lab-20260914\\curves16\\tet_reference.vol.json",
+        "threshold_pct": 5.0,
+        "cad_reference": {
+          "available": true,
+          "file": "C:\\temp\\radia-shape-reaccept-lab-20260914\\curves16\\tet_reference.vol.json",
+          "auto_discovered": true,
+          "mesh_only_materials": [],
+          "metadata_checks": {
+            "n_elements": {
+              "expected": 26948,
+              "actual": 26948,
+              "passed": true
+            },
+            "n_points": {
+              "expected": 5929,
+              "actual": 5929,
+              "passed": true
+            },
+            "order": {
+              "expected": 1,
+              "actual": 1,
+              "passed": true
+            }
+          }
+        },
+        "mesh": {
+          "dimension": 3,
+          "curve_order": 1,
+          "n_elements": 26948,
+          "n_points": 5929
+        },
+        "order": 1,
+        "n_elements": 26948,
+        "n_points": 5929,
+        "labels": {
+          "schema": "radia.vol-label-contract.v1",
+          "passed": true,
+          "application": null,
+          "strict_labels": false,
+          "materials": [
+            "iron"
+          ],
+          "boundaries": [
+            "Surface_1",
+            "Surface_2",
+            "Surface_3",
+            "Surface_4",
+            "Surface_5"
+          ],
+          "bboundaries": [
+            "default"
+          ],
+          "bbboundaries": [],
+          "required": {
+            "materials": [],
+            "boundaries": [],
+            "bboundaries": [],
+            "bbboundaries": []
+          },
+          "allowed": {
+            "materials": [],
+            "boundaries": [],
+            "bboundaries": [],
+            "bbboundaries": []
+          },
+          "allowed_specified": {
+            "materials": false,
+            "boundaries": false,
+            "bboundaries": false,
+            "bbboundaries": false
+          },
+          "missing": {
+            "materials": [],
+            "boundaries": [],
+            "bboundaries": [],
+            "bbboundaries": []
+          },
+          "unexpected": {
+            "materials": [],
+            "boundaries": [],
+            "bboundaries": [],
+            "bbboundaries": []
+          },
+          "invalid": {
+            "materials": [],
+            "boundaries": [],
+            "bboundaries": [],
+            "bbboundaries": []
+          },
+          "autogenerated": {
+            "materials": [],
+            "boundaries": [],
+            "bboundaries": [],
+            "bbboundaries": []
+          },
+          "casefold_collisions": {
+            "materials": [],
+            "boundaries": [],
+            "bboundaries": [],
+            "bbboundaries": []
+          },
+          "relational_issues": [],
+          "warnings": []
+        },
+        "quality": {
+          "passed": true,
+          "curve_order": 1,
+          "integration_order": 1,
+          "volume_element_count": 26948,
+          "tetrahedron_count": 26948,
+          "mapping_sample_count": 26948,
+          "finite_jacobian_sample_count": 26948,
+          "finite_scaled_jacobian_sample_count": 26948,
+          "minimum_jacobian": -1.055019650019646e-06,
+          "maximum_jacobian": -7.606464374383149e-15,
+          "minimum_absolute_jacobian": 7.606464374383149e-15,
+          "minimum_scaled_jacobian": 0.007640598887176897,
+          "invalid_jacobian_sample_count": 0,
+          "orientation_flip_sample_count": 0,
+          "negative_jacobian_sample_count": 26948,
+          "positive_orientation_element_count": 0,
+          "negative_orientation_element_count": 26948,
+          "low_scaled_jacobian_sample_count": 0,
+          "invalid_jacobian_elements": [],
+          "low_scaled_jacobian_elements": [],
+          "materials": [
+            "iron"
+          ],
+          "boundaries": [
+            "Surface_1",
+            "Surface_2",
+            "Surface_3",
+            "Surface_4",
+            "Surface_5"
+          ],
+          "missing_materials": [],
+          "missing_boundaries": [],
+          "adjacency": {
+            "enabled": false,
+            "conductive_materials": [],
+            "air_materials": [
+              "air",
+              "vacuum"
+            ]
+          },
+          "warnings": []
+        },
+        "boundary_domain_ownership": {
+          "passed": true,
+          "volume_element_count": 26948,
+          "surface_element_count": 5318,
+          "volume_domain_counts": {
+            "1": 26948
+          },
+          "surface_domain_pair_counts": {
+            "1->0": 5318
+          },
+          "domain_surface_incidence_counts": {
+            "1": 5318
+          },
+          "exterior_surface_element_count": 5318,
+          "exterior_surface_domain_counts": {
+            "1": 5318
+          },
+          "internal_interface_element_count": 0,
+          "internal_interface_domain_pair_counts": {},
+          "material_ids": [
+            1
+          ],
+          "missing_material_ids": [],
+          "unknown_surface_domains": [],
+          "unreferenced_volume_domains": [],
+          "invalid_volume_rows": [],
+          "invalid_surface_rows": [],
+          "invalid_surface_connectivity_rows": [],
+          "duplicate_surface_connectivity_rows": [],
+          "zero_zero_rows": [],
+          "equal_domain_rows": [],
+          "issues": []
+        },
+        "materials": [
+          {
+            "name": "iron",
+            "ng_volume": 0.00011530627160162846,
+            "cad_volume": 0.00011565287640438576,
+            "error_pct": -0.2996940616897243
+          }
+        ],
+        "boundaries": [
+          {
+            "name": "Surface_1",
+            "ng_area": 4.031081212247497e-06,
+            "cad_area": 4.046815367369235e-06,
+            "error_pct": -0.3888033847209048
+          },
+          {
+            "name": "Surface_2",
+            "ng_area": 0.0008669879271475176,
+            "cad_area": 0.0008696005986074633,
+            "error_pct": -0.3004449932681208
+          },
+          {
+            "name": "Surface_3",
+            "ng_area": 0.016543632778747725,
+            "cad_area": 0.016615358108257074,
+            "error_pct": -0.4316809125751213
+          },
+          {
+            "name": "Surface_4",
+            "ng_area": 4.58544250378645e-08,
+            "cad_area": 4.606832760596399e-08,
+            "error_pct": -0.4643158960079113
+          },
+          {
+            "name": "Surface_5",
+            "ng_area": 8.825093384461277e-07,
+            "cad_area": 8.860583731613072e-07,
+            "error_pct": -0.400541863005836
+          }
+        ],
+        "edges": [
+          {
+            "name": "default",
+            "ng_length": 0.16608514131471858
+          },
+          {
+            "name": "curve_1",
+            "cad_length": 0.013635621966478453
+          },
+          {
+            "name": "curve_10",
+            "cad_length": 0.002612887972582737
+          },
+          {
+            "name": "curve_2",
+            "cad_length": 0.013504564926377569
+          },
+          {
+            "name": "curve_3",
+            "cad_length": 0.031059254950578475
+          },
+          {
+            "name": "curve_4",
+            "cad_length": 0.028585537607844748
+          },
+          {
+            "name": "curve_5",
+            "cad_length": 0.030412958692988913
+          },
+          {
+            "name": "curve_6",
+            "cad_length": 0.027973936179181424
+          },
+          {
+            "name": "curve_7",
+            "cad_length": 0.007915720811072623
+          },
+          {
+            "name": "curve_8",
+            "cad_length": 0.007928807231463067
+          },
+          {
+            "name": "curve_9",
+            "cad_length": 0.0026152113389678825
+          }
+        ],
+        "edge_check": {
+          "available": true,
+          "error": null,
+          "per_edge_mapping": "best-effort",
+          "total_length_comparison": "used for the CAD gate when edges exist"
+        },
+        "warnings": [],
+        "total_edge_length": {
+          "cad": 0.1662445016775359,
+          "ng": 0.16608514131471855,
+          "error_pct": -0.09585902764259098
+        },
+        "report_json": "C:\\temp\\radia-shape-reaccept-lab-20260914\\curves16\\tet_reference.check.json"
+      },
+      "hex_coarse": {
+        "status": "ok",
+        "schema": "cubit-mesh-export.vol-check.v1",
+        "generated_at_utc": "2026-09-14T05:27:01.604958+00:00",
+        "versions": {
+          "cubit_mesh_export": "0.14.17",
+          "ngsolve": "6.2.2606",
+          "python": "3.12.10"
+        },
+        "passed": true,
+        "vol_file": "C:\\temp\\radia-shape-reaccept-lab-20260914\\curves16\\hex_coarse.vol",
+        "json_file": "C:\\temp\\radia-shape-reaccept-lab-20260914\\curves16\\hex_coarse.vol.json",
+        "threshold_pct": 12.0,
+        "cad_reference": {
+          "available": true,
+          "file": "C:\\temp\\radia-shape-reaccept-lab-20260914\\curves16\\hex_coarse.vol.json",
+          "auto_discovered": true,
+          "mesh_only_materials": [],
+          "metadata_checks": {
+            "n_elements": {
+              "expected": 235,
+              "actual": 235,
+              "passed": true
+            },
+            "n_points": {
+              "expected": 339,
+              "actual": 339,
+              "passed": true
+            },
+            "order": {
+              "expected": 1,
+              "actual": 1,
+              "passed": true
+            }
+          }
+        },
+        "mesh": {
+          "dimension": 3,
+          "curve_order": 1,
+          "n_elements": 235,
+          "n_points": 339
+        },
+        "order": 1,
+        "n_elements": 235,
+        "n_points": 339,
+        "labels": {
+          "schema": "radia.vol-label-contract.v1",
+          "passed": true,
+          "application": null,
+          "strict_labels": false,
+          "materials": [
+            "iron"
+          ],
+          "boundaries": [
+            "Surface_6"
+          ],
+          "bboundaries": [],
+          "bbboundaries": [],
+          "required": {
+            "materials": [],
+            "boundaries": [],
+            "bboundaries": [],
+            "bbboundaries": []
+          },
+          "allowed": {
+            "materials": [],
+            "boundaries": [],
+            "bboundaries": [],
+            "bbboundaries": []
+          },
+          "allowed_specified": {
+            "materials": false,
+            "boundaries": false,
+            "bboundaries": false,
+            "bbboundaries": false
+          },
+          "missing": {
+            "materials": [],
+            "boundaries": [],
+            "bboundaries": [],
+            "bbboundaries": []
+          },
+          "unexpected": {
+            "materials": [],
+            "boundaries": [],
+            "bboundaries": [],
+            "bbboundaries": []
+          },
+          "invalid": {
+            "materials": [],
+            "boundaries": [],
+            "bboundaries": [],
+            "bbboundaries": []
+          },
+          "autogenerated": {
+            "materials": [],
+            "boundaries": [],
+            "bboundaries": [],
+            "bbboundaries": []
+          },
+          "casefold_collisions": {
+            "materials": [],
+            "boundaries": [],
+            "bboundaries": [],
+            "bbboundaries": []
+          },
+          "relational_issues": [],
+          "warnings": []
+        },
+        "quality": {
+          "passed": true,
+          "curve_order": 1,
+          "integration_order": 1,
+          "volume_element_count": 235,
+          "tetrahedron_count": 0,
+          "mapping_sample_count": 235,
+          "finite_jacobian_sample_count": 235,
+          "finite_scaled_jacobian_sample_count": 235,
+          "minimum_jacobian": 1.2124537359621477e-07,
+          "maximum_jacobian": 9.035574251022732e-07,
+          "minimum_absolute_jacobian": 1.2124537359621477e-07,
+          "minimum_scaled_jacobian": 0.8006161010431213,
+          "invalid_jacobian_sample_count": 0,
+          "orientation_flip_sample_count": 0,
+          "negative_jacobian_sample_count": 0,
+          "positive_orientation_element_count": 235,
+          "negative_orientation_element_count": 0,
+          "low_scaled_jacobian_sample_count": 0,
+          "invalid_jacobian_elements": [],
+          "low_scaled_jacobian_elements": [],
+          "materials": [
+            "iron"
+          ],
+          "boundaries": [
+            "Surface_6"
+          ],
+          "missing_materials": [],
+          "missing_boundaries": [],
+          "adjacency": {
+            "enabled": false,
+            "conductive_materials": [],
+            "air_materials": [
+              "air",
+              "vacuum"
+            ]
+          },
+          "warnings": []
+        },
+        "boundary_domain_ownership": {
+          "passed": true,
+          "volume_element_count": 235,
+          "surface_element_count": 158,
+          "volume_domain_counts": {
+            "1": 235
+          },
+          "surface_domain_pair_counts": {
+            "1->0": 158
+          },
+          "domain_surface_incidence_counts": {
+            "1": 158
+          },
+          "exterior_surface_element_count": 158,
+          "exterior_surface_domain_counts": {
+            "1": 158
+          },
+          "internal_interface_element_count": 0,
+          "internal_interface_domain_pair_counts": {},
+          "material_ids": [
+            1
+          ],
+          "missing_material_ids": [],
+          "unknown_surface_domains": [],
+          "unreferenced_volume_domains": [],
+          "invalid_volume_rows": [],
+          "invalid_surface_rows": [],
+          "invalid_surface_connectivity_rows": [],
+          "duplicate_surface_connectivity_rows": [],
+          "zero_zero_rows": [],
+          "equal_domain_rows": [],
+          "issues": []
+        },
+        "materials": [
+          {
+            "name": "iron",
+            "ng_volume": 0.00010200336106867255,
+            "cad_volume": 0.00010295029213128898,
+            "error_pct": -0.9197944396397
+          }
+        ],
+        "boundaries": [
+          {
+            "name": "Surface_6",
+            "ng_area": 0.01447938028697954,
+            "cad_area": 0.014573222613556171,
+            "error_pct": -0.6439366848711787
+          }
+        ],
+        "edges": [],
+        "edge_check": {
+          "available": true,
+          "error": null,
+          "per_edge_mapping": "best-effort",
+          "total_length_comparison": "used for the CAD gate when edges exist"
+        },
+        "warnings": [],
+        "report_json": "C:\\temp\\radia-shape-reaccept-lab-20260914\\curves16\\hex_coarse.check.json"
+      },
+      "hex_fine": {
+        "status": "ok",
+        "schema": "cubit-mesh-export.vol-check.v1",
+        "generated_at_utc": "2026-09-14T05:27:01.767529+00:00",
+        "versions": {
+          "cubit_mesh_export": "0.14.17",
+          "ngsolve": "6.2.2606",
+          "python": "3.12.10"
+        },
+        "passed": true,
+        "vol_file": "C:\\temp\\radia-shape-reaccept-lab-20260914\\curves16\\hex_fine.vol",
+        "json_file": "C:\\temp\\radia-shape-reaccept-lab-20260914\\curves16\\hex_fine.vol.json",
+        "threshold_pct": 3.0,
+        "cad_reference": {
+          "available": true,
+          "file": "C:\\temp\\radia-shape-reaccept-lab-20260914\\curves16\\hex_fine.vol.json",
+          "auto_discovered": true,
+          "mesh_only_materials": [],
+          "metadata_checks": {
+            "n_elements": {
+              "expected": 1461,
+              "actual": 1461,
+              "passed": true
+            },
+            "n_points": {
+              "expected": 1871,
+              "actual": 1871,
+              "passed": true
+            },
+            "order": {
+              "expected": 1,
+              "actual": 1,
+              "passed": true
+            }
+          }
+        },
+        "mesh": {
+          "dimension": 3,
+          "curve_order": 1,
+          "n_elements": 1461,
+          "n_points": 1871
+        },
+        "order": 1,
+        "n_elements": 1461,
+        "n_points": 1871,
+        "labels": {
+          "schema": "radia.vol-label-contract.v1",
+          "passed": true,
+          "application": null,
+          "strict_labels": false,
+          "materials": [
+            "iron"
+          ],
+          "boundaries": [
+            "Surface_6"
+          ],
+          "bboundaries": [],
+          "bbboundaries": [],
+          "required": {
+            "materials": [],
+            "boundaries": [],
+            "bboundaries": [],
+            "bbboundaries": []
+          },
+          "allowed": {
+            "materials": [],
+            "boundaries": [],
+            "bboundaries": [],
+            "bbboundaries": []
+          },
+          "allowed_specified": {
+            "materials": false,
+            "boundaries": false,
+            "bboundaries": false,
+            "bbboundaries": false
+          },
+          "missing": {
+            "materials": [],
+            "boundaries": [],
+            "bboundaries": [],
+            "bbboundaries": []
+          },
+          "unexpected": {
+            "materials": [],
+            "boundaries": [],
+            "bboundaries": [],
+            "bbboundaries": []
+          },
+          "invalid": {
+            "materials": [],
+            "boundaries": [],
+            "bboundaries": [],
+            "bbboundaries": []
+          },
+          "autogenerated": {
+            "materials": [],
+            "boundaries": [],
+            "bboundaries": [],
+            "bbboundaries": []
+          },
+          "casefold_collisions": {
+            "materials": [],
+            "boundaries": [],
+            "bboundaries": [],
+            "bbboundaries": []
+          },
+          "relational_issues": [],
+          "warnings": []
+        },
+        "quality": {
+          "passed": true,
+          "curve_order": 1,
+          "integration_order": 1,
+          "volume_element_count": 1461,
+          "tetrahedron_count": 0,
+          "mapping_sample_count": 1461,
+          "finite_jacobian_sample_count": 1461,
+          "finite_scaled_jacobian_sample_count": 1461,
+          "minimum_jacobian": 1.1091146230996986e-08,
+          "maximum_jacobian": 1.3664399903494835e-07,
+          "minimum_absolute_jacobian": 1.1091146230996986e-08,
+          "minimum_scaled_jacobian": 0.7378315358376787,
+          "invalid_jacobian_sample_count": 0,
+          "orientation_flip_sample_count": 0,
+          "negative_jacobian_sample_count": 0,
+          "positive_orientation_element_count": 1461,
+          "negative_orientation_element_count": 0,
+          "low_scaled_jacobian_sample_count": 0,
+          "invalid_jacobian_elements": [],
+          "low_scaled_jacobian_elements": [],
+          "materials": [
+            "iron"
+          ],
+          "boundaries": [
+            "Surface_6"
+          ],
+          "missing_materials": [],
+          "missing_boundaries": [],
+          "adjacency": {
+            "enabled": false,
+            "conductive_materials": [],
+            "air_materials": [
+              "air",
+              "vacuum"
+            ]
+          },
+          "warnings": []
+        },
+        "boundary_domain_ownership": {
+          "passed": true,
+          "volume_element_count": 1461,
+          "surface_element_count": 722,
+          "volume_domain_counts": {
+            "1": 1461
+          },
+          "surface_domain_pair_counts": {
+            "1->0": 722
+          },
+          "domain_surface_incidence_counts": {
+            "1": 722
+          },
+          "exterior_surface_element_count": 722,
+          "exterior_surface_domain_counts": {
+            "1": 722
+          },
+          "internal_interface_element_count": 0,
+          "internal_interface_domain_pair_counts": {},
+          "material_ids": [
+            1
+          ],
+          "missing_material_ids": [],
+          "unknown_surface_domains": [],
+          "unreferenced_volume_domains": [],
+          "invalid_volume_rows": [],
+          "invalid_surface_rows": [],
+          "invalid_surface_connectivity_rows": [],
+          "duplicate_surface_connectivity_rows": [],
+          "zero_zero_rows": [],
+          "equal_domain_rows": [],
+          "issues": []
+        },
+        "materials": [
+          {
+            "name": "iron",
+            "ng_volume": 0.00011450197278317611,
+            "cad_volume": 0.0001146283450067549,
+            "error_pct": -0.11024517851264512
+          }
+        ],
+        "boundaries": [
+          {
+            "name": "Surface_6",
+            "ng_area": 0.01624360438145593,
+            "cad_area": 0.016294476520844862,
+            "error_pct": -0.31220480954912977
+          }
+        ],
+        "edges": [],
+        "edge_check": {
+          "available": true,
+          "error": null,
+          "per_edge_mapping": "best-effort",
+          "total_length_comparison": "used for the CAD gate when edges exist"
+        },
+        "warnings": [],
+        "report_json": "C:\\temp\\radia-shape-reaccept-lab-20260914\\curves16\\hex_fine.check.json"
+      }
+    },
+    "iso_union": {
+      "watertight": true,
+      "volume": 0.0001241345675645464,
+      "faces": 156,
+      "tri_blocks": [
+        2,
+        3
+      ]
+    },
+    "prepare_sha256": "c19d69195b517ed66015e7d1c72f2d1f558a68ce5ef9ee6fa85668f306b3f471",
+    "input_sha256": {
+      "design.stl": "48130502b0f1a0eac4e19cbba14a3a19cca06237333acea48627b8e40eede3d2",
+      "design_300.stl": "0b30ed3530f09b650106edbe541fa2d6a5b859e9cc6a967031adf16842ee6615",
+      "design_lsd.exo": "f0a07e3385709aa1d2fca632f6580d6b213dbc70c241768d4d105fb1b114a9d4"
+    },
+    "vol_sha256": {
+      "tet_reference": "1ef5a3f321415dabcd3d65ca0007cfe5eee8d34fe17f870551dc5c140ab831d6",
+      "hex_coarse": "e50fad14f8e26c6499d2a57a493dc782def8bc147e5f94e027ff43988fafecdc",
+      "hex_fine": "8ec271418a46da338a122fe969e6f84e90c0a06c257905e9d55b7bc973ad955f"
+    }
+  },
+  "mesh_receipt_sha256": "3261d120ed4e5bb96534324c5a15ae8aa2e8e0096db04b5b6e461075fa1c0bb0",
+  "run_id": "0f8c4396-f9b8-4b84-b4d8-b67fa2f2d638"
+}

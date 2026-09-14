@@ -119,6 +119,27 @@ tier to that tree.
 
 ## Rules
 
+### Preserve An Approved MCP Development Source
+
+MCP may have a separately approved development package root. Before deployment,
+set `RADIA_RELEASE_PRESERVE_MCP_SOURCE_LAB` and/or
+`RADIA_RELEASE_PRESERVE_MCP_SOURCE_100` to that host's approved absolute
+**package directory** (the directory containing the radia-mcp pyproject.toml,
+not the repository root). The 100-machine value must use its real local drive
+path, never a LAB drive mapping or UNC path. Do not derive approval from the
+currently installed distribution itself.
+
+Run `python tools/release_quad.py deployment-plan` for a side-effect-free dry
+run. It prints selected paths/actions, not a verification pass. With a preserve
+value, phase8 checks editable metadata and fresh import origin before and after
+deployment, excludes MCP from uninstall/install, and does not stop MCP transports.
+`verify-editable` and `done` use the same approved source contract. Keep the same
+environment values throughout the release. Solver/Cubit clean-SHA, version,
+tag, and phase9 gates remain unchanged; MCP cross-host version checks still apply.
+Without these variables the existing three-package reinstall behavior remains.
+`restore-editable` refuses while preservation is selected because its canonical
+reset would contradict the approved source; clear it only after explicit approval.
+
 - Do not call a release done until `python tools/release_quad.py done`
   exits 0.
 - Do not call a standalone radia-optuna release done until

@@ -85,7 +85,7 @@ import time
 import zipfile
 from datetime import datetime, timezone
 from importlib import metadata as importlib_metadata
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
@@ -132,6 +132,10 @@ NAS_REPO_LAB = "S:/Radia/01_GitHub"
 NAS_REPO_100 = r"W:\00_CAE\Radia\01_GitHub"
 EDITABLE_REPO_LAB_ENV = "RADIA_RELEASE_EDITABLE_REPO_LAB"
 EDITABLE_REPO_100_ENV = "RADIA_RELEASE_EDITABLE_REPO_100"
+MCP_SOURCE_ENV = {
+    "lab": "RADIA_RELEASE_PRESERVE_MCP_SOURCE_LAB",
+    "100": "RADIA_RELEASE_PRESERVE_MCP_SOURCE_100",
+}
 # Resolve 100号機 through the machine SSH configuration.  Its LAN address may
 # change between lab network segments, while the supported host alias remains
 # stable and carries the correct user/key settings.
@@ -164,6 +168,39 @@ def _editable_repo_100():
 
 def _release_head():
     return _git("rev-parse", "HEAD").stdout.strip().lower()
+
+
+def _preserved_mcp_source(host):
+    """Explicit approved package root, never inferred from installed metadata."""
+    name = MCP_SOURCE_ENV[host]
+    if name not in os.environ:
+        return None
+    value = os.environ[name].strip().rstrip("/\\")
+    path = PureWindowsPath(value)
+    if (not path.is_absolute() or ".." in path.parts
+            or any(c in value for c in '\n\r\x00"\'`$')):
+        raise ValueError(f"{name} must be an absolute approved package path")
+    if host == "100" and not (len(path.drive) == 2 and path.drive[1] == ":"):
+        raise ValueError(f"{name} must use the remote host's local drive path")
+    return value
+
+
+def _mcp_source(host, release_root):
+    return _preserved_mcp_source(host) or release_root + "/packages/radia-mcp"
+
+
+def cmd_deployment_plan(args):
+    """Dry-run only: print configured roots without imports, SSH or installs."""
+    plans = []
+    for host, root in (("lab", _editable_repo_lab()), ("100", _editable_repo_100())):
+        preserved = _preserved_mcp_source(host)
+        plans.append({"host": host, "solver_source": root,
+                      "cubit_source": root + "/packages/cubit-mesh-export",
+                      "mcp_source": _mcp_source(host, root),
+                      "mcp_action": "verify-and-preserve" if preserved else "reinstall",
+                      "verified": False})
+    print(json.dumps(plans, indent=2))
+    return 0
 
 
 # ============================================================
@@ -894,7 +931,7 @@ def cmd_preflight(args):
 
     # Versions in repo
     v = _read_repo_versions()
-    info(f"Repo versions:")
+    info("Repo versions:")
     info(f"  radia              pyproject={v['radia']}  __version__={v['radia.__version__']}")
     info(f"  cubit-mesh-export  pyproject={v['cubit-mesh-export']}  __version__={v['cme.__version__']}")
     info(f"  radia-mcp          pyproject={v['radia-mcp']}")
@@ -1015,19 +1052,26 @@ def _deploy_lab():
     rc = _verify_local_release_source(repo, _release_head())
     if rc != 0:
         return rc
+    preserved = _preserved_mcp_source("lab")
+    if preserved and _verify_lab_editable([("radia-mcp", preserved)]):
+        return 4
     _kill_cubit_local()
-    _kill_mcp_local()
+    if not preserved:
+        _kill_mcp_local()
+    packages = ["radia", "cubit-mesh-export"] + ([] if preserved else ["radia-mcp"])
     run([sys.executable, "-m", "pip", "uninstall", "-y",
-         "radia", "cubit-mesh-export", "radia-mcp"], check=False)
+         *packages], check=False)
     run([sys.executable, "-m", "pip", "install", "--no-deps",
          "--no-cache-dir", "--no-build-isolation",
          "-e", repo,
          "-e", repo + "/packages/cubit-mesh-export",
-         "-e", repo + "/packages/radia-mcp"])
+         *([] if preserved else ["-e", repo + "/packages/radia-mcp"])])
     run(["cubit-plugin-install"])
     run(["cubit-plugin-install", "--verify-only"])
     run(["cubit-smoke-test"])
     run(["cubit-toolbar-smoke-test", "--restarts", "2"])
+    if preserved and _verify_lab_editable([("radia-mcp", preserved)]):
+        return 4
     ok("Phase 8 complete on LAB")
     return 0
 
@@ -1041,6 +1085,11 @@ def _deploy_editable_remote(ssh_host, label, repo):
     """
     step(f"Phase 8 ({label}): kill + NAS editable install + plugin install + verify + smoke (over SSH)")
     expected_sha = _release_head()
+    preserved = _preserved_mcp_source("100")
+    if preserved and _verify_remote_editable(ssh_host, label, [("radia-mcp", preserved)]):
+        return 4
+    mcp_package = "" if preserved else " radia-mcp"
+    mcp_install = "" if preserved else f' -e "{repo}\\packages\\radia-mcp"'
     safe_repo = repo.replace("\\", "/")
     ps_block = f"""
 $ErrorActionPreference = 'Continue'
@@ -1057,18 +1106,19 @@ if ($LASTEXITCODE -ne 0 -or $sourceDirty) {{
 Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {{
   $_.ProcessId -ne $PID -and (
     $_.Name -eq 'coreform_cubit.exe' -or $_.Name -eq 'cubit.exe' -or
+    ({"$false" if preserved else "$true"} -and (
     $_.Name -like 'mcp-*' -or
     $_.Name -like 'radia-*' -or $_.Name -like 'radia_*' -or
     ((($_.Name -eq 'python.exe') -or ($_.Name -eq 'pythonw.exe')) -and
-      $_.CommandLine -match '{_CONSOLE_SCRIPT_WRAPPER_RE}')
+      $_.CommandLine -match '{_CONSOLE_SCRIPT_WRAPPER_RE}')))
   )
 }} | ForEach-Object {{
   Write-Host "Stopping $($_.Name) pid=$($_.ProcessId)"
   Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
 }}
 Start-Sleep -Seconds 2
-python -m pip uninstall -y radia cubit-mesh-export radia-mcp
-python -m pip install --no-deps --no-cache-dir --no-build-isolation -e "{repo}" -e "{repo}\\packages\\cubit-mesh-export" -e "{repo}\\packages\\radia-mcp"
+python -m pip uninstall -y radia cubit-mesh-export{mcp_package}
+python -m pip install --no-deps --no-cache-dir --no-build-isolation -e "{repo}" -e "{repo}\\packages\\cubit-mesh-export"{mcp_install}
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
 cubit-plugin-install --all-users
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
@@ -1080,6 +1130,8 @@ if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
     encoded = base64.b64encode(ps_block.encode("utf-16le")).decode("ascii")
     run(["ssh", ssh_host, "pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass",
          "-EncodedCommand", encoded])
+    if preserved and _verify_remote_editable(ssh_host, label, [("radia-mcp", preserved)]):
+        return 4
     ok(f"Phase 8 complete on {label}")
     return 0
 
@@ -1292,7 +1344,7 @@ CROSS_MACHINE_PROBE_NO_MCP = CROSS_MACHINE_PROBE.replace(
 # what the consumers' wheel was built from, immune to (a) uncommitted WIP and
 # (b) post-release commits on main.  Versions/COMPAT come from installed
 # metadata (re-synced to the release in Phase 8), identical to the consumer
-# probe so the 10 rows line up 1:1 for the row-by-row comparison.
+# probe. Phase9 requires the complete field set and compares by key.
 CROSS_MACHINE_PROBE_LAB = '''import hashlib, os, shutil, subprocess
 import importlib.metadata as md
 
@@ -1342,12 +1394,80 @@ def _probe(host_label, cmd_prefix, probe_src=CROSS_MACHINE_PROBE):
     files).  LAB passes CROSS_MACHINE_PROBE_LAB (hashes tracked files at the
     release tag via git) -- see those probe strings for the rationale.
     """
-    p = subprocess.run(cmd_prefix, input=probe_src,
-                        capture_output=True, text=True, shell=False)
+    try:
+        p = subprocess.run(cmd_prefix, input=probe_src,
+                           capture_output=True, text=True, shell=False, timeout=120)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        fail(f"probe could not run on {host_label}: {exc}")
+        return None
     if p.returncode != 0:
         fail(f"probe failed on {host_label}: {p.stderr.strip()}")
         return None
     return p.stdout
+
+
+_PHASE9_FIELDS = (
+    "VER radia", "VER cubit-mesh-export", "VER radia-mcp",
+    "COMPAT cme -> radia", "COMPAT rad -> cme",
+    "SHA radia/panels/register_toolbar.py",
+    "SHA radia/panels/radia_export_menu.py",
+    "SHA radia/simulink/application.py",
+    "SHA radia/panels/calc_inductance.py",
+    "SHA radia/panels/calc_fem_kelvin.py",
+    "SHA radia/panels/calc_fem_coilmesh.py",
+)
+_PHASE9_COMPUTE_NA = frozenset(_PHASE9_FIELDS[1:5])
+
+
+def _parse_phase9_probe(label, output):
+    """Require complete unique fields, PEP 440 versions and ordered inclusive bounds.
+
+    The packaging parser is mandatory; missing support fails the gate. Bounds
+    certify a well-formed declared interval, not installed-version membership.
+    Cross-host comparison still requires identical reported declarations.
+    """
+    try:
+        from packaging.version import InvalidVersion, Version
+    except ImportError as exc:
+        raise ValueError("phase9 requires packaging; install it with python -m pip install packaging") from exc
+    result = {}
+    for line in output.splitlines():
+        if not line.strip():
+            continue
+        key, separator, value = line.partition("=")
+        key, value = " ".join(key.split()), value.strip()
+        if not separator or key not in _PHASE9_FIELDS or not value:
+            raise ValueError(f"{label}: invalid probe row {line!r}")
+        if key in result:
+            raise ValueError(f"{label}: duplicate field {key}")
+        expected_na = label in ("mdx1", "mdx2") and key in _PHASE9_COMPUTE_NA
+        if expected_na:
+            valid = value == "N/A"
+        elif key.startswith("SHA "):
+            valid = len(value) == 12 and all(c in "0123456789abcdef" for c in value)
+        elif key.startswith("COMPAT "):
+            bounds = value[1:-1].split(",")
+            valid = (value.startswith("[") and value.endswith("]") and len(bounds) == 2
+                     and all(b.strip() for b in bounds))
+            if valid:
+                try:
+                    lower, upper = (Version(b.strip()) for b in bounds)
+                    valid = lower <= upper
+                except InvalidVersion:
+                    valid = False
+        else:
+            try:
+                Version(value)
+                valid = True
+            except InvalidVersion:
+                valid = False
+        if not valid:
+            raise ValueError(f"{label}: invalid value for {key}: {value!r}")
+        result[key] = value
+    missing = set(_PHASE9_FIELDS) - result.keys()
+    if missing:
+        raise ValueError(f"{label}: missing fields: {', '.join(sorted(missing))}")
+    return result
 
 
 def cmd_phase9(args):
@@ -1365,35 +1485,26 @@ def cmd_phase9(args):
         if not out:
             fail(f"could not collect probe data from {label}")
             return 4
-        outputs.append((label, out.strip().splitlines()))
+        try:
+            outputs.append((label, _parse_phase9_probe(label, out)))
+        except ValueError as exc:
+            fail(str(exc))
+            return 4
 
     if not outputs:
         fail("could not collect probe data from any machine")
         return 4
 
-    n = min(len(rows) for _, rows in outputs)
     drift = 0
-
-    def split(s):
-        k, _, v = s.partition("=")
-        k = k.strip()
-        # strip leading "VER " / "SHA " / "COMPAT " from key
-        for prefix in ("VER ", "SHA ", "COMPAT "):
-            if k.startswith(prefix):
-                k = k[len(prefix):]
-        return k.strip(), v.strip()
 
     labels = [label for label, _ in outputs]
     header = f"\n  {'field':<44} | " + " | ".join(f"{label:<18}" for label in labels)
     print(header)
     print("  " + "-" * max(110, len(header) - 2))
-    for i in range(n):
-        parsed = [split(rows[i]) for _, rows in outputs]
-        key = parsed[0][0]
-        values = [value for _, value in parsed]
+    for key in _PHASE9_FIELDS:
+        values = [rows[key] for _, rows in outputs]
         comparable = [value for value in values if value != "N/A"]
         match = bool(comparable) and all(value == comparable[0] for value in comparable)
-        marker = ok.__name__.upper() if match else "DRIFT"
         marker = _color("32;1", "OK") if match else _color("31;1", "DRIFT")
         if not match:
             drift += 1
@@ -1434,7 +1545,7 @@ def _lab_editable_packages():
     return [
         ("radia", root),
         ("cubit-mesh-export", root + "/packages/cubit-mesh-export"),
-        ("radia-mcp", root + "/packages/radia-mcp"),
+        ("radia-mcp", _mcp_source("lab", root)),
         # LAB-private; tolerated as missing if pip show says not installed.
         ("mcp-server-document", "S:/mcp-server"),
     ]
@@ -1456,7 +1567,7 @@ def _remote_100_editable_packages():
     return [
         ("radia", root),
         ("cubit-mesh-export", root + r"\packages\cubit-mesh-export"),
-        ("radia-mcp", root + r"\packages\radia-mcp"),
+        ("radia-mcp", _mcp_source("100", root)),
     ]
 
 
@@ -1853,6 +1964,9 @@ if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
 
 def cmd_restore_editable(args):
     """Restore canonical editable installs after a release or interrupted deploy."""
+    if any(_preserved_mcp_source(host) for host in MCP_SOURCE_ENV):
+        fail("restore-editable repoints MCP; clear the preservation contract only after explicit approval")
+        return 2
     failures = 0
     failures += int(_restore_lab_canonical_editable() != 0)
     failures += int(_restore_100_canonical_editable() != 0)
@@ -2420,6 +2534,7 @@ def main():
                     help="phase8 -> phase8e -> phase9 in one shot")
     sub.add_parser("verify-editable",
                     help="LAB/100号機 editable-install pointers check (read-only)")
+    sub.add_parser("deployment-plan", help="dry-run: print approved source plan; no runtime changes")
     sub.add_parser(
         "restore-editable",
         help="stop MCP transports and restore LAB/100号機 to canonical editable sources")
@@ -2454,6 +2569,7 @@ def main():
         "optuna-done":       cmd_optuna_done,
         "all":              cmd_all,
         "verify-editable":  cmd_verify_editable,
+        "deployment-plan": cmd_deployment_plan,
         "restore-editable": cmd_restore_editable,
         "ci-verify":        cmd_ci_verify,
         "sync-main":        cmd_sync_main,

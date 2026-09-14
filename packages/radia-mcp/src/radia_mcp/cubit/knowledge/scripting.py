@@ -1304,9 +1304,9 @@ play "export_mesh.py"
 
 ```bash
 # Execute from command line (use CUBIT_PATH or full path)
-"%CUBIT_PATH%\\coreform_cubit.exe" -batch -nographics -nojournal workflow.jou
+"%CUBIT_PATH%\\coreform_cubit.com" -batch -nographics -nojournal workflow.jou
 # Or with full path:
-"C:\\Program Files\\Coreform Cubit 2025.12\\bin\\coreform_cubit.exe" -batch -nographics -nojournal workflow.jou
+"C:\\Program Files\\Coreform Cubit 2025.12\\bin\\coreform_cubit.com" -batch -nographics -nojournal workflow.jou
 ```
 
 ## Batch Mode vs GUI Mode
@@ -1364,7 +1364,7 @@ cubit.cmd("rotate Surface {0} angle {1} about origin 0 0 0 direction {2} {3} {4}
   robust against editor auto-wrap.
 
 This affects ALL three execution paths that funnel through `play`,
-including `radia-mcp`'s `open_in_cubit(path=*.py)` and `cubit_show(path=*.py)`,
+including `radia-mcp`'s `cubit_load(path=*.py)` and `cubit_stage(path=*.py)`,
 both of which dispatch `.py → play "<abs_path>"`.
 
 For multi-line ergonomic Python, use **standalone mode** instead:
@@ -3537,30 +3537,37 @@ NGSolve-side detail.
 CUBIT_TRIAL_ERROR_POLICY = """
 # Trial-and-error policy: batch first, commit after success
 
-**POLICY** (2026-04-21): AI / LLM that is iterating on a Cubit recipe
-MUST run the trials in **headless batch mode**.  The interactive /
-persistent GUI session is reserved for the final, validated recipe.
+**POLICY**: Every AI/LLM-initiated Cubit operation runs in headless
+batch mode. The persistent MCP session is headless too. Human GUI use
+is independent and outside MCP.
+
+Human cooperation uses saved artifacts: `cubit_import_journal(path)` reads
+a human-saved journal without execution, while `cubit_session_journal`
+exports the AI session's Cubit-native `record "file"` journal. APREPRO
+definitions are retained, and comparison uses that recorded artifact rather
+than reconstructed RPC history. Preserve both sources and the checkpoint and
+review differences before explicit headless replay.
 
 ## The two channels
 
 | Channel           | How                                        | When to use                               |
 |-------------------|--------------------------------------------|-------------------------------------------|
-| **Trial (batch)** | `coreform_cubit.exe -batch -nographics -nojournal wrapper.jou`, or the MCP tool `cubit_batch_try` | Exploring recipes, probing errors, mesh ladder search |
-| **Commit (GUI)**  | `cubit_exec` / `cubit_show` against the persistent Cubit GUI daemon | Apply a recipe whose bytes-level success was already verified in batch |
+| **Trial (batch)** | `coreform_cubit.com -batch -nographics -nojournal wrapper.jou`, or the MCP tool `cubit_batch_try` | Exploring recipes, probing errors, mesh ladder search |
+| **Commit (headless)** | `cubit_exec` / `cubit_stage` against the persistent headless daemon | Apply a recipe whose success was already verified in batch |
 
 ## Why
 
 1. **Fast feedback**: each batch attempt is an independent Cubit
    subprocess with a fresh state.  No cross-contamination between
    attempts, no accumulated errors, no GUI lag.
-2. **No state leakage to the user**: a failed or half-built mesh in the
-   user-visible Cubit window is confusing.  Agents should not leave
-   broken state in the GUI the student is watching.
+2. **No GUI interference**: a failed or half-built mesh remains in an
+   agent-owned headless process and never changes a human Cubit window.
 3. **Crash isolation**: if an import / mesh command segfaults (large
    STEP, topology singularity), the batch process dies cleanly.  The
-   live GUI session is untouched.
+   persistent headless session is untouched.
 4. **Reproducibility**: the batch wrapper.jou is the exact
-   reproducible recipe.  If it worked in batch, it will work in GUI;
+   reproducible recipe. If it worked in the isolated batch, replay it
+   in the persistent headless session;
    if it didn't, don't ship it.
 
 ## Required flags
@@ -3575,12 +3582,12 @@ Always: `-batch -nographics -nojournal`.
 
 ## Flow the MCP tools already encode
 
-`cubit_mesh_auto(step_path, target_size, prefer, commit_to_gui=True)`:
+`cubit_mesh_auto(step_path, target_size, prefer, apply_to_session=True)`:
 1. Tries a ladder of schemes (`auto` -> `sweep` -> `polyhedron` -> `tetmesh`)
    in fresh headless batch subprocesses.
 2. Picks the first rung that produces >0 elements of the preferred family.
-3. Only after that does it replay the winning recipe in the live GUI
-   session (when `commit_to_gui=True`).
+3. Only after that does it replay the winning recipe in the persistent
+   headless session (when `apply_to_session=True`).
 
 `cubit_batch_try(step_path, commands)`:
 - Pure batch dry-run.  Returns element counts and per-line results.
@@ -3589,25 +3596,22 @@ Always: `-batch -nographics -nojournal`.
 ## Anti-patterns
 
 - Calling `cubit_exec` with a speculative command sequence: if one
-  line fails, the GUI session enters a half-state and subsequent
+  line fails, the persistent session enters a half-state and subsequent
   `cubit_exec` calls inherit the mess.
-- Running `cubit_show <new_step>` in the live session just to test if
+- Running `cubit_stage <new_step>` in the persistent session just to test if
   it loads: use `cubit_batch_try(step_path=new_step, commands=[])`
-  instead -- zero GUI impact.
-- Leaving a 1.5 M-tet mesh in the GUI from an exploratory run:
-  mesh cleanup / deletion IS a state change the user sees.
+  instead -- zero impact on the persistent state.
+- Leaving a 1.5 M-tet mesh in the persistent session from an exploratory
+  run: mesh cleanup and deletion add avoidable state and memory pressure.
 
 ## 3turncoil meshing incident (2026-04-21)
 
 The 3turncoil batch agent generated 1.5 M tets + order-2 NetgenCurver
-(9 min job).  Running this in the GUI session would have:
-- Locked the Cubit window for 9 min
-- Left 1.5 M tets on the user's screen even on success
-- Propagated the segfault-on-exit (exit 139) to the user-visible GUI
-
-Running it in a headless batch subprocess kept the GUI clean.  Only
-after the 7.7 MB .vol landed (32 k hexes from a separate sweep recipe
-that fit under the Learn Edition cap) would a commit-to-GUI make sense.
+(9 min job). Running it in an isolated headless batch protected the
+persistent session from the large transient mesh and the exit-139 path.
+Only after the 7.7 MB .vol landed (32 k hexes from a separate sweep
+recipe that fit under the Learn Edition cap) was the accepted recipe
+eligible for replay in the persistent headless session.
 
 See topic `mesh_auto` for the full ladder flow.
 """
@@ -3768,63 +3772,21 @@ Do NOT coarsen meshes to get under 50k.  See CLAUDE.md
 
 
 CUBIT_DAEMON_PERSISTENCE = """
-# Cubit daemon persistence (radia-mcp >= 0.32.0)
+# Persistent headless Cubit session
 
-From 0.32.0 onward the radia-mcp `cubit_session` module runs Cubit as a
-**detached Windows daemon** that survives VSCode / MCP-server restarts.
-Starting Cubit from scratch (cold license + GUI init) costs 30-60 s on
-100号機; attaching to an already-running daemon costs **0.01 s**.
+The MCP server keeps one Cubit session warm for incremental commands. Every
+LLM-owned session runs under Cubit's bundled Python with `-batch -nographics`
+and uses stdio JSON-RPC. It is owned by the MCP process; responses record
+`execution_mode="batch"` and `gui_started=false`.
 
-## The three timing regimes
+The historical file-drop GUI transport remains an internal compatibility
+implementation for manual, non-MCP integrations. MCP entry points explicitly
+request `CubitSession.get(mode="batch")`; a mode-mismatched singleton fails
+loudly instead of being reused.
 
-| Event                        | Time      | Source              |
-|------------------------------|-----------|---------------------|
-| First Cubit of the day       | ~3 s      | warm license cache  |
-| First Cubit without warm     | 30-60 s   | cold license (RLM)  |
-| VSCode restart, daemon alive | 0.01 s    | attach via pid.lock |
-| VSCode restart, daemon dead  | ~3 s      | re-spawn + warmup   |
-
-## How attach works (Phase 1)
-
-1. Per-user stable drop-dir: `%LOCALAPPDATA%/radia-mcp/cubit-session/`
-   (not a `TemporaryDirectory()` — that dies with the parent process).
-2. On spawn: write `pid.lock` with the daemon PID and the path to the
-   Unix-domain-equivalent named pipe + ready marker.
-3. On next MCP process start: `_try_attach_existing_daemon(drop_dir)`
-   reads `pid.lock`, checks PID alive via `OpenProcess(PROCESS_QUERY_
-   LIMITED_INFORMATION)` + `GetExitCodeProcess() == STILL_ACTIVE (259)`,
-   and re-uses the existing pipe if all checks pass.
-4. If any check fails (PID dead, pipe gone, ready-marker absent), we
-   fall through to normal spawn and overwrite `pid.lock`.
-
-## Why this survives VSCode restart
-
-The daemon is spawned with `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP`
-and `stdin/stdout/stderr = DEVNULL`.  Neither the console, nor the
-MCP-server process, nor VSCode is the daemon's parent or console owner,
-so closing VSCode does not SIGHUP the daemon.  The OS keeps it until
-something explicitly kills coreform_cubit.exe.
-
-## Phase 2 (standalone boot-time daemon) is deferred
-
-Cubit is a desktop GUI — if the user logs out, the desktop session dies
-and Cubit has nothing to render into.  Boot-time auto-start therefore
-has no practical value.  Phase 1 (attach-if-alive) already covers the
-VSCode-restart case, which is the only frequent reload event.
-
-## Debugging
-
-- `%LOCALAPPDATA%/radia-mcp/cubit-session/pid.lock` — current PID.
-- `tasklist | findstr coreform` — is the daemon actually alive.
-- If attach keeps failing: `taskkill /IM coreform_cubit.exe /F` and
-  delete the drop-dir; the next MCP call will re-spawn cleanly.
-- `MCP_CUBIT_FORCE_RESPAWN=1` env var skips the attach attempt.
-
-## See also
-
-- `license_warmup` -- the 3-day RLM cache that makes "first Cubit of
-  the day" cost 3 s instead of 30-60 s.
-- `utf8_path` -- how Cubit exporters handle Japanese / non-ASCII paths.
+Interactive Cubit GUI work is human-owned and outside this server. Exchange
+state through STEP, SAT, `.cub5`, `.jou`, `.vol`, Gmsh, logs, and result
+artifacts instead of attaching an LLM to a Cubit window.
 """
 
 
@@ -3832,7 +3794,7 @@ CUBIT_LICENSE_WARMUP = """
 # Cubit license warmup (radia-mcp >= 0.32.0)
 
 Coreform Cubit 2025.12 authenticates via RLM (Reprise License Manager).
-The first `coreform_cubit.exe` call after a machine sits idle takes
+The first Cubit batch start after a machine sits idle takes
 **30-60 s** because RLM:
 
   1. Contacts the Coreform license server (internet round-trip).

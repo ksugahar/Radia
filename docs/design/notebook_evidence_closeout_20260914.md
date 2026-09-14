@@ -152,3 +152,354 @@ The ZIP member is read in memory, removing a separate overwrite/delete hazard
 for pre-existing MAT files. Fast tests cover missing/invalid axes, sample order,
 real MAT parsing, unknown cycle selectors, and preservation of caller files.
 Historical CSV values and notebook outputs remain unchanged.
+
+## Focused companion citation reconciliation
+
+The stream-function and Dowell executable companions now declare selected
+canonical keys and carry generated BibTeX/TeX4ht reference displays. This is two
+additional notebook migrations, not a claim that all 43 screened notebooks or
+all methods in these two companions are citation-complete.
+
+- The [official COMPUMAG program](https://compumag2023.com/program/www.conftool.pro/compumag2023/index43b4.html?form_session=29&ismobile=false&page=browseSessions&print=export)
+  identifies contribution 525 (PC-A1:6, May 25, 2023) as *Comparison of
+  Discretization Methods for Continuous Stream-Function Distributions* by
+  Kuijpers, Jansen and Lomonova. The parent gains the distinct key
+  `kuijpers2023discretization`; `kuijpers2023` continues to identify their
+  different journal article. The university repository confirms the conference
+  title but lists only Kuijpers, so the author list follows the official program.
+  Program identity does not verify the former spatial-collocation attribution.
+  That attribution is withdrawn; Path-A is labelled Radia's own residual
+  correction. Continuous FE representation alone is no contraction proof, and
+  the companion now distinguishes saved empirical convergence from a theorem.
+- `dowell1966eddy` is reused for the winding-loss background. Publisher-deposited
+  [Crossref metadata](https://api.crossref.org/works/10.1049/piee.1966.0236)
+  confirms author, title, volume 113, issue 8, year 1966 and first page 1387.
+  This check does not certify the companion's boundary interpretation, scaling,
+  continued-fraction/PRIMA composition or saved numerical agreement. Kernel
+  agreement is explicitly an internal check, not experimental validation.
+
+No calculation cells, saved numerical outputs or figures were rerun or changed.
+The generated-reference contract checks both new notebooks and the earlier
+migrations against the parent. ACA/TSVD/DUCAS source reconciliation, the other
+named source families above, and missing instrument/external-run evidence remain
+separate follow-up work; no dummy citations were added to API-only notebooks.
+
+### Live status correction
+
+The earlier live-server paragraph is a historical pre-update observation.
+Following the user's Restart, the original task directly verified the new
+`mcp-development-main` source, 349 publication tools and all three previously
+absent bibliography keys. That task's publication reconnect is closed. It does
+not establish the state of other clients, users or the 100 host.
+
+## Remaining 41 notebooks: full editorial triage
+
+All 41 notebooks without a bibliography declaration at the start of this pass
+received an individually written source/evidence scope cell. This is an editorial
+assessment, not 41 completed literature reviews or numerical validations.
+All original code cells, saved outputs, execution counts and existing notebook
+metadata were preserved; only cut selection gains bibliography metadata.
+
+The decisions are **5 API examples, 1 navigation page, 10 internal evidence
+records, and 25 with open source or scientific-acceptance work**. An `internal`
+classification supports the particular recorded comparison, not a blanket
+citation exemption for a future methods paper. No dummy references were added.
+
+Cut selection now cites existing canonical `kotiuga1987cuts` and
+`pellikka2013homology` as general background through generated BibTeX/TeX4ht
+artifacts. Kotiuga's [author publication list](https://people.bu.edu/prk/Publications.htm)
+confirms the 1987 title, journal, volume and pages. These references do not
+identify the unnamed Takahashi benchmark or prove the one-handle algorithm.
+There are now **11 generated bibliographies among 51 notebooks**. The other
+40 absent declarations neither prove citation completeness nor automatically
+require a bibliography: follow each notebook's explicit review scope.
+
+### Work retained explicitly
+
+- **CG and Kelvin:** the unconditional Prager-Synge paragraph was rewritten.
+  Boundary/source admissibility, constitutive energy norm and theorem
+  correspondence remain open. Kelvin retained/lost fractions and growth
+  conventions need reconciliation rather than a guessed correction.
+- **Fringe/hodograph theory:** resolve Enge/SCOFF and Chaplygin/von Mises
+  sources, focusing units and tanh-profile assumptions. Angular-drift reduction
+  is not a measured saturation-range extension. Historical output remains saved
+  but its overstatements are explicitly superseded by the scope note.
+- **Named algorithms and benchmarks:** Love/Stratton-Chu, streamline/LIC,
+  geometry processing, hysteresis, TEAM 28, Simkin, optimization and CQ require
+  source-to-implementation correspondence. Finding a paper title alone does
+  not establish a numerical acceptance certificate.
+- **Model/data provenance:** closed-torus BEM behavior is case-specific;
+  analytical hysteresis fixtures are not measured samples; slab/cylinder
+  comparisons require a geometry argument. URN TDK captions now say derived
+  impedance. NASA frequency and external-run gaps above remain open.
+- **Optimization:** sampled feasible/nondominated designs are not guaranteed
+  optima or complete Pareto fronts. Current norm, magnetic energy and dissipation
+  are distinct objectives. Low-rank Tikhonov comparisons must state the retained
+  operator and metric/nullspace assumptions.
+
+The next pass should close each precise source/assumption gap and regenerate
+references where applicable. It should not remove an open qualification merely
+because a bibliography entry exists, or rerun expensive notebooks without a
+specific validation question.
+
+Verification: all 41 code/output/metadata preservation checks passed, and the
+existing notebook plus canonical-bibliography regression selection passed
+**103 tests**. No solver code, parent bibliography, editable installation or
+live-client connection was changed in this pass.
+
+## Source-resolution follow-up for the 25 open notebooks
+
+Every one of the 25 received a claim-to-source or claim-to-implementation
+resolution, replacing the initial screening note. **19 are now qualified as
+bounded demonstrations; 6 retain specific evidence gaps.** Qualified means the
+claims were narrowed to the supported demonstration, not that a broad theorem
+was proved or a historical benchmark rerun. In particular, unlocated classical
+attributions in the hodograph/edge examples are not silently promoted to verified
+citations; the displayed local derivation or explicit proxy is the asserted model.
+
+Eighteen additional notebooks now carry canonical BibTeX/TeX4ht artifacts;
+cut selection reuses its existing generated references. There are 29 declared
+bibliographies in the 51-notebook corpus. Six of these 25 use repository-local
+derivations/roadmap claims without invented external references. Code cells,
+execution counts, saved outputs and non-bibliography metadata were preserved
+in all 25, checked against the start commit.
+
+### Corrections supported by implementation and algebra
+
+- The Kelvin tests check field ratios Z/B1 = 2/3 and B0/B1 = 4/3, hence a
+  one-third deficit/excess, not a loss of two thirds. The uniform potential
+  grows as inverse radius after inversion; its gradient grows as inverse
+  radius squared. Historical diagnostic strings inside saved code/output are
+  retained but explicitly superseded in the prose.
+- The edge proxy at zero tilt is `-tan(w/(2*rho))/rho`; `-w/(2*rho^2)` is its
+  first-order approximation. The finite-z polynomial fringe is a local
+  expansion with an order-z-squared curl residual, not an exact vacuum field
+  over an arbitrary aperture.
+- The IH Bessel helper explicitly passes `geometry='cylinder'`. The class name
+  `ESIMFiniteSlabSolver` did not imply a slab/cylinder comparison.
+- The CG notebook computes an unweighted H reconstruction difference (with
+  radial integration weight), not the constitutive-energy norm or error against
+  an exact solution. [Bertrand and Boffi, section 2](https://arxiv.org/html/1907.00440v1)
+  supplies the relevant admissibility/equilibrium context, not a blanket bound
+  for this saved indicator.
+- The regularized formula applies to the retained operator A_k and an SPD free-DOF
+  metric. An independent small NumPy comparison with the dense A_k Tikhonov
+  equations agreed to 2.33e-16. This is an algebra check, not solver validation.
+- A current seminorm is not magnetic stored energy; sampled nondominated trials
+  are not a complete Pareto front. Those interpretations were corrected.
+
+### Parent bibliography reconciliation
+
+New entries identify Lubich CQ, Bertrand/Boffi hypercircle reconstruction,
+Jobard/Lefer streamline placement, Cabral/Leedom LIC, Lewiner marching cubes,
+Trimesh smoothing API and the Optuna framework. Verification used the
+[Springer CQ record](https://doi.org/10.1007/BF01398686),
+[Springer streamline chapter](https://link.springer.com/chapter/10.1007/978-3-7091-6876-9_5),
+[Lewiner's author page](https://thomas.lewiner.org/pub/marching_cubes_jgt.html),
+[Trimesh API](https://trimesh.org/trimesh.smoothing.html), author arXiv records,
+and publisher-deposited Crossref metadata. References are background only where
+the implementation or experimental correspondence has not been demonstrated.
+
+Publisher metadata for [10.1109/TMAG.2025.3621134](https://api.crossref.org/works/10.1109/TMAG.2025.3621134)
+identifies Herbert Egger, Felix Engertsberger and Andreas Schafelner, the
+forward/inverse title, volume 62(7), article 7300706 (2026).
+The misleading conference/journal hybrid record is corrected under its retained
+key; the separate [arXiv version](https://arxiv.org/abs/2507.15289) retains a
+separate key and correct title. The old `egger2025tmag` title/DOI cannot be
+confidently identified: a 404 is not proof of fabrication, so it remains flagged
+unverified rather than being silently reassigned to another paper. None of the
+new references cite it. Potter's [publisher metadata](https://api.crossref.org/works/10.1109/TMAG.1971.1067251)
+restores coauthor R. Schmulian and pages 873-880. Existing generated references
+were checked for affected selected-source hashes.
+
+### Six evidence gaps that references cannot close
+
+1. **BEM extractor:** independently specify the current/internal-inductance
+   convention and investigate the actual matrix rank/spectrum before assigning
+   a general cause to the closed-torus observation.
+2. **Shape regeneration (original finding; implementation fixed below):** `topopt_cad.py` passed `nu=-0.53` to Trimesh's
+   subtractive dilation pass. Trimesh 4.12.2 independently reproduces this sign
+   problem on a one-subdivision icosphere: two-pass volume ratios are 0.57641
+   for negative nu versus 0.99187 for positive nu. The code and saved geometry
+   are not modified in this documentation pass. A focused implementation fix
+   plus regenerated shape evidence is required; merely citing Taubin is not a fix.
+3. **Hysteresis gallery:** recover dataset/identification/preprocessing lineage
+   for measured-B-H claims. The analytical Potter fixture is not a measured specimen.
+4. **Maglev:** match inputs and observations to the current official TEAM 28
+   specification, not just its preliminary-description citation.
+5. **NGSolve integration gallery:** identify the Simkin-labelled hysteresis image
+   and underlying data. An unrelated scalar-potential paper is not its provenance.
+6. **URN:** obtain the original sample-to-frequency record and accepted manuscript
+   identity; NASA samples and derived TDK impedance remain as qualified earlier.
+
+The 103 notebook/canonical-bibliography tests pass. This pass changes no solver,
+installation, running client, or saved numerical result. Parent edits take effect
+for a manuscript only after its generated bibliography is refreshed; this is not
+a claim of live-client synchronization.
+
+### Taubin implementation repair
+
+`iso_stl_from_grid` now passes positive `nu=0.53` to Trimesh's subtractive
+dilation pass. The existing known-sphere regression now covers 0, 2, 3 and 4
+passes, including the three-pass setting used by `test_shape_regen_lane.py`.
+Its coordinate oracle directly performs alternating Laplacian updates; it
+does not read the production coefficient. It also checks finite coordinates,
+watertightness, positive volume, geometric sphere accuracy, the reported volume
+drift, and smaller volume drift than the former negative-nu control.
+
+Before the fix the two-pass case failed: 16,297 of 16,440 coordinate entries
+differed from the oracle (maximum absolute difference 0.0108824). After the fix,
+all 25 tests in `tests/test_topopt_cad.py` passed on Python 3.12.10 with Trimesh
+4.12.2. Because this checkout has no native Radia extension, the exact checkout
+file was loaded with `importlib.util.spec_from_file_location` as
+`radia.topopt_cad` before running pytest; no installed source was substituted
+and no editable installation was changed. These are small in-memory Netgen
+geometry tests, not a Cubit remeshing or magnetic re-solve acceptance run.
+
+The original shape notebook's code and saved results remain unchanged and
+explicitly historical. Full downstream shape/field reacceptance remains open;
+the numerical sign defect itself now has a failing-before/passing-after
+behavioral regression. The other five scientific evidence gaps are unchanged.
+
+### Remaining-evidence investigation
+
+- **Hysteresis source lineage recovered.** The original analytical `B_input.mat`
+  and `CASE_02.m` are preserved in `validation_test/hysteresis/fixtures/potter_schmulian`.
+  Reidentification with current `hysteresis_io.py` matches all 128 fields of the
+  existing K=40 NPZ exactly, including the K=20 subset. Hashes and zero maximum
+  absolute discrepancy are in `fixture_lineage.json`; the executable verifier
+  never overwrites the fixture. This closes missing identification lineage,
+  not a claim of measurement or a new coupled-field acceptance run.
+- **Simkin image source recovered.** Git commit
+  `3b6731aa7186c0a6b790b444b918a2fa08a1348c` contains the generating script and
+  the exact current image blob. The script constructs a synthetic K=10 material
+  and plots computed gap Bz versus NI. `hysteresis_gallery_lineage.json` records
+  identities and parameters. No laboratory specimen or raw step/convergence
+  records are claimed. Retired meshing code is not restored as a supported demo.
+- **TEAM 28 reference corrected and model mapping checked.** The current official
+  [Model A specification](https://www.compumag.org/jsite/images/stories/TEAM/problem28.pdf),
+  sections II-III and Figure 2, matches model geometry, conductivity, turns,
+  current amplitude and frequency. Its stated stationary height is 11.3 mm;
+  11.5 mm occurs in transient Table I samples, not as that stated reference.
+  Source PDF SHA-256 is `f0013db710e2109dcbea37a213d750deaa245f1004a0a8044289535bb6e7f041`.
+  Code and tests use `team28_reference.json`. Four actual FEM/CLN regressions
+  passed on mdx2 (2 threads; final run 48 s), with unchanged tolerances. Exact source
+  hashes/runtime are in `team28_reference_regression.json`. The retained model
+  weight 1.055 N differs from the reference mass 0.107 kg; dZ=0 is a steady
+  frequency-domain sample at 10.8 mm, not the nominal initial height 3.8 mm.
+  No existing plot or JSON is relabelled as a newly run transient experiment.
+- **BEM matrix/excitation diagnosis completed for the coarse case.** The
+  269-by-269 matrix is full rank with no zero columns. Its relative asymmetry is
+  0.0522. Alternating basis signs with unchanged `e=ones/n` changes 172.779 nH to
+  115.106 nH; transforming the excitation with the basis preserves the value.
+  `validation_test/bem/closed_torus_diagnostic.json` records the spectrum,
+  residuals, hashes and 85 s mdx2 run. The MCP blanket closed-surface nullspace
+  claim and advice against refinement are withdrawn. This is not acceptance of
+  physical loop inductance: current conservation/port constraints and quadrature
+  convergence remain necessary before promoting that historical extractor.
+
+**Still open:** full post-Taubin Cubit shape/field reacceptance; a physically
+constrained BEM extractor acceptance (the cause claim is corrected, not the
+entire formulation); and the NASA original sample-frequency mapping plus
+manuscript identity. The NASA archive inspection above proves why its original
+frequency axis cannot be reconstructed just from sweep endpoints. None of these
+items is marked passed by substituting metadata or synthetic data.
+
+### URN consumer and manuscript closure
+
+The two active NASA consumers (`generate_paper_figures.py` and
+`demo_spice_timedomain.py`) now fail before fitting the historical CSV unless
+the regenerated input carries its independent frequency-source locator. The
+CSV is unchanged pending the owner's redistribution decision. Its blanket
+measured-data header must not be treated as evidence. The figure loader parses
+named columns instead of assuming 24 header lines. Focused tests cover both
+rejection paths, a documented non-monotone-frequency input, and invalid numeric
+columns. Source-locator presence is a declaration check, not source authentication.
+
+The exact-title draft was located in the conference archive under
+`2026_08_25_静止器・回転機@八戸/URN@佐藤・菅原/paper/urn_paper.tex`.
+Its SHA-256 is `7a3d210d8a7cf02e213846f4dbf9379c1312e8c18fcc6063fbc3bd119f3f2445`.
+The publication dates and `10.1109/ACCESS.2026.XXXXXXX` are placeholders.
+The adjacent `REVIEW.md` (SHA-256
+`dd3eaf596fb76d42f96431e822dca373c9cd8d18f650818c2cac6ac1d6de2478`)
+identifies its reviewer as an AI agent; its ACCEPT verdict is not journal
+acceptance. The repository README now identifies the item as an IEEE
+Access-format draft. No archived manuscript or submitted artifact was edited.
+This closes the unsupported publication assertion, not a new publication task.
+Recovering the NASA instrument frequency record remains an external-data need;
+the repository no longer permits these consumers to silently treat the guessed
+axis as experimental validation. The NASA Open Data Portal dataset listing
+reports **License not specified** (checked 2026-09-14 at
+https://data.nasa.gov/dataset/groups/li-ion-battery-aging-datasets).
+Downloadability alone is not a redistribution grant. Raw-data publication is
+on hold while the owner decides whether to remove the pre-existing CSV from
+the current tree; no history rewrite or new raw-data distribution is authorized.
+
+### Physical BEM current acceptance (bounded surface-current model)
+
+`validation_test/bem/validate_torus_current_constraint.py` now assembles both
+surface divergence and the unit-current functional using NGSolve basis
+functions. It restricts the linear algebra to DOFs actually referenced by
+boundary elements. The current is divergence-free and its average meridional
+cut current is one ampere; no coefficient-ones excitation is used. The model
+minimizes magnetostatic energy on a zero-resistance current sheet. It does not
+include conductor-volume DC internal inductance or a finite-frequency port.
+
+The four `torus_current_cs*_q*.json` files record exact runtime/source identities.
+Three flat-mesh refinements give 159.6723, 155.9139 and 152.6029 nH; the last
+change is 2.17 percent. Doubling the quadrature bonus from 4 to 8 at cs=0.65
+changes inductance by 5.63e-9 relative. Unit-current residual, surface-current
+conservation and basis-sign covariance pass. The finest value is 1.96 percent
+above the thin-wire asymptotic external-inductance expression, not an exact
+finite-wire reference. Flat-mesh surface-area errors remain 9.76/6.64/3.90
+percent and are explicitly reported rather than hidden by an accuracy claim.
+
+The old cs=0.5 geometry cannot resolve this divergence-free toroidal functional
+reliably; normalizing near-zero projected current produced an absurd scale in
+the initial investigation. The final driver rejects that unresolved-current
+case instead of normalizing roundoff. Two small algebraic tests guard physical
+normalization, basis permutation/sign covariance and this failure boundary.
+This replaces the old extraction recommendation for the stated torus model;
+it is not certification of the historical notebook's coefficient-space method.
+
+The exact notebook input is preserved in
+`validation_test/bem/fixtures/torus_current_input.zip` (SHA-256
+`cfcaf6338b4a325d76dfad854e07e8670515bfa0b406a00ab1d86bd8014d262c`).
+Its sole member is the first-party `bem_inductance_limitations.ipynb`, with
+the raw hash recorded by all four runs. No downloaded third-party dataset is
+included in this archive.
+
+The independent review added a strict minimum-energy check. The reduced
+operator must be symmetric within relative 1e-6; its symmetric part must pass
+Cholesky, and the constrained KKT residual must be below 1e-10. The solve uses
+that symmetric part explicitly, not a claim that the quadrature operator was
+exactly symmetric. All four cases were rerun with this implementation: reduced
+asymmetry is at most 4.55e-8 and KKT residual at most 3.29e-16. The reported
+inductance uses the original quadratic form (the skew part contributes zero).
+Four algebraic tests now include nonsymmetric and indefinite rejection cases.
+
+## Shape-lane numerical closure (2026-09-14)
+
+The post-Taubin staged run completed on mdx2 with the identified candidate
+wheel, process-local CAD overlay and licensed LAB Cubit meshes. The 26,948-tet
+reference and 235/1,461-cell hex meshes passed their existing gates. All original
+field tests passed: maximum native/NGSolve discrepancy `6.272e-10`, maximum
+independent reciprocity discrepancy `4.038e-8`, fine-hex/reference discrepancy
+2.2805% (coarse 16.3797%), fine-hex/staircase change -2.9249%, demagnetizing
+factor 0.46275. Field work took approximately 22 minutes. Resolving every facet
+boundary with 16 intervals changed meshing conditions, not acceptance tolerances.
+
+Scientific records are in `validation_test/isochronous_topopt/`:
+`shape_reacceptance_20260914.json`, its separate `_audit.json`, and first-party
+fixture `fixtures/shape_reacceptance_20260914.zip` (SHA-256
+`333a8ba2bdd199b26bea1104c90bff87023e67f4fcd962b6c792a347ae9025ce`).
+The original numerical driver hash `859f26f5...` is preserved. The later audit
+checks parent hashes, phase/UUID completion and actual geometry/mesh hashes;
+it explicitly records that no numerical recomputation occurred. Six additional
+fast tests exercise its non-mutating success and mismatched-evidence failures.
+
+This closes the shape rerun and physical BEM-route items, not all solver-release
+or ver5 acceptance. The remaining NASA question is external: an independent
+frequency record and redistribution permission have not been established.
+Consumers reject the undocumented axis; raw data removal from the public tree
+awaits the user's decision, and no Git-history rewrite is authorized.
