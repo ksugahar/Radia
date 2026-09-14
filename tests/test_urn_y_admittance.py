@@ -37,6 +37,55 @@ def test_y_admittance_default_dictionary_matches_research_meeting_model():
     assert np.all(gates > 0.0)
 
 
+def test_research_34_dictionary_and_duplicate_response_reduction():
+    from radia.urn import reduce_y_admittance_urn, redundant_y_bases
+
+    assert YAdmittanceURNConfig.research_34_basis().total_basis_functions == 34
+    freqs = np.logspace(2, 4, 12)
+    active = [YAdmittanceURNActiveBasis(i, "debye", i, 1.0, 1.0,
+                                      {"tau": 1e-4}) for i in range(3)]
+    cfg = active_basis_refit_config(active, n_epochs=1, n_restarts=1)
+    model = YAdmittanceURN(freqs, cfg)
+    model.initialize_from_active_bases(active)
+    target = model.predict(freqs)
+    before = {k: v.clone() for k, v in model.state_dict().items()}
+    assert len(redundant_y_bases(model, freqs)) == 3
+    selected, trace = reduce_y_admittance_urn(
+        model, freqs, target, uncertainty_ohm=1e6, refit_epochs=1, refit_restarts=1)
+    assert selected.config.total_basis_functions == 1
+    assert [t['basis_count'] for t in trace['trials']] == [3, 2, 1]
+    assert trace['trials'][1]['removed_basis']['reason'] == 'redundant_response'
+    assert trace['independent_validation'] is False
+    for key, value in model.state_dict().items():
+        assert torch.equal(value, before[key])
+
+    selected, trace = reduce_y_admittance_urn(
+        model, freqs, target, uncertainty_ohm=np.full(freqs.shape, 1e-15),
+        refit_epochs=1, refit_restarts=1)
+    assert selected is model  # Never silently return a smaller rejected trial.
+    assert trace['selected_basis_count'] == 3
+
+    selected, trace = reduce_y_admittance_urn(
+        model, freqs, target * 100, uncertainty_ohm=1e-20,
+        refit_epochs=1, refit_restarts=1)
+    assert selected is None
+    assert trace['status'] == 'no_acceptable_candidate'
+    for budget in [0, -1, float('nan'), [1, 2]]:
+        with pytest.raises(ValueError, match='uncertainty_ohm'):
+            reduce_y_admittance_urn(model, freqs, target, uncertainty_ohm=budget)
+
+
+def test_equal_time_constants_with_different_exponents_are_not_duplicates():
+    from radia.urn import redundant_y_bases
+
+    freqs = np.logspace(1, 6, 30)
+    active = [YAdmittanceURNActiveBasis(i, 'cole_cole', i, 1, 1,
+              {'tau': 1e-4, 'alpha': alpha}) for i, alpha in enumerate([0.1, 0.8])]
+    model = YAdmittanceURN(freqs, active_basis_refit_config(active))
+    model.initialize_from_active_bases(active)
+    assert redundant_y_bases(model, freqs) == []
+
+
 def test_paper_22_basis_uses_research_meeting_training_defaults():
     cfg = YAdmittanceURNConfig.paper_22_basis(n_epochs=30)
 
