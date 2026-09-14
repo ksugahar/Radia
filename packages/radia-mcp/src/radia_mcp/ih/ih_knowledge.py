@@ -571,6 +571,39 @@ Workflow:
 The headless ``calc_heat.py`` and ``calc_heat_axisym.py`` paths remain reusable
 batch and validation entry points.  They are not desktop interfaces.
 
+## Thermal dimensionality: 3D EM does not require 3D heat
+
+Use ``calc_heat_axisym.py`` when the workpiece shape, thermal properties,
+thermal boundary conditions, and the circumferentially averaged heat input are
+rotation invariant.  The electromagnetic solve may still be 3D: transfer its
+surface-loss field by averaging around each ``(r,z)`` circle, then solve the
+scalar temperature field on the 2D meridian with standard NGSolve H1 and the
+``2*pi*r`` Jacobian.  This is the production choice for an axisymmetric
+workpiece after the EM hotspot has been rotation/time averaged.
+
+Use the 3D thermal solver only when angular temperature structure is physically
+required, for example a non-axisymmetric workpiece or material, angularly
+different cooling/contact boundaries, or a transient rotating hotspot whose
+period is not short compared with the thermal response.  Do not select 3D heat
+merely because the supplied EM mesh or ``qsurf.sol`` is 3D.
+
+The received TKE08 order-verification package used 3D heat because it supplied a
+fixed full-workpiece 3D ``.vol`` and intentionally varied only H1 order.  That
+was an experiment constraint, not a formulation requirement.  The independent
+2D meridian cross-check (2026-09-14, H1 order 2, 128 azimuth samples) agreed
+with the 3D order-2 solve as follows:
+
+| TKE08 case | input-power difference | volume-mean T difference | mean absolute 850 C depth difference |
+|---|---:|---:|---:|
+| A | 0.069% | 1.32 C | 0.024 mm |
+| B | 0.127% | 1.59 C | 0.029 mm |
+
+Axisymmetric heat requires a separately generated 2D ``(r,z)`` workpiece mesh.
+Loading a 3D ``.vol`` and calling ``Curve()`` cannot turn it into a 2D mesh:
+``Curve()`` changes geometry order, not dimension.  Moreover, post-load
+``Curve()`` is forbidden by the thermal geometry contract below.  Generate the
+2D mesh in memory or export it at the intended geometry order before solving.
+
 ## ``.sol + .vol`` strict contract (4.58.0+)
 
 NGSolve ``.sol`` files are coefficient vectors only -- no embedded
@@ -611,6 +644,16 @@ higher-order H1 coefficients are hierarchical; accepting order 2 would silently
 distort the heat source.  ``calc_fem_kelvin.py`` therefore saves this handoff
 as P1 even when the electromagnetic solve itself uses a higher order.
 
+For the 3D-to-axisymmetric handoff, ``calc_heat_axisym.py`` evaluates the source
+GridFunction through NGSolve's boundary point locator (``BND``), not a volume
+point lookup.  Independently meshed representations of the same CAD surface
+have slightly different facets; volume lookup previously rejected some valid
+TKE08 meridian points and silently left them at zero flux.  The default is 128
+azimuth samples (within 0.013% of 256 samples for both TKE08 cases).  Result JSON
+``qsurf_projection`` records requested/accepted samples, coverage, and partial
+vertices.  A missing target vertex or less than 80% global sample coverage is a
+hard error; there is no zero-flux fallback.
+
 The headless runner and Simulink initialization both fail before solving when
 the ``.sol`` / ``.vol`` pair is incomplete or incompatible.  They do not infer
 a missing companion file from a filename convention.
@@ -627,12 +670,12 @@ gf_q.Set(q_surf_cf, definedon=wp_region) # only workpiece-boundary DOFs touched
 gf_q.Save(qsurf_sol_path)
 ```
 
-The thermal solver re-projects this onto the wp-mesh surface
-vertices by point evaluation.  When wp-mesh and em-mesh share the
-same physical workpiece geometry, vertices land on the EM boundary
-faces and H1 continuity guarantees the boundary node values are
-recovered exactly.  See ``radia_mcp.radia_ngsolve.ngsolve`` Section
-18c for the broader pattern (surface-restricted H1 GF save/load).
+The thermal solver re-projects this onto the wp-mesh surface vertices by
+surface point evaluation.  The axisymmetric route explicitly requests a
+boundary mapped point so equivalent independently faceted 2D/3D surfaces are
+handled as a surface projection and audited.  See
+``radia_mcp.radia_ngsolve.ngsolve`` Section 18c for the broader pattern
+(surface-restricted H1 GF save/load).
 
 ## Output: T .sol re-loadable for later evaluation (radia 4.59.0+)
 
@@ -648,11 +691,13 @@ JSON output keys (calc_heat / calc_heat_axisym):
 
 | key | content |
 |---|---|
+| ``T_mean_C`` | physical volume mean; the axisymmetric route uses ``int(T*2*pi*r)/int(2*pi*r)`` |
 | ``T_sol_file`` | absolute path to the final-T NGSolve `.sol` |
 | ``heat_vol_file`` | absolute path to the companion `.vol`.  Empty when no separate companion was written (then re-use the `--wp-vol` input as the companion). |
 | ``msh_file`` | GMSH `.msh v4.1` (T_C + q_surf fields) when `--msh-output` was set |
 | ``csv_file`` | probe history CSV when both `--probe-point` + `--csv-output` were set |
 | ``boundary_audit`` | Concrete matched heat-flux, convection, and radiation boundaries; per-boundary area; and per-boundary heat input |
+| ``qsurf_projection`` | axisymmetric 3D-boundary transfer coverage and sample counts (or ``mode=uniform``) |
 
 Naming convention:
 

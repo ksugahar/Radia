@@ -69,3 +69,18 @@ def test_ih_thermal_knowledge_fixes_cross_mesh_qsurf_handoff_to_p1():
     assert "fixed P1 cross-mesh handoff" in thermal
     assert "electromagnetic solve itself uses a higher order" in thermal
     assert "always produces this handoff at order 1" in rotating
+
+
+def test_ih_thermal_knowledge_prefers_axisym_and_audits_3d_handoff():
+    thermal = get_induction_heating_documentation("thermal")
+    normalized = " ".join(thermal.split())
+
+    assert "3D EM does not require 3D heat" in thermal
+    assert "Do not select 3D heat" in normalized
+    assert "experiment constraint, not a formulation requirement" in normalized
+    assert "separately generated 2D ``(r,z)`` workpiece mesh" in normalized
+    assert "``Curve()`` changes geometry order, not dimension" in normalized
+    assert "boundary point locator (``BND``)" in normalized
+    assert "default is 128 azimuth samples" in normalized
+    assert "``qsurf_projection``" in thermal
+    assert "no zero-flux fallback" in normalized

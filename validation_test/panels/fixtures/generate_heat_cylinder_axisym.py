@@ -25,12 +25,13 @@ import sys
 
 
 def main():
-    """Build the cylinder fixture as a strictly-rectangular structured
-    grid in (r, z).  The Henrotte axisymmetric basis (radia 4.32.0+)
-    requires axis-aligned quads exactly; Netgen's quad_dominated mesher
-    produces slightly skewed quads (corner at z=-0.0125 vs opposite at
-    -0.00937624) which break the closed-form Q1/Q2 element matrices.
-    Per CLAUDE.md "Axisymmetric FE: Henrotte Basis Only" policy.
+    """Build a rectangular (r,z) fixture with a deterministic quad grid.
+
+    The production thermal solver uses standard NGSolve H1 with the 2*pi*r
+    integration weight; it does not use the magnetic Henrotte space.  Keeping
+    this fixture structured makes its regenerated topology and golden values
+    deterministic, but axis-aligned quads are not a thermal-method
+    requirement.
     """
     import netgen.meshing as ngm_pkg
     from netgen.meshing import (
