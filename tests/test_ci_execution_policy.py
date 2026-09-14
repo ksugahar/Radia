@@ -255,6 +255,8 @@ def test_pre_push_runs_the_unpushed_candidate_on_mdx():
     assert "scp" in helper
     assert "tools/ci_preflight.py --since $base" in helper
     assert "'mcp>=1.0,<2'" in helper
+    assert "pytest pyyaml setuptools 'mcp>=1.0,<2'" in helper
+    assert 'import mcp, pytest, setuptools, yaml' in helper
     assert "tools/run_test_tier.py --profile fast-contracts" in helper
     assert "upload_release_asset.py" not in hook
     assert "developer push must never upload mutable" in hook

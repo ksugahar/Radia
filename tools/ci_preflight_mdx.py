@@ -168,12 +168,12 @@ if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
     if (-not (Test-Path -LiteralPath $python)) {{
       & $system_python -m venv $venv
       if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
-      & $python -m pip install --disable-pip-version-check --quiet pytest pyyaml 'mcp>=1.0,<2'
+      & $python -m pip install --disable-pip-version-check --quiet pytest pyyaml setuptools 'mcp>=1.0,<2'
       if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
     }}
-    & $python -c "import mcp, pytest, yaml"
+    & $python -c "import mcp, pytest, setuptools, yaml"
     if ($LASTEXITCODE -ne 0) {{
-      & $python -m pip install --disable-pip-version-check --quiet pytest pyyaml 'mcp>=1.0,<2'
+      & $python -m pip install --disable-pip-version-check --quiet pytest pyyaml setuptools 'mcp>=1.0,<2'
       if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
     }}
     & $python tools/audit_ci_no_system_install.py
