@@ -5,6 +5,8 @@ problematic Netgen 2D ``NgMesh.Save()`` path.
 """
 from __future__ import annotations
 
+import ast
+import inspect
 import math
 from pathlib import Path
 import sys
@@ -18,6 +20,7 @@ if str(PANELS) not in sys.path:
 
 import calc_heat  # noqa: E402
 import calc_heat_axisym  # noqa: E402
+import calc_heat_with_em_table  # noqa: E402
 import calc_fem_kelvin  # noqa: E402
 
 
@@ -63,6 +66,17 @@ def _slab_mesh(maxh=0.35):
         else:
             face.name = "insulated"
     return Mesh(OCCGeometry(solid).GenerateMesh(maxh=maxh))
+
+
+def _sphere_vol(path, maxh=0.5):
+    """Write a first-order curved-CAD mesh for the post-load Curve gate."""
+    from netgen.occ import Pnt, Sphere
+
+    solid = Sphere(Pnt(0.0, 0.0, 0.0), 1.0)
+    solid.name = "workpiece"
+    solid.faces.name = "outer"
+    mesh = solid.GenerateMesh(maxh=maxh)
+    mesh.ngmesh.Save(str(path))
 
 
 def test_boundary_role_selector_resolves_expression_and_rejects_ambiguity():
@@ -152,6 +166,18 @@ def test_axisym_heat_separates_heating_and_cooling_boundaries():
     assert result["T_probe_history_C"][-1] == pytest.approx(
         expected_probe, abs=0.02
     )
+    assert mesh.GetCurveOrder() == 1
+    assert result["mesh_geometry"] == {
+        "policy": "preserve-input-vol-geometry",
+        "post_load_curve_applied": False,
+        "field_order": 2,
+        "input_curve_order": 1,
+        "dimension": 2,
+        "domain_measure": pytest.approx(1.0),
+        "domain_measure_unit": "m^2",
+        "boundary_measure": pytest.approx(4.0),
+        "boundary_measure_unit": "m",
+    }
 
 
 def test_axisym_heat_rejects_center_axis_as_heat_inflow_boundary():
@@ -287,6 +313,70 @@ def test_3d_heat_separates_heating_and_cooling_boundaries():
         "matched_boundaries"
     ] == ["cooled"]
     assert result["T_probe_history_C"][-1] == pytest.approx(27.0, abs=0.03)
+
+
+def test_3d_heat_preserves_loaded_vol_geometry_at_p2(tmp_path):
+    """Field order two must not re-curve a mesh after ``.vol`` loading.
+
+    A saved OCC sphere is a compact regression: calling ``Curve(2)`` on the
+    reloaded order-one mesh changes its volume by about 10% on NGSolve 6.2.2604.
+    The thermal solver must consume the serialized geometry unchanged.
+    """
+    from ngsolve import BND, CF, Integrate, Mesh
+
+    vol = tmp_path / "sphere_o1.vol"
+    _sphere_vol(vol)
+    input_mesh = Mesh(str(vol))
+    volume_before = float(Integrate(CF(1), input_mesh))
+    area_before = float(Integrate(CF(1), input_mesh, BND))
+
+    result = calc_heat.solve_heat(
+        str(vol),
+        material="custom",
+        rho=1.0,
+        cp=1.0,
+        k=1.0,
+        h_conv=0.0,
+        emissivity=0.0,
+        heat_flux_boundaries="outer",
+        q_uniform=0.0,
+        dt=0.1,
+        t_end=0.1,
+        fes_order=2,
+        _write_solution=False,
+    )
+
+    assert "error" not in result, result
+    audit = result["mesh_geometry"]
+    assert audit["policy"] == "preserve-input-vol-geometry"
+    assert audit["post_load_curve_applied"] is False
+    assert audit["field_order"] == 2
+    assert audit["input_curve_order"] == 1
+    assert audit["domain_measure"] == pytest.approx(volume_before, rel=1e-12)
+    assert audit["boundary_measure"] == pytest.approx(area_before, rel=1e-12)
+    assert result["T_min_C"] == pytest.approx(20.0, abs=1e-11)
+    assert result["T_max_C"] == pytest.approx(20.0, abs=1e-11)
+
+
+@pytest.mark.parametrize(
+    "solver",
+    [
+        calc_heat.solve_heat,
+        calc_heat_axisym.solve_heat_axisym,
+        calc_heat_with_em_table.solve_heat_em_table,
+    ],
+)
+def test_thermal_solvers_do_not_call_curve(solver):
+    """All loaded-``.vol`` thermal paths share the same no-Curve contract."""
+    tree = ast.parse(inspect.getsource(solver))
+    curve_calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "Curve"
+    ]
+    assert curve_calls == []
 
 
 def test_spatial_qsurf_high_order_transfer_fails_before_loading_files():

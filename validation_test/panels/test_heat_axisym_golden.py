@@ -63,6 +63,7 @@ def test_heat_axisym_uniform_golden(tmp_path):
         "--t-initial", str(c["t_initial_C"]),
         "--dt", str(c["dt_s"]),
         "--t-end", str(c["t_end_s"]),
+        "--fes-order", str(c["fes_order"]),
         "--probe-point", f"{c['probe_point_rz'][0]},{c['probe_point_rz'][1]}",
         "--msh-output", str(tmp_path / "heat_axisym_T.msh"),
     ]
@@ -73,6 +74,9 @@ def test_heat_axisym_uniform_golden(tmp_path):
     r = json.loads(proc.stdout.strip().splitlines()[-1])
 
     assert r["mesh_type"] == "axisymmetric"
+    assert r["mesh_geometry"]["post_load_curve_applied"] is False
+    assert r["mesh_geometry"]["field_order"] == c["fes_order"]
+    assert r["mesh_geometry"]["input_curve_order"] == 1
 
     # Mesh fingerprint -- catches a silent fixture-regen drift.
     assert r["ne"] == exp["ne"], f"ne {r['ne']} != {exp['ne']}"
