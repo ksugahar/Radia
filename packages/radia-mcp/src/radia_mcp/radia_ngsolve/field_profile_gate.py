@@ -1255,6 +1255,117 @@ def nonlinear_field_energy_physical_admissibility_gate_v8(
     }
 
 
+def nonlinear_field_energy_observable_comparison_gate_v9(
+    summary: dict[str, Any],
+    *,
+    max_relative_difference: float = 0.05,
+    absolute_floor: float = 1.0e-12,
+) -> dict[str, Any]:
+    """Compare observables only after identity and sample contracts match."""
+
+    if not isinstance(summary, dict):
+        raise ValueError("summary must be a mapping")
+    difference_limit = float(max_relative_difference)
+    floor = float(absolute_floor)
+    if not math.isfinite(difference_limit) or difference_limit < 0.0:
+        raise ValueError("max_relative_difference must be finite and nonnegative")
+    if not math.isfinite(floor) or floor <= 0.0:
+        raise ValueError("absolute_floor must be finite and positive")
+    identity_keys = (
+        "geometry_identity_sha256",
+        "material_table_sha256",
+        "excitation_identity_sha256",
+        "mesh_identity_sha256",
+        "coordinate_system",
+        "unit_system",
+    )
+    observable_keys = ("average_B_T", "rms_B_T", "energy_J", "coenergy_J")
+    required_units = {"average_B_T": "T", "rms_B_T": "T", "energy_J": "J", "coenergy_J": "J"}
+
+    def valid_sha(value: object) -> bool:
+        text = str(value or "").strip().lower()
+        return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
+
+    def lane_contract(name: str) -> dict[str, Any]:
+        lane = summary.get(name)
+        if not isinstance(lane, dict):
+            raise ValueError(f"{name} must be a mapping")
+        identity = lane.get("identity")
+        identity = identity if isinstance(identity, dict) else {}
+        observables = lane.get("observables")
+        observables = observables if isinstance(observables, dict) else {}
+        sample_ids = observables.get("sample_id")
+        arrays = {key: observables.get(key) for key in observable_keys}
+        arrays_are_lists = isinstance(sample_ids, list) and all(isinstance(value, list) for value in arrays.values())
+        lengths_match = arrays_are_lists and len({len(sample_ids), *(len(value) for value in arrays.values())}) == 1
+        finite = False
+        sample_contract = False
+        max_difference = math.inf
+        if lengths_match:
+            try:
+                finite = all(math.isfinite(float(item)) for values in arrays.values() for item in values)
+                sample_contract = (
+                    bool(sample_ids)
+                    and all(isinstance(item, (int, str)) and not isinstance(item, bool) for item in sample_ids)
+                    and len(set(sample_ids)) == len(sample_ids)
+                )
+            except (TypeError, ValueError):
+                finite = sample_contract = False
+        units = observables.get("observable_units")
+        checks = {
+            "identity_fields_present": all(bool(str(identity.get(key) or "").strip()) for key in identity_keys),
+            "identity_digests_valid": all(valid_sha(identity.get(key)) for key in identity_keys[:4]),
+            "observable_columns_exact": observables.get("observable_columns") == list(observable_keys),
+            "observable_units_exact": units == required_units,
+            "sample_arrays_are_lists": arrays_are_lists,
+            "sample_array_lengths_match": lengths_match,
+            "observable_values_finite": finite,
+            "sample_identity_valid": sample_contract,
+        }
+        return {"identity": identity, "observables": observables, "checks": checks, "sample_ids": sample_ids, "arrays": arrays, "max_relative_difference": max_difference}
+
+    candidate = lane_contract("candidate")
+    reference = lane_contract("reference")
+    identity_matches = {key: candidate["identity"].get(key) == reference["identity"].get(key) for key in identity_keys}
+    sample_ids_match = candidate["sample_ids"] == reference["sample_ids"]
+    if (
+        candidate["checks"]["observable_values_finite"]
+        and reference["checks"]["observable_values_finite"]
+        and candidate["sample_ids"]
+        and reference["sample_ids"]
+        and sample_ids_match
+    ):
+        differences = [
+            abs(float(left) - float(right)) / max(abs(float(left)), abs(float(right)), floor)
+            for key in observable_keys
+            for left, right in zip(candidate["arrays"][key], reference["arrays"][key])
+        ]
+        max_difference = max(differences, default=math.inf)
+    else:
+        max_difference = math.inf
+    checks = {
+        "candidate_contract_valid": all(candidate["checks"].values()),
+        "reference_contract_valid": all(reference["checks"].values()),
+        "comparison_identity_matches": all(identity_matches.values()),
+        "observable_sample_identity_matches": sample_ids_match,
+        "observable_differences_within_limit": max_difference <= difference_limit,
+    }
+    return {
+        "policy": "nonlinear_field_energy_observable_comparison_gate_v9",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "accepted": all(checks.values()),
+        "checks": checks,
+        "issues": [name for name, accepted in checks.items() if not accepted],
+        "max_relative_difference": max_difference,
+        "tolerances": {"max_relative_difference": difference_limit, "absolute_floor": floor},
+        "notes": [
+            "identity and sample contracts are checked before numeric differences",
+            "relative differences use a positive absolute floor for near-zero observables",
+            "numeric agreement is not a claim of solver correctness without independent physics gates",
+        ],
+    }
+
+
 def nonlinear_constitutive_response_parity_gate(
     summary: dict[str, Any],
     *,

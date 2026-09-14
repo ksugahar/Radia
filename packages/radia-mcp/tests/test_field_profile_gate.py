@@ -22,6 +22,7 @@ from radia_mcp.radia_ngsolve.field_profile_gate import (
     nonlinear_field_energy_artifact_contract_gate_v6,
     nonlinear_field_energy_lineage_gate_v7,
     nonlinear_field_energy_physical_admissibility_gate_v8,
+    nonlinear_field_energy_observable_comparison_gate_v9,
     nonlinear_magnetic_field_energy_parity_gate,
     nonlinear_magnetic_refinement_energy_gate,
     nonlinear_magnetic_spatial_evidence_gate,
@@ -38,6 +39,7 @@ from radia_mcp.radia_ngsolve.server import (
     nonlinear_field_energy_artifact_contract_gate_v6 as mcp_nonlinear_artifact_v6_gate,
     nonlinear_field_energy_lineage_gate_v7 as mcp_nonlinear_lineage_v7_gate,
     nonlinear_field_energy_physical_admissibility_gate_v8 as mcp_nonlinear_physical_v8_gate,
+    nonlinear_field_energy_observable_comparison_gate_v9 as mcp_nonlinear_comparison_v9_gate,
 )
 
 
@@ -294,6 +296,67 @@ def test_nonlinear_field_energy_physical_admissibility_v8_rejects_legendre_drift
     bad["candidate"]["response"]["coenergy_density_J_per_m3"][2] = 3.0
     result = nonlinear_field_energy_physical_admissibility_gate_v8(bad)
     assert result["checks"]["candidate_physical_contract_valid"] is False
+
+
+def _v9_observable_comparison_summary():
+    identity = {
+        "geometry_identity_sha256": "1" * 64,
+        "material_table_sha256": "2" * 64,
+        "excitation_identity_sha256": "3" * 64,
+        "mesh_identity_sha256": "4" * 64,
+        "coordinate_system": "right-handed Cartesian",
+        "unit_system": "SI",
+    }
+    observables = {
+        "observable_columns": ["average_B_T", "rms_B_T", "energy_J", "coenergy_J"],
+        "observable_units": {"average_B_T": "T", "rms_B_T": "T", "energy_J": "J", "coenergy_J": "J"},
+        "sample_id": ["op0", "op1"],
+        "average_B_T": [0.1, 0.2],
+        "rms_B_T": [0.11, 0.21],
+        "energy_J": [1.0, 2.0],
+        "coenergy_J": [0.9, 1.9],
+    }
+
+    def lane():
+        return {"identity": dict(identity), "observables": json.loads(json.dumps(observables))}
+
+    return {"candidate": lane(), "reference": lane()}
+
+
+def test_nonlinear_field_energy_observable_comparison_v9_accepts_and_wraps_mcp():
+    summary = _v9_observable_comparison_summary()
+    result = nonlinear_field_energy_observable_comparison_gate_v9(summary)
+    assert result["status"] == "ok"
+    assert result["accepted"] is True
+    wrapped = json.loads(mcp_nonlinear_comparison_v9_gate(json.dumps(summary)))
+    assert wrapped["policy"] == "nonlinear_field_energy_observable_comparison_gate_v9"
+    assert wrapped["status"] == "ok"
+
+
+def test_nonlinear_field_energy_observable_comparison_v9_rejects_identity_and_units_drift():
+    bad = _v9_observable_comparison_summary()
+    bad["candidate"]["identity"]["mesh_identity_sha256"] = ""
+    bad["candidate"]["observables"]["observable_units"]["energy_J"] = "mJ"
+    result = nonlinear_field_energy_observable_comparison_gate_v9(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["candidate_contract_valid"] is False
+    assert result["checks"]["comparison_identity_matches"] is False
+
+
+def test_nonlinear_field_energy_observable_comparison_v9_rejects_sample_id_drift():
+    bad = _v9_observable_comparison_summary()
+    bad["candidate"]["observables"]["sample_id"] = ["op0", "op2"]
+    result = nonlinear_field_energy_observable_comparison_gate_v9(bad)
+    assert result["checks"]["observable_sample_identity_matches"] is False
+    assert result["checks"]["observable_differences_within_limit"] is False
+
+
+def test_nonlinear_field_energy_observable_comparison_v9_rejects_tolerance_exceedance():
+    bad = _v9_observable_comparison_summary()
+    bad["candidate"]["observables"]["energy_J"][1] = 2.2
+    result = nonlinear_field_energy_observable_comparison_gate_v9(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["observable_differences_within_limit"] is False
 
 
 def test_build_comparison_candidate_keeps_piecewise_linear_out_of_solver_mode():
