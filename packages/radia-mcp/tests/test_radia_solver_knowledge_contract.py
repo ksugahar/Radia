@@ -31,6 +31,17 @@ def _current_solver_guidance() -> str:
     return "\n".join(topics)
 
 
+def test_urn_manual_keeps_private_inputs_and_noise_aware_basis_selection():
+    from radia_mcp.radia_ngsolve.knowledge.urn import get_urn_documentation
+    guidance = get_urn_documentation('overview')
+    assert 'RADIA_NASA_EIS_CSV' in guidance
+    assert '22-basis' in guidance
+    assert 'retained basis count' in guidance
+    assert 'Do not force an arbitrary 1e-3' in guidance
+    assert 'Fewer bases alone do not prove physical truth' in guidance
+    assert 'model-assigned' in guidance
+
+
 def test_mcp_solver_guidance_does_not_call_retired_relaxation_methods():
     guidance = _current_solver_guidance()
 
