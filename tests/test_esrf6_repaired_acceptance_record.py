@@ -31,6 +31,17 @@ def test_ci_wheel_nominal_three_engine_record():
         assert 0 <= stats[key] <= 2e-5
     assert result['provenance']['engine_settings']['mixed_total_reduced_omega']['bonus_intorder'] == 12
     points = np.asarray(result['observation_points_m'])
+    assert points.shape == (45, 3) and np.isfinite(points).all()
+    names = ('hdiv_mmm', 'reduced_a', 'mixed_total_reduced_omega')
+    assert set(result['fields_T']) == set(names)
+    for field in result['fields_T'].values():
+        values = np.asarray(field)
+        assert values.shape == (45, 3) and np.isfinite(values).all()
+    assert set(result['pairwise_core']) == {
+        names[0] + '__vs__' + names[1],
+        names[0] + '__vs__' + names[2],
+        names[1] + '__vs__' + names[2],
+    }
     core = abs(points[:, 0]) <= .02
     assert core.sum() == 27
     errors = []
