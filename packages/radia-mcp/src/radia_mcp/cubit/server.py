@@ -124,9 +124,10 @@ batch/nographics. Never launch or attach to the Cubit GUI. `cubit_snapshot`
 fails loudly because Cubit hardcopy needs a graphics window.
 
 Human handoff: cubit_import_journal reads a human-saved .jou without
-execution or GUI attachment; cubit_session_journal exports AI history.
+execution or GUI attachment; cubit_session_journal exports Cubit's native
+`record "file"` artifact for the AI session, including APREPRO definitions.
 Imported differences are candidate commands, not proven authorship or a
-standalone replay script. Review the source before explicit headless replay.
+standalone replay script. Review both sources before explicit headless replay.
 
 Session model: `cubit_stage`/`cubit_exec` reuse ONE headless Cubit daemon
 (first call may take 30+ s for license + startup; later calls are
@@ -1668,7 +1669,12 @@ def _normalized_cubit_journal_commands(text: str) -> list[str]:
 	commands = []
 	for raw_line in str(text or "").splitlines():
 		line = raw_line.strip()
-		if not line or line.startswith("#"):
+		# ``#{name = value}`` is an executable APREPRO definition, not a
+		# journal comment.  Dropping it makes two parametrically different
+		# journals appear equivalent.
+		if not line or (line.startswith("#") and not line.startswith("#{")):
+			continue
+		if line.lower().startswith(("record ", "record stop", "set journal ")):
 			continue
 		commands.append(" ".join(line.split()))
 	return commands
@@ -2999,13 +3005,12 @@ def cubit_doctor() -> str:
 def cubit_session_journal(out_path: str = "",
                           include_failed: bool = True) -> str:
 	"""
-	Export every Cubit command this MCP-server process sent to the live
-	session as a portable `.jou` journal.
+	Export Cubit's native command record for this MCP-server process.
 
-	This explicit provenance tool turns an interactive LLM-driven session
-	into an optional replayable, version-controllable recipe. Mesh export
-	does not require or create a journal. Failed commands are
-	included as comments (`# FAILED: ...`) so the record stays honest.
+	The journal comes from Cubit's ``record \"file\"`` command, not from a
+	reconstruction of RPC responses. This preserves APREPRO definitions and
+	the exact command spelling accepted by Cubit. ``include_failed`` remains
+	for API compatibility; native Cubit owns the stream and it is not filtered.
 
 	Scope: commands from THIS server process only -- attaching to a
 	daemon another process drove earlier does not recover its history.
@@ -3015,37 +3020,45 @@ def cubit_session_journal(out_path: str = "",
 	        (absolute, or relative to the repo root).
 	    include_failed: include failed commands as comments (default on).
 
-	Returns JSON {n_commands, n_failed, journal, path?}.
+	Returns JSON with the native journal, digest, generation paths, and an
+	in-memory failure count retained only as secondary diagnostics.
 	"""
 	sess = _cs._SINGLETON
-	history = list(sess._command_history) if sess is not None else []
-	if not history:
+	if sess is None:
 		return json.dumps({
 			"status": "ok", "n_commands": 0, "n_failed": 0,
-			"journal": "",
-			"note": ("no commands recorded in this server process yet "
-			         "(history is per-process, not per-daemon)"),
+			"journal": "", "gui_started": False,
+			"provenance": "cubit_native_record",
+			"note": "no Cubit session exists in this server process",
 		})
-	lines = [
-		"# Session journal exported by mcp-server-cubit",
-		f"# {time.strftime('%Y-%m-%d %H:%M:%S')}  "
-		f"({len(history)} commands)",
-		"# Replay: Cubit > Play Journal, or cubit_stage(path=...)",
-	]
-	n_failed = 0
-	for entry in history:
-		if entry["ok"]:
-			lines.append(entry["line"])
-		else:
-			n_failed += 1
-			if include_failed:
-				lines.append(f"# FAILED: {entry['line']}")
-	journal = "\n".join(lines) + "\n"
+	with sess._lock:
+		snapshot = sess.native_journal_snapshot()
+		history = list(sess._command_history)
+	journal = snapshot["journal"]
+	if history and not journal:
+		return json.dumps({
+			"status": "error", "kind": "provenance",
+			"gui_started": False, "journal": "",
+			"n_commands": 0,
+			"n_failed": sum(not row.get("ok") for row in history),
+			"provenance": "cubit_native_record_unavailable",
+			"native_journal": snapshot,
+			"error": "Cubit commands exist but no native journal was recorded",
+		}, ensure_ascii=False, indent=2)
+	commands = _normalized_cubit_journal_commands(journal)
+	n_failed = sum(not row.get("ok") for row in history)
 	result = {
 		"status": "ok",
-		"n_commands": len(history),
+		"gui_started": False,
+		"provenance": "cubit_native_record",
+		"n_commands": len(commands),
 		"n_failed": n_failed,
 		"journal": journal,
+		"sha256": hashlib.sha256(journal.encode("utf-8")).hexdigest(),
+		"native_paths": snapshot["paths"],
+		"generation_count": snapshot["generation_count"],
+		"native_errors": snapshot["errors"],
+		"include_failed_ignored_for_native_record": not include_failed,
 	}
 	if out_path:
 		p = Path(out_path)
@@ -3064,10 +3077,8 @@ def cubit_import_journal(path: str) -> str:
 	"""Read a human-saved .jou without starting Cubit or executing its contents.
 
 	Return candidate human command lines after subtracting this MCP process's
-	command history and internal journal/probe lines. Attribution is heuristic:
-	an identical human command can match AI history. The original journal and
-	line-numbered exclusions remain available for review. Candidate lines are
-	not a standalone replay script (APREPRO and Python can span lines).
+	Cubit-recorded native journal. The original journals, APREPRO definitions,
+	digests, and line-numbered exclusions remain available for review.
 	"""
 	from collections import Counter
 	import hashlib
@@ -3084,23 +3095,26 @@ def cubit_import_journal(path: str) -> str:
 		return json.dumps(_error_payload("input", str(exc), kind="input"))
 	sess = _cs._SINGLETON
 	if sess is None:
-		history = []
+		ai_snapshot = {"journal": "", "paths": [], "generation_count": 0,
+		               "errors": [], "recording_error": None}
 	else:
 		with sess._lock:
-			history = list(sess._command_history)
-	known = Counter(str(row["line"]).strip() for row in history)
-	prefixes = ("save as ", "record journal", "record stop", "probe ", "list ")
+			ai_snapshot = sess.native_journal_snapshot()
+	ai_journal = ai_snapshot["journal"]
+	known = Counter(_normalized_cubit_journal_commands(ai_journal))
+	prefixes = ("record ", "record stop", "set journal ")
 	candidates, excluded = [], []
 	for number, original in enumerate(journal.splitlines(), 1):
 		line = original.strip()
 		reason = None
-		if not line or line.startswith("#"):
+		normalized = " ".join(line.split())
+		if not line or (line.startswith("#") and not line.startswith("#{")):
 			reason = "comment_or_blank"
 		elif line.lower().startswith(prefixes):
 			reason = "internal_command"
-		elif known[line]:
-			known[line] -= 1
-			reason = "matches_ai_history"
+		elif known[normalized]:
+			known[normalized] -= 1
+			reason = "matches_cubit_recorded_ai_journal"
 		entry = {"line_number": number, "line": original}
 		if reason:
 			excluded.append({**entry, "reason": reason})
@@ -3111,8 +3125,15 @@ def cubit_import_journal(path: str) -> str:
 		"gui_started": False, "executed": False,
 		"path": str(p.resolve()), "sha256": hashlib.sha256(raw).hexdigest(),
 		"journal": journal, "candidate_commands": candidates,
-		"excluded": excluded, "history_entries": len(history),
-		"attribution": "heuristic_current_process_history_only",
+		"excluded": excluded,
+		"ai_journal": ai_journal,
+		"ai_journal_sha256": (
+			hashlib.sha256(ai_journal.encode("utf-8")).hexdigest()
+			if ai_journal else None),
+		"ai_journal_paths": ai_snapshot["paths"],
+		"history_entries": len(_normalized_cubit_journal_commands(ai_journal)),
+		"attribution": ("cubit_native_record_exact_match"
+		                if ai_journal else "no_ai_native_journal_available"),
 		"note": "Review original journal and checkpoint before explicit headless replay.",
 	}, ensure_ascii=False, indent=2)
 
@@ -3139,6 +3160,11 @@ def cubit_session_status() -> str:
 		                      if sess._drop_dir is not None else None)
 		status["license_warmup"] = sess._last_license_warmup or None
 		status["n_journal_commands"] = len(sess._command_history)
+		native = sess.native_journal_snapshot()
+		status["journal_provenance"] = "cubit_native_record"
+		status["native_journal_paths"] = native["paths"]
+		status["native_journal_generations"] = native["generation_count"]
+		status["native_journal_errors"] = native["errors"]
 		status["alive"] = _cs._SINGLETON.is_alive()
 		if _cs._SINGLETON._proc is not None:
 			status["pid"] = _cs._SINGLETON._proc.pid
@@ -4928,7 +4954,7 @@ def cubit_stl_to_vol(stl_path: str,
 			"exit_code": r.get("exit_code"),
 			"console": r.get("console"),
 			"headless_flags": r.get("headless_flags"),
-			"persistent_gui_started": r.get("persistent_gui_started"),
+			"gui_started": r.get("gui_started"),
 		},
 		"note": ("min quality is reported, not gated; gate on inverted "
 		         "elements and closure (mesh-quality study finding)"),

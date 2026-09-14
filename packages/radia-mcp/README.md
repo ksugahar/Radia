@@ -409,10 +409,11 @@ flags FreeCAD as `friendly`, others as `compat`.
 
 Execution and handoff are separate. Humans can edit in their own Cubit GUI
 and save a `.jou`; `cubit_import_journal(path)` reads it without executing
-commands or attaching to that process. `cubit_session_journal` exports AI
-commands for human review. Imported candidates are heuristic differences
-against current-process AI history, not proof of authorship. The original
-journal, excluded lines, and source hash are retained in the response.
+commands or attaching to that process. `cubit_session_journal` exports the
+AI session's actual Cubit-native `record "file"` journal for human review,
+including its APREPRO definitions. Imported candidates are exact command
+differences against that native AI journal, not a reconstruction from RPC
+responses or proof of authorship. Both originals, exclusions, and hashes remain.
 Review the source and checkpoint before an explicit headless replay.
 `cubit_stage` loads artifacts into the headless session; `cubit_snapshot`
 reports unavailable rendering and never opens a window.

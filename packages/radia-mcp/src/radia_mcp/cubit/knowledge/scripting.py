@@ -3543,8 +3543,10 @@ is independent and outside MCP.
 
 Human cooperation uses saved artifacts: `cubit_import_journal(path)` reads
 a human-saved journal without execution, while `cubit_session_journal`
-exports AI history. Differences are heuristic candidates; preserve the
-original source and checkpoint and review before explicit headless replay.
+exports the AI session's Cubit-native `record "file"` journal. APREPRO
+definitions are retained, and comparison uses that recorded artifact rather
+than reconstructed RPC history. Preserve both sources and the checkpoint and
+review differences before explicit headless replay.
 
 ## The two channels
 

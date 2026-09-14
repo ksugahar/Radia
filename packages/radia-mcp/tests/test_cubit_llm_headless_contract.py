@@ -175,11 +175,18 @@ def test_import_journal_reads_without_starting_or_executing(tmp_path, monkeypatc
     from types import SimpleNamespace
 
     journal = tmp_path / "human.jou"
-    content = '# saved\ncreate brick x 2\ncreate brick x 2\nlist volume all\n{size=3}\n'
+    content = '# saved\n#{size=3}\ncreate brick x {size}\ncreate brick x {size}\n'
     journal.write_bytes(content.encode("utf-8-sig"))
+    ai_journal = '#{size=3}\ncreate brick x {size}\n'
     existing = SimpleNamespace(
         _lock=threading.Lock(),
-        _command_history=[{"line": "create brick x 2", "ok": True}],
+        native_journal_snapshot=lambda: {
+            "journal": ai_journal,
+            "paths": [str(tmp_path / "ai.jou")],
+            "generation_count": 1,
+            "errors": [],
+            "recording_error": None,
+        },
     )
     monkeypatch.setattr(session, "_SINGLETON", existing)
     monkeypatch.setattr(server, "_cubit_session_or_error",
@@ -190,10 +197,47 @@ def test_import_journal_reads_without_starting_or_executing(tmp_path, monkeypatc
     assert result["executed"] is False
     assert result["gui_started"] is False
     assert result["journal"] == content
-    assert [row["line_number"] for row in result["candidate_commands"]] == [3, 5]
-    assert result["excluded"][1]["reason"] == "matches_ai_history"
+    assert [row["line_number"] for row in result["candidate_commands"]] == [4]
+    assert result["excluded"][1]["reason"] == "matches_cubit_recorded_ai_journal"
+    assert result["ai_journal"] == ai_journal
+    assert result["attribution"] == "cubit_native_record_exact_match"
     assert len(result["sha256"]) == 64
-    assert len(existing._command_history) == 1
+
+
+def test_native_record_uses_supported_file_syntax_and_preserves_aprepro(
+        tmp_path, monkeypatch):
+    monkeypatch.setenv("RADIA_MCP_TEMP", str(tmp_path))
+    sess = session.CubitSession.__new__(session.CubitSession)
+    sess._mode = "batch"
+    sess._client_id = "test-client"
+    sess._next_id = 1
+    sess._native_journal_path = None
+    sess._native_journal_paths = []
+    sess._native_journal_error = None
+    requests = []
+
+    def call(request, timeout_s):
+        requests.append(request)
+        return {"ok": True, "result": [
+            {"line": request["args"][0], "ok": True, "rc": 1},
+        ]}
+
+    monkeypatch.setattr(sess, "_call_via_stdio", call)
+    sess._start_native_journal_locked(timeout_s=5)
+
+    command = requests[0]["args"][0]
+    assert command.startswith('record "')
+    assert "record journal" not in command
+    assert "overwrite" not in command
+    sess._native_journal_path.write_text(
+        "#{mesh_size = 0.25}\ncreate brick x {mesh_size}\n",
+        encoding="utf-8",
+    )
+    snapshot = sess.native_journal_snapshot()
+    assert "#{mesh_size = 0.25}" in snapshot["journal"]
+    assert server._normalized_cubit_journal_commands(snapshot["journal"]) == [
+        "#{mesh_size = 0.25}", "create brick x {mesh_size}",
+    ]
 
 
 def test_import_journal_without_session_and_bad_input(tmp_path, monkeypatch):

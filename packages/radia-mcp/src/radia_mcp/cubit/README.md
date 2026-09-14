@@ -199,7 +199,7 @@ contract, gate hiding, all-calls JSONL log) and one **probe contract**:
 
 | Concept | build123d (CAD side) | Cubit (mesh side) | History-based CAD (e.g. CST) |
 |---|---|---|---|
-| Replayable history | the Python script | `.jou` journal (`cubit_session_journal`) | history list |
+| Replayable history | the Python script | Cubit-native `.jou` (`cubit_session_journal`, APREPRO retained) | history list |
 | Named bodies | `part.label` → STEP names | entity names → blocks | component/solid names |
 | Per-body probe | `build123d_probe(path, "entities")` | `cubit_probe("entities")` | volume-evidence rows |
 | Naming audit | `build123d_probe(path, "labels")` | `cubit_probe("labels")` | — |

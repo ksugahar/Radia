@@ -50,7 +50,7 @@ TWO_DOMAIN_INTERFACE_VOL = TWO_DOMAIN_VOL.replace(
 )
 
 
-def test_cubit_server_instructions_reserve_gui_for_gui_tests():
+def test_cubit_server_instructions_forbid_llm_gui_driving():
     server_source = (
         Path(__file__).resolve().parents[1]
         / "src"
@@ -59,8 +59,8 @@ def test_cubit_server_instructions_reserve_gui_for_gui_tests():
         / "server.py"
     ).read_text(encoding="utf-8")
 
-    assert "LLM/agent workflows MUST NOT" in server_source
-    assert "reserved solely for explicitly scoped GUI tests" in server_source
+    assert "Every LLM/MCP Cubit operation is" in server_source
+    assert "Never launch or attach to the Cubit GUI" in server_source
     assert "APREPRO commands + Python" in server_source
 
 

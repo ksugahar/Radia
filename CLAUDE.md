@@ -73,7 +73,7 @@ research question.
 
 Standalone PySide/PyQt Radia panels and notebook workbenches are retired.
 Coreform Cubit's private PySide6 is allowed only inside Cubit for the
-`cubit-mesh-export` toolbar. Normal Radia Python must not depend on Qt.
+`cubit-mesh-export` toolbar. Normal Radia Python must not depend on Qt. LLM/MCP Cubit execution is always batch/nographics and fails rather than launching or attaching to a GUI; the only GUI run is the separately scoped human-facing release test, while journal/checkpoint handoff remains artifact-only.
 
 ### Shared MCP Runtime Ownership
 - MCP is experimental development tooling, not a numerical solver release.
@@ -95,23 +95,6 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
   Resolve it with `bibliography_canonical_path`; correct verified entries there.
 - Manuscript folders contain generated `.bbl` only, never local `.bib` copies.
   Use `bibliography_make_bbl`, regenerate after changes, and check citations.
-
-### LLM Cubit Headless Execution
-
-- This supersedes the 2026-08-05 MCP GUI-debugging policy: execution and
-  artifact handoff are separate. Humans may use their own Cubit GUI.
-- MCP may read human-saved journals and export AI journals/checkpoints for
-  human review. Import never executes a journal, starts recording in a GUI,
-  or attaches to the human process. Replay is an explicit headless operation.
-- Journal/history subtraction identifies candidates, not proven authorship;
-  preserve the original journal and exclusions for review.
-- Every Cubit operation initiated through an LLM or MCP server runs in
-  `-batch -nographics` mode and must report that no persistent GUI was started.
-- LLM tools must never launch or attach to `coreform_cubit.exe`, open a Cubit
-  window, or fall back from the synchronous `coreform_cubit.com` console to the
-  GUI launcher. Missing headless support fails loudly.
-- Interactive Cubit GUI use remains a human-owned workflow outside MCP. LLM
-  results are inspected through saved mesh, image, log, and result artifacts.
 
 ### MATLAB And Simulink
 
