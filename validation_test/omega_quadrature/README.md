@@ -26,6 +26,14 @@ The row gates require every requested audit to pass; while an audit is pending,
 Even a zero process exit code means diagnostic gates passed, not quadrature
 convergence or three-engine acceptance. The top-level acceptance stays HOLD.
 
+For the formal ESRF6 nominal order-2 lane, `assess_plateau.py` predeclares the
+high-rule bonus 8-to-12 gate: field relative RMS <= 1e-3, maximum point change
+scaled by the high-rule global field RMS <= 5e-3, Hodge harmonic-norm change
+<= 1e-4, and free/block-action residuals <= 1e-8. The RMS limit is thirty
+times tighter than the separate 3% three-formulation gate. Passing closes only
+this model's matched Hodge/assembly high-rule plateau; it does not promote
+BDM2, IMA, evaluation-energy bounds, or other applications.
+
 Example (paths refer to the compute host):
 
 ```text
