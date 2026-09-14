@@ -404,3 +404,67 @@ entire formulation); and the NASA original sample-frequency mapping plus
 manuscript identity. The NASA archive inspection above proves why its original
 frequency axis cannot be reconstructed just from sweep endpoints. None of these
 items is marked passed by substituting metadata or synthetic data.
+
+### URN consumer and manuscript closure
+
+The two active NASA consumers (`generate_paper_figures.py` and
+`demo_spice_timedomain.py`) now fail before fitting the historical CSV unless
+the regenerated input carries its independent frequency-source locator. The
+CSV is unchanged pending the owner's redistribution decision. Its blanket
+measured-data header must not be treated as evidence. The figure loader parses
+named columns instead of assuming 24 header lines. Focused tests cover both
+rejection paths, a documented non-monotone-frequency input, and invalid numeric
+columns. Source-locator presence is a declaration check, not source authentication.
+
+The exact-title draft was located in the conference archive under
+`2026_08_25_静止器・回転機@八戸/URN@佐藤・菅原/paper/urn_paper.tex`.
+Its SHA-256 is `7a3d210d8a7cf02e213846f4dbf9379c1312e8c18fcc6063fbc3bd119f3f2445`.
+The publication dates and `10.1109/ACCESS.2026.XXXXXXX` are placeholders.
+The adjacent `REVIEW.md` (SHA-256
+`dd3eaf596fb76d42f96431e822dca373c9cd8d18f650818c2cac6ac1d6de2478`)
+identifies its reviewer as an AI agent; its ACCEPT verdict is not journal
+acceptance. The repository README now identifies the item as an IEEE
+Access-format draft. No archived manuscript or submitted artifact was edited.
+This closes the unsupported publication assertion, not a new publication task.
+Recovering the NASA instrument frequency record remains an external-data need;
+the repository no longer permits these consumers to silently treat the guessed
+axis as experimental validation. The NASA Open Data Portal dataset listing
+reports **License not specified** (checked 2026-09-14 at
+https://data.nasa.gov/dataset/groups/li-ion-battery-aging-datasets).
+Downloadability alone is not a redistribution grant. Raw-data publication is
+on hold while the owner decides whether to remove the pre-existing CSV from
+the current tree; no history rewrite or new raw-data distribution is authorized.
+
+### Physical BEM current acceptance (bounded surface-current model)
+
+`validation_test/bem/validate_torus_current_constraint.py` now assembles both
+surface divergence and the unit-current functional using NGSolve basis
+functions. It restricts the linear algebra to DOFs actually referenced by
+boundary elements. The current is divergence-free and its average meridional
+cut current is one ampere; no coefficient-ones excitation is used. The model
+minimizes magnetostatic energy on a zero-resistance current sheet. It does not
+include conductor-volume DC internal inductance or a finite-frequency port.
+
+The four `torus_current_cs*_q*.json` files record exact runtime/source identities.
+Three flat-mesh refinements give 159.6723, 155.9139 and 152.6029 nH; the last
+change is 2.17 percent. Doubling the quadrature bonus from 4 to 8 at cs=0.65
+changes inductance by 5.63e-9 relative. Unit-current residual, surface-current
+conservation and basis-sign covariance pass. The finest value is 1.96 percent
+above the thin-wire asymptotic external-inductance expression, not an exact
+finite-wire reference. Flat-mesh surface-area errors remain 9.76/6.64/3.90
+percent and are explicitly reported rather than hidden by an accuracy claim.
+
+The old cs=0.5 geometry cannot resolve this divergence-free toroidal functional
+reliably; normalizing near-zero projected current produced an absurd scale in
+the initial investigation. The final driver rejects that unresolved-current
+case instead of normalizing roundoff. Two small algebraic tests guard physical
+normalization, basis permutation/sign covariance and this failure boundary.
+This replaces the old extraction recommendation for the stated torus model;
+it is not certification of the historical notebook's coefficient-space method.
+
+The exact notebook input is preserved in
+`validation_test/bem/fixtures/torus_current_input.zip` (SHA-256
+`cfcaf6338b4a325d76dfad854e07e8670515bfa0b406a00ab1d86bd8014d262c`).
+Its sole member is the first-party `bem_inductance_limitations.ipynb`, with
+the raw hash recorded by all four runs. No downloaded third-party dataset is
+included in this archive.
