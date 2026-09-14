@@ -11,6 +11,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 from radia_mcp.radia_ngsolve.field_profile_gate import (
+    controlled_uniform_field_constitutive_sweep_gate,
     dual_formulation_symmetric_field_profile_gate,
     nonlinear_constitutive_point_sample_gate,
     nonlinear_constitutive_response_parity_gate,
@@ -19,6 +20,7 @@ from radia_mcp.radia_ngsolve.field_profile_gate import (
     nonlinear_magnetic_spatial_evidence_gate,
 )
 from radia_mcp.radia_ngsolve.server import (
+    controlled_uniform_field_constitutive_sweep_gate as mcp_controlled_sweep_gate,
     nonlinear_constitutive_point_sample_gate as mcp_constitutive_point_gate,
     nonlinear_magnetic_field_energy_parity_gate as mcp_nonlinear_parity_gate,
     nonlinear_constitutive_response_parity_gate as mcp_constitutive_parity_gate,
@@ -494,6 +496,90 @@ def test_constitutive_point_gate_reports_incomplete_H_coverage():
     assert result["checks"]["B_response_matches"] is False
 
 
+def _controlled_uniform_field_sweep_summary():
+    h_values = [10.0, 100.0, 1000.0, 10000.0, 100000.0]
+    b_values = [0.1, 0.5, 1.0, 1.7, 2.2]
+    source = {
+        "status": "accepted_as_constitutive_control",
+        "constitutive_control_ready": True,
+        "constitutive_oracle": False,
+        "checks": {
+            "all_case_evidence_valid": True,
+            "shared_material_table_identity": True,
+            "shared_excitation_identity": True,
+            "shared_result_database_identity": True,
+            "shared_region_identity": True,
+            "distinct_case_count_sufficient": True,
+            "distinct_H_count_sufficient": True,
+            "nonlinear_H_range_covered": True,
+            "mean_B_monotone_with_mean_H": True,
+        },
+        "identity": {
+            "canonical_table_sha256": "4" * 64,
+            "excitation_identity_sha256": "5" * 64,
+            "result_database_sha256": "6" * 64,
+            "case_set_sha256": "7" * 64,
+            "region_labels": ["Steel"],
+        },
+        "metrics": {
+            "valid_case_count": 5,
+            "distinct_H_count": 5,
+            "H_span_ratio": 10000.0,
+        },
+        "case_summaries": [
+            {
+                "case_index": index,
+                "mean_H_A_per_m": h_value,
+                "mean_B_T": b_value,
+                "accepted": True,
+            }
+            for index, (h_value, b_value) in enumerate(
+                zip(h_values, b_values), start=1
+            )
+        ],
+    }
+    candidate = {
+        "identity": {
+            "bh_table_sha256": "4" * 64,
+            "constitutive_interpolation": "piecewise_linear",
+            "constitutive_extrapolation": "vacuum_slope",
+        },
+        "H_A_per_m": h_values,
+        "B_T": b_values,
+    }
+    return {"source_control": source, "candidate": candidate}
+
+
+def test_controlled_uniform_field_sweep_accepts_bound_response_and_wraps_mcp():
+    summary = _controlled_uniform_field_sweep_summary()
+    result = controlled_uniform_field_constitutive_sweep_gate(summary)
+    assert result["status"] == "ok"
+    assert result["constitutive_control_parity_established"] is True
+    wrapped = json.loads(mcp_controlled_sweep_gate(json.dumps(summary)))
+    assert wrapped["status"] == "ok"
+
+
+def test_controlled_uniform_field_sweep_rejects_response_and_identity_drift():
+    summary = _controlled_uniform_field_sweep_summary()
+    summary["candidate"]["B_T"][1] *= 1.1
+    summary["candidate"]["identity"]["bh_table_sha256"] = "8" * 64
+    result = controlled_uniform_field_constitutive_sweep_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["B_response_matches"] is False
+    assert result["checks"]["material_table_identity_matches"] is False
+
+
+def test_controlled_uniform_field_sweep_rejects_uncontrolled_or_stale_source():
+    summary = _controlled_uniform_field_sweep_summary()
+    summary["source_control"]["constitutive_oracle"] = True
+    summary["source_control"]["checks"]["shared_result_database_identity"] = False
+    summary["source_control"]["identity"]["result_database_sha256"] = "stale"
+    result = controlled_uniform_field_constitutive_sweep_gate(summary)
+    assert result["checks"]["source_control_accepted"] is False
+    assert result["checks"]["source_claim_boundary_preserved"] is False
+    assert result["checks"]["source_identity_complete"] is False
+
+
 async def _probe_constitutive_gate_stdio():
     repo = Path(__file__).resolve().parents[3]
     environment = os.environ.copy()
@@ -532,19 +618,32 @@ async def _probe_constitutive_gate_stdio():
                     },
                 },
             )
+            sweep_called = await session.call_tool(
+                "radia_ngsolve_validation_run",
+                {
+                    "name": "controlled_uniform_field_constitutive_sweep_gate",
+                    "arguments": {
+                        "summary_json": json.dumps(
+                            _controlled_uniform_field_sweep_summary()
+                        )
+                    },
+                },
+            )
             return (
                 initialized.serverInfo.name,
                 tools,
                 json.loads(called.content[0].text),
                 json.loads(point_called.content[0].text),
+                json.loads(sweep_called.content[0].text),
             )
 
 
 def test_constitutive_response_gate_passes_real_stdio_protocol():
-    server_name, tools, result, point_result = asyncio.run(
+    server_name, tools, result, point_result, sweep_result = asyncio.run(
         asyncio.wait_for(_probe_constitutive_gate_stdio(), timeout=45)
     )
     assert server_name == "mcp-server-radia-ngsolve"
     assert "radia_ngsolve_validation_run" in tools
     assert result["status"] == "ok"
     assert point_result["status"] == "ok"
+    assert sweep_result["status"] == "ok"

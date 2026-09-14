@@ -930,6 +930,201 @@ def nonlinear_constitutive_point_sample_gate(
     }
 
 
+def controlled_uniform_field_constitutive_sweep_gate(
+    summary: dict[str, Any],
+    *,
+    max_response_relative_difference: float = 0.01,
+    min_response_samples: int = 5,
+) -> dict[str, Any]:
+    """Compare a bounded homogeneous-interior sweep with one B-H response.
+
+    The source input must already have passed an independent multicase gate
+    that binds every case to one material table, excitation, result database,
+    and material region. This admits recovered NODAL fields only as a
+    controlled experiment; it never promotes them to a general element-local
+    constitutive oracle.
+    """
+
+    if not isinstance(summary, dict):
+        raise ValueError("summary must be a mapping")
+    response_limit = float(max_response_relative_difference)
+    sample_limit = int(min_response_samples)
+    if not math.isfinite(response_limit) or response_limit < 0.0:
+        raise ValueError(
+            "max_response_relative_difference must be finite and nonnegative"
+        )
+    if sample_limit < 5:
+        raise ValueError("min_response_samples must be at least 5")
+
+    source = summary.get("source_control")
+    source = source if isinstance(source, dict) else {}
+    candidate = summary.get("candidate")
+    candidate = candidate if isinstance(candidate, dict) else {}
+    source_identity = source.get("identity")
+    source_identity = source_identity if isinstance(source_identity, dict) else {}
+    candidate_identity = candidate.get("identity")
+    candidate_identity = (
+        candidate_identity if isinstance(candidate_identity, dict) else {}
+    )
+    cases = source.get("case_summaries")
+    cases = cases if isinstance(cases, list) else []
+
+    def is_sha256(value: Any) -> bool:
+        text = str(value or "").lower()
+        return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
+
+    parsed_cases: list[tuple[float, float]] = []
+    case_schema_valid = bool(cases)
+    for case in cases:
+        if not isinstance(case, dict) or case.get("accepted") is not True:
+            case_schema_valid = False
+            break
+        try:
+            h_value = float(case["mean_H_A_per_m"])
+            b_value = float(case["mean_B_T"])
+        except (KeyError, TypeError, ValueError):
+            case_schema_valid = False
+            break
+        if not math.isfinite(h_value) or not math.isfinite(b_value) or h_value <= 0.0:
+            case_schema_valid = False
+            break
+        parsed_cases.append((h_value, b_value))
+
+    parsed_cases.sort()
+    source_h: list[float] = []
+    source_b: list[float] = []
+    duplicate_cases_consistent = True
+    for h_value, b_value in parsed_cases:
+        if source_h and math.isclose(
+            h_value, source_h[-1], rel_tol=1.0e-12, abs_tol=1.0e-12
+        ):
+            duplicate_cases_consistent = duplicate_cases_consistent and math.isclose(
+                b_value, source_b[-1], rel_tol=1.0e-9, abs_tol=1.0e-12
+            )
+            continue
+        source_h.append(h_value)
+        source_b.append(b_value)
+
+    try:
+        candidate_h = [float(value) for value in candidate.get("H_A_per_m", [])]
+        candidate_b = [float(value) for value in candidate.get("B_T", [])]
+    except (TypeError, ValueError):
+        candidate_h = []
+        candidate_b = []
+    candidate_valid = (
+        len(candidate_h) == len(candidate_b)
+        and len(candidate_h) >= sample_limit
+        and all(math.isfinite(value) for value in (*candidate_h, *candidate_b))
+        and all(right > left for left, right in zip(candidate_h, candidate_h[1:]))
+        and all(right >= left for left, right in zip(candidate_b, candidate_b[1:]))
+    )
+    grids_match = (
+        candidate_valid
+        and len(source_h) == len(candidate_h)
+        and all(
+            math.isclose(actual, expected, rel_tol=1.0e-12, abs_tol=1.0e-12)
+            for actual, expected in zip(source_h, candidate_h)
+        )
+    )
+    pointwise_relative_difference: list[float] = []
+    rms_relative_difference: float | None = None
+    if case_schema_valid and duplicate_cases_consistent and grids_match:
+        pointwise_relative_difference = [
+            abs(actual - expected) / max(abs(expected), 1.0e-300)
+            for actual, expected in zip(source_b, candidate_b)
+        ]
+        rms_relative_difference = math.sqrt(
+            sum((actual - expected) ** 2 for actual, expected in zip(source_b, candidate_b))
+            / max(sum(expected * expected for expected in candidate_b), 1.0e-300)
+        )
+
+    required_source_digests = (
+        source_identity.get("canonical_table_sha256"),
+        source_identity.get("excitation_identity_sha256"),
+        source_identity.get("result_database_sha256"),
+        source_identity.get("case_set_sha256"),
+    )
+    source_checks = source.get("checks")
+    source_checks = source_checks if isinstance(source_checks, dict) else {}
+    source_metrics = source.get("metrics")
+    source_metrics = source_metrics if isinstance(source_metrics, dict) else {}
+    try:
+        h_span_ratio = float(source_metrics.get("H_span_ratio", 0.0))
+    except (TypeError, ValueError):
+        h_span_ratio = 0.0
+    checks = {
+        "source_control_accepted": (
+            source.get("status") == "accepted_as_constitutive_control"
+            and source.get("constitutive_control_ready") is True
+            and source_checks
+            and all(value is True for value in source_checks.values())
+        ),
+        "source_claim_boundary_preserved": source.get("constitutive_oracle") is False,
+        "source_identity_complete": all(is_sha256(value) for value in required_source_digests)
+        and isinstance(source_identity.get("region_labels"), list)
+        and bool(source_identity.get("region_labels")),
+        "source_case_schema_valid": case_schema_valid,
+        "duplicate_cases_consistent": duplicate_cases_consistent,
+        "source_nonlinear_range_sufficient": len(source_h) >= sample_limit
+        and h_span_ratio >= 100.0,
+        "candidate_response_valid": candidate_valid,
+        "material_table_identity_matches": (
+            is_sha256(candidate_identity.get("bh_table_sha256"))
+            and source_identity.get("canonical_table_sha256")
+            == candidate_identity.get("bh_table_sha256")
+        ),
+        "candidate_grid_matches_source_control": grids_match,
+        "B_response_matches": bool(pointwise_relative_difference)
+        and max(pointwise_relative_difference) <= response_limit,
+    }
+    return {
+        "policy": "controlled_uniform_field_constitutive_sweep_gate_v1",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "checks": checks,
+        "issues": [name for name, accepted in checks.items() if not accepted],
+        "comparison_performed": bool(pointwise_relative_difference),
+        "constitutive_control_parity_established": all(checks.values()),
+        "metrics": {
+            "source_case_count": len(parsed_cases),
+            "distinct_H_count": len(source_h),
+            "H_span_ratio": h_span_ratio,
+            "max_B_relative_difference": (
+                max(pointwise_relative_difference)
+                if pointwise_relative_difference
+                else None
+            ),
+            "rms_B_relative_difference": rms_relative_difference,
+        },
+        "identity": {
+            "canonical_table_sha256": source_identity.get(
+                "canonical_table_sha256"
+            ),
+            "excitation_identity_sha256": source_identity.get(
+                "excitation_identity_sha256"
+            ),
+            "result_database_sha256": source_identity.get(
+                "result_database_sha256"
+            ),
+            "case_set_sha256": source_identity.get("case_set_sha256"),
+            "candidate_interpolation": candidate_identity.get(
+                "constitutive_interpolation"
+            ),
+            "candidate_extrapolation": candidate_identity.get(
+                "constitutive_extrapolation"
+            ),
+        },
+        "tolerances": {
+            "response_relative_difference": response_limit,
+            "minimum_response_samples": sample_limit,
+        },
+        "notes": [
+            "acceptance applies only to the identity-bound homogeneous-interior multicase control",
+            "recovered NODAL fields remain unsuitable as a general element-local material-law oracle",
+            "a failed response check identifies interpolation or solve-response mismatch without assigning either implementation as ground truth",
+        ],
+    }
+
+
 def nonlinear_magnetic_spatial_evidence_gate(
     summary: dict[str, Any],
     *,
