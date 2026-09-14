@@ -56,6 +56,7 @@ from calc_heat import (  # noqa: E402
     _boundary_role_audit,
     _resolve_boundary_role,
     _resolve_material,
+    _input_mesh_geometry_audit,
     _temperature_extrema,
     _validate_qsurf_transfer_order,
 )
@@ -255,10 +256,15 @@ def solve_heat_axisym(wp_vol,
                 f"ONLY, but --wp-vol {os.path.basename(wp_vol)} has "
                 f"{len(_wp_mats)} material regions {_wp_mats}.  Use a "
                 f"workpiece-only (r, z) mesh -- a single region."}
-    wp_mesh.Curve(int(fes_order))
+    try:
+        mesh_geometry = _input_mesh_geometry_audit(wp_mesh, fes_order)
+    except ValueError as exc:
+        return {"error": str(exc)}
     _log(f"MESH:loaded {os.path.basename(wp_vol)} "
          f"materials={list(wp_mesh.GetMaterials())} "
-         f"boundaries={list(wp_mesh.GetBoundaries())}")
+         f"boundaries={list(wp_mesh.GetBoundaries())} "
+         f"geometry_order={mesh_geometry['input_curve_order']} "
+         f"field_order={fes_order} (input geometry preserved)")
 
     try:
         heat_flux_selector, heat_flux_names = _resolve_boundary_role(
@@ -539,6 +545,7 @@ def solve_heat_axisym(wp_vol,
         "ndof": int(fes_T.ndof),
         "ne": int(wp_mesh.ne),
         "fes_order": int(fes_order),
+        "mesh_geometry": mesh_geometry,
         "n_phi_samples": int(n_phi_samples),
         "material": material,
         "rho_kg_m3": float(rho_v),
