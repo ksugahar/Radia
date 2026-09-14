@@ -11,8 +11,6 @@ Public docs/notebooks:
     induction-heating entry point with saved outputs and JSON sidecar.
   - docs/induction_heating/induction_heating_demo_showcase.ipynb -- saved
     promotion notebook for the closed public ESIM/WPT/RWG demo scripts.
-  - docs/induction_heating/induction_heating_examples_catalog.ipynb -- full
-    source/hash catalog for IH docs/API/validation migration lanes.
   - docs/ih_esim_benchmark/esim_showcase.ipynb -- nonlinear ESIM benchmark
     figures/results.
 

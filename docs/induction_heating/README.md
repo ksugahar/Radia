@@ -11,20 +11,11 @@ Start with the public result-saved notebook:
 - `public_demo_results.json`
 - `public_demo_result.json`
 
-The full source/hash catalog is:
-
-- `induction_heating_examples_catalog.ipynb`
-- `induction_heating_examples_catalog_results.json`
-- `induction_heating_examples_catalog_result.json`
-
 The closed public demo showcase is:
 
 - `induction_heating_demo_showcase.ipynb`
 - `induction_heating_demo_showcase_results.json`
 - `induction_heating_demo_showcase_result.json`
-
-The catalogs store source hashes, route decisions, existing result/media
-artifact hashes, protected references, and the final migration lane.
 
 ## Current Routing
 

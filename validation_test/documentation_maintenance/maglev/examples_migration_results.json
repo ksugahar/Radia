@@ -7,7 +7,7 @@
     "platform": "Windows-2022Server-10.0.20348-SP0"
   },
   "source_root": "examples/maglev",
-  "notebook": "docs/maglev/examples_migration.ipynb",
+  "notebook": "validation_test/documentation_maintenance/maglev/examples_migration.ipynb",
   "notebook_sha256": "934f5c3ec9db03182c5af81b12b1c6460ab75e2abab3bae066f6eaf4807ab423",
   "policy": {
     "source_archived_before_prune": true,

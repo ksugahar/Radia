@@ -1,7 +1,7 @@
 {
   "schema": "radia.notebook_result.v1",
   "generated_at_utc": "2026-06-27T04:02:20Z",
-  "notebook": "docs/kelvin/kelvin_examples_migration.ipynb",
+  "notebook": "validation_test/documentation_maintenance/kelvin/kelvin_examples_migration.ipynb",
   "notebook_sha256": "6d608f6bde0036da3e044a71765814dd92953ee289a3692796d8ba86d60008eb",
   "versions": {
     "python_version": "3.12.10",
@@ -11,7 +11,7 @@
     "radia_version": "4.95.2"
   },
   "summary": {
-    "path": "docs/kelvin/kelvin_examples_migration.ipynb",
+    "path": "validation_test/documentation_maintenance/kelvin/kelvin_examples_migration.ipynb",
     "cells": 5,
     "code_cells": 3,
     "executed_code_cells": 3,

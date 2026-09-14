@@ -1,7 +1,7 @@
 {
   "schema": "radia.notebook_result.v1",
   "generated_at_utc": "2026-06-29T06:43:29Z",
-  "notebook": "docs/ngsolve_integration/migration_catalog.ipynb",
+  "notebook": "validation_test/documentation_maintenance/ngsolve_integration/migration_catalog.ipynb",
   "notebook_sha256": "57913eddff88516e3232117ec1d9a6c699176b90d1182cb6be928ce87faeeed3",
   "versions": {
     "python_version": "3.12.10",
@@ -11,7 +11,7 @@
     "radia_version": "4.95.2"
   },
   "summary": {
-    "path": "docs/ngsolve_integration/migration_catalog.ipynb",
+    "path": "validation_test/documentation_maintenance/ngsolve_integration/migration_catalog.ipynb",
     "cells": 4,
     "code_cells": 3,
     "executed_code_cells": 3,

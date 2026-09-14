@@ -7,7 +7,7 @@
     "platform": "Windows-2022Server-10.0.20348-SP0"
   },
   "source_root": "examples/clebsch_hodograph",
-  "notebook": "docs/clebsch_hodograph/examples_migration.ipynb",
+  "notebook": "validation_test/documentation_maintenance/clebsch_hodograph/examples_migration.ipynb",
   "notebook_sha256": "f53a95a3cb009e262995acd9d874562b28c31b61e5b6b63b8180b739e215c7ae",
   "policy": {
     "source_archived_before_prune": true,
