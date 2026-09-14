@@ -280,26 +280,27 @@ V1 in 0 PULSE(0 1 0 1n 1n 100m 200m)
     return full_netlist
 
 
-def load_battery_data():
+def load_battery_data(data_path=None):
     """
-    Load the bundled NASA battery EIS measurement.
+    Load caller-owned NASA battery EIS data with a documented frequency axis.
 
     Returns:
         (freq, Z, data_source) tuple
     """
-    data_path = (
+    import os
+    data_path = Path(data_path or os.environ.get('RADIA_NASA_EIS_CSV') or (
         Path(__file__).parent / 'data' / 'real_world' / 'nasa_battery'
         / 'nasa_18650_eis.csv'
-    )
+    ))
     if not data_path.exists():
-        raise FileNotFoundError(f"NASA battery EIS data not found: {data_path}")
+        raise FileNotFoundError(f"Private NASA battery EIS data not found: {data_path}; set RADIA_NASA_EIS_CSV")
 
     header = data_path.read_text(encoding='utf-8')
     if not any(line.startswith('#   Frequency source: ') and
                line.partition(': ')[2].strip() for line in header.splitlines()):
         raise ValueError('NASA frequency axis is unverified; regenerate with '
                          'extract_real_eis.py and a sample-aligned instrument record. '
-                         'The bundled logspace axis is not measurement evidence.')
+                         'A model-assigned logspace axis is not measurement evidence.')
     print(f"  Loading documented NASA battery data: {data_path.name}")
     rows = [line for line in header.splitlines() if line.strip() and not line.startswith('#')]
     data = np.genfromtxt(rows, delimiter=',', names=True)
