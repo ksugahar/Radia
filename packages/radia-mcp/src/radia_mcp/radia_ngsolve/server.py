@@ -43,6 +43,7 @@ _nonlinear_magnetic_refinement_energy_gate = lazy_callable(".field_profile_gate"
 _nonlinear_magnetic_field_energy_parity_gate = lazy_callable(".field_profile_gate", "nonlinear_magnetic_field_energy_parity_gate", __package__)
 _nonlinear_constitutive_response_parity_gate = lazy_callable(".field_profile_gate", "nonlinear_constitutive_response_parity_gate", __package__)
 _nonlinear_constitutive_point_sample_gate = lazy_callable(".field_profile_gate", "nonlinear_constitutive_point_sample_gate", __package__)
+_controlled_uniform_field_constitutive_sweep_gate = lazy_callable(".field_profile_gate", "controlled_uniform_field_constitutive_sweep_gate", __package__)
 _symmetric_complex_field_curve_gate = lazy_callable(".field_profile_gate", "symmetric_complex_field_curve_gate", __package__)
 _symmetric_axial_field_profile_gate = lazy_callable(".field_profile_gate", "symmetric_axial_field_profile_gate", __package__)
 _helmholtz_double_layer_low_frequency_gate = lazy_callable(".acoustic_kernel_gate", "helmholtz_double_layer_low_frequency_gate", __package__)
@@ -2443,6 +2444,29 @@ def nonlinear_constitutive_point_sample_gate(
     except (TypeError, ValueError, json.JSONDecodeError) as exc:
         result = {
             "policy": "nonlinear_constitutive_point_sample_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@_validation.tool()
+def controlled_uniform_field_constitutive_sweep_gate(
+    summary_json: str,
+    max_response_relative_difference: float = 0.01,
+    min_response_samples: int = 5,
+) -> str:
+    """Compare one identity-bound homogeneous B-H sweep with a candidate response."""
+
+    try:
+        result = _controlled_uniform_field_constitutive_sweep_gate(
+            json.loads(summary_json),
+            max_response_relative_difference=max_response_relative_difference,
+            min_response_samples=min_response_samples,
+        )
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        result = {
+            "policy": "controlled_uniform_field_constitutive_sweep_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
