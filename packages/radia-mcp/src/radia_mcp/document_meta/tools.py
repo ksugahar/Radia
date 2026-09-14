@@ -533,12 +533,18 @@ def _iter_notebooks(scan_root: pathlib.Path,
                     include_gitignored: bool,
                     tracked_only: bool = False):
     tracked = _tracked_notebook_set(repo_root, scan_root) if tracked_only else None
-    for p in sorted(scan_root.rglob("*.ipynb")):
+    if tracked is not None:
+        candidates = [repo_root / rel for rel in sorted(tracked)]
+    else:
+        candidates = sorted(scan_root.rglob("*.ipynb"))
+    for p in candidates:
         if {part.lower() for part in p.parts} & _AUDIT_SKIP_PARTS:
             continue
-        if tracked is not None and _rel(p, repo_root) not in tracked:
-            continue
-        if not include_gitignored and _is_git_ignored(p, repo_root):
+        # A path returned by ``git ls-files`` is tracked by definition, so it
+        # cannot be excluded by an ignore rule.  Avoid one ``git check-ignore``
+        # subprocess per notebook; that is especially costly on network
+        # worktrees and can exceed an MCP call timeout.
+        if tracked is None and not include_gitignored and _is_git_ignored(p, repo_root):
             continue
         yield p
 
@@ -1036,7 +1042,8 @@ def document_meta_notebook_citation_audit(
             ),
             "gaps": gap_count,
         },
-        "rows": rows,
+        "rows": rows[:max_items],
+        "rows_truncated": len(rows) > max_items,
         "gaps": gaps,
         "gaps_truncated": gap_count > len(gaps),
     }
