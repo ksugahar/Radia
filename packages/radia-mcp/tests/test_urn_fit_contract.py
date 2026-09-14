@@ -13,7 +13,7 @@ from radia_mcp.radia_ngsolve.knowledge import urn
 @pytest.mark.parametrize("freqs,z,options", [
     ([], [], {}), ([1], [1j], {}), ([[1, 2]], [[1j, 2j]], {}),
     ([1, 2], [1j], {}), ([0, 2], [1j, 2j], {}),
-    ([1, 1], [1j, 2j], {}), ([1, float('nan')], [1j, 2j], {}),
+    ([-1, 2], [1j, 2j], {}), ([1, float('nan')], [1j, 2j], {}),
     ([1, 2], [1j, complex('inf')], {}), ([1, 2], [0, 0], {}),
     ([1, 2], [1j, 2j], {'n_epochs': 0}),
     ([1, 2], [1j, 2j], {'n_restarts': 1.5}),
@@ -68,13 +68,13 @@ def test_csv_routes_to_legacy_model_and_only_writes_real_netlist(tmp_path, monke
     monkeypatch.setitem(sys.modules, 'radia.urn', backend)
     monkeypatch.setitem(sys.modules, 'torch', SimpleNamespace(tensor=np.asarray, float64=np.float64))
     source, output = tmp_path/'input.csv', tmp_path/'out.cir'
-    source.write_text('f,re,im\n2,4,6\n1,3,5\n', encoding='utf-8')
+    source.write_text('f,re,im\n2,4,6\n1,3,5\n1,3.1,5.1\n', encoding='utf-8')
     if export_fails:
         output.write_text('existing circuit', encoding='utf-8')
     report = urn.urn_fit_from_csv(source, skip_rows=1, spice_out=output)
     assert calls[0][2]['n_debye'] == 3
-    np.testing.assert_array_equal(calls[0][0], [2, 1])  # No unrequested reordering.
-    np.testing.assert_array_equal(calls[0][1], [4+6j, 3+5j])
+    np.testing.assert_array_equal(calls[0][0], [2, 1, 1])  # Keep order and repeated observations.
+    np.testing.assert_array_equal(calls[0][1], [4+6j, 3+5j, 3.1+5.1j])
     assert 'not maximum error' in report
     assert 'not uniquely identified physical parts' in report
     if export_fails:

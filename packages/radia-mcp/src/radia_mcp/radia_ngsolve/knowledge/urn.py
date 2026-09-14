@@ -390,8 +390,8 @@ def run_urn_fit(freqs, Z, n_debye=3, n_cole_cole=2, n_warburg=1,
     Z = np.asarray(Z, dtype=complex)
     if freqs.ndim != 1 or Z.ndim != 1 or freqs.shape != Z.shape or freqs.size < 2:
         raise ValueError("freqs and Z must be aligned one-dimensional arrays with at least two samples")
-    if not np.all(np.isfinite(freqs) & (freqs > 0)) or np.unique(freqs).size != freqs.size:
-        raise ValueError("frequencies must be finite, positive and unique (Hz)")
+    if not np.all(np.isfinite(freqs) & (freqs > 0)):
+        raise ValueError("frequencies must be finite and positive (Hz)")
     if not np.all(np.isfinite(Z)) or not np.any(np.abs(Z) > 0):
         raise ValueError("Z must be finite and not identically zero")
     counts = [_integer_option(v, k) for k, v in (
