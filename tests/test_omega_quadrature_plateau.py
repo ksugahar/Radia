@@ -1,6 +1,7 @@
 import copy
 import importlib.util
 import json
+import hashlib
 from pathlib import Path
 
 
@@ -8,6 +9,22 @@ PATH = Path(__file__).resolve().parents[1] / "validation_test/omega_quadrature/a
 SPEC = importlib.util.spec_from_file_location("omega_plateau", PATH)
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
+
+
+def test_ci_candidate_bonus12_16_replays_recorded_evidence():
+    root = PATH.parents[1] / "esrf_three_engine/results/candidate_59b094d8"
+    raw = root / "omega_algebraic_bonus12_16.json"
+    report = root / "omega_plateau_bonus12_16.json"
+    assert hashlib.sha256(raw.read_bytes()).hexdigest() == (
+        "7cc8befa4eeb1f7ae056c816e2c36da5e07ce58bc36e99a0af7a65c8b343ca15")
+    assert hashlib.sha256(report.read_bytes()).hexdigest() == (
+        "fa1577ebf844f56e81ae68362756ae84e88301a00146fbe5b2b7506df6a99a18")
+    payload = json.loads(raw.read_text(encoding="utf-8"))
+    wheel = payload["runtime"]["direct_url"]["archive_info"]["hashes"]["sha256"]
+    assert wheel == "46e3aa1ddd89010e21419e1d28f6e44e403cf95014d7e5486109eca4232145b9"
+    result = MODULE.assess(payload, 12, 16)
+    assert result == json.loads(report.read_text(encoding="utf-8"))
+    assert result["passed"] is True
 
 
 def payload(delta=1e-5):
