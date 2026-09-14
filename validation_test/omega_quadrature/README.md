@@ -33,6 +33,9 @@ scaled by the high-rule global field RMS <= 5e-3, Hodge harmonic-norm change
 times tighter than the separate 3% three-formulation gate. Passing closes only
 this model's matched Hodge/assembly high-rule plateau; it does not promote
 BDM2, IMA, evaluation-energy bounds, or other applications.
+If 8-to-12 misses any threshold, keep every threshold fixed and rerun the next
+adjacent high-rule pair (12-to-16 via `--low-bonus 12 --high-bonus 16`); never
+relax a limit after observing the result.
 
 Example (paths refer to the compute host):
 
