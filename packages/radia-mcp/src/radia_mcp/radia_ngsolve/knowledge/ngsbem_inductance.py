@@ -35,22 +35,50 @@ Key operators:
 For inductance extraction at DC to ~1 MHz, **LaplaceSL is sufficient**
 (MQS/Darwin regime). No Helmholtz kernel needed.
 
-### CAVEAT: closed-surface LaplaceSL inductance is rank-deficient on dense meshes (verified)
+### CAVEAT: coefficient-space excitation is not a physical current constraint
 
-The `L = 1/(e^T L^{-1} e)` total-inductance extraction on a **closed** conductor
-surface (e.g. a torus) is **numerically unreliable as the surface mesh is refined**:
-the `LaplaceSL` Gram matrix becomes rank-deficient on dense closed-surface meshes
-(ngbem surface-integration on closed surfaces), and the inductance error blows up.
-Measured on circular loops (Neumann reference `L = mu_0 R (ln(8R/a) - 2)`):
-coarse mesh (`curvaturesafety=0.5`, ~89 tris) gave ~+15%, but refined meshes hit
-"Rank-deficient matrix (714/715)" and errors of **-9% to -66%**. **Do NOT fix this
-by refining the triangulation** -- it makes it worse. Mitigations: keep the mesh
-coarse, use **p-refinement** (`order>0`) or **quad elements** (from Cubit), or --
-preferred for inductance -- use the **Radia PEEC filament/panel extractor**
-(`radia.peec_*`, Neumann-formula based) which does not have this closed-surface
-rank-deficiency. (Verified 2026-06-27; rendered in
-`docs/bem_extractor/bem_inductance_limitations.ipynb`.
-This is a negative/limitation result, kept as knowledge.)
+The legacy torus extraction `L = 1/(e.T @ solve(A,e))`, `e=ones/n`, is not
+validated as a loop-current functional, even for RT0. Reversing basis signs
+requires transforming both A and e; keeping ones/n changes the represented
+physical constraint. A 2026-09-14 NGSolve 6.2.2606 coarse-torus diagnostic found
+rank 269/269, no zero columns, and 172.779 nH versus 115.106 nH after alternating
+basis signs with an unchanged e. Transforming e covariantly preserved 172.779 nH.
+The matrix also had relative asymmetry 0.0522; investigate quadrature separately.
+See `validation_test/bem/closed_torus_diagnostic.json` and its executable driver.
+
+This does not establish a universal closed-surface nullspace. Historical refined
+mesh warnings remain observations, not proof that refinement is harmful or that
+p-refinement/quads fix the cause. Specify physical current/port constraints and
+current conservation, inspect active DOFs, rank, symmetry and quadrature, then
+test convergence. The thin-wire expression with constant -2 is an asymptotic
+external-inductance reference, not a finite-wire DC reference with internal
+inductance. Do not certify this extractor by matching it with arbitrary excitation.
+
+### Validated closed-torus current route (2026-09-14)
+
+Use `validation_test/bem/validate_torus_current_constraint.py` for the bounded
+magnetostatic surface-current model. It assembles NGSolve surface divergence D
+and the physical functional c(J) = integral J.grad(phi)/(2*pi) dS. On a closed
+torus with div_surface J=0 this equals the current across a meridional cut.
+Minimize magnetic energy subject to D J=0 and c(J)=1 A; do not use ones/n.
+Select active DOFs through boundary-element GetDofNrs before dense algebra:
+the volume mesh's interior edges are not surface-current unknowns. Reject a
+mesh whose divergence-free space cannot resolve the toroidal current.
+The reduced operator's relative asymmetry must be at most 1e-6; solve its
+symmetric part only after Cholesky confirms positive definiteness, and require
+a relative KKT residual below 1e-10. This is an explicit quadrature
+symmetrization, not an assumption that an arbitrary Galerkin matrix is an energy.
+
+NGSolve 6.2.2606 results at curvaturesafety 0.65/0.8/1.0 were
+159.672/155.914/152.603 nH (513/693/1203 active boundary DOFs).
+Surface-area errors were -9.76/-6.64/-3.90 percent, so these are explicitly
+flat-mesh convergence results, not exact-geometry certification. Raising
+bonus_intorder from 4 to 8 at the first mesh changed L by 5.63e-9 relative;
+current conservation and basis-sign covariance passed. The finest result is
+about 1.96 percent above the thin-wire asymptotic external-inductance estimate.
+This does not validate finite-frequency/resistive ports, internal inductance,
+other topologies, or the historical coefficient-ones extractor. The executable
+driver and `validation_test/bem/torus_current_cs*_q*.json` own the evidence.
 
 ## When to Use ngsolve.bem
 

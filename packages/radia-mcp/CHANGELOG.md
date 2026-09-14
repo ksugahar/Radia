@@ -7,6 +7,11 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- Cubit: make every MCP-driven operation headless, reserve GUI execution for
+  the separately scoped release GUI test, and compare human journals against
+  Cubit's actual `record "file"` output. Native recording retains APREPRO
+  definitions and all execution payloads now report the single `gui_started`
+  field.
 - matrix_solvers: withdraw the unevidenced claim that CompactAMG and
   CompactAMS reach 25 iterations on mesh1_3.5T and match HYPRE. No HYPRE
   comparison is stored in the repository, and the same mesh measures 130-168

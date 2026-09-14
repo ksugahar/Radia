@@ -1,0 +1,23 @@
+\begin{thebibliography}{1}
+
+\bibitem{gustavsen1999rational}
+Bjorn {Gustavsen} and Adam {Semlyen}.
+\newblock Rational approximation of frequency domain responses by vector
+  fitting.
+\newblock {\em IEEE Transactions on Power Delivery}, 14(3):1052--1061, 1999.
+
+\bibitem{nasa_battery}
+{NASA Prognostics Center of {Excellence}}.
+\newblock Li-ion battery aging datasets.
+\newblock \url{https://data.nasa.gov/dataset/li-ion-battery-aging-datasets},
+  2024.
+\newblock Accessed: 2025-01-19.
+
+\bibitem{tdk_ferrite}
+{TDK {Corporation}}.
+\newblock Mn-zn ferrite material characteristics.
+\newblock Datasheet, may 2022.
+\newblock Document No. ferrite\_mn-zn\_material\_characteristics\_en, Rev.
+  20220510. Available: \url{https://www.tdk-electronics.tdk.com/}.
+
+\end{thebibliography}

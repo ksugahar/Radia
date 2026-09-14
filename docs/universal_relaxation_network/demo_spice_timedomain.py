@@ -294,12 +294,23 @@ def load_battery_data():
     if not data_path.exists():
         raise FileNotFoundError(f"NASA battery EIS data not found: {data_path}")
 
-    print(f"  Loading REAL NASA battery data: {data_path.name}")
-    import pandas as pd
-    df = pd.read_csv(data_path, comment='#')
-    freq = df['frequency_Hz'].values
-    Z = df['Z_real_Ohm'].values + 1j * df['Z_imag_Ohm'].values
-    return freq, Z, "NASA 18650 (REAL)"
+    header = data_path.read_text(encoding='utf-8')
+    if not any(line.startswith('#   Frequency source: ') and
+               line.partition(': ')[2].strip() for line in header.splitlines()):
+        raise ValueError('NASA frequency axis is unverified; regenerate with '
+                         'extract_real_eis.py and a sample-aligned instrument record. '
+                         'The bundled logspace axis is not measurement evidence.')
+    print(f"  Loading documented NASA battery data: {data_path.name}")
+    rows = [line for line in header.splitlines() if line.strip() and not line.startswith('#')]
+    data = np.genfromtxt(rows, delimiter=',', names=True)
+    freq = data['frequency_Hz']
+    if (np.ndim(freq) != 1 or len(freq) < 2 or not np.isfinite(freq).all()
+            or np.any(freq <= 0) or len(np.unique(freq)) != len(freq)
+            or not np.isfinite(data['Z_real_Ohm']).all()
+            or not np.isfinite(data['Z_imag_Ohm']).all()):
+        raise ValueError('EIS requires at least two unique positive finite frequencies and finite impedances')
+    Z = data['Z_real_Ohm'] + 1j * data['Z_imag_Ohm']
+    return freq, Z, "NASA 18650 (documented axis)"
 
 
 def load_ferrite_data():

@@ -5,14 +5,24 @@ fix 2026-06-20):** a 6-stage Cauer Ladder Network (CLN) reduced model
 reproduces the **TEAM Problem 28 electrodynamic-levitation Lorentz force vs
 height** with max |CLN - repo full-FEM| = 1.2e-6 N over the sweep.  The max
 |CLN - independent reference curve| is 4.7e-4 N,
-and the physically-correct levitation equilibrium (where the time-averaged
+and the model levitation equilibrium (where the time-averaged
 lift equals the disk weight 1.055 N) lands at **absolute disk-bottom height
 z = 11.0 mm** -- matching the **published measured steady-state levitation
-height z = 11.5 mm** (Karl, Fetzer, Kurz, Lehner, Rucker -- the official
-TEAM 28 definition; laser triangulation, 4-measurement average) to **4%**.
+height z = 11.3 mm** (Karl, Fetzer, Kurz, Lehner, Rucker -- the official
+TEAM 28 definition; laser triangulation, 4-measurement average) to approximately **3%**.
 TEAM 28 is a genuinely **high-Rm** levitation problem (Rm ~ 57 at the in-plane
 current-loop scale R), so the lift IS the eddy reaction -- exactly the regime
 where the CLN earns its keep.
+
+**Reference correction (2026-09-14).** The current official specification,
+[Model A, sections II-III and Figure 2](https://www.compumag.org/jsite/images/stories/TEAM/problem28.pdf),
+states 11.3 mm, not the formerly quoted 11.5 mm. The latter occurs at transient
+samples in Table I but is not the stated stationary reference. Parameters and
+the height datum are recorded in `validation_test/maglev/team28_reference.json` and checked against
+the executable model. The official mass is 0.107 kg; the historical sweep's
+1.055 N weight is retained as an explicit model difference. Its committed JSON
+and figure predate this correction and are not regenerated evidence. A match
+to a stationary height does not certify the transient trajectory.
 
 **Prior art (NOT a first -- this is an open reproduction).**  The lab already
 published CLN-on-TEAM-28 levitation: K. Sugahara, N. Tanimoto, Y. Takahashi,
@@ -27,14 +37,14 @@ and in `radia_iem_fem` builds on.  THIS example is the **open, pip-installable,
 NGSolve + golden-tested reproduction** of (a frequency-domain slice of) that
 result -- valuable as a reproducible open artifact, not as a first.
 
-> **Force-convention note (the bug the published 11.5 mm caught).**  The
+> **Force-convention note (the bug the published 11.3 mm caught).**  The
 > reported `F_z` (and the lab `.mat` `Fz1`) is the verbatim TEAM 28 surface
 > integral `Re[B_r J_t]`, which is EXACTLY **2x** the physical time-averaged
 > Lorentz force `<f_z> = -(1/2) Re[J_t conj(B_r)]` (verified ratio 1.9998).
 > The disk floats where the PHYSICAL lift == weight, i.e. `F_z/2 == 1.055 N`.
 > An earlier version balanced the 2x integral against the 1x weight and
 > reported a spurious equilibrium at dZ=+4.1 mm (absolute 14.9 mm) -- ABOVE the
-> measured 11.5 mm, which is unphysical.  Comparing to the **published** height
+> measured 11.3 mm, which is unphysical.  Comparing to the **published** height
 > surfaced it; the equilibrium now uses `F_z/2` and lands at 11.0 mm.  The
 > force-CONVERGENCE story (CLN vs full-FEM at a fixed height) is
 > convention-independent and unaffected -- the golden still locks
@@ -251,7 +261,7 @@ isomorphic H-matrix.
 |---|---|
 | `team28_axisym_fem.py` | Repo-clean port of the lab full-FEM axisymmetric TEAM 28 solve (mixed phi-B + anisotropic-nu infinite shell). Reproduces the lab `.mat` force to **0.01%** at dZ=0. The ground-truth baseline. |
 | `team28_cln_force.py`  | CLN/Cauer reduction at one height: builds K, N, F, shows the N-stage CLN force converging to full-FEM (golden). |
-| `team28_cln_sweep.py`  | CLN force **vs height**, compared to the lab full-FEM `Fz1(dZ)`; recovers the physical levitation equilibrium (`F_z/2 == weight`) at absolute z ~ 11.0 mm (published 11.5 mm). |
+| `team28_cln_sweep.py`  | CLN force **vs height**, compared to the lab full-FEM `Fz1(dZ)`; recovers the physical levitation equilibrium (`F_z/2 == weight`) at absolute z ~ 11.0 mm (published 11.3 mm). |
 | `validation_test/maglev/team28_hcurl_eddy_bubble.py` | Recomputes the p=6 face/cycle/SIBC policy and locks the existing 25-position full-FEM/CLN force curve as the acceptance target for the 3-D HCurl-VIM route. |
 | `validation_test/maglev/team28_hcurl_vim_force.py` | Builds the p=6 3-D HCurl parent, applies topology-aware Eddy Bubble reduction, assembles the epsilon-free analytic tetrahedron VIM interaction, and verifies Lorentz force on three meshes plus an outer-quadrature check. |
 | `cln_sibc_cuboid_3d.py` | Python port of the lab CLN-SIBC (Mixed Galerkin rank-(1,1) specialization) 3D cuboid core: Foster admittance + CLN reduction + Schur SIBC termination + polarizability `alpha(s)=V-Y/sigma`. The non-axisym building block. |
@@ -443,7 +453,7 @@ is `~6e-6`, negligible) -- a pure convention factor, not the dipole error.
   Electrodynamic Levitation Device", Inst. f. Theorie der Elektrotechnik,
   Univ. Stuttgart.  Official spec: Al disk R=65mm, t=3mm, m=0.107 kg; inner
   coil 960 t, outer 576 t, counter-wound; `i_hat = 20 A` peak, `f = 50 Hz`;
-  rest height z=3.8mm, **measured stationary levitation height z=11.5 mm**
+  rest height z=3.8mm, **measured stationary levitation height z=11.3 mm**
   (laser triangulation, 4-measurement average, Table I).  PDF in the lab
   corpus `05_TEAM_benchmark/23_problem28/`.
 - Geometry + full-FEM ground truth: lab learning material
@@ -467,7 +477,7 @@ is `~6e-6`, negligible) -- a pure convention factor, not the dipole error.
 ```bash
 python team28_axisym_fem.py      # full-FEM baseline  -> -2.1925 N @ dZ=0
 python team28_cln_force.py       # CLN convergence    -> 5-stage golden
-python team28_cln_sweep.py       # CLN force vs height -> physical equilib z~11.0mm (pub 11.5mm)
+python team28_cln_sweep.py       # CLN force vs height -> physical equilib z~11.0mm (pub 11.3mm)
 python validation_test/maglev/team28_hcurl_eddy_bubble.py  # run from repo root
 python cln_sibc_cuboid_3d.py     # CLN-SIBC 3D cuboid core (alpha, Schur-F)
 python maglev_sphere_force.py  # isotropic levitation force, coeff pinned

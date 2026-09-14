@@ -1,0 +1,9 @@
+\begin{thebibliography}{1}
+
+\bibitem{ngsolve}
+J.~{Sch{\"o}berl}.
+\newblock {C++11} implementation of finite elements in {NGSolve}.
+\newblock Technical Report ASC Report 30/2014, Institute for Analysis and
+  Scientific Computing, Vienna University of Technology, 2014.
+
+\end{thebibliography}

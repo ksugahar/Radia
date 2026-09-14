@@ -573,8 +573,8 @@ def iso_stl_from_grid(mesh, nodal, out_stl, *, level=0.5, resolution=64,
                       target_faces=0):
     """Marching-cubes STL of the nodal density at ``level``.
 
-    The nodal field is resampled onto a regular grid by nearest-VERTEX
-    lookup; grid points farther than ``cutoff_factor`` x (median edge
+    The nodal field is linearly interpolated onto a regular grid; grid
+    points farther than ``cutoff_factor`` x (median edge
     length) from every mesh vertex read as void, which closes the surface
     at (approximately) the design-domain boundary.  This route therefore
     blurs the domain boundary by O(grid spacing + h) -- the Cubit
@@ -583,8 +583,9 @@ def iso_stl_from_grid(mesh, nodal, out_stl, *, level=0.5, resolution=64,
 
     The raw marching-cubes surface is welded, degenerate faces are dropped,
     normals are made outward-consistent, and an optional Taubin smoothing
-    pass (``smooth_iterations`` <= 5; volume drift is measured and
-    reported) is applied.  Raises if the result is not watertight.
+    sequence (``smooth_iterations`` <= 5 counts alternating shrink/dilate
+    passes, not pairs; an odd count ends with shrinkage; volume drift is
+    measured and reported) is applied. Raises if the result is not watertight.
 
     ``target_faces > 0`` additionally quadric-decimates the surface to
     about that face count (requires ``fast-simplification``).  This is
@@ -702,7 +703,9 @@ def iso_stl_from_grid(mesh, nodal, out_stl, *, level=0.5, resolution=64,
         raise RuntimeError("iso_stl_from_grid: extracted surface has zero or "
                            "non-finite volume")
     if smooth_iterations:
-        tri_smoothing.filter_taubin(m, lamb=0.5, nu=-0.53,
+        # Trimesh subtracts nu during dilation: unlike signed lambda/mu
+        # notation, its dilation coefficient must be positive.
+        tri_smoothing.filter_taubin(m, lamb=0.5, nu=0.53,
                                     iterations=smooth_iterations)
         m.update_faces(m.nondegenerate_faces(height=1e-9 * span.max()))
         m.remove_unreferenced_vertices()
