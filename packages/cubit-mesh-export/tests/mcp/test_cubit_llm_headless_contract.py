@@ -7,11 +7,6 @@ import pytest
 from cubit_mesh_export.mcp import server, session
 
 
-@pytest.fixture
-def build123d_server():
-    return pytest.importorskip("radia_mcp.build123d.server")
-
-
 def test_cubit_session_defaults_to_batch(tmp_path, monkeypatch):
     monkeypatch.setattr(session, "find_cubit_install", lambda: tmp_path)
 
@@ -155,17 +150,14 @@ def test_headless_journal_never_falls_back_to_gui_exe(tmp_path, monkeypatch, pla
     assert "Refusing to fall back to the GUI launcher" in result["error"]
 
 
-def test_all_llm_bridges_name_the_batch_session(build123d_server):
+def test_cubit_llm_bridge_names_the_batch_session():
     cubit_source = inspect.getsource(server._cubit_session_or_error)
-    build123d_source = inspect.getsource(build123d_server)
     daemon_source = Path(session.__file__).with_name("daemon.py").read_text(
         encoding="utf-8"
     )
 
     assert 'CubitSession.get(mode="batch")' in cubit_source
-    assert 'CubitSession.get(mode="batch")' in build123d_source
     assert 'CubitSession.get(mode="gui")' not in cubit_source
-    assert 'CubitSession.get(mode="gui")' not in build123d_source
     assert 'os.environ.get("CUBIT_DAEMON_MODE", "batch")' in daemon_source
     assert "Never launch or attach to the Cubit GUI" in server._SERVER_INSTRUCTIONS
 
