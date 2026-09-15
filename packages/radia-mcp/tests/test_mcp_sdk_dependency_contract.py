@@ -28,6 +28,23 @@ def test_mcp_sdk_dependency_declares_supported_floor():
     assert not {'cae-mcp-core', 'cubit-mesh-export', 'radia'}.intersection(names)
 
 
+def test_public_description_and_optional_cubit_ownership():
+    from packaging.requirements import Requirement
+
+    project = tomllib.loads((PACKAGE_ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    assert len(project["description"]) <= 512
+    assert "distributed separately in cubit-mesh-export" in project["description"]
+    assert "mcp-server-cubit" not in project["scripts"]
+    requirement, = map(Requirement, project["optional-dependencies"]["cubit"])
+    assert requirement.name == "cubit-mesh-export"
+    assert requirement.marker.evaluate({"python_version": "3.12", "sys_platform": "win32"})
+    assert not requirement.marker.evaluate({"python_version": "3.12", "sys_platform": "linux"})
+    readme = (PACKAGE_ROOT / "README.md").read_text(encoding="utf-8")
+    assert "core (Cubit" not in readme
+    assert "| **Cubit** | `mcp-server-cubit`" not in readme
+    assert "full 49-server" not in readme
+
+
 
 def test_supported_sdk_registers_metadata_lists_schema_and_calls_tool():
     from mcp.server.fastmcp import FastMCP

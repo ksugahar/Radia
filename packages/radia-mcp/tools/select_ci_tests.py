@@ -294,8 +294,10 @@ def build_plan(
             module_parts = (*module_parts[:-1], module_parts[-1][:-3])
 
         stem = module_parts[-1] if module_parts else ""
-        if family == "common":
+        if family == "common" or relative == "_shared/hot_reload.py":
             servers.update(catalog)
+            if relative == "_shared/hot_reload.py":
+                selected.add("tests/test_hot_reload.py")
         elif family in family_servers:
             servers.add(family_servers[family])
 
