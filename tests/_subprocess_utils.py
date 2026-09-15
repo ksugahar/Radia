@@ -122,7 +122,7 @@ except ImportError:
 
 # Help the user script locate Cubit's bin (idempotent).
 try:
-    from install_panels import find_cubit_bin as _find_cubit_bin
+    from cubit_mesh_export.toolbar_install import find_cubit_bin as _find_cubit_bin
     _cb = _find_cubit_bin()
     if _cb:
         sys.path.insert(0, _cb)

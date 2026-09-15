@@ -44,7 +44,7 @@ def _grover_L(R, a):
 
 def _setup_cubit():
     """Initialize Cubit with plugin."""
-    from install_panels import find_cubit_bin
+    from cubit_mesh_export.toolbar_install import find_cubit_bin
     cubit_path = find_cubit_bin()
     if cubit_path and cubit_path not in sys.path:
         sys.path.append(cubit_path)
