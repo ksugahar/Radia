@@ -62,3 +62,17 @@ def test_positive_jacobi_diagonal_still_solves():
 def sp_coo(matrix):
     sp = pytest.importorskip("scipy.sparse")
     return sp.coo_matrix(matrix)
+
+
+@pytest.mark.parametrize("value", [np.nan, np.inf])
+@pytest.mark.parametrize("target", ["rhs", "x0"])
+def test_nonfinite_scalar_pcg_cannot_report_convergence(value, target):
+    G, Md, n_face = _configured_gram()
+    _configure_mass(G, sp_coo(Md), n_face)
+    rhs = np.ones(n_face)
+    initial = np.zeros(n_face)
+    (rhs if target == "rhs" else initial)[0] = value
+    # Zero budget reaches the final true-residual path without a curvature
+    # check masking the NaN-to-zero norm regression.
+    with ng.TaskManager(), pytest.raises(RuntimeError, match="non-finite .*norm"):
+        G.solve_configured_linear_material_auto_prec(1.0, rhs, 1e-8, 0, x0=initial)

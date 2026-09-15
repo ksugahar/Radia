@@ -1,191 +1,131 @@
 name: Release
 
-# Runs automatically after the Radia distribution CI succeeds. PyPI jobs
-# additionally verify the exact triggering CI's immutable ref-context artifact
-# was a tag run.
 on:
   workflow_run:
     workflows: ["Radia Native Release"]
     types: [completed]
+  workflow_dispatch:
+    inputs:
+      ci_run_id:
+        description: Successful exact-tag native build run ID (no rebuild)
+        required: true
+        type: string
+      wheel_sha256:
+        description: SHA-256 of the wheel accepted on LAB and hibino
+        required: true
+        type: string
+      acceptance_commit:
+        description: Full main-reachable commit containing both host acceptance records
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
 
 jobs:
   upload-binaries:
-    # Only on master CI success (not PRs, not tags).
     if: >-
+      github.event_name == 'workflow_run' &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
     timeout-minutes: 5
-
+    permissions:
+      contents: write
+      actions: read
     steps:
       - uses: actions/checkout@v4
-
-      # ----------------------------------------------------------------
-      # Download the native-binary artifact produced by CI
-      # ----------------------------------------------------------------
-      - name: Download native binary artifact
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: radia-pyd
           path: pyd-files
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      # ----------------------------------------------------------------
-      # Upload native binaries to GitHub Releases (tag: binaries)
-      # ----------------------------------------------------------------
       - name: Upload native binaries to GitHub Releases
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "=== Uploading native files to GitHub Releases ==="
-          FILES=$(find pyd-files -type f \( -name '*.pyd' -o -name '*.dll' -o -name '*.so' -o -name '*.dylib' \) 2>/dev/null)
-          if [ -z "$FILES" ]; then
-            echo "::warning::No native files found to upload"
-            exit 0
-          fi
-          # The repository helper gives this workflow an explicit,
-          # dependency-light REST upload contract. --create-if-missing creates
-          # the release and same-name assets are replaced deterministically.
-          python tools/upload_release_asset.py --repo "${{ github.repository }}" \
+          FILES=$(find pyd-files -type f \( -name '*.pyd' -o -name '*.dll' -o -name '*.so' -o -name '*.dylib' \))
+          if [ -z "$FILES" ]; then exit 0; fi
+          python tools/upload_release_asset.py --repo "$GITHUB_REPOSITORY" \
             --tag binaries --create-if-missing $FILES
 
-  # ==================================================================
-  # Publish to PyPI (only on version tags: v*)
-  # ==================================================================
-  # IMPORTANT: workflow_run.head_branch returns the BRANCH name ('main'),
-  # NOT the tag name, when the triggering commit is on both a branch and a
-  # tag simultaneously (GitHub Actions known quirk, 2026-06-03).
-  # Fix: first check CI success, then use the GitHub API to confirm a v*
-  # tag actually points at the triggering SHA before publishing.
-  publish-pypi:
-    if: >-
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'push'
+  publication-hold:
+    if: github.event_name == 'workflow_run'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      actions: read
-      contents: read
-      id-token: write
-
     steps:
-      - name: Download exact CI ref context
-        uses: actions/download-artifact@v4
-        with:
-          name: ci-release-context
-          path: ci-release-context
-          run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - run: echo 'PyPI publication is held. Accept the exact tag artifact on LAB and hibino, commit evidence to main, then dispatch Release with run ID, wheel SHA-256 and acceptance commit.'
 
-      - name: Verify triggering CI ran on a tag ref
-        id: ref_check
-        env:
-          SHA: ${{ github.event.workflow_run.head_sha }}
-          RUN_ID: ${{ github.event.workflow_run.id }}
-          TAG_PREFIX: v
-        run: |
-          python3 - <<'PY'
-          import json, os, pathlib, sys
-          path = pathlib.Path("ci-release-context/ci-release-context.json")
-          context = json.loads(path.read_text(encoding="utf-8"))
-          if context.get("schema") != "radia.ci-release-context.v1":
-              print("::error::Unknown CI release-context schema")
-              sys.exit(1)
-          if context.get("sha") != os.environ["SHA"] or str(context.get("run_id")) != os.environ["RUN_ID"]:
-              print("::error::CI release-context does not match triggering workflow_run")
-              sys.exit(1)
-          tags = context.get("release_tags")
-          if not isinstance(tags, list):
-              print("::error::CI release-context has no release-tag snapshot")
-              sys.exit(1)
-          is_tag = context.get("ref_type") == "tag"
-          eligible = is_tag and any(tag.startswith(os.environ["TAG_PREFIX"]) for tag in tags)
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-              output.write(f"is_tag={str(is_tag).lower()}\n")
-              output.write(f"eligible={str(eligible).lower()}\n")
-          print(f"CI ref context: {context.get('ref')} (tag={is_tag}, release_tags={tags})")
-          PY
-
-      - name: Check if a v* release tag points at this commit
-        id: tag_check
-        if: steps.ref_check.outputs.eligible == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SHA: ${{ github.event.workflow_run.head_sha }}
-        run: |
-          # List all tags whose target SHA (direct for lightweight, or
-          # dereferenced ^{} for annotated) matches the triggering commit.
-          # The ^{} deref endpoint returns lines like:
-          #   refs/tags/v4.90.1^{} <sha>
-          # NOTE: use the full HTTPS URL (not "origin") because no
-          # actions/checkout@v4 is done in this job -- "origin" is not
-          # defined without a .git checkout.  GITHUB_REPOSITORY is
-          # automatically set to "owner/repo" on every Actions runner.
-          REPO_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          VTAG=$(git ls-remote --tags "$REPO_URL" 'refs/tags/v*' \
-                 | awk -v sha="$SHA" '$1 == sha {print $2}' \
-                 | sed 's/\^{}//' | head -1)
-          if [ -n "$VTAG" ]; then
-            echo "found=true"  >> "$GITHUB_OUTPUT"
-            echo "tag=$VTAG"   >> "$GITHUB_OUTPUT"
-            echo "v* tag for $SHA: $VTAG"
-          else
-            echo "found=false" >> "$GITHUB_OUTPUT"
-            echo "No v* tag found for $SHA -- skipping PyPI publish"
-          fi
-
-      - name: Download wheel artifact
-        if: steps.tag_check.outputs.found == 'true'
-        uses: actions/download-artifact@v4
+  verify-promotion:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      artifact_id: ${{ steps.accepted.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
         with:
           name: radia-wheel
           path: dist
-          run-id: ${{ github.event.workflow_run.id }}
+          run-id: ${{ inputs.ci_run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Verify wheel (exists + version consistency)
-        if: steps.tag_check.outputs.found == 'true'
+      - uses: actions/download-artifact@v4
+        with:
+          name: ci-release-context
+          path: ci-release-context
+          run-id: ${{ inputs.ci_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify exact artifact and main-reachable acceptance data
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CI_RUN_ID: ${{ inputs.ci_run_id }}
+          WHEEL_SHA256: ${{ inputs.wheel_sha256 }}
+          ACCEPTANCE_COMMIT: ${{ inputs.acceptance_commit }}
         run: |
-          echo "=== Wheel files ==="
-          ls -la dist/
-          WHL=$(find dist -name '*.whl' | head -1)
-          if [ -z "$WHL" ]; then
-            echo "::error::No wheel found in dist/"
-            exit 1
-          fi
-          echo "Wheel: $WHL"
-          python3 - "$WHL" <<'PY'
-          import sys, zipfile, re
-          whl = sys.argv[1]
-          zf = zipfile.ZipFile(whl)
-          names = [f.filename for f in zf.infolist()]
-          # pyproject.toml version vs __init__.py __version__ must match
-          # the wheel filename. 2026-04-14 hardening after a missed
-          # __init__.py bump would have silently shipped the wrong
-          # __version__ attribute.
-          whl_ver = re.match(r"[^-]+-([^-]+)-", whl.rsplit("/", 1)[-1]).group(1)
-          init = zf.read(next(n for n in names if n.endswith("radia/__init__.py"))).decode()
-          m = re.search(r'^__version__\s*=\s*"([^"]+)"', init, re.M)
-          if not m:
-              print("::error::__version__ not found in wheel radia/__init__.py")
-              sys.exit(1)
-          pkg_ver = m.group(1)
-          if whl_ver != pkg_ver:
-              print(f"::error::Version mismatch — wheel={whl_ver} "
-                    f"vs radia.__version__={pkg_ver}.")
-              sys.exit(1)
-          print(f"OK version consistency: {pkg_ver}")
-          required = ["radia/radia_motor_rom.dll"]
-          missing = [name for name in required if name not in names]
-          if missing:
-              print(f"::error::Wheel missing mandatory motor C ABI: {missing}")
-              sys.exit(1)
-          print("OK mandatory motor C ABI: radia/radia_motor_rom.dll")
-          PY
+          python tools/verify_radia_promotion.py --repo "$GITHUB_REPOSITORY" \
+            --run-id "$CI_RUN_ID" --wheel-sha256 "$WHEEL_SHA256" \
+            --acceptance-commit "$ACCEPTANCE_COMMIT" --wheel-dir dist \
+            --context-dir ci-release-context --output promotion.json
+      - uses: actions/upload-artifact@v4
+        id: accepted
+        with:
+          name: accepted-radia-wheel
+          path: dist/*.whl
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: radia-promotion-evidence
+          path: promotion.json
+          if-no-files-found: error
 
-      - name: Publish to PyPI
-        if: steps.tag_check.outputs.found == 'true'
+  publish-pypi:
+    needs: verify-promotion
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.verify-promotion.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: pypi
+    permissions:
+      actions: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.verify-promotion.outputs.artifact_id }}
+          path: dist
+          merge-multiple: true
+      - name: Recheck promoted bytes before publication
+        env:
+          WHEEL_SHA256: ${{ inputs.wheel_sha256 }}
+        run: |
+          python - <<'PY'
+          import hashlib, os, pathlib
+          wheels = list(pathlib.Path('dist').rglob('*.whl'))
+          if len(wheels) != 1 or hashlib.sha256(wheels[0].read_bytes()).hexdigest() != os.environ['WHEEL_SHA256']:
+              raise SystemExit('Promoted artifact hash mismatch')
+          PY
+      - name: Publish the accepted wheel without rebuilding
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          skip-existing: true
+          skip-existing: false

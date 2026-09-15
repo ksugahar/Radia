@@ -1,0 +1,21 @@
+{
+  "passed": true,
+  "scope": "installed-wheel compatibility and exported curved mesh linear solve",
+  "python": "C:\\temp\\radia5-acceptance-venv-20260915\\Scripts\\python.exe",
+  "radia": {
+    "path": "C:\\temp\\radia5-acceptance-venv-20260915\\Lib\\site-packages\\radia",
+    "wheel_sha256": "819389941b4e48f11d91a23ccc5b4d31378c027290b7ff484a9562d4b27562af",
+    "verified_files": 344
+  },
+  "cubit_mesh_export": {
+    "path": "C:\\temp\\radia5-acceptance-venv-20260915\\Lib\\site-packages\\cubit_mesh_export",
+    "wheel_sha256": "859211e96343cd1e97b202f22ea5d008997406de35459bd200130922e286bf73",
+    "verified_files": 11
+  },
+  "vol_sha256": "1e23078fca2700c7a0dbfc2152acff3635f96a7caf5bf01c786d047694be9166",
+  "M_avg_Am": [
+    -0.2336626335904235,
+    -0.021135876657700493,
+    2918.0487934378666
+  ]
+}
