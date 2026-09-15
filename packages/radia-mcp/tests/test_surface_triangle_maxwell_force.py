@@ -5,14 +5,12 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[3]
-SRC = ROOT / "packages" / "radia-mcp" / "src"
+SRC = Path(__file__).resolve().parents[1] / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from radia_mcp.radia_ngsolve.force import (  # noqa: E402
     MU0,
-    air_gap_maxwell_pressure,
     maxwell_traction_summary,
     surface_triangle_constant_traction_load_summary,
     surface_triangle_maxwell_traction_summary,
@@ -27,7 +25,9 @@ def _sum_vectors(rows):
 def test_surface_triangle_normal_field_distributes_p1_force_load():
     tri = [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)]
     row = surface_triangle_maxwell_traction_summary(tri, (0.0, 0.0, 1.0))
-    pressure = air_gap_maxwell_pressure(1.0)
+    # Independent analytic reference; the Radia pressure adapter is a separate
+    # distribution contract, not a dependency of this tensor/load unit test.
+    pressure = 1.0 / (2.0 * MU0)
 
     assert row["area"] == pytest.approx(0.5)
     assert row["unit_normal"] == pytest.approx([0.0, 0.0, 1.0])
