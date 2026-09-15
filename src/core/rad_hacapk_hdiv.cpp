@@ -9506,7 +9506,6 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     double rz = dot(r, z);
     double bnorm = dot(rhs_projected, rhs_projected);
     bnorm = std::sqrt(bnorm); if (bnorm == 0.0) bnorm = 1.0;
-    constexpr int residual_refresh_period = 1000;
     auto recomputeResidual = [&]() {
         applyA(x, Ap);
         ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) {
@@ -9555,17 +9554,13 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
         double alpha = rz / pAp;
         const auto tu0 = Clock::now();
         ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { x[f] += alpha * p[f]; r[f] -= alpha * Ap[f]; });
-        const bool refresh = ((it + 1) % residual_refresh_period) == 0;
-        if (refresh) recomputeResidual();
         applyPrec(r, z);
         double rz_new = dot(r, z);
-        if (refresh) {
-            p = z;
-        }
-        else {
-            double beta = rz_new / rz;
-            ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { p[f] = z[f] + beta * p[f]; });
-        }
+        // Retain conjugacy until a convergence candidate requires a true-
+        // residual check above. Unconditional periodic restarts can prevent
+        // ill-conditioned SPD systems from converging within the same budget.
+        double beta = rz_new / rz;
+        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { p[f] = z[f] + beta * p[f]; });
         project(x); project(r); project(p);
         m_lastSolveTiming.pcg_update_s += elapsed(tu0, Clock::now());
         rz = rz_new;
