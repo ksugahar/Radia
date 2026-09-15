@@ -95,6 +95,28 @@ the matching **FEM-SIBC** comparison.
 
 ## Boundaries
 
+### Axisymmetric native assembly implementation
+
+The Python assembler and MATLAB assembly wrapper now accept a separate
+`axisymmetric_thermal_vol` (`--axisymmetric-thermal-vol`). New Geometry Update
+blocks expose it and include this file in staleness detection. Native thermal
+mass, conduction and boundary forms use 2*pi*r; the existing azimuthal boundary
+sampler transfers the saved 3D EM heat. Transfer power errors above 2% reject
+the configuration without rescaling. This transfer budget is not a new total
+EM accuracy certificate. The optional `axis` boundary cannot carry heat or
+convection; physical boundaries are `sibc`. This initial native route is P1.
+
+`prepare_ih_axisym_mex.py` and `validate_ih_mex_chain(...,'axisymmetric')`
+exercise the production 2D assembler and MEX against independent NGSolve forms
+on a 100-DOF meridian. The saved `ih_axisym_native_20260915.json` records 100
+steps, approximately 1e-10 K maximum discrepancy and zero leaked handles.
+This fixture uses explicit in-memory boundary relabeling and uniform heat:
+it does NOT certify real-file 3D-to-2D transfer or the strict VOL gate.
+Python assembly/manual regressions passed 17 tests; the existing MATLAB native
+integration and Geometry Update suites passed together. The tracked SLX has
+not been regenerated or accepted through the official Toolkit, and the real
+file-to-model delivery gate remains open. Do not report full IH completion.
+
 ### Simulink runtime acceptance and remaining delivery gates
 
 The existing `tests/matlab/test_native_ih_sfun_integration.m` ran through
@@ -106,11 +128,11 @@ and recovery after a singular Eddy solve. It uses scratch model harnesses,
 not acceptance of the tracked `radia_ih.slx` or a complete geometry workflow.
 
 Do not call the full IH application finished: the tracked model's official
-Toolkit acceptance, an unmocked strict-label geometry/configuration run and
-the native axisymmetric operator route remain open. The checked-in cylinder
+Toolkit acceptance and an unmocked strict-label geometry/configuration run
+remain open. The checked-in cylinder
 volume fixture currently labels its boundary `outer`, not required `sibc`;
 it cannot silently stand in for a production-contract fixture. Native geometry
-assembly still requires P1 and a 3D volume. Main integration and distribution
+assembly still requires P1; its new separate 2D route is described above. Main integration and distribution
 have not occurred.
 
 ### Additional native thermal evidence
@@ -150,9 +172,9 @@ mesh-convergence certificate. The existing fine-mesh FEM-SIBC comparisons own
 that accuracy claim. File loading is replaced by an in-memory fixture, and
 native-config fields are packaged explicitly: full geometry/configuration
 orchestration, CAD and strict VOL checks are not certified by this test.
-The current production thermal assembler accepts only 3D volumes, so this
-axisymmetric geometry uses a 3D discretization here; it does not imply that
-3D physics is necessary or that the axisymmetric native assembly route exists.
+This earlier test used the 3D assembly route, so its axisymmetric geometry
+uses a 3D discretization. The separate 2D route was added afterward and is
+validated independently above; 3D physics is not necessary for axisymmetric heat.
 
 This is not a certificate for arbitrary frequency, material or geometry.
 Nonlinear BH accuracy, spatially varying impedance, higher-order/curved
