@@ -35,3 +35,17 @@ def test_build_release_manual_matches_the_isolated_mdx_pipeline():
     assert "pytest -m basic" not in text
     assert "No GitHub CLI policy" not in text
     assert "binaries` release" not in text
+
+
+def test_mcp_release_route_is_distinct_from_solver_release():
+    mcp = get_install_deploy_documentation("mcp_release")
+    solver = get_install_deploy_documentation("release")
+    assert mcp.startswith("## mcp_release\n")
+    assert "radia-mcp-v<VERSION>" in mcp
+    assert "LAB live source" in mcp
+    assert "next-launch-pending" in mcp
+    assert "do not block release completion" in mcp
+    assert "Failed\ninstallation/import still blocks" in mcp
+    assert "tools/release_quad.py" not in mcp
+    assert "tools/release_quad.py" in solver
+    assert "topic `mcp_release`" in solver

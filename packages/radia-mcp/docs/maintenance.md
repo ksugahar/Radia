@@ -60,6 +60,11 @@ or invoke the full QUAD installer for this package-only update. Compute-runner
 CI remains isolated; existing excluded-host installations are left untouched.
 
 The default is **update source -> reconnect -> check one affected live tool**.
+For release-dual, LAB supplies the live-client acceptance. Verify the editable
+installation and fresh import on both hosts; existing 100 clients can update
+at their next normal restart without blocking release completion. Do not force
+all-user restarts merely to close the checklist. See the
+[release completion contract](operations/mcp-runtime-policy.md#release-completion).
 
 1. Update the usual editable development checkout with reviewed changes. Check
    its actual path and coordinate overlapping edits; preserve others' WIP.
@@ -96,7 +101,7 @@ for every edit. Default to the affected client/user, not every host/account.
 - **Client configuration changed:** plan/apply only the affected JSON/TOML
   settings, preserving disabled servers and access policies. Configuration
   migration is not required for ordinary source edits.
-- **Multiple users explicitly requested:** check each named user's launch and
+- **Immediate multi-user reconnection explicitly requested:** check each named user's launch and
   live client. Administrator success is not evidence for another user. LAB and
   100 have separate path namespaces; on 100 use its local `W:` paths, not LAB's
   `S:` paths or UNC. Do not copy credentials or alter unrelated site packages.
