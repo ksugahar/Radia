@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.20)
+project(radia_arc_section_checks LANGUAGES CXX)
+enable_testing()
+add_executable(test_rad_arc_section ../test_rad_arc_section.cpp)
+target_compile_features(test_rad_arc_section PRIVATE cxx_std_17)
+target_include_directories(test_rad_arc_section PRIVATE ../../../src/core)
+add_test(NAME arc_section COMMAND test_rad_arc_section)
+set_tests_properties(arc_section PROPERTIES TIMEOUT 120)

@@ -33,11 +33,35 @@ double relative(const Vec& a,const Vec& b) {
     return std::sqrt(error/norm);
 }
 
-int main() {
+bool boundary_checks() {
+    for(const auto& p: {std::array<double,2>{.035,0}, {.070,0},
+                       {.035,.0525}, {.070,.0525}, {.050,.0525}}) {
+        const auto full=RadArcSection::Field(p[0],p[1],.035,.070,.105,0,2*pi);
+        const auto first=RadArcSection::Field(p[0],p[1],.035,.070,.105,0,1.7);
+        const auto second=RadArcSection::Field(p[0],p[1],.035,.070,.105,1.7,2*pi);
+        Vec sum{};
+        for(int k=0;k<3;++k) sum[k]=first[k]+second[k];
+        const double partition_error=relative(sum,full);
+        if(!std::isfinite(partition_error) || partition_error>1e-8) return false;
+        for(double angle: {1.7,2*pi}) {
+            const auto actual=RadArcSection::Field(p[0],p[1],.035,.070,.105,0,angle);
+            const auto left=RadArcSection::Field(p[0]-1e-8,p[1]-1e-8,.035,.070,.105,0,angle);
+            const auto right=RadArcSection::Field(p[0]+1e-8,p[1]+1e-8,.035,.070,.105,0,angle);
+            Vec average{};
+            for(int k=0;k<3;++k) average[k]=(left[k]+right[k])/2;
+            const double continuity_error=relative(actual,average);
+            if(!std::isfinite(continuity_error) || continuity_error>3e-5) return false;
+        }
+    }
+    return true;
+}
+
+int check_kernel() {
     const double half=.105/2;
     const double exact=2*pi*.105*std::log((.070+std::hypot(.070,half))/(.035+std::hypot(.035,half)));
     const Vec axis=RadArcSection::Field(0,0,.035,.070,.105,0,2*pi);
-    if(relative(axis,{0,0,exact})>1e-12) return 1;
+    const double axis_error=relative(axis,{0,0,exact});
+    if(!std::isfinite(axis_error) || axis_error>1e-12) return 1;
     for(const auto& c: {std::array<double,4>{.012,.09,.2,4.8},
                        std::array<double,4>{.012,.09,0,2*pi},
                        std::array<double,4>{.012,.09,0,1e-5},
@@ -53,4 +77,15 @@ int main() {
         if(!std::isfinite(error) || convergence>2e-7 || error>2e-7) return 2;
     }
     std::cout << "PASS: axis closed form and four independent volume references\n";
+    if(!boundary_checks()) return 3;
+    std::cout << "PASS: five boundary partitions and ten two-sided limits\n";
+    return 0;
+}
+
+int main() {
+    try { return check_kernel(); }
+    catch(const std::exception& error) {
+        std::cerr << "FAIL: " << error.what() << '\n';
+        return 4;
+    }
 }
