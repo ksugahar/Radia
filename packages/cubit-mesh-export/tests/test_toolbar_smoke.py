@@ -125,7 +125,7 @@ def test_gui_smoke_is_an_installed_release_gate():
     assert 'run(["cubit-toolbar-smoke-test", "--restarts", "2"])' in lab_deploy
 
 
-@pytest.mark.parametrize('returncode', [0, 1, -1073740791])
+@pytest.mark.parametrize('returncode', [0, 1, 2, -1073740791])
 def test_good_probe_requires_clean_process_exit(monkeypatch, tmp_path, returncode):
     class Process:
         def poll(self):
@@ -133,6 +133,10 @@ def test_good_probe_requires_clean_process_exit(monkeypatch, tmp_path, returncod
         def wait(self, timeout):
             return returncode
     def launch(*args, **kwargs):
+        assert args[0] == ['cubit.exe', '-nojournal', '-commandplugindir',
+                           'plugins', str(tmp_path / 'probe_bootstrap.py')]
+        assert kwargs['stdout'].name == str(tmp_path / 'launcher.log')
+        assert kwargs['stderr'] == SMOKE.subprocess.STDOUT
         (tmp_path / 'result.json').write_text(json.dumps(_healthy_payload()))
         return Process()
     monkeypatch.setattr(SMOKE, '_cubit_pids', lambda: set())
