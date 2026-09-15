@@ -15,16 +15,16 @@ import pytest
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp.server.fastmcp import FastMCP
-from radia_mcp._shared import hot_reload
+from cae_mcp_core import hot_reload
 
 _clock = [time.time() + 2]
 
 
 @pytest.fixture
 def editable_runtime(monkeypatch):
-    from radia_mcp.common import status
+    from cae_mcp_core.common import status
 
-    monkeypatch.setattr(status, "_distribution_provenance", lambda: {"editable": True})
+    monkeypatch.setattr(status, "_distribution_provenance", lambda *args: {"editable": True})
     monkeypatch.delenv("RADIA_MCP_HOT_RELOAD", raising=False)
     return status
 
@@ -32,7 +32,7 @@ def editable_runtime(monkeypatch):
 @pytest.mark.parametrize("provenance", [{}, {"editable": False},
                                       {"editable": None}, {"editable": "true"}])
 def test_reload_is_not_registered_without_verified_editable(provenance, editable_runtime, monkeypatch):
-    monkeypatch.setattr(editable_runtime, "_distribution_provenance", lambda: provenance)
+    monkeypatch.setattr(editable_runtime, "_distribution_provenance", lambda *args: provenance)
     server = FastMCP("closed-reload")
     before = server._mcp_server.create_initialization_options().capabilities
     hot_reload.register_reload_tool(server, "closed_reload_code")
@@ -54,7 +54,7 @@ def test_reload_opt_out_precedes_provenance_and_registration(editable_runtime, m
 
 
 def test_reload_unreadable_provenance_fails_closed(editable_runtime, monkeypatch):
-    def unreadable():
+    def unreadable(*args):
         raise OSError("metadata unavailable")
 
     monkeypatch.setattr(editable_runtime, "_distribution_provenance", unreadable)
@@ -230,8 +230,8 @@ async def _probe_reload_notification_over_stdio(editable, opt_out) -> dict:
         command=sys.executable,
         # Simulate install provenance, not the protocol: use an actual server
         # and actual stdio calls without repointing the developer's install.
-        args=["-c", "from radia_mcp.common import status; "
-              f"status._distribution_provenance=lambda: {{'editable': {editable!r}}}; "
+        args=["-c", "from cae_mcp_core.common import status; "
+              f"status._distribution_provenance=lambda *args: {{'editable': {editable!r}}}; "
               "from radia_mcp.grant_writing.server import main; main()"],
         cwd=str(package_root),
         env=env,

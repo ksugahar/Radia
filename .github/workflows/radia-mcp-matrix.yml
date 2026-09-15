@@ -24,6 +24,7 @@ on:
     tags: ['radia-mcp-v*']
     paths:
       - "packages/radia-mcp/**"
+      - "packages/cae-mcp-core/**"
       - "tests/mcp_server/**"
       - "tests/mcp_integration/**"
       - "matlab/**"
@@ -41,6 +42,7 @@ on:
     branches: [main]
     paths:
       - "packages/radia-mcp/**"
+      - "packages/cae-mcp-core/**"
       - "tests/mcp_server/**"
       - "tests/mcp_integration/**"
       - "matlab/**"
@@ -183,7 +185,7 @@ jobs:
           print(floors[0])
           PY
           )
-          python -m pip install -e "packages/radia-mcp[maintenance]" "mcp==$SDK_MIN"
+          python -m pip install -e packages/cae-mcp-core -e "packages/radia-mcp[maintenance]" "mcp==$SDK_MIN"
           echo "RADIA_MCP_EXPECTED_SDK=$SDK_MIN" >> "$GITHUB_ENV"
       - name: Verify SDK registration, dispatch and real stdio reload
         run: |
@@ -224,7 +226,7 @@ jobs:
         run: |
           # tomli: tomllib backport for Python 3.10 (tools/policy_lint.py reads pyproject.toml;
           # tomllib is stdlib only on 3.11+).  No-op on 3.11/3.12 via the env marker.
-          python -m pip install -e "packages/radia-mcp[maintenance]" "tomli; python_version < '3.11'"
+          python -m pip install -e packages/cae-mcp-core -e "packages/radia-mcp[maintenance]" "tomli; python_version < '3.11'"
           if [[ "$RUN_TESTS" == "true" ]]; then
             # CSV/input contracts need NumPy, but never the optional solver stack.
             python -m pip install pytest numpy

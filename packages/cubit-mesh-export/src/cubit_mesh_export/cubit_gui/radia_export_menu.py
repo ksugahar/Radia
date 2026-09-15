@@ -12,7 +12,7 @@ collecting user input through Qt dialogs parented to the Cubit main
 window.
 
 Layer 2 (Cubit GUI Python).  See CLAUDE.md "Cubit Panel Architecture"
-and `radia_mcp.cubit.knowledge.custom_toolbar` (TOOLBAR_PYTHON_SCRIPT_
+and `cubit_mesh_export.mcp.knowledge.custom_toolbar` (TOOLBAR_PYTHON_SCRIPT_
 CONVENTIONS, TOOLBAR_CLARO_PARENT_HELPER).
 
 This module avoids:

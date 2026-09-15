@@ -1,5 +1,5 @@
 """Contract tests for the shared MCP-server hardening layer
-(radia_mcp.common.server_hardening) across the cubit and build123d
+(cae_mcp_core.common.server_hardening) across the cubit and build123d
 servers.
 
 Locks the holes a rename/typo would open silently:
@@ -18,8 +18,8 @@ import sys
 import pytest
 
 from radia_mcp.build123d import server as b3d_server
-from radia_mcp.cubit import server as cubit_server
-from radia_mcp.common.server_hardening import (
+from cubit_mesh_export.mcp import server as cubit_server
+from cae_mcp_core.common.server_hardening import (
     ANN_DESTRUCTIVE,
     ANN_READONLY,
     error_payload,
@@ -86,7 +86,7 @@ def test_server_instructions_declared():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("module,env", [
-    ("radia_mcp.cubit.server", "RADIA_MCP_CUBIT_GATES"),
+    ("cubit_mesh_export.mcp.server", "RADIA_MCP_CUBIT_GATES"),
     ("radia_mcp.build123d.server", "RADIA_MCP_BUILD123D_GATES"),
 ], ids=["cubit", "build123d"])
 def test_gate_env_hides_gate_tools(module, env):
@@ -110,7 +110,7 @@ def test_gate_env_hides_gate_tools(module, env):
 # ---------------------------------------------------------------------------
 
 def test_call_log_rotation(tmp_path):
-    from radia_mcp.common.server_hardening import rotate_if_large
+    from cae_mcp_core.common.server_hardening import rotate_if_large
 
     log = tmp_path / "calls.jsonl"
     log.write_text("x" * 100, encoding="utf-8")

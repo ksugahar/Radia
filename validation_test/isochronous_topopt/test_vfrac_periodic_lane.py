@@ -33,7 +33,7 @@ from ngsolve.meshes import MakeStructured3DMesh  # noqa: E402
 
 from radia.topopt_cad import write_vfrac_exodus  # noqa: E402
 
-pytest.importorskip("radia_mcp.cubit.server")
+pytest.importorskip("cubit_mesh_export.mcp.server")
 
 PERIOD = 0.02
 RADIUS = 0.55 * PERIOD
@@ -58,7 +58,7 @@ def artifacts(tmp_path_factory):
         cell, nodal, root / "rve", level=0.5, cells=24, supersample=4,
         bounds=((0.0, 0.0, 0.0), (PERIOD, PERIOD, PERIOD)))
 
-    from radia_mcp.cubit.server import cubit_vfrac_to_vol
+    from cubit_mesh_export.mcp.server import cubit_vfrac_to_vol
     reports = {}
     for tag, flag in (("plain", False), ("periodic", True)):
         reports[tag] = json.loads(cubit_vfrac_to_vol(
@@ -103,7 +103,7 @@ def test_plain_mesh_is_the_negative_control(artifacts):
     # otherwise the gate proves nothing.  Note the discriminator is the
     # fill RATE, not the raw count: a plain Sculpt mesh keeps a handful of
     # untouched lattice corners that match by accident (measured 9).
-    from radia_mcp.cubit.server import _periodic_node_match
+    from cubit_mesh_export.mcp.server import _periodic_node_match
     cell = artifacts["vf"]["cell_size"]
     measured = _periodic_node_match(Path(report["vol"]),
                                     [PERIOD, PERIOD, PERIOD],
@@ -193,7 +193,7 @@ def two_material_rve(tmp_path_factory):
         cell, {"core": inclusion, "matrix": 1.0 - inclusion},
         root / "rve2", cells=24, supersample=3,
         bounds=((0.0, 0.0, 0.0), (PERIOD, PERIOD, PERIOD)))
-    from radia_mcp.cubit.server import cubit_vfrac_to_vol
+    from cubit_mesh_export.mcp.server import cubit_vfrac_to_vol
     report = json.loads(cubit_vfrac_to_vol(
         vf["path"], out_vol=str(root / "rve2.vol"),
         out_msh=str(root / "rve2.msh"),

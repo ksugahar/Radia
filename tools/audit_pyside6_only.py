@@ -60,7 +60,7 @@ PYSIDE6_ALLOWED_FILES = {
     "validation_test/cubit_mesh_export/standalone_gui_probe.py",
     "validation_test/cubit_mesh_export/standalone_dialog_probe.py",
     "validation_test/cubit_mesh_export/standalone_toolbar_probe.py",
-    "packages/radia-mcp/src/radia_mcp/cubit/bootstrap.py",
+    "packages/cubit-mesh-export/src/cubit_mesh_export/mcp/bootstrap.py",
     "packages/cubit-mesh-export/src/cubit_mesh_export/cubit_gui/toolbar_probe.py",
     "tools/audit_pyside6_only.py",
     "validation_test/panels/conftest.py",

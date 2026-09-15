@@ -17,7 +17,6 @@ from urllib.request import url2pathname
 BASELINE = {
     "radia-meta": "meta",
     "radia-build123d": "build123d",
-    "radia-cubit": "cubit",
     "radia-gmsh": "gmsh",
     "radia-analysis": "radia-analysis",
     "radia-motion": "radia-motion",

@@ -8,9 +8,9 @@ import json
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
-from radia_mcp.common.mcp_contract import SCHEMA
-from radia_mcp.common.server_hardening import install_call_log
-from radia_mcp.common.status import register_status_tool
+from cae_mcp_core.common.mcp_contract import SCHEMA
+from cae_mcp_core.common.server_hardening import install_call_log
+from cae_mcp_core.common.status import register_status_tool
 
 
 def test_status_registration_completes_and_exposes_runtime_contract(

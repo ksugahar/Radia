@@ -45,7 +45,7 @@ RESULTS = Path(__file__).with_name("results_shape_regen_lane.json")
 
 def _cubit_available():
     try:
-        from radia_mcp.cubit import session as _cs  # noqa: F401
+        from cubit_mesh_export.mcp import session as _cs  # noqa: F401
         return True
     except Exception:
         return False
@@ -165,7 +165,7 @@ def prepare_shape(out):
 
 def mesh_shape(regen):
     """Run only the licensed mesh phase on LAB/100."""
-    from radia_mcp.cubit.server import cubit_stl_to_vol
+    from cubit_mesh_export.mcp.server import cubit_stl_to_vol
 
     mesh_specs = {
         "tet_reference": (regen.coarse_stl, "tet", 0.01, 0.05),
@@ -208,7 +208,7 @@ def validate_cubit_iso_union(exo, out):
     """Validate the compute-host Exodus handoff without recomputing its mesh."""
     import trimesh
     from netCDF4 import Dataset
-    from radia_mcp.cubit.server import _run_batch
+    from cubit_mesh_export.mcp.server import _run_batch
 
     iso_e = str(out / "design_iso.e").replace(os.sep, "/")
     r = _run_batch(None, [

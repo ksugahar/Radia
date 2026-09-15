@@ -41,7 +41,7 @@ except ImportError:
 from mcp.server.fastmcp import FastMCP
 
 from .build123d_knowledge import get_build123d_documentation
-from ..common.lazy_call import lazy_callable
+from cae_mcp_core.common.lazy_call import lazy_callable
 _face_first_perforation_handoff_gate = lazy_callable(".face_first_perforation_gate", "face_first_perforation_handoff_gate", __package__)
 _face_first_perforation_source_replay_gate = lazy_callable(".face_first_perforation_gate", "face_first_perforation_source_replay_gate", __package__)
 _cross_kernel_mass_topology_diagnosis_gate = lazy_callable(".mass_topology_diagnosis_gate", "cross_kernel_mass_topology_diagnosis_gate", __package__)
@@ -83,16 +83,11 @@ _validate_build123d_v50_source_identity = lazy_callable(".feature_replay_identit
 _validate_build123d_v51_public_identity = lazy_callable(".mass_sweep_exchange_identity_v51", "validate_public_identity", __package__)
 _validate_build123d_v51_source_identity = lazy_callable(".mass_sweep_exchange_identity_v51", "validate_source_identity", __package__)
 from .rules import ALL_RULES as _B3D_LINT_RULES
-from ..common import failure_log as _fl, register_status_tool
-from ..common.tool_group import CoarseToolRegistry
-from ..common import web_docs as _wd
-from ..common import examples as _ex
-from ..common.server_hardening import (
-    classify_tool_annotations as _classify_tool_annotations_common,
-    error_payload as _error_payload_common,
-    hide_gate_tools as _hide_gate_tools,
-    install_call_log as _install_call_log_common,
-)
+from cae_mcp_core.common import failure_log as _fl, register_status_tool
+from cae_mcp_core.common.tool_group import CoarseToolRegistry
+from cae_mcp_core.common import web_docs as _wd
+from cae_mcp_core.common import examples as _ex
+from cae_mcp_core.common.server_hardening import classify_tool_annotations as _classify_tool_annotations_common, error_payload as _error_payload_common, hide_gate_tools as _hide_gate_tools, install_call_log as _install_call_log_common
 
 # Server-level instructions delivered to the client model at MCP
 # `initialize` time (same MathWorks pattern as mcp-server-cubit).
@@ -1942,12 +1937,12 @@ def preview_shape_in_cubit(script: str, label: str = "preview") -> str:
 
     # Hand to the persistent headless Cubit session (lazy-start daemon).
     try:
-        from radia_mcp.cubit import session as _cs
+        from cubit_mesh_export.mcp import session as _cs
     except ImportError as e:
         return _dumps({
             "status": "error",
             "stage": "cubit_import",
-            "error": f"radia_mcp.cubit not available: {e}",
+            "error": f"cubit_mesh_export.mcp not available: {e}",
         }, indent=2)
 
     try:
@@ -2959,7 +2954,7 @@ def build123d_ask(query: str, limit: int = 6,
       - `build123d_lookup`   (bundled kb + failure log)
       - `build123d_examples` (GitHub examples/ + bd_warehouse +
         issues + GraphQL Discussions — unioned via the `build123d`
-        family in radia_mcp.common.examples)
+        family in cae_mcp_core.common.examples)
       - optionally `build123d_web_docs` (live readthedocs)
 
     Hits carry `layer` (`kb` / `examples` / `web`) so the caller
@@ -3300,7 +3295,7 @@ def cadquery_to_cubit_hex(script: str,
     # Step 2: hand off to cubit_mesh_auto (imported lazily — keeps
     # build123d server standalone if user installs without cubit)
     try:
-        from ..cubit.server import cubit_mesh_auto
+        from cubit_mesh_export.mcp.server import cubit_mesh_auto
     except ImportError as e:
         return _dumps({
             "status": "error",
@@ -4065,7 +4060,7 @@ def build123d_to_cubit_hex(script: str,
     step_path = exec_info["exported"].replace("\\", "/")
 
     try:
-        from ..cubit.server import cubit_mesh_auto
+        from cubit_mesh_export.mcp.server import cubit_mesh_auto
     except ImportError as e:
         return _dumps({"status": "error",
                            "stage": "cubit_import",
@@ -4691,7 +4686,7 @@ def build123d_probe(path: str, query: str = "summary") -> str:
             result["truncated"] = (
                 f"listing capped at {_PROBE_ENTITY_CAP} entities per kind")
     elif q in ("labels", "names"):
-        from ..cubit.label_audit import is_strict_label
+        from cubit_mesh_export.mcp.label_audit import is_strict_label
         pairs = _labeled_solids(shape)
         solids = [{"id": i, "label": label}
                   for i, (label, _s) in enumerate(pairs, 1)]
@@ -4770,7 +4765,7 @@ def build123d_doctor() -> str:
                       "cadquery_to_cubit_hex unavailable)"}
 
     try:
-        from ..cubit.session import find_cubit_install
+        from cubit_mesh_export.mcp.session import find_cubit_install
         bin_dir = find_cubit_install()
         if bin_dir is None:
             checks["cubit_handoff"] = {
@@ -4854,7 +4849,7 @@ _install_call_log_common(mcp, "build123d_tool_calls.jsonl",
 
 def main():
     if "--selftest" in sys.argv:
-        from radia_mcp.common.utf8_stdout import use_utf8_stdout
+        from cae_mcp_core.common.utf8_stdout import use_utf8_stdout
         use_utf8_stdout()
         print("build123d MCP server self-test:")
 

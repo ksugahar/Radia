@@ -17,14 +17,14 @@ markdown prompts loader, meta-overview. radia-mcp `common/` has them
 `chroma_retriever.py`). elf and comsol-fork don't, and the review
 recommends adopting them.
 
-**Question**: do we extract `radia_mcp.common.*` into a shared lib
+**Question**: do we extract `cae_mcp_core.common.*` into a shared lib
 all 3 packages depend on, or copy-paste / vendor / hand-port?
 
 ## Options
 
 ### A. Status quo (copy/port manually)
 
-elf + comsol-fork copy code from `radia_mcp.common.status` (~80 LOC)
+elf + comsol-fork copy code from `cae_mcp_core.common.status` (~80 LOC)
 into their own tree. Each maintains independently.
 
 **Pros**: zero coordination. No new package. No dep version dance.
@@ -55,7 +55,7 @@ from `radia-mcp` (via GitHub raw URL or local NAS path) on demand.
 # tools/sync_vendored.py (pseudo)
 SOURCES = [
     ("https://raw.githubusercontent.com/ksugahar/Radia/main/"
-     "packages/radia-mcp/src/radia_mcp/common/status.py",
+     "packages/cae-mcp-core/src/cae_mcp_core/common/status.py",
      "src/<pkg>/vendored/status.py"),
     ...
 ]
@@ -74,7 +74,7 @@ fresh).
 ### D. radia-mcp as the lib (consumers `pip install radia-mcp`)
 
 elf + comsol-fork add `radia-mcp>=0.70.0` as a dep and import
-`from radia_mcp.common import register_status_tool`.
+`from cae_mcp_core.common import register_status_tool`.
 
 **Pros**: zero new package. No copy-paste. Single source of truth.
 **Cons**:
@@ -94,7 +94,7 @@ elf + comsol-fork add `radia-mcp>=0.70.0` as a dep and import
 - Header comment in each vendored file points at the upstream:
   ```
   # VENDORED from radia-mcp v0.70.0 (commit b36ea560).
-  # Source: packages/radia-mcp/src/radia_mcp/common/<file>.py
+  # Source: packages/cae-mcp-core/src/cae_mcp_core/common/<file>.py
   # Sync: python tools/sync_vendored.py
   # Do not edit by hand — edits will be overwritten by the next sync.
   ```

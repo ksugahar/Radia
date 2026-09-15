@@ -34,7 +34,7 @@ sys.path.insert(0, r"S:\Radia\01_GitHub\packages\radia-mcp\src")
 
 from build123d import Box, Sphere, export_step
 from radia_mcp.build123d.archetypes import c_core
-from radia_mcp.cubit.server import _run_batch
+from cubit_mesh_export.mcp.server import _run_batch
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(_HERE, "artifacts")

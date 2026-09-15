@@ -26,7 +26,7 @@ impedance, PRIMA MOR, SPICE extraction).
 import sys
 
 from mcp.server.fastmcp import FastMCP
-from ..common import register_status_tool
+from cae_mcp_core.common import register_status_tool
 
 from .peec_knowledge import get_peec_documentation
 from .carstensen_ac_copper_loss_knowledge import get_carstensen_knowledge

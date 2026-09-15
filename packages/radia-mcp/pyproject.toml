@@ -20,6 +20,7 @@ authors = [{name = "Kengo Sugahara"}]
 # the full radia wheel.
 dependencies = [
     "mcp>=1.20.0,<2",
+    "cae-mcp-core>=0.1.0,<0.2",
 ]
 
 [project.optional-dependencies]
@@ -45,6 +46,7 @@ gmsh = [
 # `trimesh` is also the independent STL closure/volume referee used before
 # Cubit consumes the surface.
 shape-regeneration = [
+    "cubit-mesh-export>=1.0.2; python_version == '3.12' and sys_platform == 'win32'",
     "radia>=4.6.1",
     "scipy>=1.10",
     "gmsh>=4.10",
@@ -121,7 +123,6 @@ mcp-server-radia-publication = "radia_mcp.radia_publication.server:main"
 # "radia-coupled" ones reference radia from inside example snippets in
 # their knowledge modules, but importing the server does not require
 # radia to be installed.
-mcp-server-cubit = "radia_mcp.cubit.server:main"
 mcp-server-build123d = "radia_mcp.build123d.server:main"
 mcp-server-gmsh = "radia_mcp.gmsh.server:main"
 # mcp-server-elf moved to standalone package: pip install mcp-server-elf

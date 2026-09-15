@@ -18,7 +18,7 @@ import time
 
 from mcp.server.fastmcp import FastMCP
 
-from ..common import register_status_tool
+from cae_mcp_core.common import register_status_tool
 from . import bug_patterns, catalog
 
 mcp = FastMCP("mcp-server-radia-meta")
@@ -82,6 +82,9 @@ def radia_mcp_naming_conventions() -> dict:
 def radia_mcp_get(name: str) -> dict:
     """Look up one server by short name (e.g. 'bayesian-opt', 'ih', 'kelvin')."""
     info = catalog.get(name)
+    if info is None:
+        info = next(({"external": True, **entry} for entry in catalog.list_external()
+                     if name in {entry["name"], entry.get("entry_point")}), None)
     if info is None:
         return {
             "error": f"Unknown server '{name}'",

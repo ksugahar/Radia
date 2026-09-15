@@ -3,7 +3,7 @@
 Mirrors the MathWorks MATLAB MCP server architecture on the gmsh side:
 a lazily started, PERSISTENT engine process plus a stateful ``evaluate``
 (here ``gmsh_exec``), instead of one subprocess per call.  The lab's
-radia_mcp.cubit batch daemon uses the same shape (line-delimited
+cubit_mesh_export.mcp batch daemon uses the same shape (line-delimited
 JSON-RPC over stdin/stdout of a worker subprocess).
 
 Design points:
@@ -38,7 +38,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from ._gmsh_subprocess import gmsh_available
+from cae_mcp_core.mesh._gmsh_subprocess import gmsh_available
 
 _RS = "\x1e"  # response-line prefix (record separator)
 

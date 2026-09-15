@@ -2506,7 +2506,7 @@ def test_touchstone_frequency_unit_normalization_gate_keeps_raw_unit_and_selecte
 
 
 def test_balanced_mcp_learning_profile_gate_requires_all_ten_stages_and_controls():
-    from radia_mcp.common.learning_quality import build_balanced_learning_profile
+    from cae_mcp_core.common.learning_quality import build_balanced_learning_profile
 
     profile = build_balanced_learning_profile("probe", "radia-mcp", "source-mcp")
     gate = balanced_mcp_learning_profile_gate(profile)

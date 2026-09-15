@@ -13,7 +13,7 @@ import pathlib
 import re
 import zipfile
 
-from radia_mcp.common.pptx_svg import picture_svg_blob, svg_geometry
+from cae_mcp_core.common.pptx_svg import picture_svg_blob, svg_geometry
 from ._kishotenketsu import (  # noqa: F401
     FOOTER_FROM as TAKEAWAY_FOOTER_FROM,
     presentation_kishotenketsu_check,

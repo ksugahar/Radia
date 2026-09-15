@@ -157,7 +157,7 @@ human progress.
 ## 3. Reference implementation
 
 `radia-mcp` 0.25.0 ships
-[`cubit_mesh_race_with_human`](https://github.com/ksugahar/Radia/blob/main/packages/radia-mcp/src/radia_mcp/cubit/server.py)
+[`cubit_mesh_race_with_human`](https://github.com/ksugahar/Radia/blob/main/packages/cubit-mesh-export/src/cubit_mesh_export/mcp/server.py)
 as the canonical CBCR tool. The signature:
 
 ```python
@@ -441,6 +441,6 @@ For BibTeX:
 
 ## Appendix A — Full cubit_mesh_race_with_human source
 
-See [`packages/radia-mcp/src/radia_mcp/cubit/server.py`](../../src/radia_mcp/cubit/server.py),
+See [`packages/cubit-mesh-export/src/cubit_mesh_export/mcp/server.py`](../../src/radia_mcp/cubit/server.py),
 function `cubit_mesh_race_with_human` (≈ 130 lines). License:
 BSD-3-Clause.

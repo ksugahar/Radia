@@ -92,7 +92,7 @@ Reads `RADIA_MCP_LEARNED_DIR/learned_recipes.jsonl`, drops anything
 below the quality threshold, groups by signature class
 `(volumes, round(surf_per_vol, 1))`, dedups by recipe text, takes
 the top *N* per class by quality, and writes
-`packages/radia-mcp/src/radia_mcp/cubit/curated_recipes_bundle.py`.
+`packages/cubit-mesh-export/src/cubit_mesh_export/mcp/curated_recipes_bundle.py`.
 The next `python -m build` ships it inside the wheel.
 
 The bundled module is loaded on import alongside the local jsonl.
@@ -142,12 +142,12 @@ var takes effect.
 ```bash
 # 1. From any machine attached to the shared pool:
 python -c "
-import radia_mcp.cubit.server as cs
+import cubit_mesh_export.mcp.server as cs
 import json
 print(json.loads(cs.cubit_curate_learned_recipes(top_per_class=3))['curated_entries'])
 "
 # 2. Review the diff:
-git -C s:/Radia/01_GitHub diff packages/radia-mcp/src/radia_mcp/cubit/curated_recipes_bundle.py
+git -C s:/Radia/01_GitHub diff packages/cubit-mesh-export/src/cubit_mesh_export/mcp/curated_recipes_bundle.py
 # 3. Commit + bump version + ship:
 cd s:/Radia/01_GitHub/packages/radia-mcp
 sed -i 's/version = "0.X.Y"/version = "0.X.(Y+1)"/' pyproject.toml

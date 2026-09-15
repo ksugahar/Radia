@@ -151,5 +151,5 @@ Need labels (material / BND / BBBND) ?
   Kelvin / symmetry options.
 - [`docs/cubit/export_NetgenMesh.md`](export_NetgenMesh.md) —
   details of the .vol writer.
-- `radia_mcp.cubit.knowledge.format_routing` — same content as this
+- `cubit_mesh_export.mcp.knowledge.format_routing` — same content as this
   document, exposed via `cubit_docs("format_routing")` for AI lookups.

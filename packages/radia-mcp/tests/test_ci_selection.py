@@ -80,7 +80,7 @@ def test_large_server_registration_change_stays_on_contract_lane():
 
 def test_common_change_selftests_every_server_without_selecting_every_test():
     plan = SELECTOR.build_plan(
-        ["packages/radia-mcp/src/radia_mcp/common/status.py"]
+        ["packages/cae-mcp-core/src/cae_mcp_core/common/status.py"]
     )
     assert len(plan["server_selftests"]) >= 30
     assert "meta" in plan["server_selftests"]
@@ -98,7 +98,7 @@ def test_common_change_selftests_every_server_without_selecting_every_test():
 
 def test_common_lazy_export_change_skips_unrelated_rag_content_tests():
     plan = SELECTOR.build_plan(
-        ["packages/radia-mcp/src/radia_mcp/common/__init__.py"]
+        ["packages/cae-mcp-core/src/cae_mcp_core/common/__init__.py"]
     )
     assert "tests/test_coarse_tool_registry.py" in plan["package_tests"]
     assert "tests/test_optional_dependency_imports.py" in plan["package_tests"]

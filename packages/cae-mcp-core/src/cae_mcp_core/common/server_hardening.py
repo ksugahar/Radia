@@ -1,0 +1,332 @@
+"""
+server_hardening.py — shared MCP-server hardening infrastructure.
+
+Single source for the MathWorks MATLAB-MCP-server patterns adopted lab-wide
+(2026-08-05, first landed in `cubit_mesh_export.mcp`, promoted here for
+`radia_mcp.build123d` and future servers):
+
+* **Annotation presets** — every tool is classified through one of four
+  fully-specified `ToolAnnotations` presets (MathWorks annotations.go
+  discipline: presets only, all four hint fields always set).
+* **Legacy gate hiding** — in the ``full`` compatibility profile, an env var
+  can still remove direct CI/scenario ``*_gate`` tools. Production ``core``
+  groups those operations behind a catalog and runner before this layer runs.
+* **All-calls JSONL log** — one choke point wraps ``ToolManager.call_tool``
+  and appends ``{ts, tool, args digest, ms, ok, error_type?}`` per call
+  (MathWorks basetool + slog).
+* **Error payloads** — uniform ``{status, stage, kind, error, hint?, log?}``
+  dicts where ``kind`` tells the LLM audience how to react:
+  ``input`` = fix your arguments and retry; ``environment`` = report to
+  the user (license/install/hung), do not retry blindly; ``internal`` =
+  server bug, do not retry.
+
+Import from here; do not copy these into individual servers (the cubit
+server's originals were replaced by these — Discard-the-PoC policy).
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import time
+from collections.abc import Sized
+
+from mcp.types import ToolAnnotations
+
+from cae_mcp_core.common import failure_log as _fl
+
+__all__ = [
+    "ANN_READONLY", "ANN_READONLY_WEB", "ANN_WRITES", "ANN_DESTRUCTIVE",
+    "annotation_preset_name", "infer_tool_annotations",
+    "classify_tool_annotations", "hide_gate_tools", "install_call_log",
+    "error_payload",
+    "PROBE_SOLID_CORE_KEYS", "PROBE_FACE_CORE_KEYS",
+]
+
+# ---------------------------------------------------------------------------
+# Cross-server probe schema contract (cubit <-> build123d <-> external CAD)
+# ---------------------------------------------------------------------------
+# `cubit_probe(query="entities")` (mesh side) and
+# `build123d_probe(query="entities")` (CAD side) MUST both emit these core
+# keys per entity, so an agent can compare per-body numbers across the
+# STEP -> mesh handoff directly.  Servers may ADD keys (e.g. build123d
+# adds `label` -- the named-solid discipline shared with history-based
+# CAD systems such as CST); they must not rename or drop these.
+# Locked by tests on both servers.
+PROBE_SOLID_CORE_KEYS = frozenset(
+    {"id", "centroid", "bbox_min", "bbox_max", "extent", "volume"})
+PROBE_FACE_CORE_KEYS = frozenset(
+    {"id", "center", "bbox_min", "bbox_max", "extent", "area"})
+
+
+def _ann(read_only: bool, destructive: bool, idempotent: bool,
+         open_world: bool) -> ToolAnnotations:
+    return ToolAnnotations(
+        readOnlyHint=read_only, destructiveHint=destructive,
+        idempotentHint=idempotent, openWorldHint=open_world)
+
+
+ANN_READONLY = _ann(True, False, True, False)
+ANN_READONLY_WEB = _ann(True, False, False, True)   # fetches the web
+ANN_WRITES = _ann(False, False, False, False)       # writes files; no live-state harm
+ANN_DESTRUCTIVE = _ann(False, True, False, False)   # arbitrary code / mutates live state
+
+
+_DESTRUCTIVE = re.compile(
+    r"(?:^|_)(?:delete|destroy|exec|execute|kill|remove|reset|shutdown|stop)(?:_|$)"
+)
+_WRITES = re.compile(
+    r"(?:^|_)(?:add|apply|convert|create|download|edit|export|generate|import|install|launch|mesh|reload|render|run|save|set|solve|start|submit|update|write)(?:_|$)"
+)
+_READS = re.compile(
+    r"(?:^|_)(?:analysis|analyze|ask|audit|catalog|check|compare|contract|diagnos|doctor|estimate|explain|gate|get|health|index|inspect|inventory|knowledge|lesson|lint|list|lookup|manifest|overview|plan|policy|preflight|probe|profile|query|read|readiness|reference|report|roadmap|route|search|status|suggest|summary|taxonomy|tips|topic|topology|usage|validate)(?:_|$)"
+)
+_OPEN_WORLD = re.compile(
+    r"(?:^|_)(?:fetch|github|http|live|online|remote|session|web)(?:_|$)"
+)
+
+
+def annotation_preset_name(annotations: ToolAnnotations | None) -> str:
+    """Return the shared preset name for a fully specified annotation."""
+    if annotations is None:
+        return "missing"
+    values = (
+        annotations.readOnlyHint,
+        annotations.destructiveHint,
+        annotations.idempotentHint,
+        annotations.openWorldHint,
+    )
+    presets = {
+        (True, False, True, False): "readonly",
+        (True, False, False, True): "readonly_web",
+        (False, False, False, False): "writes",
+        (False, True, False, False): "destructive",
+    }
+    return presets.get(values, "custom")
+
+
+def infer_tool_annotations(name: str, description: str = "") \
+        -> tuple[ToolAnnotations, str]:
+    """Infer one conservative shared preset and report the inference basis.
+
+    Explicit server policy remains preferable.  This inference exists so every
+    server has a complete MCP annotation contract even before it has a curated
+    classification table.  Ambiguous tools are deliberately destructive, not
+    read-only: a client may ask before executing an unknown operation.
+    """
+    normalized = name.lower()
+    prose = description.lower()
+    if _DESTRUCTIVE.search(normalized) or re.search(
+        r"\b(?:delete|destroy|execute arbitrary|kill|remove|reset|shut down|stop)\b",
+        prose,
+    ):
+        return ANN_DESTRUCTIVE, "inferred-destructive"
+    if _WRITES.search(normalized) or re.search(
+        r"\b(?:create|download|edit|export|generate|install|launch|modify|render|run|save|solve|submit|update|write)\b",
+        prose,
+    ):
+        return ANN_WRITES, "inferred-writes"
+    if _READS.search(normalized) or re.search(
+        r"\b(?:analyze|check|compare|compute|explain|inspect|list|plan|read|report|return|search|validate)\b",
+        prose,
+    ):
+        if _OPEN_WORLD.search(normalized) or re.search(
+            r"\b(?:internet|online|remote|web)\b", prose
+        ):
+            return ANN_READONLY_WEB, "inferred-readonly-web"
+        return ANN_READONLY, "inferred-readonly"
+    return ANN_DESTRUCTIVE, "conservative-default"
+
+
+DEFAULT_READONLY_NAME_HINTS = (
+    "_gate", "_docs", "_guide", "_tips", "_reference", "_inventory",
+    "_status", "_lookup", "_ask", "_examples", "lint_", "get_",
+    "generate_", "netgen_", "_probe", "_diagnose", "_suggest",
+    "_failures", "_checkpoints", "_audit", "_doctor", "_usage", "_api",
+    "_knowledge", "_manifest", "_handoff", "_crosscheck", "_contract",
+    "_discussions", "_inspect", "inspect_", "_catalog",
+)
+
+
+def classify_tool_annotations(mcp, *, destructive=frozenset(),
+                              writes=frozenset(), web=frozenset(),
+                              readonly_name_hints=DEFAULT_READONLY_NAME_HINTS,
+                              ) -> list[str]:
+    """Stamp annotation presets onto every registered tool.
+
+    Explicit membership in ``destructive`` / ``writes`` / ``web`` wins.
+    Recognizable read-only names use ``ANN_READONLY``; ambiguous names use
+    ``ANN_DESTRUCTIVE``.  Returns those ambiguous names so the server's
+    ``--selftest`` can require a conscious classification.
+    """
+    unclassified: list[str] = []
+    for name, tool in mcp._tool_manager._tools.items():
+        source = "server-policy"
+        if name in destructive:
+            tool.annotations = ANN_DESTRUCTIVE
+        elif name in writes:
+            tool.annotations = ANN_WRITES
+        elif name in web:
+            tool.annotations = ANN_READONLY_WEB
+        elif name.endswith("_reload_code"):
+            # Registered by register_status_tool on every server: reloads
+            # changed modules and re-registers tools in this process. It
+            # writes nothing to disk and touches no live session.
+            tool.annotations = ANN_WRITES
+        else:
+            if any(h in name for h in readonly_name_hints):
+                tool.annotations = ANN_READONLY
+                source = "recognized-readonly-name"
+            else:
+                tool.annotations = ANN_DESTRUCTIVE
+                source = "conservative-default"
+                unclassified.append(name)
+        meta = dict(getattr(tool, "meta", None) or {})
+        meta["caeai.annotation_source"] = source
+        meta["caeai.annotation_preset"] = annotation_preset_name(
+            tool.annotations
+        )
+        tool.meta = meta
+    return unclassified
+
+
+def hide_gate_tools(mcp, env_var: str, suffix: str = "_gate") -> int:
+    """Remove ``*_gate`` tools when ``env_var`` is set to ``"0"``.
+
+    The production ``core`` profile has already grouped these operations. This
+    helper remains for ``full`` compatibility sessions. Returns the number of
+    tools removed.
+    """
+    if os.environ.get(env_var, "1") != "0":
+        return 0
+    removed = 0
+    for name in [n for n in list(mcp._tool_manager._tools)
+                 if n.endswith(suffix)]:
+        mcp._tool_manager.remove_tool(name)
+        removed += 1
+    return removed
+
+
+# One-shot size-capped rotation: when the log exceeds this, it is moved
+# to <name>.1 (replacing any previous .1) and a fresh file starts -- at
+# most 2x the cap on disk, no unbounded growth.
+CALL_LOG_ROTATE_BYTES = 5 * 1024 * 1024
+
+
+def rotate_if_large(log_path, cap_bytes: int = CALL_LOG_ROTATE_BYTES) -> bool:
+    """Rotate ``log_path`` to ``<name>.1`` when it exceeds ``cap_bytes``.
+
+    Returns True when a rotation happened.  Best-effort: a locked file
+    (concurrent server instance) just skips this round.
+    """
+    try:
+        if log_path.stat().st_size <= cap_bytes:
+            return False
+        os.replace(log_path, log_path.with_name(log_path.name + ".1"))
+        return True
+    except OSError:
+        return False
+
+
+def install_call_log(mcp, log_name: str, env_var: str | None = None) -> bool:
+    """Wrap ``ToolManager.call_tool`` with a JSONL all-calls log.
+
+    Every call appends ``{ts, tool, args, ms, ok, error_type?}`` to
+    ``<state_dir>/logs/<log_name>`` (size-capped via
+    :func:`rotate_if_large`).  Argument *values are never recorded*;
+    only key, type and length/shape metadata are retained.  A server-specific
+    ``env_var`` overrides the fleet-wide ``RADIA_MCP_CALL_LOG`` switch.
+    Installation is idempotent and creates no directory until the first call.
+
+    Returns ``True`` when the wrapper was installed.
+    """
+    manager = mcp._tool_manager
+    if getattr(manager, "_radia_call_log_installed", False):
+        return False
+    setting = os.environ.get(env_var) if env_var else None
+    if setting is None:
+        setting = os.environ.get("RADIA_MCP_CALL_LOG", "1")
+    if setting == "0":
+        return False
+
+    orig_call_tool = manager.call_tool
+
+    def _digest(arguments: dict) -> dict:
+        out = {}
+        for k, v in (arguments or {}).items():
+            item = {"type": type(v).__name__}
+            if isinstance(v, (str, bytes, bytearray, list, tuple, dict, set)):
+                item["length"] = len(v)
+            elif isinstance(v, Sized):
+                try:
+                    item["length"] = len(v)
+                except (TypeError, ValueError):
+                    pass
+            shape = getattr(v, "shape", None)
+            if shape is not None:
+                try:
+                    item["shape"] = [int(part) for part in shape]
+                except (TypeError, ValueError):
+                    pass
+            out[str(k)] = item
+        return out
+
+    async def logged_call_tool(name, arguments, context=None,
+                               convert_result=False):
+        t0 = time.time()
+        record = {"schema": "radia-mcp.tool-call.v1",
+                  "ts": round(t0, 3), "tool": name,
+                  "args": _digest(arguments)}
+        try:
+            result = await orig_call_tool(
+                name, arguments, context=context,
+                convert_result=convert_result)
+            record["ok"] = True
+            return result
+        except Exception as exc:
+            record["ok"] = False
+            record["error_type"] = type(exc).__name__
+            raise
+        finally:
+            record["ms"] = round((time.time() - t0) * 1000, 1)
+            try:
+                log_dir = _fl.state_dir() / "logs"
+                log_dir.mkdir(parents=True, exist_ok=True)
+                log_path = log_dir / log_name
+                rotate_if_large(log_path)
+                with open(log_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(record, ensure_ascii=False,
+                                       default=str) + "\n")
+            except OSError:
+                pass
+
+    manager.call_tool = logged_call_tool
+    manager._radia_call_log_installed = True
+    manager._radia_call_log_name = log_name
+    return True
+
+
+def error_payload(stage: str, message: str, *, kind: str | None = None,
+                  hint: str | None = None,
+                  environment_needles: tuple[str, ...] = (),
+                  log: str | None = None) -> dict:
+    """Uniform error dict: ``{status, stage, kind, error, hint?, log?}``.
+
+    ``kind`` defaults by needle scan: any of ``environment_needles``
+    (lower-cased substrings) in the message -> "environment", else
+    "input".  Pass ``kind="internal"`` explicitly for server bugs.
+    ``log`` (a path/description of where full diagnostics live) is
+    attached for environment/internal errors only.
+    """
+    if kind is None:
+        low = message.lower()
+        kind = ("environment"
+                if any(n in low for n in environment_needles) else "input")
+    payload = {"status": "error", "stage": stage, "kind": kind,
+               "error": message}
+    if hint:
+        payload["hint"] = hint
+    if log and kind in ("environment", "internal"):
+        payload["log"] = log
+    return payload

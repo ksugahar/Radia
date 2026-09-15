@@ -153,7 +153,7 @@ def run_phase(args):
                                 coarse_stl=out / "design_300.stl", timings={})
         if args.phase == "mesh":
             from unittest.mock import patch
-            from radia_mcp.cubit import session
+            from cubit_mesh_export.mcp import session
             journal = session.run_headless_journal
             journal_records = []
 
@@ -177,12 +177,12 @@ def run_phase(args):
                 def iso_batch(_step, commands, timeout_s=900):
                     checked_journal(commands, timeout_s=timeout_s, working_directory=out)
                     return {'status': 'ok'}
-                with patch('radia_mcp.cubit.server._run_batch', iso_batch):
+                with patch('cubit_mesh_export.mcp.server._run_batch', iso_batch):
                     iso_union = lane.validate_cubit_iso_union(out / 'design_lsd.exo', out)
             (out / "mesh-export.json").write_text(json.dumps({
                 "mesh_results": regen.mesh_results, "timings": regen.timings}, indent=2), encoding="utf-8")
         lane.test_stl_to_vol_gates(regen)
-        from radia_mcp.cubit.server import cubit_check_vol
+        from cubit_mesh_export.mcp.server import cubit_check_vol
         checks = {}
         for name in regen.mesh_results:
             checks[name] = json.loads(cubit_check_vol(

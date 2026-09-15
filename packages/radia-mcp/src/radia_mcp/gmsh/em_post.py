@@ -44,7 +44,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from ._gmsh_subprocess import run_gmsh_json_subprocess
+from cae_mcp_core.mesh._gmsh_subprocess import run_gmsh_json_subprocess
 from .post_process import _check_input, _finite_float, _finite_vector
 
 # Vacuum permeability (CODATA 2018), the default for the Maxwell stress.
