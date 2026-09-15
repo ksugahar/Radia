@@ -225,6 +225,13 @@ lofts, arbitrary profiles and discontinuous cross-section joins remain
 unsupported by this API. An open segment provides a field contribution;
 it is not a complete steady-current circuit without a return path.
 
+Rectangular loft CAD export is separate from field routing: straight lofts
+use centered endpoint sections; arc lofts interpolate circularly placed
+sections through `to_occ_shape()`. Arc CAD requires `0 < angle < 360`,
+`n_sub >= 4`, positive dimensions and a clear inner radius. Refine `n_sub`
+for CAD geometry convergence and verify analytic volume and STEP round trips.
+CAD export does not make `to_radia()` support native solid loft fields.
+
 See also: `docs/complex_coil_geometry/complex_coil.ipynb` -- 8-segment beam-steering
 coil showcase using CoilBuilder add_straight/add_arc with a Biot-Savart field map.
 
