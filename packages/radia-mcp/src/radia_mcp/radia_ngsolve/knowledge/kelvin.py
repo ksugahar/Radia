@@ -2238,7 +2238,51 @@ is a general scalar-Omega source contract for a compound current coil.
 For memoryless nonlinear iron, use
 `solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin`; it shares the
 same interface trace and B(H) law.  This Picard helper is not a hysteresis
-model.
+model. The following material-order contract describes the development solver
+candidate, not a capability enabled by upgrading radia-mcp alone. Check the
+loaded solver's signature and numerical acceptance before using
+`material_update_order`; the current released solver may not expose it.
+In that candidate, the default path uses one element-centroid order-0 permeability and is
+therefore limited to response `order=1`.  A response `order=2` solve must opt in
+with `material_update_order=1`; that path projects the monotone-PCHIP B(H)
+secant law into a discontinuous P1 log-permeability field, bounds the physical
+relative permeability above zero, and returns restartable material-state DoFs.
+The final field is re-solved after the material convergence test so H and mu
+belong to the same nonlinear state.
+
+The material field is assembled and evaluated as an NGSolve
+``CoefficientFunction`` on the selected finite-element space and is integrated
+with NGSolve quadrature.  The current Radia table adapter constructs that
+coefficient function from monotone PCHIP B(H) segments and continues beyond
+the last knot with vacuum slope.  Therefore equal B-H knots from another
+solver are not yet an equal constitutive law: bind the table digest,
+interpolation, extrapolation, and anisotropy contract explicitly.
+
+For either path, compare a volume integral or sufficiently resolved volume
+quadrature through `nonlinear_magnetic_spatial_evidence_gate`.  Production
+evidence also needs at least three h levels through
+`nonlinear_magnetic_refinement_energy_gate`: response/material orders must be
+`p`/`p-1`, average-B and RMS changes must contract, every material quadrature
+state must remain physically positive, and field/energy observables must bind
+the same material domain, coordinate frame, nonlinear-state identity, and
+physical refinement parent.  Each level must also close
+``W + W* = integral(H dot B)`` from the same converged state.  Use
+`nonlinear_magnetic_field_energy_parity_gate` for a second solver: it refuses
+numeric comparison until geometry, B-H interpolation/extrapolation,
+anisotropy, excitation, region, frame, units, case, and time semantics match.
+A center-point match, one close mesh, or nonlinear iteration convergence alone
+is not spatial validation or cross-solver parity.
+
+For newly generated comparison artifacts, the validation family also exposes
+the v5-v11 contracts: physical/energy identity (v5), result schema and digests
+(v6), solver-output lineage (v7), physical admissibility (v8), scalar observable
+comparison (v9), vector/frame comparison (v10), and live execution identity
+(v11). They check supplied evidence; passing a metadata contract is not an
+independent solver rerun or proof that a claimed result is physically correct.
+Use explicit SI H/B tables through `nonlinear_bh_canonical_table_gate` and
+compare the realized constitutive response, not just equal B-H table knots.
+`nonlinear_constitutive_point_sample_gate` requires unsmoothed element-local
+samples: recovered or averaged display fields are not constitutive oracles.
 
 Validated path: `validation_test/c_type_three_engine/run_three_engine.py`.
 This analysis workflow belongs to Radia MCP, not the exporter-owned Cubit MCP.
