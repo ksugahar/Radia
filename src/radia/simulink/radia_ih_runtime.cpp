@@ -36,6 +36,20 @@ void require_positive(const std::vector<double>& values, const char* name) {
                                     " must contain finite positive values");
 }
 
+void validate_coefficient_weights(const std::vector<double>& constant,
+                                  const std::vector<double>& weights,
+                                  bool rotation) {
+    if (rotation || constant.size() != weights.size())
+        throw std::invalid_argument("FE coefficient temperatures require matching constant coefficients and no periodic rotation");
+    require_finite(constant, "temperature_constant_coefficients");
+    require_finite(weights, "temperature_cell_weights");
+    double capacity = 0.0;
+    for (std::size_t i = 0; i < weights.size(); ++i)
+        capacity += constant[i] * weights[i];
+    if (!(capacity > 0.0) || !std::isfinite(capacity))
+        throw std::invalid_argument("FE coefficient total heat capacity must be positive");
+}
+
 void validate_csr(const CSRMatrix& matrix, int n, const char* name) {
     if (matrix.n != n || matrix.row_ptr.size() !=
             static_cast<std::size_t>(n + 1) || matrix.row_ptr.empty() ||
@@ -131,7 +145,11 @@ EddyRuntime::EddyRuntime(EddyConfig config) : config_(std::move(config)) {
         throw std::invalid_argument("IH Eddy operators must contain finite values");
     require_finite(config_.heat_projection, "heat_projection");
     require_positive(config_.heat_weights, "heat_cell_weights");
-    require_positive(config_.temperature_weights, "temperature_cell_weights");
+    if (config_.constant_coefficients.empty())
+        require_positive(config_.temperature_weights, "temperature_cell_weights");
+    else
+        validate_coefficient_weights(config_.constant_coefficients,
+                                     config_.temperature_weights, config_.periodic_rotation);
 
     previous_temperature_.assign(temperature_count, 0.0);
     cached_heat_.assign(static_cast<std::size_t>(config_.n_heat), 0.0);
@@ -174,7 +192,9 @@ std::vector<double> EddyRuntime::output(
                  ++temperature_index) {
                 const double delta_temperature =
                     local_temperature[temperature_index] -
-                    config_.reference_temperature_K;
+                    config_.reference_temperature_K *
+                    (config_.constant_coefficients.empty() ? 1.0 :
+                     config_.constant_coefficients[temperature_index]);
                 for (std::size_t entry = 0; entry < matrix_size; ++entry)
                     matrix[entry] += delta_temperature *
                         config_.matrix_temperature_slope[
@@ -222,8 +242,14 @@ ThermalRuntime::ThermalRuntime(ThermalConfig config)
         !std::isfinite(config_.options.convection_W_per_m2K) ||
         !std::isfinite(config_.angle_origin_rad))
         throw std::invalid_argument("invalid IH Thermal configuration");
-    require_positive(config_.initial_temperature_K, "initial_temperature_K");
-    require_positive(config_.weights, "temperature_cell_weights");
+    if (config_.options.constant_coefficients.empty()) {
+        require_positive(config_.initial_temperature_K, "initial_temperature_K");
+        require_positive(config_.weights, "temperature_cell_weights");
+    } else {
+        require_finite(config_.initial_temperature_K, "initial_temperature_K coefficients");
+        validate_coefficient_weights(config_.options.constant_coefficients,
+                                     config_.weights, config_.periodic_rotation);
+    }
     require_finite(config_.heat_to_temperature,
                    "heat_to_temperature_projection");
     validate_csr(config_.mass, n, "mass");

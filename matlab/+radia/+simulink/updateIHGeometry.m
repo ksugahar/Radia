@@ -264,7 +264,7 @@ for index = 1:numel(names)
     values.(name) = get_param(block, name);
 end
 % Existing tracked 3D blocks retain their explicit historical 3D behavior.
-for name=["axisymmetric_thermal_vol","n_phi_samples"]
+for name=["axisymmetric_thermal_vol","n_phi_samples","thermal_order"]
     if isfield(parameters,name), values.(name)=get_param(block,name); end
 end
 end

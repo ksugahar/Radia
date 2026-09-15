@@ -95,7 +95,7 @@ def test_options_reject_nonphysical_values():
     with pytest.raises(ValueError, match="frequency_hz"):
         assembly.IHOperatorAssemblyOptions(frequency_hz=0.0).checked()
     with pytest.raises(ValueError, match="thermal_order"):
-        assembly.IHOperatorAssemblyOptions(thermal_order=2).checked()
+        assembly.IHOperatorAssemblyOptions(thermal_order=3).checked()
     with pytest.raises(ValueError, match="versioned IH label contract"):
         assembly.IHOperatorAssemblyOptions(workpiece_label="surface").checked()
 
