@@ -22,9 +22,6 @@ import math
 import re
 from datetime import datetime, timezone
 
-from ngsolve import (CoefficientFunction, InnerProduct, sqrt, dx, ds, Integrate,
-                     IfPos, specialcf, Conj, x, y, z)
-
 from .scalar_fem3d import p1_surface_triangle_geometry, p1_tetrahedron_geometry
 
 MU0 = 4.0e-7 * math.pi
@@ -4761,6 +4758,8 @@ def electrostatic_eggshell_force(E, mesh, gradg, air_region="air"):
     (gradg = band * (r-center)/|r-center| * -1/(r_outer-r_inner)); for a plate/gap use
     an axis-aligned ramp (e.g. gradg = (0,0,g'(z)) across the gap).
     """
+    from ngsolve import InnerProduct, Integrate, dx
+
     Edg = InnerProduct(E, gradg)
     E2 = InnerProduct(E, E)
     region = dx(definedon=mesh.Materials(air_region))
@@ -4787,6 +4786,8 @@ def electrostatic_eggshell_force_2d(E, mesh, gradg, air_region="air"):
     the eggshell band (integrating in the dielectric AROUND the conductor) is the
     correct, robust extractor. (DEAD END recorded in ngsolve_usage("electro_mechanical").)
     """
+    from ngsolve import InnerProduct, Integrate, dx
+
     Edg = InnerProduct(E, gradg)
     E2 = InnerProduct(E, E)
     region = dx(definedon=mesh.Materials(air_region))
@@ -4802,6 +4803,8 @@ def magnetic_energy_2d(B, mesh, region=None):
     NOTE: for a 1/r field (e.g. a coaxial line) the |B|^2 integrand is sharply peaked at
     small r, so refine the mesh near the inner radius -- the coax energy converged
     1.8 % -> 0.5 % under such refinement."""
+    from ngsolve import InnerProduct, Integrate, dx
+
     dom = dx if region is None else dx(definedon=mesh.Materials(region))
     return Integrate(InnerProduct(B, B) / (2.0 * MU0) * dom, mesh)
 
@@ -4818,6 +4821,8 @@ def eggshell_force(B, mesh, center, r_inner, r_outer, air_region="air"):
     The band must lie in the air surrounding the body (choose ``r_inner`` >= the
     body radius). Returns (Fx, Fy, Fz) in newtons.
     """
+    from ngsolve import CoefficientFunction, IfPos, InnerProduct, Integrate, dx, sqrt, x, y, z
+
     cx, cy, cz = center
     rho = sqrt((x - cx)**2 + (y - cy)**2 + (z - cz)**2)
     band = IfPos(rho - r_inner, IfPos(r_outer - rho, 1.0, 0.0), 0.0)
@@ -4844,6 +4849,8 @@ def eggshell_torque(B, mesh, center, r_inner, r_outer, pivot=(0.0, 0.0, 0.0),
     same radial weight band (g=1 at r_inner, 0 at r_outer) in the air around the
     body. Returns (Tx, Ty, Tz). Use the same band as :func:`eggshell_force`;
     validated on a magnetised cylinder in a uniform field (tau = m x B0)."""
+    from ngsolve import CoefficientFunction, IfPos, InnerProduct, Integrate, dx, sqrt, x, y, z
+
     cx, cy, cz = center
     px, py, pz = pivot
     rho = sqrt((x - cx)**2 + (y - cy)**2 + (z - cz)**2)
@@ -4876,6 +4883,8 @@ def eggshell_force_2d(B, mesh, center, r_inner, r_outer, air_region="air"):
     benchmark F/L = mu0 I1 I2 / (2 pi d) to ~1 % (see validation_test/radia_mcp/test_planar_force.py).
     Returns (Fx, Fy) in N/m.
     """
+    from ngsolve import CoefficientFunction, IfPos, InnerProduct, Integrate, dx, sqrt, x, y
+
     cx, cy = center
     rho = sqrt((x - cx)**2 + (y - cy)**2)
     band = IfPos(rho - r_inner, IfPos(r_outer - rho, 1.0, 0.0), 0.0)
@@ -4902,6 +4911,8 @@ def eggshell_torque_2d(B, mesh, center, r_inner, r_outer, pivot=(0.0, 0.0),
     Same eggshell band convention as :func:`eggshell_force_2d`. The lever-arm
     weighting is validated to reproduce r' x F of the validated force.
     """
+    from ngsolve import CoefficientFunction, IfPos, InnerProduct, Integrate, dx, sqrt, x, y
+
     cx, cy = center
     px, py = pivot
     rho = sqrt((x - cx)**2 + (y - cy)**2)
@@ -4934,6 +4945,8 @@ def eggshell_force_axi(B, mesh, center, r_inner, r_outer, air_region="air"):
     g = 1 at r_inner, 0 at r_outer.  Validated on two coaxial loops against the
     exact mutual-inductance force I1 I2 dM/dz (M via elliptic integrals)
     (validation_test/radia_mcp/test_axi_force.py)."""
+    from ngsolve import CoefficientFunction, IfPos, InnerProduct, Integrate, dx, sqrt, x, y
+
     rc, zc = center
     rho = sqrt((x - rc)**2 + (y - zc)**2)
     band = IfPos(rho - r_inner, IfPos(r_outer - rho, 1.0, 0.0), 0.0)
@@ -4955,6 +4968,8 @@ def maxwell_surface_force(B, mesh, surface):
     Use ``eggshell_force`` instead unless you have a clean meshed surface --
     point/surface traces are noisier than the volume-band method. (Fx, Fy, Fz) [N].
     """
+    from ngsolve import InnerProduct, Integrate, ds, specialcf
+
     n = specialcf.normal(mesh.dim)
     Bn = InnerProduct(B, n)
     B2 = InnerProduct(B, B)
@@ -5005,6 +5020,8 @@ def ohmic_loss_2d(Ez, mesh, sigma, region=None):
     With a current-driven conductor (net current I), the AC resistance per length
     is ``Rac = 2 P / |I|^2``. Validated on the round-wire skin effect (Rac/Rdc vs
     Kelvin functions, 0.07 %; see validation_test/radia_mcp/test_planar_eddy.py)."""
+    from ngsolve import Conj, Integrate, dx
+
     integrand = 0.5 * sigma * (Ez * Conj(Ez)).real
     dom = dx if region is None else dx(definedon=mesh.Materials(region))
     return Integrate(integrand * dom, mesh)
@@ -5021,6 +5038,8 @@ def lorentz_force_2d(Jz, B, mesh, region):
     symmetry, so it drops out). The direct current-source twin of the Maxwell-stress
     :func:`eggshell_force_2d`. Returns ``(Fx, Fy)`` [N/m]. Validated on parallel
     busbars: |F| = mu0 I1 I2/(2 pi d)."""
+    from ngsolve import Integrate, dx
+
     dom = dx(definedon=mesh.Materials(region))
     Fx = -Integrate(Jz * B[1] * dom, mesh)
     Fy = Integrate(Jz * B[0] * dom, mesh)
@@ -5030,6 +5049,8 @@ def lorentz_force_2d(Jz, B, mesh, region):
 def magnetic_energy(B, mesh, region=None):
     """Field energy  W = 1/2 integral |B|^2 / mu0 dV  [J].
     ``region=None`` integrates the whole domain; else a material name."""
+    from ngsolve import InnerProduct, Integrate, dx
+
     integrand = 0.5 * InnerProduct(B, B) / MU0
     if region is None:
         return Integrate(integrand * dx, mesh)
@@ -5050,6 +5071,8 @@ def inductance_2d(B, mesh, nu, current, region=None):
     for a partial energy (e.g. a conductor's internal inductance). Validated:
     round-wire internal inductance L_int = mu0/(8 pi) = 5.0e-8 H/m, radius-
     independent, to 0.06 % (validation_test/radia_mcp/test_planar_inductance.py)."""
+    from ngsolve import InnerProduct, Integrate, dx
+
     dom = dx if region is None else dx(definedon=mesh.Materials(region))
     W = 0.5 * Integrate(nu * InnerProduct(B, B) * dom, mesh)
     return 2.0 * W / (current * current)
@@ -5066,6 +5089,8 @@ def inductance_axi(B, mesh, nu, current, region=None):
     current through the coil cross-section [A].
 
     ``region=None`` uses the whole domain; pass a material name to restrict."""
+    from ngsolve import InnerProduct, Integrate, dx, x
+
     dom = dx if region is None else dx(definedon=mesh.Materials(region))
     W_half = 0.5 * Integrate(nu * InnerProduct(B, B) * x * dom, mesh)
     W_3D = 2.0 * math.pi * W_half
@@ -5083,6 +5108,8 @@ def ohmic_loss_axi(E_phi, mesh, sigma, region=None):
 
     Analogous to ``ohmic_loss_2d`` but accounts for the toroidal (2*pi*r) volume.
     """
+    from ngsolve import Conj, Integrate, dx, x
+
     integrand = 0.5 * sigma * (E_phi * Conj(E_phi)).real * x
     dom = dx if region is None else dx(definedon=mesh.Materials(region))
     return 2.0 * math.pi * Integrate(integrand * dom, mesh)
