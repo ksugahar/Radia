@@ -3,7 +3,7 @@ import json
 
 from radia_mcp.build123d.brep_roundtrip_gate import brep_mass_topology_roundtrip_gate
 from radia_mcp.build123d.server import build123d_brep_mass_topology_roundtrip_gate as mcp_gate
-from radia_mcp.cubit.api_reference import get_api_reference
+from cubit_mesh_export.mcp.api_reference import get_api_reference
 
 
 REFERENCE = {

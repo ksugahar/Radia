@@ -274,6 +274,13 @@ def build_plan(
             selected.add("tests/test_policy_lint.py")
             continue
 
+        if path.startswith("packages/cae-mcp-core/"):
+            servers.update(catalog)
+            selected.update({"tests/test_common_mcp_runtime_contract.py",
+                             "tests/test_coarse_tool_registry.py",
+                             "tests/test_optional_dependency_imports.py",
+                             "tests/test_hot_reload.py"})
+            continue
         if not path.startswith(SOURCE_PREFIX):
             continue
 

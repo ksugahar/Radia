@@ -41,8 +41,8 @@ sys.path.insert(0, str(_REPO_ROOT / "packages" / "radia-mcp" / "src"))
 
 from build123d import Box, Sphere, export_step
 from radia_mcp.build123d.archetypes import c_core
-from radia_mcp.cubit.server import _run_batch
-from radia_mcp.gmsh.msh_inspect import mesh_quality
+from cubit_mesh_export.mcp.server import _run_batch
+from cae_mcp_core.mesh.msh_inspect import mesh_quality
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(_HERE, "artifacts")
@@ -151,7 +151,7 @@ def mesh_cubit(step, size, tag, hex_mode):
 def mesh_netgen(step, maxh, tag):
     from netgen.occ import OCCGeometry
     from ngsolve import Mesh
-    from radia_mcp.cubit.server import _netgen_mesh_to_msh
+    from cubit_mesh_export.mcp.server import _netgen_mesh_to_msh
     from pathlib import Path
     msh = Path(OUT) / f"ve_{tag}_ng.msh"
     _netgen_mesh_to_msh(Path(step), maxh, msh)

@@ -1,5 +1,5 @@
 from pathlib import Path
-from radia_mcp.cubit.server import _lint_file
+from cubit_mesh_export.mcp.server import _lint_file
 
 
 # ---------------------------------------------------------------------------

@@ -91,6 +91,11 @@ def start_toolbar_checks(out, mode, finish):
             later(complete)
 
     def complete():
+        import runpy
+        probe = Path(os.environ['CME_GUI_TEST_SOURCE']) / 'toolbar_probe.py'
+        snapshot = runpy.run_path(str(probe))['_snapshot']()
+        assert snapshot['ok'], snapshot
+        payload['installed_release_probe'] = snapshot
         button = next(w for w in app.allWidgets() if isinstance(w, QAbstractButton)
                       and destination.as_posix().lower() in w.toolTip().replace(chr(92), '/').lower())
         button.window().grab().save(str(out / 'persisted-toolbar.png'))

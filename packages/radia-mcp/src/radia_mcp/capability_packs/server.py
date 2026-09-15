@@ -20,8 +20,8 @@ from mcp.server.stdio import stdio_server
 
 from . import PACKS, modules_for
 from .. import __version__
-from ..common.status import build_status_payload, _runtime_provenance
-from ..common.mcp_contract import audit_tool_definitions, SCHEMA
+from cae_mcp_core.common.status import build_status_payload, _runtime_provenance
+from cae_mcp_core.common.mcp_contract import audit_tool_definitions, SCHEMA
 
 
 class CapabilityServer:

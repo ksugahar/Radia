@@ -6,7 +6,7 @@ from pathlib import Path
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from radia_mcp.common.mcp_contract import SCHEMA
+from cae_mcp_core.common.mcp_contract import SCHEMA
 from radia_mcp.radia_ngsolve.server import mcp
 
 

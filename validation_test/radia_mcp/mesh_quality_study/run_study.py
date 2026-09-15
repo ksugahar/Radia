@@ -31,8 +31,8 @@ sys.path.insert(0, str(_REPO_ROOT / "packages" / "radia-mcp" / "src"))
 from build123d import (Box, Compound, Cylinder, Pos, Sphere,
                        export_step)
 from radia_mcp.build123d.archetypes import c_core, halbach_ring, slotted_stator
-from radia_mcp.cubit.server import _netgen_mesh_to_msh, _run_batch
-from radia_mcp.gmsh.msh_inspect import mesh_quality
+from cubit_mesh_export.mcp.server import _netgen_mesh_to_msh, _run_batch
+from cae_mcp_core.mesh.msh_inspect import mesh_quality
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(_HERE, "artifacts")
@@ -148,7 +148,7 @@ def main():
     geoms = build_geometries()
     results = {"timestamp": datetime.now().isoformat(),
                "hostname": platform.node(),
-               "referee": "gmsh minSICN (radia_mcp.gmsh.msh_inspect)",
+               "referee": "gmsh minSICN (cae_mcp_core.mesh.msh_inspect)",
                "note": ("quality-class study (no timing); "
                         "equal_budget = netgen maxh calibrated to "
                         "cubit_tet element count +/-10%"),

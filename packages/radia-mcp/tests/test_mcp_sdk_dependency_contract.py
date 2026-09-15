@@ -28,7 +28,7 @@ def test_mcp_sdk_dependency_declares_supported_floor():
 
 def test_supported_sdk_registers_metadata_lists_schema_and_calls_tool():
     from mcp.server.fastmcp import FastMCP
-    from radia_mcp.common.server_hardening import ANN_READONLY
+    from cae_mcp_core.common.server_hardening import ANN_READONLY
 
     expected = os.environ.get("RADIA_MCP_EXPECTED_SDK")
     if expected:
