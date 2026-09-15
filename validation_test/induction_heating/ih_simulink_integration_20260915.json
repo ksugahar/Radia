@@ -187,6 +187,24 @@
       "passed": true,
       "failed": false,
       "incomplete": false
+    },
+    {
+      "name": "test_ih_coefficient_temperature/testConstantAmbientDoesNotHeatModalCoefficients",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_coefficient_temperature/testCoefficientTransientMatchesIndependentSolve",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_coefficient_temperature/testModalRotationAndMissingEvaluationFail",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
     }
   ]
 }
