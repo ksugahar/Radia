@@ -1028,11 +1028,36 @@ def paper_writing_check_conclusion_first_use(
     )
     src = _paper_writing_strip_comments(src) if looks_like_tex else src
     before, conclusion, heading = _paper_writing_split_conclusion(src)
+    guidance = {
+        "policy": (
+            "結論で新しくすべきなのは、本文の結果から導く統合的な洞察・"
+            "含意・展望。新しい手法、データ、変数、定量結果、引用は"
+            "本文で先に導入。"
+        ),
+        "hint": (
+            "文字列による補助診断。一般的な略語や意図的な将来展望は "
+            "whitelist または目視で除外。"
+        ),
+        "source": (
+            "Wallwork『日本人研究者のための論文の書き方・"
+            "アクセプト術』第19章, 木下『理科系の作文技術』"
+            "目標規定文"
+        ),
+    }
     if not conclusion.strip():
         return {
+            **guidance,
             "score": None,
+            "score_max": 10,
+            "passed": False,
             "conclusion_found": False,
+            "conclusion_heading": heading,
             "source_path": source_path,
+            "issue_count": None,
+            "new_technical_terms": [],
+            "new_math_symbols": [],
+            "new_numeric_claims": [],
+            "new_citation_keys": [],
             "comments": [
                 "Conclusion/結論/まとめ section を検出できない。"
                 "LaTeX \\section{} または Markdown heading を明示。"
@@ -1107,6 +1132,7 @@ def paper_writing_check_conclusion_first_use(
         )
 
     return {
+        **guidance,
         "score": round(score, 1),
         "score_max": 10,
         "passed": issue_count == 0,
@@ -1119,20 +1145,6 @@ def paper_writing_check_conclusion_first_use(
         "new_numeric_claims": new_numbers[:max_report],
         "new_citation_keys": new_citations[:max_report],
         "comments": comments,
-        "policy": (
-            "結論で新しくすべきなのは、本文の結果から導く統合的な洞察・"
-            "含意・展望。新しい手法、データ、変数、定量結果、引用は"
-            "本文で先に導入。"
-        ),
-        "hint": (
-            "文字列による補助診断。一般的な略語や意図的な将来展望は "
-            "whitelist または目視で除外。"
-        ),
-        "source": (
-            "Wallwork『日本人研究者のための論文の書き方・"
-            "アクセプト術』第19章, 木下『理科系の作文技術』"
-            "目標規定文"
-        ),
     }
 
 
