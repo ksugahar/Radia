@@ -115,6 +115,15 @@ def test_theta_jump_is_unit(ring_case):
     assert abs(abs(out["theta_jump"]) - 1.0) < 5e-3
 
 
+def test_complete_loop_reaction_is_passive_and_balanced(ring_case):
+    """Coarse thin-ring check; independent of reversing P_total into R."""
+    out, _ = ring_case
+    assert out["P_reaction"] > 0
+    assert abs(out["P_reaction"]/out["P_total"]-1) < .1
+    assert np.all(np.isfinite(out["H_t_tri"]))
+    assert np.all(out["q_tri"] >= 0)
+
+
 def test_frozen_equals_production_solve(ring_case):
     """alpha=0 sub-solve must reproduce the plain solver: same closed
     operators, same Lagrange gauge -- this pins that the extension
