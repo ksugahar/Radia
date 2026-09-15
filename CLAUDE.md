@@ -76,6 +76,15 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 `cubit-mesh-export` toolbar. Normal Radia Python must not depend on Qt. LLM/MCP Cubit execution is always batch/nographics and fails rather than launching or attaching to a GUI; the only GUI run is the separately scoped human-facing release test, while journal/checkpoint handoff remains artifact-only.
 
 ### Shared MCP Runtime Ownership
+- MCP maintenance is forward-only: update the maintained source and fix defects
+  forward. Never revert to, reinstall, or redistribute an older MCP version as
+  a recovery or deployment strategy. A failed update stays incomplete until a
+  corrected forward update passes its checks; do not label an old runtime current.
+- Superseded copies are not rollback reserves. Retain old material only for a
+  specific debugging purpose, with source identity, reason and removal condition;
+  never use it as an editable, fallback or distribution target. Remove obsolete
+  copies once consumer checks and unique-work review permit it; routine updates
+  do not require backup copies. Preserve uncommitted work and active jobs.
 - MCP is experimental development tooling, not a numerical solver release.
   Developers may edit live MCP source and change its editable source with
   `pip install -e`; no dedicated branch, frozen snapshot or separate deployment
