@@ -1,0 +1,143 @@
+{
+  "version": "4.95.91",
+  "import_path": "C:\\temp\\radia5-acceptance-venv-20260915\\Lib\\site-packages\\radia\\__init__.py",
+  "native_sha256": "932e49626c05c1e3d459f20649632d4bfa0adf9b37f325dace4093d74aeeb7b5",
+  "dependencies": {
+    "numpy": "2.5.3",
+    "scipy": "1.18.1",
+    "ngsolve": "6.2.2606",
+    "netgen-mesher": "6.2.2606",
+    "mkl": "2026.1.0"
+  },
+  "threads": 4,
+  "preconditioner": "mass-riesz",
+  "environment": {
+    "OMP_NUM_THREADS": null,
+    "MKL_NUM_THREADS": null,
+    "OPENBLAS_NUM_THREADS": null,
+    "MKL_THREADING_LAYER": "TBB"
+  },
+  "passed": true,
+  "mesh_geometry": {
+    "points": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        0.02
+      ],
+      [
+        0.0,
+        0.02,
+        0.0
+      ],
+      [
+        0.0,
+        0.02,
+        0.02
+      ],
+      [
+        0.02,
+        0.0,
+        0.0
+      ],
+      [
+        0.02,
+        0.0,
+        0.02
+      ],
+      [
+        0.02,
+        0.02,
+        0.0
+      ],
+      [
+        0.02,
+        0.02,
+        0.02
+      ]
+    ],
+    "elements": [
+      [
+        0,
+        2,
+        4,
+        1,
+        3,
+        5
+      ],
+      [
+        2,
+        6,
+        4,
+        3,
+        7,
+        5
+      ]
+    ]
+  },
+  "mesh_sha256": "2ebc42257879e43281041950620d7dc1be9b70916d63d8e1e0c8903af676b6ea",
+  "bh_table": [
+    [
+      0.0,
+      0.0
+    ],
+    [
+      10.0,
+      0.04054924577177298
+    ],
+    [
+      100.0,
+      0.3142849290651229
+    ],
+    [
+      1000.0,
+      0.96790053047368
+    ],
+    [
+      10000.0,
+      1.232602352590978
+    ],
+    [
+      100000.0,
+      1.3785421323010367
+    ]
+  ],
+  "controls": {
+    "drive": 300000.0,
+    "order": 2,
+    "gram_eps": 1e-09,
+    "tol": 1e-09,
+    "nl_tol": 2e-05,
+    "nl_maxit": 80
+  },
+  "stats": {
+    "nonlinear_inner_preconditioner": "mass-riesz",
+    "nonlinear_inner_tol": "auto",
+    "nonlinear_continuation_steps": 1,
+    "nonlinear_reuse_tangent_steps": 1,
+    "nonlinear_cg_x0": false,
+    "nonlinear_newton_iters": 19,
+    "nonlinear_warmstart_solves": 1,
+    "nonlinear_linear_inner_iters": 2404,
+    "nonlinear_line_search_backtracks": 3,
+    "nonlinear_tangent_assemblies": 19,
+    "nonlinear_tangent_reuses": 0,
+    "nonlinear_fresh_tangent_retries": 0,
+    "nonlinear_material_quadrature_order": 6,
+    "nonlinear_final_rel_step": 4.079377834873546e-05,
+    "nonlinear_final_relative_residual": 1.0202716027210686e-08,
+    "nonlinear_final_settled_iters": 1,
+    "nonlinear_converged_final_stage": true
+  },
+  "M_avg": [
+    125.26556379741288,
+    -21.139798140686164,
+    896885.7491110496
+  ],
+  "seconds": 12.697974500013515
+}

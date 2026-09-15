@@ -3,7 +3,25 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
-## Unreleased
+## 5.0.0 - HDiv-MMM production milestone
+
+Release candidate. Publication and four-machine deployment remain subject to
+the exact-tag native CI and `release_quad done` gates.
+
+- Promotes the HDiv-MMM production milestone with reproducible ESRF6 nominal
+  nonlinear three-engine acceptance: full iron mesh, BDM1, no IMA, and
+  second-order FEM. HDiv-MMM, reduced-A and mixed total/reduced Omega all
+  converge; the maximum pairwise relative RMS field difference at the 27 core
+  probes is 0.781862%, below the predeclared 3% acceptance threshold. This is
+  cross-formulation agreement, not an absolute field-error bound or a blanket
+  qualification of BDM2, IMA, strong saturation, or hysteresis. The recorded
+  run uses the official 4.95.91 candidate wheel from source `59b094d8`; it is
+  not represented as a run of the newly versioned 5.0.0 wheel.
+- The accepted three-engine result, exact mesh/runtime identities, raw
+  quadrature comparison and replayable gates are retained under
+  `validation_test/esrf_three_engine/results/candidate_59b094d8/`.
+  Fast CI now replays these records and rejects empty or incomplete residual
+  block diagnostics, mismatched field arrays and non-finite observations.
 
 - ESRF6 mixed-Omega production validation now rebuilds the total-volume Hodge
   source at the same `bonus_intorder` as every volume/interface solve, records

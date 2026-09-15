@@ -28,8 +28,8 @@ def gate():
     return ns
 
 
-@pytest.mark.parametrize('backtracks', [33, 34, 68])
-def test_legacy_exhausted_newton_result_cannot_resume(gate, backtracks):
+@pytest.mark.parametrize('backtracks', [0, 1, 32, 33, 34, 68, 86])
+def test_legacy_newton_without_residual_contract_cannot_resume(gate, backtracks):
     diagnostic = {'nonlinear': True, 'nonlinear_stats': {
         'converged': True, 'nonlinear_newton_iters': 1,
         'nonlinear_line_search_backtracks': backtracks,
@@ -45,11 +45,71 @@ def test_nonresidual_modes_are_not_convergence(gate, mode):
 
 def test_new_tolerance_contract_does_not_use_aggregate_backtrack_heuristic(gate):
     stats = {'converged': True, 'nonlinear_convergence_mode': 'tolerance',
-             'nonlinear_line_search_backtracks': 40, 'nonlinear_line_search_exhausted': False,
+             'nonlinear_line_search_backtracks': 86, 'nonlinear_line_search_exhausted': False,
              'nonlinear_final_relative_residual': 1e-6, 'nonlinear_residual_tolerance': 2e-5}
     assert gate['_is_converged_result']({'nonlinear_stats': stats})
     stats['nonlinear_line_search_exhausted'] = True
     assert not gate['_is_converged_result']({'nonlinear_stats': stats})
+
+
+def test_hdiv_engine_rejects_missing_contract_even_without_stat_names(gate, tmp_path):
+    diagnostic = {'nonlinear': True, 'nonlinear_stats': {'converged': True}}
+    assert not gate['_is_converged_result'](diagnostic, 'hdiv_mmm')
+    contract = {'engine': 'hdiv_mmm', 'observation_points_m': [[0, 0, 0]]}
+    path = tmp_path / 'checkpoint.json'
+    path.write_text(json.dumps({'schema': gate['CHECKPOINT_SCHEMA'], 'contract': contract,
+                               'diagnostics': diagnostic, 'field_T': [[1, 2, 3]]}))
+    with pytest.raises(RuntimeError, match='non-converged'):
+        gate['_read_checkpoint'](path, contract)
+
+
+def test_current_three_engine_evidence_keeps_distinct_solver_contracts(gate):
+    path = RUNNER.parent / 'results/candidate_59b094d8/three_engine_case6_bdm1_bonus12.json'
+    payload = json.loads(path.read_text(encoding='utf-8'))
+    assert set(payload['engines']) == set(NAMES)
+    for name, diagnostic in payload['engines'].items():
+        assert gate['_is_converged_result'](diagnostic, name, True), name
+
+
+@pytest.mark.parametrize('engine', ['reduced_a', 'mixed_total_reduced_omega'])
+def test_fem_contract_and_hdiv_stats_misrouting(gate, engine):
+    diagnostic = {'nonlinear': True, 'nonlinear_stats': {'converged': True, 'iterations': 5}}
+    assert gate['_is_converged_result'](diagnostic, engine)
+    diagnostic['nonlinear_stats']['converged'] = False
+    assert not gate['_is_converged_result'](diagnostic, engine)
+    diagnostic['nonlinear_stats'].update(converged=True, nonlinear_convergence_mode='tolerance',
+                                       nonlinear_final_relative_residual=1e-7,
+                                       nonlinear_residual_tolerance=2e-5)
+    assert not gate['_is_converged_result'](diagnostic, engine)
+    diagnostic['nonlinear'] = False
+    assert not gate['_is_converged_result'](diagnostic, engine)
+
+
+def test_unknown_engine_is_not_accepted(gate):
+    assert not gate['_is_converged_result']({'nonlinear': False}, 'wrong-engine')
+
+
+@pytest.mark.parametrize('stats', [
+    {'converged': False},
+    {'converged': True, 'nonlinear_convergence_mode': 'iteration-limit'},
+    {'converged': True, 'nonlinear_convergence_mode': 'tolerance',
+     'nonlinear_final_relative_residual': 1., 'nonlinear_residual_tolerance': 2e-5},
+])
+def test_linear_flag_cannot_hide_nonlinear_evidence(gate, stats):
+    assert not gate['_is_converged_result']({'nonlinear': False, 'nonlinear_stats': stats}, 'hdiv_mmm')
+    assert gate['_is_converged_result']({'nonlinear': False, 'nonlinear_stats': {}}, 'hdiv_mmm')
+
+
+def test_checkpoint_expected_nonlinear_cannot_be_downgraded(gate, tmp_path):
+    diagnostic = {'nonlinear': False, 'nonlinear_stats': {}}
+    contract = {'engine': 'hdiv_mmm', 'nonlinear': True, 'observation_points_m': [[0, 0, 0]]}
+    path = tmp_path / 'checkpoint.json'
+    path.write_text(json.dumps({'schema': gate['CHECKPOINT_SCHEMA'], 'contract': contract,
+                               'diagnostics': diagnostic, 'field_T': [[1, 2, 3]]}))
+    with pytest.raises(RuntimeError, match='non-converged'):
+        gate['_read_checkpoint'](path, contract)
+    with pytest.raises(RuntimeError, match='non-converged'):
+        gate['_write_checkpoint'](path, contract, np.ones((1, 3)), diagnostic, {})
 
 
 @pytest.mark.parametrize('residual', [None, float('nan'), float('inf'), -1., 3e-5, True])
@@ -77,7 +137,7 @@ def test_nonfinite_any_engine_any_order_rejected(gate, order, bad_engine, bad):
     fields = {name: np.ones((2, 3)) for name in order}
     fields[bad_engine][1, 2] = bad
     with pytest.raises(ValueError, match="finite"):
-        gate["_comparison_gate"](fields, np.ones(2, dtype=bool), .03)
+        gate["_comparison_gate"](fields, np.ones(2, dtype=bool), .01)
 
 
 @pytest.mark.parametrize("bad", [[], [[1, 2]], [[1, 2, 3]], [[True]*3]*2,
@@ -92,7 +152,7 @@ def test_shape_type_and_empty(gate, bad):
 @pytest.mark.parametrize("names", [(), NAMES[:2], (*NAMES, "extra")])
 def test_required_engine_set(gate, names):
     with pytest.raises(ValueError, match="three named engines"):
-        gate["_comparison_gate"]({n: np.ones((2, 3)) for n in names}, np.ones(2, dtype=bool), .03)
+        gate["_comparison_gate"]({n: np.ones((2, 3)) for n in names}, np.ones(2, dtype=bool), .01)
 
 
 @pytest.mark.parametrize("tol", [0, -1, 1, 2, np.nan, np.inf, -np.inf, True, ".03"])
@@ -105,6 +165,20 @@ def test_invalid_tolerance(gate, tol):
 def test_invalid_selector(gate, mask):
     with pytest.raises(ValueError, match="selector"):
         gate["_comparison_gate"]({n: np.ones((2, 3)) for n in NAMES}, mask, .03)
+
+
+@pytest.mark.parametrize('delta,expected', [(0.0099, True), (0.0101, False)])
+def test_one_percent_boundary(gate, delta, expected):
+    fields = {n: np.ones((2, 3)) for n in NAMES}
+    fields[NAMES[-1]] *= 1 + delta
+    assert gate['_comparison_gate'](fields, np.ones(2, dtype=bool), .01)[2] == expected
+
+
+def test_small_field_error_does_not_accept_nonconvergence(gate):
+    fields = {n: np.ones((2, 3)) for n in NAMES}
+    assert gate['_comparison_gate'](fields, np.ones(2, dtype=bool), .01)[2]
+    assert not gate['_is_converged_result'](
+        {'nonlinear': True, 'nonlinear_stats': {'converged': False}}, 'hdiv_mmm', True)
 
 
 def test_valid_agreement_and_mismatch(gate):

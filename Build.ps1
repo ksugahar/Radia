@@ -45,6 +45,27 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+function Get-NativeBuildResult {
+    param(
+        [int]$ExitCode,
+        [string]$LogText,
+        [string[]]$RequiredArtifacts = @()
+    )
+    if ($ExitCode -ne 0) { return $ExitCode }
+    # Nested cmd.exe batches can lose exit /b codes. Existing files do not
+    # make a failed build valid, so inspect the log before checking artifacts.
+    if ($LogText -match '(?im)^(?:ERROR: .*\b(?:build|configuration) failed|ninja: (?:error:|build stopped:)|CMake Error)') {
+        return 1
+    }
+    foreach ($artifact in $RequiredArtifacts) {
+        if (-not (Test-Path -LiteralPath $artifact -PathType Leaf)) {
+            Write-Host "ERROR: required native artifact was not produced: $artifact" -ForegroundColor Red
+            return 1
+        }
+    }
+    return 0
+}
+
 if (@($RadiaOnly, $AxiFemOnly, $MatlabMexOnly, $OptunaMexOnly).Where({ $_ }).Count -gt 1) {
     throw "-RadiaOnly, -AxiFemOnly, -MatlabMexOnly, and -OptunaMexOnly are mutually exclusive"
 }
@@ -598,6 +619,7 @@ try {
     # Use cmd /c directly (not Start-Process -Wait which waits for child processes)
     & cmd.exe /c "$BatchFile > `"$BuildLog`" 2>&1"
     $BuildResult = $LASTEXITCODE
+    $BuildLogText = ""
 
     if (Test-Path $BuildLog) {
         $BuildLogText = Get-Content $BuildLog -Raw
@@ -606,14 +628,13 @@ try {
             elseif ($_ -match "warning|WARNING") { Write-Host $_ -ForegroundColor Yellow }
             else { Write-Host $_ }
         }
-        # cmd.exe can lose a nested batch `exit /b` code on some Windows
-        # configurations. Never report a successful native build when the
-        # generator itself recorded a failed subcommand.
-        if ($BuildLogText -match "MATLAB MEX target build failed" -or
-                $BuildLogText -match "ninja: build stopped: subcommand failed") {
-            $BuildResult = 1
-        }
     }
+    $RequiredNativeArtifacts = @()
+    if ($BuildCubitPlugin -and -not ($RadiaOnly -or $AxiFemOnly -or $MatlabMexOnly -or $OptunaMexOnly)) {
+        $RequiredNativeArtifacts += "$PROJECT_DIR\src\cubit_plugin\build-pyd\cubit_mesh_curver.cp312-win_amd64.pyd"
+        $RequiredNativeArtifacts += "$PROJECT_DIR\src\cubit_plugin\build-ccm\cubit_mesh_export.ccm"
+    }
+    $BuildResult = Get-NativeBuildResult -ExitCode $BuildResult -LogText $BuildLogText -RequiredArtifacts $RequiredNativeArtifacts
     if ($MatlabMexOnly -or $OptunaMexOnly) {
         $RequiredMexArtifacts = @(
             "$PROJECT_DIR\matlab\optuna_mex.mexw64"

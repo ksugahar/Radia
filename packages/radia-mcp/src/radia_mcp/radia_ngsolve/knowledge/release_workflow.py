@@ -34,6 +34,15 @@ RELEASE_WORKFLOW = """\
 This document is the AI-readable canonical reference for the Radia
 release flow.  Its canonical local orchestrator is
 `tools/release_quad.py`; the former triple-machine workflow is retired.
+Radia PyPI publication is explicitly held after tag CI. Accept the exact tag
+run's wheel on LAB and hibino and merge its tracked acceptance.json/full6.json/
+focused.xml evidence to main under validation_test/esrf_three_engine/results/
+candidate_<source-sha-first-9>/. Dispatch the Release workflow on main with
+ci_run_id, wheel_sha256, and full acceptance_commit. Its read-only gate checks
+the GitHub run/workflow/repository, tag context and peeled SHA, main reachability,
+both hosts and all mandatory tests, and wheel/native hashes. Publication uses
+the same artifact without rebuilding. Changed bytes require new acceptance;
+four-machine QUAD done and Simulink gates remain separate obligations.
 Topics: overview, phases, simulink_candidate, optuna_candidate, preflight_gates, mcp_quality_review,
 ci_failure_modes, recovery, patch_bump_protocol, lab_lock_release,
 monorepo_lockstep, ci_monitor_skill.
@@ -105,7 +114,7 @@ table is the AI-readable summary.
 | 3 | Stage exactly the release files | always | NO `git add -A`; user has WIP |
 | 4 | Composite commit (HEREDOC, all packages in title) | always | Co-Authored-By trailer required |
 | 5 | Three (or two) annotated tags | always | only bump packages with changes |
-| 6 | Push main + all tags | always | tag push triggers CI; the exact tag CI uploads `ci-release-context` and is the automatic Release gate. The `radia-optuna` workflow alone also has an explicit recovery dispatch that may select an immutable, fully successful push CI for the exact tagged SHA after GitHub administratively cancels the tag run; it rechecks the CI workflow, repository, both required jobs, SHA, tag, version, and wheel before trusted publishing. |
+| 6 | Push approved main and package tags | after package gates | Radia tag CI uploads `ci-release-context` but leaves PyPI on HOLD. Accept the exact wheel, merge evidence to main, then use the explicit Release promotion dispatch described above. Other package workflows retain their independent publication gates. |
 | 7 | Monitor CI propagation to PyPI | always | use ci-monitor skill |
 | 8 | Deploy LAB + 100号機 editable, hibino PyPI, then mdx PyPI via Phase 8e | always | mdx skips radia-mcp |
 | 8S | Verify the exact versioned Simulink ZIP on LAB / 100号機 / mdx / hibino | for every Simulink revision | `simulink-candidate --package <zip> --target all` |
