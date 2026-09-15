@@ -11,7 +11,7 @@ import types
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTER_TOOLBAR = ROOT / "src" / "radia" / "panels" / "register_toolbar.py"
-EXPORT_MENU = ROOT / "src" / "radia" / "panels" / "radia_export_menu.py"
+EXPORT_MENU = ROOT / "packages/cubit-mesh-export/src/cubit_mesh_export/cubit_gui/radia_export_menu.py"
 AUDIT_SCRIPT = ROOT / "tools" / "audit_pyside6_only.py"
 
 _AUDIT_SPEC = importlib.util.spec_from_file_location(

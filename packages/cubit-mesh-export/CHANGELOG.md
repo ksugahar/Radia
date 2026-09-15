@@ -4,6 +4,14 @@ All notable changes to `cubit-mesh-export` — the high-order curved
 mesh export package for Coreform Cubit (Netgen / GMSH / Nastran /
 VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
+## Unreleased - standalone Cubit GUI
+
+- Package the Cubit-private export menu, WorkflowToolbar assets, installer
+  and default smoke journal without requiring the Radia distribution.
+- Release Claro-owned menu actions on application shutdown to prevent
+  Windows fast-fail during interpreter teardown.
+- Add isolated-wheel registration and explicitly scoped GUI smoke probes.
+
 ## 1.0.1 - Radia 5 compatibility
 
 - Extend the reciprocal Radia compatibility declaration through exactly
