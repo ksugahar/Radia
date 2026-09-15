@@ -115,6 +115,14 @@ separately, with host/client and observation time. When not checked, say so.
 
 ## Scope
 
+radia-mcp is independently versioned and distributed. Its release-dual targets
+are LAB and 100 only, using editable installations like cubit-mesh-export.
+Do not deploy radia-mcp to hibino, mdx1 or mdx2, or run the full Radia QUAD
+installer for an MCP-only update. Isolated CI/wheel tests on compute runners
+are tests, not host deployment. Existing installations on excluded hosts are
+not automatically removed. MCP updates do not wait for a Radia solver release.
+Release-dual names this two-host scope, not a new release_dual.py command.
+
 These permissions apply to MCP development, including editable repointing.
 Numerical solvers and native binaries still require their independent tests,
 provenance and release checks. Do not turn MCP experimentation into an excuse
