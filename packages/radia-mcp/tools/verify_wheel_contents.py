@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import configparser
 import pathlib
 import zipfile
 
@@ -28,12 +29,25 @@ def verify_wheel_contents(wheel_path: str | pathlib.Path) -> dict:
         raise FileNotFoundError(f"wheel not found: {wheel}")
     with zipfile.ZipFile(wheel) as archive:
         names = set(archive.namelist())
+        unwanted = sorted(name for name in names if name.startswith((
+            "radia_mcp/cubit/", "radia_mcp/common/",
+            "cubit_mesh_export/", "cae_mcp_core/",
+        )))
+        retired_entries = []
+        for name in names:
+            if name.endswith(".dist-info/entry_points.txt"):
+                entries = configparser.ConfigParser(interpolation=None)
+                entries.read_string(archive.read(name).decode("utf-8"))
+                if entries.has_option("console_scripts", "mcp-server-cubit"):
+                    retired_entries.append("mcp-server-cubit")
     missing = sorted(REQUIRED_ASSETS - names)
     return {
         "wheel": str(wheel),
         "required": sorted(REQUIRED_ASSETS),
         "missing": missing,
-        "ok": not missing,
+        "unwanted": unwanted,
+        "retired_entries": retired_entries,
+        "ok": not (missing or unwanted or retired_entries),
     }
 
 
@@ -42,10 +56,11 @@ def main() -> int:
     parser.add_argument("wheel")
     args = parser.parse_args()
     result = verify_wheel_contents(args.wheel)
-    if result["missing"]:
-        print("radia-mcp wheel is missing required runtime assets:")
-        for name in result["missing"]:
-            print(f"  {name}")
+    if not result["ok"]:
+        print("radia-mcp wheel violates its asset/ownership contract:")
+        for category in ("missing", "unwanted", "retired_entries"):
+            for name in result[category]:
+                print(f"  {category}: {name}")
         return 1
     print(f"OK: {len(result['required'])} required runtime assets are present")
     return 0
