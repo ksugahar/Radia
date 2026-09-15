@@ -106,6 +106,14 @@ def test_common_lazy_export_change_skips_unrelated_rag_content_tests():
     assert "tests/test_chunk_garble_gate.py" not in plan["package_tests"]
 
 
+def test_shared_hot_reload_change_checks_every_server_and_reload_contract():
+    path = "packages/radia-mcp/src/radia_mcp/_shared/hot_reload.py"
+    for symbols in (None, {path: {"reload_subpackage"}}):
+        plan = SELECTOR.build_plan([path], changed_symbols_by_file=symbols)
+        assert plan["server_selftests"] == sorted(SELECTOR._catalog())
+        assert "tests/test_hot_reload.py" in plan["package_tests"]
+
+
 def test_changed_symbol_narrows_a_large_compatibility_module():
     path = "packages/radia-mcp/src/radia_mcp/radia_ngsolve/solve.py"
     plan = SELECTOR.build_plan(

@@ -166,8 +166,9 @@ user's window.
 ## Install
 
 ```bash
-pip install radia-mcp                 # core (Cubit + build123d + GMSH lint/visualization + interop)
+pip install radia-mcp                # MCP guidance; no Radia solver or Cubit runtime required
 pip install radia-mcp[build123d]      # adds build123d itself
+pip install radia-mcp[build123d,cubit] # optional STEP-to-Cubit execution (Windows, Python 3.12)
 pip install radia-mcp[cadquery]       # adds CadQuery (interop with cadquery-mcp)
 pip install radia-mcp[gmsh]           # adds gmsh Python bindings for optional GMSH workflows
 pip install radia-mcp[youtube]        # adds youtube-transcript-api (tutorial scrape)
@@ -219,9 +220,10 @@ the pinned direct-Python and real-stdio-MCP evidence behind that health gate.
 Unseeded constructors use fresh private entropy; exact proposal parity uses an
 explicit seed.
 
-Requires Python ≥ 3.10. Coreform Cubit is auto-discovered from
-standard install paths; set `CUBIT_BIN_DIR` env var if installed
-non-standard.
+Requires Python ≥ 3.10. The optional `cubit` extra installs the separately
+owned `cubit-mesh-export` on Windows/Python 3.12 only; it does not install or
+license Coreform Cubit. On other platforms use build123d + Netgen for `.vol`
+generation. Cubit setup and discovery are documented by the exporter.
 
 ---
 
@@ -285,7 +287,7 @@ radia_mcp_by_tag("optimization")
 ## MCP servers
 
 The catalog is the **source of truth** — call `radia_mcp_overview()` for
-the full 49-server live list. The historically primary servers are
+the current live list. The historically primary servers are
 shown below for reference; everything else is discoverable via meta.
 
 ### Standalone (no Radia core dependency — `pip install radia-mcp`)
@@ -294,7 +296,6 @@ shown below for reference; everything else is discoverable via meta.
 |---|---|---|---|
 | **★ meta** | `mcp-server-radia-meta` | direct | Cross-server catalog + health/golden gate — RECOMMENDED FIRST CALL |
 | **literature-index** | `mcp-server-literature-index` | direct | Full-text search across 2,339 lab literature files in W:/03_文献・論文 (ChromaDB + semantic search) |
-| **Cubit** | `mcp-server-cubit` | direct + validation catalog | `cubit_mesh_auto`, `cubit_exec_safely`, `cubit_ask`, scheme ladder + geometry split, .cub5 checkpoint/restore, scrape index over Coreform forum + S:\\CoreformCubit lab archive (787 files) + YouTube + Coreform training |
 | **build123d** | `mcp-server-build123d` | direct + validation catalog | `build123d_to_cubit_hex`, `lint_build123d_script`, `build123d_try` (subprocess isolation), `build123d_inspect_step`, `build123d_heal`, `build123d_api`, Radia/general templates, CadQuery + bd_warehouse interop |
 | **GMSH** | `mcp-server-gmsh` | direct | `lint_gmsh_script`, `gmsh_audit_summary`, `gmsh_numsubedges_remediation_plan`, `gmsh_mesh_generation_remediation_plan`, references + examples |
 | **Force** | `mcp-server-force` | direct + validation catalog | Common Motor/MagLev force layer: shared result normalization; static and peak/RMS phasor Lorentz/Maxwell force and torque; virtual work, coenergy and uniform/sampled air-gap torque; method selection, independent-method/action-reaction/lift-weight gates; and validation guidance (numerical tools require the `radia` extra). |
@@ -322,7 +323,6 @@ Continue, …):
   "mcpServers": {
     "radia-meta":          {"command": "mcp-server-radia-meta"},
     "literature-index":    {"command": "mcp-server-literature-index"},
-    "cubit":               {"command": "mcp-server-cubit"},
     "build123d":           {"command": "mcp-server-build123d"},
     "gmsh":                {"command": "mcp-server-gmsh"},
     "force":               {"command": "mcp-server-force"},
@@ -341,13 +341,14 @@ The path above is an example of user-owned persistent local storage. Automated
 oracle tests must instead create a unique database in the per-run temporary
 directory and delete it after the local stdio server exits.
 
-Registering more than the 9 above is rarely necessary — once you have
+Register only the workflows you need — once you have
 **meta**, `radia_mcp_get(name)` returns the entry point for any of the
 cataloged servers and you can register them on demand. The full list of
 catalog-driven server names is in
 `radia_mcp.meta.catalog.CATALOG`.
 
-For local development from a checkout (no install needed):
+Optional external Cubit configuration, after installing `cubit-mesh-export`
+and a licensed Coreform Cubit (not provided by `radia-mcp`):
 
 ```json
 {
@@ -366,7 +367,6 @@ For local development from a checkout (no install needed):
 
 | Server | Bundled knowledge | Lines |
 |---|---|---|
-| Cubit | `cubit_api_reference.py` (600+ functions) + scripting + forum tips + netgen workflow + export rules + panels | ≈ 29 000 |
 | build123d | Auto-generated API reference (`inspect.getmembers`, 142 classes / 65 functions) + 18 curated topics (Plane/Axis/Location cookbook, Builder ↔ Algebra rosetta, joints, assemblies, CAE workflow, …) | 1 673 |
 | GMSH | Visualization/post-processing policy, MSH v4.1 spec, high-order display guidance, lint rules, examples, and remediation planners | 2 008 |
 
@@ -374,6 +374,9 @@ Plus persistent **failure log** per kind, fed into every `*_lookup` /
 `*_ask` retrieval so past mistakes are searchable next session.
 
 ## Live-scraped knowledge (cached 7 days)
+
+Cubit rows below describe the external exporter MCP, not bundled Radia MCP
+content. Consult its own catalog for current source availability.
 
 | Source | Kind | Volume |
 |---|---|---|
