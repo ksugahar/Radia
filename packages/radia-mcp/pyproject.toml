@@ -4,20 +4,18 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia-mcp"
-version = "1.5.0"
+version = "1.5.1"
 # IMPORTANT: PyPI Warehouse enforces Summary max length = 512 chars.
 # 0.72.0-0.74.0 silently failed publish-pypi (twine reject) because
 # the per-release changelog accumulated >512 chars here.  Keep this
 # short and stable; release-specific notes go in CHANGELOG.md.
-description = "MCP servers for the Radia CAE ecosystem -- Cubit / build123d / gmsh / NGSolve / PEEC / IH + 30+ specialized knowledge subpackages (panel-review, CLN MOR, COMSOL multilingual RAG, electromagnet, magnetic-materials, motor, accelerator, NMR/MRI, NDT, metamaterial, WPT, TEAM benchmark, etc.).  See README.md + CHANGELOG.md for per-release notes."
+description = "MCP workflows and executable engineering guidance for Radia: build123d, Gmsh post-processing, NGSolve, mixed-omega, PEEC, induction heating, optimization and research publications. Cubit MCP is distributed separately in cubit-mesh-export."
 readme = "README.md"
 license = {text = "BSD-3-Clause"}
 requires-python = ">=3.10"
 authors = [{name = "Kengo Sugahara"}]
-# Core dependencies cover the Cubit + build123d MCP servers which are
-# standalone (no radia core, no MKL, no C++ build). Companies that only
-# need Cubit integration can `pip install radia-mcp` without pulling in
-# the full radia wheel.
+# Core servers import without Radia, Cubit, MKL or a native build.
+# Optional execution backends are installed only for their selected workflows.
 dependencies = [
     "mcp>=1.20.0,<2",
 ]
@@ -27,6 +25,10 @@ maintenance = ["tomlkit>=0.13,<1"]
 # build123d-side tools need the build123d library itself.
 build123d = [
     "build123d>=0.6",
+]
+# Licensed Cubit execution is owned by the separate exporter (Windows/Python 3.12).
+cubit = [
+    "cubit-mesh-export>=1.0.2; python_version == '3.12' and sys_platform == 'win32'",
 ]
 # CadQuery interop: `execute_cadquery` + `cadquery_to_cubit_hex` let
 # users author geometry in either sibling OCCT CAD library and route
