@@ -9,7 +9,7 @@ from radia_mcp.maglev.server import team28_cycle_averaged_motion_gate as mcp_gat
 from radia_mcp.maglev.team28_dynamic_gate import team28_cycle_averaged_motion_gate
 
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 RESULT = (
     REPO_ROOT
     / "validation_test"
