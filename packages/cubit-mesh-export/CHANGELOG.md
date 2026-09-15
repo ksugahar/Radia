@@ -4,6 +4,12 @@ All notable changes to `cubit-mesh-export` — the high-order curved
 mesh export package for Coreform Cubit (Netgen / GMSH / Nastran /
 VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
+## 1.0.4 - GUI release launch correction
+
+- Pass the installed plugin directory before the GUI probe journal, preventing
+  Cubit 2025.12 from treating appended INI plugin arguments as journal files.
+- Retain launcher output with GUI evidence; keep nonzero process exits fatal.
+
 ## 1.0.3 - Review corrections
 
 - Declare independently maintained runtime support and preserve its BSD notices.
