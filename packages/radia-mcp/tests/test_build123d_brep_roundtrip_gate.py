@@ -3,7 +3,6 @@ import json
 
 from radia_mcp.build123d.brep_roundtrip_gate import brep_mass_topology_roundtrip_gate
 from radia_mcp.build123d.server import build123d_brep_mass_topology_roundtrip_gate as mcp_gate
-from cubit_mesh_export.mcp.api_reference import get_api_reference
 
 
 REFERENCE = {
@@ -67,10 +66,3 @@ def test_brep_roundtrip_mcp_dispatches_json():
         expected_volume=94.77361455046953,
     ))
     assert result["status"] == "ok"
-
-
-def test_cubit_geometry_reference_distinguishes_center_from_mass_centroid():
-    docs = get_api_reference("geometry_queries")
-    assert "representative geometric center" in docs
-    assert "volume_id).centroid()" in docs
-    assert "CenterOf.MASS" in docs

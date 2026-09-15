@@ -7,22 +7,6 @@ import errno
 import io
 
 
-def test_cubit_selftest_skips_repo_audit_by_default(monkeypatch, tmp_path):
-    from cubit_mesh_export.mcp import server
-
-    (tmp_path / "docs").mkdir()
-    monkeypatch.setattr(server, "PROJECT_ROOT", tmp_path)
-
-    out = io.StringIO()
-    with contextlib.redirect_stdout(out):
-        server._selftest()
-
-    text = out.getvalue()
-    assert "repo audit: SKIPPED" in text
-    assert "PASSED" in text
-    assert "Cubit Export Lint Report" not in text
-
-
 def test_gmsh_selftest_skips_repo_audit_by_default(monkeypatch, tmp_path):
     from radia_mcp.gmsh import server
 
@@ -40,10 +24,9 @@ def test_gmsh_selftest_skips_repo_audit_by_default(monkeypatch, tmp_path):
 
 
 def test_mesh_selftest_cli_tolerates_closed_stdout(monkeypatch):
-    from cubit_mesh_export.mcp import server as cubit_server
     from radia_mcp.gmsh import server as gmsh_server
 
-    for module in (cubit_server, gmsh_server):
+    for module in (gmsh_server,):
         def raise_closed_pipe(*, audit_repo=False):
             raise OSError(errno.EINVAL, "Invalid argument")
 
@@ -53,22 +36,16 @@ def test_mesh_selftest_cli_tolerates_closed_stdout(monkeypatch):
 
 
 def test_mesh_status_tools_expose_selftest_and_audit_commands():
-    from cubit_mesh_export.mcp import server as cubit_server
     from radia_mcp.gmsh import server as gmsh_server
 
-    cubit = cubit_server.mcp._tool_manager._tools["cubit_status"].fn()
     gmsh = gmsh_server.mcp._tool_manager._tools["gmsh_status"].fn()
 
-    assert cubit["selftest_command"] == "mcp-server-cubit --selftest"
-    assert cubit["audit_command"] == "mcp-server-cubit --selftest --audit-repo"
-    assert "cubit_status" in cubit["tools"]
     assert gmsh["selftest_command"] == "mcp-server-gmsh --selftest"
     assert gmsh["audit_command"] == "mcp-server-gmsh --selftest --audit-repo"
     assert "gmsh_status" in gmsh["tools"]
 
 
 def test_mesh_audit_summary_tools_are_machine_readable(monkeypatch, tmp_path):
-    from cubit_mesh_export.mcp import server as cubit_server
     from radia_mcp.gmsh import server as gmsh_server
 
     examples = tmp_path / "examples"
@@ -86,7 +63,6 @@ def test_mesh_audit_summary_tools_are_machine_readable(monkeypatch, tmp_path):
         return []
 
     for module, tool_name in (
-        (cubit_server, "cubit_audit_summary"),
         (gmsh_server, "gmsh_audit_summary"),
     ):
         monkeypatch.setattr(module, "PROJECT_ROOT", tmp_path)
