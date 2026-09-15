@@ -45,10 +45,28 @@ def test_native_motor_angle_family_artifact_records_live_matlab_evidence():
     assert isinstance(native["optimization_toolbox_available"], bool)
     assert native["foreign_openmp_runtime_dirs_remaining_on_path_count"] == 0
     assert len(native["mex_sha256"]) == 64
+    provenance = native.get("native_build_provenance")
+    assert isinstance(provenance, dict), (
+        "Native evidence predates clean-build provenance; rerun MATLAB validation, "
+        "do not restamp the historical artifact."
+    )
+    assert provenance["schema"] == "radia.native-build-provenance.v1"
+    assert provenance["source_dirty"] is False
+    assert len(provenance["source_commit"]) == 40
+    assert provenance["binary_sha256"] == native["mex_sha256"]
     assert len(native["source_sha256"]) == 64
     assert len(native["setup_sha256"]) == 64
     assert len(native["generator_sha256"]) == 64
     assert native["text_sha256_normalization"] == "newline-lf"
+    checked = {item["path"]: item["sha256"] for item in native["checked_source_hashes"]}
+    assert set(checked) == {
+        "src/core/rad_hacapk_hdiv.cpp",
+        "src/core/rad_hacapk_hdiv.h",
+        "tests/matlab/test_radia_mex.m",
+        "tests/matlab/test_simulink_workflow.m",
+    }
+    for relative_path, digest in checked.items():
+        assert digest == _text_sha256(ARTIFACT_DIR.parents[3] / relative_path)
     assert "periodic_angle_family_native_interpolation" in native[
         "validated_capabilities"
     ]

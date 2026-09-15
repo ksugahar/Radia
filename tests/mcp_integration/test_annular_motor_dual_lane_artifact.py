@@ -107,3 +107,25 @@ def test_production_replacement_proof_binds_motor_and_native_artifacts():
             "artifact_sha256": hashlib.sha256(raw.encode("utf-8")).hexdigest(),
         }
     )
+
+
+def test_proof_generator_preserves_each_evidence_version(tmp_path, monkeypatch):
+    import importlib.util
+
+    generator = ARTIFACT_DIR.parents[1] / "generate_production_replacement_proof.py"
+    spec = importlib.util.spec_from_file_location("motor_proof_generator", generator)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    output = tmp_path / "proof.json"
+    monkeypatch.setattr(module, "OUTPUT", output)
+    monkeypatch.setattr(module, "ROOT", tmp_path)
+    assert module.main() == 0
+    proof = json.loads(output.read_text(encoding="utf-8"))
+    native = _load("native_motor_angle_family.json")
+    native_proof = proof["proofs"]["native_motor_angle_family"]
+    assert native_proof["radia_version"] == native["radia_version"]
+    assert native_proof["executed_at_utc"] == native["executed_at_utc"]
+    assert proof["proofs"]["motor_dual_lane"]["radia_version"] == _load("manifest.json")["radia_version"]
+    assert native_proof["artifact_sha256_by_role"]["matlab"] == hashlib.sha256(
+        (ARTIFACT_DIR / "native_motor_angle_family.json").read_bytes()
+    ).hexdigest()
