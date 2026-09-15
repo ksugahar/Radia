@@ -11,6 +11,15 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 - Release Claro-owned menu actions on application shutdown to prevent
   Windows fast-fail during interpreter teardown.
 - Add isolated-wheel registration and explicitly scoped GUI smoke probes.
+- Fix all six official toolbar launchers for Cubit's `play` execution, which
+  does not define `__file__`; use the declared toolbar working directory.
+- Verify real dialog accept/cancel/checker-failure behavior and official package
+  import, restart and six-button dispatch using an installed wheel without Radia.
+  Tests restore the exact original Cubit preferences after the persistence lane.
+- Move Radia's duplicated GUI and installer to file-only compatibility bridges.
+  A missing exporter remains an import/dependency error for optional callers.
+- Show standalone checker startup failures and open Netgen output in a viewer
+  only after successful validation.
 
 ## 1.0.1 - Radia 5 compatibility
 
