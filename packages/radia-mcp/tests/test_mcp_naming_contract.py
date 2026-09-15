@@ -1,8 +1,7 @@
 """Regression lock for the public radia-mcp server naming contract."""
 
-from pathlib import Path
-
 import tomllib
+from pathlib import Path
 
 
 def test_all_mcp_server_scripts_are_cataloged_with_canonical_names():
@@ -32,3 +31,6 @@ def test_naming_conventions_tool_exposes_contract():
     assert result["command"] == "mcp-server-<server-id>"
     assert result["python"] == "radia_mcp.<python_module>"
     assert result["servers"]
+    assert "cubit_show" in result["compatibility"]
+    assert "removed" in result["compatibility"]
+    assert "not a blanket promise" in result["compatibility"]

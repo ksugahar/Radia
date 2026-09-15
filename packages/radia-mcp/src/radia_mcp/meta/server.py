@@ -18,8 +18,8 @@ import time
 
 from mcp.server.fastmcp import FastMCP
 
-from . import catalog, bug_patterns
 from ..common import register_status_tool
+from . import bug_patterns, catalog
 
 mcp = FastMCP("mcp-server-radia-meta")
 
@@ -73,7 +73,7 @@ def radia_mcp_naming_conventions() -> dict:
         "command": "mcp-server-<server-id>",
         "catalog_key": "<server-id>",
         "tool_prefix": "<server_id>_ (underscores)",
-        "compatibility": "Existing public commands and tool names remain aliases; do not break clients.",
+        "compatibility": "Retain compatible aliases where supported, not a blanket promise for every retired tool. Cubit GUI-only tools such as cubit_show were removed by the headless policy; use current tools/list and headless journal workflows instead.",
         "servers": catalog.list_all(),
     }
 

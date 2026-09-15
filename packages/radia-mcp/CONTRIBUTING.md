@@ -168,6 +168,19 @@ is still recommended for clarity.
 
 ## Releasing (maintainer notes)
 
+The package's mandatory runtime dependency is the MCP SDK. Test dependencies
+are a separate contract: the scoped test matrix installs pytest and NumPy for
+CSV/array fixtures, while `minimum-sdk` exercises registration and dispatch
+without adding NumPy. A NumPy-enabled test pass is not evidence that the bare
+runtime requires NumPy or that numerical solver dependencies are installed.
+Do not add test-only dependencies to mandatory runtime requirements.
+
+Some package tests inspect monorepo MATLAB, policy or validation artifacts.
+Those are repository integration checks, not standalone-wheel acceptance.
+They must be separated or supplied with synthetic package-local fixtures before
+claiming that the whole test suite runs from a package-only source distribution;
+do not hide missing integration coverage behind successful skips.
+
 Before publishing, treat a green matrix as a release candidate, not as
 operational completion.  The minimum pre-push health evidence is:
 
