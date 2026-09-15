@@ -1865,9 +1865,15 @@ Lagrange-P2 edge-node route retains path integration, as its sole
 implemented reconstruction.
 
 ``--wp-loop-dof`` accepts ``auto`` and ``on`` only.  ``auto`` applies
-the extension when its prerequisites hold and records
-``wp_loop_dof_skip_reason`` otherwise; ``on`` keeps fail-fast
-prerequisite checks.  The known-invalid ``off`` route is not selectable.
+the extension when its prerequisites hold. On the weak-coupled path,
+genus >= 1 without a supported loop mode now raises before BEM assembly
+and qsurf export, including ESIM, HACApK and P2 combinations. Genus-0
+auto needs no loop mode and remains supported. ``on`` keeps fail-fast
+prerequisite checks. No automatic change to linear SIBC or another backend
+is made: the implemented loop path is genus-1 / linear SIBC / intree-dense /
+P1. This guard does not implement ESIM-loop coupling or validate the
+Biot-Savart-normalized local loss approximation. The known-invalid
+``off`` route is not selectable.
 The Simulink configuration exposes this control.
 
 **Part 1 (DOMINANT, FIXED 2026-07-17): inconsistent surface winding.**
