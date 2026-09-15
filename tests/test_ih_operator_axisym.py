@@ -56,3 +56,21 @@ def test_p2_constant_and_mixed_surface_load():
     steady = c*(293.15+125/10)
     residual = (stiffness+10*convection)@steady-load-10*293.15*(convection@c)
     assert np.linalg.norm(residual) < 1e-9
+
+
+def test_p2_tetrahedra_use_the_same_constant_and_mixed_load_contract():
+    # In-memory algebra fixture, deliberately not a production VOL export.
+    from netgen.occ import Box, OCCGeometry, Pnt
+    body=Box(Pnt(0,0,0),Pnt(.01,.01,.01))
+    body.mat('workpiece')
+    for face in body.faces: face.name='sibc'
+    mesh=ng.Mesh(OCCGeometry(body).GenerateMesh(maxh=.01))
+    options=IHOperatorAssemblyOptions(thermal_order=2).checked()
+    with patch.object(ng,'Mesh',return_value=mesh), ng.TaskManager():
+        result=_assemble_thermal_operators(Path('in_memory'),np.ones(mesh.nv)*125,options)
+    c=result.constant_coefficients
+    assert result.n_temperature>mesh.nv
+    assert np.dot(c,result.temperature_cell_weights_J_per_K)==pytest.approx(7800*467*1e-6,rel=1e-10)
+    assert result.heat_power_W==pytest.approx(125*6e-4,rel=1e-10)
+    load=np.array(result.heat_to_temperature_projection).reshape(len(c),-1)@result.unit_heat_density_W_per_m3
+    assert np.dot(c,load)==pytest.approx(result.heat_power_W,rel=1e-10)
