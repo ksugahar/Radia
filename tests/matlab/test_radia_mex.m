@@ -1606,6 +1606,17 @@ minus = factory((1 - step) * hexCellNodes);
 minusCleanup = onCleanup(@() delete(minus));
 finiteDifference = (plus.entry(1,1) - minus.entry(1,1)) / (2*step);
 verifyEqual(testCase, derivative, finiteDifference, "RelTol", 2e-6);
+% Exercise a genuinely non-affine velocity, not only Laplace homogeneity.
+velocity = zeros(27,3);
+velocity(14,:) = [0.02, -0.01, 0.03];
+shapeDerivative = manager.hexVolumeSelfBlockDirectionalDerivative(1, velocity);
+shapePlus = factory(hexCellNodes + step*velocity);
+shapePlusCleanup = onCleanup(@() delete(shapePlus));
+shapeMinus = factory(hexCellNodes - step*velocity);
+shapeMinusCleanup = onCleanup(@() delete(shapeMinus));
+shapeFD = (shapePlus.entry(1,1) - shapeMinus.entry(1,1))/(2*step);
+verifyEqual(testCase, shapeDerivative, shapeFD, "RelTol", 2e-6, "AbsTol", 1e-12);
+clear shapeMinusCleanup shapePlusCleanup
 clear minusCleanup plusCleanup cleanup
 end
 

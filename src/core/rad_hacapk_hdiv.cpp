@@ -6442,6 +6442,9 @@ std::vector<double> RadHACApKChargeGram::HexVolumeSelfBlockDirectionalDerivative
         "HexVolumeSelfBlockDirectionalDerivative requires a 3D HEX charge Gram");
     if (host < 0 || host >= (int)m_cellCharges.size()) throw std::out_of_range("HEX host out of range");
     if (node_velocity.size() != 81) throw std::invalid_argument("node_velocity must have shape (27,3)");
+    if (m_hexAffineOrder == 1 && HexPairDuffyEnabled())
+        return QuadBlockHexPairDuffy(0, host, 0, host, 0,
+            node_velocity.data(), node_velocity.data());
     if (m_hexAffineOrder == 2 && !m_hexAffineCell[host])
         throw std::logic_error(
             "mapped HEX BDM2 shape derivatives are not implemented for the "
@@ -6597,6 +6600,9 @@ std::vector<double> RadHACApKChargeGram::HexFaceSelfBlockDirectionalDerivative(
         "HexFaceSelfBlockDirectionalDerivative requires a 3D HEX charge Gram");
     if(host<0||host>=(int)m_faceCharges.size())throw std::out_of_range("HEX face host out of range");
     if(node_velocity.size()!=27)throw std::invalid_argument("node_velocity must have shape (9,3)");
+    if (m_hexAffineOrder == 1 && HexPairDuffyEnabled())
+        return QuadBlockHexPairDuffy(1, host, 1, host, 0,
+            node_velocity.data(), node_velocity.data());
     if (m_hexAffineOrder == 2 && !m_quadAffineFace[host])
         throw std::logic_error(
             "mapped HEX BDM2 shape derivatives are not implemented for the "
@@ -7040,8 +7046,13 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHexProductN(int kindT, int hT,
     for (size_t k = 0; k < blk.size(); ++k) blk[k] = (blk[k] + comp[k]) * RAD_INV_FOUR_PI;
     return blk;
 }
-std::vector<double> RadHACApKChargeGram::QuadBlockHexPairDuffy(int kindT, int hT, int kindS, int hS, int img) const
+std::vector<double> RadHACApKChargeGram::QuadBlockHexPairDuffy(
+    int kindT, int hT, int kindS, int hS, int img,
+    const double* velocityT, const double* velocityS) const
 {
+    const bool directional = velocityT != nullptr;
+    if (directional != (velocityS != nullptr) || (directional && img != 0))
+        throw std::invalid_argument("pair Duffy derivative requires both velocities and direct image 0");
     const std::vector<int>& tgtG = (kindT == 0) ? m_cellCharges[hT] : m_faceCharges[hT];
     const std::vector<int>& srcG = (kindS == 0) ? m_cellCharges[hS] : m_faceCharges[hS];
     const int nT = (int)tgtG.size(), nS = (int)srcG.size();
@@ -7136,6 +7147,18 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHexPairDuffy(int kindT, int hT
             const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
             if (r > 1e-300) {
                 weight /= r;
+                if (directional) {
+                    // Piola charge measures and reference-domain quadrature stay
+                    // fixed. Differentiate only 1/|X_T-X_S| on exactly the same
+                    // Duffy points as the primal block, including curved maps.
+                    double VT[3], VS[3];
+                    if (dT == 3) HexQ2MapX(velocityT, xi, VT);
+                    else { const double uv[2] = {xi[0], xi[1]}; QuadQ2MapX(velocityT, uv, VT); }
+                    if (dS == 3) HexQ2MapX(velocityS, eta, VS);
+                    else { const double uv[2] = {eta[0], eta[1]}; QuadQ2MapX(velocityS, uv, VS); }
+                    weight *= -(dx*(VT[0]-VS[0]) + dy*(VT[1]-VS[1])
+                                + dz*(VT[2]-VS[2]))/(r*r);
+                }
                 for (int lt = 0; lt < nT; ++lt) qT[(size_t)lt] = HexMonoEval(tgtG[lt], xi);
                 for (int ls = 0; ls < nS; ++ls) qS[(size_t)ls] = HexMonoEval(srcG[ls], eta);
                 for (int lt = 0; lt < nT; ++lt) {
