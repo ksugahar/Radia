@@ -16,7 +16,7 @@ import time
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication, QMainWindow, QToolBar
 
-SCHEMA = "radia.cubit-toolbar-probe.v1"
+SCHEMA = "cubit-mesh-export.toolbar-probe.v2"
 EXPECTED_ACTIONS = [
     "Netgen Vol (.vol)",
     "GMSH (.msh)",
@@ -37,16 +37,6 @@ _finished = False
 
 def _plain(text):
     return str(text).replace("&", "")
-
-
-def _menu_entries(menu):
-    entries = []
-    for action in menu.actions():
-        entries.append(_plain(action.text()))
-        submenu = action.menu()
-        if submenu is not None:
-            entries.extend(_menu_entries(submenu))
-    return entries
 
 
 def _finish(payload):
@@ -94,20 +84,9 @@ def _snapshot():
     actions = list(toolbar.actions()) if toolbar is not None else []
     action_names = [_plain(action.text()) for action in actions]
 
-    top_level_menu = [_plain(action.text()) for action in main.menuBar().actions()]
-    view_action = next(
-        (action for action in main.menuBar().actions()
-         if _plain(action.text()) == "View"),
-        None,
-    )
-    view_entries = []
-    if view_action is not None and view_action.menu() is not None:
-        view_entries = _menu_entries(view_action.menu())
-
-    popup = main.createPopupMenu()
-    popup_entries = _menu_entries(popup) if popup is not None else []
-    if popup is not None:
-        popup.deleteLater()
+    # This action belongs to QToolBar itself. Never traverse Claro's menubar:
+    # wrapping its C++/SWIG menu actions with shiboken can corrupt GUI teardown.
+    toggle = toolbar.toggleViewAction() if toolbar is not None else None
 
     toolbar_visible = bool(toolbar is not None and toolbar.isVisible())
     visible_region_nonempty = bool(
@@ -124,9 +103,7 @@ def _snapshot():
         name: bool(action.isEnabled())
         for name, action in zip(action_names, actions)
     }
-    toolbar_menu_has = (
-        "Radia Export" in view_entries or "Radia Export" in popup_entries
-    )
+    toolbar_menu_has = toggle is not None and _plain(toggle.text()) == "Radia Export"
 
     payload = {
         "main_window_visible": bool(main.isVisible()),
@@ -138,8 +115,7 @@ def _snapshot():
         "action_visible": action_visible,
         "action_enabled": action_enabled,
         "toolbar_menu_has_radia_export": toolbar_menu_has,
-        "view_has_radia_export": "Radia Export" in view_entries,
-        "unsupported_top_level_menu_present": "Radia Export" in top_level_menu,
+        "toolbar_owner": toolbar.metaObject().className() if toolbar is not None else None,
     }
     payload["ok"] = (
         payload["main_window_visible"]
@@ -151,7 +127,7 @@ def _snapshot():
         and all(payload["action_visible"].get(name) for name in EXPECTED_ACTIONS)
         and all(payload["action_enabled"].get(name) for name in EXPECTED_ACTIONS)
         and payload["toolbar_menu_has_radia_export"]
-        and not payload["unsupported_top_level_menu_present"]
+        and payload["toolbar_owner"] == "WorkflowToolbar"
     )
     return payload
 
@@ -169,4 +145,5 @@ def _probe():
     _finish(payload)
 
 
-QTimer.singleShot(0, _probe)
+if __name__ in ('__main__', '_coreform_cubit'):
+    QTimer.singleShot(0, _probe)

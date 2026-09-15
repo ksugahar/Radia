@@ -40,6 +40,12 @@ Re-run `cubit-plugin-install` from the selected external interpreter and restart
 to replace old startup references; do not restore shims at removed Radia paths.
 The GUI cold-start command is an explicitly scoped release test, never an LLM
 production execution route. Its wheel and probe run without the Radia package.
+Independent publication uses the cubit-mesh-export tag and PyPI distribution.
+`release_quad.py cubit-dual` owns LAB/100 preflight, deployment and done receipts
+for one published wheel hash and clean source SHA. It leaves Radia/MCP untouched
+and refuses active Cubit instead of stopping user jobs. Optional combined Radia
+compatibility is a separate `cubit-plugin-install --check-radia-compat` check;
+ordinary install/verify must not import Radia or wait for a solver release.
 Netgen GUI exports run standalone check-vol before opening any external viewer;
 checker startup failure is a visible error, not successful export acceptance.
 Coreform's official toolbar `play` does not define `__file__`. Self-contained

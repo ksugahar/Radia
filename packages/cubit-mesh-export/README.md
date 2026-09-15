@@ -18,6 +18,11 @@ shims. Existing deployments must regenerate their startup registration using
 `cubit_toolbar_guide` for the operating contract and
 `validation_test/cubit_mesh_export/STANDALONE_GUI.md` for acceptance evidence.
 
+Version 1.0.2 publishes this GUI independently of Radia. Installation and
+deployment verification never import Radia; use `--check-radia-compat` only
+for an explicitly requested combined integration check. LAB/100 acceptance
+uses `release_quad.py cubit-dual`, not the Radia-wide deployment commands.
+
 Version 1.0.0 retains the 0.14.17 command and label contracts. Its
 supported binary runtime is 64-bit Windows, CPython 3.12, Coreform Cubit
 2025.12, and the exact Netgen/NGSolve versions declared in package metadata.
