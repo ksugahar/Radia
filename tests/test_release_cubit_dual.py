@@ -26,7 +26,7 @@ def test_receipt_requires_every_acceptance_field():
                     core={'version': '0.1.0', 'wheel_sha256': 'c' * 64})
     receipt = dict(contract, schema=dual.SCHEMA, target='lab', passed=True,
                    unrelated_packages_unchanged=True, smoke_test=True, toolbar_smoke=True,
-                   mcp_selftest=True)
+                   mcp_selftest=True, mcp_cli_selftest=True)
     assert dual.check_receipt(receipt, contract, 'lab')
     for key in receipt:
         damaged = {k: v for k, v in receipt.items() if k != key}
