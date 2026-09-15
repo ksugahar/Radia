@@ -204,6 +204,27 @@ coil = (CoilBuilder(current=2000)
 | `to_wire_segments()` | (segments, current) | Wire model for panels |
 | `combined_occ([other_coils])` | Fused OCC shape | Multi-coil STEP |
 
+## Loft Field Routing
+
+`to_radia()` accepts constant rectangular straight/arc solids; unsupported
+profiles and lofts must not be omitted or replaced with bounding rectangles.
+For rectangular straight lofts and positive-angle rectangular arc lofts, use
+`to_radia_loft_filaments(nw, nh, n_arc=64)` explicitly. This is a native
+thin-filament approximation with prescribed equal current per stream tube,
+not a solid-volume kernel or a conduction solution. Require this method to
+exist in the loaded runtime; do not silently fall back on older installations.
+
+Straight linear loft paths use closed-form line fields. Curved lofts use
+chords, so refine `n_arc` independently of the section counts `nw` and `nh`.
+Check an independent volume integral, current conservation, constant-section
+limits and rigid transforms. A matching coil field at one point is insufficient.
+
+Use only for external fields. Do not use it for internal fields, self-energy,
+self-force, Joule loss, skin effect or proximity effect. Negative-angle arc
+lofts, arbitrary profiles and discontinuous cross-section joins remain
+unsupported by this API. An open segment provides a field contribution;
+it is not a complete steady-current circuit without a return path.
+
 See also: `docs/complex_coil_geometry/complex_coil.ipynb` -- 8-segment beam-steering
 coil showcase using CoilBuilder add_straight/add_arc with a Biot-Savart field map.
 
