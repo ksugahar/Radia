@@ -1,12 +1,20 @@
 # Checkpoint-Batch-Commit-Race: a design pattern for AI-driven interactive CAE
 
+> **Historical design, not the current operating manual (2026-09-15).**
+> This disclosure describes the former interactive GUI/timer workflow.
+> Current MCP-driven Cubit execution is headless/batch; GUI-only tools are
+> retired and are not compatibility aliases. Check the live Cubit status and
+> tool catalog for supported checkpoint/batch operations. The historical
+> implementation and production-use statements below refer to that earlier
+> design, not current release acceptance.
+
 | | |
 |---|---|
 | **Author** | Kengo Sugahara (菅原 賢悟) — Sugawara Lab, Kindai University |
 | **Contact** | ksugahar@ele.kindai.ac.jp |
 | **First public disclosure** | 2026-04-20, this repository, BSD-3-Clause |
 | **Reference implementation** | [`radia-mcp`](https://pypi.org/project/radia-mcp/) ≥ 0.25.0 |
-| **Status** | Proposed pattern, in production use at the Sugawara Lab |
+| **Status** | Historical proposed pattern; interactive runtime superseded |
 | **License of this document** | BSD-3-Clause (matching the project) |
 
 > **Defensive publication.** This document, together with the
