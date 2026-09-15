@@ -20,7 +20,7 @@ Usage:
 import sys
 
 from mcp.server.fastmcp import FastMCP
-from ..common import register_status_tool
+from cae_mcp_core.common import register_status_tool
 
 from .overview_knowledge import get_overview_knowledge
 from .mom_foundations_knowledge import get_mom_foundations_knowledge

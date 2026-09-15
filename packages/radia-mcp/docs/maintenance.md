@@ -8,9 +8,15 @@ and fresh-process checks do not establish what existing clients have loaded.
 
 ## Standard client configuration
 
-The maintained baseline is `radia-meta`, `radia-build123d`, `radia-cubit`,
+The maintained baseline is `radia-meta`, `radia-build123d`,
 `radia-gmsh`, `radia-analysis`, `radia-motion`, and `radia-publication`.
 Additional servers are retained. Gmsh is for post-processing, not solver meshing.
+Cubit MCP is owned by `cubit-mesh-export`, not this baseline. Its owner installs
+and configures `python -s -m cubit_mesh_export.mcp.server`. Existing external
+entries and their permissions are preserved. Retired `radia_mcp.cubit.server`
+or `maintenance serve cubit` launchers cause a read-only conflict report with
+the replacement module; migrate them through the owning package before retrying.
+Do not delete a client's Cubit entry or silently re-enable it during migration.
 The baseline includes tools that can execute code; existing client approval
 policies still apply. Installation does not grant permission for arbitrary runs.
 
@@ -48,58 +54,72 @@ maintenance never kills unrelated MATLAB, Python, or client processes.
 
 ## Repeatable editable update
 
-1. Select the development source and intended interpreter. Routine experiments
-   require no dedicated branch, immutable snapshot or separate approval. Record
-   the source path and actual commit plus uncommitted changes when reporting
-   results; a commit alone does not identify modified source.
-2. Inventory all explicitly named human users, both clients and project-scoped
-   settings. LAB and 100 have separate executable/path namespaces. On 100 use
-   its local `W:` path, not LAB's mapped `S:` or a UNC path.
-3. Coordinate changes to the same source or interpreter with other developers.
-   Preserve their uncommitted changes and active jobs. Do not automatically
-   restore a source merely because it used to be canonical.
-4. Using the intended Python, run
-   `python -s -m pip install -e '<checkout>/packages/radia-mcp[maintenance]'`.
-   Check the exit code. Locked Windows entry points are a blocked update, not
-   success: arrange client shutdown/retry; do not kill all Python or manually
-   fabricate package metadata. Reload compatible code or reconnect the affected
-   client when needed; source edits do not refresh loaded objects automatically.
-5. Run `doctor --expected-root <checkout>/packages/radia-mcp/src/radia_mcp
-   --expected-version <selected-version> --expected-commit <actual-full-SHA>` through
-   `python -s -m radia_mcp.maintenance`. A nonzero result blocks acceptance.
-   This checks the new process, not already-running sessions. Version alone
-   cannot distinguish editable changes; record the commit and source path too.
-6. Plan/apply each user's JSON and TOML configurations, record conflicts, and
-   verify access under the intended user. An administrator's import test is not
-   proof that another user's launch works. Do not change that user's unrelated
-   Python site packages or copy credentials to enable impersonation.
-7. Run the existing fresh-process real-transport probe
-   `python -s tools/smoke_mcp_stdio.py --server <catalog-key>` from the package
-   directory for each distinct launch configuration. It verifies initialize,
-   tools/list, status, schema annotations and loaded-source provenance using
-   the standard launcher. Separately reload/reconnect affected clients as needed
-   using supported controls and the mcp-reconnect skill. Verify live discovery,
-   loaded-source evidence and a harmless changed call through each original
-   client. Neither doctor nor this new stdio process verifies an existing client.
+radia-mcp uses **release-dual: LAB and 100 only**, independently of Radia's
+solver release. Both keep editable installs. Do not deploy to hibino/mdx1/mdx2
+or invoke the full QUAD installer for this package-only update. Compute-runner
+CI remains isolated; existing excluded-host installations are left untouched.
 
-Recovery: select the intended known-working source in coordination with affected
-developers; do not reset another worktree or automatically restore an old path.
-Restore only affected settings from backups when appropriate, preserving ACLs.
-Repeat fresh-process and live-client checks. Before removing an old source,
-verify that no active consumer needs it. Release wheel tests use isolated
-environments and retain their independent publication/acceptance gates.
+The default is **update source -> reconnect -> check one affected live tool**.
+
+1. Update the usual editable development checkout with reviewed changes. Check
+   its actual path and coordinate overlapping edits; preserve others' WIP.
+   Do not blindly pull/reset a dirty tree or switch to every temporary worktree.
+   Pure Python edits at the same root normally need no reinstall.
+2. Reconnect the affected client using supported controls and the mcp-reconnect
+   skill, at a boundary without active work. Known-safe compatible hot reload
+   is an optional shortcut. If automatic reconnect is unavailable, request one
+   targeted manual Restart; do not kill Python, CAD, MATLAB or whole clients.
+3. Check the live source and one harmless affected tool through that original
+   client; check discovery too when tool names/schemas changed. Report the
+   observed source and result briefly. Unknown evidence stays unverified;
+   a Git merge or pip success alone is not live update completion.
+
+No new daemon, watcher, generation database or mandatory receipt is needed.
+The existing tools below are exceptions and diagnostics, not compulsory steps
+for every edit. Default to the affected client/user, not every host/account.
+
+### When more is needed
+
+- **Source relocation or dependencies/package metadata changed:** use the
+  intended Python to run
+  `python -s -m pip install -e '<checkout>/packages/radia-mcp[maintenance]'`.
+  Do not uninstall first. Check the exit code and actual import path, then
+  reconnect. Locked entry points mean a pending update, not success.
+- **Installation/launch changes or uncertain source:** run
+  `python -s -m radia_mcp.maintenance doctor --expected-root
+  <checkout>/packages/radia-mcp/src/radia_mcp --expected-version
+  <selected-version> --expected-commit <actual-full-SHA>`.
+  Record relevant uncommitted changes too. For launch/transport checks run
+  `python -s tools/smoke_mcp_stdio.py --server <catalog-key>` from the package
+  directory. Neither new process verifies an existing client; follow with the
+  live check above. Investigate failures rather than bypassing them.
+- **Client configuration changed:** plan/apply only the affected JSON/TOML
+  settings, preserving disabled servers and access policies. Configuration
+  migration is not required for ordinary source edits.
+- **Multiple users explicitly requested:** check each named user's launch and
+  live client. Administrator success is not evidence for another user. LAB and
+  100 have separate path namespaces; on 100 use its local `W:` paths, not LAB's
+  `S:` paths or UNC. Do not copy credentials or alter unrelated site packages.
+- **Busy CAD/MATLAB or native changes:** defer affected busy sessions. Native
+  binaries require rebuilding, their numerical checks and a fresh loading
+  process; editable installation does not rebuild or replace loaded binaries.
+
+Fix failed MCP updates forward, never reinstall an old version as recovery.
+Preserve others' work and report pending/manual/failed verification plainly.
+Before removing an obsolete source, check consumers and unique work. Release
+wheel tests remain isolated and retain independent acceptance gates.
 
 ## Behavioral acceptance, not just connectivity
 
 Run existing tests, not duplicated maintenance versions. From the package root:
 
 ```powershell
-python -s -m pytest tests/test_maintenance.py tests/test_capability_packs.py tests/test_paper_writing_review_regressions.py tests/test_cubit_webcut_conformal_hex_gate.py --junitxml=C:/temp/radia-mcp-maintenance.xml
+python -s -m pytest tests/test_maintenance.py tests/test_capability_packs.py tests/test_paper_writing_review_regressions.py --junitxml=C:/temp/radia-mcp-maintenance.xml
 ```
 
 Install maintenance/document extras as appropriate. A missing-dependency skip
-is **not** evidence for that feature. Check JUnit counts. The Cubit suite tests
-the conformal gate contract; it is not a live licensed meshing run. For changed
+is **not** evidence for that feature. Check JUnit counts. Cubit MCP tests and
+licensed meshing acceptance belong to cubit-mesh-export, not this lane. For changed
 Gmsh execution, run `tests/test_gmsh_post_guards.py` with the Gmsh extra. Real
 solver/CAD/license acceptance stays in the corresponding validation lane.
 Normal PR CI remains impact-scoped; this operator lane is not an all-server

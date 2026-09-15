@@ -109,3 +109,35 @@ def test_duplicate_json_keys_are_rejected(tmp_path):
     path.write_text('{"mcpServers": {}, "mcpServers": {}}')
     with pytest.raises(ValueError, match="Duplicate"):
         m.plan_config(path, sys.executable)
+
+
+@pytest.mark.parametrize("args", [
+    ["-m", "radia_mcp.cubit.server"],
+    ["-s", "-m", "radia_mcp.maintenance", "serve", "cubit"],
+])
+def test_retired_cubit_launcher_requires_owner_migration_without_writing(tmp_path, args):
+    path = tmp_path / "client.json"
+    path.write_text(json.dumps({"mcpServers": {"custom-cubit": {
+        "command": sys.executable, "args": args, "disabled": True,
+        "env": {"PRIVATE": "must-not-leak"},
+    }}}), encoding="utf-8")
+    before, after, report = m.plan_config(path, sys.executable)
+    assert before == after == path.read_bytes()
+    assert report["status"] == "conflict"
+    assert report["conflicts"] == ["custom-cubit"]
+    assert report["external_migrations"][0]["owner"] == "cubit-mesh-export"
+    assert "must-not-leak" not in json.dumps(report)
+
+
+def test_external_cubit_is_preserved_and_never_added_by_radia(tmp_path):
+    path = tmp_path / "client.json"
+    external = {"command": sys.executable,
+                "args": ["-s", "-m", "cubit_mesh_export.mcp.server"],
+                "disabled": True, "tools": {"cubit_exec": {"approval_policy": "always"}}}
+    path.write_text(json.dumps({"mcpServers": {"radia-cubit": external}}), encoding="utf-8")
+    _, after, report = m.plan_config(path, sys.executable)
+    assert not report["conflicts"]
+    assert json.loads(after)["mcpServers"]["radia-cubit"] == external
+    assert "radia-cubit" not in m.BASELINE
+    _, fresh, _ = m.plan_config(tmp_path / "new.json", sys.executable)
+    assert "radia-cubit" not in json.loads(fresh)["mcpServers"]

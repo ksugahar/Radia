@@ -240,7 +240,7 @@ PATTERNS: list[dict] = [
                       "cubit_stl_to_vol scheme=hex now does).  "
                       "vim.build_charge_gram raises on any 3D mesh "
                       "with 0 BND elements.",
-        "related": ["packages/radia-mcp/src/radia_mcp/cubit/server.py",
+        "related": ["packages/cubit-mesh-export/src/cubit_mesh_export/mcp/server.py",
                     "src/radia/vim/_vim.py",
                     "tests/test_hdiv_vim_boundary_faces.py",
                     "validation_test/isochronous_topopt/"

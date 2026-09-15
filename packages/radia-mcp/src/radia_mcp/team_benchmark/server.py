@@ -29,7 +29,7 @@ Usage:
 import sys
 
 from mcp.server.fastmcp import FastMCP
-from ..common import register_status_tool
+from cae_mcp_core.common import register_status_tool
 
 from .catalog_knowledge import get_catalog_knowledge
 from .magnetostatic_knowledge import get_magnetostatic_knowledge

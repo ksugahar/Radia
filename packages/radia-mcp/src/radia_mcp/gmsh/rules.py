@@ -12,7 +12,7 @@ import re
 from pathlib import Path
 from typing import List, Dict
 
-from .msh_inspect import INVALID_GEO_OPTIONS
+from cae_mcp_core.mesh.msh_inspect import INVALID_GEO_OPTIONS
 
 
 def check_gmsh_api_mesh_generation(filepath: str, lines: List[str]) -> List[Dict]:

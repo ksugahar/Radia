@@ -177,7 +177,7 @@ class CubitHexRemeshBackend:
 class CubitSculptShapeRemeshBackend:
     """Anisotropic Sculpt checkpoint backend for long topology-fixed magnets.
 
-    ``sculpt`` is normally ``radia_mcp.cubit.server.cubit_stl_to_vol``.  It is
+    ``sculpt`` is normally ``cubit_mesh_export.mcp.server.cubit_stl_to_vol``.  It is
     injected so the numerical Radia package keeps the Cubit execution layer
     optional and testable.  The accepted GetTrafo exterior is compressed by
     ``coordinate_scale`` before isotropic Sculpt and expanded afterwards.
