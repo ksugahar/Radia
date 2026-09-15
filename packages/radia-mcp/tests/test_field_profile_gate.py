@@ -1,8 +1,545 @@
 from __future__ import annotations
 
+import asyncio
+import hashlib
+import json
+import math
+import os
+import sys
+from pathlib import Path
+
+import pytest
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
+
 from radia_mcp.radia_ngsolve.field_profile_gate import (
+    build_constitutive_comparison_candidate,
+    controlled_uniform_field_constitutive_sweep_gate,
     dual_formulation_symmetric_field_profile_gate,
+    nonlinear_constitutive_point_sample_gate,
+    nonlinear_constitutive_response_parity_gate,
+    nonlinear_field_energy_identity_gate_v5,
+    nonlinear_field_energy_artifact_contract_gate_v6,
+    nonlinear_field_energy_lineage_gate_v7,
+    nonlinear_field_energy_physical_admissibility_gate_v8,
+    nonlinear_field_energy_observable_comparison_gate_v9,
+    nonlinear_vector_observable_comparison_gate_v10,
+    nonlinear_live_execution_identity_gate_v11,
+    nonlinear_magnetic_field_energy_parity_gate,
+    nonlinear_magnetic_refinement_energy_gate,
+    nonlinear_magnetic_spatial_evidence_gate,
 )
+from radia_mcp.radia_ngsolve.server import (
+    build_constitutive_comparison_candidate as mcp_build_comparison_candidate,
+    controlled_uniform_field_constitutive_sweep_gate as mcp_controlled_sweep_gate,
+    nonlinear_constitutive_point_sample_gate as mcp_constitutive_point_gate,
+    nonlinear_magnetic_field_energy_parity_gate as mcp_nonlinear_parity_gate,
+    nonlinear_constitutive_response_parity_gate as mcp_constitutive_parity_gate,
+    nonlinear_magnetic_refinement_energy_gate as mcp_nonlinear_refinement_gate,
+    nonlinear_magnetic_spatial_evidence_gate as mcp_nonlinear_gate,
+    nonlinear_field_energy_identity_gate_v5 as mcp_nonlinear_identity_v5_gate,
+    nonlinear_field_energy_artifact_contract_gate_v6 as mcp_nonlinear_artifact_v6_gate,
+    nonlinear_field_energy_lineage_gate_v7 as mcp_nonlinear_lineage_v7_gate,
+    nonlinear_field_energy_physical_admissibility_gate_v8 as mcp_nonlinear_physical_v8_gate,
+    nonlinear_field_energy_observable_comparison_gate_v9 as mcp_nonlinear_comparison_v9_gate,
+    nonlinear_vector_observable_comparison_gate_v10 as mcp_nonlinear_vector_v10_gate,
+    nonlinear_live_execution_identity_gate_v11 as mcp_nonlinear_live_v11_gate,
+)
+
+
+def _v5_identity_summary():
+    geometry = {"parts": [{"id": "stator", "primitive": "box", "size_m": [1.0, 2.0, 3.0]}]}
+    frame = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+    digest = lambda value: hashlib.sha256(
+        json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    refinement = [
+        {"level_id": "h0", "element_count": 10, "mesh_identity_sha256": "1" * 64},
+        {"level_id": "h1", "element_count": 20, "mesh_identity_sha256": "2" * 64},
+        {"level_id": "h2", "element_count": 40, "mesh_identity_sha256": "3" * 64},
+    ]
+    response = {
+        "H_A_per_m": [0.0, 1.0, 2.0, 3.0],
+        "B_T": [0.0, 2.0, 4.0, 6.0],
+        "energy_density_J_per_m3": [0.0, 1.0, 4.0, 9.0],
+        "coenergy_density_J_per_m3": [0.0, 1.0, 4.0, 9.0],
+    }
+    identity = {
+        "canonical_geometry": geometry,
+        "geometry_canonical_sha256": digest(geometry),
+        "coordinate_frame_matrix": frame,
+        "coordinate_frame_sha256": digest(frame),
+        "refinement_levels": refinement,
+    }
+    return {
+        "candidate": {
+            "identity": dict(identity),
+            "constitutive_response": {key: list(values) for key, values in response.items()},
+        },
+        "reference": {
+            "identity": dict(identity),
+            "constitutive_response": {key: list(values) for key, values in response.items()},
+        },
+    }
+
+
+def test_nonlinear_field_energy_identity_v5_accepts_recomputed_contract_and_wraps_mcp():
+    summary = _v5_identity_summary()
+    result = nonlinear_field_energy_identity_gate_v5(summary)
+    assert result["status"] == "ok"
+    assert result["accepted"] is True
+    wrapped = json.loads(mcp_nonlinear_identity_v5_gate(json.dumps(summary)))
+    assert wrapped["policy"] == "nonlinear_field_energy_identity_gate_v5"
+    assert wrapped["status"] == "ok"
+
+
+def test_nonlinear_field_energy_identity_v5_rejects_derivative_mismatch():
+    bad = _v5_identity_summary()
+    bad["candidate"]["constitutive_response"]["energy_density_J_per_m3"][2] = 5.0
+    result = nonlinear_field_energy_identity_gate_v5(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["candidate_energy_derivative_identity"] is False
+
+
+def test_nonlinear_field_energy_identity_v5_rejects_frame_and_geometry_digest_drift():
+    bad = _v5_identity_summary()
+    bad["candidate"]["identity"]["coordinate_frame_matrix"] = [
+        [1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0],
+        [0.0, 1.0, 0.0],
+    ]
+    bad["candidate"]["identity"]["geometry_canonical_sha256"] = "f" * 64
+    result = nonlinear_field_energy_identity_gate_v5(bad)
+    assert result["checks"]["right_handed_frame_digest_matches"] is False
+    assert result["checks"]["canonical_geometry_digest_matches"] is False
+
+
+def test_nonlinear_field_energy_identity_v5_rejects_duplicate_refinement_identity():
+    bad = _v5_identity_summary()
+    bad["candidate"]["identity"]["refinement_levels"][2]["level_id"] = "h1"
+    result = nonlinear_field_energy_identity_gate_v5(bad)
+    assert result["checks"]["unique_monotone_refinement_identity_matches"] is False
+
+
+def _v6_artifact_summary():
+    digest = lambda value: hashlib.sha256(
+        json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    response = {
+        "observable_columns": [
+            "sample_id",
+            "H_A_per_m",
+            "B_T",
+            "energy_density_J_per_m3",
+            "coenergy_density_J_per_m3",
+        ],
+        "observable_units": {
+            "sample_id": "1",
+            "H_A_per_m": "A/m",
+            "B_T": "T",
+            "energy_density_J_per_m3": "J/m^3",
+            "coenergy_density_J_per_m3": "J/m^3",
+        },
+        "dimension_order": "C",
+        "sample_id": [0, 1, 2, 3],
+        "H_A_per_m": [0.0, 1.0, 2.0, 3.0],
+        "B_T": [0.0, 1.0, 2.0, 3.0],
+        "energy_density_J_per_m3": [0.0, 0.5, 2.0, 4.5],
+        "coenergy_density_J_per_m3": [0.0, 0.5, 2.0, 4.5],
+    }
+    identity = {
+        "geometry_identity_sha256": "1" * 64,
+        "material_table_sha256": "2" * 64,
+        "excitation_identity_sha256": "3" * 64,
+        "coordinate_system": "right-handed Cartesian",
+        "unit_system": "SI",
+    }
+    lanes = []
+    for artifact_id in ("candidate-v6", "reference-v6"):
+        lane_identity = {
+            **identity,
+            "response_identity_sha256": digest(response),
+        }
+        lanes.append(
+            {
+                "schema": "radia.nonlinear-field-energy-artifact.v1",
+                "artifact_id": artifact_id,
+                "status": "completed",
+                "solver_converged": True,
+                "residual_norm": 1.0e-12,
+                "identity": lane_identity,
+                "response": json.loads(json.dumps(response)),
+            }
+        )
+    return {"candidate": lanes[0], "reference": lanes[1]}
+
+
+def test_nonlinear_field_energy_artifact_contract_v6_accepts_and_wraps_mcp():
+    summary = _v6_artifact_summary()
+    result = nonlinear_field_energy_artifact_contract_gate_v6(summary)
+    assert result["status"] == "ok"
+    assert result["accepted"] is True
+    wrapped = json.loads(mcp_nonlinear_artifact_v6_gate(json.dumps(summary)))
+    assert wrapped["policy"] == "nonlinear_field_energy_artifact_contract_gate_v6"
+    assert wrapped["status"] == "ok"
+
+
+def test_nonlinear_field_energy_artifact_contract_v6_rejects_units_and_stale_digest():
+    bad = _v6_artifact_summary()
+    bad["candidate"]["response"]["observable_units"]["B_T"] = "mT"
+    bad["candidate"]["identity"]["response_identity_sha256"] = "f" * 64
+    result = nonlinear_field_energy_artifact_contract_gate_v6(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["candidate_contract_valid"] is False
+
+
+def test_nonlinear_field_energy_artifact_contract_v6_rejects_incomplete_convergence():
+    bad = _v6_artifact_summary()
+    bad["candidate"]["status"] = "completed"
+    bad["candidate"]["solver_converged"] = False
+    result = nonlinear_field_energy_artifact_contract_gate_v6(bad)
+    assert result["checks"]["candidate_contract_valid"] is False
+
+
+def _v7_lineage_summary():
+    digest = lambda value: hashlib.sha256(
+        json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    base = {
+        "geometry_identity_sha256": "1" * 64,
+        "material_table_sha256": "2" * 64,
+        "excitation_identity_sha256": "3" * 64,
+        "mesh_identity_sha256": "4" * 64,
+        "solver_version": "solver-v7",
+    }
+
+    def lane(artifact_id: str, run_id: str) -> dict:
+        identity = {**base, "run_id": run_id}
+        identity["run_identity_sha256"] = digest(identity)
+        return {
+            "artifact_id": artifact_id,
+            "identity": identity,
+            "lineage": {
+                "source_kind": "solver_output",
+                "root_case_id": "case-v7",
+                "parent_artifact_id": "input-v7",
+                "parent_artifact_sha256": "a" * 64,
+            },
+        }
+
+    return {"candidate": lane("candidate-v7", "candidate-run-v7"), "reference": lane("reference-v7", "reference-run-v7")}
+
+
+def test_nonlinear_field_energy_lineage_v7_accepts_and_wraps_mcp():
+    summary = _v7_lineage_summary()
+    result = nonlinear_field_energy_lineage_gate_v7(summary)
+    assert result["status"] == "ok"
+    assert result["accepted"] is True
+    wrapped = json.loads(mcp_nonlinear_lineage_v7_gate(json.dumps(summary)))
+    assert wrapped["policy"] == "nonlinear_field_energy_lineage_gate_v7"
+    assert wrapped["status"] == "ok"
+
+
+def test_nonlinear_field_energy_lineage_v7_rejects_parent_and_run_digest_drift():
+    bad = _v7_lineage_summary()
+    bad["candidate"]["lineage"]["parent_artifact_sha256"] = ""
+    bad["candidate"]["identity"]["run_identity_sha256"] = "f" * 64
+    result = nonlinear_field_energy_lineage_gate_v7(bad)
+    assert result["checks"]["candidate_lineage_contract_valid"] is False
+
+
+def test_nonlinear_field_energy_lineage_v7_rejects_mesh_lineage_drift():
+    bad = _v7_lineage_summary()
+    bad["candidate"]["identity"]["mesh_identity_sha256"] = "5" * 64
+    result = nonlinear_field_energy_lineage_gate_v7(bad)
+    assert result["checks"]["cross_lane_physical_identity_matches"] is False
+
+
+def test_nonlinear_field_energy_lineage_v7_rejects_non_output_lineage_role():
+    bad = _v7_lineage_summary()
+    bad["candidate"]["lineage"]["source_kind"] = "solver_input"
+    result = nonlinear_field_energy_lineage_gate_v7(bad)
+    assert result["checks"]["candidate_lineage_contract_valid"] is False
+
+
+def _v8_physical_summary():
+    response = {
+        "H_A_per_m": [0.0, 1.0, 2.0, 3.0],
+        "B_T": [0.0, 1.0, 2.0, 3.0],
+        "energy_density_J_per_m3": [0.0, 0.5, 2.0, 4.5],
+        "coenergy_density_J_per_m3": [0.0, 0.5, 2.0, 4.5],
+        "differential_permeability_H_per_m": [1.0, 1.0, 1.0, 1.0],
+    }
+
+    def lane():
+        return {"identity": {"comparison_case_id": "case-v8"}, "response": json.loads(json.dumps(response))}
+
+    return {"candidate": lane(), "reference": lane()}
+
+
+def test_nonlinear_field_energy_physical_admissibility_v8_accepts_and_wraps_mcp():
+    summary = _v8_physical_summary()
+    result = nonlinear_field_energy_physical_admissibility_gate_v8(summary)
+    assert result["status"] == "ok"
+    assert result["accepted"] is True
+    wrapped = json.loads(mcp_nonlinear_physical_v8_gate(json.dumps(summary)))
+    assert wrapped["policy"] == "nonlinear_field_energy_physical_admissibility_gate_v8"
+    assert wrapped["status"] == "ok"
+
+
+def test_nonlinear_field_energy_physical_admissibility_v8_rejects_negative_energy_and_slope():
+    bad = _v8_physical_summary()
+    bad["candidate"]["response"]["energy_density_J_per_m3"][2] = -1.0
+    bad["candidate"]["response"]["differential_permeability_H_per_m"][1] = 0.0
+    result = nonlinear_field_energy_physical_admissibility_gate_v8(bad)
+    assert result["checks"]["candidate_physical_contract_valid"] is False
+
+
+def test_nonlinear_field_energy_physical_admissibility_v8_rejects_legendre_drift():
+    bad = _v8_physical_summary()
+    bad["candidate"]["response"]["coenergy_density_J_per_m3"][2] = 3.0
+    result = nonlinear_field_energy_physical_admissibility_gate_v8(bad)
+    assert result["checks"]["candidate_physical_contract_valid"] is False
+
+
+def _v9_observable_comparison_summary():
+    identity = {
+        "geometry_identity_sha256": "1" * 64,
+        "material_table_sha256": "2" * 64,
+        "excitation_identity_sha256": "3" * 64,
+        "mesh_identity_sha256": "4" * 64,
+        "coordinate_system": "right-handed Cartesian",
+        "unit_system": "SI",
+    }
+    observables = {
+        "observable_columns": ["average_B_T", "rms_B_T", "energy_J", "coenergy_J"],
+        "observable_units": {"average_B_T": "T", "rms_B_T": "T", "energy_J": "J", "coenergy_J": "J"},
+        "sample_id": ["op0", "op1"],
+        "average_B_T": [0.1, 0.2],
+        "rms_B_T": [0.11, 0.21],
+        "energy_J": [1.0, 2.0],
+        "coenergy_J": [0.9, 1.9],
+    }
+
+    def lane():
+        return {"identity": dict(identity), "observables": json.loads(json.dumps(observables))}
+
+    return {"candidate": lane(), "reference": lane()}
+
+
+def test_nonlinear_field_energy_observable_comparison_v9_accepts_and_wraps_mcp():
+    summary = _v9_observable_comparison_summary()
+    result = nonlinear_field_energy_observable_comparison_gate_v9(summary)
+    assert result["status"] == "ok"
+    assert result["accepted"] is True
+    wrapped = json.loads(mcp_nonlinear_comparison_v9_gate(json.dumps(summary)))
+    assert wrapped["policy"] == "nonlinear_field_energy_observable_comparison_gate_v9"
+    assert wrapped["status"] == "ok"
+
+
+def test_nonlinear_field_energy_observable_comparison_v9_rejects_identity_and_units_drift():
+    bad = _v9_observable_comparison_summary()
+    bad["candidate"]["identity"]["mesh_identity_sha256"] = ""
+    bad["candidate"]["observables"]["observable_units"]["energy_J"] = "mJ"
+    result = nonlinear_field_energy_observable_comparison_gate_v9(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["candidate_contract_valid"] is False
+    assert result["checks"]["comparison_identity_matches"] is False
+
+
+def test_nonlinear_field_energy_observable_comparison_v9_rejects_sample_id_drift():
+    bad = _v9_observable_comparison_summary()
+    bad["candidate"]["observables"]["sample_id"] = ["op0", "op2"]
+    result = nonlinear_field_energy_observable_comparison_gate_v9(bad)
+    assert result["checks"]["observable_sample_identity_matches"] is False
+    assert result["checks"]["observable_differences_within_limit"] is False
+
+
+def test_nonlinear_field_energy_observable_comparison_v9_rejects_tolerance_exceedance():
+    bad = _v9_observable_comparison_summary()
+    bad["candidate"]["observables"]["energy_J"][1] = 2.2
+    result = nonlinear_field_energy_observable_comparison_gate_v9(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["observable_differences_within_limit"] is False
+
+
+def _v10_vector_observable_comparison_summary():
+    identity = {
+        "geometry_identity_sha256": "1" * 64,
+        "material_table_sha256": "2" * 64,
+        "excitation_identity_sha256": "3" * 64,
+        "mesh_identity_sha256": "4" * 64,
+        "coordinate_frame_identity_sha256": "5" * 64,
+        "coordinate_system": "right-handed Cartesian",
+        "unit_system": "SI",
+    }
+    observables = {
+        "vector_observable_columns": ["field_vector_T", "force_vector_N", "torque_vector_Nm"],
+        "vector_observable_units": {"field_vector_T": "T", "force_vector_N": "N", "torque_vector_Nm": "N*m"},
+        "sample_id": ["op0", "op1"],
+        "field_vector_T": [[0.1, 0.0, 0.2], [0.2, 0.1, 0.3]],
+        "force_vector_N": [[1.0, 0.0, -1.0], [1.1, 0.1, -0.9]],
+        "torque_vector_Nm": [[0.0, 0.2, 0.0], [0.0, 0.3, 0.0]],
+    }
+
+    def lane():
+        return {"identity": dict(identity), "observables": json.loads(json.dumps(observables))}
+
+    return {"candidate": lane(), "reference": lane()}
+
+
+def test_nonlinear_vector_observable_comparison_v10_accepts_and_wraps_mcp():
+    summary = _v10_vector_observable_comparison_summary()
+    result = nonlinear_vector_observable_comparison_gate_v10(summary)
+    assert result["status"] == "ok"
+    assert result["accepted"] is True
+    wrapped = json.loads(mcp_nonlinear_vector_v10_gate(json.dumps(summary)))
+    assert wrapped["policy"] == "nonlinear_vector_observable_comparison_gate_v10"
+    assert wrapped["status"] == "ok"
+
+
+def test_nonlinear_vector_observable_comparison_v10_rejects_frame_and_units_drift():
+    bad = _v10_vector_observable_comparison_summary()
+    bad["candidate"]["identity"]["coordinate_frame_identity_sha256"] = ""
+    bad["candidate"]["observables"]["vector_observable_units"]["force_vector_N"] = "kN"
+    result = nonlinear_vector_observable_comparison_gate_v10(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["candidate_contract_valid"] is False
+    assert result["checks"]["comparison_identity_matches"] is False
+
+
+def test_nonlinear_vector_observable_comparison_v10_rejects_shape_drift():
+    bad = _v10_vector_observable_comparison_summary()
+    bad["candidate"]["observables"]["force_vector_N"][1] = [1.1, 0.1]
+    result = nonlinear_vector_observable_comparison_gate_v10(bad)
+    assert result["checks"]["candidate_contract_valid"] is False
+    assert result["checks"]["vector_differences_within_limit"] is False
+
+
+def test_nonlinear_vector_observable_comparison_v10_rejects_tolerance_exceedance():
+    bad = _v10_vector_observable_comparison_summary()
+    bad["candidate"]["observables"]["torque_vector_Nm"][1][1] = 0.5
+    result = nonlinear_vector_observable_comparison_gate_v10(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["vector_differences_within_limit"] is False
+
+
+def _v11_live_execution_identity_summary():
+    physical = {
+        "geometry_identity_sha256": "1" * 64,
+        "material_table_sha256": "2" * 64,
+        "excitation_identity_sha256": "3" * 64,
+        "mesh_identity_sha256": "4" * 64,
+        "coordinate_system": "right-handed Cartesian",
+        "unit_system": "SI",
+    }
+    execution_keys = (
+        "run_id",
+        "solver_version",
+        "execution_mode",
+        "input_sha256",
+        "output_sha256",
+        "result_sha256",
+    )
+
+    def lane(run_id):
+        execution = {
+            "run_id": run_id,
+            "solver_version": "open-solver-live-1",
+            "execution_mode": "live",
+            "input_sha256": "a" * 64,
+            "output_sha256": "b" * 64,
+            "result_sha256": "c" * 64,
+            "status": "completed",
+            "solver_work_performed": True,
+            "cleanup_verified": True,
+            "source_modified": False,
+            "existing_processes_modified": False,
+        }
+        core = {key: execution[key] for key in execution_keys}
+        execution["execution_identity_sha256"] = hashlib.sha256(
+            json.dumps(core, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        return {"identity": dict(physical), "execution": execution}
+
+    return {"candidate": lane("run-candidate"), "reference": lane("run-reference")}
+
+
+def test_nonlinear_live_execution_identity_v11_accepts_and_wraps_mcp():
+    summary = _v11_live_execution_identity_summary()
+    result = nonlinear_live_execution_identity_gate_v11(summary)
+    assert result["status"] == "ok"
+    assert result["accepted"] is True
+    wrapped = json.loads(mcp_nonlinear_live_v11_gate(json.dumps(summary)))
+    assert wrapped["policy"] == "nonlinear_live_execution_identity_gate_v11"
+    assert wrapped["status"] == "ok"
+
+
+def test_nonlinear_live_execution_identity_v11_rejects_cleanup_and_digest_drift():
+    bad = _v11_live_execution_identity_summary()
+    bad["candidate"]["execution"]["cleanup_verified"] = False
+    result = nonlinear_live_execution_identity_gate_v11(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["candidate_execution_contract_valid"] is False
+
+    bad = _v11_live_execution_identity_summary()
+    bad["candidate"]["execution"]["execution_identity_sha256"] = "d" * 64
+    result = nonlinear_live_execution_identity_gate_v11(bad)
+    assert result["checks"]["candidate_execution_contract_valid"] is False
+
+
+def test_nonlinear_live_execution_identity_v11_rejects_solver_not_performed():
+    bad = _v11_live_execution_identity_summary()
+    bad["candidate"]["execution"]["solver_work_performed"] = False
+    result = nonlinear_live_execution_identity_gate_v11(bad)
+    assert result["checks"]["candidate_execution_contract_valid"] is False
+
+
+def test_nonlinear_live_execution_identity_v11_rejects_physical_identity_drift():
+    bad = _v11_live_execution_identity_summary()
+    bad["candidate"]["identity"]["mesh_identity_sha256"] = "e" * 64
+    result = nonlinear_live_execution_identity_gate_v11(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["cross_lane_mesh_identity_sha256"] is False
+
+
+def test_build_comparison_candidate_keeps_piecewise_linear_out_of_solver_mode():
+    table = [[0.0, 0.0], [100.0, 0.5], [1000.0, 1.4]]
+    h_values = [0.0, 50.0, 500.0, 2000.0]
+    result = build_constitutive_comparison_candidate(
+        table,
+        h_values,
+        constitutive_interpolation="piecewise_linear",
+    )
+    assert result["identity"]["constitutive_interpolation"] == "piecewise_linear"
+    assert result["identity"]["constitutive_extrapolation"] == "vacuum_slope"
+    assert result["identity"]["candidate_only"] is True
+    assert result["identity"]["solver_runtime_mode"] is False
+    assert result["identity"]["radia_production_interpolation"] == "monotone_pchip"
+    assert result["B_T"][1] == 0.25
+    assert result["B_T"][2] == pytest.approx(0.9)
+    wrapped = json.loads(
+        mcp_build_comparison_candidate(
+            json.dumps(table),
+            json.dumps(h_values),
+            "piecewise_linear",
+        )
+    )
+    assert wrapped["B_T"] == pytest.approx(result["B_T"])
+
+
+
+
+def test_build_comparison_candidate_rejects_unknown_mode_through_mcp():
+    result = json.loads(
+        mcp_build_comparison_candidate(
+            "[[0.0, 0.0], [1.0, 1.0]]",
+            "[0.0, 1.0]",
+            "source_default",
+        )
+    )
+    assert result["status"] == "invalid_input"
+    assert "constitutive interpolation" in result["error"]
 
 
 def _summary():
@@ -48,3 +585,577 @@ def test_dual_formulation_profile_gate_rejects_trivial_zero_field():
     bad["center_value_a"] = 0.0
     bad["center_value_b"] = 0.0
     assert dual_formulation_symmetric_field_profile_gate(bad)["checks"]["center_field_nonzero"] is False
+
+
+def _nonlinear_volume_summary():
+    identity = {
+        "observable_id": "iron_volume_B",
+        "field_unit": "T",
+        "coordinate_system": "right-handed Cartesian",
+    }
+    return {
+        **identity,
+        "nonlinear": True,
+        "solver_converged": True,
+        "linear_reference_only": False,
+        "response_order": 1,
+        "material_update_order": 0,
+        "spatial_observable": "volume_integral",
+        "integration_order": 8,
+        "sample_count": 0,
+        "volume_m3": 1.0e-6,
+        "average_field_T": [0.0, 0.0, -1.50],
+        "rms_magnitude_T": 1.62,
+        "reference": {
+            **identity,
+            "average_field_T": [0.0, 0.0, -1.48],
+            "rms_magnitude_T": 1.60,
+        },
+    }
+
+
+def test_nonlinear_magnetic_spatial_gate_accepts_matched_volume_evidence():
+    result = nonlinear_magnetic_spatial_evidence_gate(_nonlinear_volume_summary())
+    assert result["status"] == "ok"
+    assert all(result["checks"].values())
+    assert result["metrics"]["average_vector_relative_difference"] < 0.02
+
+
+def test_nonlinear_magnetic_spatial_gate_rejects_point_only_and_order_mismatch():
+    bad = _nonlinear_volume_summary()
+    bad.update(
+        response_order=2,
+        material_update_order=0,
+        spatial_observable="point",
+        integration_order=0,
+        sample_count=1,
+    )
+    result = nonlinear_magnetic_spatial_evidence_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert set(result["issues"]) >= {
+        "response_material_orders_compatible",
+        "spatial_observable_supported",
+        "spatial_sampling_sufficient",
+    }
+
+
+def test_nonlinear_magnetic_spatial_gate_rejects_unconverged_or_linear_only():
+    bad = _nonlinear_volume_summary()
+    bad["solver_converged"] = False
+    bad["linear_reference_only"] = True
+    result = nonlinear_magnetic_spatial_evidence_gate(bad)
+    assert set(result["issues"]) >= {
+        "solver_converged",
+        "not_linear_only_evidence",
+    }
+
+
+def test_nonlinear_magnetic_spatial_gate_rejects_rms_disagreement_and_wraps_mcp():
+    bad = _nonlinear_volume_summary()
+    bad["rms_magnitude_T"] = 2.1
+    result = nonlinear_magnetic_spatial_evidence_gate(bad)
+    assert result["checks"]["rms_magnitude_matches_reference"] is False
+    wrapped = json.loads(mcp_nonlinear_gate(json.dumps(bad)))
+    assert wrapped["status"] == "needs_attention"
+
+
+def _nonlinear_refinement_summary():
+    def level(mesh_size, average_z, rms, energy):
+        identity = {
+            "material_domain": "air|iron",
+            "coordinate_system": "right-handed Cartesian",
+            "unit_system": "SI",
+            "nonlinear_state_id": "bh-state-17",
+            "mesh_topology_geometry_sha256": "1" * 64,
+            "bh_table_sha256": "2" * 64,
+            "material_state_identity_sha256": "3" * 64,
+            "solution_sha256": "4" * 64,
+            "refinement_parent_identity_sha256": "5" * 64,
+        }
+        return {
+            "mesh_size_m": mesh_size,
+            "solver_converged": True,
+            "response_order": 2,
+            "material_update_order": 1,
+            "physical_relative_permeability_bounds": [1.0, 2100.0],
+            "volume_m3": 1.0e-6,
+            "average_field_T": [0.0, 0.0, average_z],
+            "rms_magnitude_T": rms,
+            "magnetic_energy_J": energy,
+            "magnetic_coenergy_J": 1.1 * energy,
+            "h_dot_b_integral_J": 2.1 * energy,
+            "legendre_residual_relative": 0.0,
+            "field_identity": {**identity, "unit": "T"},
+            "energy_identity": {**identity, "unit": "J"},
+        }
+
+    return {
+        "levels": [
+            level(8.0e-3, -1.42, 1.66, 1.20e-3),
+            level(4.0e-3, -1.48, 1.62, 1.24e-3),
+            level(2.0e-3, -1.50, 1.61, 1.25e-3),
+        ]
+    }
+
+
+def test_nonlinear_refinement_energy_gate_accepts_contracting_matched_ladder():
+    result = nonlinear_magnetic_refinement_energy_gate(_nonlinear_refinement_summary())
+    assert result["status"] == "ok"
+    assert all(result["checks"].values())
+    assert result["pair_relative_changes"][1]["combined"] < result["pair_relative_changes"][0]["combined"]
+
+
+def test_nonlinear_refinement_energy_gate_rejects_nonpositive_material_state():
+    bad = _nonlinear_refinement_summary()
+    bad["levels"][1]["physical_relative_permeability_bounds"] = [0.0, 2100.0]
+    result = nonlinear_magnetic_refinement_energy_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["all_levels_valid"] is False
+    assert result["level_checks"][1]["physical_permeability_positive"] is False
+
+
+def test_nonlinear_refinement_energy_gate_rejects_noncontracting_ladder():
+    bad = _nonlinear_refinement_summary()
+    bad["levels"][2]["average_field_T"] = [0.0, 0.0, -1.25]
+    result = nonlinear_magnetic_refinement_energy_gate(bad)
+    assert result["checks"]["field_rms_energy_changes_contract"] is False
+
+
+def test_nonlinear_refinement_energy_gate_rejects_field_energy_identity_mismatch_and_wraps_mcp():
+    bad = _nonlinear_refinement_summary()
+    bad["levels"][2]["energy_identity"]["nonlinear_state_id"] = "stale-state"
+    result = nonlinear_magnetic_refinement_energy_gate(bad)
+    assert result["checks"]["all_levels_valid"] is False
+    assert result["level_checks"][2]["field_energy_identity_matches"] is False
+    wrapped = json.loads(mcp_nonlinear_refinement_gate(json.dumps(bad)))
+    assert wrapped["status"] == "needs_attention"
+
+
+def test_nonlinear_refinement_energy_gate_rejects_stale_solution_digest():
+    bad = _nonlinear_refinement_summary()
+    bad["levels"][1]["energy_identity"]["solution_sha256"] = "5" * 64
+    result = nonlinear_magnetic_refinement_energy_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert result["level_checks"][1]["field_energy_identity_matches"] is False
+
+
+def test_nonlinear_refinement_energy_gate_rejects_material_domain_mismatch():
+    bad = _nonlinear_refinement_summary()
+    bad["levels"][1]["energy_identity"]["material_domain"] = "iron"
+    result = nonlinear_magnetic_refinement_energy_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["all_levels_valid"] is False
+    assert result["level_checks"][1]["field_energy_identity_matches"] is False
+
+
+def test_nonlinear_refinement_energy_gate_rejects_stale_parent_lineage():
+    bad = _nonlinear_refinement_summary()
+    for identity_name in ("field_identity", "energy_identity"):
+        bad["levels"][1][identity_name][
+            "refinement_parent_identity_sha256"
+        ] = "6" * 64
+    result = nonlinear_magnetic_refinement_energy_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["refinement_parent_identity_consistent"] is False
+    assert result["level_checks"][1]["field_energy_identity_matches"] is True
+
+
+def test_nonlinear_refinement_energy_gate_rejects_legendre_residual():
+    bad = _nonlinear_refinement_summary()
+    bad["levels"][2]["legendre_residual_relative"] = 2.0e-4
+    result = nonlinear_magnetic_refinement_energy_gate(bad)
+    assert result["checks"]["all_levels_valid"] is False
+    assert result["level_checks"][2]["legendre_energy_identity_satisfied"] is False
+
+
+def _nonlinear_parity_summary():
+    identity = {
+        "geometry_identity_sha256": "1" * 64,
+        "material_identity_sha256": "2" * 64,
+        "excitation_identity_sha256": "3" * 64,
+        "bh_table_sha256": "4" * 64,
+        "constitutive_interpolation": "monotone_pchip",
+        "constitutive_extrapolation": "vacuum_slope",
+        "magnetic_anisotropy": "isotropic",
+        "region_labels": ["iron"],
+        "coordinate_system": "right-handed Cartesian",
+        "unit_system": "SI",
+        "analysis_kind": "magnetostatic",
+        "case_index": 1,
+        "time_semantics": "static",
+    }
+    return {
+        "candidate": {
+            "identity": dict(identity),
+            "average_field_T": [0.0, 0.0, 1.02],
+            "rms_magnitude_T": 1.12,
+            "magnetic_energy_J": 2.04,
+            "magnetic_coenergy_J": 2.97,
+        },
+        "reference": {
+            "identity": dict(identity),
+            "average_field_T": [0.0, 0.0, 1.0],
+            "rms_magnitude_T": 1.1,
+            "magnetic_energy_J": 2.0,
+            "magnetic_coenergy_J": 3.0,
+        },
+    }
+
+
+def test_nonlinear_field_energy_parity_gate_accepts_identity_matched_observables():
+    summary = _nonlinear_parity_summary()
+    result = nonlinear_magnetic_field_energy_parity_gate(summary)
+    assert result["status"] == "ok"
+    assert result["comparison_performed"] is True
+    wrapped = json.loads(mcp_nonlinear_parity_gate(json.dumps(summary)))
+    assert wrapped["status"] == "ok"
+
+
+def test_nonlinear_field_energy_parity_gate_rejects_material_law_before_numbers():
+    bad = _nonlinear_parity_summary()
+    bad["reference"]["identity"]["constitutive_interpolation"] = "piecewise_linear"
+    result = nonlinear_magnetic_field_energy_parity_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["physical_identity_matches"] is False
+    assert result["identity_checks"]["constitutive_interpolation"] is False
+    assert result["comparison_performed"] is False
+    assert all(value is None for value in result["relative_differences"].values())
+
+
+def _constitutive_response_summary():
+    h_values = [0.0, 100.0, 500.0, 1000.0, 5000.0, 10000.0]
+    b_values = [0.0, 0.4, 1.0, 1.3, 1.6, 1.7]
+    coenergy = [0.0, 20.0, 300.0, 875.0, 6675.0, 14925.0]
+    energy = [h * b - ws for h, b, ws in zip(h_values, b_values, coenergy)]
+    grid_sha = "ab5a4869477578a2f3d7244d52af91efb58ec84f39d5ab1454f307452bed9700"
+    identity = {
+        "bh_table_sha256": "4" * 64,
+        "response_grid_sha256": grid_sha,
+        "material_model": "single_valued_isotropic_soft_magnetic",
+        "magnetic_anisotropy": "isotropic",
+        "H_unit": "A/m",
+        "B_unit": "T",
+        "differential_permeability_unit": "H/m",
+        "energy_density_unit": "J/m^3",
+    }
+    lane = {
+        "identity": identity,
+        "H_A_per_m": h_values,
+        "B_T": b_values,
+        "differential_permeability_H_per_m": [0.004, 0.003, 0.001, 1.0e-4, 2.0e-5, 1.256637e-6],
+        "energy_density_J_per_m3": energy,
+        "coenergy_density_J_per_m3": coenergy,
+        "d_energy_d_B_A_per_m": h_values,
+        "d_coenergy_d_H_T": b_values,
+    }
+    return {"candidate": json.loads(json.dumps(lane)), "reference": lane}
+
+
+def test_constitutive_response_gate_accepts_realized_common_grid_and_wraps_mcp():
+    result = nonlinear_constitutive_response_parity_gate(_constitutive_response_summary())
+    assert result["status"] == "ok"
+    assert result["comparison_performed"] is True
+    wrapped = json.loads(mcp_constitutive_parity_gate(json.dumps(_constitutive_response_summary())))
+    assert wrapped["status"] == "ok"
+
+
+def test_constitutive_response_gate_rejects_same_table_digest_but_different_response():
+    bad = _constitutive_response_summary()
+    bad["candidate"]["B_T"][3] *= 1.02
+    result = nonlinear_constitutive_response_parity_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["B_T_matches"] is False
+
+
+def test_constitutive_response_gate_rejects_saturation_transition_mismatch():
+    bad = _constitutive_response_summary()
+    bad["candidate"]["differential_permeability_H_per_m"][-1] = 1.0e-4
+    result = nonlinear_constitutive_response_parity_gate(bad)
+    assert result["checks"]["differential_permeability_H_per_m_matches"] is False
+
+
+def test_constitutive_response_gate_rejects_non_si_grid_units_before_comparison():
+    bad = _constitutive_response_summary()
+    bad["candidate"]["identity"]["H_unit"] = "Oe"
+    bad["reference"]["identity"]["H_unit"] = "Oe"
+    result = nonlinear_constitutive_response_parity_gate(bad)
+    assert result["comparison_performed"] is False
+    assert result["lane_checks"]["candidate"]["SI_units_explicit"] is False
+
+
+def test_constitutive_response_gate_rejects_broken_energy_derivative_identity():
+    bad = _constitutive_response_summary()
+    bad["candidate"]["d_energy_d_B_A_per_m"][2] += 20.0
+    result = nonlinear_constitutive_response_parity_gate(bad)
+    assert result["checks"]["candidate_response_valid"] is False
+    assert result["lane_checks"]["candidate"]["energy_derivative_identity_satisfied"] is False
+
+
+def _canonical_digest(value):
+    return hashlib.sha256(
+        json.dumps(value, ensure_ascii=True, separators=(",", ":"), sort_keys=True).encode(
+            "ascii"
+        )
+    ).hexdigest()
+
+
+def _constitutive_point_summary():
+    h_values = [100.0, 200.0, 400.0, 800.0, 1600.0]
+    b_values = [0.2, 0.4, 0.8, 1.2, 1.5]
+    points = [[float(index), 0.0, 0.0] for index in range(5)]
+    table_sha = "8" * 64
+    identity = {
+        "observable_components": [
+            "BX",
+            "BY",
+            "BZ",
+            "BMOD",
+            "HX",
+            "HY",
+            "HZ",
+            "HMOD",
+        ],
+        "response_units": {"H": "A/m", "B": "T"},
+        "point_set_m": points,
+        "point_set_sha256": _canonical_digest(points),
+        "material_curve": {
+            "sha256": "7" * 64,
+            "canonical_table_sha256": table_sha,
+        },
+        "field_recovery": "ELEMENT_LOCAL",
+        "field_recovery_semantics": "unsmoothed_element_local_evaluation",
+        "constitutive_oracle": True,
+    }
+    identity["constitutive_identity_sha256"] = _canonical_digest(identity)
+    values = [
+        {
+            "point_m": point,
+            "field_T": [0.0, 0.0, b_value],
+            "magnitude_T": b_value,
+            "magnetic_field_strength_A_per_m": [0.0, 0.0, h_value],
+            "magnetic_field_strength_magnitude_A_per_m": h_value,
+        }
+        for point, h_value, b_value in zip(points, h_values, b_values)
+    ]
+    return {
+        "source": {
+            "status": "completed",
+            "response_evidence_status": "source_native_element_local_B_H_samples",
+            "constitutive_oracle": True,
+            "constitutive_comparison_ready": True,
+            "identity": identity,
+            "values": values,
+        },
+        "candidate": {
+            "identity": {"bh_table_sha256": table_sha},
+            "H_A_per_m": h_values,
+            "B_T": b_values,
+        },
+    }
+
+
+def test_constitutive_point_gate_accepts_identity_bound_element_local_samples():
+    summary = _constitutive_point_summary()
+    result = nonlinear_constitutive_point_sample_gate(summary)
+    assert result["status"] == "ok"
+    assert result["constitutive_parity_established"] is True
+    wrapped = json.loads(mcp_constitutive_point_gate(json.dumps(summary)))
+    assert wrapped["status"] == "ok"
+
+
+def test_constitutive_point_gate_rejects_nodal_recovery_as_material_oracle():
+    bad = _constitutive_point_summary()
+    source = bad["source"]
+    source["response_evidence_status"] = "source_native_joint_point_fields"
+    source["constitutive_oracle"] = False
+    source["constitutive_comparison_ready"] = False
+    identity = source["identity"]
+    identity["field_recovery"] = "NODAL"
+    identity["field_recovery_semantics"] = "nodally_averaged_interpolation"
+    identity["constitutive_oracle"] = False
+    identity["constitutive_identity_sha256"] = _canonical_digest(
+        {key: value for key, value in identity.items() if key != "constitutive_identity_sha256"}
+    )
+    result = nonlinear_constitutive_point_sample_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["source_is_unsmoothed_element_local"] is False
+    assert result["comparison_performed"] is True
+
+
+def test_constitutive_point_gate_rejects_noncollinear_isotropic_fields():
+    bad = _constitutive_point_summary()
+    value = bad["source"]["values"][2]
+    value["field_T"] = [0.3, 0.0, 0.8]
+    value["magnitude_T"] = (0.3**2 + 0.8**2) ** 0.5
+    bad["candidate"]["B_T"][2] = value["magnitude_T"]
+    result = nonlinear_constitutive_point_sample_gate(bad)
+    assert result["checks"]["isotropic_B_H_directions_collinear"] is False
+
+
+def test_constitutive_point_gate_rejects_point_and_material_identity_mismatch():
+    bad = _constitutive_point_summary()
+    bad["source"]["identity"]["point_set_sha256"] = "0" * 64
+    bad["candidate"]["identity"]["bh_table_sha256"] = "9" * 64
+    result = nonlinear_constitutive_point_sample_gate(bad)
+    assert result["checks"]["point_set_identity_valid"] is False
+    assert result["checks"]["material_table_identity_matches"] is False
+
+
+def test_constitutive_point_gate_reports_incomplete_H_coverage():
+    bad = _constitutive_point_summary()
+    bad["candidate"]["H_A_per_m"][-1] = 1700.0
+    result = nonlinear_constitutive_point_sample_gate(bad)
+    assert result["checks"]["candidate_grid_matches_source_samples"] is False
+    assert result["checks"]["B_response_matches"] is False
+
+
+def _controlled_uniform_field_sweep_summary():
+    h_values = [10.0, 100.0, 1000.0, 10000.0, 100000.0]
+    b_values = [0.1, 0.5, 1.0, 1.7, 2.2]
+    source = {
+        "status": "accepted_as_constitutive_control",
+        "constitutive_control_ready": True,
+        "constitutive_oracle": False,
+        "checks": {
+            "all_case_evidence_valid": True,
+            "shared_material_table_identity": True,
+            "shared_excitation_identity": True,
+            "shared_result_database_identity": True,
+            "shared_region_identity": True,
+            "distinct_case_count_sufficient": True,
+            "distinct_H_count_sufficient": True,
+            "nonlinear_H_range_covered": True,
+            "mean_B_monotone_with_mean_H": True,
+        },
+        "identity": {
+            "canonical_table_sha256": "4" * 64,
+            "excitation_identity_sha256": "5" * 64,
+            "result_database_sha256": "6" * 64,
+            "case_set_sha256": "7" * 64,
+            "region_labels": ["Steel"],
+        },
+        "metrics": {
+            "valid_case_count": 5,
+            "distinct_H_count": 5,
+            "H_span_ratio": 10000.0,
+        },
+        "case_summaries": [
+            {
+                "case_index": index,
+                "mean_H_A_per_m": h_value,
+                "mean_B_T": b_value,
+                "accepted": True,
+            }
+            for index, (h_value, b_value) in enumerate(
+                zip(h_values, b_values), start=1
+            )
+        ],
+    }
+    candidate = {
+        "identity": {
+            "bh_table_sha256": "4" * 64,
+            "constitutive_interpolation": "piecewise_linear",
+            "constitutive_extrapolation": "vacuum_slope",
+        },
+        "H_A_per_m": h_values,
+        "B_T": b_values,
+    }
+    return {"source_control": source, "candidate": candidate}
+
+
+def test_controlled_uniform_field_sweep_accepts_bound_response_and_wraps_mcp():
+    summary = _controlled_uniform_field_sweep_summary()
+    result = controlled_uniform_field_constitutive_sweep_gate(summary)
+    assert result["status"] == "ok"
+    assert result["constitutive_control_parity_established"] is True
+    wrapped = json.loads(mcp_controlled_sweep_gate(json.dumps(summary)))
+    assert wrapped["status"] == "ok"
+
+
+def test_controlled_uniform_field_sweep_rejects_response_and_identity_drift():
+    summary = _controlled_uniform_field_sweep_summary()
+    summary["candidate"]["B_T"][1] *= 1.1
+    summary["candidate"]["identity"]["bh_table_sha256"] = "8" * 64
+    result = controlled_uniform_field_constitutive_sweep_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["B_response_matches"] is False
+    assert result["checks"]["material_table_identity_matches"] is False
+
+
+def test_controlled_uniform_field_sweep_rejects_uncontrolled_or_stale_source():
+    summary = _controlled_uniform_field_sweep_summary()
+    summary["source_control"]["constitutive_oracle"] = True
+    summary["source_control"]["checks"]["shared_result_database_identity"] = False
+    summary["source_control"]["identity"]["result_database_sha256"] = "stale"
+    result = controlled_uniform_field_constitutive_sweep_gate(summary)
+    assert result["checks"]["source_control_accepted"] is False
+    assert result["checks"]["source_claim_boundary_preserved"] is False
+    assert result["checks"]["source_identity_complete"] is False
+
+
+async def _probe_constitutive_gate_stdio():
+    package_root = Path(__file__).resolve().parents[1]
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = os.pathsep.join(
+        [
+            str(package_root / "src"),
+            environment.get("PYTHONPATH", ""),
+        ]
+    ).rstrip(os.pathsep)
+    params = StdioServerParameters(
+        command=sys.executable,
+        args=["-m", "radia_mcp.radia_ngsolve.server"],
+        cwd=str(package_root),
+        env=environment,
+    )
+    async with stdio_client(params) as (read_stream, write_stream):
+        async with ClientSession(read_stream, write_stream) as session:
+            initialized = await session.initialize()
+            tools = {tool.name for tool in (await session.list_tools()).tools}
+            called = await session.call_tool(
+                "radia_ngsolve_validation_run",
+                {
+                    "name": "nonlinear_constitutive_response_parity_gate",
+                    "arguments": {
+                        "summary_json": json.dumps(_constitutive_response_summary())
+                    },
+                },
+            )
+            point_called = await session.call_tool(
+                "radia_ngsolve_validation_run",
+                {
+                    "name": "nonlinear_constitutive_point_sample_gate",
+                    "arguments": {
+                        "summary_json": json.dumps(_constitutive_point_summary())
+                    },
+                },
+            )
+            sweep_called = await session.call_tool(
+                "radia_ngsolve_validation_run",
+                {
+                    "name": "controlled_uniform_field_constitutive_sweep_gate",
+                    "arguments": {
+                        "summary_json": json.dumps(
+                            _controlled_uniform_field_sweep_summary()
+                        )
+                    },
+                },
+            )
+            return (
+                initialized.serverInfo.name,
+                tools,
+                json.loads(called.content[0].text),
+                json.loads(point_called.content[0].text),
+                json.loads(sweep_called.content[0].text),
+            )
+
+
+def test_constitutive_response_gate_passes_real_stdio_protocol():
+    server_name, tools, result, point_result, sweep_result = asyncio.run(
+        asyncio.wait_for(_probe_constitutive_gate_stdio(), timeout=45)
+    )
+    assert server_name == "mcp-server-radia-ngsolve"
+    assert "radia_ngsolve_validation_run" in tools
+    assert result["status"] == "ok"
+    assert point_result["status"] == "ok"
+    assert sweep_result["status"] == "ok"

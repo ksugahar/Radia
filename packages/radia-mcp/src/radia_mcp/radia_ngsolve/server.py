@@ -38,6 +38,20 @@ from .cq_urn import cq_response_reality_gate as _cq_response_reality_gate
 _cq_scattering_arrival_gate = lazy_callable(".cq_scattering_arrival_gate", "cq_scattering_arrival_gate", __package__)
 _physics_result_preflight_gate = lazy_callable(".physics_result_preflight_gate", "physics_result_preflight_gate", __package__)
 _dual_formulation_symmetric_field_profile_gate = lazy_callable(".field_profile_gate", "dual_formulation_symmetric_field_profile_gate", __package__)
+_nonlinear_magnetic_spatial_evidence_gate = lazy_callable(".field_profile_gate", "nonlinear_magnetic_spatial_evidence_gate", __package__)
+_nonlinear_magnetic_refinement_energy_gate = lazy_callable(".field_profile_gate", "nonlinear_magnetic_refinement_energy_gate", __package__)
+_nonlinear_magnetic_field_energy_parity_gate = lazy_callable(".field_profile_gate", "nonlinear_magnetic_field_energy_parity_gate", __package__)
+_nonlinear_field_energy_identity_gate_v5 = lazy_callable(".field_profile_gate", "nonlinear_field_energy_identity_gate_v5", __package__)
+_nonlinear_field_energy_artifact_contract_gate_v6 = lazy_callable(".field_profile_gate", "nonlinear_field_energy_artifact_contract_gate_v6", __package__)
+_nonlinear_field_energy_lineage_gate_v7 = lazy_callable(".field_profile_gate", "nonlinear_field_energy_lineage_gate_v7", __package__)
+_nonlinear_field_energy_physical_admissibility_gate_v8 = lazy_callable(".field_profile_gate", "nonlinear_field_energy_physical_admissibility_gate_v8", __package__)
+_nonlinear_field_energy_observable_comparison_gate_v9 = lazy_callable(".field_profile_gate", "nonlinear_field_energy_observable_comparison_gate_v9", __package__)
+_nonlinear_vector_observable_comparison_gate_v10 = lazy_callable(".field_profile_gate", "nonlinear_vector_observable_comparison_gate_v10", __package__)
+_nonlinear_live_execution_identity_gate_v11 = lazy_callable(".field_profile_gate", "nonlinear_live_execution_identity_gate_v11", __package__)
+_nonlinear_constitutive_response_parity_gate = lazy_callable(".field_profile_gate", "nonlinear_constitutive_response_parity_gate", __package__)
+_nonlinear_constitutive_point_sample_gate = lazy_callable(".field_profile_gate", "nonlinear_constitutive_point_sample_gate", __package__)
+_controlled_uniform_field_constitutive_sweep_gate = lazy_callable(".field_profile_gate", "controlled_uniform_field_constitutive_sweep_gate", __package__)
+_build_constitutive_comparison_candidate = lazy_callable(".field_profile_gate", "build_constitutive_comparison_candidate", __package__)
 _symmetric_complex_field_curve_gate = lazy_callable(".field_profile_gate", "symmetric_complex_field_curve_gate", __package__)
 _symmetric_axial_field_profile_gate = lazy_callable(".field_profile_gate", "symmetric_axial_field_profile_gate", __package__)
 _helmholtz_double_layer_low_frequency_gate = lazy_callable(".acoustic_kernel_gate", "helmholtz_double_layer_low_frequency_gate", __package__)
@@ -147,6 +161,7 @@ _loss_temperature_coupling_gate = lazy_callable(".loss_temperature_coupling_gate
 _transient_coupled_coil_response_gate = lazy_callable(".transient_coupled_coil_gate", "transient_coupled_coil_response_gate", __package__)
 _source_off_linear_relaxation_gate = lazy_callable(".source_off_relaxation_gate", "source_off_linear_relaxation_gate", __package__)
 _nonlinear_bh_piecewise_material_gate = lazy_callable(".nonlinear_bh_curve_gate", "nonlinear_bh_piecewise_material_gate", __package__)
+_nonlinear_bh_canonical_table_gate = lazy_callable(".nonlinear_bh_table_gate", "nonlinear_bh_canonical_table_gate", __package__)
 _skin_effect_adaptive_energy_loss_gate = lazy_callable(".skin_effect_adaptive_gate", "skin_effect_adaptive_energy_loss_gate", __package__)
 _global_local_optimization_replay_gate = lazy_callable(".global_local_optimization_gate", "global_local_optimization_replay_gate", __package__)
 _alternate_eddy_loss_formulation_gate = lazy_callable(".eddy_loss_formulation_gate", "alternate_eddy_loss_formulation_gate", __package__)
@@ -2340,6 +2355,301 @@ def cq_response_reality_gate(
 
 
 @_validation.tool()
+def nonlinear_magnetic_refinement_energy_gate(
+    summary_json: str,
+    max_refinement_growth_factor: float = 1.05,
+    max_finest_pair_relative_change: float = 0.05,
+    max_legendre_relative_residual: float = 1.0e-8,
+    min_refinement_levels: int = 3,
+) -> str:
+    """Gate a nonlinear magnetic h ladder, material bounds, and field/energy identity."""
+
+    try:
+        result = _nonlinear_magnetic_refinement_energy_gate(
+            json.loads(summary_json),
+            max_refinement_growth_factor=max_refinement_growth_factor,
+            max_finest_pair_relative_change=max_finest_pair_relative_change,
+            max_legendre_relative_residual=max_legendre_relative_residual,
+            min_refinement_levels=min_refinement_levels,
+        )
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        result = {
+            "policy": "nonlinear_magnetic_refinement_energy_gate_v3",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@_validation.tool()
+def nonlinear_magnetic_field_energy_parity_gate(
+    summary_json: str,
+    max_average_vector_relative_difference: float = 0.05,
+    max_rms_magnitude_relative_difference: float = 0.05,
+    max_energy_relative_difference: float = 0.05,
+    max_coenergy_relative_difference: float = 0.05,
+) -> str:
+    """Compare nonlinear field/energy only after full physical identity matches."""
+
+    try:
+        result = _nonlinear_magnetic_field_energy_parity_gate(
+            json.loads(summary_json),
+            max_average_vector_relative_difference=(
+                max_average_vector_relative_difference
+            ),
+            max_rms_magnitude_relative_difference=(
+                max_rms_magnitude_relative_difference
+            ),
+            max_energy_relative_difference=max_energy_relative_difference,
+            max_coenergy_relative_difference=max_coenergy_relative_difference,
+        )
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        result = {
+            "policy": "nonlinear_magnetic_field_energy_parity_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@_validation.tool()
+def nonlinear_field_energy_identity_gate_v5(summary_json: str) -> str:
+    """Gate canonical geometry/frame/refinement identity and nonlinear energy derivatives."""
+
+    try:
+        result = _nonlinear_field_energy_identity_gate_v5(json.loads(summary_json))
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        result = {
+            "policy": "nonlinear_field_energy_identity_gate_v5",
+            "status": "invalid_input",
+            "accepted": False,
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@_validation.tool()
+def nonlinear_field_energy_artifact_contract_gate_v6(summary_json: str) -> str:
+    """Gate completed result schema, units, finite samples, and response digest."""
+
+    try:
+        result = _nonlinear_field_energy_artifact_contract_gate_v6(json.loads(summary_json))
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        result = {
+            "policy": "nonlinear_field_energy_artifact_contract_gate_v6",
+            "status": "invalid_input",
+            "accepted": False,
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@_validation.tool()
+def nonlinear_field_energy_lineage_gate_v7(summary_json: str) -> str:
+    """Gate solver-output lineage, recomputable run identity, and cross-lane mesh identity."""
+
+    try:
+        result = _nonlinear_field_energy_lineage_gate_v7(json.loads(summary_json))
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        result = {
+            "policy": "nonlinear_field_energy_lineage_gate_v7",
+            "status": "invalid_input",
+            "accepted": False,
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@_validation.tool()
+def nonlinear_field_energy_physical_admissibility_gate_v8(summary_json: str) -> str:
+    """Gate nonnegative energy, positive tangent permeability, and Legendre identity."""
+
+    try:
+        result = _nonlinear_field_energy_physical_admissibility_gate_v8(json.loads(summary_json))
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        result = {
+            "policy": "nonlinear_field_energy_physical_admissibility_gate_v8",
+            "status": "invalid_input",
+            "accepted": False,
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@_validation.tool()
+def nonlinear_field_energy_observable_comparison_gate_v9(summary_json: str) -> str:
+    """Compare observables only after identity, units, and sample identities match."""
+
+    try:
+        result = _nonlinear_field_energy_observable_comparison_gate_v9(json.loads(summary_json))
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        result = {
+            "policy": "nonlinear_field_energy_observable_comparison_gate_v9",
+            "status": "invalid_input",
+            "accepted": False,
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@_validation.tool()
+def nonlinear_vector_observable_comparison_gate_v10(summary_json: str) -> str:
+    """Compare field, force, and torque vectors after frame and unit checks."""
+
+    try:
+        result = _nonlinear_vector_observable_comparison_gate_v10(json.loads(summary_json))
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        result = {
+            "policy": "nonlinear_vector_observable_comparison_gate_v10",
+            "status": "invalid_input",
+            "accepted": False,
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@_validation.tool()
+def nonlinear_live_execution_identity_gate_v11(summary_json: str) -> str:
+    """Gate completed live execution, physical identity, artifact digests, and cleanup evidence."""
+
+    try:
+        result = _nonlinear_live_execution_identity_gate_v11(json.loads(summary_json))
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        result = {
+            "policy": "nonlinear_live_execution_identity_gate_v11",
+            "status": "invalid_input",
+            "accepted": False,
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@_validation.tool()
+def build_constitutive_comparison_candidate(
+    bh_table_json: str,
+    h_values_json: str,
+    constitutive_interpolation: str = "monotone_pchip",
+) -> str:
+    """Build a source-comparison B-H response without changing the Radia solver."""
+
+    try:
+        result = _build_constitutive_comparison_candidate(
+            json.loads(bh_table_json),
+            json.loads(h_values_json),
+            constitutive_interpolation=constitutive_interpolation,
+        )
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        result = {
+            "schema": "radia.nonlinear-constitutive-response.v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@_validation.tool()
+def nonlinear_constitutive_response_parity_gate(
+    summary_json: str,
+    max_response_relative_difference: float = 1.0e-6,
+    max_integrability_relative_residual: float = 1.0e-8,
+    min_response_samples: int = 5,
+) -> str:
+    """Compare realized B-H response, tangent, energy, and coenergy on one SI grid."""
+
+    try:
+        result = _nonlinear_constitutive_response_parity_gate(
+            json.loads(summary_json),
+            max_response_relative_difference=max_response_relative_difference,
+            max_integrability_relative_residual=max_integrability_relative_residual,
+            min_response_samples=min_response_samples,
+        )
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        result = {
+            "policy": "nonlinear_constitutive_response_parity_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@_validation.tool()
+def nonlinear_constitutive_point_sample_gate(
+    summary_json: str,
+    max_response_relative_difference: float = 0.05,
+    max_direction_sine: float = 0.02,
+    max_vector_magnitude_relative_residual: float = 1.0e-9,
+    min_response_samples: int = 5,
+) -> str:
+    """Admit only unsmoothed element-local B/H samples as constitutive evidence."""
+
+    try:
+        result = _nonlinear_constitutive_point_sample_gate(
+            json.loads(summary_json),
+            max_response_relative_difference=max_response_relative_difference,
+            max_direction_sine=max_direction_sine,
+            max_vector_magnitude_relative_residual=(
+                max_vector_magnitude_relative_residual
+            ),
+            min_response_samples=min_response_samples,
+        )
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        result = {
+            "policy": "nonlinear_constitutive_point_sample_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@_validation.tool()
+def controlled_uniform_field_constitutive_sweep_gate(
+    summary_json: str,
+    max_response_relative_difference: float = 0.01,
+    min_response_samples: int = 5,
+) -> str:
+    """Compare one identity-bound homogeneous B-H sweep with a candidate response."""
+
+    try:
+        result = _controlled_uniform_field_constitutive_sweep_gate(
+            json.loads(summary_json),
+            max_response_relative_difference=max_response_relative_difference,
+            min_response_samples=min_response_samples,
+        )
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        result = {
+            "policy": "controlled_uniform_field_constitutive_sweep_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@_validation.tool()
+def nonlinear_magnetic_spatial_evidence_gate(
+    summary_json: str,
+    max_average_vector_relative_difference: float = 0.07,
+    max_rms_magnitude_relative_difference: float = 0.10,
+    min_tensor_gauss_samples: int = 27,
+) -> str:
+    """Gate nonlinear magnetic volume evidence and material/response order compatibility."""
+
+    try:
+        result = _nonlinear_magnetic_spatial_evidence_gate(
+            json.loads(summary_json),
+            max_average_vector_relative_difference=max_average_vector_relative_difference,
+            max_rms_magnitude_relative_difference=max_rms_magnitude_relative_difference,
+            min_tensor_gauss_samples=min_tensor_gauss_samples,
+        )
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        result = {
+            "policy": "nonlinear_magnetic_spatial_evidence_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@_validation.tool()
 def dual_formulation_symmetric_field_profile_gate(
     summary_json: str,
     max_profile_relative_difference: float = 0.01,
@@ -4418,6 +4728,21 @@ def nonlinear_bh_piecewise_material_gate(
     except (KeyError, TypeError, ValueError) as exc:
         result = {
             "policy": "piecewise_bh_secant_and_left_interval_differential_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@_validation.tool()
+def nonlinear_bh_canonical_table_gate(contract: dict) -> str:
+    """Gate explicit SI H,B data for a single-valued nonlinear material solve."""
+
+    try:
+        result = _nonlinear_bh_canonical_table_gate(contract)
+    except (KeyError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "explicit_si_h_b_single_valued_material_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
