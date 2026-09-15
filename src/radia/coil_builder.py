@@ -742,6 +742,72 @@ class CoilBuilder:
 
 		return self
 
+	def to_radia_loft_filaments(self, nw, nh):
+		"""Export rectangular straight/linear-loft segments as native filaments.
+
+		Each canonical section cell carries I/(nw*nh), conserved through
+		every segment. This prescribes a divergence-free stream-tube current
+		inside the conductor; it does not solve conduction or skin effects.
+		Straight filament fields use the native closed-form line integral.
+		Section midpoint sampling still requires nw/nh convergence studies.
+		Do not use this thin-filament approximation for internal fields,
+		self-energy or self-force. Arc lofts are not supported by this API.
+
+		Returns a list of native object IDs, one per continuous filament.
+		Unlike to_radia(), this explicitly selects an approximate section
+		model. Geometry is validated before allocating any native objects.
+		"""
+		import operator
+		import radia as rad
+		from radia.coil_profile import RectProfile
+
+		for count in (nw, nh):
+			if isinstance(count, (bool, np.bool_)) or operator.index(count) < 1:
+				raise ValueError("nw and nh must be positive integers")
+		nw, nh = operator.index(nw), operator.index(nh)
+		if not self.segments or not np.isfinite(self.current):
+			raise ValueError("A nonempty coil with finite current is required")
+		alpha, beta = np.meshgrid((np.arange(nw) + .5) / nw,
+		                         (np.arange(nh) + .5) / nh, indexing='ij')
+		paths = [[] for _ in range(nw * nh)]
+		previous_exit = None
+		for index, seg in enumerate(self.segments):
+			if type(seg) is StraightSegment:
+				start, end = seg.profile, seg.profile
+			elif type(seg) is LoftStraightSegment:
+				start, end = seg.profile_start, seg.profile_end
+			else:
+				raise NotImplementedError(f"segment {index}: only straight rectangular lofts are supported")
+			for profile in (start, end):
+				if type(profile) is not RectProfile:
+					raise NotImplementedError(f"segment {index}: rectangular profiles are required")
+				if not np.all(np.isfinite(profile.bounding_wh())) or min(profile.bounding_wh()) <= 0:
+					raise ValueError(f"segment {index}: profile dimensions must be finite and positive")
+			if not np.isfinite(seg.length) or seg.length <= 0 or seg.current != self.current:
+				raise ValueError(f"segment {index}: invalid length or inconsistent current")
+			frame = np.asarray(seg.orientation)
+			if not np.all(np.isfinite(frame)) or not np.allclose(frame @ frame.T, np.eye(3), rtol=0, atol=1e-12):
+				raise ValueError(f"segment {index}: an orthonormal frame is required")
+			# Corner checks also detect a section jump with a 1x1 center sample.
+			corners0 = start.sample_at(np.array([0, 1, 1, 0]), np.array([0, 0, 1, 1]))
+			corners1 = end.sample_at(np.array([0, 1, 1, 0]), np.array([0, 0, 1, 1]))
+			entry = seg.start_pos + corners0[0][:, None] * frame[0] + corners0[1][:, None] * frame[2]
+			if previous_exit is not None and not np.allclose(previous_exit, entry, rtol=0, atol=1e-12 * max(start.w, start.h)):
+				raise ValueError(f"segment {index}: disconnected cross-section")
+			previous_exit = seg.end_pos + corners1[0][:, None] * frame[0] + corners1[1][:, None] * frame[2]
+			uv0, uv1 = start.sample_at(alpha.ravel(), beta.ravel()), end.sample_at(alpha.ravel(), beta.ravel())
+			p0 = seg.start_pos + uv0[0][:, None] * frame[0] + uv0[1][:, None] * frame[2]
+			p1 = seg.end_pos + uv1[0][:, None] * frame[0] + uv1[1][:, None] * frame[2]
+			if not np.all(np.isfinite(p0)) or not np.all(np.isfinite(p1)):
+				raise ValueError(f"segment {index}: nonfinite endpoints")
+			for k, path in enumerate(paths):
+				if path and not np.allclose(path[-1], p0[k], rtol=0, atol=1e-12 * max(seg.length, start.w, start.h)):
+					raise ValueError(f"segment {index}: disconnected filament; no implicit joining wire")
+				if not path:
+					path.append(p0[k].tolist())
+				path.append(p1[k].tolist())
+		return [rad.ObjFlmCur(path, float(self.current) / (nw * nh)) for path in paths]
+
 	def to_radia(self, arc_max_segment_length=None):
 		"""
 		Convert all segments to Radia objects.
