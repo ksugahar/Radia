@@ -3633,8 +3633,8 @@ def paper_writing_check_sentence_ending_variety(
     → 「...と考えられる / ...を示す / ...が報告されている」等で変化をつける。
 
     **ロジック**:
-    1. 句点 (。．.) で文分割
-    2. 各文の末尾 (句点直前 15 字) を `_SENTENCE_END_PATTERNS` で分類
+    1. 共通の和英混在文分割を使用 (小数点と既知の略語を保持)
+    2. 各文の末尾 (句点直前 12 字) を `_SENTENCE_END_PATTERNS` で分類
     3. 同一 ending が `consecutive_threshold` 連続で発生したら "critical" に
     4. 全文末の histogram + entropy + 連続区間を返す
 

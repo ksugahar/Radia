@@ -64,7 +64,7 @@ Paths in tables are relative to `src/radia_mcp/paper_writing` unless specified.
 | P16 | 4.2 IMRaD/conclusion aliases | 検証待ち | Static inspection: plural Conclusions and Results and Discussion patterns now exist. Exercise section boundaries, combined headings and bibliography exclusion before closure. |
 | P17 | 4.2 References page boundary | 検証待ち | Reproduce a body page mentioning “Cross References” before the bibliography. |
 | P18 | 4.3 Japanese abstract splitting | 修正済み | R::test_japanese_abstract_sentences_split_without_spaces. |
-| P19 | 4.3 ending variety/decimal/shadowed endings | 検証待ち | Decimal-preserving sentence split and precedence tests required. |
+| P19 | 4.3 ending variety/decimal/shadowed endings | 修正済み | 2026-09-15: existing implementation verified through test_paper_writing_sentence_endings.py: all 15 declared endings, decimal preservation, Fig./Eq. abbreviations, run indices, entropy and threshold behavior. Minimal directory discovery plus collection protection: 24 passed. No new linguistic algorithm; English periods without following whitespace and arbitrary sentence boundaries are outside this scoped evidence. |
 | P20 | 4.3 misleading ratio/Fig. 3 | 検証待ち | Keep both source values with the ratio across abbreviations. |
 | P21 | 4.3 English stop words/passive denominator | 検証待ち | Separate English token repetition and passive-voice ratio fixtures. |
 | P22 | 4.3 percent in conclusion | 修正済み | R::test_conclusion_plain_text_preserves_percent_suffix. |
