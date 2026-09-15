@@ -17,3 +17,11 @@ def test_loft_cad_does_not_imply_native_solid_field_support():
     assert 'n_sub >= 4' in text
     assert 'STEP round trips' in text
     assert 'CAD export does not make `to_radia()` support' in text
+
+
+def test_circular_loft_routing_requires_explicit_approximation():
+    text = electromagnet_usage('coilbuilder')
+    assert 'matching rectangular or circular' in text
+    assert 'equal-area radial/angular grid' in text
+    assert 'cross-type transitions' in text
+    assert 'independent integral' in text
