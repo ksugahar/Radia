@@ -70,7 +70,9 @@ linearly varying dimensions as the current model. The curved CAD sides
 are approximations: refine the segment's `n_sub` independently of field
 sampling and check geometry convergence. CAD accepts `0 < angle < 360`,
 positive dimensions, a clear inner radius, and `n_sub >= 4`; negative and
-closed bends and cross-type profiles remain unsupported. Circular lofts
+cross-type profiles remain unsupported. Constant-section full turns use exact
+revolution for rectangular/circular profiles; unequal endpoint dimensions are
+rejected. General closed multi-segment CAD still requires separate validation. Circular lofts
 interpolate radius linearly. OCC section interpolation can have nonmonotone
 volume errors; check the analytic volume and successive refined geometries,
 not just a presumed convergence rate. Circular field export remains an explicit
