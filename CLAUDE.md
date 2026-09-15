@@ -76,13 +76,13 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 `cubit-mesh-export` toolbar. Normal Radia Python must not depend on Qt. LLM/MCP Cubit execution is always batch/nographics and fails rather than launching or attaching to a GUI; the only GUI run is the separately scoped human-facing release test, while journal/checkpoint handoff remains artifact-only.
 
 ### Shared MCP Runtime Ownership
+- radia-mcp releases independently of Radia: release-dual deploys editable updates only to LAB and 100, like cubit-mesh-export. Never deploy radia-mcp to hibino/mdx1/mdx2; isolated CI tests are not deployment. Do not wait for a solver release.
 - Routine editable updates: update the usual source -> reconnect -> check the live source and one harmless affected tool. Pure Python edits need no reinstall; source relocation or dependency/package-metadata changes do. No new daemon or mandatory ledger; see the shared runtime policy for exceptions.
 - MCP updates are forward-only: fix forward, never revert/reinstall/redistribute an old version. Retain obsolete copies only as identified debugging evidence with a removal condition, never as deployment targets or rollback reserves; remove them after consumer and unique-work checks. Details follow the shared runtime policy below.
 - MCP is experimental development tooling, not a numerical solver release. Developers may edit live MCP source and change its editable source with
   `pip install -e`; no dedicated branch, frozen snapshot or separate deployment
   approval is required for routine MCP experiments.
-- Coordinate overlapping edits and environment changes; preserve others' WIP
-  and active CAD/MATLAB jobs. Never mass-kill processes to refresh MCP.
+- Coordinate overlapping edits and environment changes; preserve others' WIP and active CAD/MATLAB jobs. Never mass-kill processes to refresh MCP.
 - Verify the interpreter and actual import path after repointing. Report each
   client's live loaded source separately; reload/reconnect affected clients as
   needed. Unknown or mixed evidence must stay unverified.
