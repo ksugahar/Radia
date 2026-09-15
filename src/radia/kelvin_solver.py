@@ -650,7 +650,9 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         interface_constraint_scale=None, total_dirichlet_cf=None,
         mu_cf=None, kelvin_interface_boundary=None,
         kelvin_source_potential=None, kelvin_source_h=None,
-        total_source_h=None, total_source_materials=(), return_system=False):
+        total_source_h=None, total_source_materials=(), return_system=False,
+        reduced_zero_normal_boundary=None, _fixed_rhs_cache=None,
+        _rhs_material=None):
     """Solve the TOSCA-style mixed total/reduced Omega formulation.
 
     ``return_system=True`` retains assembled forms for explicit diagnostics.
@@ -913,26 +915,71 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
     a_bf += interface_constraint_scale * (
         multiplier * jump_test + test_multiplier * jump_trial) * d_interface
 
-    f_lf = LinearForm(fes)
-    f_lf += mu_cf * H_s * grad(test_reduced) * dx(
+    fixed_rhs = LinearForm(fes)
+    fixed_rhs += mu_cf * H_s * grad(test_reduced) * dx(
         definedon=reduced_selector, bonus_intorder=bonus_intorder)
+    if reduced_zero_normal_boundary is not None:
+        from ngsolve import specialcf, BoundaryFromVolumeCF
+        labels = set(str(reduced_zero_normal_boundary).split("|"))
+        if not labels or not labels <= set(mesh.GetBoundaries()):
+            raise ValueError("reduced_zero_normal_boundary must name mesh boundaries")
+        for face in mesh.ngmesh.FaceDescriptors():
+            if mesh.GetBoundaries()[face.bc - 1] not in labels:
+                continue
+            domains = (face.domin, face.domout)
+            adjacent = [domain for domain in domains if domain != 0]
+            if len(adjacent) != 1 or mesh.GetMaterials()[adjacent[0] - 1] not in reduced_set:
+                raise ValueError("zero-normal correction boundary must be exterior to a reduced region")
+        # Zero normal correction field does not mean zero normal total field.
+        fixed_rhs += -BoundaryFromVolumeCF(mu_cf) * InnerProduct(H_s, specialcf.normal(3)) * test_reduced.Trace() * ds(
+            definedon=mesh.Boundaries(reduced_zero_normal_boundary),
+            bonus_intorder=bonus_intorder)
     if kelvin_lift is not None:
         # Exterior equation for Omega_t = phi_reduced + lift, tested with the
         # same continuous space; the lift moves to the right-hand side.
-        f_lf += -mu_cf * grad(kelvin_lift) * grad(test_reduced) * dx(
+        fixed_rhs += -mu_cf * grad(kelvin_lift) * grad(test_reduced) * dx(
             definedon=kelvin_selector, bonus_intorder=bonus_intorder)
     elif kelvin_selector is not None:
         # Same right-hand side with the exact source in place of the lift:
         # grad of the exact lift IS the pulled-back exterior source field.
-        f_lf += -mu_cf * kelvin_source_h * grad(test_reduced) * dx(
+        fixed_rhs += -mu_cf * kelvin_source_h * grad(test_reduced) * dx(
             definedon=kelvin_selector, bonus_intorder=bonus_intorder)
+    f_lf = LinearForm(fes)
     if total_source_h is not None:
         total_source_selector = mesh.Materials("|".join(total_source_materials))
         f_lf += mu_cf * total_source_h * grad(test_total) * dx(
             definedon=total_source_selector, bonus_intorder=bonus_intorder)
-    f_lf += interface_constraint_scale * test_multiplier * source_potential * d_interface
+    fixed_rhs += interface_constraint_scale * test_multiplier * source_potential * d_interface
     a_bf.Assemble()
-    f_lf.Assemble()
+    if _fixed_rhs_cache is None:
+        fixed_rhs.Assemble()
+        f_lf.Assemble()
+        f_lf.vec.data += fixed_rhs.vec
+    else:
+        # This cache belongs to one P1 Picard call, with fixed source and spaces.
+        layout = tuple(space.ndof for space in fes.components)
+        if "fixed" not in _fixed_rhs_cache:
+            fixed_rhs.Assemble()
+            vector = fixed_rhs.vec.CreateVector()
+            vector.data = fixed_rhs.vec
+            _fixed_rhs_cache.update(fixed=vector, layout=layout)
+        elif _fixed_rhs_cache["layout"] != layout:
+            raise ValueError("Picard RHS cache space layout changed")
+        if _rhs_material is None:
+            f_lf.Assemble()
+        else:
+            if "material_operator" not in _fixed_rhs_cache:
+                operator = BilinearForm(trialspace=_rhs_material.space, testspace=fes)
+                if total_source_h is not None:
+                    coefficient = _rhs_material.space.TrialFunction()
+                    operator += coefficient * total_source_h * grad(test_total) * dx(
+                        definedon=total_source_selector, bonus_intorder=bonus_intorder)
+                operator.Assemble()
+                _fixed_rhs_cache["material_operator"] = operator
+            f_lf = LinearForm(fes)
+            f_lf.Assemble()
+            f_lf.vec.data = _fixed_rhs_cache["material_operator"].mat * _rhs_material.vec
+        f_lf.vec.data += _fixed_rhs_cache["fixed"]
 
     solution = GridFunction(fes)
     if total_dirichlet_cf is None:
@@ -1051,7 +1098,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
         total_source_h=None, total_source_materials=(),
         anderson_depth=0, anderson_transform="log", observation_points=None,
         material_update_order=None, material_log_state_initial=None,
-        refinement_parent_identity=None):
+        refinement_parent_identity=None, cache_fixed_rhs=True,
+        reduced_zero_normal_boundary=None):
     """Picard solve for the mixed total/reduced Omega formulation.
 
     The source split and its interface trace stay fixed throughout the
@@ -1162,6 +1210,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
     if requested_material_order is not None and requested_material_order < 0:
         raise ValueError("material_update_order must be nonnegative")
     if genuinely_nonlinear and int(order) > 1:
+        if reduced_zero_normal_boundary is not None:
+            raise ValueError("reduced zero-normal boundary currently requires order=1")
         if requested_material_order != int(order) - 1:
             raise ValueError(
                 "a high-order nonlinear response requires "
@@ -1279,6 +1329,9 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
     result = None
     converged = False
     relative_change = float("inf")
+    rhs_cache = {} if cache_fixed_rhs else None
+    cache_material = (mu_elements if cache_fixed_rhs and total_source_h is not None and
+                      set(total_source_materials) <= nonlinear_set else None)
     for iteration in range(1, int(max_iterations) + 1):
         result = solve_magnetostatic_mixed_total_reduced_omega_kelvin(
             mesh, H_s, source_potential, R_K, offset,
@@ -1292,7 +1345,9 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
             kelvin_source_potential=kelvin_source_potential,
             kelvin_source_h=kelvin_source_h,
             total_source_h=total_source_h,
-            total_source_materials=total_source_materials)
+            total_source_materials=total_source_materials,
+            reduced_zero_normal_boundary=reduced_zero_normal_boundary,
+            _fixed_rhs_cache=rhs_cache, _rhs_material=cache_material)
         B_current = np.zeros(len(nonlinear_elements))
         mu_r_target = np.empty(len(nonlinear_elements))
         for index, (element_nr, centroid) in enumerate(nonlinear_elements):
@@ -1346,6 +1401,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
         raise RuntimeError("mixed total/reduced Omega Picard iteration did not start")
     stats = {
         "method": "Picard",
+        "rhs_reuse": "fixed_vector_and_material_operator" if cache_material is not None
+                     else "fixed_vector" if rhs_cache is not None else "none",
         "iterations": iteration,
         "converged": converged,
         "relative_B_change": relative_change,
