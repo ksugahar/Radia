@@ -120,7 +120,7 @@ def test_attach_ping_detects_unresponsive_daemon(monkeypatch, tmp_path):
 def test_call_log_records_tool_calls(monkeypatch, tmp_path):
     # Redirect the state dir, then re-install the choke point so the
     # log lands in tmp_path.
-    monkeypatch.setenv("RADIA_MCP_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("CUBIT_MCP_STATE_DIR", str(tmp_path))
     monkeypatch.setattr(cubit_server.mcp._tool_manager, "call_tool",
                         cubit_server.mcp._tool_manager.call_tool)
     cubit_server._install_call_log()

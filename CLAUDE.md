@@ -137,8 +137,8 @@ checks, lifecycle tests, numerical checks, and durable `run.log` /
 SAT is important for Cubit's ACIS workflow; STEP is the portable standard. The
 solver boundary is a checked `.vol` regardless of the creation route.
 
-- Producing a `.vol` is `cubit-mesh-export`'s responsibility and runs on a
-  licensed Cubit machine. radia CI never generates one: it consumes committed
+- Cubit-generated `.vol` files belong to `cubit-mesh-export` on a licensed
+  Cubit machine; without Cubit, use build123d + Netgen. radia CI consumes committed
   fixtures. A missing required fixture fails the test; only explicitly optional
   validation inputs may produce a visible skip. Heavier `.vol` work
   belongs to `validation_test/`, and `docs/**/*.ipynb` may show the Cubit
@@ -150,7 +150,7 @@ solver boundary is a checked `.vol` regardless of the creation route.
 - Radia normally reads checked `.vol` files. Generation uses APREPRO or Cubit's Python API
   in batch/headless mode with `cubit-mesh-export` owning export; CI remains fixture-only.
 - `cubit_mesh_export.mcp` owns Cubit MCP/APIs without Radia; each distribution owns its runtime helpers and requires neither the other MCP package nor a shared private distribution.
-  Radia may consume Cubit for topology optimization. MCP handoff is artifact-only, never GUI control.
+  Radia may depend on Cubit for applicable workflows and prefers it when licensed; build123d + Netgen is the explicit alternative. MCP handoff is artifact-only, never GUI control.
 - Every solver-bound `.vol` passes `check-vol` with its versioned label
   contract before solver or Simulink initialization.
 - Label checks validate topology/naming; DesignSpec validates physical data.
