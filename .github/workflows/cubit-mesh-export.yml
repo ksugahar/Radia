@@ -10,7 +10,9 @@ on:
       - 'src/radia/install_panels.py'
       - 'src/radia/panels/register_toolbar.py'
       - 'src/radia/panels/radia_export_menu.py'
-      - 'src/radia/panels/cubit_toolbar/**'
+      - 'src/radia/_cubit_gui_compat.py'
+      - 'tests/test_cubit_standalone_gui.py'
+      - 'tools/check_cubit_standalone.py'
       - 'tests/test_cubit_installers.py'
       - 'tests/test_cubit_menu_startup.py'
       - 'tools/audit_pyside6_only.py'
@@ -24,7 +26,9 @@ on:
       - 'src/radia/install_panels.py'
       - 'src/radia/panels/register_toolbar.py'
       - 'src/radia/panels/radia_export_menu.py'
-      - 'src/radia/panels/cubit_toolbar/**'
+      - 'src/radia/_cubit_gui_compat.py'
+      - 'tests/test_cubit_standalone_gui.py'
+      - 'tools/check_cubit_standalone.py'
       - 'tests/test_cubit_installers.py'
       - 'tests/test_cubit_menu_startup.py'
       - 'tools/audit_pyside6_only.py'
@@ -135,9 +139,19 @@ jobs:
             "netgen-mesher==6.2.2606" "ngsolve==6.2.2606"
           $env:PYTHONPATH = 'packages\cubit-mesh-export\src'
           python -m pytest tests\test_cubit_installers.py `
-            tests\test_cubit_menu_startup.py -q
+            tests\test_cubit_menu_startup.py tests\test_cubit_standalone_gui.py -q
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tools\audit_pyside6_only.py
+
+      - name: Verify installed standalone GUI assets without Radia
+        shell: pwsh
+        run: |
+          $wheel = Get-ChildItem packages\cubit-mesh-export\dist\*.whl |
+            Select-Object -First 1
+          python -m pip install --no-deps $wheel.FullName
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -I tools\check_cubit_standalone.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload cubit-mesh-export wheel
         uses: actions/upload-artifact@v4

@@ -10,7 +10,7 @@ import sys
 import types
 
 ROOT = Path(__file__).resolve().parents[1]
-REGISTER_TOOLBAR = ROOT / "src" / "radia" / "panels" / "register_toolbar.py"
+REGISTER_TOOLBAR = ROOT / "packages/cubit-mesh-export/src/cubit_mesh_export/cubit_gui/register_toolbar.py"
 EXPORT_MENU = ROOT / "packages/cubit-mesh-export/src/cubit_mesh_export/cubit_gui/radia_export_menu.py"
 AUDIT_SCRIPT = ROOT / "tools" / "audit_pyside6_only.py"
 
@@ -78,9 +78,8 @@ def test_cubit_startup_installs_menu_through_claro_api():
     """
     source = REGISTER_TOOLBAR.read_text(encoding="utf-8")
 
-    assert "def _install_radia_export_menu" in source
-    assert "install_menu()" in source
-    assert "_install_radia_export_menu" in source.split("def register_menu")[1]
+    assert "radia_export_menu.install_menu()" in source
+    assert "import radia" not in source.replace("import radia_export_menu", "")
 
 
 def test_export_menu_uses_claro_api_not_qmenubar_injection():

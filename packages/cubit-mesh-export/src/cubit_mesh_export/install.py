@@ -11,9 +11,9 @@ After ``pip install cubit-mesh-export``, run::
     cubit-plugin-install --check-only   # preflight only, no writes
 
 This is the SINGLE entry point for Cubit plugin and Radia export-toolbar
-deployment. If the ``radia`` package is installed, this command also
-registers the Cubit-embedded PySide6 Radia Export Mesh toolbar and verifies
-that Cubit's startup files point at it.
+deployment. It also registers the exporter-owned Cubit-embedded PySide6
+toolbar and verifies that Cubit's startup files point at it. Radia is not
+required, and Qt remains confined to Cubit's private runtime.
 
 Safety policy (2026-04-14 -- post-incident hardening):
 
@@ -32,7 +32,6 @@ from __future__ import annotations
 import argparse
 import glob
 import hashlib
-import importlib.metadata as importlib_metadata
 import os
 import shutil
 import sys
@@ -187,14 +186,6 @@ def _find_netgen_dlls():
     except ImportError:
         pass
     return None, None
-
-
-def _radia_distribution_installed() -> bool:
-    try:
-        importlib_metadata.version("radia")
-        return True
-    except importlib_metadata.PackageNotFoundError:
-        return False
 
 
 def _is_cubit_process_name(name: str) -> bool:

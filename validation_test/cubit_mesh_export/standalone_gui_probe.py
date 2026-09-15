@@ -12,16 +12,31 @@ gui = Path(os.environ['CME_GUI_TEST_SOURCE'])
 sys.path.insert(0, str(gui))
 import cubit
 baseline = os.environ.get('CME_GUI_TEST_BASELINE') == '1'
-if not baseline:
+toolbar_mode = os.environ.get('CME_GUI_TEST_TOOLBAR_MODE')
+if not baseline and not toolbar_mode:
     import radia_export_menu as menu
 
 
 def probe():
+    deferred = False
     result = {'gui_started': True, 'passed': False, 'baseline': baseline,
-              'menu_source': None if baseline else menu.__file__}
+              'menu_source': None if baseline or toolbar_mode else menu.__file__}
     try:
         if baseline:
             result['passed'] = True
+            return
+        if toolbar_mode:
+            sys.path.insert(0, os.environ['CME_GUI_TEST_HARNESS'])
+            from standalone_toolbar_probe import start_toolbar_checks
+            def complete(payload, error):
+                result['toolbar'] = payload
+                result['passed'] = error is None
+                if error:
+                    result['error'] = error
+                (out / 'gui-result.json').write_text(json.dumps(result, indent=2), encoding='utf-8')
+                QTimer.singleShot(0, QApplication.instance().quit)
+            start_toolbar_checks(out, toolbar_mode, complete)
+            deferred = True
             return
         assert 'radia' not in sys.modules
         assert 'netgen' not in sys.modules
@@ -44,12 +59,17 @@ def probe():
             cubit.cmd(command)
         cubit.cmd('export netgen "' + (out / 'sphere.vol').as_posix() + '" order 2 overwrite')
         assert (out / 'sphere.vol').is_file()
+        if os.environ.get('CME_GUI_TEST_DIALOGS') == '1':
+            sys.path.insert(0, os.environ['CME_GUI_TEST_HARNESS'])
+            from standalone_dialog_probe import run_dialog_checks
+            result['dialog_cases'] = run_dialog_checks(menu, out)
         result['passed'] = True
     except Exception as exc:
         result['error'] = repr(exc)
     finally:
-        (out / 'gui-result.json').write_text(json.dumps(result, indent=2), encoding='utf-8')
-        QTimer.singleShot(0, QApplication.instance().quit)
+        if not deferred:
+            (out / 'gui-result.json').write_text(json.dumps(result, indent=2), encoding='utf-8')
+            QTimer.singleShot(0, QApplication.instance().quit)
 
 
 QTimer.singleShot(4000, probe)

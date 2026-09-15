@@ -24,6 +24,8 @@ def main():
     gui = installed / "cubit_gui"
     assert (gui / "register_toolbar.py").is_file()
     temp_root = r"C:\temp" if os.name == "nt" else None
+    if temp_root:
+        Path(temp_root).mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="cubit-wheel-check-", dir=temp_root) as directory:
         root = Path(directory)
         home = root / "home"
