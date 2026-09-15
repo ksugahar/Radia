@@ -781,7 +781,7 @@ class CoilBuilder:
 
 		return self
 
-	def to_radia_loft_filaments(self, nw, nh, n_arc=64):
+	def to_radia_loft_filaments(self, nw, nh, n_arc=64, *, require_closed=False):
 		"""Export rectangular straight/loft segments as native filaments.
 
 		Each canonical section cell carries I/(nw*nh), conserved through
@@ -796,6 +796,8 @@ class CoilBuilder:
 		Returns a list of native object IDs, one per continuous filament.
 		Unlike to_radia(), this explicitly selects an approximate section
 		model. Geometry is validated before allocating any native objects.
+		Set require_closed=True to require matching entry/exit sections and
+		closed current paths. No implicit return wire is added.
 		"""
 		import operator
 		import radia as rad
@@ -813,6 +815,8 @@ class CoilBuilder:
 		paths = [[] for _ in range(nw * nh)]
 		previous_exit = None
 		previous_profile_type = None
+		first_entry = None
+		first_profile_type = None
 		for index, seg in enumerate(self.segments):
 			if type(seg) is StraightSegment:
 				start, end = seg.profile, seg.profile
@@ -838,6 +842,8 @@ class CoilBuilder:
 				if not np.isfinite(seg.radius) or seg.radius <= max(w0, w1) / 2:
 					raise ValueError(f"segment {index}: arc loft has nonpositive inner radius")
 				length = seg.radius * np.deg2rad(seg.arc_angle)
+				if seg.arc_angle == 360 and start.bounding_wh() != end.bounding_wh():
+					raise ValueError(f"segment {index}: full-turn loft must have matching endpoint profiles")
 			else:
 				length = seg.length
 			if not np.isfinite(length) or length <= 0 or seg.current != self.current:
@@ -852,6 +858,9 @@ class CoilBuilder:
 				corners0 = start.sample_at(np.ones(4), np.arange(4) / 4)
 				corners1 = end.sample_at(np.ones(4), np.arange(4) / 4)
 			entry = seg.start_pos + corners0[0][:, None] * frame[0] + corners0[1][:, None] * frame[2]
+			if first_entry is None:
+				first_entry = entry.copy()
+				first_profile_type = type(start)
 			if previous_exit is not None and not np.allclose(previous_exit, entry, rtol=0, atol=1e-12 * max(w0, h0)):
 				raise ValueError(f"segment {index}: disconnected cross-section")
 			exit_frame = seg.end_orientation
@@ -876,6 +885,15 @@ class CoilBuilder:
 				if not path:
 					path.append(p0[k].tolist())
 				path.extend(p[k].tolist() for p in waypoints)
+		if require_closed:
+			scale = max(np.linalg.norm(first_entry - first_entry.mean(axis=0), axis=1))
+			if (previous_profile_type is not first_profile_type
+			    or not np.allclose(previous_exit, first_entry, rtol=0, atol=1e-12 * scale)):
+				raise ValueError("Closed coil requires matching entry and exit sections")
+			for path in paths:
+				if not np.allclose(path[-1], path[0], rtol=0, atol=1e-12 * scale):
+					raise ValueError("Closed coil requires closed current paths")
+				path[-1] = path[0].copy()
 		return [rad.ObjFlmCur(path, float(self.current) / (nw * nh)) for path in paths]
 
 	def to_radia(self, arc_max_segment_length=None):
