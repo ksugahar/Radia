@@ -103,6 +103,11 @@ Then in a session:
 
 Run `cubit_status()` for the live, definitive list.
 
+MCP unit tests live under `tests/mcp` and require `pytest` and `psutil`.
+Their session teardown checks for surviving test-owned Cubit runners without
+terminating any process; pre-existing and unrelated runners are excluded.
+Missing process-inspection support fails rather than reporting a clean session.
+
 ## Persistent session architecture
 
 ```
