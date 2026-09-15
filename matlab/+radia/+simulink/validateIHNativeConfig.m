@@ -166,7 +166,7 @@ if string(config.rotation_mode) == "periodic-uniform"
 else
     config.rotation_transport = "none";
 end
-config.dt_order = "eddy;transport(theta_prev,theta_now);thermal";
+config.dt_order = "eddy(material-frame heat);thermal(material-frame state)";
 end
 
 function value = positiveInteger(value, name)

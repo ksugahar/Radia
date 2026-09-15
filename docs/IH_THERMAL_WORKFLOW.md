@@ -68,7 +68,7 @@ workpiece_angle_rad -----------------------------> |
 The fixed update order is:
 
 ```text
-Eddy output -> conservative transport(theta_prev, theta_now) -> Thermal update
+Eddy source-to-material heat mapping -> Thermal material-frame update
 ```
 
 Temperature is stored in the workpiece coordinate system. In
@@ -145,7 +145,7 @@ The release gates cover these contracts separately:
 - standalone MEX commands: ABI, numerical behavior, errors, stale handles;
 - Level-2 S-Functions: initialization, Outputs/Update ordering, termination,
   repeated runs, and closed-loop wiring;
-- rotation: zero, small, large, periodic, and conservative-energy cases;
+- rotation: integer and half-cell full-turn uniform heating, and passive material-frame temperature invariance (native regression);
 - geometry update: `.vol`, `.vol.gz`, `.step`, role normalization, label
   contracts, and persistent artifacts;
 - application model: clean open, compile, simulation, and full-window visual QA.
