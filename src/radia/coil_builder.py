@@ -760,8 +760,24 @@ class CoilBuilder:
 
 		Returns:
 			list: List of Radia object IDs (can be combined with rad.ObjCnt)
+
+		Raises:
+			NotImplementedError: A segment is not a constant rectangular
+				straight or arc. Validation precedes native object allocation.
+			ValueError: Profile dimensions disagree with native dimensions.
 		"""
 		import radia as rad
+		from radia.coil_profile import RectProfile
+
+		# Native primitives cannot represent lofts or arbitrary profiles.
+		# Check the whole coil before allocating even its supported prefix.
+		for index, seg in enumerate(self.segments):
+			if type(seg) not in (StraightSegment, ArcSegment) or type(seg.profile) is not RectProfile:
+				raise NotImplementedError(
+					f"segment {index}: native conversion requires a constant rectangular straight or arc"
+				)
+			if seg.profile.bounding_wh() != (seg.width, seg.height):
+				raise ValueError(f"segment {index}: profile and native dimensions disagree")
 
 		radia_objects = []
 		for seg in self.segments:
