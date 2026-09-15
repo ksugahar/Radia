@@ -1297,7 +1297,8 @@ private:
     // the unit hypercube converges exponentially, which the block-wise near family (graded outer x
     // separate inner) cannot: on ESRF #6 the near-zero modes are 1e-3 cancellations of block energies,
     // so 1e-8 block accuracy is required (memory hdiv_hex_gram_m_metric_amplification).
-    std::vector<double> QuadBlockHexPairDuffy(int kindT, int hT, int kindS, int hS, int img) const;
+    std::vector<double> QuadBlockHexPairDuffy(int kindT, int hT, int kindS, int hS, int img,
+        const double* velocityT = nullptr, const double* velocityS = nullptr) const;
     // Non-touching pairs inside the near band (BDM1): plain tensor Gauss on both reference domains with
     // the pair rule (the hosts are separated, so the integrand is smooth).
     std::vector<double> QuadBlockHexProductN(int kindT, int hT, int kindS, int hS, int img) const;
