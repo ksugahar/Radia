@@ -1,0 +1,53 @@
+{
+  "scope": "Diagnose the missing electric reciprocity term on a genus-zero cylinder.\n\nThe source is a closed 720-segment, one-ampere peak ring at r=30 mm.\nThe workpiece is r=25 mm, h=25 mm, sigma=5.8e7 S/m, mu_r=1 at 1 kHz.\nUses explicit in-memory Netgen surface meshes, not production VOL exports.\n\nFor exp(+i omega t), total H=-grad(phi), incident H=-grad(psi):\n  delta_L = int(phi n.B_inc) / I**2\n            + Zs/(i omega I**2) int(grad_s(psi).grad_s(phi)).\nThe second term is from -E cross H_inc in electromagnetic reciprocity.\nIt is bilinear, NOT a conjugated norm of the solved field. Therefore the\nreaction power is independent of the surface-loss evaluation.\n\nThis diagnostic does NOT validate nonlinear ESIM, multiply-connected\nsurfaces, finite-source FEM equivalence, or the production application path.\nThe old term is retained in the output solely to reproduce the defect.\n",
+  "host": "Hibino",
+  "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+  "ngsolve": "6.2.2606",
+  "production_path_fixed": false,
+  "source_sha256": {
+    "validate_sibc_reaction_power.py": "f7cf59183961d681e5b3ec5e9d9178b8138c2d368fe018773a0a65b409cc44c2",
+    "bem_sibc_solver.py": "bba28b3457ef2366bdeb7cb4c26fdbde0379f349554df52e15fb93d729e48888",
+    "biot_savart.py": "3f9d956d456ba4ceaea116e7e37b2b7cea550140a046ccfe16dfc4b337ab11d7",
+    "_radia_pybind.pyd": "4d0b6b9492050ea35ef9b46d3c601cf74b1c2684d7bb6ccdac21fd6bac9141b4"
+  },
+  "rows": [
+    {
+      "maxh": 0.006,
+      "nv": 211,
+      "triangles": 418,
+      "P_surface": 1.8625499420362713e-05,
+      "P_reaction_magnetic_only": 6.579686892540249e-06,
+      "P_reaction_complete": 1.8825951988221974e-05,
+      "P_electric_term": 1.2246265095681725e-05,
+      "old_loss_to_reaction_ratio": 2.830757713027266,
+      "complete_power_relative_error": 0.010762265394081849,
+      "phi_projection_relative_residual": 0.12198951484270551
+    },
+    {
+      "maxh": 0.003,
+      "nv": 935,
+      "triangles": 1866,
+      "P_surface": 1.963344849028062e-05,
+      "P_reaction_magnetic_only": 6.835585348739037e-06,
+      "P_reaction_complete": 1.9722973231561654e-05,
+      "P_electric_term": 1.288738788282262e-05,
+      "old_loss_to_reaction_ratio": 2.872240998922266,
+      "complete_power_relative_error": 0.004559807276106053,
+      "phi_projection_relative_residual": 0.05766766884679746
+    },
+    {
+      "maxh": 0.002,
+      "nv": 2255,
+      "triangles": 4506,
+      "P_surface": 1.996801674560158e-05,
+      "P_reaction_magnetic_only": 6.920739432956841e-06,
+      "P_reaction_complete": 2.000529499236457e-05,
+      "P_electric_term": 1.308455555940773e-05,
+      "old_loss_to_reaction_ratio": 2.8852432516839284,
+      "complete_power_relative_error": 0.0018668978115315203,
+      "phi_projection_relative_residual": 0.0377382461902237
+    }
+  ],
+  "finest_power_balance_tolerance": 0.01,
+  "passed": true
+}
