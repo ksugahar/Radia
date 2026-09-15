@@ -21,7 +21,7 @@ set(EQNEDIT64_ASSETS "${EQNEDIT64_ROOT}/assets")
 
 foreach(required
         "${EQNEDIT64_SRC}/eqnedit_pybind.cpp"
-        "${EQNEDIT64_ASSETS}/latinmodern-math.otf"
+        "${EQNEDIT64_ASSETS}/eqnedit-math.ttf"
         "${EQNEDIT64_ROOT}/web/equation-editor.js")
     if(NOT EXISTS "${required}")
         message(FATAL_ERROR "canonical Eqnedit64 source is missing: ${required}")
@@ -33,13 +33,13 @@ endforeach()
 # copy under tools/eqnedit64.
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/assets")
 configure_file(
-    "${EQNEDIT64_ASSETS}/latinmodern-math.otf"
-    "${CMAKE_CURRENT_BINARY_DIR}/assets/latinmodern-math.otf"
+    "${EQNEDIT64_ASSETS}/eqnedit-math.ttf"
+    "${CMAKE_CURRENT_BINARY_DIR}/assets/eqnedit-math.ttf"
     COPYONLY
 )
 set(EQNEDIT64_PY_RESOURCE "${CMAKE_CURRENT_BINARY_DIR}/eqnedit64_python.rc")
 file(WRITE "${EQNEDIT64_PY_RESOURCE}"
-    "#include <windows.h>\n200 RCDATA \"assets\\\\latinmodern-math.otf\"\n")
+    "#include <windows.h>\n200 RCDATA \"assets\\\\eqnedit-math.ttf\"\n")
 
 pybind11_add_module(eqnedit_core MODULE
     "${EQNEDIT64_SRC}/eqnedit_pybind.cpp"
@@ -80,4 +80,5 @@ install(FILES
 install(FILES
     "${EQNEDIT64_ASSETS}/GUST-FONT-LICENSE.txt"
     "${EQNEDIT64_ASSETS}/THIRD_PARTY_NOTICES.md"
+    "${EQNEDIT64_ASSETS}/MANIFEST-eqnedit-math.txt"
     DESTINATION eqnedit64/licenses)
