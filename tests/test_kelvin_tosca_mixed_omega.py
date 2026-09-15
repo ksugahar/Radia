@@ -45,6 +45,7 @@ def test_mixed_total_reduced_omega_keeps_source_out_of_high_mu_total_region():
     db_dy = -4.0 * ng.y * (1.0 - ng.y**2)
     h_curl = ng.CoefficientFunction((a * db_dy * c, -da_dx * b * c, 0.0))
     h_source = h_gradient + h_curl
+    phases = []
 
     with ng.TaskManager():
         source_trace = project_source_interface_potential(
@@ -55,8 +56,12 @@ def test_mixed_total_reduced_omega_keeps_source_out_of_high_mu_total_region():
             mu_r_by_material={"reduced": 1.0, "total": 1000.0},
             reduced_materials=("reduced",), total_materials=("total",),
             interface_boundary="source_total_interface", order=2,
-            dirichlet_bbbnd="outer")
+            dirichlet_bbbnd="outer", phase_callback=phases.append)
     assert source_trace["relative_tangential_residual"] < 0.03
+    names = ["matrix_assembly", "source_rhs_assembly", "factorization", "backsolve"]
+    assert [event["phase"] for event in phases if event["event"] == "complete"] == names
+    assert all(np.isfinite(result["phase_timings_seconds"][name])
+               and result["phase_timings_seconds"][name] >= 0 for name in names)
 
     h_field = result["H_cf"]
     for point in ((-0.5, 0.15, -0.10), (-0.15, -0.20, 0.25)):

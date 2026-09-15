@@ -24,6 +24,7 @@ two-sphere Kelvin geometry built via
 from __future__ import annotations
 
 import math
+import time
 
 import numpy as np
 
@@ -587,11 +588,16 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         interface_constraint_scale=None, total_dirichlet_cf=None,
         mu_cf=None, kelvin_interface_boundary=None,
         kelvin_source_potential=None, kelvin_source_h=None,
-        total_source_h=None, total_source_materials=(), return_system=False):
+        total_source_h=None, total_source_materials=(), return_system=False,
+        phase_callback=None):
     """Solve the TOSCA-style mixed total/reduced Omega formulation.
 
     ``return_system=True`` retains assembled forms for explicit diagnostics.
     The default returns ``system=None`` to avoid retaining their matrix storage.
+    ``phase_callback`` optionally receives start/complete dictionaries for
+    matrix assembly, source RHS assembly, factorization and backsolve.
+    Completed subphase durations are returned in ``phase_timings_seconds``;
+    these do not include mesh, space setup or postprocessing time.
 
     ``H_s`` is used in ``reduced_materials`` (the source enclosure), where
     ``H = H_s - grad(phi_reduced)``.  A linked coil may additionally supply
@@ -868,20 +874,37 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         f_lf += mu_cf * total_source_h * grad(test_total) * dx(
             definedon=total_source_selector, bonus_intorder=bonus_intorder)
     f_lf += interface_constraint_scale * test_multiplier * source_potential * d_interface
-    a_bf.Assemble()
-    f_lf.Assemble()
+    phase_timings = {}
+
+    def timed_phase(name, action):
+        started = time.perf_counter()
+        if phase_callback is not None:
+            phase_callback({"phase": name, "event": "start"})
+        value = action()
+        elapsed = time.perf_counter() - started
+        phase_timings[name] = elapsed
+        if phase_callback is not None:
+            phase_callback({"phase": name, "event": "complete", "seconds": elapsed})
+        return value
+
+    timed_phase("matrix_assembly", a_bf.Assemble)
+    timed_phase("source_rhs_assembly", f_lf.Assemble)
 
     solution = GridFunction(fes)
+    inverse_mat = timed_phase(
+        "factorization", lambda: a_bf.mat.Inverse(fes.FreeDofs(), inverse=inverse))
     if total_dirichlet_cf is None:
-        solution.vec.data = a_bf.mat.Inverse(
-            fes.FreeDofs(), inverse=inverse) * f_lf.vec
+        def apply_inverse():
+            solution.vec.data = inverse_mat * f_lf.vec
+        timed_phase("backsolve", apply_inverse)
     else:
         solution.components[1].Set(
             total_dirichlet_cf, definedon=mesh.BBBoundaries(dirichlet_bbbnd))
         residual = solution.vec.CreateVector()
         residual.data = f_lf.vec - a_bf.mat * solution.vec
-        solution.vec.data += a_bf.mat.Inverse(
-            fes.FreeDofs(), inverse=inverse) * residual
+        def apply_inverse():
+            solution.vec.data += inverse_mat * residual
+        timed_phase("backsolve", apply_inverse)
 
     # A direct solve has no iteration history, but it still has a residual.
     # r = b - A x on the system that was ACTUALLY solved -- non-zero Dirichlet
@@ -932,6 +955,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
     return {
         "solution": solution,
         "linear_residual": linear_residual,
+        "phase_timings_seconds": phase_timings,
         "assembled_energy": assembled_energy,
         # The assembled system, ONLY on request.  A caller testing whether
         # another order's solution is admissible HERE needs it: with the
