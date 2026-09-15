@@ -29,3 +29,32 @@ def test_builder_arc_matches_rigidly_transformed_kernel(angle, angles):
         np.testing.assert_allclose(actual, expected, rtol=2e-8, atol=1e-13)
     finally:
         rad.FldLenRndSw('on')
+
+
+@pytest.mark.parametrize('direction', [-1., 1.])
+@pytest.mark.parametrize('angles', [[0.,0.,0.], [31.,47.,19.]])
+def test_builder_nearly_closed_arc_against_axis_primitive(direction, angles):
+    rad.FldLenRndSw('off')
+    try:
+        radius, width, height, current, z = .02, .008, .012, 120., .03
+        frame = Rotation.from_euler('xyz', angles, degrees=True).as_matrix()
+        center = np.array([.004,-.007,.009])
+        phi = direction*(2*np.pi-1e-7)
+        builder = CoilBuilder(current).set_start(center+radius*frame[:,0], frame.T)
+        builder.set_cross_section(width,height).add_arc(radius,np.rad2deg(phi))
+        source = rad.ObjCnt(builder.to_radia())
+        ri, ro = radius-width/2, radius+width/2
+        lo, hi = (0.,phi) if phi>0 else (2*np.pi+phi,2*np.pi)
+        def primitive(v):
+            return v*np.log((ro+np.hypot(ro,v))/(ri+np.hypot(ri,v)))
+        def radial(v):
+            return np.hypot(ro,v)-np.hypot(ri,v)
+        transverse = radial(z-height/2)-radial(z+height/2)
+        axial = primitive(z+height/2)-primitive(z-height/2)
+        expected = 1e-7*direction*current/(width*height)*np.array([
+            transverse*(np.sin(hi)-np.sin(lo)),
+            transverse*(np.cos(lo)-np.cos(hi)), axial*(hi-lo)])
+        actual = np.asarray(rad.Fld(source,'b',center+z*frame[:,2]))@frame
+        np.testing.assert_allclose(actual,expected,rtol=2e-7,atol=1e-15)
+    finally:
+        rad.FldLenRndSw('on')
