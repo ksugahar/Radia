@@ -49,6 +49,138 @@
       "passed": true,
       "failed": false,
       "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testRebuildOnFirstRunSkipWhenFreshRebuildOnChange",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testCrossedBoxesRepairedAndInitFcnInstalled",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testBrowseButtonsAreRegisteredBesideGeometryFields",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testMaskPublishesBuiltInAssemblySettings",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testBrowseAssignsAbsoluteWorkpieceAndCoilPaths",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testBrowseCancelLeavesPathUnchanged",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testBrowseAcceptsCompressedWorkpieceAndMeshedCoil",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testBrowseRejectsWrongExtension",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testBrowseRejectsMissingFile",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testBrowseRejectsUnknownRole",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testStaleWithAutoOffErrors",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testForceRebuildOverridesAutoOff",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testSameContentAtNewPathRebuildsForProvenance",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testMatlabAssembleFcnRebuilds",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testBlankConfigIsDerivedAndPhysicalChangeRebuilds",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testAmbiguousAssemblerErrors",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testRelativePathsError",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testCorruptSidecarRecoversByRebuilding",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testFreshSkipsReloadUntilConfigContentChanges",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testDirectConfigureInvalidatesGeometryRevision",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testUnconfiguredBlockIsInert",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testTwoStepInputsError",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
     }
   ]
 }
