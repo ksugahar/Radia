@@ -35,3 +35,18 @@ def test_solver_backed_numerical_checks_use_validation_lane():
         "Move solver-backed numerical checks to validation_test/radia_mcp; "
         f"package tests must remain fast API/MCP contracts: {offenders}"
     )
+def test_package_tests_do_not_walk_above_the_package():
+    """Direct monorepo traversal belongs in tests/mcp_integration instead."""
+    violations = []
+    for path in Path(__file__).parent.rglob("test_*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Subscript):
+                continue
+            value = node.value
+            if (isinstance(value, ast.Attribute) and value.attr == "parents"
+                    and "__file__" in ast.unparse(value)
+                    and isinstance(node.slice, ast.Constant)
+                    and isinstance(node.slice.value, int) and node.slice.value >= 2):
+                violations.append(f"{path.name}:{node.lineno}")
+    assert not violations, f"Package tests escape their source tree: {violations}"

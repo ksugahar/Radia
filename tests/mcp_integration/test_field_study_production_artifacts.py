@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 ROOT = (
-    Path(__file__).resolve().parents[3]
+    Path(__file__).resolve().parents[2]
     / "validation_test"
     / "radia_mcp"
     / "artifacts"

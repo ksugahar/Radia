@@ -14,25 +14,16 @@ except ModuleNotFoundError:  # pragma: no cover - Python 3.10
     tomllib = import_module("tomli")
 
 
-ROOT = Path(__file__).resolve().parents[3]
-PACKAGE_ROOT = ROOT / "packages" / "radia-mcp"
+PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 SDK_REQUIREMENT = "mcp>=1.20.0,<2"
 
 
-def test_mcp_sdk_dependency_and_minimal_ci_are_synchronized():
+def test_mcp_sdk_dependency_declares_supported_floor():
     project = tomllib.loads(
         (PACKAGE_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     )
     assert SDK_REQUIREMENT in project["project"]["dependencies"]
 
-    workflow = (ROOT / ".github" / "workflows" / "radia-mcp-matrix.yml").read_text(
-        encoding="utf-8"
-    )
-    # Resolve the same core pin from metadata rather than duplicating it in CI.
-    assert 'pip install -e "packages/radia-mcp[maintenance]"' in workflow
-    assert 'minimum-sdk:' in workflow
-    assert '"mcp==$SDK_MIN"' in workflow
-    assert 'RADIA_MCP_EXPECTED_SDK' in workflow
 
 
 def test_supported_sdk_registers_metadata_lists_schema_and_calls_tool():

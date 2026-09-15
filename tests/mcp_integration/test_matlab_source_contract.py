@@ -1,0 +1,519 @@
+import asyncio
+import json
+import re
+from pathlib import Path
+
+from radia_mcp.matlab import (
+    matlab_optuna_benchmark_plan,
+    matlab_optuna_compatibility_contract,
+    matlab_optuna_health,
+    matlab_optuna_oracle_audit,
+    matlab_optuna_oracle_plan,
+    matlab_optuna_release_gate,
+    matlab_optuna_simulink_contract,
+    matlab_radia_mex_contract,
+)
+
+
+def _expected_optuna_health_errors() -> list[str]:
+    """Errors the Optuna health gate must report for the checked ledger.
+
+    Health reports the evidence backlog honestly. While the required public
+    API is not completely evidence-mapped, that must be its only error, so no
+    other distribution regression can hide behind it; once the ledger closes,
+    no error is expected.
+    """
+    root = Path(__file__).resolve().parents[2]
+    coverage = json.loads(
+        (root / "matlab" / "optuna50_api_coverage.json").read_text(encoding="utf-8")
+    )
+    if coverage["full_compatibility_complete"]:
+        return []
+    return ["required public API scope is not completely evidence-mapped"]
+
+
+def test_radia_mex_contract_reads_the_cpp_command_inventory():
+    contract = matlab_radia_mex_contract("mex")
+
+    assert contract["status"] == "ready"
+    # Verify the actual general-gateway table, not a hand-maintained count.
+    root = Path(__file__).resolve().parents[2]
+    source = (root / "src/matlab/radia_mex.cpp").read_text(encoding="utf-8")
+    command_function = re.search(
+        r"mxArray\s*\*\s*Commands\s*\(\s*\)\s*\{(.*?)#\s*endif\b",
+        source,
+        re.DOTALL,
+    )
+    assert command_function, "Commands() preprocessor table was not found"
+    names_array = re.search(
+        r"#\s*else\b.*?names\s*\[\s*\]\s*=\s*\{(.*?)\}\s*;",
+        command_function.group(1),
+        re.DOTALL,
+    )
+    assert names_array, "General Radia command table was not found"
+    expected_names = re.findall(r'"([a-zA-Z0-9_.]+)"', names_array.group(1))
+    assert expected_names
+    assert contract["command_names"] == expected_names
+    assert contract["command_count"] == len(set(expected_names))
+    assert not any(command.startswith("optuna.") for command in contract["command_names"])
+    assert contract["matlab_wrapper_count"] >= 133
+    expected_errors = _expected_optuna_health_errors()
+    assert contract["matlab_optuna_distribution_health"]["errors"] == (
+        expected_errors
+    )
+    assert contract["matlab_optuna_distribution_health"]["ok"] is (
+        not expected_errors
+    )
+    assert contract["matlab_optuna_file_count"] == (
+        contract["matlab_optuna_expected_file_count"]
+    )
+    root = Path(__file__).resolve().parents[2]
+    coverage = json.loads(
+        (root / "matlab" / "optuna50_api_coverage.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    public_count = len(coverage["entries"])
+    assert contract["matlab_optuna_public_api"] == {
+        "entry_count": public_count,
+        "present_count": public_count,
+        "missing_count": 0,
+        "verified_count": coverage["oracle_verified_count"],
+        "asserted_count": coverage["oracle_asserted_count"],
+        "partial_count": 0,
+        "unmapped_count": 0,
+        "required_count": coverage["required_entry_count"],
+        "required_present_count": coverage["required_entry_count"],
+        "required_verified_count": coverage["required_oracle_mapped_count"],
+        "required_asserted_count": coverage["required_oracle_asserted_count"],
+        "required_unmapped_count": coverage["required_oracle_unmapped_count"],
+        "complete": coverage["full_compatibility_complete"],
+    }
+    assert contract["optuna_mex_command_count"] == 21
+    assert contract["matlab_optuna_class_count"] >= 92
+    assert contract["matlab_optuna_function_count"] >= 85
+    assert {
+        "TPESampler",
+        "CmaEsSampler",
+        "GPSampler",
+        "NSGAIISampler",
+        "NSGAIIISampler",
+        "BruteForceSampler",
+        "LiveMonitor",
+    }.issubset(
+        contract["matlab_optuna_classes"]
+    )
+    assert "ngsolve.matrix_dump" in contract["command_names"]
+    assert "ngsolve.mesh.set_deformation" in contract["command_names"]
+    assert "ngsolve.mesh.trafo_quality" in contract["command_names"]
+    assert "ngsolve.fespace.free_dofs" in contract["command_names"]
+    assert "ngsolve.matrix.matvec_into" in contract["command_names"]
+    assert "ngsolve.coefficient_function.component" in contract["command_names"]
+    assert "simulink.state_space.output" in contract["command_names"]
+    assert "simulink.state_space.update" in contract["command_names"]
+    assert "simulink.state_space.snapshot" in contract["command_names"]
+    assert "simulink.state_space.restore" in contract["command_names"]
+    optuna_commands = {
+        "optuna.pareto.rank_crowding",
+        "optuna.parzen.log_pdf_numerical",
+        "optuna.parzen.log_pdf_categorical",
+        "optuna.tpe.best_numerical",
+        "optuna.tpe.best_joint",
+        "optuna.tpe.best_numerical_observations",
+        "optuna.tpe.best_joint_observations",
+        "optuna.tpe.history.reset",
+        "optuna.tpe.history.append_complete",
+        "optuna.tpe.best_grouped_history",
+        "optuna.sobol.points",
+        "optuna.random_state.create",
+        "optuna.random_state.rand",
+        "optuna.random_state.randn",
+        "optuna.random_state.randi",
+        "optuna.random_state.randperm",
+        "optuna.random_state.snapshot",
+        "optuna.random_state.restore",
+        "optuna.random_state.destroy",
+    }
+    assert optuna_commands.issubset(contract["optuna_mex_command_names"])
+    assert not any(name.startswith("optuna.") for name in contract["command_names"])
+    assert {
+        "ih.eddy.create",
+        "ih.eddy.output",
+        "ih.eddy.destroy",
+        "ih.thermal.create",
+        "ih.thermal.output",
+        "ih.thermal.update",
+        "ih.thermal.reset",
+        "ih.thermal.destroy",
+    }.issubset(contract["command_names"])
+    assert "hdiv.field_evaluator.from_cloud" in contract["command_names"]
+    assert "hacapk.charge_gram.configure_charge_map" in contract["command_names"]
+    assert "hacapk.charge_gram.set_image_rotations" in contract["command_names"]
+    assert "hacapk.charge_gram.configured_linear_material_element_blocks" in contract["command_names"]
+    assert "hacapk.charge_gram.configured_linear_material_candidate_clusters" in contract["command_names"]
+    assert "hlu.set_trunc_tol" in contract["command_names"]
+    # The native Lie-map pipeline and 3D reference-orbit tracker remain on the
+    # regular Radia gateway after the Optuna commands are split out.
+    assert {
+        "beam.lie.map_tensors_spoly",
+        "beam.lie.dragt_finn_factorize",
+        "beam.lie.apply_dragt_finn_batch",
+        "beam.orbit.track_reference_3d",
+        "beam.orbit.track_reference_to_plane",
+    }.issubset(contract["command_names"])
+    assert {
+        "topopt.abe_element_fill_plan",
+        "beam.orbit.track_reference_to_plane",
+        "hacapk.charge_gram.configured_field_values_shape_derivative",
+        "hacapk.charge_gram.configured_active_hmatrix_stats",
+        "hdiv.field_evaluator.field_gradient",
+    }.issubset(contract["command_names"])
+    assert contract["command_groups"]["radia-core"] >= 70
+    assert "radia.ObjTetrahedronCurrent" in contract["command_names"]
+    assert contract["pybind_public_count"] == 100
+    assert contract["pybind_covered_count"] == 100
+    assert contract["pybind_missing"] == []
+    assert contract["pybind_internal_numerical_count"] == 21
+    assert contract["pybind_internal_missing"] == []
+    assert contract["pybind_internal_unclassified"] == []
+    assert contract["command_groups"].get("acoustic", 0) == 0
+    assert not any(
+        name.startswith("acoustic.") for name in contract["command_names"]
+    )
+    assert contract["command_groups"]["axifem"] == 2
+    assert "axifem.q1_magnetic_element_matrices" in contract["command_names"]
+    assert "axifem.q2_magnetic_element_matrices" in contract["command_names"]
+    # _ChargeGramHMatrix.charge_sigma (the sigma-normalization diagnostic
+    # from the roundoff-amplification fix) is EXCLUDED with a reason, and
+    # exclusions leave the relevant surface. The raw Rayleigh/leaf diagnostics
+    # and bounded exact-dense fallback are private validation aids, while cyclic
+    # image setup expands the covered stateful surface to 126 entries, including
+    # field-gradient and configured directional-Schur/shape-derivative bindings.
+    assert contract["pybind_class_surface_count"] == 126
+    assert ("_ChargeGramHMatrix.charge_sigma"
+            in contract["pybind_class_exclusions"])
+    assert (
+        "_ChargeGramHMatrix._reduce_configured_candidate_directional_schur"
+        in contract["pybind_class_exclusions"]
+    )
+    for member in (
+        "raw_symmetric_quadratic_form",
+        "symmetric_leaf_quadratics",
+        "build_exact_dense_normalized_gram",
+        "uses_exact_dense_normalized_gram",
+    ):
+        assert f"_ChargeGramHMatrix.{member}" in contract["pybind_class_exclusions"]
+    for name in (
+        "KelvinRadiaVectorPotential",
+        "KelvinRadiaFluxDensity",
+        "KelvinRadiaFieldStrength",
+        "KelvinRadiaScalarPotential",
+    ):
+        assert f"{name}.__binding__" in contract["pybind_class_exclusions"]
+        assert f"{name}.__init__" in contract["pybind_class_exclusions"]
+    assert contract["pybind_class_covered_count"] == contract["pybind_class_surface_count"]
+    assert contract["pybind_class_missing_commands"] == []
+    assert contract["pybind_class_unmapped"] == []
+    assert contract["parity_status"] == "complete_for_radia_pybind_numerics"
+    assert contract["retired_unsafe_constructor_leaks"] == []
+    assert contract["retired_unsafe_c_abi_leaks"] == []
+    for name in contract["retired_unsafe_constructors"]:
+        assert name not in contract["command_names"]
+    assert "ngsolve.matrix_dump" in contract["ngsolve_boundary"]["project_bridge_commands"]
+    assert "radia.ngsolve.space_info" in contract["ngsolve_boundary"]["canonical_matlab_names"]
+    assert "radia.ngsolve.matrix_dump" in contract["ngsolve_boundary"]["canonical_matlab_names"]
+    assert contract["verified_contract"]["python_numerical_parity_gate"] == (
+        "runtests('tests/matlab/test_radia_ngsolve_parity.m')"
+    )
+    assert contract["verified_contract"]["ngsolve_python_mex_parity_gate"] == (
+        "runtests('tests/matlab/test_ngsolve_mex_pybind_parity.m')"
+    )
+    assert (Path(__file__).resolve().parents[2] /
+            contract["verified_contract"]["ngsolve_python_mex_validation_case"]).is_file()
+    assert contract["verified_contract"]["acoustic_reference_validation_gate"] == (
+        "runtests('validation_test/acoustics/test_acoustic_reference.m')"
+    )
+    assert contract["verified_contract"]["axifem_python_mex_parity_gate"] == (
+        "runtests('tests/matlab/test_axifem_mex.m')"
+    )
+    assert contract["verified_contract"]["hcurl_topology_python_mex_parity_gate"] == (
+        "runtests('tests/matlab/test_hcurl_topology_optimization.m')"
+    )
+    assert contract["verified_contract"]["topology_two_level_gate"] == (
+        "runtests('tests/matlab/test_topology_optimization.m')"
+    )
+    assert "testOptunaParzenLogPdfKernels" in contract["verified_contract"][
+        "optuna_native_kernel_gate"
+    ]
+    assert contract["verified_contract"]["optuna_native_kernel_benchmark"].endswith(
+        "results_matlab_optuna_mex_benchmark_20260806.json"
+    )
+    assert contract["verified_contract"]["optuna50_performance_benchmark"].endswith(
+        "results_matlab_optuna50_performance_20260825.json"
+    )
+    assert contract["verified_contract"]["native_motor_family_artifact"].endswith(
+        "native_motor_angle_family.json"
+    )
+    assert "libiomp5md.dll" in contract["verified_contract"][
+        "openmp_runtime_policy"
+    ]
+    all_contract = matlab_radia_mex_contract("all")
+    family = all_contract["topic_data"]["sections"]["simulink"][
+        "native_state_space_overloads"
+    ]["periodic_motor_family"]
+    assert "mechanical_angle" in family
+    assert "torque" in family
+
+
+def test_acoustic_validation_references_stay_out_of_native_gateways(monkeypatch):
+    root = Path(__file__).resolve().parents[2]
+    monkeypatch.setenv("RADIA_REPO_ROOT", str(root))
+    contract = matlab_radia_mex_contract("mex")
+
+    assert not any(
+        command.startswith("acoustic.") for command in contract["command_names"]
+    )
+    assert contract["verified_contract"]["acoustic_reference_validation_gate"] == (
+        "runtests('validation_test/acoustics/test_acoustic_reference.m')"
+    )
+    assert "_Acoustic" not in (
+        root / "src" / "lib" / "radia_pybind.cpp"
+    ).read_text(encoding="utf-8")
+    for path in sorted((root / "matlab" / "+radia" / "+acoustic").glob("*.m")):
+        source = path.read_text(encoding="utf-8")
+        assert "callMex" not in source
+        assert "radia_mex" not in source
+
+
+def test_optuna_simulink_contract_is_table_backed():
+    contract = matlab_optuna_simulink_contract()
+
+    assert contract["status"] == "ready"
+    assert contract["package"] == "radia.optuna"
+    assert contract["distribution"] == "radia-optuna"
+    assert contract["upstream_oracle_version"] == "optuna==5.0.0"
+    assert contract["upstream_oracle"]["oracle_owner"].startswith(
+        "optuna==5.0.0"
+    )
+    assert contract["mcp_ownership"]["routes"]["shared"]["owner"] == (
+        "optuna/optuna-mcp"
+    )
+    assert "TrialTable" in contract["tables"]
+    assert "ObjectiveTable" in contract["tables"]
+    assert "ConstraintTable" in contract["tables"]
+    assert "SamplerStateTable" in contract["tables"]
+    assert contract["schema"].endswith("/v3")
+    assert contract["upstream_oracle"]["ok"] is True
+    assert contract["upstream_oracle"]["oracle_versions"]["optuna"] == "5.0.0"
+    assert contract["native_acceleration"]["upstream_python_gp_python_per_trial"] is True
+    assert contract["native_acceleration"]["full_optimizer_in_cpp"] is False
+    assert contract["native_acceleration"]["gateway"] == "optuna_mex"
+    assert contract["native_acceleration"]["command_count"] == (
+        contract["distribution_health"]["native"]["command_count"]
+    )
+    expected_errors = _expected_optuna_health_errors()
+    assert contract["distribution_health"]["errors"] == expected_errors
+    assert contract["distribution_health"]["ok"] is (not expected_errors)
+    assert contract["native_acceleration"]["required"] is True
+    assert contract["native_acceleration"]["missing_mex_fallback"] is False
+    assert contract["cae_trial_contract"]["success_schema"] == (
+        "radia.optuna.cae-trial.v1"
+    )
+    assert contract["cae_trial_contract"]["failure_schema"] == (
+        "radia.optuna.cae-failure.v1"
+    )
+    assert "SimulinkRunner" in contract["classes"]
+    assert "OptimizationSession" in contract["classes"]
+    assert "OptimizationParameter" in contract["classes"]
+    assert "SheetMetalRunner" in contract["classes"]
+    assert contract["multi_objective"]["selection"].startswith("bestTrial")
+    assert contract["multi_objective"]["samplers"] == [
+        "RandomSampler", "TPESampler", "NSGAIISampler"
+    ]
+    assert "parsim" in contract["parallel_trials"]["simulink"]
+    assert "parfeval" in contract["parallel_trials"]["ltspice"]
+    assert "complex" in contract["ltspice_integrated_workflow"]["raw"]
+    assert len(contract["simulink_blocks"]) == 10
+    assert "radia_optuna_teaching.slx" in contract["simulink_blocks"][-1]
+    assert "distributed-field kernels" in contract["simulink_blocks"][0]
+    assert "IHMonitorBusV1" in contract["simulink_blocks"][0]
+    optuna_block = next(
+        item for item in contract["simulink_blocks"]
+        if "OptunaMonitorBusV1" in item
+    )
+    assert "six-input/eighteen-output" in optuna_block
+    assert "LUT and lumped IH builders are removed" in contract["simulink_blocks"][2]
+    assert contract["team28"]["frequency_hz"] == 50
+    team28 = contract["team28"]
+    assert team28["validated_dynamic_scope"] == (
+        "cycle_averaged_mechanical_motion"
+    )
+    assert team28["electromagnetic_model_class"] == (
+        "fixed_frequency_cycle_averaged_force_height_lut"
+    )
+    assert team28["height_coupling"] == "quasi_steady_interpolation"
+    assert team28["electromagnetic_state_transient_included"] is False
+    assert team28["motional_emf_included"] is False
+    assert team28["damping_identified_from_measurement"] is False
+    assert "full_electromagnetic_transient" in team28["unsupported_claims"]
+    assert team28["artifact_gate"].endswith(
+        "team28_cycle_averaged_motion_gate"
+    )
+    assert contract["hcurl_eddy_cln"]["mex_kernel"] == "hybrid_vim.solve"
+    assert contract["hcurl_eddy_cln"]["moving_family"].startswith("ExportHCurlEddyCLNFamilyJSON")
+    native_family = contract["hcurl_eddy_cln"]["native_motor_angle_family"]
+    assert native_family["matlab_factory"] == "radia.simulink.makeMotorAngleFamily"
+    assert native_family["simulink_builder"] == (
+        "radia.simulink.buildMotorAngleFamilyModel"
+    )
+    assert native_family["verified_tests"] == 74
+    assert contract["reinforcement_learning_workflow"]
+    topology = contract["cad_topology_optimization"]
+    assert topology["sensitivity_policy"].startswith("No cell-wise finite differences")
+    assert "Cubit Sculpt" in topology["cad_reconstruction_route"]
+    assert topology["cubit_validation_gates"] == [
+        "cubit_ato_levelset_sculpt_source_replay_gate",
+        "cubit_levelset_sculpt_hex_validation_gate",
+    ]
+    assert "existing hex mesh" in topology["boundary"]
+    adjoint = topology["adjoint_optimization"]
+    assert adjoint["status"] == "ready"
+    assert "radia.topopt.optimizeAdjoint" in adjoint["matlab_api"]
+    assert "radia.topopt.optimizeHCurlActivationAdjoint" in adjoint["matlab_api"]
+    assert "never" in adjoint["finite_difference_policy"]
+    assert topology["sheet_metal"]["two_level_loop"]["inner"].startswith("5-20")
+    assert topology["sheet_metal"]["optuna_runner"] == "radia.optuna.SheetMetalRunner"
+    assert topology["sheet_metal"]["simulink_block"] == (
+        "Optimization/Sheet Metal Optimization"
+    )
+    assert contract["sampler_quality"]["python_parity_claim"].startswith(
+        "Only behavior mapped"
+    )
+    hcurl = topology["sheet_metal"]["hcurl_eddy_bubble"]
+    assert hcurl["status"] == "native-mex-ready"
+    assert hcurl["python_boundary"] == "none in the MATLAB optimization loop"
+    assert "radia.topopt.optimizeAdjoint" in hcurl["matlab_api"]
+    assert "radia.topopt.optimizeHCurlActivationAdjoint" in hcurl["matlab_api"]
+    assert {
+        "hcurl.topopt.operator.*",
+        "hcurl.topopt.resistance_shape_tangents",
+        "hcurl.topopt.cell_curl_grams",
+        "hcurl.topopt.multifrequency_joule",
+        "hcurl.topopt.activation_multifrequency_joule",
+    }.issubset(hcurl["mex_commands"])
+
+
+def test_root_readme_publishes_native_topology_mex_parity():
+    contract = matlab_radia_mex_contract("mex")
+    root = Path(__file__).resolve().parents[2]
+    readme = " ".join((root / "README.md").read_text(encoding="utf-8").split())
+    assert "HCurl-based reduced and topology workflows" in readme
+    assert "HCurl multifrequency topology gradients" in readme
+
+    matlab_readme = " ".join(
+        (root / "matlab" / "README.md").read_text(encoding="utf-8").split()
+    )
+    assert f"{contract['pybind_public_count']} mapped public top-level names" in matlab_readme
+    assert f"{contract['pybind_internal_numerical_count']} underscore-prefixed numerical kernels" in matlab_readme
+    assert f"{contract['pybind_class_surface_count']} stateful class members" in matlab_readme
+    mapped_count = (
+        contract["pybind_public_count"]
+        + contract["pybind_internal_numerical_count"]
+        + contract["pybind_class_surface_count"]
+    )
+    assert (
+        f"All {mapped_count} mapped entries are covered by the current "
+        f"{contract['command_count']}-command gateway"
+    ) in matlab_readme
+    assert "21-command `optuna_mex`" in matlab_readme
+
+    parity_doc = (root / "docs" / "api" / "MATLAB_MEX_NGSOLVE_PARITY.md").read_text(
+        encoding="utf-8"
+    )
+    assert "| Stateful pybind11 class surface | 126 / 126 covered |" in parity_doc
+    assert (
+        f"| Public top-level pybind11 names | {contract['pybind_public_count']} |"
+        in parity_doc
+    )
+    assert (
+        f"| Covered mapped MEX names | {contract['pybind_covered_count']} |"
+        in parity_doc
+    )
+    assert (
+        f"| Radia MEX gateway commands | {contract['command_count']} |"
+        in parity_doc
+    )
+    assert (
+        f"| Optuna MEX gateway commands | {contract['optuna_mex_command_count']} |"
+        in parity_doc
+    )
+    assert (
+        f"| MATLAB Optuna classes | {contract['matlab_optuna_class_count']} |"
+        in parity_doc
+    )
+    assert (
+        f"| MATLAB Optuna functions | {contract['matlab_optuna_function_count']} |"
+        in parity_doc
+    )
+
+
+def test_optuna_quality_helpers_are_exported_from_the_matlab_package():
+    expected_errors = _expected_optuna_health_errors()
+    expected_status = "error" if expected_errors else "ready"
+    health = matlab_optuna_health()
+    assert health["errors"] == expected_errors
+    assert health["ok"] is (not expected_errors)
+    assert health["distribution"]["matlab_file_count"] == (
+        health["distribution"]["expected_matlab_file_count"]
+    )
+    assert matlab_optuna_oracle_plan()["status"] == expected_status
+    assert matlab_optuna_benchmark_plan()["status"] == expected_status
+    assert callable(matlab_optuna_release_gate)
+
+
+def test_radia_matlab_tools_do_not_shadow_verified_upstream_optuna_mcp_tools():
+    from radia_mcp.matlab.server import mcp
+
+    root = Path(__file__).resolve().parents[2]
+    fixture = json.loads(
+        (root / "tests" / "matlab" / "fixtures" /
+         "optuna50_mcp_oracle.json").read_text(encoding="utf-8")
+    )
+    upstream_tools = set(fixture["tools"])
+    radia_tools = {item.name for item in asyncio.run(mcp.list_tools())}
+
+    assert fixture["optuna_version"] == "5.0.0"
+    assert fixture["optuna_mcp_version"] == "0.2.0"
+    assert upstream_tools.isdisjoint(radia_tools)
+
+
+def test_optuna_compatibility_and_oracle_audit_are_checked():
+    contract = matlab_optuna_compatibility_contract()
+    assert contract["ok"] is True
+    assert contract["transport"]["public_mcp_contract"] == "stdio"
+    assert contract["transport"]["mcp_sampler_seed_supported"] is False
+    closure = contract["public_api_closure"]
+    assert closure["surface_entry_count"] == 812
+    assert closure["surface_present_count"] == 812
+    assert closure["surface_missing_count"] == 0
+    coverage = json.loads((Path(__file__).resolve().parents[2] /
+        "matlab/optuna50_api_coverage.json").read_text(encoding="utf-8"))
+    entries = coverage["entries"]
+    required = [entry for entry in entries if entry["scope"] == "required"]
+    assert closure["oracle_verified_count"] == sum(e["oracle_status"] == "verified" for e in entries)
+    assert closure["oracle_asserted_count"] == sum(e["oracle_status"] == "asserted" for e in entries)
+    assert closure["oracle_partial_count"] == 0
+    assert closure["oracle_unmapped_count"] == 0
+    assert closure["required_entry_count"] == 401
+    assert closure["required_oracle_mapped_count"] == sum(e["oracle_status"] == "verified" for e in required)
+    assert closure["required_oracle_asserted_count"] == sum(e["oracle_status"] == "asserted" for e in required)
+    assert closure["required_oracle_unmapped_count"] == sum(e["oracle_status"] != "verified" for e in required)
+    assert closure["full_compatibility_complete"] is all(e["oracle_status"] == "verified" for e in required)
+
+    audit = matlab_optuna_oracle_audit()
+    assert audit["ok"] is True
+    assert audit["test_function_count"] == contract["test_counts"]["total"]
+    assert audit["manifest_entry_count"] == contract["test_counts"]["total"]
+    assert audit["policy_identical"] is True
+    assert audit["missing_manifest_entries"] == []
+    assert audit["stale_manifest_entries"] == []
