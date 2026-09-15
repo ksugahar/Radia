@@ -64,3 +64,16 @@ Raw build/Engine logs and transfer inputs are retained on LAB at
 the numerical follow-up. Cleanup trigger: accepted replacement evidence and
 its committed diagnosis. Dedicated Engine workers have exited; existing
 desktop MATLAB sessions were not touched.
+
+Both owned remote staging directories were removed after recovery and evidence
+commit; absence was verified on hibino and mdx2. No other job directory was
+removed. The clean LAB build worktree
+`C:/temp/mcp-native-build-20260915-3c6197863` has the same task owner and cleanup
+trigger as the diagnostic logs. A direct isolated `import radia` confirmed the
+missing `_radia_pybind` runtime; this must be supplied by a genuine build, not
+by weakening the application assertion.
+
+Repository integration: 45 passed. Native source-freshness acceptance remains
+failed by design until a genuinely passing replacement is generated. The
+maintenance branch is pushed but not merged; no release or live update is
+claimed.
