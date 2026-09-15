@@ -151,6 +151,7 @@ def main() -> int:
         "proofs": {
             "motor_dual_lane": {
                 "status": "pass",
+                "radia_version": str(manifest["radia_version"]),
                 "shared_model_identity_sha256": identity["aggregate_sha256"],
                 "artifact_sha256_by_role": {
                     "manifest": _sha_file("manifest.json"),
@@ -165,6 +166,8 @@ def main() -> int:
             },
             "native_motor_angle_family": {
                 "status": "pass",
+                "radia_version": str(native["radia_version"]),
+                "executed_at_utc": str(native["executed_at_utc"]),
                 "test_count": int(native["test_count"]),
                 "artifact_sha256_by_role": {
                     "matlab": _sha_file("native_motor_angle_family.json")
