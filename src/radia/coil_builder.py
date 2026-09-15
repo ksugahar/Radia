@@ -1033,6 +1033,31 @@ class CoilBuilder:
 		return radia_objects
 
 
+	def audit_segment_volume_overlaps(self, relative_tolerance=1e-9):
+		"""Check pairwise positive-volume CAD overlap, including adjacent segments.
+
+		Touching faces are permitted. This is not a clearance check, an
+		intra-segment validity proof or arbitrary-sweep self-intersection proof.
+		Volumes use the active geometry unit cubed. Unsupported CAD raises.
+		"""
+		if not np.isfinite(relative_tolerance) or not 0 <= relative_tolerance < 1:
+			raise ValueError("relative_tolerance must be finite and in [0, 1)")
+		if not self.segments:
+			raise ValueError("No segments added")
+		shapes = [seg.to_occ_shape(i) for i, seg in enumerate(self.segments)]
+		volumes = [shape.mass for shape in shapes]
+		if any(not np.isfinite(v) or v <= 0 for v in volumes):
+			raise ValueError("All segment CAD volumes must be finite and positive")
+		overlaps = []
+		for i, left in enumerate(shapes):
+			for j in range(i + 1, len(shapes)):
+				common = left * shapes[j]
+				volume = sum(solid.mass for solid in common.solids)
+				if volume > relative_tolerance * min(volumes[i], volumes[j]):
+					overlaps.append({"segments": [i, j], "overlap_volume": volume})
+		return {"scope": "pairwise_segment_volume_overlap", "overlaps": overlaps,
+		        "passed": not overlaps, "relative_tolerance": relative_tolerance}
+
 	def to_occ(self):
 		"""Convert all segments to a combined OCC shape.
 

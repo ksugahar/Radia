@@ -257,6 +257,13 @@ does not claim that coupled volume-conductor support is already implemented.
 Constant-section full-turn rectangular/circular loft CAD uses exact revolution.
 Unequal endpoint profiles are rejected. General closed multi-segment CAD and
 self-intersection certification remain separate validation tasks.
+Use `audit_segment_volume_overlaps()` to detect positive-volume overlap
+between CAD segments, including adjacent ones. Touching faces are permitted.
+This reports pairwise overlap only, not clearance or intra-segment validity;
+call it before constructing a volume-conductor mesh and inspect failed pairs.
+Mixed-potential solve profiling must separate matrix assembly, source RHS
+assembly, factorization and backsolve. A long source RHS assembly is not
+evidence that the direct matrix solver is slow.
 
 See also: `docs/complex_coil_geometry/complex_coil.ipynb` -- 8-segment beam-steering
 coil showcase using CoilBuilder add_straight/add_arc with a Biot-Savart field map.
