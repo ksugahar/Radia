@@ -215,3 +215,17 @@ Its XML text scan found no replacement characters or suspicious question-mark
 runs. Full-window visual QA is pending; these are diagnostic in-memory fixtures,
 not an unmocked production VOL/CAD-to-heat-transfer acceptance. Main integration
 and publication must be recorded separately after their gates pass.
+
+The regression mesh is now constructed in memory by the tracked
+`validation_test/induction_heating/_axisym_test_mesh.py`; it neither needs an
+ignored `.vol` fixture nor calls `NgMesh.Save()`. The additional
+`prepare_ih_axisym_mex.py --thermal-order 2 --manufactured` case starts at
+`T = 293.15 + 10000 r^2`, insulates the end caps, and supplies the exact outer
+radial flux. Its analytical temperature rise is linear in time. The driver
+asserts a relative temperature-rise L2 error below 1e-9 for all 100 NGSolve
+steps. The same operators and initial coefficients passed native MEX parity
+with maximum evaluated error 9.27e-9 K (relative rise error 3.54e-10), zero
+heat-vector discrepancy, and zero retained handles; see
+`ih_axisym_p2_exact_native_20260915.json`. The twelve Python assembly tests
+also pass using the integration checkout's Python sources and the installed
+NGSolve foundation; this is not a fresh integration-commit native-build claim.
