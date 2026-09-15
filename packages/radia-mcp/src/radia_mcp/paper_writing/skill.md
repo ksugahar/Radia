@@ -1344,6 +1344,7 @@ Wallwork 第 19 章は、結論を単なる要約とせず、結果の統合か�
 - **可**: 本文で示した結果の重要度づけ、分野への含意、限界と対応する現実的な将来展望。
 - **不可**: 結論で初めて現れるソルバ名、略語、変数、定量値、比較条件、引用。これらは Method/Result/Discussion のいずれかで導入・裏付け。
 - `paper_writing_check_conclusion_first_use` で、結論で初出となる acronym-like な技術語、数式記号、数値、citation key を機械抽出。引用不要の一般略語と意図的な展望は whitelist/目視で除外。
+- 結論節が未検出または空なら、通常時と同じキーを返すが `conclusion_found=False`、`passed=False`、`score=None`、`issue_count=None` とする。空の候補一覧は「検査済み・問題なし」を意味しない。
 
 ## 📐 図表の使い分けと最小化 (作図の技術)
 

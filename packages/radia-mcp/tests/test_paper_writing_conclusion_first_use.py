@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 from radia_mcp.paper_writing.tools import (
     paper_writing_check_conclusion_first_use,
 )
@@ -62,13 +63,26 @@ The model preserved the temperature distribution.
     assert result["conclusion_heading"] == "まとめ"
 
 
-def test_reports_missing_conclusion_heading() -> None:
-    result = paper_writing_check_conclusion_first_use(
-        "Method and results are described without a conclusion heading."
+@pytest.mark.parametrize("text", [
+    "Method and results are described without a conclusion heading.",
+    "",
+    "# Conclusion\n",
+    r"\section{Conclusion}",
+])
+def test_reports_missing_conclusion_heading(text) -> None:
+    result = paper_writing_check_conclusion_first_use(text)
+    checked = paper_writing_check_conclusion_first_use(
+        "# Results\nThe method works.\n# Conclusion\nThe method works."
     )
 
     assert result["score"] is None
     assert result["conclusion_found"] is False
+    assert result.keys() == checked.keys()
+    assert result["passed"] is False
+    assert result["issue_count"] is None
+    for key in ("new_technical_terms", "new_math_symbols",
+                "new_numeric_claims", "new_citation_keys"):
+        assert result[key] == []
 
 
 def test_whitelist_suppresses_domain_standard_acronym() -> None:
