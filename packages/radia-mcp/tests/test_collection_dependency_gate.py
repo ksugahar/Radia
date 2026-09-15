@@ -1,13 +1,17 @@
 """Regression checks for the lightweight-matrix collection gate."""
 
 import conftest
+import pytest
 
 
-def test_solver_free_urn_contract_is_collectable_in_minimal_ci(monkeypatch):
-    """CSV boundary coverage must not disappear behind optional solver imports."""
+@pytest.mark.parametrize("filename", [
+    "test_urn_fit_contract.py", "test_paper_writing_conclusion_first_use.py",
+])
+def test_lightweight_contract_is_collectable_in_minimal_ci(monkeypatch, filename):
+    """Pure input/text checks must not disappear behind optional dependencies."""
     monkeypatch.setattr(conftest, "_FORCE_MINIMAL", True)
     conftest._PROJECT_IMPORT_CACHE.clear()
-    source = (conftest._TEST_ROOT / "test_urn_fit_contract.py").read_text(
+    source = (conftest._TEST_ROOT / filename).read_text(
         encoding="utf-8"
     )
     assert "numpy" in conftest._MINIMAL_BASELINE
