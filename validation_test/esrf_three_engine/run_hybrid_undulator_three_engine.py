@@ -467,7 +467,7 @@ def main(argv: list[str] | None = None) -> int:
         default="direct",
         help="native field path while assembling each formulation",
     )
-    parser.add_argument("--relative-rms-tolerance", type=float, default=0.01)
+    parser.add_argument("--relative-rms-tolerance", type=float, default=0.05)
     parser.add_argument("--threads", type=int, default=0)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument(

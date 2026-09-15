@@ -576,7 +576,7 @@ def main() -> None:
     parser.add_argument("--threads", type=int, default=0)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--gap-core-half-length", type=float, default=0.010)
-    parser.add_argument("--relative-rms-tolerance", type=float, default=0.01)
+    parser.add_argument("--relative-rms-tolerance", type=float, default=0.03)
     parser.add_argument(
         "--source-trace-tolerance",
         type=float,

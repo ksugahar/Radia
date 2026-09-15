@@ -137,7 +137,7 @@ def test_nonfinite_any_engine_any_order_rejected(gate, order, bad_engine, bad):
     fields = {name: np.ones((2, 3)) for name in order}
     fields[bad_engine][1, 2] = bad
     with pytest.raises(ValueError, match="finite"):
-        gate["_comparison_gate"](fields, np.ones(2, dtype=bool), .03)
+        gate["_comparison_gate"](fields, np.ones(2, dtype=bool), .01)
 
 
 @pytest.mark.parametrize("bad", [[], [[1, 2]], [[1, 2, 3]], [[True]*3]*2,
@@ -152,7 +152,7 @@ def test_shape_type_and_empty(gate, bad):
 @pytest.mark.parametrize("names", [(), NAMES[:2], (*NAMES, "extra")])
 def test_required_engine_set(gate, names):
     with pytest.raises(ValueError, match="three named engines"):
-        gate["_comparison_gate"]({n: np.ones((2, 3)) for n in names}, np.ones(2, dtype=bool), .03)
+        gate["_comparison_gate"]({n: np.ones((2, 3)) for n in names}, np.ones(2, dtype=bool), .01)
 
 
 @pytest.mark.parametrize("tol", [0, -1, 1, 2, np.nan, np.inf, -np.inf, True, ".03"])
@@ -165,6 +165,20 @@ def test_invalid_tolerance(gate, tol):
 def test_invalid_selector(gate, mask):
     with pytest.raises(ValueError, match="selector"):
         gate["_comparison_gate"]({n: np.ones((2, 3)) for n in NAMES}, mask, .03)
+
+
+@pytest.mark.parametrize('delta,expected', [(0.0099, True), (0.0101, False)])
+def test_one_percent_boundary(gate, delta, expected):
+    fields = {n: np.ones((2, 3)) for n in NAMES}
+    fields[NAMES[-1]] *= 1 + delta
+    assert gate['_comparison_gate'](fields, np.ones(2, dtype=bool), .01)[2] == expected
+
+
+def test_small_field_error_does_not_accept_nonconvergence(gate):
+    fields = {n: np.ones((2, 3)) for n in NAMES}
+    assert gate['_comparison_gate'](fields, np.ones(2, dtype=bool), .01)[2]
+    assert not gate['_is_converged_result'](
+        {'nonlinear': True, 'nonlinear_stats': {'converged': False}}, 'hdiv_mmm', True)
 
 
 def test_valid_agreement_and_mismatch(gate):

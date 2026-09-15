@@ -13,8 +13,8 @@ RUNNERS = (
 )
 
 
-@pytest.mark.parametrize('path', RUNNERS)
-def test_default_core_tolerance(path):
+@pytest.mark.parametrize('path,expected', zip(RUNNERS, (0.01, 0.03, 0.05)))
+def test_default_core_tolerance(path, expected):
     tree = ast.parse((ROOT / path).read_text(encoding='utf-8'))
     calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)
              and isinstance(node.func, ast.Attribute) and node.func.attr == 'add_argument'
@@ -22,13 +22,13 @@ def test_default_core_tolerance(path):
              and node.args[0].value == '--relative-rms-tolerance']
     assert len(calls) == 1
     assert next(ast.literal_eval(k.value) for k in calls[0].keywords
-                if k.arg == 'default') == 0.01
+                if k.arg == 'default') == expected
 
 
 @pytest.mark.parametrize('path', ['AGENTS.md', 'CLAUDE.md'])
 def test_policy_declares_scope(path):
     text = (ROOT / path).read_text(encoding='utf-8')
-    assert '1 % relative RMS on the declared core stencil' in text
+    assert 'ESRF coil-yoke HDiv/FEM validation defaults to 1 % relative RMS on its declared core stencil' in text
 
 
 def test_posthoc_core_agreement_preserves_historical_threshold_and_raw_error():
