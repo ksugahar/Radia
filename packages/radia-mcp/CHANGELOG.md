@@ -7,6 +7,14 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.5.2] - 2026-09-16
+
+- Separate Radia MCP release-dual guidance from the numerical solver's four-host
+  release; expose the independent workflow through the `mcp_release` manual topic.
+- Require editable/fresh-import checks on LAB and 100 plus LAB live acceptance;
+  existing 100 clients adopt updates on next launch without blocking the release.
+- Remove retired live-Cubit GUI/IPC contribution guidance after the package split.
+
 ## [1.5.1] - 2026-09-16
 
 - Correct public package descriptions and installation guidance after the Cubit
