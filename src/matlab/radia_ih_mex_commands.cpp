@@ -331,12 +331,13 @@ void require_arity(int nrhs, int expected_rhs, int nlhs, int expected_lhs,
 
 template <class T>
 std::uint64_t insert(Registry<T>& registry, std::shared_ptr<T> value) {
-    std::lock_guard<std::mutex> guard(registry_mutex);
+    std::unique_lock<std::mutex> guard(registry_mutex);
     std::uint64_t handle = next_handle.fetch_add(1);
     while (handle == 0 || eddy_registry.count(handle) != 0 ||
            thermal_registry.count(handle) != 0)
         handle = next_handle.fetch_add(1);
     registry.emplace(handle, std::move(value));
+    guard.unlock();
     mexLock();
     return handle;
 }
@@ -402,6 +403,12 @@ bool DispatchIHCommand(const std::string& command, int nlhs, mxArray* plhs[],
         plhs[0] = column(runtime->output(
             scalar(prhs[2], "current_A"), scalar(prhs[3], "angle_rad"),
             numbers(prhs[4], "temperature_K")));
+        return true;
+    }
+    if (command == "ih.eddy.reset") {
+        require_arity(nrhs, 2, nlhs, 0, "radia_mex('ih.eddy.reset', h)");
+        get(eddy_registry, input_handle(prhs[1]),
+            "invalid, stale, or wrong-type IH Eddy handle")->reset();
         return true;
     }
     if (command == "ih.eddy.destroy") {

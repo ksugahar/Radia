@@ -156,6 +156,13 @@ EddyRuntime::EddyRuntime(EddyConfig config) : config_(std::move(config)) {
     reference_heat_.assign(static_cast<std::size_t>(config_.n_heat), 0.0);
 }
 
+void EddyRuntime::reset() {
+    have_cache_ = false;
+    std::fill(previous_temperature_.begin(), previous_temperature_.end(), 0.0);
+    std::fill(cached_heat_.begin(), cached_heat_.end(), 0.0);
+    std::fill(reference_heat_.begin(), reference_heat_.end(), 0.0);
+}
+
 std::vector<double> EddyRuntime::output(
         double current, double angle,
         const std::vector<double>& temperature) {
@@ -291,12 +298,10 @@ void ThermalRuntime::update(const std::vector<double>& heat, double ambient,
                     temperature_index * config_.n_heat + heat_index] *
                 heat[static_cast<std::size_t>(heat_index)];
 
-    if (config_.periodic_rotation) {
-        std::vector<double> moved;
-        transport_periodic(state_.temperature_K, config_.weights,
-                           angle - state_.previous_angle_rad, moved);
-        state_.temperature_K = std::move(moved);
-    } else if (!equivalent_angle(angle, state_.previous_angle_rad)) {
+    // State and incoming heat are both in workpiece (material) coordinates.
+    // Eddy owns the source-frame mapping; rotating this state counts motion twice.
+    if (!config_.periodic_rotation &&
+        !equivalent_angle(angle, config_.angle_origin_rad)) {
         throw std::invalid_argument(
             "changing angle requires periodic rotation");
     }

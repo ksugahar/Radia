@@ -44,7 +44,7 @@ verifyFalse(testCase,contract.python_fallback);
 workspace=get_param(modelName,"ModelWorkspace");
 config=workspace.getVariable("radia_ih_config");
 verifyEqual(testCase,string(config.dt_order), ...
-    "eddy;transport(theta_prev,theta_now);thermal");
+    "eddy(material-frame heat);thermal(material-frame state)");
 verifyEqual(testCase,string(get_param(modelName,"Solver")),"FixedStepDiscrete");
 outports=find_system(modelName,SearchDepth=1,BlockType="Outport");
 verifyEqual(testCase,numel(outports),3);
@@ -103,14 +103,17 @@ modelPath=fullfile(root,"matlab","radia_ih.slx");
 verifyTrue(testCase,isfile(modelPath));
 load_system(modelPath);
 cleanup=onCleanup(@() closeIfLoaded("radia_ih"));
+verifyEqual(testCase,string(get_param("radia_ih","FileName")),string(modelPath));
 set_param("radia_ih","SimulationCommand","update");
 verifyEqual(testCase,string(get_param("radia_ih/Eddy","FunctionName")), ...
     "radia_ih_eddy_sfun");
 verifyEqual(testCase,string(get_param("radia_ih/Thermal","FunctionName")), ...
     "radia_ih_thermal_sfun");
 geometryBlock = "radia_ih/Geometry Update";
-verifyTrue(testCase,all(isfield(get_param(geometryBlock,"ObjectParameters"), ...
-    {"axisymmetric_thermal_vol","n_phi_samples","thermal_order"})));
+verifyTrue(testCase,all(ismember( ...
+    ["axisymmetric_thermal_vol","n_phi_samples","thermal_order"], ...
+    string(get_param(geometryBlock,"MaskNames")))), ...
+    "The saved Geometry Update mask must expose the axisymmetric/P2 controls.");
 verifyEqual(testCase,string(get_param(geometryBlock,"Mask")),"on");
 mask = Simulink.Mask.get(geometryBlock);
 verifyNotEmpty(testCase,mask.getDialogControl("browse_wp_vol"));
