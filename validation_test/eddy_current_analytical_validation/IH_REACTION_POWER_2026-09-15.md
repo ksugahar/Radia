@@ -109,10 +109,32 @@ The binary SHA-256 was checked; native sources and CMake have no diff between
 its build commit and the IH correction commit. Execution used the existing
 LAB MATLAB R2026a Update 3 via the official Python Engine, without restarting it.
 
-This establishes spatial thermal MEX behavior, not the complete corrected
-BEM-to-operator-to-MEX path. The prescribed source does not validate EM mapping,
+This radial test establishes spatial thermal MEX behavior. Its prescribed source does not validate EM mapping,
 inner-wall convection or production VOL export. Reproduce after `radia.setup`
 by calling `validate_ih_mex_radial` with an output JSON path from MATLAB.
+
+### BEM-to-thermal-MEX connection evidence
+
+`prepare_ih_mex_chain.py` executes the corrected weak BEM workpiece stage,
+loads its actual saved heat field and calls the production
+`_assemble_thermal_operators`. `validate_ih_mex_chain.m` consumes these operators
+in native Eddy/Thermal handles. Solid/bored cylinders use 565/622 thermal DOFs
+and 100 steps at 100 A. Heat-vector transfer error is zero, integrated power
+is preserved to roundoff, and maximum temperature-rise relative error against
+independently assembled NGSolve forms is 2.06e-7 (0.0000206%). Maximum absolute
+temperature difference is 2.02e-9 K; handles return from zero to zero.
+
+Reproduce with Python `prepare_ih_mex_chain.py --output C:/temp/ih-mex-chain`
+then MATLAB `validate_ih_mex_chain('C:/temp/ih-mex-chain', outputJson)` after
+configuring the selected MEX runtime. `ih_mex_chain_20260915.json` records results
+and source/build identity. These are coarse coupling tests, not a new 2% EM
+mesh-convergence certificate. The existing fine-mesh FEM-SIBC comparisons own
+that accuracy claim. File loading is replaced by an in-memory fixture, and
+native-config fields are packaged explicitly: full geometry/configuration
+orchestration, CAD and strict VOL checks are not certified by this test.
+The current production thermal assembler accepts only 3D volumes, so this
+axisymmetric geometry uses a 3D discretization here; it does not imply that
+3D physics is necessary or that the axisymmetric native assembly route exists.
 
 This is not a certificate for arbitrary frequency, material or geometry.
 Nonlinear BH accuracy, spatially varying impedance, higher-order/curved
