@@ -32,3 +32,12 @@ def test_closed_loop_contract_is_not_automatic_geometry_certification():
     assert 'require_closed=True' in text
     assert 'No return wire is added' in text
     assert 'self-intersections' in text
+
+
+def test_mixed_omega_cost_and_volume_model_limits():
+    text=electromagnet_usage('coilbuilder')
+    assert 'timeout means incomplete execution, not numerical disagreement' in text
+    assert 'interface projection' in text
+    assert 'conductivity and terminal conditions' in text
+    assert 'does not claim that coupled volume-conductor support' in text
+    assert 'full-turn rectangular/circular loft CAD uses exact revolution' in text

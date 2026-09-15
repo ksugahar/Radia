@@ -103,3 +103,20 @@ def test_cross_type_cad_is_not_silently_replaced():
     for segment in (LoftStraightSegment(*args,20),LoftArcSegment(*args,20,90)):
         with pytest.raises(NotImplementedError):
             segment.to_occ_shape()
+
+
+@pytest.mark.parametrize('profile',[RectProfile(4,6),CircleProfile(3)])
+def test_full_turn_cad_volume_and_step(profile,tmp_path):
+    from netgen.occ import OCCGeometry
+    from radia.coil_builder import LoftArcSegment
+    rotation=Rotation.from_euler('xyz',[23,41,-17],degrees=True).as_matrix()
+    segment=LoftArcSegment(100,np.array([3,-7,9]),rotation.T,profile,profile,20,360)
+    shape=segment.to_occ_shape()
+    expected=2*np.pi*20*profile.total_area()
+    assert len(shape.solids)==1
+    assert shape.mass==pytest.approx(expected,rel=1e-10)
+    path=tmp_path/'closed_coil.step'
+    shape.WriteStep(str(path))
+    recovered=OCCGeometry(str(path)).shape
+    assert len(recovered.solids)==1
+    assert recovered.mass==pytest.approx(expected,rel=1e-9)
