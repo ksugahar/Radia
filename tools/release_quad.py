@@ -2503,6 +2503,11 @@ def main():
     p = argparse.ArgumentParser(prog="release_quad",
                                  description="Enforce the release-quad flow.")
     sub = p.add_subparsers(dest="cmd", required=True)
+    dual = sub.add_parser('cubit-dual', help='independent cubit-mesh-export LAB/100 release gate')
+    dual.add_argument('--action', choices=('preflight', 'deploy', 'done'), required=True)
+    for option in ('wheel', 'source-sha', 'source-root-lab', 'source-root-100',
+                   'evidence-lab', 'evidence-100'):
+        dual.add_argument('--' + option, required=True)
 
     sub.add_parser("preflight",
                     help="read-only state report (always safe)")
@@ -2566,6 +2571,9 @@ def main():
         help="also require a matching four-machine Simulink candidate pass")
 
     args = p.parse_args()
+    if args.cmd == 'cubit-dual':
+        from release_cubit_dual import run as run_dual
+        raise SystemExit(run_dual(args))
     handler = {
         "preflight":        cmd_preflight,
         "phase0":           cmd_phase0,

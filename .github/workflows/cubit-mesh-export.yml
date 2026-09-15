@@ -9,6 +9,8 @@ on:
       - 'src/cubit_plugin/**'
       - 'tests/test_cubit_standalone_gui.py'
       - 'tools/check_cubit_standalone.py'
+      - 'tools/release_cubit_dual.py'
+      - 'tests/test_release_cubit_dual.py'
       - 'tests/test_cubit_installers.py'
       - 'tests/test_cubit_menu_startup.py'
       - 'tools/audit_pyside6_only.py'
@@ -21,6 +23,8 @@ on:
       - 'src/cubit_plugin/**'
       - 'tests/test_cubit_standalone_gui.py'
       - 'tools/check_cubit_standalone.py'
+      - 'tools/release_cubit_dual.py'
+      - 'tests/test_release_cubit_dual.py'
       - 'tests/test_cubit_installers.py'
       - 'tests/test_cubit_menu_startup.py'
       - 'tools/audit_pyside6_only.py'
@@ -132,7 +136,8 @@ jobs:
           $env:PYTHONPATH = 'packages\cubit-mesh-export\src'
           python -m pytest tests\test_cubit_installers.py `
             tests\test_cubit_menu_startup.py tests\test_cubit_standalone_gui.py `
-            packages\cubit-mesh-export\tests\test_toolbar_smoke.py -q
+            packages\cubit-mesh-export\tests\test_toolbar_smoke.py `
+            tests\test_release_cubit_dual.py -q
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tools\audit_pyside6_only.py
 
