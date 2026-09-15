@@ -41,3 +41,6 @@ def test_mixed_omega_cost_and_volume_model_limits():
     assert 'conductivity and terminal conditions' in text
     assert 'does not claim that coupled volume-conductor support' in text
     assert 'full-turn rectangular/circular loft CAD uses exact revolution' in text
+    assert 'audit_segment_volume_overlaps()' in text
+    assert 'not clearance or intra-segment validity' in text
+    assert 'source RHS' in text
