@@ -86,3 +86,22 @@ SHA-256: `35c8dbb671895361d95613c6127054249c65995aba099bfbfd63c24d5cd29e81`.
 All 15 archived files match the remote per-file hashes and sizes in
 `wedge-recovery-manifest.json`. The disposable venv is reproducible from the
 included exact requirements, install report and wheels; it is not archived.
+
+## Same-state and frozen-system follow-up
+
+The old LAB wheel was given the v5 failed-stage material coefficient vector.
+Material W, source load and zero inner initial guess matched exactly. Geometry
+N differed by 8.0793e-13 relative (maximum entry difference 5.0499e-11), and
+the resulting Newton RHS by 2.1091e-10 relative. The cause of the small N
+difference is not established; compiler/link provenance requires further audit.
+Different nonlinear trajectories must not be compared as identical tangents.
+
+`lab-v5-frozen.npz` records W, N, RHS, material state and inner initial/returned
+iterates. `lab-old-fixed-v5-state.npz` records the same-state old-wheel assembly.
+On the identical saved v5 dense system, SciPy Jacobi-CG reached true residual
+1.51698e-4 in 1860 iterations (target 2.744577e-4, cap 4000). Restarting the
+same SciPy solve every 1000 iterations left true residual 0.0125418 after 4000.
+The native returned iterate has dense residual 0.00626886. A symmetric dense
+direct solve gives residual 2.42e-11. `frozen-cg-comparison.json` and
+`validation_test/feec/compare_frozen_wedge_cg.py` preserve the comparison.
+This supports a periodic-restart mechanism, not proof that it is the only cause.
