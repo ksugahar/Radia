@@ -153,6 +153,12 @@
       "incomplete": false
     },
     {
+      "name": "test_ih_geometry_update/testRelativeAxisymmetricMeshPathErrors",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
       "name": "test_ih_geometry_update/testCorruptSidecarRecoversByRebuilding",
       "passed": true,
       "failed": false,
