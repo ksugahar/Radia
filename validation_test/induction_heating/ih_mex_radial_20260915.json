@@ -1,0 +1,38 @@
+{
+  "scope": "IH radial P1 thermal MEX; prescribed uniform source; not EM or production VOL validation",
+  "matlab_version": "26.1.0.3276743 (R2026a) Update 3",
+  "mex_path": "C:\\temp\\radia-ih-thermal-boundaries\\matlab\\radia_mex.mexw64",
+  "cases": [
+    {
+      "bore_m": 0,
+      "nodes": 33,
+      "steps": 1000,
+      "mex_vs_direct_max_K": 1.4495071809506044E-11,
+      "power_balance_relative": 2.1858784708735682E-12,
+      "steady_temperature_rise_relative_L2": 2.9008171823541344E-5
+    },
+    {
+      "bore_m": 0.0075,
+      "nodes": 33,
+      "steps": 1000,
+      "mex_vs_direct_max_K": 2.6545876607997343E-11,
+      "power_balance_relative": 4.2820720289913461E-12,
+      "steady_temperature_rise_relative_L2": 7.7811900403751047E-6
+    }
+  ],
+  "passed": true,
+  "application": "IH",
+  "steady_tolerance": 0.02,
+  "handle_count_before": 0,
+  "handle_count_after": 0,
+  "native_build": {
+    "schema": "radia.native-build-provenance.v1",
+    "source_commit": "7a139b7aff51823a2118e15441b68fb47fc80abb",
+    "source_dirty": false,
+    "source_change_fingerprint_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
+    "binary_name": "radia_mex.mexw64",
+    "binary_bytes": 3.876864E+6,
+    "binary_sha256": "b3ff42114217544cc7ff3b984f0273a88758b16b9cb51049592efb334da839f8",
+    "generated_at_utc": "2026-09-14T06:30:13.4712798+00:00"
+  }
+}
