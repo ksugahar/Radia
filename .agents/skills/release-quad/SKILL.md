@@ -25,6 +25,26 @@ python tools/release_quad.py restore-editable
 
 ## Machine Policy
 
+### Independent cubit-mesh-export release-dual
+
+Use `python tools/release_quad.py cubit-dual --action preflight|deploy|done`
+with `--wheel`, `--source-sha`, `--source-root-lab`, `--source-root-100`,
+`--evidence-lab` and `--evidence-100`. The source paths are two local views of
+one tracked-clean NAS release worktree; evidence paths likewise share durable
+storage. Populate native payloads from the exact CI wheel, verify their manifest,
+and require package source files to match the wheel before changing an editable.
+Run preflight before tagging. Publish only the independent Cubit tag/artifact;
+deploy/done additionally verify the tag SHA and PyPI wheel hash.
+
+This lane installs only the exporter editable and its Cubit plugin/toolbar on
+LAB and 100, never Radia/MCP or any compute host. It refuses active Cubit; no
+process-name kills or user-profile sweeps are permitted. Both hosts pass
+headless export/check-vol and two real GUI cold starts, with copied/hash-verified
+evidence before task scratch deletion. `done` requires both matching receipts
+and fresh import/deployment verification. Only then call release-dual complete.
+Radia integration is separately checked by `cubit-plugin-install
+--check-radia-compat`; it is not a prerequisite for standalone publication.
+
 100号機 is the student-facing release/usage host, not a routine development
 test machine. Keep release installation, import, and application smoke checks
 there minimal; run development regression suites on LAB or the mdx CI pool

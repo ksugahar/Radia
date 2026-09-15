@@ -33,7 +33,7 @@ def _healthy_payload():
         "action_visible": {name: True for name in actions},
         "action_enabled": {name: True for name in actions},
         "toolbar_menu_has_radia_export": True,
-        "unsupported_top_level_menu_present": False,
+        "toolbar_owner": "WorkflowToolbar",
     }
 
 
@@ -64,8 +64,8 @@ def test_display_contract_accepts_one_visible_complete_toolbar():
             "absent from Cubit's toolbar menu",
         ),
         (
-            lambda data: data.update(unsupported_top_level_menu_present=True),
-            "unsupported top-level",
+            lambda data: data.update(toolbar_owner="QToolBar"),
+            "not owned by Coreform",
         ),
     ],
 )
@@ -99,7 +99,9 @@ def test_cubit_probe_checks_runtime_visibility_and_enabled_state():
     assert "toolbar.visibleRegion().isEmpty()" in source
     assert "action.isVisible()" in source
     assert "action.isEnabled()" in source
-    assert "main.createPopupMenu()" in source
+    assert "toolbar.toggleViewAction()" in source
+    assert "main.menuBar()" not in source
+    assert "main.createPopupMenu()" not in source
     assert 'cubit.cmd("exit 0")' in source
     assert 'temporary_result = RESULT_PATH + ".tmp"' in source
     assert "os.replace(temporary_result, RESULT_PATH)" in source
