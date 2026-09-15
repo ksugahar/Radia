@@ -11,9 +11,9 @@ After ``pip install cubit-mesh-export``, run::
     cubit-plugin-install --check-only   # preflight only, no writes
 
 This is the SINGLE entry point for Cubit plugin and Radia export-toolbar
-deployment. If the ``radia`` package is installed, this command also
-registers the Cubit-embedded PySide6 Radia Export Mesh toolbar and verifies
-that Cubit's startup files point at it.
+deployment. It also registers the exporter-owned Cubit-embedded PySide6
+toolbar and verifies that Cubit's startup files point at it. Radia is not
+required, and Qt remains confined to Cubit's private runtime.
 
 Safety policy (2026-04-14 -- post-incident hardening):
 
@@ -32,7 +32,6 @@ from __future__ import annotations
 import argparse
 import glob
 import hashlib
-import importlib.metadata as importlib_metadata
 import os
 import shutil
 import sys
@@ -187,14 +186,6 @@ def _find_netgen_dlls():
     except ImportError:
         pass
     return None, None
-
-
-def _radia_distribution_installed() -> bool:
-    try:
-        importlib_metadata.version("radia")
-        return True
-    except importlib_metadata.PackageNotFoundError:
-        return False
 
 
 def _is_cubit_process_name(name: str) -> bool:
@@ -638,15 +629,7 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False,
 
     if verify_only:
         ok, issues = verify_deployment(pkg_dir, cubit_dir, verbose=True)
-        try:
-            from radia.install_panels import verify_panel_installation
-        except ImportError as e:
-            verify_panel_installation = None
-            if _radia_distribution_installed():
-                issues = list(issues) + [
-                    f"radia is installed but panel verifier could not import: {e}"
-                ]
-                ok = False
+        from .toolbar_install import verify_panel_installation
         if verify_panel_installation is not None:
             print()
             panel_ok, panel_issues = verify_panel_installation(
@@ -770,17 +753,10 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False,
     print("  Plugin installed. All destinations verified.")
     print("=" * 60)
 
-    # Install Radia-NGSolve export toolbar if the radia package is available.
-    try:
-        from radia.install_panels import install_panels
-        print()
-        if not install_panels(all_users=all_users):
-            raise SystemExit(4)
-    except ImportError as e:
-        if _radia_distribution_installed():
-            print(f"  [FAIL] radia is installed but panel installer could not import: {e}")
-            raise SystemExit(4)
-        pass  # radia not installed, panels not needed
+    from .toolbar_install import install_panels
+    print()
+    if not install_panels(all_users=all_users):
+        raise SystemExit(4)
 
     return True
 
