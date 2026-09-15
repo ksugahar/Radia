@@ -65,9 +65,9 @@ def _check_module(name):
     except (ImportError, OSError, Exception):
         return False
 
-# Auto-detect Cubit via install_panels.find_cubit_bin() (single source of truth)
+# Auto-detect Cubit through its owning distribution.
 try:
-    from radia.install_panels import find_cubit_bin
+    from cubit_mesh_export.toolbar_install import find_cubit_bin
     _cubit_path = find_cubit_bin()
 except ImportError:
     _cubit_path = None

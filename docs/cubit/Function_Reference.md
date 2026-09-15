@@ -44,7 +44,7 @@ cmake -G Ninja -DCMAKE_BUILD_TYPE=Release \
 
 cmake --build . --target cubit_mesh_export_ccm   # APREPRO commands (plugins/)
 # .ccl (Qt5 GUI) was removed in radia 4.80.0; PySide6 toolbar at
-# src/radia/panels/radia_export_menu.py replaces it.
+# cubit_mesh_export/cubit_gui/radia_export_menu.py replaces it.
 ```
 
 Installation: `pip install "radia[cubit]" && cubit-plugin-install`

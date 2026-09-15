@@ -26,7 +26,7 @@ from spiral_peec import generate_rectangular_spiral, generate_two_layer_spiral
 # --- Cubit ---
 # Auto-detect Cubit installation
 sys.path.insert(0, str(REPO_ROOT / "src" / "radia"))
-from install_panels import find_cubit_bin as _fcb
+from cubit_mesh_export.toolbar_install import find_cubit_bin as _fcb
 _cubit_path = _fcb()
 if _cubit_path and _cubit_path not in sys.path:
     sys.path.append(_cubit_path)
