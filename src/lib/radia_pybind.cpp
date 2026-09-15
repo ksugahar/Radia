@@ -6004,7 +6004,8 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
     m.def("FldLenRndSw", &radia_field_ext::FldLenRndSw,
           py::arg("on_off"),
-          "Switch field lens/rendering mode ('on' or 'off').");
+          "Enable or disable legacy length perturbation ('on' or 'off'); "
+          "this is a numerical geometry policy, not a rendering option.");
 
     // ========================================================================
     // Extended Field Functions
