@@ -554,6 +554,10 @@ The 2D label contract requires material ``workpiece``, physical boundary
 ``sibc`` and optional ``axis``. Do not include r=0 in ``sibc``.
 Mass, conduction, surface heat and convection use 2*pi*r. The native route
 supports thermal_order=1 or 2 independently of the P1 surface heat handoff.
+The executed public reproduction is
+``docs/induction_heating/axisymmetric_p2_thermal.ipynb``. It verifies an
+in-memory quadratic transient and displays separately recorded MEX/Simulink
+results; it does not certify production CAD/VOL coupling or release acceptance.
 Order 2 uses NGSolve H1 coefficients (P2 on triangles, Q2 on quads), not
 nodal kelvin values. The configuration stores the constant-function vector
 and a sparse mapped evaluation operator; initialization, ambient convection,
