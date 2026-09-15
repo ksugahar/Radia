@@ -79,7 +79,7 @@ Paths in tables are relative to `src/radia_mcp/paper_writing` unless specified.
 | P31 | 4.6 reviewer regex | 修正済み | R::test_reviewer_figure_caption_pattern_and_priority covers Fig./Figure, case and spacing, negative word boundaries and D/C/B precedence over minor-caption detection. |
 | P32 | 4.6 D response schema | 修正済み | R::test_reviewer_d_returns_matched_triggers verifies D results include the matched triggers. This does not certify semantic classification accuracy. |
 | P33 | 4.6 tense section argument | 検証待ち | Compare identical prose under Methods/Results/Introduction and documented contract. |
-| P34 | 4.6 missing-conclusion response schema | 検証待ち | Assert all public keys on not-found and update consumers consistently. |
+| P34 | 4.6 missing-conclusion response schema | 修正済み | 2026-09-15: test_paper_writing_conclusion_first_use.py covers missing/empty text and empty Markdown/TeX conclusions; key parity with the checked route, passed=False and score/issue_count=None prevent an unchecked result from claiming zero issues. MCP guidance documents the distinction. Focused conclusion + review-regression lane: 54 passed. |
 | P35 | 4.6 concept-drop exact text | 検証待ち | Test emphasized DtN text against original-source spans. |
 | P36 | 4.6 typography scope/dead warning branch | 検証待ち | Exercise thanks/TikZ size commands and warning counts, not just ordinary body sizes. |
 | P37 | 4.6; 8.6 personal author default | 修正済み | R::test_cover_letter_does_not_invent_author covers empty, whitespace, None and explicit names; omitted author becomes a neutral placeholder. |
