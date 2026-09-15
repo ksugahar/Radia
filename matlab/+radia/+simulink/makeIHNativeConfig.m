@@ -175,6 +175,9 @@ if isfield(spec, "eddy_matrix_temperature_slope_real")
         spec.eddy_matrix_temperature_slope_imag, nUnknown, ...
         options.NTemperature, "eddy_matrix_temperature_slope_imag");
 end
+for name=["temperature_representation","temperature_constant_coefficients","temperature_evaluation"]
+    if isfield(spec,name), config.(name)=spec.(name); end
+end
 config = radia.simulink.validateIHNativeConfig(config);
 end
 
