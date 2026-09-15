@@ -12,7 +12,7 @@ server package and asserts:
 
 Run::
 
-    pytest tests/mcp_server/test_cubit_responses.py -v
+    pytest packages/cubit-mesh-export/tests/mcp/test_cubit_responses.py -v
 """
 from __future__ import annotations
 

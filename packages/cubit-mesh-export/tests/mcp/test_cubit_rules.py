@@ -1,4 +1,4 @@
-"""Tests for Cubit lint rules.
+"""Exporter-owned tests for Cubit lint rules.
 
 Each test provides intentionally bad code and verifies the rule fires,
 then provides correct code and verifies no findings.
