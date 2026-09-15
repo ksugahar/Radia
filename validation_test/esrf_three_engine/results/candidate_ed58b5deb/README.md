@@ -53,7 +53,8 @@ All 22 archived files were checked against `ed58-recovery-manifest.json` in the
 same directory. The archive preserves inputs, scripts, wheel and results; the
 disposable virtual environment is reproducible and is not archived.
 
-After committing this evidence, remove only the completed hibino job directory
-`C:/temp/hdiv-pcg-ed58-20260915` and its sibling recovery archive, with path,
-process and archive-hash checks. Record deletion separately; unrelated jobs and
-the installed global Radia environment must remain untouched.
+After evidence commit `875ab988d`, the completed hibino job directory
+`C:/temp/hdiv-pcg-ed58-20260915` and its sibling recovery archive were deleted
+at 2026-09-15T07:53:43Z. Path, process, link and archive-hash checks passed;
+both targets were verified absent. See `hibino/cleanup.json`. Unrelated jobs
+and the installed global Radia environment were not modified.
