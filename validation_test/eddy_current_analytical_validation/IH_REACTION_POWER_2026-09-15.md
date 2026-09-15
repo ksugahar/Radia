@@ -95,6 +95,25 @@ the matching **FEM-SIBC** comparison.
 
 ## Boundaries
 
+### Additional native thermal evidence
+
+`validation_test/induction_heating/validate_ih_mex_radial.m` now independently
+assembles 33-node radial axisymmetric P1 operators for solid and bored cylinders.
+Both execute 1000 Eddy/Thermal MEX steps with prescribed uniform heating,
+an insulated inner boundary (or symmetry axis) and outer convection. The
+independent MATLAB backward-Euler solve differs by at most 2.7e-11 K;
+the analytic steady temperature-rise relative L2 error is at most 0.002901%.
+Power imbalance is below 4.3e-12, and native handles return from zero to zero.
+The JSON `ih_mex_radial_20260915.json` records the actual binary build identity.
+The binary SHA-256 was checked; native sources and CMake have no diff between
+its build commit and the IH correction commit. Execution used the existing
+LAB MATLAB R2026a Update 3 via the official Python Engine, without restarting it.
+
+This establishes spatial thermal MEX behavior, not the complete corrected
+BEM-to-operator-to-MEX path. The prescribed source does not validate EM mapping,
+inner-wall convection or production VOL export. Reproduce after `radia.setup`
+by calling `validate_ih_mex_radial` with an output JSON path from MATLAB.
+
 This is not a certificate for arbitrary frequency, material or geometry.
 Nonlinear BH accuracy, spatially varying impedance, higher-order/curved
 mapped postprocessing, strong coil-current feedback, and native Simulink
