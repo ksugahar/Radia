@@ -47,6 +47,7 @@ where = ["src"]
 # replaces it.  cubit-plugin-install now treats any deployed .ccl as stale.
 cubit_mesh_export = ["*.pyd", "*.so", "*.ccm", "native_payloads.json"]
 "cubit_mesh_export.cubit_helpers" = ["*.py"]
+"cubit_mesh_export.cubit_gui" = ["*.jou", "cubit_toolbar/scripts/*.py", "cubit_toolbar/icons/*.svg", "cubit_toolbar/toolbars/*.tmpl"]
 
 [tool.setuptools.exclude-package-data]
 cubit_mesh_export = ["bridge.py"]
