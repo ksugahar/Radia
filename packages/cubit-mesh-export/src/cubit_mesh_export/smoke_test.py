@@ -76,19 +76,10 @@ def _find_sample_jou(override: str = "") -> Path:
             raise RuntimeError(f"--jou argument does not exist: {p}")
         return p
 
-    # From installed radia package
-    try:
-        import radia
-        rad_dir = Path(radia.__file__).resolve().parent
-        candidate = rad_dir / "panels" / "samples" / "ih_bem_sample.jou"
-        if candidate.is_file():
-            return candidate
-    except ImportError:
-        pass
-
-    raise RuntimeError(
-        "Cannot locate ih_bem_sample.jou. Either install the radia "
-        "package (`pip install radia`) or pass --jou <path>.")
+    candidate = Path(__file__).parent / "cubit_gui" / "ih_bem_sample.jou"
+    if not candidate.is_file():
+        raise RuntimeError(f"Bundled smoke-test fixture missing: {candidate}")
+    return candidate
 
 
 def _read_vol_named_section(vol_path: Path, section: str):

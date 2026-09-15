@@ -48,7 +48,7 @@ def test_exporter_radia5_compatibility_is_bounded(monkeypatch, version, accepted
 
 
 def _load_install_panels():
-    path = PROJECT_ROOT / "src" / "radia" / "install_panels.py"
+    path = PROJECT_ROOT / "packages/cubit-mesh-export/src/cubit_mesh_export/toolbar_install.py"
     spec = importlib.util.spec_from_file_location("radia_install_panels_test", path)
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
@@ -242,7 +242,7 @@ def test_install_panels_refreshes_an_existing_official_toolbar(
     assert issues == []
     menu = toolbar_dir / "scripts" / "radia_export_menu.py"
     assert menu.read_bytes() == (
-        PROJECT_ROOT / "src" / "radia" / "panels"
+        PROJECT_ROOT / "packages/cubit-mesh-export/src/cubit_mesh_export/cubit_gui"
         / "radia_export_menu.py"
     ).read_bytes()
     toolbar = toolbar_dir / "toolbars" / "radia_export_toolbar.ttb"
