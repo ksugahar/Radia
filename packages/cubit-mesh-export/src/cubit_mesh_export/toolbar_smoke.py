@@ -176,14 +176,18 @@ def _run_one(cubit_exe: Path, work: Path, timeout: float) -> dict:
     env = os.environ.copy()
     env["RADIA_TOOLBAR_PROBE_RESULT"] = str(result_path)
     env["RADIA_TOOLBAR_PROBE_TIMEOUT"] = str(max(5.0, timeout - 10.0))
-    launcher = subprocess.Popen(
-        [str(cubit_exe), "-nojournal", str(bootstrap_path)],
-        cwd=str(work),
-        env=env,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    # Cubit 2025.12 can append INI plugin paths after journal arguments and
+    # misread them as journals. Declare the same installed plugin path first.
+    with (work / "launcher.log").open("wb") as output:
+        launcher = subprocess.Popen(
+            [str(cubit_exe), "-nojournal", "-commandplugindir",
+             str(cubit_exe.parent / "plugins"), str(bootstrap_path)],
+            cwd=str(work),
+            env=env,
+            stdin=subprocess.PIPE,
+            stdout=output,
+            stderr=subprocess.STDOUT,
+        )
 
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline and not result_path.is_file():
