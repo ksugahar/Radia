@@ -53,3 +53,20 @@ def test_near_axis_radial_field(radius):
     b = np.asarray(rad.Fld(obj,'b',[radius,0,z]))
     assert b[0] == pytest.approx(-radius*derivative/2,rel=2e-6)
     assert abs(b[1]) < 1e-15
+
+
+@pytest.mark.parametrize('gap', [1e-5, 5e-7, 1e-7])
+def test_almost_closed_arc_preserves_missing_sector(gap):
+    ri, ro, h, j, z = .010, .013, .003, 1e7, .006
+    lo, hi = .3, .3+2*np.pi-gap
+    obj = rad.ObjArcCur([0,0,0], [ri,ro], [lo,hi], h, 40, 'man','z',j)
+    # Integrating the radial and axial coordinates on the axis gives this
+    # closed transverse primitive; the azimuthal endpoints retain the gap.
+    def endpoint(v):
+        return np.hypot(ro,v)-np.hypot(ri,v)
+    transverse = 1e-7*j*(endpoint(z-h/2)-endpoint(z+h/2))
+    expected = [transverse*(np.sin(hi)-np.sin(lo)),
+                transverse*(np.cos(lo)-np.cos(hi)),
+                reference_axis(ri,ro,h,j,z)*(hi-lo)/(2*np.pi)]
+    np.testing.assert_allclose(rad.Fld(obj,'b',[0,0,z]), expected,
+                               rtol=2e-7, atol=1e-16)
