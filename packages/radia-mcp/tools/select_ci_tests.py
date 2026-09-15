@@ -20,8 +20,8 @@ import sys
 from typing import Iterable
 
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
-PACKAGE_ROOT = REPO_ROOT / "packages" / "radia-mcp"
+PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = PACKAGE_ROOT.parents[1]
 TEST_ROOT = PACKAGE_ROOT / "tests"
 SOURCE_PREFIX = "packages/radia-mcp/src/radia_mcp/"
 TEST_PREFIX = "packages/radia-mcp/tests/"
@@ -240,6 +240,7 @@ def build_plan(
             "package_tests": ["tests"],
             "server_selftests": sorted(catalog),
             "run_mcp_response_tests": True,
+            "integration_tests": ["tests/mcp_integration"],
         }
 
     sources = _test_sources()
@@ -334,7 +335,45 @@ def build_plan(
         "run_mcp_response_tests": any(
             path.startswith("tests/mcp_server/") for path in changed
         ),
+        "integration_tests": _integration_tests(changed),
     }
+
+
+def _integration_tests(changed: list[str]) -> list[str]:
+    """Run repository contracts separately, without package collection filters.
+
+    Evidence and cross-distribution changes run the small complete lane. MCP
+    implementation changes select the domain's importing contracts; changes to
+    the shared boundary infrastructure exercise the whole lane.
+    """
+    root = REPO_ROOT / "tests/mcp_integration"
+    if not root.is_dir():
+        return []  # A standalone package has no repository integration lane.
+    broad = (
+        "tests/mcp_integration/", "tests/mcp_server/fixtures/", "matlab/",
+        "validation_test/", "src/matlab/", "packages/radia-optuna/",
+        ".agents/skills/md2html/", ".github/workflows/radia-mcp-matrix.yml",
+        "packages/radia-mcp/tools/select_ci_tests.py",
+        "packages/radia-mcp/tools/check_package_test_boundary.py",
+    )
+    if any(path.startswith(broad) or path in {"AGENTS.md", "CLAUDE.md", "README.md"}
+           for path in changed):
+        return ["tests/mcp_integration"]
+    families = {
+        path.removeprefix(SOURCE_PREFIX).split("/", 1)[0]
+        for path in changed if path.startswith(SOURCE_PREFIX)
+    }
+    if "common" in families:
+        return ["tests/mcp_integration"]
+    selected = {
+        path.relative_to(REPO_ROOT).as_posix()
+        for path in root.glob("test_*.py")
+        if any(f"radia_mcp.{family}" in path.read_text(encoding="utf-8")
+               for family in families)
+    }
+    if any(path.endswith(".msh") for path in changed):
+        selected.add("tests/mcp_integration/test_repo_msh_assets.py")
+    return sorted(selected)
 
 
 def _git_changed_files(base: str, head: str) -> list[str]:
