@@ -87,15 +87,33 @@ hex_elem = rad.ObjHexahedron(verts, [0, 0, 0])
 
 | Function | Description |
 |----------|-------------|
-| `ObjArcCur(center, [r_min, r_max], [phi_min, phi_max], h, n_sec, j)` | Arc/circular coil |
+| `ObjArcCur(center, [r_min, r_max], [phi_min, phi_max], h, n_sec, 'man', 'z', j)` | Arc/circular coil |
 | `ObjFlmCur(points, current)` | Filament (Biot-Savart) |
 | `ObjRaceTrk(center, radii, heights, current, n_seg)` | Racetrack coil |
 
 ```python
 # Full circular coil: R=50mm, 1mm cross-section, J=1e6 A/m^2
 coil = rad.ObjArcCur([0, 0, 0], [0.0495, 0.0505],
-                     [-np.pi, np.pi], 0.001, 100, 1e6)
+                     [0, 2*np.pi], 0.001, 100, 'man', 'z', 1e6)
 ```
+
+### Native Arc Integration Contract
+
+Partial-arc B/H uses analytic rectangular-section integration and adaptive
+angular quadrature. `n_sec` is not its accuracy control. Non-finite or
+unconverged integration raises an error instead of accepting an unfinished sum.
+Full circles retain elliptic-loop evaluation with 4x4 section quadrature;
+A and scalar potential retain their separate integration paths. Do not infer
+their convergence from a partial-arc B-field test, or treat a full circle and
+two half-arcs as numerically identical without checking section convergence.
+The filament CoilBuilder path is also a separate approximation.
+
+Validate signed vector fields against independent volume-current integration,
+then test arc partition, rotation, length scaling and current reversal.
+The focused native regression is `tests/test_arc_section_regression.py`.
+This is not certification of all conductor-interior, extreme far-field or
+arbitrary-coil cases. Check the loaded native build before using this contract;
+an older installed extension does not acquire the kernel from Python edits.
 
 ## Background Field
 
