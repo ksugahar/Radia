@@ -15,7 +15,7 @@ import urllib.request
 import zipfile
 from email.parser import BytesParser
 
-SCHEMA = 'cubit-mesh-export.release-dual.v1'
+SCHEMA = 'cubit-mesh-export.release-dual.v2'
 TARGETS = ('lab', '100')
 
 
@@ -23,27 +23,38 @@ def digest(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def wheel_contract(path):
+def wheel_contract(path, distribution='cubit-mesh-export'):
+    prefix = distribution.replace('-', '_') + '/'
     with zipfile.ZipFile(path) as archive:
         names = archive.namelist()
         metadata = BytesParser().parsebytes(archive.read(next(
             n for n in names if n.endswith('.dist-info/METADATA'))))
-        if metadata['Name'] != 'cubit-mesh-export':
-            raise ValueError('Not a cubit-mesh-export wheel')
+        if metadata['Name'] != distribution:
+            raise ValueError('Not a ' + distribution + ' wheel')
         files = {}
         for name in names:
-            if name.startswith('cubit_mesh_export/') and not name.endswith('/'):
+            if name.startswith(prefix) and not name.endswith('/'):
                 content = archive.read(name)
-                text = name.endswith(('.py', '.jou', '.svg', '.tmpl', '.json'))
+                text = name.endswith(('.py', '.jou', '.svg', '.tmpl', '.json', '.md'))
                 if text:
                     content = content.replace(b'\r\n', b'\n').replace(b'\r', b'\n')
                 files[name] = {'sha256': digest(content), 'text': text}
-    for required in ('cubit_mesh_export.ccm', 'cubit_mesh_curver.pyd',
-                     'toolbar_smoke.py', 'cubit_gui/toolbar_probe.py'):
-        if 'cubit_mesh_export/' + required not in files:
+    required_files = ('__init__.py', 'common/status.py') if distribution == 'cae-mcp-core' else (
+        'cubit_mesh_export.ccm', 'cubit_mesh_curver.pyd', 'toolbar_smoke.py',
+        'cubit_gui/toolbar_probe.py', 'mcp/server.py')
+    for required in required_files:
+        if prefix + required not in files:
             raise ValueError('Wheel lacks ' + required)
     return {'version': metadata['Version'], 'wheel_sha256': digest(Path(path).read_bytes()),
-            'files': files}
+            'files': files, 'requires': metadata.get_all('Requires-Dist', [])}
+
+
+def verify_published(distribution, contract):
+    with urllib.request.urlopen('https://pypi.org/pypi/' + distribution + '/' +
+                                contract['version'] + '/json', timeout=30) as response:
+        published = json.load(response)
+    if contract['wheel_sha256'] not in [u['digests']['sha256'] for u in published['urls']]:
+        raise ValueError(distribution + ': wheel bytes are not the published PyPI artifact')
 
 
 # Same worker executes locally or through the existing Administrator SSH token.
@@ -55,13 +66,14 @@ import re, shutil, socket, subprocess, sys, zipfile
 cfg = json.loads(base64.b64decode(sys.argv[1]))
 root = Path(cfg['source_root']).resolve()
 package = root / 'packages/cubit-mesh-export'
+core_package = root / 'packages/cae-mcp-core'
 out = Path(cfg['output']).resolve()
 out.mkdir(parents=True, exist_ok=True)
 events = []
 result = dict(schema=cfg['schema'], target=cfg['target'], hostname=socket.gethostname(),
               user=getpass.getuser(), interpreter=sys.executable, source_root=str(root),
               source_sha=cfg['source_sha'], version=cfg['version'],
-              wheel_sha256=cfg['wheel_sha256'], passed=False)
+              wheel_sha256=cfg['wheel_sha256'], core=cfg['core'], passed=False)
 
 def command(args, timeout=120):
     p = subprocess.run(args, capture_output=True, text=True, encoding='utf-8',
@@ -73,7 +85,7 @@ def command(args, timeout=120):
 
 def preserved():
     state = {}
-    for name in ('radia', 'radia-mcp', 'netgen-mesher', 'ngsolve'):
+    for name in ('radia', 'radia-mcp', 'netgen-mesher', 'ngsolve', 'numpy', 'mcp'):
         try:
             d = md.distribution(name)
             state[name] = dict(version=d.version, direct_url=d.read_text('direct_url.json'))
@@ -81,8 +93,8 @@ def preserved():
             state[name] = None
     return state
 
-def verify_files(base):
-    for relative, expected in cfg['files'].items():
+def verify_files(base, files):
+    for relative, expected in files.items():
         data = (base / relative).read_bytes()
         if expected['text']:
             data = data.replace(b'\r\n', b'\n').replace(b'\r', b'\n')
@@ -116,7 +128,16 @@ try:
         raise RuntimeError('Wrong release checkout SHA')
     if command(git + ['status', '--porcelain', '--untracked-files=no']).strip():
         raise RuntimeError('Release checkout has tracked modifications')
-    verify_files(package / 'src')
+    verify_files(package / 'src', cfg['files'])
+    verify_files(core_package / 'src', cfg['core']['files'])
+    from packaging.requirements import Requirement
+    for raw in cfg['requires'] + cfg['core']['requires']:
+        requirement = Requirement(raw)
+        if requirement.marker and not requirement.marker.evaluate():
+            continue
+        version = cfg['core']['version'] if requirement.name == 'cae-mcp-core' else md.version(requirement.name)
+        if version not in requirement.specifier:
+            raise RuntimeError('Unsatisfied dependency; update explicitly before deploy: ' + raw)
     for name in ('netgen-mesher', 'ngsolve'):
         if md.version(name) != cfg['dependencies'][name]:
             raise RuntimeError('Dependency mismatch; do not mutate shared solver runtime: ' + name)
@@ -133,7 +154,7 @@ try:
         raise RuntimeError(str(issues))
     if cfg['action'] == 'deploy':
         command([sys.executable, '-m', 'pip', 'install', '--no-deps', '--no-build-isolation',
-                 '-e', str(package)], 180)
+                 '-e', str(core_package), '-e', str(package)], 180)
         command([sys.executable, '-m', 'cubit_mesh_export.install'], 180)
     if cfg['action'] != 'preflight':
         probe = "import json,pathlib,importlib.metadata as m,cubit_mesh_export as c;d=m.distribution('cubit-mesh-export');print(json.dumps(dict(version=c.__version__,file=str(pathlib.Path(c.__file__).resolve()),direct_url=json.loads(d.read_text('direct_url.json')))))"
@@ -143,6 +164,15 @@ try:
                 or identity['direct_url'].get('dir_info', {}).get('editable') is not True):
             raise RuntimeError('Wrong actual editable import: ' + str(identity))
         result['installed'] = identity
+        core_probe = "import json,pathlib,importlib.metadata as m,cae_mcp_core as c;d=m.distribution('cae-mcp-core');print(json.dumps(dict(version=c.__version__,file=str(pathlib.Path(c.__file__).resolve()),direct_url=json.loads(d.read_text('direct_url.json')))))"
+        core_identity = json.loads(command([sys.executable, '-c', core_probe]).strip())
+        if (core_identity['version'] != cfg['core']['version'] or
+                Path(core_identity['file']).resolve() != (core_package / 'src/cae_mcp_core/__init__.py').resolve() or
+                core_identity['direct_url'].get('dir_info', {}).get('editable') is not True):
+            raise RuntimeError('Wrong shared-core editable import: ' + str(core_identity))
+        result['core_installed'] = core_identity
+        command([sys.executable, '-m', 'cubit_mesh_export.mcp.server', '--selftest'], 120)
+        result['mcp_selftest'] = True
         command([sys.executable, '-m', 'cubit_mesh_export.install', '--verify-only'], 120)
     if cfg['action'] == 'deploy':
         for module, arguments in [('smoke_test', ['--keep']),
@@ -170,15 +200,18 @@ sys.exit(0 if result['passed'] else 1)
 
 def check_receipt(receipt, contract, target):
     expected = dict(schema=SCHEMA, target=target, source_sha=contract['source_sha'],
-                    version=contract['version'], wheel_sha256=contract['wheel_sha256'])
+                    version=contract['version'], wheel_sha256=contract['wheel_sha256'],
+                    core=contract['core'])
     return (all(receipt.get(k) == v for k, v in expected.items())
             and all(receipt.get(k) is True for k in
-                    ('passed', 'unrelated_packages_unchanged', 'smoke_test', 'toolbar_smoke')))
+                    ('passed', 'unrelated_packages_unchanged', 'smoke_test', 'toolbar_smoke', 'mcp_selftest')))
 
 
 def run(args):
     import tomllib
     contract = wheel_contract(args.wheel)
+    contract['core'] = wheel_contract(args.core_wheel, 'cae-mcp-core')
+    verify_published('cae-mcp-core', contract['core'])
     contract.update(schema=SCHEMA, source_sha=args.source_sha)
     root = Path(args.source_root_lab)
     metadata = tomllib.loads((root / 'packages/cubit-mesh-export/pyproject.toml').read_text(encoding='utf-8'))
@@ -191,10 +224,7 @@ def run(args):
                             'rev-parse', tag + '^{}'], capture_output=True, text=True, check=True)
         if p.stdout.strip() != args.source_sha:
             raise ValueError('Tag does not identify selected source')
-        with urllib.request.urlopen('https://pypi.org/pypi/cubit-mesh-export/' + contract['version'] + '/json', timeout=30) as response:
-            published = json.load(response)
-        if contract['wheel_sha256'] not in [u['digests']['sha256'] for u in published['urls']]:
-            raise ValueError('Wheel bytes are not the published PyPI artifact')
+        verify_published('cubit-mesh-export', contract)
     output = Path(args.evidence_lab)
     output.mkdir(parents=True, exist_ok=True)
     # Both preflights finish before either install starts.
@@ -222,5 +252,5 @@ def run(args):
                 raise RuntimeError(result.get('error', 'worker failed'))
     if args.action == 'done':
         (output / 'done.json').write_text(json.dumps(dict(contract, passed=True, targets=list(TARGETS)), indent=2))
-        print('PASS release-dual: exact published wheel, LAB/100 editable and GUI/export gates; Radia/MCP unchanged')
+        print('PASS release-dual: exact published exporter/core wheels, LAB/100 editable and GUI/export/MCP gates; Radia/radia-mcp unchanged')
     return 0
