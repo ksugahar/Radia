@@ -21,7 +21,7 @@ import json
 
 import pytest
 
-from radia_mcp.cubit import session as cs
+from cubit_mesh_export.mcp import session as cs
 
 pytestmark = pytest.mark.skipif(
     cs.find_cubit_install() is None,
@@ -29,7 +29,7 @@ pytestmark = pytest.mark.skipif(
 
 
 def _compare(step, **kw):
-    from radia_mcp.cubit.server import cubit_netgen_quality_compare
+    from cubit_mesh_export.mcp.server import cubit_netgen_quality_compare
     out = json.loads(cubit_netgen_quality_compare(str(step), **kw))
     assert out["status"] == "ok", out
     return {r["route"]: r for r in out["rows"]}

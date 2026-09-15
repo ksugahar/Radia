@@ -33,7 +33,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(_REPO_ROOT / "packages" / "radia-mcp" / "src"))
 
 from build123d import Box, export_step
-from radia_mcp.cubit.server import _run_batch
+from cubit_mesh_export.mcp.server import _run_batch
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(_HERE, "artifacts")

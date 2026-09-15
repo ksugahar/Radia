@@ -50,7 +50,7 @@ RESULTS = Path(__file__).with_name("results_hex_native_design_lane.json")
 
 def _cubit_available():
     try:
-        from radia_mcp.cubit import session as _cs  # noqa: F401
+        from cubit_mesh_export.mcp import session as _cs  # noqa: F401
         return True
     except Exception:
         return False
@@ -62,7 +62,7 @@ pytestmark = pytest.mark.skipif(not _cubit_available(),
 
 @pytest.fixture(scope="module")
 def hexdesign(tmp_path_factory):
-    from radia_mcp.cubit.server import cubit_stl_to_vol
+    from cubit_mesh_export.mcp.server import cubit_stl_to_vol
 
     out = tmp_path_factory.mktemp("hex_native")
     SetNumThreads(4)

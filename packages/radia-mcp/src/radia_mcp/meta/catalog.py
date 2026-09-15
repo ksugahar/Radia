@@ -30,16 +30,6 @@ CATALOG: dict[str, dict[str, Any]] = {
     # ============================================================
     # CAD / mesh authoring
     # ============================================================
-    "cubit": {
-        "subpackage": "radia_mcp.cubit",
-        "entry_point": "mcp-server-cubit",
-        "description": "Cubit mesh scripting, hex/tet workflow, export formats",
-        "primary_tools": ["cubit_exec", "cubit_mesh_auto", "cubit_docs",
-                          "cubit_audit_summary"],
-        "related": ["build123d", "gmsh", "radia-ngsolve"],
-        "audit_command": "mcp-server-cubit --selftest --audit-repo",
-        "tags": ["cad", "mesh"],
-    },
     "build123d": {
         "subpackage": "radia_mcp.build123d",
         "entry_point": "mcp-server-build123d",
@@ -740,6 +730,17 @@ CATALOG: dict[str, dict[str, Any]] = {
 # policy (different repos, different conventions).
 # ============================================================
 EXTERNAL_PACKAGES: dict[str, dict[str, Any]] = {
+    "cubit": {
+        "pypi": "cubit-mesh-export",
+        "github": "https://github.com/ksugahar/Radia",
+        "install": "pip install cubit-mesh-export",
+        "subpackage": "cubit_mesh_export.mcp",
+        "entry_point": "mcp-server-cubit",
+        "selftest_command": "mcp-server-cubit --selftest",
+        "audit_command": "mcp-server-cubit --selftest --audit-repo",
+        "description": "Independent Cubit APREPRO/headless meshing, export and MCP; no Radia required.",
+        "related": ["build123d", "gmsh", "radia-ngsolve", "topology-optimization"],
+    },
     "optuna-mcp": {
         "pypi": "optuna-mcp",
         "github": "https://github.com/optuna/optuna-mcp",
@@ -914,7 +915,7 @@ def list_all() -> list[dict]:
 
 
 def list_external() -> list[dict]:
-    """External lab MCP packages (not in CATALOG; different repos)."""
+    """Separately distributed MCP packages, including monorepo siblings."""
     return [{"name": n, **info} for n, info in EXTERNAL_PACKAGES.items()]
 
 

@@ -7,6 +7,11 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- Move Cubit MCP into `cubit-mesh-export` and shared runtime helpers into
+  `cae-mcp-core`; remove old Python module paths and the Cubit console script
+  from this distribution. Update clients to `cubit_mesh_export.mcp.server`.
+  Keep Radia-to-Cubit topology/STEP integration as an optional consumer.
+
 - Cubit: honor `RADIA_MCP_TEMP` for both headless batch and native journal
   scratch paths on all platforms; retain refusal to overwrite existing journals.
 - Documentation: remove stale fixed server counts, limit alias compatibility

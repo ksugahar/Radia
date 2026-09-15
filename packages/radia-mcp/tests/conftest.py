@@ -55,7 +55,7 @@ _CI_SELECT_ALL = not _CI_SELECTORS or "tests" in _CI_SELECTED_FILES
 _FORCE_MINIMAL = os.environ.get("RADIA_MCP_FORCE_MINIMAL") == "1"
 _MINIMAL_BASELINE = set(getattr(sys, "stdlib_module_names", ())) | {
     "mcp", "pytest", "_pytest", "pluggy", "iniconfig", "packaging",
-    "anyio", "attr", "attrs", "typing_extensions", "radia_mcp", "__future__",
+    "anyio", "attr", "attrs", "typing_extensions", "radia_mcp", "cae_mcp_core", "__future__",
     # Transitive dependencies installed from the package's MCP SDK requirement.
     "annotated_types", "certifi", "click", "cffi", "cryptography", "dotenv",
     "h11", "httpcore", "httpx", "httpx_sse", "idna", "jsonschema", "jwt",

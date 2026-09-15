@@ -23,12 +23,12 @@ import sys
 
 from mcp.server.fastmcp import FastMCP
 
-from ..common import register_status_tool
+from cae_mcp_core.common import register_status_tool
 from ..presentation import register as _register_presentation
 from ..figure import register as _register_figure
 from ..grant_writing import register as _register_grant
 from ..poster import register as _register_poster
-from ..common.server_hardening import ANN_READONLY
+from cae_mcp_core.common.server_hardening import ANN_READONLY
 from .review_route import paper_writing_review_route
 
 from . import tools as _tools

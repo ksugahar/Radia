@@ -4,7 +4,7 @@ import csv
 import re
 
 import pytest
-from radia_mcp.gmsh.msh_inspect import read_msh_data
+from cae_mcp_core.mesh.msh_inspect import read_msh_data
 from radia_mcp.gmsh.post_process import _PLOT_SCRIPT, export_view_csv
 from radia_mcp.gmsh.render import render_montage
 

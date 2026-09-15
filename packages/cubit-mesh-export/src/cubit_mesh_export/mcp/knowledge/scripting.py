@@ -1,0 +1,4228 @@
+"""
+Cubit Python scripting knowledge base for mesh export.
+
+Covers block registration, element order control, mesh schemes,
+STEP exchange, initialization, and common mistakes.
+
+Includes content migrated from Radia project's cubit_meshing_knowledge.py.
+"""
+
+CUBIT_OVERVIEW = """
+# Cubit Mesh Generation Overview
+
+Coreform Cubit provides structured and unstructured meshing with export to
+multiple formats via Cubit plugin commands (`export ...`) and the `cubit_mesh_export` package.
+
+## Typical Workflow
+
+MCP scratch files and native journal generations honor `RADIA_MCP_TEMP` on
+Windows, Linux and macOS. Without an override, Windows uses `C:/temp` and
+other platforms use the system temporary directory. Journals refuse overwrite;
+use a caller-owned per-run scratch root for isolated tests, not a shared fixed
+test-client path. This does not start Cubit or change its licensing requirements.
+
+`cubit-mesh-export` is independently installable without `radia` or
+`radia-mcp`. Radia adds optional toolbar integration; MCP owns AI operation.
+Radia's current source accepts exporter 1.0.0 explicitly; older Radia releases
+may still cap it at 0.999.999. Check both installed compatibility windows before
+combined deployment. Do not infer that later unvalidated exporter versions pass.
+Its standalone release acceptance uses
+`validation_test/cubit_mesh_export/validate_standalone_wheel.py` in an isolated
+wheel-installed venv with Radia/MCP absent. It loads the candidate plugin via
+the headless console, checks an APREPRO sphere journal, and retains wheel/native
+hashes plus the strict `check-vol` result. Do not substitute the no-argument
+IH smoke test (which needs Radia's sample) for standalone acceptance.
+
+```
+1. Create geometry (Cubit commands or STEP import)
+2. Set mesh scheme (tetmesh, map, sweep, etc.)
+3. Set element size or interval count
+4. Generate mesh
+5. Register blocks
+6. Export to desired format
+```
+
+## Element Types
+
+| Element | Cubit Type | Nodes (1st) | Nodes (2nd) | Best For |
+|---------|-----------|-------------|-------------|----------|
+| Tet | TET | 4 | 10 | Complex geometry, auto-mesh |
+| Hex | HEX | 8 | 20/27 | Structured grids, high accuracy |
+| Wedge | WEDGE | 6 | 15 | Transition elements |
+| Pyramid | PYRAMID | 5 | 13 | Hex-tet transition |
+| Tri | TRI | 3 | 6 | Surface mesh |
+| Quad | QUAD | 4 | 8/9 | Structured surface mesh |
+
+## Why Cubit for FEM?
+
+- **Structured hex meshing**: Higher accuracy per element
+- **Interval control**: Precise element count along curves
+- **Sweep meshing**: Efficient for extruded geometries
+- **Multi-block**: Different mesh densities per region
+- **Quality control**: Built-in mesh quality metrics
+"""
+
+CUBIT_BLOCKS = """
+# Block Registration
+
+## Why Blocks are Required
+
+All `export` commands and `cubit_mesh_export` functions read mesh data from blocks.
+**No blocks = no export.** This is the most common mistake.
+
+## Mesh Element Blocks (Recommended)
+
+```python
+# 3D domain elements
+cubit.cmd("block 1 add tet all")
+cubit.cmd('block 1 name "domain"')
+
+# 2D boundary elements
+cubit.cmd("block 2 add tri all")
+cubit.cmd('block 2 name "boundary"')
+```
+
+## Geometry Blocks (Alternative)
+
+Blocks can contain geometry instead of mesh elements:
+
+```python
+cubit.cmd("block 1 add volume 1")    # All 3D elements in volume 1
+cubit.cmd("block 2 add surface 1")   # All 2D elements on surface 1
+```
+
+| Block Contains | Elements Returned |
+|----------------|-------------------|
+| Volume | tet, hex, wedge, pyramid (3D only) |
+| Surface | tri, quad (2D only) |
+| Curve | edge (1D only) |
+| Vertex | node (0D only) |
+
+## Important: Element Order and Geometry Blocks
+
+For 2nd order conversion, you MUST use mesh element blocks:
+
+```python
+# This works:
+cubit.cmd("block 1 add tet all")
+cubit.cmd("block 1 element type tetra10")   # Converts to 2nd order
+
+# This does NOT work for 2nd order:
+cubit.cmd("block 1 add volume 1")
+cubit.cmd("block 1 element type tetra10")   # No effect on geometry blocks!
+```
+
+## Multiple Blocks
+
+Use separate blocks for different materials or boundary conditions:
+
+```python
+cubit.cmd("block 1 add tet all in volume 1")
+cubit.cmd('block 1 name "iron"')
+cubit.cmd("block 2 add tet all in volume 2")
+cubit.cmd('block 2 name "air"')
+cubit.cmd("block 3 add tri all in surface 1")
+cubit.cmd('block 3 name "dirichlet"')
+```
+
+## Mixed Element Warning
+
+If a block contains multiple 3D element types (e.g., tet + hex), a warning
+is displayed with 2nd order conversion instructions. For mixed blocks,
+separate `element type` commands are needed:
+
+```python
+cubit.cmd("block 1 element type hex20")
+cubit.cmd("block 1 element type tetra10")
+```
+"""
+
+CUBIT_ELEMENT_ORDER = """
+# Element Order Control
+
+## Creating 2nd Order Elements
+
+1. Create mesh (generates 1st order by default)
+2. Add elements to block
+3. Set element type to convert
+
+```python
+cubit.cmd("mesh volume 1")
+cubit.cmd("block 1 add tet all")
+cubit.cmd("block 1 element type tetra10")   # Now 2nd order
+```
+
+## Element Type Commands
+
+| 1st Order | 2nd Order | Command |
+|-----------|-----------|---------|
+| TET4 | TET10 | `block X element type tetra10` |
+| HEX8 | HEX20 | `block X element type hex20` |
+| HEX8 | HEX27 | `block X element type hex27` |
+| WEDGE6 | WEDGE15 | `block X element type wedge15` |
+| PYRAMID5 | PYRAMID13 | `block X element type pyramid13` |
+| TRI3 | TRI6 | `block X element type tri6` |
+| QUAD4 | QUAD8 | `block X element type quad8` |
+| QUAD4 | QUAD9 | `block X element type quad9` |
+| EDGE2 | EDGE3 | `block X element type bar3` |
+
+## get_connectivity vs get_expanded_connectivity
+
+```python
+cubit.cmd("block 1 element type tetra10")
+tet_id = cubit.get_block_tets(1)[0]
+
+# get_connectivity: ALWAYS returns corner nodes only
+nodes_1st = cubit.get_connectivity("tet", tet_id)
+print(len(nodes_1st))   # Always 4
+
+# get_expanded_connectivity: Returns ALL nodes
+nodes_all = cubit.get_expanded_connectivity("tet", tet_id)
+print(len(nodes_all))   # 10 for TET10, 4 for TET4
+```
+
+## Which Export Commands Use Which API
+
+All `export` commands use MeshExportInterface (C++ plugin). Block element
+type settings are ignored — high-order nodes are generated by NetgenCurver.
+
+| Export Command | HO Method | Max Order |
+|----------------|-----------|-----------|
+| `export netgen "f.vol" order N` | NetgenCurver + ACIS | 1-5 |
+| `export gmsh "f.msh" order N` | NetgenCurver + ACIS | 1-3 |
+| `export jmag_nastran "f.bdf" order N` | NetgenCurver + ACIS | 1-2 |
+| `export vtk "f.vtk" order N` | NetgenCurver + ACIS | 1-2 |
+| `export meg "f.meg"` | — | 1 |
+| `export femeem "dir"` | — | 1 (tet only) |
+
+## Design: Why export Uses 1st Order Internally
+
+All exporters extract 1st order elements, then curve them via ACIS
+CallbackGeometry + NetgenCurver. This enables arbitrary orders with
+exact placement on ACIS CAD surfaces. Cubit's role is topology (1st order
+mesh) AND surface projection via ACIS kernel.
+
+## Curving Test Results (netgen 6.2.2603, 2026-04-10)
+
+| Shape | Elems | p=2 V_err | p=5 V_err | Status |
+|-------|-------|-----------|-----------|--------|
+| Sphere tet | 482t | -8.24e-02% | -9.32e-06% | OK |
+| Cylinder hex | 308h | -1.57e-03% | +8.21e-06% | OK |
+| Cylinder wedge | 957w | -5.25e-03% | -4.37e-06% | OK |
+| Torus tet | 5191t | -2.68e-02% | -2.08e-05% | OK |
+| Mixed (tet+hex+wedge) | 1719 | -2.32e-02% | -8.92e-07% | OK |
+
+**All element types** (tet, hex, wedge) p-converge to machine precision at p=5.
+Hex face bubbles and prism curving both work in 6.2.2603.
+curvedelements Save/Load roundtrip works out of the box.
+
+## Multi-Surface Topology Warning
+
+Models with multiple adjacent curved surfaces (e.g., torus with inner/outer walls
+split into separate ACIS faces) cause curving divergence. `closest_point_trimmed`
+projects edge midpoints to the wrong surface sheet.
+
+**Fix**: Ensure each logical surface is a single ACIS face. Use `sweep` to create
+bodies (produces 1 curved lateral surface). Do NOT split curved surfaces.
+
+## Netgen Export Menu
+
+The Cubit Export Mesh > Netgen Vol + Pkl menu supports order 1-5:
+- order=1: .vol only (linear mesh, no curving needed)
+- order>=2: .vol (linear) + .pkl (curving preserved)
+
+.vol files now preserve curving data (curvedelements section).
+"""
+
+CUBIT_MESH_SCHEMES = """
+# Mesh Schemes
+
+## Tetrahedral (Auto)
+
+```python
+cubit.cmd("volume all scheme tetmesh")
+cubit.cmd("volume all size 0.1")       # Target edge length
+cubit.cmd("mesh volume all")
+```
+
+Best for: Complex geometry, automatic meshing.
+
+## Map (Structured Quad/Hex)
+
+```python
+cubit.cmd("surface 1 scheme map")
+cubit.cmd("curve 1 interval 10")
+cubit.cmd("mesh surface 1")
+```
+
+Best for: Simple geometries with mappable topology.
+
+## Sweep (Extruded)
+
+```python
+cubit.cmd("volume 1 scheme sweep source surface 1 target surface 2")
+cubit.cmd("mesh volume 1")
+```
+
+Best for: Extruded or revolution geometries.
+
+## Interval Control
+
+```python
+# Set number of elements along a curve
+cubit.cmd("curve 1 interval 10")
+
+# Set element size
+cubit.cmd("volume 1 size 0.05")
+
+# Gradation (size varies)
+cubit.cmd("volume 1 sizing function type skeleton")
+```
+
+## Mesh Quality
+
+```python
+cubit.cmd("quality volume all shape")
+cubit.cmd("quality volume all aspect ratio")
+cubit.cmd("quality volume all jacobian")
+```
+
+## Hex Meshing Resolution Guidelines
+
+| Resolution | Interval | Typical Elements | Use Case |
+|-----------|----------|-----------------|----------|
+| Coarse | 1-2 | 50-200 | Quick validation |
+| Medium | 3-5 | 500-2000 | Standard analysis |
+| Fine | 6-10 | 2000-10000 | High accuracy |
+| Very Fine | 10+ | 10000+ | Convergence study |
+"""
+
+CUBIT_STEP_EXCHANGE = """
+# STEP Import/Export
+
+## Role of STEP in the Workflow
+
+STEP files are used for geometry exchange between tools. Note that
+for high-order curving with `export netgen`, STEP files are NOT needed
+(export netgen uses Cubit's ACIS kernel directly via CallbackGeometry).
+
+STEP is still useful for:
+- Importing geometry from external CAD tools
+- Sharing geometry between Cubit and other applications
+
+## Exporting STEP from Cubit
+
+```python
+cubit.cmd('export step "geometry.step" overwrite')
+```
+
+## Importing STEP into Cubit
+
+```python
+# With healing (recommended for simple shapes)
+cubit.cmd('import step "geometry.step" heal')
+
+# Without healing (recommended for name-based workflow)
+cubit.cmd('import step "geometry.step" noheal')
+```
+
+## heal vs noheal
+
+| Option | Behavior | Use When |
+|--------|----------|----------|
+| `heal` | Repairs topology, merges surfaces | Simple shapes, STEP reimport workflow |
+| `noheal` | Preserves original topology and names | Name-based workflow, preserving OCC face names |
+
+## STEP Reimport Pattern (Legacy, No Longer Needed)
+
+**NOTE**: The STEP reimport pattern is NO LONGER NEEDED for high-order curving.
+`export netgen` uses Cubit's ACIS kernel directly, so no STEP exchange
+or OCC topology matching is required.
+
+STEP reimport is only relevant if you need to match Cubit topology to
+an external OCC-based tool (not for export netgen).
+"""
+
+CUBIT_INITIALIZATION = """
+# Cubit Python Initialization
+
+## Standard Boilerplate
+
+```python
+import sys, os
+
+# Add Cubit to Python path (uses CUBIT_PATH env var if set)
+cubit_path = os.environ.get("CUBIT_PATH")
+if cubit_path:
+    sys.path.append(cubit_path)
+
+import cubit
+cubit.init(['cubit', '-nojournal', '-batch'])
+```
+
+## With NGSolve (System Python + CUBIT_PATH)
+
+By using **system Python** with the `CUBIT_PATH` environment variable, scripts can
+access **both** the Cubit API and NGSolve/Netgen simultaneously. This is essential
+for the `export netgen` workflow, because Cubit's bundled Python
+cannot import ngsolve.
+
+**CRITICAL: Import NGSolve BEFORE Cubit.** Cubit bundles its own VTK DLLs which
+conflict with NGSolve's Netgen library. If Cubit is imported first, NGSolve fails
+with `ImportError: initialization failed` on `from netgen import libngpy`.
+
+```bash
+# Set CUBIT_PATH once (e.g., in your environment or before running)
+set CUBIT_PATH="C:/Program Files/Coreform Cubit 2025.12/bin"
+python my_script.py
+```
+
+```python
+import sys, os
+
+# Step 1: Import NGSolve FIRST (before Cubit!) to avoid DLL conflicts
+import ngsolve
+from ngsolve import Mesh
+
+# Step 2: Then import Cubit via CUBIT_PATH
+cubit_path = os.environ.get("CUBIT_PATH")
+if cubit_path:
+    sys.path.append(cubit_path)
+
+import cubit
+cubit.init(['cubit', '-nojournal', '-batch'])
+```
+
+**Wrong order** (causes DLL conflict):
+```python
+# DON'T DO THIS — Cubit's VTK DLLs will break Netgen
+sys.path.append(cubit_path)
+import cubit                  # Loads Cubit's bundled DLLs
+import ngsolve                # FAILS: Netgen can't initialize
+```
+
+## Reset Between Operations
+
+```python
+cubit.cmd("reset")   # Clear all geometry and mesh
+```
+
+## Batch Mode Flags
+
+| Flag | Description |
+|------|-------------|
+| `-nojournal` | Don't create journal file |
+| `-batch` | No GUI, batch mode |
+| `-nographics` | Disable graphics (faster) |
+
+## CUBIT_PATH Environment Variable
+
+Set `CUBIT_PATH` to avoid hardcoding the Cubit installation path in scripts:
+
+```bash
+# Windows
+set CUBIT_PATH="C:/Program Files/Coreform Cubit 2025.12/bin"
+
+# Linux/Mac
+export CUBIT_PATH="/opt/Coreform-Cubit-2025.12/bin"
+```
+
+**Key benefit**: System Python with `CUBIT_PATH` can access both the Cubit API
+and NGSolve/Netgen, enabling the `export netgen` high-order curving workflow.
+Cubit's bundled Python cannot import ngsolve.
+"""
+
+CUBIT_MIXED_ELEMENTS = """
+# Mixed Element Types
+
+## Warning System
+
+The module automatically warns when blocks contain multiple 3D element types:
+
+```
+WARNING: Block 1 ('mixed') contains multiple 3D element types: hex, tet
+  To convert all elements to 2nd order, you need to issue separate commands:
+    block 1 element type hex20
+    block 1 element type tetra10
+```
+
+## Why It Matters
+
+A single `element type` command only converts one type:
+```python
+cubit.cmd("block 1 element type tetra10")  # Only converts tets, not hexes
+```
+
+## Solution
+
+Issue separate commands for each element type:
+```python
+cubit.cmd("block 1 element type hex20")
+cubit.cmd("block 1 element type tetra10")
+cubit.cmd("block 1 element type wedge15")
+```
+"""
+
+CUBIT_COMMON_MISTAKES = """
+# Common Cubit Scripting Mistakes
+
+## 1. CRITICAL: No Block Registration Before Export
+
+```python
+# WRONG: Export without blocks -> empty file!
+cubit.cmd("mesh volume 1")
+cubit.cmd('export gmsh "mesh.msh" overwrite')
+
+# RIGHT: Register blocks first
+cubit.cmd("mesh volume 1")
+cubit.cmd("block 1 add tet all")
+cubit.cmd('export gmsh "mesh.msh" overwrite')
+```
+
+## 2. CRITICAL: Geometry Block with 2nd Order Conversion
+
+```python
+# WRONG: Geometry block, element type has no effect
+cubit.cmd("block 1 add volume 1")
+cubit.cmd("block 1 element type tetra10")   # Does nothing!
+
+# RIGHT: Mesh element block
+cubit.cmd("block 1 add tet all in volume 1")
+cubit.cmd("block 1 element type tetra10")   # Works!
+```
+
+## 3. HIGH: Using get_connectivity for 2nd Order
+
+```python
+# WRONG: Always returns 4 nodes for tet
+nodes = cubit.get_connectivity("tet", tet_id)        # 4 nodes
+
+# RIGHT: Returns 10 nodes for TET10
+nodes = cubit.get_expanded_connectivity("tet", tet_id)  # 10 nodes
+```
+
+## 4. HIGH: Element Type Before Adding to Block
+
+```python
+# WRONG: Set type before add
+cubit.cmd("block 1 element type tetra10")
+cubit.cmd("block 1 add tet all")
+
+# RIGHT: Add first, then set type
+cubit.cmd("block 1 add tet all")
+cubit.cmd("block 1 element type tetra10")
+```
+
+## 5. HIGH: Using Deleted APIs (export_netgen, SetGeomInfo)
+
+```python
+# WRONG: These functions no longer exist
+geo = OCCGeometry("cyl.step")
+ngmesh = cubit_mesh_export.export_netgen(cubit, geometry=geo)       # DELETED
+cubit_mesh_export.set_cylinder_geominfo(ngmesh, radius=0.5, height=2.0)  # DELETED
+
+# RIGHT: Use export netgen APREPRO command — no STEP, no OCC
+import tempfile
+from ngsolve import Mesh
+vol_path = tempfile.mktemp(suffix='.vol')
+cubit.cmd(f'export netgen "{vol_path}" order 3 overwrite')
+mesh = Mesh(vol_path)
+```
+
+## 6. MODERATE: Missing Boundary Element Block
+
+```python
+# INCOMPLETE: Volume block only
+cubit.cmd("block 1 add tet all")
+
+# COMPLETE: Both volume and surface blocks
+cubit.cmd("block 1 add tet all")
+cubit.cmd("block 2 add tri all")   # Needed for boundary conditions
+```
+
+## 7. CRITICAL: Block Registration Order for Source/Sink (BEM Inductance)
+
+When using `set duplicate block elements on` with source/sink blocks for BEM
+inductance extraction, register source/sink BEFORE the boundary block.
+If boundary (all tris) is registered first, subsequent source/sink blocks
+that are subsets of boundary may fail to register elements.
+
+```python
+# WRONG: boundary first -> source/sink subset registration may fail
+cubit.cmd("set duplicate block elements on")
+cubit.cmd("block 1 add tri all")
+cubit.cmd('block 1 name "boundary"')
+cubit.cmd("block 2 add tri in surface 3")   # May get 0 elements!
+cubit.cmd('block 2 name "source"')
+
+# RIGHT: source/sink first, then boundary (superset)
+cubit.cmd("set duplicate block elements on")
+cubit.cmd("block 1 add volume all")
+cubit.cmd('block 1 name "conductor"')
+cubit.cmd("block 2 add tri in surface 3")
+cubit.cmd('block 2 name "source"')
+cubit.cmd("block 3 add tri in surface 5")
+cubit.cmd('block 3 name "sink"')
+cubit.cmd("block 4 add tri all")            # Superset last
+cubit.cmd('block 4 name "boundary"')
+```
+
+In export netgen, the last block wins for bcname priority.
+So even with `set duplicate block elements on`, the block registration
+order determines which label an element gets:
+- source/sink blocks registered AFTER boundary -> source/sink wins (correct)
+- source/sink blocks registered BEFORE boundary -> boundary wins (wrong)
+
+Best practice: register source/sink LAST (highest block ID), or
+register boundary block first then source/sink blocks after.
+
+## 8. MODERATE: Hardcoded Absolute Paths
+
+```python
+# WRONG: Breaks on other machines
+sys.path.insert(0, "path/to/Radia/src/radia")
+
+# RIGHT: Use relative paths
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+```
+
+## 9. HIGH: Mixed Hex-Tet Mesh for JMAG Without PYRAM=False
+
+```python
+# WRONG: JMAG cannot read CPYRAM elements
+cubit.cmd("block 1 add hex all")
+cubit.cmd("block 1 add tet all")
+cubit.cmd("block 1 add pyramid all")
+cubit.cmd('export jmag_nastran "mesh.bdf" overwrite')  # Pyramids as CPYRAM!
+
+# RIGHT: Use nopyramid for JMAG
+cubit.cmd('export jmag_nastran "mesh.bdf" nopyramid overwrite')
+# Or use pure tet mesh to avoid pyramids entirely
+```
+
+## 10. LOW: Using 'modify mesh volume X order 2'
+
+```python
+# WRONG: May not work reliably
+cubit.cmd("modify mesh volume 1 order 2")
+
+# RIGHT: Use block element type
+cubit.cmd("block 1 element type tetra10")
+```
+"""
+
+CUBIT_BLOCKS_ONLY_POLICY = """
+# Blocks-Only Policy (No Nodesets or Sidesets)
+
+## Core Rule
+
+This module uses **blocks only** for mesh export. Nodesets and sidesets are **never used**.
+
+## Why?
+
+In Cubit, **only blocks** support element order specification:
+
+```python
+cubit.cmd("block 1 element type tetra10")   # Works: converts to 2nd order
+# nodesets and sidesets have NO equivalent command
+```
+
+To maintain consistent element order control across all export formats
+(Gmsh, VTK, Nastran, Netgen, Exodus), we standardize on blocks exclusively.
+
+## Boundary Conditions with Blocks
+
+Boundary conditions are defined using **separate blocks for boundary elements**,
+not using nodesets or sidesets:
+
+```python
+# Domain elements (3D)
+cubit.cmd("block 1 add tet all in volume 1")
+cubit.cmd('block 1 name "domain"')
+cubit.cmd("block 1 element type tetra10")    # 2nd order
+
+# Boundary elements (2D)
+cubit.cmd("block 2 add tri all in surface 1")
+cubit.cmd('block 2 name "boundary"')
+cubit.cmd("block 2 element type tri6")       # 2nd order
+
+# Multiple boundary conditions
+cubit.cmd("block 3 add tri all in surface 2")
+cubit.cmd('block 3 name "dirichlet"')
+cubit.cmd("block 4 add tri all in surface 3")
+cubit.cmd('block 4 name "neumann"')
+```
+
+## Common Mistakes
+
+```python
+# WRONG: Using nodesets (this module ignores them)
+cubit.cmd("nodeset 1 add surface 1")     # NOT supported
+
+# WRONG: Using sidesets (this module ignores them)
+cubit.cmd("sideset 1 add surface 1")     # NOT supported
+
+# RIGHT: Use blocks for everything
+cubit.cmd("block 2 add tri all in surface 1")
+cubit.cmd('block 2 name "boundary"')
+```
+
+## Design Rationale
+
+| Feature | Blocks | Nodesets | Sidesets |
+|---------|--------|----------|----------|
+| Element order control | Yes | No | No |
+| Named groups | Yes | Yes | Yes |
+| 2nd order conversion | Yes | N/A | N/A |
+| Export support | All formats | None | None |
+"""
+
+# Migrated from Radia project: hex and tet meshing workflows
+CUBIT_HEX_WORKFLOW = """
+# Hexahedral Mesh Workflow
+
+## Example: Simple Brick
+
+```python
+import cubit
+cubit.init(['cubit', '-nojournal', '-batch'])
+
+# Create geometry
+cubit.cmd('create brick x 1 y 1 z 1')
+
+# Set mesh intervals for structured hex mesh
+cubit.cmd('curve all interval 4')
+
+# Mesh
+cubit.cmd('volume all scheme auto')
+cubit.cmd('mesh volume all')
+
+# Register blocks
+cubit.cmd('block 1 add hex all')
+cubit.cmd('block 2 add quad all')
+```
+
+## Example: Multi-body Union
+
+```python
+# C-type geometry (multiple bricks united)
+cubit.cmd('create brick x 0.1 y 0.3 z 0.1')  # Vertical leg 1
+cubit.cmd('create brick x 0.3 y 0.1 z 0.1')  # Top bar
+cubit.cmd('create brick x 0.1 y 0.3 z 0.1')  # Vertical leg 2
+
+# Position parts
+cubit.cmd('move volume 1 x -0.1 y 0')
+cubit.cmd('move volume 2 x 0 y 0.1')
+cubit.cmd('move volume 3 x 0.1 y 0')
+
+# Union
+cubit.cmd('unite volume all')
+
+# Mesh
+cubit.cmd('curve all interval 2')
+cubit.cmd('volume all scheme auto')
+cubit.cmd('mesh volume all')
+```
+
+## When to Give Up on Hex and Switch to Tet
+
+Not all geometries can be hex-meshed in Cubit. If webcut and decomposition
+fail to produce mappable/sweepable sub-volumes, switch to tetmesh:
+
+```python
+# Try hex first
+cubit.cmd("volume all scheme auto")
+cubit.cmd("mesh volume all")
+
+# If meshing fails or produces poor quality, switch to tet
+cubit.cmd("delete mesh")
+cubit.cmd("volume all scheme tetmesh")
+cubit.cmd("volume all size 0.1")
+cubit.cmd("mesh volume all")
+```
+
+**Warning**: Switching from hex to tet may introduce pyramid transition
+elements at hex-tet interfaces. Some solvers (notably JMAG) cannot read
+standard pyramid elements — use `PYRAM=False` for Nastran export.
+
+## JMAG Compatibility
+
+JMAG requires degenerate hex pyramids, not standard CPYRAM elements:
+
+```python
+# For JMAG: use nopyramid
+cubit.cmd('export jmag_nastran "mesh.bdf" nopyramid overwrite')
+```
+
+With `nopyramid`, pyramid elements are written as degenerate CHEXA
+(8-node hex with repeated nodes) instead of CPYRAM (5-node), which JMAG
+can read.
+
+## Tips
+
+- Use `curve X interval N` for precise element counts
+- `volume all scheme auto` selects best scheme automatically
+- For sweepable volumes, Cubit auto-detects and uses sweep
+- Check quality: `cubit.cmd('quality volume all shape')`
+"""
+
+CUBIT_TET_WORKFLOW = """
+# Tetrahedral Mesh Workflow
+
+## Example: Sphere
+
+```python
+import cubit
+cubit.init(['cubit', '-nojournal', '-batch'])
+
+# Create sphere
+cubit.cmd('create sphere radius 0.5')
+
+# Set tetrahedral meshing
+cubit.cmd('volume 1 scheme tetmesh')
+cubit.cmd('volume 1 size 0.05')    # Target edge length
+cubit.cmd('mesh volume 1')
+
+# Register blocks
+cubit.cmd('block 1 add tet all')
+cubit.cmd('block 2 add tri all')
+
+# Check
+n_tets = cubit.get_tet_count()
+print(f"Tets: {n_tets}")
+```
+
+## Tips for Tetrahedral Meshing
+
+1. **Webcut complex shapes**: Split into convex subdomains for better quality
+   ```python
+   cubit.cmd('webcut volume 1 with plane xplane')
+   ```
+2. **Control element size**: `volume N size S` where S is target edge length
+3. **Quality check**: `quality volume all shape`
+4. **Gradation**: `volume N sizing function type skeleton` for size grading
+"""
+
+
+CUBIT_2D_MESH_WORKFLOW = """
+# 2D Mesh Workflow
+
+## Overview
+
+Several export formats support 2D mesh export:
+- `cubit.cmd('export jmag_nastran "file.bdf" dimension 2 overwrite')`
+- `cubit.cmd('export gmsh "file.msh" version 4 dimension 2 overwrite')`
+
+## Surface Creation
+
+```python
+# Planar rectangle
+cubit.cmd("create surface rectangle width 2 height 2 zplane")
+
+# Circle
+cubit.cmd("create surface circle radius 1 zplane")
+
+# From imported geometry
+cubit.cmd('import step "plate.step"')
+```
+
+## Mesh Schemes for Surfaces
+
+| Scheme | Command | Element Type | Best For |
+|--------|---------|-------------|----------|
+| trimesh | `surface N scheme trimesh` | TRI3 | Complex 2D shapes |
+| paving | `surface N scheme paving` | QUAD4 | Structured-like quad |
+| map | `surface N scheme map` | QUAD4 | Simple rectangular domains |
+
+```python
+# Tri mesh
+cubit.cmd("surface 1 scheme trimesh")
+cubit.cmd("surface 1 size 0.3")
+cubit.cmd("mesh surface 1")
+
+# Quad mesh (paving)
+cubit.cmd("surface 1 scheme paving")
+cubit.cmd("surface 1 size 0.3")
+cubit.cmd("mesh surface 1")
+```
+
+## Block Registration for 2D
+
+```python
+# Triangular elements
+cubit.cmd("block 1 add tri all")
+cubit.cmd('block 1 name "plate"')
+
+# Quadrilateral elements
+cubit.cmd("block 1 add quad all")
+cubit.cmd('block 1 name "plate"')
+
+# Edge elements (boundary)
+cubit.cmd("block 2 add edge all in curve all")
+cubit.cmd('block 2 name "boundary"')
+```
+
+## 2D Export Examples
+
+### Nastran 2D
+```python
+cubit.cmd("create surface rectangle width 2 height 2 zplane")
+cubit.cmd("surface 1 scheme trimesh")
+cubit.cmd("surface 1 size 0.3")
+cubit.cmd("mesh surface 1")
+cubit.cmd("block 1 add tri all")
+cubit.cmd('block 1 name "plate"')
+cubit.cmd('export jmag_nastran "plate.bdf" dimension 2 overwrite')
+```
+
+### Gmsh v4 2D
+```python
+cubit.cmd("create surface rectangle width 2 height 2 zplane")
+cubit.cmd("surface 1 scheme trimesh")
+cubit.cmd("surface 1 size 0.3")
+cubit.cmd("mesh surface 1")
+cubit.cmd("block 1 add tri all")
+cubit.cmd('export gmsh "plate.msh" version 4 dimension 2 overwrite')
+```
+
+## 2D Normal Orientation
+
+For 2D exports (Nastran DIM="2D", Gmsh v4 DIM="2D"):
+- Normals are oriented in +Z direction
+- Z coordinates may be set to 0
+"""
+
+CUBIT_TROUBLESHOOTING = """
+# Troubleshooting & Debugging Guide
+
+## Problem: Export Produces Empty File (0 Elements)
+
+**Cause**: No blocks registered before calling export function.
+**Fix**:
+```python
+# MUST register blocks before any export
+cubit.cmd("block 1 add tet all")
+cubit.cmd("block 2 add tri all")
+```
+**Diagnostic**: Check block contents:
+```python
+print(f"Tets in block 1: {len(cubit.get_block_tets(1))}")
+```
+
+## Problem: 2nd Order Elements Not Appearing
+
+**Cause 1**: Geometry block used instead of mesh element block.
+```python
+# WRONG: Geometry block - element type command has no effect
+cubit.cmd("block 1 add volume 1")
+cubit.cmd("block 1 element type tetra10")  # Silently does nothing!
+
+# RIGHT: Mesh element block
+cubit.cmd("block 1 add tet all")
+cubit.cmd("block 1 element type tetra10")  # Converts to 2nd order
+```
+
+**Cause 2**: Element type set before adding elements.
+```python
+# WRONG: Order matters
+cubit.cmd("block 1 element type tetra10")  # Set type first
+cubit.cmd("block 1 add tet all")           # Add after - type is reset
+
+# RIGHT
+cubit.cmd("block 1 add tet all")           # Add first
+cubit.cmd("block 1 element type tetra10")  # Then set type
+```
+
+**Cause 3**: Using get_connectivity instead of get_expanded_connectivity.
+```python
+# get_connectivity ALWAYS returns 1st order nodes
+nodes = cubit.get_connectivity("tet", tet_id)  # Always 4 nodes
+
+# get_expanded_connectivity returns actual nodes
+nodes = cubit.get_expanded_connectivity("tet", tet_id)  # 10 for TET10
+```
+
+**Diagnostic**: Check element order:
+```python
+tet_id = cubit.get_block_tets(1)[0]
+n1 = len(cubit.get_connectivity("tet", tet_id))
+n2 = len(cubit.get_expanded_connectivity("tet", tet_id))
+print(f"1st order nodes: {n1}, Actual nodes: {n2}")
+# If n1 == n2 == 4, still 1st order. If n2 == 10, it's 2nd order.
+```
+
+## Problem: Using Old SetGeomInfo / export_netgen APIs
+
+**These APIs have been deleted.** Use `export netgen` instead.
+
+```python
+# OLD (DELETED - does not work):
+# geo = OCCGeometry("geometry.step")
+# ngmesh = cubit_mesh_export.export_netgen(cubit, geometry=geo)   # DELETED
+# cubit_mesh_export.set_cylinder_geominfo(ngmesh, ...)            # DELETED
+
+# NEW: Single APREPRO command
+import tempfile
+from ngsolve import Mesh
+vol_path = tempfile.mktemp(suffix='.vol')
+cubit.cmd(f'export netgen "{vol_path}" order 3 overwrite')
+mesh = Mesh(vol_path)
+```
+
+## Problem: Mesh Quality Too Low
+
+**Diagnostic**:
+```python
+cubit.cmd("quality volume all shape")
+cubit.cmd("quality volume all aspect ratio")
+```
+
+**Fixes**:
+```python
+# Reduce element size
+cubit.cmd("volume 1 size 0.05")
+
+# Smooth after meshing
+cubit.cmd("smooth volume 1")
+
+# Webcut complex regions
+cubit.cmd("webcut volume 1 with plane xplane")
+```
+
+## Problem: "No module named 'cubit'" / "No module named 'netgen'"
+
+**cubit not found**: Add Cubit's bin directory to sys.path using CUBIT_PATH:
+```python
+import os
+cubit_path = os.environ.get("CUBIT_PATH")
+if cubit_path:
+    sys.path.append(cubit_path)
+```
+
+Or set the environment variable before running:
+```bash
+set CUBIT_PATH="C:/Program Files/Coreform Cubit 2025.12/bin"
+python my_script.py
+```
+
+**netgen not found**: NGSolve must be installed in the Python environment.
+Use **system Python** (which has NGSolve installed) with `CUBIT_PATH` to access
+both Cubit API and NGSolve simultaneously. Cubit's bundled Python cannot import
+ngsolve, so system Python + CUBIT_PATH is the recommended approach for the
+`export netgen` workflow.
+
+## Problem: NGSolve ImportError After Importing Cubit (DLL Conflict)
+
+**Symptom**: `ImportError: initialization failed` on `from netgen import libngpy`,
+or similar DLL-related errors when importing NGSolve after Cubit.
+
+**Cause**: Cubit bundles its own VTK and other shared libraries. When `import cubit`
+runs, these DLLs are loaded into the process. When NGSolve subsequently tries to
+load Netgen's `libngpy`, the already-loaded Cubit DLLs conflict with Netgen's
+expected library versions, causing initialization failure.
+
+**Fix**: Always import NGSolve BEFORE Cubit:
+```python
+# CORRECT: NGSolve first, then Cubit
+import ngsolve                    # Loads Netgen DLLs cleanly
+from netgen.meshing import Mesh
+from netgen.occ import OCCGeometry
+
+import sys, os
+cubit_path = os.environ.get("CUBIT_PATH")
+if cubit_path:
+    sys.path.append(cubit_path)
+import cubit                      # Safe: Netgen DLLs already loaded
+cubit.init(['cubit', '-nojournal', '-batch'])
+```
+
+```python
+# WRONG: Cubit first causes DLL conflict
+sys.path.append("C:/Program Files/Coreform Cubit 2025.12/bin")
+import cubit                      # Loads Cubit's VTK DLLs
+import ngsolve                    # FAILS — Netgen can't initialize
+```
+
+**Rule**: In any script that uses both NGSolve and Cubit, put all `import ngsolve`
+and `from netgen...` statements at the top, before any Cubit-related path
+manipulation or `import cubit`.
+
+## Problem: JMAG Cannot Read Nastran File (Pyramid Elements)
+
+**Cause**: JMAG does not support standard CPYRAM (5-node pyramid) elements.
+When Cubit produces mixed hex-tet meshes, pyramid transition elements are generated.
+
+**Fix**: Use `nopyramid` to write pyramids as degenerate CHEXA:
+```python
+cubit.cmd('export jmag_nastran "mesh.bdf" nopyramid overwrite')
+```
+
+**Alternative**: Avoid pyramids entirely by using pure tet mesh:
+```python
+cubit.cmd("volume all scheme tetmesh")
+cubit.cmd("mesh volume all")
+cubit.cmd("block 1 add tet all")
+cubit.cmd('export jmag_nastran "mesh.bdf" overwrite')
+```
+
+## Problem: Hex Meshing Fails on Complex Geometry
+
+**Cause**: Not all geometries are decomposable into sweepable/mappable sub-volumes.
+
+**Fixes** (try in order):
+1. Webcut to simplify:
+   ```python
+   cubit.cmd("webcut volume 1 with plane xplane")
+   cubit.cmd("merge all")
+   cubit.cmd("volume all scheme auto")
+   cubit.cmd("mesh volume all")
+   ```
+2. Use `scheme auto` (Cubit may choose a mix):
+   ```python
+   cubit.cmd("volume all scheme auto")
+   ```
+3. Give up on hex and use tet:
+   ```python
+   cubit.cmd("volume all scheme tetmesh")
+   ```
+
+## Problem: export netgen Returns Mesh with 0 Boundary Elements
+
+**Cause**: No surface element block (block with tri/quad).
+```python
+# Add boundary element block
+cubit.cmd("block 2 add tri all")   # For tet meshes
+cubit.cmd("block 2 add quad all")  # For hex meshes
+```
+
+Do not write `block 2 add face all` by habit. In Cubit APREPRO, `face`
+is a generic surface-element selector, but Python inspection APIs are
+element-specific (`get_block_tris`, `get_block_quads`). Use `tri` or
+`quad` explicitly unless the boundary block is intentionally mixed; for a
+mixed tet/hex boundary, keep `face` only with an explicit `mixed tri/quad`
+comment so lint can tell it is intentional.
+
+## Problem: "Interrupt Detected" During NetgenCurver (AddPoint Crash)
+
+**Cause**: ABI mismatch between the ccm plugin and nglib.dll loaded at runtime.
+The ccm was compiled against one Netgen version but plugins/nglib.dll is a
+different version. This causes access violations in netgen::Mesh::AddPoint().
+
+**Fix**: Rebuild ccm with compact_netgen (static link, no external nglib.dll):
+```bash
+cmake ...  # netgen sources in-repo (compact_netgen/netgen_src/), no external path needed
+# Do NOT use -DNETGEN_DIR=C:/netgen  # dynamic link = ABI risk
+```
+
+**Verification**: ccm file size should be > 400 KB (compact_netgen ~600 KB).
+Old dynamic-linked ccm is ~238 KB. Check after `cubit-plugin-install`:
+```python
+import os
+ccm = r"C:\\Program Files\\Coreform Cubit 2025.12\\bin\\plugins\\cubit_mesh_export.ccm"
+print(f"ccm: {os.path.getsize(ccm):,} bytes")  # should be > 400,000
+```
+
+## Problem: GMSH Crashes Opening Order 2 .msh (HEX20 Wrong Node Count)
+
+**Symptom**: GMSH crashes or shows garbled mesh when opening order 2 .msh
+exported from Cubit. HEX20 elements (GMSH type 17) have only 8 nodes
+instead of the required 20.
+
+**Cause** (fixed 2026-04-05): NetgenCurver generated HO nodes for volume
+element edges but did not register them in `edge_ho_nodes_` map. Only
+surface element edges were registered. When MeshData::build_ho_conn_nc()
+looked up edge HO nodes, the internal (non-surface) edges returned empty,
+causing fallback to linear connectivity.
+
+**Verification**: After fix, check .msh file:
+```
+# Each HEX20 line should have 25 fields (id + type + 3 tags + 20 nodes)
+grep "^[0-9]* 17 " mesh_o2.msh | awk '{print NF}'  # should print 25
+```
+
+## Problem: cp932 UnicodeDecodeError in Cubit Startup
+
+**Symptom**: `UnicodeDecodeError: 'cp932' codec can't decode byte 0x94`
+when Cubit loads register_toolbar.py via startup.py.
+
+**Cause**: Non-ASCII characters (em dash U+2014, smart quotes, etc.) in
+Python files loaded by Cubit. Japanese Windows defaults to cp932 encoding.
+
+**Fix**:
+1. Use ASCII-only characters in all .py files loaded by Cubit
+2. startup.py uses `exec(open(..., encoding='utf-8').read())`
+3. Lint rule `non-ascii-byte` catches this automatically
+
+## Problem: "export nastran" Uses Wrong Command
+
+**Symptom**: Exported .bdf uses Cubit's built-in format instead of Radia's
+format with order 2 / nopyramid support.
+
+**Cause**: Cubit has a built-in `export nastran` command. Radia's version
+is `export jmag_nastran` to avoid the naming conflict.
+
+**Fix**: Always use `export jmag_nastran`:
+```python
+cubit.cmd('export jmag_nastran "mesh.bdf" order 2 dimension 3 overwrite')
+```
+"""
+
+
+CUBIT_DESIGN_PHILOSOPHY = """
+# Design Philosophy: Why This Module Exists
+
+## Core Idea
+
+This module does **NOT** use Cubit's built-in export commands
+(`export genesis`, `export mesh`, `cubit.cmd("export ...")`, etc.) for most formats.
+Instead, it reads mesh data via the **Cubit Python API** and constructs output
+files directly in Python.
+
+## How It Works
+
+```
+Cubit Python API                    Output file
+  get_block_id_list()      ──┐
+  get_block_tets(id)       ──┤
+  get_connectivity()       ──┼──>  Python constructs  ──>  .msh / .vtk / .bdf
+  get_expanded_connectivity()─┤
+  get_nodal_coordinates()  ──┘
+```
+
+Each export function:
+1. Iterates through all blocks
+2. Gets element IDs and connectivity via Cubit API
+3. Gets node coordinates via `get_nodal_coordinates()`
+4. Writes the output file format directly
+
+## Why Not Use Built-in Export?
+
+Cubit's built-in export covers a limited set of formats (Exodus, STEP, SAT, etc.).
+For formats like Gmsh, VTK, Nastran, and Netgen, there is no built-in export
+command. This module fills that gap by providing format-specific writers that read
+from Cubit's mesh data.
+
+## Exodus II Export
+
+Exodus II uses Cubit's built-in `export mesh` command (not a export plugin):
+```python
+cubit.cmd('export mesh "filename.exo" overwrite')
+```
+This is Cubit's native format with full fidelity (all element types, nodesets, sidesets).
+
+## API Summary
+
+| API Function | Returns | Used By |
+|-------------|---------|---------|
+| `get_block_id_list()` | All block IDs | All export functions |
+| `get_block_tets(id)` | Tet IDs in block | All formats with tet support |
+| `get_block_hexes(id)` | Hex IDs in block | All formats with hex support |
+| `get_connectivity(type, id)` | Corner nodes only | nastran, meg, netgen |
+| `get_expanded_connectivity(type, id)` | All nodes (incl. mid-edge) | gmsh, vtk, vtu, exodus |
+| `get_nodal_coordinates(node_id)` | (x, y, z) | All export functions |
+
+## For AI Assistants: Script Generation Rule
+
+When generating Cubit export scripts, **always** use the `export` prefix:
+```python
+# RIGHT: Radia plugin APREPRO commands
+cubit.cmd('export gmsh "mesh.msh" overwrite')
+cubit.cmd('export jmag_nastran "mesh.bdf" dimension 3 overwrite')
+cubit.cmd('export vtk "mesh.vtk" overwrite')
+cubit.cmd('export netgen "mesh.vol" order 3 overwrite')
+
+# WRONG: Old command names (removed)
+cubit.cmd('export gmsh "mesh.msh"')           # Does not exist
+cubit.cmd('export vtk "mesh.vtk"')            # Does not exist
+cubit.cmd('export jmag_nastran "mesh.bdf"')  # Old name, removed
+```
+"""
+
+CUBIT_APREPRO_JOURNAL = """
+# Running Python Scripts from Cubit (APREPRO Journal)
+
+## The `play` Command
+
+Cubit can execute Python scripts directly via the journal system:
+
+```
+Cubit> play "export_mesh.py"
+```
+
+This is the standard way to run mesh export scripts from within Cubit's
+GUI or command line. The `play` command:
+
+1. Executes the Python file using Cubit's embedded Python interpreter
+2. The `cubit` module is already available (no `import cubit` needed in some contexts)
+3. All `cubit.cmd()` calls execute directly in the running Cubit session
+
+## Script Template for `play`
+
+```python
+# export_mesh.py - Run with: play "export_mesh.py"
+
+# Mesh is already generated in Cubit GUI
+# Just register blocks and export
+
+cubit.cmd("block 1 add tet all")
+cubit.cmd('block 1 name "domain"')
+cubit.cmd("block 2 add tri all")
+cubit.cmd('block 2 name "boundary"')
+
+# Export to desired format
+cubit.cmd('export gmsh "mesh.msh" overwrite')
+```
+
+## Prerequisites
+
+The export commands are part of the Radia Cubit plugin:
+
+```bash
+# Install Radia (includes Cubit plugin)
+pip install radia[cubit]
+cubit-plugin-install  # Deploy Cubit plugin
+
+# Use export netgen APREPRO command in Cubit
+cubit.cmd('export netgen "mesh.vol" order 3 overwrite')
+```
+
+## APREPRO Variables
+
+Cubit's journal system supports APREPRO variable substitution:
+
+```
+# In Cubit journal file (.jou)
+{radius = 0.5}
+{height = 2.0}
+create cylinder height {height} radius {radius}
+volume 1 scheme tetmesh
+volume 1 size 0.1
+mesh volume 1
+play "export_mesh.py"
+```
+
+APREPRO variables are expanded before the command is executed. However,
+APREPRO variables do NOT propagate into Python scripts run via `play`.
+To pass parameters, use environment variables or file-based communication.
+
+## Journal + Python Hybrid Workflow
+
+A common pattern uses a `.jou` file for geometry/meshing and a `.py` file for export:
+
+```
+# workflow.jou - Run with: cubit -batch -nographics -nojournal workflow.jou
+reset
+import step "geometry.step" heal
+volume all scheme tetmesh
+volume all size 0.1
+mesh volume all
+play "export_mesh.py"
+```
+
+```bash
+# Execute from command line (use CUBIT_PATH or full path)
+"%CUBIT_PATH%\\coreform_cubit.com" -batch -nographics -nojournal workflow.jou
+# Or with full path:
+"C:\\Program Files\\Coreform Cubit 2025.12\\bin\\coreform_cubit.com" -batch -nographics -nojournal workflow.jou
+```
+
+## Batch Mode vs GUI Mode
+
+| Mode | Command | `cubit` Available | Use Case |
+|------|---------|-------------------|----------|
+| GUI | `play "script.py"` in command panel | Yes (pre-imported) | Interactive |
+| Batch | `coreform_cubit -batch ... journal.jou` | Yes (pre-imported) | Automated |
+| Standalone | `python script.py` (with sys.path) | Need `import cubit` | Development |
+
+## CRITICAL: `play` is line-by-line REPL — keep every statement on one line
+
+`play "script.py"` does NOT exec the file as one Python module. It feeds
+each physical line to a REPL-like interpreter independently. Indented
+blocks (`def`, `for`, `if`, `try/except`) survive because the REPL
+recognizes the colon + indent. **But a function call split across
+physical lines breaks** — the open paren on one line is compiled alone:
+
+```
+File "<string>", line 1
+    cubit.cmd(
+             ^
+SyntaxError: '(' was never closed
+```
+
+### Forbidden in `play`-targeted scripts
+
+```python
+# WRONG — opens paren on its own line; play() compiles line 1 alone:
+cubit.cmd(
+    f"create curve arc radius {R_arc} center location 0 0 0 "
+    f"normal 0 0 1 start angle {THETA0_DEG} stop angle {THETA1_DEG}"
+)
+```
+
+### Required pattern
+
+```python
+# RIGHT — build the string first, then call cubit.cmd on a single line:
+cmd = "create curve arc radius {0} center location 0 0 0 normal 0 0 1 start angle {1} stop angle {2}".format(R_arc, TH0, TH1)
+cubit.cmd(cmd)
+
+# Also OK — long single line is fine:
+cubit.cmd("rotate Surface {0} angle {1} about origin 0 0 0 direction {2} {3} {4} include_merged".format(sid, deg, ax, ay, az))
+```
+
+### Other things that fail under `play`
+
+- `from scipy.spatial.transform import Rotation as R` — Cubit's bundled
+  Python typically lacks scipy. Use numpy + hand-rolled axis-angle.
+- Triple-quoted strings spanning many lines — the REPL is OK with them
+  (open-quote is recognized) but mixing them with multi-line calls
+  compounds the risk. Prefer single-line `#` comments at top.
+- Line continuation with `\\` — works, but a single long line is more
+  robust against editor auto-wrap.
+
+This affects ALL three execution paths that funnel through `play`,
+including `radia-mcp`'s `cubit_load(path=*.py)` and `cubit_stage(path=*.py)`,
+both of which dispatch `.py → play "<abs_path>"`.
+
+For multi-line ergonomic Python, use **standalone mode** instead:
+`python script.py` with `cubit.init([...])` at the top — no `play`,
+no REPL, normal Python compile.
+"""
+
+
+CUBIT_MESH_TO_GEOMETRY = """\
+# Mesh-to-Geometry Conversion (Mesh2Acis)
+
+Convert mesh elements back to ACIS geometry volumes. Useful for creating
+geometry from imported meshes (e.g., for Kelvin transformation or re-meshing).
+
+## Core Pattern: Element Nodes -> Vertices -> Surfaces -> Volume
+
+```python
+import cubit
+
+def create_quad(v1, v2, v3, v4):
+    cubit.cmd(f"create surface vertex {v1} {v2} {v3} {v4}")
+
+def create_tri(v1, v2, v3):
+    cubit.cmd(f"create surface vertex {v1} {v2} {v3}")
+
+# Iterate over mesh elements and reconstruct as geometry
+volume_list = cubit.get_entities("volume")
+for vol_id in volume_list:
+    # Hexahedra: 8 nodes -> 6 quad faces -> 1 volume
+    for hid in cubit.get_volume_hexes(vol_id):
+        nodes = cubit.get_connectivity("hex", hid)
+        verts = []
+        for nid in nodes:
+            x = cubit.get_nodal_coordinates(nid)
+            cubit.create_vertex(x[0], x[1], x[2])
+            verts.append(cubit.get_last_id("vertex"))
+        # Create 6 quad faces
+        for face_nodes in [(0,1,2,3), (4,5,6,7), (3,2,6,7),
+                           (0,1,5,4), (2,1,5,6), (3,0,4,7)]:
+            create_quad(*[verts[i] for i in face_nodes])
+        sids = [cubit.get_last_id("surface") - 5 + i for i in range(6)]
+        cubit.cmd(f"create volume surface {' '.join(map(str, sids))}")
+
+    # Tetrahedra: 4 nodes -> 4 tri faces -> 1 volume
+    for tid in cubit.get_volume_tets(vol_id):
+        nodes = cubit.get_connectivity("tet", tid)
+        verts = []
+        for nid in nodes:
+            x = cubit.get_nodal_coordinates(nid)
+            cubit.create_vertex(x[0], x[1], x[2])
+            verts.append(cubit.get_last_id("vertex"))
+        for face_nodes in [(0,1,2), (3,0,1), (3,1,2), (3,2,0)]:
+            create_tri(*[verts[i] for i in face_nodes])
+        sids = [cubit.get_last_id("surface") - 3 + i for i in range(4)]
+        cubit.cmd(f"create volume surface {' '.join(map(str, sids))}")
+
+    # Also available: cubit.get_volume_pyramids(), cubit.get_volume_wedges()
+```
+
+## Important: Renumber nodes before processing
+
+```python
+cubit.cmd('renumber node all in Volume all start_id 1 uniqueids')
+```
+
+## Key API Functions
+
+| Function | Returns |
+|----------|---------|
+| `cubit.get_entities("volume")` | List of all volume IDs |
+| `cubit.get_volume_hexes(vol_id)` | Hex element IDs in volume |
+| `cubit.get_volume_tets(vol_id)` | Tet element IDs in volume |
+| `cubit.get_volume_pyramids(vol_id)` | Pyramid element IDs |
+| `cubit.get_volume_wedges(vol_id)` | Wedge element IDs |
+| `cubit.get_connectivity("hex", eid)` | Node IDs (1st order) |
+| `cubit.get_nodal_coordinates(nid)` | (x, y, z) tuple |
+| `cubit.create_vertex(x, y, z)` | Creates vertex, use get_last_id |
+| `cubit.get_last_id("vertex")` | Most recently created entity ID |
+"""
+
+CUBIT_PARAMETRIC_GEOMETRY = """\
+# Parametric Geometry Generation
+
+## Archimedean Spiral (Twisted Wire)
+
+Generate spiral curves from parametric equations and sweep a cross-section along them:
+
+```python
+import cubit, math
+
+cubit.cmd('reset')
+
+# Spiral parameters
+dtheta = 0.1    # angle increment (radians)
+a = 0.1         # spiral growth rate: r = a * theta
+offset_theta = 2 * math.pi  # start offset
+
+# Generate vertices along spiral
+for i in range(1000):
+    theta = dtheta * i + offset_theta
+    r = a * theta
+    x = r * math.cos(theta)
+    y = r * math.sin(theta)
+    cubit.cmd(f"create vertex {x} {y} 0")
+
+# Create spline through all vertices
+cubit.cmd("create curve spline location vertex all")
+
+# Create cross-section and sweep
+wire_w = 0.9 * (2 * a * math.pi)
+wire_h = 1.0
+cubit.cmd(f"create surface rectangle width {wire_w} height {wire_h} yplane")
+cubit.cmd("move Surface 1 location vertex 1")
+cubit.cmd("sweep surface 1 along curve 1")
+```
+
+## Icosahedron on Sphere (Regular Surface Mesh)
+
+Generate a regular triangular mesh on a sphere using icosahedron vertices
+and great-circle arcs. Uses APREPRO variables for golden ratio construction:
+
+```python
+import cubit, os
+
+for n in [2, 4, 8, 16]:  # mesh refinement levels
+    cubit.cmd('reset')
+
+    # Golden ratio icosahedron vertices via APREPRO
+    cubit.cmd('#{p = (1+sqrt(5))/2}')    # golden ratio
+    cubit.cmd('#{q = sqrt(p+2)}')        # normalization
+    cubit.cmd('#{r0 = 100}')             # sphere radius
+    cubit.cmd('#{r1 = r0/q}')
+    cubit.cmd('#{r2 = r1*p}')
+
+    cubit.cmd('create sphere radius {r0}')
+
+    # Create 12 icosahedron vertices
+    cubit.cmd('create vertex location  0,{ r1},{ r2}')   # vertex 1
+    cubit.cmd('create vertex location  0,{-r1},{ r2}')   # vertex 2
+    # ... (10 more vertices for complete icosahedron)
+
+    # Create great-circle arcs between adjacent vertices
+    cubit.cmd('create vertex location 0, 0, 0')  # center (vertex 13)
+    cubit.cmd('create curve arc center vertex 13 1 2')
+    cubit.cmd('create curve arc center vertex 13 1 3')
+    # ... (30 edges total for icosahedron)
+
+    # Imprint arcs onto sphere surface
+    cubit.cmd('imprint volume all with curve all')
+    cubit.cmd('merge all')
+    cubit.cmd('merge vertex all force')
+
+    # Mesh with parametric refinement
+    cubit.cmd(f'surface all interval {n}')
+    cubit.cmd('Surface all scheme triadvance')
+    cubit.cmd('mesh surf all')
+
+    # Smooth for quality
+    cubit.cmd('surface all smooth scheme smart laplacian')
+    cubit.cmd('smooth surface all')
+
+    # Export
+    cubit.cmd('block 1 add surface all')
+    folder = f"n={n}"
+    os.makedirs(folder, exist_ok=True)
+    cubit.cmd(f'export jmag_nastran "{folder}/sphere.nas" dimension 3 overwrite large')
+```
+
+## Key Techniques
+
+| Technique | Command |
+|-----------|---------|
+| Parametric vertex | `create vertex {x} {y} {z}` in loop |
+| Spline through vertices | `create curve spline location vertex all` |
+| Great-circle arc | `create curve arc center vertex CENTER V1 V2` |
+| Sweep along curve | `sweep surface ID along curve ID` |
+| APREPRO variable | `#{var = expression}` then `{var}` in commands |
+| Imprint curves on surface | `imprint volume all with curve all` |
+"""
+
+CUBIT_BATCH_PROCESSING = """\
+# Batch Processing & Parametric Studies
+
+## Multi-Case Mesh Generation
+
+Generate meshes at multiple refinement levels in separate folders:
+
+```python
+import cubit, os
+
+for mesh_size in [5.0, 2.0, 1.0, 0.5]:
+    folder = f'mesh={mesh_size:.1f}'
+    os.makedirs(folder, exist_ok=True)
+
+    cubit.init([''])
+    cubit.cmd('reset')
+    cubit.cmd('create surface circle radius 3 zplane')
+    cubit.cmd('surface all scheme circle interval')
+    cubit.cmd(f'surface all size {{0.2*{mesh_size}}}')
+    cubit.cmd('mesh surface all')
+    cubit.cmd(f'export jmag_nastran "{folder}/mesh.bdf" dimension 2 overwrite large')
+    cubit.cmd('exit')
+```
+
+## Batch CMD Generation for External Solvers
+
+Generate batch scripts for running multiple solver cases:
+
+```python
+import os
+
+cases = []
+for current in range(1000, 21000, 2000):
+    for element in ['HEX8', 'TET4']:
+        for mesh in ['coarse', 'medium', 'fine']:
+            cases.append((current, element, mesh))
+
+with open('batch_run.cmd', 'w') as f:
+    for current, element, mesh in cases:
+        folder = f'{current}AT/{element}_{mesh}'
+        f.write(f'cd /d {os.path.join(base_dir, folder)}\\n')
+        f.write(f'solver.exe input.dat\\n')
+
+os.system('batch_run.cmd')
+```
+
+## Directory Structure for Parametric Studies
+
+```
+project/
+  mesh=5.0/mesh.bdf
+  mesh=2.0/mesh.bdf
+  mesh=1.0/mesh.bdf
+  mesh=0.5/mesh.bdf
+  batch_run.cmd
+  results/
+    summary.csv
+```
+
+## Best Practices
+
+1. **Use `os.makedirs(folder, exist_ok=True)`** - avoids errors if folder exists
+2. **Call `cubit.cmd('reset')` between cases** - clean state for each mesh
+3. **Use `cubit.init([''])` per case** if running standalone (not in GUI)
+4. **Format filenames with parameters** - enables post-processing automation
+5. **Graphics off for batch**: `cubit.cmd('set echo off')` and `-nographics -batch` flags
+
+## ID Identification Policy (IMPORTANT for LLM-generated scripts)
+
+**Humans pick entity IDs by visual inspection in the Cubit GUI. LLMs and
+automation MUST identify entities from geometric properties** (area, volume,
+centroid, distance from a known point) and from named blocks/sidesets.
+
+Hardcoded IDs are FRAGILE -- they break when:
+- Cubit version changes
+- Geometry creation order changes
+- imprint/merge reorders sub-entities
+- A `webcut` or `unite` step is added/removed
+
+```python
+# WRONG: hardcoded volume id
+cubit.cmd('block 1 add volume 1')   # vol 1 may be a half-coil after webcut
+
+# CORRECT: capture id immediately after create, then thread it through
+cubit.cmd('sweep surface 1 axis 0 0 0 0 0 1 angle 355')
+coil_vid = cubit.get_last_id("volume")
+cubit.cmd('block 1 add volume %d' % coil_vid)
+cubit.cmd('block 1 name "coil"')
+
+# CORRECT: identify gap faces by area
+A_gap = math.pi * a_coil**2
+gap_faces = [s for s in cubit.parse_cubit_list("surface", "in volume %d" % coil_vid)
+             if abs(cubit.surface(s).area() - A_gap) / A_gap < 0.05]
+
+# CORRECT: identify spheres by centroid
+for v in new_volumes:
+    cx = cubit.get_center_point("volume", v)[0]
+    if abs(cx - kelvin_offset) < R_kelvin:
+        kelvin_vol = v
+    else:
+        air_vol = v
+```
+
+Helper functions: `cubit.get_last_id("volume"|"surface"|"curve"|"vertex")`,
+`cubit.surface(sid).area()`, `cubit.volume(vid).volume()`,
+`cubit.get_center_point("surface"|"volume", id)`,
+`cubit.parse_cubit_list("surface", "in volume %d" % vid)`.
+"""
+
+CUBIT_FORMAT_CONVERSION = """\
+# Format Conversion Pipelines
+
+## Cubit -> Nastran -> VTU (via meshio)
+
+Convert Cubit mesh to VTU format for ParaView visualization using meshio:
+
+```python
+import cubit, meshio
+
+# Create and mesh geometry in Cubit
+cubit.cmd('reset')
+cubit.cmd('brick x 10')
+cubit.cmd('create Cylinder height 10 radius 10')
+cubit.cmd('imprint all')
+cubit.cmd('merge all')
+cubit.cmd('mesh vol all')
+
+# Register blocks (required for Nastran export)
+cubit.cmd('block 1 add vol 1')
+cubit.cmd('block 2 add vol 2')
+cubit.cmd('export jmag_nastran "mesh.nas" dimension 3 overwrite everything')
+
+# Convert to VTU using meshio
+mesh = meshio.read("mesh.nas")
+meshio.write("output.vtu", mesh, file_format="vtu", binary=True)
+```
+
+## Cubit -> Patran -> Coordinate Transform -> Reimport
+
+Export to Patran format, apply coordinate transformation, reimport as geometry:
+
+```python
+import numpy as np
+import re
+
+def transform_patran_mesh(patran_file, transform_func):
+    \"\"\"Read Patran file, transform node coordinates, write back.\"\"\"
+    with open(patran_file, 'r') as f:
+        lines = f.readlines()
+
+    for n in range(len(lines)):
+        fields = re.split(r"\\s+|\\n$", lines[n])
+        if fields[0] == '01':  # Node record
+            coord_line = re.split(r"\\s+|\\n$", lines[n+1])
+            xyz = np.array([float(coord_line[1]),
+                            float(coord_line[2]),
+                            float(coord_line[3])])
+            new_xyz = transform_func(xyz)
+            lines[n+1] = f' {new_xyz[0]:15e} {new_xyz[1]:15e} {new_xyz[2]:15e}\\n'
+
+    with open(patran_file, 'w') as f:
+        f.writelines(lines)
+
+# Example: Kelvin inversion (maps exterior to interior of sphere)
+a = 30.0  # inversion radius
+def kelvin_inversion(xyz):
+    r = np.linalg.norm(xyz)
+    return (a / r)**2 * xyz
+
+cubit.cmd('block 1 add surface all')
+cubit.cmd(f'export patran "temp.pat" block 1 dimension 3 overwrite')
+transform_patran_mesh("temp.pat", kelvin_inversion)
+cubit.cmd('reset')
+cubit.cmd(f'import patran mesh geometry "temp.pat" feature_angle 135.00')
+
+# Reconstruct surfaces from imported mesh
+for sid in range(1, 7):
+    cubit.cmd(f'create surface net from mapped surface {sid} heal')
+cubit.cmd('delete body 1 to 6')
+cubit.cmd('create volume surface 7 to 12 heal')
+```
+
+## Format Comparison for Conversion
+
+| Source | Target | Method | Use Case |
+|--------|--------|--------|----------|
+| Cubit | VTU/VTK | meshio | ParaView visualization |
+| Cubit | Netgen | cubit_mesh_export | NGSolve FEM (part of Radia) |
+| Cubit | Gmsh | export gmsh | GMSH post-processing |
+| Cubit | Patran | built-in export | Coordinate transforms |
+| Gmsh GEO | Cubit | geo2jou converter | Geometry migration |
+
+## meshio Installation
+
+```bash
+pip install meshio
+# Supports: Nastran, VTK, VTU, Exodus, Gmsh, XDMF, and 30+ formats
+```
+"""
+
+CUBIT_KELVIN_TRANSFORM = """\
+# Kelvin Sphere Transformation in Cubit
+
+The Kelvin (inversion) transform maps the exterior of a sphere to its interior,
+enabling FEM solution of open-boundary problems on a bounded domain.
+
+## Transform Formula
+
+```
+p' = (a/r)^2 * p
+```
+
+where `a` is the inversion sphere radius and `r = |p|` is the distance from origin.
+
+## Complete Workflow
+
+```python
+import cubit
+import numpy as np
+
+a = 30.0   # inversion sphere radius
+up = 2.1 * a  # vertical offset for Kelvin domain
+
+# 1. Create and mesh the source geometry
+cubit.cmd('reset')
+cubit.cmd('brick x 60 y 60 z 5')
+cubit.cmd('move Volume 1 z -22.5 include_merged')
+cubit.cmd('volume all size 2.5')
+cubit.cmd('mesh surf all')
+
+# 2. Export to Patran, apply Kelvin transform, reimport
+cubit.cmd('block 1 add surface all')
+cubit.cmd('export patran "temp.pat" block 1 dimension 3 overwrite')
+# (apply coordinate transform to temp.pat - see Format Conversion topic)
+
+cubit.cmd('reset')
+cubit.cmd('import patran mesh geometry "temp.pat" feature_angle 135.00')
+
+# 3. Reconstruct smooth surfaces from imported mesh
+for n in range(1, 7):
+    cubit.cmd(f'create surface net from mapped surface {n} heal')
+cubit.cmd('delete body 1 to 6')
+cubit.cmd('create volume surface 7 to 12 heal')
+
+# 4. Intersect with inversion sphere
+cubit.cmd(f'create sphere radius {a}')
+vid = cubit.get_last_id("volume")
+cubit.cmd(f'move Volume {vid} z {up} include_merged')
+cubit.cmd(f'intersect volume {vid-1} {vid}')
+
+# 5. Create complementary region (sphere minus Kelvin volume)
+cubit.cmd(f'create sphere radius {a}')
+vid = cubit.get_last_id("volume")
+cubit.cmd(f'move Volume {vid} z {up} include_merged')
+cubit.cmd(f'subtract volume {vid-1} from volume {vid} imprint keep_tool')
+
+# 6. Imprint and merge for conformal mesh
+cubit.cmd('imprint vol all')
+cubit.cmd('merge vol all')
+```
+
+## Tips
+
+- **feature_angle 135**: Important for Patran reimport to detect surface boundaries
+- **`create surface net from mapped surface`**: Reconstructs smooth geometry from mesh
+- **heal**: Repairs small gaps in reconstructed geometry
+- Use with NGSolve Kelvin CoefficientFunction for material property mapping
+
+## Modern 2-Sphere Workflow (Recommended)
+
+Instead of the Patran transform above, the preferred approach creates two
+identical spheres with `copy mesh surface` for 1:1 node correspondence.
+See `kelvin_transformation` MCP tool for the full NGSolve-side theory.
+
+### Step-by-step (Cubit journal)
+
+```python
+import cubit
+
+R = 0.060          # sphere radius [m]
+offset_x = 3 * R   # separation between sphere centers
+
+# 1. Create coil geometry (torus example)
+cubit.cmd('torus major {R_major} minor {R_minor}')
+# ... webcut to create gap for source/sink ...
+
+# 2. Create interior sphere at origin
+cubit.cmd(f'create sphere radius {R}')
+inner_vid = cubit.get_last_id("volume")
+
+# 3. Create exterior sphere (same R) at offset
+cubit.cmd(f'create sphere radius {R}')
+outer_vid = cubit.get_last_id("volume")
+cubit.cmd(f'move volume {outer_vid} x {offset_x} include_merged')
+
+# 4. Webcut BOTH spheres with same plane (create curves for copy mesh)
+cubit.cmd(f'webcut volume {inner_vid} with plane zplane')
+cubit.cmd(f'webcut volume {outer_vid} with plane zplane')
+
+# 5. Imprint + merge each pair of hemispheres (equator node sharing)
+# (inner pair)
+cubit.cmd(f'imprint volume {inner_top} {inner_bot}')
+cubit.cmd(f'merge volume {inner_top} {inner_bot}')
+# (outer pair)
+cubit.cmd(f'imprint volume {outer_top} {outer_bot}')
+cubit.cmd(f'merge volume {outer_top} {outer_bot}')
+
+# 6. Imprint coil with AIR sphere only (NOT Kelvin sphere)
+cubit.cmd(f'imprint volume {coil_vid} {inner_top} {inner_bot}')
+cubit.cmd(f'merge volume {coil_vid} {inner_top} {inner_bot}')
+
+# 7. Mesh hemisphere SURFACES first (required before copy mesh)
+for sid in inner_hemi_surfaces:
+    cubit.cmd(f'surface {sid} scheme trimesh')
+    cubit.cmd(f'surface {sid} size {mesh_size}')
+    cubit.cmd(f'mesh surface {sid}')
+
+# 8. Copy mesh surface: inner -> outer (1:1 node correspondence)
+for in_sid, out_sid, src_curve, src_vtx, tgt_curve, tgt_vtx in pairs:
+    cubit.cmd(f'copy mesh surface {in_sid} onto surface {out_sid} '
+              f'source curve {src_curve} source vertex {src_vtx} '
+              f'target curve {tgt_curve} target vertex {tgt_vtx}')
+
+# 9. Mesh all volumes
+cubit.cmd('volume all scheme tetmesh')
+cubit.cmd('mesh volume all')
+
+# 10. GND vertex at exterior sphere center (maps to physical infinity)
+#     Essential for H1 (scalar potential), optional for HCurl (vector potential)
+cubit.cmd(f'create vertex x {offset_x} y 0 z 0')
+gnd_vid = cubit.get_last_id("vertex")
+cubit.cmd(f'nodeset 100 add vertex {gnd_vid}')
+cubit.cmd(f'nodeset 100 name "GND"')
+
+# 11. Set blocks and sidesets
+cubit.cmd(f'block 1 add volume {coil_vid}')
+cubit.cmd(f'block 1 name "coil"')
+cubit.cmd(f'block 2 add volume {inner_top} {inner_bot}')
+cubit.cmd(f'block 2 name "air"')
+cubit.cmd(f'block 3 add volume {outer_top} {outer_bot}')
+cubit.cmd(f'block 3 name "kelvin"')
+# source/sink sidesets on coil gap faces
+cubit.cmd(f'sideset 1 add surface {source_sid}')
+cubit.cmd(f'sideset 1 name "source"')
+cubit.cmd(f'sideset 2 add surface {sink_sid}')
+cubit.cmd(f'sideset 2 name "sink"')
+
+# 12. Export (C++ writes periodic identification as translation)
+cubit.cmd(f'export netgen "model.vol" order 2 overwrite')
+```
+
+### GND Vertex Details
+
+| Formulation | GND Required? | Why |
+|-------------|---------------|-----|
+| H1 (phi, Omega) | **Yes** | Uniqueness: scalar potential needs Dirichlet at infinity |
+| HCurl (A) | Optional | Gauge regularization `reg*nu0*u*v*dx` provides uniqueness |
+
+The GND vertex must be placed at the **center of the exterior (Kelvin) sphere**.
+In the transformed domain, r'=0 corresponds to physical infinity (r -> inf).
+Setting the field to zero there is physically correct.
+
+For HCurl, GND improves iterative solver convergence even though it is not
+strictly required for uniqueness. Recommended for production use.
+
+## Naming Convention Contract for IH/BEM
+
+**POLICY**: CAD/mesh labels are authored in Cubit and persisted in `.vol`.
+Every solver-bound mesh is checked against the selected application's
+versioned label contract before initialization. Simulink DesignSpec or the
+headless configuration may select a valid named region, but must not repair or
+silently infer missing labels.
+
+| Entity | Required name | Used by |
+|--------|---------------|---------|
+| Coil terminal sideset (current in)  | `source` | calc_inductance.py default |
+| Coil terminal sideset (current out) | `sink`   | calc_inductance.py default |
+| Coil block                           | `coil`   | calc_inductance.py default (BEM filter) |
+| Workpiece block (optional)           | `workpiece` | calc_inductance.py |
+| Air block (optional)                 | `air`    | (not used by BEM) |
+| Kelvin block (optional, FEM Kelvin)  | `kelvin` | calc_fem_kelvin.py |
+| GND nodeset (optional, H1 Kelvin)    | `GND`    | calc_fem_kelvin.py |
+
+```python
+# Cubit Python template: names are fixed, IDs are local
+cubit.cmd(f'block 1 add volume {coil_vid}')
+cubit.cmd('block 1 name "coil"')
+cubit.cmd(f'sideset 1 add surface {source_sid}')
+cubit.cmd('sideset 1 name "source"')   # MUST be "source"
+cubit.cmd(f'sideset 2 add surface {sink_sid}')
+cubit.cmd('sideset 2 name "sink"')     # MUST be "sink"
+```
+
+If `calc_inductance.py` reports that `source` is missing, fix the Cubit model
+and regenerate the checked `.vol`; do not work around the failure in Simulink
+or solver code.
+"""
+
+
+CUBIT_SOLVER_HANDOFF = """\
+# Cubit-to-Radia Solver Handoff
+
+Cubit is Radia's CAD, meshing, labeling, and checked `.vol` export layer. It is
+not a solver-application GUI. Human production operation belongs to masked
+blocks in the Radia Simulink library; Python/MCP uses the same headless solver
+and artifact contracts.
+
+## Supported Boundary
+
+```
+Cubit / cubit-mesh-export
+  SAT or STEP -> mesh -> labels -> Netgen .vol -> check-vol
+
+Radia Simulink block or Python/MCP
+  checked .vol + DesignSpec -> headless solver -> result.json + GMSH .msh
+```
+
+- Cubit's bundled PySide6 may be used only by the `cubit-mesh-export` toolbar.
+- Do not add Radia solver dialogs, application panels, or Qt dependencies.
+- Solver code must not import `cubit`; Cubit communicates through checked files.
+- A solver-bound `.vol` must pass its versioned
+  `radia.vol-label-contract.v1` contract with strict labels.
+- Geometry/topology and labels live in SAT/STEP/Cubit/`.vol`; conductivity,
+  permeability, BH data, frequency, current, and thermal properties live in
+  DesignSpec/configuration.
+- Reusable computation belongs to `radia.*` APIs. A `calc_*.py` entry point is
+  a thin configuration and artifact adapter, not a second solver copy.
+- Spatial solver results use GMSH `.msh v4.1`. VTK is retained only as a Cubit
+  exporter capability and in NGSolve's upstream API.
+
+Common IH labels are `coil`, `workpiece`, `air`, `kelvin`, `source`, `sink`,
+`sibc`, `kelvin_int`, `kelvin_ext`, `outer`, and `GND`. The selected application
+mode's label contract decides which are required; labels never imply material
+constants.
+"""
+
+
+CUBIT_GEOMETRY_COMMANDS = """\
+# Geometry Creation Commands Reference
+
+## Primitives
+
+```
+brick x 10 y 10 z 20
+cylinder radius 2 z 15
+create Cylinder height 85 radius 15
+create sphere radius 10
+create sphere radius 9 inner radius 8       # hollow sphere
+create torus major radius 10 minor radius 2
+create prism height 5 sides 6 radius 3
+create frustum height 10 radius 5 top 2
+create pyramid height 5 sides 4 radius 3
+```
+
+## Surface Creation
+
+```
+create surface rectangle width 10 height 20 zplane
+create surface circle radius 1 zplane
+create surface ellipse major radius 4 minor radius 2 zplane
+create surface vertex 1 2 3 4                # from 4 vertices
+create surface curve all                     # from curve loop
+```
+
+## Vertex and Curve Creation
+
+```
+create vertex 1.5 2.3 0.0
+create curve vertex 1 2                                     # line segment
+create curve arc center vertex 3 1 4                        # arc through 3 vertices
+create curve arc radius 27.5 center location 0,0,0 normal 0,0,1 start angle 45 stop angle 90
+create curve helix zaxis location 100 0 0 thread_distance 40 angle 1440 right_handed
+create curve spline location vertex 1 2 3 4 5 delete
+create curve polyline vertex 80 96 104 103
+create curve tangent vertex 3 14 start direction -1 0 0 end direction 0 5 7.5
+create curve location 0 15.5 0 location 10.905 15.5 0       # line between coords
+create curve location at vertex 13 direction 1 1 0 length 10 # from vertex in direction
+create curve offset curve 5 distance -0.75 extended          # offset curve
+```
+
+## Volume Creation
+
+```
+create volume loft surface 1 2                                # loft between surfaces
+create volume loft surface 1 2 guide curve 14 15 16 17       # guided loft
+create volume surface 1 2 3 4 5 6                            # from 6 surfaces (hex)
+create volume surface 1 2 3 4                                # from 4 surfaces (tet)
+create volume surface 7 to 12 heal                           # from surface set
+sweep surface 1 perpendicular distance 5                     # extrude
+sweep surface 1 vector 0 0 1 distance 5                      # extrude along vector
+sweep surface 1 along curve 5 include_mesh individual        # sweep along curve
+sweep surface 1 yaxis angle 180                              # revolve
+```
+
+## Boolean Operations
+
+```
+subtract vol 2 from vol 1
+subtract volume 2 from volume 1 keep_tool         # keep cutter body
+subtract volume 2 from volume 1 imprint keep
+unite volume all
+intersect volume 1 2
+chop volume 1 with volume 2                       # splits both volumes
+imprint all
+merge all
+compress                                           # renumber IDs after deletes
+split body 14                    # split multi-volume body (required before Booleans)
+unmerge all
+```
+
+**Tip**: If you get "Body N needs to be split into a single volume body",
+run `split body N` before the Boolean operation.
+
+### CRITICAL: Imprint+Merge does NOT share surfaces between nested volumes
+
+If volume A is **fully nested inside** volume B (e.g. coil inside an air
+sphere), `imprint volume A B; merge volume A B` does **NOT** create a
+shared interface — Cubit reports `Consolidated 0 pair of surfaces`.
+
+The result is that the .vol file's FaceDescriptor for A's outer wall has
+`domin=A, domout=0` (treated as exterior boundary) instead of
+`domin=A, domout=B` (interface). FEM solvers then treat that wall as a
+PEC boundary rather than an internal interface and produce wrong results
+(observed: gapped torus FEM L = 94 nH instead of 88 nH).
+
+**Correct pattern**: use boolean SUBTRACT first to carve a cavity in the
+outer volume, then imprint+merge the resulting boundary:
+
+```python
+# WRONG: nested coil + air, just imprint+merge -> no shared surface
+cubit.cmd('create torus ...')           # vol 1 = coil
+cubit.cmd('create sphere radius 0.12')  # vol 2 = air
+cubit.cmd('imprint volume 1 2')         # nothing happens
+cubit.cmd('merge volume 1 2')           # Consolidated 0 pairs
+
+# RIGHT: subtract first
+cubit.cmd('create torus ...')           # vol 1 = coil
+cubit.cmd('create sphere radius 0.12')  # vol 2 = air
+cubit.cmd('subtract volume 1 from volume 2 keep_tool')
+# Now vol 2 has a coil-shaped hole; the new id may differ from 2
+all_vols = list(cubit.parse_cubit_list("volume", "all"))
+air_vid = [v for v in all_vols if v != 1][0]
+cubit.cmd(f'imprint volume 1 {air_vid}')
+cubit.cmd(f'merge volume 1 {air_vid}')   # Consolidated 3 pairs (correct!)
+```
+
+Verify with `Consolidated N pair of surfaces` (N > 0) in the merge log,
+or by checking that `cubit.get_relatives("surface", sid, "volume")`
+returns BOTH parent volumes for the shared surfaces.
+
+After Cubit -> .vol export, NGSolve should report `domin != 0` AND
+`domout != 0` for interface FDs.
+
+## Webcut (Geometry Decomposition for Hex Meshing)
+
+Webcut slices geometry into hex-meshable sub-volumes:
+
+```
+webcut volume all with plane xplane offset 0
+webcut volume all with plane yplane offset 0
+webcut volume all with plane zplane offset 0 imprint merge
+webcut volume all with plane xplane offset 0 rotate 45 about z
+webcut Volume 1 tool Body 2                       # cut using another body
+webcut Volume 1 with plane surface 5
+webcut Volume 1 with plane vertex 1 2 3           # plane through 3 vertices
+webcut Volume 1 with plane normal to curve 5 fraction 0.5 from vertex 1
+webcut Volume 1 with cylinder radius 2 axis z
+webcut Volume 1 with sheet surface 5
+webcut Volume 1 with bounding box volume 2
+```
+
+**Offset webcut** (cut inward from surfaces - recommended for boundary layers):
+```
+webcut Volume 7 offset_tool Surface 107 offset 1 inward merge
+webcut Volume 20 offset_tool Surface 37 104 103 offset 1 loft inward merge
+```
+
+**Sweep-based webcut**:
+```
+webcut Volume 1 sweep surface 2 vector 0 0 1 through_all
+webcut Volume 1 sweep surface 2 perpendicular distance 5 outward
+webcut body 6 sweep surface 8 vector 0 1 0 through_all
+```
+
+## Copy and Mirror
+
+```
+Volume 2 copy rotate {360/3} about z repeat 2    # 3-fold rotational symmetry
+Surface 1 2 copy reflect x                        # mirror
+Volume all copy rotate 90 about z repeat 3        # 4-fold symmetry
+```
+
+**Prevent block/nodeset duplication on copy**:
+```
+set copy_block_on_geometry_copy OFF
+set copy_nodeset_on_geometry_copy OFF
+set copy_sideset_on_geometry_copy OFF
+```
+
+## Section and Clip
+
+```
+section volume all with zplane offset 10 normal   # cut view
+section volume all with zplane offset 50 reverse
+graphics clip on plane zplane                      # clip display
+graphics clip manipulation off
+```
+
+## Trim and Offset Curves
+
+```
+trim curve 10 AtIntersection curve 12 keepside vertex 18
+create curve offset curve 5 distance -0.75 extended
+```
+"""
+
+CUBIT_HELIX_COIL = """\
+# Helix and Coil Modeling
+
+## Basic Helix Sweep
+
+Create a helical coil by sweeping a cross-section along a helix curve:
+
+```
+create curve helix zaxis location 100 0 0 thread_distance 40 angle 1440 right_handed
+create surface circle radius 15 zplane
+move Surface 1 location vertex 1 include_merged
+sweep surface 1 along curve 1 include_mesh individual
+```
+
+**Parameters**:
+- `location X Y Z`: helix start point (distance from axis = coil radius)
+- `thread_distance`: pitch (distance per 360 degrees)
+- `angle`: total winding angle (1440 = 4 turns)
+- `right_handed` / `left_handed`: winding direction
+
+## Multi-Turn Helical Coil (APREPRO)
+
+```
+#{a = 50}           # coil radius
+#{b = 5}            # wire radius
+#{N = 10}           # number of turns
+#{h = a * 0.4}      # pitch = 0.4 * radius
+
+create curve helix zaxis location {a} 0 0 thread_distance {h} angle {N*360} right_handed
+create surface circle radius {0.8*b} zplane
+move surface 1 x {a} y {-b} z {-b-h}
+sweep surface 1 along curve 3 2 1 4 5 individual
+move volume 1 to 5 z {-(N*h)/2}       # center the coil
+```
+
+## Multi-Segment Helix (Multiple Curves)
+
+For long coils, split into multiple segments and sweep along each:
+
+```
+sweep surface 1 along curve 3 2 1 4 5 individual
+```
+
+The `individual` keyword creates a separate volume for each curve segment.
+
+## Twisted Multi-Strand Cable
+
+For multi-wire cables with different strand counts per layer:
+
+```
+# Layer 1: 3 wires, each rotated 120 degrees
+Volume 1 to 12 copy rotate {360/3} about z repeat {3-1}
+
+# Layer 2: 8 wires
+Volume 13 to 24 copy rotate {360/8} about z repeat {8-1}
+
+# Layer 3: 10 wires
+Volume 25 to 36 copy rotate {360/10} about z repeat {10-1}
+```
+
+Each wire is modeled as helix + cross-section sweep, then duplicated with
+rotational symmetry matching the strand count.
+"""
+
+CUBIT_COIL_FROM_POLYLINE = """\
+# Coil Construction from a Centerline Polyline (Frame-Sweep + Loft Chain)
+
+## When to Use
+
+Use this when the coil centerline is given as a **discrete sequence of 3D
+points** `r[0..N-1]` (e.g. measured wire path, optimization output, or
+exported from an FEA tool as a point list) — not an analytical helix
+and not extracted from existing CAD. Complements:
+
+- `helix` topic — analytical helix sweep (parametric coil).
+- `radia.coil_from_cad` — centerline EXTRACTION from existing STEP CAD.
+- `radia.coil_builder` — analytical `add_straight` / `add_arc` primitives.
+
+This topic is the **forward** problem: discrete points → solid coil CAD.
+
+## Algorithm
+
+```
+Input:  r[0], r[1], ..., r[N-1]   (ordered 3D centerline points)
+        R                          (cross-section radius)
+
+For each interior point n = 1 .. N-2:
+    # 1. Tangent at r[n] via centered finite difference
+    w = (r[n+1] - r[n-1]) / |r[n+1] - r[n-1]|
+
+    # 2. Up vector — smallest-component trick to avoid up // w
+    k  = argmin |w[i]|     (the tangent's smallest absolute component)
+    up = e_k               (unit basis vector along that axis)
+
+    # 3. Orthonormal frame at r[n]
+    u = normalize(w x up)
+    v = w x u
+    M = [u | v | w]        (3x3 with columns u,v,w; M maps local +z -> w)
+
+    # 4. Build the cross-section in Cubit and place it
+    #    (default 'circle ... zplane' has normal = +z; rotate by M places
+    #     it so its normal aligns with the tangent w)
+    create surface circle radius R zplane
+    rotate Surface <id> by axis-angle(M) about origin
+    move   Surface <id> to r[n]
+
+For each adjacent pair n = 1 .. N-3:
+    create volume loft surface n n+1     # piecewise loft chain
+
+delete body 1 to N-2     # original section surfaces are now consumed
+imprint all
+merge all
+compress
+unite volume all          # 'unit volume all' in Cubit shorthand
+```
+
+## Why the Smallest-Component Up Vector
+
+Choosing `up = e_k` where `k = argmin |w[i]|` GUARANTEES `up` is not
+nearly parallel to `w`, so `w x up` is well-conditioned. A naive
+`up = (0,0,1)` fails when the centerline is vertical. This is the same
+trick used in CAD libraries to bootstrap a frame from a single tangent.
+
+It is **NOT** a parallel-transport / rotation-minimizing frame (RMF):
+
+| Frame                  | Twist between stations | Cost                |
+|------------------------|------------------------|---------------------|
+| Smallest-component up  | uncontrolled (random)  | O(1) per station    |
+| Parallel transport     | minimal                | O(N) sequential     |
+| Frenet (binormal)      | ill-defined at straight segments | requires curvature |
+
+For **circular** cross-section the twist is invisible (rotational
+symmetry), so this cheap frame is fine. For **non-circular** cross-section
+(rectangle, ellipse, racetrack), the twist between adjacent stations
+will produce a visibly twisted lofted solid — switch to RMF
+(double-reflection / Bishop frame).
+
+## Reference Python Implementation
+
+```python
+import numpy as np
+from scipy.spatial.transform import Rotation as R
+import cubit
+
+# r is a list of np.array([x, y, z]) centerline points (length N)
+R_cross = 1.0   # cross-section radius
+
+for n in range(1, len(r) - 1):
+    # 1. tangent
+    w = r[n + 1] - r[n - 1]
+    w = w / np.linalg.norm(w)
+
+    # 2. smallest-component up vector
+    up = np.zeros(3)
+    up[int(np.argmin(np.abs(w)))] = 1.0
+
+    # 3. orthonormal frame
+    u = np.cross(w, up); u /= np.linalg.norm(u)
+    v = np.cross(w, u)
+    M = np.array([u, v, w]).T          # columns = u, v, w
+
+    # 4. axis-angle from rotation matrix
+    rotvec = R.from_matrix(M).as_rotvec()
+    angle  = np.linalg.norm(rotvec)
+
+    cubit.cmd(f'create surface circle radius {R_cross} zplane')
+    sid = cubit.get_last_id("surface")
+    if angle > 1e-6:
+        axis = rotvec / angle
+        cubit.cmd(
+            f'rotate Surface {sid} angle {np.degrees(angle)} '
+            f'about origin 0 0 0 direction {axis[0]} {axis[1]} {axis[2]} '
+            f'include_merged'
+        )
+    cubit.cmd(
+        f'move Surface {sid} x {r[n][0]} y {r[n][1]} z {r[n][2]} '
+        f'include_merged'
+    )
+
+# Loft chain (N-3 segments between N-2 cross-sections)
+for n in range(1, len(r) - 2):
+    cubit.cmd(f'create volume loft surface {n} {n + 1}')
+
+cubit.cmd(f'delete body 1 to {len(r) - 2}')
+cubit.cmd('imprint all')
+cubit.cmd('merge all')
+cubit.cmd('compress')
+cubit.cmd('unite volume all')
+```
+
+## Caveats and Failure Modes
+
+1. **Endpoints are dropped.** The centered finite difference needs both
+   neighbours, so the first and last input points are NOT used as
+   stations — the resulting solid is shorter than the input polyline.
+   To preserve length, prepend / append ghost points or switch to
+   one-sided differences at the ends.
+
+2. **Closed loops require an extra wrap-around loft.** For a closed coil
+   `r[N-1] ≈ r[0]`, the loft chain above ends at station N-2; you must
+   add `create volume loft surface (N-2) 1` to close the loop. The
+   centered tangent at the wrap point also needs `r[N-1] - r[N-2]`
+   replaced by a periodic neighbour.
+
+3. **Twist visible for non-circular cross-section.** The
+   smallest-component frame can flip discretely when the dominant
+   tangent component changes between adjacent stations (e.g. tangent
+   rotates from +x-dominant to +y-dominant). Adjacent cross-sections
+   then differ by a 90° roll → lofted volume self-intersects or twists.
+   Fix: parallel-transport frame (Bishop / double-reflection RMF).
+
+4. **Polyline density matters.** Too sparse → faceted polygonal solid;
+   too dense → many ACIS lofts (slow, may fail tolerance). For wire
+   paths from physical measurement, smooth and resample to a uniform
+   arc-length spacing before invoking this algorithm.
+
+5. **`delete body 1 to (N-2)` assumes Cubit IDs start at 1 and were
+   consecutive.** This is true in a fresh `cubit.init([...])` session
+   with no other geometry. In an existing model, capture each surface
+   ID via `cubit.get_last_id("surface")` and delete by recorded IDs,
+   or use `delete surface all` AFTER lofting (the loft consumed the
+   originals, so nothing happens — confirm with `list surface`).
+
+6. **`unite volume all` after `imprint+merge` produces a single body
+   with shared internal faces removed.** Skip if you want each loft
+   segment to remain a separate volume (e.g. for Cubit `block` tagging
+   per segment).
+
+7. **Coordinate units.** The script writes raw `r[n][0..2]` into Cubit
+   as `move Surface ... x ... y ... z ...`. Cubit interprets this in
+   the current `set undo unit length` system (default mm). Match the
+   units of `r` to the Cubit session unit BEFORE running, or scale
+   `r` explicitly.
+
+## Comparison to Existing Coil Topics
+
+| Method                       | Input                  | Best For                         |
+|------------------------------|------------------------|----------------------------------|
+| `helix` (analytical)         | radius, pitch, turns   | Regular cylindrical solenoid     |
+| `coil_from_polyline` (this)  | discrete 3D points     | Measured/optimized free-form path |
+| `radia.coil_from_cad`        | existing STEP CAD      | Reverse-engineering filament from CAD |
+| `radia.coil_builder`         | analytical primitives  | Beam-optics-style design (straight + arc) |
+
+## Downstream Consumers (after STEP export)
+
+Once the lofted coil is exported to STEP (`export step "coil.step"
+overwrite`), it feeds two production paths in this codebase:
+
+### A. Radia PEEC (filament-based circuit extraction)
+
+```python
+from radia.coil_from_cad import extract_centerline_from_step
+from radia.peec_topology import PEECBuilder, PEECCircuitSolver
+
+path_m, w_m, h_m = extract_centerline_from_step("coil.step")  # CAD mm -> m
+b = PEECBuilder()
+prev = b.add_node_at(*path_m[0])
+for p, w, h in zip(path_m[1:], w_m[1:], h_m[1:]):
+    nxt = b.add_node_at(*p)
+    b.add_connected_segment(prev, nxt, w, h, sigma=5.8e7,
+                            nwinc=3, nhinc=3)
+    prev = nxt
+b.add_port(b.nodes[0], b.nodes[-1])
+solver = PEECCircuitSolver(b.build_topology())
+Z = solver.compute_port_impedance(freq=1e6)        # R + jωL
+```
+
+`extract_centerline_from_step` 5-Path dispatch picks the right spine
+recovery for closed-torus / multi-loft / per-station-faces / lofted
+section solids — including the topology produced by this algorithm.
+
+### B. BEM-A (port-driven self-inductance via ngsolve.bem)
+
+```python
+from radia.bem.coil_inductance_ngsolve import compute_inductance_source_sink
+from ngsolve import Mesh
+# Mesh must have BND labels "source" and "sink" on the two terminal faces.
+# In Cubit:
+#   sideset 1 add surface <source_face_id>;  sideset 1 name "source"
+#   sideset 2 add surface <sink_face_id>;    sideset 2 name "sink"
+#   export netgen "coil.vol" overwrite
+mesh = Mesh("coil.vol")
+# CRITICAL: compute_inductance_source_sink needs a PURE SURFACE mesh.
+# A Cubit 'export netgen' of a meshed VOLUME contains internal tets,
+# which make the saddle LU singular.  Either mesh only the surface in
+# Cubit, or extract the boundary the way the panel does:
+from surface_mesh_extract import _extract_surface_mesh_filtered  # src/radia/panels
+if mesh.ne > 0:
+    mesh = _extract_surface_mesh_filtered(mesh, keep_label="")
+# Impedance-EFIE (the sole formulation since 2026-07-02): the complex
+# Leontovich Zs = (1+1j)/(sigma*delta) sits INSIDE the saddle system,
+# so J is the finite-impedance current and R is physical (the old PEC
+# post-hoc R over-estimated ~3x on tightly-wound coils; removed).
+# Pass omega=0 for a DC vacuum-L-only solve (R = 0).
+import math
+sigma, freq = 5.8e7, 50e3
+omega = 2 * math.pi * freq
+delta = math.sqrt(2.0 / (omega * 4e-7 * math.pi * sigma))
+res = compute_inductance_source_sink(
+    mesh, source_label="source", sink_label="sink",
+    omega=omega, Z_s_complex=(1.0 + 1.0j) / (sigma * delta),
+)
+print("L =", res["L"], "H,  R =", res["R"], "Ω")
+```
+
+**Critical: BEM-A requires terminal faces.**
+- *Open-ended path* (`r[0] != r[N-1]`): the two end-cap faces of the
+  lofted solid are the natural source/sink. Tag them before meshing.
+- *Closed loop* (`r[N-1] ≈ r[0]`): the solid has no end faces. Either
+  (a) leave a small gap in the polyline (skip one wrap station) so two
+  cap faces appear and label them, or (b) cut a thin slice
+  perpendicular to the path post-loft and label the two new faces.
+  PEEC has no equivalent constraint — it can drive a closed loop via a
+  port between any two interior nodes.
+
+| Pipeline | Input from STEP    | Output                | Use when                  |
+|----------|--------------------|-----------------------|---------------------------|
+| PEEC     | centerline + (w,h) | R + jωL, SPICE / Z(f) | DC-1 MHz, multi-port, MOR |
+| BEM-A    | surface mesh + source/sink labels | L (+ optional AC R) | high-fidelity self-L on free-form paths |
+"""
+
+CUBIT_VISUALIZATION = """\
+# Visualization and Display Commands
+
+## Display Modes
+
+```
+graphics mode smoothshade     # solid shading (default)
+graphics mode transparent     # transparent
+graphics mode wireframe       # wireframe only
+```
+
+## Element Shrink (Visual Separation)
+
+```
+graphics shrink 0.1           # shrink elements 10% from center
+graphics shrink 0.2           # more separation
+graphics shrink 0              # disable (reset)
+```
+
+## Drawing Specific Elements
+
+```
+draw vol all
+draw hex all tet all pyramid all Wedge all
+draw hex with x_min > 0  tet with x_min > 0        # half-model
+draw hex with z_min > 0.1 tet with z_min > 0.1     # above z=0.1
+draw tet with z_coord < 0.5
+draw block 3 with x_min < -1500 color red
+draw block 8 to 17 color red  block 3 to 7 18 to 21 color lightblue
+draw pyramid all                                     # show pyramids only
+draw surface all except 81 66 75                     # "except" excludes listed IDs
+```
+
+## Entity Selection by Name (Wildcard)
+
+```
+mesh volume with name "coil_1*"    # mesh only coil_1 and variants
+mesh volume with name "coil_*"     # mesh all coil_N
+body in surface with name "Tear_Fault_13@A"
+```
+
+## Colors
+
+```
+color Volume 1 green
+color Volume 2 skyblue
+color Volume 3 red
+color lines lightsteelblue
+Color Background white
+Color Background lightsteelblue
+```
+
+Useful color names: `lightgoldenrodyellow`, `coral`, `palegreen`,
+`skyblue`, `royalblue`, `lightsteelblue`
+
+## Labels and Vertex Display
+
+```
+label curve On
+label vertex On
+graphics text size 3
+graphics vertex point size 2
+vertex visibility on
+```
+
+## View Control
+
+```
+view from 229.514403 0 0
+view at 0 0 0
+view up 0 1 0
+view reset
+list view                       # show current camera parameters
+from 20 20 20                   # shorthand
+zoom reset
+```
+
+## Screenshots
+
+```
+graphics window create 2
+hardcopy "Cubit.png" png window 2
+graphics window delete 2
+```
+
+## Journal and Reset
+
+```
+journal idless on               # reproducible output without IDs
+set dev on                      # enable developer mode
+reset                           # full reset (geometry + mesh + BCs)
+reset vol all                   # reset mesh only, keep geometry
+reset Aprepro                   # clear all APREPRO variables
+```
+"""
+
+CUBIT_PYRAMID_HANDLING = """\
+# Pyramid Element Handling
+
+Pyramid elements appear at the interface between hex and tet regions.
+That is not automatically a Cubit failure: in the lab split, Cubit is the
+hex-led and mixed hex+pyramid+tet lane, while Netgen/OCC is enough for
+tet-only meshes.  Many FEM solvers still do not support pyramids, so they need
+explicit routing and inventory.
+
+Before choosing a downstream parser, run:
+
+```
+cubit_vol_inventory(path="model.vol")
+```
+
+This reports triangle/quad surface records and tet/pyramid/wedge/hex volume
+records without modifying the mesh.  Use it to distinguish:
+
+- tri/tet-only `.vol` -> first-order FEM/BEM education parser is allowed.
+- hex or pyramid present -> keep it in the Cubit/NGSolve mixed-mesh lane, or
+  use a solver/export contract that explicitly supports the conversion.
+
+## Detecting Pyramids
+
+```python
+volume_ids = cubit.parse_cubit_list("volume", "all")
+for vol_id in volume_ids:
+    pyramid_ids = cubit.parse_cubit_list("pyramid", f"all in volume {vol_id}")
+    if pyramid_ids:
+        print(f"Volume {vol_id}: {len(pyramid_ids)} pyramids")
+```
+
+```
+draw pyramid all               # visualize all pyramids
+graphics shrink 0.1            # shrink for visual clarity
+```
+
+## Method 1: Split Pyramids into Two Tets
+
+Each pyramid (5 nodes: 4 base + 1 apex) splits into 2 tetrahedra:
+
+```python
+#!python
+cubit.cmd("set dev on")       # required for create tet command
+volume_ids = cubit.parse_cubit_list("volume", "all")
+for vol_id in volume_ids:
+    pyramid_ids = cubit.parse_cubit_list("pyramid", f"all in volume {vol_id}")
+    for pyr_id in pyramid_ids:
+        n = cubit.get_connectivity("pyramid", pyr_id)
+        cubit.cmd(f"create tet node {n[0]} {n[1]} {n[2]} {n[4]} owner volume {vol_id}")
+        cubit.cmd(f"create tet node {n[2]} {n[3]} {n[0]} {n[4]} owner volume {vol_id}")
+        cubit.cmd(f"delete pyramid {pyr_id}")
+```
+
+**Note**: `set dev on` (developer mode) is required for the `create tet` command.
+Do this only when the receiving solver contract asks for a tet-only mesh.  Do
+not use it as an implicit default in MCP helpers; inventory first, then route.
+
+## Method 2: Collapse Pyramid to Degenerate Hex
+
+Some solvers accept degenerate hexahedra (CHEXA with repeated nodes).
+The Radia plugin's `export jmag_nastran` handles this with the `nopyramid` option:
+
+```
+export jmag_nastran "output.bdf" nopyramid   # writes CHEXA instead of CPYRAM
+```
+
+## Method 3: Avoid Pyramids Entirely
+
+- Use tetmesh for all volumes: `volume all scheme tetmesh`
+- Or use hex for all volumes (requires swept/mapped topology)
+- Or use `thex` to convert tet mesh to all-hex: `thex volume all`
+
+## Verification
+
+```
+quality pyramid all scaled jacobian global
+quality pyramid all allmetrics
+draw hex with z_min>0 tet with z_min>0 pyramid with z_min>0 Wedge with x_min>0
+```
+"""
+
+CUBIT_ICOSAHEDRAL_SPHERE = """\
+# High-Quality Sphere Surface Mesh (Icosahedral Method)
+
+For high-quality sphere surface meshes, the icosahedral subdivision method
+produces uniform triangles with no pole concentration.
+
+## Method
+
+1. Create sphere
+2. Create 12 icosahedron vertices using the golden ratio
+3. Connect vertices with 30 great-circle arcs
+4. Imprint arcs onto sphere (subdivides into 20 equilateral patches)
+5. Mesh each patch with `triadvance` scheme
+6. Apply Laplacian smoothing
+
+## APREPRO Implementation
+
+```
+#{p = (1+sqrt(5))/2}       # golden ratio (1.618...)
+#{q = sqrt(p+2)}           # normalization factor
+#{r0 = 100}                # sphere radius
+
+create sphere radius {r0}
+
+# Create 12 icosahedron vertices (projected onto sphere)
+# (vertices at +/-1, +/-p normalized to radius r0)
+# ... (30 arc imprint commands)
+
+imprint volume all with curve all
+merge all
+merge vertex all force
+
+# Mesh with uniform triangles
+surface all interval {n}
+surface all scheme triadvance
+mesh surface all
+surface all smooth scheme smart laplacian
+smooth surface all
+```
+
+## Results
+
+| Subdivision n | Triangles per face | Total triangles | Quality |
+|---------------|-------------------|-----------------|---------|
+| 2 | 4 | 80 | Good |
+| 4 | 16 | 320 | Very good |
+| 8 | 64 | 1280 | Excellent |
+| 16 | 256 | 5120 | Excellent |
+
+## Use Cases
+
+- BEM (Boundary Element Method) surface mesh for external field problems
+- Kelvin transform: icosahedral sphere mesh as the inversion boundary
+- Radiation boundary conditions requiring uniform angular resolution
+"""
+
+CUBIT_APREPRO_ADVANCED = """\
+# Advanced APREPRO Variables and Functions
+
+## Variable Definition and Arithmetic
+
+```
+#{a = 30}                          # variable definition
+#{z0 = -2.0}
+#{radius = sqrt(300^2 - 200^2)}   # computed value
+#{inner_r = a^2/2/abs(z0)}        # complex expression
+```
+
+## Built-in Geometry Functions
+
+APREPRO provides functions to locate entities by spatial coordinates:
+
+```
+{Id("volume")}                     # last created volume ID
+{VolumeAt(x, y, z, tol)}          # find volume at (x,y,z) within tolerance
+{SurfaceAt(x, y, z, tol)}         # find surface at point
+{VertexAt(vx, vy, vz, tol)}       # find vertex at point
+{CurveAt(x, y, z, tol)}           # find curve at point
+{GeomCentroid_X("volume", 5)}     # X centroid of volume 5
+{GeomCentroid_Y("volume", 5)}
+{GeomCentroid_Z("volume", 5)}
+```
+
+These are essential for robust journal files that don't depend on specific entity IDs.
+
+## Math Functions
+
+```
+{sin(t)}, {cos(t)}, {tan(t)}
+{atan2(z0, y0)}                   # 2-argument arctangent
+{sqrt(x)}, {abs(x)}
+{exp(x)}, {log(x)}               # natural log
+{PI}                              # built-in constant
+```
+
+## Output and Debugging
+
+```
+{Print(tostring(x))}              # print to console
+{IO(id)}                          # echo value
+```
+
+## Example: Kelvin Sphere with APREPRO
+
+```
+#{a = 30}
+#{up = 2.1 * a}
+create sphere radius {a}
+move Volume {Id("volume")} z {up} include_merged
+# Use VolumeAt to find the resulting volume after Boolean ops:
+chop volume {VolumeAt(0, 0, up, 1)} with volume 2
+```
+"""
+
+CUBIT_MESH_QUALITY_DETAILED = """\
+# Detailed Mesh Quality Metrics
+
+## Quality Commands
+
+```
+quality tet all scaled jacobian global draw histogram
+quality hex all scaled jacobian global
+quality volume all allmetrics
+quality tet all aspect ratio bet high 10 list detail
+```
+
+## Available Metrics by Element Type
+
+### Hex Metrics
+Aspect Ratio, Skew, Taper, Element Volume, Stretch, Diagonal Ratio,
+Condition Number, Jacobian, Scaled Jacobian, Shear, Shape, Relative Size,
+Timestep, Distortion, Allmetrics
+
+### Tet Metrics
+Algebraic, Aspect Ratio (Beta/Gamma), Condition Number, Distortion,
+Element Volume, Inradius, Jacobian, Equiangle Skew, Mass Increase Ratio,
+Normalized Inradius, Node Distance, Relative Size, Scaled Jacobian,
+Shape, Shape and Size, Timestep, Allmetrics, Altitude
+
+### Pyramid Metrics
+Element Volume, Jacobian, Scaled Jacobian, Shape, Equiangle Skew, Allmetrics
+
+### Wedge Metrics
+Aspect Ratio, Element Volume, Condition Number, Jacobian, Scaled Jacobian,
+Shape, Stretch, Distortion
+
+## Special Quality Checks
+
+```
+Quality Check Coincident Node in volume 1 merge delete   # fix coincident nodes
+Quality Check Valence Volume all list                     # check hex valence
+```
+
+## Smoothing Techniques
+
+```
+# Condition number smoothing (most effective for bad elements)
+volume all smooth scheme condition number beta 2.0 cpu 0.5
+smooth volume all
+
+# Smart Laplacian (for surface meshes)
+surface all smooth scheme smart laplacian
+smooth surface all
+```
+"""
+
+CUBIT_BOUNDARY_LAYER_MESH = """\
+# Boundary Layer Mesh (Skin Mesh)
+
+Create refined layers near surfaces for capturing gradients (e.g., skin effect,
+thermal boundary layers).
+
+## Basic Boundary Layer
+
+```
+create boundary_layer 1
+modify boundary_layer 1 uniform height 0.03 growth 1.0 layers 3
+modify boundary_layer 1 add surface 8 volume 2 surface 5 volume 1
+modify boundary_layer 1 continuity on
+```
+
+## Parameters
+
+| Parameter | Description |
+|-----------|-------------|
+| `height` | First layer thickness |
+| `growth` | Growth ratio between layers (1.0 = uniform, 1.2 = 20% growth) |
+| `layers` | Number of layers |
+| `depth` | Total depth (alternative to height + layers) |
+
+**Note**: Only specify 3 of the 4 parameters (height, growth, layers, depth).
+
+## Multi-Surface Boundary Layer
+
+```
+create boundary_layer 1
+modify boundary_layer 1 uniform height growth 1.2 layers 4
+modify boundary_layer 1 add surface 2 volume 1 surface 12 volume 3 surface 7 volume 2
+modify boundary_layer 1 continuity off
+```
+
+**Syntax**: `add Surface <surf_id> Volume <vol_id>` — each surface must specify
+which volume it belongs to. Multiple surface-volume pairs can be added in one command.
+
+## Workflow with Webcut
+
+For more control, use offset webcut instead of boundary_layer:
+
+```
+webcut Volume 7 offset_tool Surface 107 offset 1 inward merge
+webcut Volume 20 offset_tool Surface 37 104 103 offset 1 loft inward merge
+```
+
+This creates separate thin volumes at the boundary that can be independently
+meshed with high resolution.
+"""
+
+CUBIT_RESULTS_VISUALIZATION = """\
+# Cubit Results Visualization
+
+## set_nodal_variable: Display Field Data in Cubit
+
+Cubit can display per-node scalar fields using the results view mode
+(rainbow icon in toolbar). Use `set_nodal_variable` to set values:
+
+```python
+import cubit
+
+# Get all node IDs
+node_ids = list(cubit.get_entities('node'))
+
+# Compute values (e.g., from BEM solve)
+values = [compute_field(nid) for nid in node_ids]
+
+# Set nodal variable
+cubit.set_nodal_variable(node_ids, "J_magnitude", values)
+
+# Switch to results view mode to see the contour plot
+# (click rainbow icon in Cubit toolbar, or use Display menu)
+```
+
+## Limitations of set_nodal_variable
+
+**IMPORTANT**: `set_nodal_variable` is limited:
+- Display only — values are NOT preserved on save/reload of .cub5
+- No export — Exodus export does NOT include these variables automatically
+  (despite claims in older Cubit docs). You must write a separate Exodus file.
+- No high-order interpolation — Cubit renders piecewise-linear on mesh facets
+- No vector field support — scalar only, one component at a time
+
+For production post-processing, use GMSH .msh output instead (see below).
+
+## Recommended: GMSH Post-Processing (.msh)
+
+For high-order element visualization and persistent results, use GmshPostExport:
+```python
+from radia.gmsh_post_export import GmshPostExport
+post = GmshPostExport(mesh, boundary=True)  # boundary=True for BND from volume mesh
+post.add_field("|J|", node_J, ncomp=1)       # per-node scalar
+post.write("results.msh")
+# Open in GMSH GUI for high-order interpolation
+```
+
+For curved meshes (mesh.Curve(p)), GmshPostExport automatically outputs
+high-order elements (Tri6/Tri10/Tri15/Tri21) with nodes on the curved surface.
+Node coordinates are extracted via GetTrafo evaluated at GMSH reference points.
+
+**GMSH display setting**: High-order elements require `Mesh.NumSubEdges = 4`
+(or higher) in GMSH to render curved surfaces. Default is 1 (straight lines).
+Set via Tools -> Command Line: `Mesh.NumSubEdges = 4;`
+
+**Advantages over Cubit set_nodal_variable**:
+- Persistent: .msh file saved alongside model
+- High-order: GMSH renders curved elements correctly
+- Vector fields: supports ncomp=3 for vector visualization
+- Linked to Optuna DB: each trial's gmsh_file recorded in user_attrs
+
+## Workflow: BEM Current Density Visualization
+
+```
+1. BEM solve (external Python) -> per-DOF current vector x
+2. Convert HDivSurface DOFs -> per-node scalar (J magnitude)
+3. Write .msh file via GmshPostExport (persistent)
+4. Return result JSON (inductance, n_dofs, gmsh_file path)
+5. Record trial in Optuna SQLite DB (params + result + gmsh_file)
+6. Panel auto-launches GMSH with .msh file
+7. optuna-dashboard shows parameter sweep with linked .msh files
+```
+
+## Cubit Import Formats (NO VTK)
+
+Cubit does NOT support VTK import. Supported mesh import formats:
+- Exodus II (.exo, .e, .g) - with nodal_var support
+- Abaqus, Nastran, Patran, STEP, IGES, Fluent, LSDyna
+"""
+
+
+CUBIT_LAB_POLICY = """\
+# Cubit Lab Context (2026-04-19)
+
+Cubit is used in this lab **complementary with build123d**, not as an
+alternative. Understanding the split avoids wasted effort on
+translations that shouldn't happen.
+
+## Role split
+
+| Tool | Role | When to use |
+|---|---|---|
+| **Cubit** (`.jou`, `cubit.cmd(...)`) | **hex path + mixed-mesh CAD fallback** | (1) Radia/ELF requires hex — **only Cubit can supply**. (2) Hex-led meshes with tet regions and pyramid transition elements. (3) `imprint + merge` for shared-topology multi-body CAD. (4) Complex CAD that netgen.occ can't handle cleanly. (5) Legacy `.jou` assets. |
+| **build123d** (Python / OCCT) + **Netgen/OCC** | **tet-only path, Python-driven** | Default CAD authoring and tet meshing. VSCode-native. build123d → Netgen (tet) → Radia / Gmsh pipeline. AI-writable. |
+| (not used) | | FreeCAD (reproducibility), raw OCCT Python (verbose) |
+
+**Cubit is permanent in the toolchain**, not being deprecated.
+Hex supply for Radia/ELF is a structural requirement that only Cubit
+satisfies.
+
+## When a student asks "should I port my .jou to build123d?"
+
+- **CAD-only .jou** (primitives + boolean + sweep/revolve/fillet,
+  target = tet mesh): yes, port it. See `build123d_crossref` topic.
+- **tet-only mesh request**: prefer build123d/Netgen/OCC unless Cubit-specific
+  CAD cleanup, labeling, or legacy reproducibility is the real point.
+- **.jou that uses `imprint all` / `merge all`**: **keep in Cubit**.
+  build123d has no shared-topology concept.
+- **.jou producing hex mesh** (for Radia/ELF): **keep in Cubit**.
+  Nothing else supplies hex.
+- **.jou producing hex + tet transition mesh**: **keep in Cubit** and expect
+  pyramid transition elements.  Run `cubit_vol_inventory` on the exported
+  `.vol` before choosing the downstream solver/parser path.
+- **.jou with `block` / `sideset` / `nodeset` tagging**: these have
+  no direct build123d equivalent. In the build123d pipeline, use
+  `part.label` + `Compound(children=[...])` +
+  `radia_mcp.build123d.pipeline.run_pipeline_multi`, which bridges labels
+  to Gmsh physical groups downstream.
+- **Mesh directives** (`mesh volume N`, `scheme tetmesh`, `size`): in
+  build123d pipeline these live in Netgen: `OCCGeometry(...).GenerateMesh(maxh=...)`.
+
+## Related topics
+
+- `build123d_crossref` — verb-by-verb mapping Cubit ↔ build123d
+- `tet_workflow` — Cubit's own tet workflow (kept for reference)
+- `hex_workflow` — Cubit's hex workflow (the tool's strength, not
+  being ported away)
+- `blocks_only_policy` — why only blocks, no sidesets/nodesets
+
+The companion mcp-server-build123d has the matching `lab_policy` /
+`cubit_rosetta` topics with build123d-side guidance.
+"""
+
+
+CUBIT_BUILD123D_CROSSREF = """\
+# Cubit ↔ build123d Cross-Reference (CAD subset)
+
+Side-by-side verb mapping for porting `.jou` CAD to build123d Python,
+or for writing build123d using a Cubit-trained mental model.
+
+**Scope**: geometry only. Mesh directives, blocks, sidesets, imprint,
+merge, hex-sweep schemes are **intentionally absent** — they have no
+direct build123d equivalent (see `lab_policy`).
+
+## 3D primitives
+
+| Cubit journal | build123d |
+|---|---|
+| `create brick x 10 y 20 z 5` | `Box(10, 20, 5)` |
+| `create cylinder radius 3 height 10` | `Cylinder(radius=3, height=10)` |
+| `create sphere radius 5` | `Sphere(radius=5)` |
+| `create prism height 10 sides 6 radius 5` | `extrude(RegularPolygon(radius=5, side_count=6), amount=10)` |
+| `create torus major radius 10 minor radius 2` | `Torus(major_radius=10, minor_radius=2)` |
+| `create cone radius 3 radius2 1 height 10` | `Cone(bottom_radius=3, top_radius=1, height=10)` |
+
+## 2D sketch primitives
+
+| Cubit journal | build123d |
+|---|---|
+| `create surface rectangle width 10 height 5` | `Rectangle(10, 5)` |
+| `create surface circle radius 5` | `Circle(5)` |
+| `create surface polygon sides 6 radius 5` | `RegularPolygon(5, side_count=6)` |
+
+## Boolean operations
+
+| Cubit journal | build123d |
+|---|---|
+| `subtract volume 2 from volume 1` | `v1 - v2` |
+| `unite volume 1 2` | `v1 + v2` |
+| `intersect volume 1 2` | `v1 & v2` |
+| `chop volume 1 with plane zplane offset 0` | `split(v1, Plane.XY, keep=Keep.BOTH)` |
+
+## Transforms
+
+| Cubit journal | build123d |
+|---|---|
+| `move volume 1 x 10 y 0 z 0` | `Pos(10, 0, 0) * v1` |
+| `rotate volume 1 angle 45 about z` | `Rot(0, 0, 45) * v1` |
+| `scale volume 1 2` | `v1.scale(2)` |
+| `reflect volume 1 about yplane` | `mirror(v1, about=Plane.YZ)` |
+
+## Sweep / revolve / loft
+
+| Cubit journal | build123d |
+|---|---|
+| `sweep surface 1 along curve 1` | `sweep(sketch, path=line)` |
+| `sweep surface 1 perpendicular distance 10` | `extrude(sketch, amount=10)` |
+| `revolve surface 1 about z angle 360` | `revolve(sketch_on_plane_containing_axis, axis=Axis.Z, revolution_arc=360)` |
+| `create volume loft surface 1 2 3` | `loft([sk1, sk2, sk3])` |
+
+### Revolve idiom (most common Cubit → build123d remap)
+
+Cubit pattern — sketch on `zplane`, move out to radius, revolve about Z:
+```
+create surface rectangle width 5 height 10 zplane
+move surface 1 x 20 y 0 z 0
+revolve surface 1 about z angle 360
+```
+build123d equivalent — sketch on `Plane.XZ` (contains Z axis) + `Pos`:
+```python
+profile = Plane.XZ * Pos(20, 0) * Rectangle(5, 10)
+ring = revolve(profile, axis=Axis.Z)
+```
+Key swap: Cubit's "sketch in zplane, then move" ↔ build123d's
+`Plane.XZ * Pos(...) * sketch`. The revolve axis must lie **in** the
+sketch plane.
+
+## Fillet / chamfer
+
+| Cubit journal | build123d |
+|---|---|
+| `modify curve 1 blend radius 0.5` | `fillet(edge_selection, radius=0.5)` |
+| `modify curve in volume 1 blend radius 0.5` | `fillet(part.edges(), radius=0.5)` (all edges) |
+| `chamfer curve 1 length 0.5` | `chamfer(edge_selection, length=0.5)` |
+
+build123d edge selection uses selectors:
+`part.edges().sort_by(Axis.Z)[-1]`, `.group_by(...)`, `.filter_by(...)`,
+or just `part.edges()` for the "all edges" case.
+
+## IDs vs variables
+
+| Cubit model | build123d model |
+|---|---|
+| Implicit numbered IDs: `volume 1`, `surface 3` | Explicit Python variables: `part`, `sk` |
+| `rename volume 1 "coil"` | `part.label = "coil"` |
+| `group "coils" add volume 1 2 3` | `coils = Compound(children=[v1, v2, v3])` |
+| `reset` | (no equivalent — build123d scripts start fresh each run) |
+
+### Compound vs fused Part
+
+- `Compound(children=[v1, v2, v3])` — **tree-structured assembly**;
+  children keep labels. Use when downstream needs per-region material
+  names (pairs with `run_pipeline_multi` in the build123d flow).
+- `v1 + v2 + v3` — **fused single solid** (boolean union); labels lost.
+  Use when the downstream consumer treats geometry as one part.
+
+## What has NO build123d equivalent (keep `.jou`!)
+
+- `imprint all`, `merge all` — build123d does not expose shared-
+  topology multi-body ops; uses OCCT Compound directly.
+- `mesh volume N`, `scheme tetmesh`, `size ...`, `interval N` —
+  meshing is Netgen's job: `OCCGeometry(...).GenerateMesh(maxh=maxh)`.
+- `block 1 volume all`, `sideset 1 surface X`, `nodeset 1 curve Y` —
+  use build123d labels + Compound + Gmsh physical groups via the
+  `run_pipeline_multi` bridge helper.
+- `export mesh "file.e"` (Exodus) — out of build123d's pipeline.
+- Cubit APREPRO (`{var = 10}`, `{#include ...}`) — use plain Python.
+
+## Rule of thumb
+
+If >20% of a `.jou` falls in the "no equivalent" table above,
+**don't translate** — keep the `.jou`, run it through Cubit, let
+Cubit supply hex to Radia/ELF. build123d is the wrong tool for that
+design.
+
+If the `.jou` is purely CAD primitives + booleans + sweep/revolve,
+translation is straightforward and the output plugs into the Netgen
+tet pipeline (`radia_mcp.build123d.pipeline`).
+"""
+
+
+CUBIT_OFFICIAL_TUTORIAL = """\
+# Coreform Cubit official tutorial: Perforated brick (CL version)
+
+Verbatim command sequence from Coreform's canonical first tutorial
+("Mesh a brick with a hole"), annotated with the commands that map to
+build123d (see `build123d_crossref`) and those that are Cubit-only.
+
+Source: https://coreform.com/cubit_help/step_by_step_tutorials/command_line/
+
+## Full command sequence
+
+```
+# Step 2 — Create the brick (two equivalent forms)
+create brick width 10 depth 10 height 10     # full syntax
+create brick x 10                              # shorthand (cube)
+
+# Step 3 — Create the cylinder (to be subtracted)
+create cylinder height 12 radius 3
+
+# Step 5 — Boolean subtract (cylinder from brick -> brick with hole)
+subtract 2 from 1
+
+# Step 6 — Interval / size controls (mesh sizing, pre-mesh)
+volume 1 size 1.0               # target element size on the whole volume
+label curve on                   # show curve IDs in GUI
+display                          # redraw
+graphics text size 2             # increase label font
+display                          # redraw again
+curve 16 interval size 0.78      # finer spacing on the hole curve
+curve 11 interval 5              # exactly 5 divisions on sweep direction
+
+# Step 7 — Surface meshing
+surface 11 scheme pave
+mesh surface 11
+display
+
+# Step 8 — Volume meshing
+volume 1 scheme auto
+list volume 1                    # verify scheme / source-target
+mesh volume 1
+
+# Step 10 — Boundary condition registration
+block 100 volume 1
+nodeset 100 surface all in volume 1
+
+# Step 11 — Export (ExodusII / genesis)
+export genesis 'brick_with_hole.g'
+```
+
+## build123d translation status (per lab_policy)
+
+| Command | Translation to build123d |
+|---|---|
+| `create brick width 10 depth 10 height 10` | `Box(10, 10, 10)` |
+| `create brick x 10` | `Box(10, 10, 10)` |
+| `create cylinder height 12 radius 3` | `Cylinder(radius=3, height=12)` |
+| `subtract 2 from 1` | `v1 - v2` |
+| `volume N size S`, `curve N interval ...` | **DROP** — in build123d pipeline, size control lives in `OCCGeometry(...).GenerateMesh(maxh=S)` |
+| `label curve on`, `display`, `graphics text size` | **DROP** — GUI state, no Python equivalent |
+| `surface N scheme pave`, `mesh surface`, `volume N scheme auto`, `mesh volume` | **DROP** — meshing is Netgen's job downstream |
+| `list volume 1` | **DROP** — introspection, use `part.volume` / `part.faces()` |
+| `block 100 volume 1`, `nodeset 100 surface ...` | Use build123d `label` + `Compound` + `run_pipeline_multi` bridge to Gmsh physical groups |
+| `export genesis '...'` | Replace with NGSolve `Mesh.Export('...msh', 'Gmsh Format')` |
+
+## Minimal tet-pipeline equivalent
+
+```python
+from build123d import Box, Cylinder
+from netgen.occ import OCCGeometry, Glue
+from ngsolve import Mesh
+
+brick = Box(10, 10, 10)
+hole = Cylinder(radius=3, height=12)
+part = brick - hole
+part.label = "brick_with_hole"
+
+# hand to radia_mcp.build123d.pipeline, or do inline:
+from build123d import export_brep
+export_brep(part, "brick.brep")
+geo = OCCGeometry("brick.brep")
+ng_mesh = geo.GenerateMesh(maxh=1.0)
+ng_mesh.Export("brick.msh", "Gmsh Format")
+```
+
+Note: the Cubit tutorial produces a hex-sweep mesh (via `volume 1
+scheme auto` which picks sweep for this topology). The build123d
+translation above produces a **tet** mesh. If hex is required (Radia
+ELF input), keep the `.jou` and run it through Cubit — see `lab_policy`
+for the hex-supply role of Cubit.
+
+## Related tutorials (not yet ingested)
+
+URLs preserved for future scraping / student reference:
+
+| Tutorial | URL |
+|---|---|
+| ITEM wizard (guided meshing) | `step_by_step_tutorials/item/overview.htm` |
+| Power Tools (geometry cleanup) | `step_by_step_tutorials/power_tools/overview.htm` |
+| Decomposition (webcutting) | `step_by_step_tutorials/decomposition/decomposition.htm` |
+| Geometry cleanup process flow | `step_by_step_tutorials/processflow.htm` |
+
+All under `https://coreform.com/cubit_help/`. Relevant when porting a
+`.jou` that uses decomposition/webcutting or needs geometry healing —
+not covered here yet.
+"""
+
+
+CUBIT_BOOLEAN_POLICY = """
+# Boolean Operations: unite vs imprint+merge (CRITICAL)
+
+Cubit's ACIS kernel provides three distinct ways to combine bodies that
+touch or overlap.  Choosing the wrong one for a given geometry breaks the
+downstream mesh/curving pipeline silently (no error, just a bad mesh).
+
+## The Three Operations
+
+| Operation | Result | ACIS action | Shared topology? |
+|-----------|--------|-------------|------------------|
+| `unite volume all` | **1 solid** | Boolean union + face merge | Yes, but UV re-stitched |
+| `imprint all; merge all; compress` | **N solids** | No Boolean; mark shared faces | Yes, UV preserved |
+| (none) | N disjoint solids | No shared faces | No — mesh has duplicated nodes at interfaces |
+
+## When unite breaks things (the 3turnCoil lesson)
+
+On complex lofted / twisted geometry (many consecutive loft segments
+meeting tangentially), ACIS `unite` produces **UV-degenerate merged
+surfaces**.  Symptom chain:
+
+1. `unite volume 1 to 382` on a 382-loft coil
+2. ACIS merges 381 pairs of end-caps into trimmed surfaces with seams
+3. `export netgen` curving attempts to project midpoints
+4. `closest_point_uv_guess` rejects most projections ("reject storm")
+5. Fallback to linear midpoints => **order=2 curving degrades to order=1**
+6. Volume error ~0.7% instead of the expected <0.01%
+
+Measured on 3turnCoil (commit `b085b1be`): 9,855 rejects with unite,
+Vol err -0.67%.  Without unite: 0 rejects, error at floating-point limit.
+
+**`unite` is safe on**:
+- Simple primitives (box, sphere, cylinder) added together
+- A single swept solid that won't be further united
+- Geometry where UV charts remain regular after merge
+
+**`unite` is UNSAFE on**:
+- Loft chains (3turnCoil-class: 10+ consecutive lofts)
+- Twisted / helical sweeps touching end-to-end
+- Any geometry where unite produces faces with seams or singular UV
+
+## The correct pattern for multi-body conformal mesh
+
+```python
+# Build N bodies however they come (loft chain, sweep, primitives, ...)
+cubit.cmd("create volume loft surface 1 2")
+cubit.cmd("create volume loft surface 2 3")
+# ... N lofts ...
+
+# Share topology WITHOUT Boolean union
+cubit.cmd("imprint all")
+cubit.cmd("merge all")
+cubit.cmd("compress")  # renumbers to dense IDs
+
+# Do NOT: cubit.cmd("unite volume all")
+
+# Mesh ALL volumes (not just volume 1):
+cubit.cmd("volume all scheme tetmesh")
+cubit.cmd("volume all size 6")
+cubit.cmd("mesh volume all")
+
+# Group all lofts as one material:
+cubit.cmd("block 1 add volume all")
+cubit.cmd('block 1 name "coil"')
+
+# Export .vol: the N solids come out as 1 material,
+# interface nodes are shared (conformal), UV never degenerated.
+cubit.cmd('export netgen "coil.vol" order 3 overwrite')
+```
+
+The resulting `.vol` file has:
+- 1 material label "coil" (block 1)
+- N-1 shared interfaces, each represented by a single face set
+- Conformal tet mesh across all interfaces
+- Order-3 curving that converges to the CAD volume
+
+## Why imprint+merge works where unite fails
+
+`imprint` cuts coincident regions so each body has matching topology
+at the shared boundary (same faces on both sides).  `merge` then
+declares those matching faces equivalent at the ACIS-kernel level --
+the two solid references point to the SAME face object.  No Boolean
+classification runs, so **the original UV parametrization is kept
+intact on both sides** of every interface.
+
+When Cubit meshes, it sees the shared faces as a single entity and
+emits shared nodes on them.  The `export netgen` C++ writer
+preserves this in the `.vol` text format (one face referenced twice,
+with consistent vertex order on both volume elements).
+
+## Checklist when adding a new multi-body Cubit script
+
+- [ ] Do I need a single solid downstream?  **(If NO: do not unite)**
+- [ ] Am I chaining loft/sweep segments?  **(If YES: must not unite)**
+- [ ] Am I combining bodies with different materials?  **(If YES: must not unite -- block labels would collapse)**
+- [ ] Are my bodies simple primitives summing into a bulk shape? **(Only then unite is safe)**
+- [ ] After imprint+merge, did I add `compress` to renumber? **(Always do)**
+- [ ] After imprint+merge, did I use `volume all` in scheme/size/mesh? **(If you used `volume 1` you meshed only 1 of N bodies)**
+
+## Related breakage modes (same family: ACIS sharing lost silently)
+
+### 1. `heal` may run a hidden unite
+
+```
+import step "coil.step" heal    # DANGER
+```
+
+`heal` is Cubit's ACIS repair pass.  To close tolerance gaps it will
+merge nearby faces -- effectively a partial unite.  On a clean STEP from
+build123d / OCC this is harmless; on a large / dirty STEP it can turn
+multi-body geometry into a single solid with UV-degenerate faces.
+
+**Rule**: `heal` without inspection is forbidden for geometry destined
+for high-order curving.  Either import without heal and fix issues
+manually, or run heal and then verify face count / UV continuity
+(measure area per loft; compare against CAD).
+
+### 2. `webcut` without subsequent `imprint+merge`
+
+```
+webcut volume 1 with plane normal 0 0 1 offset 0
+# volume 1 (lower half) and volume 2 (upper half) now exist
+mesh volume all    # BREAKS: interface faces are not shared
+```
+
+`webcut` splits a body into N sub-bodies but does NOT guarantee
+BRep sharing of the cut face (ACIS version-dependent).  Always follow
+with:
+
+```
+webcut volume 1 with plane ...
+imprint volume all
+merge volume all
+```
+
+Forgetting either one yields a mesh with duplicated nodes along the
+cut plane (no error message -- conformality silently lost).
+
+### 3. Mixed mesh schemes + imprint+merge forgotten
+
+```
+volume 1 scheme sweep                  # hex
+volume 2 scheme tetmesh                # tet, adjacent to volume 1
+# if imprint+merge was not done, the shared face has TWO node patterns
+mesh volume all                        # tet side and hex side disagree
+```
+
+For sweep + tetmesh adjacency, the shared face must be explicitly
+merged BEFORE meshing: Cubit picks a conformal node pattern only
+when the face is known to be shared.  Same applies to hex + hex
+across cut, tet + wedge transitions, etc.
+
+### 4. `include_merged` keyword on move/rotate
+
+When a body is already merged (shared face with neighbour), plain
+`move volume 1 x 1` un-merges it silently; use `include_merged` to
+move both sides of the shared face together:
+
+```
+# After imprint+merge:
+move volume 1 x 1 include_merged     # correct
+move volume 1 x 1                    # breaks the merge
+```
+
+## See also
+
+- `scripting_ngsolve_panel` -- the deployed Radia FEM path (Cubit -> .vol)
+  never goes through STEP, so OCCT Glue issues do not apply
+- `scripting_trampoline_pitfalls` -- other ways the Cubit -> .vol
+  pipeline silently breaks (NetgenCurver order limit, ACIS tolerance,
+  block/sideset label collision, Cubit version drift)
+- `scripting_troubleshooting` -> reject-storm symptoms
+- Note: the `Glue` concept in OCC/NGSolve (Python) is the analog of
+  Cubit's `imprint+merge`.  Do not confuse OCC Glue with Cubit unite
+  (opposites).  See mcp-server-radia-ngsolve topic `boolean_policy`.
+"""
+
+
+CUBIT_KELVIN_REDUCTION_TRAPS = """
+# Cubit traps surfaced by symmetric-Kelvin benchmark builds (2026-04-26)
+
+Building 1/2 / 1/4 / 1/8 sphere reductions for the EM panel's
+"Kelvin Benchmark" mode (`panels/samples/kelvin_benchmark_sphere_*.vol`)
+exposed three Cubit-side traps that silently produce wrong meshes
+or wrong field-solve answers downstream.  These are not obvious
+from the Cubit docs and bit us on real models in 2025.3.
+
+## Trap 1: `subtract A from B keep` does NOT carve B in Cubit 2025.3
+
+The intended semantics ("subtract A from B, but keep A around as a
+separate body") changed silently between Cubit versions.  In 2025.3
+on the Kelvin sphere build, `subtract air_inner from kelvin_outer
+keep` left **kelvin_outer untouched** -- no spherical hollow cut --
+and the downstream FEM mesh had air and kelvin volumes overlapping.
+Worse, the operation succeeded with no error or warning.
+
+**Workaround** (verified to work across Cubit versions):
+
+```python
+# Save the body we need to keep BEFORE the subtract:
+A_id = ...  # air_inner
+B_id = ...  # kelvin_outer
+A_was_at = (cubit.volume(A_id).centroid(),
+            cubit.volume(A_id).bounding_box())
+
+# Drop the `keep` keyword -- this consumes A but actually carves B:
+cubit.cmd(f"subtract volume {A_id} from volume {B_id}")
+
+# Re-create A as a fresh primitive at the same place:
+cubit.cmd(f"create sphere radius {A_radius}")
+A_new = cubit.get_last_id("volume")
+cubit.cmd(f"move volume {A_new} location {A_was_at[0][0]} {A_was_at[0][1]} {A_was_at[0][2]}")
+```
+
+This is more verbose than `keep`, but works on Cubit 2024 / 2025.x
+without the silent-no-op bug.  The `panels/samples/kelvin_benchmark_
+sphere_build.py` core uses this pattern.
+
+## Trap 2: 1/8 octant copy-mesh anchor curve is non-deterministic
+
+For copy-mesh between two octant caps (1/8 sphere reduction), the
+Cubit Python API takes anchor curves on source and target faces.
+The cap of a 1/8 sphere octant has **3 equal-length quarter-arc
+boundary curves** (one along each coordinate plane intersection).
+
+A naive selector like `max(curves, key=lambda c: cubit.curve(c).length())`
+ties three ways and returns whichever curve Cubit listed first.
+**Cubit's listing order can differ between source and target faces**
+(version + history dependent), so the source-anchor and target-
+anchor pick different curves -> copy_mesh maps the meshes wrong ->
+all 143 expected node pairs land at random positions, not their
+geometric reflections.
+
+**Fix** (in `_add_kelvin_cubit_reduction`): break the tie with a
+stable secondary key derived from the curve centroid:
+
+```python
+def anchor_curve(face_id):
+    curves = cubit.parse_cubit_list("curve", f"in surface {face_id}")
+    # Equal-length tie-break by centroid: lowest z, then lowest y,
+    # then lowest x.  Stable across Cubit's listing order on both
+    # source and target faces:
+    def key(cid):
+        c = cubit.curve(cid).position_from_fraction(0.5)
+        return (c[2], c[1], c[0])
+    return min(curves, key=key)
+```
+
+Verified 2026-04-25: 143/143 copy-mesh pairs now land at machine
+precision (2.6e-16 m).  Same lesson applies to any copy-mesh between
+geometrically equivalent N-fold-symmetric faces.
+
+See `memory/feedback_kelvin_1_8_blocker.md` and CLAUDE.md
+"AI-Driven Cubit: Probe, Don't Guess" for the general principle:
+**probe Cubit and print the actual values before writing the
+classification logic** -- do not derive selectors from the .jou
+source by hand.
+
+## Trap 3: Cubit-meshed surface normal sign for FEM Neumann BCs
+
+Cubit assigns surface element normals with the **opposite sign
+convention** to NGSolve's WorkPlane-based OCC builder for the same
+geometry.  The reduced-Omega Kelvin Neumann correction term
+
+    f += -H_s * specialcf.normal(3) * v.Trace() * ds("kelvin_int")
+
+is correct AS-WRITTEN on Cubit-meshed `.vol`; the maintained executable
+reference is `validation_test/cubit/kelvin_1_4_p_convergence/`. If the
+BC is wrong-signed: 1/4 sample goes from +0.71% to about -7% at p=2.
+
+**Practical rule**: if a Kelvin-Neumann run gives a 5-10x error at
+p=2 on a known-good `.vol`, **flip the sign on the
+`specialcf.normal(3)` term first** -- this is a 30-second A/B test
+that catches the sign convention mismatch faster than re-deriving
+the formulation.  Cross-reference: see
+`mcp-server-radia-ngsolve` topic `kelvin_transformation` ->
+"Cubit-meshed Kelvin needs `-specialcf.normal`" for the
+NGSolve-side detail.
+
+## See also
+
+- `mcp-server-radia-ngsolve` topic `kelvin_transformation` ->
+  "Why 1/8 is unsupported for the sphere benchmark" -- physical
+  reason 1/8 sphere benchmark cannot work (Hzẑ source breaks the
+  z=0 mirror symmetry; nothing to do with Cubit)
+- CLAUDE.md "AI-Driven Cubit: Probe, Don't Guess"
+- `scripting_boolean_policy` -- related: ACIS sharing lost silently
+"""
+
+
+CUBIT_TRIAL_ERROR_POLICY = """
+# Trial-and-error policy: batch first, commit after success
+
+**POLICY**: Every AI/LLM-initiated Cubit operation runs in headless
+batch mode. The persistent MCP session is headless too. Human GUI use
+is independent and outside MCP.
+
+Human cooperation uses saved artifacts: `cubit_import_journal(path)` reads
+a human-saved journal without execution, while `cubit_session_journal`
+exports the AI session's Cubit-native `record "file"` journal. APREPRO
+definitions are retained, and comparison uses that recorded artifact rather
+than reconstructed RPC history. Preserve both sources and the checkpoint and
+review differences before explicit headless replay.
+
+## The two channels
+
+| Channel           | How                                        | When to use                               |
+|-------------------|--------------------------------------------|-------------------------------------------|
+| **Trial (batch)** | `coreform_cubit.com -batch -nographics -nojournal wrapper.jou`, or the MCP tool `cubit_batch_try` | Exploring recipes, probing errors, mesh ladder search |
+| **Commit (headless)** | `cubit_exec` / `cubit_stage` against the persistent headless daemon | Apply a recipe whose success was already verified in batch |
+
+## Why
+
+1. **Fast feedback**: each batch attempt is an independent Cubit
+   subprocess with a fresh state.  No cross-contamination between
+   attempts, no accumulated errors, no GUI lag.
+2. **No GUI interference**: a failed or half-built mesh remains in an
+   agent-owned headless process and never changes a human Cubit window.
+3. **Crash isolation**: if an import / mesh command segfaults (large
+   STEP, topology singularity), the batch process dies cleanly.  The
+   persistent headless session is untouched.
+4. **Reproducibility**: the batch wrapper.jou is the exact
+   reproducible recipe. If it worked in the isolated batch, replay it
+   in the persistent headless session;
+   if it didn't, don't ship it.
+
+## Required flags
+
+Always: `-batch -nographics -nojournal`.
+
+**Do NOT** use:
+- `-nogui` — unrecognised by Cubit 2025.3, instant segfault (exit 139).
+  Verified 2026-04-21 by the 3turncoil batch-mesh agent.
+- `-noecho` alone without `-nojournal` — still writes journal files,
+  pollutes the student's working directory.
+
+## Flow the MCP tools already encode
+
+`cubit_mesh_auto(step_path, target_size, prefer, apply_to_session=True)`:
+1. Tries a ladder of schemes (`auto` -> `sweep` -> `polyhedron` -> `tetmesh`)
+   in fresh headless batch subprocesses.
+2. Picks the first rung that produces >0 elements of the preferred family.
+3. Only after that does it replay the winning recipe in the persistent
+   headless session (when `apply_to_session=True`).
+
+`cubit_batch_try(step_path, commands)`:
+- Pure batch dry-run.  Returns element counts and per-line results.
+- **Use this BEFORE `cubit_exec`** when iterating on a new recipe.
+
+## Anti-patterns
+
+- Calling `cubit_exec` with a speculative command sequence: if one
+  line fails, the persistent session enters a half-state and subsequent
+  `cubit_exec` calls inherit the mess.
+- Running `cubit_stage <new_step>` in the persistent session just to test if
+  it loads: use `cubit_batch_try(step_path=new_step, commands=[])`
+  instead -- zero impact on the persistent state.
+- Leaving a 1.5 M-tet mesh in the persistent session from an exploratory
+  run: mesh cleanup and deletion add avoidable state and memory pressure.
+
+## 3turncoil meshing incident (2026-04-21)
+
+The 3turncoil batch agent generated 1.5 M tets + order-2 NetgenCurver
+(9 min job). Running it in an isolated headless batch protected the
+persistent session from the large transient mesh and the exit-139 path.
+Only after the 7.7 MB .vol landed (32 k hexes from a separate sweep
+recipe that fit under the Learn Edition cap) was the accepted recipe
+eligible for replay in the persistent headless session.
+
+See topic `mesh_auto` for the full ladder flow.
+"""
+
+
+CUBIT_TRAMPOLINE_PITFALLS = """
+# Trampoline Pitfalls — silent breakage in the Cubit -> .vol -> NGSolve pipeline
+
+When Cubit geometry is "trampolined" through mesh export to NGSolve FEM,
+several subtle issues can produce a technically valid `.vol` file whose
+mesh is wrong.  None of these raise an error -- you only notice by
+checking volumes, mesh quality, or final solution accuracy.
+
+## 1. NetgenCurver order limit (order >= 4)
+
+`export netgen "x.vol" order 4` or higher:
+
+- `.vol` writer: succeeds (curvedelements section emitted)
+- NGSolve reader: `mesh.Curve(4)` also works
+- BUT: NetgenCurver's face-interior / volume-interior HO node extraction
+  is experimental for order >= 4.  Edge midpoints and face-boundary
+  nodes are solid, but interior nodes of triangles (order 4 -> 1 face
+  interior node, order 5 -> 3) and tets (order 4+ -> interior) may fall
+  back to linear interpolation on complex surfaces.
+
+**Practical rule**:
+- order=2, 3: production-ready for any geometry
+- order=4: OK for clean geometry (spheres, torus), measure the volume
+- order=5: experimental, spot-check each new geometry
+
+Related: GMSH export (`export gmsh`) ERRORS on order >= 4 (does
+not silently fall back); .vol export DOES write order 4-5 but without
+the same integrity guarantee.
+
+## 2. ACIS tolerance — "close but not equal" faces
+
+Two faces that are geometrically within ACIS `merge tolerance` (default
+~1e-6) but not exactly coincident may merge unpredictably:
+
+- Sometimes merge ("works by luck")
+- Sometimes don't merge ("no warning")
+- Between two Cubit sessions with the same .jou the outcome can flip
+
+Symptoms: mesh quality suddenly drops, one interface has conformal
+mesh and a similar interface does not.
+
+**Fix**: clean the geometric source rather than relaxing the tolerance.
+Loosening `merge tolerance` can merge faces that were never meant to
+share (catastrophic).  If you must loosen, target specific surface
+pairs with `merge surface A B tolerance T`.
+
+## 3. Block / sideset label collision
+
+`.vol` encodes:
+- `$PhysicalNames` entries from block names (volume labels)
+- `bcnames` entries from sideset names (boundary labels)
+
+If a block and a sideset share a name, NGSolve's `mesh.GetMaterials()`
+and `mesh.GetBoundaries()` may return the same string, breaking
+`Materials("iron")` / `Boundaries("iron")` lookups:
+
+```
+block 1 add volume 1
+block 1 name "coil"              # OK
+sideset 1 add surface 3
+sideset 1 name "coil"            # COLLIDES with block name
+```
+
+**Naming convention**:
+- Volume labels: `coil`, `iron`, `air`, `kelvin` (material semantic)
+- Boundary labels: `<material>_bnd`, `source`, `sink`, `sibc`,
+  `outer` (geometric / electrical semantic)
+
+Keep the two namespaces disjoint.
+
+## 4. Block with no volume, only surface elements
+
+```
+block 1 add tri in surface 1     # surface-only, no volume
+block 1 name "source"
+```
+
+`.vol` will write this as a material-like entity but with zero volume
+mesh -- NGSolve reports `Materials("source")` of area 0, which breaks
+`Integrate(1, mesh, definedon=Materials("source"))`.
+
+**Rule**: use `sideset` for boundary labels, `block` for volume labels.
+See the Cubit Block/Sideset Label Convention in CLAUDE.md.
+
+## 5. `volume all size <N>` after imprint+merge but before scheme
+
+Order matters:
+
+```
+# WRONG:
+volume all size 6
+volume all scheme tetmesh        # size hint may be overwritten
+mesh volume all
+
+# RIGHT:
+volume all scheme tetmesh
+volume all size 6
+mesh volume all
+```
+
+Some schemes (sweep, pave) reinitialise size defaults.  Set scheme
+FIRST, then size.
+
+## 6. Cubit version drift
+
+LAB / 100号機 / mdx must run Coreform Cubit 2025.12+.  ACIS
+version upgrades subtly change:
+- Default `merge tolerance`
+- UV parametrization of lofted surfaces (`b085b1be` reject count
+  changes between ACIS versions)
+- STEP import healing aggressiveness
+
+A .jou that works on an older Cubit may produce a different mesh on
+2025.12.  `cubit-plugin-install` and Radia panel registration now reject
+pre-2025.12 installs instead of silently selecting them.
+
+## 7. Learn Edition 50k element cap (cosmetic)
+
+Cubit Learn Edition prints:
+```
+ERROR: Coreform Cubit - Learn Edition restricts export to models
+with less than 50k elements.
+```
+
+This ERROR is **harmless for the Radia workflow**: `export netgen`
+bypasses the internal cap and writes .vol correctly (verified on 147k
+element coil, commit log).  The cap applies only to Cubit's built-in
+`export gmsh` / `export vtk` / `export exo`, which radia does not use.
+
+Do NOT coarsen meshes to get under 50k.  See CLAUDE.md
+"Cubit Learn Edition 50k Element Cap: IGNORE" for details.
+
+## Minimal checklist before committing a new .jou
+
+- [ ] No `unite` on complex loft chains (use `imprint+merge` only)
+- [ ] No `heal` unless effect on mesh was measured
+- [ ] `webcut` followed by `imprint+merge`
+- [ ] Mixed hex/tet adjacency: merge done before mesh
+- [ ] Moves/rotates use `include_merged`
+- [ ] `export netgen order <= 3` (or explicit 4+ validation)
+- [ ] Block names and sideset names in disjoint namespaces
+- [ ] Volumes in blocks, surfaces in sidesets (never mixed)
+- [ ] Scheme set before size
+- [ ] Tested on the Cubit version used on deploy targets
+
+## See also
+
+- `scripting_boolean_policy` -- unite / imprint+merge / heal (the
+  ACIS-sharing family of breakages)
+- `scripting_ngsolve_panel` -- FEM panel workflow
+- mcp-server-radia-ngsolve `boolean_policy` -- OCC side (Glue vs Fuse)
+"""
+
+
+CUBIT_DAEMON_PERSISTENCE = """
+# Persistent headless Cubit session
+
+The MCP server keeps one Cubit session warm for incremental commands. Every
+LLM-owned session runs under Cubit's bundled Python with `-batch -nographics`
+and uses stdio JSON-RPC. It is owned by the MCP process; responses record
+`execution_mode="batch"` and `gui_started=false`.
+
+The historical file-drop GUI transport remains an internal compatibility
+implementation for manual, non-MCP integrations. MCP entry points explicitly
+request `CubitSession.get(mode="batch")`; a mode-mismatched singleton fails
+loudly instead of being reused.
+
+Interactive Cubit GUI work is human-owned and outside this server. Exchange
+state through STEP, SAT, `.cub5`, `.jou`, `.vol`, Gmsh, logs, and result
+artifacts instead of attaching an LLM to a Cubit window.
+"""
+
+
+CUBIT_LICENSE_WARMUP = """
+# Cubit license warmup (radia-mcp >= 0.32.0)
+
+Coreform Cubit 2025.12 authenticates via RLM (Reprise License Manager).
+The first Cubit batch start after a machine sits idle takes
+**30-60 s** because RLM:
+
+  1. Contacts the Coreform license server (internet round-trip).
+  2. Writes a renewal entry to
+     `%LOCALAPPDATA%/Coreform/CoreformCubit/renewals/*.ren`.
+  3. Caches for 3 days (renew) / 7 days (hard expiry).
+
+If a recent renewal is on disk, the same boot costs ~3 s.
+
+## What the warmup does
+
+`cubit_mesh_export.mcp.license_warmup.warmup_license(bin_dir, timeout_s=30)`
+parses the renewals folder.  If the most recent `.ren` is within 3 days,
+it returns immediately.  Otherwise it runs
+`rlm_activate.exe --login <email> --password <pw>` **before** Cubit is
+spawned.  This turns a 60-s cold boot into a 3-s warm boot.
+
+## Credentials
+
+- `RADIA_CUBIT_LEARN_EMAIL` / `RADIA_CUBIT_LEARN_PASSWORD` env vars.
+- No hard-coded defaults: when either env var is unset, warmup is
+  skipped and Cubit does its own license checkout (slower).  Set
+  the env vars in the lab launcher script before invoking Cubit
+  for the fast-warm path.
+- These credentials are for the **Coreform Learn Edition** only.  Pro
+  machines use the local license server and skip the warmup path.
+
+## User-facing shortcut (100号機)
+
+Kubota and other shared-machine users get:
+
+- `Desktop\\Coreform Cubit (warm launch).lnk` — warmup + start Cubit.
+- `C:/ProgramData/CoreformCubit/cubit_refresh.cmd` — warmup only,
+  no Cubit launch (the silent "one-click refresh" option).
+
+Both are drop-in replacements for clicking the normal Cubit icon.
+After the scheduled task `\\Coreform\\CubitLicenseRefresh` fires once
+per user logon, the cache is already warm and these shortcuts complete
+in < 5 s.
+
+## Debugging a slow cold boot
+
+1. `dir %LOCALAPPDATA%\\Coreform\\CoreformCubit\\renewals` — look for a
+   `.ren` file newer than 3 days.  If absent, warmup will run.
+2. `type C:\\ProgramData\\CoreformCubit\\cubit_refresh.log` (if present)
+   shows the last `rlm_activate` exit code.
+3. `rlm_activate.exe --login <email> --password <pw>` direct — if this
+   hangs, it is a network / firewall issue, not a Radia issue.
+
+## See also
+
+- `daemon_persistence` -- how the 0.01 s attach path works after warmup.
+- `trial_error_policy` -- batch-first testing minimises cold-boot hits.
+"""
+
+
+CUBIT_UTF8_PATH = """
+# UTF-8 / Japanese path support (cubit-mesh-export >= 0.6.0)
+
+Before 0.6.0, `export netgen "C:/temp/日本語/coil.vol"` raised:
+
+```
+No mapping for the Unicode character exists in the target multi-byte
+code page.
+```
+
+and wrote no file.  Cause: `std::string -> std::filesystem::path`
+implicit conversion uses the system codepage, which is cp932 on Japanese
+Windows.  Non-ASCII path components could not round-trip.
+
+## The fix
+
+`src/cubit_plugin/utf8_path.hpp` provides one helper:
+
+```cpp
+std::filesystem::path u8_string_to_path(const std::string &s);
+```
+
+On Windows it calls `MultiByteToWideChar(CP_UTF8, ...)` to produce a
+`std::wstring`, then constructs `std::filesystem::path(wstring)`.  The
+wide-string path is then passed to the writer's `std::ofstream` / Cubit
+API as-is, bypassing the narrow-API cp932 bottleneck.
+
+## Applied to all 6 exporters
+
+- `ExportNetgenCommand.cpp` (.vol + .vol.json)
+- `ExportGmshCommand.cpp` (.msh v4.1)
+- `ExportNastranCommand.cpp` (.bdf)
+- `ExportVtkCommand.cpp` (.vtk)
+- `ExportMegCommand.cpp` (.meg — FEMEEM / MAGIC)
+- `ExportFemeemCommand.cpp` (in.dat + node.dat + ...)
+
+## Known limitation: cubit -batch <japanese.jou>
+
+Cubit's own argv parsing goes through the narrow cp932 API.  Passing a
+Japanese path **as a command-line argument** still breaks.  Workaround:
+an ASCII wrapper .jou containing `playback "C:/日本語/work.jou"` inside
+— the `playback` command uses Cubit's internal string handling which is
+UTF-8.  This is a Cubit core limitation; the Radia plugin cannot fix it.
+
+## Verification
+
+```
+export netgen "C:/temp/日本語/coil.vol" overwrite
+# -> writes 22,521 bytes on the reference sphere test
+```
+
+Regression guard: `tests/cubit/test_ho_volume_all_formats.py` covers
+ASCII paths; a dedicated Japanese-path smoke test is run in the 100号機
+deploy phase (not in CI because CI runners do not have Cubit installed).
+
+## See also
+
+- `license_warmup` -- the 30-60 s -> 3 s first-boot speedup.
+- `batch_first` (alias of `trial_error_policy`) -- why CI can't easily
+  cover Cubit-dependent tests.
+"""
+
+
+CUBIT_V4_7_0_RELEASE = """
+# radia 4.7.0 / cubit-mesh-export 0.6.0 / radia-mcp 0.32.0 (2026-04-22)
+
+This is the **v4.7.0 release synopsis** for the Cubit side.  The three
+packages release in lockstep; see the per-package CHANGELOGs for
+Python- or build-specific details.
+
+## Headline features
+
+1. **PEEC-inductance now handles any STEP**
+   - 1-turn circular torus (gapped or closed) via TORUS analytical sweep.
+   - 1-turn rect-section torus via CYLINDER analytical sweep.
+   - Multi-turn pancake loft via cross-section centroid NN chain.
+   - Explicit `.jou` sidecar still supported (fastest path).
+   - New: auto-prefer `<base>.jou` sibling next to `<base>.step` if it
+     contains a PEEC `move Surface ... x Y y Y z Z` pattern.
+
+2. **Japanese / Unicode paths work**
+   All 6 Cubit exporters (Netgen / GMSH / Nastran / VTK / MEG / FEMEEM)
+   handle `C:/temp/日本語/...` correctly.  See `utf8_path` topic.
+
+3. **Cubit startup 30-60 s -> 3 s; VSCode restart 6 s -> 0.01 s**
+   License warmup + daemon attach-if-alive.  See `license_warmup` and
+   `daemon_persistence` topics.
+
+## Upgrade notes for existing users
+
+- LAB / 100号機: `release_quad.py` deploys editable installs; on each user's
+  next Windows logon the scheduled task `\\Coreform\\CubitLicenseRefresh`
+  will prime the RLM cache automatically.  Users in an existing logon
+  session can double-click `Coreform Cubit (warm launch)` on the desktop
+  or run `C:/ProgramData/CoreformCubit/cubit_refresh.cmd` to get the
+  same effect immediately.
+- hibino / external users: `pip install --upgrade "radia[cubit]"
+  radia-mcp cubit-mesh-export` + `cubit-plugin-install` +
+  `cubit-plugin-install --verify-only`.
+- mdx: `release_quad.py phase8e` installs PyPI wheels for `radia` and
+  `cubit-mesh-export`; `radia-mcp` is intentionally absent there.
+- VSCode MCP users: restart VSCode once to pick up the new daemon code.
+  After that, subsequent restarts attach in 0.01 s.
+
+## Known issues / non-goals
+
+- MCP Python module hot-reload without VSCode restart: not possible
+  (OS-level limit — existing imports are in the Python process).
+- Non-admin SSH user impersonation without password: not supported
+  (6 Windows routes tried; see `.claude/skills/debug-remote-user`).
+
+## See also
+
+- `daemon_persistence` -- Phase 1 attach-if-alive.
+- `license_warmup` -- the 3-day RLM cache + `cubit_refresh.cmd`.
+- `utf8_path` -- Japanese path handling.
+- Top-level `CHANGELOG.md` -- Python-side details.
+"""
+
+
+CUBIT_APREPRO_VS_PREDICATE = """
+# Cubit APREPRO macros vs `with` predicate -- two different mechanisms
+
+This is one of the more confusing aspects of Cubit's command syntax.
+The two are **different mechanisms** that often appear next to each
+other in the same .jou file.  Confusing them costs hours of debugging.
+
+## APREPRO -- macro / template language
+
+Evaluated **before** Cubit parses the command.  Pure textual
+substitution + simple expressions.  Syntax: `#{...}`.
+
+```cubit
+brick x 0.300 y 0.300 z 0.300
+#{air_id = Id("volume")}              # captures last-created vol ID
+subtract volume 1 from volume {air_id} keep_tool
+```
+
+Built-in functions:
+- `Id("volume")` / `Id("surface")` -- ID of last-created entity
+- `IdList(type, query_string)` -- list of IDs matching query
+- arithmetic: `#{x = 5}`, `#{y = 2*x}`
+- conditional: `#{if cond}`, `#{else}`, `#{endif}`
+
+**Limitation**: APREPRO captures are **textual snapshots**.  After
+`unite` / `compress` / `subtract` / `imprint+merge` renumber the
+entities, the captured IDs become STALE.  Example failure:
+
+```cubit
+unite volume 1 to 382
+#{coil_id = Id("volume")}             # captured = some ID e.g. 1
+compress                              # IDs renumber
+# ...further topo ops...
+sideset 1 add surface 765             # surface 765 from 382-loft
+                                      # state DOES NOT EXIST anymore
+                                      # -> "Empty sideset; removing..."
+```
+
+## Cubit `with` predicate -- command-language entity selection
+
+Evaluated **at command-parse time**, fresh on every play.  Selects
+entities by GEOMETRIC PROPERTIES.  This is the renumber-resistant
+approach.
+
+```cubit
+sideset 1 add surface in volume 1 with area > 3.1e-5 with y_coord > 0
+sideset 1 name "source"
+```
+
+Filter dimensions (combined with multiple `with` clauses or `and`):
+- `area`, `length`, `volume` -- size of the entity
+- `x_coord`, `y_coord`, `z_coord` -- centroid coordinate
+- `x_min`, `x_max`, `y_min`, `y_max`, `z_min`, `z_max` -- bbox
+- `name`, `id` -- attribute predicates
+
+Stackable predicate examples:
+```cubit
+# Disk faces at +X tip of coil, +Y side
+surface in volume 1 with area > 3.1e-5 with area < 3.13e-5 \\
+                                       with y_coord > 0
+
+# Cylindrical surfaces (large area, long curved)
+surface in volume 1 with area > 1e-3
+
+# Surfaces near a specific Z plane
+surface in volume 1 with z_coord > 0.04 with z_coord < 0.06
+```
+
+## Hybrid pattern (recommended for portable .jou)
+
+Use APREPRO `Id()` to track volume IDs during construction (before
+destructive ops).  Then switch to `with` predicate for any selection
+AFTER topological operations renumber.
+
+```cubit
+# Geometry construction phase: APREPRO Id() captures stable here
+create Cylinder height 0.150 radius 0.005
+#{wp_id = Id("volume")}
+
+brick x 0.3 y 0.3 z 0.3
+#{air_id = Id("volume")}
+
+# Topological op -- IDs MAY renumber (esp. after subtract):
+subtract volume 1 to {wp_id} from volume {air_id} keep_tool
+compress
+
+# After compress: the old captured IDs MAY still work, but for
+# SURFACES (which were renumbered by subtract) use `with` predicate:
+sideset 1 add surface in volume 1 with area > 3.1e-5 \\
+                                  with area < 3.13e-5 \\
+                                  with y_coord > 0
+sideset 1 name "source"
+```
+
+## subtract gotchas (verified 2026-04-29)
+
+| Form | Tool | Body | Result |
+|------|------|------|--------|
+| `subtract A from B` | consumed | modified | 1 less volume |
+| `subtract A from B keep_tool` | kept | modified IN PLACE | same #vols, body = (B-A) |
+| `subtract A from B keep` | kept | KEPT + new vol created | +1 volume (B-A duplicate); the original B is now ORPHAN |
+
+**Use `keep_tool` for "carve a hole" semantics** (preserve coil + wp,
+modify air-brick to be (brick - coil - wp)).  `keep` instead leaves
+the un-carved brick orphaned and any block assignment using the
+captured `air_id` points at the wrong (un-carved) volume.
+
+## Common confusion (corrected by user 2026-04-29)
+
+> "that's APREPRO, right?" -> No.  `with area > X` is Cubit's
+> command-language predicate, NOT APREPRO macro syntax.  APREPRO is
+> the `#{...}` substitution + `Id()`/`IdList()` etc.  Everything
+> outside `#{...}` is ordinary Cubit command syntax.
+"""
+
+
+def get_cubit_documentation(topic: str = "all") -> str:
+	"""Return Cubit scripting documentation by topic."""
+	topics = {
+		"overview": CUBIT_OVERVIEW,
+		"lab_policy": CUBIT_LAB_POLICY,
+		"build123d_crossref": CUBIT_BUILD123D_CROSSREF,
+		"official_tutorial_cl_brick": CUBIT_OFFICIAL_TUTORIAL,
+		"snl_tutorial": CUBIT_OFFICIAL_TUTORIAL,  # alias
+		"blocks": CUBIT_BLOCKS,
+		"blocks_only_policy": CUBIT_BLOCKS_ONLY_POLICY,
+		"element_order": CUBIT_ELEMENT_ORDER,
+		"mesh_schemes": CUBIT_MESH_SCHEMES,
+		"step_exchange": CUBIT_STEP_EXCHANGE,
+		"initialization": CUBIT_INITIALIZATION,
+		"mixed_elements": CUBIT_MIXED_ELEMENTS,
+		"common_mistakes": CUBIT_COMMON_MISTAKES,
+		"hex_workflow": CUBIT_HEX_WORKFLOW,
+		"tet_workflow": CUBIT_TET_WORKFLOW,
+		"2d_mesh": CUBIT_2D_MESH_WORKFLOW,
+		"troubleshooting": CUBIT_TROUBLESHOOTING,
+		"design_philosophy": CUBIT_DESIGN_PHILOSOPHY,
+		"aprepro_journal": CUBIT_APREPRO_JOURNAL,
+		"aprepro_advanced": CUBIT_APREPRO_ADVANCED,
+		"aprepro": CUBIT_APREPRO_ADVANCED,  # alias
+		"mesh_to_geometry": CUBIT_MESH_TO_GEOMETRY,
+		"parametric_geometry": CUBIT_PARAMETRIC_GEOMETRY,
+		"batch_processing": CUBIT_BATCH_PROCESSING,
+		"format_conversion": CUBIT_FORMAT_CONVERSION,
+		"kelvin_transform": CUBIT_KELVIN_TRANSFORM,
+		"ngsolve_panel": CUBIT_SOLVER_HANDOFF,
+		"solver_handoff": CUBIT_SOLVER_HANDOFF,
+		"optuna": CUBIT_RESULTS_VISUALIZATION,
+		"results_visualization": CUBIT_RESULTS_VISUALIZATION,
+		"post_processing": CUBIT_RESULTS_VISUALIZATION,
+		"geometry_commands": CUBIT_GEOMETRY_COMMANDS,
+		"geometry": CUBIT_GEOMETRY_COMMANDS,  # alias
+		"webcut": CUBIT_GEOMETRY_COMMANDS,  # alias
+		"boolean_policy": CUBIT_BOOLEAN_POLICY,
+		"boolean": CUBIT_BOOLEAN_POLICY,  # override the old alias
+		"unite": CUBIT_BOOLEAN_POLICY,  # alias
+		"imprint_merge": CUBIT_BOOLEAN_POLICY,  # alias
+		"heal": CUBIT_BOOLEAN_POLICY,  # alias (heal = hidden unite)
+		"webcut": CUBIT_BOOLEAN_POLICY,  # override CUBIT_GEOMETRY_COMMANDS
+		"3turncoil": CUBIT_BOOLEAN_POLICY,  # alias
+		"loft_chain": CUBIT_BOOLEAN_POLICY,  # alias
+		"kelvin_reduction_traps": CUBIT_KELVIN_REDUCTION_TRAPS,
+		"subtract_keep": CUBIT_KELVIN_REDUCTION_TRAPS,  # alias
+		"copy_mesh_anchor": CUBIT_KELVIN_REDUCTION_TRAPS,  # alias
+		"specialcf_normal": CUBIT_KELVIN_REDUCTION_TRAPS,  # alias
+		"normal_sign": CUBIT_KELVIN_REDUCTION_TRAPS,  # alias
+		"octant": CUBIT_KELVIN_REDUCTION_TRAPS,  # alias
+		"trial_error_policy": CUBIT_TRIAL_ERROR_POLICY,
+		"trial_error": CUBIT_TRIAL_ERROR_POLICY,
+		"batch_first": CUBIT_TRIAL_ERROR_POLICY,
+		"commit_after_success": CUBIT_TRIAL_ERROR_POLICY,
+		"nographics": CUBIT_TRIAL_ERROR_POLICY,
+		"agent_policy": CUBIT_TRIAL_ERROR_POLICY,
+		"trampoline_pitfalls": CUBIT_TRAMPOLINE_PITFALLS,
+		"trampoline": CUBIT_TRAMPOLINE_PITFALLS,
+		"pitfalls": CUBIT_TRAMPOLINE_PITFALLS,
+		"curving_order": CUBIT_TRAMPOLINE_PITFALLS,
+		"acis_tolerance": CUBIT_TRAMPOLINE_PITFALLS,
+		"label_collision": CUBIT_TRAMPOLINE_PITFALLS,
+		"learn_edition": CUBIT_TRAMPOLINE_PITFALLS,
+		"helix_coil": CUBIT_HELIX_COIL,
+		"helix": CUBIT_HELIX_COIL,  # alias
+		"coil": CUBIT_HELIX_COIL,  # alias
+		"coil_from_polyline": CUBIT_COIL_FROM_POLYLINE,
+		"polyline_coil": CUBIT_COIL_FROM_POLYLINE,  # alias
+		"centerline_coil": CUBIT_COIL_FROM_POLYLINE,  # alias
+		"coil_from_points": CUBIT_COIL_FROM_POLYLINE,  # alias
+		"frame_sweep": CUBIT_COIL_FROM_POLYLINE,  # alias
+		"cross_section_loft": CUBIT_COIL_FROM_POLYLINE,  # alias
+		"visualization": CUBIT_VISUALIZATION,
+		"display": CUBIT_VISUALIZATION,  # alias
+		"pyramid_handling": CUBIT_PYRAMID_HANDLING,
+		"pyramid": CUBIT_PYRAMID_HANDLING,  # alias
+		"icosahedral_sphere": CUBIT_ICOSAHEDRAL_SPHERE,
+		"sphere_mesh": CUBIT_ICOSAHEDRAL_SPHERE,  # alias
+		"mesh_quality_detailed": CUBIT_MESH_QUALITY_DETAILED,
+		"quality": CUBIT_MESH_QUALITY_DETAILED,  # alias
+		"boundary_layer": CUBIT_BOUNDARY_LAYER_MESH,
+		"skin_mesh": CUBIT_BOUNDARY_LAYER_MESH,  # alias
+		# v4.7.0 operational topics (radia-mcp >= 0.32.0)
+		"daemon_persistence": CUBIT_DAEMON_PERSISTENCE,
+		"daemon": CUBIT_DAEMON_PERSISTENCE,  # alias
+		"phase1_attach": CUBIT_DAEMON_PERSISTENCE,  # alias
+		"pid_lock": CUBIT_DAEMON_PERSISTENCE,  # alias
+		"license_warmup": CUBIT_LICENSE_WARMUP,
+		"warmup": CUBIT_LICENSE_WARMUP,  # alias
+		"rlm_activate": CUBIT_LICENSE_WARMUP,  # alias
+		"cubit_refresh": CUBIT_LICENSE_WARMUP,  # alias
+		"warm_launch": CUBIT_LICENSE_WARMUP,  # alias
+		"utf8_path": CUBIT_UTF8_PATH,
+		"japanese_path": CUBIT_UTF8_PATH,  # alias
+		"unicode_path": CUBIT_UTF8_PATH,  # alias
+		"cp932": CUBIT_UTF8_PATH,  # alias
+		"v4_7_0": CUBIT_V4_7_0_RELEASE,
+		"release_v4_7_0": CUBIT_V4_7_0_RELEASE,  # alias
+		"4.7.0": CUBIT_V4_7_0_RELEASE,  # alias
+		# 2026-04-29: APREPRO vs `with` predicate distinction
+		"aprepro_vs_predicate": CUBIT_APREPRO_VS_PREDICATE,
+		"aprepro_predicate": CUBIT_APREPRO_VS_PREDICATE,  # alias
+		"with_predicate": CUBIT_APREPRO_VS_PREDICATE,  # alias
+		"predicate": CUBIT_APREPRO_VS_PREDICATE,  # alias
+		"subtract_keep": CUBIT_APREPRO_VS_PREDICATE,  # alias (subtract gotchas)
+		"subtract_keep_tool": CUBIT_APREPRO_VS_PREDICATE,  # alias
+		"unite_renumber": CUBIT_APREPRO_VS_PREDICATE,  # alias
+		"renumber": CUBIT_APREPRO_VS_PREDICATE,  # alias
+	}
+
+	topic = topic.lower().strip()
+	if topic == "all":
+		return "\n\n".join(topics.values())
+	elif topic in topics:
+		return topics[topic]
+	else:
+		return (
+			f"Unknown topic: '{topic}'. "
+			f"Available: all, {', '.join(topics.keys())}"
+		)
