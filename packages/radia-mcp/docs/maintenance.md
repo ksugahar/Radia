@@ -8,9 +8,15 @@ and fresh-process checks do not establish what existing clients have loaded.
 
 ## Standard client configuration
 
-The maintained baseline is `radia-meta`, `radia-build123d`, `radia-cubit`,
+The maintained baseline is `radia-meta`, `radia-build123d`,
 `radia-gmsh`, `radia-analysis`, `radia-motion`, and `radia-publication`.
 Additional servers are retained. Gmsh is for post-processing, not solver meshing.
+Cubit MCP is owned by `cubit-mesh-export`, not this baseline. Its owner installs
+and configures `python -s -m cubit_mesh_export.mcp.server`. Existing external
+entries and their permissions are preserved. Retired `radia_mcp.cubit.server`
+or `maintenance serve cubit` launchers cause a read-only conflict report with
+the replacement module; migrate them through the owning package before retrying.
+Do not delete a client's Cubit entry or silently re-enable it during migration.
 The baseline includes tools that can execute code; existing client approval
 policies still apply. Installation does not grant permission for arbitrary runs.
 
@@ -108,12 +114,12 @@ wheel tests remain isolated and retain independent acceptance gates.
 Run existing tests, not duplicated maintenance versions. From the package root:
 
 ```powershell
-python -s -m pytest tests/test_maintenance.py tests/test_capability_packs.py tests/test_paper_writing_review_regressions.py tests/test_cubit_webcut_conformal_hex_gate.py --junitxml=C:/temp/radia-mcp-maintenance.xml
+python -s -m pytest tests/test_maintenance.py tests/test_capability_packs.py tests/test_paper_writing_review_regressions.py --junitxml=C:/temp/radia-mcp-maintenance.xml
 ```
 
 Install maintenance/document extras as appropriate. A missing-dependency skip
-is **not** evidence for that feature. Check JUnit counts. The Cubit suite tests
-the conformal gate contract; it is not a live licensed meshing run. For changed
+is **not** evidence for that feature. Check JUnit counts. Cubit MCP tests and
+licensed meshing acceptance belong to cubit-mesh-export, not this lane. For changed
 Gmsh execution, run `tests/test_gmsh_post_guards.py` with the Gmsh extra. Real
 solver/CAD/license acceptance stays in the corresponding validation lane.
 Normal PR CI remains impact-scoped; this operator lane is not an all-server
