@@ -8,6 +8,24 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_ih_package_includes_referenced_matlab_helpers():
+    """An installed checkout must not hide missing extracted-ZIP helpers."""
+    import re
+    module = load_module("ih_package_helper_closure", ROOT / "tools/package_simulink_release.py")
+    selected = set(module.PACKAGE_FILES)
+    missing = set()
+    for relative in selected:
+        if not relative.endswith(".m"):
+            continue
+        source = (ROOT / "matlab" / relative).read_text(encoding="utf-8")
+        for name in re.findall(r"\bradia(?:\.[A-Za-z]\w*)+", source):
+            parts = name.split(".")
+            dependency = "/".join("+" + part for part in parts[:-1]) + "/" + parts[-1] + ".m"
+            if (ROOT / "matlab" / dependency).is_file() and dependency not in selected:
+                missing.add((relative, dependency))
+    assert not missing, sorted(missing)
+
+
 def test_package_builder_requires_native_ih_assets():
     module = load_module(
         "package_simulink_release_assets",

@@ -22,13 +22,13 @@
   ],
   "native_build": {
     "schema": "radia.native-build-provenance.v1",
-    "source_commit": "c4953557b9b1a8e8025b193fb15b336718fa0877",
+    "source_commit": "71c5a2869b9605e1e24789de0be016db226fc21e",
     "source_dirty": false,
     "source_change_fingerprint_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
     "binary_name": "radia_mex.mexw64",
-    "binary_bytes": 3.879936E+6,
-    "binary_sha256": "8528afeacacc310cec5aa099a64823df2d53839370fd92618497eb60b5b79d62",
-    "generated_at_utc": "2026-09-15T13:43:42.3296991+00:00"
+    "binary_bytes": 3.881984E+6,
+    "binary_sha256": "55c3acbbf784f9f77e79aa74564b021b141550cda21c40e686d64ea2b6aacefc",
+    "generated_at_utc": "2026-09-15T14:08:12.7902841+00:00"
   },
   "handles_before": 0,
   "handles_after": 0
