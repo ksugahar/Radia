@@ -1,0 +1,74 @@
+name: cae-mcp-core
+on:
+  push:
+    branches: [main]
+    tags: ['cae-mcp-core-v*']
+    paths: ['packages/cae-mcp-core/**', '.github/workflows/cae-mcp-core.yml']
+  pull_request:
+    paths: ['packages/cae-mcp-core/**', '.github/workflows/cae-mcp-core.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cae-mcp-core-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  standalone:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        python: ['3.10', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install build pytest twine
+      - run: python -m build --wheel packages/cae-mcp-core
+      - run: python -m twine check --strict packages/cae-mcp-core/dist/*.whl
+      - name: Verify release tag and distribution identity
+        env:
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+        run: |
+          python - <<'PY'
+          import ast, email, os, pathlib, zipfile
+          wheels = list(pathlib.Path('packages/cae-mcp-core/dist').glob('*.whl'))
+          assert len(wheels) == 1, wheels
+          with zipfile.ZipFile(wheels[0]) as wheel:
+              names = wheel.namelist()
+              meta = email.message_from_bytes(wheel.read(next(n for n in names if n.endswith('.dist-info/METADATA'))))
+              assert meta['Name'] == 'cae-mcp-core'
+              tree = ast.parse(wheel.read('cae_mcp_core/__init__.py').decode())
+              version = next(ast.literal_eval(n.value) for n in tree.body if isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id == '__version__' for t in n.targets))
+              assert meta['Version'] == version
+              assert all(n.startswith(('cae_mcp_core/', 'cae_mcp_core-')) for n in names)
+              if os.environ['RELEASE_TAG']:
+                  assert os.environ['RELEASE_TAG'] == 'cae-mcp-core-v' + version
+          PY
+      - run: python -m pip install packages/cae-mcp-core/dist/*.whl
+      - run: python -m pytest packages/cae-mcp-core/tests --confcutdir=packages/cae-mcp-core/tests -q
+      - uses: actions/upload-artifact@v4
+        if: matrix.python == '3.12'
+        with:
+          name: cae-mcp-core-wheel
+          path: packages/cae-mcp-core/dist/*.whl
+          if-no-files-found: error
+
+  publish:
+    needs: standalone
+    if: github.ref_type == 'tag' && startsWith(github.ref_name, 'cae-mcp-core-v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: cae-mcp-core-wheel
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/

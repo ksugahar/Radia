@@ -41,20 +41,6 @@ def test_ngsolve_selftest_uses_fixtures(monkeypatch):
     assert 'fixture' in output.lower() or 'PASSED' in output or 'SKIP' in output
 
 
-def test_cubit_selftest_runs_without_examples(tmp_path, monkeypatch):
-    """Cubit selftest should use fixtures when examples/ not found."""
-    monkeypatch.setattr(
-        'radia_mcp.cubit.server.PROJECT_ROOT', tmp_path
-    )
-    from radia_mcp.cubit.server import _selftest
-
-    captured = StringIO()
-    monkeypatch.setattr('sys.stdout', captured)
-    _selftest()
-    output = captured.getvalue()
-    assert 'PASSED' in output or 'SKIP' in output
-
-
 # ============================================================
 # Fixture file validation (Radia)
 # ============================================================
@@ -123,31 +109,6 @@ def test_bad_peec_has_findings_ngsolve():
 def test_clean_ngsolve_has_no_findings():
     """clean_ngsolve_script.py must produce zero findings (no false positives)."""
     findings = _lint_file_ngsolve(str(FIXTURES_DIR / "clean_ngsolve_script.py"))
-    assert findings == [], (
-        f"Clean script has {len(findings)} finding(s): "
-        + ", ".join(f['rule'] for f in findings)
-    )
-
-
-# ============================================================
-# Fixture file validation (Cubit)
-# ============================================================
-
-from radia_mcp.cubit.server import _lint_file as _lint_file_cubit
-
-
-def test_bad_cubit_has_findings():
-    """bad_cubit_script.py must trigger Cubit-specific findings."""
-    findings = _lint_file_cubit(str(FIXTURES_DIR / "bad_cubit_script.py"))
-    rules_found = {f['rule'] for f in findings}
-    assert 'deleted-api-usage' in rules_found
-    assert 'hardcoded-absolute-path' in rules_found
-    assert len(findings) >= 4
-
-
-def test_clean_cubit_has_no_findings():
-    """clean_cubit_script.py must produce zero findings."""
-    findings = _lint_file_cubit(str(FIXTURES_DIR / "clean_cubit_script.py"))
     assert findings == [], (
         f"Clean script has {len(findings)} finding(s): "
         + ", ".join(f['rule'] for f in findings)

@@ -6,7 +6,7 @@ translate Cubit `.jou` scripts to build123d Python.
 
 This is a docs-owned benchmark record, not an `examples/` runtime sample.  The
 2026-04-19 report's observed gaps have been folded into the public
-`radia_mcp.build123d` and `radia_mcp.cubit` knowledge tables.
+`radia_mcp.build123d` and `cubit_mesh_export.mcp` knowledge tables.
 
 **This is not a runtime compatibility layer** — we are NOT executing
 `.jou` on build123d. We are checking whether a fresh LLM session,

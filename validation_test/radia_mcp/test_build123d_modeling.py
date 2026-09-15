@@ -69,7 +69,7 @@ from radia_mcp.build123d.modeling import (annular_segment, tube, racetrack_coil,
                                           shape_bbox_pair_clearance_summary,
                                           shape_parameter_sweep_summary)
 from radia_mcp.build123d.build123d_knowledge import get_build123d_documentation
-from radia_mcp.cubit.vol_inventory import (
+from cubit_mesh_export.mcp.vol_inventory import (
     cubit_export_package_identity_gate,
     cubit_headless_installation_route_gate,
     cubit_mass_property_sidecar_gate,

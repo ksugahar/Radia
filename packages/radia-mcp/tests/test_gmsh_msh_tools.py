@@ -1,4 +1,4 @@
-"""Tests for radia_mcp.gmsh.msh_inspect (MSH v4.1 inspect/validate tools).
+"""Tests for cae_mcp_core.mesh.msh_inspect (MSH v4.1 inspect/validate tools).
 
 Structural tests are pure Python (run in the minimal-dep matrix).  The
 Jacobian tests need the gmsh Python package and skip when it is absent;
@@ -9,7 +9,7 @@ import importlib.util
 from pathlib import Path
 
 import pytest
-from radia_mcp.gmsh.msh_inspect import (
+from cae_mcp_core.mesh.msh_inspect import (
     ELEMENT_TYPES,
     audit_msh_directory,
     diff_msh,
@@ -18,7 +18,7 @@ from radia_mcp.gmsh.msh_inspect import (
     validate_geo,
     validate_msh,
 )
-from radia_mcp.gmsh.msh_inspect import (
+from cae_mcp_core.mesh.msh_inspect import (
     main as msh_inspect_main,
 )
 
@@ -615,7 +615,7 @@ $EndElements
 
 @pytest.mark.skipif(not _GMSH_AVAILABLE, reason="gmsh package not installed")
 def test_mesh_quality_affine_tet10_has_good_shape_quality(tmp_path):
-    from radia_mcp.gmsh.msh_inspect import mesh_quality
+    from cae_mcp_core.mesh.msh_inspect import mesh_quality
 
     msh = _write(tmp_path, _TET10_TEMPLATE.format(e01="0.5 0 0"))
     q = mesh_quality(msh, threshold=0.5)
@@ -631,7 +631,7 @@ def test_mesh_quality_affine_tet10_has_good_shape_quality(tmp_path):
 
 @pytest.mark.skipif(not _GMSH_AVAILABLE, reason="gmsh package not installed")
 def test_mesh_quality_flags_degrading_curved_element(tmp_path):
-    from radia_mcp.gmsh.msh_inspect import mesh_quality
+    from cae_mcp_core.mesh.msh_inspect import mesh_quality
 
     # Mid-edge node pushed sideways: NOT inverted (sign gate passes)
     # but Gmsh's minSICN shape quality collapses to ~0.31.
@@ -650,7 +650,7 @@ def test_mesh_quality_flags_degrading_curved_element(tmp_path):
 
 @pytest.mark.skipif(not _GMSH_AVAILABLE, reason="gmsh package not installed")
 def test_mesh_quality_rejects_affine_sliver(tmp_path):
-    from radia_mcp.gmsh.msh_inspect import mesh_quality
+    from cae_mcp_core.mesh.msh_inspect import mesh_quality
 
     sliver = _BASE_MSH.replace("0 0 1\n$EndNodes", "0 0 0.001\n$EndNodes")
     q = mesh_quality(_write(tmp_path, sliver), threshold=0.1)
@@ -666,7 +666,7 @@ def test_mesh_quality_rejects_affine_sliver(tmp_path):
 
 @pytest.mark.skipif(not _GMSH_AVAILABLE, reason="gmsh package not installed")
 def test_mesh_quality_counts_inverted_separately(tmp_path):
-    from radia_mcp.gmsh.msh_inspect import mesh_quality
+    from cae_mcp_core.mesh.msh_inspect import mesh_quality
 
     msh = _write(tmp_path, _TET10_TEMPLATE.format(e01="0.5 0.3 0.15"))
     q = mesh_quality(msh, threshold=0.5)
@@ -682,7 +682,7 @@ def test_mesh_quality_counts_inverted_separately(tmp_path):
 
 @pytest.mark.skipif(not _GMSH_AVAILABLE, reason="gmsh package not installed")
 def test_probe_options_flags_missing_and_reports_kind():
-    from radia_mcp.gmsh.msh_inspect import probe_options
+    from cae_mcp_core.mesh.msh_inspect import probe_options
 
     result = probe_options(["Mesh.NumSubEdges", "View[0].Visible",
                             "General.Color.Background", "Mesh.Volumes"])

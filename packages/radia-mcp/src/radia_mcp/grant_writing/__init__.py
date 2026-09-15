@@ -6,7 +6,7 @@ paper_writing / figure / grant_writing / presentation.
 from __future__ import annotations
 
 from . import tools as _tools
-from ..common.server_hardening import ANN_READONLY
+from cae_mcp_core.common.server_hardening import ANN_READONLY
 
 
 def register(mcp) -> int:

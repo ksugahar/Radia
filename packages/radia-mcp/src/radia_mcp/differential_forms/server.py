@@ -36,13 +36,13 @@ import sys
 from mcp.server.fastmcp import FastMCP
 
 from .kelvin_pullback_knowledge import get_kelvin_pullback_documentation
-from ..common import register_status_tool
-from ..common.tool_group import CoarseToolRegistry
+from cae_mcp_core.common import register_status_tool
+from cae_mcp_core.common.tool_group import CoarseToolRegistry
 from .basics_knowledge import get_basics_documentation
 from .bibliography_knowledge import get_bibliography_documentation
 from .de_rham_knowledge import get_de_rham_documentation
 from .feec_knowledge import get_feec_documentation
-from ..common.lazy_call import lazy_callable
+from cae_mcp_core.common.lazy_call import lazy_callable
 build_gauge_invariance_gate = lazy_callable(".gauge_invariance_gate", "gauge_invariance_gate", __package__)
 from .homology_knowledge import get_homology_documentation
 from .mathematica_recipes_knowledge import get_mathematica_recipes_documentation

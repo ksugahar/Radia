@@ -29,7 +29,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from ._gmsh_subprocess import run_gmsh_json_subprocess
+from cae_mcp_core.mesh._gmsh_subprocess import run_gmsh_json_subprocess
 
 _MAX_GRID = 128
 _MAX_IMAGE_SIZE = 2048
@@ -415,7 +415,7 @@ def _axis_label(vec) -> str:
 
 
 def _bbox_from_msh(path: Path):
-    from .msh_inspect import read_msh_data
+    from cae_mcp_core.mesh.msh_inspect import read_msh_data
 
     pts = list(read_msh_data(path)["nodes"].values())
     if not pts:

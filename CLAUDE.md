@@ -15,7 +15,7 @@ Until explicitly closed, work is limited to:
 Do not add unrelated features during this maintenance program.
 
 ## Repository Boundaries
-The monorepo independently releases `radia`, `cubit-mesh-export`, `radia-mcp`, `radia-optuna` and `eqnedit64`.
+The monorepo independently releases `radia`, `cubit-mesh-export`, `radia-mcp`, `cae-mcp-core`, `radia-optuna` and `eqnedit64`.
 Scope commits and CI to the owner. Shared files trigger multiple lanes only for real shared ABI, build or integration changes.
 
 - `src/`, `matlab/`, `packages/`: production implementation.
@@ -39,7 +39,7 @@ Prefer established public abstractions over proprietary plumbing.
   constitutive models, HDiv-MMM/VIM, PEEC, SIBC/ESIM, Kelvin/DtN, stream
   functions, application coupling, and validated native kernels.
 - Cubit and build123d own CAD authoring. Netgen/NGSolve and Cubit own solver
-  mesh generation. Gmsh is Radia's post-processing target.
+  mesh generation. Gmsh is Radia's post-processing target. Electromagnetic modeling APIs use neutral domain names; do not introduce reference commercial-solver brands into repository identifiers, documentation, tests, or commit messages, or claim vendor API compatibility.
 - Build thin Python/MATLAB/MCP adapters around tested domain workflows; do not duplicate solver logic or expose every helper.
   Consolidate with preserved contracts per `packages/radia-mcp/CONTRIBUTING.md`.
 - Keep two genuinely independent analysis routes for important models when
@@ -76,13 +76,13 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 `cubit-mesh-export` toolbar. Normal Radia Python must not depend on Qt. LLM/MCP Cubit execution is always batch/nographics and fails rather than launching or attaching to a GUI; the only GUI run is the separately scoped human-facing release test, while journal/checkpoint handoff remains artifact-only.
 
 ### Shared MCP Runtime Ownership
+- radia-mcp releases independently of Radia: release-dual deploys editable updates only to LAB and 100, like cubit-mesh-export. Never deploy radia-mcp to hibino/mdx1/mdx2; isolated CI tests are not deployment. Do not wait for a solver release.
+- Routine editable updates: update the usual source -> reconnect -> check the live source and one harmless affected tool. Pure Python edits need no reinstall; source relocation or dependency/package-metadata changes do. No new daemon or mandatory ledger; see the shared runtime policy for exceptions.
 - MCP updates are forward-only: fix forward, never revert/reinstall/redistribute an old version. Retain obsolete copies only as identified debugging evidence with a removal condition, never as deployment targets or rollback reserves; remove them after consumer and unique-work checks. Details follow the shared runtime policy below.
-- MCP is experimental development tooling, not a numerical solver release.
-  Developers may edit live MCP source and change its editable source with
+- MCP is experimental development tooling, not a numerical solver release. Developers may edit live MCP source and change its editable source with
   `pip install -e`; no dedicated branch, frozen snapshot or separate deployment
   approval is required for routine MCP experiments.
-- Coordinate overlapping edits and environment changes; preserve others' WIP
-  and active CAD/MATLAB jobs. Never mass-kill processes to refresh MCP.
+- Coordinate overlapping edits and environment changes; preserve others' WIP and active CAD/MATLAB jobs. Never mass-kill processes to refresh MCP.
 - Verify the interpreter and actual import path after repointing. Report each
   client's live loaded source separately; reload/reconnect affected clients as
   needed. Unknown or mixed evidence must stay unverified.
@@ -149,8 +149,8 @@ solver boundary is a checked `.vol` regardless of the creation route.
   consider Sculpt for suitable HEX domains; build123d/Netgen alternatives must be explicit.
 - Radia normally reads checked `.vol` files. Generation uses APREPRO or Cubit's Python API
   in batch/headless mode with `cubit-mesh-export` owning export; CI remains fixture-only.
-- `radia-mcp.cubit` supports human-AI collaboration through the `cubit-mesh-export` GUI;
-  it does not authorize solver-side GUI launch or interruption of human-owned sessions.
+- `cubit_mesh_export.mcp` owns Cubit MCP/APIs without Radia; both MCP products use `cae-mcp-core`.
+  Radia may consume Cubit for topology optimization. MCP handoff is artifact-only, never GUI control.
 - Every solver-bound `.vol` passes `check-vol` with its versioned label
   contract before solver or Simulink initialization.
 - Label checks validate topology/naming; DesignSpec validates physical data.

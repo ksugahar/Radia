@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from radia_mcp.cubit.server import cubit_check_vol
+from cubit_mesh_export.mcp.server import cubit_check_vol
 
 
 def _write_unit_cube_vol(vol_path):

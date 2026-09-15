@@ -2241,6 +2241,13 @@ same interface trace and B(H) law.  This Picard helper is not a hysteresis
 model.
 
 Validated path: `validation_test/c_type_three_engine/run_three_engine.py`.
+This analysis workflow belongs to Radia MCP, not the exporter-owned Cubit MCP.
+Historical C-type records in `validation_test/c_type_three_engine/results/`
+(`hibino_20260902_linear_order3_tosca_mixed_v3.json` and
+`hibino_20260902_nonlinear_order2_tosca_mixed_v3.json`) report passed runs on
+Radia 4.95.77. They do not certify a rebuilt current binary or FFAG acceptance.
+FFAG comparison on a common Kelvin mesh, CoilBuilder source and NKJ1 material
+remains pending; do not describe FFAG as accepted to 1 % on this evidence.
 The ESRF coil-yoke comparison runner defaults to 1 % relative vector-field
 RMS on its declared core stencil. C-type retains 3 % on its core and hybrid
 undulator retains 5 % on all observation points, pending separate gate audits.

@@ -29,7 +29,15 @@ monorepo_lockstep, ci_monitor_skill.
 """
 
 RELEASE_WORKFLOW = """\
-# release-quad workflow (4 distributions / 4 machines)
+# Package-scoped releases: Radia QUAD and MCP/Cubit DUAL
+
+radia-mcp releases independently of Radia. Its release-dual deployment targets
+are LAB and 100 only, using editable installs, like cubit-mesh-export.
+Never deploy radia-mcp to hibino, mdx1 or mdx2. Isolated CI is not deployment.
+For MCP-only updates use update source -> reconnect -> check an affected live
+tool, following packages/radia-mcp/docs/maintenance.md, not the QUAD installer.
+release-dual is the two-host scope, not a separate release_dual.py command.
+These rules supersede historical coupled-package/hibino-MCP wording below.
 
 This document is the AI-readable canonical reference for the Radia
 release flow.  Its canonical local orchestrator is
@@ -64,11 +72,10 @@ to PyPI and verifies the release on four machines:
 |                   |                         | generic Simulink optimization support             |
 | Radia Simulink library | Radia GitHub Release asset | `.slx`, MATLAB support, Level-2 MATLAB S-Functions, standalone MEX handles, runtime DLLs, manifest and checksums |
 
-The packages may be released independently when only one changed, but
-the release gate treats the deployment as QUAD: two editable machines
-(LAB, 100号機) plus two PyPI consumer machines (mdx, hibino).  mdx is a
-compute/Cubit verification point and intentionally does not install
-`radia-mcp`; hibino is the PyPI MCP consumer.  The reason is operational:
+Packages are independently released. radia-mcp and cubit-mesh-export use
+release-dual (LAB and 100); Radia's solver QUAD covers LAB, 100, mdx1 and mdx2.
+None of hibino/mdx1/mdx2 receives MCP deployment. Compatibility is still checked
+where an affected tool uses another package:
 * radia-mcp imports radia at runtime for several tools, and a
   schema mismatch is silent until a tool crashes.
 * cubit-mesh-export ships the Cubit C++ plugin binaries that
@@ -82,7 +89,7 @@ compute/Cubit verification point and intentionally does not install
   Windows can crash while loading `_radia_pybind.pyd` from that UNC form.
 * mdx installs pinned PyPI wheels for `radia` and `cubit-mesh-export`
   only; `radia-mcp` is not needed there.
-* hibino installs pinned PyPI wheels including `radia-mcp`; use
+* hibino does not receive radia-mcp deployments; for other workloads use
   `py -3.12` because its bare `python` command is a Windows Store alias.
   Cubit is optional on hibino, so release-quad skips plugin/smoke there
   when Coreform Cubit 2025.12+ is not installed.

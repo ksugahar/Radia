@@ -31,7 +31,7 @@ from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 
-from ..common import register_status_tool, register_topics_tool
+from cae_mcp_core.common import register_status_tool, register_topics_tool
 from .accelerator_fundamentals_knowledge import get_accelerator_source_guide
 from .em_knowledge import TOPICS, get_electromagnet_documentation
 

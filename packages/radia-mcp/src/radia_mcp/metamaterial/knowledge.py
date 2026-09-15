@@ -772,7 +772,7 @@ The same density-method TO machinery applies to:
 2. **PM placement** for IH coil array design
    (`radia_mcp.ih`) -- FOM = uniform workpiece heating.
 3. **Cubit hex mesh + density variable** -- the hex-mesh sweep
-   topology in `radia_mcp.cubit` provides exactly the structured
+   topology in `cubit_mesh_export.mcp` provides exactly the structured
    unit-cell grid that TO requires.
 
 Cross-references:

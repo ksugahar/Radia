@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cae-mcp-core"
+version = "0.1.0"
+description = "Shared MCP registration, runtime diagnostics and CAE artifact utilities without solver dependencies"
+requires-python = ">=3.10"
+readme = "README.md"
+license = {text = "BSD-3-Clause"}
+authors = [{name = "Kengo Sugahara"}]
+dependencies = ["mcp>=1.20.0,<2"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

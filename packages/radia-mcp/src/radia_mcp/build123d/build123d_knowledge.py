@@ -843,7 +843,7 @@ analytical helix and NOT extracted from existing CAD.
 Counterparts:
 - `coil_modeling` (this file) — analytical helix with `loft()` over
   parametric sections.
-- `radia_mcp.cubit` `coil_from_polyline` topic — same algorithm, Cubit
+- `cubit_mesh_export.mcp` `coil_from_polyline` topic — same algorithm, Cubit
   flavour (creates one body per station, lofts pairwise).
 - `radia.coil_from_cad` — centerline EXTRACTION from existing STEP CAD.
 
@@ -1029,7 +1029,7 @@ Pipeline downstream is identical: STEP export →
 ## Cubit Flavour — Same Algorithm, Different Engine
 
 Identical math; different engine. See the `coil_from_polyline` topic
-in `radia_mcp.cubit` for the Cubit version. Key engine differences:
+in `cubit_mesh_export.mcp` for the Cubit version. Key engine differences:
 
 | Aspect              | build123d                    | Cubit                       |
 |---------------------|------------------------------|-----------------------------|

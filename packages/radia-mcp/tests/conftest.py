@@ -55,7 +55,7 @@ _CI_SELECT_ALL = not _CI_SELECTORS or "tests" in _CI_SELECTED_FILES
 _FORCE_MINIMAL = os.environ.get("RADIA_MCP_FORCE_MINIMAL") == "1"
 _MINIMAL_BASELINE = set(getattr(sys, "stdlib_module_names", ())) | {
     "mcp", "pytest", "_pytest", "pluggy", "iniconfig", "packaging",
-    "anyio", "attr", "attrs", "typing_extensions", "radia_mcp", "__future__",
+    "anyio", "attr", "attrs", "typing_extensions", "radia_mcp", "cae_mcp_core", "__future__",
     # Transitive dependencies installed from the package's MCP SDK requirement.
     "annotated_types", "certifi", "click", "cffi", "cryptography", "dotenv",
     "h11", "httpcore", "httpx", "httpx_sse", "idna", "jsonschema", "jwt",
@@ -247,71 +247,3 @@ def pytest_collection_modifyitems(config, items):
     if deselected:
         config.hook.pytest_deselected(items=deselected)
     items[:] = kept
-
-
-# ---------------------------------------------------------------------------
-# Cubit process-leak gate (MathWorks check-matlab-leaks pattern, 2026-08-05)
-# ---------------------------------------------------------------------------
-# The persistent Cubit session runners (radia_mcp/cubit daemon.py /
-# bootstrap.py) hold an RLM license seat while alive.  A test that spawns
-# one and fails before shutdown leaks the seat until someone notices.
-# This session-scoped gate snapshots OUR runner processes before the test
-# session and fails loudly if new ones survive it.  It matches only the
-# radia_mcp runner signature -- a Cubit GUI the user opened by hand is
-# never flagged.  Inactive when psutil is unavailable (minimal-dep CI).
-
-import pytest
-
-
-def _cubit_runner_processes() -> dict[int, str]:
-    try:
-        import psutil
-    except ImportError:
-        return {}
-    procs: dict[int, str] = {}
-    for proc in psutil.process_iter(["pid", "cmdline"]):
-        try:
-            cmdline = " ".join(proc.info["cmdline"] or [])
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            continue
-        if "radia_mcp" in cmdline and ("daemon.py" in cmdline
-                                       or "bootstrap.py" in cmdline):
-            procs[proc.info["pid"]] = cmdline
-    return procs
-
-
-def _collected_tests_may_start_cubit(session) -> bool:
-    """Limit the expensive process snapshot to Cubit session tests."""
-    candidates = {
-        Path(str(item.fspath))
-        for item in session.items
-        if getattr(item, "fspath", None) is not None
-    }
-    signatures = ("CubitSession", "cubit.daemon", "cubit.bootstrap")
-    for path in candidates:
-        try:
-            source = path.read_text(encoding="utf-8", errors="ignore")
-        except OSError:
-            continue
-        if any(signature in source for signature in signatures):
-            return True
-    return False
-
-
-@pytest.fixture(scope="session", autouse=True)
-def cubit_process_leak_gate(request):
-    if not _collected_tests_may_start_cubit(request.session):
-        yield
-        return
-    before = _cubit_runner_processes()
-    yield
-    leaked = {pid: cl for pid, cl in _cubit_runner_processes().items()
-              if pid not in before}
-    if leaked:
-        detail = "\n".join(f"  pid {pid}: {cl[:160]}"
-                           for pid, cl in leaked.items())
-        pytest.fail(
-            "Cubit runner processes LEAKED by this test session "
-            "(each holds a license seat):\n" + detail +
-            "\nTests that start a session must shut it down "
-            "(CubitSession.reset()).", pytrace=False)

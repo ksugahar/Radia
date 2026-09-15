@@ -106,3 +106,26 @@ def test_wheel_runtime_asset_omission_fails(tmp_path):
 
     assert not result["ok"]
     assert result["missing"] == ["radia_mcp/paper_writing/skill.md"]
+
+
+@pytest.mark.parametrize("member", [
+    "radia_mcp/cubit/server.py", "radia_mcp/common/status.py",
+    "cubit_mesh_export/mcp/server.py", "cae_mcp_core/common/status.py",
+])
+def test_wheel_rejects_stale_build_output_from_other_owners(tmp_path, member):
+    wheel = tmp_path / "candidate.whl"
+    _write_wheel(wheel, set(MODULE.REQUIRED_ASSETS) | {member})
+    result = MODULE.verify_wheel_contents(wheel)
+    assert not result["ok"]
+    assert result["unwanted"] == [member]
+
+
+def test_wheel_rejects_retired_cubit_entrypoint(tmp_path):
+    wheel = tmp_path / "candidate.whl"
+    _write_wheel(wheel, set(MODULE.REQUIRED_ASSETS))
+    with zipfile.ZipFile(wheel, "a") as archive:
+        archive.writestr("radia_mcp-test.dist-info/entry_points.txt",
+                        "[console_scripts]\nmcp-server-cubit = old.server:main\n")
+    result = MODULE.verify_wheel_contents(wheel)
+    assert not result["ok"]
+    assert result["retired_entries"] == ["mcp-server-cubit"]

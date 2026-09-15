@@ -1,5 +1,11 @@
 # radia-mcp
 
+Cubit MCP is independently distributed with `cubit-mesh-export`, under
+`cubit_mesh_export.mcp`; it is no longer included here. Install the exporter
+and launch `mcp-server-cubit` for Cubit-only work. Both packages use the
+solver-neutral `cae-mcp-core` foundation. Radia's optional topology/CAD
+workflows may call the Cubit package; Cubit itself requires neither Radia package.
+
 Optimization now has a [solver-neutral and electromagnetic two-layer boundary](docs/design/optimization_layers.md), composed through the existing `radia-design` profile.
 
 For fewer client processes, use the [capability packs](docs/design/capability_packs.md).
@@ -16,7 +22,7 @@ see the [maintenance procedure](docs/maintenance.md) and
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](LICENSE)
 
 > **First-and-only public Model Context Protocol (MCP) server suite for
-> Coreform Cubit, Gmsh, build123d, and the Radia CAE ecosystem —
+> Gmsh, build123d, and the Radia CAE ecosystem, with independent Cubit integration —
 > including differential geometry and Mathematica integration.**
 > Pioneering MCP territory for mesh generators worldwide.
 
@@ -349,7 +355,7 @@ For local development from a checkout (no install needed):
   "mcpServers": {
     "cubit": {
       "command": "python",
-      "args": ["-m", "radia_mcp.cubit.server"]
+      "args": ["-m", "cubit_mesh_export.mcp.server"]
     }
   }
 }
@@ -405,35 +411,13 @@ flags FreeCAD as `friendly`, others as `compat`.
 
 ---
 
-## Cubit execution contract
+## External Cubit execution contract
 
-Execution and handoff are separate. Humans can edit in their own Cubit GUI
-and save a `.jou`; `cubit_import_journal(path)` reads it without executing
-commands or attaching to that process. `cubit_session_journal` exports the
-AI session's actual Cubit-native `record "file"` journal for human review,
-including its APREPRO definitions. Imported candidates are exact command
-differences against that native AI journal, not a reconstruction from RPC
-responses or proof of authorship. Both originals, exclusions, and hashes remain.
-Review the source and checkpoint before an explicit headless replay.
-`cubit_stage` loads artifacts into the headless session; `cubit_snapshot`
-reports unavailable rendering and never opens a window.
-
-Every Cubit operation initiated through an LLM or MCP runs with
-`-batch -nographics`. The server never launches or attaches to
-`coreform_cubit.exe` and never opens a Cubit window. Interactive GUI use is a
-separate, human-owned workflow; LLM runs communicate through STEP, SAT,
-`.cub5`, `.jou`, `.vol`, Gmsh, log, and result artifacts.
-
-The server combines two headless channels:
-
-1. Candidate recipes run in isolated `coreform_cubit.com` processes.
-2. Accepted recipes may be replayed in an MCP-owned persistent headless session.
-3. Every response reports `execution_mode` and `gui_started=false`.
-4. Missing console/headless support fails loudly instead of falling back to GUI.
-
-`cubit_exec_safely` checkpoints the persistent session, verifies candidate
-commands in an isolated batch process, then applies only a successful recipe
-to the persistent headless session.
+Cubit execution, journals, meshing and process lifetime are owned by
+[cubit-mesh-export's bundled MCP](../cubit-mesh-export/src/cubit_mesh_export/mcp/README.md).
+Radia consumes checked `.vol` artifacts; it does not own Cubit execution or its
+test/CI lane. The interop examples below require that separately installed MCP.
+Mixed omega and other Radia analysis workflows remain in radia-mcp.
 
 ---
 
@@ -487,7 +471,7 @@ gmsh_reference("all")                           # MSH / API / display reference
 
 Bug reports + PRs welcome — particularly for:
 
-- **Additional scrape sub-sources** under `radia_mcp.common.examples`
+- **Additional scrape sub-sources** under `cae_mcp_core.common.examples`
   (mailing list archives, more YouTube channels, blog posts).
 - **Cookbook topics** for `build123d_usage` / `gmsh_usage` / `gmsh_reference` —
   worked-example knowledge fragments are always welcome.
