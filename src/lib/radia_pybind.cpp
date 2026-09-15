@@ -17,6 +17,7 @@
 #include <fem.hpp>
 #include <comp.hpp>
 #include <python_ngstd.hpp>
+#include "rad_periodic_h1.hpp" // Preserves the base space's boundary flags.
 
 // Temporarily undefine EXP if NGSolve headers left it undefined
 // (radentry.h will redefine it)
@@ -2321,6 +2322,12 @@ py::dict AcousticCQGridOutput(const radia::acoustics::CQGridResult& result) {
 // ============================================================================
 
 PYBIND11_MODULE(_radia_pybind, m) {
+    m.def("_periodic_h1_single_interface", [](std::shared_ptr<ngcomp::FESpace> base) {
+        auto result = std::make_shared<radia::FaceConsistentPeriodicH1>(base);
+        result->Update();
+        result->FinalizeUpdate();
+        return std::static_pointer_cast<ngcomp::PeriodicFESpace>(result);
+    }, "Build H1 periodic face DOFs from complete corner correspondence.");
     m.doc() = R"pbdoc(
         Radia - 3D Magnetostatics Library (pybind11 bindings)
 
