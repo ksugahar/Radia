@@ -15,7 +15,7 @@ Until explicitly closed, work is limited to:
 Do not add unrelated features during this maintenance program.
 
 ## Repository Boundaries
-The monorepo independently releases `radia`, `cubit-mesh-export`, `radia-mcp`, `radia-optuna` and `eqnedit64`.
+The monorepo independently releases `radia`, `cubit-mesh-export`, `radia-mcp`, `cae-mcp-core`, `radia-optuna` and `eqnedit64`.
 Scope commits and CI to the owner. Shared files trigger multiple lanes only for real shared ABI, build or integration changes.
 
 - `src/`, `matlab/`, `packages/`: production implementation.
@@ -149,8 +149,8 @@ solver boundary is a checked `.vol` regardless of the creation route.
   consider Sculpt for suitable HEX domains; build123d/Netgen alternatives must be explicit.
 - Radia normally reads checked `.vol` files. Generation uses APREPRO or Cubit's Python API
   in batch/headless mode with `cubit-mesh-export` owning export; CI remains fixture-only.
-- `radia-mcp.cubit` supports human-AI collaboration through the `cubit-mesh-export` GUI;
-  it does not authorize solver-side GUI launch or interruption of human-owned sessions.
+- `cubit_mesh_export.mcp` owns Cubit MCP/APIs without Radia; both MCP products use `cae-mcp-core`.
+  Radia may consume Cubit for topology optimization. MCP handoff is artifact-only, never GUI control.
 - Every solver-bound `.vol` passes `check-vol` with its versioned label
   contract before solver or Simulink initialization.
 - Label checks validate topology/naming; DesignSpec validates physical data.

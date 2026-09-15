@@ -1,0 +1,25 @@
+name: cae-mcp-core
+on:
+  push:
+    branches: [main]
+    paths: ['packages/cae-mcp-core/**', '.github/workflows/cae-mcp-core.yml']
+  pull_request:
+    paths: ['packages/cae-mcp-core/**', '.github/workflows/cae-mcp-core.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  standalone:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.10', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install build pytest
+      - run: python -m build --wheel packages/cae-mcp-core
+      - run: python -m pip install packages/cae-mcp-core/dist/*.whl
+      - run: python -m pytest packages/cae-mcp-core/tests --confcutdir=packages/cae-mcp-core/tests -q

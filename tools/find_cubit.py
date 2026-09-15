@@ -9,7 +9,7 @@ same discovery rules:
   3. Returns None + logs a warning if nothing found.
 
 Replaces the prior hardcoded path pattern in
-``radia_mcp.cubit.daemon`` and ``cubit_mesh_export.toolbar_install``:
+``cubit_mesh_export.mcp.daemon`` and ``cubit_mesh_export.toolbar_install``:
 
     # OLD (hardcoded -- breaks on Cubit upgrade):
     candidates = [r"C:\\Program Files\\Coreform Cubit 2025.3\\bin", ...]

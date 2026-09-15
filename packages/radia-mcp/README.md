@@ -1,5 +1,11 @@
 # radia-mcp
 
+Cubit MCP is independently distributed with `cubit-mesh-export`, under
+`cubit_mesh_export.mcp`; it is no longer included here. Install the exporter
+and launch `mcp-server-cubit` for Cubit-only work. Both packages use the
+solver-neutral `cae-mcp-core` foundation. Radia's optional topology/CAD
+workflows may call the Cubit package; Cubit itself requires neither Radia package.
+
 Optimization now has a [solver-neutral and electromagnetic two-layer boundary](docs/design/optimization_layers.md), composed through the existing `radia-design` profile.
 
 For fewer client processes, use the [capability packs](docs/design/capability_packs.md).
@@ -16,7 +22,7 @@ see the [maintenance procedure](docs/maintenance.md) and
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](LICENSE)
 
 > **First-and-only public Model Context Protocol (MCP) server suite for
-> Coreform Cubit, Gmsh, build123d, and the Radia CAE ecosystem —
+> Gmsh, build123d, and the Radia CAE ecosystem, with independent Cubit integration —
 > including differential geometry and Mathematica integration.**
 > Pioneering MCP territory for mesh generators worldwide.
 
@@ -349,7 +355,7 @@ For local development from a checkout (no install needed):
   "mcpServers": {
     "cubit": {
       "command": "python",
-      "args": ["-m", "radia_mcp.cubit.server"]
+      "args": ["-m", "cubit_mesh_export.mcp.server"]
     }
   }
 }
@@ -487,7 +493,7 @@ gmsh_reference("all")                           # MSH / API / display reference
 
 Bug reports + PRs welcome — particularly for:
 
-- **Additional scrape sub-sources** under `radia_mcp.common.examples`
+- **Additional scrape sub-sources** under `cae_mcp_core.common.examples`
   (mailing list archives, more YouTube channels, blog posts).
 - **Cookbook topics** for `build123d_usage` / `gmsh_usage` / `gmsh_reference` —
   worked-example knowledge fragments are always welcome.

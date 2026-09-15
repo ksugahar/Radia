@@ -30,7 +30,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from ._gmsh_subprocess import run_gmsh_json_subprocess
+from cae_mcp_core.mesh._gmsh_subprocess import run_gmsh_json_subprocess
 
 _SAMPLE_MODES = ("random", "grid")
 

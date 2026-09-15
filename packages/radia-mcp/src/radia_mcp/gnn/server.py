@@ -12,7 +12,7 @@ Usage:
 import sys
 
 from mcp.server.fastmcp import FastMCP
-from ..common import register_status_tool, register_topics_tool
+from cae_mcp_core.common import register_status_tool, register_topics_tool
 
 from .knowledge import get_gnn_documentation, TOPICS
 

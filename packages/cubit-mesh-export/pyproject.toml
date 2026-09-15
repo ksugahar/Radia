@@ -23,6 +23,7 @@ classifiers = [
     "Topic :: Scientific/Engineering",
 ]
 dependencies = [
+    "cae-mcp-core>=0.1.0,<0.2",
     # The bundled native curver uses Netgen's C++ ABI. Keep both packages on
     # the exact version used to build the wheel and deployed Cubit DLLs.
     "netgen-mesher==6.2.2606",
@@ -34,6 +35,7 @@ dependencies = [
 Homepage = "https://github.com/ksugahar/Radia"
 
 [project.scripts]
+mcp-server-cubit = "cubit_mesh_export.mcp.server:main"
 cubit-plugin-install = "cubit_mesh_export.install:main"
 cubit-smoke-test = "cubit_mesh_export.smoke_test:main"
 cubit-toolbar-smoke-test = "cubit_mesh_export.toolbar_smoke:main"
@@ -48,6 +50,7 @@ where = ["src"]
 # replaces it.  cubit-plugin-install now treats any deployed .ccl as stale.
 cubit_mesh_export = ["*.pyd", "*.so", "*.ccm", "native_payloads.json"]
 "cubit_mesh_export.cubit_helpers" = ["*.py"]
+"cubit_mesh_export.mcp" = ["README.md"]
 "cubit_mesh_export.cubit_gui" = ["*.jou", "cubit_toolbar/scripts/*.py", "cubit_toolbar/icons/*.svg", "cubit_toolbar/toolbars/*.tmpl"]
 
 [tool.setuptools.exclude-package-data]

@@ -1,4 +1,4 @@
-"""Live-Cubit session E2E validation for the radia_mcp.cubit MCP stack.
+"""Live-Cubit session E2E validation for the cubit_mesh_export.mcp MCP stack.
 
 Promoted from C:/temp/cubit_probe_selftest (2026-08-05) per the
 promotion ladder: these are the executable truths behind the MathWorks
@@ -24,7 +24,7 @@ import threading
 import time
 
 import pytest
-from radia_mcp.cubit import session as cs
+from cubit_mesh_export.mcp import session as cs
 
 pytestmark = pytest.mark.skipif(
     cs.find_cubit_install() is None,
@@ -185,7 +185,7 @@ def test_netgen_cubit_quality_compare(tmp_path):
     pytest.importorskip("gmsh")
     pytest.importorskip("build123d")
     from build123d import Box, Compound, Cylinder, Pos, export_step
-    from radia_mcp.cubit.server import cubit_netgen_quality_compare
+    from cubit_mesh_export.mcp.server import cubit_netgen_quality_compare
 
     step = tmp_path / "asm.step"
     box = Box(1, 1, 2)
@@ -217,7 +217,7 @@ def test_cad_mesh_probe_contract(tmp_path):
     pytest.importorskip("build123d")
     from build123d import Box, Compound, Cylinder, Pos, export_step
     from radia_mcp.build123d.server import build123d_probe
-    from radia_mcp.common.server_hardening import PROBE_SOLID_CORE_KEYS
+    from cae_mcp_core.common.server_hardening import PROBE_SOLID_CORE_KEYS
 
     step = tmp_path / "compat_asm.step"
     box = Box(1, 1, 2)

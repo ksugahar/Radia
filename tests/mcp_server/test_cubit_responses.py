@@ -18,13 +18,13 @@ from __future__ import annotations
 
 import pytest
 
-from radia_mcp.cubit.knowledge.scripting import get_cubit_documentation
-from radia_mcp.cubit.knowledge.custom_toolbar import get_toolbar_documentation
-from radia_mcp.cubit.knowledge.export import get_export_documentation
-from radia_mcp.cubit.knowledge.mesh_diagnostics import (
+from cubit_mesh_export.mcp.knowledge.scripting import get_cubit_documentation
+from cubit_mesh_export.mcp.knowledge.custom_toolbar import get_toolbar_documentation
+from cubit_mesh_export.mcp.knowledge.export import get_export_documentation
+from cubit_mesh_export.mcp.knowledge.mesh_diagnostics import (
     get_diagnostics_documentation,
 )
-from radia_mcp.cubit.knowledge.netgen_workflow import get_netgen_documentation
+from cubit_mesh_export.mcp.knowledge.netgen_workflow import get_netgen_documentation
 
 
 # ---------------------------------------------------------------------------

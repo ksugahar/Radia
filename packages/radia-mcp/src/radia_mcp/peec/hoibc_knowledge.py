@@ -20,7 +20,7 @@ Topics:
                                     calc_fem_kelvin.py
 """
 
-from ..common import load_prompt
+from cae_mcp_core.common import load_prompt
 
 
 # ============================================================
@@ -550,7 +550,7 @@ Cross-link: `peec_hoibc('bilicz_2023_nonlocal')` for the formulation,
 """
 
 
-HOIBC_MATHEMATICA_DERIVATION = load_prompt("peec", "mathematica_derivation")
+HOIBC_MATHEMATICA_DERIVATION = load_prompt("radia_mcp.peec", "mathematica_derivation")
 
 _HOIBC_MATHEMATICA_DERIVATION_INLINE_DEPRECATED = r"""
 # Mathematica Symbolic Derivation of HOIBC
@@ -710,7 +710,7 @@ from a Cubit panel session.
 """
 
 
-HOIBC_NGSOLVE_RECIPES = load_prompt("peec", "ngsolve_recipes")
+HOIBC_NGSOLVE_RECIPES = load_prompt("radia_mcp.peec", "ngsolve_recipes")
 
 _HOIBC_NGSOLVE_RECIPES_INLINE_DEPRECATED = r"""
 # NGSolve Implementation Recipes for HOIBC

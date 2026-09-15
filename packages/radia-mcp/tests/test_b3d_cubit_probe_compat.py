@@ -12,7 +12,7 @@ import json
 
 import pytest
 
-from radia_mcp.common.server_hardening import (
+from cae_mcp_core.common.server_hardening import (
     PROBE_FACE_CORE_KEYS,
     PROBE_SOLID_CORE_KEYS,
 )
@@ -23,7 +23,7 @@ from radia_mcp.common.server_hardening import (
 # ---------------------------------------------------------------------------
 
 def test_cubit_probe_entities_carries_core_keys():
-    from radia_mcp.cubit import probe_ops
+    from cubit_mesh_export.mcp import probe_ops
     from test_cubit_probe_ops import _MockCubit
 
     ent = probe_ops.op_probe(_MockCubit(), ["entities"])
