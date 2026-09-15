@@ -204,6 +204,11 @@ def test_meta_related_exposes_external_optuna_mcp_without_catalog_import():
 def test_meta_related_mesh_chain_points_to_radia_ngsolve_registry():
     """CAD/mesh servers should point agents toward radia-ngsolve validation."""
     from radia_mcp.meta.server import radia_mcp_related
+    from radia_mcp.meta.catalog import CATALOG, EXTERNAL_PACKAGES
+
+    assert "cubit" not in CATALOG
+    assert EXTERNAL_PACKAGES["cubit"]["pypi"] == "cubit-mesh-export"
+    assert EXTERNAL_PACKAGES["cubit"]["subpackage"] == "cubit_mesh_export.mcp"
 
     for name in ("cubit", "build123d", "gmsh"):
         related = radia_mcp_related(name)

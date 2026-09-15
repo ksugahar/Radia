@@ -86,6 +86,22 @@ def plan_config(path: Path, python: str) -> tuple[bytes | None, bytes, dict]:
     if not hasattr(entries, "items"):
         raise ValueError(f"{section} must be an object/table")
     actions, conflicts = [], []
+    external_migrations = []
+    for name, entry in entries.items():
+        if not hasattr(entry, "get"):
+            continue
+        args = entry.get("args", [])
+        if not isinstance(args, list):
+            continue
+        launch = args[1:] if args[:1] == ["-s"] else args
+        if (launch[:2] == ["-m", "radia_mcp.cubit.server"]
+                or launch[:4] == ["-m", "radia_mcp.maintenance", "serve", "cubit"]):
+            conflicts.append(name)
+            external_migrations.append({
+                "server": name, "owner": "cubit-mesh-export",
+                "reason": "retired-cubit-launcher",
+                "replacement_module": "cubit_mesh_export.mcp.server",
+            })
     for name, key in BASELINE.items():
         expected = standard_entry(key, python)
         if name not in entries:
@@ -114,7 +130,8 @@ def plan_config(path: Path, python: str) -> tuple[bytes | None, bytes, dict]:
     if not actions or conflicts:
         candidate = original or b""
     return original, candidate, {"path": str(path), "actions": actions,
-        "conflicts": conflicts, "changed": candidate != (original or b""),
+        "conflicts": conflicts, "external_migrations": external_migrations,
+        "changed": candidate != (original or b""),
         "status": "conflict" if conflicts else "ready"}
 
 
