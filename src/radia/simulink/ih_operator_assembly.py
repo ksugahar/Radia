@@ -113,11 +113,8 @@ class IHOperatorAssemblyOptions:
             raise ValueError("coupling_mode must be weak or strong")
         if self.workpiece_bem_backend not in {"intree-dense", "hacapk"}:
             raise ValueError("workpiece_bem_backend must be intree-dense or hacapk")
-        if self.thermal_order != 1:
-            raise ValueError(
-                "thermal_order must be 1 because the current qsurf.sol contract "
-                "is an H1 P1 field"
-            )
+        if isinstance(self.thermal_order, bool) or self.thermal_order not in (1, 2):
+            raise ValueError("thermal_order must be 1 or 2")
         return self
 
 
@@ -148,6 +145,8 @@ class ThermalOperators:
     convection_value: list[float]
     heat_power_W: float
     full_heat_density_W_per_m3: np.ndarray
+    constant_coefficients: np.ndarray | None = None
+    temperature_evaluation: dict[str, Any] | None = None
 
 
 class _Tee(io.TextIOBase):
@@ -475,6 +474,8 @@ def _assemble_thermal_operators(
     if options.workpiece_label not in set(str(name) for name in mesh.GetBoundaries()):
         raise ValueError(f"workpiece boundary {options.workpiece_label!r} is absent from the mesh")
 
+    if options.thermal_order == 2:
+        return _assemble_p2_thermal(mesh, heat_flux_W_per_m2, options, weight, convection_region)
     fes = H1(mesh, order=options.thermal_order)
     if heat_flux_W_per_m2.size != fes.ndof:
         raise ValueError("the unit-current heat field and thermal H1 space have different sizes")
@@ -553,6 +554,74 @@ def _assemble_thermal_operators(
         heat_power_W=heat_power,
         full_heat_density_W_per_m3=full_density,
     )
+
+
+def _assemble_p2_thermal(mesh, flux, options, weight, convection_region):
+    """Keep the P1 surface source and P2 temperature spaces independent.
+
+    Native temperatures are NGSolve coefficients, not nodal kelvin values.
+    NGSolve owns the mixed load, constant function and mapped evaluation.
+    """
+    import ngsolve as ng
+
+    heat_fes, fes = ng.H1(mesh, order=1), ng.H1(mesh, order=2)
+    if flux.size != heat_fes.ndof or not np.all(np.isfinite(flux)) or np.min(flux) < 0:
+        raise ValueError("P2 thermal assembly requires a finite nonnegative P1 surface field")
+    u, v = fes.TnT()
+    rho_cp = options.density_kg_per_m3 * options.heat_capacity_J_per_kgK
+    forms = []
+    for integrand in (weight*rho_cp*u*v*ng.dx,
+                      weight*options.thermal_conductivity_W_per_mK*ng.grad(u)*ng.grad(v)*ng.dx,
+                      weight*u*v*ng.ds(convection_region)):
+        form = ng.BilinearForm(fes, symmetric=True, check_unused=False)
+        form += integrand
+        form.Assemble()
+        forms.append(_coo_values(form.mat))
+    constant = ng.GridFunction(fes)
+    constant.Set(ng.CF(1))
+    c = constant.vec.FV().NumPy().copy()
+    capacity = _matvec(fes.ndof, forms[0], c)
+    mixed = ng.BilinearForm(trialspace=heat_fes, testspace=fes)
+    mixed += weight*heat_fes.TrialFunction()*fes.TestFunction()*ng.ds(options.workpiece_label)
+    mixed.Assemble()
+    mixed_values = _coo_values(mixed.mat)
+    area = ng.LinearForm(heat_fes)
+    area += weight*heat_fes.TestFunction()*ng.ds(options.workpiece_label)
+    area.Assemble()
+    surface_weights = area.vec.FV().NumPy().copy()
+    heat_dofs = np.flatnonzero(surface_weights > 1e-14*max(1., np.max(surface_weights)))
+    volume = float(np.dot(c, capacity)/rho_cp)
+    length = volume / float(np.sum(surface_weights))
+    if not math.isfinite(length) or length <= 0 or not heat_dofs.size:
+        raise ValueError("P2 thermal geometry has no positive heated area or volume")
+    projection = np.zeros((fes.ndof, len(heat_dofs)))
+    indices = {int(d): i for i, d in enumerate(heat_dofs)}
+    for (row, col), value in mixed_values.items():
+        if col in indices:
+            projection[row, indices[col]] += length*value
+    density = flux[heat_dofs]/length
+    power = float(np.dot(surface_weights[heat_dofs], flux[heat_dofs]))
+    if not math.isfinite(power) or power <= 0:
+        raise ValueError("P2 thermal source must have positive power")
+    # Sample the actual FE function at mapped quadrature points, never min/max
+    # of modal coefficients. Retain a sparse evaluation operator for MATLAB.
+    rules = {el.type: ng.IntegrationRule(el.type, 4) for el in mesh.Elements(ng.VOL)}
+    points = mesh.MapToAllElements(rules, ng.VOL)
+    rows, cols, values = [], [], []
+    probe = ng.GridFunction(fes)
+    for col in range(fes.ndof):
+        probe.vec[:] = 0
+        probe.vec[col] = 1
+        evaluated = np.asarray(probe(points)).reshape(-1)
+        active = np.flatnonzero(np.abs(evaluated) > 1e-14)
+        rows.extend(active.tolist()); cols.extend([col]*len(active)); values.extend(evaluated[active].tolist())
+    evaluation = dict(n_samples=len(points), rows=rows, cols=cols, values=values,
+                      sampling="mapped-volume-quadrature-order-4")
+    row_ptr, columns, aligned = _aligned_csr(fes.ndof, *forms)
+    return ThermalOperators(fes.ndof, heat_dofs, density, surface_weights[heat_dofs]*length,
+        capacity, projection.ravel().tolist(), row_ptr, columns, aligned[0],
+        row_ptr, columns, aligned[1], row_ptr, columns, aligned[2], power,
+        flux/length, c, evaluation)
 
 
 def _export_fields(
@@ -705,6 +774,11 @@ def _native_config(
         "runtime_python": platform.python_version(),
         "runtime_platform": platform.platform(),
     }
+    if thermal.constant_coefficients is not None:
+        config["temperature_representation"] = "ngsolve-h1-coefficients"
+        config["temperature_constant_coefficients"] = thermal.constant_coefficients.tolist()
+        config["initial_temperature_K"] = (options.initial_temperature_K*thermal.constant_coefficients).tolist()
+        config["temperature_evaluation"] = thermal.temperature_evaluation
     if backend == "bem-a":
         config["coil_vol_label_contract"] = str(contracts[1])
     return config
@@ -956,6 +1030,7 @@ def build_argparser() -> argparse.ArgumentParser:
     parser.add_argument("--convection", type=float, default=10.0)
     parser.add_argument("--axisymmetric-thermal-vol", default="", help="checked 2D (r,z) thermal .vol; EM workpiece remains 3D")
     parser.add_argument("--n-phi-samples", type=int, default=128)
+    parser.add_argument("--thermal-order", type=int, choices=(1, 2), default=1)
     parser.add_argument("--initial-temperature-K", type=float, default=293.15)
     parser.add_argument("--sample-time", type=float, default=0.5)
     parser.add_argument(
@@ -1002,6 +1077,7 @@ def _options_from_args(args: argparse.Namespace) -> IHOperatorAssemblyOptions:
         frequency_hz=args.frequency_hz,
         axisymmetric_thermal_vol=args.axisymmetric_thermal_vol,
         n_phi_samples=args.n_phi_samples,
+        thermal_order=args.thermal_order,
         coil_conductivity_S_per_m=args.coil_sigma,
         workpiece_conductivity_S_per_m=args.workpiece_sigma,
         workpiece_relative_permeability=args.workpiece_mu_r,

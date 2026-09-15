@@ -553,8 +553,15 @@ mesh. Existing blocks need rebuilding to expose the new fields.
 The 2D label contract requires material ``workpiece``, physical boundary
 ``sibc`` and optional ``axis``. Do not include r=0 in ``sibc``.
 Mass, conduction, surface heat and convection use 2*pi*r. The native route
-currently supports P1 only; headless H1 order 2 is a separate route, not a
-claim about native P2 support. Transfer uses the existing boundary azimuth
+supports thermal_order=1 or 2 independently of the P1 surface heat handoff.
+Order 2 uses NGSolve H1 coefficients (P2 on triangles, Q2 on quads), not
+nodal kelvin values. The configuration stores the constant-function vector
+and a sparse mapped evaluation operator; initialization, ambient convection,
+and monitor temperature statistics must use them. The raw temperature port
+contains these coefficients in this mode. Periodic coefficient transport is
+not supported and fails explicitly. The monitor extrema are sampled at mapped
+volume quadrature points, not certified global polynomial extrema.
+Transfer uses the existing boundary azimuth
 sampler with coverage checks, and rejects an integrated power difference
 over 2%; it does not silently rescale the source. The transfer difference is
 part of the error budget, not proof of 2% total application accuracy.

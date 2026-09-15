@@ -4,7 +4,7 @@ if nargin < 3, caseNames = ["solid","bored"]; end
 before = radia.apiInfo(); cases = {};
 for name = string(caseNames)
     data = jsondecode(fileread(fullfile(inputDirectory,name,"chain.json")));
-    cfg = data.config;
+    cfg = radia.simulink.validateIHNativeConfig(data.config);
     e = radia.internal.callMex('ih.eddy.create',cfg);
     ec = onCleanup(@() radia.internal.callMex('ih.eddy.destroy',e));
     t = radia.internal.callMex('ih.thermal.create',cfg);
@@ -19,8 +19,18 @@ for name = string(caseNames)
         radia.internal.callMex('ih.thermal.update',t,heat,293.15,0);
         actual = radia.internal.callMex('ih.thermal.output',t);
         reference = data.reference_K(step,:).';
-        errorK = max(errorK,norm(actual-reference,inf));
-        relativeRise = max(relativeRise,norm(actual-reference)/norm(reference-293.15));
+        if isfield(cfg,"temperature_constant_coefficients")
+            sample = cfg.temperature_evaluation;
+            evaluate = sparse(double(sample.rows)+1,double(sample.cols)+1,double(sample.values), ...
+                sample.n_samples,cfg.n_temperature);
+            delta = evaluate*(actual-reference);
+            rise = evaluate*reference-293.15;
+        else
+            delta = actual-reference;
+            rise = reference-293.15;
+        end
+        errorK = max(errorK,norm(delta,inf));
+        relativeRise = max(relativeRise,norm(delta)/norm(rise));
     end
     assert(relativeRise < .02 && errorK < 1e-7 && heatError < 1e-12);
     clear tc ec
