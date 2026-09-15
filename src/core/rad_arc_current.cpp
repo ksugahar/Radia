@@ -43,7 +43,7 @@
 #include "rad_arc_current.h"
 // #include "rad_subdivided_arc_current.h" REMOVED (Phase C, 2026-04-16)
 #include "rad_elliptic_integral.h"
-#include "rad_arc_section.h"
+#include "rad_arc_section.h" // Regularized near sections and smooth far moments.
 
 #include <math.h>
 #include <sstream>

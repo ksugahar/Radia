@@ -202,15 +202,33 @@ inline Vec Field(double r, double z, double ri, double ro, double h,
         return {transverse*(std::sin(hi)-std::sin(lo)),
                 transverse*(std::cos(lo)-std::cos(hi)),axial*span};
     }
-    auto f=[=](double phi){return Section(phi,r,z,ri,ro,h);};
     Vec result{};
     // Split at the closest azimuth and opposite azimuth; never sample endpoints.
     while(lo<hi) {
         const double next=(std::floor(lo/pi)+1)*pi;
         const double end=std::min(hi,std::min(lo+pi/2,next));
         if(end<=lo) throw std::runtime_error("Arc integration interval collapsed");
-        const Vec value=Refine(f,lo,end,Gauss4(f,lo,end),
-                              1.e-12*std::max(ro,h)*(end-lo),20);
+        Vec value{};
+        // Integrable logarithms and nearby exterior peaks occur at endpoints.
+        // Map each half interval from its endpoint with phi = endpoint +/- L*t^4.
+        const double half=(end-lo)/2;
+        if(std::hypot(r,z)>32*std::max(ro,h)) {
+            // The far moment kernel has no endpoint peak; retain its smooth rule.
+            auto smooth=[=](double phi){return Section(phi,r,z,ri,ro,h);};
+            value=Refine(smooth,lo,end,Gauss4(smooth,lo,end),
+                         1.e-12*std::max(ro,h)*(end-lo),20);
+        } else for(int side=0;side<2;++side) {
+            const double endpoint=std::remainder(side==0 ? lo : end,2*pi);
+            auto regular=[=](double t) {
+                const double t3=t*t*t;
+                Vec v=Section(endpoint+(side==0 ? 1 : -1)*half*t3*t,r,z,ri,ro,h);
+                for(double& component:v) component*=4*half*t3;
+                return v;
+            };
+            const Vec part=Refine(regular,0.,1.,Gauss4(regular,0.,1.),
+                                  1.e-12*std::max(ro,h)*half,20);
+            for(int k=0;k<3;++k) value[k]+=part[k];
+        }
         for(int k=0;k<3;++k) result[k]+=value[k];
         lo=end;
     }
