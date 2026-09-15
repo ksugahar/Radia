@@ -43,23 +43,29 @@ end
 
 function start(block)
 block.Dwork(1).Data = 0;
+config = radia.simulink.validateIHNativeConfig(block.DialogPrm(1).Data);
+set_param(block.BlockHandle,"UserData",config,"UserDataPersistent","off");
 end
 
 function outputs(block)
-config = radia.simulink.validateIHNativeConfig(block.DialogPrm(1).Data);
+config = get_param(block.BlockHandle,"UserData");
 heat = double(block.InputPort(1).Data(:));
 temperature = double(block.InputPort(2).Data(:));
 heatWeights = double(config.heat_cell_weights(:));
 temperatureStatistics = radia.simulink.ihTemperatureStatistics(config,temperature);
 revision = double(block.InputPort(6).Data);
-if ~isfinite(revision)
-    revision = 0;
+if any(~isfinite(heat)) || ...
+        any(~isfinite([block.InputPort(3).Data;block.InputPort(4).Data;block.InputPort(5).Data]))
+    error("radia:simulink:IHMonitorNonfinite","IH monitor received a nonfinite signal.");
 end
+% configureIHNativeModel uses NaN to invalidate the geometry-cache revision;
+% this is metadata, not an invalid physical signal.
+if ~isfinite(revision), revision = 0; end
 
 block.OutputPort(1).Data = 2; % running / healthy
 block.OutputPort(2).Data = double(block.CurrentTime);
 block.OutputPort(3).Data = revision;
-block.OutputPort(4).Data = 0; % last successfully emitted sample
+block.OutputPort(4).Data = 0; % header.error_code; sample index is output 5
 block.OutputPort(5).Data = block.Dwork(1).Data;
 block.OutputPort(6).Data = double(block.InputPort(3).Data);
 block.OutputPort(7).Data = double(block.InputPort(4).Data);
