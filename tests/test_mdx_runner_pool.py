@@ -85,7 +85,10 @@ def test_compute_probe_does_not_import_cubit_and_keeps_row_contract(monkeypatch,
     monkeypatch.setattr(builtins, '__import__', guarded_import)
     exec(tool.CROSS_MACHINE_PROBE_NO_MCP, {})
     compute_rows = capsys.readouterr().out.splitlines()
-    assert len(compute_rows) == 11
-    assert sum(row.endswith('= N/A') for row in compute_rows) == 4
+    rows = {" ".join(row.partition('=')[0].split()): row.partition('=')[2].strip()
+            for row in compute_rows}
+    assert len(compute_rows) == len(rows)  # duplicate rows must not disappear
+    assert set(rows) == set(tool._PHASE9_FIELDS)
+    assert {key for key, value in rows.items() if value == 'N/A'} == tool._PHASE9_COMPUTE_NA
     assert compute_rows[0].endswith('= 1.0')
     assert 'import radia, cubit_mesh_export' in tool.CROSS_MACHINE_PROBE_LAB
