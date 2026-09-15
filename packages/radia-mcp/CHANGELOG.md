@@ -7,11 +7,12 @@ crystallized as its own package.
 
 ## [Unreleased]
 
-## [1.5.0] - release candidate (not yet published)
+## [1.5.0] - 2026-09-16
 
 - Publication preparation: reject stale Cubit/retired foundation files and the retired
   Cubit entry point in the Radia MCP wheel. Flag retired client launchers for
   owner-managed migration; preserve external Cubit settings and permissions.
+- Integrate mixed-omega v11 workflow gates without promoting pending numerical acceptance.
 - Mixed total/reduced omega remains in Radia MCP's analysis guidance, backed
   by Radia's Kelvin linear/Picard APIs. Existing C-type linear/nonlinear evidence
   is historical; FFAG model acceptance remains pending and is not a release claim.
