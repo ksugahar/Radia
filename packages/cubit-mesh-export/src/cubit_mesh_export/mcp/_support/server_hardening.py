@@ -1,3 +1,5 @@
+# Cubit-owned implementation; intentionally maintained independently of Radia MCP.
+# Derived support retains BSD-3-Clause terms: see LICENSE-BSD-3-Clause.txt.
 """
 server_hardening.py — shared MCP-server hardening infrastructure.
 
@@ -236,17 +238,17 @@ def install_call_log(mcp, log_name: str, env_var: str | None = None) -> bool:
     ``<state_dir>/logs/<log_name>`` (size-capped via
     :func:`rotate_if_large`).  Argument *values are never recorded*;
     only key, type and length/shape metadata are retained.  A server-specific
-    ``env_var`` overrides the fleet-wide ``RADIA_MCP_CALL_LOG`` switch.
+    ``env_var`` overrides the fleet-wide ``CUBIT_MCP_CALL_LOG`` switch.
     Installation is idempotent and creates no directory until the first call.
 
     Returns ``True`` when the wrapper was installed.
     """
     manager = mcp._tool_manager
-    if getattr(manager, "_radia_call_log_installed", False):
+    if getattr(manager, "_cubit_call_log_installed", False):
         return False
     setting = os.environ.get(env_var) if env_var else None
     if setting is None:
-        setting = os.environ.get("RADIA_MCP_CALL_LOG", "1")
+        setting = os.environ.get("CUBIT_MCP_CALL_LOG", "1")
     if setting == "0":
         return False
 
@@ -275,7 +277,7 @@ def install_call_log(mcp, log_name: str, env_var: str | None = None) -> bool:
     async def logged_call_tool(name, arguments, context=None,
                                convert_result=False):
         t0 = time.time()
-        record = {"schema": "radia-mcp.tool-call.v1",
+        record = {"schema": "cubit-mesh-export.tool-call.v1",
                   "ts": round(t0, 3), "tool": name,
                   "args": _digest(arguments)}
         try:
@@ -302,8 +304,8 @@ def install_call_log(mcp, log_name: str, env_var: str | None = None) -> bool:
                 pass
 
     manager.call_tool = logged_call_tool
-    manager._radia_call_log_installed = True
-    manager._radia_call_log_name = log_name
+    manager._cubit_call_log_installed = True
+    manager._cubit_call_log_name = log_name
     return True
 
 

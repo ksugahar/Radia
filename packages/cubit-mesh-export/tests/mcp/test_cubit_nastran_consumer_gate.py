@@ -200,7 +200,7 @@ async def _probe_nastran_gate_stdio():
     env["PYTHONPATH"] = os.pathsep.join(
         [str(package_root / "src"), env.get("PYTHONPATH", "")]
     ).rstrip(os.pathsep)
-    env["RADIA_MCP_TOOL_PROFILE"] = "core"
+    env["CUBIT_MCP_TOOL_PROFILE"] = "core"
     params = StdioServerParameters(
         command=sys.executable,
         args=["-m", "cubit_mesh_export.mcp.server"],

@@ -1,3 +1,5 @@
+# Cubit-owned implementation; intentionally maintained independently of Radia MCP.
+# Derived support retains BSD-3-Clause terms: see LICENSE-BSD-3-Clause.txt.
 """Small lazy-call adapter for optional and validation-only subsystems."""
 
 from __future__ import annotations
@@ -28,5 +30,5 @@ def lazy_callable(
     call.__name__ = attribute
     call.__qualname__ = attribute
     call.__doc__ = f"Lazy proxy for {resolved_module}.{attribute}."
-    setattr(call, "__radia_lazy_target__", f"{resolved_module}:{attribute}")
+    setattr(call, "__cubit_lazy_target__", f"{resolved_module}:{attribute}")
     return call

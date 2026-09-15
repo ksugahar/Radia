@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cubit-mesh-export"
-version = "1.0.2"
+version = "1.0.3"
 description = "Solver-neutral mesh export from Coreform Cubit: high-order curved .vol/.msh/.bdf, Kelvin transformation, Dirichlet/symmetry label conventions"
 readme = "README.md"
 license = {text = "MIT"}
@@ -34,6 +34,11 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/ksugahar/Radia"
 
+[project.optional-dependencies]
+mesh-quality = ["gmsh"]
+sculpt = ["netCDF4"]
+youtube = ["youtube-transcript-api"]
+
 [project.scripts]
 mcp-server-cubit = "cubit_mesh_export.mcp.server:main"
 cubit-plugin-install = "cubit_mesh_export.install:main"
@@ -51,6 +56,7 @@ where = ["src"]
 cubit_mesh_export = ["*.pyd", "*.so", "*.ccm", "native_payloads.json"]
 "cubit_mesh_export.cubit_helpers" = ["*.py"]
 "cubit_mesh_export.mcp" = ["README.md"]
+"cubit_mesh_export.mcp._support" = ["*.txt", "*.md"]
 "cubit_mesh_export.cubit_gui" = ["*.jou", "cubit_toolbar/scripts/*.py", "cubit_toolbar/icons/*.svg", "cubit_toolbar/toolbars/*.tmpl"]
 
 [tool.setuptools.exclude-package-data]

@@ -1,3 +1,5 @@
+# Cubit-owned implementation; intentionally maintained independently of Radia MCP.
+# Derived support retains BSD-3-Clause terms: see LICENSE-BSD-3-Clause.txt.
 """Cubit forum/journal example providers owned by this distribution."""
 
 
@@ -125,7 +127,7 @@ def _youtube_search(query: str, max_videos: int) -> list[tuple[str, str]]:
 	q = urllib.parse.quote(query)
 	req = urllib.request.Request(
 		_YT_SEARCH_URL.format(q=q),
-		headers={"User-Agent": "Mozilla/5.0 (radia-mcp)"},
+		headers={"User-Agent": "cubit-mesh-export (+https://pypi.org/project/cubit-mesh-export/)"},
 	)
 	try:
 		with urllib.request.urlopen(req, timeout=_TIMEOUT_SECONDS) as resp:  # noqa: S310
@@ -178,9 +180,9 @@ def refresh_youtube_transcripts(query: str, source_name: str,
 	"""Generic: search YouTube for `query`, fetch top-N transcripts,
 	store as the `source_name` example sub-source.
 
-	Used by `refresh_cubit_youtube` / `refresh_build123d_youtube` /
+	Used by `refresh_cubit_youtube` /
 	`refresh_gmsh_youtube`. Optional dep: `youtube-transcript-api`
-	(install via `pip install radia-mcp[youtube]`).
+	(install via `pip install cubit-mesh-export[youtube]`).
 
 	Args:
 	    query: search string passed to youtube.com/results.
@@ -413,7 +415,7 @@ _LOCAL_EXTS = (".jou", ".py")
 
 _LOCAL_SKIP_DIRS = frozenset({
 	".git", "__pycache__", "build", "dist", ".venv", "venv", "node_modules",
-	"packages",  # don't re-index radia-mcp's own source
+	"packages",  # don't re-index implementation packages
 })
 
 
@@ -462,8 +464,8 @@ def refresh_cubit_local_examples(roots: list[str] | None = None,
 	"""Walk local directories and index .jou / .py files as Cubit examples.
 
 	Default roots: `public-safe curated corpus` (the lab's years of curated
-	Cubit projects, ~145 files), plus Radia's durable docs/,
-	validation_test/, and panel-sample lanes. Users can pass `roots=[...]`
+	Cubit projects), plus configured durable docs and validation lanes.
+	Users can pass `roots=[...]`
 	to override.
 
 	Each file:
@@ -890,10 +892,8 @@ def search_examples(source: str, query: str, limit: int = 5,
                     auto_refresh_if_empty: bool = True) -> dict:
 	"""tf-idf search across cached examples for `source`.
 
-	`source` may be a single concrete source (`build123d`, `cubit`,
-	`bd_warehouse`, `cubit_local`) or a family name (`build123d` resolves
-	to `[build123d, bd_warehouse]`; `cubit` resolves to `[cubit,
-	cubit_local]`).  For families the indexes are unioned and ranked
+	`source` is `cubit` or `cubit_local`. The `cubit` family searches both
+	providers. For families the indexes are unioned and ranked
 	together so one query sees GitHub + local + forum hits at once.
 
 	Args:
@@ -966,7 +966,7 @@ def search_examples(source: str, query: str, limit: int = 5,
 			score *= 1.0 + 0.75 * head_hits
 		score *= 1.0 + 0.25 * (hits / max(1, len(q_terms)))
 		# Mild local-source boost: lab-curated examples are usually more
-		# relevant to Radia users than random forum posts / general libs.
+		# relevant to Cubit users than random forum posts / general libs.
 		if sub in ("cubit_local",):
 			score *= 1.1
 		scored.append((score, it, sub))

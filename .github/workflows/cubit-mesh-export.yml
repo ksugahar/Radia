@@ -132,7 +132,7 @@ jobs:
         run: |
           python -m compileall -q packages\cubit-mesh-export\src
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python -m pip install setuptools pytest psutil numpy gmsh netCDF4 `
+          python -m pip install setuptools pytest psutil numpy `
             "netgen-mesher==6.2.2606" "ngsolve==6.2.2606"
           $env:PYTHONPATH = 'packages\cubit-mesh-export\src'
           python -m pytest tests\test_cubit_installers.py `
@@ -147,7 +147,9 @@ jobs:
         run: |
           $wheel = Get-ChildItem packages\cubit-mesh-export\dist\*.whl |
             Select-Object -First 1
-          python -m pip install $wheel.FullName
+          # Resolve declared public dependencies normally; absence probes reject
+          # Radia/private foundations. Feature tests use the wheel's extras.
+          python -m pip install "$($wheel.FullName)[mesh-quality,sculpt]"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -I tools\check_cubit_standalone.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

@@ -31,6 +31,7 @@ def test_unknown_scheme_is_input_error(tmp_path):
 
 @pytest.mark.parametrize("kwargs", [
     {"order": "bad"},
+    {"order": 4},
     {"netgen_maxh": -1.0, "cubit_size": 1.0},
     {"netgen_maxh": 1.0, "cubit_size": float("nan")},
     {"threshold": float("inf")},
@@ -79,7 +80,9 @@ def test_netgen_reference_preserves_curved_volume_without_radia(tmp_path, order)
     with TaskManager():
         mesh = Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), 1)).GenerateMesh(maxh=0.4))
     target = tmp_path / 'sphere.msh'
-    _write_tet_msh(mesh, target, order)
+    report = _write_tet_msh(mesh, target, order)
+    assert report['min_jacobian_det'] > 0
+    assert '$Entities' in target.read_text()
     inventory = summarize_gmsh_v41_ascii(target.read_text())
     assert inventory['status'] == 'ok'
     volume = mesh_total_volume(target, quadrature='Gauss10')
@@ -91,3 +94,34 @@ def test_netgen_reference_preserves_curved_volume_without_radia(tmp_path, order)
     quality = mesh_quality(target, threshold=0.0)
     assert quality['ran'] and quality['total_negative'] == 0, quality
     assert {row['order'] for row in quality['by_type']} == {order}
+
+
+@pytest.mark.parametrize('minimum', [-1.0, 0.0, float('nan')])
+def test_invalid_reference_jacobians_fail_loudly(tmp_path, monkeypatch, minimum):
+    from netgen.occ import OCCGeometry, Sphere, Pnt
+    from ngsolve import Mesh
+    from cubit_mesh_export.mcp._support import netgen_compare, mesh_quality
+    mesh = Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), 1)).GenerateMesh(maxh=0.8))
+    monkeypatch.setattr(mesh_quality, 'mesh_total_volume',
+                        lambda *_a, **_k: {'ok': True, 'min_jacobian_det': minimum})
+    with pytest.raises(ValueError, match='Jacobian'):
+        netgen_compare._write_tet_msh(mesh, tmp_path / 'bad.msh')
+
+
+def test_reference_nodes_are_cached_by_supported_order(monkeypatch):
+    from cubit_mesh_export.mcp._support import netgen_compare
+    calls = []
+    def reference(_script, args, **kwargs):
+        calls.append(args)
+        return {'ok': True, 'points': []}
+    netgen_compare._reference_nodes.cache_clear()
+    monkeypatch.setattr(netgen_compare, 'run_gmsh_json_subprocess', reference)
+    try:
+        netgen_compare._reference_nodes(1)
+        netgen_compare._reference_nodes(1)
+        netgen_compare._reference_nodes(2)
+        assert len(calls) == 2
+        with pytest.raises(ValueError):
+            netgen_compare._reference_nodes(4)
+    finally:
+        netgen_compare._reference_nodes.cache_clear()

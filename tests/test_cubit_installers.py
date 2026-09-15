@@ -39,11 +39,12 @@ def test_radia_accepts_validated_exporter_versions_only(monkeypatch, version, ac
 @pytest.mark.parametrize("version,accepted", [("4.95.92", True), ("5.0.0", True),
                                               ("5.0.1", False), ("6.0.0", False)])
 def test_exporter_radia5_compatibility_is_bounded(monkeypatch, version, accepted):
+    import cubit_mesh_export
     from cubit_mesh_export import install
 
     monkeypatch.setitem(sys.modules, "radia", SimpleNamespace(
         __version__=version, COMPAT_CUBIT_MESH_EXPORT_MIN="0.5.0",
-        COMPAT_CUBIT_MESH_EXPORT_MAX="1.0.2"))
+        COMPAT_CUBIT_MESH_EXPORT_MAX=cubit_mesh_export.__version__))
     assert install._check_radia_compat()[0] is accepted
 
 

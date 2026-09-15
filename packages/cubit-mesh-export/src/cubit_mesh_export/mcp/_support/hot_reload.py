@@ -1,3 +1,5 @@
+# Cubit-owned implementation; intentionally maintained independently of Radia MCP.
+# Derived support retains BSD-3-Clause terms: see LICENSE-BSD-3-Clause.txt.
 """Reload changed product modules and re-register their tools without a restart.
 
 Development radia-mcp servers may use editable installs. An editable install only tells
@@ -344,7 +346,7 @@ def _declare_tool_list_changed(mcp: Any) -> None:
     from mcp.server.lowlevel.server import NotificationOptions
 
     low = mcp._mcp_server
-    if getattr(low, "_radia_declares_tool_list_changed", False):
+    if getattr(low, "_cubit_declares_tool_list_changed", False):
         return
     original = low.create_initialization_options
 
@@ -354,12 +356,12 @@ def _declare_tool_list_changed(mcp: Any) -> None:
         return original(options, experimental_capabilities)
 
     low.create_initialization_options = create_initialization_options
-    low._radia_declares_tool_list_changed = True
+    low._cubit_declares_tool_list_changed = True
 
 
 def register_reload_tool(mcp: Any, tool_name: str, module_prefix: str = "cubit_mesh_export.mcp") -> None:
     """Expose reload only for a verified editable install without an opt-out."""
-    if os.environ.get("RADIA_MCP_HOT_RELOAD", "").strip() == "0":
+    if os.environ.get("CUBIT_MCP_HOT_RELOAD", "").strip() == "0":
         return
     # Import locally: status registration calls this function during server setup.
     from cubit_mesh_export.mcp._support.status import _distribution_provenance
