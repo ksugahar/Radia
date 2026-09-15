@@ -130,7 +130,7 @@ config.bh_mode = char(lower(string(spec.bh_mode)));
 config.current_change_recomputes_eddy = false;
 config.temperature_coordinate_system = "workpiece";
 config.rotation_transport = options.RotationMode;
-config.dt_order = "eddy;transport(theta_prev,theta_now);thermal";
+config.dt_order = "eddy(material-frame heat);thermal(material-frame state)";
 
 workpieceContract = options.WorkpieceVolLabelContract;
 if strlength(workpieceContract) == 0 && isfield(spec, "wp_vol_label_contract")

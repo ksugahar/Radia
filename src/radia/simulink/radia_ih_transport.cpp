@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 
 namespace radia { namespace ih {
@@ -41,11 +42,21 @@ void transport_periodic(const std::vector<double>& previous,
     }
     double before = 0.0;
     double after = 0.0;
+    double magnitude = 0.0;
     for (std::size_t i = 0; i < n; ++i) {
+        if (!std::isfinite(previous[i]) || !std::isfinite(current[i]))
+            throw std::invalid_argument("IH transport field must be finite");
         before += weights[i] * previous[i];
         after += weights[i] * current[i];
+        magnitude += weights[i] * std::abs(previous[i]);
     }
-    if (std::abs(after) > 0.0) {
+    if (!std::isfinite(before) || !std::isfinite(after) || !std::isfinite(magnitude))
+        throw std::invalid_argument("IH transport weighted integral overflow");
+    const double threshold = 64 * std::numeric_limits<double>::epsilon() * magnitude;
+    if (std::abs(after) <= threshold) {
+        if (std::abs(before - after) > threshold)
+            throw std::invalid_argument("IH transport cannot conserve a nearly cancelling weighted integral");
+    } else {
         const double scale = before / after;
         for (double& value : current) value *= scale;
     }

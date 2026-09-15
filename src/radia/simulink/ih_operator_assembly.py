@@ -742,7 +742,7 @@ def _native_config(
         "temperature_change_recomputes_eddy": False,
         "temperature_coordinate_system": "workpiece",
         "rotation_transport": "none",
-        "dt_order": "eddy;transport(theta_prev,theta_now);thermal",
+        "dt_order": "eddy(material-frame heat);thermal(material-frame state)",
         "vol_check_required": True,
         "vol_check_reports": [str(path) for path in reports],
         "workpiece_vol_label_contract": str(contracts[0]),

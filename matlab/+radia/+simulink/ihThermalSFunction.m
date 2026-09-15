@@ -74,7 +74,8 @@ h = getHandle(block);
 if h ~= 0
     try
         radia_mex('ih.thermal.destroy', h);
-    catch
+    catch exception
+        warning("radia:simulink:IHThermalCleanup", "%s", exception.message);
     end
     setHandle(block, uint64(0));
 end

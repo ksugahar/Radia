@@ -24,6 +24,7 @@ block.SampleTimes = [config.sample_time_s, 0];
 block.SimStateCompliance = 'DisallowSimState';
 block.RegBlockMethod("PostPropagationSetup", @postPropagationSetup);
 block.RegBlockMethod("Start", @start);
+block.RegBlockMethod("InitializeConditions", @initializeConditions);
 block.RegBlockMethod("Outputs", @outputs);
 block.RegBlockMethod("Terminate", @terminate);
 end
@@ -48,6 +49,13 @@ config = radia.simulink.validateIHNativeConfig(block.DialogPrm(1).Data);
 setHandle(block, radia_mex('ih.eddy.create', config));
 end
 
+function initializeConditions(block)
+h = getHandle(block);
+if h ~= 0
+    radia_mex('ih.eddy.reset', h);
+end
+end
+
 function outputs(block)
 h = requireHandle(block);
 block.OutputPort(1).Data = radia_mex('ih.eddy.output', h, ...
@@ -64,7 +72,8 @@ h = getHandle(block);
 if h ~= 0
     try
         radia_mex('ih.eddy.destroy', h);
-    catch
+    catch exception
+        warning("radia:simulink:IHEddyCleanup", "%s", exception.message);
     end
     setHandle(block, uint64(0));
 end

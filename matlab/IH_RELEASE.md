@@ -1,5 +1,33 @@
 # Radia IH Simulink Preview
 
+## Validated scope and review limitations
+
+The geometry assembler generates a frozen unit-current EM loss distribution;
+runtime heat scales with current squared. It currently emits one Eddy unknown
+and disables rotation. It does **not** generate temperature-dependent BH
+operators or a nonlinear BH iteration. The generic small dense runtime and
+hand-authored slope configurations are not evidence for those production features.
+Slope assembly costs O(n_temperature * n_unknown^2), followed by an O(n_unknown^3)
+dense solve when temperature changes; no large-scale performance claim is made.
+
+`heat_projection` is a diagonal quadratic loss representation, not a general
+FEM/BEM loss tensor. Overlapping basis coefficients require cross terms and must
+not be supplied as if their squared magnitudes alone represented local loss.
+The single frozen-mode assembler does not omit such cross terms: the full EM
+solution is evaluated before its loss field is stored.
+
+For periodic sample configurations, temperature state and incoming Thermal heat
+are in material coordinates. Only Eddy maps to/from the stationary source frame;
+Thermal never rotates its stored state. Fractional-angle linear interpolation
+preserves a weighted integral after correction, not hotspot shape or peak.
+Repeated interpolation is diffusive. Nearly cancelling integrals that cannot be
+corrected safely raise an error instead of amplifying the field.
+
+Dense flattened inputs are explicitly row-major ABI data. MATLAB callers should
+pass a two-dimensional matrix to the validator or flatten with
+`reshape(A.',1,[])`, never `A(:)`. A vector alone contains no recoverable layout
+information; the current ABI cannot detect a caller's incorrect flattening.
+
 `radia_ih.slx` is the first native induction-heating runtime preview. It contains
 separate readable Level-2 MATLAB Eddy and Thermal S-Functions backed by checked
 `radia_mex` object handles, explicit current/angle/ambient source blocks, a
@@ -52,8 +80,8 @@ The discrete update order is fixed:
 
 ```text
 Eddy at T(t)
-  -> conservative workpiece transport from theta_prev to theta_now
-  -> Thermal update to T(t + dt)
+  -> Eddy heat mapped into workpiece material coordinates
+  -> Thermal update to T(t + dt), without rotating stored temperature
 ```
 
 For a linear magnetic law, a current-only change rescales heat density without
