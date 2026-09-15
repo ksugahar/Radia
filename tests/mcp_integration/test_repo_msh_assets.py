@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from radia_mcp.gmsh.msh_inspect import validate_msh
+from cae_mcp_core.mesh.msh_inspect import validate_msh
 
 _REPO = Path(__file__).resolve().parents[2]
 _LANES = ("docs", "validation_test", "src/radia/panels/samples")

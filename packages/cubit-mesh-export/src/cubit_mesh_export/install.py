@@ -387,12 +387,8 @@ def verify_deployment(pkg_dir: Path, cubit_dir: Path, *, verbose: bool = True):
             issues.append(msg)
             if verbose: print(f"    [STALE] {msg}")
 
-    # Compat report (read-only).
-    compat_ok, compat_msg = _check_radia_compat()
-    if verbose:
-        print(f"    compat: {compat_msg}")
-    if not compat_ok:
-        issues.append(f"Version incompatibility: {compat_msg}")
+    # Radia integration is a separate, explicit check. Standalone deployment
+    # must neither import Radia/native solver DLLs nor depend on its release.
 
     if verbose:
         if issues:
@@ -425,13 +421,8 @@ def preflight(cubit_dir: Path, *, verbose: bool = True):
         if reason:
             problems.append(f"File locked: {f} ({reason})")
 
-    compat_ok, compat_msg = _check_radia_compat()
-    if not compat_ok:
-        problems.append(f"Version incompatibility: {compat_msg}")
-
     if verbose:
         print("  Preflight:")
-        print(f"    compat: {compat_msg}")
         if problems:
             for p in problems:
                 print(f"    [!!] {p}")
@@ -778,12 +769,20 @@ def main():
                              "sha256). No writes.")
     parser.add_argument("--helpers-only", action="store_true",
                         help="deploy only pure-Python cubit_helpers; do not "
-                             "copy or remove .ccm/.pyd binaries")
+                            "copy or remove .ccm/.pyd binaries")
+    parser.add_argument("--check-radia-compat", action="store_true",
+                        help="check optional Radia integration only; no deployment")
     args = parser.parse_args()
-    selected_modes = sum((args.check_only, args.verify_only, args.helpers_only))
+    selected_modes = sum((args.check_only, args.verify_only, args.helpers_only,
+                          args.check_radia_compat))
     if selected_modes > 1:
-        parser.error("--check-only, --verify-only, and --helpers-only are "
+        parser.error("--check-only, --verify-only, --helpers-only and --check-radia-compat are "
                      "mutually exclusive")
+
+    if args.check_radia_compat:
+        ok, message = _check_radia_compat()
+        print(message)
+        raise SystemExit(0 if ok else 4)
 
     try:
         ok = install_plugin(all_users=args.all_users,

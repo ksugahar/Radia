@@ -2,8 +2,8 @@
 
 Solver-neutral mesh export from [Coreform Cubit](https://coreform.com/products/coreform-cubit/) to [NGSolve](https://ngsolve.org)/[Netgen](https://github.com/NGSolve/netgen).
 
-`cubit-mesh-export` is the **shared infrastructure layer** in the Radia
-toolchain. It ships mesh export, the Kelvin open-boundary
+`cubit-mesh-export` is an independent Cubit tooling distribution. It ships
+its own MCP server, mesh export, the Kelvin open-boundary
 transformation, symmetry helpers, and the Dirichlet label conventions
 consumed by Radia's Simulink applications, Python/MCP workflows, and
 result-bearing documentation notebooks.
@@ -18,17 +18,21 @@ shims. Existing deployments must regenerate their startup registration using
 `cubit_toolbar_guide` for the operating contract and
 `validation_test/cubit_mesh_export/STANDALONE_GUI.md` for acceptance evidence.
 
+Version 1.0.2 publishes this GUI independently of Radia. Installation and
+deployment verification never import Radia; use `--check-radia-compat` only
+for an explicitly requested combined integration check. LAB/100 acceptance
+uses `release_quad.py cubit-dual`, not the Radia-wide deployment commands.
+
 Version 1.0.0 retains the 0.14.17 command and label contracts. Its
 supported binary runtime is 64-bit Windows, CPython 3.12, Coreform Cubit
 2025.12, and the exact Netgen/NGSolve versions declared in package metadata.
-For LLM operation, the canonical manual is the `radia-mcp` Cubit server:
+For LLM operation, the canonical manual is the included `cubit_mesh_export.mcp` server:
 start with `cubit_status` and `cubit_docs`; use APREPRO through its headless
 execution tools and `cubit_check_vol` before handing a mesh to a solver.
 Standalone wheel acceptance is recorded under
 `validation_test/cubit_mesh_export/standalone_1_0_0_lab_result.json`.
-Radia 4.95.91 declares an exporter upper bound of `0.999.999`; its optional
-integration gate rejects 1.0.0. Keep `cubit-mesh-export==0.14.17` in that
-combined environment until Radia's compatibility declaration is updated.
+Combined Radia installations must also pass Radia's declared exporter
+compatibility check; standalone operation does not import Radia.
 
 - **Cubit plugin** (`.ccm` + `.pyd`, Coreform Cubit 2025.12+):
   - `export {netgen|gmsh|vtk|femeem|meg|nastran_bdf}` APREPRO commands
@@ -50,12 +54,21 @@ combined environment until Radia's compatibility declaration is updated.
 ## Install
 
 `cubit-mesh-export` is standalone: it needs Coreform Cubit 2025.12, but it does
-**not** need `radia`.
+**not** need `radia` or `radia-mcp`. MCP is included by default through the
+independent `cae-mcp-core` foundation.
 
 ```bash
 pip install cubit-mesh-export
 cubit-plugin-install
+mcp-server-cubit
 ```
+
+For an MCP client, use the installed `mcp-server-cubit` command, or the selected
+Python interpreter with `-m cubit_mesh_export.mcp.server`. See the
+[Cubit MCP manual](src/cubit_mesh_export/mcp/README.md) for capabilities and
+headless operation. Old `radia_mcp.cubit` module commands must be updated;
+no compatibility forwarding package is shipped. Radia topology optimization
+may depend on Cubit, but Cubit users do not install Radia to use MCP.
 
 `cubit-plugin-install` deploys the plugin binaries, the Netgen DLLs, and the
 Cubit-side Python helpers (`cubit_helpers/add_kelvin.py`,
@@ -81,7 +94,8 @@ What you get depends on whether `radia` is installed alongside it:
 | `export {netgen,gmsh,vtk,femeem,meg}` / `export jmag_nastran` |     yes    |      yes     |
 | `check-vol` CLI (no Cubit required)                           |     yes    |      yes     |
 | Kelvin transformation and symmetry labels                     |     yes    |      yes     |
-| **Export menu inside Cubit's GUI**                            |      —     |      yes     |
+| **Export menu inside Cubit's GUI**                            |     yes    |      yes     |
+| **Cubit MCP server and API reference**                        |     yes    |      yes     |
 
 The menu is registered through Cubit's own Claro API and runs in Cubit's
 embedded Python; normal Radia Python/MCP workflows and Simulink applications do

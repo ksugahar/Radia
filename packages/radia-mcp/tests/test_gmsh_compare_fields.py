@@ -21,7 +21,7 @@ import math
 
 import pytest
 from radia_mcp.gmsh.compare import compare_fields
-from radia_mcp.gmsh.msh_inspect import field_stats
+from cae_mcp_core.mesh.msh_inspect import field_stats
 
 _GMSH_AVAILABLE = importlib.util.find_spec("gmsh") is not None
 _needs_gmsh = pytest.mark.skipif(not _GMSH_AVAILABLE,

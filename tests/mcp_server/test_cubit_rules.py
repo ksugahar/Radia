@@ -5,7 +5,7 @@ then provides correct code and verifies no findings.
 """
 
 import pytest
-from radia_mcp.cubit.rules import (
+from cubit_mesh_export.mcp.rules import (
     ALL_RULES,
     check_missing_block_registration,
     check_missing_mesh_command,

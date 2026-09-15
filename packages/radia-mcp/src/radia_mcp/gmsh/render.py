@@ -28,7 +28,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from ._gmsh_subprocess import run_gmsh_json_subprocess
+from cae_mcp_core.mesh._gmsh_subprocess import run_gmsh_json_subprocess
 from .post_display import CAMERA_PRESETS, cut_plane_option_values
 
 _RENDER_SCRIPT = r"""
@@ -1117,7 +1117,7 @@ def render_montage(images: list[str | Path],
 
 def _union_bbox(paths: list[Path]) -> tuple[list[float], list[float]]:
     """Union node bounding box across .msh inputs (pure-Python reader)."""
-    from .msh_inspect import read_msh_data
+    from cae_mcp_core.mesh.msh_inspect import read_msh_data
 
     lo = [float("inf")] * 3
     hi = [float("-inf")] * 3
@@ -1222,7 +1222,7 @@ def render_panels(items: list[dict[str, Any] | str | Path],
     shared_color = dict(color or {})
     range_info = None
     if share_color and "range" not in shared_color:
-        from .msh_inspect import read_msh_data
+        from cae_mcp_core.mesh.msh_inspect import read_msh_data
         from .post_process import field_range
 
         msh = [p for p in srcs if p.suffix.lower() == ".msh"]
@@ -1284,7 +1284,7 @@ def render_panels(items: list[dict[str, Any] | str | Path],
             # one quantity per comparison figure: a second visible view
             # would add a second colour bar that the shared range does
             # not describe
-            from .msh_inspect import read_msh_data
+            from cae_mcp_core.mesh.msh_inspect import read_msh_data
 
             if Path(spec["path"]).suffix.lower() == ".msh":
                 for i, v in enumerate(read_msh_data(spec["path"])["views"]):
@@ -1371,7 +1371,7 @@ def volume_render(path: str | Path,
         alpha_power: opacity exponent (0 = uniform, 2 = low values fade).
         keep_slices: also write the slice stack as a .pos file.
     """
-    from .msh_inspect import read_msh_data
+    from cae_mcp_core.mesh.msh_inspect import read_msh_data
 
     src = Path(path)
     if not src.is_file():

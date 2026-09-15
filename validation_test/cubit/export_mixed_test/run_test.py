@@ -11,11 +11,11 @@ import os
 import subprocess
 import sys
 
-from radia_mcp.cubit.gmsh_v41 import (
+from cubit_mesh_export.mcp.gmsh_v41 import (
     gmsh_v41_mixed_order_series_gate,
     summarize_gmsh_v41_ascii,
 )
-from radia_mcp.cubit.vol_inventory import summarize_netgen_vol_inventory
+from cubit_mesh_export.mcp.vol_inventory import summarize_netgen_vol_inventory
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 

@@ -1,0 +1,3067 @@
+import copy
+import json
+
+import pytest
+
+from cubit_mesh_export.mcp.server import (
+    cubit_conformal_hex_pyramid_tet_interface_gate,
+    cubit_mixed_transition_source_gate,
+)
+
+
+def summary() -> dict:
+    return {
+        "version": "2025.12",
+        "source_kind": "source_native_local_mixed_element_journal_path_adapted",
+        "source_journal": "01_Tet_Hex_Pyramid.jou",
+        "source_sha256": "a" * 64,
+        "source_commands": [
+            "brick x 2 y 1 z 1",
+            "webcut volume 1 with plane xplane imprint merge",
+            "volume 1 scheme map",
+            "mesh volume 1",
+            "volume 2 scheme tetmesh",
+            "mesh volume 2",
+            "block 1 add hex all",
+            "block 2 add pyramid all",
+            "block 3 add tet all",
+            "block 4 add tri all",
+            "block 5 add face all",
+            "volume all scale 0.001",
+        ],
+        "execution_mode": "headless_combined_journal_then_python_inventory",
+        "headless_flags": ["-nographics", "-batch"],
+        "gui_daemon_enabled": False,
+        "element_counts": {"hex": 1, "pyramid": 1, "tet": 10, "wedge": 0},
+        "per_volume_element_counts": {
+            "1": {"hex": 1, "pyramid": 0, "tet": 0, "wedge": 0},
+            "2": {"hex": 0, "pyramid": 1, "tet": 10, "wedge": 0},
+        },
+        "quality": {
+            "hex": {"scaled_jacobian": {"count": 1, "min": 1.0}},
+            "pyramid": {"scaled_jacobian": {"count": 1, "min": 1.0}},
+            "tet": {"scaled_jacobian": {"count": 10, "min": 0.3826}},
+        },
+        "mesh_identity": {
+            "generation": "mesh-generation-42",
+            "sha256": "d" * 64,
+        },
+        "quality_report_identity": {
+            "mesh_generation": "mesh-generation-42",
+            "mesh_sha256": "d" * 64,
+            "report_sha256": "e" * 64,
+        },
+        "quality_scope_identity": {
+            "mesh_volume_ids": ["1", "2"],
+            "minimum_quality_volume_ids": ["1", "2"],
+            "histogram_volume_ids": ["1", "2"],
+            "histogram_owned_element_counts": {"hex": 1, "pyramid": 1, "tet": 10},
+        },
+        "partition_aggregation": {
+            "aggregation_policy": "owned_elements_only",
+            "reported_global_owned_counts": {"hex": 1, "pyramid": 1, "tet": 10},
+            "partitions": [
+                {
+                    "partition_id": 0,
+                    "owned_counts": {"hex": 1, "pyramid": 0, "tet": 4},
+                    "ghost_counts": {"hex": 0, "pyramid": 1, "tet": 2},
+                },
+                {
+                    "partition_id": 1,
+                    "owned_counts": {"hex": 0, "pyramid": 1, "tet": 6},
+                    "ghost_counts": {"hex": 1, "pyramid": 0, "tet": 0},
+                },
+            ],
+        },
+        "boundary_sets": [
+            {
+                "name": "interface",
+                "mesh_generation": "mesh-generation-42",
+                "mesh_sha256": "d" * 64,
+                "entity_ids": [7],
+                "connectivity_sha256": "f" * 64,
+            }
+        ],
+        "interface_surfaces": [
+            {
+                "surface_id": 7,
+                "adjacent_volumes": [1, 2],
+                "face_ids": [1],
+                "face_connectivity": [[2, 1, 3, 4]],
+            }
+        ],
+        "interface_face_ownership": [
+            {"face_id": 1, "node_count": 4, "hex_owners": [1], "pyramid_owners": [1]}
+        ],
+        "matched_pyramid_count": 1,
+        "geometry": {
+            "cad_total_volume_m3": 2.0e-9,
+            "analytic_total_volume_m3": 2.0e-9,
+            "element_volume_source": "independent_gmsh_v41_coordinate_reconstruction",
+        },
+        "gmsh_export": {"bytes": 1233, "sha256": "b" * 64},
+        "gmsh_inventory": {
+            "status": "ok",
+            "mesh_format": "4.1",
+            "binary": False,
+            "connectivity_mismatches": [],
+            "volume_family_counts": {"hex": 1, "pyramid": 1, "tet": 10},
+        },
+        "gmsh_volume_inventory": {
+            "family_counts": {"hex": 1, "pyramid": 1, "tet": 10},
+            "family_volumes_m3": {
+                "hex": 1.0e-9,
+                "pyramid": 2.3570233333333336e-10,
+                "tet": 7.642976666666667e-10,
+            },
+            "total_volume_m3": 2.0e-9,
+        },
+        "quality_probe": {
+            "command_supported": False,
+            "diagnostic": "Unknown metric name volume",
+            "failure_interpretation": "unsupported_api_not_zero_quality",
+            "fallback": "per_element_scaled_jacobian_by_family",
+            "families": ["hex", "pyramid", "tet"],
+        },
+        "process": {
+            "exit_code": 3,
+            "unexpected_error_lines": [],
+            "known_headless_diagnostics_only": True,
+            "result_artifact_fresh": True,
+            "owned_processes_remaining": 0,
+        },
+        "export_artifacts": {
+            "required": ["mixed.msh", "mixed.vol"],
+            "artifacts": [
+                {
+                    "name": "mixed.msh",
+                    "fresh": True,
+                    "bytes": 1233,
+                    "sha256": "b" * 64,
+                },
+                {
+                    "name": "mixed.vol",
+                    "fresh": True,
+                    "bytes": 900,
+                    "sha256": "c" * 64,
+                },
+            ],
+        },
+        "replay_identity": {
+            "pinned_journal_sha256": "a" * 64,
+            "pinned_source_model_sha256": "c" * 64,
+            "replayed_journal_sha256": "a" * 64,
+            "replayed_source_model_sha256": "c" * 64,
+        },
+        "export_manifest": {
+            "invocation_id": "batch-invocation-42",
+            "model_generation": "model-generation-42",
+            "artifacts": [
+                {
+                    "name": "mixed.msh",
+                    "sha256": "b" * 64,
+                    "model_generation": "model-generation-42",
+                    "invocation_id": "batch-invocation-42",
+                },
+                {
+                    "name": "mixed.vol",
+                    "sha256": "c" * 64,
+                    "model_generation": "model-generation-42",
+                    "invocation_id": "batch-invocation-42",
+                },
+            ],
+        },
+        "batch_invocation": {
+            "invocation_id": "batch-invocation-42",
+            "process_start_utc": "2026-07-16T02:00:00Z",
+            "log": {
+                "invocation_id": "batch-invocation-42",
+                "process_start_utc": "2026-07-16T02:00:00Z",
+                "sha256": "1" * 64,
+            },
+            "exports_invocation_id": "batch-invocation-42",
+        },
+        "operation_dag_identity": {
+            "final_model_generation": "model-generation-42",
+            "final_operation_sequence": 6,
+            "export_model_generation": "model-generation-42",
+            "export_after_operation_sequence": 6,
+        },
+        "length_scale_identity": {
+            "source_geometry_unit": "mm",
+            "export_geometry_unit": "m",
+            "declared_source_to_export_scale": 0.001,
+            "scale_application_stages": ["source-command"],
+            "effective_scale": 0.001,
+        },
+        "signed_jacobian_identity": {
+            "mesh_generation": "mesh-generation-42",
+            "minimum_signed_jacobian": 0.31,
+            "maximum_signed_jacobian": 1.24,
+            "interior_sign_change_count": 0,
+            "absolute_volume_matches_cad": True,
+        },
+        "coordinate_scale_identity": {
+            "source_geometry_unit": "mm",
+            "export_coordinate_unit": "m",
+            "coordinate_scale_to_si": 0.001,
+            "volume_scale_to_si": 1.0e-9,
+            "coordinate_scale_generation": "scale-generation-42",
+            "volume_scale_generation": "scale-generation-42",
+        },
+        "exodus_connectivity_identity": {
+            "connectivity_permutation_generation": "exodus-ordering-42",
+            "sideset_face_ordinal_generation": "exodus-ordering-42",
+            "permuted_connectivity_sha256": "a" * 64,
+            "sideset_connectivity_sha256": "a" * 64,
+            "target_ordering": "solver-target-ordering-v1",
+        },
+        "quality_report_generation_identity": {
+            "final_mesh_generation": "mesh-generation-42",
+            "quality_report_mesh_generation": "mesh-generation-42",
+            "final_smoothing_sequence": 8,
+            "quality_report_after_operation_sequence": 8,
+        },
+        "timing_breakdown_s": {
+            "source_replay": 0.2,
+            "mesh_inventory": 0.3,
+            "gmsh_export": 0.2,
+            "independent_validation": 0.1,
+        },
+    }
+
+
+def test_interface_gate_accepts_minimal_conformal_transition_without_hex_dominance():
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(summary()))
+    assert result["status"] == "ok"
+    assert result["element_counts"]["tet"] > result["element_counts"]["hex"]
+    assert result["checks"]["each_interface_quad_has_one_hex_and_one_pyramid_owner"] is True
+    assert result["gmsh_reconstructed_volume_relative_error"] == 0.0
+
+
+def test_interface_gate_rejects_count_only_false_positive_without_dual_ownership():
+    row = copy.deepcopy(summary())
+    row["interface_face_ownership"][0]["pyramid_owners"] = []
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["gmsh_volume_families_match_live_inventory"] is True
+    assert result["checks"]["each_interface_quad_has_one_hex_and_one_pyramid_owner"] is False
+
+
+def test_interface_gate_rejects_reconstructed_volume_drift_at_small_si_scale():
+    row = copy.deepcopy(summary())
+    row["gmsh_volume_inventory"]["total_volume_m3"] = 1.8e-9
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["gmsh_reconstructed_volume_relative_error"] == pytest.approx(0.1)
+
+
+def test_source_gate_accepts_classified_headless_exit_and_quality_fallback():
+    result = json.loads(cubit_mixed_transition_source_gate(summary()))
+    assert result["status"] == "ok"
+    assert result["warnings"] == []
+    assert result["process_exit_code"] == 3
+    assert result["checks"]["unsupported_aggregate_quality_probe_is_diagnosed"] is True
+    assert result["checks"]["independent_interface_gate_passed"] is True
+
+
+def test_source_gate_rejects_exit_code_allowlist_without_semantic_evidence():
+    row = copy.deepcopy(summary())
+    row["process"]["known_headless_diagnostics_only"] = False
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["nonzero_exit_is_semantically_classified"] is False
+
+
+def test_source_gate_rejects_unsupported_quality_query_misread_as_zero_quality():
+    row = copy.deepcopy(summary())
+    row["quality_probe"]["failure_interpretation"] = "zero_quality"
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["unsupported_aggregate_quality_probe_is_diagnosed"] is False
+
+
+def test_server_rejects_missing_independent_gmsh_volume_inventory():
+    row = copy.deepcopy(summary())
+    del row["gmsh_volume_inventory"]
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "invalid_input"
+    assert "gmsh_volume_inventory" in result["error"]
+
+
+def test_legacy_source_identity_is_accepted_with_warnings():
+    row = summary()
+    row.pop("export_artifacts")
+    row.pop("replay_identity")
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "ok"
+    assert set(result["warnings"]) == {
+        "per_artifact_export_freshness_not_recorded",
+        "journal_model_replay_identity_not_recorded",
+    }
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "v7_public_hex_orientation_negative_jacobian",
+        "v7_public_pyramid_transition_nonmanifold",
+    ],
+)
+def test_generalization_v7_public(case_id: str):
+    row = summary()
+    if case_id == "v7_public_hex_orientation_negative_jacobian":
+        row["quality"]["hex"]["scaled_jacobian"]["min"] = -0.01
+        expected = "all_volume_families_above_quality_threshold"
+    else:
+        row["interface_face_ownership"][0]["tet_owners"] = [7]
+        row["interface_surfaces"][0]["face_incidence_count"] = 3
+        expected = "interface_quads_are_two_sided_manifold"
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][expected] is False
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "v7_source_batch_partial_export_success",
+        "v7_source_journal_model_digest_mismatch",
+    ],
+)
+def test_generalization_v7_source(case_id: str):
+    row = summary()
+    if case_id == "v7_source_batch_partial_export_success":
+        row["process"]["exit_code"] = 0
+        row["export_artifacts"]["artifacts"][1]["fresh"] = False
+        expected = "all_required_export_artifacts_are_fresh"
+    else:
+        row["replay_identity"]["replayed_source_model_sha256"] = "d" * 64
+        expected = "journal_and_source_model_identity_match_replay"
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][expected] is False
+
+
+@pytest.mark.parametrize("duplicate_location", ["required", "artifacts"])
+def test_source_gate_rejects_duplicate_export_artifact_names(duplicate_location: str):
+    row = summary()
+    if duplicate_location == "required":
+        row["export_artifacts"]["required"][1] = "mixed.msh"
+    else:
+        row["export_artifacts"]["artifacts"][1]["name"] = "mixed.msh"
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["all_required_export_artifacts_are_fresh"] is False
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "v8_public_quality_report_older_than_mesh",
+        "v8_public_sideset_generation_mixed_after_remesh",
+    ],
+)
+def test_generalization_v8_public(case_id: str):
+    row = summary()
+    if case_id == "v8_public_quality_report_older_than_mesh":
+        row["quality_report_identity"]["mesh_generation"] = "mesh-generation-41"
+        row["quality_report_identity"]["mesh_sha256"] = "2" * 64
+        expected = "quality_report_matches_current_mesh_generation"
+    else:
+        row["boundary_sets"][0]["mesh_generation"] = "mesh-generation-41"
+        row["boundary_sets"][0]["mesh_sha256"] = "2" * 64
+        expected = "boundary_sets_match_current_mesh_generation"
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][expected] is False
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "v8_source_export_manifest_mixed_generations",
+        "v8_source_batch_log_prior_invocation_identity",
+    ],
+)
+def test_generalization_v8_source(case_id: str):
+    row = summary()
+    if case_id == "v8_source_export_manifest_mixed_generations":
+        row["export_manifest"]["artifacts"][1][
+            "model_generation"
+        ] = "model-generation-41"
+        expected = "export_manifest_uses_one_model_and_invocation_generation"
+    else:
+        row["batch_invocation"]["log"].update(
+            {
+                "invocation_id": "batch-invocation-41",
+                "process_start_utc": "2026-07-16T01:00:00Z",
+            }
+        )
+        expected = "batch_log_and_exports_share_invocation_identity"
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][expected] is False
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "v9_public_quality_histogram_entity_scope_mismatch",
+        "v9_public_partition_ghost_elements_double_counted",
+    ],
+)
+def test_generalization_v9_public(case_id: str):
+    row = summary()
+    if case_id == "v9_public_quality_histogram_entity_scope_mismatch":
+        row["quality_scope_identity"]["histogram_volume_ids"] = ["1"]
+        expected = "quality_histogram_covers_the_complete_mesh_scope"
+    else:
+        row["partition_aggregation"].update(
+            {
+                "aggregation_policy": "owned_plus_ghost_elements",
+                "reported_global_owned_counts": {
+                    "hex": 2,
+                    "pyramid": 2,
+                    "tet": 12,
+                },
+            }
+        )
+        expected = "partition_aggregation_excludes_ghost_elements"
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][expected] is False
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "v9_source_export_precedes_final_geometry_operation",
+        "v9_source_export_length_scale_applied_twice",
+    ],
+)
+def test_generalization_v9_source(case_id: str):
+    row = summary()
+    if case_id == "v9_source_export_precedes_final_geometry_operation":
+        row["operation_dag_identity"].update(
+            {
+                "export_model_generation": "model-generation-41",
+                "export_after_operation_sequence": 5,
+            }
+        )
+        expected = "exports_follow_the_final_geometry_operation"
+    else:
+        row["length_scale_identity"].update(
+            {
+                "scale_application_stages": ["source-command", "export-manifest"],
+                "effective_scale": 1.0e-6,
+            }
+        )
+        expected = "length_scale_is_applied_exactly_once"
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][expected] is False
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "v10_public_signed_jacobian_folded_hex_abs_volume_passes",
+        "v10_public_export_coordinate_scale_mesh_cad_mismatch",
+    ],
+)
+def test_generalization_v10_public(case_id: str):
+    row = summary()
+    if case_id == "v10_public_signed_jacobian_folded_hex_abs_volume_passes":
+        row["signed_jacobian_identity"].update(
+            {
+                "minimum_signed_jacobian": -0.08,
+                "interior_sign_change_count": 3,
+            }
+        )
+        expected = "signed_jacobians_remain_positive_inside_high_order_hexes"
+    else:
+        row["coordinate_scale_identity"].update(
+            {
+                "coordinate_scale_to_si": 1.0,
+                "coordinate_scale_generation": "scale-generation-41",
+            }
+        )
+        expected = "mesh_coordinates_and_volume_use_one_length_scale"
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][expected] is False
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "v10_source_exodus_connectivity_permuted_sideset_stale",
+        "v10_source_quality_report_before_final_smoothing",
+    ],
+)
+def test_generalization_v10_source(case_id: str):
+    row = summary()
+    if case_id == "v10_source_exodus_connectivity_permuted_sideset_stale":
+        row["exodus_connectivity_identity"].update(
+            {
+                "sideset_face_ordinal_generation": "exodus-ordering-41",
+                "sideset_connectivity_sha256": "b" * 64,
+            }
+        )
+        expected = "exodus_sidesets_follow_connectivity_permutation"
+    else:
+        row["quality_report_generation_identity"].update(
+            {
+                "quality_report_mesh_generation": "mesh-generation-41",
+                "quality_report_after_operation_sequence": 7,
+            }
+        )
+        expected = "quality_report_follows_final_smoothing_generation"
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][expected] is False
+
+
+def _with_v11_ownership(row: dict) -> dict:
+    row["high_order_shared_face_orientation_identity"] = {
+        "mesh_generation": "mesh-generation-43",
+        "left_face_node_ids": [1, 2, 3, 4, 5, 6, 7, 8],
+        "right_face_node_ids": [1, 4, 3, 2, 8, 7, 6, 5],
+        "left_element_generation": "mesh-generation-43",
+        "right_element_generation": "mesh-generation-43",
+    }
+    row["live_cad_mesh_identity"] = {
+        "live_cad_sha256": "1" * 64,
+        "mesh_source_cad_sha256": "1" * 64,
+        "live_cad_generation": "cad-generation-43",
+        "mesh_source_cad_generation": "cad-generation-43",
+        "live_cad_volume": 12.5,
+        "mesh_reference_cad_volume": 12.5,
+    }
+    row["block_material_map_identity"] = {
+        "final_mesh_generation": "mesh-generation-43",
+        "material_map_mesh_generation": "mesh-generation-43",
+        "block_table_sha256": "2" * 64,
+        "material_map_block_table_sha256": "2" * 64,
+        "unmapped_block_ids": [],
+    }
+    row["parallel_sculpt_completion_identity"] = {
+        "expected_rank_count": 4,
+        "finalized_rank_ids": [0, 1, 2, 3],
+        "rank_artifact_sha256": ["3" * 64, "4" * 64, "5" * 64, "6" * 64],
+        "rank_manifest_generation": "sculpt-generation-43",
+        "global_aggregation_generation": "sculpt-generation-43",
+    }
+    return row
+
+
+def _with_v12_topology_generation_identity(row: dict) -> dict:
+    row = _with_v11_ownership(row)
+    row["webcut_sideset_topology_identity"] = {
+        "final_geometry_operation_sequence": 9,
+        "sideset_capture_after_operation_sequence": 9,
+        "final_geometry_generation": "geometry-generation-44",
+        "sideset_geometry_generation": "geometry-generation-44",
+        "final_topology_generation": "topology-generation-44",
+        "sideset_topology_generation": "topology-generation-44",
+        "sideset_surface_ids": [21, 22],
+        "resolved_surface_ids": [21, 22],
+        "sideset_connectivity_sha256": "7" * 64,
+        "resolved_connectivity_sha256": "7" * 64,
+    }
+    row["high_order_curved_node_identity"] = {
+        "export_order": 2,
+        "final_mesh_generation": "mesh-generation-44",
+        "edge_node_mesh_generation": "mesh-generation-44",
+        "face_node_mesh_generation": "mesh-generation-44",
+        "curving_generation": "curving-generation-44",
+        "export_curving_generation": "curving-generation-44",
+        "high_order_edge_node_count": 48,
+        "high_order_face_node_count": 36,
+    }
+    row["headless_sideset_manifest_identity"] = {
+        "batch_invocation_id": "batch-invocation-44",
+        "manifest_invocation_id": "batch-invocation-44",
+        "final_webcut_operation_sequence": 9,
+        "manifest_capture_after_operation_sequence": 9,
+        "final_topology_generation": "topology-generation-44",
+        "manifest_topology_generation": "topology-generation-44",
+        "manifest_surface_ids": [21, 22],
+        "live_surface_ids": [21, 22],
+        "manifest_connectivity_sha256": "8" * 64,
+        "live_connectivity_sha256": "8" * 64,
+    }
+    row["netgen_high_order_export_identity"] = {
+        "export_order": 2,
+        "final_mesh_generation": "mesh-generation-44",
+        "higher_order_node_mesh_generation": "mesh-generation-44",
+        "export_model_generation": "model-generation-44",
+        "active_model_generation": "model-generation-44",
+        "higher_order_node_count": 84,
+        "netgen_export_sha256": "9" * 64,
+    }
+    return row
+
+
+def _with_v13_block_orientation_identity(row: dict) -> dict:
+    row = _with_v12_topology_generation_identity(row)
+    row["hex_block_material_topology_identity"] = {
+        "final_imprint_generation": "imprint-generation-45", "final_topology_generation": "topology-generation-45",
+        "block_topology_generation": "topology-generation-45", "material_assignment_topology_generation": "topology-generation-45",
+        "block_volume_ids": [1, 2, 3], "material_assignment_volume_ids": [1, 2, 3],
+        "block_material_map_sha256": "c" * 64, "resolved_material_map_sha256": "c" * 64,
+    }
+    row["pyramid_transition_face_orientation_identity"] = {
+        "transition_generation": "transition-generation-45", "pyramid_face_generation": "transition-generation-45", "hex_face_generation": "transition-generation-45",
+        "shared_face_node_ids": [101, 102, 103, 104], "pyramid_face_node_ids": [101, 102, 103, 104], "hex_face_node_ids": [104, 103, 102, 101], "opposed_outward_normal_dot": -1.0,
+    }
+    row["headless_block_material_manifest_identity"] = {
+        "batch_invocation_id": "batch-invocation-45", "manifest_invocation_id": "batch-invocation-45", "final_imprint_generation": "imprint-generation-45",
+        "active_topology_generation": "topology-generation-45", "manifest_topology_generation": "topology-generation-45",
+        "manifest_volume_ids": [1, 2, 3], "live_volume_ids": [1, 2, 3], "manifest_material_map_sha256": "d" * 64, "live_material_map_sha256": "d" * 64,
+    }
+    row["mesh_export_transition_orientation_identity"] = {
+        "export_generation": "mesh-export-45", "pyramid_face_export_generation": "mesh-export-45", "hex_face_export_generation": "mesh-export-45",
+        "shared_face_node_ids": [101, 102, 103, 104], "pyramid_face_node_ids": [101, 102, 103, 104], "hex_face_node_ids": [104, 103, 102, 101], "opposed_outward_normal_dot": -1.0,
+    }
+    return row
+
+
+def _with_v14_high_order_id_width_identity(row: dict) -> dict:
+    row = _with_v13_block_orientation_identity(row)
+    row["high_order_hex_curved_node_ordering_identity"] = {
+        "high_order_mesh_generation": "high-order-mesh-46",
+        "curved_geometry_generation": "curved-geometry-46",
+        "element_geometry_generation": "curved-geometry-46",
+        "element_type": "hex20_serendipity",
+        "export_element_type": "hex20_serendipity",
+        "node_ordering_convention": "cubit_hex20",
+        "export_node_ordering_convention": "cubit_hex20",
+        "canonical_node_ids": list(range(101, 121)),
+        "export_node_ids": list(range(101, 121)),
+        "canonical_node_order_sha256": "a" * 64,
+        "export_node_order_sha256": "a" * 64,
+    }
+    row["sideset_outward_normal_merge_identity"] = {
+        "final_merge_generation": "merge-generation-46",
+        "sideset_topology_generation": "merge-generation-46",
+        "normal_owner_topology_generation": "merge-generation-46",
+        "sideset_face_ids": [201, 202, 203],
+        "normal_owner_face_ids": [201, 202, 203],
+        "owner_volume_ids": [1, 1, 2],
+        "resolved_owner_volume_ids": [1, 1, 2],
+        "outward_normal_signs": [1, 1, 1],
+    }
+    row["journal_entity_id_map_reset_identity"] = {
+        "reset_generation": "reset-generation-46",
+        "journal_replay_reset_generation": "reset-generation-46",
+        "entity_id_map_reset_generation": "reset-generation-46",
+        "entity_kinds": ["volume", "surface", "curve"],
+        "requested_entity_ids": [1, 7, 19],
+        "resolved_entity_ids": [1, 7, 19],
+        "entity_id_map_sha256": "b" * 64,
+        "resolved_entity_id_map_sha256": "b" * 64,
+    }
+    row["exodus_entity_id_width_identity"] = {
+        "export_generation": "exodus-export-46",
+        "decoder_export_generation": "exodus-export-46",
+        "declared_entity_id_width_bits": 64,
+        "decoder_entity_id_width_bits": 64,
+        "integer_storage_type": "int64",
+        "maximum_entity_id": 4294967311,
+        "decoded_maximum_entity_id": 4294967311,
+        "entity_id_stream_sha256": "c" * 64,
+        "decoded_entity_id_stream_sha256": "c" * 64,
+    }
+    return row
+
+
+def _with_v15_interface_quadrature_identity(row: dict) -> dict:
+    row = _with_v14_high_order_id_width_identity(row)
+    row["mixed_interface_smoothing_orientation_identity"] = {
+        "smoothing_generation": "smoothing-47",
+        "interface_face_orientation_generation": "smoothing-47",
+        "interface_topology_generation": "interface-topology-47",
+        "orientation_topology_generation": "interface-topology-47",
+        "hex_interface_face_ids": [301, 302],
+        "pyramid_interface_face_ids": [401, 402],
+        "paired_orientation_products": [-1, -1],
+        "interface_pair_sha256": "1" * 64,
+        "oriented_interface_pair_sha256": "1" * 64,
+    }
+    row["high_order_jacobian_quadrature_identity"] = {
+        "high_order_mesh_generation": "high-order-mesh-47",
+        "quality_evaluation_mesh_generation": "high-order-mesh-47",
+        "element_order": 2,
+        "required_jacobian_exactness_degree": 4,
+        "jacobian_quadrature_exactness_degree": 4,
+        "quadrature_rule_generation": "jacobian-quadrature-47",
+        "quality_evaluation_quadrature_generation": "jacobian-quadrature-47",
+        "element_geometry_sha256": "2" * 64,
+        "quality_evaluation_geometry_sha256": "2" * 64,
+    }
+    row["imprint_merge_tolerance_unit_identity"] = {
+        "geometry_generation": "geometry-47",
+        "imprint_geometry_generation": "geometry-47",
+        "merge_geometry_generation": "geometry-47",
+        "tolerance_generation": "tolerance-47",
+        "imprint_tolerance_generation": "tolerance-47",
+        "merge_tolerance_generation": "tolerance-47",
+        "model_length_unit": "mm",
+        "imprint_tolerance_unit": "mm",
+        "merge_tolerance_unit": "mm",
+        "imprint_tolerance_value": 1.0e-6,
+        "merge_tolerance_value": 1.0e-6,
+        "tolerance_si_m": 1.0e-9,
+    }
+    row["exodus_block_sideset_renumber_identity"] = {
+        "renumber_generation": "renumber-47",
+        "block_map_generation": "renumber-47",
+        "sideset_map_generation": "renumber-47",
+        "block_ids": [11, 12],
+        "exported_block_ids": [11, 12],
+        "sideset_ids": [21, 22, 23],
+        "exported_sideset_ids": [21, 22, 23],
+        "entity_map_sha256": "3" * 64,
+        "exported_entity_map_sha256": "3" * 64,
+    }
+    return row
+
+
+def _with_v16_sweep_jacobian_and_source_identity(row: dict) -> dict:
+    row = _with_v15_interface_quadrature_identity(row)
+    row["hex_sweep_vertex_correspondence_heal_identity"] = {
+        "geometry_heal_generation": "heal-50",
+        "sweep_geometry_heal_generation": "heal-50",
+        "source_vertex_map_heal_generation": "heal-50",
+        "target_vertex_map_heal_generation": "heal-50",
+        "source_vertex_ids": [101, 102, 103, 104],
+        "target_vertex_ids": [201, 202, 203, 204],
+        "sweep_source_vertex_ids": [101, 102, 103, 104],
+        "sweep_target_vertex_ids": [201, 202, 203, 204],
+        "vertex_correspondence_sha256": "5" * 64,
+        "sweep_vertex_correspondence_sha256": "5" * 64,
+    }
+    row["transition_jacobian_parent_orientation_identity"] = {
+        "transition_mesh_generation": "transition-mesh-50",
+        "jacobian_mesh_generation": "transition-mesh-50",
+        "parent_orientation_generation": "transition-mesh-50",
+        "parent_orientation_convention": "right_handed_positive",
+        "jacobian_orientation_convention": "right_handed_positive",
+        "minimum_signed_jacobian": 0.125,
+        "minimum_absolute_jacobian": 0.125,
+        "parent_orientation_sha256": "6" * 64,
+        "jacobian_parent_orientation_sha256": "6" * 64,
+    }
+    row["journal_entity_id_imprint_identity"] = {
+        "imprint_generation": "imprint-50",
+        "journal_entity_generation": "imprint-50",
+        "resolved_entity_generation": "imprint-50",
+        "journal_volume_ids": [11, 12],
+        "resolved_volume_ids": [11, 12],
+        "journal_surface_ids": [21, 22, 23],
+        "resolved_surface_ids": [21, 22, 23],
+        "entity_table_sha256": "7" * 64,
+        "resolved_entity_table_sha256": "7" * 64,
+    }
+    row["exodus_sideset_outward_normal_topology_identity"] = {
+        "topology_generation": "topology-50",
+        "sideset_map_topology_generation": "topology-50",
+        "normal_ownership_topology_generation": "topology-50",
+        "sideset_ids": [31, 32],
+        "normal_ownership_sideset_ids": [31, 32],
+        "normal_orientation": "outward",
+        "exported_normal_orientation": "outward",
+        "normal_ownership_sha256": "8" * 64,
+        "exported_normal_ownership_sha256": "8" * 64,
+    }
+    return row
+
+
+def _with_v17_periodic_transition_and_export_identity(row: dict) -> dict:
+    row = _with_v16_sweep_jacobian_and_source_identity(row)
+    row["periodic_hex_node_pair_transform_frame_identity"] = {
+        "mesh_generation": "periodic-hex-mesh-51",
+        "node_pair_mesh_generation": "periodic-hex-mesh-51",
+        "periodic_transform_frame_mesh_generation": "periodic-hex-mesh-51",
+        "periodic_transform_generation": "periodic-transform-51",
+        "node_pair_periodic_transform_generation": "periodic-transform-51",
+        "source_node_ids": [101, 102, 103, 104],
+        "target_node_ids": [201, 202, 203, 204],
+        "paired_source_node_ids": [101, 102, 103, 104],
+        "paired_target_node_ids": [201, 202, 203, 204],
+        "coordinate_frame": "global_cartesian",
+        "node_pair_coordinate_frame": "global_cartesian",
+        "transform_matrix_sha256": "1" * 64,
+        "applied_transform_matrix_sha256": "1" * 64,
+    }
+    row["pyramid_transition_face_diagonal_convention_identity"] = {
+        "transition_mesh_generation": "transition-mesh-51",
+        "tet_neighbor_mesh_generation": "transition-mesh-51",
+        "hex_neighbor_mesh_generation": "transition-mesh-51",
+        "pyramid_face_ids": [301, 302],
+        "tet_neighbor_face_ids": [301, 302],
+        "hex_neighbor_face_ids": [301, 302],
+        "diagonal_convention": "canonical_node_0_to_2",
+        "tet_neighbor_diagonal_convention": "canonical_node_0_to_2",
+        "hex_neighbor_diagonal_convention": "canonical_node_0_to_2",
+        "transition_face_connectivity_sha256": "2" * 64,
+        "neighbor_face_connectivity_sha256": "2" * 64,
+    }
+    row["block_attribute_material_id_merge_identity"] = {
+        "final_merge_generation": "merge-51",
+        "block_attribute_merge_generation": "merge-51",
+        "material_id_map_merge_generation": "merge-51",
+        "block_ids": [11, 12],
+        "block_attribute_block_ids": [11, 12],
+        "material_ids": [101, 102],
+        "exported_material_ids": [101, 102],
+        "block_material_map_sha256": "3" * 64,
+        "exported_block_material_map_sha256": "3" * 64,
+    }
+    row["high_order_exodus_node_permutation_export_order_identity"] = {
+        "export_order_generation": "exodus-order-51",
+        "permutation_table_export_order_generation": "exodus-order-51",
+        "writer_export_order_generation": "exodus-order-51",
+        "element_order": 2,
+        "source_node_order": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        "permutation_table": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        "written_node_order": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        "node_permutation_sha256": "4" * 64,
+        "written_node_permutation_sha256": "4" * 64,
+    }
+    return row
+
+
+def _with_v18_ordinal_bias_and_quality_identity(row: dict) -> dict:
+    row = _with_v17_periodic_transition_and_export_identity(row)
+    row["hex_sideset_outward_face_ordinal_volume_reorder_identity"] = {
+        "mesh_generation": "hex-mesh-52",
+        "volume_connectivity_reorder_generation": "hex-reorder-52",
+        "face_ordinal_mesh_generation": "hex-mesh-52",
+        "normal_ownership_mesh_generation": "hex-mesh-52",
+        "face_ordinal_connectivity_reorder_generation": "hex-reorder-52",
+        "normal_connectivity_reorder_generation": "hex-reorder-52",
+        "element_ids": [101, 102],
+        "face_ordinals": [5, 6],
+        "exported_element_ids": [101, 102],
+        "exported_face_ordinals": [5, 6],
+        "outward_normal_signs": [1, 1],
+        "exported_outward_normal_signs": [1, 1],
+        "element_face_map_sha256": "1" * 64,
+        "exported_element_face_map_sha256": "1" * 64,
+    }
+    row["sweep_layer_bias_source_curve_orientation_generation_identity"] = {
+        "sweep_generation": "sweep-52",
+        "source_curve_orientation_generation": "curve-orientation-52",
+        "layer_bias_sweep_generation": "sweep-52",
+        "layer_bias_curve_orientation_generation": "curve-orientation-52",
+        "source_curve_ids": [31, 32],
+        "source_curve_orientations": [1, -1],
+        "biased_curve_ids": [31, 32],
+        "biased_curve_orientations": [1, -1],
+        "interval_counts": [4, 8],
+        "biased_interval_counts": [4, 8],
+        "bias_factors": [1.2, 1.5],
+        "applied_bias_factors": [1.2, 1.5],
+        "curve_bias_map_sha256": "2" * 64,
+        "applied_curve_bias_map_sha256": "2" * 64,
+    }
+    row["exodus_sideset_element_face_topology_generation_identity"] = {
+        "mesh_generation": "mesh-52",
+        "exodus_export_generation": "exodus-52",
+        "topology_ordinal_mesh_generation": "mesh-52",
+        "writer_mesh_generation": "mesh-52",
+        "topology_ordinal_export_generation": "exodus-52",
+        "writer_export_generation": "exodus-52",
+        "element_ids": [101, 102],
+        "element_face_topology_ordinals": [5, 6],
+        "written_element_ids": [101, 102],
+        "written_element_face_topology_ordinals": [5, 6],
+        "element_face_topology_sha256": "3" * 64,
+        "written_element_face_topology_sha256": "3" * 64,
+    }
+    row["high_order_quality_reference_coordinate_generation_identity"] = {
+        "mesh_generation": "high-order-mesh-52",
+        "element_order_generation": "element-order-52",
+        "reference_node_mesh_generation": "high-order-mesh-52",
+        "quality_mesh_generation": "high-order-mesh-52",
+        "reference_node_element_order_generation": "element-order-52",
+        "quality_element_order_generation": "element-order-52",
+        "element_order": 2,
+        "reference_node_count": 10,
+        "quality_reference_node_count": 10,
+        "jacobian_sampling_rule": "tet10_reference_nodes_and_interior",
+        "quality_jacobian_sampling_rule": "tet10_reference_nodes_and_interior",
+        "reference_coordinates_sha256": "4" * 64,
+        "quality_reference_coordinates_sha256": "4" * 64,
+    }
+    return row
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "v11_public_high_order_hex_shared_face_orientation_mismatch",
+        "v11_public_mesh_volume_live_cad_digest_mismatch",
+    ],
+)
+def test_generalization_v11_public(case_id: str):
+    row = _with_v11_ownership(summary())
+    if case_id == "v11_public_high_order_hex_shared_face_orientation_mismatch":
+        row["high_order_shared_face_orientation_identity"][
+            "right_face_node_ids"
+        ] = [1, 2, 3, 4, 5, 6, 7, 8]
+        expected = "high_order_hex_shared_faces_have_reciprocal_orientation"
+    else:
+        row["live_cad_mesh_identity"].update(
+            {
+                "mesh_source_cad_sha256": "7" * 64,
+                "mesh_source_cad_generation": "cad-generation-42",
+            }
+        )
+        expected = "mesh_manifest_matches_live_cad_identity"
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][expected] is False
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "v11_source_block_material_map_previous_export_generation",
+        "v11_source_parallel_sculpt_partial_rank_artifact_aggregated",
+    ],
+)
+def test_generalization_v11_source(case_id: str):
+    row = _with_v11_ownership(summary())
+    if case_id == "v11_source_block_material_map_previous_export_generation":
+        row["block_material_map_identity"].update(
+            {
+                "material_map_mesh_generation": "mesh-generation-42",
+                "material_map_block_table_sha256": "8" * 64,
+            }
+        )
+        expected = "block_material_map_matches_final_mesh_generation"
+    else:
+        row["parallel_sculpt_completion_identity"].update(
+            {
+                "finalized_rank_ids": [0, 1, 3],
+                "rank_artifact_sha256": ["3" * 64, "4" * 64, "6" * 64],
+            }
+        )
+        expected = "parallel_sculpt_waits_for_every_rank_artifact"
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][expected] is False
+
+
+def test_v12_public_hex_sideset_after_webcut_topology_generation_mismatch():
+    row = _with_v12_topology_generation_identity(summary())
+    row["webcut_sideset_topology_identity"].update(
+        {
+            "sideset_topology_generation": "topology-generation-43",
+            "sideset_connectivity_sha256": "a" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["sidesets_follow_final_webcut_topology"] is False
+
+
+def test_v12_public_high_order_export_curved_node_generation_mismatch():
+    row = _with_v12_topology_generation_identity(summary())
+    row["high_order_curved_node_identity"].update(
+        {
+            "edge_node_mesh_generation": "mesh-generation-43",
+            "face_node_mesh_generation": "mesh-generation-43",
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "high_order_export_nodes_match_current_mesh_and_curving_generation"
+        ]
+        is False
+    )
+
+
+def test_v12_source_hex_sideset_after_webcut_topology_generation_mismatch():
+    row = _with_v12_topology_generation_identity(summary())
+    row["headless_sideset_manifest_identity"].update(
+        {
+            "manifest_capture_after_operation_sequence": 8,
+            "manifest_topology_generation": "topology-generation-43",
+            "manifest_connectivity_sha256": "b" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "headless_sideset_manifest_follows_final_webcut_topology"
+        ]
+        is False
+    )
+
+
+def test_v12_source_high_order_export_curved_node_generation_mismatch():
+    row = _with_v12_topology_generation_identity(summary())
+    row["netgen_high_order_export_identity"].update(
+        {
+            "higher_order_node_mesh_generation": "mesh-generation-43",
+            "export_model_generation": "model-generation-43",
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "netgen_high_order_nodes_match_current_mesh_and_model_generation"
+        ]
+        is False
+    )
+
+
+def test_v13_public_hex_block_material_assignment_after_imprint_generation_mismatch():
+    row = _with_v13_block_orientation_identity(summary())
+    row["hex_block_material_topology_identity"].update({"material_assignment_topology_generation": "topology-generation-44", "resolved_material_map_sha256": "e" * 64})
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["hex_block_materials_follow_final_imprint_topology"] is False
+
+
+def test_v13_public_pyramid_transition_face_orientation_mismatch():
+    row = _with_v13_block_orientation_identity(summary())
+    row["pyramid_transition_face_orientation_identity"].update({"hex_face_node_ids": [101, 102, 103, 104], "opposed_outward_normal_dot": 1.0})
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["pyramid_hex_transition_faces_have_opposed_orientation"] is False
+
+
+def test_v13_source_hex_block_material_assignment_after_imprint_generation_mismatch():
+    row = _with_v13_block_orientation_identity(summary())
+    row["headless_block_material_manifest_identity"].update({"manifest_topology_generation": "topology-generation-44", "manifest_material_map_sha256": "f" * 64})
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["headless_block_material_manifest_follows_final_imprint"] is False
+
+
+def test_v13_source_pyramid_transition_face_orientation_mismatch():
+    row = _with_v13_block_orientation_identity(summary())
+    row["mesh_export_transition_orientation_identity"].update({"hex_face_node_ids": [101, 102, 103, 104], "opposed_outward_normal_dot": 1.0})
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["mesh_export_transition_faces_have_opposed_orientation"] is False
+
+
+def test_v14_public_high_order_hex_curved_node_ordering_mismatch():
+    row = _with_v14_high_order_id_width_identity(summary())
+    export_ids = list(range(101, 121))
+    export_ids[8], export_ids[9] = export_ids[9], export_ids[8]
+    row["high_order_hex_curved_node_ordering_identity"].update(
+        {
+            "export_node_ordering_convention": "vtk_quadratic_hex",
+            "export_node_ids": export_ids,
+            "export_node_order_sha256": "d" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["curved_high_order_hex_uses_canonical_node_ordering"] is False
+
+
+def test_v14_public_sideset_outward_normal_after_merge_generation_mismatch():
+    row = _with_v14_high_order_id_width_identity(summary())
+    row["sideset_outward_normal_merge_identity"].update(
+        {
+            "normal_owner_topology_generation": "merge-generation-45",
+            "resolved_owner_volume_ids": [2, 1, 2],
+            "outward_normal_signs": [-1, 1, 1],
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["merged_sideset_normals_follow_final_topology_owners"] is False
+
+
+def test_v14_source_journal_entity_id_map_previous_reset_generation():
+    row = _with_v14_high_order_id_width_identity(summary())
+    row["journal_entity_id_map_reset_identity"].update(
+        {
+            "entity_id_map_reset_generation": "reset-generation-45",
+            "resolved_entity_ids": [2, 8, 20],
+            "resolved_entity_id_map_sha256": "d" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["journal_entity_ids_follow_current_reset_generation"] is False
+
+
+def test_v14_source_exodus_64bit_entity_id_width_truncation():
+    row = _with_v14_high_order_id_width_identity(summary())
+    row["exodus_entity_id_width_identity"].update(
+        {
+            "decoder_entity_id_width_bits": 32,
+            "integer_storage_type": "int32",
+            "decoded_maximum_entity_id": 15,
+            "decoded_entity_id_stream_sha256": "d" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["exodus_decoder_preserves_declared_64bit_entity_ids"] is False
+
+
+def test_v15_positive_interface_quadrature_and_source_lineage():
+    row = _with_v15_interface_quadrature_identity(summary())
+    public = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    source = json.loads(cubit_mixed_transition_source_gate(row))
+    assert public["status"] == "ok"
+    assert source["status"] == "ok"
+
+
+def test_v15_public_hex_pyramid_interface_face_orientation_after_smoothing_mismatch():
+    row = _with_v15_interface_quadrature_identity(summary())
+    row["mixed_interface_smoothing_orientation_identity"].update(
+        {
+            "interface_face_orientation_generation": "smoothing-46",
+            "paired_orientation_products": [1, -1],
+            "oriented_interface_pair_sha256": "4" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "smoothed_hex_pyramid_interface_faces_keep_opposed_orientation"
+        ]
+        is False
+    )
+
+
+def test_v15_public_high_order_jacobian_quadrature_rule_generation_mismatch():
+    row = _with_v15_interface_quadrature_identity(summary())
+    row["high_order_jacobian_quadrature_identity"].update(
+        {
+            "jacobian_quadrature_exactness_degree": 2,
+            "quality_evaluation_quadrature_generation": "jacobian-quadrature-46",
+            "quality_evaluation_geometry_sha256": "4" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["high_order_jacobian_uses_current_sufficient_quadrature"]
+        is False
+    )
+
+
+def test_v15_source_imprint_merge_tolerance_length_unit_basis_mismatch():
+    row = _with_v15_interface_quadrature_identity(summary())
+    row["imprint_merge_tolerance_unit_identity"].update(
+        {
+            "merge_tolerance_generation": "tolerance-46",
+            "merge_tolerance_unit": "m",
+            "merge_tolerance_value": 1.0e-6,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["imprint_merge_tolerances_share_one_physical_length_basis"]
+        is False
+    )
+
+
+def test_v15_source_exodus_block_sideset_map_previous_renumber_generation():
+    row = _with_v15_interface_quadrature_identity(summary())
+    row["exodus_block_sideset_renumber_identity"].update(
+        {
+            "block_map_generation": "renumber-46",
+            "exported_block_ids": [1, 2],
+            "exported_entity_map_sha256": "4" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "exodus_block_sideset_maps_follow_current_renumber_generation"
+        ]
+        is False
+    )
+
+
+def test_v16_positive_sweep_jacobian_and_source_lineage():
+    row = _with_v16_sweep_jacobian_and_source_identity(summary())
+    public = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    source = json.loads(cubit_mixed_transition_source_gate(row))
+    assert public["status"] == "ok"
+    assert source["status"] == "ok"
+
+
+def test_v16_public_hex_sweep_source_target_vertex_map_after_heal_mismatch():
+    row = _with_v16_sweep_jacobian_and_source_identity(summary())
+    row["hex_sweep_vertex_correspondence_heal_identity"].update(
+        {
+            "source_vertex_map_heal_generation": "heal-49",
+            "sweep_source_vertex_ids": [101, 103, 102, 104],
+            "sweep_vertex_correspondence_sha256": "9" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["hex_sweep_uses_post_heal_vertex_correspondence"] is False
+
+
+def test_v16_public_transition_element_jacobian_parent_orientation_convention_mismatch():
+    row = _with_v16_sweep_jacobian_and_source_identity(summary())
+    row["transition_jacobian_parent_orientation_identity"].update(
+        {
+            "parent_orientation_generation": "transition-mesh-49",
+            "jacobian_orientation_convention": "left_handed_negative",
+            "minimum_signed_jacobian": -0.125,
+            "jacobian_parent_orientation_sha256": "9" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["transition_jacobian_uses_current_parent_orientation"]
+        is False
+    )
+
+
+def test_v16_source_journal_entity_ids_previous_imprint_generation():
+    row = _with_v16_sweep_jacobian_and_source_identity(summary())
+    row["journal_entity_id_imprint_identity"].update(
+        {
+            "journal_entity_generation": "imprint-49",
+            "resolved_surface_ids": [22, 23, 24],
+            "resolved_entity_table_sha256": "9" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["journal_entity_ids_follow_final_imprint_generation"] is False
+
+
+def test_v16_source_exodus_sideset_outward_normal_topology_generation_mismatch():
+    row = _with_v16_sweep_jacobian_and_source_identity(summary())
+    row["exodus_sideset_outward_normal_topology_identity"].update(
+        {
+            "normal_ownership_topology_generation": "topology-49",
+            "exported_normal_orientation": "inward",
+            "exported_normal_ownership_sha256": "9" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["exodus_sideset_normals_follow_current_topology"] is False
+
+
+def test_v17_positive_periodic_transition_and_export_identity():
+    row = _with_v17_periodic_transition_and_export_identity(summary())
+    public = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    source = json.loads(cubit_mixed_transition_source_gate(row))
+    assert public["status"] == "ok"
+    assert source["status"] == "ok"
+
+
+def test_v17_public_periodic_hex_node_pair_transform_frame_generation_mismatch():
+    row = _with_v17_periodic_transition_and_export_identity(summary())
+    row["periodic_hex_node_pair_transform_frame_identity"].update(
+        {
+            "periodic_transform_frame_mesh_generation": "periodic-hex-mesh-50",
+            "node_pair_periodic_transform_generation": "periodic-transform-50",
+            "node_pair_coordinate_frame": "periodic_local_previous",
+            "applied_transform_matrix_sha256": "5" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["periodic_hex_node_pairs_use_current_transform_frame"]
+        is False
+    )
+
+
+def test_v17_public_pyramid_transition_face_diagonal_convention_neighbor_mismatch():
+    row = _with_v17_periodic_transition_and_export_identity(summary())
+    row["pyramid_transition_face_diagonal_convention_identity"].update(
+        {
+            "hex_neighbor_diagonal_convention": "canonical_node_1_to_3",
+            "neighbor_face_connectivity_sha256": "5" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "pyramid_transition_neighbors_share_one_face_diagonal_convention"
+        ]
+        is False
+    )
+
+
+def test_v17_source_block_attribute_material_id_previous_merge_generation():
+    row = _with_v17_periodic_transition_and_export_identity(summary())
+    row["block_attribute_material_id_merge_identity"].update(
+        {
+            "block_attribute_merge_generation": "merge-50",
+            "exported_material_ids": [102, 101],
+            "exported_block_material_map_sha256": "5" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["block_material_attributes_follow_final_merge_generation"]
+        is False
+    )
+
+
+def test_v17_source_high_order_exodus_node_permutation_previous_export_order_generation():
+    row = _with_v17_periodic_transition_and_export_identity(summary())
+    row["high_order_exodus_node_permutation_export_order_identity"].update(
+        {
+            "permutation_table_export_order_generation": "exodus-order-50",
+            "permutation_table": [1, 3, 2, 4, 5, 6, 7, 8, 9, 10],
+            "written_node_permutation_sha256": "5" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "high_order_exodus_nodes_use_current_export_order_permutation"
+        ]
+        is False
+    )
+
+
+def test_v18_positive_ordinal_bias_and_quality_identity():
+    row = _with_v18_ordinal_bias_and_quality_identity(summary())
+    public = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    source = json.loads(cubit_mixed_transition_source_gate(row))
+    assert public["status"] == "ok"
+    assert source["status"] == "ok"
+    assert public["checks"][
+        "hex_sideset_face_ordinals_and_normals_follow_connectivity_reorder"
+    ]
+    assert public["checks"][
+        "biased_sweep_layers_follow_current_source_curve_orientation"
+    ]
+    assert source["checks"][
+        "exodus_sideset_ordinals_follow_current_mesh_and_export_topology"
+    ]
+    assert source["checks"][
+        "high_order_quality_uses_current_reference_coordinates_and_order"
+    ]
+
+
+def test_v18_public_hex_sideset_outward_face_ordinal_volume_reorder_mismatch():
+    row = _with_v18_ordinal_bias_and_quality_identity(summary())
+    row["hex_sideset_outward_face_ordinal_volume_reorder_identity"].update(
+        {
+            "face_ordinal_connectivity_reorder_generation": "hex-reorder-51",
+            "normal_connectivity_reorder_generation": "hex-reorder-51",
+            "exported_face_ordinals": [6, 5],
+            "exported_outward_normal_signs": [-1, 1],
+            "exported_element_face_map_sha256": "5" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "hex_sideset_face_ordinals_and_normals_follow_connectivity_reorder"
+    ] is False
+
+
+def test_v18_public_sweep_layer_bias_source_curve_orientation_generation_mismatch():
+    row = _with_v18_ordinal_bias_and_quality_identity(summary())
+    row["sweep_layer_bias_source_curve_orientation_generation_identity"].update(
+        {
+            "layer_bias_curve_orientation_generation": "curve-orientation-51",
+            "biased_curve_orientations": [-1, 1],
+            "biased_interval_counts": [8, 4],
+            "applied_bias_factors": [1.5, 1.2],
+            "applied_curve_bias_map_sha256": "5" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "biased_sweep_layers_follow_current_source_curve_orientation"
+    ] is False
+
+
+def test_v18_source_exodus_sideset_element_face_topology_generation_mismatch():
+    row = _with_v18_ordinal_bias_and_quality_identity(summary())
+    row["exodus_sideset_element_face_topology_generation_identity"].update(
+        {
+            "topology_ordinal_mesh_generation": "mesh-51",
+            "topology_ordinal_export_generation": "exodus-51",
+            "written_element_face_topology_ordinals": [6, 5],
+            "written_element_face_topology_sha256": "5" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "exodus_sideset_ordinals_follow_current_mesh_and_export_topology"
+    ] is False
+
+
+def test_v18_source_high_order_quality_reference_coordinate_generation_mismatch():
+    row = _with_v18_ordinal_bias_and_quality_identity(summary())
+    row["high_order_quality_reference_coordinate_generation_identity"].update(
+        {
+            "reference_node_element_order_generation": "element-order-51",
+            "quality_element_order_generation": "element-order-51",
+            "quality_reference_node_count": 4,
+            "quality_jacobian_sampling_rule": "tet4_corner_nodes",
+            "quality_reference_coordinates_sha256": "5" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "high_order_quality_uses_current_reference_coordinates_and_order"
+    ] is False
+
+
+def _with_v19_instance_layer_partition_namespace_identity(row):
+    row = _with_v18_ordinal_bias_and_quality_identity(row)
+    row["periodic_hex_node_pair_transform_instance_generation_identity"] = {
+        "mesh_generation": "periodic-hex-mesh-53",
+        "node_pair_mesh_generation": "periodic-hex-mesh-53",
+        "volume_instance_generation": "volume-instance-53",
+        "periodic_transform_volume_instance_generation": "volume-instance-53",
+        "node_pair_volume_instance_generation": "volume-instance-53",
+        "source_node_ids": [11, 12, 13],
+        "target_node_ids": [21, 22, 23],
+        "paired_source_node_ids": [11, 12, 13],
+        "paired_target_node_ids": [21, 22, 23],
+        "transform_translation_m": [0.1, 0.0, 0.0],
+        "paired_transform_translation_m": [0.1, 0.0, 0.0],
+        "node_pair_transform_sha256": "5" * 64,
+        "applied_node_pair_transform_sha256": "5" * 64,
+    }
+    row["hex_boundary_layer_thickness_surface_normal_generation_identity"] = {
+        "geometry_generation": "healed-geometry-53",
+        "surface_normal_geometry_generation": "healed-geometry-53",
+        "boundary_layer_geometry_generation": "healed-geometry-53",
+        "boundary_layer_generation": "boundary-layer-53",
+        "thickness_boundary_layer_generation": "boundary-layer-53",
+        "collapse_direction_boundary_layer_generation": "boundary-layer-53",
+        "surface_ids": [31, 32],
+        "surface_normal_signs": [1, -1],
+        "applied_surface_ids": [31, 32],
+        "applied_collapse_direction_signs": [1, -1],
+        "layer_thickness_m": [0.001, 0.0015],
+        "applied_layer_thickness_m": [0.001, 0.0015],
+        "surface_layer_map_sha256": "6" * 64,
+        "applied_surface_layer_map_sha256": "6" * 64,
+    }
+    row["partition_ghost_element_owner_shared_node_map_identity"] = {
+        "partition_generation": "partition-53",
+        "ghost_owner_partition_generation": "partition-53",
+        "shared_node_partition_generation": "partition-53",
+        "partition_ids": [0, 1],
+        "element_ids": [101, 102],
+        "element_owner_partition_ids": [0, 1],
+        "ghost_element_ids": [102, 101],
+        "ghost_owner_partition_ids": [1, 0],
+        "shared_node_ids": [41, 42],
+        "shared_node_partition_pairs": [[0, 1], [0, 1]],
+        "partition_ownership_sha256": "7" * 64,
+        "exported_partition_ownership_sha256": "7" * 64,
+    }
+    row["exodus_block_id_namespace_qa_record_mesh_generation_identity"] = {
+        "mesh_generation": "mesh-53",
+        "block_namespace_mesh_generation": "mesh-53",
+        "qa_record_mesh_generation": "mesh-53",
+        "exodus_export_generation": "exodus-53",
+        "writer_export_generation": "exodus-53",
+        "block_ids": [10, 20],
+        "block_names": ["rotor", "stator"],
+        "written_block_ids": [10, 20],
+        "written_block_names": ["rotor", "stator"],
+        "qa_record": ["radia-mcp", "v19", "2026-07-17", "headless"],
+        "written_qa_record": ["radia-mcp", "v19", "2026-07-17", "headless"],
+        "block_namespace_sha256": "8" * 64,
+        "written_block_namespace_sha256": "8" * 64,
+    }
+    return row
+
+
+def test_v19_positive_instance_layer_partition_namespace_identity():
+    row = _with_v19_instance_layer_partition_namespace_identity(summary())
+    assert json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))["status"] == "ok"
+    assert json.loads(cubit_mixed_transition_source_gate(row))["status"] == "ok"
+
+
+def test_v19_public_periodic_hex_node_pair_transform_instance_generation_mismatch():
+    row = _with_v19_instance_layer_partition_namespace_identity(summary())
+    row["periodic_hex_node_pair_transform_instance_generation_identity"].update(
+        {
+            "periodic_transform_volume_instance_generation": "volume-instance-52",
+            "node_pair_volume_instance_generation": "volume-instance-52",
+            "paired_target_node_ids": [22, 21, 23],
+            "paired_transform_translation_m": [0.0, 0.1, 0.0],
+            "applied_node_pair_transform_sha256": "9" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "periodic_hex_pairs_follow_current_volume_instance_transform"
+    ] is False
+
+
+def test_v19_public_hex_boundary_layer_thickness_surface_normal_generation_mismatch():
+    row = _with_v19_instance_layer_partition_namespace_identity(summary())
+    row["hex_boundary_layer_thickness_surface_normal_generation_identity"].update(
+        {
+            "surface_normal_geometry_generation": "healed-geometry-52",
+            "thickness_boundary_layer_generation": "boundary-layer-52",
+            "applied_collapse_direction_signs": [-1, 1],
+            "applied_layer_thickness_m": [0.0015, 0.001],
+            "applied_surface_layer_map_sha256": "9" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "hex_boundary_layers_follow_current_healed_surface_normals"
+    ] is False
+
+
+def test_v19_source_partition_ghost_element_owner_shared_node_map_mismatch():
+    row = _with_v19_instance_layer_partition_namespace_identity(summary())
+    row["partition_ghost_element_owner_shared_node_map_identity"].update(
+        {
+            "ghost_owner_partition_generation": "partition-52",
+            "shared_node_partition_generation": "partition-52",
+            "ghost_owner_partition_ids": [0, 1],
+            "shared_node_partition_pairs": [[1, 0], [1, 0]],
+            "exported_partition_ownership_sha256": "9" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "partition_ghosts_and_shared_nodes_use_current_owner_map"
+    ] is False
+
+
+def test_v19_source_exodus_block_id_namespace_qa_record_mesh_generation_mismatch():
+    row = _with_v19_instance_layer_partition_namespace_identity(summary())
+    row["exodus_block_id_namespace_qa_record_mesh_generation_identity"].update(
+        {
+            "block_namespace_mesh_generation": "mesh-52",
+            "qa_record_mesh_generation": "mesh-52",
+            "written_block_ids": [20, 10],
+            "written_qa_record": ["radia-mcp", "v18", "2026-07-16", "headless"],
+            "written_block_namespace_sha256": "9" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "exodus_blocks_and_qa_use_current_mesh_namespace"
+    ] is False
+
+
+def _with_v20_jacobian_interface_journal_vol_identity(row):
+    row = _with_v19_instance_layer_partition_namespace_identity(row)
+    row["high_order_hex_jacobian_node_order_coordinate_scale_identity"] = {
+        "mesh_generation": "hex-mesh-62",
+        "curving_mesh_generation": "hex-mesh-62",
+        "jacobian_mesh_generation": "hex-mesh-62",
+        "node_order_generation": "hex-order-62",
+        "jacobian_node_order_generation": "hex-order-62",
+        "coordinate_scale_generation": "coordinate-scale-62",
+        "jacobian_coordinate_scale_generation": "coordinate-scale-62",
+        "element_order": 2,
+        "jacobian_element_order": 2,
+        "corner_node_ids": [1, 2, 3, 4, 5, 6, 7, 8],
+        "jacobian_corner_node_ids": [1, 2, 3, 4, 5, 6, 7, 8],
+        "reference_corner_coordinates": [
+            [-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1],
+            [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1],
+        ],
+        "jacobian_reference_corner_coordinates": [
+            [-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1],
+            [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1],
+        ],
+        "coordinate_scale_m": 0.001,
+        "jacobian_coordinate_scale_m": 0.001,
+        "minimum_scaled_jacobian": 0.72,
+        "jacobian_table_sha256": "a" * 64,
+        "evaluated_jacobian_table_sha256": "a" * 64,
+    }
+    row["tet_hex_pyramid_interface_face_orientation_conformity_identity"] = {
+        "interface_generation": "transition-interface-62",
+        "tet_mesh_generation": "tet-mesh-62",
+        "interface_tet_mesh_generation": "tet-mesh-62",
+        "hex_mesh_generation": "hex-mesh-62",
+        "interface_hex_mesh_generation": "hex-mesh-62",
+        "pyramid_transition_generation": "pyramid-transition-62",
+        "interface_pyramid_transition_generation": "pyramid-transition-62",
+        "quad_face_node_ids": [[11, 12, 13, 14]],
+        "interface_quad_face_node_ids": [[11, 12, 13, 14]],
+        "pyramid_base_node_ids": [[11, 12, 13, 14]],
+        "interface_pyramid_base_node_ids": [[11, 12, 13, 14]],
+        "pyramid_apex_node_ids": [21],
+        "interface_pyramid_apex_node_ids": [21],
+        "face_orientation_signs": [1],
+        "interface_face_orientation_signs": [1],
+        "interface_conformity_sha256": "b" * 64,
+        "exported_interface_conformity_sha256": "b" * 64,
+    }
+    row["journal_transaction_undo_entity_id_reuse_generation_identity"] = {
+        "journal_generation": "journal-62",
+        "transaction_journal_generation": "journal-62",
+        "entity_table_journal_generation": "journal-62",
+        "group_table_journal_generation": "journal-62",
+        "transaction_id": "transaction-62",
+        "replay_transaction_id": "transaction-62",
+        "reset_epoch": 7,
+        "replay_reset_epoch": 7,
+        "undo_depth": 1,
+        "replay_undo_depth": 1,
+        "created_entity_ids": [101, 102],
+        "replay_created_entity_ids": [101, 102],
+        "group_entity_ids": [101, 102],
+        "replay_group_entity_ids": [101, 102],
+        "transaction_entity_table_sha256": "c" * 64,
+        "replay_transaction_entity_table_sha256": "c" * 64,
+    }
+    row["netgen_vol_element_block_order_curving_generation_identity"] = {
+        "mesh_generation": "hybrid-mesh-62",
+        "writer_mesh_generation": "hybrid-mesh-62",
+        "export_generation": "netgen-export-62",
+        "writer_export_generation": "netgen-export-62",
+        "curving_generation": "curving-62",
+        "writer_curving_generation": "curving-62",
+        "element_block_ids": [10, 20, 30],
+        "element_block_types": ["tet", "hex", "pyramid"],
+        "writer_element_block_types": ["tet", "hex", "pyramid"],
+        "element_orders": [2, 2, 1],
+        "writer_element_orders": [2, 2, 1],
+        "curving_node_counts": [10, 20, 5],
+        "writer_curving_node_counts": [10, 20, 5],
+        "element_block_table_sha256": "d" * 64,
+        "writer_element_block_table_sha256": "d" * 64,
+    }
+    return row
+
+
+def test_v20_positive_jacobian_interface_journal_vol_identity():
+    row = _with_v20_jacobian_interface_journal_vol_identity(summary())
+    assert json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))["status"] == "ok"
+    assert json.loads(cubit_mixed_transition_source_gate(row))["status"] == "ok"
+
+
+def test_v20_public_high_order_hex_jacobian_node_order_coordinate_scale_generation_mismatch():
+    row = _with_v20_jacobian_interface_journal_vol_identity(summary())
+    row["high_order_hex_jacobian_node_order_coordinate_scale_identity"].update(
+        {
+            "jacobian_mesh_generation": "hex-mesh-61",
+            "jacobian_node_order_generation": "hex-order-61",
+            "jacobian_coordinate_scale_generation": "coordinate-scale-61",
+            "jacobian_corner_node_ids": [1, 4, 3, 2, 5, 8, 7, 6],
+            "jacobian_coordinate_scale_m": 1.0,
+            "evaluated_jacobian_table_sha256": "f" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "high_order_hex_jacobians_use_current_node_order_and_coordinate_scale"
+    ] is False
+
+
+def test_v20_public_tet_hex_pyramid_interface_face_orientation_conformity_generation_mismatch():
+    row = _with_v20_jacobian_interface_journal_vol_identity(summary())
+    row["tet_hex_pyramid_interface_face_orientation_conformity_identity"].update(
+        {
+            "interface_tet_mesh_generation": "tet-mesh-61",
+            "interface_pyramid_transition_generation": "pyramid-transition-61",
+            "interface_quad_face_node_ids": [[11, 14, 13, 12]],
+            "interface_pyramid_base_node_ids": [[11, 14, 13, 12]],
+            "interface_face_orientation_signs": [-1],
+            "exported_interface_conformity_sha256": "f" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "tet_hex_pyramid_interface_uses_current_face_orientation_and_conformity"
+    ] is False
+
+
+def test_v20_source_journal_transaction_undo_entity_id_reuse_generation_mismatch():
+    row = _with_v20_jacobian_interface_journal_vol_identity(summary())
+    row["journal_transaction_undo_entity_id_reuse_generation_identity"].update(
+        {
+            "entity_table_journal_generation": "journal-61",
+            "group_table_journal_generation": "journal-61",
+            "replay_transaction_id": "transaction-61",
+            "replay_reset_epoch": 6,
+            "replay_created_entity_ids": [101, 103],
+            "replay_group_entity_ids": [101, 103],
+            "replay_transaction_entity_table_sha256": "f" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "journal_replay_uses_current_transaction_undo_and_entity_ids"
+    ] is False
+
+
+def test_v20_source_netgen_vol_element_block_order_curving_generation_mismatch():
+    row = _with_v20_jacobian_interface_journal_vol_identity(summary())
+    row["netgen_vol_element_block_order_curving_generation_identity"].update(
+        {
+            "writer_mesh_generation": "hybrid-mesh-61",
+            "writer_curving_generation": "curving-61",
+            "writer_element_block_types": ["tet", "pyramid", "hex"],
+            "writer_element_orders": [1, 1, 2],
+            "writer_curving_node_counts": [4, 5, 20],
+            "writer_element_block_table_sha256": "f" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "netgen_export_uses_current_block_order_and_curving_generation"
+    ] is False
+
+
+def _with_v21_sweep_quality_group_aprepro_identity(row):
+    row = _with_v20_jacobian_interface_journal_vol_identity(row)
+    row["hex_sweep_source_target_face_vertex_twist_generation_identity"] = {
+        "sweep_generation": "hex-sweep-71",
+        "source_face_sweep_generation": "hex-sweep-71",
+        "target_face_sweep_generation": "hex-sweep-71",
+        "vertex_map_sweep_generation": "hex-sweep-71",
+        "twist_path_sweep_generation": "hex-sweep-71",
+        "source_face_id": 11,
+        "mapped_source_face_id": 11,
+        "target_face_id": 21,
+        "mapped_target_face_id": 21,
+        "source_vertex_ids": [101, 102, 103, 104],
+        "mapped_source_vertex_ids": [101, 102, 103, 104],
+        "target_vertex_ids": [201, 202, 203, 204],
+        "mapped_target_vertex_ids": [201, 202, 203, 204],
+        "twist_path_vertex_ids": [101, 201, 102, 202, 103, 203, 104, 204],
+        "mapped_twist_path_vertex_ids": [101, 201, 102, 202, 103, 203, 104, 204],
+        "face_vertex_map_sha256": "1" * 64,
+        "applied_face_vertex_map_sha256": "1" * 64,
+        "twist_path_sha256": "2" * 64,
+        "applied_twist_path_sha256": "2" * 64,
+    }
+    row["quality_histogram_metric_element_set_unit_generation_identity"] = {
+        "mesh_generation": "quality-mesh-71",
+        "metric_mesh_generation": "quality-mesh-71",
+        "element_set_mesh_generation": "quality-mesh-71",
+        "coordinate_unit_mesh_generation": "quality-mesh-71",
+        "metric_name": "scaled_jacobian",
+        "evaluated_metric_name": "scaled_jacobian",
+        "coordinate_unit": "m",
+        "evaluated_coordinate_unit": "m",
+        "element_ids": [301, 302, 303, 304],
+        "evaluated_element_ids": [301, 302, 303, 304],
+        "metric_values": [0.62, 0.74, 0.83, 0.91],
+        "evaluated_metric_values": [0.62, 0.74, 0.83, 0.91],
+        "histogram_bin_edges": [0.0, 0.5, 0.75, 1.0],
+        "histogram_counts": [0, 2, 2],
+        "evaluated_histogram_counts": [0, 2, 2],
+        "quality_table_sha256": "3" * 64,
+        "evaluated_quality_table_sha256": "3" * 64,
+    }
+    row["block_sideset_group_entity_merge_renumber_generation_identity"] = {
+        "topology_generation": "topology-71",
+        "block_topology_generation": "topology-71",
+        "sideset_topology_generation": "topology-71",
+        "group_topology_generation": "topology-71",
+        "renumber_topology_generation": "topology-71",
+        "merge_transaction_generation": "merge-71",
+        "group_merge_transaction_generation": "merge-71",
+        "block_ids": [10, 20],
+        "exported_block_ids": [10, 20],
+        "block_entity_ids": [[401, 402], [403]],
+        "exported_block_entity_ids": [[401, 402], [403]],
+        "sideset_ids": [30, 40],
+        "exported_sideset_ids": [30, 40],
+        "sideset_entity_ids": [[501, 502], [503, 504]],
+        "exported_sideset_entity_ids": [[501, 502], [503, 504]],
+        "group_entity_ids": [401, 402, 403, 501, 502, 503, 504],
+        "exported_group_entity_ids": [401, 402, 403, 501, 502, 503, 504],
+        "ownership_table_sha256": "4" * 64,
+        "exported_ownership_table_sha256": "4" * 64,
+    }
+    row[
+        "aprepro_include_variable_expansion_working_directory_generation_identity"
+    ] = {
+        "journal_transaction_generation": "journal-71",
+        "variable_table_transaction_generation": "journal-71",
+        "include_expansion_transaction_generation": "journal-71",
+        "working_directory_transaction_generation": "journal-71",
+        "working_directory": "model/input",
+        "replay_working_directory": "model/input",
+        "variable_names": ["radius", "height", "intervals"],
+        "expanded_variable_names": ["radius", "height", "intervals"],
+        "variable_values": [0.025, 0.08, 12.0],
+        "expanded_variable_values": [0.025, 0.08, 12.0],
+        "include_paths": ["common/units.inc", "mesh/sweep.inc"],
+        "expanded_include_paths": ["common/units.inc", "mesh/sweep.inc"],
+        "variable_table_sha256": "5" * 64,
+        "expanded_variable_table_sha256": "5" * 64,
+        "include_tree_sha256": "6" * 64,
+        "expanded_include_tree_sha256": "6" * 64,
+    }
+    return row
+
+
+def test_v21_positive_sweep_quality_group_aprepro_identity():
+    row = _with_v21_sweep_quality_group_aprepro_identity(summary())
+    assert json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))["status"] == "ok"
+    assert json.loads(cubit_mixed_transition_source_gate(row))["status"] == "ok"
+
+
+def test_v21_public_hex_sweep_source_target_face_vertex_twist_generation_mismatch():
+    row = _with_v21_sweep_quality_group_aprepro_identity(summary())
+    row["hex_sweep_source_target_face_vertex_twist_generation_identity"].update(
+        {
+            "target_face_sweep_generation": "hex-sweep-70",
+            "vertex_map_sweep_generation": "hex-sweep-69",
+            "twist_path_sweep_generation": "hex-sweep-68",
+            "mapped_target_face_id": 22,
+            "mapped_source_vertex_ids": [104, 103, 102, 101],
+            "mapped_twist_path_vertex_ids": [101, 202, 102, 203, 103, 204, 104, 201],
+            "applied_face_vertex_map_sha256": "a" * 64,
+            "applied_twist_path_sha256": "b" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "hex_sweep_uses_current_source_target_vertex_map_and_twist_path"
+    ] is False
+
+
+def test_v21_public_quality_histogram_metric_element_set_unit_generation_mismatch():
+    row = _with_v21_sweep_quality_group_aprepro_identity(summary())
+    row["quality_histogram_metric_element_set_unit_generation_identity"].update(
+        {
+            "metric_mesh_generation": "quality-mesh-70",
+            "element_set_mesh_generation": "quality-mesh-69",
+            "coordinate_unit_mesh_generation": "quality-mesh-68",
+            "evaluated_metric_name": "aspect_ratio",
+            "evaluated_coordinate_unit": "mm",
+            "evaluated_element_ids": [301, 303, 305],
+            "evaluated_metric_values": [1.2, 2.1, 3.4],
+            "evaluated_histogram_counts": [1, 1, 1],
+            "evaluated_quality_table_sha256": "c" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "quality_histogram_uses_current_metric_element_set_and_units"
+    ] is False
+
+
+def test_v21_source_block_sideset_group_entity_merge_renumber_generation_mismatch():
+    row = _with_v21_sweep_quality_group_aprepro_identity(summary())
+    row["block_sideset_group_entity_merge_renumber_generation_identity"].update(
+        {
+            "group_topology_generation": "topology-70",
+            "renumber_topology_generation": "topology-69",
+            "group_merge_transaction_generation": "merge-70",
+            "exported_block_entity_ids": [[401, 405], [403]],
+            "exported_sideset_entity_ids": [[501], [503, 505]],
+            "exported_group_entity_ids": [401, 403, 405, 501, 503, 505],
+            "exported_ownership_table_sha256": "d" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "block_sideset_groups_use_current_merge_and_renumber_generation"
+    ] is False
+
+
+def test_v21_source_aprepro_include_variable_expansion_working_directory_generation_mismatch():
+    row = _with_v21_sweep_quality_group_aprepro_identity(summary())
+    row[
+        "aprepro_include_variable_expansion_working_directory_generation_identity"
+    ].update(
+        {
+            "variable_table_transaction_generation": "journal-70",
+            "include_expansion_transaction_generation": "journal-69",
+            "working_directory_transaction_generation": "journal-68",
+            "replay_working_directory": "archive/input",
+            "expanded_variable_values": [25.0, 80.0, 10.0],
+            "expanded_include_paths": ["old/units.inc", "mesh/tet.inc"],
+            "expanded_variable_table_sha256": "e" * 64,
+            "expanded_include_tree_sha256": "f" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "aprepro_replay_uses_current_variables_includes_and_working_directory"
+    ] is False
+
+
+def _with_v22_step_multibody_and_geometry_ownership_identity(row):
+    row = _with_v21_sweep_quality_group_aprepro_identity(row)
+    row["step_ap214_body_name_unit_frame_mass_property_generation_identity"] = {
+        "export_generation": "step-export-72",
+        "geometry_export_generation": "step-export-72",
+        "body_name_export_generation": "step-export-72",
+        "unit_export_generation": "step-export-72",
+        "placement_export_generation": "step-export-72",
+        "mass_property_export_generation": "step-export-72",
+        "step_schema": "AP214",
+        "exported_step_schema": "AP214",
+        "body_names": ["base", "link", "slider"],
+        "exported_body_names": ["base", "link", "slider"],
+        "length_unit": "m",
+        "exported_length_unit": "m",
+        "body_placement_ids": [101, 102, 103],
+        "exported_body_placement_ids": [101, 102, 103],
+        "geometry_sha256": "7" * 64,
+        "exported_geometry_sha256": "7" * 64,
+        "placement_table_sha256": "8" * 64,
+        "exported_placement_table_sha256": "8" * 64,
+        "mass_property_table_sha256": "9" * 64,
+        "exported_mass_property_table_sha256": "9" * 64,
+    }
+    row[
+        "hybrid_tet_hex_pyramid_transition_topology_block_generation_identity"
+    ] = {
+        "mesh_generation": "hybrid-mesh-72",
+        "pyramid_orientation_mesh_generation": "hybrid-mesh-72",
+        "shared_node_topology_mesh_generation": "hybrid-mesh-72",
+        "material_block_mesh_generation": "hybrid-mesh-72",
+        "pyramid_face_orientations": [1, -1, 1, -1],
+        "exported_pyramid_face_orientations": [1, -1, 1, -1],
+        "shared_node_ids": [201, 202, 203, 204, 205],
+        "exported_shared_node_ids": [201, 202, 203, 204, 205],
+        "material_block_ids": [10, 20, 30],
+        "exported_material_block_ids": [10, 20, 30],
+        "transition_topology_sha256": "a" * 64,
+        "exported_transition_topology_sha256": "a" * 64,
+        "material_block_map_sha256": "b" * 64,
+        "exported_material_block_map_sha256": "b" * 64,
+    }
+    row["headless_step_export_body_transform_name_generation_identity"] = {
+        "model_generation": "cubit-model-72",
+        "selected_body_model_generation": "cubit-model-72",
+        "transform_model_generation": "cubit-model-72",
+        "name_model_generation": "cubit-model-72",
+        "export_log_model_generation": "cubit-model-72",
+        "selected_body_ids": [1, 2, 3],
+        "exported_body_ids": [1, 2, 3],
+        "body_names": ["base", "link", "slider"],
+        "exported_body_names": ["base", "link", "slider"],
+        "transform_ids": [301, 302, 303],
+        "exported_transform_ids": [301, 302, 303],
+        "step_sha256": "c" * 64,
+        "exported_step_sha256": "c" * 64,
+        "transform_table_sha256": "d" * 64,
+        "exported_transform_table_sha256": "d" * 64,
+        "export_log_sha256": "e" * 64,
+        "recorded_export_log_sha256": "e" * 64,
+    }
+    row[
+        "geometry_heal_tolerance_imprint_merge_ownership_generation_identity"
+    ] = {
+        "geometry_generation": "geometry-72",
+        "heal_geometry_generation": "geometry-72",
+        "imprint_geometry_generation": "geometry-72",
+        "merge_geometry_generation": "geometry-72",
+        "ownership_geometry_generation": "geometry-72",
+        "heal_tolerance": 1.0e-6,
+        "ownership_heal_tolerance": 1.0e-6,
+        "source_entity_ids": [401, 402, 403, 404],
+        "owned_entity_ids": [401, 402, 403, 404],
+        "imprint_pair_ids": [501, 502],
+        "owned_imprint_pair_ids": [501, 502],
+        "merge_survivor_ids": [401, 403],
+        "owned_merge_survivor_ids": [401, 403],
+        "ownership_map_sha256": "f" * 64,
+        "recorded_ownership_map_sha256": "f" * 64,
+        "operation_log_sha256": "0" * 64,
+        "recorded_operation_log_sha256": "0" * 64,
+    }
+    return row
+
+
+def test_v22_positive_step_multibody_and_geometry_ownership_identity():
+    row = _with_v22_step_multibody_and_geometry_ownership_identity(summary())
+    assert json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))["status"] == "ok"
+    assert json.loads(cubit_mixed_transition_source_gate(row))["status"] == "ok"
+
+
+def test_v22_public_step_ap214_body_name_unit_frame_mass_property_generation_mismatch():
+    row = _with_v22_step_multibody_and_geometry_ownership_identity(summary())
+    row["step_ap214_body_name_unit_frame_mass_property_generation_identity"].update(
+        {
+            "body_name_export_generation": "step-export-71",
+            "unit_export_generation": "step-export-70",
+            "placement_export_generation": "step-export-69",
+            "mass_property_export_generation": "step-export-68",
+            "exported_step_schema": "AP203",
+            "exported_body_names": ["base", "slider", "link"],
+            "exported_length_unit": "mm",
+            "exported_body_placement_ids": [101, 103, 102],
+            "exported_geometry_sha256": "1" * 64,
+            "exported_placement_table_sha256": "2" * 64,
+            "exported_mass_property_table_sha256": "3" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "step_ap214_multibody_export_uses_current_body_unit_frame_and_mass_properties"
+    ] is False
+
+
+def test_v22_public_hybrid_tet_hex_pyramid_transition_topology_block_generation_mismatch():
+    row = _with_v22_step_multibody_and_geometry_ownership_identity(summary())
+    row[
+        "hybrid_tet_hex_pyramid_transition_topology_block_generation_identity"
+    ].update(
+        {
+            "pyramid_orientation_mesh_generation": "hybrid-mesh-71",
+            "shared_node_topology_mesh_generation": "hybrid-mesh-70",
+            "material_block_mesh_generation": "hybrid-mesh-69",
+            "exported_pyramid_face_orientations": [-1, -1, 1, 1],
+            "exported_shared_node_ids": [201, 202, 204, 205, 206],
+            "exported_material_block_ids": [10, 20, 40],
+            "exported_transition_topology_sha256": "4" * 64,
+            "exported_material_block_map_sha256": "5" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "hybrid_transition_uses_current_orientation_shared_nodes_and_blocks"
+    ] is False
+
+
+def test_v22_source_headless_step_export_body_transform_name_generation_mismatch():
+    row = _with_v22_step_multibody_and_geometry_ownership_identity(summary())
+    row["headless_step_export_body_transform_name_generation_identity"].update(
+        {
+            "selected_body_model_generation": "cubit-model-71",
+            "transform_model_generation": "cubit-model-70",
+            "name_model_generation": "cubit-model-69",
+            "export_log_model_generation": "cubit-model-68",
+            "exported_body_ids": [1, 3],
+            "exported_body_names": ["base", "slider"],
+            "exported_transform_ids": [301, 303],
+            "exported_step_sha256": "6" * 64,
+            "exported_transform_table_sha256": "7" * 64,
+            "recorded_export_log_sha256": "8" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "headless_step_export_uses_current_bodies_transforms_names_and_log"
+    ] is False
+
+
+def test_v22_source_geometry_heal_tolerance_imprint_merge_ownership_generation_mismatch():
+    row = _with_v22_step_multibody_and_geometry_ownership_identity(summary())
+    row[
+        "geometry_heal_tolerance_imprint_merge_ownership_generation_identity"
+    ].update(
+        {
+            "heal_geometry_generation": "geometry-71",
+            "imprint_geometry_generation": "geometry-70",
+            "merge_geometry_generation": "geometry-69",
+            "ownership_geometry_generation": "geometry-68",
+            "ownership_heal_tolerance": 1.0e-4,
+            "owned_entity_ids": [401, 403, 405],
+            "owned_imprint_pair_ids": [501, 503],
+            "owned_merge_survivor_ids": [401, 405],
+            "recorded_ownership_map_sha256": "9" * 64,
+            "recorded_operation_log_sha256": "a" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "healed_geometry_ownership_uses_current_tolerance_imprint_and_merge"
+    ] is False
+
+
+def _with_v23_parallel_sculpt_mixed_transition_replay_exodus_identity(row):
+    row = _with_v22_step_multibody_and_geometry_ownership_identity(row)
+    row["parallel_sculpt_partition_ghost_refinement_generation_identity"] = {
+        "mesh_generation": "sculpt-81",
+        "partition_mesh_generation": "sculpt-81",
+        "ghost_interface_mesh_generation": "sculpt-81",
+        "refinement_mesh_generation": "sculpt-81",
+        "assembly_mesh_generation": "sculpt-81",
+        "partition_ids": [1, 2, 3, 4],
+        "assembled_partition_ids": [1, 2, 3, 4],
+        "ghost_interface_ids": [101, 102, 103],
+        "assembled_ghost_interface_ids": [101, 102, 103],
+        "refinement_levels": [1, 2, 2, 1],
+        "assembled_refinement_levels": [1, 2, 2, 1],
+        "partition_map_sha256": "1" * 64,
+        "assembled_partition_map_sha256": "1" * 64,
+        "ghost_interface_sha256": "2" * 64,
+        "assembled_ghost_interface_sha256": "2" * 64,
+        "sculpt_mesh_sha256": "3" * 64,
+        "assembled_sculpt_mesh_sha256": "3" * 64,
+    }
+    row["mixed_transition_interface_block_sideset_generation_identity"] = {
+        "mesh_generation": "mixed-transition-81",
+        "interface_mesh_generation": "mixed-transition-81",
+        "element_family_mesh_generation": "mixed-transition-81",
+        "block_mesh_generation": "mixed-transition-81",
+        "sideset_mesh_generation": "mixed-transition-81",
+        "element_families": ["tet", "pyramid", "hex"],
+        "exported_element_families": ["tet", "pyramid", "hex"],
+        "interface_face_ids": [201, 202, 203, 204],
+        "exported_interface_face_ids": [201, 202, 203, 204],
+        "block_ids": [10, 20, 30],
+        "exported_block_ids": [10, 20, 30],
+        "sideset_ids": [40, 50],
+        "exported_sideset_ids": [40, 50],
+        "transition_table_sha256": "4" * 64,
+        "exported_transition_table_sha256": "4" * 64,
+        "ownership_table_sha256": "5" * 64,
+        "exported_ownership_table_sha256": "5" * 64,
+    }
+    row["journal_replay_geometry_entity_map_version_generation_identity"] = {
+        "replay_generation": "journal-replay-81",
+        "geometry_replay_generation": "journal-replay-81",
+        "entity_map_replay_generation": "journal-replay-81",
+        "application_version_replay_generation": "journal-replay-81",
+        "command_log_replay_generation": "journal-replay-81",
+        "application_version": "2026.6",
+        "replay_application_version": "2026.6",
+        "geometry_entity_ids": [301, 302, 303],
+        "replay_geometry_entity_ids": [301, 302, 303],
+        "entity_names": ["stator", "rotor", "airgap"],
+        "replay_entity_names": ["stator", "rotor", "airgap"],
+        "entity_map_sha256": "6" * 64,
+        "replay_entity_map_sha256": "6" * 64,
+        "journal_sha256": "7" * 64,
+        "replay_journal_sha256": "7" * 64,
+        "command_log_sha256": "8" * 64,
+        "replay_command_log_sha256": "8" * 64,
+    }
+    row["exodus64_entity_sideset_element_map_schema_generation_identity"] = {
+        "export_generation": "exodus64-81",
+        "entity_id_export_generation": "exodus64-81",
+        "sideset_export_generation": "exodus64-81",
+        "element_map_export_generation": "exodus64-81",
+        "schema_export_generation": "exodus64-81",
+        "integer_width_bits": 64,
+        "decoded_integer_width_bits": 64,
+        "entity_ids": [4294967301, 4294967302, 4294967303],
+        "decoded_entity_ids": [4294967301, 4294967302, 4294967303],
+        "sideset_ids": [11, 12],
+        "decoded_sideset_ids": [11, 12],
+        "sideset_entity_ids": [[4294967301, 4294967302], [4294967303]],
+        "decoded_sideset_entity_ids": [[4294967301, 4294967302], [4294967303]],
+        "element_map_sha256": "9" * 64,
+        "decoded_element_map_sha256": "9" * 64,
+        "schema_sha256": "a" * 64,
+        "decoded_schema_sha256": "a" * 64,
+    }
+    return row
+
+
+def test_v23_positive_parallel_sculpt_mixed_transition_replay_exodus_identity():
+    row = _with_v23_parallel_sculpt_mixed_transition_replay_exodus_identity(summary())
+    assert json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))["status"] == "ok"
+    assert json.loads(cubit_mixed_transition_source_gate(row))["status"] == "ok"
+
+
+def test_v23_public_parallel_sculpt_partition_ghost_refinement_generation_mismatch():
+    row = _with_v23_parallel_sculpt_mixed_transition_replay_exodus_identity(summary())
+    row["parallel_sculpt_partition_ghost_refinement_generation_identity"].update(
+        {
+            "partition_mesh_generation": "sculpt-80",
+            "ghost_interface_mesh_generation": "sculpt-79",
+            "refinement_mesh_generation": "sculpt-78",
+            "assembly_mesh_generation": "sculpt-77",
+            "assembled_partition_ids": [1, 3, 2, 4],
+            "assembled_ghost_interface_ids": [103, 102, 104],
+            "assembled_refinement_levels": [1, 1, 2, 3],
+            "assembled_partition_map_sha256": "b" * 64,
+            "assembled_ghost_interface_sha256": "c" * 64,
+            "assembled_sculpt_mesh_sha256": "d" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "parallel_sculpt_assembly_uses_current_partitions_ghosts_and_refinement"
+    ] is False
+
+
+def test_v23_public_mixed_tet_pyramid_hex_interface_block_sideset_generation_mismatch():
+    row = _with_v23_parallel_sculpt_mixed_transition_replay_exodus_identity(summary())
+    row["mixed_transition_interface_block_sideset_generation_identity"].update(
+        {
+            "interface_mesh_generation": "mixed-transition-80",
+            "element_family_mesh_generation": "mixed-transition-79",
+            "block_mesh_generation": "mixed-transition-78",
+            "sideset_mesh_generation": "mixed-transition-77",
+            "exported_element_families": ["tet", "hex"],
+            "exported_interface_face_ids": [204, 203, 202, 201],
+            "exported_block_ids": [10, 20, 40],
+            "exported_sideset_ids": [50, 60],
+            "exported_transition_table_sha256": "e" * 64,
+            "exported_ownership_table_sha256": "f" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "mixed_transition_export_uses_current_interfaces_families_blocks_and_sidesets"
+    ] is False
+
+
+def test_v23_source_journal_replay_geometry_entity_id_map_version_mismatch():
+    row = _with_v23_parallel_sculpt_mixed_transition_replay_exodus_identity(summary())
+    row["journal_replay_geometry_entity_map_version_generation_identity"].update(
+        {
+            "geometry_replay_generation": "journal-replay-80",
+            "entity_map_replay_generation": "journal-replay-79",
+            "application_version_replay_generation": "journal-replay-78",
+            "command_log_replay_generation": "journal-replay-77",
+            "replay_application_version": "2025.8",
+            "replay_geometry_entity_ids": [303, 302, 301],
+            "replay_entity_names": ["rotor", "stator", "airgap"],
+            "replay_entity_map_sha256": "0" * 64,
+            "replay_journal_sha256": "1" * 64,
+            "replay_command_log_sha256": "2" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "journal_replay_uses_current_geometry_entity_map_version_and_command_log"
+    ] is False
+
+
+def test_v23_source_exodus64_entity_id_sideset_mapping_schema_generation_mismatch():
+    row = _with_v23_parallel_sculpt_mixed_transition_replay_exodus_identity(summary())
+    row["exodus64_entity_sideset_element_map_schema_generation_identity"].update(
+        {
+            "entity_id_export_generation": "exodus64-80",
+            "sideset_export_generation": "exodus64-79",
+            "element_map_export_generation": "exodus64-78",
+            "schema_export_generation": "exodus64-77",
+            "decoded_integer_width_bits": 32,
+            "decoded_entity_ids": [5, 6, 7],
+            "decoded_sideset_ids": [12, 13],
+            "decoded_sideset_entity_ids": [[5, 6], [7]],
+            "decoded_element_map_sha256": "3" * 64,
+            "decoded_schema_sha256": "4" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "exodus64_decode_uses_current_entity_sideset_element_map_and_schema"
+    ] is False
+
+
+def _with_v24_hex_closure_webcut_exodus_qa_identity(row):
+    row = _with_v23_parallel_sculpt_mixed_transition_replay_exodus_identity(row)
+    row["high_order_hex_jacobian_transform_node_order_block_generation_identity"] = {
+        "mesh_generation": "hex-order-91",
+        "jacobian_mesh_generation": "hex-order-91",
+        "transform_mesh_generation": "hex-order-91",
+        "node_order_mesh_generation": "hex-order-91",
+        "block_mesh_generation": "hex-order-91",
+        "result_mesh_generation": "hex-order-91",
+        "element_ids": [101, 102],
+        "result_element_ids": [101, 102],
+        "minimum_jacobian": [0.62, 0.57],
+        "result_minimum_jacobian": [0.62, 0.57],
+        "coordinate_transform": [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+        "result_coordinate_transform": [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+        "canonical_node_order": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        "exported_node_order": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        "block_ids": [10, 20],
+        "result_block_ids": [10, 20],
+        "mesh_sha256": "1" * 64,
+        "result_mesh_sha256": "1" * 64,
+    }
+    row["mesh_boundary_cad_volume_area_unit_frame_generation_identity"] = {
+        "geometry_generation": "closure-91",
+        "cad_geometry_generation": "closure-91",
+        "mesh_geometry_generation": "closure-91",
+        "boundary_geometry_generation": "closure-91",
+        "unit_geometry_generation": "closure-91",
+        "frame_geometry_generation": "closure-91",
+        "result_geometry_generation": "closure-91",
+        "length_unit": "mm",
+        "result_length_unit": "mm",
+        "coordinate_frame": "assembly-global",
+        "result_coordinate_frame": "assembly-global",
+        "cad_volume": 125000.0,
+        "mesh_volume": 125000.0,
+        "cad_boundary_area": 15000.0,
+        "mesh_boundary_area": 15000.0,
+        "boundary_closed": True,
+        "result_boundary_closed": True,
+        "cad_shape_sha256": "2" * 64,
+        "mesh_source_shape_sha256": "2" * 64,
+        "closure_table_sha256": "3" * 64,
+        "result_closure_table_sha256": "3" * 64,
+    }
+    row["webcut_imprint_merge_tolerance_topology_entity_generation_identity"] = {
+        "operation_generation": "webcut-91",
+        "webcut_operation_generation": "webcut-91",
+        "imprint_operation_generation": "webcut-91",
+        "merge_operation_generation": "webcut-91",
+        "topology_operation_generation": "webcut-91",
+        "result_operation_generation": "webcut-91",
+        "imprint_tolerance": 1.0e-6,
+        "result_imprint_tolerance": 1.0e-6,
+        "merge_tolerance": 5.0e-7,
+        "result_merge_tolerance": 5.0e-7,
+        "entity_names": ["left", "right", "interface"],
+        "result_entity_names": ["left", "right", "interface"],
+        "topology_counts": {"volume": 2, "surface": 11, "curve": 20, "vertex": 12},
+        "result_topology_counts": {"volume": 2, "surface": 11, "curve": 20, "vertex": 12},
+        "topology_sha256": "4" * 64,
+        "result_topology_sha256": "4" * 64,
+        "command_log_sha256": "5" * 64,
+        "result_command_log_sha256": "5" * 64,
+    }
+    row["exodus_qa_coordinate_distribution_checksum_generation_identity"] = {
+        "export_generation": "exodus-qa-91",
+        "qa_export_generation": "exodus-qa-91",
+        "coordinate_export_generation": "exodus-qa-91",
+        "distribution_export_generation": "exodus-qa-91",
+        "checksum_export_generation": "exodus-qa-91",
+        "result_export_generation": "exodus-qa-91",
+        "qa_records": [["Cubit", "2026.6", "2026-07-17", "13:00:00"]],
+        "decoded_qa_records": [["Cubit", "2026.6", "2026-07-17", "13:00:00"]],
+        "coordinate_names": ["x", "y", "z"],
+        "decoded_coordinate_names": ["x", "y", "z"],
+        "sideset_distribution_factors": [[1.0, 1.0, 0.5]],
+        "decoded_sideset_distribution_factors": [[1.0, 1.0, 0.5]],
+        "payload_sha256": "6" * 64,
+        "decoded_payload_sha256": "6" * 64,
+        "qa_table_sha256": "7" * 64,
+        "decoded_qa_table_sha256": "7" * 64,
+    }
+    return row
+
+
+def test_v24_positive_hex_closure_webcut_exodus_qa_identity():
+    row = _with_v24_hex_closure_webcut_exodus_qa_identity(summary())
+    assert json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))["status"] == "ok"
+    assert json.loads(cubit_mixed_transition_source_gate(row))["status"] == "ok"
+
+
+def test_v24_public_high_order_hex_jacobian_transform_node_order_block_generation_mismatch():
+    row = _with_v24_hex_closure_webcut_exodus_qa_identity(summary())
+    row["high_order_hex_jacobian_transform_node_order_block_generation_identity"].update(
+        {
+            "jacobian_mesh_generation": "hex-order-90",
+            "transform_mesh_generation": "hex-order-89",
+            "node_order_mesh_generation": "hex-order-88",
+            "block_mesh_generation": "hex-order-87",
+            "result_minimum_jacobian": [0.62, -0.03],
+            "result_coordinate_transform": [[0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, -1.0]],
+            "exported_node_order": [1, 3, 2, 4, 5, 6, 7, 8, 10, 9],
+            "result_block_ids": [10, 30],
+            "result_mesh_sha256": "8" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "high_order_hex_uses_current_jacobians_transform_node_order_and_blocks"
+    ] is False
+
+
+def test_v24_public_mesh_boundary_closure_cad_volume_area_unit_frame_generation_mismatch():
+    row = _with_v24_hex_closure_webcut_exodus_qa_identity(summary())
+    row["mesh_boundary_cad_volume_area_unit_frame_generation_identity"].update(
+        {
+            "mesh_geometry_generation": "closure-90",
+            "boundary_geometry_generation": "closure-89",
+            "unit_geometry_generation": "closure-88",
+            "frame_geometry_generation": "closure-87",
+            "result_length_unit": "m",
+            "result_coordinate_frame": "part-local",
+            "mesh_volume": 0.125,
+            "mesh_boundary_area": 0.015,
+            "result_boundary_closed": False,
+            "mesh_source_shape_sha256": "9" * 64,
+            "result_closure_table_sha256": "a" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "mesh_boundary_closure_uses_current_cad_units_frame_and_geometry"
+    ] is False
+
+
+def test_v24_source_webcut_imprint_merge_tolerance_topology_entity_generation_mismatch():
+    row = _with_v24_hex_closure_webcut_exodus_qa_identity(summary())
+    row["webcut_imprint_merge_tolerance_topology_entity_generation_identity"].update(
+        {
+            "webcut_operation_generation": "webcut-90",
+            "imprint_operation_generation": "webcut-89",
+            "merge_operation_generation": "webcut-88",
+            "topology_operation_generation": "webcut-87",
+            "result_imprint_tolerance": 1.0e-3,
+            "result_merge_tolerance": 1.0e-2,
+            "result_entity_names": ["right", "left", "interface-old"],
+            "result_topology_counts": {"volume": 1, "surface": 8, "curve": 14, "vertex": 8},
+            "result_topology_sha256": "b" * 64,
+            "result_command_log_sha256": "c" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "webcut_imprint_merge_uses_current_tolerances_topology_and_entities"
+    ] is False
+
+
+def test_v24_source_exodus_qa_coordinate_name_distribution_factor_checksum_mismatch():
+    row = _with_v24_hex_closure_webcut_exodus_qa_identity(summary())
+    row["exodus_qa_coordinate_distribution_checksum_generation_identity"].update(
+        {
+            "qa_export_generation": "exodus-qa-90",
+            "coordinate_export_generation": "exodus-qa-89",
+            "distribution_export_generation": "exodus-qa-88",
+            "checksum_export_generation": "exodus-qa-87",
+            "decoded_qa_records": [["Cubit", "2025.8", "2026-07-16", "12:00:00"]],
+            "decoded_coordinate_names": ["r", "theta", "z"],
+            "decoded_sideset_distribution_factors": [[1.0, 0.5]],
+            "decoded_payload_sha256": "d" * 64,
+            "decoded_qa_table_sha256": "e" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "exodus_qa_uses_current_coordinates_distribution_factors_and_checksum"
+    ] is False
+
+
+def _with_v25_hybrid_periodic_journal_vol_identity(row):
+    row = _with_v24_hex_closure_webcut_exodus_qa_identity(row)
+    row["hybrid_tet_hex_pyramid_interface_conformity_orientation_block_identity"] = {
+        "mesh_generation": "hybrid-111",
+        "tet_mesh_generation": "hybrid-111",
+        "hex_mesh_generation": "hybrid-111",
+        "pyramid_mesh_generation": "hybrid-111",
+        "interface_mesh_generation": "hybrid-111",
+        "orientation_mesh_generation": "hybrid-111",
+        "block_mesh_generation": "hybrid-111",
+        "result_mesh_generation": "hybrid-111",
+        "element_counts": {"tet4": 120, "hex8": 48, "pyramid5": 24},
+        "result_element_counts": {"tet4": 120, "hex8": 48, "pyramid5": 24},
+        "interface_face_node_ids": [[11, 12, 13, 14], [21, 22, 23, 24]],
+        "result_interface_face_node_ids": [[11, 12, 13, 14], [21, 22, 23, 24]],
+        "interface_conforming": True,
+        "result_interface_conforming": True,
+        "orientation_signs": [1, 1, 1],
+        "result_orientation_signs": [1, 1, 1],
+        "block_ids": [10, 20, 30],
+        "result_block_ids": [10, 20, 30],
+        "mesh_sha256": "1" * 64,
+        "result_mesh_sha256": "1" * 64,
+    }
+    row["periodic_sideset_node_pair_transform_tolerance_geometry_generation_identity"] = {
+        "periodic_generation": "periodic-111",
+        "sideset_periodic_generation": "periodic-111",
+        "node_pair_periodic_generation": "periodic-111",
+        "transform_periodic_generation": "periodic-111",
+        "tolerance_periodic_generation": "periodic-111",
+        "geometry_periodic_generation": "periodic-111",
+        "result_periodic_generation": "periodic-111",
+        "master_sideset": "periodic-master",
+        "result_master_sideset": "periodic-master",
+        "slave_sideset": "periodic-slave",
+        "result_slave_sideset": "periodic-slave",
+        "node_pairs": [[101, 201], [102, 202], [103, 203]],
+        "result_node_pairs": [[101, 201], [102, 202], [103, 203]],
+        "rigid_transform": [
+            [1.0, 0.0, 0.0, 10.0],
+            [0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+        ],
+        "result_rigid_transform": [
+            [1.0, 0.0, 0.0, 10.0],
+            [0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+        ],
+        "pairing_tolerance": 1.0e-7,
+        "result_pairing_tolerance": 1.0e-7,
+        "geometry_sha256": "2" * 64,
+        "result_geometry_sha256": "2" * 64,
+        "periodic_table_sha256": "3" * 64,
+        "result_periodic_table_sha256": "3" * 64,
+    }
+    row["journal_reset_entity_id_reuse_undo_replay_session_generation_identity"] = {
+        "session_generation": "journal-111",
+        "reset_session_generation": "journal-111",
+        "entity_session_generation": "journal-111",
+        "undo_session_generation": "journal-111",
+        "replay_session_generation": "journal-111",
+        "topology_session_generation": "journal-111",
+        "result_session_generation": "journal-111",
+        "session_id": "headless-session-111",
+        "result_session_id": "headless-session-111",
+        "reset_applied": True,
+        "result_reset_applied": True,
+        "command_sequence": [
+            "reset",
+            "brick x 1",
+            "webcut volume 1 with plane xplane",
+        ],
+        "result_command_sequence": [
+            "reset",
+            "brick x 1",
+            "webcut volume 1 with plane xplane",
+        ],
+        "entity_id_map": [["body", 1], ["left", 1], ["right", 2]],
+        "result_entity_id_map": [["body", 1], ["left", 1], ["right", 2]],
+        "undo_checkpoint_sha256": "4" * 64,
+        "result_undo_checkpoint_sha256": "4" * 64,
+        "topology_sha256": "5" * 64,
+        "result_topology_sha256": "5" * 64,
+        "journal_sha256": "6" * 64,
+        "result_journal_sha256": "6" * 64,
+    }
+    row["netgen_vol_export_family_order_boundary_material_checksum_identity"] = {
+        "export_generation": "vol-export-111",
+        "family_export_generation": "vol-export-111",
+        "order_export_generation": "vol-export-111",
+        "boundary_export_generation": "vol-export-111",
+        "material_export_generation": "vol-export-111",
+        "entity_export_generation": "vol-export-111",
+        "result_export_generation": "vol-export-111",
+        "volume_element_family": "tet4",
+        "decoded_volume_element_family": "tet4",
+        "surface_element_family": "tri3",
+        "decoded_surface_element_family": "tri3",
+        "polynomial_order": 1,
+        "decoded_polynomial_order": 1,
+        "boundary_names": ["outer", "interface"],
+        "decoded_boundary_names": ["outer", "interface"],
+        "material_indices": [1, 2],
+        "decoded_material_indices": [1, 2],
+        "source_entity_ids": [10, 20],
+        "decoded_source_entity_ids": [10, 20],
+        "source_mesh_sha256": "7" * 64,
+        "export_source_mesh_sha256": "7" * 64,
+        "vol_sha256": "8" * 64,
+        "decoded_vol_sha256": "8" * 64,
+    }
+    return row
+
+
+def test_v25_positive_hybrid_periodic_journal_vol_identity():
+    row = _with_v25_hybrid_periodic_journal_vol_identity(summary())
+    assert json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))["status"] == "ok"
+    assert json.loads(cubit_mixed_transition_source_gate(row))["status"] == "ok"
+
+
+def test_v25_public_hybrid_tet_hex_pyramid_interface_conformity_orientation_block_mismatch():
+    row = _with_v25_hybrid_periodic_journal_vol_identity(summary())
+    row["hybrid_tet_hex_pyramid_interface_conformity_orientation_block_identity"].update(
+        {
+            "tet_mesh_generation": "hybrid-110",
+            "hex_mesh_generation": "hybrid-109",
+            "pyramid_mesh_generation": "hybrid-108",
+            "interface_mesh_generation": "hybrid-107",
+            "orientation_mesh_generation": "hybrid-106",
+            "result_element_counts": {"tet4": 121, "hex8": 48, "pyramid5": 23},
+            "result_interface_face_node_ids": [
+                [11, 13, 12, 14],
+                [21, 22, 24, 23],
+            ],
+            "result_interface_conforming": False,
+            "result_orientation_signs": [1, -1, 1],
+            "result_block_ids": [10, 20, 40],
+            "result_mesh_sha256": "9" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "hybrid_interfaces_use_current_families_nodes_orientation_and_blocks"
+    ] is False
+
+
+def test_v25_public_periodic_sideset_node_pair_transform_tolerance_geometry_generation_mismatch():
+    row = _with_v25_hybrid_periodic_journal_vol_identity(summary())
+    row["periodic_sideset_node_pair_transform_tolerance_geometry_generation_identity"].update(
+        {
+            "sideset_periodic_generation": "periodic-110",
+            "node_pair_periodic_generation": "periodic-109",
+            "transform_periodic_generation": "periodic-108",
+            "tolerance_periodic_generation": "periodic-107",
+            "geometry_periodic_generation": "periodic-106",
+            "result_slave_sideset": "periodic-old",
+            "result_node_pairs": [[101, 202], [102, 201], [103, 203]],
+            "result_rigid_transform": [
+                [1.0, 0.0, 0.0, 9.5],
+                [0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+            ],
+            "result_pairing_tolerance": 1.0e-3,
+            "result_geometry_sha256": "a" * 64,
+            "result_periodic_table_sha256": "b" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "periodic_sidesets_use_current_node_pairs_transform_tolerance_and_geometry"
+    ] is False
+
+
+def test_v25_source_journal_reset_entity_id_reuse_undo_replay_session_generation_mismatch():
+    row = _with_v25_hybrid_periodic_journal_vol_identity(summary())
+    row["journal_reset_entity_id_reuse_undo_replay_session_generation_identity"].update(
+        {
+            "reset_session_generation": "journal-110",
+            "entity_session_generation": "journal-109",
+            "undo_session_generation": "journal-108",
+            "replay_session_generation": "journal-107",
+            "topology_session_generation": "journal-106",
+            "result_session_id": "headless-session-110",
+            "result_reset_applied": False,
+            "result_command_sequence": [
+                "brick x 1",
+                "reset",
+                "webcut volume 1 with plane xplane",
+            ],
+            "result_entity_id_map": [["body", 2], ["left", 3], ["right", 4]],
+            "result_undo_checkpoint_sha256": "c" * 64,
+            "result_topology_sha256": "d" * 64,
+            "result_journal_sha256": "e" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "journal_reset_replay_uses_current_session_commands_entities_and_topology"
+    ] is False
+
+
+def test_v25_source_netgen_vol_export_family_order_boundary_material_checksum_mismatch():
+    row = _with_v25_hybrid_periodic_journal_vol_identity(summary())
+    row["netgen_vol_export_family_order_boundary_material_checksum_identity"].update(
+        {
+            "family_export_generation": "vol-export-110",
+            "order_export_generation": "vol-export-109",
+            "boundary_export_generation": "vol-export-108",
+            "material_export_generation": "vol-export-107",
+            "entity_export_generation": "vol-export-106",
+            "decoded_volume_element_family": "hex8",
+            "decoded_surface_element_family": "quad4",
+            "decoded_polynomial_order": 2,
+            "decoded_boundary_names": ["interface", "outer-old"],
+            "decoded_material_indices": [1, 3],
+            "decoded_source_entity_ids": [20, 10],
+            "export_source_mesh_sha256": "f" * 64,
+            "decoded_vol_sha256": "0" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "netgen_vol_export_uses_p1_tri_tet_boundaries_materials_and_source_mesh"
+    ] is False
+
+
+def _with_v26_sweep_high_order_sculpt_exodus_identity(row):
+    row = _with_v25_hybrid_periodic_journal_vol_identity(row)
+    row["hex_sweep_source_target_layer_correspondence_jacobian_block_generation_identity"] = {
+        "sweep_generation": "hex-sweep-131", "source_sweep_generation": "hex-sweep-131",
+        "target_sweep_generation": "hex-sweep-131", "layer_sweep_generation": "hex-sweep-131",
+        "correspondence_sweep_generation": "hex-sweep-131", "jacobian_sweep_generation": "hex-sweep-131",
+        "block_sweep_generation": "hex-sweep-131", "result_sweep_generation": "hex-sweep-131",
+        "source_face_id": 11, "result_source_face_id": 11, "target_face_id": 21,
+        "result_target_face_id": 21, "layer_count": 4, "result_layer_count": 4,
+        "source_target_vertex_pairs": [[1, 5], [2, 6], [3, 7], [4, 8]],
+        "result_source_target_vertex_pairs": [[1, 5], [2, 6], [3, 7], [4, 8]],
+        "layer_element_counts": [8, 8, 8, 8], "result_layer_element_counts": [8, 8, 8, 8],
+        "scaled_jacobians": [0.72, 0.68, 0.65, 0.61],
+        "result_scaled_jacobians": [0.72, 0.68, 0.65, 0.61],
+        "block_id": 30, "result_block_id": 30, "sweep_mesh_sha256": "1" * 64,
+        "result_sweep_mesh_sha256": "1" * 64,
+    }
+    row["high_order_hex_edge_face_interior_node_curvature_jacobian_export_generation_identity"] = {
+        "export_generation": "hex27-export-131", "edge_export_generation": "hex27-export-131",
+        "face_export_generation": "hex27-export-131", "interior_export_generation": "hex27-export-131",
+        "curvature_export_generation": "hex27-export-131", "jacobian_export_generation": "hex27-export-131",
+        "result_export_generation": "hex27-export-131", "element_family": "hex27",
+        "decoded_element_family": "hex27", "edge_node_order": list(range(9, 21)),
+        "decoded_edge_node_order": list(range(9, 21)), "face_node_order": list(range(21, 27)),
+        "decoded_face_node_order": list(range(21, 27)), "interior_node_order": [27],
+        "decoded_interior_node_order": [27], "curved_geometry_order": 2,
+        "decoded_curved_geometry_order": 2, "minimum_scaled_jacobian": 0.58,
+        "decoded_minimum_scaled_jacobian": 0.58, "export_sha256": "2" * 64,
+        "decoded_export_sha256": "2" * 64,
+    }
+    row["sculpt_voxel_spacing_threshold_material_block_output_session_generation_identity"] = {
+        "sculpt_generation": "sculpt-131", "voxel_sculpt_generation": "sculpt-131",
+        "threshold_sculpt_generation": "sculpt-131", "material_sculpt_generation": "sculpt-131",
+        "block_sculpt_generation": "sculpt-131", "output_sculpt_generation": "sculpt-131",
+        "result_sculpt_generation": "sculpt-131", "session_id": "headless-sculpt-131",
+        "result_session_id": "headless-sculpt-131", "voxel_spacing_m": [0.001, 0.001, 0.002],
+        "result_voxel_spacing_m": [0.001, 0.001, 0.002], "thresholds": [0.25, 0.75],
+        "result_thresholds": [0.25, 0.75], "material_to_block": [[1, 10], [2, 20]],
+        "result_material_to_block": [[1, 10], [2, 20]], "element_counts_by_block": [[10, 120], [20, 80]],
+        "result_element_counts_by_block": [[10, 120], [20, 80]], "input_volume_sha256": "3" * 64,
+        "result_input_volume_sha256": "3" * 64, "output_mesh_sha256": "4" * 64,
+        "result_output_mesh_sha256": "4" * 64,
+    }
+    row["exodus_merge_node_tolerance_global_id_block_sideset_checksum_generation_identity"] = {
+        "merge_generation": "exodus-merge-131", "tolerance_merge_generation": "exodus-merge-131",
+        "node_merge_generation": "exodus-merge-131", "global_id_merge_generation": "exodus-merge-131",
+        "block_merge_generation": "exodus-merge-131", "sideset_merge_generation": "exodus-merge-131",
+        "result_merge_generation": "exodus-merge-131", "merge_tolerance_m": 1.0e-8,
+        "decoded_merge_tolerance_m": 1.0e-8, "merged_node_pairs": [[101, 201], [102, 202]],
+        "decoded_merged_node_pairs": [[101, 201], [102, 202]], "global_node_ids": [101, 102, 103, 104],
+        "decoded_global_node_ids": [101, 102, 103, 104], "block_ids": [10, 20],
+        "decoded_block_ids": [10, 20], "sideset_ids": [100, 200],
+        "decoded_sideset_ids": [100, 200], "source_mesh_sha256": "5" * 64,
+        "merge_source_mesh_sha256": "5" * 64, "exodus_sha256": "6" * 64,
+        "decoded_exodus_sha256": "6" * 64,
+    }
+    return row
+
+
+def test_v26_positive_sweep_high_order_sculpt_exodus_identity():
+    row = _with_v26_sweep_high_order_sculpt_exodus_identity(summary())
+    assert json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))["status"] == "ok"
+    assert json.loads(cubit_mixed_transition_source_gate(row))["status"] == "ok"
+
+
+def test_v26_public_hex_sweep_source_target_face_layer_correspondence_jacobian_block_mismatch():
+    row = _with_v26_sweep_high_order_sculpt_exodus_identity(summary())
+    row["hex_sweep_source_target_layer_correspondence_jacobian_block_generation_identity"].update(
+        {"source_sweep_generation": "hex-sweep-130", "result_target_face_id": 22,
+         "result_layer_count": 3, "result_scaled_jacobians": [0.72, -0.1, 0.4],
+         "result_sweep_mesh_sha256": "a" * 64}
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["hex_sweeps_use_current_faces_layers_correspondence_jacobians_and_blocks"] is False
+
+
+def test_v26_public_high_order_hex_edge_face_interior_node_order_curvature_jacobian_export_mismatch():
+    row = _with_v26_sweep_high_order_sculpt_exodus_identity(summary())
+    row["high_order_hex_edge_face_interior_node_curvature_jacobian_export_generation_identity"].update(
+        {"edge_export_generation": "hex27-export-130", "decoded_element_family": "hex20",
+         "decoded_edge_node_order": [10, 9] + list(range(11, 21)), "decoded_interior_node_order": [],
+         "decoded_curved_geometry_order": 1, "decoded_minimum_scaled_jacobian": -0.02}
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["high_order_hex_exports_use_current_edge_face_interior_order_curvature_and_jacobian"] is False
+
+
+def test_v26_source_sculpt_voxel_spacing_threshold_material_block_output_session_mismatch():
+    row = _with_v26_sweep_high_order_sculpt_exodus_identity(summary())
+    row["sculpt_voxel_spacing_threshold_material_block_output_session_generation_identity"].update(
+        {"voxel_sculpt_generation": "sculpt-130", "result_session_id": "headless-sculpt-130",
+         "result_voxel_spacing_m": [0.001, 0.002, 0.002], "result_material_to_block": [[1, 20], [2, 10]],
+         "result_output_mesh_sha256": "d" * 64}
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["sculpt_outputs_use_current_voxels_thresholds_material_blocks_and_session"] is False
+
+
+def test_v26_source_exodus_merge_node_tolerance_global_id_block_sideset_checksum_mismatch():
+    row = _with_v26_sweep_high_order_sculpt_exodus_identity(summary())
+    row["exodus_merge_node_tolerance_global_id_block_sideset_checksum_generation_identity"].update(
+        {"tolerance_merge_generation": "exodus-merge-130", "decoded_merge_tolerance_m": 1.0e-4,
+         "decoded_global_node_ids": [1, 2, 3, 4], "decoded_block_ids": [10, 30],
+         "decoded_sideset_ids": [100, 300], "decoded_exodus_sha256": "f" * 64}
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["exodus_merges_use_current_tolerance_nodes_global_ids_blocks_sidesets_and_checksums"] is False
+
+
+def _with_v27_sheet_pyramid_journal_exodus_identity(row):
+    row["hex_sheet_pillow_layer_topology_block_interface_orientation_jacobian_identity"] = {
+        "layer_generation": "sheet-pillow-141", "topology_layer_generation": "sheet-pillow-141",
+        "block_layer_generation": "sheet-pillow-141", "interface_layer_generation": "sheet-pillow-141",
+        "orientation_layer_generation": "sheet-pillow-141", "jacobian_layer_generation": "sheet-pillow-141",
+        "result_layer_generation": "sheet-pillow-141", "operation": "pillow", "result_operation": "pillow",
+        "inserted_layer_element_ids": [101, 102, 103, 104],
+        "result_inserted_layer_element_ids": [101, 102, 103, 104],
+        "block_interface_pairs": [[10, 20], [20, 30]],
+        "result_block_interface_pairs": [[10, 20], [20, 30]],
+        "orientation_signs": [1, 1, 1, 1], "result_orientation_signs": [1, 1, 1, 1],
+        "scaled_jacobians": [0.62, 0.58, 0.55, 0.51],
+        "result_scaled_jacobians": [0.62, 0.58, 0.55, 0.51],
+        "layer_topology_sha256": "1" * 64, "result_layer_topology_sha256": "1" * 64,
+        "interface_map_sha256": "2" * 64, "result_interface_map_sha256": "2" * 64,
+    }
+    row["pyramid_transition_orientation_interface_jacobian_block_export_identity"] = {
+        "transition_generation": "pyramid-transition-141", "base_transition_generation": "pyramid-transition-141",
+        "side_transition_generation": "pyramid-transition-141", "interface_transition_generation": "pyramid-transition-141",
+        "jacobian_transition_generation": "pyramid-transition-141", "block_transition_generation": "pyramid-transition-141",
+        "export_transition_generation": "pyramid-transition-141", "result_transition_generation": "pyramid-transition-141",
+        "pyramid_base_node_order": [1, 2, 3, 4], "result_pyramid_base_node_order": [1, 2, 3, 4],
+        "pyramid_side_orientations": [1, 1, 1, 1], "result_pyramid_side_orientations": [1, 1, 1, 1],
+        "interface_node_ids": [1, 2, 3, 4, 5], "result_interface_node_ids": [1, 2, 3, 4, 5],
+        "adjacent_element_families": ["hex8", "pyramid5", "tet4"],
+        "result_adjacent_element_families": ["hex8", "pyramid5", "tet4"],
+        "minimum_scaled_jacobian": 0.41, "result_minimum_scaled_jacobian": 0.41,
+        "block_ids": [10, 15, 20], "result_block_ids": [10, 15, 20],
+        "transition_export_sha256": "3" * 64, "result_transition_export_sha256": "3" * 64,
+    }
+    row["journal_include_aprepro_scope_workdir_version_output_invocation_identity"] = {
+        "invocation_generation": "journal-141", "include_invocation_generation": "journal-141",
+        "aprepro_invocation_generation": "journal-141", "workdir_invocation_generation": "journal-141",
+        "version_invocation_generation": "journal-141", "output_invocation_generation": "journal-141",
+        "result_invocation_generation": "journal-141",
+        "include_order": ["geometry.jou", "mesh.jou", "export.jou"],
+        "result_include_order": ["geometry.jou", "mesh.jou", "export.jou"],
+        "aprepro_scope": [["mesh_size", "0.002"], ["layers", "4"]],
+        "result_aprepro_scope": [["mesh_size", "0.002"], ["layers", "4"]],
+        "working_directory": "C:/temp/cubit-v27", "result_working_directory": "C:/temp/cubit-v27",
+        "cubit_version": "2026.6", "result_cubit_version": "2026.6",
+        "headless_flags": ["-nographics", "-batch"], "result_headless_flags": ["-nographics", "-batch"],
+        "journal_sha256": "4" * 64, "result_journal_sha256": "4" * 64,
+        "output_sha256": "5" * 64, "result_output_sha256": "5" * 64,
+    }
+    row["exodus_64bit_id_qa_time_nodal_variable_mesh_checksum_identity"] = {
+        "exodus_generation": "exodus-result-141", "id_exodus_generation": "exodus-result-141",
+        "qa_exodus_generation": "exodus-result-141", "time_exodus_generation": "exodus-result-141",
+        "variable_exodus_generation": "exodus-result-141", "mesh_exodus_generation": "exodus-result-141",
+        "result_exodus_generation": "exodus-result-141", "integer_width_bits": 64,
+        "decoded_integer_width_bits": 64, "global_node_ids": [4294967301, 4294967302, 4294967303],
+        "decoded_global_node_ids": [4294967301, 4294967302, 4294967303],
+        "qa_records": [["cubit", "2026.6", "2026-07-18", "00:00:00"]],
+        "decoded_qa_records": [["cubit", "2026.6", "2026-07-18", "00:00:00"]],
+        "time_steps_s": [0.0, 0.1, 0.2], "decoded_time_steps_s": [0.0, 0.1, 0.2],
+        "nodal_variable_order": ["displacement_x", "displacement_y", "pressure"],
+        "decoded_nodal_variable_order": ["displacement_x", "displacement_y", "pressure"],
+        "mesh_sha256": "6" * 64, "decoded_mesh_sha256": "6" * 64,
+        "exodus_sha256": "7" * 64, "decoded_exodus_sha256": "7" * 64,
+    }
+    return row
+
+
+def test_v27_positive_sheet_pyramid_journal_exodus_identity():
+    row = _with_v27_sheet_pyramid_journal_exodus_identity(summary())
+    assert json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))["status"] == "ok"
+    assert json.loads(cubit_mixed_transition_source_gate(row))["status"] == "ok"
+
+
+def test_v27_public_hex_sheet_pillow_layer_topology_block_interface_scaled_jacobian_mismatch():
+    row = _with_v27_sheet_pyramid_journal_exodus_identity(summary())
+    row["hex_sheet_pillow_layer_topology_block_interface_orientation_jacobian_identity"].update(
+        {"topology_layer_generation": "sheet-pillow-140", "result_operation": "sheet",
+         "result_orientation_signs": [1, -1, 1, 1],
+         "result_scaled_jacobians": [0.62, -0.05, 0.55, 0.51]}
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["sheet_pillow_layers_use_current_topology_blocks_interfaces_orientation_and_jacobians"] is False
+
+
+def test_v27_public_pyramid_transition_base_side_orientation_tet_hex_interface_jacobian_export_mismatch():
+    row = _with_v27_sheet_pyramid_journal_exodus_identity(summary())
+    row["pyramid_transition_orientation_interface_jacobian_block_export_identity"].update(
+        {"base_transition_generation": "pyramid-transition-140",
+         "result_pyramid_base_node_order": [1, 4, 3, 2],
+         "result_pyramid_side_orientations": [1, -1, 1, -1],
+         "result_minimum_scaled_jacobian": -0.03,
+         "result_transition_export_sha256": "9" * 64}
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["pyramid_transitions_use_current_base_sides_interface_jacobian_blocks_and_export"] is False
+
+
+def test_v27_source_journal_include_aprepro_scope_working_directory_version_output_generation_mismatch():
+    row = _with_v27_sheet_pyramid_journal_exodus_identity(summary())
+    row["journal_include_aprepro_scope_workdir_version_output_invocation_identity"].update(
+        {"include_invocation_generation": "journal-140",
+         "result_include_order": ["mesh.jou", "geometry.jou", "export.jou"],
+         "result_working_directory": "C:/temp/cubit-old", "result_cubit_version": "2025.8",
+         "result_headless_flags": ["-batch"], "result_output_sha256": "a" * 64}
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["journal_replays_use_current_includes_aprepro_scope_workdir_version_and_output"] is False
+
+
+def test_v27_source_exodus_64bit_id_qa_time_step_nodal_variable_order_checksum_mismatch():
+    row = _with_v27_sheet_pyramid_journal_exodus_identity(summary())
+    row["exodus_64bit_id_qa_time_nodal_variable_mesh_checksum_identity"].update(
+        {"id_exodus_generation": "exodus-result-140", "decoded_integer_width_bits": 32,
+         "decoded_global_node_ids": [5, 6, 7], "decoded_time_steps_s": [0.0, 0.2, 0.1],
+         "decoded_nodal_variable_order": ["pressure", "displacement_y", "displacement_x"],
+         "decoded_exodus_sha256": "c" * 64}
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["exodus_results_use_current_64bit_ids_qa_times_variables_mesh_and_checksum"] is False
+
+
+def _with_v28_sweep_refinement_sideset_python_identity(row):
+    row["hex_sweep_spine_frame_twist_interval_surface_block_quality_identity"] = {
+        "sweep_generation": "spine-sweep-151", "spine_sweep_generation": "spine-sweep-151",
+        "frame_sweep_generation": "spine-sweep-151", "twist_sweep_generation": "spine-sweep-151",
+        "interval_sweep_generation": "spine-sweep-151", "surface_sweep_generation": "spine-sweep-151",
+        "block_sweep_generation": "spine-sweep-151", "quality_sweep_generation": "spine-sweep-151",
+        "result_sweep_generation": "spine-sweep-151", "spine_curve_ids": [31, 32],
+        "result_spine_curve_ids": [31, 32], "frame_method": "parallel_transport",
+        "result_frame_method": "parallel_transport", "twist_angles_deg": [0.0, 5.0, 10.0, 15.0],
+        "result_twist_angles_deg": [0.0, 5.0, 10.0, 15.0], "interval_count": 12,
+        "result_interval_count": 12, "source_surface_id": 101, "result_source_surface_id": 101,
+        "target_surface_id": 102, "result_target_surface_id": 102, "block_id": 30,
+        "result_block_id": 30, "scaled_jacobians": [0.71, 0.66, 0.59, 0.54],
+        "result_scaled_jacobians": [0.71, 0.66, 0.59, 0.54],
+        "sweep_mesh_sha256": "1" * 64, "result_sweep_mesh_sha256": "1" * 64,
+    }
+    row["local_refinement_parent_child_transition_conformity_block_boundary_export_identity"] = {
+        "refinement_generation": "local-refine-151", "parent_refinement_generation": "local-refine-151",
+        "child_refinement_generation": "local-refine-151", "transition_refinement_generation": "local-refine-151",
+        "conformity_refinement_generation": "local-refine-151", "block_refinement_generation": "local-refine-151",
+        "boundary_refinement_generation": "local-refine-151", "jacobian_refinement_generation": "local-refine-151",
+        "export_refinement_generation": "local-refine-151", "result_refinement_generation": "local-refine-151",
+        "parent_element_ids": [201, 202], "result_parent_element_ids": [201, 202],
+        "child_parent_pairs": [[301, 201], [302, 201], [303, 202], [304, 202]],
+        "result_child_parent_pairs": [[301, 201], [302, 201], [303, 202], [304, 202]],
+        "transition_face_pairs": [[401, 501], [402, 502]],
+        "result_transition_face_pairs": [[401, 501], [402, 502]],
+        "conformity_node_pairs": [[11, 11], [12, 12], [13, 13]],
+        "result_conformity_node_pairs": [[11, 11], [12, 12], [13, 13]],
+        "block_ids": [10, 20], "result_block_ids": [10, 20],
+        "boundary_sideset_ids": [100, 200], "result_boundary_sideset_ids": [100, 200],
+        "minimum_scaled_jacobian": 0.43, "result_minimum_scaled_jacobian": 0.43,
+        "refined_mesh_sha256": "2" * 64, "result_refined_mesh_sha256": "2" * 64,
+    }
+    row["sideset_skin_dimension_orientation_namespace_owner_exodus_mesh_identity"] = {
+        "sideset_generation": "sideset-export-151", "skin_sideset_generation": "sideset-export-151",
+        "dimension_sideset_generation": "sideset-export-151", "orientation_sideset_generation": "sideset-export-151",
+        "namespace_sideset_generation": "sideset-export-151", "owner_sideset_generation": "sideset-export-151",
+        "exodus_sideset_generation": "sideset-export-151", "mesh_sideset_generation": "sideset-export-151",
+        "result_sideset_generation": "sideset-export-151", "skin_entity_dimension": 2,
+        "decoded_skin_entity_dimension": 2, "skin_face_ids": [601, 602, 603],
+        "decoded_skin_face_ids": [601, 602, 603], "orientation_signs": [1, 1, -1],
+        "decoded_orientation_signs": [1, 1, -1], "id_namespace": "sideset",
+        "decoded_id_namespace": "sideset", "sideset_id": 120, "decoded_sideset_id": 120,
+        "geometric_owner_surface_ids": [101, 102], "decoded_geometric_owner_surface_ids": [101, 102],
+        "exodus_element_side_pairs": [[701, 1], [702, 3], [703, 5]],
+        "decoded_exodus_element_side_pairs": [[701, 1], [702, 3], [703, 5]],
+        "mesh_sha256": "3" * 64, "decoded_mesh_sha256": "3" * 64,
+        "exodus_sha256": "4" * 64, "decoded_exodus_sha256": "4" * 64,
+    }
+    row["headless_python_interpreter_module_transaction_undo_output_invocation_identity"] = {
+        "invocation_generation": "python-run-151", "interpreter_invocation_generation": "python-run-151",
+        "module_invocation_generation": "python-run-151", "transaction_invocation_generation": "python-run-151",
+        "undo_invocation_generation": "python-run-151", "output_invocation_generation": "python-run-151",
+        "result_invocation_generation": "python-run-151",
+        "interpreter_executable": "C:/Program Files/Coreform Cubit 2026.6/bin/python.exe",
+        "result_interpreter_executable": "C:/Program Files/Coreform Cubit 2026.6/bin/python.exe",
+        "python_version": "3.11.9", "result_python_version": "3.11.9",
+        "cubit_module_version": "2026.6", "result_cubit_module_version": "2026.6",
+        "headless_flags": ["-nographics", "-batch"], "result_headless_flags": ["-nographics", "-batch"],
+        "command_transaction_id": "mesh-export-151", "result_command_transaction_id": "mesh-export-151",
+        "command_log_sha256": "5" * 64, "result_command_log_sha256": "5" * 64,
+        "undo_depth_before": 0, "result_undo_depth_before": 0,
+        "undo_depth_after": 0, "result_undo_depth_after": 0,
+        "output_paths": ["C:/temp/cubit-v28/model.e", "C:/temp/cubit-v28/model.log"],
+        "result_output_paths": ["C:/temp/cubit-v28/model.e", "C:/temp/cubit-v28/model.log"],
+        "output_sha256": ["6" * 64, "7" * 64], "result_output_sha256": ["6" * 64, "7" * 64],
+    }
+    return row
+
+
+def test_v28_positive_sweep_refinement_sideset_python_identity():
+    row = _with_v28_sweep_refinement_sideset_python_identity(summary())
+    assert json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))["status"] == "ok"
+    assert json.loads(cubit_mixed_transition_source_gate(row))["status"] == "ok"
+
+
+def test_v28_public_hex_sweep_spine_frame_twist_interval_source_target_block_quality_mismatch():
+    row = _with_v28_sweep_refinement_sideset_python_identity(summary())
+    row["hex_sweep_spine_frame_twist_interval_surface_block_quality_identity"].update(
+        {"spine_sweep_generation": "spine-sweep-150", "result_frame_method": "frenet",
+         "result_interval_count": 10, "result_source_surface_id": 102, "result_target_surface_id": 101,
+         "result_block_id": 40, "result_scaled_jacobians": [0.71, -0.03, 0.59, 0.54]}
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["spine_sweeps_use_current_frame_twist_intervals_surfaces_block_and_quality"] is False
+
+
+def test_v28_public_local_refinement_parent_child_transition_conformity_block_boundary_export_mismatch():
+    row = _with_v28_sweep_refinement_sideset_python_identity(summary())
+    row["local_refinement_parent_child_transition_conformity_block_boundary_export_identity"].update(
+        {"child_refinement_generation": "local-refine-150", "result_parent_element_ids": [201, 203],
+         "result_child_parent_pairs": [[301, 201], [302, 202], [304, 203]],
+         "result_conformity_node_pairs": [[11, 12], [12, 11], [13, 13]],
+         "result_block_ids": [10, 30], "result_boundary_sideset_ids": [100, 300],
+         "result_minimum_scaled_jacobian": -0.02, "result_refined_mesh_sha256": "9" * 64}
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["local_refinements_use_current_parent_child_transition_conformity_blocks_boundaries_and_export"] is False
+
+
+def test_v28_source_sideset_skin_entity_dimension_orientation_id_namespace_exodus_export_mismatch():
+    row = _with_v28_sweep_refinement_sideset_python_identity(summary())
+    row["sideset_skin_dimension_orientation_namespace_owner_exodus_mesh_identity"].update(
+        {"dimension_sideset_generation": "sideset-export-150", "decoded_skin_entity_dimension": 3,
+         "decoded_orientation_signs": [1, -1, 1], "decoded_id_namespace": "block",
+         "decoded_sideset_id": 20, "decoded_geometric_owner_surface_ids": [101, 103],
+         "decoded_exodus_sha256": "b" * 64}
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["sideset_exports_use_current_skin_dimension_orientation_namespace_owner_exodus_and_mesh"] is False
+
+
+def test_v28_source_python_interpreter_module_version_command_transaction_undo_output_generation_mismatch():
+    row = _with_v28_sweep_refinement_sideset_python_identity(summary())
+    row["headless_python_interpreter_module_transaction_undo_output_invocation_identity"].update(
+        {"interpreter_invocation_generation": "python-run-150",
+         "result_interpreter_executable": "C:/Python311/python.exe", "result_python_version": "3.11.8",
+         "result_cubit_module_version": "2025.12", "result_headless_flags": ["-batch"],
+         "result_command_transaction_id": "mesh-export-150", "result_undo_depth_before": 2,
+         "result_undo_depth_after": 1, "result_output_paths": ["C:/temp/cubit-v27/model.e"],
+         "result_output_sha256": ["d" * 64]}
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["headless_python_runs_use_current_interpreter_module_transaction_undo_outputs_and_invocation"] is False

@@ -8,7 +8,7 @@ import io
 
 
 def test_cubit_selftest_skips_repo_audit_by_default(monkeypatch, tmp_path):
-    from radia_mcp.cubit import server
+    from cubit_mesh_export.mcp import server
 
     (tmp_path / "docs").mkdir()
     monkeypatch.setattr(server, "PROJECT_ROOT", tmp_path)
@@ -40,7 +40,7 @@ def test_gmsh_selftest_skips_repo_audit_by_default(monkeypatch, tmp_path):
 
 
 def test_mesh_selftest_cli_tolerates_closed_stdout(monkeypatch):
-    from radia_mcp.cubit import server as cubit_server
+    from cubit_mesh_export.mcp import server as cubit_server
     from radia_mcp.gmsh import server as gmsh_server
 
     for module in (cubit_server, gmsh_server):
@@ -53,7 +53,7 @@ def test_mesh_selftest_cli_tolerates_closed_stdout(monkeypatch):
 
 
 def test_mesh_status_tools_expose_selftest_and_audit_commands():
-    from radia_mcp.cubit import server as cubit_server
+    from cubit_mesh_export.mcp import server as cubit_server
     from radia_mcp.gmsh import server as gmsh_server
 
     cubit = cubit_server.mcp._tool_manager._tools["cubit_status"].fn()
@@ -68,7 +68,7 @@ def test_mesh_status_tools_expose_selftest_and_audit_commands():
 
 
 def test_mesh_audit_summary_tools_are_machine_readable(monkeypatch, tmp_path):
-    from radia_mcp.cubit import server as cubit_server
+    from cubit_mesh_export.mcp import server as cubit_server
     from radia_mcp.gmsh import server as gmsh_server
 
     examples = tmp_path / "examples"
