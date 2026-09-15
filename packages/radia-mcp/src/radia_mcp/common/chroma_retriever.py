@@ -399,7 +399,14 @@ def _text_readability(s: str) -> float:
     control-char garbage -> very low ratio.  Clean text in ANY script (Latin,
     Japanese, ...) -> high ratio.  Used as the quality gate that triggers OCR.
     """
-    if not s:
+    # CID damage can be dominated by apparently valid CJK letters. A ratio
+    # alone must not wash out explicit corruption. Preserve ordinary PDF/text
+    # layout whitespace; do not classify Japanese itself as unreadable.
+    if not s or any(
+        (ord(c) < 32 and c not in "\t\n\r\f")
+        or 127 <= ord(c) <= 159 or c == "\ufffd"
+        for c in s
+    ) or re.search(r"\(cid:\d+\)", s, re.IGNORECASE):
         return 0.0
     return sum(1 for c in s if c.isalnum() or c.isspace()) / len(s)
 

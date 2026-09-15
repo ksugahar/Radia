@@ -41,6 +41,7 @@ def main() -> int:
         shutil.copytree(source / "tests", root / "tests",
                         ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
         shutil.copy2(source / "pyproject.toml", root / "pyproject.toml")
+        shutil.copy2(source / "README.md", root / "README.md")
         env = os.environ.copy()
         env.pop("RADIA_MCP_CI_SELECTION_JSON", None)
         env["PYTHONPATH"] = str(root / "src")

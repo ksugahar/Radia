@@ -3327,7 +3327,13 @@ See also differential_forms_maxwell('twisted').
 
 def get_kelvin_documentation(topic: str = "all") -> str:
     """Return Kelvin transformation documentation by topic."""
+    if topic.lower().strip() == "gate_lifecycle":
+        import json
+        from radia_mcp.radia_ngsolve.field_profile_gate import FIELD_ENERGY_GATE_LIFECYCLE
+
+        return json.dumps(FIELD_ENERGY_GATE_LIFECYCLE, sort_keys=True)
     topics = {
+        "gate_lifecycle": "The v5-v11 field/energy gates are active complementary contracts, not successive replacements. Query gate_lifecycle for their machine-readable roles and deprecation state. This is not numerical solver acceptance.",
         "overview": KELVIN_OVERVIEW,
         "h_formulation": KELVIN_H_FORMULATION,
         "a_formulation": KELVIN_A_FORMULATION,

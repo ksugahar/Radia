@@ -3453,6 +3453,8 @@ def get_bibliography_index(query: str = "") -> str:
                scanned PDFs.  Otherwise, case-insensitive substring
                match in title + authors + abstract + filename.
     """
+    from radia_mcp.common.chroma_retriever import _text_readability
+
     q = query.strip().lower()
     if q == "__scanned__":
         sel = [e for e in CATALOG_ENTRIES if e.get("is_scanned")]
@@ -3481,6 +3483,12 @@ def get_bibliography_index(query: str = "") -> str:
         scanned = e.get("is_scanned", False)
         abs_text = e.get("abstract_excerpt", "")
         lines.append(f"### {fn}")
+        if any(value and _text_readability(value) == 0.0
+               for value in (title, a, abs_text)):
+            lines.append("**Text quality**: extraction damaged; title, authors and abstract withheld. Re-OCR and verify the source before citation.")
+            lines.append(f"**Pages**: {pages}")
+            lines.append("")
+            continue
         lines.append(f"**Title**: {title}")
         if a:
             lines.append(f"**Authors**: {a[:200]}")

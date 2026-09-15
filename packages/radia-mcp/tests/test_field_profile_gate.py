@@ -13,6 +13,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 from radia_mcp.radia_ngsolve.field_profile_gate import (
+    FIELD_ENERGY_GATE_LIFECYCLE,
     build_constitutive_comparison_candidate,
     controlled_uniform_field_constitutive_sweep_gate,
     dual_formulation_symmetric_field_profile_gate,
@@ -29,6 +30,19 @@ from radia_mcp.radia_ngsolve.field_profile_gate import (
     nonlinear_magnetic_refinement_energy_gate,
     nonlinear_magnetic_spatial_evidence_gate,
 )
+
+
+def test_gate_lifecycle_is_complete_and_available_through_kelvin_manual():
+    from radia_mcp.radia_ngsolve import field_profile_gate as gates
+    from radia_mcp.radia_ngsolve.knowledge.kelvin import get_kelvin_documentation
+
+    manifest = json.loads(get_kelvin_documentation("gate_lifecycle"))
+    assert manifest == FIELD_ENERGY_GATE_LIFECYCLE
+    assert manifest["status"] == "active"
+    assert manifest["relationship"] == "complementary-not-successive"
+    assert manifest["deprecated"] == {}
+    actual = {name for name in vars(gates) if name.rsplit("_v", 1)[-1].isdigit() and callable(getattr(gates, name))}
+    assert set(manifest["contracts"]) == actual
 from radia_mcp.radia_ngsolve.server import (
     build_constitutive_comparison_candidate as mcp_build_comparison_candidate,
     controlled_uniform_field_constitutive_sweep_gate as mcp_controlled_sweep_gate,
