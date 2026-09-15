@@ -15,7 +15,7 @@ pytest.importorskip("gmsh")
 
 from cubit_mesh_export.mcp import server
 from cubit_mesh_export.mcp.stl_inspect import inspect_stl
-from cae_mcp_core.mesh.msh_inspect import mesh_total_volume
+from cubit_mesh_export.mcp._support.mesh_quality import mesh_total_volume
 
 
 def _call(fn, **kw):

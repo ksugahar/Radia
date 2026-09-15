@@ -18,7 +18,7 @@ import pytest
 
 pytest.importorskip("gmsh")
 
-from cae_mcp_core.mesh.msh_inspect import mesh_quality
+from radia_mcp.gmsh.msh_inspect import mesh_quality
 
 
 def _write_unit_cube_tet_msh(path: Path) -> None:

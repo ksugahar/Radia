@@ -38,7 +38,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from cae_mcp_core.mesh._gmsh_subprocess import gmsh_available
+from radia_mcp.gmsh._gmsh_subprocess import gmsh_available
 
 _RS = "\x1e"  # response-line prefix (record separator)
 

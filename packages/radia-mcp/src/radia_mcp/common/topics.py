@@ -111,7 +111,7 @@ def register_topics_tool(
     # Dispatcher servers historically register topics after status. Apply the
     # same fleet contract immediately so registration order cannot leave this
     # late tool without annotations, title, metadata, or an output schema.
-    from cae_mcp_core.common.mcp_contract import apply_tool_contract
+    from radia_mcp.common.mcp_contract import apply_tool_contract
 
     try:
         version = importlib.metadata.version("radia-mcp")

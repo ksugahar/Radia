@@ -2505,7 +2505,7 @@ def main():
     sub = p.add_subparsers(dest="cmd", required=True)
     dual = sub.add_parser('cubit-dual', help='independent cubit-mesh-export LAB/100 release gate')
     dual.add_argument('--action', choices=('preflight', 'deploy', 'done'), required=True)
-    for option in ('wheel', 'core-wheel', 'source-sha', 'source-root-lab', 'source-root-100',
+    for option in ('wheel', 'source-sha', 'source-root-lab', 'source-root-100',
                    'evidence-lab', 'evidence-100'):
         dual.add_argument('--' + option, required=True)
 

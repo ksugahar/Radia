@@ -23,10 +23,13 @@ mcp-server-cubit --selftest         # lightweight self-test
 ```
 
 This server and the Cubit Python API/reference belong to `cubit_mesh_export.mcp`.
-The exporter includes MCP by default, using the independent `cae-mcp-core`
-foundation. Neither `radia` nor `radia-mcp` is required. Replace old client
+The exporter includes MCP and its private runtime support by default. Neither `radia` nor `radia-mcp` is required. Replace old client
 module commands with `python -m cubit_mesh_export.mcp.server`; there is no
 `radia_mcp.cubit` compatibility module. Use the selected installation's Python.
+
+Cubit failure logs and documentation caches use `CUBIT_MCP_STATE_DIR`, or the
+platform's `cubit-mesh-export` state directory by default, independently of Radia.
+Existing Radia state is not deleted or migrated automatically.
 
 Electromagnetic modeling helpers use neutral domain names and explicit
 Cubit or build123d backends. Reference commercial-solver brands do not belong
@@ -214,7 +217,7 @@ are separate workflows outside this server.
 ## Cross-server API compatibility (cubit ↔ build123d ↔ external CAD)
 
 `mcp-server-cubit` and `mcp-server-build123d` share one hardening layer
-(`cae_mcp_core.common.server_hardening`: annotation presets, error-kind
+(`cubit_mesh_export.mcp._support.server_hardening`: annotation presets, error-kind
 contract, gate hiding, all-calls JSONL log) and one **probe contract**:
 
 | Concept | build123d (CAD side) | Cubit (mesh side) | History-based CAD (e.g. CST) |
@@ -228,7 +231,7 @@ Both `entities` probes emit the SAME core keys per body —
 `{id, centroid, bbox_min, bbox_max, extent, volume}` (faces:
 `{id, center, bbox_min, bbox_max, extent, area}`) — locked by
 `PROBE_SOLID_CORE_KEYS` / `PROBE_FACE_CORE_KEYS` in
-`cae_mcp_core.common.server_hardening` and the
+`cubit_mesh_export.mcp._support.server_hardening` and the
 `test_b3d_cubit_probe_compat.py` contract test, so an agent can author a
 labeled STEP, mesh it, and compare per-body volumes/centroids directly
 (verified end-to-end: identical to 2e-16 relative on a 2-solid

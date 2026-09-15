@@ -3,7 +3,7 @@
 Promoted into the validation lane on 2026-08-06. One STEP per geometry
 (lab `build123d` helpers), meshed by netgen (tet) and the Cubit
 batch daemon (tet + hex where sweepable), all judged by ONE referee:
-gmsh **minSICN** via `cae_mcp_core.mesh.msh_inspect.mesh_quality` on
+gmsh **minSICN** via `radia_mcp.gmsh.msh_inspect.mesh_quality` on
 `.msh v4.1`. First-order elements throughout (shape quality is a
 corner-geometry property — 2026-08-06 decision).
 

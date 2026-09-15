@@ -29,7 +29,7 @@ from pathlib import Path
 from build123d import Sphere, export_step
 from radia_mcp.build123d.archetypes import c_core
 from cubit_mesh_export.mcp.server import _netgen_mesh_to_msh, _run_batch
-from cae_mcp_core.mesh.msh_inspect import mesh_quality
+from radia_mcp.gmsh.msh_inspect import mesh_quality
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(_HERE, "artifacts")

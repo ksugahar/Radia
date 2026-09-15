@@ -2,9 +2,8 @@
 fail loudly BEFORE any Sculpt / Cubit process is spawned."""
 import json
 
-import pytest
-
-np = pytest.importorskip("numpy")
+import netCDF4 as nc
+import numpy as np
 
 from cubit_mesh_export.mcp.server import cubit_vfrac_to_vol  # noqa: E402
 
@@ -17,7 +16,6 @@ def test_missing_file_is_an_input_error(tmp_path):
 
 
 def test_wrong_element_variables_are_rejected(tmp_path):
-    nc = pytest.importorskip("netCDF4")
     out = tmp_path / "bad.e.1.0"
     ds = nc.Dataset(str(out), "w", format="NETCDF3_64BIT_OFFSET")
     try:

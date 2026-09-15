@@ -45,7 +45,7 @@ def test_meta_health_caches_repeated_probe_in_process():
 
 def test_status_optional_dep_probe_avoids_runtime_import(monkeypatch):
     """Status tools should use import metadata, not import heavy deps."""
-    from cae_mcp_core.common import status as status_mod
+    from radia_mcp.common import status as status_mod
 
     status_mod._probe_dep.cache_clear()
 

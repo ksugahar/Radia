@@ -20,7 +20,6 @@ authors = [{name = "Kengo Sugahara"}]
 # the full radia wheel.
 dependencies = [
     "mcp>=1.20.0,<2",
-    "cae-mcp-core>=0.1.0,<0.2",
 ]
 
 [project.optional-dependencies]
