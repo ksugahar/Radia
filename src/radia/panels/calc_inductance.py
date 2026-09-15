@@ -655,6 +655,31 @@ def _delta_L_telegen_phiB_from_surface_J(
 # ======================================================================
 # Workpiece weak-coupled BEM-SIBC block (shared by both coil solvers)
 # ======================================================================
+def _resolve_weak_loop_mode(args, wp_genus, basis_order):
+    """Refuse unrepresented handle currents before assembly or qsurf export."""
+    mode = getattr(args, "wp_loop_dof", "auto")
+    if mode not in ("auto", "on"):
+        raise ValueError("wp-loop-dof must be auto or on")
+    if wp_genus == 0 and mode == "auto":
+        return mode, False, "genus-0 needs no loop DOF"
+    reason = None
+    if wp_genus != 1:
+        reason = f"loop DOF requires genus-1 (got genus-{wp_genus})"
+    elif args.impedance_model != "sibc":
+        reason = "ESIM and the circulating-current loop DOF are not coupled"
+    elif args.wp_bem_backend != "intree-dense":
+        reason = "loop DOF requires the intree-dense backend, not HACApK"
+    elif basis_order != 1:
+        reason = "loop DOF requires the P1 nodal path"
+    if reason:
+        raise ValueError(
+            f"Unsupported weak-coupled absolute heating: {reason}. "
+            "Refusing an uncorrected P_wp or qsurf. No model/backend fallback "
+            "is performed. The implemented loop path is genus-1, linear SIBC, "
+            "intree-dense, P1; changing to it changes the requested model and "
+            "requires separate validation.")
+    return mode, True, None
+
 def _wp_genus_check(wp_mesh, tag="BEM"):
     """Euler characteristic / genus of the extracted workpiece surface.
 
@@ -937,35 +962,10 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     # Resolve the loop-DOF mode (see --wp-loop-dof).  "on" was already
     # early-guarded in run_inductance and _apply_wp_loop_dof enforces
     # genus-1; "auto" applies exactly when the supported mathematical and
-    # solver prerequisites hold and otherwise records why it skipped.
-    wp_loop_req = getattr(args, "wp_loop_dof", "auto")
-    wp_loop_skip = None
-    if wp_loop_req == "on":
-        wp_loop_apply = True
-    elif wp_genus != 1:
-        wp_loop_apply = False
-        wp_loop_skip = (f"genus-{wp_genus} surface (the loop DOF applies "
-                        f"to genus-1 only; genus-0 needs none)")
-    elif args.impedance_model != "sibc":
-        wp_loop_apply = False
-        wp_loop_skip = ("ESIM impedance model (the Karl loop is not "
-                        "integrated with the loop DOF; pass "
-                        "--impedance-model sibc for the loop-extended "
-                        "solve)")
-    elif args.wp_bem_backend != "intree-dense":
-        wp_loop_apply = False
-        wp_loop_skip = ("the HACApK backend exposes no dense SL/DL for "
-                        "the loop column (pass --wp-bem-backend "
-                        "intree-dense)")
-    elif basis_order != 1:
-        wp_loop_apply = False
-        wp_loop_skip = "P1 nodal path only (pass --h1-order 1)"
-    else:
-        wp_loop_apply = True
-    if wp_loop_req == "auto" and wp_loop_skip is not None and wp_genus >= 1:
-        progress("BEM",
-            f"loop-DOF auto: SKIPPED on a genus-{wp_genus} workpiece -- "
-            f"{wp_loop_skip}.  The genus P_wp_caveat applies.")
+    # solver prerequisites hold; unsupported handle-current paths fail
+    # before assembly instead of emitting uncorrected absolute heating.
+    wp_loop_req, wp_loop_apply, wp_loop_skip = _resolve_weak_loop_mode(
+        args, wp_genus, basis_order)
 
     # 2. ESIM prerequisite check (Karl iteration needs a BH curve).
     if args.impedance_model == "esim" and not args.bh_file:
