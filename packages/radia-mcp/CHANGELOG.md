@@ -7,6 +7,17 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-09-16
+
+- Correct public package descriptions and installation guidance after the Cubit
+  split; declare the optional Cubit handoff dependency explicitly.
+- Reject control-character, replacement-character and unresolved CID damage
+  even in otherwise alphanumeric/CJK PDF text; preserve normal layout whitespace.
+- Include every server's protocol check when the shared hot-reload runtime changes,
+  including symbol-scoped CI selection.
+- Withhold damaged PEEC catalog text pending re-OCR; expose the complementary
+  v5-v11 gate lifecycle through the Kelvin manual's `gate_lifecycle` topic.
+
 ## [1.5.0] - 2026-09-16
 
 - Publication preparation: reject stale Cubit/retired foundation files and the retired

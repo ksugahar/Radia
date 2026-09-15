@@ -8,6 +8,26 @@ import json
 from typing import Any
 
 
+# Version suffixes identify distinct evidence contracts, not a replacement
+# chain. Keep these independently useful checks until a reviewed migration
+# explicitly marks one deprecated and names its successor.
+FIELD_ENERGY_GATE_LIFECYCLE = {
+    "schema": "radia-mcp.field-energy-gate-lifecycle.v1",
+    "contracts": {
+        "nonlinear_field_energy_identity_gate_v5": "geometry-and-constitutive-identity",
+        "nonlinear_field_energy_artifact_contract_gate_v6": "artifact-envelope",
+        "nonlinear_field_energy_lineage_gate_v7": "source-lineage",
+        "nonlinear_field_energy_physical_admissibility_gate_v8": "physical-admissibility",
+        "nonlinear_field_energy_observable_comparison_gate_v9": "scalar-observable-comparison",
+        "nonlinear_vector_observable_comparison_gate_v10": "vector-and-frame-comparison",
+        "nonlinear_live_execution_identity_gate_v11": "live-execution-identity",
+    },
+    "status": "active",
+    "relationship": "complementary-not-successive",
+    "deprecated": {},
+}
+
+
 def build_constitutive_comparison_candidate(
     bh_table: list[list[float]],
     h_values: list[float],
