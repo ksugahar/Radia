@@ -261,19 +261,28 @@ class LoftStraightSegment(CoilSegment):
 	def to_occ_shape(self, index=0):
 		"""Loft OCC shape from profile_start at s=0 to profile_end at s=1.
 
-		Stage 3a implementation supports only RectProfile -> RectProfile
-		and emits a ThruSections loft between the two rectangle wires.
+		Supports matching rectangular or circular profiles and emits a
+		ThruSections loft between the two centered section wires.
 		The resulting Solid is usable for STEP export and visual
 		inspection.
 		"""
 		from netgen.occ import (WorkPlane, Axes, Pnt, Axis, X, Y, Z, Vec,
 		                         ThruSections)
-		from radia.coil_profile import RectProfile
-		if not (isinstance(self.profile_start, RectProfile)
-		        and isinstance(self.profile_end, RectProfile)):
+		from radia.coil_profile import RectProfile, CircleProfile
+		if (type(self.profile_start) is not type(self.profile_end)
+		    or type(self.profile_start) not in (RectProfile, CircleProfile)):
 			raise NotImplementedError(
-				"LoftStraightSegment.to_occ_shape is only implemented for "
-				"RectProfile -> RectProfile (Stage 3a).")
+				"Straight loft CAD requires matching rectangular or circular profiles.")
+		if (not np.isfinite(self.length) or self.length <= 0
+		    or any(not np.all(np.isfinite(p.bounding_wh())) or min(p.bounding_wh()) <= 0
+		           for p in (self.profile_start, self.profile_end))):
+			raise ValueError("Straight loft CAD requires positive finite length and dimensions.")
+		if type(self.profile_start) is CircleProfile:
+			wires = [WorkPlane(Axes(Pnt(0, y, 0), n=Y, h=X)).Circle(p.r).Wire()
+			         for y, p in [(0, self.profile_start), (self.length, self.profile_end)]]
+			shape = self.apply_pose_occ(ThruSections(wires, solid=True), self.start_pos)
+			shape.name = "coil_loft_" + str(index)
+			return shape
 		w0, h0 = self.profile_start.w, self.profile_start.h
 		w1, h1 = self.profile_end.w, self.profile_end.h
 		# ThruSections requires Wires (boundary curves), not Faces.
@@ -366,18 +375,18 @@ class LoftArcSegment(CoilSegment):
 		return self.profile_start.interpolate(self.profile_end, s)
 
 	def to_occ_shape(self, index=0):
-		"""Interpolated rectangular arc loft; refine n_sub for CAD convergence.
+		"""Interpolated rectangular/circular arc loft; refine n_sub for CAD convergence.
 
 		This section loft approximates the curved side surfaces, not an
 		exact analytic sweep. Closed and negative-angle bends are unsupported.
 		"""
 		from netgen.occ import WorkPlane, Axes, Pnt, Vec, ThruSections
-		from radia.coil_profile import RectProfile
-		if not all(type(p) is RectProfile for p in
-		           (self.profile_start, self.profile_end)):
-			raise NotImplementedError("Arc loft CAD requires rectangular profiles.")
-		dims = np.array([self.profile_start.w, self.profile_start.h,
-		                 self.profile_end.w, self.profile_end.h])
+		from radia.coil_profile import RectProfile, CircleProfile
+		if (type(self.profile_start) is not type(self.profile_end)
+		    or type(self.profile_start) not in (RectProfile, CircleProfile)):
+			raise NotImplementedError("Arc loft CAD requires matching rectangular or circular profiles.")
+		dims = np.array([*self.profile_start.bounding_wh(),
+		                 *self.profile_end.bounding_wh()])
 		if (not np.all(np.isfinite(dims)) or np.any(dims <= 0)
 		    or not np.isfinite(self.radius)
 		    or self.radius <= max(dims[0], dims[2]) / 2
@@ -391,8 +400,11 @@ class LoftArcSegment(CoilSegment):
 			profile = self.profile_at(s)
 			axes = Axes(Pnt(self.radius * (c - 1), self.radius * sn, 0),
 			            n=Vec(-sn, c, 0), h=Vec(c, sn, 0))
-			wires.append(WorkPlane(axes).MoveTo(-profile.w / 2, -profile.h / 2)
-			             .Rectangle(profile.w, profile.h).Wire())
+			if type(profile) is CircleProfile:
+				wires.append(WorkPlane(axes).Circle(profile.r).Wire())
+			else:
+				wires.append(WorkPlane(axes).MoveTo(-profile.w / 2, -profile.h / 2)
+				             .Rectangle(profile.w, profile.h).Wire())
 		shape = ThruSections(wires, solid=True)
 		shape = self.apply_pose_occ(shape, self.start_pos)
 		shape.name = "coil_arc_loft_" + str(index)
