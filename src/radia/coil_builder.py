@@ -278,8 +278,10 @@ class LoftStraightSegment(CoilSegment):
 		w1, h1 = self.profile_end.w, self.profile_end.h
 		# ThruSections requires Wires (boundary curves), not Faces.
 		wire0 = WorkPlane(Axes(Pnt(0, 0, 0), n=Y, h=X)) \
+		        .MoveTo(-w0 / 2, -h0 / 2) \
 		        .Rectangle(w0, h0).Wire()
 		wire1 = WorkPlane(Axes(Pnt(0, self.length, 0), n=Y, h=X)) \
+		        .MoveTo(-w1 / 2, -h1 / 2) \
 		        .Rectangle(w1, h1).Wire()
 		shape = ThruSections([wire0, wire1], solid=True)
 		shape = self.apply_pose_occ(shape, self.start_pos)
