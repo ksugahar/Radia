@@ -49,12 +49,20 @@ def _pwsh(command: str) -> subprocess.CompletedProcess[str]:
             "-ExecutionPolicy",
             "Bypass",
             "-Command",
-            command,
+            "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); "
+            + command,
         ],
         text=True,
+        encoding="utf-8",
         capture_output=True,
         check=False,
     )
+
+
+def test_pwsh_output_decodes_unicode_independently_of_windows_locale():
+    result = _pwsh("[Console]::WriteLine([char]0x8b66)")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == chr(0x8b66)
 
 
 def test_dot_source_does_not_change_caller_strict_mode_or_emit_values():
