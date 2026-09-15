@@ -21,7 +21,7 @@ import time
 from pathlib import Path
 
 SCHEMA = "radia.cubit-toolbar-smoke.v1"
-PROBE_SCHEMA = "radia.cubit-toolbar-probe.v1"
+PROBE_SCHEMA = "cubit-mesh-export.toolbar-probe.v2"
 EXPECTED_ACTIONS = [
     "Netgen Vol (.vol)",
     "GMSH (.msh)",
@@ -132,8 +132,8 @@ def validate_probe_result(payload: dict) -> list[str]:
                 issues.append(f"toolbar action is not enabled: {name}")
     if payload.get("toolbar_menu_has_radia_export") is not True:
         issues.append("Radia Export is absent from Cubit's toolbar menu")
-    if payload.get("unsupported_top_level_menu_present") is not False:
-        issues.append("unsupported top-level Radia Export QMenu is present")
+    if payload.get("toolbar_owner") != "WorkflowToolbar":
+        issues.append("toolbar is not owned by Coreform WorkflowToolbar")
     if payload.get("ok") is not True:
         issues.append("Cubit-side display probe did not report success")
     return list(dict.fromkeys(issues))
@@ -148,7 +148,7 @@ def _write_bootstrap(path: Path, probe_path: Path) -> None:
     source = (
         "#!python\n"
         f"exec(compile(open({probe!r}, encoding='utf-8').read(), "
-        f"{probe!r}, 'exec'))\n"
+        f"{probe!r}, 'exec'), {{'__name__': '__main__'}})\n"
     )
     path.write_text(source, encoding="utf-8")
 
@@ -284,7 +284,7 @@ def run_smoke_test(*, restarts: int = 2, timeout: float = 45.0,
         print(
             "[OK] Radia Export is visible and complete on every cold start: "
             "one toolbar, six visible/enabled actions, persistent toolbar-menu "
-            "entry, no unsupported top-level QMenu."
+            "entry, Coreform-owned WorkflowToolbar."
         )
         if not keep and not report_json:
             shutil.rmtree(root, ignore_errors=True)
