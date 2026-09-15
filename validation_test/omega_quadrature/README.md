@@ -4,9 +4,12 @@ Run this heavy validation on mdx or hibino, not as part of fast CI. This lane
 does not grant #6 or three-engine field acceptance. No p=4 run is needed.
 It uses the production mixed solver, requests the assembled system explicitly,
 and solves again for every assembly bonus and response order. The source Hodge
-projection is constructed once and held fixed across the sweep.
+projection is reconstructed for every bonus with that same `bonus_intorder`;
+the saved `source_hodge_by_bonus` and per-row `source_hodge` fields make this
+alignment auditable.
 
-`bonus_intorder` controls volume stiffness, source loads AND interface terms.
+`bonus_intorder` controls the Hodge projection, volume stiffness, source loads
+AND interface terms.
 This is not an isolated load-only intervention. The independent term audit
 splits air, iron and Kelvin loads, reconstructs the default assembled primal J,
 then contracts and integrates with an explicit fixed volume quadrature rule.
@@ -22,6 +25,17 @@ The row gates require every requested audit to pass; while an audit is pending,
 (highest-order) audit. This option cannot be combined with `--algebraic-only`.
 Even a zero process exit code means diagnostic gates passed, not quadrature
 convergence or three-engine acceptance. The top-level acceptance stays HOLD.
+
+For the formal ESRF6 nominal order-2 lane, `assess_plateau.py` predeclares the
+high-rule bonus 8-to-12 gate: field relative RMS <= 1e-3, maximum point change
+scaled by the high-rule global field RMS <= 5e-3, Hodge harmonic-norm change
+<= 1e-4, and free/block-action residuals <= 1e-8. The RMS limit is thirty
+times tighter than the separate 3% three-formulation gate. Passing closes only
+this model's matched Hodge/assembly high-rule plateau; it does not promote
+BDM2, IMA, evaluation-energy bounds, or other applications.
+If 8-to-12 misses any threshold, keep every threshold fixed and rerun the next
+adjacent high-rule pair (12-to-16 via `--low-bonus 12 --high-bonus 16`); never
+relax a limit after observing the result.
 
 Example (paths refer to the compute host):
 

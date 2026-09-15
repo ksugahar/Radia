@@ -1,0 +1,39 @@
+{
+  "schema": "radia.validation.omega-quadrature-plateau.v1",
+  "passed": true,
+  "scope": "ESRF6 nominal order-2 mixed Omega; not BDM2/IMA/general acceptance",
+  "bonuses": [
+    12,
+    16
+  ],
+  "thresholds": {
+    "field_relative_rms": 0.001,
+    "maximum_scaled_change": 0.005,
+    "harmonic_relative_change": 0.0001,
+    "residual": 1e-08
+  },
+  "observed": {
+    "field_relative_rms": 2.8595794035579922e-05,
+    "maximum_scaled_change": 5.160799062392484e-05,
+    "harmonic_relative_change": 9.535608928463889e-05
+  },
+  "checks": {
+    "completed": true,
+    "source_unchanged": true,
+    "mesh_unchanged": true,
+    "wheel_mode": true,
+    "wheel_archive_hash_present": true,
+    "hodge_bonus_12": true,
+    "free_residual_12": true,
+    "block_action_12": true,
+    "finite_field_12": true,
+    "hodge_bonus_16": true,
+    "free_residual_16": true,
+    "block_action_16": true,
+    "finite_field_16": true,
+    "same_samples": true,
+    "field_relative_rms": true,
+    "maximum_scaled_change": true,
+    "harmonic_relative_change": true
+  }
+}
