@@ -173,11 +173,11 @@ void radTArcCur::B_compElliptic(radTField* FieldPtr)
 	double IntForPhi = 0.0;  // Magnetic scalar potential [A]
 
 	if (is_full_circle) {
-		// Full circular coil: use direct elliptic integral formulas
-		// Integrate over the rectangular cross-section
+		// A and scalar potential retain elliptic-loop section quadrature.
+		// B/H is evaluated separately below with analytic section integration.
 
 		// Integration over cross-section using Gaussian quadrature (4x4)
-		// 4-point Gauss-Legendre quadrature gives excellent accuracy for thick coils
+		// These potential paths require their own section-convergence check.
 		// Reference: Abramowitz & Stegun, Table 25.4
 		static const int GAUSS_ORDER = 4;
 		static const double gp[] = {
@@ -212,20 +212,8 @@ void radTArcCur::B_compElliptic(radTField* FieldPtr)
 				// dI = J_azim [A/m^2] * w_total [m^2] = J_azim * w_total [A]
 				double dI = J_azim * w_total;
 
-				// Compute B-field from this circular loop using elliptic integrals
-				double dBR = 0.0, dBZ = 0.0;
-				RadElliptic::CircularLoopBField(r, z, r_coil, z_coil, dI, dBR, dBZ);
-
-				// BR and BZ are in cylindrical coordinates
-				// Convert to Cartesian at observation point
-				double cos_phi = cos(phi_obs);
-				double sin_phi = sin(phi_obs);
-
-				if (FieldPtr->FieldKey.B_ || FieldPtr->FieldKey.H_) {
-					IntForBx += dBR * cos_phi;
-					IntForBy += dBR * sin_phi;
-					IntForBz += dBZ;
-				}
+				const double cos_phi = cos(phi_obs);
+				const double sin_phi = sin(phi_obs);
 
 				// Vector potential
 				if (FieldPtr->FieldKey.A_) {
@@ -242,6 +230,14 @@ void radTArcCur::B_compElliptic(radTField* FieldPtr)
 					IntForPhi += dI * dOmega / (4.0 * Pi);
 				}
 			}
+		}
+		if (FieldPtr->FieldKey.B_ || FieldPtr->FieldKey.H_) {
+			const auto b = (r < 1.e-5*R_min)
+				? RadArcSection::FullCircleAxis(r,z,R_min,R_max,Height)
+				: RadArcSection::Field(r,z,R_min,R_max,Height,0.,TwoPi);
+			IntForBx = ConstForJ*J_azim*b[0]*cos(phi_obs);
+			IntForBy = ConstForJ*J_azim*b[0]*sin(phi_obs);
+			IntForBz = ConstForJ*J_azim*b[2];
 		}
 	} else {
 		const double r_mid = 0.5 * (R_max + R_min);
