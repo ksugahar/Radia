@@ -31,10 +31,10 @@ import sys
 
 from mcp.server.fastmcp import FastMCP
 
-from ..common import register_status_tool, register_topics_tool
-from ..common.tool_group import CoarseToolRegistry
+from cae_mcp_core.common import register_status_tool, register_topics_tool
+from cae_mcp_core.common.tool_group import CoarseToolRegistry
 from .knowledge import TOPICS, get_knowledge
-from ..common.lazy_call import lazy_callable
+from cae_mcp_core.common.lazy_call import lazy_callable
 _rotating_conductor_periodic_settling_gate = lazy_callable(".periodic_settling_gate", "rotating_conductor_periodic_settling_gate", __package__)
 _team28_cycle_averaged_motion_gate = lazy_callable(".team28_dynamic_gate", "team28_cycle_averaged_motion_gate", __package__)
 

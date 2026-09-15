@@ -6,7 +6,7 @@ path (literature_build_vector_index) uses chunk_garble_fraction to FLAG such
 books for re-OCR instead of silently storing garbage. Portable: no NAS, no OCR,
 no embedding model -- pure string heuristic.
 """
-from radia_mcp.common.chroma_retriever import (
+from cae_mcp_core.common.chroma_retriever import (
     chunk_garble_fraction, _text_readability)
 
 

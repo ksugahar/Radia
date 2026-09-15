@@ -45,7 +45,7 @@ def test_meta_health_caches_repeated_probe_in_process():
 
 def test_status_optional_dep_probe_avoids_runtime_import(monkeypatch):
     """Status tools should use import metadata, not import heavy deps."""
-    from radia_mcp.common import status as status_mod
+    from cae_mcp_core.common import status as status_mod
 
     status_mod._probe_dep.cache_clear()
 
@@ -204,6 +204,11 @@ def test_meta_related_exposes_external_optuna_mcp_without_catalog_import():
 def test_meta_related_mesh_chain_points_to_radia_ngsolve_registry():
     """CAD/mesh servers should point agents toward radia-ngsolve validation."""
     from radia_mcp.meta.server import radia_mcp_related
+    from radia_mcp.meta.catalog import CATALOG, EXTERNAL_PACKAGES
+
+    assert "cubit" not in CATALOG
+    assert EXTERNAL_PACKAGES["cubit"]["pypi"] == "cubit-mesh-export"
+    assert EXTERNAL_PACKAGES["cubit"]["subpackage"] == "cubit_mesh_export.mcp"
 
     for name in ("cubit", "build123d", "gmsh"):
         related = radia_mcp_related(name)
@@ -243,11 +248,13 @@ def test_all_related_links_are_bidirectional():
     """
     from radia_mcp.meta import catalog
     adj = {n: set(info.get("related", []))
-           for n, info in catalog.CATALOG.items()}
+           for n, info in (catalog.CATALOG | catalog.EXTERNAL_PACKAGES).items()}
     asymmetric = []
     for a, bs in adj.items():
+        if a not in catalog.CATALOG:
+            continue  # External packages do not own the local catalog graph.
         for b in bs:
-            if b not in catalog.CATALOG:
+            if b not in adj:
                 asymmetric.append(f"{a} -> {b} (target missing from catalog)")
             elif a not in adj.get(b, set()):
                 asymmetric.append(

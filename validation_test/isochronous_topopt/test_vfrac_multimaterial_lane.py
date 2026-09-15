@@ -37,7 +37,7 @@ import ngsolve as ngs  # noqa: E402
 from radia.topopt_cad import (  # noqa: E402
     nodal_from_element_density, write_vfrac_exodus)
 
-pytest.importorskip("radia_mcp.cubit.server")
+pytest.importorskip("cubit_mesh_export.mcp.server")
 
 R_CORE, R_BODY = 0.30, 0.60
 
@@ -62,7 +62,7 @@ def artifacts(tmp_path_factory):
     vf = write_vfrac_exodus(fine, {"core": core, "shell": shell},
                             root / "two", level=0.5, cells=24, supersample=4)
 
-    from radia_mcp.cubit.server import cubit_vfrac_to_vol
+    from cubit_mesh_export.mcp.server import cubit_vfrac_to_vol
     report = json.loads(cubit_vfrac_to_vol(
         vf["path"], out_vol=str(root / "two.vol"),
         out_msh=str(root / "two.msh"), material_names="core,shell"))

@@ -7,6 +7,19 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.5.0] - release candidate (not yet published)
+
+- Publication preparation: reject stale Cubit/shared-core files and the retired
+  Cubit entry point in the Radia MCP wheel. Flag retired client launchers for
+  owner-managed migration; preserve external Cubit settings and permissions.
+- Mixed total/reduced omega remains in Radia MCP's analysis guidance, backed
+  by Radia's Kelvin linear/Picard APIs. Existing C-type linear/nonlinear evidence
+  is historical; FFAG model acceptance remains pending and is not a release claim.
+- Move Cubit MCP into `cubit-mesh-export` and shared runtime helpers into
+  `cae-mcp-core`; remove old Python module paths and the Cubit console script
+  from this distribution. Update clients to `cubit_mesh_export.mcp.server`.
+  Keep Radia-to-Cubit topology/STEP integration as an optional consumer.
+
 - Cubit: honor `RADIA_MCP_TEMP` for both headless batch and native journal
   scratch paths on all platforms; retain refusal to overwrite existing journals.
 - Documentation: remove stale fixed server counts, limit alias compatibility

@@ -319,7 +319,12 @@ def test_distribution_ci_packages_the_exact_candidate_binaries():
     assert "native_payloads.json" in workflow
     assert "download_release_asset.py" in workflow
     assert "Get-FileHash" in workflow
-    assert "pip install setuptools pytest numpy" in workflow
+    # PowerShell continuation and argument order do not define the contract.
+    install_commands = [line.split("pip install", 1)[1].split()
+                        for line in workflow.replace("`\n", " ").splitlines()
+                        if "python -m pip install " in line]
+    required_test_dependencies = {"setuptools", "pytest", "numpy", "psutil"}
+    assert any(required_test_dependencies <= set(args) for args in install_commands)
     assert "_native_provenance.py" in workflow
     assert "verify --repo-root . --package-dir $destination" in workflow
     assert '"netgen-mesher==6.2.2606"' in workflow
