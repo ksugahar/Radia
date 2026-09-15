@@ -1,5 +1,6 @@
 """Native conversion must not omit or replace unsupported conductor geometry."""
 import pytest
+import numpy as np
 import radia as rad
 from radia.coil_builder import CoilBuilder
 from radia.coil_profile import RectProfile, CircleProfile
@@ -53,3 +54,33 @@ def test_matching_explicit_rectangle_preserves_native_field():
     for obj_a, obj_b in zip(a, b):
         assert rad.Fld(obj_a, 'b', [.1, .1, .1]) == pytest.approx(
             rad.Fld(obj_b, 'b', [.1, .1, .1]), rel=1e-13, abs=1e-15)
+
+
+@pytest.mark.parametrize('fault', ['length', 'radius', 'angle', 'current',
+                                   'position', 'frame', 'subdivision'])
+def test_invalid_tail_does_not_allocate_valid_prefix(monkeypatch, fault):
+    coil=CoilBuilder(100).set_cross_section(.004,.006).add_straight(.02)
+    coil.add_arc(.02,90)
+    tail=coil.segments[-1]
+    kwargs={}
+    if fault=='length':
+        coil.add_straight(.02)
+        coil.segments[-1].length=-1
+    elif fault=='radius':
+        tail.radius=.001
+    elif fault=='angle':
+        tail.arc_angle=361
+    elif fault=='current':
+        tail.current=float('nan')
+    elif fault=='position':
+        tail.start_pos=np.array([float('inf'),0,0])
+    elif fault=='frame':
+        tail.orientation=np.diag([2.,1.,1.])
+    else:
+        kwargs['arc_max_segment_length']=0
+    def unexpected(*args, **kwargs):
+        pytest.fail('allocated native object before complete preflight')
+    monkeypatch.setattr(rad,'ObjRecCur',unexpected)
+    monkeypatch.setattr(rad,'ObjArcCur',unexpected)
+    with pytest.raises(ValueError):
+        coil.to_radia(**kwargs)
