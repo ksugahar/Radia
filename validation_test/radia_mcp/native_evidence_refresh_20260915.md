@@ -110,3 +110,9 @@ was held open until a genuinely passing replacement was generated.
 
 This closes the three reproduced failures, not a full Radia release, a live
 MCP deployment, or the unrelated remote Engine startup investigation.
+
+The obsolete LAB staging directory `C:/temp/mcp-native-evidence-logs-20260915`
+could not be removed: the execution policy rejected the recursive cleanup
+command before it ran. It remains owned by this task pending permitted cleanup,
+not as a rollback target. Current MEX/Python build logs were separately recovered
+to `C:/temp/mcp-native-forward-20260915` and their SHA-256 hashes verified.
