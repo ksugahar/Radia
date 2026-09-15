@@ -10,7 +10,7 @@ Radia uses isolated build and release artifacts. Development checkouts are
 editable where agents work; CI and release verification never depend on native
 binaries copied from another machine.
 
-Available topics: overview, development, ci_compute, release, cubit, failures.
+Available topics: overview, development, ci_compute, release, mcp_release, cubit, failures.
 
 ## overview
 
@@ -30,8 +30,9 @@ source-change CI run.
 
 LAB and 100号機 use editable installs so Python source changes are visible on
 the next import. A running MCP process still owns already-imported modules and
-registered tool objects; invoke the server's reload tool or reconnect once when
-the reload tool itself has changed.
+registered tool objects. Reconnect affected clients; compatible same-root Python
+edits may use a reviewed safe reload. Root, dependency, entry-point and schema
+changes require reconnecting, not just reloading Python modules.
 
 Native extensions are built locally against the selected Python environment.
 That environment owns NGSolve, Netgen, pybind11, and pip `mkl-devel`. Do not
@@ -49,15 +50,31 @@ and run on hibino first, with mdx reserved as an idle-CI fallback.
 
 ## release
 
-Use `tools/release_quad.py` and the `release-quad` skill. The release candidate
+For the Radia solver, use `tools/release_quad.py` and the `release-quad` skill. The release candidate
 must be built from one immutable commit, pass its required CI and package gates,
 and pass the four-machine `done` gate before GitHub Release publication. The
 release workflow consumes the accepted artifact for that exact commit; it does
 not rebuild from a mutable checkout or upload a developer-machine binary.
 
-After an interrupted release, use the release tool's documented recovery or
-editable-restore operation. Do not repair deployment by manually dropping
+This is not the radia-mcp release lane; use topic `mcp_release` for that package.
+After an interrupted release, inspect the selected source and fix forward;
+do not automatically restore an old editable tree. Do not repair deployment by manually dropping
 native files into `site-packages`.
+
+## mcp_release
+
+radia-mcp publishes independently through `radia-mcp-v<VERSION>` and its package
+CI/PyPI workflow. Its release-dual updates editable installations on LAB and
+100 only, not hibino/mdx1/mdx2. Do not run the solver's four-host release gate.
+Mixed omega remains in radia-mcp; Cubit MCP belongs to cubit-mesh-export.
+
+Completion requires passing package checks, verified publication, both hosts'
+editable registration and fresh imports, plus LAB live source and harmless
+affected-tool verification. Existing 100 clients may remain next-launch-pending
+until their normal restart; they do not block release completion. Failed
+installation/import still blocks deployment completion. Immediate all-user
+reconnection is a separate explicit request, not a reason to force restarts
+during every release. Never claim an unqueried client is live-verified.
 
 ## cubit
 
@@ -83,6 +100,7 @@ _TOPICS = (
     "development",
     "ci_compute",
     "release",
+    "mcp_release",
     "cubit",
     "failures",
 )
