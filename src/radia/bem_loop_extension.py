@@ -351,6 +351,9 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn):
     """
     from ngsolve import BND
 
+    if (not np.isfinite(omega) or omega <= 0 or np.ndim(Z_s) != 0
+            or not np.isfinite(Z_s) or complex(Z_s).real < 0):
+        raise ValueError("Loop SIBC requires positive frequency and finite passive scalar Z_s")
     mesh = bem_solver.mesh
     M, K = bem_solver.M, bem_solver.K
     SL, DL, M_inv = bem_solver.SL, bem_solver.DL, bem_solver.M_inv
@@ -588,6 +591,18 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn):
 
     P_total, H_t_rms = _P_Ht(phi_u, alpha)
 
+    # Complete total field, including the multivalued carrier.  A plain
+    # single-valued phi.B integral would omit the cut contribution.
+    phi_open = phi_u[Tmap] + alpha * Theta
+    H_total = -np.einsum('tik,ti->tk', gvecs, phi_open[tris_o])
+    H_inc = -np.einsum('tik,ti->tk', gvecs,
+                       np.asarray(phi_inc_nodal)[Tmap][tris_o])
+    A_inc = np.asarray(A_inc_fn(cents), dtype=complex)
+    reaction_magnetic = np.sum(areas * np.einsum(
+        'ij,ij->i', np.cross(normals, H_total), A_inc))
+    reaction_electric = Z_s / (1j * omega) * np.sum(
+        areas * np.einsum('ij,ij->i', H_inc, H_total))
+
     # frozen sub-solve (diagnostic; == the plain production solve)
     Ng = nv + 1
     A0 = np.zeros((Ng, Ng), dtype=complex)
@@ -602,6 +617,10 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn):
     return {
         "alpha": alpha,
         "P_total": float(P_total),
+        "H_t_tri": H_total,
+        "q_tri": 0.5 * Z_s.real * np.sum(np.abs(H_total)**2, axis=1),
+        "reaction_integral": complex(reaction_magnetic + reaction_electric),
+        "P_reaction": float(-0.5 * omega * (reaction_magnetic + reaction_electric).imag),
         "H_t_rms": float(H_t_rms),
         "P_frozen": float(P_frozen),
         "Ht_frozen": float(Ht_frozen),

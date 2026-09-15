@@ -9,6 +9,7 @@ actionable message.
 from __future__ import annotations
 
 import sys
+from types import SimpleNamespace
 from pathlib import Path
 
 import pytest
@@ -24,6 +25,31 @@ import calc_inductance as ci
 _SAMPLES = _PANELS / "samples"
 _DEMO_COIL_STEP = _SAMPLES / "ih_fem_kelvin_demo_coil.step"
 _DEMO_VOL = _SAMPLES / "ih_fem_kelvin_demo.vol"
+
+
+@pytest.mark.parametrize('mode', ['auto', 'on'])
+@pytest.mark.parametrize('genus,model,backend,order,fragment', [
+    (1, 'esim', 'hacapk', 1, 'ESIM'),
+    (1, 'esim', 'intree-dense', 1, 'ESIM'),
+    (1, 'sibc', 'hacapk', 1, 'HACApK'),
+    (1, 'sibc', 'intree-dense', 2, 'P1'),
+    (2, 'sibc', 'intree-dense', 1, 'genus-1'),
+])
+def test_weak_heating_rejects_missing_handle_mode(mode, genus, model, backend, order, fragment):
+    args = SimpleNamespace(wp_loop_dof=mode, impedance_model=model, wp_bem_backend=backend)
+    with pytest.raises(ValueError, match=fragment):
+        ci._resolve_weak_loop_mode(args, genus, order)
+
+
+def test_weak_loop_supported_and_simply_connected_routes():
+    args = SimpleNamespace(wp_loop_dof='auto', impedance_model='esim', wp_bem_backend='hacapk')
+    assert ci._resolve_weak_loop_mode(args, 0, 2)[1] is False
+    args.impedance_model = 'sibc'
+    args.wp_bem_backend = 'intree-dense'
+    assert ci._resolve_weak_loop_mode(args, 1, 1) == ('auto', True, None)
+    args.wp_loop_dof = 'on'
+    with pytest.raises(ValueError, match='genus-1'):
+        ci._resolve_weak_loop_mode(args, 0, 1)
 
 
 def _args(extra):

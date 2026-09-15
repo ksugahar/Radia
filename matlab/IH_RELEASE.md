@@ -30,12 +30,23 @@ selecting a replacement file is enough: the next diagram update or simulation
 start detects path and content changes, rebuilds the operators, and reloads the
 configuration. `Rebuild now` forces the same operation explicitly.
 
-This preview does not yet construct PEEC, BEM-A, BIM, or FEM operators from a
-Cubit `.vol` file. That native assembly boundary is required before the model
-can be called production-complete. LUT and lumped-state-space IH helpers are
+The repository now provides an explicit initialization-time operator assembly
+route; its live scope and input contract are owned by the Radia IH MCP manual.
+This archive alone does not certify an arbitrary CAD/VOL-to-heat workflow.
+An unmocked production geometry acceptance remains separate from the verified
+preassembled native runtime. LUT and lumped-state-space IH helpers are
 not included in this package. Preparing a physical configuration currently also
 requires the separately installed `check-vol` command for strict mesh-label
 reports; the diagnostic model does not require it.
+
+The thermal assembly supports order 1 and 2, including a separate 2D
+axisymmetric thermal mesh with the physical `2*pi*r` weight. Order 2 uses
+NGSolve H1 coefficients (P2 on triangles, Q2 on quadrilaterals), while the
+surface heat handoff remains P1. Temperature ports in this mode carry FE
+coefficients, not nodal Kelvin values. The monitor evaluates physical
+temperatures at mapped quadrature points; its extrema are sampled, not a
+certified global bound. The mean uses the FE integral. Periodic rotation of
+this coefficient representation is unsupported and fails explicitly.
 
 The discrete update order is fixed:
 
