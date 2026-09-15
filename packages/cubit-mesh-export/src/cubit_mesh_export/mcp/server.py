@@ -5134,15 +5134,6 @@ def cubit_vfrac_to_vol(vfrac_path: str,
 	for index, name in enumerate(labels):
 		per_material[index]["name"] = name
 
-	from cubit_mesh_export.mcp.session import get_cubit_bin_dir
-	bin_dir = get_cubit_bin_dir()
-	sculpt_exe = (Path(bin_dir) / "sculpt.exe") if bin_dir else None
-	if sculpt_exe is None or not sculpt_exe.is_file():
-		return json.dumps(_error_payload(
-			"environment", "sculpt.exe not found in the Cubit bin "
-			f"directory ({bin_dir}); Sculpt ships with Coreform Cubit "
-			"2025.12+ on Windows", kind="environment"))
-
 	base = p.with_name(p.name[:-len(".e.1.0")])
 	vol = Path(out_vol) if out_vol else base.with_suffix(".hex.vol")
 	msh = Path(out_msh) if out_msh else base.with_suffix(".hex.msh")
@@ -5158,6 +5149,14 @@ def cubit_vfrac_to_vol(vfrac_path: str,
 		return json.dumps(_error_payload(
 			"input", "vfrac input, out_vol, out_msh, and the derived "
 			"Sculpt Exodus must all be distinct paths"))
+	from cubit_mesh_export.mcp.session import get_cubit_bin_dir
+	bin_dir = get_cubit_bin_dir()
+	sculpt_exe = (Path(bin_dir) / "sculpt.exe") if bin_dir else None
+	if sculpt_exe is None or not sculpt_exe.is_file():
+		return json.dumps(_error_payload(
+			"environment", "sculpt.exe not found in the Cubit bin "
+			f"directory ({bin_dir}); Sculpt ships with Coreform Cubit "
+			"2025.12+ on Windows", kind="environment"))
 	for output in (vol, msh, sculpt_exo):
 		output.parent.mkdir(parents=True, exist_ok=True)
 		try:

@@ -115,7 +115,9 @@ def test_numeric_contract_fails_before_any_subprocess(tmp_path, kwargs,
     assert needle in report["error"]
 
 
-def test_coinciding_output_paths_are_rejected(tmp_path):
+def test_coinciding_output_paths_are_rejected(tmp_path, monkeypatch):
+    from cubit_mesh_export.mcp import session
+    monkeypatch.setattr(session, "get_cubit_bin_dir", lambda: None)
     vf = tmp_path / "design.e.1.0"
     _write_vfrac(vf)
     same = str(tmp_path / "both.out")
