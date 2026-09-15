@@ -64,6 +64,13 @@ oracle, chord convergence, rigid transforms, and a bend-to-straight join.
 
 ## CAD Export
 
+`audit_segment_volume_overlaps()` uses CAD Boolean intersections before a
+volume mesh is built. It reports positive-volume intersections of distinct
+segments (including neighbours), permitting zero-volume face contact. The
+relative threshold is measured against the smaller segment volume. It does
+not certify clearance, single-segment validity or arbitrary self-intersection.
+Unsupported CAD raises instead of silently skipping a segment.
+
 Matching rectangular or circular straight lofts use centered endpoint wires. Arc
 lofts use interpolated section wires on the same circular centerline and
 linearly varying dimensions as the current model. The curved CAD sides
