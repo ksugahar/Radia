@@ -6,6 +6,57 @@ import numpy as np
 import pytest
 
 
+@pytest.mark.parametrize('harmonic', [False, True])
+def test_picard_fixed_rhs_cache_matches_full_reassembly(harmonic):
+    import ngsolve as ng
+    mesh, source, potential, table = _picard_case(maxh=0.7)
+    options = dict(tolerance=1e-8, max_iterations=100)
+    if harmonic:
+        options.update(total_source_h=ng.CoefficientFunction((0.01, 0.02, 0.03)),
+                       total_source_materials=('total',))
+    fresh = _picard_solve(mesh, source, potential, table, cache_fixed_rhs=False, **options)
+    cached = _picard_solve(mesh, source, potential, table, cache_fixed_rhs=True, **options)
+    for point in ((-.5,.13,.17),(.5,.13,.17)):
+        a=np.asarray(fresh['H_cf'](mesh(*point)))
+        b=np.asarray(cached['H_cf'](mesh(*point)))
+        assert np.linalg.norm(a-b) < 1e-10 * max(np.linalg.norm(a),1.)
+    assert fresh['nonlinear_stats']['iterations'] == cached['nonlinear_stats']['iterations']
+    assert fresh['nonlinear_stats']['rhs_reuse'] == 'none'
+    assert cached['nonlinear_stats']['rhs_reuse'] == (
+        'fixed_vector_and_material_operator' if harmonic else 'fixed_vector')
+
+
+def test_reduced_normal_boundary_is_not_total_normal_boundary():
+    import ngsolve as ng
+    from netgen.occ import Box, Pnt, Glue, OCCGeometry
+    from netgen.meshing import Element0D
+    from radia.kelvin_solver import solve_magnetostatic_mixed_total_reduced_omega_kelvin
+    iron=Box(Pnt(-.3,-.3,-.3),Pnt(.3,.3,.3))
+    iron.mat('total'); iron.faces.name='interface'
+    outer=Box(Pnt(-1,-1,-1),Pnt(1,1,1));outer.faces.name='outer'
+    air=outer-iron;air.mat('reduced')
+    mesh=ng.Mesh(OCCGeometry(Glue([iron,air])).GenerateMesh(maxh=.8))
+    material=mesh.GetMaterials().index('total')+1
+    e=next(e for e in mesh.ngmesh.Elements3D() if e.index==material)
+    mesh.ngmesh.Add(Element0D(e.vertices[0],index=1));mesh.ngmesh.SetCD3Name(1,'GND')
+    mesh=ng.Mesh(mesh.ngmesh)
+    source=ng.CoefficientFunction((0.,0.,1.))
+    kwargs=dict(mu_r_by_material={'total':1.,'reduced':1.},
+                reduced_materials=('reduced',),total_materials=('total',),
+                interface_boundary='interface',kelvin_mats=(),order=1)
+    with ng.TaskManager():
+        correction=solve_magnetostatic_mixed_total_reduced_omega_kelvin(
+            mesh,source,-ng.z,1.,(0,0,0),reduced_zero_normal_boundary='outer',**kwargs)
+        total=solve_magnetostatic_mixed_total_reduced_omega_kelvin(
+            mesh,source,-ng.z,1.,(0,0,0),**kwargs)
+        with pytest.raises(ValueError,match='exterior'):
+            solve_magnetostatic_mixed_total_reduced_omega_kelvin(
+                mesh,source,-ng.z,1.,(0,0,0),reduced_zero_normal_boundary='interface',**kwargs)
+    for point in ((.1,.1,.1),(.6,.1,.1)):
+        assert np.linalg.norm(np.asarray(correction['H_cf'](mesh(*point)))-[0,0,1])<1e-10
+        assert np.linalg.norm(np.asarray(total['H_cf'](mesh(*point))))<1e-10
+
+
 def test_realized_bh_response_binds_pchip_tangent_energy_and_vacuum_tail():
     from radia.scalar_potential_solver import MU_0, sample_bh_constitutive_response
 
