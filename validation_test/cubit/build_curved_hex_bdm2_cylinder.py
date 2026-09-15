@@ -13,7 +13,7 @@ import os
 import sys
 from pathlib import Path
 
-from radia.install_panels import find_cubit_bin
+from cubit_mesh_export.toolbar_install import find_cubit_bin
 
 DEFAULT_OUTPUT = Path(r"C:\temp\radia_hex_bdm2\curved_cylinder_hex_q2.vol")
 

@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 _test_dir = os.path.dirname(os.path.abspath(__file__))
 _repo_root = os.path.dirname(os.path.dirname(_test_dir))
 sys.path.insert(0, os.path.join(_repo_root, 'src', 'radia'))
-from install_panels import find_cubit_bin
+from cubit_mesh_export.toolbar_install import find_cubit_bin
 _cubit_path = find_cubit_bin()
 if _cubit_path: sys.path.append(_cubit_path)
 os.environ['CUBIT_PLUGIN_DIR'] = os.environ.get(

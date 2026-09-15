@@ -76,13 +76,15 @@ def _cubit_pids() -> set[int]:
     return pids
 
 
-def _terminate_pids(pids: set[int]) -> None:
-    for pid in sorted(pids):
-        subprocess.run(
-            ["taskkill", "/PID", str(pid), "/T", "/F"],
-            capture_output=True,
-            check=False,
-        )
+def _terminate_owned(launcher) -> None:
+    """Never infer ownership from newly appearing, potentially user-owned PIDs."""
+    if launcher.poll() is None:
+        launcher.terminate()
+        try:
+            launcher.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            launcher.kill()
+            launcher.wait(timeout=10)
 
 
 def validate_probe_result(payload: dict) -> list[str]:
@@ -138,7 +140,7 @@ def validate_probe_result(payload: dict) -> list[str]:
 
 
 def _probe_path() -> Path:
-    return Path(__file__).resolve().parent / "panels" / "cubit_toolbar_probe.py"
+    return Path(__file__).resolve().parent / "cubit_gui" / "toolbar_probe.py"
 
 
 def _write_bootstrap(path: Path, probe_path: Path) -> None:
@@ -178,19 +180,19 @@ def _run_one(cubit_exe: Path, work: Path, timeout: float) -> dict:
         [str(cubit_exe), "-nojournal", str(bootstrap_path)],
         cwd=str(work),
         env=env,
+        stdin=subprocess.PIPE,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
 
     deadline = time.monotonic() + timeout
-    spawned = set()
     while time.monotonic() < deadline and not result_path.is_file():
-        spawned.update(_cubit_pids() - before)
+        if launcher.poll() is not None:
+            break
         time.sleep(0.1)
 
     if not result_path.is_file():
-        spawned.update(_cubit_pids() - before)
-        _terminate_pids(spawned)
+        _terminate_owned(launcher)
         return {
             "ok": False,
             "issues": [
@@ -202,22 +204,18 @@ def _run_one(cubit_exe: Path, work: Path, timeout: float) -> dict:
     try:
         payload = json.loads(result_path.read_text(encoding="utf-8-sig"))
     except (OSError, json.JSONDecodeError) as exc:
-        spawned.update(_cubit_pids() - before)
-        _terminate_pids(spawned)
+        _terminate_owned(launcher)
         return {"ok": False, "issues": [f"invalid probe result: {exc}"]}
 
     issues = validate_probe_result(payload)
-    close_deadline = time.monotonic() + 15.0
-    while time.monotonic() < close_deadline:
-        spawned.update(_cubit_pids() - before)
-        alive = spawned & _cubit_pids()
-        if not alive:
-            break
-        time.sleep(0.1)
+    try:
+        returncode = launcher.wait(timeout=15)
+    except subprocess.TimeoutExpired:
+        _terminate_owned(launcher)
+        issues.append("Cubit GUI did not close after probe")
     else:
-        alive = spawned & _cubit_pids()
-        _terminate_pids(alive)
-        issues.append(f"Cubit GUI did not close after probe (pids={sorted(alive)})")
+        if returncode != 0:
+            issues.append(f"Cubit GUI exited with failure: {returncode}")
 
     return {
         "ok": not issues,

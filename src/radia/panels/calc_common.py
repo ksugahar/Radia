@@ -52,7 +52,7 @@ def setup_cubit(cub5_path=None, load_plugins=False):
     """
     setup_paths()
     try:
-        from install_panels import find_cubit_bin
+        from cubit_mesh_export.toolbar_install import find_cubit_bin
     except ImportError:
         return None
 
