@@ -1,4 +1,4 @@
-"""Clean Cubit script: should produce zero lint findings.
+"""Clean Cubit script: should produce zero exporter-owned lint findings.
 
 Demonstrates correct patterns for all common Cubit operations.
 """

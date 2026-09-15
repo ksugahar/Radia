@@ -1,4 +1,4 @@
-"""Bad Cubit script: intentionally triggers cubit lint rules.
+"""Bad Cubit script: intentionally triggers exporter-owned Cubit lint rules.
 
 Expected findings:
 - missing-cubit-init (HIGH): imports cubit but no cubit.init()
