@@ -746,11 +746,12 @@ class CoilBuilder:
 		"""
 		Convert all segments to Radia objects.
 
-		Arc currents are discretized so that one Radia integration segment is
-		no longer than ``arc_max_segment_length``.  By default the larger
-		cross-section dimension is used.  The former fixed value of 10 is not
-		adequate for long, large-radius accelerator coils observed close to the
-		conductor and can create artificial field peaks.
+		The native arc subdivision count is selected from
+		``arc_max_segment_length`` (default: larger cross-section dimension).
+		The updated native B/H kernel uses analytic section integrals and
+		adaptive angular integration, not this count as its accuracy control.
+		The count is retained for legacy kernels and separate potential paths;
+		changing it alone does not certify field convergence.
 
 		Args:
 			arc_max_segment_length: Maximum arc integration segment length in
@@ -814,7 +815,7 @@ class CoilBuilder:
 					[phi1, phi2],     # phi range
 					seg.height,       # height
 					n_arc_segments,   # nseg
-					"man",            # enforce the accuracy-derived subdivision
+					"man",            # retain explicit subdivision for legacy paths
 					"z",              # axis (transformed by Euler angles below)
 					j_density         # j (current density, sign handles direction)
 				)
