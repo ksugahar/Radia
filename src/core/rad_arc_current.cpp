@@ -174,7 +174,7 @@ void radTArcCur::B_compElliptic(radTField* FieldPtr)
 
 	if (is_full_circle) {
 		// A and scalar potential retain elliptic-loop section quadrature.
-		// B/H is evaluated separately below with analytic section integration.
+		// B/H uses closed axis primitives, analytic sections and far-field moments.
 
 		// Integration over cross-section using Gaussian quadrature (4x4)
 		// These potential paths require their own section-convergence check.
