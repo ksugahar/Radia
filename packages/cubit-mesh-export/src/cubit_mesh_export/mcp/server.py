@@ -4141,7 +4141,7 @@ def cubit_netgen_quality_compare(step_path: str,
 		except ImportError as exc:
 			row = {"route": "netgen", "status": "error",
 			       "kind": "environment",
-			       "error": f"netgen/ngsolve/radia unavailable: {exc}"}
+			       "error": f"netgen/ngsolve unavailable: {exc}"}
 		except Exception as exc:
 			row = {"route": "netgen", "status": "error", "kind": "input",
 			       "error": f"{type(exc).__name__}: {exc}"}
@@ -5080,7 +5080,7 @@ def cubit_vfrac_to_vol(vfrac_path: str,
 		# route on kind, not stage).
 		return json.dumps(_error_payload(
 			"environment", "netCDF4 is required to validate the vfrac "
-			"Exodus; install it with `pip install netCDF4`",
+			"Exodus; install it with `pip install cubit-mesh-export[sculpt]`",
 			kind="environment"))
 	try:
 		ds = nc.Dataset(str(p))
@@ -5425,7 +5425,7 @@ def _geom_split_recipe(summary: dict) -> list[str]:
 	`_MESH_LADDER_RADIUS` via the batch env in a future refinement.
 	"""
 	del summary  # radius heuristic is geometry-agnostic for now
-	radius = float(os.environ.get("RADIA_MCP_WEBCUT_RADIUS", "16.01"))
+	radius = float(os.environ.get("CUBIT_MCP_WEBCUT_RADIUS", "16.01"))
 	return [
 		f"webcut volume all with cylinder radius {radius} axis z",
 		"imprint all",
@@ -5813,13 +5813,13 @@ def _learned_recipes_path() -> Path:
 	"""Where the learned-recipes jsonl lives.
 
 	Resolution order:
-	  1. `RADIA_MCP_LEARNED_DIR` env var — point all lab machines to a
+	  1. `CUBIT_MCP_LEARNED_DIR` env var — point all lab machines to a
 	     shared SMB / network drive (e.g.,
 	     `repo:/lab_learned\\`) so every race winner
 	     contributes to one collective pool.
 	  2. Fallback: `<state_dir>/learned_recipes.jsonl` (per-machine).
 	"""
-	env = os.environ.get("RADIA_MCP_LEARNED_DIR")
+	env = os.environ.get("CUBIT_MCP_LEARNED_DIR")
 	if env:
 		base = Path(env)
 		base.mkdir(parents=True, exist_ok=True)
@@ -5901,7 +5901,7 @@ def _load_learned_recipes_for(sig: dict, max_n: int = 3) -> list[dict]:
 
 	Sources (all unioned):
 	  1. `<state_dir>/learned_recipes.jsonl` — per-machine.
-	  2. `RADIA_MCP_LEARNED_DIR/learned_recipes.jsonl` — lab-shared
+	  2. `CUBIT_MCP_LEARNED_DIR/learned_recipes.jsonl` — lab-shared
 	     pool when the env var is set (Stage 1: collective intelligence).
 	  3. Bundled `curated_recipes_bundle.CURATED` — ships in the wheel,
 	     contains lab-distilled top picks across all known races
@@ -5950,7 +5950,7 @@ def cubit_curate_learned_recipes(out_module_path: str = "",
 	emit a Python module that ships in the next radia-mcp wheel.
 
 	Stage 2 of the lab-collective-intelligence pipeline:
-	  - Stage 1: lab machines share `RADIA_MCP_LEARNED_DIR` jsonl.
+	  - Stage 1: lab machines share `CUBIT_MCP_LEARNED_DIR` jsonl.
 	  - **Stage 2**: this tool distills the pool into bundled
 	    `curated_recipes_bundle.py` (typically run weekly).
 	  - Stage 3: the wheel + a CC-BY docs/design page publishes the
@@ -6615,7 +6615,7 @@ def _generate_smart_recipes(sess, target_size: float,
 	if compound_suspected:
 		# Geometry-split rung first when compound suspected
 		import os as _os
-		webcut_r = float(_os.environ.get("RADIA_MCP_WEBCUT_RADIUS", "16.01"))
+		webcut_r = float(_os.environ.get("CUBIT_MCP_WEBCUT_RADIUS", "16.01"))
 		add(
 			f"webcut_cyl_r{webcut_r}_then_auto",
 			[f"webcut volume {scope} with cylinder radius {webcut_r} axis z",
@@ -6624,7 +6624,7 @@ def _generate_smart_recipes(sess, target_size: float,
 			 "volume all scheme auto",
 			 "mesh volume all"],
 			f"compound body → cylinder webcut at z-axis r={webcut_r} "
-			f"(env: RADIA_MCP_WEBCUT_RADIUS) then re-attempt scheme auto.",
+			f"(env: CUBIT_MCP_WEBCUT_RADIUS) then re-attempt scheme auto.",
 		)
 		add(
 			"polyhedron",
@@ -7409,7 +7409,7 @@ _UNCLASSIFIED_TOOLS = _classify_tool_annotations()
 # Legacy full-profile filter.  The production core profile already exposes
 # validation operations through cubit_validation_catalog/run.  Set this to 0
 # only when a full-profile migration client also wants the old gate trimming.
-_hide_gate_tools(mcp, "RADIA_MCP_CUBIT_GATES")
+_hide_gate_tools(mcp, "CUBIT_MCP_CUBIT_GATES")
 
 
 # ============================================================
@@ -7420,12 +7420,12 @@ _hide_gate_tools(mcp, "RADIA_MCP_CUBIT_GATES")
 # <state_dir>/logs/cubit_tool_calls.jsonl -- making "silently wrong
 # mesh" sessions triageable after the fact.  Failures additionally go
 # through the existing per-kind failure log.  Disable with
-# RADIA_MCP_CUBIT_CALL_LOG=0.
+# CUBIT_MCP_CUBIT_CALL_LOG=0.
 
 def _install_call_log() -> None:
 	"""Wrap call_tool with the shared JSONL all-calls log."""
 	_install_call_log_common(mcp, "cubit_tool_calls.jsonl",
-	                         "RADIA_MCP_CUBIT_CALL_LOG")
+	                         "CUBIT_MCP_CUBIT_CALL_LOG")
 
 
 _install_call_log()

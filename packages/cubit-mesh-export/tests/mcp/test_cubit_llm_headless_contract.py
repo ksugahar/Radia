@@ -198,7 +198,7 @@ def test_import_journal_reads_without_starting_or_executing(tmp_path, monkeypatc
 @pytest.mark.parametrize("platform", ["win32", "linux", "darwin"])
 def test_native_record_uses_supported_file_syntax_and_preserves_aprepro(
         tmp_path, monkeypatch, platform):
-    monkeypatch.setenv("RADIA_MCP_TEMP", str(tmp_path))
+    monkeypatch.setenv("CUBIT_MCP_TEMP", str(tmp_path))
     monkeypatch.setattr(session.sys, "platform", platform)
     sess = session.CubitSession.__new__(session.CubitSession)
     sess._mode = "batch"
@@ -236,7 +236,7 @@ def test_native_record_uses_supported_file_syntax_and_preserves_aprepro(
 
 @pytest.mark.parametrize("platform", ["win32", "linux", "darwin"])
 def test_cubit_temp_root_platform_default(tmp_path, monkeypatch, platform):
-    monkeypatch.delenv("RADIA_MCP_TEMP", raising=False)
+    monkeypatch.delenv("CUBIT_MCP_TEMP", raising=False)
     monkeypatch.setattr(session.sys, "platform", platform)
     monkeypatch.setattr(session.tempfile, "gettempdir", lambda: str(tmp_path))
     expected = Path("C:/temp") if platform == "win32" else tmp_path
