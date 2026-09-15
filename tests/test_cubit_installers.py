@@ -1,4 +1,5 @@
 import hashlib
+import ast
 import importlib.util
 import json
 import os
@@ -8,6 +9,7 @@ import sys
 import tarfile
 import tomllib
 import xml.etree.ElementTree as ET
+from types import SimpleNamespace
 from pathlib import Path
 
 import pytest
@@ -17,6 +19,21 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CME_SRC = PROJECT_ROOT / "packages" / "cubit-mesh-export" / "src"
 if str(CME_SRC) not in sys.path:
     sys.path.insert(0, str(CME_SRC))
+
+
+@pytest.mark.parametrize("version,accepted", [("0.14.17", True), ("1.0.0", True),
+                                               ("1.0.1", False)])
+def test_radia_accepts_validated_exporter_versions_only(monkeypatch, version, accepted):
+    import cubit_mesh_export
+    from cubit_mesh_export import install
+    tree = ast.parse((PROJECT_ROOT / "src/radia/__init__.py").read_text(encoding="utf-8"))
+    names = {"__version__", "COMPAT_CUBIT_MESH_EXPORT_MIN", "COMPAT_CUBIT_MESH_EXPORT_MAX"}
+    constants = {node.targets[0].id: ast.literal_eval(node.value)
+                 for node in tree.body if isinstance(node, ast.Assign)
+                 and isinstance(node.targets[0], ast.Name) and node.targets[0].id in names}
+    monkeypatch.setitem(sys.modules, "radia", SimpleNamespace(**constants))
+    monkeypatch.setattr(cubit_mesh_export, "__version__", version)
+    assert install._check_radia_compat()[0] is accepted
 
 
 def _load_install_panels():
