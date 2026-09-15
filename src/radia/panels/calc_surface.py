@@ -24,7 +24,7 @@ def _setup_cubit():
     radia_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
     if os.path.abspath(radia_src) not in sys.path:
         sys.path.insert(0, os.path.abspath(radia_src))
-    from install_panels import find_cubit_bin
+    from cubit_mesh_export.toolbar_install import find_cubit_bin
 
     cubit_path = find_cubit_bin()
     if cubit_path and cubit_path not in sys.path:

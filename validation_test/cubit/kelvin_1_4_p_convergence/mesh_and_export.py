@@ -34,7 +34,7 @@ THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 SRC_RADIA = os.path.join(THIS_DIR, "..", "..", "..", "src", "radia")
 sys.path.insert(0, SRC_RADIA)
 sys.path.insert(0, os.path.join(SRC_RADIA, "panels"))
-from install_panels import find_cubit_bin
+from cubit_mesh_export.toolbar_install import find_cubit_bin
 
 _cubit_path = find_cubit_bin()
 if _cubit_path and _cubit_path not in sys.path:

@@ -16,8 +16,11 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 - Verify real dialog accept/cancel/checker-failure behavior and official package
   import, restart and six-button dispatch using an installed wheel without Radia.
   Tests restore the exact original Cubit preferences after the persistence lane.
-- Move Radia's duplicated GUI and installer to file-only compatibility bridges.
-  A missing exporter remains an import/dependency error for optional callers.
+- Remove Radia's old GUI, installer, startup and compatibility bridges; migrate
+  callers to the exporter rather than retaining legacy entry points.
+- Move the installed GUI smoke CLI, embedded probe and focused tests to the
+  exporter. Require a clean process exit and terminate only the test-owned
+  process on failure. Cross-host GUI hashes now cover installed exporter files.
 - Show standalone checker startup failures and open Netgen output in a viewer
   only after successful validation.
 

@@ -151,7 +151,6 @@ Issues = "https://github.com/ksugahar/Radia/issues"
 
 [project.scripts]
 radia-ih-assemble = "radia.simulink.ih_operator_assembly:main"
-cubit-toolbar-smoke-test = "radia.cubit_toolbar_smoke:main"
 # Circuit/SPICE integration is part of Radia. The shorter canonical names are
 # preferred; legacy names remain wired to the same implementation.
 radia-ltspice = "radia.ltspice.cli:main"
