@@ -6,6 +6,35 @@ It does not relax numerical solver, native ABI or release acceptance.
 
 ## Development
 
+### Lightweight editable updates (2026-09-15)
+
+The routine is **update source -> reconnect -> check one affected live tool**.
+Editable installation selects a directory; it does not advance Git, rebuild
+native binaries, or refresh objects already loaded by a server.
+
+- Keep the usual maintained development checkout as the editable target. Advance
+  that source with reviewed changes while preserving others' WIP; do not repoint
+  installations to every temporary review/build worktree or blindly pull/reset
+  a dirty checkout. Intentional experiments may still select another source.
+- Pure Python edits at the same root normally need no pip invocation. Run
+  `pip install -e` with the intended interpreter only when relocating the source
+  or changing dependencies/package metadata (including entry points). Do not
+  uninstall first as a routine step.
+- Reconnect only affected clients through supported controls. A known-safe
+  compatible hot reload is an optional shortcut, not a prerequisite. If no
+  supported automatic control exists, ask for one targeted manual Restart.
+- Confirm the live source and one harmless affected tool through the original
+  client. Include tool discovery when names or schemas changed. A short result
+  in the task is enough; no new daemon, watcher, generation database, mandatory
+  receipt file, or per-call Git/pip check is required.
+
+Use existing doctor/stdio checks for installation or launch changes and for
+unknown or contradictory evidence, not a full all-user audit on every edit.
+Default to the affected client/user; expand only to explicitly requested targets.
+Busy CAD/MATLAB work is deferred, never interrupted for a routine update. Native
+changes still need rebuilding, numerical acceptance and a fresh process that
+loads the binary. These exceptions do not make ordinary MCP edits a release gate.
+
 ### Forward-only updates (2026-09-15)
 
 Always advance the maintained MCP source. Never revert to, reinstall or
