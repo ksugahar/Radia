@@ -91,3 +91,24 @@ def test_full_circle_local_ampere_and_divergence(radius,z):
     expected=4*np.pi*1e-7*1e6 if radius>.035 else 0.
     assert dz[0]-dr[2] == pytest.approx(expected,abs=2e-5)
     assert abs(dr[0]+center[0]/radius+dz[2])<2e-5
+
+
+@pytest.mark.parametrize('distance', [1.,100.,10000.])
+@pytest.mark.parametrize('full', [False,True])
+def test_arc_far_field(distance,full):
+    angles=[0.,2*np.pi] if full else [.2,4.8]
+    point=np.array([0.,0.,distance]) if full else np.array([.6,.2,.8])*distance
+    expected=volume_reference(point,.035,.070,.105,angles,1e6,40)
+    obj=rad.ObjArcCur([0,0,0],[.035,.070],angles,.105,4,'man','z',1e6)
+    actual=np.asarray(rad.Fld(obj,'b',point))
+    assert np.linalg.norm(actual-expected)<2e-7*np.linalg.norm(expected)
+
+
+@pytest.mark.parametrize('distance', [3.36*(1-1e-7),3.36*(1+1e-7),100.,10000.])
+def test_full_circle_far_off_axis(distance):
+    point=np.array([.6,0.,.8])*distance
+    expected=volume_reference(point,.035,.070,.105,[0,2*np.pi],1e6,64)
+    obj=rad.ObjArcCur([0,0,0],[.035,.070],[0,2*np.pi],.105,4,'man','z',1e6)
+    actual=np.asarray(rad.Fld(obj,'b',point))
+    assert actual.shape==(3,)
+    assert np.linalg.norm(actual-expected)<2e-7*np.linalg.norm(expected)

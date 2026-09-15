@@ -8,12 +8,66 @@
 
 namespace RadArcSection {
 using Vec = std::array<double, 3>;
+template<class F> Vec Gauss4(const F& f, double lo, double hi);
+
+inline Vec MomentSection(double phi, double r, double z, double ri, double ro, double h)
+{
+    const double c=std::cos(phi), s=std::sin(phi);
+    const double rc=(ri+ro)/2, a=(ro-ri)/2, b=h/2;
+    const double dx=r-rc*c, dy=-rc*s, dd=dx*dx+dy*dy+z*z;
+    const double A=2*(rc-r*c)*a/dd, B=-2*z*b/dd, C=a*a/dd, D=b*b/dd;
+    const double q=std::abs(A)+std::abs(B)+C+D;
+    if(!(q<.125)) throw std::runtime_error("Arc moment expansion outside convergence region");
+    // Expand (1+A*x+B*y+C*x*x+D*y*y)^(-3/2). All rectangular
+    // moments are exact: mean(x^i*y^j) is zero for odd powers.
+    constexpr int order=12, size=2*order+3;
+    using Poly=std::array<std::array<double,size>,size>;
+    Poly power{};
+    power[0][0]=1.;
+    auto moment=[](int i,int j) { return (i%2 || j%2) ? 0. : 1./((i+1.)*(j+1.)); };
+    double coefficient=1., qpower=q, transverse=0., axial=0.;
+    const double bound=(rc+a)*std::max(std::abs(z)+b,rc+a+std::abs(r*c));
+    for(int n=0;n<=order;++n) {
+        double t=0., v=0.;
+        for(int i=0;i<=2*n;++i) for(int j=0;j<=2*n-i;++j) {
+            const double p=power[i][j];
+            if(p==0.) continue;
+            t+=p*(rc*z*moment(i,j)+a*z*moment(i+1,j)
+                  -rc*b*moment(i,j+1)-a*b*moment(i+1,j+1));
+            v+=p*(rc*(rc-r*c)*moment(i,j)+a*(2*rc-r*c)*moment(i+1,j)
+                  +a*a*moment(i+2,j));
+        }
+        transverse+=coefficient*t;
+        axial+=coefficient*v;
+        const double next_coefficient=-coefficient*(n+1.5)/(n+1.);
+        const double tail=bound*std::abs(next_coefficient)*qpower/(1-q*(n+2.5)/(n+2.));
+        if(tail<=1.e-12*std::max(std::abs(transverse),std::abs(axial))) {
+            const double factor=4*a*b/(dd*std::sqrt(dd));
+            return {factor*c*transverse,factor*s*transverse,factor*axial};
+        }
+        if(n==order) break;
+        Poly next{};
+        for(int i=0;i<=2*n;++i) for(int j=0;j<=2*n-i;++j) {
+            const double p=power[i][j];
+            next[i+1][j]+=A*p; next[i][j+1]+=B*p;
+            next[i+2][j]+=C*p; next[i][j+2]+=D*p;
+        }
+        power=next;
+        coefficient=next_coefficient;
+        qpower*=q;
+    }
+    throw std::runtime_error("Arc moment expansion did not converge");
+}
 
 // Integrate J e_phi x (x-x') / |x-x'|^3 analytically in radius and z.
 // With u=r'-r*cos(phi), v=z'-z, q=|r*sin(phi)|, the corner
 // primitives follow by integrating 1/sqrt(u*u+v*v+q*q).
 inline Vec Section(double phi, double r, double z, double ri, double ro, double h)
 {
+    // Corner differences lose relative precision far from the section.
+    // Exact section moments avoid cancellation without section quadrature.
+    if(std::hypot(r,z)>32*std::max(ro,h))
+        return MomentSection(phi,r,z,ri,ro,h);
     const long double c = std::cos(phi), s = std::sin(phi);
     const long double a = r*c, q = std::abs(r*s);
     const long double us[] = {ri-a, ro-a}, vs[] = {-h/2-z, h/2-z};
@@ -68,8 +122,28 @@ template<class F> Vec Refine(const F& f, double lo, double hi,
     return fine;
 }
 
+inline Vec AxisPrimitive(double v, double ri, double ro)
+{
+    // Radial antiderivative of the axial field and its first two z
+    // derivatives. log1p and rationalized differences preserve thin widths.
+    const double di=std::hypot(ri,v), d_o=std::hypot(ro,v);
+    const double width=ro-ri, sum=ro+ri;
+    const double logarithm=std::log1p(width*(1+sum/(di+d_o))/(ri+di));
+    const double x=ri/di,y=ro/d_o;
+    const double derivative_ratio=v*(ri-ro)*sum/((ri*d_o+ro*di)*di*d_o);
+    return {v*logarithm,logarithm+v*derivative_ratio,
+            derivative_ratio*(x*x+x*y+y*y)};
+}
+
 inline Vec FullCircleAxis(double r, double z, double ri, double ro, double h)
 {
+    if(std::abs(z)<=32*std::max(ro,h)) {
+        const Vec lower=AxisPrimitive(z-h/2,ri,ro);
+        const Vec upper=AxisPrimitive(z+h/2,ri,ro);
+        const double two_pi=6.28318530717958647692;
+        return {-two_pi*r*(upper[1]-lower[1])/2,0.,
+                two_pi*(upper[0]-lower[0]-r*r*(upper[2]-lower[2])/4)};
+    }
     // Axial source integration is exact. Radial integration gives B0 and
     // its z derivatives; the regular axis expansion avoids subtracting
     // nearly equal angular contributions to recover a tiny radial field.
@@ -78,6 +152,18 @@ inline Vec FullCircleAxis(double r, double z, double ri, double ro, double h)
     auto f=[=](double radius) {
         Vec value{};
         const double rr=radius*radius;
+        if(std::abs(z)>32*scale) {
+            // Rationalized endpoint differences, not axial quadrature.
+            const double dl=std::hypot(radius,lower), du=std::hypot(radius,upper);
+            const double gap=h/scale, sum=2*z/scale;
+            const double delta=-gap*sum/(dl+du);
+            const double l2=dl*dl,u2=du*du,l3=l2*dl,u3=u2*du;
+            value[0]=rr*gap*sum/(du*dl*(upper*dl+lower*du));
+            value[1]=rr*delta*(l2+dl*du+u2)/(l3*u3);
+            const double diff5=delta*(l2*l2+l3*du+l2*u2+dl*u3+u2*u2)/(l3*l2*u3*u2);
+            value[2]=-3*rr*(gap/(u3*u2)+lower*diff5);
+            return value;
+        }
         const double v[]={lower,upper};
         for(int i=0;i<2;++i) {
             const double dd=rr+v[i]*v[i], d=std::sqrt(dd);
@@ -101,6 +187,21 @@ inline Vec Field(double r, double z, double ri, double ro, double h,
     const double span=hi-lo;
     lo=std::remainder(lo,2*pi);
     hi=lo+span;
+    if(r==0.) {
+        double transverse, axial;
+        if(std::abs(z)>32*std::max(ro,h)) {
+            const Vec section=MomentSection(0.,0.,z,ri,ro,h);
+            transverse=section[0]; axial=section[2];
+        } else {
+            auto radial_distance=[=](double v) {
+                return (ro-ri)*(ro+ri)/(std::hypot(ro,v)+std::hypot(ri,v));
+            };
+            transverse=radial_distance(z-h/2)-radial_distance(z+h/2);
+            axial=AxisPrimitive(z+h/2,ri,ro)[0]-AxisPrimitive(z-h/2,ri,ro)[0];
+        }
+        return {transverse*(std::sin(hi)-std::sin(lo)),
+                transverse*(std::cos(lo)-std::cos(hi)),axial*span};
+    }
     auto f=[=](double phi){return Section(phi,r,z,ri,ro,h);};
     Vec result{};
     // Split at the closest azimuth and opposite azimuth; never sample endpoints.

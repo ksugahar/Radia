@@ -102,8 +102,21 @@ coil = rad.ObjArcCur([0, 0, 0], [0.0495, 0.0505],
 Arc and full-circle B/H use analytic rectangular-section integration and adaptive
 angular quadrature. `n_sec` is not its accuracy control. Non-finite or
 unconverged integration raises an error instead of accepting an unfinished sum.
-Full circles use a regular axis expansion near the axis, with exact axial
-source integration and adaptive radial integration of axial-field derivatives.
+At distances exceeding 32 times max(outer radius, height), finite-section
+moments replace cancellation-prone corner differences. This is a convergent
+binomial expansion with analytic rectangular moments and a tail bound, not
+section Gauss quadrature or a zero-width filament approximation. The angular
+quadrature remains numerical. Native legacy wrappers can return an empty field
+on kernel failure: require the expected shape and finite values before accepting
+any result; a normal return alone is not a validation gate.
+Full circles use a regular axis expansion near the axis. Up to 32 times
+max(outer radius, height) in axial distance, axial-field values and derivatives
+use elementary closed-form radial primitives; no section quadrature is used.
+Partial arcs on the exact axis also integrate angle in closed form in this
+range. Beyond it, far-axis endpoint differences are rationalized and radial
+integration remains adaptive. These are not closed-form solutions for every
+finite-section off-axis point. See the analytical/semi-analytical distinction
+in https://doi.org/10.1163/156939310791958653.
 A and scalar potential retain their separate integration paths (including
 4x4 section quadrature for full circles). Do not infer their convergence from
 a B-field test. Compare a full circle with two half-arcs as a regression gate.
@@ -113,7 +126,8 @@ Validate signed vector fields against independent volume-current integration,
 then test arc partition, rotation, length scaling and current reversal.
 The focused native regression is `tests/test_arc_section_regression.py`.
 Local Ampere and divergence checks cover representative conductor-interior
-points, not every boundary/corner. This is not certification of extreme far-field or
+points, not every boundary/corner. Far-field and switching tests cover specified
+distances, not arbitrary precision or all aspect ratios. This is not certification of
 arbitrary-coil cases. Check the loaded native build before using this contract;
 an older installed extension does not acquire the kernel from Python edits.
 
