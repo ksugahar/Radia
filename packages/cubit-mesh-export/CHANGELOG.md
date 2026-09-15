@@ -4,7 +4,18 @@ All notable changes to `cubit-mesh-export` — the high-order curved
 mesh export package for Coreform Cubit (Netgen / GMSH / Nastran /
 VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
-## 1.0.2 - Independent Cubit GUI and MCP release candidate
+## 1.0.3 - Review corrections
+
+- Declare independently maintained runtime support and preserve its BSD notices.
+- Use Cubit-owned environment settings, status/log schemas and HTTP identity;
+  remove unsupported example providers and Radia installation advice.
+- Add `sculpt`, `mesh-quality`, and `youtube` extras with metadata-driven CI.
+- Preserve old Radia logs/caches on disk but do not automatically migrate them;
+  `CUBIT_MCP_STATE_DIR` selects the new product-owned state.
+- Harden the private Netgen quality reference with checked Jacobians and explicit
+  MSH entities; cache supported reference-node layouts by element order.
+
+## 1.0.2 - Independent Cubit GUI and MCP release
 
 - Validate coinciding vfrac output paths before checking Sculpt availability;
   run all license-free MCP contracts with their declared test dependencies.

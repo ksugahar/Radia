@@ -62,6 +62,16 @@ cubit-plugin-install
 mcp-server-cubit
 ```
 
+Optional features have independent installation extras:
+`pip install "cubit-mesh-export[sculpt]"` adds Exodus/volume-fraction support;
+`pip install "cubit-mesh-export[mesh-quality]"` adds the Gmsh quality referee.
+These install Python dependencies, not Coreform Cubit or a Sculpt license.
+The included MCP manual owns the operating workflow.
+
+Cubit MCP uses `CUBIT_MCP_*` settings, not `RADIA_MCP_*`. Historical Radia
+logs and caches are neither automatically migrated nor deleted. Runtime support
+is intentionally maintained independently; see its [ownership and license](src/cubit_mesh_export/mcp/_support/OWNERSHIP.md).
+
 For an MCP client, use the installed `mcp-server-cubit` command, or the selected
 Python interpreter with `-m cubit_mesh_export.mcp.server`. See the
 [Cubit MCP manual](src/cubit_mesh_export/mcp/README.md) for capabilities and

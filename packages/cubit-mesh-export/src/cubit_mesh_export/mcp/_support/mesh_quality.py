@@ -1,3 +1,5 @@
+# Cubit-owned implementation; intentionally maintained independently of Radia MCP.
+# Derived support retains BSD-3-Clause terms: see LICENSE-BSD-3-Clause.txt.
 """Cubit mesh quality and volume referees, isolated from Gmsh server tooling."""
 from __future__ import annotations
 import math
@@ -228,7 +230,7 @@ def mesh_quality(msh_path: str | Path,
         _MESH_QUALITY_SCRIPT,
         [str(path), quadrature, str(float(threshold)), str(int(worst_n)),
          "1" if include_mesh_stats else "0"],
-        timeout_s=timeout_s, prefix="radia_mcp_gmsh_quality_")
+        timeout_s=timeout_s, prefix="cubit_mcp_gmsh_quality_")
     result["path"] = str(path)
     return result
 
@@ -305,6 +307,6 @@ def mesh_total_volume(msh_path: str | Path,
         raise ValueError("timeout_s must be a finite positive number")
     result = run_gmsh_json_subprocess(
         _MESH_VOLUME_SCRIPT, [str(path), quadrature],
-        timeout_s=timeout_s, prefix="radia_mcp_gmsh_volume_")
+        timeout_s=timeout_s, prefix="cubit_mcp_gmsh_volume_")
     result["path"] = str(path)
     return result

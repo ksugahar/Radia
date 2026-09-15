@@ -20,7 +20,7 @@ cubit-plugin-install deploys plugin binaries to Cubit.
 # fails even though the exact pinned Netgen wheel is installed.
 import netgen as _netgen  # noqa: F401
 
-__version__ = "1.0.2"
+__version__ = "1.0.3"
 
 # Compatibility window with the main radia package. The Cubit plugin
 # binaries bundled here (.ccm/.pyd; .ccl was removed in radia 4.80.0)

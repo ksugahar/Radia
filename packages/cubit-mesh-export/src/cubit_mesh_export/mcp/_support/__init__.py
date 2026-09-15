@@ -1,3 +1,5 @@
+# Cubit-owned implementation; intentionally maintained independently of Radia MCP.
+# Derived support retains BSD-3-Clause terms: see LICENSE-BSD-3-Clause.txt.
 """Private Cubit MCP runtime support; not a separate distribution."""
 from importlib import import_module
 
