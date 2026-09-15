@@ -1,0 +1,22 @@
+{
+  "schema": "radia.ih.review-validation.v1",
+  "source_base_commit": "7c931c51010a070c634ca7193b118dfa59ec1a98",
+  "source_dirty_at_build": true,
+  "host": "LAB",
+  "matlab": "26.1.0.3276743 (R2026a) Update 3",
+  "execution_route": "dedicated-python-matlab-engine",
+  "mex_sha256": "010f432a2596ad81bcdbe29f2b5bcb3b8075f36e871407a7ca529ac909ece687",
+  "native_test_executable_sha256": "8a9b31a2338e568a7a0e2556fe1d256d1b056ac3018ab00ea6be2a98f66c27be",
+  "native_regression": "passed",
+  "full_turn_temperature_K": [301,301,301,301,301,301,301,301],
+  "full_turn_test_subdivisions": [1,2],
+  "matlab_passed": 14,
+  "matlab_failed": 0,
+  "matlab_incomplete": 0,
+  "matlab_failure": null,
+  "official_toolkit_model_check": "healthy",
+  "tracked_model_controls": "confirmed via MaskNames; exact FileName asserted",
+  "interface_manifest_passed": 5,
+  "application_contract_audit": "CLEAN",
+  "release_accepted": false
+}

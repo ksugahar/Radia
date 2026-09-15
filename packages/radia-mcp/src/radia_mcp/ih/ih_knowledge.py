@@ -24,6 +24,22 @@ INDUCTION_HEATING_OVERVIEW = """
 
 ## Physics Overview
 
+### Native Simulink preview limits
+
+The geometry assembler currently freezes the full EM unit-current loss field
+and scales it by current squared; it emits one Eddy unknown and rotation=none.
+This is not temperature-dependent nonlinear BH coupling. Hand-authored dense
+temperature-slope operators are a small-system runtime capability, not a
+validated production generator. heat_projection represents diagonal quadratic
+loss only: general overlapping FEM/BEM coefficients require cross terms.
+
+For periodic sample configurations, Thermal state and heat are in workpiece
+material coordinates. Eddy alone maps temperature to the source frame and heat
+back; Thermal must not rotate temperature again. Linear fractional interpolation
+can smooth hotspots; weighted-integral conservation does not imply peak accuracy.
+Unsafe nearly cancelling integral corrections fail fast. High-order FE coefficient
+temperature rotation remains unsupported. Use standard NGSolve H1 for heat.
+
 Induction heating uses alternating current in a coil to generate eddy currents
 in a conductive workpiece. The eddy currents produce Joule heating (I^2 R losses).
 

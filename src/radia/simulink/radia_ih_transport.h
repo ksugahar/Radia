@@ -7,8 +7,9 @@ namespace radia { namespace ih {
 
 // Transport a scalar field stored in workpiece coordinates by a cyclic
 // angular shift.  The operation is conservative with respect to the supplied
-// positive cell weights; it is used by the Thermal S-Function between two
-// mechanical angles.
+// positive cell weights when the correction is well-conditioned. Eddy uses it
+// for source/material frame mapping; Thermal never transports its state.
+// Fractional linear interpolation smooths profiles, not just their integrals.
 void transport_periodic(const std::vector<double>& previous,
                         const std::vector<double>& weights,
                         double delta_angle_rad,

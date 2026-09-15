@@ -32,6 +32,8 @@ struct ThermalStepOptions {
 // Advance M*T' + K*T = f(q, Tamb) by backward Euler.  M and K are assembled
 // by the checked NGSolve mesh contract; this function owns only the native
 // state update and linear solve used by the Simulink block.
+// cell_weights validates the representation contract; M already contains the
+// integration/heat-capacity weights, so they must not be applied a second time.
 void advance_thermal(const CSRMatrix& mass, const CSRMatrix& stiffness,
                      const CSRMatrix* convection,
                      const std::vector<double>& source_W,

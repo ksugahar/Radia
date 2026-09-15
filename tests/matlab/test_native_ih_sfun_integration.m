@@ -24,6 +24,43 @@ if isfolder(testCase.TestData.FileGenRoot)
 end
 end
 
+function testFullTurnMaterialHeating(testCase)
+for subdivisions = [1,2]
+    n = 8;
+    cfg = contractConfig(1,n,n);
+    cfg.heat_projection = [1;zeros(n-1,1)];
+    cfg.heat_to_temperature_projection = eye(n);
+    cfg.mass_row_ptr = (0:n).'; cfg.mass_col = (0:n-1).';
+    cfg.mass_value = ones(n,1);
+    cfg.stiffness_row_ptr = cfg.mass_row_ptr;
+    cfg.stiffness_col = cfg.mass_col;
+    cfg.stiffness_value = zeros(n,1);
+    cfg.initial_temperature_K = 300*ones(n,1);
+    cfg.sample_time_s = 1/subdivisions;
+    cfg = radia.simulink.validateIHNativeConfig(cfg);
+    eddy = radia_mex('ih.eddy.create',cfg);
+    thermal = radia_mex('ih.thermal.create',cfg);
+    cleanup = onCleanup(@() destroyPair(eddy,thermal));
+    for k = 0:n*subdivisions-1
+        angle = 2*pi*k/(n*subdivisions);
+        temperature = radia_mex('ih.thermal.output',thermal);
+        heat = radia_mex('ih.eddy.output',eddy,1,angle,temperature);
+        radia_mex('ih.thermal.update',thermal,heat,300,angle);
+    end
+    verifyEqual(testCase,radia_mex('ih.thermal.output',thermal), ...
+        301*ones(n,1),"AbsTol",1e-9);
+    radia_mex('ih.eddy.reset',eddy);
+    verifyEqual(testCase,radia_mex('ih.eddy.output',eddy,1,0,temperature), ...
+        cfg.heat_projection(:),"AbsTol",1e-12);
+    clear cleanup
+end
+end
+
+function destroyPair(eddy,thermal)
+radia_mex('ih.eddy.destroy',eddy);
+radia_mex('ih.thermal.destroy',thermal);
+end
+
 function testHeatRaisesTemperature(testCase)
 out1 = runNativeIH(1.0);
 out2 = runNativeIH(2.0);
@@ -101,7 +138,7 @@ values=simOut.get("rotated_heat");
 heat=values(end,:);
 end
 
-function testRotationTransportConservesWeightedEnergy(testCase)
+function testRotationKeepsPassiveMaterialTemperature(testCase)
 model = "radia_native_ih_rotation_" + erase(string(java.util.UUID.randomUUID),"-");
 n = 4;
 weights = [1;2;1;2];
@@ -137,7 +174,7 @@ simOut=sim(model,"ReturnWorkspaceOutputs","on");
 temperature=simOut.get("rotation_temp");
 verifyEqual(testCase,weights.'*temperature(end,:).',weights.'*initial, ...
     "AbsTol",1e-10);
-verifyNotEqual(testCase,temperature(end,:),initial.');
+verifyEqual(testCase,temperature(end,:),initial.',"AbsTol",1e-10);
 end
 
 function testThermalStateFeedsTemperatureDependentEddy(testCase)
