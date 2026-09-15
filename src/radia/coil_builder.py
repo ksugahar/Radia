@@ -616,8 +616,8 @@ class CoilBuilder:
 
 		The cross-section interpolates linearly from profile_start at
 		s=0 to profile_end at s=1. profile_start defaults to the
-		current builder cross-section (a RectProfile constructed from
-		the builder's _width, _height).
+		current builder profile, or a rectangular fallback constructed
+		from the builder's _width and _height.
 
 		Args:
 			profile_end: Profile at the segment end. Same type as
@@ -627,15 +627,14 @@ class CoilBuilder:
 				discretization. Default 20.
 			tilt: Y-axis tilt [deg].
 			profile_start: explicit Profile at segment start. If None,
-				uses RectProfile(self._width, self._height) matching
-				the builder's current cross-section.
+				uses the builder's current profile or rectangular fallback.
 		Returns:
 			self (for chaining).
 		"""
 		from radia.coil_profile import RectProfile
 		if profile_start is None:
 			self._check_cross_section()
-			profile_start = RectProfile(self._width, self._height)
+			profile_start = self._profile if self._profile is not None else RectProfile(self._width, self._height)
 
 		segment = LoftStraightSegment(
 			self.current, self._position, self._orientation,
@@ -650,6 +649,7 @@ class CoilBuilder:
 		w_end, h_end = profile_end.bounding_wh()
 		self._width = w_end
 		self._height = h_end
+		self._profile = profile_end
 
 		return self
 
