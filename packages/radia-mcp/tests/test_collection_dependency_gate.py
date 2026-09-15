@@ -6,6 +6,7 @@ import pytest
 
 @pytest.mark.parametrize("filename", [
     "test_urn_fit_contract.py", "test_paper_writing_conclusion_first_use.py",
+    "test_paper_writing_sentence_endings.py",
 ])
 def test_lightweight_contract_is_collectable_in_minimal_ci(monkeypatch, filename):
     """Pure input/text checks must not disappear behind optional dependencies."""
