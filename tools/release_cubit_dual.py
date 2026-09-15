@@ -62,7 +62,7 @@ def verify_published(distribution, contract):
 WORKER = r'''
 import base64, getpass, hashlib, importlib.metadata as md, json, os
 from pathlib import Path
-import re, shutil, socket, subprocess, sys, zipfile
+import re, shutil, socket, subprocess, sys, sysconfig, zipfile
 cfg = json.loads(base64.b64decode(sys.argv[1]))
 root = Path(cfg['source_root']).resolve()
 package = root / 'packages/cubit-mesh-export'
@@ -173,6 +173,9 @@ try:
         result['core_installed'] = core_identity
         command([sys.executable, '-m', 'cubit_mesh_export.mcp.server', '--selftest'], 120)
         result['mcp_selftest'] = True
+        cli = Path(sysconfig.get_path('scripts')) / 'mcp-server-cubit.exe'
+        command([str(cli), '--selftest'], 120)
+        result['mcp_cli_selftest'] = True
         command([sys.executable, '-m', 'cubit_mesh_export.install', '--verify-only'], 120)
     if cfg['action'] == 'deploy':
         for module, arguments in [('smoke_test', ['--keep']),
@@ -204,7 +207,8 @@ def check_receipt(receipt, contract, target):
                     core=contract['core'])
     return (all(receipt.get(k) == v for k, v in expected.items())
             and all(receipt.get(k) is True for k in
-                    ('passed', 'unrelated_packages_unchanged', 'smoke_test', 'toolbar_smoke', 'mcp_selftest')))
+                    ('passed', 'unrelated_packages_unchanged', 'smoke_test', 'toolbar_smoke',
+                     'mcp_selftest', 'mcp_cli_selftest')))
 
 
 def run(args):
