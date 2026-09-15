@@ -86,8 +86,11 @@ void advance_thermal(const CSRMatrix& mass, const CSRMatrix& stiffness,
     check_matrix(mass, n, "mass");
     check_matrix(stiffness, n, "stiffness");
     if (convection) check_matrix(*convection, n, "convection");
+    const bool coefficients = !options.constant_coefficients.empty();
+    if (coefficients && options.constant_coefficients.size() != static_cast<std::size_t>(n))
+        throw std::invalid_argument("IH constant coefficient size mismatch");
     for (double w : cell_weights)
-        if (!(w > 0.0) || !std::isfinite(w))
+        if ((!coefficients && !(w > 0.0)) || !std::isfinite(w))
             throw std::invalid_argument("IH thermal cell weights must be finite and positive");
 
     // M + dt*K is assembled from the same workpiece mesh as the reference.
@@ -108,7 +111,9 @@ void advance_thermal(const CSRMatrix& mass, const CSRMatrix& stiffness,
         if (convection) {
             double row_sum = 0.0;
             for (int k = convection->row_ptr[i]; k < convection->row_ptr[i + 1]; ++k)
-                row_sum += convection->value[static_cast<std::size_t>(k)];
+                row_sum += convection->value[static_cast<std::size_t>(k)] *
+                    (coefficients ? options.constant_coefficients[
+                        static_cast<std::size_t>(convection->col[static_cast<std::size_t>(k)])] : 1.0);
             rhs[static_cast<std::size_t>(i)] += options.dt_s * options.convection_W_per_m2K *
                 options.ambient_temperature_K * row_sum;
         }

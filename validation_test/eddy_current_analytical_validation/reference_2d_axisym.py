@@ -38,7 +38,8 @@ def solve_2d_axisym(r_coil=0.030, a_coil=0.003, r_wp=0.025, h_wp=0.025,
                     skin_mode="uniform", maxh_wp=None,
                     maxh_wp_interior=None, skin_ratio=5.0,
                     grading=0.5,
-                    sigma_coil=0.0, mu_r_coil=1.0, maxh_coil_override=None):
+                    sigma_coil=0.0, mu_r_coil=1.0, maxh_coil_override=None,
+                    r_wp_inner=0.0):
     """2D axisymmetric FEM with full eddy current resolution.
 
     Args:
@@ -56,11 +57,17 @@ def solve_2d_axisym(r_coil=0.030, a_coil=0.003, r_wp=0.025, h_wp=0.025,
         maxh_coil_override: mesh size in coil. When sigma_coil > 0 the
             coil needs h <= delta_coil/3 to resolve the skin layer;
             default a_coil/2 may be too coarse.
+        r_wp_inner: optional cylindrical bore radius. Zero is the original
+            solid cylinder; positive values currently require kelvin=False.
 
     Returns dict with L, P, H_t_rms, diagnostics.
     """
     if mat is None:
         mat = EMMaterial.from_name("steel")
+    if not 0 <= r_wp_inner < r_wp:
+        raise ValueError("Require 0 <= r_wp_inner < r_wp")
+    if kelvin and r_wp_inner:
+        raise ValueError("Annular reference currently requires kelvin=False")
 
     from ngsolve import (Mesh, H1, Periodic, BilinearForm, LinearForm,
                          GridFunction, Integrate, Conj, grad, sqrt as ngsqrt,
@@ -120,8 +127,8 @@ def solve_2d_axisym(r_coil=0.030, a_coil=0.003, r_wp=0.025, h_wp=0.025,
 
         # Workpiece
         wp_cond = WorkPlane()
-        wp_cond.MoveTo(0, -h_wp / 2).LineTo(r_wp, -h_wp / 2).LineTo(
-            r_wp, h_wp / 2).LineTo(0, h_wp / 2).LineTo(0, -h_wp / 2)
+        wp_cond.MoveTo(r_wp_inner, -h_wp / 2).LineTo(r_wp, -h_wp / 2).LineTo(
+            r_wp, h_wp / 2).LineTo(r_wp_inner, h_wp / 2).LineTo(r_wp_inner, -h_wp / 2)
         cond_full = wp_cond.Face()
         cond_full.name = "workpiece"
         if skin_mode == "skin":
@@ -260,8 +267,8 @@ def solve_2d_axisym(r_coil=0.030, a_coil=0.003, r_wp=0.025, h_wp=0.025,
             e.name = "axis" if abs(e.center.x) < 1e-6 else "outer"
 
         wp_cond = WorkPlane()
-        wp_cond.MoveTo(0, -h_wp / 2).LineTo(r_wp, -h_wp / 2).LineTo(
-            r_wp, h_wp / 2).LineTo(0, h_wp / 2).LineTo(0, -h_wp / 2)
+        wp_cond.MoveTo(r_wp_inner, -h_wp / 2).LineTo(r_wp, -h_wp / 2).LineTo(
+            r_wp, h_wp / 2).LineTo(r_wp_inner, h_wp / 2).LineTo(r_wp_inner, -h_wp / 2)
         cond_face = wp_cond.Face()
         cond_face.name = "workpiece"
         if skin_mode == "skin":
@@ -358,6 +365,17 @@ def solve_2d_axisym(r_coil=0.030, a_coil=0.003, r_wp=0.025, h_wp=0.025,
                  for i in range(fes.ndof))
     P_total = -math.pi * omega * ftu_im
 
+    # Independent volume dissipation, not a resistance inferred from P_total.
+    # Peak phasors, exp(+i omega t): E_phi=-i omega phi/r and dV=2pi r dr dz.
+    P_joule_wp = math.pi * omega**2 * sigma * float(Integrate(
+        (gfu * Conj(gfu)).real / r_safe, mesh,
+        definedon=mesh.Materials("workpiece"), order=2 * order + 4))
+    # A conducting, renormalized coil needs its circuit-voltage contribution;
+    # the impressed-current identity below is explicitly restricted to sigma_coil=0.
+    power_balance_error = (abs(P_total - P_joule_wp) /
+                           max(abs(P_total), abs(P_joule_wp), 1e-300)
+                           if sigma_coil == 0 else None)
+
     # H_t on workpiece cylindrical surface
     B_cf = Bop(gfu)
     n_sample = 50
@@ -378,6 +396,16 @@ def solve_2d_axisym(r_coil=0.030, a_coil=0.003, r_wp=0.025, h_wp=0.025,
     return {
         'L': float(L),
         'P_total': float(P_total),
+        'P_joule_workpiece': P_joule_wp,
+        'power_balance_relative_error': power_balance_error,
+        'power_balance_applicable': sigma_coil == 0,
+        'r_wp_inner': r_wp_inner,
+        'coil_cross_section_radius': a_coil,
+        'current_peak': I_total,
+        'maxh_air': maxh_air,
+        'kelvin': kelvin,
+        'workpiece_volume': float(Integrate(2 * math.pi * x, mesh,
+            definedon=mesh.Materials("workpiece"))),
         'H_t_rms': float(H_t_rms_side),
         'W_mag': 0.5 * float(L) * I_total ** 2,
         'ndof': ndof,
