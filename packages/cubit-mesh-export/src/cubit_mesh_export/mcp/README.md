@@ -27,6 +27,10 @@ The exporter includes MCP and its private runtime support by default. Neither `r
 module commands with `python -m cubit_mesh_export.mcp.server`; there is no
 `radia_mcp.cubit` compatibility module. Use the selected installation's Python.
 
+Cubit failure logs and documentation caches use `CUBIT_MCP_STATE_DIR`, or the
+platform's `cubit-mesh-export` state directory by default, independently of Radia.
+Existing Radia state is not deleted or migrated automatically.
+
 Electromagnetic modeling helpers use neutral domain names and explicit
 Cubit or build123d backends. Reference commercial-solver brands do not belong
 in repository API names, docs, tests, or commit messages. Existing STEP exchange

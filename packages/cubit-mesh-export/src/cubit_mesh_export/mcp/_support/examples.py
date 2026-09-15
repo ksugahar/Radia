@@ -102,7 +102,6 @@ _DEFAULT_LOCAL_CUBIT_ROOTS = [
 	r"public-safe curated corpus",
 	r"repo:/docs",
 	r"repo:/validation_test",
-	r"repo:/src/radia/panels/samples",
 ]
 
 
@@ -422,17 +421,20 @@ _LOCAL_MAX_FILE_BYTES = 200_000  # skip huge files (data dumps, generated meshes
 
 
 def _resolve_local_root(root_s: str) -> Path:
-	"""Resolve `repo:/...` roots from an editable Radia checkout."""
+	"""Resolve optional repository examples without assuming a package depth."""
 	if root_s.startswith("repo:/"):
 		rel = root_s[len("repo:/"):].lstrip("/\\")
 		here = Path(__file__).resolve()
 		candidates = []
-		if len(here.parents) > 5:
-			candidates.append(here.parents[5] / rel)
+		for parent in here.parents:
+			if (parent / '.git').exists():
+				candidates.append(parent / rel)
+				break
 		candidates.append(Path.cwd() / rel)
 		for candidate in candidates:
 			if candidate.exists():
 				return candidate
+		return Path.cwd() / rel
 	return Path(root_s)
 
 
