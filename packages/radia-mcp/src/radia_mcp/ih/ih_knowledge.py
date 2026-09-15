@@ -24,6 +24,27 @@ INDUCTION_HEATING_OVERVIEW = """
 
 ## Physics Overview
 
+### Linear numerical acceptance scope
+
+The repository-owned linear acceptance is complete for the declared 1 kHz
+copper solid/bored axisymmetric cylinders, prescribed circular current and
+uniform scalar SIBC. It compares independent axisymmetric A-form FEM-SIBC
+against P1 surface BEM (including the full loop field for the bore).
+Worst errors are 0.691% surface loss, 1.179% reaction power and 1.558%
+complex tangential-field relative L2 on the declared side-surface sampling
+stencil, all below the IH-specific 2% limit. Exterior/mesh refinement and
+conservative heat projection also pass. This is not a whole-surface field
+error certificate or a general material/frequency/geometry envelope.
+
+Evidence: validation_test/eddy_current_analytical_validation/
+ih_sibc_closure_20260915.json and ih_linear_acceptance_audit_20260916.json.
+The latter rechecks saved measurements and recovered source bytes (allowing
+only CRLF/LF conversion); it is not a new solve or installed-binary acceptance.
+Do not present this as validation of SIBC approximation error against a
+volume-resolved conductor, nonlinear steel, temperature-dependent BH, or
+complete real-file Simulink delivery. Nonlinear experimental validation is a
+separate activity; known nonlinear implementation issues remain issues.
+
 ### Native Simulink preview limits
 
 The geometry assembler currently freezes the full EM unit-current loss field

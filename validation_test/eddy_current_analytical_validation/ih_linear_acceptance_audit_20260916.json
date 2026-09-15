@@ -1,0 +1,103 @@
+{
+  "scope": "Repository-owned linear SIBC acceptance; no external user-case inputs.\n\nScope: axisymmetric solid/bored copper cylinders, uniform scalar SIBC,\nprescribed circular current source, P1 dense BEM, total loop field.\nFEM is the independent axisymmetric A-form reference. BEM is a 3D surface\ndiscretization of the same axisymmetric geometry, not a 3D volume FEM solve.\n",
+  "evidence_sha256": "88eee22ee4ba80f0b50ce87b13c4742539e7c2f2ff6be08e8119db703e130a9e",
+  "audit_source_sha256": "195ed59e60280cf35b2642fa2b4ca2feea6c158dc132ba4e46ca72803af10b0d",
+  "audit_kind": "saved-measurement and recovered-source audit; no solver rerun",
+  "source_identity": {
+    "axisym_sibc_reference.py": {
+      "recorded_raw_sha256": "b30b63a64ca561db5b881ae87fda23a756f5c71f359e8d81635e19c85330b60f",
+      "current_raw_sha256": "cb7f18d54f6a9efa2af0b289b48087cb0ad1c647365207992594768bed1e5f84",
+      "lf_sha256": "b30b63a64ca561db5b881ae87fda23a756f5c71f359e8d81635e19c85330b60f"
+    },
+    "validate_sibc_reaction_power.py": {
+      "recorded_raw_sha256": "1f7e6389e9e77a1d7f06661e37ed5c807e56005b7d7897c85369fe093835736a",
+      "current_raw_sha256": "ac9dfaddb565ef08b1c69674f6b795a89dc605b471f751b6473c816b9791ff98",
+      "lf_sha256": "1f7e6389e9e77a1d7f06661e37ed5c807e56005b7d7897c85369fe093835736a"
+    },
+    "bem_sibc_solver.py": {
+      "recorded_raw_sha256": "6e8fc66ee9b1b54ada1bc0947b5c8f9483c3c15f8a25e9ca4d8a286d8dc8513d",
+      "current_raw_sha256": "f95d0d2cc9c860f4f15247dfa3d003b9d4d5657a22aa7350a49dcba9cb88b79b",
+      "lf_sha256": "c206995b549a169aade635673d50d5326b6b768692f3128cc380b0466ac96b05"
+    },
+    "bem_loop_extension.py": {
+      "recorded_raw_sha256": "334661c502aaac803b5489f5e3ca3e1b39e0e3a687434788997c196098b48337",
+      "current_raw_sha256": "4ea804b66d2de3d1f214503345de6237b2a39fd42af9351833e9d102abc40936",
+      "lf_sha256": "0cfe37a2d6fd4f905b0864d6b4d5b2b9de5ed885eee1eb17aa6b8077137314ed"
+    },
+    "workpiece_surface.py": {
+      "recorded_raw_sha256": "f40c6db4137a9fe612ebd2da03a3395890d8f9bd5647295109593d79da102b9c",
+      "current_raw_sha256": "c76deb45b041945e3e53b6e51a6e9bc421fa71a67f742f79cd861d5ec359339f",
+      "lf_sha256": "d61b8288f53b9ac8fd7da1df54fa60b7ce87c1d139242fadcdc70e3bd542d67a"
+    }
+  },
+  "limits": {
+    "loss_relative_error": 0.02,
+    "reaction_relative_error": 0.02,
+    "complex_tangential_field_relative_l2": 0.02,
+    "bem_loss_refinement_relative_change": 0.015,
+    "bem_power_balance_relative_error": 0.01,
+    "heat_projection_relative_error": 1e-10,
+    "fem_exterior_relative_change": 0.005,
+    "fem_power_balance_relative_error": 1e-08
+  },
+  "cases": [
+    {
+      "bore": 0.0,
+      "metrics": {
+        "loss_relative_error": 0.006031892831421137,
+        "reaction_relative_error": 0.005204863282359917,
+        "complex_tangential_field_relative_l2": 0.015573328851567527,
+        "bem_loss_refinement_relative_change": 0.005899928096808171,
+        "bem_power_balance_relative_error": 0.0008320483548213145,
+        "heat_projection_relative_error": 4.217692573462386e-15,
+        "fem_exterior_relative_change": 0.003295903212434448,
+        "fem_power_balance_relative_error": 2.0855279391187236e-11
+      },
+      "checks": {
+        "loss_relative_error": true,
+        "reaction_relative_error": true,
+        "complex_tangential_field_relative_l2": true,
+        "bem_loss_refinement_relative_change": true,
+        "bem_power_balance_relative_error": true,
+        "heat_projection_relative_error": true,
+        "fem_exterior_relative_change": true,
+        "fem_power_balance_relative_error": true
+      },
+      "passed": true
+    },
+    {
+      "bore": 0.0075,
+      "metrics": {
+        "loss_relative_error": 0.0069051348881375985,
+        "reaction_relative_error": 0.0117804556068406,
+        "complex_tangential_field_relative_l2": 0.015498874212159843,
+        "bem_loss_refinement_relative_change": 0.006711562023254514,
+        "bem_power_balance_relative_error": 0.004909219556143742,
+        "heat_projection_relative_error": 1.1988804610179103e-14,
+        "fem_exterior_relative_change": 0.0032952870412366053,
+        "fem_power_balance_relative_error": 1.772911241477634e-11
+      },
+      "checks": {
+        "loss_relative_error": true,
+        "reaction_relative_error": true,
+        "complex_tangential_field_relative_l2": true,
+        "bem_loss_refinement_relative_change": true,
+        "bem_power_balance_relative_error": true,
+        "heat_projection_relative_error": true,
+        "fem_exterior_relative_change": true,
+        "fem_power_balance_relative_error": true
+      },
+      "passed": true
+    }
+  ],
+  "recorded_native_sha256": "4d0b6b9492050ea35ef9b46d3c601cf74b1c2684d7bb6ccdac21fd6bac9141b4",
+  "installed_native_certified": false,
+  "excluded": [
+    "nonlinear steel",
+    "temperature-dependent BH",
+    "general linear-material/frequency/geometry envelope",
+    "SIBC approximation error versus volume-resolved conductor FEM",
+    "installed-package or real-file Simulink delivery acceptance"
+  ],
+  "passed": true
+}
