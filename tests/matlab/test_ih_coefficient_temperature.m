@@ -5,6 +5,7 @@ end
 function config=fixture()
 config=radia.simulink.makeIHNativeSmokeConfig();
 config.n_temperature=2;
+config.rotation_mode='none';
 config.temperature_representation='ngsolve-h1-coefficients';
 config.temperature_constant_coefficients=[1;0];
 config.temperature_cell_weights=[1;.5];

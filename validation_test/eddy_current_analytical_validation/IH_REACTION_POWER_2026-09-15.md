@@ -132,7 +132,7 @@ Toolkit acceptance and an unmocked strict-label geometry/configuration run
 remain open. The checked-in cylinder
 volume fixture currently labels its boundary `outer`, not required `sibc`;
 it cannot silently stand in for a production-contract fixture. Native geometry
-assembly still requires P1; its new separate 2D route is described above. Main integration and distribution
+assembly at that checkpoint required P1; see the later P2 evidence below. Main integration and distribution
 have not occurred.
 
 ### Additional native thermal evidence
@@ -187,3 +187,31 @@ asserted fixed nor used as an acceptance input.
 
 This change is a tested repository implementation, not a PyPI publication
 or deployment into existing student environments.
+
+### P2/Q2 native and tracked-model evidence (later on 2026-09-15)
+
+The source now accepts thermal order 2 independently of the P1 heat handoff.
+NGSolve assembles the mixed P1-to-P2 boundary load. Native state uses explicit
+H1 coefficients and the stored constant-function vector for initialization and
+ambient convection. Signed FE integral weights are not interpreted as nodal
+cell capacities. Periodic coefficient transport is rejected. Monitor extrema
+use a sparse mapped quadrature evaluation operator and the mean uses the FE
+integral, not coefficient min/max or an unweighted coefficient average.
+
+`ih_axisym_p2_native_20260915.json` records the clean-source MEX build at
+`c4953557b` and the independent 100-step axisymmetric Q2 comparison: maximum
+evaluated temperature error 9.73e-9 K, relative rise error 4.32e-7, no handles
+retained. Python regressions also check P2 tetrahedral assembly, exact constant
+heat capacity and mixed-source power, plus the known constant Robin steady
+solution. The updated MATLAB integration report contains 34 passing tests.
+
+The tracked `matlab/radia_ih.slx` was reconstructed in a temporary directory,
+read/edited/checked with the installed official Simulink Toolkit via the
+authorized Python Engine, saved to its exact tracked path, closed and reopened.
+`model_check` reported healthy connectivity. The tracked model then ran the
+361-DOF Q2 fixture through 10 seconds; all 101 output samples agree with the
+independent NGSolve trajectory within 9.73e-9 K (`ih_tracked_p2_20260915.json`).
+Its XML text scan found no replacement characters or suspicious question-mark
+runs. Full-window visual QA is pending; these are diagnostic in-memory fixtures,
+not an unmocked production VOL/CAD-to-heat-transfer acceptance. Main integration
+and publication must be recorded separately after their gates pass.
