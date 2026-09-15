@@ -20,13 +20,13 @@ cubit-plugin-install deploys plugin binaries to Cubit.
 # fails even though the exact pinned Netgen wheel is installed.
 import netgen as _netgen  # noqa: F401
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 # Compatibility window with the main radia package. The Cubit plugin
 # binaries bundled here (.ccm/.pyd; .ccl was removed in radia 4.80.0)
 # are rebuilt alongside Radia's Cubit toolbar and mesh-validation layer. A
 # mismatch is reported by cubit-plugin-install verification.
 COMPAT_RADIA_MIN = "4.5.0"
-COMPAT_RADIA_MAX = "4.999.999"  # bumped when we cut the next radia minor
+COMPAT_RADIA_MAX = "5.0.0"  # exact Radia 5 release candidate; no open-ended major range
 
 __all__ = ["__version__", "COMPAT_RADIA_MIN", "COMPAT_RADIA_MAX"]
