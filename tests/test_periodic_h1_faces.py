@@ -97,3 +97,60 @@ def test_nonuniform_harmonic_field(order, shape, scale, record_property):
     error = (ng.Integrate(ng.InnerProduct(diff,diff),mesh)/ng.Integrate(ng.InnerProduct(gradient,gradient),mesh))**.5
     record_property('relative_field_error',float(error))
     assert error < 1e-11
+
+
+@pytest.mark.parametrize('order',[2,3])
+@pytest.mark.parametrize('ratio',[2.,100.,1000.])
+def test_discontinuous_permeability(order, ratio, record_property):
+    mesh = split_mesh()
+    fes = ng.Compress(_periodic_h1_single_interface(ng.H1(mesh,order=order,dirichlet='outer')))
+    mu = mesh.MaterialCF({'left':1.,'right':ratio})
+    gradient = mesh.MaterialCF({'left':ng.CF((ng.y,ng.x,0)),
+        'right':ng.CF((ng.y/ratio,1+(ng.x-1)/ratio,0))})
+    u,v = fes.TnT()
+    a = ng.BilinearForm(fes,symmetric=True)
+    a += mu*ng.InnerProduct(ng.grad(u),ng.grad(v))*ng.dx(bonus_intorder=4)
+    a.Assemble()
+    g = ng.GridFunction(fes)
+    # A continuous boundary expression avoids ambiguous material selection on BND.
+    boundary = ng.IfPos(ng.x-1,ng.y*(1+(ng.x-1)/ratio),ng.x*ng.y)
+    g.Set(boundary,definedon=mesh.Boundaries('outer'))
+    g.vec.data -= a.mat.Inverse(fes.FreeDofs(),inverse='pardiso')*(a.mat*g.vec)
+    diff = mu*(ng.grad(g)-gradient)
+    error = (ng.Integrate(ng.InnerProduct(diff,diff),mesh)/
+             ng.Integrate(mu**2*ng.InnerProduct(gradient,gradient),mesh))**.5
+    record_property('relative_flux_error',float(error))
+    assert error < 1e-10
+
+
+@pytest.mark.parametrize('order',[1,2,3])
+def test_nonlinear_constitutive_interface(order, record_property):
+    # Isolates the interface with a convex analytic law, not a tabulated-BH driver.
+    import numpy as np
+    from ngsolve.solvers import Newton
+
+    mesh = split_mesh()
+    fes = ng.Compress(_periodic_h1_single_interface(ng.H1(mesh,order=order,dirichlet='outer')))
+    ratio, alpha = 7., 3.
+    # Independent cubic roots enforce equal normal flux in both materials.
+    def root(mu):
+        roots = np.roots([mu*alpha,0.,mu,-1.])
+        return float(next(r.real for r in roots if abs(r.imag)<1e-12))
+    left, right = root(1.), root(ratio)
+    mu = mesh.MaterialCF({'left':1.,'right':ratio})
+    gradient = mesh.MaterialCF({'left':ng.CF((left,0,0)), 'right':ng.CF((right,0,0))})
+    u = fes.TrialFunction()
+    q = ng.InnerProduct(ng.grad(u),ng.grad(u))
+    a = ng.BilinearForm(fes,symmetric=True)
+    a += ng.SymbolicEnergy(mu*(q/2+alpha*q*q/4), bonus_intorder=6)
+    g = ng.GridFunction(fes)
+    boundary = ng.IfPos(ng.x-1,left+right*(ng.x-1),left*ng.x)
+    g.Set(boundary,definedon=mesh.Boundaries('outer'))
+    status, iterations = Newton(a,g,maxit=50,maxerr=1e-13,inverse='pardiso',printing=False)
+    assert status == 0
+    diff = ng.grad(g)-gradient
+    error = (ng.Integrate(ng.InnerProduct(diff,diff),mesh)/
+             ng.Integrate(ng.InnerProduct(gradient,gradient),mesh))**.5
+    record_property('relative_nonlinear_field_error',float(error))
+    record_property('newton_iterations',int(iterations))
+    assert error < 1e-10
