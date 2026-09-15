@@ -19,12 +19,12 @@ def probe(label):
         "VER radia-mcp": "1.4.53", "COMPAT cme -> radia": "[4.5.0, 4.999.999]",
         "COMPAT rad -> cme": "[0.5.0, 0.999.999]",
     }
-    for name in ("panels/register_toolbar.py", "panels/radia_export_menu.py",
-                 "simulink/application.py", "panels/calc_inductance.py",
+    for name in ("simulink/application.py", "panels/calc_inductance.py",
                  "panels/calc_fem_kelvin.py", "panels/calc_fem_coilmesh.py"):
         values["SHA radia/" + name] = "0123456789ab"
+    values.update({key: "0123456789ab" for key in quad._CME_GUI_FIELDS})
     if label in ("mdx1", "mdx2"):
-        for key in list(values)[1:5]:
+        for key in quad._PHASE9_COMPUTE_NA:
             values[key] = "N/A"
     return "\n".join(f"{key} = {value}" for key, value in values.items())
 
@@ -35,7 +35,10 @@ def test_required_keys_match_both_actual_probe_file_lists():
         paths = next(ast.literal_eval(n.iter) for n in ast.walk(tree)
                      if isinstance(n, ast.For) and isinstance(n.iter, ast.List))
         assert {"SHA radia/" + p for p in paths} == {
-            k for k in quad._PHASE9_FIELDS if k.startswith("SHA ")}
+            k for k in quad._PHASE9_FIELDS if k.startswith("SHA radia/")}
+        cme_paths = [ast.literal_eval(n.iter) for n in ast.walk(tree)
+                     if isinstance(n, ast.For) and isinstance(n.iter, ast.List)][1]
+        assert {"SHA cubit_mesh_export/" + p for p in cme_paths} == set(quad._CME_GUI_FIELDS)
     assert set(quad._parse_phase9_probe("LAB", probe("LAB"))) == set(quad._PHASE9_FIELDS)
 
 
@@ -73,6 +76,24 @@ def test_editable_hosts_cannot_hide_mcp_with_na(label):
 def test_compute_host_must_declare_non_deployed_fields_na():
     with pytest.raises(ValueError):
         quad._parse_phase9_probe("mdx1", probe("LAB"))
+
+
+def test_exporter_gui_drift_blocks_release_even_when_radia_matches(monkeypatch):
+    def output(label, *args):
+        text = probe(label)
+        if label == "100号機":
+            text = text.replace(quad._CME_GUI_FIELDS[0] + " = 0123456789ab",
+                                quad._CME_GUI_FIELDS[0] + " = abcdef012345")
+        return text
+    monkeypatch.setattr(quad, "_probe", output)
+    assert quad.cmd_phase9(None) == 4
+
+
+def test_compute_probe_never_imports_exporter_gui():
+    assert 'import radia, cubit_mesh_export' not in quad.CROSS_MACHINE_PROBE_NO_MCP
+    assert 'cme_root' not in quad.CROSS_MACHINE_PROBE_NO_MCP
+    for field in quad._CME_GUI_FIELDS:
+        assert field + ' = N/A' in quad.CROSS_MACHINE_PROBE_NO_MCP
 
 
 def test_same_values_with_keys_swapped_cannot_hide_drift(monkeypatch):

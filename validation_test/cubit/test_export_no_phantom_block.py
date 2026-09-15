@@ -45,14 +45,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
 
 _cubit_path = None
 try:
-    from radia.install_panels import find_cubit_bin
+    from cubit_mesh_export.toolbar_install import find_cubit_bin
     _cubit_path = find_cubit_bin()
 except Exception:
-    try:
-        from install_panels import find_cubit_bin
-        _cubit_path = find_cubit_bin()
-    except Exception:
-        _cubit_path = None
+    _cubit_path = None
 
 if _cubit_path and _cubit_path not in sys.path:
     sys.path.append(_cubit_path)

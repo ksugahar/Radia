@@ -72,7 +72,7 @@ def demo_acis_path():
     radia_src = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                              '..', '..', 'src', 'radia')
     sys.path.insert(0, os.path.abspath(radia_src))
-    from install_panels import find_cubit_bin
+    from cubit_mesh_export.toolbar_install import find_cubit_bin
     cubit_path = find_cubit_bin()
     if not cubit_path:
         print("\n  Cubit not found. Skipping ACIS path.")

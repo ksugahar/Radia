@@ -7,10 +7,6 @@ on:
     paths:
       - 'packages/cubit-mesh-export/**'
       - 'src/cubit_plugin/**'
-      - 'src/radia/install_panels.py'
-      - 'src/radia/panels/register_toolbar.py'
-      - 'src/radia/panels/radia_export_menu.py'
-      - 'src/radia/_cubit_gui_compat.py'
       - 'tests/test_cubit_standalone_gui.py'
       - 'tools/check_cubit_standalone.py'
       - 'tests/test_cubit_installers.py'
@@ -23,10 +19,6 @@ on:
     paths:
       - 'packages/cubit-mesh-export/**'
       - 'src/cubit_plugin/**'
-      - 'src/radia/install_panels.py'
-      - 'src/radia/panels/register_toolbar.py'
-      - 'src/radia/panels/radia_export_menu.py'
-      - 'src/radia/_cubit_gui_compat.py'
       - 'tests/test_cubit_standalone_gui.py'
       - 'tools/check_cubit_standalone.py'
       - 'tests/test_cubit_installers.py'
@@ -139,7 +131,8 @@ jobs:
             "netgen-mesher==6.2.2606" "ngsolve==6.2.2606"
           $env:PYTHONPATH = 'packages\cubit-mesh-export\src'
           python -m pytest tests\test_cubit_installers.py `
-            tests\test_cubit_menu_startup.py tests\test_cubit_standalone_gui.py -q
+            tests\test_cubit_menu_startup.py tests\test_cubit_standalone_gui.py `
+            packages\cubit-mesh-export\tests\test_toolbar_smoke.py -q
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tools\audit_pyside6_only.py
 

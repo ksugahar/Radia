@@ -18,14 +18,8 @@ SCANNED_ROOTS = (
 )
 
 CUBIT_VTK_BOUNDARY = (
-    "src/radia/cubit_toolbar_smoke.py",
-    "src/radia/install_panels.py",
     "src/radia/panels/calc_common.py",
     "src/radia/panels/calc_mesh_eval.py",
-    "src/radia/panels/cubit_toolbar/",
-    "src/radia/panels/cubit_toolbar_probe.py",
-    "src/radia/panels/radia_export_menu.py",
-    "src/radia/panels/register_toolbar.py",
     "validation_test/cubit/",
     "validation_test/panels/test_radia_export_menu.py",
 )

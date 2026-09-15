@@ -1302,15 +1302,30 @@ print(f"VER cubit-mesh-export  = {cubit_mesh_export.__version__}")
 print(f"VER radia-mcp          = {ver('radia-mcp')}")
 print(f"COMPAT cme  -> radia   = [{cubit_mesh_export.COMPAT_RADIA_MIN}, {cubit_mesh_export.COMPAT_RADIA_MAX}]")
 print(f"COMPAT rad  -> cme     = [{radia.COMPAT_CUBIT_MESH_EXPORT_MIN}, {radia.COMPAT_CUBIT_MESH_EXPORT_MAX}]")
-for r in ["panels/register_toolbar.py",
-          "panels/radia_export_menu.py",
-          "simulink/application.py",
+for r in ["simulink/application.py",
           "panels/calc_inductance.py",
           "panels/calc_fem_kelvin.py",
           "panels/calc_fem_coilmesh.py"]:
     print(f"SHA radia/{r:35s} = {hsh_text(os.path.join(rad,r))}")
 '''
 
+
+_CME_GUI_PROBE = '''
+# Hash the installed exporter GUI, independently of the Radia tag/checkouts.
+from pathlib import Path
+cme_root = Path(cubit_mesh_export.__file__).resolve().parent
+for r in ["cubit_gui/register_toolbar.py", "cubit_gui/radia_export_menu.py",
+          "toolbar_smoke.py", "cubit_gui/toolbar_probe.py"]:
+    path = cme_root / r
+    data = path.read_bytes().replace(bytes([13, 10]), bytes([10])).replace(bytes([13]), bytes([10]))
+    print(f"SHA cubit_mesh_export/{r} = {hashlib.sha256(data).hexdigest()[:12]}")
+'''
+_CME_GUI_FIELDS = (
+    "SHA cubit_mesh_export/cubit_gui/register_toolbar.py",
+    "SHA cubit_mesh_export/cubit_gui/radia_export_menu.py",
+    "SHA cubit_mesh_export/toolbar_smoke.py",
+    "SHA cubit_mesh_export/cubit_gui/toolbar_probe.py",
+)
 
 CROSS_MACHINE_PROBE_NO_MCP = CROSS_MACHINE_PROBE.replace(
     "import radia, cubit_mesh_export", "import radia",
@@ -1327,6 +1342,9 @@ CROSS_MACHINE_PROBE_NO_MCP = CROSS_MACHINE_PROBE.replace(
     "print(f\"VER radia-mcp          = {ver('radia-mcp')}\")",
     'print("VER radia-mcp          = N/A")',
 )
+CROSS_MACHINE_PROBE_NO_MCP += "\n" + "\n".join(
+    f"print({(field + ' = N/A')!r})" for field in _CME_GUI_FIELDS)
+CROSS_MACHINE_PROBE += _CME_GUI_PROBE
 
 
 # Editable-tier probe (2026-05-28 fix).  LAB/100号機 are editable DEV checkouts, so
@@ -1371,14 +1389,12 @@ print(f"VER cubit-mesh-export  = {cubit_mesh_export.__version__}")
 print(f"VER radia-mcp          = {ver('radia-mcp')}")
 print(f"COMPAT cme  -> radia   = [{cubit_mesh_export.COMPAT_RADIA_MIN}, {cubit_mesh_export.COMPAT_RADIA_MAX}]")
 print(f"COMPAT rad  -> cme     = [{radia.COMPAT_CUBIT_MESH_EXPORT_MIN}, {radia.COMPAT_CUBIT_MESH_EXPORT_MAX}]")
-for r in ["panels/register_toolbar.py",
-          "panels/radia_export_menu.py",
-          "simulink/application.py",
+for r in ["simulink/application.py",
           "panels/calc_inductance.py",
           "panels/calc_fem_kelvin.py",
           "panels/calc_fem_coilmesh.py"]:
     print(f"SHA radia/{r:35s} = {hsh_git('src/radia/' + r)}")
-'''
+''' + _CME_GUI_PROBE
 
 
 def _probe(host_label, cmd_prefix, probe_src=CROSS_MACHINE_PROBE):
@@ -1403,14 +1419,12 @@ def _probe(host_label, cmd_prefix, probe_src=CROSS_MACHINE_PROBE):
 _PHASE9_FIELDS = (
     "VER radia", "VER cubit-mesh-export", "VER radia-mcp",
     "COMPAT cme -> radia", "COMPAT rad -> cme",
-    "SHA radia/panels/register_toolbar.py",
-    "SHA radia/panels/radia_export_menu.py",
     "SHA radia/simulink/application.py",
     "SHA radia/panels/calc_inductance.py",
     "SHA radia/panels/calc_fem_kelvin.py",
     "SHA radia/panels/calc_fem_coilmesh.py",
-)
-_PHASE9_COMPUTE_NA = frozenset(_PHASE9_FIELDS[1:5])
+) + _CME_GUI_FIELDS
+_PHASE9_COMPUTE_NA = frozenset(_PHASE9_FIELDS[1:5] + _CME_GUI_FIELDS)
 
 
 def _parse_phase9_probe(label, output):

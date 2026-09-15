@@ -2,7 +2,7 @@
 """Probe the Coreform-owned Radia Export toolbar in a real Cubit GUI.
 
 This file is executed inside Cubit's embedded Python by
-``radia.cubit_toolbar_smoke``.  Keep it standalone: importing the normal
+``cubit_mesh_export.toolbar_smoke``. Keep it standalone: importing the normal
 ``radia`` package here would load Python-3.12 extension modules into Cubit's
 private Python runtime.
 """
