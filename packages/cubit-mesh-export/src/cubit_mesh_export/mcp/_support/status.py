@@ -1,41 +1,9 @@
-"""Generic per-server status / introspection tool factory.
+# Cubit-owned implementation; intentionally maintained independently of Radia MCP.
+# Derived support retains BSD-3-Clause terms: see LICENSE-BSD-3-Clause.txt.
+"""Cubit-owned status, tool discovery, dependency probes and provenance.
 
-Pattern adopted 2026-05-24 from wjc9011/COMSOL_Multiphysics_MCP
-(comsol_status, pdf_search_status, pdf_list_modules — each server
-gives a clear "what can I do, am I healthy" snapshot).
-
-Why this helps LLMs (and humans):
-  - 49 radia_mcp servers (incl. meta + panel_review) — picking the
-    right one is a discovery problem. mcp-server-elf is a separate
-    PyPI package (`pip install mcp-server-elf`) and not in this
-    catalog.
-  - Each server's `<name>_status()` tool returns:
-      - server name + module path
-      - tool list (auto-introspected from FastMCP)
-      - optional-dependency probe (e.g. chromadb installed?)
-      - lightweight `--selftest` command and optional heavier audit command
-      - one-line "what am I for" description
-      - cross-link to companion servers
-  - LLM can chain `<server>_status()` -> understand server -> call
-    the right knowledge tool without trial-and-error
-
-Usage in a server's server.py:
-
-    from mcp.server.fastmcp import FastMCP
-    from cubit_mesh_export.mcp._support.status import register_status_tool
-
-    mcp = FastMCP("mcp-server-bayesian-opt")
-
-    # ... register your @mcp.tool() decorators here ...
-
-    register_status_tool(
-        mcp,
-        server_name="mcp-server-bayesian-opt",
-        description="Bayesian optimization for EM engineering",
-        subpackage="radia_mcp.bayesian_opt",
-        related_servers=["topology-optimization", "evolutionary"],
-        optional_deps=["pymc", "emcee", "numpyro"],
-    )
+The status tool introspects FastMCP registrations rather than maintaining a
+separate tool-count catalog. Importing this helper does not load a solver.
 """
 
 from __future__ import annotations
@@ -84,9 +52,9 @@ def build_status_payload(
     runtime_contract: Optional[dict] = None,
     runtime_provenance: Optional[dict] = None,
 ) -> dict:
-    """Build the status dict shape that every radia_mcp.* server returns."""
+    """Build the Cubit MCP status response."""
     payload = {
-        "schema": "radia-mcp.server-status.v2",
+        "schema": "cubit-mesh-export.server-status.v2",
         "status": "ready",
         "server": server_name,
         "subpackage": subpackage,
@@ -231,7 +199,7 @@ def register_status_tool(
         mcp: FastMCP instance (already created in the server module)
         server_name: e.g. "mcp-server-bayesian-opt"
         description: one-line "what am I for"
-        subpackage: e.g. "radia_mcp.bayesian_opt"
+        subpackage: e.g. "cubit_mesh_export.mcp"
         related_servers: list of MCP server short names that pair well
                           (e.g. ["topology-optimization", "evolutionary"])
         optional_deps: pip package names to probe (chromadb, pymc, etc.)
@@ -255,7 +223,7 @@ def register_status_tool(
             optional_deps=optional_deps,
             mcp_tools=_introspect_fastmcp_tools(mcp),
             audit_command=audit_command,
-            tool_groups=list(getattr(mcp, "_radia_tool_groups", ())),
+            tool_groups=list(getattr(mcp, "_cubit_tool_groups", ())),
         )
     # docstring set after definition so it appears in tool description
     _status.__doc__ = (
@@ -300,7 +268,7 @@ def register_status_tool(
     install_call_log(
         mcp,
         f"{short}_tool_calls.jsonl",
-        f"RADIA_MCP_{short.upper()}_CALL_LOG",
+        f"CUBIT_MCP_{short.upper()}_CALL_LOG",
     )
 
     # The closure deliberately computes the audit at call time: a later

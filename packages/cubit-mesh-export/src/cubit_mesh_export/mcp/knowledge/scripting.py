@@ -15,7 +15,7 @@ multiple formats via Cubit plugin commands (`export ...`) and the `cubit_mesh_ex
 
 ## Typical Workflow
 
-MCP scratch files and native journal generations honor `RADIA_MCP_TEMP` on
+MCP scratch files and native journal generations honor `CUBIT_MCP_TEMP` on
 Windows, Linux and macOS. Without an override, Windows uses `C:/temp` and
 other platforms use the system temporary directory. Journals refuse overwrite;
 use a caller-owned per-run scratch root for isolated tests, not a shared fixed

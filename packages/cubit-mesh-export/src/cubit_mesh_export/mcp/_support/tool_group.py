@@ -1,3 +1,5 @@
+# Cubit-owned implementation; intentionally maintained independently of Radia MCP.
+# Derived support retains BSD-3-Clause terms: see LICENSE-BSD-3-Clause.txt.
 """Coarse MCP entry points for large families of validation tools.
 
 Radia accumulated many one-purpose validation gates.  Registering every gate
@@ -7,7 +9,7 @@ the Python callables directly testable while exposing two stable MCP tools:
 a searchable catalog and one dictionary-driven runner.
 
 The default ``core`` profile exposes only those coarse entry points.  Set
-``RADIA_MCP_TOOL_PROFILE=full`` or pass ``--tool-profile full`` to retain the
+``CUBIT_MCP_TOOL_PROFILE=full`` or pass ``--tool-profile full`` to retain the
 historical individual tools while migrating existing clients.
 """
 
@@ -33,7 +35,7 @@ def selected_tool_profile(argv: list[str] | None = None) -> str:
     """Return the requested MCP tool-surface profile."""
 
     args = list(sys.argv[1:] if argv is None else argv)
-    requested = os.environ.get("RADIA_MCP_TOOL_PROFILE", "core")
+    requested = os.environ.get("CUBIT_MCP_TOOL_PROFILE", "core")
     for index, arg in enumerate(args):
         if arg.startswith("--tool-profile="):
             requested = arg.split("=", 1)[1]
@@ -242,10 +244,10 @@ class CoarseToolRegistry:
         self._append_summary()
 
     def _append_summary(self) -> None:
-        groups = getattr(self.mcp, "_radia_tool_groups", None)
+        groups = getattr(self.mcp, "_cubit_tool_groups", None)
         if groups is None:
             groups = []
-            setattr(self.mcp, "_radia_tool_groups", groups)
+            setattr(self.mcp, "_cubit_tool_groups", groups)
         groups.append(self.summary())
 
     def summary(self) -> dict[str, Any]:
