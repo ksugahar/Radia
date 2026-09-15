@@ -378,9 +378,10 @@ class LoftArcSegment(CoilSegment):
 		"""Interpolated rectangular/circular arc loft; refine n_sub for CAD convergence.
 
 		This section loft approximates the curved side surfaces, not an
-		exact analytic sweep. Closed and negative-angle bends are unsupported.
+		exact analytic sweep. Constant-section full turns use exact revolution.
+		Negative-angle bends are unsupported.
 		"""
-		from netgen.occ import WorkPlane, Axes, Pnt, Vec, ThruSections
+		from netgen.occ import WorkPlane, Axes, Axis, Pnt, Vec, ThruSections, Z
 		from radia.coil_profile import RectProfile, CircleProfile
 		if (type(self.profile_start) is not type(self.profile_end)
 		    or type(self.profile_start) not in (RectProfile, CircleProfile)):
@@ -390,9 +391,21 @@ class LoftArcSegment(CoilSegment):
 		if (not np.all(np.isfinite(dims)) or np.any(dims <= 0)
 		    or not np.isfinite(self.radius)
 		    or self.radius <= max(dims[0], dims[2]) / 2
-		    or not 0 < self.arc_angle < 360 or self.n_sub < 4):
+		    or not 0 < self.arc_angle <= 360 or self.n_sub < 4):
 			raise ValueError("Arc loft CAD requires positive dimensions, clear inner "
-			                 "radius, 0 < angle < 360 and n_sub >= 4.")
+			                 "radius, 0 < angle <= 360 and n_sub >= 4.")
+		if self.arc_angle == 360:
+			if self.profile_start.bounding_wh() != self.profile_end.bounding_wh():
+				raise ValueError("Full-turn CAD requires identical endpoint profiles.")
+			plane = WorkPlane(Axes(Pnt(0, 0, 0), n=Vec(0, 1, 0), h=Vec(1, 0, 0)))
+			if type(self.profile_start) is CircleProfile:
+				face = plane.Circle(self.profile_start.r).Face()
+			else:
+				face = plane.MoveTo(-dims[0] / 2, -dims[1] / 2).Rectangle(dims[0], dims[1]).Face()
+			shape = face.Revolve(Axis(Pnt(-self.radius, 0, 0), Z), 360)
+			shape = self.apply_pose_occ(shape, self.start_pos)
+			shape.name = "coil_arc_loft_" + str(index)
+			return shape
 		wires = []
 		for s in np.linspace(0, 1, self.n_sub + 1):
 			theta = np.deg2rad(self.arc_angle) * s

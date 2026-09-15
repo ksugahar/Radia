@@ -238,6 +238,26 @@ CAD export does not make `to_radia()` support native solid loft fields.
 Circular field sampling uses an equal-area radial/angular grid; refine both
 section counts and arc chords, and validate against an independent integral.
 
+## Mixed Omega Validation And Cost
+
+Record separate monotonic wall timings for mesh, coil-source evaluation,
+interface projection, linear solve and postprocessing, with active/completed
+phase, thread count, mesh/order, source tolerance, versions and cold/warm state.
+A timeout means incomplete execution, not numerical disagreement. Do not
+report speedup from incomplete runs or compare different accuracy targets.
+Compare signed field vectors, interface continuity, spatial observables and
+energy against an independent identity-matched reference before claiming parity.
+
+Internal fields, self-energy and Joule loss require a finite-section volume
+current model; conductivity and terminal conditions are required for conduction
+and losses. Validate mesh convergence and power/energy balance. External
+filament agreement alone cannot establish these capabilities. This routing
+does not claim that coupled volume-conductor support is already implemented.
+
+Constant-section full-turn rectangular/circular loft CAD uses exact revolution.
+Unequal endpoint profiles are rejected. General closed multi-segment CAD and
+self-intersection certification remain separate validation tasks.
+
 See also: `docs/complex_coil_geometry/complex_coil.ipynb` -- 8-segment beam-steering
 coil showcase using CoilBuilder add_straight/add_arc with a Biot-Savart field map.
 
