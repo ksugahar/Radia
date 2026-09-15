@@ -15,7 +15,7 @@ def test_fem_force_and_motor_servers_import_without_solver_dependencies() -> Non
         sys.path.insert(0, sys.argv[1])
         blocked = {
             "build123d", "gmsh", "matplotlib", "netgen", "ngsolve",
-            "numpy", "pandas", "radia", "scipy",
+            "numpy", "pandas", "radia", "scipy", "cubit_mesh_export", "cae_mcp_core",
         }
 
         class OptionalDependencyBlocker(importlib.abc.MetaPathFinder):
@@ -29,6 +29,9 @@ def test_fem_force_and_motor_servers_import_without_solver_dependencies() -> Non
         import radia_mcp.fem.server
         import radia_mcp.force.server
         import radia_mcp.motor.server
+        from radia_mcp.common import examples
+        assert set(examples.FAMILIES) == {'build123d', 'gmsh'}
+        assert not hasattr(examples, 'refresh_cubit_examples')
         """
     )
     result = subprocess.run(

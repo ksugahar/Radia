@@ -18,7 +18,7 @@ import time
 
 from mcp.server.fastmcp import FastMCP
 
-from cae_mcp_core.common import register_status_tool
+from radia_mcp.common import register_status_tool
 from . import bug_patterns, catalog
 
 mcp = FastMCP("mcp-server-radia-meta")

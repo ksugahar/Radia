@@ -7,7 +7,7 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 ## 1.0.2 - Independent Cubit GUI and MCP release candidate
 
 - Own `cubit_mesh_export.mcp` and `mcp-server-cubit`, included by default
-  without Radia or radia-mcp. Extract shared utilities to `cae-mcp-core`.
+  without Radia or radia-mcp. Include the required runtime support inside this distribution; no shared private package is needed.
   Move Cubit API/reference, headless journal workflows and their tests here;
   retain tool contracts but remove the old `radia_mcp.cubit` module path.
 

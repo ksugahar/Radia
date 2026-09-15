@@ -1,5 +1,5 @@
 from radia_mcp.radia_ngsolve.server import balanced_mcp_learning_profile
-from cae_mcp_core.common.learning_quality import validate_balanced_learning_profile
+from radia_mcp.common.learning_quality import validate_balanced_learning_profile
 
 
 def test_radia_mcp_exposes_balanced_learning_profile_tool():

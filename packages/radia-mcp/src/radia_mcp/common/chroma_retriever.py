@@ -18,7 +18,7 @@ Install:
     pip install chromadb sentence-transformers pymupdf
 
 Usage:
-    from cae_mcp_core.common.chroma_retriever import ChromaRetriever
+    from radia_mcp.common.chroma_retriever import ChromaRetriever
 
     rag = ChromaRetriever(
         db_dir="C:/temp/radia_lit_chroma",

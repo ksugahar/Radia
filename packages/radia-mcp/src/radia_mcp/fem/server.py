@@ -27,9 +27,9 @@ import sys
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 from .. import __version__
-from cae_mcp_core.common import register_status_tool
-from cae_mcp_core.common.tool_group import CoarseToolRegistry
-from cae_mcp_core.common.mcp_contract import apply_tool_contract
+from radia_mcp.common import register_status_tool
+from radia_mcp.common.tool_group import CoarseToolRegistry
+from radia_mcp.common.mcp_contract import apply_tool_contract
 
 from .overview_knowledge import get_overview_knowledge
 from .potential_formulations_knowledge import get_potential_formulations_knowledge

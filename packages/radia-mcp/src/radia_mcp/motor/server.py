@@ -21,9 +21,9 @@ import sys
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 from .. import __version__
-from cae_mcp_core.common import register_status_tool
-from cae_mcp_core.common.tool_group import CoarseToolRegistry
-from cae_mcp_core.common.mcp_contract import apply_tool_contract
+from radia_mcp.common import register_status_tool
+from radia_mcp.common.tool_group import CoarseToolRegistry
+from radia_mcp.common.mcp_contract import apply_tool_contract
 
 from .onelab_knowledge import get_onelab_knowledge
 from .topology_opt_knowledge import get_topology_opt_knowledge
@@ -71,7 +71,7 @@ from .thermal_handoff import (
     motor_thermal_handoff_gate as build_motor_thermal_handoff_gate,
 )
 from .force_covariance import force_rotation_covariance_gate as build_force_rotation_covariance_gate
-from cae_mcp_core.common.lazy_call import lazy_callable
+from radia_mcp.common.lazy_call import lazy_callable
 build_force_report_method_metadata_gate = lazy_callable(".force_report_gate", "force_report_method_metadata_gate", __package__)
 build_phase_flux_park_alignment_gate = lazy_callable(".phase_flux_park_gate", "phase_flux_park_alignment_gate", __package__)
 build_ipm_two_run_ldlq_gate = lazy_callable(".two_run_ldlq_gate", "ipm_two_run_ldlq_gate", __package__)

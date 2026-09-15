@@ -27,13 +27,13 @@ from pathlib import Path, PurePosixPath
 
 from mcp.server.fastmcp import FastMCP
 
-from cae_mcp_core.common import register_status_tool
-from cae_mcp_core.common.tool_group import CoarseToolRegistry
+from radia_mcp.common import register_status_tool
+from radia_mcp.common.tool_group import CoarseToolRegistry
 from .detect import detect_capabilities
 from .gmsh_examples import get_gmsh_examples
 from .gmsh_knowledge import get_gmsh_documentation
 from .gmsh_reference import get_gmsh_reference
-from cae_mcp_core.mesh.msh_inspect import audit_msh_directory, diff_msh, field_stats, inspect_msh, mesh_quality, probe_options, validate_geo, validate_msh
+from radia_mcp.gmsh.msh_inspect import audit_msh_directory, diff_msh, field_stats, inspect_msh, mesh_quality, probe_options, validate_geo, validate_msh
 from .post_display import (
     build_gmsh_post_display_contract,
     gmsh_post_display_manifest_gate,
@@ -2419,7 +2419,7 @@ def _is_closed_stdout_error(exc: BaseException) -> bool:
 def main():
     """Entry point for mcp-server-gmsh console script."""
     if '--selftest' in sys.argv[1:]:
-        from cae_mcp_core.common.utf8_stdout import use_utf8_stdout
+        from radia_mcp.common.utf8_stdout import use_utf8_stdout
         use_utf8_stdout()
         try:
             _selftest(audit_repo='--audit-repo' in sys.argv[1:])

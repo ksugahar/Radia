@@ -18,7 +18,7 @@ Thermal S-Functions over checked standalone radia_mex object handles. Cubit's
 embedded PySide toolbar owns mesh export only; it is not an analysis panel.
 """
 
-from cae_mcp_core.common import load_prompt
+from radia_mcp.common import load_prompt
 
 IH_PEEC_FEM = """
 # IH Architecture: PEEC+FEM (v4.6.0)

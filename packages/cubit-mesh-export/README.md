@@ -54,8 +54,7 @@ compatibility check; standalone operation does not import Radia.
 ## Install
 
 `cubit-mesh-export` is standalone: it needs Coreform Cubit 2025.12, but it does
-**not** need `radia` or `radia-mcp`. MCP is included by default through the
-independent `cae-mcp-core` foundation.
+**not** need `radia` or `radia-mcp`. MCP and its private runtime support are included by default in this wheel.
 
 ```bash
 pip install cubit-mesh-export

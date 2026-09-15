@@ -1028,12 +1028,12 @@ artifacts headlessly via mcp-server-gmsh:
 CLI twin for CI/hooks (exit 0 = ok, 1 = needs attention):
 
 ```bash
-python -m cae_mcp_core.mesh.msh_inspect case.msh               # inspect
-python -m cae_mcp_core.mesh.msh_inspect case.msh --validate --jacobians
-python -m cae_mcp_core.mesh.msh_inspect case.msh --stats
-python -m cae_mcp_core.mesh.msh_inspect case.geo               # deep .geo check
-python -m cae_mcp_core.mesh.msh_inspect a.msh --diff b.msh
-python -m cae_mcp_core.mesh.msh_inspect docs                   # directory audit
+python -m radia_mcp.gmsh.msh_inspect case.msh               # inspect
+python -m radia_mcp.gmsh.msh_inspect case.msh --validate --jacobians
+python -m radia_mcp.gmsh.msh_inspect case.msh --stats
+python -m radia_mcp.gmsh.msh_inspect case.geo               # deep .geo check
+python -m radia_mcp.gmsh.msh_inspect a.msh --diff b.msh
+python -m radia_mcp.gmsh.msh_inspect docs                   # directory audit
 ```
 | `gmsh_render` | Headless PNG screenshot of a .msh/.geo (subprocess FLTK). High-order aware: NumSubEdges=4 and per-view AdaptVisualizationGrid=1 by default. |
 | `gmsh_export_animation` | Time-stepped views -> PNG frames + GIF (linked views, AnimationCycle=0). |

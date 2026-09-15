@@ -6,7 +6,7 @@ from collections import Counter
 from collections.abc import Iterable
 from typing import Any
 
-from cae_mcp_core.common.server_hardening import annotation_preset_name, infer_tool_annotations
+from cubit_mesh_export.mcp._support.server_hardening import annotation_preset_name, infer_tool_annotations
 
 
 SCHEMA = "cae-ai-lab.mcp-server-contract.v2"

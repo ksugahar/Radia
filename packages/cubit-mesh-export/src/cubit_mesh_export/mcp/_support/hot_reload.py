@@ -117,7 +117,7 @@ def _prime_mtimes(prefix: str) -> None:
 
 
 def reload_changed_modules(
-    prefix: str = "cae_mcp_core",
+    prefix: str = "cubit_mesh_export.mcp",
     *,
     protected_modules: set[str] | None = None,
 ) -> dict[str, Any]:
@@ -213,7 +213,7 @@ def reload_changed_modules(
 
 def refresh_tools(
     mcp: Any,
-    module_prefix: str = "cae_mcp_core",
+    module_prefix: str = "cubit_mesh_export.mcp",
     *,
     reloaded_modules: set[str] | None = None,
 ) -> dict[str, Any]:
@@ -279,7 +279,7 @@ def refresh_tools(
     }
 
 
-def reload_and_refresh(mcp: Any, module_prefix: str = "cae_mcp_core") -> dict[str, Any]:
+def reload_and_refresh(mcp: Any, module_prefix: str = "cubit_mesh_export.mcp") -> dict[str, Any]:
     module_snapshots = {
         name: dict(module.__dict__)
         for name, module in list(sys.modules.items())
@@ -357,12 +357,12 @@ def _declare_tool_list_changed(mcp: Any) -> None:
     low._radia_declares_tool_list_changed = True
 
 
-def register_reload_tool(mcp: Any, tool_name: str, module_prefix: str = "cae_mcp_core") -> None:
+def register_reload_tool(mcp: Any, tool_name: str, module_prefix: str = "cubit_mesh_export.mcp") -> None:
     """Expose reload only for a verified editable install without an opt-out."""
     if os.environ.get("RADIA_MCP_HOT_RELOAD", "").strip() == "0":
         return
     # Import locally: status registration calls this function during server setup.
-    from cae_mcp_core.common.status import _distribution_provenance
+    from cubit_mesh_export.mcp._support.status import _distribution_provenance
 
     try:
         editable = _distribution_provenance(module_prefix.split('.')[0].replace('_', '-')).get("editable") is True

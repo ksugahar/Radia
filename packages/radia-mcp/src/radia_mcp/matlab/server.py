@@ -1,7 +1,7 @@
 import json,sys
 from mcp.server.fastmcp import FastMCP
-from cae_mcp_core.common import register_status_tool
-from cae_mcp_core.common.tool_group import CoarseToolRegistry
+from radia_mcp.common import register_status_tool
+from radia_mcp.common.tool_group import CoarseToolRegistry
 from radia_mcp.matlab_agentic_ml import (
     matlab_agentic_ml_guide as _ml_guide,
     validate_matlab_ml_rl_artifact as _validate_ml_rl_artifact,

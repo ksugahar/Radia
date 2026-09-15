@@ -13,7 +13,7 @@ import sys
 from importlib import util as _importlib_util
 from typing import Any
 
-from cae_mcp_core.mesh._gmsh_subprocess import gmsh_available, run_gmsh_json_subprocess
+from radia_mcp.gmsh._gmsh_subprocess import gmsh_available, run_gmsh_json_subprocess
 
 _DETECT_SCRIPT = r"""
 import json
