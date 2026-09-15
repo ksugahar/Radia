@@ -50,13 +50,17 @@ oracle, chord convergence, rigid transforms, and a bend-to-straight join.
 
 ## CAD Export
 
-Rectangular straight lofts use centered endpoint wires. Rectangular arc
+Matching rectangular or circular straight lofts use centered endpoint wires. Arc
 lofts use interpolated section wires on the same circular centerline and
 linearly varying dimensions as the current model. The curved CAD sides
 are approximations: refine the segment's `n_sub` independently of field
 sampling and check geometry convergence. CAD accepts `0 < angle < 360`,
 positive dimensions, a clear inner radius, and `n_sub >= 4`; negative and
-closed bends remain unsupported. This does not change the native-solid
+closed bends and cross-type profiles remain unsupported. Circular lofts
+interpolate radius linearly. OCC section interpolation can have nonmonotone
+volume errors; check the analytic volume and successive refined geometries,
+not just a presumed convergence rate. Circular CAD support does not imply
+circular support in `to_radia_loft_filaments`. This does not change the native-solid
 restrictions of `to_radia()`.
 
 `tests/test_coil_builder_loft_cad.py` checks analytic volume, refinement,
