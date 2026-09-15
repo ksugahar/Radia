@@ -65,3 +65,29 @@ def test_arc_bore_and_end_plane(point):
     np.testing.assert_allclose(expected,refined,rtol=1e-8,atol=1e-12)
     obj=rad.ObjArcCur([0,0,0],[.035,.070],angles,.105,4,'man','z',1e6)
     np.testing.assert_allclose(rad.Fld(obj,'b',point),refined,rtol=2e-7,atol=1e-12)
+
+
+@pytest.mark.parametrize('point', [(0.,0.,0.),(0.,0.,.08),(.02,0.,.08)])
+def test_thick_full_circle_partition(point):
+    def field(lo,hi):
+        obj=rad.ObjArcCur([0,0,0],[.035,.070],[lo,hi],.105,4,'man','z',1e6)
+        return np.asarray(rad.Fld(obj,'b',point))
+    whole=field(0,2*np.pi)
+    split=field(0,np.pi)+field(np.pi,2*np.pi)
+    expected=volume_reference(point,.035,.070,.105,[0,2*np.pi],1e6,80)
+    np.testing.assert_allclose(whole,expected,rtol=2e-7,atol=1e-12)
+    np.testing.assert_allclose(whole,split,rtol=2e-7,atol=1e-12)
+
+
+@pytest.mark.parametrize('radius,z', [(.05,0.),(.045,.02),(.02,.01)])
+def test_full_circle_local_ampere_and_divergence(radius,z):
+    obj=rad.ObjArcCur([0,0,0],[.035,.070],[0,2*np.pi],.105,4,'man','z',1e6)
+    def field(r,z):
+        return np.asarray(rad.Fld(obj,'b',[r,0,z]))
+    center=field(radius,z)
+    step=2e-6
+    dr=(field(radius+step,z)-field(radius-step,z))/(2*step)
+    dz=(field(radius,z+step)-field(radius,z-step))/(2*step)
+    expected=4*np.pi*1e-7*1e6 if radius>.035 else 0.
+    assert dz[0]-dr[2] == pytest.approx(expected,abs=2e-5)
+    assert abs(dr[0]+center[0]/radius+dz[2])<2e-5

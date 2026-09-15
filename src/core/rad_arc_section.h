@@ -68,6 +68,32 @@ template<class F> Vec Refine(const F& f, double lo, double hi,
     return fine;
 }
 
+inline Vec FullCircleAxis(double r, double z, double ri, double ro, double h)
+{
+    // Axial source integration is exact. Radial integration gives B0 and
+    // its z derivatives; the regular axis expansion avoids subtracting
+    // nearly equal angular contributions to recover a tiny radial field.
+    const double scale=std::max(ro,h);
+    const double rho=r/scale, lower=(z-h/2)/scale, upper=(z+h/2)/scale;
+    auto f=[=](double radius) {
+        Vec value{};
+        const double rr=radius*radius;
+        const double v[]={lower,upper};
+        for(int i=0;i<2;++i) {
+            const double dd=rr+v[i]*v[i], d=std::sqrt(dd);
+            const double sign=i==0 ? -1. : 1.;
+            value[0]+=sign*v[i]/d;
+            value[1]+=sign*rr/(dd*d);
+            value[2]-=sign*3*rr*v[i]/(dd*dd*d);
+        }
+        return value;
+    };
+    const double lo=ri/scale, hi=ro/scale;
+    const Vec axis=Refine(f,lo,hi,Gauss4(f,lo,hi),1.e-13*(hi-lo),20);
+    const double factor=6.28318530717958647692*scale;
+    return {-factor*rho*axis[1]/2,0.,factor*(axis[0]-rho*rho*axis[2]/4)};
+}
+
 inline Vec Field(double r, double z, double ri, double ro, double h,
                  double lo, double hi)
 {
