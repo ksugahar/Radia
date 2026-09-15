@@ -166,7 +166,8 @@ void radTArcCur::B_compElliptic(radTField* FieldPtr)
 
 	// Check if this is a full circular coil or an arc
 	double delta_phi = Phi_max - Phi_min;
-	bool is_full_circle = (fabs(delta_phi - TwoPi) < 1.0e-6);
+	// Only absorb endpoint subtraction roundoff, not a physically missing sector.
+	bool is_full_circle = (fabs(delta_phi - TwoPi) <= 8.0*2.2204460492503131e-16*TwoPi);
 
 	double IntForAx = 0.0, IntForAy = 0.0;
 	double IntForBx = 0.0, IntForBy = 0.0, IntForBz = 0.0;
