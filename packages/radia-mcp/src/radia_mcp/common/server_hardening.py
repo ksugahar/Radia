@@ -34,7 +34,7 @@ from collections.abc import Sized
 
 from mcp.types import ToolAnnotations
 
-from cae_mcp_core.common import failure_log as _fl
+from radia_mcp.common import failure_log as _fl
 
 __all__ = [
     "ANN_READONLY", "ANN_READONLY_WEB", "ANN_WRITES", "ANN_DESTRUCTIVE",

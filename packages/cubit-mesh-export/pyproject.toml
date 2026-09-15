@@ -23,7 +23,7 @@ classifiers = [
     "Topic :: Scientific/Engineering",
 ]
 dependencies = [
-    "cae-mcp-core>=0.1.0,<0.2",
+    "mcp>=1.20.0,<2",
     # The bundled native curver uses Netgen's C++ ABI. Keep both packages on
     # the exact version used to build the wheel and deployed Cubit DLLs.
     "netgen-mesher==6.2.2606",

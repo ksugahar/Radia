@@ -15,10 +15,10 @@ Usage:
 """
 import sys
 from mcp.server.fastmcp import FastMCP
-from cae_mcp_core.common import register_status_tool, register_topics_tool
-from cae_mcp_core.common.tool_group import CoarseToolRegistry
+from radia_mcp.common import register_status_tool, register_topics_tool
+from radia_mcp.common.tool_group import CoarseToolRegistry
 from .knowledge import get_knowledge, TOPICS
-from cae_mcp_core.common.lazy_call import lazy_callable
+from radia_mcp.common.lazy_call import lazy_callable
 _proximity_pair_gate = lazy_callable(".proximity_pair_gate", "litz_proximity_approximation_pair_gate", __package__)
 
 mcp = FastMCP("mcp-server-litz-transmission")

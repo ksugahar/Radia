@@ -1,4 +1,4 @@
-from cae_mcp_core.common.mcp_contract import SCHEMA
+from radia_mcp.common.mcp_contract import SCHEMA
 from radia_mcp import __version__
 import pytest
 

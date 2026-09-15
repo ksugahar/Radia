@@ -3,7 +3,7 @@ from mcp.server.fastmcp import FastMCP
 from typing import Any
 from mcp.types import ToolAnnotations
 from .. import __version__
-from cae_mcp_core.common.mcp_contract import apply_tool_contract
+from radia_mcp.common.mcp_contract import apply_tool_contract
 from .diagnostics import optimization_gradient_check, optimization_stopping_audit
 from .constraints import optimization_kkt_audit, optimization_projected_gradient_audit
 from .splitting import optimization_proximal_gradient_audit, optimization_admm_consensus_audit

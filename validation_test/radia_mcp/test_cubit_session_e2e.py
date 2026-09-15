@@ -217,7 +217,7 @@ def test_cad_mesh_probe_contract(tmp_path):
     pytest.importorskip("build123d")
     from build123d import Box, Compound, Cylinder, Pos, export_step
     from radia_mcp.build123d.server import build123d_probe
-    from cae_mcp_core.common.server_hardening import PROBE_SOLID_CORE_KEYS
+    from radia_mcp.common.server_hardening import PROBE_SOLID_CORE_KEYS
 
     step = tmp_path / "compat_asm.step"
     box = Box(1, 1, 2)

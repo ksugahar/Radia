@@ -7,7 +7,7 @@ import sys
 
 from mcp.server.fastmcp import FastMCP
 
-from cae_mcp_core.common import register_status_tool
+from radia_mcp.common import register_status_tool
 from . import (
     acoustic_fembem_agent_guide as _agent_guide,
     acoustic_fembem_extension_contract as _extension_contract,

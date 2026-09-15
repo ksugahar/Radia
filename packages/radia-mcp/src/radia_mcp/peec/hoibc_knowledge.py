@@ -20,7 +20,7 @@ Topics:
                                     calc_fem_kelvin.py
 """
 
-from cae_mcp_core.common import load_prompt
+from radia_mcp.common import load_prompt
 
 
 # ============================================================

@@ -28,7 +28,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from cae_mcp_core.mesh._gmsh_subprocess import run_gmsh_json_subprocess
+from radia_mcp.gmsh._gmsh_subprocess import run_gmsh_json_subprocess
 
 _POST_SCRIPT = r"""
 import json
@@ -2775,7 +2775,7 @@ def export_view_csv(path: str | Path, csv_out: str | Path, *,
     when NodeData exists, else elements.  List-based .pos files have no
     node table -- resample_grid/curve_profile with csv_out cover those.
     """
-    from cae_mcp_core.mesh.msh_inspect import read_msh_data
+    from radia_mcp.gmsh.msh_inspect import read_msh_data
     src = Path(path)
     if not src.is_file():
         return {"ok": False, "error": f"file not found: {src}"}
@@ -2851,7 +2851,7 @@ def field_histogram(path: str | Path, *, view: str | None = None,
     selects one.  ``step=None`` pools every time step; an int selects
     one.  Optional PNG bar chart.
     """
-    from cae_mcp_core.mesh.msh_inspect import read_msh_data
+    from radia_mcp.gmsh.msh_inspect import read_msh_data
     src = Path(path)
     if not src.is_file():
         return {"ok": False, "error": f"file not found: {src}"}
@@ -2994,7 +2994,7 @@ def point_history(path: str | Path, point: list[float], *,
     times: list[float] | None = None
     src = Path(path)
     if src.suffix.lower() == ".msh":
-        from cae_mcp_core.mesh.msh_inspect import read_msh_data
+        from radia_mcp.gmsh.msh_inspect import read_msh_data
         try:
             data = read_msh_data(src)
         except ValueError:
@@ -3093,7 +3093,7 @@ def field_range(paths: list[str | Path], *,
     Returns:
         ``{"range": [lo, hi], "per_file": {...}, "views": [...]}``.
     """
-    from cae_mcp_core.mesh.msh_inspect import read_msh_data
+    from radia_mcp.gmsh.msh_inspect import read_msh_data
 
     if not paths:
         raise ValueError("field_range needs at least one path")
@@ -3344,7 +3344,7 @@ def select(path: str | Path, expression: str, *,
     unknown name raises with the available list rather than evaluating
     to something silently wrong.
     """
-    from cae_mcp_core.mesh.msh_inspect import read_msh_data
+    from radia_mcp.gmsh.msh_inspect import read_msh_data
 
     src = Path(path)
     if not src.is_file():
@@ -3489,7 +3489,7 @@ def flow_texture(path: str | Path, *,
     trajectory (quantitative, probe-able), whereas LIC is a purely
     visual convolution that fills every pixel.
     """
-    from cae_mcp_core.mesh.msh_inspect import read_msh_data
+    from radia_mcp.gmsh.msh_inspect import read_msh_data
 
     src = Path(path)
     if not src.is_file():
@@ -3611,7 +3611,7 @@ def time_series(paths: list[str | Path], *,
         ``{"msh":, "times":, "aggregate": {...}, "point_history": [...],
         "stats_written": [...]}``.
     """
-    from cae_mcp_core.mesh.msh_inspect import read_msh_data
+    from radia_mcp.gmsh.msh_inspect import read_msh_data
 
     srcs = [Path(p) for p in paths]
     if len(srcs) < 2:

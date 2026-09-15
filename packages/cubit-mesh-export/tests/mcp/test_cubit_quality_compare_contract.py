@@ -52,7 +52,7 @@ def test_cubit_referee_exception_stays_in_route_row(tmp_path, monkeypatch):
         server, "_run_batch",
         lambda *_args, **_kwargs: {"status": "ok", "summary": {}})
 
-    from cae_mcp_core.mesh import msh_inspect
+    from cubit_mesh_export.mcp._support import mesh_quality as msh_inspect
 
     def fail_referee(*_args, **_kwargs):
         raise RuntimeError("broken quality file")
@@ -66,3 +66,28 @@ def test_cubit_referee_exception_stays_in_route_row(tmp_path, monkeypatch):
     assert out["rows"][0]["status"] == "error"
     assert out["rows"][0]["kind"] == "referee"
     assert "broken quality file" in out["rows"][0]["error"]
+
+
+@pytest.mark.parametrize('order', [1, 2, 3])
+def test_netgen_reference_preserves_curved_volume_without_radia(tmp_path, order):
+    pytest.importorskip('gmsh')
+    from netgen.occ import OCCGeometry, Sphere, Pnt
+    from ngsolve import Mesh, Integrate, TaskManager
+    from cubit_mesh_export.mcp._support.netgen_compare import _write_tet_msh
+    from cubit_mesh_export.mcp._support.mesh_quality import mesh_total_volume, mesh_quality
+    from cubit_mesh_export.mcp.gmsh_v41 import summarize_gmsh_v41_ascii
+    with TaskManager():
+        mesh = Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), 1)).GenerateMesh(maxh=0.4))
+    target = tmp_path / 'sphere.msh'
+    _write_tet_msh(mesh, target, order)
+    inventory = summarize_gmsh_v41_ascii(target.read_text())
+    assert inventory['status'] == 'ok'
+    volume = mesh_total_volume(target, quadrature='Gauss10')
+    assert volume['ok'], volume
+    assert volume['min_jacobian_det'] > 0
+    with TaskManager():
+        expected = Integrate(1, mesh, order=10)
+    assert volume['total_volume'] == pytest.approx(expected, rel=1e-8)
+    quality = mesh_quality(target, threshold=0.0)
+    assert quality['ran'] and quality['total_negative'] == 0, quality
+    assert {row['order'] for row in quality['by_type']} == {order}
