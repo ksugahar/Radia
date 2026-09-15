@@ -1,0 +1,69 @@
+{
+  "generated_at_utc": "2026-09-15T14:35:20.770334+00:00",
+  "recovered_sha256": {
+    "build_esim_spatial_demo.py": "de1a7657b56645a8a4ee6a3f2914f399115a872c3a70b7c55a4d98279ddda410",
+    "compute_record.json": "21f4d6b1b105eba068b6116b29db462c18727fa6a5fad6a2bff3ef17bccb5e7f",
+    "em_sample_bh.txt": "7a0711748f130a636f19957ac6f2de2d00d32bf164c7c244d09aaae5af5222ee",
+    "esim_spatial_demo.ipynb": "a4b5631c01ecdc80ded33bafb9e1c225ca9f5036277c784ccd3af529a75cf6a6",
+    "esim_spatial_demo.py": "5b31d572d8c78104728249fc9f049f9014a915f810eca2d3e5468e00c200560f",
+    "execute_visuals.py": "d36df30582d5786039ce463d6e01a4862a672d8f7cf262274e79f3039dc1f7bb",
+    "f10000.json": "ce5f3cc33afbaac34e96e254e13cc25b804837a22ae6bc45a68f1ab439777aab",
+    "f10000.log": "7845c483b1c6e4216a0c16e32077bb00284606f727483eab6bc5a4985dc82074",
+    "f100000.json": "7a4420933d9ced8983a74069873a159c014f2d5b5f62f5c4b1c63fca06f3abb8",
+    "f100000.log": "317138fe304907f18d2a987fe84967ca61bdeeff423fcb9891b5d9a9386958d3",
+    "f100000_qsurf.sol": "75d9b0acbd26b0f7921f77e26b7ec46f40ab1c84ddf014d9c276adc2d5b335ef",
+    "f10000_qsurf.sol": "4b9a711d304c1b0b3ef08c65c0616238f46f2d966bbac039f88b04fb4397e547",
+    "f50000.json": "1448bb96bc840352379d069f70879a51ca2a047a01e92991fe9f0ecc72df1fae",
+    "f50000.log": "f81318bec7d00a53763c5684eab2360421dc1e2acce4637dbd7cd2084ae7e2c9",
+    "f50000_qsurf.sol": "cd36ea38d12a25542fe420337b30b8e484694b952939025d8da67fad029cf55e",
+    "ih_bem_sample_p1.vol": "2d4aa00153d7dd55b19e2100e9d51d2662c017fb47ee3af73f3cd54a9c7348ec",
+    "ih_bem_sample_p1.vol.json": "c658538771c46a4c78d39c9af0d754bab96442ab1148fc9c691813a97357fa80",
+    "ih_bem_sample_p1_qsurf.sol": "75d9b0acbd26b0f7921f77e26b7ec46f40ab1c84ddf014d9c276adc2d5b335ef",
+    "ih_fem_kelvin_demo_coil.peec_v3_peri16_n200_sigma5.80e+07_u1.json": "e41534c61ad51710d26632f7b0692adebd99e25624aea9b21fe66f544cf33cc0",
+    "ih_fem_kelvin_demo_coil.step": "1a316956fbc8f0e961b78eb1fb54b39378bced0437a71a1c055deca0240a1d0d",
+    "missing_ocp.log": "ac47450c26e09fad326bcbf811f26c19cd3769ef16c3baf04093895d96ea3bb5",
+    "notebook_execution.log": "84cc675c98f976ab534a6c963e035ac90bf5280bbb39d879c7d170fadb0a4688",
+    "recover_archive.py": "79ba414f3ca5dc3af174084017ed1ccb0e8dbf64fed84a32fe9db40d1f5fbfd1",
+    "run_cases.py": "234f46d483def9dde3d2be029c67f5b31429f60bfeeccd6b5726bcd33b65407b",
+    "spatial_metrics.json": "212949953f138099dfdc4b8e54943b0f82aa81f301c17560a7e467e0fe2b3b6d",
+    "visualization_runtime.json": "31ffee9fe4ffeb9f6845180d0c3d1e94f778bae2f2e4d4c16ed57f1966e06bde",
+    "vol_check.json": "a4d8c5d839db10266f6e168341fb55b649eac439d03adddb989ec493a7f3b6d7"
+  },
+  "notebook_sha256": "af8856d0d2a053f6d3a3f12959d6458c70740e36feca4e0f884a21b979dc63d5",
+  "execution": {
+    "hostname": "mdx2",
+    "solver_versions": {
+      "radia": "4.95.92",
+      "ngsolve": "6.2.2606",
+      "numpy": "2.4.3",
+      "scipy": "1.17.1",
+      "cubit-mesh-export": "0.14.15"
+    },
+    "runtime": {
+      "hostname": "mdx2",
+      "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+      "executable": "C:\\temp\\radia_esim_webgui_20260915\\env\\Scripts\\python.exe",
+      "versions": {
+        "radia": "4.95.92",
+        "ngsolve": "6.2.2606",
+        "numpy": "2.4.3",
+        "scipy": "1.17.1",
+        "cadquery-ocp": "7.8.1.1.post1",
+        "build123d": "0.10.0",
+        "nbclient": "0.11.0",
+        "nbformat": "5.11.1",
+        "ipykernel": "7.3.0",
+        "anywidget": "0.11.0",
+        "cubit-mesh-export": "0.14.15"
+      }
+    },
+    "visual_qa": "Saved scene/state audit performed; rendered visual QA pending (browser URL security boundary).",
+    "scope": "Fresh three-frequency weak-coupled ESIM solves and notebook reconstruction on mdx2; no thermal or volume-FEM validation."
+  },
+  "helper_source": {
+    "path": "docs/ih_esim_benchmark/esim_spatial_demo.py",
+    "sha256": "5b31d572d8c78104728249fc9f049f9014a915f810eca2d3e5468e00c200560f",
+    "source": "\"\"\"Notebook-local reconstruction of P1 ESIM fields, not a solver/workbench.\"\"\"\nfrom pathlib import Path\nimport json\nimport hashlib\nimport numpy as np\nimport ngsolve as ng\nfrom cubit_mesh_export.check import check_consistency\n\n\ndef load_fields(data_dir, sample_dir):\n    \"\"\"Use the solver's sorted boundary-vertex contract and NGSolve DOF API.\"\"\"\n    data_dir, sample_dir = Path(data_dir), Path(sample_dir)\n    record = json.loads((data_dir / 'compute_record.json').read_text(encoding='utf-8'))\n    for name, digest in record['inputs'].items():\n        assert hashlib.sha256((sample_dir / name).read_bytes()).hexdigest() == digest, name\n    vol = sample_dir / 'ih_bem_sample_p1.vol'\n    # The BEM route uses only sibc; unused coarse air/coil regions have up to\n    # 8.45% CAD discrepancy. Check them at 10%, but workpiece/sibc at 1%.\n    report = check_consistency(str(vol), threshold=10.0)\n    assert report['passed'], report\n    for family, name in (('materials','workpiece'),('boundaries','sibc')):\n        row=next(r for r in report[family] if r['name']==name)\n        assert abs(row['error_pct']) < 1.0, row\n    parent = ng.Mesh(str(vol))  # Preserve exported geometry; never Curve().\n    import sys\n    import radia\n    panels = str(Path(radia.__file__).parent / 'panels')\n    sys.path.insert(0, panels)\n    try:\n        from calc_inductance import _extract_bnd_only_inline\n        mesh = _extract_bnd_only_inline(parent, 'sibc')\n    finally:\n        sys.path.remove(panels)\n    vertices = list(range(mesh.nv))  # Exactly the solver's extracted ordering.\n    fes = ng.H1(mesh, order=1)\n    cases = []\n    for item in record['cases']:\n        stem = f\"f{item['frequency_hz']}\"\n        path = data_dir / (stem + '.json')\n        assert hashlib.sha256(path.read_bytes()).hexdigest() == item['result_sha256']\n        result = json.loads(path.read_text(encoding='utf-8'))\n        assert result['esim_converged'] and result['wp_basis_order'] == 1\n        fields = []\n        for key in ('esim_per_panel_H_t', 'esim_per_panel_Z_s_real'):\n            values = np.asarray(result[key], dtype=float)\n            assert len(values) == len(vertices) and np.isfinite(values).all()\n            assert np.min(values) >= 0\n            gf = ng.GridFunction(fes)\n            for vnr, value in zip(vertices, values):\n                dofs = fes.GetDofNrs(ng.NodeId(ng.VERTEX, vnr))\n                assert len(dofs) == 1\n                gf.vec[dofs[0]] = value\n            fields.append(gf)\n        ht, resistance = fields\n        # A local diagnostic from reconstructed accepted ESIM fields. It is\n        # deliberately NOT relabelled as the solver's calibrated heat artifact.\n        q_local = 0.5 * resistance * ht**2\n        parent_fes = ng.H1(parent, order=1)\n        parent_heat = ng.GridFunction(parent_fes)\n        parent_heat.Load(str(data_dir / (stem + '_qsurf.sol')))\n        heat = ng.GridFunction(fes)\n        lookup = {tuple(round(float(x), 12) for x in v.point): v.nr for v in parent.vertices}\n        for v in mesh.vertices:\n            old = lookup[tuple(round(float(x), 12) for x in v.point)]\n            target = fes.GetDofNrs(ng.NodeId(ng.VERTEX, v.nr))[0]\n            origin = parent_fes.GetDofNrs(ng.NodeId(ng.VERTEX, old))[0]\n            heat.vec[target] = parent_heat.vec[origin]\n        p_heat = float(ng.Integrate(heat, mesh, ng.BND))\n        p_local = float(ng.Integrate(q_local, mesh, ng.BND))\n        assert np.isfinite([p_heat, p_local]).all() and min(p_heat, p_local) > 0\n        cases.append(dict(frequency_hz=item['frequency_hz'], result=result,\n                          Ht=ht, resistance=resistance, q_local=q_local, heat=heat,\n                          P_heat_W=p_heat, P_local_W=p_local))\n    return mesh, cases, report\n"
+  },
+  "remote_cleanup": "Pending evidence commit; owner: documentation maintenance; trigger: commit and hash verification."
+}

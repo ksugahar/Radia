@@ -1,0 +1,18 @@
+{
+  "hostname": "mdx2",
+  "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+  "executable": "C:\\temp\\radia_esim_webgui_20260915\\env\\Scripts\\python.exe",
+  "versions": {
+    "radia": "4.95.92",
+    "ngsolve": "6.2.2606",
+    "numpy": "2.4.3",
+    "scipy": "1.17.1",
+    "cadquery-ocp": "7.8.1.1.post1",
+    "build123d": "0.10.0",
+    "nbclient": "0.11.0",
+    "nbformat": "5.11.1",
+    "ipykernel": "7.3.0",
+    "anywidget": "0.11.0",
+    "cubit-mesh-export": "0.14.15"
+  }
+}

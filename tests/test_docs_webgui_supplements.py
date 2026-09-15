@@ -11,6 +11,8 @@ ROOT=Path(__file__).resolve().parents[1]
     ('electrostatics/electrostatics',3,True),
     ('background_fields/background_fields',3,True),
     ('gmsh_animation/gmsh_animation',2,False),
+    ('complex_coil_geometry/complex_coil',4,True),
+    ('mesh_fusion/mesh_fusion',3,True),
 ])
 def test_saved_visualization_supplement(relative,count,field):
     path=ROOT/'docs'/f'{relative}.ipynb'

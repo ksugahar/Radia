@@ -9,6 +9,9 @@ MathWorks' official MATLAB MCP Server.
 
 Start with the result-bearing Python notebooks:
 
+- [ESIM spatial heating demo](../ih_esim_benchmark/esim_spatial_demo.ipynb):
+  coil CAD, workpiece mesh and frequency-dependent surface fields in saved
+  WebGUI scenes; local loss and the heat-transfer artifact are distinguished.
 - [ESIM method and benchmark](../ih_esim_benchmark/esim_showcase.ipynb):
   equations, implementation assumptions and saved comparisons.
 - [Loop degrees of freedom and cut selection](../cohomology/loop_dof_cut_selection.ipynb):

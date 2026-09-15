@@ -2,6 +2,11 @@
 
 Result-bearing docs showcase demonstrating complex multi-segment coil geometry construction using the modern CoilBuilder API.
 
+[Open the visual notebook](complex_coil.ipynb): rotate the eight-segment CAD
+shape, inspect its field-sampling mesh, and compare magnetic-field strength
+and direction in four saved WebGUI scenes. The new finite-centreline field
+is explicitly distinguished from the historical thick-conductor result.
+
 ## Overview
 
 This directory contains examples of building complex coil paths with straight and arc segments. The examples use the `coil_builder` module which provides a fluent interface for constructing multi-segment coils with automatic state tracking.

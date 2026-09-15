@@ -1,0 +1,56 @@
+{
+  "schema": "radia.docs.webgui_supplement.v1",
+  "generated_at_utc": "2026-09-15T14:34:44.029872+00:00",
+  "host": "mdx2",
+  "python_executable": "C:\\temp\\radia_esim_webgui_20260915\\env\\Scripts\\python.exe",
+  "python_version": "3.12.10",
+  "versions": {
+    "ngsolve": "6.2.2606",
+    "netgen-mesher": "6.2.2606",
+    "anywidget": "0.11.0",
+    "cubit-mesh-export": "0.14.15"
+  },
+  "metrics": {
+    "current_A": 1265.0,
+    "segments": 244,
+    "sampling_x_m": 0.41800000000000004,
+    "relative_cf_vs_finite_segment_gap": 5.769593556666209e-16,
+    "field_route": "centreline Biot-Savart, not thick conductor",
+    "geometry_source_sha256": "a929eab2772347da3d93d55ff088de9b09d1ffcc8bb722a3a72c8e1da03d85b1",
+    "geometry_source": "#!/usr/bin/env python\n# -*- coding: utf-8 -*-\n\"\"\"\nComplex coil model definition\n\nThis module defines the 8-segment beam steering coil geometry.\nThe model can be imported by other scripts for visualization or field calculation.\n\nUnits: All geometry in meters (Radia always uses meters), current in Amperes.\n\"\"\"\n\nimport numpy as np\nimport radia as rad\nfrom radia.coil_builder import CoilBuilder\n\n# Set unit system to meters\n\n# Unit conversion factor: original design values are in mm\nmm = 1e-3  # 1 mm in meters\n\n\ndef create_beam_steering_builder():\n\t\"\"\"\n\tCreate the 8-segment beam steering magnet coil.\n\n\tReturns:\n\t\tCoilBuilder: shared geometry for CAD and finite-filament field views.\n\t\"\"\"\n\t# Coil parameters\n\tI = 1265.0       # Current (A)\n\tW = 122 * mm     # Width: 122 mm -> 0.122 m\n\tH = 122 * mm     # Height: 122 mm -> 0.122 m\n\n\t# Initial orientation and position\n\tV = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]]).T\n\tL_start = 16.43186645 * 2 * mm\n\tx0 = np.array([(48 + 170) * mm, -L_start / 2, -20 * mm - W / 2])\n\n\t# Build coil using modern fluent interface\n\treturn (CoilBuilder(current=I)\n\t\t.set_start(x0, V)\n\t\t.set_cross_section(width=W, height=H)\n\t\t.add_straight(length=16.43186645 * 2 * mm, tilt=0)\n\t\t.add_arc(radius=121 * mm, arc_angle=64.59228189, tilt=90)\n\t\t.add_straight(length=1018.51313197 * mm, tilt=90)\n\t\t.add_arc(radius=121 * mm, arc_angle=115.40771811, tilt=-90)\n\t\t.add_straight(length=453.43186645 * 2 * mm, tilt=90)\n\t\t.add_arc(radius=121 * mm, arc_angle=115.40771811, tilt=-90)\n\t\t.add_straight(length=1018.51313197 * mm, tilt=90)\n\t\t.add_arc(radius=121 * mm, arc_angle=64.59228189, tilt=-90)\n\t)\n\n\ndef create_beam_steering_coil():\n\t\"\"\"Original solid-current object contract, using the same shared geometry.\"\"\"\n\tbuilder = create_beam_steering_builder()\n\tcoil_segments = builder.to_radia()\n\n\t# Combine all coils\n\tcoils_container = rad.ObjCnt(coil_segments)\n\n\t# Note: TrfZerPara was removed from API (2026-01-31).\n\t# Symmetry hint is optional; field calculation is still correct without it.\n\n\t# Store parameters for reference\n\tparameters = {\n\t\t'current': builder.current,\n\t\t'cross_section': {'width': 122 * mm, 'height': 122 * mm},\n\t\t'num_segments': len(coil_segments),\n\t\t'description': '8-segment beam steering magnet coil'\n\t}\n\n\treturn coils_container, parameters\n\n\nif __name__ == '__main__':\n\t\"\"\"\n\tTest: Create coil and display basic information\n\t\"\"\"\n\tprint(\"=\" * 70)\n\tprint(\"COIL MODEL TEST\")\n\tprint(\"=\" * 70)\n\n\t# Create coil\n\tcoil, params = create_beam_steering_coil()\n\n\tprint(\"\\nCoil Parameters:\")\n\tprint(f\"  Description: {params['description']}\")\n\tprint(f\"  Current: {params['current']} A\")\n\tprint(f\"  Cross-section: {params['cross_section']['width']/mm:.0f}x{params['cross_section']['height']/mm:.0f} mm\")\n\tprint(f\"  Segments: {params['num_segments']}\")\n\n\t# Cleanup\n\trad.UtiDelAll()\n\n\tprint(\"\\n\" + \"=\" * 70)\n\tprint(\"[OK] Coil model test complete\")\n\tprint(\"=\" * 70)\n"
+  },
+  "threads": 2,
+  "notebook": "docs/complex_coil_geometry/complex_coil.ipynb",
+  "baseline_notebook_sha256": "c7a87f900e22889036b0f2042922c4e2d2e473a9db02141152add69c6c688b22",
+  "notebook_sha256": "97cc63788522efc8a3dad8b8a7efae51c04fb82e6fb4723c8ea6326a27e13e20",
+  "historical_code_cells_preserved": true,
+  "historical_code_cells_sha256": "f483c5402052267b6b3a97ce7241ce285af83f3e9819d9968b1266a6d51446b4",
+  "source_cells": [
+    {
+      "id": "webgui-20260915-complex_coil-1",
+      "source": "from pathlib import Path\nimport hashlib, json, math, platform, socket, sys\nfrom datetime import datetime, timezone\nfrom importlib.metadata import version\nimport ngsolve as ng\nfrom ngsolve.webgui import Draw\nng.SetNumThreads(2)\nimport numpy as np\nfrom coil_model import create_beam_steering_builder\nfrom radia.biot_savart import h_segments_cf, h_segments_batch, MU0\nfrom netgen.occ import Box, Pnt, OCCGeometry\nbuilder=create_beam_steering_builder()\nsolid=builder.to_occ()\nsegments,current=builder.to_wire_segments(n_arc=60)\npoints=np.asarray(segments).reshape(-1,3)\nlo,hi=points.min(axis=0),points.max(axis=0)\nxview=float(hi[0]+0.2)\nwith ng.TaskManager():\n    mesh=ng.Mesh(OCCGeometry(Box(Pnt(xview,lo[1],lo[2]), Pnt(xview+0.05,hi[1],hi[2]))).GenerateMesh(maxh=0.20))\n    B=MU0*h_segments_cf(segments,current=current)\n    probes=np.array([[xview+0.025,float(lo[1]+a*(hi[1]-lo[1])),float(lo[2]+b*(hi[2]-lo[2]))] for a in (0.1,0.5,0.9) for b in (0.1,0.5,0.9)])\n    actual=np.array([B(mesh(*p)) for p in probes])\n    reference=MU0*h_segments_batch(segments,probes,current=current)\n    difference=float(np.linalg.norm(actual-reference)/np.linalg.norm(reference))\n    assert np.isfinite(actual).all() and difference < 0.05, difference\nmetrics=dict(current_A=current,segments=len(segments),sampling_x_m=xview,\n             relative_cf_vs_finite_segment_gap=difference,field_route='centreline Biot-Savart, not thick conductor',\n             geometry_source_sha256=hashlib.sha256(Path('coil_model.py').read_bytes()).hexdigest(),\n             geometry_source=Path('coil_model.py').read_text(encoding='utf-8'))\nprint(json.dumps({k:v for k,v in metrics.items() if k!='geometry_source'},indent=2))\n"
+    },
+    {
+      "id": "webgui-20260915-complex_coil-3",
+      "source": "from netgen.webgui import Draw as DrawGeometry\nscene=DrawGeometry(solid,width='100%',height='480px')\nscene.GenerateHTML(filename='scene_0.html')\n"
+    },
+    {
+      "id": "webgui-20260915-complex_coil-5",
+      "source": "scene=Draw(mesh,name='Field_sampling_slab',draw_vol=False,draw_surf=True,width='100%',height='480px')\nscene.GenerateHTML(filename='scene_1.html')\n"
+    },
+    {
+      "id": "webgui-20260915-complex_coil-7",
+      "source": "with ng.TaskManager():\n    scene=Draw(ng.Norm(B),mesh,name='Centreline_B_magnitude_T',draw_vol=False,draw_surf=True,autoscale=True,clipping=None,width='100%',height='480px')\nscene.GenerateHTML(filename='scene_2.html')\n"
+    },
+    {
+      "id": "webgui-20260915-complex_coil-9",
+      "source": "with ng.TaskManager():\n    scene=Draw(B,mesh,name='Centreline_B_vectors_T',draw_vol=False,draw_surf=True,vectors={'grid_size':12},autoscale=True,clipping=None,width='100%',height='480px')\nscene.GenerateHTML(filename='scene_3.html')\n"
+    },
+    {
+      "id": "webgui-20260915-complex_coil-10",
+      "source": "evidence=dict(schema='radia.docs.webgui_supplement.v1',\n    generated_at_utc=datetime.now(timezone.utc).isoformat(),host=socket.gethostname(),\n    python_executable=sys.executable,python_version=platform.python_version(),\n    versions={p:version(p) for p in ['ngsolve','netgen-mesher','anywidget','cubit-mesh-export']},\n    metrics=metrics,threads=2)\nPath('evidence.json').write_text(json.dumps(evidence,indent=2),encoding='utf-8')\n"
+    }
+  ],
+  "supplement_sha256": "a335d0651a26d4517a37da73a9b5736c36789db06a0da969a8bcff779506adbc",
+  "visual_qa": "Saved rich output and state audited; rendered visual QA pending."
+}

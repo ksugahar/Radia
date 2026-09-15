@@ -1,13 +1,16 @@
 """
 
-SHOWCASE NOTEBOOK: docs/ih_esim_benchmark/esim_showcase.ipynb -- Bessel cross-check (live) + committed digest/envelope/per-DOF/Karl figures.
+SHOWCASE NOTEBOOKS: docs/ih_esim_benchmark/esim_showcase.ipynb (method/benchmark)
+and docs/ih_esim_benchmark/esim_spatial_demo.ipynb (coil CAD, workpiece mesh,
+accepted ESIM field and explicitly distinguished local/transfer heating).
 ESIM (Effective Surface Impedance Method) practical usage knowledge.
 
 This module covers HOW TO USE ESIM in production -- CLI flags,
 BH-curve file format, scalar-vs-per-element decision, Karl
 iteration tuning, troubleshooting.  It is NOT paper material.
 
-Source: docs/esim/USAGE.md (canonical) + relevant CLI / src code.
+Canonical operating guidance: this MCP surface, checked against CLI/src code.
+Docs are discovery and evidence, not a competing operating manual.
 Authoring guide: every example in this module must be a copy-pastable
 working command line; every flag listed must exist in the
 src/radia/panels/calc_inductance.py argparse.
@@ -16,6 +19,24 @@ src/radia/panels/calc_inductance.py argparse.
 
 ESIM_USAGE_OVERVIEW = """
 # ESIM — when to use it
+
+## Spatial discovery and result interpretation
+
+`docs/ih_esim_benchmark/esim_spatial_demo.ipynb` shows a 100 A PEEC-coil /
+steel-workpiece weak-coupled ESIM case at 10, 50 and 100 kHz with saved WebGUI
+scenes. It distinguishes accepted tangential field, local Re(Z_s), the local
+diagnostic 0.5*Re(Z_s)*|H_t|^2, and the solver's `qsurf_sol` transfer artifact.
+The current weak route normalizes the incident Biot-Savart tangential-field
+pattern to BIE total power for that transfer artifact. Do not claim this is
+the same local ESIM heating distribution, or that conservation of its integral
+independently validates its spatial pattern. Inspect both integrals and the
+exact backend/source identity. No thermal or volumetric-FEM certification is
+provided by this notebook. `ih_esim` owns current workflow guidance.
+
+Its bundled P1 mesh contains unused coarse air/coil regions: the exploratory
+whole-file CAD tolerance is explicitly 10%, while the workpiece volume and
+sibc surface each require less than 1% CAD discrepancy. This exception is
+specific to this PEEC/BEM discovery case, not a relaxed FEM acceptance gate.
 
 The 1-D nonlinear cell-problem solver returns Z_s(|H_t|) for a
 ferromagnetic conductor with a BH curve.  ESIM **only** beats linear
@@ -48,7 +69,8 @@ per-element when surface H_t spans the BH knee.
 
 ESIM is from K. Hollaus, V. Hanser, and M. Schoebinger, "A Nonlinear
 Effective Surface Impedance in a Magnetic Scalar Potential Formulation,"
-IEEE Trans. Magn., 2025, doi:10.1109/TMAG.2025.3613932 (bib key Hollaus2025;
+IEEE Trans. Magn., 62(7), 2026, doi:10.1109/TMAG.2025.3613932
+(canonical references.bib key hollaus2026nonlinear;
 official bibtex author field: "Hollaus, Karl and Hanser, Valentin and
 Sch\\"{o}binger, Markus").  The Sugahara-lab IGTE 2026 paper re-casts this
 method into a scalar BIE-SIBC; Karl Hollaus (TU Wien) is a co-author.

@@ -1,9 +1,13 @@
 # ESIM Karl Iteration — Cross-Path Benchmark
 
-**Goal**: Quantify the speed and accuracy of Radia's three production
-Karl-iteration paths (PEEC+BEM, PEEC+FEM+Kelvin, Full-FEM) on the same
-nonlinear-steel induction-heating problem.  This is Phase A of the
-ESIM publication roadmap.
+Start with [the spatial ESIM demo](esim_spatial_demo.ipynb): rotate the coil
+and cylindrical workpiece, inspect the mesh, and compare surface magnetic
+field and heating at three frequencies in ten saved WebGUI scenes.
+[The method notebook](esim_showcase.ipynb) retains the analytical checks and
+historical benchmarks. Radia MCP's `ih_esim` is the operating manual.
+
+The historical cross-path study below compares three Karl-iteration routes;
+it is not a new resolved-volume or thermal validation of the spatial demo.
 
 The three paths share the same v4.46+ ESIM cell solver but wrap it
 in different outer solvers:

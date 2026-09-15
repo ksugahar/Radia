@@ -206,6 +206,9 @@ coil = (CoilBuilder(current=2000)
 
 See also: `docs/complex_coil_geometry/complex_coil.ipynb` -- 8-segment beam-steering
 coil showcase using CoilBuilder add_straight/add_arc with a Biot-Savart field map.
+Its saved WebGUI supplement shows CAD, sampling mesh, magnitude and vectors.
+The supplement uses the exact finite-segment `h_segments_cf` source; it is a
+centreline approximation, not the historical thick-conductor field result.
 
 ## Dipole Example (C-type magnet)
 

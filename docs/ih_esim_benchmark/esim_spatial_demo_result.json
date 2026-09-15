@@ -1,0 +1,370 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-09-15T14:35:15Z",
+  "notebook": "esim_spatial_demo.ipynb",
+  "notebook_sha256": "af8856d0d2a053f6d3a3f12959d6458c70740e36feca4e0f884a21b979dc63d5",
+  "summary": {
+    "path": "esim_spatial_demo.ipynb",
+    "cells": 14,
+    "code_cells": 7,
+    "executed_code_cells": 7,
+    "code_cells_with_outputs": 7,
+    "output_count": 20,
+    "error_output_count": 0,
+    "result_saved": true,
+    "notebook_role": "example",
+    "webgui_required": true,
+    "webgui_field_required": true,
+    "webgui_import_present": true,
+    "webgui_draw_present": true,
+    "webgui_draw_cell_count": 4,
+    "executed_webgui_draw_cell_count": 4,
+    "webgui_draw_cells_with_rich_outputs": 4,
+    "webgui_ready": true,
+    "parameterized_field_draw_present": true,
+    "parameterized_field_draw_cell_count": 3,
+    "executed_parameterized_field_draw_cell_count": 3,
+    "parameterized_field_draw_cells_with_rich_outputs": 3,
+    "webgui_field_ready": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info",
+      "radia",
+      "widgets"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 1,
+      "execution_count": 1,
+      "source_sha256": "51ea80e9d45d76434e1bf6de4dfe6ef492851f8b94db585f9d3062b1d040fa1c",
+      "source_preview": "import json, os\nfrom pathlib import Path\nimport ngsolve as ng\nfrom ngsolve.webgui import Draw\nfrom IPython.display import display, Markdown\nfrom esim_spatial_demo import load_fields\ndata = Path(\"spatial_demo_data\")\nsamples = Path(os.environ.get(\"RADIA_ESIM_INPUTS\", \"../../src/radia/panels/samples\"))\nwith ng.TaskManager():\n    mesh, cases, check = load_fields(data, samples)\nprint(\"check-vol:\", check[\"passed\"], \"vertices:\", mesh.nv, \"boundaries:\", mesh.GetBoundaries())",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text_chars": 64,
+          "text_sha256": "26ca2ce719036a9eb8b289c1226c05943e7f373d895374ef468de2eb17e29038",
+          "text_preview": "BEM:winding: 0 flips, 0/1 components reversed, conflicts 0 -> 0\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 53,
+          "text_sha256": "8dd1882ea9ac2cf8494460a797b409d6d241f4f569180a6540b66acd6f04d5bf",
+          "text_preview": "check-vol: True vertices: 1077 boundaries: ('sibc',)\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 3,
+      "execution_count": 2,
+      "source_sha256": "13e3d37ebd2bac825785f1b4d8b0a00bf07c32e719d97682ce3f311a3ddba914",
+      "source_preview": "from netgen.occ import OCCGeometry, Cylinder, Pnt, Dir, Compound\nfrom netgen.webgui import Draw as DrawGeometry\nimport numpy as np\ncoil_cad = OCCGeometry(str(samples / \"ih_fem_kelvin_demo_coil.step\"))\nxyz = np.asarray([v.point for v in mesh.vertices])\nassert np.allclose(xyz.min(axis=0), [-0.025,-0.025,-0.0125], atol=1e-6)\nassert np.allclose(xyz.max(axis=0), [0.025,0.025,0.0125], atol=1e-6)\nworkpiece_cad = Cylinder(Pnt(0,0,-0.0125), Dir(0,0,1), r=0.025, h=0.025)\nworkpiece_cad.col = (0.45,0.55,0.7)\ncoil_cad.shape.col = (0.85,0.45,0.15)\ncoil_scene = DrawGeometry(Compound([coil_cad.shape, workpiece_cad]), width=\"100%\", height=\"440px\")",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "application/vnd.jupyter.widget-view+json",
+            "text/plain"
+          ],
+          "text_plain_chars": 57,
+          "text_plain_sha256": "1bc184a75ce1749e8e479a8eb83994455a734ed6510ac52678fef7efe7becd41",
+          "text_plain_preview": "<netgen.webgui.WebGuiWidget object at 0x000001C7193EFD70>",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 4,
+      "execution_count": 3,
+      "source_sha256": "91912ec8a5b1e42c320cdeb2c209bfb2142b75c9b37a318eff19f0a0a73135ea",
+      "source_preview": "with ng.TaskManager():\n    mesh_scene = Draw(mesh, name=\"ESIM_workpiece_mesh\", draw_vol=False,\n                      draw_surf=True, clipping=None,\n                      width=\"100%\", height=\"440px\")",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "application/vnd.jupyter.widget-view+json",
+            "text/plain"
+          ],
+          "text_plain_chars": 57,
+          "text_plain_sha256": "6fa0358608e7da310d7b21ed8049f23914ad283d8149838c62cb8379db0bfa94",
+          "text_plain_preview": "<netgen.webgui.WebGuiWidget object at 0x000001C6A9FAAC60>",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 6,
+      "execution_count": 4,
+      "source_sha256": "0e720379c40c06ce09afda0fbb2176f1579cd526cc4daae89eaf7d3a30780b98",
+      "source_preview": "hmax = max(max(c[\"result\"][\"esim_per_panel_H_t\"]) for c in cases)\nrmax = max(max(c[\"result\"][\"esim_per_panel_Z_s_real\"]) for c in cases)\nqmax = 0.5*rmax*hmax**2\nscenes = []\nfor c in cases:\n    display(Markdown(f\"### {c['frequency_hz']/1000:g} kHz — accepted tangential field\"))\n    with ng.TaskManager():\n        scenes.append(Draw(c[\"Ht\"], mesh, name=f\"Ht_A_per_m_{c['frequency_hz']}Hz\",\n                           draw_vol=False, draw_surf=True, autoscale=False,\n                           min=0, max=hmax, clipping=None,\n                           width=\"100%\", height=\"440px\"))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "application/vnd.jupyter.widget-view+json",
+            "text/plain"
+          ],
+          "text_plain_chars": 57,
+          "text_plain_sha256": "ff6e68e6a3577b2c9f0df1b0a6180707fe4ab34ccbbbbb4d6b83bf64211a818d",
+          "text_plain_preview": "<netgen.webgui.WebGuiWidget object at 0x000001C8735B8170>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "application/vnd.jupyter.widget-view+json",
+            "text/plain"
+          ],
+          "text_plain_chars": 57,
+          "text_plain_sha256": "0f4f88407120727b033bdcefcd04189014a45134bf8a82a51b3f4e39e2ce3b99",
+          "text_plain_preview": "<netgen.webgui.WebGuiWidget object at 0x000001C8735B81D0>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "application/vnd.jupyter.widget-view+json",
+            "text/plain"
+          ],
+          "text_plain_chars": 57,
+          "text_plain_sha256": "10ff0c28f4c10b50801970862ea97bc1d854da9710188b48de20f0d4388c3369",
+          "text_plain_preview": "<netgen.webgui.WebGuiWidget object at 0x000001C8735B83B0>",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 7,
+      "execution_count": 5,
+      "source_sha256": "ef16ee0a377ddf77c0e5d227121adf8d3826a86d734b79400569813ee52b38e7",
+      "source_preview": "for c in cases:\n    display(Markdown(f\"### {c['frequency_hz']/1000:g} kHz — local ESIM diagnostic, not transfer artifact\"))\n    with ng.TaskManager():\n        scenes.append(Draw(c[\"q_local\"], mesh, name=f\"q_local_W_per_m2_{c['frequency_hz']}Hz\",\n                           draw_vol=False, draw_surf=True, autoscale=False,\n                           min=0, max=qmax, clipping=None,\n                           width=\"100%\", height=\"440px\"))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "application/vnd.jupyter.widget-view+json",
+            "text/plain"
+          ],
+          "text_plain_chars": 57,
+          "text_plain_sha256": "6a3cd5dd9ebc7a1b13f707d4b8a109e1b8d6848880e75f771f5d9e89ab8c8cc5",
+          "text_plain_preview": "<netgen.webgui.WebGuiWidget object at 0x000001C8733D3F80>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "application/vnd.jupyter.widget-view+json",
+            "text/plain"
+          ],
+          "text_plain_chars": 57,
+          "text_plain_sha256": "de4a8d08d391203f9f2dca657c235db522fb55e1b7a50da739bb3e9ed9e9f4c4",
+          "text_plain_preview": "<netgen.webgui.WebGuiWidget object at 0x000001C8722612B0>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "application/vnd.jupyter.widget-view+json",
+            "text/plain"
+          ],
+          "text_plain_chars": 57,
+          "text_plain_sha256": "c8ad834b9de6ba197669950b4def365332a5f4bc7a6cefbbc90521d47d5770be",
+          "text_plain_preview": "<netgen.webgui.WebGuiWidget object at 0x000001C872262330>",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 9,
+      "execution_count": 6,
+      "source_sha256": "079d0593be8dc4c7dd98287c437e7c0322fc845f6096460088b3ec4595b45ec4",
+      "source_preview": "c = cases[1]\nwith ng.TaskManager():\n    resistance_scene = Draw(c[\"resistance\"], mesh, name=\"Re_Zs_ohm_50000Hz\",\n                            draw_vol=False, draw_surf=True, autoscale=False,\n                            min=0, max=rmax, clipping=None,\n                            width=\"100%\", height=\"440px\")\n    transfer_scene = Draw(c[\"heat\"], mesh, name=\"q_transfer_W_per_m2_50000Hz\",\n                          draw_vol=False, draw_surf=True, autoscale=True,\n                          clipping=None, width=\"100%\", height=\"440px\")",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "application/vnd.jupyter.widget-view+json",
+            "text/plain"
+          ],
+          "text_plain_chars": 57,
+          "text_plain_sha256": "db2d22c5d8c6f93612a4ab8594f1a30eec2d34f602a976d7cccf53362b86301c",
+          "text_plain_preview": "<netgen.webgui.WebGuiWidget object at 0x000001C8733D3710>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "application/vnd.jupyter.widget-view+json",
+            "text/plain"
+          ],
+          "text_plain_chars": 57,
+          "text_plain_sha256": "e0743adf673b63a996f1f90e6edd3b22eacd0109bcc2e10d7fe5240fc11f116a",
+          "text_plain_preview": "<netgen.webgui.WebGuiWidget object at 0x000001C8733D3FE0>",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 11,
+      "execution_count": 7,
+      "source_sha256": "c140e3c4c9225d4923090583bb710a4bfc8575a3e3c772c46b76d39430866888",
+      "source_preview": "rows = []\nfor c in cases:\n    d = c[\"result\"]\n    rows.append(dict(frequency_hz=c[\"frequency_hz\"], current_A=d[\"current_A\"],\n                     converged=d[\"esim_converged\"], iterations=d[\"esim_iterations\"],\n                     P_BIE_W=d[\"P_wp_W\"], P_local_W=c[\"P_local_W\"],\n                     P_transfer_W=c[\"P_heat_W\"],\n                     transfer_relative_gap=abs(c[\"P_heat_W\"]/d[\"P_wp_W\"]-1)))\ndisplay(Markdown(\"| f (kHz) | iterations | BIE (W) | local diagnostic (W) | transfer (W) | transfer gap |\\n\"\n                 \"|---:|---:|---:|---:|---:|---:|\\n\" + \"\\n\".join(\n    f\"| {r['frequency_hz']/1000:g} | {r['iterations']} | {r['P_BIE_W']:.6g} | {r['P_local_W']:.6g} | {r['P_transfer_W']:.6g} | {r['transfer_relative_gap']:.3e} |\" for r in rows)))\n(data / \"spatial_metrics.json\").write_text(json.dumps(rows, indent=2), encoding=\"utf-8\")",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "execute_result",
+          "data_keys": [
+            "text/plain"
+          ],
+          "text_plain_chars": 3,
+          "text_plain_sha256": "f0ccd8e78b618cb55731054911af540b5496f37e94026cd20dae22363089b2e9",
+          "text_plain_preview": "806",
+          "text_plain_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  },
+  "sidecar_writer_versions": {
+    "python_version": "3.12.10",
+    "python_executable_name": "python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.39",
+    "radia_version": "4.95.92"
+  },
+  "versions": {
+    "radia": "4.95.92",
+    "ngsolve": "6.2.2606",
+    "numpy": "2.4.3",
+    "scipy": "1.17.1",
+    "cubit-mesh-export": "0.14.15"
+  },
+  "execution": {
+    "hostname": "mdx2",
+    "solver_versions": {
+      "radia": "4.95.92",
+      "ngsolve": "6.2.2606",
+      "numpy": "2.4.3",
+      "scipy": "1.17.1",
+      "cubit-mesh-export": "0.14.15"
+    },
+    "runtime": {
+      "hostname": "mdx2",
+      "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+      "executable": "C:\\temp\\radia_esim_webgui_20260915\\env\\Scripts\\python.exe",
+      "versions": {
+        "radia": "4.95.92",
+        "ngsolve": "6.2.2606",
+        "numpy": "2.4.3",
+        "scipy": "1.17.1",
+        "cadquery-ocp": "7.8.1.1.post1",
+        "build123d": "0.10.0",
+        "nbclient": "0.11.0",
+        "nbformat": "5.11.1",
+        "ipykernel": "7.3.0",
+        "anywidget": "0.11.0",
+        "cubit-mesh-export": "0.14.15"
+      }
+    },
+    "visual_qa": "Saved scene/state audit performed; rendered visual QA pending (browser URL security boundary).",
+    "scope": "Fresh three-frequency weak-coupled ESIM solves and notebook reconstruction on mdx2; no thermal or volume-FEM validation."
+  },
+  "artifacts_sha256": {
+    "compute_record.json": "21f4d6b1b105eba068b6116b29db462c18727fa6a5fad6a2bff3ef17bccb5e7f",
+    "vol_check.json": "a4d8c5d839db10266f6e168341fb55b649eac439d03adddb989ec493a7f3b6d7",
+    "spatial_metrics.json": "212949953f138099dfdc4b8e54943b0f82aa81f301c17560a7e467e0fe2b3b6d",
+    "f10000.json": "ce5f3cc33afbaac34e96e254e13cc25b804837a22ae6bc45a68f1ab439777aab",
+    "f10000_qsurf.sol": "4b9a711d304c1b0b3ef08c65c0616238f46f2d966bbac039f88b04fb4397e547",
+    "f10000.log": "7845c483b1c6e4216a0c16e32077bb00284606f727483eab6bc5a4985dc82074",
+    "f50000.json": "1448bb96bc840352379d069f70879a51ca2a047a01e92991fe9f0ecc72df1fae",
+    "f50000_qsurf.sol": "cd36ea38d12a25542fe420337b30b8e484694b952939025d8da67fad029cf55e",
+    "f50000.log": "f81318bec7d00a53763c5684eab2360421dc1e2acce4637dbd7cd2084ae7e2c9",
+    "f100000.json": "7a4420933d9ced8983a74069873a159c014f2d5b5f62f5c4b1c63fca06f3abb8",
+    "f100000_qsurf.sol": "75d9b0acbd26b0f7921f77e26b7ec46f40ab1c84ddf014d9c276adc2d5b335ef",
+    "f100000.log": "317138fe304907f18d2a987fe84967ca61bdeeff423fcb9891b5d9a9386958d3"
+  }
+}

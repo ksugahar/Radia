@@ -1,0 +1,17 @@
+{
+  "expand_webgui_showcases.py": "d5daba73908b2f97c0d8f8a9e377fddbe2ed60c65236875a92fb138d7a26cd6a",
+  "complex_coil/coil_model.py": "a929eab2772347da3d93d55ff088de9b09d1ffcc8bb722a3a72c8e1da03d85b1",
+  "complex_coil/evidence.json": "af8e9147f0cad6d3e44f87a1857dff526c45f4887bf77d5e3b432fd300fb2c4b",
+  "complex_coil/scene_0.html": "c476bd5ff50907dc3d5312a785326019c5cdca8c970c70b78ecb5176c4079eaf",
+  "complex_coil/scene_1.html": "573b65c42c1465331cafa5b7983ae34d88f91ffa1d0e8a6b15ba1aadbc4d2948",
+  "complex_coil/scene_2.html": "926ccbcd08437b9d95950855d8d5664ab2fd00e8f019810a6453920a1ae92cb0",
+  "complex_coil/scene_3.html": "2eb40261788bd730495770f2b8b18b02c19d8cb68f71992f9acfea1604ab4118",
+  "complex_coil/supplement.ipynb": "a335d0651a26d4517a37da73a9b5736c36789db06a0da969a8bcff779506adbc",
+  "mesh_fusion/evidence.json": "1cdbaab7ad98326ff7a7314f5cc3e547c1a7e39a68f9e6ae8a2bd770745ddf82",
+  "mesh_fusion/mesh_fusion.ipynb": "ac910586266825cdcb3cebbc769742a9ca87e170397a2d6bf87eeb6b82a85416",
+  "mesh_fusion/results_phase2.json": "54199bfda7186ec61bfa3412aa48e0c734b498c2c71947ebb1913f1e341149f9",
+  "mesh_fusion/scene_0.html": "49f84f52f93f1231c245da8f0b072a1310842675ae7ce321b7326089560d475b",
+  "mesh_fusion/scene_1.html": "09b306e56bb258165c3cdedae7ffd6810eb197fc8893cd8a99cf8560d933b1a5",
+  "mesh_fusion/scene_2.html": "6318aa98e0583954e1cbd5b6bb188c06875feb39dd8632826b02f6d21938ee93",
+  "mesh_fusion/supplement.ipynb": "d4be130e4a22c39f5d2d430fa00f1f5a5c28f37e315fb60dd3724d51ca23cd30"
+}

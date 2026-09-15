@@ -1,0 +1,21 @@
+PEEC:STEP -> perimeter filaments (n_peri=16)
+Traceback (most recent call last):
+  File "C:\Program Files\Python312\Lib\site-packages\radia\panels\calc_common.py", line 1090, in calc_main
+    result = solve_func(args)
+             ^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python312\Lib\site-packages\radia\panels\calc_inductance.py", line 2598, in run_inductance
+    coil_data = _solve_coil_peec(args)
+                ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python312\Lib\site-packages\radia\panels\calc_inductance.py", line 222, in _solve_coil_peec
+    topo = filaments_from_step(args.coil_step,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python312\Lib\site-packages\radia\coil_from_cad.py", line 2658, in filaments_from_step
+    topo = _filaments_from_step_compute(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python312\Lib\site-packages\radia\coil_from_cad.py", line 2756, in _filaments_from_step_compute
+    _import_step_units_chk(step_path), cad_units_per_meter,
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python312\Lib\site-packages\radia\_b3d_shim.py", line 700, in import_step
+    from OCP.STEPControl import STEPControl_Reader
+ModuleNotFoundError: No module named 'OCP'
+{"error": "No module named 'OCP'", "radia_version": "4.95.92"}

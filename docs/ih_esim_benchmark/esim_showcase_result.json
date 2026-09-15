@@ -2,7 +2,7 @@
   "schema": "radia.notebook_result.v1",
   "generated_at_utc": "2026-06-27T21:30:32Z",
   "notebook": "docs/ih_esim_benchmark/esim_showcase.ipynb",
-  "notebook_sha256": "bba20fe6874add4a44ce2568bbfc30ee3c678b4a4cdfc613e34a4e2e851daa6d",
+  "notebook_sha256": "fdda6b610d878a93fa1c199937b7240cf5a0568c256f1a54bb9e93737759fc0e",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
@@ -180,5 +180,9 @@
     "code_and_saved_outputs_unchanged": true,
     "comparison": "All complete code-cell objects equal the Git HEAD notebook.",
     "note": "Original result timestamp/runtime retained; this is not a new numerical run."
+  },
+  "discovery_link_update": {
+    "date": "2026-09-15",
+    "code_and_saved_outputs_unchanged": true
   }
 }

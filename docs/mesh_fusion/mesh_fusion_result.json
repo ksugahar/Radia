@@ -1,8 +1,8 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-27T02:30:27Z",
-  "notebook": "docs/mesh_fusion/mesh_fusion.ipynb",
-  "notebook_sha256": "ac910586266825cdcb3cebbc769742a9ca87e170397a2d6bf87eeb6b82a85416",
+  "generated_at_utc": "2026-09-15T14:35:22Z",
+  "notebook": "mesh_fusion.ipynb",
+  "notebook_sha256": "0736a1206846fe83a40e556817bed954aa0d19d1cd2b6804e6bc91687f92c6f9",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
@@ -11,38 +11,167 @@
     "radia_version": "4.95.2"
   },
   "summary": {
-    "path": "docs/mesh_fusion/mesh_fusion.ipynb",
-    "cells": 15,
-    "code_cells": 6,
-    "executed_code_cells": 6,
-    "code_cells_with_outputs": 6,
-    "output_count": 18,
+    "path": "mesh_fusion.ipynb",
+    "cells": 24,
+    "code_cells": 11,
+    "executed_code_cells": 11,
+    "code_cells_with_outputs": 11,
+    "output_count": 27,
     "error_output_count": 0,
     "result_saved": true,
+    "notebook_role": "example",
+    "webgui_required": true,
+    "webgui_field_required": true,
+    "webgui_import_present": true,
+    "webgui_draw_present": true,
+    "webgui_draw_cell_count": 3,
+    "executed_webgui_draw_cell_count": 3,
+    "webgui_draw_cells_with_rich_outputs": 3,
+    "webgui_ready": true,
+    "parameterized_field_draw_present": true,
+    "parameterized_field_draw_cell_count": 2,
+    "executed_parameterized_field_draw_cell_count": 2,
+    "parameterized_field_draw_cells_with_rich_outputs": 2,
+    "webgui_field_ready": true,
     "metadata_keys": [
       "kernelspec",
       "language_info",
-      "radia"
-    ],
-    "error_outputs": [],
-    "notebook_role": "",
-    "webgui_required": false,
-    "webgui_field_required": false,
-    "webgui_import_present": false,
-    "webgui_draw_present": false,
-    "webgui_draw_cell_count": 0,
-    "executed_webgui_draw_cell_count": 0,
-    "webgui_draw_cells_with_rich_outputs": 0,
-    "webgui_ready": true,
-    "parameterized_field_draw_present": false,
-    "parameterized_field_draw_cell_count": 0,
-    "executed_parameterized_field_draw_cell_count": 0,
-    "parameterized_field_draw_cells_with_rich_outputs": 0,
-    "webgui_field_ready": true
+      "radia",
+      "widgets"
+    ]
   },
   "outputs": [
     {
       "cell_index": 2,
+      "execution_count": 1,
+      "source_sha256": "48748eed35207fd877dadd34042be0035f1427c06358afa49444e3b2b8c81989",
+      "source_preview": "from pathlib import Path\nimport hashlib, json, math, platform, socket, sys\nfrom datetime import datetime, timezone\nfrom importlib.metadata import version\nimport ngsolve as ng\nfrom ngsolve.webgui import Draw\nng.SetNumThreads(2)\nimport ast\nsource_notebook=Path('mesh_fusion.ipynb')\noriginal=json.loads(source_notebook.read_bytes())\nsource=next(''.join(c['source']) for c in original['cells'] if c['cell_type']=='code' and not c.get('id','').startswith('webgui-') and 'def solve_nitsche_mortar(' in ''.join(c['source']))\ntree=ast.parse(source)\n# Keep the existing definitions, not the historical full sweep's main call.\ntree.body=[node for node in tree.body if not isinstance(node,ast.If)]\nnamespace={'__name__':'mesh_fusion_preview'}\nexec(compile(tree,str(source_notebook),'exec'),namespace)\nwith ng.TaskManager():\n    mesh=namespace['build_split_mesh'](0.1,0.1)\n    fes,solution=namespace['solve_nitsche_mortar'](mesh,order=2)\n    left,right=solution.components\n    combined=mesh.MaterialCF({'left':le",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 653,
+          "text_sha256": "109ef83de5e76cb86107ccf77610709517666d4db8701496d07370e041b6f1b0",
+          "text_preview": "================================================================================\nPhase 2: 2D Poisson, NITSCHE-MORTAR coupling, independent H1 per side\nDate: 2026-09-15 23:34\n================================================================================\n    maxh  order  gamma_factor     ndof       L2 err         jump     rate\n--------------------------------------------------------------------------------\n  0.2000      2          10.0      175   9.5855e-05   1.7335e-06       -- (0.0s)\n  0.1000      2          10.0      637   9.8346e-06   7.1916e-07    +3.28 (0.0s)\n  0.0500      2          10.0     2457   1.0887e-06   7.8842e-08    +3.18 (0.1s)\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 656,
+          "text_sha256": "4d596c15284090dfb1a1299f6b160a5181eb80f5cae3226d8f86349997390563",
+          "text_preview": "  0.0250      2          10.0     9612   1.2840e-07   7.6201e-09    +3.08 (0.2s)\n--------------------------------------------------------------------------------\nExpected total L2 rate ~ -3 (H1 order=2 -> L2 err = O(h^3)).\nInterface jump decays at rate ~ -p (Nitsche penalty enforces continuity at trace-error level).\n\nWrote: C:\\temp\\radia_visual_discovery_20260915\\mesh_fusion\\results_phase2.json\n{\n  \"ndof\": 637,\n  \"l2_error\": 9.834622659813413e-06,\n  \"interface_jump\": 7.191585709950065e-07,\n  \"source_cell_sha256\": \"7da7faafa6b89feee44dd307d1eecb5135925789ce872d611697689f7b56e8c9\",\n  \"geometric_interface\": \"conforming\",\n  \"order\": 2,\n  \"maxh\": 0.1\n}\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 4,
+      "execution_count": 2,
+      "source_sha256": "7477c83e169a5895e83597686921e53225af66c5d23dd9409544818b58cec285",
+      "source_preview": "scene=Draw(mesh,name='Nitsche_two_subdomains',draw_vol=True,draw_surf=True,width='100%',height='480px')\nscene.GenerateHTML(filename='scene_0.html')\n",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "application/vnd.jupyter.widget-view+json",
+            "text/plain"
+          ],
+          "text_plain_chars": 57,
+          "text_plain_sha256": "bee8778339af70e89a8829f1313e0b7087b25aa4c1549326c3072e5a42cf589a",
+          "text_plain_preview": "<netgen.webgui.WebGuiWidget object at 0x000001EC21522720>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "execute_result",
+          "data_keys": [
+            "text/plain"
+          ],
+          "text_plain_chars": 47258,
+          "text_plain_sha256": "959339fc83b962c15a26d1efa9929a1d4770fd6b63e5562c007fe1c65ff3c479",
+          "text_plain_preview": "'\\n<!DOCTYPE html>\\n<html>\\n    <head>\\n        <title>NGSolve WebGUI</title>\\n        <meta name=\\'viewport\\' content=\\'width=device-width, user-scalable=no\\'/>\\n        <style>\\n            body{\\n                margin:0;\\n                overflow:hidden;\\n            }\\n            canvas{\\n                cursor:grab;\\n                cursor:-webkit-grab;\\n                cursor:-moz-grab;\\n            }\\n            canvas:active{\\n                cursor:grabbing;\\n                cursor:-webkit-grabbing;\\n                cursor:-moz-grabbing;\\n            }\\n        </style>\\n    </head>\\n    <body>\\n          <script src=\"https://cdn.jsdelivr.net/npm/webgui@0.2.39/dist/webgui.js\"></script>\\n          </script>\\n          <script>\\n            var render_data = {\"gui_settings\": {}, \"ngsolve_version\": \"6.2.2606\", \"mesh_dim\": 2, \"order2d\": 1, \"order3d\": 1, \"draw_vol\": null, \"draw_surf\": null, \"objects\": [], \"deformation\": false, \"mesh_regions_2d\": 2, \"mesh_regions_3d\": 0, \"names\": [\"left\", \"right\"], \"edge_names\": [\"dirichlet\", \"dirichlet\", \"dirichlet\", \"dirichlet\", \"dirichlet\", \"dirichlet\", \"interface\"], \"funcdim\": 0, \"colors\": [[0.0, 1.0, 0.0, 1.0, 1.0], [0.0, 1.0, 0.0, 1.0, 1.0]], \"show_wireframe\": true, \"show_mesh\": true, \"Bezier_points\": [\"AAAAAM3MzD0AAAAAAAAAAAAAAADNzMw9AAAAAAAAAADNzMw9AAAAAAAAAAAAAAAAS1UKPh+wyD0AAAAAAAAAAEtVCj4fsMg9AAAAAAAAAADNzEw+AAAAAAAAAAAAAAAA4G14PmT6tz0AAAAAAAAAAOBteD5k+rc9AAAAAAAAAACamZk+AAAAAAAAAAAAAAAAS1UKPh+wyD0AAAAAAAAAAEtVCj4fsMg9AAAAAAAAAADgbXg+ZPq3PQAAAAAAAAAAYESvPnGprD0AAAAAAAAAAGBErz5xqaw9AAAAAAAAAADNzMw+AAAAAAAAAAAAAAAA4G14PmT6tz0AAAAAAAAAAOBteD5k+rc9AAAAAAAAAABgRK8+camsPQAAAAAAAAAAzczMPgAAAAAAAAAAAAAAAM3MzD4AAAAAAAAAAAAAAACzi9s+dAuSPQAAAAAAAAAAYESvPnGprD0AAAAAAAAAAGBErz5xqaw9AAAAAAAAAACzi9s+dAuSPQAAAAAAAAAAs4vbPnQLkj0AAAAAAAAAALOL2z50C5I9AAAAAAAAAAAAAAA/zczMPQAAAAAAAAAAAAAAP2ZmZj8AAAAAAAAAAAAAAD9mZmY/AAAAAAAAAADNzMw+AACAPwAAAAAAAAAArIO5PnPnZj8AAAAAAAAAAKyDuT5z52Y/AAAAAAAAAACamZk+AACAPwAAAAAAAAAAWHSCPgcWaj8AAAAAAAAAAFh0gj4HFmo/AAAAAAAAAADNzEw+AACAPwAAAAAAAAAArIO5PnPnZj8AAAAAAAAAAKyDuT5z52Y/AAAAAAAAAABYdII+BxZqPwAAAAAAAAAAdIIpPuqnbj8AAAAAAAAAAHSCKT7qp24/AAAAAAAAAADNzMw9AACAPwAAAAAAAAAAWHSCPgcWaj8AAAAAAAAAAFh0gj4HFmo/AAAAAAAAAAB0gik+6qduPwAAAAAAAAAAzczMPQAAgD8AAAAAAAAAAM3MzD0AAIA/AAAAAAAAAABxF7A9JxlqPwAAAAAAAAAAdIIpPuqnbj8AAAAAAAAAAHSCKT7qp24/AAAAAAAAAABxF7A9JxlqPwAAAAAAAAAAcRewPScZaj8AAAAAAAAAAHEXsD0nGWo/AAAAAAAAAAAAAAAAZmZmPwAAAAAAAAAAFiepPVRgUz8AAAAAAAAAABYnqT1UYFM/AAAAAAAAAAAAAAAAzcxMPwAAAAAAAAAAcRewPScZaj8AAAAAAAAAAHEXsD0nGWo/AAAAAAAAAAAWJ6k9VGBTPwAAAAAAAAAA5vuePeglOz8AAAAAAAAAAOb7nj3oJTs/AAAAAAAAAAAAAAAAMzMzPwAAAAAAAAAAFiepPVRgUz8AAAAAAAAAABYnqT1UYFM/AAAAAAAAAADm+5496CU7PwAAAAAAAAAAwb6pPWJfIj8AAAAAAAAAAMG+qT1iXyI/AAAAAAAAAAAAAAAAmpkZPwAAAAAAAAAA5vuePeglOz8AAAAAAAAAAOb7nj3oJTs/AAAAAAAAAADBvqk9Yl8iPwAAAAAAAAAA9fetPQntCD8AAAAAAAAAAPX3rT0J7Qg/AAAAAAAAAAAAAAAAAAAAPwAAAAAAAAAAwb6pPWJfIj8AAAAAAAAAAMG+qT1iXyI/AAAAAAAAAAD19609Ce0IPwAAAAAAAAAA7R+sPYnl3T4AAAAAAAAAAO0frD2J5d0+AAAAAAAAAAAAAAAAzczMPgAAAAAAAAAA9fetPQntCD8AAAAAAAAAAPX3rT0J7Qg/AAAAAAAAAADtH6w9ieXdPgAAAAAAAAAABO2lPamKqT4AAAAAAAAAAATtpT2piqk+AAAAAAAAAAAAAAAAmpmZPgAAAAAAAAAA7R+sPYnl3T4AAAAAAAAAAO0frD2J5d0+AAAAAAAAAAAE7aU9qYqpPgAAAAAAAAAA+K6xPe/KVD4AAAAAAAAAAPiusT3vylQ+AAAAAAAAAAAAAAAAzcxMPgAAAAAAAAAABO2lPamKqT4AAAAAAAAAAATtpT2piqk+AAAAAAAAAAD4rrE978pUPgAAAAAAAAAA+K6xPe/KVD4AAAAAAAAAAPiusT3vylQ+AAAAAAAAAAAAAAAAzczMPQAAAAAAAAAAAAAAP2ZmZj8AAAAAAAAAAAAAAD9mZmY/AAAAAAAAAACsg7k+c+dmPwAAAAAAAAAAC/POPpq/KD4AAAAAAAAAAAvzzj6avyg+AAAAAAAAAAAAAAA/zcxMPgAAAAAAAAAAs4vbPnQLkj0AAAAAAAAAALOL2z50C5I9AAAAAAAAAAAL884+mr8oPgAAAAAAAAAA7BvWPnuqiT4AAAAAAAAAAOwb1j57qok+AAAAAAAAAAAAAAA/mpmZPgAAAAAAAAAAC/POPpq/KD4AAAAAAAAAAAvzzj6avyg+AAAAAAAAAADsG9Y+e6qJPgAAAAAAAAAAF8fVPswmvD4AAAAAAAAAABfH1T7MJrw+AAAAAAAAAAAAAAA/zczMPgAAAAAAAAAA7BvWPnuqiT4AAAAAAAAAAOwb1j57qok+AAAAAAAAAAAXx9U+zCa8PgAAAAAAAAAAWGHWPsnj7j4AAAAAAAAAAFhh1j7J4+4+AAAAAAAAAAAAAAA/AAAAPwAAAAAAAAAAF8fVPswmvD4AAAAAAAAAABfH1T7MJrw+AAAAAAAAAABYYdY+yePuPgAAAAAAAAAA8EnYPr1TED8AAAAAAAAAAPBJ2D69UxA/AAAAAAAAAAA",
+          "text_plain_truncated": true
+        }
+      ]
+    },
+    {
+      "cell_index": 6,
+      "execution_count": 3,
+      "source_sha256": "6189b379f04d05b5dbeaca4eb481d585a3e6583771053942b07c463d012a9187",
+      "source_preview": "with ng.TaskManager():\n    scene=Draw(combined,mesh,name='Nitsche_solution',draw_vol=True,draw_surf=True,autoscale=True,width='100%',height='480px')\nscene.GenerateHTML(filename='scene_1.html')\n",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "application/vnd.jupyter.widget-view+json",
+            "text/plain"
+          ],
+          "text_plain_chars": 57,
+          "text_plain_sha256": "4a2f6db9d15b3d8eeb8ee8c3f395debeb205638f68f701c911a0ae82c14f5389",
+          "text_plain_preview": "<netgen.webgui.WebGuiWidget object at 0x000001EE29CB4470>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "execute_result",
+          "data_keys": [
+            "text/plain"
+          ],
+          "text_plain_chars": 77087,
+          "text_plain_sha256": "1a768f39532de383c441648f3c75f54302f9c57e9c1424fd381023d74aa53880",
+          "text_plain_preview": "'\\n<!DOCTYPE html>\\n<html>\\n    <head>\\n        <title>NGSolve WebGUI</title>\\n        <meta name=\\'viewport\\' content=\\'width=device-width, user-scalable=no\\'/>\\n        <style>\\n            body{\\n                margin:0;\\n                overflow:hidden;\\n            }\\n            canvas{\\n                cursor:grab;\\n                cursor:-webkit-grab;\\n                cursor:-moz-grab;\\n            }\\n            canvas:active{\\n                cursor:grabbing;\\n                cursor:-webkit-grabbing;\\n                cursor:-moz-grabbing;\\n            }\\n        </style>\\n    </head>\\n    <body>\\n          <script src=\"https://cdn.jsdelivr.net/npm/webgui@0.2.39/dist/webgui.js\"></script>\\n          </script>\\n          <script>\\n            var render_data = {\"gui_settings\": {}, \"ngsolve_version\": \"6.2.2606\", \"mesh_dim\": 2, \"order2d\": 2, \"order3d\": 2, \"draw_vol\": false, \"draw_surf\": true, \"objects\": [], \"deformation\": false, \"funcdim\": 1, \"show_wireframe\": true, \"show_mesh\": true, \"Bezier_points\": [\"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",
+          "text_plain_truncated": true
+        }
+      ]
+    },
+    {
+      "cell_index": 8,
+      "execution_count": 4,
+      "source_sha256": "5535cdb245be739414980a47d40e4ba6d08ad753ddb2d1a83a55a3ee090685b2",
+      "source_preview": "with ng.TaskManager():\n    scene=Draw(absolute_error,mesh,name='Nitsche_absolute_error',draw_vol=True,draw_surf=True,autoscale=True,width='100%',height='480px')\nscene.GenerateHTML(filename='scene_2.html')\n",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "application/vnd.jupyter.widget-view+json",
+            "text/plain"
+          ],
+          "text_plain_chars": 57,
+          "text_plain_sha256": "1b893ec85dcb57f257858789deebbf37abb8b324144b8af5b32e8cb2dad1ffd3",
+          "text_plain_preview": "<netgen.webgui.WebGuiWidget object at 0x000001EC21549940>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "execute_result",
+          "data_keys": [
+            "text/plain"
+          ],
+          "text_plain_chars": 77089,
+          "text_plain_sha256": "fb7db2139fb80a58d7ebc18cb776cf29fa02c2d89de920634b814aa018f54be2",
+          "text_plain_preview": "'\\n<!DOCTYPE html>\\n<html>\\n    <head>\\n        <title>NGSolve WebGUI</title>\\n        <meta name=\\'viewport\\' content=\\'width=device-width, user-scalable=no\\'/>\\n        <style>\\n            body{\\n                margin:0;\\n                overflow:hidden;\\n            }\\n            canvas{\\n                cursor:grab;\\n                cursor:-webkit-grab;\\n                cursor:-moz-grab;\\n            }\\n            canvas:active{\\n                cursor:grabbing;\\n                cursor:-webkit-grabbing;\\n                cursor:-moz-grabbing;\\n            }\\n        </style>\\n    </head>\\n    <body>\\n          <script src=\"https://cdn.jsdelivr.net/npm/webgui@0.2.39/dist/webgui.js\"></script>\\n          </script>\\n          <script>\\n            var render_data = {\"gui_settings\": {}, \"ngsolve_version\": \"6.2.2606\", \"mesh_dim\": 2, \"order2d\": 2, \"order3d\": 2, \"draw_vol\": false, \"draw_surf\": true, \"objects\": [], \"deformation\": false, \"funcdim\": 1, \"show_wireframe\": true, \"show_mesh\": true, \"Bezier_points\": [\"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",
+          "text_plain_truncated": true
+        }
+      ]
+    },
+    {
+      "cell_index": 9,
+      "execution_count": 5,
+      "source_sha256": "b8b33e266433942db6ca856e1933b547c4e55dc2636566b11c262a6a59d254f6",
+      "source_preview": "evidence=dict(schema='radia.docs.webgui_supplement.v1',\n    generated_at_utc=datetime.now(timezone.utc).isoformat(),host=socket.gethostname(),\n    python_executable=sys.executable,python_version=platform.python_version(),\n    versions={p:version(p) for p in ['ngsolve','netgen-mesher','anywidget','cubit-mesh-export']},\n    metrics=metrics,threads=2)\nPath('evidence.json').write_text(json.dumps(evidence,indent=2),encoding='utf-8')\n",
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data_keys": [
+            "text/plain"
+          ],
+          "text_plain_chars": 4,
+          "text_plain_sha256": "2805045f2ffd81fe9398a6f427356bb32d47a287142e4d600101a90134aa0509",
+          "text_plain_preview": "9569",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 11,
       "execution_count": 1,
       "source_sha256": "77ee9c9431d2f6ea1be07317793932cbab20afac86c0fcc980c2e5dac26b8310",
       "source_preview": "\"\"\"Phase 1 — Nitsche coupling, 2D Poisson, heterogeneous material.\n\nDemonstrates the core building block of HFSS Mesh Fusion in NGSolve:\ntwo side-by-side sub-rectangles meshed AT DIFFERENT DENSITIES, with\nthe interface coupled via Nitsche's penalty method.\n\nProblem:\n    -nabla . (mu nabla u) = f       on Omega = [0,1] x [0,1]\n                          u = 0     on dOmega\n    mu(x,y) = mu_L   if x < 0.5\n           = mu_R   if x > 0.5      (jump at x=0.5)\n    f(x,y) = sin(pi x) sin(pi y)\n\nThe exact solution for constant mu is u = f / (2 pi^2 mu).  With a\njump in mu, the analytic solution is piecewise (transmission\nconditions:  u_L = u_R  AND  mu_L du_L/dn = mu_R du_R/dn  at x=0.5).\n\nFor the demonstration we use mu_L = mu_R = 1.0 (homogeneous), so the\nanalytic solution simplifies to u_exact = f / (2 pi^2) and we can\nmeasure L2 error against this closed form.  The interface coupling\nis exercised because we mesh the two halves at DIFFERENT densities,\ngiving a non-matching mesh at x=0.5 (whe",
@@ -90,7 +219,7 @@
       ]
     },
     {
-      "cell_index": 4,
+      "cell_index": 13,
       "execution_count": 2,
       "source_sha256": "7da7faafa6b89feee44dd307d1eecb5135925789ce872d611697689f7b56e8c9",
       "source_preview": "\"\"\"Phase 2 — Mortar-Nitsche coupling for 2D Poisson, multi-mesh-density.\n\nDemonstrates the mortar-style WEAK coupling of two H1 trial spaces\ndefined independently on left + right subdomains, using NGSolve's\nNitsche-method machinery (penalty + symmetry + consistency terms,\nNO explicit Lagrange multiplier space).\n\nWhy Nitsche-mortar instead of pure mortar with LM space?\n- NGSolve's pure-mortar LM space (`L2(definedon=boundary)`) is\n  fragile in 6.2.2603 (segfault on some patterns; depends on\n  build-time options).\n- Nitsche reproduces the SAME math (consistent + symmetric +\n  coercive interface coupling) without the LBB headache or the\n  saddle-point indefinite system.\n- This is the formulation Becker-Hansbo-Stenberg 2003 (M2AN)\n  proved is equivalent to mortar for the elliptic case.\n\nProblem:\n    -nabla . (mu nabla u) = f       on Omega = [0,1] x [0,1]\n                          u = 0     on dOmega\n    Omega = Omega_L + Omega_R, interface at x=0.5\n    Each side has its OWN H1 trial space",
@@ -130,7 +259,7 @@
       ]
     },
     {
-      "cell_index": 6,
+      "cell_index": 15,
       "execution_count": 3,
       "source_sha256": "2e2bb1c98b9fbe49e90a291600be1c9543b4ab344669a297de10af432ff86ea2",
       "source_preview": "\"\"\"Phase 3 — 2D TM eddy current with HCurl Nitsche-mortar coupling.\n\nDemonstrates the on-point HFSS Mesh Fusion analog for EM: independent\nHCurl trial spaces on two subdomains, coupled weakly across the\ninterface via Nitsche penalty on the tangential trace.\n\nProblem:\n    curl(nu curl A) + j omega sigma A = J_s    on Omega\n    A = 0   on dOmega\n\n    Omega split into:\n      \"coil\"   = inner rectangle with current source J_s\n      \"air\"    = outer annulus (no source, no conductivity)\n\nThis is the 2D TM-mode reduction of Maxwell's eddy-current equation,\nwhere A is the out-of-plane component of the magnetic vector potential.\n\nEach subdomain has its OWN HCurl trial space (in 2D, this reduces to\nH¹ for the scalar A_z, but we keep the HCurl name for consistency\nwith the 3D generalization).  The interface coupling uses the same\nNitsche-IPG mechanism as Phase 2.\n\nNOTE: For 2D TM mode the HCurl trial space is mathematically\nequivalent to H¹ on the scalar A_z, with the conormal flux being\nnu * gra",
@@ -162,7 +291,7 @@
       ]
     },
     {
-      "cell_index": 8,
+      "cell_index": 17,
       "execution_count": 4,
       "source_sha256": "779cc0532dd2129f3b0c8a2e67e0278d82bfa1d6ca3ca1ebc3a8a0bd1fc3b357",
       "source_preview": "\"\"\"Phase 4 — Egger (2020) harmonic mortar for rotor-stator (rotating machine).\n\nDistilled from Egger-Harutyunyan-Loescher-Schöps-Steinbach (2020),\n\"Stability of harmonic mortar methods with application to electric\nmachines\" (arXiv 2005.12020), available at\nW:/03_<lab-private>/00_<lab-private>/15_<lab-private>/05_em_applications/.\n\n## Key idea\n\nFor a UNIFORMLY ROTATING rotor (constant angular velocity omega_mech):\n- The A_z field on the rotor-stator interface is PERIODIC in the\n  azimuthal angle theta with the rotor's mechanical period.\n- Time-harmonic excitation at electrical frequency omega_e gives\n  rise to a SPATIAL Fourier series in theta on the interface:\n\n      A_z|interface(r, theta, t) = Re sum_k a_k(r) exp(j(k theta - omega_e t))\n\n- Truncating to K Fourier modes per side, the mortar Lagrange\n  multiplier space M_h has dimension 2K+1 (K cos + K sin + DC).\n\n## Why this beats per-time-step mortar\n\nStandard sliding-mesh mortar (Buffa-Maday-Rapetti 2001) must:\n  1. At each rotor an",
@@ -178,7 +307,7 @@
       ]
     },
     {
-      "cell_index": 10,
+      "cell_index": 19,
       "execution_count": 5,
       "source_sha256": "24cdf5418605184cd46badfd71c8f9d710a90abefc72d58b05a8ed144a8b1a04",
       "source_preview": "\"\"\"Phase 5 — Accelerator magnet shim mortar (Sugahara Lab scenario).\n\nUse case (from radia_mcp.fem.nonconforming_mesh_coupling lab_scenarios):\n\n  In accelerator magnet design (e.g. ATTO Tower), the iron yoke is\n  large (10-100 cm) while the SHIM region near the pole face is\n  small (a few mm thick).  Conventional single-mesh FEM refinement\n  in the shim region forces refinement of the entire neighboring\n  yoke too, exploding the DoF count.\n\n  With mortar/Nitsche coupling:\n    - Coarse mesh on the iron yoke (~5 mm element size)\n    - Fine mesh on the shim region (~0.5 mm element size)\n    - Coupled at the yoke-shim interface via Nitsche\n  -> Refining shim does NOT inflate yoke DoFs.\n\nThis demonstration covers the 2D analog: a \"C-shaped\" iron yoke with\na small SHIM rectangle attached to the pole face, with the two regions\nmeshed at vastly different densities.\n\n## Geometry\n\n  +----------------------------+\n  |          Air               |\n  |   +------+         +-----+ |\n  |   | iron |  g",
@@ -210,7 +339,7 @@
       ]
     },
     {
-      "cell_index": 12,
+      "cell_index": 21,
       "execution_count": 6,
       "source_sha256": "7c6995a670ac38b99dbb7f467bc92a4964c7075f3f0ab630f1db6941feb36d59",
       "source_preview": "import json, glob\nimport numpy as np\nimport matplotlib.pyplot as plt\n\nfig, ax = plt.subplots(figsize=(5.4, 4.2))\nfor jf in sorted(glob.glob(\"results_phase*.json\")):\n    d = json.load(open(jf))\n    rows = d[\"results\"]\n    dof = [r.get(\"n_dof\") or r.get(\"ndof\") for r in rows]\n    err = [r.get(\"l2_err\") or r.get(\"L2_err\") or r.get(\"err\") for r in rows]\n    pairs = [(x, y) for x, y in zip(dof, err) if x and y]\n    if not pairs:\n        continue\n    xs, ys = zip(*sorted(pairs))\n    ax.loglog(xs, ys, \"o-\", label=f\"phase {d['phase']}\")\nax.set_xlabel(\"number of DoF\"); ax.set_ylabel(\"L2 error\")\nax.grid(True, which=\"both\", ls=\":\"); ax.legend()\nfig.tight_layout(); fig.savefig(\"mesh_fusion_convergence.png\", dpi=150)\nplt.show()\nprint(\"phases summarised:\", sorted(glob.glob(\"results_phase*.json\")))",
@@ -248,11 +377,75 @@
     "json_has_generated_at_utc": true,
     "json_has_versions": true
   },
-  "documentation_revision": {
-    "date": "2026-09-14",
-    "previous_notebook_sha256": "00167299c824bbbed139baa395cbf8966bb012b263f43bf6f7bf55c68b57141d",
-    "code_and_saved_outputs_unchanged": true,
-    "comparison": "All complete code-cell objects equal the Git HEAD notebook.",
-    "note": "Original result timestamp/runtime retained; this is not a new numerical run."
-  }
+  "sidecar_writer_versions": {
+    "python_version": "3.12.10",
+    "python_executable_name": "python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.39",
+    "radia_version": "4.95.92"
+  },
+  "historical_execution": {
+    "generated_at_utc": "2026-06-27T02:30:27Z",
+    "versions": {
+      "python_version": "3.12.10",
+      "python_executable": "C:\\Program Files\\Python312\\python.exe",
+      "platform": "Windows-2022Server-10.0.20348-SP0",
+      "radia_mcp_version": "1.4.3",
+      "radia_version": "4.95.2"
+    }
+  },
+  "visualization_execution": {
+    "schema": "radia.docs.webgui_supplement.v1",
+    "generated_at_utc": "2026-09-15T14:34:46.528544+00:00",
+    "host": "mdx2",
+    "python_executable": "C:\\temp\\radia_esim_webgui_20260915\\env\\Scripts\\python.exe",
+    "python_version": "3.12.10",
+    "versions": {
+      "ngsolve": "6.2.2606",
+      "netgen-mesher": "6.2.2606",
+      "anywidget": "0.11.0",
+      "cubit-mesh-export": "0.14.15"
+    },
+    "metrics": {
+      "ndof": 637,
+      "l2_error": 9.834622659813413e-06,
+      "interface_jump": 7.191585709950065e-07,
+      "source_cell_sha256": "7da7faafa6b89feee44dd307d1eecb5135925789ce872d611697689f7b56e8c9",
+      "source_cell": "\"\"\"Phase 2 — Mortar-Nitsche coupling for 2D Poisson, multi-mesh-density.\n\nDemonstrates the mortar-style WEAK coupling of two H1 trial spaces\ndefined independently on left + right subdomains, using NGSolve's\nNitsche-method machinery (penalty + symmetry + consistency terms,\nNO explicit Lagrange multiplier space).\n\nWhy Nitsche-mortar instead of pure mortar with LM space?\n- NGSolve's pure-mortar LM space (`L2(definedon=boundary)`) is\n  fragile in 6.2.2603 (segfault on some patterns; depends on\n  build-time options).\n- Nitsche reproduces the SAME math (consistent + symmetric +\n  coercive interface coupling) without the LBB headache or the\n  saddle-point indefinite system.\n- This is the formulation Becker-Hansbo-Stenberg 2003 (M2AN)\n  proved is equivalent to mortar for the elliptic case.\n\nProblem:\n    -nabla . (mu nabla u) = f       on Omega = [0,1] x [0,1]\n                          u = 0     on dOmega\n    Omega = Omega_L + Omega_R, interface at x=0.5\n    Each side has its OWN H1 trial space (discontinuous H1 across\n    the interface, recoupled via Nitsche)\n\nVerification: vs analytic\n    u_exact = sin(pi x) sin(pi y) / (2 pi^2)    (mu = 1)\n    L2 error decays as O(h^{p+1})\n\nUsage:\n    python phase2_mortar_h1_poisson.py\n\nOutput:\n    results_phase2.json\n\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nimport math\nimport sys\nimport time\nfrom pathlib import Path\n\nfrom ngsolve import (\n    BilinearForm,\n    CoefficientFunction,\n    FESpace,\n    GridFunction,\n    H1,\n    Integrate,\n    LinearForm,\n    Mesh,\n    dx,\n    ds,\n    grad,\n    sin,\n    specialcf,\n    x,\n    y,\n)\nfrom ngsolve import TaskManager\nfrom netgen.geom2d import SplineGeometry\n\n\ndef build_split_mesh(maxh_L: float, maxh_R: float) -> Mesh:\n    \"\"\"Unit square split at x=0.5 into 2 subdomains.\n\n    NOTE: NGSolve+Netgen produces a CONFORMAL interface (shared\n    nodes).  The interesting non-uniformity is element density per\n    side -- the Nitsche-mortar coupling treats both sides as\n    formally independent FE spaces regardless.\n    \"\"\"\n    geo = SplineGeometry()\n    p0 = geo.AppendPoint(0, 0)\n    p1 = geo.AppendPoint(0.5, 0)\n    p2 = geo.AppendPoint(1, 0)\n    p3 = geo.AppendPoint(1, 1)\n    p4 = geo.AppendPoint(0.5, 1)\n    p5 = geo.AppendPoint(0, 1)\n    geo.Append([\"line\", p0, p1], leftdomain=1, rightdomain=0, bc=\"dirichlet\")\n    geo.Append([\"line\", p1, p2], leftdomain=2, rightdomain=0, bc=\"dirichlet\")\n    geo.Append([\"line\", p2, p3], leftdomain=2, rightdomain=0, bc=\"dirichlet\")\n    geo.Append([\"line\", p3, p4], leftdomain=2, rightdomain=0, bc=\"dirichlet\")\n    geo.Append([\"line\", p4, p5], leftdomain=1, rightdomain=0, bc=\"dirichlet\")\n    geo.Append([\"line\", p5, p0], leftdomain=1, rightdomain=0, bc=\"dirichlet\")\n    geo.Append([\"line\", p1, p4], leftdomain=1, rightdomain=2, bc=\"interface\")\n    geo.SetMaterial(1, \"left\")\n    geo.SetMaterial(2, \"right\")\n    h = min(maxh_L, maxh_R)\n    return Mesh(geo.GenerateMesh(maxh=h))\n\n\ndef solve_nitsche_mortar(mesh: Mesh, order: int = 2, mu_L: float = 1.0,\n                          mu_R: float = 1.0, gamma_factor: float = 10.0):\n    \"\"\"Solve with TWO independent H1 spaces + Nitsche interface terms.\n\n    SPD system (symmetric Nitsche IPG variant).  Penalty coefficient\n    gamma = gamma_factor * mu_avg * p^2 / h.\n    \"\"\"\n    # Two H1 spaces, each LIVES ON ONE SUBDOMAIN ONLY -> trial\n    # functions are formally independent across the interface\n    fes_L = H1(mesh, order=order, dirichlet=\"dirichlet\",\n                definedon=mesh.Materials(\"left\"))\n    fes_R = H1(mesh, order=order, dirichlet=\"dirichlet\",\n                definedon=mesh.Materials(\"right\"))\n    fes = FESpace([fes_L, fes_R])\n\n    (uL, uR), (vL, vR) = fes.TnT()\n\n    mu_L_cf = CoefficientFunction(mu_L)\n    mu_R_cf = CoefficientFunction(mu_R)\n    h = specialcf.mesh_size\n    n = specialcf.normal(mesh.dim)\n\n    # Average + jump operators on the interface.\n    # NGSolve requires `.Trace()` on the trial functions for BND-form\n    # integration; `grad(u).Trace()` returns the trace of the gradient.\n    jump_u = uL.Trace() - uR.Trace()\n    jump_v = vL.Trace() - vR.Trace()\n    # Conormal flux averages (use trace of grad)\n    avg_dn_u = 0.5 * (mu_L_cf * grad(uL).Trace() * n\n                       - mu_R_cf * grad(uR).Trace() * n)\n    avg_dn_v = 0.5 * (mu_L_cf * grad(vL).Trace() * n\n                       - mu_R_cf * grad(vR).Trace() * n)\n    # Penalty\n    mu_avg = 0.5 * (mu_L + mu_R)\n    gamma = gamma_factor * mu_avg * (order ** 2)\n\n    a = BilinearForm(fes, symmetric=True)\n    # subdomain stiffness\n    a += mu_L_cf * grad(uL) * grad(vL) * dx(\"left\")\n    a += mu_R_cf * grad(uR) * grad(vR) * dx(\"right\")\n    # Nitsche interface terms (symmetric IPG)\n    a += -avg_dn_u * jump_v * ds(\"interface\")          # consistency\n    a += -avg_dn_v * jump_u * ds(\"interface\")          # symmetry\n    a += (gamma / h) * jump_u * jump_v * ds(\"interface\")  # penalty\n\n    f = LinearForm(fes)\n    src = sin(math.pi * x) * sin(math.pi * y)\n    f += src * vL * dx(\"left\")\n    f += src * vR * dx(\"right\")\n\n    with TaskManager():\n        a.Assemble()\n        f.Assemble()\n\n        gfu = GridFunction(fes)\n        gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse=\"sparsecholesky\") * f.vec\n        return fes, gfu\n\n\ndef l2_error_combined(mesh: Mesh, gfu) -> tuple[float, float, float]:\n    \"\"\"L2 error vs analytic on each side and combined.\"\"\"\n    u_exact = (1.0 / (2.0 * math.pi**2)) * sin(math.pi * x) * sin(math.pi * y)\n    gfL, gfR = gfu.components\n    e_L2 = math.sqrt(float(Integrate((gfL - u_exact)**2, mesh,\n                                       definedon=mesh.Materials(\"left\"))))\n    e_R2 = math.sqrt(float(Integrate((gfR - u_exact)**2, mesh,\n                                       definedon=mesh.Materials(\"right\"))))\n    e_tot = math.sqrt(e_L2**2 + e_R2**2)\n    return e_L2, e_R2, e_tot\n\n\ndef interface_jump(mesh: Mesh, gfu) -> float:\n    \"\"\"L2 norm of the jump uL - uR on the interface.\n\n    For Nitsche, this is NOT zero exactly; it scales like O(h^p)\n    with the penalty.  Measures how well the coupling is enforced.\n    \"\"\"\n    gfL, gfR = gfu.components\n    return math.sqrt(float(Integrate((gfL - gfR)**2, mesh,\n                                       definedon=mesh.Boundaries(\"interface\"))))\n\n\ndef main():\n    print(\"=\" * 80)\n    print(\"Phase 2: 2D Poisson, NITSCHE-MORTAR coupling, independent H1 per side\")\n    print(f\"Date: {time.strftime('%Y-%m-%d %H:%M')}\")\n    print(\"=\" * 80)\n    print(f\"{'maxh':>8} {'order':>6} {'gamma_factor':>13} {'ndof':>8} \"\n          f\"{'L2 err':>12} {'jump':>12} {'rate':>8}\")\n    print(\"-\" * 80)\n\n    results = []\n    prev_err = None\n    prev_h = None\n    order = 2\n    gamma_factor = 10.0  # standard Nitsche penalty multiplier\n\n    for maxh in [0.2, 0.1, 0.05, 0.025]:\n        t0 = time.time()\n        mesh = build_split_mesh(maxh, maxh)\n        fes, gfu = solve_nitsche_mortar(mesh, order=order,\n                                          mu_L=1.0, mu_R=1.0,\n                                          gamma_factor=gamma_factor)\n        e_L, e_R, e_tot = l2_error_combined(mesh, gfu)\n        jump = interface_jump(mesh, gfu)\n        dt = time.time() - t0\n        rate_str = \"--\"\n        if prev_err is not None and prev_h is not None:\n            rate = math.log(prev_err / e_tot) / math.log(prev_h / maxh)\n            rate_str = f\"{rate:+.2f}\"\n        print(f\"{maxh:>8.4f} {order:>6} {gamma_factor:>13.1f} {fes.ndof:>8} \"\n              f\"{e_tot:>12.4e} {jump:>12.4e} {rate_str:>8} ({dt:.1f}s)\")\n        results.append({\n            \"maxh\": maxh, \"order\": order, \"gamma_factor\": gamma_factor,\n            \"n_dof\": fes.ndof, \"l2_err_left\": e_L, \"l2_err_right\": e_R,\n            \"l2_err_total\": e_tot, \"interface_jump\": jump,\n            \"t_solve_sec\": dt,\n        })\n        prev_err = e_tot\n        prev_h = maxh\n\n    print(\"-\" * 80)\n    print(f\"Expected total L2 rate ~ -{order+1} (H1 order={order} -> \"\n          f\"L2 err = O(h^{order+1})).\")\n    print(\"Interface jump decays at rate ~ -p (Nitsche penalty enforces \"\n          \"continuity at trace-error level).\")\n    print()\n\n    out = Path.cwd() / \"results_phase2.json\"\n    out.write_text(json.dumps({\n        \"phase\": 2,\n        \"description\": \"Nitsche-mortar 2D Poisson, independent H1 per side\",\n        \"method\": \"Symmetric Interior Penalty Galerkin variant of Nitsche\",\n        \"exact_solution\": \"u = sin(pi x) sin(pi y) / (2 pi^2)\",\n        \"results\": results,\n    }, indent=2))\n    print(f\"Wrote: {out}\")\n    return 0\n\n\n\n_rc = main()\n",
+      "geometric_interface": "conforming",
+      "order": 2,
+      "maxh": 0.1
+    },
+    "threads": 2,
+    "notebook": "docs/mesh_fusion/mesh_fusion.ipynb",
+    "baseline_notebook_sha256": "ac910586266825cdcb3cebbc769742a9ca87e170397a2d6bf87eeb6b82a85416",
+    "notebook_sha256": "0736a1206846fe83a40e556817bed954aa0d19d1cd2b6804e6bc91687f92c6f9",
+    "historical_code_cells_preserved": true,
+    "historical_code_cells_sha256": "99e6844976fb4237b448a51ad72e8f864f53122bf5d20c22fff5b35c1bbab562",
+    "source_cells": [
+      {
+        "id": "webgui-20260915-mesh_fusion-1",
+        "source": "from pathlib import Path\nimport hashlib, json, math, platform, socket, sys\nfrom datetime import datetime, timezone\nfrom importlib.metadata import version\nimport ngsolve as ng\nfrom ngsolve.webgui import Draw\nng.SetNumThreads(2)\nimport ast\nsource_notebook=Path('mesh_fusion.ipynb')\noriginal=json.loads(source_notebook.read_bytes())\nsource=next(''.join(c['source']) for c in original['cells'] if c['cell_type']=='code' and not c.get('id','').startswith('webgui-') and 'def solve_nitsche_mortar(' in ''.join(c['source']))\ntree=ast.parse(source)\n# Keep the existing definitions, not the historical full sweep's main call.\ntree.body=[node for node in tree.body if not isinstance(node,ast.If)]\nnamespace={'__name__':'mesh_fusion_preview'}\nexec(compile(tree,str(source_notebook),'exec'),namespace)\nwith ng.TaskManager():\n    mesh=namespace['build_split_mesh'](0.1,0.1)\n    fes,solution=namespace['solve_nitsche_mortar'](mesh,order=2)\n    left,right=solution.components\n    combined=mesh.MaterialCF({'left':left,'right':right})\n    exact=ng.sin(math.pi*ng.x)*ng.sin(math.pi*ng.y)/(2*math.pi**2)\n    absolute_error=ng.sqrt((combined-exact)**2)\n    errors=namespace['l2_error_combined'](mesh,solution)\n    jump=namespace['interface_jump'](mesh,solution)\n    assert errors[2] < 2e-5 and jump < 2e-6,(errors,jump)\nmetrics=dict(ndof=fes.ndof,l2_error=errors[2],interface_jump=jump,\n             source_cell_sha256=hashlib.sha256(source.encode()).hexdigest(),\n             source_cell=source,geometric_interface='conforming',order=2,maxh=0.1)\nprint(json.dumps({k:v for k,v in metrics.items() if k!='source_cell'},indent=2))\n"
+      },
+      {
+        "id": "webgui-20260915-mesh_fusion-3",
+        "source": "scene=Draw(mesh,name='Nitsche_two_subdomains',draw_vol=True,draw_surf=True,width='100%',height='480px')\nscene.GenerateHTML(filename='scene_0.html')\n"
+      },
+      {
+        "id": "webgui-20260915-mesh_fusion-5",
+        "source": "with ng.TaskManager():\n    scene=Draw(combined,mesh,name='Nitsche_solution',draw_vol=True,draw_surf=True,autoscale=True,width='100%',height='480px')\nscene.GenerateHTML(filename='scene_1.html')\n"
+      },
+      {
+        "id": "webgui-20260915-mesh_fusion-7",
+        "source": "with ng.TaskManager():\n    scene=Draw(absolute_error,mesh,name='Nitsche_absolute_error',draw_vol=True,draw_surf=True,autoscale=True,width='100%',height='480px')\nscene.GenerateHTML(filename='scene_2.html')\n"
+      },
+      {
+        "id": "webgui-20260915-mesh_fusion-8",
+        "source": "evidence=dict(schema='radia.docs.webgui_supplement.v1',\n    generated_at_utc=datetime.now(timezone.utc).isoformat(),host=socket.gethostname(),\n    python_executable=sys.executable,python_version=platform.python_version(),\n    versions={p:version(p) for p in ['ngsolve','netgen-mesher','anywidget','cubit-mesh-export']},\n    metrics=metrics,threads=2)\nPath('evidence.json').write_text(json.dumps(evidence,indent=2),encoding='utf-8')\n"
+      }
+    ],
+    "supplement_sha256": "d4be130e4a22c39f5d2d430fa00f1f5a5c28f37e315fb60dd3724d51ca23cd30",
+    "visual_qa": "Saved rich output and state audited; rendered visual QA pending."
+  },
+  "execution_scope": "Mixed provenance: original campaigns preserved; only added visualization cells executed on mdx."
 }

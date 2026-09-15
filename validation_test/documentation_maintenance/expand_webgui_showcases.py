@@ -17,6 +17,93 @@ import sys
 from datetime import datetime, timezone
 
 SPECS = {
+    'complex_coil': {
+        'path': 'docs/complex_coil_geometry/complex_coil.ipynb',
+        'heading': '''## See a bent beam-steering coil and its magnetic field
+
+Rotate the actual eight-segment CoilBuilder solid, then inspect the field beside
+it. This is Radia's geometry-to-source-field capability; its MCP coil and
+NGSolve tools own the operating workflow. The new field is the **finite-wire
+centreline approximation** of that geometry at 1265 A, not a rerun of the
+historical thick-conductor calculation below. The mesh is a sampling slab
+200 mm from the coil plane along x, not an air-boundary FEM solve.
+The scalar scene shows strength, and the vector scene shows direction.
+''',
+        'setup': '''import numpy as np
+from coil_model import create_beam_steering_builder
+from radia.biot_savart import h_segments_cf, h_segments_batch, MU0
+from netgen.occ import Box, Pnt, OCCGeometry
+builder=create_beam_steering_builder()
+solid=builder.to_occ()
+segments,current=builder.to_wire_segments(n_arc=60)
+points=np.asarray(segments).reshape(-1,3)
+lo,hi=points.min(axis=0),points.max(axis=0)
+xview=float(hi[0]+0.2)
+with ng.TaskManager():
+    mesh=ng.Mesh(OCCGeometry(Box(Pnt(xview,lo[1],lo[2]), Pnt(xview+0.05,hi[1],hi[2]))).GenerateMesh(maxh=0.20))
+    B=MU0*h_segments_cf(segments,current=current)
+    probes=np.array([[xview+0.025,float(lo[1]+a*(hi[1]-lo[1])),float(lo[2]+b*(hi[2]-lo[2]))] for a in (0.1,0.5,0.9) for b in (0.1,0.5,0.9)])
+    actual=np.array([B(mesh(*p)) for p in probes])
+    reference=MU0*h_segments_batch(segments,probes,current=current)
+    difference=float(np.linalg.norm(actual-reference)/np.linalg.norm(reference))
+    assert np.isfinite(actual).all() and difference < 0.05, difference
+metrics=dict(current_A=current,segments=len(segments),sampling_x_m=xview,
+             relative_cf_vs_finite_segment_gap=difference,field_route='centreline Biot-Savart, not thick conductor',
+             geometry_source_sha256=hashlib.sha256(Path('coil_model.py').read_bytes()).hexdigest(),
+             geometry_source=Path('coil_model.py').read_text(encoding='utf-8'))
+print(json.dumps({k:v for k,v in metrics.items() if k!='geometry_source'},indent=2))
+''',
+        'scenes': [
+            ('Bent coil: real CoilBuilder CAD', "from netgen.webgui import Draw as DrawGeometry\nscene=DrawGeometry(solid,width='100%',height='480px')"),
+            ('Field sampling slab mesh', "scene=Draw(mesh,name='Field_sampling_slab',draw_vol=False,draw_surf=True,width='100%',height='480px')"),
+            ('Magnetic flux density magnitude (tesla)', "with ng.TaskManager():\n    scene=Draw(ng.Norm(B),mesh,name='Centreline_B_magnitude_T',draw_vol=False,draw_surf=True,autoscale=True,clipping=None,width='100%',height='480px')"),
+            ('Magnetic flux density direction', "with ng.TaskManager():\n    scene=Draw(B,mesh,name='Centreline_B_vectors_T',draw_vol=False,draw_surf=True,vectors={'grid_size':12},autoscale=True,clipping=None,width='100%',height='480px')"),
+        ],
+        'field': True,
+    },
+    'mesh_fusion': {
+        'path': 'docs/mesh_fusion/mesh_fusion.ipynb',
+        'heading': '''## See the two-domain coupling, solution and error
+
+This fresh small solve reuses the notebook's Nitsche interface formulation.
+Inspect the two materials, the combined solution and its absolute error against
+the sine reference. Separate H1 spaces are coupled on a **conforming geometric
+interface**; this scene does not demonstrate arbitrary nonmatching meshes.
+The source and coupling study below remain unchanged. Radia MCP's NGSolve
+method guidance owns operating instructions; these views make the coupling
+result visible rather than supplying a second manual.
+''',
+        'setup': '''import ast
+source_notebook=Path('mesh_fusion.ipynb')
+original=json.loads(source_notebook.read_bytes())
+source=next(''.join(c['source']) for c in original['cells'] if c['cell_type']=='code' and not c.get('id','').startswith('webgui-') and 'def solve_nitsche_mortar(' in ''.join(c['source']))
+tree=ast.parse(source)
+# Keep the existing definitions, not the historical full sweep's main call.
+tree.body=[node for node in tree.body if not isinstance(node,ast.If)]
+namespace={'__name__':'mesh_fusion_preview'}
+exec(compile(tree,str(source_notebook),'exec'),namespace)
+with ng.TaskManager():
+    mesh=namespace['build_split_mesh'](0.1,0.1)
+    fes,solution=namespace['solve_nitsche_mortar'](mesh,order=2)
+    left,right=solution.components
+    combined=mesh.MaterialCF({'left':left,'right':right})
+    exact=ng.sin(math.pi*ng.x)*ng.sin(math.pi*ng.y)/(2*math.pi**2)
+    absolute_error=ng.sqrt((combined-exact)**2)
+    errors=namespace['l2_error_combined'](mesh,solution)
+    jump=namespace['interface_jump'](mesh,solution)
+    assert errors[2] < 2e-5 and jump < 2e-6,(errors,jump)
+metrics=dict(ndof=fes.ndof,l2_error=errors[2],interface_jump=jump,
+             source_cell_sha256=hashlib.sha256(source.encode()).hexdigest(),
+             source_cell=source,geometric_interface='conforming',order=2,maxh=0.1)
+print(json.dumps({k:v for k,v in metrics.items() if k!='source_cell'},indent=2))
+''',
+        'scenes': [
+            ('Mesh and two coupled subdomains', "scene=Draw(mesh,name='Nitsche_two_subdomains',draw_vol=True,draw_surf=True,width='100%',height='480px')"),
+            ('Coupled finite-element solution', "with ng.TaskManager():\n    scene=Draw(combined,mesh,name='Nitsche_solution',draw_vol=True,draw_surf=True,autoscale=True,width='100%',height='480px')"),
+            ('Absolute error against the sine solution', "with ng.TaskManager():\n    scene=Draw(absolute_error,mesh,name='Nitsche_absolute_error',draw_vol=True,draw_surf=True,autoscale=True,width='100%',height='480px')"),
+        ],
+        'field': True,
+    },
     'electrostatics': {
         'path': 'docs/electrostatics/electrostatics.ipynb',
         'heading': r'''## See the ideal coaxial electric field
@@ -186,6 +273,10 @@ Path('evidence.json').write_text(json.dumps(evidence,indent=2),encoding='utf-8')
             c.id=f'webgui-20260915-{key}-{i}'
         n=nbf.v4.new_notebook(cells=cells,metadata=dict(kernelspec=dict(name='python3',display_name='Python 3')))
         nbf.write(n,directory/'supplement.ipynb')
+        if key=='complex_coil':
+            shutil.copy2(base.parent/'coil_model.py',directory/'coil_model.py')
+        if key=='mesh_fusion':
+            shutil.copy2(base,directory/base.name)
         if key=='gmsh_animation':
             for name in ['rotor.vol','stator.vol']:
                 shutil.copy2(base.parent/name,directory/name)
@@ -261,7 +352,10 @@ if __name__=='__main__':
     parser.add_argument('mode',choices=['prepare','execute','integrate'])
     parser.add_argument('--root',type=Path,default=Path.cwd())
     parser.add_argument('--stage',type=Path,required=True)
+    parser.add_argument('--only',nargs='+',choices=list(SPECS))
     args=parser.parse_args()
+    if args.only:
+        SPECS={key:SPECS[key] for key in args.only}
     if args.mode=='prepare': prepare(args.root,args.stage)
     elif args.mode=='execute': execute(args.stage)
     else: integrate(args.root,args.stage)
