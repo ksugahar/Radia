@@ -345,6 +345,13 @@ set(RADIA_CORE_SOURCES
 # Solver-heavy accelerator validation remains under validation_test/.
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(test_ih_rotation_runtime
+        tests/ih_rotation_runtime.cpp
+        src/radia/simulink/radia_ih_runtime.cpp
+        src/radia/simulink/radia_ih_thermal.cpp
+        src/radia/simulink/radia_ih_transport.cpp)
+    target_include_directories(test_ih_rotation_runtime PRIVATE src/radia/simulink)
+    add_test(NAME radia.ih_rotation.cpp COMMAND test_ih_rotation_runtime)
 	add_executable(test_rad_beam_transfer
 		${CMAKE_CURRENT_SOURCE_DIR}/tests/cpp/test_rad_beam_transfer.cpp
 		${CORE_DIR}/rad_beam_transfer.cpp

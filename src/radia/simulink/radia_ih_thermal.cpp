@@ -10,7 +10,7 @@ namespace {
 void check_matrix(const CSRMatrix& a, int n, const char* name) {
     if (a.n != n || a.row_ptr.size() != static_cast<std::size_t>(n + 1) ||
         a.col.size() != a.value.size() ||
-        a.row_ptr.back() != static_cast<int>(a.col.size()))
+        a.row_ptr.front() != 0 || a.row_ptr.back() != static_cast<int>(a.col.size()))
         throw std::invalid_argument(std::string("invalid ") + name + " CSR matrix");
     for (int i = 0; i < n; ++i) {
         if (a.row_ptr[i] > a.row_ptr[i + 1])
@@ -44,10 +44,12 @@ double dot(const std::vector<double>& a, const std::vector<double>& b) {
 void cg(const CSRMatrix& a, const std::vector<double>& b,
         double tolerance, int max_iterations, std::vector<double>& x) {
     const int n = a.n;
-    std::vector<double> r = b, p = r, ap;
-    x.assign(static_cast<std::size_t>(n), 0.0);
+    std::vector<double> r = b, p, ap;
+    matvec(a, x, ap); // Warm start from the previous accepted temperature.
+    for (int i = 0; i < n; ++i) r[i] -= ap[i];
+    p = r;
     double rr = dot(r, r);
-    const double target = tolerance * tolerance * std::max(1.0, rr);
+    const double target = tolerance * tolerance * std::max(1.0, dot(b, b));
     for (int iteration = 0; iteration < max_iterations && rr > target; ++iteration) {
         matvec(a, p, ap);
         const double pap = dot(p, ap);
@@ -94,11 +96,10 @@ void advance_thermal(const CSRMatrix& mass, const CSRMatrix& stiffness,
             throw std::invalid_argument("IH thermal cell weights must be finite and positive");
 
     // M + dt*K is assembled from the same workpiece mesh as the reference.
-    // The S-Function performs the conservative theta_prev -> theta_now
-    // transport exactly once before entering this backward-Euler kernel.
+    // State and source are in material coordinates; no thermal-state transport.
     CSRMatrix system;
     add_scaled(stiffness, options.dt_s * options.conductivity_scale, system);
-    if (system.row_ptr.size() != mass.row_ptr.size() || system.col != mass.col ||
+    if (system.row_ptr != mass.row_ptr || system.col != mass.col ||
         (convection && (system.row_ptr != convection->row_ptr || system.col != convection->col)))
         throw std::invalid_argument("mass and stiffness CSR sparsity must match");
     for (std::size_t k = 0; k < system.value.size(); ++k)

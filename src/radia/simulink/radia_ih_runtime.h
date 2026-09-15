@@ -28,6 +28,7 @@ struct EddyConfig {
 class EddyRuntime {
 public:
     explicit EddyRuntime(EddyConfig config);
+    void reset();
     std::vector<double> output(double current_A, double angle_rad,
                                const std::vector<double>& temperature_K);
     int heat_size() const { return config_.n_heat; }
