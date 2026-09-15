@@ -39,7 +39,7 @@ Prefer established public abstractions over proprietary plumbing.
   constitutive models, HDiv-MMM/VIM, PEEC, SIBC/ESIM, Kelvin/DtN, stream
   functions, application coupling, and validated native kernels.
 - Cubit and build123d own CAD authoring. Netgen/NGSolve and Cubit own solver
-  mesh generation. Gmsh is Radia's post-processing target.
+  mesh generation. Gmsh is Radia's post-processing target. Electromagnetic modeling APIs use neutral domain names; do not introduce reference commercial-solver brands into repository identifiers, documentation, tests, or commit messages, or claim vendor API compatibility.
 - Build thin Python/MATLAB/MCP adapters around tested domain workflows; do not duplicate solver logic or expose every helper.
   Consolidate with preserved contracts per `packages/radia-mcp/CONTRIBUTING.md`.
 - Keep two genuinely independent analysis routes for important models when
