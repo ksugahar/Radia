@@ -10,6 +10,14 @@ result-bearing documentation notebooks.
 
 ## Features
 
+The standalone GUI, installer, and `cubit-toolbar-smoke-test` release check are
+owned by this distribution and require no Radia installation. The former
+`radia.install_panels` and Radia GUI paths are removed, with no compatibility
+shims. Existing deployments must regenerate their startup registration using
+`cubit-plugin-install` from the selected Python environment. See the owning MCP
+`cubit_toolbar_guide` for the operating contract and
+`validation_test/cubit_mesh_export/STANDALONE_GUI.md` for acceptance evidence.
+
 Version 1.0.0 retains the 0.14.17 command and label contracts. Its
 supported binary runtime is 64-bit Windows, CPython 3.12, Coreform Cubit
 2025.12, and the exact Netgen/NGSolve versions declared in package metadata.

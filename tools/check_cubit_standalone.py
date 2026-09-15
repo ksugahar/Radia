@@ -14,7 +14,7 @@ def main():
     if importlib.util.find_spec("radia") is not None:
         raise RuntimeError("Run this gate in an isolated environment without radia")
     import cubit_mesh_export
-    from cubit_mesh_export import toolbar_install
+    from cubit_mesh_export import toolbar_install, toolbar_smoke
     from cubit_mesh_export.smoke_test import _find_sample_jou
     installed = Path(cubit_mesh_export.__file__).resolve().parent
     if not installed.is_relative_to(Path(sys.prefix).resolve()):
@@ -23,6 +23,8 @@ def main():
     assert fixture.is_file() and fixture.is_relative_to(installed)
     gui = installed / "cubit_gui"
     assert (gui / "register_toolbar.py").is_file()
+    assert toolbar_smoke._probe_path().is_file()
+    assert toolbar_smoke._probe_path().is_relative_to(installed)
     temp_root = r"C:\temp" if os.name == "nt" else None
     if temp_root:
         Path(temp_root).mkdir(parents=True, exist_ok=True)
@@ -47,7 +49,7 @@ def main():
         with tarfile.open(archive_path) as archive:
             assert archive.extractfile("scripts/radia_export_menu.py").read() == (gui / "radia_export_menu.py").read_bytes()
             assert len([n for n in archive.getnames() if n.startswith("scripts/export_")]) == 6
-        for module in ("install", "smoke_test", "check"):
+        for module in ("install", "smoke_test", "toolbar_smoke", "check"):
             result = subprocess.run([sys.executable, "-m", f"cubit_mesh_export.{module}", "--help"],
                                     capture_output=True, text=True, timeout=30, cwd=root)
             assert result.returncode == 0, (module, result.stderr)

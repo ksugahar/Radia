@@ -5,12 +5,14 @@ from __future__ import annotations
 import copy
 import importlib.util
 import tomllib
+import json
 from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1]
-MODULE_PATH = ROOT / "src" / "radia" / "cubit_toolbar_smoke.py"
+ROOT = Path(__file__).resolve().parents[3]
+PACKAGE = ROOT / "packages/cubit-mesh-export"
+MODULE_PATH = PACKAGE / "src/cubit_mesh_export/toolbar_smoke.py"
 SPEC = importlib.util.spec_from_file_location("cubit_toolbar_smoke_test", MODULE_PATH)
 assert SPEC is not None and SPEC.loader is not None
 SMOKE = importlib.util.module_from_spec(SPEC)
@@ -89,7 +91,7 @@ def test_display_contract_rejects_missing_or_reordered_actions():
 
 def test_cubit_probe_checks_runtime_visibility_and_enabled_state():
     source = (
-        ROOT / "src" / "radia" / "panels" / "cubit_toolbar_probe.py"
+        PACKAGE / "src/cubit_mesh_export/cubit_gui/toolbar_probe.py"
     ).read_text(encoding="utf-8")
 
     assert "main.isVisible()" in source
@@ -104,10 +106,13 @@ def test_cubit_probe_checks_runtime_visibility_and_enabled_state():
 
 
 def test_gui_smoke_is_an_installed_release_gate():
-    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    project = tomllib.loads((PACKAGE / "pyproject.toml").read_text(encoding="utf-8"))
     assert project["project"]["scripts"]["cubit-toolbar-smoke-test"] == (
-        "radia.cubit_toolbar_smoke:main"
+        "cubit_mesh_export.toolbar_smoke:main"
     )
+    radia = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    assert "cubit-toolbar-smoke-test" not in radia["project"]["scripts"]
+    assert SMOKE._probe_path().is_file()
 
     release_source = (ROOT / "tools" / "release_quad.py").read_text(
         encoding="utf-8"
@@ -118,5 +123,36 @@ def test_gui_smoke_is_an_installed_release_gate():
     assert 'run(["cubit-toolbar-smoke-test", "--restarts", "2"])' in lab_deploy
 
 
-def _validate_real_cubit_displays_toolbar_on_two_cold_starts():
-    assert SMOKE.run_smoke_test(restarts=2, timeout=45.0) == 0
+@pytest.mark.parametrize('returncode', [0, 1, -1073740791])
+def test_good_probe_requires_clean_process_exit(monkeypatch, tmp_path, returncode):
+    class Process:
+        def poll(self):
+            return returncode
+        def wait(self, timeout):
+            return returncode
+    def launch(*args, **kwargs):
+        (tmp_path / 'result.json').write_text(json.dumps(_healthy_payload()))
+        return Process()
+    monkeypatch.setattr(SMOKE, '_cubit_pids', lambda: set())
+    monkeypatch.setattr(SMOKE.subprocess, 'Popen', launch)
+    result = SMOKE._run_one(Path('cubit.exe'), tmp_path, 1)
+    assert result['ok'] is (returncode == 0)
+
+
+def test_timeout_terminates_only_owned_process(monkeypatch, tmp_path):
+    calls = []
+    class Process:
+        closed = False
+        def poll(self):
+            return 1 if self.closed else None
+        def terminate(self):
+            calls.append('terminate-owned')
+            self.closed = True
+        def wait(self, timeout):
+            return 1
+    process = Process()
+    monkeypatch.setattr(SMOKE, '_cubit_pids', lambda: set())
+    monkeypatch.setattr(SMOKE.subprocess, 'Popen', lambda *a, **k: process)
+    result = SMOKE._run_one(Path('cubit.exe'), tmp_path, 0)
+    assert not result['ok']
+    assert calls == ['terminate-owned']
