@@ -1,4 +1,4 @@
-"""Unit test for src/radia/panels/radia_export_menu.py (PySide6).
+"""Unit test for the exporter-owned Cubit menu (private PySide6).
 
 Exercises the new PySide6 Radia Export toolbar that replaced the legacy
 C++ Qt5 .ccl plugin in 2026-05.  Tests are headless (QT_QPA_PLATFORM=
@@ -47,7 +47,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 # Ensure the editable radia package is importable as a side-load.
 _REPO_ROOT = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", ".."))
-sys.path.insert(0, os.path.join(_REPO_ROOT, "src", "radia", "panels"))
+sys.path.insert(0, os.path.join(_REPO_ROOT, "packages", "cubit-mesh-export",
+                              "src", "cubit_mesh_export", "cubit_gui"))
 
 try:
     from PySide6.QtWidgets import (  # noqa: E402

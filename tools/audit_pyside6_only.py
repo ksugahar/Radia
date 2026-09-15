@@ -49,17 +49,19 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+GUI_ROOT = ROOT / 'packages/cubit-mesh-export/src/cubit_mesh_export/cubit_gui'
 
 CUBIT_TOOLBAR_MODULES = [
-    "src/radia/panels/radia_export_menu.py",
-    "src/radia/panels/register_toolbar.py",
+    "packages/cubit-mesh-export/src/cubit_mesh_export/cubit_gui/radia_export_menu.py",
 ]
 
 PYSIDE6_ALLOWED_FILES = {
+    "packages/cubit-mesh-export/src/cubit_mesh_export/cubit_gui/radia_export_menu.py",
+    "validation_test/cubit_mesh_export/standalone_gui_probe.py",
+    "validation_test/cubit_mesh_export/standalone_dialog_probe.py",
+    "validation_test/cubit_mesh_export/standalone_toolbar_probe.py",
     "packages/radia-mcp/src/radia_mcp/cubit/bootstrap.py",
     "src/radia/panels/cubit_toolbar_probe.py",
-    "src/radia/panels/radia_export_menu.py",
-    "src/radia/panels/register_toolbar.py",
     "tools/audit_pyside6_only.py",
     "validation_test/panels/conftest.py",
     "validation_test/panels/test_radia_export_menu.py",
@@ -187,7 +189,7 @@ def check_deployed_panel_source(
     """
     cubit_file = cubit_file or (Path.home() / ".cubit")
     expected_register = expected_register or (
-        ROOT / "src" / "radia" / "panels" / "register_toolbar.py")
+        GUI_ROOT / "register_toolbar.py")
     if not cubit_file.is_file():
         return ("skip (no ~/.cubit)", [])
 
@@ -218,10 +220,10 @@ def check_deployed_panel_source(
 
 def check_official_toolbar_contract() -> list[str]:
     """Validate the WorkflowToolbar and Claro-owned menu contracts."""
-    toolbar_root = ROOT / "src" / "radia" / "panels" / "cubit_toolbar"
+    toolbar_root = GUI_ROOT / "cubit_toolbar"
     template = toolbar_root / "toolbars" / "radia_export_toolbar.ttb.tmpl"
-    register = ROOT / "src" / "radia" / "panels" / "register_toolbar.py"
-    export_menu = ROOT / "src" / "radia" / "panels" / "radia_export_menu.py"
+    register = GUI_ROOT / "register_toolbar.py"
+    export_menu = GUI_ROOT / "radia_export_menu.py"
     issues: list[str] = []
     if not template.is_file():
         return [f"missing WorkflowToolbar template: {template}"]
@@ -268,7 +270,7 @@ class _StubCubit:
 def _run_smoke() -> int:
     """--smoke mode: construct ExportDialog under offscreen Qt."""
     os.environ["QT_QPA_PLATFORM"] = "offscreen"
-    sys.path.insert(0, str(ROOT / "src" / "radia" / "panels"))
+    sys.path.insert(0, str(GUI_ROOT))
     from PySide6.QtWidgets import QApplication
     QApplication.instance() or QApplication([])
 
