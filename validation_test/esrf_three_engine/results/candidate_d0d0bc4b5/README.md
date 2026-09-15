@@ -105,3 +105,17 @@ The native returned iterate has dense residual 0.00626886. A symmetric dense
 direct solve gives residual 2.42e-11. `frozen-cg-comparison.json` and
 `validation_test/feec/compare_frozen_wedge_cg.py` preserve the comparison.
 This supports a periodic-restart mechanism, not proof that it is the only cause.
+
+## Local repair trial (not wheel acceptance)
+
+Commit `0317794ed` removes only unconditional periodic scalar-PCG restarts.
+The true-residual candidate check and restart on an optimistic recurrence,
+final residual recording, iteration cap and nonpositive/nonfinite curvature
+errors remain. Batched-PCG periodic restarts are unchanged.
+The rebuilt local native passes the frozen regression in 1891 iterations
+(independent residual 2.72132e-4 versus 2.744577e-4). Its one-iteration budget
+control remains unconverged. The full six-case strong-drive script passes.
+Six focused tests pass: frozen WEDGE including cap rejection, invalid/valid
+Jacobi diagonal, topology warm start, scalar true residual and batched true
+residual. The test does not force every optimistic-recursive-residual branch.
+These local source-build tests do not replace both-host installed-wheel tests.
