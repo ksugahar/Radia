@@ -297,6 +297,14 @@ def test_coil_yoke_checkpoint_rejects_different_native_build(tmp_path, monkeypat
     assert "implementation_sha256=_implementation_identity()" in text
 
 
+def test_coil_yoke_formal_lane_records_and_requires_wheel_identity():
+    text = COIL_YOKE_RUNNER_PATH.read_text(encoding="utf-8")
+    assert 'parser.add_argument("--require-wheel"' in text
+    assert "runtime_identity = _runtime_identity(options.require_wheel)" in text
+    assert '"implementation_sha256": common["implementation_sha256"]' in text
+    assert '"runtime_identity": runtime_identity' in text
+
+
 def test_coil_yoke_runner_declares_picard_state_and_anderson_controls():
     text = COIL_YOKE_RUNNER_PATH.read_text(encoding="utf-8")
     assert "--mixed-anderson-depth" in text

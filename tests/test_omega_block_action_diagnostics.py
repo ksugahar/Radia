@@ -133,10 +133,16 @@ def test_cli_preserves_hold_and_partial_energy_evidence(tmp_path, monkeypatch, s
     tree = ast.parse(path.read_text(encoding='utf-8'))
     main_node = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'main')
     calls = []
+    projection_calls = []
     audits = []
+
+    def project_source(*args, **kwargs):
+        projection_calls.append(kwargs)
+        return {'potential': 0, 'harmonic_field': 0, 'relative_harmonic_norm': 0,
+                'bonus_intorder': kwargs['bonus_intorder']}
+
     solver = SimpleNamespace(
-        project_source_total_hodge=lambda *a, **kw: {
-            'potential': 0, 'harmonic_field': 0, 'relative_harmonic_norm': 0},
+        project_source_total_hodge=project_source,
         solve_magnetostatic_mixed_total_reduced_omega_kelvin=lambda *a, **kw: (
             calls.append(kw) or {'fes': SimpleNamespace(ndof=3), 'linear_residual': {'raw': 'retained'}}))
     case = dict(mesh=SimpleNamespace(ne=1), H_s=0, H_ext=0, controls={}, radius=1, center=(0, 0, 0), mu_r=1)
@@ -164,7 +170,9 @@ def test_cli_preserves_hold_and_partial_energy_evidence(tmp_path, monkeypatch, s
     output = tmp_path / 'result.json'
     args = ['run.py', '--mode', 'research', '--research-solver', 'solver.py',
                                     '--factory', 'factory.py', '--mesh', 'mesh.vol', '--output', str(output),
-                                    '--orders', '1', '--bonuses', '4']
+                                    '--orders', '1', '--bonuses']
+    expected_bonuses = [4, 8] if scenario == 'algebraic' else [4]
+    args += [str(value) for value in expected_bonuses]
     args += ['--evaluation-orders', '16', '22', '28'] if energy_sweep else ['--algebraic-only']
     monkeypatch.setattr(sys, 'argv', args)
     if scenario == 'second_audit_raises':
@@ -173,9 +181,17 @@ def test_cli_preserves_hold_and_partial_energy_evidence(tmp_path, monkeypatch, s
     else:
         assert namespace['main']() == (0 if scenario == 'energy' else 2)
     report = json.loads(output.read_text())
-    assert len(calls) == 1 and calls[0]['return_system'] is True
+    assert len(calls) == len(expected_bonuses)
+    assert all(call['return_system'] is True for call in calls)
+    assert projection_calls == [
+        {'order': 3, 'bonus_intorder': value} for value in expected_bonuses]
+    assert report['source_hodge_by_bonus'] == {
+        str(value): {'bonus_intorder': value, 'relative_harmonic_norm': 0}
+        for value in expected_bonuses}
     assert report['acceptance'].startswith('HOLD:')
     row = report['rows'][0]
+    assert row['source_hodge'] == {'bonus_intorder': 4, 'relative_harmonic_norm': 0}
+    assert all(row['source_hodge']['bonus_intorder'] == row['bonus'] for row in report['rows'])
     assert row['linear_residual'] == {'raw': 'retained'}
     if scenario == 'second_audit_raises':
         assert report.get('completed') is not True

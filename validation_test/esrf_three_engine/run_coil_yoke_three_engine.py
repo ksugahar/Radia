@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import importlib
+import importlib.metadata
 import importlib.util
 import json
 import platform
@@ -138,6 +139,30 @@ def _implementation_identity() -> dict[str, str]:
     identity["shared_engines"] = _sha256(CTYPE_RUNNER_PATH)
     identity["case_source"] = _sha256(HERE / "esrf_coil_yoke.py")
     return identity
+
+
+def _runtime_identity(require_wheel: bool = False) -> dict[str, object]:
+    """Record the installed distribution and reject editable/source mixing on demand."""
+    distribution = importlib.metadata.distribution("radia")
+    direct_url = json.loads(distribution.read_text("direct_url.json") or "{}")
+    module = Path(rad.__file__).resolve()
+    installed_module = Path(distribution.locate_file("radia/__init__.py")).resolve()
+    editable = bool(direct_url.get("dir_info", {}).get("editable", False))
+    source_checkout = (SOURCE_PACKAGE / "__init__.py").is_file()
+    installed_import = module.samefile(installed_module)
+    if require_wheel and (editable or source_checkout or not installed_import):
+        raise RuntimeError(
+            "--require-wheel rejects editable, source-checkout, or mixed Radia imports"
+        )
+    return {
+        "distribution_version": distribution.version,
+        "module": str(module),
+        "installed_module": str(installed_module),
+        "direct_url": direct_url,
+        "editable": editable,
+        "source_checkout": source_checkout,
+        "installed_import": installed_import,
+    }
 
 
 def _legacy_contract(payload: dict[str, object]) -> dict[str, object]:
@@ -412,6 +437,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--threads", type=int, default=0)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--preflight", action="store_true")
+    parser.add_argument("--require-wheel", action="store_true",
+                        help="Reject editable, checkout, and mixed Radia imports")
     options = parser.parse_args(argv)
     _validated_tolerance(options.relative_rms_tolerance)
     _validated_tolerance(options.nonlinear_tolerance)
@@ -447,6 +474,7 @@ def main(argv: list[str] | None = None) -> int:
         ng.SetNumThreads(options.threads)
 
     case = get_case(options.case)
+    runtime_identity = _runtime_identity(options.require_wheel)
     assets_dir = options.assets_dir.resolve()
     iron_mesh_path = assets_dir / "model.vol"
     fem_mesh_path = options.fem_mesh.resolve()
@@ -485,6 +513,7 @@ def main(argv: list[str] | None = None) -> int:
     output.parent.mkdir(parents=True, exist_ok=True)
     common = _checkpoint_contract(
         implementation_sha256=_implementation_identity(),
+        runtime_identity=runtime_identity,
         case=int(case.number),
         iron_mesh_sha256=_sha256(iron_mesh_path),
         fem_mesh_sha256=_sha256(fem_mesh_path),
@@ -607,6 +636,7 @@ def main(argv: list[str] | None = None) -> int:
         payload = {
             "schema": "radia.validation.esrf-coil-yoke-preflight.v2",
             "passed": True,
+            "runtime_identity": runtime_identity,
             "case": int(case.number),
             "source": coil_manifest,
             "source_field_rms_T": float(np.sqrt(np.mean(np.sum(source_field * source_field, axis=1)))),
@@ -691,6 +721,8 @@ def main(argv: list[str] | None = None) -> int:
         "passed": bool(passed),
         "machine": platform.node(),
         "python": sys.version,
+        "runtime_identity": runtime_identity,
+        "implementation_sha256": common["implementation_sha256"],
         "peak_process_memory_mb": _process_peak_memory_mb(),
         "case": int(case.number),
         "formulation_contract": formulation_contract,
