@@ -1,3 +1,5 @@
+# Cubit-owned implementation; intentionally maintained independently of Radia MCP.
+# Derived support retains BSD-3-Clause terms: see LICENSE-BSD-3-Clause.txt.
 """Shared subprocess runner for gmsh-API-backed checks and rendering.
 
 gmsh keeps process-global state and can hard-crash on corrupt input, so
@@ -25,7 +27,7 @@ def gmsh_available() -> bool:
 
 def run_gmsh_json_subprocess(script: str, args: list[str], *,
                              timeout_s: float,
-                             prefix: str = "radia_mcp_gmsh_") -> dict[str, Any]:
+                             prefix: str = "cubit_mcp_gmsh_") -> dict[str, Any]:
     """Run ``python <script.py> <args...> <out_json>`` and read the JSON back.
 
     The script MUST take the output JSON path as its LAST argv entry and
@@ -38,7 +40,7 @@ def run_gmsh_json_subprocess(script: str, args: list[str], *,
     """
     if not gmsh_available():
         return {"ok": False, "ran": False,
-                "error": "gmsh Python package not installed (pip install gmsh)"}
+                "error": "gmsh Python package not installed (pip install cubit-mesh-export[mesh-quality])"}
 
     with tempfile.TemporaryDirectory(prefix=prefix) as work:
         out_json = Path(work) / "result.json"

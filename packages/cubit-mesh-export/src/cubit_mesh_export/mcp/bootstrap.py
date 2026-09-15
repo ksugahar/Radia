@@ -80,13 +80,13 @@ PROTOCOL_VERSION = 2  # file-drop variant of daemon.py's protocol 1
 # __file__ resolves against Cubit's CWD and sibling imports (probe_ops)
 # break -- found by the 2026-08-05 GUI E2E.  session.py passes the real
 # package dir via env; fail loud if launched outside that contract.
-_HERE = os.environ.get("RADIA_MCP_CUBIT_PKG_DIR")
+_HERE = os.environ.get("CUBIT_MCP_CUBIT_PKG_DIR")
 if not _HERE:
     _write_startup_error(
-        "RADIA_MCP_CUBIT_PKG_DIR env var not set -- bootstrap.py must "
+        "CUBIT_MCP_CUBIT_PKG_DIR env var not set -- bootstrap.py must "
         "be launched by cubit_mesh_export.mcp.session (which provides it); "
         "__file__ is unreliable under Cubit's string exec.")
-    raise RuntimeError("RADIA_MCP_CUBIT_PKG_DIR not set")
+    raise RuntimeError("CUBIT_MCP_CUBIT_PKG_DIR not set")
 
 
 def _read_drop_dir() -> pathlib.Path:

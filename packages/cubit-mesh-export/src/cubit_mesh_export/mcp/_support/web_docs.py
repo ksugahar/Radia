@@ -1,3 +1,5 @@
+# Cubit-owned implementation; intentionally maintained independently of Radia MCP.
+# Derived support retains BSD-3-Clause terms: see LICENSE-BSD-3-Clause.txt.
 """Live web documentation fetcher with on-disk cache.
 
 Targets:
@@ -31,7 +33,7 @@ from cubit_mesh_export.mcp._support.failure_log import state_dir
 
 
 _DEFAULT_TTL_SECONDS = 24 * 3600  # 1 day
-_USER_AGENT = "radia-mcp/0.16 (+https://pypi.org/project/radia-mcp)"
+_USER_AGENT = "cubit-mesh-export (+https://pypi.org/project/cubit-mesh-export/)"
 _TIMEOUT_SECONDS = 15
 
 

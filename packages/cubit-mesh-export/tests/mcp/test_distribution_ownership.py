@@ -13,19 +13,29 @@ def test_exporter_owns_mcp_without_radia_dependency():
     assert not {"radia", "radia-mcp", "cae-mcp-core"}.intersection(requires)
     entry = next(e for e in distribution.entry_points if e.name == "mcp-server-cubit")
     assert entry.value == "cubit_mesh_export.mcp.server:main"
+    assert {'mesh-quality', 'sculpt', 'youtube'} <= set(distribution.metadata.get_all('Provides-Extra', []))
     from cubit_mesh_export.mcp.api_reference import get_api_reference
     assert get_api_reference("all")
 
 
 def test_cubit_runtime_has_no_other_product_imports():
-    import cubit_mesh_export.mcp
-    root = Path(cubit_mesh_export.mcp.__file__).parent
+    import cubit_mesh_export
+    root = Path(cubit_mesh_export.__file__).parent
     violations = []
     for path in root.rglob("*.py"):
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8-sig"))):
+        tree = ast.parse(path.read_text(encoding="utf-8-sig"))
+        # Retained explicit --check-radia-compat integration is not a required
+        # runtime import. Installer contract tests protect its opt-in boundary.
+        optional = {node for function in tree.body
+                    if path.name == 'install.py' and isinstance(function, ast.FunctionDef)
+                    and function.name == '_check_radia_compat'
+                    for node in ast.walk(function)}
+        for node in ast.walk(tree):
             modules = ([node.module or ""] if isinstance(node, ast.ImportFrom)
                        else [alias.name for alias in node.names] if isinstance(node, ast.Import)
                        else [])
+            if modules == ['radia'] and node in optional:
+                continue
             if any(name.split('.')[0] in {"radia", "radia_mcp", "cae_mcp_core"} for name in modules):
                 violations.append(f"{path.relative_to(root)}:{node.lineno}")
     assert not violations, violations
@@ -55,3 +65,40 @@ def test_optional_example_roots_survive_runtime_relocation(monkeypatch, tmp_path
     monkeypatch.setattr(examples, '__file__', str(tmp_path / 'arbitrary/deep/runtime/examples.py'))
     monkeypatch.chdir(tmp_path.parent)
     assert examples._resolve_local_root('repo:/docs') == docs
+
+
+def test_support_ownership_notices_and_product_identity():
+    from cubit_mesh_export.mcp import _support
+    from cubit_mesh_export.mcp._support import examples, web_docs
+    root = Path(_support.__file__).parent
+    assert 'BSD 3-Clause License' in (root / 'LICENSE-BSD-3-Clause.txt').read_text()
+    assert 'intentionally independent implementations' in (root / 'OWNERSHIP.md').read_text()
+    for path in root.glob('*.py'):
+        text = path.read_text(encoding='utf-8')
+        assert 'intentionally maintained independently' in text, path
+        assert 'RADIA_MCP_' not in text, path
+        assert '"schema": "radia-mcp.' not in text, path
+    assert 'cubit-mesh-export' in web_docs._USER_AGENT
+    assert 'radia-mcp' not in web_docs._USER_AGENT
+    assert 'bd_warehouse' not in examples.search_examples.__doc__
+    assert 'build123d' not in examples.search_examples.__doc__
+
+
+def test_status_helper_import_does_not_load_numerical_or_gui_runtimes():
+    import subprocess
+    import sys
+    from cubit_mesh_export.mcp._support import status
+    code = '''
+import sys, importlib.util
+class RejectHeavyImports:
+    def find_spec(self, fullname, *args):
+        if fullname.split('.')[0] in {'netgen', 'ngsolve', 'gmsh', 'PySide6'}:
+            raise AssertionError('Unexpected runtime import: ' + fullname)
+sys.meta_path.insert(0, RejectHeavyImports())
+spec = importlib.util.spec_from_file_location('isolated_status_helper', sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+'''
+    # Isolate the helper: the parent package intentionally initializes Netgen's
+    # DLL search path for its bundled native extension, a separate contract.
+    subprocess.run([sys.executable, '-c', code, status.__file__], check=True)

@@ -76,7 +76,7 @@ def test_server_instructions_declared():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("module,env", [
-    ("cubit_mesh_export.mcp.server", "RADIA_MCP_CUBIT_GATES"),
+    ("cubit_mesh_export.mcp.server", "CUBIT_MCP_CUBIT_GATES"),
 ], ids=["cubit"])
 def test_gate_env_hides_gate_tools(module, env):
     code = (

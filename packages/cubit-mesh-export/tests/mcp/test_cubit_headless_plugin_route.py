@@ -8,7 +8,7 @@ from cubit_mesh_export.mcp import session
 def test_headless_journal_can_select_isolated_command_plugin_directory(
     tmp_path, monkeypatch, platform
 ):
-    monkeypatch.setenv("RADIA_MCP_TEMP", str(tmp_path / "scratch"))
+    monkeypatch.setenv("CUBIT_MCP_TEMP", str(tmp_path / "scratch"))
     monkeypatch.setattr(session.sys, "platform", platform)
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
