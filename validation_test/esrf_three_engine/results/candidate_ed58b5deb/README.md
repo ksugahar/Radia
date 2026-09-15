@@ -41,6 +41,27 @@ attributed; these results do not establish a single cause for every difference.
 
 ## Scope and recovery
 
+### Cubit package combination
+
+The LAB isolated environment also passed a combination check with official
+CME 1.0.1 wheel SHA-256
+`859211e96343cd1e97b202f22ea5d008997406de35459bd200130922e286bf73`.
+All 344 installed Radia package files and 11 CME package files matched their
+respective wheels. The standalone Cubit sphere export (curved order 2) passed
+the structural/label checker and was consumed by HDiv `Solve(order=1,
+mu_r=100, H_ext=(0,0,1000), gram_eps=1e-7, tol=1e-8)` with finite magnetization.
+See `lab/cme-radia-combination.json`. This is interoperability evidence, not
+a separate accuracy or nonlinear qualification.
+
+CME 1.0.1 deliberately reuses the existing manifest-pinned native payloads;
+no newly rebuilt payload is being published. Source-and-payload provenance
+verification passed against the installed official CME wheel and the current
+checkout. Private local rebuild outputs were retained for audit under
+`S:/Radia/validation_artifacts/hdiv_cleanup_20260915/cme-local-rebuild`.
+The release checkout was restored to its tracked CCM and the same hash-checked
+curver release asset used by CI. QUAD preflight passed the version and native
+provenance gates; its unsynchronized-main warning remains a final release gate.
+
 These are strong-field straight-element checks, not a blanket qualification of
 curved elements, IMA, pyramid elements or every application. Release publication
 and deployment remain separate gates; no tag is authorized by this record alone.
