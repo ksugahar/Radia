@@ -106,9 +106,13 @@ At distances exceeding 32 times max(outer radius, height), finite-section
 moments replace cancellation-prone corner differences. This is a convergent
 binomial expansion with analytic rectangular moments and a tail bound, not
 section Gauss quadrature or a zero-width filament approximation. The angular
-quadrature remains numerical. Native legacy wrappers can return an empty field
-on kernel failure: require the expected shape and finite values before accepting
-any result; a normal return alone is not a validation gate.
+quadrature remains numerical. The updated native RadFld point-array path
+reports invalid coordinates and caught evaluation failures as Error206 rather
+than silently returning an empty field. Single-point B queries have regression
+coverage for NaN/Inf rejection and model preservation. This does not certify
+every batch or potential API. Older wrappers can still return empty fields:
+require the expected shape and finite values before accepting any result;
+a normal return alone is not a validation gate.
 Full circles use a regular axis expansion near the axis. Up to 32 times
 max(outer radius, height) in axial distance, axial-field values and derivatives
 use elementary closed-form radial primitives; no section quadrature is used.
