@@ -9492,6 +9492,10 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     // Preconditioned conjugate gradients (SPD system; M^{-1} = mass Riesz or 1/prec diagonal Jacobi).
     std::vector<double> rhs_projected = rhs;
     project(rhs_projected);
+    double bnorm = dot(rhs_projected, rhs_projected);
+    if (!std::isfinite(bnorm) || bnorm < 0.0)
+        throw std::runtime_error("SolveLinearMaterial: non-finite right-hand side norm");
+    bnorm = std::sqrt(bnorm); if (bnorm == 0.0) bnorm = 1.0;
     std::vector<double> x((size_t)n_face, 0.0), r = rhs_projected, z((size_t)n_face), p((size_t)n_face), Ap;
     if (x0) {
         if ((int)x0->size() != n_face)
@@ -9504,8 +9508,6 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     applyPrec(r, z);
     p = z;
     double rz = dot(r, z);
-    double bnorm = dot(rhs_projected, rhs_projected);
-    bnorm = std::sqrt(bnorm); if (bnorm == 0.0) bnorm = 1.0;
     auto recomputeResidual = [&]() {
         applyA(x, Ap);
         ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) {
@@ -9574,7 +9576,10 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
         // Only the ran-out-of-iterations exit needs an extra apply; the
         // converged exit already recomputed the true residual below.
         recomputeResidual();
-        final_true_rnorm = std::sqrt(std::max(0.0, dot(r, r)));
+        const double final_squared_norm = dot(r, r);
+        if (!std::isfinite(final_squared_norm) || final_squared_norm < 0.0)
+            throw std::runtime_error("SolveLinearMaterial: non-finite residual norm");
+        final_true_rnorm = std::sqrt(final_squared_norm);
     }
     m_lastSolveTiming.final_relative_residual = final_true_rnorm / bnorm;
     m_lastSolveTiming.converged =
