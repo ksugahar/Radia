@@ -56,6 +56,8 @@ CUBIT_TOOLBAR_MODULES = [
 ]
 
 PYSIDE6_ALLOWED_FILES = {
+    "packages/cubit-mesh-export/src/cubit_mesh_export/cubit_gui/radia_export_menu.py",
+    "validation_test/cubit_mesh_export/standalone_gui_probe.py",
     "packages/radia-mcp/src/radia_mcp/cubit/bootstrap.py",
     "src/radia/panels/cubit_toolbar_probe.py",
     "src/radia/panels/radia_export_menu.py",

@@ -27,6 +27,14 @@ NOTE: This is *different* from two adjacent topics:
 TOOLBAR_OVERVIEW = """
 # In-Cubit Custom Toolbar Overview (Coreform Cubit 2025.12+)
 
+The standalone GUI candidate packages its menu and toolbar installer under
+`cubit_mesh_export.cubit_gui` and `cubit_mesh_export.toolbar_install`; Radia is
+not required for those assets. Check the installed distribution before claiming
+this candidate capability is deployed. LLM production remains APREPRO/headless;
+launch GUI only for the explicitly scoped exporter GUI test or human workflow.
+Keep Claro-owned actions out of PySide menu traversal. Register/remove them via
+Claro and disconnect their ownership before Python shutdown (aboutToQuit).
+
 Coreform Cubit 2025.12 ships PySide6 as part of its distribution.
 You can extend the Cubit GUI with custom toolbars that trigger
 Cubit command-language scripts, Python scripts, or nested command panels.

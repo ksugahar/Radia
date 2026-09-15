@@ -638,15 +638,7 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False,
 
     if verify_only:
         ok, issues = verify_deployment(pkg_dir, cubit_dir, verbose=True)
-        try:
-            from radia.install_panels import verify_panel_installation
-        except ImportError as e:
-            verify_panel_installation = None
-            if _radia_distribution_installed():
-                issues = list(issues) + [
-                    f"radia is installed but panel verifier could not import: {e}"
-                ]
-                ok = False
+        from .toolbar_install import verify_panel_installation
         if verify_panel_installation is not None:
             print()
             panel_ok, panel_issues = verify_panel_installation(
@@ -770,17 +762,10 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False,
     print("  Plugin installed. All destinations verified.")
     print("=" * 60)
 
-    # Install Radia-NGSolve export toolbar if the radia package is available.
-    try:
-        from radia.install_panels import install_panels
-        print()
-        if not install_panels(all_users=all_users):
-            raise SystemExit(4)
-    except ImportError as e:
-        if _radia_distribution_installed():
-            print(f"  [FAIL] radia is installed but panel installer could not import: {e}")
-            raise SystemExit(4)
-        pass  # radia not installed, panels not needed
+    from .toolbar_install import install_panels
+    print()
+    if not install_panels(all_users=all_users):
+        raise SystemExit(4)
 
     return True
 
