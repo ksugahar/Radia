@@ -17,9 +17,10 @@ changed by this maintenance patch.
 
 ## Package-test boundary follow-up
 
-- The current diff relocates 37 existing test functions: 36 repository
+- The current diff relocates 36 existing test functions: 35 repository
   contracts and one native-acceptance check. The SDK metadata/workflow test
-  is split rather than removed. Parameterized cases and new CI-boundary
+  is split rather than removed. The duplicated workflow-discovery assertion
+  is consolidated into `tests/test_ci_execution_policy.py`. Parameterized cases and new CI-boundary
   regressions explain why this is not the review's historical count of 29.
 - Repository contracts cover saved field/motor/HDiv evidence, MATLAB/Optuna
   source manifests, repository MSH assets, Cubit golden scripts, the legacy
@@ -28,7 +29,7 @@ changed by this maintenance patch.
 - SDK behavior, MATLAB code generation, policy-string comparisons, Cubit
   session behavior, md2html conversion and pure force helpers remain package
   tests. A copy containing only the package executed 89 focused cases on LAB;
-  repository integration executed 45 cases with no skips. These are not a
+  repository integration executed 44 cases with no skips. These are not a
   full-package audit or numerical acceptance claim.
 - The native motor-angle source-freshness test was preserved in
   `validation_test/radia_mcp/test_motor_angle_source_freshness.py`, unchanged
