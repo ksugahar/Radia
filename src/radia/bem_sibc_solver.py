@@ -27,6 +27,56 @@ from scipy.linalg import solve as scipy_solve
 MU_0 = 4e-7 * np.pi
 
 
+def _project_sibc_surface_heat(fes, phi_vec, Z_s, *, element_heat=None):
+    """Positive lumped P1 projection of the SOLVED surface heat [W/m^2].
+
+    NGSolve owns shape evaluation and assembly. No incident-field pattern
+    or global power rescaling is used. For the loop extension, element_heat
+    supplies the total (including harmonic carrier) piecewise-constant heat.
+    Caller owns TaskManager. Returns (GridFunction, integrated power).
+    """
+    from ngsolve import GridFunction, LinearForm, SurfaceL2, BND, ds, grad, InnerProduct, CF, Integrate
+    mesh = fes.mesh
+    if fes.ndof != mesh.nv or np.ndim(Z_s) != 0:
+        raise ValueError("Solved SIBC heat projection requires surface P1 and scalar Z_s")
+    z = complex(Z_s)
+    if not np.isfinite(z) or z.real < 0:
+        raise ValueError("SIBC heat requires finite passive Z_s")
+    if element_heat is None:
+        phi = np.asarray(phi_vec, dtype=complex)
+        if phi.shape != (fes.ndof,) or not np.all(np.isfinite(phi)):
+            raise ValueError("Invalid SIBC surface potential")
+        real, imag = GridFunction(fes), GridFunction(fes)
+        real.vec.FV().NumPy()[:] = phi.real
+        imag.vec.FV().NumPy()[:] = phi.imag
+        q_cf = .5 * z.real * (InnerProduct(grad(real), grad(real))
+                             + InnerProduct(grad(imag), grad(imag)))
+    else:
+        heat = np.asarray(element_heat, dtype=float)
+        elements = list(mesh.Elements(BND))
+        if heat.shape != (len(elements),) or not np.all(np.isfinite(heat)) or np.any(heat < 0):
+            raise ValueError("Invalid loop surface element heat")
+        space = SurfaceL2(mesh, order=0)
+        q_cf = GridFunction(space)
+        for el, value in zip(elements, heat):
+            dofs = space.GetDofNrs(el)
+            if len(dofs) != 1 or dofs[0] < 0:
+                raise ValueError("Expected one constant surface DOF per element")
+            q_cf.vec[dofs[0]] = value
+    v = fes.TestFunction()
+    load, mass = LinearForm(fes), LinearForm(fes)
+    load += q_cf * v.Trace() * ds
+    mass += v.Trace() * ds
+    load.Assemble()
+    mass.Assemble()
+    lumps = mass.vec.FV().NumPy()
+    if np.any(lumps <= 0):
+        raise ValueError("SIBC heat projection encountered inactive surface DOFs")
+    output = GridFunction(fes)
+    output.vec.FV().NumPy()[:] = load.vec.FV().NumPy() / lumps
+    return output, float(Integrate(output, mesh, BND))
+
+
 class ScalarBIESIBCSolver:
     """Scalar potential BIE + SIBC solver for conducting surfaces.
 

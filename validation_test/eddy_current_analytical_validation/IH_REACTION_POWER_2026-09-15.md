@@ -1,91 +1,108 @@
-# IH reaction-power investigation: repository-owned reproducer
+# IH SIBC reaction and heating: repository acceptance
 
-Status: **reproduced and narrowed; production correction and full acceptance remain open**.
-No Takahashi artifacts are required. No installed solver was repointed or changed.
+Status: **implemented and accepted within the scope below**.
+No Takahashi inputs or sixfold-ratio target are used. Existing installed
+Radia environments were not repointed. Solver work ran on idle hibino with
+staged Python sources and an identified native runtime.
 
-## Independent FEM baseline
+## Accepted model and criteria
 
-`validate_axisym_power_balance.py` extends the existing axisymmetric full-conductor
-FEM reference with a volume Joule integral and an optional 7.5 mm bore. It checks
-the actual conductor volume against the analytic volume so a requested bore
-cannot silently be omitted. The source is an impressed one-ampere peak current;
-the source reaction and the volume loss are evaluated separately. Conductive
-coil renormalization is explicitly outside this energy gate.
+Prescribed circular current at 1 kHz, copper (sigma=5.8e7 S/m, mu_r=1),
+uniform planar SIBC, cylinder radius 25 mm and height 25 mm, with/without a
+7.5 mm axial bore. Coil centre radius is 30 mm, section radius 0.5 mm.
+FEM integrates uniform current over the disk; BEM uses degree-five disk
+cubature (seven rings of 720 straight segments each).
 
-At 1 kHz, copper, radius 25 mm, height 25 mm, coil centre radius 30 mm and
-coil cross-section radius 0.5 mm, both solid and bored workpieces pass at p=2,3:
-maximum relative power imbalance is 2.8e-9. The solid p=3 loss is
-1.9350330e-5 W. These are 2D axisymmetric solves, not 3D volume FEM solves.
-Geometry is constructed in memory with OCC/Netgen for this explicit validation.
-No VOL Save/reload/Curve workaround is used.
+Independent **2D axisymmetric A-form FEM**, order 3, varies the finite
+exterior from 150 to 300 mm. The BEM is a 3D **surface** discretization of
+the same axisymmetric geometry, at mesh sizes 3, 2 and 1.5 mm. No 3D volume
+FEM or VOL Save/reload/Curve workaround is involved. These are explicit
+in-memory OCC/Netgen verification meshes, not production export fixtures.
 
-## BEM reproducer and missing term
+The user's acceptance ceiling is **2%** for loss, reaction power and the
+relative L2 error of the **complex tangential field**, not just its magnitude.
+This is an IH-specific criterion, not a repository-wide tolerance. Accelerator
+applications require their own observable-specific acceptance (0.5% or tighter).
 
-`validate_sibc_reaction_power.py` uses the same solid cylinder and material,
-with a 720-segment ideal source ring and planar half-space SIBC. It runs the
-production scalar BIE kernel. The source is axisymmetric; the current BEM
-implementation requires a 3D **surface** discretization. It does not perform a
-3D volume FEM solve.
+| Finest check | Solid | Bored | Limit |
+|---|---:|---:|---:|
+| Surface loss versus FEM | 0.6032% | 0.6905% | 2% |
+| Reaction power versus FEM | 0.5205% | 1.1781% | 2% |
+| Local complex tangential field, relative L2 | 1.5573% | 1.5499% | 2% |
+| BEM independent power imbalance | 0.0832% | 0.4909% | 1% |
+| Last BEM loss refinement change | 0.5900% | 0.6712% | 1.5% |
+| FEM exterior enlargement change | 0.3296% | 0.3295% | 0.5% |
 
-| BEM maxh | Surface loss / magnetic-only reaction | Complete reaction imbalance |
-|---|---:|---:|
-| 6 mm | 2.83076 | 1.0762% |
-| 3 mm | 2.87224 | 0.4560% |
-| 2 mm | 2.88524 | 0.1867% |
+Heat projection error is below 1.3e-14; FEM-SIBC power imbalance below
+2.1e-11. All gates pass. The field limit was tightened from exploratory
+5% to 2% using unchanged saved solver measurements. The --recheck route
+checks numerical source hashes, refuses relaxed limits and records the
+separate acceptance-gate hash.
 
-At 2 mm, surface loss is 1.9968017e-5 W. The existing magnetic-only reaction
-term gives 6.9207394e-6 W. The electric reciprocity term contributes
-1.3084556e-5 W; their sum is 2.0005295e-5 W. None of these reaction terms is
-defined by reversing the surface loss into a resistance.
+## Production changes
 
-For peak phasors with exp(+i omega t), total magnetic potential phi and
-incident potential psi, the scalar, single-valued, constant-Zs discretization is
+- Complete SIBC reciprocity replaces the magnetic-only reaction. With peak
+  exp(+i omega t), incident potential psi and total potential phi:
 
-    delta_L_m = integral(phi n.B_inc dS) / I^2
-    delta_L_e = Zs/(i omega I^2) * psi^T K phi
-    P_reaction = -omega/2 * Im(delta_L_m + delta_L_e) * I^2
+      delta_L = integral(phi n.B_inc)/I^2
+                + Zs/(i omega I^2) * psi.T K phi
 
-There is **no complex conjugation** in this reciprocal bilinear pairing.
-The electric term comes from the second term in the surface reciprocity
-integral, E_inc cross H minus E cross H_inc. The existing phi.B helper
-accounts for the first contribution, not both. The current kernel source hash
-on hibino was checked against this worktree before the probe.
+  No conjugation is used. Reaction is independent of dissipated power;
+  resistance is not manufactured by reversing the loss.
+- The genus-1 reaction and local heat use the **full loop field**. Its
+  current.A contribution retains the cut term. Plain phi alone is not used
+  as a substitute for the multivalued field.
+- NGSolve assembles a positive lumped P1 heat projection from the solved
+  field. The globally rescaled incident Biot-Savart heat pattern is removed.
+- A runtime imbalance above 10%, nonfinite/negative power, inconsistent
+  projection, incomplete vertex mapping, failed SOL export or failed
+  requested GMSH export raises. The 10% safety ceiling is NOT the tighter
+  acceptance accuracy. GMSH includes q_surf_W_per_m2.
+- Higher-order weak BEM and per-panel ESIM postprocessing fail fast pending
+  mapped weighted surface forms. This EM restriction does not restrict
+  standard **thermal H1 order 2**. Unsupported handle modes remain rejected.
+- MCP guidance describes the corrected route and withdraws the old calibrated
+  heat-pattern and plain-phi loop-inductance recommendations.
 
-The two-term surface impedance formula is also given in equation 21 of
+The two-term reciprocity expression is also given in equation 21 of
 [Luo and Di Rienzo, High-order surface impedance boundary conditions in
 three-dimensional boundary element modeling of eddy-current problems](https://www.sciencedirect.com/science/article/pii/S0955799726002420).
-The derivation and numerical checks above, not a citation alone, are the basis
-for the candidate correction.
+The independent computations above, not the citation alone, establish acceptance.
 
-## What this does not establish
+## Regression and evidence
 
-- The received case's exact sixfold discrepancy is not yet explained in full.
-- BEM surface loss is 3.19% above the finite-coil full-conductor FEM value.
-  Ideal filament versus finite coil, finite FEM exterior, SIBC approximation,
-  curved versus faceted geometry, and mesh convergence are not identical.
-  This is an independent scale check, **not** an apples-to-apples acceptance.
-- The bored case passes FEM energy balance, but loop-extended BEM has not been
-  checked here. A multivalued potential needs its cut contribution; do not
-  apply the single-valued phi.B formula unchanged.
-- Spatially varying Zs requires a weighted surface form, not mean(Zs)*K.
-- Nonlinear ESIM and spatial heat-map generation are not certified here.
-- `calc_inductance.py` is not modified by this validation commit. Its loop path
-  currently retains plain phi while replacing dissipation; that remains a
-  separate consistency problem for reaction and local heat maps.
+- validate_ih_sibc_closure.py --output result.json: FEM/BEM comparisons,
+  mesh/exterior refinement, runtime and source hashes.
+- test_ih_sibc_production.py: actual workpiece extraction, incident projection,
+  BIE/loop solve, reaction, GMSH write and SOL write/read with integral check.
+  Only the file loader is replaced by an in-memory fixture; solved fields
+  are not substituted. Covers solid dense/HACApK and bored dense.
+- validation_test/bem/test_loop_extension_ring.py: thin-ring analytic current,
+  frozen-subsystem equivalence, passive full reaction and finite local heat.
+- tests/test_sibc_reaction_contract.py: complex bilinear pairing, current and
+  gauge invariance, invalid inputs and refusal of inconsistent power.
+- Existing loop CLI, incident-potential, application/manifest and MCP heat
+  contracts are included in focused regression checks.
+- ih_sibc_closure_20260915.json contains accepted numerical evidence.
+  ih_sibc_production_20260915.json records workpiece-stage output checks.
+- Focused local contracts: 60 passed, one CAD-dependent case deselected;
+  remote production/loop regressions: nine passed. GMSH 4.15.2 reopened all
+  three saved meshes and verified node coverage, finite fields and positive heat.
 
-## Reproduction and acceptance remaining
+The earlier full-conductor axisymmetric FEM baseline remains complementary:
+solid/bored p=2,3 power imbalance is below 2.8e-9. It is not substituted for
+the matching **FEM-SIBC** comparison.
 
-Run in a foreground process on an idle compute host, inside caller-owned
-NGSolve TaskManager (the scripts provide it):
+## Boundaries
 
-    python validate_axisym_power_balance.py --coil-radius .0005 --output fem.json
-    python validate_sibc_reaction_power.py --output bem.json
+This is not a certificate for arbitrary frequency, material or geometry.
+Nonlinear BH accuracy, spatially varying impedance, higher-order/curved
+mapped postprocessing, strong coil-current feedback, and native Simulink
+MEX operators are outside this acceptance. The separate strong route's
+post-convergence loop treatment must not inherit this claim. Coil CAD and
+production VOL export/check gates are separate from the in-memory
+workpiece-stage tests. The received case's exact sixfold ratio is neither
+asserted fixed nor used as an acceptance input.
 
-The stored `ih_fem_power_balance_20260915.json` and
-`ih_sibc_reaction_power_20260915.json` include actual runtime and source hashes.
-The BEM gate checks the complete reciprocal pairing at the finest mesh, not
-agreement with a resistance back-calculated from surface loss.
-
-Next: implement the complete reaction operator in the production source bridge,
-verify identical-source FEM-SIBC versus BEM, then validate the full loop field,
-variable/nonlinear impedance and local heat extraction before claiming closure.
+This change is a tested repository implementation, not a PyPI publication
+or deployment into existing student environments.

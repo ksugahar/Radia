@@ -522,44 +522,15 @@ configuration explicitly.
 Workflow:
 
 1. Run an EM solve method that emits ``qsurf.sol`` (PEEC+BEM,
-   BEM-A+BEM, PEEC+FEM+Kelvin, or FEM-full).  Note: PEEC+BEM and
-   BEM-A+BEM gained the ``qsurf.sol`` output in **radia 4.65.0**.
-   The path has been hardened across four follow-up releases:
-
-     - **4.66.0**: parent-vol_mesh em_vol (was 2D surface mesh -->
-       cross-mesh transfer mirror-flipped) + signed energy fix.
-     - **4.67.0**: surface-path phi_inc + triangle-wise gradient.
-       (Energy magnitude regressed to 1.92 W on 3turnCoil_work,
-       below the weak-coupling lower bound 5.26 W -- the BIE was
-       under-coupling when fed a different-gauge phi_inc.)
-     - **4.68.0**: BIE-calibrated direct Biot-Savart for spatial.
-       The qsurf spatial pattern is computed from
-       q(x) = (P_wp / ∫|H_t_inc|² dS) * |H_t_inc(x)|² where
-       H_t_inc is the tangential Biot-Savart field at each wp
-       surface vertex (curl-free, no topological multivalued
-       branch cut).  The BIE provides only P_wp (its trusted
-       global integral).  Result: ∫q dS = P_wp exactly (energy
-       preserved) AND spatial peak matches the true |H_t|² peak.
-     - **4.69.0**: P2 BIE outward-orientation guard.  The Lagrange-
-       P2 path (``--h1-order 2``, curved-Tri6 geometry) was
-       producing a ~1500x P_wp discrepancy vs the P1 reference
-       because ``bem/sibc_hacapk.py::extract_surface_p2_lagrange``
-       used the vol_mesh's natural BND triangle orientation -- on
-       a workpiece-as-hole sibc this points INWARD toward the hole,
-       flipping the sign of the Galerkin trace(DL) integral.  Fixed
-       by mirroring the P1 path's outward-flip logic against the wp
-       centroid (commit 57381c78, "Release v4.69.0 / radia-mcp-
-       v0.64.0 -- P2 BIE outward orientation fix").  After the fix,
-       P1 = 6.1386 W vs P2 = 6.1565 W on 3turnCoil_work (0.29%
-       agreement); the curved-P2 path is now production-ready for
-       basis_order=2 BEM workpieces.
-
-   Use 4.68.0+ for thermal analysis on BEM-derived qsurf; use
-   4.69.0+ if you want to enable ``--h1-order 2`` curved BEM.
-   Verification on 3turnCoil_work (PEEC-BEM, 150 kHz, 100 A):
-     z of max q   = +11.25 mm (matches Biot-Savart peak exactly)
-     ∫ q dS       = 6.1386 W (= BIE P_wp)
-     peak / end   = 1465x (strong concentration under coil)
+   BEM-A+BEM, PEEC+FEM+Kelvin, or FEM-full).
+   For the corrected weak BEM route, ``qsurf_method`` must be
+   ``solved-total-field-lumped-P1``: heat is evaluated from the solved
+   total magnetic field, including the loop carrier when present.
+   Complete magnetic-plus-electric SIBC reciprocity is checked independently.
+   The old incident-field distribution rescaled to BIE total power is NOT
+   a validated local heat field, even if its integral matches the loss.
+   Weak EM postprocessing currently requires P1 and uniform Zs; P2 BEM and
+   per-panel ESIM fail fast. This does not restrict thermal H1 order 2.
 2. Select or generate the native IH configuration from the masked
    ``IH Parameters`` / geometry-update blocks.
 3. Select the workpiece thermal ``wp.vol`` (a SEPARATE mesh from the
@@ -1762,247 +1733,58 @@ Refs: ``docs/peec/VOLUME_PEEC_DESIGN.md``,
 ``docs/esim/R_MISMATCH_PEEC_VS_BEMA.md``,
 ``validation_test/bem/test_coil_bem_a_impedance_efie.py``.
 
-## Strong coupling and genus-1 workpieces
+## SIBC reaction, heating and genus-1 workpieces (2026-09-15)
 
-Both coil solvers expose an iterative self-consistent path through
-``--coupling-mode strong``: BEM-A uses
-``radia.bem_coupled_solver.CoupledBEMSolver`` and PEEC uses
-``radia.peec_coupled_bem_solver.CoupledPEECBEMSolver``.  The BEM-A
-solver is normalized to unit terminal current, so the driver scales
-fields by ``I`` and dissipation by ``I^2``.  The scaling contract is
-locked by ``test_strong_output_scales_with_terminal_current``.
+The verified weak workpiece route uses the SOLVED total surface magnetic
+field for heating. The former incident Biot-Savart pattern normalized to
+global loss has been removed. NGSolve assembles a positive lumped P1
+projection of q = 0.5 Re(Zs) |H_t|^2. Its integral must equal the BEM loss;
+an incomplete parent-mesh mapping or failed qsurf export raises.
 
-Surface winding must be globally consistent before assembling the
-double-layer operator.  ``surface_mesh_extract.orient_surface_triangles``
-uses face-BFS propagation and signed-volume normalization, including
-the inner wall of a genus-1 tube where a centroid heuristic is invalid.
+Coil reaction uses COMPLETE SIBC reciprocity: the magnetic phi.B term
+PLUS the electric boundary term. For a single-valued surface potential,
+the added inductance is Zs/(i omega I^2) psi.T K phi (no conjugation).
+It is not obtained by defining resistance from dissipated power.
+Outputs identify ``telegen_form=complete-SIBC-reciprocity``,
+``wp_reaction_power_W``, ``wp_power_balance_relative_error``,
+``wp_power_balance_tolerance``, and
+``qsurf_method=solved-total-field-lumped-P1``.
+The runtime refuses negative reaction power, nonfinite results or a
+power imbalance above 10%; this safety ceiling is NOT an accuracy claim.
+Numerical acceptance uses tighter mesh-converged FEM/BEM comparisons.
 
-A single-valued scalar potential cannot carry net current through a
-surface cut.  For a flux-linked genus-1 workpiece, the loop extension
-adds the harmonic shorted-turn current.  The extension is closed by
-Faraday's law and is locked by the analytic
-shorted-ring golden plus a frozen-subsystem equivalence check.
-Theoretical anchor: K. Sugahara, "Investigation of a Boundary Integral
-Equation n x H = J_s on Torus-Shaped Perfect Conductors," IEEE Trans.
-Antennas Propag. 56(3), pp. 722-727 (2008) -- the DUAL defect of the
-same H^1(S) != 0 topology (there the BIE admits a spurious harmonic
-null-space mode violating B.n=0, closed by one virtual-magnetic-current
-DOF + a one-point constraint; here the representation LACKS the
-harmonic mode, closed by one loop DOF + the Faraday row).  Per handle:
-one extra DOF, one extra condition, in both formulations.
+Supported weak postprocessing is surface P1 with spatially uniform Zs.
+This restriction is on the EM BEM basis, NOT the thermal FEM order;
+standard NGSolve H1 order 2 remains the thermal route.
+Higher-order BEM and per-panel ESIM are rejected until a mapped,
+weighted surface postprocessor is implemented. No fallback is selected.
+Scalar ESIM remains subject to its constitutive convergence checks;
+linear reference tests alone do not certify arbitrary nonlinear BH data.
 
-Related work (cite BOTH, the digest regardless of whether a journal
-version appears): M. Schoebinger and K. Hollaus, "An Effective
-Interface Approach for Multiply Connected Electromagnetic Shields,"
-IEEE CEFC 2026 conference digest (Thessaloniki, June 2026) -- the FEM
-thin-shell sibling of the same topology treatment: the shield becomes
-a 2-D effective interface (1-D through-thickness analytic solution,
-nonlinear mu_eff lookup -- the ESIM idea) and each HOLE gets one
-cohomology jump unknown (constant T = s_i e_z in hole i), replacing
-the earlier non-physical auxiliary conductivity inside the holes.
-P. Dlotko, B. Kapidani, S. Pitassi, R. Specogna, "Fake Conductivity
-or Cohomology: Which to Use When Solving Eddy Current Problems With
-h-Formulations?", IEEE Trans. Magn. 55(6), 1-4 (2019) -- established
-that the cohomology treatment (the route ``radia.cohomology``
-implements) is the stable, physical choice.  Differentiators of the
-radia route: surface-only BIE (no volume mesh, exact open boundary) +
-Leontovich SIBC + the surface-H^1 period-matrix engine with
-class-pure cut selection + the Faraday closure and per-run screening
-diagnostics.
+For genus 1, ``--wp-loop-dof auto`` activates the linear-SIBC,
+intree-dense, P1 extension. Both spatial heat and reaction include the
+harmonic carrier, not just the reported total loss. The reciprocal
+current.A contribution on the cut-open field retains the cut term.
+Unsupported weak handle combinations (ESIM, HACApK, P2, genus >= 2)
+raise before BEM assembly. There is no ``off`` fallback. Surface winding
+is established by face-BFS plus signed volume, never centroid flipping
+of an inner wall. The P1 incident-potential surface-Poisson residual
+must stay below 10%.
 
-**Why the MISSING mode makes the workpiece heat MORE (not less).**
-Counter-intuitive on first sight ("an extra current should add Joule
-heat"), resolved by the PHASE.  The tube is a shorted one-turn
-secondary: ``I_2 = -j omega M I_1 / (R_loop + j omega L_loop)``, whose
-phase lies between quadrature (-90 deg, resistance-dominated) and
-anti-phase (-180 deg, inductance-dominated).  In the
-INDUCTANCE-DOMINATED regime the shorted turn approaches a lossless flux
-canceller.  Since
-``P = 1/2 Re(Z_s) int |H_t|^2`` and
-``|H_inc + H_alpha|^2 = |H_inc|^2 + 2 Re(H_inc . H_alpha*) +
-|H_alpha|^2`` with a large NEGATIVE cross term, the Lenz screening
-can remove more surface |H_t|^2 than the mode's own dissipation adds.
-The emitted ``P/P_frozen`` ratio and alpha phase expose whether a run
-is in that screening regime.  Clamping the mode to zero (single-valued phi)
-is the physics of a tube with an insulating slit around its section:
-the full coil flux swings through the bore unopposed and the surface
-sees the unscreened field.  The
-machine-design intuition "a shorted turn overheats" belongs to the
-OPPOSITE regime (omega L << R_loop, phase near -90 deg, weak screening,
-the turn mostly self-heats); the alpha phase is the regime
-discriminator.  The cut is oriented to positive toroidal winding before
-alpha is reported, so this phase label is independent of tree orientation.
+The repository-owned acceptance is
+``validation_test/eddy_current_analytical_validation/validate_ih_sibc_closure.py``:
+axisymmetric FEM-SIBC versus BEM on solid and bored cylinders, separate
+source power and dissipation, local complex magnetic field, surface
+refinement, and FEM exterior-size convergence. The full-conductor FEM
+power baseline and analytic shorted-ring test are complementary checks.
+No Takahashi files or reported sixfold ratio are acceptance inputs.
 
-Every loop-DOF run now emits the screening diagnostics in the JSON:
-``wp_loop_P_frozen_W`` / ``wp_loop_H_t_frozen_A_per_m`` (the no-mode,
-"slitted-tube" values from the frozen alpha=0 sub-solve),
-``wp_loop_screening_ratio`` (= P_wp / P_frozen; < 1 in the screening
-regime), and ``wp_loop_regime`` ("inductive-screening" for |phase| >=
-135 deg / "mixed" / "resistive-dissipative" below 105 deg), so the
-physics of the correction is auditable per run.  It
-requires linear SIBC, ``--wp-bem-backend intree-dense``, and (on the
-weak path) ``--h1-order 1``; BOTH coupling modes take it -- the weak
-path applies it to its single solve, the strong drivers apply it ONCE
-on the converged Picard state (the Picard loop itself keeps the plain
-solve whose L_total / Delta_L convention is retained; the alpha
-back-reaction onto the coil current is not iterated).  The output
-records ``wp_loop_alpha_A`` and replaces the genus caveat with
-``P_wp_note``.
-
-On every P1 route -- weak AND the strong Picard iterations -- the
-incident potential is basis-determined: the solver always uses the
-Laplace-Beltrami projection of the exact vertex incident field
-(``SurfacePoissonPhiInc``, stiffness factorized once and reused per
-Picard iteration).  It performs one batched field evaluation per
-rebuild, is winding invariant, and fails loud when
-``||grad_S psi + H_t,inc|| / ||H_t,inc||`` exceeds 10 percent.  The
-legacy selectable P1 path-integration route and ``--wp-phi-inc`` flag
-are removed; the strong solvers' former per-iteration path integration
-and former ngsolve.bem dense workpiece assembly are removed with it --
-the dense wp backend is now the same in-tree
-Sauter-Schwab Galerkin configuration as the weak path.  Only the
-Lagrange-P2 edge-node route retains path integration, as its sole
-implemented reconstruction.
-
-``--wp-loop-dof`` accepts ``auto`` and ``on`` only.  ``auto`` applies
-the extension when its prerequisites hold. On the weak-coupled path,
-genus >= 1 without a supported loop mode now raises before BEM assembly
-and qsurf export, including ESIM, HACApK and P2 combinations. Genus-0
-auto needs no loop mode and remains supported. ``on`` keeps fail-fast
-prerequisite checks. No automatic change to linear SIBC or another backend
-is made: the implemented loop path is genus-1 / linear SIBC / intree-dense /
-P1. This guard does not implement ESIM-loop coupling or validate the
-Biot-Savart-normalized local loss approximation. The known-invalid
-``off`` route is not selectable.
-The Simulink configuration exposes this control.
-
-**Part 1 (DOMINANT, FIXED 2026-07-17): inconsistent surface winding.**
-The hole extractor's per-triangle "centroid-outward" flip is wrong on a
-genus-1 tube (the bore-wall outward normal points TOWARD the centroid),
-so it flipped the entire inner wall -- 199 directed-edge conflicts --
-corrupting the double-layer operator.  Fixed by
-``surface_mesh_extract.orient_surface_triangles`` (face-BFS flip
-propagation + per-component signed-volume outward), wired into BOTH
-extractors.  No-op on consistent meshes (sphere benchmark unchanged).
-
-**Part 2 (was +27-32 % on P_wp, +11 % on H_t): genus-1 missing loop
-current -- SOLVED by ``radia.bem_loop_extension`` (2026-07-17).**
-chi = V - E + F = 0 -> genus 1; the coil flux links the bore, and the
-BIE's ``J_s = n x (-grad phi)`` with single-valued phi carries ZERO net
-current through any cut -- the shorted-turn eddy current and its Lenz
-screening are unrepresentable.  The extension adds ONE DOF alpha (the
-net toroidal current): ``phi = phi_u + alpha Theta`` with Theta the
-potential of a unit mid-wall ring (ray-cast from the homology cut, same
-class -> single-valued on the cut-open mesh, verified +-1 jump), alpha
-column = ``SL(gamma M^-1 K(Theta) - q_Theta)`` (the membrane term
-cancels against Theta's own identity), closed by Faraday on the cut
-loop.  BEM operators stay on the CLOSED mesh (assembling on the open
-mesh poisons the regular quadrature via coincident duplicated vertices).
-The analytic shorted-ring golden and frozen-subsystem equivalence test
-lock the added mode and its disabled-limit behavior.  Entry points:
-``radia.bem_loop_extension.solve_loop_extended(solver, phi_inc, Z_s,
-omega, A_inc_fn)`` and the CLI flag ``calc_inductance.py --wp-loop-dof``
-(weak AND strong coupling, linear SIBC, ``--wp-bem-backend
-intree-dense``, ``--h1-order 1`` on weak; works with BOTH coil sources
--- surface panels or PEEC filaments via the exact ``A_from_filaments``,
-and both strong solvers take ``loop_dof=True`` applied on the converged
-Picard state).  With the flag, P_wp / H_t are replaced by the
-loop-extended values, the Telegen delta_L (weak) / L_total (strong)
-keep the plain-phi convention, the genus ``P_wp_caveat`` becomes a
-``P_wp_note``, and ``wp_loop_alpha_A`` reports the shorted-turn current;
-a built-in frozen-vs-plain cross-check refuses to report on operator
-mismatch.
-
-**Weak-vs-strong method choice: WEAK FIRST (Sugahara, 2026-07-17).**
-Run the weak path as the production route -- on Takahashi it is ~10x
-faster on the workpiece stage (~25 s vs 228 s coupled; the coil solve
-is common) and agrees with strong to ~1% on P_wp / H_t.  The weak
-run's OWN output reports the coupling strength: ``|delta_L_nH| /
-L_coil_nH`` measures the coil back-reaction.  MEASURED on Takahashi
-(2026-07-17 corrected; an earlier note said 1.4%, which was wrong):
-delta_L = -15.5 nH -> |delta_L|/L_coil = 15% -- and weak-vs-strong
-P_wp STILL agrees to ~1%, so a double-digit back-reaction ratio does
-NOT by itself mandate strong for heating.  Escalate to
-``--coupling-mode strong`` when the self-consistent L_total including
-the workpiece magnetic-energy term (the term weak's Telegen form
-drops) is itself the target quantity, or in close-coupled / high-mu /
-small-gap regimes where the coil-current REDISTRIBUTION (not just its
-lumped delta_L) plausibly changes the incident field shape -- then
-verify by one weak-vs-strong pair before batch runs.  Both routes
-carry the identical genus-1 correction, so this is purely a
-cost/physics-regime choice, not an accuracy fallback.
-
-**PEEC-coil weak coupling: verified against BEM-A on Takahashi
-(2026-07-17).**  The fastest forward route (``--coil-solver peec
---coil-step <coil.step>`` + weak + intree-dense, loop auto) was
-cross-checked against the BEM-A coil on the same workpiece: P_wp
-18.33 vs 18.41 kW (0.55%), H_t 46.22 vs 46.32 kA/m (0.3%), alpha
-5110 A @ -174.1 deg vs 5264 A @ -173.9 deg, delta_L -15.9 vs
--15.5 nH -- with the coil stage collapsing from ~82 s
-(impedance-EFIE, 4136 tris) to ~1.1 s (filament extraction 0.4 s +
-proximity bundle solve 0.7 s); whole weak run ~23 s vs ~109 s.  The
-PEEC coil there was a RECONSTRUCTED gapped rect-torus STEP (342 deg
-arc, true 18.1 x 16.3 mm section, leads omitted -- Kubota's original
-CAD was unavailable), so the 0.55% also bounds the lead contribution
-to P_wp.  PEEC + nonlinear ESIM composes too (Karl converged in 15
-iterations, P_wp 18.58 kW, loop auto-skipped with the recorded ESIM
-skip reason).  L_coil differs from BEM-A by the leads (66 vs 102 nH):
-use BEM-A when coil L / R themselves are deliverables.
-
-**psi-Poisson incident -- the P1 weak route, basis-determined
-(2026-07-17).**  Replaces the axis-ray + horizontal-ray path
-integration of phi_inc with a surface-Poisson (Laplace-Beltrami)
-projection of the EXACT vertex H_inc
-(``radia.bem_sibc_solver.compute_phi_inc_surface_poisson``): mean-zero
-psi with ``int grad_S psi . grad_S v = -int H_t,inc . grad_S v``, so
-the branch-cut wall a spanning-path integral drags across the surface
-disappears and the reconstruction is L2-optimal.  It also replaces
-per-vertex quadrature rays with one batched field evaluation.  The
-fail-loud gate raises when
-``||grad_S psi + H_t,inc|| / ||H_t,inc|| > 10%``; no silent fallback is
-used when the projected scalar potential does not exist.
-Works with both coil sources (BEM-A panels / PEEC filaments).
-Goldens: ``tests/test_phi_inc_poisson.py`` (icosphere: uniform field
-recovers psi = -H0 z to <2%, rotational Killing field fires the gate,
-winding-invariance, complex linearity).
-
-**THE FIX IS THE DEFAULT; THE BUGGY ROUTES ARE DELETED (2026-07-17,
-Sugahara: a known-buggy path must not stay selectable).**
-
-- phi_inc is NOT a knob: the weak P1 route is surface-Poisson ALWAYS.
-  The legacy P1 path-integration option and the transient
-  ``--wp-phi-inc`` flag were REMOVED the same day they were added;
-  path integration survives ONLY where poisson has no implementation
-  yet (Lagrange-P2 edge-node DOFs, and inside the strong driver) as
-  the sole route there, with the wall limitation documented.  The
-  dead ``compute_phi_inc_from_filaments_surface_path`` (reverted
-  2026-05-21) was deleted outright.
-- ``--wp-loop-dof {auto,on}`` (default auto; bare flag = on): auto
-  applies the loop DOF on a genus-1 workpiece when the prerequisites
-  hold (weak + linear SIBC + ``--wp-bem-backend intree-dense`` + P1)
-  and otherwise SKIPS with a recorded ``wp_loop_dof_skip_reason``
-  (genus >= 1 skips keep the ``P_wp_caveat``).  "on" fails loud on
-  unmet prerequisites.  There is deliberately NO "off": the
-  un-extended genus-1 solve is a known +25-30% over-estimate.
-
-With ``--wp-bem-backend intree-dense`` the defaults enable the complete
-genus-1 correction.  With the HACApK backend the projected incident
-potential still applies, while the loop-DoF skip reason and caveat are
-emitted so the limitation is explicit. The Simulink block and comparison
-notebook share one ``auto``-defaulted loop-DoF setting and no
-incident-potential knob.
-
-Detection is built in: ``bem_sibc_solver.surface_euler_characteristic``
-+ ``calc_inductance._wp_genus_check`` -- every weak/strong run logs a
-WARNING for genus >= 1 and emits ``wp_euler_chi`` / ``wp_genus`` +
-``P_wp_caveat`` in the JSON (genus-conditional; genus-0 gets NO caveat,
-backed by the sphere benchmark).
-
-For a genus-1 workpiece, use ``--wp-bem-backend intree-dense`` when the
-mesh fits so the dense SL/DL loop extension can be assembled.  The
-HACApK path currently reports ``wp_loop_dof_skip_reason`` and
-``P_wp_caveat`` instead of silently claiming the missing cohomology
-mode.  Genus-0 workpieces carry no topology caveat.
+Strong coupled coil solvers are a separate route. Their historical
+post-convergence loop correction does not iterate the loop reaction
+back onto the coil. Do not transfer this weak prescribed-source
+acceptance to strong coupling or claim that plain-phi inductance is
+unaffected by topology. Likewise, the native Simulink preassembled
+operator runtime is not certified by these Python workpiece tests.
 
 ## When to use this
 

@@ -24,7 +24,7 @@ Coil solver (``--coil-solver``):
 
 Workpiece is OPTIONAL.  Without ``--vol`` the script returns only the
 vacuum coil L_coil + R_coil.  With ``--vol`` it adds weak-coupled BEM-SIBC:
-gauge-invariant Telegen φ·(n·B_inc) ΔL captures the workpiece's
+complete SIBC reciprocity (magnetic and electric boundary terms) captures the workpiece's
 back-reaction at the port level (coil current distribution is NOT
 recomputed — that is "strong coupling", available via FEM A-V in
 calc_fem_coilmesh.py).
@@ -700,7 +700,7 @@ def _wp_genus_check(wp_mesh, tag="BEM"):
             f"e.g. a tube/ring).  The scalar-potential BIE cannot carry a net "
             f"circulating (shorted-turn) eddy current on the handle, so its "
             f"Lenz screening is LOST: H_t / P_wp are over-estimated when the "
-            f"coil flux links the handle.  L / delta_L remain usable.  "
+            f"coil flux links the handle. Reaction also needs the full loop field. "
             f"Use --wp-loop-dof on the supported weak-coupling path for "
             f"absolute heating.")
     return chi, genus
@@ -710,8 +710,8 @@ _GENUS_P_WP_CAVEAT = (
     "workpiece surface genus >= 1 (Euler chi != 2): the scalar-potential "
     "BIE cannot represent the net circulating (shorted-turn) eddy current "
     "on the handle, so its Lenz screening is missing and H_t / P_wp are "
-    "over-estimated when the coil flux links the handle.  delta_L is "
-    "unaffected.  On the supported weak-coupling path, use --wp-loop-dof "
+    "incorrect when the coil flux links the handle; delta_L is not exempt. "
+    "On the supported weak-coupling path, use --wp-loop-dof "
     "to add the missing cohomology mode; the extension is locked by the "
     "analytic shorted-ring golden.")
 
@@ -720,12 +720,10 @@ def _apply_wp_loop_dof(args, bem, phi_inc, Z_s_wp, omega, coil_data,
                        res_bem, wp_genus, wp_chi):
     """Apply the genus-1 loop-DOF extension to the linear-SIBC weak solve.
 
-    Replaces the reported P_wp / H_t_rms with the loop-extended values
-    (``radia.bem_loop_extension.solve_loop_extended``); ``phi_vec`` stays
-    the plain solve's, so the Telegen dL and the qsurf spatial pattern
-    keep their validated plain-phi convention (the loop DOF corrects the
-    DISSIPATION, not the reactive coupling -- cf. the genus caveat
-    "delta_L is unaffected").  Returns ``(res_bem_updated, loop_meta)``.
+    Uses the loop-extended field consistently for power, spatial heating,
+    and reciprocal reaction. The single-valued phi_u alone is insufficient
+    for either local heating or reaction on a flux-linked handle.
+    Returns ``(res_bem_updated, loop_meta)``.
     """
     import cmath
 
@@ -787,6 +785,9 @@ def _apply_wp_loop_dof(args, bem, phi_inc, Z_s_wp, omega, coil_data,
     res_bem = dict(res_bem)
     res_bem["P_density"] = loop_out["P_total"] / float(res_bem["area"])
     res_bem["H_t_rms"] = loop_out["H_t_rms"]
+    res_bem["phi_vec"] = loop_out["phi_u"]
+    res_bem["loop_q_tri"] = loop_out["q_tri"]
+    res_bem["loop_reaction_integral"] = loop_out["reaction_integral"]
     loop_meta = {
         "wp_loop_dof": True,
         "wp_loop_alpha_A": float(abs(alpha)),
@@ -966,6 +967,13 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     # before assembly instead of emitting uncorrected absolute heating.
     wp_loop_req, wp_loop_apply, wp_loop_skip = _resolve_weak_loop_mode(
         args, wp_genus, basis_order)
+    if basis_order != 1 or getattr(args, "esim_per_panel", False):
+        raise ValueError(
+            "Verified weak SIBC heat/reaction postprocessing requires P1 "
+            "and spatially uniform Z_s. Higher-order BEM or per-panel ESIM "
+            "needs a mapped weighted surface form; no incident-field "
+            "heat-pattern fallback is permitted. This does not restrict "
+            "the thermal FEM order.")
 
     # 2. ESIM prerequisite check (Karl iteration needs a BH curve).
     if args.impedance_model == "esim" and not args.bh_file:
@@ -1291,141 +1299,17 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     progress("BEM",
         f"BIE total ({t_bie:.1f}s over {n_iter_done} iter, gmres info={info})")
 
-    # 5b. Per-DOF |H_t|^2 and q_surf for the spatial qsurf.sol output.
-    # This is the data calc_heat.py needs as a Neumann BC for thermal
-    # analysis.  Linear AND ESIM paths both need it; H_t_per_final
-    # above was ESIM-only.  Same recipe (K @ phi / M_lump) applied
-    # unconditionally.  Only meaningful when bem.fes is not None
-    # (i.e. basis_order=1 -- H1 P1 on wp_mesh BND); for basis_order>=2
-    # phi_vec lives on the parent vol_mesh and the projection back to
-    # a wp-surface H1 GridFunction would need explicit coord matching,
-    # which the Telegen post-proc below already exercises.  Out of
-    # scope for now; warn instead.
-    gf_q_wp = None
-    q_per_dof = None
-    # Spatial q_surf via BIE-calibrated direct Biot-Savart.
-    #
-    # Rationale (kubota 2026-05-21 follow-up):
-    #   - phi_inc via the legacy axis-ray + horizontal-ray path
-    #     integral has numerically-induced local-gradient errors
-    #     for real coils (leads + multi-loop topology); the BIE
-    #     solution phi_vec inherits those errors so the spatial
-    #     q distribution comes out scrambled (peak on coil-FAR
-    #     face instead of coil-NEAR).
-    #   - phi_inc via surface-edge LSQ has correct local gradient
-    #     but a different gauge from the BIE's training data, so
-    #     the BIE produces an artificially low P_wp (1.9 W vs the
-    #     ~6 W axis-ray result on the same geometry).
-    #   - Gauge correction (constant shift on phi_inc) does NOT
-    #     change BIE energy because the Lagrange multiplier
-    #     constraint absorbs constants.
-    #
-    # Resolution: separate concerns.  Use the BIE's global P_wp
-    # (= integrated power, well-trusted) as the magnitude and the
-    # direct Biot-Savart |H_t_inc|^2 as the spatial pattern.  This
-    # is the weak-coupling approximation rescaled to match the
-    # BIE integral.  For typical IH (workpiece inside coil bore,
-    # near-uniform shielding factor), |H_t|^2 spatial pattern is
-    # very close to |H_t_inc|^2 times a constant -- which is
-    # exactly the rescaling we apply.
-    #
-    # P1 vs P2 (--h1-order): this path is INDEPENDENT of bem.fes
-    # because phi_vec is not used.  We only need wp_mesh (for
-    # vertex positions + element topology) and res_bem["P_density"]
-    # (scalar from the BIE solve).  Both are available regardless
-    # of basis_order.
-    if True:
-        from ngsolve import BND as _BND_imp, H1 as _H1_imp
-        n_v = wp_mesh.nv
-
-        # Collect triangle vertex indices + coords.
-        tri_v = []
-        for el in wp_mesh.Elements(_BND_imp):
-            tri_v.append([v.nr for v in el.vertices])
-        tri_v = np.asarray(tri_v, dtype=np.int64)
-        vert_xyz = np.asarray(
-            [list(wp_mesh.vertices[i].point) for i in range(n_v)],
-            dtype=float)
-
-        # Triangle areas + outward normals (area-weighted avg to verts).
-        p0 = vert_xyz[tri_v[:, 0]]
-        p1 = vert_xyz[tri_v[:, 1]]
-        p2 = vert_xyz[tri_v[:, 2]]
-        nrm = np.cross(p1 - p0, p2 - p0)
-        area2 = np.linalg.norm(nrm, axis=1)
-        tri_area = 0.5 * area2
-        n_hat_tri = nrm / np.maximum(area2[:, None], 1e-30)
-
-        vert_n = np.zeros_like(vert_xyz)
-        vert_a = np.zeros(n_v)
-        for j in range(3):
-            np.add.at(vert_n, tri_v[:, j], tri_area[:, None] * n_hat_tri)
-            np.add.at(vert_a, tri_v[:, j], tri_area)
-        vert_n /= np.maximum(vert_a[:, None], 1e-30)
-        vert_n /= np.maximum(np.linalg.norm(vert_n, axis=1,
-                                              keepdims=True), 1e-30)
-
-        # Direct Biot-Savart H at each wp vertex from the coil
-        # (curl-free in air, no topology assumption).  Branch on the
-        # coil representation, mirroring the phi_inc bridge above:
-        # PEEC returns line filaments, BEM-A returns a surface current.
-        if coil_data["source_type"] == "filament":
-            from radia.bem_sibc_solver import _h_segments_complex as _hbs
-            flat_segs, flat_I = [], []
-            for fil_segs, Ik in zip(coil_data["paths"], coil_data["I_fil"]):
-                Ik_c = complex(Ik)
-                for (q1, q2) in fil_segs:
-                    flat_segs.append((q1, q2))
-                    flat_I.append(Ik_c)
-            bs_segs = np.asarray(flat_segs, dtype=float)
-            bs_I = np.asarray(flat_I, dtype=complex)
-            H_BS = _hbs(bs_segs, vert_xyz, bs_I)        # (n_v, 3) complex
-        else:  # "surface" -- BEM-A coil
-            coil_J_complex = (complex(args.current)
-                              * coil_data["coil_J_per_tri"]).astype(complex)
-            H_BS = _H_from_surface_J_complex(
-                vert_xyz, coil_data["coil_centroids"],
-                coil_data["coil_areas"], coil_J_complex)   # (n_v, 3) complex
-
-        # Tangential H at each vertex: H - (H·n)n.
-        Hn = np.sum(H_BS * vert_n, axis=1)
-        H_t_vec = H_BS - Hn[:, None] * vert_n
-        H_t_sq = (np.abs(H_t_vec[:, 0])**2
-                   + np.abs(H_t_vec[:, 1])**2
-                   + np.abs(H_t_vec[:, 2])**2)
-
-        # Integrate |H_t|^2 over the wp surface (triangle-mean * area).
-        # ∫_S |H_t|^2 dS = sum_tri area_tri * mean_3v(|H_t|^2).
-        Hsq_at_verts = H_t_sq[tri_v]                # (n_tri, 3)
-        I_norm = float(np.sum(tri_area * Hsq_at_verts.mean(axis=1)))
-        # P_wp is the BIE-trusted total -- compute it inline here since
-        # the canonical P_wp = res_bem["P_density"] * A_wp is set
-        # AFTER this block in the function flow.
-        A_wp_local = float(np.sum(tri_area))
-        P_wp_local = float(res_bem["P_density"]) * A_wp_local
-        if I_norm <= 0 or P_wp_local <= 0:
-            progress("BEM",
-                f"qsurf.sol skipped: I_norm={I_norm:.3e} "
-                f"P_wp={P_wp_local:.3e}")
-        else:
-            # q_per_dof = (P_wp / ∫|H_t|^2 dS) * |H_t|^2.  Guarantees
-            # ∫ q dS = P_wp exactly (BIE energy preserved) AND the
-            # spatial pattern follows the topologically-correct
-            # Biot-Savart distribution.
-            scale = P_wp_local / I_norm
-            q_per_dof = scale * H_t_sq
-            # Build the wp_mesh-side GridFunction.  For basis_order=1
-            # this matches bem.fes; for basis_order>=2 (where bem.fes
-            # is None and the BIE uses Lagrange P2 on parent vol_mesh)
-            # we build a fresh P1 FES on wp_mesh -- the downstream
-            # vol_mesh transfer (via _wp_new_to_old / coord match)
-            # is by vertex anyway, independent of basis_order.
-            fes_q_local = _H1_imp(wp_mesh, order=1)
-            gf_q_wp = _GF(fes_q_local)
-            gf_q_wp.vec.FV().NumPy()[:] = q_per_dof
-            progress("BEM",
-                f"qsurf: BIE-calibrated BS  scale={scale:.3e} "
-                f"(P_wp/∫|H_t|²)  ∫|H_t|²dS={I_norm:.3e}")
+    # Spatial heat is the solved total surface field, never a rescaled
+    # incident Biot-Savart pattern.  The loop path supplies its full field.
+    from radia.bem_sibc_solver import _project_sibc_surface_heat
+    gf_q_wp, projected_power = _project_sibc_surface_heat(
+        bem.fes, res_bem["phi_vec"], Z_s_wp,
+        element_heat=res_bem.get("loop_q_tri"))
+    q_per_dof = gf_q_wp.vec.FV().NumPy().copy()
+    expected_power = float(res_bem["P_density"]) * float(res_bem["area"])
+    if abs(projected_power - expected_power) > 1e-8 * max(expected_power, 1e-30):
+        raise RuntimeError("Solved qsurf projection does not conserve BEM surface loss")
+    progress("BEM", f"qsurf: solved-field projection, P={projected_power:.6g} W")
 
     # 6. Workpiece scalar outputs
     A_wp = float(Integrate(CF(1), wp_mesh, VOL_or_BND=BND).real)
@@ -1526,6 +1410,16 @@ def _solve_workpiece_weak_coupled(args, coil_data):
             coil_J_complex,
             wp_centroids_arr, wp_areas_arr, wp_norms_arr, wp_phi_avg_arr,
             I_port=args.current)
+    if wp_loop_apply:
+        delta_L_complex = res_bem["loop_reaction_integral"] / args.current**2
+    else:
+        from radia.workpiece_surface import _complete_sibc_reaction
+        delta_L_complex = _complete_sibc_reaction(
+            delta_L_complex, phi_inc, res_bem["phi_vec"], bem.K,
+            Z_s_wp, omega, args.current)
+    reaction_power = -0.5 * omega * delta_L_complex.imag * args.current**2
+    from radia.workpiece_surface import _check_sibc_reaction_power
+    power_balance_error = _check_sibc_reaction_power(P_wp, reaction_power)
     delta_L_nH = float(delta_L_complex.real) * 1e9
     delta_R_mOhm = -float(delta_L_complex.imag) * omega * 1e3
     progress("BEM",
@@ -1537,11 +1431,13 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         try:
             from radia.gmsh_post_export import GmshPostExport
             post = GmshPostExport(wp_mesh, boundary=True)
+            post.add_scalar_field("q_surf_W_per_m2", q_per_dof)
             post.write(args.msh_output)
             msh_file = args.msh_output
             progress("BEM", f"wp .msh written: {args.msh_output}")
         except Exception as exc:
             progress("BEM", f"msh export failed: {exc}")
+            raise RuntimeError("Failed to export solved SIBC GMSH field") from exc
 
     # Z_s_wp may be scalar (default) or ndarray (--esim-per-panel).
     # Report mean Re/Im for the array case to keep the JSON schema
@@ -1640,6 +1536,8 @@ def _solve_workpiece_weak_coupled(args, coil_data):
                         vol_vec_np[vol_v_idx] = float(q_per_dof[wp_v_idx])
                         n_matched += 1
 
+            if n_matched != wp_mesh.nv:
+                raise RuntimeError(f"qsurf mapping incomplete: {n_matched}/{wp_mesh.nv} vertices")
             # Output paths: prefer args.msh_output's basename when
             # the user requested an .msh, else args.vol's basename.
             if args.msh_output:
@@ -1671,10 +1569,15 @@ def _solve_workpiece_weak_coupled(args, coil_data):
                 f"qsurf.sol save failed: {type(e).__name__}: {e}")
             for line in traceback.format_exc().splitlines()[-4:]:
                 progress("BEM", f"  {line}")
+            raise RuntimeError("Failed to export solved SIBC heating field") from e
 
     return {
         "P_wp": P_wp, "H_t_rms": H_t_rms, "A_wp": A_wp,
         "delta_L_nH": delta_L_nH, "delta_R_mOhm": delta_R_mOhm,
+        "wp_reaction_power_W": float(reaction_power),
+        "wp_power_balance_relative_error": float(power_balance_error),
+        "wp_power_balance_tolerance": 0.1,
+        "qsurf_method": "solved-total-field-lumped-P1",
         "wp_dissipation_R_mOhm": wp_dissipation_R_mOhm,
         "wp_mesh_nv": int(wp_mesh.nv),
         "wp_euler_chi": int(wp_chi),
@@ -1817,7 +1720,10 @@ def _assemble_full_output(args, coil_data, wp_data):
     out = _assemble_vacuum_output(args, coil_data)
     out["method"] = f"{args.coil_solver}-bem-weak"
     out["coupling_mode"] = "weak"
-    out["telegen_form"] = "phi-B"
+    out["telegen_form"] = "complete-SIBC-reciprocity"
+    for key in ("wp_reaction_power_W", "wp_power_balance_relative_error",
+                "wp_power_balance_tolerance", "qsurf_method"):
+        out[key] = wp_data[key]
     out["L_total_nH"] = (float(coil_data["L_coil"] * 1e9)
                           + wp_data["delta_L_nH"])
     out["R_total_mOhm"] = (float(coil_data["R_coil"] * 1e3)
@@ -1864,9 +1770,8 @@ def _assemble_full_output(args, coil_data, wp_data):
             "in P_wp / H_t (wp_loop_screening_ratio = P_wp / P_frozen; "
             "wp_loop_regime classifies the alpha phase -- anti-phase = "
             "inductance-dominated screening, quadrature = resistive "
-            "self-heating).  delta_L keeps the plain-solve phi convention; "
-            "the loop extension is locked by the analytic shorted-ring "
-            "golden.")
+            "self-heating). Heating and reaction use the full loop field "
+            "and complete SIBC reciprocity, including the cut contribution.")
     elif out["wp_genus"] != 0:
         out["P_wp_caveat"] = _GENUS_P_WP_CAVEAT
     # workpiece BIE DoF context -- mirror of the "BEM ndof=..." log line
@@ -2799,7 +2704,9 @@ def build_argparser():
                              "1 = P1 hat (flat-friendly default).  "
                              "2 = Lagrange-P2 (uses curved Tri6 geometry "
                              "if the .vol has curve order >= 2, otherwise "
-                             "P2 basis on flat Tri3 geometry).")
+                             "P2 basis on flat Tri3 geometry). Weak heat/"
+                             "reaction postprocessing currently requires P1; "
+                             "this does not restrict thermal FEM order.")
     parser.add_argument("--wp-bem-backend", default="hacapk",
                         choices=["hacapk", "intree-dense"])
     parser.add_argument("--wp-aca-eps", type=float, default=1e-10)
@@ -2815,16 +2722,15 @@ def build_argparser():
                              "auto (default): apply on a genus-1 workpiece "
                              "when the prerequisites hold (weak coupling, "
                              "linear SIBC, --wp-bem-backend intree-dense, "
-                             "--h1-order 1); otherwise skip and report "
-                             "wp_loop_dof_skip_reason (genus-1 skips also "
-                             "keep the P_wp_caveat).  "
+                             "--h1-order 1); unsupported weak handle "
+                             "combinations fail before BEM assembly. "
                              "on (= bare --wp-loop-dof): require it -- "
                              "unmet prerequisites or genus != 1 fail "
                              "loud.  There is deliberately NO 'off': the "
                              "legacy un-extended genus-1 solve is a known "
                              "+25-30%% over-estimate and must not be "
-                             "selectable.  delta_L (Telegen) keeps the "
-                             "plain-solve phi convention.")
+                             "selectable. Weak reaction and heating use "
+                             "the full loop field and complete reciprocity.")
 
     # ----- Excitation -----
     parser.add_argument("--frequency", type=float, required=True,

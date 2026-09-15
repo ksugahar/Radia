@@ -28,10 +28,14 @@ from netgen.occ import Cylinder, Pnt, Vec, OCCGeometry, Glue
 import radia.bem_sibc_solver as sibc
 import radia.biot_savart as bs
 import radia._radia_pybind as native
+from radia.workpiece_surface import _complete_sibc_reaction, delta_L_telegen_phiB
+from radia.bem_loop_extension import solve_loop_extended, A_from_filaments
 
 
-def solve(maxh):
+def solve(maxh, bore=0.0, coil_a=0.0):
     body = Cylinder(Pnt(0, 0, -.0125), Vec(0, 0, 1), r=.025, h=.025)
+    if bore:
+        body = body - Cylinder(Pnt(0, 0, -.013), Vec(0, 0, 1), r=bore, h=.026)
     mesh = ng.Mesh(OCCGeometry(Glue(list(body.faces))).GenerateMesh(maxh=maxh))
     pts = np.array([list(v.point) for v in mesh.vertices])
     tri = np.array([[v.nr for v in el.vertices] for el in mesh.Elements(ng.BND)])
@@ -43,10 +47,17 @@ def solve(maxh):
     if signed_volume <= 0:
         raise ValueError("Expected outward-oriented surface")
     angle = np.linspace(0, 2 * np.pi, 721)
-    loop = np.stack([.03 * np.cos(angle), .03 * np.sin(angle), np.zeros_like(angle)], axis=1)
-    segments = np.stack([loop[:-1], loop[1:]], axis=1)
-    h_inc = bs.h_segments_batch(segments, pts)
-    h_centres = bs.h_segments_batch(segments, cents)
+    # Degree-five disk cubature for the same uniform-J circular FEM coil.
+    offsets = [(0., 0., .25)] + [
+        (coil_a*np.sqrt(2/3)*np.cos(t), coil_a*np.sqrt(2/3)*np.sin(t), .125)
+        for t in np.arange(6)*np.pi/3]
+    paths, currents = [], []
+    for dr, dz, weight in offsets:
+        loop = np.stack([(.03+dr)*np.cos(angle), (.03+dr)*np.sin(angle),
+                         np.full_like(angle, dz)], axis=1)
+        paths.append(np.stack([loop[:-1], loop[1:]], axis=1))
+        currents.append(weight)
+    h_inc = sum(w*bs.h_segments_batch(p, pts) for p,w in zip(paths,currents))
     psi, residual = sibc.compute_phi_inc_surface_poisson(pts, tri, h_inc, max_grad_residual=.2)
     omega = 2 * np.pi * 1000
     zs = (1 + 1j) * np.sqrt(omega * 4e-7 * np.pi / (2 * 5.8e7))
@@ -55,14 +66,41 @@ def solve(maxh):
         intree_geom_order=1, intree_singular_n_q=6, intree_regular_quad_degree=7)
     result = solver.solve(psi.astype(complex), Z_s=zs, omega=omega)
     phi = result["phi_vec"]  # result['phi'] contains only the real part!
-    magnetic = np.sum(phi[tri].mean(axis=1) * np.sum(normals * h_centres, axis=1) * areas) * 4e-7 * np.pi
-    electric = zs / (1j * omega) * (psi @ solver.K @ phi)
+    magnetic = delta_L_telegen_phiB(paths, currents, cents, areas, normals,
+                                   phi[tri].mean(axis=1), I_port=1.)
+    complete = _complete_sibc_reaction(magnetic, psi, phi, solver.K, zs, omega, 1.)
     surface = result["P_density"] * result["area"]
+    if bore:
+        extended = solve_loop_extended(solver, psi, zs, omega,
+            lambda p: A_from_filaments(p, paths, currents))
+        surface = extended["P_total"]
+        complete = extended["reaction_integral"]
+        h_total = extended["H_t_tri"]
+        heat, projected = sibc._project_sibc_surface_heat(
+            solver.fes, extended["phi_u"], zs, element_heat=extended["q_tri"])
+    else:
+        heat, projected = sibc._project_sibc_surface_heat(solver.fes, phi, zs)
+        real, imag = ng.GridFunction(solver.fes), ng.GridFunction(solver.fes)
+        real.vec.FV().NumPy()[:] = phi.real
+        imag.vec.FV().NumPy()[:] = phi.imag
+        h_total = np.stack([-(np.array(ng.Integrate(ng.grad(real)[j], mesh, ng.BND, element_wise=True))
+            + 1j*np.array(ng.Integrate(ng.grad(imag)[j], mesh, ng.BND, element_wise=True)))/areas
+            for j in range(3)], axis=1)
+    z_samples = np.linspace(-.010, .010, 11)
+    hz = []
+    for zi in z_samples:
+        selected = (abs(cents[:,2]-zi) <= .001) & (np.linalg.norm(cents[:,:2],axis=1)>.024) & (abs(normals[:,2])<.1)
+        if not np.any(selected):
+            raise ValueError("Surface too coarse for local-field bins")
+        hz.append(np.sum(areas[selected]*h_total[selected,2])/sum(areas[selected]))
+    hz = np.array(hz)
     reaction_old = -.5 * omega * magnetic.imag
-    reaction = -.5 * omega * (magnetic + electric).imag
-    return dict(maxh=maxh, nv=mesh.nv, triangles=len(tri), P_surface=surface,
+    reaction = -.5 * omega * complete.imag
+    return dict(maxh=maxh, bore=bore, coil_a=coil_a, nv=mesh.nv, triangles=len(tri), P_surface=surface,
                 P_reaction_magnetic_only=reaction_old, P_reaction_complete=reaction,
-                P_electric_term=-.5 * omega * electric.imag,
+                P_added_reciprocity_terms=reaction-reaction_old,
+                heat_projection_relative_error=abs(projected-surface)/surface,
+                z=z_samples.tolist(), H_z_real=hz.real.tolist(), H_z_imag=hz.imag.tolist(),
                 old_loss_to_reaction_ratio=surface / reaction_old,
                 complete_power_relative_error=abs(surface-reaction)/surface,
                 phi_projection_relative_residual=residual)
@@ -82,7 +120,7 @@ def main():
     files = [Path(__file__), Path(sibc.__file__), Path(bs.__file__), Path(native.__file__)]
     passed = bool(rows[-1]["complete_power_relative_error"] < .01)
     report = dict(scope=__doc__, host=platform.node(), python=sys.version,
-                  ngsolve=ng.__version__, production_path_fixed=False,
+                  ngsolve=ng.__version__, workpiece_stage_exercised=False,
                   source_sha256={p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in files},
                   rows=rows, finest_power_balance_tolerance=.01, passed=passed)
     args.output.parent.mkdir(parents=True, exist_ok=True)

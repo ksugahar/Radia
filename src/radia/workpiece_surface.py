@@ -25,6 +25,50 @@ import numpy as np
 MU_0 = 4.0 * np.pi * 1e-7
 
 
+def _check_sibc_reaction_power(surface_power, reaction_power, tolerance=0.1):
+    """Reject inconsistent passive SIBC outputs; return relative imbalance."""
+    if (not np.isfinite(surface_power) or not np.isfinite(reaction_power)
+            or surface_power < 0 or reaction_power < 0
+            or not np.isfinite(tolerance) or not 0 < tolerance < 1):
+        raise RuntimeError("SIBC reciprocal power requires finite nonnegative powers and a valid tolerance")
+    error = abs(reaction_power-surface_power)/max(surface_power, 1e-30)
+    if error > tolerance:
+        raise RuntimeError(
+            f"SIBC reciprocal power balance failed: surface={surface_power:.6g} W, "
+            f"reaction={reaction_power:.6g} W, relative error={error:.3%}. "
+            "Refine/check the EM surface and incident-field projection; "
+            "refusing inconsistent heating/impedance output.")
+    return float(error)
+
+
+def _complete_sibc_reaction(magnetic_delta_L, phi_inc, phi, stiffness,
+                           Z_s, omega, I_port):
+    """Complete constant-Zs, single-valued SIBC coil reciprocity [H].
+
+    The magnetic phi.B term alone omits the electric surface term.
+    For peak exp(+i*omega*t) phasors the missing term is
+    Zs/(i*omega*I_port**2) * phi_inc.T @ K @ phi (no conjugation).
+    Inputs must use the same surface FE basis. This function does not apply
+    to a multivalued loop potential or a spatially varying impedance.
+    """
+    incident = np.asarray(phi_inc, dtype=complex)
+    total = np.asarray(phi, dtype=complex)
+    matrix = np.asarray(stiffness)
+    if incident.ndim != 1 or total.shape != incident.shape or matrix.shape != (len(total), len(total)):
+        raise ValueError("SIBC reciprocity requires matching surface FE vectors and stiffness")
+    if np.ndim(Z_s) != 0:
+        raise ValueError("SIBC reciprocity requires scalar Z_s; variable impedance needs a weighted surface form")
+    z = complex(Z_s)
+    if (not np.isfinite(omega) or omega <= 0 or not np.isfinite(I_port)
+            or I_port == 0 or not np.isfinite(z) or z.real < 0
+            or not np.isfinite(magnetic_delta_L)
+            or not np.all(np.isfinite(incident)) or not np.all(np.isfinite(total))
+            or not np.all(np.isfinite(matrix))):
+        raise ValueError("SIBC reciprocity requires finite fields, passive Z_s, positive frequency and nonzero current")
+    return complex(magnetic_delta_L + z / (1j * omega * I_port**2)
+                   * (incident @ matrix @ total))
+
+
 def _cpp_b_triangles_complex():
     try:
         from radia import _radia_pybind as _rpb
@@ -306,14 +350,12 @@ def delta_L_telegen_phiB(filament_paths, currents,
                         =  ∫_S φ · (n · curl A) dS      [∇_s · (n × A) = -n · curl A]
                         =  ∫_S φ · (n · B) dS
 
-    The right-hand side uses B = curl A directly, hence it is gauge-
-    invariant under A → A + ∇χ.  The left-hand side is gauge-invariant
-    in continuum because the J_s = -n × ∇_s φ field is exactly
-    surface-divergence-free, but in a discrete H1 P1 setting J_s_h has
-    element-edge jumps that act as a weak surface divergence.  This
-    spurious divergence couples to the gauge of A and contaminates
-    the imaginary part of Δ L (observed empirically: ~100x off vs the
-    energy-balance Δ R = 2 P_wp / I^2 prediction).
+    This evaluates only the magnetic contribution to reciprocity.
+    At finite surface impedance the electric contribution is nonzero:
+    use _complete_sibc_reaction for single-valued, constant-Zs fields.
+    The surface curl of continuous P1 phi is weakly divergence-free;
+    quadrature errors do not justify omitting the electric term.
+    Multivalued loop fields require their cut contribution explicitly.
 
     Args:
         filament_paths: K filament polylines (each [(p1, p2), ...])
