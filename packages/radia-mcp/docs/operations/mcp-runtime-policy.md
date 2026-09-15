@@ -113,6 +113,21 @@ needs it. Do not automatically restore an older tree because its path was once
 canonical. Report source integration, installation and live-client verification
 separately, with host/client and observation time. When not checked, say so.
 
+## Release completion
+
+For radia-mcp release-dual, completion requires passing the package release
+checks, verified publication, verified editable updates/fresh imports on LAB
+and 100, and LAB client reconnection with live source and harmless-tool checks.
+The LAB check must cover affected servers/contracts, not an unrelated tool.
+
+Existing clients on 100 may load the update at their next normal restart.
+Report these as `next-launch-pending`; they do not block publication or release
+completion and must not be described as live-verified. Failed installation or
+fresh import on 100 still blocks deployment completion. Do not wait for every
+student's live tool call or force a restart solely to close a release checklist.
+Immediate all-user reconnection is a separate, explicitly requested operation.
+This distinction does not weaken wheel, dependency, or numerical acceptance.
+
 ## Scope
 
 radia-mcp is independently versioned and distributed. Its release-dual targets
