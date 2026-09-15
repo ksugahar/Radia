@@ -416,7 +416,10 @@ jobs:
           plan = json.loads(Path("radia-mcp-ci-selection.json").read_text(encoding="utf-8"))
           targets = plan["integration_tests"]
           if targets:
-              subprocess.run([sys.executable, "-m", "pip", "install", "markdown"], check=True)
+              import tomllib
+              metadata = tomllib.loads(Path("packages/radia-mcp/pyproject.toml").read_text(encoding="utf-8"))
+              dependencies = metadata["project"]["optional-dependencies"]["md2html"]
+              subprocess.run([sys.executable, "-m", "pip", "install", *dependencies], check=True)
               env = os.environ.copy()
               env.pop("RADIA_MCP_CI_SELECTION_JSON", None)
               env["PYTHONPATH"] = str(Path("packages/radia-mcp/src").resolve())
