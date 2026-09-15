@@ -1,5 +1,44 @@
 # IH Eddy-Thermal Simulink Workflow
 
+Radia couples distributed electromagnetic loss to transient temperature fields.
+The **Radia IH MCP tool family** owns live instructions, supported inputs and
+constraints; this page explains architecture and numerical evidence.
+
+## Axisymmetric P2/Q2 and acceptance status
+
+Heat uses standard NGSolve H1, not the magnetic Henrotte basis. A separate
+2D meridian thermal mesh uses `2*pi*r` in both volume and boundary integrals;
+a 3D electromagnetic source does not require a 3D thermal solve when the
+thermal assumptions are axisymmetric. The true `r=0` axis has zero revolved
+surface area. A finite-radius inner wall is different and may carry heat
+input or cooling. Higher order cannot correct a wrong source selection.
+
+Thermal order 2 means P2 on triangles/tetrahedra and Q2 on quadrilaterals,
+not post-load geometry curving. The P1 heat source is integrated against the
+higher-order test space. For `T=sum(t_i*phi_i)` and constant-function vector
+`c`, initialization is `T0*c` and ambient convection uses `C*c`.
+Signed or zero higher-order coefficients are not physical temperatures.
+The mean uses FE integration; extrema use mapped quadrature samples and are
+not certified global bounds. Periodic transport of this representation is
+unsupported and fails explicitly; the nodal rotation tests do not certify it.
+
+The executed [axisymmetric demonstration](induction_heating/axisymmetric_p2_thermal.ipynb)
+and [numerical report](../validation_test/eddy_current_analytical_validation/IH_REACTION_POWER_2026-09-15.md)
+separate these checks:
+
+| Check | Recorded result | Scope |
+|---|---|---|
+| Workpiece FEM/SIBC versus BEM | Within IH 2% bound | Declared linear-material cases |
+| Axis-touching Q2, 100 steps | Native/reference maximum difference 9.27e-9 K | Manufactured in-memory fixture |
+| Tracked SLX, 361 DOFs, 101 samples | Maximum difference 9.73e-9 K | Preassembled diagnostic operators |
+| MATLAB integration/geometry/coefficient tests | 34 passed | State, errors and lifecycle |
+
+These checks and main integration do not certify arbitrary production
+CAD/VOL-to-EM-to-thermal coupling or publication. Strict-label real-input
+acceptance, source coverage/power checks without mocks, spatial artifacts,
+full-window UI inspection and all four release-host gates remain required.
+The saved one-DOF default is an installation diagnostic, not a physical design.
+
 Radia's production induction-heating interface is the masked **Induction
 Heating** block in `matlab/radia_simulink_library.slx`. The retired `radia-ih`
 PySide panel and notebook workbench are not supported interfaces.
