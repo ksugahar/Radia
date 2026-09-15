@@ -156,9 +156,11 @@ void radTArcCur::B_compElliptic(radTField* FieldPtr)
 
 	const double SmallPositive = 1.E-10;
 	double r2_xy = P_mi_CenPo.x*P_mi_CenPo.x + P_mi_CenPo.y*P_mi_CenPo.y;
-	double r = sqrt(r2_xy + SmallPositive);  // SmallPositive avoids division by zero in B-field
-	double r_exact = sqrt(r2_xy);  // Exact r for solid angle (no offset)
-	double phi_obs = ((P_mi_CenPo.y < 0)? (TwoPi - acos(P_mi_CenPo.x/r)) : (acos(P_mi_CenPo.x/r)));
+	// Preserve the exact axis so the circular-loop analytic axis branch runs.
+	// A fixed squared-radius offset changes both the field and its direction.
+	double r = sqrt(r2_xy);
+	double r_exact = r;
+	double phi_obs = (r == 0.0) ? 0.0 : atan2(P_mi_CenPo.y, P_mi_CenPo.x);
 	double z = P_mi_CenPo.z;
 
 	// Check if this is a full circular coil or an arc
