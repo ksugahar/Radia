@@ -41,12 +41,14 @@ def test_wheel_contract_includes_embedded_probe_and_bytes(tmp_path):
                          'Name: cubit-mesh-export\nVersion: 1.0.2\n')
         for file in ('cubit_mesh_export.ccm', 'cubit_mesh_curver.pyd',
                      'toolbar_smoke.py', 'cubit_gui/toolbar_probe.py', 'mcp/server.py',
-                     'mcp/_support/status.py'):
+                     'mcp/_support/status.py', 'mcp/_support/LICENSE-BSD-3-Clause.txt'):
             archive.writestr('cubit_mesh_export/' + file, b'test\r\n')
     result = dual.wheel_contract(wheel)
     assert result['version'] == '1.0.2'
     assert result['wheel_sha256'] == dual.digest(wheel.read_bytes())
     assert result['files']['cubit_mesh_export/toolbar_smoke.py']['sha256'] == dual.digest(b'test\n')
+    license_file = result['files']['cubit_mesh_export/mcp/_support/LICENSE-BSD-3-Clause.txt']
+    assert license_file == {'sha256': dual.digest(b'test\n'), 'text': True}
     assert result['files']['cubit_mesh_export/cubit_mesh_export.ccm']['sha256'] == dual.digest(b'test\r\n')
 
 
