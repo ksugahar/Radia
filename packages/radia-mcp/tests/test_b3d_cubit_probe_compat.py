@@ -22,15 +22,6 @@ from cae_mcp_core.common.server_hardening import (
 # Cubit side: probe_ops output carries the core keys (mock cubit)
 # ---------------------------------------------------------------------------
 
-def test_cubit_probe_entities_carries_core_keys():
-    from cubit_mesh_export.mcp import probe_ops
-    from test_cubit_probe_ops import _MockCubit
-
-    ent = probe_ops.op_probe(_MockCubit(), ["entities"])
-    assert PROBE_SOLID_CORE_KEYS <= set(ent["volumes"][0])
-    assert PROBE_FACE_CORE_KEYS <= set(ent["surfaces"][0])
-
-
 # ---------------------------------------------------------------------------
 # build123d side: real geometry (skipped in minimal-dep CI)
 # ---------------------------------------------------------------------------

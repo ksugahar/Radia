@@ -6,8 +6,7 @@ from cubit_mesh_export.mcp.server import _lint_file
 # Version-robust lint golden: assert (rule, line) pairs, not messages
 # ---------------------------------------------------------------------------
 
-_FIXTURE = Path(__file__).resolve().parents[2] \
-    / "tests" / "mcp_server" / "fixtures" / "bad_cubit_script.py"
+_FIXTURE = Path(__file__).parent / "fixtures" / "bad_cubit_script.py"
 
 # Locked 2026-08-05 against the committed fixture.  Assert only
 # (rule, line) membership so rule WORDING can change freely; a rule

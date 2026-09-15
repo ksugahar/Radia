@@ -1,5 +1,5 @@
 """Contract tests for the shared MCP-server hardening layer
-(cae_mcp_core.common.server_hardening) for the build123d server.
+(cae_mcp_core.common.server_hardening) for the cubit server.
 
 Locks the holes a rename/typo would open silently:
 * a name listed in an explicit classification set that matches NO
@@ -16,7 +16,7 @@ import sys
 
 import pytest
 
-from radia_mcp.build123d import server as b3d_server
+from cubit_mesh_export.mcp import server as cubit_server
 from cae_mcp_core.common.server_hardening import (
     ANN_DESTRUCTIVE,
     ANN_READONLY,
@@ -32,8 +32,8 @@ def _tool_names(mcp) -> set:
 # Classification sets must reference only REAL tool names (typo guard)
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("server_mod", [b3d_server],
-                         ids=["build123d"])
+@pytest.mark.parametrize("server_mod", [cubit_server],
+                         ids=["cubit"])
 def test_classification_sets_match_registered_tools(server_mod):
     names = _tool_names(server_mod.mcp)
     for set_name in ("_DESTRUCTIVE_TOOLS", "_WRITING_TOOLS", "_WEB_TOOLS"):
@@ -45,18 +45,19 @@ def test_classification_sets_match_registered_tools(server_mod):
             f"to READONLY): {sorted(ghosts)}")
 
 
-@pytest.mark.parametrize("server_mod", [b3d_server],
-                         ids=["build123d"])
+@pytest.mark.parametrize("server_mod", [cubit_server],
+                         ids=["cubit"])
 def test_no_unclassified_tools(server_mod):
     assert server_mod._UNCLASSIFIED_TOOLS == []
 
 
 def test_critical_tools_keep_their_preset():
     """The safety-critical classifications must never drift."""
-    b3d = b3d_server.mcp._tool_manager
-    assert b3d.get_tool("execute_build123d").annotations == ANN_DESTRUCTIVE
-    assert b3d.get_tool("build123d_probe").annotations == ANN_READONLY
-    assert b3d.get_tool("build123d_doctor").annotations == ANN_READONLY
+    cub = cubit_server.mcp._tool_manager
+    assert cub.get_tool("cubit_exec").annotations == ANN_DESTRUCTIVE
+    assert cub.get_tool("cubit_session_shutdown").annotations == ANN_DESTRUCTIVE
+    assert cub.get_tool("cubit_probe").annotations == ANN_READONLY
+    assert cub.get_tool("cubit_doctor").annotations == ANN_READONLY
 
 
 # ---------------------------------------------------------------------------
@@ -64,9 +65,9 @@ def test_critical_tools_keep_their_preset():
 # ---------------------------------------------------------------------------
 
 def test_server_instructions_declared():
-    b3d = b3d_server.mcp.instructions or ""
-    assert "label" in b3d and "build123d_probe" in b3d
-    assert '"kind"' in b3d or "kind=" in b3d
+    cub = cubit_server.mcp.instructions or ""
+    assert "cubit_probe" in cub and "check_vol" in cub.replace("-", "_")
+    assert '"kind"' in cub or "kind=" in cub
 
 
 # ---------------------------------------------------------------------------
@@ -75,8 +76,8 @@ def test_server_instructions_declared():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("module,env", [
-    ("radia_mcp.build123d.server", "RADIA_MCP_BUILD123D_GATES"),
-], ids=["build123d"])
+    ("cubit_mesh_export.mcp.server", "RADIA_MCP_CUBIT_GATES"),
+], ids=["cubit"])
 def test_gate_env_hides_gate_tools(module, env):
     code = (
         "import asyncio, json, sys\n"
