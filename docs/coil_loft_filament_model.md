@@ -1,10 +1,17 @@
-# Rectangular Straight Loft: Prescribed Stream Tubes
+# Rectangular Loft: Prescribed Stream Tubes
 
 `CoilBuilder.to_radia_loft_filaments(nw, nh)` exports straight rectangular
 segments and straight linear rectangular lofts into native `ObjFlmCur` objects.
 The existing solid `to_radia()` API does not silently select this approximation.
 
-For canonical section coordinates a,b in [-1/2,1/2], use
+Positive-angle rectangular arc lofts are also supported, with an explicit
+`n_arc` chord count (default 64). Their centerline and interpolated section
+are sampled on the arc; each chord uses the closed-form straight-filament
+kernel. This is not an analytic curved-filament integral. Refine `n_arc`
+independently of `nw` and `nh`. Radii that let the section reach the arc axis
+and angles outside (0, 360] are rejected before allocation.
+
+For a straight loft and canonical section coordinates a,b in [-1/2,1/2], use
 
     X(a,b,s) = origin + a*w(s)*ex + s*L*ey + b*h(s)*ez
 
@@ -30,10 +37,13 @@ a return path; an open segment is only a source-field contribution.
 - External-field approximation only: individual filaments are singular.
 - Not suitable for internal fields, self-energy, self-force, or Joule loss.
 - No skin effect, proximity effect, or resistance-weighted current model.
-- Arc lofts, arbitrary profiles, and discontinuous joins are rejected.
+- Negative-angle arc lofts, arbitrary profiles, ordinary ArcSegment objects,
+  and discontinuous joins are rejected by this explicit approximation API.
 - Cross-section corners are checked even with a 1x1 sampling grid.
 
 `tests/test_coil_builder_loft_native.py` checks an independent volume integral,
 section convergence at three exterior points, the constant-section solid
 limit, total current, reversal, and pre-allocation rejection. The independent
 test oracle uses Gaussian quadrature; the exported model does not.
+`tests/test_coil_builder_curved_loft.py` additionally checks a curved-volume
+oracle, chord convergence, rigid transforms, and a bend-to-straight join.
