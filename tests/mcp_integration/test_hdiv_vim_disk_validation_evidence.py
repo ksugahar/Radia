@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 
-REPO = Path(__file__).resolve().parents[3]
+REPO = Path(__file__).resolve().parents[2]
 RESULT = (
     REPO
     / "validation_test"

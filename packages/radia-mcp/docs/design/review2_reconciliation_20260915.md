@@ -12,8 +12,33 @@ changed by this maintenance patch.
 | Missing 1.4.54 changes | Added SDK floor, argument binding/validation and restricted reload entries. New scratch-path changes are under Unreleased, not falsely described as published. |
 | Blanket aliases and CBCR | Naming guidance explicitly excludes retired GUI tools; CBCR carries a historical-design notice and no longer claims current production status. Supported headless checkpoint operations remain available. |
 | NumPy in minimal tests | Clarified runtime versus test dependencies. Mandatory runtime remains MCP; scoped CSV tests install NumPy, while minimum-SDK registration/dispatch does not add it. This does not establish all tools work without their optional dependencies. |
-| 29 package tests with monorepo dependencies (review count) | OPEN. MATLAB/policy/validation artifact checks need classification as repository integration tests or conversion to synthetic local fixtures. Static path inspection confirms examples, but no fresh exhaustive count or package-only full-suite acceptance is claimed. Missing coverage must not be closed by adding skips. |
+| 29 package tests with monorepo dependencies (review count) | Boundary refactored against the current main, rather than matching the old count. Repository-dependent tests now run in `tests/mcp_integration`, hybrid modules retain their unit tests, and four package-source paths no longer traverse the monorepo. The separate CI selection and package-only copy probe protect this boundary. See the scope and outstanding native evidence below. |
 | Old S: source | An old checkout alone does not identify any live client. Use the original client's provenance; do not pull/repoint the shared tree based on its name. Integration and live acceptance remain separate. |
 
-Remaining work is the package-test/integration boundary, including the reported
-29 cases. This patch does not claim package-wide completion or a release.
+## Package-test boundary follow-up
+
+- The current diff relocates 37 existing test functions: 36 repository
+  contracts and one native-acceptance check. The SDK metadata/workflow test
+  is split rather than removed. Parameterized cases and new CI-boundary
+  regressions explain why this is not the review's historical count of 29.
+- Repository contracts cover saved field/motor/HDiv evidence, MATLAB/Optuna
+  source manifests, repository MSH assets, Cubit golden scripts, the legacy
+  md2html CLI, and CI policy. Missing required fixtures and Git inventory now
+  fail instead of silently skipping.
+- SDK behavior, MATLAB code generation, policy-string comparisons, Cubit
+  session behavior, md2html conversion and pure force helpers remain package
+  tests. A copy containing only the package executed 89 focused cases on LAB;
+  repository integration executed 45 cases with no skips. These are not a
+  full-package audit or numerical acceptance claim.
+- The native motor-angle source-freshness test was preserved in
+  `validation_test/radia_mcp/test_motor_angle_source_freshness.py`, unchanged
+  in its requirement that recorded hashes match the candidate. It currently
+  fails: the 2026-09-02 MATLAB evidence binds a different `radia_mex.cpp` hash.
+  New native/MATLAB validation evidence is required before claiming current
+  native acceptance. No evidence hash, threshold or native source was changed.
+- CI runs the integration lane independently of the package's optional-import
+  collection filter, then probes the focused package-only copy. A test migration
+  is not permission to drop its failure signal.
+
+This patch closes the identified source-tree coupling, not package-wide
+completion, a release, or the outstanding native-evidence refresh.

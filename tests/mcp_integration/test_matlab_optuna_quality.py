@@ -10,7 +10,7 @@ from radia_mcp.matlab.optuna_quality import (
     matlab_optuna_release_gate,
 )
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_health_uses_distribution_and_upstream_manifests_as_truth(monkeypatch):

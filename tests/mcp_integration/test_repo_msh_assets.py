@@ -16,7 +16,7 @@ import pytest
 
 from radia_mcp.gmsh.msh_inspect import validate_msh
 
-_REPO = Path(__file__).resolve().parents[3]
+_REPO = Path(__file__).resolve().parents[2]
 _LANES = ("docs", "validation_test", "src/radia/panels/samples")
 
 # Known legacy v2.2 assets. Never ADD to this list -- new .msh must be
@@ -27,7 +27,7 @@ _KNOWN_LEGACY = set()
 def _existing_lanes():
     lanes = [_REPO / lane for lane in _LANES if (_REPO / lane).is_dir()]
     if not lanes:
-        pytest.skip("repo durable lanes not present (installed-package run)")
+        pytest.fail("repository integration lane requires durable artifact directories")
     return lanes
 
 
@@ -35,14 +35,14 @@ def _tracked_lane_assets():
     """Return tracked .msh paths only, independent of ignored local assets."""
     try:
         result = subprocess.run(
-            ["git", "ls-files", "--", "*.msh"],
+            ["git", "-c", f"safe.directory={_REPO.as_posix()}", "ls-files", "--", "*.msh"],
             cwd=_REPO,
             check=True,
             capture_output=True,
             text=True,
         )
-    except (OSError, subprocess.CalledProcessError):
-        return None
+    except (OSError, subprocess.CalledProcessError) as exc:
+        pytest.fail(f"required tracked-file inventory unavailable: {exc}")
     lane_prefixes = tuple(f"{lane}/" for lane in _LANES)
     return {
         rel.replace("\\", "/")
@@ -54,8 +54,7 @@ def _tracked_lane_assets():
 def test_durable_lane_msh_assets_are_structurally_sound():
     _existing_lanes()
     tracked = _tracked_lane_assets()
-    if tracked is None:
-        pytest.skip("git tracked-file inventory unavailable")
+    assert tracked, "expected committed MSH assets in the repository durable lanes"
     unexpected = []
     for rel in sorted(tracked):
         result = validate_msh(_REPO / rel)
@@ -72,8 +71,6 @@ def test_durable_lane_msh_assets_are_structurally_sound():
 def test_known_legacy_allowlist_only_shrinks():
     _existing_lanes()
     tracked = _tracked_lane_assets()
-    if tracked is None:
-        pytest.skip("git tracked-file inventory unavailable")
     stale_entries = []
     for rel in sorted(_KNOWN_LEGACY):
         if rel not in tracked:

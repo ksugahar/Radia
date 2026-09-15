@@ -25,12 +25,34 @@ on:
     paths:
       - "packages/radia-mcp/**"
       - "tests/mcp_server/**"
+      - "tests/mcp_integration/**"
+      - "matlab/**"
+      - "src/matlab/**"
+      - "validation_test/**"
+      - "packages/radia-optuna/**"
+      - ".agents/skills/md2html/**"
+      - "AGENTS.md"
+      - "CLAUDE.md"
+      - "README.md"
+      - "docs/**/*.msh"
+      - "src/radia/panels/samples/**/*.msh"
       - ".github/workflows/radia-mcp-matrix.yml"
   pull_request:
     branches: [main]
     paths:
       - "packages/radia-mcp/**"
       - "tests/mcp_server/**"
+      - "tests/mcp_integration/**"
+      - "matlab/**"
+      - "src/matlab/**"
+      - "validation_test/**"
+      - "packages/radia-optuna/**"
+      - ".agents/skills/md2html/**"
+      - "AGENTS.md"
+      - "CLAUDE.md"
+      - "README.md"
+      - "docs/**/*.msh"
+      - "src/radia/panels/samples/**/*.msh"
       - ".github/workflows/radia-mcp-matrix.yml"
   workflow_dispatch:
 
@@ -378,6 +400,35 @@ jobs:
                   sys.executable, "-m", "pytest", "tests/mcp_server", "-q"
               ], env=env).returncode)
           print("Skipped: no tests/mcp_server change in the impact plan")
+          PY
+
+      - name: Run selected repository integration contracts
+        if: matrix.python-version == '3.12' && needs.scope.outputs.run_tests == 'true'
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+          import sys
+
+          plan = json.loads(Path("radia-mcp-ci-selection.json").read_text(encoding="utf-8"))
+          targets = plan["integration_tests"]
+          if targets:
+              subprocess.run([sys.executable, "-m", "pip", "install", "markdown"], check=True)
+              env = os.environ.copy()
+              env.pop("RADIA_MCP_CI_SELECTION_JSON", None)
+              env["PYTHONPATH"] = str(Path("packages/radia-mcp/src").resolve())
+              subprocess.run([
+                  sys.executable, "-m", "pytest", "-v", "-ra",
+                  "--confcutdir=tests/mcp_integration", *targets,
+              ], env=env, check=True)
+              subprocess.run([
+                  sys.executable, "packages/radia-mcp/tools/check_package_test_boundary.py"
+              ], env=env, check=True)
+              raise SystemExit(0)
+          print("No repository integration contracts affected")
           PY
 
       - name: Upload impact-scoped test plan

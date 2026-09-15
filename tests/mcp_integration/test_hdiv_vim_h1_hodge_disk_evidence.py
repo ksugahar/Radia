@@ -6,7 +6,7 @@ from radia_mcp.radia_ngsolve.knowledge.hdiv_vim import (
 )
 
 
-REPO = Path(__file__).resolve().parents[3]
+REPO = Path(__file__).resolve().parents[2]
 RESULT = (
     REPO
     / "validation_test"
