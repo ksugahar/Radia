@@ -47,3 +47,17 @@ limit, total current, reversal, and pre-allocation rejection. The independent
 test oracle uses Gaussian quadrature; the exported model does not.
 `tests/test_coil_builder_curved_loft.py` additionally checks a curved-volume
 oracle, chord convergence, rigid transforms, and a bend-to-straight join.
+
+## CAD Export
+
+Rectangular straight lofts use centered endpoint wires. Rectangular arc
+lofts use interpolated section wires on the same circular centerline and
+linearly varying dimensions as the current model. The curved CAD sides
+are approximations: refine the segment's `n_sub` independently of field
+sampling and check geometry convergence. CAD accepts `0 < angle < 360`,
+positive dimensions, a clear inner radius, and `n_sub >= 4`; negative and
+closed bends remain unsupported. This does not change the native-solid
+restrictions of `to_radia()`.
+
+`tests/test_coil_builder_loft_cad.py` checks analytic volume, refinement,
+rigid poses, STEP round trips and unsupported-geometry rejection.

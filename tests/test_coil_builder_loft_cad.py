@@ -31,3 +31,36 @@ def test_straight_loft_cad_matches_current_tube(angles, tmp_path):
     box=recovered.bounding_box
     np.testing.assert_allclose([[box[i][j] for j in range(3)] for i in range(2)],
                                expected,rtol=0,atol=1e-5)
+
+
+@pytest.mark.parametrize('angles', [[0,0,0],[23,41,-17]])
+def test_arc_loft_cad_volume_convergence_and_step(angles, tmp_path):
+    from netgen.occ import OCCGeometry
+    rotation=Rotation.from_euler('xyz',angles,degrees=True).as_matrix()
+    coil=CoilBuilder(100).set_start([3,-7,9],rotation.T).set_cross_section(4,6)
+    coil.add_loft_arc(RectProfile(8,10),20,90)
+    segment=coil.segments[0]
+    # Integral of R * angle * w(s) * h(s), centered radial section.
+    exact=20*np.pi/2*(24+20+16/3)
+    errors=[]
+    for count in [8,16,32]:
+        segment.n_sub=count
+        shape=segment.to_occ_shape()
+        assert len(shape.solids)==1
+        errors.append(abs(shape.mass/exact-1))
+    assert errors[-1]<1e-5
+    assert errors[-1]<errors[0]
+    path=tmp_path/'arc_loft.step'
+    shape.WriteStep(str(path))
+    recovered=OCCGeometry(str(path)).shape
+    assert len(recovered.solids)==1
+    assert recovered.mass==pytest.approx(shape.mass,rel=1e-8)
+
+
+@pytest.mark.parametrize('radius,angle,count', [(4,90,20),(20,-90,20),
+                                               (20,360,20),(20,90,3)])
+def test_arc_loft_cad_rejects_unsupported_geometry(radius,angle,count):
+    coil=CoilBuilder(100).set_cross_section(4,6)
+    coil.add_loft_arc(RectProfile(8,10),radius,angle,n_sub=count)
+    with pytest.raises(ValueError):
+        coil.segments[0].to_occ_shape()
