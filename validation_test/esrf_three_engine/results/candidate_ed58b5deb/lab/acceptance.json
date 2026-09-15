@@ -1,0 +1,60 @@
+{
+  "wheel_sha256": "819389941b4e48f11d91a23ccc5b4d31378c027290b7ff484a9562d4b27562af",
+  "native_sha256": "9174b12f02e0f156de72eb6bb659f85d53c604bd58c0f1a121c1a0c6341b76d3",
+  "source_commit": "ed58b5debb96efd3d4dc5df95ac6a5cd4056a987",
+  "ci_run": 34942185100,
+  "import_path": "C:\\temp\\radia5-acceptance-venv-20260915\\Lib\\site-packages\\radia",
+  "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+  "sources_verified": 303,
+  "version": "5.0.0",
+  "steps": [
+    {
+      "name": "pip-check",
+      "command": [
+        "C:\\temp\\radia5-acceptance-venv-20260915\\Scripts\\python.exe",
+        "-m",
+        "pip",
+        "check"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "full6",
+      "command": [
+        "C:\\temp\\radia5-acceptance-venv-20260915\\Scripts\\python.exe",
+        "-I",
+        "C:\\temp\\radia5-candidate-artifacts-20260915\\ed58-acceptance\\hdiv_newton_native_smoke_strong.py",
+        "--drive",
+        "300000",
+        "--output",
+        "C:\\temp\\radia5-candidate-artifacts-20260915\\ed58-acceptance\\full6.json"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "focused",
+      "command": [
+        "C:\\temp\\radia5-acceptance-venv-20260915\\Scripts\\python.exe",
+        "-I",
+        "-m",
+        "pytest",
+        "-q",
+        "C:\\temp\\radia5-candidate-artifacts-20260915\\ed58-acceptance\\validation_test\\feec",
+        "--junitxml",
+        "C:\\temp\\radia5-candidate-artifacts-20260915\\ed58-acceptance\\focused.xml"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "pip-freeze",
+      "command": [
+        "C:\\temp\\radia5-acceptance-venv-20260915\\Scripts\\python.exe",
+        "-m",
+        "pip",
+        "freeze"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "passed": true
+}

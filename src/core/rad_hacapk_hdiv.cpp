@@ -9492,6 +9492,10 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     // Preconditioned conjugate gradients (SPD system; M^{-1} = mass Riesz or 1/prec diagonal Jacobi).
     std::vector<double> rhs_projected = rhs;
     project(rhs_projected);
+    double bnorm = dot(rhs_projected, rhs_projected);
+    if (!std::isfinite(bnorm) || bnorm < 0.0)
+        throw std::runtime_error("SolveLinearMaterial: non-finite right-hand side norm");
+    bnorm = std::sqrt(bnorm); if (bnorm == 0.0) bnorm = 1.0;
     std::vector<double> x((size_t)n_face, 0.0), r = rhs_projected, z((size_t)n_face), p((size_t)n_face), Ap;
     if (x0) {
         if ((int)x0->size() != n_face)
@@ -9504,9 +9508,6 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     applyPrec(r, z);
     p = z;
     double rz = dot(r, z);
-    double bnorm = dot(rhs_projected, rhs_projected);
-    bnorm = std::sqrt(bnorm); if (bnorm == 0.0) bnorm = 1.0;
-    constexpr int residual_refresh_period = 1000;
     auto recomputeResidual = [&]() {
         applyA(x, Ap);
         ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) {
@@ -9555,17 +9556,13 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
         double alpha = rz / pAp;
         const auto tu0 = Clock::now();
         ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { x[f] += alpha * p[f]; r[f] -= alpha * Ap[f]; });
-        const bool refresh = ((it + 1) % residual_refresh_period) == 0;
-        if (refresh) recomputeResidual();
         applyPrec(r, z);
         double rz_new = dot(r, z);
-        if (refresh) {
-            p = z;
-        }
-        else {
-            double beta = rz_new / rz;
-            ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { p[f] = z[f] + beta * p[f]; });
-        }
+        // Retain conjugacy until a convergence candidate requires a true-
+        // residual check above. Unconditional periodic restarts can prevent
+        // ill-conditioned SPD systems from converging within the same budget.
+        double beta = rz_new / rz;
+        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { p[f] = z[f] + beta * p[f]; });
         project(x); project(r); project(p);
         m_lastSolveTiming.pcg_update_s += elapsed(tu0, Clock::now());
         rz = rz_new;
@@ -9579,7 +9576,10 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
         // Only the ran-out-of-iterations exit needs an extra apply; the
         // converged exit already recomputed the true residual below.
         recomputeResidual();
-        final_true_rnorm = std::sqrt(std::max(0.0, dot(r, r)));
+        const double final_squared_norm = dot(r, r);
+        if (!std::isfinite(final_squared_norm) || final_squared_norm < 0.0)
+            throw std::runtime_error("SolveLinearMaterial: non-finite residual norm");
+        final_true_rnorm = std::sqrt(final_squared_norm);
     }
     m_lastSolveTiming.final_relative_residual = final_true_rnorm / bnorm;
     m_lastSolveTiming.converged =

@@ -1,0 +1,12 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-9.0.2, pluggy-1.6.0
+rootdir: S:\Radia\release-quad\radia-5.0.0-20260915
+configfile: pyproject.toml
+plugins: anyio-4.13.0, cov-7.0.0, rerunfailures-16.2
+collected 63 items / 57 deselected / 6 selected
+
+validation_test\feec\test_wedge_frozen_pcg.py .                          [ 16%]
+tests\feec\test_hdiv_jacobi_diagonal_fail_loud.py ..                     [ 50%]
+tests\test_isochronous_topopt.py ...                                     [100%]
+
+====================== 6 passed, 57 deselected in 8.77s =======================

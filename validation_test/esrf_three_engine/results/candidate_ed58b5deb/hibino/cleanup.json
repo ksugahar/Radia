@@ -1,0 +1,11 @@
+{
+  "host_name": "HIBINO",
+  "deleted": [
+    "C:\\temp\\hdiv-pcg-ed58-20260915",
+    "C:\\temp\\hdiv-pcg-ed58-20260915-recovery.tar.gz"
+  ],
+  "verified_absent": true,
+  "recovery_sha256": "2be9b3518c3c9bc6a9d566ebf90c5310000ac885bef06cecf5752dbd54ea9a65",
+  "evidence_commit": "875ab988d",
+  "utc": "2026-09-15T07:53:43.6345788Z"
+}

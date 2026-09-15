@@ -177,13 +177,28 @@ def _legacy_contract(payload: dict[str, object]) -> dict[str, object]:
     return contract
 
 
-def _is_converged_result(diagnostics: dict[str, object]) -> bool:
-    if diagnostics.get("nonlinear") is False:
-        return True
+def _is_converged_result(
+    diagnostics: dict[str, object], engine: str | None = None,
+    expected_nonlinear: bool | None = None,
+) -> bool:
+    if expected_nonlinear is not None and diagnostics.get("nonlinear") is not expected_nonlinear:
+        return False
     stats = dict(diagnostics.get("nonlinear_stats") or {})
+    hdiv_stats = any(key.startswith("nonlinear_") for key in stats)
+    if engine not in (None, "hdiv_mmm", "reduced_a", "mixed_total_reduced_omega"):
+        return False
+    if engine in ("reduced_a", "mixed_total_reduced_omega") and hdiv_stats:
+        return False
+    if diagnostics.get("nonlinear") is False:
+        return not stats
     if stats.get("converged") is not True:
         return False
     mode = stats.get("nonlinear_convergence_mode")
+    # HDiv needs its residual-based contract; cumulative backtracks cannot
+    # distinguish accepted iterations from an exhausted individual search.
+    is_hdiv = engine == "hdiv_mmm" or hdiv_stats
+    if is_hdiv and mode is None:
+        return False
     if stats.get("nonlinear_line_search_exhausted") or (mode is not None and mode != "tolerance"):
         return False
     if mode is not None:
@@ -194,10 +209,6 @@ def _is_converged_result(diagnostics: dict[str, object]) -> bool:
                 or not np.isfinite(residual) or not np.isfinite(tolerance)
                 or tolerance <= 0 or not 0 <= residual <= tolerance):
             return False
-    # Legacy HDiv checkpoints could accept a tiny, never-approved Armijo step.
-    # Aggregate backtracks alone are not evidence of failure in the new solver.
-    if mode is None and int(stats.get("nonlinear_line_search_backtracks", 0)) >= 33:
-        return False
     return True
 
 
@@ -221,7 +232,7 @@ def _read_checkpoint(path: Path, contract: dict[str, object]):
     if stored != contract:
         raise RuntimeError(f"checkpoint contract changed: remove {path}")
     diagnostics = dict(payload["diagnostics"])
-    if not _is_converged_result(diagnostics):
+    if not _is_converged_result(diagnostics, contract.get("engine"), contract.get("nonlinear")):
         raise RuntimeError(
             f"checkpoint holds a non-converged solve and is not a result: remove {path}")
     count = (len(contract["observation_points_m"])
@@ -233,7 +244,7 @@ def _write_checkpoint(
     path: Path, contract: dict[str, object], field: np.ndarray,
     diagnostics: dict[str, object], provenance: dict[str, object],
 ) -> None:
-    if not _is_converged_result(diagnostics):
+    if not _is_converged_result(diagnostics, contract.get("engine"), contract.get("nonlinear")):
         raise RuntimeError(
             "refusing to write a non-converged solve as a result checkpoint")
     count = (len(contract["observation_points_m"])
@@ -432,7 +443,7 @@ def main(argv: list[str] | None = None) -> int:
                         help="Mixed Omega volume/interface assembly bonus")
     parser.add_argument("--mixed-exact-exterior-source", action="store_true",
                         help="Use exact Kelvin-pulled source instead of projected exterior trace")
-    parser.add_argument("--relative-rms-tolerance", type=float, default=0.03)
+    parser.add_argument("--relative-rms-tolerance", type=float, default=0.01)
     parser.add_argument("--observation-half-width", type=float, default=2.0e-5)
     parser.add_argument("--threads", type=int, default=0)
     parser.add_argument("--resume", action="store_true")
@@ -522,6 +533,7 @@ def main(argv: list[str] | None = None) -> int:
         fem_order=int(options.fem_order),
         hdiv_gram_eps=float(options.hdiv_gram_eps),
         hdiv_image=options.hdiv_image,
+        nonlinear=True,
         nonlinear_tolerance=float(options.nonlinear_tolerance),
         observation_points_m=points.tolist(),
         observation_half_width_m=float(options.observation_half_width),
@@ -685,7 +697,7 @@ def main(argv: list[str] | None = None) -> int:
                 int(state.get("resumed_iterations", 0)) + int(state["iterations"]))
             stats["warm_start_state"] = str(state_path)
             diagnostics[name]["nonlinear_stats"] = stats
-        if not _is_converged_result(diagnostics[name]):
+        if not _is_converged_result(diagnostics[name], name, common["nonlinear"]):
             if state_key is not None and state_key in stats:
                 _write_state(state_path, contract, _picard_state(name, stats, state_key),
                              provenance(name))
@@ -713,7 +725,8 @@ def main(argv: list[str] | None = None) -> int:
     raw_pairs = _pairwise(fields, all_points)
     core_pairs, maximum_core_relative_rms, fields_agree = _comparison_gate(
         fields, core, options.relative_rms_tolerance)
-    nonlinear_converged = all(_is_converged_result(row) for row in diagnostics.values())
+    nonlinear_converged = all(
+        _is_converged_result(row, name, common["nonlinear"]) for name, row in diagnostics.items())
     passed = nonlinear_converged and fields_agree
     result = {
         "schema": "radia.validation.esrf-coil-yoke-three-engine.v2",

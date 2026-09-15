@@ -1,0 +1,22 @@
+colorama==0.4.6
+iniconfig==2.3.0
+intel-cmplr-lib-rt==2026.1.2
+intel-cmplr-lib-ur==2026.1.2
+intel-openmp==2026.1.2
+mkl==2026.1.0
+netgen-mesher==6.2.2606
+netgen_occt==7.8.1
+ngsolve==6.2.2606
+ngsolve_openblas==0.3.33
+numpy==2.5.3
+onemkl-license==2026.1.0
+packaging==26.3
+pluggy==1.6.0
+Pygments==2.21.0
+pytest==9.0.2
+radia @ file:///C:/temp/hdiv-pcg-ed58-20260915/radia-5.0.0-cp312-cp312-win_amd64.whl#sha256=819389941b4e48f11d91a23ccc5b4d31378c027290b7ff484a9562d4b27562af
+scipy==1.18.1
+tbb==2023.1.0
+tcmlib==1.5.0
+threadpoolctl==3.6.0
+umf==1.1.0

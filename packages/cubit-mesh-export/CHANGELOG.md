@@ -4,6 +4,13 @@ All notable changes to `cubit-mesh-export` — the high-order curved
 mesh export package for Coreform Cubit (Netgen / GMSH / Nastran /
 VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
+## 1.0.1 - Radia 5 compatibility
+
+- Extend the reciprocal Radia compatibility declaration through exactly
+  5.0.0. No export implementation, native source, command or label contract
+  changes from 1.0.0. Combined installed-wheel and export/check-vol acceptance
+  remains a release gate; changing a version bound alone is not validation.
+
 ## 1.0.0 - Stable standalone mesh export
 
 - Standalone wheel acceptance passed on LAB without Radia or radia-mcp:

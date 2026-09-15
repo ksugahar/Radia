@@ -1,6 +1,7 @@
 {
   "schema": "radia.test-tier-manifest.v1",
   "impact_rules": {
+    "validation_test/esrf_three_engine/run_hybrid_undulator_three_engine.py": ["tests/test_three_engine_agreement_gate.py"],
     "src/radia/vim/_nonlinear.py": ["tests/test_hdiv_energy_material_consistency.py", "tests/test_hdiv_bh_table_saturation_contract.py"],
     "src/radia/panels/samples/em_sample_bh.txt": ["tests/test_hdiv_bh_table_saturation_contract.py"],
     "validation_test/feec/bh_saturation_audit.py": ["tests/test_hdiv_bh_table_saturation_contract.py"],
@@ -46,6 +47,7 @@
       "description": "Pure source, policy, package, and public-notebook contracts for every push.",
       "max_elapsed_seconds": 60,
       "paths": [
+        "tests/test_three_engine_agreement_gate.py",
         "tests/test_ci_execution_policy.py",
         "tests/test_omega_quadrature_plateau.py",
         "tests/test_esrf6_repaired_acceptance_record.py",
@@ -56,6 +58,7 @@
         "tests/test_run_test_tier.py",
         "tests/test_docs_notebook_contract.py",
         "tests/test_release_workflow_ref_gate.py",
+        "tests/test_radia_promotion_gate.py",
         "tests/test_wheel_package_policy.py",
         "tests/test_application_interface_manifest.py",
         "tests/axifem/test_docs_notebook_evidence.py"

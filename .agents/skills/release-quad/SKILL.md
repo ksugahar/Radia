@@ -119,6 +119,22 @@ tier to that tree.
 
 ## Rules
 
+### Radia Exact-Artifact Publication Hold
+
+Radia tag builds do not automatically publish to PyPI. After a successful
+exact-tag native CI run, download that run's wheel and accept those exact bytes
+on LAB and hibino. Commit both host `acceptance.json`, `full6.json`, and
+`focused.xml` records under
+`validation_test/esrf_three_engine/results/candidate_<source-sha-first-9>/`
+and merge the evidence to main. Then dispatch the `Release` workflow on main
+with `ci_run_id`, `wheel_sha256`, and the full `acceptance_commit` SHA.
+The read-only gate verifies the GitHub run, immutable tag context, current
+peeled tag, main-reachable evidence, both host contracts and wheel/native hashes.
+Only the verified artifact is promoted, without rebuilding; a changed wheel
+requires new acceptance. This gate does not replace the four-host QUAD done
+or Simulink publication requirements. Never use an earlier candidate's evidence
+for a rebuilt tag artifact.
+
 ### Preserve An Approved MCP Development Source
 
 MCP may have a separately approved development package root. Before deployment,
