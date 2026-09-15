@@ -7180,6 +7180,15 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHexPairDuffy(
     }
     (void)nsub;
     for (size_t k = 0; k < blk.size(); ++k) blk[k] = (blk[k] + comp[k]) * RAD_INV_FOUR_PI;
+    if (directional && kindT == kindS && hT == hS) {
+        // Preserve the public self-derivative's exact symmetry contract;
+        // opposite directed entries differ only in floating-point summation.
+        for (int i = 0; i < nT; ++i)
+            for (int j = i + 1; j < nT; ++j) {
+                const double value = 0.5*(blk[(size_t)i*nT+j] + blk[(size_t)j*nT+i]);
+                blk[(size_t)i*nT+j] = blk[(size_t)j*nT+i] = value;
+            }
+    }
     return blk;
 }
 
