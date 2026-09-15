@@ -21,6 +21,8 @@ p.add_argument('--output', type=Path, required=True)
 p.add_argument('--threads', type=int, default=4)
 p.add_argument('--preconditioner', default='auto')
 p.add_argument('--spectrum', action='store_true')
+p.add_argument('--frozen-system', type=Path)
+p.add_argument('--fixed-state', type=Path)
 a = p.parse_args()
 ng.SetNumThreads(a.threads)
 native = Path(radia.__file__).parent / '_radia_pybind.pyd'
@@ -92,14 +94,36 @@ except Exception as exc:
             action = w @ x + outer['_N_apply'](x)
         rhs = np.asarray(inner['rhs'])
         report['inner_true_relative_residual'] = float(np.linalg.norm(rhs-action)/np.linalg.norm(rhs))
-        if a.spectrum:
+        if a.spectrum or a.frozen_system:
             if len(x) > 500:
                 raise ValueError('Dense diagnostic limited to 500 unknowns')
             from scipy.linalg import eigvalsh
             with ng.TaskManager():
                 eye = np.eye(len(x))
                 demag = np.column_stack([outer['_N_apply'](eye[:,i]) for i in range(len(x))])
+            material_m = np.asarray(outer['m'])
+            if a.fixed_state:
+                fixed = np.load(a.fixed_state, allow_pickle=False)
+                material_m = fixed['material_m']
+                if material_m.shape != (len(x),):
+                    raise ValueError('Fixed material state dimension mismatch')
+                with ng.TaskManager():
+                    outer['material'].update(material_m)
+                    matrix = outer['_W_matrix'](outer['material'].tangent, tensor=True)
+                    ri,ci,vi = matrix.COO()
+                    w = coo_matrix((vi,(ri,ci)),shape=(len(x),len(x))).tocsr()
+                    rhs = outer['rhs_stage']-outer['_bH'](outer['material'].field)-outer['_N_apply'](material_m)
+                report['fixed_state_sha256'] = hashlib.sha256(a.fixed_state.read_bytes()).hexdigest()
             system = w.toarray() + demag
+            if a.frozen_system:
+                np.savez_compressed(a.frozen_system, W=w.toarray(), N=demag,
+                                    rhs=rhs, returned_x=x,
+                                    material_m=material_m,
+                                    applied_rhs=np.asarray(outer['rhs_stage']),
+                                    initial_x=np.zeros_like(x) if inner.get('x0') is None else np.asarray(inner['x0']))
+                report['frozen_system_artifact'] = dict(path=str(a.frozen_system),
+                    sha256=hashlib.sha256(a.frozen_system.read_bytes()).hexdigest(),
+                    initial_state='zero' if inner.get('x0') is None else 'explicit')
             symmetric = (system + system.T)*0.5
             diagonal = np.diag(symmetric)
             report['frozen_system'] = dict(
