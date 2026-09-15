@@ -108,6 +108,11 @@ assemblyOptions = readAssemblyOptions(block);
 geometryFiles = [wpPath; coilPath];
 if isfield(assemblyOptions,"axisymmetric_thermal_vol") && strlength(string(assemblyOptions.axisymmetric_thermal_vol)) > 0
     thermalPath=string(assemblyOptions.axisymmetric_thermal_vol);
+    if ~java.io.File(char(thermalPath)).isAbsolute()
+        error("radia:simulink:IHGeometryUpdateRelativePath", ...
+            "Geometry Update requires an ABSOLUTE axisymmetric_thermal_vol path; got: %s", ...
+            thermalPath);
+    end
     if ~isfile(thermalPath)
         error("radia:simulink:IHAxisymmetricMesh","Thermal mesh does not exist: %s",thermalPath);
     end
