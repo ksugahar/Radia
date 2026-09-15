@@ -18,6 +18,9 @@ struct ThermalState {
 };
 
 struct ThermalStepOptions {
+    // Empty means nodal temperatures; otherwise this is the FE representation
+    // of the constant function one (higher-order coefficients are not kelvin).
+    std::vector<double> constant_coefficients;
     double dt_s = 0.0;
     double conductivity_scale = 1.0;
     double convection_W_per_m2K = 0.0;

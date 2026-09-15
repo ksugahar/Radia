@@ -1,0 +1,210 @@
+{
+  "matlab_version": "26.1.0.3276743 (R2026a) Update 3",
+  "passed": true,
+  "tests": [
+    {
+      "name": "test_native_ih_sfun_integration/testHeatRaisesTemperature",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_native_ih_sfun_integration/testEddyAngleRotatesHeatInWorkpieceCoordinates",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_native_ih_sfun_integration/testRotationTransportConservesWeightedEnergy",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_native_ih_sfun_integration/testThermalStateFeedsTemperatureDependentEddy",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_native_ih_sfun_integration/testConfigSupportsDistinctHeatAndTemperatureSpaces",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_native_ih_sfun_integration/testConfigRejectsNonlinearAndInvalidCSR",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_native_ih_sfun_integration/testMatAndJsonConfigLoaders",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_native_ih_sfun_integration/testSingularEddyFailsAndFreshLifecycleRecovers",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testRebuildOnFirstRunSkipWhenFreshRebuildOnChange",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testCrossedBoxesRepairedAndInitFcnInstalled",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testBrowseButtonsAreRegisteredBesideGeometryFields",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testMaskPublishesBuiltInAssemblySettings",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testBrowseAssignsAbsoluteWorkpieceAndCoilPaths",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testBrowseCancelLeavesPathUnchanged",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testBrowseAcceptsCompressedWorkpieceAndMeshedCoil",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testBrowseRejectsWrongExtension",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testBrowseRejectsMissingFile",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testBrowseRejectsUnknownRole",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testStaleWithAutoOffErrors",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testForceRebuildOverridesAutoOff",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testSameContentAtNewPathRebuildsForProvenance",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testMatlabAssembleFcnRebuilds",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testBlankConfigIsDerivedAndPhysicalChangeRebuilds",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testAmbiguousAssemblerErrors",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testRelativePathsError",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testRelativeAxisymmetricMeshPathErrors",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testCorruptSidecarRecoversByRebuilding",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testFreshSkipsReloadUntilConfigContentChanges",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testDirectConfigureInvalidatesGeometryRevision",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testUnconfiguredBlockIsInert",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_geometry_update/testTwoStepInputsError",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_coefficient_temperature/testConstantAmbientDoesNotHeatModalCoefficients",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_coefficient_temperature/testCoefficientTransientMatchesIndependentSolve",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_ih_coefficient_temperature/testModalRotationAndMissingEvaluationFail",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    }
+  ]
+}

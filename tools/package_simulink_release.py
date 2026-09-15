@@ -71,6 +71,7 @@ PACKAGE_FILES = (
     "+radia/+simulink/ihEddySFunction.m",
     "+radia/+simulink/ihThermalSFunction.m",
     "+radia/+simulink/ihMonitorSFunction.m",
+    "+radia/+simulink/ihTemperatureStatistics.m",
     "+radia/+simulink/loadIHNativeConfig.m",
     "+radia/+simulink/makeIHNativeConfig.m",
     "+radia/+simulink/makeMonitorHeaderBusObject.m",

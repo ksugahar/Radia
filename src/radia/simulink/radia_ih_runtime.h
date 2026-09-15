@@ -20,6 +20,7 @@ struct EddyConfig {
     std::vector<double> heat_projection;
     std::vector<double> heat_weights;
     std::vector<double> temperature_weights;
+    std::vector<double> constant_coefficients;
     bool periodic_rotation = false;
     double angle_origin_rad = 0.0;
 };

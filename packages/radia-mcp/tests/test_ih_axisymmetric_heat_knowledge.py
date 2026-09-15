@@ -84,3 +84,14 @@ def test_ih_thermal_knowledge_prefers_axisym_and_audits_3d_handoff():
     assert "default is 128 azimuth samples" in normalized
     assert "``qsurf_projection``" in thermal
     assert "no zero-flux fallback" in normalized
+
+
+def test_ih_reciprocity_and_heat_manual_does_not_certify_old_approximations():
+    text = get_induction_heating_documentation("all")
+    assert "complete-SIBC-reciprocity" in text
+    assert "solved-total-field-lumped-P1" in text
+    assert "validate_ih_sibc_closure.py" in text
+    assert "This restriction is on the EM BEM basis" in text
+    assert "heat-pattern fallback" not in text or "No fallback" in text
+    assert "delta_L keeps the plain-solve phi convention" not in text
+    assert "genus >= 1 skips keep" not in text

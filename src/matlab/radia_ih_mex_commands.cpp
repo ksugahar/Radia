@@ -229,6 +229,16 @@ radia::ih::EddyConfig eddy_config(const mxArray* config) {
         field(config, "temperature_cell_weights"),
         "temperature_cell_weights",
         static_cast<std::size_t>(result.n_temperature));
+    if (field(config, "temperature_constant_coefficients")) {
+        require_choice(text_value(field(config, "temperature_representation"), "temperature_representation"),
+                       {"ngsolve-h1-coefficients"}, "temperature_representation");
+        result.constant_coefficients = row_major_numbers(
+            field(config, "temperature_constant_coefficients"),
+            "temperature_constant_coefficients", static_cast<std::size_t>(result.n_temperature));
+    } else if (field(config, "temperature_representation")) {
+        require_choice(text_value(field(config, "temperature_representation"), "temperature_representation"),
+                       {"nodal-kelvin"}, "temperature_representation");
+    }
     result.periodic_rotation = periodic_rotation(config);
     result.angle_origin_rad = scalar(field(config, "angle_origin_rad"),
                                      "angle_origin_rad", 0.0, true);
@@ -269,6 +279,16 @@ radia::ih::ThermalConfig thermal_config(const mxArray* config) {
         static_cast<std::size_t>(n) * result.n_heat);
     result.options.dt_s =
         scalar(field(config, "sample_time_s"), "sample_time_s");
+    if (field(config, "temperature_constant_coefficients")) {
+        require_choice(text_value(field(config, "temperature_representation"), "temperature_representation"),
+                       {"ngsolve-h1-coefficients"}, "temperature_representation");
+        result.options.constant_coefficients = row_major_numbers(
+            field(config, "temperature_constant_coefficients"),
+            "temperature_constant_coefficients", static_cast<std::size_t>(n));
+    } else if (field(config, "temperature_representation")) {
+        require_choice(text_value(field(config, "temperature_representation"), "temperature_representation"),
+                       {"nodal-kelvin"}, "temperature_representation");
+    }
     result.options.tolerance = scalar(field(config, "thermal_tolerance"),
                                       "thermal_tolerance", 1.0e-10, true);
     result.options.max_iterations = positive_integer(
