@@ -23,12 +23,15 @@ def test_mcp_sdk_dependency_declares_supported_floor():
         (PACKAGE_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     )
     assert SDK_REQUIREMENT in project["project"]["dependencies"]
+    from packaging.requirements import Requirement
+    names = {Requirement(item).name for item in project['project']['dependencies']}
+    assert not {'cae-mcp-core', 'cubit-mesh-export', 'radia'}.intersection(names)
 
 
 
 def test_supported_sdk_registers_metadata_lists_schema_and_calls_tool():
     from mcp.server.fastmcp import FastMCP
-    from cae_mcp_core.common.server_hardening import ANN_READONLY
+    from radia_mcp.common.server_hardening import ANN_READONLY
 
     expected = os.environ.get("RADIA_MCP_EXPECTED_SDK")
     if expected:

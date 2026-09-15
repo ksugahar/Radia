@@ -13,7 +13,7 @@ Why bother:
     cancel if needed.
 
 Usage:
-    from cae_mcp_core.common import AsyncRunner
+    from radia_mcp.common import AsyncRunner
 
     runner = AsyncRunner()
 

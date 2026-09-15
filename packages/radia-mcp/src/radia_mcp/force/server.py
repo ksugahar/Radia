@@ -17,9 +17,9 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from cae_mcp_core.common import register_status_tool, register_topics_tool
-from cae_mcp_core.common.tool_group import CoarseToolRegistry
-from cae_mcp_core.common.lazy_call import lazy_callable
+from radia_mcp.common import register_status_tool, register_topics_tool
+from radia_mcp.common.tool_group import CoarseToolRegistry
+from radia_mcp.common.lazy_call import lazy_callable
 _method_selection_gate = lazy_callable(".gates", "electromagnetic_force_method_selection_gate", __package__)
 _action_reaction_gate = lazy_callable(".gates", "force_action_reaction_gate", __package__)
 _method_agreement_gate = lazy_callable(".gates", "force_torque_method_agreement_gate", __package__)

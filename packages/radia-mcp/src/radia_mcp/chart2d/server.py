@@ -31,7 +31,7 @@ from typing import Any, Literal, Optional
 
 from mcp.server.fastmcp import FastMCP, Image
 
-from cae_mcp_core.common import register_status_tool
+from radia_mcp.common import register_status_tool
 from . import _charts as _ch
 from . import _render as _rd
 from . import _recipe as _rc

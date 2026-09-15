@@ -1,43 +1,48 @@
-"""Scraped example library for build123d + Cubit.
+"""build123d/Gmsh example providers owned by this distribution."""
 
-Two sources, two layouts:
-
-* **build123d** — GitHub `gumyr/build123d/examples/` (~65 curated Python
-  files).  Listing via `api.github.com/repos/.../contents/examples`,
-  bodies via `raw.githubusercontent.com`.  One cache file per example.
-
-* **cubit** — Coreform forum (`forum.coreform.com`, Discourse).  Posts
-  tagged / matching `tutorial example mesh` are fetched (JSON API),
-  markdown code fences (```...```) are extracted as individual snippets.
-  Each post becomes one "example" (metadata + concatenated code).
-
-Both layouts serialize to `<state_dir>/examples/{source}/`:
-  - `index.json` — list of `{name, title, url, code_path, tokens, token_set}`
-  - `<name>.py` / `<name>.jou` — the actual code
-
-The tf-idf retrieval machinery (`search_examples`) is shared with the
-lookup tools — same scoring / heading-boost approach.
-"""
 
 from __future__ import annotations
 
+
 import hashlib
+
+
 import json
+
+
 import math
+
+
 import re
+
+
 import time
+
+
 import urllib.error
+
+
 import urllib.parse
+
+
 import urllib.request
+
+
 from pathlib import Path
+
+
 from typing import Any
 
-from cae_mcp_core.common.failure_log import state_dir
-from cae_mcp_core.common.web_docs import _USER_AGENT, _TIMEOUT_SECONDS
+
+from radia_mcp.common.failure_log import state_dir
+
+
+from radia_mcp.common.web_docs import _USER_AGENT, _TIMEOUT_SECONDS
 
 
 _WORD_RE = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*")
-_CODE_FENCE_RE = re.compile(r"```[a-z]*\n?([\s\S]*?)```", re.MULTILINE)
+
+
 _REFRESH_TTL_SECONDS = 7 * 24 * 3600  # one week
 
 
@@ -74,7 +79,7 @@ def _http_get(url: str, accept: str = "text/plain") -> bytes | None:
 	# Authenticate GitHub API calls when a token is available: 60 → 5000
 	# req/h, and allows GraphQL / Discussions access. Safe no-op otherwise.
 	if "api.github.com" in url or "raw.githubusercontent.com" in url:
-		from cae_mcp_core.common import web_docs as _wd
+		from radia_mcp.common import web_docs as _wd
 		headers.update(_wd._github_auth_headers())
 	req = urllib.request.Request(url, headers=headers)
 	try:
@@ -90,41 +95,19 @@ def _safe_name(s: str) -> str:
 	return re.sub(r"[^A-Za-z0-9_.-]+", "_", s)[:96] or "unnamed"
 
 
-# ---------------------------------------------------------------------------
-# build123d: GitHub `gumyr/build123d/examples/*.py`
-# ---------------------------------------------------------------------------
-
 _BUILD123D_LIST_URL = ("https://api.github.com/repos/gumyr/build123d/"
                        "contents/examples")
 
+
 _BD_WAREHOUSE_LIST_URL = ("https://api.github.com/repos/gumyr/bd_warehouse/"
                            "contents/src/bd_warehouse")
+
+
 _BD_WAREHOUSE_EXAMPLES_URL = ("https://api.github.com/repos/gumyr/bd_warehouse/"
                                "contents/examples")
 
-# Default local roots walked by refresh_cubit_local_examples.  The retired
-# Radia examples/ tree is intentionally absent; durable in-repo material lives
-# in docs/, validation_test/, and panel samples.
-_DEFAULT_LOCAL_CUBIT_ROOTS = [
-	r"public-safe curated corpus",
-	r"repo:/docs",
-	r"repo:/validation_test",
-	r"repo:/src/radia/panels/samples",
-]
 
-# Source families — `search_examples(family, ...)` unions all sub-sources
-# so a single query sees forum + local + durable Radia docs/validation assets,
-# GitHub examples + bd_warehouse for build123d, etc.
-FAMILIES: dict[str, list[str]] = {
-	"cubit": ["cubit", "cubit_local",
-	          "cubit_youtube", "cubit_jou_github"],
-	"build123d": ["build123d", "bd_warehouse",
-	              "build123d_discussions",
-	              "build123d_github_discussions",
-	              "build123d_youtube"],
-	"gmsh": ["gmsh_issues", "gmsh_stackoverflow",
-	         "gmsh_youtube"],
-}
+FAMILIES: dict[str, list[str]] = {'build123d': ['build123d', 'bd_warehouse', 'build123d_discussions', 'build123d_github_discussions', 'build123d_youtube'], 'gmsh': ['gmsh_issues', 'gmsh_stackoverflow', 'gmsh_youtube']}
 
 
 def refresh_build123d_examples(limit: int = 0) -> dict:
@@ -227,11 +210,9 @@ def _guess_python_title(body: str, fallback: str) -> str:
 	return fallback
 
 
-# ---------------------------------------------------------------------------
-# build123d_discussions: GitHub Issues on `gumyr/build123d` (de-facto forum)
-# ---------------------------------------------------------------------------
-
 _B3D_ISSUES_URL = "https://api.github.com/repos/gumyr/build123d/issues"
+
+
 _B3D_COMMENTS_URL = (
 	"https://api.github.com/repos/gumyr/build123d/issues/{num}/comments"
 )
@@ -366,13 +347,15 @@ def refresh_build123d_discussions(max_issues: int = 60,
 	}
 
 
-# ---------------------------------------------------------------------------
-# YouTube transcripts (shared scraper for cubit / build123d / gmsh)
-# ---------------------------------------------------------------------------
-
 _YT_SEARCH_URL = "https://www.youtube.com/results?search_query={q}"
+
+
 _YT_VIDEO_URL = "https://www.youtube.com/watch?v={vid}"
+
+
 _YT_VID_RE = re.compile(r'"videoId":"([a-zA-Z0-9_-]{11})"')
+
+
 _YT_TITLE_RE = re.compile(r'"title":\{"runs":\[\{"text":"([^"]{5,120})"')
 
 
@@ -503,14 +486,6 @@ def refresh_youtube_transcripts(query: str, source_name: str,
 	}
 
 
-def refresh_cubit_youtube(max_videos: int = 12) -> dict:
-	return refresh_youtube_transcripts(
-		query="Coreform Cubit meshing tutorial",
-		source_name="cubit_youtube",
-		max_videos=max_videos,
-	)
-
-
 def refresh_build123d_youtube(max_videos: int = 12) -> dict:
 	return refresh_youtube_transcripts(
 		query="build123d python CAD tutorial",
@@ -527,173 +502,10 @@ def refresh_gmsh_youtube(max_videos: int = 12) -> dict:
 	)
 
 
-# ---------------------------------------------------------------------------
-# Coreform training .zip — bulk .jou + .sat sample download
-# ---------------------------------------------------------------------------
-
-_CUBIT_TRAINING_ZIP_URL = (
-	"https://coreform.com/downloads/cubit-training/examples_only.zip"
-)
-
-
-def refresh_coreform_training_zip(force: bool = False) -> dict:
-	"""Download Coreform's `examples_only.zip` (Cubit training pack)
-	and extract under `<state_dir>/coreform_training/`. Each `.jou`
-	is rewalked into the existing `cubit_local` index so it shows up
-	in `cubit_examples` / `cubit_ask` automatically.
-	"""
-	import zipfile as _zip
-	target_dir = state_dir() / "coreform_training"
-	target_dir.mkdir(parents=True, exist_ok=True)
-	zip_local = target_dir / "examples_only.zip"
-
-	if force or not zip_local.exists():
-		raw = _http_get(_CUBIT_TRAINING_ZIP_URL,
-		                 accept="application/zip")
-		if raw is None:
-			return {"status": "error",
-			        "error": "download failed",
-			        "url": _CUBIT_TRAINING_ZIP_URL}
-		try:
-			zip_local.write_bytes(raw)
-		except OSError as e:
-			return {"status": "error", "stage": "write_zip",
-			        "error": str(e)}
-
-	# Extract
-	extracted = 0
-	try:
-		with _zip.ZipFile(zip_local) as zf:
-			members = zf.namelist()
-			zf.extractall(target_dir)
-			extracted = len(members)
-	except _zip.BadZipFile as e:
-		return {"status": "error", "stage": "unzip", "error": str(e)}
-
-	# Re-walk into cubit_local with this dir added
-	jou_count = sum(1 for p in target_dir.rglob("*.jou"))
-	stat = refresh_cubit_local_examples(
-		roots=[*_DEFAULT_LOCAL_CUBIT_ROOTS, str(target_dir)],
-	)
-	return {
-		"status": "ok",
-		"download_url": _CUBIT_TRAINING_ZIP_URL,
-		"local_zip": str(zip_local),
-		"zip_size": zip_local.stat().st_size,
-		"extracted_members": extracted,
-		"jou_in_pack": jou_count,
-		"cubit_local_after": stat.get("indexed"),
-	}
-
-
-# ---------------------------------------------------------------------------
-# GitHub-wide `.jou` file code search (PAT-gated)
-# ---------------------------------------------------------------------------
-
-_GH_CODE_SEARCH = ("https://api.github.com/search/code?q=extension:jou"
-                    "+{q}&per_page=30")
-
-
-def refresh_jou_github_code_search(extra_query: str = "cubit",
-                                    max_files: int = 30) -> dict:
-	"""GitHub-wide search for `.jou` files (Cubit journals) and pull
-	their content. Requires a PAT (gh auth token / GITHUB_TOKEN) —
-	GitHub's code search endpoint is auth-only.
-
-	Indexed under `cubit_jou_github` sub-source; joined into the
-	`cubit` family.
-	"""
-	from cae_mcp_core.common import web_docs as _wd
-	tok = _wd.github_token()
-	if not tok:
-		return {"status": "skipped",
-		        "reason": "no GitHub PAT (GITHUB_TOKEN / GH_TOKEN / "
-		                  "`gh auth login`) — code search requires auth"}
-	d = _examples_dir("cubit_jou_github")
-	url = _GH_CODE_SEARCH.format(q=urllib.parse.quote(extra_query))
-	req = urllib.request.Request(url, headers={
-		"User-Agent": _USER_AGENT,
-		"Accept": "application/vnd.github+json",
-		"Authorization": f"Bearer {tok}",
-	})
-	try:
-		with urllib.request.urlopen(req, timeout=_TIMEOUT_SECONDS) as resp:  # noqa: S310
-			body = json.loads(resp.read().decode("utf-8", errors="replace"))
-	except (urllib.error.HTTPError, urllib.error.URLError,
-	        TimeoutError, OSError, json.JSONDecodeError) as e:
-		return {"status": "error", "stage": "search",
-		        "error": f"{type(e).__name__}: {e}"}
-	items = body.get("items", [])[: max_files]
-	index: list[dict[str, Any]] = []
-	failed: list[str] = []
-	for it in items:
-		repo = it.get("repository", {}).get("full_name", "?")
-		path = it.get("path", "")
-		html_url = it.get("html_url") or ""
-		# Convert blob URL → raw URL for content
-		raw_url = it.get("url")
-		if raw_url:
-			# /repos/owner/repo/contents/path?ref=sha
-			c_raw = _http_get(raw_url, accept="application/vnd.github+json")
-			if c_raw is None:
-				failed.append(html_url)
-				continue
-			try:
-				meta = json.loads(c_raw)
-				import base64 as _b64
-				content_b64 = meta.get("content", "")
-				body_bytes = _b64.b64decode(content_b64)
-				body_text = body_bytes.decode("utf-8", errors="replace")
-			except (json.JSONDecodeError, ValueError):
-				failed.append(html_url)
-				continue
-		else:
-			continue
-		blob_text = (
-			f"# {repo}: {path}\n"
-			f"# source: {html_url}\n\n"
-			f"{body_text}\n"
-		)
-		name = _safe_name(f"{repo.replace('/', '_')}__{path.replace('/', '_')}")[:120]
-		code_path = d / name
-		try:
-			code_path.write_text(blob_text, encoding="utf-8")
-		except OSError:
-			failed.append(html_url)
-			continue
-		tokens = _tokenize(blob_text)
-		index.append({
-			"name": name,
-			"title": f"{repo}: {path}",
-			"url": html_url,
-			"code_path": str(code_path),
-			"repo": repo,
-			"path": path,
-			"tokens": tokens,
-			"token_set": sorted(set(tokens)),
-		})
-	_index_path("cubit_jou_github").write_text(
-		json.dumps({"fetched_at": time.time(),
-		             "source": "cubit_jou_github",
-		             "items": index,
-		             "query": extra_query},
-		            ensure_ascii=False, indent=2),
-		encoding="utf-8",
-	)
-	return {
-		"status": "ok",
-		"fetched": len(index),
-		"failed": failed[:10],
-		"index_path": str(_index_path("cubit_jou_github")),
-	}
-
-
-# ---------------------------------------------------------------------------
-# gmsh family: GitLab issues (gmsh/gmsh) + StackOverflow [gmsh]
-# ---------------------------------------------------------------------------
-
 _GMSH_GITLAB_ISSUES = ("https://gitlab.onelab.info/api/v4/projects/3/issues"
                        "?state=all&per_page=100&order_by=updated_at&page={page}")
+
+
 _GMSH_GITLAB_NOTES = ("https://gitlab.onelab.info/api/v4/projects/3/"
                        "issues/{iid}/notes?per_page=100&sort=asc")
 
@@ -821,6 +633,8 @@ _GMSH_SE_QUESTIONS = (
 	"?tagged=gmsh&site={site}&pagesize={ps}&order=desc&sort=votes"
 	"&filter=withbody"
 )
+
+
 _GMSH_SE_ANSWERS = (
 	"https://api.stackexchange.com/2.3/questions/{qid}/answers"
 	"?site={site}&filter=withbody&order=desc&sort=votes"
@@ -981,7 +795,7 @@ def refresh_build123d_github_discussions(max_discussions: int = 100) -> dict:
 	no PAT is available.
 	"""
 	import json as _json
-	from cae_mcp_core.common import web_docs as _wd
+	from radia_mcp.common import web_docs as _wd
 	tok = _wd.github_token()
 	if not tok:
 		return {"status": "skipped",
@@ -1092,10 +906,6 @@ def refresh_build123d_github_discussions(max_discussions: int = 100) -> dict:
 	}
 
 
-# ---------------------------------------------------------------------------
-# bd_warehouse: GitHub `gumyr/bd_warehouse` (industrial-parts library)
-# ---------------------------------------------------------------------------
-
 def refresh_bd_warehouse_examples(include_examples_dir: bool = True) -> dict:
 	"""Fetch bd_warehouse source modules + examples from GitHub.
 
@@ -1181,453 +991,6 @@ def refresh_bd_warehouse_examples(include_examples_dir: bool = True) -> dict:
 	}
 
 
-# ---------------------------------------------------------------------------
-# cubit_local: walks on-disk directories (curated corpus + Radia durable lanes)
-# ---------------------------------------------------------------------------
-
-_LOCAL_EXTS = (".jou", ".py")
-_LOCAL_SKIP_DIRS = frozenset({
-	".git", "__pycache__", "build", "dist", ".venv", "venv", "node_modules",
-	"packages",  # don't re-index radia-mcp's own source
-})
-_LOCAL_MAX_FILE_BYTES = 200_000  # skip huge files (data dumps, generated meshes)
-
-
-def _resolve_local_root(root_s: str) -> Path:
-	"""Resolve `repo:/...` roots from an editable Radia checkout."""
-	if root_s.startswith("repo:/"):
-		rel = root_s[len("repo:/"):].lstrip("/\\")
-		here = Path(__file__).resolve()
-		candidates = []
-		if len(here.parents) > 5:
-			candidates.append(here.parents[5] / rel)
-		candidates.append(Path.cwd() / rel)
-		for candidate in candidates:
-			if candidate.exists():
-				return candidate
-	return Path(root_s)
-
-
-def _guess_local_title(body: str, path: Path) -> str:
-	"""Pull a 1-line title from a .jou or .py file."""
-	for raw_line in body.splitlines()[:30]:
-		line = raw_line.strip()
-		if not line:
-			continue
-		# Python docstring: opening triple-quote then text
-		if line.startswith(("'''", '"""')) and len(line) > 3:
-			return line.strip("'\" ")[:120]
-		# Python comment / Cubit journal comment (both start with #)
-		if line.startswith("#"):
-			t = line.lstrip("# \t").strip()
-			if t and not t.startswith("!"):
-				return t[:120]
-		# First meaningful non-comment line (useful when files have no header)
-		return line[:120]
-	return path.name
-
-
-def refresh_cubit_local_examples(roots: list[str] | None = None,
-                                 extra_skip_dirs: list[str] | None = None) -> dict:
-	"""Walk local directories and index .jou / .py files as Cubit examples.
-
-	Default roots: `public-safe curated corpus` (the lab's years of curated
-	Cubit projects, ~145 files), plus Radia's durable docs/,
-	validation_test/, and panel-sample lanes. Users can pass `roots=[...]`
-	to override.
-
-	Each file:
-	  - title from first non-empty comment / docstring line
-	  - tokens from full body (tf-idf indexable)
-	  - path kept as absolute — NOT copied to state_dir (these are
-	    already on a shared drive; duplicating wastes space and drifts
-	    as files evolve)
-
-	Files larger than 200 kB are skipped to keep the index sane.
-	"""
-	roots = roots or _DEFAULT_LOCAL_CUBIT_ROOTS
-	skip_dirs = set(_LOCAL_SKIP_DIRS)
-	if extra_skip_dirs:
-		skip_dirs.update(extra_skip_dirs)
-
-	index: list[dict[str, Any]] = []
-	indexed_paths: set[str] = set()
-	skipped_big = 0
-	read_errors = 0
-	roots_walked: list[str] = []
-
-	for root_s in roots:
-		root = _resolve_local_root(root_s)
-		if not root.exists():
-			continue
-		roots_walked.append(str(root))
-		for path in root.rglob("*"):
-			if not path.is_file():
-				continue
-			if path.suffix.lower() not in _LOCAL_EXTS:
-				continue
-			# Skip any path with a component in skip_dirs
-			if any(part in skip_dirs for part in path.parts):
-				continue
-			try:
-				size = path.stat().st_size
-			except OSError:
-				continue
-			if size > _LOCAL_MAX_FILE_BYTES or size == 0:
-				if size > _LOCAL_MAX_FILE_BYTES:
-					skipped_big += 1
-				continue
-			p_abs = str(path.resolve())
-			if p_abs in indexed_paths:
-				continue
-			try:
-				body = path.read_text(encoding="utf-8", errors="replace")
-			except OSError:
-				read_errors += 1
-				continue
-			tokens = _tokenize(body)
-			if not tokens:
-				continue
-			rel = str(path).replace("\\", "/")
-			title = _guess_local_title(body, path)
-			index.append({
-				"name": path.name,
-				"title": title,
-				"url": f"file:///{rel}",
-				"code_path": p_abs,
-				"size": size,
-				"root": str(root),
-				"parent_dir": path.parent.name,
-				"ext": path.suffix.lower(),
-				"tokens": tokens,
-				"token_set": sorted(set(tokens)),
-			})
-			indexed_paths.add(p_abs)
-
-	_index_path("cubit_local").write_text(
-		json.dumps({"fetched_at": time.time(), "source": "cubit_local",
-		            "items": index, "roots_walked": roots_walked},
-		           ensure_ascii=False, indent=2),
-		encoding="utf-8",
-	)
-	return {
-		"status": "ok",
-		"indexed": len(index),
-		"roots_walked": roots_walked,
-		"skipped_too_big": skipped_big,
-		"read_errors": read_errors,
-		"index_path": str(_index_path("cubit_local")),
-	}
-
-
-# ---------------------------------------------------------------------------
-# cubit: Discourse forum (forum.coreform.com)
-# ---------------------------------------------------------------------------
-
-_CUBIT_FORUM_BASE = "https://forum.coreform.com"
-_CUBIT_QUERIES = [
-	"tutorial example mesh",
-	"hex meshing tutorial",
-	"sweep scheme example",
-	"journal file example",
-	"export example",
-	"boundary layer mesh",
-	"thin shell mesh",
-	"mesh quality metric",
-	"mesh refinement",
-	"abaqus export",
-	"high order curving",
-	"polyhedron scheme",
-	"multi sweep source target",
-	"imprint merge",
-	"webcut journal",
-]
-
-
-def _walk_forum_latest(max_pages: int = 30) -> list[int]:
-	"""Walk `/latest.json` pagewise, collecting all topic IDs.
-
-	Returns topic IDs in recency order. Stops at an empty page or at
-	`max_pages` (safety cap — Coreform currently has ~263 topics, so
-	30 pages × 30 topics/page is comfortably enough headroom).
-	"""
-	ids: list[int] = []
-	for page in range(max_pages):
-		url = (f"{_CUBIT_FORUM_BASE}/latest.json"
-		       f"?no_definitions=true&page={page}")
-		raw = _http_get(url, accept="application/json")
-		if raw is None:
-			break
-		try:
-			data = json.loads(raw)
-		except json.JSONDecodeError:
-			break
-		topics = data.get("topic_list", {}).get("topics", [])
-		if not topics:
-			break
-		for t in topics:
-			if isinstance(t, dict):
-				tid = t.get("id")
-				if isinstance(tid, int):
-					ids.append(tid)
-	# dedupe preserving order
-	seen: set[int] = set()
-	out: list[int] = []
-	for tid in ids:
-		if tid not in seen:
-			seen.add(tid)
-			out.append(tid)
-	return out
-
-
-def _fetch_topic_posts(topic_id: int) -> list[dict]:
-	"""Fetch a topic's full post stream via Discourse's t/<id>.json."""
-	url = f"{_CUBIT_FORUM_BASE}/t/{topic_id}.json?include_raw=1"
-	raw = _http_get(url, accept="application/json")
-	if raw is None:
-		return []
-	try:
-		data = json.loads(raw)
-	except json.JSONDecodeError:
-		return []
-	posts = data.get("post_stream", {}).get("posts", [])
-	# Attach topic metadata onto each post entry for convenience
-	meta = {
-		"title": data.get("title", ""),
-		"slug": data.get("slug", ""),
-		"topic_id": topic_id,
-	}
-	out = []
-	for p in posts:
-		if isinstance(p, dict):
-			p = dict(p)
-			p["_topic"] = meta
-			out.append(p)
-	return out
-
-
-def _refresh_cubit_forum_full(max_topics: int = 300,
-                               concurrency: int = 8) -> dict:
-	"""Walk /latest.json across all pages, fetch every topic's posts in
-	parallel, extract code fences, and index as cubit_examples.
-
-	Preferred over `refresh_cubit_examples` (seed-query based) when you
-	want full-archive coverage. Coreform forum is small (~263 topics as
-	of 2026-04), so walking the whole thing with a small thread pool
-	takes <30 s.
-	"""
-	import concurrent.futures as _cf
-
-	d = _examples_dir("cubit")
-	tids = _walk_forum_latest()
-	if max_topics > 0:
-		tids = tids[:max_topics]
-
-	# Fetch all topics in parallel — each is one HTTP round-trip
-	topic_posts: dict[int, list[dict]] = {}
-	failed: list[str] = []
-	with _cf.ThreadPoolExecutor(max_workers=max(1, concurrency)) as pool:
-		futures = {pool.submit(_fetch_topic_posts, tid): tid for tid in tids}
-		for fut in _cf.as_completed(futures):
-			tid = futures[fut]
-			try:
-				posts = fut.result()
-			except Exception:
-				failed.append(f"topic {tid}")
-				continue
-			if posts:
-				topic_posts[tid] = posts
-			else:
-				failed.append(f"topic {tid}")
-
-	index: list[dict[str, Any]] = []
-	fetched = 0
-	seen_post_ids: set[int] = set()
-	# Preserve original ordering (most-recent first)
-	for tid in tids:
-		posts = topic_posts.get(tid)
-		if not posts:
-			continue
-		for post in posts:
-			pid = post.get("id")
-			if not pid or pid in seen_post_ids:
-				continue
-			seen_post_ids.add(pid)
-			body = post.get("raw") or post.get("cooked") or ""
-			fences = _CODE_FENCE_RE.findall(body)
-			if not fences:
-				continue
-			code = "\n\n# ---- next snippet ----\n\n".join(
-				f.strip() for f in fences if f.strip()
-			)
-			if not code:
-				continue
-			meta = post.get("_topic", {})
-			title = meta.get("title", "") or f"forum post {pid}"
-			slug = meta.get("slug", "")
-			pnum = post.get("post_number", 1)
-			html_url = (f"{_CUBIT_FORUM_BASE}/t/{slug}/{tid}/{pnum}"
-			            if slug else f"{_CUBIT_FORUM_BASE}/p/{pid}")
-			name = f"{_safe_name(title)[:60]}__p{pid}.jou"
-			code_path = d / name
-			prose_head = body.splitlines()[:60]
-			blob = (f"# {title}\n# source: {html_url}\n# post id: {pid}\n\n"
-			        f"# --- prose ---\n"
-			        + "\n".join("# " + ln for ln in prose_head)
-			        + "\n\n# --- code ---\n" + code + "\n")
-			try:
-				code_path.write_text(blob, encoding="utf-8")
-			except OSError:
-				failed.append(name)
-				continue
-			tokens = _tokenize(blob)
-			index.append({
-				"name": name,
-				"title": title,
-				"url": html_url,
-				"code_path": str(code_path),
-				"post_id": pid,
-				"tokens": tokens,
-				"token_set": sorted(set(tokens)),
-			})
-			fetched += 1
-	_index_path("cubit").write_text(
-		json.dumps({"fetched_at": time.time(), "source": "cubit",
-		            "items": index, "topics_walked": len(tids)},
-		           ensure_ascii=False, indent=2),
-		encoding="utf-8",
-	)
-	return {
-		"status": "ok",
-		"fetched": fetched,
-		"failed": failed[:10],
-		"topics_walked": len(tids),
-		"posts_seen": len(seen_post_ids),
-		"concurrency": concurrency,
-		"index_path": str(_index_path("cubit")),
-	}
-
-
-def refresh_cubit_examples(limit_per_query: int = 5,
-                           full_walk: bool = True,
-                           max_topics: int = 300) -> dict:
-	"""Fetch Cubit example snippets from the Coreform forum.
-
-	Default (`full_walk=True`): walks the entire forum via
-	/latest.json pagination, covering every topic. Best recall for a
-	small forum (~263 topics as of 2026-04). Falls back to the
-	legacy seed-query behavior if `full_walk=False`.
-
-	Args:
-	    limit_per_query: only used when full_walk=False (seed queries).
-	    full_walk: if True, walk /latest.json across pages.
-	    max_topics: cap on topics walked (safety).
-
-	Returns stats dict.
-	"""
-	if full_walk:
-		return _refresh_cubit_forum_full(max_topics=max_topics)
-	d = _examples_dir("cubit")
-	seen_post_ids: set[int] = set()
-	index: list[dict[str, Any]] = []
-	fetched = 0
-	failed: list[str] = []
-
-	for q in _CUBIT_QUERIES:
-		url = (f"{_CUBIT_FORUM_BASE}/search.json?q="
-		       + urllib.parse.quote(q))
-		raw = _http_get(url, accept="application/json")
-		if raw is None:
-			failed.append(f"search: {q}")
-			continue
-		try:
-			search_json = json.loads(raw)
-		except json.JSONDecodeError:
-			failed.append(f"search json: {q}")
-			continue
-		topics_by_id = {t["id"]: t for t in search_json.get("topics", [])
-		                if isinstance(t, dict)}
-		posts = search_json.get("posts", [])[:limit_per_query]
-		for post in posts:
-			pid = post.get("id")
-			if not pid or pid in seen_post_ids:
-				continue
-			seen_post_ids.add(pid)
-			post_url = f"{_CUBIT_FORUM_BASE}/posts/{pid}.json"
-			praw = _http_get(post_url, accept="application/json")
-			if praw is None:
-				failed.append(f"post {pid}")
-				continue
-			try:
-				pdata = json.loads(praw)
-			except json.JSONDecodeError:
-				failed.append(f"post json {pid}")
-				continue
-			body = pdata.get("raw") or ""
-			fences = _CODE_FENCE_RE.findall(body)
-			if not fences:
-				continue
-			code = "\n\n# ---- next snippet ----\n\n".join(
-				f.strip() for f in fences if f.strip()
-			)
-			if not code:
-				continue
-
-			topic = topics_by_id.get(post.get("topic_id"), {})
-			title = topic.get("title", "") or f"forum post {pid}"
-			slug = topic.get("slug", "")
-			tid = topic.get("id", post.get("topic_id"))
-			pnum = post.get("post_number", 1)
-			html_url = (f"{_CUBIT_FORUM_BASE}/t/{slug}/{tid}/{pnum}"
-			            if slug and tid else f"{_CUBIT_FORUM_BASE}/p/{pid}")
-
-			name = f"{_safe_name(title)[:60]}__p{pid}.jou"
-			code_path = d / name
-			# Store both prose and code so retrieval indexes both
-			blob = (f"# {title}\n# source: {html_url}\n# "
-			        f"post id: {pid}\n\n# --- prose ---\n"
-			        + "\n".join("# " + line for line in body.splitlines()[:60])
-			        + "\n\n# --- code ---\n" + code + "\n")
-			try:
-				code_path.write_text(blob, encoding="utf-8")
-			except OSError:
-				failed.append(name)
-				continue
-
-			tokens = _tokenize(blob)
-			index.append({
-				"name": name,
-				"title": title,
-				"url": html_url,
-				"code_path": str(code_path),
-				"post_id": pid,
-				"tokens": tokens,
-				"token_set": sorted(set(tokens)),
-			})
-			fetched += 1
-
-	index_data = {
-		"fetched_at": time.time(),
-		"source": "cubit",
-		"items": index,
-	}
-	_index_path("cubit").write_text(
-		json.dumps(index_data, ensure_ascii=False, indent=2),
-		encoding="utf-8",
-	)
-	return {
-		"status": "ok",
-		"fetched": fetched,
-		"failed": failed,
-		"posts_seen": len(seen_post_ids),
-		"index_path": str(_index_path("cubit")),
-	}
-
-
-# ---------------------------------------------------------------------------
-# Retrieval
-# ---------------------------------------------------------------------------
-
 def _load_index(source: str) -> dict:
 	p = _index_path(source)
 	if not p.exists():
@@ -1642,20 +1005,7 @@ def _is_stale(index: dict, ttl: int = _REFRESH_TTL_SECONDS) -> bool:
 	return time.time() - float(index.get("fetched_at", 0)) > ttl
 
 
-REFRESH_FUNCS = {
-	"build123d": refresh_build123d_examples,
-	"bd_warehouse": refresh_bd_warehouse_examples,
-	"build123d_discussions": refresh_build123d_discussions,
-	"build123d_github_discussions": refresh_build123d_github_discussions,
-	"build123d_youtube": refresh_build123d_youtube,
-	"cubit": refresh_cubit_examples,
-	"cubit_local": refresh_cubit_local_examples,
-	"cubit_youtube": refresh_cubit_youtube,
-	"cubit_jou_github": refresh_jou_github_code_search,
-	"gmsh_issues": refresh_gmsh_issues,
-	"gmsh_stackoverflow": refresh_gmsh_stackoverflow,
-	"gmsh_youtube": refresh_gmsh_youtube,
-}
+REFRESH_FUNCS = {'build123d': refresh_build123d_examples, 'bd_warehouse': refresh_bd_warehouse_examples, 'build123d_discussions': refresh_build123d_discussions, 'build123d_github_discussions': refresh_build123d_github_discussions, 'build123d_youtube': refresh_build123d_youtube, 'gmsh_issues': refresh_gmsh_issues, 'gmsh_stackoverflow': refresh_gmsh_stackoverflow, 'gmsh_youtube': refresh_gmsh_youtube}
 
 
 def _resolve_family(name: str) -> list[str]:

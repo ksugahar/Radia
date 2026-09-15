@@ -24,7 +24,7 @@ from typing import Any
 from mcp.server.fastmcp.utilities.func_metadata import func_metadata
 from pydantic import ValidationError
 
-from cae_mcp_core.common.server_hardening import ANN_READONLY, ANN_WRITES, error_payload
+from radia_mcp.common.server_hardening import ANN_READONLY, ANN_WRITES, error_payload
 
 _VALID_PROFILES = frozenset({"core", "full"})
 

@@ -22,7 +22,7 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
-from cae_mcp_core.mesh._gmsh_subprocess import run_gmsh_json_subprocess
+from radia_mcp.gmsh._gmsh_subprocess import run_gmsh_json_subprocess
 
 # MSH element type registry: code -> (name, nodes_per_element, dim, order).
 # Covers every type emitted by cubit-mesh-export (order 1-3 gmsh export),
@@ -2227,7 +2227,7 @@ def validate_geo(geo_path: str | Path, deep: bool = True,
 
 
 # ======================================================================
-# CLI:  python -m cae_mcp_core.mesh.msh_inspect <target> [options]
+# CLI:  python -m radia_mcp.gmsh.msh_inspect <target> [options]
 # ======================================================================
 
 def main(argv: list[str] | None = None) -> int:
@@ -2239,7 +2239,7 @@ def main(argv: list[str] | None = None) -> int:
     import json as _json
 
     parser = argparse.ArgumentParser(
-        prog="python -m cae_mcp_core.mesh.msh_inspect",
+        prog="python -m radia_mcp.gmsh.msh_inspect",
         description="Inspect / validate / diff GMSH MSH v4.1 artifacts "
                     "(pure Python; --jacobians shells out to gmsh).")
     parser.add_argument("target", help=".msh or .geo file, or a directory")

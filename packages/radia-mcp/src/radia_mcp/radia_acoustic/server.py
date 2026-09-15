@@ -3,7 +3,7 @@
 from __future__ import annotations
 import json, sys
 from mcp.server.fastmcp import FastMCP
-from cae_mcp_core.common import register_status_tool
+from radia_mcp.common import register_status_tool
 from . import acoustic_capabilities as _capabilities, acoustic_usage as _usage, cq_grid_gate as _cq, fsi_preflight_gate as _fsi
 
 mcp = FastMCP("mcp-server-radia-acoustic")

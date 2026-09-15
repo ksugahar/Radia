@@ -2,8 +2,7 @@
 
 Cubit MCP is independently distributed with `cubit-mesh-export`, under
 `cubit_mesh_export.mcp`; it is no longer included here. Install the exporter
-and launch `mcp-server-cubit` for Cubit-only work. Both packages use the
-solver-neutral `cae-mcp-core` foundation. Radia's optional topology/CAD
+and launch `mcp-server-cubit` for Cubit-only work. Each distribution contains its own required runtime support. Radia's optional topology/CAD
 workflows may call the Cubit package; Cubit itself requires neither Radia package.
 
 Optimization now has a [solver-neutral and electromagnetic two-layer boundary](docs/design/optimization_layers.md), composed through the existing `radia-design` profile.
@@ -471,7 +470,7 @@ gmsh_reference("all")                           # MSH / API / display reference
 
 Bug reports + PRs welcome — particularly for:
 
-- **Additional scrape sub-sources** under `cae_mcp_core.common.examples`
+- **Additional scrape sub-sources** under `radia_mcp.common.examples`
   (mailing list archives, more YouTube channels, blog posts).
 - **Cookbook topics** for `build123d_usage` / `gmsh_usage` / `gmsh_reference` —
   worked-example knowledge fragments are always welcome.

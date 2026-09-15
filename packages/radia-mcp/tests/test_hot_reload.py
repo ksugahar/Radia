@@ -15,14 +15,14 @@ import pytest
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp.server.fastmcp import FastMCP
-from cae_mcp_core import hot_reload
+from radia_mcp._shared import hot_reload
 
 _clock = [time.time() + 2]
 
 
 @pytest.fixture
 def editable_runtime(monkeypatch):
-    from cae_mcp_core.common import status
+    from radia_mcp.common import status
 
     monkeypatch.setattr(status, "_distribution_provenance", lambda *args: {"editable": True})
     monkeypatch.delenv("RADIA_MCP_HOT_RELOAD", raising=False)
@@ -230,7 +230,7 @@ async def _probe_reload_notification_over_stdio(editable, opt_out) -> dict:
         command=sys.executable,
         # Simulate install provenance, not the protocol: use an actual server
         # and actual stdio calls without repointing the developer's install.
-        args=["-c", "from cae_mcp_core.common import status; "
+        args=["-c", "from radia_mcp.common import status; "
               f"status._distribution_provenance=lambda *args: {{'editable': {editable!r}}}; "
               "from radia_mcp.grant_writing.server import main; main()"],
         cwd=str(package_root),
