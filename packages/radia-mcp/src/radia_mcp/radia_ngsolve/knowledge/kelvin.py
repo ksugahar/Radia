@@ -2241,6 +2241,12 @@ same interface trace and B(H) law.  This Picard helper is not a hysteresis
 model.
 
 Validated path: `validation_test/c_type_three_engine/run_three_engine.py`.
+The C-type, ESRF coil-yoke, and hybrid-undulator comparison runners default
+to 1 % relative vector-field RMS on their declared core stencil. Require
+each solver's convergence contract separately. Report full-stencil errors
+without treating core agreement as whole-domain accuracy. Historical runs
+retain their original acceptance threshold; stricter replay is post-hoc
+evidence, not a newly computed or predeclared acceptance experiment.
 The legacy scalar-potential recipe is retained in this source only for
 archaeology as `KELVIN_SOURCE_IN_OMEGA_FORM_LEGACY`; MCP must return this
 mixed formulation instead.

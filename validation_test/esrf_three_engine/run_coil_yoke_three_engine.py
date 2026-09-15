@@ -443,7 +443,7 @@ def main(argv: list[str] | None = None) -> int:
                         help="Mixed Omega volume/interface assembly bonus")
     parser.add_argument("--mixed-exact-exterior-source", action="store_true",
                         help="Use exact Kelvin-pulled source instead of projected exterior trace")
-    parser.add_argument("--relative-rms-tolerance", type=float, default=0.03)
+    parser.add_argument("--relative-rms-tolerance", type=float, default=0.01)
     parser.add_argument("--observation-half-width", type=float, default=2.0e-5)
     parser.add_argument("--threads", type=int, default=0)
     parser.add_argument("--resume", action="store_true")
