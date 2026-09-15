@@ -2,6 +2,8 @@
 
 import math
 import sys
+import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -9,6 +11,33 @@ import pytest
 SRC = Path(__file__).resolve().parents[1] / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
+
+
+def test_force_helpers_import_without_ngsolve_but_fem_calls_require_it():
+    code = '''
+import importlib.abc
+import sys
+class NoSolver(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname.split(".")[0] in {"ngsolve", "netgen"}:
+            raise ModuleNotFoundError("solver deliberately unavailable")
+sys.meta_path.insert(0, NoSolver())
+from radia_mcp.radia_ngsolve import force
+assert force.radiation_pressure_from_intensity(1.0) > 0
+assert "ngsolve" not in sys.modules
+try:
+    force.magnetic_energy(None, None)
+except ModuleNotFoundError as exc:
+    assert "solver deliberately unavailable" in str(exc)
+else:
+    raise AssertionError("FEM must require NGSolve, not silently substitute")
+'''
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        env=dict(os.environ, PYTHONPATH=str(SRC)),
+        capture_output=True, text=True, timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
 
 from radia_mcp.radia_ngsolve.force import (  # noqa: E402
     C0,

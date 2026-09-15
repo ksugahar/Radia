@@ -28,7 +28,7 @@ changed by this maintenance patch.
   fail instead of silently skipping.
 - SDK behavior, MATLAB code generation, policy-string comparisons, Cubit
   session behavior, md2html conversion and pure force helpers remain package
-  tests. A copy containing only the package executed 89 focused cases on LAB;
+  tests. A copy containing only the package executed 90 focused cases on LAB;
   repository integration executed 44 cases with no skips. These are not a
   full-package audit or numerical acceptance claim.
 - The native motor-angle source-freshness test was preserved in
@@ -40,6 +40,10 @@ changed by this maintenance patch.
 - CI runs the integration lane independently of the package's optional-import
   collection filter, then probes the focused package-only copy. A test migration
   is not permission to drop its failure signal.
+- The Linux package-only probe exposed an unnecessary import-time NGSolve
+  dependency in pure force helpers. NGSolve imports now occur only inside FEM
+  operations; formulas and signatures are unchanged. A cold-process test blocks
+  NGSolve explicitly and verifies pure helpers work while FEM calls fail loudly.
 
 This patch closes the identified source-tree coupling, not package-wide
 completion, a release, or the outstanding native-evidence refresh.
