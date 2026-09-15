@@ -9,11 +9,11 @@ hints without forcing the user to paste error messages again.
 Location: `<state_dir>/logs/{kind}_failures.jsonl`
 
 `state_dir` resolves to (in order):
-  1. $RADIA_MCP_STATE_DIR if set
+  1. $CUBIT_MCP_STATE_DIR if set
   2. Platform-appropriate dir under the user profile
-     - Windows: %LOCALAPPDATA%/radia-mcp/
-     - Other:   ~/.local/state/radia-mcp/
-  3. Fallback: ~/.radia-mcp/
+     - Windows: %LOCALAPPDATA%/cubit-mesh-export/
+     - Other:   ~/.local/state/cubit-mesh-export/
+  3. Fallback: ~/.cubit-mesh-export/
 """
 
 from __future__ import annotations
@@ -26,21 +26,21 @@ from typing import Any, Iterable
 
 
 def state_dir() -> Path:
-	env = os.environ.get("RADIA_MCP_STATE_DIR")
+	env = os.environ.get("CUBIT_MCP_STATE_DIR")
 	if env:
 		return Path(env)
 	if os.name == "nt":
 		base = os.environ.get("LOCALAPPDATA")
 		if base:
-			return Path(base) / "radia-mcp"
+			return Path(base) / "cubit-mesh-export"
 	xdg = os.environ.get("XDG_STATE_HOME")
 	if xdg:
-		return Path(xdg) / "radia-mcp"
+		return Path(xdg) / "cubit-mesh-export"
 	home = Path.home()
-	linux_default = home / ".local" / "state" / "radia-mcp"
+	linux_default = home / ".local" / "state" / "cubit-mesh-export"
 	if linux_default.exists() or os.name != "nt":
-		return linux_default if os.name != "nt" else home / ".radia-mcp"
-	return home / ".radia-mcp"
+		return linux_default if os.name != "nt" else home / ".cubit-mesh-export"
+	return home / ".cubit-mesh-export"
 
 
 def _log_path(kind: str) -> Path:

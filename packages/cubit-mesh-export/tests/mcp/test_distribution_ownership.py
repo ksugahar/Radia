@@ -36,3 +36,22 @@ def test_cubit_support_contains_only_cubit_example_providers():
     assert set(examples.FAMILIES) == {'cubit'}
     assert set(examples.REFRESH_FUNCS) == set(examples.FAMILIES['cubit'])
     assert not hasattr(examples, 'refresh_build123d_examples')
+
+
+def test_cubit_state_does_not_use_radia_settings(monkeypatch, tmp_path):
+    from cubit_mesh_export.mcp._support.failure_log import state_dir
+    monkeypatch.setenv('RADIA_MCP_STATE_DIR', str(tmp_path / 'radia'))
+    monkeypatch.delenv('CUBIT_MCP_STATE_DIR', raising=False)
+    assert state_dir().name in {'cubit-mesh-export', '.cubit-mesh-export'}
+    monkeypatch.setenv('CUBIT_MCP_STATE_DIR', str(tmp_path / 'cubit'))
+    assert state_dir() == tmp_path / 'cubit'
+
+
+def test_optional_example_roots_survive_runtime_relocation(monkeypatch, tmp_path):
+    from cubit_mesh_export.mcp._support import examples
+    (tmp_path / '.git').mkdir()
+    docs = tmp_path / 'docs'
+    docs.mkdir()
+    monkeypatch.setattr(examples, '__file__', str(tmp_path / 'arbitrary/deep/runtime/examples.py'))
+    monkeypatch.chdir(tmp_path.parent)
+    assert examples._resolve_local_root('repo:/docs') == docs
