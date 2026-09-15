@@ -25,3 +25,10 @@ def test_circular_loft_routing_requires_explicit_approximation():
     assert 'equal-area radial/angular grid' in text
     assert 'cross-type transitions' in text
     assert 'independent integral' in text
+
+
+def test_closed_loop_contract_is_not_automatic_geometry_certification():
+    text = electromagnet_usage('coilbuilder')
+    assert 'require_closed=True' in text
+    assert 'No return wire is added' in text
+    assert 'self-intersections' in text
