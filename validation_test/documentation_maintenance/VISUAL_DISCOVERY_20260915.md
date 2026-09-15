@@ -66,6 +66,9 @@ Recovered roots on LAB:
 
 Retain these and their LAB preparation directories under the documentation
 maintenance owner until rendered visual QA, then remove those exact paths.
-Remote C:/temp/radia_esim_webgui_20260915 and
-C:/temp/radia_visual_discovery_20260915 are pending cleanup after evidence
-commit/hash verification. The former owns the shared disposable venv.
+After evidence commit `b503ea78a`, remote
+C:/temp/radia_esim_webgui_20260915 and
+C:/temp/radia_visual_discovery_20260915 were removed, including the shared
+disposable venv. Exact-path, reparse-point and active-process checks preceded
+deletion; independent Test-Path checks returned false for both roots. Results,
+sources and logs remain recoverable from the commit and retained LAB copies.
