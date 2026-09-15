@@ -245,7 +245,7 @@ concept X?" without trial-and-error.
 
 ```python
 # catalog, health, golden-gate, and bug-pattern tools
-radia_mcp_overview()                  # all 49 servers + live tags
+radia_mcp_overview()                  # current server catalog + live tags
 radia_mcp_get("bayesian-opt")         # full info for one server
 radia_mcp_by_tag("optimization")      # filter optimization/theory servers
 radia_mcp_related("bayesian-opt")     # cross-link map for optimization servers
@@ -338,7 +338,7 @@ directory and delete it after the local stdio server exits.
 
 Registering more than the 9 above is rarely necessary — once you have
 **meta**, `radia_mcp_get(name)` returns the entry point for any of the
-49 servers and you can register them on demand. The full list of
+cataloged servers and you can register them on demand. The full list of
 catalog-driven server names is in
 `radia_mcp.meta.catalog.CATALOG`.
 
