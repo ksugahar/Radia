@@ -35,7 +35,7 @@ def wheel_contract(path, distribution='cubit-mesh-export'):
         for name in names:
             if name.startswith(prefix) and not name.endswith('/'):
                 content = archive.read(name)
-                text = name.endswith(('.py', '.jou', '.svg', '.tmpl', '.json', '.md'))
+                text = name.endswith(('.py', '.jou', '.svg', '.tmpl', '.json', '.md', '.txt'))
                 if text:
                     content = content.replace(b'\r\n', b'\n').replace(b'\r', b'\n')
                 files[name] = {'sha256': digest(content), 'text': text}
