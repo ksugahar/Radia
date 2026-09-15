@@ -39,6 +39,10 @@ restores the original bytes/hash in finally. It never overwrites the user's
 imported toolbar directory. A still-running Cubit blocks restoration and must
 be resolved before completion; do not discard the saved preferences.
 
-The legacy Radia menu, startup and installer paths are thin file-only bridges;
-the exporter owns the implementation and assets. No new version, publication,
+The legacy Radia menu, startup, installer and compatibility bridges are removed.
+`cubit-toolbar-smoke-test` and its embedded probe belong to cubit-mesh-export;
+their unit tests live in `packages/cubit-mesh-export/tests`. Re-run
+`cubit-plugin-install` from the selected external interpreter to replace old
+startup references before running the explicitly scoped GUI acceptance.
+No new version, publication,
 shared editable change or LAB/100 deployment is implied by these local tests.

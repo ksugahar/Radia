@@ -55,7 +55,7 @@ sys.path.insert(0, os.path.join(SRC_RADIA, "panels"))
 
 def _init_cubit():
     """Initialise Cubit batch + plugin path; idempotent."""
-    from install_panels import find_cubit_bin
+    from cubit_mesh_export.toolbar_install import find_cubit_bin
     cubit_path = find_cubit_bin()
     if cubit_path and cubit_path not in sys.path:
         sys.path.append(cubit_path)

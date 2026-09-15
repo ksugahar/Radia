@@ -34,10 +34,12 @@ this candidate capability is deployed. LLM production remains APREPRO/headless;
 launch GUI only for the explicitly scoped exporter GUI test or human workflow.
 Keep Claro-owned actions out of PySide menu traversal. Register/remove them via
 Claro and disconnect their ownership before Python shutdown (aboutToQuit).
-The legacy Radia GUI paths are compatibility bridges only; do not edit or
-restore a second menu/installer implementation there. Old Cubit startup hooks
-without the external Python configured fail with reinstall guidance: run
-`cubit-plugin-install` from the selected external interpreter and restart.
+Legacy Radia GUI paths and compatibility bridges are removed. The exporter
+owns `cubit-toolbar-smoke-test` and its embedded probe as well as the GUI.
+Re-run `cubit-plugin-install` from the selected external interpreter and restart
+to replace old startup references; do not restore shims at removed Radia paths.
+The GUI cold-start command is an explicitly scoped release test, never an LLM
+production execution route. Its wheel and probe run without the Radia package.
 Netgen GUI exports run standalone check-vol before opening any external viewer;
 checker startup failure is a visible error, not successful export acceptance.
 Coreform's official toolbar `play` does not define `__file__`. Self-contained

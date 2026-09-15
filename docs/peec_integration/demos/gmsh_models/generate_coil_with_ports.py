@@ -19,7 +19,7 @@ import sys
 import numpy as np
 
 # Add Cubit to path (auto-detect via radia's install_panels helper)
-from radia.install_panels import find_cubit_bin as _fcb
+from cubit_mesh_export.toolbar_install import find_cubit_bin as _fcb
 _cubit_path = _fcb()
 if _cubit_path and _cubit_path not in sys.path:
     sys.path.append(_cubit_path)

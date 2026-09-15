@@ -107,6 +107,6 @@ if ($LASTEXITCODE -ne 0) { throw "cmake configure build-ccm failed" }
 if ($LASTEXITCODE -ne 0) { throw "cubit_mesh_export_ccm build failed" }
 
 # cubit_mesh_export_ccl removed in radia 4.80.0 (Qt5 GUI deleted; PySide6 toolbar at
-# src/radia/panels/radia_export_menu.py replaces it).
+# packages/cubit-mesh-export/src/cubit_mesh_export/cubit_gui replaces it).
 
 Write-Host "BUILD OK"

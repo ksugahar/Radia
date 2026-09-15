@@ -28,7 +28,7 @@ Date: 2026-01-16
 import sys
 
 # Auto-detect Cubit installation
-from radia.install_panels import find_cubit_bin
+from cubit_mesh_export.toolbar_install import find_cubit_bin
 _cubit_path = find_cubit_bin()
 if _cubit_path and _cubit_path not in sys.path:
     sys.path.insert(0, _cubit_path)
