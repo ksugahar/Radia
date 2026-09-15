@@ -106,7 +106,12 @@ At distances exceeding 32 times max(outer radius, height), finite-section
 moments replace cancellation-prone corner differences. This is a convergent
 binomial expansion with analytic rectangular moments and a tail bound, not
 section Gauss quadrature or a zero-width filament approximation. The angular
-quadrature remains numerical. The updated native RadFld point-array path
+quadrature remains numerical. The updated arc kernel
+uses fourth-power angular endpoint maps in the near section to handle
+integrable boundary logarithms and nearby exterior peaks. Far-section moment
+integration retains its smooth angular rule. Boundary continuity must be
+checked alongside far-field accuracy; exterior sample agreement alone does
+not establish a valid conductor-boundary evaluation. The RadFld path
 reports invalid coordinates and caught evaluation failures as Error206 rather
 than silently returning an empty field. Single-point B queries have regression
 coverage for NaN/Inf rejection and model preservation. This does not certify
