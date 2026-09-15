@@ -523,6 +523,14 @@ jobs:
           print(f"release wheel verified: {wheel.name} ({actual})")
           PY
 
+      - name: Verify public runtime dependencies before publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip --isolated download --only-binary=:all: \
+            --index-url https://pypi.org/simple \
+            --dest "$RUNNER_TEMP/radia-mcp-public-dependencies" dist/*.whl
+
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
