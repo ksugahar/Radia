@@ -86,9 +86,9 @@ def test_prime_never_creates_a_double_superscript() -> None:
     inserts at the caret, so a palette prime pressed after `a^{2}` produced
     `a^{2}'`, which MathJax rejects with "Prime causes double exponent".
     """
-    assert "function endsWithSuperscript(text)" in SOURCE
+    assert "function endsWithScript(text, marker)" in SOURCE
     assert "/^'+$/.test(snippet)" in SOURCE
-    assert 'endsWithSuperscript(before) ? "{}" : ""' in SOURCE
+    assert 'endsWithScript(before, explicitPrime.charAt(0)) ? "{}" : ""' in SOURCE
 
 
 def test_palette_keys_explain_themselves_without_hover() -> None:
