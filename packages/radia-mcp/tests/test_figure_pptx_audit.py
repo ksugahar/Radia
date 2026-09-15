@@ -16,7 +16,7 @@ from pptx.util import Inches
 
 from radia_mcp.figure import audit_pptx_figures
 from radia_mcp.figure.tools import figure_audit_pptx_figures
-from radia_mcp.common.pptx_svg import svg_length_pt as _svg_length_pt
+from cae_mcp_core.common.pptx_svg import svg_length_pt as _svg_length_pt
 from radia_mcp.figure._pptx_audit import _svg_asset
 
 

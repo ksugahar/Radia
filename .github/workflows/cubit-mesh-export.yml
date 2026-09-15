@@ -6,9 +6,12 @@ on:
     tags: ['cubit-mesh-export-v*']
     paths:
       - 'packages/cubit-mesh-export/**'
+      - 'packages/cae-mcp-core/**'
       - 'src/cubit_plugin/**'
       - 'tests/test_cubit_standalone_gui.py'
       - 'tools/check_cubit_standalone.py'
+      - 'tools/release_cubit_dual.py'
+      - 'tests/test_release_cubit_dual.py'
       - 'tests/test_cubit_installers.py'
       - 'tests/test_cubit_menu_startup.py'
       - 'tools/audit_pyside6_only.py'
@@ -18,9 +21,12 @@ on:
     branches: [main]
     paths:
       - 'packages/cubit-mesh-export/**'
+      - 'packages/cae-mcp-core/**'
       - 'src/cubit_plugin/**'
       - 'tests/test_cubit_standalone_gui.py'
       - 'tools/check_cubit_standalone.py'
+      - 'tools/release_cubit_dual.py'
+      - 'tests/test_release_cubit_dual.py'
       - 'tests/test_cubit_installers.py'
       - 'tests/test_cubit_menu_startup.py'
       - 'tools/audit_pyside6_only.py'
@@ -127,12 +133,15 @@ jobs:
         shell: pwsh
         run: |
           python -m compileall -q packages\cubit-mesh-export\src
+          python -m pip install -e packages\cae-mcp-core
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -m pip install setuptools pytest numpy `
             "netgen-mesher==6.2.2606" "ngsolve==6.2.2606"
           $env:PYTHONPATH = 'packages\cubit-mesh-export\src'
           python -m pytest tests\test_cubit_installers.py `
             tests\test_cubit_menu_startup.py tests\test_cubit_standalone_gui.py `
-            packages\cubit-mesh-export\tests\test_toolbar_smoke.py -q
+            packages\cubit-mesh-export\tests\test_toolbar_smoke.py `
+            tests\test_release_cubit_dual.py -q
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tools\audit_pyside6_only.py
 
@@ -144,6 +153,12 @@ jobs:
           python -m pip install --no-deps $wheel.FullName
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -I tools\check_cubit_standalone.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            python -m cubit_mesh_export.mcp.server --selftest
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            python -I packages\cubit-mesh-export\tools\check_mcp_standalone.py
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m pytest packages\cubit-mesh-export\tests\mcp --confcutdir=packages\cubit-mesh-export\tests\mcp -q
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload cubit-mesh-export wheel

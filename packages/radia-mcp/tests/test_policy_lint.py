@@ -54,20 +54,20 @@ def _run(root, strict=False):
 
 
 def test_clean_open_servers_pass(tmp_path):
-    _make_repo(tmp_path, {"mcp-server-cubit": "radia_mcp.cubit.server:main"})
+    _make_repo(tmp_path, {"mcp-server-cubit": "cubit_mesh_export.mcp.server:main"})
     assert _run(tmp_path) == 0
 
 
 def test_denied_wrapper_in_scripts_fails(tmp_path):
     _make_repo(tmp_path, {
-        "mcp-server-cubit": "radia_mcp.cubit.server:main",
+        "mcp-server-cubit": "cubit_mesh_export.mcp.server:main",
         "mcp-server-comsol-converter": "radia_mcp.comsol_converter.server:main",
     })
     assert _run(tmp_path) == 1   # wired public + shipped in wheel -> ERROR
 
 
 def test_denied_excluded_and_unwired_warns_only(tmp_path):
-    _make_repo(tmp_path, {"mcp-server-cubit": "radia_mcp.cubit.server:main"},
+    _make_repo(tmp_path, {"mcp-server-cubit": "cubit_mesh_export.mcp.server:main"},
                exclude=["radia_mcp.comsol_converter*"])
     cc = tmp_path / "src" / "radia_mcp" / "comsol_converter"
     cc.mkdir(parents=True)
@@ -102,7 +102,7 @@ def test_optuna_server_must_stay_external(tmp_path):
 
 
 def test_optuna_dependency_must_stay_external(tmp_path):
-    _make_repo(tmp_path, {"mcp-server-cubit": "radia_mcp.cubit.server:main"},
+    _make_repo(tmp_path, {"mcp-server-cubit": "cubit_mesh_export.mcp.server:main"},
                dependencies=["optuna>=4"],
                optional_dependencies={"external": ["optuna-mcp>=0.2"]})
     assert _run(tmp_path) == 1

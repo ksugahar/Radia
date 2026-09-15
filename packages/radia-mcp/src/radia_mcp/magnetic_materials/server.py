@@ -12,8 +12,8 @@ Usage:
 import sys
 
 from mcp.server.fastmcp import FastMCP
-from ..common import register_status_tool
-from ..common.tool_group import CoarseToolRegistry
+from cae_mcp_core.common import register_status_tool
+from cae_mcp_core.common.tool_group import CoarseToolRegistry
 
 from .hysteresis_models_knowledge import get_hysteresis_models_knowledge
 from .iron_loss_knowledge import get_iron_loss_knowledge
@@ -21,7 +21,7 @@ from .silicon_steel_knowledge import get_silicon_steel_knowledge
 from .permanent_magnet_knowledge import get_permanent_magnet_knowledge
 from .demagnetization_knowledge import get_demagnetization_knowledge
 from .radia_status_knowledge import get_radia_status_knowledge
-from ..common.lazy_call import lazy_callable
+from cae_mcp_core.common.lazy_call import lazy_callable
 _periodic_hysteresis_loss_energy_gate = lazy_callable(".periodic_hysteresis_loss_gate", "periodic_hysteresis_loss_energy_gate", __package__)
 
 

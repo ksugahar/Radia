@@ -18,7 +18,6 @@ from xml.etree import ElementTree
 TESTS = (
     "test_axisymmetric_point_source_contract.py",
     "test_ci_selection.py",
-    "test_cubit_wave3.py",
     "test_matlab_optuna_policy_section.py",
     "test_matlab_radia_mex_contract.py",
     "test_mcp_sdk_dependency_contract.py",

@@ -43,7 +43,7 @@ def test_exporter_radia5_compatibility_is_bounded(monkeypatch, version, accepted
 
     monkeypatch.setitem(sys.modules, "radia", SimpleNamespace(
         __version__=version, COMPAT_CUBIT_MESH_EXPORT_MIN="0.5.0",
-        COMPAT_CUBIT_MESH_EXPORT_MAX="1.0.1"))
+        COMPAT_CUBIT_MESH_EXPORT_MAX="1.0.2"))
     assert install._check_radia_compat()[0] is accepted
 
 

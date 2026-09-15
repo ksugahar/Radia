@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from radia_mcp.gmsh.msh_inspect import INVALID_GEO_OPTIONS
+from cae_mcp_core.mesh.msh_inspect import INVALID_GEO_OPTIONS
 
 _GMSH_AVAILABLE = importlib.util.find_spec("gmsh") is not None
 
@@ -54,7 +54,7 @@ def _extract_names() -> set[str]:
 
 
 def test_every_documented_option_name_exists_in_gmsh():
-    from radia_mcp.gmsh.msh_inspect import probe_options
+    from cae_mcp_core.mesh.msh_inspect import probe_options
 
     names = sorted(_extract_names() - _ALLOWLIST)
     assert len(names) > 50, f"extraction looks broken: only {names}"
