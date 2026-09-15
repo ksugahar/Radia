@@ -51,3 +51,17 @@ changed by this maintenance patch.
 
 This patch closes the identified source-tree coupling, not package-wide
 completion, a release, or the outstanding native-evidence refresh.
+
+## Native follow-up
+
+The initial 2026-09-15 clean MEX rebuild exposed three failures. The forward
+fix aligns BDM1 self derivatives with the primal Duffy rule and provides the
+newly built Python native runtime to the isolated MATLAB validation.
+The dedicated LAB Engine rerun passed **87/87**, the Python invariant regression
+passed, and integration plus source-freshness checks passed **46/46**. The
+native JSON and its linked proof were regenerated from actual passing execution,
+without relaxing numerical tolerances. See
+`validation_test/radia_mcp/native_evidence_refresh_20260915.md` for exact
+build identity, initial failures and execution boundaries. This closes the
+identified native-evidence refresh; it does not claim a full solver release
+or live MCP deployment.

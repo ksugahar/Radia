@@ -2,10 +2,19 @@ function tests = test_simulink_workflow
 tests = functiontests(localfunctions);
 end
 
-function setupOnce(~)
+function setupOnce(testCase)
 testDir = fileparts(mfilename("fullpath"));
 repoRoot = fileparts(fileparts(testDir));
 addpath(fullfile(repoRoot, "matlab"));
+scratch = string(getenv("RADIA_TEMP_ROOT"));
+if strlength(scratch) == 0
+    if ispc, scratch = "C:\temp"; else, scratch = string(tempdir); end
+end
+if ~isfolder(scratch), mkdir(scratch); end
+root = string(tempname(scratch));
+mkdir(root);
+testCase.TestData.ScratchRoot = root;
+testCase.addTeardown(@() rmdir(root, "s"));
 end
 
 function testOptimizationAdapter(testCase)
@@ -88,7 +97,7 @@ if ~hasSimulink
     return
 end
 
-output = "C:\temp\radia_adjoint_library_compile_test";
+output = fullfile(testCase.TestData.ScratchRoot, "adjoint_library");
 library = radia.simulink.buildLibrary(OutputDirectory=output);
 load_system(library);
 libraryCleanup = onCleanup(@() closeIfLoaded("radia_simulink_library"));
@@ -123,7 +132,7 @@ if ~hasSimulink
 end
 
 modelName = "radia_streamfunction_topopt_test";
-output = "C:\temp\radia_streamfunction_topopt_test";
+output = fullfile(testCase.TestData.ScratchRoot, "streamfunction");
 modelPath = fullfile(output,modelName + ".slx");
 cleanup = onCleanup(@() cleanupStreamFunctionModel(modelName,modelPath));
 radia.simulink.buildStreamFunctionOptimizationModel( ...
@@ -494,7 +503,7 @@ closeIfLoaded(modelName);
 end
 
 function testRadiaLibraryBrowserArtifact(testCase)
-output="C:\temp\radia_simulink_library_test";
+output=fullfile(testCase.TestData.ScratchRoot, "library");
 library=radia.simulink.buildLibrary(OutputDirectory=output);
 verifyTrue(testCase,isfile(library)); load_system(library); cleanup=onCleanup(@()closeIfLoaded("radia_simulink_library"));
 verifyEqual(testCase,string(get_param("radia_simulink_library","BlockDiagramType")),"library");
@@ -699,7 +708,7 @@ clear cleanup
 end
 
 function testApplicationBlockCompilesInModel(testCase)
-output = "C:\temp\radia_simulink_application_compile_test";
+output = fullfile(testCase.TestData.ScratchRoot, "application_compile");
 library = radia.simulink.buildLibrary(OutputDirectory=output);
 load_system(library);
 libraryCleanup = onCleanup(@() closeIfLoaded("radia_simulink_library"));
@@ -729,7 +738,7 @@ clear modelCleanup libraryCleanup
 end
 
 function testApplicationConfigAndFailureArtifacts(testCase)
-root = "C:\temp\radia_simulink_application_test";
+root = fullfile(testCase.TestData.ScratchRoot, "application");
 config = fullfile(root, "em_config.json");
 radia.simulink.writeApplicationConfig("em", struct(), config, ...
     PrimaryKey="B_origin_mag_T");
@@ -761,7 +770,7 @@ verifyTrue(testCase, isfile(result.log));
 end
 
 function testApplicationLauncherFailureKeepsArtifacts(testCase)
-root = "C:\temp\radia_simulink_launcher_failure_test";
+root = fullfile(testCase.TestData.ScratchRoot, "launcher_failure");
 config = fullfile(root, "em_config.json");
 radia.simulink.writeApplicationConfig("em", struct(), config);
 
