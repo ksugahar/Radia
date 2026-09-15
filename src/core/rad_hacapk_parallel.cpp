@@ -33,7 +33,7 @@ void hacapk_parallel_job(
     void (*func)(int tid, int nthr, void* data), void* data)
 {
     int nthr = ngcore::TaskManager::GetNumThreads();
-    if (nthr <= 1 || !ngcore::task_manager) {
+    if (nthr <= 1 || !ngcore::GetTaskManager()) {
         // No task manager or single thread → run sequentially
         func(0, 1, data);
         return;
