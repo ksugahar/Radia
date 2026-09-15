@@ -12,7 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from cae_mcp_core.mesh.msh_inspect import validate_geo, validate_msh
+from radia_mcp.gmsh.msh_inspect import validate_geo, validate_msh
 
 
 def verify_artifact(path: str | Path,

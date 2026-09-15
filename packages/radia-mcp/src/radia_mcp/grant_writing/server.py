@@ -75,9 +75,9 @@ import sys
 from mcp.server.fastmcp import FastMCP
 
 from .. import __version__
-from cae_mcp_core.common import register_status_tool
-from cae_mcp_core.common.mcp_contract import apply_tool_contract
-from cae_mcp_core.common.server_hardening import classify_tool_annotations
+from radia_mcp.common import register_status_tool
+from radia_mcp.common.mcp_contract import apply_tool_contract
+from radia_mcp.common.server_hardening import classify_tool_annotations
 from . import register
 from .tools import (
     grant_writing_health_report,

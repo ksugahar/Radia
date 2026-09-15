@@ -22,14 +22,14 @@ Distilled from:
 import sys
 
 from mcp.server.fastmcp import FastMCP
-from cae_mcp_core.common import register_status_tool
-from cae_mcp_core.common.tool_group import CoarseToolRegistry
+from radia_mcp.common import register_status_tool
+from radia_mcp.common.tool_group import CoarseToolRegistry
 
 from .shape_optimization_knowledge import get_shape_optimization_documentation
 from .topology_derivative_knowledge import get_topology_derivative_documentation
 from .applications_knowledge import get_applications_documentation
 from .cae_ai_contract import cae_ai_artifact_gate as build_cae_ai_artifact_gate
-from cae_mcp_core.common.lazy_call import lazy_callable
+from radia_mcp.common.lazy_call import lazy_callable
 build_simplex_stationarity_audit_gate = lazy_callable(".simplex_stationarity_gate", "simplex_stationarity_audit_gate", __package__)
 build_nonlinear_lsq_multistart_gate = lazy_callable(".nonlinear_lsq_multistart_gate", "nonlinear_lsq_multistart_gate", __package__)
 

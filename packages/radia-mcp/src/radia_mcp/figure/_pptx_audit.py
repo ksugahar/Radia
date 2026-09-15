@@ -26,7 +26,7 @@ from __future__ import annotations
 import hashlib
 import os
 
-from cae_mcp_core.common.pptx_svg import picture_svg_blob, svg_geometry
+from radia_mcp.common.pptx_svg import picture_svg_blob, svg_geometry
 
 # A figure authored for a slide carries 24 pt text (lab_figure(medium=
 # 'presentation')); the displayed floor is 20 pt.  Scaling below this ratio puts

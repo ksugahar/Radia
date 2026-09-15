@@ -14,9 +14,9 @@ import pytest
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.tools.base import Tool
 from pydantic import TypeAdapter, ValidationError
-from cae_mcp_core.common.lazy_call import lazy_callable
-from cae_mcp_core.common.status import register_status_tool
-from cae_mcp_core.common.tool_group import CoarseToolRegistry, selected_tool_profile
+from radia_mcp.common.lazy_call import lazy_callable
+from radia_mcp.common.status import register_status_tool
+from radia_mcp.common.tool_group import CoarseToolRegistry, selected_tool_profile
 from radia_mcp.meta.catalog import CATALOG
 
 
@@ -32,9 +32,9 @@ def test_common_package_does_not_eagerly_import_optional_subsystems():
     env = dict(os.environ)
     env["PYTHONPATH"] = str(package_src)
     code = (
-        "import json,sys; import cae_mcp_core.common; "
+        "import json,sys; import radia_mcp.common; "
         "print(json.dumps(sorted(n for n in sys.modules "
-        "if n.startswith('cae_mcp_core.common.'))))"
+        "if n.startswith('radia_mcp.common.'))))"
     )
     result = subprocess.run(
         [sys.executable, "-c", code],
@@ -55,7 +55,7 @@ def test_small_server_status_import_does_not_preload_chroma():
     code = (
         "import json,sys; import radia_mcp.accelerator.server; "
         "print(json.dumps(sorted(n for n in sys.modules "
-        "if n.startswith('cae_mcp_core.common.'))))"
+        "if n.startswith('radia_mcp.common.'))))"
     )
     result = subprocess.run(
         [sys.executable, "-c", code],
@@ -66,9 +66,9 @@ def test_small_server_status_import_does_not_preload_chroma():
         timeout=60,
     )
     loaded = set(json.loads(result.stdout.splitlines()[-1]))
-    assert "cae_mcp_core.common.status" in loaded
-    assert "cae_mcp_core.common.chroma_retriever" not in loaded
-    assert "cae_mcp_core.common.async_runner" not in loaded
+    assert "radia_mcp.common.status" in loaded
+    assert "radia_mcp.common.chroma_retriever" not in loaded
+    assert "radia_mcp.common.async_runner" not in loaded
 
 
 def test_selected_tool_profile_defaults_to_core(monkeypatch):
@@ -273,7 +273,7 @@ def test_lazy_callable_resolves_only_on_call_and_tracks_reloaded_attribute(
         calls.append(name)
         return target
 
-    monkeypatch.setattr("cae_mcp_core.common.lazy_call.import_module", fake_import)
+    monkeypatch.setattr("radia_mcp.common.lazy_call.import_module", fake_import)
     proxy = lazy_callable(".checks", "operation", "radia_mcp.demo")
     assert calls == []
     assert proxy(2) == 3

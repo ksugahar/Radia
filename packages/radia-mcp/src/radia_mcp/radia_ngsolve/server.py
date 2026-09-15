@@ -28,11 +28,11 @@ from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 from .. import __version__
-from cae_mcp_core.common import register_status_tool
-from cae_mcp_core.common.tool_group import CoarseToolRegistry
-from cae_mcp_core.common.mcp_contract import apply_tool_contract
-from cae_mcp_core.common.learning_quality import build_balanced_learning_profile
-from cae_mcp_core.common.lazy_call import lazy_callable
+from radia_mcp.common import register_status_tool
+from radia_mcp.common.tool_group import CoarseToolRegistry
+from radia_mcp.common.mcp_contract import apply_tool_contract
+from radia_mcp.common.learning_quality import build_balanced_learning_profile
+from radia_mcp.common.lazy_call import lazy_callable
 _rf_sweep_artifact_summary_gate = lazy_callable(".rf_sweep_artifact_gate", "rf_sweep_artifact_summary_gate", __package__)
 from .cq_urn import cq_response_reality_gate as _cq_response_reality_gate
 _cq_scattering_arrival_gate = lazy_callable(".cq_scattering_arrival_gate", "cq_scattering_arrival_gate", __package__)
@@ -4837,7 +4837,7 @@ apply_tool_contract(
 def main():
     """Entry point for mcp-server-ngsolve console script."""
     if len(sys.argv) > 1 and sys.argv[1] == '--selftest':
-        from cae_mcp_core.common.utf8_stdout import use_utf8_stdout
+        from radia_mcp.common.utf8_stdout import use_utf8_stdout
         use_utf8_stdout()
         _selftest()
     else:

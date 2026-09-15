@@ -1,5 +1,5 @@
 """Contract tests for the shared MCP-server hardening layer
-(cae_mcp_core.common.server_hardening) for the build123d server.
+(radia_mcp.common.server_hardening) for the build123d server.
 
 Locks the holes a rename/typo would open silently:
 * a name listed in an explicit classification set that matches NO
@@ -17,7 +17,7 @@ import sys
 import pytest
 
 from radia_mcp.build123d import server as b3d_server
-from cae_mcp_core.common.server_hardening import (
+from radia_mcp.common.server_hardening import (
     ANN_DESTRUCTIVE,
     ANN_READONLY,
     error_payload,
@@ -98,7 +98,7 @@ def test_gate_env_hides_gate_tools(module, env):
 # ---------------------------------------------------------------------------
 
 def test_call_log_rotation(tmp_path):
-    from cae_mcp_core.common.server_hardening import rotate_if_large
+    from radia_mcp.common.server_hardening import rotate_if_large
 
     log = tmp_path / "calls.jsonl"
     log.write_text("x" * 100, encoding="utf-8")

@@ -28,7 +28,7 @@ python tools/release_quad.py restore-editable
 ### Independent cubit-mesh-export release-dual
 
 Use `python tools/release_quad.py cubit-dual --action preflight|deploy|done`
-with `--wheel`, `--core-wheel`, `--source-sha`, `--source-root-lab`, `--source-root-100`,
+with `--wheel`, `--source-sha`, `--source-root-lab`, `--source-root-100`,
 `--evidence-lab` and `--evidence-100`. The source paths are two local views of
 one tracked-clean NAS release worktree; evidence paths likewise share durable
 storage. Populate native payloads from the exact CI wheel, verify their manifest,
@@ -36,10 +36,10 @@ and require package source files to match the wheel before changing an editable.
 Run preflight before tagging. Publish only the independent Cubit tag/artifact;
 deploy/done additionally verify the tag SHA and PyPI wheel hash.
 
-This lane installs the exporter (including Cubit MCP) and `cae-mcp-core` as editables,
+This lane installs only the exporter (including Cubit MCP and its support) as editable,
 plus the Cubit plugin/toolbar on LAB and 100, never Radia/radia-mcp or any compute host.
-Publish the exact core wheel first; both package sources must match their wheels.
-Coordinate shared-core source changes with the Radia MCP owner. SDK/numerical dependencies
+The package source must match its wheel. Coordinate first-time Cubit CLI ownership
+migration with the Radia MCP owner. SDK/numerical dependencies
 must already satisfy metadata and remain unchanged. It refuses active Cubit; no
 process-name kills or user-profile sweeps are permitted. Both hosts pass
 headless export/check-vol and two real GUI cold starts, with copied/hash-verified

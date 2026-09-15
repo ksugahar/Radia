@@ -27,7 +27,7 @@ import urllib.request
 from pathlib import Path
 from typing import Optional
 
-from cae_mcp_core.common.failure_log import state_dir
+from radia_mcp.common.failure_log import state_dir
 
 
 _DEFAULT_TTL_SECONDS = 24 * 3600  # 1 day

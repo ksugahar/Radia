@@ -12,7 +12,7 @@ Convention adopted for radia_mcp:
   packages/radia-mcp/src/radia_mcp/<subpackage>/prompts/<name>.md
 
 Usage:
-    from cae_mcp_core.common import load_prompt
+    from radia_mcp.common import load_prompt
     text = load_prompt(\"radia_mcp.ih\", \"karl_overview\")   # → str
 
 Migration order recommended (highest pain first):

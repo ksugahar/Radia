@@ -1,5 +1,5 @@
 """Cubit probe preserves the shared cross-CAD entity vocabulary."""
-from cae_mcp_core.common.server_hardening import PROBE_FACE_CORE_KEYS, PROBE_SOLID_CORE_KEYS
+from cubit_mesh_export.mcp._support.server_hardening import PROBE_FACE_CORE_KEYS, PROBE_SOLID_CORE_KEYS
 
 
 def test_cubit_probe_entities_carries_core_keys():

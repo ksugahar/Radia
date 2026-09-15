@@ -12,7 +12,7 @@ import json
 
 import pytest
 
-from cae_mcp_core.common.server_hardening import (
+from radia_mcp.common.server_hardening import (
     PROBE_FACE_CORE_KEYS,
     PROBE_SOLID_CORE_KEYS,
 )

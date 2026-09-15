@@ -35,7 +35,7 @@ mcp_server_document is left in place for backward compatibility.
 import sys
 
 from mcp.server.fastmcp import FastMCP
-from cae_mcp_core.common import register_status_tool
+from radia_mcp.common import register_status_tool
 
 from . import tools as _tools
 

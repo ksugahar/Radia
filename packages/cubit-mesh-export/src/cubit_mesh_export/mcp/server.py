@@ -44,7 +44,7 @@ from cubit_mesh_export.mcp.knowledge.coreform_webinars import get_coreform_webin
 from cubit_mesh_export.mcp.vol_inventory import cubit_hex_geometry_refinement_gate, cubit_live_mixed_mesh_python_gate as _cubit_live_mixed_mesh_python_gate, cubit_mapped_boundary_layer_shell_gate as _cubit_mapped_boundary_layer_shell_gate, cubit_sweep_along_curve_gate as _cubit_sweep_along_curve_gate, cubit_partitioned_sweep_compatibility_gate as _cubit_partitioned_sweep_compatibility_gate, cubit_pyramid_degenerate_hex_export_gate as _cubit_pyramid_degenerate_hex_export_gate, cubit_webcut_conformal_hex_gate as _cubit_webcut_conformal_hex_gate, cubit_webcut_journal_execution_gate as _cubit_webcut_journal_execution_gate, cubit_helical_partition_mesh_gate as _cubit_helical_partition_mesh_gate, cubit_source_journal_replay_gate as _cubit_source_journal_replay_gate, cubit_boundary_layer_candidate_gate as _cubit_boundary_layer_candidate_gate, cubit_boundary_layer_journal_recovery_gate as _cubit_boundary_layer_journal_recovery_gate, cubit_embedded_region_mixed_transition_gate as _cubit_embedded_region_mixed_transition_gate, cubit_embedded_pipe_source_recovery_gate as _cubit_embedded_pipe_source_recovery_gate, cubit_mixed_order_series_inventory_gate, summarize_netgen_vol_inventory
 from cubit_mesh_export.mcp.gmsh_v41 import gmsh_v41_mixed_order_series_gate, summarize_gmsh_v41_ascii
 from cubit_mesh_export.mcp.nastran_consumer import evaluate_nastran_consumer_contract
-from cae_mcp_core.common.lazy_call import lazy_callable
+from cubit_mesh_export.mcp._support.lazy_call import lazy_callable
 _cubit_headless_netgen_export_gate = lazy_callable(".high_order_export_gate", "cubit_headless_netgen_export_gate", __package__)
 _cubit_loft_high_order_vol_series_gate = lazy_callable(".high_order_export_gate", "cubit_loft_high_order_vol_series_gate", __package__)
 _cubit_helical_conductor_source_gate = lazy_callable(".helical_conductor_gate", "cubit_helical_conductor_source_gate", __package__)
@@ -75,10 +75,10 @@ _cubit_partial_volume_hex_diagnosis_gate = lazy_callable(".power_tools_replay_ga
 _cubit_power_tools_cleanup_source_replay_gate = lazy_callable(".power_tools_replay_gate", "cubit_power_tools_cleanup_source_replay_gate", __package__)
 _cubit_ato_levelset_sculpt_source_replay_gate = lazy_callable(".ato_sculpt_gate", "cubit_ato_levelset_sculpt_source_replay_gate", __package__)
 _cubit_levelset_sculpt_hex_validation_gate = lazy_callable(".ato_sculpt_gate", "cubit_levelset_sculpt_hex_validation_gate", __package__)
-from cae_mcp_core.common import failure_log as _fl, register_status_tool
-from cae_mcp_core.common.tool_group import CoarseToolRegistry
-from cae_mcp_core.common import web_docs as _wd
-from cae_mcp_core.common import examples as _ex
+from cubit_mesh_export.mcp._support import failure_log as _fl, register_status_tool
+from cubit_mesh_export.mcp._support.tool_group import CoarseToolRegistry
+from cubit_mesh_export.mcp._support import web_docs as _wd
+from cubit_mesh_export.mcp._support import examples as _ex
 
 # Server-level instructions delivered to the client model at MCP
 # `initialize` time (MathWorks MATLAB MCP server pattern: a short embedded
@@ -91,7 +91,7 @@ knowledge corpus.
 
 Distribution owner: cubit-mesh-export, Python namespace cubit_mesh_export.mcp.
 MCP and the Cubit API/reference are included without radia or radia-mcp.
-Shared MCP utilities belong to cae-mcp-core. Radia topology workflows can
+Required MCP runtime helpers belong to this distribution. Radia topology workflows can
 consume this server, but are not prerequisites for standalone Cubit operation.
 
 Driving model (lab policy): APREPRO commands + Python on the
@@ -2456,7 +2456,7 @@ def _session_log_pointer() -> str | None:
 def _error_payload(stage: str, message: str, *, kind: str | None = None,
                    hint: str | None = None) -> dict:
     """Cubit-flavored wrapper over the shared error contract."""
-    from cae_mcp_core.common.server_hardening import error_payload
+    from cubit_mesh_export.mcp._support.server_hardening import error_payload
     log = _session_log_pointer()
     payload = error_payload(
         stage, message, kind=kind, hint=hint,
@@ -3921,24 +3921,9 @@ def _run_batch(step_path: str | None, commands: list[str],
 
 def _netgen_mesh_to_msh(step_path: Path, maxh: float, out_msh: Path,
                         order: int = 1) -> dict:
-	"""STEP -> Netgen tet mesh (optionally curved) -> GMSH .msh v4.1
-	(via radia's exporter, honoring the lab's vol/v4.1-only interchange
-	policy).  order=2 emits Tet10 with curved geometry, making the
-	referee's min_jacobian_ratio a real curvature diagnostic (verified:
-	sphere at order 2 reports jac_ratio ~0.79 vs 1.0 for straight)."""
-	from netgen.occ import OCCGeometry
-	from ngsolve import Mesh, TaskManager
-	from radia.gmsh_post_export import GmshPostExport
-
-	with TaskManager():
-		geo = OCCGeometry(str(step_path))
-		ngmesh = geo.GenerateMesh(maxh=maxh)
-		mesh = Mesh(ngmesh)
-		if order > 1:
-			mesh.Curve(order)
-		post = GmshPostExport(mesh)
-		post.write(str(out_msh))
-	return {"n_elements": mesh.ne, "n_vertices": mesh.nv}
+	"""STEP -> Netgen curved tetrahedra -> Gmsh 4.1, without Radia."""
+	from ._support.netgen_compare import step_to_msh
+	return step_to_msh(step_path, maxh, out_msh, order)
 
 
 def _quality_row(route: str, mesher: str, q: dict) -> dict:
@@ -4005,7 +3990,7 @@ def cubit_netgen_quality_compare(step_path: str,
 	                 possible), size
 
 	Referee: GMSH minSICN via the radia-gmsh quality engine
-	(`cae_mcp_core.mesh.msh_inspect.mesh_quality`) evaluated on each
+	(`cubit_mesh_export.mcp._support.mesh_quality.mesh_quality`) evaluated on each
 	exported `.msh v4.1` -- ONE metric implementation for every mesher,
 	so numbers are directly comparable. minSICN is defined for tets AND
 	hexes, but comparing across element FAMILIES is still
@@ -4134,7 +4119,7 @@ def cubit_netgen_quality_compare(step_path: str,
 			         "pass netgen_maxh and cubit_size explicitly"))
 
 	try:
-		from cae_mcp_core.mesh.msh_inspect import mesh_quality
+		from cubit_mesh_export.mcp._support.mesh_quality import mesh_quality
 	except ImportError as exc:
 		return json.dumps(_error_payload(
 			"referee", f"gmsh referee unavailable: {exc}",
@@ -4225,7 +4210,7 @@ def cubit_netgen_quality_compare(step_path: str,
 		"all_routes_completed": bool(rows) and all(
 			row.get("status") == "ok" for row in rows),
 		"step": str(p),
-		"referee": "gmsh minSICN (cae_mcp_core.mesh.msh_inspect.mesh_quality)",
+		"referee": "gmsh minSICN (cubit_mesh_export.mcp._support.mesh_quality.mesh_quality)",
 		"threshold": threshold,
 		"rows": rows,
 		"notes": notes,
@@ -4635,7 +4620,7 @@ def _collect_mesh_gates(msh: Path, vol: Path, v_reference: float,
 	Returns (verification_error_or_None, gates, metrics); min quality is
 	reported, never gated.  The verification guards (inspection actually
 	ran, mesh volume finite) are part of the bf8ab4c0b hardening."""
-	from cae_mcp_core.mesh.msh_inspect import mesh_quality, mesh_total_volume
+	from cubit_mesh_export.mcp._support.mesh_quality import mesh_quality, mesh_total_volume
 	vol_report = mesh_total_volume(msh)
 	quality = mesh_quality(msh)
 	if not vol_report.get("ran") or not vol_report.get("ok"):
@@ -5149,15 +5134,6 @@ def cubit_vfrac_to_vol(vfrac_path: str,
 	for index, name in enumerate(labels):
 		per_material[index]["name"] = name
 
-	from cubit_mesh_export.mcp.session import get_cubit_bin_dir
-	bin_dir = get_cubit_bin_dir()
-	sculpt_exe = (Path(bin_dir) / "sculpt.exe") if bin_dir else None
-	if sculpt_exe is None or not sculpt_exe.is_file():
-		return json.dumps(_error_payload(
-			"environment", "sculpt.exe not found in the Cubit bin "
-			f"directory ({bin_dir}); Sculpt ships with Coreform Cubit "
-			"2025.12+ on Windows", kind="environment"))
-
 	base = p.with_name(p.name[:-len(".e.1.0")])
 	vol = Path(out_vol) if out_vol else base.with_suffix(".hex.vol")
 	msh = Path(out_msh) if out_msh else base.with_suffix(".hex.msh")
@@ -5173,6 +5149,14 @@ def cubit_vfrac_to_vol(vfrac_path: str,
 		return json.dumps(_error_payload(
 			"input", "vfrac input, out_vol, out_msh, and the derived "
 			"Sculpt Exodus must all be distinct paths"))
+	from cubit_mesh_export.mcp.session import get_cubit_bin_dir
+	bin_dir = get_cubit_bin_dir()
+	sculpt_exe = (Path(bin_dir) / "sculpt.exe") if bin_dir else None
+	if sculpt_exe is None or not sculpt_exe.is_file():
+		return json.dumps(_error_payload(
+			"environment", "sculpt.exe not found in the Cubit bin "
+			f"directory ({bin_dir}); Sculpt ships with Coreform Cubit "
+			"2025.12+ on Windows", kind="environment"))
 	for output in (vol, msh, sculpt_exo):
 		output.parent.mkdir(parents=True, exist_ok=True)
 		try:
@@ -5644,7 +5628,7 @@ def cubit_ask(query: str, limit: int = 6,
 
 	# Layer 2: scraped examples via cubit_examples (unions forum + local)
 	try:
-		from cae_mcp_core.common import examples as _ex
+		from cubit_mesh_export.mcp._support import examples as _ex
 		ex_r = _ex.search_examples("cubit", q, limit=limit,
 		                            auto_refresh_if_empty=False)
 		for h in ex_r.get("results", []):
@@ -7379,7 +7363,7 @@ register_status_tool(
 # conscious choice here; unclassified tools fall back to DESTRUCTIVE and
 # are reported by --selftest.
 
-from cae_mcp_core.common.server_hardening import ANN_DESTRUCTIVE as _ANN_DESTRUCTIVE, ANN_READONLY as _ANN_READONLY, ANN_READONLY_WEB as _ANN_READONLY_WEB, ANN_WRITES as _ANN_WRITES, classify_tool_annotations as _classify_tool_annotations_common, hide_gate_tools as _hide_gate_tools, install_call_log as _install_call_log_common
+from cubit_mesh_export.mcp._support.server_hardening import ANN_DESTRUCTIVE as _ANN_DESTRUCTIVE, ANN_READONLY as _ANN_READONLY, ANN_READONLY_WEB as _ANN_READONLY_WEB, ANN_WRITES as _ANN_WRITES, classify_tool_annotations as _classify_tool_annotations_common, hide_gate_tools as _hide_gate_tools, install_call_log as _install_call_log_common
 
 # Tools that execute commands in (or overwrite / stop) the headless session.
 _DESTRUCTIVE_TOOLS = {
@@ -7512,7 +7496,7 @@ def _setup_mode() -> int:
 def main():
 	"""Entry point for mcp-server-cubit command."""
 	if '--selftest' in sys.argv[1:]:
-		from cae_mcp_core.common.utf8_stdout import use_utf8_stdout
+		from cubit_mesh_export.mcp._support.utf8_stdout import use_utf8_stdout
 		use_utf8_stdout()
 		try:
 			_selftest(audit_repo='--audit-repo' in sys.argv[1:])
@@ -7521,7 +7505,7 @@ def main():
 				return
 			raise
 	elif '--setup' in sys.argv[1:]:
-		from cae_mcp_core.common.utf8_stdout import use_utf8_stdout
+		from cubit_mesh_export.mcp._support.utf8_stdout import use_utf8_stdout
 		use_utf8_stdout()
 		sys.exit(_setup_mode())
 	else:

@@ -11,8 +11,8 @@ import math
 from pathlib import Path
 
 import pytest
-
-np = pytest.importorskip("numpy")
+import netCDF4 as nc
+import numpy as np
 
 from cubit_mesh_export.mcp import server                        # noqa: E402
 from cubit_mesh_export.mcp.server import cubit_vfrac_to_vol     # noqa: E402
@@ -23,7 +23,6 @@ from cubit_mesh_export.mcp.server import cubit_vfrac_to_vol     # noqa: E402
 # ----------------------------------------------------------------------
 def _write_vfrac(path: Path, n_mat: int = 1, nel=(2, 2, 2),
                  lo=(0.0, 0.0, 0.0), hi=(1.0, 1.0, 1.0)) -> None:
-    nc = pytest.importorskip("netCDF4")
     nx, ny, nz = nel
     n_cells = nx * ny * nz
     ds = nc.Dataset(str(path), "w", format="NETCDF3_64BIT_OFFSET")
@@ -116,7 +115,9 @@ def test_numeric_contract_fails_before_any_subprocess(tmp_path, kwargs,
     assert needle in report["error"]
 
 
-def test_coinciding_output_paths_are_rejected(tmp_path):
+def test_coinciding_output_paths_are_rejected(tmp_path, monkeypatch):
+    from cubit_mesh_export.mcp import session
+    monkeypatch.setattr(session, "get_cubit_bin_dir", lambda: None)
     vf = tmp_path / "design.e.1.0"
     _write_vfrac(vf)
     same = str(tmp_path / "both.out")
@@ -319,7 +320,6 @@ def test_bcname_face_stats_returns_empty_without_points(tmp_path):
 def test_rve_classification_rejects_a_non_rve_exodus(tmp_path):
     """Fewer than six sidesets means Sculpt's rve mode did not fire --
     fail loudly instead of naming whatever is there."""
-    nc = pytest.importorskip("netCDF4")
     exo = tmp_path / "plain_sculpt.e.1.0"
     ds = nc.Dataset(str(exo), "w", format="NETCDF3_64BIT_OFFSET")
     try:

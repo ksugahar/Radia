@@ -22,7 +22,7 @@ Why this helps LLMs (and humans):
 Usage in a server's server.py:
 
     from mcp.server.fastmcp import FastMCP
-    from cae_mcp_core.common.status import register_status_tool
+    from cubit_mesh_export.mcp._support.status import register_status_tool
 
     mcp = FastMCP("mcp-server-bayesian-opt")
 
@@ -125,7 +125,7 @@ def build_status_payload(
     return payload
 
 
-def _distribution_provenance(distribution_name: str = "cae-mcp-core") -> dict:
+def _distribution_provenance(distribution_name: str = "cubit-mesh-export") -> dict:
     """Return installed-distribution facts that expose editable-path drift."""
     result = {"name": distribution_name, "version": "unknown"}
     try:
@@ -275,10 +275,10 @@ def register_status_tool(
     # kept the old modules, FastMCP kept the old function objects, and the
     # client kept the tool list it saw at connection.
     # Keep this import lazy: document/conversion helpers import
-    # ``cae_mcp_core.common`` in lightweight environments that intentionally do
+    # ``cubit_mesh_export.mcp._support`` in lightweight environments that intentionally do
     # not install the MCP SDK, while a server calling this function always has
     # it available.
-    from cae_mcp_core.hot_reload import register_reload_tool
+    from cubit_mesh_export.mcp._support.hot_reload import register_reload_tool
 
     register_reload_tool(mcp, tool_name.removesuffix("_status") + "_reload_code",
                          module_prefix=subpackage.split('.')[0])
@@ -287,8 +287,8 @@ def register_status_tool(
     # annotations and exact loaded-source provenance.  This happens after the
     # shared status/reload controls are registered so those tools are covered
     # too.  Server-specific annotation passes may refine the inferred presets.
-    from cae_mcp_core.common.mcp_contract import apply_tool_contract, audit_tool_contract
-    from cae_mcp_core.common.server_hardening import install_call_log
+    from cubit_mesh_export.mcp._support.mcp_contract import apply_tool_contract, audit_tool_contract
+    from cubit_mesh_export.mcp._support.server_hardening import install_call_log
 
     distribution = _distribution_provenance(subpackage.split('.')[0].replace('_', '-'))
     apply_tool_contract(

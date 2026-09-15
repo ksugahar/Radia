@@ -41,7 +41,7 @@ except ImportError:
 from mcp.server.fastmcp import FastMCP
 
 from .build123d_knowledge import get_build123d_documentation
-from cae_mcp_core.common.lazy_call import lazy_callable
+from radia_mcp.common.lazy_call import lazy_callable
 _face_first_perforation_handoff_gate = lazy_callable(".face_first_perforation_gate", "face_first_perforation_handoff_gate", __package__)
 _face_first_perforation_source_replay_gate = lazy_callable(".face_first_perforation_gate", "face_first_perforation_source_replay_gate", __package__)
 _cross_kernel_mass_topology_diagnosis_gate = lazy_callable(".mass_topology_diagnosis_gate", "cross_kernel_mass_topology_diagnosis_gate", __package__)
@@ -83,11 +83,11 @@ _validate_build123d_v50_source_identity = lazy_callable(".feature_replay_identit
 _validate_build123d_v51_public_identity = lazy_callable(".mass_sweep_exchange_identity_v51", "validate_public_identity", __package__)
 _validate_build123d_v51_source_identity = lazy_callable(".mass_sweep_exchange_identity_v51", "validate_source_identity", __package__)
 from .rules import ALL_RULES as _B3D_LINT_RULES
-from cae_mcp_core.common import failure_log as _fl, register_status_tool
-from cae_mcp_core.common.tool_group import CoarseToolRegistry
-from cae_mcp_core.common import web_docs as _wd
-from cae_mcp_core.common import examples as _ex
-from cae_mcp_core.common.server_hardening import classify_tool_annotations as _classify_tool_annotations_common, error_payload as _error_payload_common, hide_gate_tools as _hide_gate_tools, install_call_log as _install_call_log_common
+from radia_mcp.common import failure_log as _fl, register_status_tool
+from radia_mcp.common.tool_group import CoarseToolRegistry
+from radia_mcp.common import web_docs as _wd
+from radia_mcp.common import examples as _ex
+from radia_mcp.common.server_hardening import classify_tool_annotations as _classify_tool_annotations_common, error_payload as _error_payload_common, hide_gate_tools as _hide_gate_tools, install_call_log as _install_call_log_common
 
 # Server-level instructions delivered to the client model at MCP
 # `initialize` time (same MathWorks pattern as mcp-server-cubit).
@@ -2954,7 +2954,7 @@ def build123d_ask(query: str, limit: int = 6,
       - `build123d_lookup`   (bundled kb + failure log)
       - `build123d_examples` (GitHub examples/ + bd_warehouse +
         issues + GraphQL Discussions — unioned via the `build123d`
-        family in cae_mcp_core.common.examples)
+        family in radia_mcp.common.examples)
       - optionally `build123d_web_docs` (live readthedocs)
 
     Hits carry `layer` (`kb` / `examples` / `web`) so the caller
@@ -4849,7 +4849,7 @@ _install_call_log_common(mcp, "build123d_tool_calls.jsonl",
 
 def main():
     if "--selftest" in sys.argv:
-        from cae_mcp_core.common.utf8_stdout import use_utf8_stdout
+        from radia_mcp.common.utf8_stdout import use_utf8_stdout
         use_utf8_stdout()
         print("build123d MCP server self-test:")
 

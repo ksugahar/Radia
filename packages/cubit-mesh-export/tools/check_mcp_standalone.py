@@ -13,6 +13,7 @@ from mcp.client.stdio import stdio_client
 async def check():
     assert importlib.util.find_spec('radia') is None, 'Radia must be absent'
     assert importlib.util.find_spec('radia_mcp') is None, 'radia-mcp must be absent'
+    assert importlib.util.find_spec('cae_mcp_core') is None, 'Retired foundation must be absent'
     import cubit_mesh_export
     assert Path(cubit_mesh_export.__file__).resolve().is_relative_to(Path(sys.prefix).resolve())
     with tempfile.TemporaryDirectory(prefix='cubit-mcp-wheel-', dir='C:/temp') as work:

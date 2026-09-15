@@ -11,7 +11,7 @@ Ported behavior origin: wjc9011/COMSOL_Multiphysics_MCP fork
 
 import pytest
 
-from cae_mcp_core.common.chroma_retriever import (
+from radia_mcp.common.chroma_retriever import (
     detect_filename_language,
     find_chapters,
     CHAPTER_PATTERNS,
@@ -141,9 +141,9 @@ def test_chapter_patterns_constant_is_list():
 # ----- common/__init__.py re-exports ------------------------------------
 
 def test_common_init_reexports():
-    """The new helpers must be importable from cae_mcp_core.common
+    """The new helpers must be importable from radia_mcp.common
     directly (not just from .chroma_retriever)."""
-    from cae_mcp_core.common import (
+    from radia_mcp.common import (
         ChromaRetriever,
         extract_pdf_chunks,
         detect_filename_language,
