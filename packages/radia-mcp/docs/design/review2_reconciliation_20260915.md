@@ -44,6 +44,10 @@ changed by this maintenance patch.
   dependency in pure force helpers. NGSolve imports now occur only inside FEM
   operations; formulas and signatures are unchanged. A cold-process test blocks
   NGSolve explicitly and verifies pure helpers work while FEM calls fail loudly.
+- The surface-load unit test now uses the independent analytic pressure
+  `B^2/(2*mu)` as its expected value, instead of calling the separate Radia
+  distribution's pressure adapter. That adapter still requires Radia; its
+  misleading dependency-free docstring is corrected, not its behavior.
 
 This patch closes the identified source-tree coupling, not package-wide
 completion, a release, or the outstanding native-evidence refresh.
