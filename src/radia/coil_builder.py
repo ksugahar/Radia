@@ -799,7 +799,7 @@ class CoilBuilder:
 		"""
 		import operator
 		import radia as rad
-		from radia.coil_profile import RectProfile
+		from radia.coil_profile import RectProfile, CircleProfile
 
 		for count in (nw, nh, n_arc):
 			if isinstance(count, (bool, np.bool_)) or operator.index(count) < 1:
@@ -812,6 +812,7 @@ class CoilBuilder:
 		                         (np.arange(nh) + .5) / nh, indexing='ij')
 		paths = [[] for _ in range(nw * nh)]
 		previous_exit = None
+		previous_profile_type = None
 		for index, seg in enumerate(self.segments):
 			if type(seg) is StraightSegment:
 				start, end = seg.profile, seg.profile
@@ -819,16 +820,22 @@ class CoilBuilder:
 				start, end = seg.profile_start, seg.profile_end
 			else:
 				raise NotImplementedError(f"segment {index}: only rectangular straight segments and lofts are supported")
+			if type(start) is not type(end):
+				raise NotImplementedError(f"segment {index}: cross-type lofts are unsupported")
+			if previous_profile_type is not None and type(start) is not previous_profile_type:
+				raise ValueError(f"segment {index}: disconnected profile types")
 			for profile in (start, end):
-				if type(profile) is not RectProfile:
-					raise NotImplementedError(f"segment {index}: rectangular profiles are required")
+				if type(profile) not in (RectProfile, CircleProfile):
+					raise NotImplementedError(f"segment {index}: rectangular or circular profiles are required")
 				if not np.all(np.isfinite(profile.bounding_wh())) or min(profile.bounding_wh()) <= 0:
 					raise ValueError(f"segment {index}: profile dimensions must be finite and positive")
 			curved = type(seg) is LoftArcSegment
+			w0, h0 = start.bounding_wh()
+			w1, h1 = end.bounding_wh()
 			if curved:
 				if not np.isfinite(seg.arc_angle) or not 0 < seg.arc_angle <= 360:
 					raise ValueError(f"segment {index}: arc loft angle must be in (0, 360]")
-				if not np.isfinite(seg.radius) or seg.radius <= max(start.w, end.w) / 2:
+				if not np.isfinite(seg.radius) or seg.radius <= max(w0, w1) / 2:
 					raise ValueError(f"segment {index}: arc loft has nonpositive inner radius")
 				length = seg.radius * np.deg2rad(seg.arc_angle)
 			else:
@@ -841,11 +848,15 @@ class CoilBuilder:
 			# Corner checks also detect a section jump with a 1x1 center sample.
 			corners0 = start.sample_at(np.array([0, 1, 1, 0]), np.array([0, 0, 1, 1]))
 			corners1 = end.sample_at(np.array([0, 1, 1, 0]), np.array([0, 0, 1, 1]))
+			if type(start) is CircleProfile:
+				corners0 = start.sample_at(np.ones(4), np.arange(4) / 4)
+				corners1 = end.sample_at(np.ones(4), np.arange(4) / 4)
 			entry = seg.start_pos + corners0[0][:, None] * frame[0] + corners0[1][:, None] * frame[2]
-			if previous_exit is not None and not np.allclose(previous_exit, entry, rtol=0, atol=1e-12 * max(start.w, start.h)):
+			if previous_exit is not None and not np.allclose(previous_exit, entry, rtol=0, atol=1e-12 * max(w0, h0)):
 				raise ValueError(f"segment {index}: disconnected cross-section")
 			exit_frame = seg.end_orientation
 			previous_exit = seg.end_pos + corners1[0][:, None] * exit_frame[0] + corners1[1][:, None] * exit_frame[2]
+			previous_profile_type = type(end)
 			uv0, uv1 = start.sample_at(alpha.ravel(), beta.ravel()), end.sample_at(alpha.ravel(), beta.ravel())
 			p0 = seg.start_pos + uv0[0][:, None] * frame[0] + uv0[1][:, None] * frame[2]
 			p1 = seg.end_pos + uv1[0][:, None] * exit_frame[0] + uv1[1][:, None] * exit_frame[2]
@@ -860,7 +871,7 @@ class CoilBuilder:
 					radial = np.cos(theta) * frame[0] + np.sin(theta) * frame[1]
 					waypoints.append(seg.arc_center + (seg.radius + u)[:, None] * radial + v[:, None] * frame[2])
 			for k, path in enumerate(paths):
-				if path and not np.allclose(path[-1], p0[k], rtol=0, atol=1e-12 * max(length, start.w, start.h)):
+				if path and not np.allclose(path[-1], p0[k], rtol=0, atol=1e-12 * max(length, w0, h0)):
 					raise ValueError(f"segment {index}: disconnected filament; no implicit joining wire")
 				if not path:
 					path.append(p0[k].tolist())
