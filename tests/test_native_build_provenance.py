@@ -65,6 +65,39 @@ def test_pwsh_output_decodes_unicode_independently_of_windows_locale():
     assert result.stdout.strip() == chr(0x8b66)
 
 
+@pytest.mark.parametrize("log,exit_code,artifact_exists,expected", [
+    ("ninja: error: unknown target 'cubit_mesh_curver'", 0, True, 1),
+    ("ERROR: cubit_mesh_curver build failed", 0, True, 1),
+    ("ERROR: cubit_mesh_curver configuration failed", 0, True, 1),
+    ("ERROR: MATLAB MEX target build failed", 0, True, 1),
+    ("ninja: build stopped: subcommand failed", 0, True, 1),
+    ("CMake Error at CMakeLists.txt:1", 0, True, 1),
+    ("Build completed.", 7, True, 7),
+    ("Build completed.", 0, False, 1),
+    ("Build completed.", 0, True, 0),
+])
+def test_native_build_result_rejects_masked_failures(
+    tmp_path, log, exit_code, artifact_exists, expected
+):
+    artifact = tmp_path / "candidate.pyd"
+    if artifact_exists:
+        artifact.write_bytes(b"old artifact does not excuse failed build")
+    # Evaluate only the real function's AST, never execute the build entrypoint.
+    command = (
+        f"$ast=[System.Management.Automation.Language.Parser]::ParseFile({_quote(BUILD_SCRIPT)},[ref]$null,[ref]$null); "
+        "$definition=$ast.Find({param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] "
+        "-and $n.Name -eq 'Get-NativeBuildResult'},$true); "
+        "if ($null -eq $definition) { exit 9 }; "
+        ". ([scriptblock]::Create($definition.Extent.Text)); "
+        f"$result=Get-NativeBuildResult -ExitCode {exit_code} "
+        f"-LogText '{log.replace(chr(39), chr(39) * 2)}' "
+        f"-RequiredArtifacts @({_quote(artifact)}); "
+        f"if ($result -ne {expected}) {{ Write-Output $result; exit 8 }}"
+    )
+    result = _pwsh(command)
+    assert result.returncode == 0, (result.stdout, result.stderr)
+
+
 def test_dot_source_does_not_change_caller_strict_mode_or_emit_values():
     command = (
         "$ErrorActionPreference='Stop'; "
