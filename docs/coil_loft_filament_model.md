@@ -4,6 +4,12 @@
 segments and straight linear rectangular lofts into native `ObjFlmCur` objects.
 The existing solid `to_radia()` API does not silently select this approximation.
 
+Matching circular straight and arc lofts are also supported. Their canonical
+section grid uses radius `r*sqrt(alpha)` and angle `2*pi*beta`, with equal
+current per cell. Radii interpolate linearly. Cross-type transitions remain
+unsupported. `tests/test_coil_builder_circle_loft_field.py` checks an
+independent volume integral, section/path refinement and rigid transforms.
+
 Positive-angle rectangular arc lofts are also supported, with an explicit
 `n_arc` chord count (default 64). Their centerline and interpolated section
 are sampled on the arc; each chord uses the closed-form straight-filament
@@ -59,8 +65,8 @@ positive dimensions, a clear inner radius, and `n_sub >= 4`; negative and
 closed bends and cross-type profiles remain unsupported. Circular lofts
 interpolate radius linearly. OCC section interpolation can have nonmonotone
 volume errors; check the analytic volume and successive refined geometries,
-not just a presumed convergence rate. Circular CAD support does not imply
-circular support in `to_radia_loft_filaments`. This does not change the native-solid
+not just a presumed convergence rate. Circular field export remains an explicit
+external thin-filament approximation. This does not change the native-solid
 restrictions of `to_radia()`.
 
 `tests/test_coil_builder_loft_cad.py` checks analytic volume, refinement,
