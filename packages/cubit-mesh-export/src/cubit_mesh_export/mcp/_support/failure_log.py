@@ -1,3 +1,5 @@
+# Cubit-owned implementation; intentionally maintained independently of Radia MCP.
+# Derived support retains BSD-3-Clause terms: see LICENSE-BSD-3-Clause.txt.
 """Append-only JSONL log of failed tool executions.
 
 Purpose: let LLM-driven sessions learn from past mistakes across calls

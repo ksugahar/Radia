@@ -51,7 +51,7 @@ PROTOCOL_VERSION = 2  # file-drop protocol; stdio batch uses protocol v1
 
 def _cubit_temp_root() -> Path:
     """Honor the caller's scratch root on every supported platform."""
-    configured = os.environ.get("RADIA_MCP_TEMP")
+    configured = os.environ.get("CUBIT_MCP_TEMP")
     if configured is not None:
         return Path(configured)
     return Path("C:/temp" if sys.platform == "win32" else tempfile.gettempdir())
@@ -1092,7 +1092,7 @@ class CubitSession:
         # so __file__-based sibling imports (probe_ops) resolve against
         # Cubit's CWD and fail -- found by the 2026-08-05 GUI E2E. The
         # package dir is passed explicitly instead.
-        env["RADIA_MCP_CUBIT_PKG_DIR"] = str(Path(__file__).parent)
+        env["CUBIT_MCP_CUBIT_PKG_DIR"] = str(Path(__file__).parent)
 
         # Detach the Cubit subprocess so it outlives THIS MCP server
         # process.  DETACHED_PROCESS + CREATE_NEW_PROCESS_GROUP mean: no

@@ -1,3 +1,5 @@
+# Cubit-owned implementation; intentionally maintained independently of Radia MCP.
+# Derived support retains BSD-3-Clause terms: see LICENSE-BSD-3-Clause.txt.
 """Explicit MCP metadata shared by radia-mcp capability servers."""
 
 from __future__ import annotations
@@ -117,7 +119,7 @@ def apply_tool_contract(
                 "validate solver ownership and artifacts before side effects."
             )
     audit = audit_tool_contract(mcp)
-    mcp._radia_runtime_contract = audit
+    mcp._cubit_runtime_contract = audit
     return audit
 
 
