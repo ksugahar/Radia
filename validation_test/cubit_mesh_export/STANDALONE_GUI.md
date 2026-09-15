@@ -9,7 +9,11 @@ Do not repoint shared editable installations to run these tests.
    Run `run_standalone_gui_probe.py <new-output-directory>` with that same venv.
    The probe loads menu code from the installed wheel by file path, not by
    importing Python-3.12 native libraries inside Cubit. It registers six actions,
-   captures the window and exports an order-2 sphere. The controller requires
+   captures the window and exports an order-2 sphere. Set
+   `CME_GUI_TEST_DIALOGS=1` to exercise six cancel paths, real Netgen accept +
+   check-vol result tables, and a missing-checker error dialog. Only the settings
+   file and external viewer are redirected; export/check use the real backend.
+   The controller requires
    successful probe AND Cubit exit zero; intermediate gui-result.json alone is
    not acceptance. Repeat with a different output directory for a fresh process.
 3. Validate each sphere.vol using the structural, CAD and strict body/outer label
@@ -18,9 +22,23 @@ Do not repoint shared editable installations to run these tests.
 Diagnostic environment switches: CME_GUI_TEST_BASELINE=1 skips the candidate;
 CME_GUI_TEST_MENU_ONLY=1 skips mesh export. Neither is full GUI acceptance.
 
-The startup-file registration is tested in a scratch profile. The GUI probe
-uses -noinitfile with an explicit candidate path: two passing starts do not
-prove persistence of a user's imported WorkflowToolbar. Manual package import,
-dialog interaction/cancel paths and persisted-toolbar reopen remain separate
-acceptance steps before release. Existing Radia legacy GUI assets are retained
-pending adapter consolidation; no new version or publication is implied.
+4. Run `run_standalone_toolbar_persistence.py <new-output-directory>` with the
+   wheel-only interpreter. This uses the real Custom Toolbar Editor to import
+   its generated package, exits, then starts a new Cubit process without an
+   explicit toolbar load. It verifies all six restored buttons, clicks each,
+   cancels each real dialog, and checks that the imported copy supplies the code.
+   The toolbar gets its own dock row so all buttons are visible for the test.
+   Native clicks are queued, not called synchronously from a nested Python
+   callback: otherwise Cubit's Python importer can deadlock behind the driver.
+
+The startup registration gate uses a scratch profile. Official persistence uses
+the user's actual Cubit.ini because Qt ignores APPDATA overrides on Windows.
+The controller requires no active Cubit session, saves the exact original file
+to its output directory, temporarily clears only the toolbar registration, and
+restores the original bytes/hash in finally. It never overwrites the user's
+imported toolbar directory. A still-running Cubit blocks restoration and must
+be resolved before completion; do not discard the saved preferences.
+
+The legacy Radia menu, startup and installer paths are thin file-only bridges;
+the exporter owns the implementation and assets. No new version, publication,
+shared editable change or LAB/100 deployment is implied by these local tests.

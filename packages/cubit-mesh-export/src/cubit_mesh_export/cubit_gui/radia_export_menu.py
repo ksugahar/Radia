@@ -828,7 +828,6 @@ def _run_netgen_export(cubit_mod, parent):
             f"export netgen command did not produce:\n{vol_path}")
         return
     print(f"Exported: {vol_path}")
-    _open_in_os(vol_path)
 
     # --- Phase 2: NGSolve subprocess to verify .vol ---
     python = _find_external_python()
@@ -852,6 +851,10 @@ def _run_netgen_export(cubit_mod, parent):
         QMessageBox.warning(parent, "Verification",
                             "NGSolve verification timed out.")
         return
+    except OSError as exc:
+        QMessageBox.warning(parent, "Verification failed",
+                            f"Cannot start standalone check-vol:\n{exc}")
+        return
 
     try:
         with open(report_path, encoding="utf-8") as stream:
@@ -860,16 +863,13 @@ def _run_netgen_export(cubit_mod, parent):
         QMessageBox.warning(parent, "Verification",
                             f"No valid check-vol report:\n{stderr[:2000]}")
         return
-    except OSError as exc:
-        QMessageBox.warning(parent, "Verification failed",
-                            f"Cannot start standalone check-vol:\n{exc}")
-        return
     if rc != 0 or not r.get("passed", False):
         QMessageBox.warning(parent, "Verification failed",
                             json.dumps(r, indent=2)[:4000])
         return
 
     _show_netgen_result(r, vol_path, order, parent)
+    _open_in_os(vol_path)
 
 
 def _show_netgen_result(r, vol_path, order, parent):
