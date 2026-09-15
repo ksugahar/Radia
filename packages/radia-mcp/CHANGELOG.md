@@ -7,6 +7,11 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- Publication preparation: reject stale Cubit/shared-core files and the retired
+  Cubit entry point in the Radia MCP wheel. Flag retired client launchers for
+  owner-managed migration; preserve external Cubit settings and permissions.
+- Mixed omega belongs to Radia MCP, not Cubit MCP. Its release coverage must
+  be tied to the accepted implementation and validation evidence before tagging.
 - Move Cubit MCP into `cubit-mesh-export` and shared runtime helpers into
   `cae-mcp-core`; remove old Python module paths and the Cubit console script
   from this distribution. Update clients to `cubit_mesh_export.mcp.server`.

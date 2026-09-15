@@ -1,8 +1,6 @@
 """radia-mcp: MCP servers for Radia CAE ecosystem.
 
 Layout:
-  cubit_mesh_export.mcp         — Cubit automation MCP server (headless command path
-                            plus Cubit's embedded QTimer/file-drop bridge)
   radia_mcp.build123d     — standalone build123d MCP server (STEP → Cubit workflow)
   radia_mcp.gmsh          — standalone gmsh MSH v4.1 inspect/validate +
                             post-display launch artifacts + policy lint
