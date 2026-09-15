@@ -578,7 +578,7 @@ if /I "$BuildCubitPlugin"=="True" (
     rem   Building cubit_mesh_export.ccm; APREPRO commands without Qt deps
     rem ========================================
     rem radia 4.80.0 removed the Qt5 RadiaComp.cpp .ccl GUI component;
-    rem all GUI work is now in src/radia/panels/radia_export_menu.py using
+    rem all GUI work is now in cubit_mesh_export/cubit_gui using
     rem PySide6.  The .ccm has no Qt dependency and builds unconditionally
     rem when the Cubit SDK is present.
     echo.

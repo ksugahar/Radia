@@ -36,6 +36,7 @@ Homepage = "https://github.com/ksugahar/Radia"
 [project.scripts]
 cubit-plugin-install = "cubit_mesh_export.install:main"
 cubit-smoke-test = "cubit_mesh_export.smoke_test:main"
+cubit-toolbar-smoke-test = "cubit_mesh_export.toolbar_smoke:main"
 check-vol = "cubit_mesh_export.check:main"
 
 [tool.setuptools.packages.find]
@@ -43,7 +44,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 # Note (radia 4.80.0): "*.ccl" removed.  The Qt5 GUI .ccl was deleted
-# (RadiaComp.cpp gone); PySide6 toolbar at radia/panels/radia_export_menu.py
+# (RadiaComp.cpp gone); exporter-owned PySide6 toolbar in cubit_gui
 # replaces it.  cubit-plugin-install now treats any deployed .ccl as stale.
 cubit_mesh_export = ["*.pyd", "*.so", "*.ccm", "native_payloads.json"]
 "cubit_mesh_export.cubit_helpers" = ["*.py"]
