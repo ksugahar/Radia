@@ -28,9 +28,11 @@ foundation. Neither `radia` nor `radia-mcp` is required. Replace old client
 module commands with `python -m cubit_mesh_export.mcp.server`; there is no
 `radia_mcp.cubit` compatibility module. Use the selected installation's Python.
 
-CST/build123d-style Cubit adapters belong here too, not in `radia-mcp`.
-Existing STEP exchange and named-solid/history checks are interoperability,
-not a claim of full CST or build123d API compatibility. Any adapter must
+Electromagnetic modeling helpers use neutral domain names and explicit
+Cubit or build123d backends. Reference commercial-solver brands do not belong
+in repository API names, docs, tests, or commit messages. Existing STEP exchange
+and named-solid/history checks are interoperability, not vendor API compatibility.
+Any adapter must
 declare supported operations and test their Cubit meaning; unsupported
 operations fail explicitly, without substituting an unrelated CAD backend.
 LLM execution remains APREPRO/Python batch and never launches or attaches to
