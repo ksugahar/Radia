@@ -175,11 +175,20 @@ without adding NumPy. A NumPy-enabled test pass is not evidence that the bare
 runtime requires NumPy or that numerical solver dependencies are installed.
 Do not add test-only dependencies to mandatory runtime requirements.
 
-Some package tests inspect monorepo MATLAB, policy or validation artifacts.
-Those are repository integration checks, not standalone-wheel acceptance.
-They must be separated or supplied with synthetic package-local fixtures before
-claiming that the whole test suite runs from a package-only source distribution;
-do not hide missing integration coverage behind successful skips.
+Package tests must not traverse above the package to read monorepo files.
+MATLAB implementation, repository policy, golden scripts and saved-artifact
+contracts live in `tests/mcp_integration/` at the repository root. Run them with
+`python -m pytest tests/mcp_integration --confcutdir=tests/mcp_integration`;
+this avoids loading the unrelated native-solver root conftest. The MCP CI plan
+selects this lane separately, including changes to its external evidence.
+Missing repository inputs fail; they are not optional installed-wheel skips.
+
+`python tools/check_package_test_boundary.py` copies only this package into
+temporary storage and exercises the refactored unit contracts without monorepo
+siblings. It verifies every selected module executes. This focused source-tree
+probe is not whole-suite or installed-wheel acceptance. Native source/evidence
+freshness stays under `validation_test/radia_mcp/`; moving that check does not
+make stale native validation evidence current.
 
 Before publishing, treat a green matrix as a release candidate, not as
 operational completion.  The minimum pre-push health evidence is:
