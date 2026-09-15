@@ -15,7 +15,7 @@ import urllib.request
 import zipfile
 from email.parser import BytesParser
 
-SCHEMA = 'cubit-mesh-export.release-dual.v2'
+SCHEMA = 'cubit-mesh-export.release-dual.v3'
 TARGETS = ('lab', '100')
 
 
@@ -39,9 +39,9 @@ def wheel_contract(path, distribution='cubit-mesh-export'):
                 if text:
                     content = content.replace(b'\r\n', b'\n').replace(b'\r', b'\n')
                 files[name] = {'sha256': digest(content), 'text': text}
-    required_files = ('__init__.py', 'common/status.py') if distribution == 'cae-mcp-core' else (
+    required_files = (
         'cubit_mesh_export.ccm', 'cubit_mesh_curver.pyd', 'toolbar_smoke.py',
-        'cubit_gui/toolbar_probe.py', 'mcp/server.py')
+        'cubit_gui/toolbar_probe.py', 'mcp/server.py', 'mcp/_support/status.py')
     for required in required_files:
         if prefix + required not in files:
             raise ValueError('Wheel lacks ' + required)
@@ -66,14 +66,13 @@ import re, shutil, socket, subprocess, sys, sysconfig, zipfile
 cfg = json.loads(base64.b64decode(sys.argv[1]))
 root = Path(cfg['source_root']).resolve()
 package = root / 'packages/cubit-mesh-export'
-core_package = root / 'packages/cae-mcp-core'
 out = Path(cfg['output']).resolve()
 out.mkdir(parents=True, exist_ok=True)
 events = []
 result = dict(schema=cfg['schema'], target=cfg['target'], hostname=socket.gethostname(),
               user=getpass.getuser(), interpreter=sys.executable, source_root=str(root),
               source_sha=cfg['source_sha'], version=cfg['version'],
-              wheel_sha256=cfg['wheel_sha256'], core=cfg['core'], passed=False)
+              wheel_sha256=cfg['wheel_sha256'], passed=False)
 
 def command(args, timeout=120):
     p = subprocess.run(args, capture_output=True, text=True, encoding='utf-8',
@@ -129,13 +128,12 @@ try:
     if command(git + ['status', '--porcelain', '--untracked-files=no']).strip():
         raise RuntimeError('Release checkout has tracked modifications')
     verify_files(package / 'src', cfg['files'])
-    verify_files(core_package / 'src', cfg['core']['files'])
     from packaging.requirements import Requirement
-    for raw in cfg['requires'] + cfg['core']['requires']:
+    for raw in cfg['requires']:
         requirement = Requirement(raw)
         if requirement.marker and not requirement.marker.evaluate():
             continue
-        version = cfg['core']['version'] if requirement.name == 'cae-mcp-core' else md.version(requirement.name)
+        version = md.version(requirement.name)
         if version not in requirement.specifier:
             raise RuntimeError('Unsatisfied dependency; update explicitly before deploy: ' + raw)
     for name in ('netgen-mesher', 'ngsolve'):
@@ -154,7 +152,7 @@ try:
         raise RuntimeError(str(issues))
     if cfg['action'] == 'deploy':
         command([sys.executable, '-m', 'pip', 'install', '--no-deps', '--no-build-isolation',
-                 '-e', str(core_package), '-e', str(package)], 180)
+                 '-e', str(package)], 180)
         command([sys.executable, '-m', 'cubit_mesh_export.install'], 180)
     if cfg['action'] != 'preflight':
         probe = "import json,pathlib,importlib.metadata as m,cubit_mesh_export as c;d=m.distribution('cubit-mesh-export');print(json.dumps(dict(version=c.__version__,file=str(pathlib.Path(c.__file__).resolve()),direct_url=json.loads(d.read_text('direct_url.json')))))"
@@ -164,13 +162,6 @@ try:
                 or identity['direct_url'].get('dir_info', {}).get('editable') is not True):
             raise RuntimeError('Wrong actual editable import: ' + str(identity))
         result['installed'] = identity
-        core_probe = "import json,pathlib,importlib.metadata as m,cae_mcp_core as c;d=m.distribution('cae-mcp-core');print(json.dumps(dict(version=c.__version__,file=str(pathlib.Path(c.__file__).resolve()),direct_url=json.loads(d.read_text('direct_url.json')))))"
-        core_identity = json.loads(command([sys.executable, '-c', core_probe]).strip())
-        if (core_identity['version'] != cfg['core']['version'] or
-                Path(core_identity['file']).resolve() != (core_package / 'src/cae_mcp_core/__init__.py').resolve() or
-                core_identity['direct_url'].get('dir_info', {}).get('editable') is not True):
-            raise RuntimeError('Wrong shared-core editable import: ' + str(core_identity))
-        result['core_installed'] = core_identity
         command([sys.executable, '-m', 'cubit_mesh_export.mcp.server', '--selftest'], 120)
         result['mcp_selftest'] = True
         cli = Path(sysconfig.get_path('scripts')) / 'mcp-server-cubit.exe'
@@ -203,8 +194,7 @@ sys.exit(0 if result['passed'] else 1)
 
 def check_receipt(receipt, contract, target):
     expected = dict(schema=SCHEMA, target=target, source_sha=contract['source_sha'],
-                    version=contract['version'], wheel_sha256=contract['wheel_sha256'],
-                    core=contract['core'])
+                    version=contract['version'], wheel_sha256=contract['wheel_sha256'])
     return (all(receipt.get(k) == v for k, v in expected.items())
             and all(receipt.get(k) is True for k in
                     ('passed', 'unrelated_packages_unchanged', 'smoke_test', 'toolbar_smoke',
@@ -214,8 +204,6 @@ def check_receipt(receipt, contract, target):
 def run(args):
     import tomllib
     contract = wheel_contract(args.wheel)
-    contract['core'] = wheel_contract(args.core_wheel, 'cae-mcp-core')
-    verify_published('cae-mcp-core', contract['core'])
     contract.update(schema=SCHEMA, source_sha=args.source_sha)
     root = Path(args.source_root_lab)
     metadata = tomllib.loads((root / 'packages/cubit-mesh-export/pyproject.toml').read_text(encoding='utf-8'))
@@ -256,5 +244,5 @@ def run(args):
                 raise RuntimeError(result.get('error', 'worker failed'))
     if args.action == 'done':
         (output / 'done.json').write_text(json.dumps(dict(contract, passed=True, targets=list(TARGETS)), indent=2))
-        print('PASS release-dual: exact published exporter/core wheels, LAB/100 editable and GUI/export/MCP gates; Radia/radia-mcp unchanged')
+        print('PASS release-dual: exact published exporter wheel, LAB/100 editable and GUI/export/MCP gates; Radia/radia-mcp unchanged')
     return 0

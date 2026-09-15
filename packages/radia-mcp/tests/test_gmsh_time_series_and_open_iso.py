@@ -105,7 +105,7 @@ def test_time_series_statistics_and_argmax_time(tmp_path):
     assert all(m == pytest.approx(1.0, abs=0.05) for m in agg["max"])
 
     # argmax_time must MOVE with the bump: read the written view back
-    from cae_mcp_core.mesh.msh_inspect import read_msh_data
+    from radia_mcp.gmsh.msh_inspect import read_msh_data
 
     data = read_msh_data(tmp_path / "stats.msh")
     views = {v["name"]: v for v in data["views"]}
@@ -164,7 +164,7 @@ def test_time_series_rejects_changed_geometry_with_same_tags(tmp_path):
 
 
 def test_time_series_rejects_element_node_data(tmp_path):
-    from cae_mcp_core.mesh.msh_inspect import read_msh_data
+    from radia_mcp.gmsh.msh_inspect import read_msh_data
 
     paths = [_sphere_field(tmp_path / f"e{k}.msh", lambda p: p[0], n=3)
              for k in range(2)]

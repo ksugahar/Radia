@@ -31,7 +31,7 @@ def test_public_gate_string_coordinates_match_numeric_coordinates(
 
 @pytest.mark.parametrize("error", [SystemExit(3), KeyboardInterrupt(), RuntimeError("broken")])
 def test_background_failure_reaches_terminal_state_and_can_restart(error):
-    from cae_mcp_core.common.async_runner import AsyncRunner
+    from radia_mcp.common.async_runner import AsyncRunner
 
     def fail():
         raise error

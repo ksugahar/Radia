@@ -9,7 +9,7 @@ Two search modes (2026-05-24 update):
   - `literature_semantic_search` — ChromaDB + sentence-transformers
     RAG over full PDF text (requires `pip install chromadb
     sentence-transformers pymupdf`); first-time index build runs
-    asynchronously via cae_mcp_core.common.AsyncRunner.
+    asynchronously via radia_mcp.common.AsyncRunner.
 
 Cache: %LOCALAPPDATA%/radia_mcp_literature_index/lit_index.json
 Vector store: %LOCALAPPDATA%/radia_mcp_literature_index/chroma/
@@ -25,8 +25,8 @@ from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 
 from .index_tools import lit_search, lit_by_folder, lit_folder_tree, lit_stats
-from cae_mcp_core.common import AsyncRunner, register_status_tool
-from cae_mcp_core.common.chroma_retriever import ChromaRetriever, extract_pdf_chunks, chunk_garble_fraction
+from radia_mcp.common import AsyncRunner, register_status_tool
+from radia_mcp.common.chroma_retriever import ChromaRetriever, extract_pdf_chunks, chunk_garble_fraction
 
 mcp = FastMCP("mcp-server-literature-index")
 
@@ -255,7 +255,7 @@ def literature_build_vector_index(
 ) -> str:
     """Build / extend the ChromaDB vector index from PDFs.
 
-    Runs ASYNCHRONOUSLY (via cae_mcp_core.common.AsyncRunner). Returns
+    Runs ASYNCHRONOUSLY (via radia_mcp.common.AsyncRunner). Returns
     immediately with a job ID; poll with `literature_index_job_status`.
 
     QUALITY GATE (always on): every PDF's extracted chunks are scored for
@@ -282,7 +282,7 @@ def literature_build_vector_index(
                   auto-detect. "" = unset (use auto-detect if enabled).
         auto_detect_language: when True (default), guess each PDF's
                   language from its filename via CJK Unicode heuristic
-                  (cae_mcp_core.common.detect_filename_language). Enables
+                  (radia_mcp.common.detect_filename_language). Enables
                   ``literature_semantic_search(..., language_filter=)``
                   filtering on the bilingual lab corpus.
         ocr_fallback: when True, OCR pages whose text layer is garbage or

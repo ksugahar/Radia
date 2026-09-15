@@ -20,7 +20,7 @@ first.
     CHANGELOG.md      — append a release entry
   ```
 - `cubit_mesh_export.mcp` owns Cubit in `packages/cubit-mesh-export`;
-  `packages/cae-mcp-core` owns shared runtime helpers. Neither depends on Radia.
+  `radia_mcp.common` owns Radia MCP support. Cubit keeps only its required helpers in its own wheel, with no shared private distribution.
 - Primary workflows are `@mcp.tool()` functions with docstrings. Fine-grained
   validation/identity helpers use a server-local `CoarseToolRegistry` and
   `@_validation.tool()` so production clients see one searchable catalog and
@@ -69,7 +69,7 @@ Do not combine unrelated solver, runtime installation or release changes.
 
 ## High-value contribution areas
 
-### 1. New scrape sub-sources in `cae_mcp_core.common.examples`
+### 1. New scrape sub-sources in `radia_mcp.common.examples`
 
 Pattern: write `refresh_<source>(...) -> dict` that fetches, indexes
 to `_examples_dir(<source>) / *.md`, and writes the index.json.
@@ -168,7 +168,7 @@ is still recommended for clarity.
 
 ## Releasing (maintainer notes)
 
-The package's mandatory runtime dependencies are the MCP SDK and `cae-mcp-core`. Test dependencies
+The package's mandatory runtime dependency is the MCP SDK. Test dependencies
 are a separate contract: the scoped test matrix installs pytest and NumPy for
 CSV/array fixtures, while `minimum-sdk` exercises registration and dispatch
 without adding NumPy. A NumPy-enabled test pass is not evidence that the bare

@@ -29,10 +29,10 @@ from mcp.server.fastmcp import FastMCP
 from .ih_knowledge import get_induction_heating_documentation
 from .sibc_knowledge import get_ih_sibc_documentation
 from .esim_knowledge import get_ih_esim_documentation
-from cae_mcp_core.common.lazy_call import lazy_callable
+from radia_mcp.common.lazy_call import lazy_callable
 evaluate_team36_json = lazy_callable(".team36_gate", "evaluate_team36_json", __package__)
 team36_contract = lazy_callable(".team36_gate", "team36_contract", __package__)
-from cae_mcp_core.common import register_status_tool
+from radia_mcp.common import register_status_tool
 
 mcp = FastMCP("mcp-server-ih")
 
