@@ -6,6 +6,25 @@ It does not relax numerical solver, native ABI or release acceptance.
 
 ## Development
 
+### Forward-only updates (2026-09-15)
+
+Always advance the maintained MCP source. Never revert to, reinstall or
+redistribute an older MCP version as a recovery or deployment strategy.
+Correct failed updates forward and repeat the relevant tests and live-client
+checks. Until then, report the update as incomplete; do not present an old
+runtime as the current deployment or bypass failed verification.
+
+Old versions are not rollback reserves. Keep superseded files only when they
+serve a specific debugging investigation, with source commit/version, purpose
+and removal condition recorded. They must not become editable, fallback or
+distribution targets. Prefer minimal logs, hashes and reproductions over whole
+old installations. Routine updates do not require recoverable backup copies.
+
+Remove obsolete copies after checking active consumers and reviewing unique
+work. This does not authorize deleting others' changes or interrupting active
+jobs. Git history remains historical evidence, not permission to deploy an old
+version. Numerical solver/native release acceptance remains a separate contract.
+
 Developers, including Codex and Claude Code, may directly edit live MCP source
 and change its editable installation source with `pip install -e`. Routine
 experiments require no dedicated branch, immutable snapshot or separate
