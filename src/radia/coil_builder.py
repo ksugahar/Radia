@@ -366,12 +366,37 @@ class LoftArcSegment(CoilSegment):
 		return self.profile_start.interpolate(self.profile_end, s)
 
 	def to_occ_shape(self, index=0):
-		"""OCC shape for LoftArcSegment is not yet implemented. For
-		visualization / STEP export, use multiple LoftStraightSegment
-		pieces along the arc, or use build123d's sweep/loft directly."""
-		raise NotImplementedError(
-			"LoftArcSegment.to_occ_shape: not implemented yet. "
-			"Use LoftStraightSegment chains for CAD export.")
+		"""Interpolated rectangular arc loft; refine n_sub for CAD convergence.
+
+		This section loft approximates the curved side surfaces, not an
+		exact analytic sweep. Closed and negative-angle bends are unsupported.
+		"""
+		from netgen.occ import WorkPlane, Axes, Pnt, Vec, ThruSections
+		from radia.coil_profile import RectProfile
+		if not all(type(p) is RectProfile for p in
+		           (self.profile_start, self.profile_end)):
+			raise NotImplementedError("Arc loft CAD requires rectangular profiles.")
+		dims = np.array([self.profile_start.w, self.profile_start.h,
+		                 self.profile_end.w, self.profile_end.h])
+		if (not np.all(np.isfinite(dims)) or np.any(dims <= 0)
+		    or not np.isfinite(self.radius)
+		    or self.radius <= max(dims[0], dims[2]) / 2
+		    or not 0 < self.arc_angle < 360 or self.n_sub < 4):
+			raise ValueError("Arc loft CAD requires positive dimensions, clear inner "
+			                 "radius, 0 < angle < 360 and n_sub >= 4.")
+		wires = []
+		for s in np.linspace(0, 1, self.n_sub + 1):
+			theta = np.deg2rad(self.arc_angle) * s
+			c, sn = np.cos(theta), np.sin(theta)
+			profile = self.profile_at(s)
+			axes = Axes(Pnt(self.radius * (c - 1), self.radius * sn, 0),
+			            n=Vec(-sn, c, 0), h=Vec(c, sn, 0))
+			wires.append(WorkPlane(axes).MoveTo(-profile.w / 2, -profile.h / 2)
+			             .Rectangle(profile.w, profile.h).Wire())
+		shape = ThruSections(wires, solid=True)
+		shape = self.apply_pose_occ(shape, self.start_pos)
+		shape.name = "coil_arc_loft_" + str(index)
+		return shape
 
 
 class ArcSegment(CoilSegment):
