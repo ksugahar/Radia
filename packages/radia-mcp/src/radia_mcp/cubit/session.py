@@ -46,8 +46,15 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-
 PROTOCOL_VERSION = 2  # file-drop protocol; stdio batch uses protocol v1
+
+
+def _cubit_temp_root() -> Path:
+    """Honor the caller's scratch root on every supported platform."""
+    configured = os.environ.get("RADIA_MCP_TEMP")
+    if configured is not None:
+        return Path(configured)
+    return Path("C:/temp" if sys.platform == "win32" else tempfile.gettempdir())
 
 # Startup timeouts (step 2 of 2026-04-21 speed fix).
 # License checkout: RLM server round-trip can take 30+ s on cold start;
@@ -443,9 +450,7 @@ def run_headless_journal(
             ),
         }
 
-    temp_root = (Path(os.environ.get("RADIA_MCP_TEMP", "C:/temp"))
-                 if sys.platform == "win32"
-                 else Path(tempfile.gettempdir()))
+    temp_root = _cubit_temp_root()
     temp_root.mkdir(parents=True, exist_ok=True)
     cwd = Path(working_directory) if working_directory else temp_root
     cwd.mkdir(parents=True, exist_ok=True)
@@ -819,9 +824,7 @@ class CubitSession:
         paths = getattr(self, "_native_journal_paths", None)
         if paths is None:
             paths = self._native_journal_paths = []
-        temp_root = (Path(os.environ.get("RADIA_MCP_TEMP", "C:/temp"))
-                     if sys.platform == "win32"
-                     else Path(tempfile.gettempdir()))
+        temp_root = _cubit_temp_root()
         journal_dir = temp_root / "radia-mcp" / "cubit-journals"
         journal_dir.mkdir(parents=True, exist_ok=True)
         generation = len(paths) + 1

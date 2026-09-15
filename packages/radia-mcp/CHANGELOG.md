@@ -7,7 +7,20 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- Cubit: honor `RADIA_MCP_TEMP` for both headless batch and native journal
+  scratch paths on all platforms; retain refusal to overwrite existing journals.
+- Documentation: remove stale fixed server counts, limit alias compatibility
+  claims for retired GUI tools, and identify CBCR as a historical interactive
+  design rather than the current headless operating manual. Distinguish NumPy
+  test dependencies from mandatory runtime dependencies.
+
 ## [1.4.54] - 2026-09-14
+
+- Require MCP SDK `>=1.20.0,<2`, with isolated minimum-version CI coverage.
+- Validate coarse-tool arguments through SDK metadata/Pydantic after signature
+  binding; unknown keywords and invalid inputs return input errors.
+- Expose hot reload only for confirmed editable installs unless explicitly
+  disabled; remove prefix-based automatic discovery of new public tools.
 
 - Clarify that axisymmetric workpieces normally use standard NGSolve H1 heat
   with the revolved measure even when the electromagnetic solve is 3D;

@@ -1,11 +1,15 @@
 from types import SimpleNamespace
 
+import pytest
 from radia_mcp.cubit import session
 
 
+@pytest.mark.parametrize("platform", ["win32", "linux", "darwin"])
 def test_headless_journal_can_select_isolated_command_plugin_directory(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, platform
 ):
+    monkeypatch.setenv("RADIA_MCP_TEMP", str(tmp_path / "scratch"))
+    monkeypatch.setattr(session.sys, "platform", platform)
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     (bin_dir / "coreform_cubit.com").write_bytes(b"")
@@ -36,6 +40,7 @@ def test_headless_journal_can_select_isolated_command_plugin_directory(
     plugin_arg = captured["argv"].index("-commandplugindir")
     assert captured["argv"][plugin_arg + 1] == str(plugin_dir)
     assert captured["argv"][-1].endswith("driver.jou")
+    assert session.Path(captured["argv"][-1]).is_relative_to(tmp_path / "scratch")
     assert captured["kwargs"]["stdin"] is session.subprocess.DEVNULL
 
 

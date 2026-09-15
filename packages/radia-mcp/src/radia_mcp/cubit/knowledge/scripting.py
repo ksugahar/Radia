@@ -15,6 +15,12 @@ multiple formats via Cubit plugin commands (`export ...`) and the `cubit_mesh_ex
 
 ## Typical Workflow
 
+MCP scratch files and native journal generations honor `RADIA_MCP_TEMP` on
+Windows, Linux and macOS. Without an override, Windows uses `C:/temp` and
+other platforms use the system temporary directory. Journals refuse overwrite;
+use a caller-owned per-run scratch root for isolated tests, not a shared fixed
+test-client path. This does not start Cubit or change its licensing requirements.
+
 `cubit-mesh-export` is independently installable without `radia` or
 `radia-mcp`. Radia adds optional toolbar integration; MCP owns AI operation.
 Radia's current source accepts exporter 1.0.0 explicitly; older Radia releases
