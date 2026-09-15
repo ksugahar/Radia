@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+from importlib import import_module
+
 import pytest
-from radia_mcp.paper_writing.tools import (
-    paper_writing_check_conclusion_first_use,
-)
+
+# Static dependency traversal follows unrelated optional PDF imports in tools.py.
+# These text-only contracts must execute in minimal CI without PDF dependencies.
+paper_writing_check_conclusion_first_use = import_module(
+    "radia_mcp.paper_writing.tools"
+).paper_writing_check_conclusion_first_use
 
 
 def test_accepts_terms_numbers_and_symbols_introduced_in_body() -> None:
