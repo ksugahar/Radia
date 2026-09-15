@@ -45,6 +45,11 @@ def test_native_motor_angle_family_artifact_records_live_matlab_evidence():
     assert isinstance(native["optimization_toolbox_available"], bool)
     assert native["foreign_openmp_runtime_dirs_remaining_on_path_count"] == 0
     assert len(native["mex_sha256"]) == 64
+    provenance = native["native_build_provenance"]
+    assert provenance["schema"] == "radia.native-build-provenance.v1"
+    assert provenance["source_dirty"] is False
+    assert len(provenance["source_commit"]) == 40
+    assert provenance["binary_sha256"] == native["mex_sha256"]
     assert len(native["source_sha256"]) == 64
     assert len(native["setup_sha256"]) == 64
     assert len(native["generator_sha256"]) == 64
