@@ -340,6 +340,16 @@ verifyError(testCase, ...
     "radia:simulink:IHGeometryUpdateRelativePath");
 end
 
+function testRelativeAxisymmetricMeshPathErrors(testCase)
+[~, cleanupDir, wp, coil, ~, configFile, ~, command] = fixture(); %#ok<ASGLU>
+[model, closer] = freshModel(); %#ok<ASGLU>
+radia.simulink.addIHGeometryUpdateBlock(model);
+configureBlock(model, wp, coil, command, configFile, "on");
+set_param(model + "/Geometry Update", "axisymmetric_thermal_vol", "thermal.vol");
+verifyError(testCase, @() radia.simulink.updateIHGeometry(model), ...
+    "radia:simulink:IHGeometryUpdateRelativePath");
+end
+
 function testCorruptSidecarRecoversByRebuilding(testCase)
 [~, cleanupDir, wp, coil, ~, configFile, runsFile, command] = fixture(); %#ok<ASGLU>
 [model, closer] = freshModel(); %#ok<ASGLU>

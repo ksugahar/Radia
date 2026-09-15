@@ -50,7 +50,7 @@ config = radia.simulink.validateIHNativeConfig(block.DialogPrm(1).Data);
 heat = double(block.InputPort(1).Data(:));
 temperature = double(block.InputPort(2).Data(:));
 heatWeights = double(config.heat_cell_weights(:));
-temperatureWeights = double(config.temperature_cell_weights(:));
+temperatureStatistics = radia.simulink.ihTemperatureStatistics(config,temperature);
 revision = double(block.InputPort(6).Data);
 if ~isfinite(revision)
     revision = 0;
@@ -68,9 +68,9 @@ block.OutputPort(9).Data = min(heat);
 block.OutputPort(10).Data = weightedMean(heat, heatWeights);
 block.OutputPort(11).Data = max(heat);
 block.OutputPort(12).Data = dot(heat, heatWeights);
-block.OutputPort(13).Data = min(temperature);
-block.OutputPort(14).Data = weightedMean(temperature, temperatureWeights);
-block.OutputPort(15).Data = max(temperature);
+block.OutputPort(13).Data = temperatureStatistics(1);
+block.OutputPort(14).Data = temperatureStatistics(2);
+block.OutputPort(15).Data = temperatureStatistics(3);
 end
 
 function update(block)
