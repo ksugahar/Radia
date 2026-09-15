@@ -7,6 +7,8 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.5.0] - release candidate (not yet published)
+
 - Publication preparation: reject stale Cubit/shared-core files and the retired
   Cubit entry point in the Radia MCP wheel. Flag retired client launchers for
   owner-managed migration; preserve external Cubit settings and permissions.
