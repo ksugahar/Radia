@@ -30,9 +30,8 @@ first.
   server import time. Use `common.lazy_call.lazy_callable` for call-only helper
   dependencies and add a cold-import validation result when changing a large
   server's dependency graph.
-- The `cubit_session` Plan A architecture (PySide6 QTimer + file-drop
-  IPC, no sockets) is non-negotiable for the live-Cubit path; if you
-  need a different transport, justify it in the PR description.
+- Cubit execution and its tests belong to `cubit-mesh-export`. Radia MCP
+  consumes artifacts; do not restore a live-Cubit GUI/IPC adapter here.
 
 ## Consolidation before expansion
 
@@ -108,10 +107,10 @@ quadrupole, …), motor / generator components, accelerator devices.
 
 ## Common pitfalls
 
-### `subprocess.Popen` MUST set `stdin=subprocess.DEVNULL` for child GUI apps
+### Explicitly isolate child-process standard streams
 
 When an MCP tool spawns a long-running external GUI process
-(Cubit, Gmsh GUI, FreeCAD, etc.) with `subprocess.Popen`, set
+(Gmsh GUI, FreeCAD, etc.) with `subprocess.Popen`, set
 **all three** stdio streams explicitly. Specifically `stdin` —
 omitting it inherits the MCP server's stdin, which is the
 JSON-RPC pipe to Claude Code / the MCP host.
@@ -123,7 +122,7 @@ launched from PowerShell `Start-Process` works fine, masking the
 issue during local manual testing.
 
 ```python
-# BAD — Cubit inherits MCP stdin (JSON-RPC pipe) and hangs.
+# BAD — the child inherits MCP stdin (the JSON-RPC pipe).
 proc = subprocess.Popen(
     [exe, "-nojournal", "-input", str(wrapper)],
     stdout=subprocess.DEVNULL,
@@ -141,11 +140,9 @@ proc = subprocess.Popen(
 )
 ```
 
-This is **not** fixed by `mcp` 1.27.0 (current as of 2026-04-25);
-the framework cannot guess which child processes a tool will spawn.
-Confirmed root cause of the long-standing "MCP-launched Cubit hangs
-intermittently" issue (fix landed in `cubit/server.py` `open_in_cubit`
-and `cubit/cubit_session.py` daemon launcher).
+The framework cannot infer which child processes may inherit its transport.
+Cubit launch implementation and regressions are maintained by its separate
+distribution, not by retired paths in this package.
 
 The same caution applies whenever a tool runs a long-lived child
 that does **not** itself read from MCP stdin. For short-lived
@@ -205,13 +202,13 @@ verifies the wheel, then publishes that same artifact through PyPI Trusted
 Publishing in the `pypi` environment. Do not replace this lane with a local
 Twine upload or treat an old test count as current release evidence.
 
-After publication, wheel-installed entry-point smoke and the applicable
-`tools/release_quad.py` gates must pass before reporting operational completion.
-Release-quad targets LAB, 100号機, mdx1 and mdx2 for the same release commit.
-LAB and 100号機 retain verified editable sources; mdx1/mdx2 consume Radia release
-wheels and do not receive `radia-mcp` or `cubit-mesh-export` in this release
-lane. Cubit plugin/toolbar deployment is limited to LAB and 100号機. hibino is
-a compute host, not a release-quad acceptance target.
+After publication, verify the published wheel and update the maintained editable
+sources on LAB and 100 only. Radia MCP uses release-dual independently of the
+Radia solver; do not run `tools/release_quad.py` or deploy to compute hosts for
+this package. Confirm the loaded source and one harmless affected tool on LAB.
+Existing 100 clients may adopt the update on their next normal restart; their
+pending live checks do not block release completion. See the
+[release completion contract](docs/operations/mcp-runtime-policy.md#release-completion).
 
 Release installation tests stay isolated from live development. Do not reset
 editable sources to an outdated shared checkout or terminate other users'
