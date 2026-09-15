@@ -3174,9 +3174,8 @@ def air_gap_maxwell_pressure(B_T, mu=MU0):
         p = B^2 / (2 mu)
 
     with ``mu=mu0`` for air.  The same value is the magnetic energy density in
-    the gap.  This tiny helper is intentionally dependency-free so magnetic
-    circuit examples can turn a solved ``B_T`` directly into a holding-force
-    estimate before running a full weighted-stress FEM extraction.
+    the gap. This adapter requires the Radia runtime and delegates to its
+    canonical pressure helper; it is not one of the standalone tensor helpers.
     """
 
     from radia.force import air_gap_maxwell_pressure as pressure

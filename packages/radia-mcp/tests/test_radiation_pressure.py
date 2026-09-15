@@ -19,7 +19,7 @@ import importlib.abc
 import sys
 class NoSolver(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
-        if fullname.split(".")[0] in {"ngsolve", "netgen"}:
+        if fullname.split(".")[0] in {"ngsolve", "netgen", "radia"}:
             raise ModuleNotFoundError("solver deliberately unavailable")
 sys.meta_path.insert(0, NoSolver())
 from radia_mcp.radia_ngsolve import force
