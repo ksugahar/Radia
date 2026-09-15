@@ -40,6 +40,14 @@ a return path; an open segment is only a source-field contribution.
 
 ## Limits
 
+Use `require_closed=True` in `to_radia_loft_filaments` for complete current
+loops. The exporter checks endpoint sections and individual paths before
+allocation and snaps roundoff-sized endpoint differences; it never adds a
+return wire. A single full-turn loft with unequal endpoint profiles is
+rejected even in open mode. Self-intersection of arbitrary multi-segment
+coils is not certified by this closure check. The finite-section circular
+ring center field is checked analytically in `test_coil_builder_loft_closed.py`.
+
 - External-field approximation only: individual filaments are singular.
 - Not suitable for internal fields, self-energy, self-force, or Joule loss.
 - No skin effect, proximity effect, or resistance-weighted current model.

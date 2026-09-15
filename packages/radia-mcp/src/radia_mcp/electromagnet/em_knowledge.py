@@ -224,6 +224,10 @@ self-force, Joule loss, skin effect or proximity effect. Negative-angle arc
 lofts, cross-type transitions, arbitrary profiles and discontinuous cross-section joins remain
 unsupported by this API. An open segment provides a field contribution;
 it is not a complete steady-current circuit without a return path.
+Use `require_closed=True` to check matching endpoint sections and individual
+current paths before export. No return wire is added. Unequal endpoint
+profiles on a full-turn loft are rejected. Closure does not certify absence
+of self-intersections in arbitrary multi-segment coils.
 
 Rectangular and circular loft CAD export is separate from field routing: straight lofts
 use centered endpoint sections; arc lofts interpolate circularly placed
