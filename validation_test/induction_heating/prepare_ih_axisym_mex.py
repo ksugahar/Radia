@@ -9,22 +9,26 @@ root=Path(__file__).resolve().parents[2]
 parser=argparse.ArgumentParser()
 parser.add_argument('--thermal-order',type=int,choices=(1,2),default=1)
 parser.add_argument('--output',type=Path,default=Path('C:/temp/ih-axisym-native/axisymmetric'))
+parser.add_argument('--manufactured',action='store_true',help='quadratic radial temperature, insulated end caps, exact linear time evolution')
 args=parser.parse_args()
 radia.__path__.insert(0,str(root/'src/radia'))
 import radia.simulink
 radia.simulink.__path__.insert(0,str(root/'src/radia/simulink'))
 from radia.simulink.ih_operator_assembly import IHOperatorAssemblyOptions,_assemble_thermal_operators
-mesh=ng.Mesh(str(root/'validation_test/panels/fixtures/heat_workpiece_cylinder_R25_H25_axisym.vol'))
+from _axisym_test_mesh import make_axisymmetric_mesh
+mesh=make_axisymmetric_mesh()
 for i,name in enumerate(mesh.GetBoundaries()):
-    if name!='axis':mesh.ngmesh.SetBCName(i,'sibc')
-opts=IHOperatorAssemblyOptions(axisymmetric_thermal_vol='fixture.vol',sample_time_s=.1,thermal_order=args.thermal_order)
+    if name!='axis':mesh.ngmesh.SetBCName(i,'insulated' if args.manufactured and name in ('bot','top') else 'sibc')
+opts=IHOperatorAssemblyOptions(axisymmetric_thermal_vol='fixture.vol',sample_time_s=.1,thermal_order=args.thermal_order,
+    convection_W_per_m2K=0 if args.manufactured else 10)
+flux=2*46.6*1e4*.025 if args.manufactured else 125
 with ng.TaskManager(),patch.object(ng,'Mesh',return_value=mesh):
-    op=_assemble_thermal_operators(Path('fixture.vol'),np.ones(mesh.nv)*125,opts)
+    op=_assemble_thermal_operators(Path('fixture.vol'),np.ones(mesh.nv)*flux,opts)
 cfg=dict(schema='radia.ih.simulink.native_sfunction.v1',backend='matlab-level2+radia-mex-handles',
     python_fallback=False,eddy_solver='fem',thermal_solver='fem',bh_mode='linear',
     n_eddy_unknown=1,eddy_matrix_real=[1.],eddy_matrix_imag=[0.],eddy_rhs_real=[1.],eddy_rhs_imag=[0.],
     sample_time_s=.1,thermal_tolerance=1e-13,thermal_max_iterations=2000,
-    convection_W_per_m2K=10.,rotation_mode='none',angle_origin_rad=0.)
+    convection_W_per_m2K=opts.convection_W_per_m2K,rotation_mode='none',angle_origin_rad=0.)
 fields=asdict(op)
 for key in ('n_temperature','mass_row_ptr','mass_col','mass_value','stiffness_row_ptr','stiffness_col','stiffness_value','convection_row_ptr','convection_col','convection_value','heat_to_temperature_projection'):cfg[key]=fields[key]
 cfg.update(n_heat=len(op.heat_dofs),heat_projection=op.unit_heat_density_W_per_m3.tolist(),heat_cell_weights=op.heat_cell_weights_m3.tolist(),temperature_cell_weights=op.temperature_cell_weights_J_per_K.tolist(),initial_temperature_K=[293.15]*op.n_temperature)
@@ -36,12 +40,23 @@ if op.constant_coefficients is not None:
 with ng.TaskManager():
     fes=ng.H1(mesh,order=args.thermal_order);u,v=fes.TnT();w=2*np.pi*ng.x
     m=ng.BilinearForm(fes);m+=w*7800*467*u*v*ng.dx;m.Assemble()
-    a=ng.BilinearForm(fes);a+=w*(7800*467*u*v+.1*46.6*ng.grad(u)*ng.grad(v))*ng.dx+.1*w*10*u*v*ng.ds('sibc');a.Assemble()
-    f=ng.LinearForm(fes);f+=w*(125+10*293.15)*v*ng.ds('sibc');f.Assemble()
-    inverse=a.mat.Inverse(fes.FreeDofs(),inverse='sparsecholesky');temp=ng.GridFunction(fes);temp.Set(293.15);history=[]
+    h=opts.convection_W_per_m2K
+    a=ng.BilinearForm(fes);a+=w*(7800*467*u*v+.1*46.6*ng.grad(u)*ng.grad(v))*ng.dx+.1*w*h*u*v*ng.ds('sibc');a.Assemble()
+    f=ng.LinearForm(fes);f+=w*(flux+h*293.15)*v*ng.ds('sibc');f.Assemble()
+    initial=293.15+1e4*ng.x**2 if args.manufactured else ng.CF(293.15)
+    inverse=a.mat.Inverse(fes.FreeDofs(),inverse='sparsecholesky');temp=ng.GridFunction(fes);temp.Set(initial);history=[]
+    cfg['initial_temperature_K']=temp.vec.FV().NumPy().tolist()
+    exact_errors=[]
     for i in range(100):
         b=temp.vec.CreateVector();b.data=m.mat*temp.vec+.1*f.vec;temp.vec.data=inverse*b;history.append(temp.vec.FV().NumPy().tolist())
+        if args.manufactured:
+            exact=initial+4*46.6*1e4/(7800*467)*.1*(i+1)
+            exact_errors.append(float(np.sqrt(ng.Integrate(w*(temp-exact)**2,mesh)/ng.Integrate(w*(exact-293.15)**2,mesh))))
+    if args.manufactured and args.thermal_order==2:
+        assert max(exact_errors)<1e-9
 out=args.output;out.mkdir(parents=True,exist_ok=True)
-(out/'chain.json').write_text(json.dumps(dict(config=cfg,reference_K=history,current_A=1.,unit_power_W=op.heat_power_W,assembled_power_W=op.heat_power_W,nodes=mesh.nv,source_sha256={
+(out/'chain.json').write_text(json.dumps(dict(config=cfg,reference_K=history,current_A=1.,unit_power_W=op.heat_power_W,assembled_power_W=op.heat_power_W,nodes=mesh.nv,
+    thermal_order=args.thermal_order,exact_temperature_rise_relative_L2=max(exact_errors) if exact_errors else None,source_sha256={
     'ih_operator_assembly':hashlib.sha256((root/'src/radia/simulink/ih_operator_assembly.py').read_bytes()).hexdigest(),
-    'driver':hashlib.sha256(Path(__file__).read_bytes()).hexdigest()},scope='axisymmetric production thermal operators; uniform input; in-memory boundary relabeling, not production VOL gate')))
+    'mesh_fixture':hashlib.sha256(Path(__file__).with_name('_axisym_test_mesh.py').read_bytes()).hexdigest(),
+    'driver':hashlib.sha256(Path(__file__).read_bytes()).hexdigest()},scope=('quadratic manufactured axisymmetric temperature' if args.manufactured else 'axisymmetric uniform boundary heat')+'; production thermal operators with in-memory boundary relabeling, not production VOL gate')))

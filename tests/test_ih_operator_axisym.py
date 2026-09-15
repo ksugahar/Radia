@@ -7,8 +7,8 @@ from radia.simulink.ih_operator_assembly import IHOperatorAssemblyOptions, _asse
 
 
 def fixture():
-    path = Path(__file__).parents[1]/'validation_test/panels/fixtures/heat_workpiece_cylinder_R25_H25_axisym.vol'
-    mesh=ng.Mesh(str(path))
+    from validation_test.induction_heating._axisym_test_mesh import make_axisymmetric_mesh
+    mesh=make_axisymmetric_mesh()
     for i,name in enumerate(mesh.GetBoundaries()):
         if name != 'axis': mesh.ngmesh.SetBCName(i,'sibc')
     return mesh
