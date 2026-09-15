@@ -65,8 +65,12 @@ class IHOperatorAssemblyOptions:
     coupling_mode: str = "weak"
     workpiece_bem_backend: str = "intree-dense"
     thermal_order: int = 1
+    axisymmetric_thermal_vol: str = ""
+    n_phi_samples: int = 128
 
     def checked(self) -> "IHOperatorAssemblyOptions":
+        if isinstance(self.n_phi_samples, bool) or not isinstance(self.n_phi_samples, int) or self.n_phi_samples < 1:
+            raise ValueError("n_phi_samples must be a positive integer")
         positive = {
             "frequency_hz": self.frequency_hz,
             "coil_conductivity_S_per_m": self.coil_conductivity_S_per_m,
@@ -449,11 +453,19 @@ def _assemble_thermal_operators(
     heat_flux_W_per_m2: np.ndarray,
     options: IHOperatorAssemblyOptions,
 ) -> ThermalOperators:
-    from ngsolve import CF, H1, BilinearForm, Mesh, TaskManager, ds, dx, grad
+    from ngsolve import CF, H1, BilinearForm, Mesh, TaskManager, ds, dx, grad, x
 
     mesh = Mesh(str(workpiece))
-    if mesh.dim != 3 or mesh.ne <= 0:
-        raise ValueError("the IH thermal workpiece must be a 3D volume .vol mesh")
+    expected_dim = 2 if options.axisymmetric_thermal_vol else 3
+    if mesh.dim != expected_dim or mesh.ne <= 0:
+        raise ValueError(f"the IH thermal workpiece must be a {expected_dim}D mesh")
+    weight = 2 * math.pi * x if expected_dim == 2 else CF(1)
+    convection_region = options.workpiece_label if expected_dim == 2 else ".*"
+    if expected_dim == 2:
+        from radia.panels.calc_heat_axisym import _reject_axis_boundary_roles
+        if any(float(vertex.point[0]) < 0 for vertex in mesh.vertices):
+            raise ValueError("axisymmetric thermal radii must be nonnegative")
+        _reject_axis_boundary_roles(mesh, [("native heat/convection", [options.workpiece_label])])
     materials = sorted(set(str(name) for name in mesh.GetMaterials()))
     if materials != ["workpiece"]:
         raise ValueError(
@@ -470,16 +482,16 @@ def _assemble_thermal_operators(
     rho_cp = options.density_kg_per_m3 * options.heat_capacity_J_per_kgK
     with TaskManager():
         mass = BilinearForm(fes, symmetric=True)
-        mass += CF(rho_cp) * u * v * dx
+        mass += weight * CF(rho_cp) * u * v * dx
         mass.Assemble()
         stiffness = BilinearForm(fes, symmetric=True)
-        stiffness += CF(options.thermal_conductivity_W_per_mK) * grad(u) * grad(v) * dx
+        stiffness += weight * CF(options.thermal_conductivity_W_per_mK) * grad(u) * grad(v) * dx
         stiffness.Assemble()
         heat_mass = BilinearForm(fes, symmetric=True, check_unused=False)
-        heat_mass += u * v * ds(options.workpiece_label)
+        heat_mass += weight * u * v * ds(options.workpiece_label)
         heat_mass.Assemble()
         convection = BilinearForm(fes, symmetric=True, check_unused=False)
-        convection += u * v * ds
+        convection += weight * u * v * ds(convection_region)
         convection.Assemble()
 
     mass_values = _coo_values(mass.mat)
@@ -504,7 +516,7 @@ def _assemble_thermal_operators(
     heat_load = _matvec(fes.ndof, heat_mass_values, heat_flux_W_per_m2)
     outside = np.ones(fes.ndof, dtype=bool)
     outside[heat_dofs] = False
-    if np.linalg.norm(heat_load[outside], ord=np.inf) > 1.0e-11 * max(
+    if np.any(outside) and np.linalg.norm(heat_load[outside], ord=np.inf) > 1.0e-11 * max(
         1.0, np.linalg.norm(heat_load, ord=np.inf)
     ):
         raise RuntimeError("the SIBC boundary load leaked into non-boundary heat DOFs")
@@ -565,7 +577,10 @@ def _export_fields(
     volume.add_scalar_field("heat_density_W_per_m3_at_1A", density)
     volume.write(str(volume_path))
     surface_path = run_dir / "ih_surface_heat_flux.msh"
-    surface = GmshPostExport(mesh, boundary=True)
+    # The scalar trace is carried by the 2D H1 grid function. The current
+    # exporter has no 1D boundary topology route; retain the meridian domain
+    # instead of silently writing a zero-element boundary artifact.
+    surface = GmshPostExport(mesh, boundary=(mesh.dim == 3))
     surface.add_scalar_field("heat_flux_W_per_m2_at_1A", qsurf)
     surface.write(str(surface_path))
     return [volume_path.resolve(), surface_path.resolve()]
@@ -598,7 +613,8 @@ def _native_config(
     if not math.isfinite(solver_power) or solver_power <= 0.0:
         raise RuntimeError("the electromagnetic result does not contain positive P_wp_W")
     relative_power_error = abs(thermal.heat_power_W - solver_power) / solver_power
-    if relative_power_error > 1.0e-6:
+    power_tolerance = 0.02 if options.axisymmetric_thermal_vol else 1.0e-6
+    if relative_power_error > power_tolerance:
         raise RuntimeError(
             "the assembled thermal source does not preserve electromagnetic power: "
             f"relative error {relative_power_error:.3e}"
@@ -652,7 +668,7 @@ def _native_config(
         ),
         "linear_solver": options.workpiece_bem_backend,
         "thermal_solver": "fem",
-        "thermal_mesh_type": "3D volume",
+        "thermal_mesh_type": "axisymmetric" if options.axisymmetric_thermal_vol else "3D volume",
         "current_change_recomputes_eddy": False,
         "temperature_change_recomputes_eddy": False,
         "temperature_coordinate_system": "workpiece",
@@ -677,6 +693,7 @@ def _native_config(
             "electromagnetic_power_W": solver_power,
             "thermal_source_power_W": thermal.heat_power_W,
             "relative_power_error": relative_power_error,
+            "relative_power_tolerance": power_tolerance,
             "qsurf_solution": str(electromagnetic.qsurf_solution),
         },
         "artifacts": {
@@ -821,14 +838,37 @@ def assemble_ih_operators(
                 electromagnetic_result = run_path / "electromagnetic_result.json"
                 _write_json(electromagnetic_result, electromagnetic.solver_payload)
                 artifacts.append(electromagnetic_result.resolve())
+                thermal_mesh = solver_workpiece
+                thermal_flux = electromagnetic.heat_flux_W_per_m2
+                transfer_audit = None
+                if options.axisymmetric_thermal_vol:
+                    from types import SimpleNamespace
+                    from ngsolve import Mesh
+                    from radia.panels.calc_heat_axisym import _build_axisym_qsurf_gf
+                    thermal_source = Path(options.axisymmetric_thermal_vol).resolve()
+                    thermal_contract = _contract_path("ih_thermal_axisym_v1.json")
+                    thermal_report = run_path / "thermal.vol-check.json"
+                    _check_vol(thermal_source, thermal_contract, thermal_report,
+                               workpiece=False, workpiece_label=options.workpiece_label)
+                    reports.append(thermal_report.resolve())
+                    artifacts.append(thermal_report.resolve())
+                    thermal_mesh, extra = _materialize_solver_vol(thermal_source, run_path, "thermal")
+                    artifacts.extend(extra)
+                    mesh2d = Mesh(str(thermal_mesh))
+                    if mesh2d.dim != 2:
+                        raise ValueError("axisymmetric_thermal_vol requires a 2D (r,z) mesh")
+                    transfer_args = SimpleNamespace(q_uniform=None, qsurf_sol=str(electromagnetic.qsurf_solution),
+                        em_vol=str(solver_workpiece), qsurf_order=1, n_phi_samples=options.n_phi_samples)
+                    flux2d, _, transfer_audit = _build_axisym_qsurf_gf(mesh2d, [options.workpiece_label], transfer_args)
+                    thermal_flux = flux2d.vec.FV().NumPy().copy()
                 thermal = _assemble_thermal_operators(
-                    solver_workpiece,
-                    electromagnetic.heat_flux_W_per_m2,
+                    thermal_mesh,
+                    thermal_flux,
                     options,
                 )
                 thermal_gmsh_files = _export_fields(
-                    solver_workpiece,
-                    electromagnetic.heat_flux_W_per_m2,
+                    thermal_mesh,
+                    thermal_flux,
                     thermal.full_heat_density_W_per_m3,
                     run_path,
                 )
@@ -848,6 +888,12 @@ def assemble_ih_operators(
                     contracts,
                     gmsh_files,
                 )
+                if options.axisymmetric_thermal_vol:
+                    config["geometry"]["thermal_vol"] = str(thermal_source)
+                    config["geometry"]["thermal_sha256"] = _sha256(thermal_source)
+                    config["geometry"]["solver_thermal_vol"] = str(thermal_mesh)
+                    config["axisymmetric_transfer"] = transfer_audit
+                    config["thermal_vol_label_contract"] = str(thermal_contract)
                 _write_json(output_path, config)
                 artifacts.append(output_path)
                 primary_power = float(config["unit_current"]["electromagnetic_power_W"])
@@ -908,6 +954,8 @@ def build_argparser() -> argparse.ArgumentParser:
     parser.add_argument("--heat-capacity", type=float, default=467.0)
     parser.add_argument("--thermal-conductivity", type=float, default=46.6)
     parser.add_argument("--convection", type=float, default=10.0)
+    parser.add_argument("--axisymmetric-thermal-vol", default="", help="checked 2D (r,z) thermal .vol; EM workpiece remains 3D")
+    parser.add_argument("--n-phi-samples", type=int, default=128)
     parser.add_argument("--initial-temperature-K", type=float, default=293.15)
     parser.add_argument("--sample-time", type=float, default=0.5)
     parser.add_argument(
@@ -952,6 +1000,8 @@ def build_argparser() -> argparse.ArgumentParser:
 def _options_from_args(args: argparse.Namespace) -> IHOperatorAssemblyOptions:
     return IHOperatorAssemblyOptions(
         frequency_hz=args.frequency_hz,
+        axisymmetric_thermal_vol=args.axisymmetric_thermal_vol,
+        n_phi_samples=args.n_phi_samples,
         coil_conductivity_S_per_m=args.coil_sigma,
         workpiece_conductivity_S_per_m=args.workpiece_sigma,
         workpiece_relative_permeability=args.workpiece_mu_r,

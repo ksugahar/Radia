@@ -544,6 +544,23 @@ batch and validation entry points.  They are not desktop interfaces.
 
 ## Thermal dimensionality: 3D EM does not require 3D heat
 
+Native operator assembly accepts ``--axisymmetric-thermal-vol`` for a separate
+2D (r,z) workpiece mesh; the EM workpiece remains the 3D first argument.
+The MATLAB ``assembleIHOperatorsFromGeometry`` options use
+``axisymmetric_thermal_vol`` and ``n_phi_samples`` (default 128).
+New Geometry Update blocks expose those settings and fingerprint the thermal
+mesh. Existing blocks need rebuilding to expose the new fields.
+The 2D label contract requires material ``workpiece``, physical boundary
+``sibc`` and optional ``axis``. Do not include r=0 in ``sibc``.
+Mass, conduction, surface heat and convection use 2*pi*r. The native route
+currently supports P1 only; headless H1 order 2 is a separate route, not a
+claim about native P2 support. Transfer uses the existing boundary azimuth
+sampler with coverage checks, and rejects an integrated power difference
+over 2%; it does not silently rescale the source. The transfer difference is
+part of the error budget, not proof of 2% total application accuracy.
+Convection in this initial native axisymmetric route acts on ``sibc`` only;
+independently selected inner/outer convection coefficients are not supported.
+
 Use ``calc_heat_axisym.py`` when the workpiece shape, thermal properties,
 thermal boundary conditions, and the circumferentially averaged heat input are
 rotation invariant.  The electromagnetic solve may still be 3D: transfer its

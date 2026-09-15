@@ -1,7 +1,8 @@
-function report = validate_ih_mex_chain(inputDirectory, outputFile)
+function report = validate_ih_mex_chain(inputDirectory, outputFile, caseNames)
 % Consume real BEM/thermal assembly artifacts and compare native time stepping.
+if nargin < 3, caseNames = ["solid","bored"]; end
 before = radia.apiInfo(); cases = {};
-for name = ["solid","bored"]
+for name = string(caseNames)
     data = jsondecode(fileread(fullfile(inputDirectory,name,"chain.json")));
     cfg = data.config;
     e = radia.internal.callMex('ih.eddy.create',cfg);
@@ -26,10 +27,10 @@ for name = ["solid","bored"]
     cases{end+1} = struct('name',name,'nodes',data.nodes,'steps',size(data.reference_K,1), ...
         'unit_power_W',data.unit_power_W,'assembled_power_W',data.assembled_power_W, ...
         'max_temperature_difference_K',errorK,'max_relative_temperature_rise_error',relativeRise, ...
-        'heat_vector_relative_error',heatError,'source_sha256',data.source_sha256);
+        'heat_vector_relative_error',heatError,'source_sha256',data.source_sha256,'scope',data.scope);
 end
 after = radia.apiInfo(); assert(after.ih_handle_count == before.ih_handle_count);
-report = struct('passed',true,'scope','real weak BEM -> production thermal assembly -> MEX; in-memory coarse axisymmetric geometry represented by 3D volume', ...
+report = struct('passed',true,'scope','IH preassembled operator MEX parity; see per-case scope for source and geometry', ...
     'matlab_version',version,'cases',{cases},'native_build',jsondecode(fileread(which('radia_mex')+".build.json")), ...
     'handles_before',before.ih_handle_count,'handles_after',after.ih_handle_count);
 fid=fopen(outputFile,'w');assert(fid>=0);fc=onCleanup(@() fclose(fid));
