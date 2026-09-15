@@ -39,6 +39,14 @@ def test_frozen_wedge_jacobi_reaches_true_residual():
     print(json.dumps(report, indent=2))
     assert result["timings"]["last_solve_converged"]
     assert np.isfinite(residual) and residual <= tolerance
+    with ng.TaskManager():
+        exhausted = _h_solve_auto_prec(operator, coo_matrix(weight), len(rhs), 1.,
+                                       rhs, tolerance, 1, x0=initial)
+        stopped = np.asarray(exhausted["m"])
+        stopped_action = weight @ stopped + operator.apply_configured_demag(stopped, True)
+    assert not exhausted["timings"]["last_solve_converged"]
+    assert exhausted["iters"] == 1
+    assert np.linalg.norm(rhs-stopped_action)/np.linalg.norm(rhs) > tolerance
 
 
 if __name__ == "__main__":
