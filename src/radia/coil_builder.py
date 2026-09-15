@@ -884,6 +884,10 @@ class CoilBuilder:
 
 		# Native primitives cannot represent lofts or arbitrary profiles.
 		# Check the whole coil before allocating even its supported prefix.
+		if arc_max_segment_length is not None:
+			arc_max_segment_length = float(arc_max_segment_length)
+			if not np.isfinite(arc_max_segment_length) or arc_max_segment_length <= 0:
+				raise ValueError("arc_max_segment_length must be positive and finite")
 		for index, seg in enumerate(self.segments):
 			if type(seg) not in (StraightSegment, ArcSegment) or type(seg.profile) is not RectProfile:
 				raise NotImplementedError(
@@ -891,6 +895,22 @@ class CoilBuilder:
 				)
 			if seg.profile.bounding_wh() != (seg.width, seg.height):
 				raise ValueError(f"segment {index}: profile and native dimensions disagree")
+			if (not np.all(np.isfinite([seg.width, seg.height, seg.current]))
+			    or min(seg.width, seg.height) <= 0):
+				raise ValueError(f"segment {index}: positive finite dimensions and finite current required")
+			frame = np.asarray(seg.orientation)
+			position = np.asarray(seg.start_pos)
+			if (position.shape != (3,) or not np.all(np.isfinite(position))
+			    or frame.shape != (3, 3) or not np.all(np.isfinite(frame))
+			    or not np.allclose(frame @ frame.T, np.eye(3), rtol=0, atol=1e-12)
+			    or not np.isclose(np.linalg.det(frame), 1, rtol=0, atol=1e-12)):
+				raise ValueError(f"segment {index}: finite position and proper orthonormal frame required")
+			if type(seg) is StraightSegment:
+				if not np.isfinite(seg.length) or seg.length <= 0:
+					raise ValueError(f"segment {index}: positive finite length required")
+			elif (not np.all(np.isfinite([seg.radius, seg.arc_angle]))
+			      or seg.radius <= seg.width / 2 or not 0 < abs(seg.arc_angle) <= 360):
+				raise ValueError(f"segment {index}: clear inner radius and 0 < abs(angle) <= 360 required")
 
 		radia_objects = []
 		for seg in self.segments:
