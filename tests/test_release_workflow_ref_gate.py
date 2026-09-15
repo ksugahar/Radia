@@ -83,15 +83,18 @@ def test_ci_records_exact_ref_context_before_release():
 def test_pypi_release_jobs_require_the_triggering_ci_to_be_a_tag_run():
     for path in RELEASE_WORKFLOWS:
         workflow=path.read_text(encoding="utf-8")
-        context=workflow.index("Download exact CI ref context")
-        verification=workflow.index("Verify triggering CI ran on a tag ref")
-        tag_lookup=workflow.index("id: tag_check")
-        assert context < verification < tag_lookup
-        assert "github.event.workflow_run.event == 'push'" in workflow
-        assert 'context.get("ref_type") == "tag"' in workflow
-        assert 'context.get("release_tags")' in workflow
-        assert "if: steps.ref_check.outputs.eligible == 'true'" in workflow
-        assert "run-id: ${{ github.event.workflow_run.id }}" in workflow
+        assert "publication-hold:" in workflow
+        assert "needs: verify-promotion" in workflow
+        publish=workflow[workflow.index("  publish-pypi:"):]
+        assert "github.event_name == 'workflow_dispatch'" in publish
+        assert "github.ref == 'refs/heads/main'" in publish
+        assert "needs.verify-promotion.result == 'success'" in publish
+        assert "artifact-ids: ${{ needs.verify-promotion.outputs.artifact_id }}" in publish
+        assert "run-id: ${{ inputs.ci_run_id }}" in workflow
+        gate=(ROOT/"tools/verify_radia_promotion.py").read_text(encoding="utf-8")
+        assert 'context.get("ref_type") == "tag"' in gate
+        assert 'run.get("event") == "push"' in gate
+        assert 'git/ref/tags/' in gate
 
 
 def test_radia_mcp_publishes_only_from_its_successful_tag_ci():
