@@ -1,0 +1,54 @@
+{
+  "matlab_version": "26.1.0.3276743 (R2026a) Update 3",
+  "passed": true,
+  "tests": [
+    {
+      "name": "test_native_ih_sfun_integration/testHeatRaisesTemperature",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_native_ih_sfun_integration/testEddyAngleRotatesHeatInWorkpieceCoordinates",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_native_ih_sfun_integration/testRotationTransportConservesWeightedEnergy",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_native_ih_sfun_integration/testThermalStateFeedsTemperatureDependentEddy",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_native_ih_sfun_integration/testConfigSupportsDistinctHeatAndTemperatureSpaces",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_native_ih_sfun_integration/testConfigRejectsNonlinearAndInvalidCSR",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_native_ih_sfun_integration/testMatAndJsonConfigLoaders",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "name": "test_native_ih_sfun_integration/testSingularEddyFailsAndFreshLifecycleRecovers",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    }
+  ]
+}

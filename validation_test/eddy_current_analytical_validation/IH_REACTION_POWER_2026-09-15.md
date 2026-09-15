@@ -95,6 +95,24 @@ the matching **FEM-SIBC** comparison.
 
 ## Boundaries
 
+### Simulink runtime acceptance and remaining delivery gates
+
+The existing `tests/matlab/test_native_ih_sfun_integration.m` ran through
+Python MATLAB Engine on LAB R2026a Update 3: eight passed, zero failed or
+incomplete, recorded in `ih_simulink_integration_20260915.json`. This covers
+closed-loop heating, current scaling, angle-dependent heat, conservative
+rotation, temperature feedback, distinct field spaces, configuration loading
+and recovery after a singular Eddy solve. It uses scratch model harnesses,
+not acceptance of the tracked `radia_ih.slx` or a complete geometry workflow.
+
+Do not call the full IH application finished: the tracked model's official
+Toolkit acceptance, an unmocked strict-label geometry/configuration run and
+the native axisymmetric operator route remain open. The checked-in cylinder
+volume fixture currently labels its boundary `outer`, not required `sibc`;
+it cannot silently stand in for a production-contract fixture. Native geometry
+assembly still requires P1 and a 3D volume. Main integration and distribution
+have not occurred.
+
 ### Additional native thermal evidence
 
 `validation_test/induction_heating/validate_ih_mex_radial.m` now independently
