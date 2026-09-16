@@ -428,11 +428,11 @@ def check_curve_without_setgeominfo(filepath: str, lines: List[str]) -> List[Dic
 		return findings
 
 	# Check for export netgen (which handles Curve internally)
-	has_radia_export_netgen = any('export netgen' in line for line in lines)
+	has_native_export_netgen = any('export netgen' in line for line in lines)
 	# Check for OCC native mesh (which has built-in geometry)
 	has_occ_mesh = any('GenerateMesh' in line for line in lines)
 
-	if not has_radia_export_netgen and not has_occ_mesh:
+	if not has_native_export_netgen and not has_occ_mesh:
 		findings.append({
 			'line': curve_line,
 			'severity': 'MODERATE',
@@ -628,7 +628,7 @@ def check_qt_imports(filepath: str, lines: List[str]) -> List[Dict]:
 
 
 def check_no_pyqt5_imports(filepath: str, lines: List[str]) -> List[Dict]:
-	"""HIGH: Radia Cubit UI is PySide6-only on Coreform Cubit 2025.12+."""
+	"""HIGH: Cubit Mesh Export UI is PySide6-only on Coreform Cubit 2025.12+."""
 	findings = []
 	for i, line in enumerate(lines, 1):
 		stripped = line.strip()
@@ -640,7 +640,7 @@ def check_no_pyqt5_imports(filepath: str, lines: List[str]) -> List[Dict]:
 				"severity": "HIGH",
 				"rule": "pyqt5-import-forbidden",
 				"message": (
-					"PyQt5 is not supported. Radia targets Coreform "
+					"PyQt5 is not supported. cubit-mesh-export targets Coreform "
 					"Cubit 2025.12+ and must use PySide6 only."
 				),
 			})

@@ -6,6 +6,11 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
 ## Unreleased
 
+- Remove the retired native Nastran command alias, old plugin identity, old GUI
+  module/settings/toolbar names, and the hard-coded legacy batch builder. The
+  installer only retains exact old paths as one-way deletion targets.
+- Remove the Radia-dependent native coil command and all legacy `RADIA_*`
+  exporter environment variables; Radia keeps its own coil-generation API.
 - Retire MCP GUI/file-drop attachment, foreign-PID shutdown, GUI snapshot RPC
   and its always-failing public tool; human toolbar release tests remain separate.
 - Keep only process-owned headless sessions, bounded startup, strict protocol
@@ -17,6 +22,17 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 - Honor both documented Cubit install overrides and keep native journals in
   Cubit-owned scratch storage. Correct generated recipe Python and publication
   ownership/permission guidance.
+- Reject path traversal in race-history IDs before reading or applying stored
+  recipes. Run synchronous FastMCP handlers in worker threads so long Sculpt or
+  Cubit calls do not block status, cancellation, or unrelated requests.
+- Make missing material-domain IDs fail mesh-quality acceptance. Reject malformed
+  or unterminated managed startup blocks instead of silently dropping following
+  user configuration, and package toolbar mappings with durable relative paths.
+- Remove unsupported programmatic license warmup; setup now reports the official
+  Cubit UI activation boundary without reading or modifying license credentials.
+- Delete the synthetic v29-v56 mixed-transition identity ladder and its recursive
+  import chain. Keep the evidence-backed topology, manifold, quality, Gmsh
+  inventory, independent volume-closure, and headless-process gates.
 
 ## 1.0.4 - GUI release launch correction
 

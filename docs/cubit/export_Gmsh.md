@@ -11,7 +11,7 @@ export gmsh "filename.msh" [order <1-3>] [dimension <2|3>] [overwrite]
 No block assignment required — all meshed elements are exported automatically.
 Sidesets are exported as surface elements. Nodesets as point elements.
 
-> **NOTE**: `export gmsh` is provided by the Radia Cubit plugin.
+> **NOTE**: `export gmsh` is provided by the Cubit Mesh Export plugin.
 > Cubit has no built-in Gmsh exporter, so there is no command conflict.
 
 ### Options

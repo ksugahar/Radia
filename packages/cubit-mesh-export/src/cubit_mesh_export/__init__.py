@@ -22,10 +22,9 @@ import netgen as _netgen  # noqa: F401
 
 __version__ = "1.0.4"
 
-# Compatibility window with the main radia package. The Cubit plugin
-# binaries bundled here (.ccm/.pyd; .ccl was removed in radia 4.80.0)
-# are rebuilt alongside Radia's Cubit toolbar and mesh-validation layer. A
-# mismatch is reported by cubit-plugin-install verification.
+# Optional interoperability window for installations that also use Radia.
+# The standalone Cubit plugin and MCP do not import Radia; a mismatch is
+# reported only when explicitly requested by cubit-plugin-install.
 COMPAT_RADIA_MIN = "4.5.0"
 COMPAT_RADIA_MAX = "5.0.0"  # exact Radia 5 release candidate; no open-ended major range
 

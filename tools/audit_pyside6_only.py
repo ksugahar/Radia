@@ -52,11 +52,11 @@ ROOT = Path(__file__).resolve().parent.parent
 GUI_ROOT = ROOT / 'packages/cubit-mesh-export/src/cubit_mesh_export/cubit_gui'
 
 CUBIT_TOOLBAR_MODULES = [
-    "packages/cubit-mesh-export/src/cubit_mesh_export/cubit_gui/radia_export_menu.py",
+    "packages/cubit-mesh-export/src/cubit_mesh_export/cubit_gui/cubit_export_menu.py",
 ]
 
 PYSIDE6_ALLOWED_FILES = {
-    "packages/cubit-mesh-export/src/cubit_mesh_export/cubit_gui/radia_export_menu.py",
+    "packages/cubit-mesh-export/src/cubit_mesh_export/cubit_gui/cubit_export_menu.py",
     "validation_test/cubit_mesh_export/standalone_gui_probe.py",
     "validation_test/cubit_mesh_export/standalone_dialog_probe.py",
     "validation_test/cubit_mesh_export/standalone_toolbar_probe.py",
@@ -64,7 +64,7 @@ PYSIDE6_ALLOWED_FILES = {
     "packages/cubit-mesh-export/src/cubit_mesh_export/cubit_gui/toolbar_probe.py",
     "tools/audit_pyside6_only.py",
     "validation_test/panels/conftest.py",
-    "validation_test/panels/test_radia_export_menu.py",
+    "validation_test/panels/test_cubit_export_menu.py",
 }
 
 
@@ -194,13 +194,13 @@ def check_deployed_panel_source(
         return ("skip (no ~/.cubit)", [])
 
     cubit_text = cubit_file.read_text(encoding="utf-8", errors="replace")
-    begin = cubit_text.find("## BEGIN radia toolbar")
-    end = cubit_text.find("## END radia toolbar")
+    begin = cubit_text.find("## BEGIN cubit-mesh-export toolbar")
+    end = cubit_text.find("## END cubit-mesh-export toolbar")
     if begin < 0 or end < begin:
-        return ("skip (Radia startup not registered)", [])
+        return ("skip (exporter startup not registered)", [])
     match = re.search(r'play\s+"([^"]+)"', cubit_text[begin:end])
     if not match:
-        return ("checked", [f"invalid Radia startup block: {cubit_file}"])
+        return ("checked", [f"invalid exporter startup block: {cubit_file}"])
 
     startup = Path(match.group(1).replace("/", os.sep))
     if not startup.is_file():
@@ -221,9 +221,9 @@ def check_deployed_panel_source(
 def check_official_toolbar_contract() -> list[str]:
     """Validate the WorkflowToolbar and Claro-owned menu contracts."""
     toolbar_root = GUI_ROOT / "cubit_toolbar"
-    template = toolbar_root / "toolbars" / "radia_export_toolbar.ttb.tmpl"
+    template = toolbar_root / "toolbars" / "cubit_mesh_export_toolbar.ttb.tmpl"
     register = GUI_ROOT / "register_toolbar.py"
-    export_menu = GUI_ROOT / "radia_export_menu.py"
+    export_menu = GUI_ROOT / "cubit_export_menu.py"
     issues: list[str] = []
     if not template.is_file():
         return [f"missing WorkflowToolbar template: {template}"]
@@ -231,8 +231,8 @@ def check_official_toolbar_contract() -> list[str]:
         root = ET.fromstring(template.read_text(encoding="utf-8"))
     except (OSError, ET.ParseError) as exc:
         return [f"invalid WorkflowToolbar template: {exc}"]
-    if root.tag != "WorkflowToolbar" or root.attrib.get("name") != "Radia Export":
-        issues.append("toolbar root must be WorkflowToolbar name='Radia Export'")
+    if root.tag != "WorkflowToolbar" or root.attrib.get("name") != "Cubit Mesh Export":
+        issues.append("toolbar root must be WorkflowToolbar name='Cubit Mesh Export'")
     buttons = root.findall("WTButton")
     if len(buttons) != 6:
         issues.append(f"expected 6 official toolbar buttons, found {len(buttons)}")
@@ -244,7 +244,7 @@ def check_official_toolbar_contract() -> list[str]:
 
     register_text = register.read_text(encoding="utf-8", errors="replace")
     menu_text = export_menu.read_text(encoding="utf-8", errors="replace")
-    if "radia_export_menu.install_menu()" not in register_text:
+    if "cubit_export_menu.install_menu()" not in register_text:
         issues.append("~/.cubit startup does not install the Claro Export menu")
     if "emclaro.add_to_menu" not in menu_text:
         issues.append("Export menu does not use Cubit's official Claro API")
@@ -277,7 +277,7 @@ def _run_smoke() -> int:
     fails: list[str] = []
 
     try:
-        import radia_export_menu as rem
+        import cubit_export_menu as rem
         stub = _StubCubit()
         for fmt in (rem.FMT_NETGEN, rem.FMT_GMSH, rem.FMT_NASTRAN,
                     rem.FMT_VTK, rem.FMT_FEMEEM, rem.FMT_MEG):

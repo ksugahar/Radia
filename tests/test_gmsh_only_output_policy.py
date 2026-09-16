@@ -21,7 +21,7 @@ CUBIT_VTK_BOUNDARY = (
     "src/radia/panels/calc_common.py",
     "src/radia/panels/calc_mesh_eval.py",
     "validation_test/cubit/",
-    "validation_test/panels/test_radia_export_menu.py",
+    "validation_test/panels/test_cubit_export_menu.py",
 )
 
 SOURCE_PATHS = tuple(

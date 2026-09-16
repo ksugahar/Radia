@@ -330,6 +330,37 @@ endmesh
                for issue in duplicate["issues"])
 
 
+def test_boundary_ownership_rejects_unlabelled_volume_domain(tmp_path):
+    vol_path = tmp_path / "missing_material.vol"
+    vol_path.write_text(
+        """mesh3d
+surfaceelements
+1
+1 1 2 0 3 1 2 3
+volumeelements
+1
+2 4 1 2 3 4
+points
+4
+0 0 0
+1 0 0
+0 1 0
+0 0 1
+materials
+1
+1 labelled_but_unused
+endmesh
+""",
+        encoding="ascii",
+    )
+
+    ownership = check_vol_boundary_domain_ownership(vol_path)
+
+    assert ownership["passed"] is False
+    assert ownership["missing_material_ids"] == [2]
+    assert "volume domains missing material labels: 2" in ownership["issues"]
+
+
 def test_compressed_crlf_vol_labels_are_transport_normalized(tmp_path):
     _, vol_path = _save_box(tmp_path)
     compressed = tmp_path / "box.vol.gz"

@@ -45,9 +45,9 @@ def main():
             assert toolbar_install.install_panels(all_users=False)
             valid, issues = toolbar_install.verify_panel_installation(all_users=False)
             assert valid, issues
-        archive_path = root / "local/Radia/Cubit/radia_export_toolbar.tar.gz"
+        archive_path = root / "local/cubit-mesh-export/Cubit/cubit_mesh_export_toolbar.tar.gz"
         with tarfile.open(archive_path) as archive:
-            assert archive.extractfile("scripts/radia_export_menu.py").read() == (gui / "radia_export_menu.py").read_bytes()
+            assert archive.extractfile("scripts/cubit_export_menu.py").read() == (gui / "cubit_export_menu.py").read_bytes()
             assert len([n for n in archive.getnames() if n.startswith("scripts/export_")]) == 6
         for module in ("install", "smoke_test", "toolbar_smoke", "check"):
             result = subprocess.run([sys.executable, "-m", f"cubit_mesh_export.{module}", "--help"],

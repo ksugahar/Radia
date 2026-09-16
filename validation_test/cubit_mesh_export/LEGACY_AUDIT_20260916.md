@@ -54,17 +54,57 @@ release acceptance or proof that every numerical/native route is defect-free.
   snapshot tool. This local test wheel retains version 1.0.4 and is NOT a new
   published artifact; do not distribute it as the released 1.0.4 wheel.
 
-## Boundaries still requiring a separate migration/validation decision
+## Third pass: legacy removal
 
-- Native compatibility command aliases, including `export jmag_nastran`, were
-  inspected but not changed. Removing them requires rebuilding and validating
-  the matching `.ccm` payload, not just editing Python guidance.
-- Existing human GUI settings and Learn credential environment names still
-  contain historical Radia naming. They are not Radia runtime dependencies;
-  changing them needs explicit settings/launcher migration, not silent deletion
-  of user preferences or credentials. No legacy user data was deleted.
+- Removed the old native command alias and its command class. The rebuilt plugin
+  exposes only `export nastran_bdf`; binary inspection confirms the old class,
+  command, plugin identity, and product header are absent.
+- Renamed the native plugin, message filter, C++ namespace, GUI module, toolbar,
+  icon, logs, eager-start environment variable, and exporter-owned settings root
+  to Cubit Mesh Export names. Deleted the obsolete hard-coded batch builder.
+- The installer removes exact exporter-owned legacy startup, toolbar, archive,
+  settings, and native-plugin paths. These names are one-way deletion targets,
+  not compatibility relays; unrelated files and parent directories are retained.
+- Removed the obsolete MCP Netgen-export compatibility gate. Current guidance
+  and active validation journals use only supported native commands.
+- Removed the Radia-dependent native coil command, obsolete GUI-transport E2E,
+  legacy test journals, and exporter-owned `RADIA_*` environment variables.
+  Radia's coil-generation API remains on the Radia side of the dependency.
+- Added a clean-package build command and wheel-content CI gate. This prevents
+  deleted Python, toolbar, icon, or bootstrap files from leaking out of a stale
+  incremental `build/lib` directory.
 - Solver-consumed Kelvin boundary labels and optional Radia integration checks
-  remain actual interoperability contracts, not unused compatibility bridges.
+  remain because they are current interoperability contracts, not legacy paths.
+- Removed programmatic license-cache warmup. `--setup` is now a non-destructive
+  doctor; license activation stays in Coreform's official UI.
+- Rejected unsafe race-history identifiers before file lookup and moved every
+  synchronous MCP tool invocation to a worker thread so a long Sculpt or Cubit
+  call does not freeze the MCP event loop.
+- Made missing material domains fail mesh-quality acceptance, made malformed
+  managed startup markers fatal, and removed transient staging paths from the
+  official toolbar archive.
+- Deleted the synthetic v29-v56 mixed-transition identity ladder: 28 generated
+  test generations, 12 recursive identity modules, and 9,400+ lines of repeated
+  predicates had no package-side evidence producer. The production gate retains
+  shared-face ownership, two-sided manifold, family/quality inventory, Gmsh
+  connectivity, independent volume closure, and headless-process classification.
+
+### Third-pass validation
+
+- Rebuilt the `.ccm` and native curver; provenance manifest updated.
+- Current package source suite: **488 passed** after deleting the synthetic
+  identity generations. Security/runtime, mesh-quality and installer review
+  focus: **59 passed**; GUI independence, native registry, Kelvin and
+  release-dual focus: **84 passed**. No skips in these runs.
+- Built-wheel standalone checks passed without Radia, radia-mcp, or
+  cae-mcp-core: **54 MCP tools**, **469 installed-wheel MCP tests**, current
+  toolbar paths, and no retired bootstrap, snapshot tool, GUI module, icon,
+  toolbar template, license warmup, or versioned identity modules. The wheel
+  contains **83 members**; Sculpt/vfrac contracts run in this clean environment
+  with the declared extras and no skips.
+- A real headless Cubit run loaded the rebuilt plugin and exported a canonical
+  BDF whose header identifies cubit-mesh-export. The installed live plugin was
+  not changed during this source audit.
 
 Published 1.0.4 and both live editable installations are unchanged by this audit.
 The corrected source must be reviewed/integrated and released before describing

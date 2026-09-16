@@ -44,14 +44,4 @@ private:
                          int eid, int pid, bool pyram, int order);
 };
 
-// Cubit registers one syntax per command object.  Keep the historical JMAG
-// spelling as a separate command so old journals remain executable.
-class ExportJmagNastranCommand : public ExportNastranCommand
-{
-public:
-  std::vector<std::string> get_syntax();
-  std::vector<std::string> get_syntax_help();
-  std::vector<std::string> get_help();
-};
-
 #endif
