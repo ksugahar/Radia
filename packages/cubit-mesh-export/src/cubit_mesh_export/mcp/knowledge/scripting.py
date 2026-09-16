@@ -22,16 +22,16 @@ use a caller-owned per-run scratch root for isolated tests, not a shared fixed
 test-client path. This does not start Cubit or change its licensing requirements.
 
 `cubit-mesh-export` is independently installable without `radia` or
-`radia-mcp`. Radia adds optional toolbar integration; MCP owns AI operation.
-Radia's current source accepts exporter 1.0.0 explicitly; older Radia releases
-may still cap it at 0.999.999. Check both installed compatibility windows before
-combined deployment. Do not infer that later unvalidated exporter versions pass.
+`radia-mcp`. This distribution owns both the toolbar and Cubit MCP.
+For optional Radia integration, run `cubit-plugin-install --check-radia-compat`
+against the installed versions; independent operation does not require it.
 Its standalone release acceptance uses
 `validation_test/cubit_mesh_export/validate_standalone_wheel.py` in an isolated
 wheel-installed venv with Radia/MCP absent. It loads the candidate plugin via
 the headless console, checks an APREPRO sphere journal, and retains wheel/native
 hashes plus the strict `check-vol` result. Do not substitute the no-argument
-IH smoke test (which needs Radia's sample) for standalone acceptance.
+unrelated solver acceptance for standalone export validation. The installed
+`cubit-smoke-test` includes its own journal and does not require Radia.
 
 ```
 1. Create geometry (Cubit commands or STEP import)
@@ -1276,11 +1276,11 @@ cubit.cmd('export gmsh "mesh.msh" overwrite')
 
 ## Prerequisites
 
-The export commands are part of the Radia Cubit plugin:
+The export commands belong to the independent cubit-mesh-export plugin:
 
 ```bash
-# Install Radia (includes Cubit plugin)
-pip install radia[cubit]
+# Install the exporter, toolbar and bundled Cubit MCP
+pip install cubit-mesh-export
 cubit-plugin-install  # Deploy Cubit plugin
 
 # Use export netgen APREPRO command in Cubit
@@ -3965,11 +3965,11 @@ Python- or build-specific details.
   session can double-click `Coreform Cubit (warm launch)` on the desktop
   or run `C:/ProgramData/CoreformCubit/cubit_refresh.cmd` to get the
   same effect immediately.
-- hibino / external users: `pip install --upgrade "radia[cubit]"
-  radia-mcp cubit-mesh-export` + `cubit-plugin-install` +
+- External licensed Cubit hosts: `pip install --upgrade cubit-mesh-export`
+  + `cubit-plugin-install` +
   `cubit-plugin-install --verify-only`.
-- mdx: `release_quad.py phase8e` installs PyPI wheels for `radia` and
-  `cubit-mesh-export`; `radia-mcp` is intentionally absent there.
+- Lab release-dual targets LAB and 100 only. Do not deploy Cubit or its MCP
+  to hibino/mdx as part of this release lane.
 - VSCode MCP users: restart VSCode once to pick up the new daemon code.
   After that, subsequent restarts attach in 0.01 s.
 
