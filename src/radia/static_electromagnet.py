@@ -166,9 +166,9 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
         raise ValueError("source_projection_order must be positive")
     if float(kelvin_radius) <= 0.0:
         raise ValueError("kelvin_radius must be positive")
-    if (linear_mu_r_by_material is None) == (bh_table is None):
+    if linear_mu_r_by_material is None and bh_table is None:
         raise ValueError(
-            "supply exactly one of linear_mu_r_by_material or bh_table for "
+            "supply linear_mu_r_by_material or bh_table (or both for hybrid materials) for "
             "mixed total/reduced Omega"
         )
     if source_potential_contract not in {
@@ -297,6 +297,7 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
         "bonus_intorder": int(bonus_intorder),
         "inverse": inverse,
         "kelvin_mats": domain.kelvin_materials,
+        "kelvin_match_exact": True,
         "kelvin_interface_boundary": domain.kelvin_interface,
         "kelvin_source_potential": (None if kelvin_source_h is not None
                                     else kelvin_source_potential),
@@ -324,6 +325,7 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
             float(kelvin_radius),
             kelvin_offset,
             bh_table=bh_table,
+            mu_r_by_material=linear_mu_r_by_material,
             nonlinear_materials=domain.nonlinear_materials,
             tolerance=float(nonlinear_tolerance),
             max_iterations=int(nonlinear_max_iterations),
@@ -336,6 +338,13 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
             material_log_state_initial=nonlinear_material_log_state_initial,
             **common,
         )
+    trace_gate_applied = source_trace_tolerance is not None and (
+        source_potential_contract != "total_hodge" or kelvin_trace is not None)
+    source_diagnostics["gate_enabled"] = trace_gate_applied
+    source_diagnostics["acceptance"] = "passed" if trace_gate_applied else "not_evaluated"
+    source_diagnostics["gate_scope"] = (
+        "kelvin_trace_only" if source_potential_contract == "total_hodge"
+        else source_potential_contract)
     result["static_electromagnet_contract"] = domain.as_dict()
     result["static_electromagnet_contract"]["source_trace"] = source_diagnostics
     return result

@@ -132,5 +132,5 @@ def test_mixed_h1_uses_kelvin_vertex_gauge_not_surface_dirichlet_label():
         "def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(", 1
     )[0]
     assert 'dirichlet_bbbnd="GND"' in mixed
-    assert "dirichlet_bbbnd=dirichlet_bbbnd" in mixed
+    assert 'dirichlet_bbbnd="" if has_surface else dirichlet_bbbnd' in mixed
     assert "dirichlet_bbnd=" not in mixed

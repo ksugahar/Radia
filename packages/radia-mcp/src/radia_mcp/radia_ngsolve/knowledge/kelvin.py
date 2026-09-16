@@ -2246,6 +2246,21 @@ B_cf = result["B_cf"]
   a rigorous field-error bound. A monolithic reduced-H1 comparison removes the
   interface projection but is not an independent A-formulation. Strong source
   cancellation may make that low-order comparison less accurate, not superior.
+  Separate weak Maxwell residuals, one-sided interface jumps and exterior
+  boundary defects from constitutive convergence. Verify the material reached
+  on each side: default point-location tolerances can hide interface jumps.
+  For an independent solenoidal source field, zero normal correction flux
+  corresponds to tangential reduced A=0, not zero total normal B. An HCurl A
+  comparison removes scalar source projection, but needs its own mesh and
+  quadrature convergence. Invert the same monotone B(H) interpolant for H(B).
+  Integrate nonlinear energy/coenergy; one-half B dot H is generally invalid.
+  W+Wstar=B dot H is an algebraic material identity, not independent validation.
+  A primal-dual energy gap is not a certified error bound until admissibility,
+  boundary identity and integration accuracy are established.
+  Audit the independently prescribed source divergence with the assembly's
+  actual volume and boundary quadrature. An underresolved source can inject
+  a forcing residual even when its analytical divergence is zero. Compare
+  residual vectors as well as norms before blaming the material or projection.
 - A prescribed analytic potential on an internal coupling face is not a
   free-interface validation. Audit boundary assignments, remove internal
   Dirichlet constraints, and test a source lift that is nonzero on the
@@ -2260,13 +2275,22 @@ B_cf = result["B_cf"]
   `phi_total - phi_reduced = Phi_source` and
   `H_source,t = -grad_Gamma(Phi_source)`.
 - When physical reduced air meets the periodic Kelvin pair, its inner surface
-  must also carry `phi_total - phi_reduced = -Phi_source`.  The minus is the
-  orientation reversal of the Kelvin pullback of this scalar source 0-form.
+  carries `phi_exterior_stored - phi_reduced = kelvin_source_potential`.
+  The stored exterior unknown is minus the computational twisted potential;
+  do not apply an extra sign to the supplied interface trace.
   It is represented by `kelvin_interface_boundary` and
   `kelvin_source_potential`; do not omit it or evaluate a source in the Kelvin
   exterior.
 - `project_source_interface_potential` obtains `Phi_source` from the exact
-  Radia H trace.  Its residual is an acceptance gate, not a cosmetic metric.
+  Radia H trace. With an explicit positive finite tolerance it is an acceptance
+  gate; `None` is diagnostic-only and reports `acceptance=not_evaluated`.
+- Material selectors are case-insensitive. Use `kelvin_match_exact=True`
+  for known material names; the high-level domain wrapper does this itself.
+  Kelvin selectors must not match reduced or nonlinear physical materials.
+- Hybrid nonlinear/linear total regions require `mu_r_by_material` for every
+  linear total material, including explicit vacuum entries. Do not silently
+  replace an unspecified pole piece by vacuum. P1 returned H, mu and B refer
+  to the same assembled iterate; check both constitutive and iteration change.
 - The interface multiplier makes the system symmetric indefinite.  Use the
   direct PARDISO path; do not incorrectly force a positive-definite CG solve.
 

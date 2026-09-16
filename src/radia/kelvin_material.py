@@ -88,8 +88,17 @@ MU_0 = 4e-7 * math.pi
 NU_0 = 1.0 / MU_0
 
 
+def _is_kelvin_material(name, keys, *, exact=False):
+    """Use one case-insensitive selector for geometry and metric assignment."""
+    name = str(name).casefold()
+    keys = tuple(str(key).casefold() for key in keys)
+    if any(not key for key in keys):
+        raise ValueError('Kelvin material selectors must not be empty')
+    return any(name == key if exact else key in name for key in keys)
+
+
 def make_kelvin_nu_cf(mesh, R_K, offset, nu_0=NU_0,
-                       kelvin_mats=("kelvin",), mu_r_by_material=None):
+                       kelvin_mats=("kelvin",), mu_r_by_material=None, kelvin_match_exact=False):
     """NGSolve CoefficientFunction for nu(r) with Kelvin modulation.
 
     nu(r) = nu_0 / mu_r in non-Kelvin materials,
@@ -107,6 +116,8 @@ def make_kelvin_nu_cf(mesh, R_K, offset, nu_0=NU_0,
         kelvin_mats: substring(s) used to detect Kelvin materials.
             A material whose name (lowercased) contains any of these
             substrings receives the Kelvin modulation.
+        kelvin_match_exact: use case-insensitive whole-name matches instead
+            of substring matches when the domain labels are known exactly.
         mu_r_by_material: optional mapping from physical material name to a
             positive scalar relative permeability. Materials absent from this
             mapping use vacuum permeability. Kelvin material names are never
@@ -132,8 +143,7 @@ def make_kelvin_nu_cf(mesh, R_K, offset, nu_0=NU_0,
 
     nu_dict = {}
     for m in material_names:
-        ml = m.lower()
-        is_kelvin = any(kw in ml for kw in kelvin_mats)
+        is_kelvin = _is_kelvin_material(m, kelvin_mats, exact=kelvin_match_exact)
         if is_kelvin:
             if m in mu_r_by_material:
                 raise ValueError(
@@ -149,7 +159,7 @@ def make_kelvin_nu_cf(mesh, R_K, offset, nu_0=NU_0,
 
 
 def make_kelvin_mu_cf(mesh, R_K, offset, mu_0=MU_0,
-                       kelvin_mats=("kelvin",), mu_r_by_material=None):
+                       kelvin_mats=("kelvin",), mu_r_by_material=None, kelvin_match_exact=False):
     """Return permeability with physical material and Kelvin metric factors.
 
     This is the explicit reciprocal companion to :func:`make_kelvin_nu_cf`.
@@ -177,7 +187,7 @@ def make_kelvin_mu_cf(mesh, R_K, offset, mu_0=MU_0,
 
     mu_dict = {}
     for material in material_names:
-        is_kelvin = any(key in material.lower() for key in kelvin_mats)
+        is_kelvin = _is_kelvin_material(material, kelvin_mats, exact=kelvin_match_exact)
         if is_kelvin:
             if material in mu_r_by_material:
                 raise ValueError(
