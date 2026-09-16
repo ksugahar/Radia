@@ -205,7 +205,7 @@ def audit_pptx_figures(pptx_path: str,
                 "sha1": None,
                 "minor": False,
                 "risks": [
-                    "UNREADABLE PICTURE -- authored width UNVERIFIABLE "
+                    "NOT MEASURABLE -- authored width UNVERIFIABLE "
                     f"({asset['unreadable']}); the image is linked/OLE or has "
                     "no embeddable asset. Re-insert it as an embedded file."
                 ],

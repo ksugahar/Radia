@@ -123,6 +123,35 @@ def test_core_profile_exposes_catalog_and_runner_only():
     assert result == {"passed": False}
 
 
+def test_catalog_default_is_bounded_and_reports_truncation():
+    mcp = FastMCP("bounded-catalog")
+    registry = CoarseToolRegistry(
+        mcp,
+        namespace="demo",
+        category="validation",
+        profile="core",
+        min_group_size=1,
+    )
+
+    for index in range(20):
+        def operation(value: int = index) -> int:
+            """Return one deterministic catalog value."""
+            return value
+
+        registry.tool(name=f"demo_gate_{index:02d}")(operation)
+
+    registry.install()
+    tool = mcp._tool_manager._tools["demo_validation_catalog"]
+    result = tool.fn()
+
+    assert tool.parameters["properties"]["limit"]["default"] == 12
+    assert result["matched"] == 20
+    assert result["returned"] == 12
+    assert result["truncated"] is True
+    assert "Narrow query" in result["next_step_hint"]
+    assert len(json.dumps(result, ensure_ascii=False)) < 10_000
+
+
 def test_full_profile_keeps_individual_tools_for_compatibility():
     mcp = FastMCP("test")
     registry = CoarseToolRegistry(

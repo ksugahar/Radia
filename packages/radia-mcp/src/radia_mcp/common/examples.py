@@ -4,9 +4,6 @@
 from __future__ import annotations
 
 
-import hashlib
-
-
 import json
 
 
@@ -417,13 +414,13 @@ def refresh_youtube_transcripts(query: str, source_name: str,
 	"""Generic: search YouTube for `query`, fetch top-N transcripts,
 	store as the `source_name` example sub-source.
 
-	Used by `refresh_cubit_youtube` / `refresh_build123d_youtube` /
-	`refresh_gmsh_youtube`. Optional dep: `youtube-transcript-api`
+	Used by `refresh_build123d_youtube` / `refresh_gmsh_youtube`.
+	Optional dep: `youtube-transcript-api`
 	(install via `pip install radia-mcp[youtube]`).
 
 	Args:
 	    query: search string passed to youtube.com/results.
-	    source_name: index sub-source name (e.g., "cubit_youtube").
+	    source_name: registered index sub-source name.
 	    max_videos: cap on videos to enumerate (transcripts may be
 	        unavailable on some — those are skipped).
 	"""
@@ -1009,8 +1006,12 @@ REFRESH_FUNCS = {'build123d': refresh_build123d_examples, 'bd_warehouse': refres
 
 
 def _resolve_family(name: str) -> list[str]:
-	"""Return the list of sub-sources for a family, or [name] if not a family."""
-	return FAMILIES.get(name, [name])
+	"""Return registered sub-sources for a family or concrete source."""
+	if name in FAMILIES:
+		return FAMILIES[name]
+	if name in REFRESH_FUNCS:
+		return [name]
+	return []
 
 
 def _ensure_fresh(source: str, force: bool) -> None:
@@ -1029,11 +1030,9 @@ def search_examples(source: str, query: str, limit: int = 5,
                     auto_refresh_if_empty: bool = True) -> dict:
 	"""tf-idf search across cached examples for `source`.
 
-	`source` may be a single concrete source (`build123d`, `cubit`,
-	`bd_warehouse`, `cubit_local`) or a family name (`build123d` resolves
-	to `[build123d, bd_warehouse]`; `cubit` resolves to `[cubit,
-	cubit_local]`).  For families the indexes are unioned and ranked
-	together so one query sees GitHub + local + forum hits at once.
+	`source` may be a registered concrete source or family name. For families,
+	the indexes are unioned and ranked together so one query sees GitHub, local,
+	forum, and tutorial hits at once.
 
 	Args:
 	    source: concrete source name or family name.
@@ -1104,10 +1103,6 @@ def search_examples(source: str, query: str, limit: int = 5,
 		if head_hits:
 			score *= 1.0 + 0.75 * head_hits
 		score *= 1.0 + 0.25 * (hits / max(1, len(q_terms)))
-		# Mild local-source boost: lab-curated examples are usually more
-		# relevant to Radia users than random forum posts / general libs.
-		if sub in ("cubit_local",):
-			score *= 1.1
 		scored.append((score, it, sub))
 
 	scored.sort(key=lambda x: (-x[0], x[2], x[1].get("name", "")))

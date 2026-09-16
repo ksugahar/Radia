@@ -1,7 +1,7 @@
 # .jou → build123d translation benchmark
 
 Purpose: measure how well the current mcp-server knowledge bases
-(`src/radia/mcp_server/cubit/` and `.../build123d/`) let an LLM
+(`cubit_mesh_export.mcp` and `radia_mcp.build123d`) let an LLM
 translate Cubit `.jou` scripts to build123d Python.
 
 This is a docs-owned benchmark record, not an `examples/` runtime sample.  The

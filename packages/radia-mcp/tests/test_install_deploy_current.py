@@ -3,6 +3,10 @@ from radia_mcp.radia_ngsolve.knowledge.install_deploy import (
     get_install_deploy_documentation,
 )
 from radia_mcp.radia_ngsolve.knowledge.radia import RADIA_BUILD_AND_RELEASE
+from radia_mcp.radia_ngsolve.knowledge.release_workflow import (
+    RELEASE_WORKFLOW,
+    get_release_workflow_documentation,
+)
 
 
 def test_install_deploy_topics_match_current_machine_roles():
@@ -49,3 +53,28 @@ def test_mcp_release_route_is_distinct_from_solver_release():
     assert "tools/release_quad.py" not in mcp
     assert "tools/release_quad.py" in solver
     assert "topic `mcp_release`" in solver
+
+
+def test_release_workflow_does_not_restore_coupled_mcp_policy():
+    mcp = get_release_workflow_documentation("mcp_release")
+    quality = get_release_workflow_documentation("mcp_quality_review")
+    overview = get_release_workflow_documentation("overview")
+    assert "## mcp_release" in mcp
+    assert "next-launch-pending" in mcp
+    assert "does not block\nrelease completion" in mcp
+    assert "solver QUAD" in mcp
+    assert "release-quad Phase 8/9 checks" not in quality
+    assert "LAB live-source" in quality
+    assert "radia-ngsolve, cubit, build123d" not in RELEASE_WORKFLOW
+    assert "Cubit MCP is distributed by cubit-mesh-export" in overview
+    assert "Bump 4 version files" not in RELEASE_WORKFLOW
+    assert "Composite commit (HEREDOC, all packages" not in RELEASE_WORKFLOW
+    assert "the radia-mcp Scripts/mcp-server-*.exe" not in RELEASE_WORKFLOW
+    assert "Never kill every MCP" in RELEASE_WORKFLOW
+    assert "Rows\ndo not have to share the same version" in RELEASE_WORKFLOW
+    assert "never restore an older tree" in RELEASE_WORKFLOW
+    assert "three-package reinstall" not in RELEASE_WORKFLOW
+    assert "RADIA_RELEASE_PRESERVE_MCP_SOURCE" not in RELEASE_WORKFLOW
+    assert "solver candidate lane never installs" in RELEASE_WORKFLOW
+    assert "monorepo_lockstep" not in RELEASE_WORKFLOW
+    assert "## version_pairs" in get_release_workflow_documentation("version_pairs")

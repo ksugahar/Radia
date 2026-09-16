@@ -37,7 +37,7 @@ def test_quad_deploys_both_compute_hosts_without_mcp(monkeypatch):
     monkeypatch.setattr(tool, '_deploy_pypi', lambda host, label, **kwargs: calls.append((host, kwargs)) or 0)
     assert tool.cmd_phase8e(None) == 0
     assert [host for host, _ in calls] == ['mdx1', 'mdx2']
-    assert all(options['include_mcp'] is False for _, options in calls)
+    assert all(not options for _, options in calls)
 
 
 def test_quad_stops_when_first_compute_deployment_fails(monkeypatch):
@@ -52,7 +52,7 @@ def test_quad_stops_when_first_compute_deployment_fails(monkeypatch):
 def test_compute_deployment_never_installs_or_runs_cubit(monkeypatch, host):
     tool = load_tool('release_quad')
     calls = []
-    monkeypatch.setattr(tool, '_read_repo_versions', lambda: {
+    monkeypatch.setattr(tool, '_read_repo_versions', lambda *_args: {
         'radia': '1.0', 'radia-mcp': '2.0', 'cubit-mesh-export': '3.0'})
 
     def run(command, **kwargs):
@@ -72,7 +72,7 @@ def test_compute_deployment_never_installs_or_runs_cubit(monkeypatch, host):
         assert forbidden not in executable
 
 
-def test_compute_probe_does_not_import_cubit_and_keeps_row_contract(monkeypatch, capsys, tmp_path):
+def test_compute_probe_is_solver_only_and_keeps_row_contract(monkeypatch, capsys, tmp_path):
     tool = load_tool('release_quad')
     radia = SimpleNamespace(__file__=str(tmp_path / '__init__.py'), __version__='1.0')
     monkeypatch.setitem(sys.modules, 'radia', radia)
@@ -83,12 +83,13 @@ def test_compute_probe_does_not_import_cubit_and_keeps_row_contract(monkeypatch,
         return original_import(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, '__import__', guarded_import)
-    exec(tool.CROSS_MACHINE_PROBE_NO_MCP, {})
+    exec(tool.CROSS_MACHINE_PROBE, {})
     compute_rows = capsys.readouterr().out.splitlines()
     rows = {" ".join(row.partition('=')[0].split()): row.partition('=')[2].strip()
             for row in compute_rows}
     assert len(compute_rows) == len(rows)  # duplicate rows must not disappear
     assert set(rows) == set(tool._PHASE9_FIELDS)
-    assert {key for key, value in rows.items() if value == 'N/A'} == tool._PHASE9_COMPUTE_NA
+    assert all(value != 'N/A' for value in rows.values())
     assert compute_rows[0].endswith('= 1.0')
-    assert 'import radia, cubit_mesh_export' in tool.CROSS_MACHINE_PROBE_LAB
+    assert 'cubit_mesh_export' not in tool.CROSS_MACHINE_PROBE_LAB
+    assert 'radia-mcp' not in tool.CROSS_MACHINE_PROBE_LAB

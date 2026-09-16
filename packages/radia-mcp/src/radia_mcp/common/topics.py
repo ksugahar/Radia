@@ -28,7 +28,7 @@ returns the authoritative topic enumeration in a stable shape:
         ],
     }
 
-Not needed for multi-tool servers (cubit, radia-ngsolve, ...): each
+Not needed for multi-tool servers (for example radia-ngsolve): each
 of their tools is already its own "topic" and is exposed via the MCP
 standard `tools/list` method.
 

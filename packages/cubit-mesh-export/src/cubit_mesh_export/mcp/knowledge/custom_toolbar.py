@@ -41,7 +41,7 @@ to replace old startup references; do not restore shims at removed Radia paths.
 The GUI cold-start command is an explicitly scoped release test, never an LLM
 production execution route. Its wheel and probe run without the Radia package.
 Independent publication uses the cubit-mesh-export tag and PyPI distribution.
-`release_quad.py cubit-dual` owns LAB/100 preflight, deployment and done receipts
+`python tools/release_cubit_dual.py` owns LAB/100 preflight, deployment and done receipts
 for one published wheel hash and clean source SHA. It leaves Radia/MCP untouched
 and refuses active Cubit instead of stopping user jobs. Optional combined Radia
 compatibility is a separate `cubit-plugin-install --check-radia-compat` check;

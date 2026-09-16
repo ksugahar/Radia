@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from radia_mcp.radia_ngsolve.cst_v45_identity import validate_public_identity
+from radia_mcp.radia_ngsolve.network_identity_v45 import validate_public_identity
 
 
 _WAVEGUIDE = "waveguide_cutoff_impedance_group_delay_power_orthogonality_mesh_owner_identity"
@@ -22,7 +22,7 @@ def _payload() -> dict:
             "modal_impedance_ohm": [50.0, 55.0, 60.0], "result_modal_impedance_ohm": [50.0, 55.0, 60.0], "group_delay_s": [1.0e-9, 1.1e-9, 1.2e-9], "result_group_delay_s": [1.0e-9, 1.1e-9, 1.2e-9],
             "power_normalization_w": [1.0, 1.0, 1.0], "result_power_normalization_w": [1.0, 1.0, 1.0], "orthogonality_matrix": [[1.0, 0.0], [0.0, 1.0]], "result_orthogonality_matrix": [[1.0, 0.0], [0.0, 1.0]],
             "mesh_owner": "mesh:" + wave, "result_mesh_owner": "mesh:" + wave, "waveguide_result_sha256": "d" * 64, "accepted_waveguide_result_sha256": "d" * 64,
-            "release_id": "cst-v45", "result_release_id": "cst-v45",
+            "release_id": "network-v45", "result_release_id": "network-v45",
         },
         _EMC: {
             "emc_probe_generation": emc,
@@ -30,13 +30,13 @@ def _payload() -> dict:
             "coordinate_system": "global_cartesian", "result_coordinate_system": "global_cartesian", "interpolation_order": 2, "result_interpolation_order": 2, "time_window_s": [0.0, 1.0e-9], "result_time_window_s": [0.0, 1.0e-9],
             "fft_normalization": "parseval_unitary", "result_fft_normalization": "parseval_unitary", "parseval_time_energy_j": 1.0, "result_parseval_time_energy_j": 1.0, "parseval_frequency_energy_j": 1.0, "result_parseval_frequency_energy_j": 1.0,
             "monitor_owner": "monitor:" + emc, "result_monitor_owner": "monitor:" + emc, "emc_probe_result_sha256": "e" * 64, "accepted_emc_probe_result_sha256": "e" * 64,
-            "release_id": "cst-v45", "result_release_id": "cst-v45",
+            "release_id": "network-v45", "result_release_id": "network-v45",
         },
     }]}
 
 
 def test_v45_public_waveguide_and_emc_identity_positive() -> None:
-    assert validate_public_identity(_payload()) == {"cst_v45_waveguide_identity": True, "cst_v45_emc_probe_identity": True}
+    assert validate_public_identity(_payload()) == {"network_v45_waveguide_identity": True, "network_v45_emc_probe_identity": True}
 
 
 def test_v45_public_identity_rejects_lineage_and_parseval_mutations() -> None:
@@ -44,5 +44,5 @@ def test_v45_public_identity_rejects_lineage_and_parseval_mutations() -> None:
     payload["runs"][0][_WAVEGUIDE]["cutoff_generation"] = "stale"
     payload["runs"][0][_EMC]["result_parseval_frequency_energy_j"] = 2.0
     result = validate_public_identity(payload)
-    assert result["cst_v45_waveguide_identity"] is False
-    assert result["cst_v45_emc_probe_identity"] is False
+    assert result["network_v45_waveguide_identity"] is False
+    assert result["network_v45_emc_probe_identity"] is False
