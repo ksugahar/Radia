@@ -1,5 +1,5 @@
 #!python
-"""Probe the Coreform-owned Radia Export toolbar in a real Cubit GUI.
+"""Probe the Coreform-owned Cubit Mesh Export toolbar in a real Cubit GUI.
 
 This file is executed inside Cubit's embedded Python by
 ``cubit_mesh_export.toolbar_smoke``. Keep it standalone: importing the normal
@@ -26,10 +26,10 @@ EXPECTED_ACTIONS = [
     "MEG (ELF/MAGIC)",
 ]
 RESULT_PATH = os.environ.get(
-    "RADIA_TOOLBAR_PROBE_RESULT",
-    r"C:\temp\radia_toolbar_probe_result.json",
+    "CUBIT_MESH_EXPORT_TOOLBAR_PROBE_RESULT",
+    r"C:\temp\cubit_mesh_export_toolbar_probe_result.json",
 )
-TIMEOUT_SECONDS = float(os.environ.get("RADIA_TOOLBAR_PROBE_TIMEOUT", "20"))
+TIMEOUT_SECONDS = float(os.environ.get("CUBIT_MESH_EXPORT_TOOLBAR_PROBE_TIMEOUT", "20"))
 
 _started = time.monotonic()
 _finished = False
@@ -77,8 +77,8 @@ def _snapshot():
 
     candidates = [
         toolbar for toolbar in main.findChildren(QToolBar)
-        if _plain(toolbar.objectName()) == "Radia Export"
-        or _plain(toolbar.windowTitle()) == "Radia Export"
+        if _plain(toolbar.objectName()) == "Cubit Mesh Export"
+        or _plain(toolbar.windowTitle()) == "Cubit Mesh Export"
     ]
     toolbar = candidates[0] if candidates else None
     actions = list(toolbar.actions()) if toolbar is not None else []
@@ -103,7 +103,7 @@ def _snapshot():
         name: bool(action.isEnabled())
         for name, action in zip(action_names, actions)
     }
-    toolbar_menu_has = toggle is not None and _plain(toggle.text()) == "Radia Export"
+    toolbar_menu_has = toggle is not None and _plain(toggle.text()) == "Cubit Mesh Export"
 
     payload = {
         "main_window_visible": bool(main.isVisible()),
@@ -114,7 +114,7 @@ def _snapshot():
         "toolbar_actions": action_names,
         "action_visible": action_visible,
         "action_enabled": action_enabled,
-        "toolbar_menu_has_radia_export": toolbar_menu_has,
+        "toolbar_menu_has_cubit_mesh_export": toolbar_menu_has,
         "toolbar_owner": toolbar.metaObject().className() if toolbar is not None else None,
     }
     payload["ok"] = (
@@ -126,7 +126,7 @@ def _snapshot():
         and payload["toolbar_actions"] == EXPECTED_ACTIONS
         and all(payload["action_visible"].get(name) for name in EXPECTED_ACTIONS)
         and all(payload["action_enabled"].get(name) for name in EXPECTED_ACTIONS)
-        and payload["toolbar_menu_has_radia_export"]
+        and payload["toolbar_menu_has_cubit_mesh_export"]
         and payload["toolbar_owner"] == "WorkflowToolbar"
     )
     return payload

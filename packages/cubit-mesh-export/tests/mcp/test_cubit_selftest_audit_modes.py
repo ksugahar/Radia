@@ -1,4 +1,5 @@
 """Cubit selftest and repository audit contracts."""
+import asyncio
 import contextlib
 import errno
 import io
@@ -35,7 +36,9 @@ def test_mesh_selftest_cli_tolerates_closed_stdout(monkeypatch):
 def test_mesh_status_tools_expose_selftest_and_audit_commands():
     from cubit_mesh_export.mcp import server as cubit_server
 
-    cubit = cubit_server.mcp._tool_manager._tools["cubit_status"].fn()
+    cubit = asyncio.run(
+        cubit_server.mcp._tool_manager._tools["cubit_status"].fn()
+    )
 
     assert cubit["selftest_command"] == "mcp-server-cubit --selftest"
     assert cubit["audit_command"] == "mcp-server-cubit --selftest --audit-repo"

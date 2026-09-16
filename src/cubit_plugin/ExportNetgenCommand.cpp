@@ -1,6 +1,6 @@
 #include "ExportNetgenCommand.hpp"
 #include "MeshData.hpp"
-#include "RadiaMessageFilter.hpp"
+#include "LearnEditionMessageFilter.hpp"
 #include "CubitInterface.hpp"
 #include "CubitMessage.hpp"
 #include <chrono>
@@ -223,8 +223,8 @@ std::vector<std::string> ExportNetgenCommand::get_help()
     "                               omit to inherit from the air surface.\n"
     "  kelvin_sym_<axis> bn|ht      Per-axis symmetry-plane BC label on a\n"
     "                               domain-reduced (1/2 or 1/4) model.\n"
-    "                               'bn' = B.n=0 (flux parallel, Radia '+').\n"
-    "                               'ht' = HxN=0 (flux perp,  Radia '-').\n"
+    "                               'bn' = B.n=0 (flux parallel).\n"
+    "                               'ht' = HxN=0 (flux perpendicular).\n"
     "                               'off' = no reduction (default)."
   );
   return help;
@@ -306,7 +306,7 @@ static void run_auto_kelvin(bool add_kelvin,
   auto pos = out_dir.find_last_of("\\/");
   if (pos != std::string::npos) out_dir = out_dir.substr(0, pos);
   else                          out_dir = ".";
-  std::string cfg_path = out_dir + "/radia_kelvin_config.json";
+  std::string cfg_path = out_dir + "/cubit_mesh_export_kelvin_config.json";
   for (auto &c : cfg_path) if (c == '\\') c = '/';
 
   // Build the JSON config.  Schema matches auto_kelvin_entry.py.
@@ -364,10 +364,10 @@ static void run_auto_kelvin(bool add_kelvin,
   // Wide-char env vars survive non-ASCII paths cleanly.
   std::wstring wcfg(cfg_path.begin(), cfg_path.end());
   std::wstring whlp(helpers_dir.begin(), helpers_dir.end());
-  SetEnvironmentVariableW(L"RADIA_LAUNCHER_CONFIG", wcfg.c_str());
+  SetEnvironmentVariableW(L"CUBIT_MESH_EXPORT_KELVIN_CONFIG", wcfg.c_str());
   SetEnvironmentVariableW(L"CUBIT_HELPERS_DIR",     whlp.c_str());
 #else
-  setenv("RADIA_LAUNCHER_CONFIG", cfg_path.c_str(),    1);
+  setenv("CUBIT_MESH_EXPORT_KELVIN_CONFIG", cfg_path.c_str(), 1);
   setenv("CUBIT_HELPERS_DIR",     helpers_dir.c_str(), 1);
 #endif
 
@@ -376,10 +376,10 @@ static void run_auto_kelvin(bool add_kelvin,
   CubitInterface::cmd(play_cmd.c_str());
 
 #ifdef _WIN32
-  SetEnvironmentVariableW(L"RADIA_LAUNCHER_CONFIG", nullptr);
+  SetEnvironmentVariableW(L"CUBIT_MESH_EXPORT_KELVIN_CONFIG", nullptr);
   SetEnvironmentVariableW(L"CUBIT_HELPERS_DIR",     nullptr);
 #else
-  unsetenv("RADIA_LAUNCHER_CONFIG");
+  unsetenv("CUBIT_MESH_EXPORT_KELVIN_CONFIG");
   unsetenv("CUBIT_HELPERS_DIR");
 #endif
 }
@@ -391,9 +391,9 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   return false;
 #else
   // Suppress Cubit Learn Edition's 50k-cap ERROR during the export.
-  // Radia bypasses the cap and exports successfully regardless, so
+  // The exporter bypasses the cap and completes successfully, so
   // the ERROR line is misleading noise confusing users in logs.
-  radia::ScopedLearnEditionFilter _lef_guard;
+  cubit_mesh_export::ScopedLearnEditionFilter _lef_guard;
 
   auto t_start = std::chrono::high_resolution_clock::now();
 

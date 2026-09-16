@@ -316,7 +316,7 @@ def main():
          'export gmsh "{f}" order {o} dimension 2 overwrite',
          parse_gmsh_area),
         ("Nastran", ".bdf",
-         'export jmag_nastran "{f}" order {o} dimension 2 overwrite',
+         'export nastran_bdf "{f}" order {o} dimension 2 overwrite',
          parse_nastran_area),
         ("VTK", ".vtk",
          'export vtk "{f}" order {o} dimension 2 overwrite',

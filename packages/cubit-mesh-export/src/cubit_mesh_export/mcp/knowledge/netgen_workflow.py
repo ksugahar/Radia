@@ -89,7 +89,7 @@ use a normal Python process to generate the script.
 
 ### Continuous-loop Cubit mass-property sidecar gate
 
-Before Cubit exports a mesh or hands CAD rows to build123d/CST/radia-ngsolve
+Before Cubit exports a mesh or hands CAD rows to build123d or a downstream solver
 cross-checks, save a compact mass-property sidecar: volume name, Cubit
 `get_volume_volume`, summed `get_surface_area(surface_id)` over the volume's
 surfaces, and bounding-box size from `get_total_bounding_box`.  Replay it with
@@ -100,7 +100,7 @@ currency, but volume alone can hide a wrong scale or clipped face; the sidecar
 should also carry total surface area and bbox dimensions whenever they are
 available.  For a simple `1.5 x 2.0 x 0.75` mapped brick the expected values
 are volume `2.25`, surface area `11.25`, and bbox size `[1.5, 2.0, 0.75]`.
-Slot210 adds the unit contract for Cubit/build123d/CST CAD cross-checks:
+Slot210 adds the unit contract for Cubit/build123d/external-CAD cross-checks:
 record `length_unit`, `area_unit`, and `volume_unit` (or a `units` mapping)
 with the sidecar, then pass the expected units into
 `cubit_mass_property_sidecar_gate`.  A perfect numeric volume is still
@@ -805,7 +805,7 @@ mesh = Mesh(vol_path)
 
 ## Requirements
 
-- Coreform Cubit 2025.12+ with Radia plugin installed (`cubit-plugin-install`)
+- Coreform Cubit 2025.12+ with Cubit Mesh Export installed (`cubit-plugin-install`)
 - NGSolve 6.2.2603+ (curvedelements Load, hex/prism curving)
 """
 
@@ -1277,21 +1277,21 @@ conflict with Netgen's expected library versions, causing initialization failure
 **Rule of thumb**: Always `import ngsolve` (and any `from netgen...` imports) at
 the very top of the script, before adding Cubit to `sys.path` or importing `cubit`.
 
-## Standalone cubit.init() Segfaults in the Radia Panel (verified 2026-06)
+## Standalone cubit.init() Segfaults with a GUI startup shim (verified 2026-06)
 
 **Symptom**: From system Python, `import cubit; cubit.init([...])` prints the banner,
-auto-plays the generated Radia startup shim
-(`%ProgramData%/Radia/Cubit/radia_startup.py` for all-users installs),
+auto-plays the generated Cubit Mesh Export startup shim
+(`%ProgramData%/cubit-mesh-export/Cubit/startup.py` for all-users installs),
 then crashes with exit code -1073741819 (0xC0000005 access violation) BEFORE your first
 `cubit.cmd()` runs. Happens with or without `-nographics` and regardless of the ngsolve
-import order above. Cause: when the Radia Cubit *panel* plugin is installed, its
+import order above. Cause: when the Cubit Mesh Export toolbar is installed, its
 startup shim loads the PySide6 toolbar under headless embedded Python (no GUI main
 window). The single-process recipe above only works when that panel plugin is absent.
 
-**Fix -- robust two-process pattern** (use this whenever the Radia panel is installed):
+**Fix -- robust two-process pattern** (use this whenever the toolbar is installed):
 
   1. EXPORT in a child process via the real Cubit executable -- it degrades the panel
-     gracefully ("Cubit main window not found -- Radia Export menu not installed", then
+     gracefully ("Cubit main window not found -- Cubit Mesh Export menu not installed", then
      continues) instead of crashing:
 
          coreform_cubit.com -nographics -batch -nojournal mesh_export.py
@@ -1414,19 +1414,20 @@ def get_netgen_documentation(workflow: str = "overview") -> str:
 
 ## Overview
 
-Kelvin open-boundary transformation is automatically added when the user
-clicks "Radia-NGSolve" -> OK in the Cubit GUI. Kelvin is added automatically
--- there is no separate "Kelvin Transform" menu item.
+Kelvin open-boundary geometry is requested explicitly in the native headless
+export command. The export toolbar may expose the same options to a human, but
+LLM automation uses APREPRO/journal playback and never depends on a solver GUI.
 
-## How It Works (register_toolbar.py)
+## How It Works (`export netgen`)
 
 1. User creates physical geometry (coil + air + optional workpiece hole)
-2. User clicks "Radia-NGSolve" -> selects analysis mode -> OK
-3. register_toolbar.py checks: is "kelvin" block already present?
-   - YES -> skip, proceed to export
-   - NO  -> auto-detect R, symmetry, and call add_kelvin_cubit()
-4. export netgen -> .vol (with Kelvin + periodic identification)
-5. Launch analysis window (calc_fem.py reads .vol with Kelvin)
+2. Run `export netgen "model.vol" order N add_kelvin` and, when needed,
+   declare `kelvin_air`, `kelvin_block`, `kelvin_mesh`, and
+   `kelvin_sym_x|y|z {off|bn|ht}`.
+3. The native command writes an owned JSON handoff, calls the packaged
+   `auto_kelvin_entry.py`, and adds Kelvin geometry only when requested.
+4. The same command exports `.vol` with Kelvin periodic identification.
+5. Run `check-vol` before handing the artifact to any solver.
 
 ## Auto-Detection Logic
 

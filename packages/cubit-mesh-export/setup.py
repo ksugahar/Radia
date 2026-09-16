@@ -12,9 +12,9 @@ the stale file into a wheel. Without this guard, ``pip install`` or
 binaries, which is how 100号機 got a post-6a8d2e5 Python package with a
 pre-6a8d2e5 .ccm on 2026-04-14.
 
-Note (radia 4.80.0): the .ccl was removed (Qt5 GUI deleted; PySide6
-dialogs and the Claro-owned menu replace it). The .ccm and .pyd are both
-mandatory wheel payloads and are both freshness-gated.
+The retired .ccl is not packaged. The .ccm and .pyd are both mandatory wheel
+payloads and are both freshness-gated. The package build directory is cleaned
+before copying sources so deleted modules cannot leak from an incremental build.
 
 Override with ``CUBIT_MESH_EXPORT_SKIP_FRESHNESS_CHECK=1`` only as a
 last resort (e.g. emergency release when the build box is offline).
@@ -25,9 +25,11 @@ from __future__ import annotations
 import os
 import sys
 import importlib.util
+import shutil
 from pathlib import Path
 
 from setuptools import Distribution, setup
+from setuptools.command.build_py import build_py as _build_py
 
 
 class BinaryDistribution(Distribution):
@@ -35,6 +37,16 @@ class BinaryDistribution(Distribution):
 
     def has_ext_modules(self):
         return True
+
+
+class CleanPackageBuild(_build_py):
+    """Remove only this distribution's generated package tree before copying."""
+
+    def run(self):
+        package_output = Path(self.build_lib) / "cubit_mesh_export"
+        if package_output.is_dir():
+            shutil.rmtree(package_output)
+        super().run()
 
 
 def _load_provenance_module(package_dir: Path):
@@ -84,4 +96,4 @@ def _check_binary_provenance():
 
 
 _check_binary_provenance()
-setup(distclass=BinaryDistribution)
+setup(distclass=BinaryDistribution, cmdclass={"build_py": CleanPackageBuild})

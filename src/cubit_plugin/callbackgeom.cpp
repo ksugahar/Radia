@@ -35,12 +35,12 @@ PointGeomInfo CallbackGeometry::ProjectPoint(int surfind, Point<3> & p) const
 
 void CallbackGeometry::ProjectPointEdge(int surfind, int surfind2, Point<3> & p,
                                          EdgePointGeomInfo* gi
-#ifdef RADIA_NETGEN_EDGE_DESCRIPTOR_API
+#ifdef CUBIT_MESH_EXPORT_NETGEN_EDGE_DESCRIPTOR_API
                                          , int edgenr
 #endif
                                          ) const
 {
-#ifdef RADIA_NETGEN_EDGE_DESCRIPTOR_API
+#ifdef CUBIT_MESH_EXPORT_NETGEN_EDGE_DESCRIPTOR_API
   (void)edgenr;
   const int callback_surfind = surfind;
   const int callback_surfind2 = surfind2;
@@ -62,7 +62,7 @@ void CallbackGeometry::ProjectPointEdge(int surfind, int surfind2, Point<3> & p,
   // Get UV on surfind (query only, do NOT move the point again)
   if (gi) {
     auto [xf, yf, zf, uf, vf] = project_func(callback_surfind, p[0], p[1], p[2], 0, 0, false);
-#ifdef RADIA_NETGEN_EDGE_DESCRIPTOR_API
+#ifdef CUBIT_MESH_EXPORT_NETGEN_EDGE_DESCRIPTOR_API
     gi->dist = 0;
     gi->gi.trignum = surfind;
     gi->gi.u = uf;
@@ -109,12 +109,12 @@ void CallbackGeometry::PointBetweenEdge(const Point<3> & p1, const Point<3> & p2
                                          const EdgePointGeomInfo & ap2,
                                          Point<3> & newp,
                                          EdgePointGeomInfo & newgi
-#ifdef RADIA_NETGEN_EDGE_DESCRIPTOR_API
+#ifdef CUBIT_MESH_EXPORT_NETGEN_EDGE_DESCRIPTOR_API
                                          , int edgenr
 #endif
                                          ) const
 {
-#ifdef RADIA_NETGEN_EDGE_DESCRIPTOR_API
+#ifdef CUBIT_MESH_EXPORT_NETGEN_EDGE_DESCRIPTOR_API
   (void)edgenr;
   const int callback_surfi1 = surfi1;
   const int callback_surfi2 = surfi2;
@@ -147,7 +147,7 @@ void CallbackGeometry::PointBetweenEdge(const Point<3> & p1, const Point<3> & p2
       newp = Point<3>(xp, yp, zp);
     } else if (project_func && surfi1 >= 0) {
       // Fallback: project onto first surface
-#ifdef RADIA_NETGEN_EDGE_DESCRIPTOR_API
+#ifdef CUBIT_MESH_EXPORT_NETGEN_EDGE_DESCRIPTOR_API
       const double ap1_u = ap1.gi.u, ap1_v = ap1.gi.v;
       const double ap2_u = ap2.gi.u, ap2_v = ap2.gi.v;
 #else
@@ -164,7 +164,7 @@ void CallbackGeometry::PointBetweenEdge(const Point<3> & p1, const Point<3> & p2
   // Get UV on surfi1
   if (project_func && surfi1 >= 0) {
     auto [xf, yf, zf, uf, vf] = project_func(callback_surfi1, newp[0], newp[1], newp[2], 0, 0, false);
-#ifdef RADIA_NETGEN_EDGE_DESCRIPTOR_API
+#ifdef CUBIT_MESH_EXPORT_NETGEN_EDGE_DESCRIPTOR_API
     newgi.gi.trignum = surfi1;
     newgi.gi.u = uf;
     newgi.gi.v = vf;
@@ -201,12 +201,12 @@ void CallbackGeometry::PointBetween(const Point<3> & p1, const Point<3> & p2,
 Vec<3> CallbackGeometry::GetTangent(const Point<3> & p, int surfi1,
                                      int surfi2,
                                      const EdgePointGeomInfo & egi
-#ifdef RADIA_NETGEN_EDGE_DESCRIPTOR_API
+#ifdef CUBIT_MESH_EXPORT_NETGEN_EDGE_DESCRIPTOR_API
                                      , int edgenr
 #endif
                                      ) const
 {
-#ifdef RADIA_NETGEN_EDGE_DESCRIPTOR_API
+#ifdef CUBIT_MESH_EXPORT_NETGEN_EDGE_DESCRIPTOR_API
   (void)edgenr;
   const int callback_surfi1 = surfi1;
   const int callback_surfi2 = surfi2;

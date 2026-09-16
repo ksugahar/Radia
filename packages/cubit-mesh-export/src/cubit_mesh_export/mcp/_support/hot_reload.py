@@ -2,7 +2,7 @@
 # Derived support retains BSD-3-Clause terms: see LICENSE-BSD-3-Clause.txt.
 """Reload changed product modules and re-register their tools without a restart.
 
-Development radia-mcp servers may use editable installs. An editable install only tells
+Development Cubit MCP servers may use editable installs. An editable install only tells
 Python which file to read at import time; a running server has already
 imported its modules and holds the old function objects, FastMCP's tool
 registry points at those objects, and the client froze the tool list when it

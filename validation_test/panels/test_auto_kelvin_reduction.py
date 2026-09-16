@@ -131,7 +131,7 @@ def test_reduction_quarter_xz_emits_sym_labels(tmp_path):
     )
 
     env = os.environ.copy()
-    env["RADIA_LAUNCHER_CONFIG"] = str(cfg)
+    env["CUBIT_MESH_EXPORT_KELVIN_CONFIG"] = str(cfg)
     env["CUBIT_HELPERS_DIR"] = str(CUBIT_HELPERS)
 
     proc = subprocess.run(
@@ -269,7 +269,7 @@ def test_reduction_eighth_emits_sym_and_kelvin_far(tmp_path):
     )
 
     env = os.environ.copy()
-    env["RADIA_LAUNCHER_CONFIG"] = str(cfg)
+    env["CUBIT_MESH_EXPORT_KELVIN_CONFIG"] = str(cfg)
     env["CUBIT_HELPERS_DIR"] = str(CUBIT_HELPERS)
 
     proc = subprocess.run(
@@ -334,7 +334,7 @@ def test_reduction_eighth_all_bn_rejected_at_runtime(tmp_path):
     )
 
     env = os.environ.copy()
-    env["RADIA_LAUNCHER_CONFIG"] = str(cfg)
+    env["CUBIT_MESH_EXPORT_KELVIN_CONFIG"] = str(cfg)
     env["CUBIT_HELPERS_DIR"] = str(CUBIT_HELPERS)
 
     proc = subprocess.run(

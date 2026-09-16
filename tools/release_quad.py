@@ -1314,7 +1314,7 @@ _CME_GUI_PROBE = '''
 # Hash the installed exporter GUI, independently of the Radia tag/checkouts.
 from pathlib import Path
 cme_root = Path(cubit_mesh_export.__file__).resolve().parent
-for r in ["cubit_gui/register_toolbar.py", "cubit_gui/radia_export_menu.py",
+for r in ["cubit_gui/register_toolbar.py", "cubit_gui/cubit_export_menu.py",
           "toolbar_smoke.py", "cubit_gui/toolbar_probe.py"]:
     path = cme_root / r
     data = path.read_bytes().replace(bytes([13, 10]), bytes([10])).replace(bytes([13]), bytes([10]))
@@ -1322,7 +1322,7 @@ for r in ["cubit_gui/register_toolbar.py", "cubit_gui/radia_export_menu.py",
 '''
 _CME_GUI_FIELDS = (
     "SHA cubit_mesh_export/cubit_gui/register_toolbar.py",
-    "SHA cubit_mesh_export/cubit_gui/radia_export_menu.py",
+    "SHA cubit_mesh_export/cubit_gui/cubit_export_menu.py",
     "SHA cubit_mesh_export/toolbar_smoke.py",
     "SHA cubit_mesh_export/cubit_gui/toolbar_probe.py",
 )
