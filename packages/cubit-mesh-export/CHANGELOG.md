@@ -4,6 +4,12 @@ All notable changes to `cubit-mesh-export` — the high-order curved
 mesh export package for Coreform Cubit (Netgen / GMSH / Nastran /
 VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
+## Unreleased
+
+- Give the independent LAB/100 release-dual gate its own
+  `tools/release_cubit_dual.py` CLI and remove the residual forwarding route
+  through the Radia solver release orchestrator.
+
 ## 1.0.4 - GUI release launch correction
 
 - Pass the installed plugin directory before the GUI probe journal, preventing

@@ -1,6 +1,6 @@
 """radia_mcp.meta — cross-server catalog + health check.
 
-Single entry-point for LLMs to discover the 29-server radia_mcp
+Single entry-point for LLMs to discover the live radia_mcp server
 ecosystem. Adopted 2026-05-24 inspired by wjc9011/COMSOL_Multiphysics_MCP
 where each server has a *_status() tool for self-introspection.
 

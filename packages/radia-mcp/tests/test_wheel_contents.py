@@ -111,6 +111,8 @@ def test_wheel_runtime_asset_omission_fails(tmp_path):
 @pytest.mark.parametrize("member", [
     "radia_mcp/cubit/server.py",
     "cubit_mesh_export/mcp/server.py", "cae_mcp_core/common/status.py",
+    "radia_mcp/radia_ngsolve/comsol_v46_identity.py",
+    "radia_mcp/obsolete_deleted_module.py",
 ])
 def test_wheel_rejects_stale_build_output_from_other_owners(tmp_path, member):
     wheel = tmp_path / "candidate.whl"

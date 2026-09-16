@@ -2,6 +2,10 @@
 bug_patterns.py -- learned catalog of bug patterns observed in real
 Radia / radia-mcp / cubit-mesh-export incidents.
 
+Entries record historical incidents; their ``prevention`` field is the current
+rule. Historical ``what`` and ``root_cause`` text is evidence, not an active
+release or deployment policy.
+
 Purpose
 =======
 Make the recurrent bug classes that bite the lab session-after-session
@@ -477,11 +481,11 @@ PATTERNS: list[dict] = [
                      "release-radia-mcp.yml all check version "
                      "consistency in the 'Verify wheel' step.  "
                      "Catches at PUBLISH time, not at commit time.",
-        "prevention": "Always bump BOTH files in lockstep.  release-"
-                      "quad Phase 2 lists them explicitly.  "
-                      "Could add a pre-commit hook or a "
-                      "test_version_consistency.py to catch earlier.",
-        "related": ["tools/release_quad.py: Phase 2"],
+        "prevention": "Bump both files in the owning distribution's "
+                      "release commit and run that package's version-"
+                      "consistency test before tagging.  Independent "
+                      "distributions do not share a version.",
+        "related": ["packages/radia-mcp/tests/test_version_consistency.py"],
     },
     {
         "id": "lab-editable-drift-after-pip-force-reinstall",
@@ -502,12 +506,13 @@ PATTERNS: list[dict] = [
                       "run on LAB.",
         "detection": "tools/release_quad.py done's LAB-editable "
                      "gate (POLICY 2026-05-27).",
-        "prevention": "Phase 8 deploy commands keep LAB + 100号機 editable, "
-                      "deploy hibino from PyPI, and leave mdx to phase8e.  "
-                      "After any release, run `python tools/release_quad.py done` and "
-                      "fix any DRIFT it reports.",
-        "related": ["memory/project_ci_radia_mcp_editable_drift_fix.md",
-                    "tools/release_quad.py: cmd_done"],
+        "prevention": "Record the intended source, repoint only the owning "
+                      "package, and verify editable metadata plus a fresh "
+                      "import. Fix forward; never restore an older tree merely "
+                      "because its path was once canonical. radia-mcp uses the "
+                      "LAB/100 release-dual rather than solver Phase 8/9.",
+        "related": ["docs/maintenance.md",
+                    "radia_ngsolve/knowledge/install_deploy.py"],
     },
     {
         "id": "ninja-stale-obj-after-netgen-upgrade",
@@ -594,12 +599,11 @@ PATTERNS: list[dict] = [
                       "old radia_cubit.* removed).",
         "detection": "cubit.log 'License Error: No license found' under "
                      "the smoke temp dir; --verify-only is green.",
-        "prevention": "NON-BLOCKING: real lab users have their own "
-                      "licenses.  `python tools/release_quad.py done` (preflight + "
-                      "verify-editable + phase9) has NO smoke, so it "
-                      "passes -- use it as the release gate, not phase8's "
-                      "smoke.  Don't burn a Learn seat activating the "
-                      "Administrator profile just for the smoke.",
+        "prevention": "Treat an Administrator-profile license failure as "
+                      "different from package deployment evidence. Use the "
+                      "independent cubit-mesh-export release-dual and verify "
+                      "the plugin/hash contract; run licensed GUI smoke only "
+                      "under a licensed user. Do not weaken radia-mcp gates.",
         "related": [".claude/skills/cubit-license/SKILL.md",
                     "memory/reference_rlm_activate_logoff_procedure.md"],
     },
@@ -624,11 +628,10 @@ PATTERNS: list[dict] = [
                       "hand.",
         "detection": "grep -r '<old-token>' .claude/skills after any "
                      "binary / command / target rename.",
-        "prevention": "On ANY binary/command/cmake-target rename, grep "
-                      ".claude/skills for the old token and sweep "
-                      "(byte-level rename).  7 skills needed it this "
-                      "time: deploy, release-quad, build, radia-plugin-"
-                      "check, cubit-license, cubit-run, pyside6-health.",
+        "prevention": "On any binary, command, or target rename, sweep the "
+                      "tracked policies, current shared skills, package docs, "
+                      "and live client configurations. Keep package ownership "
+                      "explicit and test retired entry points as absent.",
         "related": ["memory/project_tier2_cme_sole_plugin_shipper_2026_06_01.md"],
     },
 

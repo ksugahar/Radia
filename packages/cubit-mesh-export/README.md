@@ -21,7 +21,8 @@ shims. Existing deployments must regenerate their startup registration using
 Version 1.0.2 publishes this GUI independently of Radia. Installation and
 deployment verification never import Radia; use `--check-radia-compat` only
 for an explicitly requested combined integration check. LAB/100 acceptance
-uses `release_quad.py cubit-dual`, not the Radia-wide deployment commands.
+uses `python tools/release_cubit_dual.py`, not the Radia solver's release-quad
+commands.
 
 Version 1.0.0 retains the 0.14.17 command and label contracts. Its
 supported binary runtime is 64-bit Windows, CPython 3.12, Coreform Cubit
