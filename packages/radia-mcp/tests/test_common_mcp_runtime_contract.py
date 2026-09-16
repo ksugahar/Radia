@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import json
+from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
@@ -115,9 +117,13 @@ def test_call_log_is_lazy_idempotent_and_does_not_record_values(
 
 
 def test_meta_server_passes_real_stdio_runtime_contract():
-    from tools.smoke_mcp_stdio import probe_server
+    script = Path(__file__).resolve().parents[1] / "tools" / "smoke_mcp_stdio.py"
+    spec = importlib.util.spec_from_file_location("radia_mcp_stdio_probe", script)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
 
-    result = probe_server("meta", timeout=45)
+    result = module.probe_server("meta", timeout=45)
     assert result["server_name"] == "mcp-server-radia-meta"
     assert result["n_tools"] >= 5
     assert result["structured_status"] is True
