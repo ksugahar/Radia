@@ -729,9 +729,11 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
             ``kelvin_interface_boundary``.  It is lifted into the shared
             periodic space, so the exterior physical potential leaves the
             sphere as ``phi_reduced + kelvin_source_potential``.
-        total_dirichlet_cf: optional non-homogeneous total-potential lift for
-            a finite-domain verification problem. Production Kelvin meshes use
-            the default ``None`` and a point/edge ``GND`` constraint.
+        total_dirichlet_cf: optional value on the total-region BBBND point
+            gauge named by ``dirichlet_bbbnd``. This is NOT an exterior-surface
+            Dirichlet condition. Surface Dirichlet data on total and reduced
+            potentials require different source-potential lifts and are not
+            exposed by this parameter. Production Kelvin meshes use ``None``.
         mu_cf: optional fully Kelvin-aware permeability coefficient. This is
             the narrow extension point used by the nonlinear Picard driver;
             callers must not supply a physical-space coefficient in the Kelvin
