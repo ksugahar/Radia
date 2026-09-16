@@ -2231,6 +2231,15 @@ B_cf = result["B_cf"]
   disabled before coil construction and identical initial material states.
   Report nonlinear convergence separately from cache parity and timing;
   a speedup does not establish external-solver accuracy.
+- For nonlinear cross-validation, audit the actual material H range, not only
+  the observation-point range. A calibrated B-H interval does not certify its
+  extrapolation: match the high-field tail or reject the equivalence claim.
+  Normalize source-projection error against the solved internal field as well
+  as the excitation field; cancellation can amplify a small source-relative
+  remainder. Omitting that remainder is a diagnostic change, not proof of a fix.
+  External-solver agreement is not a ground-truth error bound. Judge competing
+  projections by independent mesh/order convergence, physical residuals and
+  energy consistency; do not discard a projection solely to match a reference.
 - A prescribed analytic potential on an internal coupling face is not a
   free-interface validation. Audit boundary assignments, remove internal
   Dirichlet constraints, and test a source lift that is nonzero on the

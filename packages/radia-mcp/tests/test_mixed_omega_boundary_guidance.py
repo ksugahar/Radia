@@ -20,3 +20,13 @@ def test_cache_comparison_freezes_source_and_initial_state():
                    'disabled before coil construction', 'identical initial material states',
                    'a speedup does not establish external-solver accuracy'):
         assert phrase in text
+
+
+def test_nonlinear_equivalence_requires_material_range_and_source_error_audit():
+    text = kelvin_transformation('source_in_omega_form')
+    for phrase in ('actual material H range', 'match the high-field tail',
+                   'reject the equivalence claim', 'solved internal field',
+                   'diagnostic change, not proof of a fix'):
+        assert phrase in text
+    assert 'not a ground-truth error bound' in text
+    assert 'independent mesh/order convergence' in text
