@@ -47,6 +47,9 @@ def test_reduced_normal_boundary_is_not_total_normal_boundary():
     with ng.TaskManager():
         correction=solve_magnetostatic_mixed_total_reduced_omega_kelvin(
             mesh,source,-ng.z,1.,(0,0,0),reduced_zero_normal_boundary='outer',**kwargs)
+        shifted=solve_magnetostatic_mixed_total_reduced_omega_kelvin(
+            mesh,source,-ng.z,1.,(0,0,0),reduced_zero_normal_boundary='outer',
+            total_dirichlet_cf=ng.CoefficientFunction(2.),**kwargs)
         total=solve_magnetostatic_mixed_total_reduced_omega_kelvin(
             mesh,source,-ng.z,1.,(0,0,0),**kwargs)
         with pytest.raises(ValueError,match='exterior'):
@@ -54,7 +57,10 @@ def test_reduced_normal_boundary_is_not_total_normal_boundary():
                 mesh,source,-ng.z,1.,(0,0,0),reduced_zero_normal_boundary='interface',**kwargs)
     for point in ((.1,.1,.1),(.6,.1,.1)):
         assert np.linalg.norm(np.asarray(correction['H_cf'](mesh(*point)))-[0,0,1])<1e-10
+        assert np.linalg.norm(np.asarray(shifted['H_cf'](mesh(*point)))-[0,0,1])<1e-10
         assert np.linalg.norm(np.asarray(total['H_cf'](mesh(*point))))<1e-10
+    point=mesh(.1,.1,.1)
+    assert float(shifted['phi_total'](point)-correction['phi_total'](point))==pytest.approx(2.)
 
 
 def test_realized_bh_response_binds_pchip_tangent_energy_and_vacuum_tail():
