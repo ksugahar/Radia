@@ -1,9 +1,8 @@
 """
-Cubit "Export" menu — Claro-registered menu + PySide6 export dialogs.
+Cubit Mesh Export menu — Claro-registered menu + PySide6 export dialogs.
 
 The menu itself is registered through Cubit's own Claro API
-(`emclaro.add_to_menu`), which is the same entry point the legacy Qt5
-.ccl component (RadiaComp.cpp) used, so Cubit owns the menu and it
+(`emclaro.add_to_menu`), so Cubit owns the menu and it
 survives the cold-start menu-bar rebuild.  The dialogs are PySide6 and
 run inside Cubit's embedded Python interpreter.  The .ccm (APREPRO
 commands `export gmsh / nastran / vtk / netgen / femeem / meg`) is
@@ -22,7 +21,7 @@ This module avoids:
   - dialogs without `parent=find_claro()` — they get hidden behind the
     Cubit main window on Windows
 
-Qt binding: **PySide6 only** (radia 4.80.0).  Target is Cubit 2025.12
+Qt binding: **PySide6 only**. Target is Cubit 2025.12
 which ships PySide6.  No PyQt5 fallback — per CLAUDE.md "No Fallbacks
 — Fail Fast, Fail Loud", an old Cubit without PySide6 must raise the
 underlying ImportError loudly so the operator can fix the env.
@@ -32,7 +31,7 @@ import json
 import os
 import sys
 
-# Qt binding: PySide6 only (radia 4.80.0).  Target is Cubit 2025.12
+# Qt binding: PySide6 only. Target is Cubit 2025.12
 # which ships PySide6.  Per CLAUDE.md "No Fallbacks — Fail Fast, Fail
 # Loud" any ImportError propagates so the operator sees the real cause
 # (old Cubit, broken PySide6 install, wrong Python env) instead of a
@@ -56,9 +55,10 @@ from PySide6.QtCore import Qt
 # ----------------------------------------------------------------------
 
 def _settings_dir():
-    """Per-user settings directory (matches the legacy C++ .ccl path)."""
-    appdata = os.path.join(os.path.expanduser("~"),
-                           "AppData", "Roaming", "Radia")
+    """Return the exporter-owned per-user settings directory."""
+    roaming = os.environ.get("APPDATA") or os.path.join(
+        os.path.expanduser("~"), "AppData", "Roaming")
+    appdata = os.path.join(roaming, "cubit-mesh-export")
     os.makedirs(appdata, exist_ok=True)
     return appdata
 
@@ -177,12 +177,10 @@ def _ensure_model(cubit_mod, parent):
 
 # ----------------------------------------------------------------------
 # ExportDialog — format-aware QDialog (port of ExportDialog in
-# RadiaComp.cpp).
+# the removed Qt5 component).
 # ----------------------------------------------------------------------
 
-# Format keys — match the legacy enum order so saved settings remain
-# compatible (settings dict keys: netgen_vol / gmsh / nastran / vtk /
-# femeem / meg).
+# Stable format keys used by the exporter-owned settings file.
 FMT_NETGEN = "netgen_vol"
 FMT_GMSH = "gmsh"
 FMT_NASTRAN = "nastran"
@@ -251,7 +249,8 @@ class ExportDialog(QDialog):
 
     Builds the same set of widgets as the legacy C++ ExportDialog so
     the same `export` APREPRO command is emitted.  Per-format
-    settings are persisted to ``%APPDATA%/Radia/export_settings.json``
+    settings are persisted to
+    ``%APPDATA%/cubit-mesh-export/export_settings.json``
     under the format key (``netgen_vol`` / ``gmsh`` / ``nastran`` /
     ``vtk`` / ``femeem`` / ``meg``).
     """
@@ -367,7 +366,7 @@ class ExportDialog(QDialog):
             self._nopyramid = QComboBox()
             self._nopyramid.addItems(
                 ["Keep pyramids",
-                 "Convert to degenerate hex (JMAG)"])
+                 "Convert pyramids to degenerate hexes"])
             self._nopyramid.currentIndexChanged.connect(self._update_preview)
             form.addRow("Pyramids:", self._nopyramid)
 
@@ -436,9 +435,9 @@ class ExportDialog(QDialog):
                 cb.setToolTip(
                     f"BC label on the {axis}=0 plane when the air block "
                     f"is reduced to {axis}>=0.\n"
-                    "  bn = B.n=0   (flux parallel,   Radia '+',  "
+                    "  bn = B.n=0   (flux parallel,   solver '+', "
                     "A:Dirichlet, Omega:natural)\n"
-                    "  ht = HxN=0   (flux perp,       Radia '-',  "
+                    "  ht = HxN=0   (flux perp,       solver '-', "
                     "A:natural,    Omega:Dirichlet)\n"
                     "  off = no reduction on this axis")
                 cb.currentIndexChanged.connect(self._update_preview)
@@ -783,7 +782,7 @@ def _run_subprocess_utf8(argv, timeout):
 
 def _find_external_python():
     """Find external Python 3.12 (NOT Cubit's bundled Python 3.10)."""
-    env = os.environ.get("CUBIT_MESH_EXPORT_PYTHON") or os.environ.get("RADIA_PYTHON")
+    env = os.environ.get("CUBIT_MESH_EXPORT_PYTHON")
     if env:
         return env
     if sys.platform == "win32":
@@ -977,7 +976,7 @@ def launch_export(fmt):
         FMT_NETGEN, FMT_GMSH, FMT_NASTRAN, FMT_VTK, FMT_FEMEEM, FMT_MEG,
     }
     if fmt not in supported:
-        raise ValueError(f"unsupported Radia export format: {fmt!r}")
+        raise ValueError(f"unsupported Cubit export format: {fmt!r}")
     import cubit as cubit_mod
     parent = find_claro()
     if parent is None:
@@ -994,10 +993,10 @@ def launch_export(fmt):
 # Claro component tag.  Every action we register carries it, so
 # ``emclaro.remove_menu_items(_CLARO_COMPONENT)`` removes exactly our
 # items and nothing else.  That is the officially supported cleanup path.
-_CLARO_COMPONENT = "radia"
+_CLARO_COMPONENT = "cubit_mesh_export"
 # Top-level menu title.  Cubit has no top-level "Export" menu of its own
 # (export lives under File), so this creates a new one.  The component tag
-# above stays "radia" -- it is the internal cleanup key, not a label.
+# is product-owned so it cannot remove another extension's menu items.
 _CLARO_MENU_TITLE = "&Export"
 
 # Cubit owns the PyAction objects on the C++ side, but the SWIG wrappers
@@ -1040,7 +1039,7 @@ def _activate_code(fmt):
         "_d = {dir!r}\n"
         "(_d in sys.path) or sys.path.insert(0, _d)\n"
         "try:\n"
-        "    import radia_export_menu as _rem\n"
+        "    import cubit_export_menu as _rem\n"
         "    _rem.launch_export({fmt!r})\n"
         "except Exception:\n"
         "    traceback.print_exc()\n"
@@ -1074,12 +1073,12 @@ def install_menu():
     try:
         import emclaro
     except ImportError:
-        print("[Radia] emclaro not available - "
+        print("[cubit-mesh-export] emclaro not available - "
               "Export menu not installed")
         return None
 
     if not emclaro.is_loaded():
-        print("[Radia] Claro GUI not loaded - "
+        print("[cubit-mesh-export] Claro GUI not loaded - "
               "Export menu not installed")
         return None
 
@@ -1105,7 +1104,7 @@ def install_menu():
     if app is not None and not _shutdown_connected:
         app.aboutToQuit.connect(remove_menu)
         _shutdown_connected = True
-    print("[Radia] Export menu installed "
+    print("[cubit-mesh-export] Export menu installed "
           "(%d actions, Claro add_to_menu)" % len(_MENU_SPECS))
     return True
 

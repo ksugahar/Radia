@@ -10,7 +10,7 @@ After ``pip install cubit-mesh-export``, run::
     cubit-plugin-install --all-users    # install for all user profiles (admin)
     cubit-plugin-install --check-only   # preflight only, no writes
 
-This is the SINGLE entry point for Cubit plugin and Radia export-toolbar
+This is the SINGLE entry point for Cubit plugin and exporter-toolbar
 deployment. It also registers the exporter-owned Cubit-embedded PySide6
 toolbar and verifies that Cubit's startup files point at it. Radia is not
 required, and Qt remains confined to Cubit's private runtime.
@@ -193,11 +193,9 @@ def _is_cubit_process_name(name: str) -> bool:
 
     Accept:
       - coreform_cubit.exe / coreform_cubit            (Cubit 2024+)
-      - cubit.exe / cubit                              (legacy)
-
     Reject (these contain 'cubit' but do not hold the plugin):
       - cubit-plugin-install.exe (this installer itself)
-      - mcp-server-cubit.exe (Radia MCP server)
+      - mcp-server-cubit.exe (bundled MCP server)
       - any python.exe running a cubit helper
     """
     if not name:
@@ -206,7 +204,7 @@ def _is_cubit_process_name(name: str) -> bool:
     # Strip the .exe suffix so the compare is uniform.
     if n.endswith(".exe"):
         n = n[:-4]
-    return n in ("coreform_cubit", "cubit")
+    return n == "coreform_cubit"
 
 
 def _running_cubit_processes():
@@ -372,8 +370,8 @@ def verify_deployment(pkg_dir: Path, cubit_dir: Path, *, verbose: bool = True):
         if verbose:
             print(f"    [OK] {dst.name}  ({dst_size} bytes, sha256 match)")
 
-    # Retired Qt5 .ccl guard.  Since radia 4.80.0 the Cubit-side UI is the
-    # PySide6 toolbar; any remaining .ccl can load stale menus or confuse
+    # Retired Qt5 .ccl guard.  The Cubit-side UI is the packaged PySide6
+    # toolbar; any remaining .ccl can load stale menus or confuse
     # first installs.
     for stale_ccl in [
         cubit_dir / "bin" / "cubit_mesh_export.ccl",
@@ -442,11 +440,8 @@ _CLEAN_PATTERNS = [
     "cubit_mesh_curver*.pyd",
     "nglib.dll",
     "ngcore.dll",
-    # Tier-2 rename cleanup (2026-06-01): also remove the OLD radia_cubit.*
-    # plugin from machines deployed before the cubit_mesh_export rename, so
-    # Cubit does not load BOTH the old and new .ccm and double-register the
-    # `export` APREPRO commands.  Safe to leave indefinitely (a no-op
-    # once every machine is migrated).
+    # One-way deletion targets for obsolete pre-independence artifacts.  They
+    # are deleted, never loaded or forwarded.
     "radia_cubit.ccm",
     "radia_cubit.ccl",
     "radia_cubit_mesh*.pyd",
@@ -454,7 +449,7 @@ _CLEAN_PATTERNS = [
 
 
 def _clean_old_plugins(cubit_dir: Path):
-    """Remove all radia / cubit-mesh-export plugin files from Cubit.
+    """Remove current plugin files and exact obsolete deployment artifacts.
 
     Returns:
         (removed: int, errors: list[str])
@@ -574,7 +569,7 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False,
     """Deploy Cubit plugin binaries to Cubit installation.
 
     Args:
-        all_users: if True, also register the Radia panel on every user's
+        all_users: if True, also register the exporter toolbar on every user's
             ~/.cubit. Requires admin privileges on Windows.
         check_only: if True, run preflight (find Cubit, process / lock
             scan) and exit without writing anything. Returns True iff
@@ -756,10 +751,10 @@ def main():
     """Console script entry point for cubit-plugin-install."""
     parser = argparse.ArgumentParser(
         prog="cubit-plugin-install",
-        description="Install the Radia / cubit-mesh-export Cubit plugin "
-                    "(.ccm / .pyd + Netgen DLLs) and Radia Export Mesh toolbar.")
+        description="Install the cubit-mesh-export Cubit plugin "
+                    "(.ccm / .pyd + Netgen DLLs) and Cubit Mesh Export toolbar.")
     parser.add_argument("--all-users", action="store_true",
-                        help="also register Radia toolbar in every "
+                        help="also register the exporter toolbar in every "
                              "user's ~/.cubit (requires admin)")
     parser.add_argument("--check-only", action="store_true",
                         help="run preflight only; do not modify anything")

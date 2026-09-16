@@ -16,6 +16,7 @@ async def check():
     assert importlib.util.find_spec('cae_mcp_core') is None, 'Retired foundation must be absent'
     import cubit_mesh_export
     assert Path(cubit_mesh_export.__file__).resolve().is_relative_to(Path(sys.prefix).resolve())
+    assert importlib.util.find_spec('cubit_mesh_export.mcp.bootstrap') is None
     with tempfile.TemporaryDirectory(prefix='cubit-mcp-wheel-', dir='C:/temp') as work:
         params = StdioServerParameters(command=sys.executable,
             args=['-I', '-m', 'cubit_mesh_export.mcp.server'], cwd=work)
@@ -26,7 +27,7 @@ async def check():
                 names = {t.name for t in (await client.list_tools()).tools}
                 assert {'cubit_status', 'cubit_exec', 'cubit_import_journal',
                         'cubit_validation_catalog'}.issubset(names)
-                assert not {'cubit_show', 'open_in_cubit'}.intersection(names)
+                assert not {'cubit_show', 'open_in_cubit', 'cubit_snapshot'}.intersection(names)
                 result = await client.call_tool('cubit_status', {})
                 assert not result.isError
                 status = json.loads(result.content[0].text)

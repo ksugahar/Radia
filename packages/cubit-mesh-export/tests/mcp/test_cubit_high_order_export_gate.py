@@ -2,11 +2,9 @@ import copy
 import json
 
 from cubit_mesh_export.mcp.high_order_export_gate import (
-    cubit_headless_netgen_export_gate,
     cubit_loft_high_order_vol_series_gate,
 )
 from cubit_mesh_export.mcp.server import (
-    cubit_headless_netgen_export_gate as mcp_headless_gate,
     cubit_loft_high_order_vol_series_gate as mcp_series_gate,
 )
 
@@ -46,27 +44,6 @@ def _rows():
     ]
 
 
-def _summary():
-    return {
-        "source_journal": "05_loft.jou",
-        "headless": True,
-        "persistent_gui_started": False,
-        "legacy_command": "radia_export",
-        "replay_command": "export netgen",
-        "legacy_command_available_headless": False,
-        "native_command_available_headless": True,
-        "produced_orders": [1, 2, 3, 4, 5],
-        "vol_file_count": 5,
-        "sidecar_file_count": 5,
-        "artifact_set_complete": True,
-        "hex_count": 24,
-        "quality_minimum": 0.6565,
-        "exit_code": 2,
-        "known_startup_plugin_path_diagnostics": True,
-        "model_or_export_errors": False,
-    }
-
-
 def test_live_shape_high_order_series_passes_and_mcp_dispatches():
     result = cubit_loft_high_order_vol_series_gate(_rows())
     assert result["status"] == "ok"
@@ -82,21 +59,3 @@ def test_high_order_series_rejects_topology_and_curving_drift():
     assert result["status"] == "needs_attention"
     assert result["checks"]["topology_and_labels_invariant"] is False
     assert result["checks"]["curved_nodes_start_zero_then_strictly_increase"] is False
-
-
-def test_headless_native_export_accepts_classified_exit_two_and_dispatches():
-    result = cubit_headless_netgen_export_gate(_summary())
-    assert result["status"] == "ok"
-    assert result["checks"]["exit_code_explained_by_known_startup_diagnostics"] is True
-    assert json.loads(mcp_headless_gate(_summary()))["status"] == "ok"
-
-
-def test_headless_export_rejects_gui_plugin_command_and_missing_order():
-    bad = _summary()
-    bad["replay_command"] = "radia_export"
-    bad["produced_orders"] = [1, 2, 3, 4]
-    bad["vol_file_count"] = 4
-    result = cubit_headless_netgen_export_gate(bad)
-    assert result["status"] == "needs_attention"
-    assert result["checks"]["native_export_netgen_command_used"] is False
-    assert result["checks"]["all_expected_orders_and_sidecars_created"] is False

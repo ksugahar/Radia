@@ -1,15 +1,14 @@
 """
 Cubit toolbar installer for Coreform Cubit 2025.12+.
 
-Registers the Radia toolbar script in Cubit's startup file so that the
-Radia-NGSolve menu is loaded automatically on Cubit startup.
+Registers the Cubit Mesh Export toolbar and menu at Cubit startup.
 
 The startup shim is generated outside the Python package:
-  - current-user install: %LOCALAPPDATA%/Radia/Cubit/radia_startup.py
-  - all-users install:   %ProgramData%/Radia/Cubit/radia_startup.py
+  - current-user: %LOCALAPPDATA%/cubit-mesh-export/Cubit/startup.py
+  - all-users:   %ProgramData%/cubit-mesh-export/Cubit/startup.py
 
-This avoids mutating ``site-packages/radia/panels/startup.py`` or the
-editable source tree during install, while still baking in the absolute
+This avoids mutating the package or editable source tree during install,
+while still baking in the absolute
 ``register_toolbar.py`` path Cubit needs.
 """
 
@@ -25,10 +24,11 @@ import tempfile
 from pathlib import Path
 
 
-_MARKER_BEGIN = "## BEGIN radia toolbar"
-_MARKER_END = "## END radia toolbar"
+_MARKER_BEGIN = "## BEGIN cubit-mesh-export toolbar"
+_MARKER_END = "## END cubit-mesh-export toolbar"
 
 _LEGACY_MARKERS = [
+    ("## BEGIN radia toolbar", "## END radia toolbar"),
     ("## BEGIN cubit_mesh_export toolbar", "## END cubit_mesh_export toolbar"),
 ]
 
@@ -168,8 +168,75 @@ def _startup_dir(all_users=False):
             base = os.environ.get("ProgramData", r"C:\ProgramData")
         else:
             base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
-        return os.path.join(base, "Radia", "Cubit")
-    return os.path.join(os.path.expanduser("~"), ".radia", "cubit")
+        return os.path.join(base, "cubit-mesh-export", "Cubit")
+    return os.path.join(os.path.expanduser("~"), ".cubit-mesh-export", "cubit")
+
+
+def _legacy_artifacts(all_users=False):
+    """Return exact obsolete exporter-owned paths; never whole Radia trees."""
+    local_roots = []
+    local = os.environ.get("LOCALAPPDATA")
+    if local:
+        local_roots.append(Path(local))
+    if sys.platform == "win32" and all_users:
+        local_roots.extend(
+            Path(user) / "AppData" / "Local"
+            for user in _iter_windows_user_dirs(include_default=True)
+        )
+    startup_roots = [root / "Radia" / "Cubit" for root in local_roots]
+    if sys.platform == "win32" and all_users:
+        startup_roots.append(
+            Path(os.environ.get("ProgramData", r"C:\ProgramData"))
+            / "Radia" / "Cubit"
+        )
+
+    roaming_roots = []
+    appdata = os.environ.get("APPDATA")
+    if appdata:
+        roaming_roots.append(Path(appdata))
+    if sys.platform == "win32" and all_users:
+        roaming_roots.extend(
+            Path(user) / "AppData" / "Roaming"
+            for user in _iter_windows_user_dirs(include_default=True)
+        )
+
+    files = []
+    directories = []
+    for root in startup_roots:
+        files.extend((
+            root / "radia_startup.py",
+            root / "radia_export_toolbar.tar.gz",
+        ))
+        directories.extend((
+            root / "Toolbars" / "radia_export_toolbar",
+            root / "imported" / "radia_export_toolbar",
+        ))
+    files.extend(root / "Radia" / "export_settings.json"
+                 for root in roaming_roots)
+    return files, directories
+
+
+def _remove_legacy_artifacts(all_users=False):
+    """Delete only obsolete files/directories owned by the old exporter UI."""
+    removed, errors = [], []
+    files, directories = _legacy_artifacts(all_users=all_users)
+    for path in files:
+        if not path.exists():
+            continue
+        try:
+            path.unlink()
+            removed.append(path)
+        except OSError as exc:
+            errors.append(f"could not remove legacy file {path}: {exc}")
+    for path in directories:
+        if not path.exists():
+            continue
+        try:
+            shutil.rmtree(path)
+            removed.append(path)
+        except OSError as exc:
+            errors.append(f"could not remove legacy directory {path}: {exc}")
+    return removed, errors
 
 
 def build_official_toolbar_package(output_dir=None):
@@ -182,8 +249,8 @@ def build_official_toolbar_package(output_dir=None):
     """
     panels_dir = Path(_get_panels_dir())
     source = panels_dir / "cubit_toolbar"
-    template = source / "toolbars" / "radia_export_toolbar.ttb.tmpl"
-    menu_source = panels_dir / "radia_export_menu.py"
+    template = source / "toolbars" / "cubit_mesh_export_toolbar.ttb.tmpl"
+    menu_source = panels_dir / "cubit_export_menu.py"
     if not template.is_file():
         raise FileNotFoundError(f"official toolbar template missing: {template}")
     if not menu_source.is_file():
@@ -191,10 +258,10 @@ def build_official_toolbar_package(output_dir=None):
 
     destination = Path(output_dir or _startup_dir(all_users=False))
     destination.mkdir(parents=True, exist_ok=True)
-    package_path = destination / "radia_export_toolbar.tar.gz"
+    package_path = destination / "cubit_mesh_export_toolbar.tar.gz"
 
     with tempfile.TemporaryDirectory(
-            prefix="radia-export-toolbar-", dir=str(destination)) as temp_dir:
+            prefix="cubit-mesh-export-toolbar-", dir=str(destination)) as temp_dir:
         staging = Path(temp_dir)
         shutil.copytree(
             source / "scripts",
@@ -203,12 +270,15 @@ def build_official_toolbar_package(output_dir=None):
         )
         shutil.copytree(source / "icons", staging / "icons")
         (staging / "toolbars").mkdir()
-        shutil.copy2(menu_source, staging / "scripts" / "radia_export_menu.py")
+        shutil.copy2(menu_source, staging / "scripts" / "cubit_export_menu.py")
 
-        install_dir = staging.as_posix()
+        # WorkflowToolbar's .mappings file relocates these package-relative
+        # source names during import. Never bake this short-lived staging
+        # directory into the archive: it is deleted when this block exits.
+        install_dir = "."
         toolbar_text = template.read_text(encoding="utf-8").replace(
             "@TOOLBAR_INSTALL_DIR@", install_dir)
-        toolbar_rel = Path("toolbars") / "radia_export_toolbar.ttb"
+        toolbar_rel = Path("toolbars") / "cubit_mesh_export_toolbar.ttb"
         (staging / toolbar_rel).write_text(toolbar_text, encoding="utf-8")
 
         mapped_files = sorted(
@@ -249,10 +319,13 @@ def _existing_toolbar_install_dirs(all_users=False):
 
     result = []
     for root in roots:
-        candidate = (root / "Radia" / "Cubit" / "Toolbars"
-                     / "radia_export_toolbar")
-        if candidate.is_dir() and candidate not in result:
-            result.append(candidate)
+        product_root = root / "cubit-mesh-export" / "Cubit"
+        for candidate in (
+            product_root / "Toolbars" / "cubit_mesh_export_toolbar",
+            product_root / "imported" / "cubit_mesh_export_toolbar",
+        ):
+            if candidate.is_dir() and candidate not in result:
+                result.append(candidate)
     return result
 
 
@@ -269,12 +342,12 @@ def _toolbar_expected_files(install_dir):
         "scripts/export_vtk.py",
         "scripts/export_femeem.py",
         "scripts/export_meg.py",
-        "icons/radia_export.svg",
+        "icons/cubit_mesh_export.svg",
     ):
         pairs.append((source / relative, install_dir / relative))
     pairs.append((
-        panels_dir / "radia_export_menu.py",
-        install_dir / "scripts" / "radia_export_menu.py",
+        panels_dir / "cubit_export_menu.py",
+        install_dir / "scripts" / "cubit_export_menu.py",
     ))
     return pairs
 
@@ -282,7 +355,7 @@ def _toolbar_expected_files(install_dir):
 def _render_installed_toolbar(install_dir):
     install_dir = Path(install_dir)
     template = (Path(_get_panels_dir()) / "cubit_toolbar" / "toolbars"
-                / "radia_export_toolbar.ttb.tmpl")
+                / "cubit_mesh_export_toolbar.ttb.tmpl")
     return template.read_text(encoding="utf-8").replace(
         "@TOOLBAR_INSTALL_DIR@", install_dir.as_posix())
 
@@ -294,7 +367,7 @@ def _sync_existing_toolbar_installations(all_users=False):
         for source, destination in _toolbar_expected_files(install_dir):
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, destination)
-        toolbar = install_dir / "toolbars" / "radia_export_toolbar.ttb"
+        toolbar = install_dir / "toolbars" / "cubit_mesh_export_toolbar.ttb"
         toolbar.parent.mkdir(parents=True, exist_ok=True)
         toolbar.write_text(
             _render_installed_toolbar(install_dir), encoding="utf-8")
@@ -313,7 +386,7 @@ def _verify_existing_toolbar_installations(all_users=False):
                 issues.append(f"toolbar payload missing: {destination}")
             elif source.read_bytes() != destination.read_bytes():
                 issues.append(f"toolbar payload is stale: {destination}")
-        toolbar = install_dir / "toolbars" / "radia_export_toolbar.ttb"
+        toolbar = install_dir / "toolbars" / "cubit_mesh_export_toolbar.ttb"
         if not toolbar.is_file():
             issues.append(f"toolbar definition missing: {toolbar}")
         elif (toolbar.read_text(encoding="utf-8", errors="replace") !=
@@ -327,7 +400,7 @@ def _generate_startup_script(panels_dir, *, all_users=False):
     register_path = os.path.join(panels_dir, "register_toolbar.py").replace("\\", "/")
     startup_root = _startup_dir(all_users=all_users)
     os.makedirs(startup_root, exist_ok=True)
-    startup_path = os.path.join(startup_root, "radia_startup.py")
+    startup_path = os.path.join(startup_root, "startup.py")
 
     content = (
         "#!python\n"
@@ -364,19 +437,31 @@ def _build_startup_block(startup_script_path):
 
 
 def _remove_existing_block(lines):
-    """Remove current and legacy toolbar blocks from a .cubit file."""
+    """Remove complete owned toolbar blocks from a ``.cubit`` file.
+
+    An unmatched marker is corruption, not permission to discard the rest of
+    the user's startup file.  Fail before writing so the original is preserved.
+    """
     markers = [(_MARKER_BEGIN, _MARKER_END)] + _LEGACY_MARKERS
     result = []
-    inside_block = False
+    active_end = None
     for line in lines:
-        if any(begin in line for begin, _ in markers):
-            inside_block = True
+        starts = [(begin, end) for begin, end in markers if begin in line]
+        ends = [end for _, end in markers if end in line]
+        if starts:
+            if active_end is not None:
+                raise ValueError("nested Cubit toolbar BEGIN marker")
+            _, active_end = starts[0]
             continue
-        if any(end in line for _, end in markers):
-            inside_block = False
+        if ends:
+            if active_end is None or active_end not in line:
+                raise ValueError("orphan or mismatched Cubit toolbar END marker")
+            active_end = None
             continue
-        if not inside_block:
+        if active_end is None:
             result.append(line)
+    if active_end is not None:
+        raise ValueError("unterminated Cubit toolbar BEGIN marker")
     return result
 
 
@@ -536,7 +621,7 @@ def verify_panel_installation(all_users=False, verbose=True):
 
 
 def install_panels(all_users=False):
-    """Register the Radia toolbar for Coreform Cubit 2025.12+."""
+    """Register the Cubit Mesh Export toolbar for Cubit 2025.12+."""
     print("=== Coreform Cubit - Panel Installer ===\n")
 
     panels_dir = _get_panels_dir()
@@ -591,6 +676,12 @@ def install_panels(all_users=False):
             errors.append(msg)
             print(f"ERROR: {msg}")
 
+    removed_legacy, cleanup_errors = _remove_legacy_artifacts(
+        all_users=all_users)
+    for path in removed_legacy:
+        print(f"Removed obsolete exporter asset: {path}")
+    errors.extend(cleanup_errors)
+
     plugin_dir = os.path.join(cubit_bin, "plugins")
     for ini_path in _get_cubit_ini_paths(all_users=all_users):
         try:
@@ -626,7 +717,7 @@ def install_panels(all_users=False):
 
 
 def uninstall_panels(all_users=False):
-    """Remove the Radia toolbar registration from .cubit files."""
+    """Remove the Cubit Mesh Export toolbar registration and old assets."""
     print("=== Coreform Cubit - Panel Uninstaller ===\n")
 
     for cubit_file in _get_cubit_startup_files(all_users=all_users):
@@ -643,13 +734,20 @@ def uninstall_panels(all_users=False):
             except OSError as exc:
                 print(f"ERROR: could not update {cubit_file}: {exc}")
 
-    startup_script = os.path.join(_startup_dir(all_users=all_users), "radia_startup.py")
+    startup_script = os.path.join(_startup_dir(all_users=all_users), "startup.py")
     if os.path.isfile(startup_script):
         try:
             os.remove(startup_script)
             print(f"Removed startup script: {startup_script}")
         except OSError as exc:
             print(f"ERROR: could not remove {startup_script}: {exc}")
+
+    removed_legacy, cleanup_errors = _remove_legacy_artifacts(
+        all_users=all_users)
+    for path in removed_legacy:
+        print(f"Removed obsolete exporter asset: {path}")
+    for error in cleanup_errors:
+        print(f"ERROR: {error}")
 
     print("Restart Cubit to apply changes.")
     return True

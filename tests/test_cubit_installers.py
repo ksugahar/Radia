@@ -182,7 +182,7 @@ def test_panel_startup_shim_is_generated_outside_package(monkeypatch, tmp_path):
         install_panels._generate_startup_script(str(panels_dir), all_users=True)
     )
 
-    assert startup.parent == tmp_path / "ProgramData" / "Radia" / "Cubit"
+    assert startup.parent == tmp_path / "ProgramData" / "cubit-mesh-export" / "Cubit"
     assert panels_dir not in startup.parents
     text = startup.read_text(encoding="utf-8")
     assert "register_toolbar.py" in text
@@ -199,10 +199,10 @@ def test_install_panels_writes_and_verifies_current_user(monkeypatch, tmp_path):
     assert install_panels.install_panels(all_users=False) is True
 
     cubit_file = tmp_path / "Home" / ".cubit"
-    startup = tmp_path / "LocalAppData" / "Radia" / "Cubit" / "radia_startup.py"
+    startup = tmp_path / "LocalAppData" / "cubit-mesh-export" / "Cubit" / "startup.py"
     toolbar_package = (
-        tmp_path / "LocalAppData" / "Radia" / "Cubit"
-        / "radia_export_toolbar.tar.gz"
+        tmp_path / "LocalAppData" / "cubit-mesh-export" / "Cubit"
+        / "cubit_mesh_export_toolbar.tar.gz"
     )
     ini = tmp_path / "AppData" / "Roaming" / "Coreform" / "Cubit.ini"
 
@@ -218,6 +218,42 @@ def test_install_panels_writes_and_verifies_current_user(monkeypatch, tmp_path):
     assert ok, issues
 
 
+def test_install_panels_deletes_only_exact_obsolete_exporter_assets(
+        monkeypatch, tmp_path):
+    install_panels = _load_install_panels()
+
+    monkeypatch.setattr(install_panels.sys, "platform", "win32")
+    program_files = _patch_windows_env(monkeypatch, tmp_path)
+    _fake_cubit(program_files, "2025.12")
+
+    old_startup_root = tmp_path / "LocalAppData" / "Radia" / "Cubit"
+    old_toolbar = old_startup_root / "Toolbars" / "radia_export_toolbar"
+    old_toolbar.mkdir(parents=True)
+    (old_startup_root / "radia_startup.py").write_text(
+        "obsolete\n", encoding="utf-8")
+    (old_startup_root / "radia_export_toolbar.tar.gz").write_bytes(b"obsolete")
+    (old_toolbar / "payload.py").write_text("obsolete\n", encoding="utf-8")
+    sibling = old_startup_root / "keep-user-data.txt"
+    sibling.write_text("keep\n", encoding="utf-8")
+    old_settings = tmp_path / "AppData" / "Roaming" / "Radia"
+    old_settings.mkdir(parents=True)
+    (old_settings / "export_settings.json").write_text(
+        "{}\n", encoding="utf-8")
+    settings_sibling = old_settings / "keep-unrelated.json"
+    settings_sibling.write_text("{}\n", encoding="utf-8")
+
+    assert install_panels.install_panels(all_users=False) is True
+
+    assert not (old_startup_root / "radia_startup.py").exists()
+    assert not (old_startup_root / "radia_export_toolbar.tar.gz").exists()
+    assert not old_toolbar.exists()
+    assert not (old_settings / "export_settings.json").exists()
+    assert sibling.read_text(encoding="utf-8") == "keep\n"
+    assert settings_sibling.read_text(encoding="utf-8") == "{}\n"
+    assert old_startup_root.is_dir()
+    assert old_settings.is_dir()
+
+
 def test_install_panels_refreshes_an_existing_official_toolbar(
         monkeypatch, tmp_path):
     install_panels = _load_install_panels()
@@ -226,11 +262,11 @@ def test_install_panels_refreshes_an_existing_official_toolbar(
     program_files = _patch_windows_env(monkeypatch, tmp_path)
     _fake_cubit(program_files, "2025.12")
     toolbar_dir = (
-        tmp_path / "LocalAppData" / "Radia" / "Cubit" / "Toolbars"
-        / "radia_export_toolbar"
+        tmp_path / "LocalAppData" / "cubit-mesh-export" / "Cubit" / "Toolbars"
+        / "cubit_mesh_export_toolbar"
     )
     (toolbar_dir / "scripts").mkdir(parents=True)
-    (toolbar_dir / "scripts" / "radia_export_menu.py").write_text(
+    (toolbar_dir / "scripts" / "cubit_export_menu.py").write_text(
         "# stale\n", encoding="utf-8")
 
     before = install_panels._verify_existing_toolbar_installations(
@@ -241,12 +277,12 @@ def test_install_panels_refreshes_an_existing_official_toolbar(
     issues = install_panels._verify_existing_toolbar_installations(
         all_users=False)
     assert issues == []
-    menu = toolbar_dir / "scripts" / "radia_export_menu.py"
+    menu = toolbar_dir / "scripts" / "cubit_export_menu.py"
     assert menu.read_bytes() == (
         PROJECT_ROOT / "packages/cubit-mesh-export/src/cubit_mesh_export/cubit_gui"
-        / "radia_export_menu.py"
+        / "cubit_export_menu.py"
     ).read_bytes()
-    toolbar = toolbar_dir / "toolbars" / "radia_export_toolbar.ttb"
+    toolbar = toolbar_dir / "toolbars" / "cubit_mesh_export_toolbar.ttb"
     assert toolbar_dir.as_posix() in toolbar.read_text(encoding="utf-8")
 
 
@@ -254,24 +290,24 @@ def test_official_toolbar_package_is_self_contained(tmp_path):
     install_panels = _load_install_panels()
 
     package = Path(install_panels.build_official_toolbar_package(tmp_path))
-    assert package.name == "radia_export_toolbar.tar.gz"
+    assert package.name == "cubit_mesh_export_toolbar.tar.gz"
 
     with tarfile.open(package, "r:gz") as archive:
         names = set(archive.getnames())
-        assert "toolbars/radia_export_toolbar.ttb" in names
-        assert "scripts/radia_export_menu.py" in names
-        assert "icons/radia_export.svg" in names
+        assert "toolbars/cubit_mesh_export_toolbar.ttb" in names
+        assert "scripts/cubit_export_menu.py" in names
+        assert "icons/cubit_mesh_export.svg" in names
         assert ".mappings" in names
         assert not any("__pycache__" in name or name.endswith(".pyc")
                        for name in names)
         toolbar_text = archive.extractfile(
-            "toolbars/radia_export_toolbar.ttb").read().decode("utf-8")
+            "toolbars/cubit_mesh_export_toolbar.ttb").read().decode("utf-8")
         mappings = archive.extractfile(".mappings").read().decode("utf-8")
 
     root = ET.fromstring(toolbar_text)
     assert root.tag == "WorkflowToolbar"
     assert root.attrib == {
-        "version": "1.0", "name": "Radia Export", "visible": "true",
+        "version": "1.0", "name": "Cubit Mesh Export", "visible": "true",
     }
     buttons = root.findall("WTButton")
     assert len(buttons) == 6
@@ -288,6 +324,24 @@ def test_official_toolbar_package_is_self_contained(tmp_path):
         if element.tag in {"filename", "icon"} and element.text
     ]
     assert all(f"{path} => " in mappings for path in referenced)
+    assert all(path.startswith("./") for path in referenced)
+    assert str(tmp_path).replace("\\", "/") not in toolbar_text
+    assert str(tmp_path).replace("\\", "/") not in mappings
+
+
+def test_unterminated_startup_block_never_discards_following_user_lines():
+    install_panels = _load_install_panels()
+    lines = [
+        "set echo on\n",
+        "## BEGIN cubit-mesh-export toolbar\n",
+        'play "missing.py"\n',
+        "user command that must survive\n",
+    ]
+
+    with pytest.raises(ValueError, match="unterminated"):
+        install_panels._remove_existing_block(lines)
+
+    assert lines[-1] == "user command that must survive\n"
 
 
 def test_native_build_is_worktree_relative_and_propagates_both_payloads():
@@ -307,6 +361,37 @@ def test_native_build_is_worktree_relative_and_propagates_both_payloads():
     assert "record" in build_script
     assert "verify_manifest(repo_root, pkg_dir)" in setup_script
     assert "st_mtime" not in setup_script
+    assert 'cmdclass={"build_py": CleanPackageBuild}' in setup_script
+
+
+def test_package_build_deletes_stale_generated_modules(monkeypatch, tmp_path):
+    import setuptools
+    from setuptools.command.build_py import build_py
+
+    package_root = tmp_path / "package"
+    package_dir = package_root / "src" / "cubit_mesh_export"
+    package_dir.mkdir(parents=True)
+    original = PROJECT_ROOT / "packages" / "cubit-mesh-export"
+    shutil.copy2(original / "setup.py", package_root / "setup.py")
+    shutil.copy2(CME_SRC / "cubit_mesh_export" / "_native_provenance.py",
+                 package_dir / "_native_provenance.py")
+    monkeypatch.setenv("CUBIT_MESH_EXPORT_SKIP_FRESHNESS_CHECK", "1")
+    setup_calls = []
+    monkeypatch.setattr(setuptools, "setup", lambda **kwargs: setup_calls.append(kwargs))
+    runpy.run_path(str(package_root / "setup.py"))
+
+    generated = tmp_path / "build-lib" / "cubit_mesh_export"
+    generated.mkdir(parents=True)
+    stale = generated / "retired_module.py"
+    stale.write_text("must disappear\n", encoding="utf-8")
+    ran = []
+    monkeypatch.setattr(build_py, "run", lambda _self: ran.append(True))
+    command = setup_calls[0]["cmdclass"]["build_py"](setuptools.Distribution())
+    command.build_lib = str(tmp_path / "build-lib")
+    command.run()
+
+    assert ran == [True]
+    assert not generated.exists()
 
 
 def test_distribution_ci_packages_the_exact_candidate_binaries():
@@ -339,7 +424,8 @@ def test_distribution_ci_packages_the_exact_candidate_binaries():
         PROJECT_ROOT / "packages" / "cubit-mesh-export" / "setup.py"
     ).read_text(encoding="utf-8")
     assert "class BinaryDistribution(Distribution)" in setup_script
-    assert "setup(distclass=BinaryDistribution)" in setup_script
+    assert "setup(distclass=BinaryDistribution," in setup_script
+    assert 'cmdclass={"build_py": CleanPackageBuild}' in setup_script
 
     package_dir = (
         PROJECT_ROOT / "packages" / "cubit-mesh-export" / "src"

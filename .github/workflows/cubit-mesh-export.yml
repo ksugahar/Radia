@@ -13,6 +13,7 @@ on:
       - 'tests/test_release_cubit_dual.py'
       - 'tests/test_cubit_installers.py'
       - 'tests/test_cubit_menu_startup.py'
+      - 'tests/test_cubit_auto_kelvin_entry.py'
       - 'tools/audit_pyside6_only.py'
       - 'validation_test/cubit_mesh_export/**'
       - '.github/workflows/cubit-mesh-export.yml'
@@ -27,6 +28,7 @@ on:
       - 'tests/test_release_cubit_dual.py'
       - 'tests/test_cubit_installers.py'
       - 'tests/test_cubit_menu_startup.py'
+      - 'tests/test_cubit_auto_kelvin_entry.py'
       - 'tools/audit_pyside6_only.py'
       - 'validation_test/cubit_mesh_export/**'
       - '.github/workflows/cubit-mesh-export.yml'
@@ -92,10 +94,21 @@ jobs:
           with zipfile.ZipFile(wheel) as archive:
               names = archive.namelist()
               required = ('cubit_mesh_export/cubit_mesh_export.ccm',
-                          'cubit_mesh_export/cubit_mesh_curver.pyd')
+                          'cubit_mesh_export/cubit_mesh_curver.pyd',
+                          'cubit_mesh_export/cubit_gui/solver_ready_sample.jou')
               missing = [name for name in required if name not in names]
               if missing:
                   raise SystemExit(f'missing required wheel payloads: {missing}')
+              retired = (
+                  'cubit_mesh_export/cubit_gui/radia_export_menu.py',
+                  'cubit_mesh_export/cubit_gui/cubit_toolbar/icons/radia_export.svg',
+                  'cubit_mesh_export/cubit_gui/cubit_toolbar/toolbars/radia_export_toolbar.ttb.tmpl',
+                  'cubit_mesh_export/cubit_gui/ih_bem_sample.jou',
+                  'cubit_mesh_export/mcp/bootstrap.py',
+              )
+              leaked = [name for name in retired if name in names]
+              if leaked:
+                  raise SystemExit(f'retired GUI payloads leaked into wheel: {leaked}')
               init = archive.read('cubit_mesh_export/__init__.py').decode()
               native_manifest = json.loads(archive.read(
                   'cubit_mesh_export/native_payloads.json'))
@@ -123,6 +136,12 @@ jobs:
                       hashlib.sha256(content).hexdigest() != expected['sha256']):
                   raise SystemExit(
                       f'wheel payload {name} does not match native_payloads.json')
+          ccm = payload_contents['cubit_mesh_export.ccm']
+          for retired_token in (b'CoilCommand', b'export jmag_nastran',
+                                b'RadiaPlugin', b'RADIA_LAUNCHER_CONFIG'):
+              if retired_token in ccm:
+                  raise SystemExit(
+                      f'retired native token leaked into wheel: {retired_token!r}')
           print(f'PASS cubit-mesh-export {package_version}: mandatory payloads present')
           '@ | python - $wheel.FullName
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -137,7 +156,9 @@ jobs:
           $env:PYTHONPATH = 'packages\cubit-mesh-export\src'
           python -m pytest tests\test_cubit_installers.py `
             tests\test_cubit_menu_startup.py tests\test_cubit_standalone_gui.py `
+            tests\test_cubit_auto_kelvin_entry.py `
             packages\cubit-mesh-export\tests\test_toolbar_smoke.py `
+            packages\cubit-mesh-export\tests\test_native_plugin_registry.py `
             tests\test_release_cubit_dual.py -q
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tools\audit_pyside6_only.py
@@ -208,15 +229,29 @@ jobs:
                   name for name in names if name.endswith(".dist-info/METADATA")
               )
               metadata = email.message_from_bytes(archive.read(metadata_name))
+              ccm = archive.read("cubit_mesh_export/cubit_mesh_export.ccm")
           actual = metadata["Version"]
           if actual != expected:
               raise SystemExit(
                   f"wheel/tag version mismatch: wheel={actual}, tag={expected}"
               )
-          required = ("cubit_mesh_export.ccm", "cubit_mesh_curver.pyd")
+          required = ("cubit_mesh_export.ccm", "cubit_mesh_curver.pyd",
+                      "cubit_gui/solver_ready_sample.jou")
           missing = [item for item in required if not any(name.endswith(item) for name in names)]
           if missing:
               raise SystemExit(f"release wheel lacks mandatory payloads: {missing}")
+          retired = ("radia_export_menu.py", "radia_export.svg",
+                     "radia_export_toolbar.ttb.tmpl", "ih_bem_sample.jou",
+                     "mcp/bootstrap.py")
+          leaked = [item for item in retired if any(name.endswith(item) for name in names)]
+          if leaked:
+              raise SystemExit(f"release wheel contains retired GUI payloads: {leaked}")
+          for retired_token in (b"CoilCommand", b"export jmag_nastran",
+                                b"RadiaPlugin", b"RADIA_LAUNCHER_CONFIG"):
+              if retired_token in ccm:
+                  raise SystemExit(
+                      f"release wheel contains retired native token: {retired_token!r}"
+                  )
           print(f"release wheel verified: {wheel.name} ({actual})")
           PY
 

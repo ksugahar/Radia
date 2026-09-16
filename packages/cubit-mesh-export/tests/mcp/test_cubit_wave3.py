@@ -1,6 +1,4 @@
-"""Tests for Wave-3 cubit MCP features: session-mode triad, --setup CLI
-mode, session-status enrichment, and the version-robust lint golden
-((rule, line) pairs, not message text)."""
+"""Owned process cleanup, setup CLI and current headless status."""
 
 import json
 import subprocess
@@ -35,34 +33,13 @@ def test_kill_on_close_job_terminates_private_process():
             proc.wait(timeout=5)
 
 
-def test_private_drop_cleanup_retries_transient_windows_locks(
-        monkeypatch, tmp_path):
-    drop = tmp_path / "cubit-session-private"
-    drop.mkdir()
-    (drop / "cubit_stdout.log").write_text("log", encoding="utf-8")
-    real_rmtree = cubit_session.shutil.rmtree
-    calls = 0
-
-    def temporarily_locked(path, ignore_errors=False):
-        nonlocal calls
-        calls += 1
-        if calls >= 3:
-            real_rmtree(path, ignore_errors=ignore_errors)
-
-    monkeypatch.setattr(cubit_session.shutil, "rmtree", temporarily_locked)
-
-    assert cubit_session._remove_tree_with_retry(drop, timeout_s=1.0)
-    assert calls == 3
-    assert not drop.exists()
-
-
 def test_close_process_streams_closes_batch_pipes():
     proc = subprocess.Popen(
         [sys.executable, "-c", "pass"], stdin=subprocess.PIPE,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     proc.wait(timeout=10.0)
 
-    cubit_session._close_process_streams(proc)
+    cubit_session._close_proc_streams(proc)
 
     assert proc.stdin.closed
     assert proc.stdout.closed
@@ -70,80 +47,8 @@ def test_close_process_streams_closes_batch_pipes():
 
 
 # ---------------------------------------------------------------------------
-# Session-mode triad
+# Setup CLI and status
 # ---------------------------------------------------------------------------
-
-def _bare_session(tmp_path):
-    sess = cubit_session.CubitSession.__new__(cubit_session.CubitSession)
-    sess._bin_dir = tmp_path
-    sess._mode = "gui"
-    sess._proc = None
-    sess._next_id = 1
-    sess._ready_info = None
-    sess._drop_dir = None
-    sess._outbox = None
-    sess._owned = False
-    sess._last_license_warmup = {}
-    sess._command_history = []
-    sess._command_history_max = 10
-    return sess
-
-
-def test_invalid_session_mode_fails_loud(monkeypatch, tmp_path):
-    monkeypatch.setenv("RADIA_CUBIT_SESSION_MODE", "sometimes")
-    sess = _bare_session(tmp_path)
-    with pytest.raises(cubit_session.CubitSessionError) as ei:
-        sess._start_gui_bootstrap()
-    assert "auto | new | existing" in str(ei.value)
-
-
-def test_existing_mode_without_daemon_fails_loud(monkeypatch, tmp_path):
-    monkeypatch.setenv("RADIA_CUBIT_SESSION_MODE", "existing")
-    monkeypatch.setattr(cubit_session, "_user_daemon_dir",
-                        lambda: tmp_path / "cubit-session")
-    sess = _bare_session(tmp_path)
-    with pytest.raises(cubit_session.CubitSessionError) as ei:
-        sess._start_gui_bootstrap()
-    assert "no live shared" in str(ei.value)
-
-
-def test_new_mode_uses_private_drop_dir(monkeypatch, tmp_path):
-    """Mode 'new' must ignore a live shared daemon and pick a private
-    per-process drop dir (never clobber the shared one)."""
-    import os
-
-    shared = tmp_path / "cubit-session"
-    shared.mkdir()
-    (shared / "out").mkdir()
-    (shared / "pid.lock").write_text(str(os.getpid()), encoding="utf-8")
-    (shared / "ready").write_text(json.dumps(
-        {"ready": True, "protocol_version": 2, "pid": os.getpid()}),
-        encoding="utf-8")
-
-    monkeypatch.setenv("RADIA_CUBIT_SESSION_MODE", "new")
-    monkeypatch.setattr(cubit_session, "_user_daemon_dir", lambda: shared)
-    sess = _bare_session(tmp_path)
-    # Spawn path fails at launcher discovery (no Cubit under tmp_path) --
-    # but by then the private drop dir must already exist and the shared
-    # daemon's markers must be untouched.
-    with pytest.raises((cubit_session.CubitSessionError, FileNotFoundError)):
-        sess._start_gui_bootstrap()
-    private = shared.parent / f"cubit-session-{os.getpid()}"
-    assert private.is_dir()
-    assert (shared / "pid.lock").is_file()          # shared daemon untouched
-    assert (shared / "ready").is_file()
-
-
-def test_attached_clients_use_distinct_request_filenames(tmp_path):
-    first = _bare_session(tmp_path)
-    second = _bare_session(tmp_path)
-
-    first_stem = first._request_stem(1)
-    second_stem = second._request_stem(1)
-
-    assert first_stem != second_stem
-    assert first_stem.endswith("-00000001")
-    assert second_stem.endswith("-00000001")
 
 
 # ---------------------------------------------------------------------------
@@ -158,11 +63,6 @@ def test_setup_mode_runs_and_reports(monkeypatch, capsys, tmp_path):
         "cubit_doctor",
         lambda: json.dumps({"status": "ok", "problems": []}),
     )
-    # Avoid a real license warmup: stub it.
-    import cubit_mesh_export.mcp.license_warmup as lw
-    monkeypatch.setattr(lw, "warmup_license",
-                        lambda *a, **k: {"status": "skipped",
-                                         "reason": "test stub"})
     rc = cubit_server._setup_mode()
     out = capsys.readouterr().out
     assert "Doctor report" in out
@@ -181,10 +81,11 @@ def test_setup_mode_fails_loud_when_cubit_is_missing(monkeypatch, capsys):
     assert "Doctor report" not in out
 
 
-def test_session_status_reports_mode_and_journal(monkeypatch):
-    monkeypatch.setenv("RADIA_CUBIT_SESSION_MODE", "auto")
+def test_session_status_reports_headless_mode_and_journal():
     out = json.loads(cubit_session_status())
-    assert out["session_mode"] == "auto"
+    assert out["execution_mode"] == "batch"
+    assert "session_mode" not in out
+    assert out["gui_started"] is False
     # keys present whenever a singleton exists are optional here; the
-    # baseline contract is bin_dir/alive/session_mode
+    # baseline contract is bin_dir/alive/execution_mode
     assert "alive" in out and "bin_dir" in out

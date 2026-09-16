@@ -1,10 +1,10 @@
 # Function Reference
 
-Reference documentation for the Radia Cubit plugin APREPRO commands and Python API.
+Reference documentation for Cubit Mesh Export APREPRO commands and Python API.
 
 ## APREPRO Commands (Recommended)
 
-Native Cubit commands registered by the Radia plugin. No Python import needed.
+Native Cubit commands registered by the Cubit Mesh Export plugin. No Python import needed.
 All commands are available in journal files (.jou) and the Cubit command line.
 
 ### Mesh Export Commands
@@ -21,16 +21,8 @@ All commands are available in journal files (.jou) and the Cubit command line.
 > **IMPORTANT**: The plugin's mesh exporters are `export netgen / gmsh /
 > vtk / femeem / meg / nastran_bdf`. Cubit
 > has a built-in `export nastran` (different format, no high-order support),
-> so the plugin uses the distinct `nastran_bdf` keyword. The historical
-> `jmag_nastran` spelling remains a deprecated compatibility alias.
-
-### Coil Generation Command
-
-| Command | Description |
-|---------|-------------|
-| `coil "script.py"` | Generate coil STEP from CoilBuilder script + import |
-| `coil "script.py" output "path.step"` | Custom output path |
-| `coil "script.py" noimport` | Generate STEP without importing |
+> so the plugin uses the distinct `nastran_bdf` keyword. No alternate spelling
+> is registered.
 
 ### Build & Installation
 
@@ -43,11 +35,10 @@ cmake -G Ninja -DCMAKE_BUILD_TYPE=Release \
   src/cubit_plugin
 
 cmake --build . --target cubit_mesh_export_ccm   # APREPRO commands (plugins/)
-# .ccl (Qt5 GUI) was removed in radia 4.80.0; PySide6 toolbar at
-# cubit_mesh_export/cubit_gui/radia_export_menu.py replaces it.
+# The packaged cubit_export_menu.py toolbar is the sole GUI entry point.
 ```
 
-Installation: `pip install "radia[cubit]" && cubit-plugin-install`
+Installation: `pip install cubit-mesh-export && cubit-plugin-install`
 
 ---
 
@@ -139,19 +130,6 @@ Creates directory with `in.dat`, `sin.dat.B`, `sina.dat`, and `d3`.
 |-----------|---------|-------------|
 | scale | 1.0 | Coordinate scale factor |
 
-### coil
-
-```
-coil "script.py" [output "path.step"] [noimport]
-```
-
-Generates coil STEP via external Python 3.12 subprocess (CoilBuilder).
-The script must define `build_coil()` returning a `CoilBuilder` instance.
-
-Requires: Python 3.12 with NGSolve/OCC. Set `RADIA_PYTHON` env var to override.
-
----
-
 ## Python API
 
 ### In-Memory Curving
@@ -192,20 +170,20 @@ are not inferred from `.vol` label strings.
 ## GUI Menu Structure
 
 ```
-Menu bar: ... Export Mesh  Help  Solve
+Menu bar: ... Export Mesh  Help
 
-Export Mesh (PySide6):         Solve (PySide6):
-  Netgen Vol (.vol)...           Radia-NGSolve...
-  GMSH...                        Generate Coil...
-  Nastran BDF...                 --------
-  VTK...                         Reload Panels
+Export Mesh (PySide6):
+  Netgen Vol (.vol)...
+  GMSH...
+  Nastran BDF...
+  VTK...
   MEG...
   FEMEEM...
 ```
 
-- **Export Mesh**: PySide6 dialogs with settings persistence (`AppData/Roaming/Radia/export_settings.json`)
-- **Solve**: Python subprocess to external Python 3.12 (Cubit embeds Python 3.10)
-- **Generate Coil**: Calls `coil` APREPRO command via file dialog
+- **Export Mesh**: PySide6 dialogs with settings persistence (`%APPDATA%/cubit-mesh-export/export_settings.json`)
+- Solver orchestration is intentionally outside the Cubit plugin. Downstream
+  applications consume the exported mesh through their own process boundary.
 - **Mesh p-convergence demo**: documented under `docs/cubit_mesh_export/netgen/p_convergence_demo.ipynb`; it is not an engineering design panel or Cubit menu action.
 
 ---

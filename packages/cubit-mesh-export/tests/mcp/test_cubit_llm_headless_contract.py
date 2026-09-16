@@ -123,11 +123,9 @@ def test_mcp_surface_does_not_publish_gui_execution_tools():
     assert "cubit_mesh_race_with_human" not in tool_names
 
 
-def test_snapshot_fails_without_starting_a_gui():
-    snapshot = json.loads(server.cubit_snapshot("unused.png"))
-
-    assert snapshot["kind"] == "policy"
-    assert snapshot["gui_started"] is False
+def test_retired_snapshot_is_not_advertised():
+    assert "cubit_snapshot" not in server.mcp._tool_manager._tools
+    assert not hasattr(server, "cubit_snapshot")
 
 
 @pytest.mark.parametrize("platform", ["win32", "linux", "darwin"])

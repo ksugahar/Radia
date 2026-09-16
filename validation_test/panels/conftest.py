@@ -28,7 +28,7 @@ collect_ignore = []
 if not _HAVE_PYSIDE6:
     # Current Cubit toolbar test.  It is allowed to use PySide6, but normal
     # Radia Python environments do not need that dependency.
-    collect_ignore.append("test_radia_export_menu.py")
+    collect_ignore.append("test_cubit_export_menu.py")
 
 # Make local panel calc helpers importable for validation tests.
 _REPO = Path(__file__).resolve().parents[2]

@@ -400,9 +400,8 @@ a downloadable `.tar.gz`):
 - Check the archive into a managed internal share or Artifactory.
 - Each user imports once; updates require re-importing (Cubit replaces
   the existing namespace).
-- For lab-wide distribution on the 100goki farm, piggyback on the
-  existing `deploy_radia_mcp_all_users.ps1` flow (see memory
-  `project_mcp_multi_user_deploy.md`).
+- For LAB/100 deployment, use the package-owned release-dual workflow so the
+  exact reviewed wheel and toolbar assets are verified on both machines.
 """
 
 TOOLBAR_ENCAPSULATION_PATTERN = """
@@ -626,7 +625,7 @@ TOOLBAR_TROUBLESHOOTING = """
 
 - Parenthesized multi-line imports break Cubit's importer. Switch to
   backslash continuations or single-line imports.
-- Radia targets Coreform Cubit 2025.12+. Do not add a PyQt5 fallback or
+- cubit-mesh-export targets Coreform Cubit 2025.12+. Do not add a PyQt5 fallback or
   patch older Cubit bundles; upgrade Cubit and re-run `cubit-plugin-install`.
 
 ## Symptom: "cubit.cmd raises 'not initialized'"

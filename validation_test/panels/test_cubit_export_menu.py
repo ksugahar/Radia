@@ -1,6 +1,6 @@
 """Unit test for the exporter-owned Cubit menu (private PySide6).
 
-Exercises the new PySide6 Radia Export toolbar that replaced the legacy
+Exercises the PySide6 Cubit Mesh Export toolbar that replaced the retired
 C++ Qt5 .ccl plugin in 2026-05.  Tests are headless (QT_QPA_PLATFORM=
 offscreen) and do NOT require Cubit or NGSolve -- only PySide6.
 
@@ -24,11 +24,11 @@ Run::
 
     set QT_QPA_PLATFORM=offscreen
     # Direct python (simplest -- bypasses pytest's import hooks):
-    python validation_test/panels/test_radia_export_menu.py
+    python validation_test/panels/test_cubit_export_menu.py
 
     # Or pytest with --confcutdir to isolate this Cubit-embedded PySide test
     # from unrelated validation fixtures:
-    python -m pytest validation_test/panels/test_radia_export_menu.py -xvs \
+    python -m pytest validation_test/panels/test_cubit_export_menu.py -xvs \
         --confcutdir=validation_test/panels
 """
 
@@ -44,7 +44,7 @@ from unittest.mock import MagicMock, patch
 # Force offscreen Qt platform BEFORE PySide6 is imported.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-# Ensure the editable radia package is importable as a side-load.
+# Ensure the exporter GUI module is importable as a side-load.
 _REPO_ROOT = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, os.path.join(_REPO_ROOT, "packages", "cubit-mesh-export",
@@ -57,7 +57,7 @@ try:
 except ImportError as exc:
     message = (
         "PySide6 is required only in the Cubit panel runtime; "
-        "skip radia_export_menu validation on normal Radia Python."
+        "skip Cubit toolbar validation when PySide6 is unavailable."
     )
     if __name__ == "__main__":
         print(f"SKIP: {message}")
@@ -68,7 +68,7 @@ except ImportError as exc:
 # Module under test.  Top-level `import cubit` is forbidden in the
 # module (per layer 2 isolation rules) -- this import must succeed
 # without Cubit on PATH when PySide6 is available.
-import radia_export_menu as rem  # noqa: E402
+import cubit_export_menu as rem  # noqa: E402
 
 
 _QAPP = None
@@ -107,7 +107,7 @@ class TestModuleSurface(unittest.TestCase):
         for name in ("install_menu", "find_claro", "_current_journal_hint",
                      "ExportDialog"):
             self.assertTrue(hasattr(rem, name),
-                            f"radia_export_menu missing: {name}")
+                            f"cubit_export_menu missing: {name}")
             self.assertTrue(callable(getattr(rem, name)))
 
     def test_no_top_level_cubit_import(self):
