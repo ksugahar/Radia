@@ -1,13 +1,13 @@
 #pragma once
 //=============================================================================
-// RadiaMessageFilter: suppress Cubit Learn Edition's noisy 50k-cap ERROR
+// Suppress Cubit Learn Edition's noisy 50k-cap ERROR
 // during export commands.
 //
 // Problem: Coreform Cubit Learn Edition prints
 //   *****ERROR: Coreform Cubit - Learn Edition restricts export to models
 //   with less than 50k elements.
-// on any `export *` command when element count > 50,000. The Radia
-// in-tree plugin bypasses the cap and completes the export successfully,
+// on any `export *` command when element count > 50,000. This plugin
+// bypasses the cap and completes the export successfully,
 // so the ERROR line is misleading noise that confuses users scanning logs.
 //
 // Solution: install a CubitMessageHandler that forwards every message to
@@ -30,7 +30,7 @@
                     // std::shared_ptr<CubitMessageHandler> and made them
                     // non-static. See ScopedLearnEditionFilter below.
 
-namespace radia {
+namespace cubit_mesh_export {
 
 class LearnEditionFilter : public CubitMessageHandler {
  public:
@@ -64,7 +64,7 @@ class LearnEditionFilter : public CubitMessageHandler {
       if (previous_) previous_->print_error(message);
       return;
     }
-    // (1) 50k-cap Learn Edition notice — harmless, Radia bypasses the cap.
+    // (1) 50k-cap Learn Edition notice — harmless; this exporter bypasses it.
     if (std::strstr(message, "Learn Edition") &&
         std::strstr(message, "restricts export")) {
       ++swallow_count_;
@@ -137,4 +137,4 @@ class ScopedLearnEditionFilter {
   int saved_error_count_ = 0;
 };
 
-}  // namespace radia
+}  // namespace cubit_mesh_export

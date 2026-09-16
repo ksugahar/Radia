@@ -73,7 +73,7 @@ def test_gmsh_geometry_volume_block_exports_elements():
     cubit.cmd("block 1 add volume 1")
     cubit.cmd('block 1 name "solid"')
 
-    out = Path(tempfile.mkdtemp(prefix="radia_cubit_gmsh_")) / "geometry.msh"
+    out = Path(tempfile.mkdtemp(prefix="cubit_mesh_export_gmsh_")) / "geometry.msh"
     cmd_path = str(out).replace("\\", "/")
     cubit.cmd(f'export gmsh "{cmd_path}" overwrite')
 

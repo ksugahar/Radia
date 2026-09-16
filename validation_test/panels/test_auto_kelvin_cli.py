@@ -147,13 +147,13 @@ def _run_cubit_with_config(tmpdir: Path, add_kelvin: bool,
     # CUBIT_HELPERS_DIR lets auto_kelvin_entry.py locate add_kelvin.py
     # without relying on __file__ (Cubit's `play` does not bind it).
     # The .ccm code (run_auto_kelvin in ExportNetgenCommand.cpp) sets
-    # this env var alongside RADIA_LAUNCHER_CONFIG; the test does the
+    # this env var alongside CUBIT_MESH_EXPORT_KELVIN_CONFIG; the test does the
     # same to exercise the same code path.
     env["CUBIT_HELPERS_DIR"] = str(CUBIT_HELPERS)
     if set_env:
-        env["RADIA_LAUNCHER_CONFIG"] = str(cfg)
+        env["CUBIT_MESH_EXPORT_KELVIN_CONFIG"] = str(cfg)
     else:
-        env.pop("RADIA_LAUNCHER_CONFIG", None)
+        env.pop("CUBIT_MESH_EXPORT_KELVIN_CONFIG", None)
 
     proc = subprocess.run(
         [str(CUBIT), "-batch", "-nographics", "-nojournal", str(jou)],
@@ -208,7 +208,7 @@ def test_auto_kelvin_skips_when_disabled(tmp_path):
                     reason="Coreform Cubit not installed")
 @pytest.mark.slow
 def test_auto_kelvin_default_is_on(tmp_path):
-    """Without RADIA_LAUNCHER_CONFIG env var, default is add_kelvin=True."""
+    """Without CUBIT_MESH_EXPORT_KELVIN_CONFIG, add_kelvin defaults to true."""
     # Pass set_env=False to bypass the config file.
     data = _run_cubit_with_config(tmp_path, add_kelvin=True, set_env=False)
     blocks = set(b for b in data.get("blocks", []) if b)
@@ -276,7 +276,7 @@ def test_checkbox_off_path_skips_entry_script(tmp_path):
     )
 
     env = os.environ.copy()
-    env.pop("RADIA_LAUNCHER_CONFIG", None)
+    env.pop("CUBIT_MESH_EXPORT_KELVIN_CONFIG", None)
     proc = subprocess.run(
         [str(CUBIT), "-batch", "-nographics", "-nojournal", str(jou)],
         env=env, capture_output=True, timeout=600)
