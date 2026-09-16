@@ -4,6 +4,20 @@ All notable changes to `cubit-mesh-export` — the high-order curved
 mesh export package for Coreform Cubit (Netgen / GMSH / Nastran /
 VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
+## Unreleased
+
+- Retire MCP GUI/file-drop attachment, foreign-PID shutdown, GUI snapshot RPC
+  and its always-failing public tool; human toolbar release tests remain separate.
+- Keep only process-owned headless sessions, bounded startup, strict protocol
+  replies and child cleanup. Never replay an ambiguously completed command after
+  losing the transport; report the failure and require explicit restoration.
+- Replace obsolete shared-session diagnostics and lockstep release instructions
+  with current independent-package guidance. Remove the ignored journal filter
+  parameter; preserve Cubit's native record and APREPRO definitions.
+- Honor both documented Cubit install overrides and keep native journals in
+  Cubit-owned scratch storage. Correct generated recipe Python and publication
+  ownership/permission guidance.
+
 ## 1.0.4 - GUI release launch correction
 
 - Pass the installed plugin directory before the GUI probe journal, preventing

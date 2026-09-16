@@ -77,12 +77,11 @@ class TestCubitScriptingKnowledge:
         "aprepro_journal":     ["APREPRO", "aprepro", "journal"],
         "batch_processing":    ["batch", "nographics"],
         "helix_coil":          ["helix", "coil"],
-        # v4.7.0 operational knowledge (radia-mcp 0.32.0):
-        "daemon_persistence":  ["daemon", "pid.lock", "attach", "0.01"],
+        # Current headless lifecycle and installation knowledge:
+        "daemon_persistence":  ["headless", "owned", "checkpoint"],
         "license_warmup":      ["rlm", "warmup", "renewal", "3-day"],
         "utf8_path":           ["utf-8", "cp932", "japanese", "multibytetowidechar"],
-        "v4_7_0":              ["4.7.0", "cubit", "release", "0.32.0"],
-        "cubit_refresh":       ["warmup", "cubit_refresh", "rlm"],  # alias -> warmup
+        "cubit_refresh":       ["warmup", "rlm"],  # alias -> warmup
         "japanese_path":       ["utf-8", "cp932", "japanese"],     # alias -> utf8
     }
 

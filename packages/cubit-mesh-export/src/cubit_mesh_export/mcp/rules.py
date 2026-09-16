@@ -410,22 +410,6 @@ def check_export_file_extension(filepath: str, lines: List[str]) -> List[Dict]:
 	return findings
 
 
-def check_noheal_for_named_workflow(filepath: str, lines: List[str]) -> List[Dict]:
-	"""MODERATE: Deleted name-based workflow detection."""
-	# name_occ_faces and export_netgen_with_names are deleted.
-	# Detection is handled by check_missing_step_reimport.
-	return []
-
-
-def check_setgeominfo_without_geometry(filepath: str, lines: List[str]) -> List[Dict]:
-	"""HIGH: Deleted SetGeomInfo API usage detected."""
-	# This rule now detects usage of deleted SetGeomInfo functions
-	# The actual detection is handled by check_missing_step_reimport
-	# which catches all deleted APIs. This function is kept for
-	# backward compatibility but returns empty.
-	return []
-
-
 def check_curve_without_setgeominfo(filepath: str, lines: List[str]) -> List[Dict]:
 	"""MODERATE: Manual mesh.Curve() without export netgen (legacy pattern)."""
 	findings = []
@@ -501,13 +485,6 @@ def check_nodeset_sideset_usage(filepath: str, lines: List[str]) -> List[Dict]:
 			),
 		})
 	return findings
-
-
-def check_missing_name_occ_faces(filepath: str, lines: List[str]) -> List[Dict]:
-	"""HIGH: Deleted API detection (handled elsewhere)."""
-	# export_netgen_with_names and name_occ_faces are deleted.
-	# Detection is handled by check_missing_step_reimport.
-	return []
 
 
 def check_missing_block_names(filepath: str, lines: List[str]) -> List[Dict]:
@@ -881,11 +858,8 @@ ALL_RULES = [
 	check_missing_cubit_init,
 	check_wrong_connectivity_for_2nd_order,
 	check_element_type_before_add,
-	check_setgeominfo_without_geometry,
 	check_nodeset_sideset_usage,
-	check_missing_name_occ_faces,
 	check_missing_step_reimport,
-	check_noheal_for_named_workflow,
 	check_hardcoded_absolute_paths,
 	check_missing_boundary_block,
 	check_ambiguous_face_block,

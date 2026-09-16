@@ -38,7 +38,7 @@ from typing import Optional
 
 
 # Credentials are read from env vars only.  Do NOT hard-code defaults
-# in this file -- this package is published to PyPI as radia-mcp and
+# in this file -- this package is published to PyPI as cubit-mesh-export and
 # any value here would be world-public the moment a release is cut.
 # Lab-side launchers are responsible for setting RADIA_CUBIT_LEARN_*
 # before invoking the warmup (see the Cubit launcher .ps1 / SKILL).
