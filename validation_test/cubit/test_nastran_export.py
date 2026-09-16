@@ -412,10 +412,10 @@ def test_pyram_option():
 	return True
 
 
-def test_groups_properties_and_alias():
-	"""Check machine-readable groups, collision-free PIDs, and legacy alias."""
+def test_groups_and_properties():
+	"""Check machine-readable groups and collision-free property IDs."""
 	print("\n" + "=" * 60)
-	print("Test 9: Groups, Properties, and Compatibility Alias")
+	print("Test 9: Groups and Properties")
 	print("=" * 60)
 
 	for cmd in [
@@ -433,16 +433,10 @@ def test_groups_properties_and_alias():
 	]:
 		cubit.cmd(cmd)
 
-	primary_file = "test_groups_primary.bdf"
-	alias_file = "test_groups_alias.bdf"
+	primary_file = "test_groups.bdf"
 	cubit.cmd(f'export nastran_bdf "{primary_file}" dimension 3 overwrite')
-	cubit.cmd(f'export jmag_nastran "{alias_file}" dimension 3 overwrite')
 
 	primary = parse_nastran_file(primary_file)
-	alias = parse_nastran_file(alias_file)
-	assert primary['elements'] == alias['elements']
-	assert primary['property_ids'] == alias['property_ids']
-	assert primary['sets'] == alias['sets']
 
 	assert primary['element_pids']['CTETRA'] == {1}
 	assert primary['property_ids'][1][0] == 'PSOLID'
@@ -450,10 +444,8 @@ def test_groups_properties_and_alias():
 	assert primary['property_ids'][2] == ('PSHELL', 1)
 	assert primary['sets'] == {1: 1}
 	print("  PASS: block/sideset property IDs do not collide, SET1 is present")
-	print("  PASS: deprecated jmag_nastran alias matches nastran_bdf")
 
 	os.remove(primary_file)
-	os.remove(alias_file)
 	return True
 
 
@@ -499,7 +491,7 @@ if __name__ == "__main__":
 		test_wedge_mesh,
 		test_nastran_format,
 		test_pyram_option,
-		test_groups_properties_and_alias,
+		test_groups_and_properties,
 		test_dimension_filter_rejects_volume_only_2d,
 	]
 

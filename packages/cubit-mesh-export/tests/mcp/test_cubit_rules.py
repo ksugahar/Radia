@@ -181,7 +181,7 @@ class TestMissingStepReimport:
         findings = _run(check_missing_step_reimport, code)
         assert len(findings) >= 1
 
-    def test_allows_radia_export_netgen(self):
+    def test_allows_native_export_netgen(self):
         code = (
             'mesh = cubit.cmd("export netgen output.vol order 2")\n'
         )
@@ -260,7 +260,7 @@ class TestExportFileExtension:
 
 
 class TestCurveWithoutSetGeomInfo:
-    def test_detects_manual_curve_without_radia_export_netgen(self):
+    def test_detects_manual_curve_without_native_export_netgen(self):
         code = (
             'mesh = Mesh("output.vol")\n'
             'mesh.Curve(3)\n'
@@ -268,7 +268,7 @@ class TestCurveWithoutSetGeomInfo:
         findings = _run(check_curve_without_setgeominfo, code)
         assert len(findings) == 1
 
-    def test_allows_radia_export_netgen(self):
+    def test_allows_native_export_netgen(self):
         code = (
             'cubit.cmd("export netgen output.vol order 3")\n'
         )

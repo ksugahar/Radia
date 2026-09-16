@@ -16,6 +16,8 @@ Usage:
 """
 
 from collections import Counter
+import asyncio
+import functools
 import hashlib
 import json
 import errno
@@ -45,24 +47,12 @@ from cubit_mesh_export.mcp.vol_inventory import cubit_hex_geometry_refinement_ga
 from cubit_mesh_export.mcp.gmsh_v41 import gmsh_v41_mixed_order_series_gate, summarize_gmsh_v41_ascii
 from cubit_mesh_export.mcp.nastran_consumer import evaluate_nastran_consumer_contract
 from cubit_mesh_export.mcp._support.lazy_call import lazy_callable
-_cubit_headless_netgen_export_gate = lazy_callable(".high_order_export_gate", "cubit_headless_netgen_export_gate", __package__)
 _cubit_loft_high_order_vol_series_gate = lazy_callable(".high_order_export_gate", "cubit_loft_high_order_vol_series_gate", __package__)
 _cubit_helical_conductor_source_gate = lazy_callable(".helical_conductor_gate", "cubit_helical_conductor_source_gate", __package__)
 _cubit_region_owned_mixed_mesh_gate = lazy_callable(".helical_conductor_gate", "cubit_region_owned_mixed_mesh_gate", __package__)
 _cubit_conformal_hex_pyramid_tet_interface_gate = lazy_callable(".mixed_transition_gate", "cubit_conformal_hex_pyramid_tet_interface_gate", __package__)
 _cubit_mixed_transition_source_gate = lazy_callable(".mixed_transition_gate", "cubit_mixed_transition_source_gate", __package__)
-_validate_cubit_v46_public_identity = lazy_callable(".cubit_v46_identity", "validate_public_identity", __package__)
-_validate_cubit_v46_source_identity = lazy_callable(".cubit_v46_identity", "validate_source_identity", __package__)
-from cubit_mesh_export.mcp.cross_artifact_mesh_lineage_v47 import validate_public_identity as _validate_cubit_v47_public_identity, validate_source_identity as _validate_cubit_v47_source_identity
-_validate_cubit_v48_public_identity = lazy_callable(".semantic_mesh_identity_v48", "validate_public_identity", __package__)
-_validate_cubit_v48_source_identity = lazy_callable(".semantic_mesh_identity_v48", "validate_source_identity", __package__)
-_validate_cubit_v49_public_identity = lazy_callable(".topology_replay_identity_v49", "validate_public_identity", __package__)
-_validate_cubit_v49_source_identity = lazy_callable(".topology_replay_identity_v49", "validate_source_identity", __package__)
-_validate_cubit_v50_public_identity = lazy_callable(".topology_replay_identity_v50", "validate_public_identity", __package__)
-_validate_cubit_v50_source_identity = lazy_callable(".topology_replay_identity_v50", "validate_source_identity", __package__)
 from cubit_mesh_export.mcp.stl_inspect import inspect_stl as _inspect_stl
-_validate_cubit_v51_public_identity = lazy_callable(".quality_parallel_identity_v51", "validate_public_identity", __package__)
-_validate_cubit_v51_source_identity = lazy_callable(".quality_parallel_identity_v51", "validate_source_identity", __package__)
 _cubit_structured_hex_lattice_gate = lazy_callable(".structured_hex_gate", "cubit_structured_hex_lattice_gate", __package__)
 _cubit_structured_hex_source_replay_gate = lazy_callable(".structured_hex_gate", "cubit_structured_hex_source_replay_gate", __package__)
 _cubit_symmetric_swept_mixed_mesh_gate = lazy_callable(".symmetric_mixed_gate", "cubit_symmetric_swept_mixed_mesh_gate", __package__)
@@ -659,8 +649,8 @@ def cubit_docs(topic: str = "all") -> str:
 	        "api_entity_classes"     - Volume, Surface, Curve, Vertex
 	        "api_graphics_selection" - Graphics control, selection
 	        "api_advanced"           - Merge detection, geometry analysis
-	        --- Radia-NGSolve panels ---
-	        "panel_conventions"      - Analysis window conventions (TITLE, LABELS, etc.)
+	        --- Optional Radia solver handoff ---
+	        "panel_conventions"      - Simulink/application mesh-label handoff
 	        "panel_labels"           - Label guide (blocks/sidesets -> .vol -> NGSolve)
 	        --- Custom GUI extension paths (Python vs C++) ---
 	        "cpp_sdk_*"              - C++ SDK plugin path (advanced).
@@ -670,11 +660,9 @@ def cubit_docs(topic: str = "all") -> str:
 	                                   For the Python path see the dedicated
 	                                   `cubit_toolbar_guide` tool.
 	        --- Cubit license (multi-user lab) ---
-	        "license_per_user"       - Each user activates Cubit license in their OWN
-	                                   account (renewals cache is bound to the user's
-	                                   logon token; admin cannot bootstrap it for them).
-	        "license_admin_overwrite"- Same as license_per_user, framed as the
-	                                   anti-pattern: do NOT rewrite renewals from admin.
+	        "license_per_user"       - Each user activates Cubit through the official UI
+	                                   in their own Windows account.
+	        "license_token_cache"    - Read-only cache observations and recovery boundary.
 	        --- Mesh format routing ---
 	        "format_routing"         - .vol carries labels (FEM input); .step is
 	                                   geometry-only (PEEC input); cubit-mesh-export
@@ -684,7 +672,7 @@ def cubit_docs(topic: str = "all") -> str:
 	                                   OCAF reader) are uniformly worse.
 	        --- Coreform public release/tutorial knowledge ---
 	        "coreform"               - Topic index for public Coreform tutorial/release knowledge
-	        "coreform_release_2026_6" - Cubit 2026.6 highlights and radia validation actions
+	        "coreform_release_2026_6" - Cubit 2026.6 highlights and validation actions
 	"""
 	topic = topic.lower().strip()
 
@@ -695,7 +683,7 @@ def cubit_docs(topic: str = "all") -> str:
 			"- `export_*` - Export format documentation (gmsh_v2, netgen, nastran, etc.)\n"
 			"- `scripting_*` - Python scripting guide (blocks, mesh_schemes, etc.)\n"
 			"- `api_*` - API reference (core, geometry_queries, mesh_access, etc.)\n"
-			"- `panel_*` - Radia-NGSolve analysis window conventions\n\n"
+			"- `panel_*` - optional Radia solver handoff conventions\n\n"
 			+ get_export_documentation("overview")
 		)
 
@@ -725,13 +713,12 @@ def cubit_docs(topic: str = "all") -> str:
 	if topic in ("cpp_sdk", "sdk"):
 		return get_cpp_sdk_documentation("overview")
 
-	# License topics: each user activates their own license in their
-	# own session.  Admin cannot bootstrap it (the renewals cache is
-	# bound to the user's logon token).
-	if topic in ("license_per_user", "license_per_user_rule"):
-		return get_license_documentation("per_user_rule")
-	if topic in ("license_admin_overwrite", "license_admin", "license"):
-		return get_license_documentation("admin_overwrite")
+	# License topics use canonical names only; retired authentication aliases
+	# must not become compatibility routes.
+	if topic == "license_per_user":
+		return get_license_documentation("per_user")
+	if topic == "license_token_cache":
+		return get_license_documentation("token_cache")
 
 	# Mesh format routing: .vol carries labels (FEM input);
 	# .step is geometry-only (PEEC input); cubit-mesh-export is the
@@ -1417,42 +1404,6 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
 			"status": "invalid_input",
 			"error": str(exc),
 		}
-	v46_checks = _validate_cubit_v46_public_identity(summary)
-	if v46_checks:
-		result.setdefault("checks", {}).update(v46_checks["checks"])
-		result["cubit_v46_public_identity"] = v46_checks
-		if v46_checks["status"] != "ok":
-			result["status"] = "needs_attention"
-	v47_checks = _validate_cubit_v47_public_identity(summary)
-	if v47_checks:
-		result.setdefault("checks", {}).update(v47_checks["checks"])
-		result["cubit_v47_public_identity"] = v47_checks
-		if v47_checks["status"] != "ok":
-			result["status"] = "needs_attention"
-	v48_checks = _validate_cubit_v48_public_identity(summary)
-	if v48_checks:
-		result.setdefault("checks", {}).update(v48_checks["checks"])
-		result["cubit_v48_public_identity"] = v48_checks
-		if v48_checks["status"] != "ok":
-			result["status"] = "needs_attention"
-	v49_checks = _validate_cubit_v49_public_identity(summary)
-	if v49_checks:
-		result.setdefault("checks", {}).update(v49_checks["checks"])
-		result["cubit_v49_public_identity"] = v49_checks
-		if v49_checks["status"] != "ok":
-			result["status"] = "needs_attention"
-	v50_checks = _validate_cubit_v50_public_identity(summary)
-	if v50_checks:
-		result.setdefault("checks", {}).update(v50_checks["checks"])
-		result["cubit_v50_public_identity"] = v50_checks
-		if v50_checks["status"] != "ok":
-			result["status"] = "needs_attention"
-	v51_checks = _validate_cubit_v51_public_identity(summary)
-	if v51_checks:
-		result.setdefault("checks", {}).update(v51_checks["checks"])
-		result["cubit_v51_public_identity"] = v51_checks
-		if v51_checks["status"] != "ok":
-			result["status"] = "needs_attention"
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
@@ -1475,42 +1426,6 @@ def cubit_mixed_transition_source_gate(
 			"status": "invalid_input",
 			"error": str(exc),
 		}
-	v46_checks = _validate_cubit_v46_source_identity(summary)
-	if v46_checks:
-		result.setdefault("checks", {}).update(v46_checks["checks"])
-		result["cubit_v46_source_identity"] = v46_checks
-		if v46_checks["status"] != "ok":
-			result["status"] = "needs_attention"
-	v47_checks = _validate_cubit_v47_source_identity(summary)
-	if v47_checks:
-		result.setdefault("checks", {}).update(v47_checks["checks"])
-		result["cubit_v47_source_identity"] = v47_checks
-		if v47_checks["status"] != "ok":
-			result["status"] = "needs_attention"
-	v48_checks = _validate_cubit_v48_source_identity(summary)
-	if v48_checks:
-		result.setdefault("checks", {}).update(v48_checks["checks"])
-		result["cubit_v48_source_identity"] = v48_checks
-		if v48_checks["status"] != "ok":
-			result["status"] = "needs_attention"
-	v49_checks = _validate_cubit_v49_source_identity(summary)
-	if v49_checks:
-		result.setdefault("checks", {}).update(v49_checks["checks"])
-		result["cubit_v49_source_identity"] = v49_checks
-		if v49_checks["status"] != "ok":
-			result["status"] = "needs_attention"
-	v50_checks = _validate_cubit_v50_source_identity(summary)
-	if v50_checks:
-		result.setdefault("checks", {}).update(v50_checks["checks"])
-		result["cubit_v50_source_identity"] = v50_checks
-		if v50_checks["status"] != "ok":
-			result["status"] = "needs_attention"
-	v51_checks = _validate_cubit_v51_source_identity(summary)
-	if v51_checks:
-		result.setdefault("checks", {}).update(v51_checks["checks"])
-		result["cubit_v51_source_identity"] = v51_checks
-		if v51_checks["status"] != "ok":
-			result["status"] = "needs_attention"
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
@@ -1619,24 +1534,6 @@ def cubit_loft_high_order_vol_series_gate(
 	except (TypeError, ValueError) as exc:
 		result = {
 			"policy": "cubit_loft_high_order_vol_series_gate_v1",
-			"status": "invalid_input",
-			"error": str(exc),
-		}
-	return json.dumps(result, ensure_ascii=False, indent=2)
-
-
-@_validation.tool()
-def cubit_headless_netgen_export_gate(
-	summary: dict,
-	min_quality: float = 0.2,
-) -> str:
-	"""Gate migration from a GUI plugin export command to native headless Netgen export."""
-
-	try:
-		result = _cubit_headless_netgen_export_gate(summary, min_quality=min_quality)
-	except (TypeError, ValueError) as exc:
-		result = {
-			"policy": "cubit_headless_netgen_export_command_gate_v1",
 			"status": "invalid_input",
 			"error": str(exc),
 		}
@@ -2343,7 +2240,7 @@ def get_lint_rules() -> str:
 		{
 			'rule': 'pyqt5-import-forbidden',
 			'severity': 'HIGH',
-			'description': 'PyQt5 import in Cubit UI code. Radia targets Coreform Cubit 2025.12+ and is PySide6-only.',
+			'description': 'PyQt5 import in Cubit UI code. cubit-mesh-export targets Coreform Cubit 2025.12+ and is PySide6-only.',
 			'trigger': 'from PyQt5.QtWidgets import ...',
 			'fix': 'Use PySide6 only; do not keep a PyQt5 fallback.',
 		},
@@ -2772,9 +2669,8 @@ def cubit_probe(query: str = "summary") -> str:
 	  "volume_count", "surface_count", "curve_count", "vertex_count"
 	  "node_count", "hex_count", "tet_count"
 
-	Both session transports (GUI file-drop and batch stdio) dispatch to
-	the same shared implementation (probe_ops.py) — identical queries
-	everywhere.
+	The process-owned headless session dispatches these queries through
+	`probe_ops.py`.
 
 	Args:
 	    query: probe name, see list above.
@@ -2800,8 +2696,7 @@ def cubit_doctor() -> str:
 	errors, exports missing labels, stale plugin suspicion). Read-only:
 	launches nothing, consumes no license seat.
 
-	Checks: Cubit install discovery -> Learn-license renewals cache
-	freshness -> deployed Cubit plugin (.ccm) vs the cubit-mesh-export
+	Checks: Cubit install discovery -> deployed Cubit plugin (.ccm) vs the cubit-mesh-export
 	bundled copy (hash) -> live owned daemon state -> current stderr diagnostics
 	-> check-vol dependency availability.
 
@@ -2825,33 +2720,13 @@ def cubit_doctor() -> str:
 	else:
 		checks["install"] = {"status": "ok", "bin_dir": str(bin_dir)}
 
-	# --- 2. License renewals cache (no launch, no seat) ------------------
-	# The renewals cache exists only for Learn-edition (login) licenses;
-	# Pro / RLM-server machines have none and need no login -- absence is
-	# NOT a problem there, so it reports "skipped", not "warn".
-	try:
-		from cubit_mesh_export.mcp.license_warmup import _needs_login
-		needs, info = _needs_login()
-		if not needs:
-			checks["license"] = {"status": "ok", **info}
-		elif info.get("reason") == "no renewals cache":
-			checks["license"] = {
-				"status": "skipped", **info,
-				"note": ("no Learn renewals cache -- normal on Pro/"
-				         "RLM-server machines; Learn users get a ~30 s "
-				         "login on first start"),
-			}
-		else:
-			checks["license"] = {
-				"status": "warn", **info,
-				"fix": ("Learn license cache is stale/expiring: first "
-				        "session start will re-login (~30 s, needs "
-				        "network) -- pre-warm via rlm_activate."),
-			}
-			problems.append(f"license: {info.get('reason')}")
-	except Exception as exc:
-		checks["license"] = {"status": "skipped",
-		                     "detail": f"warmup module: {exc}"}
+	# --- 2. License boundary (no cache/token inference) ------------------
+	checks["license"] = {
+		"status": "skipped",
+		"detail": ("activation is owned by Coreform's official UI for the "
+		           "intended Windows user; doctor does not inspect or mutate "
+		           "credential caches"),
+	}
 
 	# --- 3. Deployed plugin freshness vs cubit-mesh-export ---------------
 	def _sha256(p: Path) -> str:
@@ -3716,7 +3591,7 @@ def cubit_examples(query: str, limit: int = 3,
 	  2. **Local lab archive**: `public-safe curated corpus` (~145 .jou/.py
 	     across years of research projects — twisted wire, claw-pole
 	     alternator, kelvin transformation, TEAM problems, helical
-	     coils, JMAG integration, Mesh AI, Nastran/VTU pipelines)
+	     coils, mesh AI, and Nastran/VTU pipelines)
 	     + durable Radia repo lanes (`docs/`, `validation_test/`,
 	     `src/radia/panels/samples`).
 	     Lab-curated items get a small score boost.
@@ -5745,6 +5620,26 @@ def _race_history_dir() -> Path:
 	return d
 
 
+def _new_race_id() -> str:
+	"""Return a collision-resistant identifier safe for a single file name."""
+	import time as _t
+	return f"race_{_t.time_ns()}"
+
+
+def _race_history_path(race_id: str) -> Path:
+	"""Resolve one owned history file; never accept a path-like identifier."""
+	import re
+	if not isinstance(race_id, str) or not re.fullmatch(
+			r"race_[A-Za-z0-9_-]{1,96}", race_id):
+		raise ValueError(
+			"race_id must be the opaque identifier returned by a race tool")
+	root = _race_history_dir().resolve()
+	path = (root / f"{race_id}.json").resolve()
+	if path.parent != root:
+		raise ValueError("race_id resolves outside the race history directory")
+	return path
+
+
 def _learned_recipes_path() -> Path:
 	"""Where the learned-recipes jsonl lives.
 
@@ -6103,7 +5998,7 @@ def _race_review_core(recipes: list,
 	pre = _probe_summary_safe(sess)
 	t0 = _t.time()
 	if race_id is None:
-		race_id = f"race_{int(t0)}"
+		race_id = _new_race_id()
 
 	def _ai_runner(rec: dict) -> dict:
 		t1 = _t.time()
@@ -6160,7 +6055,7 @@ def _race_review_core(recipes: list,
 			source=f"ai_{valid[0].get('name','')}",
 		)
 
-	history_path = _race_history_dir() / f"{race_id}.json"
+	history_path = _race_history_path(race_id)
 	history = {
 		"race_id": race_id,
 		"state": "done",
@@ -6258,9 +6153,9 @@ def cubit_mesh_race_review_async(recipes: list,
 		                   "error": "recipes list cannot be empty"})
 
 	t0 = _t.time()
-	race_id = f"race_{int(t0)}"
+	race_id = _new_race_id()
 	# Write a 'running' placeholder so status polls see it
-	history_path = _race_history_dir() / f"{race_id}.json"
+	history_path = _race_history_path(race_id)
 	placeholder = {
 		"race_id": race_id,
 		"state": "running",
@@ -6330,7 +6225,10 @@ def cubit_mesh_race_status(race_id: str) -> str:
 	`shortlist` is populated), `"error"` if the daemon thread
 	crashed.
 	"""
-	history_path = _race_history_dir() / f"{race_id}.json"
+	try:
+		history_path = _race_history_path(race_id)
+	except ValueError as exc:
+		return json.dumps({"status": "error", "error": str(exc)})
 	if not history_path.exists():
 		return json.dumps({"status": "error",
 		                   "error": f"no race history for {race_id!r}",
@@ -6399,7 +6297,10 @@ def cubit_mesh_apply_choice(race_id: str, variant_name: str,
 
 	Returns JSON with the headless state after apply.
 	"""
-	history_path = _race_history_dir() / f"{race_id}.json"
+	try:
+		history_path = _race_history_path(race_id)
+	except ValueError as exc:
+		return json.dumps({"status": "error", "error": str(exc)})
 	if not history_path.exists():
 		return json.dumps({"status": "error",
 		                   "error": f"no race history for {race_id!r}",
@@ -7346,6 +7247,34 @@ _UNCLASSIFIED_TOOLS = _classify_tool_annotations()
 _hide_gate_tools(mcp, "CUBIT_MCP_CUBIT_GATES")
 
 
+def _offload_sync_tool_functions(server=mcp) -> int:
+	"""Run every synchronous MCP tool in a worker thread.
+
+	FastMCP invokes ordinary ``def`` tools directly on its event loop. Cubit,
+	Sculpt, filesystem, and network calls can take minutes, so leaving even one
+	registered sync function would prevent unrelated status and cancellation
+	requests from being serviced. Direct Python APIs remain synchronous; only
+	the registered MCP call surface is adapted.
+	"""
+	offloaded = 0
+	for tool in server._tool_manager._tools.values():
+		if tool.is_async:
+			continue
+		sync_fn = tool.fn
+
+		@functools.wraps(sync_fn)
+		async def _run_in_worker(_sync_fn=sync_fn, **kwargs):
+			return await asyncio.to_thread(_sync_fn, **kwargs)
+
+		tool.fn = _run_in_worker
+		tool.is_async = True
+		offloaded += 1
+	return offloaded
+
+
+_OFFLOADED_TOOL_COUNT = _offload_sync_tool_functions()
+
+
 # ============================================================
 # All-calls JSONL session log (MathWorks basetool + slog pattern)
 # ============================================================
@@ -7375,11 +7304,11 @@ def _is_closed_stdout_error(exc: BaseException) -> bool:
 
 def _maybe_eager_warmup() -> None:
 	"""Opt-in eager session start (MathWorks --initialize-matlab-on-
-	startup analog): RADIA_CUBIT_EAGER=1 hides the 30+ s license/startup
+	startup analog): CUBIT_MCP_EAGER=1 hides the 30+ s license/startup
 	cost behind server init instead of the first tool call.  Failures
 	are logged to stderr only -- the first real call re-attempts and
 	surfaces the error through the normal contract."""
-	if os.environ.get("RADIA_CUBIT_EAGER", "0") != "1":
+	if os.environ.get("CUBIT_MCP_EAGER", "0") != "1":
 		return
 	import threading
 
@@ -7396,7 +7325,7 @@ def _maybe_eager_warmup() -> None:
 
 def _setup_mode() -> int:
 	"""One-shot environment preparation (MathWorks --setup-matlab analog):
-	pre-warm the Cubit license, then print the full doctor report.
+	print the non-destructive doctor report without changing license state.
 	Exit 0 when the doctor finds no problems, 1 otherwise."""
 	print("=" * 70)
 	print("mcp-server-cubit --setup")
@@ -7407,14 +7336,6 @@ def _setup_mode() -> int:
 		      "(set CUBIT_BIN_DIR / CUBIT_INSTALL_DIR).")
 		return 1
 	print(f"Cubit install: {bin_dir}")
-	try:
-		from cubit_mesh_export.mcp.license_warmup import warmup_license
-		warmup = warmup_license(Path(bin_dir),
-		                        timeout_s=_cs.LICENSE_WARMUP_TIMEOUT_S)
-		print("License warmup:", json.dumps(warmup, ensure_ascii=False,
-		                                    default=str))
-	except Exception as exc:
-		print(f"License warmup failed: {type(exc).__name__}: {exc}")
 	report = json.loads(cubit_doctor())
 	print("Doctor report:")
 	print(json.dumps(report, ensure_ascii=False, indent=2, default=str))

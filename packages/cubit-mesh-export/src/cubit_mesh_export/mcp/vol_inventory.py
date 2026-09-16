@@ -2419,7 +2419,7 @@ def cubit_mass_property_sidecar_gate(
     Cubit/Coreform can own the hex-led mesh route, but the CAD handoff should
     keep volume, summed surface area, and bounding-box dimensions as a small
     sidecar.  This replay gate makes those checks executable without reopening
-    Cubit, and gives build123d/CST/CAD lanes a common volume/area/bbox contract.
+    Cubit, and gives build123d/external-CAD lanes a common volume/area/bbox contract.
     For mixed hex/pyramid/tet routes, a transition material row may legitimately
     report zero CAD volume in a material sidecar, but its label must still match
     the `.vol` inventory.
@@ -2629,7 +2629,7 @@ def cubit_mass_property_sidecar_gate(
         "notes": [
             "Run this before mesh export or solver-ready promotion when Cubit owns the hex-led route.",
             "Volume alone is not enough for CAD handoff; carry summed surface area and bounding-box size when available.",
-            "When comparing Cubit, build123d, CST, or other CAD lanes, record units so mm^3 and m^3 rows cannot be mixed.",
+            "When comparing Cubit, build123d, or other CAD lanes, record units so mm^3 and m^3 rows cannot be mixed.",
             "For mixed transition meshes, keep material/block row names even when an allowed transition row has zero sidecar volume.",
         ],
     }

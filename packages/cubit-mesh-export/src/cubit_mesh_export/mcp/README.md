@@ -23,9 +23,9 @@ mcp-server-cubit --selftest         # lightweight self-test
 ```
 
 This server and the Cubit Python API/reference belong to `cubit_mesh_export.mcp`.
-The exporter includes MCP and its private runtime support by default. Neither `radia` nor `radia-mcp` is required. Replace old client
-module commands with `python -m cubit_mesh_export.mcp.server`; there is no
-`radia_mcp.cubit` compatibility module. Use the selected installation's Python.
+The exporter includes MCP and its private runtime support by default. Neither
+`radia` nor `radia-mcp` is required. Run it with
+`python -m cubit_mesh_export.mcp.server` using the selected installation's Python.
 
 Cubit failure logs and documentation caches use `CUBIT_MCP_STATE_DIR`, or the
 platform's `cubit-mesh-export` state directory by default, independently of Radia.
@@ -61,7 +61,7 @@ Environment knobs:
 | `CUBIT_BIN_DIR` / `CUBIT_INSTALL_DIR` | Override Coreform Cubit install discovery |
 | `CUBIT_MCP_TOOL_PROFILE=full` | Expose individual validation tools for debugging; production defaults to `core` |
 | `CUBIT_MCP_CUBIT_GATES=0` | In the `full` profile, additionally hide direct `*_gate` tools |
-| `RADIA_CUBIT_EAGER=1` | Start the Cubit session in the background at server startup (hides the 30+ s first-call cost) |
+| `CUBIT_MCP_EAGER=1` | Start the Cubit session in the background at server startup (hides the 30+ s first-call cost) |
 | `CUBIT_MCP_CUBIT_CALL_LOG=0` | Disable the all-calls JSONL log (`<state_dir>/logs/cubit_tool_calls.jsonl`) |
 
 One-shot environment preparation (license warmup + full doctor report,
@@ -95,7 +95,7 @@ Then in a session:
 | **Checkpoint / restore** | `cubit_checkpoint`, `cubit_restore`, `cubit_list_checkpoints` |
 | **Headless batch** | `cubit_batch_try`, `cubit_mesh_auto` |
 | **Mesh race (variant exploration)** | `cubit_mesh_race`, `cubit_mesh_race_smart[_async]`, `cubit_mesh_race_review[_async]`, `cubit_mesh_race_status`, `cubit_mesh_apply_choice`, `cubit_curate_learned_recipes` |
-| **Export / .vol gates** | `cubit_check_vol` (canonical check-vol), `cubit_vol_inventory`, `cubit_gmsh_v41_inventory`, `cubit_headless_netgen_export_gate`, `cubit_mixed_order_series_gate`, ~30 further scenario gates (`*_gate`) |
+| **Export / .vol gates** | `cubit_check_vol` (canonical check-vol), `cubit_vol_inventory`, `cubit_gmsh_v41_inventory`, `cubit_mixed_order_series_gate`, and focused scenario gates (`*_gate`) |
 | **Cross-mesher quality** | `cubit_netgen_quality_compare` — one STEP through Netgen tet + Cubit tet + Cubit hex, judged by ONE gmsh minSICN referee (same metric implementation for every route; tet-vs-tet is the directly comparable pair, hex reported as the structured reference) |
 | **Diagnostics** | `cubit_mesh_diagnose`, `cubit_suggest_next`, `cubit_recent_failures`, `cubit_diagnostics_guide` |
 | **Lint** | `lint_cubit_script`, `lint_cubit_directory`, `cubit_audit_summary`, `get_lint_rules`, `generate_cubit_script` |
@@ -171,7 +171,7 @@ Guess", "Mesh Export Consistency Check Policy"):
 - **Cubit Discourse forum tips** (`cubit_forum_tips`)
 - **Coreform webinars** (`knowledge/coreform_webinars.py`)
 - **Cubit Python API reference** (600+ functions, `api_reference.py`)
-- **In-tree examples** at `src/radia/panels/samples/*.jou`
+- **Bundled solver-ready example** at `cubit_gui/solver_ready_sample.jou`
 
 ## Driving policy: LLM execution is always headless
 
@@ -215,7 +215,7 @@ are separate workflows outside this server.
 contract, gate hiding, all-calls JSONL log). Cross-server interoperability uses
 an explicit **probe contract**, not a shared runtime dependency:
 
-| Concept | build123d (CAD side) | Cubit (mesh side) | History-based CAD (e.g. CST) |
+| Concept | build123d (CAD side) | Cubit (mesh side) | History-based CAD |
 |---|---|---|---|
 | Replayable history | the Python script | Cubit-native `.jou` (`cubit_session_journal`, APREPRO retained) | history list |
 | Named bodies | `part.label` → STEP names | entity names → blocks | component/solid names |
@@ -230,7 +230,7 @@ Both `entities` probes emit the SAME core keys per body —
 `test_b3d_cubit_probe_compat.py` contract test, so an agent can author a
 labeled STEP, mesh it, and compare per-body volumes/centroids directly
 (verified end-to-end: identical to 2e-16 relative on a 2-solid
-assembly). External-CAD evidence rows (Cubit/CST) connect through the
+assembly). External-CAD evidence rows connect through the
 build123d volume-crosscheck tools with mandatory units.
 
 ## Cross-references

@@ -101,10 +101,10 @@ _SYM_NORMALS = {"x": (1, 0, 0), "y": (0, 1, 0), "z": (0, 0, 1)}
 # Valid symmetry-plane BC labels in reduction mode.
 #   "bn=0"  -- B . n = 0 on the plane (flux parallel to plane).
 #              Omega: natural (do nothing).  A: Dirichlet (A x n = 0).
-#              Radia image sign: '+' (mirror-symmetric).
+#              Magnetic image sign: '+' (mirror-symmetric).
 #   "ht=0"  -- H x n = 0 on the plane (flux perpendicular to plane).
 #              Omega: Dirichlet (Omega=const).  A: natural.
-#              Radia image sign: '-' (mirror-antisymmetric).
+#              Magnetic image sign: '-' (mirror-antisymmetric).
 _VALID_BC = ("bn=0", "ht=0")
 
 
@@ -1118,7 +1118,7 @@ def auto_add_kelvin_from_current_model(air_block="air",
                                         reduction=None):
     """Detect air sphere + symmetry, then call add_kelvin_cubit().
 
-    Meant to be invoked by the Radia-NGSolve launcher just before
+    Meant to be invoked by the `export netgen ... add_kelvin` command before
     `export netgen`.  Runs inside Cubit's embedded Python.
 
     Steps (matching the 2026-04-14 c60a6007 implementation):

@@ -7,11 +7,8 @@ from cubit_mesh_export.mcp.knowledge.license import (
 )
 
 
-@pytest.mark.parametrize("topic", [
-    "", "per_user_rule", "per_user", "user_rule", "admin_overwrite",
-    "admin", "renewals", "warning",
-])
-def test_per_user_aliases_preserve_current_guidance(topic):
+@pytest.mark.parametrize("topic", ["", "per_user"])
+def test_per_user_topic_preserves_current_guidance(topic):
     text = get_license_documentation(topic)
     assert text == LICENSE_PER_USER_RULE
     assert "official Coreform Cubit shortcut" in text
@@ -19,16 +16,11 @@ def test_per_user_aliases_preserve_current_guidance(topic):
     assert "does not establish" in text
 
 
-@pytest.mark.parametrize("topic", [
-    "token_auth_2025_12", "token_auth", "token", "2025_12", "2025.12",
-    "twin_issue", "retry_backoff", "force_login", "portal_retirement",
-    "login_tokens", "login_tokens_json",
-])
-def test_historical_token_aliases_do_not_restore_login_automation(topic):
-    text = get_license_documentation(topic)
+def test_token_cache_topic_does_not_restore_login_automation():
+    text = get_license_documentation("token_cache")
     assert text == LICENSE_2025_12_TOKEN_AUTH
     assert "not a verified" in text
-    assert "rather\nthan prescribe automatic login retries or logout" in text
+    assert "official Coreform UI" in text
 
 
 def test_all_topics_exclude_credential_commands_and_preserve_routing():
@@ -38,5 +30,8 @@ def test_all_topics_exclude_credential_commands_and_preserve_routing():
     for obsolete in ("--login", "--logout", "-ForceLogin", "takeown", "icacls"):
         assert obsolete not in text
     assert get_license_documentation(None) == LICENSE_PER_USER_RULE
-    assert get_license_documentation(" TOKEN ") == LICENSE_2025_12_TOKEN_AUTH
+    assert get_license_documentation(" TOKEN_CACHE ") == LICENSE_2025_12_TOKEN_AUTH
     assert "Unknown license topic" in get_license_documentation("missing")
+    for retired in ("force_login", "retry_backoff", "portal_retirement",
+                    "admin_overwrite", "token_auth_2025_12"):
+        assert "Unknown license topic" in get_license_documentation(retired)

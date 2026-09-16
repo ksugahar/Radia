@@ -50,7 +50,7 @@ def _source() -> dict:
         "combined_journal_plugin_command_succeeded": True,
         "compatibility_transforms": {
             "cubit_runtime": "2024.3 Python init -> 2025.12 combined journal startup",
-            "legacy_nastran_function": "cubit_mesh_export.export_3D_Nastran -> export jmag_nastran",
+            "nastran_export_migration": "cubit_mesh_export.export_3D_Nastran -> export nastran_bdf",
         },
         "version": "2025.12",
         "process": {

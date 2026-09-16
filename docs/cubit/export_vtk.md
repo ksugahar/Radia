@@ -52,7 +52,7 @@ VTK Legacy ASCII format (version 3.0), `UNSTRUCTURED_GRID` dataset:
 
 ```
 # vtk DataFile Version 3.0
-Radia Cubit Plugin (order 2)
+Cubit Mesh Export plugin (order 2)
 ASCII
 DATASET UNSTRUCTURED_GRID
 POINTS <n> double

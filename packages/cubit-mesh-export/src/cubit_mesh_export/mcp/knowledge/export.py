@@ -1,12 +1,12 @@
 """
-Export format documentation for Radia mesh export MCP server.
+Export format documentation for the Cubit Mesh Export MCP server.
 
 Provides API reference, parameter tables, supported element types,
 and usage guidance for each mesh export format.
 """
 
 EXPORT_OVERVIEW = """
-# Radia Mesh Export - Export Functions Overview
+# Cubit Mesh Export - Export Functions Overview
 
 ## Two Export Paths (must produce identical results for tet meshes)
 
@@ -291,8 +291,7 @@ No block assignment required.
 | CQUAD4 (4) | CQUAD8 (8) | Quadrilateral |
 
 **IMPORTANT**: Use `export nastran_bdf`, not Cubit's built-in `export nastran`
-(a different contract). `export jmag_nastran` remains only as a deprecated
-compatibility alias for old journals.
+(a different contract). There is no alternate or compatibility command name.
 
 The emitted BDF is a **mesh-interchange artifact**, not a complete analysis
 deck: material cards, loads, boundary conditions, and solver setup remain owned
@@ -479,7 +478,7 @@ geometry leads to poor quality or failed meshing.
 ## IMPORTANT: `export nastran_bdf` (NOT `export nastran`)
 
 Cubit has a **built-in** `export nastran` command (e.g., `export nastran "f.bdf" overwrite everything`).
-Radia's mesh-interchange export uses a different command name to avoid conflict:
+The cubit-mesh-export writer uses a different command name to avoid conflict:
 
 ```python
 # CORRECT: mesh-interchange export (supports order 2 and nopyramid)
@@ -489,33 +488,7 @@ cubit.cmd('export nastran_bdf "mesh.bdf" order 2 dimension 3 overwrite')
 cubit.cmd('export nastran "mesh.bdf" overwrite everything')
 ```
 
-`export jmag_nastran` is accepted only as a deprecated compatibility alias.
-New journals and MCP-generated commands must use `export nastran_bdf`.
-
-## Coil APREPRO Command
-
-Generate coil STEP from a Python script and import into Cubit:
-
-```python
-# In Cubit command line or .jou file:
-cubit.cmd('coil "my_coil.py"')                          # generate + import
-cubit.cmd('coil "my_coil.py" output "C:/out/coil.step"') # custom output path
-cubit.cmd('coil "my_coil.py" noimport')                  # STEP only, no import
-
-# my_coil.py must define build_coil() -> CoilBuilder:
-# def build_coil():
-#     from radia.coil_builder import CoilBuilder
-#     cb = CoilBuilder(current=1000)
-#     cb.set_start([0, 0, 0])
-#     cb.set_cross_section(width=0.02, height=0.02)
-#     cb.add_straight(length=0.1, tilt=0)
-#     cb.add_arc(radius=0.05, arc_angle=180, tilt=0)
-#     ...
-#     return cb
-```
-
-Requires external Python 3.12 with NGSolve/OCC (not Cubit's embedded 3.10).
-Set `RADIA_PYTHON` env var to override Python path.
+`export nastran_bdf` is the sole cubit-mesh-export BDF command.
 
 ## Troubleshooting: High-Order Export
 
@@ -549,22 +522,23 @@ The .vol export was unaffected (uses Netgen internal mesh, not edge_ho_nodes_).
 ## Cubit GUI Menu Structure
 
 ```
-Menu bar: File Edit View Display Tools Export_Mesh Help Solve
-                                       (PySide6)         (PySide6)
-Export Mesh:                           Solve:
-  Netgen Vol (.vol)...                   Radia-NGSolve...
-  GMSH...                               Generate Coil...
-  Nastran BDF...                         --------
-  VTK...                                 Reload Panels
+Menu bar: File Edit View Display Tools Export_Mesh Help
+                                       (PySide6)
+Export Mesh:
+  Netgen Vol (.vol)...
+  GMSH...
+  Nastran BDF...
+  VTK...
   MEG...
   FEMEEM...
 ```
 
 - **Export Mesh**: PySide6 menu/dialogs calling C++ APREPRO export commands
-- **Solve**: Python register_toolbar.py (subprocess to external Python 3.12)
+- Solver orchestration is outside the Cubit plugin. Downstream applications
+  consume exported meshes through their own process boundary.
 - **Mesh p-convergence demo**: `docs/cubit_mesh_export/netgen/p_convergence_demo.ipynb`
   uses explicit `cubit.cmd(...)` export commands and is not a Cubit menu action
-- Settings saved to `AppData/Roaming/Radia/export_settings.json`
+- Settings saved to `AppData/Roaming/cubit-mesh-export/export_settings.json`
 """
 
 
@@ -659,7 +633,7 @@ when the model contains pyramids and VTK order 2 is tested.
 This is a GMSH limitation, not a VTK export bug. The VTK file itself is
 valid and can be opened in ParaView or other VTK readers.
 
-VTK cell types used by Radia export:
+VTK cell types used by Cubit Mesh Export:
 | Element | Order 1 | Order 2 |
 |---------|---------|---------|
 | Tet     | 10      | 24 (VTK_QUADRATIC_TETRA) |

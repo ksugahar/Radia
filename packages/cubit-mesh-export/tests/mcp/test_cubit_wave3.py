@@ -63,11 +63,6 @@ def test_setup_mode_runs_and_reports(monkeypatch, capsys, tmp_path):
         "cubit_doctor",
         lambda: json.dumps({"status": "ok", "problems": []}),
     )
-    # Avoid a real license warmup: stub it.
-    import cubit_mesh_export.mcp.license_warmup as lw
-    monkeypatch.setattr(lw, "warmup_license",
-                        lambda *a, **k: {"status": "skipped",
-                                         "reason": "test stub"})
     rc = cubit_server._setup_mode()
     out = capsys.readouterr().out
     assert "Doctor report" in out
@@ -86,8 +81,7 @@ def test_setup_mode_fails_loud_when_cubit_is_missing(monkeypatch, capsys):
     assert "Doctor report" not in out
 
 
-def test_session_status_reports_mode_and_journal(monkeypatch):
-    monkeypatch.setenv("RADIA_CUBIT_SESSION_MODE", "auto")
+def test_session_status_reports_headless_mode_and_journal():
     out = json.loads(cubit_session_status())
     assert out["execution_mode"] == "batch"
     assert "session_mode" not in out

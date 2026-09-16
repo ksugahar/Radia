@@ -11,11 +11,11 @@ import types
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTER_TOOLBAR = ROOT / "packages/cubit-mesh-export/src/cubit_mesh_export/cubit_gui/register_toolbar.py"
-EXPORT_MENU = ROOT / "packages/cubit-mesh-export/src/cubit_mesh_export/cubit_gui/radia_export_menu.py"
+EXPORT_MENU = ROOT / "packages/cubit-mesh-export/src/cubit_mesh_export/cubit_gui/cubit_export_menu.py"
 AUDIT_SCRIPT = ROOT / "tools" / "audit_pyside6_only.py"
 
 _AUDIT_SPEC = importlib.util.spec_from_file_location(
-    "radia_audit_pyside6_only", AUDIT_SCRIPT
+    "cubit_export_audit_pyside6_only", AUDIT_SCRIPT
 )
 assert _AUDIT_SPEC is not None and _AUDIT_SPEC.loader is not None
 _AUDIT_MODULE = importlib.util.module_from_spec(_AUDIT_SPEC)
@@ -29,25 +29,24 @@ def test_pyside6_is_confined_to_cubit_owned_code_and_tests():
 
 
 def test_deployment_audit_rejects_startup_from_another_checkout(tmp_path):
-    expected = tmp_path / "current" / "src" / "radia" / "panels" \
-        / "register_toolbar.py"
-    foreign = tmp_path / "old-release" / "src" / "radia" / "panels" \
-        / "register_toolbar.py"
+    gui_rel = Path("packages/cubit-mesh-export/src/cubit_mesh_export/cubit_gui")
+    expected = tmp_path / "current" / gui_rel / "register_toolbar.py"
+    foreign = tmp_path / "old-release" / gui_rel / "register_toolbar.py"
     expected.parent.mkdir(parents=True)
     foreign.parent.mkdir(parents=True)
     expected.write_text("# current\n", encoding="utf-8")
     foreign.write_text("# stale\n", encoding="utf-8")
 
-    startup = tmp_path / "radia_startup.py"
+    startup = tmp_path / "startup.py"
     startup.write_text(
         f"exec(open(r'{foreign.as_posix()}').read())\n",
         encoding="utf-8",
     )
     cubit_file = tmp_path / ".cubit"
     cubit_file.write_text(
-        "## BEGIN radia toolbar\n"
+        "## BEGIN cubit-mesh-export toolbar\n"
         f'play "{startup.as_posix()}"\n'
-        "## END radia toolbar\n",
+        "## END cubit-mesh-export toolbar\n",
         encoding="utf-8",
     )
 
@@ -78,8 +77,8 @@ def test_cubit_startup_installs_menu_through_claro_api():
     """
     source = REGISTER_TOOLBAR.read_text(encoding="utf-8")
 
-    assert "radia_export_menu.install_menu()" in source
-    assert "import radia" not in source.replace("import radia_export_menu", "")
+    assert "cubit_export_menu.install_menu()" in source
+    assert "import radia" not in source.replace("import cubit_export_menu", "")
 
 
 def test_export_menu_uses_claro_api_not_qmenubar_injection():
@@ -105,7 +104,7 @@ def test_export_menu_does_not_force_a_journal_save():
 
 
 def test_claro_export_menu_not_removed_through_qt():
-    """"Radia Export" must not be torn down via Qt.
+    """"Cubit Mesh Export" must not be torn down via Qt.
 
     Enumerating Claro-owned QMenu/QAction objects from PySide6 deadlocks
     Cubit (reproduced twice: the GUI stops responding and the play script
@@ -113,8 +112,8 @@ def test_claro_export_menu_not_removed_through_qt():
     """
     source = REGISTER_TOOLBAR.read_text(encoding="utf-8")
 
-    assert '"Export Mesh", "Radia Export"' not in source
-    assert '"Radia Export",' not in source
+    assert '"Export Mesh", "Cubit Mesh Export"' not in source
+    assert '"Cubit Mesh Export",' not in source
 
 
 def test_find_claro_matches_capital_c_object_name():
@@ -135,11 +134,10 @@ def test_find_claro_matches_capital_c_object_name():
 
 
 def test_nastran_action_uses_the_solver_neutral_command():
-    """The visible menu must not regress to the deprecated JMAG alias."""
+    """The visible menu uses the package-owned BDF command."""
     source = EXPORT_MENU.read_text(encoding="utf-8")
 
     assert "export nastran_bdf" in source
-    assert "export jmag_nastran" not in source
 
 
 def test_claro_activation_strings_dispatch_every_export_format(monkeypatch):
@@ -161,7 +159,7 @@ def test_claro_activation_strings_dispatch_every_export_format(monkeypatch):
 
     calls = []
     fake_menu = types.SimpleNamespace(launch_export=calls.append)
-    monkeypatch.setitem(sys.modules, "radia_export_menu", fake_menu)
+    monkeypatch.setitem(sys.modules, "cubit_export_menu", fake_menu)
     original_path = list(sys.path)
     try:
         for fmt in ("netgen", "gmsh", "nastran", "vtk", "femeem", "meg"):

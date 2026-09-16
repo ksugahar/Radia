@@ -6,7 +6,7 @@ Invoked by ``export netgen ... add_kelvin ...`` (C++) via::
 
 just before the actual Netgen .vol export.  The C++ command writes a
 JSON config file first and exports its path via the
-``RADIA_LAUNCHER_CONFIG`` environment variable; this script reads the
+``CUBIT_MESH_EXPORT_KELVIN_CONFIG`` environment variable; this script reads the
 JSON and dispatches to ``add_kelvin.auto_add_kelvin_from_current_model``.
 
 Config schema (all keys optional; defaults in parens)::
@@ -30,7 +30,7 @@ symmetry auto-detection (mesh-seam mode).  Example::
 
     "kelvin_reduction": {"x": "ht=0", "z": "bn=0"}   // 1/4 xz model
 
-If ``RADIA_LAUNCHER_CONFIG`` is not set or the file is missing, all
+If ``CUBIT_MESH_EXPORT_KELVIN_CONFIG`` is not set or the file is missing, all
 defaults apply.
 """
 import json
@@ -60,9 +60,9 @@ def _process_environment(name):
 # NameError when invoked through `play`.  Two authoritative locations:
 #   1. __file__              -- available when imported normally
 #   2. CUBIT_HELPERS_DIR env -- set by the C++ caller alongside
-#                                RADIA_LAUNCHER_CONFIG
+#                                CUBIT_MESH_EXPORT_KELVIN_CONFIG
 # ``play`` reuses Cubit's global Python dictionary, including a stale
-# ``__file__`` left by a previously executed Radia script.  The C++ command's
+# ``__file__`` left by a previously executed script.  The C++ command's
 # per-call environment variable is therefore authoritative.
 _here = _process_environment("CUBIT_HELPERS_DIR")
 if not _here:
@@ -100,9 +100,9 @@ def _load_config():
         "kelvin_mesh_size":  None,
         "kelvin_reduction":  None,
     }
-    cfg_path = _process_environment("RADIA_LAUNCHER_CONFIG") or ""
+    cfg_path = _process_environment("CUBIT_MESH_EXPORT_KELVIN_CONFIG") or ""
     if not cfg_path:
-        print("[auto_kelvin_entry] no RADIA_LAUNCHER_CONFIG set -- "
+        print("[auto_kelvin_entry] no CUBIT_MESH_EXPORT_KELVIN_CONFIG set -- "
               "using defaults (add_kelvin=True)")
         return defaults
     if not os.path.isfile(cfg_path):

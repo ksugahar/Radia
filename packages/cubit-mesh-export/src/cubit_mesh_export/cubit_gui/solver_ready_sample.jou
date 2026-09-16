@@ -1,4 +1,4 @@
-## Induction Heating sample: gapped torus coil + cylindrical workpiece + air
+## Solver-ready export sample: gapped torus + cylindrical workpiece + air
 ##
 ## Required labels:
 ##   block 1 = "coil"      (the swept gapped torus)
@@ -16,7 +16,7 @@
 ##   Workpiece: CYLINDER, R = 0.025 m, H = 0.025 m (centered in coil)
 ##   Air:       sphere, R = 0.080 m  (~2.7x coil radius for open-BC headroom)
 ##
-## Usage: Solve -> Radia-NGSolve -> Induction Heating
+## Usage: export with cubit-mesh-export, then validate with check-vol
 ##
 ## Build policy (matches the sweep + subtract pattern documented in
 ## CLAUDE.md / cubit_scripting_knowledge):

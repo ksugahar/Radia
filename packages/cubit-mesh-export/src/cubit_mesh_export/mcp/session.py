@@ -308,7 +308,7 @@ def run_headless_journal(
             }
 
     with tempfile.TemporaryDirectory(
-            prefix="radia_cubit_headless_", dir=str(temp_root)) as scratch:
+            prefix="cubit_mesh_export_headless_", dir=str(temp_root)) as scratch:
         driver = Path(scratch) / "driver.jou"
         driver.write_text("\n".join([*commands, "exit 0", ""]),
                           encoding="utf-8")

@@ -130,11 +130,6 @@ def evaluate_nastran_consumer_contract(
         )
 
     warnings: list[str] = []
-    if verb == "jmag_nastran":
-        warnings.append(
-            "export jmag_nastran is a deprecated compatibility alias; "
-            "use export nastran_bdf for new journals"
-        )
     if order == 2 and has_second_order is None and checks["order_preserved"]:
         warnings.append(
             "second-order preservation is inferred from node count because the "
@@ -144,12 +139,9 @@ def evaluate_nastran_consumer_contract(
     if verb == "nastran":
         status = "wrong_exporter"
         recommendation = "Use export nastran_bdf; Cubit's built-in export nastran is a different contract."
-    elif verb not in ("nastran_bdf", "jmag_nastran"):
+    elif verb != "nastran_bdf":
         status = "wrong_exporter"
         recommendation = "Record the exact export nastran_bdf command used to create the BDF."
-    elif verb == "jmag_nastran":
-        status = "legacy_alias"
-        recommendation = "Migrate the journal to export nastran_bdf before promotion."
     elif scope != "mesh_interchange":
         status = "scope_mismatch"
         recommendation = "Treat this BDF as mesh interchange, not a complete analysis deck."

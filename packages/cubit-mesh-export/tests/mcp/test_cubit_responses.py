@@ -79,9 +79,7 @@ class TestCubitScriptingKnowledge:
         "helix_coil":          ["helix", "coil"],
         # Current headless lifecycle and installation knowledge:
         "daemon_persistence":  ["headless", "owned", "checkpoint"],
-        "license_warmup":      ["rlm", "warmup", "renewal", "3-day"],
         "utf8_path":           ["utf-8", "cp932", "japanese", "multibytetowidechar"],
-        "cubit_refresh":       ["warmup", "rlm"],  # alias -> warmup
         "japanese_path":       ["utf-8", "cp932", "japanese"],     # alias -> utf8
     }
 
