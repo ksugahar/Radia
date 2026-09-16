@@ -1,6 +1,6 @@
 #include "ExportNastranCommand.hpp"
 #include "MeshData.hpp"
-#include "RadiaMessageFilter.hpp"
+#include "LearnEditionMessageFilter.hpp"
 #include "CubitMessage.hpp"
 #include "utf8_path.hpp"
 
@@ -137,38 +137,10 @@ std::vector<std::string> ExportNastranCommand::get_help()
   return help;
 }
 
-std::vector<std::string> ExportJmagNastranCommand::get_syntax()
-{
-  return {
-    "export jmag_nastran <string:label='filename',help='<filename>'> "
-    "[order <value:label='order',help='<1 or 2>'>] "
-    "[dimension <value:label='dimension',help='<2 or 3>'>] "
-    "[nopyramid] "
-    "[overwrite]"
-  };
-}
-
-std::vector<std::string> ExportJmagNastranCommand::get_syntax_help()
-{
-  return {
-    "export jmag_nastran \"filename\" [order {1|2}] "
-    "[dimension {2|3}] [nopyramid] [overwrite]"
-  };
-}
-
-std::vector<std::string> ExportJmagNastranCommand::get_help()
-{
-  auto help = ExportNastranCommand::get_help();
-  help.push_back(
-    "Deprecated compatibility alias. Prefer export nastran_bdf."
-  );
-  return help;
-}
-
 bool ExportNastranCommand::execute(CubitCommandData &data)
 {
   // Suppress Cubit Learn Edition's harmless 50k-cap ERROR.
-  radia::ScopedLearnEditionFilter _lef_guard;
+  cubit_mesh_export::ScopedLearnEditionFilter _lef_guard;
 
   std::string filename;
   data.get_string("filename", filename);
@@ -266,7 +238,7 @@ void ExportNastranCommand::write_header(std::ofstream &fid, const std::string &f
 
   fid << "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$\n";
   fid << "$\n";
-  fid << "$                    Radia Cubit Plugin - Nastran Exporter\n";
+  fid << "$                    cubit-mesh-export - Nastran Exporter\n";
   fid << "$\n";
   fid << "$   File: " << filename << "\n";
   fid << "$   Time: " << ts.str() << "\n";
@@ -397,7 +369,7 @@ int ExportNastranCommand::write_element_card(std::ofstream &fid,
         fid << line << "\n";
       }
     } else {
-      // Degenerate hex for JMAG compatibility
+      // Degenerate hex representation for consumers without pyramid support
       std::snprintf(line, sizeof(line),
         "CHEXA   %8d%8d%8d%8d%8d%8d%8d%8d+",
         eid, pid, c[0], c[1], c[2], c[3], c[4], c[4]);

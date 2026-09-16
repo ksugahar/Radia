@@ -106,11 +106,11 @@ bool NetgenCurver::build(const MeshData &md, int order)
     }
   }
 
-  // Dump detailed reject CSV only when RADIA_NETGEN_REJECT_DUMP env var is
+  // Dump detailed reject CSV only when CUBIT_MESH_EXPORT_NETGEN_REJECT_DUMP is
   // set (to avoid noisy writes in production builds). Value is used as the
-  // output path. Typical debug usage: RADIA_NETGEN_REJECT_DUMP=C:\temp\netgen_reject_log.csv
+  // output path. Typical use: CUBIT_MESH_EXPORT_NETGEN_REJECT_DUMP=C:\temp\netgen_reject_log.csv
   if (!project_reject_log_entries_.empty()) {
-    const char * dump_path = std::getenv("RADIA_NETGEN_REJECT_DUMP");
+    const char * dump_path = std::getenv("CUBIT_MESH_EXPORT_NETGEN_REJECT_DUMP");
     if (dump_path && *dump_path) {
       std::ofstream ofs(dump_path);
       if (ofs) {
@@ -286,7 +286,7 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
     // Cache RefFace pointers per surface
     std::unordered_map<int, RefFace*> rf_cache;
     for (int sid : surface_ids)
-      rf_cache[sid] = radia::cubit_get_ref_face(sid);
+      rf_cache[sid] = cubit_mesh_export::cubit_get_ref_face(sid);
 
     // Cache per-surface periodicity. Seam shift (below) is applied only to
     // surfaces that ACIS flags as actually periodic in that parameter
@@ -640,7 +640,7 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
           "edge", "in curve " + std::to_string(cid));
 
       // Get curve length for dist normalization
-      RefEdge* re = radia::cubit_get_ref_edge(cid);
+      RefEdge* re = cubit_mesh_export::cubit_get_ref_edge(cid);
       double crv_length = re ? re->measure() : 1.0;
       double u_start = re ? re->start_param() : 0.0;
 
@@ -844,7 +844,7 @@ bool NetgenCurver::attach_callback_geometry()
       return {x, y, z, u_hint, v_hint};
     }
 
-    RefFace* rf = radia::cubit_get_ref_face(cubit_sid);
+    RefFace* rf = cubit_mesh_export::cubit_get_ref_face(cubit_sid);
     if (!rf) return {x, y, z, u_hint, v_hint};
 
     // Early reject: if the query point lies noticeably outside this
@@ -989,9 +989,9 @@ bool NetgenCurver::attach_callback_geometry()
       // starting from closest_point_trimmed (global trimmed projection).
       // This recovers the correct UV branch when the nearest-vertex hint
       // (path=2) landed on a wrong-side merged sub-chart.  Enabled via env
-      // var RADIA_NETGEN_TRIM_REFINE=1 so we can A/B test.
+      // var CUBIT_MESH_EXPORT_NETGEN_TRIM_REFINE=1 so we can A/B test.
       static const bool do_trim_refine = [](){
-        const char *s = std::getenv("RADIA_NETGEN_TRIM_REFINE");
+        const char *s = std::getenv("CUBIT_MESH_EXPORT_NETGEN_TRIM_REFINE");
         return s && (*s == '1' || *s == 'y' || *s == 'Y');
       }();
       if (do_trim_refine) {
@@ -1048,7 +1048,7 @@ bool NetgenCurver::attach_callback_geometry()
       return {0.0, 0.0, 1.0};
 
     int cubit_sid = it->second;
-    RefFace* rf = radia::cubit_get_ref_face(cubit_sid);
+    RefFace* rf = cubit_mesh_export::cubit_get_ref_face(cubit_sid);
     if (!rf) return {0.0, 0.0, 1.0};
 
     CubitVector loc(x, y, z);
@@ -1088,7 +1088,7 @@ bool NetgenCurver::attach_callback_geometry()
     int64_t key = ((int64_t)surfnr1 << 32) | surfnr2;
     auto it = surfpair_to_curve.find(key);
     if (it != surfpair_to_curve.end()) {
-      RefEdge* re = radia::cubit_get_ref_edge(it->second);
+      RefEdge* re = cubit_mesh_export::cubit_get_ref_edge(it->second);
       if (re) {
         CubitVector loc(x, y, z);
         CubitVector closest;
@@ -1129,7 +1129,7 @@ bool NetgenCurver::attach_callback_geometry()
     auto it = surfpair_to_curve.find(key);
     if (it == surfpair_to_curve.end()) return linear_mid();
 
-    RefEdge* re = radia::cubit_get_ref_edge(it->second);
+    RefEdge* re = cubit_mesh_export::cubit_get_ref_edge(it->second);
     if (!re) return linear_mid();
 
     double crv_length = re->measure();

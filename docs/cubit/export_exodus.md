@@ -16,11 +16,11 @@ cubit.cmd('export mesh "output.exo" overwrite')
 
 > **Note**: The old `cubit_mesh_export.export_exodus()` Python function has been removed. Use Cubit's native `export mesh` command instead.
 
-## Why no Radia plugin for Exodus?
+## Why no Cubit Mesh Export command for Exodus?
 
 Exodus II is Cubit's native format and already supports arbitrary
 element orders through Cubit's own block element-type settings
-(`HEX20`, `HEX27`, `TET10`, etc).  The Radia plugin's main value on
+(`HEX20`, `HEX27`, `TET10`, etc).  Cubit Mesh Export's main value on
 other formats is the `NetgenCurver`-based ACIS projection for high
 order curving — Exodus does not need that because Cubit already
 produces curved-element Exodus files from its own high-order meshes.

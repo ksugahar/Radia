@@ -1,4 +1,4 @@
-"""Cold-start smoke test for the persistent Radia Export Cubit toolbar.
+"""Cold-start smoke test for the persistent Cubit Mesh Export Cubit toolbar.
 
 Unlike the static toolbar-package tests, this command starts the real Cubit
 GUI and asks Cubit's embedded PySide6 runtime what is actually visible.  It
@@ -20,7 +20,7 @@ import tempfile
 import time
 from pathlib import Path
 
-SCHEMA = "radia.cubit-toolbar-smoke.v1"
+SCHEMA = "cubit-mesh-export.toolbar-smoke.v1"
 PROBE_SCHEMA = "cubit-mesh-export.toolbar-probe.v2"
 EXPECTED_ACTIONS = [
     "Netgen Vol (.vol)",
@@ -96,19 +96,19 @@ def validate_probe_result(payload: dict) -> list[str]:
         issues.append("Cubit main window is not visible")
     if payload.get("toolbar_count") != 1:
         issues.append(
-            f"expected exactly one Radia Export toolbar, found "
+            f"expected exactly one Cubit Mesh Export toolbar, found "
             f"{payload.get('toolbar_count')!r}"
         )
     if payload.get("toolbar_visible") is not True:
-        issues.append("Radia Export toolbar is not visible")
+        issues.append("Cubit Mesh Export toolbar is not visible")
     if payload.get("toolbar_visible_region_nonempty") is not True:
-        issues.append("Radia Export toolbar has no visible screen region")
+        issues.append("Cubit Mesh Export toolbar has no visible screen region")
     size = payload.get("toolbar_size")
     if not (
         isinstance(size, list) and len(size) == 2
         and all(isinstance(value, int) and value > 0 for value in size)
     ):
-        issues.append(f"Radia Export toolbar has invalid size: {size!r}")
+        issues.append(f"Cubit Mesh Export toolbar has invalid size: {size!r}")
 
     actions = payload.get("toolbar_actions")
     if actions != EXPECTED_ACTIONS:
@@ -130,8 +130,8 @@ def validate_probe_result(payload: dict) -> list[str]:
         for name in EXPECTED_ACTIONS:
             if enabled.get(name) is not True:
                 issues.append(f"toolbar action is not enabled: {name}")
-    if payload.get("toolbar_menu_has_radia_export") is not True:
-        issues.append("Radia Export is absent from Cubit's toolbar menu")
+    if payload.get("toolbar_menu_has_cubit_mesh_export") is not True:
+        issues.append("Cubit Mesh Export is absent from Cubit's toolbar menu")
     if payload.get("toolbar_owner") != "WorkflowToolbar":
         issues.append("toolbar is not owned by Coreform WorkflowToolbar")
     if payload.get("ok") is not True:
@@ -174,8 +174,8 @@ def _run_one(cubit_exe: Path, work: Path, timeout: float) -> dict:
         }
 
     env = os.environ.copy()
-    env["RADIA_TOOLBAR_PROBE_RESULT"] = str(result_path)
-    env["RADIA_TOOLBAR_PROBE_TIMEOUT"] = str(max(5.0, timeout - 10.0))
+    env["CUBIT_MESH_EXPORT_TOOLBAR_PROBE_RESULT"] = str(result_path)
+    env["CUBIT_MESH_EXPORT_TOOLBAR_PROBE_TIMEOUT"] = str(max(5.0, timeout - 10.0))
     # Cubit 2025.12 can append INI plugin paths after journal arguments and
     # misread them as journals. Declare the same installed plugin path first.
     with (work / "launcher.log").open("wb") as output:
@@ -286,7 +286,7 @@ def run_smoke_test(*, restarts: int = 2, timeout: float = 45.0,
 
     if report["passed"]:
         print(
-            "[OK] Radia Export is visible and complete on every cold start: "
+            "[OK] Cubit Mesh Export is visible and complete on every cold start: "
             "one toolbar, six visible/enabled actions, persistent toolbar-menu "
             "entry, Coreform-owned WorkflowToolbar."
         )
@@ -296,7 +296,7 @@ def run_smoke_test(*, restarts: int = 2, timeout: float = 45.0,
             print(f"  Report: {destination}")
         return 0
 
-    print(f"[FAIL] Radia Export GUI display contract failed. Report: {destination}")
+    print(f"[FAIL] Cubit Mesh Export GUI display contract failed. Report: {destination}")
     print(f"       workdir retained for diagnosis: {root}")
     return 1
 
@@ -306,7 +306,7 @@ def main() -> None:
         prog="cubit-toolbar-smoke-test",
         description=(
             "Cold-start real Coreform Cubit and verify that the persistent "
-            "Radia Export toolbar is actually visible and complete."
+            "Cubit Mesh Export toolbar is actually visible and complete."
         ),
     )
     parser.add_argument(
@@ -325,7 +325,7 @@ def main() -> None:
     args = parser.parse_args()
 
     print("=" * 60)
-    print("  Radia Export: real Cubit GUI cold-start smoke test")
+    print("  Cubit Mesh Export: real Cubit GUI cold-start smoke test")
     print("=" * 60)
     raise SystemExit(run_smoke_test(
         restarts=args.restarts,

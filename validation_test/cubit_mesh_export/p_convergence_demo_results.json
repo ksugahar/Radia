@@ -146,8 +146,8 @@
     "export gmsh \"{base}_qa_gmsh_o1.msh\" overwrite",
     "export gmsh \"{base}_qa_gmsh_o2.msh\" order 2 overwrite",
     "export gmsh \"{base}_qa_gmsh_o3.msh\" order 3 overwrite",
-    "export jmag_nastran \"{base}_qa_nastran_o1.bdf\" overwrite",
-    "export jmag_nastran \"{base}_qa_nastran_o2.bdf\" order 2 overwrite",
+    "export nastran_bdf \"{base}_qa_nastran_o1.bdf\" overwrite",
+    "export nastran_bdf \"{base}_qa_nastran_o2.bdf\" order 2 overwrite",
     "export vtk \"{base}_qa_vtk_o1.vtk\" overwrite",
     "export vtk \"{base}_qa_vtk_o2.vtk\" order 2 overwrite"
   ],
