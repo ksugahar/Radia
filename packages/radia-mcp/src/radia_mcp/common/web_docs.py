@@ -1,16 +1,13 @@
 """Live web documentation fetcher with on-disk cache.
 
-Targets:
-  - Coreform Cubit help pages (coreform.com/cubit_help)
-  - Coreform Cubit forum      (forum.coreform.com)
-  - build123d documentation   (build123d.readthedocs.io)
+Target: build123d documentation (build123d.readthedocs.io).
 
 Design:
   - stdlib only (urllib + html.parser) — no httpx/requests dep
   - Cached under `<state_dir>/cache/web/<sha1>.json` with TTL
   - Returns plain-text extract (HTML tags stripped, scripts/styles removed)
 
-Used by `cubit_web_docs` / `build123d_web_docs` MCP tools. Fail-silent:
+Used by the `build123d_web_docs` MCP tool. Fail-silent:
 network errors return a structured error dict rather than raising.
 """
 
@@ -22,7 +19,6 @@ import json
 import re
 import time
 import urllib.error
-import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Optional
@@ -200,81 +196,6 @@ def fetch(url: str, ttl: int = _DEFAULT_TTL_SECONDS, force_refresh: bool = False
 	return data
 
 
-def _fetch_json(url: str, ttl: int = _DEFAULT_TTL_SECONDS,
-                force_refresh: bool = False) -> dict:
-	"""Fetch a JSON endpoint with the same on-disk cache as `fetch`."""
-	if not force_refresh:
-		c = _cache_get(url, ttl)
-		if c is not None:
-			c["from_cache"] = True
-			return c
-	req = urllib.request.Request(url, headers={
-		"User-Agent": _USER_AGENT,
-		"Accept": "application/json",
-	})
-	try:
-		with urllib.request.urlopen(req, timeout=_TIMEOUT_SECONDS) as resp:  # noqa: S310
-			raw = resp.read()
-	except urllib.error.HTTPError as e:
-		return {"status": "error", "url": url, "error": f"HTTP {e.code}: {e.reason}"}
-	except urllib.error.URLError as e:
-		return {"status": "error", "url": url, "error": f"URL error: {e.reason}"}
-	except (TimeoutError, OSError) as e:
-		return {"status": "error", "url": url, "error": f"Network error: {e}"}
-	try:
-		data = json.loads(raw.decode("utf-8", errors="replace"))
-	except json.JSONDecodeError as e:
-		return {"status": "error", "url": url, "error": f"JSON decode: {e}"}
-	out = {
-		"status": "ok",
-		"url": url,
-		"json": data,
-		"fetched_at": time.time(),
-		"from_cache": False,
-	}
-	_cache_put(url, out)
-	return out
-
-
-def search_forum(query: str, base: str = "https://forum.coreform.com",
-                 max_hits: int = 8, force_refresh: bool = False) -> list[dict]:
-	"""Search a Discourse forum via its JSON search endpoint.
-
-	Discourse exposes `/search.json?q=...` with a well-typed structure
-	(topics / posts / excerpts). This is far more reliable than HTML
-	scraping a JS-rendered help site, and gives us authoritative, live
-	community answers for Cubit-specific questions.
-	"""
-	q = (query or "").strip()
-	if not q:
-		return []
-	url = f"{base.rstrip('/')}/search.json?q={urllib.parse.quote(q)}"
-	r = _fetch_json(url, force_refresh=force_refresh)
-	if r.get("status") != "ok":
-		return [{"error": r.get("error"), "url": url}]
-	data = r.get("json") or {}
-	topics_by_id = {t["id"]: t for t in data.get("topics", []) if isinstance(t, dict)}
-	hits: list[dict] = []
-	for post in data.get("posts", [])[: max(1, int(max_hits))]:
-		if not isinstance(post, dict):
-			continue
-		topic_id = post.get("topic_id")
-		topic = topics_by_id.get(topic_id, {})
-		slug = topic.get("slug", "")
-		tid = topic.get("id", topic_id)
-		pnum = post.get("post_number", 1)
-		link = f"{base.rstrip('/')}/t/{slug}/{tid}/{pnum}" if slug and tid else f"{base.rstrip('/')}/p/{post.get('id','')}"
-		hits.append({
-			"title": topic.get("title", ""),
-			"excerpt": (post.get("blurb") or "")[:400],
-			"username": post.get("username"),
-			"created_at": post.get("created_at"),
-			"url": link,
-			"from_cache": r.get("from_cache", False),
-		})
-	return hits
-
-
 def search_text(text: str, query: str, context_lines: int = 4, max_hits: int = 8) -> list[dict]:
 	"""Grep-like search inside fetched text. Case-insensitive term AND."""
 	terms = [t.lower() for t in query.split() if t.strip()]
@@ -301,12 +222,6 @@ def search_text(text: str, query: str, context_lines: int = 4, max_hits: int = 8
 # search/index page and list top candidate URLs. Most sites expose
 # search-friendly URL patterns.
 DOCS_INDEX: dict[str, list[str]] = {
-	"cubit": [
-		"https://coreform.com/cubit_help/cubithelp.htm",
-	],
-	"cubit_forum": [
-		"https://forum.coreform.com/",
-	],
 	"build123d": [
 		"https://build123d.readthedocs.io/en/latest/",
 		"https://build123d.readthedocs.io/en/latest/key_concepts.html",

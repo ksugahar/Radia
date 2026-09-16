@@ -1,123 +1,105 @@
 # MCP registry submission metadata for `radia-mcp`
 
-Copy-paste these fields into the submission forms:
-- [glama.ai](https://glama.ai/mcp/servers) — auto-indexes from GitHub; submit via "Add a server"
-- [pulsemcp.com/submit](https://www.pulsemcp.com/submit)
-- [mcp.so/submit](https://mcp.so/submit)
-- [modelcontextprotocol/servers](https://github.com/modelcontextprotocol/servers) — community listing, PR against README
-
----
+This file describes the current `radia-mcp` distribution. Registry listings
+must be refreshed from this file and the live `mcp-server-radia-meta` catalog;
+do not copy historical fixed server counts or retired entry points.
 
 ## One-line pitch
 
-> First-and-only public MCP server suite for Coreform Cubit, Gmsh,
-> build123d, and the Radia CAE ecosystem. Ships `cubit_mesh_auto`
-> (batch-validated scheme ladder + live GUI replay),
-> `cubit_exec_safely` (auto-checkpoint dry-run), universal
-> STEP-to-hex backend (`any_step_to_cubit_hex`) for any upstream CAD
-> MCP, plus auto-scraped community knowledge (Coreform forum +
-> gmsh/gmsh GitLab issues + StackOverflow).
+> MCP guidance and executable workflows for electromagnetic CAE, NGSolve,
+> build123d, Gmsh, optimization, scientific writing, and the Radia ecosystem.
 
 ## Name
 
 `radia-mcp`
 
-## Description (long, ≤ 512 chars)
+## Description
 
-MCP servers for the Radia CAE ecosystem: standalone Cubit + build123d
-+ gmsh-post via Plan A (persistent Cubit GUI + PySide6 QTimer + file-
-drop IPC). First-and-only public MCP for Gmsh and Cubit. Includes
-cubit_mesh_auto (scheme-ladder batch validation → live GUI replay),
-cubit_exec_safely (checkpoint + dry-run + apply), gmsh_post suite
-(MSH v4.1 inspect/validate/convert + quality + post-view writer),
-build123d with auto-generated API reference + 13 templates + lint,
-CadQuery interop, and universal STEP→hex backend for any CAD MCP.
+MCP servers for electromagnetic CAE and research workflows: Radia/NGSolve
+analysis, mixed-omega formulations, open-boundary methods, motion coupling,
+optimization, CAD authoring with build123d, Gmsh inspection, validation,
+publication figures, bibliography, and paper/grant preparation. Cubit MCP is
+distributed separately by `cubit-mesh-export` and can be installed as an
+optional integration.
 
 ## Keywords / tags
 
 ```
-mesh, meshing, cae, fem, simulation, cubit, coreform, gmsh,
-build123d, cadquery, opencascade, occt, hex-mesh, tet-mesh,
-post-processing, msh, step, netgen, ngsolve, radia, magnet,
-electromagnetism, scientific-computing
+electromagnetics, cae, fem, bem, ngsolve, radia, optimization,
+scientific-computing, model-context-protocol, build123d, gmsh,
+motion-coupling, mixed-omega, technical-writing
 ```
 
 ## Categories
 
-- CAD / 3D modeling
-- Scientific computing / CAE / FEM
-- Mesh generation
-- File conversion
+- Scientific computing / CAE / FEM / BEM
+- Electromagnetic engineering
+- Optimization and autonomous workflows
+- CAD and mesh workflow integration
+- Research communication
 
 ## URLs
 
 | Field | Value |
 |---|---|
 | PyPI | https://pypi.org/project/radia-mcp/ |
-| Source | https://github.com/ksugahar/Radia |
-| Install | `pip install radia-mcp` (core) / `pip install radia-mcp[full]` (everything) |
+| Source | https://github.com/ksugahar/Radia/tree/main/packages/radia-mcp |
+| Install | `pip install radia-mcp` |
 | License | BSD-3-Clause |
 
-## Entry points (3 MCP servers shipped in one wheel)
+## Discovery and representative entry points
 
-```
-mcp-server-cubit         # Coreform Cubit (mesh generation, hex/tet, plugins)
-mcp-server-build123d     # Python-native parametric CAD (OCCT)
-mcp-server-gmsh-post     # Gmsh post-processing (v4.1 inspect/validate/convert,
-                         # quality, boundary, $NodeData/$ElementData writers)
+The wheel contains a catalog of focused MCP servers. The catalog is discovered
+at runtime rather than documented as a fixed count.
+
+```text
+mcp-server-radia-meta       # authoritative catalog and cross-server routing
+mcp-server-radia-ngsolve    # Radia/NGSolve methods and validated workflows
+mcp-server-radia-design     # design and optimization capability pack
+mcp-server-radia-motion     # motion-coupled electromagnetic workflows
+mcp-server-build123d        # Python-native parametric CAD
+mcp-server-gmsh             # Gmsh inspection and post-processing
+mcp-server-paper-writing    # papers, grants, slides, and figures
 ```
 
-## Installation snippet (for "MCP client config" section)
+Start with `mcp-server-radia-meta` when selecting a domain server. The complete
+entry-point list is the `[project.scripts]` table in `pyproject.toml`; the live
+catalog is returned by `radia_mcp_overview()`.
+
+## MCP client configuration
 
 ```json
 {
   "mcpServers": {
-    "cubit": {
-      "command": "mcp-server-cubit"
+    "radia-meta": {
+      "command": "mcp-server-radia-meta"
     },
-    "build123d": {
-      "command": "mcp-server-build123d"
+    "radia-ngsolve": {
+      "command": "mcp-server-radia-ngsolve"
     },
-    "gmsh-post": {
-      "command": "mcp-server-gmsh-post"
+    "radia-design": {
+      "command": "mcp-server-radia-design"
     }
   }
 }
 ```
 
-## Highlights (for a feature bullet list)
+## Optional Cubit integration
 
-- **First-and-only** public MCP for Gmsh, Cubit, and mesh generators
-  more broadly (no NETGEN/TetGen/Triangle/MeshLab/Pointwise MCPs
-  exist anywhere else, as of 2026-04-20).
-- **Batch-validated then committed to live GUI** — `cubit_mesh_auto`
-  tries a scheme ladder headlessly, replays only the winning recipe
-  in the live Cubit GUI (user sees success path only).
-- **Safety layer** — `cubit_exec_safely` auto-checkpoints live state
-  to `.cub5`, dry-runs in batch, applies only on success; silent-
-  error detection via `cubit.get_error_count()`.
-- **MSH v4.1 standardization** — `gmsh_post_convert` lifts any older
-  .msh to v4.1 + spec-compliance validator + `$NodeData` /
-  `$ElementData` / view-from-CSV writers.
-- **Deep knowledge** — auto-generated API references (build123d:
-  142 classes / 65 functions / 1673 lines; gmsh: 651 function
-  entries / 2008 lines) + curated cookbooks (Plane/Axis/Location,
-  Builder vs Algebra rosetta, $NodeData usage, physical groups) +
-  live-scraped examples (Coreform forum, build123d GitHub issues +
-  Discussions, gmsh/gmsh GitLab issues, SciComp.SE / SO).
-- **Universal CAD-MCP mesh backend** — `any_step_to_cubit_hex` lets
-  any upstream CAD MCP (FreeCAD, OpenSCAD, Blender, Onshape,
-  AutoCAD, KiCad, CadQuery, …) hand off a STEP and get a hex mesh
-  back via the same ladder.
+Cubit ownership is deliberately outside this distribution:
 
-## Screenshot / demo suggestion (optional)
+```bash
+pip install cubit-mesh-export
+mcp-server-cubit
+```
 
-A 30-second demo of `build123d_to_cubit_hex(template="helix_coil")`:
-    script → STEP → batch ladder win on `scheme auto` → live Cubit
-GUI shows 1668 hex / 0 tet / 3780 nodes in ~15s. Great for the
-"hero visual" on registry pages.
+`cubit-mesh-export` owns `cubit_mesh_export.mcp`, the `mcp-server-cubit`
+entry point, plugin binaries, Cubit-specific tests, and Cubit release CI.
+`radia-mcp` may call that independently installed package for optional
+STEP-to-Cubit workflows, but its own wheel must not contain the retired
+`radia_mcp.cubit` namespace or a Cubit entry point.
 
 ## Maintainer contact
 
 Kengo Sugahara (ksugahar@ele.kindai.ac.jp)
-Kindai University, CAE research group
+Kindai University, Sugahara Laboratory

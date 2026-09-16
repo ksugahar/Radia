@@ -4,6 +4,9 @@ Cubit MCP is independently distributed with `cubit-mesh-export`, under
 `cubit_mesh_export.mcp`; it is no longer included here. Install the exporter
 and launch `mcp-server-cubit` for Cubit-only work. Each distribution contains its own required runtime support. Radia's optional topology/CAD
 workflows may call the Cubit package; Cubit itself requires neither Radia package.
+The former `cae-mcp-core` foundation is retired: it is not a dependency or
+shared runtime. radia-mcp owns `radia_mcp.common`/`radia_mcp._shared`, while
+cubit-mesh-export owns its independent runtime support.
 
 Optimization now has a [solver-neutral and electromagnetic two-layer boundary](docs/design/optimization_layers.md), composed through the existing `radia-design` profile.
 
@@ -236,9 +239,12 @@ and top-level pytest collection all pass. Tool discovery is verified from
 `radia_mcp.meta` and each server's actual `tools/list`; generated inventory
 snapshots are not committed or used as a CI oracle.
 
-Operational quality is claimed only after PyPI-installed MCP entry
-points smoke successfully and the release-quad machine checks pass on
-the lab deployment roles.  Public-safe quality records live in
+Operational quality is claimed only after the published wheel is verified,
+editable registration and fresh imports pass on LAB and 100, and LAB confirms
+the affected live source and a harmless tool call. Existing 100 clients may
+adopt the update on their next normal launch; they do not block the release.
+The numerical solver's four-host release-quad is a separate workflow.
+Public-safe quality records live in
 [`validation/mcp_quality/`](validation/mcp_quality/).
 
 ---
@@ -247,7 +253,7 @@ the lab deployment roles.  Public-safe quality records live in
 
 Before calling any specific server, ask **`mcp-server-radia-meta`** which
 server has the knowledge you need. It is the authoritative cross-server
-catalog of all 49 radia-mcp servers and answers "which tool covers
+catalog of the current radia-mcp servers and answers "which tool covers
 concept X?" without trial-and-error.
 
 ```python
@@ -256,7 +262,7 @@ radia_mcp_overview()                  # current server catalog + live tags
 radia_mcp_get("bayesian-opt")         # full info for one server
 radia_mcp_by_tag("optimization")      # filter optimization/theory servers
 radia_mcp_related("bayesian-opt")     # cross-link map for optimization servers
-radia_mcp_health()                    # importability probe of all 49
+radia_mcp_health()                    # importability probe of the current catalog
 radia_mcp_golden_gate()               # catalog/discovery/public-boundary gate
 ```
 

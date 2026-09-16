@@ -75,10 +75,11 @@ def test_self_hosted_ci_keeps_the_ngsolve_abi_in_a_run_local_environment():
 
 
 def test_build_scripts_resolve_netgen_from_the_active_python_environment():
-    for relative in ("Build.ps1", "tools/_build_cubit_plugin.ps1"):
+    for relative in ("Build.ps1", "src/cubit_plugin/cubit_build.ps1"):
         script = (ROOT / relative).read_text(encoding="utf-8")
-        assert "Get-Command python -ErrorAction Stop" in script, relative
-        assert "import netgen,os" in script, relative
+        assert "Get-Command python -ErrorAction" in script, relative
+        assert "import netgen" in script, relative
+        assert "netgen.__file__" in script, relative
         assert "-DPython3_EXECUTABLE=" in script, relative
         assert "-Dpybind11_DIR=" in script, relative
         assert (

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
-"""release_quad.py — orchestrator for the 4-distribution / 4-machine release flow.
+"""release_quad.py — numerical Radia solver / Simulink four-machine gate.
 
-Walks Phase 0 -> 9 of the release-quad skill in order, gating each
+Walks the numerical solver release phases in order, gating each
 phase on the success of the previous one. Refuses to skip steps that
 have caused real outages (2026-04-14 incident series).
 
@@ -9,22 +9,15 @@ Usage:
     python tools/release_quad.py preflight
         Read-only: report current state and consistency. Use anytime.
 
-    python tools/release_quad.py phase0
-        Mandatory clean rebuild of the Cubit plugin (~3-4 min).
-
     python tools/release_quad.py phase8 [--target lab|100|mdx1|mdx2|all]
-        Run Phase 8a..8d on each target: kill Cubit, install by the
-        target's tier (LAB/100 editable, mdx1/mdx2 PyPI), cubit-plugin-install,
-        --verify-only, cubit-smoke-test. Refuses
-        to start if Phase 0 has not been done since the last source
-        change in src/cubit_plugin/.
+        Install the numerical Radia solver by the target's tier
+        (LAB/100 editable, mdx1/mdx2 PyPI). Never change radia-mcp or
+        cubit-mesh-export.
 
     python tools/release_quad.py phase8e
         Upgrade mdx1 and mdx2 from PyPI. Refuses to run if pip index versions
-        radia / cubit-mesh-export don't match the local repo
-        (i.e. PyPI hasn't propagated yet). radia-mcp is intentionally
-        not installed on mdx -- and is actively uninstalled if a prior
-        release left it behind (mdx is a compute consumer, no MCP).
+        radia doesn't match the local repo (i.e. PyPI hasn't propagated yet).
+        Other independently released packages are not inspected or changed.
 
     python tools/release_quad.py phase9
         Cross-machine consistency probe. Final gate.
@@ -55,11 +48,6 @@ Usage:
         unchanged so a verified release worktree cannot be replaced by an
         older canonical WIP tree after the final gate.
 
-    python tools/release_quad.py restore-editable
-        Recovery command for a failed or interrupted release. Stop active
-        MCP transports, reinstall all three packages from canonical
-        01_GitHub worktrees, and verify both machines.
-
 The independent radia-optuna lane does not install or deploy Radia, Cubit,
 radia-mcp, or NGSolve. It gates one exact CI wheel before publication.
 
@@ -85,7 +73,7 @@ import time
 import zipfile
 from datetime import datetime, timezone
 from importlib import metadata as importlib_metadata
-from pathlib import Path, PureWindowsPath
+from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
@@ -132,10 +120,6 @@ NAS_REPO_LAB = "S:/Radia/01_GitHub"
 NAS_REPO_100 = r"W:\00_CAE\Radia\01_GitHub"
 EDITABLE_REPO_LAB_ENV = "RADIA_RELEASE_EDITABLE_REPO_LAB"
 EDITABLE_REPO_100_ENV = "RADIA_RELEASE_EDITABLE_REPO_100"
-MCP_SOURCE_ENV = {
-    "lab": "RADIA_RELEASE_PRESERVE_MCP_SOURCE_LAB",
-    "100": "RADIA_RELEASE_PRESERVE_MCP_SOURCE_100",
-}
 # Resolve 100号機 through the machine SSH configuration.  Its LAN address may
 # change between lab network segments, while the supported host alias remains
 # stable and carries the correct user/key settings.
@@ -170,34 +154,13 @@ def _release_head():
     return _git("rev-parse", "HEAD").stdout.strip().lower()
 
 
-def _preserved_mcp_source(host):
-    """Explicit approved package root, never inferred from installed metadata."""
-    name = MCP_SOURCE_ENV[host]
-    if name not in os.environ:
-        return None
-    value = os.environ[name].strip().rstrip("/\\")
-    path = PureWindowsPath(value)
-    if (not path.is_absolute() or ".." in path.parts
-            or any(c in value for c in '\n\r\x00"\'`$')):
-        raise ValueError(f"{name} must be an absolute approved package path")
-    if host == "100" and not (len(path.drive) == 2 and path.drive[1] == ":"):
-        raise ValueError(f"{name} must use the remote host's local drive path")
-    return value
-
-
-def _mcp_source(host, release_root):
-    return _preserved_mcp_source(host) or release_root + "/packages/radia-mcp"
-
-
 def cmd_deployment_plan(args):
-    """Dry-run only: print configured roots without imports, SSH or installs."""
+    """Dry-run only: print solver roots without imports, SSH or installs."""
     plans = []
     for host, root in (("lab", _editable_repo_lab()), ("100", _editable_repo_100())):
-        preserved = _preserved_mcp_source(host)
         plans.append({"host": host, "solver_source": root,
-                      "cubit_source": root + "/packages/cubit-mesh-export",
-                      "mcp_source": _mcp_source(host, root),
-                      "mcp_action": "verify-and-preserve" if preserved else "reinstall",
+                      "solver_action": "verify-and-install",
+                      "independent_packages": "unchanged",
                       "verified": False})
     print(json.dumps(plans, indent=2))
     return 0
@@ -231,12 +194,6 @@ def run(cmd, *, check=True, capture=False, shell=False, **kw):
     return p
 
 
-def remove_tree(path: Path):
-    """Remove a build directory without relying on POSIX rm being on PATH."""
-    print(f"  $ remove-tree {path}")
-    shutil.rmtree(path)
-
-
 def copy_file(src: Path, dst: Path):
     """Copy a file without relying on POSIX cp being on PATH."""
     print(f"  $ copy-file {src} {dst}")
@@ -248,7 +205,7 @@ def copy_file(src: Path, dst: Path):
 # state inspectors
 # ============================================================
 
-def _read_repo_versions():
+def _read_repo_versions(labels=None):
     """Parse versions out of pyproject.toml + __init__.py (no toml dep)."""
     out = {}
     import re
@@ -261,44 +218,12 @@ def _read_repo_versions():
         ("radia-optuna",      REPO / "packages/radia-optuna/pyproject.toml"),
         ("optuna.__version__", REPO / "packages/radia-optuna/src/radia_optuna/__init__.py"),
     ]:
+        if labels is not None and label not in labels:
+            continue
         text = path.read_text(encoding="utf-8")
         m = re.search(r'(?:^version|^__version__)\s*=\s*"([^"]+)"', text, re.M)
         out[label] = m.group(1) if m else None
     return out
-
-
-def _newest_mtime(root: Path, suffixes):
-    latest = 0.0
-    for r, dirs, files in os.walk(root):
-        # skip build dirs
-        dirs[:] = [d for d in dirs
-                    if d not in ("build-pyd", "build-ccm", "build", "compact_netgen")]
-        for f in files:
-            if Path(f).suffix.lower() in suffixes:
-                p = Path(r) / f
-                try:
-                    mt = p.stat().st_mtime
-                    if mt > latest:
-                        latest = mt
-                except OSError:
-                    pass
-    return latest
-
-
-def _bundled_plugin_mtime():
-    """Newest mtime of bundled .ccm in cubit-mesh-export package.
-
-    Note: the retired Qt5 .ccl target is gone. The Cubit-embedded PySide
-    toolbar is Python package data and is checked by deploy probes, not by this
-    compiled-plugin freshness gate.
-    """
-    pkg = REPO / "packages/cubit-mesh-export/src/cubit_mesh_export"
-    times = []
-    for name in ("cubit_mesh_export.ccm",):
-        p = pkg / name
-        if p.is_file():
-            times.append(p.stat().st_mtime)
-    return max(times) if times else 0.0
 
 
 def _sha256_file(path: Path) -> str:
@@ -926,167 +851,52 @@ def cmd_optuna_done(args):
 # ============================================================
 
 def cmd_preflight(args):
-    """Read-only state report. Always safe to run."""
-    step("Phase preflight: state report")
+    """Read-only numerical-solver state report. Always safe to run."""
+    step("Solver preflight: state report")
 
     # Versions in repo
-    v = _read_repo_versions()
+    v = _read_repo_versions({"radia", "radia.__version__"})
     info("Repo versions:")
     info(f"  radia              pyproject={v['radia']}  __version__={v['radia.__version__']}")
-    info(f"  cubit-mesh-export  pyproject={v['cubit-mesh-export']}  __version__={v['cme.__version__']}")
-    info(f"  radia-mcp          pyproject={v['radia-mcp']}")
-    info(f"  radia-optuna       pyproject={v['radia-optuna']}  __version__={v['optuna.__version__']}")
-
     pp_radia = (v["radia"] == v["radia.__version__"])
-    pp_cme   = (v["cubit-mesh-export"] == v["cme.__version__"])
-    pp_optuna = (v["radia-optuna"] == v["optuna.__version__"])
     if pp_radia: ok("radia pyproject == __init__")
     else:        fail("radia pyproject != __init__ — fix before any release")
-    if pp_cme: ok("cubit-mesh-export pyproject == __init__")
-    else:      fail("cubit-mesh-export pyproject != __init__ — fix before any release")
-    if pp_optuna: ok("radia-optuna pyproject == __init__")
-    else:         fail("radia-optuna pyproject != __init__ — fix before any release")
-    if not (pp_radia and pp_cme and pp_optuna):
+    if not pp_radia:
         return 2
-
-    # A fresh checkout changes mtimes without changing source or payload bytes.
-    # Reuse the wheel's content-addressed gate for both mandatory binaries.
-    pkg = REPO / "packages/cubit-mesh-export/src/cubit_mesh_export"
-    result = subprocess.run(
-        [sys.executable, str(pkg / "_native_provenance.py"), "verify",
-         "--repo-root", str(REPO), "--package-dir", str(pkg)],
-        capture_output=True, text=True, encoding="utf-8", errors="replace",
-    )
-    if result.returncode:
-        fail("native source/payload provenance failed: " +
-             (result.stdout + result.stderr).strip())
-        return 2
-    ok("native source and both mandatory payload hashes match")
 
     _check_main_synced(hard=False)
 
     return 0
 
 
-def cmd_phase0(args):
-    """Clean rebuild of Cubit plugin (.ccm + .pyd).
-
-    Note: the retired Qt5 .ccl target is gone. Phase 0 builds only the
-    C++/APREPRO plugin (.ccm + .pyd); the Cubit-embedded PySide toolbar is
-    shipped as Python package data.
-    """
-    step("Phase 0: clean rebuild of Cubit plugin (~2-3 min)")
-    build_pyd = REPO / "src/cubit_plugin/build-pyd"
-    build_ccm = REPO / "src/cubit_plugin/build-ccm"
-    if build_pyd.exists():
-        remove_tree(build_pyd)
-    if build_ccm.exists():
-        remove_tree(build_ccm)
-
-    # Build via the same ps1 we used in the 2026-04-14 manual run.
-    ps1 = REPO / "tools/_build_cubit_plugin.ps1"
-    if not ps1.is_file():
-        fail(f"missing helper script: {ps1}")
-        return 3
-    run(["pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(ps1)])
-
-    # Propagate to the cubit-mesh-export package ONLY (Tier-2, 2026-06-01):
-    # cme is the sole shipper of the Cubit plugin binary; radia no longer
-    # bundles cubit_mesh_export.ccm, so radia + cme release fully independently.
-    # Only .ccm here (the .ccl target was removed in radia 4.80.0; the .pyd
-    # is propagated by the full Build.ps1, not this fast .ccm-only phase0).
-    for src_name, dst_dirs in [
-        ("build-ccm/cubit_mesh_export.ccm", ["packages/cubit-mesh-export/src/cubit_mesh_export"]),
-    ]:
-        src = REPO / "src/cubit_plugin" / src_name
-        if not src.is_file():
-            fail(f"build did not produce {src}")
-            return 3
-        for d in dst_dirs:
-            dst = REPO / d / src.name
-            copy_file(src, dst)
-
-    ok("Phase 0 complete; .ccm propagated to cubit-mesh-export pkg (radia no longer bundles it)")
-    return 0
-
-
-_CONSOLE_SCRIPT_WRAPPER_RE = (
-    r'(?i)^\s*"?[^\"]*pythonw?\.exe"?\s+"?'
-    r'[^\"]*(?:mcp-server-|radia[-_])[^\"\s]*\.exe(?:[\"\s]|$)'
-)
-
-
-def _kill_cubit_local():
-    info("force-kill any local Cubit process")
-    run(["pwsh", "-NoProfile", "-Command",
-         "Get-Process -ErrorAction SilentlyContinue | Where-Object { "
-         "$_.ProcessName -eq 'coreform_cubit' -or $_.ProcessName -eq 'cubit' "
-         "} | ForEach-Object { Stop-Process -Id $_.Id -Force }; "
-         "Start-Sleep -Seconds 2"], check=False)
-
-
-def _kill_mcp_local():
-    info("force-kill local MCP and Radia console-script processes")
-    run(["pwsh", "-NoProfile", "-Command",
-         "Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | "
-         "Where-Object { $_.ProcessId -ne $PID -and ("
-         "$_.Name -like 'mcp-*' -or $_.Name -like 'radia-*' -or "
-         "$_.Name -like 'radia_*' -or "
-         "((($_.Name -eq 'python.exe') -or ($_.Name -eq 'pythonw.exe')) -and "
-         f"$_.CommandLine -match '{_CONSOLE_SCRIPT_WRAPPER_RE}') "
-         ") } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force "
-         "-ErrorAction SilentlyContinue }; "
-         "Start-Sleep -Seconds 2"], check=False)
-
-
 def _deploy_lab():
-    """Deploy editable packages and run the Cubit 2025.12+ -batch smoke test."""
-    step("Phase 8 (LAB): kill, install from NAS, plugin install, verify, smoke")
+    """Install only the numerical Radia solver from the approved editable."""
+    step("Phase 8 (LAB): verify and install Radia solver editable")
     repo = _editable_repo_lab()
     rc = _verify_local_release_source(repo, _release_head())
     if rc != 0:
         return rc
-    preserved = _preserved_mcp_source("lab")
-    if preserved and _verify_lab_editable([("radia-mcp", preserved)]):
-        return 4
-    _kill_cubit_local()
-    if not preserved:
-        _kill_mcp_local()
-    packages = ["radia", "cubit-mesh-export"] + ([] if preserved else ["radia-mcp"])
-    run([sys.executable, "-m", "pip", "uninstall", "-y",
-         *packages], check=False)
-    run([sys.executable, "-m", "pip", "install", "--no-deps",
-         "--no-cache-dir", "--no-build-isolation",
-         "-e", repo,
-         "-e", repo + "/packages/cubit-mesh-export",
-         *([] if preserved else ["-e", repo + "/packages/radia-mcp"])])
-    run(["cubit-plugin-install"])
-    run(["cubit-plugin-install", "--verify-only"])
-    run(["cubit-smoke-test"])
-    run(["cubit-toolbar-smoke-test", "--restarts", "2"])
-    if preserved and _verify_lab_editable([("radia-mcp", preserved)]):
+    installed = run(
+        [sys.executable, "-m", "pip", "install", "--no-deps",
+         "--no-cache-dir", "--no-build-isolation", "-e", repo],
+        check=False,
+    )
+    if installed.returncode != 0:
+        fail("LAB Radia editable install failed; independent packages were unchanged")
+        return 3
+    if _verify_lab_editable([("radia", repo)]):
         return 4
     ok("Phase 8 complete on LAB")
     return 0
 
 
 def _deploy_editable_remote(ssh_host, label, repo):
-    """Editable-install recipe for machines that should read NAS source.
-
-    LAB and 100号機 are the editable tier.  PyPI propagation is not a
-    precondition for this tier; mdx1/mdx2 remain the wheel-consumer
-    verification tier.
-    """
-    step(f"Phase 8 ({label}): kill + NAS editable install + plugin install + verify + smoke (over SSH)")
+    """Install only Radia editable on the remote development host."""
+    step(f"Phase 8 ({label}): verify and install Radia solver editable")
     expected_sha = _release_head()
-    preserved = _preserved_mcp_source("100")
-    if preserved and _verify_remote_editable(ssh_host, label, [("radia-mcp", preserved)]):
-        return 4
-    mcp_package = "" if preserved else " radia-mcp"
-    mcp_install = "" if preserved else f' -e "{repo}\\packages\\radia-mcp"'
     safe_repo = repo.replace("\\", "/")
     ps_block = f"""
-$ErrorActionPreference = 'Continue'
+$ErrorActionPreference = 'Stop'
 $sourceHead = (& git -c "safe.directory={safe_repo}" -C "{repo}" rev-parse HEAD).Trim().ToLowerInvariant()
 if ($LASTEXITCODE -ne 0 -or $sourceHead -ne "{expected_sha}") {{
   Write-Error "Release source SHA mismatch: expected {expected_sha}, got $sourceHead"
@@ -1097,40 +907,22 @@ if ($LASTEXITCODE -ne 0 -or $sourceDirty) {{
   Write-Error "Release source has tracked changes: $sourceDirty"
   exit 42
 }}
-Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {{
-  $_.ProcessId -ne $PID -and (
-    $_.Name -eq 'coreform_cubit.exe' -or $_.Name -eq 'cubit.exe' -or
-    ({"$false" if preserved else "$true"} -and (
-    $_.Name -like 'mcp-*' -or
-    $_.Name -like 'radia-*' -or $_.Name -like 'radia_*' -or
-    ((($_.Name -eq 'python.exe') -or ($_.Name -eq 'pythonw.exe')) -and
-      $_.CommandLine -match '{_CONSOLE_SCRIPT_WRAPPER_RE}')))
-  )
-}} | ForEach-Object {{
-  Write-Host "Stopping $($_.Name) pid=$($_.ProcessId)"
-  Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
-}}
-Start-Sleep -Seconds 2
-python -m pip uninstall -y radia cubit-mesh-export{mcp_package}
-python -m pip install --no-deps --no-cache-dir --no-build-isolation -e "{repo}" -e "{repo}\\packages\\cubit-mesh-export"{mcp_install}
-if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
-cubit-plugin-install --all-users
-if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
-cubit-plugin-install --verify-only
-if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
-cubit-smoke-test
+python -m pip install --no-deps --no-cache-dir --no-build-isolation -e "{repo}"
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
 """
     encoded = base64.b64encode(ps_block.encode("utf-16le")).decode("ascii")
-    run(["ssh", ssh_host, "pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass",
-         "-EncodedCommand", encoded])
-    if preserved and _verify_remote_editable(ssh_host, label, [("radia-mcp", preserved)]):
+    result = run(["ssh", ssh_host, "pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                  "-EncodedCommand", encoded], check=False)
+    if result.returncode != 0:
+        fail(f"{label} Radia editable install failed; independent packages were unchanged")
+        return 3
+    if _verify_remote_editable(ssh_host, label, [("radia", repo)]):
         return 4
     ok(f"Phase 8 complete on {label}")
     return 0
 
 
-def _check_pypi_propagation(versions, *, include_mcp=True):
+def _check_pypi_propagation(versions):
     """Refuse to deploy if PyPI hasn't propagated to repo's current versions.
 
     Returns 0 on success, 2 if any package is stale.  Used by every PyPI
@@ -1138,10 +930,7 @@ def _check_pypi_propagation(versions, *, include_mcp=True):
     while CI is still publishing the new one.
     """
     info("checking PyPI propagation...")
-    packages = [("radia", versions["radia"])]
-    if include_mcp:
-        packages.append(("radia-mcp", versions["radia-mcp"]))
-    for pkg, want in packages:
+    for pkg, want in [("radia", versions["radia"])]:
         p = run(["python", "-m", "pip", "index", "versions", pkg],
                 capture=True, check=False)
         first = p.stdout.splitlines()[0] if p.stdout else ""
@@ -1154,66 +943,19 @@ def _check_pypi_propagation(versions, *, include_mcp=True):
     return 0
 
 
-def _deploy_pypi(ssh_host, label, *, include_mcp=True, python_cmd="python"):
-    """PyPI-install recipe for compute consumers, never Cubit deployment.
-
-    Used for mdx1 and mdx2. Each is a compute
-    consumer and intentionally skips the MCP server package -- and
-    actively uninstalls radia-mcp if a prior release left it behind.
-
-    Recipe:
-      1. PyPI propagation check (refuse if stale)
-      2. stop mcp-server-*.exe (otherwise pip install blocks
-         on locked Scripts/mcp-server-*.exe)
-      3. pip install --upgrade --no-cache-dir from PyPI, pinned to the
-         repo's current versions
-    Cubit packages and plugins are deployed only by the LAB/100 editable lane.
-    Existing compute-host Cubit installations are neither used nor removed.
-    """
-    step(f"Phase 8 ({label}): compute PyPI install (over SSH; no Cubit)")
-    v = _read_repo_versions()
-    rc = _check_pypi_propagation(v, include_mcp=include_mcp)
+def _deploy_pypi(ssh_host, label, *, python_cmd="python"):
+    """Install only the exact Radia solver version on a compute consumer."""
+    step(f"Phase 8 ({label}): Radia solver PyPI install over SSH")
+    v = _read_repo_versions({"radia", "radia.__version__"})
+    rc = _check_pypi_propagation(v)
     if rc != 0:
         return rc
 
     v_radia = v["radia"]
-    v_mcp   = v["radia-mcp"]
-    mcp_pin = f' "radia-mcp=={v_mcp}"' if include_mcp else ""
-    # mdx is a compute consumer: radia-mcp must NOT be present there.  Older
-    # (pre-policy) releases left radia-mcp installed, so on any
-    # include_mcp=False target actively uninstall it rather than merely
-    # skipping the install -- "absent" is the enforced invariant, not a
-    # passive side effect.  `pip uninstall -y` on an already-absent package
-    # is a no-op (exit 0), so this is safe to run unconditionally there.
-    mcp_uninstall_ps = (
-        "" if include_mcp
-        else f"{python_cmd} -m pip uninstall -y radia-mcp\n"
-    )
 
     ps_block = f"""
-$ErrorActionPreference = 'Continue'
-Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {{
-  $_.ProcessId -ne $PID -and (
-    $_.Name -like 'mcp-server*' -or
-    $_.Name -like 'radia-*' -or $_.Name -like 'radia_*' -or
-    ((($_.Name -eq 'python.exe') -or ($_.Name -eq 'pythonw.exe')) -and
-      $_.CommandLine -match '{_CONSOLE_SCRIPT_WRAPPER_RE}')
-  )
-}} | ForEach-Object {{
-  Write-Host "Stopping $($_.Name) pid=$($_.ProcessId)"
-  Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
-}}
-Start-Sleep -Seconds 2
-{mcp_uninstall_ps}        # --force-reinstall is mandatory: `pip install --upgrade X==Y` on a
-        # machine already at X==Y is a NO-OP and leaves the on-disk files
-        # untouched. That bit us 2026-05-26: 100号機 was already at
-        # cubit-mesh-export==0.10.1 from a prior NAS-source install, so
-        # `--upgrade 0.10.1` did nothing and the worktree binary
-        # (1fd45675...) stayed on 100号機 even though PyPI 0.10.1 had a
-        # different binary (ef49da18...). Force-reinstall guarantees the
-        # PyPI wheel's bytes overwrite whatever is on disk, which is the
-        # whole point of "PyPI is the canonical channel" in the 2-tier policy.
-{python_cmd} -m pip install --upgrade --force-reinstall --no-deps --no-cache-dir "radia=={v_radia}"{mcp_pin}
+$ErrorActionPreference = 'Stop'
+{python_cmd} -m pip install --upgrade --force-reinstall --no-deps --no-cache-dir "radia=={v_radia}"
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
 """
     encoded = base64.b64encode(ps_block.encode("utf-16le")).decode("ascii")
@@ -1230,12 +972,11 @@ def _deploy_100():
 
 
 def _deploy_mdx(host):
-    return _deploy_pypi(host, host, include_mcp=False)
+    return _deploy_pypi(host, host)
 
 
 def cmd_phase8(args):
-    """Deploy + verify + smoke on LAB, 100号機, mdx1, and/or mdx2."""
-    # precondition: Phase 0 freshness
+    """Deploy and verify the Radia solver on selected QUAD targets."""
     rc = cmd_preflight(args)
     if rc != 0:
         fail("preflight failed; refusing Phase 8")
@@ -1282,7 +1023,6 @@ def cmd_phase8e(args):
 
 
 CROSS_MACHINE_PROBE = '''import hashlib, os
-import importlib.metadata as md
 
 def hsh_text(p):
     h = hashlib.sha256()
@@ -1291,60 +1031,15 @@ def hsh_text(p):
         h.update(d); return h.hexdigest()[:12]
     except Exception: return "MISSING"
 
-def ver(n):
-    try: return md.version(n)
-    except Exception: return "MISSING"
-
-import radia, cubit_mesh_export
+import radia
 rad = os.path.dirname(radia.__file__)
 print(f"VER radia              = {radia.__version__}")
-print(f"VER cubit-mesh-export  = {cubit_mesh_export.__version__}")
-print(f"VER radia-mcp          = {ver('radia-mcp')}")
-print(f"COMPAT cme  -> radia   = [{cubit_mesh_export.COMPAT_RADIA_MIN}, {cubit_mesh_export.COMPAT_RADIA_MAX}]")
-print(f"COMPAT rad  -> cme     = [{radia.COMPAT_CUBIT_MESH_EXPORT_MIN}, {radia.COMPAT_CUBIT_MESH_EXPORT_MAX}]")
 for r in ["simulink/application.py",
           "panels/calc_inductance.py",
           "panels/calc_fem_kelvin.py",
           "panels/calc_fem_coilmesh.py"]:
     print(f"SHA radia/{r:35s} = {hsh_text(os.path.join(rad,r))}")
 '''
-
-
-_CME_GUI_PROBE = '''
-# Hash the installed exporter GUI, independently of the Radia tag/checkouts.
-from pathlib import Path
-cme_root = Path(cubit_mesh_export.__file__).resolve().parent
-for r in ["cubit_gui/register_toolbar.py", "cubit_gui/radia_export_menu.py",
-          "toolbar_smoke.py", "cubit_gui/toolbar_probe.py"]:
-    path = cme_root / r
-    data = path.read_bytes().replace(bytes([13, 10]), bytes([10])).replace(bytes([13]), bytes([10]))
-    print(f"SHA cubit_mesh_export/{r} = {hashlib.sha256(data).hexdigest()[:12]}")
-'''
-_CME_GUI_FIELDS = (
-    "SHA cubit_mesh_export/cubit_gui/register_toolbar.py",
-    "SHA cubit_mesh_export/cubit_gui/radia_export_menu.py",
-    "SHA cubit_mesh_export/toolbar_smoke.py",
-    "SHA cubit_mesh_export/cubit_gui/toolbar_probe.py",
-)
-
-CROSS_MACHINE_PROBE_NO_MCP = CROSS_MACHINE_PROBE.replace(
-    "import radia, cubit_mesh_export", "import radia",
-).replace(
-    'print(f"VER cubit-mesh-export  = {cubit_mesh_export.__version__}")',
-    'print("VER cubit-mesh-export  = N/A")',
-).replace(
-    'print(f"COMPAT cme  -> radia   = [{cubit_mesh_export.COMPAT_RADIA_MIN}, {cubit_mesh_export.COMPAT_RADIA_MAX}]")',
-    'print("COMPAT cme  -> radia   = N/A")',
-).replace(
-    'print(f"COMPAT rad  -> cme     = [{radia.COMPAT_CUBIT_MESH_EXPORT_MIN}, {radia.COMPAT_CUBIT_MESH_EXPORT_MAX}]")',
-    'print("COMPAT rad  -> cme     = N/A")',
-).replace(
-    "print(f\"VER radia-mcp          = {ver('radia-mcp')}\")",
-    'print("VER radia-mcp          = N/A")',
-)
-CROSS_MACHINE_PROBE_NO_MCP += "\n" + "\n".join(
-    f"print({(field + ' = N/A')!r})" for field in _CME_GUI_FIELDS)
-CROSS_MACHINE_PROBE += _CME_GUI_PROBE
 
 
 # Editable-tier probe (2026-05-28 fix).  LAB/100号機 are editable DEV checkouts, so
@@ -1358,13 +1053,8 @@ CROSS_MACHINE_PROBE += _CME_GUI_PROBE
 # metadata (re-synced to the release in Phase 8), identical to the consumer
 # probe. Phase9 requires the complete field set and compares by key.
 CROSS_MACHINE_PROBE_LAB = '''import hashlib, os, shutil, subprocess
-import importlib.metadata as md
 
-def ver(n):
-    try: return md.version(n)
-    except Exception: return "MISSING"
-
-import radia, cubit_mesh_export
+import radia
 root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(radia.__file__))))
 tag = "v" + radia.__version__
 git_exe = shutil.which("git")
@@ -1385,16 +1075,12 @@ def hsh_git(relpath):
     h = hashlib.sha256(); h.update(d); return h.hexdigest()[:12]
 
 print(f"VER radia              = {radia.__version__}")
-print(f"VER cubit-mesh-export  = {cubit_mesh_export.__version__}")
-print(f"VER radia-mcp          = {ver('radia-mcp')}")
-print(f"COMPAT cme  -> radia   = [{cubit_mesh_export.COMPAT_RADIA_MIN}, {cubit_mesh_export.COMPAT_RADIA_MAX}]")
-print(f"COMPAT rad  -> cme     = [{radia.COMPAT_CUBIT_MESH_EXPORT_MIN}, {radia.COMPAT_CUBIT_MESH_EXPORT_MAX}]")
 for r in ["simulink/application.py",
           "panels/calc_inductance.py",
           "panels/calc_fem_kelvin.py",
           "panels/calc_fem_coilmesh.py"]:
     print(f"SHA radia/{r:35s} = {hsh_git('src/radia/' + r)}")
-''' + _CME_GUI_PROBE
+'''
 
 
 def _probe(host_label, cmd_prefix, probe_src=CROSS_MACHINE_PROBE):
@@ -1417,14 +1103,12 @@ def _probe(host_label, cmd_prefix, probe_src=CROSS_MACHINE_PROBE):
 
 
 _PHASE9_FIELDS = (
-    "VER radia", "VER cubit-mesh-export", "VER radia-mcp",
-    "COMPAT cme -> radia", "COMPAT rad -> cme",
+    "VER radia",
     "SHA radia/simulink/application.py",
     "SHA radia/panels/calc_inductance.py",
     "SHA radia/panels/calc_fem_kelvin.py",
     "SHA radia/panels/calc_fem_coilmesh.py",
-) + _CME_GUI_FIELDS
-_PHASE9_COMPUTE_NA = frozenset(_PHASE9_FIELDS[1:5] + _CME_GUI_FIELDS)
+)
 
 
 def _parse_phase9_probe(label, output):
@@ -1448,21 +1132,8 @@ def _parse_phase9_probe(label, output):
             raise ValueError(f"{label}: invalid probe row {line!r}")
         if key in result:
             raise ValueError(f"{label}: duplicate field {key}")
-        expected_na = label in ("mdx1", "mdx2") and key in _PHASE9_COMPUTE_NA
-        if expected_na:
-            valid = value == "N/A"
-        elif key.startswith("SHA "):
+        if key.startswith("SHA "):
             valid = len(value) == 12 and all(c in "0123456789abcdef" for c in value)
-        elif key.startswith("COMPAT "):
-            bounds = value[1:-1].split(",")
-            valid = (value.startswith("[") and value.endswith("]") and len(bounds) == 2
-                     and all(b.strip() for b in bounds))
-            if valid:
-                try:
-                    lower, upper = (Version(b.strip()) for b in bounds)
-                    valid = lower <= upper
-                except InvalidVersion:
-                    valid = False
         else:
             try:
                 Version(value)
@@ -1483,8 +1154,8 @@ def cmd_phase9(args):
     targets = [
         ("LAB", ["python", "-"], CROSS_MACHINE_PROBE_LAB),
         ("100号機", ["ssh", SSH_100, "python", "-"], CROSS_MACHINE_PROBE_LAB),
-        ("mdx1", ["ssh", SSH_MDX1, "python", "-"], CROSS_MACHINE_PROBE_NO_MCP),
-        ("mdx2", ["ssh", SSH_MDX2, "python", "-"], CROSS_MACHINE_PROBE_NO_MCP),
+        ("mdx1", ["ssh", SSH_MDX1, "python", "-"], CROSS_MACHINE_PROBE),
+        ("mdx2", ["ssh", SSH_MDX2, "python", "-"], CROSS_MACHINE_PROBE),
     ]
     step("Phase 9: cross-machine consistency (LAB / 100号機 / mdx1 / mdx2)")
     outputs = []
@@ -1550,43 +1221,12 @@ def cmd_all(args):
 # drive-letter representation of the same NAS path is accepted.
 def _lab_editable_packages():
     root = _editable_repo_lab()
-    return [
-        ("radia", root),
-        ("cubit-mesh-export", root + "/packages/cubit-mesh-export"),
-        ("radia-mcp", _mcp_source("lab", root)),
-        # LAB-private; tolerated as missing if pip show says not installed.
-        ("mcp-server-document", "S:/mcp-server"),
-    ]
-
-
-def _canonical_lab_editable_packages():
-    """Return LAB development pointers, ignoring release-worktree overrides."""
-    root = NAS_REPO_LAB.rstrip("/\\")
-    return [
-        ("radia", root),
-        ("cubit-mesh-export", root + "/packages/cubit-mesh-export"),
-        ("radia-mcp", root + "/packages/radia-mcp"),
-        ("mcp-server-document", "S:/mcp-server"),
-    ]
+    return [("radia", root)]
 
 
 def _remote_100_editable_packages():
     root = _editable_repo_100()
-    return [
-        ("radia", root),
-        ("cubit-mesh-export", root + r"\packages\cubit-mesh-export"),
-        ("radia-mcp", _mcp_source("100", root)),
-    ]
-
-
-def _canonical_remote_100_editable_packages():
-    """Return 100号機 development pointers, ignoring release overrides."""
-    root = NAS_REPO_100.rstrip("/\\")
-    return [
-        ("radia", root),
-        ("cubit-mesh-export", root + r"\packages\cubit-mesh-export"),
-        ("radia-mcp", root + r"\packages\radia-mcp"),
-    ]
+    return [("radia", root)]
 
 
 def _verify_local_release_source(repo, expected_sha):
@@ -1673,8 +1313,6 @@ def _pip_show(pkg):
 
 _EDITABLE_IMPORT_MODULES = {
     "radia": "radia",
-    "cubit-mesh-export": "cubit_mesh_export",
-    "radia-mcp": "radia_mcp",
 }
 
 
@@ -1695,16 +1333,14 @@ def _fresh_import_origin(pkg):
 
 
 def _verify_lab_editable(packages=None):
-    """Check the 4 LAB-editable packages still point at NAS source.
+    """Check the solver LAB editable still points at the selected source.
 
     Returns the number of drifted packages. Drift is the
     condition checked by the "release-done" gate -- it means LAB
     cannot dev-loop on that package because edits won't reflect.
 
-    Missing for `mcp-server-document` is OK (LAB-private, may not be
-    installed on every developer's box).  Missing for `radia` /
-    `cubit-mesh-export` / `radia-mcp` is itself a drift state (LAB
-    should always have these editable).
+    Missing or non-editable `radia` is a drift state. Independent package
+    installations are deliberately outside this solver check.
     """
     step("LAB editable verify (POLICY 2026-05-27)")
     n_ok = n_drift = n_missing = 0
@@ -1714,14 +1350,10 @@ def _verify_lab_editable(packages=None):
     for pkg, want_prefix in packages:
         d = _pip_show(pkg)
         if d is None:
-            if pkg == "mcp-server-document":
-                info(f"{pkg:25s}  not installed  (LAB-private; tolerated)")
-                n_missing += 1
-            else:
-                fail(f"{pkg:25s}  NOT INSTALLED  -- expected editable @ "
-                     f"{want_prefix}")
-                n_drift += 1
-                details.append((pkg, "not_installed", want_prefix))
+            fail(f"{pkg:25s}  NOT INSTALLED  -- expected editable @ "
+                 f"{want_prefix}")
+            n_drift += 1
+            details.append((pkg, "not_installed", want_prefix))
             continue
 
         version = d.get("version", "?")
@@ -1800,8 +1432,6 @@ from urllib.request import url2pathname
 EXPECT = __EXPECT__
 MODULES = {
     "radia": "radia",
-    "cubit-mesh-export": "cubit_mesh_export",
-    "radia-mcp": "radia_mcp",
 }
 
 def norm(p):
@@ -1905,90 +1535,6 @@ def cmd_verify_editable(args):
     drift = _verify_lab_editable()
     drift += _verify_100_editable()
     return 1 if drift else 0
-
-
-def _restore_lab_canonical_editable():
-    """Reinstall the three-package development tier from canonical LAB source."""
-    step("Restore LAB canonical editable installs")
-    _kill_mcp_local()
-    packages = _canonical_lab_editable_packages()[:3]
-    uninstall = run(
-        [sys.executable, "-m", "pip", "uninstall", "-y",
-         *(pkg for pkg, _path in packages)],
-        check=False,
-    )
-    if uninstall.returncode != 0:
-        warn("pip uninstall reported an error; attempting a clean editable install")
-    install_cmd = [sys.executable, "-m", "pip", "install", "--no-deps",
-                   "--no-cache-dir", "--no-build-isolation"]
-    for _pkg, path in packages:
-        install_cmd.extend(["-e", path])
-    installed = run(install_cmd, check=False)
-    if installed.returncode != 0:
-        fail("LAB canonical editable reinstall failed")
-        return 3
-    smoke = run(["mcp-server-grant-writing", "--selftest"], check=False)
-    if smoke.returncode != 0:
-        fail("LAB grant-writing MCP self-test failed after restore")
-        return 4
-    ok("LAB canonical editable reinstall and grant-writing self-test passed")
-    return 0
-
-
-def _restore_100_canonical_editable():
-    """Reinstall the three-package development tier from canonical 100 source."""
-    step("Restore 100号機 canonical editable installs")
-    repo = NAS_REPO_100.rstrip("/\\")
-    ps_block = fr"""
-$ErrorActionPreference = 'Stop'
-$env:PYTHONUTF8 = '1'
-Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {{
-  $_.ProcessId -ne $PID -and (
-    $_.Name -like 'mcp-*' -or $_.Name -like 'radia-*' -or $_.Name -like 'radia_*' -or
-    ((($_.Name -eq 'python.exe') -or ($_.Name -eq 'pythonw.exe')) -and
-      $_.CommandLine -match '{_CONSOLE_SCRIPT_WRAPPER_RE}')
-  )
-}} | ForEach-Object {{
-  Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
-}}
-python -m pip uninstall -y radia cubit-mesh-export radia-mcp
-python -m pip install --no-deps --no-cache-dir --no-build-isolation -e "{repo}" -e "{repo}\packages\cubit-mesh-export" -e "{repo}\packages\radia-mcp"
-if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
-mcp-server-grant-writing --selftest
-if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
-"""
-    encoded = base64.b64encode(ps_block.encode("utf-16le")).decode("ascii")
-    restored = run(
-        ["ssh", SSH_100, "pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass",
-         "-EncodedCommand", encoded],
-        check=False,
-    )
-    if restored.returncode != 0:
-        fail("100号機 canonical editable reinstall failed")
-        return 3
-    ok("100号機 canonical editable reinstall and grant-writing self-test passed")
-    return 0
-
-
-def cmd_restore_editable(args):
-    """Restore canonical editable installs after a release or interrupted deploy."""
-    if any(_preserved_mcp_source(host) for host in MCP_SOURCE_ENV):
-        fail("restore-editable repoints MCP; clear the preservation contract only after explicit approval")
-        return 2
-    failures = 0
-    failures += int(_restore_lab_canonical_editable() != 0)
-    failures += int(_restore_100_canonical_editable() != 0)
-    if failures:
-        fail(f"canonical editable restore failed on {failures} machine(s)")
-        return 3
-
-    drift = _verify_lab_editable(_canonical_lab_editable_packages())
-    drift += _verify_100_editable(_canonical_remote_100_editable_packages())
-    if drift:
-        fail("canonical editable verification failed after reinstall")
-        return 4
-    ok("LAB and 100号機 are back on canonical 01_GitHub editable sources")
-    return 0
 
 
 # ============================================================
@@ -2166,9 +1712,9 @@ def cmd_done(args):
     Exit 0 means the release is consistent across LAB / 100号機 / mdx1 / mdx2,
     the repo is release-ready, the retired non-Cubit PySide panel surface has
     not been reintroduced, AND LAB/100号機 still use the exact clean source
-    verified by this command. Returning to the canonical development tree is a
-    separate, explicit ``restore-editable`` operation after that tree catches
-    up with the published release.
+    verified by this command. Later development advances the explicitly
+    intended editable source forward to current main; no old-path restore is
+    part of this workflow.
     """
     step("Definition-of-done check "
          "(preflight + editable tier + phase9 + retired standalone panel guard)")
@@ -2225,8 +1771,8 @@ def cmd_done(args):
     ok("DEFINITION OF DONE met. Release is consistent across LAB / 100号機 / "
        "mdx1 / mdx2, LAB/100号機 remain on the exact verified editable "
        "source, and the retired standalone PySide panel surface is absent. "
-       "Run `release_quad restore-editable` explicitly after the canonical "
-       "development tree catches up." + suffix)
+       "Advance that intended source forward after publication; never restore "
+       "an older tree by historical path." + suffix)
     return 0
 
 
@@ -2503,18 +2049,10 @@ def main():
     p = argparse.ArgumentParser(prog="release_quad",
                                  description="Enforce the release-quad flow.")
     sub = p.add_subparsers(dest="cmd", required=True)
-    dual = sub.add_parser('cubit-dual', help='independent cubit-mesh-export LAB/100 release gate')
-    dual.add_argument('--action', choices=('preflight', 'deploy', 'done'), required=True)
-    for option in ('wheel', 'source-sha', 'source-root-lab', 'source-root-100',
-                   'evidence-lab', 'evidence-100'):
-        dual.add_argument('--' + option, required=True)
-
     sub.add_parser("preflight",
                     help="read-only state report (always safe)")
-    sub.add_parser("phase0",
-                    help="clean rebuild of the Cubit plugin")
     s8 = sub.add_parser("phase8",
-                         help="deploy + verify + smoke on LAB / 100号機 / mdx1 / mdx2")
+                         help="deploy and verify the Radia solver on LAB / 100号機 / mdx1 / mdx2")
     s8.add_argument("--target", default="lab,100",
                      help="comma list: lab, 100, mdx1, mdx2, all (default lab,100)")
     sub.add_parser("phase8e",
@@ -2548,9 +2086,6 @@ def main():
     sub.add_parser("verify-editable",
                     help="LAB/100号機 editable-install pointers check (read-only)")
     sub.add_parser("deployment-plan", help="dry-run: print approved source plan; no runtime changes")
-    sub.add_parser(
-        "restore-editable",
-        help="stop MCP transports and restore LAB/100号機 to canonical editable sources")
     sub.add_parser("ci-verify",
                     help="Phase 5.5: SHA-bound CI-green gate (after push main, before tag)")
     sm = sub.add_parser("sync-main",
@@ -2571,12 +2106,8 @@ def main():
         help="also require a matching four-machine Simulink candidate pass")
 
     args = p.parse_args()
-    if args.cmd == 'cubit-dual':
-        from release_cubit_dual import run as run_dual
-        raise SystemExit(run_dual(args))
     handler = {
         "preflight":        cmd_preflight,
-        "phase0":           cmd_phase0,
         "phase8":           cmd_phase8,
         "phase8e":          cmd_phase8e,
         "phase9":           cmd_phase9,
@@ -2586,7 +2117,6 @@ def main():
         "all":              cmd_all,
         "verify-editable":  cmd_verify_editable,
         "deployment-plan": cmd_deployment_plan,
-        "restore-editable": cmd_restore_editable,
         "ci-verify":        cmd_ci_verify,
         "sync-main":        cmd_sync_main,
         "evidence-motor":   cmd_evidence_motor,

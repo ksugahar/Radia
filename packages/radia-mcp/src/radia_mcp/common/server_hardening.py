@@ -1,9 +1,8 @@
 """
 server_hardening.py — shared MCP-server hardening infrastructure.
 
-Single source for the MathWorks MATLAB-MCP-server patterns adopted lab-wide
-(2026-08-05, first landed in `cubit_mesh_export.mcp`, promoted here for
-`radia_mcp.build123d` and future servers):
+Single source for the MathWorks MATLAB-MCP-server patterns adopted by
+radia-mcp servers:
 
 * **Annotation presets** — every tool is classified through one of four
   fully-specified `ToolAnnotations` presets (MathWorks annotations.go
@@ -20,8 +19,8 @@ Single source for the MathWorks MATLAB-MCP-server patterns adopted lab-wide
   the user (license/install/hung), do not retry blindly; ``internal`` =
   server bug, do not retry.
 
-Import from here; do not copy these into individual servers (the cubit
-server's originals were replaced by these — Discard-the-PoC policy).
+Import from here within radia-mcp; do not copy these into individual servers.
+Independent distributions own their own runtime support and release boundary.
 """
 
 from __future__ import annotations
@@ -45,9 +44,9 @@ __all__ = [
 ]
 
 # ---------------------------------------------------------------------------
-# Cross-server probe schema contract (cubit <-> build123d <-> external CAD)
+# Cross-server probe schema contract (mesh MCP <-> build123d <-> external CAD)
 # ---------------------------------------------------------------------------
-# `cubit_probe(query="entities")` (mesh side) and
+# The external mesh-side entity probe and
 # `build123d_probe(query="entities")` (CAD side) MUST both emit these core
 # keys per entity, so an agent can compare per-body numbers across the
 # STEP -> mesh handoff directly.  Servers may ADD keys (e.g. build123d

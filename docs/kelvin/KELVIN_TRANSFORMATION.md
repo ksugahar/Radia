@@ -1158,4 +1158,4 @@ case, but Kelvin transformation handles both cases uniformly.
 
 | File | Description |
 |------|-------------|
-| `src/radia/mcp_server/radia_ngsolve/kelvin_knowledge.py` | MCP server knowledge base |
+| `packages/radia-mcp/src/radia_mcp/radia_ngsolve/knowledge/kelvin.py` | MCP server knowledge base |

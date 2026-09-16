@@ -6,7 +6,7 @@ description: Guard the boundary between retired Radia desktop panels and Corefor
 # PySide6 Boundary Guard
 
 Radia's production application interface is Simulink. Normal Radia Python on
-LAB, 100, mdx, and hibino must not gain a PySide6 dependency.
+LAB, 100号機, mdx1, mdx2, and hibino must not gain a PySide6 dependency.
 
 Coreform Cubit's embedded Python owns its bundled PySide6 and the in-Cubit
 export toolbar may use it. Never remove or alter that private runtime as part

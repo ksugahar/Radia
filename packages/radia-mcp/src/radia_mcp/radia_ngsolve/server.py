@@ -12,7 +12,7 @@ Provides tools for both Radia (field/PEEC C++ core) and NGSolve (FEM/BEM):
 
 App-specific knowledge is in separate servers:
 - mcp-server-ih: Induction heating (SIBC, ESIM, Karl iteration)
-- mcp-server-cubit: Cubit scripting, mesh export
+- mcp-server-cubit: external Cubit scripting/mesh export from cubit-mesh-export
 - mcp-server-gmsh: GMSH post-processing
 
 Usage:
@@ -99,7 +99,7 @@ _validate_femm_v49_identity = lazy_callable(".electromagnetic_artifact_identity_
 _validate_femm_v50_identity = lazy_callable(".electromagnetic_artifact_identity_v50", "validate_public_identity", __package__)
 _validate_femm_v51_identity = lazy_callable(".electromagnetic_artifact_identity_v51", "validate_public_identity", __package__)
 _validate_motor_v44_identity = lazy_callable(".motor_v44_identity", "validate_public_identity", __package__)
-_validate_jmag_v46_identity = lazy_callable(".jmag_v46_identity", "validate_public_identity", __package__)
+_validate_motor_v46_identity = lazy_callable(".motor_identity_v46", "validate_public_identity", __package__)
 from .motor_artifact_lineage_v47 import validate_public_identity as _validate_motor_v47_identity
 _validate_motor_v48_identity = lazy_callable(".motor_semantic_identity_v48", "validate_public_identity", __package__)
 _validate_motor_v49_identity = lazy_callable(".motor_artifact_identity_v49", "validate_public_identity", __package__)
@@ -109,14 +109,14 @@ _rotational_kinematics_time_axis_gate = lazy_callable(".rotational_time_axis_gat
 _inductance_matrix_family_gate = lazy_callable(".inductance_matrix_gate", "inductance_matrix_family_gate", __package__)
 _nonlinear_inductance_sweep_gate = lazy_callable(".nonlinear_inductance_sweep_gate", "nonlinear_inductance_sweep_gate", __package__)
 _validate_waveguide_emc_v44_identity = lazy_callable(".waveguide_emc_v44_identity", "validate_public_identity", __package__)
-_validate_cst_v45_identity = lazy_callable(".cst_v45_identity", "validate_public_identity", __package__)
-_validate_cst_v46_identity = lazy_callable(".cst_v46_identity", "validate_public_v46_identity", __package__)
+_validate_network_v45_identity = lazy_callable(".network_identity_v45", "validate_public_identity", __package__)
+_validate_network_v46_identity = lazy_callable(".network_identity_v46", "validate_public_v46_identity", __package__)
 from .network_artifact_lineage_v47 import validate_public_v47_identity as _validate_network_v47_identity
 _validate_network_v48_identity = lazy_callable(".network_semantic_identity_v48", "validate_public_v48_identity", __package__)
 _validate_network_v49_identity = lazy_callable(".network_artifact_identity_v49", "validate_public_v49_identity", __package__)
 _validate_network_v50_identity = lazy_callable(".network_artifact_identity_v50", "validate_public_v50_identity", __package__)
 _validate_network_v51_identity = lazy_callable(".network_artifact_identity_v51", "validate_public_v51_identity", __package__)
-_validate_comsol_v46_identity = lazy_callable(".comsol_v46_identity", "validate_public_identity", __package__)
+_validate_solver_state_v46_identity = lazy_callable(".solver_state_identity_v46", "validate_public_identity", __package__)
 from .cross_artifact_lineage_v47 import validate_public_identity as _validate_comsol_v47_identity
 from .transform_normalization_v48 import validate_public_v48_identity as _validate_comsol_v48_identity
 _validate_comsol_v49_identity = lazy_callable(".solver_state_identity_v49", "validate_public_v49_identity", __package__)
@@ -2073,7 +2073,8 @@ def install_deploy(topic: str = "") -> str:
       overview     -- machine roles and installation model
       development  -- editable source and native-build rules
       ci_compute   -- mdx CI and explicit validation workloads
-      release      -- immutable release-quad artifact flow
+      release      -- immutable numerical-solver release-quad artifact flow
+      mcp_release  -- independent radia-mcp publish and LAB/100 release-dual
       cubit        -- independent Cubit plugin boundary
       failures     -- import, ABI, and MCP reload diagnostics
 
@@ -2086,11 +2087,11 @@ def install_deploy(topic: str = "") -> str:
 @mcp.tool()
 def release_workflow(topic: str = "") -> str:
     """
-    release-quad workflow for PyPI and the MEX + SLX GitHub Release.
-    Covers 3 packages / 4 machines (LAB, 100号機, mdx, hibino), the 9-phase
-    pipeline, the 4 pre-flight gates added 2026-05-03, the historical
-    CI failure modes + their root causes, and the patch-bump recovery
-    protocol when a tag CI fails.
+    Package-scoped Radia release workflows.
+
+    Separates the numerical solver's QUAD/MEX/SLX pipeline from the
+    independent radia-mcp LAB/100 release-dual and other package-owned lanes.
+    Also records historical CI failure modes and safe patch-bump recovery.
 
     Read this when:
       * The user asks for a release / version bump / PyPI publish.
@@ -2101,15 +2102,16 @@ def release_workflow(topic: str = "") -> str:
         stuck.
 
     Topics:
-      overview               -- what gets released and why atomically
-      phases                 -- the 9-phase pipeline (table)
+      overview               -- distribution ownership and verification targets
+      mcp_release            -- radia-mcp publish and LAB/100 release-dual
+      phases                 -- numerical solver release pipeline
       simulink_candidate     -- exact-ZIP four-machine publication gate
       preflight_gates        -- Phase 2.5 4-gate pre-push validation
       ci_failure_modes       -- known CI failures + cause + fix table
       recovery               -- when CI on a tag fails AFTER push
       patch_bump_protocol    -- exact steps for retry after CI failure
-      lab_lock_release       -- pre-deploy: stop processes that hold .pyd
-      monorepo_lockstep      -- 4-6 version files that must stay in sync
+      lab_lock_release       -- package-owned lock and reconnect handling
+      version_pairs          -- independent per-package metadata/runtime pairs
       ci_monitor_skill       -- companion skill for Phase 7
 
     Args:
@@ -3015,10 +3017,10 @@ def rotational_eddy_brake_energy_gate(summary_json: str) -> str:
     except (json.JSONDecodeError, TypeError, ValueError):
         payload = None
     if isinstance(payload, dict):
-        v46_checks = _validate_comsol_v46_identity(payload)
+        v46_checks = _validate_solver_state_v46_identity(payload)
         if v46_checks:
             result.setdefault("checks", {}).update(v46_checks["checks"])
-            result["comsol_v46_identity"] = v46_checks
+            result["solver_state_v46_identity"] = v46_checks
             if v46_checks["status"] != "ok":
                 result["status"] = "needs_attention"
         v47_checks = _validate_comsol_v47_identity(payload)
@@ -3689,16 +3691,16 @@ def nonlinear_inductance_sweep_gate(summary_json: str) -> str:
             result["waveguide_emc_v44_identity_checks"] = v44_checks
             if not all(v44_checks.values()):
                 result["status"] = "needs_attention"
-        v45_checks = _validate_cst_v45_identity(payload)
+        v45_checks = _validate_network_v45_identity(payload)
         if v45_checks:
             result.setdefault("checks", {}).update(v45_checks)
-            result["cst_v45_identity_checks"] = v45_checks
+            result["network_v45_identity_checks"] = v45_checks
             if not all(v45_checks.values()):
                 result["status"] = "needs_attention"
-        v46_checks = _validate_cst_v46_identity(payload)
+        v46_checks = _validate_network_v46_identity(payload)
         if v46_checks:
             result.setdefault("checks", {}).update(v46_checks)
-            result["cst_v46_identity_checks"] = v46_checks
+            result["network_v46_identity_checks"] = v46_checks
             if not all(v46_checks.values()):
                 result["status"] = "needs_attention"
         v47_checks = _validate_network_v47_identity(payload)
@@ -4128,7 +4130,7 @@ def pwm_controlled_motor_loss_gate(
             result["motor_v44_identity_checks"] = v44_checks
             if not all(v44_checks.values()):
                 result["status"] = "needs_attention"
-        v46_checks = _validate_jmag_v46_identity(payload.get("artifact_identity"))
+        v46_checks = _validate_motor_v46_identity(payload.get("artifact_identity"))
         if v46_checks:
             result.setdefault("checks", {}).update(v46_checks)
             result["motor_v46_identity_checks"] = v46_checks

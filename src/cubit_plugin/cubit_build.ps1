@@ -4,8 +4,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# Visual Studio + CMake discovery via vswhere (matches Build.ps1 +
-# tools/_build_cubit_plugin.ps1 pattern). Was hardcoded
+# Visual Studio + CMake discovery via vswhere (matches Build.ps1). Was hardcoded
 # `Microsoft Visual Studio\2022\BuildTools\...` until 2026-05-25;
 # that broke on LAB whose VS BuildTools installs as
 # `Microsoft Visual Studio\18\BuildTools\...` (the directory name uses

@@ -29,9 +29,13 @@ def test_fem_force_and_motor_servers_import_without_solver_dependencies() -> Non
         import radia_mcp.fem.server
         import radia_mcp.force.server
         import radia_mcp.motor.server
-        from radia_mcp.common import examples
+        from radia_mcp.common import examples, web_docs
         assert set(examples.FAMILIES) == {'build123d', 'gmsh'}
         assert not hasattr(examples, 'refresh_cubit_examples')
+        assert examples._resolve_family('cubit') == []
+        assert examples._resolve_family('cubit_local') == []
+        assert set(web_docs.DOCS_INDEX) == {'build123d'}
+        assert not hasattr(web_docs, 'search_forum')
         """
     )
     result = subprocess.run(

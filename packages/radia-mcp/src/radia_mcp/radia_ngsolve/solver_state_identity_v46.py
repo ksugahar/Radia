@@ -1,4 +1,4 @@
-"""Neutral COMSOL-derived replay identity checks for v46 public artifacts.
+"""Solver-state replay identity checks for v46 public artifacts.
 
 The records are optional so older solver summaries retain their v1-v45
 behavior. When present, a record must close the accepted partial/restarted
@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
-
 
 _TIME = "time_adaptive_partial_solution_nan_inf_restart_window_identity"
 _FIELD = "unit_scale_coordinate_frame_complex_field_vector_identity"
@@ -97,7 +96,7 @@ def validate_public_identity(payload: object) -> dict[str, object]:
     if not checks:
         return {}
     return {
-        "policy": "comsol_v46_public_identity_v1",
+        "policy": "solver_state_v46_public_identity_v1",
         "status": "ok" if all(checks.values()) else "needs_attention",
         "checks": checks,
         "issues": [name for name, ok in checks.items() if not ok],

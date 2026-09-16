@@ -53,7 +53,8 @@ def record_failure(kind: str, payload: dict[str, Any]) -> Path:
 	"""Append a failure record to `<kind>_failures.jsonl`.
 
 	Args:
-	    kind: "cubit" / "build123d" / etc. Becomes the log file prefix.
+	    kind: server or workflow family, such as "build123d". Becomes the log
+	        file prefix.
 	    payload: free-form dict. Callers typically include:
 	        - "input":   the tool's input (commands / script)
 	        - "error":   short error message

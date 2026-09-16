@@ -5,6 +5,7 @@ import importlib.metadata
 import json
 import os
 from pathlib import Path
+import re
 
 try:
     import tomllib
@@ -19,12 +20,16 @@ SDK_REQUIREMENT = "mcp>=1.20.0,<2"
 
 
 def test_mcp_sdk_dependency_declares_supported_floor():
-    project = tomllib.loads(
+    metadata = tomllib.loads(
         (PACKAGE_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     )
-    assert SDK_REQUIREMENT in project["project"]["dependencies"]
+    project = metadata["project"]
+    assert SDK_REQUIREMENT in project["dependencies"]
+    assert metadata["build-system"]["requires"] == ["setuptools>=77.0"]
+    assert project["license"] == "BSD-3-Clause"
+    assert project["license-files"] == ["LICENSE"]
     from packaging.requirements import Requirement
-    names = {Requirement(item).name for item in project['project']['dependencies']}
+    names = {Requirement(item).name for item in project['dependencies']}
     assert not {'cae-mcp-core', 'cubit-mesh-export', 'radia'}.intersection(names)
 
 
@@ -42,7 +47,35 @@ def test_public_description_and_optional_cubit_ownership():
     readme = (PACKAGE_ROOT / "README.md").read_text(encoding="utf-8")
     assert "core (Cubit" not in readme
     assert "| **Cubit** | `mcp-server-cubit`" not in readme
-    assert "full 49-server" not in readme
+    discovery_surfaces = [
+        PACKAGE_ROOT / "README.md",
+        PACKAGE_ROOT / "REGISTRY_SUBMISSION.md",
+        PACKAGE_ROOT / "src" / "radia_mcp" / "common" / "status.py",
+        *(PACKAGE_ROOT / "src" / "radia_mcp" / "meta").glob("*.py"),
+    ]
+    for path in discovery_surfaces:
+        if path.exists():
+            text = path.read_text(encoding="utf-8")
+            assert re.search(r"\b\d+[- ]servers?\b", text, re.IGNORECASE) is None, path
+    from radia_mcp.meta.catalog import CATALOG
+    from radia_mcp.meta.server import radia_mcp_overview
+
+    overview = radia_mcp_overview()
+    assert overview["n_servers"] == len(CATALOG)
+    assert len(overview["servers"]) == len(CATALOG)
+    registry_path = PACKAGE_ROOT / "REGISTRY_SUBMISSION.md"
+    if registry_path.exists():
+        registry = registry_path.read_text(encoding="utf-8")
+        assert "Cubit MCP is\ndistributed separately" in registry
+        assert "Entry points (3 MCP servers shipped in one wheel)" not in registry
+        assert "mcp-server-cubit         # Coreform Cubit" not in registry
+    assert not (PACKAGE_ROOT / "docs" / "SHARED_LIB_DESIGN.md").exists()
+
+
+def test_retired_cae_mcp_core_cannot_return_as_shared_policy() -> None:
+    readme = (PACKAGE_ROOT / "README.md").read_text(encoding="utf-8")
+    assert "`cae-mcp-core` foundation is retired" in readme
+    assert "not a dependency or\nshared runtime" in readme
 
 
 

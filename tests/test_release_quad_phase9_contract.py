@@ -1,4 +1,5 @@
-"""Fail-closed cross-host probe contracts; no SSH or installed solver needed."""
+"""Fail-closed solver-only cross-host probe contracts; no SSH required."""
+
 import ast
 import importlib.util
 import subprocess
@@ -13,37 +14,29 @@ quad = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(quad)
 
 
-def probe(label):
-    values = {
-        "VER radia": "4.95.91", "VER cubit-mesh-export": "0.14.17",
-        "VER radia-mcp": "1.4.53", "COMPAT cme -> radia": "[4.5.0, 4.999.999]",
-        "COMPAT rad -> cme": "[0.5.0, 0.999.999]",
-    }
+def probe():
+    values = {"VER radia": "4.95.91"}
     for name in ("simulink/application.py", "panels/calc_inductance.py",
                  "panels/calc_fem_kelvin.py", "panels/calc_fem_coilmesh.py"):
         values["SHA radia/" + name] = "0123456789ab"
-    values.update({key: "0123456789ab" for key in quad._CME_GUI_FIELDS})
-    if label in ("mdx1", "mdx2"):
-        for key in quad._PHASE9_COMPUTE_NA:
-            values[key] = "N/A"
     return "\n".join(f"{key} = {value}" for key, value in values.items())
 
 
 def test_required_keys_match_both_actual_probe_file_lists():
     for script in (quad.CROSS_MACHINE_PROBE, quad.CROSS_MACHINE_PROBE_LAB):
         tree = ast.parse(script)
-        paths = next(ast.literal_eval(n.iter) for n in ast.walk(tree)
-                     if isinstance(n, ast.For) and isinstance(n.iter, ast.List))
-        assert {"SHA radia/" + p for p in paths} == {
-            k for k in quad._PHASE9_FIELDS if k.startswith("SHA radia/")}
-        cme_paths = [ast.literal_eval(n.iter) for n in ast.walk(tree)
-                     if isinstance(n, ast.For) and isinstance(n.iter, ast.List)][1]
-        assert {"SHA cubit_mesh_export/" + p for p in cme_paths} == set(quad._CME_GUI_FIELDS)
-    assert set(quad._parse_phase9_probe("LAB", probe("LAB"))) == set(quad._PHASE9_FIELDS)
+        paths = next(ast.literal_eval(node.iter) for node in ast.walk(tree)
+                     if isinstance(node, ast.For) and isinstance(node.iter, ast.List))
+        assert {"SHA radia/" + path for path in paths} == {
+            key for key in quad._PHASE9_FIELDS if key.startswith("SHA radia/")}
+        assert "cubit_mesh_export" not in script
+        assert "radia-mcp" not in script
+    assert set(quad._parse_phase9_probe("LAB", probe())) == set(quad._PHASE9_FIELDS)
 
 
 def test_phase9_accepts_complete_shuffled_output(monkeypatch):
-    monkeypatch.setattr(quad, "_probe", lambda label, *a: "\n".join(reversed(probe(label).splitlines())))
+    monkeypatch.setattr(
+        quad, "_probe", lambda _label, *_args: "\n".join(reversed(probe().splitlines())))
     assert quad.cmd_phase9(None) == 0
 
 
@@ -57,73 +50,43 @@ def test_phase9_accepts_complete_shuffled_output(monkeypatch):
     lambda text: text.replace("4.95.91", "MISSING"),
     lambda text: text.replace("4.95.91", "1garbage"),
     lambda text: text.replace("4.95.91", "N/A"),
-    lambda text: text.replace("[4.5.0, 4.999.999]", "invalid"),
-    lambda text: text.replace("[4.5.0, 4.999.999]", "[1bad, 2bad]"),
-    lambda text: text.replace("[4.5.0, 4.999.999]", "[5.0, 4.0]"),
     lambda text: text.replace("0123456789ab", "not-a-hash!!"),
 ])
-def test_phase9_rejects_malformed_probe_even_when_all_hosts_agree(monkeypatch, corrupt):
-    monkeypatch.setattr(quad, "_probe", lambda label, *a: corrupt(probe(label)))
+def test_phase9_rejects_malformed_probe_even_when_all_hosts_agree(
+        monkeypatch, corrupt):
+    monkeypatch.setattr(quad, "_probe", lambda _label, *_args: corrupt(probe()))
     assert quad.cmd_phase9(None) == 4
 
 
-@pytest.mark.parametrize("label", ["LAB", "100号機"])
-def test_editable_hosts_cannot_hide_mcp_with_na(label):
-    with pytest.raises(ValueError):
-        quad._parse_phase9_probe(label, probe(label).replace("1.4.53", "N/A"))
-
-
-def test_compute_host_must_declare_non_deployed_fields_na():
-    with pytest.raises(ValueError):
-        quad._parse_phase9_probe("mdx1", probe("LAB"))
-
-
-def test_exporter_gui_drift_blocks_release_even_when_radia_matches(monkeypatch):
-    def output(label, *args):
-        text = probe(label)
-        if label == "100号機":
-            text = text.replace(quad._CME_GUI_FIELDS[0] + " = 0123456789ab",
-                                quad._CME_GUI_FIELDS[0] + " = abcdef012345")
-        return text
-    monkeypatch.setattr(quad, "_probe", output)
-    assert quad.cmd_phase9(None) == 4
-
-
-def test_compute_probe_never_imports_exporter_gui():
-    assert 'import radia, cubit_mesh_export' not in quad.CROSS_MACHINE_PROBE_NO_MCP
-    assert 'cme_root' not in quad.CROSS_MACHINE_PROBE_NO_MCP
-    for field in quad._CME_GUI_FIELDS:
-        assert field + ' = N/A' in quad.CROSS_MACHINE_PROBE_NO_MCP
-
-
-def test_same_values_with_keys_swapped_cannot_hide_drift(monkeypatch):
-    def run(label, *a):
-        text = probe(label)
-        if label == "100号機":
-            text = text.replace("VER radia =", "TEMP =").replace(
-                "VER radia-mcp =", "VER radia =").replace("TEMP =", "VER radia-mcp =")
-        return text
-    monkeypatch.setattr(quad, "_probe", run)
-    assert quad.cmd_phase9(None) == 4
+def test_independent_package_drift_is_not_part_of_solver_probe(monkeypatch):
+    assert "VER cubit-mesh-export" not in quad._PHASE9_FIELDS
+    assert "VER radia-mcp" not in quad._PHASE9_FIELDS
+    monkeypatch.setattr(quad, "_probe", lambda _label, *_args: probe())
+    assert quad.cmd_phase9(None) == 0
 
 
 @pytest.mark.parametrize("failure", [None, ""])
 def test_failed_host_cannot_be_omitted(monkeypatch, failure):
-    monkeypatch.setattr(quad, "_probe", lambda label, *a: failure if label == "mdx2" else probe(label))
+    monkeypatch.setattr(
+        quad, "_probe",
+        lambda label, *_args: failure if label == "mdx2" else probe())
     assert quad.cmd_phase9(None) == 4
 
 
-@pytest.mark.parametrize("error", [OSError("no executable"), subprocess.TimeoutExpired("probe", 120)])
+@pytest.mark.parametrize(
+    "error", [OSError("no executable"), subprocess.TimeoutExpired("probe", 120)])
 def test_probe_launch_failure_is_not_acceptance(monkeypatch, error):
-    def run(*args, **kwargs):
+    def run(*_args, **_kwargs):
         raise error
     monkeypatch.setattr(quad.subprocess, "run", run)
     assert quad._probe("LAB", ["python", "-"]) is None
 
 
 def test_failed_exit_rejects_even_complete_stdout(monkeypatch):
-    monkeypatch.setattr(quad.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
-        a, 1, stdout=probe("LAB"), stderr="failed after output"))
+    monkeypatch.setattr(
+        quad.subprocess, "run",
+        lambda *args, **_kwargs: subprocess.CompletedProcess(
+            args, 1, stdout=probe(), stderr="failed after output"))
     assert quad._probe("LAB", ["python", "-"]) is None
 
 
@@ -136,21 +99,10 @@ def test_missing_version_parser_fails_closed(monkeypatch):
             raise ModuleNotFoundError("packaging unavailable")
         return original(name, *args, **kwargs)
     monkeypatch.setattr(builtins, "__import__", without_packaging)
-    monkeypatch.setattr(quad, "_probe", lambda label, *a: probe(label))
+    monkeypatch.setattr(quad, "_probe", lambda _label, *_args: probe())
     assert quad.cmd_phase9(None) == 4
 
 
-def test_pep440_versions_and_inclusive_compatibility_bounds():
-    text = probe("LAB").replace("4.95.91", "5.0rc1").replace(
-        "[4.5.0, 4.999.999]", "[5.0rc1, 5.0]")
+def test_pep440_versions_are_accepted():
+    text = probe().replace("4.95.91", "5.0rc1")
     assert quad._parse_phase9_probe("LAB", text)["VER radia"] == "5.0rc1"
-    text = text.replace("[5.0rc1, 5.0]", "[5.0, 5.0]")
-    assert quad._parse_phase9_probe("LAB", text)["COMPAT cme -> radia"] == "[5.0, 5.0]"
-
-
-def test_mcp_preservation_does_not_waive_phase9_version_match(monkeypatch):
-    monkeypatch.setenv("RADIA_RELEASE_PRESERVE_MCP_SOURCE_LAB", "C:/approved/mcp")
-    monkeypatch.setenv("RADIA_RELEASE_PRESERVE_MCP_SOURCE_100", "W:/approved/mcp")
-    monkeypatch.setattr(quad, "_probe", lambda label, *a: probe(label).replace(
-        "1.4.53", "1.4.54") if label == "100号機" else probe(label))
-    assert quad.cmd_phase9(None) == 4

@@ -151,7 +151,7 @@ class CoarseToolRegistry:
         catalog_name = f"{self.namespace}_{self.category}_catalog"
         run_name = f"{self.namespace}_{self.category}_run"
 
-        def catalog(query: str = "", limit: int = 50) -> dict[str, Any]:
+        def catalog(query: str = "", limit: int = 12) -> dict[str, Any]:
             """Search grouped operations without loading individual schemas."""
 
             needle = query.casefold().strip()
@@ -170,6 +170,7 @@ class CoarseToolRegistry:
                 "profile": self.profile,
                 "matched": len(matches),
                 "returned": len(selected),
+                "truncated": len(selected) < len(matches),
                 "operations": [
                     {
                         "name": entry.name,
@@ -179,6 +180,12 @@ class CoarseToolRegistry:
                     for entry in selected
                 ],
                 "run_tool": run_name,
+                "next_step_hint": (
+                    f"Narrow query or pass a larger limit (maximum 200) to "
+                    f"{catalog_name}."
+                    if len(selected) < len(matches)
+                    else None
+                ),
             }
 
         async def run(name: str, arguments: dict[str, Any] | None = None) -> Any:

@@ -220,12 +220,19 @@ def test_active_docs_do_not_restore_generated_catalog_or_old_release_name():
     assert "do not restore a tracked generated `docs/TOOLS.md` gate" in release_skill
 
 
-def test_release_quad_describes_the_supported_cubit_generation():
+def test_solver_release_quad_excludes_cubit_generation():
     release_quad = (ROOT / "tools" / "release_quad.py").read_text(
         encoding="utf-8"
     )
-    assert "Cubit 2025.12+ -batch" in release_quad
-    assert "Cubit 2025.3 -batch" not in release_quad
+    release_skill = (ROOT / ".agents" / "skills" / "release-quad" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    assert "cubit-dual" not in release_skill
+    assert "cubit-dual" not in release_quad
+    assert "phase0" not in release_quad
+    assert "cubit-plugin-install" not in release_quad
+    assert "Stop-Process" not in release_quad
+    assert "Never change radia-mcp or" in release_quad
 
 
 def test_preflight_git_scope_is_safe_in_an_isolated_worktree(monkeypatch):

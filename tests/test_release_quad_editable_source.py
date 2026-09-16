@@ -62,109 +62,83 @@ def test_release_head_uses_safe_git_helper(monkeypatch):
     assert calls == [(('rev-parse', 'HEAD'), {})]
 
 
-@pytest.mark.parametrize("value", ["", "relative/path", "C:/approved/../other", "C:/bad\npath"])
-def test_preserved_mcp_source_requires_explicit_absolute_path(monkeypatch, value):
-    monkeypatch.setenv(release_quad.MCP_SOURCE_ENV["lab"], value)
-    with pytest.raises(ValueError):
-        release_quad._preserved_mcp_source("lab")
-
-
-def test_remote_mcp_source_requires_host_local_path(monkeypatch):
-    monkeypatch.setenv(release_quad.MCP_SOURCE_ENV["100"], "//server/share/mcp")
-    with pytest.raises(ValueError, match="local drive"):
-        release_quad._remote_100_editable_packages()
-
-
-def test_mcp_plan_uses_approved_roots_without_probing_runtime(monkeypatch, capsys):
+def test_deployment_plan_is_solver_only_and_does_not_probe_runtime(
+        monkeypatch, capsys):
     import json
 
-    monkeypatch.setenv(release_quad.MCP_SOURCE_ENV["lab"], "C:/approved/packages/radia-mcp")
-    monkeypatch.setenv(release_quad.MCP_SOURCE_ENV["100"], "W:/approved/packages/radia-mcp")
     monkeypatch.setattr(release_quad, "run", lambda *a, **k: pytest.fail("not a dry run"))
     monkeypatch.setattr(release_quad, "_pip_show", lambda *a: pytest.fail("runtime inference"))
     assert release_quad.cmd_deployment_plan(None) == 0
     plans = json.loads(capsys.readouterr().out)
-    assert [p["mcp_source"] for p in plans] == [
-        "C:/approved/packages/radia-mcp", "W:/approved/packages/radia-mcp"]
-    assert all(p["mcp_action"] == "verify-and-preserve" and not p["verified"] for p in plans)
-    assert dict(release_quad._lab_editable_packages())["radia-mcp"] == plans[0]["mcp_source"]
-    assert dict(release_quad._remote_100_editable_packages())["radia-mcp"] == plans[1]["mcp_source"]
-    assert dict(release_quad._lab_editable_packages())["radia"] == release_quad._editable_repo_lab()
+    assert [p["solver_source"] for p in plans] == [
+        release_quad._editable_repo_lab(), release_quad._editable_repo_100()]
+    assert all(p["solver_action"] == "verify-and-install" for p in plans)
+    assert all(p["independent_packages"] == "unchanged" for p in plans)
+    assert all(not p["verified"] for p in plans)
+    assert all("mcp" not in key and "cubit" not in key
+               for plan in plans for key in plan)
 
 
 @pytest.mark.parametrize("drift", [0, 1])
-def test_lab_preservation_checks_before_mutation_and_never_reinstalls_mcp(monkeypatch, drift):
-    approved = "C:/approved/packages/radia-mcp"
-    monkeypatch.setenv(release_quad.MCP_SOURCE_ENV["lab"], approved)
+def test_lab_deploy_changes_only_radia(monkeypatch, drift):
+    root = release_quad._editable_repo_lab()
     monkeypatch.setattr(release_quad, "_release_head", lambda: "a" * 40)
     monkeypatch.setattr(release_quad, "_verify_local_release_source", lambda *a: 0)
     events = []
+
     def verify(packages):
-        assert packages == [("radia-mcp", approved)]
+        assert packages == [("radia", root)]
         events.append("verify")
         return drift
+
     monkeypatch.setattr(release_quad, "_verify_lab_editable", verify)
-    monkeypatch.setattr(release_quad, "_kill_mcp_local", lambda: pytest.fail("MCP stopped"))
-    monkeypatch.setattr(release_quad, "_kill_cubit_local", lambda: events.append("cubit"))
-    monkeypatch.setattr(release_quad, "run", lambda cmd, **k: events.append(cmd))
+    def run(command, **_kwargs):
+        events.append(command)
+        return subprocess.CompletedProcess(command, 0)
+    monkeypatch.setattr(release_quad, "run", run)
+
     assert release_quad._deploy_lab() == (4 if drift else 0)
-    assert events[0] == "verify"
-    if drift:
-        assert events == ["verify"]
-    else:
-        assert events[-1] == "verify"
-        commands = [event for event in events if isinstance(event, list)]
-        assert not any("radia-mcp" in item for cmd in commands for item in cmd)
-        assert any("radia" in cmd and "cubit-mesh-export" in cmd for cmd in commands)
+    command = next(event for event in events if isinstance(event, list))
+    joined = " ".join(command)
+    assert "pip install" in joined
+    assert "uninstall" not in joined
+    assert "radia-mcp" not in joined
+    assert "cubit-mesh-export" not in joined
+    assert "Stop-Process" not in joined
+    assert events[-1] == "verify"
 
 
 @pytest.mark.parametrize("drift", [0, 1])
-def test_remote_preservation_checks_approved_source_and_install_recipe(monkeypatch, drift):
-    approved = "W:/approved/packages/radia-mcp"
-    monkeypatch.setenv(release_quad.MCP_SOURCE_ENV["100"], approved)
+def test_remote_deploy_changes_only_radia(monkeypatch, drift):
     monkeypatch.setattr(release_quad, "_release_head", lambda: "b" * 40)
     calls = []
+
     def verify(host, label, packages):
-        assert host == "100" and packages == [("radia-mcp", approved)]
+        assert host == "100" and packages == [("radia", "W:/release")]
         calls.append("verify")
         return drift
+
     monkeypatch.setattr(release_quad, "_verify_remote_editable", verify)
-    monkeypatch.setattr(release_quad, "run", lambda cmd, **k: calls.append(cmd))
+    def run(command, **_kwargs):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0)
+    monkeypatch.setattr(release_quad, "run", run)
+
     assert release_quad._deploy_editable_remote("100", "100", "W:/release") == (4 if drift else 0)
-    if drift:
-        assert calls == ["verify"]
-    else:
-        assert calls[0] == calls[-1] == "verify"
-        script = base64.b64decode(calls[1][-1]).decode("utf-16le")
-        assert "pip uninstall -y radia cubit-mesh-export\n" in script
-        assert "packages\\radia-mcp" not in script
-        assert "($false -and (" in script
-        assert "status --porcelain --untracked-files=no" in script
-        assert script.index("rev-parse HEAD") < script.index("Stop-Process")
+    script = base64.b64decode(calls[0][-1]).decode("utf-16le")
+    assert "pip install --no-deps" in script
+    assert "pip uninstall" not in script
+    assert "radia-mcp" not in script
+    assert "cubit-mesh-export" not in script
+    assert "Stop-Process" not in script
+    assert "status --porcelain --untracked-files=no" in script
+    assert script.index("rev-parse HEAD") < script.index("pip install")
+    assert calls[-1] == "verify"
 
 
-def test_preservation_does_not_accept_arbitrary_installed_location(monkeypatch):
-    monkeypatch.setenv(release_quad.MCP_SOURCE_ENV["lab"], "C:/approved/packages/radia-mcp")
-    monkeypatch.setattr(release_quad, "_pip_show", lambda pkg: {
-        "version": "1", "editable project location": "C:/wrong/packages/radia-mcp"})
-    monkeypatch.setattr(release_quad, "_fresh_import_origin", lambda pkg: pytest.fail("must reject metadata"))
-    assert release_quad._verify_lab_editable([
-        ("radia-mcp", release_quad._preserved_mcp_source("lab"))]) == 1
-
-
-def test_preservation_rejects_import_drift_even_with_matching_metadata(monkeypatch):
-    approved = "C:/approved/packages/radia-mcp"
-    monkeypatch.setattr(release_quad, "_pip_show", lambda pkg: {
-        "version": "1", "editable project location": approved})
-    monkeypatch.setattr(release_quad, "_fresh_import_origin", lambda pkg: "C:/other/radia_mcp/__init__.py")
-    assert release_quad._verify_lab_editable([("radia-mcp", approved)]) == 1
-
-
-def test_done_uses_same_preserved_roots_without_weakening_release_checks(monkeypatch):
+def test_done_checks_only_solver_editable_roots(monkeypatch):
     from argparse import Namespace
 
-    monkeypatch.setenv(release_quad.MCP_SOURCE_ENV["lab"], "C:/approved/mcp")
-    monkeypatch.setenv(release_quad.MCP_SOURCE_ENV["100"], "W:/approved/mcp")
     calls = []
     monkeypatch.setattr(release_quad, "cmd_preflight", lambda a: 0)
     monkeypatch.setattr(release_quad, "_release_head", lambda: "c" * 40)
@@ -176,14 +150,9 @@ def test_done_uses_same_preserved_roots_without_weakening_release_checks(monkeyp
     assert release_quad.cmd_done(Namespace(simulink_package=None)) == 4
     assert calls[0] == (release_quad._editable_repo_lab(), "c" * 40)
     assert calls[1] == "tag"
-    assert calls[2]["radia-mcp"] == "C:/approved/mcp"
-    assert calls[3]["radia-mcp"] == "W:/approved/mcp"
-
-
-def test_restore_refuses_to_override_preservation_contract(monkeypatch):
-    monkeypatch.setenv(release_quad.MCP_SOURCE_ENV["lab"], "C:/approved/packages/radia-mcp")
-    monkeypatch.setattr(release_quad, "run", lambda *a, **k: pytest.fail("runtime mutation"))
-    assert release_quad.cmd_restore_editable(None) == 2
+    assert calls[2] == {"radia": release_quad._editable_repo_lab()}
+    assert calls[3] == {"radia": release_quad._editable_repo_100()}
+    assert not hasattr(release_quad, "cmd_restore_editable")
 
 
 def test_editable_release_roots_can_target_one_clean_nas_worktree(monkeypatch):
@@ -196,30 +165,10 @@ def test_editable_release_roots_can_target_one_clean_nas_worktree(monkeypatch):
         "W:\\00_CAE\\Radia\\release-quad\\Radia-v4.95.46\\",
     )
 
-    assert release_quad._lab_editable_packages()[:3] == [
-        ("radia", "S:/Radia/release-quad/Radia-v4.95.46"),
-        (
-            "cubit-mesh-export",
-            "S:/Radia/release-quad/Radia-v4.95.46/packages/cubit-mesh-export",
-        ),
-        (
-            "radia-mcp",
-            "S:/Radia/release-quad/Radia-v4.95.46/packages/radia-mcp",
-        ),
-    ]
-    assert release_quad._remote_100_editable_packages()[0] == (
-        "radia",
-        r"W:\00_CAE\Radia\release-quad\Radia-v4.95.46",
-    )
-    assert release_quad._canonical_lab_editable_packages()[:3] == [
-        ("radia", "S:/Radia/01_GitHub"),
-        ("cubit-mesh-export", "S:/Radia/01_GitHub/packages/cubit-mesh-export"),
-        ("radia-mcp", "S:/Radia/01_GitHub/packages/radia-mcp"),
-    ]
-    assert release_quad._canonical_remote_100_editable_packages()[0] == (
-        "radia",
-        r"W:\00_CAE\Radia\01_GitHub",
-    )
+    assert release_quad._lab_editable_packages() == [
+        ("radia", "S:/Radia/release-quad/Radia-v4.95.46")]
+    assert release_quad._remote_100_editable_packages() == [
+        ("radia", r"W:\00_CAE\Radia\release-quad\Radia-v4.95.46")]
 
 
 def test_unc_normalization_covers_canonical_and_release_worktrees():
@@ -327,17 +276,15 @@ def test_release_tag_gate_requires_declared_version_at_exact_head(monkeypatch):
     assert release_quad._verify_head_release_tag() == 4
 
 
-def test_lab_deploy_stops_before_killing_processes_on_source_mismatch(monkeypatch):
+def test_lab_deploy_stops_before_install_on_source_mismatch(monkeypatch):
     monkeypatch.setattr(release_quad, "_release_head", lambda: "a" * 40)
     monkeypatch.setattr(
         release_quad, "_verify_local_release_source", lambda _repo, _sha: 4
     )
 
-    def unexpected_kill():
-        raise AssertionError("processes must not be killed for an invalid source")
-
-    monkeypatch.setattr(release_quad, "_kill_cubit_local", unexpected_kill)
-    monkeypatch.setattr(release_quad, "_kill_mcp_local", unexpected_kill)
+    monkeypatch.setattr(
+        release_quad, "run",
+        lambda *_a, **_k: pytest.fail("install must not run for invalid source"))
 
     assert release_quad._deploy_lab() == 4
 
@@ -349,8 +296,10 @@ def test_remote_deploy_checks_exact_source_before_install(monkeypatch):
 
     def capture_run(command, **_kwargs):
         captured["command"] = command
+        return subprocess.CompletedProcess(command, 0)
 
     monkeypatch.setattr(release_quad, "run", capture_run)
+    monkeypatch.setattr(release_quad, "_verify_remote_editable", lambda *_a: 0)
 
     assert release_quad._deploy_editable_remote(
         "release-host", "release host", r"W:\Radia\release-source"
@@ -359,26 +308,10 @@ def test_remote_deploy_checks_exact_source_before_install(monkeypatch):
     assert expected_sha in script
     assert 'safe.directory=W:/Radia/release-source' in script
     assert "status --porcelain --untracked-files=no" in script
-    assert script.index("rev-parse HEAD") < script.index("pip uninstall")
-    assert script.index("pip uninstall") < script.index("pip install --no-deps")
-
-
-def test_remote_restore_forces_canonical_uninstall_then_editable_install(monkeypatch):
-    captured = {}
-
-    def capture_run(command, **_kwargs):
-        captured["command"] = command
-        return subprocess.CompletedProcess(command, 0)
-
-    monkeypatch.setattr(release_quad, "run", capture_run)
-
-    assert release_quad._restore_100_canonical_editable() == 0
-    script = base64.b64decode(captured["command"][-1]).decode("utf-16le")
-    assert "release-quad" not in script
-    assert r"W:\00_CAE\Radia\01_GitHub\packages\radia-mcp" in script
-    assert "pip uninstall -y radia cubit-mesh-export radia-mcp" in script
-    assert script.index("pip uninstall") < script.index("pip install")
-    assert "mcp-server-grant-writing --selftest" in script
+    assert script.index("rev-parse HEAD") < script.index("pip install --no-deps")
+    assert "pip uninstall" not in script
+    assert "radia-mcp" not in script
+    assert "cubit-mesh-export" not in script
 
 
 def test_done_keeps_exact_verified_editables_after_all_gates(monkeypatch):
@@ -404,11 +337,6 @@ def test_done_keeps_exact_verified_editables_after_all_gates(monkeypatch):
         lambda: calls.append("guard") or 0,
     )
     monkeypatch.setattr(release_quad, "_check_main_synced", lambda **_kwargs: calls.append("main") or 0)
-
-    def unexpected_restore(_args):
-        raise AssertionError("done must not mutate a verified editable tier")
-
-    monkeypatch.setattr(release_quad, "cmd_restore_editable", unexpected_restore)
 
     args = type("Args", (), {"simulink_package": None})()
     assert release_quad.cmd_done(args) == 0
