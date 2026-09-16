@@ -31,6 +31,31 @@ def test_surface_dirichlet_fixes_physical_field_without_point_gauge():
         assert np.asarray(result['H_cf'](mesh(*point))) == pytest.approx([0, 0, 100], abs=1e-8)
 
 
+def test_vacuum_hodge_split_requires_response_representable_lift():
+    import ngsolve as ng
+    from radia.kelvin_solver import (
+        solve_magnetostatic_mixed_total_reduced_omega_kelvin as solve,
+        project_source_total_hodge,
+    )
+    mesh, _, options = _case()
+    source = ng.CF((2*ng.x, 0., -2*ng.z))
+    selector = mesh.Materials('iron')
+    errors = {}
+    with ng.TaskManager():
+        for response_order, projection_order in ((1,1), (1,2), (2,2)):
+            split = project_source_total_hodge(mesh, source, ('iron',), order=projection_order)
+            result = solve(mesh, source, split['potential'], 1., (0,0,0),
+                mu_r_by_material={'air':1., 'iron':1.}, order=response_order,
+                total_source_h=split['harmonic_field'], total_source_materials=('iron',),
+                **options)
+            delta = result['H_cf']-source
+            errors[response_order, projection_order] = float(ng.Integrate(
+                ng.InnerProduct(delta,delta), mesh, definedon=selector, order=6))**.5
+    assert errors[1,1] < 1e-10
+    assert errors[1,2] > 1e-3
+    assert errors[2,2] < 1e-10
+
+
 def test_total_surface_requires_source_lift_not_reduced_zero():
     import ngsolve as ng
     from radia.kelvin_solver import solve_magnetostatic_mixed_total_reduced_omega_kelvin as solve

@@ -154,14 +154,18 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
     inside total-potential iron instead of forcing it into a scalar trace.
     ``"surface_trace"`` is the strict scalar-only contract for simply connected
     interfaces.  Fixed permanent magnetization may use ``"global_physical"``.
-    Source projection defaults to at least order two even for an order-one
-    response solve; this keeps the smooth Kelvin-interface trace error below
-    the topology gate without changing the response-space order.
+    The total-Hodge projection defaults to the response order: a higher-order
+    lift is not generally representable in a lower-order total space, even in
+    vacuum. Explicit over-order projections remain available for convergence
+    studies and carry a discretization warning. Other trace contracts retain
+    their at-least-order-two projection default.
     """
     if int(order) < 1:
         raise ValueError("order must be positive")
     if source_projection_order is None:
-        source_projection_order = max(2, int(order))
+        source_projection_order = (
+            int(order) if source_potential_contract == "total_hodge"
+            else max(2, int(order)))
     if int(source_projection_order) < 1:
         raise ValueError("source_projection_order must be positive")
     if float(kelvin_radius) <= 0.0:
@@ -345,6 +349,15 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
     source_diagnostics["gate_scope"] = (
         "kelvin_trace_only" if source_potential_contract == "total_hodge"
         else source_potential_contract)
+    if source_potential_contract == "total_hodge":
+        source_diagnostics["response_order"] = int(order)
+        source_diagnostics["lift_order_compatible"] = int(source_projection_order) <= int(order)
+        source_diagnostics["split_invariance_verified"] = False
+        if int(source_projection_order) > int(order):
+            source_diagnostics["discretization_warning"] = (
+                "source lift exceeds the response space; a smaller source projection "
+                "residual does not imply a more accurate physical field. Run a vacuum "
+                "split-invariance test or increase response order.")
     result["static_electromagnet_contract"] = domain.as_dict()
     result["static_electromagnet_contract"]["source_trace"] = source_diagnostics
     return result
