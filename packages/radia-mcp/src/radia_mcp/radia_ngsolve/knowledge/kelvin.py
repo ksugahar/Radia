@@ -2226,7 +2226,11 @@ B_cf = result["B_cf"]
   equivalence. Establish full-reassembly parity before trusting RHS caching.
   Linear-form and rectangular-operator quadrature must use the same explicit
   integration rules; equal bonus orders alone are insufficient. Probe a
-  spatially varying source, not only a constant field.
+  spatially varying source, not only a constant field. Reuse one mesh and one
+  source projection for the cached/fresh comparison, with source randomization
+  disabled before coil construction and identical initial material states.
+  Report nonlinear convergence separately from cache parity and timing;
+  a speedup does not establish external-solver accuracy.
 - A prescribed analytic potential on an internal coupling face is not a
   free-interface validation. Audit boundary assignments, remove internal
   Dirichlet constraints, and test a source lift that is nonzero on the
