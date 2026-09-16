@@ -98,8 +98,8 @@ Driving model (lab policy): APREPRO commands + Python on the
 HEADLESS/batch route are the PRIMARY way agents drive Cubit --
 `cubit_batch_try` / `cubit_mesh_auto` / `.jou` playback for mesh
 generation, exports, and validation. Every LLM/MCP Cubit operation is
-batch/nographics. Never launch or attach to the Cubit GUI. `cubit_snapshot`
-fails loudly because Cubit hardcopy needs a graphics window.
+batch/nographics. Never launch or attach to the Cubit GUI. For visualization,
+render exported Gmsh/VTK artifacts outside the Cubit session.
 
 Human handoff: cubit_import_journal reads a human-saved .jou without
 execution or GUI attachment; cubit_session_journal exports Cubit's native
@@ -2439,32 +2439,24 @@ from cubit_mesh_export.mcp import session as _cs
 #   "internal"    -- server/daemon bug; do not retry.
 _ENVIRONMENT_ERROR_NEEDLES = (
     "license", "rlm", "could not locate coreform cubit", "did not signal",
-    "bootstrap", "exited during", "response timeout", "daemon died",
+    "exited during", "response timed out", "daemon died",
 )
 
 
-def _session_log_pointer() -> str | None:
-    """Where the full session diagnostics live (MathWorks 'for details,
-    see the server log in <path>' pattern)."""
-    try:
-        drop = _cs._user_daemon_dir()
-    except Exception:
-        return None
-    return str(drop)
 
 
 def _error_payload(stage: str, message: str, *, kind: str | None = None,
                    hint: str | None = None) -> dict:
     """Cubit-flavored wrapper over the shared error contract."""
     from cubit_mesh_export.mcp._support.server_hardening import error_payload
-    log = _session_log_pointer()
     payload = error_payload(
         stage, message, kind=kind, hint=hint,
         environment_needles=_ENVIRONMENT_ERROR_NEEDLES,
-        log=(f"{log} (bootstrap.log / cubit_stderr.log / "
-             "startup_error.txt hold the full record)") if log else None,
     )
     payload["gui_started"] = False
+    sess = _cs._SINGLETON
+    if sess is not None:
+        payload["stderr_tail"] = b"".join(getattr(sess, "_stderr_tail", [])).decode("utf-8", errors="replace")[-2000:]
     return payload
 
 
@@ -2797,30 +2789,6 @@ def cubit_probe(query: str = "summary") -> str:
 	return json.dumps(r, indent=2)
 
 
-@mcp.tool()
-def cubit_snapshot(out_path: str,
-                   width: int = 800,
-                   height: int = 600):
-	"""
-	Report that interactive Cubit hardcopy is unavailable to MCP callers.
-
-	Cubit 2025.12 hardcopy requires a graphics window. LLM/MCP execution is
-	headless by policy, so this tool fails loudly without starting a GUI.
-	Use exported Gmsh/VTK artifacts for LLM-visible rendering, or capture a
-	human-owned Cubit GUI outside MCP.
-
-	Args:
-	    out_path: retained for API compatibility; no file is written.
-	    width, height: retained for API compatibility and ignored.
-	"""
-	del out_path, width, height
-	return json.dumps({
-		"status": "error", "stage": "policy", "kind": "policy",
-		"error": ("Cubit snapshot requires a graphics window, but LLM/MCP "
-		          "Cubit execution is headless-only."),
-		"gui_started": False,
-		"alternative": "Render an exported Gmsh or VTK artifact.",
-	}, indent=2)
 
 
 @mcp.tool()
@@ -2834,8 +2802,8 @@ def cubit_doctor() -> str:
 
 	Checks: Cubit install discovery -> Learn-license renewals cache
 	freshness -> deployed Cubit plugin (.ccm) vs the cubit-mesh-export
-	bundled copy (hash) -> live daemon state -> drop-dir diagnostics
-	(startup_error.txt, log tails) -> check-vol dependency availability.
+	bundled copy (hash) -> live owned daemon state -> current stderr diagnostics
+	-> check-vol dependency availability.
 
 	Returns JSON: per-check {status: ok|warn|error|skipped, ...detail}
 	plus an overall summary listing the problems found.
@@ -2938,27 +2906,13 @@ def cubit_doctor() -> str:
 	daemon["status"] = "ok"
 	checks["daemon"] = daemon
 
-	# --- 5. Drop-dir diagnostics -----------------------------------------
-	drop_diag: dict = {"status": "ok"}
-	try:
-		drop = _cs._user_daemon_dir()
-		drop_diag["drop_dir"] = str(drop)
-		startup_err = drop / "startup_error.txt"
-		if startup_err.is_file():
-			drop_diag["status"] = "warn"
-			drop_diag["startup_error"] = startup_err.read_text(
-				encoding="utf-8", errors="replace")[-1500:]
-			problems.append("drop-dir: startup_error.txt present "
-			                "(last spawn failed)")
-		stderr_log = drop / "cubit_stderr.log"
-		if stderr_log.is_file():
-			tail = stderr_log.read_bytes()[-800:]
-			if tail.strip():
-				drop_diag["stderr_tail"] = tail.decode("utf-8",
-				                                       errors="replace")
-	except Exception as exc:
-		drop_diag = {"status": "skipped", "detail": str(exc)}
-	checks["drop_dir"] = drop_diag
+	# Diagnostics belong to the current owned process, not old GUI log files.
+	sess = _cs._SINGLETON
+	checks["session_diagnostics"] = {
+		"status": "ok", "execution_mode": "batch",
+		"stderr_tail": b"".join(getattr(sess, "_stderr_tail", [])).decode(
+			"utf-8", errors="replace")[-2000:],
+	}
 
 	# --- 6. check-vol dependency -----------------------------------------
 	try:
@@ -2980,23 +2934,20 @@ def cubit_doctor() -> str:
 
 
 @mcp.tool()
-def cubit_session_journal(out_path: str = "",
-                          include_failed: bool = True) -> str:
+def cubit_session_journal(out_path: str = "") -> str:
 	"""
 	Export Cubit's native command record for this MCP-server process.
 
 	The journal comes from Cubit's ``record \"file\"`` command, not from a
 	reconstruction of RPC responses. This preserves APREPRO definitions and
-	the exact command spelling accepted by Cubit. ``include_failed`` remains
-	for API compatibility; native Cubit owns the stream and it is not filtered.
+	the exact command spelling accepted by Cubit. Native Cubit owns the stream;
+	this tool never filters or reconstructs it from response history.
 
-	Scope: commands from THIS server process only -- attaching to a
-	daemon another process drove earlier does not recover its history.
+	Scope: commands from THIS server process only.
 
 	Args:
 	    out_path: optional path to also write the journal file
 	        (absolute, or relative to the repo root).
-	    include_failed: include failed commands as comments (default on).
 
 	Returns JSON with the native journal, digest, generation paths, and an
 	in-memory failure count retained only as secondary diagnostics.
@@ -3036,7 +2987,6 @@ def cubit_session_journal(out_path: str = "",
 		"native_paths": snapshot["paths"],
 		"generation_count": snapshot["generation_count"],
 		"native_errors": snapshot["errors"],
-		"include_failed_ignored_for_native_record": not include_failed,
 	}
 	if out_path:
 		p = Path(out_path)
@@ -3119,7 +3069,7 @@ def cubit_import_journal(path: str) -> str:
 @mcp.tool()
 def cubit_session_status() -> str:
 	"""Return diagnostic info about the Cubit session: alive/pid/mode,
-	ownership, session-mode policy, drop dir, last license warmup, and
+	ownership, current stderr, and
 	how many commands this process has recorded for
 	`cubit_session_journal`."""
 	status = {
@@ -3127,16 +3077,14 @@ def cubit_session_status() -> str:
 		"alive": False,
 		"pid": None,
 		"ready_info": None,
-		"session_mode": os.environ.get("RADIA_CUBIT_SESSION_MODE", "auto"),
+		"execution_mode": "batch", "gui_started": False, "ownership": "none",
 	}
 	if _cs._SINGLETON is not None:
 		sess = _cs._SINGLETON
 		status["execution_mode"] = sess._mode
-		status["gui_started"] = sess._mode == "gui"
+		status["gui_started"] = False
 		status["owned"] = sess._owned
-		status["drop_dir"] = (str(sess._drop_dir)
-		                      if sess._drop_dir is not None else None)
-		status["license_warmup"] = sess._last_license_warmup or None
+		status["stderr_tail"] = b"".join(getattr(sess, "_stderr_tail", [])).decode("utf-8", errors="replace")[-2000:]
 		status["n_journal_commands"] = len(sess._command_history)
 		native = sess.native_journal_snapshot()
 		status["journal_provenance"] = "cubit_native_record"
@@ -3147,15 +3095,6 @@ def cubit_session_status() -> str:
 		if _cs._SINGLETON._proc is not None:
 			status["pid"] = _cs._SINGLETON._proc.pid
 			status["ownership"] = "owned"
-		elif _cs._SINGLETON._drop_dir is not None:
-			# Phase-1 attached: read PID from pid.lock
-			pid_file = _cs._SINGLETON._drop_dir / "pid.lock"
-			if pid_file.exists():
-				try:
-					status["pid"] = int(pid_file.read_text(encoding="utf-8").strip())
-					status["ownership"] = "attached"
-				except (OSError, ValueError):
-					pass
 		status["ready_info"] = _cs._SINGLETON._ready_info
 	return json.dumps(status, indent=2)
 
@@ -3164,10 +3103,7 @@ def cubit_session_status() -> str:
 def cubit_session_shutdown() -> str:
 	"""Stop the persistent headless Cubit daemon. Next call relaunches it.
 
-	This is the EXPLICIT stop path: it also stops a daemon started by
-	another process (e.g. a hung session that recovery deliberately
-	left running). The report says which process was stopped
-	(stopped: "owned-child" | "attached-daemon" | "none", plus pid).
+	Only this MCP process's child is stopped. Other Cubit sessions are untouched.
 	"""
 	if _cs._SINGLETON is None:
 		return json.dumps({"status": "ok", "note": "no session running"})
@@ -3439,7 +3375,7 @@ def cubit_suggest_next(goal: str = "mesh") -> str:
 				add("volume all scheme auto", "Let Cubit pick sweep/sub/map/tet per volume.")
 				add("volume all size auto factor 5", "Moderately fine mesh size.")
 				add("mesh volume all", "Execute the mesh.")
-			add("volume all scheme tetmesh", "Tet fallback — always works, no topology constraints.")
+			add("volume all scheme tetmesh", "Tet fallback candidate; geometry validity and mesh quality still require checks.")
 		else:
 			add("quality volume all", "Check mesh quality (aspect / skew / jacobian).")
 			add("mesh volume all", "Already meshed; re-run only after mods.")
@@ -5447,7 +5383,7 @@ def cubit_mesh_auto(step_path: str = "",
 	  1. scheme auto       (hope for the best)
 	  2. scheme sweep      (force sweep; pure hex if topology fits)
 	  3. scheme polyhedron (hex-dominant for complex shapes)
-	  4. scheme tetmesh    (guaranteed fallback, tet only)
+	  4. scheme tetmesh    (fallback candidate requiring validation, tet only)
 
 	Each rung is executed in a fresh headless Cubit (no GUI pollution,
 	no state entanglement with the persistent session). The first rung that
@@ -6535,7 +6471,7 @@ def _generate_smart_recipes(sess, target_size: float,
 	    webcut + scheme auto FIRST.
 	  - simple prismatic: scheme auto, scheme sweep, then refined size.
 	  - large vol count: split-and-conquer with smaller size.
-	  - always include scheme tetmesh as a guaranteed-element fallback.
+	  - always include scheme tetmesh as a tet fallback candidate requiring validation.
 	  - vary `target_size` (half / base / double) to give the race
 	    different element counts to compare.
 	"""
@@ -6666,7 +6602,7 @@ def _generate_smart_recipes(sess, target_size: float,
 		[f"volume {scope} size {target_size}",
 		 f"volume {scope} scheme tetmesh",
 		 f"mesh volume {scope}"],
-		"guaranteed-element fallback (tet only, not hex).",
+		"tet fallback candidate requiring validation (tet only, not hex).",
 	)
 
 	# Truncate to requested N
@@ -6738,7 +6674,7 @@ def cubit_mesh_race_smart(target_size: float = 1.0,
 	     - scheme polyhedron (compound robust hex)
 	     - scheme sweep (prismatic best-hex)
 	     - finer / coarser size variants (element-count variety)
-	     - scheme tetmesh (guaranteed fallback)
+	     - scheme tetmesh (fallback candidate requiring validation)
 	4. Races them in parallel headless workers.
 	5. Returns winner + rationale (so the AI can explain WHY this
 	   recipe was chosen).
@@ -7370,7 +7306,7 @@ _DESTRUCTIVE_TOOLS = {
 }
 # Tools that create/refresh files on disk but leave the session alone.
 _WRITING_TOOLS = {
-	"cubit_checkpoint", "cubit_snapshot", "cubit_batch_try",
+	"cubit_checkpoint", "cubit_batch_try",
 	"cubit_mesh_auto", "cubit_mesh_race", "cubit_mesh_race_smart",
 	"cubit_mesh_race_smart_async", "cubit_mesh_race_review",
 	"cubit_mesh_race_review_async", "cubit_curate_learned_recipes",
