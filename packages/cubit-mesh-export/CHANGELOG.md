@@ -6,6 +6,8 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
 ## Unreleased
 
+## 1.1.0 - Standalone MCP hardening and legacy removal
+
 - Remove the retired native Nastran command alias, old plugin identity, old GUI
   module/settings/toolbar names, and the hard-coded legacy batch builder. The
   installer only retains exact old paths as one-way deletion targets.
