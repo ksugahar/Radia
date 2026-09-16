@@ -9,3 +9,6 @@ def test_mcp_boundary_guidance_distinguishes_surface_from_gauge():
         assert phrase in text
     assert 'same explicit' in text
     assert 'spatially varying source' in text
+    assert 'not a\n  free-interface validation' in text
+    assert 'remove internal' in text
+    assert 'nonzero on the' in text
