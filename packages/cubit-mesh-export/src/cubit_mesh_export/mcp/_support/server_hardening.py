@@ -54,7 +54,7 @@ __all__ = [
 # keys per entity, so an agent can compare per-body numbers across the
 # STEP -> mesh handoff directly.  Servers may ADD keys (e.g. build123d
 # adds `label` -- the named-solid discipline shared with history-based
-# CAD systems such as CST); they must not rename or drop these.
+# history-based CAD systems); they must not rename or drop these.
 # Locked by tests on both servers.
 PROBE_SOLID_CORE_KEYS = frozenset(
     {"id", "centroid", "bbox_min", "bbox_max", "extent", "volume"})

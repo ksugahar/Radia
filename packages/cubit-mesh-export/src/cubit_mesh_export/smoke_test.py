@@ -1,8 +1,8 @@
 """
 End-to-end smoke test for a deployed cubit-mesh-export plugin.
 
-Runs Cubit in ``-batch -nographics`` mode on the canonical
-``ih_bem_sample.jou`` from the radia package and exports a high-order .vol
+Runs Cubit in ``-batch -nographics`` mode on the bundled
+``solver_ready_sample.jou`` and exports a high-order .vol
 via ``export netgen``. The result must then pass the same production
 ``check-vol`` gate used before solver initialization: strict labels, complete
 DomainIn/DomainOut ownership, NGSolve reload, curved-map Jacobian sampling,
@@ -12,7 +12,7 @@ prove the full round-trip is solver-ready rather than merely file-producing.
 
 Usage::
 
-    cubit-smoke-test                  # uses ih_bem_sample.jou
+    cubit-smoke-test                  # uses solver_ready_sample.jou
     cubit-smoke-test --order 3        # mesh order (default 2)
     cubit-smoke-test --keep           # keep temp workdir for inspection
     cubit-smoke-test --jou X.jou      # override sample file
@@ -69,14 +69,14 @@ def shutil_which_fallback(name):
 
 
 def _find_sample_jou(override: str = "") -> Path:
-    """Locate the canonical IH BEM sample .jou."""
+    """Locate the bundled solver-ready sample .jou."""
     if override:
         p = Path(override)
         if not p.is_file():
             raise RuntimeError(f"--jou argument does not exist: {p}")
         return p
 
-    candidate = Path(__file__).parent / "cubit_gui" / "ih_bem_sample.jou"
+    candidate = Path(__file__).parent / "cubit_gui" / "solver_ready_sample.jou"
     if not candidate.is_file():
         raise RuntimeError(f"Bundled smoke-test fixture missing: {candidate}")
     return candidate
@@ -510,8 +510,8 @@ def main():
         description="End-to-end smoke test: Cubit -batch -> export "
                     "netgen -> complete check-vol solver-ready gate.")
     parser.add_argument("--jou", default="",
-                        help="override the source .jou (default: "
-                             "radia/panels/samples/ih_bem_sample.jou)")
+                        help="override the source .jou (default: bundled "
+                             "solver_ready_sample.jou)")
     parser.add_argument("--order", type=int, default=2,
                         help="mesh curving order passed to export "
                              "netgen (default 2)")

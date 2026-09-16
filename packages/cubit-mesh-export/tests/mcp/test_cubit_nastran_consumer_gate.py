@@ -109,17 +109,6 @@ def test_nastran_consumer_contract_rejects_complete_deck_claim():
     assert result["checks"]["mesh_interchange_scope"] is False
 
 
-def test_nastran_consumer_contract_marks_legacy_alias_for_migration():
-    summary = _summary()
-    summary["producer"]["export_command"] = 'export jmag_nastran "mesh.bdf" order 2 overwrite'
-
-    result = evaluate_nastran_consumer_contract(summary)
-
-    assert result["status"] == "legacy_alias"
-    assert result["passed"] is False
-    assert "deprecated compatibility alias" in result["warnings"][0]
-
-
 def test_nastran_consumer_contract_requires_independent_parser_and_digest():
     summary = _summary()
     summary["producer"]["independent_parse_ok"] = False
@@ -173,7 +162,7 @@ def test_nastran_mcp_knowledge_uses_tool_neutral_command_and_gate():
     resource = cubit_export_decision_guide()
 
     assert "export nastran_bdf" in docs
-    assert "compatibility alias" in docs
+    assert "compatibility alias" not in docs
     assert "mesh-interchange artifact" in docs
     assert "cubit_nastran_consumer_gate" in docs
     assert "export nastran_bdf" in resource
@@ -181,9 +170,13 @@ def test_nastran_mcp_knowledge_uses_tool_neutral_command_and_gate():
 
 
 def test_nastran_consumer_mcp_tool_has_explicit_contract_metadata():
+    import asyncio
+
     tool = mcp._tool_manager._tools["cubit_validation_run"]
-    catalog = mcp._tool_manager._tools["cubit_validation_catalog"].fn(
-        query="nastran"
+    catalog = asyncio.run(
+        mcp._tool_manager._tools["cubit_validation_catalog"].fn(
+            query="nastran"
+        )
     )
 
     assert catalog["operations"][0]["name"] == "cubit_nastran_consumer_gate"

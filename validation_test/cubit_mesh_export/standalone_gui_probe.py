@@ -14,7 +14,7 @@ import cubit
 baseline = os.environ.get('CME_GUI_TEST_BASELINE') == '1'
 toolbar_mode = os.environ.get('CME_GUI_TEST_TOOLBAR_MODE')
 if not baseline and not toolbar_mode:
-    import radia_export_menu as menu
+    import cubit_export_menu as menu
 
 
 def probe():
