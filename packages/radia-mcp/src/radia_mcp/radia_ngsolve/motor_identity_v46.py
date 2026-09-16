@@ -1,3 +1,5 @@
+"""Motor torque and thermal-coupling identity checks for v46 artifacts."""
+
 from __future__ import annotations
 
 import math

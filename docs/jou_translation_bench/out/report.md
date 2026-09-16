@@ -4,6 +4,8 @@ Benchmark run: 2026-04-19
 Evaluator: Claude (Opus 4.7, 1M context) restricted to lab mcp-server knowledge
   (src/radia/mcp_server/build123d/build123d_knowledge.py,
    src/radia/mcp_server/cubit/cubit_scripting_knowledge.py).
+Current owners: packages/radia-mcp/src/radia_mcp/build123d/build123d_knowledge.py
+  and packages/cubit-mesh-export/src/cubit_mesh_export/mcp/knowledge/scripting.py.
 Runtime: build123d 0.10.0 on Python 3.12, Windows.
 
 == Summary verdict ==

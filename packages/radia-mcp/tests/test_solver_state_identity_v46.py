@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from radia_mcp.radia_ngsolve.comsol_v46_identity import validate_public_identity
+from radia_mcp.radia_ngsolve.solver_state_identity_v46 import validate_public_identity
 
 
 PROMOTED_CASE_IDS = {

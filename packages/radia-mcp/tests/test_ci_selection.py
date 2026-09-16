@@ -107,11 +107,17 @@ def test_common_lazy_export_change_skips_unrelated_rag_content_tests():
 
 
 def test_shared_hot_reload_change_checks_every_server_and_reload_contract():
-    path = "packages/radia-mcp/src/radia_mcp/_shared/hot_reload.py"
-    for symbols in (None, {path: {"reload_subpackage"}}):
-        plan = SELECTOR.build_plan([path], changed_symbols_by_file=symbols)
-        assert plan["server_selftests"] == sorted(SELECTOR._catalog())
-        assert "tests/test_hot_reload.py" in plan["package_tests"]
+    discovered = SELECTOR._hot_reload_contract_sources()
+    assert discovered
+    paths = {
+        *(f"packages/radia-mcp/src/radia_mcp/{item}" for item in discovered),
+        "packages/radia-mcp/src/radia_mcp/runtime/hot_reload.py",
+    }
+    for path in paths:
+        for symbols in (None, {path: {"reload_subpackage"}}):
+            plan = SELECTOR.build_plan([path], changed_symbols_by_file=symbols)
+            assert plan["server_selftests"] == sorted(SELECTOR._catalog())
+            assert "tests/test_hot_reload.py" in plan["package_tests"]
 
 
 def test_changed_symbol_narrows_a_large_compatibility_module():
