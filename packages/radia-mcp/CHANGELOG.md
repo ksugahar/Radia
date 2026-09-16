@@ -7,6 +7,10 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.5.3] - 2026-09-16
+
+- Resolve the package stdio runtime-contract test probe by its own file path,
+  so the complete test suite also passes from the monorepo root.
 - Remove retired Cubit bytecode caches from maintained editable deployments and
   align the public release manual with independent MCP/Cubit package ownership.
 - Replace obsolete coupled-version, mass-process-stop, four-host MCP, and fixed
