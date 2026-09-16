@@ -37,7 +37,7 @@ compatibility check; standalone operation does not import Radia.
 
 - **Cubit plugin** (`.ccm` + `.pyd`, Coreform Cubit 2025.12+):
   - `export {netgen|gmsh|vtk|femeem|meg|nastran_bdf}` APREPRO commands
-  - Cubit-owned **Export** menu plus the Radia Export WorkflowToolbar
+  - Cubit-owned **Export** menu plus the Cubit Mesh Export WorkflowToolbar
 - **Arbitrary-order curving** (order 1-5) via ACIS geometry projection
 - **Kelvin open-boundary** transformation built into `export netgen`
   (auto-add an exterior sphere with copy-mesh + periodic identification)
@@ -94,14 +94,14 @@ cubit-smoke-test --jou path/to/sample.jou
 The journal must produce the expected material and boundary labels; adjust
 `--expect` and `--expect-materials` for its label contract. The check exports a
 `.vol` and runs the solver-ready validation gate, including NGSolve reload.
-The no-argument `cubit-smoke-test` currently requires Radia's
-`ih_bem_sample.jou`; that fixture is not bundled in the standalone package.
+The no-argument `cubit-smoke-test` uses the package-owned
+`solver_ready_sample.jou`; no Radia installation or source tree is required.
 
 What you get depends on whether `radia` is installed alongside it:
 
 |                                                             | standalone | with `radia` |
 |-------------------------------------------------------------|:----------:|:------------:|
-| `export {netgen,gmsh,vtk,femeem,meg}` / `export jmag_nastran` |     yes    |      yes     |
+| `export {netgen,gmsh,vtk,femeem,meg}` / `export nastran_bdf` |     yes    |      yes     |
 | `check-vol` CLI (no Cubit required)                           |     yes    |      yes     |
 | Kelvin transformation and symmetry labels                     |     yes    |      yes     |
 | **Export menu inside Cubit's GUI**                            |     yes    |      yes     |
@@ -165,7 +165,7 @@ run:
 cubit-smoke-test --order 2
 ```
 
-This launches Cubit in batch mode, exports the canonical IH model, and applies
+This launches Cubit in batch mode, exports the bundled solver-ready model, and applies
 the production `check-vol` gate. Success requires strict boundary/material
 labels, matching companion-JSON metadata, successful NGSolve reload,
 tetrahedral topology, complete boundary-domain ownership, positive required
@@ -182,8 +182,8 @@ export nastran_bdf "model.bdf" order 2 overwrite             # Nastran BDF
 export vtk    "model.vtk" order 2 overwrite                 # VTK Legacy
 ```
 
-`export jmag_nastran` remains as a deprecated compatibility alias for old
-journals.  Nastran output is a mesh-interchange deck: blocks become PSOLID or
+`export nastran_bdf` is the only supported Nastran command. Nastran output is
+a mesh-interchange deck: blocks become PSOLID or
 PSHELL properties, sidesets become collision-free PSHELL properties, and
 nodesets become SET1 cards.  The exporter does not invent MAT cards; assign
 physical material data in the receiving solver.

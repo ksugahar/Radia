@@ -101,7 +101,7 @@ From Python these criteria strings are the 2nd argument to `parse_cubit_list`.
    ```
    - `cubit.init([...])` is mandatory; forgetting it is the most common "crash on
      first command" error. Useful flags: `-nojournal`, `-noecho`, banner/warning/info
-     suppression. (Machine note: a Radia panel present at startup can segfault the
+     suppression. (Machine note: an installed GUI startup shim can segfault the
      standalone `cubit.init()`; a 2-process split avoids it -- environment-specific,
      not from these videos.)
    - External Python's **version must match Cubit's bundled Python** (any distro --
@@ -1250,12 +1250,12 @@ wrong, "regularize" reverts a volume back to its un-imprinted CAD.
 RELEASE_2026_6 = r"""
 ## Coreform Cubit 2026.6 release highlights
 
-Coreform Cubit 2026.6 was released on 2026-06-01. For the radia-mcp/Cubit
+Coreform Cubit 2026.6 was released on 2026-06-01. For the Cubit MCP
 workflow, the headline is not the GUI polish; it is that Cubit is becoming a
 stronger tetrahedral and downstream-export preprocessor in exactly the places
 that matter for `.vol`/NGSolve validation loops.
 
-### Highest-priority features for radia-mcp
+### Highest-priority features for Cubit MCP
 
 - **Anisotropic tetrahedral meshing**: this is the most important meshing feature
   to watch for FEM/BEM and open-boundary examples. It should help when boundary
@@ -1271,17 +1271,17 @@ that matter for `.vol`/NGSolve validation loops.
   hidden behind a single merged surface.
 - **Higher-order quality metrics**: Jacobian and scaled-Jacobian checks now cover
   Tetra10 and Tri6. This is directly relevant to curved/high-order export, because
-  a linear-corner quality check can miss bad mid-edge node placement. Any radia
+  a linear-corner quality check can miss bad mid-edge node placement. Any
   high-order Cubit route should record at least linear quality plus Tetra10/Tri6
   Jacobian-style diagnostics when available.
 - **More robust triangle/tet meshing and metric precision**: the release notes
   call out better stability on composite surfaces and more accurate normalized
-  quality metrics. For radia-mcp this reinforces the existing rule: export `.vol`,
+  quality metrics. For Cubit MCP this reinforces the existing rule: export `.vol`,
   then independently validate surface closure, signed volume, boundary inventory,
   area, tet quality, and named blocks/sidesets.
 - **Sculpt refinement memory/performance**: parallel Sculpt refinement uses less
   memory in ghost-cell refinement layers. This matters for large assemblies and
-  HPC batch meshing, even if radia-mcp's default verification should stay small.
+  HPC batch meshing, even if Cubit MCP's default verification should stay small.
 - **64-bit Exodus IDs and solver element mapping**: Cubit can write Exodus with
   64-bit IDs (`set exodus 64bit {on|off}`), and `solver_element` mappings can map
   Exodus element types to solver-specific element names globally or per block.
@@ -1289,7 +1289,7 @@ that matter for `.vol`/NGSolve validation loops.
   32-bit ID assumptions or solver import wants named element flavors.
 - **Improved degenerate-element import/export**: degenerate hexes can be treated
   as their true element types on import and written compatibly on export. For
-  radia-mcp this is a warning: do not silently reinterpret element topology in
+  Cubit MCP this is a warning: do not silently reinterpret element topology in
   `.vol` parsing; keep the tri/tet-only contract strict and reject quads/hexes/
   wedges/pyramids unless a dedicated converter explicitly handles them.
 
@@ -1325,9 +1325,9 @@ that matter for `.vol`/NGSolve validation loops.
 - **GUI quality of life**: dark mode support and icon clarity improved; graphics
   snapshots default to PNG; higher-order element shrink visualization and sideset
   pair visualization make inspection easier. These are useful for humans, but they
-  should not change headless radia-mcp validation policy.
+  should not change headless Cubit MCP validation policy.
 
-### radia-mcp action items
+### Cubit MCP action items
 
 1. Keep default Cubit automation headless (`-nographics -batch -nojournal`) and
    continue validating Cubit output by independent `.vol` geometry/topology checks.

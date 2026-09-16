@@ -57,9 +57,9 @@ def start_toolbar_checks(out, mode, finish):
         QTimer.singleShot(400, call)
 
     def verify():
-        scripts = list(destination.rglob('scripts/radia_export_menu.py'))
+        scripts = list(destination.rglob('scripts/cubit_export_menu.py'))
         assert len(scripts) == 1, scripts
-        source = Path(os.environ['CME_GUI_TEST_SOURCE']) / 'radia_export_menu.py'
+        source = Path(os.environ['CME_GUI_TEST_SOURCE']) / 'cubit_export_menu.py'
         assert scripts[0].read_bytes() == source.read_bytes()
         buttons = [w for w in app.allWidgets() if isinstance(w, QAbstractButton)
                    and destination.as_posix().lower() in w.toolTip().replace(chr(92), '/').lower()]
@@ -113,7 +113,7 @@ def start_toolbar_checks(out, mode, finish):
         later(cancel_export)
 
     def cancel_export():
-        module = sys.modules['radia_export_menu']
+        module = sys.modules['cubit_export_menu']
         assert Path(module.__file__).resolve() == Path(payload['menu_source']).resolve()
         dialog = next(w for w in app.topLevelWidgets()
                       if isinstance(w, module.ExportDialog) and w.isVisible())

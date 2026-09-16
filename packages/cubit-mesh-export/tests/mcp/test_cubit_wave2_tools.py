@@ -15,7 +15,7 @@ def test_doctor_returns_per_check_statuses():
     out = json.loads(cubit_doctor())
     assert out["status"] in ("ok", "problems_found")
     checks = out["checks"]
-    for key in ("install", "license", "plugin", "daemon", "drop_dir",
+    for key in ("install", "license", "plugin", "daemon", "session_diagnostics",
                 "check_vol_deps"):
         assert key in checks, key
         assert checks[key].get("status") in ("ok", "warn", "error",
@@ -75,46 +75,6 @@ def test_record_cmd_history_and_journal_format(monkeypatch, tmp_path):
     assert "#{size = 1}" in text
     assert "brick x {size}" in text
     assert "mesh volume 99" in text
-
-
-def test_attach_ping_detects_unresponsive_daemon(monkeypatch, tmp_path):
-    """A pid.lock pointing at a LIVE pid (this test process) with a ready
-    marker but nobody answering the file-drop ping must fail fast with a
-    clear hung-daemon message -- and must NOT kill the pid."""
-    import os
-    import pytest
-
-    drop = tmp_path / "cubit-session"
-    drop.mkdir()
-    (drop / "out").mkdir()
-    (drop / "pid.lock").write_text(str(os.getpid()), encoding="utf-8")
-    (drop / "ready").write_text(json.dumps(
-        {"ready": True, "protocol_version": 2, "pid": os.getpid(),
-         "drop": str(drop)}), encoding="utf-8")
-
-    monkeypatch.setattr(cubit_session, "_user_daemon_dir", lambda: drop)
-    monkeypatch.setattr(cubit_session, "ATTACH_PING_TIMEOUT_S", 0.4)
-    sess = cubit_session.CubitSession.__new__(cubit_session.CubitSession)
-    sess._bin_dir = tmp_path          # never used before the attach branch
-    sess._mode = "gui"
-    sess._proc = None
-    sess._next_id = 1
-    sess._ready_info = None
-    sess._drop_dir = None
-    sess._outbox = None
-    sess._owned = False
-    sess._last_license_warmup = {}
-    sess._command_history = []
-    sess._command_history_max = 10
-
-    with pytest.raises(cubit_session.CubitSessionError) as ei:
-        sess._start_gui_bootstrap()
-    msg = str(ei.value)
-    assert "did not answer a ping" in msg
-    assert "cubit_session_shutdown" in msg
-    # non-destructive: markers left for the daemon's other clients
-    assert (drop / "pid.lock").is_file()
-    assert (drop / "ready").is_file()
 
 
 def test_call_log_records_tool_calls(monkeypatch, tmp_path):

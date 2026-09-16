@@ -1,6 +1,6 @@
 #include "ExportVtkCommand.hpp"
 #include "MeshData.hpp"
-#include "RadiaMessageFilter.hpp"
+#include "LearnEditionMessageFilter.hpp"
 #include "CubitMessage.hpp"
 #include "utf8_path.hpp"
 
@@ -95,7 +95,7 @@ std::vector<std::string> ExportVtkCommand::get_help()
 bool ExportVtkCommand::execute(CubitCommandData &data)
 {
   // Suppress Cubit Learn Edition's harmless 50k-cap ERROR.
-  radia::ScopedLearnEditionFilter _lef_guard;
+  cubit_mesh_export::ScopedLearnEditionFilter _lef_guard;
 
   std::string filename;
   data.get_string("filename", filename);
@@ -207,7 +207,7 @@ bool ExportVtkCommand::write_vtk(const std::string &filename,
   int num_cells = (int)cells.size();
 
   fid << "# vtk DataFile Version 3.0\n";
-  fid << "Radia Cubit Plugin";
+  fid << "cubit-mesh-export";
   if (order >= 2) fid << " (order " << order << ")";
   fid << "\n";
   fid << "ASCII\n";

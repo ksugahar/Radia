@@ -1,4 +1,4 @@
-"""Regression tests for the real-Cubit Radia Export display contract."""
+"""Regression tests for the real-Cubit Cubit Mesh Export display contract."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ def _healthy_payload():
         "toolbar_actions": actions,
         "action_visible": {name: True for name in actions},
         "action_enabled": {name: True for name in actions},
-        "toolbar_menu_has_radia_export": True,
+        "toolbar_menu_has_cubit_mesh_export": True,
         "toolbar_owner": "WorkflowToolbar",
     }
 
@@ -60,7 +60,7 @@ def test_display_contract_accepts_one_visible_complete_toolbar():
             "action is not enabled: VTK",
         ),
         (
-            lambda data: data.update(toolbar_menu_has_radia_export=False),
+            lambda data: data.update(toolbar_menu_has_cubit_mesh_export=False),
             "absent from Cubit's toolbar menu",
         ),
         (
@@ -112,8 +112,8 @@ def test_gui_smoke_is_an_installed_release_gate():
     assert project["project"]["scripts"]["cubit-toolbar-smoke-test"] == (
         "cubit_mesh_export.toolbar_smoke:main"
     )
-    radia = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    assert "cubit-toolbar-smoke-test" not in radia["project"]["scripts"]
+    monorepo = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    assert "cubit-toolbar-smoke-test" not in monorepo["project"]["scripts"]
     assert SMOKE._probe_path().is_file()
 
     release_source = (ROOT / "tools" / "release_quad.py").read_text(

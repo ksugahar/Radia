@@ -100,7 +100,7 @@ def add_cubit_mesh_curver_to_path() -> None:
 
 def export_netgen(cubit, stem: str, order: int = 1) -> Path:
     """Run the public 2025.12 Netgen export command and return the .vol path."""
-    out_dir = Path(tempfile.mkdtemp(prefix="radia_cubit_test_"))
+    out_dir = Path(tempfile.mkdtemp(prefix="cubit_mesh_export_test_"))
     out = out_dir / f"{stem}_o{order}.vol"
     cmd_path = str(out).replace("\\", "/")
     cubit.cmd(f'export netgen "{cmd_path}" order {order} overwrite')

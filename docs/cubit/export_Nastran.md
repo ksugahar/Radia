@@ -10,9 +10,8 @@ export nastran_bdf "mesh.bdf" [order <1|2>] [dimension <2|3>] [nopyramid] [overw
 ```
 
 `export nastran_bdf` is the primary, solver-neutral command.
-`export jmag_nastran` is a deprecated compatibility alias for existing
-journals. Do not use Cubit's built-in `export nastran` when this plugin format
-and its high-order curving are required.
+No alternate spelling is registered. Do not use Cubit's built-in
+`export nastran` when this plugin format and its high-order curving are required.
 
 Mesh elements must belong to Cubit blocks. Sidesets and nodesets are exported
 in addition to the blocked mesh.

@@ -1,7 +1,7 @@
 #include "ExportGmshCommand.hpp"
 #include "MeshData.hpp"
 #include "NetgenCurver.hpp"
-#include "RadiaMessageFilter.hpp"
+#include "LearnEditionMessageFilter.hpp"
 #include "CubitMessage.hpp"
 #include "CubitInterface.hpp"
 #include "utf8_path.hpp"
@@ -57,7 +57,7 @@ bool write_gmsh_launch_companions(const std::string &msh_filename)
     PRINT_WARNING("GMSH companion: cannot write %s\n", geo.c_str());
     return false;
   }
-  gf << "// Auto-generated Radia GMSH launch companion for " << msh_base << "\n";
+  gf << "// Auto-generated cubit-mesh-export GMSH launch companion for " << msh_base << "\n";
   gf << "// Open this .geo for normal review; open .msh only for raw data inspection.\n";
   gf << "Merge \"" << msh_base << "\";\n\n";
   write_gmsh_display_options(gf);
@@ -120,7 +120,7 @@ std::vector<std::string> ExportGmshCommand::get_help()
     "Block assignment is NOT required.\n"
     "Sidesets exported as surface elements. Nodesets as comments.\n\n"
     "Writes filename.geo, filename.geo.opt, and filename.msh.opt.\n"
-    "Open the .geo file for normal Radia review; the .msh is raw data.\n\n"
+    "Open the .geo file for normal review; the .msh is raw data.\n\n"
     "Options:\n"
     "  order 1      1st-order elements (default)\n"
     "  order 2      2nd-order (edge mid-nodes)\n"
@@ -134,9 +134,9 @@ std::vector<std::string> ExportGmshCommand::get_help()
 
 bool ExportGmshCommand::execute(CubitCommandData &data)
 {
-  // Suppress Cubit Learn Edition's harmless 50k-cap ERROR.  Radia
+  // Suppress Cubit Learn Edition's harmless 50k-cap ERROR.  The exporter
   // completes the export regardless; the ERROR is misleading noise.
-  radia::ScopedLearnEditionFilter _lef_guard;
+  cubit_mesh_export::ScopedLearnEditionFilter _lef_guard;
 
   std::string filename;
   data.get_string("filename", filename);

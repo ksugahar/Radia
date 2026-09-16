@@ -18,7 +18,7 @@ The old desktop `radia_*.py` PySide6 analysis panels and their ignored GUI
 tests have been removed. Interface behavior belongs to Simulink tests; solver
 evidence remains here as result-bearing validation.
 
-Cubit is the exception: `packages/cubit-mesh-export/src/cubit_mesh_export/cubit_gui/radia_export_menu.py` and
+Cubit is the exception: `packages/cubit-mesh-export/src/cubit_mesh_export/cubit_gui/cubit_export_menu.py` and
 `register_toolbar.py` run inside Coreform Cubit's embedded PySide6 runtime.
-Their local test (`test_radia_export_menu.py`) is skipped when normal Radia
+Their local test (`test_cubit_export_menu.py`) is skipped when the normal
 Python has no PySide6.

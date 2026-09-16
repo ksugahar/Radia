@@ -29,7 +29,7 @@ namespace ng = netgen;
 PYBIND11_MODULE(cubit_mesh_curver, m)
 {
     m.doc() = R"doc(
-        Radia Cubit mesh curving (C++ accelerated, Cubit-free).
+        Cubit mesh curving (C++ accelerated, Cubit-free).
 
         Receives linear mesh data and geometry callbacks from Python,
         builds a curved Netgen mesh using BuildCurvedElements.
