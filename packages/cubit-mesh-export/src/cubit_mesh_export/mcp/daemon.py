@@ -27,7 +27,6 @@ Supported `op` values:
     "cmd"       args=[str, ...]    execute cubit commands, return list of
                                     per-command success flags
     "probe"     args=[query]       return lab-common geometry queries
-    "snapshot"  args=[path, w, h]  hardcopy current view to PNG
     "shutdown"  args=[]            graceful exit
 
 On startup the daemon emits exactly one "ready" line before entering
@@ -49,7 +48,7 @@ os.dup2(2, 1)    # fd 1 -> fd 2: any C-level print to stdout now hits stderr
 # Find Cubit binding directory (sibling of bin/python3/).
 # Was hardcoded "Cubit 2025.3" until 2026-05-25; now auto-discovers the
 # highest-version "Coreform Cubit *" under C:\Program Files. Honors
-# CUBIT_BIN_DIR (legacy var) and CUBIT_INSTALL_DIR (preferred) overrides.
+# CUBIT_BIN_DIR and CUBIT_INSTALL_DIR overrides.
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -90,17 +89,13 @@ def _log(msg):
     sys.stderr.flush()
 
 
-def _init_cubit(gui: bool):
+def _init_cubit():
     """Import cubit and initialize. Returns the imported module."""
     import cubit  # noqa: E402  (deferred import; path set above)
 
     # -nojournal: we don't need automatic .jou journaling.
     # -noecho:    don't re-echo commands to stdout (we'd corrupt JSON-RPC).
-    # For GUI:    omit -batch and -nographics.
-    # For headless: add -batch -nographics.
-    argv = ["cubit", "-nojournal", "-noecho"]
-    if not gui:
-        argv.extend(["-batch", "-nographics"])
+    argv = ["cubit", "-nojournal", "-noecho", "-batch", "-nographics"]
     cubit.init(argv)
     return cubit
 
@@ -160,35 +155,25 @@ def _op_cmd(cubit_mod, args):
 
 
 def _op_probe(cubit_mod, args):
-    """Delegate to the SHARED probe implementation (probe_ops.op_probe)
-    used by both the batch stdio runner (this file) and the GUI
-    file-drop runner (bootstrap.py) -- single source, no query drift."""
+    """Delegate to the Cubit-side probe implementation."""
     if _HERE not in sys.path:
         sys.path.insert(0, _HERE)
     import probe_ops
     return probe_ops.op_probe(cubit_mod, args)
 
 
-
-def _op_snapshot(cubit_mod, args):
-    """Delegate to the SHARED snapshot implementation (probe_ops)."""
-    if _HERE not in sys.path:
-        sys.path.insert(0, _HERE)
-    import probe_ops
-    return probe_ops.op_snapshot(cubit_mod, args)
-
-
 def main():
     """Entry point: initialize Cubit, emit ready, enter RPC loop."""
     requested_mode = os.environ.get("CUBIT_DAEMON_MODE", "batch").lower()
-    gui = requested_mode == "gui"
-
     try:
-        cubit_mod = _init_cubit(gui=gui)
+        if requested_mode != "batch":
+            raise ValueError("Only headless CUBIT_DAEMON_MODE=batch is supported")
+        cubit_mod = _init_cubit()
         version = getattr(cubit_mod, "__version__", "unknown")
         _write_response({
             "ready": True,
-            "mode": "gui" if gui else "batch",
+            "mode": "batch",
+            "protocol_version": 1,
             "cubit_version": version,
         })
     except Exception:
@@ -234,14 +219,6 @@ def main():
             try:
                 result = _op_probe(cubit_mod, args)
                 ok = not (isinstance(result, dict) and "error" in result)
-                _write_response({"id": req_id, "ok": ok, "result": result})
-            except Exception:
-                _write_response({"id": req_id, "ok": False,
-                                 "error": traceback.format_exc()})
-        elif op == "snapshot":
-            try:
-                result = _op_snapshot(cubit_mod, args)
-                ok = result.get("ok", False)
                 _write_response({"id": req_id, "ok": ok, "result": result})
             except Exception:
                 _write_response({"id": req_id, "ok": False,

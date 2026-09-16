@@ -59,7 +59,6 @@ Environment knobs:
 | Variable | Effect |
 |---|---|
 | `CUBIT_BIN_DIR` / `CUBIT_INSTALL_DIR` | Override Coreform Cubit install discovery |
-| `RADIA_CUBIT_SESSION_MODE` | `auto` (default): attach to the live shared daemon, else spawn. `new`: always spawn a fresh daemon in a private per-process drop dir (hermetic CI; removed on shutdown). `existing`: attach only — fail loud when no shared daemon is running |
 | `CUBIT_MCP_TOOL_PROFILE=full` | Expose individual validation tools for debugging; production defaults to `core` |
 | `CUBIT_MCP_CUBIT_GATES=0` | In the `full` profile, additionally hide direct `*_gate` tools |
 | `RADIA_CUBIT_EAGER=1` | Start the Cubit session in the background at server startup (hides the 30+ s first-call cost) |
@@ -74,8 +73,8 @@ mcp-server-cubit --setup
 
 First stop when anything misbehaves: `cubit_doctor()` — a read-only
 one-shot diagnosis of install discovery, license cache, deployed-plugin
-freshness (hash vs the cubit-mesh-export copy), daemon state, drop-dir
-startup diagnostics, and check-vol dependencies.
+freshness (hash vs the cubit-mesh-export copy), owned daemon state, current
+stderr diagnostics, and check-vol dependencies.
 
 Then in a session:
 
@@ -129,25 +128,21 @@ Claude Code (MCP client)
 
 Session robustness (MathWorks MATLAB-MCP patterns, 2026-08-05):
 
-- **Startup failures report the real error**: the GUI bootstrap writes
-  `startup_error.txt` on any in-process exception, Cubit's own console
-  goes to `cubit_stdout.log` / `cubit_stderr.log` in the per-user drop
-  dir, and the ready-poll surfaces those instead of a bare timeout.
-- **Ownership-tagged cleanup**: recovery paths only ever kill a Cubit
-  THIS process spawned; a live daemon another window started is detached
-  from, never terminated. The explicit `cubit_session_shutdown` tool is
-  the one way to stop a foreign/hung daemon, and it reports which
-  process it stopped.
-- **Errors carry `kind`**: `"input"` (fix your commands and retry),
-  `"environment"` (license/install/hung — tell the user), `"internal"`
-  (server bug — do not retry), plus a `log` pointer to the drop-dir
-  diagnostics. Server-level MCP `instructions` teach connecting models
-  the same contract.
+- **Startup failures report the real error**: the daemon returns a checked
+  ready response; its console output is captured in the bounded stderr tail.
+- **Process-owned headless sessions**: never attach to another process or
+  read historical PID files. Shutdown affects only the child we started.
+  On Windows a kill-on-close Job Object binds the child to its client's lifetime.
+- **No transparent replay**: a lost response leaves command outcome unknown.
+  The failed child is discarded; restore a saved checkpoint explicitly before
+  continuing. Startup waits are bounded and failed children are reaped.
+- **Errors carry `kind`** and current stderr diagnostics, not pointers to old
+  GUI logs. `cubit_session_status` describes only this process's session.
 - **Every tool is annotation-classified** (read-only / read-only+web /
   file-writing / session-destructive presets) so MCP clients can gate
   permissions correctly.
-- **`cubit_snapshot` fails explicitly** because hardcopy requires a graphics
-  window; MCP does not open one or attach to a human GUI session.
+- **No GUI snapshot API**: render exported Gmsh/VTK artifacts instead.
+  The obsolete snapshot tool and file-drop transport have been removed.
 
 ## Lab-specific workflows
 
@@ -185,8 +180,8 @@ the headless/batch route** — `.jou` playback, `cubit_batch_try`,
 `cubit_mesh_auto`, the batch stdio daemon. That is the primary path for
 mesh generation, exports, gates, and validation, and it must never
 require a GUI window. MCP tools never launch or attach to the Cubit GUI.
-`cubit_stage` stages a model in the persistent headless session, while
-`cubit_snapshot` fails explicitly because Cubit hardcopy requires rendering.
+`cubit_stage` stages a model in the persistent headless session.
+Visual inspection uses exported artifacts, not a hidden GUI transport.
 Human GUI use and the single explicitly scoped toolbar/rendering release test
 are separate workflows outside this server.
 
@@ -199,7 +194,7 @@ are separate workflows outside this server.
 | Cross-version `.jou` | ✅ (lint) | (no help) |
 | `.vol` gate before solver | ✅ (`cubit_check_vol`) | ❌ |
 | Single-shot mesh you'll never re-do | ❌ overkill | ✅ |
-| Visual debugging | `cubit_snapshot` | ✅ |
+| Visual debugging | Export Gmsh/VTK artifacts | ✅ |
 | License-saving batch runs | ✅ (`-batch -nographics`) | ❌ |
 
 ## Licensing boundary and data collection
@@ -211,14 +206,14 @@ are separate workflows outside this server.
 - The persistent session and headless batch runs each consume a license
   seat while alive.
 - **This server sends no usage data anywhere.** The only records are
-  local diagnostics under the per-user drop dir and the local failure
-  log.
+  current-process diagnostics and Cubit-owned local failure/call logs.
 
 ## Cross-server API compatibility (cubit ↔ build123d ↔ external CAD)
 
-`mcp-server-cubit` and `mcp-server-build123d` share one hardening layer
+`mcp-server-cubit` owns its private hardening implementation
 (`cubit_mesh_export.mcp._support.server_hardening`: annotation presets, error-kind
-contract, gate hiding, all-calls JSONL log) and one **probe contract**:
+contract, gate hiding, all-calls JSONL log). Cross-server interoperability uses
+an explicit **probe contract**, not a shared runtime dependency:
 
 | Concept | build123d (CAD side) | Cubit (mesh side) | History-based CAD (e.g. CST) |
 |---|---|---|---|

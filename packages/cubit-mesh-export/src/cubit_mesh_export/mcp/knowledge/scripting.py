@@ -3790,82 +3790,31 @@ Do NOT coarsen meshes to get under 50k.  See CLAUDE.md
 
 
 CUBIT_DAEMON_PERSISTENCE = """
-# Persistent headless Cubit session
+# Headless session lifetime
 
-The MCP server keeps one Cubit session warm for incremental commands. Every
-LLM-owned session runs under Cubit's bundled Python with `-batch -nographics`
-and uses stdio JSON-RPC. It is owned by the MCP process; responses record
-`execution_mode="batch"` and `gui_started=false`.
-
-The historical file-drop GUI transport remains an internal compatibility
-implementation for manual, non-MCP integrations. MCP entry points explicitly
-request `CubitSession.get(mode="batch")`; a mode-mismatched singleton fails
-loudly instead of being reused.
-
-Interactive Cubit GUI work is human-owned and outside this server. Exchange
-state through STEP, SAT, `.cub5`, `.jou`, `.vol`, Gmsh, logs, and result
-artifacts instead of attaching an LLM to a Cubit window.
+The MCP process owns one persistent batch daemon, reused across its calls.
+It never launches or attaches to a GUI. Closing/restarting the MCP client
+ends this session; geometry is not recovered by PID or from a shared daemon.
+Use cubit_checkpoint and saved .cub5/.jou artifacts for explicit restoration.
+Transport failures discard the child and report an unknown command outcome;
+commands are never replayed automatically on a fresh, empty model.
+cubit_session_status and cubit_doctor report the owned process and stderr.
+Human GUI work is separate and exchanges saved artifacts with headless work.
 """
 
 
 CUBIT_LICENSE_WARMUP = """
-# Cubit license warmup (radia-mcp >= 0.32.0)
+# Optional Coreform Learn license warmup
 
-Coreform Cubit 2025.12 authenticates via RLM (Reprise License Manager).
-The first Cubit batch start after a machine sits idle takes
-**30-60 s** because RLM:
-
-  1. Contacts the Coreform license server (internet round-trip).
-  2. Writes a renewal entry to
-     `%LOCALAPPDATA%/Coreform/CoreformCubit/renewals/*.ren`.
-  3. Caches for 3 days (renew) / 7 days (hard expiry).
-
-If a recent renewal is on disk, the same boot costs ~3 s.
-
-## What the warmup does
-
-`cubit_mesh_export.mcp.license_warmup.warmup_license(bin_dir, timeout_s=30)`
-parses the renewals folder.  If the most recent `.ren` is within 3 days,
-it returns immediately.  Otherwise it runs
-`rlm_activate.exe --login <email> --password <pw>` **before** Cubit is
-spawned.  This turns a 60-s cold boot into a 3-s warm boot.
-
-## Credentials
-
-- `RADIA_CUBIT_LEARN_EMAIL` / `RADIA_CUBIT_LEARN_PASSWORD` env vars.
-- No hard-coded defaults: when either env var is unset, warmup is
-  skipped and Cubit does its own license checkout (slower).  Set
-  the env vars in the lab launcher script before invoking Cubit
-  for the fast-warm path.
-- These credentials are for the **Coreform Learn Edition** only.  Pro
-  machines use the local license server and skip the warmup path.
-
-## User-facing shortcut (100号機)
-
-Kubota and other shared-machine users get:
-
-- `Desktop\\Coreform Cubit (warm launch).lnk` — warmup + start Cubit.
-- `C:/ProgramData/CoreformCubit/cubit_refresh.cmd` — warmup only,
-  no Cubit launch (the silent "one-click refresh" option).
-
-Both are drop-in replacements for clicking the normal Cubit icon.
-After the scheduled task `\\Coreform\\CubitLicenseRefresh` fires once
-per user logon, the cache is already warm and these shortcuts complete
-in < 5 s.
-
-## Debugging a slow cold boot
-
-1. `dir %LOCALAPPDATA%\\Coreform\\CoreformCubit\\renewals` — look for a
-   `.ren` file newer than 3 days.  If absent, warmup will run.
-2. `type C:\\ProgramData\\CoreformCubit\\cubit_refresh.log` (if present)
-   shows the last `rlm_activate` exit code.
-3. `rlm_activate.exe --login <email> --password <pw>` direct — if this
-   hangs, it is a network / firewall issue, not a Radia issue.
-
-## See also
-
-- `daemon_persistence` -- how the 0.01 s attach path works after warmup.
-- `trial_error_policy` -- batch-first testing minimises cold-boot hits.
+The explicit `python -m cubit_mesh_export.mcp.server --setup` route calls
+`cubit_mesh_export.mcp.license_warmup.warmup_license` before diagnostics.
+Ordinary headless session startup lets Cubit perform its own license checkout;
+it does not promise automatic warmup, shared-daemon attachment or fixed timing.
+The helper checks the user's renewal cache (3-day freshness threshold).
+Credentials use RADIA_CUBIT_LEARN_EMAIL / RADIA_CUBIT_LEARN_PASSWORD;
+missing credentials skip activation. Never put credentials in tracked files.
+Learn activation uses rlm_activate; a Pro/network license is managed separately.
+No desktop shortcut or scheduled refresh task is assumed to be installed.
 """
 
 
@@ -3926,67 +3875,12 @@ deploy phase (not in CI because CI runners do not have Cubit installed).
 
 ## See also
 
-- `license_warmup` -- the 30-60 s -> 3 s first-boot speedup.
+- `license_warmup` -- optional Learn license preparation.
 - `batch_first` (alias of `trial_error_policy`) -- why CI can't easily
   cover Cubit-dependent tests.
 """
 
 
-CUBIT_V4_7_0_RELEASE = """
-# radia 4.7.0 / cubit-mesh-export 0.6.0 / radia-mcp 0.32.0 (2026-04-22)
-
-This is the **v4.7.0 release synopsis** for the Cubit side.  The three
-packages release in lockstep; see the per-package CHANGELOGs for
-Python- or build-specific details.
-
-## Headline features
-
-1. **PEEC-inductance now handles any STEP**
-   - 1-turn circular torus (gapped or closed) via TORUS analytical sweep.
-   - 1-turn rect-section torus via CYLINDER analytical sweep.
-   - Multi-turn pancake loft via cross-section centroid NN chain.
-   - Explicit `.jou` sidecar still supported (fastest path).
-   - New: auto-prefer `<base>.jou` sibling next to `<base>.step` if it
-     contains a PEEC `move Surface ... x Y y Y z Z` pattern.
-
-2. **Japanese / Unicode paths work**
-   All 6 Cubit exporters (Netgen / GMSH / Nastran / VTK / MEG / FEMEEM)
-   handle `C:/temp/日本語/...` correctly.  See `utf8_path` topic.
-
-3. **Cubit startup 30-60 s -> 3 s; VSCode restart 6 s -> 0.01 s**
-   License warmup + daemon attach-if-alive.  See `license_warmup` and
-   `daemon_persistence` topics.
-
-## Upgrade notes for existing users
-
-- LAB / 100号機: `release_quad.py` deploys editable installs; on each user's
-  next Windows logon the scheduled task `\\Coreform\\CubitLicenseRefresh`
-  will prime the RLM cache automatically.  Users in an existing logon
-  session can double-click `Coreform Cubit (warm launch)` on the desktop
-  or run `C:/ProgramData/CoreformCubit/cubit_refresh.cmd` to get the
-  same effect immediately.
-- External licensed Cubit hosts: `pip install --upgrade cubit-mesh-export`
-  + `cubit-plugin-install` +
-  `cubit-plugin-install --verify-only`.
-- Lab release-dual targets LAB and 100 only. Do not deploy Cubit or its MCP
-  to hibino/mdx as part of this release lane.
-- VSCode MCP users: restart VSCode once to pick up the new daemon code.
-  After that, subsequent restarts attach in 0.01 s.
-
-## Known issues / non-goals
-
-- MCP Python module hot-reload without VSCode restart: not possible
-  (OS-level limit — existing imports are in the Python process).
-- Non-admin SSH user impersonation without password: not supported
-  (6 Windows routes tried; see `.claude/skills/debug-remote-user`).
-
-## See also
-
-- `daemon_persistence` -- Phase 1 attach-if-alive.
-- `license_warmup` -- the 3-day RLM cache + `cubit_refresh.cmd`.
-- `utf8_path` -- Japanese path handling.
-- Top-level `CHANGELOG.md` -- Python-side details.
-"""
 
 
 CUBIT_APREPRO_VS_PREDICATE = """
@@ -4191,8 +4085,6 @@ def get_cubit_documentation(topic: str = "all") -> str:
 		# v4.7.0 operational topics (radia-mcp >= 0.32.0)
 		"daemon_persistence": CUBIT_DAEMON_PERSISTENCE,
 		"daemon": CUBIT_DAEMON_PERSISTENCE,  # alias
-		"phase1_attach": CUBIT_DAEMON_PERSISTENCE,  # alias
-		"pid_lock": CUBIT_DAEMON_PERSISTENCE,  # alias
 		"license_warmup": CUBIT_LICENSE_WARMUP,
 		"warmup": CUBIT_LICENSE_WARMUP,  # alias
 		"rlm_activate": CUBIT_LICENSE_WARMUP,  # alias
@@ -4202,9 +4094,6 @@ def get_cubit_documentation(topic: str = "all") -> str:
 		"japanese_path": CUBIT_UTF8_PATH,  # alias
 		"unicode_path": CUBIT_UTF8_PATH,  # alias
 		"cp932": CUBIT_UTF8_PATH,  # alias
-		"v4_7_0": CUBIT_V4_7_0_RELEASE,
-		"release_v4_7_0": CUBIT_V4_7_0_RELEASE,  # alias
-		"4.7.0": CUBIT_V4_7_0_RELEASE,  # alias
 		# 2026-04-29: APREPRO vs `with` predicate distinction
 		"aprepro_vs_predicate": CUBIT_APREPRO_VS_PREDICATE,
 		"aprepro_predicate": CUBIT_APREPRO_VS_PREDICATE,  # alias
