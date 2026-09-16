@@ -26,19 +26,22 @@ python -c "import pathlib,radia; print(radia.__version__); print(pathlib.Path(ra
 python -c "import pathlib,radia.simulink.application as m; print(pathlib.Path(m.__file__).resolve())"
 ```
 
-Both paths must resolve to the intended canonical editable checkout, not a
-wheel under `site-packages` and not a release worktree. LAB and 100号機 use
-editable installs. If the source is wrong, stop the running MCP/MATLAB clients,
-then reinstall from the canonical checkout:
+Both paths must resolve to the explicitly intended current editable checkout,
+not a wheel under `site-packages`. A reviewed release worktree is valid while
+it is the selected current source; a historically canonical path is not an
+automatic recovery target. LAB and 100号機 use editable installs. If the source
+is wrong, verify the intended source and repoint only `radia`, without an
+uninstall-first step:
 
 ```powershell
-python -m pip uninstall -y radia
-python -m pip install -e . --no-deps
+python -m pip install -e <intended-current-radia-root> --no-deps
 ```
 
-Reconnect long-lived MCP and MATLAB processes after changing the editable
-source. A process keeps imported modules and registered tool objects until it
-reloads or restarts.
+Verify editable metadata and a fresh import before touching long-lived clients.
+Then reconnect only affected MCP/MATLAB clients at a safe boundary. A process
+keeps imported modules and registered tool objects until it reloads or restarts.
+Fix a failed update forward; never repoint to an older tree merely because it
+was previously installed.
 
 ## 2. Verify the Simulink application boundary
 
@@ -76,12 +79,15 @@ inventory and a real export/check cycle.
 
 ## 4. Cross-machine acceptance
 
-- LAB and 100号機: canonical editable source and fast application checks.
-- mdx: isolated CI/compute environment; never infer its state from LAB files.
+- LAB and 100号機: explicitly intended current editable source and fast
+  application checks.
+- mdx1/mdx2: isolated CI/compute environments; never infer their state from LAB
+  files.
 - hibino: optional long optimization/validation compute host.
 - Release verification: use `release-quad`; every result must be attributable to
   one immutable commit SHA.
 
-Reject the deployment when any machine resolves a different source tree, a
-long-lived process exposes a stale tool list, the tracked Simulink model cannot
-be reopened cleanly, or Cubit binaries and toolbar files disagree.
+Reject the deployment when a machine resolves a source different from its
+recorded intended source or release commit, a long-lived process exposes a
+stale tool list, the tracked Simulink model cannot be reopened cleanly, or Cubit
+binaries and toolbar files disagree.

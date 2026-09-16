@@ -6,15 +6,16 @@ description: Current Radia deployment entry point. Use release-quad for releases
 # Deploy
 
 Use this skill for deployment triage that does not yet require a new release.
-For a release candidate, load `.agents/skills/release-quad/SKILL.md` and follow
-that gate instead.
+For a release candidate, use the owning release skill: `release-quad` for the
+numerical Radia solver/Simulink package, `release-radia-mcp` for radia-mcp, and
+`release-cubit-mesh-export` for the exporter and Cubit MCP.
 
 ## Machine roles
 
 - LAB and 100号機 are development hosts with editable `radia`,
   `cubit-mesh-export`, and `radia-mcp` installs.
-- mdx is the priority CI runner and a MATLAB compute host. CI builds in an
-  isolated per-run environment.
+- mdx1 and mdx2 are the priority CI runners and MATLAB compute hosts. CI builds
+  in isolated per-run environments.
 - hibino runs long optimization and validation jobs when available.
 - No workflow selects a LAB runner. The EqnEdit64 release lane is GitHub-hosted
   end to end: the signed executable reaches it as an asset of the
@@ -30,7 +31,9 @@ that gate instead.
    toolbar with `cubit-plugin-install` and `cubit-smoke-test`.
 3. Build native extensions on the machine that will validate them, using the
    selected Python environment and pip `mkl-devel`.
-4. Publish only through `release-quad`; its `done` gate is the release decision.
+4. Publish only through the owning release lane. `release-quad done` decides
+   the numerical solver/Simulink release; it does not publish or deploy
+   radia-mcp or cubit-mesh-export.
 
 ## Forbidden legacy routes
 

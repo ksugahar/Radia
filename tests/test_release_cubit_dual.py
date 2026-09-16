@@ -1,6 +1,5 @@
 """Independent release receipts must not waive bytes, targets or GUI gates."""
 import importlib.util
-import json
 from pathlib import Path
 import sys
 import zipfile
@@ -19,6 +18,20 @@ def test_worker_compiles_and_targets_only_dual():
     assert "'-e', str(package)" in dual.WORKER
     assert 'pip\', \'uninstall' not in dual.WORKER
     assert 'taskkill' not in dual.WORKER
+
+
+def test_dedicated_cli_owns_release_dual_entrypoint():
+    args = dual.build_parser().parse_args([
+        '--action', 'preflight',
+        '--wheel', 'candidate.whl',
+        '--source-sha', 'a' * 40,
+        '--source-root-lab', r'S:\\Radia\\01_GitHub',
+        '--source-root-100', r'W:\\00_CAE\\Radia\\01_GitHub',
+        '--evidence-lab', r'C:\\temp\\cubit-dual',
+        '--evidence-100', r'C:\\temp\\cubit-dual',
+    ])
+    assert args.action == 'preflight'
+    assert args.wheel == 'candidate.whl'
 
 
 def test_receipt_requires_every_acceptance_field():

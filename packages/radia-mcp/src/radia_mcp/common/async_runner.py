@@ -2,7 +2,7 @@
 
 Adapted from wjc9011/COMSOL_Multiphysics_MCP src/async_handler/solver.py
 (which wraps long COMSOL solves). Generalized here for arbitrary
-long-running commands (Cubit mesh + NGSolve solve + Radia C++ Solve
+long-running commands (external mesh + NGSolve solve + Radia C++ Solve
 + Optuna sweep, etc.).
 
 Why bother:
@@ -40,7 +40,7 @@ Usage:
 from __future__ import annotations
 import threading
 import traceback
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from typing import Any, Callable, Optional

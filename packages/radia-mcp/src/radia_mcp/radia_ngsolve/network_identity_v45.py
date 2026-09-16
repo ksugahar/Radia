@@ -1,14 +1,13 @@
-"""Neutral CST v45 waveguide/EMC identity checks.
+"""Network v45 waveguide/EMC identity checks.
 
-The gate is intentionally solver-neutral: it checks lineage, units, owners,
-and replayed values without importing CST or exposing private result files.
+The gate checks lineage, units, owners, and replayed values without importing
+an external solver or exposing private result files.
 """
 
 from __future__ import annotations
 
 import math
 from collections.abc import Mapping, Sequence
-
 
 _WAVEGUIDE = "waveguide_cutoff_impedance_group_delay_power_orthogonality_mesh_owner_identity"
 _EMC = "emc_probe_coordinate_interpolation_window_fft_parseval_monitor_result_identity"
@@ -60,7 +59,7 @@ def _waveguide_ok(row: Mapping[str, object]) -> bool:
         and row.get("result_orthogonality_matrix") == matrix
         and str(row.get("mesh_owner", "")).startswith("mesh:")
         and row.get("result_mesh_owner") == row.get("mesh_owner")
-        and row.get("release_id") == row.get("result_release_id") == "cst-v45"
+        and row.get("release_id") == row.get("result_release_id") == "network-v45"
         and _digest(row.get("waveguide_result_sha256"))
         and row.get("accepted_waveguide_result_sha256") == row.get("waveguide_result_sha256")
     )
@@ -94,7 +93,7 @@ def _emc_ok(row: Mapping[str, object]) -> bool:
         and row.get("parseval_frequency_energy_j") == row.get("result_parseval_frequency_energy_j")
         and str(row.get("monitor_owner", "")).startswith("monitor:")
         and row.get("result_monitor_owner") == row.get("monitor_owner")
-        and row.get("release_id") == row.get("result_release_id") == "cst-v45"
+        and row.get("release_id") == row.get("result_release_id") == "network-v45"
         and _digest(row.get("emc_probe_result_sha256"))
         and row.get("accepted_emc_probe_result_sha256") == row.get("emc_probe_result_sha256")
     )
@@ -109,7 +108,7 @@ def validate_public_identity(payload: object) -> dict[str, bool]:
     waveguide = [row[_WAVEGUIDE] for row in rows if _WAVEGUIDE in row]
     emc = [row[_EMC] for row in rows if _EMC in row]
     if waveguide:
-        checks["cst_v45_waveguide_identity"] = len(waveguide) == len(rows) and all(_waveguide_ok(row) for row in waveguide)
+        checks["network_v45_waveguide_identity"] = len(waveguide) == len(rows) and all(_waveguide_ok(row) for row in waveguide)
     if emc:
-        checks["cst_v45_emc_probe_identity"] = len(emc) == len(rows) and all(_emc_ok(row) for row in emc)
+        checks["network_v45_emc_probe_identity"] = len(emc) == len(rows) and all(_emc_ok(row) for row in emc)
     return checks

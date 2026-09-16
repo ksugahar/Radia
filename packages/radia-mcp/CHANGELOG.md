@@ -7,6 +7,35 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- Remove retired Cubit bytecode caches from maintained editable deployments and
+  align the public release manual with independent MCP/Cubit package ownership.
+- Replace obsolete coupled-version, mass-process-stop, four-host MCP, and fixed
+  server-count guidance with the current LAB/100 release-dual contract.
+- Align shared deployment and Simulink skills with forward-only editable
+  updates and the LAB/100/mdx1/mdx2 solver acceptance pool; remove a dated live
+  bibliography-runtime handoff from the active operating contract.
+- Remove the retired solver-QUAD Cubit phase-0 build helper; the exporter-owned
+  `src/cubit_plugin/cubit_build.ps1` remains the single native build route, and
+  remove the residual Cubit release-dual forwarding command from solver QUAD.
+- Refresh registry metadata, tool descriptions, and historical incident
+  prevention guidance; remove the superseded shared-library design note.
+- Rename remaining commercial-solver-derived v45/v46 identity modules, tests,
+  result keys, and release markers to their neutral solver-state, network, and
+  motor responsibilities.
+- Remove fixed counts from every public discovery surface and derive them from
+  the live catalog; bound unfiltered coarse-tool
+  catalogs to 12 entries with an explicit truncation hint, and make hot-reload
+  CI ownership follow the implementation contract instead of one file path.
+- Remove residual Cubit example-source routing from `radia_mcp.common` and
+  record `cae-mcp-core` as a retired foundation that must not return.
+- Restore the figure-audit `NOT MEASURABLE` risk contract for linked/OLE
+  pictures without embedded artwork.
+- Reject any Python module in a built wheel that no longer exists in the source
+  tree, preventing a reused setuptools `build/lib` cache from resurrecting
+  deleted modules.
+- Adopt the current SPDX `project.license` metadata form and a compatible
+  setuptools build floor, removing the deprecated table-form build warning.
+
 ## [1.5.2] - 2026-09-16
 
 - Separate Radia MCP release-dual guidance from the numerical solver's four-host

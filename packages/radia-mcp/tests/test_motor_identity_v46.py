@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 
-from radia_mcp.radia_ngsolve.jmag_v46_identity import validate_public_identity
+from radia_mcp.radia_ngsolve.motor_identity_v46 import validate_public_identity
 
 
 TORQUE = "v46_public_transient_torque_sampling_periodic_window_partial_solution_mismatch"
@@ -31,19 +31,19 @@ def _identity():
     return {TORQUE: torque, THERMAL: thermal}
 
 
-def test_v46_public_jmag_identity_accepts_closed_artifacts():
+def test_v46_public_motor_identity_accepts_closed_artifacts():
     checks = validate_public_identity(_identity())
     assert checks and all(checks.values())
 
 
-def test_v46_public_jmag_identity_rejects_sampling_mutation():
+def test_v46_public_motor_identity_rejects_sampling_mutation():
     identity = _identity()
     identity[TORQUE]["result_periodic_window_deg"] = 180.0
     identity[TORQUE]["result_sample_times_s"] = [0.0]
     assert not all(validate_public_identity(identity).values())
 
 
-def test_v46_public_jmag_identity_rejects_thermal_frame_mutation():
+def test_v46_public_motor_identity_rejects_thermal_frame_mutation():
     identity = _identity()
     identity[THERMAL]["result_thermal_unit"] = "celsius"
     identity[THERMAL]["result_coordinate_frame"] = "rotor_local"

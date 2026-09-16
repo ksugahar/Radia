@@ -33,8 +33,9 @@ Run:  python tools/audit_pyside6_only.py
 Exit 0 = no legacy Qt and Cubit toolbar smoke healthy/skipped; non-zero =
 issues (listed).
 
-The machine/Cubit half (cubit-plugin-install --verify-only, cubit-smoke-test,
-cross-machine SSH to 100号機 / mdx / hibino) lives in the release/deploy gates.
+The machine/Cubit half (cubit-plugin-install --verify-only and licensed Cubit
+smoke on LAB/100号機) belongs to the independent cubit-mesh-export release-dual.
+The solver QUAD does not deploy or smoke Cubit on mdx1/mdx2 or hibino.
 """
 from __future__ import annotations
 
