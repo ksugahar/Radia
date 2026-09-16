@@ -34,7 +34,7 @@ from ngsolve import (H1, HCurl, BilinearForm, LinearForm, GridFunction,
                       Periodic, Compress, CoefficientFunction, TaskManager,
                       curl, dx, ds, grad, InnerProduct, Conj, Integrate)
 
-from radia.kelvin_material import make_kelvin_mu_cf, make_kelvin_nu_cf, MU_0, NU_0
+from radia.kelvin_material import make_kelvin_mu_cf, make_kelvin_nu_cf, MU_0, NU_0, _is_kelvin_material
 
 
 def _canonical_array_sha256(values):
@@ -156,6 +156,9 @@ def project_source_interface_potential(
             f"interface_boundary={interface_boundary!r} is not a mesh boundary")
     if int(order) < 1:
         raise ValueError("order must be positive")
+    if relative_tolerance is not None and (
+            not math.isfinite(float(relative_tolerance)) or float(relative_tolerance) <= 0):
+        raise ValueError("relative_tolerance must be positive and finite, or None for diagnostics only")
     if gauge_epsilon <= 0.0 or not math.isfinite(gauge_epsilon):
         raise ValueError("gauge_epsilon must be positive and finite")
 
@@ -200,6 +203,8 @@ def project_source_interface_potential(
         "relative_tangential_residual": relative_residual,
         "tangential_residual_norm": residual_norm,
         "tangential_source_norm": source_norm,
+        "gate_enabled": relative_tolerance is not None,
+        "acceptance": "passed" if relative_tolerance is not None else "not_evaluated",
     }
 
 
@@ -231,6 +236,9 @@ def project_source_physical_potential(
         raise ValueError("physical_materials must contain unique non-empty names")
     if int(order) < 1:
         raise ValueError("order must be positive")
+    if relative_tolerance is not None and (
+            not math.isfinite(float(relative_tolerance)) or float(relative_tolerance) <= 0):
+        raise ValueError("relative_tolerance must be positive and finite, or None for diagnostics only")
     if gauge_epsilon <= 0.0 or not math.isfinite(gauge_epsilon):
         raise ValueError("gauge_epsilon must be positive and finite")
     actual = {str(name) for name in mesh.GetMaterials()}
@@ -279,6 +287,8 @@ def project_source_physical_potential(
         "volume_residual_norm": residual_norm,
         "volume_source_norm": source_norm,
         "physical_materials": names,
+        "gate_enabled": relative_tolerance is not None,
+        "acceptance": "passed" if relative_tolerance is not None else "not_evaluated",
     }
 
 
@@ -652,7 +662,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         kelvin_source_potential=None, kelvin_source_h=None,
         total_source_h=None, total_source_materials=(), return_system=False,
         reduced_zero_normal_boundary=None, surface_dirichlet=None, _fixed_rhs_cache=None,
-        _rhs_material=None):
+        _rhs_material=None, kelvin_match_exact=False):
     """Solve the TOSCA-style mixed total/reduced Omega formulation.
 
     ``return_system=True`` retains assembled forms for explicit diagnostics.
@@ -689,6 +699,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
     zero field.  ``H_cf`` in a Kelvin material is the computational-frame
     ``H_comp``; its sign follows the twisted convention, so it is ``+grad`` of
     the stored unknown, not ``-grad``.
+    ``B_cf = mu_cf * H_cf`` is likewise in computational coordinates in the
+    Kelvin exterior, not a directly sampled physical-space exterior field.
 
     This prevents the source field and the reduced correction from cancelling
     inside high-permeability material.  The normal flux condition is natural
@@ -798,13 +810,20 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
     if interface_constraint_scale <= 0.0 or not math.isfinite(interface_constraint_scale):
         raise ValueError("interface_constraint_scale must be positive and finite")
 
+    kelvin_mats = tuple(kelvin_mats)
+    reduced_kelvin = sorted(
+        material for material in reduced_set
+        if _is_kelvin_material(material, kelvin_mats, exact=kelvin_match_exact))
+    if reduced_kelvin:
+        raise ValueError(
+            f"Kelvin selectors must not match reduced materials: {reduced_kelvin}")
     if mu_cf is None:
         mu_cf = make_kelvin_mu_cf(
             mesh, R_K, offset, kelvin_mats=kelvin_mats,
-            mu_r_by_material=mu_r_by_material)
+            mu_r_by_material=mu_r_by_material, kelvin_match_exact=kelvin_match_exact)
     kelvin_total_materials = tuple(
         material for material in total_materials
-        if any(str(key).lower() in material.lower() for key in kelvin_mats))
+        if _is_kelvin_material(material, kelvin_mats, exact=kelvin_match_exact))
     core_total_materials = tuple(
         material for material in total_materials
         if material not in kelvin_total_materials)
@@ -1159,7 +1178,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
         anderson_depth=0, anderson_transform="log", observation_points=None,
         material_update_order=None, material_log_state_initial=None,
         refinement_parent_identity=None, cache_fixed_rhs=True,
-        reduced_zero_normal_boundary=None, surface_dirichlet=None):
+        reduced_zero_normal_boundary=None, surface_dirichlet=None,
+        kelvin_match_exact=False, mu_r_by_material=None):
     """Picard solve for the mixed total/reduced Omega formulation.
 
     The source split and its interface trace stay fixed throughout the
@@ -1167,6 +1187,10 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
     from the shared monotone ``B(H)`` law.  This is deliberately separate from
     hysteretic state evolution: the latter needs its own committed material
     history and is not silently approximated by a memoryless Picard update.
+    Linear physical materials in the total region require explicit entries in
+    ``mu_r_by_material``. The B-H table must start at the soft-magnetic origin.
+    P1 convergence checks both flux iteration change and secant consistency;
+    returned H, mu and B belong to the same assembled iterate.
 
     ``mu_r_initial`` is one scalar or one value per nonlinear element in mesh
     element order (``nonlinear_stats["element_numbers"]`` of an earlier solve),
@@ -1220,6 +1244,21 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
     if nonlinear_set - actual_materials:
         raise ValueError(
             f"nonlinear_materials are not mesh materials: {sorted(nonlinear_set - actual_materials)}")
+    kelvin_mats = tuple(kelvin_mats)
+    kelvin_set = {name for name in actual_materials
+                  if _is_kelvin_material(name, kelvin_mats, exact=kelvin_match_exact)}
+    if kelvin_set & nonlinear_set:
+        raise ValueError("nonlinear_materials must not include Kelvin materials")
+    mu_r_by_material = dict(mu_r_by_material or {})
+    if set(mu_r_by_material) & nonlinear_set:
+        raise ValueError("mu_r_by_material must not override nonlinear materials")
+    missing_linear = set(total_materials) - nonlinear_set - kelvin_set - set(mu_r_by_material)
+    if missing_linear:
+        raise ValueError(f"declare mu_r_by_material for linear total materials: {sorted(missing_linear)}")
+    # Validate names, values and Kelvin overrides before any nonlinear work.
+    make_kelvin_mu_cf(mesh, R_K, offset, kelvin_mats=kelvin_mats,
+                      kelvin_match_exact=kelvin_match_exact,
+                      mu_r_by_material=mu_r_by_material)
     if not math.isfinite(tolerance) or tolerance <= 0.0:
         raise ValueError("tolerance must be positive and finite")
     if int(max_iterations) < 1:
@@ -1249,6 +1288,10 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
     bh_array = np.asarray(bh_table, dtype=float)
     if bh_array.ndim != 2 or bh_array.shape[1] < 2:
         raise ValueError("bh_table must contain [H, B] rows")
+    if len(bh_array) < 2 or not np.all(np.isfinite(bh_array[:, :2])):
+        raise ValueError("bh_table requires at least two finite [H, B] rows")
+    if not np.array_equal(bh_array[0, :2], [0.0, 0.0]):
+        raise ValueError("memoryless soft-magnetic bh_table must start at [0, 0]")
     positive_rows = (bh_array[:, 0] > 0.0) & (bh_array[:, 1] > 0.0)
     secants = bh_array[positive_rows, 1] / bh_array[positive_rows, 0]
     genuinely_nonlinear = (
@@ -1299,6 +1342,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
             kelvin_mats=kelvin_mats,
             inverse=inverse,
             mu_r_initial=mu_r_initial,
+            kelvin_match_exact=kelvin_match_exact,
+            mu_r_by_material=mu_r_by_material,
             tolerance=tolerance,
             max_iterations=max_iterations,
             relaxation=relaxation,
@@ -1352,24 +1397,30 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
         if not np.all(np.isfinite(initial)) or np.any(initial < 1.0):
             raise ValueError("per-element mu_r_initial must be finite and >= 1")
         mu_r_current = initial.astype(float, copy=True)
-    mu_r_zero_field = mu_r_current.copy()
+    from scipy.interpolate import PchipInterpolator
+    zero_field_mu_r = float(PchipInterpolator(
+        bh_array[:, 0], bh_array[:, 1]).derivative()(0.0)) / MU_0
+    if not math.isfinite(zero_field_mu_r) or zero_field_mu_r < 1.0:
+        raise ValueError("bh_table origin tangent must be finite and >= vacuum permeability")
+    mu_r_zero_field = np.full(len(nonlinear_elements), zero_field_mu_r)
     mu_r_upper = max(float(np.max(mu_r_current)) if mu_r_current.size else 1.0,
                      secant_upper, 1.0)
     for index, (element_nr, _) in enumerate(nonlinear_elements):
         mu_elements.vec[element_nr] = MU_0 * float(mu_r_current[index])
 
     kelvin_mu = make_kelvin_mu_cf(
-        mesh, R_K, offset, kelvin_mats=kelvin_mats, mu_r_by_material={})
+        mesh, R_K, offset, kelvin_mats=kelvin_mats, mu_r_by_material={},
+        kelvin_match_exact=kelvin_match_exact)
 
     def mixed_mu_cf():
         values = {}
         for material in mesh.GetMaterials():
             if material in nonlinear_set:
                 values[material] = mu_elements
-            elif any(key in material.lower() for key in kelvin_mats):
+            elif _is_kelvin_material(material, kelvin_mats, exact=kelvin_match_exact):
                 values[material] = kelvin_mu
             else:
-                values[material] = MU_0
+                values[material] = MU_0 * float(mu_r_by_material.get(material, 1.0))
         return mesh.MaterialCF(values, default=MU_0)
 
     observation = None
@@ -1401,6 +1452,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
             order=order, dirichlet_bbbnd=dirichlet_bbbnd,
             bonus_intorder=bonus_intorder, kelvin_mats=kelvin_mats,
             inverse=inverse, interface_constraint_scale=interface_constraint_scale,
+            kelvin_match_exact=kelvin_match_exact,
             mu_cf=mixed_mu_cf(),
             kelvin_interface_boundary=kelvin_interface_boundary,
             kelvin_source_potential=kelvin_source_potential,
@@ -1432,6 +1484,20 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
                 entry["observation_relative_change"] = float(
                     np.max(np.linalg.norm(observed_field - observed_previous, axis=1)) / scale)
             observed_previous = observed_field
+        constitutive_change = float(np.max(
+            np.abs(mu_r_target - mu_r_current) / np.maximum(mu_r_target, 1.0)))
+        entry["relative_constitutive_change"] = constitutive_change
+        if iteration > 1:
+            relative_change = float(
+                np.max(np.abs(B_current - B_previous)) / max(B_scale, 1.0e-30))
+            entry["relative_B_change"] = relative_change
+        entry["mu_r_min"] = float(np.min(mu_r_current)) if mu_r_current.size else None
+        entry["mu_r_max"] = float(np.max(mu_r_current)) if mu_r_current.size else None
+        history.append(entry)
+        # Keep the returned coefficient at the state used to assemble H.
+        if iteration > 1 and max(relative_change, constitutive_change) <= tolerance:
+            converged = True
+            break
         # PCHIP secants can exceed the secants at the tabulated nodes.
         # A safeguard must not clip the constitutive law's own target.
         if mu_r_target.size:
@@ -1446,17 +1512,6 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
         mu_r_current = np.asarray(mu_r_next, dtype=float)
         for index, (element_nr, _) in enumerate(nonlinear_elements):
             mu_elements.vec[element_nr] = MU_0 * float(mu_r_current[index])
-        if iteration > 1:
-            relative_change = float(
-                np.max(np.abs(B_current - B_previous))
-                / max(B_scale, 1.0e-30))
-            entry["relative_B_change"] = relative_change
-        entry["mu_r_min"] = float(np.min(mu_r_current)) if mu_r_current.size else None
-        entry["mu_r_max"] = float(np.max(mu_r_current)) if mu_r_current.size else None
-        history.append(entry)
-        if iteration > 1 and relative_change <= tolerance:
-            converged = True
-            break
         B_previous = B_current
 
     if result is None:  # pragma: no cover - guarded by max_iterations validation
@@ -1474,6 +1529,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
         "response_order": int(order),
         "material_update_order": 0,
         "material_sampling": "element_centroid",
+        "relative_constitutive_change": constitutive_change,
+        "returned_material_state": "assembled_iterate",
         "warm_start": bool(initial.ndim > 0),
         "history": history,
         "contraction_rate_estimate": estimate_contraction_rate(
@@ -1509,7 +1566,8 @@ def _solve_mixed_omega_projected_log_material(
         kelvin_source_potential, kelvin_source_h,
         total_source_h, total_source_materials, observation_points,
         material_log_state_initial, refinement_parent_identity,
-        refinement_parent_identity_sha256, surface_dirichlet=None):
+        refinement_parent_identity_sha256, surface_dirichlet=None,
+        kelvin_match_exact=False, mu_r_by_material=None):
     """Picard lane with a positive spatial L2 secant-permeability field."""
 
     from ngsolve import (
@@ -1563,6 +1621,7 @@ def _solve_mixed_omega_projected_log_material(
         "mesh_topology_geometry_sha256": _mesh_topology_geometry_sha256(mesh),
         "bh_table_sha256": _canonical_array_sha256(bh_array[:, :2]),
         "nonlinear_materials": sorted(str(value) for value in nonlinear_materials),
+        "linear_mu_r_by_material": dict(mu_r_by_material or {}),
         "response_order": int(order),
         "material_update_order": int(material_update_order),
         "active_material_dof_numbers": [int(value) for value in active_dofs],
@@ -1604,7 +1663,8 @@ def _solve_mixed_omega_projected_log_material(
         0.0,
     )
     kelvin_mu = make_kelvin_mu_cf(
-        mesh, R_K, offset, kelvin_mats=kelvin_mats, mu_r_by_material={}
+        mesh, R_K, offset, kelvin_mats=kelvin_mats, mu_r_by_material={},
+        kelvin_match_exact=kelvin_match_exact
     )
 
     def mixed_mu_cf():
@@ -1612,10 +1672,10 @@ def _solve_mixed_omega_projected_log_material(
         for material in mesh.GetMaterials():
             if material in nonlinear_set:
                 values[material] = MU_0 * exp(bounded_log_mu)
-            elif any(key in material.lower() for key in kelvin_mats):
+            elif _is_kelvin_material(material, kelvin_mats, exact=kelvin_match_exact):
                 values[material] = kelvin_mu
             else:
-                values[material] = MU_0
+                values[material] = MU_0 * float(mu_r_by_material.get(material, 1.0))
         return mesh.MaterialCF(values, default=MU_0)
 
     observation = None
@@ -1656,6 +1716,7 @@ def _solve_mixed_omega_projected_log_material(
             kelvin_mats=kelvin_mats,
             inverse=inverse,
             interface_constraint_scale=interface_constraint_scale,
+            kelvin_match_exact=kelvin_match_exact,
             mu_cf=mixed_mu_cf(),
             kelvin_interface_boundary=kelvin_interface_boundary,
             kelvin_source_potential=kelvin_source_potential,
@@ -1834,7 +1895,7 @@ def _solve_mixed_omega_projected_log_material(
         str(material)
         for material in mesh.GetMaterials()
         if material not in nonlinear_set
-        and not any(key.lower() in str(material).lower() for key in kelvin_mats)
+        and not _is_kelvin_material(material, kelvin_mats, exact=kelvin_match_exact)
     ]
     linear_energy = 0.0
     linear_h_dot_b = 0.0
@@ -1842,7 +1903,7 @@ def _solve_mixed_omega_projected_log_material(
         linear_selector = mesh.Materials("|".join(physical_linear_materials))
         linear_energy = float(
             Integrate(
-                0.5 * MU_0 * H_magnitude**2,
+                0.5 * result["mu_cf"] * H_magnitude**2,
                 mesh,
                 definedon=linear_selector,
                 order=max(integration_order, 2 * int(order) + 2),
@@ -1850,7 +1911,7 @@ def _solve_mixed_omega_projected_log_material(
         )
         linear_h_dot_b = float(
             Integrate(
-                MU_0 * H_magnitude**2,
+                result["mu_cf"] * H_magnitude**2,
                 mesh,
                 definedon=linear_selector,
                 order=max(integration_order, 2 * int(order) + 2),

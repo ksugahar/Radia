@@ -1,6 +1,13 @@
 from radia_mcp.radia_ngsolve.server import kelvin_transformation
 
 
+def test_maxwell_a_energy_contract_requires_admissibility():
+    text=kelvin_transformation('source_in_omega_form')
+    for phrase in ('material reached', 'hide interface jumps', 'tangential reduced A=0',
+                   'same monotone B(H)', 'algebraic material identity', 'not a certified error bound'):
+        assert phrase in text
+
+
 def test_constitutive_sampling_is_separate_from_iteration_convergence():
     text = kelvin_transformation('source_in_omega_form')
     for phrase in ('B_h-B(H_h)', 'additional interior quadrature points',

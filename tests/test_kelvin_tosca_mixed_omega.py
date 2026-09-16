@@ -696,3 +696,80 @@ def test_mixed_omega_envelope_includes_interpolated_material_targets(monkeypatch
     except MixedOmegaPicardNotConverged:
         pass
     assert maxima and max(maxima) > 2000.0
+
+
+@pytest.mark.parametrize('table', [((1., 0.), (2., .01)), ((0., .001), (1., .01))])
+def test_picard_requires_soft_magnetic_origin(table):
+    mesh, source, potential, _ = _picard_case(maxh=.8)
+    with pytest.raises(ValueError, match='start at'):
+        _picard_solve(mesh, source, potential, table)
+
+
+def test_picard_returns_assembled_material_state(monkeypatch):
+    import radia.kelvin_solver as solver
+    mesh, source, potential, table = _picard_case(maxh=.8)
+    original = solver.solve_magnetostatic_mixed_total_reduced_omega_kelvin
+    samples = []
+    point = mesh(.5, .13, .17)
+
+    def record(*args, **kwargs):
+        result = original(*args, **kwargs)
+        samples.append(float(result['mu_cf'](point)))
+        return result
+
+    monkeypatch.setattr(solver, 'solve_magnetostatic_mixed_total_reduced_omega_kelvin', record)
+    result = _picard_solve(mesh, source, potential, table, tolerance=.01, max_iterations=100)
+    assert float(result['mu_cf'](point)) == samples[-1]
+    assert result['nonlinear_stats']['relative_constitutive_change'] <= .01
+
+
+def test_picard_zero_field_material_is_independent_of_initial_guess():
+    import ngsolve as ng
+    from scipy.interpolate import PchipInterpolator
+    from radia.kelvin_material import MU_0
+    mesh, _, _, table = _picard_case(maxh=.8)
+    expected = float(PchipInterpolator(*np.asarray(table).T).derivative()(0))
+    for initial in (10., 1000.):
+        result = _picard_solve(mesh, ng.CF((0, 0, 0)), ng.CF(0), table,
+                               mu_r_initial=initial)
+        assert result['mu_cf'](mesh(.5, .13, .17)) == pytest.approx(expected)
+        assert result['nonlinear_stats']['mu_r_elements'][0] == pytest.approx(expected / MU_0)
+
+
+@pytest.mark.parametrize('order', [1, 2])
+def test_picard_hybrid_linear_material_is_preserved(order):
+    import ngsolve as ng
+    from netgen.occ import Box, Pnt, Glue, OCCGeometry
+    from radia.kelvin_material import MU_0
+    air = Box(Pnt(-1, -1, -1), Pnt(0, 1, 1))
+    iron = Box(Pnt(0, -1, -1), Pnt(1, 1, 1))
+    pole = Box(Pnt(1, -1, -1), Pnt(2, 1, 1))
+    air.mat('reduced'); iron.mat('total'); pole.mat('pole')
+    air.faces.name = iron.faces.name = pole.faces.name = 'source_total_interface'
+    mesh = ng.Mesh(OCCGeometry(Glue([air, iron, pole])).GenerateMesh(maxh=1))
+    table = [(0, 0), (1, 100*MU_0), (2, 150*MU_0)]
+    options = dict(total_materials=('total', 'pole'), order=order,
+                   material_update_order=order-1, tolerance=1e-6, max_iterations=100)
+    with pytest.raises(ValueError, match='linear total materials'):
+        _picard_solve(mesh, ng.CF((0, 0, 0)), ng.CF(0), table, **options)
+    result = _picard_solve(mesh, ng.CF((0, 0, 0)), ng.CF(0), table,
+                           mu_r_by_material={'pole': 5000}, **options)
+    assert result['mu_cf'](mesh(1.5, .13, .17)) / MU_0 == pytest.approx(5000)
+    with pytest.raises(ValueError, match='override nonlinear'):
+        _picard_solve(mesh, ng.CF((0, 0, 0)), ng.CF(0), table,
+                       mu_r_by_material={'pole': 5000, 'total': 1}, **options)
+
+
+def test_trace_without_tolerance_is_not_accepted():
+    import ngsolve as ng
+    from radia.kelvin_solver import project_source_interface_potential
+    mesh = _two_region_mesh(.8)
+    with ng.TaskManager():
+        result = project_source_interface_potential(
+            mesh, ng.CF((0, 0, 1)), 'source_total_interface')
+    assert result['gate_enabled'] is False
+    assert result['acceptance'] == 'not_evaluated'
+    for tolerance in (float('nan'), float('inf'), -1):
+        with pytest.raises(ValueError, match='positive and finite'):
+            project_source_interface_potential(
+                mesh, ng.CF((0, 0, 1)), 'source_total_interface', relative_tolerance=tolerance)
