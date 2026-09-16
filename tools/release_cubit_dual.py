@@ -1,10 +1,11 @@
-"""Independent Cubit LAB/100 gate, invoked only through release_quad.py.
+"""Independent Cubit LAB/100 release-dual command.
 
 The published wheel is the byte oracle; only its owning editable package is
 installed. Radia/MCP metadata and their selected source remain untouched.
 """
 from __future__ import annotations
 
+import argparse
 import base64
 import hashlib
 import json
@@ -246,3 +247,28 @@ def run(args):
         (output / 'done.json').write_text(json.dumps(dict(contract, passed=True, targets=list(TARGETS)), indent=2))
         print('PASS release-dual: exact published exporter wheel, LAB/100 editable and GUI/export/MCP gates; Radia/radia-mcp unchanged')
     return 0
+
+
+def build_parser():
+    """Return the dedicated Cubit release-dual CLI parser."""
+
+    parser = argparse.ArgumentParser(
+        prog="release_cubit_dual",
+        description="Verify and deploy one cubit-mesh-export wheel on LAB and 100.",
+    )
+    parser.add_argument("--action", choices=("preflight", "deploy", "done"), required=True)
+    parser.add_argument("--wheel", required=True)
+    parser.add_argument("--source-sha", required=True)
+    parser.add_argument("--source-root-lab", required=True)
+    parser.add_argument("--source-root-100", required=True)
+    parser.add_argument("--evidence-lab", required=True)
+    parser.add_argument("--evidence-100", required=True)
+    return parser
+
+
+def main():
+    raise SystemExit(run(build_parser().parse_args()))
+
+
+if __name__ == "__main__":
+    main()

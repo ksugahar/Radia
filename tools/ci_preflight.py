@@ -151,7 +151,12 @@ def gate_version_consistency():
             fails.append(f"{name}: {e1 or e2}")
         elif v1 != v2:
             fails.append(f"{name}: pyproject={v1} != __init__={v2}")
-    return (not fails), "; ".join(fails) if fails else "radia/radia-mcp/cme versions in lockstep"
+    return (
+        (not fails),
+        "; ".join(fails)
+        if fails
+        else "each independent distribution's pyproject/runtime version pair matches",
+    )
 
 
 # ======================================================================

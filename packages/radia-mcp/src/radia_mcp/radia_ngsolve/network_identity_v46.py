@@ -1,8 +1,10 @@
+"""Network trace and field-monitor identity checks for v46 artifacts."""
+
 from __future__ import annotations
 
 import math
 from collections.abc import Mapping, Sequence
-
+from itertools import pairwise
 
 _PORT = "v46_public_time_domain_port_wave_impedance_unit_scale_partial_trace_mismatch"
 _MONITOR = "v46_public_field_monitor_coordinate_frame_sampling_window_nan_inf_mismatch"
@@ -35,7 +37,7 @@ def _port_ok(row: Mapping[str, object]) -> bool:
         _linked(row, ("time_generation", "trace_generation", "impedance_generation", "unit_scale_generation", "partial_generation", "result_generation"))
         and _finite_sequence(times, minimum=2)
         and times == row.get("result_time_s")
-        and all(float(left) <= float(right) for left, right in zip(times, times[1:]))
+        and all(float(left) <= float(right) for left, right in pairwise(times))
         and _finite_sequence(row.get("port_wave_trace_v"), minimum=2)
         and row.get("port_wave_trace_v") == row.get("result_port_wave_trace_v")
         and row.get("wave_impedance_unit") == row.get("result_wave_impedance_unit") == "ohm"
@@ -74,7 +76,7 @@ def validate_public_v46_identity(payload: object) -> dict[str, bool]:
     ports = [row[_PORT] for row in rows if _PORT in row]
     monitors = [row[_MONITOR] for row in rows if _MONITOR in row]
     if ports:
-        checks["cst_v46_time_domain_port_identity"] = len(ports) == len(rows) and all(isinstance(row, Mapping) and _port_ok(row) for row in ports)
+        checks["network_v46_time_domain_port_identity"] = len(ports) == len(rows) and all(isinstance(row, Mapping) and _port_ok(row) for row in ports)
     if monitors:
-        checks["cst_v46_field_monitor_identity"] = len(monitors) == len(rows) and all(isinstance(row, Mapping) and _monitor_ok(row) for row in monitors)
+        checks["network_v46_field_monitor_identity"] = len(monitors) == len(rows) and all(isinstance(row, Mapping) and _monitor_ok(row) for row in monitors)
     return checks

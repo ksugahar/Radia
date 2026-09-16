@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68.0"]
+requires = ["setuptools>=77.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -11,7 +11,8 @@ version = "1.5.2"
 # short and stable; release-specific notes go in CHANGELOG.md.
 description = "MCP workflows and executable engineering guidance for Radia: build123d, Gmsh post-processing, NGSolve, mixed-omega, PEEC, induction heating, optimization and research publications. Cubit MCP is distributed separately in cubit-mesh-export."
 readme = "README.md"
-license = {text = "BSD-3-Clause"}
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 authors = [{name = "Kengo Sugahara"}]
 # Core servers import without Radia, Cubit, MKL or a native build.

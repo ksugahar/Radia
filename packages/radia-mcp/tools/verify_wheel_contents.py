@@ -20,6 +20,7 @@ REQUIRED_ASSETS = frozenset(
         "radia_mcp/peec/prompts/mathematica_derivation.md",
     }
 )
+PACKAGE_SOURCE = pathlib.Path(__file__).resolve().parents[1] / "src" / "radia_mcp"
 
 
 def verify_wheel_contents(wheel_path: str | pathlib.Path) -> dict:
@@ -29,10 +30,19 @@ def verify_wheel_contents(wheel_path: str | pathlib.Path) -> dict:
         raise FileNotFoundError(f"wheel not found: {wheel}")
     with zipfile.ZipFile(wheel) as archive:
         names = set(archive.namelist())
-        unwanted = sorted(name for name in names if name.startswith((
+        unwanted = {name for name in names if name.startswith((
             "radia_mcp/cubit/",
             "cubit_mesh_export/", "cae_mcp_core/",
-        )))
+        ))}
+        # setuptools' reusable build/lib tree can retain deleted Python modules
+        # and silently put them back into a later wheel. Every packaged Python
+        # module must therefore still exist in the selected source tree.
+        for name in names:
+            if name.startswith("radia_mcp/") and name.endswith(".py"):
+                relative = pathlib.PurePosixPath(name).relative_to("radia_mcp")
+                if not PACKAGE_SOURCE.joinpath(*relative.parts).is_file():
+                    unwanted.add(name)
+        unwanted = sorted(unwanted)
         retired_entries = []
         for name in names:
             if name.endswith(".dist-info/entry_points.txt"):

@@ -99,12 +99,10 @@ different acceptance steps. A fresh Python selftest is not live acceptance.
 An added optional tool parameter changes the advertised schema and requires a
 client-owned reconnect, not only code reload.
 
-At the finalization check on 2026-09-12, this task's live radia-publication
-bibliography status reported version 1.4.53 from the shared
-`release-quad/radia-4.95.91-runtime` tree, not the maintenance worktree.
-No idle-state evidence or callable client reconnect control was available.
-The runtime was not repointed or reloaded. Integrate reviewed changes into the
-chosen shared source, establish a quiet boundary, restart only radia-publication
-through the client, then verify its schema/provenance and a harmless affected
-tool through that same connection. This remains an operational handoff, not a
-code defect to mask with process termination.
+Advance the explicitly intended current editable source and verify its fresh
+import. At a quiet boundary, reconnect only `radia-publication` through the
+client and verify its live provenance, advertised schema, and a harmless
+affected tool through that same connection. Never restore an older runtime
+because its path or version was once canonical, and do not mask a stale client
+with broad process termination. Follow the shared MCP runtime policy for the
+current LAB/100 release-dual acceptance contract.

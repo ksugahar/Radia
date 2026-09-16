@@ -6,6 +6,10 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
 ## Unreleased
 
+- Give the independent LAB/100 release-dual gate its own
+  `tools/release_cubit_dual.py` CLI and remove the residual forwarding route
+  through the Radia solver release orchestrator.
+
 ## 1.1.0 - Standalone MCP hardening and legacy removal
 
 - Remove the retired native Nastran command alias, old plugin identity, old GUI

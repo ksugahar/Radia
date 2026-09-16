@@ -79,6 +79,32 @@ def _test_sources() -> frozenset[str]:
     )
 
 
+@lru_cache(maxsize=1)
+def _hot_reload_contract_sources() -> frozenset[str]:
+    """Locate the shared reload implementation by its public contract.
+
+    This deliberately avoids pinning CI coverage to ``_shared/hot_reload.py``;
+    moving the implementation must not silently drop all-server selftests.
+    """
+
+    root = PACKAGE_ROOT / "src" / "radia_mcp"
+    required = {"register_reload_tool", "reload_and_refresh", "refresh_tools"}
+    matches: set[str] = set()
+    for path in root.rglob("*.py"):
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError, UnicodeError):
+            continue
+        functions = {
+            node.name
+            for node in tree.body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        if required <= functions:
+            matches.add(path.relative_to(root).as_posix())
+    return frozenset(matches)
+
+
 @lru_cache(maxsize=None)
 def _tests_containing(token: str) -> frozenset[str]:
     matches = set()
@@ -294,9 +320,13 @@ def build_plan(
             module_parts = (*module_parts[:-1], module_parts[-1][:-3])
 
         stem = module_parts[-1] if module_parts else ""
-        if family == "common" or relative == "_shared/hot_reload.py":
+        is_hot_reload_contract = (
+            relative in _hot_reload_contract_sources()
+            or stem == "hot_reload"
+        )
+        if family == "common" or is_hot_reload_contract:
             servers.update(catalog)
-            if relative == "_shared/hot_reload.py":
+            if is_hot_reload_contract:
                 selected.add("tests/test_hot_reload.py")
         elif family in family_servers:
             servers.add(family_servers[family])

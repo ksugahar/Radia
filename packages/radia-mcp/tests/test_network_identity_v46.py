@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from radia_mcp.radia_ngsolve.cst_v46_identity import validate_public_v46_identity
+from radia_mcp.radia_ngsolve.network_identity_v46 import validate_public_v46_identity
 
 
 def _payload():
@@ -17,12 +17,12 @@ def _payload():
     }]}
 
 
-def test_v46_public_cst_identity_accepts_closed_artifacts():
+def test_v46_public_network_identity_accepts_closed_artifacts():
     checks = validate_public_v46_identity(_payload())
     assert checks and all(checks.values())
 
 
-def test_v46_public_cst_identity_rejects_unit_partial_and_nonfinite_mutations():
+def test_v46_public_network_identity_rejects_unit_partial_and_nonfinite_mutations():
     payload = _payload()
     payload["runs"][0]["v46_public_time_domain_port_wave_impedance_unit_scale_partial_trace_mismatch"]["result_partial_trace"] = True
     payload["runs"][0]["v46_public_field_monitor_coordinate_frame_sampling_window_nan_inf_mismatch"]["result_nonfinite_sample_count"] = 1
