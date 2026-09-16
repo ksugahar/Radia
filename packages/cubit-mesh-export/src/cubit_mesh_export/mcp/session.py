@@ -1,33 +1,7 @@
-"""
-session.py — Python-3.12-side client for the Cubit Viewer daemon.
+"""Process-owned headless Cubit session using daemon.py stdio protocol v1.
 
-This module is version-agnostic: stdlib only, works on any Python
->= 3.10.
-
-Two transport modes share the same public API (call/ping/shutdown):
-
-    mode="batch"  (DEFAULT for MCP/LLM execution)
-        ─ Launches Cubit's bundled Python with daemon.py
-        ─ Client ↔ Daemon communicate via line-delimited JSON-RPC on
-          stdin/stdout of the subprocess
-        ─ No GUI, no user interaction; pure headless
-
-    mode="gui"    (legacy/manual viewer integration only)
-        ─ Launches `coreform_cubit.exe -nojournal bootstrap.py`
-        ─ Bootstrap installs a QTimer inside Cubit's Qt event loop
-        ─ Client ↔ Bootstrap communicate via atomically-renamed JSON
-          files in a per-session drop directory (no sockets)
-        ─ Cubit GUI window is live & user-interactive throughout
-
-Both modes preserve a persistent Cubit session across many client calls
-(~2 s cold start amortized) — launching per-call would be prohibitively
-slow. A process-wide singleton (`CubitSession.get()`) holds the handle.
-
-Protocol version:
-    v1 — stdio JSON-RPC (daemon.py)
-    v2 — file drop JSON-RPC (bootstrap.py, legacy GUI mode)
-
-The ready message echoes `protocol_version` for mutual compatibility.
+Calls reuse one child within this MCP process. GUI attachment and persistent
+file-drop sessions are not supported; human GUI work exchanges saved artifacts.
 """
 
 from __future__ import annotations
@@ -36,7 +10,6 @@ import glob
 import json
 import math
 import os
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -46,7 +19,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-PROTOCOL_VERSION = 2  # file-drop protocol; stdio batch uses protocol v1
+PROTOCOL_VERSION = 1
 
 
 def _cubit_temp_root() -> Path:
@@ -56,63 +29,11 @@ def _cubit_temp_root() -> Path:
         return Path(configured)
     return Path("C:/temp" if sys.platform == "win32" else tempfile.gettempdir())
 
-# Startup timeouts (step 2 of 2026-04-21 speed fix).
-# License checkout: RLM server round-trip can take 30+ s on cold start;
-# the warmup helper tries pre-warm via rlm_activate.exe with a shorter
-# budget (30 s) so the main wait only covers post-warmup Cubit startup.
-# Cubit ready: once the license is warm, Qt + bootstrap init finish in
-# 2 – 3 s on this lab (measured on LAB 2026-04-21).
-LICENSE_WARMUP_TIMEOUT_S = 30.0
-CUBIT_READY_TIMEOUT_S = 15.0
-# Attach-time responsiveness probe: the bootstrap QTimer polls every
-# 200 ms, so a healthy idle daemon answers a ping in well under 1 s.
-ATTACH_PING_TIMEOUT_S = 3.0
+# License checkout may take tens of seconds on a cold start.
+CUBIT_READY_TIMEOUT_S = 90.0
 
 _SESSION_LOCK = threading.Lock()
 _SINGLETON: "CubitSession | None" = None
-
-
-def _user_daemon_dir() -> Path:
-    """Return the per-user stable path for the Cubit daemon's drop-dir.
-
-    Phase 1 of "MCP daemon survives VSCode restart" (2026-04-22).
-    Uses ``%LOCALAPPDATA%`` so each Windows user has their own
-    daemon, license cache, and drop-dir location.  Stable across
-    Python process restarts, so a fresh MCP server can discover
-    and attach to an already-running Cubit.
-    """
-    base = os.environ.get("LOCALAPPDATA") or os.environ.get("TEMP", ".")
-    d = Path(base) / "radia-mcp" / "cubit-session"
-    return d
-
-
-def _is_pid_alive(pid: int) -> bool:
-    """Check whether the given PID refers to a running process.
-
-    Works on Windows via ``OpenProcess`` with low query rights; on
-    POSIX via ``os.kill(pid, 0)``.
-    """
-    if pid <= 0:
-        return False
-    try:
-        if sys.platform == "win32":
-            import ctypes
-            PROCESS_QUERY_LIMITED = 0x1000
-            STILL_ACTIVE = 259
-            h = ctypes.windll.kernel32.OpenProcess(PROCESS_QUERY_LIMITED, False, pid)
-            if not h:
-                return False
-            try:
-                code = ctypes.c_ulong()
-                ok = ctypes.windll.kernel32.GetExitCodeProcess(h, ctypes.byref(code))
-                return bool(ok) and code.value == STILL_ACTIVE
-            finally:
-                ctypes.windll.kernel32.CloseHandle(h)
-        else:
-            os.kill(pid, 0)
-            return True
-    except (OSError, ProcessLookupError):
-        return False
 
 
 def _close_proc_streams(proc) -> None:
@@ -130,15 +51,12 @@ def _close_proc_streams(proc) -> None:
 def _assign_kill_on_close_job(pid: int):
     """Put ``pid`` into a Windows Job Object with KILL_ON_JOB_CLOSE.
 
-    Used for session_mode="new" ONLY: the private per-process daemon
-    must die with its client (a crashed client otherwise leaves a
-    license-holding orphan -- observed 2026-08-05).  The returned job
+    The process-owned daemon must die with its client. The returned job
     HANDLE must stay referenced for the client's lifetime; when this
     process exits (normally or not), the OS closes the handle and kills
-    the job's processes.  Shared-daemon modes never call this -- their
-    persistence across client restarts is the feature.
+    the job's processes.
 
-    Returns the handle. Failure raises ``OSError``: mode ``new`` must
+    Returns the handle. Failure raises ``OSError``: the client must
     not continue after losing the cleanup guarantee it promises.
     """
     import ctypes
@@ -235,67 +153,6 @@ def _close_windows_handle(handle) -> None:
         raise ctypes.WinError(ctypes.get_last_error())
 
 
-def _remove_tree_with_retry(path: Path, timeout_s: float = 2.0) -> bool:
-    """Remove a process drop directory after Windows releases log handles."""
-    deadline = time.monotonic() + max(0.0, timeout_s)
-    while True:
-        shutil.rmtree(path, ignore_errors=True)
-        if not path.exists():
-            return True
-        if time.monotonic() >= deadline:
-            return False
-        time.sleep(0.05)
-
-
-def _close_process_streams(proc: subprocess.Popen) -> None:
-    """Close Popen pipes after the child has been reaped."""
-    for name in ("stdin", "stdout", "stderr"):
-        stream = getattr(proc, name, None)
-        if stream is None:
-            continue
-        try:
-            stream.close()
-        except OSError:
-            pass
-
-
-def _try_attach_existing_daemon(drop_dir: Path) -> dict | None:
-    """Return the daemon's ready_info if a live daemon is found, else None.
-
-    Attachment criteria (all must hold):
-      * ``pid.lock`` exists under ``drop_dir``
-      * the PID inside is a live process
-      * ``ready`` marker exists (daemon finished bootstrap, JSON-RPC
-        ready to accept calls)
-
-    On attach success, the caller reuses ``drop_dir`` as-is.  On
-    failure, stale artifacts are removed so the next spawn starts
-    clean.
-    """
-    pid_file = drop_dir / "pid.lock"
-    ready_file = drop_dir / "ready"
-    if not pid_file.exists() or not ready_file.exists():
-        return None
-    try:
-        pid = int(pid_file.read_text(encoding="utf-8").strip())
-    except (OSError, ValueError):
-        return None
-    if not _is_pid_alive(pid):
-        # Stale lock — clean up for the next spawn
-        for f in (pid_file, ready_file):
-            try:
-                f.unlink()
-            except OSError:
-                pass
-        return None
-    try:
-        info = json.loads(ready_file.read_text(encoding="utf-8"))
-        info["attached"] = True  # flag so callers can log "reused"
-        info["pid"] = pid
-        return info
-    except (OSError, json.JSONDecodeError):
-        return None
-
 # Module-level overrides (OCP-inspired: cf. set_port / get_port).
 _OVERRIDE_BIN_DIR: Path | None = None
 
@@ -313,10 +170,6 @@ def get_cubit_bin_dir() -> Path | None:
     return find_cubit_install()
 
 
-def _session_info_path() -> Path:
-    return Path.home() / ".cubit_viewer" / "session.json"
-
-
 # ---------------------------------------------------------------------------
 # Cubit install auto-discovery
 # ---------------------------------------------------------------------------
@@ -329,6 +182,9 @@ def find_cubit_install(explicit: str | None = None) -> Path | None:
     env_bin = os.environ.get("CUBIT_BIN_DIR")
     if env_bin:
         candidates.append(Path(env_bin))
+    env_install = os.environ.get("CUBIT_INSTALL_DIR")
+    if env_install:
+        candidates.append(Path(env_install) / "bin")
 
     if sys.platform == "win32":
         try:
@@ -385,19 +241,6 @@ def _cubit_python_exe(bin_dir: Path) -> Path:
         f"Cubit bundled Python not found under {bin_dir}/python3/. "
         "Expected python.exe (Windows) or bin/python3 (Linux)."
     )
-
-
-def _cubit_gui_exe(bin_dir: Path) -> Path:
-    """Locate the Cubit GUI launcher (`coreform_cubit.exe` / `coreform_cubit`)."""
-    candidates = [
-        bin_dir / "coreform_cubit.exe",
-        bin_dir / "coreform_cubit",
-    ]
-    for c in candidates:
-        if c.exists():
-            return c.resolve()
-    raise FileNotFoundError(
-        f"coreform_cubit launcher not found under {bin_dir}.")
 
 
 def run_headless_journal(
@@ -465,7 +308,7 @@ def run_headless_journal(
             }
 
     with tempfile.TemporaryDirectory(
-            prefix="radia_cubit_headless_", dir=str(temp_root)) as scratch:
+            prefix="cubit_mesh_export_headless_", dir=str(temp_root)) as scratch:
         driver = Path(scratch) / "driver.jou"
         driver.write_text("\n".join([*commands, "exit 0", ""]),
                           encoding="utf-8")
@@ -528,7 +371,7 @@ class CubitSessionError(Exception):
 
 
 class CubitSession:
-    """Manages a long-lived Cubit session via one of two transports.
+    """Manages one process-owned headless Cubit session.
 
     Thread-safe via an internal lock around each call.
 
@@ -542,36 +385,23 @@ class CubitSession:
     def __init__(self,
                  cubit_bin_dir: Path | None = None,
                  mode: str = "batch"):
-        self._bin_dir = cubit_bin_dir or find_cubit_install()
+        if mode != "batch":
+            raise ValueError(f"Only headless mode='batch' is supported, got {mode!r}")
+        self._bin_dir = cubit_bin_dir or get_cubit_bin_dir()
         if self._bin_dir is None:
             raise CubitSessionError(
                 "Could not locate Coreform Cubit install. Set CUBIT_BIN_DIR "
                 "or install to a standard location."
             )
-        if mode not in ("gui", "batch"):
-            raise ValueError(f"mode must be 'gui' or 'batch', got {mode!r}")
         self._mode = mode
         self._proc: subprocess.Popen | None = None
         self._next_id = 1
         self._client_id = f"{os.getpid():08x}-{uuid.uuid4().hex[:12]}"
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._ready_info: dict | None = None
 
-        # Ownership tag (MathWorks pattern): True when THIS process
-        # spawned the Cubit runner; False when we merely attached to a
-        # daemon another process started.  Recovery paths must never
-        # kill a live session we do not own.
         self._owned = False
-        # Windows Job Object handle for session_mode="new" (kill the
-        # private daemon when this client dies); None otherwise.
         self._job_handle = None
-
-        # gui-mode (file-drop) state
-        self._drop_dir: Path | None = None
-        self._outbox: Path | None = None
-
-        # last license pre-warm result (None until first start)
-        self._last_license_warmup: dict = {}
 
         # Per-MCP-process command history for `cubit_session_journal`.
         # A live session can be captured explicitly as a portable recipe;
@@ -593,7 +423,7 @@ class CubitSession:
         self._stderr_tail_max = 200
 
     def _close_private_job(self) -> None:
-        """Release the mode-new Job Object, killing any surviving child."""
+        """Release the Job Object that contains this client's child."""
         handle, self._job_handle = getattr(self, "_job_handle", None), None
         if handle is None or sys.platform != "win32":
             return
@@ -603,7 +433,7 @@ class CubitSession:
             pass
 
     def __del__(self):
-        # A mode-new session is private to this object. Losing the object
+        # The headless child is private to this object. Losing the object
         # must not lose the only handle that enforces kill-on-close.
         try:
             self._close_private_job()
@@ -613,142 +443,44 @@ class CubitSession:
     # ---- lifecycle ----
 
     def ensure_started(self) -> dict:
-        """Spawn (or attach to) the Cubit session if not already running.
+        """Start or reuse this client's headless child; never attach by PID."""
+        with self._lock:
+            return self._ensure_started_locked()
 
-        Three live-state paths:
-          1. Our own child is alive → reuse (``self._proc.poll() is None``)
-          2. GUI mode: an external daemon is alive and we've already
-             attached to it this Python process → reuse
-             (``self._drop_dir`` set + ``pid.lock`` matches a live PID)
-          3. Nothing alive → call _start_gui_bootstrap / _start_stdio_daemon
-        """
+    def _ensure_started_locked(self) -> dict:
         if self._proc is not None and self._proc.poll() is None:
             return self._ready_info or {}
         if self._proc is not None:
-            self._close_private_job()
-            self._proc = None
-        if self._mode == "gui" and self._drop_dir is not None and self._ready_info is not None:
-            # Phase-1 attached mode: verify the daemon PID is still alive
-            pid_file = self._drop_dir / "pid.lock"
-            if pid_file.exists():
-                try:
-                    pid = int(pid_file.read_text(encoding="utf-8").strip())
-                    if _is_pid_alive(pid):
-                        return self._ready_info
-                except (OSError, ValueError):
-                    pass
-            # daemon died — fall through to re-attach or re-spawn
-            self._drop_dir = None
-            self._outbox = None
-            self._ready_info = None
-        if self._mode == "gui":
-            return self._start_gui_bootstrap()
-        return self._start_stdio_daemon()
+            self._force_reset()
+            raise CubitSessionError(
+                "Previous daemon exited; geometry state was lost. "
+                "Restore a checkpoint explicitly before continuing.")
+        try:
+            return self._start_stdio_daemon()
+        except (OSError, ValueError) as exc:
+            self._force_reset()
+            raise CubitSessionError(f"Daemon startup failed: {exc}") from exc
+        except Exception:
+            self._force_reset()
+            raise
 
     def shutdown(self, timeout_s: float = 3.0) -> dict:
-        """Politely ask Cubit to exit, then force-kill after timeout.
-
-        This is the EXPLICIT stop path (`cubit_session_shutdown` tool),
-        so it may also kill an attached daemon another process started --
-        but it reports what it did, so the caller can tell the user which
-        process was stopped (``stopped``: "owned-child" |
-        "attached-daemon" | "none"; ``pid`` when known).
-        """
-        report: dict = {"stopped": "none", "pid": None,
-                        "owned": self._owned}
-        # Best-effort polite shutdown via live transport
-        try:
-            self._lock_free_shutdown_op(timeout_s=timeout_s)
-        except Exception:
-            pass
-        # Kill our own child process
-        if self._proc is not None:
-            report["pid"] = self._proc.pid
-            try:
-                self._proc.wait(timeout=timeout_s)
-            except Exception:
-                pass
-            if self._proc.poll() is None:
+        """Stop only the child spawned by this client."""
+        with self._lock:
+            proc = self._proc
+            report = {"stopped": "owned-child" if proc else "none",
+                      "pid": proc.pid if proc else None, "owned": self._owned}
+            if proc is not None:
+                self._lock_free_shutdown_op(timeout_s)
                 try:
-                    self._proc.kill()
-                except Exception:
+                    proc.wait(timeout=timeout_s)
+                except subprocess.TimeoutExpired:
                     pass
-            # Reap after kill: releases the child's handles (so the
-            # drop-dir rmtree below can succeed on Windows) and avoids
-            # the Popen.__del__ "still running" ResourceWarning.
-            try:
-                self._proc.wait(timeout=10.0)
-            except Exception:
-                pass
-            _close_proc_streams(self._proc)
-            report["stopped"] = "owned-child"
-        self._close_private_job()
-        # Kill an attached daemon (not our child) via pid.lock
-        if self._drop_dir is not None:
-            pid_file = self._drop_dir / "pid.lock"
-            if pid_file.exists():
-                try:
-                    pid = int(pid_file.read_text(encoding="utf-8").strip())
-                    if pid > 0 and _is_pid_alive(pid):
-                        if report["stopped"] == "none":
-                            report["stopped"] = "attached-daemon"
-                            report["pid"] = pid
-                            report["note"] = (
-                                "stopped a daemon this process did not "
-                                "start (explicit shutdown request)")
-                        if sys.platform == "win32":
-                            import ctypes
-                            h = ctypes.windll.kernel32.OpenProcess(
-                                0x0001, False, pid)  # PROCESS_TERMINATE
-                            if h:
-                                ctypes.windll.kernel32.TerminateProcess(h, 1)
-                                ctypes.windll.kernel32.CloseHandle(h)
-                        else:
-                            os.kill(pid, 9)
-                except (OSError, ValueError):
-                    pass
-                try:
-                    pid_file.unlink()
-                except OSError:
-                    pass
-            # Also remove ready marker so the next ensure_started spawns fresh
-            ready = self._drop_dir / "ready"
-            if ready.exists():
-                try: ready.unlink()
-                except OSError: pass
-            # Session-mode "new" uses a private per-process drop dir --
-            # remove it entirely (the shared dir is named exactly
-            # "cubit-session" and is preserved).  Windows may hold the
-            # child's log-file handles for a moment after the kill, so
-            # retry briefly instead of leaving debris.
-            if self._owned and self._drop_dir.name != "cubit-session":
-                if not _remove_tree_with_retry(self._drop_dir):
-                    report["cleanup_warning"] = (
-                        f"private drop directory remains: {self._drop_dir}")
-        if self._proc is not None:
-            _close_process_streams(self._proc)
-        self._drop_dir = None
-        self._outbox = None
-        self._proc = None
-        self._ready_info = None
-        self._owned = False
-        self._native_journal_path = None
-        return report
+            self._force_reset()
+            return report
 
     def is_alive(self) -> bool:
-        # Our own child
-        if self._proc is not None and self._proc.poll() is None:
-            return True
-        # Phase-1 attached daemon: check pid.lock against a live PID
-        if self._mode == "gui" and self._drop_dir is not None:
-            pid_file = self._drop_dir / "pid.lock"
-            if pid_file.exists():
-                try:
-                    pid = int(pid_file.read_text(encoding="utf-8").strip())
-                    return _is_pid_alive(pid)
-                except (OSError, ValueError):
-                    pass
-        return False
+        return self._proc is not None and self._proc.poll() is None
 
     def ping(self, timeout_s: float = 5.0) -> bool:
         """Heartbeat probe — returns True if Cubit responds."""
@@ -761,55 +493,34 @@ class CubitSession:
     # ---- public RPC entrypoint ----
 
     def call(self, op: str, args: list | None = None,
-             timeout_s: float = 60.0, _recover: bool = True) -> dict:
-        """Send one JSON-RPC request, return the response dict.
+             timeout_s: float = 60.0) -> dict:
+        """Serialize an RPC. A failed transport is never replayed automatically.
 
-        Response shape:
-            {"id": int, "ok": bool, "result": ..., "error": str?}
-
-        Error recovery (gui mode, 2026-04-19): if Cubit died mid-call,
-        the session is transparently reset and the call retried once.
-        `result` will then carry `_recovered=True` so callers know state
-        was lost (no geometry history; the user may need to re-import
-        or `cubit_restore` from a checkpoint). On second failure, raises
-        CubitSessionError.
-
-        Pass `_recover=False` to disable the one-shot retry (used by the
-        recovery path itself to avoid infinite loops).
+        A command may have run before its response was lost. Resetting and
+        retrying would hide both the unknown outcome and the lost geometry.
         """
         with self._lock:
             try:
                 self.ensure_started()
-                if op == "cmd" and self._mode == "batch":
+                if op == "cmd":
                     self._start_native_journal_locked(timeout_s=timeout_s)
                 req_id = self._next_id
                 self._next_id += 1
-                req = {
-                    "id": req_id,
-                    "op": op,
-                    "args": args or [],
-                    "protocol_version": PROTOCOL_VERSION if self._mode == "gui" else 1,
-                }
-                if self._mode == "gui":
-                    resp = self._call_via_filedrop(req, timeout_s=timeout_s)
-                else:
-                    resp = self._call_via_stdio(req, timeout_s=timeout_s)
-                if isinstance(resp, dict):
-                    resp.setdefault("execution_mode", self._mode)
-                    resp.setdefault("gui_started", self._mode == "gui")
+                resp = self._call_via_stdio({
+                    "id": req_id, "op": op, "args": args or [],
+                    "protocol_version": PROTOCOL_VERSION,
+                }, timeout_s=timeout_s)
+                resp["execution_mode"] = "batch"
+                resp["gui_started"] = False
                 if op == "cmd":
                     self._record_cmd_history(resp)
                 return resp
-            except CubitSessionError as e:
-                if not _recover:
-                    raise
-                # Auto-restart: Cubit died or misbehaved. Reset and try once.
+            except CubitSessionError as exc:
                 self._force_reset()
-        # Outside the lock (avoid deadlock) — retry once with recovery off.
-        resp = self.call(op, args=args, timeout_s=timeout_s, _recover=False)
-        if isinstance(resp, dict):
-            resp.setdefault("_recovered", True)
-        return resp
+                raise CubitSessionError(
+                    f"{exc}. Session discarded; command outcome may be unknown. "
+                    "No automatic replay. Restore a checkpoint explicitly."
+                ) from exc
 
     def _start_native_journal_locked(self, timeout_s: float) -> None:
         """Start Cubit's native ``record \"file\"`` stream once per daemon.
@@ -825,7 +536,7 @@ class CubitSession:
         if paths is None:
             paths = self._native_journal_paths = []
         temp_root = _cubit_temp_root()
-        journal_dir = temp_root / "radia-mcp" / "cubit-journals"
+        journal_dir = temp_root / "cubit-mesh-export" / "journals"
         journal_dir.mkdir(parents=True, exist_ok=True)
         generation = len(paths) + 1
         path = journal_dir / (
@@ -898,360 +609,19 @@ class CubitSession:
                                       - self._command_history_max]
 
     def _force_reset(self) -> None:
-        """Tear down the current session without waiting for graceful exit.
-
-        Used by the recovery path in `call()`. Does NOT re-enter the lock
-        (caller is holding it).
-
-        Ownership rule (MathWorks pattern, 2026-08-05): a recovery path
-        may kill only a session THIS process spawned.  An attached daemon
-        that is still alive belongs to whoever started it (another VSCode
-        window's live geometry, potentially) -- we DETACH from it and
-        leave its pid.lock/ready markers intact for its other clients.
-        Killing an attached-but-hung daemon requires the explicit
-        `cubit_session_shutdown` tool, not an implicit retry path.
-        """
+        """Reap our child and close its pipes; caller owns the session lock."""
         self._native_journal_path = None
         proc = self._proc
-        if proc is not None and proc.poll() is None:
-            try:
-                proc.kill()
-            except Exception:
-                pass
         if proc is not None:
-            try:
-                proc.wait(timeout=10.0)
-            except Exception:
-                pass
+            if proc.poll() is None:
+                proc.kill()
+            proc.wait(timeout=10.0)
             _close_proc_streams(proc)
-        if self._drop_dir is not None:
-            pid_file = self._drop_dir / "pid.lock"
-            attached_alive = False
-            if not self._owned and pid_file.exists():
-                try:
-                    pid = int(pid_file.read_text(encoding="utf-8").strip())
-                    attached_alive = pid > 0 and _is_pid_alive(pid)
-                except (OSError, ValueError):
-                    attached_alive = False
-            if attached_alive:
-                # Detach only: keep pid.lock + ready for the daemon's
-                # other clients; the retry will re-attach (or surface
-                # the error if the daemon is truly hung).
-                pass
-            else:
-                # Dead daemon (or our own killed child): clean the
-                # markers so the next ensure_started spawns fresh.
-                if pid_file.exists():
-                    try: pid_file.unlink()
-                    except OSError: pass
-                ready = self._drop_dir / "ready"
-                if ready.exists():
-                    try: ready.unlink()
-                    except OSError: pass
-        # Per-process state: cleared.  The per-user drop-dir on disk
-        # persists (it's _user_daemon_dir()) so the next spawn reuses it.
-        self._drop_dir = None
-        self._outbox = None
+        self._close_private_job()
         self._proc = None
         self._ready_info = None
         self._owned = False
 
-    # ---- mode: gui (file drop) ----
-
-    def _start_gui_bootstrap(self) -> dict:
-        """Launch (or attach to) Cubit + bootstrap, wait for ready.
-
-        Phase-1 daemon persistence (2026-04-22): drop-dir is now per-user
-        stable (``%LOCALAPPDATA%\\radia-mcp\\cubit-session``), not a
-        per-process tempdir.  Before spawning a new Cubit, check if a
-        previously-launched daemon is still alive and attach to it —
-        this lets a fresh VSCode / MCP-server process reuse the Cubit
-        that an earlier session left running (license stays warm,
-        imported STEPs survive, sphere in GUI stays as-is).
-
-        Fallback to spawn when no daemon found, with four layers:
-        1. Pre-warm Learn license via rlm_activate cache check.
-        2. Spawn Cubit with ``DETACHED_PROCESS`` + ``CREATE_NEW_PROCESS_GROUP``
-           so the subprocess survives this MCP-server process exit.
-           stdout/stderr → DEVNULL to avoid pipe breakage on parent exit.
-        3. Wait for ready marker, split timeouts (15 s / 60 s by whether
-           license warmup ran).
-        4. Record our PID into ``pid.lock`` so the next process can
-           find + attach.
-        """
-        # --- Session mode (MathWorks matlab-session-mode triad) ---------
-        #   auto     (default) attach to a live shared daemon, else spawn
-        #   new      always spawn a FRESH daemon in a private drop-dir
-        #            (hermetic runs -- never reuses / clobbers the shared
-        #            per-user daemon)
-        #   existing attach only; fail loud when no live shared daemon
-        session_mode = os.environ.get(
-            "RADIA_CUBIT_SESSION_MODE", "auto").strip().lower()
-        if session_mode not in ("auto", "new", "existing"):
-            raise CubitSessionError(
-                f"Invalid RADIA_CUBIT_SESSION_MODE={session_mode!r}: "
-                "expected auto | new | existing")
-
-        # --- Drop-dir ---------------------------------------------------
-        # auto/existing share the per-user stable dir; mode "new" gets a
-        # per-process private dir so it cannot fight the shared daemon
-        # over pid.lock / request files.
-        if session_mode == "new":
-            drop = _user_daemon_dir().parent / f"cubit-session-{os.getpid()}"
-        else:
-            drop = _user_daemon_dir()
-        drop.mkdir(parents=True, exist_ok=True)
-        outbox = drop / "out"
-        outbox.mkdir(exist_ok=True)
-        ready_path = drop / "ready"
-        pid_file = drop / "pid.lock"
-
-        # --- Attach to existing daemon if alive -------------------------
-        existing = (None if session_mode == "new"
-                    else _try_attach_existing_daemon(drop))
-        if session_mode == "existing" and existing is None:
-            raise CubitSessionError(
-                f"RADIA_CUBIT_SESSION_MODE=existing but no live shared "
-                f"Cubit daemon was found at {drop}. This is a manual-only "
-                "GUI transport; MCP tools cannot start or attach to it.")
-        if existing is not None:
-            self._drop_dir = drop
-            self._outbox = outbox
-            self._proc = None  # not OUR child; we're just a client
-            self._owned = False
-            # Responsiveness probe (MathWorks ping-before-handing-out-
-            # the-client): PID-alive passes for a HUNG or busy Cubit
-            # whose Qt loop is not polling the drop dir.  Fail loud NOW
-            # with a clear message instead of letting the first real
-            # call sit in a 60 s timeout.  Non-destructive: the daemon
-            # is left running (it may be mid-operation in another
-            # window); _ready_info stays unset so the next call re-pings.
-            ping_req = {"id": self._next_id, "op": "ping", "args": [],
-                        "protocol_version": PROTOCOL_VERSION}
-            self._next_id += 1
-            try:
-                self._call_via_filedrop(ping_req,
-                                        timeout_s=ATTACH_PING_TIMEOUT_S)
-            except CubitSessionError:
-                pid = existing.get("pid")
-                raise CubitSessionError(
-                    f"Attached Cubit daemon (pid={pid}) is alive but did "
-                    f"not answer a ping within {ATTACH_PING_TIMEOUT_S:.0f} s "
-                    "-- it is busy with a long operation or hung. Wait and "
-                    "retry, or force-stop it with cubit_session_shutdown "
-                    "if it is truly stuck.")
-            self._ready_info = existing
-            self._last_license_warmup = {"status": "skipped",
-                                          "reason": "attached to existing daemon"}
-            return existing
-
-        # --- No live daemon: new spawn path ----------------------------
-        # Resolve the launcher only on the spawn path -- attaching to an
-        # already-running daemon must not require (or fail on) the exe.
-        gui_exe = _cubit_gui_exe(self._bin_dir)
-        bootstrap_path = Path(__file__).with_name("bootstrap.py")
-        if not bootstrap_path.exists():
-            raise CubitSessionError(
-                f"Bootstrap script missing: {bootstrap_path}. Expected "
-                "sibling of session.py.")
-
-        # Step 1: license pre-warm
-        try:
-            from cubit_mesh_export.mcp.license_warmup import warmup_license
-            warmup = warmup_license(self._bin_dir,
-                                     timeout_s=LICENSE_WARMUP_TIMEOUT_S)
-            self._last_license_warmup = warmup
-        except Exception as exc:
-            self._last_license_warmup = {
-                "status": "error", "reason": f"warmup module: {exc}"}
-
-        # Clear stale artifacts from any previous spawn in this dir
-        startup_error_path = drop / "startup_error.txt"
-        try:
-            if ready_path.exists():
-                ready_path.unlink()
-            if pid_file.exists():
-                pid_file.unlink()
-            if startup_error_path.exists():
-                startup_error_path.unlink()
-            for f in outbox.iterdir():
-                try: f.unlink()
-                except OSError: pass
-            for f in drop.glob("*.json"):
-                try: f.unlink()
-                except OSError: pass
-        except OSError:
-            pass
-        self._drop_dir = drop
-        self._outbox = outbox
-
-        env = os.environ.copy()
-        env["CUBIT_BIN_DIR"] = str(self._bin_dir)
-        env["CUBIT_DROP_DIR"] = str(drop)
-        # Cubit execs bootstrap.py as a STRING (frames show <string>),
-        # so __file__-based sibling imports (probe_ops) resolve against
-        # Cubit's CWD and fail -- found by the 2026-08-05 GUI E2E. The
-        # package dir is passed explicitly instead.
-        env["CUBIT_MCP_CUBIT_PKG_DIR"] = str(Path(__file__).parent)
-
-        # Detach the Cubit subprocess so it outlives THIS MCP server
-        # process.  DETACHED_PROCESS + CREATE_NEW_PROCESS_GROUP mean: no
-        # orphan child on VSCode exit, Cubit keeps running, and the next
-        # MCP server process finds it via pid.lock + attaches.
-        # EXCEPTION -- session_mode "new": the private daemon is useless
-        # without this client, so it joins a kill-on-close Job Object
-        # instead (found by the same GUI E2E: a client that died before
-        # shutdown left license-holding orphans behind).
-        creationflags = 0
-        if sys.platform == "win32":
-            creationflags = (
-                getattr(subprocess, "DETACHED_PROCESS", 0) |
-                getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))
-        # Cubit's own console output goes to log FILES in the drop dir
-        # (MathWorks matlab_stdout.log pattern), NOT to pipes (pipes
-        # block/break when the parent exits -- the detached child must
-        # outlive us) and NOT to DEVNULL (which threw away exactly the
-        # output needed when bootstrap dies before writing `ready`).
-        stdout_log = drop / "cubit_stdout.log"
-        stderr_log = drop / "cubit_stderr.log"
-        with open(stdout_log, "wb") as out_f, open(stderr_log, "wb") as err_f:
-            self._proc = subprocess.Popen(
-                [str(gui_exe), "-nojournal", str(bootstrap_path)],
-                # stdin=DEVNULL: prevent Cubit from inheriting the MCP
-                # server's stdio pipe (Claude Code JSON-RPC). Without it
-                # Cubit hangs at startup (resp=False, declining threads).
-                # Confirmed 2026-04-25.
-                stdin=subprocess.DEVNULL,
-                stdout=out_f,
-                stderr=err_f,
-                env=env,
-                bufsize=0,
-                creationflags=creationflags,
-                close_fds=True,
-            )
-        self._owned = True
-        if session_mode == "new" and sys.platform == "win32":
-            try:
-                self._job_handle = _assign_kill_on_close_job(self._proc.pid)
-            except OSError as exc:
-                try:
-                    self._proc.kill()
-                    self._proc.wait(timeout=3.0)
-                except Exception:
-                    pass
-                self._proc = None
-                self._owned = False
-                _remove_tree_with_retry(drop)
-                self._drop_dir = None
-                self._outbox = None
-                raise CubitSessionError(
-                    "Could not place the private Cubit process in a "
-                    "kill-on-close Windows Job Object; refusing to leave "
-                    "a mode-new session without orphan protection: "
-                    f"{exc}") from exc
-        # Write PID lock immediately so a sibling VSCode racing to spawn
-        # can also attach (once ready marker appears).
-        try:
-            pid_file.write_text(str(self._proc.pid), encoding="utf-8")
-        except OSError:
-            pass
-        # NOTE: no stderr drain needed — DEVNULL means no pipe to drain.
-
-        # --- Step 2: ready wait with shorter timeout after warmup ---
-        # After license pre-warm, Cubit should be ready in ~3 s.  If
-        # the warmup was skipped (cache fresh, login not needed), the
-        # budget still includes the full license checkout.  So the
-        # actual deadline depends on whether we ran the warmup.
-        warmup_ok = (self._last_license_warmup.get("status") in ("ok", "skipped")
-                     and self._last_license_warmup.get("action")
-                         != "no_rlm_activate")
-        budget = CUBIT_READY_TIMEOUT_S if warmup_ok else 60.0
-        deadline = time.time() + budget
-
-        def _startup_diag() -> str:
-            """Real in-process failure evidence, best first (MathWorks
-            mcp_startup_error.txt pattern + log-artifact pointers)."""
-            parts = []
-            if startup_error_path.exists():
-                try:
-                    parts.append("bootstrap error:\n"
-                                 + startup_error_path.read_text(
-                                       encoding="utf-8", errors="replace"))
-                except OSError:
-                    pass
-            try:
-                tail = stderr_log.read_bytes()[-2000:]
-                if tail.strip():
-                    parts.append("cubit stderr tail:\n"
-                                 + tail.decode("utf-8", errors="replace"))
-            except OSError:
-                pass
-            parts.append(f"logs: {stdout_log} / {stderr_log}")
-            return "\n".join(parts)
-
-        while time.time() < deadline:
-            if startup_error_path.exists():
-                raise CubitSessionError(
-                    "Cubit bootstrap failed during startup.\n"
-                    + _startup_diag())
-            if ready_path.exists():
-                try:
-                    info = json.loads(ready_path.read_text(encoding="utf-8"))
-                except json.JSONDecodeError:
-                    time.sleep(0.05)
-                    continue
-                self._ready_info = info
-                return info
-            if self._proc.poll() is not None:
-                raise CubitSessionError(
-                    f"Cubit exited during bootstrap "
-                    f"(rc={self._proc.returncode}).\n" + _startup_diag())
-            time.sleep(0.15)
-        raise CubitSessionError(
-            f"Cubit did not signal ready within {budget:.0f} s. "
-            f"drop={drop}\n" + _startup_diag())
-
-    def _request_stem(self, req_id: int) -> str:
-        """Return a request filename unique across attached MCP clients."""
-        client_id = getattr(self, "_client_id", None)
-        if client_id is None:
-            client_id = f"{os.getpid():08x}-{uuid.uuid4().hex[:12]}"
-            self._client_id = client_id
-        return f"{client_id}-{int(req_id):08d}"
-
-    def _call_via_filedrop(self, req: dict, timeout_s: float) -> dict:
-        assert self._drop_dir is not None and self._outbox is not None
-        req_id = req["id"]
-        stem = self._request_stem(req_id)
-        req_path = self._drop_dir / f"{stem}.req"
-        tmp_path = self._drop_dir / f"{stem}.req.tmp"
-        resp_path = self._outbox / f"{stem}.resp"
-
-        tmp_path.write_text(json.dumps(req), encoding="utf-8")
-        os.replace(tmp_path, req_path)
-
-        deadline = time.time() + timeout_s
-        while time.time() < deadline:
-            if resp_path.exists():
-                try:
-                    text = resp_path.read_text(encoding="utf-8")
-                    resp = json.loads(text)
-                except (OSError, json.JSONDecodeError):
-                    # Partial write: back off and retry.
-                    time.sleep(0.03)
-                    continue
-                resp_path.unlink(missing_ok=True)
-                if resp.get("id") != req_id:
-                    raise CubitSessionError(
-                        f"Response id mismatch for op={req.get('op')!r}: "
-                        f"expected {req_id}, got {resp.get('id')!r}")
-                return resp
-            if self._proc is not None and self._proc.poll() is not None:
-                raise CubitSessionError(
-                    f"Cubit exited during call (rc={self._proc.returncode}).")
-            time.sleep(0.05)
-        raise CubitSessionError(
-            f"Response timeout after {timeout_s}s for op={req.get('op')!r}")
 
     # ---- mode: batch (stdio JSON-RPC) ----
 
@@ -1276,19 +646,17 @@ class CubitSession:
             bufsize=0,
         )
         self._owned = True
+        if sys.platform == "win32":
+            self._job_handle = _assign_kill_on_close_job(self._proc.pid)
         self._start_stderr_drain()
 
-        line = self._proc.stdout.readline()
-        if not line:
-            stderr = self._proc.stderr.read().decode("utf-8", errors="replace")
-            raise CubitSessionError(
-                f"Daemon died during startup. stderr:\n{stderr[-2000:]}")
+        line = self._read_stdio_line(timeout_s=CUBIT_READY_TIMEOUT_S)
         try:
             ready = json.loads(line.decode("utf-8"))
-        except json.JSONDecodeError as e:
+        except (ValueError, UnicodeError) as e:
             raise CubitSessionError(
                 f"Daemon emitted non-JSON ready line: {line!r} ({e})")
-        if not ready.get("ready"):
+        if not isinstance(ready, dict) or not ready.get("ready") or ready.get("protocol_version") != PROTOCOL_VERSION:
             raise CubitSessionError(
                 f"Daemon reported startup failure: {ready}")
         self._ready_info = ready
@@ -1297,10 +665,13 @@ class CubitSession:
     def _call_via_stdio(self, req: dict, timeout_s: float) -> dict:
         self._send_stdio(req)
         line = self._read_stdio_line(timeout_s=timeout_s)
-        resp = json.loads(line.decode("utf-8"))
-        if resp.get("id") is not None and resp["id"] != req["id"]:
+        try:
+            resp = json.loads(line.decode("utf-8"))
+        except (ValueError, UnicodeError) as exc:
+            raise CubitSessionError(f"Invalid daemon response: {exc}") from exc
+        if not isinstance(resp, dict) or resp.get("id") != req["id"]:
             raise CubitSessionError(
-                f"Response id {resp.get('id')} != request id {req['id']}")
+                f"Invalid response for request {req['id']}: {resp!r}")
         return resp
 
     def _send_stdio(self, obj: dict) -> None:
@@ -1316,9 +687,11 @@ class CubitSession:
         assert self._proc is not None and self._proc.stdout is not None
         result: list[bytes | Exception] = []
 
+        pipe = self._proc.stdout
+
         def _reader():
             try:
-                line = self._proc.stdout.readline()
+                line = pipe.readline()
                 result.append(line)
             except Exception as e:
                 result.append(e)
@@ -1371,19 +744,13 @@ class CubitSession:
         t.start()
 
     def _lock_free_shutdown_op(self, timeout_s: float) -> None:
-        """Fire-and-forget shutdown op — tolerate any error."""
+        """Send shutdown without waiting for a response; tolerate a closed pipe."""
         try:
             req_id = self._next_id
             self._next_id += 1
-            req = {"id": req_id, "op": "shutdown", "args": []}
-            if self._mode == "gui":
-                try:
-                    self._call_via_filedrop(req, timeout_s=timeout_s)
-                except CubitSessionError:
-                    pass
-            else:
-                self._send_stdio(req)
-        except Exception:
+            self._send_stdio({"id": req_id, "op": "shutdown", "args": [],
+                              "protocol_version": PROTOCOL_VERSION})
+        except (CubitSessionError, AssertionError):
             pass
 
     # ---- singleton access ----
@@ -1404,7 +771,7 @@ class CubitSession:
                     f"Cubit singleton already uses mode={_SINGLETON._mode!r}; "
                     f"refusing requested mode={mode!r}. Use "
                     "cubit_session_shutdown to reset the MCP-owned session "
-                    "before changing execution mode."
+                    "before another headless session."
                 )
             return _SINGLETON
 

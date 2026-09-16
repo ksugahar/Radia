@@ -1,4 +1,4 @@
-#include "RadiaPlugin.hpp"
+#include "CubitMeshExportPlugin.hpp"
 #ifdef HAVE_NETGEN
 #include "ExportNetgenCommand.hpp"
 #endif
@@ -7,7 +7,6 @@
 #include "ExportVtkCommand.hpp"
 #include "ExportFemeemCommand.hpp"
 #include "ExportMegCommand.hpp"
-#include "CoilCommand.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -23,7 +22,7 @@
 // ============================================================
 // Python API plugin (CUBIT_PLUGIN_DIR / cubit.init)
 // ============================================================
-CUBIT_PLUGIN(RadiaPlugin)
+CUBIT_PLUGIN(CubitMeshExportPlugin)
 
 static void dbglog(const char* msg) {
   // Per-user filename under C:\temp: shared machine-level log at
@@ -36,12 +35,12 @@ static void dbglog(const char* msg) {
   if (f) { fprintf(f, "%s\n", msg); fclose(f); }
 }
 
-RadiaPlugin::RadiaPlugin() {
-  dbglog("RadiaPlugin constructor called");
+CubitMeshExportPlugin::CubitMeshExportPlugin() {
+  dbglog("CubitMeshExportPlugin constructor called");
 }
-RadiaPlugin::~RadiaPlugin() {}
+CubitMeshExportPlugin::~CubitMeshExportPlugin() {}
 
-std::vector<std::string> RadiaPlugin::get_keys()
+std::vector<std::string> CubitMeshExportPlugin::get_keys()
 {
   dbglog("get_keys() called");
   std::vector<std::string> keys;
@@ -49,16 +48,14 @@ std::vector<std::string> RadiaPlugin::get_keys()
   keys.push_back("ExportNetgenCommand");
 #endif
   keys.push_back("ExportNastranCommand");
-  keys.push_back("ExportJmagNastranCommand");
   keys.push_back("ExportGmshCommand");
   keys.push_back("ExportVtkCommand");
   keys.push_back("ExportFemeemCommand");
   keys.push_back("ExportMegCommand");
-  keys.push_back("CoilCommand");
   return keys;
 }
 
-CubitCommand* RadiaPlugin::create_command(const std::string &key)
+CubitCommand* CubitMeshExportPlugin::create_command(const std::string &key)
 {
 #ifdef HAVE_NETGEN
   if (key == "ExportNetgenCommand")
@@ -67,8 +64,6 @@ CubitCommand* RadiaPlugin::create_command(const std::string &key)
 #endif
   if (key == "ExportNastranCommand")
     return new ExportNastranCommand();
-  else if (key == "ExportJmagNastranCommand")
-    return new ExportJmagNastranCommand();
   else if (key == "ExportGmshCommand")
     return new ExportGmshCommand();
   else if (key == "ExportVtkCommand")
@@ -77,8 +72,6 @@ CubitCommand* RadiaPlugin::create_command(const std::string &key)
     return new ExportFemeemCommand();
   else if (key == "ExportMegCommand")
     return new ExportMegCommand();
-  else if (key == "CoilCommand")
-    return new CoilCommand();
   return nullptr;
 }
 

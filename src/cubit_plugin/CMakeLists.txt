@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.12)
-project(RadiaCubitPlugin)
+project(CubitMeshExportPlugin)
 
 # --------------------------------------------------------
 # Emit PDBs for Release builds so crash dumps can be symbolicated.
@@ -117,10 +117,10 @@ else()
 endif()
 
 # --------------------------------------------------------
-# Qt5 removed (radia 4.80.0).
+# Retired Qt5 target removed.
 # --------------------------------------------------------
-# The Qt5 .ccl GUI component (RadiaComp.cpp) was deleted in radia
-# 4.80.0; all GUI work is now in src/radia/panels/radia_export_menu.py
+# The old Qt5 .ccl GUI component is gone; all GUI work is now in
+# packages/cubit-mesh-export/src/cubit_mesh_export/cubit_gui/cubit_export_menu.py
 # (PySide6).  The .ccm (APREPRO commands) and .pyd (cubit_mesh_curver)
 # below have no Qt dependency.
 
@@ -132,8 +132,8 @@ endif()
 # (-commandplugindir).
 # --------------------------------------------------------
 set(CCM_SOURCES
-    RadiaPlugin.cpp
-    RadiaPlugin.hpp
+    CubitMeshExportPlugin.cpp
+    CubitMeshExportPlugin.hpp
     MeshData.cpp
     MeshData.hpp
     # HighOrderMesh removed — NetgenCurver is the sole curving path (no fallback)
@@ -149,8 +149,6 @@ set(CCM_SOURCES
     ExportFemeemCommand.hpp
     ExportMegCommand.cpp
     ExportMegCommand.hpp
-    CoilCommand.cpp
-    CoilCommand.hpp
 )
 
 # Netgen-dependent sources: callbackgeom + ExportNetgenCommand
@@ -210,11 +208,10 @@ if(HAVE_NETGEN)
 endif()
 
 # --------------------------------------------------------
-# Target 2 (cubit_mesh_export.ccl) removed in radia 4.80.0.
+# The old cubit_mesh_export.ccl target is intentionally absent.
 # --------------------------------------------------------
 # The Qt5 GUI Claro Component is replaced by the PySide6 toolbar at
-# src/radia/panels/radia_export_menu.py.  See CLAUDE.md "Cubit Panel
-# Architecture" Layer 2 (Cubit Python).
+# packages/cubit-mesh-export/src/cubit_mesh_export/cubit_gui/cubit_export_menu.py.
 
 # --------------------------------------------------------
 # pybind11 module: cubit_mesh_curver (.pyd) — Cubit-free
@@ -244,7 +241,7 @@ if(pybind11_FOUND AND HAVE_NETGEN AND NOT USE_COMPACT_NETGEN)
     "${NETGEN_DIR}/include/include"
     "${CMAKE_CURRENT_SOURCE_DIR}"
   )
-  target_compile_definitions(cubit_mesh_curver PRIVATE RADIA_NETGEN_EDGE_DESCRIPTOR_API)
+  target_compile_definitions(cubit_mesh_curver PRIVATE CUBIT_MESH_EXPORT_NETGEN_EDGE_DESCRIPTOR_API)
   target_link_libraries(cubit_mesh_curver PRIVATE netgen::nglib netgen::ngcore)
 
   install(TARGETS cubit_mesh_curver
@@ -262,8 +259,7 @@ endif()
 install(TARGETS cubit_mesh_export_ccm
     LIBRARY DESTINATION "${CMAKE_INSTALL_PREFIX}/plugins"
 )
-# cubit_mesh_export_ccl install removed in radia 4.80.0 (Qt5 .ccl deleted;
-# replaced by PySide6 src/radia/panels/radia_export_menu.py).
+# No .ccl is installed; the packaged PySide6 toolbar is the sole GUI.
 
 if(HAVE_NETGEN AND NOT USE_COMPACT_NETGEN)
   install(FILES

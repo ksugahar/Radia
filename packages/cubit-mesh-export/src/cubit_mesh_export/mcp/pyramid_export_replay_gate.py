@@ -144,8 +144,8 @@ def cubit_pyramid_source_plugin_replay_gate(
         "runtime_and_export_migrations_recorded": "2024.3 Python init"
         in str(transforms.get("cubit_runtime", ""))
         and "combined journal startup" in str(transforms.get("cubit_runtime", ""))
-        and "export_3D_Nastran" in str(transforms.get("legacy_nastran_function", ""))
-        and "export jmag_nastran" in str(transforms.get("legacy_nastran_function", "")),
+        and "export_3D_Nastran" in str(transforms.get("nastran_export_migration", ""))
+        and "export nastran_bdf" in str(transforms.get("nastran_export_migration", "")),
         "current_cubit_version_recorded": str(summary.get("version", "")).startswith(
             "2025.12"
         ),

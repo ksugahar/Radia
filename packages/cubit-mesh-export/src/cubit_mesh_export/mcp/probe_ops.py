@@ -1,30 +1,19 @@
-"""
-probe_ops.py — SHARED Cubit-side probe queries for both session runners.
+"""Cubit-side queries used by the headless stdio daemon.
 
-The GUI file-drop runner (bootstrap.py, executed inside Cubit's Qt/Python)
-and the batch stdio runner (daemon.py, executed by Cubit's bundled
-Python 3.10) both dispatch the "probe" op here, so the query surface can
-never drift between the two transports again (it had: `per_volume`
-existed only in bootstrap, `entities`/`labels` only in daemon).
-
-Both runners execute as plain scripts (no package context), so this
-module is imported BY PATH (the runner inserts its own directory into
-``sys.path``).  Keep it importable under Python 3.10 and free of any
-import beyond the stdlib; the ``cubit`` module is passed in as an
-argument, never imported here.
+Loaded by path in Cubit's bundled Python; stdlib only. The daemon passes
+the Cubit module explicitly, so importing these helpers never starts Cubit.
 """
 
 import os
 import sys
 import traceback
-import uuid
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
 _ENTITY_DUMP_CAP = 300
 
 
-def trimmed_traceback(exclude_basenames=("daemon.py", "bootstrap.py",
+def trimmed_traceback(exclude_basenames=("daemon.py",
                                          "probe_ops.py")) -> str:
     """Format the ACTIVE exception with runner-harness frames removed.
 
@@ -248,59 +237,8 @@ def _probe_per_volume(cubit_mod):
     return rows
 
 
-def op_snapshot(cubit_mod, args):
-    """Hardcopy the current view to PNG -- SHARED by both runners.
-
-    Uses the plain ``hardcopy "<path>" png`` form: the ``window <w> <h>``
-    variant returns rc=1 but writes a 0-byte file in GUI mode (measured
-    Coreform Cubit 2025.12, 2026-08-05).  Any requested size is reported
-    back as ignored rather than silently dropped; the image renders at
-    the current graphics-window size.  The written file is verified
-    (existence + non-zero size) because ``cubit.cmd`` returns success
-    for silently-failing hardcopies.
-    """
-    if len(args) < 1:
-        return {"error": "snapshot requires at least 1 arg (path)"}
-    out_path = str(args[0])
-    parent = os.path.dirname(os.path.abspath(out_path))
-    os.makedirs(parent, exist_ok=True)
-    tmp_path = os.path.join(
-        parent,
-        f".{os.path.basename(out_path)}.{uuid.uuid4().hex}.tmp.png",
-    )
-    try:
-        try:
-            rc = cubit_mod.cmd(f'hardcopy "{tmp_path}" png')
-            size = (os.path.getsize(tmp_path)
-                    if os.path.isfile(tmp_path) else 0)
-        except OSError:
-            rc, size = False, 0
-        ok = bool(rc) and size > 0
-        result = {"path": out_path, "ok": ok, "bytes": int(size)}
-        if len(args) >= 3:
-            result["requested_size_ignored"] = [int(args[1]), int(args[2])]
-        if not ok:
-            result["error"] = (
-                "hardcopy wrote no image (0 bytes). The graphics window is "
-                "not rendering -- in batch (-nographics) mode snapshots are "
-                "unavailable; in GUI mode issue a draw/display command first.")
-        else:
-            try:
-                os.replace(tmp_path, out_path)
-            except OSError as exc:
-                result.update(ok=False, error=f"cannot publish snapshot: {exc}")
-        return result
-    finally:
-        try:
-            if os.path.exists(tmp_path):
-                os.unlink(tmp_path)
-        except OSError:
-            pass
-
-
 def op_probe(cubit_mod, args):
-    """Dispatch one probe query.  The single implementation for BOTH the
-    GUI file-drop runner and the batch stdio runner."""
+    """Dispatch one query for the headless stdio runner."""
     query = args[0] if args else ""
     q = str(query).strip().lower()
     try:

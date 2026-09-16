@@ -11,7 +11,7 @@ export netgen "filename.vol" [order <1-5>] [overwrite]
 No block assignment required — all meshed elements are exported automatically.
 Sidesets become boundary labels. Block names become material labels.
 
-> **NOTE**: `export netgen` is provided by the Radia Cubit plugin.
+> **NOTE**: `export netgen` is provided by the Cubit Mesh Export plugin.
 > Cubit has no built-in Netgen exporter, so there is no command conflict.
 
 ### Options

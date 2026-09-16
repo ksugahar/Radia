@@ -13,11 +13,8 @@ from cubit_mesh_export.mcp.rules import (
     check_missing_cubit_init,
     check_wrong_connectivity_for_2nd_order,
     check_element_type_before_add,
-    check_setgeominfo_without_geometry,
     check_nodeset_sideset_usage,
-    check_missing_name_occ_faces,
     check_missing_step_reimport,
-    check_noheal_for_named_workflow,
     check_hardcoded_absolute_paths,
     check_missing_boundary_block,
     check_ambiguous_face_block,
@@ -161,13 +158,6 @@ class TestElementTypeBeforeAdd:
         assert _run(check_element_type_before_add, code) == []
 
 
-class TestSetGeomInfoWithoutGeometry:
-    def test_stub_returns_empty(self):
-        code = 'set_cylinder_geominfo(mesh, surface_id)\n'
-        # Rule is now a stub (old API detection handled by check_missing_step_reimport)
-        assert _run(check_setgeominfo_without_geometry, code) == []
-
-
 class TestNodesetSidesetUsage:
     def test_detects_nodeset_with_non_exodus(self):
         code = (
@@ -183,13 +173,6 @@ class TestNodesetSidesetUsage:
         assert _run(check_nodeset_sideset_usage, code) == []
 
 
-class TestMissingNameOccFaces:
-    def test_stub_returns_empty(self):
-        code = 'name_occ_faces(shape)\n'
-        # Rule is now a stub (old API removed)
-        assert _run(check_missing_name_occ_faces, code) == []
-
-
 class TestMissingStepReimport:
     def test_detects_deleted_api(self):
         code = (
@@ -198,18 +181,11 @@ class TestMissingStepReimport:
         findings = _run(check_missing_step_reimport, code)
         assert len(findings) >= 1
 
-    def test_allows_radia_export_netgen(self):
+    def test_allows_native_export_netgen(self):
         code = (
             'mesh = cubit.cmd("export netgen output.vol order 2")\n'
         )
         assert _run(check_missing_step_reimport, code) == []
-
-
-class TestNohealForNamedWorkflow:
-    def test_stub_returns_empty(self):
-        code = 'name_occ_faces(shape)\n'
-        # Rule is now a stub (old name-based workflow removed)
-        assert _run(check_noheal_for_named_workflow, code) == []
 
 
 class TestCubitHardcodedAbsolutePaths:
@@ -284,7 +260,7 @@ class TestExportFileExtension:
 
 
 class TestCurveWithoutSetGeomInfo:
-    def test_detects_manual_curve_without_radia_export_netgen(self):
+    def test_detects_manual_curve_without_native_export_netgen(self):
         code = (
             'mesh = Mesh("output.vol")\n'
             'mesh.Curve(3)\n'
@@ -292,7 +268,7 @@ class TestCurveWithoutSetGeomInfo:
         findings = _run(check_curve_without_setgeominfo, code)
         assert len(findings) == 1
 
-    def test_allows_radia_export_netgen(self):
+    def test_allows_native_export_netgen(self):
         code = (
             'cubit.cmd("export netgen output.vol order 3")\n'
         )
@@ -349,8 +325,8 @@ class TestNoPyQt5Imports:
 
 class TestAllRulesList:
     def test_all_rules_count(self):
-        # 20 original + 3 Cubit in-process toolbar rules + PySide6-only gate.
-        assert len(ALL_RULES) == 24
+        # Retired three no-op compatibility placeholders; 21 active rules remain.
+        assert len(ALL_RULES) == 21
 
     def test_all_rules_callable(self):
         for rule in ALL_RULES:

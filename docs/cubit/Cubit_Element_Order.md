@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document explains how to create and work with 1st and 2nd order elements in Coreform Cubit, and how they interact with the Radia Cubit plugin export commands (`export <fmt>`).
+This document explains how to create and work with 1st and 2nd order elements in Coreform Cubit, and how they interact with the Cubit Mesh Export plugin commands (`export <fmt>`).
 
 ## Creating 2nd Order Elements
 
@@ -167,7 +167,7 @@ Output:
 | `export vtk "f.vtk" order N` | NetgenCurver | 1-2 |
 
 > **Note**: use `export nastran_bdf` (not Cubit's built-in `export nastran`).
-> `export jmag_nastran` remains a deprecated compatibility alias.
+> No alternate spelling is registered.
 
 ## See Also
 

@@ -1,7 +1,7 @@
 """Test Cubit mesh export: mixed elements, hex cylinder, p-convergence.
 
 Runs journal files in Cubit batch mode and verifies output files.
-Requires Coreform Cubit with the Radia plugin installed.
+Requires Coreform Cubit with the Cubit Mesh Export plugin installed.
 
 Usage:
     python run_test.py

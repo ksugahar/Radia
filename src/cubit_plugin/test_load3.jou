@@ -1,2 +1,0 @@
-# Test: new plugin should be loaded, try the full command
-export jmag_nastran "test.bdf"

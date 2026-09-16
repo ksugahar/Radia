@@ -1,6 +1,6 @@
 # Cubit-owned implementation; intentionally maintained independently of Radia MCP.
 # Derived support retains BSD-3-Clause terms: see LICENSE-BSD-3-Clause.txt.
-"""Explicit MCP metadata shared by radia-mcp capability servers."""
+"""Explicit MCP metadata for Cubit-owned capabilities."""
 
 from __future__ import annotations
 

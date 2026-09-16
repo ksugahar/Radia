@@ -4,8 +4,8 @@
 //
 // Background (2026-05-25):
 //   Cubit 2025.12 (CUBIT_VERSION_ALLINT 17040+) removed the convenience
-//   static `GeometryQueryTool::instance()` accessor that older Radia
-//   plugin code relied on for `get_ref_face(int)` / `get_ref_edge(int)`
+//   static `GeometryQueryTool::instance()` accessor that older exporter
+//   code relied on for `get_ref_face(int)` / `get_ref_edge(int)`
 //   / `get_ref_volume(int)` lookups by ID.  The replacement path is
 //
 //     CubitCoreModel::instance()        // process singleton (still here)
@@ -19,9 +19,9 @@
 //
 // Usage:
 //   #include "CubitRefAccessor.hpp"
-//   RefFace*   rf = radia::cubit_get_ref_face(sid);
-//   RefEdge*   re = radia::cubit_get_ref_edge(cid);
-//   RefVolume* rv = radia::cubit_get_ref_volume(vid);
+//   RefFace*   rf = cubit_mesh_export::cubit_get_ref_face(sid);
+//   RefEdge*   re = cubit_mesh_export::cubit_get_ref_edge(cid);
+//   RefVolume* rv = cubit_mesh_export::cubit_get_ref_volume(vid);
 //
 // All accessors return nullptr if the ID does not resolve (same contract as
 // the old GeometryQueryTool methods).  Callers MUST null-check.
@@ -35,7 +35,7 @@ class RefFace;
 class RefEdge;
 class RefVolume;
 
-namespace radia {
+namespace cubit_mesh_export {
 
 inline RefEntityFactory* cubit_factory() {
   CubitCoreModel* model = CubitCoreModel::instance();
@@ -60,4 +60,4 @@ inline RefVolume* cubit_get_ref_volume(int id) {
   return f ? f->get_ref_volume(id) : nullptr;
 }
 
-}  // namespace radia
+}  // namespace cubit_mesh_export

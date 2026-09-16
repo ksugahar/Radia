@@ -107,8 +107,8 @@ try {
 } finally {
     Pop-Location
 }
-# cubit_mesh_export_ccl removed in radia 4.80.0 (Qt5 .ccl deleted; PySide6
-# toolbar at src/radia/panels/radia_export_menu.py replaces it).
+# The retired Qt5 .ccl target is intentionally absent.  The packaged PySide6
+# toolbar is the only supported Cubit GUI surface.
 
 $pydOutput = Get-ChildItem -LiteralPath $buildPyd `
     -Filter "cubit_mesh_curver*.pyd" -File |

@@ -251,6 +251,11 @@ def _boundary_domain_ownership_from_text(text):
             "volume domains absent from all boundary/interface descriptors: "
             + ", ".join(map(str, unreferenced_volume_domains))
         )
+    if missing_material_ids:
+        issues.append(
+            "volume domains missing material labels: "
+            + ", ".join(map(str, missing_material_ids))
+        )
 
     return {
         "passed": not issues,

@@ -43,7 +43,7 @@ def test_auto_kelvin_loads_deployed_sibling_despite_stale_module(tmp_path, monke
         AssertionError("stale add_kelvin module was reused"))
     monkeypatch.setitem(sys.modules, "add_kelvin", stale)
     monkeypatch.setenv("CUBIT_HELPERS_DIR", str(helper_dir))
-    monkeypatch.setenv("RADIA_LAUNCHER_CONFIG", str(config))
+    monkeypatch.setenv("CUBIT_MESH_EXPORT_KELVIN_CONFIG", str(config))
     monkeypatch.setenv("AUTO_KELVIN_TEST_MARKER", str(marker))
 
     runpy.run_path(str(entry), run_name="__main__")
