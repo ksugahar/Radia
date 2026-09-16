@@ -1,9 +1,9 @@
 # Radia
 
 <p align="center">
-  <strong>AI-native electromagnetic CAE, built on NGSolve</strong><br>
-  Design magnets, conductors, coils, open boundaries, reduced models, and
-  coupled electromagnetic systems from Python, MCP, MATLAB, and Simulink.
+  <strong>From a target magnetic field to a coil you can inspect.</strong><br>
+  Explore electromagnetic designs with an AI agent, examine the solved fields,
+  and compose applications in Simulink.
 </p>
 
 <p align="center">
@@ -17,160 +17,161 @@
 </p>
 
 <p align="center">
-  <img src="docs/gmsh_post/output/raster_pair.png"
-       alt="Magnetic-field magnitude over CAD geometry and LIC field-flow visualization"
-       width="1100">
-</p>
-<p align="center">
-  <sub>Checked Gmsh post-processing artifacts: ray-cast field magnitude over
-  STEP geometry and line-integral-convolution field flow.</sub>
+  <a href="docs/gmsh_post/em_post_gallery.ipynb"><img src=".github/assets/radia_field_preview.png"
+       alt="Saddle-coil CAD with magnetic-field magnitude and a midplane field-direction visualization"
+       width="1100"></a>
 </p>
 
-**AI designs. Radia provides the engineering platform.**
+*Saddle-coil field visualization: field magnitude over CAD and field direction
+on a slice. Open the [executed field gallery](docs/gmsh_post/em_post_gallery.ipynb)
+for the model, calculation, and comparison—not just the picture.*
 
-Radia is an open-source electromagnetic engineering platform for moving from
-geometry and physical intent to solved fields, optimized designs, dynamic
-models, and durable result artifacts. It brings together analytical
-open-boundary magnetics, high-order finite and boundary elements, scalable
-integral operators, CAD and mesh workflows, optimization, visualization, and
-human/AI interfaces.
+Radia brings together **coil and magnet design, induction heating, curved HEX
+meshes, and optimization** on [NGSolve](https://ngsolve.org/).
+NGSolve owns the finite-element mathematics; Radia adds electromagnetic
+methods, open-boundary operators, and engineering workflows.
 
-Radia is deliberately **not** another monolithic finite-element solver. It is
-built on [NGSolve](https://ngsolve.org/), which remains the numerical
-foundation for finite-element spaces, mappings, quadrature, weak forms,
-assembly, and field evaluation. Radia adds electromagnetic methods,
-open-boundary operators, application workflows, native kernels, and
-orchestration around that foundation.
+**MCP is the front door and the canonical manual.** An LLM drives the Python
+implementations through Radia MCP. **Simulink is the formal human-facing UI.**
+These pages show what is possible; the MCP tools supply the current operating
+instructions.
 
-> **Radia extends NGSolve; it does not compete with it.**
-
-[Quick start](#quick-start) | [Capabilities](#capabilities) |
-[Simulink](#simulink) | [MCP](#python-and-mcp) |
-[Documentation](#documentation) | [Contributing](#contributing)
-
-## Why Radia?
-
-- **Design, not only solve.** Optimize pole faces, magnetic material,
-  conductor topology, stream-function coils, reduced models, circuits, and
-  controllers in one workflow.
-- **Open boundaries are first-class.** Combine analytical source fields,
-  Kelvin and DtN techniques, volume and boundary integral methods, SIBC, and
-  model reduction without automatically surrounding every problem with a
-  large air mesh.
-- **MCP and Simulink have distinct roles.** MCP is the primary AI-facing
-  surface and canonical operating manual. The masked blocks in the single
-  **Radia** Simulink library are the formal human-facing UI. A separate
-  standalone MATLAB edition remains undecided.
-- **Radia is MCP-native.** LLM agents drive the Python solver and workflow
-  implementations through Radia MCP. Simulink operation requires MathWorks'
-  official MATLAB MCP Server; missing MCP connectivity fails fast rather than
-  switching to an undocumented direct-execution path.
-- **The numerical backend stays visible.** NGSolve owns finite-element
-  mathematics. Radia supplies the missing physical operator or coupling and
-  keeps independent analytical or integral routes where they improve trust.
-- **Integration is a feature.** build123d, Coreform Cubit, Netgen, Gmsh,
-  LTspice, MATLAB, Simulink, NumPy, SciPy, MKL, HACApK, and proven sparse
-  solvers are connected through explicit boundaries instead of reimplemented.
-- **Results carry evidence.** Production runs write checked meshes, logs,
-  machine-readable result metadata, and visualization artifacts. Public
-  examples are executed, result-bearing notebooks.
+[See the results](#what-can-you-build) · [Simulink](#simulink) ·
+[Start with MCP](#quick-start) · [Technical methods](#capabilities) ·
+[Documentation](#documentation)
 
 ## What can you build?
 
-| Engineering need | Radia route |
-| :--- | :--- |
-| Permanent magnets and coils | Analytical Radia source fields, CAD-driven coils, multipoles, forces, and open-space evaluation |
-| Soft magnetic materials | HDiv-VIM, magnetic-moment and multipole-moment methods, nonlinear material laws, and HACApK charge-Gram operators |
-| Accelerator and precision magnets | Clebsch-Hodograph pole design, field quality and multipoles, isochronous topology optimization, and charged-particle tracking |
-| Eddy currents and shielding | NGSolve HCurl workflows, BEM-A, SIBC, ESIM, cohomology-aware formulations, and reduced transient models |
-| Coil and current-sheet design | Stream-function inverse design, ACA+ / TSVD compression, contour extraction, and manufacturable single-stroke paths |
-| Conductors and circuits | PEEC, proximity and skin effects, PRIMA/CLN reduction, SPICE export, KiCad/LTspice workflows, and circuit-field coupling |
-| Induction heating | Geometry-to-operator assembly, distributed Eddy/Thermal Simulink blocks, temperature fields, and checked Gmsh outputs |
-| Motors and magnetic levitation | Angle-periodic native reduced models, HCurl/CLN moving plants, Lorentz force, and Simulink control integration |
-| Electromagnetic optimization | TPE, CMA-ES, MMA, SQP, adjoints, density/shape optimization, sheet-metal deformation, and CAD/mesh regeneration |
-| Post-processing | Saved NGSolve WebGUI scenes, Gmsh field views, LIC, isosurfaces, streamlines, sweeps, and flying particle-orbit animations |
+### Design a coil for the field you need
+
+Start from a target field, solve for a current distribution, and inspect the
+winding contours and the field they produce.
+
+[![Designed cylindrical coil currents and the resulting axial magnetic-field gradient](docs/stream_function/demo_coil_design_gz.png)](docs/stream_function/theory.ipynb)
+
+*An axial-gradient coil example: current distribution and winding locations
+at left, discrete-coil field against a linear fit at right. This is a design
+calculation, not a measured prototype.*
+
+Explore the [stream-function method notebook](docs/stream_function/theory.ipynb)
+and [complex-coil geometry and field notebook](docs/complex_coil_geometry/complex_coil.ipynb).
+The latter includes saved CAD, sampling-mesh, field-magnitude, and vector views.
+
+### See where induction-heating models differ
+
+Use ESIM surface-impedance models to examine how excitation and local
+surface response affect workpiece heating.
+
+[![Historical ESIM sweep comparing local and uniform impedance heating models, with an unrolled surface impedance map](docs/ih_esim_benchmark/sweep_heatmap_digest.png)](docs/ih_esim_benchmark/esim_showcase.ipynb)
+
+*Historical benchmark: the workpiece-power difference between per-element and
+uniform impedance models (left), and spatial impedance magnitude (right).
+The difference is between two modeling routes, not an error against experiment.*
+
+Open the [spatial ESIM demo](docs/ih_esim_benchmark/esim_spatial_demo.ipynb)
+to rotate the coil and workpiece, inspect the mesh, and compare surface fields
+and heating at three frequencies. The
+[method and benchmark notebook](docs/ih_esim_benchmark/esim_showcase.ipynb)
+explains the equations and checks. The spatial demo does **not** claim a
+resolved-volume thermal solution; its normalized heat-transfer artifact is
+distinguished from the local surface-heating diagnostic.
+
+### Bring curved HEX meshes from Cubit into NGSolve
+
+A HEX mesh is useful only if the solver preserves its geometry and can solve
+on it. The [Cubit mesh showcase](docs/cubit_mesh_export/cubit_mesh_export_showcase.ipynb)
+shows the same **56-cell sphere at geometry orders 1, 2, and 3**, followed by
+a manufactured Poisson solution on the cubic curved mesh.
+
+Open its saved WebGUI scenes to compare straight and curved element edges,
+then inspect the computed field. These are committed reference exports—not
+a certification of every element family or a fresh run of the current Cubit
+plugin. [Exporter capabilities and evidence](docs/cubit_mesh_export/README.md).
+
+### Choose a design trade-off, not just one optimum
+
+[![Stream-function optimization trials showing target-field RMS versus regularization cost and the Pareto front](docs/stream_function/demo_pareto_plot.png)](docs/stream_function/deformation.ipynb)
+
+*One saved 50-trial study: lower target-field RMS competes with regularization
+cost. The highlighted front shows the trade-offs found in this run, not proof
+of a global optimum.*
+
+Explore [coil deformation and optimization](docs/stream_function/deformation.ipynb).
+For human operation, the Radia Simulink library includes **Optuna Optimization**
+and **Optuna Monitor** blocks. The plot above is a Python-backed notebook
+result; it is not presented as a Simulink-run screenshot.
+
+### More to explore
+
+[Permanent magnets and soft iron](docs/hdiv_vim/README.md) ·
+[Accelerator magnet design](docs/clebsch_hodograph/demos/README.md) ·
+[Conductors and PEEC circuits](docs/peec_integration/README.md) ·
+[Force and torque checks](docs/force_validation/force_validation.ipynb) ·
+[Particle trajectories](docs/gmsh_post/em_particle_orbits.ipynb) ·
+[All capability notebooks](docs/README.md)
+
+The notebooks retain equations, derivations, citations cross-checked against
+the canonical
+[references.bib](packages/radia-mcp/src/radia_mcp/bibliography/data/references.bib),
+and saved numerical evidence. They are executable technical explanations,
+not a second operating manual. Interactive WebGUI scenes require a compatible
+notebook viewer; GitHub may show the narrative and static output without
+activating those scenes.
+
+## Simulink
+
+**The single Radia library is the formal human-facing UI.** Compose masked
+application blocks for Electromagnet, PCB/PEEC, Motor, Stream Function, and
+Induction Heating, with optimization, circuit, and reduced-model components.
+
+![Saved Radia library overview with application, optimization, coupling, reduced-model, material, LTspice, and utility groups](.github/assets/radia_simulink_library.png)
+
+*Saved library overview. This illustrates the block groupings; it is not a
+full-window visual acceptance check of the current release.*
+
+Simulink operation requires **MathWorks' official MATLAB MCP Server**.
+MathWorks' Simulink Agentic Toolkit owns generic model operations; Radia MCP
+supplies the domain workflows and canonical manual. A standalone MATLAB
+product edition is not currently defined. MATLAB and MEX files are
+implementation and integration assets, not an alternative docs format.
+
+[MATLAB/Simulink integration](matlab/README.md) ·
+[Discover the underlying methods and results](docs/README.md)
 
 ## Quick start
 
-The current production wheel targets **Windows x64**, **Python 3.12**, and
-**NGSolve/Netgen 6.2.2604**.
+Start with an **MCP-capable AI client**, not a standalone Python tutorial.
+The solver stack targets Windows x64, Python 3.12, and NGSolve/Netgen 6.2.2606;
+the lightweight manual tools and the native solver have different dependencies.
 
-```powershell
-python -m pip install --upgrade radia
-```
+1. Follow the [MCP package and client setup](packages/radia-mcp/README.md)
+   to install and connect the relevant capability packs. Installing a Python
+   package alone does not connect an MCP server to your client.
+2. Ask the agent to call the selected pack's `capability_pack_status` and
+   follow its reported status, usage, and recipe tools.
+3. Choose a notebook above and describe the result you want. Have the agent
+   check dependencies and validation requirements before starting a solve.
 
-Evaluate an analytical open-boundary magnetic field in SI units:
+For example, ask your connected agent:
 
-```python
-import numpy as np
-import radia as rad
+> I want a coil that produces an approximately uniform field in a specified
+> region. Use Radia MCP to identify the supported design route, show me the
+> relevant result-bearing notebook, and confirm the inputs and checks before
+> running anything.
 
-mu0 = 4.0 * np.pi * 1e-7
-remanence_t = 1.2
+For Simulink, connect the official MATLAB MCP foundation as well.
+Cubit-based meshing requires a working Coreform Cubit installation and license.
+Missing MCP connectivity or a required numerical dependency is a blocker,
+not a reason to silently substitute another execution route.
+See [Installation](#installation) for package boundaries and build requirements.
 
-magnet = rad.ObjRecMag(
-    [0.0, 0.0, 0.0],
-    [0.01, 0.01, 0.01],
-    [0.0, 0.0, remanence_t / mu0],
-)
+**Know the scope:** Radia targets magneto-quasi-static through Darwin models,
+not full-wave radiation. Individual methods have different maturity and
+validation coverage; use the owning MCP contract and the linked evidence to
+decide whether a route fits your problem.
 
-b_t = rad.Fld(magnet, "b", [0.0, 0.0, 0.02])
-print(f"Bz [T] = {b_t[2]:.8f}")
-rad.UtiDelAll()
-```
-
-```text
-Bz [T] = 0.02356629
-```
-
-This first example needs no air mesh. Move to NGSolve when the problem needs
-finite-element spaces, material domains, weak forms, or coupled field
-equations.
-
-Turn solved SI field samples into electromagnetic force and torque through
-Lorentz volume integration, air-side Maxwell stress, time-averaged complex
-phasors, virtual work/coenergy, or a cylindrical air-gap shear estimate:
-
-```python
-from radia.force import integrate_lorentz_force
-
-# One quadrature sample: J = 2 MA/m^2 in +z, B = 0.3 T in +y,
-# with 2.5 cm^3 of physical volume. The force points in -x.
-force_n = integrate_lorentz_force(
-    [0.0, 0.0, 2.0e6],
-    [0.0, 0.3, 0.0],
-    2.5e-6,
-)
-print(force_n)  # [-1.5, 0.0, 0.0] N
-```
-
-Supplying quadrature positions and a pivot to
-`integrate_lorentz_force_and_torque` returns both resultants. The same
-contracts are available in MATLAB under `radia.force`, including
-`integrateLorentzForceTorque`, `integrateTimeAverageMaxwellSurfaceForceTorque`,
-`virtualWorkForce`, and `coenergyTorque`.
-The [force validation notebook](docs/force_validation/force_validation.ipynb)
-shows the Lorentz, Maxwell-stress, and virtual-work identities used to check
-signs and force extraction before attaching them to a production field solve.
-
-Install only the integrations you need:
-
-```powershell
-# AI-facing domain tools and executable workflow knowledge
-python -m pip install radia-mcp
-
-# Coreform Cubit export and strict .vol checking
-python -m pip install "radia[cubit]"
-cubit-plugin-install
-cubit-plugin-install --verify-only
-
-# Optional accelerator tracking and topology-to-CAD workflows
-python -m pip install "radia[beam]"
-python -m pip install "radia[topopt-cad]"
-```
-
-See [Installation](#installation) for MATLAB/Simulink, visualization, and
-source-build paths.
+<details>
+<summary>Architecture and responsibility boundaries</summary>
 
 ## Architecture
 
@@ -178,7 +179,8 @@ source-build paths.
 flowchart TB
     AI["AI / LLM"] --> MCP["radia-mcp"]
     Human["Human engineer"] --> Simulink["MATLAB / Simulink"]
-    Python["Python API"] --> Contract["DesignSpec + typed artifacts"]
+    MCP --> Python["LLM-driven Python implementation"]
+    Python --> Contract["DesignSpec + typed artifacts"]
     MCP --> Contract
     Simulink --> Contract
 
@@ -193,9 +195,9 @@ flowchart TB
     Results --> Viz["WebGUI | Gmsh | plots | animation"]
 ```
 
-The same engineering model can therefore be driven by an AI agent, a Python
-program, or a Simulink composition without making the user-facing interface
-the source of numerical truth.
+AI agents and Simulink compositions share numerical and artifact contracts.
+Python supplies the implementation behind the MCP-driven workflow; the UI is
+not the source of numerical truth.
 
 ### Responsibility boundaries
 
@@ -206,6 +208,11 @@ the source of numerical truth.
 | **MATLAB and Simulink** | Formal masked-block human UI on the required MathWorks MATLAB MCP foundation; typed signal flow, lifecycle, controls, monitoring, and native MEX state ownership |
 | **radia-mcp** | Primary AI-facing entrypoint and canonical manual: executable domain knowledge, tool discovery, workflow selection, validation guidance, and orchestration |
 | **CAD and visualization tools** | Geometry/mesh authoring and durable inspection through explicit STEP, VOL, MSH, and result boundaries |
+
+</details>
+
+<details>
+<summary>Technical methods and implementation interfaces</summary>
 
 ## Capabilities
 
@@ -291,8 +298,9 @@ MATLAB adapters.
 Radia supports global, local, and gradient-based design loops:
 
 - TPE, CMA-ES, GP, NSGA-II/III, QMC, and finite define-by-run search;
-- MATLAB-native Optuna 4.9-style Study/Trial workflows, table-backed resume,
-  automatic sampler routing, and live Pareto monitoring;
+- MATLAB-native Optuna 4.9.0-oracled Study/Trial workflows, table-backed
+  resume/replay, parameter importance, termination callbacks, automatic
+  sampler routing, and live Pareto monitoring;
 - analytic-adjoint MMA and SQP for continuous field optimization;
 - HDiv-VIM and HCurl material topology;
 - stream-function, sheet-metal, and electromagnet topology optimization;
@@ -320,12 +328,6 @@ longitudinal-polynomial coupling to a nonautonomous fourth-order Lie-map
 integrator. Independent canonical A-map and projected B-map Runge--Kutta routes
 keep field-projection error separate from Lie truncation error.
 
-<p align="center">
-  <img src="docs/gmsh_post/output/saddle_beam.gif"
-       alt="Charged particles flying through a saddle-coil magnetic field"
-       width="520">
-</p>
-
 - [Executed particle-orbit notebook](docs/gmsh_post/em_particle_orbits.ipynb)
 - [Native beam and transfer API design](docs/api/EARLY_TIMES_CPP_API_DESIGN.md)
 - [Canonical HCurl and Lie-map validation](validation_test/ffag_topopt/README.md)
@@ -335,8 +337,8 @@ keep field-projection error separate from Lie truncation error.
 
 ### Python and MCP
 
-Python is the complete programmable API. MCP makes the same platform
-discoverable and executable by AI agents.
+Python supplies the solver and workflow implementations driven by LLM agents
+through MCP. MCP is the supported entrypoint, not an optional help layer.
 
 The [radia-mcp package](packages/radia-mcp/) provides domain servers for Radia,
 NGSolve, Cubit, Gmsh, build123d, PEEC, induction heating, optimization,
@@ -363,7 +365,12 @@ callable native MEX functions. Checked `uint64` handles own meshes, spaces,
 coefficient and grid functions, forms, vectors, matrices, and repeated native
 state without exposing raw pointers.
 
-The standalone MEX ABI is both a user surface and a debugging boundary. It is
+MathWorks' official MATLAB MCP Server and Simulink Agentic Toolkit own generic
+MATLAB/Simulink operations. Radia follows their current stable interfaces and
+adds only CAE-domain MEX, artifact, and workflow contracts above that
+foundation.
+
+The standalone MEX ABI is an integration and debugging boundary. It is
 tested independently for numerical parity, error propagation, lifecycle, and
 performance before a Simulink block depends on it. MATLAB wrappers use an
 explicit Python-DLL boundary only where no stable native object boundary is
@@ -376,22 +383,6 @@ MEX commands before they are composed into Simulink blocks.
 
 - [MATLAB integration and MEX contracts](matlab/README.md)
 - [NGSolve/MEX parity map](docs/api/MATLAB_MEX_NGSOLVE_PARITY.md)
-
-### Simulink: the formal human-facing product UI
-
-The single **Radia** Simulink library is the final human-facing product. Its
-operation requires MathWorks' official MATLAB MCP Server; Radia MCP is the
-canonical manual and AI-facing workflow surface. A separate standalone MATLAB
-product edition is not currently defined.
-
-![Radia Simulink library showing application, optimization, material, coupling, reduced-model, LTspice, and utility blocks](.github/assets/radia_simulink_library.png)
-
-The actual tracked library is shown above. Its Optimization group includes
-Optuna Optimization and Optuna Monitor blocks, so optimization studies can be
-composed and observed directly in Simulink. For installation and operation,
-query the Radia MATLAB MCP capability pack; this README does not duplicate the
-live manual. Discover the underlying Python-implemented capabilities, equations,
-citations, and executed results in [`docs/`](docs/README.md).
 
 ### Documentation and visualization
 
@@ -423,6 +414,8 @@ isosurfaces, LIC, streamlines, file-series statistics, shared-camera
 comparisons, and particle-track animation. Geometry is shown at physical
 1:1:1 axis scale unless an explicit display exaggeration is recorded.
 
+</details>
+
 ## Engineering contracts
 
 Radia favors fail-loud, inspectable boundaries over convenient ambiguity.
@@ -452,14 +445,14 @@ explicit configuration.
 | Operating system | Windows 10/11 or Windows Server, x64 |
 | Python core | 3.12 |
 | Lightweight radia-mcp | Python 3.10-3.12 |
-| NGSolve / Netgen | 6.2.2604 |
+| NGSolve / Netgen | 6.2.2606 |
 | MATLAB / Simulink package | R2026a, Windows x64 |
 | Coreform Cubit | 2025.12, optional |
-| Native build | Visual Studio 2022, CMake/Ninja, Intel MKL |
+| Native build | Visual Studio 2022, CMake/Ninja, pip `mkl-devel` oneMKL |
 
 ### Python packages
 
-This monorepo contains three independently published packages. SPICE/LTspice
+This monorepo contains four independently versioned distributions. SPICE/LTspice
 integration ships inside `radia`; its extra only adds schemdraw support.
 
 | Package or extra | Install | Purpose |
@@ -467,7 +460,14 @@ integration ships inside `radia`; its extra only adds schemdraw support.
 | `radia` | `python -m pip install radia` | C++ core, Python APIs, NGSolve integration, physical methods, and application logic |
 | `radia-mcp` | `python -m pip install radia-mcp` | AI-facing MCP servers and executable domain knowledge |
 | `cubit-mesh-export` | `python -m pip install cubit-mesh-export` | Solver-neutral high-order Cubit export and `check-vol` |
+| `radia-optuna` | `python -m pip install radia-optuna` | Standalone MATLAB Optuna namespace and 20-command native gateway; no Radia solver, NGSolve, or MKL runtime |
+| `radia[optuna]` | `python -m pip install "radia[optuna]"` | Radia plus the independently versioned, validated native MATLAB/Simulink `radia-optuna` release |
+| `radia[optuna-upstream]` | `python -m pip install "radia[optuna-upstream]"` | Also installs pinned upstream Python/SciPy/PyTorch paths used by GP, scrambled QMC, and importance parity |
 | `radia[ltspice]` | `python -m pip install "radia[ltspice]"` | Radia plus schemdraw support for built-in SPICE/LTspice conversion and circuit coupling |
+
+The separately verified `radia-optuna` wheel is also emitted as a CI artifact.
+Its first PyPI release requires registration of the repository's trusted
+publisher and a matching `radia-optuna-v<version>` tag.
 
 Pin release versions together when reproducing a validated deployment. Release
 notes and immutable native/Simulink assets are published on the
