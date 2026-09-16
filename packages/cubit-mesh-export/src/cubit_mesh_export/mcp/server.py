@@ -5947,7 +5947,7 @@ def cubit_curate_learned_recipes(out_module_path: str = "",
                                     min_quality_jacobian: float = 0.3) -> str:
 	"""**Lab maintainer tool**: read accumulated `learned_recipes.jsonl`,
 	dedup + group by signature class, pick top-N per class by quality,
-	emit a Python module that ships in the next radia-mcp wheel.
+	emit a Python module for review before a cubit-mesh-export release.
 
 	Stage 2 of the lab-collective-intelligence pipeline:
 	  - Stage 1: lab machines share `CUBIT_MCP_LEARNED_DIR` jsonl.
@@ -5958,7 +5958,7 @@ def cubit_curate_learned_recipes(out_module_path: str = "",
 
 	Args:
 	    out_module_path: where to write the .py module. Empty = the
-	        package's own `radia_mcp/cubit/curated_recipes_bundle.py`
+	        package's own `cubit_mesh_export/mcp/curated_recipes_bundle.py`
 	        (so the next `python -m build` picks it up).
 	    top_per_class: cap on recipes per signature class (default 3).
 	    min_quality_jacobian: drop recipes whose `min` scaled-Jacobian
@@ -6042,11 +6042,11 @@ def cubit_curate_learned_recipes(out_module_path: str = "",
 		f'Source records (post-quality-filter): {len(records)}\n'
 		f'Signature classes: {len(classes)}\n'
 		f'Curated entries: {len(curated)}\n'
-		'License: BSD-3-Clause (matching radia-mcp). The recipes are\n'
-		'aggregated from multiple lab races; individual contributors\n'
-		'consented via using radia-mcp under its license.\n'
+		'Draft: review source permissions and confidentiality before publication.\n'
+		'Running this tool does not establish contributor consent or a license.\n'
 		'"""\n\n'
-		f'CURATED = {json.dumps(curated, ensure_ascii=False, indent=2)}\n'
+		'import json\n'
+		f'CURATED = json.loads({json.dumps(curated, ensure_ascii=False, allow_nan=False)!r})\n'
 	)
 	try:
 		out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -6064,10 +6064,8 @@ def cubit_curate_learned_recipes(out_module_path: str = "",
 		"output_module": str(out_path),
 		"top_per_class": top_per_class,
 		"min_quality_jacobian": min_quality_jacobian,
-		"next_step": ("commit the new curated_recipes_bundle.py + bump "
-		              "radia-mcp version + `python -m build` to ship it "
-		              "to PyPI. Stage 3: write up methodology in "
-		              "packages/radia-mcp/docs/design/lab_curated_recipes.md."),
+		"next_step": ("Review source permissions, confidentiality and recipe quality; "
+		              "only then include the reviewed module in cubit-mesh-export."),
 	}, indent=2, ensure_ascii=False)
 
 
