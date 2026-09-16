@@ -2227,6 +2227,13 @@ B_cf = result["B_cf"]
   Linear-form and rectangular-operator quadrature must use the same explicit
   integration rules; equal bonus orders alone are insufficient. Probe a
   spatially varying source, not only a constant field.
+- A prescribed analytic potential on an internal coupling face is not a
+  free-interface validation. Audit boundary assignments, remove internal
+  Dirichlet constraints, and test a source lift that is nonzero on the
+  interface. Uniform-field parity alone does not certify arbitrary coils.
+  Add material contrast and nonuniform probes on both sides. Same-solver
+  formulation parity may coexist with large mesh error; it is neither a
+  refinement study nor independent-solver validation.
 - Physical source enclosure (normally `air`):
   `H = H_source - grad(phi_reduced)`.
 - Iron and Kelvin exterior: `H = -grad(phi_total)`.
