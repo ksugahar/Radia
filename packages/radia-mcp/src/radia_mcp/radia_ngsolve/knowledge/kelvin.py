@@ -2240,6 +2240,12 @@ B_cf = result["B_cf"]
   External-solver agreement is not a ground-truth error bound. Judge competing
   projections by independent mesh/order convergence, physical residuals and
   energy consistency; do not discard a projection solely to match a reference.
+  A small linear residual or centroid material-update residual is not enough:
+  audit B_h-B(H_h) at additional interior quadrature points and record the
+  quadrature rule and material range. A sampled constitutive L2 defect is not
+  a rigorous field-error bound. A monolithic reduced-H1 comparison removes the
+  interface projection but is not an independent A-formulation. Strong source
+  cancellation may make that low-order comparison less accurate, not superior.
 - A prescribed analytic potential on an internal coupling face is not a
   free-interface validation. Audit boundary assignments, remove internal
   Dirichlet constraints, and test a source lift that is nonzero on the
