@@ -2209,6 +2209,24 @@ B_cf = result["B_cf"]
 
 ## Mathematical contract
 
+- Finite-domain surface Dirichlet data use `surface_dirichlet`, for example
+  `{"reduced": {"outer": g - phi_s}}` when physical total potential is `g`
+  and `Hs = -grad(phi_s)` admits a single-valued lift on that surface.
+  Reduced zero is not total zero. Do not extend an iron-only lift into air
+  without verification. Values belong to the explicitly named potential.
+- `total_dirichlet_cf` is only a BBBND point gauge, not a surface condition.
+  Surface data replace that point gauge and reject simultaneous gauge values,
+  internal/wrong-region labels and overlapping correction-Neumann labels.
+  Kelvin exterior plus surface Dirichlet is currently unsupported.
+- `reduced_zero_normal_boundary` sets zero normal correction field, not zero
+  normal total flux. Compare physical H/B, boundary traces and free-DOF
+  residuals under identical constitutive interpolation and recovery rules.
+- Nonlinear P1/P2 source-split invariance with a representable gradient is
+  a formulation regression, not proof of arbitrary-mesh or external-solver
+  equivalence. Establish full-reassembly parity before trusting RHS caching.
+  Linear-form and rectangular-operator quadrature must use the same explicit
+  integration rules; equal bonus orders alone are insufficient. Probe a
+  spatially varying source, not only a constant field.
 - Physical source enclosure (normally `air`):
   `H = H_source - grad(phi_reduced)`.
 - Iron and Kelvin exterior: `H = -grad(phi_total)`.

@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 
-@pytest.mark.parametrize('harmonic', [False, True])
+@pytest.mark.parametrize('harmonic', [False, True, 'varying'])
 def test_picard_fixed_rhs_cache_matches_full_reassembly(harmonic):
     import ngsolve as ng
     mesh, source, potential, table = _picard_case(maxh=0.7)
@@ -14,6 +14,10 @@ def test_picard_fixed_rhs_cache_matches_full_reassembly(harmonic):
     if harmonic:
         options.update(total_source_h=ng.CoefficientFunction((0.01, 0.02, 0.03)),
                        total_source_materials=('total',))
+    if harmonic == 'varying':
+        options['total_source_h'] = ng.CoefficientFunction((
+            .03*ng.exp(3*ng.x)*ng.cos(3*ng.y),
+            -.03*ng.exp(3*ng.x)*ng.sin(3*ng.y), 0.))
     fresh = _picard_solve(mesh, source, potential, table, cache_fixed_rhs=False, **options)
     cached = _picard_solve(mesh, source, potential, table, cache_fixed_rhs=True, **options)
     for point in ((-.5,.13,.17),(.5,.13,.17)):

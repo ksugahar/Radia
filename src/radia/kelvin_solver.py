@@ -651,7 +651,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         mu_cf=None, kelvin_interface_boundary=None,
         kelvin_source_potential=None, kelvin_source_h=None,
         total_source_h=None, total_source_materials=(), return_system=False,
-        reduced_zero_normal_boundary=None, _fixed_rhs_cache=None,
+        reduced_zero_normal_boundary=None, surface_dirichlet=None, _fixed_rhs_cache=None,
         _rhs_material=None):
     """Solve the TOSCA-style mixed total/reduced Omega formulation.
 
@@ -734,6 +734,11 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
             Dirichlet condition. Surface Dirichlet data on total and reduced
             potentials require different source-potential lifts and are not
             exposed by this parameter. Production Kelvin meshes use ``None``.
+        surface_dirichlet: finite-domain mapping ``{"reduced": {label: value},
+            "total": {label: value}}`` of potential values on exact exterior
+            boundary labels. Replaces the point gauge; the caller must supply
+            the correct source lift for reduced values. Not supported with a
+            Kelvin exterior. Passed unchanged through P1/P2 Picard solves.
         mu_cf: optional fully Kelvin-aware permeability coefficient. This is
             the narrow extension point used by the nonlinear Picard driver;
             callers must not supply a physical-space coefficient in the Kelvin
@@ -844,11 +849,51 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         None if kelvin_interface_boundary is None
         else mesh.Boundaries(kelvin_interface_boundary))
 
+    # Surface values belong to the named potential, not automatically to H.
+    if surface_dirichlet is not None and not isinstance(surface_dirichlet, Mapping):
+        raise ValueError("surface_dirichlet must be a mapping")
+    surface_values = {} if surface_dirichlet is None else dict(surface_dirichlet)
+    if set(surface_values) - {"reduced", "total"}:
+        raise ValueError("surface_dirichlet keys must be reduced or total")
+    surface_labels = {}
+    for region, materials in (("reduced", reduced_set), ("total", set(core_total_materials))):
+        values = surface_values.get(region, {})
+        if not isinstance(values, Mapping):
+            raise ValueError("surface_dirichlet region values must be boundary/value mappings")
+        labels = set(values)
+        if not labels <= set(mesh.GetBoundaries()) or any(not label or "|" in label for label in labels):
+            raise ValueError("surface_dirichlet must name exact mesh boundary labels")
+        for face in mesh.ngmesh.FaceDescriptors():
+            if mesh.GetBoundaries()[face.bc - 1] in labels:
+                adjacent = [d for d in (face.domin, face.domout) if d != 0]
+                if len(adjacent) != 1 or mesh.GetMaterials()[adjacent[0] - 1] not in materials:
+                    raise ValueError("surface Dirichlet must be exterior to its named potential region")
+        surface_labels[region] = "|".join(sorted(labels))
+    has_surface = any(surface_labels.values())
+    if has_surface:
+        if kelvin_selector is not None:
+            raise ValueError("surface Dirichlet with Kelvin exterior is not supported")
+        if total_dirichlet_cf is not None:
+            raise ValueError("surface Dirichlet fixes the gauge; do not also supply total_dirichlet_cf")
+        if set(surface_values.get("reduced", {})) & set(str(reduced_zero_normal_boundary).split("|")):
+            raise ValueError("Dirichlet and zero-normal conditions overlap")
+        if all(surface_labels.values()):
+            from ngsolve import BND
+            nodes = {
+                region: {vertex.nr for face in mesh.Elements(BND)
+                         if str(face.mat) in surface_values.get(region, {})
+                         for vertex in face.vertices}
+                for region in ("reduced", "total")}
+            if nodes["reduced"] & nodes["total"]:
+                raise ValueError("surface Dirichlet on both sides of an interface junction is not supported")
+
     if kelvin_selector is None:
-        fes_reduced = H1(mesh, order=int(order), definedon=coupled_selector)
+        fes_reduced = H1(mesh, order=int(order), definedon=coupled_selector,
+                         dirichlet=surface_labels["reduced"])
         fes_total = Compress(Periodic(H1(
             mesh, order=int(order), definedon=core_total_selector,
-            dirichlet_bbbnd=dirichlet_bbbnd)))
+            dirichlet=surface_labels["total"],
+            dirichlet_bbbnd="" if has_surface else dirichlet_bbbnd)))
     else:
         # Exactly one of the two blocks carries the point gauge.  Pinning both
         # would fight the interface jump; pinning neither leaves the coupled
@@ -949,8 +994,14 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
     f_lf = LinearForm(fes)
     if total_source_h is not None:
         total_source_selector = mesh.Materials("|".join(total_source_materials))
-        f_lf += mu_cf * total_source_h * grad(test_total) * dx(
-            definedon=total_source_selector, bonus_intorder=bonus_intorder)
+        from ngsolve import IntegrationRule, VOL
+        # Linear and rectangular bilinear forms infer different default rules.
+        # Bind one rule so caching cannot change the discrete excitation.
+        material_rhs_measure = dx(
+            definedon=total_source_selector,
+            intrules={kind: IntegrationRule(kind, order=2 * int(order) + int(bonus_intorder))
+                      for kind in {element.type for element in mesh.Elements(VOL)}})
+        f_lf += mu_cf * total_source_h * grad(test_total) * material_rhs_measure
     fixed_rhs += interface_constraint_scale * test_multiplier * source_potential * d_interface
     a_bf.Assemble()
     if _fixed_rhs_cache is None:
@@ -974,8 +1025,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
                 operator = BilinearForm(trialspace=_rhs_material.space, testspace=fes)
                 if total_source_h is not None:
                     coefficient = _rhs_material.space.TrialFunction()
-                    operator += coefficient * total_source_h * grad(test_total) * dx(
-                        definedon=total_source_selector, bonus_intorder=bonus_intorder)
+                    operator += coefficient * total_source_h * grad(test_total) * material_rhs_measure
                 operator.Assemble()
                 _fixed_rhs_cache["material_operator"] = operator
             f_lf = LinearForm(fes)
@@ -984,12 +1034,20 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         f_lf.vec.data += _fixed_rhs_cache["fixed"]
 
     solution = GridFunction(fes)
-    if total_dirichlet_cf is None:
+    if total_dirichlet_cf is None and not has_surface:
         solution.vec.data = a_bf.mat.Inverse(
             fes.FreeDofs(), inverse=inverse) * f_lf.vec
     else:
-        solution.components[1].Set(
-            total_dirichlet_cf, definedon=mesh.BBBoundaries(dirichlet_bbbnd))
+        if has_surface:
+            for index, region in enumerate(("reduced", "total")):
+                values = surface_values.get(region, {})
+                if values:
+                    solution.components[index].Set(
+                        mesh.BoundaryCF(values, default=0),
+                        definedon=mesh.Boundaries(surface_labels[region]))
+        else:
+            solution.components[1].Set(
+                total_dirichlet_cf, definedon=mesh.BBBoundaries(dirichlet_bbbnd))
         residual = solution.vec.CreateVector()
         residual.data = f_lf.vec - a_bf.mat * solution.vec
         solution.vec.data += a_bf.mat.Inverse(
@@ -1101,7 +1159,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
         anderson_depth=0, anderson_transform="log", observation_points=None,
         material_update_order=None, material_log_state_initial=None,
         refinement_parent_identity=None, cache_fixed_rhs=True,
-        reduced_zero_normal_boundary=None):
+        reduced_zero_normal_boundary=None, surface_dirichlet=None):
     """Picard solve for the mixed total/reduced Omega formulation.
 
     The source split and its interface trace stay fixed throughout the
@@ -1254,6 +1312,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
             material_log_state_initial=material_log_state_initial,
             refinement_parent_identity=normalized_refinement_parent_identity,
             refinement_parent_identity_sha256=refinement_parent_identity_sha256,
+            surface_dirichlet=surface_dirichlet,
         )
     if requested_material_order not in (None, 0):
         raise ValueError("order=1 supports material_update_order=0 only")
@@ -1349,6 +1408,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
             total_source_h=total_source_h,
             total_source_materials=total_source_materials,
             reduced_zero_normal_boundary=reduced_zero_normal_boundary,
+            surface_dirichlet=surface_dirichlet,
             _fixed_rhs_cache=rhs_cache, _rhs_material=cache_material)
         B_current = np.zeros(len(nonlinear_elements))
         mu_r_target = np.empty(len(nonlinear_elements))
@@ -1449,7 +1509,7 @@ def _solve_mixed_omega_projected_log_material(
         kelvin_source_potential, kelvin_source_h,
         total_source_h, total_source_materials, observation_points,
         material_log_state_initial, refinement_parent_identity,
-        refinement_parent_identity_sha256):
+        refinement_parent_identity_sha256, surface_dirichlet=None):
     """Picard lane with a positive spatial L2 secant-permeability field."""
 
     from ngsolve import (
@@ -1602,6 +1662,7 @@ def _solve_mixed_omega_projected_log_material(
             kelvin_source_h=kelvin_source_h,
             total_source_h=total_source_h,
             total_source_materials=total_source_materials,
+            surface_dirichlet=surface_dirichlet,
         )
 
     for iteration in range(1, int(max_iterations) + 1):

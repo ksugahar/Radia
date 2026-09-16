@@ -21,6 +21,31 @@ Changing this gauge must shift the potentials without changing H or B.
 General exterior-surface Dirichlet data are not exposed by this parameter;
 do not claim they were tested through a nonzero point gauge.
 
+Finite-domain linear and Picard solves accept `surface_dirichlet`, a mapping
+from `reduced` / `total` to exact exterior boundary labels and scalar values.
+For example, `{"reduced": {"outer": g - phi_s}}` imposes physical total
+potential `g` when a valid source lift `phi_s` is known on that surface.
+The caller supplies this lift; an iron-only source projection cannot silently
+be extended to an exterior air boundary. A nonempty surface condition replaces
+the point gauge. Simultaneous `total_dirichlet_cf`, internal/wrong-region labels,
+and overlapping correction-Neumann labels are rejected. Kelvin-exterior plus
+surface Dirichlet is explicitly unsupported.
+Prescribing both sides where exterior faces meet an interface junction is
+also rejected: that requires eliminating redundant multiplier constraints.
+
+Regression covers uniform-field positive/negative controls, nonzero total
+surface values, and nonlinear P1/P2 source-split invariance using full RHS
+reassembly. The nonlinear comparison keeps identical physical H/B while
+moving an exactly representable gradient between the source and potential.
+This is a formulation test, not validation of arbitrary source projections,
+external solver equivalence, or continuum accuracy.
+
+Material-dependent RHS caching uses an explicit volume integration rule shared
+by the linear form and rectangular material operator. Equal bonus orders alone
+do not establish identical quadrature for those two form types. A smooth,
+spatially varying source regression protects full-reassembly/cache parity;
+constant sources alone would miss this error.
+
 Nonlinear constitutive laws do not remove this distinction. Compare physical
 H and B under the same boundary, source lift, material law and gauge convention,
 not the raw total and reduced potential values. Those potentials generally
