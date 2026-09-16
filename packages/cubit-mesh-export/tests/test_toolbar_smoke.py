@@ -116,13 +116,13 @@ def test_gui_smoke_is_an_installed_release_gate():
     assert "cubit-toolbar-smoke-test" not in monorepo["project"]["scripts"]
     assert SMOKE._probe_path().is_file()
 
-    release_source = (ROOT / "tools" / "release_quad.py").read_text(
+    release_source = (ROOT / "tools" / "release_cubit_dual.py").read_text(
         encoding="utf-8"
     )
-    lab_start = release_source.index("def _deploy_lab():")
-    lab_end = release_source.index("def _deploy_editable_remote", lab_start)
-    lab_deploy = release_source[lab_start:lab_end]
-    assert 'run(["cubit-toolbar-smoke-test", "--restarts", "2"])' in lab_deploy
+    assert "('toolbar_smoke', ['--restarts', '2'" in release_source
+    assert "('passed', 'unrelated_packages_unchanged', 'smoke_test', 'toolbar_smoke'" in release_source
+    solver_release = (ROOT / "tools" / "release_quad.py").read_text(encoding="utf-8")
+    assert "cubit_mesh_export.toolbar_smoke" not in solver_release
 
 
 @pytest.mark.parametrize('returncode', [0, 1, 2, -1073740791])
