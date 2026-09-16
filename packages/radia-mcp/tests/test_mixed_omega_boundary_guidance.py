@@ -1,6 +1,13 @@
 from radia_mcp.radia_ngsolve.server import kelvin_transformation
 
 
+def test_constitutive_sampling_is_separate_from_iteration_convergence():
+    text = kelvin_transformation('source_in_omega_form')
+    for phrase in ('B_h-B(H_h)', 'additional interior quadrature points',
+                   'not an independent A-formulation', 'rigorous field-error bound'):
+        assert phrase in text
+
+
 def test_mcp_boundary_guidance_distinguishes_surface_from_gauge():
     text = kelvin_transformation('source_in_omega_form')
     for phrase in ('surface_dirichlet', 'g - phi_s', 'Reduced zero is not total zero',
