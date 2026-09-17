@@ -21,6 +21,7 @@ import shutil
 import sys
 import tarfile
 import tempfile
+import uuid
 from pathlib import Path
 
 
@@ -465,6 +466,21 @@ def _remove_existing_block(lines):
     return result
 
 
+def _read_startup_for_edit(path: Path):
+    """Validate a user's startup file without replacing undecodable bytes."""
+    if not path.is_file():
+        return [], "utf-8", "\n"
+    raw = path.read_bytes()
+    encoding = "utf-8-sig" if raw.startswith(b"\xef\xbb\xbf") else "utf-8"
+    try:
+        content = raw.decode(encoding)
+    except UnicodeDecodeError:
+        encoding = "cp932"
+        content = raw.decode(encoding)
+    newline = "\r\n" if b"\r\n" in raw else "\n"
+    return _remove_existing_block(content.splitlines(keepends=True)), encoding, newline
+
+
 def _get_cubit_ini_paths(all_users=False):
     """Return Cubit.ini paths targeted by this install."""
     paths = []
@@ -630,6 +646,22 @@ def install_panels(all_users=False):
         print(f"ERROR: Toolbar script not found: {register_script}")
         return False
 
+    cubit_bin = find_cubit_bin()
+    if not cubit_bin:
+        print(f"ERROR: Coreform Cubit {_MIN_CUBIT_VERSION_TEXT}+ not found.")
+        print("       Set CUBIT_PATH to the Cubit 2025.12 bin directory.")
+        return False
+
+    startup_edits = []
+    for cubit_file in _get_cubit_startup_files(all_users=all_users):
+        path = Path(cubit_file)
+        try:
+            lines, encoding, newline = _read_startup_for_edit(path)
+        except (OSError, UnicodeError, ValueError) as exc:
+            print(f"ERROR: refusing to edit {path}: {exc}")
+            return False
+        startup_edits.append((path, lines, encoding, newline))
+
     try:
         startup_script = _generate_startup_script(panels_dir, all_users=all_users)
         toolbar_package = build_official_toolbar_package(
@@ -646,11 +678,6 @@ def install_panels(all_users=False):
     for toolbar_dir in synced_toolbars:
         print(f"Updated imported toolbar: {toolbar_dir}")
 
-    cubit_bin = find_cubit_bin()
-    if not cubit_bin:
-        print(f"ERROR: Coreform Cubit {_MIN_CUBIT_VERSION_TEXT}+ not found.")
-        print("       Set CUBIT_PATH to the Cubit 2025.12 bin directory.")
-        return False
     print(f"Cubit bin:      {cubit_bin}")
 
     if all_users:
@@ -658,23 +685,38 @@ def install_panels(all_users=False):
 
     errors = []
     block = _build_startup_block(startup_script)
-    for cubit_file in _get_cubit_startup_files(all_users=all_users):
+    for path, lines, encoding, newline in startup_edits:
+        pending = None
         try:
-            os.makedirs(os.path.dirname(cubit_file), exist_ok=True)
-            if os.path.isfile(cubit_file):
-                with open(cubit_file, "r", encoding="utf-8", errors="replace") as f:
-                    lines = f.readlines()
-            else:
-                lines = []
-            lines = _remove_existing_block(lines)
-            lines.append("\n" + block)
-            with open(cubit_file, "w", encoding="utf-8") as f:
-                f.writelines(lines)
-            print(f"Updated: {cubit_file}")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            content = "".join(lines)
+            if content:
+                if not content.endswith(("\r", "\n")):
+                    content += newline
+                content += newline
+            content += block.replace("\n", newline)
+            if path.is_file():
+                backup = path.with_name(path.name + ".bak-" + uuid.uuid4().hex[:12])
+                shutil.copy2(path, backup)
+                print(f"Backup:  {backup}")
+            with tempfile.NamedTemporaryFile(mode="wb", dir=path.parent,
+                                             prefix=".cubit-new-", delete=False) as stream:
+                pending = Path(stream.name)
+                stream.write(content.encode(encoding))
+            os.replace(pending, path)
+            pending = None
+            print(f"Updated: {path}")
         except OSError as exc:
-            msg = f"could not update {cubit_file}: {exc}"
+            msg = f"could not update {path}: {exc}"
             errors.append(msg)
             print(f"ERROR: {msg}")
+        finally:
+            if pending is not None:
+                pending.unlink(missing_ok=True)
+
+    if errors:
+        print("=== Installation FAILED; backups above preserve original startup files ===")
+        return False
 
     removed_legacy, cleanup_errors = _remove_legacy_artifacts(
         all_users=all_users)

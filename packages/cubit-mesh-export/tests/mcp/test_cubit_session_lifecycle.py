@@ -58,6 +58,35 @@ def test_failed_command_is_not_replayed(tmp_path, monkeypatch):
     assert len(calls) == 1
     assert sess._proc is None
     assert not sess._owned
+    assert sess._retired
+    with pytest.raises(session.CubitSessionError, match='Session was retired'):
+        sess.call('cmd', ['create brick x 1'])
+    assert len(calls) == 1
+
+
+def test_shutdown_retires_stale_reference_without_starting_an_orphan(tmp_path, monkeypatch):
+    monkeypatch.setattr(session, 'get_cubit_bin_dir', lambda: tmp_path)
+    monkeypatch.setattr(session, '_SINGLETON', None)
+    stale = session.CubitSession.get()
+    assert session.CubitSession.reset()['stopped'] == 'none'
+    monkeypatch.setattr(stale, '_start_stdio_daemon',
+                        lambda: pytest.fail('stale reference launched a daemon'))
+    with pytest.raises(session.CubitSessionError, match='Session was retired'):
+        stale.call('cmd', ['create brick x 1'])
+    assert session.CubitSession.get() is not stale
+
+
+def test_command_timeout_default_allows_real_mesh_operations(tmp_path, monkeypatch):
+    sess = session.CubitSession(tmp_path)
+    monkeypatch.setattr(sess, 'ensure_started', lambda: {})
+    monkeypatch.setattr(sess, '_start_native_journal_locked', lambda **kw: None)
+    seen = []
+    def reply(req, *, timeout_s):
+        seen.append(timeout_s)
+        return {'id': req['id'], 'ok': True, 'result': []}
+    monkeypatch.setattr(sess, '_call_via_stdio', reply)
+    sess.call('cmd', ['mesh volume all'])
+    assert seen == [900.0]
 
 
 def test_dead_child_reports_state_loss_before_new_commands(tmp_path, monkeypatch):
