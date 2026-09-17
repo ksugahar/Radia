@@ -147,7 +147,7 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
     :class:`radia.kelvin_solver.MixedOmegaPicardNotConverged` with that state.
     For a P1 diagnostic, ``nonlinear_material_sampling="integration_point"``
     evaluates the B(H) secant at volume quadrature points. It requires plain
-    Picard (Anderson depth=0), and reports a separate returned-field
+    Picard (relaxation=1, Anderson depth=0), and reports a separate returned-field
     constitutive defect rather than treating iterate convergence as accuracy.
     ``nonlinear_bh_interpolation="linear_spline"`` uses NGSolve's compact
     piecewise-linear table lookup; its interpolation error must be checked
