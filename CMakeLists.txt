@@ -826,6 +826,18 @@ message(STATUS "_radia_pybind module configured (pybind11 bindings)")
 # of TaskManager, mesh loading, finite-element orientation, and space updates.
 if(RADIA_BUILD_MATLAB_MEX)
 	find_package(Matlab REQUIRED COMPONENTS MX_LIBRARY MEX_LIBRARY)
+	execute_process(
+		COMMAND git -c safe.directory=${CMAKE_CURRENT_SOURCE_DIR} rev-parse HEAD
+		WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+		OUTPUT_VARIABLE RADIA_MEX_SOURCE_COMMIT
+		OUTPUT_STRIP_TRAILING_WHITESPACE
+		RESULT_VARIABLE RADIA_MEX_GIT_RESULT)
+	string(LENGTH "${RADIA_MEX_SOURCE_COMMIT}" RADIA_MEX_COMMIT_LENGTH)
+	if(NOT RADIA_MEX_GIT_RESULT EQUAL 0 OR
+		NOT RADIA_MEX_COMMIT_LENGTH EQUAL 40 OR
+		NOT RADIA_MEX_SOURCE_COMMIT MATCHES "^[0-9a-f]+$")
+		message(FATAL_ERROR "radia_mex requires a Git source commit")
+	endif()
 	matlab_add_mex(
 		NAME radia_mex
 		R2018a
@@ -878,6 +890,7 @@ if(RADIA_BUILD_MATLAB_MEX)
 		HACAPK_RADIA_LOGGING
 		NOMINMAX
 		RADIA_MEX_NO_PYTHON
+		RADIA_MEX_SOURCE_COMMIT="${RADIA_MEX_SOURCE_COMMIT}"
 	)
 	target_compile_features(radia_mex PRIVATE cxx_std_20)
 	# FindMatlab uses the plain signature internally, so this call must too.

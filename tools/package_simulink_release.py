@@ -18,6 +18,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED_MEX = ("radia_mex.mexw64",)
+RADIA_MEX_PROVENANCE = "radia_mex.mexw64.build.json"
 REQUIRED_MATLAB_SFUNCTIONS = (
     "radia_ih_eddy_sfun.m",
     "radia_ih_thermal_sfun.m",
@@ -54,6 +55,7 @@ PACKAGE_FILES = (
     "IH_VERSION",
     "install_radia_ih.m",
     "radia_ih.slx",
+    "verify_radia_mex_provenance.py",
     "radia_ih_eddy_sfun.m",
     "radia_ih_thermal_sfun.m",
     "radia_ih_monitor_sfun.m",
@@ -199,6 +201,17 @@ def build_package(
             raise FileNotFoundError(f"Required Simulink model is missing: {model}")
     for name in required_mex:
         validate_native_binary(mex_dir / name)
+    provenance_path = mex_dir / RADIA_MEX_PROVENANCE
+    if not provenance_path.is_file():
+        raise RuntimeError("radia_mex native build provenance is missing")
+    provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+    if (provenance.get("schema") != "radia.native-build-provenance.v1"
+            or provenance.get("source_dirty") is not False
+            or provenance.get("source_commit") != commit()
+            or provenance.get("binary_name") != "radia_mex.mexw64"
+            or provenance.get("binary_bytes") != (mex_dir / "radia_mex.mexw64").stat().st_size
+            or provenance.get("binary_sha256") != sha256(mex_dir / "radia_mex.mexw64")):
+        raise RuntimeError("radia_mex does not match the release source and native build provenance")
     for name in FULL_RUNTIME_DLLS:
         validate_native_binary(mex_dir / name)
 
@@ -224,9 +237,13 @@ def build_package(
             destination = stage / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, destination)
+        if full_library:
+            shutil.copy2(matlab_source / "verify_radia_mex_provenance.py",
+                         stage / "matlab" / "verify_radia_mex_provenance.py")
         shutil.copy2(ROOT / "LICENSE", stage / "LICENSE")
         for name in required_mex:
             shutil.copy2(mex_dir / name, stage / "matlab" / name)
+        shutil.copy2(provenance_path, stage / "matlab" / RADIA_MEX_PROVENANCE)
         for name in FULL_RUNTIME_DLLS:
             shutil.copy2(mex_dir / name, stage / "matlab" / name)
 
@@ -327,6 +344,8 @@ def build_package(
         names = set(bundle.namelist())
         required = {
             "manifest.json",
+            f"matlab/{RADIA_MEX_PROVENANCE}",
+            "matlab/verify_radia_mex_provenance.py",
             *(f"matlab/{name}" for name in required_mex),
             *(f"matlab/{name}" for name in required_models),
         }

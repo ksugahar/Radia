@@ -82,6 +82,22 @@ def test_package_builder_fails_when_mex_is_missing(tmp_path):
         module.build_package(tmp_path, tmp_path / "out")
 
 
+def test_mex_build_verifier_rejects_missing_and_changed_binaries(tmp_path):
+    verifier = load_module(
+        "verify_radia_mex_build_test",
+        ROOT / "matlab" / "verify_radia_mex_provenance.py",
+    )
+    mex = tmp_path / "radia_mex.mexw64"
+    mex.write_bytes(fake_x64_pe())
+    with pytest.raises(RuntimeError, match="provenance is missing"):
+        verifier.verify(mex)
+    write_test_mex_provenance(tmp_path, "a" * 40)
+    assert verifier.verify(mex) == "a" * 40
+    mex.write_bytes(b"changed")
+    with pytest.raises(RuntimeError, match="does not match"):
+        verifier.verify(mex)
+
+
 def test_package_commit_uses_github_sha_without_git(monkeypatch):
     module = load_module(
         "package_simulink_release_commit",
@@ -107,6 +123,7 @@ def test_package_is_hashed_native_ih_allowlist(tmp_path):
         *package_module.FULL_RUNTIME_DLLS,
     ):
         (mex_dir / name).write_bytes(fake_x64_pe())
+    write_test_mex_provenance(mex_dir, package_module.commit())
     archive, sums = package_module.build_package(mex_dir, tmp_path / "out")
     manifest = verify_module.verify_archive(archive)
     assert sums.read_text(encoding="ascii").split()[0] == \
@@ -149,6 +166,7 @@ def test_full_library_package_includes_mex_models_and_runtime(tmp_path):
         *package_module.FULL_RUNTIME_DLLS,
     ):
         (mex_dir / name).write_bytes(fake_x64_pe())
+    write_test_mex_provenance(mex_dir, package_module.commit())
     archive, sums = package_module.build_package(
         mex_dir,
         tmp_path / "out",
@@ -275,6 +293,7 @@ def test_matlab_smoke_decodes_utf8_without_cp932(monkeypatch, tmp_path):
         *package_module.FULL_RUNTIME_DLLS,
     ):
         (mex_dir / name).write_bytes(fake_x64_pe())
+    write_test_mex_provenance(mex_dir, package_module.commit())
     archive, _ = package_module.build_package(mex_dir, tmp_path / "out")
     matlab = tmp_path / "matlab.exe"
     matlab.write_bytes(b"MZ")
@@ -433,6 +452,23 @@ def load_module(name, path):
     assert spec.loader is not None
     spec.loader.exec_module(module)
     return module
+
+
+def write_test_mex_provenance(mex_dir, source_commit):
+    import json
+    import hashlib
+
+    mex = mex_dir / "radia_mex.mexw64"
+    data = {
+        "schema": "radia.native-build-provenance.v1",
+        "source_commit": source_commit,
+        "source_dirty": False,
+        "binary_name": mex.name,
+        "binary_bytes": mex.stat().st_size,
+        "binary_sha256": hashlib.sha256(mex.read_bytes()).hexdigest(),
+    }
+    (mex_dir / "radia_mex.mexw64.build.json").write_text(
+        json.dumps(data), encoding="utf-8")
 
 
 def fake_x64_pe():
