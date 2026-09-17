@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from ._metadata_values import (
     _coordinate_tuple,
     _first,
+    _first_nonempty,
     _norm,
     _phase_list,
     _string_list,
@@ -5430,12 +5431,6 @@ def owned_solver_model_tag_lifecycle_gate(
 
     if not isinstance(artifact, dict):
         raise ValueError("artifact must be a mapping")
-
-    def _first(row, names, default=None):
-        for name in names:
-            if name in row and row[name] is not None:
-                return row[name]
-        return default
 
     def _string_list(value):
         if value is None:
@@ -11081,12 +11076,6 @@ def femm_static_current_circuit_rows_gate(
         }
         return aliases.get(key, key)
 
-    def _first_present(row, names):
-        for name in names:
-            if name in row and row[name] is not None:
-                return row[name]
-        return None
-
     dq = three_phase_currents_to_dq_summary(
         currents,
         theta_e_rad,
@@ -11122,10 +11111,10 @@ def femm_static_current_circuit_rows_gate(
         if row is None:
             details.append({"phase": phase, "present": False})
             continue
-        circuit_name = _first_present(row, ("circuit_name", "circuit", "name"))
-        current_value = _first_present(row, ("current_A", "current", "amps", "current_amps"))
-        turns = _first_present(row, ("turns", "series_turns", "nturns"))
-        multiplier = _first_present(row, ("current_multiplier", "multiplier"))
+        circuit_name = _first(row, ("circuit_name", "circuit", "name"))
+        current_value = _first(row, ("current_A", "current", "amps", "current_amps"))
+        turns = _first(row, ("turns", "series_turns", "nturns"))
+        multiplier = _first(row, ("current_multiplier", "multiplier"))
         multiplier = 1.0 if multiplier is None else float(multiplier)
         kind = row.get("current_kind")
         normalized_kind = None if kind is None else _normalize_kind(kind)
@@ -11151,15 +11140,15 @@ def femm_static_current_circuit_rows_gate(
         "no_unknown_phase_rows": not unknown_phases,
         "no_duplicate_phase_rows": not duplicate_phases,
         "circuit_names_present": all(bool(row.get("circuit_name")) or bool(row.get("circuit")) or bool(row.get("name")) for row in row_by_phase.values()),
-        "current_values_present": all(_first_present(row, ("current_A", "current", "amps", "current_amps")) is not None for row in row_by_phase.values()) and set(row_by_phase) == set(phase_names),
+        "current_values_present": all(_first(row, ("current_A", "current", "amps", "current_amps")) is not None for row in row_by_phase.values()) and set(row_by_phase) == set(phase_names),
         "current_kind_matches": all(
             _normalize_kind(row.get("current_kind")) == expected_kind
             for row in row_by_phase.values()
         ) and set(row_by_phase) == set(phase_names),
-        "turns_present": all(_first_present(row, ("turns", "series_turns", "nturns")) is not None for row in row_by_phase.values()) and set(row_by_phase) == set(phase_names),
+        "turns_present": all(_first(row, ("turns", "series_turns", "nturns")) is not None for row in row_by_phase.values()) and set(row_by_phase) == set(phase_names),
         "turns_nonzero": all(
-            _first_present(row, ("turns", "series_turns", "nturns")) is not None
-            and abs(float(_first_present(row, ("turns", "series_turns", "nturns")))) > 0.0
+            _first(row, ("turns", "series_turns", "nturns")) is not None
+            and abs(float(_first(row, ("turns", "series_turns", "nturns")))) > 0.0
             for row in row_by_phase.values()
         ) and set(row_by_phase) == set(phase_names),
         "circuit_currents_match": bool(current_errors) and len(current_errors) == len(phase_names) and max(current_errors) <= tolerance,
@@ -12322,11 +12311,7 @@ def jmag_force_table_metadata_gate(
     frequency_tol = 1.0e-12
 
     def _first_row_value(row, names):
-        for name in names:
-            value = row.get(name)
-            if value not in (None, ""):
-                return str(value).strip()
-        return ""
+        return str(_first_nonempty(row, names, "")).strip()
 
     for index, row in enumerate(rows):
         values = [str(row.get(column, "")).strip() for column in identity_cols]
@@ -12862,11 +12847,8 @@ def jmag_airgap_flux_sample_metadata_gate(
     def _norm(value):
         return str(value).strip().lower().replace("-", "_").replace(" ", "_")
 
-    def _first(row, names):
-        for name in names:
-            if name in row and row[name] not in (None, ""):
-                return row[name]
-        return None
+    # In this evidence lane an empty string means no metadata value.
+    _first = _first_nonempty
 
     def _float_or_none(value):
         if value in (None, ""):
@@ -13317,11 +13299,8 @@ def jmag_airgap_torque_integration_package_gate(
     def _norm(value):
         return str(value).strip().lower().replace("-", "_").replace(" ", "_")
 
-    def _first(mapping, names):
-        for name in names:
-            if name in mapping and mapping[name] not in (None, ""):
-                return mapping[name]
-        return None
+    # Keep the same empty-string semantics as the sample-metadata lane.
+    _first = _first_nonempty
 
     def _string_or_none(value):
         if value in (None, ""):
@@ -16493,12 +16472,6 @@ def jmag_pm_short_circuit_fault_table_gate(
     value_tol = float(value_tol)
     ich = lm / ld
 
-    def _first(row, *names):
-        for name in names:
-            if name in row and row[name] is not None:
-                return row[name]
-        return None
-
     summaries = []
     omega_values = []
     residual_errors = []
@@ -16513,14 +16486,14 @@ def jmag_pm_short_circuit_fault_table_gate(
     negative_iq_ok = []
 
     for index, row in enumerate(table, start=1):
-        omega_raw = _first(row, "omega_e", "omega_e_rad_per_s", "omega_e_rad_s")
-        id_raw = _first(row, "id_A", "id")
-        iq_raw = _first(row, "iq_A", "iq")
-        torque_raw = _first(row, "torque_Nm", "torque")
-        ratio_raw = _first(row, "current_ratio_to_characteristic", "current_ratio")
-        demag_raw = _first(row, "d_axis_demag_fraction", "demag_fraction")
-        vd_raw = _first(row, "vd_residual", "vd_residual_V", "vd_V")
-        vq_raw = _first(row, "vq_residual", "vq_residual_V", "vq_V")
+        omega_raw = _first(row, ("omega_e", "omega_e_rad_per_s", "omega_e_rad_s"))
+        id_raw = _first(row, ("id_A", "id"))
+        iq_raw = _first(row, ("iq_A", "iq"))
+        torque_raw = _first(row, ("torque_Nm", "torque"))
+        ratio_raw = _first(row, ("current_ratio_to_characteristic", "current_ratio"))
+        demag_raw = _first(row, ("d_axis_demag_fraction", "demag_fraction"))
+        vd_raw = _first(row, ("vd_residual", "vd_residual_V", "vd_V"))
+        vq_raw = _first(row, ("vq_residual", "vq_residual_V", "vq_V"))
         if any(value is None for value in (omega_raw, id_raw, iq_raw, torque_raw, ratio_raw, demag_raw, vd_raw, vq_raw)):
             missing_required.append(index)
             continue
@@ -16542,7 +16515,7 @@ def jmag_pm_short_circuit_fault_table_gate(
         vd_ref = r * id_got - omega * lq * iq_got
         vq_ref = r * iq_got + omega * (ld * id_got + lm)
         residual = max(abs(vd), abs(vq), abs(vd_ref), abs(vq_ref))
-        omega_mech = _first(row, "omega_mech", "omega_mech_rad_per_s", "omega_mech_rad_s")
+        omega_mech = _first(row, ("omega_mech", "omega_mech_rad_per_s", "omega_mech_rad_s"))
         mech_error = 0.0
         if omega_mech is not None:
             mech_error = abs(float(omega_mech) - omega / pp)

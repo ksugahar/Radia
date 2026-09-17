@@ -11,6 +11,11 @@ crystallized as its own package.
 
 ### Changed
 
+- Establish the `radia_ngsolve` growth boundary: new gate responsibilities live
+  in cohesive domain modules, not the legacy `slot_gates.py` monolith. Share
+  equivalent metadata readers while preserving empty-value semantics, and
+  enforce the legacy boundary in pull-request CI without a line-count quota.
+
 - Make the recommended first-call `radia_mcp_overview()` compact by default:
   each server entry now contains `name`, `description`, and `tags`. The
   top-level count, tags, and external-package fields are unchanged. Use

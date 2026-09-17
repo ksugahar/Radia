@@ -1,5 +1,8 @@
 """Boundary contracts for shared, transport-independent metadata readers."""
 
+import ast
+from pathlib import Path
+
 import pytest
 from radia_mcp.radia_ngsolve import _metadata_values as values
 
@@ -52,3 +55,27 @@ def test_first_preserves_falsey_values(value):
 
 def test_first_returns_none_when_no_value_exists():
     assert values._first({"empty": None}, ["missing", "empty"]) is None
+
+
+def test_first_explicit_default_and_empty_string_contracts():
+    row = {"missing_value": None, "empty": "", "zero": 0, "false": False}
+    assert values._first(row, ("missing_value",), "fallback") == "fallback"
+    assert values._first(row, ("empty", "zero")) == ""
+    assert values._first_nonempty(row, ("missing_value", "empty", "zero")) == 0
+    assert values._first_nonempty(row, ("empty", "false")) is False
+    assert values._first_nonempty(row, ("empty",), "fallback") == "fallback"
+
+
+def test_legacy_slot_gates_does_not_copy_shared_metadata_readers():
+    """One metadata-reader owner prevents another nested copy from accruing."""
+    slot_gates = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "radia_mcp" / "radia_ngsolve" / "slot_gates.py"
+    )
+    tree = ast.parse(slot_gates.read_text(encoding="utf-8"))
+    duplicates = [
+        node.lineno for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name in {"_first", "_first_present", "_first_nonempty"}
+    ]
+    assert duplicates == []
