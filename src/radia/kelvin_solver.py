@@ -1321,6 +1321,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
             raise ValueError("integration_point material sampling currently requires P1")
         if int(anderson_depth) != 0:
             raise ValueError("integration_point material sampling requires anderson_depth=0")
+        if float(relaxation) != 1.0:
+            raise ValueError("integration_point material sampling requires relaxation=1")
         if material_log_state_initial is not None:
             raise ValueError("integration_point material sampling has no projected restart state")
         return _solve_mixed_omega_pointwise_picard(
@@ -1340,7 +1342,6 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
             surface_dirichlet=surface_dirichlet, kelvin_match_exact=kelvin_match_exact,
             mu_r_by_material=mu_r_by_material,
             bh_interpolation=bh_interpolation,
-            relaxation=relaxation,
             progress_callback=progress_callback)
     if genuinely_nonlinear and int(order) > 1 and requested_material_order is None:
         raise ValueError(
@@ -2036,7 +2037,7 @@ def _solve_mixed_omega_pointwise_picard(
         kelvin_source_potential, kelvin_source_h, total_source_h,
         total_source_materials, reduced_zero_normal_boundary,
         surface_dirichlet, kelvin_match_exact, mu_r_by_material,
-        bh_interpolation, relaxation, progress_callback):
+        bh_interpolation, progress_callback):
     """P1 secant Picard with the coefficient evaluated by volume quadrature."""
     from ngsolve import IfPos, sqrt
     from scipy.interpolate import PchipInterpolator
@@ -2140,7 +2141,6 @@ def _solve_mixed_omega_pointwise_picard(
                 "method": "pointwise_secant_picard",
                 "material_sampling": "integration_point",
                 "bh_interpolation": bh_interpolation,
-                "material_relaxation": float(relaxation),
                 "iterations": iteration,
                 "converged": True,
                 "relative_B_change": relative_change,
@@ -2151,9 +2151,8 @@ def _solve_mixed_omega_pointwise_picard(
         previous_b = result["B_cf"]
         magnitude = sqrt(InnerProduct(result["H_cf"], result["H_cf"]))
         law_b = build_b(magnitude, bh_array)
-        proposed_mu = IfPos(magnitude - 1.e-12,
-                            law_b / (magnitude + 1.e-30), origin_mu)
-        current_mu = relaxation * proposed_mu + (1. - relaxation) * current_mu
+        current_mu = IfPos(magnitude - 1.e-12,
+                           law_b / (magnitude + 1.e-30), origin_mu)
 
     raise MixedOmegaPicardNotConverged(
         "pointwise mixed Omega Picard did not converge: "
@@ -2162,7 +2161,6 @@ def _solve_mixed_omega_pointwise_picard(
         {"nonlinear_stats": {"method": "pointwise_secant_picard",
                              "material_sampling": "integration_point",
                              "bh_interpolation": bh_interpolation,
-                             "material_relaxation": float(relaxation),
                              "converged": False, "history": history}})
 
 
