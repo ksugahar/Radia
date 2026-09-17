@@ -28,28 +28,13 @@ matlabDir = fileparts(packageDir);
 if ~contains(path, matlabDir)
     addpath(matlabDir);
 end
-expectedMexCommit = "";
+selectedMex = "";
 if options.RequireMex
     selectedMex = which("radia_mex");
     if exist("radia_mex", "file") ~= 3
         error("radia:setup:MissingMex", ...
             "radia_mex is not built. Run Build.ps1 -MatlabMexOnly.");
     end
-    verifier = fullfile(matlabDir, "verify_radia_mex_provenance.py");
-    command = sprintf('"%s" "%s" "%s"', ...
-        char(options.PythonExecutable), verifier, selectedMex);
-    [verified, output] = system(command);
-    if verified ~= 0
-        error("radia:setup:StaleMex", ...
-            "radia_mex provenance check failed: %s", strtrim(output));
-    end
-    lines = splitlines(string(output));
-    values = extractAfter(lines(startsWith(lines, "RADIA_MEX_COMMIT:")), ...
-        "RADIA_MEX_COMMIT:");
-    if numel(values) ~= 1 || strlength(values) ~= 40
-        error("radia:setup:StaleMex", "Invalid radia_mex build identity.");
-    end
-    expectedMexCommit = values(1);
 end
 
 fileGenerationInfo = struct("available", false, "changed", false, ...
@@ -65,13 +50,34 @@ if ~options.Force && ~isempty(cachedInfo) && ...
         cachedPython == options.PythonExecutable && ...
         cachedInfo.mkl_threading_layer_requested == mklThreadingLayerRequested && ...
         (~options.RequireMex || cachedInfo.mex_available) && ...
-        (~options.RequireMex || string(which("radia_mex")) == cachedInfo.mex_path)
+        (~options.RequireMex || string(selectedMex) == cachedInfo.mex_path)
     if options.RequireMex
-        verifyLoadedMex(expectedMexCommit);
+        % Per-step calls must not launch Python. The loaded native identity is
+        % checked in-process; Force or a path change rechecks the sidecar.
+        verifyLoadedMex(cachedInfo.mex_source_commit);
     end
     cachedInfo.simulink_file_generation = fileGenerationInfo;
     info = cachedInfo;
     return
+end
+
+expectedMexCommit = "";
+if options.RequireMex
+    verifier = fullfile(matlabDir, "verify_radia_mex_provenance.py");
+    command = sprintf('"%s" "%s" "%s"', ...
+        char(options.PythonExecutable), verifier, selectedMex);
+    [verified, output] = system(command);
+    if verified ~= 0
+        error("radia:setup:StaleMex", ...
+            "radia_mex provenance check failed: %s", strtrim(output));
+    end
+    lines = splitlines(string(output));
+    values = extractAfter(lines(startsWith(lines, "RADIA_MEX_COMMIT:")), ...
+        "RADIA_MEX_COMMIT:");
+    if numel(values) ~= 1 || strlength(values) ~= 40
+        error("radia:setup:StaleMex", "Invalid radia_mex build identity.");
+    end
+    expectedMexCommit = values(1);
 end
 
 runtimeDirs = strings(0, 1);
