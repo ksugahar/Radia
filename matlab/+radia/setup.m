@@ -167,7 +167,7 @@ end
 
 function verifyLoadedMex(expectedCommit)
 try
-    nativeInfo = radia_mex("api.info");
+    nativeInfo = radia_mex('api.info');
 catch cause
     error("radia:setup:StaleMex", ...
         "Loaded radia_mex cannot report its build identity: %s", cause.message);

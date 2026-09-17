@@ -16,6 +16,13 @@ verifyEqual(t, radia.internal.callMex("api.commands"), expected);
 verifyEqual(t, radia.internal.callMex('api.commands'), expected);
 end
 
+function testLoadedMexIdentityMatchesBuild(t)
+info = radia.setup(ConfigureSimulinkFileGeneration=false);
+nativeInfo = radia_mex('api.info');
+verifyEqual(t, string(nativeInfo.source_commit), info.mex_source_commit);
+verifyEqual(t, strlength(info.mex_source_commit), 40);
+end
+
 function testCallDoesNotConfigureSimulinkButExplicitSetupDoes(t)
 original = Simulink.fileGenControl("getConfig");
 cleanup = onCleanup(@() Simulink.fileGenControl("setConfig", config=original)); %#ok<NASGU>
