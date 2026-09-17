@@ -44,8 +44,8 @@ Independent publication uses the cubit-mesh-export tag and PyPI distribution.
 `python tools/release_cubit_dual.py` owns LAB/100 preflight, deployment and done receipts
 for one published wheel hash and clean source SHA. It leaves Radia/MCP untouched
 and refuses active Cubit instead of stopping user jobs. Optional combined Radia
-compatibility is a separate `cubit-plugin-install --check-radia-compat` check;
-ordinary install/verify must not import Radia or wait for a solver release.
+Radia owns any optional integration check; ordinary install/verify must not
+import Radia or wait for a solver release.
 Netgen GUI exports run standalone check-vol before opening any external viewer;
 checker startup failure is a visible error, not successful export acceptance.
 Coreform's official toolbar `play` does not define `__file__`. Self-contained
@@ -737,9 +737,37 @@ def generate_toolbar_skeleton(name: str, buttons: list[dict]) -> dict:
         dict mapping relative paths -> file content (str). Caller writes
         these to disk and then runs the platform packaging script.
     """
+    import re
     import textwrap
+    from xml.sax.saxutils import escape
 
-    safe_name = "".join(c if c.isalnum() or c in "_-" else "_" for c in name)
+    def identifier(value, field):
+        if not isinstance(value, str) or re.fullmatch(
+                r"[A-Za-z][A-Za-z0-9_-]{0,63}", value) is None:
+            raise ValueError(f"{field} must be a simple ASCII identifier")
+        return value
+
+    safe_name = identifier(name, "toolbar_name")
+    checked_buttons = []
+    used_basenames = set()
+    for index, button in enumerate(buttons):
+        if not isinstance(button, dict):
+            raise ValueError(f"buttons[{index}] must be an object")
+        kind = button.get("kind", "python")
+        if kind not in ("python", "cubit_script"):
+            raise ValueError(f"buttons[{index}].kind is unsupported")
+        basename = identifier(button.get("script_basename", "button"),
+                              f"buttons[{index}].script_basename")
+        if basename in used_basenames:
+            raise ValueError(f"duplicate button script_basename: {basename}")
+        used_basenames.add(basename)
+        label = button.get("label", "Untitled")
+        if (not isinstance(label, str) or not 1 <= len(label) <= 80
+                or any(c in label for c in ('\n', '\r', '"', "'", '\\'))):
+            raise ValueError(f"buttons[{index}].label contains unsafe characters")
+        checked_buttons.append({**button, "kind": kind,
+                                "script_basename": basename, "label": label})
+    buttons = checked_buttons
     files: dict[str, str] = {}
 
     # toolbar.xml (minimal, one toolbar with the given buttons)
@@ -751,13 +779,13 @@ def generate_toolbar_skeleton(name: str, buttons: list[dict]) -> dict:
         if kind == "python":
             script_rel = f"scripts/{basename}.py"
             button_entries.append(
-                f'    <button label="{label}" type="python" '
+                f'    <button label="{escape(label)}" type="python" '
                 f'script="{script_rel}" icon="resources/icons/{basename}.png"/>'
             )
         else:
             script_rel = f"scripts/{basename}.jou"
             button_entries.append(
-                f'    <button label="{label}" type="cubit_script" '
+                f'    <button label="{escape(label)}" type="cubit_script" '
                 f'script="{script_rel}" icon="resources/icons/{basename}.png"/>'
             )
 

@@ -53,7 +53,11 @@ def test_wheel_contract_includes_embedded_probe_and_bytes(tmp_path):
         archive.writestr('cubit_mesh_export-1.0.2.dist-info/METADATA',
                          'Name: cubit-mesh-export\nVersion: 1.0.2\n')
         for file in ('cubit_mesh_export.ccm', 'cubit_mesh_curver.pyd',
-                     'toolbar_smoke.py', 'cubit_gui/toolbar_probe.py', 'mcp/server.py',
+                     'toolbar_smoke.py', 'cubit_gui/toolbar_probe.py',
+                     'cubit_gui/cubit_export_menu.py',
+                     'cubit_gui/cubit_toolbar/toolbars/cubit_mesh_export_toolbar.ttb.tmpl',
+                     'cubit_gui/solver_ready_sample.jou', 'native_payloads.json',
+                     'mcp/server.py',
                      'mcp/_support/status.py', 'mcp/_support/LICENSE-BSD-3-Clause.txt'):
             archive.writestr('cubit_mesh_export/' + file, b'test\r\n')
     result = dual.wheel_contract(wheel)
@@ -79,16 +83,15 @@ def test_standalone_preflight_never_checks_or_imports_radia(monkeypatch, tmp_pat
     from cubit_mesh_export import install
     def forbidden():
         raise AssertionError('Standalone deployment consulted Radia')
-    monkeypatch.setattr(install, '_check_radia_compat', forbidden)
+    assert not hasattr(install, '_check_radia_compat')
     monkeypatch.setattr(install, '_running_cubit_processes', lambda: [])
     monkeypatch.setattr(install, '_critical_plugin_files', lambda root: [])
     assert install.preflight(tmp_path, verbose=False) == (True, [])
 
 
-def test_optional_integration_check_is_explicit(monkeypatch):
+def test_standalone_installer_rejects_reverse_radia_integration_flag(monkeypatch):
     from cubit_mesh_export import install
     monkeypatch.setattr(sys, 'argv', ['cubit-plugin-install', '--check-radia-compat'])
-    monkeypatch.setattr(install, '_check_radia_compat', lambda: (False, 'integration not accepted'))
     with pytest.raises(SystemExit) as error:
         install.main()
-    assert error.value.code == 4
+    assert error.value.code == 2

@@ -20,12 +20,6 @@ cubit-plugin-install deploys plugin binaries to Cubit.
 # fails even though the exact pinned Netgen wheel is installed.
 import netgen as _netgen  # noqa: F401
 
-__version__ = "1.1.0"
+__version__ = "2.0.0"
 
-# Optional interoperability window for installations that also use Radia.
-# The standalone Cubit plugin and MCP do not import Radia; a mismatch is
-# reported only when explicitly requested by cubit-plugin-install.
-COMPAT_RADIA_MIN = "4.5.0"
-COMPAT_RADIA_MAX = "5.0.0"  # exact Radia 5 release candidate; no open-ended major range
-
-__all__ = ["__version__", "COMPAT_RADIA_MIN", "COMPAT_RADIA_MAX"]
+__all__ = ["__version__"]

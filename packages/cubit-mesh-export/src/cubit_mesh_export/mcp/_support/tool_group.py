@@ -15,6 +15,7 @@ historical individual tools while migrating existing clients.
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 import os
 import sys
@@ -213,9 +214,12 @@ class CoarseToolRegistry:
             except ValidationError as exc:
                 return error_payload(run_name, str(exc), kind="input",
                                      hint=f"Query {catalog_name} for {name}'s signature.")
-            result = entry.function(**kwargs)
-            if inspect.isawaitable(result):
-                result = await result
+            if inspect.iscoroutinefunction(entry.function):
+                result = await entry.function(**kwargs)
+            else:
+                result = await asyncio.to_thread(entry.function, **kwargs)
+                if inspect.isawaitable(result):
+                    result = await result
             return result
 
         catalog.__name__ = catalog_name
