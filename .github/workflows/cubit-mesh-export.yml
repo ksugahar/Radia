@@ -164,6 +164,7 @@ jobs:
             tests\test_cubit_menu_startup.py tests\test_cubit_standalone_gui.py `
             tests\test_cubit_auto_kelvin_entry.py `
             packages\cubit-mesh-export\tests\test_toolbar_smoke.py `
+            packages\cubit-mesh-export\tests\test_smoke_command.py `
             packages\cubit-mesh-export\tests\test_native_plugin_registry.py `
             tests\test_release_cubit_dual.py -q
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

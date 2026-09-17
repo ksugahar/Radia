@@ -1,0 +1,570 @@
+{
+  "protocol": "sphere radius=1; Cubit tet max size=0.65, hex sphere size=0.4; Netgen OCC maxh=0.42 (approximately matched TET DOFs); p=1..3; repeated independent mesh generations",
+  "field_problem": "electrostatic -Delta(phi)=3*pi^2*phi; phi=sin(pi*x)cos(pi*y)cos(pi*z); exact full-boundary Dirichlet; E=-grad(phi)",
+  "environment": {
+    "python": "3.12.10",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "ngsolve": "6.2.2606",
+    "cubit_mesh_export": "2.0.0"
+  },
+  "cubit_exe": "C:\\Program Files\\Coreform Cubit 2025.12\\bin\\coreform_cubit.exe",
+  "rows": [
+    {
+      "order": 1,
+      "elements": {
+        "ET.TET": 231
+      },
+      "ndof": 75,
+      "volume": 3.769576445247214,
+      "volume_error_pct": -10.007991306419573,
+      "boundaries": [
+        "outer"
+      ],
+      "materials": [
+        "body"
+      ],
+      "boundary_label_preservation": 1.0,
+      "material_label_preservation": 1.0,
+      "phi_l2_error": 0.2539340018912174,
+      "electric_field_l2_error": 2.3852543154565238,
+      "route": "cubit_export_netgen",
+      "kind": "tet",
+      "run_dir": "C:\\temp\\cubit-paper-sphere-benchmark\\cubit_tet_1",
+      "cubit_exit": 0,
+      "mesh_seconds": 1.125,
+      "vol_check_passed": false,
+      "invalid_jacobian_samples": 0,
+      "vol_check_warnings": [
+        "Volume \"body\": -1.00e+01% (ng=3.769576e+00, cad=4.188790e+00)",
+        "Area \"outer\": -5.54e+00% (ng=1.187026e+01, cad=1.256637e+01)"
+      ],
+      "repeat": 1
+    },
+    {
+      "order": 2,
+      "elements": {
+        "ET.TET": 231
+      },
+      "ndof": 434,
+      "volume": 4.179901598424494,
+      "volume_error_pct": -0.21219984595408636,
+      "boundaries": [
+        "outer"
+      ],
+      "materials": [
+        "body"
+      ],
+      "boundary_label_preservation": 1.0,
+      "material_label_preservation": 1.0,
+      "phi_l2_error": 0.051155804562551706,
+      "electric_field_l2_error": 0.8962150689168299,
+      "route": "cubit_export_netgen",
+      "kind": "tet",
+      "run_dir": "C:\\temp\\cubit-paper-sphere-benchmark\\cubit_tet_1",
+      "cubit_exit": 0,
+      "mesh_seconds": 1.125,
+      "vol_check_passed": true,
+      "invalid_jacobian_samples": 0,
+      "vol_check_warnings": [],
+      "repeat": 1
+    },
+    {
+      "order": 3,
+      "elements": {
+        "ET.TET": 231
+      },
+      "ndof": 1309,
+      "volume": 4.189594400145546,
+      "volume_error_pct": 0.01919874999316562,
+      "boundaries": [
+        "outer"
+      ],
+      "materials": [
+        "body"
+      ],
+      "boundary_label_preservation": 1.0,
+      "material_label_preservation": 1.0,
+      "phi_l2_error": 0.010395823533993612,
+      "electric_field_l2_error": 0.1752625986276965,
+      "route": "cubit_export_netgen",
+      "kind": "tet",
+      "run_dir": "C:\\temp\\cubit-paper-sphere-benchmark\\cubit_tet_1",
+      "cubit_exit": 0,
+      "mesh_seconds": 1.125,
+      "vol_check_passed": true,
+      "invalid_jacobian_samples": 0,
+      "vol_check_warnings": [],
+      "repeat": 1
+    },
+    {
+      "order": 1,
+      "elements": {
+        "ET.HEX": 32
+      },
+      "ndof": 53,
+      "volume": 3.2103434310450503,
+      "volume_error_pct": -23.35869608898774,
+      "boundaries": [
+        "outer"
+      ],
+      "materials": [
+        "body"
+      ],
+      "boundary_label_preservation": 1.0,
+      "material_label_preservation": 1.0,
+      "phi_l2_error": 0.30090625319611425,
+      "electric_field_l2_error": 2.1457122661372856,
+      "route": "cubit_export_netgen",
+      "kind": "hex",
+      "run_dir": "C:\\temp\\cubit-paper-sphere-benchmark\\cubit_hex_1",
+      "cubit_exit": 0,
+      "mesh_seconds": 1.125,
+      "vol_check_passed": false,
+      "invalid_jacobian_samples": 0,
+      "vol_check_warnings": [
+        "Volume \"body\": -2.34e+01% (ng=3.210343e+00, cad=4.188790e+00)",
+        "Area \"outer\": -1.21e+01% (ng=1.104029e+01, cad=1.256637e+01)"
+      ],
+      "repeat": 1
+    },
+    {
+      "order": 2,
+      "elements": {
+        "ET.HEX": 32
+      },
+      "ndof": 321,
+      "volume": 4.17994645646573,
+      "volume_error_pct": -0.21112893910405495,
+      "boundaries": [
+        "outer"
+      ],
+      "materials": [
+        "body"
+      ],
+      "boundary_label_preservation": 1.0,
+      "material_label_preservation": 1.0,
+      "phi_l2_error": 0.05302538476061621,
+      "electric_field_l2_error": 1.0114803193043707,
+      "route": "cubit_export_netgen",
+      "kind": "hex",
+      "run_dir": "C:\\temp\\cubit-paper-sphere-benchmark\\cubit_hex_1",
+      "cubit_exit": 0,
+      "mesh_seconds": 1.125,
+      "vol_check_passed": true,
+      "invalid_jacobian_samples": 0,
+      "vol_check_warnings": [],
+      "repeat": 1
+    },
+    {
+      "order": 3,
+      "elements": {
+        "ET.HEX": 32
+      },
+      "ndof": 997,
+      "volume": 4.194293770405313,
+      "volume_error_pct": 0.1313879509323268,
+      "boundaries": [
+        "outer"
+      ],
+      "materials": [
+        "body"
+      ],
+      "boundary_label_preservation": 1.0,
+      "material_label_preservation": 1.0,
+      "phi_l2_error": 0.02876959178880194,
+      "electric_field_l2_error": 0.23121556913447877,
+      "route": "cubit_export_netgen",
+      "kind": "hex",
+      "run_dir": "C:\\temp\\cubit-paper-sphere-benchmark\\cubit_hex_1",
+      "cubit_exit": 0,
+      "mesh_seconds": 1.125,
+      "vol_check_passed": true,
+      "invalid_jacobian_samples": 0,
+      "vol_check_warnings": [],
+      "repeat": 1
+    },
+    {
+      "order": 1,
+      "elements": {
+        "ET.TET": 156
+      },
+      "ndof": 81,
+      "volume": 3.9007683931086534,
+      "volume_error_pct": -6.876014257019225,
+      "boundaries": [
+        "outer"
+      ],
+      "materials": [
+        "body"
+      ],
+      "boundary_label_preservation": 1.0,
+      "material_label_preservation": 1.0,
+      "phi_l2_error": 0.5412435735382329,
+      "electric_field_l2_error": 3.2752322933923446,
+      "route": "netgen_occ_native",
+      "kind": "tet",
+      "run_dir": "C:\\temp\\cubit-paper-sphere-benchmark\\occ_tet_1",
+      "mesh_seconds": 0.046999999991385266,
+      "repeat": 1
+    },
+    {
+      "order": 2,
+      "elements": {
+        "ET.TET": 156
+      },
+      "ndof": 395,
+      "volume": 4.184658027697556,
+      "volume_error_pct": -0.09864846141286465,
+      "boundaries": [
+        "outer"
+      ],
+      "materials": [
+        "body"
+      ],
+      "boundary_label_preservation": 1.0,
+      "material_label_preservation": 1.0,
+      "phi_l2_error": 0.16286280457221256,
+      "electric_field_l2_error": 1.670587406510722,
+      "route": "netgen_occ_native",
+      "kind": "tet",
+      "run_dir": "C:\\temp\\cubit-paper-sphere-benchmark\\occ_tet_1",
+      "mesh_seconds": 0.046999999991385266,
+      "repeat": 1
+    },
+    {
+      "order": 3,
+      "elements": {
+        "ET.TET": 156
+      },
+      "ndof": 1099,
+      "volume": 4.189165187779621,
+      "volume_error_pct": 0.00895205954221101,
+      "boundaries": [
+        "outer"
+      ],
+      "materials": [
+        "body"
+      ],
+      "boundary_label_preservation": 1.0,
+      "material_label_preservation": 1.0,
+      "phi_l2_error": 0.03604827348077875,
+      "electric_field_l2_error": 0.38588340555103245,
+      "route": "netgen_occ_native",
+      "kind": "tet",
+      "run_dir": "C:\\temp\\cubit-paper-sphere-benchmark\\occ_tet_1",
+      "mesh_seconds": 0.046999999991385266,
+      "repeat": 1
+    },
+    {
+      "order": 1,
+      "elements": {
+        "ET.TET": 231
+      },
+      "ndof": 75,
+      "volume": 3.7695764452472136,
+      "volume_error_pct": -10.007991306419584,
+      "boundaries": [
+        "outer"
+      ],
+      "materials": [
+        "body"
+      ],
+      "boundary_label_preservation": 1.0,
+      "material_label_preservation": 1.0,
+      "phi_l2_error": 0.2539340018912174,
+      "electric_field_l2_error": 2.3852543154565238,
+      "route": "cubit_export_netgen",
+      "kind": "tet",
+      "run_dir": "C:\\temp\\cubit-paper-sphere-benchmark\\cubit_tet_2",
+      "cubit_exit": 0,
+      "mesh_seconds": 1.187999999994645,
+      "vol_check_passed": false,
+      "invalid_jacobian_samples": 0,
+      "vol_check_warnings": [
+        "Volume \"body\": -1.00e+01% (ng=3.769576e+00, cad=4.188790e+00)",
+        "Area \"outer\": -5.54e+00% (ng=1.187026e+01, cad=1.256637e+01)"
+      ],
+      "repeat": 2
+    },
+    {
+      "order": 2,
+      "elements": {
+        "ET.TET": 231
+      },
+      "ndof": 434,
+      "volume": 4.179901598424494,
+      "volume_error_pct": -0.21219984595408636,
+      "boundaries": [
+        "outer"
+      ],
+      "materials": [
+        "body"
+      ],
+      "boundary_label_preservation": 1.0,
+      "material_label_preservation": 1.0,
+      "phi_l2_error": 0.05115580456255172,
+      "electric_field_l2_error": 0.8962150689168299,
+      "route": "cubit_export_netgen",
+      "kind": "tet",
+      "run_dir": "C:\\temp\\cubit-paper-sphere-benchmark\\cubit_tet_2",
+      "cubit_exit": 0,
+      "mesh_seconds": 1.187999999994645,
+      "vol_check_passed": true,
+      "invalid_jacobian_samples": 0,
+      "vol_check_warnings": [],
+      "repeat": 2
+    },
+    {
+      "order": 3,
+      "elements": {
+        "ET.TET": 231
+      },
+      "ndof": 1309,
+      "volume": 4.189594400145546,
+      "volume_error_pct": 0.01919874999316562,
+      "boundaries": [
+        "outer"
+      ],
+      "materials": [
+        "body"
+      ],
+      "boundary_label_preservation": 1.0,
+      "material_label_preservation": 1.0,
+      "phi_l2_error": 0.010395823533993603,
+      "electric_field_l2_error": 0.17526259862769653,
+      "route": "cubit_export_netgen",
+      "kind": "tet",
+      "run_dir": "C:\\temp\\cubit-paper-sphere-benchmark\\cubit_tet_2",
+      "cubit_exit": 0,
+      "mesh_seconds": 1.187999999994645,
+      "vol_check_passed": true,
+      "invalid_jacobian_samples": 0,
+      "vol_check_warnings": [],
+      "repeat": 2
+    },
+    {
+      "order": 1,
+      "elements": {
+        "ET.HEX": 32
+      },
+      "ndof": 53,
+      "volume": 3.2103434310450494,
+      "volume_error_pct": -23.358696088987763,
+      "boundaries": [
+        "outer"
+      ],
+      "materials": [
+        "body"
+      ],
+      "boundary_label_preservation": 1.0,
+      "material_label_preservation": 1.0,
+      "phi_l2_error": 0.3009062531961142,
+      "electric_field_l2_error": 2.1457122661372856,
+      "route": "cubit_export_netgen",
+      "kind": "hex",
+      "run_dir": "C:\\temp\\cubit-paper-sphere-benchmark\\cubit_hex_2",
+      "cubit_exit": 0,
+      "mesh_seconds": 1.139999999999418,
+      "vol_check_passed": false,
+      "invalid_jacobian_samples": 0,
+      "vol_check_warnings": [
+        "Volume \"body\": -2.34e+01% (ng=3.210343e+00, cad=4.188790e+00)",
+        "Area \"outer\": -1.21e+01% (ng=1.104029e+01, cad=1.256637e+01)"
+      ],
+      "repeat": 2
+    },
+    {
+      "order": 2,
+      "elements": {
+        "ET.HEX": 32
+      },
+      "ndof": 321,
+      "volume": 4.17994645646573,
+      "volume_error_pct": -0.21112893910405495,
+      "boundaries": [
+        "outer"
+      ],
+      "materials": [
+        "body"
+      ],
+      "boundary_label_preservation": 1.0,
+      "material_label_preservation": 1.0,
+      "phi_l2_error": 0.053025384760616245,
+      "electric_field_l2_error": 1.0114803193043709,
+      "route": "cubit_export_netgen",
+      "kind": "hex",
+      "run_dir": "C:\\temp\\cubit-paper-sphere-benchmark\\cubit_hex_2",
+      "cubit_exit": 0,
+      "mesh_seconds": 1.139999999999418,
+      "vol_check_passed": true,
+      "invalid_jacobian_samples": 0,
+      "vol_check_warnings": [],
+      "repeat": 2
+    },
+    {
+      "order": 3,
+      "elements": {
+        "ET.HEX": 32
+      },
+      "ndof": 997,
+      "volume": 4.194293770405312,
+      "volume_error_pct": 0.1313879509323046,
+      "boundaries": [
+        "outer"
+      ],
+      "materials": [
+        "body"
+      ],
+      "boundary_label_preservation": 1.0,
+      "material_label_preservation": 1.0,
+      "phi_l2_error": 0.028769591788801972,
+      "electric_field_l2_error": 0.23121556913447874,
+      "route": "cubit_export_netgen",
+      "kind": "hex",
+      "run_dir": "C:\\temp\\cubit-paper-sphere-benchmark\\cubit_hex_2",
+      "cubit_exit": 0,
+      "mesh_seconds": 1.139999999999418,
+      "vol_check_passed": true,
+      "invalid_jacobian_samples": 0,
+      "vol_check_warnings": [],
+      "repeat": 2
+    },
+    {
+      "order": 1,
+      "elements": {
+        "ET.TET": 156
+      },
+      "ndof": 81,
+      "volume": 3.9007683931086534,
+      "volume_error_pct": -6.876014257019225,
+      "boundaries": [
+        "outer"
+      ],
+      "materials": [
+        "body"
+      ],
+      "boundary_label_preservation": 1.0,
+      "material_label_preservation": 1.0,
+      "phi_l2_error": 0.5412435735382329,
+      "electric_field_l2_error": 3.2752322933923446,
+      "route": "netgen_occ_native",
+      "kind": "tet",
+      "run_dir": "C:\\temp\\cubit-paper-sphere-benchmark\\occ_tet_2",
+      "mesh_seconds": 0.03199999999196734,
+      "repeat": 2
+    },
+    {
+      "order": 2,
+      "elements": {
+        "ET.TET": 156
+      },
+      "ndof": 395,
+      "volume": 4.184658027697555,
+      "volume_error_pct": -0.09864846141288686,
+      "boundaries": [
+        "outer"
+      ],
+      "materials": [
+        "body"
+      ],
+      "boundary_label_preservation": 1.0,
+      "material_label_preservation": 1.0,
+      "phi_l2_error": 0.1628628045722125,
+      "electric_field_l2_error": 1.670587406510722,
+      "route": "netgen_occ_native",
+      "kind": "tet",
+      "run_dir": "C:\\temp\\cubit-paper-sphere-benchmark\\occ_tet_2",
+      "mesh_seconds": 0.03199999999196734,
+      "repeat": 2
+    },
+    {
+      "order": 3,
+      "elements": {
+        "ET.TET": 156
+      },
+      "ndof": 1099,
+      "volume": 4.18916518777962,
+      "volume_error_pct": 0.008952059542188806,
+      "boundaries": [
+        "outer"
+      ],
+      "materials": [
+        "body"
+      ],
+      "boundary_label_preservation": 1.0,
+      "material_label_preservation": 1.0,
+      "phi_l2_error": 0.036048273480778756,
+      "electric_field_l2_error": 0.3858834055510324,
+      "route": "netgen_occ_native",
+      "kind": "tet",
+      "run_dir": "C:\\temp\\cubit-paper-sphere-benchmark\\occ_tet_2",
+      "mesh_seconds": 0.03199999999196734,
+      "repeat": 2
+    }
+  ],
+  "multi_label_rows": [
+    {
+      "route": "cubit_export_netgen",
+      "case": "gapped_coil_workpiece_air",
+      "order": 2,
+      "boundaries": [
+        "coil_surface",
+        "outer",
+        "sibc",
+        "sink",
+        "source"
+      ],
+      "materials": [
+        "air",
+        "coil",
+        "workpiece"
+      ],
+      "boundary_areas": {
+        "coil_surface": 0.0034992735852545104,
+        "sibc": 0.007853974472716416,
+        "sink": 2.8260429365825575e-05,
+        "outer": 0.0803944882707098,
+        "source": 2.826041544656349e-05
+      },
+      "boundary_label_preservation": 1.0,
+      "material_label_preservation": 1.0,
+      "vol_check_passed": true,
+      "invalid_jacobian_samples": 0,
+      "cubit_exit": 0,
+      "run_dir": "C:\\temp\\cubit-paper-sphere-benchmark\\em_labels_1",
+      "repeat": 1
+    },
+    {
+      "route": "cubit_export_netgen",
+      "case": "gapped_coil_workpiece_air",
+      "order": 2,
+      "boundaries": [
+        "coil_surface",
+        "outer",
+        "sibc",
+        "sink",
+        "source"
+      ],
+      "materials": [
+        "air",
+        "coil",
+        "workpiece"
+      ],
+      "boundary_areas": {
+        "coil_surface": 0.0034992735852545113,
+        "sibc": 0.007853974472716416,
+        "sink": 2.8260429365825575e-05,
+        "outer": 0.0803944882707098,
+        "source": 2.8260415446563487e-05
+      },
+      "boundary_label_preservation": 1.0,
+      "material_label_preservation": 1.0,
+      "vol_check_passed": true,
+      "invalid_jacobian_samples": 0,
+      "cubit_exit": 0,
+      "run_dir": "C:\\temp\\cubit-paper-sphere-benchmark\\em_labels_2",
+      "repeat": 2
+    }
+  ],
+  "max_repeat_metric_delta": 8.881784197001252e-16
+}
