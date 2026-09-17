@@ -86,6 +86,17 @@ jobs:
               git fetch --no-tags --depth=1 origin "$CI_BASE_SHA"
           fi
 
+      - name: Keep new gates out of the legacy ngsolve monolith
+        if: github.event_name != 'workflow_dispatch' && github.ref_type != 'tag'
+        shell: bash
+        env:
+          CI_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          python3 packages/radia-mcp/tools/check_ngsolve_architecture.py --selftest
+          if [[ -n "$CI_BASE_SHA" && ! "$CI_BASE_SHA" =~ ^0+$ ]]; then
+            python3 packages/radia-mcp/tools/check_ngsolve_architecture.py --base "$CI_BASE_SHA"
+          fi
+
       - name: Classify radia-mcp change scope
         id: classify
         shell: bash

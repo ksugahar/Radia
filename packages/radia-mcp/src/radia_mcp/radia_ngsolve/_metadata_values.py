@@ -11,11 +11,19 @@ def _norm(value):
     return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
 
 
-def _first(row, names):
+def _first(row, names, default=None):
     for name in names:
         if name in row and row[name] is not None:
             return row[name]
-    return None
+    return default
+
+
+def _first_nonempty(row, names, default=None):
+    """Like ``_first``, but also skip an empty string, not other falsey values."""
+    for name in names:
+        if name in row and row[name] not in (None, ""):
+            return row[name]
+    return default
 
 
 def _string_list(value):
