@@ -23,8 +23,8 @@ test-client path. This does not start Cubit or change its licensing requirements
 
 `cubit-mesh-export` is independently installable without `radia` or
 `radia-mcp`. This distribution owns both the toolbar and Cubit MCP.
-For optional Radia integration, run `cubit-plugin-install --check-radia-compat`
-against the installed versions; independent operation does not require it.
+Radia owns any optional integration contract; this distribution does not
+inspect or import Radia during installation.
 Its standalone release acceptance uses
 `validation_test/cubit_mesh_export/validate_standalone_wheel.py` in an isolated
 wheel-installed venv with Radia/MCP absent. It loads the candidate plugin via
@@ -1372,8 +1372,7 @@ cubit.cmd("rotate Surface {0} angle {1} about origin 0 0 0 direction {2} {3} {4}
   robust against editor auto-wrap.
 
 This affects every Cubit MCP execution path that funnels through `play`,
-including `cubit_load(path=*.py)` and `cubit_stage(path=*.py)`, both of which
-dispatch `.py → play "<abs_path>"`.
+including `cubit_stage(path=*.py)`, which dispatches `.py → play "<abs_path>"`.
 
 For multi-line ergonomic Python, use **standalone mode** instead:
 `python script.py` with `cubit.init([...])` at the top — no `play`,

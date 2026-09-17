@@ -21,33 +21,6 @@ if str(CME_SRC) not in sys.path:
     sys.path.insert(0, str(CME_SRC))
 
 
-@pytest.mark.parametrize("version,accepted", [("0.14.17", True), ("1.0.0", True),
-                                               ("1.0.1", True), ("1.0.2", False)])
-def test_radia_accepts_validated_exporter_versions_only(monkeypatch, version, accepted):
-    import cubit_mesh_export
-    from cubit_mesh_export import install
-    tree = ast.parse((PROJECT_ROOT / "src/radia/__init__.py").read_text(encoding="utf-8"))
-    names = {"__version__", "COMPAT_CUBIT_MESH_EXPORT_MIN", "COMPAT_CUBIT_MESH_EXPORT_MAX"}
-    constants = {node.targets[0].id: ast.literal_eval(node.value)
-                 for node in tree.body if isinstance(node, ast.Assign)
-                 and isinstance(node.targets[0], ast.Name) and node.targets[0].id in names}
-    monkeypatch.setitem(sys.modules, "radia", SimpleNamespace(**constants))
-    monkeypatch.setattr(cubit_mesh_export, "__version__", version)
-    assert install._check_radia_compat()[0] is accepted
-
-
-@pytest.mark.parametrize("version,accepted", [("4.95.92", True), ("5.0.0", True),
-                                              ("5.0.1", False), ("6.0.0", False)])
-def test_exporter_radia5_compatibility_is_bounded(monkeypatch, version, accepted):
-    import cubit_mesh_export
-    from cubit_mesh_export import install
-
-    monkeypatch.setitem(sys.modules, "radia", SimpleNamespace(
-        __version__=version, COMPAT_CUBIT_MESH_EXPORT_MIN="0.5.0",
-        COMPAT_CUBIT_MESH_EXPORT_MAX=cubit_mesh_export.__version__))
-    assert install._check_radia_compat()[0] is accepted
-
-
 def _load_install_panels():
     path = PROJECT_ROOT / "packages/cubit-mesh-export/src/cubit_mesh_export/toolbar_install.py"
     spec = importlib.util.spec_from_file_location("radia_install_panels_test", path)
@@ -342,6 +315,41 @@ def test_unterminated_startup_block_never_discards_following_user_lines():
         install_panels._remove_existing_block(lines)
 
     assert lines[-1] == "user command that must survive\n"
+
+
+def test_install_panels_refuses_corrupt_startup_before_writing_assets(
+        monkeypatch, tmp_path, capsys):
+    install_panels = _load_install_panels()
+    monkeypatch.setattr(install_panels.sys, "platform", "win32")
+    program_files = _patch_windows_env(monkeypatch, tmp_path)
+    _fake_cubit(program_files, "2025.12")
+    cubit_file = tmp_path / "Home" / ".cubit"
+    original = ("set echo on\n## BEGIN cubit-mesh-export toolbar\n"
+                "user command that must survive\n").encode("utf-8")
+    cubit_file.write_bytes(original)
+
+    assert install_panels.install_panels() is False
+    assert cubit_file.read_bytes() == original
+    assert str(cubit_file) in capsys.readouterr().out
+    assert not (tmp_path / "LocalAppData" / "cubit-mesh-export").exists()
+
+
+def test_install_panels_preserves_cp932_startup_with_backup(monkeypatch, tmp_path):
+    install_panels = _load_install_panels()
+    monkeypatch.setattr(install_panels.sys, "platform", "win32")
+    program_files = _patch_windows_env(monkeypatch, tmp_path)
+    _fake_cubit(program_files, "2025.12")
+    cubit_file = tmp_path / "Home" / ".cubit"
+    original = "# 日本語の設定\r\nset echo on\r\n".encode("cp932")
+    cubit_file.write_bytes(original)
+
+    assert install_panels.install_panels() is True
+    backups = list(cubit_file.parent.glob(".cubit.bak-*"))
+    assert len(backups) == 1
+    assert backups[0].read_bytes() == original
+    updated = cubit_file.read_bytes()
+    assert updated.startswith(original)
+    assert b"\r\n## BEGIN cubit-mesh-export toolbar" in updated
 
 
 def test_native_build_is_worktree_relative_and_propagates_both_payloads():
