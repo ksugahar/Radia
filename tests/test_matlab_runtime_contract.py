@@ -36,6 +36,15 @@ def test_matlab_setup_checks_the_native_ngsolve_abi_and_mkl_dispatcher() -> None
     assert "radia:setup:NGSolveABI" in setup
 
 
+def test_cached_mex_setup_keeps_provenance_subprocess_off_the_step_path() -> None:
+    setup = _source("matlab/+radia/setup.m")
+    cache_branch = setup.index("if ~options.Force && ~isempty(cachedInfo)")
+    cache_return = setup.index("    return\nend", cache_branch)
+    verifier_launch = setup.index('verifier = fullfile(matlabDir, "verify_radia_mex_provenance.py")')
+    assert cache_return < verifier_launch
+    assert "verifyLoadedMex(cachedInfo.mex_source_commit)" in setup[cache_branch:cache_return]
+
+
 def test_matlab_release_uses_sequential_mkl_without_changing_python() -> None:
     build = _source("Build.ps1")
     cmake = _source("CMakeLists.txt")
