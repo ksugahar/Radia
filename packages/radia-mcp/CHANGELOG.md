@@ -7,6 +7,17 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.6.0] - Unreleased
+
+### Changed
+
+- Make the recommended first-call `radia_mcp_overview()` compact by default:
+  each server entry now contains `name`, `description`, and `tags`. The
+  top-level count, tags, and external-package fields are unchanged. Use
+  `radia_mcp_get(name)` for one complete entry or `radia_mcp_overview(full=True)`
+  for the previous full catalog shape. This default response-shape change
+  is the reason for the minor version bump.
+
 ## [1.5.3] - 2026-09-16
 
 - Resolve the package stdio runtime-contract test probe by its own file path,
@@ -26,6 +37,10 @@ crystallized as its own package.
 - Rename remaining commercial-solver-derived v45/v46 identity modules, tests,
   result keys, and release markers to their neutral solver-state, network, and
   motor responsibilities.
+  Compatibility note: three top-level result keys changed to
+  `solver_state_v46_identity`, `network_v45_identity_checks`, and
+  `network_v46_identity_checks`; callers that read the old top-level names
+  must update. Individual entries under `checks` did not change.
 - Remove fixed counts from every public discovery surface and derive them from
   the live catalog; bound unfiltered coarse-tool
   catalogs to 12 entries with an explicit truncation hint, and make hot-reload

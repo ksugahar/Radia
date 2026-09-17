@@ -33,32 +33,37 @@ _HEALTH_CACHE_TTL_S = 30.0
 # ============================================================
 
 @mcp.tool()
-def radia_mcp_overview() -> dict:
-    """Authoritative catalog of all radia_mcp.* servers.
+def radia_mcp_overview(full: bool = False) -> dict:
+    """Compact first-call catalog of all radia_mcp.* servers.
 
     Use this as your FIRST tool call if you don't know which radia_mcp
     server has the knowledge you need. Returns a dict with:
         - n_servers: how many subpackages exist
-        - servers: list of {name, subpackage, entry_point,
-                              description, primary_tools, related, tags,
-                              selftest_command, optional audit_command}
+        - servers: list of {name, description, tags} by default
 
     Filter by tag with `radia_mcp_by_tag`; drill into a single server
-    with `radia_mcp_get`.
+    with `radia_mcp_get`. Pass full=True for the previous full entries.
+
+    Args:
+        full: Return complete catalog entries instead of the compact list.
     """
     servers = catalog.list_all()
     external = catalog.list_external()
     return {
         "n_servers": len(servers),
-        "servers": servers,
+        "servers": servers if full else [
+            {key: server[key] for key in ("name", "description", "tags")}
+            for server in servers
+        ],
         "tags_available": sorted({
             t for s in servers for t in s.get("tags", [])
         }),
         "external_packages": external,
         "n_external_packages": len(external),
         "next_step_hint":
-            "Call <server>_status() on a specific server for full "
-            "introspection + dependency probe. External packages "
+            "Call radia_mcp_get(name) for one complete catalog entry, or "
+            "<server>_status() for live introspection + dependency probe. "
+            "External packages "
             "(optuna-mcp / elf / comsol / mcp-server-document) ship from their own "
             "repos — see entries in `external_packages` for install paths.",
     }
