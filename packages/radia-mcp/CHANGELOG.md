@@ -7,7 +7,7 @@ crystallized as its own package.
 
 ## [Unreleased]
 
-## [1.6.0] - Unreleased
+## [1.6.0] - 2026-09-18
 
 ### Changed
 
@@ -15,6 +15,10 @@ crystallized as its own package.
   in cohesive domain modules, not the legacy `slot_gates.py` monolith. Share
   equivalent metadata readers while preserving empty-value semantics, and
   enforce the legacy boundary in pull-request CI without a line-count quota.
+- Define domain/MCP/validation ownership for the next `radia_ngsolve` migration.
+  `ngsolve_usage()` now starts with a compact topic index rather than repeating
+  the full documentation for every alias; named topics and explicit `all`
+  remain available.
 
 - Make the recommended first-call `radia_mcp_overview()` compact by default:
   each server entry now contains `name`, `description`, and `tags`. The
