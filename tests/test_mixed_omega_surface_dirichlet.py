@@ -150,20 +150,16 @@ def test_pointwise_picard_linear_spline_nonlinear_control():
         energy['h_dot_b_integral_J'], rel=1e-12)
 
 
-def test_pointwise_picard_damped_material_update_converges():
+def test_pointwise_picard_rejects_unbounded_damped_expression_tree():
     import ngsolve as ng
     from radia.kelvin_solver import solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin
     mesh, source, options = _case()
-    h = np.linspace(0., 1000., 21)
-    table = np.column_stack((h, 4e-7*np.pi*h + .01*np.tanh(h/100)))
-    with ng.TaskManager():
-        result = solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
+    table = np.array([[0., 0.], [100., .1], [1000., .2]])
+    with pytest.raises(ValueError, match='relaxation=1'):
+        solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
             mesh, source, -100*ng.z, 1., (0,0,0), bh_table=table,
             nonlinear_materials=('iron',), mu_r_initial=10.,
-            material_sampling='integration_point', bh_interpolation='linear_spline',
-            relaxation=.5, max_iterations=60, tolerance=1e-5, **options)
-    assert result['nonlinear_stats']['converged']
-    assert result['constitutive_field_audit']['relative_B_constitutive_L2'] < 1e-5
+            material_sampling='integration_point', relaxation=.5, **options)
 
 
 def test_total_surface_requires_source_lift_not_reduced_zero():
