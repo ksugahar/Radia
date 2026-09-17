@@ -7,6 +7,8 @@ the unit sphere, but their meshes and degrees of freedom differ. The native
 route is not an alternate converter for the *same Cubit mesh*. Do not use
 ratios between routes as a speed or accuracy advantage without a matched-DOF
 study. Netgen/OCC has no corresponding HEX row in this comparison.
+The native TET size was selected to put its degrees of freedom in the same
+range as Cubit TET; both routes hold their own mesh topology fixed across orders.
 
 The electrostatic manufactured problem is
 `-Delta(phi) = 3*pi^2*phi`, with
@@ -24,9 +26,9 @@ meshing is batch/nographics; no GUI is launched.
 | Cubit → exporter → `.vol` | HEX | 1 | 32 | 53 | −23.359% | 3.009e−1 | 2.146 | 1/1 | CAD tolerance fails, as expected |
 | Cubit → exporter → `.vol` | HEX | 2 | 32 | 321 | −0.211% | 5.303e−2 | 1.011 | 1/1 | pass |
 | Cubit → exporter → `.vol` | HEX | 3 | 32 | 997 | +0.131% | 2.877e−2 | 2.312e−1 | 1/1 | pass |
-| Netgen/OCC native | TET | 1 | 107 | 58 | −9.376% | 6.847e−1 | 4.409 | 1/1 | not applicable¹ |
-| Netgen/OCC native | TET | 2 | 107 | 278 | −0.187% | 3.427e−1 | 2.705 | 1/1 | not applicable¹ |
-| Netgen/OCC native | TET | 3 | 107 | 768 | +0.016% | 2.430e−1 | 1.553 | 1/1 | not applicable¹ |
+| Netgen/OCC native | TET | 1 | 156 | 81 | −6.876% | 5.412e−1 | 3.275 | 1/1 | not applicable¹ |
+| Netgen/OCC native | TET | 2 | 156 | 395 | −0.099% | 1.629e−1 | 1.671 | 1/1 | not applicable¹ |
+| Netgen/OCC native | TET | 3 | 156 | 1099 | +0.009% | 3.605e−2 | 3.859e−1 | 1/1 | not applicable¹ |
 
 ¹ `check-vol` checks an exported `.vol` and its Cubit CAD-reference sidecar;
 the native OCC meshes were not exported through Cubit. All six Cubit sphere
@@ -44,7 +46,7 @@ the coil device.
 Two independent full Cubit batch generations and two independent OCC
 generations gave the same element counts, labels and field errors. The maximum
 absolute repeat difference across volume, potential error and field error was
-`4.44e-16`. This checks numerical repeatability on this host, not portability
+`1.78e-15`. This checks numerical repeatability on this host, not portability
 across machines or Cubit releases.
 
 ## Reproduce
