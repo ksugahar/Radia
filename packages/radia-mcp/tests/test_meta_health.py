@@ -107,18 +107,52 @@ def test_every_cataloged_server_has_register_status_tool():
 
 
 def test_meta_overview_returns_expected_shape():
-    """Smoke-test the overview tool shape."""
-    from radia_mcp.meta.server import radia_mcp_overview
+    """The recommended first call stays compact; full details remain opt-in."""
+    import json
+
+    from radia_mcp.meta.server import radia_mcp_get, radia_mcp_overview
+
     ov = radia_mcp_overview()
+    full = radia_mcp_overview(full=True)
     assert "n_servers" in ov
     assert "servers" in ov
     assert "tags_available" in ov
-    assert ov["n_servers"] == len(ov["servers"])
-    # Each server entry has required keys
+    assert ov["n_servers"] == len(ov["servers"]) == len(full["servers"])
+    assert [srv["name"] for srv in ov["servers"]] == [
+        srv["name"] for srv in full["servers"]
+    ]
+    assert ov["tags_available"] == full["tags_available"]
     for srv in ov["servers"]:
-        for k in ("name", "subpackage", "entry_point",
-                   "description", "primary_tools", "tags"):
-            assert k in srv, f"{srv.get('name','?')} missing key {k}"
+        assert set(srv) == {"name", "description", "tags"}
+        detail = radia_mcp_get(srv["name"])
+        assert srv == {
+            key: detail[key]
+            for key in ("name", "description", "tags")
+        }
+    assert len(json.dumps(ov, ensure_ascii=False)) < (
+        len(json.dumps(full, ensure_ascii=False)) / 2
+    )
+
+
+def test_meta_overview_mcp_call_defaults_to_compact_entries():
+    """The public MCP schema and dispatch must preserve the compact default."""
+    import asyncio
+    import json
+
+    from radia_mcp.meta.server import mcp
+
+    async def exercise():
+        tools = await mcp.list_tools()
+        overview = next(tool for tool in tools if tool.name == "radia_mcp_overview")
+        assert overview.inputSchema["properties"]["full"]["default"] is False
+        for arguments, expected_full in (({}, False), ({"full": True}, True)):
+            result = await mcp.call_tool("radia_mcp_overview", arguments)
+            content = result[0] if isinstance(result, tuple) else result
+            payload = json.loads(content[0].text)
+            first = payload["servers"][0]
+            assert ("entry_point" in first) is expected_full
+
+    asyncio.run(exercise())
 
 
 def test_meta_golden_gate_passes_catalog_contracts():
@@ -225,7 +259,7 @@ def test_meta_catalog_exposes_selftest_and_heavy_audit_commands():
     """Agents should discover lightweight health checks separately from audits."""
     from radia_mcp.meta.server import radia_mcp_get, radia_mcp_overview
 
-    overview = radia_mcp_overview()
+    overview = radia_mcp_overview(full=True)
     by_name = {entry["name"]: entry for entry in overview["servers"]}
 
     for name, entry in by_name.items():

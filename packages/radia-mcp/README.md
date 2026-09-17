@@ -258,7 +258,8 @@ concept X?" without trial-and-error.
 
 ```python
 # catalog, health, golden-gate, and bug-pattern tools
-radia_mcp_overview()                  # current server catalog + live tags
+radia_mcp_overview()                  # compact catalog (name/description/tags)
+radia_mcp_overview(full=True)         # complete catalog entries when needed
 radia_mcp_get("bayesian-opt")         # full info for one server
 radia_mcp_by_tag("optimization")      # filter optimization/theory servers
 radia_mcp_related("bayesian-opt")     # cross-link map for optimization servers
