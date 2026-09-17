@@ -3369,11 +3369,16 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
 
 void ApiInfo(int nlhs, mxArray* plhs[], int nrhs) {
     CheckArity(nrhs, 1, nlhs, 1, "info = radia_mex('api.info')");
+#ifndef RADIA_MEX_SOURCE_COMMIT
+#define RADIA_MEX_SOURCE_COMMIT "unverified"
+#endif
     const char* fields[] = {
         "api_version", "handle_count", "ih_handle_count",
-        "reactor_handle_count", "taskmanager_max_threads"};
-    plhs[0] = mxCreateStructMatrix(1, 1, 5, fields);
+        "reactor_handle_count", "taskmanager_max_threads", "source_commit"};
+    plhs[0] = mxCreateStructMatrix(1, 1, 6, fields);
     mxSetField(plhs[0], 0, "api_version", mxCreateDoubleScalar(1.0));
+    mxSetField(plhs[0], 0, "source_commit",
+               mxCreateString(RADIA_MEX_SOURCE_COMMIT));
     std::size_t base_count = 0;
     {
         std::lock_guard<std::mutex> guard(registry_mutex);

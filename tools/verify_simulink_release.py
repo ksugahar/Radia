@@ -37,6 +37,8 @@ REQUIRED_MEMBERS = {
     "matlab/+radia/+simulink/makeIHMonitorBusObject.m",
     "matlab/+radia/+simulink/validateIHNativeConfig.m",
     "matlab/radia_mex.mexw64",
+    "matlab/radia_mex.mexw64.build.json",
+    "matlab/verify_radia_mex_provenance.py",
     "matlab/mkl_avx2.3.dll",
     "matlab/mkl_core.3.dll",
     "matlab/mkl_def.3.dll",
@@ -48,6 +50,8 @@ PREVIEW_V2_REQUIRED_MEMBERS = (
     - {
         "matlab/+radia/+internal/expectedNGSolveVersion.m",
         "matlab/mkl_sequential.3.dll",
+        "matlab/radia_mex.mexw64.build.json",
+        "matlab/verify_radia_mex_provenance.py",
     }
     | {"matlab/mkl_intel_thread.3.dll"}
 )
@@ -107,6 +111,8 @@ FULL_REQUIRED_MEMBERS = (
     | {
         "matlab/+radia/+internal/expectedNGSolveVersion.m",
         "matlab/mkl_sequential.3.dll",
+        "matlab/radia_mex.mexw64.build.json",
+        "matlab/verify_radia_mex_provenance.py",
     }
 )
 LEGACY_FULL_REQUIRED_MEMBERS = {
