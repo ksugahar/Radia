@@ -56,6 +56,26 @@ def test_vacuum_hodge_split_requires_response_representable_lift():
     assert errors[2,2] < 1e-10
 
 
+def test_constitutive_audit_detects_centroid_secant_defect():
+    import ngsolve as ng
+    from radia.kelvin_solver import audit_mixed_omega_constitutive_field
+    from radia.scalar_potential_solver import _build_bh_coefficient_function
+    mesh, _, _ = _case()
+    h = np.linspace(0., 10000., 101)
+    table = np.column_stack((h, 4e-7*np.pi*h + 1.5*np.tanh(h/1000)))
+    magnitude = 2000 + 1800*ng.x/.3
+    field = ng.CF((magnitude, 0, 0))
+    target = ng.CF((_build_bh_coefficient_function(magnitude, table), 0, 0))
+    centroid_mu = (4e-7*np.pi*2000+1.5*np.tanh(2))/2000
+    with ng.TaskManager():
+        exact = audit_mixed_omega_constitutive_field(mesh, field, target, table, ('iron',))
+        frozen = audit_mixed_omega_constitutive_field(mesh, field, centroid_mu*field,
+                                                    table, ('iron',))
+    assert exact['relative_B_constitutive_L2'] < 1e-12
+    assert frozen['relative_B_constitutive_L2'] > .2
+    assert frozen['accuracy_accepted'] is False
+
+
 def test_total_surface_requires_source_lift_not_reduced_zero():
     import ngsolve as ng
     from radia.kelvin_solver import solve_magnetostatic_mixed_total_reduced_omega_kelvin as solve
