@@ -77,10 +77,19 @@ def test_netgen_reference_preserves_curved_volume_without_radia(tmp_path, order)
     from cubit_mesh_export.mcp._support.netgen_compare import _write_tet_msh
     from cubit_mesh_export.mcp._support.mesh_quality import mesh_total_volume, mesh_quality
     from cubit_mesh_export.mcp.gmsh_v41 import summarize_gmsh_v41_ascii
-    with TaskManager():
-        mesh = Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), 1)).GenerateMesh(maxh=0.4))
     target = tmp_path / 'sphere.msh'
-    report = _write_tet_msh(mesh, target, order)
+    # Netgen's sphere tessellation is not deterministic across hosts. A coarse
+    # third-order curved mesh can genuinely invert, which the exporter must
+    # reject. Retry with finer source meshes rather than accepting a bad Jacobian.
+    for maxh in (0.4, 0.3, 0.2):
+        with TaskManager():
+            mesh = Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), 1)).GenerateMesh(maxh=maxh))
+        try:
+            report = _write_tet_msh(mesh, target, order)
+            break
+        except ValueError as exc:
+            if 'Invalid Netgen reference Jacobian' not in str(exc) or maxh == 0.2:
+                raise
     assert report['min_jacobian_det'] > 0
     assert '$Entities' in target.read_text()
     inventory = summarize_gmsh_v41_ascii(target.read_text())
