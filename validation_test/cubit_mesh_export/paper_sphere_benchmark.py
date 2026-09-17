@@ -97,7 +97,8 @@ def run_cubit(exe: Path, kind: str, run_dir: Path, timeout: int) -> list[dict]:
     journal.write_text(cubit_journal(kind, run_dir), encoding="utf-8")
     started = time.monotonic()
     proc = subprocess.run(
-        [str(exe), "-batch", "-nographics", "-nojournal", str(journal)],
+        [str(exe), "-batch", "-nographics", "-nojournal",
+         "-commandplugindir", str(exe.parent / "plugins"), str(journal)],
         cwd=run_dir, capture_output=True, text=True, encoding="utf-8",
         errors="replace", timeout=timeout,
     )
@@ -106,6 +107,8 @@ def run_cubit(exe: Path, kind: str, run_dir: Path, timeout: int) -> list[dict]:
         f"exit={proc.returncode}\n=== STDOUT ===\n{proc.stdout}\n=== STDERR ===\n{proc.stderr}",
         encoding="utf-8",
     )
+    if proc.returncode != 0:
+        raise RuntimeError(f"Cubit exited {proc.returncode}; see {run_dir / 'cubit.log'}")
     rows = []
     for order in ORDERS:
         vol = run_dir / f"{kind}_o{order}.vol"
@@ -158,7 +161,8 @@ def run_label_case(exe: Path, run_dir: Path, timeout: int) -> dict:
         encoding="utf-8",
     )
     proc = subprocess.run(
-        [str(exe), "-batch", "-nographics", "-nojournal", str(driver)],
+        [str(exe), "-batch", "-nographics", "-nojournal",
+         "-commandplugindir", str(exe.parent / "plugins"), str(driver)],
         cwd=run_dir, capture_output=True, text=True, encoding="utf-8",
         errors="replace", timeout=timeout,
     )
@@ -166,6 +170,8 @@ def run_label_case(exe: Path, run_dir: Path, timeout: int) -> dict:
         f"exit={proc.returncode}\n=== STDOUT ===\n{proc.stdout}\n=== STDERR ===\n{proc.stderr}",
         encoding="utf-8",
     )
+    if proc.returncode != 0:
+        raise RuntimeError(f"Cubit exited {proc.returncode}; see {run_dir / 'cubit.log'}")
     if not vol.is_file():
         raise RuntimeError(f"Cubit exit {proc.returncode}; missing {vol}")
     mesh = Mesh(str(vol))
@@ -228,6 +234,39 @@ def main() -> None:
         "cubit_exe": str(args.cubit_exe), "rows": rows,
         "multi_label_rows": label_rows,
     }
+    for route, kind in (("cubit_export_netgen", "tet"),
+                        ("cubit_export_netgen", "hex"),
+                        ("netgen_occ_native", "tet")):
+        for repeat in range(1, args.repeats+1):
+            series = [r for r in rows if (r["route"], r["kind"], r["repeat"])
+                      == (route, kind, repeat)]
+            series.sort(key=lambda r: r["order"])
+            if len(series) != len(ORDERS):
+                raise AssertionError(f"incomplete series: {route} {kind} repeat {repeat}")
+            if not all(series[i+1]["electric_field_l2_error"] < series[i]["electric_field_l2_error"]
+                       for i in range(len(series)-1)):
+                raise AssertionError(f"electric-field convergence failed: {route} {kind}")
+            if route == "cubit_export_netgen" and not all(
+                    r["vol_check_passed"] and r["invalid_jacobian_samples"] == 0
+                    for r in series[1:]):
+                raise AssertionError(f"high-order quality gate failed: {kind}")
+    if not all(r["vol_check_passed"] and r["boundary_label_preservation"] == 1
+               and r["material_label_preservation"] == 1 for r in label_rows):
+        raise AssertionError("multi-label export failed")
+    max_repeat_delta = 0.0
+    for row in rows:
+        if row["repeat"] == 1:
+            continue
+        first = next(r for r in rows if (r["route"], r["kind"], r["order"], r["repeat"])
+                     == (row["route"], row["kind"], row["order"], 1))
+        if row["elements"] != first["elements"] or row["ndof"] != first["ndof"]:
+            raise AssertionError("repeat topology/DOF drift")
+        max_repeat_delta = max(max_repeat_delta, *(
+            abs(row[k]-first[k]) for k in
+            ("volume", "phi_l2_error", "electric_field_l2_error")))
+    result["max_repeat_metric_delta"] = max_repeat_delta
+    if max_repeat_delta > 1e-10:
+        raise AssertionError(f"repeat metric drift: {max_repeat_delta}")
     target = args.output / "results.json"
     target.write_text(json.dumps(result, indent=2, ensure_ascii=False)+"\n", encoding="utf-8")
     print(f"Wrote {target}")

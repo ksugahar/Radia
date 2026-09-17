@@ -334,6 +334,18 @@ def _validate_exported_vol(
     }
 
 
+def _batch_command(cubit_exe: Path, driver: Path) -> list[str]:
+    """Build a headless command without Cubit's implicit plugin-path error."""
+    cmd = [str(cubit_exe), "-batch", "-nographics", "-nojournal"]
+    plugin_dir = cubit_exe.parent / "plugins"
+    if plugin_dir.is_dir():
+        # Cubit 2025.12 otherwise treats its auto-discovered plugin path and
+        # -commandplugindir as journal inputs, causing exit 2 after export.
+        cmd.extend(["-commandplugindir", str(plugin_dir)])
+    cmd.append(str(driver))
+    return cmd
+
+
 def run_smoke_test(*, jou: str = "", order: int = 2,
                     expect: list[str] | None = None,
                     expect_materials: list[str] | None = None,
@@ -394,8 +406,7 @@ def run_smoke_test(*, jou: str = "", order: int = 2,
     print()
 
     t0 = time.time()
-    cmd = [str(cubit_exe), "-batch", "-nographics",
-           "-nojournal", str(driver)]
+    cmd = _batch_command(cubit_exe, driver)
     print(f"  Running: {' '.join(cmd)}")
     proc = subprocess.run(cmd, capture_output=True, text=True,
                            timeout=timeout, cwd=str(work),

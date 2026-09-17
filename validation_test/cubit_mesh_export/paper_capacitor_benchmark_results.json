@@ -1,0 +1,307 @@
+{
+  "protocol": "concentric spherical capacitor a=0.3 b=1 Vinner=1 Vouter=0 eps=1; Cubit TET size=0.22; Netgen OCC maxh=0.16; fixed topology within each p-series",
+  "environment": {
+    "python": "3.12.10",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "ngsolve": "6.2.2606",
+    "cubit_mesh_export": "2.0.0"
+  },
+  "cubit_exe": "C:\\Program Files\\Coreform Cubit 2025.12\\bin\\coreform_cubit.exe",
+  "rows": [
+    {
+      "order": 1,
+      "elements": {
+        "ET.TET": 4691
+      },
+      "ndof": 977,
+      "boundary_areas": {
+        "inner": 1.06834137232732,
+        "outer": 12.441063500889397
+      },
+      "boundary_label_preservation": 1.0,
+      "material_label_preservation": 1.0,
+      "capacitance": 5.520765720402989,
+      "exact_capacitance": 5.385587406153931,
+      "capacitance_error_pct": 2.5100013063495075,
+      "potential_l2_error": 0.017821870148560032,
+      "electric_field_l2_error": 0.630832581309372,
+      "route": "cubit_export_netgen",
+      "run_dir": "C:\\temp\\cubit-paper-capacitor-benchmark\\cubit_1",
+      "cubit_exit": 0,
+      "mesh_seconds": 1.5160000000032596,
+      "vol_check_passed": false,
+      "vol_check_warnings": [
+        "Volume \"dielectric\": -1.59e+00% (ng=4.010693e+00, cad=4.075693e+00)",
+        "Area \"inner\": -5.54e+00% (ng=1.068341e+00, cad=1.130973e+00)"
+      ],
+      "invalid_jacobian_samples": 0,
+      "repeat": 1
+    },
+    {
+      "order": 2,
+      "elements": {
+        "ET.TET": 4691
+      },
+      "ndof": 7007,
+      "boundary_areas": {
+        "inner": 1.1294054637423814,
+        "outer": 12.56582498803149
+      },
+      "boundary_label_preservation": 1.0,
+      "material_label_preservation": 1.0,
+      "capacitance": 5.386571001378986,
+      "exact_capacitance": 5.385587406153931,
+      "capacitance_error_pct": 0.01826347157471986,
+      "potential_l2_error": 0.0014612013073592987,
+      "electric_field_l2_error": 0.07973222207611172,
+      "route": "cubit_export_netgen",
+      "run_dir": "C:\\temp\\cubit-paper-capacitor-benchmark\\cubit_1",
+      "cubit_exit": 0,
+      "mesh_seconds": 1.5160000000032596,
+      "vol_check_passed": true,
+      "vol_check_warnings": [],
+      "invalid_jacobian_samples": 0,
+      "repeat": 1
+    },
+    {
+      "order": 3,
+      "elements": {
+        "ET.TET": 4691
+      },
+      "ndof": 22783,
+      "boundary_areas": {
+        "inner": 1.131129951595658,
+        "outer": 12.56642648040431
+      },
+      "boundary_label_preservation": 1.0,
+      "material_label_preservation": 1.0,
+      "capacitance": 5.386199725285586,
+      "exact_capacitance": 5.385587406153931,
+      "capacitance_error_pct": 0.011369588597798241,
+      "potential_l2_error": 0.00014561629804116054,
+      "electric_field_l2_error": 0.010272414113406188,
+      "route": "cubit_export_netgen",
+      "run_dir": "C:\\temp\\cubit-paper-capacitor-benchmark\\cubit_1",
+      "cubit_exit": 0,
+      "mesh_seconds": 1.5160000000032596,
+      "vol_check_passed": true,
+      "vol_check_warnings": [],
+      "invalid_jacobian_samples": 0,
+      "repeat": 1
+    },
+    {
+      "order": 1,
+      "elements": {
+        "ET.TET": 4155
+      },
+      "ndof": 1030,
+      "boundary_areas": {
+        "inner": 1.071415677131311,
+        "outer": 12.49599216466807
+      },
+      "boundary_label_preservation": 1.0,
+      "material_label_preservation": 1.0,
+      "capacitance": 5.653412216552688,
+      "exact_capacitance": 5.385587406153931,
+      "capacitance_error_pct": 4.972991620054712,
+      "potential_l2_error": 0.03327236970767773,
+      "electric_field_l2_error": 0.7197728754927456,
+      "route": "netgen_occ_native",
+      "run_dir": "C:\\temp\\cubit-paper-capacitor-benchmark\\occ_1",
+      "mesh_seconds": 0.23399999999674037,
+      "repeat": 1
+    },
+    {
+      "order": 2,
+      "elements": {
+        "ET.TET": 4155
+      },
+      "ndof": 6823,
+      "boundary_areas": {
+        "inner": 1.1295902483358053,
+        "outer": 12.56619918881293
+      },
+      "boundary_label_preservation": 1.0,
+      "material_label_preservation": 1.0,
+      "capacitance": 5.392868261765385,
+      "exact_capacitance": 5.385587406153931,
+      "capacitance_error_pct": 0.1351914853918279,
+      "potential_l2_error": 0.0025898549828089605,
+      "electric_field_l2_error": 0.10937930379546765,
+      "route": "netgen_occ_native",
+      "run_dir": "C:\\temp\\cubit-paper-capacitor-benchmark\\occ_1",
+      "mesh_seconds": 0.23399999999674037,
+      "repeat": 1
+    },
+    {
+      "order": 3,
+      "elements": {
+        "ET.TET": 4155
+      },
+      "ndof": 21536,
+      "boundary_areas": {
+        "inner": 1.1311042057373075,
+        "outer": 12.566387642987129
+      },
+      "boundary_label_preservation": 1.0,
+      "material_label_preservation": 1.0,
+      "capacitance": 5.3863459669790075,
+      "exact_capacitance": 5.385587406153931,
+      "capacitance_error_pct": 0.01408501557711439,
+      "potential_l2_error": 0.00029057137120679983,
+      "electric_field_l2_error": 0.016952634303485776,
+      "route": "netgen_occ_native",
+      "run_dir": "C:\\temp\\cubit-paper-capacitor-benchmark\\occ_1",
+      "mesh_seconds": 0.23399999999674037,
+      "repeat": 1
+    },
+    {
+      "order": 1,
+      "elements": {
+        "ET.TET": 4691
+      },
+      "ndof": 977,
+      "boundary_areas": {
+        "inner": 1.06834137232732,
+        "outer": 12.441063500889397
+      },
+      "boundary_label_preservation": 1.0,
+      "material_label_preservation": 1.0,
+      "capacitance": 5.520765720402986,
+      "exact_capacitance": 5.385587406153931,
+      "capacitance_error_pct": 2.510001306349441,
+      "potential_l2_error": 0.017821870148560036,
+      "electric_field_l2_error": 0.6308325813093721,
+      "route": "cubit_export_netgen",
+      "run_dir": "C:\\temp\\cubit-paper-capacitor-benchmark\\cubit_2",
+      "cubit_exit": 0,
+      "mesh_seconds": 1.4529999999940628,
+      "vol_check_passed": false,
+      "vol_check_warnings": [
+        "Volume \"dielectric\": -1.59e+00% (ng=4.010693e+00, cad=4.075693e+00)",
+        "Area \"inner\": -5.54e+00% (ng=1.068341e+00, cad=1.130973e+00)"
+      ],
+      "invalid_jacobian_samples": 0,
+      "repeat": 2
+    },
+    {
+      "order": 2,
+      "elements": {
+        "ET.TET": 4691
+      },
+      "ndof": 7007,
+      "boundary_areas": {
+        "inner": 1.1294054637423814,
+        "outer": 12.565824988031489
+      },
+      "boundary_label_preservation": 1.0,
+      "material_label_preservation": 1.0,
+      "capacitance": 5.386571001378988,
+      "exact_capacitance": 5.385587406153931,
+      "capacitance_error_pct": 0.018263471574764267,
+      "potential_l2_error": 0.0014612013073593026,
+      "electric_field_l2_error": 0.07973222207611164,
+      "route": "cubit_export_netgen",
+      "run_dir": "C:\\temp\\cubit-paper-capacitor-benchmark\\cubit_2",
+      "cubit_exit": 0,
+      "mesh_seconds": 1.4529999999940628,
+      "vol_check_passed": true,
+      "vol_check_warnings": [],
+      "invalid_jacobian_samples": 0,
+      "repeat": 2
+    },
+    {
+      "order": 3,
+      "elements": {
+        "ET.TET": 4691
+      },
+      "ndof": 22783,
+      "boundary_areas": {
+        "inner": 1.131129951595658,
+        "outer": 12.56642648040431
+      },
+      "boundary_label_preservation": 1.0,
+      "material_label_preservation": 1.0,
+      "capacitance": 5.386199725285586,
+      "exact_capacitance": 5.385587406153931,
+      "capacitance_error_pct": 0.011369588597798241,
+      "potential_l2_error": 0.00014561629804117388,
+      "electric_field_l2_error": 0.010272414113406186,
+      "route": "cubit_export_netgen",
+      "run_dir": "C:\\temp\\cubit-paper-capacitor-benchmark\\cubit_2",
+      "cubit_exit": 0,
+      "mesh_seconds": 1.4529999999940628,
+      "vol_check_passed": true,
+      "vol_check_warnings": [],
+      "invalid_jacobian_samples": 0,
+      "repeat": 2
+    },
+    {
+      "order": 1,
+      "elements": {
+        "ET.TET": 4155
+      },
+      "ndof": 1030,
+      "boundary_areas": {
+        "inner": 1.071415677131311,
+        "outer": 12.495992164668074
+      },
+      "boundary_label_preservation": 1.0,
+      "material_label_preservation": 1.0,
+      "capacitance": 5.653412216552687,
+      "exact_capacitance": 5.385587406153931,
+      "capacitance_error_pct": 4.97299162005469,
+      "potential_l2_error": 0.03327236970767772,
+      "electric_field_l2_error": 0.7197728754927456,
+      "route": "netgen_occ_native",
+      "run_dir": "C:\\temp\\cubit-paper-capacitor-benchmark\\occ_2",
+      "mesh_seconds": 0.21800000000803266,
+      "repeat": 2
+    },
+    {
+      "order": 2,
+      "elements": {
+        "ET.TET": 4155
+      },
+      "ndof": 6823,
+      "boundary_areas": {
+        "inner": 1.1295902483358053,
+        "outer": 12.566199188812929
+      },
+      "boundary_label_preservation": 1.0,
+      "material_label_preservation": 1.0,
+      "capacitance": 5.392868261765386,
+      "exact_capacitance": 5.385587406153931,
+      "capacitance_error_pct": 0.1351914853918279,
+      "potential_l2_error": 0.0025898549828089895,
+      "electric_field_l2_error": 0.10937930379546762,
+      "route": "netgen_occ_native",
+      "run_dir": "C:\\temp\\cubit-paper-capacitor-benchmark\\occ_2",
+      "mesh_seconds": 0.21800000000803266,
+      "repeat": 2
+    },
+    {
+      "order": 3,
+      "elements": {
+        "ET.TET": 4155
+      },
+      "ndof": 21536,
+      "boundary_areas": {
+        "inner": 1.1311042057373075,
+        "outer": 12.566387642987129
+      },
+      "boundary_label_preservation": 1.0,
+      "material_label_preservation": 1.0,
+      "capacitance": 5.386345966979008,
+      "exact_capacitance": 5.385587406153931,
+      "capacitance_error_pct": 0.014085015577136595,
+      "potential_l2_error": 0.00029057137120678004,
+      "electric_field_l2_error": 0.01695263430348577,
+      "route": "netgen_occ_native",
+      "run_dir": "C:\\temp\\cubit-paper-capacitor-benchmark\\occ_2",
+      "mesh_seconds": 0.21800000000803266,
+      "repeat": 2
+    }
+  ],
+  "max_repeat_metric_delta": 2.6645352591003757e-15
+}
