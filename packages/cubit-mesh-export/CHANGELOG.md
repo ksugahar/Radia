@@ -6,6 +6,13 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
 ## Unreleased
 
+## 2.0.1 - Reproducible mesh and electrostatic comparison
+
+- Publish two-run, high-order Cubit versus Netgen/OCC geometry and
+  electrostatic-capacitor benchmark evidence under `validation_test/`.
+- Pass Cubit's command plugin directory explicitly in the batch smoke driver,
+  avoiding startup failure on clean Cubit 2025.12 installations.
+
 ## 2.0.0 - Standalone Cubit session and release hardening
 
 - Retire the redundant `cubit_load` MCP tool and reverse Radia compatibility
