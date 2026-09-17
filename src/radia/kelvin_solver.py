@@ -1191,6 +1191,9 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
     ``mu_r_by_material``. The B-H table must start at the soft-magnetic origin.
     P1 convergence checks both flux iteration change and secant consistency;
     returned H, mu and B belong to the same assembled iterate.
+    ``constitutive_field_audit`` separately measures their spatial B(H) defect
+    at quadrature points. Iterative convergence does not imply that this defect
+    is small, nor that the returned field has passed a physical accuracy gate.
 
     ``mu_r_initial`` is one scalar or one value per nonlinear element in mesh
     element order (``nonlinear_stats["element_numbers"]`` of an earlier solve),
@@ -1553,6 +1556,9 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
     result["mu_cf"] = mixed_mu_cf()
     result["B_cf"] = result["mu_cf"] * result["H_cf"]
     result["nonlinear_stats"] = stats
+    result["constitutive_field_audit"] = audit_mixed_omega_constitutive_field(
+        mesh, result["H_cf"], result["B_cf"], bh_array, nonlinear_materials,
+        integration_order=max(4, 2 * int(order) + int(bonus_intorder)))
     return result
 
 
@@ -1975,9 +1981,49 @@ def _solve_mixed_omega_projected_log_material(
         "linear_physical_h_dot_b_integral_J": linear_h_dot_b,
         "nonlinear_constitutive_relation": "energy=H*B-integral_0^H_Bdh",
         "nonlinear_coenergy_relation": "coenergy=integral_0^H_Bdh",
+        "nonlinear_B_evaluation": "reconstructed_BH_not_returned_B",
     }
     result["nonlinear_stats"] = stats
+    result["constitutive_field_audit"] = audit_mixed_omega_constitutive_field(
+        mesh, result["H_cf"], result["B_cf"], bh_array, nonlinear_materials,
+        integration_order=max(4, 2 * int(order) + int(bonus_intorder)))
     return result
+
+
+def audit_mixed_omega_constitutive_field(mesh, H_cf, B_cf, bh_table,
+                                       nonlinear_materials, *, integration_order=6):
+    """Measure returned B against B(H), independently of iterate convergence.
+
+    This quadrature diagnostic is not a Maxwell residual or an error bound.
+    A Legendre identity evaluated using a reconstructed B(H) cannot replace it.
+    """
+    from ngsolve import Integrate, InnerProduct, sqrt
+    from radia.scalar_potential_solver import _build_bh_coefficient_function
+
+    names = tuple(nonlinear_materials)
+    if not names or not set(names) <= set(mesh.GetMaterials()):
+        raise ValueError("nonlinear_materials must name existing mesh materials")
+    if int(integration_order) != integration_order or integration_order < 1:
+        raise ValueError("integration_order must be a positive integer")
+    magnitude = sqrt(InnerProduct(H_cf, H_cf) + 1.e-30)
+    law_b = _build_bh_coefficient_function(magnitude, np.asarray(bh_table, dtype=float))
+    target = law_b * H_cf / magnitude
+    delta = B_cf - target
+    region = mesh.Materials("|".join(names))
+    def integral(value):
+        return float(Integrate(value, mesh, definedon=region,
+                               order=int(integration_order)).real)
+    defect = integral(InnerProduct(delta, delta))
+    reference = integral(InnerProduct(target, target))
+    if not math.isfinite(defect) or not math.isfinite(reference):
+        raise ValueError("non-finite constitutive field audit")
+    return {
+        "relative_B_constitutive_L2": math.sqrt(max(defect, 0.) / max(reference, 1.e-60)),
+        "absolute_B_constitutive_L2_T_m32": math.sqrt(max(defect, 0.)),
+        "integration_order": int(integration_order),
+        "scope": "returned_B_against_pointwise_BH",
+        "accuracy_accepted": False,
+    }
 
 
 def inductance_from_energy(gfu, nu_cf, mesh, I_total,
