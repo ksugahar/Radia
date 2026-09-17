@@ -61,10 +61,27 @@ or an instruction to move all logic into a generic framework.
   not consolidation. Report implementation and test line counts separately;
   do not set an arbitrary line-count quota.
 
-Start with metadata-reader duplication in `radia_ngsolve/slot_gates.py`, then
-review cohesive gate families, copied writing checks and embedded knowledge.
-Each slice needs focused tests and the affected SDK/server contract checks.
-Do not combine unrelated solver, runtime installation or release changes.
+`radia_ngsolve/slot_gates.py` is a legacy compatibility surface, not the owner
+for new gates. The PR scope check rejects new named definitions there (including
+nested helpers); put the implementation in a cohesive domain module and retain
+the existing import path with a thin compatibility import when needed. Existing
+definitions may still receive bug fixes. Shared metadata readers belong in
+`_metadata_values.py`; keep distinct "None is absent" and "None or empty string
+is absent" contracts explicit rather than silently broadening either one.
+
+`radia_ngsolve/server.py` owns MCP registration, typed input, dispatch, and
+serialization; domain gates and physical checks remain directly callable and
+transport-independent. Do not add a new numbered gate merely because the
+current one grew: state its independent evidence role, register its lifecycle
+relationship, and test a distinct failure signal. Keep large knowledge prose
+in the owning topic or packaged resource, not in the server adapter. Refactor
+one cohesive family at a time with old/new result parity, affected SDK/server
+contracts, and cold-import checks. Moving lines alone is not debt repayment,
+and there is no arbitrary line-count quota.
+
+After this metadata-reader slice, review cohesive gate families, copied writing
+checks and embedded knowledge. Do not combine unrelated solver, runtime
+installation or release changes.
 
 ## High-value contribution areas
 
