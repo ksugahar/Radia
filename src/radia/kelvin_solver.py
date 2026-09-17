@@ -26,6 +26,7 @@ from __future__ import annotations
 import math
 import hashlib
 import json
+import time
 from collections.abc import Mapping
 
 import numpy as np
@@ -1179,7 +1180,9 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
         material_update_order=None, material_log_state_initial=None,
         refinement_parent_identity=None, cache_fixed_rhs=True,
         reduced_zero_normal_boundary=None, surface_dirichlet=None,
-        kelvin_match_exact=False, mu_r_by_material=None):
+        kelvin_match_exact=False, mu_r_by_material=None,
+        material_sampling="element_centroid", bh_interpolation="pchip",
+        progress_callback=None):
     """Picard solve for the mixed total/reduced Omega formulation.
 
     The source split and its interface trace stay fixed throughout the
@@ -1305,6 +1308,40 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
     requested_material_order = (
         None if material_update_order is None else int(material_update_order)
     )
+    if material_sampling not in ("element_centroid", "integration_point"):
+        raise ValueError("material_sampling must be element_centroid or integration_point")
+    if bh_interpolation not in ("pchip", "linear_spline"):
+        raise ValueError("bh_interpolation must be pchip or linear_spline")
+    if material_sampling != "integration_point" and bh_interpolation != "pchip":
+        raise ValueError("linear_spline is available only for integration_point sampling")
+    if material_sampling == "integration_point":
+        if progress_callback is not None and not callable(progress_callback):
+            raise ValueError("progress_callback must be callable")
+        if int(order) != 1 or requested_material_order not in (None, 0):
+            raise ValueError("integration_point material sampling currently requires P1")
+        if int(anderson_depth) != 0:
+            raise ValueError("integration_point material sampling requires anderson_depth=0")
+        if material_log_state_initial is not None:
+            raise ValueError("integration_point material sampling has no projected restart state")
+        return _solve_mixed_omega_pointwise_picard(
+            mesh, H_s, source_potential, R_K, offset,
+            bh_array=bh_array, nonlinear_materials=nonlinear_materials,
+            reduced_materials=reduced_materials, total_materials=total_materials,
+            interface_boundary=interface_boundary, order=int(order),
+            dirichlet_bbbnd=dirichlet_bbbnd, bonus_intorder=bonus_intorder,
+            kelvin_mats=kelvin_mats, inverse=inverse, mu_r_initial=mu_r_initial,
+            tolerance=tolerance, max_iterations=max_iterations,
+            interface_constraint_scale=interface_constraint_scale,
+            kelvin_interface_boundary=kelvin_interface_boundary,
+            kelvin_source_potential=kelvin_source_potential,
+            kelvin_source_h=kelvin_source_h, total_source_h=total_source_h,
+            total_source_materials=total_source_materials,
+            reduced_zero_normal_boundary=reduced_zero_normal_boundary,
+            surface_dirichlet=surface_dirichlet, kelvin_match_exact=kelvin_match_exact,
+            mu_r_by_material=mu_r_by_material,
+            bh_interpolation=bh_interpolation,
+            relaxation=relaxation,
+            progress_callback=progress_callback)
     if genuinely_nonlinear and int(order) > 1 and requested_material_order is None:
         raise ValueError(
             "nonlinear mixed total/reduced Omega currently updates permeability "
@@ -1990,23 +2027,169 @@ def _solve_mixed_omega_projected_log_material(
     return result
 
 
+def _solve_mixed_omega_pointwise_picard(
+        mesh, H_s, source_potential, R_K, offset, *, bh_array,
+        nonlinear_materials, reduced_materials, total_materials,
+        interface_boundary, order, dirichlet_bbbnd, bonus_intorder,
+        kelvin_mats, inverse, mu_r_initial, tolerance, max_iterations,
+        interface_constraint_scale, kelvin_interface_boundary,
+        kelvin_source_potential, kelvin_source_h, total_source_h,
+        total_source_materials, reduced_zero_normal_boundary,
+        surface_dirichlet, kelvin_match_exact, mu_r_by_material,
+        bh_interpolation, relaxation, progress_callback):
+    """P1 secant Picard with the coefficient evaluated by volume quadrature."""
+    from ngsolve import IfPos, sqrt
+    from scipy.interpolate import PchipInterpolator
+    from radia.scalar_potential_solver import (
+        _build_bh_coefficient_function,
+        _build_bh_linear_spline_coefficient_function,
+        _build_bh_coenergy_coefficient_function,
+        _build_bh_linear_spline_coenergy_coefficient_function)
+    build_b = (_build_bh_coefficient_function if bh_interpolation == "pchip"
+               else _build_bh_linear_spline_coefficient_function)
+
+    initial = np.asarray(mu_r_initial, dtype=float)
+    if initial.ndim != 0 or not math.isfinite(float(initial)) or float(initial) <= 0:
+        raise ValueError("integration_point mu_r_initial must be a positive scalar")
+    if bh_interpolation == "pchip":
+        origin_mu = float(PchipInterpolator(
+            bh_array[:, 0], bh_array[:, 1]).derivative()(0.))
+    else:
+        origin_mu = float((bh_array[1, 1] - bh_array[0, 1])
+                          / (bh_array[1, 0] - bh_array[0, 0]))
+    if not math.isfinite(origin_mu) or origin_mu <= 0:
+        raise ValueError("B(H) origin tangent must be positive and finite")
+    material_names = tuple(nonlinear_materials)
+    selector = mesh.Materials("|".join(material_names))
+    current_mu = MU_0 * float(initial)
+    previous_b = None
+    history = []
+    fixed_rhs_cache = {}
+    integration_order = max(4, 2 * int(order) + int(bonus_intorder))
+
+    for iteration in range(1, int(max_iterations) + 1):
+        iteration_started = time.perf_counter()
+        coefficients = dict(mu_r_by_material)
+        mu = make_kelvin_mu_cf(
+            mesh, R_K, offset, kelvin_mats=kelvin_mats,
+            mu_r_by_material=coefficients, kelvin_match_exact=kelvin_match_exact)
+        values = {name: current_mu for name in material_names}
+        mu = mesh.MaterialCF(values, default=mu)
+        result = solve_magnetostatic_mixed_total_reduced_omega_kelvin(
+            mesh, H_s, source_potential, R_K, offset,
+            mu_cf=mu, reduced_materials=reduced_materials,
+            total_materials=total_materials, interface_boundary=interface_boundary,
+            order=order, dirichlet_bbbnd=dirichlet_bbbnd,
+            bonus_intorder=bonus_intorder, kelvin_mats=kelvin_mats,
+            inverse=inverse, interface_constraint_scale=interface_constraint_scale,
+            kelvin_match_exact=kelvin_match_exact,
+            kelvin_interface_boundary=kelvin_interface_boundary,
+            kelvin_source_potential=kelvin_source_potential,
+            kelvin_source_h=kelvin_source_h,
+            total_source_h=total_source_h,
+            total_source_materials=total_source_materials,
+            reduced_zero_normal_boundary=reduced_zero_normal_boundary,
+            surface_dirichlet=surface_dirichlet,
+            _fixed_rhs_cache=fixed_rhs_cache)
+        linear_solve_seconds = time.perf_counter() - iteration_started
+        audit = audit_mixed_omega_constitutive_field(
+            mesh, result["H_cf"], result["B_cf"], bh_array, material_names,
+            integration_order=integration_order, interpolation=bh_interpolation)
+        relative_change = float("inf")
+        if previous_b is not None:
+            difference = result["B_cf"] - previous_b
+            numerator = float(Integrate(
+                InnerProduct(difference, difference), mesh,
+                definedon=selector, order=integration_order).real)
+            denominator = float(Integrate(
+                InnerProduct(result["B_cf"], result["B_cf"]), mesh,
+                definedon=selector, order=integration_order).real)
+            relative_change = math.sqrt(max(numerator, 0.) / max(denominator, 1.e-60))
+        history.append({"iteration": iteration,
+                        "linear_solve_seconds": linear_solve_seconds,
+                        "iteration_seconds": time.perf_counter() - iteration_started,
+                        "relative_B_change": relative_change,
+                        "relative_B_constitutive_L2": audit["relative_B_constitutive_L2"]})
+        if progress_callback is not None:
+            progress_callback(dict(history[-1]))
+        if (relative_change <= tolerance
+                and audit["relative_B_constitutive_L2"] <= tolerance):
+            magnitude = sqrt(InnerProduct(result["H_cf"], result["H_cf"]))
+            build_energy = (
+                _build_bh_coenergy_coefficient_function
+                if bh_interpolation == "pchip"
+                else _build_bh_linear_spline_coenergy_coefficient_function)
+            coenergy_density = build_energy(magnitude, bh_array)
+            coenergy = float(Integrate(
+                coenergy_density, mesh, definedon=selector,
+                order=integration_order).real)
+            h_dot_b = float(Integrate(
+                InnerProduct(result["H_cf"], result["B_cf"]), mesh,
+                definedon=selector, order=integration_order).real)
+            result["constitutive_field_audit"] = audit
+            result["energy_observables"] = {
+                "scope": "nonlinear_materials_only",
+                "bh_interpolation": bh_interpolation,
+                "coenergy_J": coenergy,
+                "energy_J": h_dot_b - coenergy,
+                "h_dot_b_integral_J": h_dot_b,
+                "integration_order": integration_order,
+                "accuracy_accepted": False,
+            }
+            result["nonlinear_stats"] = {
+                "method": "pointwise_secant_picard",
+                "material_sampling": "integration_point",
+                "bh_interpolation": bh_interpolation,
+                "material_relaxation": float(relaxation),
+                "iterations": iteration,
+                "converged": True,
+                "relative_B_change": relative_change,
+                "relative_B_constitutive_L2": audit["relative_B_constitutive_L2"],
+                "history": history,
+            }
+            return result
+        previous_b = result["B_cf"]
+        magnitude = sqrt(InnerProduct(result["H_cf"], result["H_cf"]))
+        law_b = build_b(magnitude, bh_array)
+        proposed_mu = IfPos(magnitude - 1.e-12,
+                            law_b / (magnitude + 1.e-30), origin_mu)
+        current_mu = relaxation * proposed_mu + (1. - relaxation) * current_mu
+
+    raise MixedOmegaPicardNotConverged(
+        "pointwise mixed Omega Picard did not converge: "
+        f"iterations={max_iterations}, relative_B_change={relative_change:.3e}, "
+        f"relative_B_constitutive_L2={audit['relative_B_constitutive_L2']:.3e}",
+        {"nonlinear_stats": {"method": "pointwise_secant_picard",
+                             "material_sampling": "integration_point",
+                             "bh_interpolation": bh_interpolation,
+                             "material_relaxation": float(relaxation),
+                             "converged": False, "history": history}})
+
+
 def audit_mixed_omega_constitutive_field(mesh, H_cf, B_cf, bh_table,
-                                       nonlinear_materials, *, integration_order=6):
+                                       nonlinear_materials, *, integration_order=6,
+                                       interpolation="pchip"):
     """Measure returned B against B(H), independently of iterate convergence.
 
     This quadrature diagnostic is not a Maxwell residual or an error bound.
     A Legendre identity evaluated using a reconstructed B(H) cannot replace it.
     """
     from ngsolve import Integrate, InnerProduct, sqrt
-    from radia.scalar_potential_solver import _build_bh_coefficient_function
+    from radia.scalar_potential_solver import (
+        _build_bh_coefficient_function,
+        _build_bh_linear_spline_coefficient_function)
 
     names = tuple(nonlinear_materials)
     if not names or not set(names) <= set(mesh.GetMaterials()):
         raise ValueError("nonlinear_materials must name existing mesh materials")
     if int(integration_order) != integration_order or integration_order < 1:
         raise ValueError("integration_order must be a positive integer")
+    if interpolation not in ("pchip", "linear_spline"):
+        raise ValueError("interpolation must be pchip or linear_spline")
     magnitude = sqrt(InnerProduct(H_cf, H_cf) + 1.e-30)
-    law_b = _build_bh_coefficient_function(magnitude, np.asarray(bh_table, dtype=float))
+    build_b = (_build_bh_coefficient_function if interpolation == "pchip"
+               else _build_bh_linear_spline_coefficient_function)
+    law_b = build_b(magnitude, np.asarray(bh_table, dtype=float))
     target = law_b * H_cf / magnitude
     delta = B_cf - target
     region = mesh.Materials("|".join(names))
@@ -2021,6 +2204,7 @@ def audit_mixed_omega_constitutive_field(mesh, H_cf, B_cf, bh_table,
         "relative_B_constitutive_L2": math.sqrt(max(defect, 0.) / max(reference, 1.e-60)),
         "absolute_B_constitutive_L2_T_m32": math.sqrt(max(defect, 0.)),
         "integration_order": int(integration_order),
+        "interpolation": interpolation,
         "scope": "returned_B_against_pointwise_BH",
         "accuracy_accepted": False,
     }
