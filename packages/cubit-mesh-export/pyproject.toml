@@ -27,7 +27,7 @@ dependencies = [
     # the exact version used to build the wheel and deployed Cubit DLLs.
     "netgen-mesher==6.2.2606",
     "ngsolve==6.2.2606",
-    "numpy>=1.26,<2",
+    "numpy",
 ]
 
 [project.urls]
