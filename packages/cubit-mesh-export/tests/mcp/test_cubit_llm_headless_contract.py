@@ -53,6 +53,7 @@ def test_batch_rpc_response_reports_that_no_gui_started(monkeypatch):
     sess._next_id = 1
     sess._command_history = []
     sess._command_history_max = 10
+    sess._retired = False
     monkeypatch.setattr(sess, "ensure_started", lambda: {"ready": True})
     monkeypatch.setattr(
         sess, "_call_via_stdio",
@@ -67,33 +68,25 @@ def test_batch_rpc_response_reports_that_no_gui_started(monkeypatch):
     assert response["gui_started"] is False
 
 
-def test_cubit_load_uses_only_the_headless_session(tmp_path, monkeypatch):
-    step = tmp_path / "part.step"
-    step.write_text("ISO-10303-21;", encoding="ascii")
+def test_stage_exposes_bounded_mesh_command_deadline(monkeypatch):
+    deadlines = []
 
     class FakeSession:
         def call(self, op, args, timeout_s=None):
+            deadlines.append((op, timeout_s))
             if op == "cmd":
-                return {"ok": True, "result": [
-                    {"line": args[0], "ok": True, "rc": 1}
-                ]}
-            if op == "probe":
-                return {"ok": True, "result": {"volumes": 1}}
-            raise AssertionError(op)
+                return {"ok": True, "result": [{"line": args[0], "ok": True}]}
+            return {"result": {}}
 
-    monkeypatch.setattr(
-        server, "_cubit_session_or_error", lambda: (FakeSession(), None)
-    )
-
-    result = json.loads(server.cubit_load(path=str(step)))
-
+    monkeypatch.setattr(server, "_cubit_session_or_error", lambda: (FakeSession(), None))
+    result = json.loads(server.cubit_stage(extra_commands=["mesh volume all"],
+                                           timeout_s=600))
     assert result["status"] == "ok"
-    assert result["mode"] == "headless_persistent"
-    assert result["gui_started"] is False
-    assert result["summary"] == {"volumes": 1}
-    source = inspect.getsource(server.cubit_load)
-    assert "_cubit_gui_exe" not in source
-    assert ".Popen(" not in source
+    assert deadlines[0] == ("cmd", 600.0)
+    bad = json.loads(server.cubit_stage(extra_commands=["mesh volume all"],
+                                        timeout_s=float("inf")))
+    assert bad["kind"] == "input"
+    assert len(deadlines) == 2  # command plus the successful summary probe
 
 
 def test_public_mesh_tools_expose_only_headless_session_language():
@@ -115,12 +108,20 @@ def test_public_mesh_tools_expose_only_headless_session_language():
 def test_mcp_surface_does_not_publish_gui_execution_tools():
     tool_names = set(server.mcp._tool_manager._tools)
 
-    assert "cubit_load" in tool_names
+    assert "cubit_load" not in tool_names
     assert "cubit_stage" in tool_names
     assert "cubit_import_journal" in tool_names
     assert "cubit_show" not in tool_names
     assert "open_in_cubit" not in tool_names
     assert "cubit_mesh_race_with_human" not in tool_names
+
+
+def test_race_defaults_to_one_disposable_license_seat():
+    for name in ("cubit_mesh_race", "cubit_mesh_race_review",
+                 "cubit_mesh_race_review_async", "cubit_mesh_race_smart",
+                 "cubit_mesh_race_smart_async"):
+        assert inspect.signature(getattr(server, name)).parameters[
+            "max_concurrent"].default == 1
 
 
 def test_retired_snapshot_is_not_advertised():

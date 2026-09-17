@@ -90,7 +90,7 @@ Then in a session:
 
 | Family | Examples |
 |---|---|
-| **Persistent headless session** | `cubit_load`, `cubit_stage`, `cubit_exec`, `cubit_exec_safely`, `cubit_probe`, `cubit_session_status`, `cubit_session_shutdown`, `cubit_session_journal` (export the session as a replayable `.jou`) |
+| **Persistent headless session** | `cubit_stage`, `cubit_exec`, `cubit_exec_safely`, `cubit_probe`, `cubit_session_status`, `cubit_session_shutdown`, `cubit_session_journal` (export the session as a replayable `.jou`) |
 | **Environment** | `cubit_doctor` (one-shot install/license/plugin/daemon diagnosis) |
 | **Checkpoint / restore** | `cubit_checkpoint`, `cubit_restore`, `cubit_list_checkpoints` |
 | **Headless batch** | `cubit_batch_try`, `cubit_mesh_auto` |

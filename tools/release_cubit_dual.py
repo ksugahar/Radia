@@ -42,7 +42,10 @@ def wheel_contract(path, distribution='cubit-mesh-export'):
                 files[name] = {'sha256': digest(content), 'text': text}
     required_files = (
         'cubit_mesh_export.ccm', 'cubit_mesh_curver.pyd', 'toolbar_smoke.py',
-        'cubit_gui/toolbar_probe.py', 'mcp/server.py', 'mcp/_support/status.py')
+        'cubit_gui/toolbar_probe.py', 'cubit_gui/cubit_export_menu.py',
+        'cubit_gui/cubit_toolbar/toolbars/cubit_mesh_export_toolbar.ttb.tmpl',
+        'cubit_gui/solver_ready_sample.jou', 'native_payloads.json',
+        'mcp/server.py', 'mcp/_support/status.py')
     for required in required_files:
         if prefix + required not in files:
             raise ValueError('Wheel lacks ' + required)

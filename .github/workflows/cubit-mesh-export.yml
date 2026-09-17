@@ -12,6 +12,7 @@ on:
       - 'tools/release_cubit_dual.py'
       - 'tests/test_release_cubit_dual.py'
       - 'tests/test_cubit_installers.py'
+      - 'tests/test_cubit_mesh_quality.py'
       - 'tests/test_cubit_menu_startup.py'
       - 'tests/test_cubit_auto_kelvin_entry.py'
       - 'tools/audit_pyside6_only.py'
@@ -27,6 +28,7 @@ on:
       - 'tools/release_cubit_dual.py'
       - 'tests/test_release_cubit_dual.py'
       - 'tests/test_cubit_installers.py'
+      - 'tests/test_cubit_mesh_quality.py'
       - 'tests/test_cubit_menu_startup.py'
       - 'tests/test_cubit_auto_kelvin_entry.py'
       - 'tools/audit_pyside6_only.py'
@@ -95,7 +97,10 @@ jobs:
               names = archive.namelist()
               required = ('cubit_mesh_export/cubit_mesh_export.ccm',
                           'cubit_mesh_export/cubit_mesh_curver.pyd',
-                          'cubit_mesh_export/cubit_gui/solver_ready_sample.jou')
+                          'cubit_mesh_export/cubit_gui/solver_ready_sample.jou',
+                          'cubit_mesh_export/cubit_gui/cubit_export_menu.py',
+                          'cubit_mesh_export/cubit_gui/cubit_toolbar/toolbars/cubit_mesh_export_toolbar.ttb.tmpl',
+                          'cubit_mesh_export/native_payloads.json')
               missing = [name for name in required if name not in names]
               if missing:
                   raise SystemExit(f'missing required wheel payloads: {missing}')
@@ -155,6 +160,7 @@ jobs:
             "netgen-mesher==6.2.2606" "ngsolve==6.2.2606"
           $env:PYTHONPATH = 'packages\cubit-mesh-export\src'
           python -m pytest tests\test_cubit_installers.py `
+            tests\test_cubit_mesh_quality.py `
             tests\test_cubit_menu_startup.py tests\test_cubit_standalone_gui.py `
             tests\test_cubit_auto_kelvin_entry.py `
             packages\cubit-mesh-export\tests\test_toolbar_smoke.py `
@@ -170,7 +176,7 @@ jobs:
             Select-Object -First 1
           # Resolve declared public dependencies normally; absence probes reject
           # Radia/private foundations. Feature tests use the wheel's extras.
-          python -m pip install "$($wheel.FullName)[mesh-quality,sculpt]"
+          python -m pip install "$($wheel.FullName)[mesh-quality,sculpt,youtube]"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -I tools\check_cubit_standalone.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -236,7 +242,10 @@ jobs:
                   f"wheel/tag version mismatch: wheel={actual}, tag={expected}"
               )
           required = ("cubit_mesh_export.ccm", "cubit_mesh_curver.pyd",
-                      "cubit_gui/solver_ready_sample.jou")
+                      "cubit_gui/solver_ready_sample.jou",
+                      "cubit_gui/cubit_export_menu.py",
+                      "cubit_gui/cubit_toolbar/toolbars/cubit_mesh_export_toolbar.ttb.tmpl",
+                      "native_payloads.json")
           missing = [item for item in required if not any(name.endswith(item) for name in names)]
           if missing:
               raise SystemExit(f"release wheel lacks mandatory payloads: {missing}")
