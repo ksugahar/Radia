@@ -725,7 +725,7 @@ def taskmanager(topic: str = "overview") -> str:
 
 
 @mcp.tool()
-def ngsolve_usage(topic: str = "all") -> str:
+def ngsolve_usage(topic: str = "index") -> str:
     """
     Get NGSolve finite element library usage documentation.
 
@@ -739,7 +739,8 @@ def ngsolve_usage(topic: str = "all") -> str:
 
     Args:
         topic: Documentation topic. Options:
-            "all"              - Complete documentation
+            "index"            - Compact topic index (default); request one topic at a time
+            "all"              - Legacy complete corpus (very large; explicit use only)
             "overview"         - Installation, workflow, direct solvers
             "spaces"           - FE spaces (H1, HCurl, HDiv, HDivSurface, SurfaceL2)
             "maxwell"          - Maxwell/magnetostatics (A-formulation, BDDC, materials)

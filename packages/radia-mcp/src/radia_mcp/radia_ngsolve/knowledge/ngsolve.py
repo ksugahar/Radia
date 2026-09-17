@@ -7893,6 +7893,26 @@ def get_ngsolve_documentation(topic: str = "all") -> str:
     }
 
     topic = topic.lower().strip()
+    if topic == "index":
+        # Group aliases by their shared document, not by spelling.  This keeps
+        # discovery bounded as aliases are added and leaves existing lookups
+        # (including the explicit legacy "all" route) unchanged.
+        documents: dict[int, tuple[str, list[str]]] = {}
+        for name, document in topics.items():
+            key = id(document)
+            if key not in documents:
+                documents[key] = (name, [])
+            else:
+                documents[key][1].append(name)
+        lines = [
+            "NGSolve documentation topics (call ngsolve_usage(topic=<name>) for one topic):"
+        ]
+        for name, aliases in sorted(documents.values()):
+            preview = ", ".join(aliases[:3])
+            suffix = f", +{len(aliases) - 3} more" if len(aliases) > 3 else ""
+            lines.append(f"- {name}" + (f" (aliases: {preview}{suffix})" if aliases else ""))
+        lines.append('Legacy ngsolve_usage(topic="all") returns the full, very large corpus.')
+        return "\n".join(lines)
     if topic == "all":
         return "\n\n".join(topics.values())
     elif topic in topics:
