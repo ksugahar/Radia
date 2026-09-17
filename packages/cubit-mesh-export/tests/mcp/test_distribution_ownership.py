@@ -24,18 +24,10 @@ def test_cubit_runtime_has_no_other_product_imports():
     violations = []
     for path in root.rglob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8-sig"))
-        # Retained explicit --check-radia-compat integration is not a required
-        # runtime import. Installer contract tests protect its opt-in boundary.
-        optional = {node for function in tree.body
-                    if path.name == 'install.py' and isinstance(function, ast.FunctionDef)
-                    and function.name == '_check_radia_compat'
-                    for node in ast.walk(function)}
         for node in ast.walk(tree):
             modules = ([node.module or ""] if isinstance(node, ast.ImportFrom)
                        else [alias.name for alias in node.names] if isinstance(node, ast.Import)
                        else [])
-            if modules == ['radia'] and node in optional:
-                continue
             if any(name.split('.')[0] in {"radia", "radia_mcp", "cae_mcp_core"} for name in modules):
                 violations.append(f"{path.relative_to(root)}:{node.lineno}")
     assert not violations, violations

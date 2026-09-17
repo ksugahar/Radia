@@ -1,6 +1,7 @@
 """Security and server-responsiveness regression contracts."""
 import asyncio
 import json
+import threading
 import time
 
 from mcp.server.fastmcp import FastMCP
@@ -52,3 +53,46 @@ def test_registered_tools_are_async_and_do_not_block_event_loop():
     assert server._OFFLOADED_TOOL_COUNT > 0
     assert all(tool.is_async
                for tool in server.mcp._tool_manager._tools.values())
+
+
+def test_long_cubit_calls_do_not_exhaust_status_workers():
+    probe = FastMCP("separate-cubit-worker-pools")
+    release = threading.Event()
+    started = 0
+    lock = threading.Lock()
+
+    def long_work() -> str:
+        nonlocal started
+        with lock:
+            started += 1
+        release.wait(timeout=3)
+        return "done"
+
+    for name in ("cubit_exec", "cubit_stage", "cubit_batch_try",
+                 "cubit_mesh_auto"):
+        probe.tool(name=name)(long_work)
+
+    @probe.tool()
+    def cubit_status() -> str:
+        return "ready"
+
+    assert server._offload_sync_tool_functions(probe) == 5
+
+    async def exercise():
+        tasks = [asyncio.create_task(probe._tool_manager._tools[name].run({}))
+                 for name in ("cubit_exec", "cubit_stage", "cubit_batch_try",
+                              "cubit_mesh_auto")]
+        try:
+            for _ in range(200):
+                with lock:
+                    if started == 4:
+                        break
+                await asyncio.sleep(0.005)
+            assert started == 4
+            return await asyncio.wait_for(
+                probe._tool_manager._tools["cubit_status"].run({}), timeout=0.5)
+        finally:
+            release.set()
+            await asyncio.gather(*tasks)
+
+    assert asyncio.run(exercise()) == "ready"

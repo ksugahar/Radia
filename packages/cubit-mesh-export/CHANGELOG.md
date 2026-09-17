@@ -6,9 +6,21 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
 ## Unreleased
 
-- Give the independent LAB/100 release-dual gate its own
-  `tools/release_cubit_dual.py` CLI and remove the residual forwarding route
-  through the Radia solver release orchestrator.
+## 2.0.0 - Standalone Cubit session and release hardening
+
+- Retire the redundant `cubit_load` MCP tool and reverse Radia compatibility
+  check; `cubit_stage` is the single file-staging route and Radia owns any
+  optional integration contract.
+- Use a 900-second default command deadline with bounded overrides, and reject
+  stale session references after shutdown or transport failure without replay.
+- Keep long-running MCP tools off the status executor and offload grouped
+  synchronous gates. Race workers default to one disposable Cubit process so
+  a normal request does not consume multiple license seats.
+- Refuse journal and toolbar output overwrite, validate generated toolbar paths,
+  and preserve startup files with per-file backups and atomic replacement.
+- Expand the wheel payload gate and CI mesh-quality coverage before publication.
+- Bound NumPy to the verified 1.26 runtime shared with the `netCDF4` Sculpt
+  extra; a clean environment otherwise selects an ABI-warning NumPy 2.x pair.
 
 ## 1.1.0 - Standalone MCP hardening and legacy removal
 

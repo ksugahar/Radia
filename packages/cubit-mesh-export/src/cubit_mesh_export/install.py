@@ -116,64 +116,6 @@ def _package_dir():
     return Path(__file__).resolve().parent
 
 
-def _parse_version(v: str):
-    """Parse 'X.Y.Z' -> (X, Y, Z) for comparison. Extras after '+' dropped."""
-    core = v.split("+", 1)[0].split("-", 1)[0]
-    parts = core.split(".")
-    out = []
-    for p in parts[:3]:
-        try:
-            out.append(int(p))
-        except ValueError:
-            out.append(0)
-    while len(out) < 3:
-        out.append(0)
-    return tuple(out)
-
-
-def _check_radia_compat():
-    """If radia is importable, verify version compatibility.
-
-    Compares radia.__version__ against COMPAT_RADIA_MIN/MAX declared in
-    this package's __init__, and reciprocally checks
-    radia.COMPAT_CUBIT_MESH_EXPORT_MIN/MAX.
-
-    Returns:
-        (ok: bool, message: str)
-
-    ok=True when radia is not installed (nothing to check) or versions
-    match. ok=False with a descriptive message on mismatch.
-    """
-    try:
-        import cubit_mesh_export as _cme
-        import radia as _rad
-    except ImportError:
-        return True, "radia not installed in this Python env -- skipping"
-
-    cme_ver = _parse_version(getattr(_cme, "__version__", "0.0.0"))
-    rad_ver = _parse_version(getattr(_rad, "__version__", "0.0.0"))
-
-    cme_min = _parse_version(getattr(_cme, "COMPAT_RADIA_MIN", "0.0.0"))
-    cme_max = _parse_version(getattr(_cme, "COMPAT_RADIA_MAX", "999.999.999"))
-    rad_min = _parse_version(getattr(_rad, "COMPAT_CUBIT_MESH_EXPORT_MIN", "0.0.0"))
-    rad_max = _parse_version(getattr(_rad, "COMPAT_CUBIT_MESH_EXPORT_MAX", "999.999.999"))
-
-    problems = []
-    if not (cme_min <= rad_ver <= cme_max):
-        problems.append(
-            f"cubit-mesh-export {_cme.__version__} expects radia in "
-            f"[{_cme.COMPAT_RADIA_MIN}, {_cme.COMPAT_RADIA_MAX}], got {_rad.__version__}")
-    if not (rad_min <= cme_ver <= rad_max):
-        problems.append(
-            f"radia {_rad.__version__} expects cubit-mesh-export in "
-            f"[{_rad.COMPAT_CUBIT_MESH_EXPORT_MIN}, {_rad.COMPAT_CUBIT_MESH_EXPORT_MAX}], "
-            f"got {_cme.__version__}")
-    if problems:
-        return False, "; ".join(problems)
-    return True, (f"radia {_rad.__version__} <-> cubit-mesh-export "
-                   f"{_cme.__version__} compatible")
-
-
 def _find_netgen_dlls():
     """Find nglib.dll and ngcore.dll from pip-installed netgen."""
     try:
@@ -765,19 +707,11 @@ def main():
     parser.add_argument("--helpers-only", action="store_true",
                         help="deploy only pure-Python cubit_helpers; do not "
                             "copy or remove .ccm/.pyd binaries")
-    parser.add_argument("--check-radia-compat", action="store_true",
-                        help="check optional Radia integration only; no deployment")
     args = parser.parse_args()
-    selected_modes = sum((args.check_only, args.verify_only, args.helpers_only,
-                          args.check_radia_compat))
+    selected_modes = sum((args.check_only, args.verify_only, args.helpers_only))
     if selected_modes > 1:
-        parser.error("--check-only, --verify-only, --helpers-only and --check-radia-compat are "
+        parser.error("--check-only, --verify-only, and --helpers-only are "
                      "mutually exclusive")
-
-    if args.check_radia_compat:
-        ok, message = _check_radia_compat()
-        print(message)
-        raise SystemExit(0 if ok else 4)
 
     try:
         ok = install_plugin(all_users=args.all_users,

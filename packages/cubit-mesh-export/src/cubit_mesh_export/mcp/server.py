@@ -17,10 +17,12 @@ Usage:
 
 from collections import Counter
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 import functools
 import hashlib
 import json
 import errno
+import math
 import os
 import sys
 import time
@@ -2258,60 +2260,6 @@ def get_lint_rules() -> str:
 
 
 # ============================================================
-# File loader for the persistent headless session
-# ============================================================
-
-
-@mcp.tool()
-def cubit_load(path: str = "", commands: list = None) -> str:
-	"""Load a file and run commands in the persistent headless session.
-
-	This MCP tool never opens or attaches to a Cubit window.
-	"""
-	cmds: list[str] = []
-	if path:
-		p = Path(path)
-		if not p.is_absolute():
-			p = PROJECT_ROOT / p
-		if not p.exists():
-			return json.dumps({
-				"status": "error", "stage": "input", "kind": "input",
-				"error": f"File not found: {p}", "gui_started": False,
-			})
-		try:
-			cmds.append(_cubit_path_dispatch(p))
-		except ValueError as exc:
-			return json.dumps({
-				"status": "error", "stage": "input", "kind": "input",
-				"error": str(exc), "gui_started": False,
-			})
-	if commands:
-		cmds.extend(str(c).rstrip() for c in commands)
-	if not cmds:
-		return json.dumps({
-			"status": "error", "stage": "input", "kind": "input",
-			"error": "Either `path` or `commands` is required.",
-			"gui_started": False,
-		})
-
-	sess, err = _cubit_session_or_error()
-	if err is not None:
-		return err
-	try:
-		result = sess.call("cmd", cmds)
-	except _cs.CubitSessionError as exc:
-		return json.dumps(_error_payload("rpc", str(exc)))
-	return json.dumps({
-		"status": "ok",
-		"mode": "headless_persistent",
-		"gui_started": False,
-		"commands": cmds,
-		"result": result,
-		"summary": _probe_summary_safe(sess),
-	}, indent=2)
-
-
-# ============================================================
 # Persistent headless Cubit session tools
 # ============================================================
 #
@@ -2327,6 +2275,17 @@ def cubit_load(path: str = "", commands: list = None) -> str:
 # OCP's Python client.
 
 from cubit_mesh_export.mcp import session as _cs
+
+
+def _command_timeout(value: float) -> float:
+    """Bound a user-supplied Cubit command deadline before starting Cubit."""
+    try:
+        seconds = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("timeout_s must be a number of seconds") from exc
+    if not math.isfinite(seconds) or not 1 <= seconds <= 3600:
+        raise ValueError("timeout_s must be between 1 and 3600 seconds")
+    return seconds
 
 # Error `kind` classification for the LLM audience (MathWorks
 # UnexpectedErrorPrefixForLLM pattern, extended):
@@ -2366,6 +2325,7 @@ def _cubit_session_or_error():
     except _cs.CubitSessionError as e:
         err = _error_payload(
             "session_init", str(e),
+            kind="environment",
             hint=("Ensure Coreform Cubit is installed. "
                   "Override path with `set_cubit_bin_dir(path)` or "
                   "`CUBIT_BIN_DIR` environment variable."),
@@ -2393,7 +2353,8 @@ def _cubit_path_dispatch(path: Path) -> str:
 
 
 @mcp.tool()
-def cubit_stage(path: str = "", extra_commands: list = None) -> str:
+def cubit_stage(path: str = "", extra_commands: list = None,
+                timeout_s: float = _cs.DEFAULT_COMMAND_TIMEOUT_S) -> str:
 	"""
 	Load a file into the persistent headless Cubit session and optionally
 	run follow-up commands. No Cubit GUI window is opened.
@@ -2405,10 +2366,15 @@ def cubit_stage(path: str = "", extra_commands: list = None) -> str:
 	Args:
 	    path: file to load. Leave empty to run only `extra_commands`.
 	    extra_commands: extra Cubit commands to run after loading.
+	    timeout_s: deadline for the command batch in seconds (default 900).
 
 	Returns JSON with the per-command results (line + ok + rc).
 	"""
 	from pathlib import Path as _P
+	try:
+		deadline = _command_timeout(timeout_s)
+	except ValueError as exc:
+		return json.dumps(_error_payload("input", str(exc), kind="input"))
 	sess, err = _cubit_session_or_error()
 	if err is not None:
 		return err
@@ -2433,7 +2399,7 @@ def cubit_stage(path: str = "", extra_commands: list = None) -> str:
 		                   "error": "Either `path` or `extra_commands` is required."})
 
 	try:
-		r = sess.call("cmd", cmds)
+		r = sess.call("cmd", cmds, timeout_s=deadline)
 	except _cs.CubitSessionError as e:
 		return json.dumps(_error_payload("rpc", str(e)))
 	return json.dumps({
@@ -2469,7 +2435,8 @@ def _state_delta(before: dict, after: dict) -> dict:
 
 
 @mcp.tool()
-def cubit_exec(commands: list) -> str:
+def cubit_exec(commands: list,
+               timeout_s: float = _cs.DEFAULT_COMMAND_TIMEOUT_S) -> str:
 	"""
 	Send arbitrary Cubit commands to the persistent headless session.
 
@@ -2479,6 +2446,7 @@ def cubit_exec(commands: list) -> str:
 	Args:
 	    commands: list of Cubit command strings (one per list item, no
 	        trailing newline). Runs in order; stops at first failure.
+	    timeout_s: deadline for the command batch in seconds (default 900).
 
 	Returns JSON with:
 	  - `result`: per-command {line, ok, rc|error}
@@ -2496,6 +2464,10 @@ def cubit_exec(commands: list) -> str:
 	if not commands:
 		return json.dumps({"status": "error",
 		                   "error": "commands list cannot be empty"})
+	try:
+		deadline = _command_timeout(timeout_s)
+	except ValueError as exc:
+		return json.dumps(_error_payload("input", str(exc), kind="input"))
 	sess, err = _cubit_session_or_error()
 	if err is not None:
 		return err
@@ -2507,7 +2479,7 @@ def cubit_exec(commands: list) -> str:
 
 	before = _probe_summary_safe(sess)
 	try:
-		r = sess.call("cmd", cmd_list)
+		r = sess.call("cmd", cmd_list, timeout_s=deadline)
 	except _cs.CubitSessionError as e:
 		_fl.record_failure("cubit", {
 			"input": cmd_list,
@@ -2517,10 +2489,9 @@ def cubit_exec(commands: list) -> str:
 		})
 		return json.dumps(_error_payload(
 			"rpc", str(e),
-			hint="Cubit daemon RPC failed. An owned session auto-restarts "
-			     "on the next call (state lost -- consider cubit_checkpoint "
-			     "before risky ops); an attached session is left running -- "
-			     "use cubit_session_shutdown to force-stop a hung daemon."))
+			hint="The command outcome may be unknown. No automatic replay or "
+			     "restart occurs. Call cubit_session_shutdown, then restore "
+			     "a checkpoint explicitly."))
 	after = _probe_summary_safe(sess)
 
 	per_line = r.get("result") if isinstance(r, dict) else r
@@ -2867,10 +2838,18 @@ def cubit_session_journal(out_path: str = "") -> str:
 		p = Path(out_path)
 		if not p.is_absolute():
 			p = PROJECT_ROOT / p
+		if p.suffix.lower() != ".jou":
+			result.update(status="error", kind="input",
+			              write_error="Journal output must end in .jou")
+			return json.dumps(result, ensure_ascii=False, indent=2)
 		try:
-			p.write_text(journal, encoding="utf-8")
+			# Exclusive creation preserves an existing user journal. The path
+			# is an explicit artifact destination, not an overwrite command.
+			with p.open("x", encoding="utf-8") as destination:
+				destination.write(journal)
 			result["path"] = str(p)
 		except OSError as exc:
+			result.update(status="error", kind="input")
 			result["write_error"] = str(exc)
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
@@ -5484,7 +5463,7 @@ def cubit_ask(query: str, limit: int = 6,
 def cubit_mesh_race(step_path: str,
                      recipes: list,
                      prefer: str = "hex",
-                     max_concurrent: int = 4,
+                     max_concurrent: int = 1,
                      apply_to_session: bool = True,
                      timeout_s: int = 600) -> str:
 	"""Race N recipes in parallel batch Cubits, then optionally apply the
@@ -5511,7 +5490,8 @@ def cubit_mesh_race(step_path: str,
 	    step_path: STEP file imported into each batch.
 	    recipes: list of {name, cmds} dicts.
 	    prefer: "hex" or "any".
-	    max_concurrent: pool size (default 4 — safe for 16 GB RAM).
+	    max_concurrent: license-seat pool size (default 1; each worker owns
+	        a separate disposable Cubit process).
 	    apply_to_session: replay the winner in the
 	        persistent headless session.
 	    timeout_s: per-batch timeout.
@@ -6128,7 +6108,7 @@ def _race_review_core(recipes: list,
 @mcp.tool()
 def cubit_mesh_race_review_async(recipes: list,
                                    max_wait_s: int = 600,
-                                   max_concurrent: int = 4) -> str:
+                                   max_concurrent: int = 1) -> str:
 	"""**Background launch** of a race review — returns immediately
 	with a `race_id`, then runs in a daemon thread.
 
@@ -6243,7 +6223,7 @@ def cubit_mesh_race_status(race_id: str) -> str:
 @mcp.tool()
 def cubit_mesh_race_review(recipes: list,
                              max_wait_s: int = 600,
-                             max_concurrent: int = 4) -> str:
+                             max_concurrent: int = 1) -> str:
 	"""Race N headless AI variants and **wait for all** to
 	finish (or `max_wait_s`), and return a shortlist sorted by quality.
 
@@ -6518,7 +6498,7 @@ def _generate_smart_recipes(sess, target_size: float,
 def cubit_mesh_race_smart_async(target_size: float = 1.0,
                                   n_variants: int = 4,
                                   max_wait_s: int = 600,
-                                  max_concurrent: int = 4) -> str:
+                                  max_concurrent: int = 1) -> str:
 	"""**Background variant of `cubit_mesh_race_smart`** — AI inspects
 	the persistent geometry, generates *N* candidate recipes, and races them
 	in a daemon thread; returns immediately with `race_id`.
@@ -6558,7 +6538,7 @@ def cubit_mesh_race_smart(target_size: float = 1.0,
                             prefer: str = "hex",
                             commit_winner: bool = True,
                             max_wait_s: int = 600,
-                            max_concurrent: int = 4) -> str:
+                            max_concurrent: int = 1) -> str:
 	"""AI inspects the persistent headless Cubit state,
 	auto-generates *N* candidate mesh recipes (with rationale), and
 	races them in isolated headless Cubit workers.
@@ -6986,13 +6966,15 @@ def cubit_scaffold_toolbar(toolbar_name: str, buttons_json: str,
 	if not parent.exists():
 		return f"ERROR: out_dir does not exist: {parent}"
 
-	target = parent / toolbar_name
 	try:
 		files = generate_toolbar_skeleton(toolbar_name, buttons)
 	except Exception as exc:
 		return f"ERROR: skeleton generation failed: {type(exc).__name__}: {exc}"
+	target = parent / toolbar_name
+	if target.exists():
+		return f"ERROR: refusing to overwrite an existing toolbar: {target}"
 
-	target.mkdir(parents=True, exist_ok=True)
+	target.mkdir(exist_ok=False)
 	(target / "scripts").mkdir(exist_ok=True)
 	(target / "resources" / "icons").mkdir(parents=True, exist_ok=True)
 
@@ -7202,7 +7184,7 @@ from cubit_mesh_export.mcp._support.server_hardening import ANN_DESTRUCTIVE as _
 
 # Tools that execute commands in (or overwrite / stop) the headless session.
 _DESTRUCTIVE_TOOLS = {
-	"cubit_exec", "cubit_exec_safely", "cubit_stage", "cubit_load",
+	"cubit_exec", "cubit_exec_safely", "cubit_stage",
 	"cubit_restore", "cubit_session_shutdown", "cubit_mesh_apply_choice",
 }
 # Tools that create/refresh files on disk but leave the session alone.
@@ -7214,6 +7196,7 @@ _WRITING_TOOLS = {
 	"cubit_examples_refresh", "cubit_check_vol", "cubit_scaffold_toolbar",
 	"cubit_session_journal", "cubit_netgen_quality_compare",
 	"cubit_stl_to_vol", "cubit_vfrac_to_vol", "cubit_validation_run",
+	"cubit_probe", "cubit_mesh_diagnose", "cubit_suggest_next",
 }
 # Read-only tools that may reach the network.
 _WEB_TOOLS = {"cubit_web_docs", "cubit_examples"}
@@ -7223,7 +7206,7 @@ _CUBIT_READONLY_HINTS = (
 	"cubit_import_journal",
 	"_gate", "_docs", "_guide", "_tips", "_reference", "_inventory",
 	"_status", "_lookup", "_ask", "_examples", "lint_", "get_",
-	"generate_", "netgen_", "_probe", "_diagnose", "_suggest",
+	"generate_", "netgen_",
 	"_failures", "_checkpoints", "_audit", "_doctor", "_catalog",
 )
 
@@ -7247,6 +7230,18 @@ _UNCLASSIFIED_TOOLS = _classify_tool_annotations()
 _hide_gate_tools(mcp, "CUBIT_MCP_CUBIT_GATES")
 
 
+_LONG_TOOL_EXECUTOR = ThreadPoolExecutor(max_workers=4,
+									 thread_name_prefix="cubit-long")
+_LONG_TOOL_NAMES = {
+	"cubit_exec", "cubit_stage", "cubit_exec_safely",
+	"cubit_batch_try", "cubit_mesh_auto", "cubit_mesh_race",
+	"cubit_mesh_race_smart", "cubit_mesh_race_smart_async",
+	"cubit_mesh_race_review", "cubit_mesh_race_review_async",
+	"cubit_netgen_quality_compare", "cubit_stl_to_vol",
+	"cubit_vfrac_to_vol",
+}
+
+
 def _offload_sync_tool_functions(server=mcp) -> int:
 	"""Run every synchronous MCP tool in a worker thread.
 
@@ -7261,9 +7256,15 @@ def _offload_sync_tool_functions(server=mcp) -> int:
 		if tool.is_async:
 			continue
 		sync_fn = tool.fn
+		long_running = tool.name in _LONG_TOOL_NAMES
 
 		@functools.wraps(sync_fn)
-		async def _run_in_worker(_sync_fn=sync_fn, **kwargs):
+		async def _run_in_worker(_sync_fn=sync_fn,
+							_long_running=long_running, **kwargs):
+			if _long_running:
+				loop = asyncio.get_running_loop()
+				return await loop.run_in_executor(
+					_LONG_TOOL_EXECUTOR, functools.partial(_sync_fn, **kwargs))
 			return await asyncio.to_thread(_sync_fn, **kwargs)
 
 		tool.fn = _run_in_worker

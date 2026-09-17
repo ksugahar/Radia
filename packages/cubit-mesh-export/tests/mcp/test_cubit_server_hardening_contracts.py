@@ -20,6 +20,7 @@ from cubit_mesh_export.mcp import server as cubit_server
 from cubit_mesh_export.mcp._support.server_hardening import (
     ANN_DESTRUCTIVE,
     ANN_READONLY,
+    ANN_WRITES,
     error_payload,
 )
 
@@ -56,7 +57,7 @@ def test_critical_tools_keep_their_preset():
     cub = cubit_server.mcp._tool_manager
     assert cub.get_tool("cubit_exec").annotations == ANN_DESTRUCTIVE
     assert cub.get_tool("cubit_session_shutdown").annotations == ANN_DESTRUCTIVE
-    assert cub.get_tool("cubit_probe").annotations == ANN_READONLY
+    assert cub.get_tool("cubit_probe").annotations == ANN_WRITES
     assert cub.get_tool("cubit_doctor").annotations == ANN_READONLY
 
 
