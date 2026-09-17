@@ -28,6 +28,29 @@ matlabDir = fileparts(packageDir);
 if ~contains(path, matlabDir)
     addpath(matlabDir);
 end
+expectedMexCommit = "";
+if options.RequireMex
+    selectedMex = which("radia_mex");
+    if exist("radia_mex", "file") ~= 3
+        error("radia:setup:MissingMex", ...
+            "radia_mex is not built. Run Build.ps1 -MatlabMexOnly.");
+    end
+    verifier = fullfile(matlabDir, "verify_radia_mex_provenance.py");
+    command = sprintf('"%s" "%s" "%s"', ...
+        char(options.PythonExecutable), verifier, selectedMex);
+    [verified, output] = system(command);
+    if verified ~= 0
+        error("radia:setup:StaleMex", ...
+            "radia_mex provenance check failed: %s", strtrim(output));
+    end
+    lines = splitlines(string(output));
+    values = extractAfter(lines(startsWith(lines, "RADIA_MEX_COMMIT:")), ...
+        "RADIA_MEX_COMMIT:");
+    if numel(values) ~= 1 || strlength(values) ~= 40
+        error("radia:setup:StaleMex", "Invalid radia_mex build identity.");
+    end
+    expectedMexCommit = values(1);
+end
 
 fileGenerationInfo = struct("available", false, "changed", false, ...
     "root", "", "cache_folder", "", "codegen_folder", "", ...
@@ -42,7 +65,10 @@ if ~options.Force && ~isempty(cachedInfo) && ...
         cachedPython == options.PythonExecutable && ...
         cachedInfo.mkl_threading_layer_requested == mklThreadingLayerRequested && ...
         (~options.RequireMex || cachedInfo.mex_available) && ...
-        (~options.RequireMex || exist("radia_mex", "file") == 3)
+        (~options.RequireMex || string(which("radia_mex")) == cachedInfo.mex_path)
+    if options.RequireMex
+        verifyLoadedMex(expectedMexCommit);
+    end
     cachedInfo.simulink_file_generation = fileGenerationInfo;
     info = cachedInfo;
     return
@@ -105,11 +131,15 @@ if options.RequireMex && ~mexAvailable
     error("radia:setup:MissingMex", ...
         "radia_mex is not built. Run Build.ps1 -MatlabMexOnly or configure CMake with RADIA_BUILD_MATLAB_MEX=ON.");
 end
+if options.RequireMex
+    verifyLoadedMex(expectedMexCommit);
+end
 
 info = struct( ...
     "matlab_dir", matlabDir, ...
     "mex_path", string(mexPath), ...
     "mex_available", mexAvailable, ...
+    "mex_source_commit", expectedMexCommit, ...
     "python_executable", options.PythonExecutable, ...
     "runtime_dirs", runtimeDirs, ...
     "excluded_openmp_runtime_dirs", excludedOpenMPRuntimeDirs, ...
@@ -133,4 +163,18 @@ if numel(values) ~= 1 || strlength(values) == 0
         "Python runtime probe did not return exactly one %s value.", prefix);
 end
 value = string(values(1));
+end
+
+function verifyLoadedMex(expectedCommit)
+try
+    nativeInfo = radia_mex("api.info");
+catch cause
+    error("radia:setup:StaleMex", ...
+        "Loaded radia_mex cannot report its build identity: %s", cause.message);
+end
+if ~isfield(nativeInfo, "source_commit") || ...
+        string(nativeInfo.source_commit) ~= expectedCommit
+    error("radia:setup:StaleMex", ...
+        "Loaded radia_mex differs from the selected build. Restart MATLAB; do not clear live native handles.");
+end
 end
