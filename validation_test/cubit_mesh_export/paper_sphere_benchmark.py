@@ -129,12 +129,12 @@ def run_occ(run_dir: Path) -> list[dict]:
     shape = Sphere(Pnt(0, 0, 0), 1)
     shape.faces.name = "outer"
     shape.mat("body")
+    started = time.monotonic()
+    mesh = shape.GenerateMesh(maxh=0.42)
+    mesh_seconds = time.monotonic()-started
     rows = []
     for order in ORDERS:
-        started = time.monotonic()
-        mesh = shape.GenerateMesh(maxh=0.65)
         mesh.Curve(order)
-        mesh_seconds = time.monotonic()-started
         row = solve(mesh, order)
         row.update(route="netgen_occ_native", kind="tet", run_dir=str(run_dir),
                    mesh_seconds=mesh_seconds)
@@ -219,7 +219,7 @@ def main() -> None:
             label_rows.append({**run_label_case(args.cubit_exe,
                 args.output / f"em_labels_{repeat+1}", args.timeout), "repeat": repeat+1})
     result = {
-        "protocol": "sphere radius=1; Cubit tet max size=0.65, hex sphere size=0.4; Netgen OCC maxh=0.65; p=1..3; repeated independent mesh generations",
+        "protocol": "sphere radius=1; Cubit tet max size=0.65, hex sphere size=0.4; Netgen OCC maxh=0.42 (approximately matched TET DOFs); p=1..3; repeated independent mesh generations",
         "field_problem": "electrostatic -Delta(phi)=3*pi^2*phi; phi=sin(pi*x)cos(pi*y)cos(pi*z); exact full-boundary Dirichlet; E=-grad(phi)",
         "environment": {"python": platform.python_version(),
                         "platform": platform.platform(),

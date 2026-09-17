@@ -1,5 +1,5 @@
 {
-  "protocol": "sphere radius=1; Cubit tet max size=0.65, hex sphere size=0.4; Netgen OCC maxh=0.65; p=1..3; repeated independent mesh generations",
+  "protocol": "sphere radius=1; Cubit tet max size=0.65, hex sphere size=0.4; Netgen OCC maxh=0.42 (approximately matched TET DOFs); p=1..3; repeated independent mesh generations",
   "field_problem": "electrostatic -Delta(phi)=3*pi^2*phi; phi=sin(pi*x)cos(pi*y)cos(pi*z); exact full-boundary Dirichlet; E=-grad(phi)",
   "environment": {
     "python": "3.12.10",
@@ -15,8 +15,8 @@
         "ET.TET": 231
       },
       "ndof": 75,
-      "volume": 3.7695764452472136,
-      "volume_error_pct": -10.007991306419584,
+      "volume": 3.7695764452472145,
+      "volume_error_pct": -10.007991306419562,
       "boundaries": [
         "outer"
       ],
@@ -25,8 +25,8 @@
       ],
       "boundary_label_preservation": 1.0,
       "material_label_preservation": 1.0,
-      "phi_l2_error": 0.25393400189121734,
-      "electric_field_l2_error": 2.3852543154565238,
+      "phi_l2_error": 0.2539340018912174,
+      "electric_field_l2_error": 2.385254315456524,
       "route": "cubit_export_netgen",
       "kind": "tet",
       "run_dir": "C:\\temp\\cubit-paper-sphere-benchmark\\cubit_tet_1",
@@ -56,8 +56,8 @@
       ],
       "boundary_label_preservation": 1.0,
       "material_label_preservation": 1.0,
-      "phi_l2_error": 0.05115580456255172,
-      "electric_field_l2_error": 0.8962150689168298,
+      "phi_l2_error": 0.0511558045625517,
+      "electric_field_l2_error": 0.8962150689168299,
       "route": "cubit_export_netgen",
       "kind": "tet",
       "run_dir": "C:\\temp\\cubit-paper-sphere-benchmark\\cubit_tet_1",
@@ -84,7 +84,7 @@
       ],
       "boundary_label_preservation": 1.0,
       "material_label_preservation": 1.0,
-      "phi_l2_error": 0.010395823533993617,
+      "phi_l2_error": 0.010395823533993612,
       "electric_field_l2_error": 0.1752625986276965,
       "route": "cubit_export_netgen",
       "kind": "tet",
@@ -102,8 +102,8 @@
         "ET.HEX": 32
       },
       "ndof": 53,
-      "volume": 3.2103434310450494,
-      "volume_error_pct": -23.358696088987763,
+      "volume": 3.2103434310450503,
+      "volume_error_pct": -23.35869608898774,
       "boundaries": [
         "outer"
       ],
@@ -143,8 +143,8 @@
       ],
       "boundary_label_preservation": 1.0,
       "material_label_preservation": 1.0,
-      "phi_l2_error": 0.05302538476061623,
-      "electric_field_l2_error": 1.0114803193043709,
+      "phi_l2_error": 0.05302538476061622,
+      "electric_field_l2_error": 1.0114803193043707,
       "route": "cubit_export_netgen",
       "kind": "hex",
       "run_dir": "C:\\temp\\cubit-paper-sphere-benchmark\\cubit_hex_1",
@@ -161,8 +161,8 @@
         "ET.HEX": 32
       },
       "ndof": 997,
-      "volume": 4.194293770405311,
-      "volume_error_pct": 0.1313879509322824,
+      "volume": 4.194293770405312,
+      "volume_error_pct": 0.1313879509323046,
       "boundaries": [
         "outer"
       ],
@@ -186,11 +186,11 @@
     {
       "order": 1,
       "elements": {
-        "ET.TET": 107
+        "ET.TET": 156
       },
-      "ndof": 58,
-      "volume": 3.7960605764178266,
-      "volume_error_pct": -9.375729248025,
+      "ndof": 81,
+      "volume": 3.900768393108654,
+      "volume_error_pct": -6.876014257019214,
       "boundaries": [
         "outer"
       ],
@@ -199,8 +199,8 @@
       ],
       "boundary_label_preservation": 1.0,
       "material_label_preservation": 1.0,
-      "phi_l2_error": 0.684718827691615,
-      "electric_field_l2_error": 4.409399014547061,
+      "phi_l2_error": 0.5412435735382329,
+      "electric_field_l2_error": 3.275232293392344,
       "route": "netgen_occ_native",
       "kind": "tet",
       "run_dir": "C:\\temp\\cubit-paper-sphere-benchmark\\occ_tet_1",
@@ -210,11 +210,11 @@
     {
       "order": 2,
       "elements": {
-        "ET.TET": 107
+        "ET.TET": 156
       },
-      "ndof": 278,
-      "volume": 4.18096891080061,
-      "volume_error_pct": -0.18671963988178275,
+      "ndof": 395,
+      "volume": 4.184658027697556,
+      "volume_error_pct": -0.09864846141286465,
       "boundaries": [
         "outer"
       ],
@@ -223,22 +223,22 @@
       ],
       "boundary_label_preservation": 1.0,
       "material_label_preservation": 1.0,
-      "phi_l2_error": 0.34273573271424745,
-      "electric_field_l2_error": 2.7048036247046583,
+      "phi_l2_error": 0.1628628045722125,
+      "electric_field_l2_error": 1.670587406510722,
       "route": "netgen_occ_native",
       "kind": "tet",
       "run_dir": "C:\\temp\\cubit-paper-sphere-benchmark\\occ_tet_1",
-      "mesh_seconds": 0.031000000002677552,
+      "mesh_seconds": 0.046999999991385266,
       "repeat": 1
     },
     {
       "order": 3,
       "elements": {
-        "ET.TET": 107
+        "ET.TET": 156
       },
-      "ndof": 768,
-      "volume": 4.189473734660447,
-      "volume_error_pct": 0.016318073731058647,
+      "ndof": 1099,
+      "volume": 4.189165187779621,
+      "volume_error_pct": 0.00895205954221101,
       "boundaries": [
         "outer"
       ],
@@ -247,12 +247,12 @@
       ],
       "boundary_label_preservation": 1.0,
       "material_label_preservation": 1.0,
-      "phi_l2_error": 0.2429704093336076,
-      "electric_field_l2_error": 1.5531231520813829,
+      "phi_l2_error": 0.036048273480778756,
+      "electric_field_l2_error": 0.3858834055510323,
       "route": "netgen_occ_native",
       "kind": "tet",
       "run_dir": "C:\\temp\\cubit-paper-sphere-benchmark\\occ_tet_1",
-      "mesh_seconds": 0.031000000002677552,
+      "mesh_seconds": 0.046999999991385266,
       "repeat": 1
     },
     {
@@ -261,8 +261,8 @@
         "ET.TET": 231
       },
       "ndof": 75,
-      "volume": 3.7695764452472136,
-      "volume_error_pct": -10.007991306419584,
+      "volume": 3.769576445247214,
+      "volume_error_pct": -10.007991306419573,
       "boundaries": [
         "outer"
       ],
@@ -277,7 +277,7 @@
       "kind": "tet",
       "run_dir": "C:\\temp\\cubit-paper-sphere-benchmark\\cubit_tet_2",
       "cubit_exit": 2,
-      "mesh_seconds": 1.187999999994645,
+      "mesh_seconds": 1.1410000000032596,
       "vol_check_passed": false,
       "invalid_jacobian_samples": 0,
       "vol_check_warnings": [
@@ -302,13 +302,13 @@
       ],
       "boundary_label_preservation": 1.0,
       "material_label_preservation": 1.0,
-      "phi_l2_error": 0.05115580456255173,
-      "electric_field_l2_error": 0.8962150689168298,
+      "phi_l2_error": 0.051155804562551664,
+      "electric_field_l2_error": 0.8962150689168299,
       "route": "cubit_export_netgen",
       "kind": "tet",
       "run_dir": "C:\\temp\\cubit-paper-sphere-benchmark\\cubit_tet_2",
       "cubit_exit": 2,
-      "mesh_seconds": 1.187999999994645,
+      "mesh_seconds": 1.1410000000032596,
       "vol_check_passed": true,
       "invalid_jacobian_samples": 0,
       "vol_check_warnings": [],
@@ -320,8 +320,8 @@
         "ET.TET": 231
       },
       "ndof": 1309,
-      "volume": 4.189594400145546,
-      "volume_error_pct": 0.01919874999316562,
+      "volume": 4.189594400145545,
+      "volume_error_pct": 0.019198749993143416,
       "boundaries": [
         "outer"
       ],
@@ -330,13 +330,13 @@
       ],
       "boundary_label_preservation": 1.0,
       "material_label_preservation": 1.0,
-      "phi_l2_error": 0.010395823533993612,
-      "electric_field_l2_error": 0.1752625986276965,
+      "phi_l2_error": 0.010395823533993613,
+      "electric_field_l2_error": 0.17526259862769655,
       "route": "cubit_export_netgen",
       "kind": "tet",
       "run_dir": "C:\\temp\\cubit-paper-sphere-benchmark\\cubit_tet_2",
       "cubit_exit": 2,
-      "mesh_seconds": 1.187999999994645,
+      "mesh_seconds": 1.1410000000032596,
       "vol_check_passed": true,
       "invalid_jacobian_samples": 0,
       "vol_check_warnings": [],
@@ -358,13 +358,13 @@
       ],
       "boundary_label_preservation": 1.0,
       "material_label_preservation": 1.0,
-      "phi_l2_error": 0.30090625319611425,
-      "electric_field_l2_error": 2.145712266137286,
+      "phi_l2_error": 0.3009062531961142,
+      "electric_field_l2_error": 2.1457122661372856,
       "route": "cubit_export_netgen",
       "kind": "hex",
       "run_dir": "C:\\temp\\cubit-paper-sphere-benchmark\\cubit_hex_2",
       "cubit_exit": 2,
-      "mesh_seconds": 1.1089999999967404,
+      "mesh_seconds": 1.110000000000582,
       "vol_check_passed": false,
       "invalid_jacobian_samples": 0,
       "vol_check_warnings": [
@@ -389,13 +389,13 @@
       ],
       "boundary_label_preservation": 1.0,
       "material_label_preservation": 1.0,
-      "phi_l2_error": 0.053025384760616225,
-      "electric_field_l2_error": 1.0114803193043707,
+      "phi_l2_error": 0.05302538476061622,
+      "electric_field_l2_error": 1.0114803193043709,
       "route": "cubit_export_netgen",
       "kind": "hex",
       "run_dir": "C:\\temp\\cubit-paper-sphere-benchmark\\cubit_hex_2",
       "cubit_exit": 2,
-      "mesh_seconds": 1.1089999999967404,
+      "mesh_seconds": 1.110000000000582,
       "vol_check_passed": true,
       "invalid_jacobian_samples": 0,
       "vol_check_warnings": [],
@@ -407,8 +407,8 @@
         "ET.HEX": 32
       },
       "ndof": 997,
-      "volume": 4.194293770405311,
-      "volume_error_pct": 0.1313879509322824,
+      "volume": 4.194293770405312,
+      "volume_error_pct": 0.1313879509323046,
       "boundaries": [
         "outer"
       ],
@@ -417,13 +417,13 @@
       ],
       "boundary_label_preservation": 1.0,
       "material_label_preservation": 1.0,
-      "phi_l2_error": 0.028769591788801938,
-      "electric_field_l2_error": 0.2312155691344787,
+      "phi_l2_error": 0.028769591788801962,
+      "electric_field_l2_error": 0.23121556913447874,
       "route": "cubit_export_netgen",
       "kind": "hex",
       "run_dir": "C:\\temp\\cubit-paper-sphere-benchmark\\cubit_hex_2",
       "cubit_exit": 2,
-      "mesh_seconds": 1.1089999999967404,
+      "mesh_seconds": 1.110000000000582,
       "vol_check_passed": true,
       "invalid_jacobian_samples": 0,
       "vol_check_warnings": [],
@@ -432,11 +432,11 @@
     {
       "order": 1,
       "elements": {
-        "ET.TET": 107
+        "ET.TET": 156
       },
-      "ndof": 58,
-      "volume": 3.7960605764178266,
-      "volume_error_pct": -9.375729248025,
+      "ndof": 81,
+      "volume": 3.900768393108653,
+      "volume_error_pct": -6.876014257019236,
       "boundaries": [
         "outer"
       ],
@@ -445,22 +445,22 @@
       ],
       "boundary_label_preservation": 1.0,
       "material_label_preservation": 1.0,
-      "phi_l2_error": 0.684718827691615,
-      "electric_field_l2_error": 4.409399014547061,
+      "phi_l2_error": 0.5412435735382329,
+      "electric_field_l2_error": 3.275232293392344,
       "route": "netgen_occ_native",
       "kind": "tet",
       "run_dir": "C:\\temp\\cubit-paper-sphere-benchmark\\occ_tet_2",
-      "mesh_seconds": 0.062000000005355105,
+      "mesh_seconds": 0.03200000000651926,
       "repeat": 2
     },
     {
       "order": 2,
       "elements": {
-        "ET.TET": 107
+        "ET.TET": 156
       },
-      "ndof": 278,
-      "volume": 4.18096891080061,
-      "volume_error_pct": -0.18671963988178275,
+      "ndof": 395,
+      "volume": 4.184658027697556,
+      "volume_error_pct": -0.09864846141286465,
       "boundaries": [
         "outer"
       ],
@@ -469,22 +469,22 @@
       ],
       "boundary_label_preservation": 1.0,
       "material_label_preservation": 1.0,
-      "phi_l2_error": 0.3427357327142475,
-      "electric_field_l2_error": 2.7048036247046583,
+      "phi_l2_error": 0.1628628045722125,
+      "electric_field_l2_error": 1.670587406510722,
       "route": "netgen_occ_native",
       "kind": "tet",
       "run_dir": "C:\\temp\\cubit-paper-sphere-benchmark\\occ_tet_2",
-      "mesh_seconds": 0.014999999999417923,
+      "mesh_seconds": 0.03200000000651926,
       "repeat": 2
     },
     {
       "order": 3,
       "elements": {
-        "ET.TET": 107
+        "ET.TET": 156
       },
-      "ndof": 768,
-      "volume": 4.189473734660447,
-      "volume_error_pct": 0.016318073731058647,
+      "ndof": 1099,
+      "volume": 4.189165187779621,
+      "volume_error_pct": 0.00895205954221101,
       "boundaries": [
         "outer"
       ],
@@ -493,12 +493,12 @@
       ],
       "boundary_label_preservation": 1.0,
       "material_label_preservation": 1.0,
-      "phi_l2_error": 0.24297040933360764,
-      "electric_field_l2_error": 1.553123152081383,
+      "phi_l2_error": 0.03604827348077876,
+      "electric_field_l2_error": 0.3858834055510324,
       "route": "netgen_occ_native",
       "kind": "tet",
       "run_dir": "C:\\temp\\cubit-paper-sphere-benchmark\\occ_tet_2",
-      "mesh_seconds": 0.030999999988125637,
+      "mesh_seconds": 0.03200000000651926,
       "repeat": 2
     }
   ],
@@ -520,11 +520,11 @@
         "workpiece"
       ],
       "boundary_areas": {
-        "coil_surface": 0.003499273585254511,
-        "sibc": 0.007853974472716416,
-        "outer": 0.08039448827070979,
+        "sibc": 0.007853974472716414,
+        "coil_surface": 0.0034992735852545104,
         "source": 2.8260415446563487e-05,
-        "sink": 2.826042936582558e-05
+        "sink": 2.8260429365825575e-05,
+        "outer": 0.0803944882707098
       },
       "boundary_label_preservation": 1.0,
       "material_label_preservation": 1.0,
@@ -551,11 +551,11 @@
         "workpiece"
       ],
       "boundary_areas": {
-        "coil_surface": 0.003499273585254511,
         "sibc": 0.007853974472716416,
-        "outer": 0.0803944882707098,
-        "source": 2.826041544656349e-05,
-        "sink": 2.8260429365825572e-05
+        "coil_surface": 0.003499273585254511,
+        "source": 2.8260415446563487e-05,
+        "sink": 2.8260429365825575e-05,
+        "outer": 0.0803944882707098
       },
       "boundary_label_preservation": 1.0,
       "material_label_preservation": 1.0,
