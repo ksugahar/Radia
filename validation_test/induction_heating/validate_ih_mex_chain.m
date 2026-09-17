@@ -13,7 +13,8 @@ for name = string(caseNames)
     for step = 1:size(data.reference_K,1)
         temp = radia.internal.callMex('ih.thermal.output',t);
         heat = radia.internal.callMex('ih.eddy.output',e,data.current_A,0,temp);
-        heatError = max(heatError,norm(heat-data.current_A^2*cfg.heat_projection)/norm(heat));
+        expectedHeat = data.current_A^2*cfg.heat_projection(:);
+        heatError = max(heatError,norm(heat(:)-expectedHeat)/norm(heat(:)));
         power = dot(cfg.heat_cell_weights,heat);
         assert(abs(power/(data.current_A^2*data.unit_power_W)-1)<1e-8);
         radia.internal.callMex('ih.thermal.update',t,heat,293.15,0);
@@ -32,6 +33,8 @@ for name = string(caseNames)
         errorK = max(errorK,norm(delta,inf));
         relativeRise = max(relativeRise,norm(delta)/norm(rise));
     end
+    fprintf('IH chain %s: max_dT_K=%.12g relative_rise=%.12g heat_relative=%.12g\n', ...
+        name,errorK,relativeRise,heatError);
     assert(relativeRise < .02 && errorK < 1e-7 && heatError < 1e-12);
     clear tc ec
     cases{end+1} = struct('name',name,'nodes',data.nodes,'steps',size(data.reference_K,1), ...

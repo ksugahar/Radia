@@ -1,0 +1,85 @@
+{
+  "schema": "radia.ih.mex-numeric-validation.v1",
+  "date": "2026-09-18",
+  "host": "LAB",
+  "matlab_version": "26.1.0.3276743 (R2026a) Update 3",
+  "matlab_pid": 10760,
+  "execution_route": "official-matlab-mcp-existing-session",
+  "source_commit_at_build": "aa32e3b54b6027cf524bff652373897b37767975",
+  "source_dirty_at_build": false,
+  "mex_sha256": "09dc02b42d8f39f9b8eaf260bcd4d3353e14145d3618322c7d35127236d33d7e",
+  "chain_validation_script_sha256": "ed58d841f1b7308af8d270d91b1b8825348622293eac4f79921087a40eb42b09",
+  "full_turn": {
+    "cells": 8,
+    "subdivisions": [1, 2],
+    "temperature_K": [301, 301, 301, 301, 301, 301, 301, 301],
+    "passed": true
+  },
+  "bem_to_thermal_chain": {
+    "scope": "real weak BEM and production thermal assembly on coarse in-memory 3D volumes; no CAD/VOL or mesh-convergence claim",
+    "steps_per_case": 100,
+    "max_temperature_difference_limit_K": 1e-7,
+    "max_relative_temperature_rise_error_limit": 0.02,
+    "heat_vector_relative_error_limit": 1e-12,
+    "cases": [
+      {
+        "name": "solid",
+        "nodes": 565,
+        "unit_power_W": 1.9101073235059925e-5,
+        "assembled_power_W": 1.910107323506002e-5,
+        "max_temperature_difference_K": 1.9318804334034212e-9,
+        "max_relative_temperature_rise_error": 1.959526365153536e-7,
+        "heat_vector_relative_error": 0
+      },
+      {
+        "name": "bored",
+        "nodes": 622,
+        "unit_power_W": 1.9062500905205424e-5,
+        "assembled_power_W": 1.9062500905205424e-5,
+        "max_temperature_difference_K": 2.3567281459691003e-9,
+        "max_relative_temperature_rise_error": 1.4914174233923589e-7,
+        "heat_vector_relative_error": 0
+      }
+    ],
+    "handles_before": 0,
+    "handles_after": 0,
+    "elapsed_s": 1.212,
+    "passed": true
+  },
+  "radial_thermal": {
+    "scope": "independent radial P1 MATLAB assembly and analytic steady solution with prescribed uniform heat; no EM-source claim",
+    "steps_per_case": 1000,
+    "max_temperature_difference_limit_K": 1e-7,
+    "power_balance_relative_limit": 1e-7,
+    "steady_temperature_rise_relative_L2_limit": 0.02,
+    "cases": [
+      {
+        "bore_m": 0,
+        "nodes": 33,
+        "mex_vs_direct_max_K": 2.9996272132848389e-10,
+        "power_balance_relative": 2.1277900641215941e-11,
+        "steady_temperature_rise_relative_L2": 2.9008156732962137e-5
+      },
+      {
+        "bore_m": 0.0075,
+        "nodes": 33,
+        "mex_vs_direct_max_K": 2.1816504158778116e-10,
+        "power_balance_relative": 2.1153626703099671e-11,
+        "steady_temperature_rise_relative_L2": 7.7811772700691637e-6
+      }
+    ],
+    "handles_before": 0,
+    "handles_after": 0,
+    "elapsed_s": 6.561,
+    "passed": true
+  },
+  "runtime_gate": {
+    "cached_api_info_calls": 50,
+    "elapsed_s": 0.098,
+    "passed": true
+  },
+  "cpp_rotation_test_passed": true,
+  "python_ih_tests_passed": 18,
+  "overall_passed": true,
+  "release_accepted": false
+}
