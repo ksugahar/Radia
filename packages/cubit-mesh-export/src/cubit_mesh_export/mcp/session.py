@@ -31,6 +31,7 @@ def _cubit_temp_root() -> Path:
 
 # License checkout may take tens of seconds on a cold start.
 CUBIT_READY_TIMEOUT_S = 90.0
+DEFAULT_COMMAND_TIMEOUT_S = 900.0
 
 _SESSION_LOCK = threading.Lock()
 _SINGLETON: "CubitSession | None" = None
@@ -399,6 +400,9 @@ class CubitSession:
         self._client_id = f"{os.getpid():08x}-{uuid.uuid4().hex[:12]}"
         self._lock = threading.RLock()
         self._ready_info: dict | None = None
+        # Shutdown and an ambiguous transport failure retire this object.
+        # A stale tool reference must never launch an untracked daemon.
+        self._retired = False
 
         self._owned = False
         self._job_handle = None
@@ -448,6 +452,10 @@ class CubitSession:
             return self._ensure_started_locked()
 
     def _ensure_started_locked(self) -> dict:
+        if self._retired:
+            raise CubitSessionError(
+                "Session was retired; call cubit_session_shutdown before "
+                "requesting a new session.")
         if self._proc is not None and self._proc.poll() is None:
             return self._ready_info or {}
         if self._proc is not None:
@@ -467,6 +475,7 @@ class CubitSession:
     def shutdown(self, timeout_s: float = 3.0) -> dict:
         """Stop only the child spawned by this client."""
         with self._lock:
+            self._retired = True
             proc = self._proc
             report = {"stopped": "owned-child" if proc else "none",
                       "pid": proc.pid if proc else None, "owned": self._owned}
@@ -493,13 +502,17 @@ class CubitSession:
     # ---- public RPC entrypoint ----
 
     def call(self, op: str, args: list | None = None,
-             timeout_s: float = 60.0) -> dict:
+             timeout_s: float = DEFAULT_COMMAND_TIMEOUT_S) -> dict:
         """Serialize an RPC. A failed transport is never replayed automatically.
 
         A command may have run before its response was lost. Resetting and
         retrying would hide both the unknown outcome and the lost geometry.
         """
         with self._lock:
+            if self._retired:
+                raise CubitSessionError(
+                    "Session was retired; call cubit_session_shutdown before "
+                    "requesting a new session.")
             try:
                 self.ensure_started()
                 if op == "cmd":
@@ -516,10 +529,12 @@ class CubitSession:
                     self._record_cmd_history(resp)
                 return resp
             except CubitSessionError as exc:
+                self._retired = True
                 self._force_reset()
                 raise CubitSessionError(
                     f"{exc}. Session discarded; command outcome may be unknown. "
-                    "No automatic replay. Restore a checkpoint explicitly."
+                    "No automatic replay or restart. Call cubit_session_shutdown "
+                    "before a new session, then restore a checkpoint explicitly."
                 ) from exc
 
     def _start_native_journal_locked(self, timeout_s: float) -> None:
