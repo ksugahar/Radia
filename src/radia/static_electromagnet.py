@@ -130,6 +130,8 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
     nonlinear_observation_points=None,
     nonlinear_material_update_order: int | None = None,
     nonlinear_material_log_state_initial=None,
+    nonlinear_material_sampling: str = "element_centroid",
+    nonlinear_bh_interpolation: str = "pchip",
     inverse: str = "pardiso",
     bonus_intorder: int = 4,
 ) -> dict[str, object]:
@@ -143,6 +145,13 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
     ``nonlinear_observation_points`` records the per-iteration field change at
     the points where the result is consumed.  A non-converged loop raises
     :class:`radia.kelvin_solver.MixedOmegaPicardNotConverged` with that state.
+    For a P1 diagnostic, ``nonlinear_material_sampling="integration_point"``
+    evaluates the B(H) secant at volume quadrature points. It requires plain
+    Picard (Anderson depth=0), and reports a separate returned-field
+    constitutive defect rather than treating iterate convergence as accuracy.
+    ``nonlinear_bh_interpolation="linear_spline"`` uses NGSolve's compact
+    piecewise-linear table lookup; its interpolation error must be checked
+    against the original B-H curve for a validation comparison.
     Response order two requires an explicit
     ``nonlinear_material_update_order=1``; its positive log-permeability field
     is a separate spatial material state. Resume it with the complete
@@ -340,6 +349,8 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
             observation_points=nonlinear_observation_points,
             material_update_order=nonlinear_material_update_order,
             material_log_state_initial=nonlinear_material_log_state_initial,
+            material_sampling=nonlinear_material_sampling,
+            bh_interpolation=nonlinear_bh_interpolation,
             **common,
         )
     trace_gate_applied = source_trace_tolerance is not None and (

@@ -77,6 +77,49 @@ def _build_bh_interpolator(bh_data):
     return B_of_H
 
 
+def _make_bh_linear_spline(bh_data):
+    """Build the compact order-2 NGSolve spline for a tabulated B(H)."""
+    from ngsolve import BSpline
+
+    bh = np.asarray(bh_data, dtype=float)
+    if (bh.ndim != 2 or bh.shape[1] < 2 or len(bh) < 2
+            or not np.isfinite(bh[:, :2]).all()
+            or np.any(np.diff(bh[:, 0]) <= 0)
+            or np.any(np.diff(bh[:, 1]) < 0)):
+        raise ValueError("bh_data must be a finite monotone [H, B] table")
+    h, b = bh[:, 0], bh[:, 1]
+    left = h[0] - (h[1] - h[0])
+    right_step = h[-1] - h[-2]
+    knots = [left, *h, h[-1] + right_step]
+    values = [*b, b[-1] + MU_0 * right_step,
+              b[-1] + 2 * MU_0 * right_step]
+    spline = BSpline(2, [float(v) for v in knots],
+                     [float(v) for v in values])
+    return h, b, spline
+
+
+def _build_bh_linear_spline_coefficient_function(H_magnitude, bh_data):
+    """Piecewise-linear B(H) with C++ lookup and vacuum-slope tail."""
+    from ngsolve import IfPos
+
+    h, b, spline = _make_bh_linear_spline(bh_data)
+    tail = float(b[-1]) + MU_0 * (H_magnitude - float(h[-1]))
+    return IfPos(H_magnitude - float(h[-1]), tail, spline(H_magnitude))
+
+
+def _build_bh_linear_spline_coenergy_coefficient_function(H_magnitude, bh_data):
+    """Integral of the same piecewise-linear B(H), including its vacuum tail."""
+    from ngsolve import IfPos
+
+    h, b, spline = _make_bh_linear_spline(bh_data)
+    primitive = spline.Integrate()
+    origin = float(primitive(float(h[0])))
+    at_last = float(primitive(float(h[-1]))) - origin
+    delta = H_magnitude - float(h[-1])
+    tail = at_last + float(b[-1]) * delta + .5 * MU_0 * delta**2
+    return IfPos(delta, tail, primitive(H_magnitude) - origin)
+
+
 def _build_bh_coefficient_function(H_magnitude, bh_data):
     """Return the monotone-PCHIP B(H) law as an NGSolve coefficient function."""
 
