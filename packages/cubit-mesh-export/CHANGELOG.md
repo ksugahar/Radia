@@ -19,8 +19,11 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 - Refuse journal and toolbar output overwrite, validate generated toolbar paths,
   and preserve startup files with per-file backups and atomic replacement.
 - Expand the wheel payload gate and CI mesh-quality coverage before publication.
-- Bound NumPy to the verified 1.26 runtime shared with the `netCDF4` Sculpt
-  extra; a clean environment otherwise selects an ABI-warning NumPy 2.x pair.
+- Keep NumPy independently managed by the host: LAB and 100 both run 2.5.2,
+  which passes the isolated Cubit MCP suite including Sculpt contracts.
+- Retry the curved Netgen reference test with finer meshes when a stochastic
+  coarse sphere mesh has a genuinely inverted Jacobian; production validation
+  still rejects the invalid mesh.
 
 ## 1.1.0 - Standalone MCP hardening and legacy removal
 
