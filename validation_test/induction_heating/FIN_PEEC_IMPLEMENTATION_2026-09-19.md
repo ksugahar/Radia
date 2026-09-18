@@ -30,9 +30,14 @@ IH operator assembler on the strength of topology/KCL tests alone.
 
 ## Required next gates
 
-1. Obtain a representative beak-fin STEP and preserve its tip radius. Check
-   direct CAD extraction, station alignment, branch geometry, and convergence
-   under perimeter/axial refinement. Reject missing tips and zero-area cells.
+1. A synthetic straight beak-fin STEP and reproducible generator now live in
+   `tests/coil_from_cad/fixtures/beak_fin_straight.step` and
+   `validation_test/induction_heating/make_beak_fin_step.py`. The dedicated
+   straight-prism section route preserves its single solid, 0.25 mm rounded
+   tip, constant section, and direct perimeter (64 lanes in the fixture test).
+   This is not representative of an as-built coil. Obtain representative CAD,
+   then check station alignment, branch geometry, and convergence under
+   perimeter/axial refinement. Reject missing tips and zero-area cells.
 2. Implement a consistent surface-current discretization with passive SIBC
    Gram matrix and validated nonorthogonal partial elements. Avoid adding the
    existing isolated-wire Dowell/Bessel or proximity correction on top.
