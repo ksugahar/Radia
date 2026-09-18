@@ -28,6 +28,31 @@ thin-fin two-face coupling, and no branch-current back-reaction to the
 workpiece BEM. It must not be enabled in `calc_inductance.py` or the Simulink
 IH operator assembler on the strength of topology/KCL tests alone.
 
+## First independent BEM-A comparison (not accepted)
+
+`compare_beak_fin_bema.py --experimental-peec --n-peri 64` uses the same
+6 mm synthetic STEP for both routes, copper conductivity 58 MS/m, 150 kHz,
+and a 0.171 mm SIBC skin depth. BEM-A uses an independently generated
+1156-triangle NGSolve surface mesh (1734 HDivSurface current DoFs); its
+current-continuity residual is about 3.2e-16. The experimental PEEC graph
+has 448 branches. The computed terminal/energy quantities were:
+
+| Route | R (micro-ohm) | External L (nH) |
+| --- | ---: | ---: |
+| BEM-A impedance-EFIE | 34.372 | 1.12291 |
+| Experimental rectangular-branch PEEC | 29.186 | 1.05442 |
+
+PEEC is 15.1% low in R and 6.1% low in external L. These are **not**
+equal and not a validation pass. The PEEC internal sheet reactance was
+included in its solve but excluded from the reported external L, matching
+the BEM-A result convention. Perimeter refinement from 16 to 64 lanes did
+not close the R discrepancy. BEM-A mesh/PEEC axial convergence, spatial
+current and tip/root loss maps, and the physical fin SIBC matrix remain
+required. The original 60 mm fixture yielded ~9662 BEM-A surface triangles
+even at 6 mm target maxh due to the 0.25 mm nose; a dense direct solve was
+stopped after reaching ~6.8 GB working set. The 6 mm short fixture is a
+bounded exploratory comparison, not a substitute for the full-length gate.
+
 ## Required next gates
 
 1. A synthetic straight beak-fin STEP and reproducible generator now live in
