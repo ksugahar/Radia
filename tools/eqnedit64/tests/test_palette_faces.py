@@ -36,7 +36,7 @@ from fontTools.ttLib import TTFont
 ROOT = Path(__file__).resolve().parents[1]
 PALETTES = ROOT / "src/palettes.cpp"
 SYMBOLS = ROOT / "src/math_symbols.cpp"
-MATH_FONT = ROOT / "assets/latinmodern-math.otf"
+MATH_FONT = ROOT / "assets/eqnedit-math.ttf"
 
 # A C++ string literal, captured raw.
 STR = r'"((?:[^"\\]|\\.)*)"'
