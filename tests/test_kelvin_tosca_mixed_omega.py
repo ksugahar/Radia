@@ -230,6 +230,68 @@ def test_mixed_omega_accepts_the_total_hodge_source_components():
     assert result["total_source_materials"] == ("total",)
 
 
+def test_mixed_omega_accepts_preassembled_reduced_source_load():
+    """Replacing only the reduced volume load preserves the full system."""
+    import ngsolve as ng
+    from radia.kelvin_solver import solve_magnetostatic_mixed_total_reduced_omega_kelvin
+
+    mesh = _two_region_mesh(maxh=0.55)
+    source_h = ng.CoefficientFunction((ng.x * ng.x, ng.y, ng.z))
+    trace = 0.0
+    args = dict(mu_r_by_material={"reduced": 1.0, "total": 2.0},
+                reduced_materials=("reduced",), total_materials=("total",),
+                interface_boundary="source_total_interface", order=1,
+                dirichlet_bbbnd="outer", return_system=True)
+    with ng.TaskManager():
+        original = solve_magnetostatic_mixed_total_reduced_omega_kelvin(
+            mesh, source_h, trace, 1.0, (3.0, 0.0, 0.0), **args)
+        reduced = original["fes_reduced"]
+        test = reduced.TestFunction()
+        load = ng.LinearForm(reduced)
+        load += (4e-7 * np.pi) * ng.InnerProduct(source_h, ng.grad(test)) * ng.dx(
+            definedon=mesh.Materials("reduced"), bonus_intorder=4)
+        load.Assemble()
+        supplied = solve_magnetostatic_mixed_total_reduced_omega_kelvin(
+            mesh, source_h, trace, 1.0, (3.0, 0.0, 0.0),
+            source_rhs_reduced=load.vec.FV().NumPy().copy(), **args)
+
+    assert np.allclose(supplied["system"]["linear_form"].vec.FV().NumPy(),
+                       original["system"]["linear_form"].vec.FV().NumPy(),
+                       rtol=1e-11, atol=1e-11)
+    # The test mesh has no BBBND point gauge; compare physical fields rather
+    # than additive constants in its scalar potentials.
+    for point in ((-0.5, 0.15, 0.1), (-0.2, -0.1, -0.2),
+                  (0.2, 0.1, 0.2), (0.6, -0.2, 0.1)):
+        assert np.allclose(supplied["H_cf"](mesh(*point)),
+                           original["H_cf"](mesh(*point)),
+                           rtol=1e-9, atol=1e-9)
+    with pytest.raises(ValueError, match="source_rhs_reduced"):
+        solve_magnetostatic_mixed_total_reduced_omega_kelvin(
+            mesh, source_h, trace, 1.0, (3.0, 0.0, 0.0),
+            source_rhs_reduced=np.zeros(2), **args)
+
+
+def test_mixed_omega_prescribed_reduced_normal_flux_recovers_uniform_source():
+    import ngsolve as ng
+    from radia.kelvin_solver import solve_magnetostatic_mixed_total_reduced_omega_kelvin
+
+    mesh = _two_region_mesh(maxh=0.55)
+    source_h = ng.CoefficientFunction((0., 0., 1.))
+    flux = (4e-7 * np.pi) * ng.InnerProduct(source_h, ng.specialcf.normal(3))
+    with ng.TaskManager():
+        result = solve_magnetostatic_mixed_total_reduced_omega_kelvin(
+            mesh, source_h, -ng.z, 1.0, (3., 0., 0.),
+            mu_r_by_material={"reduced": 1., "total": 1.},
+            reduced_materials=("reduced",), total_materials=("total",),
+            interface_boundary="source_total_interface", order=1,
+            dirichlet_bbbnd="outer", kelvin_mats=(),
+            reduced_normal_flux=flux, reduced_flux_boundary="outer",
+            total_normal_flux=flux, total_flux_boundary="outer")
+    for point in ((-.5, .1, .1), (.5, -.1, -.1)):
+        assert np.allclose(result["H_cf"](mesh(*point)), (0., 0., 1.),
+                           rtol=1e-8, atol=1e-8)
+
+
 def test_mixed_total_reduced_omega_picard_uses_the_same_interface_contract():
     """The nonlinear driver keeps source topology separate from B(H) updates."""
     import math
