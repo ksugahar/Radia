@@ -591,7 +591,9 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         total_source_h=None, total_source_materials=(), return_system=False,
         phase_callback=None, source_rhs_reduced=None,
         reduced_normal_flux=None, reduced_flux_boundary=None,
-        total_normal_flux=None, total_flux_boundary=None):
+        total_normal_flux=None, total_flux_boundary=None,
+        reduced_dirichlet_boundary=None, total_dirichlet_boundary=None,
+        interface_multiplier_dirichlet_boundary=None):
     """Solve the TOSCA-style mixed total/reduced Omega formulation.
 
     ``return_system=True`` retains assembled forms for explicit diagnostics.
@@ -693,6 +695,13 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
             is zero normal flux. Supply ``reduced_flux_boundary`` with it.
         total_normal_flux: analogous outward normal B for the total region.
             Supply ``total_flux_boundary`` with it.
+        reduced_dirichlet_boundary: physical boundary where the reduced
+            correction potential is zero (not the total scalar potential).
+        total_dirichlet_boundary: physical boundary where the total scalar
+            potential is zero. These selectors do not identify the two fields.
+        interface_multiplier_dirichlet_boundary: optional boundary on which
+            the interface constraint is already fixed by essential traces.
+            Use only after checking the intersecting interface DOFs.
     """
     reduced_materials = tuple(reduced_materials)
     total_materials = tuple(total_materials)
@@ -755,6 +764,14 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         flux_names = str(total_flux_boundary).split("|")
         if not flux_names or not set(flux_names) <= set(mesh.GetBoundaries()):
             raise ValueError("total_flux_boundary must name existing boundaries")
+    for selector, label in ((reduced_dirichlet_boundary, "reduced_dirichlet_boundary"),
+                            (total_dirichlet_boundary, "total_dirichlet_boundary"),
+                            (interface_multiplier_dirichlet_boundary,
+                             "interface_multiplier_dirichlet_boundary")):
+        if selector is not None:
+            names = str(selector).split("|")
+            if not names or not set(names) <= set(mesh.GetBoundaries()):
+                raise ValueError(f"{label} must name existing boundaries")
 
     if mu_cf is None:
         mu_cf = make_kelvin_mu_cf(
@@ -808,10 +825,16 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         else mesh.Boundaries(kelvin_interface_boundary))
 
     if kelvin_selector is None:
-        fes_reduced = H1(mesh, order=int(order), definedon=coupled_selector)
+        reduced_dirichlet = ({"dirichlet": reduced_dirichlet_boundary}
+                             if reduced_dirichlet_boundary else {})
+        total_dirichlet = ({"dirichlet": total_dirichlet_boundary}
+                           if total_dirichlet_boundary else {})
+        fes_reduced = H1(mesh, order=int(order), definedon=coupled_selector,
+                         **reduced_dirichlet)
         fes_total = Compress(Periodic(H1(
             mesh, order=int(order), definedon=core_total_selector,
-            dirichlet_bbbnd=dirichlet_bbbnd)))
+            **({"dirichlet_bbbnd": dirichlet_bbbnd}
+               if dirichlet_bbbnd else {}), **total_dirichlet)))
     else:
         # Exactly one of the two blocks carries the point gauge.  Pinning both
         # would fight the interface jump; pinning neither leaves the coupled
@@ -837,12 +860,18 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
                        if total_gauged else {})
         fes_reduced = Periodic(H1(
             mesh, order=int(order), definedon=coupled_selector,
-            **coupled_gauge))
+            **coupled_gauge,
+            **({"dirichlet": reduced_dirichlet_boundary}
+               if reduced_dirichlet_boundary else {})))
         fes_total = Compress(Periodic(H1(
             mesh, order=int(order), definedon=core_total_selector,
-            **total_gauge)))
+            **total_gauge,
+            **({"dirichlet": total_dirichlet_boundary}
+               if total_dirichlet_boundary else {}))))
     fes_multiplier = Compress(H1(
-        mesh, order=int(order), definedon=interface_selector))
+        mesh, order=int(order), definedon=interface_selector,
+        **({"dirichlet": interface_multiplier_dirichlet_boundary}
+           if interface_multiplier_dirichlet_boundary else {})))
     fes = fes_reduced * fes_total * fes_multiplier
     source_values = None
     if source_rhs_reduced is not None:
