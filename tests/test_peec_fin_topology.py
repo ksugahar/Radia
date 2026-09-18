@@ -13,8 +13,24 @@ from radia.peec_fin_topology import (
     assemble_experimental_fin_peec,
     build_hybrid_surface_topology,
     build_hybrid_surface_topology_from_step,
+    build_hybrid_surface_topology_from_straight_prism_step,
     rings_from_filament_paths,
 )
+
+
+def test_beak_fin_step_preserves_direct_cad_cross_section():
+    fixture = (Path(__file__).parent / "coil_from_cad" / "fixtures"
+               / "beak_fin_straight.step")
+    graph, meta = build_hybrid_surface_topology_from_straight_prism_step(
+        fixture, n_peri=64, n_stations=5)
+    assert meta["cad_source"] == "step_straight_prism_sections"
+    assert meta["cross_section_kind"] == "unknown"
+    assert meta["section_area_m2"] == pytest.approx(24.552230195e-6)
+    assert graph.n_lanes == 64
+    assert graph.n_stations == 5
+    assert np.min(graph.nodes[:, 0]) == pytest.approx(-0.004)
+    assert np.max(graph.nodes[:, 0]) > 0.0039
+    assert graph.mesh_stations == (1, 2, 3)
 
 
 def _rings(n_stations=5, n_lanes=4):

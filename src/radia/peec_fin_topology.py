@@ -259,3 +259,62 @@ def build_hybrid_surface_topology_from_step(step_path, *, sigma,
                    "mesh_stations": graph.mesh_stations,
                    "n_lanes": graph.n_lanes,
                    "n_stations": graph.n_stations}
+
+
+def build_hybrid_surface_topology_from_straight_prism_step(
+        step_path, *, n_peri=32, n_stations=9, cad_units_per_meter=1000.0):
+    """Directly section a single z-extruded STEP solid, including a fin tip.
+
+    This deliberately narrow fixture route does not infer a curved coil spine.
+    Constant section area and a single face at each station are required.
+    """
+    from build123d import Plane, import_step, section
+
+    from radia.coil_from_cad import _sample_face_perimeter_in_pt_frame
+
+    if n_peri < 4 or n_stations < 3 or cad_units_per_meter <= 0:
+        raise ValueError("invalid perimeter, station, or CAD-unit count")
+    shape = import_step(str(step_path))
+    solids = shape.solids()
+    if len(solids) != 1:
+        raise ValueError("straight-prism route requires exactly one solid")
+    solid = solids[0]
+    bbox = solid.bounding_box()
+    z0, z1 = float(bbox.min.Z), float(bbox.max.Z)
+    if z1 <= z0:
+        raise ValueError("zero-length STEP solid")
+    rings = []
+    areas = []
+    for z in np.linspace(z0, z1, n_stations):
+        # Intersect strictly inside the end caps to avoid coincident-face
+        # ambiguity in OpenCascade's section operation.
+        probe_z = float(np.clip(z, z0 + 1e-7 * (z1 - z0),
+                                z1 - 1e-7 * (z1 - z0)))
+        cut = section(solid, section_by=Plane(origin=(0, 0, probe_z),
+                                              z_dir=(0, 0, 1)))
+        faces = cut.faces()
+        if len(faces) != 1:
+            raise ValueError("STEP section must have exactly one face")
+        face = faces[0]
+        areas.append(float(face.area))
+        center = face.center()
+        uv = _sample_face_perimeter_in_pt_frame(
+            face, np.array([center.X, center.Y, center.Z]),
+            np.array([1.0, 0.0, 0.0]), np.array([0.0, 1.0, 0.0]),
+            int(n_peri))
+        ring = np.column_stack((uv[:, 0] + center.X,
+                                uv[:, 1] + center.Y,
+                                np.full(n_peri, z))) / cad_units_per_meter
+        rings.append(ring)
+    if not np.allclose(areas, areas[0], rtol=1e-6, atol=1e-9):
+        raise ValueError("STEP is not a constant-section straight prism")
+    if not np.allclose(np.asarray(rings)[:, :, :2], rings[0][:, :2],
+                       rtol=0, atol=1e-9):
+        raise ValueError("STEP section changes along the extrusion axis")
+    graph = build_hybrid_surface_topology(
+        np.asarray(rings), range(1, n_stations - 1))
+    return graph, {"cad_source": "step_straight_prism_sections",
+                   "cross_section_kind": "unknown",
+                   "section_area_m2": areas[0] / cad_units_per_meter**2,
+                   "n_lanes": graph.n_lanes,
+                   "n_stations": graph.n_stations}
