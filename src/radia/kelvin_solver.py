@@ -589,7 +589,9 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         mu_cf=None, kelvin_interface_boundary=None,
         kelvin_source_potential=None, kelvin_source_h=None,
         total_source_h=None, total_source_materials=(), return_system=False,
-        phase_callback=None):
+        phase_callback=None, source_rhs_reduced=None,
+        reduced_normal_flux=None, reduced_flux_boundary=None,
+        total_normal_flux=None, total_flux_boundary=None):
     """Solve the TOSCA-style mixed total/reduced Omega formulation.
 
     ``return_system=True`` retains assembled forms for explicit diagnostics.
@@ -681,6 +683,16 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
             the total-potential region.
         total_source_materials: total-region materials on which
             ``total_source_h`` is defined.  Supply both arguments together.
+        source_rhs_reduced: optional preassembled reduced-region volume load
+            in ``fes_reduced`` DOF order. The caller must establish the same
+            source, permeability and quadrature contract as the omitted
+            ``mu_cf * H_s * grad(test_reduced)`` volume term. Interface and
+            exterior loads remain assembled normally.
+        reduced_normal_flux: prescribed outward normal B on the named physical
+            boundary of the reduced region. Without it the natural condition
+            is zero normal flux. Supply ``reduced_flux_boundary`` with it.
+        total_normal_flux: analogous outward normal B for the total region.
+            Supply ``total_flux_boundary`` with it.
     """
     reduced_materials = tuple(reduced_materials)
     total_materials = tuple(total_materials)
@@ -731,6 +743,18 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         interface_constraint_scale = (1.0 / NU_0) / float(R_K)
     if interface_constraint_scale <= 0.0 or not math.isfinite(interface_constraint_scale):
         raise ValueError("interface_constraint_scale must be positive and finite")
+    if (reduced_normal_flux is None) != (reduced_flux_boundary is None):
+        raise ValueError("reduced_normal_flux and reduced_flux_boundary must be supplied together")
+    if reduced_flux_boundary is not None:
+        flux_names = str(reduced_flux_boundary).split("|")
+        if not flux_names or not set(flux_names) <= set(mesh.GetBoundaries()):
+            raise ValueError("reduced_flux_boundary must name existing boundaries")
+    if (total_normal_flux is None) != (total_flux_boundary is None):
+        raise ValueError("total_normal_flux and total_flux_boundary must be supplied together")
+    if total_flux_boundary is not None:
+        flux_names = str(total_flux_boundary).split("|")
+        if not flux_names or not set(flux_names) <= set(mesh.GetBoundaries()):
+            raise ValueError("total_flux_boundary must name existing boundaries")
 
     if mu_cf is None:
         mu_cf = make_kelvin_mu_cf(
@@ -820,6 +844,13 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
     fes_multiplier = Compress(H1(
         mesh, order=int(order), definedon=interface_selector))
     fes = fes_reduced * fes_total * fes_multiplier
+    source_values = None
+    if source_rhs_reduced is not None:
+        source_values = np.asarray(source_rhs_reduced, dtype=float)
+        if (source_values.shape != (fes_reduced.ndof,)
+                or not np.isfinite(source_values).all()):
+            raise ValueError("source_rhs_reduced must be a finite vector in "
+                             "fes_reduced DOF order")
     (phi_reduced, phi_total, multiplier), (
         test_reduced, test_total, test_multiplier) = fes.TnT()
 
@@ -857,8 +888,9 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         multiplier * jump_test + test_multiplier * jump_trial) * d_interface
 
     f_lf = LinearForm(fes)
-    f_lf += mu_cf * H_s * grad(test_reduced) * dx(
-        definedon=reduced_selector, bonus_intorder=bonus_intorder)
+    if source_rhs_reduced is None:
+        f_lf += mu_cf * H_s * grad(test_reduced) * dx(
+            definedon=reduced_selector, bonus_intorder=bonus_intorder)
     if kelvin_lift is not None:
         # Exterior equation for Omega_t = phi_reduced + lift, tested with the
         # same continuous space; the lift moves to the right-hand side.
@@ -874,6 +906,14 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         f_lf += mu_cf * total_source_h * grad(test_total) * dx(
             definedon=total_source_selector, bonus_intorder=bonus_intorder)
     f_lf += interface_constraint_scale * test_multiplier * source_potential * d_interface
+    if reduced_normal_flux is not None:
+        f_lf += -reduced_normal_flux * test_reduced * ds(
+            definedon=mesh.Boundaries(reduced_flux_boundary),
+            bonus_intorder=bonus_intorder)
+    if total_normal_flux is not None:
+        f_lf += -total_normal_flux * test_total * ds(
+            definedon=mesh.Boundaries(total_flux_boundary),
+            bonus_intorder=bonus_intorder)
     phase_timings = {}
 
     def timed_phase(name, action):
@@ -888,7 +928,13 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         return value
 
     timed_phase("matrix_assembly", a_bf.Assemble)
-    timed_phase("source_rhs_assembly", f_lf.Assemble)
+
+    def assemble_rhs():
+        f_lf.Assemble()
+        if source_values is not None:
+            f_lf.vec.FV().NumPy()[:fes_reduced.ndof] += source_values
+
+    timed_phase("source_rhs_assembly", assemble_rhs)
 
     solution = GridFunction(fes)
     inverse_mat = timed_phase(
