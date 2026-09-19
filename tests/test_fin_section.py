@@ -9,6 +9,7 @@ import pytest
 
 from radia.fin_section import (
     analyze_section,
+    feature_panel_weights,
     graded_lane_arclengths,
     local_thickness,
     outline_points_at,
@@ -169,3 +170,33 @@ def test_graded_lanes_reject_impossible_budget():
     analysis = analyze_section(resample_outline(_beak_outline(), 1024))
     with pytest.raises(ValueError):
         graded_lane_arclengths(analysis, 8, tip_lanes=64)
+
+
+def test_feature_weights_conserve_arc_and_resist_half_cell_phase_shift():
+    analysis = analyze_section(resample_outline(_beak_outline(), 2048))
+    fin = analysis.primary
+    n_lanes = 128
+    ds = analysis.perimeter / n_lanes
+    fractions = []
+    dense_region_length = (np.count_nonzero(fin.fin_mask(analysis.outline))
+                           * analysis.perimeter / len(analysis.outline))
+    for phase in (0.0, 0.5):
+        s = np.mod((np.arange(n_lanes) + 0.5 + phase) * ds,
+                   analysis.perimeter)
+        lanes = outline_points_at(analysis.outline, s)
+        weight = feature_panel_weights(analysis, fin, lanes)
+        assert np.sum(weight) * ds == pytest.approx(
+            dense_region_length, rel=0, abs=analysis.perimeter / 2048)
+        k = 1.0 + 0.2 * fin.project(lanes) / fin.length
+        current = k * ds
+        current /= np.sum(current)
+        fractions.append(float(np.sum(current * weight)))
+    assert abs(fractions[1] / fractions[0] - 1.0) < 0.005
+
+
+def test_feature_weights_reject_duplicate_lanes():
+    analysis = analyze_section(resample_outline(_beak_outline(), 512))
+    lanes = resample_outline(analysis.outline, 64)
+    lanes[10] = lanes[9]
+    with pytest.raises(ValueError, match="ordered and distinct"):
+        feature_panel_weights(analysis, analysis.primary, lanes)
