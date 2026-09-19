@@ -1,0 +1,24 @@
+{
+  "schema": "radia.beak_fin_discretization_convergence.v1",
+  "frequency_hz": 150000.0,
+  "reference_2d_SIBC_ohm_per_m": 0.005242,
+  "reference_note": "Infinite straight prism; logarithmic vector-potential kernel plus Leontovich surface impedance.",
+  "reference_convergence": [
+    {"n_peri": 64, "R_ohm_per_m": 0.0054250960, "tip_mean_absK_over_mean": 2.0109},
+    {"n_peri": 128, "R_ohm_per_m": 0.0053329565, "tip_mean_absK_over_mean": 2.0637},
+    {"n_peri": 256, "R_ohm_per_m": 0.0052850715, "tip_mean_absK_over_mean": 1.9972},
+    {"n_peri": 512, "R_ohm_per_m": 0.0052629629, "tip_mean_absK_over_mean": 2.0150},
+    {"n_peri": 1024, "R_ohm_per_m": 0.0052483328, "tip_mean_absK_over_mean": 2.0141}
+  ],
+  "bema_12_to_24_mm_difference": [
+    {"maxh_mm": 3.0, "R_ohm_per_m": 0.0049774012, "relative_to_reference": -0.0505},
+    {"maxh_mm": 1.5, "R_ohm_per_m": 0.0050271549, "relative_to_reference": -0.0410},
+    {"maxh_mm": 0.75, "R_ohm_per_m": 0.0051052853, "relative_to_reference": -0.0261}
+  ],
+  "peec_12_to_24_mm_difference": [
+    {"n_peri": 64, "max_axial_mm": 1.5, "R_ohm_per_m": 0.0054327686, "relative_to_reference": 0.0364},
+    {"n_peri": 128, "max_axial_mm": 1.5, "R_ohm_per_m": 0.0053350791, "relative_to_reference": 0.0178},
+    {"n_peri": 256, "max_axial_mm": 1.5, "R_ohm_per_m": 0.0052723742, "relative_to_reference": 0.0058}
+  ],
+  "conclusion": "Independent refinement brackets the 2-D SIBC reference. BEM-A rises toward it and experimental PEEC falls toward it. At the finest completed points they are -2.61% and +0.58%, respectively. This validates the lateral-loss formulation for the straight-prism integral quantity, but not the pointwise physical current at a tip whose radius is only 1.47 skin depths."
+}
