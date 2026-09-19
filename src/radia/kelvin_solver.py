@@ -1061,6 +1061,314 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
     }
 
 
+def _map_matching_h1_load_to_global(
+        mesh, source_space, target_space, source_values, *, order):
+    """Map an uncompressed P1/P2 H1 load by shared mesh entities.
+
+    The helper is deliberately narrower than a generic prolongation.  It is
+    the numbering bridge needed when a reduced-region surface-source load was
+    assembled before the matching-trace total/reduced spaces were condensed
+    into one global H1 space.
+    """
+    import ngsolve as ng
+
+    order = int(order)
+    if order not in (1, 2):
+        raise ValueError("matching H1 load mapping supports only order 1 or 2")
+    values = np.asarray(source_values, dtype=float)
+    if values.shape != (source_space.ndof,) or not np.isfinite(values).all():
+        raise ValueError(
+            "source_values must be a finite vector in source_space DOF order")
+
+    mapped = np.zeros(target_space.ndof, dtype=float)
+    node_groups = [(ng.VERTEX, mesh.vertices)]
+    if order == 2:
+        node_groups.append((ng.EDGE, mesh.edges))
+    seen_source = set()
+    for node_type, entities in node_groups:
+        for entity in entities:
+            source_dofs = tuple(
+                dof for dof in source_space.GetDofNrs(
+                    ng.NodeId(node_type, entity.nr)) if dof >= 0)
+            if not source_dofs:
+                continue
+            target_dofs = tuple(
+                dof for dof in target_space.GetDofNrs(
+                    ng.NodeId(node_type, entity.nr)) if dof >= 0)
+            if len(source_dofs) != 1 or len(target_dofs) != 1:
+                raise ValueError(
+                    "matching H1 load mapping requires one uncompressed DOF "
+                    "per active vertex/edge")
+            source_dof, target_dof = source_dofs[0], target_dofs[0]
+            if source_dof in seen_source:
+                raise ValueError("source H1 DOF is owned by multiple mesh entities")
+            seen_source.add(source_dof)
+            mapped[target_dof] += values[source_dof]
+
+    nonzero_unmapped = np.flatnonzero(np.abs(values) > 1.0e-30)
+    if not set(nonzero_unmapped).issubset(seen_source):
+        raise ValueError(
+            "source load contains active DOFs outside the P1/P2 matching "
+            "vertex/edge contract")
+    return mapped
+
+
+def _copy_matching_h1_trace_to_global(
+        mesh, source_trace, target, interface_boundary, *, order):
+    """Copy projected trace coefficients without re-projecting through Set."""
+    import ngsolve as ng
+
+    vertex_ids = set()
+    edge_ids = set()
+    for element in mesh.Elements(ng.BND):
+        if element.mat != interface_boundary:
+            continue
+        vertex_ids.update(vertex.nr for vertex in element.vertices)
+        if int(order) == 2:
+            edge_ids.update(edge.nr for edge in element.edges)
+    groups = [(ng.VERTEX, sorted(vertex_ids))]
+    if int(order) == 2:
+        groups.append((ng.EDGE, sorted(edge_ids)))
+    target_values = target.vec.FV().NumPy()
+    source_values = source_trace.vec.FV().NumPy()
+    for node_type, entity_ids in groups:
+        for entity_id in entity_ids:
+            source_dofs = tuple(
+                dof for dof in source_trace.space.GetDofNrs(
+                    ng.NodeId(node_type, entity_id)) if dof >= 0)
+            target_dofs = tuple(
+                dof for dof in target.space.GetDofNrs(
+                    ng.NodeId(node_type, entity_id)) if dof >= 0)
+            if len(source_dofs) != 1 or len(target_dofs) != 1:
+                raise ValueError(
+                    "matching trace condensation requires one projected "
+                    "P1/P2 DOF per interface vertex/edge")
+            target_values[target_dofs[0]] = source_values[source_dofs[0]]
+
+
+def _zero_h1_boundary_dofs(mesh, grid_function, boundary, *, order):
+    """Zero P1/P2 boundary entities, including interface/Dirichlet junctions."""
+    import ngsolve as ng
+
+    boundary_names = set(str(boundary).split("|"))
+    vertex_ids = set()
+    edge_ids = set()
+    for element in mesh.Elements(ng.BND):
+        if element.mat not in boundary_names:
+            continue
+        vertex_ids.update(vertex.nr for vertex in element.vertices)
+        if int(order) == 2:
+            edge_ids.update(edge.nr for edge in element.edges)
+    values = grid_function.vec.FV().NumPy()
+    for node_type, entity_ids in ((ng.VERTEX, vertex_ids), (ng.EDGE, edge_ids)):
+        if node_type == ng.EDGE and int(order) != 2:
+            continue
+        for entity_id in entity_ids:
+            for dof in grid_function.space.GetDofNrs(
+                    ng.NodeId(node_type, entity_id)):
+                if dof >= 0:
+                    values[dof] = 0.0
+
+
+def solve_magnetostatic_matching_trace_total_reduced_omega(
+        mesh, H_s, source_trace, *, mu_r_by_material,
+        reduced_materials, total_materials, interface_boundary,
+        order=1, dirichlet_boundary=None, bonus_intorder=4,
+        source_rhs_reduced=None, reduced_normal_flux=None,
+        reduced_flux_boundary=None, solver="direct", inverse="pardiso",
+        cg_preconditioner="local", cg_tolerance=1.0e-10,
+        cg_max_iterations=2000, return_system=False):
+    """Solve the finite-domain matching-trace mixed Omega problem as SPD.
+
+    This is a strict acceleration path for a joined, non-periodic mesh whose
+    total and reduced potentials have the same P1/P2 trace space.  With a
+    projected interface lift ``L`` the constrained variables are
+    ``phi_total = u`` and ``phi_reduced = u - L``.  The Lagrange multiplier is
+    therefore eliminated exactly and the remaining global H1 system is SPD,
+    allowing CG.  Kelvin exteriors, periodic/compressed spaces, nonmatching
+    traces, nonlinear permeability and orders above two stay on the general
+    saddle-point driver.
+
+    ``source_trace`` must be an NGSolve GridFunction.  Accepting an arbitrary
+    CoefficientFunction would silently change the projection used by the
+    multiplier formulation and has been observed to change P1 fields.
+    """
+    import ngsolve as ng
+
+    order = int(order)
+    if order not in (1, 2):
+        raise ValueError("matching-trace condensation supports only order 1 or 2")
+    if not isinstance(source_trace, GridFunction):
+        raise TypeError(
+            "source_trace must be a projected NGSolve GridFunction, not an "
+            "arbitrary CoefficientFunction")
+    reduced_materials = tuple(str(name) for name in reduced_materials)
+    total_materials = tuple(str(name) for name in total_materials)
+    actual = set(mesh.GetMaterials())
+    reduced_set = set(reduced_materials)
+    total_set = set(total_materials)
+    if (not reduced_set or not total_set or reduced_set & total_set
+            or reduced_set | total_set != actual):
+        raise ValueError(
+            "reduced_materials and total_materials must be a disjoint, "
+            "exhaustive mesh partition")
+    if interface_boundary not in mesh.GetBoundaries():
+        raise ValueError("interface_boundary must name an existing boundary")
+    if (reduced_normal_flux is None) != (reduced_flux_boundary is None):
+        raise ValueError(
+            "reduced_normal_flux and reduced_flux_boundary must be supplied together")
+    if solver not in ("direct", "cg"):
+        raise ValueError("solver must be 'direct' or 'cg'")
+
+    material_mu = {}
+    supplied_mu = dict(mu_r_by_material or {})
+    for material in mesh.GetMaterials():
+        mu_r = float(supplied_mu.get(material, 1.0))
+        if not math.isfinite(mu_r) or mu_r <= 0.0:
+            raise ValueError(f"mu_r for {material!r} must be positive and finite")
+        material_mu[material] = MU_0 * mu_r
+    mu_cf = mesh.MaterialCF(material_mu)
+    reduced_selector = mesh.Materials("|".join(reduced_materials))
+    interface_selector = mesh.Boundaries(interface_boundary)
+    fes = H1(
+        mesh, order=order,
+        **({"dirichlet": dirichlet_boundary} if dirichlet_boundary else {}))
+    reduced_space = H1(mesh, order=order, definedon=reduced_selector)
+    u, v = fes.TnT()
+
+    lift = GridFunction(fes, name="source_interface_lift")
+    lift.vec[:] = 0.0
+    _copy_matching_h1_trace_to_global(
+        mesh, source_trace, lift, interface_boundary, order=order)
+    if dirichlet_boundary:
+        # The multiplier formulation omits the jump equation where both
+        # scalar potentials are already fixed.  Zeroing the lift on that
+        # junction is its exact eliminated counterpart.
+        _zero_h1_boundary_dofs(
+            mesh, lift, dirichlet_boundary, order=order)
+
+    a_bf = BilinearForm(fes, symmetric=True)
+    a_bf += mu_cf * grad(u) * grad(v) * dx(
+        bonus_intorder=bonus_intorder)
+    preconditioner = None
+    if solver == "cg":
+        from ngsolve import Preconditioner
+        preconditioner = Preconditioner(a_bf, cg_preconditioner)
+    f_lf = LinearForm(fes)
+    if source_rhs_reduced is None:
+        f_lf += mu_cf * H_s * grad(v) * dx(
+            definedon=reduced_selector, bonus_intorder=bonus_intorder)
+    f_lf += mu_cf * grad(lift) * grad(v) * dx(
+        definedon=reduced_selector, bonus_intorder=bonus_intorder)
+    if reduced_normal_flux is not None:
+        requested_flux_names = set(str(reduced_flux_boundary).split("|"))
+        face_materials = {}
+        for element in mesh.Elements(ng.VOL):
+            for face in element.faces:
+                face_materials.setdefault(face.nr, set()).add(element.mat)
+        reduced_flux_names = set()
+        for element in mesh.Elements(ng.BND):
+            if element.mat not in requested_flux_names:
+                continue
+            adjacent = set()
+            for face in element.faces:
+                adjacent.update(face_materials.get(face.nr, ()))
+            if adjacent & reduced_set:
+                reduced_flux_names.add(element.mat)
+        if not reduced_flux_names:
+            raise ValueError(
+                "reduced_flux_boundary has no face adjacent to reduced materials")
+        f_lf += -reduced_normal_flux * v * ds(
+            definedon=mesh.Boundaries("|".join(sorted(reduced_flux_names))),
+            bonus_intorder=bonus_intorder)
+
+    started = time.perf_counter()
+    a_bf.Assemble()
+    matrix_assembly = time.perf_counter() - started
+    started = time.perf_counter()
+    f_lf.Assemble()
+    if source_rhs_reduced is not None:
+        mapped = _map_matching_h1_load_to_global(
+            mesh, reduced_space, fes, source_rhs_reduced, order=order)
+        f_lf.vec.FV().NumPy()[:] += mapped
+    rhs_assembly = time.perf_counter() - started
+
+    solution = GridFunction(fes, name="phi_total_condensed")
+    residual = solution.vec.CreateVector()
+    residual.data = f_lf.vec - a_bf.mat * solution.vec
+    started = time.perf_counter()
+    iterations = None
+    if solver == "direct":
+        inv = a_bf.mat.Inverse(fes.FreeDofs(), inverse=inverse)
+        setup_seconds = time.perf_counter() - started
+        started = time.perf_counter()
+        solution.vec.data += inv * residual
+        solve_seconds = time.perf_counter() - started
+    else:
+        preconditioner.Update()
+        setup_seconds = time.perf_counter() - started
+        from ngsolve.krylovspace import CGSolver
+        started = time.perf_counter()
+        inv = CGSolver(
+            mat=a_bf.mat, pre=preconditioner.mat,
+            tol=float(cg_tolerance), maxiter=int(cg_max_iterations),
+            printrates=False)
+        solution.vec.data += inv * residual
+        solve_seconds = time.perf_counter() - started
+        iterations = getattr(inv, "iterations", None)
+
+    phi_reduced = solution - lift
+    H_reduced = H_s - grad(solution) + grad(lift)
+    H_total = -grad(solution)
+    zero = CoefficientFunction((0.0, 0.0, 0.0))
+    components = []
+    for component in range(3):
+        components.append(mesh.MaterialCF({
+            material: (H_reduced[component] if material in reduced_set
+                       else H_total[component] if material in total_set
+                       else zero[component])
+            for material in mesh.GetMaterials()
+        }))
+    H_cf = CoefficientFunction(tuple(components))
+    final_residual = f_lf.vec.CreateVector()
+    final_residual.data = f_lf.vec - a_bf.mat * solution.vec
+    free = np.asarray(list(fes.FreeDofs()), dtype=bool)
+    residual_values = final_residual.FV().NumPy()[free]
+    rhs_values = f_lf.vec.FV().NumPy()[free]
+    relative_residual = float(
+        np.linalg.norm(residual_values) / max(np.linalg.norm(rhs_values), 1.0e-30))
+    linear_residual = {
+        "free_dofs": {
+            "l2": float(np.linalg.norm(residual_values)),
+            "rhs_l2": float(np.linalg.norm(rhs_values)),
+            "relative": relative_residual,
+        }
+    }
+    return {
+        "solution": solution,
+        "phi_total": solution,
+        "phi_reduced": phi_reduced,
+        "source_lift": lift,
+        "fes": fes,
+        "fes_reduced_source": reduced_space,
+        "mu_cf": mu_cf,
+        "H_cf": H_cf,
+        "B_cf": mu_cf * H_cf,
+        "linear_residual": linear_residual,
+        "linear_residual_relative": relative_residual,
+        "solver": solver,
+        "iterations": iterations,
+        "phase_timings_seconds": {
+            "matrix_assembly": matrix_assembly,
+            "source_rhs_assembly": rhs_assembly,
+            "preconditioner_or_factorization": setup_seconds,
+            "backsolve": solve_seconds,
+        },
+        "system": ({"bilinear_form": a_bf, "linear_form": f_lf}
+                   if return_system else None),
+    }
+
+
 class MixedOmegaPicardNotConverged(RuntimeError):
     """Fail-loud non-convergence of the mixed total/reduced Omega Picard loop.
 
