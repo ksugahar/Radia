@@ -222,6 +222,15 @@ PEEC assembly/solve. During verification, centre-only region masks exposed a
 Integrated metrics now use `feature_panel_weights`, the exact overlap fraction
 of each perimeter dual cell with the automatically detected fin/tip interval;
 the declared graded-vs-uniform tolerances then pass without relaxation.
+`tip_mean_absK_over_mean` is consequently an arc-length-weighted tip mean,
+not a mean over lane indices; its existing 2.0 +/- 5% golden passes under this
+definition. Arc coordinates use continuous nearest-segment projection, so two
+lanes cannot silently collapse onto one dense-outline sample; duplicate or
+unordered lanes fail loudly. Unit tests cover dual-cell arc-length conservation,
+less than 0.5% change under a half-cell lane-phase shift, and duplicate-lane
+rejection. A `FinFeature.fin_mask` is a single-feature half-space convenience;
+for multiple fins in the same half-space, connected-interval weights are the
+required integration route.
 
 Not covered yet: fins whose section changes along the sweep (needs
 station-wise analysis and lane transition rings), separate brazed fin

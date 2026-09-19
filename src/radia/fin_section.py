@@ -205,6 +205,10 @@ class FinFeature:
         Samples lying on the root plane itself (e.g. the shoulder faces of a
         stepped root) count as fin side; ``root_tolerance`` (two steps of the
         analysed outline) absorbs the sampling error of the root corner.
+        This is a half-space classification for one selected feature. If two
+        fins extend into the same half-space, use the feature's connected
+        outline interval (for example :func:`feature_panel_weights`) rather
+        than combining multiple ``fin_mask`` results.
         """
         return self.project(xy) >= -self.root_tolerance
 
@@ -261,10 +265,23 @@ class SectionAnalysis:
     fins: tuple[FinFeature, ...] = field(default_factory=tuple)
 
     def arclength_of(self, xy):
-        """Arc length of the outline sample nearest to each point."""
+        """Continuous arc coordinate from nearest outline-segment projection."""
         q = np.asarray(xy, dtype=float)
-        d = np.linalg.norm(self.outline[None, :, :] - q[:, None, :], axis=2)
-        return self.arclength[np.argmin(d, axis=1)]
+        p0 = self.outline
+        edge = np.roll(p0, -1, axis=0) - p0
+        edge2 = np.sum(edge * edge, axis=1)
+        if np.any(edge2 <= 0):
+            raise ValueError("outline contains a zero-length edge")
+        rel = q[:, None, :] - p0[None, :, :]
+        fraction = np.clip(np.sum(rel * edge[None, :, :], axis=2) /
+                           edge2[None, :], 0.0, 1.0)
+        projected = p0[None, :, :] + fraction[:, :, None] * edge[None, :, :]
+        distance2 = np.sum((q[:, None, :] - projected) ** 2, axis=2)
+        nearest = np.argmin(distance2, axis=1)
+        edge_length = np.sqrt(edge2)
+        return np.mod(self.arclength[nearest]
+                      + fraction[np.arange(len(q)), nearest]
+                      * edge_length[nearest], self.perimeter)
 
     @property
     def primary(self):
@@ -501,13 +518,11 @@ def feature_panel_weights(analysis, fin, lane_xy, *, tip=False):
     if xy.ndim != 2 or xy.shape[1] != 2 or len(xy) < 3:
         raise ValueError("lane_xy must have shape (n>=3, 2)")
     outline = analysis.outline
-    nearest = np.argmin(np.sum((xy[:, None, :] - outline[None, :, :]) ** 2,
-                               axis=2), axis=1)
-    s = analysis.arclength[nearest].astype(float)
+    s = analysis.arclength_of(xy)
     per = float(analysis.perimeter)
-    for i in range(1, len(s)):
-        while s[i] <= s[i - 1]:
-            s[i] += per
+    s = np.unwrap(2.0 * np.pi * s / per) * per / (2.0 * np.pi)
+    if np.any(np.diff(s) <= 1e-12 * per):
+        raise ValueError("perimeter lanes must be ordered and distinct")
     prev = np.r_[s[-1] - per, s[:-1]]
     following = np.r_[s[1:], s[0] + per]
     left = 0.5 * (prev + s)
