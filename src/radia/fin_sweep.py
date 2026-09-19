@@ -479,10 +479,26 @@ OUTLINE_SAMPLES_PER_LANE = 24
 #: the lanes it needs come out of the body.
 DEFAULT_TIP_LANES = 8
 
+#: How much of the section's total change one station may absorb.  A
+#: station sweep at 150 kHz (2026-09-20) compared a prismatic beak fin
+#: with a tapered one whose fin runs 2.40 -> 0.60 mm over 60 mm.  The
+#: prismatic terminal resistance moved 0.17 % between 5 and 33 stations,
+#: so a constant section needs nothing beyond the aspect rule.  The
+#: tapered one kept climbing -- 330.3, 332.4, 334.0, 336.4, 336.5 uOhm at
+#: 9, 13, 17, 25, 33 stations -- and only settled to 0.03 % per step
+#: between 25 and 33.  Its fin length spans 75 %, and 0.75 / 0.03 lands
+#: at 26 stations, which is where that settling begins.
+STATION_RELATIVE_CHANGE = 0.03
+
+#: Dense partial-element matrices cost 16 * N**2 bytes and factor in
+#: O(N**3), so the measured discretisation is checked against a branch
+#: budget rather than being quietly coarsened.  12000 branches is ~2.3 GB.
+DEFAULT_MAX_BRANCHES = 12000
+
 
 def auto_fin_resolution(step_path, *, cad_units_per_meter="auto",
                         route="auto", probe_stations=5, probe_outline=4096,
-                        max_lanes=256, max_stations=41):
+                        max_lanes=256, max_branches=DEFAULT_MAX_BRANCHES):
     """Measure one STEP conductor and choose its fin discretisation.
 
     A cheap CAD-only pass sections the solid at ``probe_stations``
@@ -491,6 +507,12 @@ def auto_fin_resolution(step_path, *, cad_units_per_meter="auto",
     they imply.  Nothing is solved here.  Every returned number carries
     the measurement it came from so a run can be audited without
     re-deriving the rule.
+
+    Raises when the measured discretisation would exceed ``max_branches``.
+    A section that both crowds its current on a small tip radius and
+    changes along the sweep wants fine lanes AND many stations, and the
+    dense kernel cannot afford both; coarsening one of them quietly would
+    hide that, so the caller is told the cost and pins a value itself.
     """
     stations, tag = station_outlines_from_step(
         step_path, n_stations=probe_stations, n_outline=probe_outline,
@@ -517,9 +539,41 @@ def auto_fin_resolution(step_path, *, cad_units_per_meter="auto",
     n_outline = int(np.clip(
         2 ** math.ceil(math.log2(OUTLINE_SAMPLES_PER_LANE * n_lanes)),
         1024, 16384))
+    # Stations follow how much the section CHANGES along the sweep, not
+    # how long the sweep is: a prismatic fin is insensitive to the count.
+    fin_lengths = [float(a.primary.length)
+                   for a in analyses if a.primary is not None]
+    if len(fin_lengths) < len(analyses):
+        fin_span = 1.0                      # the fin vanishes somewhere
+    elif fin_lengths:
+        fin_span = (max(fin_lengths) - min(fin_lengths)) / max(fin_lengths)
+    else:
+        fin_span = 0.0
+    area_span = float((areas.max() - areas.min()) / np.mean(areas))
+    section_change = max(fin_span, area_span)
+
     section_size = float(np.sqrt(np.mean(areas)))
-    n_stations = int(np.clip(
-        round(sweep_length / (2.0 * section_size)) + 1, 5, max_stations))
+    n_from_aspect = round(sweep_length / (2.0 * section_size)) + 1
+    n_from_change = math.ceil(section_change / STATION_RELATIVE_CHANGE) + 1
+    n_stations = max(5, int(n_from_aspect), int(n_from_change))
+
+    branches = (2 * n_stations - 3) * n_lanes
+    if branches > max_branches:
+        raise ValueError(
+            f"the measured discretisation needs {branches} branches "
+            f"({n_lanes} lanes x {n_stations} stations), over the "
+            f"{max_branches} the dense partial-element kernel is budgeted "
+            f"for (~{16 * branches ** 2 / 2**30:.1f} GB).  Lanes come from a "
+            f"{min(tip_radii) * 1e3:.4g} mm tip radius on a "
+            f"{perimeter * 1e3:.4g} mm perimeter; stations from a "
+            f"{section_change:.0%} section change along the sweep.  Pin "
+            f"n_lanes or n_stations to choose which one to give up, or "
+            f"raise max_branches."
+            if tip_radii else
+            f"the measured discretisation needs {branches} branches "
+            f"({n_lanes} lanes x {n_stations} stations), over the "
+            f"{max_branches} budget.  Pin n_lanes or n_stations, or raise "
+            f"max_branches.")
 
     return {
         "n_lanes": n_lanes, "n_outline": n_outline,
@@ -529,8 +583,8 @@ def auto_fin_resolution(step_path, *, cad_units_per_meter="auto",
             "cad_source": tag,
             "perimeter_m": perimeter,
             "section_area_m2_mean": float(np.mean(areas)),
-            "section_area_relative_spread": float(
-                (areas.max() - areas.min()) / np.mean(areas)),
+            "section_area_relative_spread": area_span,
+            "fin_length_relative_span": fin_span,
             "tip_radius_m_min": min(tip_radii) if tip_radii else None,
             "fin_probe_stations": len(tip_radii),
             "probe_stations": len(stations),
@@ -541,8 +595,11 @@ def auto_fin_resolution(step_path, *, cad_units_per_meter="auto",
             "lane_spacing_m": lane_spacing,
             "outline_samples_per_lane": OUTLINE_SAMPLES_PER_LANE,
             "station_spacing_per_section_size": 2.0,
+            "station_relative_change": STATION_RELATIVE_CHANGE,
+            "stations_from_aspect": int(n_from_aspect),
+            "stations_from_section_change": int(n_from_change),
+            "estimated_branches": int(branches),
             "clamped_lanes": n_lanes == max_lanes,
-            "clamped_stations": n_stations == max_stations,
         },
     }
 

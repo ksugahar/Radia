@@ -234,6 +234,47 @@ def test_auto_resolution_measures_the_beak_tip_and_sizes_the_lanes():
     assert auto["rule"]["lane_spacing_driver"] == "fin tip radius"
 
 
+def test_station_count_follows_the_section_change_not_the_sweep_length():
+    """A prismatic fin is insensitive to the station count; a tapered one
+    is not, and only the taper may raise it."""
+    from radia.fin_sweep import STATION_RELATIVE_CHANGE, auto_fin_resolution
+
+    prismatic = auto_fin_resolution(FIXTURES / "beak_fin_straight.step")
+    tapered = auto_fin_resolution(FIXTURES / "beak_fin_tapered.step",
+                                  max_branches=20000)
+
+    assert prismatic["measured"]["fin_length_relative_span"] < 1e-6
+    assert prismatic["rule"]["stations_from_section_change"] == 1
+    assert prismatic["n_stations"] == prismatic["rule"]["stations_from_aspect"]
+
+    # The beak reach runs 4.0 -> 2.2 mm past a 1.6 mm root, so the fin
+    # length spans 75 % geometrically.  The detector reports 84 %: it
+    # tracks the length to ~0.1 % while the fin is at least 1 mm long
+    # (2.3973 / 1.9471 / 1.4969 / 1.0449 mm against 2.40 / 1.95 / 1.50 /
+    # 1.05) and then under-measures the 0.60 mm blunt end as 0.376 mm,
+    # where the fin is only ~2.4 tip radii long and its root genuinely
+    # blurs.  That errs toward more stations, so it is recorded, not
+    # corrected here.
+    span = tapered["measured"]["fin_length_relative_span"]
+    assert span == pytest.approx(0.84, abs=0.03)
+    assert tapered["rule"]["stations_from_section_change"] == (
+        math.ceil(span / STATION_RELATIVE_CHANGE) + 1)
+    # Measured: the tapered terminal resistance only settles to 0.03 % per
+    # step beyond ~25 stations, where the prismatic one is flat from 5.
+    assert tapered["n_stations"] >= 25
+    assert tapered["n_stations"] > prismatic["n_stations"]
+
+
+def test_auto_resolution_refuses_to_exceed_the_branch_budget():
+    """Fine lanes AND many stations is a cost the dense kernel cannot pay;
+    it must say so rather than quietly coarsening one of them."""
+    from radia.fin_sweep import auto_fin_resolution
+
+    with pytest.raises(ValueError, match="branches"):
+        auto_fin_resolution(FIXTURES / "beak_fin_tapered.step",
+                            max_branches=2000)
+
+
 def test_fin_graph_from_step_needs_only_the_file_and_records_its_choice():
     from radia.fin_sweep import fin_graph_from_step
 
