@@ -184,3 +184,46 @@ See `beak_fin_delivery_metrics_150kHz.json`.
 5. Only after those gates, add an explicit `fin-surface` IH backend and
    document its contract through the owning Radia MCP manual. Existing
    rectangle/circle production behavior must remain unchanged.
+
+## Automatic fin detection from the STEP section (2026-09-19, later)
+
+The beak/tip regions and the workpiece-side probe are no longer fixture
+constants (`x >= 1.6 mm`, `x >= 3.5 mm`, probe at `x = 5 mm`).
+`radia.fin_section.analyze_section` derives them from the dense CAD outline:
+
+- local thickness by inward-normal ray casting; fin = contiguous thin run
+  (`t < 0.5 * median(t)`), merged across the rounded tip and walked back to
+  the geometric root (`t < 0.9 * t_body` stops at the shoulder faces);
+- root chord, fin axis, extremity; tip radius by least-squares circle fit
+  (chord-polygonisation insensitive); tip arc by circle membership;
+- `fin_mask` = on/beyond the root plane, `tip_mask` = within `2 r_tip` of the
+  extremity along the axis, `probe_points` = perpendicular segment at
+  `max(5 delta, 4 r_tip)` beyond the tip spanning the body half width.
+
+On `beak_fin_straight.step` this reproduces the former constants
+(root 1.608 mm, tip threshold 3.4995 mm, probe centre 5.0008 mm, r_tip
+0.2500 mm) and is rigid-motion invariant; rectangles and circles yield no
+fin.  `build_hybrid_surface_topology_from_straight_prism_step` returns the
+analysis in its metadata and accepts `lane_grading="auto"`, which grades the
+lanes geometrically toward each fin tip with `tip_lanes` cells on the tip
+arc (2-D check: graded 128 lanes reproduce the uniform-256 R to 0.03 %,
+beak fractions to 1 %).  Default lane placement is unchanged
+(`"uniform"`), so previous goldens are untouched.  `tests/test_fin_section.py`
+covers detection, invariance, density stability, two-fin separation and
+lane grading without CAD; `sibc2d_beak_reference.py` gained an
+auto-detection golden and a graded-vs-uniform consistency test.
+
+Verification in the build123d/native-PEEC environment passed all 25 focused
+tests. The CAD sampler's fifth argument is the requested point count, so the
+2048-point outline path is API-correct. A graded 128-lane STEP solve produced
+eight lanes on the fitted CAD tip arc and completed the 896-branch native C++
+PEEC assembly/solve. During verification, centre-only region masks exposed a
+3.27% lane-phase jump when one graded dual cell straddled the detected root.
+Integrated metrics now use `feature_panel_weights`, the exact overlap fraction
+of each perimeter dual cell with the automatically detected fin/tip interval;
+the declared graded-vs-uniform tolerances then pass without relaxation.
+
+Not covered yet: fins whose section changes along the sweep (needs
+station-wise analysis and lane transition rings), separate brazed fin
+solids, and fins with filleted roots (the root then lands at the end of
+the thin walk, not at a corner).

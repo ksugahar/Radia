@@ -15,7 +15,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 
 def run(step_path: Path, *, n_peri: int, max_axial_m: float,
-        frequency=150_000.0, sigma=5.8e7):
+        frequency=150_000.0, sigma=5.8e7, lane_grading="uniform"):
     from build123d import import_step
 
     from radia.peec_fin_topology import (
@@ -27,8 +27,9 @@ def run(step_path: Path, *, n_peri: int, max_axial_m: float,
     bbox = solid.bounding_box()
     length_m = (float(bbox.max.Z) - float(bbox.min.Z)) / 1000.0
     n_stations = math.ceil(length_m / max_axial_m) + 1
-    graph, _ = build_hybrid_surface_topology_from_straight_prism_step(
-        step_path, n_peri=n_peri, n_stations=n_stations)
+    graph, cad = build_hybrid_surface_topology_from_straight_prism_step(
+        step_path, n_peri=n_peri, n_stations=n_stations,
+        lane_grading=lane_grading)
     rings = np.empty((graph.n_stations, graph.n_lanes, 3))
     for station in range(graph.n_stations - 1):
         lo = station * graph.n_lanes
@@ -49,7 +50,9 @@ def run(step_path: Path, *, n_peri: int, max_axial_m: float,
     return {"length_m": length_m, "n_peri": n_peri,
             "n_stations": n_stations,
             "axial_step_m": length_m / (n_stations - 1),
-            "n_branches": len(graph.branches), "R_ohm": resistance}
+            "n_branches": len(graph.branches), "R_ohm": resistance,
+            "lane_grading": cad["lane_grading"],
+            "fin_analysis": cad["fin_analysis"]}
 
 
 def main():
@@ -57,9 +60,12 @@ def main():
     parser.add_argument("--step", type=Path, required=True)
     parser.add_argument("--n-peri", type=int, required=True)
     parser.add_argument("--max-axial-mm", type=float, default=1.5)
+    parser.add_argument("--lane-grading", choices=("uniform", "auto"),
+                        default="uniform")
     args = parser.parse_args()
     print(json.dumps(run(args.step, n_peri=args.n_peri,
-                         max_axial_m=args.max_axial_mm * 1e-3), indent=2))
+                         max_axial_m=args.max_axial_mm * 1e-3,
+                         lane_grading=args.lane_grading), indent=2))
 
 
 if __name__ == "__main__":
