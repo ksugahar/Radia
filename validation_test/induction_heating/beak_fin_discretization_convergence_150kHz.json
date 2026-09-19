@@ -3,6 +3,14 @@
   "frequency_hz": 150000.0,
   "reference_2d_SIBC_ohm_per_m": 0.005242,
   "reference_note": "Infinite straight prism; logarithmic vector-potential kernel plus Leontovich surface impedance.",
+  "reference_delivery_metrics_n1024": {
+    "beak_current_fraction": 0.3081461020,
+    "beak_loss_fraction": 0.3416716228,
+    "tip_loss_fraction": 0.2023114598,
+    "beak_current_centroid_x_mm": 2.8531143942,
+    "tip_mean_absK_over_mean": 2.0140712063,
+    "probe_center_H_A_per_m": 41.7840683704
+  },
   "reference_convergence": [
     {"n_peri": 64, "R_ohm_per_m": 0.0054250960, "tip_mean_absK_over_mean": 2.0109},
     {"n_peri": 128, "R_ohm_per_m": 0.0053329565, "tip_mean_absK_over_mean": 2.0637},

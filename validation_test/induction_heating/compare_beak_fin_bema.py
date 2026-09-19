@@ -16,6 +16,54 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "src" / "radia" / "panels"))
 
 
+def _fill_periodic(values, valid):
+    """Periodically interpolate unsampled perimeter lanes."""
+    values = np.asarray(values, dtype=complex).copy()
+    valid = np.asarray(valid, dtype=bool)
+    if np.count_nonzero(valid) < 3:
+        raise ValueError("need at least three sampled perimeter lanes")
+    idx = np.flatnonzero(valid)
+    query = np.arange(len(values))
+    xp = np.r_[idx - len(values), idx, idx + len(values)]
+    for component in ("real", "imag"):
+        fp0 = getattr(values[idx], component)
+        fp = np.tile(fp0, 3)
+        part = np.interp(query, xp, fp)
+        if component == "real":
+            values.real = part
+        else:
+            values.imag = part
+    return values
+
+
+def _distribution_metrics(k_surface, ds, xy, sheet_resistance):
+    panel_current = np.asarray(k_surface, complex) * np.asarray(ds, float)
+    panel_current /= np.sum(panel_current)
+    loss = sheet_resistance * np.abs(panel_current) ** 2 / ds
+    beak = xy[:, 0] >= 1.6e-3
+    tip = xy[:, 0] >= 3.5e-3
+    probe_y = np.linspace(-2e-3, 2e-3, 41)
+    probe_xy = np.column_stack((np.full_like(probe_y, 5e-3), probe_y))
+    offset = probe_xy[:, None, :] - xy[None, :, :]
+    radius2 = np.sum(offset**2, axis=2)
+    hx = np.sum(-panel_current[None, :] * offset[:, :, 1] /
+                (2 * math.pi * radius2), axis=1)
+    hy = np.sum(panel_current[None, :] * offset[:, :, 0] /
+                (2 * math.pi * radius2), axis=1)
+    h_abs = np.sqrt(np.abs(hx)**2 + np.abs(hy)**2)
+    return {
+        "beak_current_fraction": float(abs(np.sum(panel_current[beak]))),
+        "beak_loss_fraction": float(np.sum(loss[beak]) / np.sum(loss)),
+        "tip_loss_fraction": float(np.sum(loss[tip]) / np.sum(loss)),
+        "beak_current_centroid_x_m": float(
+            np.sum(np.abs(panel_current[beak]) * xy[beak, 0]) /
+            np.sum(np.abs(panel_current[beak]))),
+        "probe_center_H_abs_A_per_m": float(h_abs[len(h_abs) // 2]),
+        "probe_y_m": probe_y.tolist(),
+        "probe_H_abs_A_per_m": h_abs.tolist(),
+    }
+
+
 def run(step_path: Path, *, frequency: float, maxh: float,
         n_peri: int, n_stations: int, mesh_only: bool = False,
         experimental_peec: bool = False, profile_csv: Path | None = None,
@@ -149,6 +197,7 @@ def run(step_path: Path, *, frequency: float, maxh: float,
                 lane_area[k] = np.sum(area[body][take])
                 k_bem[k] = np.sum(jz[body][take] * area[body][take]) / lane_area[k]
         valid = lane_area > 0
+        k_bem = _fill_periodic(k_bem, valid)
         # Remove the arbitrary global phasor before a complex-field norm.
         phase = np.angle(np.vdot(k_peec[valid], k_bem[valid]))
         k_peec_aligned = k_peec * np.exp(1j * phase)
@@ -162,6 +211,10 @@ def run(step_path: Path, *, frequency: float, maxh: float,
         rs = zs.real
         loss_bem = 0.5 * rs * np.abs(k_bem) ** 2
         loss_peec = 0.5 * rs * np.abs(k_peec_aligned) ** 2
+        metrics_bem = _distribution_metrics(k_bem, widths[first:last], xy, rs)
+        metrics_peec = _distribution_metrics(k_peec, widths[first:last], xy, rs)
+        h_bem = np.asarray(metrics_bem["probe_H_abs_A_per_m"])
+        h_peec = np.asarray(metrics_peec["probe_H_abs_A_per_m"])
         result["surface_current_profile"] = {
             "axial_window_m": [zlo, zhi],
             "valid_lanes": int(np.count_nonzero(valid)),
@@ -176,23 +229,40 @@ def run(step_path: Path, *, frequency: float, maxh: float,
                 np.mean(loss_peec[beak]) / np.mean(loss_bem[beak])),
             "tip_mean_loss_ratio_peec_over_bema": float(
                 np.mean(loss_peec[tip]) / np.mean(loss_bem[tip])),
+            "integral_metrics": {"bema": metrics_bem, "peec": metrics_peec},
+            "probe_H_relative_L2": float(
+                np.linalg.norm(h_peec - h_bem) / np.linalg.norm(h_bem)),
+            "probe_center_H_ratio_peec_over_bema": float(
+                metrics_peec["probe_center_H_abs_A_per_m"] /
+                metrics_bem["probe_center_H_abs_A_per_m"]),
         }
         profile = result["surface_current_profile"]
         profile["acceptance_limits"] = {
-            "complex_relative_L2_max": 0.05,
-            "absK_mean_ratio_range": [0.95, 1.05],
-            "loss_mean_ratio_range": [0.90, 1.10],
+            "beak_current_and_loss_fraction_relative": 0.03,
+            "centroid_absolute_m": float(np.mean(widths[first:last])),
+            "probe_H_relative_L2": 0.02,
+        }
+        current_share_error = abs(
+            metrics_peec["beak_current_fraction"] /
+            metrics_bem["beak_current_fraction"] - 1)
+        loss_share_error = abs(
+            metrics_peec["beak_loss_fraction"] /
+            metrics_bem["beak_loss_fraction"] - 1)
+        centroid_error = abs(
+            metrics_peec["beak_current_centroid_x_m"] -
+            metrics_bem["beak_current_centroid_x_m"])
+        profile["integral_metric_errors"] = {
+            "beak_current_fraction_relative": float(current_share_error),
+            "beak_loss_fraction_relative": float(loss_share_error),
+            "beak_current_centroid_absolute_m": float(centroid_error),
         }
         profile["accepted"] = bool(
-            profile["complex_relative_L2"] <= 0.05
-            and all(0.95 <= profile[name] <= 1.05 for name in (
-                "beak_mean_absK_ratio_peec_over_bema",
-                "tip_mean_absK_ratio_peec_over_bema"))
-            and all(0.90 <= profile[name] <= 1.10 for name in (
-                "beak_mean_loss_ratio_peec_over_bema",
-                "tip_mean_loss_ratio_peec_over_bema")))
+            current_share_error <= 0.03
+            and loss_share_error <= 0.03
+            and centroid_error <= np.mean(widths[first:last])
+            and profile["probe_H_relative_L2"] <= 0.02)
         result["status"] = ("accepted" if profile["accepted"] else
-                            "rejected: beak/tip current distribution mismatch")
+                            "rejected: integral fin-delivery metrics mismatch")
         if profile_csv is not None:
             profile_csv.parent.mkdir(parents=True, exist_ok=True)
             with profile_csv.open("w", newline="", encoding="utf-8") as f:

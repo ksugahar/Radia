@@ -1,0 +1,52 @@
+{
+  "schema": "radia.beak_fin_delivery_metrics.v1",
+  "definitions": {
+    "beak": "x >= 1.6 mm",
+    "tip": "x >= 3.5 mm",
+    "probe_line": "x = 5.0 mm, -2 mm <= y <= 2 mm",
+    "current": "1 A peak phasor"
+  },
+  "reference_2d_sibc_n1024": {
+    "beak_current_fraction": 0.3081461020,
+    "beak_loss_fraction": 0.3416716228,
+    "tip_loss_fraction": 0.2023114598,
+    "beak_current_centroid_x_mm": 2.8531143942,
+    "tip_mean_absK_over_mean": 2.0140712063,
+    "probe_center_H_A_per_m": 41.7840683704
+  },
+  "three_dimensional_finest_completed": {
+    "geometry_length_mm": 24,
+    "bema": {
+      "maxh_mm": 0.75,
+      "current_dofs": 8985,
+      "beak_current_fraction": 0.3040130364,
+      "beak_loss_fraction": 0.3259171428,
+      "tip_loss_fraction": 0.1894070819,
+      "beak_current_centroid_x_mm": 2.8167708236,
+      "probe_center_H_A_per_m": 41.0586065176
+    },
+    "peec": {
+      "n_peri": 256,
+      "max_axial_mm": 1.5,
+      "beak_current_fraction": 0.3065987296,
+      "beak_loss_fraction": 0.3364678200,
+      "tip_loss_fraction": 0.1976414451,
+      "beak_current_centroid_x_mm": 2.8308682045,
+      "probe_center_H_A_per_m": 41.4462789689
+    },
+    "peec_vs_bema": {
+      "beak_current_fraction_relative_error": 0.0085052050,
+      "beak_loss_fraction_relative_error": 0.0323722683,
+      "beak_current_centroid_error_mm": 0.0140973809,
+      "probe_center_H_relative_error": 0.0094419291,
+      "probe_line_H_relative_L2": 0.0072218441
+    }
+  },
+  "acceptance": {
+    "current_and_loss_fraction_relative_max": 0.03,
+    "centroid_absolute_max": "one perimeter lane spacing",
+    "probe_line_H_relative_L2_max": 0.02,
+    "accepted": false,
+    "reason": "Beak loss fraction differs by 3.24%, narrowly above the 3% threshold. All other integral/delivery metrics pass. Pointwise maximum K is diagnostic only and is not an acceptance metric."
+  }
+}
