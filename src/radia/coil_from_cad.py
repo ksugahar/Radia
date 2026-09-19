@@ -4310,9 +4310,9 @@ def _section_faces_from_solid(solid, cad_units_per_meter: float,
                     raise ValueError(
                         f"_filaments_from_section_planes: spacing "
                         f"between {label} and the adjacent interior "
-                        f"station is {jump * 1e3:.2f} mm vs typical "
+                        f"station is {jump:.2f} CAD units vs typical "
                         f"interior spacing "
-                        f"{interior_median * 1e3:.2f} mm "
+                        f"{interior_median:.2f} CAD units "
                         f"({jump / interior_median:.1f}x larger) -- "
                         f"the planar-arc spine skips a chunk of the "
                         f"conductor near {label}.  HINT: this "

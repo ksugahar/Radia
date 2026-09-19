@@ -321,7 +321,17 @@ class _ShapeBase:
 
 
 class Edge(_ShapeBase):
-    """``TopoDS_Edge`` wrapper, parity with build123d.topology.Edge."""
+    """``TopoDS_Edge`` wrapper, parity with build123d.topology.Edge.
+
+    ``_wire_reversed`` is set only by :meth:`Wire.edges`: an edge whose
+    orientation in the wire is ``TopAbs_REVERSED`` is traversed against
+    its own curve parametrisation, so ``start_point`` / ``end_point`` /
+    ``position_at`` must measure from the other end to follow the wire.
+    Edges taken straight off a solid or compound keep the plain
+    geometric direction (orientation there is not a traversal).
+    """
+
+    _wire_reversed = False
 
     @property
     def geom_type(self) -> GeomType:
@@ -347,12 +357,14 @@ class Edge(_ShapeBase):
     def start_point(self) -> Vector:
         from OCP.BRepAdaptor import BRepAdaptor_Curve
         ad = BRepAdaptor_Curve(self.wrapped)
-        return _pnt_to_vector(ad.Value(ad.FirstParameter()))
+        u = ad.LastParameter() if self._wire_reversed else ad.FirstParameter()
+        return _pnt_to_vector(ad.Value(u))
 
     def end_point(self) -> Vector:
         from OCP.BRepAdaptor import BRepAdaptor_Curve
         ad = BRepAdaptor_Curve(self.wrapped)
-        return _pnt_to_vector(ad.Value(ad.LastParameter()))
+        u = ad.FirstParameter() if self._wire_reversed else ad.LastParameter()
+        return _pnt_to_vector(ad.Value(u))
 
     def position_at(self, distance: float,
                     position_mode: PositionMode = PositionMode.PARAMETER) -> Vector:
@@ -363,17 +375,22 @@ class Edge(_ShapeBase):
           is treated as a NORMALISED parameter linearly mapped to
           [FirstParameter, LastParameter]; other values are passed
           through as the raw curve parameter.
-        * PositionMode.LENGTH -- distance is treated as arc length
-          from the curve start.
+        * PositionMode.LENGTH -- distance is ABSOLUTE arc length from
+          the start of the traversal, in CAD units.  It is never
+          reinterpreted as a fraction: the earlier "0 <= d <= 1 means a
+          fraction" branch silently squared the position on every edge
+          shorter than one CAD unit and on the first sample of every
+          edge (measured 2026-09-20 on the beak-fin tip arc, length
+          0.685 mm: position_at(0.685) landed 32 % short of the far
+          endpoint, so the sampled outline self-intersected).
         """
         from OCP.BRepAdaptor import BRepAdaptor_Curve
         ad = BRepAdaptor_Curve(self.wrapped)
         if position_mode == PositionMode.LENGTH:
             from OCP.GCPnts import GCPnts_AbscissaPoint
-            total = GCPnts_AbscissaPoint.Length_s(ad)
-            target = (float(distance) * total
-                      if 0.0 <= float(distance) <= 1.0
-                      else float(distance))
+            target = float(distance)
+            if self._wire_reversed:
+                target = GCPnts_AbscissaPoint.Length_s(ad) - target
             ap = GCPnts_AbscissaPoint(ad, target, ad.FirstParameter())
             return _pnt_to_vector(ad.Value(ap.Parameter()))
         # PARAMETER mode (default, matches build123d)
@@ -477,9 +494,31 @@ class Wire(_ShapeBase):
     """``TopoDS_Wire`` wrapper."""
 
     def edges(self) -> List[Edge]:
-        from OCP.TopAbs import TopAbs_EDGE
-        from OCP.TopoDS import TopoDS
-        return _unique_subshapes(self.wrapped, TopAbs_EDGE, Edge, TopoDS.Edge_s)
+        """Edges in WIRE TRAVERSAL order, each flagged with its
+        traversal direction.
+
+        ``TopExp.MapShapes_s`` (used for solids and compounds) returns
+        map order, which is not the order the wire connects them in:
+        on a boolean section face of a revolved beak fin it left 5 of 7
+        junctions discontinuous, so an arc-length walk of the perimeter
+        jumped across the section and produced a self-intersecting
+        outline (measured 2026-09-20).  ``BRepTools_WireExplorer`` walks
+        the wire in connection order and reports each edge's orientation
+        within it; honouring that orientation closes every junction.
+        """
+        from OCP.BRepTools import BRepTools_WireExplorer
+        from OCP.TopAbs import TopAbs_REVERSED
+
+        explorer = BRepTools_WireExplorer(self.wrapped)
+        out = []
+        while explorer.More():
+            topods_edge = explorer.Current()
+            edge = Edge(topods_edge)
+            edge._wire_reversed = (
+                topods_edge.Orientation() == TopAbs_REVERSED)
+            out.append(edge)
+            explorer.Next()
+        return out
 
 
 class Face(_ShapeBase):
