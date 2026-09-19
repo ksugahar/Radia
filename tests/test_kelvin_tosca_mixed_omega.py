@@ -433,6 +433,17 @@ def test_matching_trace_condensation_maps_preassembled_reduced_load():
             mesh, source_h, trace,
             source_rhs_reduced=source_load.vec.FV().NumPy().copy(), **args)
 
+        global_space = ng.H1(mesh, order=2)
+        global_test = global_space.TestFunction()
+        global_load = ng.LinearForm(global_space)
+        global_load += ((4.0e-7 * np.pi) * source_h * ng.grad(global_test)
+                        * ng.dx(definedon=mesh.Materials("reduced"),
+                                bonus_intorder=4))
+        global_load.Assemble()
+        supplied_global = solve_magnetostatic_matching_trace_total_reduced_omega(
+            mesh, source_h, trace,
+            source_rhs_reduced=global_load.vec.FV().NumPy().copy(), **args)
+
     assert np.allclose(
         native["system"]["linear_form"].vec.FV().NumPy(),
         supplied["system"]["linear_form"].vec.FV().NumPy(),
@@ -440,6 +451,9 @@ def test_matching_trace_condensation_maps_preassembled_reduced_load():
     for point in ((-0.5, 0.1, 0.1), (0.5, -0.1, 0.2)):
         assert np.allclose(native["H_cf"](mesh(*point)),
                            supplied["H_cf"](mesh(*point)),
+                           rtol=1.0e-10, atol=1.0e-11)
+        assert np.allclose(native["H_cf"](mesh(*point)),
+                           supplied_global["H_cf"](mesh(*point)),
                            rtol=1.0e-10, atol=1.0e-11)
 
 

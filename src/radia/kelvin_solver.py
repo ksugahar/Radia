@@ -1076,10 +1076,24 @@ def _map_matching_h1_load_to_global(
     if order not in (1, 2):
         raise ValueError("matching H1 load mapping supports only order 1 or 2")
     values = np.asarray(source_values, dtype=float)
-    if values.shape != (source_space.ndof,) or not np.isfinite(values).all():
+    if values.ndim != 1 or not np.isfinite(values).all():
         raise ValueError(
-            "source_values must be a finite vector in source_space DOF order")
+            "source_values must be a finite H1 load vector")
 
+    # A producer may deliberately assemble directly in the global H1
+    # numbering.  This is the preferred high-throughput contract.
+    if values.shape == (target_space.ndof,):
+        return values.copy()
+    if values.shape != (source_space.ndof,):
+        raise ValueError(
+            "source_values must use source-space or global H1 DOF order")
+
+    if source_space.ndof > target_space.ndof:
+        raise ValueError("source H1 space is larger than the global H1 space")
+
+    # A defined-on source space is compressed.  Keep the generic entity map
+    # for compatibility; performance-sensitive producers should return the
+    # global-numbered vector handled above.
     mapped = np.zeros(target_space.ndof, dtype=float)
     node_groups = [(ng.VERTEX, mesh.vertices)]
     if order == 2:
@@ -1087,29 +1101,20 @@ def _map_matching_h1_load_to_global(
     seen_source = set()
     for node_type, entities in node_groups:
         for entity in entities:
-            source_dofs = tuple(
-                dof for dof in source_space.GetDofNrs(
-                    ng.NodeId(node_type, entity.nr)) if dof >= 0)
+            node = ng.NodeId(node_type, entity.nr)
+            source_dofs = tuple(d for d in source_space.GetDofNrs(node) if d >= 0)
             if not source_dofs:
                 continue
-            target_dofs = tuple(
-                dof for dof in target_space.GetDofNrs(
-                    ng.NodeId(node_type, entity.nr)) if dof >= 0)
+            target_dofs = tuple(d for d in target_space.GetDofNrs(node) if d >= 0)
             if len(source_dofs) != 1 or len(target_dofs) != 1:
                 raise ValueError(
                     "matching H1 load mapping requires one uncompressed DOF "
                     "per active vertex/edge")
             source_dof, target_dof = source_dofs[0], target_dofs[0]
-            if source_dof in seen_source:
-                raise ValueError("source H1 DOF is owned by multiple mesh entities")
             seen_source.add(source_dof)
             mapped[target_dof] += values[source_dof]
-
-    nonzero_unmapped = np.flatnonzero(np.abs(values) > 1.0e-30)
-    if not set(nonzero_unmapped).issubset(seen_source):
-        raise ValueError(
-            "source load contains active DOFs outside the P1/P2 matching "
-            "vertex/edge contract")
+    if not set(np.flatnonzero(np.abs(values) > 1.0e-30)).issubset(seen_source):
+        raise ValueError("source load contains unmapped active H1 DOFs")
     return mapped
 
 
@@ -1194,6 +1199,8 @@ def solve_magnetostatic_matching_trace_total_reduced_omega(
     multiplier formulation and has been observed to change P1 fields.
     """
     import ngsolve as ng
+
+    function_started = time.perf_counter()
 
     order = int(order)
     if order not in (1, 2):
@@ -1282,6 +1289,8 @@ def solve_magnetostatic_matching_trace_total_reduced_omega(
             definedon=mesh.Boundaries("|".join(sorted(reduced_flux_names))),
             bonus_intorder=bonus_intorder)
 
+    setup_before_assembly = time.perf_counter() - function_started
+
     started = time.perf_counter()
     a_bf.Assemble()
     matrix_assembly = time.perf_counter() - started
@@ -1317,6 +1326,7 @@ def solve_magnetostatic_matching_trace_total_reduced_omega(
         solve_seconds = time.perf_counter() - started
         iterations = getattr(inv, "iterations", None)
 
+    postprocess_started = time.perf_counter()
     phi_reduced = solution - lift
     H_reduced = H_s - grad(solution) + grad(lift)
     H_total = -grad(solution)
@@ -1344,6 +1354,7 @@ def solve_magnetostatic_matching_trace_total_reduced_omega(
             "relative": relative_residual,
         }
     }
+    postprocess_seconds = time.perf_counter() - postprocess_started
     return {
         "solution": solution,
         "phi_total": solution,
@@ -1359,10 +1370,12 @@ def solve_magnetostatic_matching_trace_total_reduced_omega(
         "solver": solver,
         "iterations": iterations,
         "phase_timings_seconds": {
+            "setup_before_assembly": setup_before_assembly,
             "matrix_assembly": matrix_assembly,
             "source_rhs_assembly": rhs_assembly,
             "preconditioner_or_factorization": setup_seconds,
             "backsolve": solve_seconds,
+            "solver_postprocess": postprocess_seconds,
         },
         "system": ({"bilinear_form": a_bf, "linear_form": f_lf}
                    if return_system else None),
