@@ -15,7 +15,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 
 def solve_beak_sibc_2d(step_path: Path, *, frequency=150_000.0,
-                       sigma=5.8e7, n_peri=256):
+                       sigma=5.8e7, n_peri=256, lane_grading="uniform"):
     """Solve the constant-E 2-D Leontovich integral equation.
 
     Unknowns are panel currents ``I_k=K_k ds_k`` with sum(I_k)=1 A.
@@ -24,12 +24,16 @@ def solve_beak_sibc_2d(step_path: Path, *, frequency=150_000.0,
     ``-log(ds)+3/2``. The arbitrary logarithm reference cancels through
     the terminal-voltage Lagrange multiplier.
     """
+    from radia.fin_section import feature_panel_weights
     from radia.peec_fin_topology import (
         build_hybrid_surface_topology_from_straight_prism_step,
     )
 
-    graph, _ = build_hybrid_surface_topology_from_straight_prism_step(
-        step_path, n_peri=n_peri, n_stations=3)
+    graph, cad = build_hybrid_surface_topology_from_straight_prism_step(
+        step_path, n_peri=n_peri, n_stations=3, lane_grading=lane_grading)
+    fin = cad["section_analysis"].primary
+    if fin is None:
+        raise ValueError("no fin detected on the STEP section")
     xy = graph.branch_xyz[:n_peri, 0, :2]
     ds = 0.5 * (np.linalg.norm(xy - np.roll(xy, 1, axis=0), axis=1)
                 + np.linalg.norm(np.roll(xy, -1, axis=0) - xy, axis=1))
@@ -53,11 +57,13 @@ def solve_beak_sibc_2d(step_path: Path, *, frequency=150_000.0,
     panel_current = solution[:n_peri]
     k_surface = panel_current / ds
     resistance = float(zs.real * np.sum(np.abs(panel_current) ** 2 / ds))
-    beak = xy[:, 0] >= 1.6e-3
-    tip = xy[:, 0] >= 3.5e-3
+    beak_weight = feature_panel_weights(cad["section_analysis"], fin, xy)
+    tip_weight = feature_panel_weights(
+        cad["section_analysis"], fin, xy, tip=True)
     mean_k = 1.0 / np.sum(ds)
     loss = zs.real * np.abs(panel_current) ** 2 / ds
-    probe = np.array([5.0e-3, 0.0])
+    probe = fin.probe_points(
+        offset=max(5.0 * delta, 4.0 * fin.tip_radius), n=1)[0]
     offset = probe - xy
     radius2 = np.sum(offset**2, axis=1)
     hx = np.sum(-panel_current * offset[:, 1] / (2 * math.pi * radius2))
@@ -67,17 +73,24 @@ def solve_beak_sibc_2d(step_path: Path, *, frequency=150_000.0,
         "perimeter_m": float(np.sum(ds)),
         "skin_depth_m": delta,
         "resistance_ohm_per_m": resistance,
-        "beak_mean_absK_over_mean": float(np.mean(np.abs(k_surface[beak])) /
-                                           mean_k),
-        "tip_mean_absK_over_mean": float(np.mean(np.abs(k_surface[tip])) /
-                                          mean_k),
+        "beak_mean_absK_over_mean": float(
+            np.sum(np.abs(k_surface) * ds * beak_weight) /
+            np.sum(ds * beak_weight) / mean_k),
+        "tip_mean_absK_over_mean": float(
+            np.sum(np.abs(k_surface) * ds * tip_weight) /
+            np.sum(ds * tip_weight) / mean_k),
         "max_absK_over_mean": float(np.max(np.abs(k_surface)) / mean_k),
-        "beak_current_fraction": float(abs(np.sum(panel_current[beak]))),
-        "beak_loss_fraction": float(np.sum(loss[beak]) / np.sum(loss)),
-        "tip_loss_fraction": float(np.sum(loss[tip]) / np.sum(loss)),
+        "beak_current_fraction": float(abs(np.sum(
+            panel_current * beak_weight))),
+        "beak_loss_fraction": float(np.sum(loss * beak_weight) /
+                                    np.sum(loss)),
+        "tip_loss_fraction": float(np.sum(loss * tip_weight) / np.sum(loss)),
         "beak_current_centroid_x_m": float(
-            np.sum(np.abs(panel_current[beak]) * xy[beak, 0]) /
-            np.sum(np.abs(panel_current[beak]))),
+            np.sum(np.abs(panel_current) * beak_weight * fin.project(xy)) /
+            np.sum(np.abs(panel_current) * beak_weight)
+            + fin.root_mid @ fin.axis),
+        "fin": fin.as_dict(),
+        "lane_grading": cad["lane_grading"],
         "probe_xy_m": probe.tolist(),
         "probe_H_abs_A_per_m": float(np.sqrt(abs(hx)**2 + abs(hy)**2)),
     }
@@ -89,8 +102,11 @@ def main():
         ROOT / "tests" / "coil_from_cad" / "fixtures" /
         "beak_fin_straight.step"))
     parser.add_argument("--n-peri", type=int, default=256)
+    parser.add_argument("--lane-grading", choices=("uniform", "auto"),
+                        default="uniform")
     args = parser.parse_args()
-    print(json.dumps(solve_beak_sibc_2d(args.step, n_peri=args.n_peri),
+    print(json.dumps(solve_beak_sibc_2d(args.step, n_peri=args.n_peri,
+                                        lane_grading=args.lane_grading),
                      indent=2))
 
 
@@ -105,6 +121,27 @@ def test_beak_sibc_2d_golden():
     assert abs(result["beak_loss_fraction"] / 0.34 - 1) < 0.03
     assert abs(result["beak_current_centroid_x_m"] - 2.86e-3) < 0.05e-3
     assert abs(result["probe_H_abs_A_per_m"] / 41.78 - 1) < 0.01
+    # Automatic fin detection must reproduce the fixture's known geometry.
+    fin = result["fin"]
+    assert abs(fin["root_mid_m"][0] - 1.6e-3) < 0.05e-3
+    assert abs(fin["extremity_m"][0] - 4.0e-3) < 0.01e-3
+    assert abs(fin["tip_radius_m"] - 0.25e-3) < 0.01e-3
+    assert abs(result["probe_xy_m"][0] - 5.0e-3) < 0.05e-3
+
+
+def test_beak_sibc_2d_graded_lanes_match_uniform():
+    """Tip-graded lanes are a discretisation choice, not a model change."""
+    fixture = (ROOT / "tests" / "coil_from_cad" / "fixtures" /
+               "beak_fin_straight.step")
+    uniform = solve_beak_sibc_2d(fixture, n_peri=256)
+    graded = solve_beak_sibc_2d(fixture, n_peri=128, lane_grading="auto")
+    assert graded["lane_grading"] == "auto"
+    assert abs(graded["resistance_ohm_per_m"] /
+               uniform["resistance_ohm_per_m"] - 1) < 0.01
+    assert abs(graded["beak_current_fraction"] /
+               uniform["beak_current_fraction"] - 1) < 0.02
+    assert abs(graded["probe_H_abs_A_per_m"] /
+               uniform["probe_H_abs_A_per_m"] - 1) < 0.01
 
 
 if __name__ == "__main__":
