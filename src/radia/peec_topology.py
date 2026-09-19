@@ -54,6 +54,40 @@ import numpy as np
 from radia.peec_matrices import MNASolver
 
 
+def _reject_non_finite_partials(L, R, topology_dict):
+    """Refuse a partial-element matrix that carries NaN or inf.
+
+    Nothing downstream looked: a single non-finite mutual inductance
+    sailed through the solve and came out as a NaN ``L_coil`` in the
+    result JSON, with only a numpy RuntimeWarning to show for it
+    (measured 2026-09-20 on a tapered beak fin, 2 of 704**2 entries; the
+    pair was two touching, exactly collinear longitudinal filaments, and
+    the same geometry in isolation is finite -- so the kernel's
+    degeneracy is assembly dependent and cannot be screened by geometry
+    alone).  Report which branches are involved so the caller can point
+    the kernel work at them.
+    """
+    for name, matrix in (("L", L), ("R", R)):
+        array = np.asarray(matrix)
+        bad = ~np.isfinite(array)
+        if not bad.any():
+            continue
+        rows = np.unique(np.nonzero(bad)[0])
+        centers = topology_dict.get("segment_centers")
+        where = ""
+        if centers is not None:
+            centers = np.asarray(centers, dtype=float)
+            where = "".join(
+                f"\n  branch {int(i)} centre "
+                f"({centers[i, 0]:.6g}, {centers[i, 1]:.6g}, {centers[i, 2]:.6g}) m"
+                for i in rows[:8] if i < len(centers))
+        raise ValueError(
+            f"PEEC partial-element matrix {name} has {int(bad.sum())} "
+            f"non-finite entries across {len(rows)} branches of "
+            f"{array.shape[0]}.  A NaN here silently becomes a NaN "
+            f"inductance, so the solve is refused.{where}")
+
+
 class PEECCircuitSolver:
     """
     PEEC port impedance solver using nodal admittance (MNA).
@@ -191,6 +225,7 @@ class PEECCircuitSolver:
         else:
             self.L = np.array(topology_dict['L'])
             self.R_dc = np.array(topology_dict['R'])
+            _reject_non_finite_partials(self.L, self.R_dc, topology_dict)
 
         # Per-segment geometry kept for post-processing exports.  Only
         # O(n_seg) arrays are retained (never the dense L), so this is

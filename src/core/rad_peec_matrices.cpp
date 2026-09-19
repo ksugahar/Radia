@@ -1050,9 +1050,20 @@ double PEECMatrixBuilder::MutualInductance(const PEECSegment& seg_i,
             // F(x, d) = x * arsinh(x/d) - sqrt(x^2 + d^2)
             // F is even in x, so swapping a2/b2 flips the sign of M.
             // Reference: FastMaxwell mut_rect() = -F(), same formula.
+            //
+            // arsinh is evaluated directly.  The algebraically identical
+            // log((x + sqrt(x^2 + d^2)) / d) cancels catastrophically for
+            // x < 0: the sum loses every digit once d < |x| * sqrt(2 * eps),
+            // then rounds to exactly 0 and the log returns -inf, so M comes
+            // back +inf.  Measured 2026-09-20 on two touching, collinear
+            // 10 mm filaments of a tapered beak fin at d_perp = 1.88e-10 m
+            // (onset 2.11e-10 m): the log form gave M = inf, arsinh gives
+            // 1.3869e-09 H.  The d_perp < 1e-15 guard below is an absolute
+            // length and sits five orders of magnitude under that onset, so
+            // it never fired.
             auto F = [](double x, double d) -> double {
                 double x2d2 = x*x + d*d;
-                return x * std::log((x + std::sqrt(x2d2)) / d) - std::sqrt(x2d2);
+                return x * std::asinh(x / d) - std::sqrt(x2d2);
             };
 
             // Filament i: from a1 to b1 along dir_i
