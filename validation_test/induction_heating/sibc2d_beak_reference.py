@@ -56,6 +56,12 @@ def solve_beak_sibc_2d(step_path: Path, *, frequency=150_000.0,
     beak = xy[:, 0] >= 1.6e-3
     tip = xy[:, 0] >= 3.5e-3
     mean_k = 1.0 / np.sum(ds)
+    loss = zs.real * np.abs(panel_current) ** 2 / ds
+    probe = np.array([5.0e-3, 0.0])
+    offset = probe - xy
+    radius2 = np.sum(offset**2, axis=1)
+    hx = np.sum(-panel_current * offset[:, 1] / (2 * math.pi * radius2))
+    hy = np.sum(panel_current * offset[:, 0] / (2 * math.pi * radius2))
     return {
         "n_peri": n_peri,
         "perimeter_m": float(np.sum(ds)),
@@ -66,6 +72,14 @@ def solve_beak_sibc_2d(step_path: Path, *, frequency=150_000.0,
         "tip_mean_absK_over_mean": float(np.mean(np.abs(k_surface[tip])) /
                                           mean_k),
         "max_absK_over_mean": float(np.max(np.abs(k_surface)) / mean_k),
+        "beak_current_fraction": float(abs(np.sum(panel_current[beak]))),
+        "beak_loss_fraction": float(np.sum(loss[beak]) / np.sum(loss)),
+        "tip_loss_fraction": float(np.sum(loss[tip]) / np.sum(loss)),
+        "beak_current_centroid_x_m": float(
+            np.sum(np.abs(panel_current[beak]) * xy[beak, 0]) /
+            np.sum(np.abs(panel_current[beak]))),
+        "probe_xy_m": probe.tolist(),
+        "probe_H_abs_A_per_m": float(np.sqrt(abs(hx)**2 + abs(hy)**2)),
     }
 
 
@@ -87,6 +101,10 @@ def test_beak_sibc_2d_golden():
         "beak_fin_straight.step", n_peri=256)
     assert abs(result["resistance_ohm_per_m"] / 0.005242 - 1) < 0.01
     assert abs(result["tip_mean_absK_over_mean"] / 2.0 - 1) < 0.05
+    assert abs(result["beak_current_fraction"] / 0.31 - 1) < 0.03
+    assert abs(result["beak_loss_fraction"] / 0.34 - 1) < 0.03
+    assert abs(result["beak_current_centroid_x_m"] - 2.86e-3) < 0.05e-3
+    assert abs(result["probe_H_abs_A_per_m"] / 41.78 - 1) < 0.01
 
 
 if __name__ == "__main__":
