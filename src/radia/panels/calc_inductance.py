@@ -322,6 +322,61 @@ def _solve_coil_peec(args):
 
 
 # ======================================================================
+# Coil solver: fin-surface (fin-graded surface PEEC from STEP)
+# ======================================================================
+def _solve_coil_fin_surface(args):
+    """Fin-capable surface PEEC coil layer (see docs/induction_heating/
+    FIN_PEEC_PRODUCTION_BOUNDARY.md).
+
+    Returns the same coil_data contract as ``_solve_coil_peec`` with
+    ``source_type = "filament"`` where every PEEC surface branch (axial
+    lane piece or circumferential ring piece) is one two-point polyline
+    carrying its own complex current.  Downstream consumers (A / B / phi_inc
+    from filaments, msh export, weak BEM-SIBC coupling) integrate paths and
+    currents independently, so no lane-level assumption is needed.  Strong
+    coupling is rejected in ``run_inductance`` (the coupled PEEC solver
+    needs the K x K lane bundle).
+    """
+    from radia.fin_surface_solver import solve_fin_surface
+
+    progress("FIN", f"STEP -> fin-graded surface PEEC "
+                    f"(n_lanes={args.fin_n_lanes}, n_stations={args.fin_n_stations}, "
+                    f"grading={args.fin_lane_grading}, route={args.fin_route})")
+    t0 = time.perf_counter()
+    sol = solve_fin_surface(
+        args.coil_step, frequency=float(args.frequency),
+        sigma=float(args.coil_sigma), n_lanes=int(args.fin_n_lanes),
+        n_stations=int(args.fin_n_stations), n_outline=int(args.fin_n_outline),
+        lane_grading=str(args.fin_lane_grading), tip_lanes=int(args.fin_tip_lanes),
+        route=str(args.fin_route), current_A=float(args.current))
+    t_fin = time.perf_counter() - t0
+    meta = dict(sol["sweep"].meta)
+    fin_stations = meta.get("fin_stations", [])
+    progress("FIN", f"L_coil={sol['L_external_H'] * 1e9:.3f} nH, "
+                    f"R_coil={sol['R_ohm'] * 1e3:.4f} mΩ, "
+                    f"{sol['n_branches']} branches, fin on "
+                    f"{len(fin_stations)}/{meta.get('n_stations', '?')} stations "
+                    f"({t_fin:.1f}s)")
+    if not fin_stations:
+        progress("FIN", "WARNING: no fin detected on any station -- the "
+                        "fin-surface solver then reduces to a uniform-lane "
+                        "surface PEEC; --coil-solver peec is the cheaper "
+                        "choice for this geometry.")
+    return {
+        "source_type": "filament",
+        "L_coil": sol["L_external_H"], "R_coil": sol["R_ohm"],
+        "paths": sol["paths"], "I_fil": sol["I_fil"],
+        "n_filaments": len(sol["paths"]),
+        "t_coil_topology_s": t_fin, "t_coil_solve_s": 0.0,
+        "cross_section_kind": "fin-surface",
+        "internal_impedance_model": "leontovich-sheet",
+        "fin_sweep": meta,
+        "fin_metrics": sol["stations"],
+        "fin_n_branches": sol["n_branches"],
+    }
+
+
+# ======================================================================
 # Coil solver: BEM-A (intree Weggler EFIE saddle on RWG)
 # ======================================================================
 def _build_bema_coil_mesh(args):
@@ -1701,6 +1756,11 @@ def _assemble_vacuum_output(args, coil_data):
     }
     if args.coil_solver == "peec":
         out["n_filaments"] = int(coil_data["n_filaments"])
+    elif args.coil_solver == "fin-surface":
+        out["n_filaments"] = int(coil_data["n_filaments"])
+        out["fin_n_branches"] = int(coil_data["fin_n_branches"])
+        out["fin_sweep"] = coil_data["fin_sweep"]
+        out["fin_metrics"] = coil_data["fin_metrics"]
     else:
         out["coil_mesh_nv"] = int(coil_data["coil_mesh_nv"])
         out["coil_mesh_n_tris"] = int(coil_data["coil_mesh_n_tris"])
@@ -2434,9 +2494,9 @@ def run_inductance(args):
     # Coil-input format must match coil-solver:
     #   peec  -> --coil-step (CAD geometry, filaments derived)
     #   bem-a -> --coil-vol  (pre-meshed surface, no on-the-fly OCC re-mesh)
-    if args.coil_solver == "peec" and not args.coil_step:
+    if args.coil_solver in ("peec", "fin-surface") and not args.coil_step:
         return {"status": "error",
-                "error": "--coil-step is required for --coil-solver peec"}
+                "error": f"--coil-step is required for --coil-solver {args.coil_solver}"}
     if args.coil_solver == "bem-a" and not args.coil_vol:
         return {"status": "error",
                 "error": "--coil-vol is required for --coil-solver bem-a"}
@@ -2450,7 +2510,9 @@ def run_inductance(args):
                     "error": f"--coupling-mode strong supports --coil-solver "
                              f"bem-a (CoupledBEMSolver, EFIE coil) or peec "
                              f"(CoupledPEECBEMSolver, filament coil); got "
-                             f"{args.coil_solver!r}."}
+                             f"{args.coil_solver!r}.  fin-surface is weak-only "
+                             f"until the per-branch workpiece EMF (gate 4) "
+                             f"exists."}
         if args.coil_only or not args.vol:
             return {"status": "error",
                     "error": "--coupling-mode strong requires a workpiece "
@@ -2501,6 +2563,8 @@ def run_inductance(args):
     with TaskManager():
         if args.coil_solver == "peec":
             coil_data = _solve_coil_peec(args)
+        elif args.coil_solver == "fin-surface":
+            coil_data = _solve_coil_fin_surface(args)
         elif args.coil_solver == "bem-a":
             coil_data = _solve_coil_bem_a(args)
         else:
@@ -2567,9 +2631,30 @@ def build_argparser():
                              "--coil-solver bem-a; must contain "
                              "'source'/'sink' boundary labels)")
     parser.add_argument("--coil-solver", required=True,
-                        choices=["peec", "bem-a"],
+                        choices=["peec", "bem-a", "fin-surface"],
                         help="peec: PEEC perimeter filaments from STEP (fast). "
-                             "bem-a: Weggler EFIE on RWG, reads pre-meshed .vol.")
+                             "bem-a: Weggler EFIE on RWG, reads pre-meshed .vol. "
+                             "fin-surface: fin-graded surface PEEC from STEP "
+                             "(radia.fin_sweep; weak coupling only).")
+
+    # ----- fin-surface-specific args -----
+    parser.add_argument("--fin-n-lanes", type=int, default=64,
+                        help="fin-surface: longitudinal lanes per station")
+    parser.add_argument("--fin-n-stations", type=int, default=20,
+                        help="fin-surface: spine stations (rings at every "
+                             "interior station)")
+    parser.add_argument("--fin-n-outline", type=int, default=2048,
+                        help="fin-surface: dense outline samples per station "
+                             "used for fin detection")
+    parser.add_argument("--fin-lane-grading", choices=("auto", "uniform"),
+                        default="auto",
+                        help="fin-surface: grade lanes toward detected fin tips")
+    parser.add_argument("--fin-tip-lanes", type=int, default=8,
+                        help="fin-surface: cells requested on each tip arc")
+    parser.add_argument("--fin-route", choices=("auto", "straight_prism",
+                                                "section_planes"),
+                        default="auto",
+                        help="fin-surface: STEP sectioning route")
 
     # ----- PEEC-specific args -----
     parser.add_argument("--peec-n-peri", type=int, default=16,
