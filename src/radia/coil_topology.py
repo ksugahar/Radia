@@ -26,9 +26,9 @@ API
 - ``extract_coil_topology(solid)``: build a fully populated
   ``CoilTopology``.
 - ``generate_spine(topo, n_segments)``: ``(n_segments, 3)`` spine
-  polyline.  OPEN samples ``[theta_a, theta_b]`` along the LONG arc
-  with ``endpoint=True``; CLOSED samples ``[0, 2pi)`` with
-  ``endpoint=False``.
+  polyline.  OPEN samples ``[theta_a, theta_b]`` along the arc the
+  extractor measured as occupied with ``endpoint=True``; CLOSED samples
+  ``[0, 2pi)`` with ``endpoint=False``.
 """
 from __future__ import annotations
 
@@ -53,8 +53,14 @@ class CoilTopology:
             ``is_open``, else ``None``.
         theta_a, theta_b: cap face centroid angles around the rotation
             axis, in **radians** (``atan2``).  Only meaningful for OPEN.
-        sweep_deg: LONG arc length spanned by the conductor in degrees
-            (``360 - gap_deg`` for OPEN, ``360`` for CLOSED).
+        sweep_deg: arc length spanned by the conductor in degrees,
+            MEASURED by probing the material (``360`` for CLOSED).  A
+            nearly-closed coil gives ``360 - gap_deg``; a partial-arc
+            conductor (e.g. a 120-deg beak-fin segment) gives its own
+            short arc, not the complementary one.
+        sweep_ccw: True when the occupied arc runs counter-clockwise
+            from ``theta_a`` to ``theta_b`` about ``axis``.  Only
+            meaningful for OPEN.
         axis: (3,) unit vector for the rotation axis.
         R_spine: scalar spine radius estimate.  Bbox-derived; the
             actual spine radius is recovered by the caller via
@@ -69,6 +75,7 @@ class CoilTopology:
     theta_a: float = 0.0
     theta_b: float = 0.0
     sweep_deg: float = 360.0
+    sweep_ccw: bool = True
     axis: np.ndarray = field(default_factory=lambda: _AXIS_Z.copy())
     R_spine: float = 0.0
     cross_section_kind: str = "unknown"
@@ -138,6 +145,58 @@ def _material_depth_reaches(solid, face, depth: float) -> bool:
     # Monotone depth: material at half depth AND at full depth.
     return (_inside(c0 + 0.5 * depth * inward)
             and _inside(c0 + depth * inward))
+
+
+def _face_centroid(face) -> np.ndarray:
+    """Exact face centroid (3,) through ``BRepGProp``.
+
+    ``Face.center()`` returned origin / garbage coordinates on an
+    OCCT-swept solid (measured 2026-07-29, see
+    :func:`_material_depth_reaches`), so the cap angles that decide the
+    spine direction are taken from the GProp centroid instead.
+    """
+    from OCP.BRepGProp import BRepGProp
+    from OCP.GProp import GProp_GProps
+
+    props = GProp_GProps()
+    BRepGProp.SurfaceProperties_s(face.wrapped, props)
+    com = props.CentreOfMass()
+    return np.array([com.X(), com.Y(), com.Z()], dtype=float)
+
+
+def _lateral_azimuths(solid, caps, n_uv: int = 5) -> np.ndarray:
+    """Azimuths (rad, about +z) of UV-grid samples on every non-cap face.
+
+    The conductor's lateral surface covers exactly the arc the conductor
+    occupies, so the azimuths of points on it say which of the two arcs
+    joining the caps is the real one -- without needing a spine radius.
+    Radius-free matters: on a lead-bearing coil both cap centroids sit
+    essentially on the rotation axis (measured 2026-09-20 on
+    ``keiko_outsideline.step``: cap centroid radius 0.05 mm), so any
+    probe riding a cross-section centroid circle misses the conductor.
+
+    Samples are taken on the surface's UV box, so a trimmed face
+    contributes a few points outside its trim.  That only blurs the
+    azimuth histogram slightly; the caller decides on a clear majority.
+    """
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepTools import BRepTools
+
+    cap_shapes = [cap.wrapped for cap in caps]
+    azimuths = []
+    for face in solid.faces():
+        wrapped = face.wrapped
+        if any(wrapped.IsSame(cap) for cap in cap_shapes):
+            continue
+        surface = BRep_Tool.Surface_s(wrapped)
+        umin, umax, vmin, vmax = BRepTools.UVBounds_s(wrapped)
+        for iu in range(n_uv):
+            u = umin + (umax - umin) * (iu + 0.5) / n_uv
+            for iv in range(n_uv):
+                v = vmin + (vmax - vmin) * (iv + 0.5) / n_uv
+                point = surface.Value(u, v)
+                azimuths.append(math.atan2(point.Y(), point.X()))
+    return np.asarray(azimuths, dtype=float)
 
 
 def detect_cap_faces(solid, depth_factor: float = 2.0
@@ -282,8 +341,9 @@ def extract_coil_topology(solid, axis_hint: str = "z") -> CoilTopology:
 
     Behaviour summary:
       - 2 cap faces detected -> OPEN.  ``theta_a, theta_b`` are the
-        cap centroid angles; ``sweep_deg`` is the LONG arc between
-        them (i.e. ``360 - gap_deg``).
+        cap centroid angles; ``sweep_deg`` / ``sweep_ccw`` describe
+        whichever of the two arcs between them was measured to carry
+        material.
       - 0 cap faces -> CLOSED.  ``sweep_deg = 360``.
     """
     if solid is None:
@@ -306,23 +366,45 @@ def extract_coil_topology(solid, axis_hint: str = "z") -> CoilTopology:
         )
 
     cap_a, cap_b = caps
-    ca, cb = cap_a.center(), cap_b.center()
-    theta_a = math.atan2(ca.Y, ca.X)
-    theta_b = math.atan2(cb.Y, cb.X)
-    # LONG arc length: pick whichever direction (CCW from theta_a to
-    # theta_b, or the other way) is longer.
+    ca, cb = _face_centroid(cap_a), _face_centroid(cap_b)
+    theta_a = math.atan2(ca[1], ca[0])
+    theta_b = math.atan2(cb[1], cb[0])
     delta_ccw = (theta_b - theta_a) % (2.0 * math.pi)
-    if delta_ccw < math.pi:
-        # Short arc is CCW; long arc is CW.
-        sweep_deg = math.degrees(2.0 * math.pi - delta_ccw)
-    else:
-        sweep_deg = math.degrees(delta_ccw)
+
+    # Two arcs join the caps: CCW by delta_ccw, or CW by the
+    # complement.  MEASURE which one carries the conductor instead of
+    # assuming the longer one.  The long-arc assumption is right for a
+    # nearly-closed 1-turn coil but sends the spine around the outside
+    # of a partial-arc conductor (measured 2026-09-20 on a 120-deg
+    # revolved beak fin: the spine took the empty 240-deg arc, so the
+    # section planes missed the solid and the downstream spacing guard
+    # blamed the CAD for "straight leads").
+    azimuths = _lateral_azimuths(solid, caps)
+    if azimuths.size == 0:
+        raise ValueError(
+            "extract_coil_topology: the solid has no lateral face "
+            "outside the two caps, so the occupied arc cannot be "
+            "measured.")
+    relative = (azimuths - theta_a) % (2.0 * math.pi)
+    frac_ccw = float(np.count_nonzero(relative < delta_ccw)) / relative.size
+    if 0.25 < frac_ccw < 0.75:
+        raise ValueError(
+            f"extract_coil_topology: the lateral surface straddles both "
+            f"arcs between the caps ({frac_ccw:.0%} of "
+            f"{relative.size} samples on the CCW side), so the solid is "
+            f"not a single arc sweep about {axis.tolist()} "
+            f"(multi-turn, self-overlapping, or a different axis).")
+
+    sweep_ccw = frac_ccw >= 0.75
+    sweep_deg = math.degrees(
+        delta_ccw if sweep_ccw else 2.0 * math.pi - delta_ccw)
 
     return CoilTopology(
         is_open=True,
         cap_a=cap_a, cap_b=cap_b,
         theta_a=theta_a, theta_b=theta_b,
         sweep_deg=sweep_deg,
+        sweep_ccw=sweep_ccw,
         axis=axis,
         R_spine=R_spine,
     )
@@ -353,17 +435,13 @@ def generate_spine(topo: CoilTopology, n_segments: int) -> np.ndarray:
             "generate_spine: non-z rotation axis not yet supported")
 
     if topo.is_open:
-        delta_ccw = (topo.theta_b - topo.theta_a) % (2.0 * math.pi)
-        if delta_ccw > math.pi:
-            # LONG arc is CCW from theta_a to theta_b.
-            thetas = np.linspace(topo.theta_a,
-                                  topo.theta_a + delta_ccw,
-                                  n_segments)
-        else:
-            # LONG arc is CW from theta_a (i.e. through negative dtheta).
-            thetas = np.linspace(topo.theta_a,
-                                  topo.theta_a - (2.0 * math.pi - delta_ccw),
-                                  n_segments)
+        # Walk the arc the extractor MEASURED as occupied, in its
+        # measured direction; theta_a + delta lands on theta_b mod 2pi.
+        delta = math.radians(topo.sweep_deg)
+        thetas = np.linspace(topo.theta_a,
+                              topo.theta_a + (delta if topo.sweep_ccw
+                                              else -delta),
+                              n_segments)
     else:
         # CLOSED: full revolution, do NOT include the wrap-around point.
         thetas = np.linspace(0.0, 2.0 * math.pi, n_segments,

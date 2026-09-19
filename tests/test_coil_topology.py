@@ -28,7 +28,7 @@ import pytest
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, ".."))
 SAMPLES = os.path.join(ROOT, "src", "radia", "panels", "samples")
-GOLDEN = os.path.join(ROOT, "tests", "panels", "golden")
+GOLDEN = os.path.join(ROOT, "validation_test", "panels", "golden")
 
 
 def _have_build123d():
@@ -195,3 +195,35 @@ def test_spine_open_sweeps_long_arc_not_short():
         total_deg += abs(math.degrees(d))
     assert 354.0 < total_deg < 356.0, (
         f"spine spans {total_deg:.2f} deg, expected ~355 (long arc)")
+
+
+@pytest.mark.skipif(not _have_build123d(), reason="build123d unavailable")
+def test_partial_arc_conductor_keeps_its_own_short_arc():
+    """A conductor that spans well under half a turn must NOT be given
+    the complementary arc.
+
+    Before the occupied arc was measured, ``sweep_deg`` was defined as
+    ``360 - gap``, which is right for a nearly-closed 1-turn coil and
+    wrong for a partial-arc one: a 120 deg revolved beak fin was handed
+    the empty 240 deg arc, every section plane along it missed the
+    solid, and the failure surfaced downstream as a spacing complaint
+    about CAD "leads" that the fixture does not have.
+    """
+    from radia.coil_topology import extract_coil_topology, generate_spine
+
+    sld = _import("beak_fin_curved.step",
+                  os.path.join(ROOT, "tests", "coil_from_cad", "fixtures"))
+    topo = extract_coil_topology(sld)
+
+    assert topo.is_open
+    assert topo.sweep_deg == pytest.approx(120.0, abs=0.5)
+    assert topo.sweep_ccw is True
+
+    # Every spine station must sit in the material, i.e. between the
+    # cap angles the short way round.
+    spine = generate_spine(topo, 13)
+    for point in spine:
+        theta = math.atan2(point[1], point[0]) % (2 * math.pi)
+        assert -1e-9 <= theta <= math.radians(120.0) + 1e-9, (
+            f"spine station at {math.degrees(theta):.2f} deg is outside "
+            f"the conductor's 0..120 deg arc")
