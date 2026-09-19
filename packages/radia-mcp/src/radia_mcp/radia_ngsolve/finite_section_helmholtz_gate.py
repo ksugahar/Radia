@@ -110,6 +110,33 @@ def _relative_errors(values: Sequence[float], reference: Sequence[float]) -> lis
     return [abs(value - exact) / abs(exact) for value, exact in zip(values, reference)]
 
 
+def divergence_free_source_assembly_gate(summary: Mapping[str, object]) -> dict[str, Any]:
+    """Gate a volume-to-boundary source-load acceleration by solved fields."""
+    if not isinstance(summary, Mapping):
+        raise ValueError("summary must be an object")
+    required = ("manufactured_load_relative_error", "solved_field_relative_difference",
+                "allowed_solved_field_relative_difference", "volume_rhs_seconds",
+                "surface_rhs_seconds")
+    values = {name: _finite(summary.get(name), name, positive=True) for name in required}
+    checks = {
+        "schema_is_supported": summary.get("schema") == "radia.divergence-free-source-assembly.v1",
+        "scope_is_affine_p1_constant_mu": summary.get("scope") == "affine_p1_constant_mu",
+        "source_is_divergence_free": summary.get("source_identity") == "divergence_free",
+        "boundary_orientation_is_element_derived": summary.get("boundary_orientation") == "opposite_vertex",
+        "manufactured_load_matches": values["manufactured_load_relative_error"] <= 1.0e-12,
+        "solved_field_matches": values["solved_field_relative_difference"] <= values["allowed_solved_field_relative_difference"],
+        "surface_rhs_is_faster": values["surface_rhs_seconds"] < values["volume_rhs_seconds"],
+    }
+    return {
+        "policy": "divergence_free_source_assembly_gate_v1",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "checks": checks,
+        "issues": [name for name, ok in checks.items() if not ok],
+        "speedup": values["volume_rhs_seconds"] / values["surface_rhs_seconds"],
+        "claim_limit": "Accepted only for affine P1, constant permeability and a verified divergence-free source; load-vector L2 agreement alone is not an acceptance gate.",
+    }
+
+
 def finite_section_helmholtz_mixed_omega_gate(summary: Mapping[str, object]) -> dict[str, Any]:
     """Gate source construction, analytic accuracy, open boundary, and p/h convergence."""
     if not isinstance(summary, Mapping):
