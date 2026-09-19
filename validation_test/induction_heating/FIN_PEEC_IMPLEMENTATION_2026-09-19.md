@@ -134,6 +134,31 @@ the R_tip/delta limitation, only about two 64-lane nose samples, and absence of
 an independently converged 3-D tip profile remain explicit blockers. Full data
 are in `beak_fin_discretization_convergence_150kHz.json`.
 
+### Fin-delivery metrics replace pointwise K acceptance
+
+The early 20 mm pointwise-profile rejection above is retained as provenance
+but is no longer the acceptance definition. A rounded nose with R_tip/delta
+near one and only a few lanes must not be judged by max(K), and terminal R/L
+is insensitive to whether useful current reaches the fin. The primary metrics
+are now beak current fraction, beak/tip integrated loss fraction, beak-current
+centroid, and the H profile on x=5 mm (1 mm beyond the nose). Pointwise max(K)
+is diagnostic only.
+
+The independent 2-D n=1024 reference gives I_beak/I=0.30815,
+P_beak/P=0.34167, P_tip/P=0.20231, beak-current centroid x=2.8531 mm,
+tip mean |K|/mean(K)=2.014, and centre-probe |H|=41.784 A/m. For the finest
+completed 24 mm comparison (BEM-A maxh=0.75 mm, PEEC n=256 and axial <=1.5
+mm), BEM-A/PEEC respectively give current fraction 0.3040/0.3066, loss
+fraction 0.3259/0.3365, centroid 2.8168/2.8309 mm, and probe H 41.06/41.45
+A/m. Probe-line relative L2 error is 0.72%.
+
+Acceptance requires current and loss fractions within 3%, centroid within one
+perimeter-lane spacing, and probe-line H within 2%. Current fraction, centroid,
+and H pass; beak loss fraction differs by 3.24%, narrowly failing the declared
+limit. Therefore the strict combined result remains `accepted=false`, without
+mischaracterising the well-converged integral and delivered-field quantities.
+See `beak_fin_delivery_metrics_150kHz.json`.
+
 ## Required next gates
 
 1. A synthetic straight beak-fin STEP and reproducible generator now live in
