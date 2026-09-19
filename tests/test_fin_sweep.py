@@ -164,3 +164,84 @@ def test_flat_planar_coil_is_not_classified_as_axial_z_sweep():
                / "golden" / "rect_torus_lofted_united.step")
     solid = import_step(str(fixture)).solids()[0]
     assert not _is_straight_prism(solid)
+
+
+# ----------------------------------------------------------------------
+# automatic CAD unit + discretisation
+# ----------------------------------------------------------------------
+
+FIXTURES = Path(__file__).parent / "coil_from_cad" / "fixtures"
+GOLDEN = (Path(__file__).parents[1] / "validation_test" / "panels" / "golden")
+
+
+def test_cad_unit_scale_is_resolved_for_both_lab_numbering_conventions():
+    """Every lab STEP declares millimetre in its header whatever its
+    numbers mean, so only the extent can decide -- and it must."""
+    from radia._b3d_shim import import_step
+    from radia.fin_sweep import resolve_cad_units_per_meter
+
+    millimetre_numbered = import_step(
+        str(FIXTURES / "beak_fin_straight.step")).solids()[0]
+    metre_numbered = import_step(
+        str(GOLDEN / "rect_torus_lofted_united.step")).solids()[0]
+
+    assert resolve_cad_units_per_meter(millimetre_numbered) == 1000.0
+    assert resolve_cad_units_per_meter(metre_numbered) == 1.0
+
+
+def test_cad_unit_scale_refuses_an_ambiguous_extent():
+    """A conductor of a few CAD units is plausible at BOTH scales; the
+    resolver must say so instead of silently picking one."""
+    from radia.fin_sweep import resolve_cad_units_per_meter
+
+    class _Corner:
+        def __init__(self, v):
+            self.X = self.Y = self.Z = v
+
+    class _Box:
+        min = _Corner(0.0)
+        max = _Corner(2.0)
+
+    class _Solid:
+        def bounding_box(self):
+            return _Box()
+
+    with pytest.raises(ValueError, match="ambiguous"):
+        resolve_cad_units_per_meter(_Solid())
+
+
+def test_auto_resolution_measures_the_beak_tip_and_sizes_the_lanes():
+    from radia.fin_sweep import (
+        LANE_SPACING_PER_TIP_RADIUS,
+        OUTLINE_SAMPLES_PER_LANE,
+        auto_fin_resolution,
+    )
+
+    auto = auto_fin_resolution(FIXTURES / "beak_fin_straight.step")
+    measured = auto["measured"]
+
+    # Fixture geometry recovered from CAD alone, with no unit argument.
+    assert measured["tip_radius_m_min"] == pytest.approx(0.25e-3, abs=1e-6)
+    assert measured["sweep_length_m"] == pytest.approx(60e-3, rel=1e-6)
+    assert measured["fin_probe_stations"] == measured["probe_stations"]
+
+    # Lanes follow the measured tip radius, outline follows the lanes.
+    spacing = LANE_SPACING_PER_TIP_RADIUS * measured["tip_radius_m_min"]
+    assert auto["n_lanes"] == pytest.approx(
+        measured["perimeter_m"] / spacing, rel=0.1)
+    assert auto["n_outline"] >= OUTLINE_SAMPLES_PER_LANE * auto["n_lanes"]
+    assert auto["lane_grading"] == "auto"
+    assert auto["rule"]["lane_spacing_driver"] == "fin tip radius"
+
+
+def test_fin_graph_from_step_needs_only_the_file_and_records_its_choice():
+    from radia.fin_sweep import fin_graph_from_step
+
+    sweep = fin_graph_from_step(FIXTURES / "beak_fin_short.step")
+    resolution = sweep.meta["resolution"]
+
+    assert sweep.meta["auto_resolution"] is not None
+    assert sweep.meta["n_lanes"] == resolution["n_lanes"]
+    assert sweep.meta["n_stations"] == resolution["n_stations"]
+    # A prismatic beak fin has its fin at every station.
+    assert len(sweep.fin_station_indices()) == resolution["n_stations"]

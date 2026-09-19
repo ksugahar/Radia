@@ -30,6 +30,7 @@ synthetic stations (tapering fin, curved sweep).
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -259,6 +260,63 @@ def probe_points_3d(feature, station, offset, n=41):
 
 
 # ----------------------------------------------------------------------
+# CAD unit resolution
+# ----------------------------------------------------------------------
+
+#: The two numeric conventions actually present in the tracked STEP
+#: corpus.  Every lab STEP declares ``SI_UNIT(.MILLI.,.METRE.)`` in its
+#: header regardless of what its numbers mean, so the header carries no
+#: information: ``rect_torus_lofted_united`` and ``keiko_outsideline``
+#: hold METRE-valued numbers while ``beak_fin_*`` and
+#: ``tapered_helix_coil`` hold MILLIMETRE-valued numbers (measured
+#: 2026-09-20).  Only the magnitude separates them.
+CAD_UNIT_CANDIDATES = (1.0, 1000.0)
+
+#: Conductor extent window used to decide between the candidates.  The
+#: upper bound matches ``coil_from_cad``'s plausibility guard; the lower
+#: bound rejects a sub-millimetre "coil".
+_FIN_MIN_EXTENT_M = 1.0e-3
+_FIN_MAX_EXTENT_M = 5.0
+
+
+def resolve_cad_units_per_meter(solid, source_tag="fin_sweep"):
+    """Scale for ``solid`` when the STEP determines it UNIQUELY.
+
+    Tries each entry of :data:`CAD_UNIT_CANDIDATES` and keeps the ones
+    that put the solid's largest extent inside the conductor window.
+    Exactly one survivor is the answer; zero or two is reported as an
+    error naming both, because guessing here silently scales every
+    downstream length (and inductance) by 1000.  Pass an explicit
+    ``cad_units_per_meter`` to settle an ambiguous case.
+    """
+    box = solid.bounding_box()
+    extent_cad = max(float(box.max.X - box.min.X),
+                     float(box.max.Y - box.min.Y),
+                     float(box.max.Z - box.min.Z))
+    if not np.isfinite(extent_cad) or extent_cad <= 0:
+        raise ValueError(
+            f"{source_tag}: STEP bounding box is degenerate "
+            f"(largest extent {extent_cad!r} CAD units).")
+    viable = [c for c in CAD_UNIT_CANDIDATES
+              if _FIN_MIN_EXTENT_M <= extent_cad / c <= _FIN_MAX_EXTENT_M]
+    if len(viable) == 1:
+        return viable[0]
+    implied = ", ".join(f"{c:g} -> {extent_cad / c:.4g} m"
+                        for c in CAD_UNIT_CANDIDATES)
+    if not viable:
+        raise ValueError(
+            f"{source_tag}: no CAD unit candidate puts the conductor in "
+            f"the {_FIN_MIN_EXTENT_M * 1e3:g} mm .. {_FIN_MAX_EXTENT_M:g} m "
+            f"window (largest extent {extent_cad:.6g} CAD units; {implied}). "
+            f"Pass cad_units_per_meter explicitly.")
+    raise ValueError(
+        f"{source_tag}: the CAD unit is ambiguous -- {implied} are both "
+        f"plausible for a conductor of {extent_cad:.6g} CAD units. "
+        f"Pass cad_units_per_meter explicitly (the STEP header says "
+        f"millimetre for both lab conventions, so it cannot decide).")
+
+
+# ----------------------------------------------------------------------
 # STEP adapters (need build123d)
 # ----------------------------------------------------------------------
 
@@ -349,13 +407,15 @@ def _stations_from_section_planes(solid, n_stations, n_outline,
 
 
 def station_outlines_from_step(step_path, *, n_stations=20, n_outline=2048,
-                               cad_units_per_meter=1.0, route="auto"):
+                               cad_units_per_meter="auto", route="auto"):
     """Dense per-station outlines of one STEP conductor.
 
     ``route``: ``"auto"`` picks the straight-prism sectioner for a single
     z-extruded prism and the spine sectioner otherwise; ``"straight_prism"``
-    or ``"section_planes"`` force one.  Returns ``(stations, source_tag)``
-    with stations already origin-aligned.
+    or ``"section_planes"`` force one.  ``cad_units_per_meter="auto"``
+    defers to :func:`resolve_cad_units_per_meter`, which answers only when
+    the STEP settles it.  Returns ``(stations, source_tag)`` with stations
+    already origin-aligned.
     """
     from radia._b3d_shim import import_step
     from radia.coil_from_cad import _check_solid_extent_plausible
@@ -370,6 +430,11 @@ def station_outlines_from_step(step_path, *, n_stations=20, n_outline=2048,
         raise ValueError("fin sweep requires exactly one solid (brazed fin "
                          "plates must be united in CAD first)")
     solid = solids[0]
+    if isinstance(cad_units_per_meter, str):
+        if cad_units_per_meter != "auto":
+            raise ValueError("cad_units_per_meter must be a number or 'auto'")
+        cad_units_per_meter = resolve_cad_units_per_meter(
+            solid, "station_outlines_from_step")
     cad_units_per_meter = _check_solid_extent_plausible(
         solid, cad_units_per_meter, "station_outlines_from_step")
     if route == "auto":
@@ -392,15 +457,125 @@ def station_outlines_from_step(step_path, *, n_stations=20, n_outline=2048,
     return align_station_origins(stations), tag
 
 
-def fin_graph_from_step(step_path, *, n_lanes=64, n_stations=20,
-                        n_outline=2048, lane_grading="auto", tip_lanes=8,
-                        cad_units_per_meter=1.0, route="auto"):
-    """One call: STEP -> origin-aligned stations -> fin-graded PEEC graph."""
+#: Body lane spacing as a fraction of the fin tip radius.  The tip
+#: radius is the length scale the surface current crowds on, and a
+#: straight-beak-fin convergence run at 150 kHz (2026-09-20, mid-station
+#: of the 60 mm fixture against the independent 2-D SIBC reference)
+#: measured: h_body = r_tip gave R/m +1.3 %, beak loss fraction -1.1 %;
+#: h_body = r_tip/2 gave +0.3 % and -0.2 %; h_body = r_tip/3 gave +0.06 %
+#: and -0.6 %.  Half the tip radius is where the delivery metrics enter
+#: the 1 % band without paying the cubic solve cost of the next step.
+LANE_SPACING_PER_TIP_RADIUS = 0.5
+
+#: Dense outline samples per lane.  The same run showed 96 lanes on a
+#: 1024-point outline and on a 2048-point outline disagreeing by 2 % on
+#: the beak loss fraction purely from where the graded lane centres
+#: quantised onto the sampled outline; >= 20 samples per lane removed it.
+OUTLINE_SAMPLES_PER_LANE = 24
+
+#: Cells on each tip arc.  Measured at a fixed 96-lane budget: 6-8 cells
+#: sit closest to the 2-D reference, and raising the request past ~16
+#: silently saturates against the grading's ``max_ratio`` clamp because
+#: the lanes it needs come out of the body.
+DEFAULT_TIP_LANES = 8
+
+
+def auto_fin_resolution(step_path, *, cad_units_per_meter="auto",
+                        route="auto", probe_stations=5, probe_outline=4096,
+                        max_lanes=256, max_stations=41):
+    """Measure one STEP conductor and choose its fin discretisation.
+
+    A cheap CAD-only pass sections the solid at ``probe_stations``
+    stations, analyses each section, and reports both the measurements
+    and the ``n_lanes`` / ``n_outline`` / ``tip_lanes`` / ``n_stations``
+    they imply.  Nothing is solved here.  Every returned number carries
+    the measurement it came from so a run can be audited without
+    re-deriving the rule.
+    """
     stations, tag = station_outlines_from_step(
-        step_path, n_stations=n_stations, n_outline=n_outline,
+        step_path, n_stations=probe_stations, n_outline=probe_outline,
         cad_units_per_meter=cad_units_per_meter, route=route)
-    result = build_fin_graph(stations, n_lanes=n_lanes,
-                             lane_grading=lane_grading, tip_lanes=tip_lanes)
+    analyses = [analyze_section(_as_closed_ccw(st.uv)) for st in stations]
+    perimeter = max(float(a.perimeter) for a in analyses)
+    areas = np.array([float(st.area) for st in stations])
+    tip_radii = [float(a.primary.tip_radius)
+                 for a in analyses if a.primary is not None]
+    centroids = np.array([st.centroid for st in stations])
+    sweep_length = float(np.sum(np.linalg.norm(
+        centroids[1:] - centroids[:-1], axis=1)))
+
+    if tip_radii:
+        driver = "fin tip radius"
+        lane_spacing = LANE_SPACING_PER_TIP_RADIUS * min(tip_radii)
+    else:
+        # No fin anywhere: there is no tip length scale to resolve, so
+        # fall back on the section size.  Reported, never silent.
+        driver = "section size (no fin detected)"
+        lane_spacing = float(np.sqrt(np.mean(areas))) / 8.0
+    n_lanes = int(np.clip(8 * math.ceil(perimeter / lane_spacing / 8),
+                          32, max_lanes))
+    n_outline = int(np.clip(
+        2 ** math.ceil(math.log2(OUTLINE_SAMPLES_PER_LANE * n_lanes)),
+        1024, 16384))
+    section_size = float(np.sqrt(np.mean(areas)))
+    n_stations = int(np.clip(
+        round(sweep_length / (2.0 * section_size)) + 1, 5, max_stations))
+
+    return {
+        "n_lanes": n_lanes, "n_outline": n_outline,
+        "tip_lanes": DEFAULT_TIP_LANES, "n_stations": n_stations,
+        "lane_grading": "auto" if tip_radii else "uniform",
+        "measured": {
+            "cad_source": tag,
+            "perimeter_m": perimeter,
+            "section_area_m2_mean": float(np.mean(areas)),
+            "section_area_relative_spread": float(
+                (areas.max() - areas.min()) / np.mean(areas)),
+            "tip_radius_m_min": min(tip_radii) if tip_radii else None,
+            "fin_probe_stations": len(tip_radii),
+            "probe_stations": len(stations),
+            "sweep_length_m": sweep_length,
+        },
+        "rule": {
+            "lane_spacing_driver": driver,
+            "lane_spacing_m": lane_spacing,
+            "outline_samples_per_lane": OUTLINE_SAMPLES_PER_LANE,
+            "station_spacing_per_section_size": 2.0,
+            "clamped_lanes": n_lanes == max_lanes,
+            "clamped_stations": n_stations == max_stations,
+        },
+    }
+
+
+def fin_graph_from_step(step_path, *, n_lanes=None, n_stations=None,
+                        n_outline=None, lane_grading=None, tip_lanes=None,
+                        cad_units_per_meter="auto", route="auto"):
+    """One call: STEP -> origin-aligned stations -> fin-graded PEEC graph.
+
+    Any discretisation argument left as ``None`` is measured from the
+    geometry by :func:`auto_fin_resolution`; the chosen values and their
+    basis land in ``meta["auto_resolution"]``.
+    """
+    requested = {"n_lanes": n_lanes, "n_stations": n_stations,
+                 "n_outline": n_outline, "lane_grading": lane_grading,
+                 "tip_lanes": tip_lanes}
+    auto = None
+    if any(v is None for v in requested.values()):
+        auto = auto_fin_resolution(
+            step_path, cad_units_per_meter=cad_units_per_meter, route=route)
+        for key, value in requested.items():
+            if value is None:
+                requested[key] = auto[key]
+
+    stations, tag = station_outlines_from_step(
+        step_path, n_stations=requested["n_stations"],
+        n_outline=requested["n_outline"],
+        cad_units_per_meter=cad_units_per_meter, route=route)
+    result = build_fin_graph(stations, n_lanes=requested["n_lanes"],
+                             lane_grading=requested["lane_grading"],
+                             tip_lanes=requested["tip_lanes"])
     result.meta["cad_source"] = tag
     result.meta["step_path"] = str(step_path)
+    result.meta["auto_resolution"] = auto
+    result.meta["resolution"] = dict(requested)
     return result

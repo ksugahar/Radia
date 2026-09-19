@@ -75,8 +75,15 @@ def test_calc_inductance_argparser_accepts_fin_surface():
 
     args = build_argparser().parse_args(_argv("peec", coil_step_solver="fin-surface"))
     assert args.coil_solver == "fin-surface"
-    assert args.fin_n_lanes == 64 and args.fin_lane_grading == "auto"
-    assert args.fin_route == "auto" and args.fin_n_outline == 2048
+    assert args.fin_route == "auto"
+    # Nothing pinned by the caller stays None so the solver measures it
+    # from the STEP; a pinned value still reaches the parser.
+    assert (args.fin_n_lanes, args.fin_n_stations, args.fin_n_outline,
+            args.fin_lane_grading, args.fin_tip_lanes) == (
+        None, None, None, None, None)
+    pinned = build_argparser().parse_args(
+        _argv("peec", coil_step_solver="fin-surface", fin_n_lanes=96))
+    assert pinned.fin_n_lanes == 96 and pinned.fin_n_stations is None
     with pytest.raises(SystemExit):
         build_argparser().parse_args(["--coil-solver", "fin", "--coil-step", "x.step"])
 
