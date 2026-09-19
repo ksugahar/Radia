@@ -4,10 +4,13 @@ Open-ended conductors for testing CAD perimeter recovery, surface-mesh
 transitions, and fin-tip current/loss convergence. These are not as-built
 induction coils or IH validation results. Coordinates are in mm.
 
-Two variants share one profile: a straight z extrusion, and a revolution
+Three variants share one profile. A straight z extrusion; a revolution
 about z that gives the partial-arc conductor a real beak-fin coil wraps
-into. The curved one is what exercises the swept-section route end to end
-(the straight one takes the z-plane sectioner instead).
+into, which is what exercises the swept-section route end to end (the
+straight one takes the z-plane sectioner instead); and a z loft whose
+beak shortens along the sweep at a fixed tip radius, which is the only
+one whose section CHANGES and so the only one that constrains the
+station count.
 """
 
 from __future__ import annotations
@@ -23,24 +26,33 @@ from build123d import (
     ThreePointArc,
     export_step,
     extrude,
+    loft,
     make_face,
     revolve,
 )
 
-TIP_HALF_HEIGHT = (0.25**2 - 0.05**2) ** 0.5
+TIP_RADIUS = 0.25
+TIP_HALF_HEIGHT = (TIP_RADIUS**2 - 0.05**2) ** 0.5
 
 
-def _beak_face(plane, radial_offset: float = 0.0):
-    """Beak cross-section on ``plane``, shifted along the first axis."""
+def _beak_face(plane, radial_offset: float = 0.0, tip_x: float = 4.0):
+    """Beak cross-section on ``plane``, shifted along the first axis.
+
+    ``tip_x`` moves how far the beak reaches while the tip circle keeps
+    radius ``TIP_RADIUS``, so a loft between two of these varies the fin
+    length alone.
+    """
+    centre = tip_x - TIP_RADIUS
+
     def p(u, v):
         return (radial_offset + u, v)
 
     with BuildLine(plane) as outline:
         Polyline(p(-4.0, -2.0), p(1.6, -2.0), p(1.6, -0.7),
-                 p(3.8, -TIP_HALF_HEIGHT))
-        ThreePointArc(p(3.8, -TIP_HALF_HEIGHT), p(4.0, 0.0),
-                      p(3.8, TIP_HALF_HEIGHT))
-        Polyline(p(3.8, TIP_HALF_HEIGHT), p(1.6, 0.7), p(1.6, 2.0),
+                 p(centre + 0.05, -TIP_HALF_HEIGHT))
+        ThreePointArc(p(centre + 0.05, -TIP_HALF_HEIGHT), p(tip_x, 0.0),
+                      p(centre + 0.05, TIP_HALF_HEIGHT))
+        Polyline(p(centre + 0.05, TIP_HALF_HEIGHT), p(1.6, 0.7), p(1.6, 2.0),
                  p(-4.0, 2.0), p(-4.0, -2.0))
     return make_face(outline.edges())
 
@@ -67,6 +79,22 @@ def make_curved_beak_fin(major_radius_mm: float = 30.0,
                    axis=Axis.Z, revolution_arc=arc_deg)
 
 
+def make_tapered_beak_fin(length_mm: float = 60.0,
+                          tip_x_end_mm: float = 2.2):
+    """Straight sweep whose beak shortens from 4.0 mm to ``tip_x_end_mm``.
+
+    The tip radius is unchanged at both ends, so the only thing varying
+    along the sweep is the fin length -- which is what the station-count
+    rule keys on.
+    """
+    if length_mm <= 0:
+        raise ValueError("length_mm must be positive")
+    if not 1.9 < tip_x_end_mm <= 4.0:
+        raise ValueError("the beak tip must stay ahead of its 1.6 mm root")
+    return loft([_beak_face(Plane.XY, tip_x=4.0),
+                 _beak_face(Plane.XY.offset(length_mm), tip_x=tip_x_end_mm)])
+
+
 def main():
     fixtures = (Path(__file__).resolve().parents[2] / "tests"
                 / "coil_from_cad" / "fixtures")
@@ -76,9 +104,14 @@ def main():
     parser.add_argument("--arc-deg", type=float, default=None,
                         help="revolve through this angle instead of extruding")
     parser.add_argument("--major-radius-mm", type=float, default=30.0)
+    parser.add_argument("--tip-x-end-mm", type=float, default=None,
+                        help="loft the beak down to this reach instead")
     args = parser.parse_args()
 
-    if args.arc_deg is None:
+    if args.tip_x_end_mm is not None:
+        shape = make_tapered_beak_fin(args.length_mm, args.tip_x_end_mm)
+        default = fixtures / "beak_fin_tapered.step"
+    elif args.arc_deg is None:
         shape = make_beak_fin(args.length_mm)
         default = fixtures / "beak_fin_straight.step"
     else:
