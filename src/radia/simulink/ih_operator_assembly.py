@@ -31,7 +31,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Optional, Sequence
 
 import numpy as np
 
@@ -66,10 +66,12 @@ class IHOperatorAssemblyOptions:
     # (fin-graded surface PEEC, radia.fin_sweep; weak coupling only).  Only
     # meaningful for a .step coil; .vol coils always use BEM-A.
     coil_step_solver: str = "peec"
-    fin_n_lanes: int = 64
-    fin_n_stations: int = 20
-    fin_lane_grading: str = "auto"
-    fin_tip_lanes: int = 8
+    # None = let the solver measure it from the geometry (fin tip radius,
+    # perimeter, sweep length); an explicit value overrides the measurement.
+    fin_n_lanes: Optional[int] = None
+    fin_n_stations: Optional[int] = None
+    fin_lane_grading: Optional[str] = None
+    fin_tip_lanes: Optional[int] = None
     coupling_mode: str = "weak"
     workpiece_bem_backend: str = "intree-dense"
     thermal_order: int = 1
@@ -121,10 +123,14 @@ class IHOperatorAssemblyOptions:
             raise ValueError("coupling_mode must be weak or strong")
         if self.coil_step_solver not in {"peec", "fin-surface"}:
             raise ValueError("coil_step_solver must be peec or fin-surface")
-        if self.fin_lane_grading not in {"auto", "uniform"}:
-            raise ValueError("fin_lane_grading must be auto or uniform")
-        if self.fin_n_lanes < 8 or self.fin_n_stations < 3 or self.fin_tip_lanes < 1:
-            raise ValueError("fin_n_lanes >= 8, fin_n_stations >= 3, fin_tip_lanes >= 1")
+        if self.fin_lane_grading not in {None, "auto", "uniform"}:
+            raise ValueError("fin_lane_grading must be auto, uniform or None "
+                             "(None = measured from the geometry)")
+        if ((self.fin_n_lanes is not None and self.fin_n_lanes < 8)
+                or (self.fin_n_stations is not None and self.fin_n_stations < 3)
+                or (self.fin_tip_lanes is not None and self.fin_tip_lanes < 1)):
+            raise ValueError("fin_n_lanes >= 8, fin_n_stations >= 3, "
+                             "fin_tip_lanes >= 1 when given explicitly")
         if self.coil_step_solver == "fin-surface" and self.coupling_mode == "strong":
             raise ValueError(
                 "fin-surface supports weak coupling only (per-branch workpiece "
@@ -376,20 +382,15 @@ def _unit_current_argv(
         str(field_path),
     ]
     if coil_solver == "fin-surface":
-        argv.extend(
-            [
-                "--coil-step",
-                str(coil),
-                "--fin-n-lanes",
-                str(options.fin_n_lanes),
-                "--fin-n-stations",
-                str(options.fin_n_stations),
-                "--fin-lane-grading",
-                options.fin_lane_grading,
-                "--fin-tip-lanes",
-                str(options.fin_tip_lanes),
-            ]
-        )
+        argv.extend(["--coil-step", str(coil)])
+        # Only pass what the caller pinned; the rest is measured from the
+        # STEP so the block does not freeze a discretisation into the run.
+        for flag, value in (("--fin-n-lanes", options.fin_n_lanes),
+                            ("--fin-n-stations", options.fin_n_stations),
+                            ("--fin-lane-grading", options.fin_lane_grading),
+                            ("--fin-tip-lanes", options.fin_tip_lanes)):
+            if value is not None:
+                argv.extend([flag, str(value)])
     elif backend == "peec":
         argv.extend(
             [
@@ -1129,10 +1130,11 @@ def build_argparser() -> argparse.ArgumentParser:
         default="peec",
         help="STEP coil solver: series perimeter bundle or fin-graded surface PEEC",
     )
-    parser.add_argument("--fin-n-lanes", type=int, default=64)
-    parser.add_argument("--fin-n-stations", type=int, default=20)
-    parser.add_argument("--fin-lane-grading", choices=("auto", "uniform"), default="auto")
-    parser.add_argument("--fin-tip-lanes", type=int, default=8)
+    # default None = measured from the STEP by radia.fin_sweep
+    parser.add_argument("--fin-n-lanes", type=int, default=None)
+    parser.add_argument("--fin-n-stations", type=int, default=None)
+    parser.add_argument("--fin-lane-grading", choices=("auto", "uniform"), default=None)
+    parser.add_argument("--fin-tip-lanes", type=int, default=None)
     parser.add_argument(
         "--peec-proximity",
         action=argparse.BooleanOptionalAction,

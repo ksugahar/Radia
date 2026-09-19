@@ -340,18 +340,26 @@ def _solve_coil_fin_surface(args):
     from radia.fin_surface_solver import solve_fin_surface
 
     progress("FIN", f"STEP -> fin-graded surface PEEC "
-                    f"(n_lanes={args.fin_n_lanes}, n_stations={args.fin_n_stations}, "
-                    f"grading={args.fin_lane_grading}, route={args.fin_route})")
+                    f"(n_lanes={args.fin_n_lanes or 'auto'}, "
+                    f"n_stations={args.fin_n_stations or 'auto'}, "
+                    f"grading={args.fin_lane_grading or 'auto'}, "
+                    f"route={args.fin_route})")
     t0 = time.perf_counter()
     sol = solve_fin_surface(
         args.coil_step, frequency=float(args.frequency),
-        sigma=float(args.coil_sigma), n_lanes=int(args.fin_n_lanes),
-        n_stations=int(args.fin_n_stations), n_outline=int(args.fin_n_outline),
-        lane_grading=str(args.fin_lane_grading), tip_lanes=int(args.fin_tip_lanes),
+        sigma=float(args.coil_sigma), n_lanes=args.fin_n_lanes,
+        n_stations=args.fin_n_stations, n_outline=args.fin_n_outline,
+        lane_grading=args.fin_lane_grading, tip_lanes=args.fin_tip_lanes,
         route=str(args.fin_route), current_A=float(args.current))
     t_fin = time.perf_counter() - t0
     meta = dict(sol["sweep"].meta)
     fin_stations = meta.get("fin_stations", [])
+    chosen = sol["resolution"]
+    origin = "measured" if sol["auto_resolution"] else "given"
+    progress("FIN", f"discretisation {origin}: n_lanes={chosen['n_lanes']}, "
+                    f"n_stations={chosen['n_stations']}, "
+                    f"n_outline={chosen['n_outline']}, "
+                    f"tip_lanes={chosen['tip_lanes']}")
     progress("FIN", f"L_coil={sol['L_external_H'] * 1e9:.3f} nH, "
                     f"R_coil={sol['R_ohm'] * 1e3:.4f} mΩ, "
                     f"{sol['n_branches']} branches, fin on "
@@ -2638,19 +2646,25 @@ def build_argparser():
                              "(radia.fin_sweep; weak coupling only).")
 
     # ----- fin-surface-specific args -----
-    parser.add_argument("--fin-n-lanes", type=int, default=64,
-                        help="fin-surface: longitudinal lanes per station")
-    parser.add_argument("--fin-n-stations", type=int, default=20,
+    parser.add_argument("--fin-n-lanes", type=int, default=None,
+                        help="fin-surface: longitudinal lanes per station "
+                             "(default: measured from the fin tip radius)")
+    parser.add_argument("--fin-n-stations", type=int, default=None,
                         help="fin-surface: spine stations (rings at every "
-                             "interior station)")
-    parser.add_argument("--fin-n-outline", type=int, default=2048,
+                             "interior station; default: measured from the "
+                             "sweep length and section size)")
+    parser.add_argument("--fin-n-outline", type=int, default=None,
                         help="fin-surface: dense outline samples per station "
-                             "used for fin detection")
+                             "used for fin detection (default: measured from "
+                             "the lane count)")
     parser.add_argument("--fin-lane-grading", choices=("auto", "uniform"),
-                        default="auto",
-                        help="fin-surface: grade lanes toward detected fin tips")
-    parser.add_argument("--fin-tip-lanes", type=int, default=8,
-                        help="fin-surface: cells requested on each tip arc")
+                        default=None,
+                        help="fin-surface: grade lanes toward detected fin "
+                             "tips (default: measured -- graded when a fin "
+                             "is found)")
+    parser.add_argument("--fin-tip-lanes", type=int, default=None,
+                        help="fin-surface: cells requested on each tip arc "
+                             "(default: measured)")
     parser.add_argument("--fin-route", choices=("auto", "straight_prism",
                                                 "section_planes"),
                         default="auto",
