@@ -14,11 +14,18 @@ import math
 import numpy as np
 
 
-def solve_fin_surface(step_path, *, frequency, sigma, n_lanes=64,
-                      n_stations=20, n_outline=2048, lane_grading="auto",
-                      tip_lanes=8, cad_units_per_meter=1.0, route="auto",
-                      probe_points=41, current_A=1.0):
+def solve_fin_surface(step_path, *, frequency, sigma, n_lanes=None,
+                      n_stations=None, n_outline=None, lane_grading=None,
+                      tip_lanes=None, cad_units_per_meter="auto",
+                      route="auto", probe_points=41, current_A=1.0):
     """STEP -> fin-graded graph -> branch currents -> per-station fin metrics.
+
+    Discretisation arguments left as ``None`` are measured from the
+    geometry (:func:`radia.fin_sweep.auto_fin_resolution`), and
+    ``cad_units_per_meter="auto"`` is resolved from the conductor extent
+    when the STEP settles it -- so a beak-fin STEP needs nothing but the
+    file, the frequency and the conductivity.  The values actually used
+    and the measurements behind them are in ``sweep.meta``.
 
     Returns a dict with ``sweep`` (FinSweepGraph), ``current`` (branch
     currents at ``current_A``), ``widths``, ``R_ohm``, ``L_external_H``,
@@ -43,6 +50,8 @@ def solve_fin_surface(step_path, *, frequency, sigma, n_lanes=64,
         step_path, n_lanes=n_lanes, n_stations=n_stations,
         n_outline=n_outline, lane_grading=lane_grading, tip_lanes=tip_lanes,
         cad_units_per_meter=cad_units_per_meter, route=route)
+    # fin_graph_from_step measured whatever was left as None.
+    tip_lanes = int(sweep.meta["resolution"]["tip_lanes"])
     graph = sweep.graph
     peec, widths = assemble_experimental_fin_peec(
         graph, sweep.rings, sigma=sigma, sheet_depth=delta)
@@ -113,6 +122,8 @@ def solve_fin_surface(step_path, *, frequency, sigma, n_lanes=64,
         "sweep": sweep, "current": current, "widths": widths,
         "R_ohm": r_total, "L_external_H": l_external,
         "skin_depth_m": delta, "sheet_resistance_ohm": rs,
+        "resolution": sweep.meta["resolution"],
+        "auto_resolution": sweep.meta["auto_resolution"],
         "n_branches": int(len(graph.branches)),
         "n_nodes": int(len(graph.nodes)),
         "stations": per_station,

@@ -18,9 +18,9 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
 
-def run(step_path: Path, *, n_lanes=64, n_stations=20, n_outline=2048,
-        lane_grading="auto", tip_lanes=8, frequency=150_000.0, sigma=5.8e7,
-        cad_units_per_meter=1.0, route="auto", probe_points=41):
+def run(step_path: Path, *, n_lanes=None, n_stations=None, n_outline=None,
+        lane_grading=None, tip_lanes=None, frequency=150_000.0, sigma=5.8e7,
+        cad_units_per_meter="auto", route="auto", probe_points=41):
     from radia.fin_surface_solver import solve_fin_surface
 
     sol = solve_fin_surface(
@@ -31,6 +31,8 @@ def run(step_path: Path, *, n_lanes=64, n_stations=20, n_outline=2048,
     return {
         "step_path": str(step_path), "frequency_hz": frequency,
         "sigma_S_per_m": sigma, "skin_depth_m": sol["skin_depth_m"],
+        "resolution": sol["resolution"],
+        "auto_resolution": sol["auto_resolution"],
         "sweep": sol["sweep"].meta,
         "peec": {"R_ohm": sol["R_ohm"], "L_external_H": sol["L_external_H"],
                  "n_branches": sol["n_branches"], "n_nodes": sol["n_nodes"]},
@@ -43,24 +45,32 @@ def run(step_path: Path, *, n_lanes=64, n_stations=20, n_outline=2048,
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--step", type=Path, required=True)
-    parser.add_argument("--n-lanes", type=int, default=64)
-    parser.add_argument("--n-stations", type=int, default=20)
-    parser.add_argument("--n-outline", type=int, default=2048)
-    parser.add_argument("--tip-lanes", type=int, default=8)
+    parser.add_argument("--n-lanes", type=int, default=None,
+                        help="default: measured from the fin tip radius")
+    parser.add_argument("--n-stations", type=int, default=None,
+                        help="default: measured from the sweep length")
+    parser.add_argument("--n-outline", type=int, default=None,
+                        help="default: measured (samples per lane)")
+    parser.add_argument("--tip-lanes", type=int, default=None,
+                        help="default: measured")
     parser.add_argument("--lane-grading", choices=("uniform", "auto"),
-                        default="auto")
+                        default=None, help="default: measured")
     parser.add_argument("--route", choices=("auto", "straight_prism",
                                             "section_planes"), default="auto")
     parser.add_argument("--frequency", type=float, default=150_000.0)
     parser.add_argument("--sigma", type=float, default=5.8e7)
-    parser.add_argument("--cad-units-per-meter", type=float, default=1.0,
-                        help="1000 for a millimetre STEP (auto-checked)")
+    parser.add_argument("--cad-units-per-meter", default="auto",
+                        help="'auto' (default) resolves the scale when the "
+                             "conductor extent settles it; pass 1 or 1000 "
+                             "when it reports the STEP as ambiguous")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
+    scale = (args.cad_units_per_meter if args.cad_units_per_meter == "auto"
+             else float(args.cad_units_per_meter))
     result = run(args.step, n_lanes=args.n_lanes, n_stations=args.n_stations,
                  n_outline=args.n_outline, lane_grading=args.lane_grading,
                  tip_lanes=args.tip_lanes, frequency=args.frequency,
-                 sigma=args.sigma, cad_units_per_meter=args.cad_units_per_meter,
+                 sigma=args.sigma, cad_units_per_meter=scale,
                  route=args.route)
     text = json.dumps(result, indent=2)
     if args.output is not None:
