@@ -169,7 +169,12 @@ def test_graded_lanes_put_more_cells_on_the_tip():
 def test_graded_lanes_reject_impossible_budget():
     analysis = analyze_section(resample_outline(_beak_outline(), 1024))
     with pytest.raises(ValueError):
-        graded_lane_arclengths(analysis, 8, tip_lanes=64)
+        graded_lane_arclengths(analysis, 8, tip_lanes=64, max_ratio=None)
+    with pytest.raises(ValueError):
+        graded_lane_arclengths(analysis, 4)
+    # the default bounded grading always fits the budget
+    s = graded_lane_arclengths(analysis, 8, tip_lanes=64)
+    assert len(s) == 8 and np.all(np.diff(s) > 0)
 
 
 def test_feature_weights_conserve_arc_and_resist_half_cell_phase_shift():

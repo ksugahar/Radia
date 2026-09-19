@@ -432,14 +432,20 @@ def analyze_section(xy, *, fin_ratio=0.5, gap_factor=3.0, min_samples=4,
 # lane placement
 # ----------------------------------------------------------------------
 
-def graded_lane_arclengths(analysis, n_lanes, *, tip_lanes=8, taper=None):
+def graded_lane_arclengths(analysis, n_lanes, *, tip_lanes=8, taper=None,
+                           max_ratio=8.0):
     """Arc-length positions of ``n_lanes`` lanes graded toward each fin tip.
 
     Body: uniform spacing ``h_body``.  Each fin face: spacing decreases
     geometrically from ``h_body`` at the root to ``h_tip`` at the tip arc.
     Tip arc: ``tip_lanes`` equal cells.  ``h_body`` is solved so that the
     total lane count is exactly ``n_lanes`` (cell-centred positions).
-    Without fins this is plain equal-arc-length sampling.
+    Without fins this is plain equal-arc-length sampling.  ``max_ratio``
+    bounds ``h_body / h_tip`` so a vanishing fin (tiny tip arc along a
+    sweep) never demands more lanes than the budget allows; the tip then
+    gets fewer than ``tip_lanes`` cells but the grading stays well posed.
+    ``max_ratio=None`` restores the strict behaviour (raise when the budget
+    cannot honour ``tip_lanes``).
     """
     n_lanes = int(n_lanes)
     if n_lanes < 8:
@@ -459,6 +465,8 @@ def graded_lane_arclengths(analysis, n_lanes, *, tip_lanes=8, taper=None):
             on_fin = arc < (b - a) % per if b != a else np.zeros(n, bool)
             fin_len = (b - a) % per
             h_tip = fin.tip_arc_length / tip_lanes
+            if max_ratio is not None:
+                h_tip = max(h_tip, h_body / float(max_ratio))
             if h_tip >= h_body:
                 continue
             u = arc[on_fin]
