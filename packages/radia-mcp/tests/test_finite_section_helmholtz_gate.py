@@ -60,6 +60,40 @@ def test_rejects_surface_source_without_orientation_or_solution_parity():
     assert "solved_field_matches" in result["issues"]
 
 
+def test_accepts_hierarchical_p2_surface_source_evidence():
+    result = divergence_free_source_assembly_gate({
+        "schema": "radia.divergence-free-source-assembly.v1",
+        "scope": "affine_p2_constant_mu",
+        "response_order": 2,
+        "source_identity": "divergence_free",
+        "boundary_orientation": "opposite_vertex",
+        "manufactured_load_relative_error": 8e-15,
+        "solved_field_relative_difference": 8e-4,
+        "allowed_solved_field_relative_difference": 1e-3,
+        "volume_rhs_seconds": 390.0,
+        "surface_rhs_seconds": 6.0,
+    })
+    assert result["status"] == "ok"
+    assert result["response_order"] == 2
+
+
+def test_rejects_response_order_scope_mismatch():
+    summary = {
+        "schema": "radia.divergence-free-source-assembly.v1",
+        "scope": "affine_p1_constant_mu",
+        "response_order": 2,
+        "source_identity": "divergence_free",
+        "boundary_orientation": "opposite_vertex",
+        "manufactured_load_relative_error": 1e-15,
+        "solved_field_relative_difference": 1e-4,
+        "allowed_solved_field_relative_difference": 1e-3,
+        "volume_rhs_seconds": 10.0,
+        "surface_rhs_seconds": 1.0,
+    }
+    result = divergence_free_source_assembly_gate(summary)
+    assert "scope_matches_response_order" in result["issues"]
+
+
 def good_summary():
     exact = [
         0.00792907237221318,
