@@ -36,14 +36,24 @@ def _fill_periodic(values, valid):
     return values
 
 
-def _distribution_metrics(k_surface, ds, xy, sheet_resistance):
+def _probe_offset(fin, delta):
+    """Probe distance beyond the tip: outside the SIBC breakdown zone."""
+    return max(5.0 * delta, 4.0 * fin.tip_radius)
+
+
+def _distribution_metrics(k_surface, ds, xy, sheet_resistance, analysis,
+                          fin, delta):
+    from radia.fin_section import feature_panel_weights
+
     panel_current = np.asarray(k_surface, complex) * np.asarray(ds, float)
     panel_current /= np.sum(panel_current)
     loss = sheet_resistance * np.abs(panel_current) ** 2 / ds
-    beak = xy[:, 0] >= 1.6e-3
-    tip = xy[:, 0] >= 3.5e-3
-    probe_y = np.linspace(-2e-3, 2e-3, 41)
-    probe_xy = np.column_stack((np.full_like(probe_y, 5e-3), probe_y))
+    # Regions and probe come from the CAD outline (radia.fin_section), not
+    # from fixture constants.
+    beak_weight = feature_panel_weights(analysis, fin, xy)
+    tip_weight = feature_panel_weights(analysis, fin, xy, tip=True)
+    probe_xy = fin.probe_points(offset=_probe_offset(fin, delta), n=41)
+    probe_axis = (probe_xy - probe_xy[len(probe_xy) // 2]) @ fin.normal
     offset = probe_xy[:, None, :] - xy[None, :, :]
     radius2 = np.sum(offset**2, axis=2)
     hx = np.sum(-panel_current[None, :] * offset[:, :, 1] /
@@ -52,14 +62,22 @@ def _distribution_metrics(k_surface, ds, xy, sheet_resistance):
                 (2 * math.pi * radius2), axis=1)
     h_abs = np.sqrt(np.abs(hx)**2 + np.abs(hy)**2)
     return {
-        "beak_current_fraction": float(abs(np.sum(panel_current[beak]))),
-        "beak_loss_fraction": float(np.sum(loss[beak]) / np.sum(loss)),
-        "tip_loss_fraction": float(np.sum(loss[tip]) / np.sum(loss)),
+        "beak_current_fraction": float(abs(np.sum(
+            panel_current * beak_weight))),
+        "beak_loss_fraction": float(np.sum(loss * beak_weight) /
+                                    np.sum(loss)),
+        "tip_loss_fraction": float(np.sum(loss * tip_weight) / np.sum(loss)),
+        # centroid measured along the fin axis from the root chord
         "beak_current_centroid_x_m": float(
-            np.sum(np.abs(panel_current[beak]) * xy[beak, 0]) /
-            np.sum(np.abs(panel_current[beak]))),
+            np.sum(np.abs(panel_current) * beak_weight * fin.project(xy)) /
+            np.sum(np.abs(panel_current) * beak_weight)
+            + fin.root_mid @ fin.axis),
+        "beak_current_centroid_axial_m": float(
+            np.sum(np.abs(panel_current) * beak_weight * fin.project(xy)) /
+            np.sum(np.abs(panel_current) * beak_weight)),
         "probe_center_H_abs_A_per_m": float(h_abs[len(h_abs) // 2]),
-        "probe_y_m": probe_y.tolist(),
+        "probe_center_xy_m": probe_xy[len(probe_xy) // 2].tolist(),
+        "probe_axis_m": probe_axis.tolist(),
         "probe_H_abs_A_per_m": h_abs.tolist(),
     }
 
@@ -67,7 +85,7 @@ def _distribution_metrics(k_surface, ds, xy, sheet_resistance):
 def run(step_path: Path, *, frequency: float, maxh: float,
         n_peri: int, n_stations: int, mesh_only: bool = False,
         experimental_peec: bool = False, profile_csv: Path | None = None,
-        bema_solver: str = "lu"):
+        bema_solver: str = "lu", lane_grading: str = "uniform"):
     from netgen.occ import OCCGeometry, Pnt
     from ngsolve import Mesh, TaskManager
     from surface_mesh_extract import _extract_surface_mesh_filtered
@@ -88,7 +106,14 @@ def run(step_path: Path, *, frequency: float, maxh: float,
     zs = (1 + 1j) / (sigma * delta)
 
     graph, cad = build_hybrid_surface_topology_from_straight_prism_step(
-        step_path, n_peri=n_peri, n_stations=n_stations)
+        step_path, n_peri=n_peri, n_stations=n_stations,
+        lane_grading=lane_grading)
+    cad = dict(cad)
+    analysis = cad.pop("section_analysis")
+    fin = analysis.primary
+    if fin is None:
+        raise ValueError("no fin detected on the STEP section; the beak "
+                         "comparison needs a protruding fin")
 
     # OCCGeometry's STEP units are mm; scale to SI before NGSolve assembly.
     solid = OCCGeometry(str(step_path)).shape.Scale(Pnt(0, 0, 0), 1e-3)
@@ -206,17 +231,26 @@ def run(step_path: Path, *, frequency: float, maxh: float,
         k_peec_aligned *= scale
         rel_l2 = float(np.linalg.norm(k_peec_aligned[valid] - k_bem[valid]) /
                        np.linalg.norm(k_bem[valid]))
-        beak = xy[:, 0] >= 1.6e-3
-        tip = xy[:, 0] >= 3.5e-3
+        beak = fin.fin_mask(xy)
+        tip = fin.tip_mask(xy)
         rs = zs.real
         loss_bem = 0.5 * rs * np.abs(k_bem) ** 2
         loss_peec = 0.5 * rs * np.abs(k_peec_aligned) ** 2
-        metrics_bem = _distribution_metrics(k_bem, widths[first:last], xy, rs)
-        metrics_peec = _distribution_metrics(k_peec, widths[first:last], xy, rs)
+        metrics_bem = _distribution_metrics(
+            k_bem, widths[first:last], xy, rs, analysis, fin, delta)
+        metrics_peec = _distribution_metrics(
+            k_peec, widths[first:last], xy, rs, analysis, fin, delta)
         h_bem = np.asarray(metrics_bem["probe_H_abs_A_per_m"])
         h_peec = np.asarray(metrics_peec["probe_H_abs_A_per_m"])
         result["surface_current_profile"] = {
             "axial_window_m": [zlo, zhi],
+            "fin_regions": {
+                "beak_lanes": int(np.count_nonzero(beak)),
+                "tip_lanes": int(np.count_nonzero(tip)),
+                "tip_arc_lanes": int(np.count_nonzero(fin.on_tip_arc(
+                    analysis.arclength_of(xy), analysis.perimeter))),
+                "probe_offset_m": _probe_offset(fin, delta),
+            },
             "valid_lanes": int(np.count_nonzero(valid)),
             "complex_relative_L2": rel_l2,
             "beak_mean_absK_ratio_peec_over_bema": float(
@@ -292,6 +326,9 @@ def main():
     parser.add_argument("--profile-csv", type=Path)
     parser.add_argument("--bema-solver", choices=("lu", "cocr", "hacapk_cocr"),
                         default="lu")
+    parser.add_argument("--lane-grading", choices=("uniform", "auto"),
+                        default="uniform",
+                        help="auto: grade PEEC lanes toward the detected fin tip")
     args = parser.parse_args()
     print(json.dumps(run(args.step, frequency=args.frequency,
                          maxh=args.maxh, n_peri=args.n_peri,
@@ -299,7 +336,8 @@ def main():
                          mesh_only=args.mesh_only,
                          experimental_peec=args.experimental_peec,
                          profile_csv=args.profile_csv,
-                         bema_solver=args.bema_solver), indent=2))
+                         bema_solver=args.bema_solver,
+                         lane_grading=args.lane_grading), indent=2))
 
 
 if __name__ == "__main__":

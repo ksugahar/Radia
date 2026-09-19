@@ -262,15 +262,34 @@ def build_hybrid_surface_topology_from_step(step_path, *, sigma,
 
 
 def build_hybrid_surface_topology_from_straight_prism_step(
-        step_path, *, n_peri=32, n_stations=9, cad_units_per_meter=1000.0):
+        step_path, *, n_peri=32, n_stations=9, cad_units_per_meter=1000.0,
+        lane_grading="uniform", n_outline=2048, tip_lanes=8):
     """Directly section a single z-extruded STEP solid, including a fin tip.
 
     This deliberately narrow fixture route does not infer a curved coil spine.
     Constant section area and a single face at each station are required.
+
+    The section outline is analysed with :mod:`radia.fin_section`; the fin
+    root, tip radius, tip arc and workpiece-side probe are derived from the
+    CAD outline instead of fixture constants.  ``lane_grading="uniform"``
+    keeps the historical equal-arc-length lanes; ``"auto"`` grades the lanes
+    geometrically toward each detected fin tip and puts ``tip_lanes`` cells
+    on the tip arc.  The returned metadata carries ``section_analysis`` (the
+    :class:`~radia.fin_section.SectionAnalysis` object) and its JSON form
+    ``fin_analysis``.
     """
+    if lane_grading not in {"uniform", "auto"}:
+        raise ValueError("lane_grading must be 'uniform' or 'auto'")
     from build123d import Plane, import_step, section
 
     from radia.coil_from_cad import _sample_face_perimeter_in_pt_frame
+    from radia.fin_section import (
+        _as_closed_ccw,
+        analyze_section,
+        graded_lane_arclengths,
+        outline_arclength,
+        outline_points_at,
+    )
 
     if n_peri < 4 or n_stations < 3 or cad_units_per_meter <= 0:
         raise ValueError("invalid perimeter, station, or CAD-unit count")
@@ -285,6 +304,9 @@ def build_hybrid_surface_topology_from_straight_prism_step(
         raise ValueError("zero-length STEP solid")
     rings = []
     areas = []
+    outlines = []
+    lane_fraction = None
+    analysis = None
     for z in np.linspace(z0, z1, n_stations):
         # Intersect strictly inside the end caps to avoid coincident-face
         # ambiguity in OpenCascade's section operation.
@@ -298,23 +320,49 @@ def build_hybrid_surface_topology_from_straight_prism_step(
         face = faces[0]
         areas.append(float(face.area))
         center = face.center()
-        uv = _sample_face_perimeter_in_pt_frame(
-            face, np.array([center.X, center.Y, center.Z]),
-            np.array([1.0, 0.0, 0.0]), np.array([0.0, 1.0, 0.0]),
-            int(n_peri))
-        ring = np.column_stack((uv[:, 0] + center.X,
-                                uv[:, 1] + center.Y,
-                                np.full(n_peri, z))) / cad_units_per_meter
+        origin = np.array([center.X, center.Y, center.Z])
+        e_u = np.array([1.0, 0.0, 0.0])
+        e_v = np.array([0.0, 1.0, 0.0])
+        uv_dense = _sample_face_perimeter_in_pt_frame(
+            face, origin, e_u, e_v, int(n_outline))
+        outline_m = (uv_dense + np.array([center.X, center.Y])) / cad_units_per_meter
+        outlines.append(outline_m)
+        if analysis is None:
+            analysis = analyze_section(outline_m)
+        if lane_grading == "auto" and analysis.fins:
+            if lane_fraction is None:
+                s_lanes = graded_lane_arclengths(
+                    analysis, int(n_peri), tip_lanes=int(tip_lanes))
+                lane_fraction = s_lanes / analysis.perimeter
+            # The same normalised arc-length positions are applied to every
+            # station; constant section is asserted below anyway.
+            closed = _as_closed_ccw(outline_m)
+            _, per = outline_arclength(closed)
+            uv_m = outline_points_at(closed, lane_fraction * per)
+            ring = np.column_stack((uv_m[:, 0], uv_m[:, 1],
+                                    np.full(n_peri, z / cad_units_per_meter)))
+        else:
+            uv = _sample_face_perimeter_in_pt_frame(
+                face, origin, e_u, e_v, int(n_peri))
+            ring = np.column_stack((uv[:, 0] + center.X,
+                                    uv[:, 1] + center.Y,
+                                    np.full(n_peri, z))) / cad_units_per_meter
         rings.append(ring)
     if not np.allclose(areas, areas[0], rtol=1e-6, atol=1e-9):
         raise ValueError("STEP is not a constant-section straight prism")
     if not np.allclose(np.asarray(rings)[:, :, :2], rings[0][:, :2],
                        rtol=0, atol=1e-9):
         raise ValueError("STEP section changes along the extrusion axis")
+    if not np.allclose(np.asarray(outlines), outlines[0], rtol=0, atol=1e-9):
+        raise ValueError("STEP dense outline changes along the extrusion axis")
     graph = build_hybrid_surface_topology(
         np.asarray(rings), range(1, n_stations - 1))
     return graph, {"cad_source": "step_straight_prism_sections",
                    "cross_section_kind": "unknown",
                    "section_area_m2": areas[0] / cad_units_per_meter**2,
                    "n_lanes": graph.n_lanes,
-                   "n_stations": graph.n_stations}
+                   "n_stations": graph.n_stations,
+                   "lane_grading": lane_grading if analysis.fins else "uniform",
+                   "n_outline": int(n_outline),
+                   "fin_analysis": analysis.as_dict(),
+                   "section_analysis": analysis}
