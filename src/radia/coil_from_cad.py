@@ -4126,36 +4126,17 @@ def _section_solid_at_plane(solid, point_xyz, normal_xyz):
         return None
 
 
-def _filaments_from_section_planes(solid,
-                                    cad_units_per_meter: float,
-                                    sigma: float,
-                                    n_peri: int,
-                                    n_stations: int,
-                                    source_tag: str = "step_section_planes"):
-    """Phase C-heavy fallback: united multi-loft (any cross-section).
+def _section_faces_from_solid(solid, cad_units_per_meter: float,
+                              n_stations: int):
+    """Section a swept solid along its spine into ordered planar faces.
 
-    Used when:
-      * Tier 1 lateral-surface UV trips (multi-fragment lateral)
-      * Tier 2 per-station faces trips (no surviving end-cap faces, e.g.
-        after ``unite()`` on a multi-loft)
-      * Tier 2b circle-edge per-station trips (non-circular cross-section)
-
-    Algorithm:
-      1. Extract spine polyline + per-station tangents (existing
-         ``extract_centerline_from_step`` falls back to longest-edge
-         spine; we reuse its result and recompute tangents here).
-      2. At each station, build a cutting plane perpendicular to the
-         local tangent, section the solid, recover the cross-section
-         Face from the resulting edges.
-      3. Pass (centroids, faces) to ``_filaments_from_per_station_faces``
-         (existing Tier 2 algorithm) for the actual filament placement.
-
-    Returns None if sectioning fails on >50 % of stations (the spine
-    is unreliable) or if any structural assumption breaks.
-
-    Cost: one ``BRepAlgoAPI_Section`` call per station.  ~5-30 s for
-    a 10 MB STEP at n_stations=20.  Acceptable for production; the
-    much faster Tier 1 / Tier 2 paths are tried first.
+    Shared front half of :func:`_filaments_from_section_planes`: spine
+    extraction (topology-aware), one ``BRepAlgoAPI_Section`` per station
+    with cap faces reused at open ends, area-outlier filtering and spine
+    ordering.  Returns ``(centroids_m, faces_ordered)`` or ``None`` when
+    the spine is unreliable, exactly as the filament builder decides.
+    ``radia.fin_sweep`` reuses this to obtain dense per-station outlines
+    without assembling a PEEC solver.
     """
     if solid is None:
         return None
@@ -4407,6 +4388,44 @@ def _filaments_from_section_planes(solid,
         centroids_ordered_cad = centroids_from_sections_cad[perm]
         faces_ordered = [faces_kept[i] for i in perm]
     centroids_kept_np = centroids_ordered_cad / cad_units_per_meter
+    return centroids_kept_np, faces_ordered
+
+
+def _filaments_from_section_planes(solid,
+                                    cad_units_per_meter: float,
+                                    sigma: float,
+                                    n_peri: int,
+                                    n_stations: int,
+                                    source_tag: str = "step_section_planes"):
+    """Phase C-heavy fallback: united multi-loft (any cross-section).
+
+    Used when:
+      * Tier 1 lateral-surface UV trips (multi-fragment lateral)
+      * Tier 2 per-station faces trips (no surviving end-cap faces, e.g.
+        after ``unite()`` on a multi-loft)
+      * Tier 2b circle-edge per-station trips (non-circular cross-section)
+
+    Algorithm:
+      1. Extract spine polyline + per-station tangents (existing
+         ``extract_centerline_from_step`` falls back to longest-edge
+         spine; we reuse its result and recompute tangents here).
+      2. At each station, build a cutting plane perpendicular to the
+         local tangent, section the solid, recover the cross-section
+         Face from the resulting edges.
+      3. Pass (centroids, faces) to ``_filaments_from_per_station_faces``
+         (existing Tier 2 algorithm) for the actual filament placement.
+
+    Returns None if sectioning fails on >50 % of stations (the spine
+    is unreliable) or if any structural assumption breaks.
+
+    Cost: one ``BRepAlgoAPI_Section`` call per station.  ~5-30 s for
+    a 10 MB STEP at n_stations=20.  Acceptable for production; the
+    much faster Tier 1 / Tier 2 paths are tried first.
+    """
+    sections = _section_faces_from_solid(solid, cad_units_per_meter, n_stations)
+    if sections is None:
+        return None
+    centroids_kept_np, faces_ordered = sections
     return _filaments_from_per_station_faces(
         centroids_kept_np, faces_ordered,
         sigma=sigma, n_peri=n_peri, source_tag=source_tag)

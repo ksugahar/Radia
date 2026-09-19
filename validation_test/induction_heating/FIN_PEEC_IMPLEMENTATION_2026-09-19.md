@@ -236,3 +236,61 @@ Not covered yet: fins whose section changes along the sweep (needs
 station-wise analysis and lane transition rings), separate brazed fin
 solids, and fins with filleted roots (the root then lands at the end of
 the thin walk, not at a corner).
+
+## STEP -> fin PEEC for general sweeps (2026-09-19, later)
+
+`radia.fin_sweep` generalises the straight-prism fixture route:
+
+- `station_outlines_from_step` returns dense per-station outlines in the
+  station frame using the existing CAD extractors.  `route="auto"` takes
+  a single z-extruded prism through direct z-sectioning and everything
+  else through the spine sectioner; the sectioner's front half was
+  factored out of `_filaments_from_section_planes` as
+  `coil_from_cad._section_faces_from_solid` (behaviour of the filament
+  builder unchanged) so no PEEC solver is built for outline extraction.
+- `align_station_origins` re-registers each station's arc-length origin to
+  its predecessor by FFT cross-correlation.  The CAD sampler starts at the
+  boundary point nearest +u, which jumps when a fin appears; without this
+  step lane k would change material line and the longitudinal branches
+  would cross the section.
+- `build_fin_graph` analyses every station (`fin_section.analyze_section`),
+  grades lanes toward the fin tip where a fin exists and keeps uniform
+  lanes elsewhere, lifts the lanes to 3-D with the station frame and puts
+  circumferential rings at every interior station.  `graded_lane_arclengths`
+  gained `max_ratio` (default 8) so a fin tapering to nothing along the
+  sweep never demands more lanes than the budget; `max_ratio=None` keeps
+  the strict fixture behaviour.
+- `validation_test/induction_heating/fin_peec_from_step.py` runs STEP ->
+  graph -> experimental surface PEEC and reports R, external L and, per fin
+  station, beak current/loss fractions, axial centroid, tip lanes and the
+  3-D probe field (`peec_proximity._biot_savart_H`) at
+  `max(5 delta, 4 r_tip)` beyond the tip.
+
+`tests/test_fin_sweep.py` covers the frames, origin registration, a
+straight sweep whose fin tapers to zero (fin detected while present, absent
+after, longitudinal branches stay within 1.6x the station spacing after
+registration) and a 90 degree planar sweep (rings lie in the (u, v) planes,
+branch count).  A build123d-backed regression also checks that direct STEP
+sections retain connected outer-wire order, SI scale and fin detection.
+
+Native verification now covers all three CAD cases.  The 6 mm fixture gives
+29.1938 micro-ohm (the previous independent result was 29.19 micro-ohm), while
+the 60 mm fixture gives 322.10 micro-ohm = 5.37 milliohm/m; the earlier
+28.8 micro-ohm expectation belongs to the short fixture, not the 60 mm file.
+A z-directed loft with 2.5% changing cap area runs through eight sections and
+the complete 3-D graph/PEEC solve (160.38 micro-ohm).  Auto routing accepts
+such a tapered axial loft without requiring equal cap areas, but uses an
+axial-aspect guard so a flat planar coil extruded in z is not misclassified as
+a z-directed conductor.  The curved `rect_torus_lofted_united.step` therefore
+uses `step_section_planes`; eight CAD sections, 416 branches and the native
+solve complete (1.263 milliohm, 141.51 nH; geometry-path smoke evidence, not a
+fin accuracy reference).  The runner reports requested `tip_lanes` separately
+from `tip_overlap_majority_panels`, since conservative dual-cell overlap can
+make the latter larger than the placement target.
+
+Still outside the automation: separate brazed fin solids (unite in CAD),
+filleted roots (root lands at the end of the thin walk), the area-outlier
+filter in `_section_faces_from_solid` (drops stations whose section area
+differs >30 % from the median, i.e. very large fins appearing mid-sweep),
+and the production hook (`calc_inductance.py` / IH operator assembler
+still use the series bundle).
