@@ -1,0 +1,42 @@
+{
+  "schema": "radia.beak_fin_end_effect_sweep.v1",
+  "frequency_hz": 150000.0,
+  "conductivity_S_per_m": 58000000.0,
+  "skin_depth_m": 0.0001706320094702169,
+  "bema_solver": "cocr",
+  "bema_maxh_m": 0.003,
+  "peec_n_peri": 64,
+  "cases": [
+    {
+      "length_mm": 6,
+      "bema_R_total_uohm": 34.3719341029,
+      "bema_R_caps_uohm": 6.5313825051,
+      "bema_R_lateral_uohm": 27.8405515978,
+      "peec_R_uohm": 29.1855464689,
+      "peec_vs_bema_total_percent": -15.0890189028,
+      "peec_vs_bema_lateral_percent": 4.8310640197,
+      "bema_divJ_residual": 1.2746226759e-13
+    },
+    {
+      "length_mm": 12,
+      "bema_R_total_uohm": 63.5396948984,
+      "bema_R_caps_uohm": 6.7578686074,
+      "bema_R_lateral_uohm": 56.7818262910,
+      "peec_R_uohm": 60.9258176719,
+      "peec_vs_bema_total_percent": -4.1137705031,
+      "peec_vs_bema_lateral_percent": 7.2980945693,
+      "bema_divJ_residual": 1.9858865421e-12
+    },
+    {
+      "length_mm": 24,
+      "bema_R_total_uohm": 123.4092898025,
+      "bema_R_caps_uohm": 6.8986489937,
+      "bema_R_lateral_uohm": 116.5106408088,
+      "peec_R_uohm": 126.1789495965,
+      "peec_vs_bema_total_percent": 2.2442879287,
+      "peec_vs_bema_lateral_percent": 8.2982195622,
+      "bema_divJ_residual": 1.3122150728e-12
+    }
+  ],
+  "conclusion": "BEM-A cap resistance stays approximately constant at 6.5-6.9 uohm while lateral resistance scales with length. The original 6 mm total-R discrepancy is dominated by the different terminal-cap convention. Total relative discrepancy magnitude falls from 15.1% to 4.1% to 2.2%; PEEC remains 4.8-8.3% above the BEM-A lateral-only resistance, so local convergence is not yet established."
+}
