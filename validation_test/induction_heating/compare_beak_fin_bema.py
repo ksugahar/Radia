@@ -18,7 +18,8 @@ sys.path.insert(0, str(ROOT / "src" / "radia" / "panels"))
 
 def run(step_path: Path, *, frequency: float, maxh: float,
         n_peri: int, n_stations: int, mesh_only: bool = False,
-        experimental_peec: bool = False, profile_csv: Path | None = None):
+        experimental_peec: bool = False, profile_csv: Path | None = None,
+        bema_solver: str = "lu"):
     from netgen.occ import OCCGeometry, Pnt
     from ngsolve import Mesh, TaskManager
     from surface_mesh_extract import _extract_surface_mesh_filtered
@@ -58,14 +59,39 @@ def run(step_path: Path, *, frequency: float, maxh: float,
                     "n_vertices": int(surface.nv), "cad": cad}
         bem = compute_inductance_source_sink(
             surface, "source", "sink", omega=omega, Z_s_complex=zs,
-            solver="lu")
+            solver=bema_solver)
+    cen, area, j_re = compute_centroids_areas_J(surface, bem["gf_J"])
+    _cen_im, _area_im, j_im = compute_centroids_areas_J(
+        surface, bem["gf_J_im"])
+    j_complex = j_re + 1j * j_im
+    j_abs2 = np.sum(np.abs(j_complex) ** 2, axis=1)
+    end_tol = max(1e-12, z_end * 1e-8)
+    source_cap = np.abs(cen[:, 2]) <= end_tol
+    sink_cap = np.abs(cen[:, 2] - z_end) <= end_tol
+    caps = source_cap | sink_cap
+    # For a unit peak terminal current, Pavg=R/2. Hence the equivalent
+    # resistance of a region is Rs*integral(|K|^2 dS).
+    def region_resistance(mask):
+        return float(zs.real * np.sum(j_abs2[mask] * area[mask]))
+
+    cap_r_source = region_resistance(source_cap)
+    cap_r_sink = region_resistance(sink_cap)
+    cap_r = cap_r_source + cap_r_sink
+    lateral_r = region_resistance(~caps)
     result = {
         "fixture": str(step_path), "frequency_hz": frequency,
         "sigma_S_per_m": sigma, "skin_depth_m": delta,
         "bema": {"R_ohm": float(bem["R"]), "L_H": float(bem["L"]),
                  "residual": float(bem["residual"]),
                  "n_J": int(bem["n_J"]), "n_f": int(bem["n_f"]),
-                 "n_surface_faces": int(surface.nface)},
+                 "n_surface_faces": int(surface.nface),
+                 "solver": bema_solver,
+                 "R_source_cap_ohm": cap_r_source,
+                 "R_sink_cap_ohm": cap_r_sink,
+                 "R_caps_ohm": cap_r,
+                 "R_lateral_ohm": lateral_r,
+                 "R_partition_relative_closure": float(
+                     (cap_r + lateral_r) / bem["R"] - 1)},
         "peec_topology": {**cad, "n_branches": len(graph.branches),
                           "n_nodes": len(graph.nodes)},
         "status": "BEM-A baseline only; PEEC physical R/L and current/loss comparison pending",
@@ -99,10 +125,7 @@ def run(step_path: Path, *, frequency: float, maxh: float,
             "relative_R_error": float(r_power / bem["R"] - 1),
             "relative_L_error": float(l_external / bem["L"] - 1),
         }
-        cen, area, j_re = compute_centroids_areas_J(surface, bem["gf_J"])
-        _cen_im, _area_im, j_im = compute_centroids_areas_J(
-            surface, bem["gf_J_im"])
-        jz = j_re[:, 2] + 1j * j_im[:, 2]
+        jz = j_complex[:, 2]
         zlo, zhi = 0.35 * z_end, 0.65 * z_end
         body = (cen[:, 2] > zlo) & (cen[:, 2] < zhi) & (area > 0)
 
@@ -197,13 +220,16 @@ def main():
     parser.add_argument("--mesh-only", action="store_true")
     parser.add_argument("--experimental-peec", action="store_true")
     parser.add_argument("--profile-csv", type=Path)
+    parser.add_argument("--bema-solver", choices=("lu", "cocr", "hacapk_cocr"),
+                        default="lu")
     args = parser.parse_args()
     print(json.dumps(run(args.step, frequency=args.frequency,
                          maxh=args.maxh, n_peri=args.n_peri,
                          n_stations=args.n_stations,
                          mesh_only=args.mesh_only,
                          experimental_peec=args.experimental_peec,
-                         profile_csv=args.profile_csv), indent=2))
+                         profile_csv=args.profile_csv,
+                         bema_solver=args.bema_solver), indent=2))
 
 
 if __name__ == "__main__":

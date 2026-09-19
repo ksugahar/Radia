@@ -74,6 +74,38 @@ rectangular Ruehli self term is not yet a validated surface partial element;
 the failed local-current gate above confirms that further formulation work is
 needed even where terminal quantities happen to agree.
 
+### Review correction: cap convention is the dominant 6 mm discrepancy
+
+The preceding rejection remains valid as a conservative gate, but its causal
+interpretation is superseded here. The experimental `peec_fin_topology` path
+does **not** use main's bulk `Zs_fil` or proximity iteration. It already uses
+`R=Rs*length/dual_width`, `Zs=jR`, and transverse MNA branches at interior
+stations. Review findings A--D apply to the existing production path, not this
+experimental assembly.
+
+Direct partition of BEM-A's sampled surface-current loss establishes the
+terminal convention mismatch. At 6 mm, BEM-A total R is 34.372 micro-ohm:
+6.531 micro-ohm is on the source/sink caps and 27.841 micro-ohm is lateral.
+The experimental PEEC has ideal lossless equipotential terminal nodes and
+gives 29.186 micro-ohm. Thus its difference from BEM-A total is -15.1%, but
+from BEM-A lateral-only loss is +4.83%. The cap term alone is larger than the
+original 5.19 micro-ohm discrepancy.
+
+The 6/12/24 mm `cocr` sweep in `beak_fin_length_sweep_150kHz.json` reinforces
+this: BEM-A cap R stays 6.53/6.76/6.90 micro-ohm, while total relative PEEC
+error changes -15.1% -> -4.11% -> +2.24%. The absolute cap contribution is
+approximately length-independent and its relative importance decays with
+length. PEEC remains 4.8--8.3% above BEM-A lateral-only R, so discretization
+and local-current convergence are not yet certified.
+
+The local |K| comparison is also not yet a truth test at the nose: R_tip/delta
+is only 1.47, violating a robust thin-skin asymptotic regime; 64 equal-arc
+lanes place only about two lanes on the rounded tip; and the short-fixture
+sampling window lies within end-effect penetration. BEM-A and thin-sheet PEEC
+therefore require geometry/frequency and mesh convergence before applying the
+numerical acceptance thresholds above. Neither current result validates the
+physical nose current.
+
 ## Required next gates
 
 1. A synthetic straight beak-fin STEP and reproducible generator now live in
