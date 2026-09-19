@@ -106,6 +106,34 @@ therefore require geometry/frequency and mesh convergence before applying the
 numerical acceptance thresholds above. Neither current result validates the
 physical nose current.
 
+### Independent lateral-discretization convergence
+
+`sibc2d_beak_reference.py` supplies the third, infinite-length reference
+instead of treating either 3-D route as truth. Its resistance converges from
+5.425 to 5.248 mOhm/m over 64--1024 perimeter panels, consistent with the
+5.242 mOhm/m continuum value; rounded-tip mean |K|/mean(K) converges near 2.0.
+A 256-panel regression requires R within 1% and the tip ratio within 5%.
+
+Using the 12-to-24 mm difference quotient to cancel terminal effects:
+
+| Route/refinement | lateral R (mOhm/m) | error vs 5.242 |
+| --- | ---: | ---: |
+| BEM-A maxh 3.0 mm | 4.977 | -5.05% |
+| BEM-A maxh 1.5 mm | 5.027 | -4.10% |
+| BEM-A maxh 0.75 mm | 5.105 | -2.61% |
+| PEEC n=64, axial <=1.5 mm | 5.433 | +3.64% |
+| PEEC n=128, axial <=1.5 mm | 5.335 | +1.78% |
+| PEEC n=256, axial <=1.5 mm | 5.272 | +0.58% |
+
+Thus BEM-A rises and PEEC falls toward the independent 2-D value. The earlier
+4.8--8.3% lateral mismatch was shared discretization error, not evidence that
+the experimental PEEC SIBC topology was physically wrong. This clears the
+straight-prism **integrated lateral loss** formulation at the finest PEEC
+point. It does not clear pointwise nose current or a real tapered/curved fin:
+the R_tip/delta limitation, only about two 64-lane nose samples, and absence of
+an independently converged 3-D tip profile remain explicit blockers. Full data
+are in `beak_fin_discretization_convergence_150kHz.json`.
+
 ## Required next gates
 
 1. A synthetic straight beak-fin STEP and reproducible generator now live in
@@ -116,9 +144,11 @@ physical nose current.
    This is not representative of an as-built coil. Obtain representative CAD,
    then check station alignment, branch geometry, and convergence under
    perimeter/axial refinement. Reject missing tips and zero-area cells.
-2. Implement a consistent surface-current discretization with passive SIBC
-   Gram matrix and validated nonorthogonal partial elements. Avoid adding the
-   existing isolated-wire Dowell/Bessel or proximity correction on top.
+2. Preserve the experimental path's SIBC-consistent surface-band resistance
+   and transverse MNA topology when promoting it. Replace or validate the
+   rectangular Ruehli self term as a nonorthogonal surface partial element;
+   do not route it through production's isolated-wire Dowell/Bessel allocation
+   or proximity correction.
 3. Compare local current, tip/root loss, terminal impedance, and field at the
    workpiece against an independent 3-D A-phi/HCurl reference over frequency,
    conductivity, geometry, and mesh sweeps. KCL alone is not an accuracy gate.
