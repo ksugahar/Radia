@@ -339,6 +339,136 @@ def test_mixed_omega_accepts_preassembled_reduced_source_load():
             source_rhs_reduced=np.zeros(2), **args)
 
 
+@pytest.mark.parametrize("order", [1, 2])
+def test_matching_trace_condensation_matches_multiplier_and_cg(order):
+    """The restricted SPD path is the saddle system with its trace eliminated."""
+    from netgen.occ import Box, Glue, OCCGeometry, Pnt, X
+    import ngsolve as ng
+    from radia.kelvin_solver import (
+        solve_magnetostatic_matching_trace_total_reduced_omega,
+        solve_magnetostatic_mixed_total_reduced_omega_kelvin,
+    )
+
+    reduced = Box(Pnt(-1, -1, -1), Pnt(0, 1, 1))
+    reduced.mat("reduced")
+    reduced.faces.name = "natural"
+    reduced.faces.Min(X).name = "norm_boundary"
+    reduced.faces.Max(X).name = "source_total_interface"
+    total = Box(Pnt(0, -1, -1), Pnt(1, 1, 1))
+    total.mat("total")
+    total.faces.name = "natural"
+    total.faces.Max(X).name = "norm_boundary"
+    total.faces.Min(X).name = "source_total_interface"
+    mesh = ng.Mesh(OCCGeometry(Glue([reduced, total])).GenerateMesh(maxh=0.65))
+    source_h = ng.CoefficientFunction((
+        ng.x * ng.x + 0.1 * ng.y,
+        0.2 * ng.y,
+        -0.15 * ng.z,
+    ))
+    trace_space = ng.H1(
+        mesh, order=order,
+        definedon=mesh.Boundaries("source_total_interface"))
+    trace = ng.GridFunction(trace_space)
+    trace.Set(-ng.z, definedon=mesh.Boundaries("source_total_interface"))
+    common = dict(
+        mu_r_by_material={"reduced": 1.0, "total": 2.0},
+        reduced_materials=("reduced",), total_materials=("total",),
+        interface_boundary="source_total_interface", order=order,
+    )
+    with ng.TaskManager():
+        saddle = solve_magnetostatic_mixed_total_reduced_omega_kelvin(
+            mesh, source_h, trace, 1.0, (3.0, 0.0, 0.0),
+            dirichlet_bbbnd=None,
+            reduced_dirichlet_boundary="norm_boundary",
+            total_dirichlet_boundary="norm_boundary",
+            kelvin_mats=(), **common)
+        direct = solve_magnetostatic_matching_trace_total_reduced_omega(
+            mesh, source_h, trace, dirichlet_boundary="norm_boundary",
+            solver="direct", **common)
+        iterative = solve_magnetostatic_matching_trace_total_reduced_omega(
+            mesh, source_h, trace, dirichlet_boundary="norm_boundary",
+            solver="cg", cg_tolerance=1.0e-12, **common)
+
+    assert direct["linear_residual_relative"] < 1.0e-10
+    assert iterative["linear_residual_relative"] < 1.0e-9
+    for point in ((-0.65, 0.1, 0.15), (-0.2, -0.2, 0.25),
+                  (0.2, 0.15, -0.1), (0.65, -0.1, 0.2)):
+        saddle_h = np.asarray(saddle["H_cf"](mesh(*point)), dtype=float)
+        direct_h = np.asarray(direct["H_cf"](mesh(*point)), dtype=float)
+        iterative_h = np.asarray(iterative["H_cf"](mesh(*point)), dtype=float)
+        assert np.allclose(direct_h, saddle_h, rtol=1.0e-10, atol=1.0e-11)
+        assert np.allclose(iterative_h, direct_h, rtol=1.0e-9, atol=1.0e-10)
+
+
+def test_matching_trace_condensation_maps_preassembled_reduced_load():
+    import ngsolve as ng
+    from radia.kelvin_solver import (
+        solve_magnetostatic_matching_trace_total_reduced_omega,
+    )
+
+    mesh = _two_region_mesh(maxh=0.65)
+    trace_space = ng.H1(
+        mesh, order=2,
+        definedon=mesh.Boundaries("source_total_interface"))
+    trace = ng.GridFunction(trace_space)
+    trace.vec[:] = 0.0
+    args = dict(
+        mu_r_by_material={"reduced": 1.0, "total": 1.0},
+        reduced_materials=("reduced",), total_materials=("total",),
+        interface_boundary="source_total_interface", order=2,
+        dirichlet_boundary="outer", solver="direct", return_system=True,
+    )
+    source_h = ng.CoefficientFunction((ng.x * ng.x, ng.y, ng.z))
+    with ng.TaskManager():
+        native = solve_magnetostatic_matching_trace_total_reduced_omega(
+            mesh, source_h, trace, **args)
+        source_space = native["fes_reduced_source"]
+        test = source_space.TestFunction()
+        source_load = ng.LinearForm(source_space)
+        source_load += ((4.0e-7 * np.pi) * source_h * ng.grad(test)
+                        * ng.dx(definedon=mesh.Materials("reduced"),
+                                bonus_intorder=4))
+        source_load.Assemble()
+        supplied = solve_magnetostatic_matching_trace_total_reduced_omega(
+            mesh, source_h, trace,
+            source_rhs_reduced=source_load.vec.FV().NumPy().copy(), **args)
+
+    assert np.allclose(
+        native["system"]["linear_form"].vec.FV().NumPy(),
+        supplied["system"]["linear_form"].vec.FV().NumPy(),
+        rtol=1.0e-12, atol=1.0e-12)
+    for point in ((-0.5, 0.1, 0.1), (0.5, -0.1, 0.2)):
+        assert np.allclose(native["H_cf"](mesh(*point)),
+                           supplied["H_cf"](mesh(*point)),
+                           rtol=1.0e-10, atol=1.0e-11)
+
+
+def test_matching_trace_condensation_rejects_unsupported_trace_and_order():
+    import ngsolve as ng
+    from radia.kelvin_solver import (
+        solve_magnetostatic_matching_trace_total_reduced_omega,
+    )
+
+    mesh = _two_region_mesh(maxh=0.8)
+    args = dict(
+        mu_r_by_material={"reduced": 1.0, "total": 1.0},
+        reduced_materials=("reduced",), total_materials=("total",),
+        interface_boundary="source_total_interface",
+    )
+    with pytest.raises(TypeError, match="projected NGSolve GridFunction"):
+        solve_magnetostatic_matching_trace_total_reduced_omega(
+            mesh, ng.CoefficientFunction((0.0, 0.0, 0.0)), ng.x,
+            order=1, **args)
+    trace_space = ng.H1(
+        mesh, order=2,
+        definedon=mesh.Boundaries("source_total_interface"))
+    trace = ng.GridFunction(trace_space)
+    with pytest.raises(ValueError, match="only order 1 or 2"):
+        solve_magnetostatic_matching_trace_total_reduced_omega(
+            mesh, ng.CoefficientFunction((0.0, 0.0, 0.0)), trace,
+            order=3, **args)
+
+
 def test_mixed_omega_prescribed_reduced_normal_flux_recovers_uniform_source():
     import ngsolve as ng
     from radia.kelvin_solver import solve_magnetostatic_mixed_total_reduced_omega_kelvin
