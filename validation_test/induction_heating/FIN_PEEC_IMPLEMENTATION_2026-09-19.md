@@ -53,6 +53,27 @@ even at 6 mm target maxh due to the 0.25 mm nose; a dense direct solve was
 stopped after reaching ~6.8 GB working set. The 6 mm short fixture is a
 bounded exploratory comparison, not a substitute for the full-length gate.
 
+The current-distribution gate is stricter than terminal R/L. On the tracked
+20 mm fixture at 150 kHz (BEM-A: 3520 triangles / 5280 current DoFs; PEEC:
+64 perimeter lanes / 9 stations), terminal R and external L differ by only
++1.23% and -1.86%, respectively. Nevertheless, after mapping the central
+30% of the BEM-A surface to the same perimeter lanes and removing only the
+arbitrary global phasor, PEEC has 13.1% complex relative L2 error. It predicts
+the mean beak |K| 23.6% high, the rounded-tip |K| 8.7% high, beak loss 33.6%
+high, and tip loss 20.7% high. Therefore terminal agreement does not clear the
+model. `beak_fin_bema_comparison_150kHz.json` records `accepted=false`; the
+per-lane evidence is `beak_fin_current_profile_150kHz.csv`. Acceptance requires
+profile L2 <= 5%, beak/tip mean |K| within 5%, and mean loss within 10%, after
+both discretizations have independently converged.
+
+The attached 2026-09-19 internal review also identifies the production-main
+bulk impedance allocation and proximity iteration as non-SIBC-consistent.
+Those paths must not be reused for this fin backend. The experimental branch
+model uses a thin surface-band resistance and transverse MNA links, but its
+rectangular Ruehli self term is not yet a validated surface partial element;
+the failed local-current gate above confirms that further formulation work is
+needed even where terminal quantities happen to agree.
+
 ## Required next gates
 
 1. A synthetic straight beak-fin STEP and reproducible generator now live in

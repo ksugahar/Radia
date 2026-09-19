@@ -1,0 +1,58 @@
+{
+  "fixture": "tests\\coil_from_cad\\fixtures\\beak_fin_20mm.step",
+  "frequency_hz": 150000.0,
+  "sigma_S_per_m": 58000000.0,
+  "skin_depth_m": 0.0001706320094702169,
+  "bema": {
+    "R_ohm": 0.000103094874387732,
+    "L_H": 7.050252491856904e-09,
+    "residual": 9.020796634999798e-17,
+    "n_J": 5280,
+    "n_f": 3520,
+    "n_surface_faces": 3520
+  },
+  "peec_topology": {
+    "cad_source": "step_straight_prism_sections",
+    "cross_section_kind": "unknown",
+    "section_area_m2": 2.4552230195068283e-05,
+    "n_lanes": 64,
+    "n_stations": 9,
+    "n_branches": 960,
+    "n_nodes": 450
+  },
+  "status": "rejected: beak/tip current distribution mismatch",
+  "experimental_peec": {
+    "R_ohm": 0.00010436228392345239,
+    "L_external_H": 6.918826139646883e-09,
+    "Z_port_ohm": [
+      0.0001043622839244493,
+      0.006625202295458904
+    ],
+    "relative_R_error": 0.012293623162619616,
+    "relative_L_error": -0.01864136814416495
+  },
+  "surface_current_profile": {
+    "axial_window_m": [
+      0.006999999999999999,
+      0.013000000000000001
+    ],
+    "valid_lanes": 37,
+    "complex_relative_L2": 0.13065070515510563,
+    "beak_mean_absK_ratio_peec_over_bema": 1.2362744935479504,
+    "tip_mean_absK_ratio_peec_over_bema": 1.0867515045500167,
+    "beak_mean_loss_ratio_peec_over_bema": 1.3362582952000617,
+    "tip_mean_loss_ratio_peec_over_bema": 1.20708859179241,
+    "acceptance_limits": {
+      "complex_relative_L2_max": 0.05,
+      "absK_mean_ratio_range": [
+        0.95,
+        1.05
+      ],
+      "loss_mean_ratio_range": [
+        0.9,
+        1.1
+      ]
+    },
+    "accepted": false
+  }
+}
