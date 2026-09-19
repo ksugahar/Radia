@@ -5,13 +5,59 @@ import json
 import pytest
 
 from radia_mcp.radia_ngsolve.finite_section_helmholtz_gate import (
+    divergence_free_source_assembly_gate,
     finite_section_helmholtz_axis_bz,
     finite_section_helmholtz_mixed_omega_gate,
 )
 from radia_mcp.radia_ngsolve.server import (
+    divergence_free_source_assembly_gate as mcp_source_gate,
     finite_section_helmholtz_mixed_omega_gate as mcp_gate,
     mcp,
 )
+
+
+def test_accepts_oriented_divergence_free_surface_source_assembly():
+    result = divergence_free_source_assembly_gate({
+        "schema": "radia.divergence-free-source-assembly.v1",
+        "scope": "affine_p1_constant_mu",
+        "source_identity": "divergence_free",
+        "boundary_orientation": "opposite_vertex",
+        "manufactured_load_relative_error": 4e-15,
+        "solved_field_relative_difference": 4.7e-4,
+        "allowed_solved_field_relative_difference": 1e-3,
+        "volume_rhs_seconds": 7.9,
+        "surface_rhs_seconds": 0.55,
+    })
+    assert result["status"] == "ok"
+    assert result["speedup"] > 10
+    assert json.loads(mcp_source_gate(json.dumps({
+        "schema": "radia.divergence-free-source-assembly.v1",
+        "scope": "affine_p1_constant_mu",
+        "source_identity": "divergence_free",
+        "boundary_orientation": "opposite_vertex",
+        "manufactured_load_relative_error": 4e-15,
+        "solved_field_relative_difference": 4.7e-4,
+        "allowed_solved_field_relative_difference": 1e-3,
+        "volume_rhs_seconds": 7.9,
+        "surface_rhs_seconds": 0.55,
+    })))['status'] == 'ok'
+
+
+def test_rejects_surface_source_without_orientation_or_solution_parity():
+    result = divergence_free_source_assembly_gate({
+        "schema": "radia.divergence-free-source-assembly.v1",
+        "scope": "affine_p1_constant_mu",
+        "source_identity": "divergence_free",
+        "boundary_orientation": "boundary_label",
+        "manufactured_load_relative_error": 1e-3,
+        "solved_field_relative_difference": 0.4,
+        "allowed_solved_field_relative_difference": 1e-3,
+        "volume_rhs_seconds": 8.0,
+        "surface_rhs_seconds": 1.0,
+    })
+    assert result["status"] == "needs_attention"
+    assert "boundary_orientation_is_element_derived" in result["issues"]
+    assert "solved_field_matches" in result["issues"]
 
 
 def good_summary():
