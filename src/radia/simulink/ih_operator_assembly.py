@@ -62,6 +62,14 @@ class IHOperatorAssemblyOptions:
     coil_sink_label: str = "sink"
     peec_perimeter_filaments: int = 16
     peec_proximity: bool = True
+    # STEP coil solver: "peec" (series perimeter bundle) or "fin-surface"
+    # (fin-graded surface PEEC, radia.fin_sweep; weak coupling only).  Only
+    # meaningful for a .step coil; .vol coils always use BEM-A.
+    coil_step_solver: str = "peec"
+    fin_n_lanes: int = 64
+    fin_n_stations: int = 20
+    fin_lane_grading: str = "auto"
+    fin_tip_lanes: int = 8
     coupling_mode: str = "weak"
     workpiece_bem_backend: str = "intree-dense"
     thermal_order: int = 1
@@ -111,6 +119,18 @@ class IHOperatorAssemblyOptions:
             raise ValueError("peec_perimeter_filaments must be positive")
         if self.coupling_mode not in {"weak", "strong"}:
             raise ValueError("coupling_mode must be weak or strong")
+        if self.coil_step_solver not in {"peec", "fin-surface"}:
+            raise ValueError("coil_step_solver must be peec or fin-surface")
+        if self.fin_lane_grading not in {"auto", "uniform"}:
+            raise ValueError("fin_lane_grading must be auto or uniform")
+        if self.fin_n_lanes < 8 or self.fin_n_stations < 3 or self.fin_tip_lanes < 1:
+            raise ValueError("fin_n_lanes >= 8, fin_n_stations >= 3, fin_tip_lanes >= 1")
+        if self.coil_step_solver == "fin-surface" and self.coupling_mode == "strong":
+            raise ValueError(
+                "fin-surface supports weak coupling only (per-branch workpiece "
+                "EMF is not implemented; see docs/induction_heating/"
+                "FIN_PEEC_PRODUCTION_BOUNDARY.md)"
+            )
         if self.workpiece_bem_backend not in {"intree-dense", "hacapk"}:
             raise ValueError("workpiece_bem_backend must be intree-dense or hacapk")
         if isinstance(self.thermal_order, bool) or self.thermal_order not in (1, 2):
@@ -305,27 +325,29 @@ def _check_vol(
     return report
 
 
-def _solve_unit_current(
+def _coil_solver_name(backend: str, options: IHOperatorAssemblyOptions) -> str:
+    """calc_inductance --coil-solver for this geometry/option pair."""
+    if backend == "peec" and options.coil_step_solver == "fin-surface":
+        return "fin-surface"
+    return backend
+
+
+def _unit_current_argv(
     workpiece: Path,
     coil: Path,
     backend: str,
     options: IHOperatorAssemblyOptions,
-    run_dir: Path,
-) -> UnitCurrentResult:
-    from ngsolve import H1, GridFunction, Mesh
+    field_path: Path,
+) -> list[str]:
+    """Build the calc_inductance CLI for the 1 A electromagnetic solve.
 
-    from radia.panels.calc_inductance import build_argparser, run_inductance
-
-    if backend == "peec" and options.coupling_mode == "strong" and options.peec_proximity:
-        raise ValueError(
-            "strong PEEC coupling cannot be combined with PEEC proximity; "
-            "pass --no-peec-proximity or use weak coupling"
-        )
-
-    field_path = run_dir / "ih_fields.msh"
+    Factored out so the STEP-solver contract (peec vs fin-surface) is unit
+    testable without NGSolve.
+    """
+    coil_solver = _coil_solver_name(backend, options)
     argv = [
         "--coil-solver",
-        backend,
+        coil_solver,
         "--vol",
         str(workpiece),
         "--wp-label",
@@ -353,7 +375,22 @@ def _solve_unit_current(
         "--msh-output",
         str(field_path),
     ]
-    if backend == "peec":
+    if coil_solver == "fin-surface":
+        argv.extend(
+            [
+                "--coil-step",
+                str(coil),
+                "--fin-n-lanes",
+                str(options.fin_n_lanes),
+                "--fin-n-stations",
+                str(options.fin_n_stations),
+                "--fin-lane-grading",
+                options.fin_lane_grading,
+                "--fin-tip-lanes",
+                str(options.fin_tip_lanes),
+            ]
+        )
+    elif backend == "peec":
         argv.extend(
             [
                 "--coil-step",
@@ -375,6 +412,28 @@ def _solve_unit_current(
             ]
         )
 
+    return argv
+
+
+def _solve_unit_current(
+    workpiece: Path,
+    coil: Path,
+    backend: str,
+    options: IHOperatorAssemblyOptions,
+    run_dir: Path,
+) -> UnitCurrentResult:
+    from ngsolve import H1, GridFunction, Mesh
+
+    from radia.panels.calc_inductance import build_argparser, run_inductance
+
+    if backend == "peec" and options.coupling_mode == "strong" and options.peec_proximity:
+        raise ValueError(
+            "strong PEEC coupling cannot be combined with PEEC proximity; "
+            "pass --no-peec-proximity or use weak coupling"
+        )
+
+    field_path = run_dir / "ih_fields.msh"
+    argv = _unit_current_argv(workpiece, coil, backend, options, field_path)
     arguments = build_argparser().parse_args(argv)
     payload = run_inductance(arguments)
     if payload.get("status") == "error" or payload.get("error"):
@@ -729,9 +788,13 @@ def _native_config(
         "convection_W_per_m2K": options.convection_W_per_m2K,
         "rotation_mode": "none",
         "angle_origin_rad": 0.0,
+        # MEX contract keeps eddy_solver in {fem, peec, bem-a, bim}; the
+        # fin-surface variant is recorded in eddy_method / coil_backend.
         "eddy_solver": backend,
         "eddy_method": (
-            "PEEC + BEM-SIBC unit-current response"
+            "fin-surface PEEC + BEM-SIBC unit-current response"
+            if _coil_solver_name(backend, options) == "fin-surface"
+            else "PEEC + BEM-SIBC unit-current response"
             if backend == "peec"
             else "BEM-A + BEM-SIBC unit-current response"
         ),
@@ -749,7 +812,7 @@ def _native_config(
         "geometry": {
             "workpiece_vol": str(workpiece),
             "coil_file": str(coil),
-            "coil_backend": backend,
+            "coil_backend": _coil_solver_name(backend, options),
             "workpiece_sha256": _sha256(workpiece),
             "coil_sha256": _sha256(coil),
             "solver_workpiece_vol": str(solver_workpiece),
@@ -764,6 +827,8 @@ def _native_config(
             "relative_power_error": relative_power_error,
             "relative_power_tolerance": power_tolerance,
             "qsurf_solution": str(electromagnetic.qsurf_solution),
+            "fin_metrics": electromagnetic.solver_payload.get("fin_metrics"),
+            "fin_sweep": electromagnetic.solver_payload.get("fin_sweep"),
         },
         "artifacts": {
             "gmsh_format": "msh-v4.1",
@@ -1059,6 +1124,16 @@ def build_argparser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--peec-n-peri", type=int, default=16)
     parser.add_argument(
+        "--coil-step-solver",
+        choices=("peec", "fin-surface"),
+        default="peec",
+        help="STEP coil solver: series perimeter bundle or fin-graded surface PEEC",
+    )
+    parser.add_argument("--fin-n-lanes", type=int, default=64)
+    parser.add_argument("--fin-n-stations", type=int, default=20)
+    parser.add_argument("--fin-lane-grading", choices=("auto", "uniform"), default="auto")
+    parser.add_argument("--fin-tip-lanes", type=int, default=8)
+    parser.add_argument(
         "--peec-proximity",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -1093,6 +1168,11 @@ def _options_from_args(args: argparse.Namespace) -> IHOperatorAssemblyOptions:
         coil_sink_label=args.coil_sink_label,
         peec_perimeter_filaments=args.peec_n_peri,
         peec_proximity=args.peec_proximity,
+        coil_step_solver=args.coil_step_solver,
+        fin_n_lanes=args.fin_n_lanes,
+        fin_n_stations=args.fin_n_stations,
+        fin_lane_grading=args.fin_lane_grading,
+        fin_tip_lanes=args.fin_tip_lanes,
         coupling_mode=args.coupling_mode,
         workpiece_bem_backend=args.workpiece_bem_backend,
     )

@@ -294,3 +294,37 @@ filter in `_section_faces_from_solid` (drops stations whose section area
 differs >30 % from the median, i.e. very large fins appearing mid-sweep),
 and the production hook (`calc_inductance.py` / IH operator assembler
 still use the series bundle).
+
+## Production boundary: `--coil-solver fin-surface` (2026-09-19, later)
+
+Design in `docs/induction_heating/FIN_PEEC_PRODUCTION_BOUNDARY.md`.  The IH
+assembler has no electromagnetic solve of its own; it calls
+`calc_inductance.run_inductance` and consumes `qsurf.sol`.  Hence the fin
+PEEC enters production as a third coil solver:
+
+- `radia.fin_surface_solver.solve_fin_surface` is the single implementation
+  (STEP -> `fin_sweep` graph -> surface PEEC -> branch currents -> per-station
+  fin metrics); `fin_peec_from_step.py` now calls it, so the runner and the
+  production backend report identical numbers.
+- `calc_inductance._solve_coil_fin_surface` returns the existing
+  `coil_data` contract with `source_type="filament"`, one two-point polyline
+  per surface branch (axial and circumferential) and its complex current.
+  Downstream A/B/phi_inc/msh consumers integrate paths independently, so
+  weak BEM-SIBC coupling works unchanged.  Strong coupling is rejected
+  (the coupled PEEC solver needs the K x K lane bundle; per-branch EMF is
+  gate 4).  New CLI: `--fin-n-lanes --fin-n-stations --fin-n-outline
+  --fin-lane-grading --fin-tip-lanes --fin-route`.
+- `IHOperatorAssemblyOptions.coil_step_solver = "peec" | "fin-surface"` plus
+  `fin_*` options; `_unit_current_argv` builds the CLI (unit tested).  The
+  native config keeps `eddy_solver="peec"` (MEX contract) and records the
+  variant in `eddy_method` and `geometry.coil_backend`; `unit_current`
+  carries `fin_metrics` / `fin_sweep`.  The C++ runtime is untouched.
+
+Boundary acceptance (interface, not accuracy) per the design document:
+(1) `--coil-solver fin-surface --coil-only` on the straight fixture equals
+`fin_peec_from_step.py`; (2) weak coupling with a workpiece `.vol` produces a
+finite, non-negative `qsurf.sol`; (3) the assembler's `native_ih.json` with
+`coil_step_solver="fin-surface"` passes `validateIHNativeConfig`; (4) record
+the corner-region loss share and centroid of `qsurf` for `peec` vs
+`fin-surface` on the same workpiece.  (1)-(4) were not executed in the
+authoring environment (no NGSolve / native kernel).
