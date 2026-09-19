@@ -118,9 +118,12 @@ def divergence_free_source_assembly_gate(summary: Mapping[str, object]) -> dict[
                 "allowed_solved_field_relative_difference", "volume_rhs_seconds",
                 "surface_rhs_seconds")
     values = {name: _finite(summary.get(name), name, positive=True) for name in required}
+    response_order = _positive_int(summary.get("response_order", 1), "response_order")
+    expected_scope = f"affine_p{response_order}_constant_mu"
     checks = {
         "schema_is_supported": summary.get("schema") == "radia.divergence-free-source-assembly.v1",
-        "scope_is_affine_p1_constant_mu": summary.get("scope") == "affine_p1_constant_mu",
+        "response_order_is_supported": response_order in (1, 2),
+        "scope_matches_response_order": summary.get("scope") == expected_scope,
         "source_is_divergence_free": summary.get("source_identity") == "divergence_free",
         "boundary_orientation_is_element_derived": summary.get("boundary_orientation") == "opposite_vertex",
         "manufactured_load_matches": values["manufactured_load_relative_error"] <= 1.0e-12,
@@ -133,7 +136,8 @@ def divergence_free_source_assembly_gate(summary: Mapping[str, object]) -> dict[
         "checks": checks,
         "issues": [name for name, ok in checks.items() if not ok],
         "speedup": values["volume_rhs_seconds"] / values["surface_rhs_seconds"],
-        "claim_limit": "Accepted only for affine P1, constant permeability and a verified divergence-free source; load-vector L2 agreement alone is not an acceptance gate.",
+        "response_order": response_order,
+        "claim_limit": "Accepted only for affine P1/P2, constant permeability and a verified divergence-free source; load-vector L2 agreement alone is not an acceptance gate.",
     }
 
 
