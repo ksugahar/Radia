@@ -1,22 +1,29 @@
-"""ECB plate force: replay the reference evidence, and run the kernel live.
+"""ECB scalar plate force: replay same-model evidence and run the kernel live.
 
 The reference lane (``ecb_foster_lorentz_reference.py``) solves the scalar
 model of ``radia.maglev.ecb.lorentz`` directly and reconstructs the eddy
 current as (1/mu) curl(v z).  These tests replay its summary and run the
 shipped kernel on a small mesh, so a regression to the pre-2026-09-11 current
 (-omega sigma Im(v): no lift when centred, forbidden horizontal force) fails
-here rather than in someone's result.
+here rather than in someone's result.  Quantitative physical fidelity belongs
+to the independent 3-D HCurl-VIM evidence lane.
 """
 
 from __future__ import annotations
 
 import json
 import math
+import sys
+from itertools import pairwise
 from pathlib import Path
 
 import pytest
 
 HERE = Path(__file__).resolve().parent
+REPO = next(path for path in HERE.parents if (path / "src" / "radia").is_dir())
+for path in (REPO / "src", HERE):
+    if str(path) not in sys.path:
+        sys.path.insert(0, str(path))
 SUMMARY = HERE / "ecb_foster_lorentz_reference_summary.json"
 
 
@@ -24,7 +31,7 @@ def _payload():
     return json.loads(SUMMARY.read_text(encoding="utf-8"))
 
 
-def test_reference_summary_is_complete_and_physical():
+def test_scalar_reference_summary_is_complete_and_self_consistent():
     payload = _payload()
     assert payload["schema"] == "radia.maglev.ecb-foster-lorentz-reference.v2"
     for key in ("radia_version", "ngsolve_version", "python_version", "host"):
@@ -45,7 +52,7 @@ def test_reference_lift_values_are_locked():
     assert max(-v for v in centred.values()) < payload["problem"]["image_lift_bound_N"]
 
 
-def test_kernel_agrees_with_the_reference():
+def test_kernel_agrees_with_the_direct_scalar_oracle():
     payload = _payload()
     assert payload["kernel_passed"] is True
     assert all(payload["kernel_checks"].values()), payload["kernel_checks"]
@@ -59,7 +66,7 @@ def test_kernel_converges_with_the_foster_basis_at_5khz():
     """200 modes stop far short of the 5 kHz skin depth; growing the basis must fix it."""
     rows = _payload()["mode_study"]["rows"]
     errors = [row["relative_error"] for row in rows]
-    assert all(a > b for a, b in zip(errors, errors[1:])), errors
+    assert all(a > b for a, b in pairwise(errors)), errors
     assert errors[-1] < _payload()["problem"]["mode_study_final_rtol"], errors
     assert rows[0]["relative_error"] > 0.1, "the truncation effect should be visible at 200 modes"
 
@@ -73,17 +80,18 @@ def test_history_keeps_the_pre_fix_defect():
 
 def test_kernel_live_centred_symmetry_and_lift():
     pytest.importorskip("ngsolve")
+    import ecb_foster_lorentz_reference as lane
     from ngsolve import TaskManager
 
-    import ecb_foster_lorentz_reference as lane
     from radia.maglev.ecb.lorentz import compute_lorentz_force_via_foster
     from radia.maglev.mixed_galerkin.alpha import _dirichlet_eigenmodes
 
     with TaskManager():
         mesh = lane.plate_mesh(20, 8, 2)
         lam, vecs, _mass, free, _fes, _volume = _dirichlet_eigenmodes(mesh, 60, "outer")
-        fx, fy, fz = compute_lorentz_force_via_foster(
-            mesh, lam, vecs, free, lane.SIGMA, lane.MU0,
-            2j * math.pi * 500.0, lane.M_PM, lane.Z_PM, 0.0)
+        with pytest.warns(RuntimeWarning, match="not a quantitatively validated"):
+            fx, fy, fz = compute_lorentz_force_via_foster(
+                mesh, lam, vecs, free, lane.SIGMA, lane.MU0,
+                2j * math.pi * 500.0, lane.M_PM, lane.Z_PM, 0.0)
     assert fz < 0.0, "the conductor must be pushed away from the magnet"
     assert max(abs(fx), abs(fy)) < 1e-9 * abs(fz), (fx, fy, fz)
