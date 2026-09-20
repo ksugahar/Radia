@@ -1219,7 +1219,7 @@ A+B→C が揃って初めて Discussion として機能する。
 ### R. 使える診断ツール (paper_writing_*)
 
 既存 + 新規で計画されている:
-- `paper_writing_check_subject_verb_distance` — 主述の物理距離
+- `paper_writing_check_subject_predicate_distance` — 主述の物理距離
 - `paper_writing_check_paragraph_length` — 段落字数の範囲
 - `paper_writing_bilingual_readability_check(text_or_tex_path)` — **和文と英文を別基準で査読者視点から評価**。和文は字数・読点・接続・述語・段落内の論証役割、英文は語数・従属節・名詞化・句読点連鎖を使う。数式・図表・keyword・TeX command は除外し、`japanese` / `english` に別の diagnostic score と source line を返す。両言語の score は平均せず、悪い側を `paper_writing_em_submission_gate` の判定に用いる。
 - `paper_writing_check_abstract_background_ratio` — abstract 内 background 比率
