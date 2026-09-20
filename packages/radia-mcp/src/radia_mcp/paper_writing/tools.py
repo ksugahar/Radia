@@ -58,6 +58,7 @@ from ._terminology_normalizer import (  # noqa: F401
     paper_writing_normalize_terminology_file,
 )
 from ._shared.sentence import split_mixed_sentences
+from .._shared.latex_log import summarize_overfull
 
 # Paper-PDF download tools (v0.25.0, 2026-05-21) — IEEE Xplore + Emerald
 # Cookie-seeded session pattern.  Requires caller's IP to have
@@ -364,33 +365,22 @@ def paper_writing_validate_pdf_pages(pdf_path: str, page_limit: int) -> dict:
 
 
 def paper_writing_check_overfull_hbox(log_path: str) -> dict:
-    """LaTeX ログ中の Overfull \\hbox 警告をカウント。journal では許容ゼロ。"""
+    """LaTeX ログ中の Overfull box をカウント。journal では許容ゼロ。
+
+    TeX は overfull box を 4 つの site から報告する: ``in paragraph at
+    lines`` / ``in alignment at lines`` / ``detected at line`` / そして
+    行番号を持たない ``has occurred while \\output is active``。 段落だけを
+    数えると、表組み・float・出力ルーチン由来の溢れが 0 件として通過し、
+    目標ゼロの検査が「合格」に見えてしまう。 4 site すべてと
+    ``\\hbox`` / ``\\vbox`` の双方を数え、内訳を返す。
+    """
     p = pathlib.Path(log_path)
     if not p.exists():
         return {"error": f"file not found: {log_path}"}
     text = p.read_text(encoding="utf-8", errors="replace")
-    # Count warning headers independently of TeX's context suffix. Alignment,
-    # detected-at-line and output-active warnings are not paragraph warnings.
-    matches = list(re.finditer(
-        r"^Overfull \\hbox \(([^)\r\n]+)\)([^\r\n]*)", text, re.MULTILINE,
-    ))
-    details = []
-    for match in matches[:20]:
-        context = match.group(2).strip()
-        if re.search(r"at lines?\s*$", context):
-            # TeX can wrap the source-line number onto the next log line.
-            following = text[match.end():].lstrip("\r\n").splitlines()
-            if following and re.match(r"\s*\d+(?:--\d+)?\s*$", following[0]):
-                context += " " + following[0].strip()
-        location = re.search(r"\bat lines?\s+(\d+)(?:--(\d+))?", context)
-        lines = ""
-        if location:
-            lines = location[1] + (f"-{location[2]}" if location[2] else "")
-        details.append({"severity": match[1], "lines": lines, "context": context})
     return {
         "file": str(p),
-        "overfull_count": len(matches),
-        "overfull_details": details,
+        **summarize_overfull(text),
         "target": "0 (journal は許容なし)",
     }
 
