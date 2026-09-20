@@ -141,6 +141,9 @@ def test_done_checks_only_solver_editable_roots(monkeypatch):
 
     calls = []
     monkeypatch.setattr(release_quad, "cmd_preflight", lambda a: 0)
+    # the retired-override gate reaches mdx1/mdx2/hibino over SSH; stub it
+    # like every other gate so this test still measures the editable roots
+    monkeypatch.setattr(release_quad, "cmd_temp_shadows", lambda a: 0)
     monkeypatch.setattr(release_quad, "_release_head", lambda: "c" * 40)
     monkeypatch.setattr(release_quad, "_verify_local_release_source", lambda root, sha: calls.append((root, sha)) or 0)
     monkeypatch.setattr(release_quad, "_verify_head_release_tag", lambda: calls.append("tag") or 0)
@@ -316,6 +319,7 @@ def test_remote_deploy_checks_exact_source_before_install(monkeypatch):
 
 def test_done_keeps_exact_verified_editables_after_all_gates(monkeypatch):
     calls = []
+    monkeypatch.setattr(release_quad, "cmd_temp_shadows", lambda _args: calls.append("shadows") or 0)
     monkeypatch.setattr(release_quad, "cmd_preflight", lambda _args: calls.append("preflight") or 0)
     monkeypatch.setattr(release_quad, "_release_head", lambda: "a" * 40)
     monkeypatch.setattr(
@@ -341,7 +345,7 @@ def test_done_keeps_exact_verified_editables_after_all_gates(monkeypatch):
     args = type("Args", (), {"simulink_package": None})()
     assert release_quad.cmd_done(args) == 0
     assert calls == [
-        "preflight", "source", "tag", "lab", "100", "phase9", "guard", "main"
+        "preflight", "source", "shadows", "tag", "lab", "100", "phase9", "guard", "main"
     ]
 
 

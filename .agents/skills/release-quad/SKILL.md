@@ -35,6 +35,18 @@ The retired `phase0` Cubit build and `restore-editable` routes are not part of
 the solver workflow. Cubit native preparation belongs to the independent Cubit
 release skill. Editable source advancement is explicit and forward-only.
 
+### Retired Omega Override Gate
+
+After the Kelvin source commits through `7ffda79d3` are integrated into main,
+run `python tools/release_quad.py temp-shadows --apply`. This checks the exact
+`C:\temp\radia-omega-test` tree on mdx1, mdx2, and hibino. It refuses removal
+while Python/MATLAB processes are active, PYTHONPATH still names the tree, or
+reparse points are present. It never terminates research processes or removes
+other scratch directories. Unreachable hosts are unresolved, not clean.
+`all` runs this cleanup first; `done` repeats the read-only absence check.
+Keep the JSON console report with the release evidence. hibino is checked for
+this retired override only; it is not added to the four deployment targets.
+
 ## Solver machine policy
 
 | Machine | Solver install tier | Solver release route |
