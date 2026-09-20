@@ -47,7 +47,7 @@ def _is_compute_host():
     import platform
 
     node = platform.node().lower().split(".", 1)[0]
-    return node == "mdx" or node.startswith("mdx-") or node == "hibino" or node.startswith("hibino-")
+    return node.startswith(("mdx", "hibino"))
 
 
 def pytest_collection_modifyitems(config, items):
