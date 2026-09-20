@@ -109,6 +109,7 @@ class CapabilityServer:
                 inputSchema={"type": "object", "properties": {}, "additionalProperties": False},
                 outputSchema={"type": "object"},
                 _meta={"caeai.contract": SCHEMA, "caeai.control_plane": "status",
+                       "caeai.maturity": "knowledge_only",
                       "caeai.annotation_source": "explicit"},
                 annotations=types.ToolAnnotations(readOnlyHint=True, destructiveHint=False,
                                                   idempotentHint=True, openWorldHint=False),
