@@ -288,7 +288,11 @@ def register_status_tool(
     # annotations and exact loaded-source provenance.  This happens after the
     # shared status/reload controls are registered so those tools are covered
     # too.  Server-specific annotation passes may refine the inferred presets.
-    from radia_mcp.common.mcp_contract import apply_tool_contract, audit_tool_contract
+    from radia_mcp.common.mcp_contract import (
+        apply_tool_contract,
+        audit_tool_contract,
+        get_client_connection_state,
+    )
     from radia_mcp.common.server_hardening import install_call_log
 
     distribution = _distribution_provenance(subpackage.split('.')[0].replace('_', '-'))
@@ -316,6 +320,7 @@ def register_status_tool(
     def _status_with_runtime_contract() -> dict:
         payload = original_status()
         payload["runtime_contract"] = audit_tool_contract(mcp)
+        payload["client_connection"] = get_client_connection_state(mcp)
         provenance = _runtime_provenance(subpackage)
         registered_hash = registration_provenance.get("module_file_sha256")
         current_hash = provenance.get("module_file_sha256")
