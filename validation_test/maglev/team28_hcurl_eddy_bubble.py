@@ -126,7 +126,7 @@ def run(maxh_m: float = 0.025, evrs_rank: int = 6) -> dict[str, object]:
         "skin_gate_disables_all_sibc_faces": selected_sibc_faces == 0,
         "disk_conductor_is_connected": p6["conductor_graph"]["component_count"] == 1,
         "cycle_bridge_basis_is_nonempty": p6["conductor_graph"]["cycle_rank"] > 0,
-        "p6_reduction_is_below_one_percent": (
+        "p6_planned_reduction_estimate_below_one_percent": (
             p6["reduction_plan"]["estimated_reduction_ratio"] < 0.01
         ),
         "cln_force_curve_matches_full_fem_below_5uN": (

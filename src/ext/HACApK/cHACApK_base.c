@@ -739,18 +739,21 @@ int cHACApK_aca(
 {
   int *lrow_msk, *lcol_msk;
   double *prow, *pcol;
-  double *workspace;
+  double *workspace, *row_bounds;
 
-  double znrm, ACA_EPS, col_maxval, row_maxval, zdltinv, zeps;
+  double znrm, col_maxval, row_maxval, pivot, zeps;
+  double approximation_norm = 0.0;
+  long double approximation_norm2 = 0.0;
+  int check_residual = 0;
+  int verification_cursor = 0;
   int krank, kstop, k, ist, jst, istn, lstop_aca;
   int il, it;
 
   krank = (ndl < ndt) ? ndl : ndt;  /* min(ndl, ndt) */
   znrm = znrmmat * sqrt((double)ndl * (double)ndt);
 
-  if ((int)param[61] == 1) ACA_EPS = pACA_EPS;
-  else if ((int)param[61] == 2 || (int)param[61] == 3) ACA_EPS = pACA_EPS * znrm;
-  else ACA_EPS = pACA_EPS;
+  /* Absolute pivot cutoffs are not invariant under physical-unit scaling. */
+  (void)pACA_EPS;
 
   lrow_msk = (int *) calloc(ndl, sizeof(int));
   lcol_msk = (int *) calloc(ndt, sizeof(int));
@@ -765,6 +768,12 @@ int cHACApK_aca(
     fprintf(stderr, "Error: cHACApK_aca: malloc workspace\n");
     goto error;
   }
+  row_bounds = (double *)malloc((size_t)ndl * sizeof(double));
+  if (row_bounds == NULL) {
+    fprintf(stderr, "Error: cHACApK_aca: malloc row_bounds\n");
+    goto error;
+  }
+  for (il = 0; il < ndl; ++il) row_bounds[il] = HUGE_VAL;
 
   k = 0;  /* 0-indexed (Fortran uses 1-indexed) */
   lstop_aca = 0;
@@ -784,17 +793,40 @@ int cHACApK_aca(
     /* Compute row: prow = A(ist, :) - approximation */
     cHACApK_calc_vec(zab, zaa, ndt, ndl, k, ist, prow, nstrtl, nstrtt, lod, i_bemv, lcol_msk, 0, workspace);
 
-    /* Find max abs value in prow (with mask) */
-    cHACApK_maxabsvallocm_d(prow, &row_maxval, &jst, ndt, lcol_msk);
-
-    /* Scale row by pivot */
-    if (fabs(prow[jst]) > 1.0e-20) {
-      zdltinv = 1.0 / prow[jst];
-      for (it = 0; it < ndt; it++) prow[it] *= zdltinv;
-    } else {
-      /* Pivot too small, stop */
-      break;
+    /* A small selected row/update does not certify the residual block.
+     * Bounding every unused residual row by eps*||U V^T||_F/sqrt(ndl)
+     * bounds the remaining Frobenius residual relative to the approximation,
+     * modulo roundoff in pivoted rows/columns. Stop-time verification can
+     * cost O(ndl*ndt) entries.
+     */
+    {
+      double row_limit = eps * approximation_norm / sqrt((double)ndl);
+      double row_norm = cHACApK_unrm_d(ndt, prow);
+      row_bounds[ist] = nextafter(row_norm, HUGE_VAL);
+      if (check_residual || row_norm <= row_limit) {
+        int found = 0, offset;
+        for (offset = 0; offset < ndl; ++offset) {
+          int row = (verification_cursor + offset) % ndl;
+          if (lrow_msk[row] || row_bounds[row] <= row_limit) continue;
+          cHACApK_calc_vec(zab, zaa, ndt, ndl, k, row, prow,
+                          nstrtl, nstrtt, lod, i_bemv, lcol_msk, 0, workspace);
+          row_norm = cHACApK_unrm_d(ndt, prow);
+          row_bounds[row] = nextafter(row_norm, HUGE_VAL);
+          if (row_norm > row_limit) {
+            ist = row;
+            verification_cursor = (row + 1) % ndl;
+            found = 1;
+            break;
+          }
+        }
+        if (!found) break;
+        check_residual = 0;
+      }
     }
+    cHACApK_maxabsvallocm_d(prow, &row_maxval, &jst, ndt, lcol_msk);
+    pivot = prow[jst];
+    /* Divide directly: forming 1/pivot can overflow for tiny matrices. */
+    for (it = 0; it < ndt; it++) prow[it] /= pivot;
 
     /* Compute column: pcol = A(:, jst) - approximation */
     cHACApK_calc_vec(zaa, zab, ndl, ndt, k, jst, pcol, nstrtl, nstrtt, lod, i_bemv, lrow_msk, 1, workspace);
@@ -806,22 +838,38 @@ int cHACApK_aca(
     /* Find next row index (max abs in pcol with mask) */
     cHACApK_maxabsvallocm_d(pcol, &col_maxval, &istn, ndl, lrow_msk);
 
-    /* Check stopping criterion */
-    if (fabs(row_maxval) < ACA_EPS && fabs(col_maxval) < ACA_EPS && k >= (int)param[64]) {
-      lstop_aca = 1;
-      break;
-    }
-
     /* Compute approximation norm */
-    zeps = cHACApK_unrm_d(ndl, pcol) * cHACApK_unrm_d(ndt, prow);
-    if (k == 0 && (int)param[61] == 1) znrm = zeps;
+    {
+      double right_norm = cHACApK_unrm_d(ndt, prow);
+      zeps = cHACApK_unrm_d(ndl, pcol) * right_norm;
+      /* Triangle inequality carries verified row bounds across updates.
+       * No new entries are needed while the upper bound meets the gate.
+       */
+      for (il = 0; il < ndl; ++il) {
+        if (!lrow_msk[il])
+          row_bounds[il] = nextafter(row_bounds[il] + fabs(pcol[il]) * right_norm, HUGE_VAL);
+      }
+    }
+    /* Update ||sum_j u_j v_j^T||_F, including cross terms. Using only the
+     * first update over-tightens the residual gate as the rank increases.
+     */
+    {
+      int previous;
+      approximation_norm2 += (long double)zeps * zeps;
+      for (previous = 0; previous < k; ++previous) {
+        long double dot_left = 0.0, dot_right = 0.0;
+        for (il = 0; il < ndl; ++il)
+          dot_left += (long double)pcol[il] * zaa[il + ndl * previous];
+        for (it = 0; it < ndt; ++it)
+          dot_right += (long double)prow[it] * zab[it + ndt * previous];
+        approximation_norm2 += 2.0L * dot_left * dot_right;
+      }
+      approximation_norm = sqrt((double)fmaxl(0.0L, approximation_norm2));
+    }
+    if ((int)param[61] == 1) znrm = approximation_norm;
     zeps = zeps / znrm;
 
-    if (zeps < eps || k == kstop - 1) lstop_aca = 1;
-    if (lstop_aca == 1 && k >= (int)param[64]) {
-      k++;
-      break;
-    }
+    if (zeps < eps && k + 1 >= (int)param[64]) check_residual = 1;
 
     ist = istn;  /* Next row index */
     k++;
@@ -830,6 +878,7 @@ int cHACApK_aca(
   free(lrow_msk);
   free(lcol_msk);
   free(workspace);
+  free(row_bounds);
   return k;
 
 error:
