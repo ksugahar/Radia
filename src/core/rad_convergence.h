@@ -58,7 +58,8 @@ public:
 	// Deterministic perturbation functions
 	// These add small fixed offsets to avoid numerical singularities
 	// when observation points lie exactly on element boundaries.
-	// The perturbation is ~1e-9 mm which is physically negligible.
+	// Absolute perturbations use the active geometry length unit. They can
+	// limit relative accuracy in small models or precision comparisons.
 
 	double Double(double A)
 	{

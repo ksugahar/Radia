@@ -24,7 +24,10 @@ two-sphere Kelvin geometry built via
 from __future__ import annotations
 
 import math
+import hashlib
+import json
 import time
+from collections.abc import Mapping
 
 import numpy as np
 
@@ -32,7 +35,67 @@ from ngsolve import (H1, HCurl, BilinearForm, LinearForm, GridFunction,
                       Periodic, Compress, CoefficientFunction, TaskManager,
                       curl, dx, ds, grad, InnerProduct, Conj, Integrate)
 
-from radia.kelvin_material import make_kelvin_mu_cf, make_kelvin_nu_cf, MU_0, NU_0
+from radia.kelvin_material import make_kelvin_mu_cf, make_kelvin_nu_cf, MU_0, NU_0, _is_kelvin_material
+
+
+def _canonical_array_sha256(values):
+    array = np.ascontiguousarray(np.asarray(values, dtype="<f8"))
+    digest = hashlib.sha256()
+    digest.update(json.dumps(list(array.shape), separators=(",", ":")).encode("ascii"))
+    digest.update(array.tobytes(order="C"))
+    return digest.hexdigest()
+
+
+def _mesh_topology_geometry_sha256(mesh):
+    from ngsolve import VOL
+
+    vertices = [
+        [int(vertex.nr), *[float(value) for value in vertex.point]]
+        for vertex in mesh.vertices
+    ]
+    elements = [
+        [
+            int(element.nr),
+            int(element.index),
+            *[int(vertex.nr) for vertex in element.vertices],
+        ]
+        for element in mesh.Elements(VOL)
+    ]
+    payload = {
+        "vertices": vertices,
+        "volume_elements": elements,
+        "materials": [str(value) for value in mesh.GetMaterials()],
+        "geometry_order": int(mesh.GetCurveOrder()),
+        "deformation_sha256": None,
+    }
+    deformation = getattr(mesh, "deformation", None)
+    if deformation is not None:
+        try:
+            payload["deformation_sha256"] = _canonical_array_sha256(
+                deformation.vec.FV().NumPy()
+            )
+        except (AttributeError, TypeError) as exc:
+            raise ValueError(
+                "cannot establish restart identity for this deformed mesh"
+            ) from exc
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
+def _identity_sha256(identity):
+    return hashlib.sha256(
+        json.dumps(identity, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
+def _validate_restart_identity_digest(value):
+    canonical = str(value or "").strip().lower()
+    if len(canonical) != 64 or any(
+        character not in "0123456789abcdef" for character in canonical
+    ):
+        raise ValueError("material restart state identity_sha256 is not a SHA-256 digest")
+    return canonical
 
 
 def _constrains_point_gauge(mesh, selector, dirichlet_bbbnd):
@@ -94,6 +157,9 @@ def project_source_interface_potential(
             f"interface_boundary={interface_boundary!r} is not a mesh boundary")
     if int(order) < 1:
         raise ValueError("order must be positive")
+    if relative_tolerance is not None and (
+            not math.isfinite(float(relative_tolerance)) or float(relative_tolerance) <= 0):
+        raise ValueError("relative_tolerance must be positive and finite, or None for diagnostics only")
     if gauge_epsilon <= 0.0 or not math.isfinite(gauge_epsilon):
         raise ValueError("gauge_epsilon must be positive and finite")
 
@@ -138,6 +204,8 @@ def project_source_interface_potential(
         "relative_tangential_residual": relative_residual,
         "tangential_residual_norm": residual_norm,
         "tangential_source_norm": source_norm,
+        "gate_enabled": relative_tolerance is not None,
+        "acceptance": "passed" if relative_tolerance is not None else "not_evaluated",
     }
 
 
@@ -169,6 +237,9 @@ def project_source_physical_potential(
         raise ValueError("physical_materials must contain unique non-empty names")
     if int(order) < 1:
         raise ValueError("order must be positive")
+    if relative_tolerance is not None and (
+            not math.isfinite(float(relative_tolerance)) or float(relative_tolerance) <= 0):
+        raise ValueError("relative_tolerance must be positive and finite, or None for diagnostics only")
     if gauge_epsilon <= 0.0 or not math.isfinite(gauge_epsilon):
         raise ValueError("gauge_epsilon must be positive and finite")
     actual = {str(name) for name in mesh.GetMaterials()}
@@ -217,6 +288,8 @@ def project_source_physical_potential(
         "volume_residual_norm": residual_norm,
         "volume_source_norm": source_norm,
         "physical_materials": names,
+        "gate_enabled": relative_tolerance is not None,
+        "acceptance": "passed" if relative_tolerance is not None else "not_evaluated",
     }
 
 
@@ -593,7 +666,9 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         reduced_normal_flux=None, reduced_flux_boundary=None,
         total_normal_flux=None, total_flux_boundary=None,
         reduced_dirichlet_boundary=None, total_dirichlet_boundary=None,
-        interface_multiplier_dirichlet_boundary=None):
+        interface_multiplier_dirichlet_boundary=None,
+        reduced_zero_normal_boundary=None, surface_dirichlet=None, _fixed_rhs_cache=None,
+        _rhs_material=None, kelvin_match_exact=False):
     """Solve the TOSCA-style mixed total/reduced Omega formulation.
 
     ``return_system=True`` retains assembled forms for explicit diagnostics.
@@ -634,6 +709,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
     zero field.  ``H_cf`` in a Kelvin material is the computational-frame
     ``H_comp``; its sign follows the twisted convention, so it is ``+grad`` of
     the stored unknown, not ``-grad``.
+    ``B_cf = mu_cf * H_cf`` is likewise in computational coordinates in the
+    Kelvin exterior, not a directly sampled physical-space exterior field.
 
     This prevents the source field and the reduced correction from cancelling
     inside high-permeability material.  The normal flux condition is natural
@@ -674,9 +751,16 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
             ``kelvin_interface_boundary``.  It is lifted into the shared
             periodic space, so the exterior physical potential leaves the
             sphere as ``phi_reduced + kelvin_source_potential``.
-        total_dirichlet_cf: optional non-homogeneous total-potential lift for
-            a finite-domain verification problem. Production Kelvin meshes use
-            the default ``None`` and a point/edge ``GND`` constraint.
+        total_dirichlet_cf: optional value on the total-region BBBND point
+            gauge named by ``dirichlet_bbbnd``. This is NOT an exterior-surface
+            Dirichlet condition. Surface Dirichlet data on total and reduced
+            potentials require different source-potential lifts and are not
+            exposed by this parameter. Production Kelvin meshes use ``None``.
+        surface_dirichlet: finite-domain mapping ``{"reduced": {label: value},
+            "total": {label: value}}`` of potential values on exact exterior
+            boundary labels. Replaces the point gauge; the caller must supply
+            the correct source lift for reduced values. Not supported with a
+            Kelvin exterior. Passed unchanged through P1/P2 Picard solves.
         mu_cf: optional fully Kelvin-aware permeability coefficient. This is
             the narrow extension point used by the nonlinear Picard driver;
             callers must not supply a physical-space coefficient in the Kelvin
@@ -773,13 +857,20 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
             if not names or not set(names) <= set(mesh.GetBoundaries()):
                 raise ValueError(f"{label} must name existing boundaries")
 
+    kelvin_mats = tuple(kelvin_mats)
+    reduced_kelvin = sorted(
+        material for material in reduced_set
+        if _is_kelvin_material(material, kelvin_mats, exact=kelvin_match_exact))
+    if reduced_kelvin:
+        raise ValueError(
+            f"Kelvin selectors must not match reduced materials: {reduced_kelvin}")
     if mu_cf is None:
         mu_cf = make_kelvin_mu_cf(
             mesh, R_K, offset, kelvin_mats=kelvin_mats,
-            mu_r_by_material=mu_r_by_material)
+            mu_r_by_material=mu_r_by_material, kelvin_match_exact=kelvin_match_exact)
     kelvin_total_materials = tuple(
         material for material in total_materials
-        if any(str(key).lower() in material.lower() for key in kelvin_mats))
+        if _is_kelvin_material(material, kelvin_mats, exact=kelvin_match_exact))
     core_total_materials = tuple(
         material for material in total_materials
         if material not in kelvin_total_materials)
@@ -824,17 +915,56 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         None if kelvin_interface_boundary is None
         else mesh.Boundaries(kelvin_interface_boundary))
 
+    # Surface values belong to the named potential, not automatically to H.
+    if surface_dirichlet is not None and not isinstance(surface_dirichlet, Mapping):
+        raise ValueError("surface_dirichlet must be a mapping")
+    surface_values = {} if surface_dirichlet is None else dict(surface_dirichlet)
+    if set(surface_values) - {"reduced", "total"}:
+        raise ValueError("surface_dirichlet keys must be reduced or total")
+    surface_labels = {}
+    for region, materials in (("reduced", reduced_set), ("total", set(core_total_materials))):
+        values = surface_values.get(region, {})
+        if not isinstance(values, Mapping):
+            raise ValueError("surface_dirichlet region values must be boundary/value mappings")
+        labels = set(values)
+        if not labels <= set(mesh.GetBoundaries()) or any(not label or "|" in label for label in labels):
+            raise ValueError("surface_dirichlet must name exact mesh boundary labels")
+        for face in mesh.ngmesh.FaceDescriptors():
+            if mesh.GetBoundaries()[face.bc - 1] in labels:
+                adjacent = [d for d in (face.domin, face.domout) if d != 0]
+                if len(adjacent) != 1 or mesh.GetMaterials()[adjacent[0] - 1] not in materials:
+                    raise ValueError("surface Dirichlet must be exterior to its named potential region")
+        surface_labels[region] = "|".join(sorted(labels))
+    has_surface = any(surface_labels.values())
+    if has_surface:
+        if kelvin_selector is not None:
+            raise ValueError("surface Dirichlet with Kelvin exterior is not supported")
+        if total_dirichlet_cf is not None:
+            raise ValueError("surface Dirichlet fixes the gauge; do not also supply total_dirichlet_cf")
+        if set(surface_values.get("reduced", {})) & set(str(reduced_zero_normal_boundary).split("|")):
+            raise ValueError("Dirichlet and zero-normal conditions overlap")
+        if all(surface_labels.values()):
+            from ngsolve import BND
+            nodes = {
+                region: {vertex.nr for face in mesh.Elements(BND)
+                         if str(face.mat) in surface_values.get(region, {})
+                         for vertex in face.vertices}
+                for region in ("reduced", "total")}
+            if nodes["reduced"] & nodes["total"]:
+                raise ValueError("surface Dirichlet on both sides of an interface junction is not supported")
+
     if kelvin_selector is None:
-        reduced_dirichlet = ({"dirichlet": reduced_dirichlet_boundary}
-                             if reduced_dirichlet_boundary else {})
-        total_dirichlet = ({"dirichlet": total_dirichlet_boundary}
-                           if total_dirichlet_boundary else {})
+        def _dirichlet_labels(*parts):
+            return "|".join(part for part in parts if part)
+
         fes_reduced = H1(mesh, order=int(order), definedon=coupled_selector,
-                         **reduced_dirichlet)
+                         dirichlet=_dirichlet_labels(surface_labels["reduced"],
+                                                     reduced_dirichlet_boundary))
         fes_total = Compress(Periodic(H1(
             mesh, order=int(order), definedon=core_total_selector,
-            **({"dirichlet_bbbnd": dirichlet_bbbnd}
-               if dirichlet_bbbnd else {}), **total_dirichlet)))
+            dirichlet=_dirichlet_labels(surface_labels["total"],
+                                        total_dirichlet_boundary),
+            dirichlet_bbbnd=("" if has_surface else (dirichlet_bbbnd or "")))))
     else:
         # Exactly one of the two blocks carries the point gauge.  Pinning both
         # would fight the interface jump; pinning neither leaves the coupled
@@ -916,31 +1046,56 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
     a_bf += interface_constraint_scale * (
         multiplier * jump_test + test_multiplier * jump_trial) * d_interface
 
-    f_lf = LinearForm(fes)
+    fixed_rhs = LinearForm(fes)
     if source_rhs_reduced is None:
-        f_lf += mu_cf * H_s * grad(test_reduced) * dx(
+        fixed_rhs += mu_cf * H_s * grad(test_reduced) * dx(
             definedon=reduced_selector, bonus_intorder=bonus_intorder)
+    if reduced_zero_normal_boundary is not None:
+        from ngsolve import specialcf, BoundaryFromVolumeCF
+        labels = set(str(reduced_zero_normal_boundary).split("|"))
+        if not labels or not labels <= set(mesh.GetBoundaries()):
+            raise ValueError("reduced_zero_normal_boundary must name mesh boundaries")
+        for face in mesh.ngmesh.FaceDescriptors():
+            if mesh.GetBoundaries()[face.bc - 1] not in labels:
+                continue
+            domains = (face.domin, face.domout)
+            adjacent = [domain for domain in domains if domain != 0]
+            if len(adjacent) != 1 or mesh.GetMaterials()[adjacent[0] - 1] not in reduced_set:
+                raise ValueError("zero-normal correction boundary must be exterior to a reduced region")
+        # Zero normal correction field does not mean zero normal total field.
+        fixed_rhs += -BoundaryFromVolumeCF(mu_cf) * InnerProduct(H_s, specialcf.normal(3)) * test_reduced.Trace() * ds(
+            definedon=mesh.Boundaries(reduced_zero_normal_boundary),
+            bonus_intorder=bonus_intorder)
     if kelvin_lift is not None:
         # Exterior equation for Omega_t = phi_reduced + lift, tested with the
         # same continuous space; the lift moves to the right-hand side.
-        f_lf += -mu_cf * grad(kelvin_lift) * grad(test_reduced) * dx(
+        fixed_rhs += -mu_cf * grad(kelvin_lift) * grad(test_reduced) * dx(
             definedon=kelvin_selector, bonus_intorder=bonus_intorder)
     elif kelvin_selector is not None:
         # Same right-hand side with the exact source in place of the lift:
         # grad of the exact lift IS the pulled-back exterior source field.
-        f_lf += -mu_cf * kelvin_source_h * grad(test_reduced) * dx(
+        fixed_rhs += -mu_cf * kelvin_source_h * grad(test_reduced) * dx(
             definedon=kelvin_selector, bonus_intorder=bonus_intorder)
+    f_lf = LinearForm(fes)
     if total_source_h is not None:
         total_source_selector = mesh.Materials("|".join(total_source_materials))
-        f_lf += mu_cf * total_source_h * grad(test_total) * dx(
-            definedon=total_source_selector, bonus_intorder=bonus_intorder)
-    f_lf += interface_constraint_scale * test_multiplier * source_potential * d_interface
+        from ngsolve import IntegrationRule, VOL
+        # Linear and rectangular bilinear forms infer different default rules.
+        # Bind one rule so caching cannot change the discrete excitation.
+        material_rhs_measure = dx(
+            definedon=total_source_selector,
+            intrules={kind: IntegrationRule(kind, order=2 * int(order) + int(bonus_intorder))
+                      for kind in {element.type for element in mesh.Elements(VOL)}})
+        f_lf += mu_cf * total_source_h * grad(test_total) * material_rhs_measure
+    fixed_rhs += interface_constraint_scale * test_multiplier * source_potential * d_interface
+    # Prescribed normal flux is part of the source, so it belongs to the cached
+    # fixed right-hand side rather than the material-dependent one.
     if reduced_normal_flux is not None:
-        f_lf += -reduced_normal_flux * test_reduced * ds(
+        fixed_rhs += -reduced_normal_flux * test_reduced * ds(
             definedon=mesh.Boundaries(reduced_flux_boundary),
             bonus_intorder=bonus_intorder)
     if total_normal_flux is not None:
-        f_lf += -total_normal_flux * test_total * ds(
+        fixed_rhs += -total_normal_flux * test_total * ds(
             definedon=mesh.Boundaries(total_flux_boundary),
             bonus_intorder=bonus_intorder)
     phase_timings = {}
@@ -959,7 +1114,35 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
     timed_phase("matrix_assembly", a_bf.Assemble)
 
     def assemble_rhs():
-        f_lf.Assemble()
+        nonlocal f_lf
+        if _fixed_rhs_cache is None:
+            fixed_rhs.Assemble()
+            f_lf.Assemble()
+            f_lf.vec.data += fixed_rhs.vec
+        else:
+            # This cache belongs to one P1 Picard call, with fixed source and spaces.
+            layout = tuple(space.ndof for space in fes.components)
+            if "fixed" not in _fixed_rhs_cache:
+                fixed_rhs.Assemble()
+                vector = fixed_rhs.vec.CreateVector()
+                vector.data = fixed_rhs.vec
+                _fixed_rhs_cache.update(fixed=vector, layout=layout)
+            elif _fixed_rhs_cache["layout"] != layout:
+                raise ValueError("Picard RHS cache space layout changed")
+            if _rhs_material is None:
+                f_lf.Assemble()
+            else:
+                if "material_operator" not in _fixed_rhs_cache:
+                    operator = BilinearForm(trialspace=_rhs_material.space, testspace=fes)
+                    if total_source_h is not None:
+                        coefficient = _rhs_material.space.TrialFunction()
+                        operator += coefficient * total_source_h * grad(test_total) * material_rhs_measure
+                    operator.Assemble()
+                    _fixed_rhs_cache["material_operator"] = operator
+                f_lf = LinearForm(fes)
+                f_lf.Assemble()
+                f_lf.vec.data = _fixed_rhs_cache["material_operator"].mat * _rhs_material.vec
+            f_lf.vec.data += _fixed_rhs_cache["fixed"]
         if source_values is not None:
             f_lf.vec.FV().NumPy()[:fes_reduced.ndof] += source_values
 
@@ -968,13 +1151,21 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
     solution = GridFunction(fes)
     inverse_mat = timed_phase(
         "factorization", lambda: a_bf.mat.Inverse(fes.FreeDofs(), inverse=inverse))
-    if total_dirichlet_cf is None:
+    if total_dirichlet_cf is None and not has_surface:
         def apply_inverse():
             solution.vec.data = inverse_mat * f_lf.vec
         timed_phase("backsolve", apply_inverse)
     else:
-        solution.components[1].Set(
-            total_dirichlet_cf, definedon=mesh.BBBoundaries(dirichlet_bbbnd))
+        if has_surface:
+            for index, region in enumerate(("reduced", "total")):
+                values = surface_values.get(region, {})
+                if values:
+                    solution.components[index].Set(
+                        mesh.BoundaryCF(values, default=0),
+                        definedon=mesh.Boundaries(surface_labels[region]))
+        else:
+            solution.components[1].Set(
+                total_dirichlet_cf, definedon=mesh.BBBoundaries(dirichlet_bbbnd))
         residual = solution.vec.CreateVector()
         residual.data = f_lf.vec - a_bf.mat * solution.vec
         def apply_inverse():
@@ -1406,7 +1597,13 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
         kelvin_interface_boundary=None, kelvin_source_potential=None,
         kelvin_source_h=None,
         total_source_h=None, total_source_materials=(),
-        anderson_depth=0, anderson_transform="log", observation_points=None):
+        anderson_depth=0, anderson_transform="log", observation_points=None,
+        material_update_order=None, material_log_state_initial=None,
+        refinement_parent_identity=None, cache_fixed_rhs=True,
+        reduced_zero_normal_boundary=None, surface_dirichlet=None,
+        kelvin_match_exact=False, mu_r_by_material=None,
+        material_sampling="element_centroid", bh_interpolation="pchip",
+        progress_callback=None):
     """Picard solve for the mixed total/reduced Omega formulation.
 
     The source split and its interface trace stay fixed throughout the
@@ -1414,6 +1611,13 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
     from the shared monotone ``B(H)`` law.  This is deliberately separate from
     hysteretic state evolution: the latter needs its own committed material
     history and is not silently approximated by a memoryless Picard update.
+    Linear physical materials in the total region require explicit entries in
+    ``mu_r_by_material``. The B-H table must start at the soft-magnetic origin.
+    P1 convergence checks both flux iteration change and secant consistency;
+    returned H, mu and B belong to the same assembled iterate.
+    ``constitutive_field_audit`` separately measures their spatial B(H) defect
+    at quadrature points. Iterative convergence does not imply that this defect
+    is small, nor that the returned field has passed a physical accuracy gate.
 
     ``mu_r_initial`` is one scalar or one value per nonlinear element in mesh
     element order (``nonlinear_stats["element_numbers"]`` of an earlier solve),
@@ -1427,9 +1631,28 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
     iteration change of B at those points, so the stopping criterion can be judged
     where the result is consumed instead of only through the material step.
 
+    The default material update is one order-0 permeability value sampled at
+    each nonlinear element centroid and therefore supports ``order=1`` only.
+    A genuinely nonlinear ``order=2`` solve must explicitly select
+    ``material_update_order=1``. That path projects the logarithm of the B-H
+    secant permeability into discontinuous L2 and exponentiates a bounded field,
+    so the physical permeability remains positive while its spatial order is
+    compatible with the response. Its restart input is the complete
+    ``nonlinear_stats["material_restart_state"]`` mapping. Bare coefficient
+    arrays are rejected because their mesh, material, order, and B-H identity
+    cannot be verified.
+
+    ``refinement_parent_identity`` is an optional non-empty mapping that names
+    the common physical geometry, material, and excitation contract shared by
+    an h-refinement family. Its canonical digest is attached to field and
+    energy observables, allowing a convergence gate to reject a stale or
+    unrelated mesh level before comparing numbers.
+
     The result has the same field keys as the linear mixed solve plus
     ``nonlinear_stats`` (with the per-iteration ``history``, a contraction-rate
-    estimate, and the per-element ``mu_r_elements`` state).  A loop that reaches
+    estimate, and its restart state). The projected high-order path also returns
+    energy and coenergy evaluated from the final solution and the exact PCHIP
+    H-potential under a shared identity. A loop that reaches
     ``max_iterations`` raises :class:`MixedOmegaPicardNotConverged` carrying that
     state.  Caller wraps the complete operation in :class:`ngsolve.TaskManager`.
     """
@@ -1448,6 +1671,21 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
     if nonlinear_set - actual_materials:
         raise ValueError(
             f"nonlinear_materials are not mesh materials: {sorted(nonlinear_set - actual_materials)}")
+    kelvin_mats = tuple(kelvin_mats)
+    kelvin_set = {name for name in actual_materials
+                  if _is_kelvin_material(name, kelvin_mats, exact=kelvin_match_exact)}
+    if kelvin_set & nonlinear_set:
+        raise ValueError("nonlinear_materials must not include Kelvin materials")
+    mu_r_by_material = dict(mu_r_by_material or {})
+    if set(mu_r_by_material) & nonlinear_set:
+        raise ValueError("mu_r_by_material must not override nonlinear materials")
+    missing_linear = set(total_materials) - nonlinear_set - kelvin_set - set(mu_r_by_material)
+    if missing_linear:
+        raise ValueError(f"declare mu_r_by_material for linear total materials: {sorted(missing_linear)}")
+    # Validate names, values and Kelvin overrides before any nonlinear work.
+    make_kelvin_mu_cf(mesh, R_K, offset, kelvin_mats=kelvin_mats,
+                      kelvin_match_exact=kelvin_match_exact,
+                      mu_r_by_material=mu_r_by_material)
     if not math.isfinite(tolerance) or tolerance <= 0.0:
         raise ValueError("tolerance must be positive and finite")
     if int(max_iterations) < 1:
@@ -1456,10 +1694,139 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
         raise ValueError("relaxation must lie in (0, 1]")
     if int(anderson_depth) < 0:
         raise ValueError("anderson_depth must be non-negative")
+    if refinement_parent_identity is None:
+        normalized_refinement_parent_identity = None
+        refinement_parent_identity_sha256 = None
+    else:
+        if not isinstance(refinement_parent_identity, Mapping):
+            raise ValueError("refinement_parent_identity must be a mapping")
+        normalized_refinement_parent_identity = dict(refinement_parent_identity)
+        if not normalized_refinement_parent_identity:
+            raise ValueError("refinement_parent_identity must not be empty")
+        try:
+            refinement_parent_identity_sha256 = _identity_sha256(
+                normalized_refinement_parent_identity
+            )
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                "refinement_parent_identity must be JSON serializable"
+            ) from exc
 
     bh_array = np.asarray(bh_table, dtype=float)
     if bh_array.ndim != 2 or bh_array.shape[1] < 2:
         raise ValueError("bh_table must contain [H, B] rows")
+    if len(bh_array) < 2 or not np.all(np.isfinite(bh_array[:, :2])):
+        raise ValueError("bh_table requires at least two finite [H, B] rows")
+    if not np.array_equal(bh_array[0, :2], [0.0, 0.0]):
+        raise ValueError("memoryless soft-magnetic bh_table must start at [0, 0]")
+    positive_rows = (bh_array[:, 0] > 0.0) & (bh_array[:, 1] > 0.0)
+    secants = bh_array[positive_rows, 1] / bh_array[positive_rows, 0]
+    genuinely_nonlinear = (
+        secants.size > 1
+        and float(np.ptp(secants))
+        > 1.0e-12 * max(float(np.max(np.abs(secants))), MU_0)
+    )
+    requested_material_order = (
+        None if material_update_order is None else int(material_update_order)
+    )
+    if material_sampling not in ("element_centroid", "integration_point"):
+        raise ValueError("material_sampling must be element_centroid or integration_point")
+    if bh_interpolation not in ("pchip", "linear_spline"):
+        raise ValueError("bh_interpolation must be pchip or linear_spline")
+    if material_sampling != "integration_point" and bh_interpolation != "pchip":
+        raise ValueError("linear_spline is available only for integration_point sampling")
+    if material_sampling == "integration_point":
+        if progress_callback is not None and not callable(progress_callback):
+            raise ValueError("progress_callback must be callable")
+        if int(order) != 1 or requested_material_order not in (None, 0):
+            raise ValueError("integration_point material sampling currently requires P1")
+        if int(anderson_depth) != 0:
+            raise ValueError("integration_point material sampling requires anderson_depth=0")
+        if float(relaxation) != 1.0:
+            raise ValueError("integration_point material sampling requires relaxation=1")
+        if material_log_state_initial is not None:
+            raise ValueError("integration_point material sampling has no projected restart state")
+        return _solve_mixed_omega_pointwise_picard(
+            mesh, H_s, source_potential, R_K, offset,
+            bh_array=bh_array, nonlinear_materials=nonlinear_materials,
+            reduced_materials=reduced_materials, total_materials=total_materials,
+            interface_boundary=interface_boundary, order=int(order),
+            dirichlet_bbbnd=dirichlet_bbbnd, bonus_intorder=bonus_intorder,
+            kelvin_mats=kelvin_mats, inverse=inverse, mu_r_initial=mu_r_initial,
+            tolerance=tolerance, max_iterations=max_iterations,
+            interface_constraint_scale=interface_constraint_scale,
+            kelvin_interface_boundary=kelvin_interface_boundary,
+            kelvin_source_potential=kelvin_source_potential,
+            kelvin_source_h=kelvin_source_h, total_source_h=total_source_h,
+            total_source_materials=total_source_materials,
+            reduced_zero_normal_boundary=reduced_zero_normal_boundary,
+            surface_dirichlet=surface_dirichlet, kelvin_match_exact=kelvin_match_exact,
+            mu_r_by_material=mu_r_by_material,
+            bh_interpolation=bh_interpolation,
+            progress_callback=progress_callback)
+    if genuinely_nonlinear and int(order) > 1 and requested_material_order is None:
+        raise ValueError(
+            "nonlinear mixed total/reduced Omega currently updates permeability "
+            "as one order-0 centroid value per element; response order > 1 would "
+            "use an unmatched material polynomial order. Use order=1 with an "
+            "h-convergence and volume-observable gate, or explicitly select "
+            "material_update_order=order-1."
+        )
+    if requested_material_order is not None and requested_material_order < 0:
+        raise ValueError("material_update_order must be nonnegative")
+    if genuinely_nonlinear and int(order) > 1:
+        if reduced_zero_normal_boundary is not None:
+            raise ValueError("reduced zero-normal boundary currently requires order=1")
+        if requested_material_order != int(order) - 1:
+            raise ValueError(
+                "a high-order nonlinear response requires "
+                "material_update_order=order-1"
+            )
+        if int(anderson_depth) != 0:
+            raise ValueError(
+                "anderson_depth must be 0 for the projected high-order material path"
+            )
+        return _solve_mixed_omega_projected_log_material(
+            mesh,
+            H_s,
+            source_potential,
+            R_K,
+            offset,
+            bh_array=bh_array,
+            nonlinear_materials=nonlinear_materials,
+            reduced_materials=reduced_materials,
+            total_materials=total_materials,
+            interface_boundary=interface_boundary,
+            order=int(order),
+            material_update_order=requested_material_order,
+            dirichlet_bbbnd=dirichlet_bbbnd,
+            bonus_intorder=bonus_intorder,
+            kelvin_mats=kelvin_mats,
+            inverse=inverse,
+            mu_r_initial=mu_r_initial,
+            kelvin_match_exact=kelvin_match_exact,
+            mu_r_by_material=mu_r_by_material,
+            tolerance=tolerance,
+            max_iterations=max_iterations,
+            relaxation=relaxation,
+            interface_constraint_scale=interface_constraint_scale,
+            kelvin_interface_boundary=kelvin_interface_boundary,
+            kelvin_source_potential=kelvin_source_potential,
+            kelvin_source_h=kelvin_source_h,
+            total_source_h=total_source_h,
+            total_source_materials=total_source_materials,
+            observation_points=observation_points,
+            material_log_state_initial=material_log_state_initial,
+            refinement_parent_identity=normalized_refinement_parent_identity,
+            refinement_parent_identity_sha256=refinement_parent_identity_sha256,
+            surface_dirichlet=surface_dirichlet,
+        )
+    if requested_material_order not in (None, 0):
+        raise ValueError("order=1 supports material_update_order=0 only")
+    if material_log_state_initial is not None:
+        raise ValueError(
+            "material_log_state_initial is only valid for the projected high-order path"
+        )
     B_of_H = _build_bh_interpolator(bh_array[:, :2])
     B_scale = max(float(bh_array[:, 1].max()), MU_0)
     positive = (bh_array[:, 0] > 0.0) & (bh_array[:, 1] > 0.0)
@@ -1492,24 +1859,30 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
         if not np.all(np.isfinite(initial)) or np.any(initial < 1.0):
             raise ValueError("per-element mu_r_initial must be finite and >= 1")
         mu_r_current = initial.astype(float, copy=True)
-    mu_r_zero_field = mu_r_current.copy()
+    from scipy.interpolate import PchipInterpolator
+    zero_field_mu_r = float(PchipInterpolator(
+        bh_array[:, 0], bh_array[:, 1]).derivative()(0.0)) / MU_0
+    if not math.isfinite(zero_field_mu_r) or zero_field_mu_r < 1.0:
+        raise ValueError("bh_table origin tangent must be finite and >= vacuum permeability")
+    mu_r_zero_field = np.full(len(nonlinear_elements), zero_field_mu_r)
     mu_r_upper = max(float(np.max(mu_r_current)) if mu_r_current.size else 1.0,
                      secant_upper, 1.0)
     for index, (element_nr, _) in enumerate(nonlinear_elements):
         mu_elements.vec[element_nr] = MU_0 * float(mu_r_current[index])
 
     kelvin_mu = make_kelvin_mu_cf(
-        mesh, R_K, offset, kelvin_mats=kelvin_mats, mu_r_by_material={})
+        mesh, R_K, offset, kelvin_mats=kelvin_mats, mu_r_by_material={},
+        kelvin_match_exact=kelvin_match_exact)
 
     def mixed_mu_cf():
         values = {}
         for material in mesh.GetMaterials():
             if material in nonlinear_set:
                 values[material] = mu_elements
-            elif any(key in material.lower() for key in kelvin_mats):
+            elif _is_kelvin_material(material, kelvin_mats, exact=kelvin_match_exact):
                 values[material] = kelvin_mu
             else:
-                values[material] = MU_0
+                values[material] = MU_0 * float(mu_r_by_material.get(material, 1.0))
         return mesh.MaterialCF(values, default=MU_0)
 
     observation = None
@@ -1530,6 +1903,9 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
     result = None
     converged = False
     relative_change = float("inf")
+    rhs_cache = {} if cache_fixed_rhs else None
+    cache_material = (mu_elements if cache_fixed_rhs and total_source_h is not None and
+                      set(total_source_materials) <= nonlinear_set else None)
     for iteration in range(1, int(max_iterations) + 1):
         result = solve_magnetostatic_mixed_total_reduced_omega_kelvin(
             mesh, H_s, source_potential, R_K, offset,
@@ -1538,12 +1914,16 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
             order=order, dirichlet_bbbnd=dirichlet_bbbnd,
             bonus_intorder=bonus_intorder, kelvin_mats=kelvin_mats,
             inverse=inverse, interface_constraint_scale=interface_constraint_scale,
+            kelvin_match_exact=kelvin_match_exact,
             mu_cf=mixed_mu_cf(),
             kelvin_interface_boundary=kelvin_interface_boundary,
             kelvin_source_potential=kelvin_source_potential,
             kelvin_source_h=kelvin_source_h,
             total_source_h=total_source_h,
-            total_source_materials=total_source_materials)
+            total_source_materials=total_source_materials,
+            reduced_zero_normal_boundary=reduced_zero_normal_boundary,
+            surface_dirichlet=surface_dirichlet,
+            _fixed_rhs_cache=rhs_cache, _rhs_material=cache_material)
         B_current = np.zeros(len(nonlinear_elements))
         mu_r_target = np.empty(len(nonlinear_elements))
         for index, (element_nr, centroid) in enumerate(nonlinear_elements):
@@ -1566,6 +1946,20 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
                 entry["observation_relative_change"] = float(
                     np.max(np.linalg.norm(observed_field - observed_previous, axis=1)) / scale)
             observed_previous = observed_field
+        constitutive_change = float(np.max(
+            np.abs(mu_r_target - mu_r_current) / np.maximum(mu_r_target, 1.0)))
+        entry["relative_constitutive_change"] = constitutive_change
+        if iteration > 1:
+            relative_change = float(
+                np.max(np.abs(B_current - B_previous)) / max(B_scale, 1.0e-30))
+            entry["relative_B_change"] = relative_change
+        entry["mu_r_min"] = float(np.min(mu_r_current)) if mu_r_current.size else None
+        entry["mu_r_max"] = float(np.max(mu_r_current)) if mu_r_current.size else None
+        history.append(entry)
+        # Keep the returned coefficient at the state used to assemble H.
+        if iteration > 1 and max(relative_change, constitutive_change) <= tolerance:
+            converged = True
+            break
         # PCHIP secants can exceed the secants at the tabulated nodes.
         # A safeguard must not clip the constitutive law's own target.
         if mu_r_target.size:
@@ -1580,29 +1974,25 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
         mu_r_current = np.asarray(mu_r_next, dtype=float)
         for index, (element_nr, _) in enumerate(nonlinear_elements):
             mu_elements.vec[element_nr] = MU_0 * float(mu_r_current[index])
-        if iteration > 1:
-            relative_change = float(
-                np.max(np.abs(B_current - B_previous))
-                / max(B_scale, 1.0e-30))
-            entry["relative_B_change"] = relative_change
-        entry["mu_r_min"] = float(np.min(mu_r_current)) if mu_r_current.size else None
-        entry["mu_r_max"] = float(np.max(mu_r_current)) if mu_r_current.size else None
-        history.append(entry)
-        if iteration > 1 and relative_change <= tolerance:
-            converged = True
-            break
         B_previous = B_current
 
     if result is None:  # pragma: no cover - guarded by max_iterations validation
         raise RuntimeError("mixed total/reduced Omega Picard iteration did not start")
     stats = {
         "method": "Picard",
+        "rhs_reuse": "fixed_vector_and_material_operator" if cache_material is not None
+                     else "fixed_vector" if rhs_cache is not None else "none",
         "iterations": iteration,
         "converged": converged,
         "relative_B_change": relative_change,
         "tolerance": float(tolerance),
         "relaxation": float(relaxation),
         "anderson_depth": int(anderson_depth),
+        "response_order": int(order),
+        "material_update_order": 0,
+        "material_sampling": "element_centroid",
+        "relative_constitutive_change": constitutive_change,
+        "returned_material_state": "assembled_iterate",
         "warm_start": bool(initial.ndim > 0),
         "history": history,
         "contraction_rate_estimate": estimate_contraction_rate(
@@ -1625,7 +2015,618 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
     result["mu_cf"] = mixed_mu_cf()
     result["B_cf"] = result["mu_cf"] * result["H_cf"]
     result["nonlinear_stats"] = stats
+    result["constitutive_field_audit"] = audit_mixed_omega_constitutive_field(
+        mesh, result["H_cf"], result["B_cf"], bh_array, nonlinear_materials,
+        integration_order=max(4, 2 * int(order) + int(bonus_intorder)))
     return result
+
+
+def _solve_mixed_omega_projected_log_material(
+        mesh, H_s, source_potential, R_K, offset, *, bh_array,
+        nonlinear_materials, reduced_materials, total_materials,
+        interface_boundary, order, material_update_order,
+        dirichlet_bbbnd, bonus_intorder, kelvin_mats, inverse,
+        mu_r_initial, tolerance, max_iterations, relaxation,
+        interface_constraint_scale, kelvin_interface_boundary,
+        kelvin_source_potential, kelvin_source_h,
+        total_source_h, total_source_materials, observation_points,
+        material_log_state_initial, refinement_parent_identity,
+        refinement_parent_identity_sha256, surface_dirichlet=None,
+        kelvin_match_exact=False, mu_r_by_material=None):
+    """Picard lane with a positive spatial L2 secant-permeability field."""
+
+    from ngsolve import (
+        GridFunction,
+        IfPos,
+        InnerProduct,
+        Integrate,
+        L2,
+        exp,
+        log,
+        sqrt,
+    )
+    from radia.picard_acceleration import estimate_contraction_rate
+    from radia.scalar_potential_solver import (
+        _build_bh_coefficient_function,
+        _build_bh_coenergy_coefficient_function,
+    )
+
+    initial = np.asarray(mu_r_initial, dtype=float)
+    if initial.ndim != 0:
+        raise ValueError(
+            "projected high-order material updates currently require scalar "
+            "mu_r_initial; resume states use nonlinear_stats.material_log_state_dofs"
+        )
+    initial_mu_r = float(initial)
+    if not math.isfinite(initial_mu_r) or initial_mu_r < 1.0:
+        raise ValueError("mu_r_initial must be finite and >= 1")
+
+    positive = (bh_array[:, 0] > 0.0) & (bh_array[:, 1] > 0.0)
+    secant_upper = (
+        float(np.max(bh_array[positive, 1] / (MU_0 * bh_array[positive, 0])))
+        if np.any(positive)
+        else 1.0
+    )
+    mu_r_upper = max(initial_mu_r, secant_upper, 1.0)
+    log_mu_upper = math.log(mu_r_upper)
+
+    nonlinear_materials = tuple(nonlinear_materials)
+    nonlinear_set = set(nonlinear_materials)
+    nonlinear_selector = mesh.Materials("|".join(nonlinear_materials))
+    material_fes = L2(mesh, order=int(material_update_order))
+    log_mu = GridFunction(material_fes, name="mixed_omega_log_mu")
+    log_mu.Set(math.log(initial_mu_r), definedon=nonlinear_selector)
+    target_log_mu = GridFunction(material_fes, name="mixed_omega_target_log_mu")
+    active_mask = material_fes.GetDofs(nonlinear_selector)
+    active_dofs = [index for index in range(material_fes.ndof) if active_mask[index]]
+    if not active_dofs:
+        raise ValueError("nonlinear material selector has no material-update degrees of freedom")
+    material_state_identity = {
+        "schema": "radia.mixed-omega-material-state.v1",
+        "mesh_topology_geometry_sha256": _mesh_topology_geometry_sha256(mesh),
+        "bh_table_sha256": _canonical_array_sha256(bh_array[:, :2]),
+        "nonlinear_materials": sorted(str(value) for value in nonlinear_materials),
+        "linear_mu_r_by_material": dict(mu_r_by_material or {}),
+        "response_order": int(order),
+        "material_update_order": int(material_update_order),
+        "active_material_dof_numbers": [int(value) for value in active_dofs],
+    }
+    material_state_identity_sha256 = _identity_sha256(material_state_identity)
+    warm_state = None
+    if material_log_state_initial is not None:
+        if not isinstance(material_log_state_initial, Mapping):
+            raise ValueError(
+                "material_log_state_initial must be the material_restart_state "
+                "mapping from an earlier solve, not a bare coefficient array"
+            )
+        supplied_identity = material_log_state_initial.get("identity")
+        supplied_identity_sha256 = _validate_restart_identity_digest(
+            material_log_state_initial.get("identity_sha256")
+        )
+        if not isinstance(supplied_identity, Mapping):
+            raise ValueError("material restart state is missing its identity mapping")
+        if _identity_sha256(dict(supplied_identity)) != supplied_identity_sha256:
+            raise ValueError("material restart state identity digest is internally inconsistent")
+        if supplied_identity_sha256 != material_state_identity_sha256:
+            raise ValueError(
+                "material restart state does not match the current mesh, B-H table, "
+                "material selector, response order, material order, and active DOFs"
+            )
+        warm_state = np.asarray(material_log_state_initial.get("values"), dtype=float)
+        if warm_state.shape != (len(active_dofs),):
+            raise ValueError(
+                "material restart state must contain one value per active "
+                f"material degree of freedom ({len(active_dofs)}); got {warm_state.shape}"
+            )
+        if not np.all(np.isfinite(warm_state)):
+            raise ValueError("material_log_state_initial must be finite")
+        log_mu.vec.FV().NumPy()[active_dofs] = warm_state
+
+    bounded_log_mu = IfPos(
+        log_mu,
+        IfPos(log_mu_upper - log_mu, log_mu, log_mu_upper),
+        0.0,
+    )
+    kelvin_mu = make_kelvin_mu_cf(
+        mesh, R_K, offset, kelvin_mats=kelvin_mats, mu_r_by_material={},
+        kelvin_match_exact=kelvin_match_exact
+    )
+
+    def mixed_mu_cf():
+        values = {}
+        for material in mesh.GetMaterials():
+            if material in nonlinear_set:
+                values[material] = MU_0 * exp(bounded_log_mu)
+            elif _is_kelvin_material(material, kelvin_mats, exact=kelvin_match_exact):
+                values[material] = kelvin_mu
+            else:
+                values[material] = MU_0 * float(mu_r_by_material.get(material, 1.0))
+        return mesh.MaterialCF(values, default=MU_0)
+
+    observation = None
+    if observation_points is not None:
+        observation = np.asarray(observation_points, dtype=float).reshape(-1, 3)
+        for point in observation:
+            if not mesh(*map(float, point)):
+                raise ValueError(
+                    f"observation point lies outside the mesh: {point.tolist()}"
+                )
+
+    b_fes = L2(mesh, order=int(material_update_order))
+    b_projected = GridFunction(b_fes, name="mixed_omega_B_magnitude")
+    b_previous = GridFunction(b_fes, name="mixed_omega_B_magnitude_previous")
+    have_previous = False
+    observed_previous = None
+    observed_field = None
+    history = []
+    result = None
+    converged = False
+    relative_change = float("inf")
+    integration_order = max(4, 2 * int(material_update_order) + 2)
+
+    def solve_current_material_state():
+        return solve_magnetostatic_mixed_total_reduced_omega_kelvin(
+            mesh,
+            H_s,
+            source_potential,
+            R_K,
+            offset,
+            mu_r_by_material=None,
+            reduced_materials=reduced_materials,
+            total_materials=total_materials,
+            interface_boundary=interface_boundary,
+            order=order,
+            dirichlet_bbbnd=dirichlet_bbbnd,
+            bonus_intorder=bonus_intorder,
+            kelvin_mats=kelvin_mats,
+            inverse=inverse,
+            interface_constraint_scale=interface_constraint_scale,
+            kelvin_match_exact=kelvin_match_exact,
+            mu_cf=mixed_mu_cf(),
+            kelvin_interface_boundary=kelvin_interface_boundary,
+            kelvin_source_potential=kelvin_source_potential,
+            kelvin_source_h=kelvin_source_h,
+            total_source_h=total_source_h,
+            total_source_materials=total_source_materials,
+            surface_dirichlet=surface_dirichlet,
+        )
+
+    for iteration in range(1, int(max_iterations) + 1):
+        result = solve_current_material_state()
+        H_magnitude = sqrt(InnerProduct(result["H_cf"], result["H_cf"]) + 1.0e-24)
+        B_target = _build_bh_coefficient_function(H_magnitude, bh_array)
+        mu_r_target = B_target / (MU_0 * H_magnitude)
+        admissible_mu_r_target = IfPos(mu_r_target - 1.0, mu_r_target, 1.0)
+        target_log_mu.Set(log(admissible_mu_r_target), definedon=nonlinear_selector)
+
+        b_magnitude = sqrt(InnerProduct(result["B_cf"], result["B_cf"]) + 1.0e-30)
+        b_projected.Set(b_magnitude, definedon=nonlinear_selector)
+        entry = {"iteration": int(iteration)}
+        if have_previous:
+            difference_sq = float(
+                Integrate(
+                    (b_projected - b_previous) ** 2,
+                    mesh,
+                    definedon=nonlinear_selector,
+                    order=integration_order,
+                ).real
+            )
+            scale_sq = float(
+                Integrate(
+                    b_projected**2,
+                    mesh,
+                    definedon=nonlinear_selector,
+                    order=integration_order,
+                ).real
+            )
+            relative_change = math.sqrt(
+                max(difference_sq, 0.0) / max(scale_sq, 1.0e-60)
+            )
+            entry["relative_B_l2_change"] = relative_change
+        b_previous.vec.data = b_projected.vec
+        have_previous = True
+
+        if observation is not None:
+            observed_field = np.asarray(
+                [
+                    [float(value) for value in result["B_cf"](mesh(*point))]
+                    for point in observation
+                ],
+                dtype=float,
+            )
+            if observed_previous is not None:
+                scale = max(
+                    float(np.max(np.linalg.norm(observed_field, axis=1))), 1.0e-30
+                )
+                entry["observation_relative_change"] = float(
+                    np.max(np.linalg.norm(observed_field - observed_previous, axis=1))
+                    / scale
+                )
+            observed_previous = observed_field
+
+        current_coefficients = log_mu.vec.FV().NumPy()
+        target_coefficients = target_log_mu.vec.FV().NumPy()
+        if iteration == 1:
+            current_coefficients[active_dofs] = target_coefficients[active_dofs]
+        else:
+            current_coefficients[active_dofs] = (
+                (1.0 - float(relaxation)) * current_coefficients[active_dofs]
+                + float(relaxation) * target_coefficients[active_dofs]
+            )
+        entry["material_log_state_min"] = float(
+            np.min(current_coefficients[active_dofs])
+        )
+        entry["material_log_state_max"] = float(
+            np.max(current_coefficients[active_dofs])
+        )
+        history.append(entry)
+        if iteration > 1 and relative_change <= tolerance:
+            converged = True
+            break
+
+    if result is None:  # pragma: no cover - guarded by validation
+        raise RuntimeError("projected mixed Omega Picard iteration did not start")
+    if converged:
+        result = solve_current_material_state()
+        if observation is not None:
+            observed_field = np.asarray(
+                [
+                    [float(value) for value in result["B_cf"](mesh(*point))]
+                    for point in observation
+                ],
+                dtype=float,
+            )
+    state = log_mu.vec.FV().NumPy()[active_dofs].copy()
+    material_restart_state = {
+        "values": state.tolist(),
+        "identity": material_state_identity,
+        "identity_sha256": material_state_identity_sha256,
+    }
+    stats = {
+        "method": "Picard projected log-permeability",
+        "iterations": int(iteration),
+        "converged": converged,
+        "relative_B_change": relative_change,
+        "relative_B_change_norm": "L2(nonlinear_materials)",
+        "tolerance": float(tolerance),
+        "relaxation": float(relaxation),
+        "anderson_depth": 0,
+        "anderson": None,
+        "response_order": int(order),
+        "material_update_order": int(material_update_order),
+        "material_sampling": "L2_log_secant_projection",
+        "physical_permeability_bounds": [1.0, float(mu_r_upper)],
+        "history": history,
+        "contraction_rate_estimate": estimate_contraction_rate(
+            [
+                row["relative_B_l2_change"]
+                for row in history
+                if "relative_B_l2_change" in row
+            ]
+        ),
+        "material_log_state_dofs": state.tolist(),
+        "material_state_dof_numbers": active_dofs,
+        "material_state_identity": material_state_identity,
+        "material_state_identity_sha256": material_state_identity_sha256,
+        "material_restart_state": material_restart_state,
+        "warm_start": warm_state is not None,
+        "final_material_state_resolved": converged,
+    }
+    if observed_field is not None:
+        stats["observation_points_m"] = observation.tolist()
+        stats["observation_field_T"] = observed_field.tolist()
+    if not converged:
+        raise MixedOmegaPicardNotConverged(
+            "projected mixed total/reduced Omega Picard iteration did not converge: "
+            f"iterations={iteration}, relative_B_change={relative_change:.3e}, "
+            f"tolerance={tolerance:.3e}",
+            {
+                "material_log_state_dofs": state.tolist(),
+                "material_state_dof_numbers": active_dofs,
+                "material_restart_state": material_restart_state,
+                "nonlinear_stats": stats,
+            },
+        )
+    result["mu_cf"] = mixed_mu_cf()
+    result["B_cf"] = result["mu_cf"] * result["H_cf"]
+    H_magnitude = sqrt(InnerProduct(result["H_cf"], result["H_cf"]) + 1.0e-24)
+    B_law = _build_bh_coefficient_function(H_magnitude, bh_array)
+    coenergy_density = _build_bh_coenergy_coefficient_function(H_magnitude, bh_array)
+    nonlinear_coenergy = float(
+        Integrate(
+            coenergy_density,
+            mesh,
+            definedon=nonlinear_selector,
+            order=max(integration_order, 2 * int(order) + 2),
+        ).real
+    )
+    nonlinear_energy = float(
+        Integrate(
+            H_magnitude * B_law - coenergy_density,
+            mesh,
+            definedon=nonlinear_selector,
+            order=max(integration_order, 2 * int(order) + 2),
+        ).real
+    )
+    nonlinear_h_dot_b = float(
+        Integrate(
+            H_magnitude * B_law,
+            mesh,
+            definedon=nonlinear_selector,
+            order=max(integration_order, 2 * int(order) + 2),
+        ).real
+    )
+    physical_linear_materials = [
+        str(material)
+        for material in mesh.GetMaterials()
+        if material not in nonlinear_set
+        and not _is_kelvin_material(material, kelvin_mats, exact=kelvin_match_exact)
+    ]
+    linear_energy = 0.0
+    linear_h_dot_b = 0.0
+    if physical_linear_materials:
+        linear_selector = mesh.Materials("|".join(physical_linear_materials))
+        linear_energy = float(
+            Integrate(
+                0.5 * result["mu_cf"] * H_magnitude**2,
+                mesh,
+                definedon=linear_selector,
+                order=max(integration_order, 2 * int(order) + 2),
+            ).real
+        )
+        linear_h_dot_b = float(
+            Integrate(
+                result["mu_cf"] * H_magnitude**2,
+                mesh,
+                definedon=linear_selector,
+                order=max(integration_order, 2 * int(order) + 2),
+            ).real
+        )
+    energy_total = nonlinear_energy + linear_energy
+    coenergy_total = nonlinear_coenergy + linear_energy
+    h_dot_b_total = nonlinear_h_dot_b + linear_h_dot_b
+    legendre_residual = abs(energy_total + coenergy_total - h_dot_b_total) / max(
+        abs(energy_total), abs(coenergy_total), abs(h_dot_b_total), 1.0e-300
+    )
+    solution_sha256 = _canonical_array_sha256(result["solution"].vec.FV().NumPy())
+    energy_identity = {
+        "schema": "radia.nonlinear-magnetic-energy-identity.v1",
+        "mesh_topology_geometry_sha256": material_state_identity[
+            "mesh_topology_geometry_sha256"
+        ],
+        "bh_table_sha256": material_state_identity["bh_table_sha256"],
+        "constitutive_interpolation": "monotone_pchip",
+        "constitutive_extrapolation": "vacuum_slope",
+        "magnetic_anisotropy": "isotropic",
+        "material_state_identity_sha256": material_state_identity_sha256,
+        "solution_sha256": solution_sha256,
+        "nonlinear_materials": sorted(str(value) for value in nonlinear_materials),
+        "linear_physical_materials": sorted(physical_linear_materials),
+        "material_domain": "|".join(
+            sorted([*map(str, nonlinear_materials), *physical_linear_materials])
+        ),
+        "nonlinear_state_id": material_state_identity_sha256,
+        "coordinate_system": "right-handed Cartesian",
+        "unit_system": "SI",
+        "unit": "J",
+        "integration_order": max(integration_order, 2 * int(order) + 2),
+        "refinement_parent_identity_sha256": refinement_parent_identity_sha256,
+    }
+    if refinement_parent_identity is not None:
+        energy_identity["refinement_parent_identity"] = refinement_parent_identity
+    field_identity = {
+        key: value
+        for key, value in energy_identity.items()
+        if key not in {"schema", "integration_order", "unit"}
+    }
+    field_identity.update(
+        {
+            "schema": "radia.nonlinear-magnetic-field-identity.v1",
+            "unit": "T",
+        }
+    )
+    result["field_observable_identity"] = field_identity
+    result["energy_observables"] = {
+        "identity": energy_identity,
+        "identity_sha256": _identity_sha256(energy_identity),
+        "energy_J": energy_total,
+        "coenergy_J": coenergy_total,
+        "h_dot_b_integral_J": h_dot_b_total,
+        "legendre_residual_relative": legendre_residual,
+        "nonlinear_energy_J": nonlinear_energy,
+        "nonlinear_coenergy_J": nonlinear_coenergy,
+        "nonlinear_h_dot_b_integral_J": nonlinear_h_dot_b,
+        "linear_physical_energy_J": linear_energy,
+        "linear_physical_h_dot_b_integral_J": linear_h_dot_b,
+        "nonlinear_constitutive_relation": "energy=H*B-integral_0^H_Bdh",
+        "nonlinear_coenergy_relation": "coenergy=integral_0^H_Bdh",
+        "nonlinear_B_evaluation": "reconstructed_BH_not_returned_B",
+    }
+    result["nonlinear_stats"] = stats
+    result["constitutive_field_audit"] = audit_mixed_omega_constitutive_field(
+        mesh, result["H_cf"], result["B_cf"], bh_array, nonlinear_materials,
+        integration_order=max(4, 2 * int(order) + int(bonus_intorder)))
+    return result
+
+
+def _solve_mixed_omega_pointwise_picard(
+        mesh, H_s, source_potential, R_K, offset, *, bh_array,
+        nonlinear_materials, reduced_materials, total_materials,
+        interface_boundary, order, dirichlet_bbbnd, bonus_intorder,
+        kelvin_mats, inverse, mu_r_initial, tolerance, max_iterations,
+        interface_constraint_scale, kelvin_interface_boundary,
+        kelvin_source_potential, kelvin_source_h, total_source_h,
+        total_source_materials, reduced_zero_normal_boundary,
+        surface_dirichlet, kelvin_match_exact, mu_r_by_material,
+        bh_interpolation, progress_callback):
+    """P1 secant Picard with the coefficient evaluated by volume quadrature."""
+    from ngsolve import IfPos, sqrt
+    from scipy.interpolate import PchipInterpolator
+    from radia.scalar_potential_solver import (
+        _build_bh_coefficient_function,
+        _build_bh_linear_spline_coefficient_function,
+        _build_bh_coenergy_coefficient_function,
+        _build_bh_linear_spline_coenergy_coefficient_function)
+    build_b = (_build_bh_coefficient_function if bh_interpolation == "pchip"
+               else _build_bh_linear_spline_coefficient_function)
+
+    initial = np.asarray(mu_r_initial, dtype=float)
+    if initial.ndim != 0 or not math.isfinite(float(initial)) or float(initial) <= 0:
+        raise ValueError("integration_point mu_r_initial must be a positive scalar")
+    if bh_interpolation == "pchip":
+        origin_mu = float(PchipInterpolator(
+            bh_array[:, 0], bh_array[:, 1]).derivative()(0.))
+    else:
+        origin_mu = float((bh_array[1, 1] - bh_array[0, 1])
+                          / (bh_array[1, 0] - bh_array[0, 0]))
+    if not math.isfinite(origin_mu) or origin_mu <= 0:
+        raise ValueError("B(H) origin tangent must be positive and finite")
+    material_names = tuple(nonlinear_materials)
+    selector = mesh.Materials("|".join(material_names))
+    current_mu = MU_0 * float(initial)
+    previous_b = None
+    history = []
+    fixed_rhs_cache = {}
+    integration_order = max(4, 2 * int(order) + int(bonus_intorder))
+
+    for iteration in range(1, int(max_iterations) + 1):
+        iteration_started = time.perf_counter()
+        coefficients = dict(mu_r_by_material)
+        mu = make_kelvin_mu_cf(
+            mesh, R_K, offset, kelvin_mats=kelvin_mats,
+            mu_r_by_material=coefficients, kelvin_match_exact=kelvin_match_exact)
+        values = {name: current_mu for name in material_names}
+        mu = mesh.MaterialCF(values, default=mu)
+        result = solve_magnetostatic_mixed_total_reduced_omega_kelvin(
+            mesh, H_s, source_potential, R_K, offset,
+            mu_cf=mu, reduced_materials=reduced_materials,
+            total_materials=total_materials, interface_boundary=interface_boundary,
+            order=order, dirichlet_bbbnd=dirichlet_bbbnd,
+            bonus_intorder=bonus_intorder, kelvin_mats=kelvin_mats,
+            inverse=inverse, interface_constraint_scale=interface_constraint_scale,
+            kelvin_match_exact=kelvin_match_exact,
+            kelvin_interface_boundary=kelvin_interface_boundary,
+            kelvin_source_potential=kelvin_source_potential,
+            kelvin_source_h=kelvin_source_h,
+            total_source_h=total_source_h,
+            total_source_materials=total_source_materials,
+            reduced_zero_normal_boundary=reduced_zero_normal_boundary,
+            surface_dirichlet=surface_dirichlet,
+            _fixed_rhs_cache=fixed_rhs_cache)
+        linear_solve_seconds = time.perf_counter() - iteration_started
+        audit = audit_mixed_omega_constitutive_field(
+            mesh, result["H_cf"], result["B_cf"], bh_array, material_names,
+            integration_order=integration_order, interpolation=bh_interpolation)
+        relative_change = float("inf")
+        if previous_b is not None:
+            difference = result["B_cf"] - previous_b
+            numerator = float(Integrate(
+                InnerProduct(difference, difference), mesh,
+                definedon=selector, order=integration_order).real)
+            denominator = float(Integrate(
+                InnerProduct(result["B_cf"], result["B_cf"]), mesh,
+                definedon=selector, order=integration_order).real)
+            relative_change = math.sqrt(max(numerator, 0.) / max(denominator, 1.e-60))
+        history.append({"iteration": iteration,
+                        "linear_solve_seconds": linear_solve_seconds,
+                        "iteration_seconds": time.perf_counter() - iteration_started,
+                        "relative_B_change": relative_change,
+                        "relative_B_constitutive_L2": audit["relative_B_constitutive_L2"]})
+        if progress_callback is not None:
+            progress_callback(dict(history[-1]))
+        if (relative_change <= tolerance
+                and audit["relative_B_constitutive_L2"] <= tolerance):
+            magnitude = sqrt(InnerProduct(result["H_cf"], result["H_cf"]))
+            build_energy = (
+                _build_bh_coenergy_coefficient_function
+                if bh_interpolation == "pchip"
+                else _build_bh_linear_spline_coenergy_coefficient_function)
+            coenergy_density = build_energy(magnitude, bh_array)
+            coenergy = float(Integrate(
+                coenergy_density, mesh, definedon=selector,
+                order=integration_order).real)
+            h_dot_b = float(Integrate(
+                InnerProduct(result["H_cf"], result["B_cf"]), mesh,
+                definedon=selector, order=integration_order).real)
+            result["constitutive_field_audit"] = audit
+            result["energy_observables"] = {
+                "scope": "nonlinear_materials_only",
+                "bh_interpolation": bh_interpolation,
+                "coenergy_J": coenergy,
+                "energy_J": h_dot_b - coenergy,
+                "h_dot_b_integral_J": h_dot_b,
+                "integration_order": integration_order,
+                "accuracy_accepted": False,
+            }
+            result["nonlinear_stats"] = {
+                "method": "pointwise_secant_picard",
+                "material_sampling": "integration_point",
+                "bh_interpolation": bh_interpolation,
+                "iterations": iteration,
+                "converged": True,
+                "relative_B_change": relative_change,
+                "relative_B_constitutive_L2": audit["relative_B_constitutive_L2"],
+                "history": history,
+            }
+            return result
+        previous_b = result["B_cf"]
+        magnitude = sqrt(InnerProduct(result["H_cf"], result["H_cf"]))
+        law_b = build_b(magnitude, bh_array)
+        current_mu = IfPos(magnitude - 1.e-12,
+                           law_b / (magnitude + 1.e-30), origin_mu)
+
+    raise MixedOmegaPicardNotConverged(
+        "pointwise mixed Omega Picard did not converge: "
+        f"iterations={max_iterations}, relative_B_change={relative_change:.3e}, "
+        f"relative_B_constitutive_L2={audit['relative_B_constitutive_L2']:.3e}",
+        {"nonlinear_stats": {"method": "pointwise_secant_picard",
+                             "material_sampling": "integration_point",
+                             "bh_interpolation": bh_interpolation,
+                             "converged": False, "history": history}})
+
+
+def audit_mixed_omega_constitutive_field(mesh, H_cf, B_cf, bh_table,
+                                       nonlinear_materials, *, integration_order=6,
+                                       interpolation="pchip"):
+    """Measure returned B against B(H), independently of iterate convergence.
+
+    This quadrature diagnostic is not a Maxwell residual or an error bound.
+    A Legendre identity evaluated using a reconstructed B(H) cannot replace it.
+    """
+    from ngsolve import Integrate, InnerProduct, sqrt
+    from radia.scalar_potential_solver import (
+        _build_bh_coefficient_function,
+        _build_bh_linear_spline_coefficient_function)
+
+    names = tuple(nonlinear_materials)
+    if not names or not set(names) <= set(mesh.GetMaterials()):
+        raise ValueError("nonlinear_materials must name existing mesh materials")
+    if int(integration_order) != integration_order or integration_order < 1:
+        raise ValueError("integration_order must be a positive integer")
+    if interpolation not in ("pchip", "linear_spline"):
+        raise ValueError("interpolation must be pchip or linear_spline")
+    magnitude = sqrt(InnerProduct(H_cf, H_cf) + 1.e-30)
+    build_b = (_build_bh_coefficient_function if interpolation == "pchip"
+               else _build_bh_linear_spline_coefficient_function)
+    law_b = build_b(magnitude, np.asarray(bh_table, dtype=float))
+    target = law_b * H_cf / magnitude
+    delta = B_cf - target
+    region = mesh.Materials("|".join(names))
+    def integral(value):
+        return float(Integrate(value, mesh, definedon=region,
+                               order=int(integration_order)).real)
+    defect = integral(InnerProduct(delta, delta))
+    reference = integral(InnerProduct(target, target))
+    if not math.isfinite(defect) or not math.isfinite(reference):
+        raise ValueError("non-finite constitutive field audit")
+    return {
+        "relative_B_constitutive_L2": math.sqrt(max(defect, 0.) / max(reference, 1.e-60)),
+        "absolute_B_constitutive_L2_T_m32": math.sqrt(max(defect, 0.)),
+        "integration_order": int(integration_order),
+        "interpolation": interpolation,
+        "scope": "returned_B_against_pointwise_BH",
+        "accuracy_accepted": False,
+    }
 
 
 def inductance_from_energy(gfu, nu_cf, mesh, I_total,

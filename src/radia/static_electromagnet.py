@@ -128,6 +128,10 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
     nonlinear_anderson_transform: str = "log",
     nonlinear_mu_r_initial=1000.0,
     nonlinear_observation_points=None,
+    nonlinear_material_update_order: int | None = None,
+    nonlinear_material_log_state_initial=None,
+    nonlinear_material_sampling: str = "element_centroid",
+    nonlinear_bh_interpolation: str = "pchip",
     inverse: str = "pardiso",
     bonus_intorder: int = 4,
 ) -> dict[str, object]:
@@ -137,31 +141,47 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
     :func:`radia.kelvin_solver.solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin`:
     ``nonlinear_anderson_depth`` enables its constrained Anderson mixing,
     ``nonlinear_mu_r_initial`` is a scalar or the per-element warm start of an
-    earlier ``nonlinear_stats["mu_r_elements"]``, and
+    earlier order-one ``nonlinear_stats["mu_r_elements"]``, and
     ``nonlinear_observation_points`` records the per-iteration field change at
     the points where the result is consumed.  A non-converged loop raises
     :class:`radia.kelvin_solver.MixedOmegaPicardNotConverged` with that state.
+    For a P1 diagnostic, ``nonlinear_material_sampling="integration_point"``
+    evaluates the B(H) secant at volume quadrature points. It requires plain
+    Picard (relaxation=1, Anderson depth=0), and reports a separate returned-field
+    constitutive defect rather than treating iterate convergence as accuracy.
+    ``nonlinear_bh_interpolation="linear_spline"`` uses NGSolve's compact
+    piecewise-linear table lookup; its interpolation error must be checked
+    against the original B-H curve for a validation comparison.
+    Response order two requires an explicit
+    ``nonlinear_material_update_order=1``; its positive log-permeability field
+    is a separate spatial material state. Resume it with the complete
+    ``nonlinear_stats["material_restart_state"]`` mapping so mesh, B-H table,
+    material selector, orders, and active DOFs are checked before solving.
 
     ``source_potential_contract="total_hodge"`` is the general CoilBuilder
     route.  It retains the non-exact harmonic/cut component of a linked source
     inside total-potential iron instead of forcing it into a scalar trace.
     ``"surface_trace"`` is the strict scalar-only contract for simply connected
     interfaces.  Fixed permanent magnetization may use ``"global_physical"``.
-    Source projection defaults to at least order two even for an order-one
-    response solve; this keeps the smooth Kelvin-interface trace error below
-    the topology gate without changing the response-space order.
+    The total-Hodge projection defaults to the response order: a higher-order
+    lift is not generally representable in a lower-order total space, even in
+    vacuum. Explicit over-order projections remain available for convergence
+    studies and carry a discretization warning. Other trace contracts retain
+    their at-least-order-two projection default.
     """
     if int(order) < 1:
         raise ValueError("order must be positive")
     if source_projection_order is None:
-        source_projection_order = max(2, int(order))
+        source_projection_order = (
+            int(order) if source_potential_contract == "total_hodge"
+            else max(2, int(order)))
     if int(source_projection_order) < 1:
         raise ValueError("source_projection_order must be positive")
     if float(kelvin_radius) <= 0.0:
         raise ValueError("kelvin_radius must be positive")
-    if (linear_mu_r_by_material is None) == (bh_table is None):
+    if linear_mu_r_by_material is None and bh_table is None:
         raise ValueError(
-            "supply exactly one of linear_mu_r_by_material or bh_table for "
+            "supply linear_mu_r_by_material or bh_table (or both for hybrid materials) for "
             "mixed total/reduced Omega"
         )
     if source_potential_contract not in {
@@ -290,6 +310,7 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
         "bonus_intorder": int(bonus_intorder),
         "inverse": inverse,
         "kelvin_mats": domain.kelvin_materials,
+        "kelvin_match_exact": True,
         "kelvin_interface_boundary": domain.kelvin_interface,
         "kelvin_source_potential": (None if kelvin_source_h is not None
                                     else kelvin_source_potential),
@@ -317,6 +338,7 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
             float(kelvin_radius),
             kelvin_offset,
             bh_table=bh_table,
+            mu_r_by_material=linear_mu_r_by_material,
             nonlinear_materials=domain.nonlinear_materials,
             tolerance=float(nonlinear_tolerance),
             max_iterations=int(nonlinear_max_iterations),
@@ -325,8 +347,28 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
             anderson_transform=str(nonlinear_anderson_transform),
             mu_r_initial=nonlinear_mu_r_initial,
             observation_points=nonlinear_observation_points,
+            material_update_order=nonlinear_material_update_order,
+            material_log_state_initial=nonlinear_material_log_state_initial,
+            material_sampling=nonlinear_material_sampling,
+            bh_interpolation=nonlinear_bh_interpolation,
             **common,
         )
+    trace_gate_applied = source_trace_tolerance is not None and (
+        source_potential_contract != "total_hodge" or kelvin_trace is not None)
+    source_diagnostics["gate_enabled"] = trace_gate_applied
+    source_diagnostics["acceptance"] = "passed" if trace_gate_applied else "not_evaluated"
+    source_diagnostics["gate_scope"] = (
+        "kelvin_trace_only" if source_potential_contract == "total_hodge"
+        else source_potential_contract)
+    if source_potential_contract == "total_hodge":
+        source_diagnostics["response_order"] = int(order)
+        source_diagnostics["lift_order_compatible"] = int(source_projection_order) <= int(order)
+        source_diagnostics["split_invariance_verified"] = False
+        if int(source_projection_order) > int(order):
+            source_diagnostics["discretization_warning"] = (
+                "source lift exceeds the response space; a smaller source projection "
+                "residual does not imply a more accurate physical field. Run a vacuum "
+                "split-invariance test or increase response order.")
     result["static_electromagnet_contract"] = domain.as_dict()
     result["static_electromagnet_contract"]["source_trace"] = source_diagnostics
     return result

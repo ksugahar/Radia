@@ -30,6 +30,8 @@ Example:
 	>>> coil.write_step("racetrack.step")    # STEP export
 """
 
+import hashlib
+import json
 import warnings
 
 import numpy as np
@@ -501,6 +503,158 @@ class CoilBuilder:
 		# Optional explicit profile, takes precedence over (_width, _height)
 		# when a segment is added. Set via set_profile().
 		self._profile = None
+
+	@classmethod
+	def rounded_rectangle_racetrack(
+		cls,
+		current,
+		*,
+		corner_centerline_radius,
+		straight_x,
+		straight_y,
+		width,
+		height,
+		centre=(0.0, 0.0, 0.0),
+		orientation=None,
+	):
+		"""Build a closed four-straight/four-quarter-arc racetrack.
+
+		All dimensions use the active geometry unit.  The corner radius is
+		the conductor centreline radius, not the inner-edge radius used by
+		some commercial coil commands.
+		"""
+		values = {
+			"corner_centerline_radius": corner_centerline_radius,
+			"straight_x": straight_x,
+			"straight_y": straight_y,
+			"width": width,
+			"height": height,
+		}
+		for name, raw in values.items():
+			value = float(raw)
+			if not np.isfinite(value):
+				raise ValueError(f"{name} must be finite")
+			if name.startswith("straight_"):
+				if value < 0.0:
+					raise ValueError(f"{name} must be nonnegative")
+			elif value <= 0.0:
+				raise ValueError(f"{name} must be positive")
+		if float(straight_x) == 0.0 and float(straight_y) == 0.0:
+			raise ValueError("at least one racetrack straight length must be positive")
+		frame = np.eye(3) if orientation is None else np.asarray(orientation, dtype=float)
+		if frame.shape != (3, 3) or not np.isfinite(frame).all():
+			raise ValueError("orientation must be a finite 3x3 matrix")
+		if not np.allclose(frame @ frame.T, np.eye(3), rtol=0.0, atol=1.0e-10):
+			raise ValueError("orientation rows must form an orthonormal frame")
+		if np.linalg.det(frame) <= 0.0:
+			raise ValueError("orientation must be right-handed")
+		centre_vec = np.asarray(centre, dtype=float)
+		if centre_vec.shape != (3,) or not np.isfinite(centre_vec).all():
+			raise ValueError("centre must contain three finite coordinates")
+		radius = float(corner_centerline_radius)
+		start = (
+			centre_vec
+			+ (0.5 * float(straight_x) + radius) * frame[0]
+			- 0.5 * float(straight_y) * frame[1]
+		)
+		return (
+			cls(float(current))
+			.set_start(start, orientation=frame)
+			.set_cross_section(float(width), float(height))
+			.add_straight(float(straight_y))
+			.add_arc(radius, 90.0)
+			.add_straight(float(straight_x))
+			.add_arc(radius, 90.0)
+			.add_straight(float(straight_y))
+			.add_arc(radius, 90.0)
+			.add_straight(float(straight_x))
+			.add_arc(radius, 90.0)
+		)
+
+	def to_identity_manifest(
+		self,
+		*,
+		geometry_unit_to_m=1.0,
+		turns=1,
+		conductor_model="solid_uniform_current_density",
+		region_label="coil",
+	):
+		"""Return a canonical SI geometry/excitation identity for this coil."""
+		scale = float(geometry_unit_to_m)
+		turn_count = int(turns)
+		if not np.isfinite(scale) or scale <= 0.0:
+			raise ValueError("geometry_unit_to_m must be positive and finite")
+		if turn_count < 1 or float(turns) != turn_count:
+			raise ValueError("turns must be a positive integer")
+		model = str(conductor_model).strip()
+		label = str(region_label).strip()
+		if not model or not label:
+			raise ValueError("conductor_model and region_label must be nonempty")
+		if not self.segments:
+			raise ValueError("at least one coil segment is required")
+
+		def scalar(value):
+			value = float(value)
+			if abs(value) < 1.0e-15:
+				return 0.0
+			return float(f"{value:.15g}")
+
+		def vector(values):
+			return [scalar(value * scale) for value in np.asarray(values, dtype=float)]
+
+		segments = []
+		for index, segment in enumerate(self.segments):
+			if not np.isclose(float(segment.current), float(self.current), rtol=0.0, atol=0.0):
+				raise ValueError("all segment currents must match CoilBuilder.current")
+			entry = {
+				"index": index,
+				"kind": "straight" if isinstance(segment, StraightSegment) else "arc",
+				"start_m": vector(segment.start_pos),
+				"end_m": vector(segment.end_pos),
+				"orientation": [
+					[scalar(value) for value in row]
+					for row in np.asarray(segment.orientation, dtype=float)
+				],
+				"cross_section_width_m": scalar(segment.width * scale),
+				"cross_section_height_m": scalar(segment.height * scale),
+			}
+			if isinstance(segment, StraightSegment):
+				entry["length_m"] = scalar(segment.length * scale)
+			elif isinstance(segment, ArcSegment):
+				entry.update(
+					corner_centerline_radius_m=scalar(segment.radius * scale),
+					arc_angle_deg=scalar(segment.arc_angle),
+					arc_center_m=vector(segment.arc_center),
+				)
+			else:
+				raise ValueError(
+					"identity manifests currently support straight and circular-arc segments"
+				)
+			segments.append(entry)
+
+		closure_error = scalar(
+			np.linalg.norm(self.segments[-1].end_pos - self.segments[0].start_pos)
+			* scale
+		)
+		payload = {
+			"schema": "radia.coil-geometry-excitation-identity.v1",
+			"coordinate_system": "right-handed Cartesian",
+			"length_unit": "m",
+			"current_unit": "A",
+			"current_A": scalar(self.current),
+			"turns": turn_count,
+			"ampere_turns_A": scalar(self.current * turn_count),
+			"current_direction": "segment_path_start_to_end",
+			"conductor_model": model,
+			"region_label": label,
+			"closed": closure_error <= max(1.0e-12, scale * 1.0e-9),
+			"closure_error_m": closure_error,
+			"segments": segments,
+		}
+		encoded = json.dumps(
+			payload, ensure_ascii=True, sort_keys=True, separators=(",", ":")
+		).encode("ascii")
+		return {**payload, "identity_sha256": hashlib.sha256(encoded).hexdigest()}
 
 	def set_start(self, position, orientation=None):
 		"""
