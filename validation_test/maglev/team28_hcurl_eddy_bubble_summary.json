@@ -175,7 +175,7 @@
     "skin_gate_disables_all_sibc_faces": true,
     "disk_conductor_is_connected": true,
     "cycle_bridge_basis_is_nonempty": true,
-    "p6_reduction_is_below_one_percent": true,
+    "p6_planned_reduction_estimate_below_one_percent": true,
     "cln_force_curve_matches_full_fem_below_5uN": true,
     "cln_force_curve_matches_reference_below_0p5mN": true,
     "physical_equilibrium_found": true,

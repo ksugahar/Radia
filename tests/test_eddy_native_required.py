@@ -30,6 +30,46 @@ def test_explicit_python_backend_stays_explicit(monkeypatch):
     assert eddy.EVRSTMethodAlgebra(*([np.eye(1)] * 7), backend="python") is expected
 
 
+def test_real_reduced_solve_uses_native_kernel(monkeypatch):
+    calls = []
+
+    def kernel(name, **kwargs):
+        assert name == "_HybridVIMSolve"
+
+        def solve(matrix, rhs):
+            calls.append((matrix.dtype, rhs.dtype))
+            return np.linalg.solve(matrix, rhs)
+
+        return solve
+
+    monkeypatch.setattr(eddy, "_radia_cpp_kernel", kernel)
+    matrix = np.array([[4.0, 1.0], [1.0, 3.0]])
+    rhs = np.array([1.0, 2.0])
+
+    result = eddy._solve_reduced_linear(matrix, rhs)
+
+    np.testing.assert_allclose(result, np.linalg.solve(matrix, rhs))
+    assert np.isrealobj(result)
+    assert calls == [(np.dtype(np.complex128), np.dtype(np.complex128))]
+
+
+def test_reported_solver_backend_does_not_probe_native_symbols(monkeypatch):
+    def unexpected_lookup(*args, **kwargs):
+        raise AssertionError("backend reporting must not probe native symbols")
+
+    monkeypatch.setattr(eddy, "_radia_cpp_kernel", unexpected_lookup)
+    solved = {"solver_diagnostics": {"backend": "native-dense-reduced-lu"}}
+
+    assert eddy._reported_solver_backend(solved, mixed_galerkin=True) == (
+        "native-dense-reduced-lu-mixed-galerkin"
+    )
+
+
+def test_reported_solver_backend_requires_actual_diagnostics():
+    with pytest.raises(RuntimeError, match="did not report its solver backend"):
+        eddy._reported_solver_backend({}, mixed_galerkin=False)
+
+
 @pytest.mark.parametrize("name,call", [
     ("_SkinImpedance", lambda: eddy.SkinImpedance(1j, 1.0)),
     ("_SIBCAdmittanceTail", lambda: eddy.SIBCAdmittanceTail(1j, 1.0, 1.0)),
