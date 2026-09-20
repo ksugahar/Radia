@@ -132,5 +132,33 @@ def test_mixed_h1_uses_kelvin_vertex_gauge_not_surface_dirichlet_label():
         "def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(", 1
     )[0]
     assert 'dirichlet_bbbnd="GND"' in mixed
-    assert "dirichlet_bbbnd=dirichlet_bbbnd" in mixed
+    # The `or ""` guard is required: this branch also reaches here with
+    # dirichlet_bbbnd=None and no surface Dirichlet, and NGSolve rejects None.
+    assert 'dirichlet_bbbnd=("" if has_surface else (dirichlet_bbbnd or ""))' in mixed
     assert "dirichlet_bbnd=" not in mixed
+
+
+@pytest.mark.parametrize('requested,expected,compatible', [(None,1,True),(3,3,False)])
+def test_total_hodge_default_matches_response_and_overorder_is_diagnostic(monkeypatch, requested, expected, compatible):
+    from types import SimpleNamespace
+    import radia.kelvin_solver as ks
+    from radia.static_electromagnet import solve_static_electromagnet_mixed_total_reduced_omega
+    mesh = SimpleNamespace(GetMaterials=lambda: ('air','iron','kelvin'),
+        GetBoundaries=lambda: ('iron_air_interface','kelvin_int'),
+        GetBBBoundaries=lambda: ('GND',))
+    domain = StaticElectromagnetMixedDomain(reduced_materials=('air',), total_materials=('iron','kelvin'), nonlinear_materials=())
+    orders = []
+    def project(*args, **kwargs):
+        orders.append(kwargs['order'])
+        return dict(potential=0, harmonic_field=0, relative_harmonic_norm=0., bonus_intorder=3)
+    monkeypatch.setattr(ks, 'project_source_total_hodge', project)
+    monkeypatch.setattr(ks, 'solve_magnetostatic_mixed_total_reduced_omega_kelvin', lambda *args, **kwargs: {})
+    result = solve_static_electromagnet_mixed_total_reduced_omega(
+        mesh, 0, domain=domain, kelvin_radius=1, kelvin_offset=(0,0,0), order=1,
+        source_potential_contract='total_hodge', kelvin_source_h=0,
+        source_projection_order=requested, linear_mu_r_by_material={'iron':1})
+    assert orders == [expected]
+    trace = result['static_electromagnet_contract']['source_trace']
+    assert trace['lift_order_compatible'] is compatible
+    assert trace['split_invariance_verified'] is False
+    assert ('discretization_warning' in trace) is (not compatible)
