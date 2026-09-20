@@ -123,6 +123,9 @@ def test_grant_writing_server_exposes_adjacent_reviewer_readability():
     assert "grant_writing_reviewer_momentum_check" in names
     assert "grant_writing_japanese_genre_contract" in names
     assert "grant_writing_japanese_readability_score" in names
+    assert "grant_writing_unresolved_target_language_check" in names
+    assert "grant_writing_applicant_self_reference_check" in names
+    assert "grant_writing_declared_priority_coverage_check" in names
     assert "grant_writing_kaken_basic_research_positioning_check" in names
     assert "grant_writing_budget_source_consistency_check" in names
     assert "bib_path" in by_name["grant_writing_publication_list"].inputSchema[
@@ -131,6 +134,12 @@ def test_grant_writing_server_exposes_adjacent_reviewer_readability():
     assert "document_type" in by_name[
         "grant_writing_japanese_readability_score"
     ].inputSchema["required"]
+    assert "applicant_name" in by_name[
+        "grant_writing_applicant_self_reference_check"
+    ].inputSchema["properties"]
+    assert "applicant_name" in by_name[
+        "grant_writing_health_report"
+    ].inputSchema["properties"]
     assert mcp._mcp_server.instructions
     domain_tools = [
         tool
@@ -3657,3 +3666,165 @@ def test_publication_relative_scope_uses_the_current_year_and_lists_each_group_o
     assert "Edited" not in listing
     assert "プレースホルダを含む書誌項目" in listing
     assert "将来年の業績" in listing
+def test_unresolved_target_language_lists_target_nearby_qualifiers_without_scoring():
+    text = (
+        "### 達成目標\n"
+        "未同定履歴に対する磁束密度の再現誤差を2%以下（暫定目標）とする。\n"
+        "国際会議の会場は未定である。"
+    )
+    result = gw.grant_writing_unresolved_target_language_check(text)
+
+    assert result["score"] is None
+    assert result["automatic_judgment_prohibited"]
+    assert result["candidate_count"] == 1
+    assert result["candidates"][0]["qualifiers"] == ["暫定目標"]
+    assert "2%" in result["candidates"][0]["numbers"]
+
+
+def test_applicant_self_reference_lists_prose_but_not_bibliographic_authors():
+    text = (
+        "菅原研究室は、加速器磁石の履歴モデルを検討してきた。\n"
+        "菅原らは、その結果を設計へ接続した。\n"
+        'Y. Onchi, K. Sugahara, Y. Hane, "Model," CEM, 2023.\n'
+    )
+    result = gw.grant_writing_applicant_self_reference_check(
+        text,
+        applicant_name="菅原|Sugahara",
+    )
+
+    assert result["score"] is None
+    assert result["candidate_count"] == 2
+    assert [item["match"] for item in result["candidates"]] == [
+        "菅原研究室は",
+        "菅原らは",
+    ]
+    assert result["note"].startswith("bibliographic author order")
+
+
+def test_applicant_self_reference_requires_an_explicit_applicant_alias():
+    result = gw.grant_writing_applicant_self_reference_check(
+        "A研究室は履歴モデルを検討した。"
+    )
+
+    assert not result["applicable"]
+    assert result["candidate_count"] == 0
+
+
+def test_declared_priority_coverage_lists_missing_evaluation_locations():
+    text = """\
+## 1-(3) 目標と解決すべき課題
+本研究の中心はEnergyStopモデルの検証にある。
+
+### 達成目標
+EnergyStopモデルで磁束密度誤差2%以下を達成する。
+
+## 1-(4) 独創性
+空気メッシュなしで磁極形状を探索する。
+
+**棄却条件**: バンド比1以下と動的口径20%以上を満たさなければ棄却する。
+"""
+    result = gw.grant_writing_declared_priority_coverage_check(text)
+
+    assert result["score"] is None
+    assert result["declaration_count"] == 1
+    assert result["declarations"][0]["anchors"] == ["EnergyStop"]
+    assert result["uncovered_count"] == 2
+    assert {item["section"] for item in result["uncovered"]} == {
+        "originality",
+        "rejection_condition",
+    }
+
+
+def test_declared_priority_coverage_accepts_literal_anchor_in_all_three_fields():
+    text = """\
+## 1-(3) 目標と解決すべき課題
+本研究の中心はEnergyStopモデルの検証にある。
+
+### 達成目標
+EnergyStopモデルで磁束密度誤差2%以下を達成する。
+
+## 1-(4) 独創性
+EnergyStopモデルにより、形状設計と履歴再現を一つの環境で扱う。
+
+**棄却条件**: EnergyStopモデルの磁束密度誤差が2%を超えれば未達とする。
+"""
+    result = gw.grant_writing_declared_priority_coverage_check(text)
+
+    assert result["uncovered_count"] == 0
+    assert all(row["literal_anchor_present"] for row in result["coverage"])
+
+
+def test_declared_priority_coverage_combines_parent_and_child_target_sections():
+    text = """\
+## 1-(3) 目標と解決すべき課題
+
+### 中心の問い
+設計性能を実機で再現できるか。
+
+### 達成目標
+EnergyStopモデルの磁束密度誤差を2%以下にする。
+
+## 1-(4) 独創性
+EnergyStopモデルで形状と履歴を一つの環境に結ぶ。
+
+## 2-(1) 研究計画
+EnergyStopモデルの検証は未実施である。
+この未検証部分が本研究の要である。
+
+**棄却条件**: EnergyStopモデルの誤差が2%を超えれば未達とする。
+"""
+    result = gw.grant_writing_declared_priority_coverage_check(text)
+
+    target_row = next(
+        row for row in result["coverage"] if row["section"] == "targets"
+    )
+    assert target_row["matched_anchors"] == ["EnergyStop"]
+    assert result["uncovered_count"] == 0
+
+
+def test_declared_priority_coverage_resolves_nearby_named_target_for_demonstrative():
+    text = """\
+## 目標と解決すべき課題
+EnergyStopモデルの実機検証は未実施である。
+この未検証部分が本研究の要である。
+
+## 独創性
+形状と履歴を一つの環境で扱う。
+
+### 達成目標
+EnergyStopモデルの再現誤差を2%以下にする。
+
+**棄却条件**: 磁束密度誤差が2%を超えれば未達とする。
+"""
+    result = gw.grant_writing_declared_priority_coverage_check(text)
+
+    assert result["declaration_count"] == 1
+    assert result["declarations"][0]["anchors"] == ["EnergyStop"]
+    assert result["declarations"][0]["anchors_resolved_from_context"]
+    assert {item["section"] for item in result["uncovered"]} == {
+        "originality",
+        "rejection_condition",
+    }
+
+
+def test_health_report_exposes_unscored_submission_consistency_audits():
+    text = """\
+## 目標と解決すべき課題
+本研究の中心はEnergyStopモデルの検証にある。
+達成目標は磁束密度誤差2%以下（暫定目標）である。
+
+## 独創性
+形状と履歴を一つの環境で扱う。
+
+**棄却条件**: 動的口径が20%拡大しなければ未達とする。
+菅原研究室は履歴モデルを検討してきた。
+"""
+    result = gw.grant_writing_health_report(text, applicant_name="菅原")
+
+    assert result["detailed_results"]["unresolved_target_language"]["score"] is None
+    assert result["detailed_results"]["applicant_self_reference"]["score"] is None
+    assert result["detailed_results"]["declared_priority_coverage"]["score"] is None
+    question_names = {item["name"] for item in result["questions"]}
+    assert "unresolved_target_language_check" in question_names
+    assert "applicant_self_reference_check" in question_names
+    assert "declared_priority_coverage_check" in question_names

@@ -1458,6 +1458,9 @@ presentation（`presentation_translationese_check`）にもある。英語論文
 - `grant_writing_acronym_usage_audit(text, ...)`
 - `grant_writing_check_notation_variants(text)`
 - `grant_writing_proper_noun_load_check(text)` -- 一度しか出ず役割も書かれていない固有名詞（異物）の列挙
+- `grant_writing_unresolved_target_language_check(text)` -- 数値目標付近の暫定語を非採点で列挙
+- `grant_writing_applicant_self_reference_check(text, applicant_name="菅原|Sugahara")` -- 業績の著者順を変えず、本文中の三人称自己言及候補を列挙
+- `grant_writing_declared_priority_coverage_check(text)` -- 「中心・本命・要」と独創性・達成目標・棄却条件の文字列対応を非採点で表示
 - `grant_writing_publication_list(bib_path, author="Sugahara|菅原", since="", ...)`
 - `grant_writing_achievement_count_check(text, bib_path, author="Sugahara|菅原")`
 - `grant_writing_recommendation_letter_template(program="kddi_digital")`
@@ -1468,8 +1471,15 @@ presentation（`presentation_translationese_check`）にもある。英語論文
 `international`, `irreplaceable`, `japanese`, `kaken`, `kddi`, `literature`,
 `metric`, `momentum`, `narrative`, `nouns`, `originality`, `pages`,
 `persuasion`, `pilot`, `readability`, `residue`, `scale`, `sections`,
-`sentence`, `translationese`, `vague`, `vocabulary`, and `weak`. Unknown ids
+`sentence`, `translationese`, `vague`, `vocabulary`, `weak`, `singularity`,
+`unresolved`, `self_reference`, and `priority_coverage`. Unknown ids
 raise `ValueError`; they are never ignored.
+
+The three submission-consistency audits are facts, not grades. A literal
+absence may be a valid paraphrase, a third-person form may refer to prior work,
+and a provisional value may be appropriate in a working draft. The health
+report places these results under `questions`; they do not change
+`defect_score`.
 
 For an ordinary KAKENHI draft, use `program="kaken_generic"`. It checks the
 three research-plan axes plus internationality without applying vocabulary and

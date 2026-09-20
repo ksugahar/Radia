@@ -44,6 +44,11 @@ non-applicant keeps the final-year-early-application page completely blank
 instead of writing "not applicable." Central-claim checks catch one
 question restated as two: keyword coverage cannot see it, because every
 required word is present and the defect is that the words disagree.
+Unscored submission-consistency audits list unresolved qualifiers beside
+targets, applicant third-person self-references, and the literal recurrence of
+a declared centre or main aim across originality, targets, and rejection
+conditions. These audits expose evidence for human review and never turn a
+heuristic absence into a defect score.
 Argument-evidence mapping indexes the question, gap, operations, decision
 rules, knowledge output, preliminary evidence, responsibilities, and negative
 results for an LLM/human close read without scoring their scientific validity.
@@ -80,9 +85,12 @@ from radia_mcp.common.mcp_contract import apply_tool_contract
 from radia_mcp.common.server_hardening import classify_tool_annotations
 from . import register
 from .tools import (
+    grant_writing_applicant_self_reference_check,
+    grant_writing_declared_priority_coverage_check,
     grant_writing_health_report,
     grant_writing_japanese_genre_contract,
     grant_writing_japanese_readability_score,
+    grant_writing_unresolved_target_language_check,
 )
 
 _SERVER_INSTRUCTIONS = (
@@ -123,6 +131,8 @@ register_status_tool(
         "KAKENHI official review structure and review-format realities, "
         "form-specific blank-field rules for conditional KAKENHI sections, "
         "central-claim consistency across summary and body, "
+        "unscored unresolved-target, applicant self-reference, and "
+        "declared-priority/evaluation-structure audits, "
         "non-scoring argument-evidence maps for close reading, "
         "and integrated health reports."
     ),
@@ -177,6 +187,22 @@ def main():
         )
         assert manuscript["status"] == "wrong_genre"
         assert manuscript["review_owner"] == "paper-writing"
+        unresolved = grant_writing_unresolved_target_language_check(
+            "達成目標は誤差2%以下（暫定目標）である。"
+        )
+        assert unresolved["candidate_count"] == 1
+        self_reference = grant_writing_applicant_self_reference_check(
+            "菅原研究室は履歴モデルを検討した。", applicant_name="菅原"
+        )
+        assert self_reference["candidate_count"] == 1
+        priority = grant_writing_declared_priority_coverage_check(
+            "## 目標\n本研究の中心はEnergyStopモデルの検証にある。\n"
+            "## 独創性\n形状と履歴を結ぶ。\n"
+            "### 達成目標\n誤差2%以下。\n"
+            "**棄却条件**: 誤差2%超を未達とする。"
+        )
+        assert priority["score"] is None
+        assert priority["uncovered_count"] == 3
         print(
             "mcp-server-grant-writing self-test: "
             f"registered {_n_tools} domain tools (+ status tool)"
