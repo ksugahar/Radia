@@ -3828,3 +3828,103 @@ def test_health_report_exposes_unscored_submission_consistency_audits():
     assert "unresolved_target_language_check" in question_names
     assert "applicant_self_reference_check" in question_names
     assert "declared_priority_coverage_check" in question_names
+
+
+def test_adjacent_reviewer_readability_flags_undefined_scope_and_bare_staging():
+    text = (
+        "目的は、誘導加熱と加速器電磁石の二課題で設計則を検証することである。"
+        "研究項目1では、結合を四段階に分ける。"
+    )
+
+    result = gw.grant_writing_adjacent_reviewer_readability_check(text)
+    types = {risk["type"] for risk in result["risks"]}
+
+    assert "purpose_scope_alias_before_definition" in types
+    assert "bare_process_divided_into_stages" in types
+    assert result["metrics"]["purpose_scope_alias_before_definition_count"] == 1
+    assert result["metrics"]["bare_process_divided_into_stages_count"] == 1
+    staging = next(
+        risk for risk in result["risks"]
+        if risk["type"] == "bare_process_divided_into_stages"
+    )
+    assert "何を整備・検証" in staging["comment"]
+    assert "作業対象" in staging["recommendation"]
+
+
+def test_adjacent_reviewer_readability_accepts_defined_scope_and_named_staging():
+    text = (
+        "本研究では、誘導加熱と加速器電磁石を対象とする二つの設計課題"
+        "（以下「二課題」という）を扱う。"
+        "研究目的は、二課題で設計則を検証することである。"
+        "研究項目1では、結合条件の整備と検証を四段階に分ける。"
+    )
+
+    result = gw.grant_writing_adjacent_reviewer_readability_check(text)
+    types = {risk["type"] for risk in result["risks"]}
+
+    assert "purpose_scope_alias_before_definition" not in types
+    assert "bare_process_divided_into_stages" not in types
+
+
+def test_adjacent_reviewer_flags_incomplete_research_platform_role_chain():
+    text = (
+        "菅原（研究代表者）は、開境界電磁界解析と磁気モーメント法を研究してきた。"
+        "これらを高次有限要素、誘導加熱、静止器・加速器電磁石へ展開している。"
+        "Radia関連リポジトリでは、共同利用者が接続する。"
+    )
+
+    result = gw.grant_writing_adjacent_reviewer_readability_check(text)
+    risks = {risk["type"]: risk for risk in result["risks"]}
+
+    assert "research_platform_role_chain_incomplete" in risks
+    risk = risks["research_platform_role_chain_incomplete"]
+    assert set(risk["missing_roles"]) == {
+        "named_manager",
+        "platform_function",
+        "inclusive_user_and_validation",
+    }
+    assert "専門分野・対象・機能語を削らず" in risk["recommendation"]
+
+
+def test_adjacent_reviewer_accepts_complete_research_platform_role_chain():
+    text = (
+        "菅原（研究代表者）は、開境界電磁界解析と磁気モーメント法を研究してきた。"
+        "これらを高次有限要素、誘導加熱、静止器・加速器電磁石へ展開している。"
+        "菅原が整備・管理するRadia関連リポジトリでは、離散化、メッシュ生成、"
+        "最適化をAI向け知識・実行インターフェース（MCP）で接続し、"
+        "研究者が利用・検証できる環境を構築している。"
+    )
+
+    result = gw.grant_writing_adjacent_reviewer_readability_check(text)
+    types = {risk["type"] for risk in result["risks"]}
+
+    assert "research_platform_role_chain_incomplete" not in types
+
+
+def test_reviewer_momentum_flags_decision_value_hidden_in_negative_opening():
+    text = (
+        "電気機器の設計では、解析手法を替えると候補の優劣が入れ替わることがあり、"
+        "どの手法まで確かめれば候補を絞れるかを設計者が判断できない。"
+        "そこで本研究では、手法間の差を比較する。"
+        "設計候補を絞る条件を明らかにする。"
+    )
+
+    result = gw.grant_writing_reviewer_momentum_check(text)
+    types = {risk["type"] for risk in result["risks"]}
+
+    assert "decision_value_hidden_in_negative_opening" in types
+
+
+def test_reviewer_momentum_accepts_decision_value_before_obstacle():
+    text = (
+        "根拠ある設計判断を行うため、電気機器の設計では、解析手法を替えると"
+        "候補の優劣が入れ替わることがあり、どの手法まで確かめれば候補を"
+        "絞れるかを設計者が判断できない。"
+        "そこで本研究では、手法間の差を比較する。"
+        "設計候補を絞る条件を明らかにする。"
+    )
+
+    result = gw.grant_writing_reviewer_momentum_check(text)
+    types = {risk["type"] for risk in result["risks"]}
+
+    assert "decision_value_hidden_in_negative_opening" not in types
