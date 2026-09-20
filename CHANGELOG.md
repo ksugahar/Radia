@@ -214,6 +214,11 @@ Released 2026-09-11.
   parenthesis in the generated batch block from entering Cubit configuration.
   Release-ref discovery also cannot block on an interactive credential helper.
 
+- AMS construction and matrix updates now reject active NGSolve TaskManager
+  contexts with a catchable error before hierarchy setup. Real/complex factories
+  and compatibility aliases are covered by subprocess regressions; parallel
+  application of an already-built preconditioner remains supported.
+
 - Simplified Eqnedit64 automation to a single input/output conversion contract
   and migrated the `eqnedit64` package plus `radia-mcp.presentation` bridge to
   it, while retaining the older native switches only as compatibility inputs.
