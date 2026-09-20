@@ -5,6 +5,26 @@ No Takahashi inputs or sixfold-ratio target are used. Existing installed
 Radia environments were not repointed. Solver work ran on idle hibino with
 staged Python sources and an identified native runtime.
 
+### Linear-scope confirmation (2026-09-16)
+
+The saved linear copper, solid/bored, uniform-SIBC comparisons remain accepted.
+`audit_linear_acceptance.py` recalculates all eight acceptance metrics for both
+cases and verifies the five recorded numerical Python sources against recovered
+originals before comparing their content with this checkout. Raw hash differences
+were mixed CRLF/LF line endings, not implementation changes. The audit permits
+only that byte normalization; it does not ignore whitespace or code changes.
+All 16 checks pass in `ih_linear_acceptance_audit_20260916.json`.
+
+This is a saved-evidence audit, not another solver run or installed-native
+certification. The complex-field norm is on the declared side-surface sampling
+stencil, not a whole-surface error bound. Acceptance does not cover arbitrary
+linear materials/frequencies/geometries or the SIBC modeling error versus
+volume-resolved conductor FEM. Nonlinear steel and temperature-dependent BH
+are outside this acceptance. In particular, historical nonlinear FEM
+per-panel product-of-averages loss and final-iterate consistency remain open;
+they are not validated by linear constant-impedance agreement or deferred to
+experimental measurements as a substitute for software correction.
+
 ## Accepted model and criteria
 
 Prescribed circular current at 1 kHz, copper (sigma=5.8e7 S/m, mu_r=1),
