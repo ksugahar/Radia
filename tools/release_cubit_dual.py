@@ -217,7 +217,7 @@ def run(args):
     if args.action != 'preflight':
         tag = 'cubit-mesh-export-v' + contract['version']
         p = subprocess.run(['git', '-c', 'safe.directory=' + str(root), '-C', str(root),
-                            'rev-parse', tag + '^{}'], capture_output=True, text=True, check=True)
+                            'rev-parse', tag + '^{}'], capture_output=True, text=True, encoding="utf-8", check=True)
         if p.stdout.strip() != args.source_sha:
             raise ValueError('Tag does not identify selected source')
         verify_published('cubit-mesh-export', contract)

@@ -99,7 +99,7 @@ def check_pyside6_ownership_boundary() -> list[str]:
         ["git", "grep", "-lI", "-E", pattern, "--", "*.py"],
         cwd=ROOT,
         capture_output=True,
-        text=True,
+        text=True, encoding="utf-8",
     )
     issues = []
     for raw_path in result.stdout.splitlines():

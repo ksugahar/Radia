@@ -39,7 +39,7 @@ def _tracked_lane_assets():
             cwd=_REPO,
             check=True,
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8",
         )
     except (OSError, subprocess.CalledProcessError) as exc:
         pytest.fail(f"required tracked-file inventory unavailable: {exc}")

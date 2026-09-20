@@ -125,7 +125,7 @@ def commit() -> str:
                 "git", "-c", f"safe.directory={ROOT.as_posix()}",
                 "rev-parse", "HEAD",
             ], cwd=ROOT, check=True,
-            capture_output=True, text=True,
+            capture_output=True, text=True, encoding="utf-8",
         )
     except (FileNotFoundError, subprocess.CalledProcessError) as error:
         raise RuntimeError(
@@ -170,7 +170,7 @@ def release_matlab_files() -> tuple[Path, ...]:
         cwd=ROOT,
         check=True,
         capture_output=True,
-        text=True,
+        text=True, encoding="utf-8",
     )
     files = tuple(
         Path(line.strip())

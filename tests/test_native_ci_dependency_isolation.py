@@ -28,7 +28,7 @@ def test_dependencies_use_explicit_venv_without_host_cleanup():
 def test_missing_venv_fails_before_any_install():
     script = "$env:RADIA_CI_VENV = ''\n" + dependency_step()
     result = subprocess.run(["pwsh", "-NoProfile", "-NonInteractive", "-Command", script],
-                            capture_output=True, text=True, timeout=20)
+                            capture_output=True, text=True, encoding="utf-8", timeout=20)
     assert result.returncode != 0
     assert "RADIA_CI_VENV is required" in result.stderr
 
@@ -38,6 +38,6 @@ def test_missing_venv_python_fails_before_any_install(tmp_path):
     path = str(tmp_path).replace("'", "''")
     script = f"$env:RADIA_CI_VENV = '{path}'\n" + dependency_step()
     result = subprocess.run(["pwsh", "-NoProfile", "-NonInteractive", "-Command", script],
-                            capture_output=True, text=True, timeout=20)
+                            capture_output=True, text=True, encoding="utf-8", timeout=20)
     assert result.returncode != 0
     assert "Isolated CI Python is missing" in result.stderr

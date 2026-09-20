@@ -17,7 +17,7 @@ BUILD_SCRIPT = ROOT / "Build.ps1"
 
 def _git(repo: Path, *arguments: str) -> str:
     return subprocess.check_output(
-        ["git", "-C", str(repo), *arguments], text=True
+        ["git", "-C", str(repo), *arguments], text=True, encoding="utf-8"
     ).strip()
 
 
@@ -288,7 +288,7 @@ def test_real_build_clean_certificate_and_dirty_noncertificate():
                 *extra,
             ],
             cwd=build_root,
-            text=True,
+            text=True, encoding="utf-8",
             capture_output=True,
             check=False,
             env=environment,
