@@ -6,6 +6,87 @@ import numpy as np
 import pytest
 
 
+@pytest.mark.parametrize('harmonic', [False, True, 'varying'])
+def test_picard_fixed_rhs_cache_matches_full_reassembly(harmonic):
+    import ngsolve as ng
+    mesh, source, potential, table = _picard_case(maxh=0.7)
+    options = dict(tolerance=1e-8, max_iterations=100)
+    if harmonic:
+        options.update(total_source_h=ng.CoefficientFunction((0.01, 0.02, 0.03)),
+                       total_source_materials=('total',))
+    if harmonic == 'varying':
+        options['total_source_h'] = ng.CoefficientFunction((
+            .03*ng.exp(3*ng.x)*ng.cos(3*ng.y),
+            -.03*ng.exp(3*ng.x)*ng.sin(3*ng.y), 0.))
+    fresh = _picard_solve(mesh, source, potential, table, cache_fixed_rhs=False, **options)
+    cached = _picard_solve(mesh, source, potential, table, cache_fixed_rhs=True, **options)
+    for point in ((-.5,.13,.17),(.5,.13,.17)):
+        a=np.asarray(fresh['H_cf'](mesh(*point)))
+        b=np.asarray(cached['H_cf'](mesh(*point)))
+        assert np.linalg.norm(a-b) < 1e-10 * max(np.linalg.norm(a),1.)
+    assert fresh['nonlinear_stats']['iterations'] == cached['nonlinear_stats']['iterations']
+    assert fresh['nonlinear_stats']['rhs_reuse'] == 'none'
+    assert cached['nonlinear_stats']['rhs_reuse'] == (
+        'fixed_vector_and_material_operator' if harmonic else 'fixed_vector')
+
+
+def test_reduced_normal_boundary_is_not_total_normal_boundary():
+    import ngsolve as ng
+    from netgen.occ import Box, Pnt, Glue, OCCGeometry
+    from netgen.meshing import Element0D
+    from radia.kelvin_solver import solve_magnetostatic_mixed_total_reduced_omega_kelvin
+    iron=Box(Pnt(-.3,-.3,-.3),Pnt(.3,.3,.3))
+    iron.mat('total'); iron.faces.name='interface'
+    outer=Box(Pnt(-1,-1,-1),Pnt(1,1,1));outer.faces.name='outer'
+    air=outer-iron;air.mat('reduced')
+    mesh=ng.Mesh(OCCGeometry(Glue([iron,air])).GenerateMesh(maxh=.8))
+    material=mesh.GetMaterials().index('total')+1
+    e=next(e for e in mesh.ngmesh.Elements3D() if e.index==material)
+    mesh.ngmesh.Add(Element0D(e.vertices[0],index=1));mesh.ngmesh.SetCD3Name(1,'GND')
+    mesh=ng.Mesh(mesh.ngmesh)
+    source=ng.CoefficientFunction((0.,0.,1.))
+    kwargs=dict(mu_r_by_material={'total':1.,'reduced':1.},
+                reduced_materials=('reduced',),total_materials=('total',),
+                interface_boundary='interface',kelvin_mats=(),order=1)
+    with ng.TaskManager():
+        correction=solve_magnetostatic_mixed_total_reduced_omega_kelvin(
+            mesh,source,-ng.z,1.,(0,0,0),reduced_zero_normal_boundary='outer',**kwargs)
+        shifted=solve_magnetostatic_mixed_total_reduced_omega_kelvin(
+            mesh,source,-ng.z,1.,(0,0,0),reduced_zero_normal_boundary='outer',
+            total_dirichlet_cf=ng.CoefficientFunction(2.),**kwargs)
+        total=solve_magnetostatic_mixed_total_reduced_omega_kelvin(
+            mesh,source,-ng.z,1.,(0,0,0),**kwargs)
+        with pytest.raises(ValueError,match='exterior'):
+            solve_magnetostatic_mixed_total_reduced_omega_kelvin(
+                mesh,source,-ng.z,1.,(0,0,0),reduced_zero_normal_boundary='interface',**kwargs)
+    for point in ((.1,.1,.1),(.6,.1,.1)):
+        assert np.linalg.norm(np.asarray(correction['H_cf'](mesh(*point)))-[0,0,1])<1e-10
+        assert np.linalg.norm(np.asarray(shifted['H_cf'](mesh(*point)))-[0,0,1])<1e-10
+        assert np.linalg.norm(np.asarray(total['H_cf'](mesh(*point))))<1e-10
+    point=mesh(.1,.1,.1)
+    assert float(shifted['phi_total'](point)-correction['phi_total'](point))==pytest.approx(2.)
+
+
+def test_realized_bh_response_binds_pchip_tangent_energy_and_vacuum_tail():
+    from radia.scalar_potential_solver import MU_0, sample_bh_constitutive_response
+
+    table = [(0.0, 0.0), (100.0, 0.5), (1000.0, 1.4), (10000.0, 1.7)]
+    grid = [0.0, 50.0, 100.0, 500.0, 1000.0, 10000.0, 20000.0]
+    response = sample_bh_constitutive_response(table, grid)
+
+    assert response["identity"]["constitutive_interpolation"] == "monotone_pchip"
+    assert response["identity"]["constitutive_extrapolation"] == "vacuum_slope"
+    assert response["B_T"][-1] == pytest.approx(1.7 + MU_0 * 10000.0)
+    assert response["differential_permeability_H_per_m"][-1] == pytest.approx(MU_0)
+    for h, b, energy, coenergy in zip(
+        response["H_A_per_m"],
+        response["B_T"],
+        response["energy_density_J_per_m3"],
+        response["coenergy_density_J_per_m3"],
+    ):
+        assert energy + coenergy == pytest.approx(h * b, abs=1.0e-10)
+
+
 def _two_region_mesh(maxh):
     from netgen.occ import Box, Glue, OCCGeometry, Pnt, X
     import ngsolve as ng
@@ -586,7 +667,7 @@ def _picard_solve(mesh, h_source, potential, bh_table, **overrides):
         bh_table=bh_table,
         nonlinear_materials=("total",), reduced_materials=("reduced",),
         total_materials=("total",), interface_boundary="source_total_interface",
-        order=2, dirichlet_bbbnd="outer", tolerance=1.0e-6,
+        order=1, dirichlet_bbbnd="outer", tolerance=1.0e-6,
         max_iterations=60, relaxation=0.3)
     settings.update(overrides)
     with ng.TaskManager():
@@ -674,6 +755,200 @@ def test_mixed_omega_picard_non_convergence_raises_with_the_state():
     assert resumed["nonlinear_stats"]["converged"]
 
 
+def test_mixed_omega_picard_rejects_unmatched_high_order_nonlinear_material_update():
+    mesh, h_source, potential, bh_table = _picard_case()
+    with pytest.raises(ValueError, match="order-0 centroid value per element"):
+        _picard_solve(mesh, h_source, potential, bh_table, order=2)
+
+
+def test_mixed_omega_picard_projects_positive_order_matched_material_state():
+    mesh, h_source, potential, bh_table = _picard_case()
+    observation = np.array([[0.5, 0.1, 0.2]])
+    result = _picard_solve(
+        mesh,
+        h_source,
+        potential,
+        bh_table,
+        order=2,
+        material_update_order=1,
+        anderson_depth=0,
+        observation_points=observation,
+    )
+    stats = result["nonlinear_stats"]
+    assert stats["converged"]
+    assert stats["response_order"] == 2
+    assert stats["material_update_order"] == 1
+    assert stats["material_sampling"] == "L2_log_secant_projection"
+    assert stats["physical_permeability_bounds"][0] == 1.0
+    assert stats["final_material_state_resolved"]
+    assert len(stats["material_log_state_dofs"]) == len(
+        stats["material_state_dof_numbers"]
+    )
+    assert len(stats["material_log_state_dofs"]) > 0
+    np.testing.assert_allclose(
+        stats["observation_field_T"],
+        [np.asarray(result["B_cf"](mesh(*observation[0])))],
+        rtol=1.0e-12,
+        atol=1.0e-12,
+    )
+
+    resumed = _picard_solve(
+        mesh,
+        h_source,
+        potential,
+        bh_table,
+        order=2,
+        material_update_order=1,
+        anderson_depth=0,
+        material_log_state_initial=stats["material_restart_state"],
+    )
+    resumed_stats = resumed["nonlinear_stats"]
+    assert resumed_stats["converged"]
+    assert resumed_stats["warm_start"]
+    assert resumed_stats["final_material_state_resolved"]
+
+
+def test_ngsolve_bh_coefficient_function_matches_scalar_pchip_and_vacuum_tail():
+    import ngsolve as ng
+    from radia.scalar_potential_solver import (
+        _build_bh_coefficient_function,
+        _build_bh_coenergy_coefficient_function,
+        _build_bh_coenergy_interpolator,
+        _build_bh_interpolator,
+    )
+
+    mesh, _, _, bh_table = _picard_case()
+    parameter = ng.Parameter(0.0)
+    coefficient = _build_bh_coefficient_function(parameter, bh_table)
+    coenergy_coefficient = _build_bh_coenergy_coefficient_function(parameter, bh_table)
+    scalar = _build_bh_interpolator(bh_table)
+    coenergy_scalar = _build_bh_coenergy_interpolator(bh_table)
+    point = mesh(0.5, 0.1, 0.2)
+    for H_value in (0.0, 0.25, 0.5, 1.1, 5.0, 20.0, 40.0, 100.0):
+        parameter.Set(H_value)
+        assert float(coefficient(point)) == pytest.approx(
+            scalar(H_value), rel=2.0e-12, abs=1.0e-15
+        )
+        assert float(coenergy_coefficient(point)) == pytest.approx(
+            coenergy_scalar(H_value), rel=2.0e-12, abs=1.0e-15
+        )
+    for H_value in (0.25, 1.1, 20.0, 100.0):
+        step = 1.0e-6 * max(H_value, 1.0)
+        derivative = (
+            coenergy_scalar(H_value + step) - coenergy_scalar(H_value - step)
+        ) / (2.0 * step)
+        assert derivative == pytest.approx(scalar(H_value), rel=2.0e-8, abs=1.0e-10)
+
+
+def test_mixed_omega_projected_material_state_validates_resume_shape():
+    mesh, h_source, potential, bh_table = _picard_case()
+    solved = _picard_solve(
+        mesh,
+        h_source,
+        potential,
+        bh_table,
+        order=2,
+        material_update_order=1,
+        anderson_depth=0,
+    )
+    restart = dict(solved["nonlinear_stats"]["material_restart_state"])
+    restart["values"] = [0.0]
+    with pytest.raises(ValueError, match="one value per active"):
+        _picard_solve(
+            mesh,
+            h_source,
+            potential,
+            bh_table,
+            order=2,
+            material_update_order=1,
+            anderson_depth=0,
+            material_log_state_initial=restart,
+        )
+
+
+def test_mixed_omega_projected_material_state_rejects_identity_mismatch():
+    mesh, h_source, potential, bh_table = _picard_case()
+    solved = _picard_solve(
+        mesh,
+        h_source,
+        potential,
+        bh_table,
+        order=2,
+        material_update_order=1,
+        anderson_depth=0,
+    )
+    restart = solved["nonlinear_stats"]["material_restart_state"]
+    changed_table = list(bh_table)
+    changed_table[-1] = (changed_table[-1][0], changed_table[-1][1] * 1.01)
+    with pytest.raises(ValueError, match="does not match the current mesh"):
+        _picard_solve(
+            mesh,
+            h_source,
+            potential,
+            changed_table,
+            order=2,
+            material_update_order=1,
+            anderson_depth=0,
+            material_log_state_initial=restart,
+        )
+
+
+def test_mixed_omega_projected_energy_uses_current_solution_and_material_state():
+    mesh, h_source, potential, bh_table = _picard_case()
+    solved = _picard_solve(
+        mesh,
+        h_source,
+        potential,
+        bh_table,
+        order=2,
+        material_update_order=1,
+        anderson_depth=0,
+        refinement_parent_identity={
+            "geometry": "two-box-interface-v1",
+            "material": "saturating-table-v1",
+            "excitation": "fixed-source-field-v1",
+        },
+    )
+    energy = solved["energy_observables"]
+    stats = solved["nonlinear_stats"]
+    assert energy["energy_J"] > 0.0
+    assert energy["coenergy_J"] > 0.0
+    assert energy["identity"]["material_state_identity_sha256"] == stats[
+        "material_state_identity_sha256"
+    ]
+    assert energy["identity"]["bh_table_sha256"] == stats[
+        "material_state_identity"
+    ]["bh_table_sha256"]
+    assert len(energy["identity"]["solution_sha256"]) == 64
+    assert len(energy["identity"]["refinement_parent_identity_sha256"]) == 64
+    assert energy["identity"]["constitutive_interpolation"] == "monotone_pchip"
+    assert energy["identity"]["constitutive_extrapolation"] == "vacuum_slope"
+    assert energy["identity"]["magnetic_anisotropy"] == "isotropic"
+    assert energy["h_dot_b_integral_J"] > 0.0
+    assert energy["legendre_residual_relative"] < 1.0e-12
+    np.testing.assert_allclose(
+        energy["energy_J"] + energy["coenergy_J"],
+        energy["h_dot_b_integral_J"],
+        rtol=1.0e-12,
+        atol=1.0e-14,
+    )
+
+
+def test_mixed_omega_projected_rejects_invalid_refinement_parent_identity():
+    mesh, h_source, potential, bh_table = _picard_case()
+    with pytest.raises(ValueError, match="must be a mapping"):
+        _picard_solve(
+            mesh,
+            h_source,
+            potential,
+            bh_table,
+            order=2,
+            material_update_order=1,
+            anderson_depth=0,
+            refinement_parent_identity="stale-parent",
+        )
+
+
 def test_mixed_omega_envelope_includes_interpolated_material_targets(monkeypatch):
     import math
     from radia.kelvin_solver import MixedOmegaPicardNotConverged
@@ -700,3 +975,80 @@ def test_mixed_omega_envelope_includes_interpolated_material_targets(monkeypatch
     except MixedOmegaPicardNotConverged:
         pass
     assert maxima and max(maxima) > 2000.0
+
+
+@pytest.mark.parametrize('table', [((1., 0.), (2., .01)), ((0., .001), (1., .01))])
+def test_picard_requires_soft_magnetic_origin(table):
+    mesh, source, potential, _ = _picard_case(maxh=.8)
+    with pytest.raises(ValueError, match='start at'):
+        _picard_solve(mesh, source, potential, table)
+
+
+def test_picard_returns_assembled_material_state(monkeypatch):
+    import radia.kelvin_solver as solver
+    mesh, source, potential, table = _picard_case(maxh=.8)
+    original = solver.solve_magnetostatic_mixed_total_reduced_omega_kelvin
+    samples = []
+    point = mesh(.5, .13, .17)
+
+    def record(*args, **kwargs):
+        result = original(*args, **kwargs)
+        samples.append(float(result['mu_cf'](point)))
+        return result
+
+    monkeypatch.setattr(solver, 'solve_magnetostatic_mixed_total_reduced_omega_kelvin', record)
+    result = _picard_solve(mesh, source, potential, table, tolerance=.01, max_iterations=100)
+    assert float(result['mu_cf'](point)) == samples[-1]
+    assert result['nonlinear_stats']['relative_constitutive_change'] <= .01
+
+
+def test_picard_zero_field_material_is_independent_of_initial_guess():
+    import ngsolve as ng
+    from scipy.interpolate import PchipInterpolator
+    from radia.kelvin_material import MU_0
+    mesh, _, _, table = _picard_case(maxh=.8)
+    expected = float(PchipInterpolator(*np.asarray(table).T).derivative()(0))
+    for initial in (10., 1000.):
+        result = _picard_solve(mesh, ng.CF((0, 0, 0)), ng.CF(0), table,
+                               mu_r_initial=initial)
+        assert result['mu_cf'](mesh(.5, .13, .17)) == pytest.approx(expected)
+        assert result['nonlinear_stats']['mu_r_elements'][0] == pytest.approx(expected / MU_0)
+
+
+@pytest.mark.parametrize('order', [1, 2])
+def test_picard_hybrid_linear_material_is_preserved(order):
+    import ngsolve as ng
+    from netgen.occ import Box, Pnt, Glue, OCCGeometry
+    from radia.kelvin_material import MU_0
+    air = Box(Pnt(-1, -1, -1), Pnt(0, 1, 1))
+    iron = Box(Pnt(0, -1, -1), Pnt(1, 1, 1))
+    pole = Box(Pnt(1, -1, -1), Pnt(2, 1, 1))
+    air.mat('reduced'); iron.mat('total'); pole.mat('pole')
+    air.faces.name = iron.faces.name = pole.faces.name = 'source_total_interface'
+    mesh = ng.Mesh(OCCGeometry(Glue([air, iron, pole])).GenerateMesh(maxh=1))
+    table = [(0, 0), (1, 100*MU_0), (2, 150*MU_0)]
+    options = dict(total_materials=('total', 'pole'), order=order,
+                   material_update_order=order-1, tolerance=1e-6, max_iterations=100)
+    with pytest.raises(ValueError, match='linear total materials'):
+        _picard_solve(mesh, ng.CF((0, 0, 0)), ng.CF(0), table, **options)
+    result = _picard_solve(mesh, ng.CF((0, 0, 0)), ng.CF(0), table,
+                           mu_r_by_material={'pole': 5000}, **options)
+    assert result['mu_cf'](mesh(1.5, .13, .17)) / MU_0 == pytest.approx(5000)
+    with pytest.raises(ValueError, match='override nonlinear'):
+        _picard_solve(mesh, ng.CF((0, 0, 0)), ng.CF(0), table,
+                       mu_r_by_material={'pole': 5000, 'total': 1}, **options)
+
+
+def test_trace_without_tolerance_is_not_accepted():
+    import ngsolve as ng
+    from radia.kelvin_solver import project_source_interface_potential
+    mesh = _two_region_mesh(.8)
+    with ng.TaskManager():
+        result = project_source_interface_potential(
+            mesh, ng.CF((0, 0, 1)), 'source_total_interface')
+    assert result['gate_enabled'] is False
+    assert result['acceptance'] == 'not_evaluated'
+    for tolerance in (float('nan'), float('inf'), -1):
+        with pytest.raises(ValueError, match='positive and finite'):
+            project_source_interface_potential(
+                mesh, ng.CF((0, 0, 1)), 'source_total_interface', relative_tolerance=tolerance)

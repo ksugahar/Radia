@@ -34,6 +34,9 @@ Reference:
     electromagnetics," IJNME, vol. 14, pp. 423-440, 1979.
 """
 
+import hashlib
+import json
+
 import numpy as np
 from math import sqrt as msqrt
 
@@ -72,6 +75,270 @@ def _build_bh_interpolator(bh_data):
         return B_max + MU_0 * (value - H_max)
 
     return B_of_H
+
+
+def _make_bh_linear_spline(bh_data):
+    """Build the compact order-2 NGSolve spline for a tabulated B(H)."""
+    from ngsolve import BSpline
+
+    bh = np.asarray(bh_data, dtype=float)
+    if (bh.ndim != 2 or bh.shape[1] < 2 or len(bh) < 2
+            or not np.isfinite(bh[:, :2]).all()
+            or np.any(np.diff(bh[:, 0]) <= 0)
+            or np.any(np.diff(bh[:, 1]) < 0)):
+        raise ValueError("bh_data must be a finite monotone [H, B] table")
+    h, b = bh[:, 0], bh[:, 1]
+    left = h[0] - (h[1] - h[0])
+    right_step = h[-1] - h[-2]
+    knots = [left, *h, h[-1] + right_step]
+    values = [*b, b[-1] + MU_0 * right_step,
+              b[-1] + 2 * MU_0 * right_step]
+    spline = BSpline(2, [float(v) for v in knots],
+                     [float(v) for v in values])
+    return h, b, spline
+
+
+def _build_bh_linear_spline_coefficient_function(H_magnitude, bh_data):
+    """Piecewise-linear B(H) with C++ lookup and vacuum-slope tail."""
+    from ngsolve import IfPos
+
+    h, b, spline = _make_bh_linear_spline(bh_data)
+    tail = float(b[-1]) + MU_0 * (H_magnitude - float(h[-1]))
+    return IfPos(H_magnitude - float(h[-1]), tail, spline(H_magnitude))
+
+
+def _build_bh_linear_spline_coenergy_coefficient_function(H_magnitude, bh_data):
+    """Integral of the same piecewise-linear B(H), including its vacuum tail."""
+    from ngsolve import IfPos
+
+    h, b, spline = _make_bh_linear_spline(bh_data)
+    primitive = spline.Integrate()
+    origin = float(primitive(float(h[0])))
+    at_last = float(primitive(float(h[-1]))) - origin
+    delta = H_magnitude - float(h[-1])
+    tail = at_last + float(b[-1]) * delta + .5 * MU_0 * delta**2
+    return IfPos(delta, tail, primitive(H_magnitude) - origin)
+
+
+def _build_bh_coefficient_function(H_magnitude, bh_data):
+    """Return the monotone-PCHIP B(H) law as an NGSolve coefficient function."""
+
+    from ngsolve import IfPos
+    from scipy.interpolate import PchipInterpolator
+
+    bh = np.asarray(bh_data, dtype=float)
+    if bh.ndim != 2 or bh.shape[1] < 2 or bh.shape[0] < 2:
+        raise ValueError("bh_data must contain at least two [H, B] rows")
+    H_tab = bh[:, 0]
+    B_tab = bh[:, 1]
+    if not np.all(np.isfinite(H_tab)) or not np.all(np.isfinite(B_tab)):
+        raise ValueError("bh_data must contain finite H and B values")
+    if np.any(np.diff(H_tab) <= 0.0):
+        raise ValueError("bh_data H values must be strictly increasing")
+    if np.any(np.diff(B_tab) < 0.0):
+        raise ValueError("bh_data B values must be non-decreasing")
+
+    pchip = PchipInterpolator(H_tab, B_tab, extrapolate=False)
+    coefficients = np.asarray(pchip.c, dtype=float)
+    H_cf = H_magnitude
+    result = float(B_tab[-1]) + MU_0 * (H_cf - float(H_tab[-1]))
+    for interval in range(len(H_tab) - 2, -1, -1):
+        delta = H_cf - float(H_tab[interval])
+        polynomial = (
+            float(coefficients[0, interval]) * delta**3
+            + float(coefficients[1, interval]) * delta**2
+            + float(coefficients[2, interval]) * delta
+            + float(coefficients[3, interval])
+        )
+        result = IfPos(float(H_tab[interval + 1]) - H_cf, polynomial, result)
+    return IfPos(H_cf - float(H_tab[0]), result, float(B_tab[0]))
+
+
+def _build_bh_coenergy_interpolator(bh_data):
+    """Return coenergy density ``integral_0^H B(h) dh`` in J/m3."""
+    from scipy.interpolate import PchipInterpolator
+
+    bh = np.asarray(bh_data, dtype=float)
+    if bh.ndim != 2 or bh.shape[1] < 2 or bh.shape[0] < 2:
+        raise ValueError("bh_data must contain at least two [H, B] rows")
+    H_tab = bh[:, 0]
+    B_tab = bh[:, 1]
+    if not np.all(np.isfinite(H_tab)) or not np.all(np.isfinite(B_tab)):
+        raise ValueError("bh_data must contain finite H and B values")
+    if np.any(np.diff(H_tab) <= 0.0):
+        raise ValueError("bh_data H values must be strictly increasing")
+    if np.any(np.diff(B_tab) < 0.0):
+        raise ValueError("bh_data B values must be non-decreasing")
+
+    pchip = PchipInterpolator(H_tab, B_tab, extrapolate=False)
+    primitive = pchip.antiderivative()
+    H_min = float(H_tab[0])
+    H_max = float(H_tab[-1])
+    B_min = float(B_tab[0])
+    B_max = float(B_tab[-1])
+    value_at_min = B_min * H_min
+    value_at_max = value_at_min + float(primitive(H_max) - primitive(H_min))
+
+    def coenergy_of_H(H):
+        value = max(float(H), 0.0)
+        if value <= H_min:
+            return B_min * value
+        if value <= H_max:
+            return value_at_min + float(primitive(value) - primitive(H_min))
+        delta = value - H_max
+        return value_at_max + B_max * delta + 0.5 * MU_0 * delta**2
+
+    return coenergy_of_H
+
+
+def sample_bh_constitutive_response(bh_data, h_values):
+    """Evaluate the production isotropic B-H law on an explicit SI grid.
+
+    The returned response binds the imported knots separately from the
+    realized interpolation and extrapolation.  This is intended for
+    cross-solver validation: equal table digests alone do not establish equal
+    differential permeability, energy, or saturation-tail behavior.
+    """
+    from scipy.interpolate import PchipInterpolator
+
+    bh = np.asarray(bh_data, dtype=float)
+    if bh.ndim != 2 or bh.shape[1] < 2 or bh.shape[0] < 2:
+        raise ValueError("bh_data must contain at least two [H, B] rows")
+    bh = bh[:, :2]
+    H_tab = bh[:, 0]
+    B_tab = bh[:, 1]
+    if not np.all(np.isfinite(bh)):
+        raise ValueError("bh_data must contain finite H and B values")
+    if np.any(np.diff(H_tab) <= 0.0):
+        raise ValueError("bh_data H values must be strictly increasing")
+    if np.any(np.diff(B_tab) < 0.0):
+        raise ValueError("bh_data B values must be non-decreasing")
+
+    grid = np.asarray(h_values, dtype=float)
+    if grid.ndim != 1 or grid.size < 2:
+        raise ValueError("h_values must contain at least two samples")
+    if not np.all(np.isfinite(grid)) or np.any(grid < 0.0):
+        raise ValueError("h_values must be finite and nonnegative")
+    if np.any(np.diff(grid) <= 0.0):
+        raise ValueError("h_values must be strictly increasing")
+
+    pchip = PchipInterpolator(H_tab, B_tab, extrapolate=False)
+    derivative = pchip.derivative()
+    coenergy_of_H = _build_bh_coenergy_interpolator(bh)
+    H_min = float(H_tab[0])
+    H_max = float(H_tab[-1])
+    B_min = float(B_tab[0])
+    B_max = float(B_tab[-1])
+
+    b_values = []
+    tangent_values = []
+    coenergy_values = []
+    for value in grid:
+        h_value = float(value)
+        if h_value < H_min:
+            b_value = B_min
+            tangent = 0.0
+        elif h_value <= H_max:
+            b_value = float(pchip(h_value))
+            tangent = float(derivative(h_value))
+        else:
+            delta = h_value - H_max
+            b_value = B_max + MU_0 * delta
+            tangent = MU_0
+        b_values.append(b_value)
+        tangent_values.append(tangent)
+        coenergy_values.append(coenergy_of_H(h_value))
+
+    b_array = np.asarray(b_values, dtype=float)
+    coenergy_array = np.asarray(coenergy_values, dtype=float)
+    energy_array = grid * b_array - coenergy_array
+    canonical_table = bh.tolist()
+    canonical_grid = grid.tolist()
+
+    def digest(value):
+        encoded = json.dumps(
+            value, ensure_ascii=True, separators=(",", ":")
+        ).encode("ascii")
+        return hashlib.sha256(encoded).hexdigest()
+
+    return {
+        "schema": "radia.nonlinear-constitutive-response.v1",
+        "identity": {
+            "bh_table_sha256": digest(canonical_table),
+            "response_grid_sha256": digest(canonical_grid),
+            "material_model": "single_valued_isotropic_soft_magnetic",
+            "magnetic_anisotropy": "isotropic",
+            "constitutive_interpolation": "monotone_pchip",
+            "constitutive_extrapolation": "vacuum_slope",
+            "H_unit": "A/m",
+            "B_unit": "T",
+            "differential_permeability_unit": "H/m",
+            "energy_density_unit": "J/m^3",
+        },
+        "H_A_per_m": canonical_grid,
+        "B_T": b_array.tolist(),
+        "differential_permeability_H_per_m": tangent_values,
+        "energy_density_J_per_m3": energy_array.tolist(),
+        "coenergy_density_J_per_m3": coenergy_array.tolist(),
+        "d_energy_d_B_A_per_m": canonical_grid,
+        "d_coenergy_d_H_T": b_array.tolist(),
+        "last_table_H_A_per_m": H_max,
+        "last_table_B_T": B_max,
+    }
+
+
+def _build_bh_coenergy_coefficient_function(H_magnitude, bh_data):
+    """Return the exact piecewise-PCHIP H-potential as an NGSolve CF."""
+    from ngsolve import IfPos
+    from scipy.interpolate import PchipInterpolator
+
+    bh = np.asarray(bh_data, dtype=float)
+    if bh.ndim != 2 or bh.shape[1] < 2 or bh.shape[0] < 2:
+        raise ValueError("bh_data must contain at least two [H, B] rows")
+    H_tab = bh[:, 0]
+    B_tab = bh[:, 1]
+    if not np.all(np.isfinite(H_tab)) or not np.all(np.isfinite(B_tab)):
+        raise ValueError("bh_data must contain finite H and B values")
+    if np.any(np.diff(H_tab) <= 0.0):
+        raise ValueError("bh_data H values must be strictly increasing")
+    if np.any(np.diff(B_tab) < 0.0):
+        raise ValueError("bh_data B values must be non-decreasing")
+
+    coefficients = np.asarray(
+        PchipInterpolator(H_tab, B_tab, extrapolate=False).c, dtype=float
+    )
+    cumulative = [float(B_tab[0]) * float(H_tab[0])]
+    for interval in range(len(H_tab) - 1):
+        delta = float(H_tab[interval + 1] - H_tab[interval])
+        a, b, c, d = coefficients[:, interval]
+        cumulative.append(
+            cumulative[-1]
+            + float(a) * delta**4 / 4.0
+            + float(b) * delta**3 / 3.0
+            + float(c) * delta**2 / 2.0
+            + float(d) * delta
+        )
+
+    H_cf = H_magnitude
+    tail_delta = H_cf - float(H_tab[-1])
+    result = (
+        cumulative[-1]
+        + float(B_tab[-1]) * tail_delta
+        + 0.5 * MU_0 * tail_delta**2
+    )
+    for interval in range(len(H_tab) - 2, -1, -1):
+        delta = H_cf - float(H_tab[interval])
+        a, b, c, d = coefficients[:, interval]
+        polynomial = (
+            cumulative[interval]
+            + float(a) * delta**4 / 4.0
+            + float(b) * delta**3 / 3.0
+            + float(c) * delta**2 / 2.0
+            + float(d) * delta
+        )
+        result = IfPos(float(H_tab[interval + 1]) - H_cf, polynomial, result)
+    below = float(B_tab[0]) * H_cf
+    return IfPos(H_cf - float(H_tab[0]), result, below)
 
 
 class ScalarPotentialSolver:

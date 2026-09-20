@@ -30,6 +30,540 @@ from radia_mcp.radia_ngsolve.field_profile_gate import (
     nonlinear_magnetic_refinement_energy_gate,
     nonlinear_magnetic_spatial_evidence_gate,
 )
+from radia_mcp.radia_ngsolve.server import (
+    build_constitutive_comparison_candidate as mcp_build_comparison_candidate,
+    controlled_uniform_field_constitutive_sweep_gate as mcp_controlled_sweep_gate,
+    nonlinear_constitutive_point_sample_gate as mcp_constitutive_point_gate,
+    nonlinear_magnetic_field_energy_parity_gate as mcp_nonlinear_parity_gate,
+    nonlinear_constitutive_response_parity_gate as mcp_constitutive_parity_gate,
+    nonlinear_magnetic_refinement_energy_gate as mcp_nonlinear_refinement_gate,
+    nonlinear_magnetic_spatial_evidence_gate as mcp_nonlinear_gate,
+    nonlinear_field_energy_identity_gate_v5 as mcp_nonlinear_identity_v5_gate,
+    nonlinear_field_energy_artifact_contract_gate_v6 as mcp_nonlinear_artifact_v6_gate,
+    nonlinear_field_energy_lineage_gate_v7 as mcp_nonlinear_lineage_v7_gate,
+    nonlinear_field_energy_physical_admissibility_gate_v8 as mcp_nonlinear_physical_v8_gate,
+    nonlinear_field_energy_observable_comparison_gate_v9 as mcp_nonlinear_comparison_v9_gate,
+    nonlinear_vector_observable_comparison_gate_v10 as mcp_nonlinear_vector_v10_gate,
+    nonlinear_live_execution_identity_gate_v11 as mcp_nonlinear_live_v11_gate,
+)
+
+
+def _v5_identity_summary():
+    geometry = {"parts": [{"id": "stator", "primitive": "box", "size_m": [1.0, 2.0, 3.0]}]}
+    frame = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+    digest = lambda value: hashlib.sha256(
+        json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    refinement = [
+        {"level_id": "h0", "element_count": 10, "mesh_identity_sha256": "1" * 64},
+        {"level_id": "h1", "element_count": 20, "mesh_identity_sha256": "2" * 64},
+        {"level_id": "h2", "element_count": 40, "mesh_identity_sha256": "3" * 64},
+    ]
+    response = {
+        "H_A_per_m": [0.0, 1.0, 2.0, 3.0],
+        "B_T": [0.0, 2.0, 4.0, 6.0],
+        "energy_density_J_per_m3": [0.0, 1.0, 4.0, 9.0],
+        "coenergy_density_J_per_m3": [0.0, 1.0, 4.0, 9.0],
+    }
+    identity = {
+        "canonical_geometry": geometry,
+        "geometry_canonical_sha256": digest(geometry),
+        "coordinate_frame_matrix": frame,
+        "coordinate_frame_sha256": digest(frame),
+        "refinement_levels": refinement,
+    }
+    return {
+        "candidate": {
+            "identity": dict(identity),
+            "constitutive_response": {key: list(values) for key, values in response.items()},
+        },
+        "reference": {
+            "identity": dict(identity),
+            "constitutive_response": {key: list(values) for key, values in response.items()},
+        },
+    }
+
+
+def test_nonlinear_field_energy_identity_v5_accepts_recomputed_contract_and_wraps_mcp():
+    summary = _v5_identity_summary()
+    result = nonlinear_field_energy_identity_gate_v5(summary)
+    assert result["status"] == "ok"
+    assert result["accepted"] is True
+    wrapped = json.loads(mcp_nonlinear_identity_v5_gate(json.dumps(summary)))
+    assert wrapped["policy"] == "nonlinear_field_energy_identity_gate_v5"
+    assert wrapped["status"] == "ok"
+
+
+def test_nonlinear_field_energy_identity_v5_rejects_derivative_mismatch():
+    bad = _v5_identity_summary()
+    bad["candidate"]["constitutive_response"]["energy_density_J_per_m3"][2] = 5.0
+    result = nonlinear_field_energy_identity_gate_v5(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["candidate_energy_derivative_identity"] is False
+
+
+def test_nonlinear_field_energy_identity_v5_rejects_frame_and_geometry_digest_drift():
+    bad = _v5_identity_summary()
+    bad["candidate"]["identity"]["coordinate_frame_matrix"] = [
+        [1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0],
+        [0.0, 1.0, 0.0],
+    ]
+    bad["candidate"]["identity"]["geometry_canonical_sha256"] = "f" * 64
+    result = nonlinear_field_energy_identity_gate_v5(bad)
+    assert result["checks"]["right_handed_frame_digest_matches"] is False
+    assert result["checks"]["canonical_geometry_digest_matches"] is False
+
+
+def test_nonlinear_field_energy_identity_v5_rejects_duplicate_refinement_identity():
+    bad = _v5_identity_summary()
+    bad["candidate"]["identity"]["refinement_levels"][2]["level_id"] = "h1"
+    result = nonlinear_field_energy_identity_gate_v5(bad)
+    assert result["checks"]["unique_monotone_refinement_identity_matches"] is False
+
+
+def _v6_artifact_summary():
+    digest = lambda value: hashlib.sha256(
+        json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    response = {
+        "observable_columns": [
+            "sample_id",
+            "H_A_per_m",
+            "B_T",
+            "energy_density_J_per_m3",
+            "coenergy_density_J_per_m3",
+        ],
+        "observable_units": {
+            "sample_id": "1",
+            "H_A_per_m": "A/m",
+            "B_T": "T",
+            "energy_density_J_per_m3": "J/m^3",
+            "coenergy_density_J_per_m3": "J/m^3",
+        },
+        "dimension_order": "C",
+        "sample_id": [0, 1, 2, 3],
+        "H_A_per_m": [0.0, 1.0, 2.0, 3.0],
+        "B_T": [0.0, 1.0, 2.0, 3.0],
+        "energy_density_J_per_m3": [0.0, 0.5, 2.0, 4.5],
+        "coenergy_density_J_per_m3": [0.0, 0.5, 2.0, 4.5],
+    }
+    identity = {
+        "geometry_identity_sha256": "1" * 64,
+        "material_table_sha256": "2" * 64,
+        "excitation_identity_sha256": "3" * 64,
+        "coordinate_system": "right-handed Cartesian",
+        "unit_system": "SI",
+    }
+    lanes = []
+    for artifact_id in ("candidate-v6", "reference-v6"):
+        lane_identity = {
+            **identity,
+            "response_identity_sha256": digest(response),
+        }
+        lanes.append(
+            {
+                "schema": "radia.nonlinear-field-energy-artifact.v1",
+                "artifact_id": artifact_id,
+                "status": "completed",
+                "solver_converged": True,
+                "residual_norm": 1.0e-12,
+                "identity": lane_identity,
+                "response": json.loads(json.dumps(response)),
+            }
+        )
+    return {"candidate": lanes[0], "reference": lanes[1]}
+
+
+def test_nonlinear_field_energy_artifact_contract_v6_accepts_and_wraps_mcp():
+    summary = _v6_artifact_summary()
+    result = nonlinear_field_energy_artifact_contract_gate_v6(summary)
+    assert result["status"] == "ok"
+    assert result["accepted"] is True
+    wrapped = json.loads(mcp_nonlinear_artifact_v6_gate(json.dumps(summary)))
+    assert wrapped["policy"] == "nonlinear_field_energy_artifact_contract_gate_v6"
+    assert wrapped["status"] == "ok"
+
+
+def test_nonlinear_field_energy_artifact_contract_v6_rejects_units_and_stale_digest():
+    bad = _v6_artifact_summary()
+    bad["candidate"]["response"]["observable_units"]["B_T"] = "mT"
+    bad["candidate"]["identity"]["response_identity_sha256"] = "f" * 64
+    result = nonlinear_field_energy_artifact_contract_gate_v6(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["candidate_contract_valid"] is False
+
+
+def test_nonlinear_field_energy_artifact_contract_v6_rejects_incomplete_convergence():
+    bad = _v6_artifact_summary()
+    bad["candidate"]["status"] = "completed"
+    bad["candidate"]["solver_converged"] = False
+    result = nonlinear_field_energy_artifact_contract_gate_v6(bad)
+    assert result["checks"]["candidate_contract_valid"] is False
+
+
+def _v7_lineage_summary():
+    digest = lambda value: hashlib.sha256(
+        json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    base = {
+        "geometry_identity_sha256": "1" * 64,
+        "material_table_sha256": "2" * 64,
+        "excitation_identity_sha256": "3" * 64,
+        "mesh_identity_sha256": "4" * 64,
+        "solver_version": "solver-v7",
+    }
+
+    def lane(artifact_id: str, run_id: str) -> dict:
+        identity = {**base, "run_id": run_id}
+        identity["run_identity_sha256"] = digest(identity)
+        return {
+            "artifact_id": artifact_id,
+            "identity": identity,
+            "lineage": {
+                "source_kind": "solver_output",
+                "root_case_id": "case-v7",
+                "parent_artifact_id": "input-v7",
+                "parent_artifact_sha256": "a" * 64,
+            },
+        }
+
+    return {"candidate": lane("candidate-v7", "candidate-run-v7"), "reference": lane("reference-v7", "reference-run-v7")}
+
+
+def test_nonlinear_field_energy_lineage_v7_accepts_and_wraps_mcp():
+    summary = _v7_lineage_summary()
+    result = nonlinear_field_energy_lineage_gate_v7(summary)
+    assert result["status"] == "ok"
+    assert result["accepted"] is True
+    wrapped = json.loads(mcp_nonlinear_lineage_v7_gate(json.dumps(summary)))
+    assert wrapped["policy"] == "nonlinear_field_energy_lineage_gate_v7"
+    assert wrapped["status"] == "ok"
+
+
+def test_nonlinear_field_energy_lineage_v7_rejects_parent_and_run_digest_drift():
+    bad = _v7_lineage_summary()
+    bad["candidate"]["lineage"]["parent_artifact_sha256"] = ""
+    bad["candidate"]["identity"]["run_identity_sha256"] = "f" * 64
+    result = nonlinear_field_energy_lineage_gate_v7(bad)
+    assert result["checks"]["candidate_lineage_contract_valid"] is False
+
+
+def test_nonlinear_field_energy_lineage_v7_rejects_mesh_lineage_drift():
+    bad = _v7_lineage_summary()
+    bad["candidate"]["identity"]["mesh_identity_sha256"] = "5" * 64
+    result = nonlinear_field_energy_lineage_gate_v7(bad)
+    assert result["checks"]["cross_lane_physical_identity_matches"] is False
+
+
+def test_nonlinear_field_energy_lineage_v7_rejects_non_output_lineage_role():
+    bad = _v7_lineage_summary()
+    bad["candidate"]["lineage"]["source_kind"] = "solver_input"
+    result = nonlinear_field_energy_lineage_gate_v7(bad)
+    assert result["checks"]["candidate_lineage_contract_valid"] is False
+
+
+def _v8_physical_summary():
+    response = {
+        "H_A_per_m": [0.0, 1.0, 2.0, 3.0],
+        "B_T": [0.0, 1.0, 2.0, 3.0],
+        "energy_density_J_per_m3": [0.0, 0.5, 2.0, 4.5],
+        "coenergy_density_J_per_m3": [0.0, 0.5, 2.0, 4.5],
+        "differential_permeability_H_per_m": [1.0, 1.0, 1.0, 1.0],
+    }
+
+    def lane():
+        return {"identity": {"comparison_case_id": "case-v8"}, "response": json.loads(json.dumps(response))}
+
+    return {"candidate": lane(), "reference": lane()}
+
+
+def test_nonlinear_field_energy_physical_admissibility_v8_accepts_and_wraps_mcp():
+    summary = _v8_physical_summary()
+    result = nonlinear_field_energy_physical_admissibility_gate_v8(summary)
+    assert result["status"] == "ok"
+    assert result["accepted"] is True
+    wrapped = json.loads(mcp_nonlinear_physical_v8_gate(json.dumps(summary)))
+    assert wrapped["policy"] == "nonlinear_field_energy_physical_admissibility_gate_v8"
+    assert wrapped["status"] == "ok"
+
+
+def test_nonlinear_field_energy_physical_admissibility_v8_rejects_negative_energy_and_slope():
+    bad = _v8_physical_summary()
+    bad["candidate"]["response"]["energy_density_J_per_m3"][2] = -1.0
+    bad["candidate"]["response"]["differential_permeability_H_per_m"][1] = 0.0
+    result = nonlinear_field_energy_physical_admissibility_gate_v8(bad)
+    assert result["checks"]["candidate_physical_contract_valid"] is False
+
+
+def test_nonlinear_field_energy_physical_admissibility_v8_rejects_legendre_drift():
+    bad = _v8_physical_summary()
+    bad["candidate"]["response"]["coenergy_density_J_per_m3"][2] = 3.0
+    result = nonlinear_field_energy_physical_admissibility_gate_v8(bad)
+    assert result["checks"]["candidate_physical_contract_valid"] is False
+
+
+def _v9_observable_comparison_summary():
+    identity = {
+        "geometry_identity_sha256": "1" * 64,
+        "material_table_sha256": "2" * 64,
+        "excitation_identity_sha256": "3" * 64,
+        "mesh_identity_sha256": "4" * 64,
+        "coordinate_system": "right-handed Cartesian",
+        "unit_system": "SI",
+    }
+    observables = {
+        "observable_columns": ["average_B_T", "rms_B_T", "energy_J", "coenergy_J"],
+        "observable_units": {"average_B_T": "T", "rms_B_T": "T", "energy_J": "J", "coenergy_J": "J"},
+        "sample_id": ["op0", "op1"],
+        "average_B_T": [0.1, 0.2],
+        "rms_B_T": [0.11, 0.21],
+        "energy_J": [1.0, 2.0],
+        "coenergy_J": [0.9, 1.9],
+    }
+
+    def lane():
+        return {"identity": dict(identity), "observables": json.loads(json.dumps(observables))}
+
+    return {"candidate": lane(), "reference": lane()}
+
+
+def test_nonlinear_field_energy_observable_comparison_v9_accepts_and_wraps_mcp():
+    summary = _v9_observable_comparison_summary()
+    result = nonlinear_field_energy_observable_comparison_gate_v9(summary)
+    assert result["status"] == "ok"
+    assert result["accepted"] is True
+    wrapped = json.loads(mcp_nonlinear_comparison_v9_gate(json.dumps(summary)))
+    assert wrapped["policy"] == "nonlinear_field_energy_observable_comparison_gate_v9"
+    assert wrapped["status"] == "ok"
+
+
+def test_nonlinear_field_energy_observable_comparison_v9_rejects_identity_and_units_drift():
+    bad = _v9_observable_comparison_summary()
+    bad["candidate"]["identity"]["mesh_identity_sha256"] = ""
+    bad["candidate"]["observables"]["observable_units"]["energy_J"] = "mJ"
+    result = nonlinear_field_energy_observable_comparison_gate_v9(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["candidate_contract_valid"] is False
+    assert result["checks"]["comparison_identity_matches"] is False
+
+
+def test_nonlinear_field_energy_observable_comparison_v9_rejects_sample_id_drift():
+    bad = _v9_observable_comparison_summary()
+    bad["candidate"]["observables"]["sample_id"] = ["op0", "op2"]
+    result = nonlinear_field_energy_observable_comparison_gate_v9(bad)
+    assert result["checks"]["observable_sample_identity_matches"] is False
+    assert result["checks"]["observable_differences_within_limit"] is False
+
+
+def test_nonlinear_field_energy_observable_comparison_v9_rejects_tolerance_exceedance():
+    bad = _v9_observable_comparison_summary()
+    bad["candidate"]["observables"]["energy_J"][1] = 2.2
+    result = nonlinear_field_energy_observable_comparison_gate_v9(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["observable_differences_within_limit"] is False
+
+
+def _v10_vector_observable_comparison_summary():
+    identity = {
+        "geometry_identity_sha256": "1" * 64,
+        "material_table_sha256": "2" * 64,
+        "excitation_identity_sha256": "3" * 64,
+        "mesh_identity_sha256": "4" * 64,
+        "coordinate_frame_identity_sha256": "5" * 64,
+        "coordinate_system": "right-handed Cartesian",
+        "unit_system": "SI",
+    }
+    observables = {
+        "vector_observable_columns": ["field_vector_T", "force_vector_N", "torque_vector_Nm"],
+        "vector_observable_units": {"field_vector_T": "T", "force_vector_N": "N", "torque_vector_Nm": "N*m"},
+        "sample_id": ["op0", "op1"],
+        "field_vector_T": [[0.1, 0.0, 0.2], [0.2, 0.1, 0.3]],
+        "force_vector_N": [[1.0, 0.0, -1.0], [1.1, 0.1, -0.9]],
+        "torque_vector_Nm": [[0.0, 0.2, 0.0], [0.0, 0.3, 0.0]],
+    }
+
+    def lane():
+        return {"identity": dict(identity), "observables": json.loads(json.dumps(observables))}
+
+    return {"candidate": lane(), "reference": lane()}
+
+
+def test_nonlinear_vector_observable_comparison_v10_accepts_and_wraps_mcp():
+    summary = _v10_vector_observable_comparison_summary()
+    result = nonlinear_vector_observable_comparison_gate_v10(summary)
+    assert result["status"] == "ok"
+    assert result["accepted"] is True
+    wrapped = json.loads(mcp_nonlinear_vector_v10_gate(json.dumps(summary)))
+    assert wrapped["policy"] == "nonlinear_vector_observable_comparison_gate_v10"
+    assert wrapped["status"] == "ok"
+
+
+def test_nonlinear_vector_observable_comparison_v10_rejects_frame_and_units_drift():
+    bad = _v10_vector_observable_comparison_summary()
+    bad["candidate"]["identity"]["coordinate_frame_identity_sha256"] = ""
+    bad["candidate"]["observables"]["vector_observable_units"]["force_vector_N"] = "kN"
+    result = nonlinear_vector_observable_comparison_gate_v10(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["candidate_contract_valid"] is False
+    assert result["checks"]["comparison_identity_matches"] is False
+
+
+def test_nonlinear_vector_observable_comparison_v10_rejects_shape_drift():
+    bad = _v10_vector_observable_comparison_summary()
+    bad["candidate"]["observables"]["force_vector_N"][1] = [1.1, 0.1]
+    result = nonlinear_vector_observable_comparison_gate_v10(bad)
+    assert result["checks"]["candidate_contract_valid"] is False
+    assert result["checks"]["vector_differences_within_limit"] is False
+
+
+def test_nonlinear_vector_observable_comparison_v10_rejects_tolerance_exceedance():
+    bad = _v10_vector_observable_comparison_summary()
+    bad["candidate"]["observables"]["torque_vector_Nm"][1][1] = 0.5
+    result = nonlinear_vector_observable_comparison_gate_v10(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["vector_differences_within_limit"] is False
+
+
+def _v11_live_execution_identity_summary():
+    physical = {
+        "geometry_identity_sha256": "1" * 64,
+        "material_table_sha256": "2" * 64,
+        "excitation_identity_sha256": "3" * 64,
+        "mesh_identity_sha256": "4" * 64,
+        "coordinate_system": "right-handed Cartesian",
+        "unit_system": "SI",
+    }
+    execution_keys = (
+        "run_id",
+        "solver_version",
+        "execution_mode",
+        "input_sha256",
+        "output_sha256",
+        "result_sha256",
+    )
+
+    def lane(run_id):
+        execution = {
+            "run_id": run_id,
+            "solver_version": "open-solver-live-1",
+            "execution_mode": "live",
+            "input_sha256": "a" * 64,
+            "output_sha256": "b" * 64,
+            "result_sha256": "c" * 64,
+            "status": "completed",
+            "solver_work_performed": True,
+            "cleanup_verified": True,
+            "source_modified": False,
+            "existing_processes_modified": False,
+        }
+        core = {key: execution[key] for key in execution_keys}
+        execution["execution_identity_sha256"] = hashlib.sha256(
+            json.dumps(core, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        return {"identity": dict(physical), "execution": execution}
+
+    return {"candidate": lane("run-candidate"), "reference": lane("run-reference")}
+
+
+def test_nonlinear_live_execution_identity_v11_accepts_and_wraps_mcp():
+    summary = _v11_live_execution_identity_summary()
+    result = nonlinear_live_execution_identity_gate_v11(summary)
+    assert result["status"] == "ok"
+    assert result["accepted"] is True
+    wrapped = json.loads(mcp_nonlinear_live_v11_gate(json.dumps(summary)))
+    assert wrapped["policy"] == "nonlinear_live_execution_identity_gate_v11"
+    assert wrapped["status"] == "ok"
+
+
+def test_nonlinear_live_execution_identity_v11_rejects_cleanup_and_digest_drift():
+    bad = _v11_live_execution_identity_summary()
+    bad["candidate"]["execution"]["cleanup_verified"] = False
+    result = nonlinear_live_execution_identity_gate_v11(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["candidate_execution_contract_valid"] is False
+
+    bad = _v11_live_execution_identity_summary()
+    bad["candidate"]["execution"]["execution_identity_sha256"] = "d" * 64
+    result = nonlinear_live_execution_identity_gate_v11(bad)
+    assert result["checks"]["candidate_execution_contract_valid"] is False
+
+
+def test_nonlinear_live_execution_identity_v11_rejects_solver_not_performed():
+    bad = _v11_live_execution_identity_summary()
+    bad["candidate"]["execution"]["solver_work_performed"] = False
+    result = nonlinear_live_execution_identity_gate_v11(bad)
+    assert result["checks"]["candidate_execution_contract_valid"] is False
+
+
+def test_nonlinear_live_execution_identity_v11_rejects_physical_identity_drift():
+    bad = _v11_live_execution_identity_summary()
+    bad["candidate"]["identity"]["mesh_identity_sha256"] = "e" * 64
+    result = nonlinear_live_execution_identity_gate_v11(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["cross_lane_mesh_identity_sha256"] is False
+
+
+def test_build_comparison_candidate_keeps_piecewise_linear_out_of_solver_mode():
+    table = [[0.0, 0.0], [100.0, 0.5], [1000.0, 1.4]]
+    h_values = [0.0, 50.0, 500.0, 2000.0]
+    result = build_constitutive_comparison_candidate(
+        table,
+        h_values,
+        constitutive_interpolation="piecewise_linear",
+    )
+    assert result["identity"]["constitutive_interpolation"] == "piecewise_linear"
+    assert result["identity"]["constitutive_extrapolation"] == "vacuum_slope"
+    assert result["identity"]["candidate_only"] is True
+    assert result["identity"]["solver_runtime_mode"] is False
+    assert result["identity"]["radia_production_interpolation"] == "monotone_pchip"
+    assert result["B_T"][1] == 0.25
+    assert result["B_T"][2] == pytest.approx(0.9)
+    wrapped = json.loads(
+        mcp_build_comparison_candidate(
+            json.dumps(table),
+            json.dumps(h_values),
+            "piecewise_linear",
+        )
+    )
+    assert wrapped["B_T"] == pytest.approx(result["B_T"])
+
+
+def test_build_comparison_candidate_matches_pchip_and_energy_identity():
+    from scipy.interpolate import PchipInterpolator
+
+    table = [[0.0, 0.0], [100.0, 0.5], [1000.0, 1.4], [10000.0, 1.7]]
+    h_values = [0.0, 50.0, 500.0, 10000.0, 20000.0]
+    candidate = build_constitutive_comparison_candidate(table, h_values)
+    pchip = PchipInterpolator(
+        [row[0] for row in table], [row[1] for row in table], extrapolate=False
+    )
+    expected_inside = [float(pchip(value)) for value in h_values[:-1]]
+    assert candidate["identity"]["constitutive_interpolation"] == "monotone_pchip"
+    assert candidate["identity"]["solver_runtime_mode"] is True
+    assert candidate["B_T"][:-1] == pytest.approx(expected_inside, rel=1.0e-14)
+    assert candidate["B_T"][-1] == pytest.approx(
+        table[-1][1] + 4.0e-7 * math.pi * (h_values[-1] - table[-1][0])
+    )
+    for h_value, b_value, energy, coenergy in zip(
+        candidate["H_A_per_m"],
+        candidate["B_T"],
+        candidate["energy_density_J_per_m3"],
+        candidate["coenergy_density_J_per_m3"],
+    ):
+        assert energy + coenergy == pytest.approx(h_value * b_value, abs=1.0e-10)
+
+
+def test_build_comparison_candidate_rejects_unknown_mode_through_mcp():
+    result = json.loads(
+        mcp_build_comparison_candidate(
+            "[[0.0, 0.0], [1.0, 1.0]]",
+            "[0.0, 1.0]",
+            "source_default",
+        )
+    )
+    assert result["status"] == "invalid_input"
+    assert "constitutive interpolation" in result["error"]
 
 
 def test_gate_lifecycle_is_complete_and_available_through_kelvin_manual():
