@@ -45,6 +45,13 @@ def test_non_cubit_code_has_no_vtk_output_path() -> None:
     completed = subprocess.run(
         [
             "git",
+            # A checkout whose .git lives on a UNC share (a worktree under
+            # C:/temp of a repository on the lab NAS) is "dubious ownership"
+            # to git, and every command in it exits 128 until the path is
+            # trusted.  Trusting it for this one invocation keeps the policy
+            # scan working there without touching the user's global config.
+            "-c",
+            f"safe.directory={ROOT.as_posix()}",
             "grep",
             "-n",
             "-I",
