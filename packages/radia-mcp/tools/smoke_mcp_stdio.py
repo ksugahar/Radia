@@ -18,8 +18,33 @@ from typing import Any
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+from mcp.types import Implementation
 
 from radia_mcp.meta.catalog import CATALOG
+
+
+_PROBE_CLIENT = {
+    "name": "cae-lab-radia-contract-probe",
+    "title": "CAE-AI Lab Runtime Contract Probe",
+    "version": "1.0",
+}
+
+
+def _probe_artifact() -> dict[str, Any]:
+    return {
+        "schema": "cae-ai-lab.solver-artifact-identity.v1",
+        "artifact_id": "protocol-probe-001",
+        "created_at_utc": "2026-09-03T00:00:00Z",
+        "producer": {"name": "protocol-probe", "version": "1.0"},
+        "solver": {"name": "analytical-fixture", "version": "1.0"},
+        "status": "complete",
+        "coordinate_system": "cartesian-right-handed",
+        "unit_system": "SI",
+        "input_sha256": "a" * 64,
+        "result_sha256": "b" * 64,
+        "total_compute_seconds": 0.01,
+        "timing_breakdown_s": {"verify": 0.01},
+    }
 
 
 def _status_payload(result: Any) -> dict[str, Any]:
@@ -51,6 +76,17 @@ async def _probe_server(short_name: str, installed_wheel: bool = False) -> dict[
     environment["RADIA_MCP_CALL_LOG"] = "0"
     if installed_wheel:
         environment.pop("RADIA_MCP_HOT_RELOAD", None)
+    else:
+        # The development lane must probe THIS checkout. Without this the
+        # probe imports whatever radia_mcp the interpreter has installed,
+        # so a tool added here reads as "missing" from the server. The
+        # wheel lane is unaffected: it runs with -I, which ignores
+        # PYTHONPATH and must resolve under the installation root.
+        local_src = str(Path(__file__).resolve().parents[1] / "src")
+        inherited = environment.get("PYTHONPATH", "")
+        environment["PYTHONPATH"] = os.pathsep.join(
+            part for part in (local_src, inherited) if part
+        )
     parameters = StdioServerParameters(
         command=sys.executable,
         args=[
@@ -58,8 +94,13 @@ async def _probe_server(short_name: str, installed_wheel: bool = False) -> dict[
         ],
         env=environment,
     )
+    artifact_gate = None
     async with stdio_client(parameters) as (read_stream, write_stream):
-        async with ClientSession(read_stream, write_stream) as session:
+        async with ClientSession(
+            read_stream,
+            write_stream,
+            client_info=Implementation(**_PROBE_CLIENT),
+        ) as session:
             initialized = await session.initialize()
             listed = await session.list_tools()
             by_name = {tool.name: tool for tool in listed.tools}
@@ -101,12 +142,58 @@ async def _probe_server(short_name: str, installed_wheel: bool = False) -> dict[
             if called.isError:
                 raise AssertionError(f"{short_name}: status tools/call failed")
             payload = _status_payload(called)
+            called_again = await session.call_tool(status_name, {})
+            if called_again.isError:
+                raise AssertionError(
+                    f"{short_name}: second status tools/call failed"
+                )
+            payload_again = _status_payload(called_again)
+            if short_name == "meta":
+                gate_name = "radia_mcp_validate_solver_artifact"
+                if gate_name not in by_name:
+                    raise AssertionError(f"{short_name}: artifact gate missing")
+                accepted = await session.call_tool(
+                    gate_name, {"artifact": _probe_artifact()}
+                )
+                stale = _probe_artifact()
+                stale["result_sha256"] = "stale"
+                rejected = await session.call_tool(
+                    gate_name, {"artifact": stale}
+                )
+                accepted_payload = _status_payload(accepted)
+                rejected_payload = _status_payload(rejected)
+                if not accepted_payload.get("accepted"):
+                    raise AssertionError("meta: complete artifact was rejected")
+                if rejected_payload.get("accepted"):
+                    raise AssertionError("meta: stale artifact was accepted")
+                artifact_gate = {
+                    "positive": accepted_payload.get("status"),
+                    "negative": rejected_payload.get("status"),
+                }
 
     if payload.get("schema") != "radia-mcp.server-status.v2":
         raise AssertionError(f"{short_name}: unexpected status schema")
     contract = payload.get("runtime_contract", {})
     if not contract.get("complete"):
         raise AssertionError(f"{short_name}: incomplete runtime contract")
+    maturity = contract.get("capability_maturity", {})
+    if sum(int(value) for value in maturity.values()) != len(by_name):
+        raise AssertionError(f"{short_name}: incomplete maturity metadata")
+    if contract.get("invalid_maturity"):
+        raise AssertionError(f"{short_name}: invalid maturity metadata")
+    if contract.get("artifact_identity_contract", {}).get(
+        "canonical_container"
+    ) != ".hdf5":
+        raise AssertionError(f"{short_name}: artifact contract missing")
+    connection = payload_again.get("client_connection", {})
+    if connection.get("connection_count") != 1:
+        raise AssertionError(
+            f"{short_name}: client identity was not captured exactly once"
+        )
+    if connection.get("latest") != _PROBE_CLIENT:
+        raise AssertionError(
+            f"{short_name}: client identity differs from initialize payload"
+        )
     provenance = payload.get("runtime_provenance", {})
     module_file = provenance.get("module_file")
     if not module_file:
@@ -158,6 +245,9 @@ async def _probe_server(short_name: str, installed_wheel: bool = False) -> dict[
         "structured_status": bool(
             getattr(by_name[status_name], "outputSchema", None)
         ),
+        "client_connection": connection,
+        "capability_maturity": maturity,
+        "artifact_gate": artifact_gate,
     }
 
 
