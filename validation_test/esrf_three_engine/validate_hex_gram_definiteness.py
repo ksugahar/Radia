@@ -38,9 +38,8 @@ from pathlib import Path
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-REPO = next(p for p in HERE.parents if (p / "src" / "radia").exists())
-if str(REPO / "src") not in sys.path:
-    sys.path.insert(0, str(REPO / "src"))
+# Resolve Radia from the active environment. Source-tree trials must explicitly
+# set PYTHONPATH; installed-wheel validation must never shadow its native module.
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
