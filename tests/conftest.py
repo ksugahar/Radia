@@ -140,17 +140,65 @@ _MISSING_REQUIRED = {
 }
 _ALLOW_PARTIAL = os.environ.get(ALLOW_PARTIAL_ENV, "") not in ("", "0")
 
-if _MISSING_REQUIRED and not _ALLOW_PARTIAL:
-    raise pytest.UsageError(
-        "pinned dependencies failed to import, so %d of the %d test files "
-        "in %s would be skipped without the run looking any different from "
-        "a full pass:%s%s%sFix the environment (both are pinned in "
-        "pyproject.toml), or ask for the partial run by name with %s=1."
-        % (len(collect_ignore), len(list(_tests_dir.glob("test_*.py"))),
-           _tests_dir, os.linesep,
-           os.linesep.join("  %s -> %s" % (name, reason)
-                           for name, reason in sorted(_MISSING_REQUIRED.items())),
-           os.linesep, ALLOW_PARTIAL_ENV))
+
+def _requested_roots(config):
+    """The paths this invocation asked for, absolute."""
+    base = Path(config.invocation_params.dir)
+    args = [a.split("::", 1)[0] for a in config.args]
+    if not args:
+        args = list(config.getini("testpaths")) or [str(config.rootpath)]
+    return [(base / a).resolve() for a in args]
+
+
+def _skipped_but_requested(config):
+    """Ignored test files that lie under something this run asked for.
+
+    A tier that names its files from the checked manifest cannot lose one
+    this way -- the list is fixed and a missing entry already raises -- so
+    only a directory-wide collection can silently shrink.
+    """
+    roots = _requested_roots(config)
+    lost = []
+    for ignored in collect_ignore:
+        target = Path(ignored).resolve()
+        if any(target == root or root in target.parents for root in roots):
+            lost.append(target)
+    return lost
+
+
+def pytest_collection_finish(session):
+    """State how many of the test files on disk this run actually collected.
+
+    On 2026-09-20 two runs of the same command differed by 529 tests because
+    one of them never walked tests/ltspice at all -- 68 files with no skip,
+    no error and a green summary.  That cause was never identified, so the
+    countermeasure is to make the size of a collection visible rather than to
+    guess at the mechanism.
+    """
+    roots = [r for r in _requested_roots(session.config) if r.is_dir()]
+    if not roots:
+        return
+    # `fixtures/` holds generated circuits named test_*.py that are data for
+    # the converter tests, not tests themselves.
+    on_disk = {f.resolve() for root in roots for f in root.rglob("test_*.py")
+               if "fixtures" not in f.parts}
+    on_disk -= {Path(i).resolve() for i in collect_ignore}
+    collected = {Path(str(item.path)).resolve() for item in session.items
+                 if getattr(item, "path", None) is not None}
+    missing = sorted(on_disk - collected)
+    reporter = session.config.pluginmanager.get_plugin("terminalreporter")
+    if reporter is None:
+        return
+    reporter.write_line(
+        "test files: %d collected of %d on disk under %s"
+        % (len(on_disk) - len(missing), len(on_disk),
+           ", ".join(str(r) for r in roots)))
+    if missing:
+        detail = ("%s%s" % (os.linesep, os.linesep.join(
+            "    " + str(m) for m in missing[:20]))
+            if session.config.option.verbose > 0 else " (-v lists them)")
+        reporter.write_line(
+            "  %d file(s) contributed no test:%s" % (len(missing), detail))
 
 
 def pytest_report_header(config):
@@ -174,7 +222,21 @@ def pytest_report_header(config):
 # Markers
 # ---------------------------------------------------------------
 def pytest_configure(config):
-    """Configure pytest with custom markers."""
+    """Configure markers, and refuse a run that quietly lost test files."""
+    if _MISSING_REQUIRED and not _ALLOW_PARTIAL:
+        lost = _skipped_but_requested(config)
+        if lost:
+            raise pytest.UsageError(
+                "pinned dependencies failed to import, so %d of the test "
+                "files this run asked for would be skipped without the run "
+                "looking any different from a full pass:%s%s%sFix the "
+                "environment (both are pinned in pyproject.toml), or ask "
+                "for the partial run by name with %s=1."
+                % (len(lost), os.linesep,
+                   os.linesep.join("  %s -> %s" % (name, reason)
+                                   for name, reason
+                                   in sorted(_MISSING_REQUIRED.items())),
+                   os.linesep, ALLOW_PARTIAL_ENV))
     config.addinivalue_line("markers", "basic: Basic functionality tests (fast)")
     config.addinivalue_line("markers", "comprehensive: Comprehensive test suite")
     config.addinivalue_line("markers", "advanced: Advanced features and edge cases")
