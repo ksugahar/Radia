@@ -70,6 +70,19 @@ Released 2026-09-14.
   `nonlinear_final_relative_residual`. This change does not redefine the
   stopping criteria of the separate Picard and FEM solvers.
 
+- Added an independent three-dimensional HCurl-VIM validation of the MagLev
+  ECB plate-force model.  Rank and mesh refinement converge below 0.2%, but
+  the scalar local-reaction model differs from the converged 3-D lift by 63%
+  at 50 Hz, 87% at 500 Hz, and 89% at 5 kHz on the recorded plate case.  The
+  scalar Foster API now warns that it is not a quantitative 3-D model;
+  `compute_lorentz_force_torque_via_hcurl_vim` is the recommended common
+  force/torque route.
+  `compute_lorentz_force_via_foster_verified` separately detects an
+  insufficient Foster basis and falls back to the direct scalar solve, so
+  high-frequency truncation error is no longer accepted silently.  Results
+  produced by the scalar ECB model, including 4.95.91, should not be used as
+  quantitative three-dimensional MagLev forces and must be recalculated with
+  the HCurl-VIM route.
 - Fixed MATLAB LTspice binary RAW precision/layout validation and transient
   state injection. Unsupported layouts, malformed payload sizes, missing or
   ambiguous `.end` directives, and unsupported hierarchical inductor states
@@ -118,7 +131,8 @@ Released 2026-09-11.
   `(F_x, F_y, F_z)` instead of `(F_x, F_z)`. No caller in the repository used
   it; **any result obtained from it before this release is wrong.**
   `validation_test/maglev/ecb_foster_lorentz_reference.py` locks it against a
-  direct solve and the centred-dipole physics checks.
+  direct solve of the same scalar PDE and basic invariants.  That evidence does
+  not establish quantitative 3-D accuracy; see the Unreleased 3-D result above.
 
 ## 4.95.90 - Recovered motor torque and completed the AMS contract
 

@@ -106,9 +106,15 @@ Keep MagLev-only concerns in `radia_mcp.maglev`: lift/weight equilibrium,
 stability, periodic eddy-current settling, motion coupling, and TEAM 28
 cycle-averaged dynamics. Its force-method agreement and lift/weight tools are
 application aliases of the common Force gates.
-`compute_lorentz_force_result_via_foster` emits conductor/source reaction
-records and their residual, while `PositionForceCurve.force_result_at` converts
-a CLN position-force interpolation into the same common result schema.
+For quantitative 3-D plate forces, build the divergence-free HCurl-VIM current
+model and use `compute_lorentz_force_result_via_hcurl_vim`; it emits the
+conductor/source reaction pair in the common peak-phasor schema.  The older
+`compute_lorentz_force_result_via_foster` is only a reduced solve of a scalar
+local-reaction approximation.  Independent 3-D evidence rejects that scalar
+model quantitatively; `compute_lorentz_force_via_foster_verified` can control
+its high-frequency truncation but cannot repair its physical-model error.
+`PositionForceCurve.force_result_at` converts a CLN position-force
+interpolation into the same common result schema.
 """
 
 
