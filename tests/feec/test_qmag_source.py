@@ -13,9 +13,12 @@ def _make_junction(link: Path, target: Path) -> bool:
     link.parent.mkdir(parents=True, exist_ok=True)
     target.mkdir(parents=True, exist_ok=True)
     try:
+        # Only the exit status is used.  mklink writes its message in the
+        # console code page (cp932 on a Japanese Windows), so decoding it as
+        # text raised UnicodeDecodeError before the status was ever read.
         completed = subprocess.run(
             ["cmd", "/c", "mklink", "/J", str(link), str(target)],
-            capture_output=True, text=True)
+            capture_output=True)
     except OSError:
         return False
     return completed.returncode == 0 and link.exists()

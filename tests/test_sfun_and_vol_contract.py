@@ -47,9 +47,19 @@ def test_vol_checker_is_a_native_simulink_preflight_dependency():
 
 def test_native_ih_rotation_is_applied_to_both_fields():
     runtime = (ROOT / "src" / "radia" / "simulink" / "radia_ih_runtime.cpp").read_text(encoding="utf-8")
-    assert runtime.count("transport_periodic(") >= 3
+    # Exactly two rotations: temperature into the source frame on the way in,
+    # and heat back out of it.  A third one used to rotate the stored thermal
+    # state as well, which counted the motion twice because that state and the
+    # incoming heat are both already in workpiece coordinates; it was removed
+    # on 2026-09-16 while this >= 3 anchor stayed behind.  Pinning the count
+    # exactly is what makes a re-introduced double rotation fail here.
+    assert runtime.count("transport_periodic(") == 2
+    # Both rotations are taken from the configured origin, temperature in and
+    # heat back out.  The incremental form is what produced the third rotation
+    # and the double count, so its absence is the contract now.
+    assert "angle - config_.angle_origin_rad" in runtime
     assert "-(angle - config_.angle_origin_rad)" in runtime
-    assert "angle - state_.previous_angle_rad" in runtime
+    assert "angle - state_.previous_angle_rad" not in runtime
 
 
 def test_native_ih_recompute_policy_distinguishes_current_and_material_changes():

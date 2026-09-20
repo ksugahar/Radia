@@ -461,6 +461,14 @@
       "notes": "Geometry, mesh, electromagnetic, and thermal operator assembly runs only at the explicit Simulink update boundary. The generated standalone MEX handles own every simulation step."
     },
     {
+      "id": "fin-surface-peec",
+      "patterns": ["fin_section.py", "fin_sweep.py", "fin_surface_solver.py"],
+      "classification": "python-fallback",
+      "backend_contract": "process-python",
+      "matlab": ["matlab/+radia/+simulink/assembleIHOperatorsFromGeometry.m"],
+      "notes": "Fin-graded surface PEEC for a swept STEP conductor: section analysis, the station/lane sweep, and the shared solve behind calc_inductance --coil-solver fin-surface. MATLAB reaches it through the assembler's coil_step_solver option, which emits that CLI once per explicit trigger and never per Simulink time step. The CAD stage depends on the OCC/build123d ecosystem and there is no second MATLAB numerical implementation. Weak coupling only; strong coupling raises until the per-branch workpiece EMF gate is settled (docs/induction_heating/FIN_PEEC_PRODUCTION_BOUNDARY.md)."
+    },
+    {
       "id": "retired-or-operator-ui",
       "patterns": ["ih_notebook.py", "install_panels.py", "notebook_workbench.py", "panel_design_common.py", "simulink/__init__.py", "tools/**/*.py", "tools/*.py"],
       "classification": "private/not-applicable",

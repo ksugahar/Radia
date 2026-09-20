@@ -129,8 +129,12 @@ def test_generated_script_locks_before_setup_and_always_cleans(monkeypatch, tmp_
             f"return {process_result} " + "}\n" + isolated
         )
         file.write_text(isolated, encoding='utf-8')
+        # pwsh writes its failure text in the console code page (cp932 on a
+        # Japanese Windows), so a strict utf-8 decode raised inside the reader
+        # thread and left result.stderr as None.
         result = subprocess.run([pwsh, '-NoProfile', '-File', str(file)],
-                                capture_output=True, text=True, timeout=30)
+                                capture_output=True, text=True, timeout=30,
+                                encoding='utf-8', errors='replace')
         assert result.returncode != 0
         expected = 'CI became busy' if busy else 'Git is unavailable'
         assert expected in result.stderr

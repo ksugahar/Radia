@@ -10,8 +10,27 @@ SOURCE = ROOT / 'packages/cubit-mesh-export/src'
 sys.path.insert(0, str(SOURCE))
 
 
+def _load_from_source(module_path: str):
+    """Load a module out of THIS checkout, whatever the install points at.
+
+    conftest imports cubit_mesh_export before this module runs, so the package
+    is already cached in sys.modules from wherever the editable install
+    resolves -- a release worktree while the LAB pointer is drifted -- and the
+    sys.path.insert above can no longer win.  The contract under test is about
+    the repository layout, so the module is loaded by location instead of by
+    name.  Editable drift is the drift checker's job, not this test's.
+    """
+    file = SOURCE / module_path
+    spec = importlib.util.spec_from_file_location(
+        "cubit_mesh_export_checkout_" + file.stem, file)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def test_bundled_fixture_is_product_owned_and_needs_no_radia():
-    from cubit_mesh_export.smoke_test import _find_sample_jou
+    _find_sample_jou = _load_from_source(
+        'cubit_mesh_export/smoke_test.py')._find_sample_jou
     path = _find_sample_jou()
     assert path.is_relative_to(SOURCE)
     text = path.read_text(encoding='utf-8')
