@@ -105,6 +105,14 @@ def test_calc_heat_axisym_temperature_band(regenerate_fixture, tmp_path):
         f"calc_heat_axisym did not log H1 FESpace usage; current stderr "
         f"shows: {proc.stderr[:500]}")
 
+    # Order 1 keeps the near-axis cusp -- that is a property of the
+    # P1/Q1 space, not a fixable bug -- so choosing it MUST warn at
+    # run time, not only in --help.  A silently plausible cusped
+    # profile is what the original field report was about.
+    assert "FES:WARNING order=1" in proc.stderr, (
+        f"order 1 must warn about the near-axis cusp; stderr shows: "
+        f"{proc.stderr[:800]}")
+
 
 def test_calc_heat_axisym_default_order2_band(regenerate_fixture, tmp_path):
     """DEFAULT run (no --fes-order): must use order 2 (near-axis cusp
@@ -138,6 +146,8 @@ def test_calc_heat_axisym_default_order2_band(regenerate_fixture, tmp_path):
         f"default --fes-order is expected to be 2; stderr shows: "
         f"{proc.stderr[:500]}")
     assert int(result["fes_order"]) == 2
+    assert "FES:WARNING order=1" not in proc.stderr, (
+        "the order-1 cusp warning must not fire on the order-2 default")
 
     T_max = float(result["T_max_C"])
     T_min = float(result["T_min_C"])
