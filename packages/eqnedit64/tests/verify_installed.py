@@ -14,6 +14,7 @@ assert eqnedit64.backend_path().is_file()
 assert eqnedit64.web_asset().is_file()
 assert eqnedit64.web_asset("equation-editor.fragment.html").is_file()
 assert (eqnedit64.web_asset().parents[1] / "licenses" / "GUST-FONT-LICENSE.txt").is_file()
+assert (eqnedit64.web_asset().parents[1] / "licenses" / "MANIFEST-eqnedit-math.txt").is_file()
 assert eqnedit64.tex_normalize(r"\frac{x}{y}") == r"\frac{x}{y}"
 assert "<mfrac>" in eqnedit64.tex_to_mathml(r"\frac{x}{y}")
 assert "<svg" in eqnedit64.tex_to_svg(r"E=mc^2")

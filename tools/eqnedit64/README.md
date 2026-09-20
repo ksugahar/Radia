@@ -323,6 +323,6 @@ IrfanViewがインストールされた試験機が必要ですが、マウス�
 ## ライセンス
 
 Eqnedit64本体はBSD 2-Clause Licenseです。詳細は[`LICENSE`](LICENSE)を参照して
-ください。内蔵Latin Modern Mathフォントとアプリケーションアイコンの第三者素材は
+ください。内蔵Eqnedit Math（Latin Modern Mathから変換したTrueTypeフォント）とアプリケーションアイコンの第三者素材は
 [`assets/THIRD_PARTY_NOTICES.md`](assets/THIRD_PARTY_NOTICES.md)および
 [`assets/GUST-FONT-LICENSE.txt`](assets/GUST-FONT-LICENSE.txt)に従います。

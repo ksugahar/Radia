@@ -11,6 +11,34 @@ assert.deepEqual(
 );
 
 let edit;
+// Suffix palettes share attachment semantics, not a prime-only exception.
+const suffixes = ["^{\\circ} ", "^{*} ", "_{*} ", "^{\\flat} ",
+                  "^{\\sharp} ", "^{\\prime }", "^{}", "_{}"];
+for (const snippet of suffixes) {
+  for (const base of ["", "x", "a+b", "a^{2}", "x_{i}", "x_i^n", "x^n_i"]) {
+    const selected = editor.composeInsertion(base, 0, base.length, snippet);
+    assert.equal(selected.value, "{" + base + "}" + snippet);
+    const item = ["test", snippet, "test", "", "test", 0];
+    assert.deepEqual(editor.composePaletteInsertion(base, 0, base.length, item), selected);
+  }
+}
+for (const [base, suffix, expected] of [
+  ["30", "^{\\circ}", "30^{\\circ}"],
+  ["a^{2}", "^{\\circ}", "a^{2}{}^{\\circ}"],
+  ["x_i^n", "_{*}", "x_i^n{}_{*}"],
+  ["x^n_i", "^{*}", "x^n_i{}^{*}"],
+  ["x^{\\alpha}", "^{*}", "x^{\\alpha}{}^{*}"],
+  ["x^\\alpha", "^{*}", "x^\\alpha{}^{*}"],
+  ["x_i", "^{*}", "x_i^{*}"]
+]) assert.equal(editor.composeInsertion(base, base.length, base.length, suffix).value, expected);
+
+for (const command of ["hat", "vec", "bar", "dot", "ddot", "overline", "underline"]) {
+  for (const base of ["", "x", "a+b", "a^{2}", "x_{i}"]) {
+    const snippet = "\\" + command + "{}";
+    assert.equal(editor.composeInsertion(base, 0, base.length, snippet).value,
+                 "\\" + command + "{" + base + "}");
+  }
+}
 for (const snippet of ["\\mathsf{}", "\\mathtt{}", "\\mathcal{}",
                        "\\mathbb{}", "\\mathfrak{}", "\\bm{}",
                        "\\mathnormal{}"]) {
@@ -135,26 +163,33 @@ assert.equal(
  * another superscript ("Prime causes double exponent").  The palette inserts
  * at the caret, so the insertion carries MathJax's own remedy when needed and
  * stays untouched when it is not. */
-assert.deepEqual(editor.composeInsertion("a", 1, 1, "'"), { value: "a'", caret: 2 });
-assert.deepEqual(editor.composeInsertion("f", 1, 1, "''"), { value: "f''", caret: 3 });
+const onePrime = "^{\\prime }";
+for (const count of [1, 2, 3]) {
+  const snippet = "^{" + "\\prime ".repeat(count) + "}";
+  for (const base of ["x", "\\alpha"]) {
+    const expected = base + snippet;
+    assert.deepEqual(editor.composeInsertion(base, base.length, base.length, snippet),
+                     {value:expected, caret:expected.length});
+  }
+}
 for (const mark of ["'", "''", "'''"]) {
   const decorated = "{a^{2}}^{" + "\\prime ".repeat(mark.length) + "}";
   assert.deepEqual(editor.composeInsertion("a^{2}", 0, 5, mark),
                    { value: decorated, caret: decorated.length });
 }
 assert.deepEqual(editor.composeInsertion("a^{2}", 5, 5, "'"),
-                 { value: "a^{2}{}'", caret: 8 });
+                 { value: "a^{2}{}" + onePrime, caret: 7 + onePrime.length });
 assert.deepEqual(editor.composeInsertion("a^2", 3, 3, "'"),
-                 { value: "a^2{}'", caret: 6 });
+                 { value: "a^2{}" + onePrime, caret: 5 + onePrime.length });
 assert.deepEqual(editor.composeInsertion("a^{n+1} ", 8, 8, "'"),
-                 { value: "a^{n+1} {}'", caret: 11 });
+                 { value: "a^{n+1} {}" + onePrime, caret: 10 + onePrime.length });
 /* Already primed, subscripted, or plain text needs no group. */
-assert.deepEqual(editor.composeInsertion("a'", 2, 2, "'"), { value: "a''", caret: 3 });
-assert.deepEqual(editor.composeInsertion("x_{1}", 5, 5, "'"), { value: "x_{1}'", caret: 6 });
-assert.deepEqual(editor.composeInsertion("a^{2}b", 6, 6, "'"), { value: "a^{2}b'", caret: 7 });
+assert.deepEqual(editor.composeInsertion("a'", 2, 2, onePrime), { value: "a'{}" + onePrime, caret: 4 + onePrime.length });
+assert.deepEqual(editor.composeInsertion("x_{1}", 5, 5, onePrime), { value: "x_{1}" + onePrime, caret: 5 + onePrime.length });
+assert.deepEqual(editor.composeInsertion("a^{2}b", 6, 6, onePrime), { value: "a^{2}b" + onePrime, caret: 6 + onePrime.length });
 /* An escaped brace is a symbol, not the end of a superscript group. */
 assert.deepEqual(editor.composeInsertion("\\{x\\}", 5, 5, "'"),
-                 { value: "\\{x\\}'", caret: 6 });
+                 { value: "\\{x\\}" + onePrime, caret: 5 + onePrime.length });
 
 /* An unclosed group is the beginner's most frequent mistake, and MathJax
  * answers it by refusing the whole expression, which left raw TeX on screen.
