@@ -58,3 +58,74 @@ checked their input hashes through their runner/preflight provenance.
 
 Old scratch files are not deleted blindly because other tasks may reference
 them. Their mere presence is not evidence that the current runner opened them.
+
+## Completed candidate runs: acceptance remains HOLD
+
+Both foreground Hibino jobs completed with exit code zero. The original result
+JSON files are retained without changing their reported flags:
+
+- `three_engine_case6_bonus8_p2.json`, SHA256
+  `40ab46e2d2aa2676633cc8731005b666b073df44ff8ff41347770cc809332e21`.
+- `omega_bonus8_p1_q16_22.json`, SHA256
+  `af29048e10e2cb19959b2ec6ac67b45ec6cdcdc2481b056101b70f9bf7ecbf65`.
+
+The nonlinear run used BDM2 for HDiv, FEM order 2, mixed source order 3,
+exact exterior source, mixed assembly bonus 8, and tolerance `2e-5`.
+The core observations are the runner's 27 gap points, not the whole field.
+
+| Pair | Core relative RMS | Maximum core vector difference (T) |
+| --- | ---: | ---: |
+| HDiv / reduced-A | 0.0036015580 | 0.0010756475 |
+| HDiv / mixed total/reduced Omega | 0.0070167627 | 0.0017637700 |
+| reduced-A / mixed total/reduced Omega | 0.0078074982 | 0.0020484297 |
+
+### Release blocker: HDiv false nonlinear convergence
+
+The raw runner reports `passed=true` and `nonlinear_converged=true`. These are
+**not accepted**: HDiv reported one Newton iteration, 34 Armijo backtracks and
+relative step `1.091285e-12`. In this candidate, exhausting the line search
+below `1e-10` still applies the tiny unaccepted step, then declares convergence
+from step size. Thus the runner's Boolean is not evidence of a nonlinear root.
+The separate settled-iteration exit also lacks a nonlinear residual gate.
+
+The repair must address fail-loud line-search exhaustion and independently
+check residual convergence. Energy/residual/tangent consistency is an additional
+investigation: the inverse BH energy uses a separate interpolated trapezoidal
+integral, while the residual and tangent use other derivatives; the HDiv path
+also evaluates coefficients from an elementwise projected magnetization norm.
+These are source-level concerns, not proven sole causes of this run's failure.
+A repaired candidate requires new provenance and a new numerical run.
+
+Reduced-A reported 31 iterations and final relative change `1.859221e-5`.
+Mixed Omega reported 14 iterations and relative B change `7.876665e-6`.
+Neither observation repairs the HDiv acceptance defect or proves absolute
+accuracy. The complete three-engine acceptance remains **HOLD**.
+
+### Frozen-state quadrature audit
+
+This is a separate **linear**, order-1, permeability-1000 run with assembly
+bonus 8. It solved once and evaluated that same state at q=16 and q=22.
+Source and mesh identity remained unchanged; every recorded algebraic and
+same-rule identity gate passed.
+
+| Evaluation q | W | J (same rule) | W - J - source offset |
+| --- | ---: | ---: | ---: |
+| 16 | 8.47725441135 | 8.80958313240 | 7.67e-14 |
+| 22 | 8.47699289981 | 8.80932051468 | 6.17e-14 |
+
+The observed W change is `-2.6151154e-4` (about `3.085e-5` relative to q=16).
+This is an observed evaluation change, not an error bound. The assembled
+functional is `8.80306880342`, still different from the q=22 functional by
+`0.00625171126`. The air source-load contraction changes from
+`-0.65772528574` (assembly) to `-0.66397947200` (q=22), whereas the quadratic
+part changes by only about `1.16e-8`. Source-load assembly quadrature must
+therefore be varied with **new solves** before declaring it converged.
+This frozen-state audit neither establishes p-nesting nor nonlinear acceptance.
+
+### Timing scope
+
+The jobs overlapped on Hibino, so these are run diagnostics, not comparative
+performance claims. HDiv took 6246.7 s, including about 6134.1 s for ChargeGram
+construction and 96.8 s for its reported solve. Reduced-A took 2253.2 s and
+mixed Omega 16194.3 s. The high-order HEX Gram build is the dominant cost in
+this run; the falsely converged HDiv solve time is not a valid solver benchmark.
