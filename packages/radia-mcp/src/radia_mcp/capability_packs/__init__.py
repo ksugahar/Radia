@@ -47,7 +47,7 @@ PACKS = {
     "radia-publication": {
         "description": "Paper, slide, poster, figure and bibliography workflows",
         "profiles": {
-            "paper": ("paper_writing", "bibliography"),
+            "paper": ("paper_writing", "bibliography", "document_meta"),
             "poster": ("paper_writing", "chart2d", "bibliography"),
             "figures": ("chart2d",),
         },
