@@ -32,7 +32,7 @@ for the derivation.
 |--------|---------|
 | `radia.maglev.mixed_galerkin.alpha` | Bulk Foster spectrum (NGSolve eigsh) + W(alpha) edge + Schur composition -> alpha(s) for any .vol |
 | `radia.maglev.mixed_galerkin.cad_edges` | IGA-style CAD-direct edge extraction (12 edges exact for cuboid, mesh-independent) |
-| `radia.maglev.ecb.lorentz` | Cycle-averaged plate force <F> = (1/2) int Re(J) x B dV for an AC dipole: Foster expansion of the reaction field v = B_r,z, current J = (1/mu) curl(v z); plus common force-result records |
+| `radia.maglev.ecb.lorentz` | Cycle-averaged 3-D HCurl-VIM plate force/torque through the common `radia.force` integrator; the older scalar Foster reaction-field approximation remains available with an explicit warning and direct-solve truncation fallback |
 | `radia.maglev.ecb.plate_response` | alpha(s) frequency sweep + drag/lift crossover identification for plate ECB design |
 | `radia.maglev.simulink.export` | State-space (A, B, C, D) export to MATLAB .mat + helper .m for Simulink LTI block |
 
@@ -90,33 +90,27 @@ lab Sample Promotion Ladder: tests -> examples -> panels).  Contents:
 Promote a script from `research/` to `docs/maglev/demos/` only after it gains a
 README, runs standalone, and demonstrates one clear concept.
 
-## Force computation: Lorentz vs Maxwell stress
+## Force computation: three-dimensional HCurl-VIM
 
-In this framework Lorentz force `F = integral J x B_ext dV` is MORE
-ACCURATE than Maxwell stress tensor surface integral:
+The quantitative plate route is the sampled volume Lorentz integral
+`F = integral J x B_ext dV`, with `J` supplied by the divergence-free 3-D
+HCurl current basis and the open-boundary VIM interaction.  Use
+`compute_lorentz_force_torque_via_hcurl_vim` for raw force/torque or
+`compute_lorentz_force_result_via_hcurl_vim` for the common
+`radia.force-result/v1` conductor/source pair.
 
-| Method | Error chain |
-|--------|-------------|
-| **Lorentz** | Foster truncation -> J(r), Radia analytical -> B_ext (exact), volume integral (1 step) |
-| Maxwell stress | Foster -> J -> Biot-Savart -> B_induced, Radia -> B_ext, surface integral (3 steps) |
+The older scalar Dirichlet/Foster route is retained as a stated reduced model,
+not as the physical reference.  Its direct scalar solve is useful for measuring
+Foster truncation: `compute_lorentz_force_via_foster_verified` falls back to
+that direct solve when a high-frequency basis is too short.  This does not cure
+the scalar ansatz.  The independent rank- and mesh-converged 3-D lane
+`validation_test/maglev/ecb_foster_lorentz_3d_reference.py` finds 63--89%
+lift differences on its plate case and rejects the scalar model for
+quantitative 3-D force.
 
-Reasons:
-1. Maxwell needs an additional Biot-Savart from J (more numerical error).
-2. Volume integration averages truncation error; surface integration
-   does not.
-3. Scalar Dirichlet formulation has known boundary artifacts that
-   surface evaluation magnifies.
-
-So the package uses Lorentz.  There is no Maxwell-stress route in this package;
-the cross-check is `validation_test/maglev/ecb_foster_lorentz_reference.py`, a
-direct solve of the same model held to the physics a centred dipole must show.
-
-`compute_lorentz_force_result_via_foster` preserves the existing Foster solve
-while packaging both conductor and source reactions as
-`radia.force-result/v1`. The action-reaction residual it records is zero by
-construction -- the source force is the negated conductor force -- so it
-confirms the bookkeeping only; physical correctness comes from the reference
-lane above.
+There is not yet an ECB-specific enclosing-air Maxwell-stress route.  When one
+is added, it should be treated as an independent extraction cross-check of the
+3-D current solution, not as a correction applied to the scalar model.
 
 ## Simulink integration
 

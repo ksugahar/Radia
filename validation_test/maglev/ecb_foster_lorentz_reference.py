@@ -11,13 +11,18 @@ eigen-truncation) on a mirror-symmetric structured hex mesh and reconstructs
 the current the same way.  Force is <F> = 0.5 int Re(J) x B dV with the full
 dipole field (B_x, B_y, B_z).
 
-The reference must meet what a centred z-dipole over a plate has to show: zero
+The same-model direct solution must meet what a centred z-dipole over a plate
+has to show: zero
 horizontal force (mirror symmetry), a repulsive lift (conductor Fz < 0), mesh
 convergence, a lift rising with frequency, and a lift below the infinite
 perfect-conductor image bound.  The shipped kernel is then held to the
 reference: the same symmetry and sign, the same lift within 2.5 % at 50 and
 500 Hz with 200 modes, and -- at 5 kHz, where 200 modes stop far short of the
-skin depth -- monotone convergence to the reference as the basis grows.
+skin depth -- monotone convergence to the direct scalar solution as the basis
+grows.  These checks establish implementation self-consistency and basic
+invariants only.  The independent HCurl-VIM lane
+``ecb_foster_lorentz_3d_reference.py`` rejects the scalar local-reaction model
+for quantitative three-dimensional plate force.
 
 Until 2026-09-11 the kernel built the current as -omega sigma Im(v).  On this
 lane it gave zero lift for a centred magnet and a horizontal force of 1906 N at
