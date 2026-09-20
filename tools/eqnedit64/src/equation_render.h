@@ -3,6 +3,7 @@
 #define EQUATION_RENDER_H
 
 #include "equation_node.h"
+#include "eqnedit64_resource.h"
 #include <string>
 
 #ifdef _WIN32
@@ -25,10 +26,10 @@ struct SvgStyle {
     double sym = 18.0;
     double subsym = 12.0;
 
-    /* Font families emitted into the SVG.  A list is used so a viewer that
-     * lacks the first still finds the glyph. */
-    std::string serif = "Latin Modern Math, Cambria Math, serif";
-    std::string symbol = "Latin Modern Math, Cambria Math, Symbol, serif";
+    /* The first family also selects the native drawing font. Keep it tied
+     * to the registered resource; subsequent families serve external SVG viewers. */
+    std::string serif = EQNEDIT64_MATH_FONT_FAMILY ", Latin Modern Math, Cambria Math, serif";
+    std::string symbol = EQNEDIT64_MATH_FONT_FAMILY ", Latin Modern Math, Cambria Math, Symbol, serif";
     std::string cjk = "Yu Mincho, Yu Gothic UI, Meiryo, MS Mincho, serif";
 
     double padding = 1.0;   /* pt of white space around the equation */

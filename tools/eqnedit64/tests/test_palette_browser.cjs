@@ -132,7 +132,34 @@ const server = http.createServer((req, res) => {
     await page.locator(".eqed-source").evaluate(e=>e.setSelectionRange(0,1));
     await page.locator('.eqed-key').filter({hasText:"n√□"}).click();
     assert.equal(await page.locator(".eqed-source").inputValue(),"\\sqrt[]{x}");
-    console.log("PASS: cold first copy before palette previews; 291 browser keys, CHTML fonts, strike preview and selected root body");
+    for (const count of [1,2,3]) {
+      await page.locator(".eqed-source").fill("x");
+      await page.locator(".eqed-source").evaluate(e=>e.setSelectionRange(1,1));
+      const face = ["x′", "x″", "x‴"][count-1];
+      await page.getByRole('button', {name:face, exact:true}).click();
+      assert.equal(await page.locator(".eqed-source").inputValue(),
+                   "x^{" + "\\prime ".repeat(count) + "}");
+    }
+    await page.getByRole('tab', {name:"Web追加", exact:true}).click();
+    for (const [base, selected, expected] of [
+      ["x", true, "{x}^{\\circ}"],
+      ["a+b", true, "{a+b}^{\\circ}"],
+      ["a^{2}", false, "a^{2}{}^{\\circ}"],
+      ["x^n_i", false, "x^n_i{}^{\\circ}"]
+    ]) {
+      await page.locator(".eqed-source").fill(base);
+      await page.locator(".eqed-source").evaluate((e, selected) =>
+        e.setSelectionRange(selected ? 0 : e.value.length, e.value.length), selected);
+      await page.getByRole('button', {name:"°", exact:true}).click();
+      const tex = await page.locator(".eqed-source").inputValue();
+      assert.equal(tex.trim(), expected);
+      const errorCount = await page.evaluate(tex => {
+        const xml = new DOMParser().parseFromString(MathJax.tex2mml(tex), "text/xml");
+        return xml.getElementsByTagName("merror").length;
+      }, tex);
+      assert.equal(errorCount, 0, tex);
+    }
+    console.log("PASS: cold copy, 291 keys, fonts, root body, and degree selection/script attachment");
   } finally {
     if (browser) await browser.close();
     server.close();
