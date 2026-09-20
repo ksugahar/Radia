@@ -83,6 +83,24 @@ Released 2026-09-14.
   produced by the scalar ECB model, including 4.95.91, should not be used as
   quantitative three-dimensional MagLev forces and must be recalculated with
   the HCurl-VIM route.
+- Split IH thermal boundary selection into explicit heat-flux, convection,
+  and radiation roles. The former empty `surface_label` default silently
+  applied every term to every workpiece boundary and could create or conceal
+  inner-surface hotspots on multi-sideset meshes; the legacy option now fails
+  with migration guidance. Thermal results include boundary-wise area and
+  input-power audits. The EM-to-thermal `q_surf.sol` handoff is now fixed to
+  P1 independently of EM and thermal solve order, avoiding invalid
+  reconstruction of hierarchical high-order H1 coefficients from vertices.
+  Axisymmetric heat now also rejects active surface selectors containing the
+  zero-revolved-area `r=0` symmetry axis, including broad labels shared with
+  physical surfaces.
+- Decoupled IH thermal field order from serialized mesh geometry.  The 3D,
+  axisymmetric, and EM-table heat solvers now preserve a loaded `.vol` exactly
+  instead of calling `Mesh.Curve(fes_order)` after import; that call can silently
+  destroy a curved CAD mapping (the reported TKE08 mesh inflated its boundary
+  area by about 297 million times).  Results now record the input curve order,
+  domain/boundary measures, and the no-post-load-Curve policy.
+
 - Fixed MATLAB LTspice binary RAW precision/layout validation and transient
   state injection. Unsupported layouts, malformed payload sizes, missing or
   ambiguous `.end` directives, and unsupported hierarchical inductor states
