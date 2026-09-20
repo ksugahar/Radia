@@ -897,6 +897,46 @@ static void GaussLegendre01(int n, std::vector<double>& x, std::vector<double>& 
 
 // Diagnostic latch: RADIA_HDIV_HEX_PAIR_DUFFY=0 restores the block-wise near family for touching pairs
 // (an A/B path, reported as a numerical override).
+// Largest length-scale ratio the exponentially convergent BDM1 pair rules keep the charge Gram POSITIVE
+// DEFINITE at.  Measured 2026-09-20 on a single unit hex flattened to aspect ratio AR, smallest
+// eigenvalue of the assembled Gram with the Duffy family on every near pair:
+//   AR         8          10         12     |     14         16         18         20
+//   lambda_min +4.8e-7    +3.6e-7    +2.5e-7|    -9.2e-5    -2.7e-4    -6.8e-4    -2.2e-3
+//   negatives   0          0          0     |     3          4          4          4
+// The boundary is sharp between 12 and 14, so 12 is the last ratio the Duffy family may take.  Beyond it
+// the graded near tensor rule is used, which restores definiteness (lambda_min +2.2e-7 at AR 20) and
+// slightly improves conditioning at every AR measured.  The threshold is deliberately NOT set at the
+// accuracy crossover (~AR 3): between 3 and 12 the Duffy family is less accurate than the graded rule but
+// still definite, and it is the only family with a consistent shape derivative, so the meshes in that band
+// stay differentiable.  Relative error of the individual rules against analytic-reduced references
+// (constant-monomial entries; a x a x a/AR, a = 0.1 m):
+//   AR                        1      2      3      5      8     12     20     33     50    100
+//   side-face self (Duffy)    4e-9   6e-7   8e-6   1e-4   3e-4   2e-3   1e-2   9e-3   1e-2   9e-2
+//   opposite faces (ProductN) 2e-9   7e-7   4e-5   1e-3   9e-3   3e-2   1e-1   2e-1   4e-1   1e+0
+//   cell-face e=2 (Duffy)     5e-9   4e-7   6e-6   6e-5   2e-4   4e-4   3e-3   5e-3   4e-3   4e-4
+//   graded near tensor        2e-6   1e-5   6e-5   4e-5   8e-5   1e-4   2e-5   6e-5   8e-5   5e-5
+// The Duffy family wins below AR ~3 and loses by orders of magnitude above it: its Gauss rules see a
+// feature of relative width 1/AR (the gap in the product rule, the angular 1/X in the Duffy cone), so
+// the exponential rate is divided by AR.  A 100 x 100 x 1 mm hex came back with four negative
+// eigenvalues (lambda_min -3.46 against lambda_max 26.8) and the thin-shield solve broke down in CG at
+// iteration 11; the graded rule stays flat at 1e-4 for every AR measured.
+static constexpr double HEX_EXPONENTIAL_RULE_MAX_ANISOTROPY_DEFAULT = 12.0;
+
+// Diagnostic A/B of the crossover (performance/accuracy class; the effective value is published in
+// hmat_stats as hex_exponential_rule_max_anisotropy).  A huge value restores the pre-2026-09-20
+// behaviour of sending every near pair to the Duffy family, which is how the table above was
+// measured on one binary.
+static double HexExponentialRuleMaxAnisotropy()
+{
+    static const double value = []() -> double {
+        const char* text = std::getenv("RADIA_HDIV_HEX_MAX_ANISOTROPY");
+        if (text == nullptr || text[0] == '\0') return HEX_EXPONENTIAL_RULE_MAX_ANISOTROPY_DEFAULT;
+        const double parsed = std::atof(text);
+        return (parsed >= 1.0 && std::isfinite(parsed)) ? parsed : HEX_EXPONENTIAL_RULE_MAX_ANISOTROPY_DEFAULT;
+    }();
+    return value;
+}
+
 static bool HexPairDuffyEnabled()
 {
     static const bool enabled = []() -> bool {
@@ -4208,6 +4248,7 @@ void RadHACApKChargeGram::ResetHexCacheStats()
     m_hexBlkDistortedFar.store(0, std::memory_order_relaxed);
     m_hexBlkGeneralNear.store(0, std::memory_order_relaxed);
     m_hexPairNonconforming.store(0, std::memory_order_relaxed);
+    m_hexPairAnisotropyGraded.store(0, std::memory_order_relaxed);
     m_hexBlkGeneralFar.store(0, std::memory_order_relaxed);
     m_hexNsAffineNear.store(0, std::memory_order_relaxed);
     m_hexNsAffineFar.store(0, std::memory_order_relaxed);
@@ -4245,7 +4286,9 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexCacheStats()
         !ho_analytic_enabled || !ho_image_enabled || !ho_image_far_enabled ||
         !curved_direct_enabled || (m_hexmode && !m_nearInnerExact) ||
         (m_hexmode && !HexClusterRadiusEnabled()) ||
-        (m_hexmode && !HexPairDuffyEnabled()) || (m_hexmode && HexPairWOverride() != 0);
+        (m_hexmode && !HexPairDuffyEnabled()) || (m_hexmode && HexPairWOverride() != 0)
+        || (m_hexmode && HexExponentialRuleMaxAnisotropy()
+                         != HEX_EXPONENTIAL_RULE_MAX_ANISOTROPY_DEFAULT);
     const bool congruent_cache_enabled = HexCongruentCacheEnabled();
     const bool performance_override =
         block_cache_limit != HEX_BLOCK_CACHE_LIMIT_DEFAULT ||
@@ -4284,6 +4327,8 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexCacheStats()
     out.emplace_back("hex_glpair_affine_w_n",
                      (double)(m_glPairAffineW.empty() ? m_glPairAffine.size() : m_glPairAffineW.size()));
     out.emplace_back("hex_pair_nonconforming", ld(m_hexPairNonconforming));
+    out.emplace_back("hex_pair_anisotropy_graded", ld(m_hexPairAnisotropyGraded));
+    out.emplace_back("hex_exponential_rule_max_anisotropy", HexExponentialRuleMaxAnisotropy());
     out.emplace_back("hex_cluster_radius_enabled", HexClusterRadiusEnabled() ? 1.0 : 0.0);
     out.emplace_back("hex_glnear_n", (double)m_glNear.size());
     out.emplace_back("hex_glout_n", (double)m_glOut.size());
@@ -5059,7 +5104,53 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHexDirectionalDerivative(
             "mapped HEX BDM2 shape derivatives are not implemented for the "
             "cancellation-preserving composite quadrature");
     const auto& tg=kindT==0?m_cellCharges[hT]:m_faceCharges[hT];const auto& sg=kindS==0?m_cellCharges[hS]:m_faceCharges[hS];const int nt=(int)tg.size(),ns=(int)sg.size();std::vector<double> out((size_t)nt*ns,0),inn(ns);
+    if(m_hexAffineOrder==1&&HexPairDuffyEnabled()){
+        // Same routing as the primal: a pair the Gram integrated on the graded near tensor rule has no
+        // shape derivative on a consistent rule (the graded rule's analytic inner has no directional
+        // twin under its outer cloud; the legacy sub-cloud derivative misses the dilation identity by 2 %).
+        // Refusing keeps a 2 %-inconsistent gradient out of an optimizer instead of returning it quietly.
+        const bool touching=HexHostsTouch(kindT,hT,kindS,hS,0);
+        const int rT=tg[0],rS=sg[0];
+        const double dc[3]={m_cent[3*rT]-m_cent[3*rS],m_cent[3*rT+1]-m_cent[3*rS+1],m_cent[3*rT+2]-m_cent[3*rS+2]};
+        const bool near_band=touching||std::sqrt(dc[0]*dc[0]+dc[1]*dc[1]+dc[2]*dc[2])<=m_near_grade*(m_size[rT]+m_size[rS]);
+        double ratio=1.0;
+        if(near_band&&!HexPairExponentialRulesResolve(kindT,hT,kindS,hS,0,touching,&ratio))
+            throw std::logic_error(
+                "HEX charge Gram shape derivative: host pair (kind "+std::to_string(kindT)+" host "+std::to_string(hT)
+                +", kind "+std::to_string(kindS)+" host "+std::to_string(hS)+") has length-scale ratio "
+                +std::to_string(ratio)+" > "+std::to_string(HexExponentialRuleMaxAnisotropy())
+                +", so its Gram block was integrated on the graded near tensor rule, which has no consistent "
+                "directional derivative.  Flat (thin-shell) hexes are solvable but not yet shape-differentiable.");
+    }
     if(kindT==kindS&&hT==hS)return kindT==0?HexVolumeSelfBlockDirectionalDerivative(hT,std::vector<double>(velocityT,velocityT+81)):HexFaceSelfBlockDirectionalDerivative(hT,std::vector<double>(velocityT,velocityT+27));
+    // TOUCHING pairs take the same pair-domain Duffy rule the primal block
+    // takes, for the same reason the self blocks do: the derivative has to
+    // differentiate the quadrature the Gram was actually built on, not an
+    // equivalent one.  Routing only the self blocks there (2026-09-15) left
+    // every touching pair differentiating the subdomain-cloud rule below
+    // while the Gram integrated them on the Duffy rule, so the discrete
+    // Gram stopped being homogeneous of degree -1 in the geometry: on a
+    // single Q2-warped hex the dilation derivative missed -Gram by 3.9e-3
+    // relative on face-face pairs and 2.3e-3 on cell-face pairs, while the
+    // self blocks held to 2e-16.  The branch conditions here mirror the
+    // primal dispatch exactly, so the two rules cannot diverge again.
+    if(m_hexAffineOrder==1&&HexPairDuffyEnabled()){
+        const HexPairAdjacency adj=HexPairAdjacencyOf(kindT,hT,kindS,hS,0);
+        if(adj.entity_dim>=0)
+            return QuadBlockHexPairDuffy(kindT,hT,kindS,hS,0,velocityT,velocityS);
+        // NON-touching pairs inside the near band take the primal product
+        // rule, for the same reason.  Opposite faces of one hex share no
+        // vertex, so they land here rather than on the Duffy rule above;
+        // leaving them on the cloud rule kept 1.0e-4 of the dilation
+        // identity on exactly those three pairs after the touching ones
+        // were routed.
+        const int rt=tg[0],rs=sg[0];
+        const double d[3]={m_cent[3*rt]-m_cent[3*rs],m_cent[3*rt+1]-m_cent[3*rs+1],
+                           m_cent[3*rt+2]-m_cent[3*rs+2]};
+        if(std::sqrt(d[0]*d[0]+d[1]*d[1]+d[2]*d[2])
+                <=m_near_grade*(m_size[rt]+m_size[rs]))
+            return QuadBlockHexProductN(kindT,hT,kindS,hS,0,velocityT,velocityS);
+    }
     if(kindT==1&&kindS==1&&m_quadAffineFace[hT]&&m_quadAffineFace[hS]){
         const double* nd=&m_quadNodes[(size_t)hT*27];const int nq=(int)m_glOut.size();double xi[3]={0,0,0};
         for(int iy=0;iy<nq;++iy){xi[1]=m_glOut[iy];for(int ix=0;ix<nq;++ix){xi[0]=m_glOut[ix];const double uv[2]={xi[0],xi[1]};double p[3],dp[3];QuadQ2MapX(nd,uv,p);QuadQ2MapX(velocityT,uv,dp);std::fill(inn.begin(),inn.end(),0.0);for(int sub=0;sub<2;++sub)DPhiInnerHexSubVec(1,hS,sub,p,dp,velocityS,sg,inn.data());const double wg=m_gwOut[ix]*m_gwOut[iy];for(int i=0;i<nt;++i){const double w=wg*HexMonoEval(tg[i],xi);for(int j=0;j<ns;++j)out[(size_t)i*ns+j]+=w*inn[j];}}}
@@ -5486,7 +5577,16 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
     // face-charge mode on ESRF #6: self face +0.65, touching face-face -0.46, near band -0.20 in units
     // of the mode's M-norm).  Beyond the band the affine far product stays.
     // BDM1 TOUCHING pairs (self, shared face/edge/vertex, affine or not): the pair-domain Duffy rule.
-    if (m_hexAffineOrder == 1 && touching_hosts && HexPairDuffyEnabled()) {
+    // Both exponentially convergent rules below are trusted only while the pair's length scales stay
+    // within HEX_EXPONENTIAL_RULE_MAX_ANISOTROPY of each other (see the table at that constant); a
+    // flatter pair takes the graded near tensor rule, whose accuracy does not depend on the aspect ratio.
+    const bool in_near_band = touching_hosts || sep <= m_near_grade*(m_size[repA] + m_size[repB]);
+    bool exponential_ok = true;
+    if (m_hexAffineOrder == 1 && HexPairDuffyEnabled() && in_near_band) {
+        exponential_ok = HexPairExponentialRulesResolve(kindT, hT, kindS, hS, img, touching_hosts, nullptr);
+        if (!exponential_ok) m_hexPairAnisotropyGraded.fetch_add(1, std::memory_order_relaxed);
+    }
+    if (m_hexAffineOrder == 1 && touching_hosts && HexPairDuffyEnabled() && exponential_ok) {
         const HexPairAdjacency adj = HexPairAdjacencyOf(kindT, hT, kindS, hS, img);
         if (adj.entity_dim >= 0)
             return timed(m_hexBlkGeneralNear, m_hexNsGeneralNear,
@@ -5496,7 +5596,7 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
     // BDM1 NON-touching pairs inside the near band: the plain product rule with the pair point count
     // (the graded cloud + fan inner of that band was the largest remaining error class on ESRF #6:
     // +2.9e-3 of a -5e-3 mode's energy moved when the band rules were refined, 2026-09-06).
-    if (m_hexAffineOrder == 1 && HexPairDuffyEnabled()
+    if (m_hexAffineOrder == 1 && HexPairDuffyEnabled() && exponential_ok
             && sep <= m_near_grade*(m_size[repA] + m_size[repB]))
         return timed(m_hexBlkGeneralNear, m_hexNsGeneralNear,
                      [&]{ return QuadBlockHexProductN(kindT, hT, kindS, hS, img); });
@@ -6442,6 +6542,16 @@ std::vector<double> RadHACApKChargeGram::HexVolumeSelfBlockDirectionalDerivative
         "HexVolumeSelfBlockDirectionalDerivative requires a 3D HEX charge Gram");
     if (host < 0 || host >= (int)m_cellCharges.size()) throw std::out_of_range("HEX host out of range");
     if (node_velocity.size() != 81) throw std::invalid_argument("node_velocity must have shape (27,3)");
+    if (m_hexAffineOrder == 1 && HexPairDuffyEnabled()) {
+        double ratio = 1.0;
+        if (!HexPairExponentialRulesResolve(0, host, 0, host, 0, true, &ratio))
+            throw std::logic_error(
+                "HEX volume self-block shape derivative: host " + std::to_string(host)
+                + " has axis anisotropy " + std::to_string(ratio) + " > "
+                + std::to_string(HexExponentialRuleMaxAnisotropy())
+                + ", so its Gram block was integrated on the graded near tensor rule, which has no "
+                "consistent directional derivative.");
+    }
     if (m_hexAffineOrder == 1 && HexPairDuffyEnabled())
         return QuadBlockHexPairDuffy(0, host, 0, host, 0,
             node_velocity.data(), node_velocity.data());
@@ -6600,6 +6710,16 @@ std::vector<double> RadHACApKChargeGram::HexFaceSelfBlockDirectionalDerivative(
         "HexFaceSelfBlockDirectionalDerivative requires a 3D HEX charge Gram");
     if(host<0||host>=(int)m_faceCharges.size())throw std::out_of_range("HEX face host out of range");
     if(node_velocity.size()!=27)throw std::invalid_argument("node_velocity must have shape (9,3)");
+    if (m_hexAffineOrder == 1 && HexPairDuffyEnabled()) {
+        double ratio = 1.0;
+        if (!HexPairExponentialRulesResolve(1, host, 1, host, 0, true, &ratio))
+            throw std::logic_error(
+                "HEX face self-block shape derivative: host " + std::to_string(host)
+                + " has axis anisotropy " + std::to_string(ratio) + " > "
+                + std::to_string(HexExponentialRuleMaxAnisotropy())
+                + ", so its Gram block was integrated on the graded near tensor rule, which has no "
+                "consistent directional derivative.");
+    }
     if (m_hexAffineOrder == 1 && HexPairDuffyEnabled())
         return QuadBlockHexPairDuffy(1, host, 1, host, 0,
             node_velocity.data(), node_velocity.data());
@@ -6987,12 +7107,17 @@ static inline void NeumaierAdd(double& sum, double& comp, double x)
     sum = t;
 }
 
-std::vector<double> RadHACApKChargeGram::QuadBlockHexProductN(int kindT, int hT, int kindS, int hS, int img) const
+std::vector<double> RadHACApKChargeGram::QuadBlockHexProductN(
+    int kindT, int hT, int kindS, int hS, int img,
+    const double* velocityT, const double* velocityS) const
 {
     // Non-touching pairs inside the near band: plain tensor Gauss on both reference domains with the pair
     // rule (Q2 maps, reference charge measure); the integrand is smooth because the hosts are separated,
     // and the same point count that resolves the regularized touching integrals resolves a gap of the
     // order of the host size.
+    const bool directional = velocityT != nullptr;
+    if (directional != (velocityS != nullptr) || (directional && img != 0))
+        throw std::invalid_argument("pair product derivative requires both velocities and direct image 0");
     const std::vector<int>& tgtG = (kindT == 0) ? m_cellCharges[hT] : m_faceCharges[hT];
     const std::vector<int>& srcG = (kindS == 0) ? m_cellCharges[hS] : m_faceCharges[hS];
     const int nT = (int)tgtG.size(), nS = (int)srcG.size();
@@ -7007,11 +7132,16 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHexProductN(int kindT, int hT,
     // source samples once (points and mode values), then the target loop
     const int nptS = (dS == 3) ? N*N*N : N*N;
     std::vector<double> XS((size_t)3*nptS), wS((size_t)nptS), qS((size_t)nptS*nS);
+    std::vector<double> VS(directional ? (size_t)3*nptS : (size_t)0);
     {
         int p = 0;
         for (int a = 0; a < N; ++a) for (int b = 0; b < N; ++b) for (int c = 0; c < (dS == 3 ? N : 1); ++c, ++p) {
             double eta[3] = {gl[(size_t)a], gl[(size_t)b], dS == 3 ? gl[(size_t)c] : 0.0};
             wS[(size_t)p] = gw[(size_t)a]*gw[(size_t)b]*(dS == 3 ? gw[(size_t)c] : 1.0);
+            if (directional) {
+                if (dS == 3) HexQ2MapX(velocityS, eta, &VS[(size_t)3*p]);
+                else { const double uv[2] = {eta[0], eta[1]}; QuadQ2MapX(velocityS, uv, &VS[(size_t)3*p]); }
+            }
             if (dS == 3) HexQ2MapX(ndS, eta, &XS[(size_t)3*p]); else { const double uv[2] = {eta[0], eta[1]}; QuadQ2MapX(ndS, uv, &XS[(size_t)3*p]); }
             for (int ls = 0; ls < nS; ++ls) qS[(size_t)p*nS + ls] = HexMonoEval(srcG[ls], eta);
         }
@@ -7026,12 +7156,24 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHexProductN(int kindT, int hT,
         double XT[3], XTr[3];
         if (dT == 3) HexQ2MapX(ndT, xi, XT); else { const double uv[2] = {xi[0], xi[1]}; QuadQ2MapX(ndT, uv, XT); }
         ImageEvalPoint(img, XT, XTr);
+        double VT[3] = {0.0, 0.0, 0.0};
+        if (directional) {
+            if (dT == 3) HexQ2MapX(velocityT, xi, VT);
+            else { const double uv[2] = {xi[0], xi[1]}; QuadQ2MapX(velocityT, uv, VT); }
+        }
         std::fill(inn.begin(), inn.end(), 0.0);
         for (int p = 0; p < nptS; ++p) {
             const double dx = XTr[0]-XS[(size_t)3*p], dy = XTr[1]-XS[(size_t)3*p+1], dz = XTr[2]-XS[(size_t)3*p+2];
             const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
             if (r < 1e-300) continue;
-            const double w = wS[(size_t)p]/r;
+            double w = wS[(size_t)p]/r;
+            if (directional) {
+                // Piola charge measures and reference-domain quadrature stay
+                // fixed; only 1/|X_T-X_S| is differentiated, on exactly the
+                // same product points as the primal block.
+                w *= -(dx*(VT[0]-VS[(size_t)3*p]) + dy*(VT[1]-VS[(size_t)3*p+1])
+                       + dz*(VT[2]-VS[(size_t)3*p+2]))/(r*r);
+            }
             const double* q = &qS[(size_t)p*nS];
             for (int ls = 0; ls < nS; ++ls) inn[(size_t)ls] += w*q[ls];
         }
@@ -7190,6 +7332,50 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHexPairDuffy(
             }
     }
     return blk;
+}
+
+void RadHACApKChargeGram::HexHostAxisLengths(int kind, int h, double& shortest, double& longest) const
+{
+    // Q2 lattice: hex node ix + 3*iy + 9*iz, quad node iu + 3*iv (HexQ2MapX / QuadQ2MapX), so the far
+    // corner along each reference axis is node 2, 6 and 18 respectively.
+    const double* nd = (kind == 0) ? &m_hexNodes[(size_t)h*81] : &m_quadNodes[(size_t)h*27];
+    static const int far_corner[3] = {2, 6, 18};
+    const int naxis = (kind == 0) ? 3 : 2;
+    shortest = 1e300; longest = 0.0;
+    for (int a = 0; a < naxis; ++a) {
+        const double* p = &nd[3*far_corner[a]];
+        const double Lax = std::sqrt((p[0]-nd[0])*(p[0]-nd[0]) + (p[1]-nd[1])*(p[1]-nd[1]) + (p[2]-nd[2])*(p[2]-nd[2]));
+        shortest = std::min(shortest, Lax); longest = std::max(longest, Lax);
+    }
+}
+
+bool RadHACApKChargeGram::HexPairExponentialRulesResolve(int kindT, int hT, int kindS, int hS, int img,
+                                                         bool touching, double* ratio_out) const
+{
+    double loT, hiT, loS, hiS;
+    HexHostAxisLengths(kindT, hT, loT, hiT);
+    HexHostAxisLengths(kindS, hS, loS, hiS);
+    double ratio = (loT > 0.0 && loS > 0.0) ? std::max(hiT/loT, hiS/loS) : 1e300;
+    if (!touching) {
+        // Closest approach of the two lattices (source image-mapped) against the longest extent: the
+        // plain product rule integrates 1/r as if smooth, which it is only when the gap is of the order
+        // of the hosts, not of their thickness.
+        const double* ndT = (kindT == 0) ? &m_hexNodes[(size_t)hT*81] : &m_quadNodes[(size_t)hT*27];
+        const double* ndS = (kindS == 0) ? &m_hexNodes[(size_t)hS*81] : &m_quadNodes[(size_t)hS*27];
+        const int nT = (kindT == 0) ? 27 : 9, nS = (kindS == 0) ? 27 : 9;
+        double gap2 = 1e300;
+        for (int j = 0; j < nS; ++j) {
+            double s[3]; ImageEvalPoint(img, &ndS[3*j], s);
+            for (int i = 0; i < nT; ++i) {
+                const double dx = ndT[3*i]-s[0], dy = ndT[3*i+1]-s[1], dz = ndT[3*i+2]-s[2];
+                gap2 = std::min(gap2, dx*dx + dy*dy + dz*dz);
+            }
+        }
+        const double gap = std::sqrt(gap2), extent = std::max(hiT, hiS);
+        ratio = std::max(ratio, gap > 0.0 ? extent/gap : 1e300);
+    }
+    if (ratio_out) *ratio_out = ratio;
+    return ratio <= HexExponentialRuleMaxAnisotropy();
 }
 
 bool RadHACApKChargeGram::HexHostsTouch(int kindT, int hT, int kindS, int hS, int img) const

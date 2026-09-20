@@ -1208,6 +1208,7 @@ private:
     mutable std::atomic<long long> m_hexBlkDistortedFar{0};
     mutable std::atomic<long long> m_hexBlkGeneralNear{0};
     mutable std::atomic<long long> m_hexPairNonconforming{0};   // touching pairs without canonical frames (hanging nodes)
+    mutable std::atomic<long long> m_hexPairAnisotropyGraded{0}; // near pairs whose length-scale ratio sent them to the graded rule
     mutable std::atomic<long long> m_hexBlkGeneralFar{0};
     mutable std::atomic<long long> m_hexNsAffineNear{0};
     mutable std::atomic<long long> m_hexNsAffineFar{0};
@@ -1288,6 +1289,15 @@ private:
         int permS[3] = {0, 1, 2}, flipS[3] = {0, 0, 0};
     };
     HexPairAdjacency HexPairAdjacencyOf(int kindT, int hT, int kindS, int hS, int img) const;
+    // Physical lengths of a host's reference axes from its Q2 lattice corners: shortest and longest.
+    void HexHostAxisLengths(int kind, int h, double& shortest, double& longest) const;
+    // Whether the exponentially convergent BDM1 rules (pair-domain Duffy, plain pair product) resolve
+    // this pair.  They do while every length scale of the pair -- each host's axis anisotropy and, for a
+    // non-touching pair, its extent over its closest approach -- stays within
+    // HEX_EXPONENTIAL_RULE_MAX_ANISOTROPY; beyond it the graded near tensor rule is the accurate one.
+    // The ratio that decided is returned so a refusal can name it.
+    bool HexPairExponentialRulesResolve(int kindT, int hT, int kindS, int hS, int img,
+                                        bool touching, double* ratio_out) const;
     // TOUCHING pairs of the BDM1 family: the (dT + dS)-dimensional product integral is regularized on
     // the product domain itself (Sauter-Schwab / Taylor-Duffy pattern): relative in-entity coordinates
     // u = zeta_S - zeta_T plus the transverse coordinates form a cone vector c whose max-norm w is the
@@ -1301,7 +1311,8 @@ private:
         const double* velocityT = nullptr, const double* velocityS = nullptr) const;
     // Non-touching pairs inside the near band (BDM1): plain tensor Gauss on both reference domains with
     // the pair rule (the hosts are separated, so the integrand is smooth).
-    std::vector<double> QuadBlockHexProductN(int kindT, int hT, int kindS, int hS, int img) const;
+    std::vector<double> QuadBlockHexProductN(int kindT, int hT, int kindS, int hS, int img,
+        const double* velocityT = nullptr, const double* velocityS = nullptr) const;
     // NEAR host pairs (self / touching / within near_grade): endpoint-graded tensor outer over the whole
     // target host, exact-anchor radial (or far cloud) inner per source sub-simplex.
     std::vector<double> QuadBlockHexNearTensor(int kindT, int hT, int kindS, int hS, int img,
