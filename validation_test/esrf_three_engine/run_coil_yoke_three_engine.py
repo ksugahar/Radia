@@ -120,6 +120,14 @@ STATE_SCHEMA = "radia.validation.esrf-coil-yoke-picard-state.v1"
 LEGACY_CAP_KEY = "nonlinear_maximum_iterations"
 
 
+CHECKPOINT_SCHEMA = "radia.validation.esrf-coil-yoke-checkpoint.v3"
+LEGACY_CHECKPOINT_SCHEMAS = ("radia.validation.esrf-coil-yoke-checkpoint.v2",)
+STATE_SCHEMA = "radia.validation.esrf-coil-yoke-picard-state.v1"
+# A v2 checkpoint carried the iteration cap inside its identity.  The cap does not
+# change a converged solution, so it is provenance, not identity, from v3 on.
+LEGACY_CAP_KEY = "nonlinear_maximum_iterations"
+
+
 def _checkpoint_contract(**values: object) -> dict[str, object]:
     return dict(values)
 
