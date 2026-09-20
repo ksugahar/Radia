@@ -32,6 +32,7 @@ int HACApK_matvec_mkl_threads_get(void);
 }
 
 #ifdef HAVE_LAPACK
+#include "rad_hex_far_product.h"
 #include "mkl_pardiso.h"          // PARDISO sparse-direct factor of the HDiv mass for the MASS RIESZ precond
 #include "mkl_cblas.h"            // row-major cluster-space dense contractions
 #include "mkl_lapacke.h"          // small cluster Rayleigh--Ritz eigensolve
@@ -4707,6 +4708,18 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHexAffineFarProduct(
 
     const HexFarRule& target = GetHexFarRule(kindT, hT);
     const HexFarRule& source = GetHexFarRule(kindS, hS);
+#ifdef HAVE_LAPACK
+    if (m_hexAffineOrder == 2) {
+        std::vector<double> transformed(target.x.size());
+        for (int q = 0; q < target.np; ++q)
+            ImageEvalPoint(img, &target.x[(size_t)3*q], &transformed[(size_t)3*q]);
+        radia_detail::HexFarProductBlas(nT, nS, target.np, source.np,
+            transformed.data(), target.w.data(), target.values.data(),
+            source.x.data(), source.w.data(), source.values.data(), block.data());
+        for (double& value : block) value *= RAD_INV_FOUR_PI;
+        return block;
+    }
+#endif
     std::vector<double> inner((size_t)nS, 0.0);
     const int nqT = target.np, nqS = source.np;
     for (int qt = 0; qt < nqT; ++qt) {
