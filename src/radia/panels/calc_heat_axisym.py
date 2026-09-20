@@ -430,6 +430,17 @@ def solve_heat_axisym(wp_vol,
     u, v = fes_T.TnT()
     gfT = GridFunction(fes_T)
     _log(f"FES:H1 order={fes_order} ndof={fes_T.ndof}")
+    if int(fes_order) == 1:
+        # Order 1 stays available (an explicit user choice, e.g. to
+        # reproduce an older result), but it must not look correct by
+        # default: standard P1/Q1 cannot represent dT/dr = 0 at the
+        # axis, so say so at run time rather than only in --help.
+        _log("FES:WARNING order=1 cannot represent dT/dr = 0 at the "
+             "r = 0 axis: the near-axis profile shows a cusp "
+             "(apparent slope 16/3x the exact secant; the shape does "
+             "NOT refine away) and T(axis) is off by O(h^2).  Use "
+             "--fes-order 2 (the default) unless you are "
+             "deliberately reproducing an order-1 result.")
 
     class _Args:
         pass
