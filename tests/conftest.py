@@ -58,28 +58,42 @@ PROJECT_ROOT = setup_radia_path()
 # DLL load failures and access violations from crashing the process.
 # ---------------------------------------------------------------
 def _check_module(name):
-    """Check whether an optional module can be imported safely."""
+    """Import a module, returning None on success or the reason it failed."""
     try:
         __import__(name)
-        return True
-    except (ImportError, OSError, Exception):
-        return False
+        return None
+    except BaseException as exc:  # a DLL load failure is not an ImportError
+        return "%s: %s" % (type(exc).__name__, exc)
 
-# Auto-detect Cubit through its owning distribution.
+# Auto-detect Cubit through its owning distribution.  This probe is for an
+# optional extra, so nothing it raises may end collection -- a broken netgen
+# reaches this import first and used to kill the session with a raw traceback,
+# ahead of the check below that can actually say what to fix.
 try:
     from cubit_mesh_export.toolbar_install import find_cubit_bin
     _cubit_path = find_cubit_bin()
-except ImportError:
+except BaseException:
     _cubit_path = None
 if _cubit_path and _cubit_path not in sys.path:
     sys.path.append(_cubit_path)
 
+# `ngsolve` and `netgen` are pinned, non-optional dependencies in
+# pyproject.toml, so a failed import there means a broken environment, not an
+# absent extra.  Treating them as optional silently shrank a 2026-09-20 run by
+# 529 of 5313 tests -- ~10 % of the suite vanished and the summary was still
+# green, which is indistinguishable from a full pass.  A partial run now has
+# to be asked for by name.
+_REQUIRED_MODULES = ("ngsolve", "netgen")
+# radia_ngsolve is no longer a separate module; RadiaField is in radia
+_OPTIONAL_MODULES = ("magpylib", "cubit")
+ALLOW_PARTIAL_ENV = "RADIA_TESTS_ALLOW_PARTIAL"
+
+_IMPORT_FAILURES = {
+    name: _check_module(name)
+    for name in _REQUIRED_MODULES + _OPTIONAL_MODULES
+}
 _OPTIONAL_DEPS = {
-    "ngsolve": _check_module("ngsolve"),
-    "netgen": _check_module("netgen"),
-    # radia_ngsolve is no longer a separate module; RadiaField is in radia
-    "magpylib": _check_module("magpylib"),
-    "cubit": _check_module("cubit"),
+    name: reason is None for name, reason in _IMPORT_FAILURES.items()
 }
 
 # Build the exclusion list by scanning test files for top-level imports
@@ -117,6 +131,43 @@ for _tf in sorted(_tests_dir.glob("test_*.py")):
 
     if _skip:
         collect_ignore.append(str(_tf))
+
+
+_MISSING_REQUIRED = {
+    name: reason
+    for name in _REQUIRED_MODULES
+    if (reason := _IMPORT_FAILURES[name]) is not None
+}
+_ALLOW_PARTIAL = os.environ.get(ALLOW_PARTIAL_ENV, "") not in ("", "0")
+
+if _MISSING_REQUIRED and not _ALLOW_PARTIAL:
+    raise pytest.UsageError(
+        "pinned dependencies failed to import, so %d of the %d test files "
+        "in %s would be skipped without the run looking any different from "
+        "a full pass:%s%s%sFix the environment (both are pinned in "
+        "pyproject.toml), or ask for the partial run by name with %s=1."
+        % (len(collect_ignore), len(list(_tests_dir.glob("test_*.py"))),
+           _tests_dir, os.linesep,
+           os.linesep.join("  %s -> %s" % (name, reason)
+                           for name, reason in sorted(_MISSING_REQUIRED.items())),
+           os.linesep, ALLOW_PARTIAL_ENV))
+
+
+def pytest_report_header(config):
+    """Say out loud how much of the suite this environment can collect."""
+    del config
+    lines = []
+    if _MISSING_REQUIRED:
+        lines.append(
+            "PARTIAL RUN (%s=1): pinned %s unavailable"
+            % (ALLOW_PARTIAL_ENV, ", ".join(sorted(_MISSING_REQUIRED))))
+    absent = sorted(name for name in _OPTIONAL_MODULES
+                    if _IMPORT_FAILURES[name] is not None)
+    if absent:
+        lines.append("optional modules unavailable: %s" % ", ".join(absent))
+    if collect_ignore:
+        lines.append("test files not collected: %d" % len(collect_ignore))
+    return lines
 
 
 # ---------------------------------------------------------------
