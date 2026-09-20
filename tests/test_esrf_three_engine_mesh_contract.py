@@ -271,11 +271,24 @@ def _coil_yoke_runner_module(monkeypatch):
     return module
 
 
-def _converged_diagnostics(converged=True):
+def _converged_diagnostics(converged=True, *, hdiv=False):
+    stats = {"converged": converged, "iterations": 7}
+    if hdiv:
+        # An hdiv_mmm checkpoint has to carry the residual convergence
+        # contract since 2026-09-15; a bare converged flag is refused because
+        # cumulative backtracks cannot tell an accepted iteration from an
+        # exhausted line search.  It stays opt-in because reduced_a and
+        # mixed_total_reduced_omega are refused for carrying nonlinear_* keys
+        # at all.
+        stats.update({
+            "nonlinear_convergence_mode": "tolerance",
+            "nonlinear_final_relative_residual": 2.5e-9,
+            "nonlinear_residual_tolerance": 1.0e-8,
+        })
     return {
         "formulation": "test",
         "nonlinear": True,
-        "nonlinear_stats": {"converged": converged, "iterations": 7},
+        "nonlinear_stats": stats,
     }
 
 
@@ -286,7 +299,7 @@ def test_coil_yoke_checkpoint_rejects_different_native_build(tmp_path, monkeypat
         implementation_sha256={"radia._radia_pybind": "diagnostic-build"})
     path = tmp_path / "hdiv.checkpoint.json"
     runner._write_checkpoint(path, contract, np.ones((2, 3)),
-                             _converged_diagnostics(), {})
+                             _converged_diagnostics(hdiv=True), {})
     with pytest.raises(RuntimeError, match="contract changed"):
         runner._read_checkpoint(path, dict(
             contract, implementation_sha256={"radia._radia_pybind": "production-build"}))

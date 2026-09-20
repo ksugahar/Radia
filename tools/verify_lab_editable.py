@@ -141,8 +141,27 @@ def verify_against_origin_main(packages):
     return stale
 
 
+def canonical_lab_editable_packages():
+    """LAB development pointers, ignoring release-worktree overrides.
+
+    release_quad narrowed its own release-time set to ``radia`` alone when the
+    coupled release policy was retired (2026-09-16) and deleted the canonical
+    list this checker called, which left the drift check itself dead with an
+    AttributeError.  The daily check is a different question -- whether every
+    lab-editable install still points at its canonical tree, per the LAB
+    editable default -- so the four-package list lives with its only consumer.
+    """
+    root = release_quad.NAS_REPO_LAB.rstrip("/\\")
+    return [
+        ("radia", root),
+        ("cubit-mesh-export", root + "/packages/cubit-mesh-export"),
+        ("radia-mcp", root + "/packages/radia-mcp"),
+        ("mcp-server-document", "S:/mcp-server"),
+    ]
+
+
 def expected_packages(mcp_source=None, source_root=None):
-    packages = release_quad._canonical_lab_editable_packages()
+    packages = canonical_lab_editable_packages()
     if source_root:
         root = pathlib.Path(source_root)
         monorepo_paths = {
