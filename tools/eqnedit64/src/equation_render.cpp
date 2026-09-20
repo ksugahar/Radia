@@ -11,6 +11,7 @@
  * state; unsupported legacy nodes fail rather than silently losing content.
  */
 #include "equation_render.h"
+#include "eqnedit64_resource.h"
 #include "tex_parser.h"
 
 #include <algorithm>
@@ -31,6 +32,7 @@
 #define NOMINMAX          /* else windows.h's max/min macros eat std::max */
 #include <windows.h>
 #endif
+#include "font_trace.h"
 
 namespace eqnedit {
 namespace {
@@ -218,7 +220,7 @@ bool math_face_measures() {
     LOGFONTW lf = {};
     lf.lfHeight = -kEm;
     lf.lfCharSet = DEFAULT_CHARSET;
-    wcscpy_s(lf.lfFaceName, L"Latin Modern Math");
+    wcscpy_s(lf.lfFaceName, EQNEDIT64_MATH_FONT_FACE);
     HFONT probe = CreateFontIndirectW(&lf);
     if (!probe) return false;
     HDC dc = CreateCompatibleDC(nullptr);
@@ -289,8 +291,8 @@ std::filesystem::path cache_embedded_math_font(const unsigned char* bytes,
     if (error) return {};
 
     std::wostringstream filename;
-    filename << L"latinmodern-math-" << std::hex << std::setw(16)
-             << std::setfill(L'0') << font_bytes_hash(bytes, size) << L".otf";
+    filename << L"eqnedit-math-" << std::hex << std::setw(16)
+             << std::setfill(L'0') << font_bytes_hash(bytes, size) << L".ttf";
     const std::filesystem::path target = directory / filename.str();
     if (file_matches_bytes(target, bytes, size)) return target;
 
@@ -338,7 +340,13 @@ bool load_math_font() {
     HGLOBAL block = LoadResource(self, found);
     const auto* bytes = block
         ? static_cast<const unsigned char*>(LockResource(block)) : nullptr;
-    if (!bytes || !size) return false;
+    // Reject an accidentally re-embedded CFF/OTTO asset before any GDI call.
+    // The shipped standalone TrueType resource has sfnt version 0x00010000.
+    if (!bytes || size < 12 || bytes[0] != 0 || bytes[1] != 1 ||
+        bytes[2] != 0 || bytes[3] != 0) {
+        font_trace("resource.unsupported-outline");
+        return false;
+    }
 
     /* A controlled 2026-08-29 A/B run identified AddFontMemResourceEx as one
      * trigger for Server 2022's per-session fontdrvhost.exe (0xc0000005), even
@@ -351,10 +359,15 @@ bool load_math_font() {
      * external PID/event gate (see VALIDATION_NOTES.md).
      * This is a cache, not an installation: there is no registry
      * entry and the EXE remains the only input. */
+    font_trace("cache.begin");
     const std::filesystem::path path = cache_embedded_math_font(bytes, size);
+    font_trace("cache.end", path.empty() ? 0 : 1);
     if (path.empty()) return false;
-    return AddFontResourceExW(path.c_str(), FR_PRIVATE | FR_NOT_ENUM,
-                              nullptr) > 0;
+    font_trace("register.begin");
+    const int added = AddFontResourceExW(path.c_str(), FR_PRIVATE | FR_NOT_ENUM,
+                                       nullptr);
+    font_trace("register.end", added);
+    return added > 0;
 }
 
 /* Keep trying until the face actually measures.  Registering it is not the
@@ -390,7 +403,9 @@ void ensure_math_font() {
     }
     if (!g_mathFontRegistered) return;
     for (int attempt = 0; attempt < 30; ++attempt) {
+        font_trace("measure.begin", attempt);
         g_mathFontLoaded = math_face_measures();
+        font_trace("measure.end", g_mathFontLoaded ? 1 : 0);
         if (g_mathFontLoaded) return;
         Sleep(25);
     }
@@ -454,7 +469,7 @@ HFONT make_font(bool italic, bool symbol, bool cjk) {
      * RadicalRuleThickness and FractionRuleThickness are both 0.040 em and
      * AxisHeight is 0.250 em. */
     const wchar_t* face = cjk ? cjk_face_name().c_str()
-                              : L"Latin Modern Math";
+                              : EQNEDIT64_MATH_FONT_FACE;
     (void)symbol;
     wcscpy_s(lf.lfFaceName, face);
     return CreateFontIndirectW(&lf);
@@ -468,8 +483,10 @@ struct MetricCache {
 
     MetricCache() { hdc = CreateCompatibleDC(nullptr); }
     ~MetricCache() {
+        font_trace("metrics.destroy.begin");
         for (auto& kv : fonts) DeleteObject(kv.second);
         if (hdc) DeleteDC(hdc);
+        font_trace("metrics.destroy.end");
     }
     /* ink_bottom is where the glyph's ink STOPS above the baseline, and
      * it is deliberately not clamped: an accent such as U+02DC is drawn
@@ -2857,7 +2874,9 @@ struct DrawFontKey {
 struct DrawFontCache {
     std::map<DrawFontKey, HFONT> fonts;
     ~DrawFontCache() {
+        font_trace("drawfonts.destroy.begin");
         for (auto& kv : fonts) DeleteObject(kv.second);
+        font_trace("drawfonts.destroy.end");
     }
     bool enabled = true;
     HFONT get(const DrawFontKey& key) {
