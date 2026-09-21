@@ -241,6 +241,32 @@ support in the compressed solver.
 None of this indicts the SIBC model. The 2-D SIBC reference converges to the
 continuum value and PEEC, on the same SIBC sheet, lands within 4% of it.
 
+### Under every control the gate metric stands still (2026-09-21, later)
+
+With `hacapk_cocr` now taking any order and the BEM-A boundary curved, the
+gate was run at fes_order 1 and Curve(2) on maxh 0.75 (n_J 17970): R rose to
+126.449 micro-ohm (+0.51%) but the beak loss fraction is 0.324837 and the tip
+loss fraction 0.184909 -- unchanged from RT0 flat (0.325491 / 0.185637), so the
+pairwise gap is 3.21% and the gate still reads `accepted=false`.  The tip is
+not under-resolved in the observable either: 977 BEM-A triangles sit on the
+tip inside the axial window, about 2.3 per PEEC lane per station.
+
+So h (0.75 -> 0.45 mm), p (0 -> 1), and geometry (1 -> 2) have each been moved
+and the delivery fractions did not follow any of them.  BEM-A is converged on
+this fixture at about 3% below PEEC and about 5% (beak) / 8.6% (tip) below the
+infinite-length 2-D reference, with PEEC itself 1.9% / 4.0% below it.  The 3%
+criterion is therefore straddling a converged model difference, not a
+discretisation error, and the two entries above that attributed it first to
+geometry order and then to basis order are both superseded: geometry order was
+measured too small, basis order moves R but not the gate metric.
+
+Both routes sit below an infinite-length reference in the same order, so end
+effects of the 24 mm fixture are the first candidate; the impedance-EFIE versus
+thin-sheet PEEC current models are the second.  A length sweep of the
+fractions discriminates the first; required gate 3 (an independent 3-D
+reference) is what settles the second.  Data:
+`results/beak_fin_bema_refinement_20260921.json`.
+
 ## Required next gates
 
 1. A synthetic straight beak-fin STEP and reproducible generator now live in
