@@ -1,0 +1,131 @@
+{
+  "schema": "radia.ih.fin_surface.boundary_acceptance.v1",
+  "generated_at_utc": "2026-09-21T04:14:58.405818+00:00",
+  "git_head": "058058f4b22ce1ed71c0228d0c65c4d85a4a4da1",
+  "host": "intel11",
+  "python": "3.12.10",
+  "ngsolve": "6.2.2606",
+  "design": "docs/induction_heating/FIN_PEEC_PRODUCTION_BOUNDARY.md section 5",
+  "previously": "(1)-(4) had never been executed: no NGSolve, no native kernel",
+  "criterion_1_cli_equals_runner": {
+    "fixture": "tests/coil_from_cad/fixtures/beak_fin_straight.step",
+    "runner": {
+      "R_mOhm": 0.31541089727689925,
+      "L_nH": 32.501491944699154,
+      "n_branches": 2024,
+      "resolution": {
+        "n_lanes": 184,
+        "n_stations": 7,
+        "n_outline": 8192,
+        "lane_grading": "auto",
+        "tip_lanes": 8
+      }
+    },
+    "production": {
+      "R_mOhm": 0.31541089727689925,
+      "L_nH": 32.501491944699154,
+      "n_branches": 2024,
+      "resolution": {
+        "n_lanes": 184,
+        "n_stations": 7,
+        "n_outline": 8192,
+        "lane_grading": "auto",
+        "tip_lanes": 8
+      }
+    },
+    "relative_difference": {
+      "R": 0.0,
+      "L": 0.0
+    },
+    "pass": true,
+    "note": "both call radia.fin_surface_solver.solve_fin_surface; the residual difference is the last unit in the double after the ohm->milliohm and henry->nanohenry conversions"
+  },
+  "criterion_2_weak_coupling_qsurf": {
+    "coil": "validation_test/panels/golden/rect_torus_lofted_united.step",
+    "workpiece": "cylinder r=20 mm h=24 mm, maxh 4 mm, sigma 5.8e7, mu_r 1",
+    "frequency_hz": 150000.0,
+    "qsurf_finite": true,
+    "qsurf_min_W_per_m2": 0.0,
+    "qsurf_max_W_per_m2": 0.0156804031228243,
+    "qsurf_negative_count": 0,
+    "qsurf_surface_integral_W": 4.542056193852602e-05,
+    "P_wp_W": 4.542056193852596e-05,
+    "phi_inc_grad_residual": 0.011691973490001272,
+    "power_balance_relative_error": 0.08169930970727095,
+    "pass": true,
+    "open_fixture_finding": {
+      "statement": "the straight beak-fin fixture is one open prism, so its field has no scalar potential on a nearby surface and the surface-Poisson gate refuses it; this is the gate working, not a defect",
+      "residual_vs_workpiece_mesh": {
+        "maxh_2.5mm": 0.199,
+        "maxh_1.0mm": 0.193,
+        "maxh_0.5mm": 0.193
+      },
+      "residual_vs_gap": {
+        "gap_1mm": 0.193,
+        "gap_3mm": 0.179,
+        "gap_10mm": 0.148
+      },
+      "conclusion": "mesh-converged at 19.3%: the residual is the open current path, not discretisation. The criterion is therefore recorded on the tracked closed conductor"
+    }
+  },
+  "criterion_3_native_config": {
+    "config": "native_ih.json from radia.simulink.ih_operator_assembly",
+    "coil_step_solver": "fin-surface",
+    "required_fields_present": "25 / 25",
+    "schema": "radia.ih.simulink.native_sfunction.v1",
+    "bh_mode": "linear",
+    "backend": "matlab-level2+radia-mex-handles",
+    "eddy_solver": "peec",
+    "eddy_method": "fin-surface PEEC + BEM-SIBC unit-current response",
+    "coil_backend": "fin-surface",
+    "n_eddy_unknown": 1,
+    "n_heat": 364,
+    "n_temperature": 504,
+    "fin_metrics_stations": 34,
+    "P_wp_1A_W": 4.54205619e-05,
+    "matches_standalone_calc_inductance": true,
+    "pass": "contract satisfied",
+    "not_executed": "validateIHNativeConfig.m itself; MATLAB did not connect in this session. Its required-field list, schema, bh_mode, backend and eddy_solver checks were transcribed and applied in Python"
+  },
+  "criterion_4_peec_vs_fin_surface": {
+    "workpiece": "the same billet, at maxh 4.0, 2.0 and 1.2 mm",
+    "fin_surface": {
+      "balance_relative_error": [
+        0.0817,
+        0.0819,
+        0.0827
+      ],
+      "P_wp_W": [
+        4.542056e-05,
+        4.641554e-05,
+        4.683006e-05
+      ],
+      "n_source": 2680,
+      "accepted_by_gate": true
+    },
+    "peec": {
+      "balance_relative_error": [
+        0.1324,
+        0.1322,
+        0.1326
+      ],
+      "surface_P_W": [
+        4.599e-05,
+        4.6992e-05,
+        4.74088e-05
+      ],
+      "n_peri": 64,
+      "accepted_by_gate": false,
+      "refusal": "SIBC reciprocal power balance failed: exceeds the 10% gate, so no qsurf is produced"
+    },
+    "peec_sensitivity": {
+      "n_peri_16": 0.15831,
+      "n_peri_40": 0.14185,
+      "n_peri_64": 0.13243,
+      "n_peri_64_no_proximity": 0.13707
+    },
+    "finding": "both balances are flat under workpiece refinement, and the peec imbalance is unchanged by the proximity iteration, so it is neither the workpiece discretisation nor the proximity correction. On this geometry the fin-surface surface-current source satisfies the shared SIBC reciprocity gate and the series-filament bundle does not, while their surface losses agree to 1.3%",
+    "pass": "recorded for fin-surface; the peec side cannot be compared because the shared gate refuses it"
+  },
+  "scope": "interface acceptance only. This says nothing about fin accuracy; that gate is validation_test/induction_heating/FIN_PEEC_IMPLEMENTATION_2026-09-19.md and remains accepted=false"
+}

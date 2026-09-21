@@ -73,6 +73,49 @@ STEP ─ fin_sweep.fin_graph_from_step ─ assemble_experimental_fin_peec ─ �
 4. `peec` と `fin-surface` の `qsurf` を同一ワークで比べ、**隅領域の損失分担・損失重心**
    を記録する（差の大小は判定しない。フィン側の精度受け入れは別文書）。
 
+## 5.1 受け入れ実行記録（2026-09-21, INTEL11）
+
+証跡: `validation_test/induction_heating/results/fin_surface_boundary_acceptance_20260921.json`
+（NGSolve 6.2.2606、ネイティブ再ビルド済み）。
+
+1. **合格**。`beak_fin_straight.step` で `--coil-solver fin-surface --coil-only`
+   と `fin_peec_from_step.py` の R / L の相対差は 0（倍精度）。両者とも
+   自動解像度 lanes=184 / stations=7 / outline=8192 / tip=8、2024 枝。
+   R=0.315411 mΩ、L=32.5015 nH。
+2. **合格（ただし fixture を替えた）**。直線 beak-fin は 1 本の**開いた**
+   角柱なので、その場は近傍面でスカラーポテンシャルを持たず、surface-Poisson
+   ゲートが接線勾配残差 19.9 % で拒否する。これはゲートの正常動作であって
+   欠陥ではない: ワーク maxh を 2.5 → 1.0 → 0.5 mm と細かくしても残差は
+   19.9 → 19.3 → 19.3 % で**収束して止まり**、間隙を 1 → 10 mm に離すと
+   19.3 → 14.8 % と緩やかに下がるだけで、開路の非勾配成分の振る舞いである。
+   したがって追跡済みの**閉じた**導体 `rect_torus_lofted_united.step` と
+   ビレット（r=20 mm, h=24 mm）で記録した: 残差 1.17 %、電力収支 8.17 %
+   （許容 10 %）、`qsurf.sol` は全て有限・**負値ゼロ**・最小 0、その表面積分
+   4.542056e-05 W は報告 `P_wp` と完全一致。
+3. **契約充足**。`coil_step_solver="fin-surface"` の `native_ih.json` は
+   必須 25 項目すべてを持ち、`schema=radia.ih.simulink.native_sfunction.v1`、
+   `bh_mode=linear`、`backend=matlab-level2+radia-mex-handles`、
+   `eddy_solver="peec"`（MEX 契約維持）、
+   `eddy_method="fin-surface PEEC + BEM-SIBC unit-current response"`、
+   `geometry.coil_backend="fin-surface"`、`unit_current.fin_metrics` 34 station。
+   `P_wp(1 A)=4.54205619e-05 W` は単独 `calc_inductance` と一致。
+   **未実行**: `validateIHNativeConfig.m` そのもの（本セッションで MATLAB
+   未接続）。必須項目・schema・bh_mode・backend・eddy_solver の検査は
+   同 .m から転記して Python で適用した。
+4. **fin-surface 側のみ記録**。同一ビレットを maxh 4.0 / 2.0 / 1.2 mm で
+   振ると、fin-surface は収支 8.17 / 8.19 / 8.27 %、peec(n_peri=64) は
+   13.24 / 13.22 / 13.26 % で、**両者ともワーク細分化に対して平坦**。
+   peec は n_peri 16 → 40 → 64 で 15.83 → 14.19 → 13.24 % と下がるが 10 %
+   を超えたままで、`--no-peec-proximity` でも 13.71 % と変わらない。
+   よってワーク離散化でも proximity 補正でもなく、直列フィラメント表現に
+   固有である。peec は共通ゲートに拒否されて `qsurf` を出さないため、
+   隅領域の損失分担・損失重心の**比較は成立しない**。両者の表面損失
+   4.542e-05 W と 4.599e-05 W は 1.3 % 差。
+
+この節はインターフェイスの受け入れであり、フィンの数値精度については何も
+述べない。精度ゲートは `validation_test/induction_heating/
+FIN_PEEC_IMPLEMENTATION_2026-09-19.md` で、そちらは `accepted=false` のまま。
+
 ## 6. 後段（この文書の範囲外）
 
 - gate 4：ワーク反作用を **枝ごとの emf** で KVL に入れる。BEM 側は枝の線積分

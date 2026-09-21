@@ -327,4 +327,20 @@ finite, non-negative `qsurf.sol`; (3) the assembler's `native_ih.json` with
 `coil_step_solver="fin-surface"` passes `validateIHNativeConfig`; (4) record
 the corner-region loss share and centroid of `qsurf` for `peec` vs
 `fin-surface` on the same workpiece.  (1)-(4) were not executed in the
-authoring environment (no NGSolve / native kernel).
+authoring environment (no NGSolve / native kernel); they were executed
+on 2026-09-21 and the result is
+`results/fin_surface_boundary_acceptance_20260921.json`.  (1) and (2)
+pass, (3) satisfies the contract with the MATLAB validator itself not
+run, and (4) is recorded for `fin-surface` only.
+
+Two findings came out of running them.  The straight beak-fin fixture
+is one open prism, so its field has no scalar potential on a nearby
+surface and the surface-Poisson gate refuses it; the residual is
+mesh-converged at 19.3%, so this is the open current path and not
+discretisation, and criterion (2) is therefore recorded on the tracked
+closed conductor.  On that case the fin-surface source passes the
+shared SIBC reciprocity gate at 8.2% while the series-filament bundle
+is refused at 13.2%, flat under both workpiece and perimeter
+refinement and unchanged by the proximity iteration, although the two
+surface losses agree to 1.3%.  That is an interface observation, not a
+fin accuracy result.
