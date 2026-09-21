@@ -146,9 +146,12 @@ def test_distribution_ci_is_change_scoped_and_mcp_full_suite_is_explicit():
     assert 'plan["package_tests"]' in mcp
     assert 'env["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"' in mcp
     assert 'env["RADIA_MCP_CI_SELECTION_JSON"]' in mcp
-    assert '"-m", "not xval and not slow", "tests"' in mcp
-    package_step = mcp.split('package_root = Path("packages/radia-mcp")', 1)[1].split("\n          PY", 1)[0]
-    assert '*targets' not in package_step
+    # The package suite is change-scoped like the rest of the lane, and the
+    # full `tests` tree is the explicit case the plan has to ask for rather
+    # than the default that happens to be spelled out here.
+    assert ('targets = ["tests"] if plan["package_tests"] == ["tests"] '
+            'else plan["package_tests"]') in mcp
+    assert '"-m", "not xval and not slow", *targets,' in mcp
     assert '"--confcutdir=tests/mcp_integration", *targets' in mcp
     assert 'metadata["project"]["optional-dependencies"]["md2html"]' in mcp
     assert 'check_package_test_boundary.py' in mcp
